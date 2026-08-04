@@ -20,10 +20,13 @@
 // One `<code> <phoneme> <start> <end> <volume> [<flag>]` row.
 struct FElysiumLipPhoneme
 {
-	// **The key, and the only usable one.** The leading integer is Faceposer's numeric code and is
-	// not stable across the corpus — `ax` appears under 20 distinct codes, `ih` under 12 — so it is
-	// not carried at all. 59 distinct strings ship, including `<sil>` and a small tail of authoring
-	// junk (`???`, plus case slips like `AH`/`L`/`W`/`D` that FindRow's case folding recovers).
+	// **The key.** The leading integer, which `client.dll` uses as an index into the table's own
+	// code->row array (`FUN_100c4940`), and which resolves through the row's *class* column here.
+	// 48 distinct codes across the whole corpus, and every real phoneme table carries all 48.
+	int32 Code = INDEX_NONE;
+	// The second field. Carried for diagnostics only — it is **not** a usable key: the 48 codes
+	// appear under 555 distinct (code, string) pairs, `k` names the row called `c` 12,444 times, and
+	// `ax` shows up under nine codes naming nine different rows.
 	FString Phoneme;
 	// Seconds from the start of the audio.
 	float Start = 0.f;
@@ -99,10 +102,12 @@ struct FElysiumLipSyncBinding
 	// `expressions/<model stem>_phonemes.txt`, resolved through `ElysiumExpressions::Load`.
 	TSharedPtr<const FElysiumExpressionTable> Table;
 
-	// `studiohdr` +232/+236 — the phoneme filter, authored per model. These defaults are what every
-	// rigged character ships (`Jeanette` alone carries a 0.105 maximum), and they stand in when the
-	// facial sidecar predates the field.
-	float BlendMin = 0.08f;
+	// `studiohdr` +232/+236 — the phoneme filter, authored **per model** and genuinely varying
+	// across the rigged cast: 57 carry (0.065, 0.100), 32 carry (0.080, 0.100) and `Jeanette` alone
+	// (0.080, 0.105). The defaults are the modal pair, which is also what all three of sp_theatre's
+	// speakers carry, and they stand in until the facial sidecar's `phoneme_filter` is plumbed
+	// through to here.
+	float BlendMin = 0.065f;
 	float BlendMax = 0.10f;
 
 	bool IsValid() const { return Track.IsValid() && Table.IsValid() && Track->bValid; }

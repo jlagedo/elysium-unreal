@@ -128,9 +128,9 @@ namespace ElysiumCameraTrack
 		}
 		Arrivals.SetNumZeroed(Points.Num());
 		Departures.SetNumZeroed(Points.Num());
-		// Retail begins the first segment immediately. Pause belongs to a destination after it is
-		// reached; the root key's authored Pause is not a pre-roll dwell.
-		Departures[0] = 0.0f;
+		// Retail reaches the root immediately, fires its OnReached output, then holds that sample for
+		// the root's authored Pause before leaving for the first segment.
+		Departures[0] = FMath::Max(0.0f, Points[0].Pause);
 		for (int32 Index = 0; Index + 1 < Points.Num(); ++Index)
 		{
 			Arrivals[Index + 1] = Departures[Index] + SegmentSeconds(Points[Index], Points[Index + 1]);

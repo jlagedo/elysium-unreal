@@ -32,8 +32,15 @@ namespace
 		int32 Alloc() { return Nodes.Emplace(); }
 	};
 
-	// A `.lip` carries no comments — unlike a `.vcd`, which needs the line-leading `//` test — so
-	// this is the plain quote-aware split.
+	// Whitespace only — **no quote grouping**, unlike the `.vcd` tokenizer this otherwise mirrors,
+	// and no comment test because a `.lip` carries none.
+	//
+	// A word's text is always one non-whitespace run, and Faceposer writes the caption's own
+	// punctuation into it: `WORD "I'll 0.130 0.190` and `WORD elevator." 0.429 1.028` are what a line
+	// beginning with a quotation mark actually produces. Treating that `"` as an opening quote
+	// swallows the rest of the line, and the word loses every phoneme under it — 1,159 files across
+	// the corpus, one word each, silently. The only quoted content in the format is the `PHRASE`
+	// line, which this reader discards.
 	void TokenizeLipLine(const FString& Line, TArray<FString>& Out)
 	{
 		Out.Reset();
@@ -44,21 +51,6 @@ namespace
 			if (FChar::IsWhitespace(*P))
 			{
 				++P;
-				continue;
-			}
-			if (*P == TEXT('"'))
-			{
-				++P;
-				const TCHAR* Start = P;
-				while (*P != TEXT('\0') && *P != TEXT('"'))
-				{
-					++P;
-				}
-				Out.Emplace(FString::ConstructFromPtrSize(Start, static_cast<int32>(P - Start)));
-				if (*P == TEXT('"'))
-				{
-					++P;   // closing quote; an unterminated one just runs to end of line
-				}
 				continue;
 			}
 			const TCHAR* Start = P;
@@ -257,12 +249,20 @@ int32 FElysiumLipSyncBinding::Accumulate(float LineSeconds, TMap<FString, float>
 	int32 Applied = 0;
 	for (const FElysiumLipSample& Sample : Live)
 	{
-		const int32 RowIndex = Table->FindRow(Sample.Phoneme->Phoneme);
+		// By CODE, through the table's class column — what client.dll indexes with. The string is
+		// only the fallback for a hand-written table with no class codes at all, and only ever
+		// reached by a test fixture.
+		int32 RowIndex = Table->FindRowByPhonemeCode(Sample.Phoneme->Code);
+		if (RowIndex == INDEX_NONE)
+		{
+			RowIndex = Table->FindRow(Sample.Phoneme->Phoneme);
+		}
 		if (!Table->Rows.IsValidIndex(RowIndex))
 		{
 			if (OutUnresolved != nullptr)
 			{
-				OutUnresolved->AddUnique(Sample.Phoneme->Phoneme);
+				OutUnresolved->AddUnique(FString::Printf(TEXT("%d/%s"),
+					Sample.Phoneme->Code, *Sample.Phoneme->Phoneme));
 			}
 			continue;
 		}
@@ -383,15 +383,14 @@ void ElysiumLip::ParseText(const FString& Text, const FString& SourceRel, FElysi
 				const FLipNode& RowNode = Arena.Nodes[RowIndex];
 				// `<code> <phoneme> <start> <end> <volume>` with an optional sixth flag — version
 				// 1.0 and 1.1 omit it (11,331 five-field rows corpus-wide).
-				if (RowNode.Words.Num() < 5 || !IsLipNumber(RowNode.Words[2])
-					|| !IsLipNumber(RowNode.Words[3]))
+				if (RowNode.Words.Num() < 5 || !IsLipNumber(RowNode.Words[0])
+					|| !IsLipNumber(RowNode.Words[2]) || !IsLipNumber(RowNode.Words[3]))
 				{
 					++Out.NumMalformedRows;
 					continue;
 				}
 				FElysiumLipPhoneme& Phoneme = Word.Phonemes.AddDefaulted_GetRef();
-				// Words[0] is Faceposer's numeric code and is deliberately dropped: the same phoneme
-				// string carries several codes across the corpus.
+				Phoneme.Code = FCString::Atoi(*RowNode.Words[0]);
 				Phoneme.Phoneme = RowNode.Words[1];
 				Phoneme.Start = FCString::Atof(*RowNode.Words[2]);
 				Phoneme.End = FMath::Max(Phoneme.Start, FCString::Atof(*RowNode.Words[3]));

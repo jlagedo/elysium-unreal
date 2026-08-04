@@ -24,8 +24,13 @@ struct FElysiumExpressionRow
 	// The first quoted word — what an `expression` event's `param2` names, and what a phoneme row
 	// is keyed by. Authored case and stray trailing spaces both occur; FindRow folds them.
 	FString Name;
-	// The second quoted word. `_` on every expression row; the phoneme string on a phoneme row.
+	// The second quoted word. `_` on every expression row; on a phoneme row it is the phoneme's IPA
+	// form, written either as a single character (`k`, `h`, `s`) or as `0x….` (`0x0279`).
 	FString Class;
+	// `Class` as a code point — the key a `.lip` row's leading integer actually is. INDEX_NONE when
+	// the class is neither a single character nor `0x….` (every `_` row, i.e. the whole expression
+	// half plus `<sil>`).
+	int32 PhonemeCode = INDEX_NONE;
 	// The trailing quoted word, authoring commentary ("Big : voiced alveolar stop").
 	FString Description;
 
@@ -48,9 +53,22 @@ struct FElysiumExpressionTable
 	bool bHasWeighting = false;
 	TArray<FElysiumExpressionRow> Rows;
 
+	// `PhonemeCode` -> row. Built at parse; empty on an expression table, whose every class is `_`.
+	TMap<int32, int32> RowByPhonemeCode;
+
 	// Case-insensitive and trimmed: `therese_expressions` authors both `"sneer"` and
 	// `"Anger_No Deform "`, and a scene's `param2` matches neither exactly.
 	int32 FindRow(const FString& Name) const;
+
+	// **The lipsync lookup.** A `.lip` phoneme row's leading integer, resolved through the class
+	// column — which is what `client.dll` does: `FUN_100c4940` bounds-checks the code and indexes the
+	// table's own code->row array with it, never a string.
+	//
+	// The phoneme *string* beside it is not usable. Across the 7,136 shipped files the 48 distinct
+	// codes carry 555 distinct (code, string) pairs: `k` names the row whose own name is `c` 12,444
+	// times, `ay` names `aa` 10,221 times, and `ax` appears under nine different codes naming nine
+	// different rows. Keying on the string picks the wrong viseme far more often than not.
+	int32 FindRowByPhonemeCode(int32 Code) const;
 
 	bool IsValid() const { return !Keys.IsEmpty() && !Rows.IsEmpty(); }
 

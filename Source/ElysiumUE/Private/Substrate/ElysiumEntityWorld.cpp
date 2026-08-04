@@ -13,6 +13,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumLipTrack.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
@@ -1253,6 +1254,7 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 			LineService->PlayDialogueTurn(OpenDialogOwner, OpenDialogConv->File().SourcePath,
 				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
 				Speaker ? Speaker->GetSkeletalBody() : nullptr);
+			BeginDialogueLipsync(OpenDialogConv->File().SourcePath, Line->Id);
 		}
 	}
 
@@ -1284,6 +1286,9 @@ void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
 			LineService->PlayDialogueTurn(OpenDialogOwner, OpenDialogConv->File().SourcePath,
 				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
 				Speaker ? Speaker->GetSkeletalBody() : nullptr);
+			// Each answer starts a new line, so the previous turn's track is replaced rather than
+			// left to run out — otherwise two turns' phonemes would sum on one face.
+			BeginDialogueLipsync(OpenDialogConv->File().SourcePath, Line->Id);
 		}
 	}
 	if (OpenDialogConv->IsOver())
@@ -1465,6 +1470,112 @@ void FElysiumEntityWorld::ClearTrackCamera(float BlendOutSeconds)
 	TrackCameraTargetOwner = FElysiumEntityHandle::Invalid();
 }
 
+// --- 12.5, the dialogue half of lipsync ----------------------------------------------------------
+//
+// The same join as a choreo scene's — the line's `.lip`, the speaker's `expressions/<stem>_phonemes`
+// table, and the model's phoneme filter — but on a different clock. A `speak` event is authored on a
+// scene timeline and its lipsync rides the AUTHORED start, so the phoneme track stays in lockstep
+// with the gestures and camera moves beside it. A conversation turn has no authored timeline at all;
+// the line begins when the turn opens, and the only reference it has is its own audio. So this one
+// measures from the moment the turn was submitted.
+static TAutoConsoleVariable<int32> CVarDialogueLipsync(
+	TEXT("elysium.DialogueLipsync"),
+	1,
+	TEXT("A .dlg conversation turn drives the speaking NPC's mouth from the line's .lip phoneme track (1, default) or leaves it at rest (0)."),
+	ECVF_Default);
+
+void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int32 LineId)
+{
+	DialogueLipsync.Reset();
+	DialogueLineStart = -1.0;
+	if (CVarDialogueLipsync.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+	FElysiumEntity* Speaker = Resolve(OpenDialogOwner);
+	if (Speaker == nullptr)
+	{
+		return;
+	}
+
+	FElysiumLipSyncBinding Binding;
+	// The audio path this turn resolves to, with the extension swapped — the one place the two
+	// halves of the join have to agree, so it goes through the line service's own rule.
+	Binding.Track = ElysiumLip::Load(FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId));
+	const FString Stem = FPaths::GetBaseFilename(Speaker->Model).ToLower();
+	if (!Stem.IsEmpty())
+	{
+		Binding.Table = ElysiumExpressions::Load(Stem, TEXT("phonemes"));
+	}
+	if (!Binding.Table.IsValid())
+	{
+		Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), TEXT("phonemes"));
+	}
+	if (!Binding.IsValid())
+	{
+		return;
+	}
+	DialogueFaceOwner = OpenDialogOwner;
+	DialogueLineStart = NowSeconds();
+	DialogueLipsync = MakeShared<FElysiumLipSyncBinding>(MoveTemp(Binding));
+}
+
+void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
+{
+	if (!DialogueLipsync.IsValid() && DialogueFacialPose.IsEmpty())
+	{
+		return;
+	}
+
+	TMap<FString, float> Next;
+	if (DialogueLipsync.IsValid() && DialogueLineStart >= 0.0
+		&& CVarDialogueLipsync.GetValueOnGameThread() != 0)
+	{
+		const float LineSeconds = static_cast<float>(Now - DialogueLineStart);
+		if (LineSeconds >= 0.f && LineSeconds <= DialogueLipsync->Track->LatestTime)
+		{
+			DialogueLipsync->Accumulate(LineSeconds, Next, nullptr);
+		}
+	}
+
+	FElysiumEntity* Speaker = Resolve(DialogueFaceOwner);
+	if (Speaker == nullptr)
+	{
+		// The face went away mid-line. Drop the bookkeeping rather than holding a pose for an entity
+		// that no longer exists.
+		DialogueFacialPose.Reset();
+		DialogueFaceOwner = FElysiumEntityHandle();
+		return;
+	}
+
+	// Same compose-diff-push as FElysiumChoreoScene::RefreshFacialPose, for one face.
+	TArray<FElysiumFlexWrite> Writes;
+	bool bChanged = DialogueFacialPose.Num() != Next.Num();
+	for (const TPair<FString, float>& Key : Next)
+	{
+		const float* Was = DialogueFacialPose.Find(Key.Key);
+		bChanged |= Was == nullptr || *Was != Key.Value;
+		Writes.Add({ Key.Key, Key.Value });
+	}
+	for (const TPair<FString, float>& Key : DialogueFacialPose)
+	{
+		if (!Next.Contains(Key.Key))
+		{
+			bChanged = true;
+			Writes.Add({ Key.Key, 0.f });
+		}
+	}
+	if (bChanged && !Writes.IsEmpty())
+	{
+		Speaker->SetFlexControllers(Writes, nullptr);
+	}
+	DialogueFacialPose = MoveTemp(Next);
+	if (DialogueFacialPose.IsEmpty() && !DialogueLipsync.IsValid())
+	{
+		DialogueFaceOwner = FElysiumEntityHandle();
+	}
+}
+
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
 	const FElysiumEntityHandle Closing = OpenDialogOwner;
@@ -1472,6 +1583,12 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	{
 		LineService->CancelDialogue(Closing);
 	}
+	// Drop the phoneme track but NOT the pose: the next RefreshDialogueLipsync writes every key this
+	// turn was driving back to zero, exactly as a choreo scene's release pass does. Clearing the pose
+	// here instead would leave the last phoneme latched on the face for the rest of the map.
+	DialogueLipsync.Reset();
+	DialogueLineStart = -1.0;
+
 	OpenDialogOwner = FElysiumEntityHandle();
 	OpenDialogConv.Reset();
 
@@ -1545,6 +1662,9 @@ void FElysiumEntityWorld::Tick(double Now)
 	}
 	RunThinks(Now);
 	ServiceEvents(Now);
+	// After the thinks, so a turn opened this frame already has its track bound — the same ordering
+	// FElysiumChoreoScene::Think uses for RefreshFacialPose.
+	RefreshDialogueLipsync(Now);
 }
 
 void FElysiumEntityWorld::FadeGlobalWetness(float Target)

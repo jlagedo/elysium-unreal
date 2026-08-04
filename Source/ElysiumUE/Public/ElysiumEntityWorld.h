@@ -504,6 +504,26 @@ private:
 	// OnDialogEnd fires through the real chokepoint (the B3 seam the runner reuses).
 	void EndDialogSession(bool bSilent);
 
+	// --- 12.5, the dialogue half of lipsync ----------------------------------------------------
+	// A conversation turn has no authored timeline — the line simply starts when the turn opens — so
+	// unlike a choreo scene there is no scene clock to ride and no per-event latch to key off. The
+	// world holds the one open turn's join and drives it from its own tick.
+	TSharedPtr<struct FElysiumLipSyncBinding> DialogueLipsync;   // incomplete here; freed in the .cpp
+	// Substrate seconds at which the current turn's audio was submitted; negative when none.
+	double DialogueLineStart = -1.0;
+	// The controllers this turn last wrote, so the ones it stops driving go back to zero — the same
+	// bookkeeping FElysiumChoreoScene keeps per actor.
+	TMap<FString, float> DialogueFacialPose;
+	// Whose face `DialogueFacialPose` is on. Held separately from OpenDialogOwner because the session
+	// ends BEFORE the pose is released, and the release still has to find the speaker.
+	FElysiumEntityHandle DialogueFaceOwner;
+
+	// Join the turn's `.lip` to the speaker's phoneme table and start its clock. Replaces whatever
+	// the previous turn left.
+	void BeginDialogueLipsync(const FString& DlgSourcePath, int32 LineId);
+	// Compose and push this frame's phoneme pose onto the speaking NPC.
+	void RefreshDialogueLipsync(double Now);
+
 	// Unknown target/input aggregation: log once per unique (target.Input), count the rest.
 	TSet<FString> UnknownLogged;
 	int32 UnknownTargetCount = 0;

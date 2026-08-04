@@ -685,12 +685,46 @@ max 445 s, with p50 11 words.
 `<sil>` (481) and a small tail of authoring junk (`???`, `AH`, `L`, `W`, `D`, and `aa2`-style
 duplicates).
 
-**The leading integer is not a reliable key.** It is Faceposer's numeric phoneme code —
-ASCII for the single-letter phonemes (`t`=116, `n`=110, `s`=115, `d`=100, `l`=108, `m`=109,
-`k`=107, `w`=119, `z`=122, `b`=98, `f`=102, `p`=112, `v`=118, `g`=103) and an extended code
-for the rest (`ax`=601, `ih`=618, `ah`=652, `eh`=603, `ay`=593, `ae`=230, `dh`=240,
-`ao`=596, `er`=602) — but the same phoneme string carries several different codes across the
-corpus (`ax` appears under 20 distinct codes, `ih` under 12). **Match on the phoneme string.**
+**The leading integer is the key, and the phoneme string is not.** The integer is the code point
+of the phoneme's IPA form — ASCII for the single-letter ones (`t`=116, `n`=110, `s`=115,
+`d`=100, `l`=108, `m`=109, `k`=107, `w`=119, `z`=122, `b`=98, `f`=102, `p`=112, `v`=118,
+`g`=103) and the Unicode scalar for the rest (`0x0259`=601, `0x026a`=618, `0x028c`=652,
+`0x025b`=603, `0x0251`=593, `0x00e6`=230, `0x00f0`=240, `0x0254`=596, `0x025a`=602). That is
+exactly the `expressions/` table's **class** column, which is how a code resolves to a row.
+
+`client.dll` settles it: `FUN_100c4940` takes the code as an integer, bounds-checks it against
+the table's count at `+0x98`, and indexes the table's own code→row array at `+0x9c`. **No string
+is involved at any point.**
+
+The corpus agrees and the string does not survive contact with it. Across all 7,136 files there
+are **48 distinct codes** but **555 distinct (code, string) pairs**:
+
+| `.lip` string | code | row it actually names | uses |
+|---|---|---|---|
+| `k` | 107 | `c` | 12,444 |
+| `ay` | 593 | `aa` | 10,221 |
+| `ng` | 331 | `nx` | 4,073 |
+| `h` | 104 | `hh` | 3,174 |
+| `ax` | 618 / 603 / 652 / 106 / 117 / 105 / 111 / 601 / 593 | `ih` / `eh` / `ah` / `y` / `uw` / `iy` / `ow` / `ax` / `aa` | 4,000+ |
+
+So `ax` alone appears under nine codes naming nine different rows, and the four commonest
+strings in the corpus name a row of a different name every time. **Match on the code.** Every
+one of the 48 resolves against 122 of the 126 shipped phoneme tables; the four that fall short
+(`larry`, `shu`, `phonemes_strong`, `phonemes_weak`) carry a single row each and are degenerate.
+
+**A word's text may begin or end with a quotation mark.** Faceposer writes the caption's own
+punctuation into it — `WORD "I'll 0.130 0.190`, `WORD elevator." 0.429 1.028` — so a tokenizer
+that treats `"` as an opening quote swallows the line and drops that word's phonemes. It happens
+in **1,159 files**, one word each, and the file otherwise parses. The only quoted content in the
+format is the `PHRASE` line. Split on whitespace alone.
+
+A word's text may also contain the CP-1252 ellipsis `0x85` (`WORD man…" 10.000 10.336`, seven
+files). It is part of the word, not a separator — a splitter that treats U+0085 as whitespace
+breaks those rows in two and reads the wrong field as a time.
+
+Parsed that way the corpus yields **394,923 phoneme rows** over 7,136 files, with exactly **one**
+malformed row — `WORD Come on 0.048 0.400`, whose word text carries a real space — and 92 files
+carrying a placeholder word with no phonemes at all.
 
 The trailing `volume` is 1.000 on effectively every row and the sixth field is 0; version 1.0
 and 1.1 files omit the sixth field. **Neither is consumed.** The accumulate call takes only the
@@ -708,6 +742,12 @@ $hasweighting
 "b" "b" 0.000 0.000 … 0.350 1.000 … 0.330 1.000 … "Big : voiced alveolar stop"
 "m" "m" 0.000 0.000 … 0.340 1.000 … 0.590 1.000 … "Mat : voiced bilabial nasal"
 ```
+
+The first quoted word is the row's name — what an `expression` event's `param2` selects. The
+second is its **class**, and on a phoneme table that is the row's key: a single character or a
+`0x….` scalar whose code point is what a `.lip` row's leading integer holds (`"c" "k"` is
+reached by 107, `"nx" "0x014b"` by 331). On an expression table the class is `_` on every row
+and only the name is usable.
 
 `$keys` names the flex controllers the table writes; `$hasweighting` (set on all 249) means
 each row carries **two floats per key** — the value and its weight — so a row is
@@ -830,14 +870,18 @@ therefore entirely the model's own numbers.
 Those numbers are the two floats at **studiohdr +232/+236** (`mdl_v2531.md` recorded them as an
 `int[2] Unknown`). Across the 339 loose models:
 
-| `+232`, `+236` | Models |
-|---|---|
-| **0.080, 0.100** | every rigged character |
-| 0.080, 0.105 | `Jeanette` alone |
-| 0.065, 0.100 | 169 unrigged |
-| 0.0, 0.0 | 113, all `NumFlexDescs 0` |
+| `+232`, `+236` | Rigged | Models |
+|---|---|---|
+| **0.065, 0.100** | yes | **57** — including `lacroix`, `nines` and `skelter` |
+| 0.080, 0.100 | yes | 32 |
+| 0.080, 0.105 | yes | `Jeanette` alone |
+| 0.065, 0.100 | no | 112 |
+| 0.080, 0.100 | no | 24 |
+| 0.0, 0.0 | no | 113, all `NumFlexDescs 0` |
 
-So a speaking character blends over `clamp(span, 0.080, 0.100)` seconds. The `(0,0)` pair would
+**The pair varies across the rigged cast**, so it is a per-model input rather than a constant: the
+two shipped minima differ by 23 %, and the majority of speaking characters — every one of
+sp_theatre's — blends over `clamp(span, 0.065, 0.100)` seconds. The `(0,0)` pair would
 make `S` zero and `1/S` infinite; nothing in the clamp guards it, and only models that never
 reach the viseme path carry it.
 
@@ -940,8 +984,8 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - The eyelid `uppertarget`/`lowertarget` values are **linear offsets through `asin(t/radius)`**,
   not radians.
 - Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
-  for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
-  key. All three are on disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/`, and `mouths` in the facial
+  for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *code* as the key,
+  resolved through the table's class column. All three are on disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/`, and `mouths` in the facial
   manifest. The join needs a **fourth** input the manifest does not carry: the two floats at
   studiohdr +232/+236 that set the phoneme blend width (envelope section above).
 - The phoneme envelope is **not symmetric inside the span**. It ramps in before the phoneme's

@@ -54,9 +54,9 @@
   },
   {
    "confidence": "confirmed",
-   "fact": "Studiohdr offsets 232 and 236 are floats, not the int[2] Unknown previously recorded. Across 339 loose models: (0.080, 0.100) on every rigged character, (0.080, 0.105) on Jeanette alone, (0.065, 0.100) on 169 unrigged models, (0.0, 0.0) on 113.",
-   "evidence": "Direct read of the model headers; the values are the operands FUN_100c3be0 clamps against.",
-   "consequence": "The shipped phoneme blend width for a speaking character is clamp(span, 0.080, 0.100) seconds."
+   "fact": "Studiohdr offsets 232 and 236 are floats, not the int[2] Unknown previously recorded, and the pair varies across the rigged cast. Across 339 loose models: rigged carry (0.065, 0.100) x57, (0.080, 0.100) x32 and (0.080, 0.105) on Jeanette alone; unrigged carry (0.065, 0.100) x112, (0.080, 0.100) x24 and (0.0, 0.0) x113.",
+   "evidence": "Direct read of the model headers; the values are the operands FUN_100c3be0 clamps against. lacroix, nines and skelter all read (0.065, 0.100).",
+   "consequence": "The blend width is a per-model input, not a constant: the two shipped minima differ by 23 percent. A runtime that hardcodes either one is wrong for the other half of the cast."
   },
   {
    "confidence": "confirmed",

@@ -6150,20 +6150,21 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	FPath Timed;
 	Timed.Points = { A, B };
 	Timed.RebuildTimes();
-	TestEqual(TEXT("the root pause is not a pre-roll dwell"), Timed.Departures[0], 0.0f);
-	TestEqual(TEXT("TimeControl uses authored MoveTime"), Timed.Arrivals[1], 2.0f);
-	TestEqual(TEXT("the destination pause extends completion"), Timed.EndTime, 2.5f);
+	TestEqual(TEXT("the root is reached immediately and leaves after its authored pause"),
+		Timed.Departures[0], 1.0f);
+	TestEqual(TEXT("TimeControl movement starts after the root dwell"), Timed.Arrivals[1], 3.0f);
+	TestEqual(TEXT("the destination pause extends completion"), Timed.EndTime, 3.5f);
 
 	FSample Sample;
-	TestTrue(TEXT("a path starts moving immediately"), Timed.Sample(0.5f, Sample));
-	TestFalse(TEXT("the root is not held for its authored pause"), Sample.Position.Equals(A.Position, 0.01f));
-	TestTrue(TEXT("the midpoint samples between endpoints"), Timed.Sample(1.0f, Sample));
+	TestTrue(TEXT("the root sample is available during its dwell"), Timed.Sample(0.5f, Sample));
+	TestTrue(TEXT("the root is held for its authored pause"), Sample.Position.Equals(A.Position, 0.01f));
+	TestTrue(TEXT("the midpoint samples between endpoints after the dwell"), Timed.Sample(2.0f, Sample));
 	TestTrue(TEXT("linear rate defaults put the two-point Catmull midpoint at 50"),
 		FMath::IsNearlyEqual(Sample.Position.X, 50.0f, 0.01f));
 	TestTrue(TEXT("roll takes the short 20-degree path across 180"),
 		FMath::Abs(FMath::Abs(Sample.Roll) - 180.0f) < 0.1f);
 	TestTrue(TEXT("a positive lens becomes a horizontal FOV"), Sample.FieldOfView > 0.0f);
-	TestTrue(TEXT("the path is complete after the destination pause"), Timed.Sample(2.5f, Sample) && Sample.bFinished);
+	TestTrue(TEXT("the path is complete after the destination pause"), Timed.Sample(3.5f, Sample) && Sample.bFinished);
 
 	FPoint SpeedA;
 	SpeedA.Position = FVector::ZeroVector;
@@ -6301,10 +6302,10 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 		FElysiumEntityHandle(), FElysiumEntityHandle());
 	TestEqual(TEXT("the first role pushes one value shot"), Services.Count(TEXT("PushCameraShotValue")), 1);
 	World.Tick(0.0);
-	auto CounterValue = [&World]()
+	auto CounterValue = [](FElysiumEntityWorld& CounterWorld, const TCHAR* Name)
 	{
 		TArray<TPair<FString, FString>> Rows;
-		if (FElysiumEntity* CounterEnt = World.FindByName(TEXT("completed")))
+		if (FElysiumEntity* CounterEnt = CounterWorld.FindByName(Name))
 		{
 			CounterEnt->GetDebugState(Rows);
 		}
@@ -6314,7 +6315,7 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 		}
 		return -1.0f;
 	};
-	TestEqual(TEXT("zero-duration completion fires once"), CounterValue(), 1.0f);
+	TestEqual(TEXT("zero-duration completion fires once"), CounterValue(World, TEXT("completed")), 1.0f);
 	TArray<TPair<FString, FString>> ReachedRows;
 	World.FindByName(TEXT("reached"))->GetDebugState(ReachedRows);
 	TestTrue(TEXT("arrival fires the authored OnReachedKeyframe output"),
@@ -6323,7 +6324,7 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 			return Row.Key == TEXT("Value") && FMath::IsNearlyEqual(FCString::Atof(*Row.Value), 1.0f);
 		}));
 	World.Tick(1.0);
-	TestEqual(TEXT("held completion does not fire again"), CounterValue(), 1.0f);
+	TestEqual(TEXT("held completion does not fire again"), CounterValue(World, TEXT("completed")), 1.0f);
 	World.AcceptInput(TEXT("target"), FName(TEXT("PlayAsCameraTarget")), FElysiumVariant::Void(),
 		FElysiumEntityHandle(), FElysiumEntityHandle());
 	TestEqual(TEXT("the paired role updates rather than pushes another shot"),
@@ -6354,6 +6355,75 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 		TestFalse(TEXT("the temporal cut instruction is one-shot"),
 			Services.LastCameraShot.bCameraCut);
 	}
+
+	// Retail starts on the root, fires OnReached immediately, dwells for Pause, then leaves. Keep
+	// that output ordering covered through the entity-world clock as well as through the pure path.
+	FElysiumEntityDefs DwellDefs;
+	DwellDefs.MapName = TEXT("__camera_track_root_dwell_test__");
+	FElysiumEntityDef Dwell;
+	Dwell.Classname = TEXT("camera_track");
+	Dwell.TargetName = TEXT("dwell");
+	Dwell.Keys.Add(TEXT("TimeControl"), TEXT("1"));
+	Dwell.Keys.Add(TEXT("MoveTime"), TEXT("2"));
+	Dwell.Keys.Add(TEXT("Pause"), TEXT("1"));
+	Dwell.Keys.Add(TEXT("NextKey"), TEXT("dwell_end"));
+	FElysiumOutputDef DwellReached = Reached;
+	DwellReached.Target = TEXT("dwell_reached");
+	Dwell.Outputs.Add(DwellReached);
+	FElysiumOutputDef DwellLeaving = Reached;
+	DwellLeaving.Name = TEXT("OnLeavingKeyframe");
+	DwellLeaving.Target = TEXT("dwell_left");
+	Dwell.Outputs.Add(DwellLeaving);
+	FElysiumOutputDef DwellCompleted = Completed;
+	DwellCompleted.Target = TEXT("dwell_completed");
+	Dwell.Outputs.Add(DwellCompleted);
+	DwellDefs.Defs.Add(Dwell);
+
+	FElysiumEntityDef DwellEnd;
+	DwellEnd.Classname = TEXT("camera_keyframe");
+	DwellEnd.TargetName = TEXT("dwell_end");
+	DwellEnd.Origin = FVector(100.0f, 0.0f, 0.0f);
+	DwellEnd.Keys.Add(TEXT("Pause"), TEXT("0.5"));
+	FElysiumOutputDef DwellEndReached = Reached;
+	DwellEndReached.Target = TEXT("dwell_end_reached");
+	DwellEnd.Outputs.Add(DwellEndReached);
+	DwellDefs.Defs.Add(DwellEnd);
+
+	for (const TCHAR* Name : { TEXT("dwell_reached"), TEXT("dwell_left"),
+		TEXT("dwell_end_reached"), TEXT("dwell_completed") })
+	{
+		FElysiumEntityDef DwellCounter;
+		DwellCounter.Classname = TEXT("math_counter");
+		DwellCounter.TargetName = Name;
+		DwellDefs.Defs.Add(MoveTemp(DwellCounter));
+	}
+
+	FElysiumRecordingServices DwellServices;
+	DwellServices.bHasPlayer = true;
+	FElysiumEntityWorld DwellWorld(nullptr, nullptr, DwellServices.Bundle());
+	DwellWorld.Load(MoveTemp(DwellDefs));
+	DwellWorld.Activate(0.0);
+	DwellWorld.AcceptInput(TEXT("dwell"), FName(TEXT("PlayAsCameraPosition")), FElysiumVariant::Void(),
+		FElysiumEntityHandle(), FElysiumEntityHandle());
+	DwellWorld.Tick(0.0);
+	TestEqual(TEXT("the root OnReached output fires at play time"),
+		CounterValue(DwellWorld, TEXT("dwell_reached")), 1.0f);
+	TestEqual(TEXT("the root does not leave at play time"),
+		CounterValue(DwellWorld, TEXT("dwell_left")), 0.0f);
+	DwellWorld.Tick(0.5);
+	TestEqual(TEXT("the root remains held inside its pause"),
+		CounterValue(DwellWorld, TEXT("dwell_left")), 0.0f);
+	DwellWorld.Tick(1.0);
+	TestEqual(TEXT("the root OnLeaving output fires when its pause expires"),
+		CounterValue(DwellWorld, TEXT("dwell_left")), 1.0f);
+	DwellWorld.Tick(3.0);
+	TestEqual(TEXT("the destination is reached after root pause plus MoveTime"),
+		CounterValue(DwellWorld, TEXT("dwell_end_reached")), 1.0f);
+	TestEqual(TEXT("the destination dwell delays completion"),
+		CounterValue(DwellWorld, TEXT("dwell_completed")), 0.0f);
+	DwellWorld.Tick(3.5);
+	TestEqual(TEXT("completion follows the destination dwell"),
+		CounterValue(DwellWorld, TEXT("dwell_completed")), 1.0f);
 
 	return true;
 }

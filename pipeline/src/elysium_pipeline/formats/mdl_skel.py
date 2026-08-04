@@ -533,6 +533,11 @@ def read_skin(d, model_base, vertex_index, num_vertices):
 # The studiohdr facial block starts at 344 -- eight bytes past a naive VAMPTools field
 # walk, which drops two ints between LocalAttachmentIndex@332 and NumFlexDescs. These are
 # the offsets every array closes on (count x stride exactly, on all 4,444 models).
+#: The phoneme filter -- two floats the lipsync blend width is clamped to, per model.
+#: `client.dll` FUN_100c3be0 reads them as the fallback for the phonemefilter_min/max ConVars,
+#: which are inert unless BOTH are set, so these are what every shipped line actually uses.
+H_PHONEME_FILTER = 232
+
 H_NUM_FLEXDESC, H_FLEXDESC = 344, 348
 H_NUM_FLEXCTRL, H_FLEXCTRL = 352, 356
 H_NUM_FLEXRULE, H_FLEXRULE = 360, 364
@@ -631,6 +636,15 @@ def mouths(d):
     n, base = _i32(d, H_NUM_MOUTH), _i32(d, H_MOUTH)
     return [(_i32(d, base + i * 20), _vec3(d, base + i * 20 + 4), _i32(d, base + i * 20 + 16))
             for i in range(n)]
+
+
+def phoneme_filter(d):
+    """The `studiohdr` pair at 232/236 -> (min, max) seconds, the bounds a phoneme's own
+    duration is clamped to before it becomes the lipsync blend width. Recorded as an
+    `int[2] Unknown` by every prior field walk; they are floats. Rigged characters carry
+    (0.080, 0.100) -- `Jeanette` alone (0.080, 0.105) -- and unrigged models (0.065, 0.100)
+    or (0, 0)."""
+    return struct.unpack_from("<2f", d, H_PHONEME_FILTER)
 
 
 def eyeballs(d, model_base):

@@ -114,11 +114,18 @@ int32 FElysiumExpressionTable::FindRow(const FString& Name) const
 	return INDEX_NONE;
 }
 
+int32 FElysiumExpressionTable::FindRowByPhonemeCode(int32 Code) const
+{
+	const int32* Found = RowByPhonemeCode.Find(Code);
+	return Found != nullptr ? *Found : INDEX_NONE;
+}
+
 bool FElysiumExpressionTable::ParseText(const FString& Text, const FString& InStem, FString& OutError)
 {
 	Stem = InStem;
 	Keys.Reset();
 	Rows.Reset();
+	RowByPhonemeCode.Reset();
 	bHasWeighting = false;
 	NumMalformedRows = 0;
 
@@ -186,6 +193,16 @@ bool FElysiumExpressionTable::ParseText(const FString& Text, const FString& InSt
 		FElysiumExpressionRow Row;
 		Row.Name = Toks[0];
 		Row.Class = Toks[1];
+		// The class as a code point: `0x0279` -> 633, `k` -> 107. Anything else (`_`, and the whole
+		// expression half) has no code and is reachable only by name.
+		if (Row.Class.StartsWith(TEXT("0x"), ESearchCase::IgnoreCase) && Row.Class.Len() > 2)
+		{
+			Row.PhonemeCode = FParse::HexNumber(*Row.Class.RightChop(2));
+		}
+		else if (Row.Class.Len() == 1)
+		{
+			Row.PhonemeCode = static_cast<int32>(Row.Class[0]);
+		}
 		Row.Values.Reserve(Keys.Num());
 		Row.Weights.Reserve(Keys.Num());
 		for (int32 k = 0; k < Keys.Num(); ++k)
@@ -198,6 +215,12 @@ bool FElysiumExpressionTable::ParseText(const FString& Text, const FString& InSt
 		if (Toks.Num() > 2 + Expected)
 		{
 			Row.Description = Toks[2 + Expected];
+		}
+		// First row wins a code, matching the `.vfe`'s own single-entry-per-code array. `_` rows carry
+		// no code, so an expression table simply builds an empty map.
+		if (Row.PhonemeCode != INDEX_NONE)
+		{
+			RowByPhonemeCode.FindOrAdd(Row.PhonemeCode, Rows.Num());
 		}
 		Rows.Add(MoveTemp(Row));
 	}

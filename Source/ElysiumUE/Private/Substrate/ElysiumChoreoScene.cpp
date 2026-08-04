@@ -44,6 +44,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumLipTrack.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumScenePlayer.h"
 #include "Visual/ElysiumExpressionTable.h"
@@ -117,6 +118,15 @@ namespace
 		TEXT("A choreo scene drives its actors' faces from its expression events (1, default) or leaves them at rest (0)."),
 		ECVF_Default);
 
+	// The same A/B for lipsync (12.5). Independent of the expression switch for the same reason the
+	// jaw is: the phoneme track and the expression track write the same controllers through the same
+	// push, and telling them apart on a live face means being able to turn one off.
+	TAutoConsoleVariable<int32> CVarSceneLipsync(
+		TEXT("elysium.SceneLipsync"),
+		1,
+		TEXT("A choreo scene drives its actors' mouths from each line's .lip phoneme track (1, default) or leaves the phoneme controllers at rest (0)."),
+		ECVF_Default);
+
 	// The same A/B for the jaw. Independent of the expression switch: the two tracks meet on one face
 	// but at different layers, and either alone is a thing worth looking at.
 	TAutoConsoleVariable<int32> CVarSceneJaw(
@@ -169,6 +179,9 @@ namespace
 	// for the lipsync half). Only reached when an event's `param` names a bare model stem rather than
 	// the table itself — 4 of the 23 authored params do.
 	const TCHAR* const GExpressionClass = TEXT("expressions");
+
+	// The lipsync half of the same pair, straight from FUN_100C42F0.
+	const TCHAR* const GPhonemeClass = TEXT("phonemes");
 
 	// Subclass-member field accessor. File-unique name so every one of these can land in one unity
 	// blob — same reason as AddSeqField / AddNpcField / AddLogicField.
@@ -282,11 +295,15 @@ public:
 	int32 NumUnresolvedSpeak = 0;
 	int32 NumUnresolvedExpressions = 0;
 	int32 NumMissingFlexKeys = 0;
+	int32 NumLinesWithLip = 0;
+	int32 NumLinesWithoutLip = 0;
+	int32 NumUnresolvedPhonemes = 0;
 	mutable bool bLoggedMissingActor = false;
 	mutable bool bLoggedMissingClip = false;
 	mutable bool bLoggedMissingSpeak = false;
 	mutable bool bLoggedMissingExpression = false;
 	mutable bool bLoggedMissingFlexKey = false;
+	mutable bool bLoggedUnresolvedPhoneme = false;
 
 	// --- the facial track (12.3) --------------------------------------------------------------
 	// One live `expression` event: its table and the row inside it, resolved once when the event
@@ -303,6 +320,11 @@ public:
 	// pose costs no rig evaluation, and when an expression ends the scene has to write the keys it
 	// was driving back to zero — nothing else knows which those were.
 	TMap<int32, TMap<FString, float>> ActorFacialPose;
+	// --- lipsync (12.5 slice 2) ---------------------------------------------------------------
+	// Per live `speak` event, its `.lip` phoneme track joined to the speaker's own phoneme table.
+	// Keyed by event index like everything else here, so `RestoreEvent` rebuilds it for free by
+	// routing a restored Speak back through SpeakLine. Absent for a line that resolved neither.
+	TMap<int32, FElysiumLipSyncBinding> ActiveLipsync;
 	// --- the amplitude jaw (12.5 slice 1) -----------------------------------------------------
 	// One authored span of the line's amplitude envelope, on the SCENE clock.
 	struct FJawSpan
@@ -660,6 +682,9 @@ public:
 		NumUnresolvedSpeak = 0;
 		NumUnresolvedExpressions = 0;
 		NumMissingFlexKeys = 0;
+		NumLinesWithLip = 0;
+		NumLinesWithoutLip = 0;
+		NumUnresolvedPhonemes = 0;
 		NumLineEnvelopes = 0;
 		NumLinesWithoutEnvelope = 0;
 		bLoggedMissingActor = false;
@@ -667,6 +692,7 @@ public:
 		bLoggedMissingSpeak = false;
 		bLoggedMissingExpression = false;
 		bLoggedMissingFlexKey = false;
+		bLoggedUnresolvedPhoneme = false;
 		ActiveClipEvents.Reset();
 		ActiveExpressions.Reset();
 		ActorFacialPose.Reset();
@@ -1092,6 +1118,7 @@ public:
 		{
 			ActiveSpeakEvents.Add(EvIndex);
 			ResolveLineEnvelope(Event, EvIndex);
+			ResolveLineLipsync(Event, EvIndex);
 		}
 		if (World == nullptr || World->Lines() == nullptr)
 		{
@@ -1127,6 +1154,9 @@ public:
 		if (Event.Type == EElysiumChoreoEvent::Speak)
 		{
 			ActiveSpeakEvents.Remove(EventIndex(Event));
+			// The controllers it was driving go back to zero on the next RefreshFacialPose, the same
+			// way an expression's do.
+			ActiveLipsync.Remove(EventIndex(Event));
 		}
 		if (World == nullptr || World->Audio() == nullptr)
 		{
@@ -1221,7 +1251,10 @@ public:
 	// because that is what the data means and what a fractional influence would need.
 	void RefreshFacialPose()
 	{
-		if (World == nullptr || !HasScene() || (ActiveExpressions.IsEmpty() && ActorFacialPose.IsEmpty()))
+		// ActiveLipsync belongs in this guard: most of sp_theatre's scenes carry no `expression` event
+		// at all, and without it the whole phoneme track would silently never tick on them.
+		if (World == nullptr || !HasScene()
+			|| (ActiveExpressions.IsEmpty() && ActiveLipsync.IsEmpty() && ActorFacialPose.IsEmpty()))
 		{
 			return;
 		}
@@ -1251,6 +1284,52 @@ public:
 					const float Influence = FMath::Clamp(Row.Weights[k] * Intensity, 0.f, 1.f);
 					float& Slot = Pose.FindOrAdd(Live->Table->Keys[k]);
 					Slot = Slot * (1.f - Influence) + Row.Values[k] * Influence;
+				}
+			}
+		}
+
+		// Lipsync composes ON TOP of the expression pose, into the same map and out through the same
+		// push — which is what retail does too: `SetupWeights` lerps and remaps the controllers first
+		// (step 4) and accumulates visemes onto the result (step 6). Feeding `Next` rather than
+		// pushing separately also inherits the release-to-zero below, the unchanged-pose skip, and the
+		// missing-key accounting; a second `SetFlexControllers` call would be undone by the first.
+		//
+		// Its own gate, not the expression one: a scene may carry only lines, or only expressions.
+		if (ActorsEnabled() && CVarSceneLipsync.GetValueOnGameThread() != 0)
+		{
+			TArray<FString> Unresolved;
+			for (const TPair<int32, FElysiumLipSyncBinding>& Line : ActiveLipsync)
+			{
+				if (!Scene->Events.IsValidIndex(Line.Key) || !Line.Value.IsValid())
+				{
+					continue;
+				}
+				const FElysiumSceneEvent& Ev = Scene->Events[Line.Key];
+				if (Ev.ActorIndex == INDEX_NONE)
+				{
+					continue;
+				}
+				// A speak event dispatched early by the mixahead is not speaking yet — the same gate
+				// the jaw uses, and for the same reason. `.lip` times are seconds from the start of
+				// the audio, and the authored start is when that audio is meant to be HEARD.
+				const float LineSeconds = SceneTime - Ev.StartTime;
+				if (LineSeconds < 0.f || LineSeconds > Line.Value.Track->LatestTime)
+				{
+					continue;
+				}
+				Unresolved.Reset();
+				Line.Value.Accumulate(LineSeconds, Next.FindOrAdd(Ev.ActorIndex), &Unresolved);
+				if (!Unresolved.IsEmpty())
+				{
+					NumUnresolvedPhonemes += Unresolved.Num();
+					if (!bLoggedUnresolvedPhoneme)
+					{
+						bLoggedUnresolvedPhoneme = true;
+						UE_LOG(LogElysiumChoreo, Log,
+							TEXT("%s: %s carries no phoneme row named %s (further misses counted, not logged)"),
+							*DebugString(), *Line.Value.Table->Stem,
+							*FString::Join(Unresolved, TEXT(", ")));
+					}
 				}
 			}
 		}
@@ -1360,6 +1439,10 @@ public:
 		ActiveSpeakEvents.Reset();
 		LineEnvelopes.Reset();
 		ActorJaw.Reset();
+		// Lipsync is keyed by the same live `speak` set, so it is torn down with it rather than on a
+		// path of its own — which is what puts it in InputStart, both save-restore paths, ShutJaws,
+		// cancel and completion without any of them naming it.
+		ActiveLipsync.Reset();
 		// Not the counters: they are diagnostics, and the completion path runs through here, so
 		// zeroing them would leave the inspector reporting nothing about the scene that just played.
 		// InputStart clears them alongside every other one.
@@ -1409,6 +1492,53 @@ public:
 			Span.bLoud = Ev.Type == EElysiumChoreoEvent::Loud;
 		}
 		if (Spans.IsEmpty()) { ++NumLinesWithoutEnvelope; } else { ++NumLineEnvelopes; }
+	}
+
+	// --- lipsync: the three-file join for one line (12.5 slice 2) ------------------------------
+	//
+	// `.lip` for the phoneme timing, `expressions/<model stem>_phonemes.txt` for the weights, and the
+	// model's own phoneme filter for the blend width. Resolved once when the line starts, beside
+	// ResolveLineEnvelope and for the same reason: before the audio gate, because a muted or
+	// unresolved line still has a mouth.
+	//
+	// The table is chosen by the SPEAKING ENTITY'S model, matching `client.dll`'s FUN_100C4210
+	// (`"expressions/%s_%s.vfe"` over the model basename). Not by the scene's `faceposermodel`, which
+	// names the cinematic animation model — `Courtroom_bip2.mdl` — and occurs once corpus-wide.
+	void ResolveLineLipsync(const FElysiumSceneEvent& Event, int32 EvIndex)
+	{
+		if (EvIndex == INDEX_NONE || ActiveLipsync.Contains(EvIndex)
+			|| CVarSceneLipsync.GetValueOnGameThread() == 0)
+		{
+			return;
+		}
+		const FElysiumEntity* Actor = ActorOf(Event);
+		if (Actor == nullptr)
+		{
+			return;
+		}
+		FElysiumLipSyncBinding Binding;
+		Binding.Track = ElysiumLip::Load(Event.Param);
+		const FString Stem = FPaths::GetBaseFilename(Actor->Model).ToLower();
+		if (!Stem.IsEmpty())
+		{
+			Binding.Table = ElysiumExpressions::Load(Stem, GPhonemeClass);
+		}
+		// `phonemes` / `phonemes_male` are the fallbacks client.dll names literally. Every rigged
+		// character in the shipped cast carries its own table, so this is reached only by a model
+		// whose stem has none.
+		if (!Binding.Table.IsValid())
+		{
+			Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), GPhonemeClass);
+		}
+		// The blend width is the model's own `studiohdr` +232/+236 pair. The binding's defaults are
+		// what every rigged character ships, and stand in until the facial sidecar carries the field.
+		if (!Binding.IsValid())
+		{
+			++NumLinesWithoutLip;
+			return;
+		}
+		++NumLinesWithLip;
+		ActiveLipsync.Add(EvIndex, MoveTemp(Binding));
 	}
 
 	// The jaw's target for one actor this frame, over both envelope sources.
@@ -1731,7 +1861,10 @@ public:
 
 		Out.Emplace(TEXT("Unresolved"), FString::Printf(TEXT("actors %d, clips %d, lines %d, expressions %d"),
 			NumUnresolvedActors, NumUnresolvedClips, NumUnresolvedSpeak, NumUnresolvedExpressions));
-		if (HasScene() && Scene->CountOf(EElysiumChoreoEvent::Expression) > 0)
+		// Both facial tracks share `ActorFacialPose`, so the pose row is reported for either — a
+		// lipsync-only scene is the common case (none of sp_theatre's eleven carries an expression).
+		if (HasScene() && (Scene->CountOf(EElysiumChoreoEvent::Expression) > 0
+			|| Scene->CountOf(EElysiumChoreoEvent::Speak) > 0))
 		{
 			FString Faces;
 			for (const TPair<int32, TMap<FString, float>>& Actor : ActorFacialPose)
@@ -1740,11 +1873,22 @@ public:
 					Scene->Actors.IsValidIndex(Actor.Key) ? *Scene->Actors[Actor.Key].Name : TEXT("?"),
 					Actor.Value.Num());
 			}
-			Out.Emplace(TEXT("Expressions"), FString::Printf(TEXT("%d authored, %d live%s%s"),
-				Scene->CountOf(EElysiumChoreoEvent::Expression), ActiveExpressions.Num(),
-				NumMissingFlexKeys > 0
-					? *FString::Printf(TEXT(", %d key(s) the model lacks"), NumMissingFlexKeys) : TEXT(""),
-				CVarSceneExpressions.GetValueOnGameThread() == 0 ? TEXT(" [off]") : TEXT("")));
+			if (Scene->CountOf(EElysiumChoreoEvent::Expression) > 0)
+			{
+				Out.Emplace(TEXT("Expressions"), FString::Printf(TEXT("%d authored, %d live%s%s"),
+					Scene->CountOf(EElysiumChoreoEvent::Expression), ActiveExpressions.Num(),
+					NumMissingFlexKeys > 0
+						? *FString::Printf(TEXT(", %d key(s) the model lacks"), NumMissingFlexKeys) : TEXT(""),
+					CVarSceneExpressions.GetValueOnGameThread() == 0 ? TEXT(" [off]") : TEXT("")));
+			}
+			if (Scene->CountOf(EElysiumChoreoEvent::Speak) > 0)
+			{
+				Out.Emplace(TEXT("Lipsync"), FString::Printf(TEXT("%d line(s) joined, %d without a .lip, %d live%s%s"),
+					NumLinesWithLip, NumLinesWithoutLip, ActiveLipsync.Num(),
+					NumUnresolvedPhonemes > 0
+						? *FString::Printf(TEXT(", %d phoneme(s) with no row"), NumUnresolvedPhonemes) : TEXT(""),
+					CVarSceneLipsync.GetValueOnGameThread() == 0 ? TEXT(" [off]") : TEXT("")));
+			}
 			if (!Faces.IsEmpty())
 			{
 				Out.Emplace(TEXT("Faces posed"), Faces);
@@ -1888,6 +2032,79 @@ static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumExpressionCmd(
 				// A key at influence 0 is one this row does not participate in; printed anyway, so
 				// what the row leaves alone is as visible as what it writes.
 				Ar.Logf(TEXT("    %-24s %.3f  x%.3f"), *Table->Keys[k], Row.Values[k], Row.Weights[k]);
+			}
+		}));
+
+// The corpus-facing half of the lipsync join, needing no world: read a line's `.lip` off disk and,
+// with a model stem, show what its phonemes resolve to on that face.
+static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumLipCmd(
+	TEXT("elysium.lip"),
+	TEXT("Lipsync: `elysium.lip <line path>` dumps a .lip's words and phonemes, "
+	     "`<line path> <model stem>` also resolves each phoneme against that model's phoneme table, "
+	     "`cache [clear]` reports the parse cache."),
+	FConsoleCommandWithArgsAndOutputDeviceDelegate::CreateStatic(
+		[](const TArray<FString>& Args, FOutputDevice& Ar)
+		{
+			if (Args.Num() >= 1 && Args[0].Equals(TEXT("cache"), ESearchCase::IgnoreCase))
+			{
+				if (Args.Num() >= 2 && Args[1].Equals(TEXT("clear"), ESearchCase::IgnoreCase))
+				{
+					ElysiumLip::ClearCache();
+					Ar.Logf(TEXT("lip cache cleared"));
+					return;
+				}
+				int32 Entries = 0, Hits = 0, Misses = 0;
+				ElysiumLip::CacheStats(Entries, Hits, Misses);
+				Ar.Logf(TEXT("lip tracks under %s; cache: %d entries, %d hits, %d misses"),
+					*FElysiumContentPaths::LipDir(), Entries, Hits, Misses);
+				return;
+			}
+			if (Args.Num() < 1)
+			{
+				Ar.Logf(TEXT("usage: elysium.lip <line path> [model stem] | cache [clear]"));
+				return;
+			}
+
+			const FString Rel = ElysiumLip::NormalizeLipRel(Args[0]);
+			TSharedPtr<const FElysiumLipTrack> Track = ElysiumLip::Load(Args[0]);
+			if (!Track.IsValid())
+			{
+				Ar.Logf(ELogVerbosity::Warning, TEXT("no usable .lip at %s"),
+					*FElysiumContentPaths::LipFile(Rel));
+				return;
+			}
+			Ar.Logf(TEXT("%s: version %s, %d word(s), %d phoneme(s), %.3fs%s%s"),
+				*Rel, *Track->Version, Track->Words.Num(), Track->NumPhonemes(), Track->LatestTime,
+				Track->SpeakerName.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", %s"), *Track->SpeakerName),
+				Track->NumMalformedRows > 0
+					? *FString::Printf(TEXT(", %d malformed row(s) dropped"), Track->NumMalformedRows) : TEXT(""));
+
+			// With a stem, the join is shown end to end: code -> row -> the controllers it writes.
+			TSharedPtr<const FElysiumExpressionTable> Table = Args.Num() >= 2
+				? ElysiumExpressions::Load(Args[1], GPhonemeClass) : nullptr;
+			if (Args.Num() >= 2 && !Table.IsValid())
+			{
+				Ar.Logf(ELogVerbosity::Warning, TEXT("'%s' resolves to no phoneme table"), *Args[1]);
+			}
+
+			for (const FElysiumLipWord& Word : Track->Words)
+			{
+				Ar.Logf(TEXT("  %-20s %.3f  %.3f"), *Word.Text, Word.Start, Word.End);
+				for (const FElysiumLipPhoneme& P : Word.Phonemes)
+				{
+					FString Resolved;
+					if (Table.IsValid())
+					{
+						const int32 Row = Table->FindRowByPhonemeCode(P.Code);
+						// The string is printed beside the row it actually reaches, because the two
+						// disagree far more often than not.
+						Resolved = Row != INDEX_NONE
+							? FString::Printf(TEXT("  -> \"%s\""), *Table->Rows[Row].Name)
+							: FString(TEXT("  -> (no row)"));
+					}
+					Ar.Logf(TEXT("      %-5d %-6s %.3f  %.3f%s"),
+						P.Code, *P.Phoneme, P.Start, P.End, *Resolved);
+				}
 			}
 		}));
 

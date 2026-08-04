@@ -19,6 +19,8 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumLineService.h"
+#include "Substrate/ElysiumLipTrack.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Tests/ElysiumTestServices.h"
 #include "Visual/ElysiumExpressionTable.h"
@@ -2098,6 +2100,616 @@ bool FElysiumTheatreJawTest::RunTest(const FString&)
 	// The eight that mark nothing are the Prince's escort walk-out and one whispered line; every
 	// line of the trial itself carries one, which is what puts the courtroom cast's jaws in motion.
 	TestTrue(TEXT("and most of them carry an envelope in it"), TheatreLines * 2 > TheatreSpeak);
+
+	return true;
+}
+
+// =====================================================================================
+// Lipsync (12.5): the `.lip` reader, the recovered envelope, and the scene driver.
+// =====================================================================================
+
+namespace
+{
+	// `facial_animation.md`'s own worked example, plus the two shapes a reader gets wrong silently:
+	// a five-field row (version 1.0/1.1 omit the trailing flag; 11,331 rows corpus-wide) and a row
+	// whose time is not a number, which must be counted rather than read as zero.
+	const TCHAR* const GTestLipText = TEXT(
+		"VERSION 1.2\r\n"
+		"PLAINTEXT\r\n"
+		"{\r\n"
+		"Out, devil!\r\n"
+		"}\r\n"
+		"WORDS\r\n"
+		"{\r\n"
+		"WORD Out 0.140 0.578\r\n"
+		"{\r\n"
+		"593 aw 0.140 0.437 1.000 0\r\n"
+		"116 t 0.437 0.578 1.000\r\n"
+		"999 zz notanumber 0.500 1.000 0\r\n"
+		"}\r\n"
+		"WORD devil 0.702 1.155\r\n"
+		"{\r\n"
+		"100 d 0.702 0.900 1.000 0\r\n"
+		"618 ih 0.900 1.155 1.000 0\r\n"
+		"}\r\n"
+		// Faceposer writes the caption's own punctuation into the word text. A quote-aware tokenizer
+		// swallows this line and loses both phonemes under it — 1,159 files corpus-wide.
+		"WORD \"I'll 1.200 1.400\r\n"
+		"{\r\n"
+		"593 ay 1.200 1.300 1.000 0\r\n"
+		"108 l 1.300 1.400 1.000 0\r\n"
+		"}\r\n"
+		"}\r\n"
+		"EMPHASIS\r\n"
+		"{\r\n"
+		"}\r\n"
+		"CLOSECAPTION\r\n"
+		"{\r\n"
+		"english\r\n"
+		"{\r\n"
+		"PHRASE char 13 \"Out, devil!\" 0.140 1.155\r\n"
+		"}\r\n"
+		"}\r\n"
+		"OPTIONS\r\n"
+		"{\r\n"
+		"voice_duck 1\r\n"
+		"speaker_name Bach\r\n"
+		"}\r\n");
+
+	// Two abutting phonemes chosen so the envelope's numbers come out exact against the shipped
+	// filter pair (0.080, 0.100): `aw` spans 0.200 (clamps to the 0.100 maximum) and `t` spans 0.050
+	// (clamps up to the 0.080 minimum, so its peak is 0.050/0.080 = 0.625, not 1).
+	const TCHAR* const GEnvelopeLipText = TEXT(
+		"VERSION 1.2\r\n"
+		"WORDS\r\n"
+		"{\r\n"
+		"WORD out 1.000 1.250\r\n"
+		"{\r\n"
+		"593 aw 1.000 1.200 1.000 0\r\n"
+		"116 t 1.200 1.250 1.000 0\r\n"
+		"}\r\n"
+		"}\r\n");
+
+	// The same two phonemes on the audio clock a scene event would give them.
+	const TCHAR* const GSceneLipText = TEXT(
+		"VERSION 1.2\r\n"
+		"WORDS\r\n"
+		"{\r\n"
+		"WORD out 0.000 0.250\r\n"
+		"{\r\n"
+		"593 aw 0.000 0.200 1.000 0\r\n"
+		"116 t 0.200 0.250 1.000 0\r\n"
+		"}\r\n"
+		"}\r\n");
+
+	// A phoneme table over two mouth controllers.
+	//
+	//   `aa`  is reachable ONLY by its class code 0x0251 = 593. The `.lip` rows that carry 593 spell
+	//         themselves `aw` and `ay`, neither of which is a row name here — so a string lookup
+	//         finds nothing and a code lookup finds `aa`, which is the whole correction.
+	//   `t`   carries a NON-ZERO value under a ZERO influence on `smile` — the shape
+	//         `lacroix_phonemes`'s `r2` row actually has, and the one that separates retail's
+	//         accumulate (which reads the value alone) from an influence-weighted read.
+	const TCHAR* const GTestPhonemeTableText = TEXT(
+		"$keys jaw_drop smile\r\n"
+		"$hasweighting\r\n"
+		"\"aa\" \"0x0251\" 0.800 1.000 0.000 0.000 \"reached by code 593\"\r\n"
+		"\"t\" \"t\" 0.900 1.000 0.500 0.000 \"value under zero influence\"\r\n");
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLipTrackTest,
+	"Elysium.Substrate.LipTrack", GElysiumFacialTestFlags)
+bool FElysiumLipTrackTest::RunTest(const FString&)
+{
+	FElysiumLipTrack Track;
+	ElysiumLip::ParseText(GTestLipText, TEXT("test/bach.lip"), Track);
+
+	TestTrue(TEXT("the fixture yields a usable track"), Track.bValid);
+	TestEqual(TEXT("VERSION is read"), Track.Version, FString(TEXT("1.2")));
+	TestEqual(TEXT("three words"), Track.Words.Num(), 3);
+	TestEqual(TEXT("six usable phoneme rows"), Track.NumPhonemes(), 6);
+	// The row whose start is not a number is dropped, not read as zero — a zero start would put the
+	// phoneme at the head of the line and it would fire on every sample from t=0.
+	TestEqual(TEXT("the malformed row is dropped and counted"), Track.NumMalformedRows, 1);
+	TestEqual(TEXT("LatestTime is the last phoneme's end"), Track.LatestTime, 1.400f, 1e-4f);
+
+	// The regression the corpus taught: a word whose text opens with a quotation mark keeps both its
+	// phonemes. Quote-aware tokenization reads the whole line as one token and loses them.
+	if (TestEqual(TEXT("the quote-prefixed word survives"), Track.Words.Num(), 3))
+	{
+		TestEqual(TEXT("its text keeps the quote"), Track.Words[2].Text, FString(TEXT("\"I'll")));
+		TestEqual(TEXT("and it keeps its phonemes"), Track.Words[2].Phonemes.Num(), 2);
+	}
+
+	// The leading integer is carried, because it is the key.
+	TestEqual(TEXT("the phoneme code is read"), Track.Words[0].Phonemes[0].Code, 593);
+	TestEqual(TEXT("the string is carried beside it"),
+		Track.Words[0].Phonemes[0].Phoneme, FString(TEXT("aw")));
+
+	// The five-field row parses identically to the six-field one.
+	if (TestEqual(TEXT("the first word keeps both its rows"), Track.Words[0].Phonemes.Num(), 2))
+	{
+		TestEqual(TEXT("six-field row phoneme"), Track.Words[0].Phonemes[0].Phoneme, FString(TEXT("aw")));
+		TestEqual(TEXT("five-field row phoneme"), Track.Words[0].Phonemes[1].Phoneme, FString(TEXT("t")));
+		TestEqual(TEXT("five-field row start"), Track.Words[0].Phonemes[1].Start, 0.437f, 1e-4f);
+		TestEqual(TEXT("five-field row end"), Track.Words[0].Phonemes[1].End, 0.578f, 1e-4f);
+	}
+	TestEqual(TEXT("the word text is carried"), Track.Words[1].Text, FString(TEXT("devil")));
+
+	// OPTIONS, for the debug surface. CLOSECAPTION and PLAINTEXT are read and dropped: a `}` inside
+	// the caption would desync the block walk, which is what Elysium.Content.LipCorpus proves it does
+	// not do across the shipped corpus.
+	TestTrue(TEXT("voice_duck is read"), Track.bVoiceDuck);
+	TestEqual(TEXT("speaker_name is read"), Track.SpeakerName, FString(TEXT("Bach")));
+
+	// A file with no WORDS block moves no mouth, and says so rather than looking loaded.
+	FElysiumLipTrack Empty;
+	ElysiumLip::ParseText(TEXT("VERSION 1.2\r\nWORDS\r\n{\r\n}\r\n"), TEXT("empty.lip"), Empty);
+	TestFalse(TEXT("a track with no phoneme is not valid"), Empty.bValid);
+
+	// The path fold is the scene reader's, with the extension swapped — a `speak` param names a wav
+	// or an mp3 and the mirror holds neither.
+	TestEqual(TEXT("a speak param folds to the lip mirror key"),
+		ElysiumLip::NormalizeLipRel(TEXT("Character\\dlg\\Downtown LA\\prince1\\line1015_col_f.mp3")),
+		FString(TEXT("character/dlg/downtown la/prince1/line1015_col_f.lip")));
+	TestEqual(TEXT("a leading sound/ is stripped as it is for scenes"),
+		ElysiumLip::NormalizeLipRel(TEXT("sound/CINEMATIC/x.wav")), FString(TEXT("cinematic/x.lip")));
+	// The dialogue half derives its path from the line service's own rule, which returns a stem with
+	// NO extension — so the fold has to append one rather than replace one.
+	TestEqual(TEXT("a dialogue turn's extension-less source gains .lip"),
+		ElysiumLip::NormalizeLipRel(
+			FElysiumLineService::DialogueLineSource(TEXT("dlg/Downtown LA/prince1.dlg"), 1001)),
+		FString(TEXT("character/dlg/downtown la/prince1/line1001_col_e.lip")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLipSampleTest,
+	"Elysium.Substrate.LipSample", GElysiumFacialTestFlags)
+bool FElysiumLipSampleTest::RunTest(const FString&)
+{
+	FElysiumLipTrack Track;
+	ElysiumLip::ParseText(GEnvelopeLipText, TEXT("test/envelope.lip"), Track);
+	if (!TestTrue(TEXT("the envelope fixture parses"), Track.bValid))
+	{
+		return false;
+	}
+
+	// One of the two shipped rigged pairs; the fixture's spans are chosen against it so the
+	// envelope's numbers come out exact.
+	const float Lo = 0.08f, Hi = 0.10f;
+	TArray<FElysiumLipSample> Live;
+
+	auto ScaleOf = [&](float T, const TCHAR* Phoneme) -> float
+	{
+		Track.SampleAt(T, Lo, Hi, Live);
+		for (const FElysiumLipSample& S : Live)
+		{
+			if (S.Phoneme->Phoneme == Phoneme) { return S.Scale; }
+		}
+		return 0.f;
+	};
+
+	// --- the lead-in happens BEFORE the phoneme's authored start ------------------------------
+	// `aw` starts at 1.000 with S = 0.100, so its window opens at 0.900. A reader that ramped inside
+	// the span would have it silent here and at full weight in the middle of the span instead.
+	Track.SampleAt(0.89f, Lo, Hi, Live);
+	TestEqual(TEXT("t=0.89: before the window, nothing is live"), Live.Num(), 0);
+	Track.SampleAt(0.90f, Lo, Hi, Live);
+	TestEqual(TEXT("t=0.90: the window opens exactly at start-S, still at zero"), Live.Num(), 0);
+	TestEqual(TEXT("t=0.95: halfway up the lead-in"), ScaleOf(0.95f, TEXT("aw")), 0.5f, 1e-4f);
+
+	// --- peak at the authored start, then a linear decay ending at the authored end ------------
+	TestEqual(TEXT("t=1.00: a long phoneme reaches full weight at its start"),
+		ScaleOf(1.00f, TEXT("aw")), 1.f, 1e-4f);
+	TestEqual(TEXT("t=1.15: decaying"), ScaleOf(1.15f, TEXT("aw")), 0.5f, 1e-4f);
+	TestEqual(TEXT("t=1.20: zero exactly at the authored end"), ScaleOf(1.20f, TEXT("aw")), 0.f);
+
+	// --- a span shorter than S never reaches 1 -------------------------------------------------
+	// `t` spans 0.050 and S clamps up to 0.080, so its peak is 0.625. This is the case a symmetric
+	// min(D, span/2) reconstruction gets wrong: that one reaches 1.0 on every phoneme.
+	TestEqual(TEXT("t=1.20: the short phoneme peaks at span/S, not 1"),
+		ScaleOf(1.20f, TEXT("t")), 0.625f, 1e-4f);
+	TestEqual(TEXT("t=1.25: and is zero at its authored end"), ScaleOf(1.25f, TEXT("t")), 0.f);
+
+	// --- abutting spans overlap, because one's lead-in runs under the other's decay -------------
+	Track.SampleAt(1.15f, Lo, Hi, Live);
+	TestEqual(TEXT("t=1.15: both phonemes are live at once"), Live.Num(), 2);
+	TestEqual(TEXT("t=1.15: the next phoneme is already leading in"),
+		ScaleOf(1.15f, TEXT("t")), 0.375f, 1e-4f);
+
+	// --- the accumulate: value-only, additive, clamped -----------------------------------------
+	FElysiumExpressionTable Table;
+	FString Error;
+	if (!TestTrue(TEXT("the phoneme table parses"),
+		Table.ParseText(GTestPhonemeTableText, TEXT("testface_phonemes"), Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// The correction the corpus forced: the row is reached by CODE, through the class column. The
+	// `.lip` spells code 593 as `aw` here and as `ay` elsewhere, and neither is a row name.
+	TestEqual(TEXT("the class column becomes a code"), Table.Rows[0].PhonemeCode, 593);
+	TestEqual(TEXT("code 593 resolves to the 'aa' row"), Table.FindRowByPhonemeCode(593), 0);
+	TestEqual(TEXT("a single-character class is its own code point"),
+		Table.FindRowByPhonemeCode(static_cast<int32>('t')), 1);
+	TestEqual(TEXT("and the string the .lip spells it with names no row at all"),
+		Table.FindRow(TEXT("aw")), INDEX_NONE);
+
+	FElysiumLipSyncBinding Binding;
+	Binding.Track = MakeShared<FElysiumLipTrack>(Track);
+	Binding.Table = MakeShared<FElysiumExpressionTable>(Table);
+	// Pinned to this test's own pair rather than left on the default, so the accumulate's numbers
+	// follow from the same S the sampling above used.
+	Binding.BlendMin = Lo;
+	Binding.BlendMax = Hi;
+	TestTrue(TEXT("the binding is usable"), Binding.IsValid());
+
+	TMap<FString, float> Pose;
+	TArray<FString> Unresolved;
+	TestEqual(TEXT("both live phonemes contribute"),
+		Binding.Accumulate(1.15f, Pose, &Unresolved), 2);
+	TestEqual(TEXT("every phoneme resolved to a row"), Unresolved.Num(), 0);
+	// 0.5 x 0.800 + 0.375 x 0.900. A blend rather than a sum would read 0.900 here.
+	TestEqual(TEXT("the two phonemes SUM on the key they share"),
+		Pose.FindRef(TEXT("jaw_drop")), 0.7375f, 1e-4f);
+	// `t`'s smile value is 0.500 under influence 0.000. Retail's accumulate never reads the
+	// influence column, so this is 0.375 x 0.500 and NOT zero.
+	TestEqual(TEXT("a value under zero influence still contributes"),
+		Pose.FindRef(TEXT("smile")), 0.1875f, 1e-4f);
+
+	// Composed on top of an expression that already claimed the key, the sum clamps rather than
+	// running past 1 — which is what the controller min/max would do to it downstream anyway.
+	Pose.Reset();
+	Pose.Add(TEXT("jaw_drop"), 0.6f);
+	Binding.Accumulate(1.15f, Pose, nullptr);
+	TestEqual(TEXT("accumulation onto an expression clamps at 1"),
+		Pose.FindRef(TEXT("jaw_drop")), 1.f, 1e-4f);
+
+	// An instant with nothing live writes nothing at all, so the mouth relaxes to whatever else is
+	// driving it rather than being pinned to zero by the phoneme track.
+	Pose.Reset();
+	TestEqual(TEXT("past the line, nothing contributes"), Binding.Accumulate(2.f, Pose, nullptr), 0);
+	TestEqual(TEXT("and nothing is written"), Pose.Num(), 0);
+
+	// A phoneme string the table does not carry comes back by name rather than being dropped.
+	FElysiumLipTrack Junk;
+	ElysiumLip::ParseText(
+		TEXT("VERSION 1.2\r\nWORDS\r\n{\r\nWORD x 0.000 0.100\r\n{\r\n1 ??? 0.000 0.100 1.000 0\r\n}\r\n}\r\n"),
+		TEXT("junk.lip"), Junk);
+	FElysiumLipSyncBinding JunkBinding;
+	JunkBinding.Track = MakeShared<FElysiumLipTrack>(Junk);
+	JunkBinding.Table = Binding.Table;
+	Unresolved.Reset();
+	Pose.Reset();
+	JunkBinding.Accumulate(0.05f, Pose, &Unresolved);
+	TestEqual(TEXT("an unknown phoneme is reported"), Unresolved.Num(), 1);
+	// Reported as code/string, because the code is what failed to resolve and the string is what a
+	// reader would recognise in the file.
+	TestTrue(TEXT("and it names both halves"), Unresolved.Contains(TEXT("1/???")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneLipsyncTest,
+	"Elysium.Substrate.SceneLipsync", GElysiumFacialTestFlags)
+bool FElysiumSceneLipsyncTest::RunTest(const FString&)
+{
+	ElysiumExpressions::ClearCache();
+	ElysiumLip::ClearCache();
+	// The resolver asks for the SPEAKER'S model stem, so the table has to be seeded under that stem
+	// rather than under the table's own file name.
+	ElysiumExpressions::RegisterInline(TEXT("testface"), GTestPhonemeTableText);
+	ElysiumLip::RegisterInline(TEXT("test/line1.wav"), GSceneLipText);
+	// A cached negative for the per-line `.vcd` the jaw looks for, so this test exercises only the
+	// phoneme track and does not warn about a scene it was never going to find.
+	ElysiumScene::RegisterInline(TEXT("test/line1.vcd"), TEXT(""));
+
+	// One actor, one line, authored to start at scene time 1.0.
+	const FString SceneText =
+		TEXT("// Choreo version 1\n")
+		TEXT("actor \"Face\"\n{\n")
+		TEXT("  channel \"VO\"\n  {\n")
+		TEXT("    event speak \"line1\"\n    {\n")
+		TEXT("      time 1.000000 3.000000\n")
+		TEXT("      param \"test/line1.wav\"\n")
+		TEXT("    }\n")
+		TEXT("  }\n")
+		TEXT("}\n")
+		TEXT("fps 60\nsnap off\n");
+	ElysiumScene::RegisterInline(TEXT("test/lipsync.vcd"), SceneText);
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test__");
+
+	FElysiumEntityDef S;
+	S.Classname = TEXT("logic_choreographed_scene");
+	S.TargetName = TEXT("scene1");
+	S.Keys.Add(TEXT("SceneFile"), TEXT("test/lipsync.vcd"));
+	Defs.Defs.Add(MoveTemp(S));
+
+	FElysiumEntityDef Face;
+	Face.Classname = TEXT("npc_VVampire");
+	Face.TargetName = TEXT("Face");
+	Face.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/testface.mdl"));
+	Defs.Defs.Add(MoveTemp(Face));
+
+	FElysiumRecordingServices Services;
+	Services.FlexControllers = { TEXT("jaw_drop"), TEXT("smile") };
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	double T = 0.0;
+	World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+	World.Tick(T);
+
+	// --- before the authored start: silent ----------------------------------------------------
+	// The mixahead dispatches a speak event early so the sample is HEARD at the authored instant.
+	// The phoneme track has to run on the authored clock or the mouth leads the voice by the lead.
+	T = 0.5; World.Tick(T);
+	TestEqual(TEXT("t=0.5: dispatched early, but not speaking yet"),
+		Services.FlexValue(TEXT("jaw_drop")), 0.f);
+
+	// --- t = 1.15, i.e. 0.15 into the line ----------------------------------------------------
+	// The scene builds the binding itself, so this runs on the DEFAULT filter pair (0.065, 0.100) —
+	// which is what lacroix, nines and skelter all carry. `aw` spans 0.200 and clamps to the 0.100
+	// maximum, decaying to 0.5; `t` spans 0.050 and clamps up to the 0.065 minimum, leading in at
+	// 1 - 0.05/0.065 = 0.230769. So the controllers read 0.5x0.8 + 0.230769x0.9 and 0.230769x0.5.
+	T = 1.15; World.Tick(T);
+	TestEqual(TEXT("t=1.15: the phoneme pair sums on jaw_drop"),
+		Services.FlexValue(TEXT("jaw_drop")), 0.607692f, 1e-3f);
+	TestEqual(TEXT("t=1.15: and a zero-influence value still reaches smile"),
+		Services.FlexValue(TEXT("smile")), 0.115384f, 1e-3f);
+
+	// --- past the line's last phoneme: back to rest -------------------------------------------
+	// The keys the line was driving are written back to zero by the same release pass an expression
+	// uses; a driver that only wrote what was live would latch the last frame of the last phoneme.
+	T = 2.0; World.Tick(T);
+	TestEqual(TEXT("t=2.0: the phoneme track has ended and released jaw_drop"),
+		Services.FlexValue(TEXT("jaw_drop")), 0.f);
+	TestEqual(TEXT("t=2.0: and smile"), Services.FlexValue(TEXT("smile")), 0.f);
+
+	// --- the A/B holds ------------------------------------------------------------------------
+	IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.SceneLipsync"));
+	if (TestNotNull(TEXT("elysium.SceneLipsync is registered"), CVar))
+	{
+		const int32 Was = CVar->GetInt();
+		ON_SCOPE_EXIT { CVar->Set(Was, ECVF_SetByCode); };
+		CVar->Set(0, ECVF_SetByCode);
+		T = 1.15; World.Tick(T);
+		TestEqual(TEXT("with lipsync off the mouth stays at rest"),
+			Services.FlexValue(TEXT("jaw_drop")), 0.f);
+	}
+
+	ElysiumLip::ClearCache();
+	ElysiumExpressions::ClearCache();
+	return true;
+}
+
+// =====================================================================================
+// Content: the shipped `.lip` corpus, and the theatre's own three-file join.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLipCorpusTest,
+	"Elysium.Content.LipCorpus", GElysiumFacialTestFlags)
+bool FElysiumLipCorpusTest::RunTest(const FString&)
+{
+	const FString LipDir = FElysiumContentPaths::LipDir();
+	TArray<FString> Files;
+	IFileManager::Get().FindFilesRecursive(Files, *LipDir, TEXT("*.lip"), true, false);
+	if (Files.Num() == 0)
+	{
+		AddInfo(TEXT("skipping: no .lip files under $ELYSIUM_EXPORT_ROOT/lip (run: uv run elysium export bundle scenes)"));
+		return true;
+	}
+
+	int32 Parsed = 0, Phonemes = 0, Malformed = 0, NoPhonemes = 0;
+	TSet<FString> Strings;
+	TSet<int32> Codes;
+	TArray<FString> Unreadable;
+	for (const FString& File : Files)
+	{
+		FString Text;
+		if (!FFileHelper::LoadFileToString(Text, *File))
+		{
+			Unreadable.Add(File);
+			continue;
+		}
+		FElysiumLipTrack Track;
+		ElysiumLip::ParseText(Text, File, Track);
+		++Parsed;
+		Malformed += Track.NumMalformedRows;
+		Phonemes += Track.NumPhonemes();
+		if (!Track.bValid) { ++NoPhonemes; }
+		for (const FElysiumLipWord& Word : Track.Words)
+		{
+			for (const FElysiumLipPhoneme& P : Word.Phonemes)
+			{
+				Strings.Add(P.Phoneme);
+				Codes.Add(P.Code);
+			}
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%d .lip files, %d phoneme rows, %d distinct codes, %d distinct strings"),
+		Parsed, Phonemes, Codes.Num(), Strings.Num()));
+
+	TestEqual(TEXT("the corpus is the 7,136 files PL9 mirrors"), Files.Num(), 7136);
+	TestEqual(TEXT("every one of them is readable"), Unreadable.Num(), 0);
+	TestEqual(TEXT("the phoneme-row total is the documented one"), Phonemes, 394923);
+	// Exactly one: `WORD Come on 0.048 0.400` in giovanni/nadia/line411_col_e, whose word text
+	// carries a real space. A count above that means the block walk desynced — which is what a
+	// quote-aware tokenizer does here, silently, on 1,159 files at once.
+	TestEqual(TEXT("one authored row in the corpus is malformed"), Malformed, 1);
+	// **48 codes against far more strings** is the whole reason the code is the key. If this ever
+	// reads the other way round, the join has been rewritten against the wrong column.
+	TestEqual(TEXT("48 distinct phoneme codes"), Codes.Num(), 48);
+	TestTrue(TEXT("and many more distinct strings than codes"), Strings.Num() > Codes.Num());
+	// 92 files carry a placeholder word with an empty block; they parse and are correctly inert.
+	TestEqual(TEXT("92 files carry no phoneme at all"), NoPhonemes, 92);
+
+	// Every code the corpus uses has to resolve against a real phoneme table, or the weights go
+	// nowhere. `lacroix` stands in for the 122 that carry a full row set.
+	TSharedPtr<const FElysiumExpressionTable> Reference =
+		ElysiumExpressions::Load(TEXT("lacroix"), TEXT("phonemes"));
+	if (Reference.IsValid())
+	{
+		TArray<int32> Unresolvable;
+		for (const int32 Code : Codes)
+		{
+			if (Reference->FindRowByPhonemeCode(Code) == INDEX_NONE)
+			{
+				Unresolvable.Add(Code);
+			}
+		}
+		for (const int32 Code : Unresolvable)
+		{
+			AddError(FString::Printf(TEXT("lacroix_phonemes cannot resolve code %d"), Code));
+		}
+		TestEqual(TEXT("a full phoneme table resolves every code in the corpus"),
+			Unresolvable.Num(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTheatreLipsyncTest,
+	"Elysium.Content.TheatreLipsync", GElysiumFacialTestFlags)
+bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(TEXT("skipping: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_theatre.ents parses"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+	FElysiumNpcIndex Index;
+	FString IndexError;
+	if (!Index.Load(IndexError))
+	{
+		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *IndexError));
+		return true;
+	}
+
+	// targetname -> model stem, the rule FElysiumAnimating::ModelStem applies and the one
+	// client.dll's FUN_100C4210 formats the table name from.
+	TMap<FString, FString> StemByName;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		const FString* Model = Def.Keys.Find(TEXT("model"));
+		if (!Def.TargetName.IsEmpty() && Model != nullptr && !Model->IsEmpty())
+		{
+			StemByName.Add(Def.TargetName.ToLower(), FPaths::GetBaseFilename(*Model).ToLower());
+		}
+	}
+
+	int32 Speak = 0, WithLip = 0, WithTable = 0, PhonemeRows = 0;
+	TSet<FString> Speakers;
+	TArray<FString> NoLip, NoTable, NoRow, NoController;
+
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (!Def.Classname.Equals(TEXT("logic_choreographed_scene"), ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+		const FString* SceneFile = Def.Keys.Find(TEXT("SceneFile"));
+		if (SceneFile == nullptr)
+		{
+			continue;
+		}
+		TSharedPtr<const FElysiumSceneData> Scene = ElysiumScene::Load(*SceneFile);
+		if (!Scene.IsValid())
+		{
+			continue;
+		}
+		for (const FElysiumSceneEvent& Ev : Scene->Events)
+		{
+			if (Ev.Type != EElysiumChoreoEvent::Speak || Ev.Param.IsEmpty())
+			{
+				continue;
+			}
+			++Speak;
+			const FString Actor = Scene->Actors.IsValidIndex(Ev.ActorIndex)
+				? Scene->Actors[Ev.ActorIndex].Name.ToLower() : FString();
+			const FString Stem = StemByName.FindRef(Actor);
+
+			TSharedPtr<const FElysiumLipTrack> Track = ElysiumLip::Load(Ev.Param);
+			if (!Track.IsValid())
+			{
+				NoLip.Add(Ev.Param);
+				continue;
+			}
+			++WithLip;
+			PhonemeRows += Track->NumPhonemes();
+			Speakers.Add(Stem);
+
+			TSharedPtr<const FElysiumExpressionTable> Table =
+				Stem.IsEmpty() ? nullptr : ElysiumExpressions::Load(Stem, TEXT("phonemes"));
+			if (!Table.IsValid())
+			{
+				NoTable.Add(FString::Printf(TEXT("%s (%s)"), *Actor, *Stem));
+				continue;
+			}
+			++WithTable;
+
+			// Every phoneme this line speaks must resolve to a row in this speaker's own table — by
+			// code, through the class column, which is the lookup client.dll performs.
+			for (const FElysiumLipWord& Word : Track->Words)
+			{
+				for (const FElysiumLipPhoneme& P : Word.Phonemes)
+				{
+					if (Table->FindRowByPhonemeCode(P.Code) == INDEX_NONE)
+					{
+						NoRow.AddUnique(FString::Printf(TEXT("%s: %d/'%s'"), *Stem, P.Code, *P.Phoneme));
+					}
+				}
+			}
+
+			// And every controller that table writes must exist on this speaker's rig, or the
+			// weights go nowhere.
+			const FElysiumNpcIndexEntry* Entry = Index.Npcs.Find(Stem);
+			if (Entry != nullptr && !Entry->Facial.IsEmpty())
+			{
+				FElysiumFacialRig Rig;
+				FString RigError;
+				if (Rig.Load(Entry->Facial, RigError))
+				{
+					for (const FString& Key : Table->Keys)
+					{
+						if (Rig.FindController(Key) == INDEX_NONE)
+						{
+							NoController.AddUnique(FString::Printf(TEXT("%s: '%s'"), *Stem, *Key));
+						}
+					}
+				}
+			}
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%d speak events, %d with a .lip, %d phoneme rows, speakers: %s"),
+		Speak, WithLip, PhonemeRows, *FString::Join(Speakers.Array(), TEXT(", "))));
+	for (const FString& F : NoLip) { AddError(FString::Printf(TEXT("no .lip for %s"), *F)); }
+	for (const FString& F : NoTable) { AddError(FString::Printf(TEXT("no phoneme table for %s"), *F)); }
+	for (const FString& F : NoRow) { AddError(FString::Printf(TEXT("no phoneme row: %s"), *F)); }
+	for (const FString& F : NoController) { AddError(FString::Printf(TEXT("table key off-rig: %s"), *F)); }
+
+	// The whole act speaks 21 times, and the three-file join has to close on every one of them —
+	// that is what "mouths move with the words on every theatre line" reduces to offline.
+	TestEqual(TEXT("sp_theatre's scenes carry 21 speak events"), Speak, 21);
+	TestEqual(TEXT("every one resolves a .lip"), WithLip, Speak);
+	TestEqual(TEXT("every one resolves its speaker's phoneme table"), WithTable, Speak);
+	TestTrue(TEXT("and they carry phoneme rows"), PhonemeRows > 2000);
+	// LaCroix, Nines and Skelter are the only actors who speak in the act.
+	TestEqual(TEXT("three speakers"), Speakers.Num(), 3);
 
 	return true;
 }

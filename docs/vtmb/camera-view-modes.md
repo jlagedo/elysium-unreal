@@ -504,10 +504,13 @@ blend, and an explicit restore parameter overrides the latter. `OnReachedKeyfram
 `OnLeavingKeyframe`, and exactly-once `OnAnimationCompleted` fire from crossed authored times,
 including zero-duration chains.
 
-Timing belongs to the departing key. With `TimeControl`, its `MoveTime` is the segment duration.
+Each key is reached before its timing is consumed. The root is reached immediately when playback
+starts and fires `OnReachedKeyframe`; its `Pause` holds that first sample before
+`OnLeavingKeyframe` and the first segment. Every later key follows the same reached → pause → leave
+order. With `TimeControl`, the departing key's `MoveTime` is the following segment duration.
 Otherwise duration is distance divided by endpoint `MoveSpeed`: the two endpoint speeds are averaged,
-except a `Corner` departure uses its own speed. Units convert once from Source units/s to cm/s. The
-destination key's `Pause` is then added as a dwell. `RateOut`/`RateIn` ease normalized segment time;
+except a `Corner` departure uses its own speed. Units convert once from Source units/s to cm/s.
+`RateOut`/`RateIn` ease normalized segment time;
 position, roll, and focal length use the recovered four-key Catmull form (duplicating an endpoint at
 chain ends or corners), while pitch/yaw and roll normalize onto the shortest angular path.
 `PositionInterpolator` is parsed, retained, and shown in diagnostics but is a dead VtMB key with no

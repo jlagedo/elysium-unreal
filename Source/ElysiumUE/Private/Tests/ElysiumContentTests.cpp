@@ -26,6 +26,7 @@
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumCameraTrack.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumQuestLog.h"
@@ -1645,53 +1646,109 @@ bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
 	TestEqual(TEXT("embrace target chain remains complete"),
 		ChainLengths.FindRef(TEXT("embrace_target")), 19);
 
-	// The two independent streams use different numbers of keys, but their cuts, dwells and moves
-	// converge on the same authored edit clock. A mismatched clock makes a correct position sample
-	// look at the wrong beat and reads on screen as a spurious pan.
-	auto ChainEndSeconds = [&NamedKeys](const TCHAR* RootName)
+	// Compile the real chains through the same plain-value path used at runtime. The two independent
+	// streams can use different keys, but their cuts, dwells and moves must share one edit clock.
+	using namespace ElysiumCameraTrack;
+	auto BuildCameraPath = [&NamedKeys](const TCHAR* RootName, FPath& Out, TArray<FString>& OutNames)
 	{
+		Out = FPath();
+		OutNames.Reset();
 		const FElysiumEntityDef* const* Root = NamedKeys.Find(FString(RootName).ToLower());
 		if (!Root)
 		{
-			return -1.0f;
+			return false;
 		}
+		auto FloatKey = [](const FElysiumEntityDef& Def, const TCHAR* Name, float Default)
+		{
+			const FString* Value = Def.Keys.Find(Name);
+			return Value ? FCString::Atof(**Value) : Default;
+		};
 		const FElysiumEntityDef* Cursor = *Root;
 		TSet<FString> Seen;
-		float End = 0.0f;
 		while (Cursor)
 		{
 			const FString Current = Cursor->TargetName.ToLower();
 			if (Seen.Contains(Current))
 			{
-				return -1.0f;
+				return false;
 			}
 			Seen.Add(Current);
+			FPoint Point;
+			Point.Position = Cursor->Origin;
+			Point.bTimeControl = Cursor->Keys.FindRef(TEXT("TimeControl")).Equals(TEXT("1"));
+			Point.MoveSpeed = FloatKey(*Cursor, TEXT("MoveSpeed"), 64.0f);
+			Point.MoveTime = FloatKey(*Cursor, TEXT("MoveTime"), 0.0f);
+			Point.Pause = FloatKey(*Cursor, TEXT("Pause"), 0.0f);
+			Point.RateIn = FloatKey(*Cursor, TEXT("RateIn"), 1.0f);
+			Point.RateOut = FloatKey(*Cursor, TEXT("RateOut"), 1.0f);
+			Point.bCorner = Cursor->Keys.FindRef(TEXT("Corner")).Equals(TEXT("1"));
+			Out.Points.Add(Point);
+			OutNames.Add(Current);
 			const FString Next = Cursor->Keys.FindRef(TEXT("NextKey"));
 			if (Next.IsEmpty())
 			{
 				break;
 			}
-			if (!Cursor->Keys.FindRef(TEXT("TimeControl")).Equals(TEXT("1")))
-			{
-				return -1.0f;
-			}
-			End += FMath::Max(0.0f, FCString::Atof(*Cursor->Keys.FindRef(TEXT("MoveTime"))));
 			const FElysiumEntityDef* const* Found = NamedKeys.Find(Next.ToLower());
 			if (!Found)
 			{
-				return -1.0f;
+				return false;
 			}
 			Cursor = *Found;
-			End += FMath::Max(0.0f, FCString::Atof(*Cursor->Keys.FindRef(TEXT("Pause"))));
 		}
-		return End;
+		Out.RebuildTimes();
+		return Out.Points.Num() > 0;
 	};
-	const float PositionEnd = ChainEndSeconds(TEXT("embrace_camera"));
-	const float TargetEnd = ChainEndSeconds(TEXT("embrace_target"));
+	auto ArrivalAt = [](const FPath& Path, const TArray<FString>& Names, const TCHAR* Name)
+	{
+		const int32 Index = Names.IndexOfByKey(FString(Name).ToLower());
+		return Index != INDEX_NONE && Path.Arrivals.IsValidIndex(Index) ? Path.Arrivals[Index] : -1.0f;
+	};
+
+	FPath EmbracePosition;
+	FPath EmbraceTarget;
+	FPath CourtroomPosition;
+	FPath CourtroomTarget;
+	FPath WalkBackPosition;
+	FPath EscortPosition;
+	FPath EscortTarget;
+	TArray<FString> EmbracePositionNames;
+	TArray<FString> EmbraceTargetNames;
+	TArray<FString> CourtroomPositionNames;
+	TArray<FString> CourtroomTargetNames;
+	TArray<FString> WalkBackPositionNames;
+	TArray<FString> EscortPositionNames;
+	TArray<FString> EscortTargetNames;
+	const bool bPathsBuilt = BuildCameraPath(TEXT("embrace_camera"), EmbracePosition, EmbracePositionNames)
+		&& BuildCameraPath(TEXT("embrace_target"), EmbraceTarget, EmbraceTargetNames)
+		&& BuildCameraPath(TEXT("courtroom_camera_1"), CourtroomPosition, CourtroomPositionNames)
+		&& BuildCameraPath(TEXT("courtroom_target_1"), CourtroomTarget, CourtroomTargetNames)
+		&& BuildCameraPath(TEXT("walk_out_back_camera"), WalkBackPosition, WalkBackPositionNames)
+		&& BuildCameraPath(TEXT("cinematic_shot_1"), EscortPosition, EscortPositionNames)
+		&& BuildCameraPath(TEXT("cinematic_shot_2"), EscortTarget, EscortTargetNames);
+	if (!TestTrue(TEXT("the opening camera paths compile through the runtime timing model"), bPathsBuilt))
+	{
+		return true;
+	}
 	TestTrue(TEXT("embrace position and target streams end on the same edit"),
-		FMath::IsNearlyEqual(PositionEnd, TargetEnd, KINDA_SMALL_NUMBER));
+		FMath::IsNearlyEqual(EmbracePosition.EndTime, EmbraceTarget.EndTime, KINDA_SMALL_NUMBER));
 	TestTrue(TEXT("the recovered embrace edit clock remains 58.87 seconds"),
-		FMath::IsNearlyEqual(PositionEnd, 58.87f, 0.001f));
+		FMath::IsNearlyEqual(EmbracePosition.EndTime, 58.87f, 0.001f));
+	TestTrue(TEXT("the courtroom streams include their 3.4-second root dwell"),
+		FMath::IsNearlyEqual(CourtroomPosition.EndTime, 159.86f, 0.001f)
+			&& FMath::IsNearlyEqual(CourtroomTarget.EndTime, 159.86f, 0.001f));
+	TestTrue(TEXT("courtroom target 36 reaches the fade clock at 150.19 seconds"),
+		FMath::IsNearlyEqual(ArrivalAt(CourtroomTarget, CourtroomTargetNames,
+			TEXT("courtroom_target_36")), 150.19f, 0.001f));
+	TestTrue(TEXT("the walk-back edit waits nine seconds on its root"),
+		WalkBackPosition.Arrivals.Num() > 1
+			&& FMath::IsNearlyEqual(WalkBackPosition.Arrivals[1], 9.0f, 0.001f));
+	TestTrue(TEXT("the escort streams include their 2.5-second root dwell"),
+		FMath::IsNearlyEqual(EscortPosition.EndTime, 61.21f, 0.001f)
+			&& FMath::IsNearlyEqual(EscortTarget.EndTime, 61.21f, 0.001f));
+	TestTrue(TEXT("walk_out_cam_k reaches the fade/travel clock at 40.21 seconds"),
+		FMath::IsNearlyEqual(ArrivalAt(EscortPosition, EscortPositionNames,
+			TEXT("walk_out_cam_k")), 40.21f, 0.001f));
 	return true;
 }
 

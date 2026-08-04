@@ -397,6 +397,10 @@ def facial_rig(d, morphs):
                            else [op, fv if op == "CONST" else iv] for op, iv, fv in ops]}
                   for fd, ops in S.flex_rules(d)],
         "mouths": [{"bone": b, "forward": list(f), "flexdesc": fd} for b, f, fd in S.mouths(d)],
+        # The lipsync blend width, per model: a phoneme's own duration clamped to this pair
+        # decides how long it ramps in before its authored start and out to its authored end.
+        # The fourth input of 12.5's per-line join, and the only one not already on disk.
+        "phoneme_filter": [round(v, 6) for v in S.phoneme_filter(d)],
         "morphs": morphs,
     }
 
