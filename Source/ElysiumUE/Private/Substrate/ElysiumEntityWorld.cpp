@@ -220,6 +220,77 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		*Defs.MapName, EntityList.Num(), Bodies.Num(), Epoch);
 }
 
+void FElysiumEntityWorld::PreloadMapAnimations()
+{
+	if (bActive)
+	{
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("animation preload ignored after world '%s' activation"), *Defs.MapName);
+		return;
+	}
+	RefreshAnimationPreload();
+}
+
+void FElysiumEntityWorld::RefreshAnimationPreload()
+{
+
+	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	{
+		if (Ent && !Ent->IsDead())
+		{
+			Ent->PreloadForActivation();
+		}
+	}
+
+	// SetAnimation references authored on output wires do not belong to the target entity's own
+	// fields, so include them in the same closure. Dynamic Python strings cannot be recovered here;
+	// skeletal props cover those by warming their compact per-model catalogs above.
+	int32 OutputRefs = 0;
+	for (const TUniquePtr<FElysiumEntity>& Source : EntityList)
+	{
+		if (!Source || Source->IsDead() || !Source->Def)
+		{
+			continue;
+		}
+		for (const FElysiumOutputDef& Output : Source->Def->Outputs)
+		{
+			if (Output.Param.IsEmpty()
+				|| (!Output.Input.Equals(TEXT("SetAnimation"), ESearchCase::IgnoreCase)
+					&& !Output.Input.Equals(TEXT("SetGesture"), ESearchCase::IgnoreCase)))
+			{
+				continue;
+			}
+			auto PreloadTarget = [&Output, &OutputRefs](FElysiumEntity& Target)
+			{
+				if (Target.PreloadAnimClip(Output.Param))
+				{
+					++OutputRefs;
+				}
+			};
+			if (Output.Target.Equals(TEXT("!self"), ESearchCase::IgnoreCase))
+			{
+				PreloadTarget(*Source);
+			}
+			else if (!Output.Target.Equals(TEXT("!activator"), ESearchCase::IgnoreCase))
+			{
+				ForEachNamed(Output.Target, PreloadTarget);
+			}
+		}
+	}
+	if (bActive)
+	{
+		UE_LOG(LogElysiumWorld, Verbose,
+			TEXT("world '%s' animation references walked (%d output refs, runtime refresh)"),
+			*Defs.MapName, OutputRefs);
+	}
+	else
+	{
+		UE_LOG(LogElysiumWorld, Log,
+			TEXT("world '%s' animation references walked (%d output refs)"),
+			*Defs.MapName, OutputRefs);
+	}
+}
+
 void FElysiumEntityWorld::Activate(double Now)
 {
 	if (bActive)
@@ -1348,28 +1419,43 @@ void FElysiumEntityWorld::ClearScriptedCamera()
 	ScriptedCameraFile.Reset();
 }
 
+bool FElysiumEntityWorld::SelectTrackCameraRole(bool bTargetRole,
+	const FElysiumEntityHandle& TrackOwner)
+{
+	if (!TrackOwner.IsSet())
+	{
+		return false;
+	}
+	FElysiumEntityHandle& OwnerSlot = bTargetRole
+		? TrackCameraTargetOwner
+		: TrackCameraPositionOwner;
+	const bool bRoleChanged = OwnerSlot != TrackOwner;
+	OwnerSlot = TrackOwner;
+	return bRoleChanged;
+}
+
 void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 	const FElysiumEntityHandle& TrackOwner, const FVector& Point, const FRotator& Rotation,
 	float Roll, float FieldOfView, float BlendInSeconds, bool bCameraCut)
 {
+	const FElysiumEntityHandle SelectedOwner = bTargetRole
+		? TrackCameraTargetOwner
+		: TrackCameraPositionOwner;
+	if (!TrackOwner.IsSet() || SelectedOwner != TrackOwner)
+	{
+		return; // a superseded track still advances its authored clock, but cannot reclaim the role
+	}
 	IElysiumEmbodiment* E = Embodiment();
-	if (!E || !TrackOwner.IsSet())
+	if (!E)
 	{
 		return;
 	}
-
-	const FElysiumEntityHandle PreviousOwner = bTargetRole
-		? TrackCameraTargetOwner
-		: TrackCameraPositionOwner;
-	const bool bRoleChanged = PreviousOwner != TrackOwner;
 	if (bTargetRole)
 	{
-		TrackCameraTargetOwner = TrackOwner;
 		TrackCameraTarget = Point;
 	}
 	else
 	{
-		TrackCameraPositionOwner = TrackOwner;
 		TrackCameraPosition = Point;
 		TrackCameraRotation = Rotation;
 		TrackCameraRoll = Roll;
@@ -1398,10 +1484,10 @@ void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 	// cuts. The generic shot channel's default 90-degree/second tracking limiter is for moving
 	// entity anchors; applying it here adds a second interpolator and turns authored cuts into pans.
 	Shot.MaxTurnRate = FVector::ZeroVector;
-	// A new zero-blend owner is itself a cut (the embrace -> courtroom handoff); a zero-time
-	// keyframe crossing supplies bCameraCut while an existing owner continues.
+	// Selecting a new zero-blend owner supplies bCameraCut from the caller; a zero-time keyframe
+	// crossing does the same while the selected owner continues. The first shot is also a cut.
 	Shot.bCameraCut = bCameraCut
-		|| (BlendInSeconds <= KINDA_SMALL_NUMBER && (TrackCameraShot == 0 || bRoleChanged));
+		|| (BlendInSeconds <= KINDA_SMALL_NUMBER && TrackCameraShot == 0);
 	Shot.DebugName = TEXT("camera_track");
 	if (TrackCameraTargetOwner.IsSet())
 	{
@@ -1511,6 +1597,9 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 	{
 		Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), TEXT("phonemes"));
 	}
+	// This speaker's own blend width, same read the cutscene driver makes. A body with no rig keeps
+	// the binding's modal default.
+	Speaker->GetPhonemeFilter(Binding.BlendMin, Binding.BlendMax);
 	if (!Binding.IsValid())
 	{
 		return;

@@ -200,6 +200,22 @@ struct FElysiumFacialRig
 	TArray<FElysiumFlexLid> Lids;
 	FElysiumFlexMouth Mouth;
 
+	// `studiohdr` +232/+236 — the phoneme filter. A `.lip` phoneme's own span is clamped to this pair
+	// to give the viseme envelope its blend width `S`, so the pair decides how wide a phoneme ramps
+	// and, for any span below the floor, how far it gets to open at all: a phoneme shorter than `S`
+	// peaks at `span/S` rather than 1.
+	//
+	// Authored **per model**, and genuinely varying across the rigged cast — 57 carry (0.065, 0.100),
+	// 32 carry (0.080, 0.100) and `Jeanette` alone (0.080, 0.105). The two shipped minima differ by
+	// 23%, and roughly a third of a line's phonemes fall below either, so a runtime that hardcodes one
+	// is visibly wrong on the half of the cast carrying the other.
+	//
+	// Defaults are the modal rigged pair, which is what stands in when a sidecar predates the field or
+	// reads (0, 0) — the value 113 of the 339 loose models carry, all of them unrigged. Zero would
+	// make `1/S` infinite, and nothing in retail's own clamp guards it either.
+	float PhonemeFilterMin = 0.065f;
+	float PhonemeFilterMax = 0.100f;
+
 	// The controller the jaw bridge writes, derived at load. INDEX_NONE on a rig that has none.
 	//
 	// **Faithful behaviour: writing the mouth flexdesc moves nothing.** `mstudiomouth_t` names a

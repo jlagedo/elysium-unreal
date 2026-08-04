@@ -2490,6 +2490,119 @@ bool FElysiumSceneLipsyncTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// 12.5 — the phoneme filter is the SPEAKER'S, not a constant.
+//
+// `studiohdr` +232/+236 clamps a phoneme's span into the envelope's blend width, and the pair is
+// authored per model: 57 of the rigged cast carry (0.065, 0.100), 32 carry (0.080, 0.100) and
+// `Jeanette` alone (0.080, 0.105). The floor is what decides how far a SHORT phoneme opens at all —
+// a span below it peaks at `span/S` — and about a third of a line's phonemes are below either
+// value, so hardcoding one is visibly wrong on the half of the cast carrying the other.
+//
+// This drives the same scene as SceneLipsync with one thing changed: the body answers the wider
+// floor. Both halves are asserted — the rig reads the field off the sidecar, and the value survives
+// the whole trip out through IElysiumEmbodiment, into the driver's binding, and into the arithmetic.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhonemeFilterTest,
+	"Elysium.Substrate.PhonemeFilter", GElysiumFacialTestFlags)
+bool FElysiumPhonemeFilterTest::RunTest(const FString&)
+{
+	// --- the rig half: what the sidecar says, and what stands when it says nothing usable -----
+	{
+		FElysiumFacialRig Rig;
+		FString Error;
+		TestTrue(TEXT("the fixture rig parses"), Rig.LoadJsonText(GTestRigJson, Error));
+		// The fixture carries no `phoneme_filter`, which is the pre-field export state.
+		TestEqual(TEXT("a sidecar with no filter keeps the modal minimum"), Rig.PhonemeFilterMin, 0.065f, 1e-6f);
+		TestEqual(TEXT("  and the modal maximum"), Rig.PhonemeFilterMax, 0.100f, 1e-6f);
+
+		const FString WithField = FString(GTestRigJson).Replace(
+			TEXT("\"stem\": \"testrig\","),
+			TEXT("\"stem\": \"testrig\", \"phoneme_filter\": [0.080, 0.105],"));
+		FElysiumFacialRig Jeanette;
+		TestTrue(TEXT("a sidecar carrying the field parses"), Jeanette.LoadJsonText(WithField, Error));
+		TestEqual(TEXT("and the authored minimum is taken"), Jeanette.PhonemeFilterMin, 0.080f, 1e-6f);
+		TestEqual(TEXT("as is the authored maximum"), Jeanette.PhonemeFilterMax, 0.105f, 1e-6f);
+
+		// 113 of the 339 loose models read (0, 0). All are unrigged so none reaches the viseme path,
+		// but S would be 0 and 1/S infinite if one ever did — retail's own clamp does not guard it.
+		const FString Zeroed = FString(GTestRigJson).Replace(
+			TEXT("\"stem\": \"testrig\","),
+			TEXT("\"stem\": \"testrig\", \"phoneme_filter\": [0.0, 0.0],"));
+		FElysiumFacialRig Unrigged;
+		TestTrue(TEXT("a (0,0) sidecar parses"), Unrigged.LoadJsonText(Zeroed, Error));
+		TestEqual(TEXT("and (0,0) does not become the blend width"), Unrigged.PhonemeFilterMin, 0.065f, 1e-6f);
+		TestEqual(TEXT("  on either bound"), Unrigged.PhonemeFilterMax, 0.100f, 1e-6f);
+	}
+
+	// --- the trip: rig -> IElysiumEmbodiment -> entity -> binding -> envelope ------------------
+	ElysiumExpressions::ClearCache();
+	ElysiumLip::ClearCache();
+	ElysiumExpressions::RegisterInline(TEXT("testface"), GTestPhonemeTableText);
+	ElysiumLip::RegisterInline(TEXT("test/line1.wav"), GSceneLipText);
+	ElysiumScene::RegisterInline(TEXT("test/line1.vcd"), TEXT(""));
+
+	const FString SceneText =
+		TEXT("// Choreo version 1\n")
+		TEXT("actor \"Face\"\n{\n")
+		TEXT("  channel \"VO\"\n  {\n")
+		TEXT("    event speak \"line1\"\n    {\n")
+		TEXT("      time 1.000000 3.000000\n")
+		TEXT("      param \"test/line1.wav\"\n")
+		TEXT("    }\n")
+		TEXT("  }\n")
+		TEXT("}\n")
+		TEXT("fps 60\nsnap off\n");
+	ElysiumScene::RegisterInline(TEXT("test/filter.vcd"), SceneText);
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test__");
+
+	FElysiumEntityDef S;
+	S.Classname = TEXT("logic_choreographed_scene");
+	S.TargetName = TEXT("scene1");
+	S.Keys.Add(TEXT("SceneFile"), TEXT("test/filter.vcd"));
+	Defs.Defs.Add(MoveTemp(S));
+
+	FElysiumEntityDef Face;
+	Face.Classname = TEXT("npc_VVampire");
+	Face.TargetName = TEXT("Face");
+	Face.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/testface.mdl"));
+	Defs.Defs.Add(MoveTemp(Face));
+
+	FElysiumRecordingServices Services;
+	Services.FlexControllers = { TEXT("jaw_drop"), TEXT("smile") };
+	// The one difference from SceneLipsync: this speaker ships the wider floor.
+	Services.PhonemeFilterMin = 0.080f;
+	Services.PhonemeFilterMax = 0.100f;
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+	World.Tick(0.0);
+
+	// Same instant SceneLipsync samples, 0.15 into the line. `aw` spans 0.200 and still clamps to the
+	// 0.100 maximum, so its 0.5 is unchanged — the floor is the only term that moves. `t` spans 0.050
+	// and now clamps up to 0.080 rather than 0.065, so it leads in at 1 - 0.05/0.08 = 0.375 instead of
+	// 0.230769: the same phoneme opening half again as far on this face as on LaCroix's.
+	World.Tick(1.15);
+	TestEqual(TEXT("the wider floor opens a short phoneme further"),
+		Services.FlexValue(TEXT("jaw_drop")), 0.7375f, 1e-3f);
+	TestEqual(TEXT("and carries through to every key the row writes"),
+		Services.FlexValue(TEXT("smile")), 0.1875f, 1e-3f);
+	// The value SceneLipsync asserts on the default pair, restated as the thing that must NOT happen
+	// here: one hardcoded constant would give both faces the same number.
+	TestTrue(TEXT("which is not what the modal pair would have produced"),
+		!FMath::IsNearlyEqual(Services.FlexValue(TEXT("jaw_drop")), 0.607692f, 1e-3f));
+
+	ElysiumLip::ClearCache();
+	ElysiumExpressions::ClearCache();
+	return true;
+}
+
+// =====================================================================================
 // Content: the shipped `.lip` corpus, and the theatre's own three-file join.
 // =====================================================================================
 
@@ -2614,6 +2727,8 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	int32 Speak = 0, WithLip = 0, WithTable = 0, PhonemeRows = 0;
 	TSet<FString> Speakers;
 	TArray<FString> NoLip, NoTable, NoRow, NoController;
+	// Each speaker's own `studiohdr` +232/+236 pair, as its exported sidecar carries it.
+	TMap<FString, TPair<float, float>> FilterByStem;
 
 	for (const FElysiumEntityDef& Def : Defs.Defs)
 	{
@@ -2690,6 +2805,8 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 							NoController.AddUnique(FString::Printf(TEXT("%s: '%s'"), *Stem, *Key));
 						}
 					}
+					FilterByStem.Add(Stem,
+						TPair<float, float>(Rig.PhonemeFilterMin, Rig.PhonemeFilterMax));
 				}
 			}
 		}
@@ -2710,6 +2827,24 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	TestTrue(TEXT("and they carry phoneme rows"), PhonemeRows > 2000);
 	// LaCroix, Nines and Skelter are the only actors who speak in the act.
 	TestEqual(TEXT("three speakers"), Speakers.Num(), 3);
+
+	// The blend width each of them actually speaks at. This is the corpus half of the per-model
+	// filter: the Substrate tier proves the pair travels, and this proves the export still carries
+	// one — a sidecar written before the field would silently fall back to the same modal default
+	// these three happen to ship, and nothing else would notice.
+	TArray<FString> Filters;
+	for (const TPair<FString, TPair<float, float>>& Row : FilterByStem)
+	{
+		Filters.Add(FString::Printf(TEXT("%s (%.3f, %.3f)"),
+			*Row.Key, Row.Value.Key, Row.Value.Value));
+		TestEqual(*FString::Printf(TEXT("%s's phoneme filter minimum"), *Row.Key),
+			Row.Value.Key, 0.065f, 1e-6f);
+		TestEqual(*FString::Printf(TEXT("%s's phoneme filter maximum"), *Row.Key),
+			Row.Value.Value, 0.100f, 1e-6f);
+	}
+	Filters.Sort();
+	AddInfo(FString::Printf(TEXT("phoneme filters: %s"), *FString::Join(Filters, TEXT(", "))));
+	TestEqual(TEXT("every speaker's rig carries a phoneme filter"), FilterByStem.Num(), Speakers.Num());
 
 	return true;
 }

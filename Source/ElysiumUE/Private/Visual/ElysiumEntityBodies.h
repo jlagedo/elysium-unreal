@@ -76,6 +76,12 @@ public:
 	// returned UAnimSequence to that model's USkeleton.
 	bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& BankStem,
 		const FString& ClipName, bool bLoop, float* OutSeconds);
+	bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName);
+	bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial, const FString& ClipName);
+	bool PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& BankStem, const FString& ClipName);
+	bool PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& BankStem, const FString& ClipName);
 	bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 	void StopCinematicClip(USkeletalMeshComponent* Body);
 	bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const;
@@ -90,6 +96,7 @@ public:
 	// 12.5 — the amplitude jaw. False on a body with no animation host, no rig, or a rig carrying no
 	// `mstudiomouth_t` record.
 	bool SetMouthOpen(USkeletalMeshComponent* Body, float Open);
+	bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin, float& OutMax) const;
 
 	// 12.4 — the one value crossing from the gaze decision to the eye pass, and the head frame the
 	// decision measures itself in.
@@ -100,6 +107,8 @@ public:
 		bool bLoop, float* OutSeconds);
 	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
+	bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
+		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 
 	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
 	// clip resolution stay separate so ordinary props never load glTF or animation data.
@@ -108,6 +117,8 @@ public:
 		const FQuat& Rotation, float UniformScale);
 	bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds);
+	int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body, const FString& Stem);
+	int32 FinishAnimationPreload();
 	void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp, const FString& Stem, int32 Family);
 	// The model's resting clip, and whether a named clip loops. Both read the manifest only — no
 	// glb, no mesh — so a prop can ask before deciding which representation to stand.
@@ -160,6 +171,11 @@ public:
 	void TickEyes(float DeltaSeconds);
 
 private:
+	USkeletalMesh* ResolveNpcMesh(const FString& Stem, bool bPlayerMaterial);
+	UAnimSequence* ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
+		const FString& BankStem, const FString& ClipName);
+	UAnimSequence* ResolveAnimatedPropClip(USkeletalMesh* Mesh, const FString& Stem,
+		const FString& ClipName);
 	// The manifest record for a prop stem, or null. Shared by the two query members above.
 	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
 

@@ -442,6 +442,40 @@ FString UElysiumNpcAnimSubsystem::ResolveClipAnimName(const FString& Stem, const
 	return ResolveGridClip(Owner, ClipName, Pose);
 }
 
+bool UElysiumNpcAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,
+	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+{
+	OutLabel.Reset();
+	OutAnimName.Reset();
+	OutGroundSpeedCmPerSecond = 0.f;
+	const FString Label = PickActivityClip(Stem, Activity, Variant);
+	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
+	const FElysiumNpcClip* Clip = Set ? Set->Find(Label) : nullptr;
+	if (Clip == nullptr)
+	{
+		return false;
+	}
+
+	OutLabel = Label;
+	OutAnimName = ResolveClipAnimName(Stem, Label, FElysiumPoseParams::Neutral());
+	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
+	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(Owner);
+	const FElysiumBlendGrid* Grid = Table.IsValid() ? Table->Find(Label) : nullptr;
+	if (Grid == nullptr)
+	{
+		return !OutAnimName.IsEmpty();
+	}
+
+	const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Grid, *Table,
+		FElysiumPoseParams::Neutral());
+	if (Pick.Cell != nullptr && Pick.Cell->Clip.Equals(OutAnimName, ESearchCase::IgnoreCase)
+		&& Pick.Cell->Motion.IsUsable())
+	{
+		OutGroundSpeedCmPerSecond = Pick.Cell->Motion.GroundSpeedCmPerSecond;
+	}
+	return !OutAnimName.IsEmpty();
+}
+
 UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
 	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError)
 {

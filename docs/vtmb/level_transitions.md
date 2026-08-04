@@ -77,6 +77,15 @@ sit at the same spot (the patch's `info_player_start` is 8 units above its
 `info_landmark "tutorial"`, same x/y), so the two paths coincide here — but that is
 a property of the data, not a rule.
 
+**Divergence — owner call.** The Unreal runtime makes this one authored
+`sp_theatre` → `sp_tutorial_1 @ tutorial` leg a direct landmark entry: it drops the
+source offset and yaw, seats the player on the tutorial porch, and faces the
+destination landmark's angles. The closing cinematic has already moved the Unreal
+player body when the hidden `tutorial_change` trigger becomes touchable; treating
+that scene-space displacement as a cross-map offset placed the player about 11.7 m
+laterally from the porch and 0.9 m below its anchor. Every other
+`trigger_changelevel` retains the recovered `dest_landmark + source_offset` rule.
+
 ## Retail vs. patch (`sp_tutorial_1`)
 
 The patch moved the tutorial entrance ~7,900 units in +Y and built new geometry
@@ -112,4 +121,5 @@ compiler emitted first wins, not a deliberate choice.
 The runtime reproduces the landmark path (paths 2/3): `UElysiumMapSubsystem::RequestLandmarkTravel`
 captures the player's source-landmark offset and view yaw, defers the travel to the next tick, and
 `AElysiumMapActor::ResolveLandmarkSpawn` seats the player at `dest_landmark + offset` on the far
-side (roadmap 4.6). A bare `map` command still bypasses this and spawns at `info_player_start`.
+side (roadmap 4.6), except for the owner-directed theatre exit above. A bare `map` command still
+bypasses this and spawns at `info_player_start`.

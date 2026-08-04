@@ -1077,6 +1077,14 @@ NPCs that walk carry `0x1260` (NOINTERRUPT + OVERRIDESTATE + priority + troika),
 were teleported to the far end and only play looping idles carry `0x360` — the same word with
 post-idle hold in place of the troika bit.
 
+A scripted Walk resolves `ACT_WALK` through the character vocabulary and the owning bank's neutral
+blend-grid cell before requesting travel. That same deterministic selection plays the visible
+in-place clip and supplies its decoded average ground speed to the existing route motor. The
+skeleton therefore animates without contributing a second actor translation; an old sidecar with
+no motion summary retains the `speed_walk` fallback. Playback re-enters the global resolver with
+the vocabulary label (`walk`), not the concrete bank animation (`walk_0`), because the label is
+what retains the shared-bank owner needed to load and retarget the clip.
+
 ### Where the rebuild diverges
 
 Each is a deliberate call, recorded beside the behaviour it departs from:
@@ -1087,8 +1095,6 @@ Each is a deliberate call, recorded beside the behaviour it departs from:
   still ends — a beat that never ends stalls the map's whole script flow. The cap has to sit under
   the cleanup timers a map hangs off its own camera track: `sp_theatre` kills the walk-out beats
   twenty seconds into the shot, having authored them against a walk of about half that.
-- **Gait speed comes from `speed_walk`/`speed_runbase`, not from the cycle's own displacement**,
-  which is not decoded, so a travelling NPC can foot-slide.
 - **Spawnflag 256's condition is approximated.** The engine holds the post-idle when there is no
   live `m_hNextCine`; the nearest thing here is an authored `m_iszNextScript`, so an empty one
   stands in for it.

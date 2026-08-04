@@ -151,6 +151,7 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	TArray<FString> MissingItems;
 	if (!bConstructionComplete) { MissingItems.Add(TEXT("runtime construction")); }
 	if (!bEntityWorldReady)     { MissingItems.Add(TEXT("entity substrate")); }
+	if (!bAnimationPreloadReady){ MissingItems.Add(TEXT("map animation residency")); }
 	if (!bAudioCatalogReady)    { MissingItems.Add(TEXT("audio catalog")); }
 	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
 	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
@@ -190,6 +191,11 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 	if (bConstructionComplete && !bEntityWorldReady)
 	{
 		OutFailure = TEXT("runtime construction produced no entity substrate");
+		return EElysiumMapReadinessResult::Failed;
+	}
+	if (bConstructionComplete && !bAnimationPreloadReady)
+	{
+		OutFailure = TEXT("runtime construction did not complete map animation residency");
 		return EElysiumMapReadinessResult::Failed;
 	}
 	if (bConstructionComplete && !bAudioCatalogReady && WaitSeconds >= WatchdogSeconds)
@@ -473,6 +479,7 @@ void AElysiumMapActor::BeginPlay()
 void AElysiumMapActor::LoadMap()
 {
 	const double Start = FPlatformTime::Seconds();
+	bAnimationPreloadReady = false;
 	if (NavigationBounds)
 	{
 		NavigationBounds->Destroy();
@@ -640,6 +647,20 @@ void AElysiumMapActor::LoadMap()
 
 	Phase(TEXT("Entities"));
 
+	// The entity world is still dormant here: no logic_auto, trigger, scene, camera or game-clock
+	// work can run. Walk every map-authored animation reference, retain the skeleton-bound sequences
+	// in Bodies' map-epoch caches, then wait on only those editor compilation jobs. In a packaged
+	// build the same walk performs the synchronous loose-asset loads and the finish is a no-op.
+	if (EntityWorld)
+	{
+		EntityWorld->PreloadMapAnimations();
+	}
+	const int32 ResidentAnimations = FinishAnimationPreload();
+	bAnimationPreloadReady = true;
+	Phase(TEXT("Animations"));
+	UE_LOG(LogElysium, Log, TEXT("map animation residency %s: %d sequence(s) ready before activation"),
+		*MapName, ResidentAnimations);
+
 	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
 	LoadPhases.Add({ TEXT("Total"), TotalMs });
 	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, TotalMs / 1000.0);
@@ -736,10 +757,29 @@ bool AElysiumMapActor::PlayNpcActivity(USkeletalMeshComponent* Body, const FStri
 	return Bodies->PlayNpcActivity(Body, Stem, Activity, Variant, bLoop, OutSeconds);
 }
 
+bool AElysiumMapActor::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,
+	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+{
+	return Bodies->ResolveNpcActivityClip(Stem, Activity, Variant, OutLabel, OutAnimName,
+		OutGroundSpeedCmPerSecond);
+}
+
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
 	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds);
+}
+
+bool AElysiumMapActor::PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName)
+{
+	return Bodies && Bodies->PreloadNpcClip(Body, Stem, ClipName);
+}
+
+bool AElysiumMapActor::PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
+	const FString& ClipName)
+{
+	return Bodies && Bodies->PreloadNpcClipForModel(Stem, bPlayerMaterial, ClipName);
 }
 
 bool AElysiumMapActor::PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -759,6 +799,26 @@ bool AElysiumMapActor::PlayCinematicClip(USkeletalMeshComponent* Body, const FSt
 		return false;
 	}
 	return Bodies->PlayCinematicClip(Body, Stem, Bank, ClipName, bLoop, OutSeconds);
+}
+
+bool AElysiumMapActor::PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName)
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const FString Bank = Anims ? Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot) : FString();
+	return Bodies && !Bank.IsEmpty()
+		&& Bodies->PreloadCinematicClip(Body, Stem, Bank, ClipName);
+}
+
+bool AElysiumMapActor::PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
+	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName)
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const FString Bank = Anims ? Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot) : FString();
+	return Bodies && !Bank.IsEmpty()
+		&& Bodies->PreloadCinematicClipForModel(Stem, bPlayerMaterial, Bank, ClipName);
 }
 
 bool AElysiumMapActor::SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
@@ -795,6 +855,12 @@ bool AElysiumMapActor::SetMouthOpen(USkeletalMeshComponent* Body, float Open)
 	return Bodies ? Bodies->SetMouthOpen(Body, Open) : false;
 }
 
+bool AElysiumMapActor::GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
+	float& OutMax) const
+{
+	return Bodies ? Bodies->GetPhonemeFilter(Body, OutMin, OutMax) : false;
+}
+
 bool AElysiumMapActor::SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget)
 {
 	return Bodies ? Bodies->SetViewTarget(Body, WorldTarget) : false;
@@ -821,6 +887,17 @@ bool AElysiumMapActor::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const 
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
 	return Bodies && Bodies->PlayAnimatedPropClip(Body, Stem, ClipName, bLoop, OutSeconds);
+}
+
+int32 AElysiumMapActor::PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
+	const FString& Stem)
+{
+	return Bodies ? Bodies->PreloadAnimatedPropClips(Body, Stem) : 0;
+}
+
+int32 AElysiumMapActor::FinishAnimationPreload()
+{
+	return Bodies ? Bodies->FinishAnimationPreload() : 0;
 }
 
 FString AElysiumMapActor::AnimatedPropRestClip(const FString& Stem) const
@@ -1762,6 +1839,7 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 	FElysiumMapRuntimePrerequisites P;
 	P.bConstructionComplete = bRuntimeConstructionComplete;
 	P.bEntityWorldReady = EntityWorld.Get() != nullptr;
+	P.bAnimationPreloadReady = bAnimationPreloadReady;
 	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	P.bAudioCatalogReady = !Audio || Audio->IsReadyForMapActivation();
 	P.bMenuBackdrop = bMenuBackdrop;

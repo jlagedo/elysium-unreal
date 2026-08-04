@@ -29,9 +29,12 @@ included. The record names the eye's bone, its resting basis, the iris scale, an
 flexdescs the renderer's eye pass writes back into the flex weights; `StudioMesh.materialtype`
 flags which meshes it applies to.
 
-Not decoded here: procedural bones (`ProcType`!=0), IK, animation events
-(`numevents`/`eventindex`, located but unread), and root motion (clips bake in place).
+Not decoded here: procedural bones (`ProcType`!=0), IK, and animation events
+(`numevents`/`eventindex`, located but unread). Authored movement is decoded as metadata beside
+the in-place bone tracks; the glTF clip deliberately stays in place so a host motor can consume
+the same movement without translating the skeleton a second time.
 """
+import math
 import os
 import struct
 from collections import namedtuple
@@ -150,6 +153,19 @@ MAXSTUDIOBLENDS = 16
 
 _POSEPARAM_STRIDE = 20
 
+#: `mstudiomovement_t`, addressed by one StudioAnimDesc's `nummovements`@16 and
+#: `movementindex`@20. The index is relative to the animdesc. `position` is the cumulative
+#: Source-space displacement at this record's end frame; the final record therefore carries one
+#: complete cycle's travel.
+_MOVEMENT_STRIDE = 44
+Movement = namedtuple("Movement", "endframe motionflags v0 v1 angle vector position")
+
+#: The scalar part a route motor needs from an in-place locomotion clip. Distances are converted
+#: from Source inches to centimetres here, at the offline seam; no coordinate direction is emitted.
+MovementSummary = namedtuple(
+    "MovementSummary", "cycle_seconds ground_distance_cm ground_speed_cm_s"
+)
+
 #: One `mstudioposeparamdesc_t` (`NumLocalPoseParameters`@384 / `LocalPoseParamIndex`@388).
 #: A non-zero `loop` is the wrap modulus an axis folds the parameter through before it
 #: normalizes over `start`..`end`.
@@ -239,6 +255,58 @@ def local_animation(d, index):
         return None
     ab = _i32(d, 268) + index * 72
     return _cstr(d, ab + _i32(d, ab)).lstrip("@"), ab, _i32(d, ab + 12), _f32(d, ab + 4)
+
+
+def read_movements(d, animdesc_base):
+    """One StudioAnimDesc's authored movement records -> tuple[Movement, ...].
+
+    `movementindex` is relative to the descriptor, like `animindex`. A malformed count/range is
+    treated as no movement: callers retain their existing gait fallback rather than reading past a
+    damaged model image. The raw values remain in Source units because they are format data; use
+    :func:`movement_summary` for the centimetre scalar exported to Unreal.
+    """
+    count = _i32(d, animdesc_base + 16)
+    relative = _i32(d, animdesc_base + 20)
+    if count <= 0 or relative <= 0:
+        return ()
+    base = animdesc_base + relative
+    end = base + count * _MOVEMENT_STRIDE
+    if base < 0 or end > len(d):
+        return ()
+
+    out = []
+    for index in range(count):
+        record = base + index * _MOVEMENT_STRIDE
+        values = struct.unpack_from("<ii9f", d, record)
+        out.append(Movement(
+            endframe=values[0], motionflags=values[1], v0=values[2], v1=values[3],
+            angle=values[4], vector=values[5:8], position=values[8:11],
+        ))
+    return tuple(out)
+
+
+def movement_summary(d, animdesc_base, frames, fps):
+    """Authored cycle movement -> MovementSummary in seconds and centimetres, or ``None``.
+
+    Source's ground-speed calculation is the complete movement vector's length divided by the
+    animation duration. glTF samples frame ``i`` at ``i / fps``, so a clip with ``frames`` samples
+    spans ``(frames - 1) / fps`` seconds. Zero/invalid motion stays absent and lets the runtime keep
+    its established fallback speed.
+    """
+    movements = read_movements(d, animdesc_base)
+    if not movements or frames <= 1 or not math.isfinite(fps) or fps <= 0.0:
+        return None
+    cycle_seconds = (frames - 1) / fps
+    position = movements[-1].position
+    ground_distance_cm = math.sqrt(sum(value * value for value in position)) * 2.54
+    if (not math.isfinite(cycle_seconds) or cycle_seconds <= 0.0
+            or not math.isfinite(ground_distance_cm) or ground_distance_cm <= 0.0):
+        return None
+    return MovementSummary(
+        cycle_seconds=cycle_seconds,
+        ground_distance_cm=ground_distance_cm,
+        ground_speed_cm_s=ground_distance_cm / cycle_seconds,
+    )
 
 
 def local_sequences(d):

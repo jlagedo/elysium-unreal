@@ -48,15 +48,31 @@ struct FElysiumPoseParams
 	void Set(const FString& Name, float Value) { Values.Add(Name, Value); }
 };
 
+// Scalar movement authored beside an in-place animation. The offline decoder converts Source
+// inches to centimetres; the skeleton remains in place and the route motor consumes GroundSpeed.
+struct FElysiumClipMotion
+{
+	float CycleSeconds = 0.f;
+	float GroundDistanceCm = 0.f;
+	float GroundSpeedCmPerSecond = 0.f;
+
+	bool IsUsable() const
+	{
+		return FMath::IsFinite(GroundSpeedCmPerSecond) && GroundSpeedCmPerSecond > 0.f;
+	}
+};
+
 // One cell of a grid. `Clip` is empty when the cell's animation did not bake, which the exporter
 // records as a null — no shipped grid carries one today, but the field is nullable by construction
-// so every reader tolerates it rather than assuming.
+// so every reader tolerates it rather than assuming. Motion is optional for backwards-compatible
+// exports and for non-locomotion cells.
 struct FElysiumBlendCell
 {
 	int32 Axis[2] = { 0, 0 };
 	// The owner-local MDL animation index. Provenance only — the runtime addresses the clip by name.
 	int32 Anim = INDEX_NONE;
 	FString Clip;
+	FElysiumClipMotion Motion;
 };
 
 // One sequence's blend space. Axis 0 takes the row stride; `ParamIndex[a]` is -1 when that axis is

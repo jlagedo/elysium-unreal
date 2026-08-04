@@ -375,6 +375,61 @@ public:
 		}
 	}
 
+	virtual void PreloadForActivation() override
+	{
+		if (!HasScene() || World == nullptr)
+		{
+			return;
+		}
+		const FString& AnimSet = ResolveAnimSetModel();
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		for (const FElysiumSceneEvent& Event : Scene->Events)
+		{
+			if (!Event.bActive
+				|| (Event.Type != EElysiumChoreoEvent::Sequence
+					&& Event.Type != EElysiumChoreoEvent::Gesture)
+				|| Event.Param.IsEmpty() || !Scene->Actors.IsValidIndex(Event.ActorIndex)
+				|| !Scene->Actors[Event.ActorIndex].bActive)
+			{
+				continue;
+			}
+
+			const FElysiumSceneActor& SceneActor = Scene->Actors[Event.ActorIndex];
+			FElysiumEntity* Actor = ResolveActorByName(SceneActor.Name);
+			bool bResolved = false;
+			if (Actor && !AnimSet.IsEmpty())
+			{
+				bResolved = Actor->PreloadCinematicClip(
+					AnimSet, SceneActor.BoneFrom, Event.Param);
+			}
+			if (Actor && !bResolved)
+			{
+				Actor->PreloadAnimClip(Event.Param);
+				continue;
+			}
+
+			// events_player creates this stand-in immediately before the scene starts. Resolve the
+			// ordinary NPC mesh permutation now from the player's model without mutating the dormant
+			// entity world or adding a save-visible proxy entity.
+			if (!Actor && Embodiment
+				&& SceneActor.Name.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+			{
+				const FElysiumPlayer* PlayerEntity = World->FindPlayer();
+				const FString Stem = PlayerEntity ? PlayerEntity->ModelStem() : FString();
+				if (!Stem.IsEmpty() && !AnimSet.IsEmpty())
+				{
+					bResolved = Embodiment->PreloadCinematicClipForModel(Stem,
+						/*bPlayerMaterial=*/false, AnimSet, SceneActor.BoneFrom, Event.Param);
+				}
+				if (!bResolved && !Stem.IsEmpty())
+				{
+					Embodiment->PreloadNpcClipForModel(
+						Stem, /*bPlayerMaterial=*/false, Event.Param);
+				}
+			}
+		}
+	}
+
 	bool HasScene() const { return Scene.IsValid() && Scene->bValid; }
 
 	// --- Actor binding ----------------------------------------------------------------------
@@ -669,6 +724,17 @@ public:
 		if (IsInert() || bPlaying || !HasScene())
 		{
 			return;   // VtMB's two gates: already playing, and no parsed scene
+		}
+
+		// A level script may have replaced one or more actors since the dormant map walk (theatre's
+		// castUnderstudy/courtroomSire/fillSeats do exactly that). Runtime meshes own distinct
+		// USkeletons, so the map's old skeleton-bound sequences cannot serve the replacement body.
+		// Re-resolve this scene against the cast that will actually play it, and complete the batch
+		// before assigning StartTime: a load can delay the shot, but can never advance its clock.
+		PreloadForActivation();
+		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		{
+			Embodiment->FinishAnimationPreload();
 		}
 
 		Activator = Args.Activator;
@@ -1530,8 +1596,11 @@ public:
 		{
 			Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), GPhonemeClass);
 		}
-		// The blend width is the model's own `studiohdr` +232/+236 pair. The binding's defaults are
-		// what every rigged character ships, and stand in until the facial sidecar carries the field.
+		// The blend width is this speaker's own `studiohdr` +232/+236 pair, read off its rig. A body
+		// with no rig keeps the binding's modal default, which is what sp_theatre's three speakers
+		// carry anyway — so this changes nothing here and corrects the third of the rigged cast that
+		// ships the wider floor.
+		Actor->GetPhonemeFilter(Binding.BlendMin, Binding.BlendMax);
 		if (!Binding.IsValid())
 		{
 			++NumLinesWithoutLip;

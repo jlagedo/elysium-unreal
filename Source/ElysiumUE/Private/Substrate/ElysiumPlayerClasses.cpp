@@ -220,6 +220,13 @@ bool FElysiumAnimating::PlayAnimClip(const FString& ClipName, bool bLoop, float*
 	return Embodiment->PlayNpcClip(Visual, ModelStem(), ClipName, bLoop, OutSeconds);
 }
 
+bool FElysiumAnimating::PreloadAnimClip(const FString& ClipName)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	return Embodiment && Visual && !ClipName.IsEmpty()
+		&& Embodiment->PreloadNpcClip(Visual, ModelStem(), ClipName);
+}
+
 bool FElysiumAnimating::PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
@@ -230,6 +237,15 @@ bool FElysiumAnimating::PlayCinematicClip(const FString& AnimSetModel, const FSt
 	}
 	return Embodiment->PlayCinematicClip(Visual, ModelStem(), AnimSetModel, BoneRoot, ClipName,
 		bLoop, OutSeconds);
+}
+
+bool FElysiumAnimating::PreloadCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
+	const FString& ClipName)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	return Embodiment && Visual && !AnimSetModel.IsEmpty() && !ClipName.IsEmpty()
+		&& Embodiment->PreloadCinematicClip(
+			Visual, ModelStem(), AnimSetModel, BoneRoot, ClipName);
 }
 
 bool FElysiumAnimating::SeekCinematicClip(float PositionSeconds)
@@ -267,6 +283,16 @@ bool FElysiumAnimating::SetMouthOpen(float Open)
 		return false;   // a bodiless or headless character has no jaw to move
 	}
 	return Embodiment->SetMouthOpen(Visual, Open);
+}
+
+bool FElysiumAnimating::GetPhonemeFilter(float& OutMin, float& OutMax) const
+{
+	const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Visual)
+	{
+		return false;   // a bodiless or headless character speaks with no filter to read
+	}
+	return Embodiment->GetPhonemeFilter(Visual, OutMin, OutMax);
 }
 
 bool FElysiumAnimating::ResetAnimToIdle()
@@ -352,6 +378,14 @@ void FElysiumAnimating::OnRuntimeModelChanged()
 					bKeepSocket ? Child.Socket : NAME_None);
 				Live->SetRelativeTransform(Child.RelativeTransform);
 			}
+		}
+
+		// Runtime animation objects are bound to the old body's transient USkeleton. Re-walk the
+		// dormant plan against this replacement immediately so compression for a Python recast can
+		// overlap the authored lead to its scene; InputStart owns the completion barrier.
+		if (World->IsActive())
+		{
+			World->RefreshAnimationPreload();
 		}
 	}
 }

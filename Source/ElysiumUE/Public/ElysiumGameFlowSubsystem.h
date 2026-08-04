@@ -89,6 +89,14 @@ namespace ElysiumStory
 	// A divergence, and marked as one in `docs/vtmb/level_transitions.md` — reversible by `elysium.SkipIntro 0`,
 	// which takes the authored route. Pure so the rule is testable with no world and no cvar.
 	bool ResolveIntroSkip(bool bSkip, FString& Map, FString& Landmark, FVector& Offset, bool& bHasYaw);
+
+	// The theatre's hidden exit becomes touchable only after its closing cinematic has moved the
+	// Unreal player body. That scene-space displacement is not a destination-map placement: carrying
+	// it through the ordinary landmark formula puts the player away from and below the tutorial porch.
+	// Match the story-entry contract by making only this authored leg a direct landmark entry. Pure so
+	// the exception cannot spread into ordinary trigger_changelevel travel unnoticed.
+	bool ResolveTheatreExitPlacement(const FString& SourceMap, const FString& Map,
+		const FString& Landmark, FVector& Offset, bool& bHasYaw);
 }
 
 // Old state, new state. Non-dynamic: the listeners are C++ (the UI subsystem, the HUD, the input

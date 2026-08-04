@@ -295,7 +295,8 @@ namespace
 			Playback.StartTime = World ? World->NowSeconds() : 0.0;
 			Playback.LastElapsed = -KINDA_SMALL_NUMBER;
 			Playback.ActivatorIndex = Args.Activator.Index;
-			TickPlayback(bTarget, Playback, 0.0f);
+			const bool bRoleChanged = World && World->SelectTrackCameraRole(bTarget, Handle);
+			TickPlayback(bTarget, Playback, 0.0f, bRoleChanged);
 			ScheduleNextThink();
 		}
 
@@ -435,7 +436,7 @@ namespace
 			}
 		}
 
-		void TickPlayback(bool bTarget, FPlayback& P, float Elapsed)
+		void TickPlayback(bool bTarget, FPlayback& P, float Elapsed, bool bRoleChanged = false)
 		{
 			ElysiumCameraTrack::FSample Sample;
 			if (!P.Path.Sample(Elapsed, Sample))
@@ -443,8 +444,10 @@ namespace
 				StopPlayback(bTarget, P, ToPlayerTime);
 				return;
 			}
-			const bool bCameraCut = ElysiumCameraTrack::CrossesHardCut(P.Path, P.LastElapsed, Elapsed);
-			if (bCameraCut)
+			const bool bHardCut = ElysiumCameraTrack::CrossesHardCut(P.Path, P.LastElapsed, Elapsed);
+			const bool bCameraCut = bHardCut
+				|| (bRoleChanged && FromPlayerTime <= KINDA_SMALL_NUMBER);
+			if (bHardCut)
 			{
 				UE_LOG(LogElysiumCameraTrack, Log, TEXT("hard cut crossed: %.6f -> %.6f"),
 					P.LastElapsed, Elapsed);
@@ -504,8 +507,10 @@ namespace
 					ElysiumCameraTrack::FSample Sample;
 					if (P.Path.Sample(Elapsed, Sample) && World)
 					{
+						const bool bRoleChanged = World->SelectTrackCameraRole(bTarget, Handle);
 						World->PublishTrackCamera(bTarget, Handle, Sample.Position, Sample.Rotation,
-							Sample.Roll, Sample.FieldOfView, FromPlayerTime);
+							Sample.Roll, Sample.FieldOfView, FromPlayerTime,
+							bRoleChanged && FromPlayerTime <= KINDA_SMALL_NUMBER);
 					}
 				}
 				else

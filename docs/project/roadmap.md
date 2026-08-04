@@ -734,15 +734,7 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `.AnimatedPropManifest`, `.OpeningEmbodiment`, `Elysium.Content.OpeningAnimatedProps`, and
   `pipeline/tests/test_animated_props.py`. → `docs/vtmb/entity_io.md`, `docs/vtmb/phy_vphysics.md`,
   `docs/vtmb/entity_visuals.md`. *Deps:* 8.3, 12.1.
-- [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs idle on a
-  disposition-selected stance. Mobile NPCs are native Unreal characters over a runtime Recast
-  projection of the sidecar collision: `SetupPatrolType` / `FollowPatrolPath` loop the shipped
-  named `info_node_patrol_point` routes, while `use_interesting` pedestrians reserve the shipped
-  `intersting_place` entities by group/capacity and play the table's weighted ACT activities for
-  its authored dwell time. Route/place state survives Elysium saves. `scripted_sequence` runs as a
-  real class reproducing its beat outputs. **Not reproduced:** decoded locomotion root movement
-  (the actor moves at retail walk speed but the in-place cycle can foot-slide), walking to a
-  `scripted_sequence` mark (still placed there), `OnScriptEvent01..08`, or perception/combat AI.
+- [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs stand, patrol/use authored places, and scripted Walk travels through the existing motor at its selected clip's decoded ground speed; animation events and perception/combat AI remain open. → `docs/vtmb/entity_io.md`, `docs/vtmb/animation_and_movers.md`.
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — the player sheet +
   `UElysiumGameStateSubsystem::BeginNewGame` seed the fresh-story state (`Story_State=-4`,
   `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`) and travel to **`sp_tutorial_1` @ the `tutorial`

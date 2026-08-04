@@ -8106,6 +8106,74 @@ class BlendGridTests(unittest.TestCase):
 
         return {seq.label: seq for seq in mdl_skel.local_sequences(image)}
 
+    def _with_movements(self, image, animation, records):
+        """Append real 44-byte movement records and point one animdesc at them."""
+        data = bytearray(image)
+        descriptor = CONTRIBUTION_ANIM_INDEX_OFF + animation * ANIM_DESC_STRIDE
+        movement = len(data)
+        struct.pack_into("<ii", data, descriptor + 16, len(records), movement - descriptor)
+        for record in records:
+            data += struct.pack("<ii9f", *record)
+        return bytes(data)
+
+    def test_movement_records_decode_and_report_source_ground_speed(self) -> None:
+        """The record layout and Source's distance/duration ground-speed calculation."""
+        from elysium_pipeline.formats import mdl_skel
+
+        records = (
+            (2, 0x10C0, 2.0, 3.0, 0.0, 1.0, 0.0, 0.0, 5.0, 1.0, 0.0),
+            (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
+        )
+        image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
+        _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
+        decoded = mdl_skel.read_movements(image, descriptor)
+        self.assertEqual(len(decoded), 2)
+        self.assertEqual(decoded[0].endframe, 2)
+        self.assertEqual(decoded[0].motionflags, 0x10C0)
+        self.assertEqual(decoded[0].vector, (1.0, 0.0, 0.0))
+        self.assertEqual(decoded[-1].position, (12.0, 0.0, 0.0))
+
+        summary = mdl_skel.movement_summary(image, descriptor, frames, fps)
+        self.assertIsNotNone(summary)
+        self.assertAlmostEqual(summary.cycle_seconds, 0.1, places=6)
+        self.assertAlmostEqual(summary.ground_distance_cm, 30.48, places=5)
+        self.assertAlmostEqual(summary.ground_speed_cm_s, 304.8, places=4)
+
+    def test_absent_or_malformed_movement_keeps_the_fallback(self) -> None:
+        """A damaged optional array never reads beyond the image or invents a speed."""
+        from elysium_pipeline.formats import mdl_skel
+
+        image = self._image({0: NINE_BY_ONE})
+        _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
+        self.assertEqual(mdl_skel.read_movements(image, descriptor), ())
+        self.assertIsNone(mdl_skel.movement_summary(image, descriptor, frames, fps))
+
+        malformed = bytearray(image)
+        struct.pack_into("<ii", malformed, descriptor + 16, 2, len(malformed) - descriptor - 10)
+        self.assertEqual(mdl_skel.read_movements(malformed, descriptor), ())
+        self.assertIsNone(mdl_skel.movement_summary(malformed, descriptor, frames, fps))
+
+    def test_a_resolved_cell_exports_its_motion_summary(self) -> None:
+        """The neutral walk cell carries the scalar its Unreal motor consumes."""
+        from elysium_pipeline.formats import mdl_gltf, mdl_skel
+
+        records = (
+            (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
+        )
+        image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
+        _extra, blends = mdl_gltf.blend_clip_plan(image, mdl_skel.local_sequences(image))
+        forward = next(cell for cell in blends["walk"]["cells"] if cell["axis"] == [4, 0])
+        self.assertEqual(forward["clip"], "aim#4")
+        self.assertEqual(
+            forward["motion"],
+            {
+                "cycle_seconds": 0.1,
+                "ground_distance_cm": 30.48,
+                "ground_speed_cm_s": 304.8,
+            },
+        )
+        self.assertNotIn("motion", blends["walk"]["cells"][0])
+
     def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell(self) -> None:
         """The shape the theatre corpus fires throughout, read end to end."""
         sequences = self._sequences(self._image({0: NINE_BY_ONE}))

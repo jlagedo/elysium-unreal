@@ -53,6 +53,14 @@ public:
 	// substrate is dormant: construction may queue work, but no think, event, cursor or physical
 	// touch ingress is admitted until Activate.
 	void Load(FElysiumEntityDefs&& InDefs);
+	// Walk the dormant map's animation references after the player and restored state exist. This is
+	// deliberately separate from Load: the map actor owns the engine-side batch completion that must
+	// follow it before the activation gate opens.
+	void PreloadMapAnimations();
+	// A runtime SetModel invalidates skeleton-bound entries contributed by the dormant walk. Queue
+	// the same exact reference closure against the replacement cast without activating or playing
+	// anything; the next scene/sequence pre-roll closes the batch before starting its clock.
+	void RefreshAnimationPreload();
 
 	// Open the gameplay gate at the map actor's frozen game time. Idempotent: a second call does
 	// not restart timers or replay construction. The map actor owns the initial think/event pass
@@ -277,8 +285,11 @@ public:
 	bool HasScriptedCamera() const { return ScriptedCameraShot != 0; }
 	const FString& ScriptedCameraName() const { return ScriptedCameraFile; }
 
-	// `camera_track` publishes position and target independently. The world composes both roles into
-	// one value shot so restoring one track never tears down the other.
+	// `camera_track` selects and publishes position and target independently. Selection is exclusive
+	// per role: a newer track supersedes an older one, whose clock and outputs may continue without
+	// reclaiming the view. The world composes both selected roles into one value shot so restoring one
+	// track never tears down the other.
+	bool SelectTrackCameraRole(bool bTargetRole, const FElysiumEntityHandle& Owner);
 	void PublishTrackCamera(bool bTargetRole, const FElysiumEntityHandle& Owner,
 		const FVector& Point, const FRotator& Rotation, float Roll, float FieldOfView,
 		float BlendInSeconds, bool bCameraCut = false);

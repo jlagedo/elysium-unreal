@@ -10,17 +10,22 @@
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Visual/ElysiumBlendGrids.h"
+#include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataModel.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Tests/AutomationCommon.h"
 #include "glTFRuntimeAsset.h"
 
 static constexpr EAutomationTestFlags GElysiumSkeletalContentFlags =
@@ -1094,6 +1099,216 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 		SceneSets, ActorRoots, RuntimeBinds, PlayerBinds));
 	TestTrue(TEXT("every theatre cinematic clip binds to its target model's USkeleton"), bValid);
 	TestTrue(TEXT("the theatre test exercised runtime bindings"), RuntimeBinds > 0);
+	return true;
+}
+
+// The binding test above proves that the cinematic clip can be constructed, but not that the
+// native animation host evaluates it into a changing component pose. Drive one real theatre
+// `sequence` event through the same UAnimSequence and UElysiumNpcAnimInstance used by play, seek it
+// to two authored scene times, and compare the bone transforms skinning consumes. This is pose data
+// only: no viewport, RHI, screenshot, or image comparison.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTheatreSequenceEvaluationTest,
+	"Elysium.Content.TheatreSequenceEvaluation", GElysiumSkeletalContentFlags)
+bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(TEXT("skipping: sp_theatre is not exported"));
+		return true;
+	}
+
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_theatre.ents parses"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+
+	const FElysiumEntityDef* SceneDef = nullptr;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (Def.TargetName.Equals(TEXT("courtroom_scene_bip4"), ESearchCase::IgnoreCase))
+		{
+			SceneDef = &Def;
+			break;
+		}
+	}
+	if (!TestNotNull(TEXT("Nines' courtroom scene exists"), SceneDef))
+	{
+		return false;
+	}
+
+	const FString* SceneFile = FindKeyIgnoreCase(SceneDef->Keys, TEXT("SceneFile"));
+	const FString* AnimModel = FindKeyIgnoreCase(SceneDef->Keys, TEXT("BaseAnim"));
+	if (!TestNotNull(TEXT("the scene names a VCD"), SceneFile)
+		|| !TestNotNull(TEXT("the scene names a cinematic animation set"), AnimModel))
+	{
+		return false;
+	}
+	const TSharedPtr<const FElysiumSceneData> Scene = ElysiumScene::Load(*SceneFile);
+	if (!TestTrue(TEXT("Nines' courtroom VCD parses"), Scene.IsValid()))
+	{
+		return false;
+	}
+
+	const FElysiumSceneEvent* SequenceEvent = nullptr;
+	const FElysiumSceneActor* SceneActor = nullptr;
+	for (const FElysiumSceneEvent& Event : Scene->Events)
+	{
+		if (Event.Type != EElysiumChoreoEvent::Sequence
+			|| !Event.Param.Equals(TEXT("entire_scene"), ESearchCase::IgnoreCase)
+			|| !Scene->Actors.IsValidIndex(Event.ActorIndex))
+		{
+			continue;
+		}
+		const FElysiumSceneActor& Candidate = Scene->Actors[Event.ActorIndex];
+		if (Candidate.Name.Equals(TEXT("Nines"), ESearchCase::IgnoreCase))
+		{
+			SequenceEvent = &Event;
+			SceneActor = &Candidate;
+			break;
+		}
+	}
+	if (!TestNotNull(TEXT("the VCD carries Nines' entire_scene sequence event"), SequenceEvent)
+		|| !TestNotNull(TEXT("the sequence event has an actor"), SceneActor))
+	{
+		return false;
+	}
+
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(TEXT("NPC/cinematic index loads"), Index.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	const FElysiumCinematicSet* Set = Index.FindCinematic(*AnimModel);
+	if (!TestNotNull(TEXT("the cinematic animation set is indexed"), Set))
+	{
+		return false;
+	}
+	const FString Bank = Set->BankForRoot(SceneActor->BoneFrom);
+	if (!TestTrue(TEXT("Nines' bonerename root resolves a cinematic bank"),
+		!Bank.IsEmpty() && Index.Banks.Contains(Bank)))
+	{
+		return false;
+	}
+
+	const FString Target = ResolveSceneActorTarget(*SceneDef, SceneActor->Name);
+	const FElysiumEntityDef* TargetDef = FindEntityByTarget(Defs, Target);
+	const FString* TargetModel = TargetDef != nullptr
+		? FindKeyIgnoreCase(TargetDef->Keys, TEXT("model")) : nullptr;
+	const FString Stem = TargetModel != nullptr ? StemForModel(Index, *TargetModel) : FString();
+	if (!TestTrue(TEXT("the sequence actor resolves Nines' target model"), !Stem.IsEmpty()))
+	{
+		return false;
+	}
+
+	UglTFRuntimeAsset* MeshAsset = nullptr;
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, MeshAsset, Error);
+	if (!TestNotNull(TEXT("Nines' target mesh loads"), Mesh))
+	{
+		AddError(Error);
+		return false;
+	}
+	UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(
+		Index.BankGlbPath(Bank), Error);
+	if (!TestNotNull(TEXT("Nines' cinematic bank loads"), BankAsset))
+	{
+		AddError(Error);
+		return false;
+	}
+	UAnimSequence* Anim = ElysiumNpcVisual::RetargetClip(
+		BankAsset, Mesh, SequenceEvent->Param, Error);
+	if (!TestNotNull(TEXT("the sequence event retargets its clip"), Anim))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("a skeletal body owner spawned"), Owner))
+	{
+		return false;
+	}
+
+	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetSkeletalMeshAsset(Mesh);
+	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+	Owner->SetRootComponent(Comp);
+	Comp->RegisterComponent();
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance());
+	if (!TestNotNull(TEXT("the production NPC animation host is installed"), Inst))
+	{
+		return false;
+	}
+
+	const auto PoseAt = [Comp, Inst, Anim](float Seconds, TArray<FTransform>& OutPose)
+	{
+		Inst->PlayClip(Anim, /*bLoop=*/false, /*BlendSeconds=*/0.f);
+		Inst->SeekClip(Seconds);
+		// Seek is consumed by UpdateAnimationNode; refresh synchronously so the transforms copied below
+		// are this authored pose rather than the component's previous evaluation.
+		Comp->TickAnimation(0.f, /*bNeedsValidRootMotion=*/false);
+		Comp->RefreshBoneTransforms(/*TickFunction=*/nullptr);
+		OutPose = Comp->GetComponentSpaceTransforms();
+	};
+
+	const float EventSeconds = SequenceEvent->EndTime - SequenceEvent->StartTime;
+	const float LaterSeconds = FMath::Min(120.f, FMath::Max(0.f, EventSeconds - 1.f / 30.f));
+	if (!TestTrue(TEXT("the real sequence spans the later sample"), LaterSeconds > 1.f))
+	{
+		return false;
+	}
+	TArray<FTransform> StartPose;
+	TArray<FTransform> LaterPose;
+	PoseAt(0.f, StartPose);
+	PoseAt(LaterSeconds, LaterPose);
+	if (!TestEqual(TEXT("both evaluations pose the complete skeleton"),
+		StartPose.Num(), LaterPose.Num()) || StartPose.Num() != Mesh->GetRefSkeleton().GetNum())
+	{
+		return false;
+	}
+
+	int32 ChangedBones = 0;
+	float MaxAngleDegrees = 0.f;
+	float MaxTranslationCm = 0.f;
+	FName MostChangedBone = NAME_None;
+	for (int32 BoneIndex = 1; BoneIndex < StartPose.Num(); ++BoneIndex)
+	{
+		const float Angle = FMath::RadiansToDegrees(StartPose[BoneIndex].GetRotation().AngularDistance(
+			LaterPose[BoneIndex].GetRotation()));
+		const float Translation = FVector::Distance(
+			StartPose[BoneIndex].GetTranslation(), LaterPose[BoneIndex].GetTranslation());
+		if (Angle > 0.01f || Translation > 0.01f)
+		{
+			++ChangedBones;
+		}
+		if (Angle > MaxAngleDegrees || Translation > MaxTranslationCm)
+		{
+			MaxAngleDegrees = FMath::Max(MaxAngleDegrees, Angle);
+			MaxTranslationCm = FMath::Max(MaxTranslationCm, Translation);
+			MostChangedBone = Mesh->GetRefSkeleton().GetBoneName(BoneIndex);
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%s.%s: evaluated '%s' at 0.000s and %.3fs; %d/%d non-root "
+		"bones changed (max %.2f deg, %.2f cm; representative '%s')"),
+		*SceneDef->TargetName, *SceneActor->Name, *SequenceEvent->Param, LaterSeconds,
+		ChangedBones, StartPose.Num() - 1, MaxAngleDegrees, MaxTranslationCm,
+		*MostChangedBone.ToString()));
+	TestTrue(TEXT("the cinematic sequence event produces a changing skeletal pose"), ChangedBones > 0);
 	return true;
 }
 

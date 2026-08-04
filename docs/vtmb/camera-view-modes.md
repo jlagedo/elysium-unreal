@@ -497,10 +497,12 @@ clears all owners.
 A `camera_track` is also its first keyframe. `NextKey` walks through `camera_keyframe` or another
 `camera_track`; cycles and missing/wrong-class links terminate with one warning, and content tests
 require the shipped opening chains to be complete and acyclic. `PlayAsCameraPosition` and
-`PlayAsCameraTarget` start independently owned streams. `RestoreCameraToPlayerControl` (with
-`Restore` as a compact compatibility alias) releases that entity's live roles; `HoldAtEnd` retains
-the final sample until restore. `FromPlayerTime` is the push blend, `ToPlayerTime` the default pop
-blend, and an explicit restore parameter overrides the latter. `OnReachedKeyframe`,
+`PlayAsCameraTarget` select independently owned streams. Each role has one current track: a newer
+selection supersedes the previous one, while the superseded track may continue its authored clock
+and outputs without driving the view. `RestoreCameraToPlayerControl` (with `Restore` as a compact
+compatibility alias) releases that entity's live roles; `HoldAtEnd` retains the final sample until
+restore. `FromPlayerTime` is the push blend, `ToPlayerTime` the default pop blend, and an explicit
+restore parameter overrides the latter. `OnReachedKeyframe`,
 `OnLeavingKeyframe`, and exactly-once `OnAnimationCompleted` fire from crossed authored times,
 including zero-duration chains.
 

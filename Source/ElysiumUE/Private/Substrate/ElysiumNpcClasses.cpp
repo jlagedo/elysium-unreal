@@ -54,10 +54,9 @@ static TAutoConsoleVariable<int32> CVarNpcBodies(
 
 // An NPC's travel speeds and the bounds a scripted move runs under.
 //
-// Retail NPC locomotion speed is the walk/run cycle's own root movement, and this runtime has no
-// decoded root motion (`docs/vtmb/animation_and_movers.md` A.3), so the figure has to come from
-// somewhere else: `speed_walk` 100 and `speed_runbase` 225 Source inches/s, which
-// `docs/vtmb/source_movement.md` records as Troika's stated tuning. The same pair drives the player.
+// Retail NPC locomotion speed is the cycle's own authored movement. Scripted Walk resolves that
+// metadata through the selected ACT_WALK blend cell below; these constants remain the compatible
+// fallback for old exports and the established tuning for patrol, Run and Custom travel.
 namespace ElysiumNpcGait
 {
 	inline constexpr float WalkSpeed = 254.0f;   // speed_walk 100 in/s
@@ -449,8 +448,30 @@ public:
 			return true;
 		}
 
-		const float Speed = (Gait == EElysiumScriptGait::Run)
+		float Speed = (Gait == EElysiumScriptGait::Run)
 			? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed;
+		FString ScriptWalkLabel;
+		FString ScriptWalkAnim;
+		// The theatre walk-out is ordinary scripted Walk travel. Its visible cycle is in place, but
+		// the selected forward grid cell carries the displacement the original motor used as ground
+		// speed. Resolve before MoveTo so the body and its ACT_WALK cycle share one authored stride.
+		// Other scripted gaits and autonomous patrols retain their established tuning.
+		if (Gait == EElysiumScriptGait::Walk)
+		{
+			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+			float AuthoredSpeed = 0.f;
+			if (Embodiment && Embodiment->ResolveNpcActivityClip(ModelStem(), TEXT("ACT_WALK"),
+				FMath::Max(0, Handle.Index), ScriptWalkLabel, ScriptWalkAnim, AuthoredSpeed))
+			{
+				if (FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
+				{
+					Speed = AuthoredSpeed;
+					UE_LOG(LogElysiumNpcEnt, Verbose,
+						TEXT("%s scripted walk uses '%s' -> '%s' authored ground speed %.1fcm/s"),
+						*DebugString(), *ScriptWalkLabel, *ScriptWalkAnim, Speed);
+				}
+			}
+		}
 		if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
 			/*bAllowPartialPath=*/true))
 		{
@@ -460,8 +481,19 @@ public:
 		ScriptPhase = EScriptPhase::Travel;
 		ScriptBestDistance = static_cast<float>(FVector::Dist2D(Origin, Mark));
 		// The travel cycle. `m_fMoveTo 3` names its own (`doom_walk`, `claws_aggressive_run`,
-		// `wolf_form_run`); 1 and 2 take the model's ACT_WALK / ACT_RUN.
-		if (Gait != EElysiumScriptGait::Custom || !PlayAnimClip(CustomClip, /*bLoop=*/true))
+		// `wolf_form_run`); Walk plays the exact cell resolved for its speed, while Run takes ACT_RUN.
+		bool bTravelCycleStarted = false;
+		if (Gait == EElysiumScriptGait::Custom)
+		{
+			bTravelCycleStarted = PlayAnimClip(CustomClip, /*bLoop=*/true);
+		}
+		else if (Gait == EElysiumScriptGait::Walk && !ScriptWalkLabel.IsEmpty())
+		{
+			// The global clip resolver needs the vocabulary label (`walk`) to recover the shared-bank
+			// owner; it then resolves the same neutral grid cell (`walk_0`) used for Speed above.
+			bTravelCycleStarted = PlayAnimClip(ScriptWalkLabel, /*bLoop=*/true);
+		}
+		if (!bTravelCycleStarted)
 		{
 			StartWalkingAnimation(Gait == EElysiumScriptGait::Run);
 		}

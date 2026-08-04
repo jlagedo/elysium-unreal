@@ -108,10 +108,31 @@ public:
 	// which is what a scripted_sequence schedules its OnEndSequence off.
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) = 0;
+	// Resolve and retain a clip without changing the body's current animation. The map-load walker
+	// uses this before activation so runtime-created UAnimSequences and their compression work belong
+	// to the loading barrier, not to a choreographed scene's clock.
+	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName) { return false; }
+	// The same operation when the future body does not exist yet. `!playercontroller` is created by
+	// map logic immediately before a scene starts; its ordinary NPC material permutation therefore
+	// has to be made resident from the player's model stem without spawning the stand-in early.
+	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& ClipName) { return false; }
 	// Select and play a manifest clip by VtMB ACT_* activity. Ambient interesting-place data is
 	// authored in activities rather than clip labels; Variant makes its weighted pick repeatable.
 	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) { return false; }
+	// Resolve the same deterministic activity selection without playing it. OutLabel is the NPC
+	// vocabulary key that must go back through PlayNpcClip so the shared-bank owner is preserved;
+	// OutAnimName is the concrete neutral-pose cell whose optional authored speed configures the motor.
+	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
+		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+	{
+		OutLabel.Reset();
+		OutAnimName.Reset();
+		OutGroundSpeedCmPerSecond = 0.f;
+		return false;
+	}
 
 	// 12.1 — a choreo scene's whole-cast performance. The clip lives in a cinematic anim set that
 	// no NPC's include tree names, so it is addressed by the scene's own anim-set model plus the
@@ -119,6 +140,10 @@ public:
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) = 0;
+	virtual bool PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) { return false; }
+	virtual bool PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) { return false; }
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) = 0;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) = 0;
 
@@ -145,6 +170,17 @@ public:
 	// body carries no rig or no mouth record.
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) { return false; }
 
+	// 12.5 — this body's own phoneme filter (`studiohdr` +232/+236), the bounds a `.lip` phoneme's
+	// span is clamped to for the viseme envelope's blend width. A read rather than a write, and the
+	// only one on this interface: the pair is a property of the model, so the substrate's lipsync
+	// binding asks for it once per line instead of carrying a copy of the cast's rig data. False when
+	// the body carries no rig, and the caller then keeps the modal default — which is right for
+	// sp_theatre's three speakers and for the majority of the rigged cast.
+	virtual bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin, float& OutMax) const
+	{
+		return false;
+	}
+
 	// 12.4 — where this body's eyes are looking, in world space. One vector per character per frame
 	// is the whole seam between the half that decides where to look and the half that draws it,
 	// which is the same hop retail networks as `m_viewtarget`. False when the body carries no eye
@@ -164,6 +200,15 @@ public:
 		const FVector& Location, const FQuat& Rotation, float UniformScale) = 0;
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds) = 0;
+	// Animated props are a small, map-scoped catalog. Warm every clip on each model represented in
+	// the map so SetAnimation calls originating in Python as well as entity I/O cannot hitch a shot.
+	virtual int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body, const FString& Stem)
+	{
+		return 0;
+	}
+	// Complete the exact UAnimSequences retained by this map's body cache. Editor builds may have
+	// queued asynchronous compression; packaged builds have no compiler work and simply return.
+	virtual int32 FinishAnimationPreload() { return 0; }
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) = 0;
 

@@ -37,10 +37,10 @@
 // mark, `m_iszPlay` timing `OnEndSequence`, `m_iszPostIdle` held after it, `m_iszIdle` as the pose
 // the NPC waits in from map load, and `m_iszNextScript` chaining.
 //
-// What is NOT: root movement. The gait speeds come from `speed_walk`/`speed_runbase`
-// (`docs/vtmb/source_movement.md`) rather than from the cycle's own displacement, which is not decoded
-// (`docs/vtmb/animation_and_movers.md` A.3), so a travelling NPC can foot-slide. `OnScriptEvent01..08`
-// (5 wires) need decoded animation events and do not fire.
+// The visible locomotion clips stay in place: scripted Walk resolves the selected ACT_WALK cell's
+// decoded ground speed and gives it to the existing motor, so actor translation is applied once.
+// Old sidecars and the other gaits retain their established fallback speeds. `OnScriptEvent01..08`
+// (5 wires) still need decoded animation events and do not fire.
 //
 // **Not RE-established:** whether VtMB fires `OnBeginSequence` at the input or on arrival at the
 // mark. It fires at the input here, which is the order every wire in the exported maps was authored
@@ -50,9 +50,11 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 
 #include "HAL/IConsoleManager.h"
+#include "Misc/Paths.h"
 
 #include <type_traits>
 
@@ -585,6 +587,51 @@ public:
 			// Overrides the disposition stance 8.5 picked at spawn: this pose is authored for this
 			// NPC at this spot, and the stance idle is only the default when nothing else says.
 			Npc->PlayAnimClip(Wait, /*bLoop=*/true);
+		}
+	}
+
+	virtual void PreloadForActivation() override
+	{
+		FElysiumEntity* Npc = ResolveTarget();
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		FString ProxyStem;
+		if (!Npc && Embodiment
+			&& TargetEntity.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
+		{
+			if (const FElysiumPlayer* Player = World->FindPlayer())
+			{
+				ProxyStem = FPaths::GetBaseFilename(Player->Model).ToLower();
+			}
+		}
+
+		auto Preload = [Npc, Embodiment, &ProxyStem](const FString& Clip)
+		{
+			if (Clip.IsEmpty())
+			{
+				return;
+			}
+			if (Npc)
+			{
+				Npc->PreloadAnimClip(Clip);
+			}
+			else if (Embodiment && !ProxyStem.IsEmpty())
+			{
+				Embodiment->PreloadNpcClipForModel(
+					ProxyStem, /*bPlayerMaterial=*/false, Clip);
+			}
+		};
+
+		Preload(PreIdle.IsEmpty() ? PreIdleAlt : PreIdle);
+		Preload(Play);
+		Preload(PostIdle);
+		Preload(CustomMove);
+		if (MoveTo == MOVETO_WALK)
+		{
+			Preload(TEXT("walk"));
+		}
+		else if (MoveTo == MOVETO_RUN)
+		{
+			Preload(TEXT("run"));
 		}
 	}
 

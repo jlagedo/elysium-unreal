@@ -215,6 +215,22 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 		}
 	}
 
+	// Both bounds have to be usable together: the pair is a clamp, and half of one is not a narrower
+	// filter but a wrong one. An absent field and the unrigged (0, 0) therefore land on the same
+	// modal-pair default rather than on a mix.
+	const TArray<TSharedPtr<FJsonValue>>* Filter = nullptr;
+	if (Root->TryGetArrayField(TEXT("phoneme_filter"), Filter) && Filter != nullptr
+		&& Filter->Num() == 2 && (*Filter)[0].IsValid() && (*Filter)[1].IsValid())
+	{
+		const float Lo = static_cast<float>((*Filter)[0]->AsNumber());
+		const float Hi = static_cast<float>((*Filter)[1]->AsNumber());
+		if (Lo > 0.f && Hi > 0.f)
+		{
+			PhonemeFilterMin = FMath::Min(Lo, Hi);
+			PhonemeFilterMax = FMath::Max(Lo, Hi);
+		}
+	}
+
 	// A well-formed sidecar that drives nothing is a real export state, not a failure: `shovelhead`
 	// carries the whole 65/44/60 rig and no flex record that deforms a mesh, and `female_raver_1`
 	// carries a single flexdesc and nothing else. Both parse; `IsValid` is what says whether there

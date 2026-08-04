@@ -325,6 +325,14 @@ void UElysiumMapSubsystem::RequestLandmarkTravel(const FString& Map, const FStri
 			TEXT("intro skip: %s @ %s -> %s @ %s (dropping source offset/yaw)"),
 			*Map, *Landmark, *DestMap, *DestLandmark);
 	}
+	const FString SourceMap = GetCurrentMapName();
+	if (ElysiumStory::ResolveTheatreExitPlacement(SourceMap, DestMap, DestLandmark,
+		DestOffset, bHasYaw))
+	{
+		UE_LOG(LogElysiumMap, Log,
+			TEXT("theatre exit: %s @ %s -> %s @ %s (direct landmark placement)"),
+			*SourceMap, *Landmark, *DestMap, *DestLandmark);
+	}
 
 	if (DestMap.IsEmpty())
 	{

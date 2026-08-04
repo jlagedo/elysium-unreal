@@ -241,6 +241,7 @@ public:
 	// `GetAttachBody` is here). OutSeconds receives the clip's authored length — a
 	// `scripted_sequence` times its `OnEndSequence` off it.
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
+	virtual bool PreloadAnimClip(const FString& ClipName) { return false; }
 
 	// Hand the body back to its resting pose — the disposition idle 8.5 picked for it. What a
 	// `scripted_sequence` does to its NPC on `CancelSequence`: VtMB returns the NPC to AI, which
@@ -294,6 +295,8 @@ public:
 	// beside PlayAnimClip for the same no-RTTI reason; base answers false.
 	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
+	virtual bool PreloadCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
+		const FString& ClipName) { return false; }
 	virtual bool SeekCinematicClip(float PositionSeconds) { return false; }
 	virtual void StopCinematicClip() {}
 
@@ -315,6 +318,12 @@ public:
 	// line's own peak. False when there is no face, no body, or no mouth record — all ordinary, and
 	// the answer for the whole unrigged half of the cast. Base answers false.
 	virtual bool SetMouthOpen(float Open) { return false; }
+
+	// This character's own phoneme filter — the bounds a `.lip` phoneme's span is clamped to for the
+	// viseme envelope's blend width. Read once per spoken line, not per frame: it is a property of the
+	// model, and the two drivers that own a line hold the answer on the binding. False when there is
+	// no face here, and the caller keeps the modal default. Base answers false.
+	virtual bool GetPhonemeFilter(float& OutMin, float& OutMax) const { return false; }
 
 	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
 	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state
@@ -375,6 +384,11 @@ public:
 	// pass). The base resolves parentname and attaches this entity's body while preserving its
 	// exported world pose; constraints and other leaves extend this after every body exists.
 	virtual void PostSpawn();
+
+	// Map-load residency pass. All map entities and the player have spawned, but the entity world is
+	// still dormant: a leaf contributes its authored animation references here without starting any
+	// clip, think, output, camera or scene clock.
+	virtual void PreloadForActivation() {}
 
 	virtual void Think() {}
 

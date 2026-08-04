@@ -4,11 +4,13 @@
 #include "Engine/World.h"
 
 #if PLATFORM_WINDOWS
-#include "Microsoft/COMPointer.h"
 #include "Windows/AllowWindowsPlatformTypes.h"
 #include "Windows/AllowWindowsPlatformAtomics.h"
+#include "Microsoft/COMPointer.h"
+THIRD_PARTY_INCLUDES_START
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+THIRD_PARTY_INCLUDES_END
 #include "Windows/HideWindowsPlatformAtomics.h"
 #include "Windows/HideWindowsPlatformTypes.h"
 #endif

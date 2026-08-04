@@ -32,6 +32,15 @@ static TAutoConsoleVariable<int32> CVarLightFit(
 	TEXT("Apply the <map>.lightfit per-area brightness rebalance to the LightRig (0/1)."),
 	ECVF_Default);
 
+// A/B the point/spot brightness ceiling. 0 clips at MaxBrightness (8.0), which on a hub map pins
+// roughly half the live sources to one flat value; 1 clips at ExtendedMaxBrightness instead, which
+// no source reaches, so the authored range reaches the tone curve intact. Everything below the
+// old ceiling is unchanged either way. Applied at map load; re-travel to A/B.
+static TAutoConsoleVariable<int32> CVarLightCurve(
+	TEXT("elysium.LightCurve"), 0,
+	TEXT("Point/spot brightness ceiling: 0 = MaxBrightness, 1 = ExtendedMaxBrightness (0/1)."),
+	ECVF_Default);
+
 // The map's saved light edits (`_lights/<map>.json`, written by the Lights window) are applied at
 // map load when present: calibration, switched-off sources and full attribute overrides. That
 // makes the file the standing hand-authored state; 0 loads the full faithful source set.
@@ -170,6 +179,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 	// reflects what the rig actually applied (and live re-tuning stays consistent).
 	PointSpotScale = Scale;
 
+	bExtendedRange = CVarLightCurve.GetValueOnAnyThread() != 0;
+
 	// Optional per-area rebalance: one multiplier per `.lights` line, in the same order.
 	TArray<float> Fit;
 	if (CVarLightFit.GetValueOnAnyThread() != 0)
@@ -300,16 +311,23 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 	ApplyLiveTuning();
 
 	int32 AnimatedNum = 0;
+	// How many sources the ceiling is actually clipping — the number the A/B turns on, so it is
+	// reported rather than inferred from the look.
+	int32 ClippedNum = 0;
+	const float Ceiling = bExtendedRange ? ExtendedMaxBrightness : MaxBrightness;
 	for (const FLightSource& S : LightSources)
 	{
 		AnimatedNum += (S.Style >= 1) ? 1 : 0;
+		ClippedNum += (S.Type != 3 && S.Mag * PointSpotScale * S.FitMult > Ceiling) ? 1 : 0;
 	}
-	UE_LOG(LogElysiumLights, Log, TEXT("LightRig: adopted %d baked lights (%d animated)%s%s%s%s"),
+	UE_LOG(LogElysiumLights, Log,
+		TEXT("LightRig: adopted %d baked lights (%d animated)%s%s%s%s · ceiling %.1f%s clips %d"),
 		LightCount, AnimatedNum,
 		bHasSun ? TEXT(" +sun") : TEXT(""),
 		bHasSkyAmbient ? TEXT(" +skyambient") : TEXT(""),
 		bApplyFit ? TEXT(" +lightfit") : TEXT(""),
-		Unmatched > 0 ? *FString::Printf(TEXT(" (%d unmatched)"), Unmatched) : TEXT(""));
+		Unmatched > 0 ? *FString::Printf(TEXT(" (%d unmatched)"), Unmatched) : TEXT(""),
+		Ceiling, bExtendedRange ? TEXT(" (extended)") : TEXT(""), ClippedNum);
 
 	// The standing hand-authored light state: apply the map's saved survey whenever one exists.
 	// A missing file is the normal case and stays silent; a file that fails to apply is a warning.
@@ -677,7 +695,8 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 		{
 			Reach = FMath::Max(Reach * SkyReachScale, MinSkyReachCm);
 		}
-		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, MaxBrightness);
+		const float Ceiling = bExtendedRange ? ExtendedMaxBrightness : MaxBrightness;
+		S.BaseIntensity = FMath::Min(S.Mag * PointSpotScale * S.FitMult, Ceiling);
 		if (ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
 		{
 			Local->SetAttenuationRadius(Reach);

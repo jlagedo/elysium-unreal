@@ -207,6 +207,29 @@ public:
 		}
 	}
 
+	virtual bool PreloadAnimClip(const FString& ClipName) override
+	{
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		bool bLoops = false;
+		return Embodiment && AnimatedVisual && !AnimatedStem.IsEmpty()
+			&& Embodiment->FindAnimatedPropClip(AnimatedStem, ClipName, bLoops)
+			&& Embodiment->PreloadAnimatedPropClips(AnimatedVisual, AnimatedStem) > 0;
+	}
+
+	virtual void PreloadForActivation() override
+	{
+		// Unlike an NPC, a skeletal prop owns a compact, self-contained clip list. Load the whole
+		// represented model now: SetAnimation is also invoked from Python, whose dynamic string cannot
+		// be recovered by walking entity outputs alone.
+		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		{
+			if (AnimatedVisual && !AnimatedStem.IsEmpty())
+			{
+				Embodiment->PreloadAnimatedPropClips(AnimatedVisual, AnimatedStem);
+			}
+		}
+	}
+
 	// CDynamicProp::Activate (FUN_101906c0). `LoopSequence` resolves HERE, not in Spawn: when it
 	// names a real sequence — including sequence index 0, the compare is against -1 — the prop arms
 	// a one-shot think at `curtime + RandomFloat(0.1, 0.99)`. That stagger is why three palm trees

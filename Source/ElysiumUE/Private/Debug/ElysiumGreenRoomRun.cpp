@@ -368,6 +368,8 @@ bool FElysiumGreenRoomRun::PrepareTheatreCase()
 	TheatreSceneRotation = ElysiumSkeletalBasis::FromSourceAngles(Scene->Angles);
 	TheatrePositionOwner = PositionRoot->Handle;
 	TheatreTargetOwner = TargetRoot->Handle;
+	World->SelectTrackCameraRole(false, TheatrePositionOwner);
+	World->SelectTrackCameraRole(true, TheatreTargetOwner);
 
 	FElysiumEntityDefs Defs;
 	if (!FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(TEXT("sp_theatre")), Defs))

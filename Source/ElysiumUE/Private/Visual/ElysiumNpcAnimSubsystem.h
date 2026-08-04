@@ -117,6 +117,13 @@ public:
 	FString ResolveClipAnimName(const FString& Stem, const FString& ClipName,
 		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral());
 
+	// Resolve one ACT_* request all the way through its character vocabulary and the owning bank's
+	// neutral blend-grid cell. OutLabel is the vocabulary key (for example `walk`) that preserves
+	// bank ownership for playback; OutAnimName is the concrete glb animation (`walk_0`), and the
+	// speed is zero when that cell carries no authored movement metadata.
+	bool ResolveActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
+		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+
 	// The standing idle for a stem at a disposition, by VtMB's own chain:
 	//   default_disposition -> dispositiontable "Animation Name" -> Stance_<Name>_Idle_* (by weight)
 	//   -> ACT_IDLE (by weight) -> a loose idle-named clip -> nothing.

@@ -394,7 +394,10 @@ def write_blends(stem, model, table, prefix=""):
                            "paramstart[a]..paramend[a], clamping to 0..1 and scaling by the "
                            "extent; that yields a cell index and a fraction to the next. "
                            "`cells[].clip` names an animation of this stem's glb, or is null "
-                           "where the cell's animation did not bake. Evaluate each cell and "
+                           "where the cell's animation did not bake. A cell whose animation "
+                           "carries authored movement also has a `motion` summary in seconds, "
+                           "centimetres and centimetres/second for an in-place host motor. "
+                           "Evaluate each cell and "
                            "blend the results — never blend the clips. See "
                            "docs/vtmb/animation_and_movers.md A.3.",
                    **table}, f, separators=(",", ":"))

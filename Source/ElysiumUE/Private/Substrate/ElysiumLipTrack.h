@@ -104,9 +104,9 @@ struct FElysiumLipSyncBinding
 
 	// `studiohdr` +232/+236 — the phoneme filter, authored **per model** and genuinely varying
 	// across the rigged cast: 57 carry (0.065, 0.100), 32 carry (0.080, 0.100) and `Jeanette` alone
-	// (0.080, 0.105). The defaults are the modal pair, which is also what all three of sp_theatre's
-	// speakers carry, and they stand in until the facial sidecar's `phoneme_filter` is plumbed
-	// through to here.
+	// (0.080, 0.105). Whichever driver owns the line fills these from the speaker's own rig
+	// (`FElysiumEntity::GetPhonemeFilter`). The defaults are the modal pair, and they stand for a
+	// speaker with no rig to ask — and for a test that drives the arithmetic with no world at all.
 	float BlendMin = 0.065f;
 	float BlendMax = 0.10f;
 

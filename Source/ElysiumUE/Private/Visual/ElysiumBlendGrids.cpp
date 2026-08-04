@@ -144,6 +144,21 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 				(*CellObject)->TryGetNumberField(TEXT("anim"), Cell.Anim);
 				// A null clip stays empty: the cell exists and addresses nothing.
 				(*CellObject)->TryGetStringField(TEXT("clip"), Cell.Clip);
+				const TSharedPtr<FJsonObject>* MotionObject = nullptr;
+				if ((*CellObject)->TryGetObjectField(TEXT("motion"), MotionObject)
+					&& MotionObject != nullptr)
+				{
+					(*MotionObject)->TryGetNumberField(TEXT("cycle_seconds"),
+						Cell.Motion.CycleSeconds);
+					(*MotionObject)->TryGetNumberField(TEXT("ground_distance_cm"),
+						Cell.Motion.GroundDistanceCm);
+					(*MotionObject)->TryGetNumberField(TEXT("ground_speed_cm_s"),
+						Cell.Motion.GroundSpeedCmPerSecond);
+					if (!Cell.Motion.IsUsable())
+					{
+						Cell.Motion = FElysiumClipMotion{};
+					}
+				}
 				// The glb spells an animation without the leading '@' a raw label can carry, and the
 				// sidecar records the raw label. No shipped cell has one; stripping costs nothing and
 				// a mismatch here would look like a missing animation.

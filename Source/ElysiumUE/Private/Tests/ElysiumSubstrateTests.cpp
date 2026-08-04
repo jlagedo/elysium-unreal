@@ -2111,6 +2111,7 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 	Gameplay.bSpawnTransformReady = true;
 	Gameplay.bPlayerEntityReady = true;
 	Gameplay.bEntityWorldReady = true;
+	Gameplay.bAnimationPreloadReady = true;
 	TestEqual(TEXT("construction has not completed yet"),
 		Gameplay.Evaluate(1.0, Failure), EElysiumMapReadinessResult::Waiting);
 	Gameplay.bConstructionComplete = true;
@@ -2121,6 +2122,7 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 	Backdrop.bMenuBackdrop = true;
 	Backdrop.bConstructionComplete = true;
 	Backdrop.bEntityWorldReady = true;
+	Backdrop.bAnimationPreloadReady = true;
 	Backdrop.bCollisionReady = true;
 	TestEqual(TEXT("a backdrop omits every pawn prerequisite"),
 		Backdrop.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Ready);
@@ -2144,6 +2146,13 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 	TestTrue(TEXT("watchdog reason names missing prerequisites"),
 		Failure.Contains(TEXT("possessed player pawn"))
 		&& Failure.Contains(TEXT("final player placement")));
+
+	FElysiumMapRuntimePrerequisites MissingAnimations = Gameplay;
+	MissingAnimations.bAnimationPreloadReady = false;
+	TestEqual(TEXT("a completed build cannot activate before its map animations are resident"),
+		MissingAnimations.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
+	TestTrue(TEXT("animation residency failure is structured"),
+		Failure.Contains(TEXT("animation residency")));
 
 	FElysiumMapRuntimePrerequisites MissingSubstrate = Backdrop;
 	MissingSubstrate.bEntityWorldReady = false;
@@ -3869,6 +3878,9 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityClip = TEXT("walk_0");
+		Services.ResolvedNpcGroundSpeedCmPerSecond = 136.7f;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.Activate(0.0);
@@ -3892,6 +3904,16 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 
 		TestTrue(TEXT("the beat asked the motor for the mark"),
 			Motor->RequestedFeet.Equals(Mark, 0.01));
+		TestTrue(TEXT("the scripted walk uses the selected clip's authored ground speed"),
+			FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, 136.7f, 0.01f));
+		TestTrue(TEXT("the speed came from the concrete forward walk cell"),
+			Services.Saw(TEXT("ResolveNpcActivityClip isaac ACT_WALK")));
+		TestTrue(TEXT("the activity label entered the global bank resolver after the move"),
+			Services.Saw(TEXT("PlayNpcClip isaac walk loop=1")));
+		TestFalse(TEXT("the concrete bank cell was not mistaken for a vocabulary label"),
+			Services.Saw(TEXT("PlayNpcClip isaac walk_0")));
+		TestFalse(TEXT("the resolved scripted walk was not selected a second time"),
+			Services.Saw(TEXT("PlayNpcActivity isaac ACT_WALK")));
 		TestFalse(TEXT("the NPC was not teleported onto the mark"), Npc->Origin.Equals(Mark, 0.01));
 		TestEqual(TEXT("OnEndSequence is held while the NPC is still walking"),
 			CounterValue(Count), 0.f);
@@ -3915,6 +3937,9 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 
 		FElysiumRecordingServices Services;
 		Services.bProvideNpcMotor = true;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityClip = TEXT("walk_0");
+		Services.ResolvedNpcGroundSpeedCmPerSecond = 0.f;   // older sidecar: clip, no motion block
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
 		World.Activate(0.0);
@@ -3927,7 +3952,8 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		if (FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor())
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (Motor)
 		{
 			Motor->bAcceptMoves = false;   // the navigation graph has nothing to offer this mark
 		}
@@ -3939,6 +3965,11 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		TestTrue(TEXT("an unreachable mark places the NPC on it instead"), Npc->Origin.Equals(Mark, 0.01));
 		TestTrue(TEXT("and applies the mark's facing"),
 			FMath::IsNearlyEqual(Npc->Angles.Y, 270.f, 0.01f));
+		if (Motor)
+		{
+			TestTrue(TEXT("an older sidecar without motion retains the scripted-walk fallback speed"),
+				FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, 254.f, 0.01f));
+		}
 		TestEqual(TEXT("and the beat still fires OnEndSequence"), CounterValue(Count), 5.f);
 	}
 
@@ -5028,6 +5059,26 @@ bool FElysiumStorySkipTest::RunTest(const FString&)
 		TestEqual(TEXT("another map remains untouched"), Map, FString(TEXT("sm_pawnshop_1")));
 		TestTrue(TEXT("another destination keeps its placement"),
 			Offset.Equals(FVector(4.f, 5.f, 6.f)) && bHasYaw);
+	}
+
+	{
+		FVector Offset(1120.756f, 325.981f, -89.643f);
+		bool bHasYaw = true;
+		TestTrue(TEXT("the authored theatre exit selects direct tutorial placement"),
+			ElysiumStory::ResolveTheatreExitPlacement(ElysiumStory::TheatreMap,
+				ElysiumStory::TutorialMap, ElysiumStory::TutorialLandmark, Offset, bHasYaw));
+		TestTrue(TEXT("the theatre cinematic displacement is dropped"), Offset.IsNearlyZero());
+		TestFalse(TEXT("the tutorial landmark supplies the arrival facing"), bHasYaw);
+	}
+
+	{
+		FVector Offset(7.f, 8.f, 9.f);
+		bool bHasYaw = true;
+		TestFalse(TEXT("ordinary landmark travel keeps its relative placement"),
+			ElysiumStory::ResolveTheatreExitPlacement(TEXT("sp_tutorial_1"),
+				TEXT("sm_pawnshop_1"), TEXT("newgame"), Offset, bHasYaw));
+		TestTrue(TEXT("ordinary placement is untouched"),
+			Offset.Equals(FVector(7.f, 8.f, 9.f)) && bHasYaw);
 	}
 
 	return true;
@@ -6235,10 +6286,24 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 			TemporalCamera->ConsumeTemporalCameraCutRequest());
 		TestFalse(TEXT("the camera apply phase consumes the cut exactly once"),
 			TemporalCamera->ConsumeTemporalCameraCutRequest());
+		// camera_track publishes a new value every frame. Exercise an updated origin, look-at and lens
+		// before the component solves so the rendered-view seam, not only the value stack, is covered.
+		TemporalShot.Origin = FVector(120.0f, -30.0f, 45.0f);
+		TemporalShot.LookAt = FVector(220.0f, -30.0f, 45.0f);
+		TemporalShot.bUseLookAt = true;
+		TemporalShot.FieldOfView = FocalLengthToHorizontalFov(35.0f);
+		TestTrue(TEXT("a moving track value reaches the live camera shot"),
+			TemporalCamera->UpdateShot(TemporalShotId, TemporalShot));
 		TemporalCamera->UpdateCamera(1.0f / 60.0f);
 		FMinimalViewInfo ScriptedView;
 		ScriptedView.PostProcessSettings.MotionBlurAmount = 0.5f;
 		TemporalCamera->ApplyToView(ScriptedView);
+		TestTrue(TEXT("the refreshed track origin reaches the rendered view"),
+			ScriptedView.Location.Equals(TemporalShot.Origin, 0.01f));
+		TestTrue(TEXT("the refreshed track target reaches the rendered view"),
+			ScriptedView.Rotation.Equals((TemporalShot.LookAt - TemporalShot.Origin).Rotation(), 0.01f));
+		TestTrue(TEXT("the refreshed track lens reaches the rendered view"),
+			FMath::IsNearlyEqual(ScriptedView.FOV, TemporalShot.FieldOfView, 0.001f));
 		TestTrue(TEXT("a visible scripted shot overrides camera motion blur"),
 			ScriptedView.PostProcessSettings.bOverride_MotionBlurAmount);
 		TestEqual(TEXT("scripted camera edits and dollies render without radial smear"),
@@ -6346,6 +6411,7 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	TestNotNull(TEXT("the camera owner remains addressable"), PosEntity);
 	if (PosEntity)
 	{
+		World.SelectTrackCameraRole(false, PosEntity->Handle);
 		World.PublishTrackCamera(false, PosEntity->Handle, FVector(1.0f, 2.0f, 3.0f),
 			FRotator::ZeroRotator, 0.0f, 60.0f, 0.0f, true);
 		TestTrue(TEXT("the world carries a hard-cut instruction onto the value shot"),
@@ -6424,6 +6490,66 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	DwellWorld.Tick(3.5);
 	TestEqual(TEXT("completion follows the destination dwell"),
 		CounterValue(DwellWorld, TEXT("dwell_completed")), 1.0f);
+
+	// Position and target are exclusive retail player slots, not a last-writer-wins contest between
+	// every live track. Put the old pair after the new pair in entity order: without selection leases,
+	// their later Think calls reclaim both roles and their completion tears down the newer shot.
+	FElysiumEntityDefs ReplacementDefs;
+	ReplacementDefs.MapName = TEXT("__camera_track_replacement_test__");
+	auto ReplacementTrack = [](const TCHAR* Name, const FVector& At, float Pause)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("camera_track");
+		Def.TargetName = Name;
+		Def.Origin = At;
+		Def.Keys.Add(TEXT("Pause"), *FString::SanitizeFloat(Pause));
+		return Def;
+	};
+	ReplacementDefs.Defs.Add(ReplacementTrack(TEXT("new_position"), FVector(100.0f, 0.0f, 0.0f), 3.0f));
+	ReplacementDefs.Defs.Add(ReplacementTrack(TEXT("new_target"), FVector(200.0f, 0.0f, 0.0f), 3.0f));
+	FElysiumEntityDef OldPosition = ReplacementTrack(TEXT("old_position"), FVector(10.0f, 0.0f, 0.0f), 2.0f);
+	FElysiumOutputDef OldCompleted = Completed;
+	OldCompleted.Target = TEXT("old_completed");
+	OldPosition.Outputs.Add(OldCompleted);
+	ReplacementDefs.Defs.Add(MoveTemp(OldPosition));
+	ReplacementDefs.Defs.Add(ReplacementTrack(TEXT("old_target"), FVector(20.0f, 0.0f, 0.0f), 2.0f));
+	FElysiumEntityDef OldCounter;
+	OldCounter.Classname = TEXT("math_counter");
+	OldCounter.TargetName = TEXT("old_completed");
+	ReplacementDefs.Defs.Add(MoveTemp(OldCounter));
+
+	FElysiumRecordingServices ReplacementServices;
+	ReplacementServices.bHasPlayer = true;
+	FElysiumEntityWorld ReplacementWorld(nullptr, nullptr, ReplacementServices.Bundle());
+	ReplacementWorld.Load(MoveTemp(ReplacementDefs));
+	ReplacementWorld.Activate(0.0);
+	auto PlayReplacementRole = [&ReplacementWorld](const TCHAR* Name, const TCHAR* Input)
+	{
+		ReplacementWorld.AcceptInput(Name, FName(Input), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+	};
+	PlayReplacementRole(TEXT("old_target"), TEXT("PlayAsCameraTarget"));
+	PlayReplacementRole(TEXT("old_position"), TEXT("PlayAsCameraPosition"));
+	PlayReplacementRole(TEXT("new_target"), TEXT("PlayAsCameraTarget"));
+	PlayReplacementRole(TEXT("new_position"), TEXT("PlayAsCameraPosition"));
+	TestTrue(TEXT("the newer pair owns the composed shot immediately"),
+		ReplacementServices.LastCameraShot.Origin.Equals(FVector(100.0f, 0.0f, 0.0f), 0.01f)
+			&& ReplacementServices.LastCameraShot.bUseLookAt
+			&& ReplacementServices.LastCameraShot.LookAt.Equals(FVector(200.0f, 0.0f, 0.0f), 0.01f));
+	ReplacementWorld.Tick(0.5);
+	TestTrue(TEXT("later entity-order thinks from superseded tracks cannot reclaim either role"),
+		ReplacementServices.LastCameraShot.Origin.Equals(FVector(100.0f, 0.0f, 0.0f), 0.01f)
+			&& ReplacementServices.LastCameraShot.LookAt.Equals(FVector(200.0f, 0.0f, 0.0f), 0.01f));
+	ReplacementWorld.Tick(2.0);
+	TestEqual(TEXT("a superseded track still advances and fires authored completion"),
+		CounterValue(ReplacementWorld, TEXT("old_completed")), 1.0f);
+	TestTrue(TEXT("superseded completion leaves the newer camera pair live"),
+		ReplacementWorld.HasTrackCamera());
+	TestEqual(TEXT("superseded completion does not pop the shared shot"),
+		ReplacementServices.Count(TEXT("PopCameraShot")), 0);
+	ReplacementWorld.Tick(3.0);
+	TestFalse(TEXT("the selected pair restores normally when its own clock completes"),
+		ReplacementWorld.HasTrackCamera());
 
 	return true;
 }
@@ -9203,6 +9329,94 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		TestEqual(TEXT("an unresolvable SceneFile fires nothing at all"), CounterValue(Count), 0.f);
 	}
 
+	// --- the dormant map walk resolves scene, scripted and output animation references --------
+	{
+		FElysiumRecordingServices Services;
+		Services.bCinematicClipsResolve = true;
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__animation_preload__");
+
+		FElysiumEntityDef Actor;
+		Actor.Classname = TEXT("npc_VHumanCombatant");
+		Actor.TargetName = TEXT("A");
+		Actor.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/male_citizen.mdl"));
+		Defs.Defs.Add(MoveTemp(Actor));
+
+		FElysiumEntityDef SceneDef;
+		SceneDef.Classname = TEXT("logic_choreographed_scene");
+		SceneDef.TargetName = TEXT("resident_scene");
+		SceneDef.Keys.Add(TEXT("SceneFile"), TEXT("test/scene.vcd"));
+		SceneDef.Keys.Add(TEXT("BaseAnim"), TEXT("models/cinematic/test_scene.mdl"));
+		Defs.Defs.Add(MoveTemp(SceneDef));
+
+		FElysiumEntityDef Sequence;
+		Sequence.Classname = TEXT("scripted_sequence");
+		Sequence.TargetName = TEXT("resident_sequence");
+		Sequence.Keys.Add(TEXT("m_iszEntity"), TEXT("A"));
+		Sequence.Keys.Add(TEXT("m_iszPlay"), TEXT("action_clip"));
+		Defs.Defs.Add(MoveTemp(Sequence));
+
+		FElysiumEntityDef Relay;
+		Relay.Classname = TEXT("logic_relay");
+		FElysiumOutputDef SetAnim;
+		SetAnim.Name = TEXT("OnTrigger");
+		SetAnim.Target = TEXT("A");
+		SetAnim.Input = TEXT("SetAnimation");
+		SetAnim.Param = TEXT("wire_clip");
+		Relay.Outputs.Add(MoveTemp(SetAnim));
+		Defs.Defs.Add(MoveTemp(Relay));
+
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		Services.Calls.Reset();
+		World.PreloadMapAnimations();
+
+		TestFalse(TEXT("the residency walk does not activate the entity world"), World.IsActive());
+		TestTrue(TEXT("a choreographed sequence clip is preloaded"),
+			Services.Saw(TEXT("PreloadCinematicClip male_citizen")));
+		TestTrue(TEXT("a scripted_sequence action clip is preloaded"),
+			Services.Saw(TEXT("PreloadNpcClip male_citizen action_clip")));
+		TestTrue(TEXT("a SetAnimation output parameter is preloaded"),
+			Services.Saw(TEXT("PreloadNpcClip male_citizen wire_clip")));
+		TestFalse(TEXT("preloading does not play a cinematic clip"),
+			Services.Saw(TEXT("PlayCinematicClip")));
+
+		// Python may recast an actor after the dormant map walk. Start must resolve the VCD again
+		// against that replacement skeleton and finish the batch before the scene clock/playback.
+		World.Activate(0.0);
+		FElysiumEntity* LiveActor = World.FindByName(TEXT("A"));
+		Services.Calls.Reset();
+		LiveActor->SetRuntimeModel(
+			TEXT("models/character/npc/common/female_citizen.mdl"));
+		TestTrue(TEXT("SetModel queues the map closure for the replacement skeleton"),
+			Services.Saw(TEXT("PreloadCinematicClip female_citizen")));
+		Services.Calls.Reset();
+		World.EnqueueInput(TEXT("resident_scene"), FName(TEXT("Start")),
+			FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(0.0);
+
+		int32 RecastPreload = INDEX_NONE;
+		int32 Finish = INDEX_NONE;
+		for (int32 Index = 0; Index < Services.Calls.Num(); ++Index)
+		{
+			if (RecastPreload == INDEX_NONE
+				&& Services.Calls[Index].StartsWith(
+					TEXT("PreloadCinematicClip female_citizen")))
+			{
+				RecastPreload = Index;
+			}
+			if (Finish == INDEX_NONE
+				&& Services.Calls[Index].StartsWith(TEXT("FinishAnimationPreload")))
+			{
+				Finish = Index;
+			}
+		}
+		TestTrue(TEXT("scene Start re-resolves the Python-recast actor"),
+			RecastPreload != INDEX_NONE);
+		TestTrue(TEXT("scene Start closes residency after resolving its actual cast"),
+			Finish > RecastPreload);
+	}
+
 	ElysiumScene::ClearCache();
 	return true;
 }
@@ -10151,6 +10365,12 @@ namespace
 			Cell.Axis[0] = i;
 			Cell.Axis[1] = 0;
 			Cell.Clip = Names[i];
+			if (i == 4)
+			{
+				Cell.Motion.CycleSeconds = 1.2f;
+				Cell.Motion.GroundDistanceCm = 164.0f;
+				Cell.Motion.GroundSpeedCmPerSecond = 136.7f;
+			}
 			Walk.Cells.Add(Cell);
 		}
 		Table.Grids.Add(Walk.Label, Walk);
@@ -10236,6 +10456,8 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("...and it is the forward walk, not the base cell"), Pick.Cell->Clip,
 			FString(TEXT("walk_0")));
+		TestTrue(TEXT("...and carries that cell's authored route speed"),
+			FMath::IsNearlyEqual(Pick.Cell->Motion.GroundSpeedCmPerSecond, 136.7f, 0.01f));
 	}
 
 	// A steered pose selects a different cell — the property the resolved-name cache key exists for.
@@ -10264,7 +10486,9 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 		TEXT(R"("start":-180.0,"end":180.0,"loop":360.0}],)")
 		TEXT(R"("grids":{"walk":{"numblends":3,"groupsize":[3,1],"paramindex":[0,-1],)")
 		TEXT(R"("paramstart":[-180.0,0.0],"paramend":[180.0,0.0],"cells":[)")
-		TEXT(R"({"axis":[0,0],"anim":20,"clip":"walk_180"},)")
+		TEXT(R"({"axis":[0,0],"anim":20,"clip":"walk_180","motion":)")
+		TEXT(R"({"cycle_seconds":1.2,"ground_distance_cm":164.0,)")
+		TEXT(R"("ground_speed_cm_s":136.7}},)")
 		TEXT(R"({"axis":[1,0],"anim":16,"clip":null},)")
 		TEXT(R"({"axis":[2,0],"anim":17,"clip":"walk_45"}]},)")
 		TEXT(R"("lonely":{"numblends":1,"groupsize":[1,1],"paramindex":[-1,-1],)")
@@ -10279,10 +10503,18 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	if (const FElysiumBlendGrid* Grid = Parsed.Find(TEXT("walk")))
 	{
 		TestEqual(TEXT("every cell is read, null included"), Grid->Cells.Num(), 3);
+		const FElysiumBlendCell* Authored = Grid->CellAt(0, 0);
+		if (TestNotNull(TEXT("the authored-motion cell exists"), Authored))
+		{
+			TestTrue(TEXT("...and its optional ground speed is read"),
+				FMath::IsNearlyEqual(Authored->Motion.GroundSpeedCmPerSecond, 136.7f, 0.01f));
+		}
 		const FElysiumBlendCell* Null = Grid->CellAt(1, 0);
 		if (TestNotNull(TEXT("the null cell exists"), Null))
 		{
 			TestTrue(TEXT("...and addresses no animation"), Null->Clip.IsEmpty());
+			TestFalse(TEXT("...and an old/motionless cell invents no route speed"),
+				Null->Motion.IsUsable());
 		}
 		// Case-insensitive, like every other label lookup in the module.
 		TestNotNull(TEXT("labels resolve case-insensitively"), Parsed.Find(TEXT("WALK")));

@@ -668,6 +668,21 @@ namespace ElysiumStory
 		bHasYaw = false;
 		return true;
 	}
+
+	bool ResolveTheatreExitPlacement(const FString& SourceMap, const FString& Map,
+		const FString& Landmark, FVector& Offset, bool& bHasYaw)
+	{
+		if (!SourceMap.Equals(TheatreMap, ESearchCase::IgnoreCase)
+			|| !Map.Equals(TutorialMap, ESearchCase::IgnoreCase)
+			|| !Landmark.Equals(TutorialLandmark, ESearchCase::IgnoreCase))
+		{
+			return false;
+		}
+
+		Offset = FVector::ZeroVector;
+		bHasYaw = false;
+		return true;
+	}
 }
 
 bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)

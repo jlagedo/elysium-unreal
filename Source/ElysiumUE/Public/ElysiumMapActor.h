@@ -52,6 +52,7 @@ struct FElysiumMapRuntimePrerequisites
 
 	bool bConstructionComplete = false;
 	bool bEntityWorldReady = false;
+	bool bAnimationPreloadReady = false;
 	bool bAudioCatalogReady = true;
 	bool bMenuBackdrop = false;
 	bool bCollisionReady = false;   // Ready or intentionally Disabled
@@ -272,11 +273,21 @@ public:
 		const FString& Disposition, int32 IdleVariant) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
+	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName) override;
+	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& ClipName) override;
 	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override;
+	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
+		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
+	virtual bool PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override;
+	virtual bool PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override;
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) override;
 	virtual bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const override;
@@ -284,6 +295,8 @@ public:
 	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
 		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) override;
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;
+	virtual bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
+		float& OutMax) const override;
 	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) override;
 	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
 		FVector& OutForward) const override;
@@ -292,6 +305,9 @@ public:
 		const FVector& Location, const FQuat& Rotation, float UniformScale) override;
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds) override;
+	virtual int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
+		const FString& Stem) override;
+	virtual int32 FinishAnimationPreload() override;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) override;
 	virtual FString AnimatedPropRestClip(const FString& Stem) const override;
@@ -490,6 +506,7 @@ private:
 
 	EElysiumMapRuntimePhase RuntimePhase = EElysiumMapRuntimePhase::Building;
 	bool bRuntimeConstructionComplete = false;
+	bool bAnimationPreloadReady = false;
 	bool bMenuBackdrop = false;
 	bool bNavigationBuildRequested = false;
 	bool bNavigationBuildFailed = false;

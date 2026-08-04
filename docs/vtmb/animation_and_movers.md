@@ -108,7 +108,7 @@ persistent bone-to-world array it is evaluated into are owned by
 | 4 | float | `fps` | **not uniform** — 30.0 on 1,436 of 1,502 sequences across six banks, but 18.0 ×54 (incl. `run`), 60.0 ×8, 20.0 ×4. A clip's own rate, so a consumer must read it rather than assume 30 |
 | 8 | int | `flags` | loop/delta |
 | 12 | int | `numframes` | 101–501 on probed clips |
-| 16/20 | int | `nummovements` / `movementindex` | **root motion — present, and load-bearing for locomotion.** 0 on the dialogue clips (jeanette et al.), but **66 of `move_and_ranged`'s 722 animdescs carry it**: `walk` 23 records, `run` 9, `sneak` 1, every weapon walk/run variant. The records are located but **not decoded**, so a locomotion clip bakes in place. The native route motor moves the actor at retail walk speed, but its feet can slide until these records drive or calibrate the visual stride |
+| 16/20 | int | `nummovements` / `movementindex` | **Authored movement — present and load-bearing for locomotion.** 0 on dialogue clips, but **66 of `move_and_ranged`'s 722 animdescs carry it**: `walk` 23 records, `run` 9, `sneak` 1, and every weapon walk/run variant. The records are decoded as metadata while the bone clip remains in place, so the host motor applies actor translation exactly once |
 | 24 | Vector | `bbmin` (3f) | per-anim bbox |
 | 36 | Vector | `bbmax` (3f) | |
 | 48 | int | **`animindex`** | → per-bone anim records, rel. animdesc base |
@@ -118,10 +118,35 @@ persistent bone-to-world array it is evaluated into are owned by
 (VtMB has **none** of modern Source's `animblockindex`/`sectionindex`/`zeroframe`
 streaming fields — older HL2-Beta layout.)
 
-Across the whole character tree, **1,386 of 6,382 animdescs** carry **23,347**
-movement records. The exporter does not decode them. This is not confined to the
-original `move_and_ranged` probe: any consumer that moves an actor from the
-ordinary local bone tracks alone omits authored root displacement.
+`mstudiomovement_t` is **44 bytes** [SDK cross-reference, data-verified]:
+
+| Off | Type | Field | Meaning |
+|---|---|---|---|
+| 0 | int | `endframe` | Last frame of this piecewise block |
+| 4 | int | `motionflags` | Motion component mask |
+| 8/12 | float | `v0` / `v1` | Block-start/end movement values |
+| 16 | float | `angle` | Cumulative yaw at the block end |
+| 20 | Vector | `vector` | Direction relative to the block's initial angle |
+| 32 | Vector | `position` | Cumulative Source-space displacement at the block end |
+
+The array starts at `animdesc + movementindex`. Source's sequence ground speed is the final
+record's displacement length divided by `(numframes - 1) / fps`. The exporter writes that scalar
+beside a resolved blend cell as `motion.{cycle_seconds,ground_distance_cm,ground_speed_cm_s}`;
+distance is converted from Source inches to centimetres offline. The skeletal glTF remains in
+place, because also translating its root would double-move a body whose route motor consumes the
+same metadata. Missing or malformed movement metadata is optional and leaves the runtime's prior
+gait fallback intact.
+
+The character vocabulary and bank animation have deliberately different keys. `ACT_WALK` selects
+the sequence label `walk`; that label owns the include-tree mapping to the gendered
+`move_and_ranged` bank. Only after the bank is known does its neutral blend grid select the baked
+animation `walk_0`. A consumer must therefore play `walk` through the vocabulary resolver while
+using `walk_0`'s motion metadata; treating `walk_0` itself as a character label loses the bank owner.
+
+Across the whole character tree, **1,386 of 6,382 animdescs** carry **23,347** movement records.
+This is not confined to the original `move_and_ranged` probe. On the neutral forward `walk_0`
+cells, the installed male bank reports **164.019 cm over 1.2 s = 136.683 cm/s**, and the female
+bank **107.807 cm over 1.064459 s = 101.278 cm/s**.
 All 6,382 animdescs have `numikrules == 0`; there is no animdesc IK payload to
 recover in this corpus, although sequence-tail IK locks and autolayers remain
 outside the first-pass exporter.

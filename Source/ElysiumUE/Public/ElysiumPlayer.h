@@ -242,13 +242,17 @@ public:
 
 	// --- The animation seam (8.5), implemented once for every character ---------------------
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
+	virtual bool PreloadAnimClip(const FString& ClipName) override;
 	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
+	virtual bool PreloadCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
+		const FString& ClipName) override;
 	virtual bool SeekCinematicClip(float PositionSeconds) override;
 	virtual void StopCinematicClip() override;
 	virtual int32 SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,
 		TArray<FString>* OutMissing = nullptr) override;
 	virtual bool SetMouthOpen(float Open) override;
+	virtual bool GetPhonemeFilter(float& OutMin, float& OutMax) const override;
 	virtual bool ResetAnimToIdle() override;
 	virtual bool SetDispositionName(const FString& NewDisposition) override;
 

@@ -744,9 +744,10 @@ def blend_clip_plan(d, clips):
     per animation an active cell selects that the base-cell bake does not already reach,
     labelled by the animation's own name, so every cell ships as its own clip. `blends` maps a
     sequence label to `{numblends, groupsize, paramindex, paramstart, paramend, cells}`, each
-    cell carrying its position, the owner-local animation index it selects, and the clip that
-    animation baked as. The index travels because it is the identity a contribution record
-    names, so a cell joins back to the model image it was read from.
+    cell carrying its position, the owner-local animation index it selects, the clip that
+    animation baked as, and optional authored movement metadata. The index travels because it is
+    the identity a contribution record names, so a cell joins back to the model image it was read
+    from.
 
     **Nothing is blended here.** The grid rides beside the clips because the mix depends on a
     pose parameter the exporter cannot know, and because blending clips is not the same pose
@@ -790,10 +791,18 @@ def blend_clip_plan(d, clips):
                 by_base[ab] = clip
                 extra.append(S.Seq(label=clip, base=ab, frames=frames, fps=fps,
                                    activity="", actweight=0, flags=0))
-            cells.append(
-                {"axis": [cell.axis0, cell.axis1], "anim": cell.anim,
-                 "clip": by_base[ab]}
-            )
+            exported = {
+                "axis": [cell.axis0, cell.axis1], "anim": cell.anim,
+                "clip": by_base[ab],
+            }
+            motion = S.movement_summary(d, ab, frames, fps)
+            if motion is not None:
+                exported["motion"] = {
+                    "cycle_seconds": round(motion.cycle_seconds, 6),
+                    "ground_distance_cm": round(motion.ground_distance_cm, 6),
+                    "ground_speed_cm_s": round(motion.ground_speed_cm_s, 6),
+                }
+            cells.append(exported)
         blends[c.label] = {
             "numblends": grid.numblends,
             "groupsize": list(grid.groupsize),

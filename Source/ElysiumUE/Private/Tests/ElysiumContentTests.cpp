@@ -14,6 +14,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumCameraSolve.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumDecals.h"
 #include "ElysiumDlg.h"
@@ -39,6 +40,7 @@
 #include "Visual/ElysiumRopes.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
+#include "ElysiumTestServices.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
@@ -1675,6 +1677,8 @@ bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
 			Seen.Add(Current);
 			FPoint Point;
 			Point.Position = Cursor->Origin;
+			Point.Roll = FloatKey(*Cursor, TEXT("Roll"), 0.0f);
+			Point.FocalLength = FloatKey(*Cursor, TEXT("FocalLength"), 0.0f);
 			Point.bTimeControl = Cursor->Keys.FindRef(TEXT("TimeControl")).Equals(TEXT("1"));
 			Point.MoveSpeed = FloatKey(*Cursor, TEXT("MoveSpeed"), 64.0f);
 			Point.MoveTime = FloatKey(*Cursor, TEXT("MoveTime"), 0.0f);
@@ -1740,9 +1744,96 @@ bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
 	TestTrue(TEXT("courtroom target 36 reaches the fade clock at 150.19 seconds"),
 		FMath::IsNearlyEqual(ArrivalAt(CourtroomTarget, CourtroomTargetNames,
 			TEXT("courtroom_target_36")), 150.19f, 0.001f));
+	// The retail execution shot is a deliberate compound move, not a held edit: both streams leave
+	// key 27 together for 0.87 seconds while the position track widens from a 40 mm to a 35 mm lens.
+	const float ExecutionStart = ArrivalAt(CourtroomPosition, CourtroomPositionNames,
+		TEXT("courtroom_camera_27"));
+	const float ExecutionEnd = ArrivalAt(CourtroomPosition, CourtroomPositionNames,
+		TEXT("courtroom_camera_27a"));
+	const float ExecutionTargetStart = ArrivalAt(CourtroomTarget, CourtroomTargetNames,
+		TEXT("courtroom_target_27"));
+	const float ExecutionTargetEnd = ArrivalAt(CourtroomTarget, CourtroomTargetNames,
+		TEXT("courtroom_target_27a"));
+	TestTrue(TEXT("the execution position and target moves share the 120.45-to-121.32 edit"),
+		FMath::IsNearlyEqual(ExecutionStart, 120.45f, 0.001f)
+			&& FMath::IsNearlyEqual(ExecutionEnd, 121.32f, 0.001f)
+			&& FMath::IsNearlyEqual(ExecutionTargetStart, ExecutionStart, KINDA_SMALL_NUMBER)
+			&& FMath::IsNearlyEqual(ExecutionTargetEnd, ExecutionEnd, KINDA_SMALL_NUMBER));
+	FSample ExecutionPositionStart;
+	FSample ExecutionPositionMiddle;
+	FSample ExecutionPositionEnd;
+	FSample ExecutionTargetAtStart;
+	FSample ExecutionTargetAtMiddle;
+	FSample ExecutionTargetAtEnd;
+	const float ExecutionMiddle = 0.5f * (ExecutionStart + ExecutionEnd);
+	const bool bExecutionSamples = CourtroomPosition.Sample(ExecutionStart, ExecutionPositionStart)
+		&& CourtroomPosition.Sample(ExecutionMiddle, ExecutionPositionMiddle)
+		&& CourtroomPosition.Sample(ExecutionEnd, ExecutionPositionEnd)
+		&& CourtroomTarget.Sample(ExecutionTargetStart, ExecutionTargetAtStart)
+		&& CourtroomTarget.Sample(ExecutionMiddle, ExecutionTargetAtMiddle)
+		&& CourtroomTarget.Sample(ExecutionTargetEnd, ExecutionTargetAtEnd);
+	TestTrue(TEXT("the execution edit samples both authored value streams"), bExecutionSamples);
+	if (bExecutionSamples)
+	{
+		TestTrue(TEXT("the execution camera is moving between its authored endpoints"),
+			!ExecutionPositionMiddle.bInPause
+				&& !ExecutionPositionMiddle.Position.Equals(ExecutionPositionStart.Position, 0.01f)
+				&& !ExecutionPositionMiddle.Position.Equals(ExecutionPositionEnd.Position, 0.01f));
+		TestTrue(TEXT("the execution look-at is moving between its authored endpoints"),
+			!ExecutionTargetAtMiddle.bInPause
+				&& !ExecutionTargetAtMiddle.Position.Equals(ExecutionTargetAtStart.Position, 0.01f)
+				&& !ExecutionTargetAtMiddle.Position.Equals(ExecutionTargetAtEnd.Position, 0.01f));
+		TestTrue(TEXT("the execution lens widens continuously from 40 mm to 35 mm"),
+			FMath::IsNearlyEqual(ExecutionPositionStart.FieldOfView,
+				FocalLengthToHorizontalFov(40.0f), 0.001f)
+				&& ExecutionPositionMiddle.FieldOfView > ExecutionPositionStart.FieldOfView
+				&& ExecutionPositionMiddle.FieldOfView < ExecutionPositionEnd.FieldOfView
+				&& FMath::IsNearlyEqual(ExecutionPositionEnd.FieldOfView,
+					FocalLengthToHorizontalFov(35.0f), 0.001f));
+
+		// Run the authored entities too: this covers field registration, the substrate clock, the two
+		// independently selected roles, and composition onto the embodiment's value-shot seam.
+		TSet<FString> CourtroomNames;
+		for (const FString& Name : CourtroomPositionNames) { CourtroomNames.Add(Name); }
+		for (const FString& Name : CourtroomTargetNames) { CourtroomNames.Add(Name); }
+		FElysiumEntityDefs ExecutionDefs;
+		ExecutionDefs.MapName = TEXT("__sp_theatre_execution_camera_test__");
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (CourtroomNames.Contains(Def.TargetName.ToLower()))
+			{
+				FElysiumEntityDef Copy = Def;
+				Copy.Outputs.Reset();
+				ExecutionDefs.Defs.Add(MoveTemp(Copy));
+			}
+		}
+		FElysiumRecordingServices ExecutionServices;
+		ExecutionServices.bHasPlayer = true;
+		FElysiumEntityWorld ExecutionWorld(nullptr, nullptr, ExecutionServices.Bundle());
+		ExecutionWorld.Load(MoveTemp(ExecutionDefs));
+		ExecutionWorld.Activate(0.0);
+		ExecutionWorld.AcceptInput(TEXT("courtroom_target_1"),
+			FName(TEXT("PlayAsCameraTarget")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+		ExecutionWorld.AcceptInput(TEXT("courtroom_camera_1"),
+			FName(TEXT("PlayAsCameraPosition")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+		ExecutionWorld.Tick(ExecutionMiddle);
+		TestTrue(TEXT("the live entity pair publishes the execution camera midpoint"),
+			ExecutionServices.LastCameraShot.Origin.Equals(ExecutionPositionMiddle.Position, 0.01f));
+		TestTrue(TEXT("the live entity pair publishes the execution target midpoint"),
+			ExecutionServices.LastCameraShot.bUseLookAt
+				&& ExecutionServices.LastCameraShot.LookAt.Equals(
+					ExecutionTargetAtMiddle.Position, 0.01f));
+		TestTrue(TEXT("the live entity pair publishes the execution lens midpoint"),
+			FMath::IsNearlyEqual(ExecutionServices.LastCameraShot.FieldOfView,
+				ExecutionPositionMiddle.FieldOfView, 0.001f));
+	}
 	TestTrue(TEXT("the walk-back edit waits nine seconds on its root"),
 		WalkBackPosition.Arrivals.Num() > 1
 			&& FMath::IsNearlyEqual(WalkBackPosition.Arrivals[1], 9.0f, 0.001f));
+	TestTrue(TEXT("the superseded walk-back clock retains its twenty-second cleanup dwell"),
+		FMath::IsNearlyEqual(WalkBackPosition.EndTime, 29.0f, 0.001f));
 	TestTrue(TEXT("the escort streams include their 2.5-second root dwell"),
 		FMath::IsNearlyEqual(EscortPosition.EndTime, 61.21f, 0.001f)
 			&& FMath::IsNearlyEqual(EscortTarget.EndTime, 61.21f, 0.001f));

@@ -30,6 +30,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	FVector RequestedFeet = FVector::ZeroVector;
 	float Yaw = 0.0f;
 	float RequestedYaw = 0.0f;
+	float RequestedSpeedCmPerSecond = 0.0f;
 	bool bEnabled = true;
 	bool bMoving = false;
 	bool bFacing = false;
@@ -52,6 +53,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		float SpeedCmPerSecond, bool bAllowPartialPath = false) override
 	{
 		RequestedFeet = FeetDestination;
+		RequestedSpeedCmPerSecond = SpeedCmPerSecond;
 		bMoving = bEnabled && bAcceptMoves;
 		bFacing = false;
 		Record(FString::Printf(TEXT("NpcMotor MoveTo %s radius=%.1f speed=%.1f partial=%d"),
@@ -165,6 +167,12 @@ struct FElysiumRecordingServices final
 	float DamageTaken = 0.f;
 	// Opt-in because most tests intentionally exercise the supported headless/no-motor path.
 	bool bProvideNpcMotor = false;
+	// Opt-in activity resolution mirrors the real manifest path. Default false preserves the
+	// supported old-export fallback exercised by most Substrate tests.
+	bool bNpcActivitiesResolve = false;
+	FString ResolvedNpcActivityLabel = TEXT("walk");
+	FString ResolvedNpcActivityClip = TEXT("walk_0");
+	float ResolvedNpcGroundSpeedCmPerSecond = 0.f;
 	TArray<TUniquePtr<FElysiumRecordingNpcMotor>> NpcMotors;
 	FElysiumRecordingNpcMotor* LastNpcMotor() const
 	{
@@ -220,6 +228,41 @@ struct FElysiumRecordingServices final
 		}
 		return Body != nullptr;
 	}
+	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& ClipName) override
+	{
+		Record(FString::Printf(TEXT("PreloadNpcClip %s %s"), *Stem, *ClipName));
+		return Body != nullptr;
+	}
+	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& ClipName) override
+	{
+		Record(FString::Printf(TEXT("PreloadNpcClipForModel %s player=%d %s"),
+			*Stem, bPlayerMaterial ? 1 : 0, *ClipName));
+		return !Stem.IsEmpty() && !ClipName.IsEmpty();
+	}
+	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override
+	{
+		Record(FString::Printf(TEXT("PlayNpcActivity %s %s var=%d loop=%d"), *Stem, *Activity,
+			Variant, bLoop ? 1 : 0));
+		if (OutSeconds)
+		{
+			*OutSeconds = ClipSeconds;
+		}
+		return bNpcActivitiesResolve && Body != nullptr;
+	}
+	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
+		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override
+	{
+		Record(FString::Printf(TEXT("ResolveNpcActivityClip %s %s var=%d"), *Stem, *Activity,
+			Variant));
+		OutLabel = bNpcActivitiesResolve ? ResolvedNpcActivityLabel : FString();
+		OutAnimName = bNpcActivitiesResolve ? ResolvedNpcActivityClip : FString();
+		OutGroundSpeedCmPerSecond = bNpcActivitiesResolve
+			? ResolvedNpcGroundSpeedCmPerSecond : 0.f;
+		return bNpcActivitiesResolve;
+	}
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override
@@ -231,6 +274,25 @@ struct FElysiumRecordingServices final
 			*OutSeconds = ClipSeconds;
 		}
 		return bCinematicClipsResolve && Body != nullptr;
+	}
+	virtual bool PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override
+	{
+		Record(FString::Printf(TEXT("PreloadCinematicClip %s %s %s %s"), *Stem,
+			*AnimSetModel, *BoneRoot, *ClipName));
+		return bCinematicClipsResolve && Body != nullptr;
+	}
+	virtual bool PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
+		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override
+	{
+		Record(FString::Printf(TEXT("PreloadCinematicClipForModel %s player=%d %s %s %s"),
+			*Stem, bPlayerMaterial ? 1 : 0, *AnimSetModel, *BoneRoot, *ClipName));
+		return bCinematicClipsResolve && !Stem.IsEmpty();
+	}
+	virtual int32 FinishAnimationPreload() override
+	{
+		Record(TEXT("FinishAnimationPreload"));
+		return 1;
 	}
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override
 	{
@@ -326,6 +388,30 @@ struct FElysiumRecordingServices final
 		return true;
 	}
 
+	// 12.5 — the per-model phoneme filter this fake cast answers with. Per body, because the point of
+	// the read is that two speakers in one scene can carry different pairs. A body with no entry falls
+	// back to the shared pair, so a test that does not care sets nothing.
+	float PhonemeFilterMin = 0.065f;
+	float PhonemeFilterMax = 0.100f;
+	TMap<const USkeletalMeshComponent*, TPair<float, float>> PhonemeFilterByBody;
+	virtual bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
+		float& OutMax) const override
+	{
+		if (Body == nullptr || FlexControllers.IsEmpty())
+		{
+			return false;   // no rig here, and the caller keeps its default
+		}
+		if (const TPair<float, float>* Found = PhonemeFilterByBody.Find(Body))
+		{
+			OutMin = Found->Key;
+			OutMax = Found->Value;
+			return true;
+		}
+		OutMin = PhonemeFilterMin;
+		OutMax = PhonemeFilterMax;
+		return true;
+	}
+
 	// 12.4 — the gaze seam, recorded rather than drawn. The head frame is test-controlled so a
 	// cascade assertion can put a candidate inside or outside the ±30° cone on purpose.
 	TMap<const USkeletalMeshComponent*, FVector> ViewTargetByBody;
@@ -405,6 +491,12 @@ struct FElysiumRecordingServices final
 			*Stem, *ClipName, bLoop ? 1 : 0));
 		if (OutSeconds) { *OutSeconds = ClipSeconds; }
 		return Body != nullptr;
+	}
+	virtual int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
+		const FString& Stem) override
+	{
+		Record(FString::Printf(TEXT("PreloadAnimatedPropClips %s"), *Stem));
+		return Body != nullptr ? 1 : 0;
 	}
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent*, const FString& StaticStem,
 		int32 Family) override

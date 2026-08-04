@@ -156,6 +156,13 @@ public:
 	// = clamp(max(rgb) * PointSpotScale, 0, MaxBrightness); reach = radius * RadiusScale.
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float PointSpotScale = 0.003f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float MaxBrightness = 8.0f;
+	// A/B against MaxBrightness (elysium.LightCurve 1): the same PointSpotScale against a ceiling
+	// high enough that no source reaches it, so the clip becomes the only variable. Every light
+	// that was already under MaxBrightness keeps its exact intensity and only the clipped ones
+	// move, which puts the whole authored range in front of the filmic tone curve instead of
+	// flattening its top half here. Held apart from MaxBrightness because a saved survey restores
+	// that field, and the A/B has to outlive the calibration it is being judged against.
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float ExtendedMaxBrightness = 512.f;
 	// Fitting the baked lightmaps (probe_light_calibration.py) shows brightness barely
 	// varies with distance-to-light (Spearman ~0, falloff slope ~0): VtMB light is ~flat
 	// within its authored radius, so a gentle exponent + authored reach, not inverse-square.
@@ -191,6 +198,11 @@ private:
 	TArray<FLightSource> LightSources;
 	float StyleTime = 0.f;
 	bool bLightsVisible = true;
+
+	// Resolved from elysium.LightCurve at Adopt: which ceiling ApplyToSource clips against. Read
+	// before the survey loads, so a saved calibration restores MaxBrightness without deciding the
+	// A/B.
+	bool bExtendedRange = false;
 
 	// The map this rig adopted (the `.lights` base name), which keys the survey save file.
 	FString SurveyMapName;

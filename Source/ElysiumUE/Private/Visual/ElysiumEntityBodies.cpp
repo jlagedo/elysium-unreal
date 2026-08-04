@@ -7,6 +7,9 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
+#if WITH_EDITOR
+#include "Animation/IAnimationSequenceCompiler.h"
+#endif
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -113,6 +116,48 @@ FString UElysiumEntityBodies::NpcVisualKeyForMesh(const FString& Stem, const USk
 	return ElysiumEntityAnimation::NpcVisualCacheKey(Stem, false);
 }
 
+USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bPlayerMaterial)
+{
+	if (Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	const FString VisualKey = ElysiumEntityAnimation::NpcVisualCacheKey(Stem, bPlayerMaterial);
+	if (const TObjectPtr<USkeletalMesh>* Cached = NpcMeshCache.Find(VisualKey))
+	{
+		return Cached->Get();
+	}
+
+	AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const TSharedPtr<const FElysiumEyeSet> EyeSet = Anims ? Anims->GetEyeSet(Stem) : nullptr;
+	TArray<FString> EyeMaterials;
+	if (EyeSet.IsValid())
+	{
+		for (const FElysiumEyeball& Eye : EyeSet->Eyeballs)
+		{
+			if (!Eye.Material.IsEmpty())
+			{
+				EyeMaterials.AddUnique(Eye.Material);
+			}
+		}
+	}
+
+	UglTFRuntimeAsset* Asset = nullptr;
+	FString Error;
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(
+		Stem, Asset, Error, bPlayerMaterial, &EyeMaterials);
+	if (Mesh == nullptr)
+	{
+		UE_LOG(LogElysiumBodies, Warning, TEXT("ResolveNpcMesh '%s': %s"), *Stem, *Error);
+		return nullptr;
+	}
+	NpcMeshCache.Add(VisualKey, Mesh);
+	NpcAssetCache.Add(VisualKey, Asset);
+	return Mesh;
+}
+
 UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const FString& ClipName,
 	USkeletalMesh* TargetMesh)
 {
@@ -179,44 +224,59 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	return true;
 }
 
-bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& BankStem, const FString& ClipName, bool bLoop, float* OutSeconds)
+bool UElysiumEntityBodies::PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName)
 {
-	if (Body == nullptr || BankStem.IsEmpty())
+	return Body && ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset()) != nullptr;
+}
+
+bool UElysiumEntityBodies::PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
+	const FString& ClipName)
+{
+	USkeletalMesh* Mesh = ResolveNpcMesh(Stem, bPlayerMaterial);
+	return Mesh && ResolveNpcClip(Stem, ClipName, Mesh) != nullptr;
+}
+
+UAnimSequence* UElysiumEntityBodies::ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
+	const FString& BankStem, const FString& ClipName)
+{
+	if (Mesh == nullptr || BankStem.IsEmpty() || ClipName.IsEmpty())
 	{
-		return false;
+		return nullptr;
 	}
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
-	USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
-	if (Anims == nullptr || Mesh == nullptr)
+	if (Anims == nullptr)
 	{
-		return false;
+		return nullptr;
 	}
 
-	// Cached alongside the ordinary clips. Both the target stem and material permutation are
-	// load-bearing because glTFRuntime binds the sequence to this exact runtime USkeleton.
 	const FString VisualKey = NpcVisualKeyForMesh(Stem, Mesh);
-	// Resolved-name keyed for the same reason the NPC cache is: a cinematic bank can declare grids too.
 	const FString Key = ElysiumEntityAnimation::CinematicClipCacheKey(
 		VisualKey, BankStem, Anims->ResolveGridClip(BankStem, ClipName));
-	UAnimSequence* Anim = nullptr;
 	if (const TObjectPtr<UAnimSequence>* Found = NpcAnimCache.Find(Key))
 	{
-		Anim = Found->Get();
+		return Found->Get();
 	}
-	else
+
+	FString Error;
+	UAnimSequence* Anim = Anims->ResolveClipFromBank(BankStem, ClipName, Mesh, Error);
+	if (Anim == nullptr)
 	{
-		FString Error;
-		Anim = Anims->ResolveClipFromBank(BankStem, ClipName, Mesh, Error);
-		if (Anim == nullptr)
-		{
-			UE_LOG(LogElysiumBodies, Warning, TEXT("cinematic bank '%s' clip '%s': %s"),
-				*BankStem, *ClipName, *Error);
-		}
-		NpcAnimCache.Add(Key, Anim);
+		UE_LOG(LogElysiumBodies, Warning, TEXT("cinematic bank '%s' clip '%s': %s"),
+			*BankStem, *ClipName, *Error);
 	}
+	NpcAnimCache.Add(Key, Anim);
+	return Anim;
+}
+
+bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& BankStem, const FString& ClipName, bool bLoop, float* OutSeconds)
+{
+	UAnimSequence* Anim = Body
+		? ResolveCinematicClip(Body->GetSkeletalMeshAsset(), Stem, BankStem, ClipName)
+		: nullptr;
 	if (Anim == nullptr)
 	{
 		return false;
@@ -234,6 +294,20 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 		Body->PlayAnimation(Anim, bLoop);
 	}
 	return true;
+}
+
+bool UElysiumEntityBodies::PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& BankStem, const FString& ClipName)
+{
+	return Body && ResolveCinematicClip(
+		Body->GetSkeletalMeshAsset(), Stem, BankStem, ClipName) != nullptr;
+}
+
+bool UElysiumEntityBodies::PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
+	const FString& BankStem, const FString& ClipName)
+{
+	USkeletalMesh* Mesh = ResolveNpcMesh(Stem, bPlayerMaterial);
+	return ResolveCinematicClip(Mesh, Stem, BankStem, ClipName) != nullptr;
 }
 
 bool UElysiumEntityBodies::SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
@@ -333,6 +407,21 @@ bool UElysiumEntityBodies::SetMouthOpen(USkeletalMeshComponent* Body, float Open
 	UElysiumNpcAnimInstance* Inst = Body
 		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	return Inst != nullptr && Inst->SetMouthOpen(Open);
+}
+
+bool UElysiumEntityBodies::GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
+	float& OutMax) const
+{
+	const UElysiumNpcAnimInstance* Inst = Body
+		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	const FElysiumFacialRig* Rig = Inst ? Inst->GetFacialRig() : nullptr;
+	if (Rig == nullptr)
+	{
+		return false;
+	}
+	OutMin = Rig->PhonemeFilterMin;
+	OutMax = Rig->PhonemeFilterMax;
+	return true;
 }
 
 bool UElysiumEntityBodies::SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget)
@@ -662,45 +751,19 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 		return nullptr;
 	}
 
-	// Cache-checked load: mesh per stem, so a shared model (three Sabbat share shovelhead) loads
-	// once. A stem that failed once is not cached (Mesh stays null), so it retries — cheap, and a
-	// genuinely missing glb is a one-line warning per NPC, not per frame.
-	// The eyeball pair (12.4). Fetched before the mesh because the eye sections are drawn with
-	// M_Eyes, and that override has to be in the load config — it cannot be applied afterwards
-	// without losing the sclera glTFRuntime injects.
+	// Cache-checked load: a map-load preload may already have stood this skeleton in the cache even
+	// though no component existed yet (the future !playercontroller case). The eyeball data is still
+	// needed below to install this component's independent material instances.
 	UElysiumNpcAnimSubsystem* Anims = nullptr;
 	if (UGameInstance* GI = Owner->GetGameInstance())
 	{
 		Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>();
 	}
 	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims ? Anims->GetEyeSet(Stem) : nullptr;
-	TArray<FString> EyeMaterials;
-	if (EyeSet.IsValid())
-	{
-		for (const FElysiumEyeball& E : EyeSet->Eyeballs)
-		{
-			if (!E.Material.IsEmpty())
-			{
-				EyeMaterials.AddUnique(E.Material);
-			}
-		}
-	}
-
-	const FString VisualKey = ElysiumEntityAnimation::NpcVisualCacheKey(Stem, bPlayerMaterial);
-	const TObjectPtr<USkeletalMesh>* Cached = NpcMeshCache.Find(VisualKey);
-	USkeletalMesh* Mesh = Cached ? Cached->Get() : nullptr;
+	USkeletalMesh* Mesh = ResolveNpcMesh(Stem, bPlayerMaterial);
 	if (Mesh == nullptr)
 	{
-		UglTFRuntimeAsset* Asset = nullptr;
-		FString Error;
-		Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error, bPlayerMaterial, &EyeMaterials);
-		if (Mesh == nullptr)
-		{
-			UE_LOG(LogElysiumBodies, Warning, TEXT("BuildNpcVisual '%s': %s"), *Stem, *Error);
-			return nullptr;
-		}
-		NpcMeshCache.Add(VisualKey, Mesh);
-		NpcAssetCache.Add(VisualKey, Asset); // own clips must use this variant's exact USkeleton
+		return nullptr;
 	}
 
 	// The standing idle. Two NPCs sharing a model can carry different dispositions and different
@@ -787,6 +850,23 @@ bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const F
 	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
 	const FString Clip = Anims ? Anims->PickActivityClip(Stem, Activity, Variant) : FString();
 	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, bLoop, OutSeconds);
+}
+
+bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,
+	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+{
+	AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	if (Anims == nullptr)
+	{
+		OutLabel.Reset();
+		OutAnimName.Reset();
+		OutGroundSpeedCmPerSecond = 0.f;
+		return false;
+	}
+	return Anims->ResolveActivityClip(Stem, Activity, Variant, OutLabel, OutAnimName,
+		OutGroundSpeedCmPerSecond);
 }
 
 FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath) const
@@ -905,12 +985,12 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	return Comp;
 }
 
-bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds)
+UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh,
+	const FString& Stem, const FString& ClipName)
 {
-	if (!Body || Stem.IsEmpty() || ClipName.IsEmpty())
+	if (!Mesh || Stem.IsEmpty() || ClipName.IsEmpty())
 	{
-		return false;
+		return nullptr;
 	}
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
@@ -918,7 +998,7 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 	const FElysiumAnimatedPropEntry* Entry = Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
 	if (!Entry || !Entry->HasClip(ClipName))
 	{
-		return false;
+		return nullptr;
 	}
 
 	// CAP7.3 — collapse a grid label to its cell BEFORE the key is built, or the label would cache one
@@ -934,11 +1014,10 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 	else
 	{
 		const TObjectPtr<UglTFRuntimeAsset>* Asset = AnimatedPropAssetCache.Find(Stem);
-		const TObjectPtr<USkeletalMesh>* Mesh = AnimatedPropMeshCache.Find(Stem);
 		FString Error;
-		if (Asset && Mesh)
+		if (Asset)
 		{
-			Anim = ElysiumNpcVisual::RetargetClip(Asset->Get(), Mesh->Get(), AnimName, Error);
+			Anim = ElysiumNpcVisual::RetargetClip(Asset->Get(), Mesh, AnimName, Error);
 		}
 		if (!Anim)
 		{
@@ -947,7 +1026,16 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 		}
 		AnimatedPropAnimCache.Add(Key, Anim);
 	}
-	if (!Anim)
+	return Anim;
+}
+
+bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName, bool bLoop, float* OutSeconds)
+{
+	UAnimSequence* Anim = Body
+		? ResolveAnimatedPropClip(Body->GetSkeletalMeshAsset(), Stem, ClipName)
+		: nullptr;
+	if (Anim == nullptr)
 	{
 		return false;
 	}
@@ -964,6 +1052,54 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 		Body->PlayAnimation(Anim, bLoop);
 	}
 	return true;
+}
+
+int32 UElysiumEntityBodies::PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
+	const FString& Stem)
+{
+	if (!Body || Stem.IsEmpty())
+	{
+		return 0;
+	}
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
+	USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+	if (!Entry || !Mesh)
+	{
+		return 0;
+	}
+	int32 Resolved = 0;
+	for (const FElysiumPropClip& Clip : Entry->Clips)
+	{
+		Resolved += ResolveAnimatedPropClip(Mesh, Stem, Clip.Name) != nullptr ? 1 : 0;
+	}
+	return Resolved;
+}
+
+int32 UElysiumEntityBodies::FinishAnimationPreload()
+{
+	TSet<UAnimSequence*> Unique;
+	for (const TPair<FString, TObjectPtr<UAnimSequence>>& Pair : NpcAnimCache)
+	{
+		if (Pair.Value)
+		{
+			Unique.Add(Pair.Value.Get());
+		}
+	}
+	for (const TPair<FString, TObjectPtr<UAnimSequence>>& Pair : AnimatedPropAnimCache)
+	{
+		if (Pair.Value)
+		{
+			Unique.Add(Pair.Value.Get());
+		}
+	}
+	TArray<UAnimSequence*> Sequences = Unique.Array();
+#if WITH_EDITOR
+	if (!Sequences.IsEmpty())
+	{
+		UE::Anim::IAnimSequenceCompilingManager::FinishCompilation(Sequences);
+	}
+#endif
+	return Sequences.Num();
 }
 
 void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
