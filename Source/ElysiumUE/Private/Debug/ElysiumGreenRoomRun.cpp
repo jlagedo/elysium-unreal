@@ -2,6 +2,7 @@
 
 #include "ElysiumCameraSolve.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumEnvironment.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -19,6 +20,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
@@ -346,6 +348,25 @@ bool FElysiumGreenRoomRun::CreateStage()
 	if (FillLight.IsValid())
 	{
 		FillLight->SetLightColor(FLinearColor(0.30f, 0.45f, 1.0f));
+	}
+
+	// In a stage world nothing else lights anything — no map sky light, no fog, no environment — and
+	// two point lights against a void read far harsher than the same two standing inside a map. The
+	// stage carries its own ambient there. Only there: inside a real map the map's environment is the
+	// baseline every existing capture was taken against, and a second sky light would move it.
+	const UElysiumMapSubsystem* Maps = Subsystem.Get();
+	if (Maps && Maps->IsStageWorld())
+	{
+		USkyLightComponent* Sky = NewObject<USkyLightComponent>(Actor, TEXT("GreenRoomAmbient"));
+		Actor->AddInstanceComponent(Sky);
+		Sky->SetupAttachment(Root);
+		Sky->SetMobility(EComponentMobility::Movable);
+		Sky->SourceType = ESkyLightSourceType::SLS_SpecifiedCubemap;
+		Sky->Cubemap = ElysiumEnvironment::BuildConstantCube(FLinearColor(0.55f, 0.58f, 0.68f));
+		Sky->SetIntensity(1.0f);
+		Sky->RegisterComponent();
+		Sky->RecaptureSky();
+		Ambient = Sky;
 	}
 	return true;
 }
@@ -926,6 +947,49 @@ void FElysiumGreenRoomRun::UpdateStage(const FBox& Bounds)
 	}
 }
 
+FBox FElysiumGreenRoomRun::EmptyStageBounds() const
+{
+	const FVector Centre = StageOrigin + FVector(0.0f, 0.0f, 90.0f);
+	return FBox(Centre - FVector(40.0f, 40.0f, 90.0f), Centre + FVector(40.0f, 40.0f, 90.0f));
+}
+
+void FElysiumGreenRoomRun::FrameLabCamera(const FBox& Bounds)
+{
+	AElysiumMapActor* Map = GetMap();
+	if (!Map || !Bounds.IsValid)
+	{
+		return;
+	}
+	const FVector Extent = Bounds.GetExtent();
+	const FVector Focus(Bounds.GetCenter().X, Bounds.GetCenter().Y,
+		FMath::Lerp(Bounds.Min.Z, Bounds.Max.Z, FMath::Clamp(LabViewState.LookHeight, 0.0f, 1.0f)));
+	// The same fit the capture path uses, then scaled: the orbit starts framed the way a contact
+	// sheet would have framed it, so the two are comparable by eye.
+	const float Fit = FMath::Max(220.0f, Extent.Z / 0.34f + Extent.X + 50.0f);
+	const float Distance = Fit * FMath::Clamp(LabViewState.DistanceScale, 0.15f, 6.0f);
+	const FVector Offset = FRotator(FMath::Clamp(LabViewState.OrbitPitch, -85.0f, 85.0f),
+		LabViewState.OrbitYaw, 0.0f).RotateVector(FVector(Distance, 0.0f, 0.0f));
+	CameraLocation = Focus + Offset;
+	CameraRotation = (Focus - CameraLocation).Rotation();
+
+	FElysiumCameraShot Shot;
+	Shot.Origin = CameraLocation;
+	Shot.LookAt = Focus;
+	Shot.bUseLookAt = true;
+	Shot.FieldOfView = 60.0f;
+	Shot.BlendSeconds = 0.0f;
+	Shot.MaxTurnRate = FVector::ZeroVector;
+	Shot.DebugName = TEXT("green_room_lab");
+	if (CameraShotId == 0)
+	{
+		CameraShotId = Map->PushCameraShotValue(Shot);
+	}
+	else
+	{
+		Map->UpdateCameraShotValue(CameraShotId, Shot);
+	}
+}
+
 void FElysiumGreenRoomRun::PublishCamera(const FBox& Bounds)
 {
 	AElysiumMapActor* Map = GetMap();
@@ -1465,6 +1529,11 @@ void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 	USkeletalMeshComponent* Body = LabBody();
 	if (!Map || !Body || !Body->GetSkeletalMeshAsset())
 	{
+		// Nothing standing: hold the empty stage in frame. Every frame, not once on the edge — the
+		// window can clear the body, and on a stage world there is nothing else in the level to look
+		// at, so a camera left where the last body was would be pointing at void.
+		UpdateStage(EmptyStageBounds());
+		FrameLabCamera(EmptyStageBounds());
 		PinCameraAndPlayerSurface();
 		return;
 	}
@@ -1486,35 +1555,7 @@ void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 	if (Bounds.IsValid)
 	{
 		UpdateStage(Bounds);
-
-		const FVector Extent = Bounds.GetExtent();
-		const FVector Focus(Bounds.GetCenter().X, Bounds.GetCenter().Y,
-			FMath::Lerp(Bounds.Min.Z, Bounds.Max.Z, FMath::Clamp(LabViewState.LookHeight, 0.0f, 1.0f)));
-		// The same fit the capture path uses, then scaled: the orbit starts framed the way a
-		// contact sheet would have framed it, so the two are comparable by eye.
-		const float Fit = FMath::Max(220.0f, Extent.Z / 0.34f + Extent.X + 50.0f);
-		const float Distance = Fit * FMath::Clamp(LabViewState.DistanceScale, 0.15f, 6.0f);
-		const FVector Offset = FRotator(FMath::Clamp(LabViewState.OrbitPitch, -85.0f, 85.0f),
-			LabViewState.OrbitYaw, 0.0f).RotateVector(FVector(Distance, 0.0f, 0.0f));
-		CameraLocation = Focus + Offset;
-		CameraRotation = (Focus - CameraLocation).Rotation();
-
-		FElysiumCameraShot Shot;
-		Shot.Origin = CameraLocation;
-		Shot.LookAt = Focus;
-		Shot.bUseLookAt = true;
-		Shot.FieldOfView = 60.0f;
-		Shot.BlendSeconds = 0.0f;
-		Shot.MaxTurnRate = FVector::ZeroVector;
-		Shot.DebugName = TEXT("green_room_lab");
-		if (CameraShotId == 0)
-		{
-			CameraShotId = Map->PushCameraShotValue(Shot);
-		}
-		else
-		{
-			Map->UpdateCameraShotValue(CameraShotId, Shot);
-		}
+		FrameLabCamera(Bounds);
 	}
 
 	PinCameraAndPlayerSurface();
@@ -1665,10 +1706,11 @@ bool FElysiumGreenRoomRun::Tick(float DeltaSeconds)
 				Phase = EPhase::Done;
 				return false;
 			}
-			// Frame the empty room so the camera is somewhere sane before the first body arrives.
-			const FVector Centre = StageOrigin + FVector(0.0f, 0.0f, 90.0f);
-			UpdateStage(FBox(Centre - FVector(40.0f, 40.0f, 90.0f),
-				Centre + FVector(40.0f, 40.0f, 90.0f)));
+			// Build the empty room *and look at it*. On a stage world that is the whole picture: the
+			// pawn is seated at the origin with the stage 500 m away and an empty level between them,
+			// so a camera nobody has framed yet renders black until the first body stands up.
+			UpdateStage(EmptyStageBounds());
+			FrameLabCamera(EmptyStageBounds());
 			Phase = EPhase::Lab;
 			UE_LOG(LogElysiumGreenRoom, Log,
 				TEXT("lab: stage ready — F1, or `elysium.gr`, opens the window that drives it"));

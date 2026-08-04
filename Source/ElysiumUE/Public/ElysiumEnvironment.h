@@ -81,6 +81,13 @@ namespace ElysiumEnvironment
 	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
 		float* OutUpperMean = nullptr);
 
+	// A cube of one flat colour, for a SkyLight that has no sky to capture. The green room's stage
+	// world is empty by construction, so a captured-scene SkyLight there would capture black; this
+	// gives it a neutral studio ambient instead. With the SkyLight's own `bLowerHemisphereIsBlack`
+	// it lights from above, which is what a flat cube is good for. Not a VtMB path — nothing in the
+	// game is lit by this.
+	UTextureCube* BuildConstantCube(const FLinearColor& Colour, int32 Size = 8);
+
 	// True when all six `<Prefix><face>.png` exist in Dir — the test for "is there an enhanced
 	// face set for this map", asked before BuildSkyCubeFrom so a partial set falls back to the
 	// faithful one rather than failing the sky outright.

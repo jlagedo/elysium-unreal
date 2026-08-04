@@ -222,9 +222,18 @@ public:
 	UPROPERTY()
 	FElysiumPostMoveTickFunction PostMoveTickFunction;
 
-	// Map name under FElysiumContentPaths::Root() (a folder holding <MapName>.obj).
+	// Map name under FElysiumContentPaths::Root() (a folder holding <MapName>.obj). Empty on a
+	// stage world, which has no map to name.
 	UPROPERTY(EditAnywhere, Category = "Elysium")
 	FString MapName = TEXT("sp_tutorial_1");
+
+	// The green room's world: this actor carries the body factory, the camera director and the
+	// substrate seam over an empty level, with no VtMB map behind any of them. Set by
+	// UElysiumMapSubsystem::EnterGreenRoom before FinishSpawning, same as MapName.
+	UPROPERTY()
+	bool bStageOnly = false;
+
+	bool IsStageOnly() const { return bStageOnly; }
 
 	// --- The three halves this actor is not ---------------------------------------------------
 	// Never null after construction. Anything asking the map what it LOOKS like (the Lights and
@@ -456,6 +465,11 @@ private:
 	class UElysiumCameraComponent* PlayerCamera() const;
 
 	void LoadMap();
+	// LoadMap's stage-world half: the substrate scaffolding a green room needs and nothing else —
+	// an entity world with a player in it, a spawn transform for the pawn, and the body factory.
+	// No baked level, no collision, no sidecars, so the activation barrier's world-content inputs
+	// are satisfied by their own "intentionally absent" states rather than skipped.
+	void BuildStageWorld();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
 	// P4.6 — if this load is a landmark transition (the map subsystem has a queued landmark spawn),
 	// override the info_player_start placement: resolve the destination `info_landmark` in the just-

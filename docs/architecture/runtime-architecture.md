@@ -543,7 +543,7 @@ is an application concern that must survive travel.
 enum class EElysiumAppState : uint8
 {
     Boot,        // process start; nothing loaded
-    FrontEnd,    // menu over a live backdrop map, no pawn        (8.6, exists)
+    FrontEnd,    // static menu in the empty boot world, no run   (8.6, exists)
     Loading,     // travel in flight; loading screen up
     Playing,     // a session is running with a pawn
     Paused,      // Playing + time held + pause menu
@@ -559,7 +559,7 @@ enum class EElysiumAppState : uint8
 | `NewGame(FElysiumNewGameRequest)` | clear the session record → chargen (or seed it) → travel the story entry |
 | `LoadGame(SlotName)` | restore the session record → travel the saved map with a restore payload |
 | `SaveGame(SlotName, EElysiumSaveKind)` | manual / quick / auto (`trigger_autosave` fires this) |
-| `QuitToMenu()` | clear the session, travel the backdrop map, `FrontEnd` |
+| `QuitToMenu()` | clear the session, travel the empty boot world, `FrontEnd` |
 | `SetPaused(bool)` | `FElysiumTimeControl` + the pause input scope + the pause menu |
 | `OnAppStateChanged` | the delegate the UI, the HUD and the input scope stack listen on |
 

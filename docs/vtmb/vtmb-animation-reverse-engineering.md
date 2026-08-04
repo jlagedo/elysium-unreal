@@ -2153,6 +2153,8 @@ Reverse-engineering experiments often coexist with unrelated animation work. Pre
 | Formatter permits arbitrary skeleton changes | Not supported by documented workflow | Tutorial explicitly keeps donor skeleton | Reproducible counterexample |
 | Bloodlines SDK compiles arbitrary multi-bone character animations | Not supported | SDK's published limitations | Reproducible counterexample |
 | Facial flex extraction is exact | Contradicted | Crowbar author describes approximation/guesses | Model-by-model runtime capture |
+| The shipped flex rules are recovered | Verified, two independent routes | This project's opcode decode and a community decompiler's published QC expressions agree operand for operand on all 60 (`docs/vtmb/facial_animation.md`) | None for the rules; the vertex-animation encoding they drive is this project's alone |
+| VTMB procedural bones are AxisInterp authored from a `.vhb` | Verified for the rule; community-reported for the authoring file | 3,123 compiled `ProcType == 1` records replay against capture; modders decompiling VTMB characters name the `.vhb` and report it invariant between models | None for reproduction — the compiled record, not the authoring file, is what a port carries |
 | Root motion is just the root-bone track | Hypothesis only | No VTMB-specific runtime proof | Entity plus pose trace |
 | Later Source `SetupBones` behavior applies unchanged | Hypothesis only | Architectural similarity | VTMB disassembly/capture |
 | Final D3D9 constants can help locate the palette | Strong technical basis | D3D9 API and common skinning layout | VTMB-specific trace |

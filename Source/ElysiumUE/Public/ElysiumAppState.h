@@ -11,7 +11,7 @@
 enum class EElysiumAppState : uint8
 {
 	Boot,        // process start; nothing loaded
-	FrontEnd,    // menu over a live backdrop map, no pawn
+	FrontEnd,    // static menu in the empty boot world, no run
 	Loading,     // travel in flight; the loading screen is up
 	Playing,     // a session is running with a pawn
 	Paused,      // Playing + the world held + the pause menu
@@ -51,8 +51,8 @@ namespace ElysiumAppState
 		return false;
 	}
 
-	// A run exists: the session record, the player sheet and `G` are live. FrontEnd's backdrop map
-	// is a world without a run, which is exactly why it does not pause.
+	// A run exists: the session record, the player sheet and `G` are live. FrontEnd is the empty
+	// shell without a run, which is exactly why it does not pause.
 	inline bool IsInSession(EElysiumAppState State)
 	{
 		return State == EElysiumAppState::Playing
@@ -72,8 +72,7 @@ namespace ElysiumAppState
 	// not listed is a bug in the caller and is refused with a warning rather than silently taken.
 	//
 	// The two load-bearing rows:
-	//   Paused   is reachable only from Playing — the front end deliberately does NOT pause, because
-	//            the live backdrop behind the menu is the feature (8.6).
+	//   Paused   is reachable only from Playing — the empty front-end shell has no run to hold.
 	//   Boot     is reachable from nowhere. The boot decision is made once, at game-instance init.
 	inline bool CanEnter(EElysiumAppState From, EElysiumAppState To)
 	{
@@ -86,7 +85,7 @@ namespace ElysiumAppState
 		case EElysiumAppState::Boot:
 			return false;
 		case EElysiumAppState::FrontEnd:
-			// Cold boot straight to the menu, or arriving in a backdrop world after quit-to-menu.
+			// Cold boot straight to the menu, or arriving in the empty shell after quit-to-menu.
 			return From == EElysiumAppState::Boot || From == EElysiumAppState::Loading;
 		case EElysiumAppState::Loading:
 			// Any state can travel: New Game, Load, Reload, quit-to-menu, a trigger_changelevel.

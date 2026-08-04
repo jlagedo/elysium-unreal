@@ -185,6 +185,10 @@ struct FElysiumContentPaths
 	static FString UiStrings() { return UiDir() / TEXT("strings.json"); }
 	static FString UiMenuDir() { return UiDir() / TEXT("menu"); }
 	static FString UiTitle() { return UiMenuDir() / TEXT("title.png"); }
+	// Local Elysium key art used by the empty front-end shell. It is deliberately below the
+	// gitignored export root: the plate incorporates the user's decoded clan art and must never be
+	// tracked. The menu remains usable over black when the optional local plate is absent.
+	static FString UiMenuWallpaper() { return UiMenuDir() / TEXT("elysium_main_wallpaper_4k.png"); }
 	// The menu particle scene's sprite sheet, decoded to PNG: the blood cels, the glow, and the 15
 	// `mm_<clan>` sect/clan sigils VtMB drifts across its own menu backdrop. The menu draws one of
 	// them as its seal (`mm_cam` in the front end, the PC's clan in a session), so the emitter graph

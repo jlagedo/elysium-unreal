@@ -6,9 +6,20 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
 
+#include "HAL/IConsoleManager.h"
+
 #include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCameraTrack, Log, All);
+
+// A/B for the sub-frame-edit rule. 0 restores exact-zero-only cuts, which samples sp_theatre's
+// courtroom edits as 30-millisecond camera moves.
+static TAutoConsoleVariable<float> CVarCameraCutSeconds(
+	TEXT("elysium.CameraCutSeconds"),
+	1.0f / 30.0f,
+	TEXT("camera_track: a TimeControl segment at or below this many seconds is an authored edit "
+	     "rather than camera movement (default one 30 fps frame). 0 cuts only on an exact zero."),
+	ECVF_Default);
 
 namespace ElysiumCameraTrack
 {
@@ -67,11 +78,18 @@ namespace ElysiumCameraTrack
 			: 0.0f;
 	}
 
+	float HardCutSeconds()
+	{
+		// Floating-point tolerance is the floor: at a threshold of 0 an exact authored zero must still
+		// read as the cut it is.
+		return FMath::Max(CVarCameraCutSeconds.GetValueOnAnyThread(), KINDA_SMALL_NUMBER);
+	}
+
 	bool IsHardCut(const FPoint& From)
 	{
 		return From.bTimeControl
 			&& From.MoveTime >= 0.0f
-			&& From.MoveTime <= KINDA_SMALL_NUMBER;
+			&& From.MoveTime <= HardCutSeconds();
 	}
 
 	bool CrossesHardCut(const FPath& Path, float PreviousElapsed, float Elapsed)
@@ -161,8 +179,9 @@ namespace ElysiumCameraTrack
 			{
 				if (IsHardCut(Points[Index]))
 				{
-					// A true zero-time edit switches exactly at the arrival. Positive authored
-					// MoveTime values remain camera movement, even when they are very short.
+					// An edit holds the source key for the segment's authored length and switches
+					// exactly at the arrival, so the chain's clock is untouched and only the
+					// interior interpolation is skipped.
 					FillPoint(Time < Arrivals[Index + 1] ? Points[Index] : Points[Index + 1], Out);
 					Out.Segment = Index;
 					Out.bInPause = false;

@@ -162,7 +162,7 @@ bool UElysiumSaveSubsystem::CanSave(FString& OutReason) const
 	}
 	if (Maps->IsMenuBackdrop())
 	{
-		OutReason = TEXT("the current world is the menu backdrop, not a run");
+		OutReason = TEXT("the current world is the front-end shell, not a run");
 		return false;
 	}
 

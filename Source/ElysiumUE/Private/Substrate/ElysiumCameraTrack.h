@@ -48,8 +48,17 @@ namespace ElysiumCameraTrack
 	};
 
 	float SegmentSeconds(const FPoint& From, const FPoint& To);
+
+	// The longest `TimeControl` segment that counts as an authored edit rather than camera movement.
+	// VtMB's server frame IS the render frame (`docs/vtmb/game_runtime.md`), so at the ~30 fps its
+	// cutscenes were cut on, a segment shorter than one frame was stepped over whole and its interior
+	// never sampled. sp_theatre's courtroom chain writes 87 of its edits as `MoveTime 0.03` and
+	// sm_gallery_1 writes 7 as `0.01`; sampling those at 120 fps turns each into a visible slew.
+	// The authored duration is still spent either way, so a chain's timing against its scene audio is
+	// unchanged — only the interior interpolation goes away. `elysium.CameraCutSeconds`.
+	float HardCutSeconds();
 	bool IsHardCut(const FPoint& From);
-	// True exactly once when forward playback crosses an authored zero-time edit.
+	// True exactly once when forward playback crosses an authored edit.
 	bool CrossesHardCut(const FPath& Path, float PreviousElapsed, float Elapsed);
 	float EaseRate(float Alpha, float RateOut, float RateIn);
 	float FocalLengthToHorizontalFov(float Millimetres);

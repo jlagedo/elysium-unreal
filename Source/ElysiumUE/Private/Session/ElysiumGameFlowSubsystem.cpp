@@ -10,7 +10,6 @@
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUISubsystem.h"
 
-#include "Camera/CameraActor.h"
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
@@ -30,32 +29,12 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumFlow, Log, All);
 
-// The menu backdrop camera, as "x,y,z,pitch,yaw" in world centimetres and degrees. Deliberately
-// NOT an entry in ElysiumVantages::Table: that table is the profiling and screenshot baseline, and
-// Resolve("") returns every vantage for a map — adding one there would silently change what
-// uv run elysium debug profile and uv run elysium debug shots measure. Retune in-game with `elysium.campos`, which logs a
-// paste-ready position/rotation including pitch.
-static TAutoConsoleVariable<FString> CVarMenuVantage(
-	TEXT("elysium.MenuVantage"),
-	TEXT("-3160,-1910,-90,0,83"),
-	TEXT("Menu backdrop camera as x,y,z,pitch,yaw (world cm / degrees)."),
-	ECVF_Default);
-
-// The map the menu stands in. Santa Monica's hub — the Asylum frontage — rather than the story
-// entry: it is the game's signature exterior, it carries NPCs who idle in frame, and it is not the
-// map New Game enters, so the menu never has to look like the level it is about to load.
-static TAutoConsoleVariable<FString> CVarMenuMap(
-	TEXT("elysium.MenuMap"),
-	TEXT("sm_hub_1"),
-	TEXT("Map loaded as the menu backdrop."),
-	ECVF_Default);
-
 // Boot to the menu (1) or straight into play (0). -ElysiumMap= already bypasses the menu entirely,
 // so this is the A/B for the story boot path. Read once, at game-instance init.
 static TAutoConsoleVariable<int32> CVarBootMenu(
 	TEXT("elysium.BootMenu"),
 	1,
-	TEXT("1 = cold boot raises the main menu over a backdrop; 0 = boot straight into New Game."),
+	TEXT("1 = cold boot raises the static main menu; 0 = boot straight into New Game."),
 	ECVF_Default);
 
 // New Game always enters the chain at genesis; this governs only the leg AFTER it. The theatre act
@@ -290,7 +269,7 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.quittomenu"),
-		TEXT("elysium.quittomenu — drop the run and return to the main menu over its backdrop map"),
+		TEXT("elysium.quittomenu — drop the run and return to the static main menu"),
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]() { QuitToMenu(); }),
 		ECVF_Default));
 
@@ -485,6 +464,13 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 		BootKind = EBootKind::DevMap;
 		BootMap = CmdMap;
 	}
+	// The green room with no map named boots into its own stage world: an empty level, no travel, no
+	// map build. Naming a map keeps the DevMap branch above, which is how the cases that read a real
+	// map's entities — the theatre camera streams, the courtroom oracle — still get one.
+	else if (FParse::Param(FCommandLine::Get(), TEXT("ElysiumGreenRoom")))
+	{
+		BootKind = EBootKind::GreenRoom;
+	}
 	else if (NewGameFlag == 0)
 	{
 		// -ElysiumNewGame=0 loads the story map through the dev path instead of through New Game,
@@ -502,8 +488,9 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 	}
 
 	const FString Plan =
-		(BootKind == EBootKind::Menu)    ? FString(TEXT("menu over the backdrop")) :
+		(BootKind == EBootKind::Menu)    ? FString(TEXT("static menu in the boot world")) :
 		(BootKind == EBootKind::NewGame) ? FString(TEXT("new game")) :
+		(BootKind == EBootKind::GreenRoom) ? FString(TEXT("green-room stage world")) :
 		                                   FString::Printf(TEXT("dev map '%s'"), *BootMap);
 	UE_LOG(LogElysiumFlow, Log, TEXT("boot plan: %s"), *Plan);
 }
@@ -527,6 +514,16 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 		return;
 	}
 
+	// Quit-to-menu has opened the empty shell rather than a VtMB map, so there is no map actor to
+	// publish ready. BeginPlay in that fresh shell is the completion signal for this one travel.
+	if (State == EElysiumAppState::Loading && Maps->IsMenuBackdrop())
+	{
+		HideRuntimeLoadingOverlay();
+		RuntimeLoadingFailure.Reset();
+		SetAppState(EElysiumAppState::FrontEnd);
+		return;
+	}
+
 	// No pending load: this is the boot world (/Game/Elysium). Run the plan decided at GI init.
 	if (bBootExecuted)
 	{
@@ -537,11 +534,14 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 	switch (BootKind)
 	{
 	case EBootKind::Menu:
-		if (Maps->TravelForMenu(CVarMenuMap.GetValueOnGameThread()))
+	{
+		bool bTravelStarted = false;
+		if (Maps->EnterFrontEnd(bTravelStarted))
 		{
-			SetAppState(EElysiumAppState::Loading);
+			SetAppState(bTravelStarted ? EElysiumAppState::Loading : EElysiumAppState::FrontEnd);
 		}
 		break;
+	}
 
 	case EBootKind::NewGame:
 		NewGame(FElysiumNewGameRequest{});
@@ -562,43 +562,20 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 			SetAppState(EElysiumAppState::Loading);
 		}
 		break;
-	}
-}
 
-void UElysiumGameFlowSubsystem::EnterMenuBackdrop()
-{
-	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
-	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
-	if (!PC)
+	case EBootKind::GreenRoom:
 	{
-		return;
+		// The boot world is already the empty level the stage wants, so this builds in place: no
+		// travel, no map, and the state follows the same Loading -> ready -> Playing path a map load
+		// does.
+		FString Error;
+		if (!EnterGreenRoom(Error))
+		{
+			UE_LOG(LogElysiumFlow, Error, TEXT("green room boot failed: %s"), *Error);
+		}
+		break;
 	}
-
-	// Parse the vantage; a malformed cvar falls back to the world origin looking level rather than
-	// refusing to show a menu.
-	FVector Loc = FVector::ZeroVector;
-	FRotator Rot = FRotator::ZeroRotator;
-	TArray<FString> Parts;
-	CVarMenuVantage.GetValueOnGameThread().ParseIntoArray(Parts, TEXT(","));
-	if (Parts.Num() >= 5)
-	{
-		Loc = FVector(FCString::Atod(*Parts[0]), FCString::Atod(*Parts[1]), FCString::Atod(*Parts[2]));
-		Rot = FRotator(FCString::Atof(*Parts[3]), FCString::Atof(*Parts[4]), 0.0f);
 	}
-	else
-	{
-		UE_LOG(LogElysiumFlow, Warning, TEXT("elysium.MenuVantage is malformed — using the world origin"));
-	}
-
-	FActorSpawnParameters Params;
-	Params.ObjectFlags |= RF_Transient;
-	if (ACameraActor* Camera = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), Loc, Rot, Params))
-	{
-		// Blend time zero: the menu is the first thing on screen, so there is nothing to blend from.
-		PC->SetViewTarget(Camera);
-	}
-	// The menu itself is raised by the FrontEnd transition the caller makes next — one rule, one
-	// place (ApplyMenuForState).
 }
 
 // ================================================================================================
@@ -850,11 +827,10 @@ bool UElysiumGameFlowSubsystem::QuitToMenu()
 		return false;
 	}
 
-	const FString Map = CVarMenuMap.GetValueOnGameThread();
-	if (!Maps->TravelForMenu(Map))
+	bool bTravelStarted = false;
+	if (!Maps->EnterFrontEnd(bTravelStarted))
 	{
-		UE_LOG(LogElysiumFlow, Error,
-			TEXT("quit to menu: backdrop map '%s' is not exported+baked — staying put"), *Map);
+		UE_LOG(LogElysiumFlow, Error, TEXT("quit to menu: could not enter the front-end shell"));
 		return false;
 	}
 
@@ -864,7 +840,7 @@ bool UElysiumGameFlowSubsystem::QuitToMenu()
 	{
 		GameState->EndSession();
 	}
-	SetAppState(EElysiumAppState::Loading);
+	SetAppState(bTravelStarted ? EElysiumAppState::Loading : EElysiumAppState::FrontEnd);
 	return true;
 }
 
@@ -878,6 +854,33 @@ bool UElysiumGameFlowSubsystem::ReloadMap()
 	}
 	ReleasePauseHold();
 	SetAppState(EElysiumAppState::Loading);
+	return true;
+}
+
+bool UElysiumGameFlowSubsystem::EnterGreenRoom(FString& OutError)
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	if (!Maps)
+	{
+		OutError = TEXT("no map subsystem");
+		return false;
+	}
+	// Asked from inside a stage world, this only re-arms the lab: nothing loads, so nothing will
+	// publish ready, and moving to Loading would strand the app behind the overlay forever.
+	const bool bAlreadyStanding = Maps->IsStageWorld();
+	if (!Maps->EnterGreenRoom(OutError))
+	{
+		return false;
+	}
+	if (!bAlreadyStanding)
+	{
+		// Otherwise the stage world is a play world like any other: an ordinary load, and the stage
+		// actor's own ready callback is what lifts Loading to Playing. Set after the call, so a
+		// refused entry leaves the state it found.
+		ReleasePauseHold();
+		SetAppState(EElysiumAppState::Loading);
+	}
 	return true;
 }
 
@@ -997,16 +1000,7 @@ void UElysiumGameFlowSubsystem::OnMapRuntimeReady(AElysiumMapActor* Map)
 
 	HideRuntimeLoadingOverlay();
 	RuntimeLoadingFailure.Reset();
-	UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>();
-	if (Maps && Maps->IsMenuBackdrop())
-	{
-		EnterMenuBackdrop();
-		SetAppState(EElysiumAppState::FrontEnd);
-	}
-	else
-	{
-		SetAppState(EElysiumAppState::Playing);
-	}
+	SetAppState(EElysiumAppState::Playing);
 }
 
 void UElysiumGameFlowSubsystem::OnMapRuntimeFailed(AElysiumMapActor* Map, const FString& Reason)

@@ -5,6 +5,7 @@
 #include "Debug/ElysiumCogStyle.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumNpcSubsystem.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
@@ -40,7 +41,9 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 		"The green room, driven by hand. Stand any exported character on the neutral stage, play "
 		"any clip it owns, orbit it, and tune the garment simulation while it moves.\n\n"
 		"Launch it with `uv run elysium gr [model] [clip]`, or type `elysium.gr` in a running "
-		"session to stand a stage up wherever you are.\n\n"
+		"session. Either way the stage stands in an empty world of its own with no VtMB map loaded, "
+		"so the room looks the same however it was entered -- entering from a session leaves that "
+		"map, and `elysium.map <name>` goes back.\n\n"
 		"Cloth: VtMB simulates no garment at all -- a skirt or coat is skinned rigidly to the "
 		"pelvis and swings as one shell. The offline spike appends a bone lattice to a copy of the "
 		"mesh and hangs an AnimDynamics chain down each panel; `npc/cloth/<stem>.json` is the "
@@ -71,13 +74,18 @@ void FElysiumCogWindow_GreenRoom::OpenLab()
 {
 	SetIsVisible(true);
 	LastError.Reset();
-	if (UElysiumMapSubsystem* Maps = GetMapSubsystem())
+	// The green room is a place, not an overlay: this leaves whatever map is loaded and builds the
+	// stage in an empty world, so the room looks the same however it was entered. `elysium.map <name>`
+	// is the way back.
+	const UWorld* World = GetWorld();
+	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+	if (UElysiumGameFlowSubsystem* Flow = GI ? GI->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr)
 	{
-		Maps->EnsureGreenRoomLab(LastError);
+		Flow->EnterGreenRoom(LastError);
 	}
 	else
 	{
-		LastError = TEXT("no map subsystem — load a map first");
+		LastError = TEXT("no game flow subsystem");
 	}
 }
 
@@ -326,9 +334,10 @@ void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
 	ImGui::TextDisabled("Slowing the clip does not slow the cloth - the sim runs in real time.");
 }
 
-void FElysiumCogWindow_GreenRoom::RenderCamera(FElysiumGreenRoomRun& Lab)
+void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 {
 	FElysiumGreenRoomRun::FLabView& View = Lab.LabView();
+	ImGui::SeparatorText("Orbit");
 	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
 	ImGui::SliderFloat("Yaw", &View.OrbitYaw, -180.0f, 180.0f, "%.0f deg");
 	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
@@ -367,6 +376,32 @@ void FElysiumCogWindow_GreenRoom::RenderCamera(FElysiumGreenRoomRun& Lab)
 	// a moving body is worth being able to put back over one.
 	ImGui::Checkbox("Game HUD", &View.bShowHud);
 	ImGui::TextDisabled("Off by default - the reticle sits where the hem is.");
+
+	// The overlays belong to what is being LOOKED at, not to the garment. The skeleton in particular
+	// is the model's own rig and reads on any body, including every model the cloth spike never
+	// touched — behind the Cloth tab it was unreachable on exactly those, because that tab returns
+	// early when no garment rig is installed.
+	ImGui::SeparatorText("Overlays");
+	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const bool bHasRig = Inst != nullptr && Inst->GetClothRig() != nullptr;
+
+	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
+	ImGui::TextDisabled("The model's own bones, garment lattice excluded. The bones a collider hangs");
+	ImGui::TextDisabled("off are named, so a sphere sitting off its limb reads at a glance.");
+
+	ImGui::BeginDisabled(!bHasRig);
+	ImGui::Checkbox("Lattice", &View.bDrawLattice);
+	ImGui::SameLine();
+	ImGui::Checkbox("Colliders", &View.bDrawColliders);
+	ImGui::EndDisabled();
+	if (bHasRig)
+	{
+		ImGui::TextDisabled("Anchor row in blue, simulated rows in amber, leg spheres in red.");
+	}
+	else
+	{
+		ImGui::TextDisabled("Both need a garment rig on the standing body - see the Cloth tab.");
+	}
 }
 
 void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
@@ -519,15 +554,6 @@ void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
 	}
 
-	ImGui::SeparatorText("Overlays");
-	ImGui::Checkbox("Lattice", &View.bDrawLattice);
-	ImGui::SameLine();
-	ImGui::Checkbox("Colliders", &View.bDrawColliders);
-	ImGui::SameLine();
-	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
-	ImGui::TextDisabled("Anchor row in blue, simulated rows in amber, leg spheres in red.");
-	ImGui::TextDisabled("Skeleton is the model's own bones, lattice excluded; the bones a collider");
-	ImGui::TextDisabled("hangs off are named, so a sphere sitting off its limb reads at a glance.");
 }
 
 void FElysiumCogWindow_GreenRoom::RenderContent()
@@ -542,8 +568,9 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 		{
 			OpenLab();
 		}
-		ImGui::TextDisabled("Builds a neutral stage and moves the camera onto it. `elysium.gr` does");
-		ImGui::TextDisabled("the same from the console; `uv run elysium gr` launches straight into it.");
+		ImGui::TextDisabled("Leaves the current map for an empty world and stands a neutral stage in");
+		ImGui::TextDisabled("it. `elysium.gr` does the same from the console; `uv run elysium gr`");
+		ImGui::TextDisabled("launches straight into it. `elysium.map <name>` goes back.");
 		if (!LastError.IsEmpty())
 		{
 			ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
@@ -576,9 +603,9 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 		RenderPlayback(*Lab);
 		ImGui::EndTabItem();
 	}
-	if (ImGui::BeginTabItem("Camera"))
+	if (ImGui::BeginTabItem("View"))
 	{
-		RenderCamera(*Lab);
+		RenderView(*Lab);
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Cloth"))

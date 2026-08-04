@@ -49,7 +49,9 @@ private:
 
 	void RenderModel(FElysiumGreenRoomRun& Lab);
 	void RenderPlayback(FElysiumGreenRoomRun& Lab);
-	void RenderCamera(FElysiumGreenRoomRun& Lab);
+	// The orbit, the stage, and the drawn overlays — everything about how the body is being looked
+	// at, as opposed to which body it is or what its garment is doing.
+	void RenderView(FElysiumGreenRoomRun& Lab);
 	void RenderCloth(FElysiumGreenRoomRun& Lab);
 
 	void Stand(FElysiumGreenRoomRun& Lab, const FString& Stem, const FString& Clip);

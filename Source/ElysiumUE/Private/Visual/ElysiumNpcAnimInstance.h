@@ -59,7 +59,9 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	// thread through UElysiumNpcAnimInstance, never from the worker.
 	void Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds);
 	// Pin the current clip to an absolute authored time. Cinematic scenes call this every scene
-	// frame, making the pose a function of scene time rather than accumulated animation delta.
+	// frame, making the pose a function of scene time rather than accumulated animation delta. It
+	// does NOT settle a crossfade — a scene seeks the clip it just started, so a Seek that forced the
+	// blend to 1 would make every scene's opening pose snap.
 	void Seek(float PositionSeconds);
 	void Stop();
 

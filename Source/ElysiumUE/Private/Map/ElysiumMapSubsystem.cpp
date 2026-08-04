@@ -121,6 +121,78 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 #endif
 }
 
+bool UElysiumMapSubsystem::EnterGreenRoom(FString& OutError)
+{
+	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (!World)
+	{
+		OutError = TEXT("no current world");
+		return false;
+	}
+	// A green room armed from the command line — a lab or a capture run — already owns the harness,
+	// and the stage world is simply the world it runs in. Only a session that has none gets one armed
+	// here, which is the `elysium.gr` case. Arming happens before anything is torn down so its
+	// failure modes (no RHI) are reported while the current map is still standing. The run is owned
+	// by this GI-scoped subsystem and re-reads the current map every tick, so it survives the travel
+	// below and picks the stage actor up when it is ready.
+	if (!GreenRoomRun.IsValid() && EnsureGreenRoomLab(OutError) == nullptr)
+	{
+		return false;
+	}
+	if (const AElysiumMapActor* Map = CurrentMap.Get())
+	{
+		if (Map->IsStageOnly())
+		{
+			return true;   // already standing in one; the lab has just been re-armed over it
+		}
+	}
+
+	// The stage wants the same empty shell the front end stands in, and it can be built in place
+	// there — but only if this world already seated a pawn. The front end refuses one (the game mode
+	// returns no pawn class while IsMenuBackdrop), and nothing but a fresh world spawns one, so
+	// entering from the menu re-opens the shell rather than building into a world with no pawn for
+	// the activation barrier to wait on.
+	const FString ShellPackage = TEXT("/Game/Elysium");
+	const bool bInShell =
+		World->GetOutermost()->GetName().Equals(ShellPackage, ESearchCase::IgnoreCase);
+	const bool bWorldHasPawn = !bCurrentIsMenuBackdrop;
+
+	PendingMapLoad = FPendingMapLoad{ true, FString(), FString(), false, /*bStageOnly*/ true };
+	bCurrentIsMenuBackdrop = false;
+	// Neither placement means anything without a map to resolve it against, and leaving either armed
+	// would leak it onto whatever map is entered after the green room.
+	NextLandmarkSpawn = FLandmarkSpawn{};
+	NextRestorePlacement = FRestorePlacement{};
+
+	if (bInShell && bWorldHasPawn)
+	{
+		UE_LOG(LogElysiumMap, Log, TEXT("green room: building the stage world in place"));
+		return SpawnPendingMap();
+	}
+
+	CurrentMap = nullptr;
+	UE_LOG(LogElysiumMap, Log, TEXT("green room: %s for the stage world"),
+		bInShell ? TEXT("reopening the shell") : TEXT("leaving the map"));
+#if WITH_EDITOR
+	// Same editor-game world lifetime normalization Travel performs; see the comment there.
+	World->ClearFlags(RF_Standalone);
+#endif
+	UGameplayStatics::OpenLevel(World, FName(*ShellPackage));
+	return true;
+}
+
+void UElysiumMapSubsystem::RetireGreenRoomLab(const TCHAR* Reason)
+{
+	if (!GreenRoomRun.IsValid() || !GreenRoomRun->IsLab())
+	{
+		return;
+	}
+	// The destructor is what puts the game HUD back and releases the bodies, so this is the whole of
+	// it — but it must run before the new world's first frame, not on some later teardown.
+	GreenRoomRun.Reset();
+	UE_LOG(LogElysiumMap, Log, TEXT("green room: lab retired (%s)"), Reason);
+}
+
 FElysiumGreenRoomRun* UElysiumMapSubsystem::EnsureGreenRoomLab(FString& OutError)
 {
 	if (GreenRoomRun.IsValid())
@@ -200,9 +272,9 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	// Stow the target for the world that builds it. This subsystem is GI-scoped, so PendingMapLoad
 	// (and NextLandmarkSpawn) survive the OpenLevel below.
 	PendingMapLoad = FPendingMapLoad{ true, Map, Landmark };
-	// An ordinary Travel is always a play world. TravelForMenu re-raises this immediately after,
-	// *before* OpenLevel — the game mode reads it during PostLogin (which runs ahead of BeginPlay)
-	// to decide whether to spawn a pawn at all.
+	// An ordinary Travel is always a play world. EnterFrontEnd sets the shell flag before its own
+	// OpenLevel — the game mode reads it during PostLogin (which runs ahead of BeginPlay) to decide
+	// whether to spawn a pawn at all.
 	bCurrentIsMenuBackdrop = false;
 
 	// Hard travel into the map's own baked level: the engine tears the current UWorld down and runs
@@ -238,6 +310,13 @@ bool UElysiumMapSubsystem::SpawnPendingMap()
 	// Latch the kind of world this is before the map actor builds — AElysiumMapActor::BeginPlay
 	// reads it to decide whether to build the gameplay half at all.
 	bCurrentIsMenuBackdrop = P.bMenuBackdrop;
+	bCurrentIsStageOnly = P.bStageOnly;
+	if (!P.bStageOnly)
+	{
+		// Travelling to a real map is one of the two ways out of the green room (`elysium.map <name>`
+		// is the documented one); the lab does not follow the player into it.
+		RetireGreenRoomLab(TEXT("left the stage world for a map"));
+	}
 
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!World)
@@ -261,6 +340,7 @@ bool UElysiumMapSubsystem::SpawnPendingMap()
 		return false;
 	}
 	NewMap->MapName = P.Map;
+	NewMap->bStageOnly = P.bStageOnly;
 	// CurrentMap and the delegates are installed before FinishSpawning invokes BeginPlay. Readiness
 	// normally completes on a later tick, but this ordering also makes a synchronous construction
 	// failure unambiguously belong to the current actor.
@@ -269,7 +349,8 @@ bool UElysiumMapSubsystem::SpawnPendingMap()
 	NewMap->OnRuntimeFailed().AddUObject(this, &UElysiumMapSubsystem::HandleRuntimeFailed);
 	NewMap->FinishSpawning(Xf);
 
-	UE_LOG(LogElysiumMap, Log, TEXT("built %s%s%s (%.2fs)"), *P.Map,
+	UE_LOG(LogElysiumMap, Log, TEXT("built %s%s%s (%.2fs)"),
+		P.bStageOnly ? TEXT("the stage world") : *P.Map,
 		P.Landmark.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" @ %s"), *P.Landmark),
 		P.bMenuBackdrop ? TEXT(" [menu backdrop]") : TEXT(""),
 		FPlatformTime::Seconds() - Start);
@@ -298,16 +379,39 @@ void UElysiumMapSubsystem::HandleRuntimeFailed(AElysiumMapActor* Map, const FStr
 	CurrentMapFailed.Broadcast(Map, Reason);
 }
 
-bool UElysiumMapSubsystem::TravelForMenu(const FString& Map)
+bool UElysiumMapSubsystem::EnterFrontEnd(bool& bOutTravelStarted)
 {
-	// Travel does all the validation and the OpenLevel; the only difference is the flag the fresh
-	// world reads, so set it after Travel has stowed the record.
-	if (!Travel(Map))
+	bOutTravelStarted = false;
+	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (!World)
 	{
 		return false;
 	}
-	PendingMapLoad.bMenuBackdrop = true;
+
+	PendingMapLoad = FPendingMapLoad{};
 	bCurrentIsMenuBackdrop = true;
+	bCurrentIsStageOnly = false;
+	NextLandmarkSpawn = FLandmarkSpawn{};
+	NextRestorePlacement = FRestorePlacement{};
+	// The other way out of the green room: quit to the menu. The shell has no pawn and no map, so a
+	// lab left armed here would drive a controller the front end is trying to point at its own
+	// character stage.
+	RetireGreenRoomLab(TEXT("returned to the front end"));
+
+	const FString ShellPackage = TEXT("/Game/Elysium");
+	if (World->GetOutermost()->GetName().Equals(ShellPackage, ESearchCase::IgnoreCase))
+	{
+		UE_LOG(LogElysiumMap, Log, TEXT("front end: using the empty boot world in place"));
+		return true;
+	}
+
+	CurrentMap = nullptr;
+#if WITH_EDITOR
+	World->ClearFlags(RF_Standalone);
+#endif
+	bOutTravelStarted = true;
+	UE_LOG(LogElysiumMap, Log, TEXT("front end: leaving the map for the empty boot world"));
+	UGameplayStatics::OpenLevel(World, FName(*ShellPackage));
 	return true;
 }
 

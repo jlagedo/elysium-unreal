@@ -1854,8 +1854,8 @@ bool FElysiumAppStateTest::RunTest(const FString&)
 		TestTrue(TEXT("self-transition is legal"), ElysiumAppState::CanEnter(S, S));
 	}
 
-	// **Pause is reachable only from Playing.** The front end running a live backdrop behind the
-	// menu is the feature (8.6), so Esc there must be a no-op rather than a hold.
+	// **Pause is reachable only from Playing.** The empty front-end shell has no run to hold, so Esc
+	// there must be a no-op rather than a hold.
 	TestTrue(TEXT("Playing pauses"), ElysiumAppState::CanEnter(EState::Playing, EState::Paused));
 	TestFalse(TEXT("FrontEnd does not pause"), ElysiumAppState::CanEnter(EState::FrontEnd, EState::Paused));
 	TestFalse(TEXT("Loading does not pause"), ElysiumAppState::CanEnter(EState::Loading, EState::Paused));
@@ -6244,36 +6244,64 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	TestTrue(TEXT("a zero-duration chain reaches its final key immediately"),
 		Cut.Sample(0.0f, Sample) && Sample.bFinished && Sample.Position.Equals(B.Position, 0.01f));
 
+	// sp_theatre's courtroom chain authors 87 of its edits as `MoveTime 0.03` and sm_gallery_1 writes
+	// 7 as `0.01` — a sub-frame segment the shipping game stepped over whole. It cuts, and it still
+	// spends its authored 0.03 s so the chain stays in step with the scene audio underneath it.
 	FPath TheatreCut;
 	A.MoveTime = 0.03f;
 	B.Position = FVector(900.0f, -400.0f, 200.0f);
 	TheatreCut.Points = { A, B };
 	TheatreCut.RebuildTimes();
-	TestFalse(TEXT("a positive authored MoveTime remains movement rather than an invented cut"),
-		IsHardCut(A));
-	TestTrue(TEXT("the short move keeps its authored duration in the path clock"),
+	TestTrue(TEXT("a sub-frame authored MoveTime is an edit, not camera movement"), IsHardCut(A));
+	TestTrue(TEXT("the edit keeps its authored duration in the path clock"),
 		FMath::IsNearlyEqual(TheatreCut.EndTime, 0.03f, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("the edit holds the source key for the whole of that duration"),
+		TheatreCut.Sample(0.015f, Sample) && Sample.Position.Equals(A.Position, 0.01f));
+	TestTrue(TEXT("the edit switches to the destination at the arrival boundary"),
+		TheatreCut.Sample(0.03f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
+	TestTrue(TEXT("a sub-frame edit requests a temporal camera cut exactly once"),
+		CrossesHardCut(TheatreCut, 0.0f, 0.03f));
+	TestFalse(TEXT("the sub-frame edit is not reported again on the next frame"),
+		CrossesHardCut(TheatreCut, 0.03f, 0.1f));
+
+	// Above one authored frame the segment is a real move again — the shortest of those in the corpus
+	// is 0.1 s, and the theatre's own dollies run from 0.3 to 15.5.
+	FPath ShortMove;
+	A.MoveTime = 0.3f;
+	ShortMove.Points = { A, B };
+	ShortMove.RebuildTimes();
+	TestFalse(TEXT("a MoveTime longer than one authored frame remains camera movement"), IsHardCut(A));
 	TestTrue(TEXT("the short move samples between the authored endpoints"),
-		TheatreCut.Sample(0.015f, Sample)
+		ShortMove.Sample(0.15f, Sample)
 			&& !Sample.Position.Equals(A.Position, 0.01f)
 			&& !Sample.Position.Equals(B.Position, 0.01f));
-	TestTrue(TEXT("the short move reaches its destination at the arrival boundary"),
-		TheatreCut.Sample(0.03f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
+	TestFalse(TEXT("camera movement never requests a temporal camera cut"),
+		CrossesHardCut(ShortMove, 0.0f, 0.3f));
 
 	FPath ZeroCut;
 	A.MoveTime = 0.0f;
 	ZeroCut.Points = { A, B };
 	ZeroCut.RebuildTimes();
-	TestTrue(TEXT("only an authored zero-time transition is classified as a hard cut"),
-		IsHardCut(A));
+	TestTrue(TEXT("an authored zero-time transition is classified as a hard cut"), IsHardCut(A));
 	TestTrue(TEXT("a zero-time edit switches to the destination immediately"),
 		ZeroCut.Sample(0.0f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
 	TestTrue(TEXT("forward playback reports the zero-time edit exactly once"),
 		CrossesHardCut(ZeroCut, -KINDA_SMALL_NUMBER, 0.0f));
 	TestFalse(TEXT("a sampled hard cut is not reported again on the next frame"),
 		CrossesHardCut(ZeroCut, 0.0f, 0.1f));
-	TestFalse(TEXT("positive-time movement never requests a temporal camera cut"),
-		CrossesHardCut(TheatreCut, 0.0f, 0.03f));
+
+	// The A/B: at a threshold of 0 only an exact authored zero cuts, which is what samples the
+	// theatre's edits as 30-millisecond slews again.
+	if (IConsoleVariable* CutCvar = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.CameraCutSeconds")))
+	{
+		const float Restore = CutCvar->GetFloat();
+		CutCvar->Set(0.0f, ECVF_SetByCode);
+		A.MoveTime = 0.03f;
+		TestFalse(TEXT("elysium.CameraCutSeconds 0 restores exact-zero-only cuts"), IsHardCut(A));
+		A.MoveTime = 0.0f;
+		TestTrue(TEXT("an exact zero still cuts at a threshold of zero"), IsHardCut(A));
+		CutCvar->Set(Restore, ECVF_SetByCode);
+	}
 
 	UElysiumCameraComponent* TemporalCamera = NewObject<UElysiumCameraComponent>();
 	TestNotNull(TEXT("the temporal-cut phase test has a camera component"), TemporalCamera);

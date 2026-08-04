@@ -280,6 +280,7 @@ public:
 		bool bSaved = false;
 		bool bBodyFrozen = false;           // position_start immobilised it and owes it a thaw
 		bool bPlayingClip = false;          // we started a clip on it and owe it a reset
+		bool bClaimed = false;              // we stamped ScriptOwner on it and owe it a release
 		bool bCachedBip01 = false;
 		FVector CachedBipOrigin = FVector::ZeroVector;
 		FVector CachedBipAngles = FVector::ZeroVector;
@@ -574,6 +575,76 @@ public:
 		}
 	}
 
+	// --- who owns the cast's pose -------------------------------------------------------------
+	// A running scene and a `scripted_sequence` beat both drive an NPC's animation, and until both
+	// stamp the same claim neither can see the other. `scripted_sequence` writes `ScriptOwner`
+	// (VtMB's m_pCine) already; a scene writing it too is what lets the two arbitrate at the seam
+	// where one hands over to the next — sp_theatre fires its walk-out beats while the courtroom
+	// chain is still finishing.
+	//
+	// Claimed UNLOCKED on purpose. VtMB only refuses a challenger for a priority script or an
+	// authored next-script, and a scene that refused every beat outright would stall the map's flow
+	// on outputs a refused `BeginSequence` never fires. The claim is a marker of who is driving, not
+	// a lock: a beat may still take an actor, and this scene then stops animating the one it lost
+	// instead of fighting it frame by frame.
+	//
+	// An actor a beat already holds is left alone rather than taken: it stays unclaimed here, which
+	// is the "nobody stamped anything" case the scene has always run in, so the arbitration only ever
+	// adds refusals it can act on. That also makes this safe to re-run on a load, where a restored
+	// `scripted_sequence` re-stamps its own claim and the two orders are not controllable.
+	void ClaimActors()
+	{
+		if (!ActorsEnabled())
+		{
+			return;
+		}
+		for (int32 i = 0; i < Bound.Num(); ++i)
+		{
+			FElysiumEntity* A = ActorAt(i);
+			if (A == nullptr || (A->ScriptOwner.IsSet() && !(A->ScriptOwner == Handle)))
+			{
+				continue;
+			}
+			A->ScriptOwner = Handle;
+			A->bScriptOwnerLocked = false;
+			Bound[i].bClaimed = true;
+		}
+	}
+
+	// Give the cast back. Runs on completion AND on cancel, like ThawActors, and only releases a
+	// claim still standing in this scene's name — an actor a beat took mid-scene belongs to that
+	// beat now, and clearing it here would strand the beat's own release.
+	void ReleaseActors()
+	{
+		for (int32 i = 0; i < Bound.Num(); ++i)
+		{
+			if (!Bound[i].bClaimed)
+			{
+				continue;
+			}
+			Bound[i].bClaimed = false;
+			FElysiumEntity* A = ActorAt(i);
+			if (A != nullptr && A->ScriptOwner == Handle)
+			{
+				A->ScriptOwner = FElysiumEntityHandle::Invalid();
+				A->bScriptOwnerLocked = false;
+			}
+		}
+	}
+
+	// Is this scene still the thing driving that actor's pose? False once a `scripted_sequence` beat
+	// has taken it — the scene then leaves the clip it is playing alone rather than re-seeking a body
+	// somebody else is now animating.
+	bool DrivesActor(int32 ActorIndex) const
+	{
+		if (!Bound.IsValidIndex(ActorIndex) || !Bound[ActorIndex].bClaimed)
+		{
+			return true;   // never claimed (actors disabled, or an actor that did not resolve at Start)
+		}
+		const FElysiumEntity* A = ActorAt(ActorIndex);
+		return A == nullptr || !A->ScriptOwner.IsSet() || A->ScriptOwner == Handle;
+	}
+
 	// A load rebuilds every body from the payload, so a scene restored mid-play owns actors whose
 	// bodies are simulating again. The record says they should be frozen; make it true.
 	void RefreezeRestoredActors()
@@ -768,6 +839,7 @@ public:
 		SavedControllerRelationship = World ? World->PlayerControllerHandle() : FElysiumEntityHandle::Invalid();
 
 		BindActors();
+		ClaimActors();
 		SaveAndPlaceActors();
 		NextThink = static_cast<float>(StartTime);
 		HideSurroundings();
@@ -813,6 +885,7 @@ public:
 		Player.StopActiveEvents(*this);
 		ThawActors();          // Cancel skips position_end (FUN_10082b80) but still frees the cast
 		ReleaseActorClips();
+		ReleaseActors();
 		RefreshFacialPose();   // the live set is empty now, so this writes every driven key back to rest
 		ShutJaws();
 		UnhideSurroundings();
@@ -837,7 +910,7 @@ public:
 			{
 				CacheActorFinalPose(i);
 				Bound[i].bPlayingClip = false;
-				if (FElysiumEntity* A = ActorAt(i))
+				if (FElysiumEntity* A = DrivesActor(i) ? ActorAt(i) : nullptr)
 				{
 					A->StopCinematicClip();
 				}
@@ -857,6 +930,9 @@ public:
 		ApplyPositionEnd();
 		ThawActors();          // FUN_10081b60's order: position_end, then the cast's body state back
 		ReleaseActorClips();
+		// After the clips: ReleaseActorClips crossfades each actor out of its cinematic pose, and it
+		// may only do that for an actor this scene still drives.
+		ReleaseActors();
 		RefreshFacialPose();   // as in Cancel: the faces this scene drove go back to rest
 		ShutJaws();
 		Player.Reset();
@@ -1045,7 +1121,7 @@ public:
 
 	void PlayActorClip(const FElysiumSceneEvent& Event, float SceneTime)
 	{
-		if (!ActorsEnabled() || Event.Param.IsEmpty())
+		if (!ActorsEnabled() || Event.Param.IsEmpty() || !DrivesActor(Event.ActorIndex))
 		{
 			return;
 		}
@@ -1095,7 +1171,7 @@ public:
 	void SeekActorClip(const FElysiumSceneEvent& Event, float SceneTime)
 	{
 		const int32 EvIndex = EventIndex(Event);
-		if (!ActiveClipEvents.Contains(EvIndex))
+		if (!ActiveClipEvents.Contains(EvIndex) || !DrivesActor(Event.ActorIndex))
 		{
 			return;
 		}
@@ -1148,7 +1224,7 @@ public:
 		{
 			Bound[ActorIndex].bPlayingClip = bActorStillPlaying;
 		}
-		if (!bActorStillPlaying)
+		if (!bActorStillPlaying && DrivesActor(ActorIndex))
 		{
 			if (FElysiumEntity* A = ActorAt(ActorIndex))
 			{
@@ -1752,6 +1828,7 @@ public:
 				ActiveExpressions.Reset();
 				ActorFacialPose.Reset();
 				ResetJaw();
+				ClaimActors();
 				Player.RestoreTo(Elapsed, *this);
 				RefreshFacialPose();
 				RefreshJaw(Elapsed, 0.f);   // dt 0 snaps: a restored jaw is where the save left it
@@ -1871,6 +1948,10 @@ public:
 			RefreshJaw(Elapsed, 0.f);
 			NextThink = static_cast<float>(Now);
 			RefreezeRestoredActors();
+			// Re-derived rather than serialized: `bClaimed` is a marker over live entity state, and a
+			// restored beat re-stamps its own claim in its own Serialize, so re-running the claim is
+			// both cheaper than a payload field and correct in either order.
+			ClaimActors();
 		}
 		else
 		{

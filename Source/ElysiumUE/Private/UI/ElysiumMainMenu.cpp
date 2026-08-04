@@ -22,6 +22,7 @@
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SDPIScaler.h"
+#include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Input/SButton.h"
@@ -89,8 +90,8 @@ namespace
 		constexpr float ListTop = HeadTop + HeadHeight + HeadGap;
 	}
 
-	// The veil's ramp, right (opaque) to left (gone). Tuned against the sm_hub_1 h1 vantage: it has
-	// to bury a lit window at the rail's edge without touching the lamp pool at frame centre.
+	// The veil's ramp, right (opaque) to left (gone). It makes the wallpaper's quiet right-hand field
+	// deterministic beneath the rail without touching the theatre and sigil composition at centre.
 	uint8 VeilAlphaAt(float DistanceFromRight)
 	{
 		static const float Stops[]  = { 0.00f, 0.22f, 0.52f, 1.00f };
@@ -217,8 +218,8 @@ void UElysiumMainMenu::Run(EElysiumMenuCommand Command)
 	switch (Command)
 	{
 	case EElysiumMenuCommand::NewGame:
-		// The backdrop world is standing in the menu map with no substrate, so this opens the story
-		// entry for real — one map load, which is what buys a menu that can never run half a world.
+		// The front end stands in the empty boot world, so this is the first game map load of the
+		// process rather than a second load after an expensive menu backdrop.
 		Flow->NewGame(FElysiumNewGameRequest{});
 		break;
 
@@ -807,10 +808,55 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 	// Everything below is authored in VtMB's 1024x768 virtual canvas; the SDPIScaler at the root
 	// converts once. So the font is measured at its *virtual* size and every recovered constant is
 	// used verbatim.
-	return SNew(SDPIScaler)
+	const TSharedRef<SWidget> MenuLayout = SNew(SDPIScaler)
 		.DPIScale_Lambda([this]() { return VirtualScale(); })
 		[
 			bRail ? BuildRail(Items, Labels) : BuildClassic(Items, Labels)
+		];
+
+	// Pause and game-over menus remain overlays over the held play world. Only the true front end
+	// owns the static plate that replaces the old live sm_hub_1 backdrop.
+	if (Mode != EElysiumMenuMode::Main)
+	{
+		return MenuLayout;
+	}
+	if (!WallpaperTexture)
+	{
+		WallpaperTexture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiMenuWallpaper());
+		if (!WallpaperTexture)
+		{
+			UE_LOG(LogElysiumMenu, Warning, TEXT("menu wallpaper not found or invalid: %s"),
+				*FElysiumContentPaths::UiMenuWallpaper());
+			return MenuLayout;
+		}
+	}
+	if (!WallpaperBrush.IsValid())
+	{
+		WallpaperBrush = MakeShared<FSlateBrush>();
+		WallpaperBrush->SetResourceObject(WallpaperTexture);
+		WallpaperBrush->ImageSize = FVector2D(
+			static_cast<float>(WallpaperTexture->GetSizeX()),
+			static_cast<float>(WallpaperTexture->GetSizeY()));
+		WallpaperBrush->DrawAs = ESlateBrushDrawType::Image;
+	}
+
+	return SNew(SOverlay)
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+		[
+			// Uniform cover: 16:9 is exact, ultrawide clips top/bottom, and narrower windows clip
+			// the sides. The plate never stretches, letterboxes or exposes the empty shell world.
+			SNew(SScaleBox)
+			.Stretch(EStretch::ScaleToFill)
+			.StretchDirection(EStretchDirection::Both)
+			[
+				SNew(SImage).Image(WallpaperBrush.Get())
+			]
+		]
+		+ SOverlay::Slot()
+		.HAlign(HAlign_Fill).VAlign(VAlign_Fill)
+		[
+			MenuLayout
 		];
 }
 
@@ -863,6 +909,7 @@ void UElysiumMainMenu::NativeTick(const FGeometry& Geometry, float DeltaSeconds)
 void UElysiumMainMenu::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
+	WallpaperBrush.Reset();
 	TitleBrush.Reset();
 	ScrimBrush.Reset();
 	SealBrush.Reset();

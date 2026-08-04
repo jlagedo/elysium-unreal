@@ -9,6 +9,7 @@ class AElysiumMapActor;
 class UElysiumMapSubsystem;
 class UPointLightComponent;
 class USkeletalMeshComponent;
+class USkyLightComponent;
 class UStaticMeshComponent;
 
 namespace ElysiumCameraTrack
@@ -193,6 +194,13 @@ private:
 	void SeekPose();
 	bool PrepareFrame();
 	void UpdateStage(const FBox& Bounds);
+	// The lab's orbit camera around a box, published as a camera shot. Separate from UpdateStage
+	// because the stage has to be *looked at* before the first body arrives, not merely built: in a
+	// stage world the level is otherwise empty and the pawn sits at the origin, half a world away.
+	void FrameLabCamera(const FBox& Bounds);
+	// What the lab frames while no body is standing — a person-sized volume at the stage's centre, so
+	// an empty stage is framed the way the first body on it will be.
+	FBox EmptyStageBounds() const;
 	void PublishCamera(const FBox& Bounds);
 	void PublishTheatreCamera();
 	float CurrentSceneTime() const;
@@ -259,6 +267,9 @@ private:
 	TWeakObjectPtr<UStaticMeshComponent> Wall;
 	TWeakObjectPtr<UPointLightComponent> KeyLight;
 	TWeakObjectPtr<UPointLightComponent> FillLight;
+	// The stage's own ambient, built only in a stage world (see CreateStage). Null inside a map,
+	// where the map's environment is the ambient.
+	TWeakObjectPtr<USkyLightComponent> Ambient;
 
 	FVector CameraLocation = FVector::ZeroVector;
 	FRotator CameraRotation = FRotator::ZeroRotator;

@@ -106,7 +106,21 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 	// The first clip has nothing to blend from, so it snaps in regardless of BlendSeconds —
 	// otherwise every NPC would fade up out of the reference pose on map load.
 	const bool bSnap = !bInitialized || BlendSeconds <= 0.f;
-	const int32 Next = bInitialized ? (1 - Incoming) : Incoming;
+
+	// Which player the new clip lands on, and the whole of this crossfade's priority rule: with two
+	// players a request arriving mid-blend has to overwrite one of two live poses, so it overwrites
+	// the one the visible pose owes LESS to. Settled (alpha 1) that is always the other slot. Inside
+	// a crossfade below half weight it is the INCOMING slot — the pose that has barely faded up yet —
+	// which keeps the outgoing pose the body is still mostly showing as the thing the new clip blends
+	// out of.
+	//
+	// Load-bearing at a cutscene seam. A choreo scene handing over to the next one releases its cast
+	// to an idle and the next scene claims them a frame later, so two requests land back to back;
+	// flipping slots unconditionally would blend the incoming clip out of that one-frame-old idle
+	// instead of out of the cutscene pose actually on screen.
+	const int32 Next = !bInitialized
+		? Incoming
+		: (BlendAlpha < 0.5f ? Incoming : 1 - Incoming);
 
 	Players[Next].SetSequence(Sequence);
 	Players[Next].SetLoopAnimation(bLoop);
@@ -135,8 +149,11 @@ void FElysiumNpcAnimProxy::Seek(float PositionSeconds)
 	Players[Incoming].SetStartPosition(Position);
 	Players[Incoming].SetPlayRate(0.f);
 	bNeedsReinit[Incoming] = true;
-	BlendAlpha = 1.f;
-	BlendRate = 0.f;
+	// The crossfade is deliberately left running. A cinematic scene seeks its clip on the frame it
+	// starts it and on every frame after, so forcing the blend to settle here would mean no clip a
+	// scene plays could ever blend in at all — the pose would snap at the head of every scene and at
+	// every clip boundary inside one. Pinning the phase and fading up are independent: the outgoing
+	// player holds whatever pose it was left at while this one rises under it.
 }
 
 float FElysiumNpcAnimProxy::GetClipPosition() const

@@ -17,7 +17,7 @@ class UWorld;
 //
 // The rig is three transient actors: a camera the controller looks through, an unlit quad carrying
 // the sheet's own `charactermaintenance/background` art, and the body itself with collision off.
-// `UElysiumGameFlowSubsystem::EnterMenuBackdrop` is the precedent for the camera half.
+// The camera half remembers and restores the previous view target so it is safe in both hosts.
 //
 // Every piece degrades independently. No `.glb`, no body; no backdrop texture, no quad; no world,
 // no stage at all — and in each case the screen's panels stand on their own, which is the

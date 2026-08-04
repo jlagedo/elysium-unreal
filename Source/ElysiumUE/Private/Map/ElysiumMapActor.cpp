@@ -476,8 +476,66 @@ void AElysiumMapActor::BeginPlay()
 		ElysiumCollisionBuildStateName(Collision->GetBuildState()));
 }
 
+void AElysiumMapActor::BuildStageWorld()
+{
+	const double Start = FPlatformTime::Seconds();
+	LoadPhases.Reset();
+	LoadedMap = MapName;
+	Bodies->SetMap(MapName);
+	SkyDef = FElysiumSkyDef();
+
+	// Nothing is adopted, built or parsed: there is no baked level, no `.hulls`, no `.ents`. The
+	// collision component is left at its Disabled default, which the activation barrier counts as a
+	// satisfied input and which also drops the runtime Recast requirement — a stage with no walkable
+	// surface has nothing to navigate.
+	//
+	// The pawn is seated at the world origin rather than on the stage: the stage stands far out at
+	// FElysiumGreenRoomRun::StageOrigin, and a player model standing in the same place as the body
+	// being reviewed would be in every frame of it.
+	PendingSpawnLoc = FVector(0.0f, 0.0f, 100.0f);
+	PendingSpawnYaw = 0.0f;
+	bSpawnPending = true;
+
+	// An empty entity world, not the absence of one. The green room reaches the map through the same
+	// IElysiumEmbodiment seam a map's own NPCs do, the substrate clock is what `SeekCinematicClip`
+	// and the audio pass run against, and the activation barrier requires both a world and a player
+	// entity in it. All of that holds with zero entity definitions.
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		{
+			SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
+			SchemeManager->SetMapEpoch(AudioMapEpoch);
+
+			FElysiumWorldServices Services;
+			Services.Embodiment = this;
+			Services.Audio      = this;
+			Services.Travel     = this;
+			Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
+			Services.Weather    = this;
+			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+			EntityWorld->Load(FElysiumEntityDefs());
+			EntityWorld->SpawnPlayer();
+		}
+	}
+
+	// No map animations to make resident — the bodies the green room stands up resolve their own
+	// clips on demand through the same caches.
+	bAnimationPreloadReady = true;
+
+	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
+	LoadPhases.Add({ TEXT("Total"), TotalMs });
+	UE_LOG(LogElysium, Log, TEXT("built the green-room stage world in %.0f ms (no map)"), TotalMs);
+}
+
 void AElysiumMapActor::LoadMap()
 {
+	if (bStageOnly)
+	{
+		BuildStageWorld();
+		return;
+	}
+
 	const double Start = FPlatformTime::Seconds();
 	bAnimationPreloadReady = false;
 	if (NavigationBounds)
@@ -2045,7 +2103,10 @@ void AElysiumMapActor::ActivateRuntime()
 	{
 		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn))
 		{
-			Body->SetMovementFrozen(false);
+			// A stage world has no walkable surface at all, so releasing the pawn drops it out of the
+			// level for as long as the green room is open. It stays frozen where the spawn seated it;
+			// the view belongs to the camera shot stack, which does not consult the pawn's feet.
+			Body->SetMovementFrozen(bStageOnly);
 		}
 	}
 	PreMoveTickFunction.bTickEvenWhenPaused = false;

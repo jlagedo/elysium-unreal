@@ -1109,7 +1109,9 @@ void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	{
 		return;
 	}
-	if (!bPropSkinsLoaded)
+	// The skin set is baked per map, so a stage world (no map, hence no name) has none to read and
+	// the prop draws its own authored material set.
+	if (!bPropSkinsLoaded && !MapName.IsEmpty())
 	{
 		bPropSkinsLoaded = true;
 		PropSkins = LoadObject<UElysiumPropSkinSet>(

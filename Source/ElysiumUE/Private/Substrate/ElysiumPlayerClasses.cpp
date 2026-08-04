@@ -257,11 +257,21 @@ bool FElysiumAnimating::SeekCinematicClip(float PositionSeconds)
 void FElysiumAnimating::StopCinematicClip()
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment && Visual)
+	if (!Embodiment || !Visual)
+	{
+		return;
+	}
+	// Crossfade out of the cinematic pose; only tear the player down when there is no idle to go to.
+	// Stopping first empties the animation host, which makes the idle behind it SNAP in from nothing
+	// (the host has nothing to blend from, so it treats the idle as a first clip) and discards the
+	// outgoing pose that the next scene's opening clip has to blend out of. Between two chained
+	// scenes that is two hard pops a frame apart, which is what the theatre's courtroom hand-offs
+	// read as. With no idle resolved, StopCinematicClip leaves the body in its reference pose, so it
+	// stays the fallback rather than the first move.
+	if (!ResetAnimToIdle())
 	{
 		Embodiment->StopCinematicClip(Visual);
 	}
-	ResetAnimToIdle();
 }
 
 int32 FElysiumAnimating::SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,

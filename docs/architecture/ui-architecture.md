@@ -134,36 +134,26 @@ Two constraints:
 - Sizes in `ElysiumUI::Type` are virtual px. The sign panel still resolves the older Plex/Zilla set
   through `ElysiumSignFonts.cpp`; 8.8 migrates it onto this ramp.
 
-## 5. The menu backdrop
+## 5. The menu plate
 
-The menu stands in front of **real game geometry**, not a port of VtMB's particle scene — that
-scene was never verified against a ground-truth capture, so "faithful" was not testable. `UElysiumMapSubsystem::TravelForMenu` loads `elysium.MenuMap` (default `sm_hub_1`,
-the Asylum frontage) as a **backdrop**.
+The front end stays in the genuinely empty `/Game/Elysium` boot world and draws the local
+`$ELYSIUM_EXPORT_ROOT/ui/menu/elysium_main_wallpaper_4k.png` plate beneath the CommonUI menu. Cold
+boot therefore loads no VtMB map, creates no map actor or entity substrate, and waits on no runtime
+activation barrier. New Game's story entry is the process's first VtMB map load.
 
-A backdrop is an ordinary map build **minus the player**. The substrate builds in full, because the
-NPCs standing and idling in frame *are* entities — a look-only build is an empty street, and the
-crowd is why that vantage was chosen. `AElysiumGameMode` returns null from
-`GetDefaultPawnClassForController` and makes an `ACameraActor` at `elysium.MenuVantage` the view
-target. The mode is latched at **Travel** time, not when the map actor spawns, because `PostLogin`
-— which decides the pawn — runs before `BeginPlay`.
+The plate is 3840×2160 and uses uniform cover scaling: no distortion or letterbox at other aspect
+ratios, with the longer axis clipped. Its composition reserves a dark right-hand field for the rail.
+The title, seal, labels, focus marker and captions remain live resolution-independent Slate rather
+than being rasterised into the art. Pause and game-over modes do not draw the plate; they remain
+overlays over the held play world.
 
-The map's own logic runs, and that is a feature: `sm_hub_1`'s streetlight relays cycle the crossing
-signals behind the menu. What it also means is that the map can try to talk to the player, so
-**while a menu is up `AElysiumHUD` stands the player-facing HUD down** — no reticle, no sign panel,
-no dialogue box (`IsMenuUp()`). Not hypothetical: `sm_hub_1`'s `havenbum` opens a conversation
-unprompted, and the B4 box drew over the menu until it was gated. The conversation still runs in the
-entity world; only its UI is withheld. The `env_fade` quad still draws — it is a screen effect, not
-a HUD element.
+The plate incorporates decoded clan sigils, so it is local, game-derived output under the
+gitignored export root and is never tracked. If it is absent or invalid, the screen remains usable
+over the boot world's black clear rather than attempting to load a fallback game map.
 
-Leaving the backdrop is an ordinary Travel: New Game opens the story entry with a player in it.
-
-Two things are knobs rather than constants for that reason (§3): `elysium.MenuScrim` and
-`elysium.MenuMap`.
-
-The menu camera is deliberately **not** an entry in `ElysiumVantages::Table`: that table is the
-profiling and screenshot baseline and `Resolve("")` returns every vantage for a map, so adding one
-there would silently change what `uv run elysium debug profile` and `uv run elysium debug shots` measure. Retune with
-`elysium.campos`, which logs a paste-ready position/rotation.
+`UElysiumMapSubsystem::EnterFrontEnd` returns to the same empty shell from a run. It latches the
+front-end predicate before `OpenLevel`, so `PostLogin` seats no pawn in the destination world.
+`elysium.BootMenu 0` remains the direct-to-story A/B.
 
 `elysium.BootMenu 0` boots straight into play for A/B; `-ElysiumMap=` bypasses the menu entirely.
 
@@ -300,8 +290,8 @@ the original's even where the backing system is missing.
 - **The character stage** — `FElysiumCharacterStage`, the body behind the screen's panels. Raised
   for **both** hosts: VtMB's own screen draws the character *through* its translucent panels in game
   as well as at chargen, which is what proves the body is geometry and not a picture. Three transient
-  actors in a pocket of whatever world is loaded — an `ACameraActor` the controller looks through
-  (`UElysiumGameFlowSubsystem::EnterMenuBackdrop` is the precedent), an unlit quad carrying
+  actors in a pocket of whatever world is loaded — an `ACameraActor` the controller looks through,
+  an unlit quad carrying
   `charactermaintenance/background` as a **fixed wallpaper**, and the body itself with collision off,
   standing the idle `UElysiumNpcAnimSubsystem::PickIdleClip` would give an NPC. The mesh goes through
   the same world-free `ElysiumNpcVisual::LoadMesh` the game's own NPC bodies use, resolved by

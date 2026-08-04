@@ -318,14 +318,19 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         # The interactive green room. It shares the harness's stage and body factory and nothing
         # else: no offscreen rendering, no `-unattended`, no capture, no contact sheet, and no exit
         # -- the window is the point, so the process lives until it is closed.
+        # No map by default: the lab boots into its own stage world, an empty level with the stage
+        # built into it and nothing else loaded. Naming one still loads it, which is how a body can
+        # be auditioned against a real map's environment.
         stem = values[0] if values else ""
         clip = values[1] if len(values) > 1 else ""
-        map_name = values[2] if len(values) > 2 else "sp_tutorial_1"
+        map_name = values[2] if len(values) > 2 else ""
         launch = [
             *common, "-dx12", "-ForceRes", "-windowed", "-ResX=1920", "-ResY=1080",
-            f"-ElysiumMap={map_name}", "-ElysiumGreenRoom", "-GreenRoomLab",
+            "-ElysiumGreenRoom", "-GreenRoomLab",
             "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
         ]
+        if map_name:
+            launch.append(f"-ElysiumMap={map_name}")
         # An empty `-Switch=` makes Unreal's parser swallow the NEXT token as the value, so a
         # stem-less launch must omit the pair rather than pass it blank.
         if stem:

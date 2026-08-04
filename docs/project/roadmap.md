@@ -752,19 +752,18 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   stack, and the New Game flow calling 8.6a's New Game seam (now `UElysiumGameFlowSubsystem::NewGame`,
   11.3).
 
-  **Landed — the main menu runs.** Verified in the built game by screenshot: the title lockup from
-  the user's own install over **`sm_hub_1` (the Asylum frontage) as a live backdrop — NPCs idling,
-  streetlights cycling** — with five small-caps items laid out by the RE'd law. The backdrop is a
-  full map build minus the player (the idling NPCs are entities, so a look-only build is an empty
-  street — corrects the original call); the HUD stands down while
-  a menu is up, since `sm_hub_1`'s `havenbum` opens a conversation unprompted. Design: `docs/architecture/ui-architecture.md`; the RE it is checked against: `docs/vtmb/vtmb-ui.md`
+  **Landed — the main menu runs.** The title lockup and five small-caps items sit over a local 4K
+  Elysium key-art plate in the empty `/Game/Elysium` boot world. Cold boot therefore raises the
+  front end without loading or building a VtMB map; Quit to Main Menu travels back to the same
+  empty shell. The plate lives below the gitignored export root because it incorporates decoded
+  clan sigils. Design: `docs/architecture/ui-architecture.md`; the RE it is checked against: `docs/vtmb/vtmb-ui.md`
   (the two UI stacks, both schemes, the **1024×768** canvas law, the HUD class inventory, and four
   corrections to `docs/vtmb/m0_menu_build.md`). **PL8** [x]. The **Nocturne** type set (Spectral SC /
   Spectral / Inter, SIL OFL, no RFN) ships as generated local `UFontFace` assets
   (`fetch_ui_fonts.py` → `make_ui_fonts.py`). **CommonUI + CommonInput** adopted with widget trees
   in C++ Slate, so **no Widget Blueprint assets**. `UElysiumUISubsystem` +
   `UElysiumMainMenu` + `ElysiumUIStyle`/`Strings`/`Texture`; `elysium.menu [pause]`,
-  `elysium.menu.close`, `elysium.MenuVantage`, `elysium.BootMenu`. Six owner calls:.
+  `elysium.menu.close`, `elysium.BootMenu`. Six owner calls:.
 
   Three findings the build forced, all recorded in `docs/architecture/ui-architecture.md`: `make_ui_fonts.py`
   **cannot** run in the headless content commandlet, so the policy export coordinates a

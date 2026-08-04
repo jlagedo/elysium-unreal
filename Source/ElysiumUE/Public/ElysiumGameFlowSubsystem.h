@@ -151,18 +151,23 @@ public:
 	bool LoadGame(const FString& SlotName);
 	bool SaveGame(const FString& SlotName, EElysiumSaveKind Kind);
 
-	// Drop the run and return to the menu over its backdrop map. The session record is cleared, so
-	// the next New Game starts from nothing.
+	// Drop the run and return to the static menu in the empty front-end shell. The session record is
+	// cleared, so the next New Game starts from nothing.
 	bool QuitToMenu();
 
 	// Re-travel the current map, releasing a pause hold and dropping the menu first (the pause
 	// menu's Reload).
 	bool ReloadMap();
 
+	// Enter the green room's stage world (`elysium.gr`): the map subsystem builds an empty level with
+	// a stage actor in it, and the app follows an ordinary load into it — Loading here, Playing when
+	// the stage publishes ready. Legal from anywhere, including the front end, because a green room
+	// entered from the menu is a session like any other. False with the reason in OutError.
+	bool EnterGreenRoom(FString& OutError);
+
 	// --- Pause ---------------------------------------------------------------------------------
 	// Playing <-> Paused: the world is held (clock + engine) and the pause menu is raised. Only
-	// legal from Playing — the front end deliberately does not pause, because the live backdrop
-	// behind the menu is the feature (8.6).
+	// legal from Playing — the front end is an empty shell and has no run to pause.
 	void SetPaused(bool bPaused);
 	void TogglePause();
 	bool IsPaused() const { return State == EElysiumAppState::Paused; }
@@ -190,9 +195,6 @@ private:
 	// does nothing from a running state, so a hand `elysium.pause` survives a travel exactly as S1
 	// says it does.
 	void ReleasePauseHold();
-
-	// Stand the backdrop camera at `elysium.MenuVantage` and raise the main menu over it.
-	void EnterMenuBackdrop();
 
 	// Resolve FElysiumNewGameRequest::EntryPoint to a map + landmark. False when nothing resolves.
 	bool ResolveEntryPoint(const FString& EntryPoint, FString& OutMap, FString& OutLandmark) const;
@@ -226,9 +228,10 @@ private:
 	// The boot decision, made once in Initialize and consumed by the first NotifyWorldReady.
 	enum class EBootKind : uint8
 	{
-		Menu,      // raise the main menu over the backdrop map
+		Menu,      // raise the static main menu in the empty boot world
 		NewGame,   // straight into the story entry, seeded
 		DevMap,    // -ElysiumMap=<name>: a bare load with the mock character seeded
+		GreenRoom, // -ElysiumGreenRoom with no map named: the stage world, no VtMB map loaded
 	};
 	EBootKind BootKind = EBootKind::Menu;
 	FString   BootMap;             // DevMap only

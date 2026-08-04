@@ -161,6 +161,29 @@ with `fc0` = `right_lid_raiser`, `fc4` = `right_lid_droop`, `fc6` = `blink` — 
 suppressed by droop and cancelled by a blink, its neutral the complement, and the lowerer
 driven by blink alone.
 
+### Three rules read the wrong side of the face, and it is authored
+
+The rig is not left-right symmetric, and the asymmetry is not per-character damage: it is
+identical on **85 of 85** exported rigs, so it is a property of the one shared template.
+
+| Rule | Reads | Effect |
+|---|---|---|
+| `left_open` | `right_part`, `right_puckerer`, `right_funneler` | operand-for-operand identical to `right_open` |
+| `AU1AU2L` | `right_inner_raiser`, `right_outer_raiser` | operand-for-operand identical to `AU1AU2R` |
+| `AU1AU2R` | `left_lowerer` | both brow-pair rules are cancelled by the **left** brow lowerer |
+
+`left_open` is consumed by `left_lip_suppressor`, so that suppressor equals its right-hand
+twin on every frame and the whole left lip chain — `AU25L`, `AU18L`, `AU22L`, and `AU17L`
+through them — is scaled by how open the *right* side of the mouth is. A face driven by a
+one-sided phoneme therefore moves both sides of the lip, and a brow raise is suppressed by
+the opposite brow's lowerer.
+
+**Reproduce it.** The behaviour is visible rather than inert — unlike `mouth`, every rule
+here reaches a morph — so symmetrising the three rules changes what a face does and is a
+Logic-layer change under `docs/project/remaster-direction.md`, not a decode fix. Nothing in
+Elysium's replay special-cases them: the rules ship as data in the facial sidecar and are
+evaluated as written.
+
 **The four eyelid rules do not reach a morph by themselves — the eyeball record is the bridge,
 and it is authored.** The flexdescs that carry eyelid *morphs* — `upper_right`, `lower_right`,
 `upper_left`, `lower_left`, flexdescs 0/4/8/12 — carry no rule. The `_lowerer`/`_neutral`/
@@ -764,6 +787,36 @@ same mechanism yields `<stem>_expressions.vfe`. Of the 249 files, 121 are `_phon
 stem**. `expressions/phonemes.vfe` and `expressions/phonemes_male.vfe` are the fallbacks
 `client.dll` names literally.
 
+### The compiled `.vfe` header
+
+Every `.vfe` has a `.txt` twin, so the pipeline reads the text and nothing needs the binary
+form. The header is recorded because it dates the toolchain and because a reader ported from
+modern Source mis-walks it silently:
+
+| Off | Type | Field | Value |
+|---|---|---|---|
+| 0 | char[4] | `id` | `EFV\0` on disk — Source's `('V'<<16)+('F'<<8)+'E'` little-endian |
+| 4 | int | `version` | `0` on all 249 |
+| 8 | char[128] | `name` | the file's own `expressions/…` path |
+| 136 | int | `length` | file size — **exact on 247 of 249** |
+| 140 | int | `numflexsettings` | 4–48, matching the `.txt`'s row count |
+
+**`name` is `char[128]` where modern Source's `flexsettinghdr_t` has `char[64]`** — the same
+widening `MDLHeader.Name` carries (`docs/vtmb/mdl_v2531.md`), so it is a property of Troika's
+toolchain rather than of one format. A modern walk reads `length` at 72, which is `0` in
+every shipped file.
+
+`phonemes_strong.vfe` and `phonemes_weak.vfe` are the two exceptions: both are 1,260 bytes
+with `0x3F800000` — float `1.0` — where `length` and `numflexsettings` belong, so they are a
+different layout rather than a damaged one. They are two of the four degenerate tables the
+`.lip` coverage above already sets aside.
+
+**The internal name is authoring provenance, not a path.** On **13 of 249** it names a
+different file than the one it ships as — `shu_phonemes.vfe` and `larry_phonemes.vfe` both
+carry `larry_e3_phonemes.vfe`, `kiki_expressions.vfe` carries `mingxiao_expressions.vfe` —
+so a table copied during authoring keeps the source's name. Nothing at runtime reads it: the
+file is selected by the actor's model stem (above).
+
 ## The chain, end to end
 
 ```
@@ -978,6 +1031,9 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
   tuning data are all recovered (eyes section above). Two pieces of it are inert in retail and
   are therefore owner calls rather than decisions: head turn drives bone controllers no model
   declares, and `LookAtEntityCenter` aims at the eye rather than the centre.
+- **Three of the 60 rules are cross-wired left to right on every rig** (rules section above).
+  They are authored and they move geometry, so they are reproduced; symmetrising them is a
+  content change, not a repair.
 - The flex evaluation has an **order dependency that spans the seam**: rules first, then the
   eyeball pass, which overwrites the four eyelid flexdescs. A morph pipeline that ends at the
   rules has no lid motion.
@@ -1030,6 +1086,15 @@ facial/lip capture status is in `docs/project/retail-capture-roadmap.md`.
   (`client.dll`): `SetupWeights` `0x100C42F0`, `RunFlexRules` `0x100C3CD0`, the view-target
   interpolation `0x100C4110`, `AddGlobalFlexController` `0x100C4880`, the weight array
   `0x104A4A90`.
+- The flex rules have a **second, independent recovery**. A community decompiler recovered the
+  60 rules of the shipped rig as QC `%flexcontroller` expressions and published them on Planet
+  Vampire (thread *"BloodThirstyVamp's decompiled VTMB models"*), naming the `FETCH2` targets as
+  QC `localvar`s. Replayed against this document's opcode table over `heather.mdl`, the two
+  agree **operand for operand on all 60**, including the three cross-wired rules above and the
+  `1 / right_open` divide. Neither reading informed the other, and the published set carries no
+  scaling or ordering assumption that ours could have inherited.
+- The `.vfe` header is read from the shipped files themselves — all 249 in the merged install,
+  `id` and `version` uniform, `length` exact on 247 and the internal name resolving as described.
 - Reference parsers: `$ELYSIUM_WORK_ROOT/research/reference-source/VAMPTools` `studio.h` (flex block 8 bytes short; eyeball and
   vertanim marked *UNVERIFIED ALIGNMENT*) and `$ELYSIUM_WORK_ROOT/research/reference-source/Crowbar` `SourceModel2531`
   (`StudioFlex` 32 B with field 0x1C as *"unknown"*, `StudioVertAnim` read as

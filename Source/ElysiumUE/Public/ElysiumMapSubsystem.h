@@ -39,16 +39,13 @@ public:
 	// landmark's facing) instead of info_player_start — the console/direct entry to the P4.6 path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
-	// 8.6 — load a map as the **menu backdrop**. The map actor builds the ordinary runtime world so
-	// NPCs and authored ambience can live behind the menu, but the activation barrier omits the
-	// possessed-pawn/final-placement requirement. No player entity or pawn is seated.
-	//
-	// Leaving this mode is an ordinary Travel: New Game re-opens the destination as a play world.
-	bool TravelForMenu(const FString& Map);
+	// Enter the empty `/Game/Elysium` front-end shell. If it is already the current world (cold
+	// boot), this only latches front-end mode and reports no travel. From a game map it hard-travels
+	// back to the shell and reports that travel through bOutTravelStarted.
+	bool EnterFrontEnd(bool& bOutTravelStarted);
 
-	// True while the current world is a menu backdrop (see TravelForMenu). Read by the map actor
-	// to skip the gameplay half of its build, and by the game mode to seat a camera instead of a
-	// pawn.
+	// True while the current world is the front-end shell. The historical name remains because map
+	// and save call sites use it as the established "not a playable map" predicate.
 	bool IsMenuBackdrop() const { return bCurrentIsMenuBackdrop; }
 
 	// P4.6 — a landmark transition (from a trigger_changelevel touch / scripted ChangeMap). Safe to
@@ -112,6 +109,19 @@ public:
 	static const TCHAR* StoryEntryMap() { return TEXT("sp_tutorial_1"); }
 	static const TCHAR* StoryEntryLandmark() { return TEXT("tutorial"); }
 
+	// Enter the green room: travel into the empty boot level, build a **stage world** in it (an
+	// AElysiumMapActor carrying the body factory, the camera director and an empty entity world, with
+	// no VtMB map behind any of them), and arm the interactive lab over it. This is what `elysium.gr`
+	// fires, from a cold boot or from the middle of a session — in the latter case the running map is
+	// torn down, and an ordinary `elysium.map <name>` is the way back. Re-entering a stage world that
+	// already exists only re-arms the lab. False with the reason in OutError.
+	bool EnterGreenRoom(FString& OutError);
+
+	// True while the current world is a stage world (see EnterGreenRoom): an empty level with no map
+	// in it. Read by the green room, which lights and frames its stage differently when nothing else
+	// is contributing either.
+	bool IsStageWorld() const { return bCurrentIsStageOnly; }
+
 	// The green room, if one is armed. Null in every ordinary session — the harness only exists
 	// under `-ElysiumGreenRoom` or after `elysium.gr` has stood one up.
 	FElysiumGreenRoomRun* GetGreenRoom() const { return GreenRoomRun.Get(); }
@@ -123,6 +133,12 @@ public:
 private:
 	void HandleRuntimeReady(AElysiumMapActor* Map);
 	void HandleRuntimeFailed(AElysiumMapActor* Map, const FString& Reason);
+
+	// Drop an interactive lab when the world it was standing in stops being its stage. The run is
+	// GI-scoped and ticks off the core ticker, so nothing else ends it: left armed, it would go on
+	// hiding the HUD and writing control rotation into whatever world came next. A capture run is
+	// left alone — it owns the process and exits on its own.
+	void RetireGreenRoomLab(const TCHAR* Reason);
 
 	TWeakObjectPtr<AElysiumMapActor> CurrentMap;
 	FOnElysiumCurrentMapReady CurrentMapReady;
@@ -137,6 +153,7 @@ private:
 		FString Map;
 		FString Landmark;
 		bool    bMenuBackdrop = false;   // 8.6: build the full runtime world, omit player seating
+		bool    bStageOnly = false;      // the green room: no map at all, Map is empty
 	};
 	FPendingMapLoad PendingMapLoad;
 
@@ -144,6 +161,8 @@ private:
 	// actor and game mode can ask what kind of world this is after SpawnPendingMap has cleared
 	// the pending record.
 	bool bCurrentIsMenuBackdrop = false;
+	// The same mirror for a stage world (EnterGreenRoom).
+	bool bCurrentIsStageOnly = false;
 
 	// One-shot: the next map build discards the destination's snapshot (RequestFreshMapState).
 	bool bFreshMapState = false;

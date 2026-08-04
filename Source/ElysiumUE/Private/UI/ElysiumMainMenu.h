@@ -119,8 +119,12 @@ private:
 	// re-scales without a rebuild.
 	float VirtualScale() const;
 
-	// The title lockup, decoded from the user's install (out/ui/menu/title.png). Held as a UPROPERTY
-	// so the transient texture survives GC for the widget's lifetime.
+	// The front end's static plate and title lockup. Both are loose, local PNGs below the export
+	// root and are held as UPROPERTYs so their transient textures survive GC for the widget's
+	// lifetime. Pause/game-over modes leave WallpaperTexture unused and show the held game world.
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> WallpaperTexture;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> TitleTexture;
 
@@ -138,6 +142,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> BarTexture;
 
+	TSharedPtr<FSlateBrush> WallpaperBrush;
 	TSharedPtr<FSlateBrush> TitleBrush;
 	TSharedPtr<FSlateBrush> ScrimBrush;
 	TSharedPtr<FSlateBrush> SealBrush;

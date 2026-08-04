@@ -82,6 +82,14 @@ compiles to **quatinterp**. So the published tutorials, the trigger syntax with 
 angle-of-influence and control/helper rotation pairs, and the Blender addons built around
 them all describe a rule v2531 never uses. None of it transcribes into a VtMB decoder.
 
+The authoring file that *does* compile to axisinterp is **`.vhb`**, and `studiomdl` still
+accepts it in later Source revisions — so the rule kind outlived the tooling that emitted it.
+Modders decompiling VtMB characters report one `.vhb` whose contents do not vary between
+models, which is the authoring-side statement of the shared-template measurement below,
+reached from compiled models rather than from bytes. That correspondence is the useful part;
+the `.vhb` text layout itself is neither decoded nor needed, since the compiled 176-byte
+record is what the runtime reads and what a reproduction carries.
+
 The driven bones are a consistent anatomical set — the most frequent are `Bip01 R Wrist`
 (107 models), `Bip01 L Wrist` (106), `Bip01 L Bicep` (85), `Bip01 R Bicep` (77),
 `Bip01 R Ankle` (77), `Bip01 L Shin` (76), `Bip01 L Quadricep` (76), `Bip01 L Ankle` (76).

@@ -286,6 +286,41 @@ UTextureCube* ElysiumEnvironment::BuildSkyCube(const FString& TexDir)
 	return BuildSkyCubeFrom(TexDir, TEXT("sky_"));
 }
 
+UTextureCube* ElysiumEnvironment::BuildConstantCube(const FLinearColor& Colour, int32 Size)
+{
+	Size = FMath::Clamp(Size, 1, 128);
+	UTextureCube* Cube = NewObject<UTextureCube>(GetTransientPackage(), NAME_None, RF_Transient);
+	Cube->SRGB = true;
+	Cube->NeverStream = true;
+
+	FTexturePlatformData* PD = new FTexturePlatformData();
+	PD->SizeX = Size;
+	PD->SizeY = Size;
+	PD->PixelFormat = PF_B8G8R8A8;
+	PD->SetIsCubemap(true);
+	PD->SetNumSlices(6);
+
+	const int64 TotalBytes = int64(Size) * Size * 4 * 6;
+	FTexture2DMipMap* Mip = new FTexture2DMipMap(Size, Size, 1);
+	PD->Mips.Add(Mip);
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
+	uint8* Dest = (uint8*)Mip->BulkData.Realloc(TotalBytes);
+	// The cube is sRGB, same as the sky faces, so the colour is encoded rather than written linear.
+	const FColor Encoded = Colour.ToFColor(true);
+	for (int64 Texel = 0; Texel < TotalBytes; Texel += 4)
+	{
+		Dest[Texel + 0] = Encoded.B;
+		Dest[Texel + 1] = Encoded.G;
+		Dest[Texel + 2] = Encoded.R;
+		Dest[Texel + 3] = 255;
+	}
+	Mip->BulkData.Unlock();
+
+	Cube->SetPlatformData(PD);
+	Cube->UpdateResource();
+	return Cube;
+}
+
 bool ElysiumEnvironment::HasSkyFaces(const FString& Dir, const FString& Prefix)
 {
 	IPlatformFile& Files = FPlatformFileManager::Get().GetPlatformFile();
