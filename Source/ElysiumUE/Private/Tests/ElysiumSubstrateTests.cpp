@@ -4463,6 +4463,30 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 		}
 	}
 
+	// `bounds_radius_m` is additive and optional. Its presence states the reach the clip needs
+	// about the model origin, in the metres the glb is written in; its absence is "no claim", not
+	// "zero reach". These are `cin_sheriff_sword`'s real numbers — a 2 m mesh whose scene clip
+	// draws it up to 22 m from the anchor it is culled on.
+	FElysiumNpcIndex Reach;
+	Error.Reset();
+	const FString JsonReach = FString::Printf(TEXT("{\"manifest_version\":6,%s,\"banks\":{},\"cinematics\":{},"
+		"\"animated_props\":{\"cin_sheriff_sword\":{\"glb\":\"animated_props/cin_sheriff_sword.glb\","
+		"\"model\":\"models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl\",\"bones\":15,\"clips\":["
+		"{\"name\":\"idle01\",\"index\":0,\"frames\":4701,\"fps\":10.0,\"bounds_radius_m\":22.388},"
+		"{\"name\":\"scene\",\"index\":1,\"frames\":4701,\"fps\":30.0}"
+		"]}}}"), *MinimalNpc);
+	TestTrue(FString::Printf(TEXT("an index carrying a clip reach parses: %s"), *Error),
+		Reach.LoadJsonText(JsonReach, Error));
+	const FElysiumAnimatedPropEntry* Sword =
+		Reach.FindAnimatedProp(TEXT("models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl"));
+	if (TestNotNull(TEXT("the sword resolves"), Sword))
+	{
+		TestEqual(TEXT("a declared clip reach is read in the glb's own metres"),
+			Sword->Clips[0].BoundsRadiusMeters, 22.388f);
+		TestEqual(TEXT("a clip that declares no reach makes no claim"),
+			Sword->Clips[1].BoundsRadiusMeters, 0.f);
+	}
+
 	// The v4 shape above still parses, and its bare names land as ordered rows with no selection
 	// keys — an index that predates the re-export keeps working, it just has no loop flags.
 	if (Glass)
@@ -4470,6 +4494,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 		TestEqual(TEXT("v4 names land in array order"), Glass->Clips[0].Name, FString(TEXT("Idle")));
 		TestEqual(TEXT("v4 rest sequence falls back to the first name"),
 			Glass->RestSequence(), FString(TEXT("Idle")));
+		TestEqual(TEXT("a v4 row declares no clip reach"), Glass->Clips[0].BoundsRadiusMeters, 0.f);
 	}
 
 	FElysiumNpcIndex Future;
@@ -4479,6 +4504,57 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 6")));
 	return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropBoundsTest,
+	"Elysium.Substrate.PropBounds", GElysiumTestFlags)
+bool FElysiumPropBoundsTest::RunTest(const FString&)
+{
+	// `cin_sheriff_sword`'s bind pose in the centimetres the loaded mesh is in: a sword about a
+	// metre off the model origin, nowhere near the 22 m its scene clip draws it at.
+	const FBoxSphereBounds Bind(FVector(-65.0, 145.0, 75.0), FVector(35.0, 35.0, 115.0), 125.0);
+	const double Reach = 2238.8;
+	FVector Positive, Negative;
+
+	TestTrue(TEXT("a clip reaching past the bind pose widens it"),
+		ElysiumPropBounds::ExtensionFor(Bind, Reach, Positive, Negative));
+
+	// Assert the property, not the arithmetic: compose the box the way CalculateExtendedBounds
+	// does and require it to contain the whole +/-Reach cube about the MODEL origin, which is
+	// what a clip's reach is measured from and is not where the bind pose is centred.
+	const FVector Min = Bind.Origin - Bind.BoxExtent - Negative;
+	const FVector Max = Bind.Origin + Bind.BoxExtent + Positive;
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		TestTrue(FString::Printf(TEXT("the widened box reaches -%.1f on axis %d"), Reach, Axis),
+			Min[Axis] <= -Reach + UE_KINDA_SMALL_NUMBER);
+		TestTrue(FString::Printf(TEXT("the widened box reaches +%.1f on axis %d"), Reach, Axis),
+			Max[Axis] >= Reach - UE_KINDA_SMALL_NUMBER);
+		// And lands exactly there unless the bind pose had already passed it. A side that
+		// overshoots is a sign error on the centre offset, which containment alone would not see.
+		const double BindMin = Bind.Origin[Axis] - Bind.BoxExtent[Axis];
+		const double BindMax = Bind.Origin[Axis] + Bind.BoxExtent[Axis];
+		TestTrue(FString::Printf(TEXT("axis %d does not overshoot below"), Axis),
+			FMath::IsNearlyEqual(Min[Axis], -Reach) || BindMin <= -Reach);
+		TestTrue(FString::Printf(TEXT("axis %d does not overshoot above"), Axis),
+			FMath::IsNearlyEqual(Max[Axis], Reach) || BindMax >= Reach);
+	}
+
+	// An index that states no reach must leave the mesh exactly as glTFRuntime built it — that is
+	// how a pre-re-export corpus keeps today's behaviour instead of gaining a zero-sized bound.
+	TestFalse(TEXT("no declared reach writes no extension"),
+		ElysiumPropBounds::ExtensionFor(Bind, 0.0, Positive, Negative));
+	TestEqual(TEXT("the positive extension is left at zero"), Positive, FVector::ZeroVector);
+	TestEqual(TEXT("the negative extension is left at zero"), Negative, FVector::ZeroVector);
+
+	// A prop whose bind pose already contains its clip — every ordinary skeletal prop — is not
+	// widened either, so the common case pays nothing and keeps its own tight bounds.
+	const FBoxSphereBounds Roomy(FVector::ZeroVector, FVector(500.0), 900.0);
+	TestFalse(TEXT("a bind pose that already covers the reach is left alone"),
+		ElysiumPropBounds::ExtensionFor(Roomy, 400.0, Positive, Negative));
+	TestEqual(TEXT("a covered prop takes no positive extension"), Positive, FVector::ZeroVector);
+	TestEqual(TEXT("a covered prop takes no negative extension"), Negative, FVector::ZeroVector);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningEmbodimentTest,
 	"Elysium.Substrate.OpeningEmbodiment", GElysiumTestFlags)
 bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)

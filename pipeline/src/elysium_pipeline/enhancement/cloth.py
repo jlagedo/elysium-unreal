@@ -40,8 +40,23 @@ DEFAULT_ROOT = "Bip01 Pelvis"
 
 #: The joint whose height splits "hangs free" from "wraps the torso". A coat reaching
 #: the chest keeps its upper half rigid; only what falls below the hip can swing. The
-#: same two bones drive the collision spheres that keep the legs inside the garment.
+#: same two bones are where the leg chain the garment has to clear starts.
 DEFAULT_HIP = ("Bip01 L Thigh", "Bip01 R Thigh")
+
+#: How far down each leg the collider chain runs, counted in bone segments from the thigh.
+#: Two reaches the ankle, which is below every hem in the corpus; the foot sticks out past
+#: the garment entirely and carries no sphere.
+LEG_SEGMENTS = 2
+
+#: A limb is approximated by a short row of spheres down its own bone axis rather than one
+#: ball around its centroid. `FAnimPhysSphericalLimit` is the only collision AnimDynamics
+#: offers, and a single sphere wide enough to span a thigh's length reaches the waist.
+#: Stations sit at the centres of equal bands, so none lands on a joint.
+MIN_SPHERES_PER_SEGMENT = 2
+MAX_SPHERES_PER_SEGMENT = 4
+
+#: Vertices a bone needs before its own geometry is trusted to size a sphere.
+MIN_COLLIDER_VERTS = 8
 
 #: A garment worth simulating has to be a shell, not a stray weight. Below these it is
 #: cheaper and safer to leave the model exactly as it shipped.
@@ -80,9 +95,10 @@ SOLVER_ITERATIONS_POST = 2
 COMPONENT_LINEAR_VEL_SCALE = 0.6
 COMPONENT_LINEAR_ACC_SCALE = 0.25
 
-#: Fraction of a collider bone's own skinned radius to use for its sphere. Below 1 so the
-#: garment sits just off the leg rather than exactly on it.
-COLLIDER_RADIUS_SCALE = 0.85
+#: Fraction of a limb's own measured cross-section to use for its spheres. Slightly above
+#: 1 so the garment rides just clear of the skin instead of exactly on it, which is where
+#: a hem starts showing the leg through.
+COLLIDER_RADIUS_SCALE = 1.1
 
 
 @dataclass
@@ -205,36 +221,96 @@ def segment(bones, surfaces, *, root=DEFAULT_ROOT, hip=DEFAULT_HIP):
     return shell, hip_z
 
 
-def collider_spheres(bones, surfaces, names=DEFAULT_HIP):
-    """Sphere limits sized from the collider bones' own skinned geometry.
+def dominant_vertices(surfaces):
+    """bone index -> the vertex positions that bone dominates, gathered in one pass."""
+    out: dict[int, list] = {}
+    for s in surfaces.values():
+        for p, js, ws in zip(s["pos"], s["joints"], s["weights"]):
+            out.setdefault(max(zip(ws, js))[1], []).append(p)
+    return {index: np.array(pts, dtype=np.float64) for index, pts in out.items()}
 
-    A garment that swings has to be stopped by the legs rather than pass through them,
-    and `FAnimPhysSphericalLimit` is the only collision `AnimDynamics` offers. The radius
-    is measured off the bone's own dominant vertices instead of guessed, so a heavy NPC
-    and a slim one get different legs without either being authored.
 
-    Returns `[(bone, offset from the bone's bind position, radius)]` in Source units.
+def leg_segments(bones, owned, names=DEFAULT_HIP, depth=LEG_SEGMENTS):
+    """`(bone, child)` pairs walking `depth` segments down from each named joint.
+
+    The chain is followed through the skeleton rather than spelled out, so a model whose
+    leg bones are named differently still resolves. Where a joint forks, the branch
+    carrying the most skinned geometry is the limb.
     """
     by_name = {b.name: b for b in bones}
-    world = bind_world(bones)
+    children: dict[int, list] = {}
+    for b in bones:
+        if b.parent >= 0:
+            children.setdefault(b.parent, []).append(b)
+
     out = []
     for name in names:
         bone = by_name.get(name)
-        if bone is None:
+        for _ in range(depth):
+            if bone is None:
+                break
+            kids = children.get(bone.index, [])
+            if not kids:
+                break
+            child = max(kids, key=lambda k: len(owned.get(k.index, ())))
+            out.append((bone, child))
+            bone = child
+    return out
+
+
+def collider_spheres(bones, surfaces, names=DEFAULT_HIP):
+    """Sphere limits tracing the legs a swinging garment has to stay outside of.
+
+    `FAnimPhysSphericalLimit` is the only collision `AnimDynamics` offers, so each limb
+    segment is approximated by a row of spheres down its own bone axis. A sphere is sized
+    from the *perpendicular* spread of the vertices beside it -- the leg's thickness at
+    that height -- so a heavy NPC and a slim one get different legs without either being
+    authored, and no sphere is inflated by the length of the bone it sits on.
+
+    Offsets are parent-relative, which is the space `FAnimPhysSphericalLimit::
+    SphereLocalOffset` reads. A station at fraction `t` down a segment sits at `t` times
+    the child's own bind position, because that position *is* the segment expressed in the
+    parent's frame.
+
+    Returns `[(bone, offset from the bone's bind position, radius)]` in Source units.
+    """
+    world = bind_world(bones)
+    owned = dominant_vertices(surfaces)
+
+    out = []
+    for bone, child in leg_segments(bones, owned, names=names):
+        pts = owned.get(bone.index)
+        if pts is None or len(pts) < MIN_COLLIDER_VERTS:
             continue
         origin = world[bone.index][:3, 3]
-        owned = [p for s in surfaces.values()
-                 for p, js, ws in zip(s["pos"], s["joints"], s["weights"])
-                 if max(zip(ws, js))[1] == bone.index]
-        if len(owned) < 8:
+        axis = world[child.index][:3, 3] - origin
+        length = float(np.linalg.norm(axis))
+        if length < 1e-3:
             continue
-        pts = np.array(owned, dtype=np.float64)
-        centre = pts.mean(axis=0)
-        # 75th percentile rather than the max: a single stray vertex on the hip seam
-        # would otherwise inflate the sphere until it pushed the whole skirt outward.
-        radius = float(np.percentile(np.linalg.norm(pts - centre, axis=1), 75))
-        out.append((name, tuple(float(x) for x in centre - origin),
-                    radius * COLLIDER_RADIUS_SCALE))
+        unit = axis / length
+
+        rel = pts - origin
+        along = rel @ unit
+        perp = np.linalg.norm(rel - np.outer(along, unit), axis=1)
+        height = np.clip(along / length, 0.0, 1.0)
+
+        # One station per radius' worth of bone, so consecutive spheres overlap instead of
+        # leaving a gap between them for a hem to be pushed through.
+        typical = float(np.percentile(perp, 75)) or length
+        stations = int(np.clip(round(length / typical),
+                               MIN_SPHERES_PER_SEGMENT, MAX_SPHERES_PER_SEGMENT))
+
+        local = np.array(child.pos, dtype=np.float64)
+        for k in range(stations):
+            centre = (k + 0.5) / stations
+            band = np.abs(height - centre) <= 0.5 / stations
+            # 75th percentile rather than the max: one stray vertex on a seam would
+            # otherwise inflate the sphere until it pushed the whole skirt outward. A band
+            # too sparse to measure falls back to the segment, never to a guess.
+            sample = perp[band] if int(band.sum()) >= MIN_COLLIDER_VERTS else perp
+            radius = float(np.percentile(sample, 75))
+            out.append((bone.name, tuple(float(x) for x in local * centre),
+                        radius * COLLIDER_RADIUS_SCALE))
     return out
 
 

@@ -37,8 +37,8 @@ struct FElysiumNpcClip
 	// three fidgets at 1, which is how VtMB rests on the idle ~91% of the time.
 	int32 Weight = 0;
 	// Studio sequence bits. Bit 0 is STUDIO_LOOPING (RE35 — `CBaseAnimating::ResetSequenceInfo`
-	// derives `m_bSequenceLoops` from `GetSequenceFlags(m_nSequence) & 1`). The higher bits are
-	// still unestablished (A.3). No NPC path reads this yet; the prop path does.
+	// derives `m_bSequenceLoops` from `GetSequenceFlags(m_nSequence) & 1`). Bits 2 and 4 mark an
+	// additive layer, together (A.3). The remaining bits are unestablished.
 	int32 Flags = 0;
 	int32 Frames = 0;
 	float Fps = 30.f;
@@ -47,6 +47,10 @@ struct FElysiumNpcClip
 	// sequences are 18 fps, including `run`), so this is read rather than assumed.
 	float Seconds() const { return Fps > 0.f ? static_cast<float>(Frames) / Fps : 0.f; }
 	bool IsOwnedBy(const FString& Stem) const { return Owner.Equals(Stem, ESearchCase::IgnoreCase); }
+	// An additive layer rather than a pose: what it stores is the *difference* from a base clip,
+	// so playing it standalone folds the skeleton up instead of animating it. The engine composes
+	// these on top of something else and never selects one, which is why they carry no activity.
+	bool IsAdditive() const { return (Flags & 0x14) == 0x14; }
 };
 
 // One NPC's whole resolved vocabulary, off `out/npc/clips/<stem>.json` (~92 KB / ~1,360 clips).
@@ -139,6 +143,11 @@ struct FElysiumPropClip
 	int32 Index = 0;
 	int32 Frames = 0;
 	float Fps = 30.f;
+	// How far this clip carries the posed model from its origin, in the glb's own metres — the
+	// sequence's authored bounding box reduced to a radius, reconciled at export against what
+	// baked. Zero on a v4/v5 index and on any row the export could not vouch for, which reads
+	// as "no claim" and leaves the mesh's bind-pose bounds alone.
+	float BoundsRadiusMeters = 0.f;
 
 	float Seconds() const { return Fps > 0.f ? static_cast<float>(Frames) / Fps : 0.f; }
 	// RE35: `ResetSequenceInfo` derives `m_bSequenceLoops` from `GetSequenceFlags() & 1`.

@@ -68,6 +68,10 @@ public:
 		// thigh sphere in the wrong place is obvious here and invisible in the silhouette.
 		bool bDrawLattice = false;
 		bool bDrawColliders = false;
+		// The model's own skeleton, which is what a collider is supposed to be tracing. A sphere is
+		// authored against a bone's *local* frame, so whether it sits on the limb or somewhere off
+		// beside it is a question only the two drawn together can answer.
+		bool bDrawSkeleton = false;
 	};
 
 	bool IsLab() const { return bLab; }

@@ -1523,40 +1523,109 @@ void FElysiumGreenRoomRun::DrawLabOverlays() const
 {
 	UWorld* World = GetWorld();
 	USkeletalMeshComponent* Body = Bodies.IsEmpty() ? nullptr : Bodies[0].Body.Get();
-	if (!World || !Body || (!LabViewState.bDrawLattice && !LabViewState.bDrawColliders))
+	if (!World || !Body
+		|| (!LabViewState.bDrawLattice && !LabViewState.bDrawColliders
+			&& !LabViewState.bDrawSkeleton))
 	{
 		return;
 	}
 	const UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
 	const FElysiumClothRig* Rig = Inst ? Inst->GetClothRig() : nullptr;
-	if (Rig == nullptr)
+
+	// The bones the lattice overlay owns. The skeleton view skips them, because a garment lattice
+	// drawn twice in two colours reads as a rig fault that is not there — and because what the
+	// skeleton view is for is the *model's* limbs, which the lattice hides among fifty of its own.
+	TSet<FName> Lattice;
+	if (Rig != nullptr)
 	{
-		return;
+		for (const FName& Anchor : Rig->AnchorRow)
+		{
+			Lattice.Add(Anchor);
+		}
+		for (const FElysiumClothChain& Chain : Rig->Chains)
+		{
+			for (const FElysiumClothBody& Cell : Chain.Bodies)
+			{
+				Lattice.Add(Cell.Bone);
+			}
+		}
 	}
 
 	// One frame's lifetime: this runs every tick, and a persistent line would stack until the
 	// overlay is a solid block.
-	if (LabViewState.bDrawLattice)
+	if (LabViewState.bDrawSkeleton)
 	{
+		const USkinnedAsset* Asset = Body->GetSkinnedAsset();
+		const FReferenceSkeleton* Ref = Asset ? &Asset->GetRefSkeleton() : nullptr;
+		// The bones a collider hangs off, labelled. Every other bone is a joint and a line: naming
+		// ninety of them costs a DrawDebugString apiece and buries the four that are being judged.
+		TSet<FName> Driving;
+		if (Rig != nullptr)
+		{
+			for (const FElysiumClothCollider& Collider : Rig->Colliders)
+			{
+				Driving.Add(Collider.Bone);
+			}
+		}
+		for (int32 Index = 0; Ref != nullptr && Index < Ref->GetNum(); ++Index)
+		{
+			const FName Name = Ref->GetBoneName(Index);
+			if (Lattice.Contains(Name))
+			{
+				continue;
+			}
+			const bool bDrives = Driving.Contains(Name);
+			const FColor Colour = bDrives ? FColor(255, 90, 120) : FColor(150, 230, 160);
+			const FVector Here = Body->GetBoneTransform(Index).GetLocation();
+			DrawDebugPoint(World, Here, bDrives ? 8.0f : 5.0f, Colour, false, -1.0f, SDPG_Foreground);
+
+			const int32 Parent = Ref->GetParentIndex(Index);
+			// Only when the parent is drawn too — the lattice hangs off the pelvis, and a line to a
+			// skipped bone would draw the garment's own rig back in through the gap.
+			if (Parent != INDEX_NONE && !Lattice.Contains(Ref->GetBoneName(Parent)))
+			{
+				DrawDebugLine(World, Body->GetBoneTransform(Parent).GetLocation(), Here,
+					FColor(90, 190, 110), false, -1.0f, SDPG_Foreground, 0.4f);
+			}
+			if (bDrives)
+			{
+				DrawDebugString(World, Here + FVector(0, 0, 4.f), Name.ToString(), nullptr,
+					Colour, 0.f, /*bShadow*/ true, /*Scale*/ 0.9f);
+			}
+		}
+	}
+	if (Rig != nullptr && LabViewState.bDrawLattice)
+	{
+		// The anchors first: they are the row the panels hang from and never simulate, so a chain
+		// that has collapsed onto its anchor is only recognisable against them.
+		for (const FName& Anchor : Rig->AnchorRow)
+		{
+			DrawDebugPoint(World, Body->GetBoneLocation(Anchor), 7.0f, FColor(120, 200, 255),
+				false, -1.0f, SDPG_Foreground);
+		}
 		for (const FElysiumClothChain& Chain : Rig->Chains)
 		{
 			for (int32 Index = 0; Index < Chain.Bodies.Num(); ++Index)
 			{
 				const FVector Here = Body->GetBoneLocation(Chain.Bodies[Index].Bone);
-				// Row 0 is the anchor the panel hangs from and never simulates, so it is drawn in a
-				// different colour: a chain that has collapsed onto its anchor is then obvious.
-				const FColor Colour = Chain.Bodies[Index].Row == 0
-					? FColor(120, 200, 255) : FColor(255, 190, 90);
-				DrawDebugPoint(World, Here, 6.0f, Colour, false, -1.0f, SDPG_Foreground);
+				DrawDebugPoint(World, Here, 6.0f, FColor(255, 190, 90), false, -1.0f, SDPG_Foreground);
 				if (Index > 0)
 				{
 					DrawDebugLine(World, Body->GetBoneLocation(Chain.Bodies[Index - 1].Bone), Here,
-						Colour, false, -1.0f, SDPG_Foreground, 0.6f);
+						FColor(255, 190, 90), false, -1.0f, SDPG_Foreground, 0.6f);
 				}
+			}
+			// The link into the anchor, so the panel reads as hanging from something rather than
+			// floating at the waist.
+			if (!Chain.Bodies.IsEmpty() && Rig->AnchorRow.IsValidIndex(Chain.Column))
+			{
+				DrawDebugLine(World, Body->GetBoneLocation(Rig->AnchorRow[Chain.Column]),
+					Body->GetBoneLocation(Chain.Bodies[0].Bone), FColor(120, 200, 255),
+					false, -1.0f, SDPG_Foreground, 0.6f);
 			}
 		}
 	}
-	if (LabViewState.bDrawColliders)
+	if (Rig != nullptr && LabViewState.bDrawColliders)
 	{
 		for (const FElysiumClothCollider& Collider : Rig->Colliders)
 		{

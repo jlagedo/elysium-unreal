@@ -85,6 +85,10 @@ struct FElysiumClothRig
 	int32 Columns = 0;
 
 	TArray<FElysiumClothChain> Chains;
+	// The rigid row every chain hangs from, one bone per column. Nothing simulates these — they are
+	// carried so a debug view can tell a chain that is hanging from its anchor apart from one that
+	// has collapsed onto it, which look identical when only the simulated rows are drawn.
+	TArray<FName> AnchorRow;
 	TArray<FElysiumClothCollider> Colliders;
 	FElysiumClothSolver Solver;
 
@@ -121,8 +125,9 @@ struct FElysiumClothTuning
 	float ConeScale = 1.f;
 	// Multiplies every collider's authored radius — how much clearance the legs are given.
 	float ColliderRadiusScale = 1.f;
-	// Multiplies every body's authored `BoxExtent`. Inertia, not collision: AnimDynamics only
-	// collides a garment body against the spherical limits.
+	// Multiplies every body's authored `BoxExtent`, which is both its inertia and — through
+	// `SphereCollisionRadius` — the footprint it meets a leg sphere with. Moving it therefore
+	// changes how readily the garment is pushed as well as how heavily it swings.
 	float BoxExtentScale = 1.f;
 
 	// What the sidecar itself asks for: the authored solver at every scale 1. This is the baseline a

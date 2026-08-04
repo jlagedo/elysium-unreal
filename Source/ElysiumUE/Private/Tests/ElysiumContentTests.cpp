@@ -1730,6 +1730,11 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 			if (TestNotNull(TEXT("the sword carries its scene clip"), Scene))
 			{
 				TestFalse(TEXT("the scene clip is a one shot"), Scene->IsLooping());
+				// The sword is a ghost rig: its component never moves, so the clip's reach is the
+				// only thing that can keep it on screen. Its mesh spans ~2 m and its scene clip
+				// draws it out past 20, which is the gap the bind-pose bounds cannot see.
+				TestTrue(TEXT("the scene clip declares the reach it needs"),
+					Scene->BoundsRadiusMeters > 20.f);
 			}
 		}
 		// `drknobantique` is the model whose declaration order and alphabetical order disagree.

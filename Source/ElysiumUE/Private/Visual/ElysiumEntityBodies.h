@@ -17,6 +17,20 @@ class UStaticMesh;
 class UStaticMeshComponent;
 class USceneComponent;
 
+// A skeletal prop is animated IN PLACE — nothing moves its component — so it draws where its bones
+// go while it is culled on where its component sits. With no physics asset,
+// `USkinnedMeshComponent::CalcMeshBound` falls through to the mesh's bind-pose bounds, and for a
+// cinematic rig those can be twenty metres from the geometry they are supposed to contain: the
+// courtroom sword's vertices span 2 m about its anchor while its scene clip draws it 9-22 m away.
+namespace ElysiumPropBounds
+{
+	// The bounds extension that widens `Bind` to reach `RadiusCm` about the MODEL origin — which is
+	// what a clip's reach is measured from, and is not the bind-pose centre. False when the bind
+	// bounds already cover it, so a caller can leave the mesh alone.
+	bool ExtensionFor(const FBoxSphereBounds& Bind, double RadiusCm,
+		FVector& OutPositive, FVector& OutNegative);
+}
+
 // The BODY FACTORY behind IElysiumEmbodiment's mesh half: every render component an entity stands
 // in the world, plus the per-map asset caches behind them. AElysiumMapActor stays the interface's
 // implementer — the substrate's engine side is the actor (`ElysiumWorldServices.h`) — and forwards

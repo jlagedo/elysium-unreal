@@ -55,6 +55,7 @@ bool FElysiumClothRig::Load(const FString& InStem, FString& OutError)
 bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 {
 	Chains.Reset();
+	AnchorRow.Reset();
 	Colliders.Reset();
 	Solver = FElysiumClothSolver();
 
@@ -155,6 +156,19 @@ bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 				return false;
 			}
 			Chains.Add(MoveTemp(Chain));
+		}
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* AnchorValues = nullptr;
+	if (Document->TryGetArrayField(TEXT("anchor_row"), AnchorValues) && AnchorValues != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *AnchorValues)
+		{
+			FString Name;
+			if (Value.IsValid() && Value->TryGetString(Name) && !Name.IsEmpty())
+			{
+				AnchorRow.Add(FName(*Name));
+			}
 		}
 	}
 

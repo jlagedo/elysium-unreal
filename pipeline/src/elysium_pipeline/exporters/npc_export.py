@@ -245,15 +245,40 @@ def _basename_stem(model_key):
                         else os.path.basename(model_key))
 
 
-def _clip_meta(c):
+def _clip_meta(c, bounds_radius_m=None):
     """One baked clip's engine-facing selection keys (`docs/vtmb/animation_and_movers.md` A.3).
 
     `activity` is the `ACT_*` literal the engine selects on (empty on a layer/plumbing
     sequence), `weight` its weighted-random share among the clips sharing that activity, and
     `flags` the studio sequence bits. Stored once per owning stem, not per NPC that resolves
-    it -- 157 characters x ~1,400 resolved clips would be two orders of magnitude more rows."""
-    return {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
+    it -- 157 characters x ~1,400 resolved clips would be two orders of magnitude more rows.
+
+    `bounds_radius_m` appears only where it has been reconciled against the baked glb
+    (`clip_bounds_radius_m`). Its presence is therefore a promise that the number covers the
+    geometry, which is the whole reason a consumer would trust it over the mesh's own bounds."""
+    meta = {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
             "frames": c.frames, "fps": round(c.fps, 4)}
+    if bounds_radius_m is not None:
+        meta["bounds_radius_m"] = round(bounds_radius_m, 4)
+    return meta
+
+
+def authored_radius_m(c):
+    """A sequence's own model-space bound as a radius about the model origin, in the metres
+    the glb is written in -- `mdl_skel.Seq.bbmin`/`bbmax` reduced to its largest coordinate.
+
+    A radius rather than the box: the box is in Source axes and the runtime holds the model in
+    glTFRuntime's, so a box would have to carry its basis across the seam while a magnitude
+    does not care which way the axes point."""
+    return max(max(abs(v) for v in c.bbmin), max(abs(v) for v in c.bbmax)) * mdl_gltf.SCALE
+
+
+def clip_bounds_radius_m(c, measured_m):
+    """The radius a clip's rendered geometry needs, reconciling what the file declares against
+    what actually baked. The larger wins: retail's own number is the faithful answer and is
+    what this normally emits, but it is zero on a descriptor that was never filled in, and a
+    bound that does not contain the pose culls the model out of its own cutscene."""
+    return max(authored_radius_m(c), measured_m)
 
 
 def write_facial(stem, model, rig):
@@ -385,6 +410,11 @@ def animated_prop_index_row(rec):
     **index 0**, so sorting the labels — as versions 4 and 5 did — picks the wrong rest pose for
     any model whose first declared sequence is not also its alphabetically first (`drknobantique`,
     `clamp`, `wolf_form`).
+
+    Each row also carries `bounds_radius_m`, the reach the clip needs about the model origin in
+    the glb's own metres (`clip_bounds_radius_m`). The runtime widens the mesh's bind-pose
+    bounds by it, because a prop animated in place draws where its bones go and is culled on
+    where its component sits.
     """
     return {
         "glb": rec["glb"],
@@ -680,7 +710,8 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         stem = (_basename_stem(model) if prop_counts[_basename_stem(model)] == 1
                 else bank_stem(model))
         try:
-            info = mdl_gltf.export_npc(idx, model, ANIMATED_PROP_DIR, stem, anorms=None)
+            info = mdl_gltf.export_npc(idx, model, ANIMATED_PROP_DIR, stem, anorms=None,
+                                       measure_extents=True)
         except (Exception, SystemExit) as e:
             warning = animated_prop_warning(
                 model,
@@ -697,12 +728,21 @@ def main(only=None, *, index=None, integrate=False, strict=False):
                 print(f"  !! animated prop {stem} FAILED: {e}")
                 failures.append(f"animated prop {stem}: {e}")
             continue
+        # A cinematic prop is animated in place: nothing moves its component, so its render
+        # bound has to come from the clip rather than from the reference pose the mesh carries.
+        prop_clips = {}
+        for c in info["clips"]:
+            measured = info["clip_extents"].get(c.label, 0.0)
+            if authored_radius_m(c) < measured - 1e-4:
+                print(f"  ! {stem}: clip '{c.label}' declares r={authored_radius_m(c):.3f} m "
+                      f"but bakes out to {measured:.3f} m - using the baked extent")
+            prop_clips[c.label] = _clip_meta(c, clip_bounds_radius_m(c, measured))
         animated_prop_index[stem] = {
             "glb": "animated_props/" + info["glb"],
             "model": info["model"],
             "bones": info["bones"],
             "split_bones": info["split_bones"],
-            "clips": {c.label: _clip_meta(c) for c in info["clips"]},
+            "clips": prop_clips,
             **write_procedural(stem, info["model"], info["procedural"], "animated_props"),
             **write_blends(stem, info["model"], info["blends"], "animated_props"),
         }

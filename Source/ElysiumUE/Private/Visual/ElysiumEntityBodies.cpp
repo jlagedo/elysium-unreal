@@ -20,6 +20,32 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBodies, Log, All);
 
+namespace ElysiumPropBounds
+{
+	bool ExtensionFor(const FBoxSphereBounds& Bind, double RadiusCm,
+		FVector& OutPositive, FVector& OutNegative)
+	{
+		OutPositive = FVector::ZeroVector;
+		OutNegative = FVector::ZeroVector;
+		if (!(RadiusCm > 0.0))
+		{
+			return false;
+		}
+		bool bWidened = false;
+		for (int32 Axis = 0; Axis < 3; ++Axis)
+		{
+			// The box has to contain [-R, +R] about the origin, and it is centred on `Bind.Origin`,
+			// so each side carries the centre offset with its own sign.
+			const double Positive = FMath::Max(0.0, RadiusCm - Bind.Origin[Axis] - Bind.BoxExtent[Axis]);
+			const double Negative = FMath::Max(0.0, RadiusCm + Bind.Origin[Axis] - Bind.BoxExtent[Axis]);
+			OutPositive[Axis] = Positive;
+			OutNegative[Axis] = Negative;
+			bWidened |= Positive > 0.0 || Negative > 0.0;
+		}
+		return bWidened;
+	}
+}
+
 // The NPC animation host. 1 = UElysiumNpcAnimInstance (two sequence players + a crossfade, and the
 // facial flex track over them), 0 = Unreal's single-node instance, which cannot blend, so every clip
 // change pops — and which has no facial track at all, so 0 also stands the cast with still faces.
@@ -827,6 +853,29 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 		}
 		AnimatedPropMeshCache.Add(Stem, Mesh);
 		AnimatedPropAssetCache.Add(Stem, Asset);
+
+		// Widen the bind-pose bounds to the furthest reach of any clip this model owns, once, here —
+		// see ElysiumPropBounds. The union rather than the playing clip's own radius: one mesh is
+		// cached per stem and serves every prop standing that model, and the haven stake's five
+		// entities play five different clips off this one asset. `GetImportedBounds` stays the true
+		// bind pose; only the extended bounds move.
+		double ReachCm = 0.0;
+		for (const FElysiumPropClip& Clip : Entry->Clips)
+		{
+			// glTFRuntime loads with SceneScale 100 (ElysiumNpcVisual's AssetConfig), so the mesh is
+			// in centimetres while the index states the reach in the glb's own metres.
+			ReachCm = FMath::Max(ReachCm, static_cast<double>(Clip.BoundsRadiusMeters) * 100.0);
+		}
+		FVector Positive, Negative;
+		if (ElysiumPropBounds::ExtensionFor(Mesh->GetImportedBounds(), ReachCm, Positive, Negative))
+		{
+			Mesh->SetPositiveBoundsExtension(Positive);
+			Mesh->SetNegativeBoundsExtension(Negative);
+			Mesh->CalculateExtendedBounds();
+			UE_LOG(LogElysiumBodies, Verbose,
+				TEXT("animated prop '%s': bounds %.0f -> %.0f cm for a %.0f cm clip reach"),
+				*Stem, Mesh->GetImportedBounds().SphereRadius, Mesh->GetBounds().SphereRadius, ReachCm);
+		}
 	}
 
 	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);

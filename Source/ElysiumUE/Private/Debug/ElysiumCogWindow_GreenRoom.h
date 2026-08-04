@@ -83,6 +83,9 @@ private:
 	// list would show `walk` and stand something whose name appears nowhere on screen. Built once per
 	// stem beside the vocabulary rather than per frame per row.
 	TArray<FString> ClipCells;
+	// Parallel to Clips — whether the label is an additive layer rather than a pose. Read off the
+	// vocabulary once per stem, because the answer changes what a broken-looking body means.
+	TArray<bool> ClipAdditive;
 
 	// The live edit and the file it came from. Both are held here rather than read back from the
 	// node every frame because ImGui's sliders need a stable address to write into, and because

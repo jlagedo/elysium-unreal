@@ -59,6 +59,47 @@ def load_anorms():
         return None
 
 
+def rot_matrices(q):
+    """`rot_matrix` over an (N,4) array of (x,y,z,w) quaternions -> (N,3,3)."""
+    x, y, z, w = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    return np.stack([
+        1-2*(y*y+z*z), 2*(x*y-z*w),   2*(x*z+y*w),
+        2*(x*y+z*w),   1-2*(x*x+z*z), 2*(y*z-x*w),
+        2*(x*z-y*w),   2*(y*z+x*w),   1-2*(x*x+y*y),
+    ], axis=-1).reshape(-1, 3, 3)
+
+
+def clip_extent(d, bones, animdesc_base, nframes):
+    """The furthest any bone reaches from the model origin over one clip, in this glb's
+    metres -- the radius a renderer needs to keep the posed model on screen.
+
+    This is the *measured* answer to the question `mdl_skel.Seq.bbmin`/`bbmax` already
+    answers from the file. Both exist because a descriptor carrying zeros would otherwise
+    hand the runtime a bound smaller than the geometry it has to cover, and this corpus does
+    ship zeroed bounds -- every model's header `ViewBBMin`/`ViewBBMax` is (0,0,0).
+
+    Composed in Source space and scaled once at the end: M is a rotation, so a magnitude
+    survives the basis change and the per-frame conversion is wasted work here."""
+    if not bones or nframes <= 0:
+        return 0.0
+    frames = S.read_anim(d, bones, animdesc_base, nframes)
+    n = len(bones)
+    lt = np.array([[frames[f][i][0] for i in range(n)] for f in range(nframes)], dtype=np.float64)
+    lq = np.array([[frames[f][i][1] for i in range(n)] for f in range(nframes)], dtype=np.float64)
+    lr = rot_matrices(lq.reshape(-1, 4)).reshape(nframes, n, 3, 3)
+    wt, wr = np.empty_like(lt), np.empty_like(lr)
+    for i, b in enumerate(bones):
+        p = b.parent
+        # A root, or a parent declared after its child -- which the composition cannot honour
+        # and no v2531 skeleton writes. Either way the bone stands on the model origin.
+        if not 0 <= p < i:
+            wt[:, i], wr[:, i] = lt[:, i], lr[:, i]
+            continue
+        wt[:, i] = wt[:, p] + np.einsum("fab,fb->fa", wr[:, p], lt[:, i])
+        wr[:, i] = np.einsum("fab,fbc->fac", wr[:, p], lr[:, i])
+    return float(np.abs(wt).max()) * SCALE
+
+
 def rot_matrix(q):
     """Source-space 3x3 rotation matrix of a quaternion (x,y,z,w)."""
     x, y, z, w = q
@@ -795,14 +836,19 @@ def blend_sidecar(d, blends):
     }
 
 
-def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=None):
+def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=None,
+               measure_extents=False):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
     dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
     from bank glbs applied by bone name at runtime. Returns
-    {stem, glb, model, bones, split_bones, clips:[mdl_skel.Seq,...], facial, procedural,
-    procedural_faults} — the clip list is what actually baked, so a sequence whose tracks came
-    out empty is absent, and `facial` is None for a model with no flex rig (or when the
-    `anorms` table could not be read).
+    {stem, glb, model, bones, split_bones, clips:[mdl_skel.Seq,...], clip_extents, facial,
+    procedural, procedural_faults} — the clip list is what actually baked, so a sequence whose
+    tracks came out empty is absent, and `facial` is None for a model with no flex rig (or when
+    the `anorms` table could not be read).
+
+    `measure_extents` fills `clip_extents` with `clip_extent` per baked label. It decodes every
+    clip a second time, which is worth it for the handful of animated props whose render bound
+    depends on it and is not worth it for the NPC corpus, so it is off by default.
     `split_bones` preserves the target model's StudioBone `Flags & 0x2` inventory for the
     runtime pose builder; it is application metadata, not an alternate channel decode.
     `procedural` is the model's `ProcType == 1` rule table in this glb's basis
@@ -821,12 +867,14 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=N
     built = _build_skinned(g, idx, d, v, model_path, out_dir, anorms, cloth_planner)
     own = S.local_sequences(d)
     extra, blends = blend_clip_plan(d, own)
-    animations, labels = [], []
+    animations, labels, extents = [], [], {}
     for c in own + extra:
         anim = _bake_animation(g, d, built["bones"], c.label, c.base, c.frames, c.fps)
         if anim:
             animations.append(anim)
             labels.append(c)
+            if measure_extents:
+                extents[c.label] = clip_extent(d, built["bones"], c.base, c.frames)
     blends = _reconcile_blends(blends, {c.label for c in labels})
     gltf, _root = _assemble_skinned(built, animations)
     gltf["accessors"] = g.accessors
@@ -855,7 +903,8 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=N
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
                 bones=len(built["bones"]),
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
-                clips=labels, facial=face, blends=blend_sidecar(d, blends),
+                clips=labels, clip_extents=extents,
+                facial=face, blends=blend_sidecar(d, blends),
                 procedural=rules, procedural_faults=rule_faults,
                 eyes=eyes, eye_faults=built["eye_faults"],
                 cloth=built.get("cloth"))

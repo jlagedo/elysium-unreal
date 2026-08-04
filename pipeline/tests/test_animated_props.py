@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 from elysium_pipeline.exporters import npc_export
-from elysium_pipeline.formats import mdl_skel
+from elysium_pipeline.formats import mdl_gltf, mdl_skel
 
 
 def _run(valid_keys, total, stored=None):
@@ -119,6 +119,79 @@ class AnimatedPropIndexRowTests(unittest.TestCase):
     def test_a_clipless_record_projects_an_empty_list(self) -> None:
         row = npc_export.animated_prop_index_row({"glb": "g", "model": "m"})
         self.assertEqual(row["clips"], [])
+
+    def test_a_bounds_radius_reaches_the_runtime_row(self) -> None:
+        record = dict(self.RECORD, clips={
+            "idle": dict(self.RECORD["clips"]["idle"], bounds_radius_m=22.388)})
+        row = npc_export.animated_prop_index_row(record)
+        self.assertEqual(row["clips"][0]["bounds_radius_m"], 22.388)
+
+
+def _seq(label, bbmin, bbmax):
+    return mdl_skel.Seq(label=label, base=0, frames=16, fps=30.0, activity="",
+                        actweight=0, flags=0, bbmin=bbmin, bbmax=bbmax)
+
+
+class ClipBoundsRadiusTests(unittest.TestCase):
+    """What a clip declares about its own reach, reconciled with what baked.
+
+    `cin_sheriff_sword`'s `scene` is the shape these guard: a 2 m mesh whose sequence bbox
+    spans 881 Source units because the rig carries the sword across the courtroom.
+    """
+
+    SWORD = _seq("scene", (-881.4, -162.6, -6.7), (0.0, 89.3, 166.2))
+
+    def test_the_authored_box_reduces_to_its_largest_coordinate(self) -> None:
+        self.assertAlmostEqual(npc_export.authored_radius_m(self.SWORD), 881.4 * 0.0254, places=6)
+
+    def test_the_authored_radius_wins_when_it_covers_the_bake(self) -> None:
+        # The real case: studiomdl's box sits a little outside the extent it was computed from.
+        self.assertAlmostEqual(npc_export.clip_bounds_radius_m(self.SWORD, 21.833),
+                               881.4 * 0.0254, places=6)
+
+    def test_a_zeroed_descriptor_falls_back_to_the_bake(self) -> None:
+        # Every model's header ViewBBMin/ViewBBMax is (0,0,0) in this corpus, so a sequence box
+        # that was never filled in is a shape the export has to survive rather than trust.
+        blank = _seq("scene", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+        self.assertEqual(npc_export.authored_radius_m(blank), 0.0)
+        self.assertAlmostEqual(npc_export.clip_bounds_radius_m(blank, 9.99), 9.99, places=6)
+
+    def test_an_authored_radius_short_of_the_bake_loses(self) -> None:
+        short = _seq("scene", (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0))
+        self.assertAlmostEqual(npc_export.clip_bounds_radius_m(short, 4.0), 4.0, places=6)
+
+    def test_the_key_is_absent_until_it_has_been_reconciled(self) -> None:
+        # Presence is the promise that the number covers the geometry; a bank or NPC clip, which
+        # nothing measures, must not look like it carries one.
+        self.assertNotIn("bounds_radius_m", npc_export._clip_meta(self.SWORD))
+        self.assertEqual(npc_export._clip_meta(self.SWORD, 22.38812)["bounds_radius_m"], 22.3881)
+
+
+class ClipExtentTests(unittest.TestCase):
+    """The measured half of the same question: how far a bone chain actually reaches."""
+
+    def test_a_rotated_parent_carries_its_child_out(self) -> None:
+        bones = [mdl_skel.Bone(index=0, parent=-1), mdl_skel.Bone(index=1, parent=0)]
+        # Frame 0 rests; frame 1 turns the root a quarter turn about Z, which swings the child's
+        # 100-unit local offset onto +Y. Either way the reach is 100 units = 2.54 m.
+        rest = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+        turn = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.7071067811865476, 0.7071067811865476)),
+                ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+        with mock.patch.object(mdl_gltf.S, "read_anim", return_value=[rest, turn]):
+            self.assertAlmostEqual(mdl_gltf.clip_extent(b"", bones, 0, 2), 100.0 * 0.0254, places=6)
+
+    def test_a_clip_with_no_bones_or_no_frames_claims_nothing(self) -> None:
+        self.assertEqual(mdl_gltf.clip_extent(b"", [], 0, 16), 0.0)
+        self.assertEqual(mdl_gltf.clip_extent(b"", [mdl_skel.Bone(index=0, parent=-1)], 0, 0), 0.0)
+
+    def test_the_vectorised_rotation_matches_the_scalar_one(self) -> None:
+        import numpy as np
+        quats = np.array([[0.0, 0.0, 0.0, 1.0],
+                          [0.5, -0.5, 0.5, 0.5],
+                          [0.0, 0.0, 0.7071067811865476, 0.7071067811865476]])
+        stacked = mdl_gltf.rot_matrices(quats)
+        for i, q in enumerate(quats):
+            np.testing.assert_allclose(stacked[i], mdl_gltf.rot_matrix(q), atol=1e-12)
 
 
 if __name__ == "__main__":

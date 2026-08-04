@@ -319,6 +319,10 @@ void FAnimNode_ElysiumCloth::ApplyTuning()
 				continue;
 			}
 			Body.BoxExtents = FVector(FMath::Max(Authored->BoxExtent * Tuning.BoxExtentScale, 1.0f));
+			// The footprint the body collides with, not just its inertia: half a lattice cell, which
+			// is what makes ten columns of samples tile a panel instead of sampling it. Baked at
+			// `InitPhysics` exactly like the extents it follows, so it re-seats on the same edit.
+			Body.SphereCollisionRadius = Body.BoxExtents.X;
 			Body.ConstraintSetup.ConeAngle =
 				FMath::Clamp(Authored->ConeAngleDeg * Tuning.ConeScale, 0.f, 90.f);
 		}
@@ -384,6 +388,15 @@ void FAnimNode_ElysiumCloth::Build(const FBoneContainer& RequiredBones)
 
 		for (FAnimPhysBodyDefinition& Body : Node.PhysicsBodyDefinitions)
 		{
+			// AnimDynamics collides a body as a dimensionless *point* by default — `CoM` is
+			// documented as "only limit the center of mass from crossing planes", and
+			// `FAnimPhys::ConstrainSphericalOuter` subtracts a body's own footprint only when the
+			// type is something else. Left at the default a garment is forty zero-size samples on a
+			// ten-column grid and a leg passes cleanly between them: the sim runs, the limits
+			// install, the bodies move, nothing reports an error, and the mesh visibly intersects.
+			// The radius each body gets is the half-cell `ApplyTuning` already hands it.
+			Body.CollisionType = AnimPhysCollisionType::CustomSphere;
+
 			FAnimPhysConstraintSetup& Constraint = Body.ConstraintSetup;
 			// A hanging panel should swing the same amount in every direction, which is a cone
 			// rather than three independent angular limits.

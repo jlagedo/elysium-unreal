@@ -327,6 +327,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 							(*ClipObj)->TryGetNumberField(TEXT("index"), Row.Index);
 							(*ClipObj)->TryGetNumberField(TEXT("frames"), Row.Frames);
 							(*ClipObj)->TryGetNumberField(TEXT("fps"), Row.Fps);
+							(*ClipObj)->TryGetNumberField(TEXT("bounds_radius_m"), Row.BoundsRadiusMeters);
 						}
 						else
 						{

@@ -210,6 +210,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	{
 		Clips.Reset();
 		ClipCells.Reset();
+		ClipAdditive.Reset();
 		ClipsStem = PendingStem;
 		const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
 		UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
@@ -221,10 +222,13 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			// one thing in this window that changes what plays without changing what was asked for,
 			// so it is named on screen rather than left to the log.
 			ClipCells.Reserve(Clips.Num());
+			ClipAdditive.Reserve(Clips.Num());
 			for (const FString& Label : Clips)
 			{
 				const FString Cell = Anims->ResolveClipAnimName(PendingStem, Label);
 				ClipCells.Add(Cell.Equals(Label, ESearchCase::IgnoreCase) ? FString() : Cell);
+				const FElysiumNpcClip* Clip = Set->Find(Label);
+				ClipAdditive.Add(Clip != nullptr && Clip->IsAdditive());
 			}
 		}
 	}
@@ -247,20 +251,35 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			continue;
 		}
 		const bool bGrid = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
+		const bool bAdditive = ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index];
 		ImGui::PushID(Index);
-		const FString Row = bGrid
+		FString Row = bGrid
 			? FString::Printf(TEXT("%s  -> %s"), *Clips[Index], *ClipCells[Index])
 			: Clips[Index];
+		if (bAdditive)
+		{
+			// Named on the row, not hidden from the list: standing one of these is the fastest way
+			// to see what an additive layer actually contains, and the only thing worth preventing
+			// is mistaking the result for a broken model.
+			Row += TEXT("   [additive layer]");
+			ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColError);
+		}
 		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Row), PendingClip == Clips[Index]))
 		{
 			bUserPicked = true;
 			PendingClip = Clips[Index];
 			Stand(Lab, PendingStem, Clips[Index]);
 		}
+		if (bAdditive)
+		{
+			ImGui::PopStyleColor();
+		}
 		ImGui::PopID();
 	}
 	ImGui::EndChild();
 	ImGui::TextDisabled("-> = a blend grid, showing the cell the pose parameters select.");
+	ImGui::TextDisabled("[additive layer] = a delta on top of a base pose, not a pose. Standing one");
+	ImGui::TextDisabled("alone shows the difference itself, which folds the skeleton up.");
 }
 
 void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
@@ -504,7 +523,11 @@ void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 	ImGui::Checkbox("Lattice", &View.bDrawLattice);
 	ImGui::SameLine();
 	ImGui::Checkbox("Colliders", &View.bDrawColliders);
+	ImGui::SameLine();
+	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
 	ImGui::TextDisabled("Anchor row in blue, simulated rows in amber, leg spheres in red.");
+	ImGui::TextDisabled("Skeleton is the model's own bones, lattice excluded; the bones a collider");
+	ImGui::TextDisabled("hangs off are named, so a sphere sitting off its limb reads at a glance.");
 }
 
 void FElysiumCogWindow_GreenRoom::RenderContent()

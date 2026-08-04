@@ -23,6 +23,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Actor.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
@@ -433,6 +434,14 @@ public:
 		{
 			Out.Emplace(TEXT("Clip phase"), FString::Printf(TEXT("%.3fs, %d resync(s), last drift %.3fs"),
 				World ? World->NowSeconds() - AnimStartTime : 0.0, ResyncCount, LastResyncDrift));
+		}
+		// A prop animated in place is culled on its bounds, not on where its bones drew it, so a
+		// prop that vanishes mid-scene is asking whether the bind pose was widened to the clip's
+		// reach. Equal numbers mean it was not — the index carried no radius for this model.
+		if (const USkeletalMesh* PropMesh = AnimatedVisual ? AnimatedVisual->GetSkeletalMeshAsset() : nullptr)
+		{
+			Out.Emplace(TEXT("Bounds radius"), FString::Printf(TEXT("%.0f cm bind -> %.0f cm drawn"),
+				PropMesh->GetImportedBounds().SphereRadius, PropMesh->GetBounds().SphereRadius));
 		}
 		Out.Emplace(TEXT("Loop sequence"), LoopSequence.IsEmpty() ? TEXT("(none)")
 			: (bLoopSequenceResolved ? LoopSequence : LoopSequence + TEXT(" (unresolved)")));
