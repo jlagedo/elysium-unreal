@@ -1,9 +1,10 @@
-#include "ElysiumHUDSubsystem.h"
+#include "ElysiumPlayerUISubsystem.h"
 
 #include "ElysiumHUDModel.h"
 #include "ElysiumPresentationSubsystem.h"
-#include "UI/ElysiumHUDRoot.h"
+#include "UI/ElysiumUIRoot.h"
 
+#include "CommonActivatableWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
@@ -11,7 +12,7 @@
 #include "HAL/IConsoleManager.h"
 #include "UObject/UObjectGlobals.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumHUDSubsystem, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumPlayerUI, Log, All);
 
 namespace
 {
@@ -27,7 +28,7 @@ namespace
 	}
 }
 
-UElysiumHUDSubsystem* UElysiumHUDSubsystem::Get(const UObject* WorldContextObject)
+UElysiumPlayerUISubsystem* UElysiumPlayerUISubsystem::Get(const UObject* WorldContextObject)
 {
 	if (!GEngine || !WorldContextObject)
 	{
@@ -36,15 +37,15 @@ UElysiumHUDSubsystem* UElysiumHUDSubsystem::Get(const UObject* WorldContextObjec
 	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
 	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
 	ULocalPlayer* LP = GI ? GI->GetFirstGamePlayer() : nullptr;
-	return LP ? LP->GetSubsystem<UElysiumHUDSubsystem>() : nullptr;
+	return LP ? LP->GetSubsystem<UElysiumPlayerUISubsystem>() : nullptr;
 }
 
-void UElysiumHUDSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+void UElysiumPlayerUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	Model = NewObject<UElysiumHUDModel>(this);
 	PostLoadMapHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(
-		this, &UElysiumHUDSubsystem::OnPostLoadMap);
+		this, &UElysiumPlayerUISubsystem::OnPostLoadMap);
 
 #if !UE_BUILD_SHIPPING
 	IConsoleObject* PreviewCommand = IConsoleManager::Get().RegisterConsoleCommand(
@@ -63,7 +64,7 @@ void UElysiumHUDSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 }
 
-void UElysiumHUDSubsystem::Deinitialize()
+void UElysiumPlayerUISubsystem::Deinitialize()
 {
 	RemoveRoot();
 	UnbindPresentation();
@@ -84,22 +85,29 @@ void UElysiumHUDSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UElysiumHUDSubsystem::PlayerControllerChanged(APlayerController* NewPlayerController)
+void UElysiumPlayerUISubsystem::PlayerControllerChanged(APlayerController* NewPlayerController)
 {
 	Super::PlayerControllerChanged(NewPlayerController);
 	RemoveRoot();
 	RebindToWorld(NewPlayerController ? NewPlayerController->GetWorld() : nullptr);
 }
 
-void UElysiumHUDSubsystem::RebindToWorld(UWorld* World)
+void UElysiumPlayerUISubsystem::RebindToWorld(UWorld* World)
 {
+	// PostLoadMap listeners have no ordering contract. Game flow may request the runtime-loading
+	// layer before our own listener runs, so make rebinding idempotent and replace only a root that
+	// still belongs to the previous world.
+	if (Root && Root->GetWorld() != World)
+	{
+		RemoveRoot();
+	}
 	UnbindPresentation();
 	UElysiumPresentationSubsystem* Presentation = UElysiumPresentationSubsystem::Get(World);
 	if (Presentation)
 	{
 		BoundPresentation = Presentation;
 		ViewPublishedHandle = Presentation->OnViewPublished().AddUObject(
-			this, &UElysiumHUDSubsystem::OnViewPublished);
+			this, &UElysiumPlayerUISubsystem::OnViewPublished);
 		if (Model)
 		{
 			Model->Apply(Presentation->View(), PreviewMode);
@@ -108,7 +116,7 @@ void UElysiumHUDSubsystem::RebindToWorld(UWorld* World)
 	EnsureRoot();
 }
 
-void UElysiumHUDSubsystem::SetPreviewMode(EElysiumHUDPreview Mode)
+void UElysiumPlayerUISubsystem::SetPreviewMode(EElysiumHUDPreview Mode)
 {
 	PreviewMode = Mode;
 	static const FElysiumViewState Empty;
@@ -119,28 +127,52 @@ void UElysiumHUDSubsystem::SetPreviewMode(EElysiumHUDPreview Mode)
 	}
 }
 
-void UElysiumHUDSubsystem::SetHidden(bool bInHidden)
+void UElysiumPlayerUISubsystem::SetHUDSurfaceVisible(bool bVisible)
 {
-	if (bHidden == bInHidden)
+	if (bHUDSurfaceVisible == bVisible)
 	{
 		return;
 	}
-	bHidden = bInHidden;
-	if (bHidden)
+	bHUDSurfaceVisible = bVisible;
+	if (Root)
 	{
-		RemoveRoot();
-	}
-	else
-	{
-		EnsureRoot();
+		Root->SetHUDSurfaceVisible(bVisible);
 	}
 }
 
-void UElysiumHUDSubsystem::EnsureRoot()
+UCommonActivatableWidget* UElysiumPlayerUISubsystem::PushWidget(
+	EElysiumUILayer Layer,
+	TSubclassOf<UCommonActivatableWidget> WidgetClass,
+	TFunction<void(UCommonActivatableWidget&)> Init)
 {
-	// Every publish calls through here, so this is also what keeps the root off screen for as long
-	// as something is holding it hidden rather than only until the next frame.
-	if (Root || !Model || bHidden)
+	EnsureRoot();
+	if (!Root || !WidgetClass)
+	{
+		return nullptr;
+	}
+	if (!Init)
+	{
+		Init = [](UCommonActivatableWidget&) {};
+	}
+	return Root->PushWidget(Layer, WidgetClass, Init);
+}
+
+void UElysiumPlayerUISubsystem::RemoveWidget(EElysiumUILayer Layer, UCommonActivatableWidget* Widget)
+{
+	if (Root)
+	{
+		Root->RemoveWidget(Layer, Widget);
+	}
+}
+
+UCommonActivatableWidget* UElysiumPlayerUISubsystem::GetActiveWidget(EElysiumUILayer Layer) const
+{
+	return Root ? Root->GetActiveWidget(Layer) : nullptr;
+}
+
+void UElysiumPlayerUISubsystem::EnsureRoot()
+{
+	if (Root || !Model)
 	{
 		return;
 	}
@@ -150,26 +182,31 @@ void UElysiumHUDSubsystem::EnsureRoot()
 	{
 		return;
 	}
-	Root = CreateWidget<UElysiumHUDRoot>(PC, UElysiumHUDRoot::StaticClass());
+	Root = CreateWidget<UElysiumUIRoot>(PC, UElysiumUIRoot::StaticClass());
 	if (Root)
 	{
 		Root->SetModel(Model);
+		Root->SetHUDSurfaceVisible(bHUDSurfaceVisible);
 		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		Root->AddToPlayerScreen(10);
-		UE_LOG(LogElysiumHUDSubsystem, Log, TEXT("Created local-player HUD root"));
+		UE_LOG(LogElysiumPlayerUI, Log, TEXT("Created local-player UI root"));
 	}
 }
 
-void UElysiumHUDSubsystem::RemoveRoot()
+void UElysiumPlayerUISubsystem::RemoveRoot()
 {
 	if (Root)
 	{
+		// CommonUI deactivation is what releases each screen's Elysium input scope. Do it before
+		// detaching a root during travel/controller replacement so an old world's UI cannot leave
+		// UI-only input latched into the next one.
+		Root->DeactivateAllScreens();
 		Root->RemoveFromParent();
 		Root = nullptr;
 	}
 }
 
-void UElysiumHUDSubsystem::UnbindPresentation()
+void UElysiumPlayerUISubsystem::UnbindPresentation()
 {
 	if (ViewPublishedHandle.IsValid())
 	{
@@ -182,7 +219,7 @@ void UElysiumHUDSubsystem::UnbindPresentation()
 	BoundPresentation.Reset();
 }
 
-void UElysiumHUDSubsystem::OnViewPublished(const FElysiumViewState& View)
+void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 {
 	if (Model)
 	{
@@ -191,12 +228,11 @@ void UElysiumHUDSubsystem::OnViewPublished(const FElysiumViewState& View)
 	EnsureRoot();
 }
 
-void UElysiumHUDSubsystem::OnPostLoadMap(UWorld* LoadedWorld)
+void UElysiumPlayerUISubsystem::OnPostLoadMap(UWorld* LoadedWorld)
 {
 	ULocalPlayer* LP = GetLocalPlayer();
 	if (LP && LP->GetWorld() == LoadedWorld)
 	{
-		RemoveRoot();
 		RebindToWorld(LoadedWorld);
 	}
 }

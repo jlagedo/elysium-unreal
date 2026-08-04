@@ -131,13 +131,9 @@ namespace
 
 UElysiumMainMenu::UElysiumMainMenu()
 {
-	// CommonUI: this screen owns the input while it is up, and takes focus so keyboard/gamepad
-	// navigation works with no extra wiring.
-	bIsBackHandler = false;
-	bAutoActivate = true;
-	// Required for NativeOnKeyDown to ever run: SObjectWidget::SupportsKeyboardFocus() reports this
-	// flag, and the menu's input scope names this widget as its focus target (11.5).
-	SetIsFocusable(true);
+	// Policy-owned: Escape is routed through the app-state command rather than deactivating this
+	// screen independently and leaving a paused run with no menu.
+	bIsBackHandler = true;
 }
 
 float UElysiumMainMenu::VirtualScale() const
@@ -858,6 +854,14 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 		[
 			MenuLayout
 		];
+}
+
+bool UElysiumMainMenu::NativeOnHandleBackAction()
+{
+	// The menu follows app state. In Pause this releases the hold; in FrontEnd/GameOver the command
+	// is deliberately swallowed, so CommonUI can never pop a policy-owned menu behind GameFlow.
+	ElysiumCommandBus::Exec(TEXT("cancelselect"));
+	return true;
 }
 
 void UElysiumMainMenu::NativeTick(const FGeometry& Geometry, float DeltaSeconds)

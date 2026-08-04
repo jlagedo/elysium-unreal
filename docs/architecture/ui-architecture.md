@@ -21,24 +21,30 @@ per screen and an editor content loop; that cost is avoided by overriding `Rebui
 `UCommonActivatableWidget` subclass and returning a Slate tree. So the screens are code, diffable
 and reviewable, while the plumbing is the engine's.
 
-The only asset CommonInput requires is a `CommonUIInputData` (the Back/Click actions). Nothing else
-in the UI is a `.uasset` except the typefaces.
+CommonInput's Accept and Back rows are supplied by the native `UElysiumCommonUIInputData` class
+(keyboard and controller defaults), selected in `DefaultGame.ini`. Nothing in the source-authored
+UI requires a Widget Blueprint or data-table asset; the generated typefaces remain the only UI
+`.uasset` inputs.
 
 | Type | Role |
 |---|---|
-| `UElysiumUISubsystem` | GI-scoped owner of the screens. Creates/shows/tears down, owns the input-mode switch. GI-scoped because the menu outlives any one world — it is up before the first map and survives the travel New Game triggers. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
-| `UElysiumHUDSubsystem` | Local-player-scoped owner of the in-game HUD root and its stable `UElysiumHUDModel`. It binds the current world's presentation publisher, rebinds across travel, and owns no gameplay state. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
-| `UElysiumHUDRoot` | The one passive viewport root for the HUD plus reserved transient, game-modal and system-modal hosts. It is `SelfHitTestInvisible`; interactive selectors become activatable children rather than teaching the always-on HUD to capture input. |
+| `UElysiumUISubsystem` | GI-scoped flow facade. It owns menu/character/chargen policy and scratch state, but delegates screen lifetime and composition to the local-player owner. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
+| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
+| `UElysiumUIRoot` | The single local-player root. Paint order is structural rather than numeric: passive HUD, transient stack, notification queue, game-modal stack, system-modal stack, runtime-loading stack. Hiding the HUD collapses only its passive surface, never the root or a menu/loading screen above it. |
+| `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one Elysium input scope on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. |
 | `UElysiumHUDWidget` | The resolution-independent in-world surface: life, discrete vitae droplets, Masquerade readout, equipment/discipline regions, selector preview, reticle and full-viewport fade. Unowned regions collapse instead of displaying fabricated runtime data. |
-| `UElysiumMainMenu` | the main / pause menu (`UCommonActivatableWidget`) |
+| `UElysiumMainMenu` | the main / pause menu (`UElysiumActivatableScreen`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
 | `ElysiumUIStyle.{h,cpp}` | the design tokens — palette, type ramp, spacing, the virtual canvas — plus `FElysiumUIFontLibrary` |
 | `ElysiumUIStrings.{h,cpp}` | the authored string table read from `$ELYSIUM_EXPORT_ROOT/ui/strings.json` |
 | `ElysiumUITexture.{h,cpp}` | PNG → transient texture, shared by the use-icon atlas, sign backgrounds and the title lockup |
 
-**A `UCommonActivatableWidget` added straight to the viewport is collapsed until activated.**
-`bAutoActivate` only fires for widgets pushed onto a `UCommonActivatableWidgetContainer`, so
-`ShowMenu` calls `ActivateWidget()` by hand. Without it the tree builds correctly and draws nothing.
+Every activatable screen enters through `UElysiumPlayerUISubsystem`; callers select a semantic
+layer rather than a viewport Z-order. The root initializes a fresh or pooled instance before its
+container activates it, which is when the caller supplies all per-open state and the input-scope
+policy. Direct `AddToViewport`, `AddViewportWidgetContent`, manual `ActivateWidget`, and additional
+`SetInputMode` writers are architectural violations. `Elysium.Substrate.UI.CompositionPolicy`
+guards the viewport and input-mode boundaries in editor automation.
 
 **A screen takes the mouse back from the debug UI.** While Cog holds ImGui input capture it consumes
 the click before Slate sees it, so every menu item is dead — a restored Cog layout is not cosmetic,
@@ -50,11 +56,13 @@ input scope stack revokes any capture the moment a UI-only scope is pushed
 push time, not continuously, because the front end has a menu up permanently.
 
 The runtime boundary is one-way: `UElysiumPresentationSubsystem` publishes an
-`FElysiumViewState`; the HUD subsystem projects it into the Blueprint-readable model; widgets
-render that model. A future selector sends commands through the input/command layer and never
-mutates the model or entity world. The first HUD slice leaves the faithful `game_sign` Canvas panel
-and retained dialogue box in `AElysiumHUD`, while moving the duplicated reticle and `env_fade`
-rendering into the unified local-player root. This is a migration boundary, not two HUD owners.
+`FElysiumViewState`; the player UI subsystem projects it into the Blueprint-readable model; widgets
+render that model. A selector sends commands through the input/command layer and never mutates the
+model or entity world. The faithful `game_sign` panel is the remaining Canvas surface because its
+world-click dismissal is gameplay input; dialogue is an activatable game-modal screen wrapping its
+retained Slate body. The blocking MoviePlayer loading screen is the other deliberate exception: it
+must render with no UObjects while the game thread is inside `LoadMap`. Its post-load continuation
+uses the root's runtime-loading layer like every ordinary player surface.
 The heads-up layer is also withheld while the entity world has a `camera_track` or named scripted
 camera shot. Those owners already span the authored `PlayAsCamera*`/`SetCamera` through
 `RestoreCameraToPlayerControl`/`RemoveCamera` lifetime, so ambient choreography without a camera

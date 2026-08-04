@@ -53,8 +53,8 @@ public class ElysiumUE : ModuleRules
 			// activatable-widget stack, input routing, focus and gamepad navigation that
 			// roadmap 8.10 would otherwise hand-roll. The widget
 			// *visual trees* are still built in C++ Slate inside UCommonActivatableWidget
-			// subclasses, so adopting it costs no Widget Blueprint assets -- only the one
-			// CommonUIInputData asset CommonInput requires as config.
+			// subclasses. Back/Accept defaults come from the native CommonUIInputData class,
+			// so the source-authored foundation requires no Widget Blueprint or data assets.
 			"UMG", "CommonUI", "CommonInput",
 			// 11.3 the loading screen. The engine's own movie player is the only thing that can
 			// draw while the game thread is blocked inside LoadMap. It resolves to
@@ -95,7 +95,11 @@ public class ElysiumUE : ModuleRules
 				"ModelContextProtocol", "ModelContextProtocolEngine", "JsonUtilities",
 				// Offline weather-content generation authors the one native Niagara system
 				// through UE's editor stack API. No NiagaraEditor code reaches Game/Shipping.
-				"NiagaraEditor"
+				"NiagaraEditor",
+				// The character bake (UElysiumCharacterBakeLibrary) registers each asset it writes
+				// so the commandlet's own does-asset-exist checks and the verifier see it without a
+				// rescan.
+				"AssetRegistry"
 			});
 			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only

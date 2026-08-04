@@ -2,7 +2,6 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumCommands.h"
-#include "ElysiumInputScope.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "ElysiumUISubsystem.generated.h"
@@ -32,12 +31,12 @@ enum class EElysiumMenuMode : uint8
 	GameOver,
 };
 
-// Owns the player-facing UI screens (roadmap 8.6). GI-scoped because the menu outlives any one
-// world — it is up before the first map and survives the travel New Game triggers.
+// GameInstance-scoped UI facade. Game flow decides when policy-owned screens exist; this object
+// prepares per-open screen state and forwards presentation to the local player's one UI root.
 //
-// The screens are `UCommonActivatableWidget`s built in C++ Slate; this subsystem is what creates,
-// shows and tears them down, and what owns the input-mode switch while one is up. *When* a screen
-// is up is not its call: `UElysiumGameFlowSubsystem` drives it from the app state (11.3). Verbs:
+	// The screens are `UCommonActivatableWidget`s built in C++ Slate. The local-player subsystem owns
+	// their CommonUI containers and the screen base owns its Elysium input scope. *When* a menu is up
+	// is not this facade's call: `UElysiumGameFlowSubsystem` drives it from app state (11.3). Verbs:
 // `elysium.menu` / `elysium.menu.close`.
 UCLASS()
 class UElysiumUISubsystem : public UGameInstanceSubsystem
@@ -93,23 +92,6 @@ public:
 	bool CloseTopScreen();
 
 private:
-	// Claim input for the screen while it is up, and release it when it goes away (11.5). The menu
-	// is modal by construction — the world behind it is a backdrop, not something the player can
-	// reach past it — so the scope is UI-only with the cursor shown.
-	//
-	// Focus is handed to the menu widget itself, not left on the game viewport: that is what lets
-	// the screen see Escape (`UElysiumMainMenu::NativeOnKeyDown`) and close itself. The subsystem
-	// no longer calls SetInputMode, and a UI-only push is also what takes an inherited Cog capture
-	// back, so a menu can never open under a debug UI that eats its clicks.
-	void PushMenuScope();
-	void PopMenuScope();
-
-	// The screen's input scope. Chargen pushes the same scope at `Priority::Chargen` instead of
-	// `Priority::Character` — it sits above the game rather than beside it, because there is no run
-	// to fall back into while it is up.
-	void PushCharacterScope(int32 Priority, const TCHAR* Name);
-	void PopCharacterScope();
-
 	// `questlog` / `chareditor` — declared and key-bound already (`ElysiumCommands.cpp`,
 	// `ElysiumBinds.cpp`); this subsystem supplies what they do, because it owns the screen.
 	void RegisterCommands();
@@ -136,8 +118,6 @@ private:
 	bool bChargenHold = false;
 
 	EElysiumMenuMode CurrentMode = EElysiumMenuMode::Main;
-	FElysiumInputScopeHandle MenuScope;
-	FElysiumInputScopeHandle CharacterScope;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 	TArray<FElysiumCommandBinding> Bindings;

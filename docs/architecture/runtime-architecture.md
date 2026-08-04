@@ -606,12 +606,13 @@ the HUD later.
 
 ### Loading
 
-`Loading` covers both halves of map admission. `FCoreUObjectDelegates::PreLoadMap` prepares a pure-
-Slate MoviePlayer screen for the blocking `OpenLevel`/`LoadMap` portion; it auto-completes normally.
-`PostLoadMapWithWorld` then installs the same visual as a game-viewport overlay while the map actor's
+`Loading` covers both halves of map admission. `IGameMoviePlayer::OnPrepareLoadingScreen` prepares a
+pure-Slate MoviePlayer screen for the blocking `OpenLevel`/`LoadMap` portion; it auto-completes
+normally. `PostLoadMapWithWorld` then installs the same visual in the unified player UI root's
+runtime-loading layer while the map actor's
 runtime activation barrier polls construction, final player placement/tick wiring, and required
 asynchronous collision cooks. `NotifyWorldReady` only spawns the runtime actor and leaves the app in
-`Loading`; the current actor's one-shot `MapReady` callback removes the overlay and transitions to
+`Loading`; the current actor's one-shot `MapReady` callback removes the screen and transitions to
 `Playing`/`FrontEnd`. `MapFailed` remains gated and replaces the spinner with the structured missing
 prerequisite. `docs/architecture/map-architecture.md` owns the full lifecycle; roadmap 10.4 remains the separate
 time-slicing optimisation inside this correctness boundary.

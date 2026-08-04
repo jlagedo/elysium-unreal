@@ -11,11 +11,11 @@
 class AElysiumMapActor;
 class FElysiumSignFontLibrary;
 class IConsoleObject;
-class SElysiumDialogueBox;
+class UElysiumDialogueScreen;
 class UElysiumPresentationSubsystem;
 class UTexture2D;
 
-// The legacy world-HUD bridge. The local-player UElysiumHUDSubsystem owns the always-on reticle,
+// The legacy world-HUD bridge. The local-player UElysiumPlayerUISubsystem owns the always-on reticle,
 // vitals and fade; this actor keeps the faithful Canvas sign panel, the retained dialogue bridge,
 // and map-scoped developer commands until those modal surfaces move into the unified root.
 //
@@ -58,7 +58,7 @@ private:
 	FDelegateHandle ViewPublishedHandle;
 
 	// --- Dialogue box (P9 9.1 / B4) ----------------------------------------------------------
-	// The visual-novel `.dlg` panel, a native Slate widget added to the viewport while the published
+	// The visual-novel `.dlg` panel, a CommonUI screen wrapping the native Slate body while published
 	// state carries an open conversation. `ElysiumView::ReconcileDialogue` decides build / rebuild /
 	// teardown against what is already up; while the box is up it holds a UI-only input scope (the
 	// VN freezes the world), and a pick routes back through the presenter's DialogueChoose.
@@ -66,13 +66,12 @@ private:
 	void TeardownDialogue();
 	void OnDialogueChoice(int32 VisibleIndex);   // -1 = advance a terminal line
 
-	TSharedPtr<SElysiumDialogueBox> DialogueWidget;
+	UPROPERTY(Transient)
+	TObjectPtr<UElysiumDialogueScreen> DialogueScreen;
 	// Identity + turn of the conversation the box currently shows. The pointer is compared and never
 	// dereferenced — the conversation is the world's, and the map epoch it lives in can end.
 	const FElysiumDlgConversation* ShownConv = nullptr;
 	uint32 ShownRev = 0;
-	FElysiumInputScopeHandle DialogueScope;            // the box's claim on input while it is open
-
 	// --- Sign / popup window (P4.10) ---------------------------------------------------------
 	// The one open game_sign panel, taken off the published state each frame with its fade-in ramp
 	// already resolved. Layout is CSignUI's 1024x768 virtual canvas stretched to the viewport — see

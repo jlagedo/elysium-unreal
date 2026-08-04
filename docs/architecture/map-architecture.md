@@ -126,10 +126,10 @@ final containment query is the one authoritative initial state; active touch-pai
 collapses `UpdateOverlaps` and the manual containment scan into one edge.
 
 Loading presentation has two consecutive owners. MoviePlayer draws the pure-Slate loading tree for
-the blocking `OpenLevel` portion and auto-completes normally. `PostLoadMapWithWorld` installs the
-same tree as a game-viewport overlay for the tick-driven readiness phase. `MapReady` removes it only
-after the initial activation pass; `MapFailed` keeps it visible with the failed prerequisite. The
-game thread is never held in `WaitForMovieToFinish` while readiness ticks.
+the blocking `OpenLevel` portion and auto-completes normally. `PostLoadMapWithWorld` pushes the same
+visual into the unified player UI root's runtime-loading layer for the tick-driven readiness phase.
+`MapReady` removes it only after the initial activation pass; `MapFailed` keeps it visible with the
+failed prerequisite. The game thread is never held in `WaitForMovieToFinish` while readiness ticks.
 
 ## Native NPC navigation
 

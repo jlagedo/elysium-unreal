@@ -2,7 +2,11 @@
 
 #include "ElysiumHUDModel.h"
 
+#include "CommonInputSettings.h"
+#include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDModelProjectionTest,
 	"Elysium.Substrate.UI.HUDModelProjection",
@@ -65,6 +69,69 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 		Model->Selector.Entries.IsValidIndex(Model->Selector.SelectedIndex));
 
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUICompositionPolicyTest,
+	"Elysium.Substrate.UI.CompositionPolicy",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumUICompositionPolicyTest::RunTest(const FString& Parameters)
+{
+	UCommonInputSettings* CommonInput = GetMutableDefault<UCommonInputSettings>();
+	CommonInput->LoadData();
+	const FDataTableRowHandle Click = CommonInput->GetDefaultClickAction();
+	const FDataTableRowHandle Back = CommonInput->GetDefaultBackAction();
+	TestFalse(TEXT("CommonUI never installs a competing default input mode"),
+		CommonInput->GetEnableDefaultInputConfig());
+	TestNotNull(TEXT("native Accept action table resolves"), Click.DataTable.Get());
+	TestEqual(TEXT("native Accept action row resolves"), Click.RowName, FName(TEXT("Accept")));
+	TestNotNull(TEXT("native Back action table resolves"), Back.DataTable.Get());
+	TestEqual(TEXT("native Back action row resolves"), Back.RowName, FName(TEXT("Back")));
+
+	const FString SourceRoot = FPaths::ConvertRelativePathToFull(
+		FPaths::ProjectDir() / TEXT("Source/ElysiumUE"));
+	TArray<FString> Files;
+	IFileManager::Get().FindFilesRecursive(Files, *SourceRoot, TEXT("*.cpp"), true, false);
+
+	struct FRule
+	{
+		const TCHAR* Needle;
+		const TCHAR* AllowedFile;
+	};
+	const FRule Rules[] =
+	{
+		{ TEXT("AddToViewport("), nullptr },
+		{ TEXT("AddViewportWidgetContent("), nullptr },
+		{ TEXT("AddToPlayerScreen("), TEXT("ElysiumPlayerUISubsystem.cpp") },
+		{ TEXT("ActivateWidget("), nullptr },
+		{ TEXT("DeactivateWidget("), nullptr },
+		{ TEXT("SetInputMode("), TEXT("ElysiumInputSubsystem.cpp") },
+	};
+
+	for (const FString& File : Files)
+	{
+		if (File.EndsWith(TEXT("ElysiumHUDTests.cpp")))
+		{
+			continue;
+		}
+		FString Contents;
+		if (!FFileHelper::LoadFileToString(Contents, *File))
+		{
+			AddError(FString::Printf(TEXT("Could not inspect UI composition policy in %s"), *File));
+			continue;
+		}
+		for (const FRule& Rule : Rules)
+		{
+			if (Contents.Contains(Rule.Needle) &&
+				(!Rule.AllowedFile || !File.EndsWith(Rule.AllowedFile)))
+			{
+				AddError(FString::Printf(TEXT("%s uses forbidden composition call %s"),
+					*File, Rule.Needle));
+			}
+		}
+	}
+
+	return !HasAnyErrors();
 }
 
 #endif

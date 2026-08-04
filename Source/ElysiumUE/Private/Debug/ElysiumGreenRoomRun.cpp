@@ -6,7 +6,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumHUDSubsystem.h"
+#include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
@@ -1515,9 +1515,9 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 
 void FElysiumGreenRoomRun::ApplyLabHud(bool bShow) const
 {
-	if (UElysiumHUDSubsystem* Hud = UElysiumHUDSubsystem::Get(GetWorld()))
+	if (UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(GetWorld()))
 	{
-		Hud->SetHidden(!bShow);
+		UI->SetHUDSurfaceVisible(bShow);
 	}
 }
 

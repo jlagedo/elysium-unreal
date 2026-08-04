@@ -9,9 +9,8 @@
 
 class AGameModeBase;
 class UWorld;
-class UGameViewportClient;
-class SWidget;
 class AElysiumMapActor;
+class UElysiumLoadingScreen;
 
 // Which slot ring a save belongs to. `trigger_autosave` fires Auto; the pause menu fires Manual;
 // the quicksave binding fires Quick. The slots themselves are 11.9's.
@@ -242,8 +241,8 @@ private:
 	FDelegateHandle PostLoadMapHandle;
 	FDelegateHandle MapReadyHandle;
 	FDelegateHandle MapFailedHandle;
-	TWeakObjectPtr<UGameViewportClient> RuntimeLoadingViewport;
-	TSharedPtr<SWidget> RuntimeLoadingWidget;
+	UPROPERTY(Transient)
+	TObjectPtr<UElysiumLoadingScreen> RuntimeLoadingScreen;
 	FString RuntimeLoadingFailure;
 
 	TArray<IConsoleObject*> ConsoleObjects;

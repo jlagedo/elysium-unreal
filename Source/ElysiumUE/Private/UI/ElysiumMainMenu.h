@@ -1,8 +1,8 @@
 #pragma once
 
-#include "CommonActivatableWidget.h"
 #include "CoreMinimal.h"
 
+#include "UI/ElysiumActivatableScreen.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumMainMenu.generated.h"
@@ -45,7 +45,7 @@ enum class EElysiumMenuCommand : uint8
 //
 // Neither reproduces the craft: vector small caps instead of a 640x480 bitmap atlas.
 UCLASS()
-class UElysiumMainMenu : public UCommonActivatableWidget
+class UElysiumMainMenu : public UElysiumActivatableScreen
 {
 	GENERATED_BODY()
 
@@ -73,13 +73,7 @@ protected:
 	// keyboard route exists because CommonUI's Back action needs the `CommonUIInputData` asset that
 	// 8.6 still owes; when that lands this becomes the back handler instead.
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
-
-	// S6 — the input scope stack is the sole authority over mode and cursor (11.5). CommonUI brings
-	// its own writer (`UCommonUIActionRouterBase` applies an FUIInputConfig per activated widget), so
-	// this screen declares no desired config and the action router never writes one; the UI subsystem
-	// pushes a scope instead. Stated rather than inherited: the engine's default happens to be unset,
-	// and a fourth mode owner appearing by default is exactly the failure this task removed.
-	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override { return TOptional<FUIInputConfig>(); }
+	virtual bool NativeOnHandleBackAction() override;
 
 private:
 	struct FMenuEntry

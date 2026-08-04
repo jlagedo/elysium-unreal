@@ -6,12 +6,12 @@
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumSaveSubsystem.h"
-#include "UI/ElysiumUIStyle.h"
+#include "UI/ElysiumLoadingScreen.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "Engine/GameInstance.h"
-#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerController.h"
@@ -19,13 +19,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #include "MoviePlayer.h"
-#include "Styling/CoreStyle.h"
 #include "UObject/UObjectGlobals.h"
-#include "Widgets/Images/SThrobber.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/SBoxPanel.h"
-#include "Widgets/SOverlay.h"
-#include "Widgets/Text/STextBlock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumFlow, Log, All);
 
@@ -63,64 +57,6 @@ static TAutoConsoleVariable<float> CVarLoadingScreenMinTime(
 	0.75f,
 	TEXT("Minimum seconds the loading screen stays up."),
 	ECVF_Default);
-
-namespace
-{
-	// The loading screen's visual tree.
-	//
-	// **Pure Slate, no UObjects.** It is rendered by FSlateLoadingSynchronizationMechanism on a
-	// separate thread while the game thread is blocked inside LoadMap — which is also where the
-	// engine runs garbage collection. So it takes its type from FCoreStyle (Slate's own composite
-	// font, not a UFont asset) and its ground from a core brush, rather than from the
-	// FElysiumUIFontLibrary / decoded-texture path every other screen uses. The palette is still
-	// ours: ElysiumUI::Palette is plain FLinearColor constants with nothing to collect.
-	TSharedRef<SWidget> BuildLoadingScreen(const FText& Message, bool bShowThrobber)
-	{
-		const FSlateBrush* Solid = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
-
-		FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Regular", 22);
-
-		return SNew(SBorder)
-			.BorderImage(Solid)
-			.BorderBackgroundColor(FSlateColor(ElysiumUI::Palette::Ink))
-			.HAlign(HAlign_Fill)
-			.VAlign(VAlign_Fill)
-			.Padding(0.0f)
-			[
-				SNew(SOverlay)
-				+ SOverlay::Slot()
-				.HAlign(HAlign_Right)
-				.VAlign(VAlign_Bottom)
-				.Padding(FMargin(48.0f))
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					.Padding(FMargin(0.0f, 0.0f, 16.0f, 0.0f))
-					[
-						SNew(STextBlock)
-						.Text(Message)
-						.Font(Font)
-						.Justification(ETextJustify::Right)
-						.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::Gold))
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						// SCircularThrobber, not SThrobber: only the circular one takes a tint, and
-						// the loading screen's whole palette is the point of building it by hand.
-						SNew(SCircularThrobber)
-						.NumPieces(8)
-						.Radius(14.0f)
-						.Visibility(bShowThrobber ? EVisibility::Visible : EVisibility::Collapsed)
-						.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::Blood))
-					]
-				]
-			];
-	}
-}
 
 // ================================================================================================
 // Lifetime
@@ -953,7 +889,7 @@ void UElysiumGameFlowSubsystem::OnPrepareLoadingScreen()
 	}
 
 	FLoadingScreenAttributes Attributes;
-	Attributes.WidgetLoadingScreen = BuildLoadingScreen(
+	Attributes.WidgetLoadingScreen = ElysiumLoadingUI::Build(
 		NSLOCTEXT("Elysium", "Loading", "LOADING"), /*bShowThrobber*/ true);
 	Attributes.bAutoCompleteWhenLoadingCompletes = true;
 	Attributes.bMoviesAreSkippable = false;
@@ -1024,26 +960,32 @@ void UElysiumGameFlowSubsystem::ShowRuntimeLoadingOverlay(
 	{
 		return;
 	}
-	UGameViewportClient* Viewport = World->GetGameViewport();
-	if (!Viewport)
+	UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(World);
+	if (!UI)
 	{
 		return;
 	}
+	UI->RebindToWorld(World);
 
 	HideRuntimeLoadingOverlay();
 	const bool bFailed = Message.ToString().StartsWith(TEXT("MAP LOAD FAILED"));
-	RuntimeLoadingWidget = BuildLoadingScreen(Message, !bFailed);
-	RuntimeLoadingViewport = Viewport;
-	Viewport->AddViewportWidgetContent(RuntimeLoadingWidget.ToSharedRef(), 10000);
+	RuntimeLoadingScreen = Cast<UElysiumLoadingScreen>(UI->PushWidget(
+		EElysiumUILayer::RuntimeLoading,
+		UElysiumLoadingScreen::StaticClass(),
+		[Message, bFailed](UCommonActivatableWidget& Widget)
+	{
+		CastChecked<UElysiumLoadingScreen>(&Widget)->SetLoadingState(Message, !bFailed);
+	}));
 }
 
 void UElysiumGameFlowSubsystem::HideRuntimeLoadingOverlay()
 {
-	if (UGameViewportClient* Viewport = RuntimeLoadingViewport.Get();
-		Viewport && RuntimeLoadingWidget.IsValid())
+	if (RuntimeLoadingScreen)
 	{
-		Viewport->RemoveViewportWidgetContent(RuntimeLoadingWidget.ToSharedRef());
+		if (UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(this))
+		{
+			UI->RemoveWidget(EElysiumUILayer::RuntimeLoading, RuntimeLoadingScreen);
+		}
+		RuntimeLoadingScreen = nullptr;
 	}
-	RuntimeLoadingWidget.Reset();
-	RuntimeLoadingViewport.Reset();
 }

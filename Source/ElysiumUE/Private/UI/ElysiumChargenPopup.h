@@ -1,9 +1,9 @@
 #pragma once
 
-#include "CommonActivatableWidget.h"
 #include "CoreMinimal.h"
 
 #include "Substrate/ElysiumChargen.h"
+#include "UI/ElysiumActivatableScreen.h"
 
 #include "ElysiumChargenPopup.generated.h"
 
@@ -21,7 +21,7 @@ struct FSlateBrush;
 // The run is the caller's — this widget draws `Run.Popup`, reports the index that was clicked and
 // asks to be redrawn. Everything that decides what happens next is `ElysiumChargen::WizChoose`.
 UCLASS()
-class UElysiumChargenPopup : public UCommonActivatableWidget
+class UElysiumChargenPopup : public UElysiumActivatableScreen
 {
 	GENERATED_BODY()
 
@@ -39,12 +39,7 @@ public:
 
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
-
-	// Same reason as the character screen's: the scope stack is the only owner of the input mode.
-	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override
-	{
-		return TOptional<FUIInputConfig>();
-	}
+	virtual bool NativeOnHandleBackAction() override;
 
 private:
 	float VirtualScale() const;

@@ -217,13 +217,15 @@ namespace
 
 UElysiumCharacterScreen::UElysiumCharacterScreen()
 {
-	bAutoActivate = true;
-	// Without this `SObjectWidget::SupportsKeyboardFocus()` reports false and the screen never sees
-	// Escape, even though the input scope names it as the focus target.
-	SetIsFocusable(true);
-
+	bIsBackHandler = true;
 	Mode.Tabs = { EElysiumCharacterTab::Sheet, EElysiumCharacterTab::Info,
 	              EElysiumCharacterTab::QuestLog };
+}
+
+bool UElysiumCharacterScreen::NativeOnHandleBackAction()
+{
+	OnCancel.ExecuteIfBound();
+	return true;
 }
 
 float UElysiumCharacterScreen::VirtualScale() const

@@ -53,8 +53,14 @@ namespace
 
 UElysiumChargenPopup::UElysiumChargenPopup()
 {
-	bAutoActivate = true;
-	SetIsFocusable(true);
+	bIsBackHandler = true;
+}
+
+bool UElysiumChargenPopup::NativeOnHandleBackAction()
+{
+	// The authored wizard has no backward edge. Consume Back so it cannot escape into gameplay or
+	// open the pause menu behind the modal.
+	return true;
 }
 
 float UElysiumChargenPopup::VirtualScale() const

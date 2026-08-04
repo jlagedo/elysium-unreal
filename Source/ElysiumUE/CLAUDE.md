@@ -175,10 +175,11 @@ Hard-won, non-obvious, and easy to undo:
   guards on `GetEnableInput()` first.
 - **The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not `PreLoadMap`** — the
   movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem. Its blocking
-  screen auto-completes; `PostLoadMapWithWorld` installs the same pure-Slate tree as a viewport
-  overlay until the map actor publishes ready.
-- **A `UCommonActivatableWidget` added straight to the viewport stays collapsed until
-  `ActivateWidget()`** (`bAutoActivate` fires only inside a container).
+  screen auto-completes; `PostLoadMapWithWorld` installs the same visual in the player UI root's
+  runtime-loading layer until the map actor publishes ready.
+- **Activatable screens enter through `UElysiumPlayerUISubsystem` containers.** Adding one straight
+  to a viewport bypasses CommonUI activation, Back routing and focus restoration; the composition
+  policy test rejects direct insertion outside the one root owner.
 - **`UElysiumCameraComponent::CalcCameraFor` must delegate to `UCameraComponent::GetCameraView`
   first** — overriding `CalcCamera` without it silently breaks first-person rendering.
 - **The player hull is a box, not a capsule** — `StepMove` depends on a flat bottom, and `ACharacter`

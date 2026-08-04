@@ -1,9 +1,9 @@
 #pragma once
 
-#include "CommonActivatableWidget.h"
 #include "CoreMinimal.h"
 
 #include "Substrate/ElysiumChargen.h"
+#include "UI/ElysiumActivatableScreen.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumCharacterScreen.generated.h"
@@ -47,7 +47,7 @@ struct FElysiumCharacterScreenMode
 // (`EElysiumChargenCurrency`). The spend state is a scratch — nothing reaches the character until
 // ACCEPT — so CANCEL is a discard rather than an undo log.
 UCLASS()
-class UElysiumCharacterScreen : public UCommonActivatableWidget
+class UElysiumCharacterScreen : public UElysiumActivatableScreen
 {
 	GENERATED_BODY()
 
@@ -90,13 +90,7 @@ public:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
-
-	// Empty, deliberately: CommonUI's action router must not become a second owner of the input
-	// mode — the scope stack is the only one (11.5), same as the menu.
-	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override
-	{
-		return TOptional<FUIInputConfig>();
-	}
+	virtual bool NativeOnHandleBackAction() override;
 
 private:
 	float VirtualScale() const;

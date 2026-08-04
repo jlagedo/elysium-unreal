@@ -2,17 +2,19 @@
 
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumInputScope.h"
+#include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
-#include "ElysiumInputSubsystem.h"
 #include "UI/ElysiumCharacterScreen.h"
 #include "UI/ElysiumCharacterStage.h"
 #include "UI/ElysiumChargenPopup.h"
 #include "UI/ElysiumMainMenu.h"
 
 #include "Blueprint/UserWidget.h"
+#include "CommonActivatableWidget.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
@@ -193,35 +195,6 @@ void UElysiumUISubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UElysiumUISubsystem::PushMenuScope()
-{
-	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
-	if (!Input || !Menu)
-	{
-		return;
-	}
-
-	FElysiumInputScope Scope;
-	Scope.Name = TEXT("Menu");
-	Scope.Priority = ElysiumInput::Priority::Menu;
-	Scope.Mode = EElysiumInputMode::UIOnly;
-	Scope.bShowCursor = true;
-	// Focus the screen itself so Escape reaches it. Without this, focus stays on the game viewport
-	// widget and the menu's key handler never runs — the pause menu would open on Esc and then
-	// refuse to close on the same key.
-	Scope.FocusWidget = Menu->TakeWidget();
-	MenuScope = Input->Push(MoveTemp(Scope));
-}
-
-void UElysiumUISubsystem::PopMenuScope()
-{
-	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
-	{
-		Input->Pop(MenuScope);
-	}
-	MenuScope.Reset();
-}
-
 void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
 {
 	if (Menu)
@@ -235,29 +208,28 @@ void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
 		HideMenu();
 	}
 
-	UGameInstance* GI = GetGameInstance();
-	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
-	if (!PC)
+	UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GetGameInstance());
+	if (!PlayerUI)
 	{
-		UE_LOG(LogElysiumUI, Warning, TEXT("no local player controller — menu not shown"));
+		UE_LOG(LogElysiumUI, Warning, TEXT("no local-player UI root — menu not shown"));
 		return;
 	}
 
-	Menu = CreateWidget<UElysiumMainMenu>(PC, UElysiumMainMenu::StaticClass());
+	Menu = Cast<UElysiumMainMenu>(PlayerUI->PushWidget(
+		EElysiumUILayer::SystemModal,
+		UElysiumMainMenu::StaticClass(),
+		[Mode](UCommonActivatableWidget& Widget)
+		{
+			UElysiumMainMenu& Screen = *CastChecked<UElysiumMainMenu>(&Widget);
+			Screen.SetMenuMode(Mode);
+			Screen.ConfigureInputScope(TEXT("Menu"), ElysiumInput::Priority::Menu);
+		}));
 	if (!Menu)
 	{
-		UE_LOG(LogElysiumUI, Error, TEXT("failed to create the menu widget"));
+		UE_LOG(LogElysiumUI, Error, TEXT("failed to push the menu widget"));
 		return;
 	}
 	CurrentMode = Mode;
-	Menu->SetMenuMode(Mode);
-	Menu->AddToViewport(/*ZOrder*/ 100);
-	// A UCommonActivatableWidget is collapsed until it is activated. `bAutoActivate` only fires for
-	// widgets pushed onto a UCommonActivatableWidgetContainer, and this one goes straight to the
-	// viewport — so activate it by hand, or the tree builds and draws nothing.
-	Menu->ActivateWidget();
-	Menu->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	PushMenuScope();
 
 	UE_LOG(LogElysiumUI, Log, TEXT("menu shown (%s)"), MenuModeName(Mode));
 }
@@ -279,43 +251,17 @@ void UElysiumUISubsystem::HideMenu()
 	{
 		return;
 	}
-	Menu->RemoveFromParent();
+	if (UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GetGameInstance()))
+	{
+		PlayerUI->RemoveWidget(EElysiumUILayer::SystemModal, Menu);
+	}
 	Menu = nullptr;
-	PopMenuScope();
 	UE_LOG(LogElysiumUI, Log, TEXT("menu hidden"));
 }
 
 // ================================================================================================
 // The character screen
 // ================================================================================================
-
-void UElysiumUISubsystem::PushCharacterScope(int32 Priority, const TCHAR* Name)
-{
-	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
-	if (!Input || !CharacterScreen)
-	{
-		return;
-	}
-
-	FElysiumInputScope Scope;
-	Scope.Name = Name;
-	Scope.Priority = Priority;
-	Scope.Mode = EElysiumInputMode::UIOnly;
-	Scope.bShowCursor = true;
-	// As with the menu: the screen must hold focus or its own key handler never runs, and `L` would
-	// open a panel that neither Escape nor `L` could close.
-	Scope.FocusWidget = CharacterScreen->TakeWidget();
-	CharacterScope = Input->Push(MoveTemp(Scope));
-}
-
-void UElysiumUISubsystem::PopCharacterScope()
-{
-	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
-	{
-		Input->Pop(CharacterScope);
-	}
-	CharacterScope.Reset();
-}
 
 void UElysiumUISubsystem::ShowCharacterScreen(EElysiumCharacterTab Tab)
 {
@@ -340,51 +286,60 @@ void UElysiumUISubsystem::ShowCharacterScreen(EElysiumCharacterTab Tab)
 
 	UGameInstance* GI = GetGameInstance();
 	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
-	if (!PC)
+	UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GI);
+	if (!PC || !PlayerUI)
 	{
-		UE_LOG(LogElysiumUI, Warning, TEXT("no local player controller — character screen not shown"));
+		UE_LOG(LogElysiumUI, Warning, TEXT("no local player/UI root — character screen not shown"));
 		return;
 	}
-
-	CharacterScreen = CreateWidget<UElysiumCharacterScreen>(PC, UElysiumCharacterScreen::StaticClass());
-	if (!CharacterScreen)
-	{
-		UE_LOG(LogElysiumUI, Error, TEXT("failed to create the character screen widget"));
-		return;
-	}
-	CharacterScreen->SetActiveTab(Tab);
 
 	// The in-game screen edits a SCRATCH, not the character: a dot bought here is pending until
 	// ACCEPT, so CANCEL is a discard rather than an undo log. Same shape chargen uses, differing
 	// only in the currency (`Substrate/ElysiumChargen.h`).
+	TSharedPtr<FElysiumChargenState> Scratch;
 	if (UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 	{
 		const FElysiumPlayer* Player = State->PlayerEntity();
 		const FElysiumSheetEffects* Effects = Player ? Player->SheetEffects() : nullptr;
 		static const FElysiumSheetEffects Empty;
 
-		TSharedRef<FElysiumChargenState> Scratch = MakeShared<FElysiumChargenState>();
+		Scratch = MakeShared<FElysiumChargenState>();
 		ElysiumChargen::BeginLevelUp(*Scratch, State->PlayerSheet(), Effects ? *Effects : Empty);
 		Scratch->Name = State->PlayerName();
-		CharacterScreen->SetSpendState(Scratch);
-
-		CharacterScreen->OnAccept.BindUObject(this, &UElysiumUISubsystem::CommitCharacterSpend);
-		CharacterScreen->OnCancel.BindUObject(this, &UElysiumUISubsystem::HideCharacterScreen);
-		CharacterScreen->OnCharacterChanged.BindUObject(
-			this, &UElysiumUISubsystem::UpdateCharacterStageBody);
 	}
 
 	// The body behind the panels. Raised for BOTH hosts: VtMB's own screen draws the character
 	// through its translucent panels in game as well as at chargen.
 	CharacterStage = MakeShared<FElysiumCharacterStage>();
 	CharacterStage->Raise(PC->GetWorld(), PC);
-	UpdateCharacterStageBody();
+	FElysiumCharacterScreenMode ScreenMode;
+	ScreenMode.Tabs = { EElysiumCharacterTab::Sheet, EElysiumCharacterTab::Info,
+		EElysiumCharacterTab::QuestLog };
+	ScreenMode.Spend = EElysiumSpendMode::LevelUp;
 
-	CharacterScreen->AddToViewport(/*ZOrder*/ 90);   // under the menu, which can open over it
-	// Collapsed until activated by hand — `bAutoActivate` only fires inside an activatable container.
-	CharacterScreen->ActivateWidget();
-	CharacterScreen->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	PushCharacterScope(ElysiumInput::Priority::Character, TEXT("Character"));
+	CharacterScreen = Cast<UElysiumCharacterScreen>(PlayerUI->PushWidget(
+		EElysiumUILayer::GameModal,
+		UElysiumCharacterScreen::StaticClass(),
+		[this, Tab, Scratch, ScreenMode](UCommonActivatableWidget& Widget)
+		{
+			UElysiumCharacterScreen& Screen = *CastChecked<UElysiumCharacterScreen>(&Widget);
+			Screen.SetMode(ScreenMode);
+			Screen.SetActiveTab(Tab);
+			Screen.SetSpendState(Scratch);
+			Screen.OnAccept.BindUObject(this, &UElysiumUISubsystem::CommitCharacterSpend);
+			Screen.OnCancel.BindUObject(this, &UElysiumUISubsystem::HideCharacterScreen);
+			Screen.OnCharacterChanged.BindUObject(
+				this, &UElysiumUISubsystem::UpdateCharacterStageBody);
+			Screen.ConfigureInputScope(TEXT("Character"), ElysiumInput::Priority::Character);
+		}));
+	if (!CharacterScreen)
+	{
+		CharacterStage->Teardown();
+		CharacterStage.Reset();
+		UE_LOG(LogElysiumUI, Error, TEXT("failed to push the character screen widget"));
+		return;
+	}
+	UpdateCharacterStageBody();
 
 	UE_LOG(LogElysiumUI, Log, TEXT("character screen shown"));
 }
@@ -400,11 +355,12 @@ void UElysiumUISubsystem::ShowChargen()
 
 	UGameInstance* GI = GetGameInstance();
 	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
+	UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GI);
 	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
 	UElysiumRulebookSubsystem* Book = GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
-	if (!PC || !State || !Book)
+	if (!PC || !PlayerUI || !State || !Book)
 	{
-		UE_LOG(LogElysiumUI, Warning, TEXT("chargen: no controller / session — not shown"));
+		UE_LOG(LogElysiumUI, Warning, TEXT("chargen: no controller / UI root / session — not shown"));
 		return;
 	}
 
@@ -443,25 +399,18 @@ void UElysiumUISubsystem::ShowChargen()
 			ElysiumChargen::WizEntryPopup);
 		if (ChargenRun->IsActive())
 		{
-			ChargenPopup = CreateWidget<UElysiumChargenPopup>(PC, UElysiumChargenPopup::StaticClass());
+			ChargenPopup = Cast<UElysiumChargenPopup>(PlayerUI->PushWidget(
+				EElysiumUILayer::GameModal,
+				UElysiumChargenPopup::StaticClass(),
+				[this](UCommonActivatableWidget& Widget)
+				{
+					UElysiumChargenPopup& Popup = *CastChecked<UElysiumChargenPopup>(&Widget);
+					Popup.SetRun(ChargenRun);
+					Popup.OnAnswer.BindUObject(this, &UElysiumUISubsystem::AnswerChargenPopup);
+					Popup.ConfigureInputScope(TEXT("Chargen"), ElysiumInput::Priority::Chargen);
+				}));
 			if (ChargenPopup)
 			{
-				ChargenPopup->SetRun(ChargenRun);
-				ChargenPopup->OnAnswer.BindUObject(this, &UElysiumUISubsystem::AnswerChargenPopup);
-				ChargenPopup->AddToViewport(/*ZOrder*/ 91);
-				ChargenPopup->ActivateWidget();
-				ChargenPopup->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-
-				if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GI))
-				{
-					FElysiumInputScope Scope;
-					Scope.Name = TEXT("Chargen");
-					Scope.Priority = ElysiumInput::Priority::Chargen;
-					Scope.Mode = EElysiumInputMode::UIOnly;
-					Scope.bShowCursor = true;
-					Scope.FocusWidget = ChargenPopup->TakeWidget();
-					CharacterScope = Input->Push(MoveTemp(Scope));
-				}
 				UE_LOG(LogElysiumUI, Log, TEXT("chargen: entry popup shown"));
 				return;
 			}
@@ -510,11 +459,13 @@ void UElysiumUISubsystem::AnswerChargenPopup(int32 Index)
 
 	if (ChargenPopup)
 	{
-		ChargenPopup->RemoveFromParent();
+		if (UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GI))
+		{
+			PlayerUI->RemoveWidget(EElysiumUILayer::GameModal, ChargenPopup);
+		}
 		ChargenPopup = nullptr;
 	}
 	ChargenRun.Reset();
-	PopCharacterScope();
 	OpenChargenSheet();
 }
 
@@ -522,19 +473,13 @@ void UElysiumUISubsystem::OpenChargenSheet()
 {
 	UGameInstance* GI = GetGameInstance();
 	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
+	UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GI);
 	UElysiumRulebookSubsystem* Book = GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
-	if (!PC || !Book || !PendingChargen.IsValid())
+	if (!PC || !PlayerUI || !Book || !PendingChargen.IsValid())
 	{
 		return;
 	}
 	TSharedRef<FElysiumChargenState> Chargen = PendingChargen.ToSharedRef();
-
-	CharacterScreen = CreateWidget<UElysiumCharacterScreen>(PC, UElysiumCharacterScreen::StaticClass());
-	if (!CharacterScreen)
-	{
-		UE_LOG(LogElysiumUI, Error, TEXT("failed to create the character screen widget"));
-		return;
-	}
 
 	// The three axes the shell already carries: two tabs instead of three, the pools as the
 	// currency, and a name the player types. Everything else about the screen is the shared one.
@@ -542,8 +487,6 @@ void UElysiumUISubsystem::OpenChargenSheet()
 	ScreenMode.Tabs = { EElysiumCharacterTab::Base, EElysiumCharacterTab::Sheet };
 	ScreenMode.Spend = EElysiumSpendMode::Chargen;
 	ScreenMode.bNameEditable = true;
-	CharacterScreen->SetMode(ScreenMode);
-	CharacterScreen->SetActiveTab(EElysiumCharacterTab::Base);
 
 	FElysiumChargenRules Rules;
 	Rules.Stats        = &Book->Stats();
@@ -556,18 +499,26 @@ void UElysiumUISubsystem::OpenChargenSheet()
 	Rules.Strings      = &Book->Strings();
 	ElysiumChargen::ApplyBaseline(*Chargen, Rules);
 
-	CharacterScreen->SetSpendState(Chargen);
-	CharacterScreen->OnAccept.BindUObject(this, &UElysiumUISubsystem::CommitChargen);
-	CharacterScreen->OnCancel.BindUObject(this, &UElysiumUISubsystem::HideCharacterScreen);
-	CharacterScreen->OnCharacterChanged.BindUObject(
-		this, &UElysiumUISubsystem::UpdateCharacterStageBody);
-
-	CharacterScreen->AddToViewport(/*ZOrder*/ 90);
-	CharacterScreen->ActivateWidget();
-	CharacterScreen->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-	// Above the character screen's own priority: there is no run to fall back into while the wizard
-	// is up, so nothing beneath it may act.
-	PushCharacterScope(ElysiumInput::Priority::Chargen, TEXT("Chargen"));
+	CharacterScreen = Cast<UElysiumCharacterScreen>(PlayerUI->PushWidget(
+		EElysiumUILayer::GameModal,
+		UElysiumCharacterScreen::StaticClass(),
+		[this, ScreenMode, Chargen](UCommonActivatableWidget& Widget)
+		{
+			UElysiumCharacterScreen& Screen = *CastChecked<UElysiumCharacterScreen>(&Widget);
+			Screen.SetMode(ScreenMode);
+			Screen.SetActiveTab(EElysiumCharacterTab::Base);
+			Screen.SetSpendState(Chargen);
+			Screen.OnAccept.BindUObject(this, &UElysiumUISubsystem::CommitChargen);
+			Screen.OnCancel.BindUObject(this, &UElysiumUISubsystem::HideCharacterScreen);
+			Screen.OnCharacterChanged.BindUObject(
+				this, &UElysiumUISubsystem::UpdateCharacterStageBody);
+			Screen.ConfigureInputScope(TEXT("Chargen"), ElysiumInput::Priority::Chargen);
+		}));
+	if (!CharacterScreen)
+	{
+		UE_LOG(LogElysiumUI, Error, TEXT("failed to push the chargen sheet widget"));
+		return;
+	}
 	UpdateCharacterStageBody();
 
 	UE_LOG(LogElysiumUI, Log, TEXT("chargen sheet opened (clan %d, %d points to spend)"),
@@ -633,29 +584,41 @@ void UElysiumUISubsystem::CommitCharacterSpend()
 
 void UElysiumUISubsystem::HideCharacterScreen()
 {
-	if (!CharacterScreen)
+	if (!CharacterScreen && !ChargenPopup)
 	{
 		return;
 	}
 	// Closing is the last thing that marks the shown hub read; the screen owns that rule.
-	CharacterScreen->NotifyClosing();
-	CharacterScreen->RemoveFromParent();
-	CharacterScreen = nullptr;
-	// The stage restores the player's own camera as it goes, so this must happen before the scope
-	// pops and input returns to the game.
+	if (CharacterScreen)
+	{
+		CharacterScreen->NotifyClosing();
+	}
+	// The stage restores the player's own camera before removing the active screen deactivates it
+	// and releases its input scope.
 	if (CharacterStage.IsValid())
 	{
 		CharacterStage->Teardown();
 		CharacterStage.Reset();
 	}
+	UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GetGameInstance());
+	if (CharacterScreen)
+	{
+		if (PlayerUI)
+		{
+			PlayerUI->RemoveWidget(EElysiumUILayer::GameModal, CharacterScreen);
+		}
+		CharacterScreen = nullptr;
+	}
 	if (ChargenPopup)
 	{
-		ChargenPopup->RemoveFromParent();
+		if (PlayerUI)
+		{
+			PlayerUI->RemoveWidget(EElysiumUILayer::GameModal, ChargenPopup);
+		}
 		ChargenPopup = nullptr;
 	}
 	ChargenRun.Reset();
 	PendingChargen.Reset();
-	PopCharacterScope();
 
 	// CharEditPanel's recovered mode!=0 close tail: unpause, then execute
 	// `teleport_player firetrans`. Both ACCEPT and CANCEL close through here. The latch keeps the

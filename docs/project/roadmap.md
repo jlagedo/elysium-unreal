@@ -752,7 +752,16 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   stack, and the New Game flow calling 8.6a's New Game seam (now `UElysiumGameFlowSubsystem::NewGame`,
   11.3).
 
-  **Landed — the main menu runs.** The title lockup and five small-caps items sit over a local 4K
+  **Landed — the unified player UI and main menu run.** `UElysiumPlayerUISubsystem` owns one
+  `UElysiumUIRoot` per local player: passive HUD, transient, notification, game-modal,
+  system-modal and runtime-loading containers in structural paint order. Main/pause, character,
+  chargen and dialogue share `UElysiumActivatableScreen`; CommonUI owns activation, Back and focus
+  restoration while the existing Elysium input-scope stack remains the sole input-mode writer.
+  Native `UElysiumCommonUIInputData` supplies keyboard/gamepad Accept and Back defaults, so the
+  source-authored foundation needs no Widget Blueprint or data-table asset. A source-policy
+  automation test rejects new direct viewport insertion or competing `SetInputMode` writers.
+
+  The title lockup and five small-caps items sit over a local 4K
   Elysium key-art plate in the empty `/Game/Elysium` boot world. Cold boot therefore raises the
   front end without loading or building a VtMB map; Quit to Main Menu travels back to the same
   empty shell. The plate lives below the gitignored export root because it incorporates decoded
@@ -761,21 +770,20 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   corrections to `docs/vtmb/m0_menu_build.md`). **PL8** [x]. The **Nocturne** type set (Spectral SC /
   Spectral / Inter, SIL OFL, no RFN) ships as generated local `UFontFace` assets
   (`fetch_ui_fonts.py` → `make_ui_fonts.py`). **CommonUI + CommonInput** adopted with widget trees
-  in C++ Slate, so **no Widget Blueprint assets**. `UElysiumUISubsystem` +
-  `UElysiumMainMenu` + `ElysiumUIStyle`/`Strings`/`Texture`; `elysium.menu [pause]`,
-  `elysium.menu.close`, `elysium.BootMenu`. Six owner calls:.
+  in C++ Slate, so **no Widget Blueprint assets**. `UElysiumUISubsystem` remains the GI-scoped
+  flow facade; screen composition belongs to the local-player root. Verbs: `elysium.menu [pause]`,
+  `elysium.menu.close`, `elysium.BootMenu`.
 
   Three findings the build forced, all recorded in `docs/architecture/ui-architecture.md`: `make_ui_fonts.py`
   **cannot** run in the headless content commandlet, so the policy export coordinates a
-  Slate-enabled editor pass; a `UCommonActivatableWidget` added straight
-  to the viewport is **collapsed until `ActivateWidget()`**; and `ElysiumScreenshot::Request` grew a
+  Slate-enabled editor pass; activatable screens must be pushed through a CommonUI container; and
+  `ElysiumScreenshot::Request` grew a
   `bShowUI` flag because the harness's UI-free capture silently omits every Slate widget — the MCP
   tool now passes true, the regression harness keeps false so baselines hold.
 
-  **Remaining:** the `CommonUIInputData` config asset + gamepad/keyboard nav pass (11.3 routes Esc
-  through the player controller and the menu's own `NativeOnKeyDown` precisely because CommonUI's
-  Back action needs that asset); New Game click path untested end to end (the seam is wired, the
-  console equivalent works); chargen ahead of New Game (9.4). **Open risk:** `uv run elysium debug shots` cannot see
+  **Remaining:** live keyboard/gamepad navigation acceptance across the screen set; New Game click
+  path untested end to end (the seam is wired, the console equivalent works); chargen ahead of New
+  Game (9.4). **Open risk:** `uv run elysium debug shots` cannot see
   the UI layer, so 8.9's HUD needs UI-inclusive vantages or its regressions go unwatched.
 
   **Acceptance:** main menu and pause menu are legible and correctly proportioned at 1080p,
@@ -797,13 +805,20 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `Columns`, and the panel keys `CloseOnLeftClick`/`MinShowTime`/`ClientCommand`. The
   per-resolution `Font_640`…`Font_1600` overrides are **dropped** — vector type scales
   continuously. *Deps:* 8.6, 4.10.
-- [ ] **8.9 HUD on the UI foundation** — retire the Canvas HUD as the player-facing surface:
+- [~] **8.9 HUD on the UI foundation** — retire the Canvas HUD as the player-facing surface:
   the +use reticle/use-icon (4.4), blood/health and status, the sign/screen-fade states, and a
   subtitle slot, composed on 8.6's stack with the same design tokens. Player pose/mode/FPS is
   dev-only and already lives in the Cog Maps window, separate from the game HUD. Use-icon art
   comes from the PL3 atlas, upscaled under the presentation test. It reads **`FElysiumViewState`**
   (**11.8**), not the substrate — the blood/health/frenzy/masquerade meters come off the player
-  entity's sheet (**11.4**). *Deps:* 8.6, 4.4, 4.10, 11.8.
+  entity's sheet (**11.4**).
+
+  **Landed:** the stable HUD model and local-player surface, reticle/use icons, health, discrete
+  vitae droplets, Humanity/Masquerade, fade, cutscene suppression, bright-scene contrast veils and
+  outlined glyph/icon treatments. Selector layouts have preview coverage but equipment,
+  disciplines and inventory still need authoritative gameplay data and command wiring; the sign
+  remains the faithful Canvas exception until 8.8, and subtitles remain open. *Deps:* 8.6, 4.4,
+  4.10, 11.8.
 - [ ] **8.10 Accessibility & options backing** *(`docs/project/remaster-direction.md` axis 4 — additive only;
   changes what the player can configure and perceive, never what the game does)* — full
   key/button remapping + gamepad navigation across the 8.6 component set; UI text scaling;

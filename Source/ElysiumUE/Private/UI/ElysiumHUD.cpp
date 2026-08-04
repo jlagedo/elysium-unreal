@@ -1,8 +1,8 @@
 #include "ElysiumHUD.h"
 
 #include "ElysiumContentPaths.h"
-#include "UI/ElysiumDialogueWidget.h"
 #include "ElysiumInputSubsystem.h"
+#include "ElysiumPlayerUISubsystem.h"
 #include "Debug/ElysiumLightProbe.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
@@ -10,9 +10,9 @@
 #include "ElysiumPresentationSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "Visual/ElysiumSignFonts.h"
+#include "UI/ElysiumDialogueScreen.h"
 #include "UI/ElysiumUITexture.h"
 
-#include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
 
 #include "CanvasItem.h"
@@ -404,44 +404,19 @@ void AElysiumHUD::RebuildDialogue(const FElysiumDialogueView& Dialogue)
 	// Rebuild the box for the new turn (turns are user-paced, so a full rebuild is cheap). Every
 	// string is the publisher's — the speaker, the subtitle and the choice labels are already
 	// resolved against the player's clan and gender, so the box never touches the `.dlg` data.
-	if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+	TeardownDialogue();
+	if (UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(this))
 	{
-		if (DialogueWidget.IsValid())
+		DialogueScreen = Cast<UElysiumDialogueScreen>(UI->PushWidget(
+			EElysiumUILayer::GameModal,
+			UElysiumDialogueScreen::StaticClass(),
+			[this, Dialogue](UCommonActivatableWidget& Widget)
 		{
-			Viewport->RemoveViewportWidgetContent(DialogueWidget.ToSharedRef());
-		}
-		DialogueWidget = SNew(SElysiumDialogueBox)
-			.Speaker(Dialogue.Speaker)
-			.Line(Dialogue.Line)
-			.Choices(Dialogue.Choices)
-			.bTerminal(Dialogue.bTerminal)
-			.OnChoose(FElysiumOnDlgChoice::CreateUObject(this, &AElysiumHUD::OnDialogueChoice));
-		Viewport->AddViewportWidgetContent(DialogueWidget.ToSharedRef(), /*ZOrder*/ 100);
-	}
-
-	// Claim UI-only input for the life of the conversation, with the box focused so number-key
-	// selection works. The box is rebuilt every turn, so the scope's focus widget is re-pointed at
-	// the new one — otherwise a menu closing over a conversation would hand focus to a dead widget.
-	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
-	{
-		if (!DialogueScope.IsValid())
-		{
-			FElysiumInputScope Scope;
-			Scope.Name = TEXT("Dialogue");
-			Scope.Priority = ElysiumInput::Priority::Dialogue;
-			Scope.Mode = EElysiumInputMode::UIOnly;
-			Scope.bShowCursor = true;
-			Scope.FocusWidget = DialogueWidget;
-			DialogueScope = Input->Push(MoveTemp(Scope));
-		}
-		else
-		{
-			Input->SetFocusWidget(DialogueScope, DialogueWidget);
-			if (DialogueWidget.IsValid())
-			{
-				FSlateApplication::Get().SetKeyboardFocus(DialogueWidget);
-			}
-		}
+			UElysiumDialogueScreen* Screen = CastChecked<UElysiumDialogueScreen>(&Widget);
+			Screen->SetDialogue(Dialogue);
+			Screen->OnChoice.BindUObject(this, &AElysiumHUD::OnDialogueChoice);
+			Screen->ConfigureInputScope(TEXT("Dialogue"), ElysiumInput::Priority::Dialogue);
+		}));
 	}
 
 	ShownConv = Dialogue.Conversation;
@@ -450,19 +425,14 @@ void AElysiumHUD::RebuildDialogue(const FElysiumDialogueView& Dialogue)
 
 void AElysiumHUD::TeardownDialogue()
 {
-	if (DialogueWidget.IsValid())
+	if (DialogueScreen)
 	{
-		if (UGameViewportClient* Viewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+		if (UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(this))
 		{
-			Viewport->RemoveViewportWidgetContent(DialogueWidget.ToSharedRef());
+			UI->RemoveWidget(EElysiumUILayer::GameModal, DialogueScreen);
 		}
-		DialogueWidget.Reset();
+		DialogueScreen = nullptr;
 	}
-	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
-	{
-		Input->Pop(DialogueScope);
-	}
-	DialogueScope.Reset();
 	ShownConv = nullptr;
 	ShownRev = 0;
 }
