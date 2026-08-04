@@ -9,9 +9,12 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
+// File-prefixed rather than the plain `ReadVector`/`ReadName` these would naturally be called:
+// the module builds non-unity adaptively, so this translation unit is regularly concatenated with
+// `ElysiumCompositionRig.cpp`, whose anonymous namespace holds a helper of exactly that name.
 namespace
 {
-	bool ReadVector(const TSharedPtr<FJsonValue>& Value, FVector& Out)
+	bool ReadClothVector(const TSharedPtr<FJsonValue>& Value, FVector& Out)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Numbers = nullptr;
 		if (!Value.IsValid() || !Value->TryGetArray(Numbers) || Numbers == nullptr
@@ -23,7 +26,7 @@ namespace
 		return true;
 	}
 
-	FName ReadName(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field)
+	FName ReadClothName(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field)
 	{
 		FString Text;
 		return Object->TryGetStringField(Field, Text) && !Text.IsEmpty()
@@ -68,7 +71,7 @@ bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	{
 		Stem = FileStem;
 	}
-	Root = ReadName(Document, TEXT("root"));
+	Root = ReadClothName(Document, TEXT("root"));
 	Document->TryGetNumberField(TEXT("rows"), Rows);
 	Document->TryGetNumberField(TEXT("columns"), Columns);
 
@@ -106,8 +109,8 @@ bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 			}
 			FElysiumClothChain Chain;
 			(*Object)->TryGetNumberField(TEXT("column"), Chain.Column);
-			Chain.Root = ReadName(*Object, TEXT("root"));
-			Chain.End = ReadName(*Object, TEXT("end"));
+			Chain.Root = ReadClothName(*Object, TEXT("root"));
+			Chain.End = ReadClothName(*Object, TEXT("end"));
 
 			const TArray<TSharedPtr<FJsonValue>>* BodyValues = nullptr;
 			if ((*Object)->TryGetArrayField(TEXT("bodies"), BodyValues) && BodyValues != nullptr)
@@ -121,7 +124,7 @@ bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 						continue;
 					}
 					FElysiumClothBody Body;
-					Body.Bone = ReadName(*BodyObject, TEXT("bone"));
+					Body.Bone = ReadClothName(*BodyObject, TEXT("bone"));
 					(*BodyObject)->TryGetNumberField(TEXT("row"), Body.Row);
 					double Number = 0.0;
 					if ((*BodyObject)->TryGetNumberField(TEXT("cone_deg"), Number))
@@ -166,13 +169,13 @@ bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 				continue;
 			}
 			FElysiumClothCollider Collider;
-			Collider.Bone = ReadName(*Object, TEXT("bone"));
+			Collider.Bone = ReadClothName(*Object, TEXT("bone"));
 			double Number = 0.0;
 			if ((*Object)->TryGetNumberField(TEXT("radius"), Number))
 			{
 				Collider.Radius = Number;
 			}
-			ReadVector((*Object)->TryGetField(TEXT("offset")), Collider.Offset);
+			ReadClothVector((*Object)->TryGetField(TEXT("offset")), Collider.Offset);
 			if (Collider.Bone != NAME_None && Collider.Radius > 0.f)
 			{
 				Colliders.Add(Collider);
@@ -180,6 +183,139 @@ bool FElysiumClothRig::LoadJsonText(const FString& JsonText, FString& OutError)
 		}
 	}
 
+	return true;
+}
+
+FElysiumClothTuning FElysiumClothTuning::FromRig(const FElysiumClothRig& Rig)
+{
+	FElysiumClothTuning Tuning;
+	Tuning.Solver = Rig.Solver;
+	return Tuning;
+}
+
+bool FElysiumClothTuning::EqualsTuning(const FElysiumClothTuning& Other) const
+{
+	return FMath::IsNearlyEqual(ConeScale, Other.ConeScale)
+		&& FMath::IsNearlyEqual(ColliderRadiusScale, Other.ColliderRadiusScale)
+		&& FMath::IsNearlyEqual(BoxExtentScale, Other.BoxExtentScale)
+		&& FMath::IsNearlyEqual(Solver.LinearDamping, Other.Solver.LinearDamping)
+		&& FMath::IsNearlyEqual(Solver.AngularDamping, Other.Solver.AngularDamping)
+		&& FMath::IsNearlyEqual(Solver.GravityScale, Other.Solver.GravityScale)
+		&& FMath::IsNearlyEqual(Solver.ComponentLinearVelScale, Other.Solver.ComponentLinearVelScale)
+		&& FMath::IsNearlyEqual(Solver.ComponentLinearAccScale, Other.Solver.ComponentLinearAccScale)
+		&& Solver.IterationsPre == Other.Solver.IterationsPre
+		&& Solver.IterationsPost == Other.Solver.IterationsPost;
+}
+
+bool FElysiumClothTuning::NeedsReseat(const FElysiumClothTuning& Other) const
+{
+	return !FMath::IsNearlyEqual(Solver.LinearDamping, Other.Solver.LinearDamping)
+		|| !FMath::IsNearlyEqual(Solver.AngularDamping, Other.Solver.AngularDamping)
+		|| !FMath::IsNearlyEqual(BoxExtentScale, Other.BoxExtentScale);
+}
+
+bool ElysiumClothRig::SaveTuning(const FString& Stem, const FElysiumClothTuning& Tuning,
+	FString& OutError)
+{
+	const FString Path = FElysiumContentPaths::NpcClothRig(Stem);
+	FString JsonText;
+	if (!FFileHelper::LoadFileToString(JsonText, *Path))
+	{
+		OutError = FString::Printf(TEXT("not found: %s"), *Path);
+		return false;
+	}
+
+	TSharedPtr<FJsonObject> Document;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
+	if (!FJsonSerializer::Deserialize(Reader, Document) || !Document.IsValid())
+	{
+		OutError = FString::Printf(TEXT("malformed cloth JSON: %s"), *Path);
+		return false;
+	}
+
+	// The solver block is written whole. A sidecar predating a knob simply gains it, which is the
+	// same forgiving direction the reader takes.
+	const TSharedPtr<FJsonObject> Solver = MakeShared<FJsonObject>();
+	Solver->SetNumberField(TEXT("linear_damping"), Tuning.Solver.LinearDamping);
+	Solver->SetNumberField(TEXT("angular_damping"), Tuning.Solver.AngularDamping);
+	Solver->SetNumberField(TEXT("gravity_scale"), Tuning.Solver.GravityScale);
+	Solver->SetNumberField(TEXT("component_linear_vel_scale"), Tuning.Solver.ComponentLinearVelScale);
+	Solver->SetNumberField(TEXT("component_linear_acc_scale"), Tuning.Solver.ComponentLinearAccScale);
+	Solver->SetNumberField(TEXT("iterations_pre"), Tuning.Solver.IterationsPre);
+	Solver->SetNumberField(TEXT("iterations_post"), Tuning.Solver.IterationsPost);
+	Document->SetObjectField(TEXT("solver"), Solver);
+
+	// The three scales are folded into the authored numbers in place, so a saved file reads exactly
+	// like one the exporter could have written and re-tuning starts from 1.0 again.
+	const TArray<TSharedPtr<FJsonValue>>* ChainValues = nullptr;
+	if (Document->TryGetArrayField(TEXT("chains"), ChainValues) && ChainValues != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *ChainValues)
+		{
+			const TSharedPtr<FJsonObject>* Chain = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(Chain) || Chain == nullptr)
+			{
+				continue;
+			}
+			const TArray<TSharedPtr<FJsonValue>>* BodyValues = nullptr;
+			if (!(*Chain)->TryGetArrayField(TEXT("bodies"), BodyValues) || BodyValues == nullptr)
+			{
+				continue;
+			}
+			for (const TSharedPtr<FJsonValue>& BodyValue : *BodyValues)
+			{
+				const TSharedPtr<FJsonObject>* Body = nullptr;
+				if (!BodyValue.IsValid() || !BodyValue->TryGetObject(Body) || Body == nullptr)
+				{
+					continue;
+				}
+				double Number = 0.0;
+				if ((*Body)->TryGetNumberField(TEXT("cone_deg"), Number))
+				{
+					(*Body)->SetNumberField(TEXT("cone_deg"),
+						FMath::Clamp(Number * Tuning.ConeScale, 0.0, 90.0));
+				}
+				if ((*Body)->TryGetNumberField(TEXT("box_extent"), Number))
+				{
+					(*Body)->SetNumberField(TEXT("box_extent"),
+						FMath::Max(Number * Tuning.BoxExtentScale, 0.0));
+				}
+			}
+		}
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* ColliderValues = nullptr;
+	if (Document->TryGetArrayField(TEXT("colliders"), ColliderValues) && ColliderValues != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *ColliderValues)
+		{
+			const TSharedPtr<FJsonObject>* Collider = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(Collider) || Collider == nullptr)
+			{
+				continue;
+			}
+			double Number = 0.0;
+			if ((*Collider)->TryGetNumberField(TEXT("radius"), Number))
+			{
+				(*Collider)->SetNumberField(TEXT("radius"),
+					FMath::Max(Number * Tuning.ColliderRadiusScale, 0.0));
+			}
+		}
+	}
+
+	FString Output;
+	const TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&Output);
+	if (!FJsonSerializer::Serialize(Document.ToSharedRef(), Writer))
+	{
+		OutError = TEXT("could not serialise the tuned rig");
+		return false;
+	}
+	if (!FFileHelper::SaveStringToFile(Output, *Path))
+	{
+		OutError = FString::Printf(TEXT("could not write %s"), *Path);
+		return false;
+	}
 	return true;
 }
 

@@ -546,6 +546,20 @@ def debug_modelroom(ctx: typer.Context, args: list[str] = typer.Argument(None)) 
     _debug(ctx, "modelroom", [*(args or ()), *ctx.args])
 
 
+@app.command("gr", context_settings=PASSTHROUGH)
+def green_room(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
+    """Open the interactive green room: one body, live, with cloth tuning.
+
+    Usage: `gr <model> <clip> <map>`, and all three are optional -- with no model the stage
+    comes up empty and the window picks one. Square brackets are Rich markup in a Typer
+    help string, so the optional arguments are written in angle brackets here.
+
+    Top level rather than under `debug` because it is driven by hand rather than run as a
+    check, and it captures nothing.
+    """
+    _debug(ctx, "gr", [*(args or ()), *ctx.args])
+
+
 def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal

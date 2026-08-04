@@ -279,6 +279,8 @@ public:
 		bool bLoop, float* OutSeconds) override;
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) override;
+	virtual bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const override;
+	virtual bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
 	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
 		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) override;
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;

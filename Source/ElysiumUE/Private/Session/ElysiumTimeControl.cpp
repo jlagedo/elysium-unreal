@@ -19,8 +19,9 @@ double FElysiumTimeControl::AdvanceFrame(double DeltaSeconds)
 {
 	// Bounded exactly as `Host_FilterTime` bounds it, with the same constant the mover uses: a
 	// hitch must not fire a whole interval's thinks and queued I/O in one frame, and game time must
-	// not disagree with player motion about how long the frame was.
-	return Clock.Advance(ElysiumFrame::ClampFrameDelta(DeltaSeconds));
+	// not disagree with player motion about how long the frame was. The delta is already dilated,
+	// so the bound takes the same scale the engine's own filter applied.
+	return Clock.Advance(ElysiumFrame::ClampFrameDelta(DeltaSeconds, Clock.GetScale()));
 }
 
 void FElysiumTimeControl::EndFrame()
@@ -108,6 +109,23 @@ void FElysiumTimeControl::ApplyToWorld()
 	if (!World)
 	{
 		return;
+	}
+	if (AWorldSettings* Settings = World->GetWorldSettings())
+	{
+		// The engine's frame filter IS `Host_FilterTime`, and this is where it gets told so.
+		// `AWorldSettings::FixupDeltaSeconds` clamps the frame to [Min, Max] x dilation before
+		// `UWorld::DeltaTimeSeconds` reaches any tick, exactly as retail bounds `host_frametime`
+		// before `curtime`/`frametime` are published to the game DLL. Epic's stock 0.4 s ceiling is
+		// four times ours, and the gap is not cosmetic: an engine-tick consumer (skeletal animation,
+		// Niagara, Chaos) would advance up to 0.3 s further than the substrate on a long frame, and
+		// never give it back — which is how a cinematic prop drifts out of the hand holding it.
+		//
+		// Written undilated: FixupDeltaSeconds multiplies by GetEffectiveTimeDilation() itself, so a
+		// time scale is applied once, here as everywhere else. The clock's own Scale tracks
+		// TimeDilation alone — anything that starts driving CinematicTimeDilation breaks that
+		// equality and this comment with it.
+		Settings->MinUndilatedFrameTime = static_cast<float>(ElysiumFrame::MinFrameSeconds);
+		Settings->MaxUndilatedFrameTime = static_cast<float>(ElysiumFrame::MaxFrameSeconds);
 	}
 	UGameplayStatics::SetGlobalTimeDilation(World, static_cast<float>(Clock.GetScale()));
 	UGameplayStatics::SetGamePaused(World, Clock.IsPaused());

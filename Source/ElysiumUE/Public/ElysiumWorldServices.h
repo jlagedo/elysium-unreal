@@ -122,6 +122,19 @@ public:
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) = 0;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) = 0;
 
+	// The free-run counterpart of SeekCinematicClip, for a caller that phases a clip against the
+	// substrate clock rather than driving it. Seek pins the body at play rate 0 and collapses any
+	// crossfade, which is right for a scene that re-seeks every frame and wrong for a 10 Hz think
+	// that wants the clip to keep running smoothly between corrections.
+	//
+	// This is how retail's `StudioFrameAdvance` behaves without meaning to: it recomputes the cycle
+	// from `curtime - m_flAnimTime` every call, so a 10 Hz prop think and a per-frame scene actor
+	// stay in lockstep. Reading the position back is what lets a caller tell drift from agreement.
+	// False means the body cannot answer — no anim host, or nothing playing — which is an ordinary
+	// answer, not an error.
+	virtual bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const { return false; }
+	virtual bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) { return false; }
+
 	// 12.3 — write named flex controllers on a body's facial rig, evaluating the rule/ramp chain once
 	// for the whole set. INDEX_NONE when the body carries no rig, which is the majority of the cast.
 	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,

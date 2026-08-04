@@ -1,0 +1,180 @@
+{
+ "version": 1,
+ "topic": "phoneme_envelope",
+ "consuming_document": "docs/vtmb/facial_animation.md",
+ "research_id": "RE20",
+ "program": "client.dll",
+ "binary": {
+  "size": 3428425,
+  "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+  "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+  "image_base": "0x10000000"
+ },
+ "lock_delay_seconds": 9,
+ "questions": [
+  "Which ConVar object address binds to which of phonemefilter_min / phonemefilter_max? The objects live in .bss, so the image carries no initialized name pointer at 0x104a4c9c / 0x104a4ce4; the binding is inferred from registration order (FUN_100c3b50 before FUN_100c3ba0) matching ascending .bss allocation, and from the clamp's own use of the first as the lower bound.",
+  "phoneme_delay's default value is unread for the same reason. Its only observable effect at default is zero, because the call site takes the 0.0 branch when IsDefault() answers true, so the default matters only if a user sets and then resets it.",
+  "The two studiohdr floats read (0.0, 0.0) on 113 of the 339 loose models. S then evaluates to 0 and 1/S is infinite. Every such model carries NumFlexDescs 0 and so never reaches the viseme path, but nothing in the clamp itself guards it."
+ ],
+ "field_probes": [
+  {
+   "displacement": "6ac",
+   "label": "studiohdr",
+   "role": "The C_BaseFlex field holding the model header. SetupWeights reaches the same field as EBX+0x6a8 because EBX is this+4 throughout that function; +0x158/+0x15c are NumFlexDescs/FlexDescIndex and +0x160/+0x164 NumFlexControllers/FlexControllerIndex, which is what identifies the pointer."
+  },
+  {
+   "displacement": "e8",
+   "label": "phonemefilter_min",
+   "role": "First of the two studiohdr floats the phoneme filter clamps a span against. Studiohdr offset 232, previously recorded as the first half of an int[2] Unknown."
+  },
+  {
+   "displacement": "ec",
+   "label": "phonemefilter_max",
+   "role": "Second of the pair. Studiohdr offset 236."
+  }
+ ],
+ "findings": [
+  {
+   "confidence": "confirmed",
+   "fact": "A phoneme's contribution is a trapezoid whose ramp-in ENDS at the phoneme's authored start and whose ramp-out ENDS at its authored end, both of duration S. scale = min((end-t)/S, 1) - max((start-t)/S, 0).",
+   "evidence": "0x100c463b-0x100c4730. A=(start-t)/S at 100c467f-100c4687, B=(end-t)/S at 100c468b-100c4692, skip when A>=1 (FCOMP double 0x101e34e0 = 1.0) or B<=0 (FCOM float 0x101e34f0 = 0.0), B=min(B,1) at 100c46b4-100c46c5, A=max(A,0) at 100c46cb-100c46e4, and FSUB at 100c46ec produces B-A immediately before the accumulate call.",
+   "consequence": "A phoneme leads in before it is spoken and always decays to zero at its authored end. A span shorter than S never reaches full weight: its peak is span/S, attained exactly at the authored start."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "S is the phoneme's own duration clamped to a per-model pair: S = clamp(end-start, studiohdr+232, studiohdr+236).",
+   "evidence": "FUN_100c3be0 takes the span as its float argument and returns it clamped. It reads the ConVar pair first and falls back to *(float*)(studiohdr+0xec) as the upper bound and *(float*)(studiohdr+0xe8) as the lower.",
+   "consequence": "The blend width is authored per model, not global, and is bounded above so a long phoneme still ramps in a fixed time."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "The ConVar override applies only when BOTH phonemefilter_min and phonemefilter_max are away from their defaults; otherwise the model pair is used.",
+   "evidence": "FUN_100c3be0 sets each local to 0.0 when the corresponding ConVar answers IsDefault(), then takes the studiohdr branch when either local is 0.0.",
+   "consequence": "Shipped behaviour is entirely the model pair. The ConVars are a tuning override that cannot be applied one at a time."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "Studiohdr offsets 232 and 236 are floats, not the int[2] Unknown previously recorded. Across 339 loose models: (0.080, 0.100) on every rigged character, (0.080, 0.105) on Jeanette alone, (0.065, 0.100) on 169 unrigged models, (0.0, 0.0) on 113.",
+   "evidence": "Direct read of the model headers; the values are the operands FUN_100c3be0 clamps against.",
+   "consequence": "The shipped phoneme blend width for a speaking character is clamp(span, 0.080, 0.100) seconds."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "The viseme accumulate ignores the expression table's influence column. It walks entries of stride 12 as {int key; float value; float influence} and multiplies scale by the value alone.",
+   "evidence": "FUN_100c4940 tail: iVar2 = *param_5; pfVar1 = (float*)(param_5+1); param_5 = param_5+3; g_flexweight[global[iVar2]] += param_2 * *pfVar1.",
+   "consequence": "A row entry carrying a non-zero value under a zero influence still contributes. The phoneme tables do author such entries (lacroix_phonemes row 'r2' carries 0.050 under influence 0.000), so applying the influence would silently diverge."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "The viseme clock is t = (curtime - the speak event's start) - phoneme_delay, and phoneme_delay contributes 0 at its default.",
+   "evidence": "0x100c45f2-0x100c462f: the engine time call at +0x40 less the event start at [EBP], then less either float 0x101e34f0 (0.0) when the ConVar is default or the ConVar's own float at +0x28.",
+   "consequence": "The phoneme track runs on the authored event clock, not on the mixer's position."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "The phoneme table is chosen per emitting entity as expressions/<model stem>_phonemes.vfe, with expressions/phonemes.vfe and expressions/phonemes_male.vfe as the literal fallbacks.",
+   "evidence": "0x100c45ce pushes \"phonemes\" into FUN_100c4210 (\"expressions/%s_%s.vfe\"); FUN_10099850 selects between the two fallback strings on the result of FUN_10099870.",
+   "consequence": "Confirms the selection rule already recorded for the expression half applies unchanged to the phoneme half."
+  },
+  {
+   "confidence": "confirmed",
+   "fact": "Every float constant the viseme block reads cross-checks against terms already recorded for the blink envelope and the controller lerp.",
+   "evidence": "0x101e34ec = 1.0, 0x101e34f0 = 0.0, 0x101e34e0 = 1.0 as a double, 0x1022df98 = 2.0 (the documented blink fold), 0x10232820 = 5.235987756 (the documented (pi/2)/0.3 blink rate), 0x10232828 = 0.3 (the documented blink duration), 0x10227108 = 10.0 (the documented dt scale).",
+   "consequence": "Independent corroboration that the disassembly of SetupWeights is being read in the right frame."
+  }
+ ],
+ "functions": [
+  {
+   "address": "100c42f0",
+   "label": "setup_weights",
+   "confidence": "confirmed",
+   "role": "C_BaseFlex::SetupWeights. Zeroes the 128-entry global weight array at 0x104a4a90, lerps and remaps the networked controllers, assigns blink raw, then walks the emitting entity's sentences accumulating visemes, and finally hands the flexdesc array to the renderer. The viseme block is 0x100c463b-0x100c4730.",
+   "depth": 1,
+   "cap": 80,
+   "asm_count": 400
+  },
+  {
+   "address": "100c3be0",
+   "label": "phoneme_filter_clamp",
+   "confidence": "confirmed",
+   "role": "Returns the blend width S for one phoneme span. Clamps the span to the phonemefilter_min/max ConVar pair when both are non-default, otherwise to the model's own floats at studiohdr+232/+236.",
+   "depth": 0,
+   "cap": 20,
+   "asm_count": 200
+  },
+  {
+   "address": "100c4940",
+   "label": "accumulate_viseme_row",
+   "confidence": "confirmed",
+   "role": "Resolves a phoneme code to its row in the loaded table, following the class/default indirections, then accumulates scale * value into the global flex-controller weight array for each of the row's entries. The row entry stride is 12 bytes and the third field is not read.",
+   "depth": 1,
+   "cap": 40,
+   "asm_count": 300
+  },
+  {
+   "address": "100c4210",
+   "label": "format_expression_path",
+   "confidence": "confirmed",
+   "role": "Formats \"expressions/%s_%s.vfe\" from the entity's model basename and a class string.",
+   "depth": 0,
+   "cap": 20,
+   "asm_count": 120
+  },
+  {
+   "address": "10099850",
+   "label": "select_default_phoneme_table",
+   "confidence": "confirmed",
+   "role": "Chooses expressions/phonemes_male.vfe or expressions/phonemes.vfe as the fallback table.",
+   "depth": 0,
+   "cap": 20,
+   "asm_count": 60
+  },
+  {
+   "address": "100c3b50",
+   "label": "register_phonemefilter_min",
+   "confidence": "confirmed",
+   "role": "ConVar registration for phonemefilter_min.",
+   "depth": 0,
+   "cap": 10,
+   "asm_count": 60
+  },
+  {
+   "address": "100c3ba0",
+   "label": "register_phonemefilter_max",
+   "confidence": "confirmed",
+   "role": "ConVar registration for phonemefilter_max.",
+   "depth": 0,
+   "cap": 10,
+   "asm_count": 60
+  },
+  {
+   "address": "100c3a10",
+   "label": "register_phoneme_delay",
+   "confidence": "confirmed",
+   "role": "ConVar registration for phoneme_delay, the lead subtracted from the viseme clock.",
+   "depth": 0,
+   "cap": 10,
+   "asm_count": 60
+  }
+ ],
+ "relationships": [
+  {
+   "from": "100c42f0",
+   "to": "100c3be0",
+   "confidence": "confirmed",
+   "evidence": "direct call at 0x100c4674, the span passed as the sole float argument"
+  },
+  {
+   "from": "100c42f0",
+   "to": "100c4940",
+   "confidence": "confirmed",
+   "evidence": "direct call at 0x100c46fe, scale pushed as the float argument immediately after FSUB at 0x100c46ec"
+  },
+  {
+   "from": "100c42f0",
+   "to": "100c4210",
+   "confidence": "confirmed",
+   "evidence": "direct call at 0x100c45d5 with \"phonemes\" pushed at 0x100c45ce"
+  }
+ ]
+}

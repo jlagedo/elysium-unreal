@@ -97,16 +97,22 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 	// A material permutation creates a distinct runtime mesh and USkeleton even when both meshes
 	// came from the same GLB. Keep its animation cache identity separate from the ordinary NPC.
 	const FString VisualKey = NpcVisualKeyForMesh(Stem, TargetMesh);
-	const FString Key = ElysiumEntityAnimation::NpcClipCacheKey(VisualKey, ClipName);
+
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+
+	// CAP7.3 — key on the animation the label will actually load, not the label. A blend-grid label
+	// selects a cell from the pose parameters, so a cache keyed on `walk` would pin whichever cell was
+	// resolved first and no parameter could ever move it again.
+	const FString Key = ElysiumEntityAnimation::NpcClipCacheKey(VisualKey,
+		Anims != nullptr ? Anims->ResolveClipAnimName(Stem, ClipName) : ClipName);
 	if (const TObjectPtr<UAnimSequence>* Cached = NpcAnimCache.Find(Key))
 	{
 		return Cached->Get();
 	}
 
 	UAnimSequence* Anim = nullptr;
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
 	const TObjectPtr<USkeletalMesh>* Mesh = NpcMeshCache.Find(VisualKey);
 	const TObjectPtr<UglTFRuntimeAsset>* Own = NpcAssetCache.Find(VisualKey);
 	if (Anims != nullptr && Mesh != nullptr && *Mesh != nullptr)
@@ -166,8 +172,9 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	// Cached alongside the ordinary clips. Both the target stem and material permutation are
 	// load-bearing because glTFRuntime binds the sequence to this exact runtime USkeleton.
 	const FString VisualKey = NpcVisualKeyForMesh(Stem, Mesh);
+	// Resolved-name keyed for the same reason the NPC cache is: a cinematic bank can declare grids too.
 	const FString Key = ElysiumEntityAnimation::CinematicClipCacheKey(
-		VisualKey, BankStem, ClipName);
+		VisualKey, BankStem, Anims->ResolveGridClip(BankStem, ClipName));
 	UAnimSequence* Anim = nullptr;
 	if (const TObjectPtr<UAnimSequence>* Found = NpcAnimCache.Find(Key))
 	{
@@ -218,6 +225,54 @@ bool UElysiumEntityBodies::SeekCinematicClip(USkeletalMeshComponent* Body, float
 		Body->SetPosition(FMath::Max(0.f, PositionSeconds), /*bFireNotifies=*/false);
 		Body->SetPlayRate(0.f);
 	}
+	return true;
+}
+
+bool UElysiumEntityBodies::GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	if (const UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	{
+		const float Position = Inst->GetClipPosition();
+		if (Position < 0.f)
+		{
+			return false;   // nothing playing — "cannot say", not "at zero"
+		}
+		OutSeconds = Position;
+		return true;
+	}
+	// The single-node fallback (elysium.NpcAnim 0). GetPosition answers 0 for a component with no
+	// player at all, which is indistinguishable from a clip genuinely at frame 0 — so the presence
+	// of a sequence is the test, not the value.
+	if (Body->GetAnimationMode() != EAnimationMode::AnimationSingleNode || Body->GetSingleNodeInstance() == nullptr)
+	{
+		return false;
+	}
+	OutSeconds = Body->GetPosition();
+	return true;
+}
+
+bool UElysiumEntityBodies::ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	{
+		Inst->ResyncClip(PositionSeconds);
+		return true;
+	}
+	if (Body->GetAnimationMode() != EAnimationMode::AnimationSingleNode || Body->GetSingleNodeInstance() == nullptr)
+	{
+		return false;
+	}
+	// Deliberately WITHOUT the SetPlayRate(0.f) that SeekCinematicClip pairs with SetPosition: the
+	// clip is meant to keep running from its corrected phase, not freeze at it.
+	Body->SetPosition(FMath::Max(0.f, PositionSeconds), /*bFireNotifies=*/false);
 	return true;
 }
 
@@ -678,6 +733,14 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			// The two composition stages (CAP7.2). Null for a model declaring neither a split
 			// bone nor a procedural rule, which poses under Unreal's own hierarchy alone.
 			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
+			// The garment spike. Gated on the same predicate the mesh loader used, so the rig is
+			// installed only onto a body actually wearing the enhanced mesh — chains naming a
+			// lattice the faithful skeleton does not carry would resolve to nothing and cost a
+			// per-frame walk to discover it.
+			if (ElysiumNpcVisual::UseClothMesh(Stem))
+			{
+				Inst->SetClothRig(Anims->GetClothRig(Stem));
+			}
 		}
 	}
 	// The eyes (12.4). Independent of the facial rig above: a player body binds eyes here and no
@@ -809,7 +872,11 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 		return false;
 	}
 
-	const FString Key = Stem + TEXT("|") + ClipName.ToLower();
+	// CAP7.3 — collapse a grid label to its cell BEFORE the key is built, or the label would cache one
+	// cell forever and no pose parameter could ever move it. `wolf_form` is the one skeletal prop
+	// declaring a grid; every other prop label resolves to itself.
+	const FString AnimName = Anims->ResolveGridClip(Stem, ClipName);
+	const FString Key = Stem + TEXT("|") + AnimName.ToLower();
 	UAnimSequence* Anim = nullptr;
 	if (const TObjectPtr<UAnimSequence>* Cached = AnimatedPropAnimCache.Find(Key))
 	{
@@ -822,7 +889,7 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 		FString Error;
 		if (Asset && Mesh)
 		{
-			Anim = ElysiumNpcVisual::RetargetClip(Asset->Get(), Mesh->Get(), ClipName, Error);
+			Anim = ElysiumNpcVisual::RetargetClip(Asset->Get(), Mesh->Get(), AnimName, Error);
 		}
 		if (!Anim)
 		{

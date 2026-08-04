@@ -12,6 +12,7 @@
 #include "ElysiumNpcAnimInstance.generated.h"
 
 class UAnimSequence;
+struct FElysiumClothRig;
 struct FElysiumCompositionRig;
 
 // The NPC animation host (roadmap 8.5) — a native C++ anim instance, no Blueprint and no anim
@@ -44,6 +45,10 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 
 	virtual void Initialize(UAnimInstance* InAnimInstance) override;
 	virtual void CacheBones() override;
+	// The cloth chains' game-thread pass, driven from the anim instance rather than through
+	// `GetCustomNodes`: that registration is gathered during InitializeAnimation, before any rig
+	// exists, and holds raw pointers into an array `SetClothRig` reallocates.
+	void PreUpdateCloth(const UAnimInstance* Instance);
 	// The node graph's own update — where the sequence players advance their play time. The
 	// base-class `Update(float)` is NOT enough: a node that is never Update_AnyThread'd sits at
 	// its start position forever and evaluates one frozen frame.
@@ -57,6 +62,15 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	// frame, making the pose a function of scene time rather than accumulated animation delta.
 	void Seek(float PositionSeconds);
 	void Stop();
+
+	// Where the incoming player's clip actually sits, in clip seconds. Negative when nothing is
+	// playing — "cannot say" is a different answer from "at zero", and a caller measuring drift
+	// must not read the second as the first.
+	float GetClipPosition() const;
+	// Re-phase a clip that is still PLAYING, without pinning it. Unlike Seek this touches neither
+	// the play rate nor the start position nor the crossfade, so a clip mid-blend keeps blending
+	// and a free-running clip keeps running — it only moves where it is running from.
+	void ResyncPosition(float PositionSeconds);
 
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
@@ -74,6 +88,13 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
 
+	// The garment spike's rig; null clears it. Independent of the two composition stages — a model
+	// can carry any combination, and nearly every model carries none of this one.
+	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
+	int32 NumClothChains() const { return Cloth.NumChains(); }
+	void SetClothTuning(const FElysiumClothTuning& InTuning) { Cloth.SetTuning(InTuning); }
+	const FElysiumClothTuning& GetClothTuning() const { return Cloth.GetTuning(); }
+
 private:
 	// The body half of Evaluate: the crossfade between the two sequence players.
 	void EvaluateBody(FPoseContext& Output);
@@ -88,6 +109,8 @@ private:
 	// AnimGraph, so the post-process slot is the tail of Evaluate.
 	UPROPERTY(Transient) FAnimNode_ElysiumSplitInheritance Split;
 	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
+	// The garment spike, evaluated after both of them so the simulation sees the finished skeleton.
+	UPROPERTY(Transient) FAnimNode_ElysiumCloth Cloth;
 
 	// Standalone (not _Standalone-suffixed by accident): the plain-C++ variant of the sequence
 	// player whose setters actually write, unlike the Blueprint-bound FAnimNode_SequencePlayer
@@ -125,6 +148,12 @@ public:
 	void SeekClip(float PositionSeconds);
 	void StopClip();
 
+	// Read and correct the phase of a clip that is still playing. This is the measurement half of
+	// the substrate-clock phase lock: a caller compares the position against elapsed game time and
+	// re-phases only when the two have parted company.
+	float GetClipPosition() const;
+	void ResyncClip(float PositionSeconds);
+
 	UAnimSequence* GetPlayingClip() const { return Proxy.GetPlaying(); }
 
 	// --- the facial flex track (roadmap 12.3) ------------------------------------------------
@@ -146,6 +175,28 @@ public:
 	// How many rules resolved against this body's actual skeleton — the number the debug surface
 	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
 	int32 GetResolvedAxisInterpRules() const;
+
+	// Install the garment spike's rig (`npc/cloth/<stem>.json`). Null for every model the spike did
+	// not build, which is an ordinary load: the body then wears its faithful mesh and simulates
+	// nothing. Independent of the composition rig above — a model may carry either, both or neither.
+	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
+	const FElysiumClothRig* GetClothRig() const { return ClothRig.Get(); }
+	// The live edit sitting over that rig — what the green-room lab's sliders write, and what a
+	// freshly installed rig resets to its own authored values. Same game-thread door as SetClothRig:
+	// the proxy accessor blocks on any in-flight parallel evaluation first.
+	void SetClothTuning(const FElysiumClothTuning& InTuning);
+	FElysiumClothTuning GetClothTuning() const;
+	// How many chains were built against this body's actual skeleton — what distinguishes "no rig"
+	// from "a rig whose lattice bones this skeleton lacks", which is what wearing the faithful mesh
+	// with the enhanced sidecar would look like.
+	int32 GetResolvedClothChains() const;
+
+protected:
+	// The cloth chains' game-thread pass. Runs here rather than through the proxy's node
+	// registration, which is gathered before any rig is installed (`FAnimNode_ElysiumCloth`).
+	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+
+public:
 
 	// Flex controllers are the only writable facial state; the flexdesc weights and morph weights
 	// below them are arithmetic, re-derived on every write. Names are the rig's own (`blink`,
@@ -203,6 +254,7 @@ private:
 
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
 	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
+	TSharedPtr<const FElysiumClothRig> ClothRig;
 	float MouthOpen = 0.f;
 	FElysiumEyeInput EyeInput;
 	TArray<float> ControllerValues;

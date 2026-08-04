@@ -27,7 +27,18 @@ def build_sheet(run_dir: Path) -> Path:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     shots = manifest.get("shots", [])
     if not shots:
-        raise RuntimeError(f"{manifest_path} contains no shots")
+        # The harness ran and wrote a manifest, so the interesting failure is upstream of here --
+        # almost always a stem or clip the body could not resolve. Say what it tried, because the
+        # bare "no shots" sends you looking at the contact sheet instead of at the bind.
+        stem = manifest.get("review_stem") or manifest.get("selector") or "?"
+        clip = manifest.get("review_clip") or "?"
+        raise RuntimeError(
+            f"{manifest_path} contains no shots: the green room captured nothing for "
+            f"stem '{stem}' clip '{clip}'.\n"
+            f"Check the run log for 'LogElysiumGreenRoom' -- a failed clip bind is the usual "
+            f"cause, and `uv run elysium debug modelroom {stem} <clip> --live` lets you watch "
+            f"the attempt instead of inferring it."
+        )
 
     fractions = sorted({float(shot["fraction"]) for shot in shots})
     view_yaws = sorted({float(shot.get("view_yaw", 0.0)) for shot in shots})

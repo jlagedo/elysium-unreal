@@ -9,6 +9,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumSceneData.h"
+#include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -1093,6 +1094,213 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 		SceneSets, ActorRoots, RuntimeBinds, PlayerBinds));
 	TestTrue(TEXT("every theatre cinematic clip binds to its target model's USkeleton"), bValid);
 	TestTrue(TEXT("the theatre test exercised runtime bindings"), RuntimeBinds > 0);
+	return true;
+}
+
+// =====================================================================================
+// Blend-grid sidecars against the corpus they describe (CAP7.3).
+//
+// Two contracts. The cheap one: every cell that names a clip names an animation that is actually in
+// the owning glb, because the runtime addresses cells by name and a miss would be a silent still
+// body. The load-bearing one: the neutral pose selects the FORWARD cell of a locomotion fan. The
+// clip baked under the label `walk` is the grid's base cell, which on a -180..180 fan is the
+// backward walk — resolving the grid is the only thing that makes `walk` mean walk.
+// =====================================================================================
+
+namespace
+{
+	// The animation names in a glb's JSON chunk, lowercased. `FGltfContract` keeps its parsed root
+	// private and validates far more than this needs — a cell check only has to know which names the
+	// file carries, and reading the chunk directly keeps this out of the rendering path.
+	bool ReadGlbAnimationNames(const FString& Path, TSet<FString>& Out)
+	{
+		TArray<uint8> Bytes;
+		if (!FFileHelper::LoadFileToArray(Bytes, *Path) || Bytes.Num() < 20
+			|| ReadU32(Bytes, 0) != GlbMagic)
+		{
+			return false;
+		}
+		int32 Offset = 12;
+		while (Offset + 8 <= Bytes.Num())
+		{
+			const int32 Length = static_cast<int32>(ReadU32(Bytes, Offset));
+			const uint32 Type = ReadU32(Bytes, Offset + 4);
+			Offset += 8;
+			if (Length < 0 || Offset + Length > Bytes.Num())
+			{
+				return false;
+			}
+			if (Type == JsonChunk)
+			{
+				const FUTF8ToTCHAR Convert(
+					reinterpret_cast<const ANSICHAR*>(Bytes.GetData() + Offset), Length);
+				const FString Text(Convert.Length(), Convert.Get());
+				TSharedPtr<FJsonObject> Root;
+				const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
+				if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+				{
+					return false;
+				}
+				if (const TArray<TSharedPtr<FJsonValue>>* Animations = JsonArray(Root, TEXT("animations")))
+				{
+					for (const TSharedPtr<FJsonValue>& Value : *Animations)
+					{
+						Out.Add(JsonString(Value->AsObject(), TEXT("name")).ToLower());
+					}
+				}
+				return true;
+			}
+			Offset += Length;
+		}
+		return false;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlendGridCorpusTest,
+	"Elysium.Content.BlendGrids", GElysiumSkeletalContentFlags)
+bool FElysiumBlendGridCorpusTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	{
+		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Every group that can declare grids, gathered as (stem, sidecar, glb) so one loop covers
+	// characters, banks and animated props rather than three near-copies.
+	TArray<TTuple<FString, FString, FString>> Owners;
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
+	{
+		if (!Pair.Value.Blends.IsEmpty())
+		{
+			Owners.Emplace(Pair.Key, Pair.Value.Blends, Pair.Value.Glb);
+		}
+	}
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Banks)
+	{
+		if (!Pair.Value.Blends.IsEmpty())
+		{
+			Owners.Emplace(Pair.Key, Pair.Value.Blends, Pair.Value.Glb);
+		}
+	}
+	for (const TPair<FString, FElysiumAnimatedPropEntry>& Pair : Index.AnimatedProps)
+	{
+		if (!Pair.Value.Blends.IsEmpty())
+		{
+			Owners.Emplace(Pair.Value.Stem, Pair.Value.Blends, Pair.Value.Glb);
+		}
+	}
+	if (Owners.IsEmpty())
+	{
+		AddInfo(TEXT("skipping: this export declares no blend grids"));
+		return true;
+	}
+
+	int32 Grids = 0, Cells = 0, NullCells = 0;
+	bool bValid = true;
+	for (const TTuple<FString, FString, FString>& Owner : Owners)
+	{
+		FElysiumBlendTable Table;
+		FString TableError;
+		if (!Table.Load(Owner.Get<1>(), TableError) || !Table.IsValid())
+		{
+			AddError(FString::Printf(TEXT("blends '%s': %s"), *Owner.Get<0>(), *TableError));
+			bValid = false;
+			continue;
+		}
+
+		// The owning glb's animation names, read straight out of the JSON chunk — no rendering
+		// resources, which is what keeps this in the headless tier.
+		TSet<FString> Baked;
+		if (!ReadGlbAnimationNames(FElysiumContentPaths::NpcBankGlb(Owner.Get<2>()), Baked))
+		{
+			AddError(FString::Printf(TEXT("cannot read animations from %s's glb '%s'"),
+				*Owner.Get<0>(), *Owner.Get<2>()));
+			bValid = false;
+			continue;
+		}
+
+		for (const TPair<FString, FElysiumBlendGrid>& Pair : Table.Grids)
+		{
+			++Grids;
+			int32 Playable = 0;
+			for (const FElysiumBlendCell& Cell : Pair.Value.Cells)
+			{
+				++Cells;
+				if (Cell.Clip.IsEmpty())
+				{
+					++NullCells;
+					continue;
+				}
+				++Playable;
+				if (!Baked.Contains(Cell.Clip.ToLower()))
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s' cell [%d,%d] names '%s', which its glb does not carry"),
+						*Owner.Get<0>(), *Pair.Key, Cell.Axis[0], Cell.Axis[1], *Cell.Clip));
+					bValid = false;
+				}
+			}
+			// The exporter drops any grid left with fewer than two live cells, so a grid that
+			// reaches the runtime always has something to blend between.
+			if (Playable < 2)
+			{
+				AddError(FString::Printf(TEXT("%s grid '%s' has %d playable cell(s)"),
+					*Owner.Get<0>(), *Pair.Key, Playable));
+				bValid = false;
+			}
+		}
+	}
+
+	AddInfo(FString::Printf(TEXT("%d owner(s), %d grid(s), %d cell(s), %d unbaked"),
+		Owners.Num(), Grids, Cells, NullCells));
+	TestTrue(TEXT("every blend cell names an animation its glb carries"), bValid);
+
+	// The regression that started this: the shared female locomotion fan at rest.
+	FElysiumBlendTable Female;
+	FString FemaleError;
+	if (Female.Load(TEXT("blends/character_shared_female_move_and_ranged.json"), FemaleError))
+	{
+		if (const FElysiumBlendGrid* Walk = Female.Find(TEXT("walk")))
+		{
+			TestEqual(TEXT("`walk` is a nine-cell fan"), Walk->Cells.Num(), 9);
+			const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Walk, Female,
+				FElysiumPoseParams::Neutral());
+			if (TestNotNull(TEXT("the neutral pose resolves a cell"), Pick.Cell))
+			{
+				// `walk` itself is the -180 cell's baked name. Resolving to it would be the bug.
+				TestEqual(TEXT("a resting body walks FORWARD, not backward"), Pick.Cell->Clip,
+					FString(TEXT("walk_0")));
+			}
+		}
+		else
+		{
+			AddError(TEXT("the female locomotion bank declares no `walk` grid"));
+		}
+
+		if (const FElysiumBlendGrid* Run = Female.Find(TEXT("run")))
+		{
+			const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Run, Female,
+				FElysiumPoseParams::Neutral());
+			if (TestNotNull(TEXT("the run fan resolves a cell"), Pick.Cell))
+			{
+				TestEqual(TEXT("...and it runs forward too"), Pick.Cell->Clip,
+					FString(TEXT("npc_run_0")));
+			}
+		}
+	}
+	else
+	{
+		AddInfo(FString::Printf(TEXT("no female locomotion bank in this export (%s)"), *FemaleError));
+	}
+
 	return true;
 }
 

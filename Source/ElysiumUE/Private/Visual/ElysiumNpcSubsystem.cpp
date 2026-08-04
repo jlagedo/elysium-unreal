@@ -470,8 +470,11 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		}
 		if (Anim == nullptr)
 		{
-			// No manifest (NPC export not run) -- fall back to this glb's own clips.
-			Anim = ElysiumNpcVisual::RetargetClip(Asset, Mesh, Want, AnimError);
+			// No manifest (NPC export not run) -- fall back to this glb's own clips. Still through the
+			// grid resolver: without an index it answers the label unchanged, but a stem that does
+			// carry a sidecar must not play the base cell just because the vocabulary lookup missed.
+			const FString AnimName = Anims != nullptr ? Anims->ResolveGridClip(Stem, Want) : Want;
+			Anim = ElysiumNpcVisual::RetargetClip(Asset, Mesh, AnimName, AnimError);
 		}
 		if (Anim != nullptr)
 		{

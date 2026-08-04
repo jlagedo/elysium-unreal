@@ -693,7 +693,9 @@ for the rest (`ax`=601, `ih`=618, `ah`=652, `eh`=603, `ay`=593, `ae`=230, `dh`=2
 corpus (`ax` appears under 20 distinct codes, `ih` under 12). **Match on the phoneme string.**
 
 The trailing `volume` is 1.000 on effectively every row and the sixth field is 0; version 1.0
-and 1.1 files omit the sixth field.
+and 1.1 files omit the sixth field. **Neither is consumed.** The accumulate call takes only the
+phoneme code, the envelope's `scale` and the two tables (`FUN_100c4940`'s argument list), so a
+row's volume never reaches a weight.
 
 ## `expressions/` — phoneme → flex-controller weights
 
@@ -761,8 +763,11 @@ so the face is evaluated at render time rather than on a think tick. The order i
    `0x10`), then remap through the controller's own `min`/`max`;
 5. **blink** (below) — assigned *after* the loop, so it overwrites any networked `blink` value,
    and written raw, bypassing the `min`/`max` remap every other controller receives;
-6. visemes accumulate additively from the `.vfe`: `g_flexweight[map[i]] += scale × weight_i`, so
-   lipsync, expression and blink share one surface;
+6. visemes accumulate additively from the `.vfe`: `g_flexweight[map[i]] += scale × value_i`, so
+   lipsync, expression and blink share one surface. `scale` is the phoneme envelope below, and
+   `value_i` is the row's **value** column — the `$hasweighting` influence beside it is **not
+   applied** (`FUN_100c4940` walks the row at stride 12 as `{int key; float value; float
+   influence}` and reads only the first two);
 7. `RunFlexRules` → the flexdesc array — gated by the `flex_rules` ConVar, which when 0 returns
    **without zeroing the destination**, sending uninitialized stack to the renderer;
 8. the view target is interpolated and pushed to the renderer;
@@ -790,6 +795,55 @@ The `eyes_updown` / `eyes_rightleft` names are interned as **flex controllers**,
 parameters, and nothing indexes the weight array by them — gaze reaches the renderer only
 through the view target. A model that declared them would still have them driven by the
 ordinary networked controller path.
+
+### The phoneme envelope — step 6's `scale`
+
+The viseme block is `0x100c463b–0x100c4730`. It walks the emitting entity's sentences, and each
+phoneme row contributes over a window derived from its own duration:
+
+```
+S = clamp(end − start, studiohdr+232, studiohdr+236)     // FUN_100c3be0
+t = (curtime − the speak event's start) − phoneme_delay
+
+A = (start − t) / S ;  skip the phoneme when A ≥ 1 ;  A = max(A, 0)
+B = (end   − t) / S ;  skip the phoneme when B ≤ 0 ;  B = min(B, 1)
+
+scale = B − A
+```
+
+So a phoneme's contribution is a **trapezoid whose ramp-in ends at its authored start and whose
+ramp-out ends at its authored end**, both of duration `S`. Two consequences that a symmetric
+in-span reading would get wrong:
+
+- the phoneme **leads in before it is spoken** — the window opens at `start − S` — and always
+  decays to exactly zero at `end`;
+- a span shorter than `S` **never reaches full weight**. Its peak is `span / S`, attained
+  exactly at the authored start. Since spans abut within a word, one phoneme's decay overlaps
+  the next one's lead-in, and the additive accumulate is what sums them.
+
+`S` is the span **clamped to a per-model pair**, so the blend width is authored per character
+rather than global. `FUN_100c3be0` prefers the `phonemefilter_min` / `phonemefilter_max`
+ConVars, but only when **both** are away from their defaults — each reads as `0.0` when
+`IsDefault()` answers true, and either zero sends it to the model pair. Shipped behaviour is
+therefore entirely the model's own numbers.
+
+Those numbers are the two floats at **studiohdr +232/+236** (`mdl_v2531.md` recorded them as an
+`int[2] Unknown`). Across the 339 loose models:
+
+| `+232`, `+236` | Models |
+|---|---|
+| **0.080, 0.100** | every rigged character |
+| 0.080, 0.105 | `Jeanette` alone |
+| 0.065, 0.100 | 169 unrigged |
+| 0.0, 0.0 | 113, all `NumFlexDescs 0` |
+
+So a speaking character blends over `clamp(span, 0.080, 0.100)` seconds. The `(0,0)` pair would
+make `S` zero and `1/S` infinite; nothing in the clamp guards it, and only models that never
+reach the viseme path carry it.
+
+`phoneme_delay` contributes **0 at its default** — the call site takes a literal `0.0` when the
+ConVar answers `IsDefault()`. The clock is therefore the authored event's, not the mixer's
+position.
 
 ## The offline export (PL10)
 
@@ -888,7 +942,15 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
 - Lip sync is a three-file join per line — `.lip` for timing, `expressions/<stem>_phonemes`
   for the weights, `mstudiomouth_t` for the amplitude jaw — with the phoneme *string* as the
   key. All three are on disk: `$ELYSIUM_EXPORT_ROOT/lip/`, `$ELYSIUM_EXPORT_ROOT/expressions/`, and `mouths` in the facial
-  manifest.
+  manifest. The join needs a **fourth** input the manifest does not carry: the two floats at
+  studiohdr +232/+236 that set the phoneme blend width (envelope section above).
+- The phoneme envelope is **not symmetric inside the span**. It ramps in before the phoneme's
+  authored start and decays to zero at its end, and a span shorter than the blend width peaks
+  below 1. A reconstruction that ramps within the span moves the mouth early-to-late by up to
+  the blend width and over-articulates every short phoneme.
+- The viseme accumulate applies the expression row's **value** and ignores its influence
+  column. `lacroix_phonemes`'s `r2` row carries `0.050` under influence `0.000`, so applying
+  the influence is a silent divergence rather than a no-op.
 - No player body carries a flex rig (inventory above), so the PC has no morph targets to
   drive and no `facial/` sidecar — but 57 of the 59 carry eyeball records, so the faithful
   player face is a **still face with live, aiming eyes**.

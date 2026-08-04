@@ -121,6 +121,28 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 #endif
 }
 
+FElysiumGreenRoomRun* UElysiumMapSubsystem::EnsureGreenRoomLab(FString& OutError)
+{
+	if (GreenRoomRun.IsValid())
+	{
+		// A capture run owns the camera, the stage and the process's exit code, and driving it from
+		// a window mid-flight would corrupt the very captures it exists to produce.
+		if (!GreenRoomRun->IsLab())
+		{
+			OutError = TEXT("a green-room capture run is already in flight in this session");
+			return nullptr;
+		}
+		return GreenRoomRun.Get();
+	}
+	if (GUsingNullRHI)
+	{
+		OutError = TEXT("the green room needs a real RHI");
+		return nullptr;
+	}
+	GreenRoomRun = MakePimpl<FElysiumGreenRoomRun>(this, /*bForceLab=*/true);
+	return GreenRoomRun.Get();
+}
+
 void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();

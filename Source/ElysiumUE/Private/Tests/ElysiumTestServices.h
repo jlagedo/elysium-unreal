@@ -239,6 +239,32 @@ struct FElysiumRecordingServices final
 	}
 	virtual void StopCinematicClip(USkeletalMeshComponent*) override { Record(TEXT("StopCinematicClip")); }
 
+	// Where each fake body's clip is "at". A test writes an entry to stage drift and reads it back
+	// to see what a resync corrected it to. An ABSENT entry is the ordinary "this body has no anim
+	// host" answer, which is what a prop under `elysium.NpcAnim 0` gets — keyed on the component so
+	// a test with two bodies can drift one without touching the other.
+	TMap<const USkeletalMeshComponent*, float> ClipPositions;
+
+	virtual bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const override
+	{
+		const float* Position = Body ? ClipPositions.Find(Body) : nullptr;
+		if (!Position)
+		{
+			return false;
+		}
+		OutSeconds = *Position;
+		return true;
+	}
+	virtual bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override
+	{
+		Record(FString::Printf(TEXT("ResyncCinematicClip %.3f"), PositionSeconds));
+		if (Body)
+		{
+			ClipPositions.Add(Body, PositionSeconds);
+		}
+		return Body != nullptr;
+	}
+
 	// The controller names this fake face carries, lowercased. Empty is the default and stands for a
 	// body with no facial rig — the majority of the exported cast, and the case every caller must
 	// treat as an ordinary no-op.
@@ -356,6 +382,11 @@ struct FElysiumRecordingServices final
 	FQuat LastAnimatedPropRotation = FQuat::Identity;
 	FQuat LastPropRotation = FQuat::Identity;
 
+	// The body each animated stem was built onto, so a test can address one prop's clip by name —
+	// the records carry the stem but not the pointer, and ClipPositions is keyed on the component
+	// because that is what the real seam receives.
+	TMap<FString, USkeletalMeshComponent*> AnimatedPropBodies;
+
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
 		const FVector& Location, const FQuat& Rotation, float UniformScale) override
 	{
@@ -363,7 +394,9 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("BuildAnimatedPropVisual %s %s scale=%.2f rot=%s"),
 			*Stem, *Location.ToString(), UniformScale, *Rotation.Rotator().ToString()));
 		LastAnimatedPropRotation = Rotation;
-		return NewComponent<USkeletalMeshComponent>();
+		USkeletalMeshComponent* Body = NewComponent<USkeletalMeshComponent>();
+		AnimatedPropBodies.Add(Stem, Body);
+		return Body;
 	}
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds) override

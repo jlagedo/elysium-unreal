@@ -33,6 +33,12 @@ public:
 
 	void RebindToWorld(UWorld* World);
 	void SetPreviewMode(EElysiumHUDPreview Mode);
+	// Take the whole root off screen — reticle, vitals and fade together. For the debug harnesses
+	// that own the viewport and are not showing the player anything: a green room is a neutral
+	// stage, and a masquerade meter over a model being inspected is noise. Idempotent, and the
+	// state survives a rebind, because a travel must not quietly put the HUD back.
+	void SetHidden(bool bInHidden);
+	bool IsHidden() const { return bHidden; }
 
 private:
 	void EnsureRoot();
@@ -51,5 +57,6 @@ private:
 	FDelegateHandle ViewPublishedHandle;
 	FDelegateHandle PostLoadMapHandle;
 	EElysiumHUDPreview PreviewMode = EElysiumHUDPreview::Off;
+	bool bHidden = false;
 	TArray<IConsoleObject*> ConsoleObjects;
 };

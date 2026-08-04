@@ -81,6 +81,8 @@ namespace
 			ReadStringArray(*Obj, TEXT("split_bones"), E.SplitRotationBones);
 			(*Obj)->TryGetStringField(TEXT("procedural"), E.Procedural);
 			(*Obj)->TryGetNumberField(TEXT("procedural_bones"), E.ProceduralBones);
+			(*Obj)->TryGetStringField(TEXT("blends"), E.Blends);
+			(*Obj)->TryGetNumberField(TEXT("blend_grids"), E.BlendGrids);
 			Out.Add(Pair.Key, MoveTemp(E));
 		}
 	}
@@ -296,6 +298,8 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				ReadStringArray(*Obj, TEXT("split_bones"), Entry.SplitRotationBones);
 				(*Obj)->TryGetStringField(TEXT("procedural"), Entry.Procedural);
 				(*Obj)->TryGetNumberField(TEXT("procedural_bones"), Entry.ProceduralBones);
+				(*Obj)->TryGetStringField(TEXT("blends"), Entry.Blends);
+				(*Obj)->TryGetNumberField(TEXT("blend_grids"), Entry.BlendGrids);
 				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
 				Entry.Model.ToLowerInline();
 				// Two shapes. v6 writes one object per clip carrying the selection keys; v4/v5

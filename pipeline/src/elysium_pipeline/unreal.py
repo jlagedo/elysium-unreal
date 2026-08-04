@@ -211,8 +211,42 @@ def run_play(config, runner, map_name: str | None = None, extra: Sequence[str] =
     _run(config, runner, editor_executable(config), args)
 
 
+def _take_options(values: list[str]) -> tuple[list[str], list[str], bool]:
+    """Split harness-wide options out of the positional arguments.
+
+    Two of these exist because the harnesses are otherwise only drivable by editing files:
+    `--set` is the only way to put a console variable in front of a run, and `--live` is the
+    only way to watch one instead of reading stills afterwards.
+
+    Returns `(positional, exec_cmds, live)`.
+    """
+    positional: list[str] = []
+    exec_cmds: list[str] = []
+    live = False
+    index = 0
+    while index < len(values):
+        value = values[index]
+        if value in {"--set", "--cvar"}:
+            if index + 1 >= len(values):
+                raise ValueError(f"{value} needs a command, e.g. --set 'elysium.Cloth 0'")
+            exec_cmds.append(values[index + 1])
+            index += 2
+            continue
+        if value.startswith(("--set=", "--cvar=")):
+            exec_cmds.append(value.split("=", 1)[1])
+            index += 1
+            continue
+        if value == "--live":
+            live = True
+            index += 1
+            continue
+        positional.append(value)
+        index += 1
+    return positional, exec_cmds, live
+
+
 def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
-    values = list(args)
+    values, exec_cmds, live = _take_options(list(args))
     common = common_game_args(config)
     editor = editor_executable(config)
     if kind == "profile":
@@ -280,6 +314,28 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             launch.append(f"-MoveCourse={course}")
         _run(config, runner, editor, launch)
         return None
+    if kind == "gr":
+        # The interactive green room. It shares the harness's stage and body factory and nothing
+        # else: no offscreen rendering, no `-unattended`, no capture, no contact sheet, and no exit
+        # -- the window is the point, so the process lives until it is closed.
+        stem = values[0] if values else ""
+        clip = values[1] if len(values) > 1 else ""
+        map_name = values[2] if len(values) > 2 else "sp_tutorial_1"
+        launch = [
+            *common, "-dx12", "-ForceRes", "-windowed", "-ResX=1920", "-ResY=1080",
+            f"-ElysiumMap={map_name}", "-ElysiumGreenRoom", "-GreenRoomLab",
+            "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
+        ]
+        # An empty `-Switch=` makes Unreal's parser swallow the NEXT token as the value, so a
+        # stem-less launch must omit the pair rather than pass it blank.
+        if stem:
+            launch.append(f"-GreenRoomStem={stem}")
+        if clip:
+            launch.append(f"-GreenRoomClip={clip}")
+        if exec_cmds:
+            launch.append("-ExecCmds=" + ";".join(exec_cmds))
+        _run(config, runner, editor, launch)
+        return None
     if kind in {"greenroom", "modelroom"}:
         if kind == "greenroom":
             case = values[0] if values else "player"
@@ -303,23 +359,36 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
                     map_name = values[4]
             elif len(values) > 2:
                 map_name = values[2]
+            # An empty `-Switch=` is not an empty value to Unreal's parser -- it takes the NEXT
+            # token as the value, so passing the pair unconditionally made a clip-vocabulary
+            # review read its anim set as "-GreenRoomBoneRoot=" and take the cinematic path.
+            # Omit both unless a cinematic set was actually named.
             review_args = [
                 "-GreenRoomCase=review", f"-GreenRoomStem={stem}", f"-GreenRoomClip={clip}",
-                f"-GreenRoomAnimSet={anim_set}", f"-GreenRoomBoneRoot={bone_root}",
-                "-GreenRoomSettle=8",
             ]
-        _run(
-            config,
-            runner,
-            editor,
-            [
-                *common, "-dx12", "-RenderOffScreen", "-ForceRes", "-windowed",
-                "-ResX=1920", "-ResY=1080", f"-ElysiumMap={map_name}", "-ElysiumGreenRoom",
-                *review_args, "-unattended", "-nosplash", "-nopause", "-stdout",
-                "-FullStdOutLogOutput",
-            ],
-        )
-        if kind == "modelroom":
+            if anim_set:
+                review_args += [f"-GreenRoomAnimSet={anim_set}",
+                                f"-GreenRoomBoneRoot={bone_root}"]
+            review_args.append("-GreenRoomSettle=8")
+        # `--live` opens a window and stays in it: the harness's own stills answer "is it there
+        # and does it hold together", but anything about timing -- a garment settling, a blend
+        # easing -- only reads in motion, and offscreen rendering cannot show that.
+        launch = [*common, "-dx12"]
+        if not live:
+            launch.append("-RenderOffScreen")
+        launch += [
+            "-ForceRes", "-windowed", "-ResX=1920", "-ResY=1080",
+            f"-ElysiumMap={map_name}", "-ElysiumGreenRoom", *review_args,
+            "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
+        ]
+        if not live:
+            launch.append("-unattended")
+        else:
+            launch.append("-GreenRoomLive")
+        if exec_cmds:
+            launch.append("-ExecCmds=" + ";".join(exec_cmds))
+        _run(config, runner, editor, launch)
+        if kind == "modelroom" and not live:
             review = config.export_root / "_greenroom" / "review"
             _run(
                 config,

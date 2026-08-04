@@ -26,10 +26,63 @@ namespace ElysiumCameraTrack
 class FElysiumGreenRoomRun
 {
 public:
-	explicit FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem);
+	// bForceLab arms the interactive lab regardless of the command line — the door `elysium.gr`
+	// uses to stand a green room up inside a session that never asked for one.
+	explicit FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem, bool bForceLab = false);
 	~FElysiumGreenRoomRun();
 
 	static bool IsRequested();
+
+	// --- the interactive lab (`elysium.gr`) -------------------------------------------------
+	//
+	// Everything above this line is a one-shot: resolve fixed cases, seek fixed times, capture,
+	// exit. The lab is the same stage and the same body factory with the state machine's tail
+	// removed — it builds the room, stands one body on it, and then does nothing until asked. It
+	// captures nothing and never exits, because the questions it answers are the ones a still
+	// cannot hold: whether a garment settles, whether it flares too eagerly, whether a hem clears
+	// the knee at walking speed. The Cog window is the only thing that drives it.
+
+	// What the window owns and the run reads back every frame. Kept as one struct passed by
+	// reference rather than a wall of setters: it is all display state, all written from the game
+	// thread by exactly one window, and a slider that has to round-trip through an accessor is a
+	// slider that fights the immediate-mode UI it lives in.
+	struct FLabView
+	{
+		// Degrees around the body and above it, and the pull-back distance as a multiple of the
+		// automatic fit. 1 is the framing the capture path chooses.
+		float OrbitYaw = 35.0f;
+		float OrbitPitch = -6.0f;
+		float DistanceScale = 1.0f;
+		// 0 = the feet, 1 = the top of the bounds. Half is the hip, which is where a garment is.
+		float LookHeight = 0.5f;
+
+		bool bPaused = false;
+		float Speed = 1.0f;
+
+		// The game's own HUD over the stage. Off, because the lab is not showing the player
+		// anything: a masquerade meter and a reticle across a model being inspected are noise, and
+		// the reticle in particular sits exactly where a hem is being watched.
+		bool bShowHud = false;
+
+		// The lattice chains and the collider spheres, drawn in the world. A collapsed chain or a
+		// thigh sphere in the wrong place is obvious here and invisible in the silhouette.
+		bool bDrawLattice = false;
+		bool bDrawColliders = false;
+	};
+
+	bool IsLab() const { return bLab; }
+	// The stage exists and the lab is accepting bodies.
+	bool IsLabReady() const { return bLab && Phase == EPhase::Lab; }
+	// Stand a body on the stage, replacing whatever is there. An empty clip asks the model's own
+	// idle policy for one, so a stem alone is a complete request.
+	bool LabSetBody(const FString& Stem, const FString& Clip, FString& OutError);
+	const FString& LabStem() const { return ReviewStem; }
+	const FString& LabClip() const { return ReviewClip; }
+	USkeletalMeshComponent* LabBody() const;
+	float LabDuration() const;
+	float LabTime() const { return LabClipTime; }
+	void LabSetTime(float Seconds);
+	FLabView& LabView() { return LabViewState; }
 
 private:
 	struct FCase
@@ -115,9 +168,17 @@ private:
 		FCameraMetric Camera;
 	};
 
-	enum class EPhase : uint8 { WaitReady, PoseWarmup, Settle, Await, Done };
+	enum class EPhase : uint8 { WaitReady, PoseWarmup, Settle, Await, Lab, Done };
 
 	bool Tick(float DeltaSeconds);
+	// One frame of the lab: advance the clip under the window's playback state, re-frame the stage
+	// and the orbit camera around whatever the body is doing now, and draw the requested overlays.
+	void TickLab(float DeltaSeconds);
+	void DrawLabOverlays() const;
+	// Push FLabView::bShowHud at the local-player HUD. Called every lab frame rather than on the
+	// edge: the HUD subsystem rebuilds its root on travel and on a controller change, and a
+	// one-shot hide would lose to either.
+	void ApplyLabHud(bool bShow) const;
 	UWorld* GetWorld() const;
 	AElysiumMapActor* GetMap() const;
 	void ResolveCases();
@@ -161,6 +222,15 @@ private:
 	bool bPlayerSurfaceActive = false;
 	bool bAwaitingCapture = false;
 	bool bAnyFailure = false;
+	// `-GreenRoomLive`: keep the window up after the captures instead of exiting. The stills answer
+	// whether a body is there and holds together; anything about *timing* — a garment settling, a
+	// blend easing — only reads in motion, and there is otherwise no way to watch one.
+	bool bLive = false;
+	// `-GreenRoomLab` (or `elysium.gr`): the interactive mode. Implies live — a lab that exits when
+	// it has finished building is not a lab.
+	bool bLab = false;
+	FLabView LabViewState;
+	float LabClipTime = 0.0f;
 	int32 CameraShotId = 0;
 
 	TArray<FCase> ActiveCases;

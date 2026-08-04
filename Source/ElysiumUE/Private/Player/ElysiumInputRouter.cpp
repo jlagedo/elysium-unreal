@@ -9,8 +9,10 @@
 
 #include "Components/InputComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/WorldSettings.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumRouter, Log, All);
 
@@ -186,8 +188,13 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 {
 	// Bound the delta here, at the point the command is built, so a hitch never *enters* the
 	// command stream: a recording made across a level-load stutter replays as the game would have
-	// simulated it, not as the stall happened to be measured.
-	DeltaSeconds = static_cast<float>(ElysiumFrame::ClampFrameDelta(DeltaSeconds));
+	// simulated it, not as the stall happened to be measured. The scale comes from the world
+	// settings rather than the substrate clock — it is the same number `FixupDeltaSeconds` already
+	// multiplied this delta by, and reading it here keeps Player off a Session dependency.
+	const UWorld* SampleWorld = GetWorld();
+	const AWorldSettings* Settings = SampleWorld ? SampleWorld->GetWorldSettings() : nullptr;
+	const double FrameScale = Settings ? Settings->GetEffectiveTimeDilation() : 1.0;
+	DeltaSeconds = static_cast<float>(ElysiumFrame::ClampFrameDelta(DeltaSeconds, FrameScale));
 
 	if (bReplaying)
 	{

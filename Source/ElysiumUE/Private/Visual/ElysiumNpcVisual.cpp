@@ -12,7 +12,25 @@
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/UObjectGlobals.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
+
+// The simulated-garment spike (docs/architecture/asset-enhancement.md). VtMB has no cloth solver at
+// all — a skirt or coat is skinned rigidly to one bone and never moves — so this adds motion the
+// original never had rather than reproducing any. It selects a side-by-side enhanced mesh built by
+// pipeline/src/elysium_pipeline/enhancement/cloth_spike.py; the faithful npc/<stem>.glb is never
+// written and is what loads whenever this is off or the enhanced pair is absent.
+//
+// Default 1 is an explicit owner call for the spike and diverges from the enhancement layer's
+// otherwise-uniform "opt in" default, which the blast radius makes affordable: the toggle selects
+// nothing on a stem the spike did not build, and npc/cloth/ holds two models.
+//
+// Applied at map load; NPC meshes and their rigs are resolved once per map epoch.
+static TAutoConsoleVariable<int32> CVarCloth(
+	TEXT("elysium.Cloth"), 1,
+	TEXT("Simulate garments on the models the cloth spike built (1) or wear the faithful rigid "
+		 "mesh (0). Applied at map load."),
+	ECVF_Default);
 
 namespace
 {
@@ -233,11 +251,24 @@ namespace ElysiumNpcVisual
 		return Mesh;
 	}
 
+	bool UseClothMesh(const FString& Stem)
+	{
+		// Necessary but not sufficient, the same shape as `elysium.EnhancedTextures` over `tex_hi/`:
+		// the toggle selects between two sets, and a stem the spike never built silently keeps the
+		// faithful one rather than failing to load. Deleting npc/cloth/ reverts the spike whether
+		// the cvar is on or not.
+		return CVarCloth.GetValueOnAnyThread() != 0
+			&& FPaths::FileExists(FElysiumContentPaths::NpcClothGlb(Stem))
+			&& FPaths::FileExists(FElysiumContentPaths::NpcClothRig(Stem));
+	}
+
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
 		bool bPlayerMaterial, const TArray<FString>* EyeMaterials)
 	{
-		return LoadMeshFromPath(FElysiumContentPaths::NpcGlb(Stem), OutAsset, OutError,
-			bPlayerMaterial, EyeMaterials);
+		const FString Path = UseClothMesh(Stem)
+			? FElysiumContentPaths::NpcClothGlb(Stem)
+			: FElysiumContentPaths::NpcGlb(Stem);
+		return LoadMeshFromPath(Path, OutAsset, OutError, bPlayerMaterial, EyeMaterials);
 	}
 
 }

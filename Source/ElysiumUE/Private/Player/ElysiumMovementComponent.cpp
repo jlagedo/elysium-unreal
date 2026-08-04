@@ -9,8 +9,10 @@
 #include "Engine/GameInstance.h"
 
 #include "Components/PrimitiveComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/WorldSettings.h"
 
 // The timestep A/B. **0 is the faithful baseline** — VtMB has no tick, so its movement really is
 // frame-rate dependent (`docs/vtmb/source_movement.md` → "Frame timing"). A non-zero value opts into
@@ -416,7 +418,11 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	{
 		DeltaTime = PendingCmd.DeltaSeconds;
 	}
-	DeltaTime = static_cast<float>(ElysiumFrame::ClampFrameDelta(DeltaTime));
+	// The scale comes from the world settings, which is the number the engine's own filter already
+	// applied to this frame — not the substrate clock, which the Player layer does not reach.
+	const AWorldSettings* FrameSettings = GetWorld() ? GetWorld()->GetWorldSettings() : nullptr;
+	DeltaTime = static_cast<float>(ElysiumFrame::ClampFrameDelta(
+		DeltaTime, FrameSettings ? FrameSettings->GetEffectiveTimeDilation() : 1.0));
 
 	if (bFrozen)
 	{

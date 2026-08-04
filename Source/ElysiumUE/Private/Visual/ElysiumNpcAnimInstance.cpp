@@ -1,5 +1,6 @@
 #include "Visual/ElysiumNpcAnimInstance.h"
 
+#include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumFacialRig.h"
 
@@ -63,6 +64,14 @@ void FElysiumNpcAnimProxy::CacheBones()
 	// by name per evaluation.
 	Split.ResolveBones(GetRequiredBones());
 	AxisInterp.ResolveBones(GetRequiredBones());
+	// The cloth chains take the context rather than the container: they are constructed here too,
+	// because the reference skeleton their body definitions need is only reachable from it.
+	Cloth.CacheBones(Context);
+}
+
+void FElysiumNpcAnimProxy::PreUpdateCloth(const UAnimInstance* Instance)
+{
+	Cloth.PreUpdate(Instance);
 }
 
 void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
@@ -77,6 +86,11 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 		// commands, though: repeating one means replay it, and changing loop policy must take effect.
 		if (bLoop && bPlayingLoop)
 		{
+			// A body a prior Seek pinned at rate 0 must not stay frozen forever just because the
+			// same looping clip was asked for again. SetPlayRate writes the node's own member, read
+			// on every UpdateAssetPlayer, so this un-freezes without the visible restart the
+			// early-out exists to prevent — no bNeedsReinit, and the play position is preserved.
+			Players[Incoming].SetPlayRate(1.f);
 			return;
 		}
 		Players[Incoming].SetLoopAnimation(bLoop);
@@ -125,6 +139,45 @@ void FElysiumNpcAnimProxy::Seek(float PositionSeconds)
 	BlendRate = 0.f;
 }
 
+float FElysiumNpcAnimProxy::GetClipPosition() const
+{
+	if (!bInitialized || Playing == nullptr)
+	{
+		return -1.f;
+	}
+	return Players[Incoming].GetAccumulatedTime();
+}
+
+void FElysiumNpcAnimProxy::ResyncPosition(float PositionSeconds)
+{
+	if (!bInitialized || Playing == nullptr)
+	{
+		return;
+	}
+	// A pending restart wins. The worker consumes bNeedsReinit in UpdateAnimationNode and
+	// Initialize_AnyThread then sets the accumulator to the node's start position, so a resync
+	// written in the same frame as a Request would be silently discarded. Bailing makes that
+	// deterministic instead of dependent on which ran first; the next resync corrects it.
+	if (bNeedsReinit[Incoming])
+	{
+		return;
+	}
+	const float Length = Playing->GetPlayLength();
+	const float Position = bPlayingLoop && Length > SMALL_NUMBER
+		? FMath::Fmod(FMath::Max(0.f, PositionSeconds), Length)
+		: FMath::Clamp(PositionSeconds, 0.f, Length);
+	// SetAccumulatedTime writes the node's play time and nothing else — no play rate, no start
+	// position, no reinit, no blend state. That is the whole reason this is not Seek: a resync
+	// landing inside a crossfade leaves the crossfade running, and only the incoming player is
+	// re-phased because the outgoing pose is fading out and its phase no longer matters.
+	//
+	// This is a game-thread write to a field the worker advances. It is safe only because every
+	// caller arrives through UElysiumNpcAnimInstance's GetProxyOnGameThread, which blocks on any
+	// in-flight parallel evaluation. A future path reaching the proxy without that accessor turns
+	// this into a silent data race on a float.
+	Players[Incoming].SetAccumulatedTime(Position);
+}
+
 void FElysiumNpcAnimProxy::Stop()
 {
 	Playing = nullptr;
@@ -135,6 +188,11 @@ void FElysiumNpcAnimProxy::Stop()
 
 void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
 {
+	// Ahead of the initialised gate: the simulation's only source of a timestep is this call, and a
+	// body with no clip still evaluates — against the ref pose — so its garment must still hang and
+	// settle rather than freeze mid-air until something plays.
+	Cloth.Update(InContext);
+
 	if (!bInitialized)
 	{
 		return;
@@ -210,8 +268,9 @@ static TAutoConsoleVariable<int32> CVarCompositionStages(
 
 void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
 {
-	if ((!Split.HasWork() && !AxisInterp.HasWork())
-		|| CVarCompositionStages.GetValueOnAnyThread() == 0)
+	const bool bStages = (Split.HasWork() || AxisInterp.HasWork())
+		&& CVarCompositionStages.GetValueOnAnyThread() != 0;
+	if (!bStages && !Cloth.HasWork())
 	{
 		return;
 	}
@@ -227,8 +286,15 @@ void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
 
 	// ORDER IS LOAD-BEARING. Split inheritance re-roots `Bip01 Spine1`'s orientation, and every
 	// driven arm bone hangs off it, so running these the other way produces a different skeleton.
-	Split.Apply(Composed);
-	AxisInterp.Apply(Composed);
+	if (bStages)
+	{
+		Split.Apply(Composed);
+		AxisInterp.Apply(Composed);
+	}
+	// Last, over the finished skeleton. The garment is synthesised geometry hanging off the pelvis
+	// and shares no bone with either stage above, but it should still swing from the pose that will
+	// actually be drawn rather than one still missing its corrections.
+	Cloth.Apply(Composed);
 
 	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have
 	// been asked for in component space, and the plain conversion ensures against exactly that.
@@ -284,6 +350,19 @@ void FElysiumNpcAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositio
 	}
 }
 
+void FElysiumNpcAnimProxy::SetClothRig(TSharedPtr<const FElysiumClothRig> InRig)
+{
+	Cloth.SetRig(MoveTemp(InRig));
+	// Same rule as the composition rig, and the same reason: installed before the first CacheBones
+	// this resolves there, installed after it has to rebuild against the container already in force.
+	// The chains are torn down by SetRig, so this is a construction rather than a re-resolve.
+	if (const FBoneContainer& Container = GetRequiredBones(); Container.IsValid())
+	{
+		FAnimationCacheBonesContext Context(this);
+		Cloth.CacheBones(Context);
+	}
+}
+
 void UElysiumNpcAnimInstance::PlayClip(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
 {
 	if (Sequence == nullptr)
@@ -303,6 +382,17 @@ void UElysiumNpcAnimInstance::SeekClip(float PositionSeconds)
 void UElysiumNpcAnimInstance::StopClip()
 {
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Stop();
+}
+
+float UElysiumNpcAnimInstance::GetClipPosition() const
+{
+	return const_cast<UElysiumNpcAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().GetClipPosition();
+}
+
+void UElysiumNpcAnimInstance::ResyncClip(float PositionSeconds)
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().ResyncPosition(PositionSeconds);
 }
 
 void UElysiumNpcAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig)
@@ -341,6 +431,41 @@ int32 UElysiumNpcAnimInstance::GetResolvedAxisInterpRules() const
 {
 	return const_cast<UElysiumNpcAnimInstance*>(this)
 		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().NumAxisInterpRules();
+}
+
+void UElysiumNpcAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
+{
+	Super::NativeUpdateAnimation(DeltaSeconds);
+	// Skipped entirely for the overwhelming majority of bodies, which carry no garment rig at all.
+	if (ClothRig.IsValid())
+	{
+		GetProxyOnGameThread<FElysiumNpcAnimProxy>().PreUpdateCloth(this);
+	}
+}
+
+void UElysiumNpcAnimInstance::SetClothRig(TSharedPtr<const FElysiumClothRig> InRig)
+{
+	ClothRig = MoveTemp(InRig);
+	// Same guarantee as the composition rig: GetProxyOnGameThread blocks on any in-flight parallel
+	// evaluation, so no worker can be simulating against the chains this replaces.
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetClothRig(ClothRig);
+}
+
+void UElysiumNpcAnimInstance::SetClothTuning(const FElysiumClothTuning& InTuning)
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetClothTuning(InTuning);
+}
+
+FElysiumClothTuning UElysiumNpcAnimInstance::GetClothTuning() const
+{
+	return const_cast<UElysiumNpcAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().GetClothTuning();
+}
+
+int32 UElysiumNpcAnimInstance::GetResolvedClothChains() const
+{
+	return const_cast<UElysiumNpcAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().NumClothChains();
 }
 
 bool UElysiumNpcAnimInstance::SetFlexController(const FString& Name, float Value)

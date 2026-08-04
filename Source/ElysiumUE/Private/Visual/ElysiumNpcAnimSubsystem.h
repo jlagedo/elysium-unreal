@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "Substrate/ElysiumDisposition.h"
+#include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumEyeRig.h"
@@ -74,6 +75,10 @@ public:
 	// `npc_index.json`; the spike writes nothing into the manifest, so existence on disk is the
 	// whole selection rule and a miss costs one file probe, cached like every other miss here.
 	TSharedPtr<const FElysiumClothRig> GetClothRig(const FString& Stem);
+	// The blend spaces a stem declares (CAP7.3): `npc/blends/<stem>.json`. Null for every model whose
+	// sequences each name a single animation, which is most of them and a normal load. The stem may
+	// be a character, a bank or an animated prop — all three can declare grids.
+	TSharedPtr<const FElysiumBlendTable> GetBlendTable(const FString& Stem);
 	// vdata/system/dispositiontable.txt, loaded once.
 	const FElysiumDispositionTable& GetDispositions();
 
@@ -92,6 +97,25 @@ public:
 	// `BaseAnim` and the actor's `bonerename` root (PL16).
 	UAnimSequence* ResolveClipFromBank(const FString& BankStem, const FString& ClipName,
 		USkeletalMesh* Mesh, FString& OutError);
+
+	// CAP7.3 — the animation a label actually plays on OwnerStem, which is the label itself for every
+	// label that does not name a blend grid. **This is the only place a grid is collapsed to a cell**;
+	// the three resolvers above and the animated-prop path all come through here, because a hook in
+	// any one of them would silently leave the others playing the -180 degree base cell.
+	//
+	// OwnerStem is the stem whose glb carries the animation — a bank for most locomotion — not the
+	// character asking for it, because the grid and its cells are declared by the owner. The returned
+	// name is NOT in the character's clip vocabulary and must not be looked up there; it addresses an
+	// animation in the owner's glb directly.
+	FString ResolveGridClip(const FString& OwnerStem, const FString& Label,
+		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral());
+
+	// The same answer for a label reached through a character's vocabulary, which is what finds the
+	// owner. Exposed because a caller that caches the resolved sequence has to key its cache on the
+	// name that will actually be loaded — resolving is two in-memory lookups, so asking twice is
+	// cheaper than a cache keyed on a label that no longer identifies what it holds.
+	FString ResolveClipAnimName(const FString& Stem, const FString& ClipName,
+		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral());
 
 	// The standing idle for a stem at a disposition, by VtMB's own chain:
 	//   default_disposition -> dispositiontable "Animation Name" -> Stance_<Name>_Idle_* (by weight)
@@ -141,4 +165,7 @@ private:
 	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;
 	// And again for the garment spike. A null entry here is the common case, not the exception.
 	TMap<FString, TSharedPtr<const FElysiumClothRig>> ClothRigs;
+	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that
+	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.
+	TMap<FString, TSharedPtr<const FElysiumBlendTable>> BlendTables;
 };

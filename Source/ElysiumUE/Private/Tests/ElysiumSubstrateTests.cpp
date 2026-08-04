@@ -25,6 +25,7 @@
 #include "ElysiumCommands.h"
 #include "ElysiumContentPaths.h"
 #include "Debug/ElysiumConsole.h"
+#include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
@@ -1469,11 +1470,16 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 
 	// Scale is applied EXACTLY ONCE (runtime-architecture.md §4). Engine dilation has already
 	// scaled the tick's delta by the time it reaches AdvanceFrame, so the clock must multiply by
-	// nothing: at 0.25x a 0.04 s delta is still 0.04 s of game time, not 0.01.
+	// nothing: at 0.25x a 0.02 s delta is still 0.02 s of game time, not 0.005.
 	Time.SetScale(0.25);
 	TestEqual(TEXT("scale recorded on the clock"), Time.GetScale(), 0.25);
-	TestEqual(TEXT("the clock adds no factor of its own"), Time.AdvanceFrame(0.04), 0.04);
-	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.09);
+	TestEqual(TEXT("the clock adds no factor of its own"), Time.AdvanceFrame(0.02), 0.02);
+	TestEqual(TEXT("now advanced by the dilated delta"), Clock.GetNow(), 0.07);
+	// The BOUND scales with it, exactly as `Host_FilterTime`'s does (`timescale * 0.1`) and as
+	// AWorldSettings::FixupDeltaSeconds does (`Max * Dilation`). A flat bound here would cut the
+	// substrate short of the delta every other actor on the frame received.
+	TestEqual(TEXT("a hitch at 0.25x bounds to a quarter of MaxFrameSeconds"), Time.AdvanceFrame(5.0),
+		ElysiumFrame::MaxFrameSeconds * 0.25);
 	Time.SetScale(1.0);
 
 	// The frame bound (`docs/vtmb/source_movement.md` → "Frame timing"): VtMB's `Host_FilterTime` clamps
@@ -1751,6 +1757,28 @@ bool FElysiumMovementTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(ElysiumFrame::ClampFrameDelta(0.00001), 0.001, 1e-9));
 		TestTrue(TEXT("and zero passes through rather than fabricating time"),
 			ElysiumFrame::ClampFrameDelta(0.0) == 0.0);
+
+		// These two constants are also what FElysiumTimeControl::ApplyToWorld writes into
+		// AWorldSettings::Min/MaxUndilatedFrameTime, and what Config/DefaultGame.ini declares.
+		// If they drift, the engine's filter and this one stop being the same filter and
+		// engine-tick consumers advance further on a long frame than the substrate does.
+		TestEqual(TEXT("the floor is Host_FilterTime's"), ElysiumFrame::MinFrameSeconds, 0.001);
+		TestEqual(TEXT("and the ceiling is Host_FilterTime's"), ElysiumFrame::MaxFrameSeconds, 0.1);
+
+		// The bound scales with time dilation, as retail's (`timescale * [0.001, 0.1]`) and
+		// Unreal's (`Min/Max * Dilation`) both do. The delta handed in is already dilated, so a
+		// flat bound would disagree with the engine in both directions.
+		TestTrue(TEXT("a hitch at 0.25x bounds to 0.025 s"),
+			FMath::IsNearlyEqual(ElysiumFrame::ClampFrameDelta(5.0, 0.25), 0.025, 1e-9));
+		TestTrue(TEXT("and the floor scales down with it rather than fabricating motion"),
+			FMath::IsNearlyEqual(ElysiumFrame::ClampFrameDelta(0.00001, 0.25), 0.00025, 1e-9));
+		TestTrue(TEXT("a hitch at 2x bounds to 0.2 s"),
+			FMath::IsNearlyEqual(ElysiumFrame::ClampFrameDelta(5.0, 2.0), 0.2, 1e-9));
+		// A held world advances nothing, and a negative scale must not invert the bound.
+		TestTrue(TEXT("scale 0 collapses the bound to zero"),
+			ElysiumFrame::ClampFrameDelta(0.05, 0.0) == 0.0);
+		TestTrue(TEXT("and a negative scale is treated as held, not reversed"),
+			ElysiumFrame::ClampFrameDelta(0.05, -1.0) == 0.0);
 	}
 
 	// --- The cvar surface is declared, so a config.cfg governs and nothing falls to Python -----
@@ -6646,6 +6674,139 @@ bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
 }
 
 // ============================================================================================
+// A prop's clip phase is a function of the substrate clock, not of accumulated animation delta.
+//
+// Retail gets this without trying: `CBaseAnimating::StudioFrameAdvance` (FUN_1008f120) recomputes
+// its interval as `curtime - m_flAnimTime` and leaves the stamp at curtime, so the advance
+// telescopes and the total is exactly elapsed game time however many calls there were. That is why
+// `CDynamicPropAnimThink` can run at 10 Hz beside a choreo actor seeked every frame and neither
+// drifts. Unreal's sequence player accumulates instead, so the 10 Hz think measures the clip
+// against elapsed game time and corrects it when the two have parted company.
+//
+// The correction is deliberately NOT `SeekCinematicClip`: that pins the body at play rate 0 and
+// collapses any crossfade, which is right for a scene driving every frame and wrong for a clip that
+// must keep running smoothly between corrections.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropClipResyncTest,
+	"Elysium.Substrate.PropClipResync", GElysiumTestFlags)
+bool FElysiumPropClipResyncTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_stake.mdl"), TEXT("cin_stake"));
+	Services.AnimatedPropModels.Add(TEXT("models/props/lamp.mdl"), TEXT("lamp"));
+	Services.AnimatedPropRestClips.Add(TEXT("cin_stake"), TEXT("idle01"));
+	Services.AnimatedPropRestClips.Add(TEXT("lamp"), TEXT("idle"));
+	Services.AnimatedPropClipLoops.Add(TEXT("cin_stake|idle01"), true);
+	Services.ClipSeconds = 4.0f;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_resync__");
+	{
+		// A looping prop, so the think stays armed for the whole test.
+		FElysiumEntityDef Stake;
+		Stake.Classname = TEXT("prop_dynamic");
+		Stake.TargetName = TEXT("stake");
+		Stake.ModelMesh = TEXT("cin_stake");
+		Stake.Keys.Add(TEXT("model"), TEXT("models/cinematic/cin_stake.mdl"));
+		Stake.Keys.Add(TEXT("LoopSequence"), TEXT("idle01"));
+		Defs.Defs.Add(MoveTemp(Stake));
+
+		// No LoopSequence: this one never leaves its held rest pose, and never arms a think.
+		FElysiumEntityDef Lamp;
+		Lamp.Classname = TEXT("prop_dynamic");
+		Lamp.TargetName = TEXT("lamp");
+		Lamp.ModelMesh = TEXT("lamp");
+		Lamp.Keys.Add(TEXT("model"), TEXT("models/props/lamp.mdl"));
+		Defs.Defs.Add(MoveTemp(Lamp));
+	}
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	USkeletalMeshComponent* Body = Services.AnimatedPropBodies.FindRef(TEXT("cin_stake"));
+	USkeletalMeshComponent* LampBody = Services.AnimatedPropBodies.FindRef(TEXT("lamp"));
+	if (!TestNotNull(TEXT("the animated body was built"), Body))
+	{
+		return false;
+	}
+
+	// Past the longest stagger (0.99) the loop is running, and AnimStartTime is stamped at the
+	// think that started it. From here on the expected phase is `Now - that stamp`.
+	World.Tick(1.0);
+	const int32 AfterStart = Services.Count(TEXT("ResyncCinematicClip"));
+
+	// A body that reports no position at all — no anim host, which is every prop under
+	// `elysium.NpcAnim 0` — is an ordinary no-op, not an error and not a correction.
+	World.Tick(1.2);
+	TestEqual(TEXT("a body that cannot report its position is never resynced"),
+		Services.Count(TEXT("ResyncCinematicClip")), AfterStart);
+
+	// In phase: the clip sits exactly where elapsed game time says it should.
+	Services.ClipPositions.Add(Body, 0.4f);
+	World.Tick(1.4);
+	TestEqual(TEXT("a clip in phase is left alone"),
+		Services.Count(TEXT("ResyncCinematicClip")), AfterStart);
+
+	// Inside the tolerance. This is the assertion that stops the tolerance being quietly tightened:
+	// the position read here is up to one frame stale by construction, so correcting a sub-frame
+	// difference would snap on every think and read as a 10 Hz stutter.
+	Services.ClipPositions.Add(Body, 0.6f - 0.02f);
+	World.Tick(1.6);
+	TestEqual(TEXT("drift under the tolerance is not worth a correction"),
+		Services.Count(TEXT("ResyncCinematicClip")), AfterStart);
+
+	// Beyond it: exactly one correction, to elapsed game time — not to the position plus a delta.
+	Services.ClipPositions.Add(Body, 0.3f);
+	World.Tick(1.8);
+	TestEqual(TEXT("real drift is corrected once"),
+		Services.Count(TEXT("ResyncCinematicClip")), AfterStart + 1);
+	TestTrue(TEXT("and corrected to elapsed game time"),
+		Services.Saw(TEXT("ResyncCinematicClip 0.800")));
+	TestTrue(TEXT("the body reads the corrected phase back"),
+		FMath::IsNearlyEqual(Services.ClipPositions.FindRef(Body), 0.8f, 1e-3f));
+
+	// A looping clip wraps at the source, in double: at 9.0 s of elapsed time on a 4 s clip the
+	// phase is 1.0, never 9.0. Narrowing an unbounded elapsed time to float instead would quantise
+	// visibly over a long session.
+	Services.ClipPositions.Add(Body, 0.0f);
+	World.Tick(10.0);
+	TestTrue(TEXT("a looping phase wraps into the clip's own length"),
+		Services.Saw(TEXT("ResyncCinematicClip 1.000")));
+
+	// Across the loop seam the distance is circular. The clip started at 1.0, so a tick at 13.01
+	// puts the phase at 12.01 mod 4 = 0.01 — which is 0.02 from a position of 3.99 the short way
+	// round, and 3.98 the long way. A plain difference would correct here on every single think.
+	const int32 BeforeSeam = Services.Count(TEXT("ResyncCinematicClip"));
+	Services.ClipPositions.Add(Body, 3.99f);
+	World.Tick(13.01);
+	TestEqual(TEXT("drift across the loop seam is measured the short way round"),
+		Services.Count(TEXT("ResyncCinematicClip")), BeforeSeam);
+
+	// A prop with no LoopSequence and no random animator stands its held rest pose and arms no
+	// think at all, so the pose it was spawned on is never touched again. That — not the
+	// bRestPoseHeld guard inside the think — is what actually keeps a resting prop at rest; the
+	// guard is the defence for a prop that IS thinking and has been put back on a held pose.
+	FElysiumEntity* Lamp = World.FindByName(TEXT("lamp"));
+	TestNotNull(TEXT("lamp resolved"), Lamp);
+	if (LampBody)
+	{
+		Services.ClipPositions.Add(LampBody, 3.0f);
+	}
+	// Put the stake back in phase first (13.0 mod 4 = 1.0 at the tick below), so the only prop that
+	// could produce a correction on this tick is the lamp.
+	Services.ClipPositions.Add(Body, 1.0f);
+	const int32 BeforeLamp = Services.Count(TEXT("ResyncCinematicClip"));
+	World.Tick(14.0);
+	TestEqual(TEXT("a prop standing at rest never armed a think"),
+		Lamp->NextThink, ELYSIUM_NEVER_THINK);
+	TestEqual(TEXT("so its held pose is never resynced"),
+		Services.Count(TEXT("ResyncCinematicClip")), BeforeLamp);
+
+	return true;
+}
+
+// ============================================================================================
 // A skeletal prop is placed with the glTF basis, not the static mesh's. `model_quat` is the
 // placement of the exporter's Unreal-native OBJ; a glTF body needs the fixed model-local
 // correction composed on top, because glTFRuntime imports mdl_gltf.py's Y-up output into its own
@@ -9792,6 +9953,193 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		Watcher->TickGaze(5.f, 0.1f, Head, Forward, Up);
 		TestEqual(TEXT("cell 8 is the top-centre cell"), Watcher->FidgetCell, 8);
 		TestTrue(TEXT("...and aims above the head"), Watcher->EyeLookTarget.Z > Head.Z);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// Blend grids (CAP7.3) — the axis arithmetic, content-free.
+//
+// The bug this guards is not subtle once stated: a VtMB locomotion sequence is a 9-cell fan over
+// `move_yaw` running -180..180, and the exporter bakes the grid's base cell under the sequence's
+// label. Cell 0 is the -180 cell, so the clip named `walk` is the BACKWARD walk. The whole point of
+// resolving the grid is that 0 degrees lands on cell 4 and the character walks forward.
+// =====================================================================================
+
+namespace
+{
+	FElysiumBlendTable MakeYawTable()
+	{
+		FElysiumBlendTable Table;
+		FElysiumPoseParamDesc MoveYaw;
+		MoveYaw.Name = TEXT("move_yaw");
+		MoveYaw.Flags = 1;
+		MoveYaw.Start = -180.f;
+		MoveYaw.End = 180.f;
+		MoveYaw.Loop = 360.f;      // wraps
+		Table.PoseParams.Add(MoveYaw);
+
+		FElysiumPoseParamDesc AimYaw;
+		AimYaw.Name = TEXT("aim_yaw");
+		AimYaw.Start = -45.f;
+		AimYaw.End = 45.f;
+		AimYaw.Loop = 0.f;         // does NOT wrap
+		Table.PoseParams.Add(AimYaw);
+
+		// The shipped shape: 9 cells on axis 0, no axis 1.
+		FElysiumBlendGrid Walk;
+		Walk.Label = TEXT("walk");
+		Walk.GroupSize[0] = 9;
+		Walk.GroupSize[1] = 1;
+		Walk.ParamIndex[0] = 0;
+		Walk.ParamIndex[1] = INDEX_NONE;
+		Walk.ParamStart[0] = -180.f;
+		Walk.ParamEnd[0] = 180.f;
+		static const TCHAR* Names[9] = { TEXT("walk_180"), TEXT("walk_225"), TEXT("walk_270"),
+			TEXT("walk_315"), TEXT("walk_0"), TEXT("walk_45"), TEXT("walk_90"), TEXT("walk_135"),
+			TEXT("walk_180") };
+		for (int32 i = 0; i < 9; ++i)
+		{
+			FElysiumBlendCell Cell;
+			Cell.Axis[0] = i;
+			Cell.Axis[1] = 0;
+			Cell.Clip = Names[i];
+			Walk.Cells.Add(Cell);
+		}
+		Table.Grids.Add(Walk.Label, Walk);
+		return Table;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlendGridAxisTest,
+	"Elysium.Substrate.BlendGrids", GElysiumTestFlags)
+bool FElysiumBlendGridAxisTest::RunTest(const FString&)
+{
+	const FElysiumBlendTable Table = MakeYawTable();
+	const FElysiumBlendGrid& Walk = *Table.Find(TEXT("walk"));
+	const FElysiumPoseParamDesc* MoveYaw = Table.Param(0);
+
+	int32 Cell = -1;
+	float Fraction = -1.f;
+
+	// THE assertion. A body nothing has steered sits at move_yaw 0, which is straight ahead, and a
+	// -180..180 fan of nine puts that exactly on cell 4. Anything else and `walk` plays sideways or
+	// backwards.
+	ElysiumBlendGrids::ResolveAxis(Walk, 0, MoveYaw, 0.f, Cell, Fraction);
+	TestEqual(TEXT("move_yaw 0 selects the middle cell"), Cell, 4);
+	TestTrue(TEXT("...exactly, with no fraction"), FMath::IsNearlyZero(Fraction));
+
+	// The endpoints. Under a 360 wrap +180 IS -180 — the same heading named twice — so it resolves
+	// to cell 0, and the fan's last cell holds the same clip precisely because of that seam. Cell 8
+	// is therefore unreachable by any wrapped value, which costs nothing: it is a duplicate.
+	ElysiumBlendGrids::ResolveAxis(Walk, 0, MoveYaw, -180.f, Cell, Fraction);
+	TestEqual(TEXT("-180 is cell 0"), Cell, 0);
+	ElysiumBlendGrids::ResolveAxis(Walk, 0, MoveYaw, 180.f, Cell, Fraction);
+	TestEqual(TEXT("+180 wraps onto the same cell as -180"), Cell, 0);
+	TestEqual(TEXT("...and the two ends of the fan are the same animation"),
+		Walk.CellAt(0, 0)->Clip, Walk.CellAt(8, 0)->Clip);
+
+	// Just short of the seam is the far end of the fan.
+	ElysiumBlendGrids::ResolveAxis(Walk, 0, MoveYaw, 179.f, Cell, Fraction);
+	TestEqual(TEXT("179 degrees is the last distinct cell"), Cell, 7);
+	TestTrue(TEXT("...nearly all the way to the seam"), Fraction > 0.9f);
+
+	// A value past the end wraps through the loop modulus rather than clamping: 190 is -170.
+	ElysiumBlendGrids::ResolveAxis(Walk, 0, MoveYaw, 190.f, Cell, Fraction);
+	TestEqual(TEXT("190 wraps to -170, just past cell 0"), Cell, 0);
+	TestTrue(TEXT("...carrying a fraction toward cell 1"), Fraction > 0.f);
+
+	// Halfway between two cells reports the fraction the two-cell blend will weigh on.
+	ElysiumBlendGrids::ResolveAxis(Walk, 0, MoveYaw, 22.5f, Cell, Fraction);
+	TestEqual(TEXT("22.5 degrees sits on cell 4"), Cell, 4);
+	TestTrue(TEXT("...half a cell toward cell 5"), FMath::IsNearlyEqual(Fraction, 0.5f, 0.001f));
+
+	// An unused axis: documented as cell 0, weight 0. Its range is a degenerate 0/0, so this also
+	// proves nothing divided by it.
+	ElysiumBlendGrids::ResolveAxis(Walk, 1, nullptr, 0.f, Cell, Fraction);
+	TestEqual(TEXT("an axis with no parameter is cell 0"), Cell, 0);
+	TestTrue(TEXT("...with no weight"), FMath::IsNearlyZero(Fraction));
+
+	// A non-wrapping parameter must CLAMP, not wrap. The aim parameters declare loop 0, and wrapping
+	// one would swing a gun to the opposite extreme at the edge of its range.
+	FElysiumBlendGrid Aim;
+	Aim.Label = TEXT("aim");
+	Aim.GroupSize[0] = 3;
+	Aim.GroupSize[1] = 1;
+	Aim.ParamIndex[0] = 1;
+	Aim.ParamIndex[1] = INDEX_NONE;
+	Aim.ParamStart[0] = -45.f;
+	Aim.ParamEnd[0] = 45.f;
+	for (int32 i = 0; i < 3; ++i)
+	{
+		FElysiumBlendCell C;
+		C.Axis[0] = i;
+		Aim.Cells.Add(C);
+	}
+	const FElysiumPoseParamDesc* AimYaw = Table.Param(1);
+	ElysiumBlendGrids::ResolveAxis(Aim, 0, AimYaw, 0.f, Cell, Fraction);
+	TestEqual(TEXT("a level aim is the centre cell"), Cell, 1);
+	ElysiumBlendGrids::ResolveAxis(Aim, 0, AimYaw, 400.f, Cell, Fraction);
+	TestEqual(TEXT("a non-looping parameter clamps rather than wrapping"), Cell, 2);
+
+	// Selection: the neutral pose picks the forward walk out of the fan.
+	const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(Walk, Table,
+		FElysiumPoseParams::Neutral());
+	if (TestNotNull(TEXT("the neutral pose selects a cell"), Pick.Cell))
+	{
+		TestEqual(TEXT("...and it is the forward walk, not the base cell"), Pick.Cell->Clip,
+			FString(TEXT("walk_0")));
+	}
+
+	// A steered pose selects a different cell — the property the resolved-name cache key exists for.
+	FElysiumPoseParams Strafing;
+	Strafing.Set(TEXT("move_yaw"), 90.f);
+	const FElysiumBlendPick Sideways = ElysiumBlendGrids::SelectCell(Walk, Table, Strafing);
+	if (TestNotNull(TEXT("a steered pose selects a cell"), Sideways.Cell))
+	{
+		TestEqual(TEXT("...the 90 degree one"), Sideways.Cell->Clip, FString(TEXT("walk_90")));
+	}
+
+	// A cell whose animation never baked is skipped rather than played as nothing.
+	FElysiumBlendGrid Holed = Walk;
+	Holed.Cells[4].Clip.Reset();
+	const FElysiumBlendPick Repaired = ElysiumBlendGrids::SelectCell(Holed, Table,
+		FElysiumPoseParams::Neutral());
+	if (TestNotNull(TEXT("a hole in the fan still resolves"), Repaired.Cell))
+	{
+		TestTrue(TEXT("...to a neighbour that actually baked"), !Repaired.Cell->Clip.IsEmpty());
+	}
+
+	// The sidecar parse, including the null cell the schema permits and the single-cell grid the
+	// exporter never writes.
+	const FString Json = TEXT(R"({"stem":"t","model":"m",)")
+		TEXT(R"("pose_parameters":[{"index":0,"name":"move_yaw","flags":1,)")
+		TEXT(R"("start":-180.0,"end":180.0,"loop":360.0}],)")
+		TEXT(R"("grids":{"walk":{"numblends":3,"groupsize":[3,1],"paramindex":[0,-1],)")
+		TEXT(R"("paramstart":[-180.0,0.0],"paramend":[180.0,0.0],"cells":[)")
+		TEXT(R"({"axis":[0,0],"anim":20,"clip":"walk_180"},)")
+		TEXT(R"({"axis":[1,0],"anim":16,"clip":null},)")
+		TEXT(R"({"axis":[2,0],"anim":17,"clip":"walk_45"}]},)")
+		TEXT(R"("lonely":{"numblends":1,"groupsize":[1,1],"paramindex":[-1,-1],)")
+		TEXT(R"("paramstart":[0.0,0.0],"paramend":[0.0,0.0],)")
+		TEXT(R"("cells":[{"axis":[0,0],"anim":1,"clip":"x"}]}}})");
+	FElysiumBlendTable Parsed;
+	FString Error;
+	TestTrue(TEXT("the sidecar parses"), Parsed.LoadJsonText(Json, Error));
+	TestEqual(TEXT("the pose parameter comes through"), Parsed.PoseParams.Num(), 1);
+	TestNotNull(TEXT("the multi-cell grid is kept"), Parsed.Find(TEXT("walk")));
+	TestNull(TEXT("a single-cell grid is not a blend space"), Parsed.Find(TEXT("lonely")));
+	if (const FElysiumBlendGrid* Grid = Parsed.Find(TEXT("walk")))
+	{
+		TestEqual(TEXT("every cell is read, null included"), Grid->Cells.Num(), 3);
+		const FElysiumBlendCell* Null = Grid->CellAt(1, 0);
+		if (TestNotNull(TEXT("the null cell exists"), Null))
+		{
+			TestTrue(TEXT("...and addresses no animation"), Null->Clip.IsEmpty());
+		}
+		// Case-insensitive, like every other label lookup in the module.
+		TestNotNull(TEXT("labels resolve case-insensitively"), Parsed.Find(TEXT("WALK")));
 	}
 
 	return true;

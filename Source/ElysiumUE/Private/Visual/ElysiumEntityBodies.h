@@ -64,6 +64,8 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds);
 	bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 	void StopCinematicClip(USkeletalMeshComponent* Body);
+	bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const;
+	bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 
 	// 12.3 — write named flex controllers on a body's facial rig. INDEX_NONE when the body has no
 	// Elysium animation host or no rig on it; otherwise the number of writes that landed, with the

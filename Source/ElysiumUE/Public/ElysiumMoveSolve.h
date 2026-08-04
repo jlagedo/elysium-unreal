@@ -170,8 +170,10 @@ struct FElysiumMoveStepper
 	// Seconds per step. 0 = one step at the frame's own delta — the faithful path.
 	float FixedStep = 0.0f;
 
-	// A backstop, not a tuning knob. With the frame delta already bounded to 0.1 s, a 100 Hz step
-	// needs at most 10, so this can only be reached if FixedStep is set absurdly small.
+	// A backstop, not a tuning knob. With the frame delta already bounded to 0.1 s x timescale, a
+	// 100 Hz step needs at most 10 at normal speed, so this can only be reached if FixedStep is set
+	// absurdly small or the world is running at more than 1.6x. Reaching it is the signal; do not
+	// raise the number to silence it.
 	int32 MaxSubSteps = 16;
 
 	// Begin a frame. Returns how many steps to run and writes the dt each one takes; the unspent

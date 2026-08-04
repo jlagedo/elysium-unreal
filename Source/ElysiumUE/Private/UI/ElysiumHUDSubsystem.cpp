@@ -119,9 +119,28 @@ void UElysiumHUDSubsystem::SetPreviewMode(EElysiumHUDPreview Mode)
 	}
 }
 
+void UElysiumHUDSubsystem::SetHidden(bool bInHidden)
+{
+	if (bHidden == bInHidden)
+	{
+		return;
+	}
+	bHidden = bInHidden;
+	if (bHidden)
+	{
+		RemoveRoot();
+	}
+	else
+	{
+		EnsureRoot();
+	}
+}
+
 void UElysiumHUDSubsystem::EnsureRoot()
 {
-	if (Root || !Model)
+	// Every publish calls through here, so this is also what keeps the root off screen for as long
+	// as something is holding it hidden rather than only until the next frame.
+	if (Root || !Model || bHidden)
 	{
 		return;
 	}

@@ -112,6 +112,14 @@ public:
 	static const TCHAR* StoryEntryMap() { return TEXT("sp_tutorial_1"); }
 	static const TCHAR* StoryEntryLandmark() { return TEXT("tutorial"); }
 
+	// The green room, if one is armed. Null in every ordinary session — the harness only exists
+	// under `-ElysiumGreenRoom` or after `elysium.gr` has stood one up.
+	FElysiumGreenRoomRun* GetGreenRoom() const { return GreenRoomRun.Get(); }
+	// Arm the interactive green-room lab in a session that did not ask for one on the command
+	// line, so `elysium.gr` works from a running game. A green room already armed is returned as
+	// it stands rather than replaced; a capture run in progress is left alone and reported.
+	FElysiumGreenRoomRun* EnsureGreenRoomLab(FString& OutError);
+
 private:
 	void HandleRuntimeReady(AElysiumMapActor* Map);
 	void HandleRuntimeFailed(AElysiumMapActor* Map, const FString& Reason);

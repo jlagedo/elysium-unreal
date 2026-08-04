@@ -179,6 +179,20 @@ public:
 	double NextRandAnim = 0.0;          // m_flNextRandAnim @0x7c8
 	double AnimationEndTime = 0.0;      // absolute seconds the current one-shot ends; 0 = none pending
 
+	// Absolute game seconds the current clip's frame 0 played at — retail's `m_flAnimTime`, which
+	// `StudioFrameAdvance` measures every advance against so the cycle telescopes and a 10 Hz think
+	// cannot drift from a per-frame one. The clip itself free-runs on engine time; this is what the
+	// think measures that free run against. NOT saved: Serialize's replay restarts the clip, which
+	// re-derives this exactly as it re-derives AnimationEndTime.
+	double AnimStartTime = 0.0;
+	// The clip's authored length, kept for loops too (unlike AnimationEndTime) so a looping phase
+	// wraps in double at the source rather than narrowing an unbounded elapsed time to float.
+	double AnimLengthSeconds = 0.0;
+	// Drift telemetry for the inspector. `resyncs 0` beside a visibly wrong prop says the phase is
+	// right and the clip ORIGIN is wrong, which is a different bug.
+	int32  ResyncCount = 0;
+	double LastResyncDrift = 0.0;
+
 	virtual void Spawn() override
 	{
 		BuildBody(/*bFromSetModel=*/false);
@@ -258,6 +272,11 @@ public:
 			FireOutput(OnAnimationBegun, Handle);
 			NextRandAnim = Now + DrawRandomAnimInterval();
 		}
+
+		// After the two start branches, so a clip that started on this very think is not measured
+		// against a stamp it has not run under yet; before the finish check, so the last correction
+		// lands on the frame the clip completes rather than after the think has disarmed.
+		ResyncAnimation(Now);
 
 		if (SequenceFinished(Now))
 		{
@@ -407,6 +426,14 @@ public:
 			: (bRestPoseHeld ? CurrentAnimation + TEXT(" (rest pose, held at frame 0)")
 				: CurrentAnimation));
 		Out.Emplace(TEXT("Animation loop"), bAnimationLoop ? TEXT("yes") : TEXT("no"));
+		// Where the clip SHOULD be by the substrate clock, and how hard the think has had to work to
+		// keep it there. A misplaced prop reading `0 resync(s)` is in phase and wrongly anchored —
+		// a different fault from the one this row exists to catch.
+		if (!CurrentAnimation.IsEmpty() && !bRestPoseHeld)
+		{
+			Out.Emplace(TEXT("Clip phase"), FString::Printf(TEXT("%.3fs, %d resync(s), last drift %.3fs"),
+				World ? World->NowSeconds() - AnimStartTime : 0.0, ResyncCount, LastResyncDrift));
+		}
 		Out.Emplace(TEXT("Loop sequence"), LoopSequence.IsEmpty() ? TEXT("(none)")
 			: (bLoopSequenceResolved ? LoopSequence : LoopSequence + TEXT(" (unresolved)")));
 		if (bRandomAnimator)
@@ -436,6 +463,20 @@ private:
 
 	// CDynamicPropAnimThink's re-arm interval (`_DAT_104493d0`).
 	static constexpr double AnimThinkInterval = 0.1;
+
+	// How far a clip may sit from its substrate-clock phase before the think corrects it. Two frames
+	// at 60 Hz, and it has to be at least one: the body's component ticks in TG_PrePhysics, the same
+	// group as the gameplay tick that runs this think and with no prerequisite between them, so the
+	// position read here is either current or exactly one frame stale and which one is not
+	// deterministic. A tolerance under one frame would therefore snap on every think — a 10 Hz
+	// stutter, strictly worse than the drift it was correcting.
+	//
+	// A false trigger costs nothing: the correction applied is one frame of animation, the same step
+	// the frame was about to take. That is also why it does not scale with frame time.
+	//
+	// If `bEnableUpdateRateOptimizations` is ever turned on for these bodies, the accumulator will
+	// lag by the URO interval instead and this will fight it at 10 Hz — revisit the number then.
+	static constexpr double AnimResyncTolerance = 0.033;
 
 	// Retail's m_bSequenceFinished (+0x65c) for the cases the think cares about: a looping clip never
 	// reports finished, and a one-shot is finished once its authored length has elapsed.
@@ -490,6 +531,10 @@ private:
 		bRestPoseHeld = false;
 		bLoopStartPending = false;
 		AnimationEndTime = 0.0;
+		AnimStartTime = 0.0;
+		AnimLengthSeconds = 0.0;
+		ResyncCount = 0;
+		LastResyncDrift = 0.0;
 	}
 
 	bool PlayAnimation(const FString& Clip, bool bLoop)
@@ -508,8 +553,63 @@ private:
 		CurrentAnimation = Clip;
 		bAnimationLoop = bLoop;
 		bRestPoseHeld = false;   // playing anything releases the held pose
-		AnimationEndTime = (!bLoop && Seconds > 0.0f) ? World->NowSeconds() + Seconds : 0.0;
+		// Frame 0 is now, which is retail stamping m_flAnimTime at the first StudioFrameAdvance.
+		// The length is kept for loops as well, so the phase wraps at the source; AnimationEndTime
+		// deliberately stays 0 for a loop, since a looping clip never reports finished.
+		AnimStartTime = World->NowSeconds();
+		AnimLengthSeconds = Seconds > 0.0f ? static_cast<double>(Seconds) : 0.0;
+		AnimationEndTime = (!bLoop && Seconds > 0.0f) ? AnimStartTime + Seconds : 0.0;
 		return true;
+	}
+
+	// Retail's cycle is not accumulated — StudioFrameAdvance (FUN_1008f120) recomputes it from
+	// `curtime - m_flAnimTime` on every call and leaves the stamp at curtime, so the interval
+	// telescopes and the total advance is exactly elapsed game time no matter how many calls there
+	// were or how long each frame was. That is why a prop thinking at 10 Hz stays in lockstep with a
+	// choreo actor seeked every frame.
+	//
+	// Unreal's sequence player accumulates instead, off the engine's animation delta. With the
+	// frame filters unified (FElysiumTimeControl::ApplyToWorld) the two agree frame for frame, so
+	// this corrects only the residue — a clip that missed ticks while hidden, float accumulation, a
+	// body that started a frame early. It is also the measurement: if a prop is visibly wrong with
+	// ResyncCount at zero, its phase is right and its clip origin is not.
+	void ResyncAnimation(double Now)
+	{
+		if (!AnimatedVisual || bRestPoseHeld || CurrentAnimation.IsEmpty() || !World)
+		{
+			return;   // a held pose is rate 0 by design and must never be re-phased
+		}
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		float Position = 0.0f;
+		if (!Embodiment || !Embodiment->GetCinematicClipPosition(AnimatedVisual, Position))
+		{
+			return;   // no anim host, or nothing playing — an ordinary answer
+		}
+
+		const bool bWraps = bAnimationLoop && AnimLengthSeconds > 0.0;
+		double Phase = Now - AnimStartTime;
+		if (bWraps)
+		{
+			Phase = FMath::Fmod(Phase, AnimLengthSeconds);
+		}
+
+		// Circular distance on a loop: at length 4, a position of 3.99 and a phase of 0.01 are
+		// 0.02 apart across the seam, not 3.98. A plain difference would resync every think there.
+		double Drift = Phase - static_cast<double>(Position);
+		if (bWraps)
+		{
+			Drift = FMath::Fmod(Drift + 1.5 * AnimLengthSeconds, AnimLengthSeconds)
+				- 0.5 * AnimLengthSeconds;
+		}
+		if (FMath::Abs(Drift) <= AnimResyncTolerance)
+		{
+			return;
+		}
+		if (Embodiment->ResyncCinematicClip(AnimatedVisual, static_cast<float>(Phase)))
+		{
+			++ResyncCount;
+			LastResyncDrift = Drift;
+		}
 	}
 
 	// CBaseProp::Spawn (FUN_1018df70). A prop at rest is a **held pose, not a playing clip**: the
@@ -644,8 +744,18 @@ private:
 		}
 		if (AnimatedVisual)
 		{
+			const bool bWasTicking = AnimatedVisual->IsComponentTickEnabled();
 			AnimatedVisual->SetVisibility(bShown);
 			AnimatedVisual->SetComponentTickEnabled(bShown);
+			// A hidden body does not tick, so its clip stops advancing while the game clock does
+			// not. On the way back the 10 Hz think would correct it within 0.1 s; doing it on the
+			// edge makes the prop right on its FIRST visible frame instead of a tenth of a second
+			// into being looked at. ResyncAnimation owns the rest of the preconditions — BuildBody
+			// reaches here before any clip exists, and a held rest pose must stay held.
+			if (bShown && !bWasTicking && World)
+			{
+				ResyncAnimation(World->NowSeconds());
+			}
 		}
 	}
 };

@@ -101,6 +101,11 @@ struct FElysiumNpcIndexEntry
 	// empty/zero on a model with no `ProcType == 1` bone, and on any export predating CAP7.1.
 	FString Procedural;
 	int32   ProceduralBones = 0;
+	// The blend-space sidecar, relative to out/npc ("blends/<stem>.json"), and how many multi-cell
+	// sequences it declares. Both empty/zero on a model whose every sequence names a single
+	// animation — most of them — and on any export predating CAP7.3.
+	FString Blends;
+	int32   BlendGrids = 0;
 };
 
 // One cinematic anim set (12.1 / PL16): the whole-cast performance a choreo scene's
@@ -149,6 +154,10 @@ struct FElysiumAnimatedPropEntry
 	TArray<FString> SplitRotationBones;
 	FString Procedural;
 	int32 ProceduralBones = 0;
+	// Same as the character entry's: "animated_props/blends/<stem>.json" and its grid count, empty
+	// on every prop but `wolf_form`, which is the one skeletal prop declaring a multi-cell sequence.
+	FString Blends;
+	int32 BlendGrids = 0;
 	// **Declaration order is semantic** — see FElysiumPropClip::Index. A v4/v5 index carries only
 	// names, so those rows land here with Index set from the array position and no selection keys.
 	TArray<FElysiumPropClip> Clips;

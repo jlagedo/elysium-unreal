@@ -233,6 +233,16 @@ struct FElysiumContentPaths
 	// bone names none; 130 of the 185 exported models carry one.
 	static FString NpcProcedural(const FString& RelPath) { return NpcDir() / RelPath; }
 
+	// The blend spaces a model's multi-cell sequences declare (CAP7.3). A VtMB sequence can name a
+	// grid of animations rather than one — a 9x1 `move_yaw` locomotion fan, a 3x3 weapon-aim layer —
+	// and the exporter bakes every cell as its own clip beside a sidecar naming the axes, the pose
+	// parameter driving each, and which clip sits in each cell. Without it a grid label resolves to
+	// the base cell, which on a symmetric yaw fan is the -180 degree extreme: `walk` plays backwards.
+	// RelPath is `npc_index.json`'s own `blends` value — "blends/<stem>.json", or
+	// "animated_props/blends/<stem>.json" for a skeletal prop. A model whose every sequence is a
+	// single cell names none, which is most of them.
+	static FString NpcBlends(const FString& RelPath) { return NpcDir() / RelPath; }
+
 	// The simulated-garment spike, beside the faithful mesh rather than over it
 	// (pipeline/src/elysium_pipeline/enhancement/cloth_spike.py). VtMB skins a skirt or coat
 	// rigidly to one bone and has no cloth solver at all, so the enhanced glb is the same mesh

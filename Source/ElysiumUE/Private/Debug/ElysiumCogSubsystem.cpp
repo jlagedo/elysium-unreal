@@ -8,10 +8,13 @@
 #include "CogSubsystem.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Debug/ElysiumCogWindow_Audio.h"
 #include "Debug/ElysiumCogWindow_Entities.h"
 #include "Debug/ElysiumCogWindow_Environment.h"
 #include "Debug/ElysiumCogWindow_EventQueue.h"
+#include "Debug/ElysiumCogWindow_GreenRoom.h"
 #include "Debug/ElysiumCogWindow_Inspector.h"
 #include "Debug/ElysiumCogWindow_Lights.h"
 #include "Debug/ElysiumCogWindow_Logic.h"
@@ -130,7 +133,31 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio.Playback");
 	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Audio.Soundscape");
 	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.Characters.NPCs");
+	GreenRoomWindow = Cog->AddWindow<FElysiumCogWindow_GreenRoom>("Elysium.Characters.Green Room");
 	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Gameplay.Scripting");
+
+	// `elysium.gr` — the whole point of which is that it works from a cold session. It arms the
+	// green-room lab if this session has none, opens the window, and hands ImGui the mouse: a
+	// window that is visible behind a game still holding the cursor is not usable, and finding it
+	// through F1 and two menu levels is the friction this verb exists to remove.
+	GreenRoomCommand = IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.gr"),
+		TEXT("Open the green room: a neutral stage with one body on it, live cloth tuning, and a "
+			 "camera you drive. Arms the stage if this session has none."),
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		{
+			UCogSubsystem* CogNow = Cast<UCogSubsystem>(CogSubsystem.Get());
+			if (GreenRoomWindow == nullptr || !IsValid(CogNow))
+			{
+				return;
+			}
+			GreenRoomWindow->OpenLab();
+			if (!CogNow->GetContext().GetEnableInput())
+			{
+				CogNow->GetContext().SetEnableInput(true);
+			}
+		}),
+		ECVF_Default);
 
 	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing should be on
 	// screen until then, and it must not be holding the mouse — a captured cursor makes the game's
@@ -165,6 +192,19 @@ void UElysiumCogSubsystem::PostInitialize()
 			if (!bKeepTicking)
 			{
 				StartupHideTicker.Reset();
+				// `uv run elysium gr` launches straight into the lab, so the window it exists to
+				// show has to survive the dormant-boot pass above rather than be hunted for
+				// afterwards. This runs once the hide window closes, which is why it is here and
+				// not beside the AddWindow calls.
+				if (GreenRoomWindow != nullptr && IsValid(CogToHide)
+					&& FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab")))
+				{
+					GreenRoomWindow->OpenLab();
+					if (!CogToHide->GetContext().GetEnableInput())
+					{
+						CogToHide->GetContext().SetEnableInput(true);
+					}
+				}
 			}
 			return bKeepTicking;
 		}));
@@ -179,6 +219,12 @@ void UElysiumCogSubsystem::Deinitialize()
 		FTSTicker::GetCoreTicker().RemoveTicker(StartupHideTicker);
 		StartupHideTicker.Reset();
 	}
+	if (GreenRoomCommand != nullptr)
+	{
+		IConsoleManager::Get().UnregisterConsoleObject(GreenRoomCommand);
+		GreenRoomCommand = nullptr;
+	}
+	GreenRoomWindow = nullptr;
 #endif
 
 	Super::Deinitialize();

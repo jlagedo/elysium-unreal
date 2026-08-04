@@ -5,12 +5,16 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumHUDSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Debug/ElysiumScreenshot.h"
 #include "Substrate/ElysiumCameraTrack.h"
+#include "Visual/ElysiumClothRig.h"
+#include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumNpcAnimSubsystem.h"
 
 #include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
@@ -23,6 +27,7 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/Pawn.h"
 #include "Camera/PlayerCameraManager.h"
+#include "DrawDebugHelpers.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
@@ -76,7 +81,7 @@ bool FElysiumGreenRoomRun::IsRequested()
 	return true;
 }
 
-FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem)
+FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem, bool bForceLab)
 	: Subsystem(InSubsystem)
 {
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomCase="), Selector);
@@ -85,13 +90,21 @@ FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem)
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomClip="), ReviewClip);
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomAnimSet="), ReviewAnimSet);
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomBoneRoot="), ReviewBoneRoot);
+	bLive = FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLive"));
 	Selector = Selector.ToLower();
+	bLab = bForceLab || FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab"))
+		|| Selector == TEXT("lab");
+	if (bLab)
+	{
+		Selector = TEXT("lab");
+		bLive = true;
+	}
 	SettleFrames = FMath::Max(2, SettleFrames);
 	Fractions = { 0.0f, 0.25f, 0.5f, 0.75f, 0.99f };
 	ReviewViewYaws = { 0.0f, 45.0f, 90.0f, 180.0f };
 
-	UE_LOG(LogElysiumGreenRoom, Log, TEXT("green room armed: case=%s settle=%d"),
-		*Selector, SettleFrames);
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("green room armed: case=%s settle=%d%s"),
+		*Selector, SettleFrames, bLab ? TEXT(" (interactive lab)") : TEXT(""));
 	TickHandle = FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateRaw(this, &FElysiumGreenRoomRun::Tick));
 }
@@ -101,6 +114,13 @@ FElysiumGreenRoomRun::~FElysiumGreenRoomRun()
 	if (TickHandle.IsValid())
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
+	}
+	// The lab took the HUD off screen; it does not own it past its own lifetime. `elysium.gr` can
+	// arm a lab inside an ordinary session, so leaving the HUD hidden would look like a HUD bug
+	// long after the green room is gone.
+	if (bLab)
+	{
+		ApplyLabHud(true);
 	}
 	DestroyBodies();
 }
@@ -185,6 +205,14 @@ void FElysiumGreenRoomRun::ResolveCases()
 	};
 
 	ActiveCases.Reset();
+	if (bLab)
+	{
+		// The lab resolves no case at all. It builds the room and waits: which body stands on it is
+		// the window's decision, taken and re-taken while the run is alive, and pre-seeding one from
+		// the command line would only mean answering that question twice.
+		bReview = true;   // the review stage dressing — no backdrop wall, so an orbit stays clean
+		return;
+	}
 	bTheatreCamera = Selector == TEXT("embrace");
 	bCourtroom = Selector == TEXT("courtroom");
 	bReview = Selector == TEXT("review");
@@ -1296,10 +1324,252 @@ void FElysiumGreenRoomRun::Finish()
 		UE_LOG(LogElysiumGreenRoom, Log, TEXT("wrote %s (%d shots, ok=%s)"),
 			*Manifest, Shots.Num(), bAnyFailure ? TEXT("false") : TEXT("true"));
 	}
+	if (bLive)
+	{
+		// Holding the window open is not enough on its own. Capturing pins each body with
+		// `SeekCinematicClip`, which is an absolute-time scrub at zero play rate — so a body left
+		// as the captures found it stands frozen at the last fraction. Re-issue an ordinary looping
+		// play so the clip actually runs, which is the entire point of watching it.
+		AElysiumMapActor* Map = GetMap();
+		int32 Playing = 0;
+		for (FBodyEntry& Entry : Bodies)
+		{
+			USkeletalMeshComponent* Body = Entry.Body.Get();
+			if (!Map || !Body)
+			{
+				continue;
+			}
+			float Duration = 0.0f;
+			const FString ClipName = Entry.Case.ClipName.IsEmpty()
+				? TEXT("entire_scene") : Entry.Case.ClipName;
+			const bool bPlayed = Entry.Case.bAnimatedProp
+				? Map->PlayAnimatedPropClip(Body, Entry.Case.MeshStem, Entry.Case.AnimSetModel,
+					/*bLoop=*/true, &Duration)
+				: Entry.Case.bResolvedClip
+					? Map->PlayNpcClip(Body, Entry.Case.MeshStem, ClipName,
+						/*bLoop=*/true, &Duration)
+					: Map->PlayCinematicClip(Body, Entry.Case.MeshStem, Entry.Case.AnimSetModel,
+						Entry.Case.BoneRoot, ClipName, /*bLoop=*/true, &Duration);
+			Playing += bPlayed ? 1 : 0;
+		}
+		UE_LOG(LogElysiumGreenRoom, Log,
+			TEXT("live: captures written, %d/%d bodies looping — close the window when done"),
+			Playing, Bodies.Num());
+		return;
+	}
 	FPlatformMisc::RequestExitWithStatus(false, bAnyFailure ? 1 : 0);
 }
 
-bool FElysiumGreenRoomRun::Tick(float /*DeltaSeconds*/)
+USkeletalMeshComponent* FElysiumGreenRoomRun::LabBody() const
+{
+	return Bodies.IsEmpty() ? nullptr : Bodies[0].Body.Get();
+}
+
+float FElysiumGreenRoomRun::LabDuration() const
+{
+	return Bodies.IsEmpty() ? 0.0f : Bodies[0].Duration;
+}
+
+void FElysiumGreenRoomRun::LabSetTime(float Seconds)
+{
+	const float Duration = LabDuration();
+	LabClipTime = Duration > KINDA_SMALL_NUMBER
+		? FMath::Fmod(FMath::Max(0.0f, Seconds), Duration) : 0.0f;
+}
+
+bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, FString& OutError)
+{
+	AElysiumMapActor* Map = GetMap();
+	if (!IsLabReady() || !Map)
+	{
+		OutError = TEXT("the green room stage is not ready yet");
+		return false;
+	}
+	if (Stem.IsEmpty())
+	{
+		OutError = TEXT("no model named");
+		return false;
+	}
+
+	// Resolve the clip before anything is destroyed, so a typo costs nothing: the body that is
+	// already standing there stays standing.
+	FString ResolvedClip = Clip;
+	const UGameInstance* GI = Subsystem.IsValid() ? Subsystem->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	if (ResolvedClip.IsEmpty())
+	{
+		// An empty clip is a complete request: ask the model's own idle policy, the same chain a
+		// map's NPCs resolve through, and report back which clip that was.
+		EElysiumIdleTier Tier = EElysiumIdleTier::None;
+		if (Anims != nullptr)
+		{
+			ResolvedClip = Anims->PickIdleClip(Stem, TEXT("Neutral"), Tier);
+		}
+		if (ResolvedClip.IsEmpty())
+		{
+			OutError = FString::Printf(TEXT("%s resolves no idle clip — name one"), *Stem);
+			return false;
+		}
+	}
+
+	DestroyBodies();
+	USkeletalMeshComponent* Body = Map->BuildNpcVisual(Stem, BodyOrigin(), BodyRotation(),
+		1.0f, TEXT("Neutral"), 0);
+	if (!Body)
+	{
+		OutError = FString::Printf(TEXT("could not build %s — is npc/%s.glb exported?"),
+			*Stem, *Stem);
+		return false;
+	}
+	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+	Body->SetVisibility(true, true);
+	Body->SetComponentTickEnabled(true);
+
+	float Duration = 0.0f;
+	if (!Map->PlayNpcClip(Body, Stem, ResolvedClip, /*bLoop=*/true, &Duration))
+	{
+		Body->DestroyComponent();
+		OutError = FString::Printf(TEXT("%s has no clip '%s'"), *Stem, *ResolvedClip);
+		return false;
+	}
+
+	FCase Case;
+	Case.Label = Stem;
+	Case.MeshStem = Stem;
+	Case.ClipName = ResolvedClip;
+	Case.bResolvedClip = true;
+	Case.bLoop = true;
+	Bodies.Add({ Case, Body, Duration });
+	ReviewStem = Stem;
+	ReviewClip = ResolvedClip;
+	LabClipTime = 0.0f;
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s clip %s (%.3fs)"), *Stem, *ResolvedClip, Duration);
+	return true;
+}
+
+void FElysiumGreenRoomRun::ApplyLabHud(bool bShow) const
+{
+	if (UElysiumHUDSubsystem* Hud = UElysiumHUDSubsystem::Get(GetWorld()))
+	{
+		Hud->SetHidden(!bShow);
+	}
+}
+
+void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
+{
+	ApplyLabHud(LabViewState.bShowHud);
+
+	AElysiumMapActor* Map = GetMap();
+	USkeletalMeshComponent* Body = LabBody();
+	if (!Map || !Body || !Body->GetSkeletalMeshAsset())
+	{
+		PinCameraAndPlayerSurface();
+		return;
+	}
+
+	// The clip is driven by absolute time rather than left to play itself. `Seek` pins the player at
+	// a position and a zero play rate, so one mechanism gives pause, scrub and speed together — and
+	// the simulation still integrates over real frame time underneath, which is why a paused body
+	// keeps settling instead of freezing mid-swing.
+	const float Duration = LabDuration();
+	if (!LabViewState.bPaused && Duration > KINDA_SMALL_NUMBER)
+	{
+		LabClipTime = FMath::Fmod(LabClipTime + DeltaSeconds * LabViewState.Speed + Duration, Duration);
+	}
+	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+	Map->SeekCinematicClip(Body, LabClipTime);
+
+	Body->UpdateBounds();
+	const FBox Bounds = Body->Bounds.GetBox();
+	if (Bounds.IsValid)
+	{
+		UpdateStage(Bounds);
+
+		const FVector Extent = Bounds.GetExtent();
+		const FVector Focus(Bounds.GetCenter().X, Bounds.GetCenter().Y,
+			FMath::Lerp(Bounds.Min.Z, Bounds.Max.Z, FMath::Clamp(LabViewState.LookHeight, 0.0f, 1.0f)));
+		// The same fit the capture path uses, then scaled: the orbit starts framed the way a
+		// contact sheet would have framed it, so the two are comparable by eye.
+		const float Fit = FMath::Max(220.0f, Extent.Z / 0.34f + Extent.X + 50.0f);
+		const float Distance = Fit * FMath::Clamp(LabViewState.DistanceScale, 0.15f, 6.0f);
+		const FVector Offset = FRotator(FMath::Clamp(LabViewState.OrbitPitch, -85.0f, 85.0f),
+			LabViewState.OrbitYaw, 0.0f).RotateVector(FVector(Distance, 0.0f, 0.0f));
+		CameraLocation = Focus + Offset;
+		CameraRotation = (Focus - CameraLocation).Rotation();
+
+		FElysiumCameraShot Shot;
+		Shot.Origin = CameraLocation;
+		Shot.LookAt = Focus;
+		Shot.bUseLookAt = true;
+		Shot.FieldOfView = 60.0f;
+		Shot.BlendSeconds = 0.0f;
+		Shot.MaxTurnRate = FVector::ZeroVector;
+		Shot.DebugName = TEXT("green_room_lab");
+		if (CameraShotId == 0)
+		{
+			CameraShotId = Map->PushCameraShotValue(Shot);
+		}
+		else
+		{
+			Map->UpdateCameraShotValue(CameraShotId, Shot);
+		}
+	}
+
+	PinCameraAndPlayerSurface();
+	DrawLabOverlays();
+}
+
+void FElysiumGreenRoomRun::DrawLabOverlays() const
+{
+	UWorld* World = GetWorld();
+	USkeletalMeshComponent* Body = Bodies.IsEmpty() ? nullptr : Bodies[0].Body.Get();
+	if (!World || !Body || (!LabViewState.bDrawLattice && !LabViewState.bDrawColliders))
+	{
+		return;
+	}
+	const UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
+	const FElysiumClothRig* Rig = Inst ? Inst->GetClothRig() : nullptr;
+	if (Rig == nullptr)
+	{
+		return;
+	}
+
+	// One frame's lifetime: this runs every tick, and a persistent line would stack until the
+	// overlay is a solid block.
+	if (LabViewState.bDrawLattice)
+	{
+		for (const FElysiumClothChain& Chain : Rig->Chains)
+		{
+			for (int32 Index = 0; Index < Chain.Bodies.Num(); ++Index)
+			{
+				const FVector Here = Body->GetBoneLocation(Chain.Bodies[Index].Bone);
+				// Row 0 is the anchor the panel hangs from and never simulates, so it is drawn in a
+				// different colour: a chain that has collapsed onto its anchor is then obvious.
+				const FColor Colour = Chain.Bodies[Index].Row == 0
+					? FColor(120, 200, 255) : FColor(255, 190, 90);
+				DrawDebugPoint(World, Here, 6.0f, Colour, false, -1.0f, SDPG_Foreground);
+				if (Index > 0)
+				{
+					DrawDebugLine(World, Body->GetBoneLocation(Chain.Bodies[Index - 1].Bone), Here,
+						Colour, false, -1.0f, SDPG_Foreground, 0.6f);
+				}
+			}
+		}
+	}
+	if (LabViewState.bDrawColliders)
+	{
+		for (const FElysiumClothCollider& Collider : Rig->Colliders)
+		{
+			const FTransform Frame = Body->GetSocketTransform(Collider.Bone, RTS_World);
+			const float Radius = Collider.Radius
+				* (Inst ? Inst->GetClothTuning().ColliderRadiusScale : 1.0f);
+			DrawDebugSphere(World, Frame.TransformPosition(Collider.Offset), Radius, 16,
+				FColor(255, 90, 120), false, -1.0f, SDPG_Foreground, 0.6f);
+		}
+	}
+}
+
+bool FElysiumGreenRoomRun::Tick(float DeltaSeconds)
 {
 	AElysiumMapActor* Map = GetMap();
 	UWorld* World = GetWorld();
@@ -1309,6 +1579,40 @@ bool FElysiumGreenRoomRun::Tick(float /*DeltaSeconds*/)
 	switch (Phase)
 	{
 	case EPhase::WaitReady:
+		if (bLab)
+		{
+			if (!Map || !Map->IsSpawnDone() || !PC || !Pawn
+				|| ++FrameInPhase < GreenRoomBootSettleFrames)
+			{
+				break;
+			}
+			ResolveCases();
+			if (!CreateStage())
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning, TEXT("lab: could not build the stage"));
+				bAnyFailure = true;
+				Phase = EPhase::Done;
+				return false;
+			}
+			// Frame the empty room so the camera is somewhere sane before the first body arrives.
+			const FVector Centre = StageOrigin + FVector(0.0f, 0.0f, 90.0f);
+			UpdateStage(FBox(Centre - FVector(40.0f, 40.0f, 90.0f),
+				Centre + FVector(40.0f, 40.0f, 90.0f)));
+			Phase = EPhase::Lab;
+			UE_LOG(LogElysiumGreenRoom, Log,
+				TEXT("lab: stage ready — F1, or `elysium.gr`, opens the window that drives it"));
+			// `gr <model> [clip]` names a body up front. A failure here is reported and nothing
+			// else: the stage is up, and the window can name another one.
+			if (!ReviewStem.IsEmpty())
+			{
+				FString Error;
+				if (!LabSetBody(ReviewStem, ReviewClip, Error))
+				{
+					UE_LOG(LogElysiumGreenRoom, Warning, TEXT("lab: %s"), *Error);
+				}
+			}
+			break;
+		}
 		if (Map && Map->IsSpawnDone() && PC && Pawn && ++FrameInPhase >= GreenRoomBootSettleFrames)
 		{
 			ResolveCases();
@@ -1359,6 +1663,10 @@ bool FElysiumGreenRoomRun::Tick(float /*DeltaSeconds*/)
 				return false;
 			}
 		}
+		break;
+
+	case EPhase::Lab:
+		TickLab(DeltaSeconds);
 		break;
 
 	case EPhase::Done:

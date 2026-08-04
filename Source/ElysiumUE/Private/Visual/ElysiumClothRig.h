@@ -99,3 +99,50 @@ struct FElysiumClothRig
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
 	void ApplyAssetImport();
 };
+
+// A live edit sitting on top of an authored rig, never replacing it. The rig is what the exporter
+// derived from the model's own measurements — the shape of the cone ramp down a panel, the radius
+// of the thigh a hem has to clear — and tuning is the magnitude those were guessed at, which is the
+// half that only a moving body can answer. So the three geometry knobs are *scales* over the
+// authored values rather than absolutes: they keep the ramp and re-size it.
+//
+// Which of these the engine re-reads per frame is not a detail — it is the difference between a
+// slider that answers while you drag it and one that does not. `FAnimNode_AnimDynamics::UpdateLimits`
+// rebuilds the cone constraint and every spherical limit every frame, and the gravity, iteration
+// counts and component scales are read straight off the node inside the evaluate. Damping and box
+// extents are the exception: both are baked into `FAnimPhysRigidBody` at `InitPhysics`, so changing
+// either re-seats the chain (`RequestInitialise`) and the garment drops from the pose again.
+struct FElysiumClothTuning
+{
+	FElysiumClothSolver Solver;
+
+	// Multiplies every body's authored `ConeAngleDeg`. The engine clamps a cone to 0..90 and so does
+	// the exporter, so the product is clamped rather than allowed to saturate silently.
+	float ConeScale = 1.f;
+	// Multiplies every collider's authored radius — how much clearance the legs are given.
+	float ColliderRadiusScale = 1.f;
+	// Multiplies every body's authored `BoxExtent`. Inertia, not collision: AnimDynamics only
+	// collides a garment body against the spherical limits.
+	float BoxExtentScale = 1.f;
+
+	// What the sidecar itself asks for: the authored solver at every scale 1. This is the baseline a
+	// Revert returns to and the one "modified" is measured against — NOT the struct's own defaults,
+	// which are the fallback for a sidecar that omits a field and say nothing about what this file
+	// wrote.
+	static FElysiumClothTuning FromRig(const FElysiumClothRig& Rig);
+	bool EqualsTuning(const FElysiumClothTuning& Other) const;
+	// Whether moving from Other to this needs the chain re-seated rather than just re-read.
+	bool NeedsReseat(const FElysiumClothTuning& Other) const;
+};
+
+namespace ElysiumClothRig
+{
+	// Bake a tuning into `npc/cloth/<Stem>.json` so it survives the session.
+	//
+	// This patches the document the exporter wrote rather than re-serialising the parsed rig: the
+	// sidecar carries fields the runtime never reads, and a save that quietly dropped them would
+	// make the file a worse record than the exporter left it. Every value written is the authored
+	// number times a dimensionless scale, so nothing here converts units — the file stays in metres
+	// and the runtime's centimetres never touch it.
+	bool SaveTuning(const FString& Stem, const FElysiumClothTuning& Tuning, FString& OutError);
+}

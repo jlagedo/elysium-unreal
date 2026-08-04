@@ -49,6 +49,13 @@ namespace ElysiumNpcVisual
 	// configuration the mesh is imported under is what keeps the two from drifting apart.
 	float ImportGlbScale();
 
+	// Whether the simulated-garment spike is engaged for this stem: `elysium.Cloth` is on AND both
+	// of its artifacts exist on disk. One predicate, called by the mesh loader and by the body
+	// factory that installs the rig, because the two must never disagree — the enhanced mesh with
+	// no rig is a lattice that never moves, and the faithful mesh with a rig is a set of chains
+	// naming bones the skeleton does not have.
+	bool UseClothMesh(const FString& Stem);
+
 	// Bind one named clip from Asset onto Mesh's compatible skeleton by bone name. VtMB banks author
 	// biped-local tracks directly; generic rest-pose retargeting corrupts those locals and Bip01's
 	// absolute scene placement. Optional source tracks absent from the target are filtered before

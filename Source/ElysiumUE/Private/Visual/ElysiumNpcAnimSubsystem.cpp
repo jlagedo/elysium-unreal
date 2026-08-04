@@ -16,6 +16,8 @@ void UElysiumNpcAnimSubsystem::Deinitialize()
 	FacialRigs.Reset();
 	CompositionRigs.Reset();
 	ClothRigs.Reset();
+	EyeSets.Reset();
+	BlendTables.Reset();
 	Super::Deinitialize();
 }
 
@@ -150,6 +152,97 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 	}
 	EyeSets.Add(Stem, Result);
 	return Result;
+}
+
+TSharedPtr<const FElysiumBlendTable> UElysiumNpcAnimSubsystem::GetBlendTable(const FString& Stem)
+{
+	if (Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	if (const TSharedPtr<const FElysiumBlendTable>* Cached = BlendTables.Find(Stem))
+	{
+		return *Cached;
+	}
+
+	// A grid can be declared by any of the three things that own animations: a character's own model,
+	// a shared bank, or a skeletal prop. The stem arrives here already resolved to whichever owns the
+	// clip, so all three groups are searched rather than assuming the caller knew which it was.
+	const FElysiumNpcIndex& Loaded = GetIndex();
+	const FElysiumNpcIndexEntry* Entry = Loaded.Npcs.Find(Stem);
+	if (Entry == nullptr)
+	{
+		Entry = Loaded.Banks.Find(Stem);
+	}
+	FString RelPath = Entry != nullptr ? Entry->Blends : FString();
+	if (RelPath.IsEmpty())
+	{
+		for (const TPair<FString, FElysiumAnimatedPropEntry>& Prop : Loaded.AnimatedProps)
+		{
+			if (Prop.Value.Stem.Equals(Stem, ESearchCase::IgnoreCase))
+			{
+				RelPath = Prop.Value.Blends;
+				break;
+			}
+		}
+	}
+
+	TSharedPtr<const FElysiumBlendTable> Result;
+	if (!RelPath.IsEmpty())
+	{
+		TSharedPtr<FElysiumBlendTable> Table = MakeShared<FElysiumBlendTable>();
+		FString Error;
+		if (!Table->Load(RelPath, Error) || !Table->IsValid())
+		{
+			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("blends '%s': %s"), *Stem,
+				Error.IsEmpty() ? TEXT("no usable grid") : *Error);
+		}
+		else
+		{
+			UE_LOG(LogElysiumNpcAnim, Verbose, TEXT("blends '%s': %d grid(s), %d pose parameter(s)"),
+				*Stem, Table->Grids.Num(), Table->PoseParams.Num());
+			Result = Table;
+		}
+	}
+	BlendTables.Add(Stem, Result);
+	return Result;
+}
+
+FString UElysiumNpcAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const FString& Label,
+	const FElysiumPoseParams& Pose)
+{
+	if (OwnerStem.IsEmpty() || Label.IsEmpty())
+	{
+		return Label;
+	}
+	// Nearly every label names one animation, and a model with no multi-cell sequence has no sidecar
+	// at all — so the common path is a cached null and one map lookup that misses.
+	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(OwnerStem);
+	if (!Table.IsValid())
+	{
+		return Label;
+	}
+	const FElysiumBlendGrid* Grid = Table->Find(Label);
+	if (Grid == nullptr)
+	{
+		return Label;
+	}
+
+	const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Grid, *Table, Pose);
+	if (Pick.Cell == nullptr || Pick.Cell->Clip.IsEmpty())
+	{
+		// Every shipped grid has at least two live cells, so this is a damaged sidecar. Playing the
+		// label is what the runtime did before grids were read at all — worse, but never silent.
+		UE_LOG(LogElysiumNpcAnim, Warning,
+			TEXT("blend grid '%s' on '%s' selected no playable cell; falling back to the label"),
+			*Label, *OwnerStem);
+		return Label;
+	}
+
+	UE_LOG(LogElysiumNpcAnim, Verbose,
+		TEXT("blend grid '%s' on '%s' -> cell [%d,%d] '%s'"), *Label, *OwnerStem,
+		Pick.Index[0], Pick.Index[1], *Pick.Cell->Clip);
+	return Pick.Cell->Clip;
 }
 
 namespace
@@ -331,7 +424,22 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClip(const FString& Stem, const 
 	{
 		return nullptr;
 	}
-	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ClipName, OutError);
+	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ResolveClipAnimName(Stem, ClipName), OutError);
+}
+
+FString UElysiumNpcAnimSubsystem::ResolveClipAnimName(const FString& Stem, const FString& ClipName,
+	const FElysiumPoseParams& Pose)
+{
+	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
+	if (Clip == nullptr)
+	{
+		return ClipName;
+	}
+	// The grid is declared by whoever owns the animation, which is a bank for anything but a dialogue
+	// clip — so the owner column decides which table is asked, not the character.
+	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
+	return ResolveGridClip(Owner, ClipName, Pose);
 }
 
 UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
@@ -348,7 +456,8 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& Bank
 	{
 		return nullptr;
 	}
-	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ClipName, OutError);
+	// This path never consults the clip vocabulary, so the bank is both the asset and the grid owner.
+	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ResolveGridClip(BankStem, ClipName), OutError);
 }
 
 TArray<FString> UElysiumNpcAnimSubsystem::IdleCandidates(const FString& Stem,

@@ -774,6 +774,16 @@ void AElysiumMapActor::StopCinematicClip(USkeletalMeshComponent* Body)
 	}
 }
 
+bool AElysiumMapActor::GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const
+{
+	return Bodies && Bodies->GetCinematicClipPosition(Body, OutSeconds);
+}
+
+bool AElysiumMapActor::ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
+{
+	return Bodies && Bodies->ResyncCinematicClip(Body, PositionSeconds);
+}
+
 int32 AElysiumMapActor::SetFlexControllers(USkeletalMeshComponent* Body,
 	TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing)
 {
