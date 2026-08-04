@@ -36,7 +36,9 @@ struct FElysiumNpcClip
 	// Weighted-random share among the clips sharing this activity. `idle01` carries 30 against
 	// three fidgets at 1, which is how VtMB rests on the idle ~91% of the time.
 	int32 Weight = 0;
-	// Studio sequence bits. Bit meanings are NOT established (A.3) — do not read looping off it.
+	// Studio sequence bits. Bit 0 is STUDIO_LOOPING (RE35 — `CBaseAnimating::ResetSequenceInfo`
+	// derives `m_bSequenceLoops` from `GetSequenceFlags(m_nSequence) & 1`). The higher bits are
+	// still unestablished (A.3). No NPC path reads this yet; the prop path does.
 	int32 Flags = 0;
 	int32 Frames = 0;
 	float Fps = 30.f;
@@ -116,6 +118,28 @@ struct FElysiumCinematicSet
 	FString BankForRoot(const FString& Root) const;
 };
 
+// One baked clip of a skeletal prop. A prop owns every clip it can play — there is no bank
+// indirection — so this carries the selection keys directly rather than an owner column.
+struct FElysiumPropClip
+{
+	FString Name;
+	// The `ACT_*` literal, empty on a plumbing sequence. 16 of the 19 exported prop models tag
+	// nothing (`palmtree`, `drknobantique`) or tag `ACT_VM_IDLE` (every theatre cinematic prop),
+	// so the activity pick usually misses and the index-0 fallback is what selects the rest pose.
+	FString Activity;
+	int32 Weight = 0;
+	int32 Flags = 0;
+	// Ordinal in the model's own sequence-declaration order. Index 0 is retail's rest-pose
+	// fallback (`CBaseProp::Spawn`), which is why the export must not sort these by name.
+	int32 Index = 0;
+	int32 Frames = 0;
+	float Fps = 30.f;
+
+	float Seconds() const { return Fps > 0.f ? static_cast<float>(Frames) / Fps : 0.f; }
+	// RE35: `ResetSequenceInfo` derives `m_bSequenceLoops` from `GetSequenceFlags() & 1`.
+	bool IsLooping() const { return (Flags & 1) != 0; }
+};
+
 struct FElysiumAnimatedPropEntry
 {
 	FString Stem;
@@ -125,9 +149,17 @@ struct FElysiumAnimatedPropEntry
 	TArray<FString> SplitRotationBones;
 	FString Procedural;
 	int32 ProceduralBones = 0;
-	TSet<FString> Clips;
+	// **Declaration order is semantic** — see FElysiumPropClip::Index. A v4/v5 index carries only
+	// names, so those rows land here with Index set from the array position and no selection keys.
+	TArray<FElysiumPropClip> Clips;
 
-	bool HasClip(const FString& Label) const { return Clips.Contains(Label.ToLower()); }
+	const FElysiumPropClip* FindClip(const FString& Label) const;
+	bool HasClip(const FString& Label) const { return FindClip(Label) != nullptr; }
+
+	// The clip retail stands this model on at rest: `SelectWeightedSequence(ACT_IDLE)` falling
+	// back to sequence index 0 (`CBaseProp::Spawn`, FUN_1018df70). Empty only when the model
+	// bakes no clip at all, which is also the test a prop uses to keep its static mesh.
+	FString RestSequence() const;
 };
 
 struct FElysiumNpcIndex

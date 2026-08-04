@@ -388,6 +388,71 @@ public:
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.
 	void PendingInput(const TCHAR* Input, const TCHAR* Owner, const FElysiumInputArgs& Args) const;
 
+	// --- Gaze (12.4) --------------------------------------------------------------------------
+	// VtMB puts this on CBaseCombatCharacter and so do we. The class decides *where to look*; the
+	// visual layer decides what that looks like, and the only thing crossing between them is one
+	// world point per character per frame — which is exactly the hop retail networks as
+	// `m_viewtarget`.
+	//
+	// Datamap-backed, at the recovered offsets: m_vEyeLookTarget@0x0E44 (commanded),
+	// m_vCurEyeTarget@0x0E50 (smoothed), m_hEyeLookTarget@0x0E64, m_flEyeIntegRate@0x0E3C.
+	FVector EyeLookTarget = FVector::ZeroVector;
+	FVector CurEyeTarget = FVector::ZeroVector;
+	float EyeIntegRate = 0.f;
+	// The smoothed point starts at nothing rather than at the origin, and the difference matters:
+	// testing it against zero instead would re-seed a character that is legitimately looking at the
+	// world origin, snapping its eyes every frame it stayed there.
+	bool bCurEyeTargetSeeded = false;
+	// `m_hEyeLookTarget` is a handle, which is not a field type the registry carries, so the saved
+	// form is the target's targetname — the same thing the save would have to re-resolve anyway.
+	FString EyeLookTargetName;
+
+	// Retail's scripted-mode int lives at 0x0E68 and the datamap does NOT carry it, so a scripted
+	// look-at does not survive a save. Registered with EElysiumField::None to reproduce that.
+	int32 EyeLookMode = 0;
+
+	// The saccade layer. Not in retail's datamap either: a fidget in progress is re-derived, not
+	// restored.
+	// Two independent clocks, and they must stay independent: the scan re-picks what to look at
+	// every 1-5 s, while the fidget holds each keypad cell for a fraction of a second. Sharing one
+	// field would make a saccade cancel the scan's schedule and vice versa.
+	float NextEyeLookTime = 0.f;   // when the autonomous scan next re-picks a subject
+	float NextFidgetTime = 0.f;    // when the current fidget hold expires
+	int32 FidgetStep = -1;         // -1 = not fidgeting, else 0..2 into the disposition's triple
+	int32 FidgetCell = 0;          // the keypad cell the current step resolved to
+
+	// Integration is a fixed 0.1 s step, so the leftover frame time has to be carried rather than
+	// discarded — dropping it would make the convergence rate depend on the frame rate.
+	float EyeIntegAccumulator = 0.f;
+
+	// Head yaw/pitch, integrated through retail's 0.8/0.2 filter and driving nothing — see
+	// TickGaze. Kept so the values can be inspected and so the filter stays reproducible.
+	float HeadYaw = 0.f;
+	float HeadPitch = 0.f;
+
+	// One gaze step. `HeadPos`/`HeadForward` come from the live animated head bone when the body
+	// has one, and fall back to EyePosition()/EyeAngles() when it does not — the input side of the
+	// look-at is live in retail even though the output side is inert. Returns the smoothed world
+	// point the eyes should converge on.
+	//
+	// The tuning is passed in rather than looked up: every rate and interval here is content, and
+	// taking it as an argument keeps this class free of the engine subsystem that owns the parsed
+	// table, so the whole cascade is assertable under -nullrhi.
+	//
+	// `DialogPovPoint`, when set, is where the camera is for a shot whose `DialogPOV` is on: it
+	// replaces the player as the dialogue arm's subject, and nothing else. Passed as a point rather
+	// than a camera so this stays free of the engine half.
+	FVector TickGaze(float Now, float DeltaSeconds, const FVector& HeadPos, const FVector& HeadForward,
+		const struct FElysiumEyeTargetTuning& Tuning, const FVector* DialogPovPoint = nullptr);
+
+	// The four scripted look-at inputs. Center deliberately behaves as Eye — see the .cpp.
+	void InputLookAtEntityEye(const FElysiumInputArgs& Args);
+	void InputLookAtEntityCenter(const FElysiumInputArgs& Args);
+	void InputLookAtEntityOrigin(const FElysiumInputArgs& Args);
+	void InputLookAtEntityDefault(const FElysiumInputArgs& Args);
+
+	virtual FVector EyePosition() const override;
+
 	// What is left after the datamap: a `base_*` name no compiled slot owns. It still has to read a
 	// number rather than raise, because the gates that ask (`pc.base_Celerity > 0`) are written
 	// against a sheet where every name resolves.

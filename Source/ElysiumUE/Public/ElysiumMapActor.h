@@ -205,6 +205,10 @@ public:
 	// S2 — the frame's post-move pass (TG_PostPhysics, step 8), driven by PostMoveTickFunction.
 	void PostMoveTick(float DeltaSeconds);
 
+	// 12.4 — run the gaze cascade for every drawn character and publish each answer to its body.
+	// Called from PostMoveTick, where the head-bone pose it measures against is settled.
+	void TickGaze(float DeltaSeconds);
+
 	// Steps 2-3's tick function. Public so a test can read the declared frame order off the class.
 	UPROPERTY()
 	FElysiumPreMoveTickFunction PreMoveTickFunction;
@@ -278,6 +282,9 @@ public:
 	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
 		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) override;
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;
+	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) override;
+	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
+		FVector& OutForward) const override;
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override;
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
 		const FVector& Location, const FQuat& Rotation, float UniformScale) override;
@@ -285,6 +292,9 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds) override;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) override;
+	virtual FString AnimatedPropRestClip(const FString& Stem) const override;
+	virtual bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
+		bool& bOutLoops) const override;
 	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,
 		USceneComponent* ParentBody, float UniformScale, bool bSky) override;
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,

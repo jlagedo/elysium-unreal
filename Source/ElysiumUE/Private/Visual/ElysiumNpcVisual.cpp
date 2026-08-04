@@ -105,6 +105,11 @@ namespace ElysiumNpcVisual
 		return AssetConfig().GetMatrix().TransformVector(GlbDirection);
 	}
 
+	float ImportGlbScale()
+	{
+		return AssetConfig().SceneScale;
+	}
+
 	UglTFRuntimeAsset* LoadAssetFromPath(const FString& FullPath, FString& OutError)
 	{
 		OutError.Reset();

@@ -7,6 +7,39 @@
 
 const TCHAR* FElysiumDispositionTable::NeutralName = TEXT("Neutral");
 
+namespace
+{
+	// "Fidget Points" is authored as a bracketed triple — `[-1,-1,-1]`, `[0,2,0]`, `[7,5,9]`. It is
+	// the only value in the table that is not a bare scalar, and an unparsed one has to leave the
+	// caller's default (all -1, "pick a random cell") rather than three zeroes: 0 is a meaningful
+	// cell value in this grid, so zeroing on a parse failure would silently author behaviour.
+	void ParseFidgetPoints(const FString& Raw, int32 (&Out)[3])
+	{
+		FString Body = Raw;
+		Body.TrimStartAndEndInline();
+		Body.RemoveFromStart(TEXT("["));
+		Body.RemoveFromEnd(TEXT("]"));
+		TArray<FString> Parts;
+		Body.ParseIntoArray(Parts, TEXT(","), /*InCullEmpty=*/true);
+		if (Parts.Num() != 3)
+		{
+			return;
+		}
+		for (int32 i = 0; i < 3; ++i)
+		{
+			Parts[i].TrimStartAndEndInline();
+			if (!Parts[i].IsNumeric())
+			{
+				return;
+			}
+		}
+		for (int32 i = 0; i < 3; ++i)
+		{
+			Out[i] = FCString::Atoi(*Parts[i]);
+		}
+	}
+}
+
 bool FElysiumDispositionTable::Load(FString& OutError)
 {
 	Rows.Reset();
@@ -53,6 +86,19 @@ bool FElysiumDispositionTable::Load(FString& OutError)
 		// when its disposition does not resolve, blinks at 1.5/2.0.
 		Row.MinBlinkInterval = N->Flt(TEXT("Min Blink Interval"), N->Flt(TEXT("MinBlinkInterval"), 2.5f));
 		Row.MaxBlinkInterval = N->Flt(TEXT("Max Blink Interval"), N->Flt(TEXT("MaxBlinkInterval"), 6.f));
+		// The disposition-level "Eye Turn Rate", which is a different key from the one inside the
+		// `EyeTarget` block below and carries a different value on every row that authors both.
+		Row.EyeTurnRate = N->Flt(TEXT("Eye Turn Rate"), 0.9f);
+		if (const ElysiumKeyValues::FKvNode* Eye = N->Child(TEXT("EyeTarget")))
+		{
+			Row.EyeTarget.DefaultDirection = Eye->Int(TEXT("Default Direction"), 0);
+			ParseFidgetPoints(Eye->Str(TEXT("Fidget Points"), FString()), Row.EyeTarget.FidgetPoints);
+			Row.EyeTarget.MinInterval = Eye->Flt(TEXT("Min Interval"), 5.f);
+			Row.EyeTarget.MaxInterval = Eye->Flt(TEXT("Max Interval"), 8.f);
+			Row.EyeTarget.HoldMin = Eye->Flt(TEXT("Hold Min"), 0.15f);
+			Row.EyeTarget.HoldMax = Eye->Flt(TEXT("Hold Max"), 0.25f);
+			Row.EyeTarget.TurnRate = Eye->Flt(TEXT("Eye Turn Rate"), 0.3f);
+		}
 		Rows.Add(Kid.Key, MoveTemp(Row));
 	}
 	if (Rows.IsEmpty())

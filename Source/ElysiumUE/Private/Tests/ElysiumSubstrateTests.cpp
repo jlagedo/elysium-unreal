@@ -52,7 +52,9 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
+#include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
 #include "ElysiumPawn.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
@@ -4398,11 +4400,55 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	// than a parse failure.
 	TestTrue(TEXT("v3 index reads no eyeball sidecar"), V3.Npcs[TEXT("dummy")].Eyes.IsEmpty());
 
+	// v6 turns `clips` from a sorted name array into the model's own sequence table, in declaration
+	// order, with the selection keys beside each label. Order is what retail's index-0 rest-pose
+	// fallback selects on, so the alphabetically-first clip must NOT win: this table is
+	// `drknobantique`'s real shape, where sorting would stand the knob on `handle_locked`.
+	FElysiumNpcIndex V6;
+	Error.Reset();
+	const FString Json6 = FString::Printf(TEXT("{\"manifest_version\":6,%s,\"banks\":{},\"cinematics\":{},"
+		"\"animated_props\":{\"drknobantique\":{\"glb\":\"animated_props/drknobantique.glb\","
+		"\"model\":\"models/scenery/doorknoba/drknobantique.mdl\",\"bones\":2,\"clips\":["
+		"{\"name\":\"idle\",\"index\":0,\"activity\":\"\",\"weight\":0,\"flags\":1,\"frames\":16,\"fps\":15.0},"
+		"{\"name\":\"handle_locked\",\"index\":1,\"activity\":\"\",\"weight\":0,\"flags\":0,\"frames\":16,\"fps\":15.0},"
+		"{\"name\":\"handle_unlocked\",\"index\":2,\"activity\":\"\",\"weight\":0,\"flags\":0,\"frames\":16,\"fps\":15.0}"
+		"]}}}"), *MinimalNpc);
+	TestTrue(FString::Printf(TEXT("v6 manifest parses: %s"), *Error), V6.LoadJsonText(Json6, Error));
+	TestEqual(TEXT("v6 version retained"), V6.ManifestVersion, 6);
+	const FElysiumAnimatedPropEntry* Knob =
+		V6.FindAnimatedProp(TEXT("models/scenery/doorknoba/drknobantique.mdl"));
+	if (TestNotNull(TEXT("v6 resolves the animated prop"), Knob))
+	{
+		TestEqual(TEXT("v6 keeps declaration order"), Knob->Clips[0].Name, FString(TEXT("idle")));
+		TestEqual(TEXT("v6 rest sequence is the declared first, not the alphabetical first"),
+			Knob->RestSequence(), FString(TEXT("idle")));
+		const FElysiumPropClip* Idle = Knob->FindClip(TEXT("IDLE"));
+		if (TestNotNull(TEXT("v6 clip lookup folds case"), Idle))
+		{
+			TestTrue(TEXT("STUDIO_LOOPING is read off bit 0"), Idle->IsLooping());
+			TestEqual(TEXT("v6 carries the declared ordinal"), Idle->Index, 0);
+		}
+		const FElysiumPropClip* Locked = Knob->FindClip(TEXT("handle_locked"));
+		if (TestNotNull(TEXT("v6 resolves a later clip"), Locked))
+		{
+			TestFalse(TEXT("a non-looping clip reads as one shot"), Locked->IsLooping());
+		}
+	}
+
+	// The v4 shape above still parses, and its bare names land as ordered rows with no selection
+	// keys — an index that predates the re-export keeps working, it just has no loop flags.
+	if (Glass)
+	{
+		TestEqual(TEXT("v4 names land in array order"), Glass->Clips[0].Name, FString(TEXT("Idle")));
+		TestEqual(TEXT("v4 rest sequence falls back to the first name"),
+			Glass->RestSequence(), FString(TEXT("Idle")));
+	}
+
 	FElysiumNpcIndex Future;
 	Error.Reset();
-	const FString Json6 = FString::Printf(TEXT("{\"manifest_version\":6,%s}"), *MinimalNpc);
-	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json6, Error));
-	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 5")));
+	const FString Json7 = FString::Printf(TEXT("{\"manifest_version\":7,%s}"), *MinimalNpc);
+	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json7, Error));
+	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 6")));
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningEmbodimentTest,
@@ -4414,6 +4460,7 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 	Services.PlayerLocation = FVector(10.f, 20.f, 30.f);
 	Services.PlayerRotation = FRotator(0.f, 35.f, 0.f);
 	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_wineglass.mdl"), TEXT("cin_wineglass"));
+	Services.AnimatedPropClipLoops.Add(TEXT("cin_wineglass|glass_idle"), true);
 
 		auto BuildDefs = []()
 	{
@@ -4497,14 +4544,20 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 
 	TestTrue(TEXT("indexed prop selects the animated visual"),
 		Services.Saw(TEXT("BuildAnimatedPropVisual cin_wineglass")));
-	TestTrue(TEXT("authored loop starts looping"),
+	// `LoopSequence` resolves in the Activate phase and starts behind a 0.1-0.99 s stagger, so at
+	// spawn the prop is holding its rest pose and the loop has not begun. Elysium.Substrate.
+	// PropAnimateThink is the dedicated coverage; this only pins that the seam still reaches here.
+	TestFalse(TEXT("the authored loop waits for the Activate-phase stagger"),
+		Services.Saw(TEXT("PlayAnimatedPropClip cin_wineglass glass_idle loop=1")));
+	World.Tick(1.0);
+	TestTrue(TEXT("authored loop starts looping once the stagger elapses"),
 		Services.Saw(TEXT("PlayAnimatedPropClip cin_wineglass glass_idle loop=1")));
 	World.EnqueueInput(TEXT("wineglass"), FName(TEXT("SetAnimation")),
 		FElysiumVariant::String(TEXT("glass_pour")), 0.0,
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	World.EnqueueInput(TEXT("wineglass"), FName(TEXT("Skin")), FElysiumVariant::Int(3), 0.0,
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	World.Tick(0.0);
+	World.Tick(1.0);   // the clock has already reached 1.0 above; it must not run backwards
 	TestTrue(TEXT("SetAnimation selects a non-looping cinematic clip"),
 		Services.Saw(TEXT("PlayAnimatedPropClip cin_wineglass glass_pour loop=0")));
 	TestTrue(TEXT("Skin reaches skeletal prop material families"),
@@ -4525,7 +4578,7 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 
 	World.EnqueueInput(TEXT("wineglass"), FName(TEXT("Break")), FElysiumVariant::Void(), 0.0,
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	World.Tick(0.0);
+	World.Tick(1.0);
 	TArray<TPair<FString, FString>> Debug;
 	if (FElysiumEntity* Glass = World.FindByName(TEXT("wineglass")))
 	{
@@ -6490,8 +6543,16 @@ namespace
 }
 
 // ============================================================================================
-// CDynamicProp's animate think (FUN_10190850): a finished one-shot returns to `LoopSequence`, and
-// `demo_sequence` stands nothing up because the engine has no such keyfield.
+// CDynamicProp's spawn/activate/think lifecycle (RE35). Four facts, in the order they happen:
+//   * `CBaseProp::Spawn` (FUN_1018df70) stands the prop on a HELD pose — the rest sequence at
+//     frame 0 with the play rate at zero — not on a playing clip. `demo_sequence` is not an
+//     engine keyfield and contributes nothing; the pose comes from the activity/index rule.
+//   * `CDynamicProp::Activate` (FUN_101906c0) resolves `LoopSequence` and arms the start behind
+//     a RandomFloat(0.1, 0.99) stagger, so nothing starts on the map's first frozen-time tick.
+//   * `SetAnimation` plays on the clip's own STUDIO_LOOPING bit, not a forced one shot.
+//   * A finished one-shot HOLDS ITS FINAL FRAME. The think returns without rewriting
+//     m_flNextThink once `RandomAnimation` is 0 — true on all 749 shipped entities — so it
+//     disarms permanently and the revert-to-LoopSequence branch is unreachable in shipped data.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropAnimateThinkTest,
 	"Elysium.Substrate.PropAnimateThink", GElysiumTestFlags)
@@ -6500,6 +6561,11 @@ bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_stake.mdl"), TEXT("cin_stake"));
 	Services.AnimatedPropModels.Add(TEXT("models/cinematic/cin_cigar.mdl"), TEXT("cin_cigar"));
+	// Rest clips that are NOT the authored keyvalues, so a pose sourced from `demo_sequence`
+	// would be distinguishable from one sourced by the activity/index rule.
+	Services.AnimatedPropRestClips.Add(TEXT("cin_stake"), TEXT("idle01"));
+	Services.AnimatedPropRestClips.Add(TEXT("cin_cigar"), TEXT("rest_pose"));
+	Services.AnimatedPropClipLoops.Add(TEXT("cin_stake|idle01"), true);
 	Services.ClipSeconds = 4.0f;
 
 	FElysiumEntityDefs Defs;
@@ -6532,28 +6598,163 @@ bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("LoopSequence stands the prop on its authored loop"),
-		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 1);
-	TestEqual(TEXT("demo_sequence is not an engine keyfield and stands nothing up"),
-		Services.Count(TEXT("PlayAnimatedPropClip cin_cigar")), 0);
+	// Spawn: a held rest pose on both props. `loop=0` is load-bearing — the anim proxy's Request
+	// early-outs on a repeated looping clip without restoring the play rate, so a hold created as
+	// a loop could never be released.
+	TestEqual(TEXT("the prop stands its rest sequence, held"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=0")), 1);
+	TestTrue(TEXT("the rest pose is seeked to frame 0"),
+		Services.Saw(TEXT("SeekCinematicClip 0.000")));
+	TestEqual(TEXT("demo_sequence is not an engine keyfield; the rest pose comes from the model"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_cigar rest_pose loop=0")), 1);
+	TestEqual(TEXT("nothing stands on the demo_sequence value"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_cigar idle")), 0);
 
-	// A scripted one-shot replaces the loop and arms the think.
+	// Activate armed the loop start behind the stagger, so the frozen-time pass must not fire it.
+	World.Tick(0.0);
+	TestEqual(TEXT("the authored loop does not start on the map's first tick"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 0);
+
+	// Past the longest stagger (0.99) the loop starts, once, honouring its STUDIO_LOOPING bit.
+	World.Tick(1.0);
+	TestEqual(TEXT("the authored loop starts after the stagger"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 1);
+
+	// A scripted one-shot replaces the loop and re-arms the think.
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("SetAnimation")),
 		FElysiumVariant::String(TEXT("scene")), /*Delay*/ 0.0,
 		FElysiumEntityHandle::Invalid(), Stake->Handle);
-	World.Tick(0.0);
-	TestEqual(TEXT("SetAnimation plays the one-shot"),
+	World.Tick(1.0);
+	TestEqual(TEXT("SetAnimation plays the one-shot on the clip's own loop bit"),
 		Services.Count(TEXT("PlayAnimatedPropClip cin_stake scene loop=0")), 1);
 
-	// Mid-clip the think must leave it alone (ClipSeconds is 4).
-	World.Tick(2.0);
-	TestEqual(TEXT("the loop is not restored while the one-shot is still running"),
-		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 1);
+	// Mid-clip nothing changes (ClipSeconds is 4).
+	World.Tick(3.0);
+	TestEqual(TEXT("the one-shot is left alone while it runs"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake scene loop=0")), 1);
 
-	// Past the clip's end the think returns the prop to its LoopSequence.
-	World.Tick(4.5);
-	TestEqual(TEXT("a finished one-shot reverts to LoopSequence"),
-		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 2);
+	// Past the clip's end the prop holds its final frame: OnAnimationDone fires and the think
+	// disarms. Retail does not return to `LoopSequence` and does not fall back to a rest pose.
+	World.Tick(5.5);
+	TestEqual(TEXT("a finished one-shot does not revert to LoopSequence"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake idle01 loop=1")), 1);
+	TestEqual(TEXT("a finished one-shot does not restart itself"),
+		Services.Count(TEXT("PlayAnimatedPropClip cin_stake scene loop=0")), 1);
+	TestEqual(TEXT("the think disarms once the clip has finished"),
+		Stake->NextThink, ELYSIUM_NEVER_THINK);
+	return true;
+}
+
+// ============================================================================================
+// A skeletal prop is placed with the glTF basis, not the static mesh's. `model_quat` is the
+// placement of the exporter's Unreal-native OBJ; a glTF body needs the fixed model-local
+// correction composed on top, because glTFRuntime imports mdl_gltf.py's Y-up output into its own
+// basis. Composing (rather than substituting a yaw-only rotation) is what keeps a placement's
+// pitch and roll — 15 of the corpus's animated-prop placements are leaning palms.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropPlacementTest,
+	"Elysium.Substrate.AnimatedPropPlacement", GElysiumTestFlags)
+bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
+{
+	auto BuildOne = [](FElysiumRecordingServices& Services, const FVector& SourceAngles,
+		const FQuat& ModelQuat, bool bAnimated)
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__prop_place__");
+		FElysiumEntityDef Prop;
+		Prop.Classname = TEXT("prop_dynamic");
+		Prop.TargetName = TEXT("prop");
+		Prop.ModelMesh = TEXT("prop_mesh");
+		Prop.ModelQuat = ModelQuat;
+		Prop.Keys.Add(TEXT("model"), TEXT("models/test/prop.mdl"));
+		Prop.Keys.Add(TEXT("angles"), FString::Printf(TEXT("%f %f %f"),
+			SourceAngles.X, SourceAngles.Y, SourceAngles.Z));
+		Defs.Defs.Add(MoveTemp(Prop));
+		if (bAnimated)
+		{
+			Services.AnimatedPropModels.Add(TEXT("models/test/prop.mdl"), TEXT("prop_anim"));
+		}
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+	};
+
+	// `sp_theatre` ships eleven of its sixteen animated props at `angles "0 270 0"`, whose exported
+	// model_quat is a +90 degree Unreal yaw. The static mesh wants that verbatim; the skeletal body
+	// wants 0, because the glTF basis already carries the other -90.
+	const FQuat Yaw90(FRotator(0.f, 90.f, 0.f));
+	{
+		FElysiumRecordingServices Animated;
+		BuildOne(Animated, FVector(0.f, 270.f, 0.f), Yaw90, /*bAnimated=*/true);
+		TestTrue(TEXT("the skeletal body is built"),
+			Animated.Saw(TEXT("BuildAnimatedPropVisual prop_anim")));
+		const FRotator Got = Animated.LastAnimatedPropRotation.Rotator();
+		TestTrue(FString::Printf(TEXT("a 270 degree Source yaw stands the skeletal body at 0 (got %s)"),
+			*Got.ToString()), Got.Equals(FRotator::ZeroRotator, 0.01f));
+	}
+	{
+		FElysiumRecordingServices Static;
+		BuildOne(Static, FVector(0.f, 270.f, 0.f), Yaw90, /*bAnimated=*/false);
+		const FRotator Got = Static.LastPropRotation.Rotator();
+		TestTrue(FString::Printf(TEXT("the static mesh keeps model_quat verbatim (got %s)"),
+			*Got.ToString()), Got.Equals(FRotator(0.f, 90.f, 0.f), 0.01f));
+	}
+
+	// `sm_oceanhouse_1`'s leaning palms — 15 of the corpus's animated-prop placements carry pitch
+	// or roll. A yaw-only derivation would stand these bolt upright; composing preserves the lean,
+	// which is the whole reason the correction is a quaternion rather than a replacement rotator.
+	{
+		FElysiumRecordingServices Leaning;
+		const FRotator Authored(24.0994f, 284.031f, -4.27304f);
+		BuildOne(Leaning, FVector(24.0994f, 284.031f, -4.27304f), FQuat(Authored), /*bAnimated=*/true);
+		TestTrue(TEXT("the leaning skeletal body is built"),
+			Leaning.Saw(TEXT("BuildAnimatedPropVisual prop_anim")));
+		const FRotator Got = Leaning.LastAnimatedPropRotation.Rotator();
+		TestTrue(FString::Printf(TEXT("the authored lean survives the model fix (got %s)"),
+			*Got.ToString()), FMath::Abs(Got.Pitch) > 1.f && FMath::Abs(Got.Roll) > 1.f);
+		// The fix is exactly a -90 degree model-local yaw on top of the authored placement.
+		const FQuat Expected = FQuat(Authored) * FQuat(FRotator(0.f, -90.f, 0.f));
+		TestTrue(TEXT("the composed rotation is placement * model fix"),
+			Leaning.LastAnimatedPropRotation.Equals(Expected, 0.001f));
+	}
+	return true;
+}
+
+// ============================================================================================
+// An indexed model that bakes no playable clip is not an animated representation — it is a
+// bind-pose skeleton standing where the baked static mesh should be. `lampfloor`, `glassa` and
+// `junkyardcraneb` are the shipped cases; the exporter now keeps them out of the index, and this
+// is the runtime's own guard for an index that still carries one.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropZeroClipFallbackTest,
+	"Elysium.Substrate.PropZeroClipFallback", GElysiumTestFlags)
+bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.AnimatedPropModels.Add(TEXT("models/scenery/lampfloor.mdl"), TEXT("lampfloor"));
+	Services.AnimatedPropRestClips.Add(TEXT("lampfloor"), FString());   // bakes no clip
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_fallback__");
+	FElysiumEntityDef Lamp;
+	Lamp.Classname = TEXT("prop_dynamic");
+	Lamp.TargetName = TEXT("plus_bag");
+	Lamp.ModelMesh = TEXT("lampfloor_static");
+	Lamp.Keys.Add(TEXT("model"), TEXT("models/scenery/lampfloor.mdl"));
+	Lamp.Keys.Add(TEXT("LoopSequence"), TEXT("idle"));
+	Defs.Defs.Add(MoveTemp(Lamp));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+	World.Tick(1.0);
+
+	TestFalse(TEXT("a clipless model does not stand a skeletal body"),
+		Services.Saw(TEXT("BuildAnimatedPropVisual lampfloor")));
+	TestTrue(TEXT("it keeps its baked static mesh instead"),
+		Services.Saw(TEXT("BuildPropVisual lampfloor_static")));
+	TestEqual(TEXT("and plays nothing, authored LoopSequence notwithstanding"),
+		Services.Count(TEXT("PlayAnimatedPropClip")), 0);
 	return true;
 }
 
@@ -9292,6 +9493,306 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	FireAt(TEXT("counter1"), TEXT("Add"));
 	TestEqual(TEXT("an implemented input reports nothing"),
 		CountFor(TEXT("input"), TEXT("math_counter.Add")), 0);
+
+	return true;
+}
+
+// =====================================================================================
+// Gaze — the selection cascade, the cone gate, the scripted inputs and the integrator (12.4)
+// =====================================================================================
+//
+// Every arm of this is a plain function of positions and time, which is the point: the half that
+// decides where a character looks holds no engine state, so the whole cascade is assertable here
+// rather than only in a running world. The one thing this cannot check is that the answer reaches
+// a material — that is the content tier's FacialMorphTargets and the live run's job.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeTest, "Elysium.Substrate.Gaze", GElysiumTestFlags)
+bool FElysiumGazeTest::RunTest(const FString&)
+{
+	auto MakeWorld = [](FElysiumEntityWorld& World)
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__gaze_test__");
+		FElysiumEntityDef Watcher;
+		Watcher.Classname = TEXT("npc_VVampire");
+		Watcher.TargetName = TEXT("watcher");
+		Watcher.Origin = FVector::ZeroVector;
+		Watcher.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Watcher));
+		FElysiumEntityDef Prop;
+		Prop.Classname = TEXT("prop_static");
+		Prop.TargetName = TEXT("statue");
+		Prop.Origin = FVector(300.f, 0.f, 0.f);
+		Defs.Defs.Add(MoveTemp(Prop));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+	};
+
+	// The head frame every assertion measures in: eye height, facing +X.
+	const FVector Head(0.f, 0.f, ElysiumMove::StandViewZ);
+	const FVector Forward(1.f, 0.f, 0.f);
+	FElysiumEyeTargetTuning Tuning;
+	Tuning.TurnRate = 0.5f;
+	// Keep the saccade out of the way of the selection assertions — a fidget would move the
+	// commanded point off the subject as soon as the eyes converged on it.
+	Tuning.MinInterval = 1000.f;
+	Tuning.MaxInterval = 1000.f;
+
+	// --- EyePosition is the view offset, not a bounds fraction -------------------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (!TestNotNull(TEXT("the world has a player"), Player))
+		{
+			return false;
+		}
+		Player->Origin = FVector(10.f, 20.f, 30.f);
+		TestTrue(TEXT("EyePosition is origin + the standing view offset"),
+			Player->EyePosition().Equals(FVector(10.f, 20.f, 30.f + ElysiumMove::StandViewZ)));
+	}
+
+	// --- The autonomous scan, and the cone that gates it --------------------------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (!TestNotNull(TEXT("the watcher is a combat character"), Watcher) || Player == nullptr)
+		{
+			return false;
+		}
+
+		// Straight ahead and well inside the 300-unit scan sphere: the player is picked.
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a candidate inside the cone is chosen, at its EyePosition"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		// The same candidate off to the side is outside the ±30° cone, so the character looks
+		// straight ahead instead. dot((1,0,0), normalize(100,500,0)) = 0.196, well under 0.866.
+		Watcher->NextEyeLookTime = 0.f;   // let the scan re-pick
+		Player->Origin = FVector(100.f, 500.f, 0.f);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		const FVector Ahead = Head + Forward * (500.f * ElysiumMove::U);
+		TestTrue(TEXT("a candidate outside the cone is rejected for straight ahead"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+
+		// A prop is not a candidate however well placed — retail's filter admits the player and
+		// characters, and `statue` sits dead ahead at 300 units.
+		Watcher->NextEyeLookTime = 0.f;
+		Player->Origin = FVector(-500.f, 0.f, 0.f);   // behind, so only the prop is in the cone
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a non-character in the cone is not a gaze candidate"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+	}
+
+	// --- The dialogue arm, and the DialogPOV redirect -----------------------------------------
+	// The camera-shot table's how-to defines `DialogPOV "1"` as "NPCs will look at the camera during
+	// dialog, rather than the player's eye position", and 51 of the 66 shipped shot files set it —
+	// so this, not the 40 authored `LookAtEntity*` wires, is where most of VtMB's look-at happens.
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+
+		// The smallest conversation that opens: one spoken NPC line.
+		TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+		if (!TestTrue(TEXT("the gaze fixture conversation parses"),
+			FElysiumDlgFile::ParseBytes(
+				ElysiumDlgBytes({ ElysiumDlgRow(11, TEXT("Hello."), TEXT("#"), TEXT(""), TEXT("")) }),
+				File.Get())))
+		{
+			return false;
+		}
+		TSharedRef<FElysiumDlgConversation> Conv = MakeShared<FElysiumDlgConversation>(
+			File, /*bMale*/ true, /*bMalk*/ false,
+			[](const FString&) { return true; }, [](const FString&) {});
+		Conv->Start();
+		World.OpenDialog(Watcher->Handle, Conv);
+
+		// With no shot asking for it, the NPC aims at the player's eye.
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("the dialogue arm aims at the partner's EyePosition"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		// With one, it aims at the camera instead. Placed inside the cone so nothing else can be
+		// what moved it, and away from the player so the two answers cannot be confused.
+		const FVector CameraPoint(420.f, 60.f, ElysiumMove::StandViewZ + 40.f);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning, &CameraPoint);
+		TestTrue(TEXT("DialogPOV redirects the dialogue arm to the camera"),
+			Watcher->EyeLookTarget.Equals(CameraPoint, 0.1f));
+
+		// It replaces the *player* as the subject and nothing else: the player looking back at the
+		// NPC still resolves the NPC, with the same point supplied.
+		Player->NextFidgetTime = TNumericLimits<float>::Max();
+		Player->TickGaze(0.f, 0.f, Head, Forward, Tuning, &CameraPoint);
+		TestTrue(TEXT("DialogPOV does not redirect the player's own aim"),
+			Player->EyeLookTarget.Equals(Watcher->EyePosition(), 0.1f));
+	}
+
+	// --- The four scripted inputs -------------------------------------------------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		// Hold the saccade off. It engages the moment the eyes converge, and every assertion below
+		// is about *what was selected*, which a fidget would immediately move off.
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(ElysiumPlayerTargetName());
+
+		Watcher->InputLookAtEntityEye(Args);
+		TestEqual(TEXT("LookAtEntityEye pushes mode 1"), Watcher->EyeLookMode, 1);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("...and aims at the target's EyePosition"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		// The shipped defect: Center pushes the Eye constant, so it lands on EyePosition too. If
+		// this ever starts resolving WorldSpaceCenter, we have diverged from retail.
+		Watcher->InputLookAtEntityDefault(Args);
+		Watcher->InputLookAtEntityCenter(Args);
+		TestEqual(TEXT("LookAtEntityCenter pushes mode 1, reproducing the shipped defect"),
+			Watcher->EyeLookMode, 1);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("...so Center aims exactly where Eye does"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		Watcher->InputLookAtEntityOrigin(Args);
+		TestEqual(TEXT("LookAtEntityOrigin pushes mode 3"), Watcher->EyeLookMode, 3);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("...and aims at the target's origin, not its eyes"),
+			Watcher->EyeLookTarget.Equals(Player->Origin, 0.1f));
+
+		Watcher->InputLookAtEntityDefault(Args);
+		TestEqual(TEXT("LookAtEntityDefault clears the mode"), Watcher->EyeLookMode, 0);
+		TestTrue(TEXT("...and the target name with it"), Watcher->EyeLookTargetName.IsEmpty());
+
+		// A scripted target naming an entity that is not there yields back to autonomous rather
+		// than holding a dead aim.
+		FElysiumInputArgs Gone;
+		Gone.Param = FElysiumVariant::String(TEXT("no_such_entity"));
+		Watcher->InputLookAtEntityEye(Gone);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestEqual(TEXT("a scripted target that is gone releases to autonomous"),
+			Watcher->EyeLookMode, 0);
+	}
+
+	// --- The integrator is a fixed 0.1 s step, not a per-frame lerp ---------------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(ElysiumPlayerTargetName());
+		Watcher->InputLookAtEntityEye(Args);
+
+		// Seed the smoothed point somewhere definite, then step exactly one interval at rate 0.5:
+		// the result must be the midpoint. A frame-rate-dependent lerp would land elsewhere.
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		const FVector Commanded = Watcher->EyeLookTarget;
+		const FVector Seed(0.f, 0.f, 100.f);
+		Watcher->CurEyeTarget = Seed;
+		Watcher->EyeIntegAccumulator = 0.f;
+		Watcher->TickGaze(0.f, 0.1f, Head, Forward, Tuning);
+		TestTrue(TEXT("one 0.1 s step at rate 0.5 moves the smoothed point halfway"),
+			Watcher->CurEyeTarget.Equals(Seed + (Commanded - Seed) * 0.5f, 0.5f));
+
+		// Two half-steps make one whole one — the accumulator carries the remainder rather than
+		// discarding it, which is the whole reason the step is fixed.
+		Watcher->CurEyeTarget = Seed;
+		Watcher->EyeIntegAccumulator = 0.f;
+		Watcher->TickGaze(0.f, 0.05f, Head, Forward, Tuning);
+		TestTrue(TEXT("half an interval alone moves nothing"),
+			Watcher->CurEyeTarget.Equals(Seed, 0.01f));
+		Watcher->TickGaze(0.f, 0.05f, Head, Forward, Tuning);
+		TestTrue(TEXT("...and the second half completes the same single step"),
+			Watcher->CurEyeTarget.Equals(Seed + (Commanded - Seed) * 0.5f, 0.5f));
+
+		TestEqual(TEXT("the integration rate is published from the disposition"),
+			Watcher->EyeIntegRate, 0.5f);
+	}
+
+	// --- The fidget walks the authored keypad cells in order ----------------------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(ElysiumPlayerTargetName());
+		Watcher->InputLookAtEntityEye(Args);
+
+		// Anger's authored triple, and a zero hold so each call advances exactly one step.
+		FElysiumEyeTargetTuning Anger;
+		Anger.FidgetPoints[0] = 0;
+		Anger.FidgetPoints[1] = 2;
+		Anger.FidgetPoints[2] = 0;
+		Anger.HoldMin = 0.f;
+		Anger.HoldMax = 0.f;
+		Anger.TurnRate = 1.f;   // converge immediately so the saccade can engage
+
+		Watcher->TickGaze(0.f, 1.f, Head, Forward, Anger);   // converge on the target
+		Watcher->TickGaze(1.f, 0.1f, Head, Forward, Anger);  // step 0 -> cell 0
+		TestEqual(TEXT("the fidget starts at the first authored cell"), Watcher->FidgetCell, 0);
+		TestEqual(TEXT("...as step 0"), Watcher->FidgetStep, 0);
+
+		Watcher->TickGaze(2.f, 0.1f, Head, Forward, Anger);
+		TestEqual(TEXT("the second step takes the second authored cell"), Watcher->FidgetCell, 2);
+		// Cell 2 is bottom-centre: 20 degrees below the head's forward, no yaw. That has to move the
+		// commanded point DOWN and leave it dead ahead in plan, or the keypad is transposed.
+		TestTrue(TEXT("cell 2 aims below the head"), Watcher->EyeLookTarget.Z < Head.Z);
+		TestTrue(TEXT("...and does not yaw off centre"),
+			FMath::IsNearlyZero(Watcher->EyeLookTarget.Y, 0.5f));
+
+		Watcher->TickGaze(3.f, 0.1f, Head, Forward, Anger);
+		TestEqual(TEXT("the third step takes the third authored cell"), Watcher->FidgetCell, 0);
+		Watcher->TickGaze(4.f, 0.1f, Head, Forward, Anger);
+		TestEqual(TEXT("exhausting the sequence ends the fidget"), Watcher->FidgetStep, -1);
+
+		// Cell 8 is top-centre, the mirror of cell 2 — the row arithmetic has to be symmetric. One
+		// call, not two: with a zero hold every call advances a step, so a second would already be
+		// on the next cell.
+		FElysiumEyeTargetTuning Up = Anger;
+		Up.FidgetPoints[0] = 8;
+		Watcher->FidgetStep = -1;
+		Watcher->NextFidgetTime = 0.f;
+		Watcher->TickGaze(5.f, 0.1f, Head, Forward, Up);
+		TestEqual(TEXT("cell 8 is the top-centre cell"), Watcher->FidgetCell, 8);
+		TestTrue(TEXT("...and aims above the head"), Watcher->EyeLookTarget.Z > Head.Z);
+	}
 
 	return true;
 }

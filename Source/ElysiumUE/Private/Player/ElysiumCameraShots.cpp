@@ -466,6 +466,18 @@ void FElysiumCameraDirector::Tick(FElysiumEntityWorld* World, UElysiumCameraComp
 	}
 }
 
+bool FElysiumCameraDirector::WantsDialogPOV() const
+{
+	for (int32 Index = Live.Num() - 1; Index >= 0; --Index)
+	{
+		if (!Live[Index].bValue)
+		{
+			return Live[Index].Def.Constraints.bDialogPOV;
+		}
+	}
+	return false;
+}
+
 FString FElysiumCameraDirector::Describe() const
 {
 	if (Live.Num() == 0)

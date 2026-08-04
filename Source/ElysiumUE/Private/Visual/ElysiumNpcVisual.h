@@ -44,6 +44,10 @@ namespace ElysiumNpcVisual
 	// restated. Nothing here is a Source-to-Unreal conversion; that half already happened offline.
 	FTransform ImportGlbLocal(const FTransform& GlbLocal);
 	FVector ImportGlbDirection(const FVector& GlbDirection);
+	// The loader's own metres->centimetres factor. A sidecar carrying a plain *length* — a radius,
+	// a body extent — has no basis to change and only needs this, and taking it from the same
+	// configuration the mesh is imported under is what keeps the two from drifting apart.
+	float ImportGlbScale();
 
 	// Bind one named clip from Asset onto Mesh's compatible skeleton by bone name. VtMB banks author
 	// biped-local tracks directly; generic rest-pose retargeting corrupts those locals and Bip01's

@@ -702,29 +702,37 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
 - [x] **8.4 Physics props** — `prop_physics` / `phys_hinge` as Chaos rigid bodies on the baked
   `SM_<stem>`; collision and mass reproduce VtMB's own `.phy` exactly. **Chaos settle/push feel +
   hinge swing await an owner in-game play test.** → `docs/vtmb/phy_vphysics.md`.
-- [ ] **8.4a Close the `prop_dynamic` divergences RE35 exposed** — ordered by visible impact.
-  (a) **Skeletal props are placed with the static-mesh basis.** The animated representation is
-  built from `Def->ModelQuat`, the OBJ placement quaternion, while every other glTF body goes
-  through `ElysiumSkeletalBasis::FromSourceAngles` and its fixed −90° glTFRuntime offset — so an
-  animated prop is yawed 90° off, at rest and while playing. Affects all 16 animated props in
-  `sp_theatre`.
-  (b) **No rest pose.** Retail holds *frame 0* of `SelectWeightedSequence(ACT_IDLE)` (index-0
-  fallback) at playback rate 0 — a frozen pose, not a playing clip. A prop with no `LoopSequence`
-  currently stands in the glTF bind pose instead. The export sidecar already carries `activity` and
-  `actweight` per clip.
-  (c) **`CDynamicProp::Activate` is not implemented** — `LoopSequence` resolves there, starts after
-  a `RandomFloat(0.1, 0.99)` stagger, and fires `OnAnimationBegun`.
-  (d) **`SetAnimation` forces `loop=false`** where retail honours the clip's own `STUDIO_LOOPING`
-  flag, already exported as `flags`.
-  (e) **The revert-to-`LoopSequence` on a finished one-shot is a divergence**, not reproduction:
-  retail's think disarms itself on the finish frame, so the prop holds its final frame. Needs an
-  owner call to keep or drop.
-  (f) **`solid` is unread** — 699 of 903 shipped `prop_dynamic` placements build static collision
-  from the model's `.phy` in retail and are walk-through here.
-  (g) **`disableshadows` is unread** — 849 props cast shadows the author switched off.
-  (h) **An animated representation that resolves no playable clip loses its static mesh**, standing
-  a bind-pose skeleton instead (`lampfloor`, `glassa`, `junkyardcraneb`; `drknobantique` in
-  `sp_theatre`). → `docs/vtmb/entity_io.md`, `docs/vtmb/phy_vphysics.md`,
+- [~] **8.4a Close the `prop_dynamic` divergences RE35 exposed** — the animation half is done; the
+  collision and shadow halves are not.
+  - [x] (a) **Skeletal placement basis.** The animated representation took `Def->ModelQuat`, the
+    OBJ placement quaternion, while every other glTF body composes the fixed −90° glTFRuntime
+    offset. `ElysiumSkeletalBasis::FromPlacementQuat` composes it — `Placement * ModelFix` rather
+    than a yaw-only substitution, because 15 of the corpus's 152 animated-prop placements are
+    leaning palms whose pitch and roll a yaw-only form would flatten. The static path is unchanged.
+  - [x] (b) **The rest pose** is now a *held* pose: `SelectWeightedSequence(ACT_IDLE)` with retail's
+    sequence-index-0 fallback, played non-looping and seeked to frame 0 through the existing
+    `SeekCinematicClip` seam. Only 3 of 19 prop models tag `ACT_IDLE`, so the index-0 branch is what
+    fires for the theatre's cinematic props.
+  - [x] (c) **`CDynamicProp::Activate`** landed as a `PostSpawn` override resolving `LoopSequence`
+    and arming a `RandomFloat(0.1, 0.99)` stagger consumed by a pending-start flag in `Think`, which
+    fires `OnAnimationBegun`.
+  - [x] (d) **`SetAnimation` honours the clip's own `STUDIO_LOOPING` bit** instead of forcing one
+    shot.
+  - [x] (e) **The revert-to-`LoopSequence` is dropped — reproduce.** Retail's think disarms
+    permanently on the finish frame, so the branch is unreachable in shipped data and a finished
+    one-shot holds its final frame. No shipped placement changes behaviour.
+  - [ ] (f) **`solid` is unread** — 699 of 903 shipped `prop_dynamic` placements build static
+    collision from the model's `.phy` in retail and are walk-through here.
+  - [ ] (g) **`disableshadows` is unread** — 849 props cast shadows the author switched off.
+  - [x] (h) **A resolved animated entry that bakes no clip** no longer displaces the static mesh.
+    The exporter keeps such models out of the index (PL18) and `BuildBody` guards the same case.
+
+  Manifest v6 carries each prop's clip vocabulary inline in the model's own declaration order with
+  its selection keys, because the v4/v5 alphabetical sort chose the wrong sequence 0 for
+  `drknobantique`, `clamp` and `wolf_form`. Tests: `Elysium.Substrate.AnimatedPropPlacement`,
+  `.PropRestPose` coverage inside `.PropAnimateThink`, `.PropZeroClipFallback`,
+  `.AnimatedPropManifest`, `.OpeningEmbodiment`, `Elysium.Content.OpeningAnimatedProps`, and
+  `pipeline/tests/test_animated_props.py`. → `docs/vtmb/entity_io.md`, `docs/vtmb/phy_vphysics.md`,
   `docs/vtmb/entity_visuals.md`. *Deps:* 8.3, 12.1.
 - [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs idle on a
   disposition-selected stance. Mobile NPCs are native Unreal characters over a runtime Recast
@@ -1254,17 +1262,49 @@ rather than the centre. Full specification: `docs/vtmb/facial_animation.md`.
   5. **The iris.** The eye basis and the two UV planes, plus the `Eyes` shader's `$vampire`
      variant (12 shipped materials) whose iris ignores scene lighting.
 
-  **Two owner calls, both narrow, both about retail behaviour that is inert rather than
-  absent.** Head turn is integrated every think and applied through bone controllers that no
-  shipped model declares, so it reaches nothing — visible head movement in VtMB dialogue is
-  animation, not this path; reproducing the dead path or making it live is a Feel-layer call.
+  **Three owner calls, all made, all reproduce.** Head turn is integrated every think and
+  applied through bone controllers that no shipped model declares, so it reaches nothing —
+  visible head movement in VtMB dialogue is animation, not this path; the dead path is
+  reproduced, filter and `> 360 → 0` guard included, and drives nothing.
   `LookAtEntityCenter` pushes the `Eye` constant, so all 10 authored firings aim at the eye
-  rather than the centre — reproduce the defect or fix it. Both are recorded beside the
-  faithful behaviour in `docs/vtmb/facial_animation.md`.
+  rather than the centre — the defect is reproduced, and the input stays separately registered
+  so the divergence is visible rather than implied. The glint is the one Presentation-layer
+  divergence: no glint node, the highlight comes from UE specular off the flattened eye normal.
+  All three are recorded beside the faithful behaviour in `docs/vtmb/facial_animation.md`.
 
   *Acceptance:* actors blink on their own cadence, their lids shape with the gaze, their eyes
   select and track targets through the theatre scene, and `Prince1.LookAtEntityEye` aims
   LaCroix at the player where `sp_theatre` fires it. *Deps:* 12.3.
+  - **Built and green through the gaze layer.** The pipeline exports the records to
+    `$ELYSIUM_EXPORT_ROOT/npc/eyes/<stem>.json`; `M_Eyes` is a generated master carrying both UV
+    planes and the `$vampire` lerp; `FElysiumEyeRig` + `ElysiumEyes::BuildState` solve the basis
+    per eye per frame from `AElysiumMapActor::PostMoveTick`; the lid write-back runs between the
+    rule pass and the ramps, with `FElysiumFlexLid` kept as the per-flexdesc fallback for
+    sidecars exported before the record existed. `FElysiumCombatCharacter` holds the gaze state
+    at the recovered datamap offsets and runs the cascade, the ±30° cone, the keypad saccade and
+    the fixed-0.1 s integrator; the four `LookAtEntity*` inputs are live. One world point per
+    character per frame crosses `IElysiumEmbodiment::SetViewTarget`, which is the hop retail
+    networks as `m_viewtarget`. Live on `sp_tutorial_1`: lids close, the blink fires on the
+    disposition's own cadence at peak 0.96 and 7.25 % duty against 7.06 % predicted.
+  - **What is left.** The debug surface: `elysium.npc.gaze`/`blink` verbs beside the existing
+    `eyes_dump`, and a Cog **Eyes** tab reporting the resolved basis, both planes, blink phase
+    and the lid flexdesc weights per body. Then the acceptance run itself, which is a theatre
+    scene rather than a tutorial NPC.
+  - **Three cascade arms have nothing to read and are marked in the code where they belong** —
+    `enemy` needs the combat layer (P13), `navigation goal` needs a move-goal accessor on
+    `FElysiumNpc`, and `heard sound` needs a sound record. Each falls through to the autonomous
+    scan, which is what retail does when those arms find nothing, so the gap changes behaviour
+    only where the missing system would have supplied a subject. The scan's own candidate filter
+    tests a `CBaseEntity` field at `+0x94` that the decompilation does not name; the recovered
+    `FL_CLIENT` half is exact and the rest is a stated divergence.
+  - **A dependency defect blocked the whole thing and is fixed.** glTFRuntime built morph-target
+    deltas with the index-buffer base used as a vertex-buffer offset, so on any multi-primitive
+    mesh every primitive after the first addressed vertices that were not its own — on
+    `smiling_jack`, indices 10299-11680 into a 4737-vertex buffer. No facial morph in the game
+    deformed anything, while every weight, curve and delta magnitude measured correct. The
+    vendored patch carries the fix and `Elysium.Content.FacialMorphTargets` now asserts that every
+    delta lands inside the LOD vertex buffer and inside a section its morph target declares.
+    Submitted upstream as `rdeioris/glTFRuntime#131`.
 - [ ] **12.5 Lipsync** — `.lip` phoneme tracks (RE20 [x]; 9.3c already logs the scripts' `.lip`
   probes as a named divergence) driving mouth flexes against 12.2's line audio; the 7,136 files
   are on disk in `$ELYSIUM_EXPORT_ROOT/lip/` (PL9 [x]), keyed by the line's own sound path. A **three-file join
@@ -1317,7 +1357,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | PL14 | **Export the first-person hand viewmodels.** `clandoc000.txt` also names `M_Hands`/`F_Hands` per clan — the patch-restored per-clan viewmodels under `models/hands/**` (21 in the merged install) — and PL13 deliberately left them out: they are the first-person half of the body and 8.11a's acceptance is the third-person boom. Same seed function, one more key pair; none carries a flex rig | 8.11a |
 | PL16 [x] | Cinematic animation sets are exported and split into actor-addressable banks. → `docs/vtmb/choreographed_scenes.md`. | 12.1 |
 | PL17 | Build the patch-first audio catalog + typed sidecars: codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map + entity sound schemes, sentences/surfaces, item/discipline events, radio/news, case collisions and missing refs. Raw game audio remains gitignored under `$ELYSIUM_EXPORT_ROOT/sound/`. → `docs/vtmb/audio_pipeline.md`, `docs/architecture/audio-architecture.md`. | 6.5–6.8, 9.2, 12.2 |
-| PL18 | Resolve the four structured NPC-export source warnings: the absent generic Night Watchman doppleganger model and the truncated skeletal records in `bottleb`, `bottlec`, and `stage_light`. The current export records all four; the three props use their successfully decoded static `model_mesh` fallback. **Root cause for the three props: `mdl_skel._rle_channel` reads `struct.unpack_from(f"<{valid}h", …)` without clamping to the remaining buffer, so a final `mstudioanimvalue_t` run that overshoots the file end aborts the whole model** — `stage_light.mdl` is 11,400 bytes and the decode asks for 11,419. Retail's `ExtractAnimValue` walks runs lazily and stops at the frame it wants, so a shipped file may legitimately end mid-run; clamping the read is the faithful fix. `stage_light` carries `LoopSequence "idle"` in `sp_theatre`, so the theatre's stage lights do not sway until this lands. Also in scope: `lampfloor`, `glassa` and `junkyardcraneb` export as animated props carrying **zero** clips, which the runtime must not prefer over the static mesh (8.4a h). → `docs/vtmb/animation_and_movers.md`. | 8.5, 12.1 |
+| PL18 [x] | The three structured animated-prop warnings are resolved and only the absent generic Night Watchman doppleganger model remains. **The premise was wrong: `bottleb`, `bottlec` and `stage_light` are not animated props at all.** Each declares exactly one **single-frame** `idle` while authoring `LoopSequence`, as do `lampfloor`, `glassa` and `junkyardcraneb` — six models of static dressing wearing an animation keyvalue. The seed now requires a sequence carrying more than one frame (`npc_export.has_animation`), which drops all six and leaves them on their decoded static `model_mesh`, so the theatre's stage lights are correctly still. Two real defects were found on the way and fixed: `mdl_skel._rle_channel` read `struct.unpack_from(f"<{valid}h", …)` without clamping to the remaining buffer (and indexed an empty tuple when `valid == 0`), and the actual decode failure was `read_skin` hardcoding a 44-byte stride over the 12- and 8-byte compact vertex formats those three models use, which `decode_skinned` handles for positions but not for skin. → `docs/vtmb/animation_and_movers.md`. | 8.5, 12.1 |
 | PL19 [x] | Verified per-asset Unreal bake caching across all seven stages. Normal exports retain coarse content-addressed stage planning, then compare canonical semantic recipes for every desired texture, material, world/sky chunk, prop/skin asset, particle asset, and level; only dirty assets author/save and pruning is namespace-owned. Frozen-input, pending-inventory, commandlet, save/prune, and independent-verifier failures promote nothing; schema v1 establishes receipts through one conservative full rebuild and `--force` bypasses both cache layers. Acceptance on the current 2,100-asset `sp_tutorial_1` inventory: final no-op 10.246s with no Unreal launch; a one-pixel asphalt edit built 1/880 textures, changed one package, passed verification, and took 47.932s end to end (3.767s commandlet script, 12.220s verifier); a combined material/world/prop/particle/placement edit and its restore each changed exactly the five expected packages. → `docs/architecture/uasset-bake-spike.md`. | 0.9 |
 | PL7 [x] | The sidecar-space audit found no fixes: all consumed sidecars are already Unreal centimetres. | 0.4 [x] |
 | PL9 [x] | Choreographed scenes and `.lip` files are mirrored patch-first. → `docs/vtmb/choreographed_scenes.md`, `docs/vtmb/facial_animation.md`. | 12.1, 12.5 |

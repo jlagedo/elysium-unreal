@@ -1712,7 +1712,43 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 	{
 		return true;
 	}
-	TestTrue(TEXT("animated-prop manifest schema is at least v4"), Index.ManifestVersion >= 4);
+	// v6 is what carries declaration order and the selection keys the rest pose is chosen with.
+	TestTrue(TEXT("animated-prop manifest schema is at least v6"), Index.ManifestVersion >= 6);
+
+	// The theatre's cinematic props tag their idle `ACT_VM_IDLE`, not `ACT_IDLE`, so every one of
+	// them resolves its rest pose through retail's sequence-index-0 fallback rather than the
+	// activity lookup. Pinning the exact clip here is what would catch an exporter that went back
+	// to sorting the labels.
+	{
+		const FElysiumAnimatedPropEntry* Sword =
+			Index.FindAnimatedProp(TEXT("models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl"));
+		if (TestNotNull(TEXT("the courtroom sword is indexed"), Sword))
+		{
+			TestEqual(TEXT("the sword rests on its declared first sequence"),
+				Sword->RestSequence(), FString(TEXT("idle01")));
+			const FElysiumPropClip* Scene = Sword->FindClip(TEXT("scene"));
+			if (TestNotNull(TEXT("the sword carries its scene clip"), Scene))
+			{
+				TestFalse(TEXT("the scene clip is a one shot"), Scene->IsLooping());
+			}
+		}
+		// `drknobantique` is the model whose declaration order and alphabetical order disagree.
+		const FElysiumAnimatedPropEntry* Knob =
+			Index.FindAnimatedProp(TEXT("models/scenery/structural/doorknoba/drknobantique.mdl"));
+		if (TestNotNull(TEXT("the antique doorknob is indexed"), Knob))
+		{
+			TestEqual(TEXT("declaration order beats alphabetical for the rest pose"),
+				Knob->RestSequence(), FString(TEXT("idle")));
+		}
+		// A model whose only sequence is a single static frame is not an animated prop at all, so
+		// the exporter must leave it out and the prop keeps its baked static mesh.
+		for (const TCHAR* Motionless : { TEXT("models/scenery/furniture/lampfloor/lampfloor.mdl"),
+			TEXT("models/scenery/theater/stage_light.mdl") })
+		{
+			TestNull(FString::Printf(TEXT("%s is not indexed as animated"), Motionless),
+				Index.FindAnimatedProp(Motionless));
+		}
+	}
 
 	FElysiumEntityDefs Defs;
 	if (!TestTrue(TEXT("sp_theatre entities parse"), FElysiumEntityDefs::Parse(Path, Defs)))

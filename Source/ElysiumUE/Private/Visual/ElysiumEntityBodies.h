@@ -75,6 +75,11 @@ public:
 	// `mstudiomouth_t` record.
 	bool SetMouthOpen(USkeletalMeshComponent* Body, float Open);
 
+	// 12.4 — the one value crossing from the gaze decision to the eye pass, and the head frame the
+	// decision measures itself in.
+	bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget);
+	bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition, FVector& OutForward) const;
+
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
 	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
@@ -88,6 +93,10 @@ public:
 	bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds);
 	void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp, const FString& Stem, int32 Family);
+	// The model's resting clip, and whether a named clip loops. Both read the manifest only — no
+	// glb, no mesh — so a prop can ask before deciding which representation to stand.
+	FString AnimatedPropRestClip(const FString& Stem) const;
+	bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName, bool& bOutLoops) const;
 
 	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).
 	// The clip may live in the NPC's own glb or in any shared bank — the manifest says which, and
@@ -135,6 +144,9 @@ public:
 	void TickEyes(float DeltaSeconds);
 
 private:
+	// The manifest record for a prop stem, or null. Shared by the two query members above.
+	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
+
 	FString MapName;
 
 	// One eye section on one body: which slot draws it, which record it draws, the head bone it
@@ -173,6 +185,18 @@ private:
 		// 1 closes the lid 48 ms after the toggle and reopens it over the remaining 252 ms.
 		float NextBlinkTime = 0.f;
 		float BlinkEndsAt = 0.f;
+
+		// Where the substrate says this character is looking, world space, pushed once per frame
+		// through IElysiumEmbodiment::SetViewTarget. Held rather than pulled because the two halves
+		// tick in different passes: the gaze decision runs over the entity world, the eye pass runs
+		// over the bodies, and this is the one value that crosses.
+		FVector ViewTarget = FVector::ZeroVector;
+		bool bHasViewTarget = false;
+
+		// The head bone, resolved once at build. The gaze cone and the fidget grid are measured in
+		// the live animated head frame, so this is looked up by name and cached — never mixed with
+		// the `.mdl`'s own bone ordering, which is not the USkeleton's.
+		int32 HeadBoneIndex = INDEX_NONE;
 	};
 	TArray<FElysiumEyeBinding> EyeBindings;
 	// The per-character iris is the `.vmt`'s `$iris`, decoded beside the glb rather than carried

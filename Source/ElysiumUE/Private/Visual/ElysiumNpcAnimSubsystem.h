@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "Substrate/ElysiumDisposition.h"
+#include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumFacialRig.h"
@@ -67,6 +68,12 @@ public:
 	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
 	// animated_props/.
 	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);
+	// The simulated-garment rig for a stem: `npc/cloth/<stem>.json`. Null for every model the spike
+	// did not build, which is nearly all of them and a normal load — the body then wears the
+	// faithful mesh and no garment simulation runs. Unlike the rigs above this one is NOT named by
+	// `npc_index.json`; the spike writes nothing into the manifest, so existence on disk is the
+	// whole selection rule and a miss costs one file probe, cached like every other miss here.
+	TSharedPtr<const FElysiumClothRig> GetClothRig(const FString& Stem);
 	// vdata/system/dispositiontable.txt, loaded once.
 	const FElysiumDispositionTable& GetDispositions();
 
@@ -132,4 +139,6 @@ private:
 	// And again for the composition stages. Keyed by stem for characters and by the normalized
 	// model path for animated props, which is how each is addressed upstream.
 	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;
+	// And again for the garment spike. A null entry here is the common case, not the exception.
+	TMap<FString, TSharedPtr<const FElysiumClothRig>> ClothRigs;
 };

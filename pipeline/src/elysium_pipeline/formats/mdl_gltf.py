@@ -501,7 +501,56 @@ def eye_rig(d, bones, mesh_map, matinfo):
                        for p, m in sorted(eye_mat.items())]}, faults
 
 
-def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
+def _append_cloth(bones, surfaces, plan):
+    """Append a synthesised garment lattice to the skeleton and move the shell onto it.
+
+    The lattice goes at the **end** of the bone list, which is what keeps every real
+    bone's index -- and so its glTF node index, the invariant `_bake_animation` targets
+    -- exactly where it was. No real bone is renumbered, reparented or reweighted; only
+    shell vertices change, and only their joint/weight pairs.
+
+    `bones` is copied rather than mutated: animation decoding and the procedural rule
+    walk both index the model's own bone array through `d`, so they have to keep seeing
+    it at its original length. `surfaces` is rewritten in place.
+
+    The planner is passed in by the caller (`enhancement/cloth.py`), so this module
+    stays a format reader and gains no dependency on the enhancement layer.
+    """
+    index_of = {b.name: b.index for b in bones}
+    extended = list(bones)
+    for lb in plan.bones:
+        parent = index_of.get(lb.parent)
+        if parent is None:
+            raise ValueError(f"cloth bone {lb.name} names unknown parent {lb.parent}")
+        index_of[lb.name] = len(extended)
+        extended.append(S.Bone(
+            index=len(extended), name=lb.name, parent=parent,
+            # Source units and xyzw, exactly as a StudioBone carries them, so
+            # `_skeleton_nodes` and `_inverse_bind_accessor` convert these the same way
+            # they convert every other bone.
+            pos=lb.pos, quat=lb.quat,
+            # A lattice bone carries no animation channels and no procedural rule, so the
+            # decode scales are inert and the flags must stay clear -- `split_bones` and
+            # `axis_interp_rules` both select on flags.
+            posscale=(1.0, 1.0, 1.0), rotscale=(1.0, 1.0, 1.0, 1.0),
+            pose_to_bone=(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0),
+            flags=0,
+        ))
+
+    for mat, per_vert in plan.weights.items():
+        surface = surfaces[mat]
+        for vi, terms in per_vert.items():
+            js = [index_of[n] for n, _ in terms][:4]
+            ws = [float(w) for _, w in terms][:4]
+            # glTF JOINTS_0/WEIGHTS_0 are VEC4; a zero weight makes its joint index inert.
+            js += [0] * (4 - len(js))
+            ws += [0.0] * (4 - len(ws))
+            surface["joints"][vi] = js
+            surface["weights"][vi] = ws
+    return extended
+
+
+def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None, cloth_planner=None):
     """Skeleton nodes + skin + per-material mesh primitives + materials into `g`.
 
     Returns a dict the assemblers finish: nodes (with the mesh node appended), meshes, skins,
@@ -519,8 +568,14 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
     read_bytes = lambda k: install.read(idx, k)
     tex_cache = {}
 
-    nodes = _skeleton_nodes(bones)
-    ibm_acc = _inverse_bind_accessor(g, bones)
+    # The garment lattice, when the caller asked for one. `bones` stays the model's own
+    # array for everything that indexes back into `d`; `skin_bones` is what the skeleton,
+    # the inverse binds and `skin.joints` are built from.
+    cloth_plan = cloth_planner(bones, surfaces) if cloth_planner is not None else None
+    skin_bones = bones if cloth_plan is None else _append_cloth(bones, surfaces, cloth_plan)
+
+    nodes = _skeleton_nodes(skin_bones)
+    ibm_acc = _inverse_bind_accessor(g, skin_bones)
 
     # --- materials ---
     matnames = list(surfaces.keys())
@@ -574,7 +629,8 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
 
     mesh_node = len(nodes)
     nodes.append({"name": mdl.sanitize(os.path.basename(model_path)), "mesh": 0, "skin": 0})
-    built = dict(bones=bones, nodes=nodes, mesh_node=mesh_node, primitives=primitives,
+    built = dict(bones=bones, skin_bones=skin_bones, cloth=cloth_plan,
+                 nodes=nodes, mesh_node=mesh_node, primitives=primitives,
                  ibm_acc=ibm_acc, materials=materials, images=images, textures=textures,
                  surfaces=surfaces, matnames=matnames, mesh_map=mesh_map, target_names=[])
     built["facial"] = (facial_rig(d, _build_morphs(g, d, built, anorms))
@@ -588,6 +644,10 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
 def _assemble_skinned(built, animations):
     """glTF dict for a skinned mesh + skeleton + the given animations."""
     bones = built["bones"]
+    # The skin addresses every node the skeleton carries, which on a cloth build is the
+    # model's bones plus the appended lattice. Roots come off the model's own array: a
+    # lattice bone always parents into it, so it can never introduce a new root.
+    skin_bones = built.get("skin_bones") or bones
     nodes = built["nodes"]
     roots = [b.index for b in bones if b.parent == -1]
     # glTFRuntime traverses the skeleton from a SINGLE root down `children`, so any bone not
@@ -616,7 +676,7 @@ def _assemble_skinned(built, animations):
         "nodes": nodes,
         "meshes": [mesh],
         "skins": [{"inverseBindMatrices": built["ibm_acc"],
-                   "joints": list(range(len(bones))), "skeleton": skel_root}],
+                   "joints": list(range(len(skin_bones))), "skeleton": skel_root}],
         "materials": built["materials"],
     }
     if animations:
@@ -735,7 +795,7 @@ def blend_sidecar(d, blends):
     }
 
 
-def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
+def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=None):
     """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
     dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
     from bank glbs applied by bone name at runtime. Returns
@@ -746,7 +806,11 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     `split_bones` preserves the target model's StudioBone `Flags & 0x2` inventory for the
     runtime pose builder; it is application metadata, not an alternate channel decode.
     `procedural` is the model's `ProcType == 1` rule table in this glb's basis
-    (`axis_interp_rules`), which the runtime evaluates after the hierarchy composes."""
+    (`axis_interp_rules`), which the runtime evaluates after the hierarchy composes.
+
+    `cloth_planner`, when given, is a callable `(bones, surfaces) -> plan | None` that may
+    append a synthesised garment lattice (`enhancement/cloth.py`). Left at None -- which is
+    every ordinary export -- nothing about the output changes."""
     dv = mdl.load(idx, model_path)
     if not dv:
         raise SystemExit(f"model not found: {model_path}")
@@ -754,7 +818,7 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     stem = stem or mdl.sanitize(os.path.basename(model_path)[:-4])
 
     g = Gltf()
-    built = _build_skinned(g, idx, d, v, model_path, out_dir, anorms)
+    built = _build_skinned(g, idx, d, v, model_path, out_dir, anorms, cloth_planner)
     own = S.local_sequences(d)
     extra, blends = blend_clip_plan(d, own)
     animations, labels = [], []
@@ -779,8 +843,11 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
     grids = f", {len(blends)} blend grids" if blends else ""
     eyes = built["eyes"]
     eyeballs = f", {len(eyes['eyeballs'])} eyeballs" if eyes else ""
+    garment = (f", +{len(built['cloth'].bones)} cloth bones"
+               if built.get("cloth") else "")
     print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
-          f"{morphs}{driven}{grids}{eyeballs} -> {glb} ({os.path.getsize(glb) // 1024} KB)")
+          f"{morphs}{driven}{grids}{eyeballs}{garment}"
+          f" -> {glb} ({os.path.getsize(glb) // 1024} KB)")
     for fault in rule_faults:
         print(f"  ! {stem}: procedural rule - {fault}")
     for fault in built["eye_faults"]:
@@ -790,7 +857,8 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None):
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
                 clips=labels, facial=face, blends=blend_sidecar(d, blends),
                 procedural=rules, procedural_faults=rule_faults,
-                eyes=eyes, eye_faults=built["eye_faults"])
+                eyes=eyes, eye_faults=built["eye_faults"],
+                cloth=built.get("cloth"))
 
 
 def export_bank(idx, model_path, out_dir, stem):

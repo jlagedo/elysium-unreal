@@ -488,6 +488,19 @@ thirds of it carries over between regenerations. `u`/`v` are world-space lengths
 normalized `[-0.5, +0.5]` texture offsets, which makes the eyeball radius the effective
 lobe-size constant.
 
+#### Divergence — Elysium has no glint node
+
+**Owner call, Presentation layer.** The procedural splat is not reproduced. `M_Eyes` carries no
+glint; the highlight comes from UE specular off the flattened eye normal, lit by the same HWRT
+Lumen and MegaLights the rest of the scene uses.
+
+The faithful behaviour is above. The call rests on *what the splat was for*: a 32×32 per-eye
+per-frame texture that samples at most two lights is a fix for a renderer with no per-pixel
+specular, not an artist's decision about how an eye should read. No shipped material sets
+`$glint`, so nothing in the corpus depends on it either. Reproducing it would mean carrying the
+two as-compiled defects above — the reused half-angle vector and the two-thirds-stale
+accumulator — into a renderer that does not need the technique at all.
+
 ### Gaze — the server behaviour
 
 State lives on `CBaseCombatCharacter` (`vampire.dll`): `m_vEyeLookTarget`@0x0E44 (commanded),
@@ -518,6 +531,16 @@ scan sweeps a 300-unit sphere centred 300 units ahead of the eyes, keeps the nea
 and re-picks after `RandomInt(1, 5)` seconds; finding nothing it looks straight ahead at
 `eyePos + BodyDirection2D() × 500` and retries in 0.5 s. The candidate filter is
 `entity->+0x94 != 0 || (GetFlags() & FL_CLIENT)`, so **the player always qualifies**.
+
+**`+0x94` is not recovered.** It is a `CBaseEntity` field the filter tests as a boolean and
+nothing else in the decompilation names, so what makes a *non-player* entity worth looking at is
+unknown. The `FL_CLIENT` half stands on its own and is exact.
+
+> **Divergence — Elysium's scan admits the player and combat characters.** With `+0x94` unknown,
+> the runtime treats the recovered half as the whole rule and adds characters, which is the
+> smallest set that makes the behaviour observable at all. Widening it is a content decision, not
+> a maths one, and it is the one place in the cascade where the shipped candidate set cannot be
+> matched until the field is identified. Everything else in the cascade is reproduced.
 
 In dialogue the NPC looks at the partner's `EyePosition()` — eye height on the entity, not an
 attachment or a head bone. A dialogue **camera shot can redirect it**: when the shot's flags

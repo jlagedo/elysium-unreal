@@ -132,6 +132,18 @@ public:
 	// body carries no rig or no mouth record.
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) { return false; }
 
+	// 12.4 — where this body's eyes are looking, in world space. One vector per character per frame
+	// is the whole seam between the half that decides where to look and the half that draws it,
+	// which is the same hop retail networks as `m_viewtarget`. False when the body carries no eye
+	// record, which is most of the cast.
+	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) { return false; }
+
+	// The head frame the gaze cascade measures its ±30° cone and its fidget grid in. Retail reads
+	// the live animated head bone and falls back to EyePosition()/EyeAngles() on a model that has
+	// none, so the caller needs to know which it got. False when there is no head bone.
+	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
+		FVector& OutForward) const { return false; }
+
 	// v4 animated props. Model selection is explicit and manifest-backed; ordinary props stay on
 	// the existing static representation. The skeletal surface remains non-solid.
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const = 0;
@@ -141,6 +153,17 @@ public:
 		const FString& ClipName, bool bLoop, float* OutSeconds) = 0;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) = 0;
+
+	// The clip this model rests on — `SelectWeightedSequence(ACT_IDLE)` with retail's sequence-0
+	// fallback. **Empty exactly when the model bakes no clip**, which is also the test a prop uses
+	// to keep its baked static mesh instead of standing a bind-pose skeleton.
+	virtual FString AnimatedPropRestClip(const FString& Stem) const { return FString(); }
+	// Does this model bake a clip by this name, and does that clip's own STUDIO_LOOPING bit ask for
+	// looping playback? One lookup answering both, because the two callers need different halves:
+	// `SetAnimation` plays on the loop bit instead of forcing one shot, and `Activate` only needs
+	// to know whether `LoopSequence` resolves at all.
+	virtual bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
+		bool& bOutLoops) const { bOutLoops = false; return false; }
 
 	// A BSP brush entity's baked, local-pivot render surface. ParentBody owns its transform and
 	// collision; the returned mesh is visual-only and attached at identity.

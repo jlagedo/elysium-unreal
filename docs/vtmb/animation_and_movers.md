@@ -1190,15 +1190,27 @@ resolution plus the target mesh's diagnostic `split_bones` inventory. The runtim
 glb once and applies its clips to any NPC skeletal mesh by bone name (glTFRuntime
 `LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel bank-sharing.
 
-The patch-first grid contains four explicit source exceptions. The Night Watchman in
+The patch-first grid contains one explicit source exception. The Night Watchman in
 `sm_junkyard_1` references
 `models/character/npc/doppleganger/doppleganger.mdl`, which is absent even though the
-`common/doppleganger` male and female variants exist. Three animated props —
-`bottleb.mdl`, `bottlec.mdl`, and `stage_light.mdl` — carry truncated skeletal mesh
-records. Their per-map static `model_mesh` geometry decodes successfully, so they remain
-visible through the static path while skeletal animation is unavailable. The exporter
-downgrades only these exact paths to structured warnings in `npc_manifest.json` and
-`npc_index.json`; every other missing model or decode failure remains fatal.
+`common/doppleganger` male and female variants exist. The exporter downgrades only that
+exact path to a structured warning in `npc_manifest.json` and `npc_index.json`; every
+other missing model or decode failure remains fatal.
+
+**An authored `LoopSequence` is not proof of motion.** Six models a `prop_dynamic` selects
+declare exactly one **single-frame** sequence: `stage_light`, `lampfloor`, `glassa`,
+`junkyardcraneb`, `bottleb` and `bottlec`. They are static dressing wearing an animation
+keyvalue — there is nothing to bake, and standing a skeletal body for one would replace the
+decoded static mesh with a bind pose. The animated-prop seed therefore requires at least one
+sequence carrying more than one frame. The test is *any* sequence, not every one: `clamp`'s
+`idle` is a single frame beside its real 45-frame `open`/`close`, and `wolf_form` carries
+twelve single-frame hit poses among its clips.
+
+Two of those six (`bottleb`, `bottlec`) and `stage_light` also use the compact vertex formats
+(`StudioVertex2` 12B, `StudioVertex3` 8B) rather than the 44-byte skinned layout. Those formats
+carry a quantized position, a packed normal and a UV — **no `BoneWeight` at all** — so the
+skinned decode path cannot read them, and the model's whole geometry is rigidly bound to its
+single bone. Only `vlist == 0` models can take the skeletal path.
 
 Retail first evaluates the included model's complete pose. Its outer mapping then
 copies the donor quaternion verbatim and either copies its position or transforms

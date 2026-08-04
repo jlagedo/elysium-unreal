@@ -317,18 +317,33 @@ def _rle_channel(v, p, numframes):
     """Decode one `mstudioanimvalue_t` RLE channel into a per-frame value list.
 
     Each run: byte valid, byte total, then `valid` int16 keys. Frames [0,valid) take
-    the explicit keys; [valid,total) clamp to the last key. Returns numframes shorts."""
+    the explicit keys; [valid,total) clamp to the last key. Returns numframes shorts.
+
+    A run may claim more keys than the file stores. Retail's `ExtractAnimValue` walks the
+    runs lazily and stops at the frame it asked for, so it never reads past the keys it
+    needs and a shipped model may legitimately end mid-run -- `stage_light.mdl` is 11,400
+    bytes and a literal walk asks for 11,419. Decoding every frame eagerly has to clamp
+    instead: read what is stored, hold the last readable key across the rest of the run,
+    and pad a channel that ends early. The cursor still advances by the *authored* stride
+    so a later readable run lands at the right offset."""
     out = []
     remaining = numframes
-    while remaining > 0:
+    end = len(v)
+    while remaining > 0 and p + 2 <= end:
         valid = v[p]
         total = v[p + 1]
         p += 2
-        keys = struct.unpack_from(f"<{valid}h", v, p)
-        p += 2 * valid
+        if total <= 0:
+            break                      # a zero-length run cannot terminate the walk
+        stored = min(valid, max(0, (end - p) // 2))
+        keys = struct.unpack_from(f"<{stored}h", v, p) if stored else (0,)
+        p += 2 * valid                 # authored stride, not the clamped read
+        last = keys[-1]                # also covers valid == 0, which indexes nothing
         for f in range(total):
-            out.append(keys[min(f, valid - 1)])
+            out.append(keys[f] if f < stored else last)
         remaining -= total
+    if len(out) < numframes:
+        out.extend([out[-1] if out else 0] * (numframes - len(out)))
     return out[:numframes]
 
 

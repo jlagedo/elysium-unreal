@@ -561,16 +561,30 @@ The authored loop is resolved one phase later, in **`CDynamicProp::Activate` (`F
 ```c
 BaseClass::Activate();
 m_iGoalSequence /*+0x7d8*/ = LookupSequence(m_iszSequenceName /*+0x7d4*/);   // FUN_1008f7b0
-if (m_iGoalSequence > 0) {
+if (m_iGoalSequence >= 0) {
     SetThink(FUN_10190750);
     m_flNextThink = curtime + RandomFloat(0.1f, 0.99f);   // per-prop stagger
 }
 ```
 
+**The comparison is against −1, not zero** — `ACTIVITY_NOT_AVAILABLE`, so a clip at sequence
+index 0 does arm:
+
+```
+101906da  CALL 0x1000e057               ; CBaseAnimating::LookupSequence
+101906df  CMP  EAX,-0x1
+101906e2  MOV  dword ptr [ESI + 0x7d8],EAX
+101906e8  JLE  0x1019072a               ; skip only when the result is <= -1
+```
+
+That distinction decides whether the commonest animated props move at all: `palmtree`,
+`bats_smaller` and `stage_light` each declare their loop clip *as* sequence 0.
+`InputSetAnimation` carries the same `CMP EAX,-0x1` / `JLE` pair at `0x10190a2f`.
+
 and that one-shot think (`FUN_10190750`) starts it:
 
 ```c
-if (m_iGoalSequence > 0) {
+if (m_iGoalSequence >= 0) {
     m_nSequence = m_iGoalSequence;  ResetSequenceInfo();  ResetClientsideFrame();
     m_pOutputAnimBegun /*+0x77c*/ .FireOutput();
     SetThink(CDynamicPropAnimThink);  m_flNextThink = curtime + 0.1;
@@ -623,7 +637,8 @@ m_flNextThink = curtime + 0.1;                     // 0.1 is `_DAT_104493d0`
 The random animator re-picks by activity, not arbitrarily — it is the same
 `SelectWeightedSequence(ACT_IDLE, -1)` the spawn path uses.
 
-**The revert branch is unreachable in shipped data.** `CBaseEntity::PhysicsRunSpecificThink`
+**The revert branch is unreachable in shipped data, and the rebuild reproduces that.**
+`CBaseEntity::PhysicsRunSpecificThink`
 (`FUN_10033de0`) zeroes `m_flNextThink` before every dispatch, so a think that returns without
 rewriting it is disarmed permanently. With `m_bRandomAnimator == 0` — true for all 749 entities that
 carry the key — the think returns at `0x10190935` on the frame the one-shot finishes, so it is never

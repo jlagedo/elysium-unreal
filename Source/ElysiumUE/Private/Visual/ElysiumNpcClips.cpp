@@ -233,9 +233,9 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 		return false;
 	}
 	Root->TryGetNumberField(TEXT("manifest_version"), ManifestVersion);
-	if (ManifestVersion < 3 || ManifestVersion > 5)
+	if (ManifestVersion < 3 || ManifestVersion > 6)
 	{
-		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 5)"),
+		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 6)"),
 			ManifestVersion);
 		return false;
 	}
@@ -298,14 +298,39 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				(*Obj)->TryGetNumberField(TEXT("procedural_bones"), Entry.ProceduralBones);
 				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
 				Entry.Model.ToLowerInline();
+				// Two shapes. v6 writes one object per clip carrying the selection keys; v4/v5
+				// wrote bare, alphabetically sorted names. Both are accepted so an index that
+				// predates the re-export still stands its props — it just has no rest pose and
+				// no loop flags, which is the behaviour those versions already had.
 				const TArray<TSharedPtr<FJsonValue>>* Clips = nullptr;
 				if ((*Obj)->TryGetArrayField(TEXT("clips"), Clips) && Clips != nullptr)
 				{
 					for (const TSharedPtr<FJsonValue>& Clip : *Clips)
 					{
-						if (Clip.IsValid())
+						if (!Clip.IsValid())
 						{
-							Entry.Clips.Add(Clip->AsString().ToLower());
+							continue;
+						}
+						FElysiumPropClip Row;
+						Row.Index = Entry.Clips.Num();
+						const TSharedPtr<FJsonObject>* ClipObj = nullptr;
+						if (Clip->TryGetObject(ClipObj) && ClipObj != nullptr)
+						{
+							(*ClipObj)->TryGetStringField(TEXT("name"), Row.Name);
+							(*ClipObj)->TryGetStringField(TEXT("activity"), Row.Activity);
+							(*ClipObj)->TryGetNumberField(TEXT("weight"), Row.Weight);
+							(*ClipObj)->TryGetNumberField(TEXT("flags"), Row.Flags);
+							(*ClipObj)->TryGetNumberField(TEXT("index"), Row.Index);
+							(*ClipObj)->TryGetNumberField(TEXT("frames"), Row.Frames);
+							(*ClipObj)->TryGetNumberField(TEXT("fps"), Row.Fps);
+						}
+						else
+						{
+							Row.Name = Clip->AsString();
+						}
+						if (!Row.Name.IsEmpty())
+						{
+							Entry.Clips.Add(MoveTemp(Row));
 						}
 					}
 				}
@@ -362,6 +387,66 @@ FString FElysiumNpcIndex::CinematicBank(const FString& ModelPath, const FString&
 {
 	const FElysiumCinematicSet* Set = FindCinematic(ModelPath);
 	return Set ? Set->BankForRoot(BoneRoot) : FString();
+}
+
+const FElysiumPropClip* FElysiumAnimatedPropEntry::FindClip(const FString& Label) const
+{
+	// Linear: the largest exported prop vocabulary is 50 clips (`wolf_form`) and the theatre's
+	// largest is 7, so a map would cost more than it saves and would lose declaration order.
+	for (const FElysiumPropClip& Clip : Clips)
+	{
+		if (Clip.Name.Equals(Label, ESearchCase::IgnoreCase))
+		{
+			return &Clip;
+		}
+	}
+	return nullptr;
+}
+
+FString FElysiumAnimatedPropEntry::RestSequence() const
+{
+	if (Clips.IsEmpty())
+	{
+		return FString();
+	}
+	// CBaseProp::Spawn (FUN_1018df70): SelectWeightedSequence(ACT_IDLE, -1), then sequence 0.
+	// Highest weight wins and the declared ordinal breaks a tie, so the pick is identical on
+	// every load — a rest pose that moved across a save would be a visible pop.
+	//
+	// Not UElysiumNpcAnimSubsystem::PickActivityClip: that keys its walk on a (stem, variant)
+	// seed to spread a crowd of NPCs across alternates, and a prop has no variant. The branch is
+	// defensive anyway — no exported prop model carries more than one ACT_IDLE clip.
+	static const FString ActIdle(TEXT("ACT_IDLE"));
+	const FElysiumPropClip* Best = nullptr;
+	for (const FElysiumPropClip& Clip : Clips)
+	{
+		if (!Clip.Activity.Equals(ActIdle, ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+		if (!Best || Clip.Weight > Best->Weight
+			|| (Clip.Weight == Best->Weight && Clip.Index < Best->Index))
+		{
+			Best = &Clip;
+		}
+	}
+	if (Best)
+	{
+		return Best->Name;
+	}
+
+	// The fallback, and the branch that actually fires: 16 of the 19 exported prop models tag no
+	// ACT_IDLE at all. Sequence 0 is the lowest declared ordinal, not the array's first element —
+	// a v4/v5 index carries alphabetically sorted names whose ordinals are the sort positions.
+	const FElysiumPropClip* First = &Clips[0];
+	for (const FElysiumPropClip& Clip : Clips)
+	{
+		if (Clip.Index < First->Index)
+		{
+			First = &Clip;
+		}
+	}
+	return First->Name;
 }
 
 const FElysiumAnimatedPropEntry* FElysiumNpcIndex::FindAnimatedProp(const FString& ModelPath) const

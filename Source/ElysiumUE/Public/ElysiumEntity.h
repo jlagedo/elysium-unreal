@@ -170,6 +170,15 @@ public:
 	// that DID specify a param keep their override. `Value` is ignored (Void) by the plain overload.
 	void FireOutput(FName Output, const FElysiumEntityHandle& Activator, const FElysiumVariant& Value);
 
+	// VtMB's `CBaseEntity::EyePosition()` — `GetAbsOrigin() + m_vecViewOffset`. A fixed per-entity
+	// offset, NOT a bounds fraction and NOT a head bone: it is what a scripted `LookAtEntityEye`
+	// aims at and what an NPC looks at across a conversation, so a gaze that used a head attachment
+	// instead would drift with the animation where retail's holds still.
+	//
+	// The base is a point entity, whose offset is zero. The character chain overrides with the
+	// standing view height; the player leaf additionally accounts for ducking.
+	virtual FVector EyePosition() const { return Origin; }
+
 	// --- Runtime writers (9.3 — VtMB's Entity.SetOrigin/SetAngles/SetModel) ------------
 	// Scripts move, re-face, and re-skin live entities. These mutate the authoritative field
 	// (so GetOrigin/GetAngles/GetModelName reflect it and other entities' logic reads it), then

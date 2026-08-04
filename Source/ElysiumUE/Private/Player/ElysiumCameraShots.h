@@ -151,6 +151,13 @@ public:
 	int32 Num() const { return Live.Num(); }
 	FString Describe() const;
 
+	// Whether the shot in effect asks for `DialogPOV` — the shot table's own how-to states it as
+	// "NPCs will look at the camera during dialog, rather than the player's eye position", and 51 of
+	// the 66 shipped shot files set it, so it is the ordinary case for a conversation. The gaze
+	// cascade reads it. Value shots carry no parsed constraints, so a `camera_track` layered over a
+	// dialogue shot is skipped rather than answering false and masking the shot underneath.
+	bool WantsDialogPOV() const;
+
 private:
 	struct FLiveShot
 	{

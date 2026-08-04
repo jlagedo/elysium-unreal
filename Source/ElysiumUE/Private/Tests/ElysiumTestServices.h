@@ -299,6 +299,40 @@ struct FElysiumRecordingServices final
 		MouthOpenByBody.Add(Body, Open);
 		return true;
 	}
+
+	// 12.4 — the gaze seam, recorded rather than drawn. The head frame is test-controlled so a
+	// cascade assertion can put a candidate inside or outside the ±30° cone on purpose.
+	TMap<const USkeletalMeshComponent*, FVector> ViewTargetByBody;
+	bool bHasHeadFrame = false;
+	FVector HeadFramePosition = FVector::ZeroVector;
+	FVector HeadFrameForward = FVector(1.f, 0.f, 0.f);
+
+	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) override
+	{
+		if (Body == nullptr)
+		{
+			return false;
+		}
+		ViewTargetByBody.Add(Body, WorldTarget);
+		return true;
+	}
+	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
+		FVector& OutForward) const override
+	{
+		if (Body == nullptr || !bHasHeadFrame)
+		{
+			return false;
+		}
+		OutPosition = HeadFramePosition;
+		OutForward = HeadFrameForward;
+		return true;
+	}
+	FVector ViewTargetOf(const FElysiumEntity* Entity) const
+	{
+		const USkeletalMeshComponent* Body = Entity ? Entity->GetSkeletalBody() : nullptr;
+		const FVector* Found = Body ? ViewTargetByBody.Find(Body) : nullptr;
+		return Found != nullptr ? *Found : FVector::ZeroVector;
+	}
 	// Test-controlled model path -> v4 animated-prop stem.
 	TMap<FString, FString> AnimatedPropModels;
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override
@@ -309,11 +343,26 @@ struct FElysiumRecordingServices final
 		}
 		return FString();
 	}
+	// Test-controlled prop stem -> its rest clip. An entry mapping to an empty string models a
+	// model that bakes no clip, which is how the static-fallback path is exercised.
+	TMap<FString, FString> AnimatedPropRestClips;
+	// Test-controlled "<stem>|<clip>" -> the clip's STUDIO_LOOPING bit. A stem with a rest clip
+	// resolves every clip name; this map only decides whether one loops.
+	TMap<FString, bool> AnimatedPropClipLoops;
+
+	// The rotation each build path was handed. Kept as a quaternion rather than asserted off the
+	// record string: the two representations deliberately receive different bases, and a float
+	// comparison with a tolerance is the honest test of that.
+	FQuat LastAnimatedPropRotation = FQuat::Identity;
+	FQuat LastPropRotation = FQuat::Identity;
+
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
 		const FVector& Location, const FQuat& Rotation, float UniformScale) override
 	{
-		Record(FString::Printf(TEXT("BuildAnimatedPropVisual %s %s scale=%.2f"),
-			*Stem, *Location.ToString(), UniformScale));
+		// The rotation is recorded last so the existing prefix assertions keep matching.
+		Record(FString::Printf(TEXT("BuildAnimatedPropVisual %s %s scale=%.2f rot=%s"),
+			*Stem, *Location.ToString(), UniformScale, *Rotation.Rotator().ToString()));
+		LastAnimatedPropRotation = Rotation;
 		return NewComponent<USkeletalMeshComponent>();
 	}
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -328,6 +377,20 @@ struct FElysiumRecordingServices final
 		int32 Family) override
 	{
 		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StaticStem, Family));
+	}
+	virtual FString AnimatedPropRestClip(const FString& Stem) const override
+	{
+		const FString* Found = AnimatedPropRestClips.Find(Stem);
+		// Unregistered stems answer a rest clip so a test that only cares about SetAnimation does
+		// not have to declare one; an explicit empty entry is the "bakes no clip" case.
+		return Found != nullptr ? *Found : FString(TEXT("idle"));
+	}
+	virtual bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
+		bool& bOutLoops) const override
+	{
+		const bool* Loops = AnimatedPropClipLoops.Find(Stem + TEXT("|") + ClipName);
+		bOutLoops = Loops != nullptr && *Loops;
+		return !AnimatedPropRestClip(Stem).IsEmpty() && !ClipName.IsEmpty();
 	}
 	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,
 		USceneComponent* ParentBody, float UniformScale, bool bSky) override
@@ -354,6 +417,7 @@ struct FElysiumRecordingServices final
 		const FQuat& Rotation, float UniformScale) override
 	{
 		Record(FString::Printf(TEXT("BuildPropVisual %s %s scale=%.2f"), *Stem, *Location.ToString(), UniformScale));
+		LastPropRotation = Rotation;
 		return NewComponent<UStaticMeshComponent>();
 	}
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,

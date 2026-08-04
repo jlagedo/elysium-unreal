@@ -24,4 +24,20 @@ namespace ElysiumSkeletalBasis
 	{
 		return FRotator(0.0f, UnrealYaw + ModelYawOffset, 0.0f);
 	}
+
+	// The same correction as a model-local quaternion, for a placement that is already a full
+	// rotation rather than a Source yaw. Compose it AFTER the placement — World = Placement *
+	// ModelFix — so the fix stays in the model's own frame and the placement keeps its pitch and
+	// roll. `FromPlacementQuat(source_angles_to_unreal_quat(A))` equals `FromSourceAngles(A)`
+	// whenever pitch and roll are zero, and beats it when they are not: 15 of the corpus's
+	// animated-prop placements are leaning palms whose lean the yaw-only form would discard.
+	inline FQuat ModelFix()
+	{
+		return FQuat(FRotator(0.0f, ModelYawOffset, 0.0f));
+	}
+
+	inline FQuat FromPlacementQuat(const FQuat& Placement)
+	{
+		return Placement * ModelFix();
+	}
 }

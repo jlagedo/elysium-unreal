@@ -153,6 +153,23 @@ void FElysiumGreenRoomRun::ResolveCases()
 			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
 		{ TEXT("sire_post"), TEXT("cinematic_santa_monica_haven_cin_stake"), TEXT("sire_post"),
 			TEXT("models/cinematic/santa_monica/haven/cin_stake.mdl"), false, true, false },
+		// The courtroom half. `scene` is the clip the `courtroom_scene_relay` wire plays on all
+		// three, and `idle01`/`idle` is the sequence each rests on; both are covered because the
+		// rest pose and the scripted one-shot resolve through different rules.
+		{ TEXT("sword_idle01"), TEXT("cin_sheriff_sword"), TEXT("idle01"),
+			TEXT("models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl"), false, true, true },
+		{ TEXT("sword_scene"), TEXT("cin_sheriff_sword"), TEXT("scene"),
+			TEXT("models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl"), false, true, false },
+		{ TEXT("courtroom_stake_idle01"), TEXT("cinematic_santa_monica_courtroom_cin_stake"),
+			TEXT("idle01"),
+			TEXT("models/cinematic/santa_monica/courtroom/cin_stake.mdl"), false, true, true },
+		{ TEXT("courtroom_stake_scene"), TEXT("cinematic_santa_monica_courtroom_cin_stake"),
+			TEXT("scene"),
+			TEXT("models/cinematic/santa_monica/courtroom/cin_stake.mdl"), false, true, false },
+		{ TEXT("cigar_idle"), TEXT("cin_cigar"), TEXT("idle"),
+			TEXT("models/cinematic/santa_monica/courtroom/cin_cigar.mdl"), false, true, true },
+		{ TEXT("cigar_scene"), TEXT("cin_cigar"), TEXT("scene"),
+			TEXT("models/cinematic/santa_monica/courtroom/cin_cigar.mdl"), false, true, false },
 	};
 	const TArray<FCase> Courtroom =
 	{

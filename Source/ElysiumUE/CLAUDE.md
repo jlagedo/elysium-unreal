@@ -189,6 +189,16 @@ Hard-won, non-obvious, and easy to undo:
   prerequisites to `AElysiumMapActor::PrimaryActorTick` closes a cycle and floods `LogTick`.
 - **`ApplyMaterialOverrides` is lazy** — a runtime `SetMaterial` drops the primitive's built
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
+- **glTFRuntime's morph-target vertex base is a local patch, and losing it fails silently.**
+  `FMorphTargetDelta::SourceIdx` addresses the LOD's vertex buffer;
+  `FinalizeSkeletalMeshWithLODs` upstream advances its per-primitive base by `Indices.Num()`
+  instead of `Positions.Num()`, so on a multi-primitive mesh every primitive after the first
+  writes its deltas at out-of-range vertices and the GPU discards them. Nothing reports an
+  error — weights animate, curves arrive, delta magnitudes read correct, and the mesh never
+  moves. The fix lives in `dev/dependencies/patches/gltfruntime-skeletal-multiroot.patch` and is
+  pinned by `post_patch_tree` in `dev/dependencies.lock.json`; `Plugins/External/` is gitignored,
+  so editing the vendored tree directly is lost on the next `deps sync`. Change the patch, not the
+  checkout, and re-pin the tree hash. `Elysium.Content.FacialMorphTargets` guards the contract.
 - **`UBodySetup::CalculateMass` reads the owning primitive's `FBodyInstance`**, which a runtime-built
   component never seeds from the asset — physics props re-apply mass to the component.
 - **`USkeleton::AddCurveMetaData` defaults `bTransact = true`**, which under `WITH_EDITOR` calls

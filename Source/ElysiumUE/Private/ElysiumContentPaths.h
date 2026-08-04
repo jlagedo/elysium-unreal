@@ -233,6 +233,18 @@ struct FElysiumContentPaths
 	// bone names none; 130 of the 185 exported models carry one.
 	static FString NpcProcedural(const FString& RelPath) { return NpcDir() / RelPath; }
 
+	// The simulated-garment spike, beside the faithful mesh rather than over it
+	// (pipeline/src/elysium_pipeline/enhancement/cloth_spike.py). VtMB skins a skirt or coat
+	// rigidly to one bone and has no cloth solver at all, so the enhanced glb is the same mesh
+	// with a synthesised bone lattice appended and its garment shell re-weighted onto it, and the
+	// sidecar is the solver setup over that lattice. Both are keyed by stem rather than named by
+	// `npc_index.json`: the spike writes nothing into the manifest, so the only thing that selects
+	// it is `elysium.Cloth` plus these files existing — which is why every reader tests before
+	// preferring them, exactly as the `tex_hi/` set does. Deleting npc/cloth/ reverts the spike.
+	static FString NpcClothDir() { return NpcDir() / TEXT("cloth"); }
+	static FString NpcClothGlb(const FString& Stem) { return NpcClothDir() / (Stem + TEXT(".glb")); }
+	static FString NpcClothRig(const FString& Stem) { return NpcClothDir() / (Stem + TEXT(".json")); }
+
 	// The eyeball pair beside a character's glb (12.4): the eye's bone and resting basis, the iris
 	// scale and texture, and the eyelid flexdescs the renderer's eye pass writes back into the flex
 	// weights. RelPath is `npc_index.json`'s own `npcs[stem].eyes` value ("eyes/<stem>.json").

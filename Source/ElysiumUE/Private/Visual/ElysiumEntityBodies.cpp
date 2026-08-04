@@ -254,6 +254,54 @@ bool UElysiumEntityBodies::SetMouthOpen(USkeletalMeshComponent* Body, float Open
 	return Inst != nullptr && Inst->SetMouthOpen(Open);
 }
 
+bool UElysiumEntityBodies::SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget)
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	for (FElysiumEyeBinding& Binding : EyeBindings)
+	{
+		if (Binding.Comp.Get() == Body)
+		{
+			Binding.ViewTarget = WorldTarget;
+			Binding.bHasViewTarget = true;
+			return true;
+		}
+	}
+	// Most of the cast authors no eyeball record, so this is the ordinary answer rather than an
+	// error: the character still decides where it is looking, there is simply nothing to aim.
+	return false;
+}
+
+bool UElysiumEntityBodies::GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
+	FVector& OutForward) const
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	for (const FElysiumEyeBinding& Binding : EyeBindings)
+	{
+		if (Binding.Comp.Get() != Body || Binding.HeadBoneIndex == INDEX_NONE)
+		{
+			continue;
+		}
+		// Component-space bone transform lifted to world. Read here rather than in the substrate
+		// because this is the settled post-move pose, and because a bone index only means anything
+		// beside the component it was resolved against.
+		const FTransform BoneToWorld =
+			Body->GetBoneTransform(Binding.HeadBoneIndex, Body->GetComponentTransform());
+		OutPosition = BoneToWorld.GetLocation();
+		// VtMB's head bone points down the model's own axis, not the character's facing, so the
+		// forward the cone is measured along is the component's, rotated by the head bone's yaw.
+		// Taking the bone's raw X would tilt the cone with every idle head bob.
+		OutForward = BoneToWorld.GetRotation().GetForwardVector();
+		return true;
+	}
+	return false;
+}
+
 bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& Disposition, int32 IdleVariant)
 {
@@ -287,6 +335,26 @@ void UElysiumEntityBodies::InstallEyes(USkeletalMeshComponent* Comp,
 	Binding.Comp = Comp;
 	Binding.Set = Set;
 	Binding.Disposition = Disposition;
+
+	// The head bone the gaze cone and the fidget grid are measured in. Resolved once, by name,
+	// against this component's own skeleton: the exporter appends a synthetic root on models with
+	// more than one parent-less bone, so the `.mdl`'s bone ordering is not the USkeleton's and an
+	// index carried across from the sidecar would aim off the wrong bone. The eye records name the
+	// bone they hang from, which for every rigged character is the head, so take it from there
+	// rather than hardcoding a string.
+	for (const FElysiumEyeball& Candidate : Set->Eyeballs)
+	{
+		if (Candidate.Bone.IsNone())
+		{
+			continue;
+		}
+		const int32 Index = Comp->GetBoneIndex(Candidate.Bone);
+		if (Index != INDEX_NONE)
+		{
+			Binding.HeadBoneIndex = Index;
+			break;
+		}
+	}
 
 	const TArray<FSkeletalMaterial>& Slots = Mesh->GetMaterials();
 	for (int32 Slot = 0; Slot < Slots.Num(); ++Slot)
@@ -390,18 +458,18 @@ void UElysiumEntityBodies::TickEyes(float)
 	UElysiumNpcAnimSubsystem* Anims = GI
 		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
 
-	FElysiumEyeTuning Tuning;
-	Tuning.bEyeMove = CVarEyeTrackPlayer.GetValueOnGameThread() != 0;
+	// `elysium.EyeTrackPlayer` is the debug override, and it outranks the gaze cascade on purpose:
+	// it is the cheapest unambiguous check that the basis math is right, and it has to keep working
+	// when the cascade is the thing under suspicion.
+	const bool bTrackPlayer = CVarEyeTrackPlayer.GetValueOnGameThread() != 0;
 	FVector TrackWorld = FVector::ZeroVector;
-	if (Tuning.bEyeMove)
+	bool bHaveCamera = false;
+	if (bTrackPlayer)
 	{
 		if (const APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(this, 0))
 		{
 			TrackWorld = Cam->GetCameraLocation();
-		}
-		else
-		{
-			Tuning.bEyeMove = false;
+			bHaveCamera = true;
 		}
 	}
 	for (int32 i = EyeBindings.Num() - 1; i >= 0; --i)
@@ -443,6 +511,22 @@ void UElysiumEntityBodies::TickEyes(float)
 		}
 		EyeInput.Blink = ElysiumEyes::BlinkWeight(Binding.BlinkEndsAt - Now);
 
+		// Where this body is looking, in priority order: the debug override, then the gaze the
+		// substrate pushed for this character, then nothing — which leaves the eye on the record's
+		// own authored resting aim, the state retail produces with `bEyeMove` off.
+		FElysiumEyeTuning Tuning;
+		FVector GazeWorld = FVector::ZeroVector;
+		if (bTrackPlayer && bHaveCamera)
+		{
+			Tuning.bEyeMove = true;
+			GazeWorld = TrackWorld;
+		}
+		else if (Binding.bHasViewTarget)
+		{
+			Tuning.bEyeMove = true;
+			GazeWorld = Binding.ViewTarget;
+		}
+
 		for (const FElysiumEyeSlot& Slot : Binding.Slots)
 		{
 			UMaterialInstanceDynamic* Mid = Slot.Mid.Get();
@@ -455,7 +539,7 @@ void UElysiumEntityBodies::TickEyes(float)
 			// origin, and it keeps the arithmetic away from large world coordinates.
 			const FTransform BoneToComponent = Comp->GetBoneTransform(Slot.BoneIndex, FTransform::Identity);
 			const FVector Target = Tuning.bEyeMove
-				? Comp->GetComponentTransform().InverseTransformPosition(TrackWorld)
+				? Comp->GetComponentTransform().InverseTransformPosition(GazeWorld)
 				: FVector::ZeroVector;
 			FElysiumEyeState State;
 			ElysiumEyes::BuildState(*Eye, BoneToComponent, Target, Tuning, State);
@@ -624,6 +708,29 @@ FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath)
 	const FElysiumAnimatedPropEntry* Entry = Anims
 		? Anims->GetIndex().FindAnimatedProp(ModelPath) : nullptr;
 	return Entry ? Entry->Stem : FString();
+}
+
+const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(const FString& Stem) const
+{
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	return Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
+}
+
+FString UElysiumEntityBodies::AnimatedPropRestClip(const FString& Stem) const
+{
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
+	return Entry ? Entry->RestSequence() : FString();
+}
+
+bool UElysiumEntityBodies::FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
+	bool& bOutLoops) const
+{
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
+	const FElysiumPropClip* Clip = Entry ? Entry->FindClip(ClipName) : nullptr;
+	bOutLoops = Clip && Clip->IsLooping();
+	return Clip != nullptr;
 }
 
 USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FString& Stem,

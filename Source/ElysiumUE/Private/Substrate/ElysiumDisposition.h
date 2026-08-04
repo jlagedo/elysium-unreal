@@ -18,6 +18,36 @@
 // `default_disposition` is authored on 242 of 243 `npc_*` entities across the exported maps
 // (239 of them `Neutral`).
 
+// The `EyeTarget` block — where the gaze layer gets every one of its timings and rates. Retail
+// compiles in no fallbacks for these: the built-in defaults sit in BSS and are zero, so a row that
+// failed to parse would leave a character perfectly still rather than visibly wrong.
+struct FElysiumEyeTargetTuning
+{
+	// "Default Direction" — a keypad cell (see FidgetPoints) the character returns to. Every
+	// shipped row authors 0, which the table's own comment defines as "fall back to normal look
+	// behavior", i.e. the selection cascade rather than a fixed head-relative point.
+	int32 DefaultDirection = 0;
+
+	// "Fidget Points" — three head-relative keypad cells the saccade walks in order. The cells are
+	// laid out like a numeric keypad with 5 at centre, each step ±20° of yaw and pitch projected
+	// 25 units out. A triple of all -1 means "pick a random cell 1-9 each time" instead of walking
+	// a fixed path, and that is what every row but Anger, Disgust, Apathy and Confused authors.
+	int32 FidgetPoints[3] = { -1, -1, -1 };
+
+	// "Min Interval"/"Max Interval" — how long a converged gaze is held before a fidget sequence
+	// starts. "Hold Min"/"Hold Max" — how long each cell within one sequence is held.
+	float MinInterval = 5.f;
+	float MaxInterval = 8.f;
+	float HoldMin = 0.15f;
+	float HoldMax = 0.25f;
+
+	// "Eye Turn Rate" as authored *inside* this block, which is the one that varies per row:
+	// 0.3 Neutral, 0.95 Anger, 0.6 Disgust, 0.2 Apathy and Confused. The file's own comment reads
+	// "0.1 is slow, 1.0 is instant", so it is the per-step coefficient of the fixed 0.1 s
+	// integrator rather than a rate in units per second.
+	float TurnRate = 0.3f;
+};
+
 struct FElysiumDisposition
 {
 	FString Name;                  // the block name, e.g. "Neutral" — matches `default_disposition`
@@ -41,6 +71,13 @@ struct FElysiumDisposition
 	// drives is the client's and is not in this file.
 	float MinBlinkInterval = 2.5f;
 	float MaxBlinkInterval = 6.f;
+
+	// The gaze block, and beside it the *second* "Eye Turn Rate" the file carries — this one at
+	// disposition level rather than inside `EyeTarget`, authored 0.9 on every row that has it. Both
+	// spellings are real and they disagree, so both are kept: the gaze integrator uses the block's,
+	// which is the one that varies per disposition.
+	FElysiumEyeTargetTuning EyeTarget;
+	float EyeTurnRate = 0.9f;
 
 	bool IsValid() const { return !Name.IsEmpty(); }
 };

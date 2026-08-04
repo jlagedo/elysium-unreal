@@ -14,6 +14,8 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
+#include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumSkeletalBasis.h"
@@ -58,6 +60,18 @@ namespace
 			Acc.Type = EElysiumVariantType::Int;
 			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
 			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
+		}
+		else if constexpr (std::is_same_v<TMember, float>)
+		{
+			Acc.Type = EElysiumVariantType::Float;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
+		}
+		else if constexpr (std::is_same_v<TMember, FVector>)
+		{
+			Acc.Type = EElysiumVariantType::Vector;
+			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Vector(static_cast<const TClass&>(E).*Member); };
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToVector(); };
 		}
 		else if constexpr (std::is_same_v<TMember, FString>)
 		{
@@ -618,6 +632,302 @@ void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
 	bWillTalk = Args.Param.ToInt() != 0;
 }
 
+// ============================================================================================
+// Gaze — the selection cascade, the saccade layer and the integrator (12.4)
+// ============================================================================================
+
+namespace
+{
+	// The ±30° cone every candidate is gated by, as a dot rather than an angle — retail's own
+	// test is `dot(headForward, normalize(p - headPos)) > 0.866`.
+	constexpr float GGazeConeDot = 0.866f;
+
+	// Distances, in Source units converted at the one place the project converts them. The scan
+	// sweeps a 300-unit sphere centred 300 units ahead of the eyes; the straight-ahead fallback is
+	// 500 units out; a fidget cell is projected 25 units from the head.
+	constexpr float GScanReach = 300.f * ElysiumMove::U;
+	constexpr float GScanRadius = 300.f * ElysiumMove::U;
+	constexpr float GAheadReach = 500.f * ElysiumMove::U;
+	constexpr float GFidgetReach = 25.f * ElysiumMove::U;
+
+	// A fidget cell is a numeric keypad seen from the character's point of view: 5 is dead ahead,
+	// each column is 20° of yaw and each row 20° of pitch.
+	//
+	//     7 8 9      up
+	//     4 5 6
+	//     1 2 3      down
+	//
+	// Cell 0 is not a direction at all — the table's comment defines it as "fall back to normal
+	// look behavior", so it is handled by the caller and never reaches here.
+	FVector FidgetCellDirection(int32 Cell, const FVector& HeadForward)
+	{
+		const int32 Clamped = FMath::Clamp(Cell, 1, 9);
+		const int32 Column = (Clamped - 1) % 3;   // 0 left, 1 centre, 2 right
+		const int32 Row = (Clamped - 1) / 3;      // 0 bottom, 1 middle, 2 top
+		FRotator Aim = HeadForward.Rotation();
+		Aim.Yaw += static_cast<float>(Column - 1) * 20.f;
+		Aim.Pitch += static_cast<float>(Row - 1) * 20.f;
+		return Aim.Vector();
+	}
+
+	bool InsideGazeCone(const FVector& HeadPos, const FVector& HeadForward, const FVector& Point)
+	{
+		const FVector To = Point - HeadPos;
+		if (To.IsNearlyZero())
+		{
+			return false;
+		}
+		return FVector::DotProduct(HeadForward, To.GetSafeNormal()) > GGazeConeDot;
+	}
+}
+
+FVector FElysiumCombatCharacter::EyePosition() const
+{
+	// `GetAbsOrigin() + m_vecViewOffset`. The standing view offset is 64 units — the ducked 30 is
+	// the player's crouched value and belongs to the player leaf, not to every character.
+	return Origin + FVector(0.f, 0.f, ElysiumMove::StandViewZ);
+}
+
+void FElysiumCombatCharacter::InputLookAtEntityEye(const FElysiumInputArgs& Args)
+{
+	EyeLookTargetName = Args.Param.ToString();
+	EyeLookMode = 1;
+}
+
+void FElysiumCombatCharacter::InputLookAtEntityCenter(const FElysiumInputArgs& Args)
+{
+	// Reproduced defect. Mode 2 is the one that would resolve `WorldSpaceCenter()`, but the shipped
+	// handler pushes the Eye constant and no handler anywhere passes 2 — so all 10 authored
+	// `LookAtEntityCenter` firings behave exactly as `LookAtEntityEye`. Kept as its own input so the
+	// wire still resolves by name and so the divergence is visible here rather than implied.
+	EyeLookTargetName = Args.Param.ToString();
+	EyeLookMode = 1;
+}
+
+void FElysiumCombatCharacter::InputLookAtEntityOrigin(const FElysiumInputArgs& Args)
+{
+	EyeLookTargetName = Args.Param.ToString();
+	EyeLookMode = 3;
+}
+
+void FElysiumCombatCharacter::InputLookAtEntityDefault(const FElysiumInputArgs&)
+{
+	// Clears the scripted target and restores autonomous behaviour. The smoothed point is left
+	// where it is so the eyes glide off the old target rather than snapping.
+	EyeLookTargetName.Reset();
+	EyeLookMode = 0;
+}
+
+FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
+	const FVector& HeadPos, const FVector& HeadForward, const FElysiumEyeTargetTuning& Tuning,
+	const FVector* DialogPovPoint)
+{
+	const FVector Ahead = HeadPos + HeadForward * GAheadReach;
+
+	// --- Selection ---------------------------------------------------------------------------
+	// The priority cascade. Three of retail's arms have nothing to read yet and are marked rather
+	// than faked: `enemy` needs the combat layer (P13), `navigation goal` needs a move-goal
+	// accessor on FElysiumNpc, and `heard sound` needs a sound record. Each would sit here, in this
+	// order, between the scripted target and the autonomous scan. Their absence makes a character
+	// fall through to the scan, which is the same thing retail does when those arms find nothing.
+	FVector Commanded = Ahead;
+	bool bResolved = false;
+
+	// 1. The dialogue partner, at their EyePosition() — eye height on the entity, not a head bone,
+	//    so the aim holds still through the partner's animation the way retail's does.
+	if (World != nullptr)
+	{
+		const FElysiumEntityHandle DialogOwner = World->GetOpenDialogOwner();
+		if (DialogOwner.IsSet())
+		{
+			const FElysiumEntity* Partner = nullptr;
+			if (DialogOwner.Index == Handle.Index)
+			{
+				// This character is the one talking; its partner is the player.
+				Partner = World->FindPlayer();
+			}
+			else if (World->PlayerHandle().Index == Handle.Index)
+			{
+				Partner = World->Resolve(DialogOwner);
+			}
+			if (Partner != nullptr && Partner != this)
+			{
+				// `DialogPOV` on the shot in effect redirects this arm to the camera. It replaces the
+				// *player* as the subject and nothing else, so a character being looked at by the
+				// player still resolves normally, and every other arm of the cascade is untouched.
+				const bool bPartnerIsPlayer = World->PlayerHandle().IsSet()
+					&& Partner->Handle.Index == World->PlayerHandle().Index;
+				Commanded = (bPartnerIsPlayer && DialogPovPoint != nullptr)
+					? *DialogPovPoint
+					: Partner->EyePosition();
+				bResolved = true;
+			}
+		}
+	}
+
+	// 2. A scripted look-at. It still passes the cone test, and falls back to straight ahead
+	//    outside it; it also yields back to autonomous on its own when the entity goes away.
+	if (!bResolved && EyeLookMode != 0 && !EyeLookTargetName.IsEmpty() && World != nullptr)
+	{
+		if (const FElysiumEntity* Scripted = World->FindByName(EyeLookTargetName))
+		{
+			const FVector Point = (EyeLookMode == 3) ? Scripted->Origin : Scripted->EyePosition();
+			Commanded = InsideGazeCone(HeadPos, HeadForward, Point) ? Point : Ahead;
+			bResolved = true;
+		}
+		else
+		{
+			EyeLookTargetName.Reset();
+			EyeLookMode = 0;
+		}
+	}
+
+	// 3. The autonomous scan: nearest qualifying entity inside a 300-unit sphere centred 300 units
+	//    ahead of the eyes, re-picked every 1-5 seconds; nothing found means straight ahead and a
+	//    retry in half a second.
+	if (!bResolved)
+	{
+		if (Now >= NextEyeLookTime)
+		{
+			const FVector Centre = HeadPos + HeadForward * GScanReach;
+			const FElysiumEntity* Best = nullptr;
+			float BestDistanceSq = TNumericLimits<float>::Max();
+			if (World != nullptr)
+			{
+				for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
+				{
+					// Retail's filter is `entity->+0x94 != 0 || (GetFlags() & FL_CLIENT)`. The first
+					// half is an unrecovered field, so the recovered half stands on its own: the
+					// player always qualifies, and beyond that only other characters are treated as
+					// worth looking at. Widening this is a content decision, not a maths one.
+					const FElysiumEntity* E = Candidate.Get();
+					if (E == nullptr || E == this || E->IsInert())
+					{
+						continue;
+					}
+					const bool bIsPlayer = World->PlayerHandle().IsSet()
+						&& E->Handle.Index == World->PlayerHandle().Index;
+					if (!bIsPlayer && const_cast<FElysiumEntity*>(E)->AsCombatCharacter() == nullptr)
+					{
+						continue;
+					}
+					const FVector Point = E->EyePosition();
+					if (FVector::DistSquared(Point, Centre) > GScanRadius * GScanRadius
+						|| !InsideGazeCone(HeadPos, HeadForward, Point))
+					{
+						continue;
+					}
+					const float DistanceSq = FVector::DistSquared(Point, HeadPos);
+					if (Best == nullptr || DistanceSq < BestDistanceSq
+						|| (FMath::IsNearlyEqual(DistanceSq, BestDistanceSq)
+							&& E->Handle.Index < Best->Handle.Index))
+					{
+						Best = E;
+						BestDistanceSq = DistanceSq;
+					}
+				}
+			}
+			if (Best != nullptr)
+			{
+				Commanded = Best->EyePosition();
+				NextEyeLookTime = Now + static_cast<float>(FMath::RandRange(1, 5));
+				FidgetStep = -1;
+			}
+			else
+			{
+				Commanded = Ahead;
+				NextEyeLookTime = Now + 0.5f;
+			}
+			EyeLookTarget = Commanded;
+		}
+		// Between re-picks the commanded point stands, so the scan does not jitter frame to frame.
+		// The re-pick above always runs on the first call (NextEyeLookTime starts at zero), so this
+		// is never reading an unset value.
+		Commanded = EyeLookTarget;
+	}
+
+	// --- Fidget ------------------------------------------------------------------------------
+	// The saccade layer engages once the eyes have actually converged — retail waits for the
+	// smoothed point to come within a unit of the commanded one, so a character crossing a room
+	// tracks cleanly and only starts flicking about after it has settled. It applies to whatever
+	// the cascade chose, autonomous subject included; it is a layer over the aim, not a mode.
+	{
+		const bool bConverged = FVector::Dist(CurEyeTarget, Commanded) <= ElysiumMove::U;
+		if (bConverged && FidgetStep < 0 && Now >= NextFidgetTime)
+		{
+			FidgetStep = 0;
+			NextFidgetTime = Now + FMath::FRandRange(Tuning.HoldMin, Tuning.HoldMax);
+			FidgetCell = Tuning.FidgetPoints[0] < 0 ? FMath::RandRange(1, 9) : Tuning.FidgetPoints[0];
+		}
+		else if (FidgetStep >= 0 && Now >= NextFidgetTime)
+		{
+			++FidgetStep;
+			if (FidgetStep > 2)
+			{
+				// Sequence exhausted: back to the default direction and hold for the disposition's
+				// own interval before the next one.
+				FidgetStep = -1;
+				NextFidgetTime = Now + FMath::FRandRange(Tuning.MinInterval, Tuning.MaxInterval);
+			}
+			else
+			{
+				NextFidgetTime = Now + FMath::FRandRange(Tuning.HoldMin, Tuning.HoldMax);
+				const int32 Authored = Tuning.FidgetPoints[FidgetStep];
+				FidgetCell = Authored < 0 ? FMath::RandRange(1, 9) : Authored;
+			}
+		}
+		// Cell 0 means "fall back to normal look behavior", so it leaves the commanded point alone.
+		if (FidgetStep >= 0 && FidgetCell > 0)
+		{
+			Commanded = HeadPos + FidgetCellDirection(FidgetCell, HeadForward) * GFidgetReach;
+		}
+	}
+
+	EyeLookTarget = Commanded;
+
+	// --- Integration -------------------------------------------------------------------------
+	// A fixed-timestep lerp, not a rate: per 0.1 s of accumulated interval,
+	// `m_vCurEyeTarget += rate × (m_vEyeLookTarget − m_vCurEyeTarget)`. Reproducing the fixed step
+	// matters — folding the rate into a per-frame lerp would make the convergence speed depend on
+	// frame rate, which is exactly what the accumulator exists to avoid.
+	EyeIntegRate = Tuning.TurnRate;
+	if (!bCurEyeTargetSeeded)
+	{
+		CurEyeTarget = Commanded;
+		bCurEyeTargetSeeded = true;
+	}
+	EyeIntegAccumulator += DeltaSeconds;
+	int32 Steps = 0;
+	while (EyeIntegAccumulator >= 0.1f && Steps < 16)
+	{
+		EyeIntegAccumulator -= 0.1f;
+		CurEyeTarget += (EyeLookTarget - CurEyeTarget) * EyeIntegRate;
+		++Steps;
+	}
+	if (Steps >= 16)
+	{
+		// A long hitch would otherwise spin this loop; land on the target and drop the backlog.
+		CurEyeTarget = EyeLookTarget;
+		EyeIntegAccumulator = 0.f;
+	}
+
+	// --- Head turn, which drives nothing -------------------------------------------------------
+	// Retail integrates m_flHeadYaw/m_flHeadPitch every think through this 0.8/0.2 filter and
+	// applies them with SetBoneController(0, …) and (1, …) — bone controllers, not pose parameters.
+	// No shipped model declares a single bone controller, so the lookup fails and the value never
+	// reaches the skeleton. Visible head movement in VtMB dialogue is animation and choreography,
+	// not this path. Reproduced, including the unclamped filter and its lone `> 360 → 0` guard, so
+	// the state is inspectable and so nobody later mistakes its absence for a missing feature.
+	const FRotator ToTarget = (EyeLookTarget - HeadPos).Rotation();
+	const FRotator HeadNow = HeadForward.Rotation();
+	HeadYaw = HeadYaw * 0.8f + (ToTarget.Yaw - HeadNow.Yaw) * 0.2f;
+	HeadPitch = HeadPitch * 0.8f + (ToTarget.Pitch - HeadNow.Pitch) * 0.2f;
+	if (HeadYaw > 360.f) { HeadYaw = 0.f; }
+	if (HeadPitch > 360.f) { HeadPitch = 0.f; }
+
+	return CurEyeTarget;
+}
+
 void FElysiumCombatCharacter::SyncHealthFromSheet()
 {
 	// `CBaseCombatCharacter::HealthToPercent` projects the sheet pair onto Source's engine-space
@@ -1082,14 +1392,31 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		ELYSIUM_PENDING_INPUT(FC, SetBodyAsCameraTarget,  "11.7 — the scripted-shot channel");
 		ELYSIUM_PENDING_INPUT(FC, FadeHeadAsCameraTarget, "11.7 — the scripted-shot channel");
 		ELYSIUM_PENDING_INPUT(FC, FadeBodyAsCameraTarget, "11.7 — the scripted-shot channel");
-		ELYSIUM_PENDING_INPUT(FC, LookAtEntityEye,        "12.4 — the look-at rig");
-		ELYSIUM_PENDING_INPUT(FC, LookAtEntityCenter,     "12.4 — the look-at rig");
-		ELYSIUM_PENDING_INPUT(FC, LookAtEntityOrigin,     "12.4 — the look-at rig");
-		ELYSIUM_PENDING_INPUT(FC, LookAtEntityDefault,    "12.4 — the look-at rig");
+		// The four scripted look-at inputs. Center is registered separately from Eye even though it
+		// behaves identically, because the identical behaviour is retail's own defect rather than a
+		// simplification of ours — see InputLookAtEntityCenter.
+		D.Input(TEXT("LookAtEntityEye"),     [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputLookAtEntityEye(A); });
+		D.Input(TEXT("LookAtEntityCenter"),  [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputLookAtEntityCenter(A); });
+		D.Input(TEXT("LookAtEntityOrigin"),  [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputLookAtEntityOrigin(A); });
+		D.Input(TEXT("LookAtEntityDefault"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputLookAtEntityDefault(A); });
 
 		// `money` is `m_iMoney`, the one counter `stats.txt` does not carry as a Stat. Humanity,
 		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
 		AddCharField(D, TEXT("money"), &FC::Money);
+
+		// The gaze state, at the offsets the datamap carries them: the commanded and smoothed eye
+		// targets and the integration rate. `m_hEyeLookTarget` is a handle, which the registry has no
+		// field type for, so the saved form is the targetname a restore would have to re-resolve
+		// anyway.
+		AddCharField(D, TEXT("m_vEyeLookTarget"), &FC::EyeLookTarget);
+		AddCharField(D, TEXT("m_vCurEyeTarget"), &FC::CurEyeTarget);
+		AddCharField(D, TEXT("m_flEyeIntegRate"), &FC::EyeIntegRate);
+		AddCharField(D, TEXT("m_hEyeLookTarget"), &FC::EyeLookTargetName);
+		// The scripted-mode int sits at 0x0E68 and retail's datamap does NOT carry it, so a scripted
+		// look-at does not survive a save. Registered with no flags so it is inspectable but neither
+		// keyable nor saved, which reproduces that exactly.
+		AddCharField(D, TEXT("m_iEyeLookMode"), &FC::EyeLookMode, EElysiumField::None);
+
 		AddSheetFields(D);
 	});
 

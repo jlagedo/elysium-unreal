@@ -66,7 +66,7 @@ FACIAL_DIR = os.path.join(NPC_DIR, "facial")
 PROCEDURAL_DIR = os.path.join(NPC_DIR, "procedural")
 BLENDS_DIR = os.path.join(NPC_DIR, "blends")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
-MANIFEST_VERSION = 5
+MANIFEST_VERSION = 6
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -89,6 +89,26 @@ def npc_models_from_ents(out_root=OUT):
 
 def _meaningful_sequence(value):
     return isinstance(value, str) and value.strip().lower() not in ("", "none", "null", "0")
+
+
+def has_animation(d):
+    """True when the model declares a sequence carrying more than one frame.
+
+    A `prop_dynamic` may author `LoopSequence` on a model whose only sequence is a single
+    static frame. Six models in the shipped seed do exactly that -- `stage_light`,
+    `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec` each declare one
+    1-frame `idle`. They are static dressing wearing an animation keyvalue: there is no
+    motion to bake, and standing a skeletal body for one replaces the baked static mesh
+    with a bind pose.
+
+    The test is *any* sequence with more than one frame, not every one: `clamp`'s `idle`
+    is a single frame beside its real 45-frame `open`/`close`, and `wolf_form` carries
+    twelve 1-frame hit poses among its real clips.
+    """
+    try:
+        return any(s.frames > 1 for s in S.local_sequences(d))
+    except Exception:
+        return False
 
 
 def animated_prop_models_from_ents(out_root=OUT):
@@ -356,6 +376,30 @@ def write_blends(stem, model, table, prefix=""):
     return {"blends": rel, "blend_grids": len(table["grids"])}
 
 
+def animated_prop_index_row(rec):
+    """One animated-prop manifest record projected into the runtime index (v6).
+
+    `clips` becomes the model's own sequence table in DECLARATION ORDER with the selection keys
+    beside each label, and each row carries its ordinal explicitly. Order is semantic: retail's
+    `CBaseProp::Spawn` stands a prop on `SelectWeightedSequence(ACT_IDLE)` falling back to sequence
+    **index 0**, so sorting the labels — as versions 4 and 5 did — picks the wrong rest pose for
+    any model whose first declared sequence is not also its alphabetically first (`drknobantique`,
+    `clamp`, `wolf_form`).
+    """
+    return {
+        "glb": rec["glb"],
+        "model": rec["model"],
+        "bones": rec.get("bones", 0),
+        "split_bones": rec.get("split_bones", []),
+        **({"procedural": rec["procedural"],
+            "procedural_bones": rec["procedural_bones"]} if rec.get("procedural") else {}),
+        **({"blends": rec["blends"], "blend_grids": rec["blend_grids"]}
+           if rec.get("blends") else {}),
+        "clips": [{"name": label, "index": i, **meta}
+                  for i, (label, meta) in enumerate(rec.get("clips", {}).items())],
+    }
+
+
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
@@ -375,11 +419,12 @@ def write_sidecars(manifest):
     os.makedirs(CLIPS_DIR, exist_ok=True)
     index = {
         "manifest_version": manifest["manifest_version"],
-        "note": "counts only; a clip vocabulary lives in clips/<stem>.json, a flex rig in "
-                "facial/<stem>.json, an eyeball pair in eyes/<stem>.json, a procedural bone "
-                "rule table in procedural/<stem>.json and a blend-grid table in "
-                "blends/<stem>.json. Those "
-                "paths, like the bank glb paths, are relative to this file's directory.",
+        "note": "counts only for npcs/banks; a character clip vocabulary lives in "
+                "clips/<stem>.json, a flex rig in facial/<stem>.json, an eyeball pair in "
+                "eyes/<stem>.json, a procedural bone rule table in procedural/<stem>.json and "
+                "a blend-grid table in blends/<stem>.json. Those paths, like the bank glb "
+                "paths, are relative to this file's directory. animated_props carry their "
+                "whole clip vocabulary inline, in the model's own sequence-declaration order.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
@@ -403,18 +448,18 @@ def write_sidecars(manifest):
         "cinematics": manifest.get("cinematics", {}),
         # v4 — skeletal prop models selected by prop_dynamic. Version 3 readers see no field;
         # version 4 readers get the GLB plus the exact baked clip inventory.
-        "animated_props": {
-            stem: {"glb": rec["glb"], "model": rec["model"],
-                   "bones": rec.get("bones", 0),
-                   "split_bones": rec.get("split_bones", []),
-                   **({"procedural": rec["procedural"],
-                       "procedural_bones": rec["procedural_bones"]} if rec.get("procedural")
-                      else {}),
-                   **({"blends": rec["blends"], "blend_grids": rec["blend_grids"]}
-                      if rec.get("blends") else {}),
-                   "clips": sorted(rec.get("clips", {}))}
-            for stem, rec in manifest.get("animated_props", {}).items()
-        },
+        #
+        # v6 — `clips` carries the model's own sequence table in DECLARATION ORDER, with the
+        # selection keys beside each label. Order is semantic, not presentation: retail's
+        # CBaseProp::Spawn stands a prop on SelectWeightedSequence(ACT_IDLE) and falls back to
+        # sequence **index 0**, so the first entry is the rest pose for the 16 of 19 models that
+        # tag no ACT_IDLE. The v4/v5 shape sorted the labels alphabetically, which picked the
+        # wrong sequence 0 for `drknobantique` (`handle_locked` over `idle`), `clamp` (`close`
+        # over `idle`) and `wolf_form`. Inlined rather than sliced into a sidecar because the
+        # whole prop corpus is ~80 clips: a `clips/<stem>.json` slice would also have to enter
+        # the stem namespace props already share with NPCs, where a collision aliases a rig.
+        "animated_props": {stem: animated_prop_index_row(rec)
+                           for stem, rec in manifest.get("animated_props", {}).items()},
         "warnings": manifest.get("warnings", []),
     }
     with open(INDEX, "w", encoding="utf-8") as f:
@@ -473,6 +518,15 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         pc_models = set(pc_models_from_clandoc())
         cinematics = cinematic_models_from_ents()
         animated_props = animated_prop_models_from_ents()
+        # An authored LoopSequence is not proof of motion. Drop the models whose sequences
+        # are all single frames before anything tries to bake them: they keep their decoded
+        # static mesh, which is what they already look like in the original game.
+        still = [m for m in animated_props
+                 if (r := load_mdl(m)) is not None and not has_animation(r)]
+        if still:
+            animated_props = [m for m in animated_props if m not in set(still)]
+            print(f"[npc] {len(still)} animated-prop candidate(s) declare no multi-frame "
+                  f"sequence and stay static: {', '.join(_basename_stem(m) for m in still)}")
         print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
               f"{len(pc_models)} player body model(s) from {CLANDOC} + "
               f"{len(cinematics)} cinematic anim-set(s) + "

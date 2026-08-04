@@ -17,6 +17,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
+#include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
 
 #include "Components/SkeletalMeshComponent.h"
@@ -168,13 +169,20 @@ public:
 	// Derived. Retail carries a resolved sequence *index* (-1 when LoopSequence names nothing); the
 	// animated-prop index exposes clip *names*, so the equivalent test is "it resolved to a real clip".
 	bool   bLoopSequenceResolved = false;
+	// The body is parked on a held pose — a clip seeked to frame 0 with the play rate at zero —
+	// rather than playing. Retail's resting state (CBaseProp::Spawn); carried in the save so a
+	// restore re-holds instead of starting the clip running.
+	bool   bRestPoseHeld = false;
+	// CDynamicProp::Activate armed the loop start and the think has not consumed it yet. Not saved:
+	// a restored map re-runs Load -> PostSpawn and re-arms, which is what retail's Activate does.
+	bool   bLoopStartPending = false;
 	double NextRandAnim = 0.0;          // m_flNextRandAnim @0x7c8
 	double AnimationEndTime = 0.0;      // absolute seconds the current one-shot ends; 0 = none pending
 
 	virtual void Spawn() override
 	{
 		BuildBody(/*bFromSetModel=*/false);
-		PlayAuthoredDefault();
+		StandRestPose();
 		// CDynamicProp::Spawn (FUN_101905e0) arms the animate think only for a random animator.
 		// Every other prop spawns thinking never; SetAnimation is what arms it later.
 		if (bRandomAnimator && World)
@@ -184,22 +192,67 @@ public:
 		}
 	}
 
-	// CDynamicPropAnimThink (FUN_10190850). Two jobs: return a finished one-shot to the authored
-	// loop, and drive the random animator. Retail leaves the think disarmed once a non-looping
-	// sequence has finished and there is no random animator left to schedule.
+	// CDynamicProp::Activate (FUN_101906c0). `LoopSequence` resolves HERE, not in Spawn: when it
+	// names a real sequence — including sequence index 0, the compare is against -1 — the prop arms
+	// a one-shot think at `curtime + RandomFloat(0.1, 0.99)`. That stagger is why three palm trees
+	// do not sway in lockstep. The think it arms (FUN_10190750) assigns the sequence, calls
+	// ResetSequenceInfo (which lifts the play rate off zero), fires OnAnimationBegun and hands over
+	// to the 10 Hz animate think.
+	virtual void PostSpawn() override
+	{
+		FElysiumEntity::PostSpawn();   // the base resolves `parentname` and attaches the body
+		bLoopSequenceResolved = false;
+		bLoopStartPending = false;
+		if (!AnimatedVisual || !World || !MeaningfulSequence(LoopSequence))
+		{
+			return;
+		}
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment || AnimatedStem.IsEmpty())
+		{
+			return;
+		}
+		// Resolution is by name here rather than by index: the runtime addresses clips by label.
+		bool bLoops = false;
+		if (!Embodiment->FindAnimatedPropClip(AnimatedStem, LoopSequence, bLoops))
+		{
+			return;
+		}
+		bLoopSequenceResolved = true;
+		bLoopStartPending = true;
+		// NowSeconds() at PostSpawn equals the Now the world is activated with: the game clock only
+		// advances from AElysiumMapActor::PreMoveTick, which is gated on RuntimePhase == Active and
+		// so has not ticked yet. The stagger therefore survives the load gap intact. If that gate
+		// ever moves, every prop's start collapses onto the first frame.
+		NextThink = static_cast<float>(World->NowSeconds() + DrawLoopStartDelay());
+	}
+
+	// CDynamicPropAnimThink (FUN_10190850): drive the random animator and report a finished clip.
+	// Retail leaves the think disarmed once a non-looping sequence has finished and there is no
+	// random animator left to schedule — and because that disarm is permanent, the revert-to-
+	// `LoopSequence` branch at the top of the retail think is **unreachable in shipped data**
+	// (`m_bRandomAnimator` is zero on all 749 entities carrying the key). A finished one-shot holds
+	// its final frame; it does not return to the authored loop, and there is no rest-pose fallback.
 	virtual void Think() override
 	{
 		const double Now = World ? World->NowSeconds() : 0.0;
-		if (!bRandomAnimator || Now <= NextRandAnim)
+
+		// The Activate-phase one-shot (FUN_10190750), folded in as a flag rather than a second
+		// think function: this think already owns the random animator's schedule, and a second
+		// state would have to interleave with it.
+		if (bLoopStartPending)
 		{
-			// The revert is gated on the sequence having *finished* and not being a loop itself —
-			// retail tests m_bSequenceFinished (+0x65c) && !m_bSequenceLoops (+0x65d).
-			if (bLoopSequenceResolved && SequenceFinished(Now))
+			bLoopStartPending = false;
+			if (StartLoopSequence())
 			{
-				PlayAnimation(LoopSequence, /*bLoop*/ true);
+				static const FName OnAnimationBegun(TEXT("OnAnimationBegun"));
+				FireOutput(OnAnimationBegun, Handle);
 			}
+			NextThink = static_cast<float>(Now + AnimThinkInterval);
+			return;
 		}
-		else if (PlayRandomAnimation())
+
+		if (bRandomAnimator && Now > NextRandAnim && PlayRandomAnimation())
 		{
 			static const FName OnAnimationBegun(TEXT("OnAnimationBegun"));
 			FireOutput(OnAnimationBegun, Handle);
@@ -229,11 +282,22 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
 		// m_flNextRandAnim is a retail SAVE field. AnimationEndTime is not carried: the replay below
-		// restarts the clip, which is what re-derives it.
-		Ar << CurrentAnimation << bAnimationLoop << NextRandAnim;
+		// restarts the clip, which is what re-derives it. `bRestPoseHeld` has to be, though — the
+		// replay would otherwise start a resting prop's clip *running* instead of holding frame 0.
+		Ar << CurrentAnimation << bAnimationLoop << bRestPoseHeld << NextRandAnim;
 		if (Ar.IsLoading() && AnimatedVisual && !CurrentAnimation.IsEmpty())
 		{
-			PlayAnimation(CurrentAnimation, bAnimationLoop);
+			const bool bWasHeld = bRestPoseHeld;
+			PlayAnimation(CurrentAnimation, bAnimationLoop);   // clears bRestPoseHeld
+			if (bWasHeld && World)
+			{
+				if (IElysiumEmbodiment* Embodiment = World->Embodiment())
+				{
+					Embodiment->SeekCinematicClip(AnimatedVisual, 0.0f);
+					AnimationEndTime = 0.0;
+					bRestPoseHeld = true;
+				}
+			}
 		}
 	}
 
@@ -246,14 +310,15 @@ public:
 	virtual void OnRuntimeTransformChanged() override
 	{
 		FElysiumEntity::OnRuntimeTransformChanged();
-		const FQuat Rot(FRotator(0.0f, -Angles.Y, 0.0f));
+		// Each representation keeps its own basis (see BuildBody).
 		if (Visual)
 		{
-			Visual->SetWorldLocationAndRotation(Origin, Rot);
+			Visual->SetWorldLocationAndRotation(Origin, FQuat(FRotator(0.0f, -Angles.Y, 0.0f)));
 		}
 		if (AnimatedVisual)
 		{
-			AnimatedVisual->SetWorldLocationAndRotation(Origin, Rot);
+			AnimatedVisual->SetWorldLocationAndRotation(Origin,
+				FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)));
 		}
 	}
 
@@ -261,7 +326,10 @@ public:
 	{
 		DestroyBody();
 		BuildBody(/*bFromSetModel=*/true);
-		PlayAuthoredDefault();
+		StandRestPose();
+		// A SetModel arrives long after the Activate phase, so there is no stagger to wait out —
+		// if the authored loop resolves on the new model it starts now.
+		bLoopSequenceResolved = MeaningfulSequence(LoopSequence) && StartLoopSequence();
 	}
 
 	void InputBreak(const FElysiumInputArgs& Args)
@@ -308,14 +376,22 @@ public:
 	void InputSetAnimation(const FElysiumInputArgs& Args)
 	{
 		const FString Clip = Args.Param.ToString();
-		if (!PlayAnimation(Clip, /*bLoop*/ false))
+		// InputSetAnimation does not force one shot: ResetSequenceInfo derives m_bSequenceLoops
+		// from the model's own STUDIO_LOOPING bit, so the clip decides. Every clip the exported
+		// maps name here is non-looping; a script naming a looping one gets a loop, as in retail.
+		bool bLoops = false;
+		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		{
+			Embodiment->FindAnimatedPropClip(AnimatedStem, Clip, bLoops);
+		}
+		if (!PlayAnimation(Clip, bLoops))
 		{
 			UE_LOG(LogElysiumProp, Warning, TEXT("%s SetAnimation '%s' did not resolve on %s"),
 				*DebugString(), *Clip, AnimatedStem.IsEmpty() ? TEXT("static representation") : *AnimatedStem);
 			return;
 		}
-		// InputSetAnimation (FUN_10190a00) arms the animate think — that is what returns the prop to
-		// its LoopSequence once this one-shot finishes.
+		// InputSetAnimation (FUN_10190a00) re-arms the animate think, which is what carries the clip
+		// to its end and fires OnAnimationDone before disarming again.
 		if (World)
 		{
 			NextThink = static_cast<float>(World->NowSeconds() + AnimThinkInterval);
@@ -327,7 +403,9 @@ public:
 		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 		Out.Emplace(TEXT("Body"), AnimatedVisual ? TEXT("skeletal animated prop")
 			: (Visual ? TEXT("static mesh") : TEXT("(none)")));
-		Out.Emplace(TEXT("Animation"), CurrentAnimation.IsEmpty() ? TEXT("(none)") : CurrentAnimation);
+		Out.Emplace(TEXT("Animation"), CurrentAnimation.IsEmpty() ? TEXT("(none)")
+			: (bRestPoseHeld ? CurrentAnimation + TEXT(" (rest pose, held at frame 0)")
+				: CurrentAnimation));
 		Out.Emplace(TEXT("Animation loop"), bAnimationLoop ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Loop sequence"), LoopSequence.IsEmpty() ? TEXT("(none)")
 			: (bLoopSequenceResolved ? LoopSequence : LoopSequence + TEXT(" (unresolved)")));
@@ -374,12 +452,30 @@ private:
 			FMath::Max(MinAnimTime, MaxAnimTime));
 	}
 
-	// Retail picks a random sequence off the model here (FUN_1008dc40). `RandomAnimation` is 0 on all
-	// 749 entities carrying it across the exported corpus, so the branch is unreachable in shipped
-	// data and the clip-list seam it would need does not exist. The gate around it stays faithful.
+	// CDynamicProp::Activate's `RandomFloat(0.1, 0.99)` start stagger. `FMath` for the same reason
+	// the interval above uses it: the draw is sub-second, fires once per map load, and no save can
+	// observe it — a restore re-runs PostSpawn and re-draws.
+	static double DrawLoopStartDelay()
+	{
+		return FMath::FRandRange(0.1f, 0.99f);
+	}
+
+	// Retail re-picks here with the *same* call the spawn path uses — SelectWeightedSequence
+	// (ACT_IDLE, -1), FUN_1008dc40 — not an arbitrary sequence. `RandomAnimation` is 0 on all 749
+	// entities carrying it across the exported corpus, so this is unreachable in shipped data; it
+	// is written out rather than stubbed because the seam it needs now exists, and no exported prop
+	// model carries more than one ACT_IDLE clip, so the pick cannot actually vary.
 	bool PlayRandomAnimation()
 	{
-		return false;
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (!Embodiment || AnimatedStem.IsEmpty())
+		{
+			return false;
+		}
+		const FString Clip = Embodiment->AnimatedPropRestClip(AnimatedStem);
+		bool bLoops = false;
+		Embodiment->FindAnimatedPropClip(AnimatedStem, Clip, bLoops);
+		return PlayAnimation(Clip, bLoops);
 	}
 
 	void DestroyBody()
@@ -391,6 +487,8 @@ private:
 		CurrentAnimation.Reset();
 		bAnimationLoop = false;
 		bLoopSequenceResolved = false;
+		bRestPoseHeld = false;
+		bLoopStartPending = false;
 		AnimationEndTime = 0.0;
 	}
 
@@ -409,21 +507,54 @@ private:
 		}
 		CurrentAnimation = Clip;
 		bAnimationLoop = bLoop;
+		bRestPoseHeld = false;   // playing anything releases the held pose
 		AnimationEndTime = (!bLoop && Seconds > 0.0f) ? World->NowSeconds() + Seconds : 0.0;
 		return true;
 	}
 
-	// The authored resting animation. Retail resolves `LoopSequence` to a sequence index and stands
-	// the prop on it; `demo_sequence` is not an engine keyfield and is deliberately not consulted.
-	void PlayAuthoredDefault()
+	// CBaseProp::Spawn (FUN_1018df70). A prop at rest is a **held pose, not a playing clip**: the
+	// cycle and the playback rate are both left at zero, and only ResetSequenceInfo — which nothing
+	// calls for a prop with no `LoopSequence` and no scripted SetAnimation — ever lifts the rate.
+	// The sequence is SelectWeightedSequence(ACT_IDLE, -1) falling back to sequence index 0, which
+	// is the branch that fires for the theatre's cinematic props: they tag `ACT_VM_IDLE`, not
+	// `ACT_IDLE`. `demo_sequence` names the same clip but is not an engine keyfield, so it stays
+	// unread — the activity/index rule reaches the same pose by the faithful route.
+	bool StandRestPose()
 	{
-		bLoopSequenceResolved = false;
-		if (!AnimatedVisual)
+		bRestPoseHeld = false;
+		if (!AnimatedVisual || !World)
 		{
-			return;
+			return false;
 		}
-		bLoopSequenceResolved = MeaningfulSequence(LoopSequence)
-			&& PlayAnimation(LoopSequence, /*bLoop*/ true);
+		IElysiumEmbodiment* Embodiment = World->Embodiment();
+		if (!Embodiment)
+		{
+			return false;
+		}
+		// bLoop MUST stay false. The anim proxy's Request early-outs on
+		// (Sequence == Playing && bLoop && bPlayingLoop) *without* restoring the play rate, so a
+		// hold created as a loop would latch a later request out of ever un-freezing — and
+		// `palmtree`'s rest clip and its `LoopSequence` are the same clip, so that path is live.
+		if (!PlayAnimation(Embodiment->AnimatedPropRestClip(AnimatedStem), /*bLoop*/ false))
+		{
+			return false;
+		}
+		Embodiment->SeekCinematicClip(AnimatedVisual, 0.0f);   // start position 0, play rate 0
+		AnimationEndTime = 0.0;   // a held pose never finishes, so it must not fire OnAnimationDone
+		bRestPoseHeld = true;
+		return true;
+	}
+
+	// The Activate-phase loop start: assign the authored sequence and let it run.
+	bool StartLoopSequence()
+	{
+		bool bLoops = false;
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment)
+		{
+			Embodiment->FindAnimatedPropClip(AnimatedStem, LoopSequence, bLoops);
+		}
+		return PlayAnimation(LoopSequence, bLoops);
 	}
 
 	void BuildBody(bool bFromSetModel)
@@ -438,25 +569,50 @@ private:
 			return;
 		}
 
+		// The two representations do NOT share a rotation. `model_quat` is the placement of the
+		// exporter's Unreal-native OBJ; a glTF body needs the fixed model-local correction on top
+		// of it, because glTFRuntime imports mdl_gltf.py's standard Y-up glTF into its own basis
+		// (ElysiumSkeletalBasis). Passing the static quat to the skeletal factory yaws the body 90
+		// degrees — which on a cinematic prop, whose clip carries the whole scene motion relative
+		// to its anchor, sweeps it through the wrong part of the room.
 		FVector Loc;
-		FQuat Rot;
+		FQuat StaticRot, SkeletalRot;
 		if (bFromSetModel)
 		{
+			// `Def->ModelQuat` belongs to the model this one replaced, so it cannot be reused. Both
+			// representations fall back to the yaw-only runtime derivation, as the static path
+			// already did.
 			VisualStem = FPaths::GetBaseFilename(Model).ToLower();
 			Loc = Origin;
-			Rot = FQuat(FRotator(0.0f, -Angles.Y, 0.0f));
+			StaticRot = FQuat(FRotator(0.0f, -Angles.Y, 0.0f));
+			SkeletalRot = FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles));
 		}
 		else
 		{
 			VisualStem = Def->ModelMesh;
 			Loc = Def->Origin;
-			Rot = Def->ModelQuat;
+			StaticRot = Def->ModelQuat;
+			// A model that decoded no static geometry carries no `model_quat`, so composing against
+			// the identity default would silently drop the placement.
+			SkeletalRot = Def->ModelMesh.IsEmpty()
+				? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles))
+				: ElysiumSkeletalBasis::FromPlacementQuat(Def->ModelQuat);
 		}
 
 		AnimatedStem = Embodiment->AnimatedPropStemForModel(Model);
+		// An indexed model that bakes no playable clip is not an animated representation — it is a
+		// bind-pose skeleton standing where the baked static mesh should be. RestClip is empty
+		// exactly when the entry carries no clips, so it is the same test.
+		if (!AnimatedStem.IsEmpty() && Embodiment->AnimatedPropRestClip(AnimatedStem).IsEmpty())
+		{
+			UE_LOG(LogElysiumProp, Verbose,
+				TEXT("%s: '%s' is indexed as animated but bakes no clip; standing the static mesh"),
+				*DebugString(), *AnimatedStem);
+			AnimatedStem.Reset();
+		}
 		if (!AnimatedStem.IsEmpty())
 		{
-			AnimatedVisual = Embodiment->BuildAnimatedPropVisual(AnimatedStem, Loc, Rot,
+			AnimatedVisual = Embodiment->BuildAnimatedPropVisual(AnimatedStem, Loc, SkeletalRot,
 				Embodiment->BodyScaleFor(*Def));
 			if (AnimatedVisual)
 			{
@@ -465,7 +621,7 @@ private:
 		}
 		else if (!VisualStem.IsEmpty())
 		{
-			Visual = Embodiment->BuildPropVisual(VisualStem, Loc, Rot, Embodiment->BodyScaleFor(*Def));
+			Visual = Embodiment->BuildPropVisual(VisualStem, Loc, StaticRot, Embodiment->BodyScaleFor(*Def));
 			if (Visual)
 			{
 				World->RegisterPropBody(Visual);

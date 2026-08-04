@@ -15,8 +15,10 @@
 #include "Audio/ElysiumSoundScheme.h"
 #include "Map/ElysiumMapCollision.h"
 #include "Player/ElysiumCameraShots.h"
+#include "ElysiumCameraComponent.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning — the gaze layer's content
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumMapVisuals.h"
 
@@ -783,6 +785,17 @@ bool AElysiumMapActor::SetMouthOpen(USkeletalMeshComponent* Body, float Open)
 	return Bodies ? Bodies->SetMouthOpen(Body, Open) : false;
 }
 
+bool AElysiumMapActor::SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget)
+{
+	return Bodies ? Bodies->SetViewTarget(Body, WorldTarget) : false;
+}
+
+bool AElysiumMapActor::GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
+	FVector& OutForward) const
+{
+	return Bodies ? Bodies->GetHeadFrame(Body, OutPosition, OutForward) : false;
+}
+
 FString AElysiumMapActor::AnimatedPropStemForModel(const FString& ModelPath) const
 {
 	return Bodies ? Bodies->AnimatedPropStemForModel(ModelPath) : FString();
@@ -798,6 +811,18 @@ bool AElysiumMapActor::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const 
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
 	return Bodies && Bodies->PlayAnimatedPropClip(Body, Stem, ClipName, bLoop, OutSeconds);
+}
+
+FString AElysiumMapActor::AnimatedPropRestClip(const FString& Stem) const
+{
+	return Bodies ? Bodies->AnimatedPropRestClip(Stem) : FString();
+}
+
+bool AElysiumMapActor::FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
+	bool& bOutLoops) const
+{
+	bOutLoops = false;
+	return Bodies && Bodies->FindAnimatedPropClip(Stem, ClipName, bOutLoops);
 }
 
 void AElysiumMapActor::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
@@ -1982,6 +2007,77 @@ void AElysiumMapActor::TickAudio(float DeltaSeconds)
 	}
 }
 
+void AElysiumMapActor::TickGaze(float DeltaSeconds)
+{
+	if (EntityWorld == nullptr || Bodies == nullptr)
+	{
+		return;
+	}
+	const UGameInstance* GI = GetGameInstance();
+	UElysiumNpcAnimSubsystem* Anims = GI
+		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const float Now = EntityWorld->NowSeconds();
+
+	// `DialogPOV` is a property of the shot in effect, not of any one character, so it resolves once
+	// per frame. It is the dominant look-at surface in the game: 51 of the 66 shipped shot files set
+	// it, against 40 authored `LookAtEntity*` wires in the whole of VtMB.
+	FVector DialogPovValue = FVector::ZeroVector;
+	const FVector* DialogPovPoint = nullptr;
+	if (CameraDirector && CameraDirector->WantsDialogPOV())
+	{
+		if (const UElysiumCameraComponent* Cam = PlayerCamera())
+		{
+			DialogPovValue = Cam->GetComponentLocation();
+			DialogPovPoint = &DialogPovValue;
+		}
+	}
+
+	for (const TUniquePtr<FElysiumEntity>& Entity : EntityWorld->Entities())
+	{
+		FElysiumEntity* Raw = Entity.Get();
+		if (Raw == nullptr || Raw->IsInert())
+		{
+			continue;
+		}
+		FElysiumCombatCharacter* Character = Raw->AsCombatCharacter();
+		USkeletalMeshComponent* Body = Raw->GetSkeletalBody();
+		if (Character == nullptr || Body == nullptr)
+		{
+			continue;
+		}
+		// Retail runs the whole eye path per *drawn* model, so an unseen character neither aims nor
+		// fidgets. Skipping here rather than inside the eye pass also keeps the cascade's own cost
+		// off the frame, which is the half that walks the entity list.
+		if (!Body->WasRecentlyRendered(0.2f))
+		{
+			continue;
+		}
+		// The head frame the cone and the fidget grid are measured in, with retail's own fallback to
+		// EyePosition()/EyeAngles() when the model has no head bone.
+		FVector HeadPos = FVector::ZeroVector;
+		FVector HeadForward = FVector::ZeroVector;
+		if (!Bodies->GetHeadFrame(Body, HeadPos, HeadForward))
+		{
+			HeadPos = Character->EyePosition();
+			HeadForward = FRotator(0.f, Character->Angles.Y, 0.f).Vector();
+		}
+
+		// Every rate and interval is content. A character whose disposition does not resolve gets
+		// the table's own `Neutral`, which is what the table says it should.
+		FElysiumEyeTargetTuning Tuning;
+		if (Anims != nullptr)
+		{
+			if (const FElysiumDisposition* Row = Anims->GetDispositions().Resolve(Character->Disposition))
+			{
+				Tuning = Row->EyeTarget;
+			}
+		}
+		const FVector Smoothed =
+			Character->TickGaze(Now, DeltaSeconds, HeadPos, HeadForward, Tuning, DialogPovPoint);
+		Bodies->SetViewTarget(Body, Smoothed);
+	}
+}
+
 void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 {
 	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
@@ -2009,10 +2105,16 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		CameraDirector->Tick(EntityWorld.Get(), PlayerCamera());
 	}
 
-	// 12.4 — rebuild each eye's basis against this frame's settled pose and publish it to the
-	// material. Here for the same reason as the two above, and for one of its own: the bone
-	// transforms it reads are only stable once the frame's parallel animation evaluation has
-	// completed, which at this tick group it has.
+	// 12.4 — decide where each character is looking, then rebuild each eye's basis against this
+	// frame's settled pose and publish it to the material. Both halves are here for the same reason
+	// as the two above, and for one of their own: the head-bone transform the cascade measures its
+	// cone in, and the bone transforms the eye pass reads, are only stable once the frame's parallel
+	// animation evaluation has completed, which at this tick group it has.
+	//
+	// The gaze runs from this pass rather than from NextThink deliberately: NextThink is a
+	// single-slot scheduler already shared with patrol, ambient and scripted move on FElysiumNpc,
+	// and a per-frame gaze update would fight ThinkPatrol's 0.05 s cadence for the slot.
+	TickGaze(DeltaSeconds);
 	if (Bodies)
 	{
 		Bodies->TickEyes(DeltaSeconds);
