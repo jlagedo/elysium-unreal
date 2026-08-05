@@ -250,14 +250,16 @@ def _clip_meta(c, bounds_radius_m=None):
 
     `activity` is the `ACT_*` literal the engine selects on (empty on a layer/plumbing
     sequence), `weight` its weighted-random share among the clips sharing that activity, and
-    `flags` the studio sequence bits. Stored once per owning stem, not per NPC that resolves
-    it -- 157 characters x ~1,400 resolved clips would be two orders of magnitude more rows.
+    `flags` the studio sequence bits, and `fade` the authored transition duration in seconds
+    that the engine combines across a sequence pair to time a base-sequence crossfade. Stored
+    once per owning stem, not per NPC that resolves it -- 157 characters x ~1,400 resolved
+    clips would be two orders of magnitude more rows.
 
     `bounds_radius_m` appears only where it has been reconciled against the baked glb
     (`clip_bounds_radius_m`). Its presence is therefore a promise that the number covers the
     geometry, which is the whole reason a consumer would trust it over the mesh's own bounds."""
     meta = {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
-            "frames": c.frames, "fps": round(c.fps, 4)}
+            "frames": c.frames, "fps": round(c.fps, 4), "fade": round(c.fade, 4)}
     if bounds_radius_m is not None:
         meta["bounds_radius_m"] = round(bounds_radius_m, 4)
     return meta
@@ -514,11 +516,12 @@ def write_sidecars(manifest):
             if act not in act_i:
                 act_i[act] = len(acts); acts.append(act)
             clips[label] = [owner_i[owner], act_i[act], meta["weight"], meta["flags"],
-                            meta["frames"], meta["fps"]]
+                            meta["frames"], meta["fps"], meta.get("fade", 0.2)]
         path = os.path.join(CLIPS_DIR, stem + ".json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"stem": stem, "owners": owners, "activities": acts,
-                       "fields": ["owner", "activity", "weight", "flags", "frames", "fps"],
+                       "fields": ["owner", "activity", "weight", "flags", "frames", "fps",
+                                  "fade"],
                        "clips": clips}, f, separators=(",", ":"))
         total += os.path.getsize(path)
     print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "

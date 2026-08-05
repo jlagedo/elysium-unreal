@@ -9,10 +9,15 @@ playable-path priority, and roll-up status.
 The private, exact-build retail animation instrument and its resource-to-render
 investigation delegate detailed task status to
 `docs/project/retail-capture-roadmap.md`; this file
-retains the parent rows `0.10`, `RE32`, and `RE33`. That is the only scoped
-subtracker. There is no as-built archive and no decision log: git history is the
-as-built record, and a decision's outcome is a present-tense fact in the doc
-that owns the system.
+retains the parent rows `0.10`, `RE32`, and `RE33`.
+
+The skeletal animation programme — the character asset bake, the shared skeleton, layer masks,
+blend spaces, the animation graph, and the locomotion that drives them — delegates detailed task
+status to `docs/project/animation-roadmap.md`; this file retains the parent rows `8.5` and `8.11b`.
+
+Those two are the only scoped subtrackers. There is no as-built archive and no decision log: git
+history is the as-built record, and a decision's outcome is a present-tense fact in the doc that
+owns the system.
 
 ## How to use this doc
 
@@ -682,7 +687,7 @@ execute (e.g. `FindPlayer().ClearActiveDisciplines()` runs, `OnTrue`/`OnFalse` f
 **Slice acceptance** *(Track A criterion, re-based)*: side-by-side A/B match with the
 original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
 
-## P8 — Characters & UI *(design: `docs/project/rebuild-strategy.md` B5, `docs/project/remaster-direction.md` axis 1; `docs/vtmb/m0_menu_build.md` = structural reference, not a port target)*
+## P8 — Characters & UI *(design: `docs/project/rebuild-strategy.md` B5, `docs/project/remaster-direction.md` axis 1; `docs/vtmb/m0_menu_build.md` = structural reference, not a port target; skeletal animation: `docs/project/animation-roadmap.md`)*
 
 - [x] **8.1 PL1: entity-model export** — `UE_bsp_to_scene.py` decodes every static-`.mdl` entity
   model (the prop family; skeletal `npc_*` excluded → 8.2/8.5) into the shared `props/` dir and
@@ -734,7 +739,7 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `.AnimatedPropManifest`, `.OpeningEmbodiment`, `Elysium.Content.OpeningAnimatedProps`, and
   `pipeline/tests/test_animated_props.py`. → `docs/vtmb/entity_io.md`, `docs/vtmb/phy_vphysics.md`,
   `docs/vtmb/entity_visuals.md`. *Deps:* 8.3, 12.1.
-- [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs stand, patrol/use authored places, and scripted Walk travels through the existing motor at its selected clip's decoded ground speed; animation events and perception/combat AI remain open. → `docs/vtmb/entity_io.md`, `docs/vtmb/animation_and_movers.md`.
+- [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — NPCs stand, patrol/use authored places, and scripted Walk travels through the existing motor at its selected clip's decoded ground speed; animation events and perception/combat AI remain open. → `docs/vtmb/entity_io.md`, `docs/vtmb/animation_and_movers.md`. **The animation half — how a clip is selected, blended and layered — is owned by `docs/project/animation-roadmap.md`; what stays here is the motor, the route and the entity behaviour.**
 - [x] **8.6a New Game context + story entry** *(carve-out of 8.6)* — the player sheet +
   `UElysiumGameStateSubsystem::BeginNewGame` seed the fresh-story state (`Story_State=-4`,
   `Tut_Jack=0`, `Tut_Patch=0`, `Linux_Wine=1`) and travel to **`sp_tutorial_1` @ the `tutorial`
@@ -859,9 +864,10 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
     `player_understudy` present, correctly skinned, and animating through the embrace.
     *Deps:* 8.2 [x], 8.5 [x], 11.7 [x], PL13 [x]; 9.4 for real identity.
   - **b. Locomotion** *(PP4, beside 4.7)* — idle/walk/run/crouch driven by movement state.
-    `UElysiumNpcAnimInstance` is a two-sequence idle crossfade; a player locomotion blend is new
-    work, and the states it blends between are the Source movement port's, so it lands beside 4.7
-    rather than ahead of it. *Deps:* 8.11a, 4.7.
+    **Detailed status and design: `docs/project/animation-roadmap.md`**, which owns the animation
+    graph the player's gait runs on; the states it blends between are the Source movement port's,
+    so it still lands beside 4.7 rather than ahead of it. *Deps:* 8.11a, 4.7, and the animation
+    tracker's graph.
   *Acceptance (a):* on `sp_tutorial_1`, `togglecamera` shows the PC's own clan model on the boom,
   dissolving in across `cam_fadeend`→`cam_fadestart` and culled at weight 0; the theatre's scenes
   animate it. *(b):* the gait matches the mover's reported state through a walk/run/crouch pass, and
@@ -1006,7 +1012,10 @@ dialogue, scripted flow, quests, save/load included.
   - **b. `IMC_Player_KBM` + analog actions + `UElysiumInputRouter`** — retires the legacy
     mappings and `bEnableLegacyInputScales`; contexts replace VtMB's `CClientMode*` split
     (`IMC_Dialogue`/`_Menu`/`_Cinematic`), with `bIgnoreAllPressedKeysUntilRelease` settling the
-    held-input-into-conversation question on our side of the port.
+    held-input-into-conversation question on our side of the port. Every button-pair action binds
+    **`ETriggerEvent::Canceled` alongside `Completed`** — a Hold or Tap trigger released early
+    fires `Canceled`, and the missing `-cmd` leaves the button latched for the session. Also wires
+    the analog path: nothing calls `FElysiumUserCmdBuilder::SetAnalogMove`/`SetAnalogUp` today.
   - **c. Reserved keys** — console on `` ` `` (VtMB's own `toggleconsole` key; frees F10 for
     `snapshot`) **plus `F7`** for layouts with no `` ` `` left of `1`, Cog's shell shortcuts to
     `Ctrl+F1`–`Ctrl+F4`, all other dev keys on
@@ -1014,14 +1023,25 @@ dialogue, scripted flow, quests, save/load included.
     convention; `elysium.input.ReserveDebugKeys 0` A/Bs it in dev builds.
   - **d. `UElysiumMouseSensitivity` modifier** — reads `sensitivity`/`m_pitch`/`m_yaw`/`m_filter`
     off `FElysiumConsole` for VtMB's 0.066°/count; the options slider writes the cvar.
-  - **e. `GameInputWindows` + PS device configs + `IMC_Player_Gamepad`** — Xbox needs no config;
-    DS4/DualSense get `FGameInputDeviceConfiguration` entries (VID `054C`) mapping onto standard
-    `Gamepad_*` keys plus an overridden hardware-device id for glyph swapping. `GameInputRedist.msi`
-    joins 10.5's packaging story. Adaptive triggers/haptics deferred.
+  - **e. `GameInputWindows` + PS device configs + `IMC_Player_Gamepad`** — the plugin is **not yet
+    enabled in `Elysium.uproject`**. Xbox needs no config; DS4/DualSense get
+    `FGameInputDeviceConfiguration` entries (VID `054C`) mapping onto standard `Gamepad_*` keys
+    plus an overridden hardware-device id for glyph swapping. `GameInputRedist.msi` joins 10.5's
+    packaging story. Adaptive triggers/haptics deferred. The **pad layout** — its allocation rule,
+    the contextual `LT`, the quickbar radial, and its three marked divergences (crouch as a toggle,
+    `toggleuiside` unbound, the `vhotkey` deferral not reproduced) — is
+    `docs/architecture/input-architecture.md` § "The layout". Melee combo selection needs the stick
+    quantised to four directions on a combat deadzone of its own. `LT`'s melee half and D-pad ↑ are
+    blocked on **RE36**.
   - **f. `UElysiumInputUserSettings` + `config.cfg` projection** — the key profile is
     authoritative; `FElysiumConfigWriter` emits Valve-format text into `$ELYSIUM_EXPORT_ROOT/cfg/config.cfg` so
-    `vamputil.py`'s `FixKeyBindings` reads a faithful view (one-way; imported once on first run).
-    Rebinding works headlessly before any UI exists.
+    `vamputil.py`'s `FixKeyBindings` reads a faithful view (imported once on first run). Slot
+    `Third` is **excluded** — a gamepad row would produce a file VtMB could never write. The
+    projection is not write-only: `FixKeyBindings` reads that file and then issues
+    `bind <KEY> "vm_discipline"`, so a runtime `bind` must resolve to `MapPlayerKey` instead of
+    being dropped by `FElysiumConsole` as it is today, or the patch's re-routing of discipline and
+    feed silently dies whenever a player moves either off its default key. Declare `execonsole`,
+    `player_immobilize` and `player_mobilize`. Rebinding works headlessly before any UI exists.
   - **g. Remapping screen** — lands with **8.10** on the 8.6 stack, not here.
 
   **Acceptance:** the tutorial is playable start to finish on keyboard+mouse and on an Xbox *and*
@@ -1127,7 +1147,7 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
 and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,
 Save and Load round-trip the run, and `uv run elysium test Play` asserts the whole thing headlessly.
 
-## P12 — The theatre: choreography & faces *(the PP2 rung — everything blocks)*
+## P12 — The theatre: choreography & faces *(the PP2 rung — everything blocks; the skeletal animation the cast plays: `docs/project/animation-roadmap.md`)*
 
 The intro cinematic (`sp_theatre` — embrace + trial) as VtMB plays it: `logic_choreographed_scene`
 driving actors, scripted camera (11.7), line audio, subtitles, and facial animation. The fidelity
@@ -1409,6 +1429,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE33 | Trace expression, VCD/audio, and `.lip` resources from source bytes through runtime objects, controller mixing, flex rules/ramps, eyelids, amplitude mouth, vertex deformation, and render submission. **It verifies 12.3–12.5 rather than gating them** — RE20 closed the facial format and PL10 exported every input it names, so the face is built from that specification and captured only where the build diverges. Detailed status and experiments: `docs/project/retail-capture-roadmap.md`; facts: `docs/vtmb/facial_animation.md`. | 12.3–12.5 (as verification) | [~] |
 | RE34 | **VtMB's eye system is recovered end to end** — the `StudioEyeball` record and its true `StudioModel`+192/+196 slot, the `StudioMesh` eye-mesh flags, the renderer's iris/glint math and its eyelid write-back, the `Eyes` shader family including the `$vampire` variant, the server's gaze/fidget/blink behaviour and its `vdata/System/DispositionTable.txt` tuning, the four `LookAtEntity*` inputs, and the networked hop between them. Head turn (applied through bone controllers no model declares) and `LookAtEntityCenter` (pushes the `Eye` constant) are inert or defective in retail and are recorded as such. → `docs/vtmb/facial_animation.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md`. | 12.4 | [x] |
 | RE35 | **The prop and trigger entity surface is recovered end to end.** `CDynamicProp`'s chain (`CBreakableProp → CBaseAnimating → CBaseToggle → CBaseEntity`, so every animating entity inherits the mover) with its complete 9 outputs / 25 inputs; `CDynamicProp::Activate` and the `SelectWeightedSequence(ACT_IDLE)` held-pose rest state; server-side `StudioFrameAdvance` versus the `m_bClientSideAnimation`-gated client path; the real `CBaseTrigger` spawnflag table including the absence of an allow-all fallback and the per-leaf reinterpretations of `0x2`/`0x10`/`0x20`/`0x80`; `filtername` resolution and the filter classes; `CTriggerHurt`'s datamap and its `×0.5`/`×3.0` cadence; `CPropSwitch`, `CBaseLockableEnt`/`CBaseVampireSkillEntity`, `CItemContainer`, `CBaseTerminal`/`CPropHacking`; the `EF_NOSHADOW`/`EF_NODRAW`/`EF_NORECEIVESHADOW` enum shift; `solid` → `VPhysicsInitStatic`. Proven-dead FGD keys: `demo_sequence`, `climbable`, `locksnd`, `npc_opaque`, `diceroll`, `actsnd`/`deactsnd`. The skin crossfade renders but is unreachable, so snapping is faithful. Extends RE1. Open: no consumer of `EF_NORECEIVESHADOW` found in `client.dll` (`engine.dll` unchecked); `rendermode`/`renderfx` per-value semantics undecoded; the `CPropHacking` `trigger`→`m_OnTrigger[n]` fire site inferred from the loader, not decompiled. → `docs/vtmb/entity_io.md`, `docs/vtmb/entity_visuals.md`, `docs/vtmb/phy_vphysics.md`, `docs/vtmb/animation_and_movers.md` B.0. | 4.11, 8.4a | [x] |
+| RE36 | Identify the **melee block verb** and `+wpn_secondaryatk`'s semantics. `+attack2` is declared by `client.dll` and left unbound by `default.cfg` in both retail and the patch (`MOUSE2` carries `vdiscipline_last`), which makes it the leading candidate; blocking is a real mechanic backed by the `Defence` feat. Also confirm the `vhotkey` one-frame deferral and the `vdiscipline_int` index table, both currently community-sourced. Decompiling the client attack handlers and `vampire.dll`'s `vdiscipline_int` would settle all four. → `docs/vtmb/controls.md`. | 10.6, 13.3 | [ ] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

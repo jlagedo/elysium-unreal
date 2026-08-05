@@ -101,7 +101,7 @@ listed in the order work can start rather than in phase order.
 | 2 | The shipped clip decoder is differenced against retail for the first time | CAP4.3 | **done — the decoder is clean**; what surrounds it is not |
 | 3 | The difference instrument models what the export actually writes on multi-biped banks | CAP5.7 | **done**; the shipped path carries no correspondence error at all |
 | 4 | The face is built from its closed specification — flex rig, eyelids, lip sync | `docs/project/roadmap.md` 12.3–12.5 | 12.3 done pending a clean visual; 12.4 and 12.5 open |
-| 5 | Blend grids and the animation weight are carried out of the model | CAP5.3, then CAP7.3 | CAP5.3 **done** — byte-coverage missing list empty; CAP7.3 open |
+| 5 | Blend grids and the animation weight are carried out of the model | CAP5.3, then `docs/project/animation-roadmap.md` | CAP5.3 **done** — byte-coverage missing list empty; carrying them to the runtime is the animation tracker's |
 | 6 | The include-model remap route | CAP5.8 | **done**; 6,927 → 2,452, and it needed no capture |
 | 6b | Frame interpolation — is the host loader's LINEAR what retail does | CAP5.10 | open |
 | 7 | Secondary motion — cloth and hair | CAP5.5 | **the mechanism is located**; the clamp is proved, the solve it clamps is not |
@@ -109,8 +109,9 @@ listed in the order work can start rather than in phase order.
 | 9 | **The cast has living eyes** — a plain reproduction; the whole eye system is specified | `docs/project/roadmap.md` 12.4 | open as a build; nothing here gates it |
 | 10 | A visual-acceptance harness that actually isolates one body | `pipeline/` green-room path | open; **now blocking rows 1 and 4** |
 
-Nothing on the list is blocked by anything else on it except row 5 feeding CAP7.3, and rows 1
-and 4 both waiting on row 10 to *demonstrate* what their numbers already establish. Row 9's
+Nothing on the list is blocked by anything else on it except row 5 feeding the animation
+tracker's blend-space bake, and rows 1 and 4 both waiting on row 10 to *demonstrate* what their
+numbers already establish. Row 9's
 build consumes row 4's flex runtime, but no capture work stands between them.
 
 **Row 3 is a measurement defect, and the distinction cost a round of work.** CAP4.3's
@@ -251,7 +252,7 @@ and over, so **42%** of one run's payload bytes repeat bytes it already holds.
 | 3 | P0 — done | CAP3 — decode and index | One deduplicated, joinable database answers per-actor and per-time questions without re-running the game, and reports its own counts |
 | 4 | P0 — CAP4.1–4.3 done | CAP4 — inspect against export and decoder | Byte ranges the runtime reads that we do not, and the first mismatching stage and bone per pose group. The shipped decoder reproduces the corpus; CAP4.4's consolidation is what remains |
 | 5 | P0 — current | CAP5 — close what the difference proves | Recovered rules and carried byte ranges, each with a regression and a fact in the owning topic. The decode stage's residual is down to **2,452**, and CAP5.3's blend grids are the ranking item — the largest remaining group is a walk grid whose cells the export never wrote |
-| 6 | P0 — current, beside CAP5 | CAP7 — deliver the animation in Unreal | `sp_theatre` animates under the two closed composition rules. CAP7.1 and CAP7.2 are done; blend spaces, the equivalence oracle and acceptance remain |
+| 6 | P0 — current, beside CAP5 | CAP7 — the two composition rules in Unreal | CAP7.1 and CAP7.2 are done. The rest of the skeletal stack — and `sp_theatre`'s animation acceptance — is `docs/project/animation-roadmap.md`'s |
 | 7 | P1 — build-first | CAP6 — face and lips | The built face is captured against retail only where it diverges |
 | 8 | P2 | CAP8 — trim | Unused probes, readers and fixtures are deleted |
 
@@ -1307,6 +1308,14 @@ have had no rung to sit on since CAP4.1 named them.
   Cheap to add, and unvalidatable on this corpus — so it lands with a game-independent
   regression and a recorded statement that no captured record exercises it.
 
+  **What the field means is now settled offline, and the capture corpus was simply the wrong
+  population.** Read install-wide it is strictly binary — `{0.0, 1.0}` over 736,208
+  `(animation, bone)` records across 4,508 models, with 18,346 zeros — and its zero set is a
+  per-bone mask naming the bones a partial-body layer does *not* own. The theatre corpus reads
+  1.0 throughout because a cutscene fires no layer sequence, not because the field is inert.
+  The fact belongs to `docs/vtmb/animation_and_movers.md`; carrying the mask to the runtime is
+  `docs/project/animation-roadmap.md`'s.
+
   **The missing list is empty.** 9,938 → **0 of 3,430,830** bytes retail dereferences that the
   decoder does not read. The 2 bytes that remain retail-only are the quaternion look-ahead past
   a track end, which CAP4.2 already reports apart from the missing list by design. CAP4.1's ten
@@ -1590,12 +1599,16 @@ confirming a recorded fact, not discovering one.
 
 ## CAP7 — Deliver the animation in Unreal
 
-The recovered rules reach the built game here. Two of the three composition stages are closed
-and confirmed against a running engine, and **neither is implemented**: the runtime carries no
-skeletal control node at all, and the `split_bones` inventory the model export already writes
-is read by nothing. The design — where the stages sit in Unreal's pipeline, what the export
-has to carry, and why the basis forces a single exporter — is
-`docs/architecture/animation-architecture.md`; this phase owns its status.
+The recovered rules reach the built game here. The design — where the stages sit in Unreal's
+pipeline, what the export has to carry, and why the basis forces a single exporter — is
+`docs/architecture/animation-architecture.md`.
+
+**This phase's scope is now the two composition stages alone.** Delivering the rest of the
+skeletal animation stack in Unreal is owned by `docs/project/animation-roadmap.md`, whose
+governing decision is that VtMB's animation data is baked into native Unreal assets and run by
+Unreal's animation system rather than reproduced by a bespoke evaluator. CAP7.1 and CAP7.2 are
+unaffected by that decision and stay here: they carry the two rules Unreal has no equivalent for,
+and both are complete. CAP7.3, CAP7.4 and CAP7.5 are superseded — see each entry.
 
 **It runs beside CAP4 and CAP5, not after them.** Everything below consumes a rule that has
 already passed the evidence gate, so none of it waits on the decode stages, the
@@ -1661,26 +1674,28 @@ secondary-motion cause, or the facial build.
   *Remaining:* a visual acceptance on an isolated body. The A/B above is a street pedestrian,
   and the green-room harness yields no shots because it is passed empty `-GreenRoomAnimSet=`
   and `-GreenRoomBoneRoot=` and takes the cinematic path.
-- [ ] **CAP7.3 Blend spaces from the exported grids.** Consumes CAP5.3. A 9×1 grid becomes a
-  one-dimensional blend space and a 3×3 a two-dimensional one, driven by the sequence's own
-  pose parameters. *Acceptance:* the theatre's `move_and_ranged` walk grids blend across
-  their cells instead of playing cell `[0][0]`.
-- [ ] **CAP7.4 Numerical equivalence, separately from the visual.** The offline evaluator
-  consumes original resources plus explicit runtime state and matches the verified retail
-  outputs with no Unreal retargeting or presentation transform in the test.
+- **CAP7.3 Blend spaces from the exported grids — superseded.** The task and its acceptance are
+  unchanged in substance; what changed is that a grid becomes a **baked `UBlendSpace` asset**
+  rather than a runtime resolver, which puts it in the character bake alongside the meshes and
+  clips. Owned by `docs/project/animation-roadmap.md`. CAP5.3, which carried the grids out of the
+  model, is unaffected and remains this tracker's.
+- **CAP7.4 Numerical equivalence, separately from the visual — superseded.** It required the
+  shipped pose to match retail's numerically. Under the animation programme's governing decision
+  the interpolation *between* authored values is Unreal's, so a whole-pose numerical match is not
+  a target and a failing comparison would not name a defect.
 
-  **It is an oracle, not a runtime.** Unreal owns decoding, blending, skinning and LOD, and
-  CAP7.2's nodes add only the stages Unreal has no equivalent for — so there is no
-  engine-neutral evaluator in the shipped path waiting to hand Unreal a pose. Numerical
-  source equivalence and retargeted visual acceptance stay separate tests, and this task owns
-  the first.
-- [ ] **CAP7.5 `sp_theatre` animation acceptance.** The delivered outcome: the theatre act
-  plays with skeletal pose under both composition rules, scene-driven placement, faces
-  running their flex rig, lids blinking, mouths on the line audio, and the secondary-motion
-  bones doing whatever CAP5.5 adjudicated. Skeletal, facial and secondary motion are judged
-  on one run rather than three, because the cast shows all three at once and each has had its
-  own pass above. The scene, camera, audio and subtitle halves of the same act belong to
-  `docs/project/roadmap.md` 12.1–12.5; this task judges the animation.
+  What survives is narrower and already covered: CAP4.3 differences retail against the **decoder**,
+  which is the claim that still matters — that the authored values are carried correctly. The
+  composition stages keep their own numerical checks, which CAP7.2 records as complete. Visual
+  acceptance moves to `docs/project/animation-roadmap.md`.
+- **CAP7.5 `sp_theatre` animation acceptance — moved.** The delivered outcome is unchanged: the
+  theatre act plays with skeletal pose under both composition rules, scene-driven placement, faces
+  running their flex rig, lids blinking, mouths on the line audio, and the secondary-motion bones
+  doing whatever CAP5.5 adjudicated — judged on one run rather than three, because the cast shows
+  all three at once. It moves because it is an acceptance of the delivered stack rather than of a
+  capture, and the stack is now owned elsewhere: `docs/project/animation-roadmap.md` judges the
+  skeletal half and sequences it after the cinematic path migrates. The scene, camera, audio and
+  subtitle halves of the same act remain `docs/project/roadmap.md`'s.
 
 ## CAP8 — Trim
 

@@ -6212,9 +6212,18 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	TestTrue(TEXT("the midpoint samples between endpoints after the dwell"), Timed.Sample(2.0f, Sample));
 	TestTrue(TEXT("linear rate defaults put the two-point Catmull midpoint at 50"),
 		FMath::IsNearlyEqual(Sample.Position.X, 50.0f, 0.01f));
-	TestTrue(TEXT("roll takes the short 20-degree path across 180"),
-		FMath::Abs(FMath::Abs(Sample.Roll) - 180.0f) < 0.1f);
+	// Roll is NOT unwrapped onto the shortest path. Retail normalises each key's roll once at spawn
+	// and then Catmulls the plain values, so 170 -> -170 sweeps the long way through zero rather than
+	// the short 20 degrees across 180. Reproduced rather than corrected: the sweep is what the shot
+	// was authored against.
+	TestTrue(TEXT("roll interpolates plainly, so 170 to -170 passes through zero"),
+		FMath::Abs(Sample.Roll) < 0.1f);
 	TestTrue(TEXT("a positive lens becomes a horizontal FOV"), Sample.FieldOfView > 0.0f);
+	// Converted before interpolating, not after: the midpoint of a 50mm and a 25mm key is the mean of
+	// their two FOVs, not the FOV of the mean focal length (which would read ~52.4 degrees).
+	TestTrue(TEXT("the FOV is interpolated, not the focal length"),
+		FMath::IsNearlyEqual(Sample.FieldOfView,
+			0.5f * (FocalLengthToHorizontalFov(50.0f) + FocalLengthToHorizontalFov(25.0f)), 0.05f));
 	TestTrue(TEXT("the path is complete after the destination pause"), Timed.Sample(3.5f, Sample) && Sample.bFinished);
 
 	FPoint SpeedA;
@@ -6244,33 +6253,40 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	TestTrue(TEXT("a zero-duration chain reaches its final key immediately"),
 		Cut.Sample(0.0f, Sample) && Sample.bFinished && Sample.Position.Equals(B.Position, 0.01f));
 
-	// sp_theatre's courtroom chain authors 87 of its edits as `MoveTime 0.03` and sm_gallery_1 writes
-	// 7 as `0.01` — a sub-frame segment the shipping game stepped over whole. It cuts, and it still
-	// spends its authored 0.03 s so the chain stays in step with the scene audio underneath it.
-	FPath TheatreCut;
-	A.MoveTime = 0.03f;
-	B.Position = FVector(900.0f, -400.0f, 200.0f);
-	TheatreCut.Points = { A, B };
-	TheatreCut.RebuildTimes();
-	TestTrue(TEXT("a sub-frame authored MoveTime is an edit, not camera movement"), IsHardCut(A));
-	TestTrue(TEXT("the edit keeps its authored duration in the path clock"),
-		FMath::IsNearlyEqual(TheatreCut.EndTime, 0.03f, KINDA_SMALL_NUMBER));
-	TestTrue(TEXT("the edit holds the source key for the whole of that duration"),
-		TheatreCut.Sample(0.015f, Sample) && Sample.Position.Equals(A.Position, 0.01f));
-	TestTrue(TEXT("the edit switches to the destination at the arrival boundary"),
-		TheatreCut.Sample(0.03f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
-	TestTrue(TEXT("a sub-frame edit requests a temporal camera cut exactly once"),
-		CrossesHardCut(TheatreCut, 0.0f, 0.03f));
-	TestFalse(TEXT("the sub-frame edit is not reported again on the next frame"),
-		CrossesHardCut(TheatreCut, 0.03f, 0.1f));
+	// `CCameraKeyFrame::Activate`'s fold. sp_theatre's courtroom chain authors 87 of its edits as
+	// `MoveTime 0.03` and sm_gallery_1 writes 7 as `0.01`; retail's threshold is 0.05, so all of them
+	// are rewritten to true zero-time edits at spawn and none survives to be interpolated.
+	TestTrue(TEXT("a 0.03 TimeControl segment folds to an edit"), ShouldFold(true, 0.03f));
+	TestTrue(TEXT("a 0.01 TimeControl segment folds to an edit"), ShouldFold(true, 0.01f));
+	TestTrue(TEXT("retail's threshold is inclusive at 0.05"), ShouldFold(true, 0.05f));
+	TestFalse(TEXT("just above the threshold stays camera movement"), ShouldFold(true, 0.0501f));
+	TestFalse(TEXT("the fold only applies to TimeControl segments"), ShouldFold(false, 0.03f));
+	TestTrue(TEXT("0.1 — the shortest authored move in the corpus — is movement"),
+		!ShouldFold(true, 0.1f));
 
-	// Above one authored frame the segment is a real move again — the shortest of those in the corpus
-	// is 0.1 s, and the theatre's own dollies run from 0.3 to 15.5.
+	// What the sampler sees after the fold: MoveTime zeroed, so the segment consumes no time and the
+	// destination becomes current immediately. The folded 0.03 s is re-attributed to a pause by the
+	// entity, which is where the chain's clock keeps it.
+	FPath Folded;
+	A.MoveTime = 0.0f;
+	A.Pause = 0.0f;
+	B.Position = FVector(900.0f, -400.0f, 200.0f);
+	B.Pause = 0.03f;   // the re-attributed edit time, now spent AFTER the cut rather than before
+	Folded.Points = { A, B };
+	Folded.RebuildTimes();
+	TestTrue(TEXT("a folded edit is a hard cut at the sampler"), IsHardCut(A));
+	TestTrue(TEXT("the folded edit switches to the destination immediately"),
+		Folded.Sample(0.0f, Sample) && Sample.Position.Equals(B.Position, 0.01f));
+	TestTrue(TEXT("the re-attributed time is held on the destination key"),
+		FMath::IsNearlyEqual(Folded.EndTime, 0.03f, KINDA_SMALL_NUMBER));
+
+	// Above the threshold the segment is a real move — the theatre's own dollies run 0.3 to 15.5.
 	FPath ShortMove;
 	A.MoveTime = 0.3f;
+	B.Pause = 0.0f;
 	ShortMove.Points = { A, B };
 	ShortMove.RebuildTimes();
-	TestFalse(TEXT("a MoveTime longer than one authored frame remains camera movement"), IsHardCut(A));
+	TestFalse(TEXT("a MoveTime above the fold threshold remains camera movement"), IsHardCut(A));
 	TestTrue(TEXT("the short move samples between the authored endpoints"),
 		ShortMove.Sample(0.15f, Sample)
 			&& !Sample.Position.Equals(A.Position, 0.01f)
@@ -6290,16 +6306,15 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	TestFalse(TEXT("a sampled hard cut is not reported again on the next frame"),
 		CrossesHardCut(ZeroCut, 0.0f, 0.1f));
 
-	// The A/B: at a threshold of 0 only an exact authored zero cuts, which is what samples the
-	// theatre's edits as 30-millisecond slews again.
+	// The A/B: at a threshold of 0 nothing folds, which leaves the theatre's edits as 30-millisecond
+	// slews. An exact authored zero is still a cut either way — that one never needed folding.
 	if (IConsoleVariable* CutCvar = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.CameraCutSeconds")))
 	{
 		const float Restore = CutCvar->GetFloat();
 		CutCvar->Set(0.0f, ECVF_SetByCode);
-		A.MoveTime = 0.03f;
-		TestFalse(TEXT("elysium.CameraCutSeconds 0 restores exact-zero-only cuts"), IsHardCut(A));
+		TestFalse(TEXT("elysium.CameraCutSeconds 0 disables the fold"), ShouldFold(true, 0.03f));
 		A.MoveTime = 0.0f;
-		TestTrue(TEXT("an exact zero still cuts at a threshold of zero"), IsHardCut(A));
+		TestTrue(TEXT("an exact zero is a cut with the fold disabled"), IsHardCut(A));
 		CutCvar->Set(Restore, ECVF_SetByCode);
 	}
 

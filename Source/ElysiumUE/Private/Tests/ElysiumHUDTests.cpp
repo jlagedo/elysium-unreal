@@ -1,7 +1,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumHUDModel.h"
+#include "UI/ElysiumUIRoot.h"
 
+#include "CommonActivatableWidget.h"
 #include "CommonInputSettings.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
@@ -69,6 +71,26 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 		Model->Selector.Entries.IsValidIndex(Model->Selector.SelectedIndex));
 
 	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUIRootPushTest,
+	"Elysium.Substrate.UI.CompositionRootPush",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
+{
+	UElysiumUIRoot* Root = NewObject<UElysiumUIRoot>();
+	Root->TakeWidget();
+
+	UCommonActivatableWidget* Screen = Root->PushWidget(
+		EElysiumUILayer::SystemModal,
+		UCommonActivatableWidget::StaticClass(),
+		[](UCommonActivatableWidget&) {});
+
+	TestNotNull(TEXT("a CommonUI screen can be created through the root layer"), Screen);
+	TestEqual(TEXT("the pushed screen becomes the layer's active widget"),
+		Root->GetActiveWidget(EElysiumUILayer::SystemModal), Screen);
+	return !HasAnyErrors();
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUICompositionPolicyTest,

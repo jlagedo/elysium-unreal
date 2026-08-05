@@ -12,12 +12,16 @@ engine-neutral intermediates.
 - **`docs/project/roadmap.md`** — the master work tracker: the playable-path ladder
   (PP0–PP6, the master sequence), phases P0–P13, project roll-up status, pipeline + RE backlogs,
   and risk register.
-- **`docs/project/retail-capture-roadmap.md`** — the only scoped subtracker: detailed status for
-  the retail capture harness and original-runtime animation/facial investigation. The master
-  roadmap owns its roll-up and priority. Status lives in those two trackers and nowhere else,
-  including this file. There is no as-built archive and no decision log; git history is the
-  as-built record, and a decision's outcome is a present-tense fact in the doc that owns the
-  system.
+- **`docs/project/retail-capture-roadmap.md`** — a scoped subtracker: detailed status for
+  the retail capture harness and original-runtime animation/facial investigation.
+- **`docs/project/animation-roadmap.md`** — a scoped subtracker: detailed status for the skeletal
+  animation programme — the character asset bake, the shared skeleton, layer masks, blend spaces,
+  the animation graph, and the locomotion that drives them.
+
+  Those two are the only scoped subtrackers. The master roadmap owns their roll-up and priority.
+  Status lives in the three trackers and nowhere else, including this file. There is no as-built
+  archive and no decision log; git history is the as-built record, and a decision's outcome is a
+  present-tense fact in the doc that owns the system.
 - **`docs/project/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
   tracks, sidecar contracts, per-system design targets.
 - **`docs/project/remaster-direction.md`** — the direction charter: what may be modernized, what must
@@ -104,8 +108,8 @@ rules: `docs/project/rebuild-strategy.md` → "Coordinate conventions".
 ### Docs describe design, RE, and status — not the current build
 
 Documentation exists for what the code cannot say for itself: design intent, VtMB
-reverse-engineering facts, and status in the master roadmap plus its declared retail-capture
-subtracker. The source is the as-built record — read
+reverse-engineering facts, and status in the master roadmap plus its two declared
+subtrackers. The source is the as-built record — read
 it rather than paraphrasing it. The five directory orientation `CLAUDE.md` files (`Source/ElysiumUE/
 CLAUDE.md`, `pipeline/CLAUDE.md`, `research/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) point at *where* something
 lives — module/plugin list, folder → layer map, build/test commands — never *how* the current
@@ -122,13 +126,14 @@ Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/Ely
 `pipeline/CLAUDE.md`, `research/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) — states present-tense facts only, same
 as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
 parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a date, or a change/migration narrative
-("was X, now Y") into any of them — task tracking lives only in the master roadmap and its
-declared retail-capture subtracker. Cite a doc by name, with no date or task number attached.
+("was X, now Y") into any of them — task tracking lives only in the master roadmap and its two
+declared subtrackers. Cite a doc by name, with no date or task number attached.
 
 ## What runs today
 
 **Project priority and roll-up status: `docs/project/roadmap.md`; detailed retail-capture
-status: `docs/project/retail-capture-roadmap.md`.** Runtime types and where they live:
+status: `docs/project/retail-capture-roadmap.md`; detailed skeletal-animation status:
+`docs/project/animation-roadmap.md`.** Runtime types and where they live:
 `Source/ElysiumUE/CLAUDE.md`.
 
 ## Target hardware

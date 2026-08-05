@@ -12,6 +12,8 @@
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
+#include "Algo/Unique.h"
+#include "Animation/AnimSequence.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "HAL/FileManager.h"
@@ -26,6 +28,27 @@ namespace
 	IConsoleVariable* ClothCVar()
 	{
 		return IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.Cloth"));
+	}
+
+	IConsoleVariable* BakedCVar()
+	{
+		return IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.BakedCharacters"));
+	}
+
+	/** One bone's pose at one time, off the sequence's raw data. False when the bone is absent. */
+	bool SampleClipBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
+		FTransform& OutTransform)
+	{
+		const USkeleton* Skeleton = Sequence != nullptr ? Sequence->GetSkeleton() : nullptr;
+		const int32 BoneIndex = Skeleton != nullptr
+			? Skeleton->GetReferenceSkeleton().FindBoneIndex(Bone) : INDEX_NONE;
+		if (BoneIndex == INDEX_NONE)
+		{
+			return false;
+		}
+		Sequence->GetBoneTransform(OutTransform, FSkeletonPoseBoneIndex(BoneIndex),
+			FAnimExtractContext(Time), /*bUseRawData=*/true);
+		return true;
 	}
 }
 
@@ -44,6 +67,12 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 		"session. Either way the stage stands in an empty world of its own with no VtMB map loaded, "
 		"so the room looks the same however it was entered -- entering from a session leaves that "
 		"map, and `elysium.map <name>` goes back.\n\n"
+		"Source: `elysium.BakedCharacters` picks which build of the body stands here -- the assets "
+		"on the /ElysiumBaked mount, or the one glTFRuntime builds from the .glb at load. The "
+		"choice is made when the body is built, so flip it and press Restand. Only the models the "
+		"character bake has run over are on the mount; anything else silently falls back to the "
+		"loader, which is why the line under the checkbox names the path the standing body "
+		"actually came from rather than the one the cvar asked for.\n\n"
 		"Cloth: VtMB simulates no garment at all -- a skirt or coat is skinned rigidly to the "
 		"pelvis and swings as one shell. The offline spike appends a bone lattice to a copy of the "
 		"mesh and hangs an AnimDynamics chain down each panel; `npc/cloth/<stem>.json` is the "
@@ -104,8 +133,104 @@ void FElysiumCogWindow_GreenRoom::Stand(FElysiumGreenRoomRun& Lab, const FString
 	}
 }
 
+void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
+{
+	IConsoleVariable* Baked = BakedCVar();
+	if (Baked == nullptr)
+	{
+		return;
+	}
+
+	// Same control shape as the cloth switch: which build of the body to use is decided when the
+	// body is built, so flipping the cvar changes nothing until one is built again.
+	bool bEnabled = Baked->GetInt() != 0;
+	if (ImGui::Checkbox("elysium.BakedCharacters - stand the baked asset", &bEnabled))
+	{
+		Baked->Set(bEnabled ? 1 : 0, ECVF_SetByConsole);
+	}
+	ImGui::SameLine();
+	ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
+	if (ImGui::Button("Restand##source"))
+	{
+		Stand(Lab, Lab.LabStem(), Lab.LabClip());
+	}
+	ImGui::EndDisabled();
+
+	// Which path the body ACTUALLY came from, read off the asset that is standing rather than off
+	// the cvar. Only part of the cast is baked, and an unbaked model falls back to the loader
+	// without saying so -- which would otherwise make an A/B look like a null result.
+	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const USkeletalMeshComponent* Comp = Inst != nullptr ? Inst->GetSkelMeshComponent() : nullptr;
+	const USkeletalMesh* Mesh = Comp != nullptr ? Comp->GetSkeletalMeshAsset() : nullptr;
+	if (Mesh == nullptr)
+	{
+		ImGui::TextDisabled("Nothing is standing on the stage.");
+		return;
+	}
+	const FString Path = Mesh->GetPathName();
+	if (Path.StartsWith(FElysiumContentPaths::BakedMount()))
+	{
+		const USkeleton* Skeleton = Mesh->GetSkeleton();
+		const FString Family = Skeleton != nullptr
+			? FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName()) : FString();
+		ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
+			"baked: %s (rig family '%s')", COG_TCHAR_TO_CHAR(*FPackageName::GetShortName(Path)),
+			COG_TCHAR_TO_CHAR(*Family));
+	}
+	else
+	{
+		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f), "glTFRuntime: built at load%s",
+			bEnabled ? " - this model is not on the baked mount" : "");
+	}
+}
+
+void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
+{
+	ClipRootMotion.Reset();
+	ScannedStem.Reset();
+
+	const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	USkeletalMeshComponent* Body = Lab.LabBody();
+	USkeletalMesh* Mesh = Body != nullptr ? Body->GetSkeletalMeshAsset() : nullptr;
+	if (Anims == nullptr || Mesh == nullptr)
+	{
+		LastError = TEXT("stand a body first - a clip resolves against the mesh it plays on");
+		return;
+	}
+
+	static const FName RootBone(TEXT("Bip01"));
+	ClipRootMotion.SetNumZeroed(Clips.Num());
+	int32 Moving = 0;
+	for (int32 Index = 0; Index < Clips.Num(); ++Index)
+	{
+		FString Error;
+		// Null own-asset: on the baked path there is none, and on the loader path the lab's own
+		// body already parsed it, so this resolves through the same cache either way.
+		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Clips[Index], Mesh,
+			nullptr, Error);
+		FTransform Start;
+		FTransform End;
+		const float Length = Sequence != nullptr ? Sequence->GetPlayLength() : 0.0f;
+		if (Sequence == nullptr || !SampleClipBone(Sequence, RootBone, 0.0, Start)
+			|| !SampleClipBone(Sequence, RootBone, Length, End))
+		{
+			continue;
+		}
+		const bool bMoves = FVector::Dist(Start.GetTranslation(), End.GetTranslation()) > 0.5
+			|| FMath::RadiansToDegrees(Start.GetRotation().AngularDistance(End.GetRotation())) > 0.5;
+		ClipRootMotion[Index] = bMoves ? 1 : 2;
+		Moving += bMoves ? 1 : 0;
+	}
+	ScannedStem = PendingStem;
+	LastNotice = FString::Printf(TEXT("%d of %d clips carry the root"), Moving, Clips.Num());
+}
+
 void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 {
+	RenderSource(Lab);
+	ImGui::Separator();
+
 	if (bStemsDirty)
 	{
 		Stems = UElysiumNpcSubsystem::AvailableGlbStems();
@@ -219,6 +344,12 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		Clips.Reset();
 		ClipCells.Reset();
 		ClipAdditive.Reset();
+		ClipOwner.Reset();
+		ClipOwners.Reset();
+		ClipRootMotion.Reset();
+		ScannedStem.Reset();
+		OwnerFilter.Reset();
+		ClipCursor = INDEX_NONE;
 		ClipsStem = PendingStem;
 		const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
 		UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
@@ -231,12 +362,24 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			// so it is named on screen rather than left to the log.
 			ClipCells.Reserve(Clips.Num());
 			ClipAdditive.Reserve(Clips.Num());
+			ClipOwner.Reserve(Clips.Num());
 			for (const FString& Label : Clips)
 			{
 				const FString Cell = Anims->ResolveClipAnimName(PendingStem, Label);
 				ClipCells.Add(Cell.Equals(Label, ESearchCase::IgnoreCase) ? FString() : Cell);
 				const FElysiumNpcClip* Clip = Set->Find(Label);
 				ClipAdditive.Add(Clip != nullptr && Clip->IsAdditive());
+				ClipOwner.Add(Clip != nullptr && !Clip->IsOwnedBy(PendingStem)
+					? Clip->Owner : FString());
+			}
+			ClipOwners = ClipOwner;
+			ClipOwners.Sort();
+			ClipOwners.SetNum(Algo::Unique(ClipOwners));
+			// The body's own file sorts as the empty string; name it, so the list reads as a set of
+			// sources rather than as one blank row among thirty banks.
+			if (!ClipOwners.IsEmpty() && ClipOwners[0].IsEmpty())
+			{
+				ClipOwners[0] = PendingStem;
 			}
 		}
 	}
@@ -251,15 +394,129 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			COG_TCHAR_TO_CHAR(*PendingStem));
 		return;
 	}
-	ImGui::BeginChild("##Clips", ImVec2(0, GetDpiScale() * 140.f), ImGuiChildFlags_Borders);
+	// --- filters ------------------------------------------------------------------------------
+	// A substring box alone is not a filter over 1,500 clips. Source, kind and root motion are the
+	// three axes that actually partition a vocabulary, and they are ANDed with the text.
+	const float ThirdWidth = (ImGui::GetContentRegionAvail().x
+		- ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f;
+
+	ImGui::SetNextItemWidth(ThirdWidth);
+	if (ImGui::BeginCombo("##Owner",
+		OwnerFilter.IsEmpty() ? "all sources" : COG_TCHAR_TO_CHAR(*OwnerFilter)))
+	{
+		if (ImGui::Selectable("all sources", OwnerFilter.IsEmpty()))
+		{
+			OwnerFilter.Reset();
+		}
+		for (const FString& Source : ClipOwners)
+		{
+			if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Source), OwnerFilter == Source))
+			{
+				OwnerFilter = Source;
+			}
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(ThirdWidth);
+	ImGui::Combo("##Kind", &KindFilter, "all kinds\0poses only\0additive only\0");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(ThirdWidth);
+	ImGui::BeginDisabled(ScannedStem != PendingStem);
+	ImGui::Combo("##Motion", &MotionFilter, "all motion\0carries the root\0root held\0");
+	ImGui::EndDisabled();
+
+	if (ScannedStem != PendingStem)
+	{
+		MotionFilter = 0;
+		if (ImGui::SmallButton("Scan root motion"))
+		{
+			ScanRootMotion(Lab);
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("resolves every clip once - takes a moment on a big vocabulary");
+	}
+
+	// The rows the filters leave, in order. Built before the list is drawn because the arrow keys
+	// have to step through what is on screen -- stepping through Clips itself would jump over
+	// filtered-out rows and stand something the list is not showing.
+	TArray<int32> Visible;
+	Visible.Reserve(Clips.Num());
 	for (int32 Index = 0; Index < Clips.Num(); ++Index)
 	{
 		if (!ClipFilter.IsEmpty() && !Clips[Index].Contains(ClipFilter))
 		{
 			continue;
 		}
+		if (!OwnerFilter.IsEmpty())
+		{
+			const FString& Source = ClipOwner.IsValidIndex(Index) ? ClipOwner[Index] : FString();
+			// The body's own clips carry an empty owner and are listed under the model's name.
+			const bool bMine = Source.IsEmpty() && OwnerFilter == PendingStem;
+			if (!bMine && Source != OwnerFilter)
+			{
+				continue;
+			}
+		}
+		if (KindFilter != 0)
+		{
+			const bool bAdditive = ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index];
+			if (bAdditive != (KindFilter == 2))
+			{
+				continue;
+			}
+		}
+		if (MotionFilter != 0)
+		{
+			const uint8 Motion = ClipRootMotion.IsValidIndex(Index) ? ClipRootMotion[Index] : 0;
+			if (Motion != (MotionFilter == 1 ? 1 : 2))
+			{
+				continue;
+			}
+		}
+		Visible.Add(Index);
+	}
+	if (!Visible.Contains(ClipCursor))
+	{
+		// The cursor follows the standing clip, and falls to the first visible row when the filter
+		// moves out from under it.
+		const int32 Standing = Clips.IndexOfByKey(PendingClip);
+		ClipCursor = Visible.Contains(Standing) ? Standing
+			: (Visible.IsEmpty() ? INDEX_NONE : Visible[0]);
+	}
+
+	// Up/Down walk the list and stand what they land on. Guarded on the window having focus and on
+	// no text field being active, so typing in a filter box still moves the caret.
+	bClipCursorMoved = false;
+	if (!Visible.IsEmpty() && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)
+		&& !ImGui::IsAnyItemActive())
+	{
+		const int32 At = FMath::Max(Visible.IndexOfByKey(ClipCursor), 0);
+		int32 Step = 0;
+		if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, /*bRepeat=*/true))
+		{
+			Step = 1;
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, /*bRepeat=*/true))
+		{
+			Step = -1;
+		}
+		if (Step != 0)
+		{
+			ClipCursor = Visible[FMath::Clamp(At + Step, 0, Visible.Num() - 1)];
+			bClipCursorMoved = true;
+			bUserPicked = true;
+			PendingClip = Clips[ClipCursor];
+			Stand(Lab, PendingStem, PendingClip);
+		}
+	}
+
+	ImGui::BeginChild("##Clips", ImVec2(0, GetDpiScale() * 140.f), ImGuiChildFlags_Borders);
+	for (const int32 Index : Visible)
+	{
 		const bool bGrid = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
 		const bool bAdditive = ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index];
+		const FString Bank = ClipOwner.IsValidIndex(Index) ? ClipOwner[Index] : FString();
 		ImGui::PushID(Index);
 		FString Row = bGrid
 			? FString::Printf(TEXT("%s  -> %s"), *Clips[Index], *ClipCells[Index])
@@ -272,9 +529,11 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			Row += TEXT("   [additive layer]");
 			ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColError);
 		}
-		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Row), PendingClip == Clips[Index]))
+		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Row),
+			ClipCursor == Index || PendingClip == Clips[Index]))
 		{
 			bUserPicked = true;
+			ClipCursor = Index;
 			PendingClip = Clips[Index];
 			Stand(Lab, PendingStem, Clips[Index]);
 		}
@@ -282,9 +541,27 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		{
 			ImGui::PopStyleColor();
 		}
+		if (!Bank.IsEmpty())
+		{
+			// Right-aligned so the labels stay readable down the left edge; a body's own clips are
+			// left blank rather than repeating the model's name on hundreds of rows.
+			const float Width = ImGui::CalcTextSize(COG_TCHAR_TO_CHAR(*Bank)).x;
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x - Width);
+			ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Bank));
+		}
+		if (bClipCursorMoved && ClipCursor == Index)
+		{
+			ImGui::SetScrollHereY(0.5f);
+		}
 		ImGui::PopID();
 	}
 	ImGui::EndChild();
+	ImGui::TextDisabled("Up/Down walk the list and stand each clip. Right column = the bank that");
+	ImGui::TextDisabled("owns it; blank means this model's own file.");
+	if (!LastNotice.IsEmpty())
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*LastNotice));
+	}
 	ImGui::TextDisabled("-> = a blend grid, showing the cell the pose parameters select.");
 	ImGui::TextDisabled("[additive layer] = a delta on top of a base pose, not a pose. Standing one");
 	ImGui::TextDisabled("alone shows the difference itself, which folds the skeleton up.");
@@ -311,6 +588,39 @@ void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
 	}
 	ImGui::SameLine();
 	ImGui::TextDisabled("%s  -  %.3fs", COG_TCHAR_TO_CHAR(*Lab.LabClip()), Duration);
+
+	// What the standing clip does to the root. A VtMB bank clip either carries the body across the
+	// floor on Bip01 or animates only the limbs above a root that never moves, and which of the two
+	// it is decides whether a wrong-looking result is the clip, the rig, or the placement. Measured
+	// off the sequence rather than declared, so it answers for whichever path built the body.
+	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const UAnimSequence* Playing = Inst != nullptr ? Inst->GetPlayingClip() : nullptr;
+	if (Playing != nullptr)
+	{
+		static const FName RootBone(TEXT("Bip01"));
+		FTransform Start;
+		FTransform End;
+		if (SampleClipBone(Playing, RootBone, 0.0, Start)
+			&& SampleClipBone(Playing, RootBone, Duration, End))
+		{
+			const double Travel = FVector::Dist(Start.GetTranslation(), End.GetTranslation());
+			const double Turn = FMath::RadiansToDegrees(
+				Start.GetRotation().AngularDistance(End.GetRotation()));
+			if (Travel > 0.5 || Turn > 0.5)
+			{
+				ImGui::TextColored(ElysiumCogStyle::ColName,
+					"Bip01 moves: %.1f cm, %.1f deg over the clip", Travel, Turn);
+			}
+			else
+			{
+				ImGui::TextDisabled("Bip01 is held - the motion is all above the root.");
+			}
+		}
+		else
+		{
+			ImGui::TextDisabled("No Bip01 on this skeleton.");
+		}
+	}
 
 	float Time = Lab.LabTime();
 	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);

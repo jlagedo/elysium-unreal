@@ -34,7 +34,6 @@ public:
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 
 private:
 	UCommonActivatableWidgetContainerBase* ResolveLayer(EElysiumUILayer Layer) const;

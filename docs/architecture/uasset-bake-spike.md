@@ -14,7 +14,12 @@ runtime-rendering path for the baked look.
 | | |
 |---|---|
 | **Baked** — real assets in the `.umap` | world + 3D-skybox geometry, materials, textures, static props, unplaced movable brush meshes, projected decals, lights, sky light, height fog |
-| **Runtime** — built by `AElysiumMapActor` | `.hulls`/`.dispcol` collision, `.ropes` cables, the sky cubemap + backdrop, the `.ents` entity substrate and every entity-driven body, movable-brush placement, NPC glTF skeletals, audio, dialogue, scripting |
+| **Runtime** — built by `AElysiumMapActor` | `.hulls`/`.dispcol` collision, `.ropes` cables, the sky cubemap + backdrop, the `.ents` entity substrate and every entity-driven body, movable-brush placement, audio, dialogue, scripting |
+
+This table describes the **map** bake. Character skeletal assets — skeletons, meshes, animation
+sequences, blend profiles and blend spaces — are baked by their own commandlet onto the same mount
+rather than built at runtime; `docs/project/animation-roadmap.md` owns that programme and
+`docs/architecture/animation-architecture.md` its design.
 
 `UElysiumMapSubsystem::Travel` opens `/ElysiumBaked/<map>/<map>` directly — each map is its own
 level, and the `/Game/Elysium` shell is now only the boot world. The map actor is spawned into that

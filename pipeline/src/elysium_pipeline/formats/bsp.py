@@ -115,6 +115,17 @@ def source_dir_to_unreal(x, y, z):
     return (x, -y, z)
 
 
+def source_quat_to_unreal(x, y, z, w):
+    """Source rotation quaternion (x,y,z,w) -> the same rotation in the reflected Unreal
+    frame `source_to_unreal` produces.
+
+    Same conjugation as `source_angles_to_unreal_quat` (R_u = M*R*M, M = diag(1,-1,1)),
+    taken through the quaternion instead of through the matrix. M*[a]x*M = -[M a]x, so
+    conjugating carries (a, w) to (M a, -w), and negating the whole quaternion -- which
+    names the same rotation -- puts it back in the familiar form."""
+    return (-x, y, -z, w)
+
+
 def source_angles_to_unreal_quat(pitch, yaw, roll):
     """Source QAngle (pitch, yaw, roll degrees) -> Unreal rotation quaternion
     (qx, qy, qz, qw), in the reflected Unreal frame source_to_unreal produces.

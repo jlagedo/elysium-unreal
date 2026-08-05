@@ -49,14 +49,15 @@ namespace ElysiumCameraTrack
 
 	float SegmentSeconds(const FPoint& From, const FPoint& To);
 
-	// The longest `TimeControl` segment that counts as an authored edit rather than camera movement.
-	// VtMB's server frame IS the render frame (`docs/vtmb/game_runtime.md`), so at the ~30 fps its
-	// cutscenes were cut on, a segment shorter than one frame was stepped over whole and its interior
-	// never sampled. sp_theatre's courtroom chain writes 87 of its edits as `MoveTime 0.03` and
-	// sm_gallery_1 writes 7 as `0.01`; sampling those at 120 fps turns each into a visible slew.
-	// The authored duration is still spent either way, so a chain's timing against its scene audio is
-	// unchanged — only the interior interpolation goes away. `elysium.CameraCutSeconds`.
-	float HardCutSeconds();
+	// `CCameraKeyFrame::Activate`'s short-segment fold, which runs once at spawn and REWRITES the key.
+	// A `TimeControl` segment at or below the threshold becomes a true zero-time edit; its authored
+	// duration is re-attributed to a neighbouring pause rather than spent in place, and both ends of
+	// the segment are forced to corners. sp_theatre's courtroom chain writes 87 of its edits as
+	// `MoveTime 0.03` and sm_gallery_1 writes 7 as `0.01`, so the fold is what makes those read as
+	// cuts instead of 30-millisecond slews. Threshold via `elysium.CameraCutSeconds` (retail: 0.05).
+	float FoldSeconds();
+	bool ShouldFold(bool bTimeControl, float MoveTime);
+	// Exact-zero only — by sampling time the fold has already happened.
 	bool IsHardCut(const FPoint& From);
 	// True exactly once when forward playback crosses an authored edit.
 	bool CrossesHardCut(const FPath& Path, float PreviousElapsed, float Elapsed);

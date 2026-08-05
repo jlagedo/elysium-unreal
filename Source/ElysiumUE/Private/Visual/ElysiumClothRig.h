@@ -96,12 +96,12 @@ struct FElysiumClothRig
 	bool HasWork() const { return !Chains.IsEmpty(); }
 
 	// The door the runtime uses: read `npc/cloth/<Stem>.json` and convert it into Unreal space.
-	bool Load(const FString& InStem, FString& OutError);
+	bool Load(const FString& InStem, FString& OutError, bool bBaked = false);
 	// The same parse without the import conversion, so a test can see exactly what the exporter
 	// wrote. The sidecar ships in the glb's own basis and in metres, because the mesh beside it
 	// does; skipping `ApplyAssetImport` is a factor of 100 on every length, silently.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
-	void ApplyAssetImport();
+	void ApplyAssetImport(bool bBaked);
 };
 
 // A live edit sitting on top of an authored rig, never replacing it. The rig is what the exporter

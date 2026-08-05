@@ -19,6 +19,13 @@ Everything below is read out of the user's own install.
 - Decompiles and byte-scans of `Bin/engine.dll`, `Vampire/cl_dlls/client.dll`,
   `Vampire/cl_dlls/GameUI.dll`, `Bin/vgui2.dll`, `Vampire/dlls/vampire.dll` via
   `research/tooling/ghidra/driver/run.ps1 -Script DumpGrep`.
+- `Unofficial_Patch/python/vamputil.py` — the patch's own runtime rebinding.
+
+A few **player-facing behaviours** below are read from community documentation rather than from
+the install: the two GameFAQs guides under `$ELYSIUM_WORK_ROOT/research/reference-source/`
+(rezzzman's *Mod Developer Guide* and the walkthrough). Each such claim is marked where it
+appears, with the evidence that would confirm it. Command *existence* is always confirmed against
+the shipped binaries.
 
 Both the **retail** (VPK) and **Unofficial Patch 11.5** (loose, patch-first) copies of every
 data file are cited where they differ; the patch shadows retail for all four `kb_*.lst` and all
@@ -124,13 +131,59 @@ bare `+mlook` line, which is why mouse-look is on from a cold start and `m_side`
 | `toggleinven`, `toggleuiside`, `showinventory <n>` | selection-UI verbs |
 | `vhotkey #N` / `vhotkey_int %d` | fire hotkey slot N (client) |
 | `showhotkeys`, `hidehotkeys`, `sethotkeys`, `init_hotkeys` | the hotkey window (`VHotkeysUI`) |
-| `vdiscipline`, `vdiscipline_last`, `vdiscipline_endall`, `vdiscipline_int <name>` | disciplines (server-side, `vampire.dll`) |
+| `vdiscipline #N`, `vdiscipline_int <N>`, `vdiscipline_last`, `vdiscipline_endall` | disciplines (server-side, `vampire.dll`; `vdiscipline_int` is also in `client.dll`) |
 | ±`feed` | feeding |
 | `zoom_sensitivity_ratio` | extra mouse scale while zoomed |
 
 The `slotN` numbering is the one the patch's `kb_act.lst` documents: `slot1` Disciplines,
 `slot2` Melee, `slot3` Ranged, `slot4` Thrown, `slot5` Armor/Clothing, `slot6` General
 Inventory. Retail exposes only `slot2`/`slot3`/`slot5`/`slot6` in its action list.
+
+#### The quickbar is select-then-cast
+
+Activating a power is **two stages, two console commands**:
+
+1. `vhotkey #N` **selects** slot N into the queue drawn below the blood meter;
+2. `vdiscipline_last` **casts** whatever is selected — retail's `MOUSE2` bind.
+
+The selection is **deferred by one frame**. Both commands in one statement cast the *previously*
+selected power and only then switch, so a one-key cast has to spend a frame between them —
+`bind "key" "vhotkey #X; wait 1; vdiscipline_last"`.
+
+`showhotkeys` (`k`) opens `VHotkeysUI`, where the ten slots are assigned. A slot holds a **weapon,
+a discipline or a blood pack** — it is a general quickbar, not a discipline bar — and a tiered
+discipline exposes its level in a drop-list on the slot.
+
+Two verbs cast **without** the `vdiscipline_last` confirm, reaching tier 1 only:
+`vdiscipline_int <N>` indexes the compiled discipline table, and `vdiscipline #N` takes the Nth
+discipline on the character sheet. Neither reaches the upper tiers of Animalism or Thaumaturgy.
+Passive disciplines (Bloodbuff, Celerity) therefore fire on the keypress alone.
+
+`vdiscipline_endall` (`F8`) ends every active discipline, so some are **sustained states** rather
+than instants.
+
+`toggleuiside` (`t`, relabelled "Toggle Discipline/Weapon" by the patch, `client.dll`) switches
+**what the mouse wheel cycles** — weapons or disciplines. `invnext`/`invprev` act on whichever
+list is selected; the accompanying UI shift is cosmetic.
+
+*Community-sourced, pending decompilation:* the one-frame deferral, the slot contents, and the
+`vdiscipline_int` index table (`0` Nightwisp Ravens, `1` Auspex, `3` Celerity, `4` Bloodbuff,
+`5` Hysteria, `6` Trance, `7` Fortitude, `8` Obfuscate, `9` Potence, `10` Presence, `11` Protean,
+`12` Bloodstrike). Decompiling `vampire.dll`'s `vdiscipline_int` handler would confirm the table
+and the argument form; `client.dll`'s `vhotkey_int` handler would confirm the deferral.
+
+#### What `+attack` does — directional combos and the block
+
+Unarmed and melee share one move set, selected by **`+attack` plus the movement direction held
+with it**: three directional combos, plus a fourth for `+attack` with no direction held.
+
+**The block verb is not identified.** Blocking is a real mechanic with a stat behind it — the
+`Defence` feat, raised by Wits (`docs/vtmb/game_runtime.md`) — but no shipped file names the
+command. `+attack2` is the strongest candidate: it is declared by `client.dll` and left **unbound
+by `default.cfg` in both retail and the patch**, because `MOUSE2` carries `vdiscipline_last`
+rather than `+attack2`. `+wpn_secondaryatk` is the other candidate, and its own semantics are
+equally unrecorded. Decompiling the client's attack handlers, or byte-scanning for the `Defence`
+feat's consumer, would settle both. *(Move set: community-sourced.)*
 
 ### Camera
 
@@ -172,6 +225,7 @@ Several real commands are content/UI machinery rather than player binds:
 | Command | Owner | Effect |
 |---|---|---|
 | `teleport_player <targetname>` / `<x> <y> <z>` | vampire | move the player to a named entity or coordinate; missing names report `Could not find entity named %s` |
+| `player_immobilize` / `player_mobilize` | vampire | take and return player control for a scripted moment — a **server-side lock on the player**, not a client input-mode change |
 | `v_setpause`, `v_unpause` | client | take/release the character-panel modal hold |
 | `vskip_intro` | vampire | skip the current intro scene; not the `vchar_skip_intro` chargen-footer ConVar |
 | `createplayer` | client | show `CharEditPanel` in character-creation mode |
@@ -225,6 +279,23 @@ Each file's role:
 every binding as `bind "<KEY>" "<command>"`, then every `FCVAR_ARCHIVE` cvar, then a trailing
 `+mlook` and/or `+jlook` if those look modes are engaged. That trailing `+mlook` in the shipped
 `default.cfg` is the same mechanism, not a hand-authored line.
+
+### Bindings are rewritten at runtime, from Python
+
+`config.cfg` is not only written at exit — the patch **reads it back and rebinds live keys while
+the game runs**. `vamputil.py`'s `FixKeyBindings()` scans `cfg/config.cfg` for whichever key
+carries `vdiscipline_last`, writes `bind <KEY> "vm_discipline"` into `cfg/console.cfg`, and fires
+the patch alias `execonsole` (`alias execonsole "exec console.cfg"`, `user.cfg`) to execute it.
+It then repeats the scan for `feed`, rebinding that key to `vm_feed`.
+
+So the patch re-routes discipline and feed onto its own aliases **following the player's own
+choice of key**, rather than assuming the default. `vm_feed` is why one key is two verbs:
+`checkFeed()` calls `prayerStart()` for clans 9–11 and `feedStart` otherwise.
+
+The same mechanism is available to any mod — generate console text from Python, exec it — and is
+documented as the way to read keys into Python directly (`host_writeconfig backup.cfg`,
+`unbindall`, `bind "1" "OnInput('1')"`, later `exec backup.cfg`). **`bind` is therefore a verb the
+running game executes, not merely a line a config file carries.**
 
 ## Default bindings
 
@@ -439,9 +510,11 @@ Facts that constrain the rebuild, not decisions. The Unreal design they feed is
   dropped and the `kb_def.lst`/`default.cfg` disagreements resolved to `default.cfg`.
 - `config.cfg` round-tripping (`unbindall` + `bind` lines + archived cvars) is what the embedded
   CPython VM's `FixKeyBindings` reads — the VM's `nt.getcwd`/`sys.moddir` redirect to
-  `$ELYSIUM_EXPORT_ROOT/` exists so that read resolves (roadmap 9.3b, `docs/vtmb/python_bridge.md`). The rebuild keeps
-  that file as a **one-way projection** of the Enhanced Input key profile, not as the settings
-  model.
+  `$ELYSIUM_EXPORT_ROOT/` exists so that read resolves (roadmap 9.3b, `docs/vtmb/python_bridge.md`).
+  The file is a projection of the Enhanced Input key profile rather than the settings model, but
+  **the projection cannot be write-only**: `FixKeyBindings` reads it and then issues `bind`, so a
+  runtime `bind` has to reach the key profile or the patch's own re-routing silently does nothing
+  (`docs/architecture/input-architecture.md` § "Remapping and persistence").
 - Auto-aim (`sv_aim`) defaults to **off**.
 - Gamepad support has no original to reproduce (see "Joystick" above). Anything here is new
   work under the Presentation/Feel axes rather than a port; the device layer is the engine's

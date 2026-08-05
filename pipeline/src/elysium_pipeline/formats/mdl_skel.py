@@ -189,9 +189,10 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: One game-facing sequence. The first four fields are the bake inputs; `activity`,
 #: `actweight` and `flags` are the engine's own selection keys (see `local_sequences`);
 #: `grid` is the blend space the label names (see `read_grid`); `bbmin`/`bbmax` are the
-#: sequence's own model-space bounding box in Source units (see `local_sequences`).
-Seq = namedtuple("Seq", "label base frames fps activity actweight flags grid bbmin bbmax",
-                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)))
+#: sequence's own model-space bounding box in Source units (see `local_sequences`);
+#: `fade` is the authored transition duration in seconds (see `local_sequences`).
+Seq = namedtuple("Seq", "label base frames fps activity actweight flags grid bbmin bbmax fade",
+                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2))
 
 
 def pose_parameters(d):
@@ -336,7 +337,13 @@ def local_sequences(d):
     reference pose, so on a rig whose bones carry the motion it is far larger than the mesh:
     `cin_sheriff_sword`'s `scene` spans 881 units while its vertices span 28. The
     header's `ViewBBMin`/`ViewBBMax`@204/216 are zero across this corpus, which leaves this
-    the only per-clip bound the files carry."""
+    the only per-clip bound the files carry.
+
+    `fade`@612 is the sequence's authored transition duration in seconds, the value the
+    engine combines across a sequence pair to time a base-sequence crossfade
+    (`docs/vtmb/animation_and_movers.md`). Three floats sit at @612/@616/@620 and are
+    byte-identical in every shipped sequence, so the first is read and the other two are
+    left alone."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
     out, seen = [], set()
@@ -355,7 +362,8 @@ def local_sequences(d):
         out.append(Seq(label=label, base=ab, frames=_i32(d, ab + 12), fps=_f32(d, ab + 4),
                        activity=_cstr_rel(d, sb, 4), actweight=_i32(d, sb + 16),
                        flags=_i32(d, sb + 8), grid=grid,
-                       bbmin=_vec3(d, sb + 28), bbmax=_vec3(d, sb + 40)))
+                       bbmin=_vec3(d, sb + 28), bbmax=_vec3(d, sb + 40),
+                       fade=_f32(d, sb + 612)))
     return out
 
 

@@ -85,6 +85,83 @@ struct FElysiumContentPaths
 		return BakedMapDir(Map) / TEXT("Particles") / Asset + TEXT(".") + Asset;
 	}
 
+	// --- Baked characters (pipeline/unreal/bake_characters.py) -----------------------------------
+	// The cast bakes to the same mount as the maps but is not per-map: one shared biped USkeleton
+	// carries the whole cast, so a bank clip is one UAnimSequence rather than one per body, and a
+	// character outlives any map epoch. `Stem` is the model name the export uses ("smiling_jack");
+	// `Owner` is the stem that OWNS a clip — the body itself for its own dialogue clips, the bank
+	// stem for everything resolved through the include DAG, which is npc_manifest.json's own
+	// ownership resolution. `Clip` is the sequence label with no leading '@'.
+	// A **rig family** is a maximal set of models whose bone trees agree on every bone they share,
+	// so one USkeleton can carry all of them. The cast is not one family: VtMB's `Bip01` biped is
+	// consistent everywhere, but the appendix chains above it are not a shared convention — the
+	// generic `BoneNN` hair names mean a different chain on different bodies, and a handful of
+	// models fork into a second skinned root that Unreal's single-rooted reference skeleton has to
+	// unify. A family is named for its lowest-sorted member and is recomputed per bake run.
+	static FString BakedCharacterDir() { return BakedMount() / TEXT("Characters"); }
+	static FString BakedCharacterSkeletonPrefix() { return TEXT("SKEL_Elysium_"); }
+	static FString BakedCharacterSkeleton(const FString& Family)
+	{
+		const FString Asset = BakedCharacterSkeletonPrefix() + Family;
+		return BakedCharacterDir() / TEXT("Skeletons") / Asset + TEXT(".") + Asset;
+	}
+	// The family a baked body belongs to, read back off the skeleton its mesh was built against.
+	// Empty for a mesh that is not on the baked mount, which is how a caller tells the two paths
+	// apart without consulting a second table.
+	static FString BakedCharacterFamily(const FString& SkeletonName)
+	{
+		return SkeletonName.StartsWith(BakedCharacterSkeletonPrefix())
+			? SkeletonName.RightChop(BakedCharacterSkeletonPrefix().Len())
+			: FString();
+	}
+	// One body, whoever is wearing it. The player-material variant is not a separate asset: every
+	// section is instanced from the one body master whose parameters the player path drives, so the
+	// PC and an NPC differ in the ModelAlpha set on the component and in nothing on disk. The
+	// argument stays because the runtime's own visual cache key still distinguishes the two.
+	static FString BakedCharacterMesh(const FString& Stem, bool /*bPlayerMaterial*/ = false)
+	{
+		const FString Asset = TEXT("SK_") + Stem;
+		return BakedCharacterDir() / TEXT("Meshes") / Asset + TEXT(".") + Asset;
+	}
+	// One clip, per rig family. A bank clip is one asset for every body in a family rather than one
+	// per body, which is the whole point of the shared skeleton; two families that both play a bank
+	// each carry their own copy, because a UAnimSequence is bound to one USkeleton.
+	static FString BakedCharacterAnim(const FString& Family, const FString& Owner, const FString& Clip)
+	{
+		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
+		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
+	}
+	// bake_lib.safe_name in C++: every run of characters illegal in an Unreal object name folds to a
+	// single underscore. Model stems are already safe, but 14 of the 2,494 shipped clip labels are
+	// not — `claws_aggressive_walk#50`, `wolf_Form_attack[Bite]`, `Lacroix_Line1_col_E&F`. The two
+	// implementations must agree exactly or the runtime asks for a package the bake did not write;
+	// folding introduces no collision on the shipped corpus, case-insensitively, within any owner.
+	static FString BakedAssetName(const FString& Raw)
+	{
+		FString Out;
+		Out.Reserve(Raw.Len());
+		bool bInRun = false;
+		for (const TCHAR Ch : Raw)
+		{
+			const bool bLegal = (Ch >= TEXT('A') && Ch <= TEXT('Z')) ||
+				(Ch >= TEXT('a') && Ch <= TEXT('z')) ||
+				(Ch >= TEXT('0') && Ch <= TEXT('9')) || Ch == TEXT('_');
+			if (bLegal)
+			{
+				Out.AppendChar(Ch);
+				bInRun = false;
+			}
+			else if (!bInRun)
+			{
+				// One underscore per maximal illegal run, leading and trailing runs included, which
+				// is what re.sub(r'[^A-Za-z0-9_]+', '_', ...) does.
+				Out.AppendChar(TEXT('_'));
+				bInRun = true;
+			}
+		}
+		return Out;
+	}
+
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
 	// The offline enhancement track's parallel texture set (docs/architecture/asset-enhancement.md): the
@@ -209,6 +286,14 @@ struct FElysiumContentPaths
 	// plugin does the glTF->UE basis/scale change). Stem is the model name, e.g. "gangmember_male_2".
 	static FString NpcDir() { return Root() / TEXT("npc"); }
 	static FString NpcGlb(const FString& Stem) { return NpcDir() / (Stem + TEXT(".glb")); }
+	// The Unreal-native skeletal container the character bake reads (`UE_mdl_skeletal.py`). Unlike
+	// the .glb it needs no import transform, so it is also the reference a baked asset is checked
+	// against: whatever it says a bone's bind pose is, is what the bake had to write.
+	static FString NpcSource(const FString& Stem) { return NpcDir() / (Stem + TEXT(".eskm")); }
+	static FString NpcBankSource(const FString& Stem)
+	{
+		return NpcDir() / TEXT("banks") / (Stem + TEXT(".eskm"));
+	}
 
 	// The shared animation banks and their resolution sidecars (8.5). A VtMB NPC's own .mdl
 	// carries only its own clips — mostly dialogue — and pulls idle/locomotion/combat from banks

@@ -34,6 +34,11 @@ public class ElysiumUE : ModuleRules
 			// Static props: build UStaticMesh at runtime from mesh descriptions
 			// (BuildFromMeshDescriptions) with manual convex collision for solid props.
 			"MeshDescription", "StaticMeshDescription", "PhysicsCore",
+			// The character bake authors skeletal assets through the engine's own mesh-description
+			// path -- geometry, skin weights and morph deltas -- which is what every shipped
+			// importer writes into. SkeletalMeshDescription carries FSkeletalMeshAttributes;
+			// AnimationCore carries the bone-weight types it stores.
+			"SkeletalMeshDescription", "AnimationCore",
 			// P8 NPCs: glTFRuntime loads USkeletalMesh + UAnimSequence from the .glb NPC exports
 			// (out/npc, standard glTF 2.0) at runtime -- no editor import. Vendored under
 			// Plugins/External/glTFRuntime; a runtime module, so it stays in every config.

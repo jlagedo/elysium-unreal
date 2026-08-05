@@ -73,7 +73,7 @@ struct FElysiumCompositionRig
 	// Read `npc/procedural/<RelPath>` — `npc_index.json`'s own `procedural` value — and carry it
 	// onto the skeleton through the glb's import transform (see `ApplyAssetImport`). This is the
 	// door the runtime uses.
-	bool LoadAxisRules(const FString& RelPath, FString& OutError);
+	bool LoadAxisRules(const FString& RelPath, FString& OutError, bool bBaked = false);
 	// Parse the same JSON **verbatim**, in the glb's own space and metres. Split out so a test can
 	// see what the file says before and after the import; a caller wanting rules that line up with
 	// a loaded skeleton wants `LoadAxisRules`.
@@ -90,7 +90,7 @@ struct FElysiumCompositionRig
 	// exemption's other half, not a coordinate conversion this runtime authors — the constants come
 	// from the same `FglTFRuntimeConfig` the mesh was loaded with, and metres to centimetres alone
 	// is a factor of 100 on every driven bone's translation.
-	void ApplyAssetImport();
+	void ApplyAssetImport(bool bBaked);
 
 	// The rule body, verbatim from `docs/vtmb/procedural_bones.md`, as a pure function of one local
 	// rotation — no pose, no component space, no skeleton:

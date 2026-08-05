@@ -137,6 +137,52 @@ def bake_maps(
             )
 
 
+def bake_characters(config, runner, stems: Sequence[str]) -> None:
+    """Bake the named models onto /ElysiumBaked/Characters.
+
+    Deliberately NOT batched, unlike the map bake. The bake partitions the models into rig families
+    -- the sets whose bone trees one USkeleton can carry -- and that partition is a property of the
+    whole set it is given. Splitting the run into batches would compute a different partition per
+    batch, so the same model could land in differently-named families on different runs and a mesh
+    would point at a skeleton whose clips were written elsewhere.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/bake_characters.py'}",
+            f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+    )
+
+
+def verify_characters(config, runner, stems: Sequence[str]) -> None:
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/bake_verify_characters.py'}",
+            f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+    )
+
+
 def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) -> None:
     maps = list(dict.fromkeys(maps))
     for offset in range(0, len(maps), max(1, batch_size)):

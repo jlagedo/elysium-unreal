@@ -339,7 +339,164 @@ addresses read out of the PE.*
 
 ---
 
-## 6. Reproducing it on Unreal 5.8
+## 6. Worldcraft camera tracks — `camera_track` / `camera_keyframe`
+
+Maps drive their authored shots from a second, **server-side** system: a chain of keyframe
+entities laid out in Worldcraft, sampled by the map's own think. It is independent of the client
+weights of §2–§3 and meets them only where the client adopts the resulting view (`0x1017d280` /
+`0x1017d460`).
+
+*Provenance: `Vampire/dlls/vampire.dll`, imagebase `0x10000000`, static decompilation. Member
+names are reconstructed, but the datamap records carry the external key names verbatim, so the
+field ↔ key mapping is read rather than inferred.*
+
+### The track is its own root key
+
+`CCameraTrack` derives from `CCameraKeyFrame` — **the track entity is itself the first key of the
+chain it plays**. The constructor `0x100cbe60` walks the vftable chain `0x104475c4` →
+`0x104536ec` (`CCameraKeyFrame`) → `0x10453b9c` (`CCameraTrack`), and the scheduler reads
+keyframe fields straight off `this`.
+
+| Symbol | Address |
+|---|---|
+| `CCameraKeyFrame::Activate` (shared, vslot `+0x1c4`) | `0x100cb750` |
+| `CCameraTrack::TrackThink` (datamap thinkfunc record `0x1055d20c`) | `0x100cc360` |
+| the scheduler/sampler — one call per sub-chain | `0x100cc430` |
+| start a chain: position (vslot `+0xbc`) / target (vslot `+0xb8`) | `0x100cc250` / `0x100cc1c0` |
+| inputs `PlayAsCameraPosition` / `PlayAsCameraTarget` / `RestoreCameraToPlayerControl` | `0x100cc0e0` / `0x100cc090` / `0x100cc130` |
+| player-side adopt | `0x1017d280` / `0x1017d460` |
+| four-point Catmull | `0x1013b610` |
+
+`CCameraKeyFrame` fields, from the datamap records `0x1055ceac`…`0x1055d090`:
+
+| Offset | Field |
+|---|---|
+| `+0x450` | `m_iNextKey` — the authored `NextKey` target name (string) |
+| `+0x454` / `+0x458` | resolved `m_pNextKey` / `m_pPrevKey` |
+| `+0x45c` | `m_flRollDegrees` |
+| `+0x460` | `m_fl35mmFocalLength` |
+| `+0x464` | `m_bTimeControlsSpeed` |
+| `+0x468` / `+0x46c` | `m_flMoveSpeed` / `m_flMoveTime` |
+| `+0x470` | `m_flPauseTime` |
+| `+0x474` / `+0x478` | `m_flRateIn` / `m_flRateOut` |
+| `+0x47c` | `m_bCorner` |
+| `+0x480` / `+0x498` | `m_OnReached` / `m_OnLeaving` |
+
+`CCameraTrack` adds `m_bHoldAtEnd` `+0x4b0`, `m_flFromPlayerTime` `+0x4b4`, `m_flToPlayerTime`
+`+0x4b8`, `m_OnCompleted` `+0x4f4` (external name `OnAnimationCompleted`), and **two independent
+clocks over the same key chain**:
+
+| Clock | `startTime` | `hKey` | `bPaused` | outputs |
+|---|---|---|---|---|
+| target | `0x4bc` | `0x4c0` | `0x4c4` | position `0x4c8` |
+| position | `0x4d4` | `0x4d8` | `0x4dc` | position `0x4e0`, roll `0x4ec`, FOV `0x4f0` |
+
+One entity can therefore be the position track and the target track at the same time, running two
+unsynchronised walks of one chain. `startTime < 0` marks a clock inactive; the constructor's
+default is `−1`. Only the position clock carries roll and field of view — the target clock
+contributes a look-at point and nothing else, so the view direction is the position→target vector
+rather than an authored yaw/pitch pair.
+
+### `Activate` folds a short segment into a cut
+
+`CCameraKeyFrame::Activate` rewrites the key **once at spawn**, before anything samples the chain.
+The threshold is the constant `0x10453b74` = `0.05f`:
+
+```c
+if (m_flMoveTime <= 0.05f && m_bTimeControlsSpeed) {
+    if (m_flMoveTime > 0) {
+        if (m_pNextKey && m_pNextKey->m_flPauseTime > 0)
+            m_pNextKey->m_flPauseTime += m_flMoveTime;   // re-attributed to the NEXT key's pause
+        else if (m_flPauseTime > 0)
+            m_flPauseTime += m_flMoveTime;               // else to this key's own pause
+        // else the time is DROPPED and the chain is that much shorter
+    }
+    m_flMoveTime = 0;
+    m_bCorner = true;
+    if (m_pNextKey) m_pNextKey->m_bCorner = true;        // forced on BOTH ends
+}
+```
+
+Three consequences the sampler cannot recover from, so they have to be reproduced at load:
+
+- The folded time is **not spent where it was authored** — it lands at the start of a pause rather
+  than the end of one, or is lost outright when neither key pauses.
+- `Corner` is forced on **both** ends. That changes the segment-duration rule for any speed-driven
+  segment arriving at the key (below) and collapses the Catmull endpoint selection to the segment
+  endpoints.
+- The rewrite is **order-sensitive**, exactly as retail is: a key whose pause was just raised from
+  zero by its predecessor's fold is a legal re-attribution target for its own fold.
+
+`Activate` also normalises `m_flRollDegrees` once, and clamps an out-of-range `FocalLength` to a
+default derived from the same 18 mm half-gate as the FOV conversion — of the form `18 / sin k`,
+from constants `0x10453b78` / `0x10453b88`. **The exact default is not pinned**; reading those two
+float constants out of the PE settles it.
+
+### The schedule
+
+`0x100cc430(startTime*, hKey*, bPaused*, vecOut*, rollOut*, fovOut*, isTarget, lookahead)` walks
+the chain from the root every call:
+
+```c
+if (*startTime < 0) return false;
+elapsed = curtime - *startTime - this->m_flPauseTime;   // this == the ROOT key, at 0x100cc46c
+cur = this;
+while (elapsed >= 0) {
+    if (resolve(*hKey) == cur && *bPaused) { *bPaused = false; Fire(cur->m_OnLeaving); }
+    next = cur->m_pNextKey;
+    if (!next) { *startTime = -1; Fire(m_OnCompleted); if (!m_bHoldAtEnd) release camera; return false; }
+    segTime = cur->m_flMoveTime;                                  // 0x100cc52d
+    if (!cur->m_bTimeControlsSpeed)
+        segTime = |next->origin - cur->origin| /
+                  (next->m_bCorner ? cur->m_flMoveSpeed           // Corner read off the DESTINATION, 0x100cc544
+                                   : 0.5f*(cur->m_flMoveSpeed + next->m_flMoveSpeed));  // const 0x104454d0
+    if (segTime > 0) {
+        if (elapsed < segTime && elapsed > 0) { interpolate; return true; }
+        elapsed -= segTime;
+    }
+    // segTime <= 0 consumes NO time
+    if (resolve(*hKey) == cur) { *hKey = next; *bPaused = true; Fire(next->m_OnReached); }
+    elapsed -= next->m_flPauseTime;
+    cur = next;
+}
+// paused on `cur`: emit its position / roll / FOV verbatim
+```
+
+- **`Corner` is read off the destination key, not the departing one** (`0x100cc544`). A corner
+  destination makes the segment run at the *departing* key's own `MoveSpeed`; otherwise the two
+  endpoint speeds are averaged.
+- **Sampling is per frame.** `TrackThink` calls the scheduler twice — position group, then target
+  group — and re-arms `SetNextThink(curtime)` if either returned true.
+- **The clock cannot drift.** `elapsed` is recomputed absolutely from `curtime − startTime` on
+  every call; nothing accumulates.
+- The root's `OnReachedKeyframe` fires on the frame the `PlayAsCamera*` input lands: `0x100cc250`
+  stamps `startTime = curtime`, `hKey = root`, `bPaused = true`.
+
+### Interpolation
+
+Segment time is remapped by a Hermite curve on the two authored rates, `r0 = cur->m_flRateOut` and
+`r1 = next->m_flRateIn` (constants `0x10452dc4` = `2.0f`, `0x10449258` = `3.0f`):
+
+```
+u = (r0 + ((r1 + r0 - 2)*t + (3 - r1 - 2*r0))*t)*t
+```
+
+The four-point Catmull (`0x1013b610`) picks its outer control points by `Corner`:
+
+```c
+p0 = (cur->m_pPrevKey  == 0 || cur->m_bCorner)  ? cur  : cur->m_pPrevKey;
+p3 = (next->m_pNextKey == 0 || next->m_bCorner) ? next : next->m_pNextKey;
+```
+
+**Roll and field of view are packed into a second vector and run through the same four-point
+Catmull as the position.** Two things follow: the authored focal length is converted to a field of
+view *before* interpolating, not after; and roll is swept as a plain scalar with **no shortest-path
+unwrapping** — the keys are normalised once in `Activate` and then swept literally, so 170° to
+−170° travels the long way, through zero.
+
+---
+
+## 7. Reproducing it on Unreal 5.8
 
 Implementation status is `docs/project/roadmap.md` 11.7. The sections below own the Unreal design and the
 remaining RE questions; source owns the current type inventory.
@@ -494,7 +651,8 @@ clears all owners.
 
 ### `camera_track` / `camera_keyframe`
 
-A `camera_track` is also its first keyframe. `NextKey` walks through `camera_keyframe` or another
+A `camera_track` is also its first keyframe (§6: `CCameraTrack` derives from `CCameraKeyFrame`, and
+the scheduler reads key fields off the track entity itself). `NextKey` walks through `camera_keyframe` or another
 `camera_track`; cycles and missing/wrong-class links terminate with one warning, and content tests
 require the shipped opening chains to be complete and acyclic. `PlayAsCameraPosition` and
 `PlayAsCameraTarget` select independently owned streams. Each role has one current track: a newer
@@ -511,19 +669,38 @@ starts and fires `OnReachedKeyframe`; its `Pause` holds that first sample before
 `OnLeavingKeyframe` and the first segment. Every later key follows the same reached → pause → leave
 order. With `TimeControl`, the departing key's `MoveTime` is the following segment duration.
 Otherwise duration is distance divided by endpoint `MoveSpeed`: the two endpoint speeds are averaged,
-except a `Corner` departure uses its own speed. Units convert once from Source units/s to cm/s.
-`RateOut`/`RateIn` ease normalized segment time;
-position, roll, and focal length use the recovered four-key Catmull form (duplicating an endpoint at
-chain ends or corners), while pitch/yaw and roll normalize onto the shortest angular path.
+except that a **`Corner` destination** makes the segment run at the departing key's own speed — the
+flag is read off the destination, not the departure (§6). Units convert once from Source units/s to
+cm/s. `RateOut`/`RateIn` ease normalized segment time through the recovered Hermite remap; position
+and a packed roll + field-of-view vector each run through the four-key Catmull form (duplicating an
+endpoint at chain ends or corners). Focal length converts to a field of view **before**
+interpolating, and roll sweeps plainly with **no shortest-path unwrapping** — keys are normalized
+once at spawn, so a 170° → −170° edit travels the long way through zero, as retail does. The view
+direction is the position→target vector, so there are no authored pitch/yaw to unwrap.
 `PositionInterpolator` is parsed, retained, and shown in diagnostics but is a dead VtMB key with no
-runtime effect. A time-controlled segment is a **hard cut only when authored `MoveTime` is zero**
-(with normal floating-point tolerance): the destination becomes current at that same scene time.
-Every positive `MoveTime`, however short, remains authored movement and uses the spatial and angular
-interpolation above. The theatre chains use exact zeroes for their edits; the value-shot seam also
-sets `MaxTurnRate` to zero so the generic moving-subject tracker cannot turn those authored cuts into
-secondary camera pans. Crossing an exact-zero edit, replacing a zero-blend track owner, or popping a
-zero-blend top shot also marks Unreal's `bGameCameraCutThisFrame` and resets the previous view
-transform at the single camera apply point. That one-frame signal invalidates temporal history.
+runtime effect.
+
+A time-controlled segment is a **hard cut whenever its authored `MoveTime` is at or below 0.05 s**,
+not only when it is exactly zero. Retail's `Activate` fold (§6) rewrites such a key at spawn —
+zeroing `MoveTime`, forcing `Corner` on both ends, and re-attributing the time to the next key's
+`Pause`, else to its own `Pause`, else dropping it — so the edit lands at the *start* of a pause
+rather than the end of one. The fold is reproduced at load, in authored order, with the same
+re-attribution priority. It carries the shipped corpus: sp_theatre's `courtroom_*` and `walk_out_*`
+chains author 87 edits as `MoveTime 0.03`, and only its `embrace_*` chain uses exact zeros (28 of
+them). Corpus-wide the authored `TimeControl` `MoveTime` values below 0.1 s are `0.03` ×87
+(sp_theatre) and ×10 (sm_medical_1), `0.01` ×7 (sm_gallery_1), and `0.05` ×1 (sp_tutorial_1) —
+without the fold every one of them reads as a 10–50 ms slew instead of a cut. The value-shot seam
+also sets `MaxTurnRate` to zero so the generic moving-subject tracker cannot turn those authored cuts
+into secondary camera pans. Crossing a folded or exact-zero edit, replacing a zero-blend track owner,
+or popping a zero-blend top shot also marks Unreal's `bGameCameraCutThisFrame` and resets the
+previous view transform at the single camera apply point.
+
+**Divergence, by explicit owner call.** The fold threshold is exposed as the engine cvar
+`elysium.CameraCutSeconds`, default `0.05` — retail's constant, so the default reproduces the
+faithful behaviour above exactly. Setting it to `0` disables the fold and leaves the corpus's short
+edits as authored slews. It exists only as an A/B switch over this finding, and it is deliberately an
+`elysium.*` name rather than a VtMB one because retail holds the threshold in a code constant
+(`0x10453b74`) with no cvar behind it. That one-frame signal invalidates temporal history.
 While the scripted-shot stack has non-zero weight, the same apply point overrides motion-blur amount
 to zero: Unreal's ordinary camera blur otherwise makes the opening's rapid authored dollies and
 closely spaced edits read as continuous scrolling even when every sampled transform and cut boundary
@@ -531,7 +708,9 @@ is correct. The override leaves gameplay motion blur unchanged after the scripte
 
 The authored focal value is 35 mm focal length, not degrees. The unresolved client helper is isolated
 behind the standard 36 mm horizontal-gate conversion
-`FOV = 2 * atan(18 / focalMm)`; non-positive values preserve the player's FOV. Both streams and their
+`FOV = 2 * atan(18 / focalMm)`; non-positive values preserve the player's FOV, where retail instead
+clamps an out-of-range focal length once at spawn to a default of the same `18 / sin k` form (§6 —
+the default's exact value is not pinned). Both streams and their
 elapsed/output latches serialize with the map snapshot, so restore republishes the current sample
 without replaying crossed outputs.
 
@@ -604,3 +783,13 @@ arriving is the *weight ramp*; the shot itself starts where it was authored.
 - The feed / seduction / death camera solvers `0x100fdfa0` and `0x100fe7f0`, and the
   `camfeed_*` / `camseduct_*` / `camdead_*` cvar families that drive them.
 - The player-state flag at `+0x16f0` and predicate `0x10192850` that quantise the model alpha.
+
+Server-side, in the camera-track system (§6, `vampire.dll`):
+
+- The `sp_endsequences_b`-gated branch at `0x100cc6c1`, where a zero-length segment recursively
+  drives the *paired* sub-chain with a 0.1 s lookahead, together with the matching lookahead
+  skip-ahead at `0x100cc5af`. Both are map-specific and unreachable from `TrackThink` on any other
+  map, so only a trace of `sp_endsequences_b` playing its own chain would establish what they do.
+- The default `FocalLength` that `Activate` clamps an out-of-range authored value to. It has the
+  form `18 / sin k`, from constants `0x10453b78` / `0x10453b88`; reading those two floats out of the
+  PE settles the number.

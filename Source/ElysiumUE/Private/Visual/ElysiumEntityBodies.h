@@ -105,6 +105,10 @@ public:
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
+	// The transition a clip asks for when something fades INTO it: its authored `mstudioseqdesc_t`
+	// fade, or 0 when it carries the no-transition bit. The host takes the larger of this and the
+	// clip already playing, so this answers for one clip rather than for the pair.
+	float ClipFadeSeconds(const FString& Stem, const FString& ClipName) const;
 	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
 	bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,

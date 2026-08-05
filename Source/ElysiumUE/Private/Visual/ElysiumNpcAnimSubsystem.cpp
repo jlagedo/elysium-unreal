@@ -138,7 +138,7 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 	{
 		TSharedPtr<FElysiumEyeSet> Set = MakeShared<FElysiumEyeSet>();
 		FString Error;
-		if (!Set->Load(Entry->Eyes, Error))
+		if (!Set->Load(Entry->Eyes, Error, ElysiumNpcVisual::IsStemBaked(Stem)))
 		{
 			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
 		}
@@ -260,7 +260,9 @@ namespace
 		{
 			Rig->SplitBones.Add(FName(*BoneName));
 		}
-		if (!ProceduralRelPath.IsEmpty() && !Rig->LoadAxisRules(ProceduralRelPath, OutError))
+		if (!ProceduralRelPath.IsEmpty()
+			&& !Rig->LoadAxisRules(ProceduralRelPath, OutError,
+				ElysiumNpcVisual::IsStemBaked(Stem)))
 		{
 			// A named-but-unreadable table is a fault, not a model without one: the split half is
 			// still installed so the body keeps whatever composition it can have.
@@ -409,6 +411,20 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClip(const FString& Stem, const 
 		return nullptr;
 	}
 
+	// The owner column decides where the clip comes from either way: the NPC itself for a dialogue
+	// clip, a bank for everything else.
+	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
+	if (ElysiumNpcVisual::UseBakedCharacters())
+	{
+		// A baked sequence is bound to the shared skeleton, so it is the same asset for every body
+		// and is addressed by owner and resolved animation name rather than rebuilt per mesh.
+		if (UAnimSequence* Baked =
+			ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, ResolveClipAnimName(Stem, ClipName)))
+		{
+			return Baked;
+		}
+	}
+
 	// The NPC's own dialogue clips live in the glb the mesh came from; everything else is a bank.
 	UglTFRuntimeAsset* Asset = OwnAsset;
 	if (!Clip->IsOwnedBy(Stem))
@@ -485,13 +501,21 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& Bank
 		OutError = TEXT("no bank or no mesh");
 		return nullptr;
 	}
+	// This path never consults the clip vocabulary, so the bank is both the asset and the grid owner.
+	const FString AnimName = ResolveGridClip(BankStem, ClipName);
+	if (ElysiumNpcVisual::UseBakedCharacters())
+	{
+		if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, BankStem, AnimName))
+		{
+			return Baked;
+		}
+	}
 	UglTFRuntimeAsset* Asset = GetBankAsset(BankStem, OutError);
 	if (Asset == nullptr)
 	{
 		return nullptr;
 	}
-	// This path never consults the clip vocabulary, so the bank is both the asset and the grid owner.
-	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ResolveGridClip(BankStem, ClipName), OutError);
+	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, AnimName, OutError);
 }
 
 TArray<FString> UElysiumNpcAnimSubsystem::IdleCandidates(const FString& Stem,

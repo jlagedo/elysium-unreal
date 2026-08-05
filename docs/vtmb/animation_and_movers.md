@@ -148,8 +148,8 @@ This is not confined to the original `move_and_ranged` probe. On the neutral for
 cells, the installed male bank reports **164.019 cm over 1.2 s = 136.683 cm/s**, and the female
 bank **107.807 cm over 1.064459 s = 101.278 cm/s**.
 All 6,382 animdescs have `numikrules == 0`; there is no animdesc IK payload to
-recover in this corpus, although sequence-tail IK locks and autolayers remain
-outside the first-pass exporter.
+recover in this corpus, although sequence-tail IK locks remain outside the first-pass exporter.
+The autolayer table is decoded and censused in A.3.
 
 **`StudioSeqDesc` (`mstudioseqdesc_t`) — 764 bytes** [data-verified — stride
 confirmed] (`NumLocalSeq`@272 / `LocalSeqIndex`@276). The game-facing entries; each
@@ -201,6 +201,7 @@ The trailing region carries the blend space. Read from the runtime evaluator
 | 580 | int[2] | `paramindex` | pose parameter driving each axis, `-1` when the axis is unused |
 | 588 | float[2] | `paramstart` | axis range, in the parameter's own units |
 | 596 | float[2] | `paramend` | |
+| 612 | float[3] | transition-duration triple | seconds; the crossfade time this sequence asks for, sampled piecewise-linearly over the *outgoing* sequence's cycle. Read by `FUN_1008de30`, not by the blend evaluator; the rule that consumes it is A.4c |
 | 660/664 | int | `numautolayers` / `autolayerindex` | four bytes per entry, each a sequence index the dispatcher evaluates recursively |
 
 A cell is `anim[i0][i1]` at `56 + (i0 * 16 + i1) * 2`: **axis 0 takes the row stride**, a
@@ -277,12 +278,89 @@ change with a build, while the name is what the `.mdl` ships. Landmarks: `ACT_ID
 `ACT_DISPOSITION` = 0xf1. The tail of the table is a long knockback/ragdoll family
 (`ACT_KNOCKBACK_FLYING_*`), which is why the count is so much larger than any one model's vocabulary.
 
-`flags`@8 correlates with looping (`walk`/`run`/`sneak`/every stance = 1; `crouch` = 0), but
-`idle01` reads 0 while being a looping idle, and the values 2 and 0x14 are unmapped — the bit
-meanings are **not** established, so looping is a consumer policy rather than a read of this
-field. `numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
+`numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
 array is located but not decoded. Whole-install scope is **1,044 event-bearing
 sequences / 1,714 events**. The current exporter writes no event timeline.
+
+### `flags`@8 is a small, nearly-closed bit set [data + VtMB decompiled]
+
+Only five values occur across **331 loose models / 5,836 sequences**: `0x0002` ×2,642,
+`0x0000` ×2,217, `0x0001` ×815, `0x0014` ×118, `0x0003` ×44. Nothing else appears.
+
+| bit | meaning | evidence |
+|---|---|---|
+| `0x1` | looping | `walk`/`run`/`sneak`/every stance = 1; `crouch` = 0 |
+| `0x2` | **no transition — hard cut** | the first gate of `FUN_1008de30` (A.4c): an incoming sequence carrying it yields a zero crossfade duration, and the transitioner discards the whole fading set. Attacks (`Claw1`, `Claw2`, …) carry it; `0x3` is looping + hard cut |
+| `0x4` | **delta / additive** | tested at `0x10088efc` inside the pose accumulator `FUN_10088e10`, selecting a different composition branch |
+| `0x10` | unknown | never occurs without `0x4` |
+| `0x400` | flips the crossfade-duration combine from `max` to `min` (A.4c) | set by no shipped sequence, so unreachable and untested |
+
+`0x1` is not a complete looping oracle: `idle01` reads 0 while being a looping idle, so a
+consumer still applies its own policy for the clips the authors left unflagged.
+
+**`0x14` marks the additive family.** All **118** sequences carrying it are named `*_delta`
+— 60 of them the male bank's — and conversely all 118 `*_delta`-named sequences across the
+331 models carry exactly `0x14`, with zero exceptions in either direction. Each decodes to
+near-identity local rotations (median frame-0 deviation 0.0° against 54.6° for an ordinary
+partial-body layer), which is what a difference from a base pose looks like. `0x14` is
+`0x4 | 0x10`, and what `0x10` contributes on its own is **not established** [inferred]:
+because it never appears without `0x4` in this corpus, only a sequence carrying `0x10`
+alone would separate the two.
+
+Note that the sequence-descriptor `0x2` here is unrelated to the bone `Flags & 0x2` of
+§A.4a; they are different structures that happen to share a bit position.
+
+### The autolayer table is the base→layer binding [data-verified]
+
+`numautolayers`@660 / `autolayerindex`@664 declare, per sequence, a list of **4-byte entries, each
+a bare sequence index** the dispatcher evaluates alongside the base. VtMB's record is only that
+index: unlike later Source's `mstudioautolayer_t`, it carries **no pose parameter, no flags and no
+ramp**, so whatever weight a layer contributes lives in the game DLL rather than in the file.
+
+**The composition rule for an autolayer is unresolved.** Because the entry names nothing but a
+sequence, whether the layer replaces per-bone, slerps in at weight 1, or is gated by something the
+file does not carry is **not established** [inferred]. Static RE of the combine that follows
+`FUN_10089c40`'s recursion, or a capture hook placed on that combine itself, would settle it;
+nothing readable from the shipped bytes can.
+
+The census is clean and small. Across **4,249** v2531 models / 10,739 sequences the count histogram
+is `{0: 10,278, 1: 237, 2: 224}`, and the only carriers are
+`models/character/shared/{male,female}/move_and_ranged.mdl` — 232 declaring sequences and 345
+entries on the male bank, 229 and 340 on the female. **0 entries are out of range, 0 are
+self-referencing, and 0 of the 111 distinct targets themselves declare autolayers**, so the
+recursive dispatcher never actually recurses on shipped content: depth is 1 and fan-out is at most
+2. Every target is a `_layer` or a `_delta`, and **none carries an activity**, which is the same
+statement the empty-activity population above makes from the other side.
+
+The two-entry pattern is uniform: `<weapon>_aim_layer` plus `<weapon>_<action>_delta` — a masked
+partial-body overlay and an unmasked additive, one of each.
+
+**The running game reproduces that census exactly.** Capture of the retail pose pipeline records
+**461 of 2,478** captured sequence descriptors carrying autolayers — the same 461 the static
+`{1: 237, 2: 224}` histogram counts — and every one of them belongs to `move_and_ranged.mdl`, male
+or female, which is the file-side "only carriers" statement reached independently. Each layer is
+evaluated at the host sequence's own cycle, bit-identical to it. Measured examples: `smith_ready`
+→ `smith_aim_layer`, itself a 3×3 grid on the `aim_yaw`/`aim_pitch` pose parameters;
+`baseballbat_aggressive_run` → `baseballbat_bobble_layer`; `smith_aggressive_run` →
+`smith_aim_layer` plus `smith_bobble_delta`.
+
+**A pose build is nearly always one sequence.** Counting contributions per build, `sp_theatre`
+measures 99.712% one, 0.281% two and 0.007% three, with **zero autolayer recursion** — the
+census's depth-1 property observed live rather than inferred from the bytes. `sp_tutorial_1` is
+the busier case: one renderable in one frame reaches 5 concurrent sequences, 13 contributions and
+30 blend cells.
+
+**A second binding mechanism exists and is not in the model.** 46 masked sequences on the male bank
+carry an `ACT_*_LAYER_*` activity — every weapon's attack, reload and dryfire layer, the discipline
+casts named in `vdata/system/disciplinetgt_000.txt`, and both `lookback_*_layer` — so the game DLL
+selects them by activity and composes them as layers. No autolayer entry names them. Five sequences
+per bank are neither bound nor selectable, byte-identically on male and female, and read as
+abandoned authoring.
+
+**One decode hazard.** Seven single-sequence scenery and weapon models (`projector.mdl`, three
+`libcolumn_*`, `malklifetube_trims.mdl`, `g_handleclaws.mdl`, `i_handleclaws.mdl`) read
+`numautolayers == 764` at sequence 0 — the descriptor tail runs past the end of the file and lands
+in the string table. A reader must bound both the count and the array against the image.
 
 ## A.4 Animation data — the 32B/bone record + `{valid,total}` RLE [data-verified]
 
@@ -290,11 +368,33 @@ The core decode. At `animdesc_base + animindex` (@48): an array of **one 32-byte
 record per bone** (bone order = header order), immediately followed by the
 variable-length RLE blobs.
 
-**Per-bone record (32B):** `float weight`@0 (always 1.0 — per-bone anim weight,
-ignorable), then `int offset[7]`@4 — the 7 channel offsets **relative to this
+**Per-bone record (32B):** `float weight`@0 (the per-bone mask — see below), then
+`int offset[7]`@4 — the 7 channel offsets **relative to this
 record's start**, in order **posX, posY, posZ, rotX, rotY, rotZ, rotW**.
 `offset[c]==0` ⇒ channel not animated (use bind value); `offset[c]>0` ⇒ an RLE track
 at `record_base + offset[c]`.
+
+**`weight`@0 is a binary per-bone mask, and it is load-bearing** [data-verified].
+Read across the whole install it takes **exactly two values** — `{0.0, 1.0}` over
+**736,208** `(animation, bone)` records on **4,508** models, with 18,346 zeros and no
+fractional value anywhere. Both retail channel decoders compare it against zero before
+anything else and, on zero, write a zero position and a zero quaternion and return —
+reading no channel offset, no track and no bind field. So the zero set names the bones an
+animation does **not** own, which is what lets a partial-body layer be composed over a base
+without disturbing the bones the base owns.
+
+The zero sets are authored masks, not physics groups: `lookback_left_layer` zeroes 59 of 60
+bones and keeps only `Bip01 Head`; `katana_bobble_layer` keeps exactly the right-arm chain and
+the weapon props. Only **5 distinct masks** occur over the 722 animation descriptors of the male
+`move_and_ranged` bank (and 5 over the female bank's 674) — an unmasked one, one zeroing root,
+pelvis, spine and both legs, one keeping arms and props only, one on the abandoned throwing-star
+set, and the head-only one.
+
+**No zero-weight record carries a non-zero channel offset** (0 of 736,208), so a decoder that
+gates on the offsets rather than on the weight never reaches the zero branch on shipped content.
+An earlier reading of this field as "always 1.0, ignorable" came from the theatre capture corpus,
+where it does read 1.0 on all 2,254 decoded triples — because a cutscene fires no layer sequence,
+not because the field is inert.
 
 **RLE track (`mstudioanimvalue_t`, 2B each — the one piece carried over unchanged
 from Source):**
@@ -459,26 +559,14 @@ instead of scoring it, because two zero matrices agree exactly on translation an
 disagree by `acos(-0.5)` = 120° on rotation, and neither number means anything.
 
 A separate client path at `FUN_10091110` does read the flag. It is the sequence
-transition-maintenance path, not a ragdoll path or the local-channel decoder. The
-two live pose builders at `FUN_10091650` and `FUN_100979b0` call it
+transition-maintenance path, not a ragdoll path or the local-channel decoder. It
+maintains a `CUtlVector` of `0x4c`-byte previous-sequence records at entity
+`+0x67c`/`+0x688`, evaluates each surviving previous sequence through
+`FUN_100968a0`, and blends it into the current pose through `FUN_10096b30`; the
+record layout, the crossfade weights and the rest of that mechanism are §A.4c.
+The two live pose builders at `FUN_10091650` and `FUN_100979b0` call it
 immediately after resolving the current base sequence pose and before autoplay
 sequences, weighted layers, virtual hooks, and bone controllers.
-
-`FUN_10091110` maintains a variable array at entity offsets `+0x67c/+0x688` whose
-entries are 0x4c-byte previous-sequence records. It detects a sequence change,
-records sequence/cycle/time, computes transition weights, evaluates each surviving
-previous sequence through `FUN_100968a0`, and blends it into the current pose through
-`FUN_10096b30`. A record whose byte `+0x18` is set also carries a saved 3×4 entity
-transform at `+0x1c`.
-
-The array is a `CUtlVector` at `+0x67c` — the frame takes its address as a `this`
-pointer and reads the buffer through it — with the **element count at `+0x688`**, which
-the function compares against zero before anything else. `FUN_10091110` is
-`__thiscall(this, five stack dwords)`, cleaning `0x14` at its own epilogue, the same shape
-as `SetupBones`. So a sequence change is observable from outside as a growth in that
-count, without decoding an entry: what the 0x4c bytes hold beyond the fields above is not
-established, and the sequence now playing is already named by the evaluations the same
-pose build fires.
 
 Only while rebuilding one of those saved previous poses does it special-case every
 root bone or bone with `Flags & 0x2`. Raw stack accounting establishes the full
@@ -1116,8 +1204,9 @@ all of these seams:
 
 1. ~~studio header/sequence/animation record selection;~~
 2. RLE local position and quaternion evaluation;
-3. the nested virtual-model remap branch inside `FUN_10089c40` — the outer remap,
-   sequence blends, and autolayer recursion are closed;
+3. the nested virtual-model remap branch inside `FUN_10089c40`, and the rule by which an
+   autolayer's evaluated pose is combined with its host's — the outer remap, the sequence
+   blends, and the autolayer *dispatch* are closed;
 4. ~~the complete `Flags & 0x2` post-decode path and its coordinate frame;~~
 5. ~~parent-local hierarchy concatenation into model-space bone matrices;~~
 6. ~~`Bip01` root composition with entity origin/angles and cinematic placement;~~
@@ -1137,6 +1226,191 @@ that the current exporter/runtime does not apply.
 Each newly confirmed format or behavior fact is corrected into this document in
 the same pass. The context specification keeps unresolved addresses and working
 aliases; it does not promote a hypothesis into a VtMB fact.
+
+## A.4c Sequence transitions and the layer stack [VtMB — decompiled + capture-verified]
+
+Two composition stages sit above the base sequence, both landing in `SlerpBones`
+(`FUN_1008eb70`): a client-only **crossfade against the sequences the entity was
+recently playing**, and a four-slot **layer stack** carried by combat characters.
+
+Two independent methods reach this stage — static decompilation of the retail DLLs, and
+numerical solution of pose arrays captured from the running retail game. Where they agree
+it is stated below, and those agreements are the strongest evidence in this document: one
+recovers the code, the other recovers the numbers the code produces, and neither is
+derived from the other.
+
+### The previous-sequence list
+
+`FUN_10091110` maintains a `CUtlVector` at entity `+0x67c` with its element count at
+`+0x688`, holding **`0x4c`-byte previous-sequence records** at that stride. The **last**
+element is the sequence playing now; elements `[0 … count-2]` are previous sequences still
+fading out.
+
+| Off | Type | Field | Written at |
+|---|---|---|---|
+| `+0x00` | int | sequence | `0x100912d5`, from `m_nSequence`@`+0x63c` |
+| `+0x04` | float | cycle at the moment it became previous | `0x100912e6` |
+| `+0x08` | float | playback rate | from `m_flPlaybackRate`@`+0x640` |
+| `+0x0c` | float | weight — recomputed every frame | `0x10091390` |
+| `+0x10` | float | start time (`engine->Time()`) | `0x100912de` |
+| `+0x14` | float | fade duration, seconds | `0x10091246` |
+| `+0x18` | byte | has-saved-transform | `0x10091296` / `0x100912d1` |
+| `+0x1c` | matrix3x4 | saved entity transform (48B) | `0x1009128e` (`FUN_101094b0`) |
+
+`FUN_10091110` is `__thiscall(this, five stack dwords)`, cleaning `0x14` at its own
+epilogue, the same shape as `SetupBones`, and it compares the count against zero before
+anything else. A sequence change is therefore observable from outside as a growth in that
+count, without decoding an entry.
+
+### The ramp is `SimpleSpline`
+
+Per frame, for every record except the last (`0x10091340`–`0x100913b8`):
+
+```
+f = 1.0 - (engine->Time() - rec.startTime) / rec.duration;
+if (f <= 0) evict the record;
+if (f < 1.0) f = 3*f*f - 2*f*f*f;      // SimpleSpline; the 3.0f constant is at 0x10225158
+if (f <= 0) evict;
+rec.weight = f;
+```
+
+`rec.weight` is the blend factor **toward the old pose**. Since `1 − S(1−t) = S(t)` for
+`S(x) = 3x² − 2x³`, the equivalent statement is that the **new clip's weight is
+`SimpleSpline(elapsed / duration)`**. `FUN_10088e10` clamps the weight to 1.0 where it
+consumes it and skips the pose entirely at `<= 0`.
+
+**Capture agrees with the decompile on every part of this.** Solving
+`FINAL = P1 + w·(P2 − P1)` over recorded pose arrays returns a single scalar that explains
+the whole pose — per-component spread `1.5e-6` over 197 components — and that scalar's ramp
+matches `SimpleSpline` to every printed digit. Rotations are provably **slerp, not nlerp**
+(median error `3.5e-8` against `1.6e-6` for the nlerp candidate); positions are a plain
+lerp on the same scalar; bones outside the `SetupBones` bone mask are untouched.
+
+### Duration is authored per sequence and combined as a `max`
+
+`FUN_1008de30(outgoingSeqdesc, incomingSeqdesc, outgoingCycle)`:
+
+```
+if (!out || !in || (in->flags & 0x2)) return 0.0f;        // the refusal, at 0x1008de4d
+cap = in->[0x264];
+v   = piecewise-linear over cycle across out->[0x264], out->[0x268], out->[0x26c];
+return (in->flags & 0x400) ? min(v, cap) : max(v, cap);   // 0x1008defd
+```
+
+The three floats are the `mstudioseqdesc_t` triple at 612/616/620 (§A.3). **The triple is
+constant within a sequence in 100% of shipped content**, so the cycle interpolation always
+collapses to one number per sequence, and no sequence sets `0x400`, so the rule is always
+`max`. Across 331 loose models / 5,836 sequences the values are `(0.2,0.2,0.2)` ×5,762,
+`(0.3,0.3,0.3)` ×58 and `(0.5,0.5,0.5)` ×16. The non-default clips are deliberate
+authoring: the 0.3 s ones are dialogue (`nines_damagedw.mdl`, `Jeanette.mdl`,
+`Therese.mdl`, `Tourette.mdl`), the 0.5 s ones lying-down and damaged-stance idles
+(`hannah.mdl`, `heatherneardeath.mdl`, `lacroix.mdl`, `vv.mdl`). Capture of VPK-resident
+models additionally observes **0.45** on the female `stances.mdl`, so the loose-model
+survey above is a large sample rather than the complete corpus.
+
+**Capture agrees on the combine.** Scored against recorded transitions,
+`duration = max(fade(current), fade(previous))` is right on **80 of 80** across three
+theatre captures, where a current-only rule scores 20 of 26 and a previous-only rule 16
+of 26.
+
+### Concurrency, eviction, interruption
+
+There is **no cap on concurrent transitions**: the append path is `EnsureCapacity(1)` plus
+`InsertMultiple` with no bound check, and eviction is purely a record's weight reaching
+zero. Survivors are blended in **descending index order — newest previous first, oldest
+last** — each a slerp of the accumulated pose toward that record's pose by that record's
+own weight. This is **a chain of pairwise blends, not a normalised N-way blend**, so the
+oldest surviving record exerts the weakest pull on the result.
+
+A sequence change arriving mid-transition is detected at `0x10091193` and simply
+**appends**. Every in-flight record is kept untouched on its own clock; nothing is
+shortened, dropped early, or refused. Capture observes the count moving `0 → 1 → 2 → 3 →
+4`.
+
+### The one refusal is a property of the incoming clip
+
+When the duration is `<= 0` — which happens when the **incoming** sequence sets
+`flags & 0x2`, or when entity flag `0x10` is set — `0x1009129c` discards the entire
+previous-sequence list (`count = 0`, then `FUN_10096c30`) and appends the new record
+alone. That is an unconditional hard cut, and what decides it is the clip being entered,
+not whatever is already running. **2,642 of 5,836 sequences set `0x2`**, so the hard cut
+is the most common authored transition behaviour in the corpus.
+
+### Transitions are client-side only
+
+`FUN_10091110` is called by both client pose builders — `FUN_10091650` at `0x1009176d`
+and `FUN_100979b0` at `0x10097a92` — immediately after the base `CalcPose`. The server's
+builder `FUN_10098eb0` in `vampire.dll` has no transitioner and no `+0x67c` vector, so
+server-side bone setup sees the un-blended current sequence.
+
+### The layer stack — `CBaseAnimatingOverlay`
+
+The class name comes from the `DevMsg` string at `0x10552678`. `CBaseCombatCharacter`
+derives from it; plain `CBaseAnimating` does not, so an ordinary animated prop carries no
+layers at all.
+
+Server-side the array base is `this + 0x73c`, stride `0x30`, **exactly four entries**:
+
+| Off | Field | Note |
+|---|---|---|
+| `+0x00` | sequence | |
+| `+0x04` | cycle | |
+| `+0x08` | playbackrate | |
+| `+0x0c` | weight | `0` means the slot is free |
+| `+0x14` | blend-in | initialised `0.2` |
+| `+0x18` | blend-out | initialised `0.2` |
+| `+0x1c` | owner / activity id | initialised `-1` |
+| `+0x20` | byte | flags |
+
+The API around it: `AllocateLayer` `FUN_10099470`, `SetLayer` `FUN_10099020`,
+`FindLayerByOwner` `FUN_100994c0`, `HasLayer` `FUN_10099540`, `RemoveLayer` `FUN_10099660`,
+`RemoveLayerByOwner` `FUN_100995e0`, `AddGestureSequence` `FUN_100990f0` / `FUN_10099140`,
+`AddGesture` `FUN_100991b0`.
+
+Composition (`FUN_10098eb0`) is the base sequence, then the layers in **ascending
+array-index order**, each accumulated by `SlerpBones` (`FUN_1008eb70`) with a single scalar
+weight — a weighted slerp toward the layer pose, neither an additive add nor a per-bone
+replace. **There is no priority field**: order is the array index and nothing sorts it. The
+`+0x1c` owner id serves lookup and removal only.
+
+**Layers do not ramp.** `blend-in` and `blend-out` are written by `SetLayer` and read
+nowhere in `vampire.dll`, and they are absent from the SendTable —
+`DT_BaseAnimatingOverlay` transmits only `sequenceN`/`cycleN`/`playbackrateN`/`weightN` for
+N = 0..3 plus a flinch block — so no client-side ramp can be built on them either. Nothing
+advances `layer.cycle` or ramps `layer.weight` per frame on the server, and a superseded
+layer is killed outright (`weight = 0, sequence = 0`) with no dying state.
+
+The client mirrors the same four entries at base `this + 0x7DC`, stride `0xE4` — larger
+because each networked float carries a `CInterpolatedVar` history — and composes them
+identically in `FUN_100979b0`. Its only per-layer weight logic is a linear lerp between two
+received snapshot values plus a deliberate snap to 0 or 1 when the sequence index changes,
+which **suppresses** smoothing across exactly the change a crossfade would want it for.
+
+**`SetLayer` initialises weight to `0.1f`**, and the client never substitutes a default, so
+a layer composes at 10% weight. That is measured from the code rather than reasoned from
+behaviour, and it is surprising enough to hold as unconfirmed: a live capture of a fired
+gesture, reading the composed weight back off the pose, would confirm or overturn it.
+
+The client advances a layer's cycle with the same routine it uses for the base sequence,
+`FUN_1008fa70`:
+
+```
+c = cycle + (dt / SequenceDuration(sequence)) * playbackrate
+looping:      c = c - floor(c)
+non-looping:  c = clamp(c, 0.0, 0.999)
+```
+
+`dt` there is `frac * 0.1`, where `frac` is the snapshot fraction from `FUN_1008f960`
+clamped to `[0, 2]` — snapshot interpolation, not playback time.
+
+**One layout inconsistency is open.** Four `0x30` entries from `0x73c` run to `0x7fc`, yet
+the server's flinch array is declared at `0x7f4`; on the client, four `0xE4` entries run
+past the flinch block declared at `0xb20` whichever of the two bases the evidence names for
+that array (`0x7dc` from the composition loop, `0xad4` from the flinch accounting, which do
+not themselves reconcile). Both strides are corroborated by the iteration code on their own
+side, so the declared flinch offsets are the anomaly rather than the strides. The
+discrepancy is **unexplained**; recovering the class declaration, or watching which bytes a
+flinch write actually touches, would resolve it.
 
 ## A.5 Skinning [data-verified + VtMB decompiled]
 

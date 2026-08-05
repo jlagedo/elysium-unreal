@@ -199,6 +199,19 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 	return Anim;
 }
 
+float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& ClipName) const
+{
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set ? Set->Find(ClipName) : nullptr;
+	// A clip the vocabulary does not carry — a bank clip reached by name, a prop, the green room —
+	// transitions on the shipped default rather than snapping, which is what 5,762 of the 5,836
+	// shipped sequences authored anyway.
+	return Clip != nullptr ? Clip->FadeSeconds() : UElysiumNpcAnimInstance::DefaultBlendSeconds;
+}
+
 bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
@@ -215,7 +228,7 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	}
 	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
 	{
-		Inst->PlayClip(Anim, bLoop);
+		Inst->PlayClip(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
 	}
 	else
 	{

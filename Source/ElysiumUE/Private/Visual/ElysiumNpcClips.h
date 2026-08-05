@@ -36,12 +36,16 @@ struct FElysiumNpcClip
 	// Weighted-random share among the clips sharing this activity. `idle01` carries 30 against
 	// three fidgets at 1, which is how VtMB rests on the idle ~91% of the time.
 	int32 Weight = 0;
-	// Studio sequence bits. Bit 0 is STUDIO_LOOPING (RE35 — `CBaseAnimating::ResetSequenceInfo`
-	// derives `m_bSequenceLoops` from `GetSequenceFlags(m_nSequence) & 1`). Bits 2 and 4 mark an
-	// additive layer, together (A.3). The remaining bits are unestablished.
+	// Studio sequence bits (`docs/vtmb/mdl_v2531.md`). Bit 0 is STUDIO_LOOPING, bit 1 refuses a
+	// transition, and bits 2 and 4 mark an additive layer together.
 	int32 Flags = 0;
 	int32 Frames = 0;
 	float Fps = 30.f;
+	// The authored transition duration in seconds (`mstudioseqdesc_t`+0x264). 0.2 on almost every
+	// shipped sequence; 0.3 on a handful of dialogue clips and 0.45/0.5 on the lying-down and
+	// damaged stance idles. A pair of clips transitions over the LARGER of the two, which is why
+	// this is carried per clip rather than tuned globally (`docs/vtmb/animation_and_movers.md`).
+	float Fade = 0.2f;
 
 	// Authored duration. The rate is per clip and is not always 30 (54 of 1,502 surveyed
 	// sequences are 18 fps, including `run`), so this is read rather than assumed.
@@ -51,6 +55,14 @@ struct FElysiumNpcClip
 	// so playing it standalone folds the skeleton up instead of animating it. The engine composes
 	// these on top of something else and never selects one, which is why they carry no activity.
 	bool IsAdditive() const { return (Flags & 0x14) == 0x14; }
+	// Bit 1 — this clip takes no transition. It snaps in AND drops every clip still fading out,
+	// so it lands on a clean pose rather than over the tail of whatever it interrupted. 2,642 of
+	// the 5,836 shipped sequences set it, most of them attacks, and it is much of why VtMB's
+	// combat reads sharp rather than mushy.
+	bool IsSnap() const { return (Flags & 0x2) != 0; }
+	// What this clip asks a transition INTO it to take. Zero for a snap, so a caller can hand the
+	// result straight to the animation host and let 0 mean "cut".
+	float FadeSeconds() const { return IsSnap() ? 0.f : FMath::Max(0.f, Fade); }
 };
 
 // One NPC's whole resolved vocabulary, off `out/npc/clips/<stem>.json` (~92 KB / ~1,360 clips).

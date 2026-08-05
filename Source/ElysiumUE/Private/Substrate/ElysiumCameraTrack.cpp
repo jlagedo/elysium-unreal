@@ -12,13 +12,14 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCameraTrack, Log, All);
 
-// A/B for the sub-frame-edit rule. 0 restores exact-zero-only cuts, which samples sp_theatre's
-// courtroom edits as 30-millisecond camera moves.
+// A/B for the short-segment fold. 0 disables it, which leaves sp_theatre's courtroom edits as
+// 30-millisecond camera moves.
 static TAutoConsoleVariable<float> CVarCameraCutSeconds(
 	TEXT("elysium.CameraCutSeconds"),
-	1.0f / 30.0f,
-	TEXT("camera_track: a TimeControl segment at or below this many seconds is an authored edit "
-	     "rather than camera movement (default one 30 fps frame). 0 cuts only on an exact zero."),
+	0.05f,
+	TEXT("camera_keyframe: a TimeControl segment at or below this many seconds is folded to a hard "
+	     "cut at spawn, the way CCameraKeyFrame::Activate does (retail's threshold is 0.05). "
+	     "0 disables the fold and leaves short segments as camera movement."),
 	ECVF_Default);
 
 namespace ElysiumCameraTrack
@@ -78,18 +79,23 @@ namespace ElysiumCameraTrack
 			: 0.0f;
 	}
 
-	float HardCutSeconds()
+	float FoldSeconds()
 	{
-		// Floating-point tolerance is the floor: at a threshold of 0 an exact authored zero must still
-		// read as the cut it is.
-		return FMath::Max(CVarCameraCutSeconds.GetValueOnAnyThread(), KINDA_SMALL_NUMBER);
+		return FMath::Max(0.0f, CVarCameraCutSeconds.GetValueOnAnyThread());
+	}
+
+	bool ShouldFold(bool bTimeControl, float MoveTime)
+	{
+		return bTimeControl && MoveTime >= 0.0f && MoveTime <= FoldSeconds();
 	}
 
 	bool IsHardCut(const FPoint& From)
 	{
+		// Exact zero only. A short segment never reaches the sampler as a short segment: FoldShortEdit
+		// has already zeroed its MoveTime at spawn, which is where retail settles it.
 		return From.bTimeControl
 			&& From.MoveTime >= 0.0f
-			&& From.MoveTime <= HardCutSeconds();
+			&& From.MoveTime <= KINDA_SMALL_NUMBER;
 	}
 
 	bool CrossesHardCut(const FPath& Path, float PreviousElapsed, float Elapsed)
@@ -203,15 +209,17 @@ namespace ElysiumCameraTrack
 				Out.Rotation.Yaw = R1.Yaw + FMath::FindDeltaAngleDegrees(R1.Yaw, R2.Yaw) * T;
 				Out.Rotation.Roll = 0.0f;
 
-				const float Roll1 = Points[Index].Roll;
-				const float Roll0 = Roll1 - FMath::FindDeltaAngleDegrees(Points[I0].Roll, Roll1);
-				const float Roll2 = Roll1 + FMath::FindDeltaAngleDegrees(Roll1, Points[Index + 1].Roll);
-				const float Roll3 = Roll2 + FMath::FindDeltaAngleDegrees(Points[Index + 1].Roll, Points[I3].Roll);
-				Out.Roll = FRotator::NormalizeAxis(Catmull(Roll0, Roll1, Roll2, Roll3, T));
-
-				const float Focal = Catmull(Points[I0].FocalLength, Points[Index].FocalLength,
-					Points[Index + 1].FocalLength, Points[I3].FocalLength, T);
-				Out.FieldOfView = FocalLengthToHorizontalFov(Focal);
+				// Retail packs roll and FOV into one vector and runs the SAME Catmull over both, which
+				// fixes two things this used to get wrong: the focal length is converted to a field of
+				// view BEFORE interpolating rather than after, and roll takes no shortest-path
+				// unwrapping — the keys are normalised once at spawn and interpolated as plain values.
+				Out.Roll = Catmull(Points[I0].Roll, Points[Index].Roll,
+					Points[Index + 1].Roll, Points[I3].Roll, T);
+				Out.FieldOfView = Catmull(
+					FocalLengthToHorizontalFov(Points[I0].FocalLength),
+					FocalLengthToHorizontalFov(Points[Index].FocalLength),
+					FocalLengthToHorizontalFov(Points[Index + 1].FocalLength),
+					FocalLengthToHorizontalFov(Points[I3].FocalLength), T);
 				Out.Segment = Index;
 				Out.bInPause = false;
 				return true;
@@ -274,6 +282,67 @@ namespace
 		float RateOut = 1.0f;
 		bool bCorner = false;
 		int32 PositionInterpolator = 0; // authored and inspectable, but dead in CCameraKeyFrame
+
+		// `CCameraKeyFrame::Activate`'s spawn-time rewrite. Runs once, mutates the authored keys, and
+		// is what turns a short authored segment into a real edit — so by the time anything samples the
+		// chain there are no sub-frame segments left to interpolate.
+		//
+		// The re-attribution is the part that is easy to get wrong: the folded MoveTime is NOT spent
+		// where it was authored. It moves to the NEXT key's pause when that key has one, otherwise to
+		// this key's own pause when it has one, and otherwise it is dropped outright. So the cut lands
+		// at the start of the pause rather than the end of it, and a fold between two pauseless keys
+		// shortens the chain.
+		//
+		// Order-sensitive, exactly as retail is: a key whose pause was just raised from zero by its
+		// predecessor's fold becomes a legal re-attribution target for its own.
+		void FoldShortEdit()
+		{
+			Roll = FRotator::NormalizeAxis(Roll);   // Activate normalises the authored roll once
+			if (!ElysiumCameraTrack::ShouldFold(bTimeControl, MoveTime))
+			{
+				return;
+			}
+			FElysiumCameraKeyframe* Next = NextKeyframe();
+			if (MoveTime > 0.0f)
+			{
+				if (Next != nullptr && Next->Pause > 0.0f)
+				{
+					Next->Pause += MoveTime;
+				}
+				else if (Pause > 0.0f)
+				{
+					Pause += MoveTime;
+				}
+				// else: dropped. The chain is genuinely shorter by that much.
+			}
+			MoveTime = 0.0f;
+			bCorner = true;
+			if (Next != nullptr)
+			{
+				// Forced on BOTH ends. This is why a fold changes more than timing: a speed-driven
+				// segment arriving at a corner takes the source key's own speed instead of the endpoint
+				// average, and the Catmull endpoint selection collapses to the segment itself.
+				Next->bCorner = true;
+			}
+		}
+
+		virtual void PostSpawn() override
+		{
+			FoldShortEdit();
+		}
+
+		// The next key in the chain, or null when this is the tail or the name does not resolve to a
+		// keyframe. Deliberately non-const: the fold above writes through it.
+		FElysiumCameraKeyframe* NextKeyframe() const
+		{
+			FElysiumEntity* Next = (World && !NextKey.IsEmpty()) ? World->FindByName(NextKey) : nullptr;
+			const FName ClassName = Next && Next->Class ? Next->Class->ClassName : NAME_None;
+			if (ClassName != FName(TEXT("camera_keyframe")) && ClassName != FName(TEXT("camera_track")))
+			{
+				return nullptr;
+			}
+			return static_cast<FElysiumCameraKeyframe*>(Next);
+		}
 
 		ElysiumCameraTrack::FPoint Point() const
 		{

@@ -26,6 +26,22 @@
 // nothing on a stem the spike did not build, and npc/cloth/ holds two models.
 //
 // Applied at map load; NPC meshes and their rigs are resolved once per map epoch.
+// The character bake's A/B (ANM1). 1 loads the cast from the /ElysiumBaked mount — one shared
+// skeleton, a mesh per model, a UAnimSequence per clip, all built offline by
+// pipeline/unreal/bake_characters.py; 0 keeps the glTFRuntime load that builds the same objects at
+// map load. Both paths exist for one cycle so a wrong pose can be diagnosed by flipping one switch
+// rather than by bisecting a migration.
+//
+// Default 0 until the baked slice passes its path-equality test. A stem the bake has not covered
+// falls back to glTFRuntime with the toggle on, the same shape as `elysium.Cloth` and
+// `elysium.EnhancedTextures`: the switch selects between two sets and never turns a present model
+// into a missing one. Applied at map load, like every other mesh-resolution toggle.
+static TAutoConsoleVariable<int32> CVarBakedCharacters(
+	TEXT("elysium.BakedCharacters"), 0,
+	TEXT("Load characters from the baked /ElysiumBaked mount (1) or build them from .glb through "
+		 "glTFRuntime at map load (0). Applied at map load."),
+	ECVF_Default);
+
 static TAutoConsoleVariable<int32> CVarCloth(
 	TEXT("elysium.Cloth"), 1,
 	TEXT("Simulate garments on the models the cloth spike built (1) or wear the faithful rigid "
@@ -63,6 +79,10 @@ namespace
 		}
 	}
 
+}
+
+namespace ElysiumNpcVisual
+{
 	// Declare every morph target the mesh came back with as a morph-target *curve* on its skeleton
 	// (12.3). An anim curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone
 	// container flags it, and the bone container takes those flags from this metadata — so without
@@ -110,17 +130,32 @@ namespace ElysiumNpcVisual
 	// FglTFRuntimeParser::GetNodeTransform, applied to something that is not a node: conjugate by
 	// the scene basis, then scale the translation. A rule's `pos`/`quat` entries are the same kind
 	// of quantity as a bone's own local, so they take the same treatment and land in the same space.
-	FTransform ImportGlbLocal(const FTransform& GlbLocal)
+	FMatrix AssetImportBasis(bool bBaked)
 	{
-		const FMatrix Basis = AssetConfig().GetMatrix();
+		// A sidecar states its geometry in the glb's own basis, once, whichever path builds the
+		// body -- so which frame it has to be carried into is a property of the body, not of the
+		// sidecar. glTFRuntime imports under its own Default basis. The baked assets are written
+		// by `UE_mdl_skeletal.py` in the repo's canonical Source->Unreal frame, and that frame is
+		// exactly what glTFRuntime calls YForward: the composite of the exporter's Source->glTF
+		// rotation inverted with `bsp.source_to_unreal`. The two differ by a 90 degree yaw, which
+		// is visible on nothing until the two are mixed.
+		static const FMatrix Canonical = FBasisVectorMatrix(
+			FVector(1.0, 0.0, 0.0), FVector(0.0, 0.0, 1.0), FVector(0.0, 1.0, 0.0),
+			FVector::ZeroVector);
+		return bBaked ? Canonical : AssetConfig().GetMatrix();
+	}
+
+	FTransform ImportGlbLocal(const FTransform& GlbLocal, bool bBaked)
+	{
+		const FMatrix Basis = AssetImportBasis(bBaked);
 		FTransform Imported(Basis.Inverse() * GlbLocal.ToMatrixWithScale() * Basis);
 		Imported.ScaleTranslation(AssetConfig().SceneScale);
 		return Imported;
 	}
 
-	FVector ImportGlbDirection(const FVector& GlbDirection)
+	FVector ImportGlbDirection(const FVector& GlbDirection, bool bBaked)
 	{
-		return AssetConfig().GetMatrix().TransformVector(GlbDirection);
+		return AssetImportBasis(bBaked).TransformVector(GlbDirection);
 	}
 
 	float ImportGlbScale()
@@ -176,6 +211,15 @@ namespace ElysiumNpcVisual
 	USkeletalMesh* LoadMeshFromPath(const FString& FullPath, UglTFRuntimeAsset*& OutAsset,
 		FString& OutError, bool bPlayerMaterial, const TArray<FString>* EyeMaterials)
 	{
+		FElysiumGlbMeshOptions Options;
+		Options.bPlayerMaterial = bPlayerMaterial;
+		Options.EyeMaterials = EyeMaterials;
+		return LoadMeshFromPath(FullPath, OutAsset, OutError, Options);
+	}
+
+	USkeletalMesh* LoadMeshFromPath(const FString& FullPath, UglTFRuntimeAsset*& OutAsset,
+		FString& OutError, const FElysiumGlbMeshOptions& Options)
+	{
 		OutAsset = nullptr;
 		OutError.Reset();
 
@@ -198,7 +242,15 @@ namespace ElysiumNpcVisual
 		// pieces into one UMorphTarget; the plugin default, Ignore, keeps the first piece and
 		// silently drops the rest — a jaw that moves and leaves its teeth behind.
 		SkeletalMeshConfig.MorphTargetsDuplicateStrategy = EglTFRuntimeMorphTargetsDuplicateStrategy::Merge;
-		if (bPlayerMaterial)
+		// The bake's two knobs. Outer puts the built objects in a package instead of the transient
+		// one; Skeleton hands every body the same skeleton asset and merges its bones into that
+		// tree, while `bOverwriteRefSkeleton` stays false so the mesh keeps its OWN reference
+		// skeleton — VtMB bodies differ in proportion and a shared reference pose would reshape
+		// every character that is not the donor.
+		SkeletalMeshConfig.Outer = Options.Outer;
+		SkeletalMeshConfig.Skeleton = Options.Skeleton;
+		SkeletalMeshConfig.bMergeAllBonesToBoneTree = Options.Skeleton != nullptr;
+		if (Options.bPlayerMaterial)
 		{
 			UMaterialInterface* BodyMaterial = LoadObject<UMaterialInterface>(nullptr,
 				TEXT("/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"));
@@ -223,12 +275,12 @@ namespace ElysiumNpcVisual
 		// builds a MID over M_Eyes and injects `baseColorTexture` and the glTF factors, which is
 		// what the master is written to receive. `UberMaterialsOverrideMap` cannot be used here: it
 		// keys on material *type*, not on the section.
-		if (EyeMaterials != nullptr && !EyeMaterials->IsEmpty())
+		if (Options.EyeMaterials != nullptr && !Options.EyeMaterials->IsEmpty())
 		{
 			if (UMaterialInterface* Master = EyeMaster())
 			{
 				SkeletalMeshConfig.MaterialsConfig.bMaterialsOverrideMapInjectParams = true;
-				for (const FString& Name : *EyeMaterials)
+				for (const FString& Name : *Options.EyeMaterials)
 				{
 					SkeletalMeshConfig.MaterialsConfig.MaterialsOverrideByNameMap.Add(Name, Master);
 				}
@@ -262,9 +314,70 @@ namespace ElysiumNpcVisual
 			&& FPaths::FileExists(FElysiumContentPaths::NpcClothRig(Stem));
 	}
 
+	bool UseBakedCharacters()
+	{
+		return CVarBakedCharacters.GetValueOnAnyThread() != 0;
+	}
+
+	USkeletalMesh* LoadBakedMesh(const FString& Stem, bool bPlayerMaterial)
+	{
+		return LoadObject<USkeletalMesh>(nullptr,
+			*FElysiumContentPaths::BakedCharacterMesh(Stem, bPlayerMaterial));
+	}
+
+	bool IsStemBaked(const FString& Stem)
+	{
+		// Exactly the branch `LoadMesh` takes, answered without loading the package -- the sidecar
+		// rigs are built per stem and must be carried into the frame the body actually landed in,
+		// so the two decisions have to agree or an eye aims ninety degrees off a correct head.
+		return UseBakedCharacters() && !UseClothMesh(Stem)
+			&& FPackageName::DoesPackageExist(
+				FPackageName::ObjectPathToPackageName(
+					FElysiumContentPaths::BakedCharacterMesh(Stem)));
+	}
+
+	UAnimSequence* LoadBakedClip(const USkeletalMesh* Mesh, const FString& Owner,
+		const FString& ClipName)
+	{
+		// The family comes off the body's own skeleton rather than a second lookup table: the mesh
+		// was baked against exactly one family's USkeleton, and a sequence is bound to that same
+		// asset, so asking the mesh is the only answer that cannot disagree with what will actually
+		// play. A mesh built through glTFRuntime answers empty and takes no baked clip.
+		const USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
+		if (Skeleton == nullptr)
+		{
+			return nullptr;
+		}
+		const FString Family = FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName());
+		if (Family.IsEmpty())
+		{
+			return nullptr;
+		}
+		return LoadObject<UAnimSequence>(nullptr,
+			*FElysiumContentPaths::BakedCharacterAnim(Family, Owner, ClipName));
+	}
+
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
 		bool bPlayerMaterial, const TArray<FString>* EyeMaterials)
 	{
+		// The garment spike is deliberately not baked: it selects a *different* .glb, and the rig
+		// that drives its lattice is installed from the same predicate the mesh choice comes from.
+		// A baked body under an enhanced rig is a set of chains naming bones the skeleton does not
+		// have, so a cloth stem stays on the loader that can give it the enhanced mesh.
+		if (UseBakedCharacters() && !UseClothMesh(Stem))
+		{
+			if (USkeletalMesh* Baked = LoadBakedMesh(Stem, bPlayerMaterial))
+			{
+				// No parsed asset on this path, and none is needed: a baked clip is addressed by
+				// its owner and label rather than pulled out of the body's own glb. Every caller
+				// already handles a null asset, because a bank-owned clip never had one.
+				OutAsset = nullptr;
+				OutError.Reset();
+				return Baked;
+			}
+			// Not baked yet — the slice is a subset of the cast. Fall through rather than fail: the
+			// toggle selects between two sets and must not turn a present model into a missing one.
+		}
 		const FString Path = UseClothMesh(Stem)
 			? FElysiumContentPaths::NpcClothGlb(Stem)
 			: FElysiumContentPaths::NpcGlb(Stem);

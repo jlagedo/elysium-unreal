@@ -39,13 +39,14 @@ void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 		Player.SetGroupMethod(EAnimSyncMethod::DoNotSync);
 		Player.Initialize_AnyThread(Context);
 	}
-	Incoming = 0;
-	BlendAlpha = 1.f;
-	BlendRate = 0.f;
+	Current = 0;
+	Fading.Reset();
 	Playing = nullptr;
 	bPlayingLoop = true;
-	bNeedsReinit[0] = false;
-	bNeedsReinit[1] = false;
+	for (bool& Reinit : bNeedsReinit)
+	{
+		Reinit = false;
+	}
 	bInitialized = false;
 	// The facial track is not reset here: the rig is installed once per body, before or after this
 	// runs depending on when the component registers, and re-initializing the pose graph does not
@@ -74,7 +75,46 @@ void FElysiumNpcAnimProxy::PreUpdateCloth(const UAnimInstance* Instance)
 	Cloth.PreUpdate(Instance);
 }
 
-void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
+float FElysiumNpcAnimProxy::FadeWeight(const FFadingClip& Fade)
+{
+	if (Fade.Duration <= 0.f)
+	{
+		return 0.f;
+	}
+	const float F = 1.f - Fade.Elapsed / Fade.Duration;
+	if (F <= 0.f)
+	{
+		return 0.f;
+	}
+	if (F >= 1.f)
+	{
+		return 1.f;
+	}
+	return F * F * (3.f - 2.f * F);   // SimpleSpline — retail's 3f^2 - 2f^3, not a linear ramp
+}
+
+int32 FElysiumNpcAnimProxy::TakeFreeSlot()
+{
+	for (int32 Slot = 0; Slot < MaxPlayers; ++Slot)
+	{
+		if (Slot == Current)
+		{
+			continue;
+		}
+		const bool bBusy = Fading.ContainsByPredicate(
+			[Slot](const FFadingClip& F) { return F.Slot == Slot; });
+		if (!bBusy)
+		{
+			return Slot;
+		}
+	}
+	// Every slot is live. The oldest fade is the weakest contribution, so it is the one to lose.
+	const int32 Reused = Fading.Last().Slot;
+	Fading.Pop();
+	return Reused;
+}
+
+void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float FadeSeconds)
 {
 	if (Sequence == nullptr)
 	{
@@ -90,37 +130,47 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 			// same looping clip was asked for again. SetPlayRate writes the node's own member, read
 			// on every UpdateAssetPlayer, so this un-freezes without the visible restart the
 			// early-out exists to prevent — no bNeedsReinit, and the play position is preserved.
-			Players[Incoming].SetPlayRate(1.f);
+			Players[Current].SetPlayRate(1.f);
 			return;
 		}
-		Players[Incoming].SetLoopAnimation(bLoop);
-		Players[Incoming].SetPlayRate(1.f);
-		Players[Incoming].SetStartPosition(0.f);
-		bNeedsReinit[Incoming] = true;
+		Players[Current].SetLoopAnimation(bLoop);
+		Players[Current].SetPlayRate(1.f);
+		Players[Current].SetStartPosition(0.f);
+		bNeedsReinit[Current] = true;
 		bPlayingLoop = bLoop;
-		BlendAlpha = 1.f;
-		BlendRate = 0.f;
+		Fading.Reset();
 		return;
 	}
 
-	// The first clip has nothing to blend from, so it snaps in regardless of BlendSeconds —
-	// otherwise every NPC would fade up out of the reference pose on map load.
-	const bool bSnap = !bInitialized || BlendSeconds <= 0.f;
+	// The first clip has nothing to blend from, so it snaps in regardless — otherwise every NPC
+	// would fade up out of the reference pose on map load. A zero duration is retail's `flags & 0x2`
+	// hard cut, and it does more than skip this clip's own fade: it FLUSHES every clip still fading,
+	// so an attack lands on a clean pose rather than over the tail of whatever it interrupted.
+	// Nearly half the shipped vocabulary sets that bit, which is much of why VtMB's combat reads
+	// sharp.
+	// Retail times a transition by the LARGER of the two clips' own authored fades, so a clip that
+	// asks for a long settle gets it whether it is the one arriving or the one leaving. A zero on
+	// the incoming clip is the refusal and wins outright — it is not a `max` input.
+	const float Duration = FadeSeconds <= 0.f
+		? 0.f
+		: FMath::Max(CurrentFade, FadeSeconds);
+	CurrentFade = FMath::Max(0.f, FadeSeconds);
 
-	// Which player the new clip lands on, and the whole of this crossfade's priority rule: with two
-	// players a request arriving mid-blend has to overwrite one of two live poses, so it overwrites
-	// the one the visible pose owes LESS to. Settled (alpha 1) that is always the other slot. Inside
-	// a crossfade below half weight it is the INCOMING slot — the pose that has barely faded up yet —
-	// which keeps the outgoing pose the body is still mostly showing as the thing the new clip blends
-	// out of.
-	//
-	// Load-bearing at a cutscene seam. A choreo scene handing over to the next one releases its cast
-	// to an idle and the next scene claims them a frame later, so two requests land back to back;
-	// flipping slots unconditionally would blend the incoming clip out of that one-frame-old idle
-	// instead of out of the cutscene pose actually on screen.
-	const int32 Next = !bInitialized
-		? Incoming
-		: (BlendAlpha < 0.5f ? Incoming : 1 - Incoming);
+	const bool bSnap = !bInitialized || Duration <= 0.f;
+
+	if (bSnap)
+	{
+		Fading.Reset();
+	}
+	else
+	{
+		// Stack it. Retail keeps every in-flight record untouched on its own clock — nothing is
+		// shortened, dropped early, or refused because a transition is already running. The new clip
+		// is simply blended over the partially-faded result.
+		Fading.Insert(FFadingClip{ Current, 0.f, Duration }, 0);
+	}
+
+	const int32 Next = bInitialized ? TakeFreeSlot() : Current;
 
 	Players[Next].SetSequence(Sequence);
 	Players[Next].SetLoopAnimation(bLoop);
@@ -128,11 +178,9 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Bl
 	Players[Next].SetStartPosition(0.f);
 	bNeedsReinit[Next] = true;   // reset that player's play time on the worker
 
-	Incoming = Next;
+	Current = Next;
 	Playing = Sequence;
 	bPlayingLoop = bLoop;
-	BlendAlpha = bSnap ? 1.f : 0.f;
-	BlendRate = bSnap ? 0.f : 1.f / BlendSeconds;
 	bInitialized = true;
 }
 
@@ -146,10 +194,10 @@ void FElysiumNpcAnimProxy::Seek(float PositionSeconds)
 	const float Position = bPlayingLoop && Length > SMALL_NUMBER
 		? FMath::Fmod(FMath::Max(0.f, PositionSeconds), Length)
 		: FMath::Clamp(PositionSeconds, 0.f, Length);
-	Players[Incoming].SetStartPosition(Position);
-	Players[Incoming].SetPlayRate(0.f);
-	bNeedsReinit[Incoming] = true;
-	// The crossfade is deliberately left running. A cinematic scene seeks its clip on the frame it
+	Players[Current].SetStartPosition(Position);
+	Players[Current].SetPlayRate(0.f);
+	bNeedsReinit[Current] = true;
+	// The transition is deliberately left running. A cinematic scene seeks its clip on the frame it
 	// starts it and on every frame after, so forcing the blend to settle here would mean no clip a
 	// scene plays could ever blend in at all — the pose would snap at the head of every scene and at
 	// every clip boundary inside one. Pinning the phase and fading up are independent: the outgoing
@@ -162,7 +210,7 @@ float FElysiumNpcAnimProxy::GetClipPosition() const
 	{
 		return -1.f;
 	}
-	return Players[Incoming].GetAccumulatedTime();
+	return Players[Current].GetAccumulatedTime();
 }
 
 void FElysiumNpcAnimProxy::ResyncPosition(float PositionSeconds)
@@ -175,7 +223,7 @@ void FElysiumNpcAnimProxy::ResyncPosition(float PositionSeconds)
 	// Initialize_AnyThread then sets the accumulator to the node's start position, so a resync
 	// written in the same frame as a Request would be silently discarded. Bailing makes that
 	// deterministic instead of dependent on which ran first; the next resync corrects it.
-	if (bNeedsReinit[Incoming])
+	if (bNeedsReinit[Current])
 	{
 		return;
 	}
@@ -192,15 +240,14 @@ void FElysiumNpcAnimProxy::ResyncPosition(float PositionSeconds)
 	// caller arrives through UElysiumNpcAnimInstance's GetProxyOnGameThread, which blocks on any
 	// in-flight parallel evaluation. A future path reaching the proxy without that accessor turns
 	// this into a silent data race on a float.
-	Players[Incoming].SetAccumulatedTime(Position);
+	Players[Current].SetAccumulatedTime(Position);
 }
 
 void FElysiumNpcAnimProxy::Stop()
 {
 	Playing = nullptr;
 	bInitialized = false;
-	BlendAlpha = 1.f;
-	BlendRate = 0.f;
+	Fading.Reset();
 }
 
 void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
@@ -229,48 +276,75 @@ void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& In
 		}
 	}
 
-	if (BlendAlpha < 1.f)
+	// Every fade runs on its own absolute clock and leaves only when its weight reaches zero — retail
+	// caps nothing and evicts nothing early, so a burst of clip changes simply stacks and decays.
+	const float Dt = InContext.GetDeltaTime();
+	for (int32 Index = Fading.Num() - 1; Index >= 0; --Index)
 	{
-		BlendAlpha = FMath::Min(1.f, BlendAlpha + BlendRate * InContext.GetDeltaTime());
+		Fading[Index].Elapsed += Dt;
+		if (FadeWeight(Fading[Index]) <= 0.f)
+		{
+			Fading.RemoveAt(Index);
+		}
 	}
 
-	// Advancing play time is what this call is for. Weighting each player by its blend share keeps
-	// notifies and root motion proportional, even though neither is consumed yet.
-	Players[Incoming].Update_AnyThread(InContext.FractionalWeight(BlendAlpha));
-	if (BlendAlpha < 1.f && Players[1 - Incoming].GetSequence() != nullptr)
+	// Advancing play time is what this call is for, and a fading clip keeps advancing its own —
+	// retail stores a playbackrate on the previous-sequence record and keeps running it. Weighting
+	// each player by its share keeps notifies and root motion proportional, even though neither is
+	// consumed yet.
+	float Residual = 1.f;
+	for (const FFadingClip& Fade : Fading)
 	{
-		Players[1 - Incoming].Update_AnyThread(InContext.FractionalWeight(1.f - BlendAlpha));
+		Residual *= 1.f - FadeWeight(Fade);
+	}
+	Players[Current].Update_AnyThread(InContext.FractionalWeight(Residual));
+	for (const FFadingClip& Fade : Fading)
+	{
+		if (Players[Fade.Slot].GetSequence() != nullptr)
+		{
+			Players[Fade.Slot].Update_AnyThread(InContext.FractionalWeight(FadeWeight(Fade)));
+		}
 	}
 }
 
 void FElysiumNpcAnimProxy::EvaluateBody(FPoseContext& Output)
 {
-	if (!bInitialized || Players[Incoming].GetSequence() == nullptr)
+	if (!bInitialized || Players[Current].GetSequence() == nullptr)
 	{
 		Output.ResetToRefPose();
 		return;
 	}
 
-	// The incoming player always contributes; the outgoing one only while the crossfade runs,
-	// so a settled NPC evaluates exactly one sequence.
-	FPoseContext Incoming_(this);
-	Players[Incoming].Evaluate_AnyThread(Incoming_);
+	// The live clip always contributes; a settled NPC has no fades and evaluates exactly one
+	// sequence, which is the common case by a wide margin.
+	FPoseContext Accumulated(this);
+	Players[Current].Evaluate_AnyThread(Accumulated);
 
-	if (BlendAlpha >= 1.f || Players[1 - Incoming].GetSequence() == nullptr)
+	// Retail blends newest-first, oldest-last — a CHAIN of pairwise slerps toward each previous
+	// pose by that record's own weight, not a normalised N-way blend. Order matters: the oldest
+	// record carries the smallest weight and lands last, so it exerts the weakest pull on the
+	// result. `Fading` is already kept in that order.
+	for (const FFadingClip& Fade : Fading)
 	{
-		Output = Incoming_;
-		return;
+		if (Players[Fade.Slot].GetSequence() == nullptr)
+		{
+			continue;
+		}
+		FPoseContext Previous(this);
+		Players[Fade.Slot].Evaluate_AnyThread(Previous);
+
+		FPoseContext Blended(this);
+		FAnimationPoseData BlendedData(Blended);
+		const FAnimationPoseData AccumulatedData(Accumulated);
+		const FAnimationPoseData PreviousData(Previous);
+		// WeightOfPoseOne is the FIRST argument's share, so the pose built so far leads and the
+		// fading clip takes its record's weight.
+		FAnimationRuntime::BlendTwoPosesTogether(
+			AccumulatedData, PreviousData, 1.f - FadeWeight(Fade), BlendedData);
+		Accumulated = Blended;
 	}
 
-	FPoseContext Outgoing(this);
-	Players[1 - Incoming].Evaluate_AnyThread(Outgoing);
-
-	FAnimationPoseData OutData(Output);
-	const FAnimationPoseData OutgoingData(Outgoing);
-	const FAnimationPoseData IncomingData(Incoming_);
-	// WeightOfPoseOne is the *first* argument's share, so the outgoing pose leads and the
-	// incoming one takes BlendAlpha.
-	FAnimationRuntime::BlendTwoPosesTogether(OutgoingData, IncomingData, 1.f - BlendAlpha, OutData);
+	Output = Accumulated;
 }
 
 // The A/B for the two composition stages. 1 = VtMB's own composition, 0 = Unreal's ordinary

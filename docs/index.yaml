@@ -2,6 +2,7 @@ version: 1
 documents:
   - {path: project/roadmap.md, kind: tracker, owner: project, subject: project status}
   - {path: project/retail-capture-roadmap.md, kind: tracker, owner: retail capture, subject: retail animation capture and decoder verification status}
+  - {path: project/animation-roadmap.md, kind: tracker, owner: animation, subject: skeletal animation programme status}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}
   - {path: project/remaster-direction.md, kind: charter, owner: project, subject: remaster direction}
   - {path: operations/repository.md, kind: operations, owner: repository, subject: repository and workspace policy}

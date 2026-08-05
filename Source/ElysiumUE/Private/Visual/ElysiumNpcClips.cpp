@@ -151,6 +151,12 @@ bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
 		Clip.Flags = static_cast<int32>((*Row)[3]->AsNumber());
 		Clip.Frames = static_cast<int32>((*Row)[4]->AsNumber());
 		Clip.Fps = static_cast<float>((*Row)[5]->AsNumber());
+		// Trailing and optional: a slice written before the field existed keeps the struct's own
+		// 0.2, which is the value 5,762 of the 5,836 shipped sequences carry anyway.
+		if (Row->Num() > 6)
+		{
+			Clip.Fade = static_cast<float>((*Row)[6]->AsNumber());
+		}
 		Clips.Add(Pair.Key, MoveTemp(Clip));
 	}
 	if (Malformed > 0)

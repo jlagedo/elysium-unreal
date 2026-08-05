@@ -652,5 +652,84 @@ def export_model(
     return config.export_root / "npc"
 
 
+def write_character_sources(npc_dir: Path, stems: Sequence[str]) -> tuple[list[str], list[str]]:
+    """Write the `.eskm` container for each named body and for every bank those bodies play.
+
+    This is the offline half of the character bake: the Python side decodes VtMB's own formats
+    and writes one Unreal-native container per model, and the editor side reads nothing else.
+    Returns (bodies, banks) as written.
+
+    A bank is written whole. It is shared by the whole cast, it is the natural unit the manifest
+    already resolves ownership against, and the rollout to the rest of the corpus needs it
+    anyway.
+    """
+    from elysium_pipeline.exporters import UE_mdl_skeletal
+    from elysium_pipeline.formats import install, mdl_gltf
+
+    with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+
+    banks: dict[str, str] = {}
+    for stem in stems:
+        record = manifest["npcs"].get(stem)
+        if record is None:
+            raise ValueError(f"{stem} is not in the NPC manifest")
+        for owner in record.get("clips", {}).values():
+            if owner == stem or owner in banks:
+                continue
+            bank = manifest["banks"].get(owner)
+            if bank is None:
+                raise ValueError(
+                    f"{stem} names bank '{owner}', which the manifest does not carry"
+                )
+            banks[owner] = bank["model"]
+
+    index = install.build_index(verbose=False)
+    # Without the unit-vector table a compressed vertex-animation record has directions but no
+    # magnitudes, so a body is written with no morph section rather than a wrong one.
+    anorms = mdl_gltf.load_anorms()
+
+    for stem in stems:
+        UE_mdl_skeletal.write_model(
+            index, manifest["npcs"][stem]["model"], str(npc_dir), stem=stem, anorms=anorms
+        )
+    for stem in sorted(banks):
+        UE_mdl_skeletal.write_bank(index, banks[stem], str(npc_dir), stem)
+    return list(stems), sorted(banks)
+
+
+def export_characters(config, runner, models: Sequence[str]) -> list[str]:
+    """Bake the named models onto /ElysiumBaked/Characters (ANM1).
+
+    Two stages. First the `.eskm` containers are written from the user's own install, then a
+    headless editor turns them into a shared skeleton per rig family, a mesh per model and a
+    compressed sequence per clip. The manifest and the eye sidecars have to be on disk already,
+    which `export bundle npc` or a complete profile writes. The policy content is a prerequisite
+    too, because a body is built against the same master materials the runtime names.
+
+    Unlike the map bake this runs wholesale for the models it is given. There is no per-model
+    receipt yet, so re-running re-bakes; the map bake's `bake_cache` store is keyed and staged by
+    map and does not carry over unchanged.
+    """
+    _require_export_config(config)
+    stems = [Path(model.replace("\\", "/")).stem.lower() for model in models]
+    stems = [stem for stem in dict.fromkeys(stems) if stem]
+    if not stems:
+        raise ValueError("no models named")
+
+    npc_dir = config.export_root / "npc"
+    index = npc_dir / "npc_index.json"
+    if not index.is_file():
+        raise ValueError(
+            f"{index} is missing; run: uv run elysium export bundle npc"
+        )
+
+    write_character_sources(npc_dir, stems)
+    ensure_policy_content(config, runner)
+    unreal.bake_characters(config, runner, stems)
+    unreal.verify_characters(config, runner, stems)
+    return stems
+
+
 def export_is_incomplete(export_root: Path) -> bool:
     return (export_root / INCOMPLETE_FILE).is_file()

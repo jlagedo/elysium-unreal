@@ -9,6 +9,7 @@ import os
 import re
 import hashlib
 import json
+import struct
 
 import unreal
 
@@ -23,6 +24,76 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_]+")
 def safe_name(text):
     """An OBJ material / texture path turned into a legal Unreal object name."""
     return _UNSAFE.sub("_", text).strip("_") or "unnamed"
+
+
+def read_glb_json(path):
+    """The JSON chunk of a .glb (pipeline/unreal/bake_characters.py and its verifier).
+
+    The character bake reads only the material, texture and image tables -- enough to bind a real
+    Texture2D where glTFRuntime bound a transient decode, and enough for the verifier to know which
+    materials are supposed to carry an albedo at all. Everything else in the file is glTFRuntime's
+    to read; this is deliberately not a glTF parser."""
+    with open(path, "rb") as handle:
+        magic, _version, _length = struct.unpack("<III", handle.read(12))
+        if magic != 0x46546C67:
+            raise ValueError("%s is not a .glb" % path)
+        chunk_length, _chunk_type = struct.unpack("<II", handle.read(8))
+        return json.loads(handle.read(chunk_length).decode("utf-8"))
+
+
+def glb_bone_parents(glb):
+    """{bone name: parent bone name or None} over a .glb's node tree.
+
+    None means the file does not name a parent for that bone -- it is that file's own root -- which
+    is NOT the same as asserting the bone is parentless everywhere. A bank is a bare tree rooted at
+    Bip01; a body whose VtMB skeleton forks carries a synthetic root above the same Bip01. Reading
+    None as "unspecified" is what lets those two describe one rig."""
+    nodes = glb.get("nodes", [])
+    parent = {}
+    for index, node in enumerate(nodes):
+        for child in node.get("children", []):
+            parent[child] = index
+    out = {}
+    for index, node in enumerate(nodes):
+        name = node.get("name", "")
+        if name:
+            out[name] = nodes[parent[index]].get("name", "") if index in parent else None
+    return out
+
+
+def rig_trees_compatible(base, tree):
+    """Whether `tree` can merge into `base`: every bone they share must agree on its parent.
+
+    Strict, including the root. A bone that is parentless in one tree and parented in the other is a
+    conflict, because USkeleton::MergeBonesToBoneTree rejects exactly that -- a model whose VtMB
+    skeleton forks carries a synthetic root above Bip01, and no amount of interpretation makes that
+    the same shape as a Bip01-rooted one. Those models get their own family, which costs them
+    nothing: a clip binds to a skeleton by BONE NAME, so a bank still resolves against the Bip01
+    subtree inside their skeleton without ever merging into it."""
+    return all(bone not in base or base[bone] == par for bone, par in tree.items())
+
+
+def rig_tree_merge(base, tree):
+    base.update(tree)
+
+
+def glb_material_albedo(glb):
+    """{glTF material name: image uri} for the materials that declare one. A VtMB material carries
+    at most one map -- mdl_gltf.py writes either a baseColorTexture or a flat baseColorFactor."""
+    images = glb.get("images", [])
+    textures = glb.get("textures", [])
+    out = {}
+    for material in glb.get("materials", []):
+        entry = material.get("pbrMetallicRoughness", {}).get("baseColorTexture")
+        if entry is None:
+            continue
+        source = textures[entry["index"]].get("source")
+        if source is None:
+            continue
+        uri = images[source].get("uri", "")
+        if uri:
+            out[material["name"]] = uri
+    return out
 
 
 # ---------------------------------------------------------------------------- sidecars

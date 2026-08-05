@@ -880,6 +880,27 @@ twice.
 
 The die itself (pool → tier, 10-again, botch table) is `docs/recovered/dice-system.md`.
 
+### Zone legality — where a verb is allowed
+
+Which player verbs are legal is a property of **where the player is standing**, surfaced by one
+icon above the health meter:
+
+| Icon | Zone | Forbidden |
+|---|---|---|
+| mask | Masquerade | visible disciplines, feeding on the unwilling — a breach costs a `Masquerade` point |
+| `E` | Elysium | attacking and disciplines outright; Bloodbuff while picking a lock is the sole exception |
+| gun | combat zone | nothing — attacking and disciplines carry no Masquerade or Humanity cost |
+
+Breaking *human* law does not touch the Masquerade counter; it draws police. Killing innocents
+costs Humanity, including inside a combat zone.
+
+The same button therefore means a legal or an illegal act depending on the zone, which is why the
+gamepad quickbar greys what the current zone forbids (`docs/architecture/input-architecture.md`).
+*Community-sourced;* the icon set and the Bloodbuff-in-Elysium exception are documented by the
+GameFAQs walkthrough under `$ELYSIUM_WORK_ROOT/research/reference-source/`. The zone entity and
+the check that reads it are not yet identified — locating the consumer of the `Masquerade` sheet
+field would confirm both.
+
 ## 4. The opening flow — New Game → chargen → trial → tutorial
 
 New Game reaches genesis, theatre, tutorial, and Santa Monica through the landmark chain in

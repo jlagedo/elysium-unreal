@@ -136,8 +136,8 @@ for anything else:
 | 3 | `LOOKAT` | `lookat` | 0 | resolve `param` as an entity, then `+0x408` with the event duration |
 | 4 | `MOVETO` | `moveto` | 0 | → `+0x40c` |
 | 5 | `SPEAK` | `speak` | **5,541** | play `param` on the actor; `param2` is a dB level (`"70dB"`, parsed as a float) |
-| 6 | `GESTURE` | `gesture` | **609** | → `+0x400`; `param` = an animation sequence label |
-| 7 | `SEQUENCE` | `sequence` | **242** | → `+0x418`; `param` = an animation sequence label |
+| 6 | `GESTURE` | `gesture` | **609** | → `+0x400`; `param` = an animation sequence label, played on an overlay layer and time-normalised to the event's range |
+| 7 | `SEQUENCE` | `sequence` | **242** | → `+0x418`; `param` = an animation sequence label, played 1:1 in absolute scene seconds and off the layer stack entirely |
 | 8 | `FACE` | `face` | 0 | resolve `param` as an entity, then `+0x414` |
 | 9 | `FIRETRIGGER` | `firetrigger` | **24** | `atoi(param)` ∈ 1…4 → fire `OnTrigger1`…`OnTrigger4` |
 | 10 | `FLEXANIMATION` | `flexanimation` | 0 | same handler as `EXPRESSION` (`+0x3f8`) |
@@ -208,6 +208,73 @@ whole-cast animation inside the entity's `BaseAnim` model. The rest are per-char
 dialogue clips (`Smiling_Jack_line191_col_E`, `Damsel_Line231_col_E`). Against today's
 exported NPC set (45 NPCs / 62 shared banks) 216 of 851 resolve; the remainder belong to
 characters not yet exported, not to a naming mismatch.
+
+**The two types are opposites in how they treat time, and neither runs the other's path.**
+
+**A `sequence` plays its clip 1:1 in absolute scene seconds; the authored event duration does not
+rescale it.** `CSceneEntity` virtual `+0x418` (`FUN_10081900`) re-applies the scene's anim set
+(`FUN_100843d0`) and calls **`CBaseFlex::AddSceneEvent`** (`FUN_100b5e60`), which for event type 7
+records `{event, scene, started = false, layer = -1, sequence, startTime}` into the array at actor
+`+0xa58`, stride `0x1c` — writing **`layer = -1`** explicitly. `CBaseFlex::ProcessSceneEvents`
+(`FUN_100b65b0`) then dispatches type 7 to `ProcessSequenceSceneEvent` (`FUN_100b70e0`), whose body
+is gated on `layer >= 0` and therefore **never runs**. No playback rate is derived from the event's
+range anywhere on that path. The clip is driven instead through the extra-animation binding that
+**`CBaseAnimating::AddExtraAnimation`** (`FUN_1008e0a0`, actor virtual `+0x3d4`) installs when the
+anim set is applied. So **a `sequence` event does not use the animation layer stack at all** — that
+stack, and the transition blending a base-sequence change goes through, are
+`docs/vtmb/animation_and_movers.md`'s.
+
+Measured, the 1:1 holds to the limit of the capture: three finalized retail capture databases put
+the clip at **29.9946 clip frames per second of scene time** across four independent actors,
+6,675–8,315 samples each, agreeing to 0.01%. Reading the clip as normalised to the event's duration
+instead is off by 4.5%.
+
+**A `gesture` is the opposite — it *is* time-normalised, and it *does* take a layer.** Virtual
+`+0x400` (`FUN_10081510`) looks up the label on the actor and calls `FUN_10099140`, which takes the
+lowest free overlay layer and sets **`playbackrate = SequenceDuration(sequence) / eventDuration`**,
+stretching or compressing the clip to fill the authored `time <start> <end>`. A label that does not
+resolve logs `Could not find gesture sequence %s`. The layer is pushed onto the object at actor
+`+0x94`, whose identity is **not established**; naming it needs that object's vftable located and
+walked, the same shape of open question as the `hide_ents` predicate's `+0x98` object. The
+`sequenceduration` key on 56 `gesture` events is the authored companion to that division.
+
+**No capture in the corpus shows a gesture composing.** `gesture` is dispatched **zero** times
+across all five retail capture databases, and the per-line dialogue `.vcd`s dispatch type 7, not
+type 6 — `jack_tutorial/line881_col_E.vcd` fires `Smiling_Jack_line881_col_E` over `time 0 → 12` as
+a `SEQUENCE`. The only other dispatched types observed are 13 (`Silence`), 14 (`Loud`) and 19
+(`Horn`, an environmental wav). How a gesture composes against a running base clip is therefore
+**open**: settling it needs a capture of a path that actually dispatches type 6 — a scene authoring
+`event gesture` on an actor already playing a `sequence` — with that actor's layer array sampled per
+frame.
+
+### An `event sequence`'s end time is derived from the model, and can be stale
+
+Corpus-wide, an `event sequence`'s authored end is a function of the clip's frame count, exactly:
+
+```
+vcd_length == float32( round( (numframes - 2) / 30.0, 3 ) )
+```
+
+This holds bit-for-bit on 30+ cinematic scenes: `prince_escort_male`/`female` 1801 frames →
+`59.966999`, `embrace_bips1`/`2` 1731 → `57.632999`, `jack_vs_sabbat` 461 → `15.300`,
+`ghoul_heather` 340 → `11.267`, `kueijin_part1_*` 3461 → `115.300003`, `snuff_*` 1331 → `44.2999`,
+`manbat_trans` 201 → `6.633`, `push_coffin` 61 → `1.967`. The `−2` and the 30 fps are the authoring
+tool's, not the runtime's: **the value is written into the file and never read back from the model
+at load**, so it can disagree with the model that ships.
+
+It does, once. `sp_theatre`'s courtroom `.vcd`s write `149.966995` — `round(4499/30, 3)`, implying a
+4501-frame cut — while the shipped `Courtroom_bip1..7.mdl` each carry **4701** frames. The
+disagreement is in retail data, identical in the base VPK copies and in the loose Unofficial Patch
+copies, and it is unique to that cutscene in the exported corpus; every other cinematic scene
+matches its model within one frame.
+
+A stale end is not clamped, and the scene does not end at it either: a scene's own end is the
+maximum over **all** its events (*The completion test*), so a scene can outlive its sequence event's
+authored range. `courtroom_bip2_scene.vcd` carries `speak "prince_line1021e"` over
+`133.740 → 155.815`, 5.8 s past its own `event sequence` end of `150.000`. Measured, the clip is
+**truncated by the scene ending rather than rescaled to it**: the bip4 scene stops at scene time
+~150.03 having reached cycle `0.957794` — frame 4501.6 of 4701 — leaving frames 4502–4700 never
+evaluated.
 
 ## `logic_choreographed_scene` — the entity
 
@@ -322,8 +389,9 @@ multi-actor performance**, e.g. `models/cinematic/tutorial/jack_VS_sabbat.mdl` f
 
 **One model, N co-located skeletons, one clip.** `jack_vs_sabbat.mdl` is **271 bones** — four
 complete 67-bone skeletons rooted `Bip01`, `Bip02`, `Bip03`, `Bip04`, plus three `DummyNN` nodes —
-carrying a **single** sequence, `entire_scene`, 461 frames at 30 fps (15.37 s, against the `.vcd`'s
-authored `0 → 15.300`). Every actor plays that same clip; `bonerename "BipNN" "Bip01"` is what
+carrying a **single** sequence, `entire_scene`, 461 frames at 30 fps (15.37 s of clip, against the
+`.vcd`'s authored `0 → 15.300` — which is exactly the `(numframes − 2) / 30` end time above). Every
+actor plays that same clip; `bonerename "BipNN" "Bip01"` is what
 selects which skeleton inside it is *this* actor's. That is the whole purpose of the key.
 
 Some cinematics instead ship one file per actor (`Courtroom_bip1.mdl` … `Courtroom_bip7.mdl` for
@@ -351,8 +419,16 @@ origin/angles so the shared cinematic animation lines up — and **immobilises i
 **The actors are placed once, not re-pinned.** They hold position because they cannot move, not
 because anything rewrites their transform. The per-frame call the playback think makes when
 `position_start == 1` is `FUN_100846c0`, which walks the actors propagating one float on each
-studio model (read through vftable `+0x3e8`, written through `+0x4e0`) and recurses into
-`SUBSCENE` events; it never touches origin or angles.
+studio model — per actor, `v = charObj->vt[0x3e8](0); charObj->vt[0x4e0](v);` — and recurses into
+`SUBSCENE` events. It touches **neither origin and angles nor the animation layers**; it is a value
+copy and a recursion, nothing else.
+
+**What that float is, is not established.** The same slot number on `CBaseAnimating` is the
+anim-advance think, `StudioFrameAdvance`, which steps `m_flCycle` by
+`GetSequenceCycleRate * m_flPlaybackRate * dt` (`docs/vtmb/entity_io.md`), which makes a cycle or a
+rate the plausible reading — but that is an inference from a slot number, and whether the object
+behind a scene actor's studio-model pointer shares that vftable is not shown. Sampling the value in
+a live capture beside the actor's own clip cycle would settle it.
 
 At `OnSceneFinished`, `FUN_10081b60` restores **only** the four body fields — move type, move
 collide, solid flags, solid type. The saved transform is *not* restored, which is why
@@ -566,6 +642,10 @@ its own flags in place. This is the path the ~5,300 per-line `.vcd`s run on.
   `firetrigger "N"` → `OnTriggerN`, N ∈ 1…4.
 - Scene time is absolute seconds since `Start`, ticked every frame, offset by the audio
   mixahead. That maps directly onto a timeline on the game clock.
+- A `sequence` event's clip runs at its own rate from the event's start and is **cut off** by
+  whatever ends the scene; only a `gesture` is fitted to its authored range. An `event sequence`'s
+  end time is a derived, authored number and is not the clip's authority — do not scale a clip to
+  it, and do not trust it to match the model.
 - Actor/channel/event blocks marked `active 0` remain parseable for inspection but do not enter the
   live timeline or extend its completion time.
 - `sp_theatre`'s trial runs **seven** concurrent scenes (`courtroom_scene_bip2`…`bip7`
@@ -620,7 +700,8 @@ dialogue scenes at once, and the two populations are separable only by the vftab
 `FUN_10082ee0` is `__thiscall(this, float currenttime, CChoreoScene*, CChoreoEvent*)`,
 cleaning twelve bytes of stack arguments. It switches on the event's own type field, and
 case 6 reaches virtual `+0x400` while case 7 reaches `+0x418` — the gesture and sequence
-arms.
+arms, whose two opposite time models are settled under *`gesture` / `sequence` — the
+animation payload*.
 
 `CChoreoEvent` stores everything the dispatcher needs inline, behind getters that are one
 instruction each [data-verified]:
@@ -699,10 +780,14 @@ The runtime class is `FElysiumChoreoScene`
 outputs, actor binding by name, the timing model above, and `position_start`/`position_end`. It
 diverges as follows, each an explicit call:
 
-- **`gesture` and `sequence` collapse onto one clip player.** Source layers a gesture additively
-  over a base sequence; this runtime has a single clip slot per body, so both play through it. Same
-  class of simplification as `scripted_sequence`'s missing locomotion. `sequenceduration` is parsed
-  and surfaced, not acted on.
+- **`gesture` and `sequence` collapse onto one clip player.** The runtime has a single clip slot per
+  body and seeks it to `sceneTime − eventStart`, which is what a `sequence` does in retail — that
+  event drives the base clip 1:1 and never touches the layer stack, so the collapse costs nothing
+  there. The divergence is `gesture`: retail gives it an overlay layer at
+  `SequenceDuration / eventDuration`, so it composes over the base clip *and* is stretched to the
+  authored range, while here it replaces the base clip and plays at rate 1. `sequenceduration` is
+  parsed and surfaced, not acted on. Nothing in the corpus is observed dispatching a gesture, so the
+  cost of this one is unmeasured as well as unimplemented.
 - **`position_start` immobilises the body rather than restoring four separate fields.** The engine
   saves and restores move type, move collide, solid type and solid flags individually; this runtime
   has one reversible freeze (`FElysiumEntity::SetBodyFrozen`) that stops the movement motor and
@@ -755,6 +840,9 @@ patch-first, with the `sound/` prefix stripped — so a `SceneFile` is that path
 | `OnSceneFinished` | `0x10081b60` |
 | speak audio resolution | `FUN_10081700` |
 | actor save-and-place / per-frame cast pass / anim-set / `position_end` | `FUN_10081ed0` / `FUN_100846c0` / `FUN_100843d0` / `FUN_100821f0` |
+| `sequence` arm (`+0x418`) / `gesture` arm (`+0x400`) / overlay-layer allocator | `FUN_10081900` / `FUN_10081510` / `FUN_10099140` |
+| `CBaseFlex::AddSceneEvent` / `ProcessSceneEvents` / `ProcessSequenceSceneEvent` (dead) | `FUN_100b5e60` / `FUN_100b65b0` / `FUN_100b70e0` |
+| `CBaseAnimating::AddExtraAnimation` | `FUN_1008e0a0` (actor virtual `+0x3d4`) |
 | `CInstancedSceneEntity` | vftable `0x1044f584`, think `0x10084c80` |
 | `CChoreoEvent` getters | type `0x10075b70`, name `0x10075c00`, `param` `0x10075c50`, `param2` `0x10075ca0`, start `0x10075e70`, end `0x10075f10`, has-end `0x10075f30`, actor `0x10076690` |
 | `CChoreoActor` getters | name `0x10072d90`, `bonerename` `0x10072e20` / `0x10072e40` |

@@ -6,9 +6,12 @@ Source code remains the as-built record.
 ## Ownership
 
 - `project/roadmap.md` owns master sequencing, playable-path priority, and roll-up status.
-- `project/retail-capture-roadmap.md` is the only scoped subtracker; it owns detailed status
-  for the retail capture harness and the capture-index-inspect loop that verifies the
-  original-runtime animation and facial decode against the export.
+- `project/retail-capture-roadmap.md` and `project/animation-roadmap.md` are the two scoped
+  subtrackers. The first owns detailed status for the retail capture harness and the
+  capture-index-inspect loop that verifies the original-runtime animation and facial decode
+  against the export. The second owns detailed status for the skeletal animation programme —
+  the character asset bake, the shared skeleton, layer masks, blend spaces, the animation graph,
+  and the locomotion that drives them.
 - `project/rebuild-strategy.md` owns strategy, milestone vocabulary, and sidecar contracts.
 - `project/remaster-direction.md` owns modernization boundaries.
 - `architecture/` owns Unreal system designs and integration seams.
@@ -26,8 +29,8 @@ Source code remains the as-built record.
   identify the explicit owner call.
 - Mark uncertain reconstructions and say what evidence would verify them.
 - Correct contradicted facts in place.
-- Never place status outside `project/roadmap.md` and its one declared scoped subtracker,
-  `project/retail-capture-roadmap.md`.
+- Never place status outside `project/roadmap.md` and its two declared scoped subtrackers,
+  `project/retail-capture-roadmap.md` and `project/animation-roadmap.md`.
 
 Directory `CLAUDE.md` files orient readers to code and workflow. They do not own VtMB
 facts or roadmap status.

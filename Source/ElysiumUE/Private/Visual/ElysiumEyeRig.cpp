@@ -45,7 +45,7 @@ namespace
 	}
 }
 
-bool FElysiumEyeSet::Load(const FString& RelPath, FString& OutError)
+bool FElysiumEyeSet::Load(const FString& RelPath, FString& OutError, bool bBaked)
 {
 	OutError.Reset();
 	const FString Path = FElysiumContentPaths::NpcEyes(RelPath);
@@ -59,7 +59,7 @@ bool FElysiumEyeSet::Load(const FString& RelPath, FString& OutError)
 	{
 		return false;
 	}
-	ApplyAssetImport();
+	ApplyAssetImport(bBaked);
 	return true;
 }
 
@@ -123,7 +123,7 @@ bool FElysiumEyeSet::LoadJsonText(const FString& JsonText, FString& OutError)
 	return true;
 }
 
-void FElysiumEyeSet::ApplyAssetImport()
+void FElysiumEyeSet::ApplyAssetImport(bool bBaked)
 {
 	// The same door the procedural rule table goes through: the sidecar states its geometry in the
 	// glb's own basis and metres, and glTFRuntime imports that file under a declared basis and
@@ -131,10 +131,10 @@ void FElysiumEyeSet::ApplyAssetImport()
 	for (FElysiumEyeball& E : Eyeballs)
 	{
 		const FTransform Imported = ElysiumNpcVisual::ImportGlbLocal(
-			FTransform(FQuat::Identity, E.Org, FVector::OneVector));
+			FTransform(FQuat::Identity, E.Org, FVector::OneVector), bBaked);
 		E.Org = Imported.GetLocation();
-		E.Up = ElysiumNpcVisual::ImportGlbDirection(E.Up).GetSafeNormal();
-		E.Forward = ElysiumNpcVisual::ImportGlbDirection(E.Forward).GetSafeNormal();
+		E.Up = ElysiumNpcVisual::ImportGlbDirection(E.Up, bBaked).GetSafeNormal();
+		E.Forward = ElysiumNpcVisual::ImportGlbDirection(E.Forward, bBaked).GetSafeNormal();
 	}
 }
 

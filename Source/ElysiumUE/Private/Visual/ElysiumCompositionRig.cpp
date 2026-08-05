@@ -52,7 +52,7 @@ const FElysiumAxisInterpRule* FElysiumCompositionRig::FindRule(const FName Bone)
 
 // --- load ------------------------------------------------------------------------------------
 
-bool FElysiumCompositionRig::LoadAxisRules(const FString& RelPath, FString& OutError)
+bool FElysiumCompositionRig::LoadAxisRules(const FString& RelPath, FString& OutError, bool bBaked)
 {
 	const FString Path = FElysiumContentPaths::NpcProcedural(RelPath);
 	FString JsonText;
@@ -65,7 +65,7 @@ bool FElysiumCompositionRig::LoadAxisRules(const FString& RelPath, FString& OutE
 	{
 		return false;
 	}
-	ApplyAssetImport();
+	ApplyAssetImport(bBaked);
 	return true;
 }
 
@@ -168,19 +168,19 @@ bool FElysiumCompositionRig::LoadAxisRulesJson(const FString& JsonText, FString&
 	return true;
 }
 
-void FElysiumCompositionRig::ApplyAssetImport()
+void FElysiumCompositionRig::ApplyAssetImport(bool bBaked)
 {
 	for (int32 i = 0; i < 3; ++i)
 	{
-		DriverAxes[i] = ElysiumNpcVisual::ImportGlbDirection(DriverAxes[i]);
+		DriverAxes[i] = ElysiumNpcVisual::ImportGlbDirection(DriverAxes[i], bBaked);
 	}
 	for (FElysiumAxisInterpRule& Rule : AxisRules)
 	{
-		Rule.Axis = ElysiumNpcVisual::ImportGlbDirection(Rule.Axis);
+		Rule.Axis = ElysiumNpcVisual::ImportGlbDirection(Rule.Axis, bBaked);
 		for (int32 i = 0; i < 6; ++i)
 		{
 			const FTransform Imported =
-				ElysiumNpcVisual::ImportGlbLocal(FTransform(Rule.Quat[i], Rule.Pos[i]));
+				ElysiumNpcVisual::ImportGlbLocal(FTransform(Rule.Quat[i], Rule.Pos[i]), bBaked);
 			Rule.Quat[i] = Imported.GetRotation();
 			Rule.Pos[i] = Imported.GetTranslation();
 		}

@@ -5,60 +5,54 @@
 
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Overlay.h"
 #include "Components/Widget.h"
-#include "GameFramework/PlayerController.h"
-#include "Widgets/SOverlay.h"
-#include "Widgets/SNullWidget.h"
 
 void UElysiumUIRoot::EnsureContainers()
 {
-	if (!TransientStack)
+	if (TransientStack)
 	{
-		TransientStack = NewObject<UCommonActivatableWidgetStack>(this, TEXT("TransientStack"));
-		NotificationQueue = NewObject<UCommonActivatableWidgetQueue>(this, TEXT("NotificationQueue"));
-		GameModalStack = NewObject<UCommonActivatableWidgetStack>(this, TEXT("GameModalStack"));
-		SystemModalStack = NewObject<UCommonActivatableWidgetStack>(this, TEXT("SystemModalStack"));
-		RuntimeLoadingStack = NewObject<UCommonActivatableWidgetStack>(this, TEXT("RuntimeLoadingStack"));
+		return;
 	}
+
+	// CommonUI creates activatable screens through the container's owning UUserWidget. Keep every
+	// layer in this root's WidgetTree so that ownership can be resolved during AddWidget().
+	Initialize();
+	check(WidgetTree);
+
+	UOverlay* RootOverlay = WidgetTree->ConstructWidget<UOverlay>(
+		UOverlay::StaticClass(), TEXT("RootOverlay"));
+	WidgetTree->RootWidget = RootOverlay;
+
+	HUDWidget = WidgetTree->ConstructWidget<UElysiumHUDWidget>(
+		UElysiumHUDWidget::StaticClass(), TEXT("HUD"));
+	TransientStack = WidgetTree->ConstructWidget<UCommonActivatableWidgetStack>(
+		UCommonActivatableWidgetStack::StaticClass(), TEXT("TransientStack"));
+	NotificationQueue = WidgetTree->ConstructWidget<UCommonActivatableWidgetQueue>(
+		UCommonActivatableWidgetQueue::StaticClass(), TEXT("NotificationQueue"));
+	GameModalStack = WidgetTree->ConstructWidget<UCommonActivatableWidgetStack>(
+		UCommonActivatableWidgetStack::StaticClass(), TEXT("GameModalStack"));
+	SystemModalStack = WidgetTree->ConstructWidget<UCommonActivatableWidgetStack>(
+		UCommonActivatableWidgetStack::StaticClass(), TEXT("SystemModalStack"));
+	RuntimeLoadingStack = WidgetTree->ConstructWidget<UCommonActivatableWidgetStack>(
+		UCommonActivatableWidgetStack::StaticClass(), TEXT("RuntimeLoadingStack"));
+
+	RootOverlay->AddChildToOverlay(HUDWidget);
+	RootOverlay->AddChildToOverlay(TransientStack);
+	RootOverlay->AddChildToOverlay(NotificationQueue);
+	RootOverlay->AddChildToOverlay(GameModalStack);
+	RootOverlay->AddChildToOverlay(SystemModalStack);
+	RootOverlay->AddChildToOverlay(RuntimeLoadingStack);
 }
 
 TSharedRef<SWidget> UElysiumUIRoot::RebuildWidget()
 {
 	EnsureContainers();
-	APlayerController* PC = GetOwningPlayer();
-	HUDWidget = PC ? CreateWidget<UElysiumHUDWidget>(PC, UElysiumHUDWidget::StaticClass()) : nullptr;
-	if (HUDWidget)
-	{
-		HUDWidget->SetModel(Model);
-		HUDWidget->SetVisibility(bHUDSurfaceVisible
-			? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
-	}
-
-	return SNew(SOverlay)
-		+ SOverlay::Slot()
-		[
-			HUDWidget ? HUDWidget->TakeWidget() : SNullWidget::NullWidget
-		]
-		+ SOverlay::Slot()
-		[
-			TransientStack ? TransientStack->TakeWidget() : SNullWidget::NullWidget
-		]
-		+ SOverlay::Slot()
-		[
-			NotificationQueue ? NotificationQueue->TakeWidget() : SNullWidget::NullWidget
-		]
-		+ SOverlay::Slot()
-		[
-			GameModalStack ? GameModalStack->TakeWidget() : SNullWidget::NullWidget
-		]
-		+ SOverlay::Slot()
-		[
-			SystemModalStack ? SystemModalStack->TakeWidget() : SNullWidget::NullWidget
-		]
-		+ SOverlay::Slot()
-		[
-			RuntimeLoadingStack ? RuntimeLoadingStack->TakeWidget() : SNullWidget::NullWidget
-		];
+	HUDWidget->SetModel(Model);
+	HUDWidget->SetVisibility(bHUDSurfaceVisible
+		? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	return Super::RebuildWidget();
 }
 
 void UElysiumUIRoot::SetHUDSurfaceVisible(bool bVisible)
@@ -121,10 +115,4 @@ UCommonActivatableWidget* UElysiumUIRoot::GetActiveWidget(EElysiumUILayer Layer)
 		return Container->GetActiveWidget();
 	}
 	return nullptr;
-}
-
-void UElysiumUIRoot::ReleaseSlateResources(bool bReleaseChildren)
-{
-	Super::ReleaseSlateResources(bReleaseChildren);
-	HUDWidget = nullptr;
 }

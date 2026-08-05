@@ -55,9 +55,12 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	virtual void UpdateAnimationNode(const FAnimationUpdateContext& InContext) override;
 	virtual bool Evaluate(FPoseContext& Output) override;
 
-	// Start playing Sequence, crossfading over BlendSeconds (0 snaps). Called from the game
-	// thread through UElysiumNpcAnimInstance, never from the worker.
-	void Request(UAnimSequence* Sequence, bool bLoop, float BlendSeconds);
+	// Start playing Sequence. FadeSeconds is the INCOMING clip's own authored fade, not the
+	// transition duration — the transition takes the larger of it and the outgoing clip's, which
+	// this owns. 0 is the refusal: it snaps AND flushes every clip still fading, which is retail's
+	// `flags & 0x2` hard cut. Called from the game thread through UElysiumNpcAnimInstance, never
+	// from the worker.
+	void Request(UAnimSequence* Sequence, bool bLoop, float FadeSeconds);
 	// Pin the current clip to an absolute authored time. Cinematic scenes call this every scene
 	// frame, making the pose a function of scene time rather than accumulated animation delta. It
 	// does NOT settle a crossfade — a scene seeks the clip it just started, so a Seek that forced the
@@ -76,7 +79,10 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
-	bool IsBlending() const { return BlendAlpha < 1.f; }
+	// True while any previous clip is still fading out. More than one may be, so this is "a
+	// transition is in flight", not "the one crossfade is running".
+	bool IsBlending() const { return Fading.Num() > 0; }
+	int32 NumFadingClips() const { return Fading.Num(); }
 
 	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
 	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
@@ -114,24 +120,46 @@ private:
 	// The garment spike, evaluated after both of them so the simulation sees the finished skeleton.
 	UPROPERTY(Transient) FAnimNode_ElysiumCloth Cloth;
 
+	// One clip still fading out. Retail keeps these in a CUtlVector with NO cap and evicts purely on
+	// the weight reaching zero, so concurrency is however many clip changes land inside a fade
+	// window. Four players is one live clip plus three fading, which covers everything the retail
+	// captures ever showed (the deepest observed was four concurrent sequences); a fifth change
+	// inside one fade window evicts the oldest, which is the weakest contribution by construction.
+	struct FFadingClip
+	{
+		int32 Slot = INDEX_NONE;
+		float Elapsed = 0.f;
+		float Duration = 0.f;
+	};
+
+	static constexpr int32 MaxPlayers = 4;
+
 	// Standalone (not _Standalone-suffixed by accident): the plain-C++ variant of the sequence
 	// player whose setters actually write, unlike the Blueprint-bound FAnimNode_SequencePlayer
 	// whose SetSequence is a no-op outside a compiled anim graph.
-	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone Players[2];
+	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone Players[MaxPlayers];
 
-	// Index of the player the crossfade is moving *to*. The other holds the outgoing pose.
-	int32 Incoming = 0;
-	// Weight of the incoming player: 1 = settled, <1 = mid-blend.
-	float BlendAlpha = 1.f;
-	float BlendRate = 0.f;
+	// A slot no live clip is using, evicting the oldest fade when every slot is busy.
+	int32 TakeFreeSlot();
+	// The blend factor toward a fading clip's pose. Retail: f = 1 - elapsed/duration, then
+	// SimpleSpline. Zero once expired, which is also the eviction test.
+	static float FadeWeight(const FFadingClip& Fade);
+
+	// Which player holds the clip that is playing now.
+	int32 Current = 0;
+	// Newest first, oldest last — the order retail blends them in, so the weakest pull lands last.
+	TArray<FFadingClip, TInlineAllocator<MaxPlayers>> Fading;
 
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> Playing = nullptr;
+	// The playing clip's own authored fade, kept so the next transition can take the max of the
+	// pair without the caller having to know what is currently up.
+	float CurrentFade = 0.2f;
 	bool bPlayingLoop = true;
 	bool bInitialized = false;
 	// A player whose sequence changed needs Initialize_AnyThread to reset its time accumulator —
 	// SetSequence alone leaves it wherever the previous clip had run to. Flagged on the game
 	// thread, consumed on the worker where the contexts are valid.
-	bool bNeedsReinit[2] = { false, false };
+	bool bNeedsReinit[MaxPlayers] = {};
 };
 
 UCLASS(Transient)
@@ -140,12 +168,16 @@ class UElysiumNpcAnimInstance : public UAnimInstance
 	GENERATED_BODY()
 
 public:
-	// Default crossfade for a stance/fidget/gesture change. Short: these are all idle-to-idle
-	// swaps on a standing body, and a long blend reads as a drift rather than a change of pose.
-	static constexpr float DefaultBlendSeconds = 0.25f;
+	// The transition duration a clip gets when its own authored value is not known. VtMB stores one
+	// per sequence in `mstudioseqdesc_t` at +0x264 and combines a pair as `max(outgoing, incoming)`;
+	// across 5,836 shipped sequences 5,762 carry 0.2, with 0.3 on a handful of dialogue clips and
+	// 0.5 on the lying-down and damaged stance idles. So this default IS the shipped value for
+	// 98.7% of the vocabulary, and stays correct until the export carries the field per clip.
+	static constexpr float DefaultBlendSeconds = 0.2f;
 
-	// Play a clip, crossfading from whatever is current. Repeating an already-looping clip does
-	// nothing; a repeated one-shot or a loop-mode change restarts it from frame zero.
+	// Play a clip, transitioning from whatever is current. Repeating an already-looping clip does
+	// nothing; a repeated one-shot or a loop-mode change restarts it from frame zero. A FadeSeconds
+	// of 0 is retail's `flags & 0x2` snap: no transition, and every clip still fading is dropped.
 	void PlayClip(UAnimSequence* Sequence, bool bLoop = true, float BlendSeconds = DefaultBlendSeconds);
 	void SeekClip(float PositionSeconds);
 	void StopClip();

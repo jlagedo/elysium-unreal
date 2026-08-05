@@ -90,12 +90,12 @@ struct FElysiumEyeSet
 
 	// Read `npc/<RelPath>` — `npc_index.json`'s own `eyes` value — and carry the geometry onto the
 	// skeleton through the glb's import transform. This is the door the runtime uses.
-	bool Load(const FString& RelPath, FString& OutError);
+	bool Load(const FString& RelPath, FString& OutError, bool bBaked = false);
 	// Parse the same JSON **verbatim**, in the glb's own space and metres. Split out so a test can
 	// see what the file says before and after the import.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
 	// Convert the geometry from the glb's basis/metres into the loaded skeleton's space, in place.
-	void ApplyAssetImport();
+	void ApplyAssetImport(bool bBaked);
 
 	const FElysiumEyeball* Find(int32 Index) const;
 	// The eye a glTF material name draws, or null. The join the slot lookup uses.

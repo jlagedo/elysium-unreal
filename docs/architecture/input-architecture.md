@@ -66,6 +66,24 @@ Two tiers:
   `UEnhancedInputComponent::BindAction`'s variadic `VarTypes...` payload carries the command name,
   so the whole inventory is one loop.
 
+### Triggers, and the `Canceled` hazard
+
+Modifiers shape a value; **triggers decide when an action fires**. The gamepad layout needs four:
+
+| Trigger | Used for |
+|---|---|
+| `UInputTriggerPressed` + `ActuationThreshold` | an analog `Gamepad_*TriggerAxis` acting as a button |
+| `UInputTriggerTap` | the short press of a dual-purpose button (`LB` tap = cast) |
+| `UInputTriggerHold` | the long press of the same button (`LB` hold = the radial) |
+| `UInputTriggerChordAction` | any modifier layer |
+
+**A Hold or Tap trigger breaks the `+`/`-` pairing unless `Canceled` is bound.** The loop above
+binds `Started` → `+cmd` and `Completed` → `-cmd`. A `Hold` released before its threshold fires
+**`ETriggerEvent::Canceled`, not `Completed`** — the `-cmd` never runs, and the button stays
+latched in `FElysiumUserCmd` for the rest of the session. Every `bIsButtonPair` action therefore
+binds `Canceled` to the same `OnCommandUp` handler as `Completed`, and the pairing test covers the
+cancelled path as well as the released one.
+
 **Command actions route through the console because the patch's vocabulary is aliases.** `f` →
 `vm_feed` → `checkFeed()` in Python. An action bound to a compiled verb and one bound to a user
 alias must be indistinguishable, as they are in VtMB. It also means `-ExecCmds`, the MCP tools and
@@ -118,6 +136,14 @@ conversation does to held input" on our side of the port.
 Both device contexts stay applied together so the remapping screen's Keyboard and Gamepad columns
 are independent and each device carries its own modifier stack.
 
+**Cursor visibility is device-dependent, and a scope alone cannot decide it.**
+`FElysiumInputScope::bShowCursor` is a fixed value per scope, which is right for a mouse and wrong
+for a pad: a `GameAndUI` screen showing a cursor leaves a gamepad player holding a pointer they
+cannot move, over a screen with nothing focused. The scope's request is therefore filtered by the
+live device — `UCommonInputSubsystem::GetCurrentInputType`, with `OnInputMethodChanged`
+re-resolving the stack when the player switches device mid-screen. What a pad drives is **focus**,
+not the cursor, so every activatable screen names a default focus widget.
+
 ## Gamepad
 
 **`GameInputWindows`** (engine plugin, beta, `EnabledByDefault: false`) is the device layer — one
@@ -148,6 +174,67 @@ Two constraints:
 Gamepad defaults are new work with no original to reproduce (`docs/vtmb/controls.md` records that VtMB ships
 raw joystick cvars, no UI, no default binds, and a `joystick.cfg` that does not exist). They sit on
 the Feel axis: A/B-able, one delta at a time by owner call.
+
+### The layout
+
+VtMB's ~40 player verbs do not fit 16 digital inputs. The layout follows one allocation rule:
+**anything needed while the right stick is moving lives on a shoulder, a trigger or a stick click,
+never on a face button** — that is attack, block, `+use` and the discipline cast.
+
+| Input | Action | Note |
+|---|---|---|
+| `LS` | `IA_Move` | magnitude carries the walk↔run gait, so `+speed` needs no button |
+| `LS` click | `autospeed` | the patch's own walk/run toggle alias |
+| `RS` | `IA_Look` | in third person this *is* the orbit, so the `cam_*` verbs need no binds |
+| `RS` click | `togglecamera` | |
+| `RT` | `+attack` | `Pressed` with an actuation threshold |
+| `LT` | **block** (melee/unarmed) · **zoom** (ranged) | contextual by weapon class |
+| `LB` | tap → `vdiscipline_last` · hold → the quickbar radial | the two-stage cast as one button |
+| `RB` | `+use` | |
+| `A` / `B` / `X` / `Y` | `+jump` / `+duck` / `+reload` / `+feed` | |
+| D-pad ← / → | `invprev` / `invnext` | |
+| D-pad ↑ / ↓ | `+wpn_secondaryatk` / `holster` | |
+| `Start` | `cancelselect` | |
+| `Back` | the character screen | the quest log is a tab on it |
+
+Everything absent from that table resolves to a **context** rather than a binding: `slot1`–`slot6`,
+`lastinv` and `dropitem` are operations inside the character screen (`IMC_Menu`); `skip` is any
+face button under `IMC_Cinematic`; `save quick` / `load quick` are pause-menu items; the dialogue
+verbs belong to `IMC_Dialogue`.
+
+**`LT` is contextual because the game already is.** `camera_prefs` forces third person for weapon
+class 1 and first person for classes 2 and 4 (`docs/vtmb/camera-view-modes.md`), so branching a
+binding on weapon class uses the original's own arbitration rather than inventing a mode; unarmed
+has no zoom, so the two meanings never collide. It requires the weapon-class bitmask to be
+readable by the input layer, which is a seam the substrate does not expose today.
+
+**The radial subsumes three things.** It *is* `showhotkeys` — VtMB's own `VHotkeysUI`, so the
+surface is not an invention; it removes the need for `toggleuiside`, because the D-pad cycles
+weapons and the radial owns powers, leaving the wheel no mode to switch; and it fires selection
+and cast as one action instead of reproducing the one-frame `vhotkey` deferral.
+
+Three **divergences**, all additive, each pending an explicit owner call. The faithful behaviour
+is `docs/vtmb/controls.md`:
+
+- **`+duck` is a toggle on gamepad**, not a hold. Crouch is VtMB's stealth mode and Obfuscate
+  breaks on moving while standing, so it is held for minutes at a time and a hold binding is not
+  playable on a pad. Keyboard keeps the hold.
+- **`toggleuiside` is unbound on gamepad** — it has nothing left to switch.
+- **The one-frame `vhotkey` deferral is not reproduced.** It is the defect the community's
+  `wait 1` idiom exists to work around, not a behaviour worth carrying.
+
+Two entries are **blocked on RE rather than on design**: `LT`'s melee half needs the block verb
+identified, and D-pad ↑ needs `+wpn_secondaryatk`'s semantics. Both are open questions in
+`docs/vtmb/controls.md`.
+
+### Melee combos need the stick quantised
+
+`+attack` selects one of four melee moves from **the movement direction held with it**, and VtMB
+reads that from discrete direction keys. An analog stick has to be quantised to the same four
+directions with a **combat deadzone of its own** — the locomotion deadzone is tuned for a smooth
+gait and is far too permissive to select a combo reliably. `IA_Move` therefore delivers its raw
+vector into `FElysiumUserCmd` and the quantisation happens where the move set is resolved, so a
+keyboard and a pad present the same four inputs to the same code.
 
 ### Modifier stacks
 
@@ -184,8 +271,19 @@ mirroring `Host_WriteConfiguration`. The CPython VM's `nt.getcwd` redirect (9.3b
 needs the `FKey` ↔ VtMB-keyname table from `docs/vtmb/controls.md` § "Key names and keynums"
 (`EKeys::LeftMouseButton` ↔ `MOUSE1`, …), which is one static map.
 
-The direction is **one-way** (profile → text). On first run only, an existing `config.cfg` with no
-profile beside it is imported as the initial profile.
+**Slot `Third` is excluded from the projection.** A gamepad binding has no VtMB keyname —
+`JOY1`–`JOY4` and `AUX1`–`AUX32` exist in the engine's table but map onto nothing a modern pad
+reports — so emitting gamepad rows would produce a `config.cfg` VtMB itself could never write,
+which is precisely the file `FixKeyBindings` then parses. Only `First` and `Second` are written.
+
+**The projection is write-mostly, not write-only: a runtime `bind` must reach the profile.** The
+patch does not merely read `config.cfg` — `FixKeyBindings` reads it and then issues
+`bind <KEY> "vm_discipline"` through the console (`docs/vtmb/controls.md` § "Bindings are rewritten
+at runtime, from Python"). A `bind` executed by the running game therefore resolves to
+`MapPlayerKey` on the profile rather than being discarded, or the patch's re-routing of discipline
+and feed silently does nothing the moment a player moves either off its default key. `unbindall`
+and `exec` follow the same rule. Everything else stays one-way (profile → text), and on first run
+only, an existing `config.cfg` with no profile beside it is imported as the initial profile.
 
 ## Reserved keys — the dev/player guarantee
 
@@ -246,9 +344,16 @@ removes the mapping.
 
 ## Open
 
-**CommonUI / CommonInput adoption.** Gamepad *UI* navigation — focus, back-button routing, and
-Xbox/PlayStation glyph swapping — is CommonUI's remit, and `CommonInputBaseControllerData` is what
-turns the `"DualSense"` hardware id above into the right button art. It is Epic's first-party answer
-and Lyra's, and it is also opinionated (activatable widget stacks, input action domains): it shapes
-the UI foundation rather than bolting onto it, so adopting it after 8.6 lands costs materially more
-than adopting it with 8.6. The call belongs to **8.6**, not to 10.6.
+**Button glyphs.** CommonUI and CommonInput are adopted: `UElysiumCommonUIInputData` supplies the
+keyboard and generic-gamepad Accept/Back actions natively, and CommonUI owns focus and Back
+routing while the input-scope stack stays the sole input-mode writer
+(`docs/architecture/ui-architecture.md`). What is **not** authored is
+`CommonInputBaseControllerData`, which turns the `"DualSense"` hardware id above into the right
+button art; without it every pad draws generic glyphs.
+
+**Aim assist and the look curve on a stick.** `sv_aim` defaults to off, but VtMB is a mouse game:
+ranged combat on a stick with no assist, over a `+use` trace radius tuned for a mouse cursor, has
+no original to reproduce and no measured baseline. A Feel-axis decision with no owner yet.
+
+**The weapon-class seam.** `LT`'s melee/ranged split and the `camera_prefs` arbitration both read
+the weapon-class bitmask, which the substrate does not currently expose to the input layer.

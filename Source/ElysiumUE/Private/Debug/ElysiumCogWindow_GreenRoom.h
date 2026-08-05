@@ -47,6 +47,9 @@ private:
 	// The anim instance of the body currently standing on the stage, or null.
 	UElysiumNpcAnimInstance* GetBodyInstance() const;
 
+	// Which build of the body stands on the stage -- the baked /ElysiumBaked assets or the
+	// glTFRuntime load -- and which one actually did, since only part of the cast is baked.
+	void RenderSource(FElysiumGreenRoomRun& Lab);
 	void RenderModel(FElysiumGreenRoomRun& Lab);
 	void RenderPlayback(FElysiumGreenRoomRun& Lab);
 	// The orbit, the stage, and the drawn overlays — everything about how the body is being looked
@@ -88,6 +91,36 @@ private:
 	// Parallel to Clips — whether the label is an additive layer rather than a pose. Read off the
 	// vocabulary once per stem, because the answer changes what a broken-looking body means.
 	TArray<bool> ClipAdditive;
+	// Parallel to Clips — the stem whose file carries the animation: the body itself for its own
+	// dialogue clips, a shared bank otherwise. A body resolves most of its vocabulary through banks
+	// it has nothing else to do with, and which file a clip came out of is the first thing worth
+	// knowing when one of them looks wrong.
+	TArray<FString> ClipOwner;
+
+	// Row index of the clip the keyboard is on, into Clips. Arrow keys move it and stand what they
+	// land on, so a vocabulary can be walked without the mouse.
+	int32 ClipCursor = INDEX_NONE;
+	// Set when the cursor moved this frame, so the list scrolls to follow it.
+	bool bClipCursorMoved = false;
+
+	// The distinct owners in this stem's vocabulary, sorted, with the body's own file first. A
+	// well-connected NPC resolves through ~30 banks, which is a list worth picking from; its 1,500
+	// clips are not.
+	TArray<FString> ClipOwners;
+	// Filters over the clip list, all ANDed. Empty owner means every owner; the two enums are
+	// 0 = everything, then one entry per value worth isolating.
+	FString OwnerFilter;
+	int32 KindFilter = 0;       // 1 = poses only, 2 = additive layers only
+	int32 MotionFilter = 0;     // 1 = carries the root, 2 = root held. Needs the scan below.
+
+	// Parallel to Clips: 0 unknown, 1 the clip moves Bip01, 2 it holds it. VtMB's vocabulary does
+	// not record this and only the resolved sequence can answer it, so it is filled by an explicit
+	// scan rather than on load -- resolving a whole vocabulary is hundreds of package loads.
+	TArray<uint8> ClipRootMotion;
+	// Which stem ClipRootMotion belongs to, so a different body discards it rather than mislabels.
+	FString ScannedStem;
+
+	void ScanRootMotion(FElysiumGreenRoomRun& Lab);
 
 	// The live edit and the file it came from. Both are held here rather than read back from the
 	// node every frame because ImGui's sliders need a stable address to write into, and because
