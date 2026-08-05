@@ -20,6 +20,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumInputAssets.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumPlayer.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -45,6 +46,8 @@
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
 #include "Engine/TextureCube.h"
+#include "EnhancedActionKeyMapping.h"
+#include "GameInputDeveloperSettings.h"
 #include "HAL/FileManager.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionRayTracingQualitySwitch.h"
@@ -53,8 +56,13 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "MaterialShared.h"
+#include "InputAction.h"
+#include "InputActionValue.h"
+#include "InputMappingContext.h"
+#include "InputModifiers.h"
 #include "NiagaraSystem.h"
 #include "RHIShaderPlatform.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
@@ -4272,6 +4280,221 @@ bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("generated routing asset exists: %s"), Package),
 			FPackageName::DoesPackageExist(Package));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGamepadInputAssetsContentTest,
+	"Elysium.Content.GamepadInputAssets", GElysiumContentTestFlags)
+
+bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
+{
+	UElysiumInputActionSet* ActionSet = LoadObject<UElysiumInputActionSet>(
+		nullptr, ElysiumInputAssets::ActionSetPath);
+	UInputMappingContext* Context = LoadObject<UInputMappingContext>(
+		nullptr, ElysiumInputAssets::GamepadContextPath);
+	if (!TestNotNull(TEXT("generated input action set"), ActionSet) ||
+		!TestNotNull(TEXT("generated gamepad mapping context"), Context))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("the vertical slice defines exactly three actions"), ActionSet->Actions.Num(), 3);
+	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
+	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
+	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));
+	if (!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
+		!TestTrue(TEXT("Look definition exists"), Look && Look->Action) ||
+		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Move is Axis2D"), Move->Action->ValueType == EInputActionValueType::Axis2D);
+	TestTrue(TEXT("Look is Axis2D"), Look->Action->ValueType == EInputActionValueType::Axis2D);
+	TestTrue(TEXT("Jump is Boolean"), Jump->Action->ValueType == EInputActionValueType::Boolean);
+	TestEqual(TEXT("Jump preserves its command identity"), Jump->Command, FString(TEXT("+jump")));
+	TestTrue(TEXT("Jump is a press/release pair"), Jump->bButtonPair);
+
+	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
+	TestEqual(TEXT("only Move, Look and Jump are gameplay-mapped"), Mappings.Num(), 3);
+	auto FindMapping = [&Mappings](const UInputAction* Action) -> const FEnhancedActionKeyMapping*
+	{
+		return Mappings.FindByPredicate(
+			[Action](const FEnhancedActionKeyMapping& Mapping) { return Mapping.Action == Action; });
+	};
+	const FEnhancedActionKeyMapping* MoveMapping = FindMapping(Move->Action);
+	const FEnhancedActionKeyMapping* LookMapping = FindMapping(Look->Action);
+	const FEnhancedActionKeyMapping* JumpMapping = FindMapping(Jump->Action);
+	if (!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
+		!TestNotNull(TEXT("Look mapping"), LookMapping) ||
+		!TestNotNull(TEXT("Jump mapping"), JumpMapping))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Move uses the left stick"), MoveMapping->Key, EKeys::Gamepad_Left2D);
+	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
+	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
+	TestEqual(TEXT("Move has only its radial dead zone"), MoveMapping->Modifiers.Num(), 1);
+	TestEqual(TEXT("Look has the documented six-modifier stack"), LookMapping->Modifiers.Num(), 6);
+	TestEqual(TEXT("Jump has no modifier stack"), JumpMapping->Modifiers.Num(), 0);
+
+	const UInputModifierDeadZone* MoveDeadZone = MoveMapping->Modifiers.Num() > 0
+		? Cast<UInputModifierDeadZone>(MoveMapping->Modifiers[0]) : nullptr;
+	const UInputModifierDeadZone* LookDeadZone = LookMapping->Modifiers.Num() > 0
+		? Cast<UInputModifierDeadZone>(LookMapping->Modifiers[0]) : nullptr;
+	TestNotNull(TEXT("Move dead zone modifier"), MoveDeadZone);
+	TestNotNull(TEXT("Look dead zone modifier"), LookDeadZone);
+	if (MoveDeadZone && LookDeadZone)
+	{
+		TestEqual(TEXT("Move radial dead zone"), MoveDeadZone->Type, EDeadZoneType::Radial);
+		TestEqual(TEXT("Look radial dead zone"), LookDeadZone->Type, EDeadZoneType::Radial);
+		TestEqual(TEXT("Move dead-zone threshold"), MoveDeadZone->LowerThreshold, 0.24f);
+		TestEqual(TEXT("Look dead-zone threshold"), LookDeadZone->LowerThreshold, 0.265f);
+		TestEqual(TEXT("Move dead-zone upper range"), MoveDeadZone->UpperThreshold, 1.0f);
+		TestEqual(TEXT("Look dead-zone upper range"), LookDeadZone->UpperThreshold, 1.0f);
+		const FVector2D MoveInside = MoveDeadZone->ModifyRaw(
+			nullptr, FInputActionValue(FVector2D(0.20, 0.0)), 0.0f).Get<FVector2D>();
+		const FVector2D LookInside = LookDeadZone->ModifyRaw(
+			nullptr, FInputActionValue(FVector2D(0.25, 0.0)), 0.0f).Get<FVector2D>();
+		const FVector2D MoveHalfRange = MoveDeadZone->ModifyRaw(
+			nullptr, FInputActionValue(FVector2D(0.62, 0.0)), 0.0f).Get<FVector2D>();
+		TestTrue(TEXT("Move input inside the dead zone is zero"), MoveInside.IsNearlyZero());
+		TestTrue(TEXT("Look input inside the dead zone is zero"), LookInside.IsNearlyZero());
+		TestEqual(TEXT("Move dead zone remaps its remaining range"),
+			(float)MoveHalfRange.X, 0.5f, 0.001f);
+	}
+	if (LookMapping->Modifiers.Num() == 6)
+	{
+		const UInputModifierResponseCurveExponential* Response =
+			Cast<UInputModifierResponseCurveExponential>(LookMapping->Modifiers[1]);
+		const UInputModifierNegate* NativeY =
+			Cast<UInputModifierNegate>(LookMapping->Modifiers[2]);
+		const UInputModifierScalar* Scalar = Cast<UInputModifierScalar>(LookMapping->Modifiers[3]);
+		const UInputModifierFOVScaling* FOV =
+			Cast<UInputModifierFOVScaling>(LookMapping->Modifiers[5]);
+		TestNotNull(TEXT("linear response modifier"), Response);
+		TestNotNull(TEXT("native right-stick Y correction"), NativeY);
+		TestNotNull(TEXT("look rate scalar"), Scalar);
+		TestTrue(TEXT("look is delta-time scaled"),
+			LookMapping->Modifiers[4]->IsA<UInputModifierScaleByDeltaTime>());
+		TestNotNull(TEXT("look is FOV scaled"), FOV);
+		if (Response)
+		{
+			TestTrue(TEXT("response exponent is neutral linear"),
+				Response->CurveExponent.Equals(FVector::OneVector));
+		}
+		if (NativeY)
+		{
+			TestFalse(TEXT("native Y correction preserves yaw"), NativeY->bX);
+			TestTrue(TEXT("native Y correction inverts pitch"), NativeY->bY);
+			TestFalse(TEXT("native Y correction preserves Z"), NativeY->bZ);
+			const FVector2D PhysicalUp = NativeY->ModifyRaw(
+				nullptr, FInputActionValue(FVector2D(0.0, -1.0)), 0.0f).Get<FVector2D>();
+			const FVector2D PhysicalDown = NativeY->ModifyRaw(
+				nullptr, FInputActionValue(FVector2D(0.0, 1.0)), 0.0f).Get<FVector2D>();
+			TestEqual(TEXT("right-stick up becomes positive look pitch"),
+				(float)PhysicalUp.Y, 1.0f);
+			TestEqual(TEXT("right-stick down becomes negative look pitch"),
+				(float)PhysicalDown.Y, -1.0f);
+		}
+		if (Scalar)
+		{
+			TestEqual(TEXT("yaw rate is 210 degrees/sec"), (float)Scalar->Scalar.X, 210.0f);
+			TestEqual(TEXT("pitch rate is 225 degrees/sec"), (float)Scalar->Scalar.Y, 225.0f);
+		}
+		if (FOV)
+		{
+			TestEqual(TEXT("look uses standard FOV scaling"), FOV->FOVScalingType,
+				EFOVScalingType::Standard);
+			TestEqual(TEXT("look FOV scalar is neutral"), FOV->FOVScale, 1.0f);
+		}
+	}
+
+	for (const TCHAR* Name : {
+		ElysiumInputAssets::DualSenseCreateKey,
+		ElysiumInputAssets::DualSensePSKey,
+		ElysiumInputAssets::DualSenseMuteKey })
+	{
+		const TSharedPtr<FKeyDetails> Details = EKeys::GetKeyDetails(FKey(Name));
+		TestTrue(FString::Printf(TEXT("%s is registered as a gamepad key"), Name),
+			Details.IsValid() && Details->IsGamepadKey());
+	}
+
+#if PLATFORM_WINDOWS && GAME_INPUT_SUPPORT
+	bool bPreferredAPIEnabled = false;
+	FString PreferredAPIs;
+	TestTrue(TEXT("preferred controller API setting is present"), GConfig->GetBool(
+		TEXT("/Script/Engine.InputSettings"), TEXT("bEnablePreferredInputAPIPreferences"),
+		bPreferredAPIEnabled, GInputIni));
+	TestTrue(TEXT("preferred controller API selection is enabled"), bPreferredAPIEnabled);
+	TestTrue(TEXT("preferred controller API list is present"), GConfig->GetString(
+		TEXT("/Script/Engine.InputSettings"), TEXT("DefaultPreferredInputAPIList"),
+		PreferredAPIs, GInputIni));
+	TestEqual(TEXT("GameInput is the only preferred controller API"),
+		PreferredAPIs, FString(TEXT("GameInput")));
+
+	const UGameInputPlatformSettings* Platform = UGameInputPlatformSettings::Get();
+	TestNotNull(TEXT("Windows GameInput platform settings"), Platform);
+	if (Platform)
+	{
+		TestTrue(TEXT("Xbox Gamepad capability is enabled"), Platform->bProcessGamepad);
+		TestTrue(TEXT("configured HID Controller capability is enabled"), Platform->bProcessController);
+		TestFalse(TEXT("GameInput does not duplicate keyboard"), Platform->bProcessKeyboard);
+		TestFalse(TEXT("GameInput does not duplicate mouse"), Platform->bProcessMouse);
+		TestFalse(TEXT("raw reports remain outside this slice"), Platform->bProcessRawInput);
+		TestTrue(TEXT("unconfigured HID controllers are rejected"),
+			Platform->bSpecialDevicesRequireExplicitDeviceConfiguration);
+	}
+	bool bProcessSensors = true;
+	TestTrue(TEXT("GameInput sensor setting is present"), GConfig->GetBool(
+		TEXT("GameInputPlatformSettings_Windows GameInputPlatformSettings"),
+		TEXT("bProcessSensors"), bProcessSensors, GInputIni));
+	TestFalse(TEXT("sensors remain outside this slice"), bProcessSensors);
+
+	const FGameInputDeviceConfiguration* DualSense =
+		GetDefault<UGameInputDeveloperSettings>()->FindDeviceConfiguration(
+			FGameInputDeviceIdentifier(0x054c, 0x0ce6));
+	if (!TestNotNull(TEXT("DualSense 054C:0CE6 configuration"), DualSense))
+	{
+		return false;
+	}
+	TestEqual(TEXT("DualSense hardware id"), DualSense->OverriddenHardwareDeviceId,
+		FString(TEXT("DualSense")));
+	TestTrue(TEXT("DualSense hardware id override is active"),
+		DualSense->bOverrideHardwareDeviceIdString);
+	TestTrue(TEXT("DualSense extra buttons are processed"), DualSense->bProcessControllerButtons);
+	TestFalse(TEXT("DualSense D-pad has only the native Gamepad publisher"),
+		DualSense->bProcessControllerSwitchState);
+	TestFalse(TEXT("DualSense axes have only the native Gamepad publisher"),
+		DualSense->bProcessControllerAxis);
+	TestFalse(TEXT("DualSense raw reports remain outside this slice"),
+		DualSense->bProcessRawReportData);
+	TestEqual(TEXT("only four DualSense-only buttons use the Controller processor"),
+		DualSense->ControllerButtonMappingData.Num(), 4);
+	TestEqual(TEXT("the Controller processor republishes no DualSense axes"),
+		DualSense->ControllerAxisMappingData.Num(), 0);
+
+	static const TPair<uint32, const TCHAR*> ExpectedButtons[] = {
+		{256, ElysiumInputAssets::DualSenseCreateKey},
+		{4096, ElysiumInputAssets::DualSensePSKey}, {8192, TEXT("Gamepad_Special_Left")},
+		{16384, ElysiumInputAssets::DualSenseMuteKey},
+	};
+	for (const TPair<uint32, const TCHAR*>& Expected : ExpectedButtons)
+	{
+		const FName* Actual = DualSense->ControllerButtonMappingData.Find(Expected.Key);
+		TestTrue(FString::Printf(TEXT("DualSense button mask %u is configured"), Expected.Key),
+			Actual && *Actual == FName(Expected.Value));
+	}
+
+	static const uint32 NativeGamepadButtonMasks[] = {
+		1, 2, 4, 8, 16, 32, 64, 128, 512, 1024, 2048,
+	};
+	for (const uint32 Mask : NativeGamepadButtonMasks)
+	{
+		TestFalse(FString::Printf(TEXT("native Gamepad button mask %u is not republished"), Mask),
+			DualSense->ControllerButtonMappingData.Contains(Mask));
+	}
+#endif
+
 	return true;
 }
 

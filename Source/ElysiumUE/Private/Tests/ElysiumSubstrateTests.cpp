@@ -547,6 +547,19 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	Builder.SetButton(EElysiumButton::Strafe, false);
 	Builder.SetButton(EElysiumButton::Right, false);
 
+	// Enhanced Input reports a 2D stick as (right, up); the user command stores (forward, right).
+	const FVector2D StickMove = ElysiumInput::GamepadStickToMove(FVector2D(0.25f, 0.75f));
+	TestEqual(TEXT("stick up becomes command forward"), (float)StickMove.X, 0.75f, 0.001f);
+	TestEqual(TEXT("stick right becomes command side"), (float)StickMove.Y, 0.25f, 0.001f);
+	Builder.SetAnalogMove(StickMove);
+	Builder.SetButton(EElysiumButton::Forward, true);
+	Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("keyboard and analog forward compose then clamp"), (float)Cmd.Move.X, 1.0f, 0.001f);
+	TestEqual(TEXT("analog side survives composition"), (float)Cmd.Move.Y, 0.25f, 0.001f);
+	Builder.SetButton(EElysiumButton::Forward, false);
+	Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("analog movement is consumed each frame"), (float)Cmd.Move.X, 0.0f, 0.001f);
+
 	// Mouse counts accumulate within a frame and are consumed by the build, never carried over.
 	Builder.AddLook(1.5f, -0.5f);
 	Builder.AddLook(0.5f, 0.25f);
@@ -570,6 +583,16 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	TestTrue(TEXT("a new press is an edge"), Now.JustPressed(EElysiumButton::Jump, Prev));
 	TestFalse(TEXT("a held press is not"), Now.JustPressed(EElysiumButton::Jump, Now));
 	TestTrue(TEXT("a release is an edge"), Prev.JustReleased(EElysiumButton::Jump, Now));
+	Builder.SetButton(EElysiumButton::Jump, true);       // Started -> +jump
+	TestTrue(TEXT("jump Started latches the command"),
+		Builder.Build(0.016f).IsDown(EElysiumButton::Jump));
+	Builder.SetButton(EElysiumButton::Jump, false);      // Completed -> -jump
+	TestFalse(TEXT("jump Completed releases the command"),
+		Builder.Build(0.016f).IsDown(EElysiumButton::Jump));
+	Builder.SetButton(EElysiumButton::Jump, true);
+	Builder.ClearButtons();                              // Canceled/context removal -> clear
+	TestFalse(TEXT("jump cancellation cannot leave a latch"),
+		Builder.Build(0.016f).IsDown(EElysiumButton::Jump));
 
 	// --- Record / replay -----------------------------------------------------------------
 	// The acceptance: a recorded stream replays identically. The whole of it is here because the
@@ -1944,7 +1967,10 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	const FElysiumInputScope Dialogue  = MakeScope(TEXT("Dialogue"),  Prio::Dialogue,  EMode::UIOnly,    true);
 	const FElysiumInputScope Character = MakeScope(TEXT("Character"), Prio::Character, EMode::UIOnly,    true);
 	const FElysiumInputScope Menu      = MakeScope(TEXT("Menu"),      Prio::Menu,      EMode::UIOnly,    true);
-	const FElysiumInputScope Debug     = MakeScope(TEXT("Debug"),     Prio::Debug,     EMode::GameOnly,  true);
+	FElysiumInputScope SignWithGameplay = Sign;
+	SignWithGameplay.Contexts.Add(ElysiumInput::PlayerGamepadContext());
+	FElysiumInputScope Debug = MakeScope(TEXT("Debug"), Prio::Debug, EMode::GameOnly, true);
+	Debug.Contexts.Add(ElysiumInput::PlayerGamepadContext());
 
 	// --- the empty stack is the game holding the mouse ---
 	{
@@ -1954,13 +1980,16 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 		TestTrue(TEXT("empty resolves to the gameplay default"), Base.Mode == EMode::GameOnly);
 		TestFalse(TEXT("no cursor over the world"), Base.bShowCursor);
 		TestTrue(TEXT("no deciding scope"), Base.Name.IsNone());
+		TestEqual(TEXT("gameplay applies one context"), Base.Contexts.Num(), 1);
+		TestEqual(TEXT("the gameplay context is the gamepad slice"), Base.Contexts[0],
+			ElysiumInput::PlayerGamepadContext());
 	}
 
 	// --- the top decides everything, and it is the priority top, not the last push ---
 	{
 		FElysiumInputScopeStack Stack;
 		FElysiumInputScopeHandle MenuH = Stack.Push(Menu);
-		Stack.Push(Sign);   // a sign opening under a menu changes nothing
+		Stack.Push(SignWithGameplay);   // a sign opening under a menu changes nothing
 		TestEqual(TEXT("the menu still decides"), Stack.Resolve().Name, FName(TEXT("Menu")));
 		TestTrue(TEXT("still UI-only"), Stack.Resolve().Mode == EMode::UIOnly);
 
@@ -1974,6 +2003,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 		TestTrue(TEXT("the menu handle is still the menu's"), Stack.Pop(MenuH));
 		TestEqual(TEXT("the sign underneath is restored"), Stack.Resolve().Name, FName(TEXT("Sign")));
 		TestTrue(TEXT("and with it game input"), Stack.Resolve().Mode == EMode::GameOnly);
+		TestEqual(TEXT("the sign retains the gamepad context"), Stack.Resolve().Contexts.Num(), 1);
 	}
 
 	// --- same priority stacks like modals: the later push wins, and popping it restores the earlier ---
@@ -2018,7 +2048,9 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	//     the out-of-order one (the thing under closes first, e.g. a conversation ending behind an
 	//     open pause menu).
 	{
-		const TArray<FElysiumInputScope> Screens = { Sign, Cinematic, Chargen, Dialogue, Character, Menu, Debug };
+		const TArray<FElysiumInputScope> Screens = {
+			SignWithGameplay, Cinematic, Chargen, Dialogue, Character, Menu, Debug
+		};
 		for (const FElysiumInputScope& Under : Screens)
 		{
 			for (const FElysiumInputScope& Over : Screens)

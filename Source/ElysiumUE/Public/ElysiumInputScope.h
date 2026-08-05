@@ -21,6 +21,12 @@ enum class EElysiumInputMode : uint8
 
 namespace ElysiumInput
 {
+	inline FName PlayerGamepadContext()
+	{
+		static const FName Name(TEXT("IMC_Player_Gamepad"));
+		return Name;
+	}
+
 	inline const TCHAR* ModeName(EElysiumInputMode Mode)
 	{
 		switch (Mode)
@@ -81,10 +87,8 @@ struct FElysiumInputScope
 	EElysiumInputMode Mode = EElysiumInputMode::GameOnly;
 	bool bShowCursor = false;
 
-	// The mapping contexts applied while this scope is top, by id. Nothing resolves them yet: the
-	// Enhanced Input surface is 10.6's, and it reads them from here rather than adding a fourth
-	// owner. `FElysiumInputScopeStack::Resolve` already reports the active set, so a context change
-	// is observable before a single UInputMappingContext asset exists.
+	// The mapping contexts applied while this scope is top, by id. UElysiumInputSubsystem resolves
+	// and diffs this list, keeping the same arbiter as the sole owner of input mode and contexts.
 	TArray<FName> Contexts;
 
 	// Where keyboard focus goes under UIOnly. A screen that does not take focus never sees Escape

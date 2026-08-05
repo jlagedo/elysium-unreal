@@ -1,13 +1,16 @@
 #include "ElysiumInputSubsystem.h"
 
+#include "ElysiumInputAssets.h"
 #include "ElysiumInputRouter.h"
 #include "ElysiumPlayerController.h"
 
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "EnhancedInputSubsystems.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "InputMappingContext.h"
 
 #include "CogCommon.h"
 #if ENABLE_COG
@@ -44,6 +47,7 @@ void UElysiumInputSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UElysiumInputSubsystem::Deinitialize()
 {
+	ApplyMappingContexts({});
 	if (DebugTicker.IsValid())
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(DebugTicker);
@@ -56,6 +60,8 @@ void UElysiumInputSubsystem::Deinitialize()
 	ConsoleObjects.Reset();
 	Scopes.Reset();
 	DebugScope.Reset();
+	ContextAssets.Reset();
+	MissingContextNames.Reset();
 
 	Super::Deinitialize();
 }
@@ -105,6 +111,11 @@ void UElysiumInputSubsystem::SetFocusWidget(FElysiumInputScopeHandle Handle, TSh
 
 void UElysiumInputSubsystem::Reapply()
 {
+	// Mapping contexts are stored on the current UEnhancedPlayerInput. A replacement controller
+	// gets a fresh one even though the LocalPlayer subsystem and our logical scope stack survive,
+	// so make the next Apply add every wanted Elysium context to that new owner. The generated
+	// contexts use Untracked registration; adding one already present simply refreshes its entry.
+	AppliedContextNames.Reset();
 	bApplied = false;
 	Apply();
 }
@@ -139,6 +150,8 @@ void UElysiumInputSubsystem::Apply()
 
 void UElysiumInputSubsystem::ApplyToController(APlayerController* PC, const FElysiumInputState& NewState)
 {
+	ApplyMappingContexts(NewState.Contexts);
+
 	switch (NewState.Mode)
 	{
 	case EElysiumInputMode::UIOnly:
@@ -187,6 +200,72 @@ void UElysiumInputSubsystem::ApplyToController(APlayerController* PC, const FEly
 	}
 }
 
+void UElysiumInputSubsystem::ApplyMappingContexts(const TArray<FName>& ContextNames)
+{
+	ULocalPlayer* LocalPlayer = GetLocalPlayer<ULocalPlayer>();
+	UEnhancedInputLocalPlayerSubsystem* Enhanced =
+		LocalPlayer ? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+	if (!Enhanced)
+	{
+		return;
+	}
+
+	const TSet<FName> Wanted(ContextNames);
+	const FModifyContextOptions Options;
+	for (const FName AppliedName : AppliedContextNames.Difference(Wanted))
+	{
+		if (UInputMappingContext* Context = ResolveMappingContext(AppliedName))
+		{
+			Enhanced->RemoveMappingContext(Context, Options);
+		}
+	}
+	for (const FName WantedName : Wanted.Difference(AppliedContextNames))
+	{
+		if (UInputMappingContext* Context = ResolveMappingContext(WantedName))
+		{
+			Enhanced->AddMappingContext(Context, /*Priority*/ 0, Options);
+		}
+	}
+	AppliedContextNames = Wanted;
+}
+
+UInputMappingContext* UElysiumInputSubsystem::ResolveMappingContext(FName ContextName)
+{
+	if (TObjectPtr<UInputMappingContext>* Found = ContextAssets.Find(ContextName))
+	{
+		return Found->Get();
+	}
+
+	const TCHAR* Path = ContextName == ElysiumInput::PlayerGamepadContext()
+		? ElysiumInputAssets::GamepadContextPath
+		: nullptr;
+	if (!Path)
+	{
+		if (!MissingContextNames.Contains(ContextName))
+		{
+			UE_LOG(LogElysiumInput, Error, TEXT("input scope names unknown mapping context '%s'"),
+				*ContextName.ToString());
+			MissingContextNames.Add(ContextName);
+		}
+		return nullptr;
+	}
+
+	UInputMappingContext* Context = LoadObject<UInputMappingContext>(nullptr, Path);
+	if (Context)
+	{
+		ContextAssets.Add(ContextName, Context);
+		return Context;
+	}
+	if (!MissingContextNames.Contains(ContextName))
+	{
+		UE_LOG(LogElysiumInput, Error,
+			TEXT("mapping context '%s' is missing; run `uv run elysium export bundle policy` (expected %s)"),
+			*ContextName.ToString(), Path);
+		MissingContextNames.Add(ContextName);
+	}
+	return nullptr;
+}
+
 APlayerController* UElysiumInputSubsystem::ResolveController() const
 {
 	const ULocalPlayer* LocalPlayer = GetLocalPlayer<ULocalPlayer>();
@@ -225,6 +304,7 @@ bool UElysiumInputSubsystem::ReconcileDebugCapture(float /*DeltaTime*/)
 		// Cog does to the controller anyway, so the two never disagree.
 		Scope.Mode = EElysiumInputMode::GameOnly;
 		Scope.bShowCursor = true;
+		Scope.Contexts.Add(ElysiumInput::PlayerGamepadContext());
 		DebugScope = Scopes.Push(MoveTemp(Scope));
 		Apply();
 	}

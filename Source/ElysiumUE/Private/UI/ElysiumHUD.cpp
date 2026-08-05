@@ -453,6 +453,7 @@ void AElysiumHUD::UpdateSignScope(bool bSignOpen)
 		// Game input, no cursor: the panel is dismissed by a world click the player controller
 		// binds, so taking the mouse away from the game would make it undismissable.
 		Scope.Mode = EElysiumInputMode::GameOnly;
+		Scope.Contexts.Add(ElysiumInput::PlayerGamepadContext());
 		SignScope = Input->Push(MoveTemp(Scope));
 	}
 	else if (!bSignOpen && SignScope.IsValid())

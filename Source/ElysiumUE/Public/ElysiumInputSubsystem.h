@@ -11,6 +11,7 @@
 class APlayerController;
 class IConsoleObject;
 class UGameInstance;
+class UInputMappingContext;
 
 // S6 — the one input-mode arbiter (roadmap 11.5, `docs/architecture/runtime-architecture.md` §8.1). Mode, cursor and
 // (at 10.6) mapping contexts come from the top of one priority stack, and nothing else in the
@@ -65,6 +66,8 @@ private:
 	// (re-applying UIOnly re-steals keyboard focus, which a screen behind a closing one would feel).
 	void Apply();
 	void ApplyToController(APlayerController* PC, const FElysiumInputState& NewState);
+	void ApplyMappingContexts(const TArray<FName>& ContextNames);
+	UInputMappingContext* ResolveMappingContext(FName ContextName);
 
 	APlayerController* ResolveController() const;
 
@@ -93,4 +96,9 @@ private:
 	FTSTicker::FDelegateHandle DebugTicker;
 	FDelegateHandle PostLoadMapHandle;
 	TArray<IConsoleObject*> ConsoleObjects;
+
+	UPROPERTY(Transient)
+	TMap<FName, TObjectPtr<UInputMappingContext>> ContextAssets;
+	TSet<FName> AppliedContextNames;
+	TSet<FName> MissingContextNames;
 };

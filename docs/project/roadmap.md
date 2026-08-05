@@ -995,7 +995,7 @@ dialogue, scripted flow, quests, save/load included.
   10.6e introduces (Windows 10 19H1 floor). The gitignored `/ElysiumBaked` mount joins this
   story (0.9): a package must either ship a bake-on-first-run path or the user-side bake
   tooling. *Deps:* none until first package.
-- [ ] **10.6 Input path — Enhanced Input, remapping, first-party gamepad** *(design:
+- [~] **10.6 Input path — Enhanced Input, remapping, first-party gamepad** *(design:
   `docs/architecture/input-architecture.md`; VtMB facts: `docs/vtmb/controls.md`)* — retire the legacy `DefaultInput.ini`
   axis/action block for the four-plane model: **Enhanced Input is the driver, the VtMB console
   command string stays the action's identity.** One `UInputAction` per bindable command from the
@@ -1015,7 +1015,8 @@ dialogue, scripted flow, quests, save/load included.
     held-input-into-conversation question on our side of the port. Every button-pair action binds
     **`ETriggerEvent::Canceled` alongside `Completed`** — a Hold or Tap trigger released early
     fires `Canceled`, and the missing `-cmd` leaves the button latched for the session. Also wires
-    the analog path: nothing calls `FElysiumUserCmdBuilder::SetAnalogMove`/`SetAnalogUp` today.
+    the analog path. The gamepad slice calls `SetAnalogMove`; `SetAnalogUp` and the keyboard/mouse
+    Enhanced Input migration remain in this sub-step.
   - **c. Reserved keys** — console on `` ` `` (VtMB's own `toggleconsole` key; frees F10 for
     `snapshot`) **plus `F7`** for layouts with no `` ` `` left of `1`, Cog's shell shortcuts to
     `Ctrl+F1`–`Ctrl+F4`, all other dev keys on
@@ -1023,10 +1024,14 @@ dialogue, scripted flow, quests, save/load included.
     convention; `elysium.input.ReserveDebugKeys 0` A/Bs it in dev builds.
   - **d. `UElysiumMouseSensitivity` modifier** — reads `sensitivity`/`m_pitch`/`m_yaw`/`m_filter`
     off `FElysiumConsole` for VtMB's 0.066°/count; the options slider writes the cvar.
-  - **e. `GameInputWindows` + PS device configs + `IMC_Player_Gamepad`** — the plugin is **not yet
-    enabled in `Elysium.uproject`**. Xbox needs no config; DS4/DualSense get
-    `FGameInputDeviceConfiguration` entries (VID `054C`) mapping onto standard `Gamepad_*` keys
-    plus an overridden hardware-device id for glyph swapping. `GameInputRedist.msi` joins 10.5's
+  - **e. `GameInputWindows` + PS device configs + `IMC_Player_Gamepad`** — the plugin and standard
+    DualSense (`054C:0CE6`) configuration are enabled for the first slice. Xbox needs no config;
+    additional DS4/Edge `FGameInputDeviceConfiguration` entries remain open. The native Gamepad
+    capability owns all shared controls; the configured generic Controller capability publishes
+    only Create/PS/touchpad/Mute, avoiding duplicate stick, D-pad, standard-button and focus-clear
+    events. The overridden hardware-device id supports glyph swapping; distinct Create/PS/Mute keys
+    retain the otherwise-unrepresentable inputs.
+    `GameInputRedist.msi` joins 10.5's
     packaging story. Adaptive triggers/haptics deferred. The **pad layout** — its allocation rule,
     the contextual `LT`, the quickbar radial, and its three marked divergences (crouch as a toggle,
     `toggleuiside` unbound, the `vhotkey` deferral not reproduced) — is
@@ -1043,6 +1048,16 @@ dialogue, scripted flow, quests, save/load included.
     feed silently dies whenever a player moves either off its default key. Declare `execonsole`,
     `player_immobilize` and `player_mobilize`. Rebinding works headlessly before any UI exists.
   - **g. Remapping screen** — lands with **8.10** on the 8.6 stack, not here.
+
+  **Current partial slice:** the committed action table and generator emit `IA_Move`, `IA_Look`,
+  `IA_Jump`, `IMC_Player_Gamepad`, and their runtime action set. `UElysiumInputRouter` folds LS/RS
+  into the existing `FElysiumUserCmd` and routes Cross/A through the existing `+jump`/`-jump` bus;
+  `UElysiumInputSubsystem` owns the context across scopes and travel. `GameInputWindows` is the sole
+  preferred Windows pad API: native Xbox plus the configured standard DualSense (`054C:0CE6`). Its
+  native Gamepad processor owns standard controls, while its generic Controller processor is
+  extra-buttons-only; axes and D-pad are not published twice. Keyboard/mouse still uses the legacy
+  front end. The rest of a–g, the full pad layout, DS4/Edge, glyphs, haptics and the shipping
+  redistributable remain open; physical Xbox acceptance also remains open.
 
   **Acceptance:** the tutorial is playable start to finish on keyboard+mouse and on an Xbox *and*
   a DualSense pad with no third-party driver; every action rebindable to primary/alternate/gamepad

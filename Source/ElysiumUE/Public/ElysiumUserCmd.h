@@ -83,6 +83,13 @@ namespace ElysiumInput
 	inline constexpr float DefaultSensitivity = 3.0f;
 	inline constexpr float DefaultMouseYaw    = 0.022f;
 	inline constexpr float DefaultMousePitch  = 0.022f;
+
+	// Unreal's 2D gamepad keys are (right, up). The Source-shaped user command is (forward, right),
+	// so the device-neutral intent seam owns the one swizzle between them.
+	inline FVector2D GamepadStickToMove(const FVector2D& Stick)
+	{
+		return FVector2D(Stick.Y, Stick.X);
+	}
 }
 
 // One frame of intent.

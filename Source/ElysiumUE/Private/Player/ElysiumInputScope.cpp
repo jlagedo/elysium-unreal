@@ -83,6 +83,9 @@ const FElysiumInputScope* FElysiumInputScopeStack::Top() const
 FElysiumInputState FElysiumInputScopeStack::Resolve() const
 {
 	FElysiumInputState State;
+	// Gameplay is the identity of the stack. A pushed scope replaces this set explicitly: signs
+	// and Cog retain it, while screens and cinematics leave their context list empty.
+	State.Contexts.Add(ElysiumInput::PlayerGamepadContext());
 	if (const FElysiumInputScope* Scope = Top())
 	{
 		State.Name = Scope->Name;

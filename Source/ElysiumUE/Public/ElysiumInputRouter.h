@@ -9,6 +9,8 @@
 
 class APlayerController;
 class UInputComponent;
+class UElysiumInputActionSet;
+struct FInputActionValue;
 
 // The one thing that turns keys into verbs and verbs into intent (roadmap 11.6,
 // `docs/architecture/runtime-architecture.md` §8.2–8.3). It sits on `AElysiumPlayerController` and does three jobs,
@@ -73,11 +75,16 @@ private:
 	// Mouse look, and the dev chords the reserved-key rule keeps off bare keys.
 	void BindLookAxes(UInputComponent* Input);
 	void BindDebugChords(UInputComponent* Input);
+	void BindEnhancedActions(UInputComponent* Input);
 
 	void FireCommand(FString Line);
 	void FireEngineCommand(FString Line);
 	void OnMouseX(float Value);
 	void OnMouseY(float Value);
+	void OnAnalogMove(const FInputActionValue& Value);
+	void OnAnalogLook(const FInputActionValue& Value);
+	void OnCommandDown(FName Command);
+	void OnCommandUp(FName Command);
 	void ApplyLook(const FElysiumUserCmd& Cmd);
 
 	// Degrees per mouse count: `sensitivity` x `m_yaw` / `m_pitch`, read off the VtMB console store
@@ -87,6 +94,8 @@ private:
 
 	TWeakObjectPtr<APlayerController> PC;
 	TWeakObjectPtr<UInputComponent> BoundInput;
+	UPROPERTY(Transient)
+	TObjectPtr<UElysiumInputActionSet> EnhancedActions;
 
 	FElysiumUserCmdBuilder CmdBuilder;
 	FElysiumUserCmd Current;

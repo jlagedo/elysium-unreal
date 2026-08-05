@@ -1,6 +1,7 @@
 #include "ElysiumInputRouter.h"
 
 #include "ElysiumBinds.h"
+#include "ElysiumInputAssets.h"
 #include "Player/ElysiumCommandBus.h"
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
@@ -10,9 +11,12 @@
 #include "Components/InputComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "EnhancedInputComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WorldSettings.h"
+#include "InputAction.h"
+#include "InputActionValue.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumRouter, Log, All);
 
@@ -60,6 +64,7 @@ void UElysiumInputRouter::Setup(APlayerController* Controller, UInputComponent* 
 	}
 	BindLookAxes(Input);
 	BindDebugChords(Input);
+	BindEnhancedActions(Input);
 
 	// Every `+cmd` latch this local player's keys produce lands in our builder.
 	FElysiumCommands::Get().SetUserCmdSink(&CmdBuilder);
@@ -75,6 +80,7 @@ void UElysiumInputRouter::Shutdown()
 		FElysiumCommands::Get().SetUserCmdSink(nullptr);
 	}
 	CmdBuilder.Reset();
+	EnhancedActions = nullptr;
 	BoundInput.Reset();
 	PC.Reset();
 }
@@ -133,6 +139,63 @@ void UElysiumInputRouter::BindDebugChords(UInputComponent* Input)
 #endif
 }
 
+void UElysiumInputRouter::BindEnhancedActions(UInputComponent* Input)
+{
+	UEnhancedInputComponent* Enhanced = Cast<UEnhancedInputComponent>(Input);
+	if (!Enhanced)
+	{
+		UE_LOG(LogElysiumRouter, Error,
+			TEXT("gamepad input unavailable: controller input component is not EnhancedInputComponent"));
+		return;
+	}
+
+	EnhancedActions = LoadObject<UElysiumInputActionSet>(nullptr, ElysiumInputAssets::ActionSetPath);
+	if (!EnhancedActions)
+	{
+		UE_LOG(LogElysiumRouter, Error,
+			TEXT("gamepad input assets are missing; run `uv run elysium export bundle policy` (expected %s)"),
+			ElysiumInputAssets::ActionSetPath);
+		return;
+	}
+
+	const FElysiumInputActionDefinition* Move = EnhancedActions->Find(TEXT("Move"));
+	const FElysiumInputActionDefinition* Look = EnhancedActions->Find(TEXT("Look"));
+	if (!Move || !Move->Action || !Look || !Look->Action)
+	{
+		UE_LOG(LogElysiumRouter, Error,
+			TEXT("gamepad action set is incomplete: Move and Look must reference generated actions"));
+		return;
+	}
+
+	Enhanced->BindAction(Move->Action, ETriggerEvent::Triggered,
+		this, &UElysiumInputRouter::OnAnalogMove);
+	Enhanced->BindAction(Look->Action, ETriggerEvent::Triggered,
+		this, &UElysiumInputRouter::OnAnalogLook);
+
+	int32 CommandCount = 0;
+	for (const FElysiumInputActionDefinition& Definition : EnhancedActions->Actions)
+	{
+		if (!Definition.Action || Definition.Command.IsEmpty())
+		{
+			continue;
+		}
+		const FName Command(*Definition.Command);
+		Enhanced->BindAction(Definition.Action, ETriggerEvent::Started,
+			this, &UElysiumInputRouter::OnCommandDown, Command);
+		if (Definition.bButtonPair)
+		{
+			Enhanced->BindAction(Definition.Action, ETriggerEvent::Completed,
+				this, &UElysiumInputRouter::OnCommandUp, Command);
+			Enhanced->BindAction(Definition.Action, ETriggerEvent::Canceled,
+				this, &UElysiumInputRouter::OnCommandUp, Command);
+		}
+		++CommandCount;
+	}
+
+	UE_LOG(LogElysiumRouter, Log,
+		TEXT("enhanced input: Move, Look and %d command action(s) installed"), CommandCount);
+}
+
 void UElysiumInputRouter::FireCommand(FString Line)
 {
 	// Straight into the bus, so a bound key is indistinguishable from a level script, a `.dlg`
@@ -163,6 +226,31 @@ void UElysiumInputRouter::OnMouseY(float Value)
 	if (Value != 0.0f)
 	{
 		CmdBuilder.AddLook(0.0f, Value * MousePitchScale());
+	}
+}
+
+void UElysiumInputRouter::OnAnalogMove(const FInputActionValue& Value)
+{
+	CmdBuilder.SetAnalogMove(ElysiumInput::GamepadStickToMove(Value.Get<FVector2D>()));
+}
+
+void UElysiumInputRouter::OnAnalogLook(const FInputActionValue& Value)
+{
+	const FVector2D Look = Value.Get<FVector2D>();
+	CmdBuilder.AddLook(Look.X, Look.Y);
+}
+
+void UElysiumInputRouter::OnCommandDown(FName Command)
+{
+	FireCommand(Command.ToString());
+}
+
+void UElysiumInputRouter::OnCommandUp(FName Command)
+{
+	const FString Press = Command.ToString();
+	if (Press.StartsWith(TEXT("+")))
+	{
+		FireCommand(TEXT("-") + Press.Mid(1));
 	}
 }
 
