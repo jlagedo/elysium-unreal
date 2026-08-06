@@ -119,13 +119,14 @@ TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const
 	return Result;
 }
 
-TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FString& Stem)
+TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FString& Stem, bool bBaked)
 {
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
 	}
-	if (const TSharedPtr<const FElysiumEyeSet>* Cached = EyeSets.Find(Stem))
+	const FString CacheKey = FrameKey(Stem, bBaked);
+	if (const TSharedPtr<const FElysiumEyeSet>* Cached = EyeSets.Find(CacheKey))
 	{
 		return *Cached;
 	}
@@ -138,7 +139,7 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 	{
 		TSharedPtr<FElysiumEyeSet> Set = MakeShared<FElysiumEyeSet>();
 		FString Error;
-		if (!Set->Load(Entry->Eyes, Error, ElysiumNpcVisual::IsStemBaked(Stem)))
+		if (!Set->Load(Entry->Eyes, Error, bBaked))
 		{
 			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
 		}
@@ -150,7 +151,7 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 			Result = Set;
 		}
 	}
-	EyeSets.Add(Stem, Result);
+	EyeSets.Add(CacheKey, Result);
 	return Result;
 }
 
@@ -251,7 +252,8 @@ namespace
 	// inventory and, when the model declares any driven bone, the rule table beside its glb. Either
 	// half may be empty; a model with neither is answered null, and that is a normal load.
 	TSharedPtr<const FElysiumCompositionRig> BuildCompositionRig(const FString& Stem,
-		const TArray<FString>& SplitBones, const FString& ProceduralRelPath, FString& OutError)
+		const TArray<FString>& SplitBones, const FString& ProceduralRelPath, bool bBaked,
+		FString& OutError)
 	{
 		TSharedPtr<FElysiumCompositionRig> Rig = MakeShared<FElysiumCompositionRig>();
 		Rig->Stem = Stem;
@@ -261,8 +263,7 @@ namespace
 			Rig->SplitBones.Add(FName(*BoneName));
 		}
 		if (!ProceduralRelPath.IsEmpty()
-			&& !Rig->LoadAxisRules(ProceduralRelPath, OutError,
-				ElysiumNpcVisual::IsStemBaked(Stem)))
+			&& !Rig->LoadAxisRules(ProceduralRelPath, OutError, bBaked))
 		{
 			// A named-but-unreadable table is a fault, not a model without one: the split half is
 			// still installed so the body keeps whatever composition it can have.
@@ -272,13 +273,15 @@ namespace
 	}
 }
 
-TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositionRig(const FString& Stem)
+TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositionRig(
+	const FString& Stem, bool bBaked)
 {
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
 	}
-	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(Stem))
+	const FString CacheKey = FrameKey(Stem, bBaked);
+	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(CacheKey))
 	{
 		return *Cached;
 	}
@@ -288,7 +291,7 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositio
 	if (Entry != nullptr)
 	{
 		FString Error;
-		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
+		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, bBaked, Error);
 		if (!Error.IsEmpty())
 		{
 			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural '%s': %s"), *Stem, *Error);
@@ -299,7 +302,7 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositio
 				*Stem, Result->SplitBones.Num(), Result->AxisRules.Num());
 		}
 	}
-	CompositionRigs.Add(Stem, Result);
+	CompositionRigs.Add(CacheKey, Result);
 	return Result;
 }
 
@@ -322,7 +325,8 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetAnimatedPr
 
 	FString Error;
 	TSharedPtr<const FElysiumCompositionRig> Result =
-		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
+		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural,
+			ElysiumNpcVisual::IsStemBaked(Entry->Stem), Error);
 	if (!Error.IsEmpty())
 	{
 		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);

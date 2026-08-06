@@ -81,6 +81,18 @@ public:
 	// Stand a body on the stage, replacing whatever is there. An empty clip asks the model's own
 	// idle policy for one, so a stem alone is a complete request.
 	bool LabSetBody(const FString& Stem, const FString& Clip, FString& OutError);
+	// Rebuild the standing body from scratch, discarding the map's cached meshes and clips first.
+	// This is the door `elysium.BakedCharacters` needs: the cache is keyed by stem, not by which
+	// path built it, so an ordinary restand reuses whatever was resolved the first time and the
+	// toggle reads as dead. Same for `elysium.Cloth`.
+	bool LabRestand(FString& OutError);
+	// Lay a `_delta` autolayer over the standing body without disturbing it. Re-asking for the
+	// layer already running only re-weights it, so the slider drives this every frame.
+	bool LabSetLayer(const FString& Clip, float Weight, FString& OutError);
+	void LabClearLayers();
+	// The layer label the lab last accepted, or empty. Cleared by LabClearLayers and by standing a
+	// new body, because a layer belongs to the body it was composed onto.
+	const FString& LabLayer() const { return ReviewLayer; }
 	const FString& LabStem() const { return ReviewStem; }
 	const FString& LabClip() const { return ReviewClip; }
 	USkeletalMeshComponent* LabBody() const;
@@ -225,6 +237,9 @@ private:
 	FString Selector = TEXT("player");
 	FString ReviewStem;
 	FString ReviewClip;
+	// The autolayer riding over the stage body, or empty. Lab-only: the one-shot capture path
+	// composes nothing.
+	FString ReviewLayer;
 	FString ReviewAnimSet;
 	FString ReviewBoneRoot;
 	bool bEnsemble = false;

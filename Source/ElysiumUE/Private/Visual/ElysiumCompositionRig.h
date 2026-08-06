@@ -19,8 +19,16 @@
 //      *replaced* by a six-entry three-way blend of the control bone's local rotation. Its own
 //      animation channels are decoded, carried through, and discarded.
 //
-// The correction cannot be baked into clips instead: it is non-linear, so evaluating per clip and
-// blending the results is not the same as blending first and evaluating once.
+// Only stage 2 is inherently un-bakeable: a driven bone reads its control bone's *live*
+// orientation, so it has no value until a finished pose exists to read one from.
+//
+// Stage 1 is bakeable per clip, and is baked — `world_rot(parent)^-1 * local` is fixed once the
+// clip and frame are, so `UE_mdl_skeletal.py` rewrites that one rotation curve at export
+// (container v2) and a clip off the baked mount is played with this stage declined. What is NOT
+// bakeable is the correction across a BLEND: the rule is non-linear, so normalising two clips
+// against their own parent chains and blending is not the same as blending first and correcting
+// once. That residual is bounded and measured — see `EvaluateComposition` in
+// `ElysiumNpcAnimInstance.cpp`.
 
 // One `mstudioaxisinterpbone_t`, as `npc/procedural/<stem>.json` states it.
 //

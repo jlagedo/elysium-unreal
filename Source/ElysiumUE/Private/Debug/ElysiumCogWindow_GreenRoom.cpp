@@ -133,6 +133,32 @@ void FElysiumCogWindow_GreenRoom::Stand(FElysiumGreenRoomRun& Lab, const FString
 	}
 }
 
+void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
+{
+	if (!Clips.IsValidIndex(Index))
+	{
+		return;
+	}
+	bUserPicked = true;
+	ClipCursor = Index;
+	if (!(ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index]))
+	{
+		PendingClip = Clips[Index];
+		Stand(Lab, PendingStem, Clips[Index]);
+		return;
+	}
+	// An additive row leaves PendingClip alone: the standing clip is still the standing clip, and
+	// the layer rides over it. Restanding the body would drop the layer, so the two must not share
+	// the field that Restand reads.
+	LastError.Reset();
+	LastNotice.Reset();
+	if (!Lab.LabSetLayer(Clips[Index], LayerWeight, LastError))
+	{
+		return;
+	}
+	LastNotice = FString::Printf(TEXT("layering %s over %s"), *Clips[Index], *Lab.LabClip());
+}
+
 void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 {
 	IConsoleVariable* Baked = BakedCVar();
@@ -141,18 +167,27 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 		return;
 	}
 
-	// Same control shape as the cloth switch: which build of the body to use is decided when the
-	// body is built, so flipping the cvar changes nothing until one is built again.
+	// Which build of the body to use is decided when the body is built, so the toggle takes effect
+	// on the next Restand -- and Restand has to be the cache-clearing one, or it silently reuses
+	// whichever mesh answered first (`UElysiumEntityBodies::ForgetNpcVisuals`).
 	bool bEnabled = Baked->GetInt() != 0;
 	if (ImGui::Checkbox("elysium.BakedCharacters - stand the baked asset", &bEnabled))
 	{
 		Baked->Set(bEnabled ? 1 : 0, ECVF_SetByConsole);
+		// Restand immediately. A toggle whose only visible effect is to arm a second button reads
+		// as broken, and this one had a whole debugging session spent on it.
+		if (!Lab.LabStem().IsEmpty())
+		{
+			LastError.Reset();
+			Lab.LabRestand(LastError);
+		}
 	}
 	ImGui::SameLine();
 	ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
 	if (ImGui::Button("Restand##source"))
 	{
-		Stand(Lab, Lab.LabStem(), Lab.LabClip());
+		LastError.Reset();
+		Lab.LabRestand(LastError);
 	}
 	ImGui::EndDisabled();
 
@@ -177,10 +212,22 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 			"baked: %s (rig family '%s')", COG_TCHAR_TO_CHAR(*FPackageName::GetShortName(Path)),
 			COG_TCHAR_TO_CHAR(*Family));
 	}
+	else if (!bEnabled)
+	{
+		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f), "glTFRuntime: built at load");
+	}
+	else if (ElysiumNpcVisual::IsStemBaked(Lab.LabStem()))
+	{
+		// The asset IS there and this body did not come from it, so the toggle was off when this
+		// body was built. Said outright rather than guessed at: the old wording blamed the export
+		// for a stale cache, which sends the reader off to re-bake a model that was already baked.
+		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f),
+			"glTFRuntime: built at load - the baked asset EXISTS; this body predates the toggle");
+	}
 	else
 	{
-		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f), "glTFRuntime: built at load%s",
-			bEnabled ? " - this model is not on the baked mount" : "");
+		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f),
+			"glTFRuntime: built at load - this model is not on the baked mount");
 	}
 }
 
@@ -503,11 +550,8 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		}
 		if (Step != 0)
 		{
-			ClipCursor = Visible[FMath::Clamp(At + Step, 0, Visible.Num() - 1)];
 			bClipCursorMoved = true;
-			bUserPicked = true;
-			PendingClip = Clips[ClipCursor];
-			Stand(Lab, PendingStem, PendingClip);
+			Pick(Lab, Visible[FMath::Clamp(At + Step, 0, Visible.Num() - 1)]);
 		}
 	}
 
@@ -523,19 +567,16 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			: Clips[Index];
 		if (bAdditive)
 		{
-			// Named on the row, not hidden from the list: standing one of these is the fastest way
-			// to see what an additive layer actually contains, and the only thing worth preventing
-			// is mistaking the result for a broken model.
+			// Named on the row, not hidden from the list: picking one composes it over the body
+			// rather than standing it, and saying which rows do that is what stops the layer from
+			// reading as a clip that did nothing.
 			Row += TEXT("   [additive layer]");
-			ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColError);
+			ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColName);
 		}
 		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Row),
 			ClipCursor == Index || PendingClip == Clips[Index]))
 		{
-			bUserPicked = true;
-			ClipCursor = Index;
-			PendingClip = Clips[Index];
-			Stand(Lab, PendingStem, Clips[Index]);
+			Pick(Lab, Index);
 		}
 		if (bAdditive)
 		{
@@ -563,8 +604,38 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*LastNotice));
 	}
 	ImGui::TextDisabled("-> = a blend grid, showing the cell the pose parameters select.");
-	ImGui::TextDisabled("[additive layer] = a delta on top of a base pose, not a pose. Standing one");
-	ImGui::TextDisabled("alone shows the difference itself, which folds the skeleton up.");
+	ImGui::TextDisabled("[additive layer] = a delta, not a pose. Picking one composes it OVER the");
+	ImGui::TextDisabled("standing clip at the weight below; the standing clip does not change.");
+
+	// The layer controls, drawn whether or not one is running: the weight has to be settable before
+	// the pick, because a layer picked at 1.0 and then dialled back reads as a different clip.
+	ImGui::SetNextItemWidth(GetDpiScale() * 160.f);
+	if (ImGui::SliderFloat("Layer weight", &LayerWeight, 0.f, 1.f, "%.2f")
+		&& !Lab.LabLayer().IsEmpty())
+	{
+		// Re-asking for the running layer only re-weights it, so dragging does not restart the
+		// delta under the slider.
+		FString Ignored;
+		Lab.LabSetLayer(Lab.LabLayer(), LayerWeight, Ignored);
+	}
+	ImGui::SameLine();
+	ImGui::BeginDisabled(Lab.LabLayer().IsEmpty());
+	if (ImGui::Button("Clear layers"))
+	{
+		Lab.LabClearLayers();
+		LastNotice.Reset();
+	}
+	ImGui::EndDisabled();
+
+	// Read once: the proxy accessor behind it blocks on any in-flight parallel evaluation, which is
+	// not a thing to do twice a frame to draw one label.
+	const UElysiumNpcAnimInstance* LayerInst = GetBodyInstance();
+	const int32 Composing = LayerInst != nullptr ? LayerInst->GetActiveLayers() : 0;
+	if (Composing > 0)
+	{
+		ImGui::SameLine();
+		ImGui::TextColored(ElysiumCogStyle::ColName, "%d composing", Composing);
+	}
 }
 
 void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)

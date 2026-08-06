@@ -14,6 +14,7 @@
 #include "Debug/ElysiumScreenshot.h"
 #include "Substrate/ElysiumCameraTrack.h"
 #include "Visual/ElysiumClothRig.h"
+#include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 
@@ -1508,9 +1509,71 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	Bodies.Add({ Case, Body, Duration });
 	ReviewStem = Stem;
 	ReviewClip = ResolvedClip;
+	// A layer belongs to the body it was composed onto, and that body has just been destroyed.
+	ReviewLayer.Reset();
 	LabClipTime = 0.0f;
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s clip %s (%.3fs)"), *Stem, *ResolvedClip, Duration);
 	return true;
+}
+
+bool FElysiumGreenRoomRun::LabRestand(FString& OutError)
+{
+	if (ReviewStem.IsEmpty())
+	{
+		OutError = TEXT("nothing is standing on the stage");
+		return false;
+	}
+	AElysiumMapActor* Map = GetMap();
+	UElysiumEntityBodies* BodyFactory = Map != nullptr ? Map->GetBodies() : nullptr;
+	if (BodyFactory != nullptr)
+	{
+		// Before the rebuild, not after: LabSetBody resolves the mesh through the same cache this
+		// clears, so clearing afterwards would leave the body it just built on the old path and
+		// only take effect on the restand after this one.
+		BodyFactory->ForgetNpcVisuals();
+	}
+	return LabSetBody(ReviewStem, ReviewClip, OutError);
+}
+
+bool FElysiumGreenRoomRun::LabSetLayer(const FString& Clip, float Weight, FString& OutError)
+{
+	AElysiumMapActor* Map = GetMap();
+	USkeletalMeshComponent* Body = LabBody();
+	if (!IsLabReady() || Map == nullptr || Body == nullptr)
+	{
+		OutError = TEXT("nothing is standing on the stage");
+		return false;
+	}
+	if (Clip.IsEmpty())
+	{
+		OutError = TEXT("no layer named");
+		return false;
+	}
+	UElysiumEntityBodies* BodyFactory = Map->GetBodies();
+	if (BodyFactory == nullptr || !BodyFactory->PlayNpcLayer(Body, ReviewStem, Clip, Weight))
+	{
+		// The two refusals worth telling apart, because only one of them is about the clip. A
+		// sequence off the glTFRuntime loader is never stamped additive, so its delta is
+		// unrecoverable and the layer is declined rather than composed out of reference-pose bones.
+		OutError = FString::Printf(
+			TEXT("%s cannot layer '%s' — is it a `_delta` clip, and is the body baked? ")
+			TEXT("(elysium.BakedCharacters 1, then Restand)"), *ReviewStem, *Clip);
+		return false;
+	}
+	ReviewLayer = Clip;
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s layer %s at %.2f"), *ReviewStem, *Clip, Weight);
+	return true;
+}
+
+void FElysiumGreenRoomRun::LabClearLayers()
+{
+	AElysiumMapActor* Map = GetMap();
+	UElysiumEntityBodies* BodyFactory = Map != nullptr ? Map->GetBodies() : nullptr;
+	if (BodyFactory != nullptr)
+	{
+		BodyFactory->StopNpcLayers(LabBody());
+	}
+	ReviewLayer.Reset();
 }
 
 void FElysiumGreenRoomRun::ApplyLabHud(bool bShow) const

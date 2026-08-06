@@ -105,6 +105,25 @@ public:
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
+	// Compose a `_delta` autolayer over whatever this body is already playing. Same resolution
+	// chain as PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself
+	// is independent of the standing clip and survives a stance change. False when the label does
+	// not resolve, when the body has no animation host, or when the resolved sequence is not a
+	// baked additive (`UElysiumNpcAnimInstance::PlayLayer`).
+	bool PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
+		float Weight);
+	void StopNpcLayers(USkeletalMeshComponent* Body);
+
+	// Drop every cached NPC mesh, parsed glb and resolved clip so the next build re-resolves from
+	// scratch.
+	//
+	// **This is what makes `elysium.BakedCharacters` switchable without a map reload.** The cvar is
+	// read in exactly one place, `ElysiumNpcVisual::LoadMesh`, and the mesh cache is keyed by stem
+	// and material permutation -- NOT by which path answered. So a stem resolved once is pinned to
+	// that path for the rest of the map epoch: rebuilding the component hits the cache, LoadMesh is
+	// never reached, and the toggle appears to do nothing. Only the A/B harness should call this;
+	// gameplay has no reason to, and dropping the caches mid-map re-parses every bank glb.
+	void ForgetNpcVisuals();
 	// The transition a clip asks for when something fades INTO it: its authored `mstudioseqdesc_t`
 	// fade, or 0 when it carries the no-transition bit. The host takes the larger of this and the
 	// clip already playing, so this answers for one clip rather than for the pair.

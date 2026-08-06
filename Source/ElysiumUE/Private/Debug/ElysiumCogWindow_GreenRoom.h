@@ -58,6 +58,10 @@ private:
 	void RenderCloth(FElysiumGreenRoomRun& Lab);
 
 	void Stand(FElysiumGreenRoomRun& Lab, const FString& Stem, const FString& Clip);
+	// What a clip row does when it is picked. An additive row lays a layer over the standing body
+	// instead of standing the delta by itself, which is the only way to see what one is for: a
+	// `_delta` alone is a difference, and a difference posed as a pose folds the skeleton up.
+	void Pick(FElysiumGreenRoomRun& Lab, int32 Index);
 
 	FString PendingStem;
 	FString PendingClip;
@@ -100,6 +104,11 @@ private:
 	// Row index of the clip the keyboard is on, into Clips. Arrow keys move it and stand what they
 	// land on, so a vocabulary can be walked without the mouse.
 	int32 ClipCursor = INDEX_NONE;
+	// Retail's `layer_weight` for the next layer picked, and for the one already running — the
+	// slider re-weights live, because re-asking for a running layer only changes its weight. The
+	// scalar the accumulator actually receives in retail lives in the DLL and is not recovered, so
+	// this is a control surface rather than a reproduction.
+	float LayerWeight = 1.f;
 	// Set when the cursor moved this frame, so the list scrolls to follow it.
 	bool bClipCursorMoved = false;
 

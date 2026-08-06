@@ -77,6 +77,20 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	// and a free-running clip keeps running — it only moves where it is running from.
 	void ResyncPosition(float PositionSeconds);
 
+	// --- additive layers -----------------------------------------------------------------------
+	//
+	// Start or re-weight one autolayer. Weight is retail's `layer_weight`, the scalar the
+	// accumulator receives from its caller; 1 is the whole delta. Asking for a sequence already on
+	// a layer only re-weights it, so a caller may drive the weight every frame without restarting
+	// the clip. False when the sequence is not a baked additive — the delta the applier needs is
+	// only recoverable from a sequence Unreal itself stamped additive, see RequestAdditive.
+	bool RequestAdditive(UAnimSequence* Sequence, bool bLoop, float Weight);
+	// Drop one layer, or every layer. Dropping is immediate: an autolayer carries no fade of its
+	// own, and the weight IS the ramp.
+	void StopAdditive(const UAnimSequence* Sequence);
+	void StopAllAdditives();
+	int32 NumAdditiveLayers() const;
+
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
 	// True while any previous clip is still fading out. More than one may be, so this is "a
@@ -108,6 +122,14 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 private:
 	// The body half of Evaluate: the crossfade between the two sequence players.
 	void EvaluateBody(FPoseContext& Output);
+	// The autolayer half: VtMB's `_delta` layers accumulated onto the body pose in LOCAL space,
+	// post-multiplied. Runs between the body and the composition stages, which is retail's own
+	// order — see the definition.
+	void EvaluateAdditives(FPoseContext& Output);
+	// `elysium.AdditiveDump`'s one-shot readout: what the layer pose actually contains, per bone,
+	// so the delta the applier reads can be checked against the container's own numbers instead of
+	// against a screenshot.
+	void DumpAdditivePose(int32 Layer, const FPoseContext& Delta);
 	// The composition half: split inheritance, then axis interpolation, in component space over
 	// whatever the body produced. Order is load-bearing.
 	void EvaluateComposition(FPoseContext& Output);
@@ -136,10 +158,24 @@ private:
 
 	static constexpr int32 MaxPlayers = 4;
 
+	// Autolayers get their OWN players rather than a share of the ones above. The array above is
+	// the crossfade's: `TakeFreeSlot` evicts from it by age whenever a clip change lands inside a
+	// fade window, and an autolayer has no business being evicted by a stance change — its lifetime
+	// is the weapon's, not the transition's. Two, because retail's autolayer pattern is one masked
+	// `<weapon>_aim_layer` plus one unmasked `<weapon>_<action>_delta` and never more; a third
+	// request replaces the weakest, which is the smallest contribution by construction.
+	static constexpr int32 MaxLayers = 2;
+
 	// Standalone (not _Standalone-suffixed by accident): the plain-C++ variant of the sequence
 	// player whose setters actually write, unlike the Blueprint-bound FAnimNode_SequencePlayer
 	// whose SetSequence is a no-op outside a compiled anim graph.
 	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone Players[MaxPlayers];
+	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone LayerPlayers[MaxLayers];
+
+	// Retail's `layer_weight` per layer, 0 for a slot carrying nothing. Not a fade: an autolayer
+	// has no authored transition, and a caller that wants one ramps this itself.
+	float LayerWeights[MaxLayers] = {};
+	bool bLayerNeedsReinit[MaxLayers] = {};
 
 	// A slot no live clip is using, evicting the oldest fade when every slot is busy.
 	int32 TakeFreeSlot();
@@ -183,6 +219,22 @@ public:
 	void PlayClip(UAnimSequence* Sequence, bool bLoop = true, float BlendSeconds = DefaultBlendSeconds);
 	void SeekClip(float PositionSeconds);
 	void StopClip();
+
+	// --- autolayers ----------------------------------------------------------------------------
+	//
+	// Compose a VtMB `_delta` sequence over the body pose as an additive layer. Weight is retail's
+	// own layer scalar; re-asking with a new weight re-weights the running layer rather than
+	// restarting it. Independent of PlayClip in every way: a stance change underneath does not
+	// touch a layer, and a layer does not transition.
+	//
+	// False when the sequence is not a baked additive. Only the `.eskm` bake writes the delta in a
+	// form Unreal hands back as a delta (`AdditiveAnimType`), so a `_delta` built by glTFRuntime is
+	// refused rather than composed out of a pose that is really the reference pose for every bone
+	// the layer does not touch.
+	bool PlayLayer(UAnimSequence* Sequence, float Weight = 1.f, bool bLoop = true);
+	void StopLayer(UAnimSequence* Sequence);
+	void StopAllLayers();
+	int32 GetActiveLayers() const;
 
 	// Read and correct the phase of a clip that is still playing. This is the measurement half of
 	// the substrate-clock phase lock: a caller compares the position against elapsed game time and

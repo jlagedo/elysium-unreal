@@ -40,6 +40,17 @@ void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 		Player.SetGroupMethod(EAnimSyncMethod::DoNotSync);
 		Player.Initialize_AnyThread(Context);
 	}
+	// Same treatment for the autolayers, and for the same reason: a layer must never be forced onto
+	// a shared normalized time with the pose it rides over — an aim layer and a walk cycle have
+	// nothing to say to each other's phase.
+	for (FAnimNode_SequencePlayer_Standalone& Player : LayerPlayers)
+	{
+		Player.SetLoopAnimation(true);
+		Player.SetPlayRate(1.f);
+		Player.SetGroupName(NAME_None);
+		Player.SetGroupMethod(EAnimSyncMethod::DoNotSync);
+		Player.Initialize_AnyThread(Context);
+	}
 	Current = 0;
 	Fading.Reset();
 	Playing = nullptr;
@@ -47,6 +58,11 @@ void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 	for (bool& Reinit : bNeedsReinit)
 	{
 		Reinit = false;
+	}
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		LayerWeights[Layer] = 0.f;
+		bLayerNeedsReinit[Layer] = false;
 	}
 	bInitialized = false;
 	// The facial track is not reset here: the rig is installed once per body, before or after this
@@ -58,6 +74,10 @@ void FElysiumNpcAnimProxy::CacheBones()
 {
 	FAnimationCacheBonesContext Context(this);
 	for (FAnimNode_SequencePlayer_Standalone& Player : Players)
+	{
+		Player.CacheBones_AnyThread(Context);
+	}
+	for (FAnimNode_SequencePlayer_Standalone& Player : LayerPlayers)
 	{
 		Player.CacheBones_AnyThread(Context);
 	}
@@ -251,6 +271,94 @@ void FElysiumNpcAnimProxy::Stop()
 	Fading.Reset();
 }
 
+bool FElysiumNpcAnimProxy::RequestAdditive(UAnimSequence* Sequence, bool bLoop, float Weight)
+{
+	if (Sequence == nullptr)
+	{
+		return false;
+	}
+	// The gate that keeps this honest. `EvaluateAdditives` reads the layer player's pose as a
+	// DELTA, and only a sequence Unreal considers additive evaluates to one: for those it starts
+	// from the additive identity and lets the compressed delta overwrite the bones the clip carries
+	// tracks for, so a bone the layer never touches comes back as identity. An ordinary sequence
+	// starts from the REFERENCE pose instead, and accumulating that would post-multiply every
+	// untouched bone by its own bind rotation — a folded skeleton, from data that looks fine.
+	if (!Sequence->IsValidAdditive())
+	{
+		return false;
+	}
+
+	const float Clamped = FMath::Clamp(Weight, 0.f, 1.f);
+	// Already running: re-weight and leave the phase alone. A caller ramping a layer in writes the
+	// weight every frame, and restarting the clip under it would freeze it on frame zero.
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		if (LayerPlayers[Layer].GetSequence() == Sequence)
+		{
+			LayerWeights[Layer] = Clamped;
+			LayerPlayers[Layer].SetLoopAnimation(bLoop);
+			return true;
+		}
+	}
+
+	// A free slot, else the weakest — the least of what is playing is the least to lose.
+	int32 Chosen = INDEX_NONE;
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		if (LayerPlayers[Layer].GetSequence() == nullptr || LayerWeights[Layer] <= 0.f)
+		{
+			Chosen = Layer;
+			break;
+		}
+		if (Chosen == INDEX_NONE || LayerWeights[Layer] < LayerWeights[Chosen])
+		{
+			Chosen = Layer;
+		}
+	}
+
+	LayerPlayers[Chosen].SetSequence(Sequence);
+	LayerPlayers[Chosen].SetLoopAnimation(bLoop);
+	LayerPlayers[Chosen].SetPlayRate(1.f);
+	LayerPlayers[Chosen].SetStartPosition(0.f);
+	LayerWeights[Chosen] = Clamped;
+	bLayerNeedsReinit[Chosen] = true;   // reset that player's play time on the worker
+	return true;
+}
+
+void FElysiumNpcAnimProxy::StopAdditive(const UAnimSequence* Sequence)
+{
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		if (LayerPlayers[Layer].GetSequence() == Sequence)
+		{
+			// The weight is the whole gate — Update and Evaluate both skip a zero-weight layer, so
+			// the sequence is left in place and re-asking for it costs no reinitialization.
+			LayerWeights[Layer] = 0.f;
+		}
+	}
+}
+
+void FElysiumNpcAnimProxy::StopAllAdditives()
+{
+	for (float& Weight : LayerWeights)
+	{
+		Weight = 0.f;
+	}
+}
+
+int32 FElysiumNpcAnimProxy::NumAdditiveLayers() const
+{
+	int32 Count = 0;
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		if (LayerPlayers[Layer].GetSequence() != nullptr && LayerWeights[Layer] > 0.f)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
 void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
 {
 	// Ahead of the initialised gate: the simulation's only source of a timestep is this call, and a
@@ -258,14 +366,36 @@ void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& In
 	// settle rather than freeze mid-air until something plays.
 	Cloth.Update(InContext);
 
+	// Also ahead of the gate, and for the same reason as the garment: a layer rides over whatever
+	// the body produced, INCLUDING the reference pose a body with no clip falls back to. A weapon
+	// overlay on an NPC that has not been given a stance yet must still run rather than hold frame
+	// zero until one arrives.
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		if (bLayerNeedsReinit[Layer])
+		{
+			bLayerNeedsReinit[Layer] = false;
+			FAnimationInitializeContext InitContext(this);
+			LayerPlayers[Layer].Initialize_AnyThread(InitContext);
+			FAnimationCacheBonesContext BoneContext(this);
+			LayerPlayers[Layer].CacheBones_AnyThread(BoneContext);
+		}
+		if (LayerPlayers[Layer].GetSequence() != nullptr && LayerWeights[Layer] > 0.f)
+		{
+			LayerPlayers[Layer].Update_AnyThread(InContext.FractionalWeight(LayerWeights[Layer]));
+		}
+	}
+
 	if (!bInitialized)
 	{
 		return;
 	}
 
 	// A player whose clip changed restarts from its start position. Done here rather than in
-	// Request() because this is the thread and the context the node expects.
-	for (int32 i = 0; i < 2; ++i)
+	// Request() because this is the thread and the context the node expects. Every slot, not the
+	// first two: TakeFreeSlot hands out all four, and a slot whose flag is never consumed keeps the
+	// previous clip's play time and starts the new one part-way through.
+	for (int32 i = 0; i < MaxPlayers; ++i)
 	{
 		if (bNeedsReinit[i])
 		{
@@ -348,6 +478,139 @@ void FElysiumNpcAnimProxy::EvaluateBody(FPoseContext& Output)
 	Output = Accumulated;
 }
 
+// The A/B for the autolayer accumulator. 1 = VtMB's own post-multiplied combine, 0 = no layer at
+// all, which is what every body composed before this existed. There is deliberately no "use
+// Unreal's additive node" setting: every Unreal additive mode pre-multiplies, and the cost of that
+// order is measured rather than offered — 89.1% of bone-frames within 0.5 degrees, 1.9% past 10,
+// worst 162.9 on a thigh (`docs/vtmb/animation_and_movers.md`).
+static TAutoConsoleVariable<int32> CVarAdditiveLayers(
+	TEXT("elysium.AdditiveLayers"), 1,
+	TEXT("1 = accumulate VtMB `_delta` autolayers onto the body pose, 0 = ignore every layer."),
+	ECVF_Default);
+
+// One-shot: dump the delta the NEXT additive evaluation reads, per bone, largest first.
+//
+// The question this exists to answer is the one no screenshot can: whether the pose the applier
+// accumulates is the delta VtMB authored. The container's own numbers are readable offline, so a
+// disagreement localises the fault immediately -- matching numbers mean the bake and the read are
+// sound and the accumulate is wrong, differing numbers mean the opposite.
+//
+// A counter rather than a cvar read, because the consumer runs on the animation worker and a cvar
+// write from there is not safe. The command arms it on the game thread; the worker takes it.
+static FThreadSafeCounter GAdditiveDumpRequest;
+
+static FAutoConsoleCommand GAdditiveDumpCommand(
+	TEXT("elysium.AdditiveDump"),
+	TEXT("Log the additive delta the next layer evaluation reads, per bone, largest first."),
+	FConsoleCommandDelegate::CreateLambda([] { GAdditiveDumpRequest.Set(1); }));
+
+void FElysiumNpcAnimProxy::DumpAdditivePose(int32 Layer, const FPoseContext& Delta)
+{
+	// Consumed here rather than in the caller, so exactly one layer of one body answers a request
+	// even when several are composing.
+	if (GAdditiveDumpRequest.Set(0) == 0)
+	{
+		return;
+	}
+	const FBoneContainer& Container = Delta.Pose.GetBoneContainer();
+	const FReferenceSkeleton& Ref = Container.GetReferenceSkeleton();
+
+	struct FRow { double Degrees; double Centimetres; FName Bone; };
+	TArray<FRow> Rows;
+	Rows.Reserve(Delta.Pose.GetNumBones());
+	for (const FCompactPoseBoneIndex BoneIndex : Delta.Pose.ForEachBoneIndex())
+	{
+		const FTransform& Add = Delta.Pose[BoneIndex];
+		const FMeshPoseBoneIndex MeshIndex = Container.MakeMeshPoseIndex(BoneIndex);
+		Rows.Add({
+			FMath::RadiansToDegrees(Add.GetRotation().GetAngle()),
+			Add.GetTranslation().Size(),
+			Ref.IsValidIndex(MeshIndex.GetInt()) ? Ref.GetBoneName(MeshIndex.GetInt()) : NAME_None });
+	}
+	Rows.Sort([](const FRow& A, const FRow& B) { return A.Degrees > B.Degrees; });
+
+	const UAnimSequence* Sequence = Cast<UAnimSequence>(LayerPlayers[Layer].GetSequence());
+	int32 Quiet = 0;
+	for (const FRow& Row : Rows)
+	{
+		Quiet += Row.Degrees < 1.0 ? 1 : 0;
+	}
+	UE_LOG(LogTemp, Display, TEXT("additive layer %d: '%s' at t=%.3f, %d bone(s), additive=%d"),
+		Layer, Sequence != nullptr ? *Sequence->GetName() : TEXT("none"),
+		LayerPlayers[Layer].GetAccumulatedTime(), Rows.Num(),
+		Sequence != nullptr ? static_cast<int32>(Sequence->AdditiveAnimType) : -1);
+	for (int32 i = 0; i < FMath::Min(12, Rows.Num()); ++i)
+	{
+		UE_LOG(LogTemp, Display, TEXT("   %-24s %7.2f deg   %6.2f cm"),
+			*Rows[i].Bone.ToString(), Rows[i].Degrees, Rows[i].Centimetres);
+	}
+	UE_LOG(LogTemp, Display, TEXT("   ... %d of %d bones under 1 deg"), Quiet, Rows.Num());
+}
+
+void FElysiumNpcAnimProxy::EvaluateAdditives(FPoseContext& Output)
+{
+	if (CVarAdditiveLayers.GetValueOnAnyThread() == 0)
+	{
+		return;
+	}
+
+	// RETAIL'S SLOT, and it is not the obvious one. `FUN_10089c40` walks a sequence's autolayers
+	// and accumulates each through `FUN_10088e10` while the pose is still LOCAL, before
+	// `BuildTransformations` (`FUN_1008fd00`) composes the hierarchy and applies split inheritance.
+	// So a layer lands under the composition stages, not over them, and the stages see the
+	// accumulated result. Running this after EvaluateComposition is wrong in a way that still looks
+	// plausible on a screenshot.
+	for (int32 Layer = 0; Layer < MaxLayers; ++Layer)
+	{
+		const float LayerWeight = LayerWeights[Layer];
+		if (LayerPlayers[Layer].GetSequence() == nullptr || LayerWeight <= 0.f)
+		{
+			continue;
+		}
+
+		FPoseContext Delta(this);
+		LayerPlayers[Layer].Evaluate_AnyThread(Delta);
+
+		if (GAdditiveDumpRequest.GetValue() != 0)
+		{
+			DumpAdditivePose(Layer, Delta);
+		}
+
+		// `s = layer_weight * bone_weight` in retail, where bone_weight is the animation record's
+		// `weight`@0. That field is a MASK rather than a factor — both channel decoders test it
+		// against zero and return zeros — and no record in the retail capture corpus carries
+		// anything but 1.0, so the product reduces to the layer weight. The masked partial-body
+		// overlays (`<weapon>_aim_layer`) are the case that needs the mask, and they need it as a
+		// skeleton blend profile rather than as a per-clip array.
+		const float S = LayerWeight;
+		const bool bFull = S >= 1.f - KINDA_SMALL_NUMBER;
+
+		for (const FCompactPoseBoneIndex BoneIndex : Output.Pose.ForEachBoneIndex())
+		{
+			const FTransform& Add = Delta.Pose[BoneIndex];
+			FTransform& Bone = Output.Pose[BoneIndex];
+
+			// POST-multiplied: `out = out * scale(delta, s)`. All 118 shipped `_delta` sequences
+			// carry `0x14` — STUDIO_DELTA together with STUDIO_POST — which selects `FUN_10088d60`,
+			// the combine that puts the delta on the RIGHT. Every Unreal additive mode puts it on
+			// the left (`FTransform::BlendFromIdentityAndAccumulate`), which is why this is written
+			// out here instead of calling FAnimationRuntime::AccumulateAdditivePose.
+			//
+			// `scale(q, s)` is retail's `QuaternionScale`: a true power, not the nlerp Unreal's
+			// accumulator uses. It keeps the sign of the input rather than aligning, which is the
+			// same ROTATION as slerping from identity along the short arc.
+			const FQuat Scaled = bFull
+				? Add.GetRotation()
+				: FQuat::Slerp(FQuat::Identity, Add.GetRotation(), S);
+			Bone.SetRotation((Bone.GetRotation() * Scaled).GetNormalized());
+			Bone.AddToTranslation(Add.GetTranslation() * S);
+			// Scale is deliberately untouched. VtMB animates none — the format carries no scale
+			// channel at all — so an additive scale term would only ever apply the identity, and
+			// leaving it alone keeps a body whose mesh was built at a non-unit scale intact.
+		}
+	}
+}
+
 // The A/B for the two composition stages. 1 = VtMB's own composition, 0 = Unreal's ordinary
 // hierarchy alone, which is what every body posed under before CAP7.2. Dropping it is visible
 // exactly where the docs measure it: up to 44.9 degrees on a shoulder, 26.9 on a bicep, 6.4 on a
@@ -376,8 +639,10 @@ void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
 	//
 	// Split inheritance does NOT, and the distinction is worth stating because the opposite is easy
 	// to assume. The correction is `world_rot(parent)^-1 * local`, which is fixed per clip per
-	// frame, so `UE_mdl_skeletal.py` rewrites that one rotation curve at export and a body posed off
-	// the baked mount is installed with this stage declined (`SetCompositionRig`). Per clip that is
+	// frame, so `UE_mdl_skeletal.py` rewrites that one rotation curve at export and a clip off the
+	// baked mount plays with this stage declined. The gate is PER CLIP, not per body
+	// (`PlayClip` -> `IsBakedClip` -> `SetCompositionRig`): a baked body still reaches for
+	// loader-sourced bank clips, which carry VtMB's rotations unchanged and do need it. Per clip that is
 	// exact — 7.2e-06 degrees over 24 models and 14k frame-poses, which is float noise. It is
 	// approximate only ACROSS A TRANSITION, where a crossfade blends two clips already normalised
 	// against their own parent chains and then composes once against the blended chain: measured
@@ -414,6 +679,7 @@ void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
 bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
 {
 	EvaluateBody(Output);
+	EvaluateAdditives(Output);
 	EvaluateComposition(Output);
 
 	// The face is written last, over whatever the body produced — including the ref pose a body
@@ -511,6 +777,30 @@ void UElysiumNpcAnimInstance::SeekClip(float PositionSeconds)
 void UElysiumNpcAnimInstance::StopClip()
 {
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Stop();
+}
+
+bool UElysiumNpcAnimInstance::PlayLayer(UAnimSequence* Sequence, float Weight, bool bLoop)
+{
+	// No composition-rig decision here, unlike PlayClip. Split inheritance is a property of the
+	// BASE pose's clip: an autolayer is a delta accumulated in local space underneath the
+	// composition stages, so which stages run is still the standing clip's answer.
+	return GetProxyOnGameThread<FElysiumNpcAnimProxy>().RequestAdditive(Sequence, bLoop, Weight);
+}
+
+void UElysiumNpcAnimInstance::StopLayer(UAnimSequence* Sequence)
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().StopAdditive(Sequence);
+}
+
+void UElysiumNpcAnimInstance::StopAllLayers()
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().StopAllAdditives();
+}
+
+int32 UElysiumNpcAnimInstance::GetActiveLayers() const
+{
+	return const_cast<UElysiumNpcAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().NumAdditiveLayers();
 }
 
 float UElysiumNpcAnimInstance::GetClipPosition() const

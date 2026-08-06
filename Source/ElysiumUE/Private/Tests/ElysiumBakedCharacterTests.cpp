@@ -48,6 +48,8 @@
 
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimTypes.h"
+#include "Animation/AnimationPoseData.h"
+#include "BonePose.h"
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
 #include "BoneIndices.h"
@@ -118,6 +120,18 @@ namespace
 	constexpr double GComposedRotationToleranceDeg = 0.05;
 	constexpr double GComposedTranslationTolerance = 0.05;   // centimetres
 
+	// How many `_delta` clips per model to round-trip. Only two shipped models carry any, and
+	// their 118 between them are all the same shape.
+	constexpr int32 GMaxAdditiveClipsPerModel = 4;
+
+	// The additive delta is read back through the COMPRESSED data, unlike everything else here,
+	// because that is the only form the runtime applier ever sees and the only one the additive
+	// bake-out has run over. So these are a compressor's tolerance rather than a serialiser's --
+	// and still three orders below the failure they exist to catch, which is a bone arriving
+	// rotated by its own bind (tens of degrees, centimetres of offset).
+	constexpr double GAdditiveRotationToleranceDeg = 0.5;
+	constexpr double GAdditiveTranslationTolerance = 0.5;   // centimetres
+
 	bool SampleBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
 		FTransform& OutTransform)
 	{
@@ -136,6 +150,66 @@ namespace
 		// content surviving the bake, not about two compressors agreeing bit for bit.
 		Sequence->GetBoneTransform(OutTransform, FSkeletonPoseBoneIndex(BoneIndex),
 			FAnimExtractContext(Time), /*bUseRawData=*/true);
+		return true;
+	}
+
+	/**
+	 * One frame of an additive sequence as the DELTA it states, indexed by skeleton bone.
+	 *
+	 * `GetBoneTransform` is the wrong door for this and quietly answers the wrong question: it is
+	 * a plain track read, so on a raw evaluation it hands back the keys as written and never
+	 * performs the additive conversion at all. The keys of a baked `_delta` are the delta already
+	 * composed onto the reference pose -- Unreal's own transport, because its compressor subtracts
+	 * that pose back out -- so a track read reports the reference pose and calls a correct asset
+	 * broken.
+	 *
+	 * `GetAnimationPose` is the door the runtime uses. It resolves the two evaluation paths
+	 * itself: raw data goes through `GetBonePose_Additive`, which subtracts the base pose, and
+	 * compressed data was subtracted already at bake time. Both answer the delta, which is what
+	 * `FElysiumNpcAnimProxy::EvaluateAdditives` accumulates.
+	 *
+	 * A bone the sequence carries no track for comes back as the ADDITIVE identity rather than as
+	 * the reference pose, which is the property that makes an unmasked layer safe to accumulate
+	 * over every bone.
+	 */
+	bool EvaluateAdditiveFrame(const UAnimSequence* Sequence, const double Time,
+		TArray<FTransform>& OutLocals)
+	{
+		const USkeleton* Skeleton = Sequence != nullptr ? Sequence->GetSkeleton() : nullptr;
+		if (Skeleton == nullptr)
+		{
+			return false;
+		}
+		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+		TArray<FBoneIndexType> RequiredBones;
+		RequiredBones.SetNumUninitialized(Ref.GetNum());
+		for (int32 Bone = 0; Bone < RequiredBones.Num(); ++Bone)
+		{
+			RequiredBones[Bone] = static_cast<FBoneIndexType>(Bone);
+		}
+
+		FMemMark Mark(FMemStack::Get());
+		FBoneContainer Container;
+		Container.InitializeTo(RequiredBones,
+			UE::Anim::FCurveFilterSettings(UE::Anim::ECurveFilterMode::None), *Skeleton);
+		FCompactPose Pose;
+		Pose.SetBoneContainer(&Container);
+		FBlendedCurve Curve;
+		Curve.InitFrom(Container);
+		UE::Anim::FStackAttributeContainer Attributes;
+		FAnimationPoseData PoseData(Pose, Curve, Attributes);
+		Sequence->GetAnimationPose(PoseData, FAnimExtractContext(Time));
+
+		OutLocals.SetNum(Ref.GetNum());
+		for (const FCompactPoseBoneIndex BoneIndex : Pose.ForEachBoneIndex())
+		{
+			const FSkeletonPoseBoneIndex Skeletal =
+				Container.GetSkeletonPoseIndexFromCompactPoseIndex(BoneIndex);
+			if (Skeletal.IsValid() && OutLocals.IsValidIndex(Skeletal.GetInt()))
+			{
+				OutLocals[Skeletal.GetInt()] = Pose[BoneIndex];
+			}
+		}
 		return true;
 	}
 
@@ -226,6 +300,112 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	double BindRotationDeg = 0.0;
 	double BindTranslationCm = 0.0;
 	TArray<UObject*> KeepAlive;
+	int32 AdditiveClips = 0;
+
+	// The `_delta` round-trip, for one container's worth of clips against one baked body.
+	//
+	// This is the ONE assertion here that reads the compressed data, and it has to. Unreal bakes an
+	// additive sequence down by subtracting its base pose before compressing, so the raw keys the
+	// bake writes are the delta composed onto the skeleton's reference pose and the compressed data
+	// is the delta itself. The runtime accumulator (`FElysiumNpcAnimProxy::EvaluateAdditives`) reads
+	// the second, so the second is what has to equal what VtMB authored -- and a raw comparison
+	// would pass without the subtraction ever having run.
+	//
+	// Un-composed, unlike everything else here: a delta has no hierarchy to inherit through. It is
+	// accumulated onto a bone's own local rotation, so a per-bone comparison IS the contract.
+	auto CheckAdditives = [&](const USkeletalMesh* Baked, const FString& Owner,
+		const FElysiumSkeletalSource& Container)
+	{
+		int32 Taken = 0;
+		for (const FElysiumSourceClip& Clip : Container.Clips)
+		{
+			if (Taken >= GMaxAdditiveClipsPerModel)
+			{
+				break;
+			}
+			if ((Clip.Flags & 0x4) == 0 || Clip.FrameCount <= 0 || Clip.Tracks.IsEmpty())
+			{
+				continue;
+			}
+			UAnimSequence* BakedDelta = ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Clip.Name);
+			if (BakedDelta == nullptr)
+			{
+				AddInfo(FString::Printf(TEXT("%s '%s': not on the baked mount"), *Owner, *Clip.Name));
+				continue;
+			}
+			KeepAlive.Add(BakedDelta);
+			++Taken;
+			++AdditiveClips;
+
+			// Without the stamp the sequence evaluates to a POSE, and every bone the layer does not
+			// touch comes back as the reference pose rather than as no change -- which the
+			// accumulator would then post-multiply into the body, one bind rotation per bone.
+			if (!BakedDelta->IsValidAdditive())
+			{
+				AddError(FString::Printf(
+					TEXT("%s '%s': STUDIO_DELTA in the container and not additive on the mount, so ")
+					TEXT("no delta can be read out of it"), *Owner, *Clip.Name));
+				continue;
+			}
+
+			const FReferenceSkeleton& BakedRefSkeleton =
+				BakedDelta->GetSkeleton()->GetReferenceSkeleton();
+			bool bSound = true;
+			for (const double Fraction : GSampleFractions)
+			{
+				const int32 Frame = FMath::Clamp(
+					FMath::RoundToInt32(Fraction * (Clip.FrameCount - 1)), 0, Clip.FrameCount - 1);
+				const double Time = Frame / FMath::Max(static_cast<double>(Clip.FrameRate), 1.0);
+				TArray<FTransform> Deltas;
+				if (!EvaluateAdditiveFrame(BakedDelta, Time, Deltas))
+				{
+					break;
+				}
+				for (const FElysiumSourceTrack& Track : Clip.Tracks)
+				{
+					if (!Container.Bones.IsValidIndex(Track.Bone))
+					{
+						continue;
+					}
+					const FName BoneName = Container.Bones[Track.Bone].Name;
+					const int32 SkeletonBone = BakedRefSkeleton.FindBoneIndex(BoneName);
+					if (!Deltas.IsValidIndex(SkeletonBone))
+					{
+						// A bank drives bones this rig family has never had; that is sharing, not a
+						// defect, and the composed pass below is what asserts an own body's rig.
+						continue;
+					}
+					// A channel a delta leaves alone is a ZERO delta, not a bind value -- the
+					// opposite of the rule an ordinary clip's untouched channel follows.
+					const FQuat Expected = Track.Rotations.IsValidIndex(Frame)
+						? FQuat(Track.Rotations[Frame]) : FQuat::Identity;
+					const FVector ExpectedPos = Track.Translations.IsValidIndex(Frame)
+						? FVector(Track.Translations[Frame]) : FVector::ZeroVector;
+					const FTransform& Actual = Deltas[SkeletonBone];
+
+					++Samples;
+					const double Degrees = FMath::RadiansToDegrees(
+						Actual.GetRotation().AngularDistance(Expected));
+					const double Centimetres =
+						FVector::Distance(Actual.GetTranslation(), ExpectedPos);
+					if (Degrees > GAdditiveRotationToleranceDeg
+						|| Centimetres > GAdditiveTranslationTolerance)
+					{
+						AddError(FString::Printf(
+							TEXT("%s '%s' frame %d bone '%s': the baked delta is %.4f deg / %.4f cm ")
+							TEXT("off VtMB's own"),
+							*Owner, *Clip.Name, Frame, *BoneName.ToString(), Degrees, Centimetres));
+						bSound = false;
+						break;
+					}
+				}
+				if (!bSound)
+				{
+					break;
+				}
+			}
+		}
+	};
 
 	for (const FString& Stem : SliceStems())
 	{
@@ -409,6 +589,41 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			BindLocals.Add(BakedRef.GetRefBonePose()[BakedIndexOf[Bone.Name]]);
 		}
 
+		// The `_delta` family, which lives in the BANKS rather than in a body's own container --
+		// `move_and_ranged` carries all 60 of the male ones. Resolved through the body's own
+		// vocabulary rather than named here, so the pass follows whatever the export actually
+		// wrote. Runs before the composed-pose loop below because it answers a different question
+		// and shares none of its machinery.
+		CheckAdditives(Baked, Stem, Source);
+		{
+			FElysiumNpcClipSet Vocabulary;
+			FString VocabularyError;
+			TSet<FString> AdditiveOwners;
+			if (Vocabulary.Load(Stem, VocabularyError))
+			{
+				for (const TPair<FString, FElysiumNpcClip>& Entry : Vocabulary.Clips)
+				{
+					if (Entry.Value.IsAdditive() && !Entry.Value.IsOwnedBy(Stem))
+					{
+						AdditiveOwners.Add(Entry.Value.Owner);
+					}
+				}
+			}
+			for (const FString& Bank : AdditiveOwners)
+			{
+				FElysiumSkeletalSource BankSource;
+				FString BankError;
+				if (!FElysiumSkeletalSource::Load(
+					FElysiumContentPaths::NpcBankSource(Bank), BankSource, BankError))
+				{
+					AddInfo(FString::Printf(TEXT("%s: bank '%s' has no container (%s)"),
+						*Stem, *Bank, *BankError));
+					continue;
+				}
+				CheckAdditives(Baked, Bank, BankSource);
+			}
+		}
+
 		int32 Taken = 0;
 		for (const FElysiumSourceClip& Clip : Source.Clips)
 		{
@@ -422,7 +637,8 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			}
 			// A `_delta` clip states a difference from a base pose, not a pose, so composing it
 			// through the hierarchy answers nothing -- and it is the one family the exporter
-			// leaves un-normalised, because its correction needs the runtime base.
+			// leaves un-normalised, because its correction needs the runtime base. The pass above
+			// asserts it in the only form that means anything for one.
 			if ((Clip.Flags & 0x4) != 0)
 			{
 				continue;
@@ -538,7 +754,8 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		AddInfo(TEXT("skipping: no slice model is baked; run: uv run elysium export characters"));
 		return true;
 	}
-	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d composed bone samples"), Compared, Samples));
+	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d bone samples, %d `_delta` clip(s) ")
+		TEXT("round-tripped through the additive bake"), Compared, Samples, AdditiveClips));
 	AddInfo(FString::Printf(
 		TEXT("bind-frame delta against the glTFRuntime path: %.4f deg / %.4f cm at most, after ")
 		TEXT("each rig's own root is divided out -- expected, and not a defect: the two paths frame ")

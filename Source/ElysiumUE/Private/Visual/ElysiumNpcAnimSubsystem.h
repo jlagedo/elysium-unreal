@@ -59,13 +59,22 @@ public:
 	// the glb's import transform. Same shape and lifetime as GetFacialRig — shared, immutable once
 	// built, GI-scoped. Answered independently of the flex rig, because a player body carries a
 	// pair of eyeballs and no flex rig at all.
-	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem);
+	//
+	// **`bBaked` is part of the identity, not a hint.** Both sidecars state their geometry in the
+	// glb's frame, and the two body paths land in frames a 90 degree yaw apart, so the rig is
+	// carried into whichever one the body actually landed in
+	// (`ElysiumNpcVisual::ImportGlbLocal`). Pass it from the MESH in hand
+	// (`ElysiumNpcVisual::IsBakedMesh`), never re-derived from the cvar: a body can be on the
+	// loader while the toggle says baked, and a rig built in the wrong frame aims driven bones and
+	// irises sideways while every other bone looks correct. The cache is keyed on it too, so the
+	// two framings coexist rather than the first one built winning the map.
+	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem, bool bBaked);
 	// The two composition stages' rig for a stem (CAP7.2): `npc_index.json`'s `split_bones` plus
 	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
 	// the body then poses under Unreal's ordinary hierarchy composition, as it did before CAP7.2.
 	// Same shape and lifetime as GetFacialRig: shared, immutable once built, and GI-scoped so it
-	// outlives the map epoch the skeleton belongs to.
-	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem);
+	// outlives the map epoch the skeleton belongs to. `bBaked` as above.
+	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem, bool bBaked);
 	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
 	// animated_props/.
 	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);
@@ -166,10 +175,18 @@ private:
 	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipSets;
 	// Same shape, same reason: a null entry is the remembered "this model has no flex rig".
 	TMap<FString, TSharedPtr<const FElysiumFacialRig>> FacialRigs;
+	// These two are keyed `<stem>|baked` / `<stem>|loader`, not by stem: their contents depend on
+	// which frame the body landed in, so a single entry per stem would pin whichever path was built
+	// first and hand the other one a rig aimed 90 degrees off.
 	TMap<FString, TSharedPtr<const FElysiumEyeSet>> EyeSets;
-	// And again for the composition stages. Keyed by stem for characters and by the normalized
-	// model path for animated props, which is how each is addressed upstream.
+	// And again for the composition stages. Keyed by stem+frame for characters and by the
+	// normalized model path for animated props, which is how each is addressed upstream.
 	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;
+	// The key those two share.
+	static FString FrameKey(const FString& Stem, bool bBaked)
+	{
+		return Stem + (bBaked ? TEXT("|baked") : TEXT("|loader"));
+	}
 	// And again for the garment spike. A null entry here is the common case, not the exception.
 	TMap<FString, TSharedPtr<const FElysiumClothRig>> ClothRigs;
 	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that

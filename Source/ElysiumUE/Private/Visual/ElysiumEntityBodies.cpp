@@ -131,7 +131,12 @@ USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bP
 	AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
-	const TSharedPtr<const FElysiumEyeSet> EyeSet = Anims ? Anims->GetEyeSet(Stem) : nullptr;
+	// Ahead of the mesh, so there is no built body to ask -- and that is fine here, because only
+	// the eye MATERIAL names are read below and those are frame-independent strings. The frame is
+	// part of the cache key, so a guess costs at worst one redundant parse; it can never hand a
+	// body the other frame's rig the way a stem-keyed cache did.
+	const TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
+		? Anims->GetEyeSet(Stem, ElysiumNpcVisual::IsStemBaked(Stem)) : nullptr;
 	TArray<FString> EyeMaterials;
 	if (EyeSet.IsValid())
 	{
@@ -235,6 +240,45 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 		Body->PlayAnimation(Anim, bLoop);   // elysium.NpcAnim 0 — single-node A/B, no crossfade
 	}
 	return true;
+}
+
+bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName, float Weight)
+{
+	UAnimSequence* Anim = Body
+		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset())
+		: nullptr;
+	if (Anim == nullptr)
+	{
+		return false;
+	}
+	// No `elysium.NpcAnim 0` fallback. The single-node instance the A/B drops to plays one sequence
+	// and composes nothing, so there is no honest way to lay a delta over it.
+	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
+	return Inst != nullptr && Inst->PlayLayer(Anim, Weight);
+}
+
+void UElysiumEntityBodies::StopNpcLayers(USkeletalMeshComponent* Body)
+{
+	if (UElysiumNpcAnimInstance* Inst = Body
+		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr)
+	{
+		Inst->StopAllLayers();
+	}
+}
+
+void UElysiumEntityBodies::ForgetNpcVisuals()
+{
+	// All three together. The clip cache is keyed off the visual key and every sequence in it is
+	// bound to the mesh that key names, so keeping it across a path change would hand the new body
+	// sequences bound to the old body's skeleton -- which is a worse failure than the one this
+	// exists to fix, because it looks like a rig bug rather than a stale cache.
+	const int32 Meshes = NpcMeshCache.Num();
+	NpcMeshCache.Empty();
+	NpcAnimCache.Empty();
+	NpcAssetCache.Empty();
+	UE_LOG(LogElysiumBodies, Log, TEXT("forgot %d cached NPC visual(s); the next build re-resolves"),
+		Meshes);
 }
 
 bool UElysiumEntityBodies::PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -772,12 +816,15 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	{
 		Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>();
 	}
-	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims ? Anims->GetEyeSet(Stem) : nullptr;
 	USkeletalMesh* Mesh = ResolveNpcMesh(Stem, bPlayerMaterial);
 	if (Mesh == nullptr)
 	{
 		return nullptr;
 	}
+	// After the mesh, not before: the eye geometry is carried into the frame the body actually
+	// landed in, and only the loaded mesh can say which that is.
+	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
+		? Anims->GetEyeSet(Stem, ElysiumNpcVisual::IsBakedMesh(Mesh)) : nullptr;
 
 	// The standing idle. Two NPCs sharing a model can carry different dispositions and different
 	// variants, so the pick is per (stem, disposition, variant) — but the resolved clip caches per
@@ -842,8 +889,13 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			// can disagree with the branch the loader actually took, and disagreeing here applies
 			// the correction to clips that already carry it — a bend of the same size as the one
 			// it exists to remove.
-			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem),
-				/*bSplitInheritance=*/!ElysiumNpcVisual::IsBakedMesh(Comp->GetSkeletalMeshAsset()));
+			//
+			// The same mesh answers BOTH halves. The procedural rule table is stated in the glb's
+			// frame and the two paths land 90 degrees apart, so the rig's contents depend on the
+			// path exactly as much as the split flag does.
+			const bool bBakedBody = ElysiumNpcVisual::IsBakedMesh(Comp->GetSkeletalMeshAsset());
+			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem, bBakedBody),
+				/*bSplitInheritance=*/!bBakedBody);
 			// The garment spike. Gated on the same predicate the mesh loader used, so the rig is
 			// installed only onto a body actually wearing the enhanced mesh — chains naming a
 			// lattice the faithful skeleton does not carry would resolve to nothing and cost a

@@ -527,8 +527,10 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		// Same gate as the map's own bodies: the split correction lives in the baked clips, so a
 		// body posed off the baked mount must not have it applied a second time. Asked of the mesh
 		// that loaded, not of the toggle.
-		Inst->SetCompositionRig(Anims ? Anims->GetCompositionRig(Stem) : nullptr,
-			/*bSplitInheritance=*/!ElysiumNpcVisual::IsBakedMesh(Component->GetSkeletalMeshAsset()));
+		const bool bBakedBody =
+			ElysiumNpcVisual::IsBakedMesh(Component->GetSkeletalMeshAsset());
+		Inst->SetCompositionRig(Anims ? Anims->GetCompositionRig(Stem, bBakedBody) : nullptr,
+			/*bSplitInheritance=*/!bBakedBody);
 		if (Anim != nullptr)
 		{
 			Inst->PlayClip(Anim, /*bLoop=*/true);

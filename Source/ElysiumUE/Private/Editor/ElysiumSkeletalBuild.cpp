@@ -585,6 +585,17 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		const int32 KeyCount = FMath::Max(Clip.FrameCount, 2);
 		Controller.SetNumberOfFrames(FFrameNumber(KeyCount - 1), false);
 
+		// The `_delta` family. `STUDIO_DELTA` (0x4) marks a clip whose tracks state a DIFFERENCE
+		// from the running pose rather than a pose, which is what Unreal calls a local-space
+		// additive against the reference pose. Declared before the tracks are written because it
+		// changes what is written -- see the composition below.
+		const bool bAdditive = (Clip.Flags & 0x4) != 0;
+		if (bAdditive)
+		{
+			Sequence->AdditiveAnimType = AAT_LocalSpaceBase;
+			Sequence->RefPoseType = ABPT_RefPose;
+		}
+
 		int32 BoundTracks = 0;
 		for (const FElysiumSourceTrack& Track : Clip.Tracks)
 		{
@@ -607,7 +618,18 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			// disagrees about -- the `[2]` fork and the appendix chains, whose generic names denote
 			// different chains on different bodies -- and taking the skeleton's would hand every
 			// member of a family whichever member happened to seed it.
+			//
+			// An ADDITIVE clip inverts both halves. Its untouched channel is a zero delta rather
+			// than a bind value, and its base is the SHARED SKELETON's reference pose rather than
+			// the container's bind -- because the base is not a choice here, it is whatever Unreal
+			// subtracts back out. `FCompressibleAnimData::BakeOutAdditiveIntoRawData` composes an
+			// additive sequence down by `Target * Base^-1` against the skeleton's reference pose
+			// before compressing, so the raw keys have to be the delta composed ONTO that pose or
+			// the shipped asset carries `delta * refpose^-1` -- every layered bone rotated by its
+			// own inverse bind, from a bake that logs nothing wrong. Composing here is what makes
+			// that subtraction hand VtMB's delta straight back.
 			const FTransform& Bind = Source.Bones[Track.Bone].Local;
+			const FTransform& Base = RefSkeleton.GetRefBonePose()[SkeletonBone];
 			TArray<FVector3f> Positions;
 			TArray<FQuat4f> Rotations;
 			TArray<FVector3f> Scales;
@@ -617,22 +639,26 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			for (int32 Key = 0; Key < KeyCount; ++Key)
 			{
 				const int32 Frame = FMath::Min(Key, Clip.FrameCount - 1);
-				Positions.Add(Track.Translations.IsValidIndex(Frame)
-					? Track.Translations[Frame] : FVector3f(Bind.GetTranslation()));
-				Rotations.Add(Track.Rotations.IsValidIndex(Frame)
-					? Track.Rotations[Frame] : FQuat4f(Bind.GetRotation()));
+				const FVector3f Fallback = bAdditive
+					? FVector3f::ZeroVector : FVector3f(Bind.GetTranslation());
+				const FQuat4f FallbackRotation = bAdditive
+					? FQuat4f::Identity : FQuat4f(Bind.GetRotation());
+				FVector3f Position = Track.Translations.IsValidIndex(Frame)
+					? Track.Translations[Frame] : Fallback;
+				FQuat4f Rotation = Track.Rotations.IsValidIndex(Frame)
+					? Track.Rotations[Frame] : FallbackRotation;
+				if (bAdditive)
+				{
+					// `Target = Delta * Base`, matching the order `ConvertPoseToAdditive` undoes.
+					Position += FVector3f(Base.GetTranslation());
+					Rotation = (Rotation * FQuat4f(Base.GetRotation())).GetNormalized();
+				}
+				Positions.Add(Position);
+				Rotations.Add(Rotation);
 			}
 			Controller.AddBoneCurve(BoneName, false);
 			Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false);
 			++BoundTracks;
-		}
-
-		// The `_delta` family. VtMB composes these on top of the bind pose rather than replacing
-		// it, which is exactly Unreal's local-space additive against the reference pose.
-		if ((Clip.Flags & 0x4) != 0)
-		{
-			Sequence->AdditiveAnimType = AAT_LocalSpaceBase;
-			Sequence->RefPoseType = ABPT_RefPose;
 		}
 
 		Controller.NotifyPopulated();
