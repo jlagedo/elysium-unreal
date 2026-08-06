@@ -11,19 +11,18 @@
 class AElysiumMapActor;
 class FElysiumSignFontLibrary;
 class IConsoleObject;
-class UElysiumDialogueScreen;
 class UElysiumPresentationSubsystem;
 class UTexture2D;
 
-// The legacy world-HUD bridge. The local-player UElysiumPlayerUISubsystem owns the always-on reticle,
-// vitals and fade; this actor keeps the faithful Canvas sign panel, the retained dialogue bridge,
-// and map-scoped developer commands until those modal surfaces move into the unified root.
+// The legacy world-HUD bridge. The local-player UElysiumPlayerUISubsystem owns the Slate root,
+// including reticle, vitals, fade and dialogue; this actor keeps the faithful Canvas sign panel and
+// map-scoped developer commands until the remaining Canvas surface moves into the unified root.
 //
 // **It reads FElysiumViewState and nothing else** (11.8): no map-actor walk, no FElysiumEntityWorld,
 // no per-draw-path IsMenuUp() check. `UElysiumPresentationSubsystem` publishes the state in step 9
 // of the frame and calls OnViewPublished right after, which is where the retained surfaces — the
-// dialogue box and the sign's input scope — reconcile; DrawHUD draws only the sign panel on Canvas.
-// The local-player HUD subsystem consumes the same publication for its Slate surface. The map-actor
+// sign input scope reconciles; DrawHUD draws only the sign panel on Canvas. The local-player UI
+// subsystem consumes the same publication for its Slate surfaces. The map-actor
 // handle that survives is the dev console verbs' (`elysium.lights` and friends), which are not
 // presentation.
 UCLASS()
@@ -57,21 +56,6 @@ private:
 	void OnViewPublished(const FElysiumViewState& NewView);
 	FDelegateHandle ViewPublishedHandle;
 
-	// --- Dialogue box (P9 9.1 / B4) ----------------------------------------------------------
-	// The visual-novel `.dlg` panel, a CommonUI screen wrapping the native Slate body while published
-	// state carries an open conversation. `ElysiumView::ReconcileDialogue` decides build / rebuild /
-	// teardown against what is already up; while the box is up it holds a UI-only input scope (the
-	// VN freezes the world), and a pick routes back through the presenter's DialogueChoose.
-	void RebuildDialogue(const FElysiumDialogueView& Dialogue);
-	void TeardownDialogue();
-	void OnDialogueChoice(int32 VisibleIndex);   // -1 = advance a terminal line
-
-	UPROPERTY(Transient)
-	TObjectPtr<UElysiumDialogueScreen> DialogueScreen;
-	// Identity + turn of the conversation the box currently shows. The pointer is compared and never
-	// dereferenced — the conversation is the world's, and the map epoch it lives in can end.
-	const FElysiumDlgConversation* ShownConv = nullptr;
-	uint32 ShownRev = 0;
 	// --- Sign / popup window (P4.10) ---------------------------------------------------------
 	// The one open game_sign panel, taken off the published state each frame with its fade-in ramp
 	// already resolved. Layout is CSignUI's 1024x768 virtual canvas stretched to the viewport — see

@@ -198,6 +198,7 @@ def main():
 
         # The meshes first: the skeleton's bone tree is the union of the bodies merged into it, and
         # a clip cannot bind to a bone the tree does not carry yet.
+        mesh_failed = False
         for stem in family["stems"]:
             error = library.build_skeletal_mesh_from_source(
                 source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
@@ -205,24 +206,39 @@ def main():
             if error:
                 fail("SK_%s: %s" % (stem, error))
                 failed.append(stem)
+                mesh_failed = True
         log("family '%s': %d model(s), %d bones"
             % (name, len(family["stems"]), len(family["tree"])))
 
+        # A family whose skeleton is short of a body's bones cannot bake that body's clips, and the
+        # clip builder would report every owner in turn against a skeleton that was never finished.
+        # The mesh error above is the one worth reading, so stop here rather than bury it.
+        if mesh_failed:
+            fail("family '%s': skipping clips, a model in it did not build" % name)
+            continue
+
         owners = owner_clips(manifest, family["stems"])
         total = 0
+        # Tracks a bank named against a bone this family has never had. Expected and reported: a
+        # bank is recorded on another clan's rig, so its hair chains and ponytails have nowhere to
+        # bind here. A body's OWN clips can never contribute to this -- the builder fails outright
+        # rather than drop one of those.
+        dropped_total = 0
         for owner, is_bank in sorted(owners.items()):
             path = source_path(owner, bank=is_bank)
             if not os.path.isfile(path):
                 fail("no .eskm for clip owner %s" % owner)
                 failed.append(owner)
                 continue
-            error, count = library.build_anim_sequences_from_source(
+            error, count, dropped = library.build_anim_sequences_from_source(
                 path, "%s/%s/%s" % (ANIMS, name, owner), skeleton_package)
             if error:
                 fail("%s: %s" % (owner, error))
                 failed.append(owner)
             total += count
-        log("family '%s': %d clip owner(s), %d sequence(s)" % (name, len(owners), total))
+            dropped_total += dropped
+        log("family '%s': %d clip owner(s), %d sequence(s), %d bank track(s) unbound"
+            % (name, len(owners), total, dropped_total))
 
     if failed:
         raise SystemExit("[chars] failed: %s" % ", ".join(sorted(set(failed))))

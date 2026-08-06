@@ -105,18 +105,24 @@ def modifiers_for(action_id, context):
                 "Look_InvertNativeY",
                 {"x": False, "y": True, "z": False},
             ),
+            # The stack ends at the RATE. It deliberately carries neither ScaleByDeltaTime nor
+            # FOVScaling:
+            #
+            # ScaleByDeltaTime would multiply by Enhanced Input's own raw frame delta, which
+            # bypasses the ClampFrameDelta / time-dilation normalisation `SampleFrame` applies to
+            # every other look source — a level-load stall would emit a full turn in one command
+            # and a replay would not reproduce across frame rates. `Build` applies the clamped
+            # delta instead.
+            #
+            # FOVScaling is not neutral at FOVScale 1.0: Standard normalises against an 80-degree
+            # base, so the rate would be multiplied by tan(FOV/2)/tan(40) — about 1.19 at the
+            # shipped 90-degree FOV, and roughly halved by any scene or scope that drops FOV.
+            # `cl_yawspeed` is a flat rate and does not move with the camera.
             make_modifier(
                 unreal.InputModifierScalar,
                 context,
                 "Look_Rate",
                 {"scalar": unreal.Vector(210.0, 225.0, 1.0)},
-            ),
-            make_modifier(unreal.InputModifierScaleByDeltaTime, context, "Look_DeltaTime"),
-            make_modifier(
-                unreal.InputModifierFOVScaling,
-                context,
-                "Look_FOV",
-                {"fov_scale": 1.0, "fov_scaling_type": unreal.FOVScalingType.STANDARD},
             ),
         ]
     return []

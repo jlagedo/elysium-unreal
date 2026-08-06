@@ -292,7 +292,7 @@ Only five values occur across **331 loose models / 5,836 sequences**: `0x0002` �
 | `0x1` | looping | `walk`/`run`/`sneak`/every stance = 1; `crouch` = 0 |
 | `0x2` | **no transition — hard cut** | the first gate of `FUN_1008de30` (A.4c): an incoming sequence carrying it yields a zero crossfade duration, and the transitioner discards the whole fading set. Attacks (`Claw1`, `Claw2`, …) carry it; `0x3` is looping + hard cut |
 | `0x4` | **delta / additive** | tested at `0x10088efc` inside the pose accumulator `FUN_10088e10`, selecting a different composition branch |
-| `0x10` | unknown | never occurs without `0x4` |
+| `0x10` | **selects the post-multiply additive combine** (`FUN_10088d60`) over the pre-multiply one (`FUN_10088d00`) inside the `0x4` branch — see below | read after the `0x4` gate in `FUN_10088e10`; set by every shipped `_delta` |
 | `0x400` | flips the crossfade-duration combine from `max` to `min` (A.4c) | set by no shipped sequence, so unreachable and untested |
 
 `0x1` is not a complete looping oracle: `idle01` reads 0 while being a looping idle, so a
@@ -303,12 +303,46 @@ consumer still applies its own policy for the clips the authors left unflagged.
 331 models carry exactly `0x14`, with zero exceptions in either direction. Each decodes to
 near-identity local rotations (median frame-0 deviation 0.0° against 54.6° for an ordinary
 partial-body layer), which is what a difference from a base pose looks like. `0x14` is
-`0x4 | 0x10`, and what `0x10` contributes on its own is **not established** [inferred]:
-because it never appears without `0x4` in this corpus, only a sequence carrying `0x10`
-alone would separate the two.
+`0x4 | 0x10`, and inside the additive branch `0x10` selects the post-multiply combine. What
+`0x10` would mean on a sequence that does **not** set `0x4` stays **not established**
+[inferred]: it never appears alone in this corpus, and the accumulator reads it only after
+the `0x4` gate.
 
 Note that the sequence-descriptor `0x2` here is unrelated to the bone `Flags & 0x2` of
 §A.4a; they are different structures that happen to share a bit position.
+
+### The additive combine accumulates, and `0x10` picks which side the delta lands on [VtMB decompiled]
+
+`FUN_10088e10` accumulates one evaluated layer onto the running local-space pose. `flags`@8
+gates the arithmetic, with `s` the layer's weight times the animation record's per-bone
+`weight`@0 mask (§A.4):
+
+```text
+if (flags & 0x4) == 0:                                          # ordinary layer
+    out.quat = nlerp(out.quat, layer.quat, s)                   # complementary weights
+    out.pos  = (1 - s) * out.pos + s * layer.pos
+else:                                                           # delta / additive
+    if (flags & 0x10) == 0:                                     # FUN_10088d00
+        out.quat = normalize( scale(layer.quat, s) * out.quat )     # delta on the LEFT
+    else:                                                       # FUN_10088d60
+        out.quat = normalize( out.quat * scale(layer.quat, s) )     # delta on the RIGHT
+    out.pos += layer.pos * s                                    # accumulates on both sides
+```
+
+The `0x4` branch carries no complementary weight — it accumulates rather than interpolating —
+and position accumulates identically on both of its sides, so `0x10` changes rotation only.
+`FUN_1010a450` is the plain Hamilton product `p*q`, verified component-by-component against
+the identity; `FUN_1010a320` scales a rotation by a scalar.
+
+**Every shipped additive post-multiplies.** All 118 `_delta` sequences carry `0x14`, so the
+`FUN_10088d00` pre-multiply side is unreachable on shipped content.
+
+Valve's `source-sdk-2013` carries the same control flow in `SlerpBones()`, under the names
+`STUDIO_DELTA` (`0x0004`) and `STUDIO_POST` (`0x0010`), dispatching to `QuaternionSM`
+(`qt = (s*p) * q`) and `QuaternionMA` (`qt = p * (s*q)`). VtMB forked Source before that
+engine's public release and v2531 diverges structurally from the SDK's own format, so the
+correspondence supplies vocabulary rather than authority — every statement above is read
+from this binary, and the rest of the SDK's flag table is not carried across.
 
 ### The autolayer table is the base→layer binding [data-verified]
 
@@ -317,11 +351,13 @@ a bare sequence index** the dispatcher evaluates alongside the base. VtMB's reco
 index: unlike later Source's `mstudioautolayer_t`, it carries **no pose parameter, no flags and no
 ramp**, so whatever weight a layer contributes lives in the game DLL rather than in the file.
 
-**The composition rule for an autolayer is unresolved.** Because the entry names nothing but a
-sequence, whether the layer replaces per-bone, slerps in at weight 1, or is gated by something the
-file does not carry is **not established** [inferred]. Static RE of the combine that follows
-`FUN_10089c40`'s recursion, or a capture hook placed on that combine itself, would settle it;
-nothing readable from the shipped bytes can.
+**The combine an autolayer goes through is resolved; the weight it arrives with is not.**
+`FUN_10089c40` evaluates each entry and hands the result to the accumulator `FUN_10088e10`, whose
+arithmetic is given above — a complementary-weight blend for an ordinary layer, an accumulation for
+a `0x4` delta. What the file cannot supply is the scalar: the accumulator takes a layer weight from
+its caller and multiplies it by the record's per-bone `weight`@0, and the derivation of that
+caller-side value is **not established** [inferred]. A capture hook on the accumulator's entry
+would settle it; nothing readable from the shipped bytes can.
 
 The census is clean and small. Across **4,249** v2531 models / 10,739 sequences the count histogram
 is `{0: 10,278, 1: 237, 2: 224}`, and the only carriers are

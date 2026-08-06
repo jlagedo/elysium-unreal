@@ -834,7 +834,16 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			Inst->SetFacialRig(Anims->GetFacialRig(Stem));
 			// The two composition stages (CAP7.2). Null for a model declaring neither a split
 			// bone nor a procedural rule, which poses under Unreal's own hierarchy alone.
-			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
+			// Split inheritance is a property of where this body's CLIPS came from: the baked
+			// `.eskm` carries the correction already, the `.glb` the loader reads does not, and
+			// both paths are live in one map — a stem with a cloth mesh or one the bake has not
+			// covered still loads through glTFRuntime whatever `elysium.BakedCharacters` says.
+			// Asked of the MESH that loaded rather than of the toggle, because re-deriving it
+			// can disagree with the branch the loader actually took, and disagreeing here applies
+			// the correction to clips that already carry it — a bend of the same size as the one
+			// it exists to remove.
+			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem),
+				/*bSplitInheritance=*/!ElysiumNpcVisual::IsBakedMesh(Comp->GetSkeletalMeshAsset()));
 			// The garment spike. Gated on the same predicate the mesh loader used, so the rig is
 			// installed only onto a body actually wearing the enhanced mesh — chains naming a
 			// lattice the faithful skeleton does not carry would resolve to nothing and cost a

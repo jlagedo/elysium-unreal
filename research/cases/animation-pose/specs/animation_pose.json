@@ -546,6 +546,46 @@
       "depth": 1,
       "cap": 20,
       "asm_count": 120
+    },
+    {
+      "address": "10088e10",
+      "label": "accumulate_layer_pose",
+      "confidence": "confirmed",
+      "role": "Accumulates one evaluated layer onto the running local pose. Decompiled from VtMB: bit 0x4 at 0x10088efc selects straight accumulation over the complementary-weight blend, and within it bit 0x10 selects FUN_10088d60 over FUN_10088d00; position accumulates as pos1 += pos2*s in both sub-branches. Valve's source-sdk-2013 SlerpBones() carries the same control flow under the names STUDIO_DELTA/STUDIO_POST - a shared-ancestor correspondence that supplies vocabulary only. VtMB forked Source before its public release and v2531 already diverges structurally, so the behaviour above rests on this binary, not on the SDK.",
+      "depth": 0,
+      "cap": 20
+    },
+    {
+      "address": "10088d00",
+      "label": "combine_layer_quat_pre",
+      "confidence": "confirmed",
+      "role": "Bit-0x10-CLEAR additive combine, decompiled from VtMB: out = normalize(scale(layer,s) * base) - the scaled layer pre-multiplies. No VtMB sequence takes this branch; every _delta carries 0x14. Corresponds to Valve's QuaternionSM by shape.",
+      "depth": 0,
+      "cap": 20
+    },
+    {
+      "address": "10088d60",
+      "label": "combine_layer_quat_post",
+      "confidence": "confirmed",
+      "role": "Bit-0x10-SET additive combine, decompiled from VtMB and taken by all 118 _delta sequences: out = normalize(base * scale(layer,s)) - the running pose stays on the left. This order is the one Unreal's AAT_LocalSpaceBase does not implement; every stock Unreal additive mode pre-multiplies. Corresponds to Valve's QuaternionMA by shape.",
+      "depth": 0,
+      "cap": 20
+    },
+    {
+      "address": "1010a450",
+      "label": "quaternion_multiply",
+      "confidence": "confirmed",
+      "role": "Hamilton product out = p*q, preceded by an align of q into p's hemisphere. Verified component-by-component against the Hamilton identity from VtMB's own float math, independently of any SDK. Same operand convention as Unreal's VectorQuaternionMultiply.",
+      "depth": 0,
+      "cap": 20
+    },
+    {
+      "address": "1010a320",
+      "label": "quaternion_scale",
+      "confidence": "unconfirmed",
+      "role": "Scales a quaternion's rotation by a scalar weight - the q^s the two additive combines apply before multiplying. Role read from its use sites in this binary.",
+      "depth": 0,
+      "cap": 20
     }
   ],
   "relationships": [

@@ -12,6 +12,13 @@
 // UI on the 8.6 stack. Number keys 1-9 select; a terminal line offers a single "continue".
 DECLARE_DELEGATE_OneParam(FElysiumOnDlgChoice, int32);   // choice index >= 0, or -1 to advance a terminal line
 
+namespace ElysiumDialogueUI
+{
+	// Pure input policy shared by the CommonUI wrapper and retained Slate body. An engaged optional
+	// carries the visible choice index; -1 advances a terminal line.
+	TOptional<int32> ChoiceForKey(const FKey& Key, int32 NumChoices, bool bTerminal);
+}
+
 class SElysiumDialogueBox : public SCompoundWidget
 {
 public:
@@ -24,12 +31,16 @@ public:
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
+	void SetDialogue(const FString& Speaker, const FString& Line,
+		const TArray<FString>& Choices, bool bInTerminal);
 
-	// The box owns keyboard focus while open so number-key selection works under its UI-only scope.
+	// The CommonUI wrapper normally owns focus; retain this route for direct Slate focus as well.
 	virtual bool SupportsKeyboardFocus() const override { return true; }
 	virtual FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 
 private:
+	void RebuildDialogue(const FString& Speaker, const FString& Line,
+		const TArray<FString>& Choices);
 	FReply Pick(int32 Index);
 
 	FElysiumOnDlgChoice OnChooseEvent;

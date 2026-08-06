@@ -3,6 +3,7 @@
 #include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumFacialRig.h"
+#include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimCurveElementFlags.h"
 #include "Animation/AnimSequence.h"
@@ -367,8 +368,26 @@ void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
 	}
 
 	// Retail's slot: the locals are decoded and blended, the hierarchy composes, then these run,
-	// then skinning. The rule is non-linear, so it has to see the blended pose rather than each
-	// clip's — which is exactly why it cannot be baked into the clips instead.
+	// then skinning.
+	//
+	// Axis interpolation genuinely belongs here. A driven bone reads its control bone's live
+	// orientation, so it has no value at all until there is a finished pose to read one from, and
+	// no offline pass can produce one.
+	//
+	// Split inheritance does NOT, and the distinction is worth stating because the opposite is easy
+	// to assume. The correction is `world_rot(parent)^-1 * local`, which is fixed per clip per
+	// frame, so `UE_mdl_skeletal.py` rewrites that one rotation curve at export and a body posed off
+	// the baked mount is installed with this stage declined (`SetCompositionRig`). Per clip that is
+	// exact — 7.2e-06 degrees over 24 models and 14k frame-poses, which is float noise. It is
+	// approximate only ACROSS A TRANSITION, where a crossfade blends two clips already normalised
+	// against their own parent chains and then composes once against the blended chain: measured
+	// over the male locomotion bank at five blend weights, 96.7% of bone samples land within 2
+	// degrees and the worst is 5.2, for the length of a fade. That is the whole cost, and it buys
+	// self-describing assets that pose correctly with no runtime rule — including in the Content
+	// Browser and the animation editor, neither of which can run this node.
+	//
+	// This stage therefore runs for a body on the glTFRuntime path, whose `.glb` clips carry VtMB's
+	// rotations unchanged, and both paths are live in one map.
 	// Copied in, not moved: the conversion back writes *into* Output.Pose and addresses it by bone
 	// index, so it has to still be a sized pose when we get there. Moving it out leaves it empty and
 	// the first write indexes an array of size zero.
@@ -428,9 +447,14 @@ void FElysiumNpcAnimProxy::SetFacialWeights(TArrayView<const float> InWeights)
 	}
 }
 
-void FElysiumNpcAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig)
+void FElysiumNpcAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig,
+	bool bSplitInheritance)
 {
-	Split.SetRig(InRig);
+	// The split stage is declined by handing it no rig at all rather than by a flag it checks:
+	// `HasWork()` then answers false, `EvaluateComposition` skips the component-space round trip
+	// when the axis stage is also idle, and the debug surface reports the stage as absent, which
+	// is the truth for a body whose clips already carry the correction.
+	Split.SetRig(bSplitInheritance ? InRig : nullptr);
 	AxisInterp.SetRig(MoveTemp(InRig));
 	// A rig installed before the component has ever cached bones resolves on the first evaluate;
 	// one installed after re-resolves here, because the bone container is already valid.
@@ -459,6 +483,20 @@ void UElysiumNpcAnimInstance::PlayClip(UAnimSequence* Sequence, bool bLoop, floa
 	if (Sequence == nullptr)
 	{
 		return;
+	}
+	// Split inheritance follows the CLIP, not the body. `ResolveClip` picks the baked sequence when
+	// there is one and silently falls back to a glTFRuntime build otherwise, so a body on the baked
+	// mount still plays un-normalised `.glb` clips for any bank or name the bake has not covered --
+	// a cinematic set most of all. Those need the rule; the baked ones already carry it, and
+	// applying it to them bends the body by exactly the amount it exists to remove.
+	//
+	// Re-installed only on a change: SetRig tears down and re-resolves the node's bone references,
+	// which is not work to repeat on every clip request.
+	const bool bWantSplit = !ElysiumNpcVisual::IsBakedClip(Sequence);
+	if (bWantSplit != bSplitInheritance)
+	{
+		bSplitInheritance = bWantSplit;
+		GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetCompositionRig(CompositionRig, bWantSplit);
 	}
 	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the write cannot race
 	// the worker reading the same fields.
@@ -510,12 +548,16 @@ void UElysiumNpcAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> I
 	EvaluateFacial();
 }
 
-void UElysiumNpcAnimInstance::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig)
+void UElysiumNpcAnimInstance::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig,
+	bool bInSplitInheritance)
 {
 	CompositionRig = MoveTemp(InRig);
+	// The state a body starts in, before any clip has been requested — a body posing its ref pose
+	// with no clip must not have the rule applied either. `PlayClip` refines it per clip.
+	bSplitInheritance = bInSplitInheritance;
 	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
 	// reading the rig this replaces.
-	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetCompositionRig(CompositionRig);
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetCompositionRig(CompositionRig, bSplitInheritance);
 }
 
 int32 UElysiumNpcAnimInstance::GetResolvedAxisInterpRules() const

@@ -7,7 +7,26 @@
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/Widget.h"
+
+namespace
+{
+	void AddFullscreenLayer(UOverlay& Overlay, UWidget& Child)
+	{
+		UOverlaySlot* Slot = Overlay.AddChildToOverlay(&Child);
+		check(Slot);
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+	}
+
+	void ConfigureInstantLayer(UCommonActivatableWidgetContainerBase& Layer)
+	{
+		// The old viewport surfaces appeared synchronously. Keep that contract until a layer has an
+		// authored transition of its own; CommonUI's inherited 0.4 s default is not presentation policy.
+		Layer.SetTransitionDuration(0.0f);
+	}
+}
 
 void UElysiumUIRoot::EnsureContainers()
 {
@@ -38,12 +57,18 @@ void UElysiumUIRoot::EnsureContainers()
 	RuntimeLoadingStack = WidgetTree->ConstructWidget<UCommonActivatableWidgetStack>(
 		UCommonActivatableWidgetStack::StaticClass(), TEXT("RuntimeLoadingStack"));
 
-	RootOverlay->AddChildToOverlay(HUDWidget);
-	RootOverlay->AddChildToOverlay(TransientStack);
-	RootOverlay->AddChildToOverlay(NotificationQueue);
-	RootOverlay->AddChildToOverlay(GameModalStack);
-	RootOverlay->AddChildToOverlay(SystemModalStack);
-	RootOverlay->AddChildToOverlay(RuntimeLoadingStack);
+	ConfigureInstantLayer(*TransientStack);
+	ConfigureInstantLayer(*NotificationQueue);
+	ConfigureInstantLayer(*GameModalStack);
+	ConfigureInstantLayer(*SystemModalStack);
+	ConfigureInstantLayer(*RuntimeLoadingStack);
+
+	AddFullscreenLayer(*RootOverlay, *HUDWidget);
+	AddFullscreenLayer(*RootOverlay, *TransientStack);
+	AddFullscreenLayer(*RootOverlay, *NotificationQueue);
+	AddFullscreenLayer(*RootOverlay, *GameModalStack);
+	AddFullscreenLayer(*RootOverlay, *SystemModalStack);
+	AddFullscreenLayer(*RootOverlay, *RuntimeLoadingStack);
 }
 
 TSharedRef<SWidget> UElysiumUIRoot::RebuildWidget()

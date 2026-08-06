@@ -92,8 +92,10 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	void SetFacialWeights(TArrayView<const float> InWeights);
 
 	// VtMB's two composition stages (CAP7.2), installed together because one model can declare
-	// either, both or neither. Null clears both.
-	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
+	// either, both or neither. Null clears both. `bSplitInheritance` false installs the axis stage
+	// alone, for a body whose clips already carry the split correction — see the anim instance.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig,
+		bool bSplitInheritance = true);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
 
 	// The garment spike's rig; null clears it. Independent of the two composition stages — a model
@@ -204,7 +206,18 @@ public:
 	// `ProcType == 1` rule table. Null for a model declaring neither, which is an ordinary load:
 	// the body then poses under Unreal's own hierarchy composition alone. Both stages run in the
 	// proxy's evaluate, after the graph has blended locals and before skinning, split first.
-	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
+	//
+	// `bInSplitInheritance` is only the STARTING state of the split stage, for the window before
+	// any clip has been requested; `PlayClip` decides it per clip from there, because whether the
+	// rule is needed is a property of the clip and not of the body. `UE_mdl_skeletal.py` rewrites
+	// the split bone's rotation curve into the `.eskm`, so a baked clip must NOT have the rule
+	// applied a second time — the result is a fresh bend of the same size, which reads as a new bug
+	// rather than a doubled fix — while a glTFRuntime clip read from `.glb` carries VtMB's
+	// rotations unchanged and still needs it. A baked BODY plays both, so the two cannot be
+	// decided together. The axis-interpolation stage is unaffected: procedural bones read the
+	// control bone's live orientation, so they are runtime work on either path.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig,
+		bool bInSplitInheritance = true);
 	const FElysiumCompositionRig* GetCompositionRig() const { return CompositionRig.Get(); }
 	// How many rules resolved against this body's actual skeleton — the number the debug surface
 	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
@@ -288,6 +301,10 @@ private:
 
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
 	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
+	// Whether the split stage is currently installed. Tracked so a clip request only re-installs
+	// the rig when the answer actually changes, and seeded by SetCompositionRig for the window
+	// before any clip has been requested.
+	bool bSplitInheritance = true;
 	TSharedPtr<const FElysiumClothRig> ClothRig;
 	float MouthOpen = 0.f;
 	FElysiumEyeInput EyeInput;

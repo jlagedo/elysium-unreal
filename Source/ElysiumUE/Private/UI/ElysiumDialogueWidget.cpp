@@ -22,16 +22,33 @@ namespace
 	const FSlateBrush* WhiteBox() { return FCoreStyle::Get().GetBrush("GenericWhiteBox"); }
 }
 
+TOptional<int32> ElysiumDialogueUI::ChoiceForKey(
+	const FKey& Key, int32 NumChoices, bool bTerminal)
+{
+	if (bTerminal || NumChoices == 0)
+	{
+		return Key == EKeys::SpaceBar || Key == EKeys::Enter || Key == EKeys::One
+			? TOptional<int32>(-1) : TOptional<int32>();
+	}
+
+	static const FKey Row[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five,
+		EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine };
+	static const FKey Pad[] = { EKeys::NumPadOne, EKeys::NumPadTwo, EKeys::NumPadThree,
+		EKeys::NumPadFour, EKeys::NumPadFive, EKeys::NumPadSix, EKeys::NumPadSeven,
+		EKeys::NumPadEight, EKeys::NumPadNine };
+	for (int32 Index = 0; Index < NumChoices && Index < UE_ARRAY_COUNT(Row); ++Index)
+	{
+		if (Key == Row[Index] || Key == Pad[Index])
+		{
+			return Index;
+		}
+	}
+	return TOptional<int32>();
+}
+
 void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 {
 	OnChooseEvent = InArgs._OnChoose;
-	NumChoices = InArgs._Choices.Num();
-	bTerminal = InArgs._bTerminal;
-
-	const FSlateFontInfo SpeakerFont = FCoreStyle::GetDefaultFontStyle("Bold", 22);
-	const FSlateFontInfo LineFont = FCoreStyle::GetDefaultFontStyle("Regular", 20);
-	const FSlateFontInfo ChoiceFont = FCoreStyle::GetDefaultFontStyle("Regular", 18);
-
 	// A flat, chrome-free button whose only visible state is our own translucent row fill (idle -> a
 	// faint white wash, hovered/pressed -> a blood tint), so the choice list reads as geometry. Held as
 	// a member (ChoiceRowStyle) because SButton keeps the style by pointer for its lifetime.
@@ -45,6 +62,23 @@ void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 	ChoiceRowStyle.NormalForeground = FSlateColor(ColChoiceText);
 	ChoiceRowStyle.HoveredForeground = FSlateColor(FLinearColor::White);
 	ChoiceRowStyle.PressedForeground = FSlateColor(FLinearColor::White);
+	SetDialogue(InArgs._Speaker, InArgs._Line, InArgs._Choices, InArgs._bTerminal);
+}
+
+void SElysiumDialogueBox::SetDialogue(const FString& Speaker, const FString& Line,
+	const TArray<FString>& Choices, bool bInTerminal)
+{
+	NumChoices = Choices.Num();
+	bTerminal = bInTerminal;
+	RebuildDialogue(Speaker, Line, Choices);
+}
+
+void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString& Line,
+	const TArray<FString>& Choices)
+{
+	const FSlateFontInfo SpeakerFont = FCoreStyle::GetDefaultFontStyle("Bold", 22);
+	const FSlateFontInfo LineFont = FCoreStyle::GetDefaultFontStyle("Regular", 20);
+	const FSlateFontInfo ChoiceFont = FCoreStyle::GetDefaultFontStyle("Regular", 18);
 
 	TSharedRef<SVerticalBox> Inner = SNew(SVerticalBox);
 
@@ -54,7 +88,7 @@ void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 		SNew(STextBlock)
 		.Font(SpeakerFont)
 		.ColorAndOpacity(FSlateColor(ColSpeaker))
-		.Text(FText::FromString(InArgs._Speaker.IsEmpty() ? TEXT("???") : InArgs._Speaker))
+		.Text(FText::FromString(Speaker.IsEmpty() ? TEXT("???") : Speaker))
 	];
 
 	// NPC subtitle (word-wrapped to the panel width).
@@ -64,7 +98,7 @@ void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 		.Font(LineFont)
 		.ColorAndOpacity(FSlateColor(ColLine))
 		.AutoWrapText(true)
-		.Text(FText::FromString(InArgs._Line))
+		.Text(FText::FromString(Line))
 	];
 
 	// A thin rule between the line and the responses.
@@ -97,7 +131,7 @@ void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 		// One numbered, clickable row per choice.
 		for (int32 i = 0; i < NumChoices; ++i)
 		{
-			const FString Label = FString::Printf(TEXT("%d.  %s"), i + 1, *InArgs._Choices[i]);
+			const FString Label = FString::Printf(TEXT("%d.  %s"), i + 1, *Choices[i]);
 			Inner->AddSlot().AutoHeight().Padding(0, 2)
 			[
 				SNew(SButton)
@@ -138,28 +172,10 @@ void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 
 FReply SElysiumDialogueBox::OnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent)
 {
-	const FKey Key = KeyEvent.GetKey();
-
-	if (bTerminal || NumChoices == 0)
+	if (const TOptional<int32> Choice = ElysiumDialogueUI::ChoiceForKey(
+		KeyEvent.GetKey(), NumChoices, bTerminal))
 	{
-		if (Key == EKeys::SpaceBar || Key == EKeys::Enter || Key == EKeys::One)
-		{
-			return Pick(-1);
-		}
-		return FReply::Unhandled();
-	}
-
-	// Number keys 1..9 (top row and numpad) select the matching visible choice.
-	static const FKey Row[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five,
-		EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine };
-	static const FKey Pad[] = { EKeys::NumPadOne, EKeys::NumPadTwo, EKeys::NumPadThree, EKeys::NumPadFour,
-		EKeys::NumPadFive, EKeys::NumPadSix, EKeys::NumPadSeven, EKeys::NumPadEight, EKeys::NumPadNine };
-	for (int32 i = 0; i < NumChoices && i < 9; ++i)
-	{
-		if (Key == Row[i] || Key == Pad[i])
-		{
-			return Pick(i);
-		}
+		return Pick(Choice.GetValue());
 	}
 	return FReply::Unhandled();
 }

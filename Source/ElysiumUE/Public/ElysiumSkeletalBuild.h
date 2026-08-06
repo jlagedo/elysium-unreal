@@ -61,15 +61,24 @@ public:
 	 * Every clip in the file is baked in one pass because a shared animation bank holds hundreds
 	 * of them and re-reading the container per clip is the whole cost of the bake.
 	 *
-	 * Tracks bind to the skeleton by bone NAME, which is what lets a bank recorded on one rig
-	 * play on every body in the family. A track naming a bone the skeleton does not carry is
-	 * dropped -- the clip still bakes, that bone simply has nothing to drive.
+	 * Tracks bind to the skeleton by bone NAME, which is what lets a bank recorded on one rig play
+	 * on every body in the family. How hard an unresolved name is depends on which kind of
+	 * container this is, and the container says which: a body carries its own geometry, a bank
+	 * carries none.
+	 *
+	 * - A **body's own** container is checked up front and the whole call fails if any of its bones
+	 *   is missing from the skeleton. That skeleton was merged from this very body's mesh, so a
+	 *   missing bone means the merge lost one, and the clip would bake a track short and play part
+	 *   of the rig at bind pose with nothing reported.
+	 * - A **bank** is recorded against another body's rig and legitimately names bones this family
+	 *   has never had -- the Gangrel hair chain, the Ventrue ponytail. Those tracks are dropped, and
+	 *   `OutDroppedTracks` counts them so a bake that quietly loses more than it should is visible.
 	 *
 	 * Returns an empty string on success, otherwise the first thing that went wrong.
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildAnimSequencesFromSource(const FString& SourcePath, const FString& PackagePath,
-		const FString& SkeletonPackageName, int32& OutClipCount);
+		const FString& SkeletonPackageName, int32& OutClipCount, int32& OutDroppedTracks);
 
 	/** Report what a saved sequence contains, for a fresh process to check against. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")

@@ -11,7 +11,7 @@ Layout is documented once, at the top of `UE_mdl_skeletal.py`.
 import struct
 
 MAGIC = b"ESKM"
-VERSION = 1
+VERSION = 2
 
 
 def _string(blob, offset):

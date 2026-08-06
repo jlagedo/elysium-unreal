@@ -2,7 +2,6 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumInputSubsystem.h"
-#include "ElysiumPlayerUISubsystem.h"
 #include "Debug/ElysiumLightProbe.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
@@ -10,7 +9,6 @@
 #include "ElysiumPresentationSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "Visual/ElysiumSignFonts.h"
-#include "UI/ElysiumDialogueScreen.h"
 #include "UI/ElysiumUITexture.h"
 
 #include "GameFramework/PlayerController.h"
@@ -49,8 +47,8 @@ using ElysiumUI::LoadPngTexture;
 
 AElysiumHUD::AElysiumHUD()
 {
-	// The HUD does not tick. The Slate dialogue box and the sign's input scope are reconciled from
-	// the publisher's OnViewPublished, which runs in step 9 of the frame (TG_PostUpdateWork); an
+	// The HUD does not tick. The sign's input scope is reconciled from the publisher's
+	// OnViewPublished, which runs in step 9 of the frame (TG_PostUpdateWork); an
 	// actor tick would run in TG_PrePhysics and therefore always act on the previous frame's state.
 	PrimaryActorTick.bCanEverTick = false;
 }
@@ -139,7 +137,6 @@ void AElysiumHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		IConsoleManager::Get().UnregisterConsoleObject(PropsCmd);
 		PropsCmd = nullptr;
 	}
-	TeardownDialogue();
 	// The scope stack outlives this world (it is the local player's), so a map epoch ending has to
 	// return what it borrowed or the next map boots with a sign's claim still on the stack.
 	if (UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance()))
@@ -171,22 +168,6 @@ void AElysiumHUD::OnViewPublished(const FElysiumViewState& NewView)
 	// dropped by the same fact.
 	UpdateSignScope(NewView.Sign != nullptr);
 
-	switch (ElysiumView::ReconcileDialogue(ShownConv, ShownRev, NewView.Dialogue))
-	{
-	case ElysiumView::EDialogueAction::Rebuild:
-		RebuildDialogue(NewView.Dialogue);
-		break;
-	case ElysiumView::EDialogueAction::Teardown:
-		// Reached both when the conversation ends and when a screen comes up over it: the publisher
-		// withholds the whole player-facing surface, so the box comes down instead of drawing
-		// through the menu. The conversation itself is untouched in the entity world — `sm_hub_1`'s
-		// havenbum panhandles behind the main menu exactly as it does in play — and the box is
-		// rebuilt from the next publish once the screen closes.
-		TeardownDialogue();
-		break;
-	case ElysiumView::EDialogueAction::None:
-		break;
-	}
 }
 
 AElysiumMapActor* AElysiumHUD::ResolveMapActor() const
@@ -397,46 +378,6 @@ void AElysiumHUD::DrawSignPanel(const FElysiumViewState& V)
 	}
 }
 
-// --- Dialogue box (P9 9.1 / B4) -------------------------------------------------------------
-
-void AElysiumHUD::RebuildDialogue(const FElysiumDialogueView& Dialogue)
-{
-	// Rebuild the box for the new turn (turns are user-paced, so a full rebuild is cheap). Every
-	// string is the publisher's — the speaker, the subtitle and the choice labels are already
-	// resolved against the player's clan and gender, so the box never touches the `.dlg` data.
-	TeardownDialogue();
-	if (UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(this))
-	{
-		DialogueScreen = Cast<UElysiumDialogueScreen>(UI->PushWidget(
-			EElysiumUILayer::GameModal,
-			UElysiumDialogueScreen::StaticClass(),
-			[this, Dialogue](UCommonActivatableWidget& Widget)
-		{
-			UElysiumDialogueScreen* Screen = CastChecked<UElysiumDialogueScreen>(&Widget);
-			Screen->SetDialogue(Dialogue);
-			Screen->OnChoice.BindUObject(this, &AElysiumHUD::OnDialogueChoice);
-			Screen->ConfigureInputScope(TEXT("Dialogue"), ElysiumInput::Priority::Dialogue);
-		}));
-	}
-
-	ShownConv = Dialogue.Conversation;
-	ShownRev = Dialogue.Revision;
-}
-
-void AElysiumHUD::TeardownDialogue()
-{
-	if (DialogueScreen)
-	{
-		if (UElysiumPlayerUISubsystem* UI = UElysiumPlayerUISubsystem::Get(this))
-		{
-			UI->RemoveWidget(EElysiumUILayer::GameModal, DialogueScreen);
-		}
-		DialogueScreen = nullptr;
-	}
-	ShownConv = nullptr;
-	ShownRev = 0;
-}
-
 void AElysiumHUD::UpdateSignScope(bool bSignOpen)
 {
 	UElysiumInputSubsystem* Input = UElysiumInputSubsystem::Get(GetGameInstance());
@@ -459,26 +400,5 @@ void AElysiumHUD::UpdateSignScope(bool bSignOpen)
 	else if (!bSignOpen && SignScope.IsValid())
 	{
 		Input->Pop(SignScope);
-	}
-}
-
-void AElysiumHUD::OnDialogueChoice(int32 VisibleIndex)
-{
-	UElysiumPresentationSubsystem* P = Presentation();
-	if (!P)
-	{
-		return;
-	}
-	// -1 is the terminal "continue"; otherwise the Nth visible PC choice. Player input goes back the
-	// other way through the presenter, which resolves the world and hands it to the same
-	// PlayerDialogChoose/PlayerDialogAdvance chokepoint every other caller uses; the next publish
-	// reflects the new turn (or tears the box down when the conversation ends).
-	if (VisibleIndex < 0)
-	{
-		P->DialogueAdvance();
-	}
-	else
-	{
-		P->DialogueChoose(VisibleIndex);
 	}
 }

@@ -4334,7 +4334,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
 	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
 	TestEqual(TEXT("Move has only its radial dead zone"), MoveMapping->Modifiers.Num(), 1);
-	TestEqual(TEXT("Look has the documented six-modifier stack"), LookMapping->Modifiers.Num(), 6);
+	TestEqual(TEXT("Look has the documented four-modifier stack"), LookMapping->Modifiers.Num(), 4);
 	TestEqual(TEXT("Jump has no modifier stack"), JumpMapping->Modifiers.Num(), 0);
 
 	const UInputModifierDeadZone* MoveDeadZone = MoveMapping->Modifiers.Num() > 0
@@ -4362,21 +4362,29 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		TestEqual(TEXT("Move dead zone remaps its remaining range"),
 			(float)MoveHalfRange.X, 0.5f, 0.001f);
 	}
-	if (LookMapping->Modifiers.Num() == 6)
+	if (LookMapping->Modifiers.Num() == 4)
 	{
 		const UInputModifierResponseCurveExponential* Response =
 			Cast<UInputModifierResponseCurveExponential>(LookMapping->Modifiers[1]);
 		const UInputModifierNegate* NativeY =
 			Cast<UInputModifierNegate>(LookMapping->Modifiers[2]);
 		const UInputModifierScalar* Scalar = Cast<UInputModifierScalar>(LookMapping->Modifiers[3]);
-		const UInputModifierFOVScaling* FOV =
-			Cast<UInputModifierFOVScaling>(LookMapping->Modifiers[5]);
 		TestNotNull(TEXT("linear response modifier"), Response);
 		TestNotNull(TEXT("native right-stick Y correction"), NativeY);
 		TestNotNull(TEXT("look rate scalar"), Scalar);
-		TestTrue(TEXT("look is delta-time scaled"),
-			LookMapping->Modifiers[4]->IsA<UInputModifierScaleByDeltaTime>());
-		TestNotNull(TEXT("look is FOV scaled"), FOV);
+		// The stack ends at the rate, and the two modifiers that are NOT here are asserted as
+		// firmly as the ones that are. ScaleByDeltaTime would multiply by Enhanced Input's raw
+		// frame delta and bypass the ClampFrameDelta / dilation normalisation `SampleFrame`
+		// applies to every other look source; FOVScaling is not neutral even at FOVScale 1.0,
+		// because Standard normalises against an 80-degree base and would make a flat
+		// `cl_yawspeed` move with the camera.
+		for (const TObjectPtr<UInputModifier>& Modifier : LookMapping->Modifiers)
+		{
+			TestFalse(TEXT("look is not delta-time scaled in the asset"),
+				Modifier != nullptr && Modifier->IsA<UInputModifierScaleByDeltaTime>());
+			TestFalse(TEXT("look is not FOV scaled"),
+				Modifier != nullptr && Modifier->IsA<UInputModifierFOVScaling>());
+		}
 		if (Response)
 		{
 			TestTrue(TEXT("response exponent is neutral linear"),
@@ -4400,12 +4408,6 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		{
 			TestEqual(TEXT("yaw rate is 210 degrees/sec"), (float)Scalar->Scalar.X, 210.0f);
 			TestEqual(TEXT("pitch rate is 225 degrees/sec"), (float)Scalar->Scalar.Y, 225.0f);
-		}
-		if (FOV)
-		{
-			TestEqual(TEXT("look uses standard FOV scaling"), FOV->FOVScalingType,
-				EFOVScalingType::Standard);
-			TestEqual(TEXT("look FOV scalar is neutral"), FOV->FOVScale, 1.0f);
 		}
 	}
 

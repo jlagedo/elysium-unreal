@@ -236,8 +236,12 @@ void UElysiumInputRouter::OnAnalogMove(const FInputActionValue& Value)
 
 void UElysiumInputRouter::OnAnalogLook(const FInputActionValue& Value)
 {
-	const FVector2D Look = Value.Get<FVector2D>();
-	CmdBuilder.AddLook(Look.X, Look.Y);
+	// Degrees per SECOND, not degrees: the mapping's modifier stack scales the stick to a rate and
+	// stops there, so the delta is applied once in Build against the clamped, dilated frame time
+	// every other look source already uses. Multiplying it here (or in the asset, with
+	// ScaleByDeltaTime) would hand the pad the raw engine delta and let a level-load hitch emit a
+	// full turn in one command.
+	CmdBuilder.SetAnalogLook(Value.Get<FVector2D>());
 }
 
 void UElysiumInputRouter::OnCommandDown(FName Command)

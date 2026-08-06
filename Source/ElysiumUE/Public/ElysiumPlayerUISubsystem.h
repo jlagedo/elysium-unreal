@@ -9,10 +9,13 @@
 class IConsoleObject;
 class APlayerController;
 class UCommonActivatableWidget;
+class UElysiumDialogueScreen;
 class UElysiumHUDModel;
 class UElysiumUIRoot;
 class UElysiumPresentationSubsystem;
 class UWorld;
+struct FElysiumDialogueView;
+class FElysiumDlgConversation;
 
 // The fixed composition order for one local player's screen. HUD content is passive; every
 // interactive screen enters one of the semantic CommonUI containers above it.
@@ -66,6 +69,10 @@ private:
 	void UnbindPresentation();
 	void OnViewPublished(const struct FElysiumViewState& View);
 	void OnPostLoadMap(UWorld* LoadedWorld);
+	void ReconcileDialogue(const FElysiumDialogueView& Dialogue);
+	void ShowDialogue(const FElysiumDialogueView& Dialogue);
+	void HideDialogue();
+	void OnDialogueChoice(int32 VisibleIndex);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;
@@ -73,7 +80,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumUIRoot> Root;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UElysiumDialogueScreen> DialogueScreen;
+
 	TWeakObjectPtr<UElysiumPresentationSubsystem> BoundPresentation;
+	// Identity only: never dereferenced after publication, because the conversation is map-owned.
+	const FElysiumDlgConversation* ShownDialogue = nullptr;
+	uint32 ShownDialogueRevision = 0;
 	FDelegateHandle ViewPublishedHandle;
 	FDelegateHandle PostLoadMapHandle;
 	EElysiumHUDPreview PreviewMode = EElysiumHUDPreview::Off;

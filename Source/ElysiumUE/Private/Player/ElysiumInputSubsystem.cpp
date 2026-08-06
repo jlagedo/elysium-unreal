@@ -218,15 +218,21 @@ void UElysiumInputSubsystem::ApplyMappingContexts(const TArray<FName>& ContextNa
 		{
 			Enhanced->RemoveMappingContext(Context, Options);
 		}
+		AppliedContextNames.Remove(AppliedName);
 	}
+	// Records what actually went in, not what was asked for. A context whose asset has not been
+	// generated resolves null and adds nothing; remembering it as applied would make every later
+	// Difference() come out empty and retire the retry, leaving the pad dead for the rest of the
+	// session behind one early log line. A session that never opens a UI-only screen — the headless
+	// harnesses, or any boot straight into a map — never gets another chance otherwise.
 	for (const FName WantedName : Wanted.Difference(AppliedContextNames))
 	{
 		if (UInputMappingContext* Context = ResolveMappingContext(WantedName))
 		{
 			Enhanced->AddMappingContext(Context, /*Priority*/ 0, Options);
+			AppliedContextNames.Add(WantedName);
 		}
 	}
-	AppliedContextNames = Wanted;
 }
 
 UInputMappingContext* UElysiumInputSubsystem::ResolveMappingContext(FName ContextName)

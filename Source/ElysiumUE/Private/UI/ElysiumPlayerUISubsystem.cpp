@@ -1,7 +1,9 @@
 #include "ElysiumPlayerUISubsystem.h"
 
 #include "ElysiumHUDModel.h"
+#include "ElysiumInputScope.h"
 #include "ElysiumPresentationSubsystem.h"
+#include "UI/ElysiumDialogueScreen.h"
 #include "UI/ElysiumUIRoot.h"
 
 #include "CommonActivatableWidget.h"
@@ -108,10 +110,7 @@ void UElysiumPlayerUISubsystem::RebindToWorld(UWorld* World)
 		BoundPresentation = Presentation;
 		ViewPublishedHandle = Presentation->OnViewPublished().AddUObject(
 			this, &UElysiumPlayerUISubsystem::OnViewPublished);
-		if (Model)
-		{
-			Model->Apply(Presentation->View(), PreviewMode);
-		}
+		OnViewPublished(Presentation->View());
 	}
 	EnsureRoot();
 }
@@ -204,6 +203,9 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 		Root->RemoveFromParent();
 		Root = nullptr;
 	}
+	DialogueScreen = nullptr;
+	ShownDialogue = nullptr;
+	ShownDialogueRevision = 0;
 }
 
 void UElysiumPlayerUISubsystem::UnbindPresentation()
@@ -226,6 +228,7 @@ void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 		Model->Apply(View, PreviewMode);
 	}
 	EnsureRoot();
+	ReconcileDialogue(View.Dialogue);
 }
 
 void UElysiumPlayerUISubsystem::OnPostLoadMap(UWorld* LoadedWorld)
@@ -234,5 +237,77 @@ void UElysiumPlayerUISubsystem::OnPostLoadMap(UWorld* LoadedWorld)
 	if (LP && LP->GetWorld() == LoadedWorld)
 	{
 		RebindToWorld(LoadedWorld);
+	}
+}
+
+void UElysiumPlayerUISubsystem::ReconcileDialogue(const FElysiumDialogueView& Dialogue)
+{
+	switch (ElysiumView::ReconcileDialogue(
+		ShownDialogue, ShownDialogueRevision, Dialogue))
+	{
+	case ElysiumView::EDialogueAction::Rebuild:
+		if (DialogueScreen && ShownDialogue == Dialogue.Conversation)
+		{
+			// A turn is new content inside one modal lifetime. Keep the screen, focus and input scope.
+			DialogueScreen->ApplyDialogue(Dialogue);
+		}
+		else
+		{
+			HideDialogue();
+			ShowDialogue(Dialogue);
+		}
+		if (DialogueScreen)
+		{
+			ShownDialogue = Dialogue.Conversation;
+			ShownDialogueRevision = Dialogue.Revision;
+		}
+		break;
+
+	case ElysiumView::EDialogueAction::Teardown:
+		HideDialogue();
+		break;
+
+	case ElysiumView::EDialogueAction::None:
+		break;
+	}
+}
+
+void UElysiumPlayerUISubsystem::ShowDialogue(const FElysiumDialogueView& Dialogue)
+{
+	DialogueScreen = Cast<UElysiumDialogueScreen>(PushWidget(
+		EElysiumUILayer::GameModal,
+		UElysiumDialogueScreen::StaticClass(),
+		[this, Dialogue](UCommonActivatableWidget& Widget)
+		{
+			UElysiumDialogueScreen* Screen = CastChecked<UElysiumDialogueScreen>(&Widget);
+			Screen->ApplyDialogue(Dialogue);
+			Screen->OnChoice.BindUObject(this, &UElysiumPlayerUISubsystem::OnDialogueChoice);
+			Screen->ConfigureInputScope(TEXT("Dialogue"), ElysiumInput::Priority::Dialogue);
+		}));
+}
+
+void UElysiumPlayerUISubsystem::HideDialogue()
+{
+	if (DialogueScreen)
+	{
+		RemoveWidget(EElysiumUILayer::GameModal, DialogueScreen);
+		DialogueScreen = nullptr;
+	}
+	ShownDialogue = nullptr;
+	ShownDialogueRevision = 0;
+}
+
+void UElysiumPlayerUISubsystem::OnDialogueChoice(int32 VisibleIndex)
+{
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		if (VisibleIndex < 0)
+		{
+			Presentation->DialogueAdvance();
+		}
+		else
+		{
+			Presentation->DialogueChoose(VisibleIndex);
+		}
 	}
 }

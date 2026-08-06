@@ -12,6 +12,7 @@
 #include "Engine/SkinnedAssetCommon.h"
 #include "MeshDescription.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/MaterialInterface.h"
@@ -24,6 +25,8 @@
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumSkeletalBuild, Log, All);
 
 namespace
 {
@@ -493,9 +496,11 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 }
 
 FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString& SourcePath,
-	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount)
+	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount,
+	int32& OutDroppedTracks)
 {
 	OutClipCount = 0;
+	OutDroppedTracks = 0;
 #if WITH_EDITOR
 	FElysiumSkeletalSource Source;
 	FString Error;
@@ -511,6 +516,44 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
 	}
 	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
+
+	// A body's own container carries geometry; a shared animation bank carries none. That is the
+	// difference that decides whether an unresolved bone is a defect or a fact of sharing, and it is
+	// checked here rather than per track so the bake stops before writing a single short clip.
+	//
+	// The whole bone list, not just the ones some clip animates: the skeleton was merged from this
+	// body's mesh, so every one of its bones must be on it whether or not anything drives it yet,
+	// and asserting the wider set catches a lost bone where it happens instead of wherever a clip
+	// first misses it.
+	if (!Source.Vertices.IsEmpty())
+	{
+		TArray<FString> Missing;
+		for (const FElysiumSourceBone& Bone : Source.Bones)
+		{
+			if (RefSkeleton.FindBoneIndex(Bone.Name) == INDEX_NONE)
+			{
+				Missing.Add(Bone.Name.ToString());
+			}
+		}
+		if (!Missing.IsEmpty())
+		{
+			// Deliberately does not name a cause. The mesh build for this stem may have failed
+			// earlier in the same run -- `bake_characters.py` records that and carries on -- in
+			// which case the skeleton never saw these bones rather than losing them, and the real
+			// error is already in the log above this one. Naming the merge would send the operator
+			// past it.
+			return FString::Printf(
+				TEXT("%s: %d of %d bones are not on skeleton %s (%s) -- every clip here would bake ")
+				TEXT("that many tracks short, so nothing is written; check whether this model's ")
+				TEXT("mesh built at all earlier in this run"),
+				*SourcePath, Missing.Num(), Source.Bones.Num(),
+				*FPackageName::GetShortName(SkeletonPackageName), *FString::Join(Missing, TEXT(", ")));
+		}
+	}
+
+	// Bank bones this family has never had. Named rather than only counted: which ones they are is
+	// what says "another clan's hair chain" rather than "the merge dropped something".
+	TSet<FName> Unresolved;
 
 	for (const FElysiumSourceClip& Clip : Source.Clips)
 	{
@@ -553,6 +596,9 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			const int32 SkeletonBone = RefSkeleton.FindBoneIndex(BoneName);
 			if (SkeletonBone == INDEX_NONE)
 			{
+				// Only reachable from a bank -- an own body returned above rather than get here.
+				Unresolved.Add(BoneName);
+				++OutDroppedTracks;
 				continue;
 			}
 
@@ -609,6 +655,21 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			return FString::Printf(TEXT("could not save %s"), *PackageName);
 		}
 		++OutClipCount;
+	}
+
+	if (!Unresolved.IsEmpty())
+	{
+		TArray<FString> Names;
+		Names.Reserve(Unresolved.Num());
+		for (const FName& Name : Unresolved)
+		{
+			Names.Add(Name.ToString());
+		}
+		Names.Sort();
+		UE_LOG(LogElysiumSkeletalBuild, Display,
+			TEXT("%s: %d track(s) dropped across %d bone(s) absent from %s (%s)"),
+			*FPaths::GetBaseFilename(SourcePath), OutDroppedTracks, Names.Num(),
+			*FPackageName::GetShortName(SkeletonPackageName), *FString::Join(Names, TEXT(", ")));
 	}
 	return FString();
 #else

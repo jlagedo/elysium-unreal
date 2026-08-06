@@ -47,8 +47,12 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   same-named piece per primitive; those pieces are **merged**, never first-wins, or a jaw moves and
   leaves its teeth behind.
 - **A compressed `UAnimSequence` per clip.** The `_delta` family — the sequences carrying the
-  additive studio flags — is flagged as a local-space additive against the reference pose at bake,
-  so Unreal's own additive nodes compose it.
+  additive studio flags — is marked additive against the reference pose at bake. The composition
+  order does **not** carry over: every `EAdditiveAnimationType` pre-multiplies the delta
+  (`Delta * Base`, in `AccumulateLocalSpaceAdditivePoseInternal` and the mesh-space path alike),
+  while VtMB post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). Composing
+  one of these through `FAnimNode_ApplyAdditive` therefore reproduces the wrong order, and the
+  family needs a post-multiplying applier.
 - **Blend profiles** in blend-mask mode, one per distinct per-bone mask. The mask is binary in the
   source data and there are only a handful of distinct masks per bank, so this is a small table on
   the skeleton rather than per-clip data.

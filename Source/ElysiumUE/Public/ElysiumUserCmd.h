@@ -171,6 +171,13 @@ struct FElysiumUserCmdBuilder
 	void SetAnalogMove(const FVector2D& InMove) { AnalogMove = InMove; }
 	void SetAnalogUp(float InUp) { AnalogUp = InUp; }
 
+	// Analog look for this frame as a RATE in degrees per second, replacing whatever a stick
+	// contributed. A rate rather than a finished delta so Build multiplies it by the same clamped,
+	// dilated delta the keyboard turn keys get: a stick is a held direction like `+left`, not a
+	// mouse count, and pre-multiplying it upstream would let a hitch or a time dilation reach the
+	// command stream through the pad alone.
+	void SetAnalogLook(const FVector2D& InLookRate) { AnalogLook = InLookRate; }
+
 	// Compose the frame and advance Seq. Consumes the look accumulator and the analog values; the
 	// button latches persist, because a held key is held.
 	FElysiumUserCmd Build(float DeltaSeconds);
@@ -188,6 +195,7 @@ private:
 	uint64 Buttons = 0;
 	FVector2D LookAccum = FVector2D::ZeroVector;
 	FVector2D AnalogMove = FVector2D::ZeroVector;
+	FVector2D AnalogLook = FVector2D::ZeroVector;
 	float AnalogUp = 0.0f;
 	uint32 Seq = 0;
 };

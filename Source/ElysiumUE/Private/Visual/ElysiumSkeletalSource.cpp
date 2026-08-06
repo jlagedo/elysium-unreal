@@ -5,7 +5,11 @@
 namespace
 {
 	constexpr uint32 EskmMagic = 'M' << 24 | 'K' << 16 | 'S' << 8 | 'E';   // "ESKM", little-endian
-	constexpr uint32 EskmVersion = 1;
+	// 2 -- a clip's rotations for the split bone are written pre-corrected by the exporter, so
+	// ordinary inheritance reproduces the pose VtMB draws and no runtime rule is applied. A
+	// version 1 container carries the same bytes meaning the opposite, and nothing in the payload
+	// tells them apart, so a stale export is refused rather than posed wrongly with no error.
+	constexpr uint32 EskmVersion = 2;
 
 	/**
 	 * A bounds-checked forward cursor over the loaded file.

@@ -70,6 +70,17 @@ namespace ElysiumNpcVisual
 	// the mesh choice makes, exposed because the sidecar rigs are carried into whichever frame
 	// the body landed in.
 	bool IsStemBaked(const FString& Stem);
+	// Whether a mesh that ALREADY LOADED came off the baked mount, asked of the mesh rather than
+	// re-derived from the toggle. The two can disagree — `LoadMesh` selects the baked branch on
+	// `UseBakedCharacters() && !UseClothMesh` and then falls through when the package is absent,
+	// while `IsStemBaked` additionally asks the file system — so anything that must agree with the
+	// body actually standing there asks this. A glTFRuntime mesh answers false.
+	bool IsBakedMesh(const USkeletalMesh* Mesh);
+	// Whether a sequence that ALREADY RESOLVED came off the baked mount. Necessary separately from
+	// IsBakedMesh because the two are chosen independently: `ResolveClip` falls back to a
+	// glTFRuntime-built sequence whenever the bake has not covered a bank or a clip name, so a
+	// baked BODY routinely plays a non-baked CLIP. Only the baked ones carry the split correction.
+	bool IsBakedClip(const UAnimSequence* Sequence);
 	// One baked body / one baked clip off the /ElysiumBaked mount, or null when the bake has not
 	// covered it. `Owner` is the stem that owns the clip — the body for its own dialogue clips, the
 	// bank stem otherwise — and `ClipName` is the resolved animation name, after any blend-grid

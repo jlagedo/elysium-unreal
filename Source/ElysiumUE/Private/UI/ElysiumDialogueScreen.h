@@ -5,8 +5,8 @@
 
 #include "ElysiumDialogueScreen.generated.h"
 
-// CommonUI host for the retained dialogue Slate body. Each turn is initialized before activation;
-// choices return through the owning HUD bridge to the presentation command seam.
+// CommonUI host for the retained dialogue Slate body. One instance spans a conversation and updates
+// turns in place; choices return through the local-player UI owner to the presentation command seam.
 UCLASS()
 class UElysiumDialogueScreen final : public UElysiumActivatableScreen
 {
@@ -15,7 +15,7 @@ class UElysiumDialogueScreen final : public UElysiumActivatableScreen
 public:
 	UElysiumDialogueScreen();
 
-	void SetDialogue(const FElysiumDialogueView& InDialogue) { Dialogue = InDialogue; }
+	void ApplyDialogue(const FElysiumDialogueView& InDialogue);
 
 	DECLARE_DELEGATE_OneParam(FOnChoice, int32);
 	FOnChoice OnChoice;
@@ -24,8 +24,11 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 	virtual bool NativeOnHandleBackAction() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 
 private:
+	float VirtualScale() const;
+
 	FElysiumDialogueView Dialogue;
 	TSharedPtr<class SElysiumDialogueBox> DialogueBox;
 };

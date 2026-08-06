@@ -336,6 +336,26 @@ namespace ElysiumNpcVisual
 					FElysiumContentPaths::BakedCharacterMesh(Stem)));
 	}
 
+	bool IsBakedMesh(const USkeletalMesh* Mesh)
+	{
+		// The same question `LoadBakedClip` asks, and for the same reason: the mesh was built
+		// against exactly one skeleton, so the skeleton's name is the only answer that cannot
+		// disagree with the body that actually loaded.
+		const USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
+		return Skeleton != nullptr
+			&& !FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName()).IsEmpty();
+	}
+
+	bool IsBakedClip(const UAnimSequence* Sequence)
+	{
+		// Asked of the package the sequence lives in, for the same reason IsBakedMesh asks the
+		// skeleton: a glTFRuntime-built sequence is a transient object with no package on the
+		// mount, so the two cannot be confused however the toggle is set.
+		const UPackage* Package = Sequence != nullptr ? Sequence->GetPackage() : nullptr;
+		return Package != nullptr
+			&& Package->GetName().StartsWith(FElysiumContentPaths::BakedMount() + TEXT("/"));
+	}
+
 	UAnimSequence* LoadBakedClip(const USkeletalMesh* Mesh, const FString& Owner,
 		const FString& ClipName)
 	{

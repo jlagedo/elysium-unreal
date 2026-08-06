@@ -52,7 +52,12 @@ from elysium_pipeline.formats import bsp, mdl, mdl_skel as S
 
 #: Bumped whenever a section's payload changes meaning. `FElysiumSkeletalSource` refuses a
 #: file it does not recognise rather than reading a stale layout as if it were current.
-VERSION = 1
+#:
+#: 2 -- ANIM rotations for a bone carrying `SPLIT_ROTATION` are written pre-corrected, so ordinary
+#: inheritance reproduces the pose VtMB draws and the runtime applies no rule of its own. A version
+#: 1 container states the same bytes with the opposite meaning, and nothing in the payload
+#: distinguishes them, so a stale file has to be refused rather than read.
+VERSION = 2
 
 MAGIC = b"ESKM"
 
@@ -64,6 +69,15 @@ MAX_INFLUENCES = 3
 #: few VtMB skeletons fork (regular_cop bones 0/1, prophet bones 0/59). Those get one synthetic
 #: root above the real ones, under the name the runtime already knows.
 SYNTHETIC_ROOT = "__elysium_skeleton_root"
+
+#: StudioBone flag 0x2 (`docs/vtmb/animation_and_movers.md`): the bone's ROTATION declines its
+#: parent and roots in the character, while its translation still rides the parent. One bone per
+#: biped, always `Bip01 Spine1`.
+SPLIT_ROTATION = 0x2
+
+#: StudioSeqDesc flag 0x4 (`STUDIO_DELTA`): the clip stores a difference from a base pose rather
+#: than a pose of its own.
+DELTA_SEQUENCE = 0x4
 
 
 def _string(text):
@@ -81,6 +95,117 @@ def _conv_dir(p):
 
 def _conv_quat(q):
     return bsp.source_quat_to_unreal(q[0], q[1], q[2], q[3])
+
+
+def _qmul(a, b):
+    """Hamilton product, matching `FUN_1010a450` and Unreal's `FQuat::operator*` convention."""
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return (aw * bx + ax * bw + ay * bz - az * by,
+            aw * by - ax * bz + ay * bw + az * bx,
+            aw * bz + ax * by - ay * bx + az * bw,
+            aw * bw - ax * bx - ay * by - az * bz)
+
+
+def _qconj(q):
+    """The inverse of a unit quaternion."""
+    return (-q[0], -q[1], -q[2], q[3])
+
+
+#: Below this length a stored quaternion is not a rotation at all. VtMB's masked `_layer` clips
+#: store all-zero rotations for the bones their per-bone weight mask excludes -- the accumulator
+#: multiplies those bones out rather than posing them, so the value is padding the file carries
+#: rather than data anything reads.
+_QUAT_EPSILON = 1e-6
+
+
+def _qnorm(q):
+    """The unit form of `q`, or None when it carries no rotation at all."""
+    length = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]) ** 0.5
+    if length < _QUAT_EPSILON:
+        return None
+    return (q[0] / length, q[1] / length, q[2] / length, q[3] / length)
+
+
+def _split_ancestors(bones, index):
+    """`index`'s ancestors, root first. Four bones deep on a biped, not the whole rig."""
+    chain = []
+    parent = bones[index].parent
+    while parent >= 0:
+        chain.append(parent)
+        parent = bones[parent].parent
+    chain.reverse()
+    return chain
+
+
+def _split_rotation_tracks(bones, frames, frame_count):
+    """Rewrite each split bone's rotation so ORDINARY inheritance reproduces retail's pose.
+
+    VtMB poses a bone carrying `SPLIT_ROTATION` by taking its animated rotation as the
+    model-space rotation outright -- the parent's rotation is skipped -- while the translation
+    still composes through the parent. Unreal has no such rule and no way to express one on an
+    asset, so the clip is rewritten to hold what conventional inheritance needs in order to
+    land in the same place:
+
+        local'[i] = world_rot(parent)^-1 * local[i]
+
+    `world_rot(parent)` is composed from this clip's OWN frame, which is why the correction is
+    per frame and per clip rather than a constant baked once. Children of the split bone
+    inherit the corrected rotation and need no rewrite of their own, and the bind pose needs
+    none either -- VtMB's own `poseToBone` inverse binds are conventional, so only the live
+    pose ever disagreed.
+
+    A clip carrying no rotation channel for the bone still gets a track. The bone holds its
+    bind rotation there and retail applies the rule to that too, so leaving the channel absent
+    would bake the conventional bind where retail draws the declined one.
+
+    Where the ancestor chain does not compose to a rotation at all -- a masked `_layer` clip
+    zeroes the bones its weight mask excludes, and 289 of `move_and_ranged`'s 826 sequences
+    reach this bone through such a bone -- the authored rotation is kept unchanged. Dividing by
+    padding would turn this bone's own value into padding, and keeping it is what a
+    non-normalising export wrote for that frame anyway.
+
+    Returns {bone index: [quaternion per frame]}, empty when the model flags no split bone. A
+    bone absent from the returned map keeps whatever channel the clip authored for it, which for
+    an unauthored one is no channel at all.
+    """
+    split = [b.index for b in bones if (b.flags & SPLIT_ROTATION) and b.parent >= 0]
+    # A bone the clip carries no animation record for at all reads back as a ZERO quaternion, not
+    # as its bind rotation -- `read_anim` only fills the bones it finds a record for. That is not a
+    # rotation to correct, and emitting it would be strictly worse than emitting nothing: an absent
+    # channel leaves the bone on the container's bind pose, while a zero quaternion reaches the
+    # runtime as IDENTITY, because `FElysiumSkeletalSource::Load` normalises every key it reads.
+    # 18 of `move_and_ranged`'s masked `_layer` sequences reach this bone that way.
+    split = [index for index in split
+             if all(_qnorm(frames[frame][index][1]) is not None
+                    for frame in range(frame_count))]
+    if not split:
+        return {}
+    needed = set()
+    for index in split:
+        needed.update(_split_ancestors(bones, index))
+    # StudioBone order states a parent before its children, so one ascending pass composes the
+    # chain. Only the flagged bones' ancestors are composed -- four bones on a biped, against
+    # eighty for the whole rig, over every frame of every clip in the cast.
+    order = sorted(needed)
+    out = {index: [] for index in split}
+    for frame in range(frame_count):
+        world = {}
+        for index in order:
+            local = frames[frame][index][1]
+            parent = bones[index].parent
+            if parent < 0 or (bones[index].flags & SPLIT_ROTATION):
+                world[index] = _qnorm(local)
+            elif world[parent] is None:
+                world[index] = None
+            else:
+                world[index] = _qnorm(_qmul(world[parent], local))
+        for index in split:
+            local = frames[frame][index][1]
+            parent_world = world[bones[index].parent]
+            out[index].append(local if parent_world is None
+                              else _qmul(_qconj(parent_world), local))
+    return out
 
 
 def unreal_bones(bones):
@@ -219,15 +344,35 @@ def _clip_payload(d, bones, clip, bone_map):
     A bone gets a track only for the channels its animation record actually carries: the
     seven offsets at `+4` are the per-channel RLE pointers, the first three positional and
     the last four rotational, and a zero there means the bone holds its bind value. Writing
-    a constant track for those would triple most clips for nothing."""
+    a constant track for those would triple most clips for nothing.
+
+    The one exception is a split bone, whose rewritten rotation is emitted whether or not the
+    clip authored that channel -- see `_split_rotation_tracks`."""
     frames = S.read_anim(d, bones, clip.base, clip.frames)
     records = clip.base + struct.unpack_from("<i", d, clip.base + 48)[0]
+
+    # Read the authored channels first, so "this clip animates nothing" stays a property of
+    # what VtMB wrote rather than of the correction below, and such a clip is still absent
+    # rather than present-and-silent.
+    channels = []
+    for bone in bones:
+        offsets = struct.unpack_from("<7i", d, records + bone.index * 32 + 4)
+        channels.append((any(offsets[:3]), any(offsets[3:])))
+    if not any(translation or rotation for translation, rotation in channels):
+        return None
+
+    # A delta clip's split correction is a conjugation by the runtime base pose, which no
+    # offline pass knows, so those keep VtMB's own rotations and stay the composition layer's
+    # problem (`docs/vtmb/animation_and_movers.md`).
+    split_rotations = ({} if clip.flags & DELTA_SEQUENCE
+                       else _split_rotation_tracks(bones, frames, clip.frames))
+
     tracks = bytearray()
     count = 0
     for bone in bones:
-        offsets = struct.unpack_from("<7i", d, records + bone.index * 32 + 4)
-        has_translation = any(offsets[:3])
-        has_rotation = any(offsets[3:])
+        has_translation, has_rotation = channels[bone.index]
+        rotations = split_rotations.get(bone.index)
+        has_rotation = has_rotation or rotations is not None
         if not (has_translation or has_rotation):
             continue
         tracks += struct.pack("<I2B", bone_map[bone.index], int(has_translation),
@@ -237,7 +382,9 @@ def _clip_payload(d, bones, clip, bone_map):
                 tracks += struct.pack("<3f", *_conv_pos(frames[frame][bone.index][0]))
         if has_rotation:
             for frame in range(clip.frames):
-                tracks += struct.pack("<4f", *_conv_quat(frames[frame][bone.index][1]))
+                quat = (rotations[frame] if rotations is not None
+                        else frames[frame][bone.index][1])
+                tracks += struct.pack("<4f", *_conv_quat(quat))
         count += 1
     if not count:
         return None

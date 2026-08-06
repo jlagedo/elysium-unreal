@@ -29,9 +29,9 @@ UI requires a Widget Blueprint or data-table asset; the generated typefaces rema
 | Type | Role |
 |---|---|
 | `UElysiumUISubsystem` | GI-scoped flow facade. It owns menu/character/chargen policy and scratch state, but delegates screen lifetime and composition to the local-player owner. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
-| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
-| `UElysiumUIRoot` | The single local-player root. Paint order is structural rather than numeric: passive HUD, transient stack, notification queue, game-modal stack, system-modal stack, runtime-loading stack. Hiding the HUD collapses only its passive surface, never the root or a menu/loading screen above it. |
-| `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one Elysium input scope on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. |
+| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles the retained dialogue screen, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation is one modal lifetime whose turns update in place. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
+| `UElysiumUIRoot` | The single local-player root. Paint order is structural rather than numeric: passive HUD, transient stack, notification queue, game-modal stack, system-modal stack, runtime-loading stack. Every root slot explicitly fills the player viewport and every layer is instant until it owns an authored transition. Hiding the HUD collapses only its passive surface, never the root or a menu/loading screen above it. |
+| `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one Elysium input scope on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. The scope owns mode, cursor and gameplay contexts; CommonUI owns focus and restores the screen's desired target. |
 | `UElysiumHUDWidget` | The resolution-independent in-world surface: life, discrete vitae droplets, Masquerade readout, equipment/discipline regions, selector preview, reticle and full-viewport fade. Unowned regions collapse instead of displaying fabricated runtime data. |
 | `UElysiumMainMenu` | the main / pause menu (`UElysiumActivatableScreen`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
@@ -56,11 +56,12 @@ input scope stack revokes any capture the moment a UI-only scope is pushed
 push time, not continuously, because the front end has a menu up permanently.
 
 The runtime boundary is one-way: `UElysiumPresentationSubsystem` publishes an
-`FElysiumViewState`; the player UI subsystem projects it into the Blueprint-readable model; widgets
-render that model. A selector sends commands through the input/command layer and never mutates the
-model or entity world. The faithful `game_sign` panel is the remaining Canvas surface because its
-world-click dismissal is gameplay input; dialogue is an activatable game-modal screen wrapping its
-retained Slate body. The blocking MoviePlayer loading screen is the other deliberate exception: it
+`FElysiumViewState`; the player UI subsystem projects it into the Blueprint-readable model and
+reconciles modal dialogue; widgets render that state. A selector sends commands through the
+input/command layer and never mutates the model or entity world. The faithful `game_sign` panel is
+the remaining Canvas surface because its world-click dismissal is gameplay input; dialogue is an
+activatable game-modal screen wrapping its retained Slate body. The blocking MoviePlayer loading
+screen is the other deliberate exception: it
 must render with no UObjects while the game thread is inside `LoadMap`. Its post-load continuation
 uses the root's runtime-loading layer like every ordinary player surface.
 The heads-up layer is also withheld while the entity world has a `camera_track` or named scripted
@@ -77,6 +78,8 @@ Everything is authored in **VtMB's own 1024×768 space** and scaled once by `Scr
 - Width is *not* divided — the virtual width is `ScreenW·768/ScreenH`, so content reflows into real
   widescreen and ultrawide with no letterbox and no `//ws-fix` coordinate pairs.
 - Signs (`CSignUI`), the menu and the HUD share one law.
+- The supported acceptance range is Full HD through 4K: 1920×1080, 2560×1440 and 3840×2160.
+  Anchors, safe-zone margins, type and icons scale under the same law at every point in that range.
 
 This is deliberately **not** the engine's `UIScaleCurve`. The curve would restate the same ratio in
 an ini and could then drift from the canvas the panels are authored against; `ScaleFor` is the one

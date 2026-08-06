@@ -582,13 +582,19 @@ def green_room(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
 
 
 def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
+    # The rendering is already offscreen; this is only about what happens to the sheet afterwards.
+    # `--no-open` leaves it on disk and reports the path, which is what an unattended or scripted
+    # run wants — handing a file to the shell's image viewer is a side effect nothing asked for.
+    open_sheet = "--no-open" not in args
+    args = [value for value in args if value != "--no-open"]
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
         output = unreal.run_harness(config, runner, kind, args)
         if output is not None:
             console.print(f"review sheet: {output}")
-            if os.name == "nt" and output.is_file():
+            if open_sheet and os.name == "nt" and output.is_file():
                 os.startfile(output)  # type: ignore[attr-defined]
 
     _execute(

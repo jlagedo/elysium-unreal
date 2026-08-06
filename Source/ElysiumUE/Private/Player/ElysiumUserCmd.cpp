@@ -174,10 +174,14 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 	Cmd.Move.Y = FMath::Clamp(Cmd.Move.Y, -1.0f, 1.0f);
 	Cmd.Up     = FMath::Clamp(Cmd.Up, -1.0f, 1.0f);
 
+	// The stick, on the same clamped delta the turn keys just used. Mouse counts are already
+	// finished degrees for this frame and are added raw; a stick is a held rate and is not.
+	Cmd.LookDelta += AnalogLook * DeltaSeconds;
 	Cmd.LookDelta += LookAccum;
 
 	LookAccum = FVector2D::ZeroVector;
 	AnalogMove = FVector2D::ZeroVector;
+	AnalogLook = FVector2D::ZeroVector;
 	AnalogUp = 0.0f;
 	return Cmd;
 }
