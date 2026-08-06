@@ -496,88 +496,43 @@ unwrapping** — the keys are normalised once in `Activate` and then swept liter
 
 ---
 
-## 7. Reproducing it on Unreal 5.8
+## 7. Rebuild compatibility surface
 
-Implementation status is `docs/project/roadmap.md` 11.7. The sections below own the Unreal design and the
-remaining RE questions; source owns the current type inventory.
+Implementation status is `docs/project/roadmap.md`. This document owns the faithful evaluator,
+original script/map inputs, and remaining RE questions. The shipped player/dialogue/focus/cinematic
+architecture is `docs/architecture/camera-architecture.md`.
 
-### Constraints this project imposes
+### Integration boundary
 
-- **No `.uasset` authoring.** Every engine object is built in C++ at map-load
-  (root `CLAUDE.md`). That rules out any asset-authored camera solution.
-- **A console/cvar bridge already exists** (`ccmd`/`cvar`, roadmap 9.3b), so VtMB's cvar names can
-  be reproduced 1:1 and the shipped `cfg/` + the patch's `user.cfg` aliases keep working verbatim.
-- **One eye-point contract.** The boom hangs from the pawn's camera origin; player-model
-  visibility is driven through the body seam in `docs/architecture/runtime-architecture.md`, not by a second
-  camera or a camera-owned mesh.
-- **Fully dynamic renderer**, HWRT Lumen + VSM, static lighting disabled
-  (`docs/architecture/rendering-perf.md`).
-- **Feel is reproduce-first, then polish by explicit owner call** (`docs/project/remaster-direction.md`).
-  The blend rate, the damper constants and the fade band are all *feel*, so they get built
-  faithfully and stay A/B-able behind the cvars.
+- The recovered weight ramp, priority latches, Hooke damper, collision solve, fade band, cvar
+  surface, named shot grammar, and map-track scheduler remain executable as the compatibility and
+  development A/B path.
+- `UElysiumCameraComponent` is the faithful evaluator. Its output enters the remaster camera service
+  as a `LegacyShot` or `LegacyTrack` request; it is not the final camera authority and does not
+  arbitrate dialogue, focus, Sequencer, or modern player modes itself.
+- The console/cvar bridge reproduces VtMB's camera names so `config.cfg`, patch aliases, and original
+  scripts continue to resolve. Those settings tune the faithful evaluator, not the remaster's user
+  preference or project-authored profiles.
+- Game-derived `vdata/camerashots/`, map entities, and VCDs stay external runtime inputs. Original
+  project camera profiles and Level Sequences may be authored under `/Game/ElysiumAuthored/**` but
+  do not replace source data silently.
+- Original map-track timing is already authoritative. Its evaluator publishes sampled values into
+  the shared request surface without a second spring, turn tracker, or blend.
 
-### The shape: one camera, one weight, one chokepoint
+### Faithful evaluator shape
 
-Mirror VtMB's structure rather than Unreal's idioms:
+The faithful path preserves VtMB's one weight and one solve order: advance the third-person weight
+at **2.0/s × player time scale**, apply the recovered latch priority, smooth with
+`SimpleSpline(t) = t²(3−2t)`, approach distance/yaw/pitch, run the camera collision trace, integrate
+the two-constant Hooke damper, and blend offset/rotation once. `cdamp_on 0` remains the direct A/B
+bypass.
 
-- Keep the single `UCameraComponent`. It stays the source of FOV, post-process settings and the
-  first-person-rendering flags.
-- Add a camera state object (a component on the pawn, or a member of `AElysiumPawn`) holding the
-  weight, the latches and the smoothed distance/yaw/pitch — VtMB's `CInput` camera block.
-- Advance the weight in `Tick` at **2.0/s × time scale**, clamped `[0,1]`, with VtMB's priority
-  order. This is the whole transition; there is no state machine.
-- Override **`AElysiumPawn::CalcCamera(float, FMinimalViewInfo&)`** as the single apply point —
-  the structural analogue of `CAM_ApplyToView`. Call `Camera->GetCameraView(DeltaTime, Out)`
-  first so post-process and the first-person-rendering fields are filled, then add the offset and
-  override the rotation on top. (Overriding `CalcCamera` without delegating to the camera
-  component is the documented cause of first-person rendering silently not applying — Lyra's
-  custom camera component hit exactly this.)
-- Solve the boom in the same order VtMB does: desired vector from control rotation with
-  `cam_yaw` added to yaw and `cam_targetangle` added to pitch → rate-limited approach on
-  distance/yaw/pitch → collision sweep → spring damper → `Offset *= SimpleSpline(w)` and
-  `Rotation = Lerp(ViewRotation, CameraRotation, SimpleSpline(w))`.
-
-`SimpleSpline` exists in Unreal as `FMath::SmoothStep`/`FMath::InterpEaseInOut`; `t²(3−2t)` is
-two lines, so write it literally to match the decompiled constant.
-
-### Collision and damping
-
-`UWorld::SweepSingleByChannel` with a sphere of `cam_trace_radius` on `ECC_Camera`, ignoring the
-pawn, is the direct equivalent of `UTIL_TraceHull` (VtMB uses a *box* hull with equal half-extents;
-a sphere is the closer match to how it actually reads in motion, and is what `USpringArmComponent`
-uses too — record the substitution here, it is a feel delta).
-
-The damper is a Hooke spring with **two constants** — 4.0 free, 15.0 wall-clipped — the reason the
-stock spring arm is not enough (below). Implement it explicitly; keep `cdamp_on 0` working as a
-bypass for A/B.
-
-### Options considered and rejected
-
-| Option | Why not |
-|---|---|
-| **`USpringArmComponent`** with `TargetArmLength` lerped to 0 | The obvious idiom and fine for a prototype, but its lag model is an exponential interpolation on location/rotation, not a spring with a separate wall constant; its probe retracts instantly and springs back linearly; and there is no weight to hang the angle blend, the model fade and the crosshair switch on. Reproducing VtMB's damper inside it means subclassing it anyway, at which point the component buys nothing. |
-| **`SetViewTargetWithBlend`** between two camera actors | Blends between *actors* over a fixed time with a fixed curve. Re-triggering mid-blend restarts rather than resuming from the current weight, and VtMB's toggle is symmetric and interruptible by design. It also implies a second view target, which the single-pawn model does not have. |
-| **Gameplay Camera System** (UE 5.5+) | Still **Experimental** in 5.8 ("use caution when shipping"), and it is a *data asset* system — camera rigs authored in the editor. Directly contrary to the no-`.uasset`, code-built rule. Revisit if it stabilises and exposes a code path to build rigs without assets. |
-
-### Player mesh, fade and first-person rendering
-
-There is no player mesh yet, so this is design intent for when one lands — **roadmap 8.11a** owns
-it, and the P8 skeletal path (8.2/8.5) supplies the machinery:
-
-- **Visibility**: draw the mesh from the first frame of the blend, not switched at the end
-  (`CAM_IsThirdPerson`'s "true throughout" behaviour, §2). Drive a MID scalar from the alpha
-  rather than toggling `SetOwnerNoSee`; use `SetOwnerNoSee(true)` only as a cull when the weight
-  is exactly 0.
-- **The fade band** (`cam_fadeend` → `cam_fadestart`) is a near-camera dissolve, so it needs
-  dithered or masked opacity on the character material, not translucency — translucency would
-  take the player mesh off the opaque path and out of Lumen's GI, which is load-bearing here. The
-  one state that quantises the alpha to 0/1 maps to a simple `bDitherEnabled = false` branch.
-- **First Person Rendering** (UE 5.5+) already qualifies: its advanced features require *Allow
-  Static Lighting* to be **disabled**, already the case, and its world-space-representation path
-  needs VSM or ray-traced shadows, already the render path. If a first-person weapon/hands mesh
-  is ever added, `FirstPersonPrimitiveType = FirstPerson` plus a `WorldSpaceRepresentation` twin
-  gives correct HWRT reflections and VSM shadows without a second render pass. It is not needed
-  for the camera itself.
+This path deliberately does not constrain the remaster third-person rig. The modern player rig uses
+Unreal's Spring Arm obstruction model, independent camera orbit and explicit character-facing
+policies; the camera manager arbitrates its output with every scoped request. `SetViewTargetWithBlend`
+is not a public gameplay API, and Unreal's experimental Gameplay Camera System is not the production
+foundation. Those owner calls and their reasoning live only in
+`docs/architecture/camera-architecture.md`.
 
 ### Units
 

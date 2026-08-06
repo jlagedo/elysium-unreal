@@ -128,10 +128,18 @@ remodelling, invented hero detail) stays out of bounds.
 
 **Faithful first.** The Source `CGameMovement` math is ported line-by-line from the decompile
 (`docs/vtmb/source_movement.md`) because it *is* the known-good baseline, and because you cannot tune
-what you have not reproduced. Once it runs and is A/B-able, individual deltas — acceleration
-curves, camera behaviour, combat readability, input latency — are proposed one at a time,
-each under the behaviour test, each on an explicit call. Same for combat and camera when they
-arrive.
+what you have not reproduced. Once it runs and is A/B-able, individual movement and combat deltas
+are proposed one at a time, each under the behaviour test, each on an explicit call.
+
+**Camera owner call — deliberate divergence.** VtMB's recovered camera remains the executable
+compatibility/reference evaluator, but it is not the shipped feel target. The remaster provides
+persistent, complete first- and third-person player modes; never changes that preference because a
+weapon, dialogue, focus target, or cutscene temporarily needs another view; separates third-person
+orbit from character facing and navigation; and restores the exact prior player state after every
+scoped override. Dialogue, prop focus, map triggers, original camera tracks, embedded Python, and
+project-authored Sequencer scenes all enter one request-based camera director. The design and its
+A/B boundary are `docs/architecture/camera-architecture.md`; the recovered source behaviour remains
+`docs/vtmb/camera-view-modes.md`.
 
 Modern *plumbing* under identical behaviour is presentation-grade and needs no gate: frame-rate
 independence, uncapped physics/render rates, high-polling-rate mouse input, gamepad support,
@@ -171,5 +179,7 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
 Project implementation status and sequencing live in `docs/project/roadmap.md`; detailed retail
 capture and original-runtime animation/facial investigation status lives in its declared scoped
 subtracker, `docs/project/retail-capture-roadmap.md`. Topic design remains split by
-concern: `docs/architecture/ui-architecture.md` for the Unreal UI, `docs/architecture/asset-enhancement.md` for surfaces, and the
-owning behavior doc for every deliberate divergence.
+concern: `docs/architecture/ui-architecture.md` for the Unreal UI,
+`docs/architecture/camera-architecture.md` for the remaster camera,
+`docs/architecture/asset-enhancement.md` for surfaces, and the owning behavior doc for every
+deliberate divergence.

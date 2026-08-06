@@ -95,7 +95,7 @@ it waits. Three standing rules:
 | **PP1 — New Game & genesis [x]** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | **9.4 a–g [x]** *(RE24 [x], RE25 [x], RE27 [x], RE28 [x], RE29 [x])*, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
-| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), camera modes, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
+| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), modern persistent first-/third-person camera, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, **11.13**, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
 | **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | **[x]** *(11.9 = 9.5)* |
 | **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `uv run elysium test Play` |
 
@@ -1066,7 +1066,7 @@ dialogue, scripted flow, quests, save/load included.
   against, and the `FElysiumUserCmd` the analog actions fill); 8.6/8.10 for the screen only.
 - [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached — **promoted 2026-07-26:**
   stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, chargen → **9.4**,
-  choreography → **P12**)* — full combat AI (beyond 13.3's basics); NPC perception, reactions and
+  choreography → **P12**; conversation camera → **11.13**)* — full combat AI (beyond 13.3's basics); NPC perception, reactions and
   the schedule graph beyond 8.5's native patrol/interesting-place locomotion (BT/StateTree where
   it adds value without replacing authored entity I/O); ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
   parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
@@ -1078,7 +1078,7 @@ dialogue, scripted flow, quests, save/load included.
   them: **disciplines/vampire powers** (`disciplinetgt_*`, ~300 KB — the largest; → **13.2**),
   **stealth** (`stealth`/`stealthkillrules`; → **13.1**), the **hacking minigame** (`hackterminals/`),
   **economy/vendors** (`vendors`, item `worth`), **NPC disposition + reactions**
-  (`dispositiontable`/`reaction*`), **data-driven conversation camera** (`camerashots/`),
+  (`dispositiontable`/`reaction*`), **data-driven conversation camera** (`camerashots/`; → **11.13f**),
   **radio + TV-news ambient content** (`radio_data`/`newscaster_*` → **6.8**), **impact FX**
   (`particleimpacttable`), **per-category entity sound schemes + AI-hearing volume**
   (`sndscheme_*`/`sound_volume_table` → **6.8**, distinct from PL5a's map SoundSchemes), and the **minor UI
@@ -1094,7 +1094,7 @@ dialogue, scripted flow, quests, save/load included.
   *Deps:* PP6, 10.3, 7.4. *Design:* `docs/architecture/asset-enhancement.md`; governing test:
   `docs/project/remaster-direction.md`.
 
-## P11 — Runtime spine *(design: `docs/architecture/runtime-architecture.md` + `docs/architecture/save-architecture.md` — read them; steps here are the tracker)*
+## P11 — Runtime spine *(design: `docs/architecture/runtime-architecture.md` + `docs/architecture/save-architecture.md` + `docs/architecture/camera-architecture.md` — read them; steps here are the tracker)*
 
 The structure *between* the systems P1–P10 design: lifetimes, the frame, the player object, the
 session, and the seams. It exists because the slice ladder now reaches "boot a New Game and play it",
@@ -1157,6 +1157,50 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   retains the overlay with the missing prerequisite. This is the correctness gate under **10.4**;
   parsing/spawning are still synchronous and 10.4 remains open. → `docs/architecture/map-architecture.md`,
   `docs/architecture/runtime-architecture.md` §3/§10.
+- [ ] **11.13 Remaster camera director and modern player views** *(PP4)* — replace the original
+  camera as the shipped player-feel target without disturbing its verified compatibility path.
+  One `AElysiumPlayerCameraManager` resolves handle-based requests from the player rig, props,
+  dialogue, map entities, embedded Python, VCD/map tracks, feed/death, and project-authored
+  Sequencer scenes. Direct first-/third-person choices persist; the cycle contains only those two;
+  third-person orbit, character facing and navigation are independent. The complete responsibility,
+  API, asset, fallback, and migration design is `docs/architecture/camera-architecture.md`.
+  - [ ] **11.13a Director foundation** — `AElysiumPlayerCameraManager`, local-player
+    `UElysiumCameraService`, value requests, generation/map-epoch handles, semantic priority,
+    cut/reset handling, diagnostics, and `IElysiumCameraService`; wrap 11.7's shot stack and
+    camera-track sampler as legacy requests before changing their output. *Deps:* 11.5 [x],
+    11.7 [x], 11.8 [x], 12.1's verified sampler.
+  - [ ] **11.13b Authored camera library** — committed/LFS project-owned packages under
+    `/Game/ElysiumAuthored/Camera/**` and `/Game/ElysiumAuthored/Cinematics/**`; Primary Data Asset
+    profiles, dialogue shot sets, curves and shakes load by soft id. Game-derived packages remain
+    prohibited and the generated mount contracts remain unchanged. *Deps:* 11.13a.
+  - [ ] **11.13c Player rig and mode contract** — `UElysiumPlayerCameraRigComponent`, modern Spring
+    Arm obstruction, complete first/third views, direct binds plus a two-state cycle, independent
+    third-person orbit/facing/navigation, aim policy, shoulder/recenter preferences, exact nested
+    override restore, and a developer A/B path to the faithful evaluator. *Deps:* 11.13a–b;
+    full played gait acceptance joins 4.7 and 8.11b.
+  - [ ] **11.13d Input, settings and presentation** — camera commands enter the action catalog;
+    inspect/dialogue/cinematic scopes stay owned by `UElysiumInputSubsystem`; resolved reticle,
+    HUD, body/viewmodel and letterbox state enters `FElysiumViewState`; accessibility covers
+    separate FOV, recenter, shake/head-motion/recoil response and motion blur. *Deps:* 11.13c,
+    8.10 for the final options surface.
+  - [ ] **11.13e Prop focus, map triggers and public API** — focusable target specs, soft-focus and
+    inspect requests, collision/framing fallback, trigger component/volume, C++ value API, embedded
+    Python 2.7 opaque handles, map-epoch teardown, and compatibility-safe `SetCamera`/`RemoveCamera`
+    ownership. The camera never moves or rotates the player to frame an item. *Deps:* 11.13a,
+    11.13d; real inventory/interaction coverage joins 9.8 and B6.
+  - [ ] **11.13f Dialogue director** — reusable two-shot/single/over-shoulder/close-up grammar over
+    speaker/listener anchors; collision, visibility, eye-line, screen-side and subtitle-safe tests;
+    original `vdata/camerashots/` through the legacy adapter; player-view fallback when no safe shot
+    exists. *Deps:* 11.13a–b, 11.13d, 9.2; played first-conversation coverage joins 9.9.
+  - [ ] **11.13g Sequencer bridge** — project-authored Level Sequences and Cine Cameras acquire one
+    `Sequence` request; Camera Cut Track owns authored transforms/lenses/cuts/blends without a second
+    interpolation; stop, abort, skip and travel release cleanly. Original VCD and Worldcraft timing
+    stays in the legacy evaluator. *Deps:* 11.13a–b.
+  - [ ] **11.13h Integration acceptance** — migrate feed/death and every remaining direct producer;
+    retain the theatre's 12.1 camera acceptance; add request/mode/collision/focus/dialogue/Python/
+    Sequencer automation and a mouse+gamepad played matrix through narrow interiors. Every scoped
+    camera returns to the exact chosen view and no camera path rotates or navigates the character.
+    *Deps:* 11.13a–g, 4.7, 8.11b, 9.8, 9.9, 11.10.
 
 **Slice acceptance:** from a cold launch — the menu comes up over the backdrop, New Game runs chargen
 and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,

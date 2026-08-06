@@ -12,6 +12,7 @@ documents:
   - {path: architecture/map-architecture.md, kind: architecture, owner: maps, subject: map lifecycle}
   - {path: architecture/animation-architecture.md, kind: architecture, owner: animation, subject: Unreal animation integration}
   - {path: architecture/audio-architecture.md, kind: architecture, owner: audio, subject: Unreal audio integration}
+  - {path: architecture/camera-architecture.md, kind: architecture, owner: camera, subject: Unreal camera integration}
   - {path: architecture/input-architecture.md, kind: architecture, owner: input, subject: Unreal input integration}
   - {path: architecture/save-architecture.md, kind: architecture, owner: persistence, subject: Unreal persistence}
   - {path: architecture/ui-architecture.md, kind: architecture, owner: user interface, subject: Unreal UI stack}

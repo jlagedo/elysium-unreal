@@ -14,8 +14,18 @@ import sys
 
 REPO = Path(__file__).resolve().parent.parent
 
-FORBIDDEN_EXTENSIONS = {
+UNREAL_PACKAGE_EXTENSIONS = {
     ".uasset", ".umap", ".ubulk", ".uexp", ".uptnl",
+}
+AUTHORED_UNREAL_PREFIXES = (
+    "Content/ElysiumAuthored/",
+)
+AUTHORED_UNREAL_LFS_PATTERNS = {
+    f"Content/ElysiumAuthored/**/*{suffix}"
+    for suffix in UNREAL_PACKAGE_EXTENSIONS
+}
+FORBIDDEN_EXTENSIONS = {
+    *UNREAL_PACKAGE_EXTENSIONS,
     ".pak", ".ucas", ".utoc",
     ".bsp", ".mdl", ".phy", ".vpk", ".tth", ".ttz", ".vtf", ".vmt",
     ".vcd", ".dlg", ".sav",
@@ -85,6 +95,10 @@ def prohibited(path: str) -> str | None:
     path = normalized(path)
     lower = path.lower()
     suffix = PurePosixPath(lower).suffix
+    if suffix in UNREAL_PACKAGE_EXTENSIONS and any(
+        lower.startswith(prefix.lower()) for prefix in AUTHORED_UNREAL_PREFIXES
+    ):
+        return None
     if suffix in FORBIDDEN_EXTENSIONS:
         return f"forbidden extension {suffix}"
     for prefix in FORBIDDEN_PREFIXES:
@@ -103,8 +117,12 @@ def tracked_violations() -> list[str]:
     attributes = (REPO / ".gitattributes").read_text(
         encoding="utf-8", errors="replace"
     ) if (REPO / ".gitattributes").is_file() else ""
-    if "filter=lfs" in attributes:
-        errors.append("Git LFS is not an exception for prohibited assets")
+    for line in attributes.splitlines():
+        fields = line.split()
+        if "filter=lfs" in fields and fields[0] not in AUTHORED_UNREAL_LFS_PATTERNS:
+            errors.append(
+                "Git LFS is allowed only for Unreal packages under Content/ElysiumAuthored/**"
+            )
     return errors
 
 

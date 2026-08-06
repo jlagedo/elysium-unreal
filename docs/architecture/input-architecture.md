@@ -131,11 +131,20 @@ conversation does to held input" on our side of the port.
 | `IMC_Player_KBM` | 0 | in world |
 | `IMC_Player_Gamepad` | 0 | in world (always — a pad key cannot collide with a keyboard key) |
 | `IMC_Dialogue` | 10 | conversation open — advance / choose / history / skip, movement removed |
+| `IMC_Inspect` | 15 | prop inspection — bounded orbit / zoom / cancel, gameplay movement removed |
 | `IMC_Menu` | 20 | pause, options, chargen |
 | `IMC_Cinematic` | 30 | `scripted_sequence`, scripted cameras |
 
 Both device contexts stay applied together so the remapping screen's Keyboard and Gamepad columns
 are independent and each device carries its own modifier stack.
+
+Player-camera actions — look, first person, third person, cycle view, recenter, shoulder swap and
+inspect — are ordinary commands in the two player contexts. A winning dialogue, inspect, or
+cinematic camera request publishes its desired control policy, but the request owner asks this
+subsystem for the corresponding handle-based scope; the camera manager never calls `SetInputMode`,
+adds a mapping context, or reads a key. Aim remains gameplay state inside the selected player view,
+not a mapping-context swap. Full ownership and restoration rules:
+`docs/architecture/camera-architecture.md`.
 
 **Cursor visibility is device-dependent, and a scope alone cannot decide it.**
 `FElysiumInputScope::bShowCursor` is a fixed value per scope, which is right for a mouse and wrong

@@ -514,24 +514,23 @@ which is also what keeps the A/B honest: it compares the movers, not two input p
 
 ## 9. The camera
 
-`docs/vtmb/camera-view-modes.md` has the full solve. Two spine-level facts:
+`docs/architecture/camera-architecture.md` owns the remaster integration. The spine supplies its
+lifetime and dependency boundaries:
 
-- **One camera, one weight stack, one apply point.** `UElysiumCameraComponent` holds the four VtMB
-  weights (third-person toggle, scripted, feed/death, secondary) and `AElysiumPawn::CalcCamera` is the
-  single place the view is modified — delegating to `UCameraComponent::GetCameraView` first so
-  post-process and first-person-rendering fields are filled, then applying offset and rotation.
-- **The scripted channel is a service, not a special case.** `SetCamera(shotfile)` (115 script calls,
-  keyed to `vdata/camerashots/`), `camera_keyframe`/`camera_track`, the conversation camera and the
-  feed camera all push onto the same weight stack through one value seam —
-  **`IElysiumEmbodiment::PushCameraShotValue(const FElysiumCameraShot&)`**,
-  **`UpdateCameraShotValue(int32, const FElysiumCameraShot&)`**, and
-  **`PopCameraShot(int32, float)`** — beside the other player-body calls. The camera *is* part of the
-  body (§5–6), while `IElysiumPresenter` carries what is put on *screen*. Whoever owns a shot keeps
-  its values current, so the camera never learns what an entity is. `SetCamera` owns a replaceable
-  named-shot slot; the map epoch separately owns camera-track position and target streams and composes
-  them into one raw shot. Either stream may restore independently, and the raw shot leaves the stack
-  only after both owners are gone. This keeps `RemoveCamera` a pop and cutscene cameras out of the
-  pawn.
+- `AElysiumPlayerCameraManager` is the one final-view authority per local player;
+  `UElysiumCameraService` arbitrates handle-based base-view requests and post-layer policy.
+- The pawn owns only the player camera rig and candidate first-/third-person poses. The camera service
+  is reached through `IElysiumCameraService` beside the other injected world services; the entity
+  substrate and embedded Python exchange values and entity handles, never camera actors or UObjects.
+- Movement owns character facing and navigation, `UElysiumInputSubsystem` owns control scopes, and
+  `IElysiumPresenter` carries the resolved HUD/reticle/letterbox state. A camera request describes
+  policy but cannot mutate any of those owners directly.
+- The recovered `UElysiumCameraComponent` evaluator and scripted-shot stack remain the compatibility
+  adapter for original player behaviour, `SetCamera`, VCD camera actions, and
+  `camera_keyframe`/`camera_track`. `docs/vtmb/camera-view-modes.md` owns their source semantics.
+- Map-scoped request handles carry the map epoch and die before travel. Player mode and accessibility
+  preferences live above the world; story-authoritative owners republish dialogue, track, feed/death,
+  or sequence requests after load rather than serializing transient camera handles.
 
 ## 10. Session, boot and the app state machine
 

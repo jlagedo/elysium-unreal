@@ -598,6 +598,19 @@ class RepositoryPolicyTests(unittest.TestCase):
     def test_authored_source_is_not_prohibited(self) -> None:
         self.assertIsNone(POLICY.prohibited("pipeline/src/elysium_pipeline/formats/bsp.py"))
 
+    def test_project_authored_unreal_packages_have_one_namespace(self) -> None:
+        for path in (
+            "Content/ElysiumAuthored/Camera/Profiles/DA_Default.uasset",
+            "Content/ElysiumAuthored/Cinematics/Sequences/LS_Test.uasset",
+            "Content/ElysiumAuthored/Cinematics/Maps/CameraLab.umap",
+        ):
+            with self.subTest(path=path):
+                self.assertIsNone(POLICY.prohibited(path))
+
+        self.assertIsNotNone(
+            POLICY.prohibited("Content/ElysiumAuthored/Camera/copied_game_data.vpk")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

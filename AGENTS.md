@@ -1,11 +1,12 @@
 # Elysium-Unreal
 
 *Vampire: The Masquerade – Bloodlines* (VtMB, 2004, early Source engine) rebuilt as a
-playable game — **remastered** — on **Unreal Engine 5.8 + C++**. Everything the runtime consumes
+playable game — **remastered** — on **Unreal Engine 5.8 + C++**. Every game-derived runtime input
 is produced by this repo's own offline decode/export pipeline from the user's own install: the
 world's *look* is baked into a gitignored `.uasset` plugin mount and adopted at load, while
 collision, entities, scripting, audio and NPCs are built in code at map-load time from
-engine-neutral intermediates.
+engine-neutral intermediates. Original project-owned remaster assets may be authored in Unreal
+under the repository's explicit authored-content namespace.
 
 ## Read first
 
@@ -31,7 +32,7 @@ Directory-scoped facts live in sub-files that load with the code they describe:
 | `pipeline/CLAUDE.md` | the offline Python pipeline — boundaries, paths, formats and exporters |
 | `research/CLAUDE.md` | reproducible research cases and tooling |
 | `docs/CLAUDE.md` | how the documentation set is organised and maintained |
-| `Content/CLAUDE.md` | licensed source fonts and generated local package policy |
+| `Content/CLAUDE.md` | licensed source fonts, project-authored assets, and generated local package policy |
 
 ## Load-bearing rules
 
@@ -63,8 +64,10 @@ Full charter: `docs/project/remaster-direction.md`.
 output (`$ELYSIUM_EXPORT_ROOT/`) is gitignored and regenerable, and so is everything derived from it —
 including the baked `.uasset` mount `Plugins/ElysiumBaked/Content/` (only the `.uplugin` is
 committed). This is the legal posture, not a convenience — prior community rebuilds died to a
-C&D, not to technical failure. The only tracked `Content/` inputs are licensed loose fonts,
-their licences, and directory policy; Unreal packages are generated locally and ignored.
+C&D, not to technical failure. Tracked `Content/` inputs are licensed loose fonts and original
+project-owned Unreal packages below `Content/ElysiumAuthored/`; the latter use Git LFS and must not
+contain bytes, transforms, timing, or other content derived from the user's game. Generated
+`/Game/Elysium`, `/Game/VtMB/**`, and `/ElysiumBaked/**` packages remain local and ignored.
 
 ### The two clean halves
 

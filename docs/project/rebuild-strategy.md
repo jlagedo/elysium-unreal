@@ -4,8 +4,9 @@ North star: rebuild VtMB as a **playable game — remastered** — in Unreal Eng
 consuming engine-neutral intermediates produced by this repo's own decode/export pipeline
 (`pipeline/`). Game content converted into `.uasset`s — the offline look bake — lands on a
 **gitignored, regenerable mount** (`/ElysiumBaked`): **no original game content is ever
-committed in any form.** Unreal packages under `Content/` are generated locally; only
-licensed loose source fonts and their licences are tracked there.
+committed in any form.** Generated Unreal packages under `Content/` stay local; licensed loose
+source fonts and original project-owned packages under `Content/ElysiumAuthored/` are the tracked
+content inputs.
 
 **Remaster, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
 is raised with tools 2004 did not have — modern UI and typography first, then assets, feel, and
@@ -43,11 +44,12 @@ Two tracks run in parallel:
      tag, then builds everything else in code from the intermediates on disk — collision,
      ropes, the sky cubemap, the entity substrate, NPCs, audio, scripting. Python is **never
      run at runtime** — the seam between the halves is purely file-based.
-2. **The Unreal editor is in the offline content loop only, never at runtime.** Editor Python
-   authors what only the editor build can produce — the map bake (`bake_map.py`, `bake_lib.py`,
-   `bake_verify.py`), the generated `Content/` assets (`build_content.py`), offline scaffolding
-   (`make_boot_map.py`) — and no shipped code path invokes it. The architecture call, its
-   split, and its costs: `docs/architecture/uasset-bake-spike.md`.
+2. **The Unreal editor is in the offline development/content loop only, never at runtime.** Editor
+   Python authors what only the editor build can produce — the map bake (`bake_map.py`,
+   `bake_lib.py`, `bake_verify.py`), the generated `Content/` assets (`build_content.py`), offline
+   scaffolding (`make_boot_map.py`) — while designers author original project-owned packages below
+   `Content/ElysiumAuthored/`. No shipped code path invokes editor Python. The bake architecture,
+   split, and costs: `docs/architecture/uasset-bake-spike.md`.
 3. **The pipeline lives in this repo.** `pipeline/` is the single home for the decoders; fixes
    and new sidecar formats land here. The intermediates stay engine-neutral so the format work
    is not Unreal-specific, but there is only one consumer.
@@ -485,7 +487,8 @@ list are documented next to the code they describe:
 
 - `/Source/ElysiumUE/CLAUDE.md` — the C++ runtime (module + deps, key types, entity
   substrate, scripting hosts, audio, debug layer, console commands, `Config/` facts).
-- `/Content/CLAUDE.md` — licensed source fonts and generated local packages.
+- `/Content/CLAUDE.md` — licensed source fonts, original project-authored packages, and generated
+  local packages.
 - `/pipeline/CLAUDE.md` — the VtMB input formats and their decoders.
 - The repo-root `CLAUDE.md` — orientation, the load-bearing rules, build & run.
 

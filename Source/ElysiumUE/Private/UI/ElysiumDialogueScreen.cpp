@@ -23,6 +23,8 @@ void UElysiumDialogueScreen::ApplyDialogue(const FElysiumDialogueView& InDialogu
 
 TSharedRef<SWidget> UElysiumDialogueScreen::RebuildWidget()
 {
+	(void)Super::RebuildWidget();
+
 	DialogueBox = SNew(SElysiumDialogueBox)
 		.Speaker(Dialogue.Speaker)
 		.Line(Dialogue.Line)

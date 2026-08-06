@@ -55,5 +55,7 @@ TSharedRef<SWidget> ElysiumLoadingUI::Build(const FText& Message, bool bShowThro
 
 TSharedRef<SWidget> UElysiumLoadingScreen::RebuildWidget()
 {
+	(void)Super::RebuildWidget();
+
 	return ElysiumLoadingUI::Build(Message, bShowThrobber);
 }

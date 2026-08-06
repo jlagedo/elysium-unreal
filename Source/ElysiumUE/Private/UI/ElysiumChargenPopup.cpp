@@ -205,6 +205,8 @@ TSharedRef<SWidget> UElysiumChargenPopup::BuildPage()
 
 TSharedRef<SWidget> UElysiumChargenPopup::RebuildWidget()
 {
+	(void)Super::RebuildWidget();
+
 	ArtBrushes.Reset();
 
 	TSharedRef<SOverlay> Root = SNew(SOverlay);

@@ -1,8 +1,8 @@
 # Repository and workspace policy
 
-The checkout contains authored project source only. User-owned game data, generated
-packages, decompilation, dependency source, build output, and research evidence live
-outside Git.
+The checkout contains authored project source and original project-owned Unreal packages only.
+User-owned game data, generated packages, decompilation, dependency source, build output, and
+research evidence live outside Git.
 
 ## Local paths
 
@@ -22,8 +22,9 @@ and work roots are never guessed from the repository.
 
 The repository rejects:
 
-- Unreal packages and containers: `.uasset`, `.umap`, `.ubulk`, `.uexp`, `.uptnl`,
-  `.pak`, `.ucas`, `.utoc`;
+- Unreal packages and containers: `.uasset`, `.umap`, `.ubulk`, `.uexp`, `.uptnl`, `.pak`,
+  `.ucas`, `.utoc`, except original project-authored package files below
+  `Content/ElysiumAuthored/`;
 - raw VtMB containers and assets such as `.bsp`, `.mdl`, `.phy`, `.vpk`, `.tth`,
   `.ttz`, `.vtf`, `.vmt`, `.vcd`, `.dlg`, and `.sav`;
 - extracted binaries, game-derived export, and baked content;
@@ -33,8 +34,14 @@ The repository rejects:
   `.codex-patch/**`;
 - downloaded dependency source under `Plugins/External/`.
 
-Git LFS is not an exception. `uv run elysium doctor` enforces the boundary and the
-tracked pre-commit hook runs the repository-only check. Configure it with:
+Git LFS is required for `Content/ElysiumAuthored/**` and is not an exception anywhere else. The
+authored namespace may contain original project camera/cinematic assets and other independently
+owned work; copying game-derived exports, packages, transforms, timings, or scripts into it is a
+policy violation. Generated `/Game/Elysium`, `/Game/VtMB/**`, and `/ElysiumBaked/**` packages keep
+their ignored/regenerable contracts.
+
+`uv run elysium doctor` enforces the path boundary and the tracked pre-commit hook runs the
+repository-only check. Configure it with:
 
 ```powershell
 git config core.hooksPath .githooks

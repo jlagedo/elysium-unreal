@@ -785,6 +785,10 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Ite
 
 TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 {
+	// UCommonActivatableWidget announces this rebuild to the action router. Skipping it leaves the
+	// screen visible in its stack but absent from the activatable input tree.
+	(void)Super::RebuildWidget();
+
 	const TArray<FMenuEntry> Items = BuildItemSet();
 
 	TArray<FText> Labels;

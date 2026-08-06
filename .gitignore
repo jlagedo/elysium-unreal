@@ -38,8 +38,8 @@ compile_commands.json
 *.egg-info/
 **/__pycache__/
 
-# Unreal packages are always generated or externally supplied. Git LFS is not
-# an exception: no Unreal binary package belongs in this repository.
+# Generated or game-derived Unreal packages never belong in Git. Original
+# project-authored packages have one explicit Git LFS namespace below.
 *.uasset
 *.umap
 *.ubulk
@@ -48,6 +48,12 @@ compile_commands.json
 *.pak
 *.ucas
 *.utoc
+
+!Content/ElysiumAuthored/**/*.uasset
+!Content/ElysiumAuthored/**/*.umap
+!Content/ElysiumAuthored/**/*.ubulk
+!Content/ElysiumAuthored/**/*.uexp
+!Content/ElysiumAuthored/**/*.uptnl
 
 # Generated project packages. The virtual package paths remain /Game and
 # /ElysiumBaked; only their Git posture changes.

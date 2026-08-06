@@ -1648,6 +1648,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBody()
 
 TSharedRef<SWidget> UElysiumCharacterScreen::RebuildWidget()
 {
+	(void)Super::RebuildWidget();
+
 	// Brushes are rebuilt per tree; the textures behind them stay cached on the widget.
 	ArtBrushes.Reset();
 
