@@ -208,6 +208,17 @@ Hard-won, non-obvious, and easy to undo:
   editor. Pass `bTransact = false` from any runtime path.
 - **`UElysiumNpcAnimInstance`'s proxy must implement `UpdateAnimationNode`** — a sequence player never
   `Update_AnyThread`'d holds its start frame forever.
+- **A `UBlendProfile`'s mode has to be set before its bone scales.** An entry equal to the mode's own
+  default is not stored, and that default is 0 for `EBlendProfileMode::BlendMask` against 1 for every
+  other mode. A profile still in its constructed `WeightFactor` mode therefore discards every 1.0
+  written into it and saves empty — which reads at evaluation as owning the whole rig, the exact
+  opposite of the mask that was asked for, with nothing logged.
+- **`UAnimSequence::GetAnimationPose` silently falls back to the raw data model** whenever the
+  compressed data for the current platform is not resident yet, and compression runs asynchronously
+  after a bake. So the same call answers out of two different representations depending on how much
+  work happened earlier in the same process, and a test that reads an additive can pass and fail on
+  the same assets across runs. Call `WaitOnExistingCompression()` first when the assertion is about
+  what a cooked build ships; `IsCompressedDataValid()` is how a caller tells which one it got.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.

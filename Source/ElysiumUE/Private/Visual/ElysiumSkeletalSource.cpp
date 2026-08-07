@@ -5,11 +5,15 @@
 namespace
 {
 	constexpr uint32 EskmMagic = 'M' << 24 | 'K' << 16 | 'S' << 8 | 'E';   // "ESKM", little-endian
+	// 3 -- a clip carries the index of its per-bone `weight`@0 mask, and the masks ship as a
+	// de-duplicated table. Without it a bone a layer leaves at its bind pose is indistinguishable
+	// from one the layer does not own, which are opposite results when the layer is composed.
+	//
 	// 2 -- a clip's rotations for the split bone are written pre-corrected by the exporter, so
 	// ordinary inheritance reproduces the pose VtMB draws and no runtime rule is applied. A
 	// version 1 container carries the same bytes meaning the opposite, and nothing in the payload
 	// tells them apart, so a stale export is refused rather than posed wrongly with no error.
-	constexpr uint32 EskmVersion = 2;
+	constexpr uint32 EskmVersion = 3;
 
 	/**
 	 * A bounds-checked forward cursor over the loaded file.
@@ -168,6 +172,21 @@ namespace
 		}
 	}
 
+	void ReadMasks(FCursor& Cursor, FElysiumSkeletalSource& Out)
+	{
+		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
+		Out.Masks.Reserve(FMath::Max(Count, 0));
+		for (int32 Index = 0; Index < Count && Cursor.IsValid(); ++Index)
+		{
+			FElysiumSourceMask& Mask = Out.Masks.AddDefaulted_GetRef();
+			const int32 BoneCount = static_cast<int32>(Cursor.Read<uint32>());
+			if (const uint8* At = Cursor.Take(BoneCount))
+			{
+				Mask.Bones.Append(At, BoneCount);
+			}
+		}
+	}
+
 	void ReadClips(FCursor& Cursor, FElysiumSkeletalSource& Out)
 	{
 		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
@@ -179,6 +198,7 @@ namespace
 			Clip.FrameCount = static_cast<int32>(Cursor.Read<uint32>());
 			Clip.FrameRate = Cursor.Read<float>();
 			Clip.Flags = Cursor.Read<uint32>();
+			Clip.Mask = Cursor.Read<int32>();
 			const int32 TrackCount = static_cast<int32>(Cursor.Read<uint32>());
 			Clip.Tracks.Reserve(FMath::Max(TrackCount, 0));
 			for (int32 Track = 0; Track < TrackCount && Cursor.IsValid(); ++Track)
@@ -263,6 +283,7 @@ bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& O
 	constexpr uint32 TagMatl = 'L' << 24 | 'T' << 16 | 'A' << 8 | 'M';
 	constexpr uint32 TagMesh = 'H' << 24 | 'S' << 16 | 'E' << 8 | 'M';
 	constexpr uint32 TagMorf = 'F' << 24 | 'R' << 16 | 'O' << 8 | 'M';
+	constexpr uint32 TagMask = 'K' << 24 | 'S' << 16 | 'A' << 8 | 'M';
 	constexpr uint32 TagAnim = 'M' << 24 | 'I' << 16 | 'N' << 8 | 'A';
 
 	for (const FEntry& Entry : Directory)
@@ -280,6 +301,7 @@ bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& O
 		case TagMatl: ReadMaterials(Section, Out); break;
 		case TagMesh: ReadMesh(Section, Out); break;
 		case TagMorf: ReadMorphs(Section, Out); break;
+		case TagMask: ReadMasks(Section, Out); break;
 		case TagAnim: ReadClips(Section, Out); break;
 		default: continue;
 		}
@@ -303,6 +325,26 @@ bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& O
 		{
 			OutError = FString::Printf(TEXT("%s: bone %s parents forward to %d"),
 				*Path, *Out.Bones[Index].Name.ToString(), Out.Bones[Index].Parent);
+			return false;
+		}
+	}
+	// A mask is read per bone by index, so a short one would silently leave the tail of the
+	// skeleton outside every mask -- which is a pose, not an error, unless it is caught here.
+	for (int32 Index = 0; Index < Out.Masks.Num(); ++Index)
+	{
+		if (Out.Masks[Index].Bones.Num() != Out.Bones.Num())
+		{
+			OutError = FString::Printf(TEXT("%s: mask %d covers %d of %d bones"),
+				*Path, Index, Out.Masks[Index].Bones.Num(), Out.Bones.Num());
+			return false;
+		}
+	}
+	for (const FElysiumSourceClip& Clip : Out.Clips)
+	{
+		if (Clip.Mask != INDEX_NONE && !Out.Masks.IsValidIndex(Clip.Mask))
+		{
+			OutError = FString::Printf(TEXT("%s: clip %s names mask %d of %d"),
+				*Path, *Clip.Name, Clip.Mask, Out.Masks.Num());
 			return false;
 		}
 	}

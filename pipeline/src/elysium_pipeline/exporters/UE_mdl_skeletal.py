@@ -35,12 +35,18 @@ bytes, unterminated.
     "MORF"  u32 morphCount
             morphCount x { string name, u32 deltaCount,
                            deltaCount x { u32 vertex, f32 dp[3], f32 dn[3] } }
+    "MASK"  u32 maskCount
+            maskCount x { u32 boneCount, boneCount x u8 }       1 = the clip owns this bone
     "ANIM"  u32 clipCount
             clipCount x { string name, u32 frameCount, f32 frameRate, u32 flags,
-                          u32 trackCount,
+                          i32 mask, u32 trackCount,
                           trackCount x { u32 bone, u8 hasTranslation, u8 hasRotation,
                                          hasTranslation ? f32 t[3] x frameCount,
                                          hasRotation    ? f32 q[4] x frameCount } }
+
+A clip's `mask` indexes "MASK", or is -1 when the clip owns every bone. The table is
+de-duplicated across the file because a bank states only a handful of distinct masks over
+hundreds of clips.
 
 The directory exists so a reader can skip a section it does not understand and so a bank,
 which has no geometry, is the same file shape as a body rather than a special case.
@@ -53,11 +59,16 @@ from elysium_pipeline.formats import bsp, mdl, mdl_skel as S
 #: Bumped whenever a section's payload changes meaning. `FElysiumSkeletalSource` refuses a
 #: file it does not recognise rather than reading a stale layout as if it were current.
 #:
+#: 3 -- a clip carries the index of its per-bone `weight`@0 mask, and the masks themselves ship as
+#: a de-duplicated "MASK" table. Without it a bone the clip leaves at its bind pose and a bone the
+#: clip does not own are both "no track", which is the same bytes for two opposite results when a
+#: partial-body overlay is composed.
+#:
 #: 2 -- ANIM rotations for a bone carrying `SPLIT_ROTATION` are written pre-corrected, so ordinary
 #: inheritance reproduces the pose VtMB draws and the runtime applies no rule of its own. A version
 #: 1 container states the same bytes with the opposite meaning, and nothing in the payload
 #: distinguishes them, so a stale file has to be refused rather than read.
-VERSION = 2
+VERSION = 3
 
 MAGIC = b"ESKM"
 
@@ -338,7 +349,36 @@ def _morph_names(descs, slots):
     return out
 
 
-def _clip_payload(d, bones, clip, bone_map):
+def _bone_mask(d, bones, clip, bone_map, emitted):
+    """This clip's per-bone `weight`@0 gate over the emitted bone list, or None when the clip
+    owns every bone.
+
+    `weight`@0 is a binary authored mask, not a factor: it takes only 0.0 and 1.0 across the
+    whole install, and both retail channel decoders test it against zero before anything else
+    and, on zero, write a zero position and a zero quaternion and read no track at all. So the
+    zero set names the bones the animation does NOT own -- the bones a partial-body overlay
+    leaves to whatever pose it is composed over (`docs/vtmb/animation_and_movers.md` A.4).
+
+    It cannot be recovered from the tracks. A bone the clip owns and does not animate holds its
+    bind pose -- a real authored pose, 1,346 records across the shipped `*_layer` clips -- and a
+    bone outside the mask animates nothing either, so both arrive as "no track" once the
+    channel-less tracks are dropped. Collapsing them either drops the first or stomps the base
+    pose on the second.
+
+    A synthetic root is outside every mask: it is not a bone any animation was authored
+    against, and nothing animates it, so both readings pose it identically.
+    """
+    records = clip.base + struct.unpack_from("<i", d, clip.base + 48)[0]
+    mask = bytearray(emitted)
+    owned = 0
+    for bone in bones:
+        if struct.unpack_from("<f", d, records + bone.index * 32)[0] != 0.0:
+            mask[bone_map[bone.index]] = 1
+            owned += 1
+    return None if owned == len(bones) else bytes(mask)
+
+
+def _clip_payload(d, bones, clip, bone_map, emitted, masks):
     """One clip's tracks, or None if it animates no channel at all.
 
     A bone gets a track only for the channels its animation record actually carries: the
@@ -388,18 +428,36 @@ def _clip_payload(d, bones, clip, bone_map):
         count += 1
     if not count:
         return None
+    # De-duplicated across the file: a bank states a handful of distinct masks over hundreds of
+    # clips (five over the male `move_and_ranged`'s 722 animations), so this is a table plus a
+    # reference rather than a per-bone array per clip.
+    mask = _bone_mask(d, bones, clip, bone_map, emitted)
+    index = -1 if mask is None else masks.setdefault(mask, len(masks))
     header = _string(clip.label.lstrip("@"))
-    header += struct.pack("<IfII", clip.frames, clip.fps or 30.0, clip.flags, count)
+    header += struct.pack("<IfIiI", clip.frames, clip.fps or 30.0, clip.flags, index, count)
     return header + bytes(tracks)
 
 
-def _anim_section(d, bones, clips, bone_map):
+def _anim_section(d, bones, clips, bone_map, emitted, masks):
     """The clips that actually baked, in declaration order. A sequence whose tracks came out
     empty is absent rather than present-and-silent, which is the same rule the manifest's
-    clip list already follows."""
-    payloads = [p for p in (_clip_payload(d, bones, c, bone_map) for c in clips)
+    clip list already follows.
+
+    `masks` accumulates the file's distinct bone masks in index order; it is written out as the
+    "MASK" section once every clip has been read."""
+    payloads = [p for p in (_clip_payload(d, bones, c, bone_map, emitted, masks) for c in clips)
                 if p is not None]
     return struct.pack("<I", len(payloads)) + b"".join(payloads), len(payloads)
+
+
+def _mask_section(masks, emitted):
+    """The distinct bone masks, in the order the clips referenced them."""
+    if not masks:
+        return b""
+    out = bytearray(struct.pack("<I", len(masks)))
+    for mask in masks:
+        out += struct.pack("<I", emitted) + mask
+    return bytes(out)
 
 
 def _assemble(sections):
@@ -448,13 +506,15 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None):
     from elysium_pipeline.formats.mdl_gltf import blend_clip_plan
     own = S.local_sequences(d)
     extra, _blends = blend_clip_plan(d, own)
-    anim_payload, clip_count = _anim_section(d, bones, own + extra, bone_map)
+    masks = {}
+    anim_payload, clip_count = _anim_section(d, bones, own + extra, bone_map, len(rows), masks)
 
     blob = _assemble([
         (b"SKEL", _skel_section(rows)),
         (b"MATL", _matl_section(matnames, matinfo)),
         (b"MESH", mesh_payload),
         (b"MORF", morph_payload),
+        (b"MASK", _mask_section(masks, len(rows))),
         (b"ANIM", anim_payload),
     ])
     os.makedirs(out_dir, exist_ok=True)
@@ -487,7 +547,8 @@ def write_bank(idx, model_path, out_dir, stem):
     bones = S.read_bones(d)
     extra, _blends = blend_clip_plan(d, clips)
     rows, bone_map = unreal_bones(bones)
-    anim_payload, count = _anim_section(d, bones, clips + extra, bone_map)
+    masks = {}
+    anim_payload, count = _anim_section(d, bones, clips + extra, bone_map, len(rows), masks)
     if not count:
         return None
 
@@ -495,8 +556,10 @@ def write_bank(idx, model_path, out_dir, stem):
     os.makedirs(banks_dir, exist_ok=True)
     path = os.path.join(banks_dir, stem + ".eskm")
     with open(path, "wb") as fh:
-        fh.write(_assemble([(b"SKEL", _skel_section(rows)), (b"ANIM", anim_payload)]))
-    print(f"  eskm bank {stem}: {len(bones)} bones, {count} clips "
+        fh.write(_assemble([(b"SKEL", _skel_section(rows)),
+                            (b"MASK", _mask_section(masks, len(rows))),
+                            (b"ANIM", anim_payload)]))
+    print(f"  eskm bank {stem}: {len(bones)} bones, {count} clips, {len(masks)} bone mask(s) "
           f"-> {path} ({os.path.getsize(path) // 1024} KB)")
     return dict(stem=stem, eskm="banks/" + os.path.basename(path), model=model_path,
                 bones=len(bones), clips=count)

@@ -253,7 +253,7 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 		return false;
 	}
 	// No `elysium.NpcAnim 0` fallback. The single-node instance the A/B drops to plays one sequence
-	// and composes nothing, so there is no honest way to lay a delta over it.
+	// and composes nothing, so there is no honest way to lay a layer over it.
 	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
 	return Inst != nullptr && Inst->PlayLayer(Anim, Weight);
 }

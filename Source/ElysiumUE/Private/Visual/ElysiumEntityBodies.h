@@ -105,11 +105,12 @@ public:
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
-	// Compose a `_delta` autolayer over whatever this body is already playing. Same resolution
-	// chain as PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself
-	// is independent of the standing clip and survives a stance change. False when the label does
-	// not resolve, when the body has no animation host, or when the resolved sequence is not a
-	// baked additive (`UElysiumNpcAnimInstance::PlayLayer`).
+	// Compose an autolayer over whatever this body is already playing — a `_delta` additive or a
+	// masked partial-body `_layer`, decided from the sequence. Same resolution chain as PlayNpcClip,
+	// so a layer owned by a shared bank is reached by label; the layer itself is independent of the
+	// standing clip and survives a stance change. False when the label does not resolve, when the
+	// body has no animation host, or when the resolved sequence is neither kind
+	// (`UElysiumNpcAnimInstance::PlayLayer`).
 	bool PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		float Weight);
 	void StopNpcLayers(USkeletalMeshComponent* Body);

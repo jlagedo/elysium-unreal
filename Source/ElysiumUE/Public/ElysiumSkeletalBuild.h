@@ -74,6 +74,11 @@ public:
 	 *   has never had -- the Gangrel hair chain, the Ventrue ponytail. Those tracks are dropped, and
 	 *   `OutDroppedTracks` counts them so a bake that quietly loses more than it should is visible.
 	 *
+	 * A clip that owns only part of the rig -- VtMB's partial-body `*_layer` overlays -- also gets a
+	 * `UBlendProfile` blend mask on the shared skeleton and a `UElysiumAnimLayerMask` naming it, and
+	 * its owned-but-unanimated bones are written out at the container's bind pose rather than left
+	 * to the skeleton's reference pose.
+	 *
 	 * Returns an empty string on success, otherwise the first thing that went wrong.
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")

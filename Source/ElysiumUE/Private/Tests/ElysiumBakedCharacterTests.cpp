@@ -42,11 +42,13 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumSkeletalSource.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendProfile.h"
 #include "Animation/AnimTypes.h"
 #include "Animation/AnimationPoseData.h"
 #include "BonePose.h"
@@ -124,6 +126,10 @@ namespace
 	// their 118 between them are all the same shape.
 	constexpr int32 GMaxAdditiveClipsPerModel = 4;
 
+	// How many masked `*_layer` clips per model to check. The whole install states four distinct
+	// masks over 209 clips, so a handful covers every shape a wider slice would reach.
+	constexpr int32 GMaxLayerClipsPerModel = 4;
+
 	// The additive delta is read back through the COMPRESSED data, unlike everything else here,
 	// because that is the only form the runtime applier ever sees and the only one the additive
 	// bake-out has run over. So these are a compressor's tolerance rather than a serialiser's --
@@ -180,6 +186,17 @@ namespace
 		{
 			return false;
 		}
+#if WITH_EDITOR
+		// PIN THE PATH, or this asserts whichever one the process happened to be ready to serve.
+		// `GetAnimationPose` falls back to the raw data model whenever the compressed data for the
+		// current platform is not resident yet, and compression runs asynchronously after a bake --
+		// so the same call answered out of two different representations depending on how much work
+		// happened earlier in the same run, which made this test's result depend on how many
+		// sequences the checks above it had loaded first. Waiting makes it always the compressed
+		// data, which is the only form a cooked build ships and the only one the additive bake-out
+		// has run over.
+		const_cast<UAnimSequence*>(Sequence)->WaitOnExistingCompression();
+#endif
 		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
 		TArray<FBoneIndexType> RequiredBones;
 		RequiredBones.SetNumUninitialized(Ref.GetNum());
@@ -198,6 +215,15 @@ namespace
 		Curve.InitFrom(Container);
 		UE::Anim::FStackAttributeContainer Attributes;
 		FAnimationPoseData PoseData(Pose, Curve, Attributes);
+		if (!Sequence->IsCompressedDataValid())
+		{
+			// Reported rather than worked around: after the wait above this should not happen, and
+			// if it does the reading below came out of the raw data model and the compressed data --
+			// the only form a cooked build ships -- was never checked at all.
+			UE_LOG(LogTemp, Warning,
+				TEXT("%s: no compressed data after waiting on compression, so this reads raw"),
+				*Sequence->GetName());
+		}
 		Sequence->GetAnimationPose(PoseData, FAnimExtractContext(Time));
 
 		OutLocals.SetNum(Ref.GetNum());
@@ -301,6 +327,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	double BindTranslationCm = 0.0;
 	TArray<UObject*> KeepAlive;
 	int32 AdditiveClips = 0;
+	int32 LayerClips = 0;
 
 	// The `_delta` round-trip, for one container's worth of clips against one baked body.
 	//
@@ -401,6 +428,123 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				}
 				if (!bSound)
 				{
+					break;
+				}
+			}
+		}
+	};
+
+	// The masked partial-body overlays, the other kind of autolayer. Where an additive is verified
+	// by its numbers, one of these is verified by its GATE: a `*_layer` sequence is composed by a
+	// complementary-weight blend that replaces the bones it owns, so what has to survive the bake
+	// is which bones those are and what the clip poses them at where it animates nothing.
+	//
+	// Both halves fail silently and neither is visible in the sequence's own tracks. A lost mask
+	// composes the overlay over the whole rig at full weight, which erases the body's stance from
+	// the waist down; a lost bind track leaves an owned bone on the shared skeleton's reference
+	// pose, which is another body of the family's bind rather than this clip's own.
+	auto CheckLayerMasks = [&](const USkeletalMesh* Baked, const FString& Owner,
+		const FElysiumSkeletalSource& Container)
+	{
+		int32 Taken = 0;
+		for (const FElysiumSourceClip& Clip : Container.Clips)
+		{
+			if (Taken >= GMaxLayerClipsPerModel)
+			{
+				break;
+			}
+			// An additive states its own mask through the additive identity and is given no mask
+			// asset; a clip with no mask at all owns the whole rig and needs none.
+			if ((Clip.Flags & 0x4) != 0 || !Container.Masks.IsValidIndex(Clip.Mask)
+				|| Clip.FrameCount <= 0 || Clip.Tracks.IsEmpty())
+			{
+				continue;
+			}
+			UAnimSequence* BakedLayer = ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Clip.Name);
+			if (BakedLayer == nullptr)
+			{
+				AddInfo(FString::Printf(TEXT("%s '%s': not on the baked mount"), *Owner, *Clip.Name));
+				continue;
+			}
+			KeepAlive.Add(BakedLayer);
+			++Taken;
+			++LayerClips;
+
+			const UElysiumAnimLayerMask* Meta =
+				BakedLayer->FindMetaDataByClass<UElysiumAnimLayerMask>();
+			USkeleton* Skeleton = BakedLayer->GetSkeleton();
+			const UBlendProfile* Profile = Meta != nullptr && Skeleton != nullptr
+				? Skeleton->GetBlendProfile(Meta->Profile) : nullptr;
+			if (Profile == nullptr)
+			{
+				int32 Owned = 0;
+				for (const uint8 In : Container.Masks[Clip.Mask].Bones)
+				{
+					Owned += In != 0 ? 1 : 0;
+				}
+				AddError(FString::Printf(
+					TEXT("%s '%s': the container has it owning %d of %d bones and the baked sequence "
+					     "names %s, so it would compose over the whole rig"),
+					*Owner, *Clip.Name, Owned, Container.Bones.Num(),
+					Meta == nullptr ? TEXT("no blend mask") : *Meta->Profile.ToString()));
+				continue;
+			}
+
+			const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+			const FElysiumSourceMask& Mask = Container.Masks[Clip.Mask];
+			TSet<int32> Tracked;
+			for (const FElysiumSourceTrack& Track : Clip.Tracks)
+			{
+				Tracked.Add(Track.Bone);
+			}
+
+			bool bMaskSound = true;
+			for (int32 Bone = 0; Bone < Container.Bones.Num() && bMaskSound; ++Bone)
+			{
+				const FName BoneName = Container.Bones[Bone].Name;
+				if (Ref.FindBoneIndex(BoneName) == INDEX_NONE)
+				{
+					// A bank names bones this family has never had; they leave the mask for the
+					// same reason their tracks are dropped.
+					continue;
+				}
+				const bool bOwned = Mask.Bones[Bone] != 0;
+				++Samples;
+				if ((Profile->GetBoneBlendScale(BoneName) > 0.0f) != bOwned)
+				{
+					AddError(FString::Printf(
+						TEXT("%s '%s' bone '%s': the container %s it and the blend mask %s"),
+						*Owner, *Clip.Name, *BoneName.ToString(),
+						bOwned ? TEXT("owns") : TEXT("masks out"),
+						bOwned ? TEXT("does not") : TEXT("owns it")));
+					bMaskSound = false;
+					break;
+				}
+				// An owned bone the clip animates nothing on holds its BIND pose, which is a pose
+				// the overlay states rather than an absence. The bake writes it out; without that
+				// the sequence would evaluate to the shared skeleton's reference pose here.
+				if (!bOwned || Tracked.Contains(Bone))
+				{
+					continue;
+				}
+				FTransform Held;
+				if (!SampleBone(BakedLayer, BoneName, 0.0, Held))
+				{
+					continue;
+				}
+				const FTransform& Bind = Container.Bones[Bone].Local;
+				const double Degrees = FMath::RadiansToDegrees(
+					Held.GetRotation().AngularDistance(Bind.GetRotation()));
+				const double Centimetres =
+					FVector::Distance(Held.GetTranslation(), Bind.GetTranslation());
+				++Samples;
+				if (Degrees > GComposedRotationToleranceDeg || Centimetres > GPositionTolerance)
+				{
+					AddError(FString::Printf(
+						TEXT("%s '%s' bone '%s': owned by the mask and unanimated, so it holds its "
+						     "bind pose -- the bake has it %.4f deg / %.4f cm away"),
+						*Owner, *Clip.Name, *BoneName.ToString(), Degrees, Centimetres));
+					bMaskSound = false;
 					break;
 				}
 			}
@@ -595,6 +739,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		// wrote. Runs before the composed-pose loop below because it answers a different question
 		// and shares none of its machinery.
 		CheckAdditives(Baked, Stem, Source);
+		CheckLayerMasks(Baked, Stem, Source);
 		{
 			FElysiumNpcClipSet Vocabulary;
 			FString VocabularyError;
@@ -621,6 +766,10 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					continue;
 				}
 				CheckAdditives(Baked, Bank, BankSource);
+				// The same bank, and not a coincidence: the two kinds of autolayer are declared
+				// together on `move_and_ranged`, one masked `*_layer` and one `_delta` per host
+				// sequence (`docs/vtmb/animation_and_movers.md` A.3).
+				CheckLayerMasks(Baked, Bank, BankSource);
 			}
 		}
 
@@ -755,7 +904,8 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d bone samples, %d `_delta` clip(s) ")
-		TEXT("round-tripped through the additive bake"), Compared, Samples, AdditiveClips));
+		TEXT("round-tripped through the additive bake, %d masked `_layer` clip(s) checked against ")
+		TEXT("their blend masks"), Compared, Samples, AdditiveClips, LayerClips));
 	AddInfo(FString::Printf(
 		TEXT("bind-frame delta against the glTFRuntime path: %.4f deg / %.4f cm at most, after ")
 		TEXT("each rig's own root is divided out -- expected, and not a defect: the two paths frame ")

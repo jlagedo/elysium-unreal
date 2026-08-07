@@ -69,6 +69,19 @@ struct FElysiumSourceTrack
 	TArray<FQuat4f> Rotations;
 };
 
+/**
+ * One clip's per-bone `weight`@0 gate, indexed by bone: 1 for a bone the clip owns, 0 for one it
+ * leaves to whatever pose it is composed over.
+ *
+ * The distinction only exists for a clip composed as a layer, and it is not recoverable from the
+ * tracks: an owned bone the clip does not animate holds its BIND pose -- a real authored pose --
+ * and an unowned bone animates nothing either, so both arrive with no track.
+ */
+struct FElysiumSourceMask
+{
+	TArray<uint8> Bones;
+};
+
 struct FElysiumSourceClip
 {
 	FString Name;
@@ -76,6 +89,8 @@ struct FElysiumSourceClip
 	float FrameRate = 30.0f;
 	/** The raw `StudioSeqDesc.flags`; bit 0x4 marks the additive `_delta` family. */
 	uint32 Flags = 0;
+	/** Index into Masks, or INDEX_NONE when this clip owns every bone. */
+	int32 Mask = INDEX_NONE;
 	TArray<FElysiumSourceTrack> Tracks;
 };
 
@@ -88,6 +103,8 @@ struct FElysiumSkeletalSource
 	/** Three per triangle, indexing Vertices, already wound for Unreal. */
 	TArray<uint32> Indices;
 	TArray<FElysiumSourceMorph> Morphs;
+	/** De-duplicated across the file; a clip references one by index. */
+	TArray<FElysiumSourceMask> Masks;
 	TArray<FElysiumSourceClip> Clips;
 
 	/**

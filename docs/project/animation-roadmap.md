@@ -62,9 +62,10 @@ file and each is recorded beside the faithful behaviour in the topic that owns i
 
 ## What it supersedes
 
-- **A bespoke layer stage.** An earlier design added a custom local-space pose-combine node, a
-  hand-written mask resolver, and a two-slot player array to the animation proxy. Replaced by
-  `FAnimNode_LayeredBoneBlend` over baked blend profiles.
+- **A bespoke layer stage as the destination.** The animation proxy composes both kinds of layer
+  itself because there is no graph to hold a layered blend or an additive node yet. What is
+  superseded is treating that stage as the design rather than as the stand-in; ANM4 says what
+  replaces it and what that costs.
 - **A hand-rolled grid resolver.** `ElysiumBlendGrids`'s nearest-cell pick computes interpolation
   fractions and discards them. Replaced by baked blend spaces; the parse survives for provenance
   and for the per-cell ground speed the motor consumes.
@@ -121,6 +122,23 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   *Acceptance:* every autolayer target resolves to a label, the orphan census reproduces, and the
   mask count per bank is 5.
 
+  **The mask half is delivered.** The character container carries a de-duplicated mask table and a
+  per-clip index into it, and the character bake turns every mask a non-additive clip references
+  into a blend profile on the shared skeleton, named for the bones it owns, with the clip carrying
+  the profile's name as its own metadata. The male `move_and_ranged` bank ships **4** masks over its
+  826 exported clips plus the unmasked state, which is the evidence table's five; `misc` ships one
+  more. Because a profile is named for the bones it owns *after* they resolve against the skeleton,
+  masks that differ only in bones a family does not have become one asset: the baked male family
+  skeletons carry **4** profiles and the female **5**.
+  `Elysium.Content.BakedCharacterParity` asserts each baked layer's profile against the container's
+  mask bone for bone, and asserts that a bone the mask owns and the clip does not animate holds the
+  container's bind pose rather than the skeleton's reference pose.
+
+  **The binding half is not**, and its blocker is gone rather than open: `numautolayers`@660 /
+  `autolayerindex`@664 are decoded and censused in `docs/vtmb/animation_and_movers.md` A.3, so what
+  remains is exporting the table across the include DAG, not reverse-engineering it. Until it ships,
+  a layer is played by explicit request and nothing in gameplay selects one.
+
 - [ ] **ANM3 Bake the blend spaces.** A `UBlendSpace1D` per 9×1 `move_yaw` fan and a `UBlendSpace`
   per 3×3 aim grid, samples placed at the axis values the grid declares. The −180/+180 endpoint
   cells are already duplicates in the authored data, which is how a wrapping axis is authored.
@@ -139,6 +157,12 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
 
   Montage slots also un-collapse a stated simplification: gesture and sequence currently share one
   clip slot, so a scene's gesture overwrites its sequence instead of layering over it.
+
+  **This is also what retires the proxy's own layer composition.** Both combines run there today —
+  a `_delta` accumulated post-multiplied and a masked `*_layer` blended under its profile, in two
+  slots of their own, under `elysium.AnimLayers` — because there is no graph to plug a layered blend
+  or an additive node into. The blend profiles they read are the assets `FAnimNode_LayeredBoneBlend`
+  consumes unchanged, so the graph replaces the mechanism without re-baking anything.
 
 - [ ] **ANM5 Drive it.** Locomotion state and `move_yaw` for the cast, from the motor's own
   velocity and facing; and the player's gait from the movement component's reported state. The

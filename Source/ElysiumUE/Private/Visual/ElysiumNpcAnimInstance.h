@@ -77,19 +77,24 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	// and a free-running clip keeps running — it only moves where it is running from.
 	void ResyncPosition(float PositionSeconds);
 
-	// --- additive layers -----------------------------------------------------------------------
+	// --- autolayers ----------------------------------------------------------------------------
 	//
 	// Start or re-weight one autolayer. Weight is retail's `layer_weight`, the scalar the
-	// accumulator receives from its caller; 1 is the whole delta. Asking for a sequence already on
+	// accumulator receives from its caller; 1 is the whole layer. Asking for a sequence already on
 	// a layer only re-weights it, so a caller may drive the weight every frame without restarting
-	// the clip. False when the sequence is not a baked additive — the delta the applier needs is
-	// only recoverable from a sequence Unreal itself stamped additive, see RequestAdditive.
-	bool RequestAdditive(UAnimSequence* Sequence, bool bLoop, float Weight);
+	// the clip.
+	//
+	// Which combine it goes through is the SEQUENCE's property, not the caller's — retail's one
+	// accumulator branches on the clip's own flags. An additive `_delta` accumulates
+	// post-multiplied over every bone; an ordinary `*_layer` is a complementary-weight blend gated
+	// by the bones that clip owns. False when the sequence is neither, which is the gate that keeps
+	// the second honest — see RequestLayer.
+	bool RequestLayer(UAnimSequence* Sequence, bool bLoop, float Weight);
 	// Drop one layer, or every layer. Dropping is immediate: an autolayer carries no fade of its
 	// own, and the weight IS the ramp.
-	void StopAdditive(const UAnimSequence* Sequence);
-	void StopAllAdditives();
-	int32 NumAdditiveLayers() const;
+	void StopLayer(const UAnimSequence* Sequence);
+	void StopAllLayers();
+	int32 NumLayers() const;
 
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
@@ -122,14 +127,18 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 private:
 	// The body half of Evaluate: the crossfade between the two sequence players.
 	void EvaluateBody(FPoseContext& Output);
-	// The autolayer half: VtMB's `_delta` layers accumulated onto the body pose in LOCAL space,
-	// post-multiplied. Runs between the body and the composition stages, which is retail's own
-	// order — see the definition.
-	void EvaluateAdditives(FPoseContext& Output);
-	// `elysium.AdditiveDump`'s one-shot readout: what the layer pose actually contains, per bone,
-	// so the delta the applier reads can be checked against the container's own numbers instead of
-	// against a screenshot.
-	void DumpAdditivePose(int32 Layer, const FPoseContext& Delta);
+	// The autolayer half: VtMB's layers composed onto the body pose in LOCAL space — a `_delta`
+	// accumulated post-multiplied, a `*_layer` blended under its bone mask. Runs between the body
+	// and the composition stages, which is retail's own order — see the definition.
+	void EvaluateLayers(FPoseContext& Output);
+	// Read one slot's bone gate out of the sequence's own metadata and the skeleton's blend
+	// profile. Game thread, at the request: the worker has no business resolving an asset.
+	void ResolveLayerMask(int32 Layer, const UAnimSequence* Sequence,
+		const class UElysiumAnimLayerMask* Mask);
+	// `elysium.LayerDump`'s one-shot readout: what the layer pose actually contains, per bone, so
+	// what the applier reads can be checked against the container's own numbers instead of against
+	// a screenshot.
+	void DumpLayerPose(int32 Layer, const FPoseContext& Pose);
 	// The composition half: split inheritance, then axis interpolation, in component space over
 	// whatever the body produced. Order is load-bearing.
 	void EvaluateComposition(FPoseContext& Output);
@@ -176,6 +185,16 @@ private:
 	// has no authored transition, and a caller that wants one ramps this itself.
 	float LayerWeights[MaxLayers] = {};
 	bool bLayerNeedsReinit[MaxLayers] = {};
+	// Which combine this slot's sequence asks for, latched at the request rather than re-derived
+	// per frame: `IsValidAdditive()` walks the sequence's additive settings, and the answer cannot
+	// change while the slot holds it.
+	bool bLayerAdditive[MaxLayers] = {};
+	// The bones an ordinary layer owns, as retail's per-bone `weight`@0 gate: 1 inside the mask, 0
+	// outside, indexed by SKELETON bone index. Empty for a layer that owns the whole rig and for
+	// every additive, where the mask is already expressed by the additive identity. Resolved on the
+	// game thread at the request, off the sequence's own `UElysiumAnimLayerMask` — the worker has
+	// no business loading an asset, and the mask cannot change under a running layer.
+	TArray<float> LayerMasks[MaxLayers];
 
 	// A slot no live clip is using, evicting the oldest fade when every slot is busy.
 	int32 TakeFreeSlot();
@@ -222,15 +241,19 @@ public:
 
 	// --- autolayers ----------------------------------------------------------------------------
 	//
-	// Compose a VtMB `_delta` sequence over the body pose as an additive layer. Weight is retail's
-	// own layer scalar; re-asking with a new weight re-weights the running layer rather than
-	// restarting it. Independent of PlayClip in every way: a stance change underneath does not
-	// touch a layer, and a layer does not transition.
+	// Compose a VtMB autolayer over the body pose. Weight is retail's own layer scalar; re-asking
+	// with a new weight re-weights the running layer rather than restarting it. Independent of
+	// PlayClip in every way: a stance change underneath does not touch a layer, and a layer does
+	// not transition.
 	//
-	// False when the sequence is not a baked additive. Only the `.eskm` bake writes the delta in a
-	// form Unreal hands back as a delta (`AdditiveAnimType`), so a `_delta` built by glTFRuntime is
-	// refused rather than composed out of a pose that is really the reference pose for every bone
-	// the layer does not touch.
+	// Either kind, decided from the sequence: a `_delta` accumulates as an additive over the whole
+	// rig, a partial-body `*_layer` blends in under the bones it owns.
+	//
+	// False when the sequence is neither — a plain pose clip, or one built by glTFRuntime. Only the
+	// `.eskm` bake writes a delta in the form Unreal hands back as a delta (`AdditiveAnimType`) and
+	// only it carries the bone mask (`UElysiumAnimLayerMask`), so an unbaked layer is refused rather
+	// than composed out of a pose that is really the reference pose for every bone it does not
+	// touch. Layering therefore requires `elysium.BakedCharacters 1`.
 	bool PlayLayer(UAnimSequence* Sequence, float Weight = 1.f, bool bLoop = true);
 	void StopLayer(UAnimSequence* Sequence);
 	void StopAllLayers();

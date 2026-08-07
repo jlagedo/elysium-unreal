@@ -95,6 +95,12 @@ private:
 	// Parallel to Clips — whether the label is an additive layer rather than a pose. Read off the
 	// vocabulary once per stem, because the answer changes what a broken-looking body means.
 	TArray<bool> ClipAdditive;
+	// Parallel to Clips — whether the label is a masked partial-body overlay, the other kind of
+	// autolayer. Taken from the NAME, unlike ClipAdditive: the mask that actually decides this lives
+	// in the container and reaches the runtime on the baked sequence, and the vocabulary sidecar the
+	// list is built from carries neither. It is a row hint, not the decision — the pick still goes
+	// through the same door as everything else and a wrong hint comes back as a refusal on screen.
+	TArray<bool> ClipOverlay;
 	// Parallel to Clips — the stem whose file carries the animation: the body itself for its own
 	// dialogue clips, a shared bank otherwise. A body resolves most of its vocabulary through banks
 	// it has nothing else to do with, and which file a clip came out of is the first thing worth
@@ -119,7 +125,7 @@ private:
 	// Filters over the clip list, all ANDed. Empty owner means every owner; the two enums are
 	// 0 = everything, then one entry per value worth isolating.
 	FString OwnerFilter;
-	int32 KindFilter = 0;       // 1 = poses only, 2 = additive layers only
+	int32 KindFilter = 0;       // 1 = poses only, 2 = autolayers only (either kind)
 	int32 MotionFilter = 0;     // 1 = carries the root, 2 = root held. Needs the scan below.
 
 	// Parallel to Clips: 0 unknown, 1 the clip moves Bip01, 2 it holds it. VtMB's vocabulary does

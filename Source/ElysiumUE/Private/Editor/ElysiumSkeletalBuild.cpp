@@ -4,6 +4,7 @@
 #include "Animation/AnimData/IAnimationDataController.h"
 #include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendProfile.h"
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -22,6 +23,7 @@
 #include "SkeletalMeshAttributes.h"
 #include "StaticMeshAttributes.h"
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
@@ -555,6 +557,104 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// what says "another clan's hair chain" rather than "the merge dropped something".
 	TSet<FName> Unresolved;
 
+	// --- blend masks ---------------------------------------------------------------------------
+	// A layer sequence owns some of the rig and leaves the rest to the pose it is composed over,
+	// stated per bone as the animation record's `weight`@0 (`docs/vtmb/animation_and_movers.md`
+	// A.4). That gate becomes one `UBlendProfile` in BlendMask mode on the SHARED skeleton, which
+	// is the asset a layered blend already consumes, and the sequence carries its name.
+	//
+	// The profile is content-addressed by the bones it owns, so the same gate reached from two
+	// banks resolves to one asset and a re-bake of a different slice cannot rename it out from
+	// under a sequence already pointing at it. The whole install states four distinct layer masks,
+	// so this is a handful of assets per family rather than a table per clip.
+	struct FMaskProfile
+	{
+		FName Profile = NAME_None;
+		int32 OwnedBones = 0;
+		bool bResolved = false;
+	};
+	TArray<FMaskProfile> MaskProfiles;
+	MaskProfiles.SetNum(Source.Masks.Num());
+	int32 ProfilesCreated = 0;
+
+	auto MaskProfileFor = [&](const int32 MaskIndex) -> const FMaskProfile&
+	{
+		FMaskProfile& Entry = MaskProfiles[MaskIndex];
+		if (Entry.bResolved)
+		{
+			return Entry;
+		}
+		Entry.bResolved = true;
+
+		TArray<FName> Owned;
+		const FElysiumSourceMask& Mask = Source.Masks[MaskIndex];
+		for (int32 Bone = 0; Bone < Source.Bones.Num(); ++Bone)
+		{
+			// A bank names bones this family has never had, and they leave the mask for the same
+			// reason their tracks are dropped: there is nothing here for them to own.
+			if (Mask.Bones[Bone] != 0 && RefSkeleton.FindBoneIndex(Source.Bones[Bone].Name) != INDEX_NONE)
+			{
+				Owned.Add(Source.Bones[Bone].Name);
+			}
+		}
+		if (Owned.IsEmpty())
+		{
+			return Entry;
+		}
+		Owned.Sort([](const FName& A, const FName& B) { return A.Compare(B) < 0; });
+		FString Joined;
+		for (const FName& BoneName : Owned)
+		{
+			Joined += BoneName.ToString();
+			Joined += TEXT("|");
+		}
+		Entry.Profile = FName(*FString::Printf(TEXT("ElysiumLayerMask_%08X"), FCrc::StrCrc32(*Joined)));
+		Entry.OwnedBones = Owned.Num();
+		if (Skeleton->GetBlendProfile(Entry.Profile) == nullptr)
+		{
+			UBlendProfile* Profile = Skeleton->CreateNewBlendProfile(Entry.Profile);
+			// The mode FIRST, and it is not cosmetic. An entry equal to the mode's own default is
+			// not stored, and that default is 0 for a blend mask against 1 for every other mode --
+			// so writing the weights while the profile is still WeightFactor discards every one of
+			// them and leaves an empty profile, which reads as owning the whole rig.
+			Profile->Mode = EBlendProfileMode::BlendMask;
+			for (const FName& BoneName : Owned)
+			{
+				Profile->SetBoneBlendScale(BoneName, 1.0f, /*bRecurse=*/false, /*bCreate=*/true);
+			}
+			++ProfilesCreated;
+		}
+		return Entry;
+	};
+
+	// Resolved and saved BEFORE the first sequence is written, rather than as each masked clip is
+	// reached. The profiles live on the skeleton, which this pass does not otherwise touch — the
+	// mesh pass saved it before any clip was read — so leaving the write until the end would
+	// interleave a save of the skeleton with saves of sequences bound to it. Doing it up front
+	// keeps the bake's order the same whether or not a container happens to carry a mask.
+	//
+	// An additive is skipped here for the reason given at its own branch below: its mask needs no
+	// asset, and creating one would put a profile on the skeleton that nothing ever reads.
+	for (const FElysiumSourceClip& Clip : Source.Clips)
+	{
+		if ((Clip.Flags & 0x4) == 0 && Source.Masks.IsValidIndex(Clip.Mask))
+		{
+			MaskProfileFor(Clip.Mask);
+		}
+	}
+	if (ProfilesCreated > 0)
+	{
+		UPackage* SkeletonPackage = Skeleton->GetPackage();
+		if (SkeletonPackage == nullptr || !SavePackageTo(SkeletonPackage, SkeletonPackage->GetName()))
+		{
+			return FString::Printf(TEXT("could not save %s after adding %d blend mask(s)"),
+				*SkeletonPackageName, ProfilesCreated);
+		}
+		UE_LOG(LogElysiumSkeletalBuild, Display, TEXT("%s: %d blend mask(s) on %s"),
+			*FPaths::GetBaseFilename(SourcePath), ProfilesCreated,
+			*FPackageName::GetShortName(SkeletonPackageName));
+	}
+
 	for (const FElysiumSourceClip& Clip : Source.Clips)
 	{
 		if (Clip.FrameCount <= 0 || Clip.Tracks.IsEmpty())
@@ -596,7 +696,19 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			Sequence->RefPoseType = ABPT_RefPose;
 		}
 
+		// Resolved in the pre-pass above. An ADDITIVE's mask needs no asset, and giving it one would
+		// be an asset nothing reads: a bone outside the mask animates nothing, the exporter drops
+		// its channel-less track, and a missing track on an additive evaluates to the additive
+		// identity -- so the bone already contributes no change and gating it would be the same
+		// no-op. That equivalence belongs to the additive identity, not to the mask, so it does not
+		// carry over to an ordinary layer, where a masked bone must keep the BASE pose and an owned
+		// one with no track holds its BIND.
+		const FMaskProfile* MaskProfile = !bAdditive && MaskProfiles.IsValidIndex(Clip.Mask)
+			&& MaskProfiles[Clip.Mask].Profile != NAME_None ? &MaskProfiles[Clip.Mask] : nullptr;
+
 		int32 BoundTracks = 0;
+		TSet<int32> Tracked;
+		Tracked.Reserve(Clip.Tracks.Num());
 		for (const FElysiumSourceTrack& Track : Clip.Tracks)
 		{
 			if (!Source.Bones.IsValidIndex(Track.Bone))
@@ -658,7 +770,37 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			}
 			Controller.AddBoneCurve(BoneName, false);
 			Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false);
+			Tracked.Add(Track.Bone);
 			++BoundTracks;
+		}
+
+		// A bone the overlay OWNS and does not animate holds its BIND pose, and that is a real
+		// authored pose rather than an absence -- 1,346 records across the shipped `*_layer` clips.
+		// The exporter drops a channel-less track, so without this the sequence evaluates to the
+		// SHARED SKELETON's reference pose there, which is whichever body of the family seeded it,
+		// and the overlay would quietly pull those bones onto another model's bind.
+		if (MaskProfile != nullptr)
+		{
+			const FElysiumSourceMask& Mask = Source.Masks[Clip.Mask];
+			for (int32 Bone = 0; Bone < Source.Bones.Num(); ++Bone)
+			{
+				const FName BoneName = Source.Bones[Bone].Name;
+				if (Mask.Bones[Bone] == 0 || Tracked.Contains(Bone)
+					|| RefSkeleton.FindBoneIndex(BoneName) == INDEX_NONE)
+				{
+					continue;
+				}
+				const FTransform& Bind = Source.Bones[Bone].Local;
+				TArray<FVector3f> Positions;
+				TArray<FQuat4f> Rotations;
+				TArray<FVector3f> Scales;
+				Positions.Init(FVector3f(Bind.GetTranslation()), KeyCount);
+				Rotations.Init(FQuat4f(Bind.GetRotation()), KeyCount);
+				Scales.Init(FVector3f::OneVector, KeyCount);
+				Controller.AddBoneCurve(BoneName, false);
+				Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false);
+				++BoundTracks;
+			}
 		}
 
 		Controller.NotifyPopulated();
@@ -672,6 +814,17 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			Sequence->Rename(nullptr, GetTransientPackage(),
 				REN_DontCreateRedirectors | REN_NonTransactional);
 			continue;
+		}
+
+		// Carried ON the sequence rather than in a table beside it: a clip that says which bones it
+		// owns can be composed correctly by anything that opens it, which is the whole point of
+		// baking assets instead of rules.
+		if (MaskProfile != nullptr)
+		{
+			UElysiumAnimLayerMask* LayerMask = NewObject<UElysiumAnimLayerMask>(Sequence);
+			LayerMask->Profile = MaskProfile->Profile;
+			LayerMask->OwnedBones = MaskProfile->OwnedBones;
+			Sequence->AddMetaData(LayerMask);
 		}
 
 		Sequence->PostEditChange();

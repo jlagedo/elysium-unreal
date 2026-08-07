@@ -53,9 +53,27 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   while VtMB post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). Composing
   one of these through `FAnimNode_ApplyAdditive` therefore reproduces the wrong order, and the
   family needs a post-multiplying applier.
+
+  **An additive sequence's raw keys are not what ships.** Setting the additive type makes the
+  compressor bake the sequence down by subtracting its base — the skeleton's reference pose —
+  before compressing, so the delta has to be written *composed onto* that pose for the subtraction
+  to hand it back. A bake that writes the bare delta ships every layered bone rotated by its own
+  inverse bind, from a run that logs nothing wrong.
 - **Blend profiles** in blend-mask mode, one per distinct per-bone mask. The mask is binary in the
   source data and there are only a handful of distinct masks per bank, so this is a small table on
-  the skeleton rather than per-clip data.
+  the skeleton rather than per-clip data. A profile is named for the bones it owns rather than for
+  the clip or the slice that first reached it, so the same mask arriving from two banks resolves to
+  one asset and a re-bake cannot rename one out from under a sequence pointing at it.
+
+  **Which mask a clip owns is carried on the clip**, as animation metadata naming the profile. A
+  sequence that states which bones it owns can be composed correctly by anything that opens it,
+  including the animation editor, which is the same reason the assets are baked at all.
+
+  A masked clip also needs one thing written that the source file states by omission: a bone the
+  clip **owns and does not animate** holds its bind pose, which is an authored pose rather than an
+  absence, so the bake writes it out as a constant track. Left implicit it would evaluate to the
+  shared skeleton's reference pose — whichever body of the family seeded it — and the overlay would
+  quietly pull those bones onto another model's bind.
 - **Blend spaces** from the exported grids: one-dimensional for a `move_yaw` fan, two-dimensional
   for an aim grid.
 - **Morph-target curve metadata**, authored at bake. Registering it at runtime transacts by default
@@ -80,6 +98,11 @@ hand-written instance:
   land, and it is what makes a masked bone come from the base pose rather than from the reference
   pose. The binding — which layer rides which base — is exported data the graph consults, not a
   mechanism the graph implements.
+
+  The arithmetic underneath is a **complementary-weight** blend gated per bone by the mask —
+  `nlerp(base, layer, s)` on rotation and the matching lerp on translation, `s` the layer's weight
+  times the bone's mask bit. An overlay therefore *replaces* the bones it owns rather than adding to
+  them, which is what separates it from the additive below and why the two are never the same node.
 - **Additive nodes** for the `_delta` family.
 - **Montage slots** for one-shots: scripted-sequence clips, scene gestures, disciplines, and the
   cinematic playback path. A slot is also what keeps a gesture layered over a sequence instead of
@@ -160,8 +183,17 @@ self-describing, and a table written by that exporter in that basis inherits the
 it costs a factor of 100 on every driven bone's translation, silently. The check that catches it is
 the driven bone's own bind position, which arrives independently through the mesh.
 
-The mask is carried as bone **names** rather than indices, for the same reason retargeting works by
-name: a bank's bone order is not a character's.
+The mask ships **inside the character container**, as a de-duplicated table the clips index into,
+rather than beside it: it is per animation record, so a sidecar would restate the clip list to say
+which row belongs to which clip. It is carried as bone **names** rather than indices by the time it
+reaches an asset, for the same reason retargeting works by name: a bank's bone order is not a
+character's.
+
+**It cannot be reconstructed from the tracks, which is why it has to ship.** A bone the clip does
+not own animates nothing, and a bone the clip owns and leaves at its bind pose animates nothing
+either, so both reach the exporter with no channel and would arrive as the same absence. The two are
+opposite results when the clip is composed as a layer — the first keeps the base pose, the second
+replaces it with a bind pose the overlay authored.
 
 ## 6. The face is a curve interface
 

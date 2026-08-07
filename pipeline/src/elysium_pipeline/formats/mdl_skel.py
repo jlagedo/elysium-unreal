@@ -443,9 +443,16 @@ def read_anim(d, bones, animdesc_base, numframes):
     against zero before anything else and, on zero, write a zero position and a zero
     quaternion and return — reading no channel offset, no track and no bind field. So a
     zero-weight bone yields exact zeros here too, not the bind pose and not an identity
-    rotation. No record of the retail capture corpus carries anything but 1.0, so the branch
-    is taken from the decompiled decoders and is exercised only by a synthetic regression;
-    it is not validated against retail bytes."""
+    rotation.
+
+    It is a binary authored mask and shipped content exercises it: the field is only ever
+    0.0 or 1.0, and the partial-body `*_layer` overlays carry the bulk of the zeros — a
+    `<weapon>_aim_layer` keeps the spine-up chain and both arms, `lookback_left_layer` keeps
+    `Bip01 Head` alone. Gating on the channel offsets instead would reach the same bytes,
+    because no zero-weight record carries a non-zero offset, but it would conflate two
+    different states: a masked-OUT bone (zeros, the base pose survives it) against a bone
+    inside the mask that simply holds its bind (a real authored pose). Census and the mask
+    inventory: `docs/vtmb/animation_and_movers.md` §A.4."""
     animindex = _i32(d, animdesc_base + 48)
     recs = animdesc_base + animindex
     frames = [[None] * len(bones) for _ in range(numframes)]

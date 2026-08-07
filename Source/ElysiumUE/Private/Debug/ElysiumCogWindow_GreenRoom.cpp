@@ -141,14 +141,16 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 	}
 	bUserPicked = true;
 	ClipCursor = Index;
-	if (!(ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index]))
+	const bool bLayerRow = (ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index])
+		|| (ClipOverlay.IsValidIndex(Index) && ClipOverlay[Index]);
+	if (!bLayerRow)
 	{
 		PendingClip = Clips[Index];
 		Stand(Lab, PendingStem, Clips[Index]);
 		return;
 	}
-	// An additive row leaves PendingClip alone: the standing clip is still the standing clip, and
-	// the layer rides over it. Restanding the body would drop the layer, so the two must not share
+	// A layer row leaves PendingClip alone: the standing clip is still the standing clip, and the
+	// layer rides over it. Restanding the body would drop the layer, so the two must not share
 	// the field that Restand reads.
 	LastError.Reset();
 	LastNotice.Reset();
@@ -391,6 +393,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		Clips.Reset();
 		ClipCells.Reset();
 		ClipAdditive.Reset();
+		ClipOverlay.Reset();
 		ClipOwner.Reset();
 		ClipOwners.Reset();
 		ClipRootMotion.Reset();
@@ -409,13 +412,16 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			// so it is named on screen rather than left to the log.
 			ClipCells.Reserve(Clips.Num());
 			ClipAdditive.Reserve(Clips.Num());
+			ClipOverlay.Reserve(Clips.Num());
 			ClipOwner.Reserve(Clips.Num());
 			for (const FString& Label : Clips)
 			{
 				const FString Cell = Anims->ResolveClipAnimName(PendingStem, Label);
 				ClipCells.Add(Cell.Equals(Label, ESearchCase::IgnoreCase) ? FString() : Cell);
 				const FElysiumNpcClip* Clip = Set->Find(Label);
-				ClipAdditive.Add(Clip != nullptr && Clip->IsAdditive());
+				const bool bAdditiveClip = Clip != nullptr && Clip->IsAdditive();
+				ClipAdditive.Add(bAdditiveClip);
+				ClipOverlay.Add(!bAdditiveClip && Label.EndsWith(TEXT("_layer")));
 				ClipOwner.Add(Clip != nullptr && !Clip->IsOwnedBy(PendingStem)
 					? Clip->Owner : FString());
 			}
@@ -466,7 +472,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	}
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(ThirdWidth);
-	ImGui::Combo("##Kind", &KindFilter, "all kinds\0poses only\0additive only\0");
+	ImGui::Combo("##Kind", &KindFilter, "all kinds\0poses only\0layers only\0");
 	ImGui::SameLine();
 	ImGui::SetNextItemWidth(ThirdWidth);
 	ImGui::BeginDisabled(ScannedStem != PendingStem);
@@ -507,8 +513,11 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		}
 		if (KindFilter != 0)
 		{
-			const bool bAdditive = ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index];
-			if (bAdditive != (KindFilter == 2))
+			// Both kinds of autolayer sit on the same side of this filter: what it separates is
+			// "picking this stands the body" from "picking this composes over the body".
+			const bool bLayer = (ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index])
+				|| (ClipOverlay.IsValidIndex(Index) && ClipOverlay[Index]);
+			if (bLayer != (KindFilter == 2))
 			{
 				continue;
 			}
@@ -560,17 +569,20 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	{
 		const bool bGrid = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
 		const bool bAdditive = ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index];
+		const bool bOverlay = ClipOverlay.IsValidIndex(Index) && ClipOverlay[Index];
 		const FString Bank = ClipOwner.IsValidIndex(Index) ? ClipOwner[Index] : FString();
 		ImGui::PushID(Index);
 		FString Row = bGrid
 			? FString::Printf(TEXT("%s  -> %s"), *Clips[Index], *ClipCells[Index])
 			: Clips[Index];
-		if (bAdditive)
+		if (bAdditive || bOverlay)
 		{
 			// Named on the row, not hidden from the list: picking one composes it over the body
 			// rather than standing it, and saying which rows do that is what stops the layer from
-			// reading as a clip that did nothing.
-			Row += TEXT("   [additive layer]");
+			// reading as a clip that did nothing. The two kinds are named apart because they fail
+			// apart — a delta over the wrong base is anatomical nonsense, an overlay under no mask
+			// is a body with no legs.
+			Row += bAdditive ? TEXT("   [additive layer]") : TEXT("   [overlay layer]");
 			ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColName);
 		}
 		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Row),
@@ -578,7 +590,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		{
 			Pick(Lab, Index);
 		}
-		if (bAdditive)
+		if (bAdditive || bOverlay)
 		{
 			ImGui::PopStyleColor();
 		}
@@ -606,6 +618,8 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	ImGui::TextDisabled("-> = a blend grid, showing the cell the pose parameters select.");
 	ImGui::TextDisabled("[additive layer] = a delta, not a pose. Picking one composes it OVER the");
 	ImGui::TextDisabled("standing clip at the weight below; the standing clip does not change.");
+	ImGui::TextDisabled("[overlay layer] = a partial-body pose. It REPLACES the bones its mask owns");
+	ImGui::TextDisabled("(the spine up and both arms, for an aim layer) and leaves the legs alone.");
 
 	// The layer controls, drawn whether or not one is running: the weight has to be settable before
 	// the pick, because a layer picked at 1.0 and then dialled back reads as a different clip.
