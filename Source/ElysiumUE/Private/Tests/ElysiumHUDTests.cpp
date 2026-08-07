@@ -2,11 +2,13 @@
 
 #include "ElysiumHUDModel.h"
 #include "UI/ElysiumDialogueWidget.h"
+#include "UI/ElysiumMainMenu.h"
 #include "UI/ElysiumUIRoot.h"
 #include "UI/ElysiumUIStyle.h"
 
 #include "CommonActivatableWidget.h"
 #include "CommonInputSettings.h"
+#include "ICommonInputModule.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
@@ -145,6 +147,33 @@ bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
 	// instantly. Whether that is a container that never activates or an activation that needs a
 	// tick this harness does not run is unresolved, so the assertion is not made rather than made
 	// and disabled.
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumActivatableRebuildNotificationTest,
+	"Elysium.Substrate.UI.ActivatableRebuildNotification",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumActivatableRebuildNotificationTest::RunTest(const FString& Parameters)
+{
+	ICommonInputModule::GetSettings().LoadData();
+	UElysiumMainMenu* Menu = NewObject<UElysiumMainMenu>();
+	Menu->SetMenuMode(EElysiumMenuMode::Pause);
+	int32 RebuildNotifications = 0;
+	const FDelegateHandle Handle = UCommonActivatableWidget::OnRebuilding.AddLambda(
+		[Menu, &RebuildNotifications](UCommonActivatableWidget& Widget)
+		{
+			if (&Widget == Menu)
+			{
+				++RebuildNotifications;
+			}
+		});
+
+	Menu->TakeWidget();
+	UCommonActivatableWidget::OnRebuilding.Remove(Handle);
+
+	TestEqual(TEXT("custom Slate screen announces its rebuild to the CommonUI action router"),
+		RebuildNotifications, 1);
 	return !HasAnyErrors();
 }
 
