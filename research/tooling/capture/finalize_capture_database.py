@@ -54,6 +54,16 @@ SCENE_REASONS = {
     b"SBND": (5,),
     b"SANM": (6,),
 }
+# The gameplay-action stream records server-side policy decisions before they
+# become the client pose evaluations captured by ELANIM. Its fixed-width rows
+# live in their own table because server entity handles and activity values are
+# a different identity domain from the client-generation spine. Its file header
+# names the resident `vampire.dll` base and the hash-pinned target RVAs, which
+# `gameplay_action_binding` keeps so a recorded caller address resolves to a
+# module RVA without re-deriving the base from a known call site.
+GAMEPLAY_ACTION_FILE_HEADER = struct.Struct("<8sIIQq7I65s3s")
+GAMEPLAY_ACTION_RECORD_HEADER = struct.Struct("<4sIQqIIII7iI3f3iI")
+GAMEPLAY_ACTION_KINDS = (b"PCLS", b"IDEA", b"WTRN", b"SWGT", b"SHVY")
 # The contribution stream. Unlike the census and the actor stream these rows are
 # events on the same generation spine as the evaluations they nest inside, so
 # they land in `records` rather than in a table of their own.
@@ -617,6 +627,71 @@ def _scene_records(
         )
 
 
+def _gameplay_action_records(
+    stream: BinaryIO,
+    vampire_base: int,
+) -> Iterator[tuple[dict[str, object], bytes, bytes] | bytes]:
+    layouts = {
+        magic: GAMEPLAY_ACTION_RECORD_HEADER for magic in GAMEPLAY_ACTION_KINDS
+    }
+    while True:
+        record = _read_record(stream, layouts)
+        if record is None:
+            return
+        if isinstance(record, bytes):
+            yield record
+            return
+        raw_header, payload, header = record
+        fields = header.unpack(raw_header)
+        magic = bytes(fields[0])[:4]
+        if int(fields[1]) != header.size:
+            yield raw_header + payload + stream.read()
+            return
+        ref_handle = int(fields[6])
+        weapon_handle = int(fields[15])
+        caller_address = int(fields[7])
+        # A caller below the module base belongs to some other image, so it has
+        # no RVA in this one.
+        caller_rva = (
+            caller_address - vampire_base
+            if vampire_base and caller_address >= vampire_base
+            else None
+        )
+        yield (
+            {
+                "kind": magic.decode("ascii"),
+                "sequence_number": int(fields[2]),
+                "qpc": int(fields[3]),
+                "thread_id": int(fields[4]),
+                "server_entity": int(fields[5]),
+                "ref_handle": ref_handle,
+                "entity_index": _handle_index(ref_handle),
+                "entity_serial": _handle_serial(ref_handle),
+                "caller_address": caller_address,
+                "caller_rva": caller_rva,
+                "input_value": int(fields[8]),
+                "output_value": int(fields[9]),
+                "selection_argument": int(fields[10]),
+                "selected_sequence": int(fields[11]),
+                "current_activity": int(fields[12]),
+                "ideal_activity": int(fields[13]),
+                "current_sequence": int(fields[14]),
+                "active_weapon_handle": weapon_handle,
+                "active_weapon_index": _handle_index(weapon_handle),
+                "active_weapon_serial": _handle_serial(weapon_handle),
+                "velocity_x": float(fields[16]),
+                "velocity_y": float(fields[17]),
+                "velocity_z": float(fields[18]),
+                "water_level": int(fields[19]),
+                "retained_action": int(fields[20]),
+                "jump_landing_state": int(fields[21]),
+                "faults": int(fields[22]),
+            },
+            raw_header,
+            payload,
+        )
+
+
 def _text(value: bytes) -> str:
     return value.split(b"\0", 1)[0].decode("ascii", "replace")
 
@@ -825,6 +900,51 @@ CREATE TABLE sequence_changes (
     raw_header BLOB NOT NULL,
     UNIQUE(stream_name, ordinal)
 );
+CREATE TABLE gameplay_action_events (
+    id INTEGER PRIMARY KEY,
+    stream_name TEXT NOT NULL REFERENCES streams(name),
+    ordinal INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    sequence_number INTEGER NOT NULL,
+    qpc INTEGER NOT NULL,
+    thread_id INTEGER NOT NULL,
+    server_entity INTEGER NOT NULL,
+    ref_handle INTEGER NOT NULL,
+    entity_index INTEGER,
+    entity_serial INTEGER,
+    caller_address INTEGER NOT NULL,
+    caller_rva INTEGER,
+    input_value INTEGER NOT NULL,
+    output_value INTEGER NOT NULL,
+    selection_argument INTEGER NOT NULL,
+    selected_sequence INTEGER NOT NULL,
+    current_activity INTEGER NOT NULL,
+    ideal_activity INTEGER NOT NULL,
+    current_sequence INTEGER NOT NULL,
+    active_weapon_handle INTEGER NOT NULL,
+    active_weapon_index INTEGER,
+    active_weapon_serial INTEGER,
+    velocity_x REAL NOT NULL,
+    velocity_y REAL NOT NULL,
+    velocity_z REAL NOT NULL,
+    water_level INTEGER NOT NULL,
+    retained_action INTEGER NOT NULL,
+    jump_landing_state INTEGER NOT NULL,
+    faults INTEGER NOT NULL,
+    raw_header BLOB NOT NULL,
+    UNIQUE(stream_name, ordinal)
+);
+CREATE TABLE gameplay_action_binding (
+    stream_name TEXT PRIMARY KEY REFERENCES streams(name),
+    process_id INTEGER NOT NULL,
+    vampire_base INTEGER NOT NULL,
+    vampire_sha256 TEXT NOT NULL,
+    classify_player_action_rva INTEGER NOT NULL,
+    set_ideal_activity_rva INTEGER NOT NULL,
+    weapon_translate_activity_rva INTEGER NOT NULL,
+    select_weighted_sequence_rva INTEGER NOT NULL,
+    select_heaviest_sequence_rva INTEGER NOT NULL
+);
 CREATE TABLE failures (
     category TEXT PRIMARY KEY,
     count INTEGER NOT NULL,
@@ -853,6 +973,12 @@ CREATE INDEX scene_events_scope ON scene_events(scope);
 CREATE INDEX scene_events_scene ON scene_events(scene_entity, qpc);
 CREATE INDEX sequence_changes_entity ON sequence_changes(entity_index, qpc);
 CREATE INDEX sequence_changes_generation ON sequence_changes(generation);
+CREATE INDEX gameplay_action_entity
+    ON gameplay_action_events(entity_index, entity_serial, qpc);
+CREATE INDEX gameplay_action_kind ON gameplay_action_events(kind, qpc);
+CREATE INDEX gameplay_action_activity
+    ON gameplay_action_events(current_activity, ideal_activity, qpc);
+CREATE INDEX gameplay_action_site ON gameplay_action_events(caller_rva, kind);
 """
 
 
@@ -925,6 +1051,29 @@ INSERT INTO sequence_changes (
     :generation, :client_entity, :ref_handle, :entity_index, :entity_serial,
     :renderable, :studio_hdr, :checksum, :transitions_before,
     :transitions_after, :caller_address, :faults, :raw_header
+)
+"""
+
+
+INSERT_GAMEPLAY_ACTION = """
+INSERT INTO gameplay_action_events (
+    stream_name, ordinal, kind, sequence_number, qpc, thread_id,
+    server_entity, ref_handle, entity_index, entity_serial, caller_address,
+    caller_rva, input_value, output_value, selection_argument,
+    selected_sequence,
+    current_activity, ideal_activity, current_sequence, active_weapon_handle,
+    active_weapon_index, active_weapon_serial, velocity_x, velocity_y,
+    velocity_z, water_level, retained_action, jump_landing_state, faults,
+    raw_header
+) VALUES (
+    :stream_name, :ordinal, :kind, :sequence_number, :qpc, :thread_id,
+    :server_entity, :ref_handle, :entity_index, :entity_serial,
+    :caller_address, :caller_rva, :input_value, :output_value,
+    :selection_argument,
+    :selected_sequence, :current_activity, :ideal_activity, :current_sequence,
+    :active_weapon_handle, :active_weapon_index, :active_weapon_serial,
+    :velocity_x, :velocity_y, :velocity_z, :water_level, :retained_action,
+    :jump_landing_state, :faults, :raw_header
 )
 """
 
@@ -1032,6 +1181,8 @@ def _insert_stream(
         if name == "contribution"
         else SCENE_FILE_HEADER
         if name == "scene"
+        else GAMEPLAY_ACTION_FILE_HEADER
+        if name == "gameplay_action"
         else ANIMATION_FILE_HEADER
     )
     # Both contribution file headers are 128 bytes and agree on magic and
@@ -1076,6 +1227,10 @@ def _insert_stream(
             if (magic, version) != (b"ELSCN1", 1):
                 raise ValueError(f"{path} is not a supported ELSCN stream")
             records = _scene_records(stream)
+        elif name == "gameplay_action":
+            if (magic, version) != (b"ELGACT1", 1):
+                raise ValueError(f"{path} is not a supported ELGACT stream")
+            records = _gameplay_action_records(stream, int(fields[6]))
         else:
             if (magic, version) not in {
                 (b"ELANIM1", 1),
@@ -1108,6 +1263,25 @@ def _insert_stream(
                 b"",
             ),
         )
+        if name == "gameplay_action":
+            connection.execute(
+                """
+                INSERT INTO gameplay_action_binding (
+                    stream_name, process_id, vampire_base, vampire_sha256,
+                    classify_player_action_rva, set_ideal_activity_rva,
+                    weapon_translate_activity_rva,
+                    select_weighted_sequence_rva,
+                    select_heaviest_sequence_rva
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    int(fields[5]),
+                    int(fields[6]),
+                    _text(fields[12]),
+                    *(int(field) for field in fields[7:12]),
+                ),
+            )
 
         record_count = 0
         incomplete_tail = b""
@@ -1157,6 +1331,19 @@ def _insert_stream(
                 )
                 connection.execute(
                     statement,
+                    {
+                        "stream_name": name,
+                        "ordinal": ordinal,
+                        "raw_header": raw_header,
+                        **values,
+                    },
+                )
+                record_count += 1
+                continue
+            if name == "gameplay_action":
+                values, raw_header, _ = record
+                connection.execute(
+                    INSERT_GAMEPLAY_ACTION,
                     {
                         "stream_name": name,
                         "ordinal": ordinal,
@@ -1221,6 +1408,7 @@ def finalize(
         ("actor", session / "actor.elact"),
         ("contribution", session / "contribution.elcon"),
         ("scene", session / "scene.elscn"),
+        ("gameplay_action", session / "gameplay.elgact"),
     ]
     stream_paths = [(name, path) for name, path in stream_paths if path.is_file()]
     if not stream_paths:
@@ -1385,6 +1573,10 @@ def finalize(
                 int(done.get("scene_truncated", "0")),
                 "scene records whose source string was longer than its field",
             ),
+            "gameplay_action_faults": (
+                int(done.get("gameplay_action_faults", "0")),
+                "gameplay-action records whose guarded state reads failed",
+            ),
             "scene_resolutions_unscoped": (
                 int(done.get("scene_resolutions_unscoped", "0")),
                 "actor resolutions outside every scene scope, which are the "
@@ -1423,6 +1615,7 @@ def finalize(
                 "actor_observations",
                 "scene_events",
                 "sequence_changes",
+                "gameplay_action_events",
             )
         )
         if integrity != "ok" or stored_records != sum(counts.values()):

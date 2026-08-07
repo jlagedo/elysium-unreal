@@ -153,6 +153,14 @@ MAXSTUDIOBLENDS = 16
 
 _POSEPARAM_STRIDE = 20
 
+_AUTOLAYER_STRIDE = 4
+
+#: The gate on `numautolayers`@660. Seven single-sequence scenery and weapon models read 764
+#: there — the descriptor tail running past the end of the file into the string table — so a
+#: count this side of plausible is the first of the three bounds
+#: `docs/vtmb/animation_and_movers.md` A.3 requires. The shipped maximum is 2.
+_MAX_AUTOLAYERS = 16
+
 #: `mstudiomovement_t`, addressed by one StudioAnimDesc's `nummovements`@16 and
 #: `movementindex`@20. The index is relative to the animdesc. `position` is the cumulative
 #: Source-space displacement at this record's end frame; the final record therefore carries one
@@ -190,9 +198,11 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: `actweight` and `flags` are the engine's own selection keys (see `local_sequences`);
 #: `grid` is the blend space the label names (see `read_grid`); `bbmin`/`bbmax` are the
 #: sequence's own model-space bounding box in Source units (see `local_sequences`);
-#: `fade` is the authored transition duration in seconds (see `local_sequences`).
-Seq = namedtuple("Seq", "label base frames fps activity actweight flags grid bbmin bbmax fade",
-                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2))
+#: `fade` is the authored transition duration in seconds (see `local_sequences`);
+#: `autolayers` names the sequences this one is composed with (see `read_autolayers`).
+Seq = namedtuple("Seq",
+                 "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers",
+                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, ()))
 
 
 def pose_parameters(d):
@@ -245,6 +255,38 @@ def read_grid(d, sb):
         for i0 in range(n0) for i1 in range(n1)
     )
     return grid._replace(cells=cells)
+
+
+def read_autolayers(d, sb, ns):
+    """One StudioSeqDesc's autolayer entries at descriptor base `sb` -> tuple of local
+    sequence indices, in the order the dispatcher walks them.
+
+    `numautolayers`@660 / `autolayerindex`@664 declare a list of 4-byte entries, each a bare
+    sequence index — VtMB's record carries no pose parameter, flags or ramp, so the binding is
+    the whole payload and the weight a layer arrives with lives in the game DLL
+    (`docs/vtmb/animation_and_movers.md` A.3).
+
+    **The index is relative to the descriptor and the entries address this model's own local
+    sequence array.** Both halves are measured, not assumed: read that way, all 345 entries on
+    the male `move_and_ranged` bank and all 340 on the female resolve in range and every one
+    names a `_layer` or `_delta` sequence, where reading `autolayerindex` as an absolute file
+    offset resolves 64 and 43 of them and names none. Do not re-derive this.
+
+    Three bounds, all required. The count is gated because seven single-sequence scenery and
+    weapon models read 764 there and their array address runs off the end of the image; the
+    array is bounded against the image; and every entry is bounded against `ns`
+    (`NumLocalSeq`@272). A descriptor failing any of them yields no entries rather than
+    entries read out of someone else's bytes."""
+    n = _i32(d, sb + 660)
+    if not (0 < n <= _MAX_AUTOLAYERS):
+        return ()
+    base = sb + _i32(d, sb + 664)
+    if base <= 0 or base + n * _AUTOLAYER_STRIDE > len(d):
+        return ()
+    entries = struct.unpack_from(f"<{n}i", d, base)
+    if any(not (0 <= t < ns) for t in entries):
+        return ()
+    return entries
 
 
 def local_animation(d, index):
@@ -346,10 +388,14 @@ def local_sequences(d):
     left alone."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
+    # Every descriptor's label by index, read before the walk because an autolayer entry
+    # addresses this array directly and may name a descriptor the dedup below drops. A dropped
+    # descriptor is a duplicate label, so the name it resolves to is the same either way.
+    labels = [_cstr_rel(d, sbase + i * _SEQDESC_STRIDE, 0) for i in range(ns)]
     out, seen = [], set()
     for i in range(ns):
         sb = sbase + i * _SEQDESC_STRIDE
-        label = _cstr_rel(d, sb, 0)
+        label = labels[i]
         # Read before the skips, so every declared descriptor's grid is read off the same
         # walk that reads its label rather than only the ones that survive the dedup.
         grid = read_grid(d, sb)
@@ -363,7 +409,8 @@ def local_sequences(d):
                        activity=_cstr_rel(d, sb, 4), actweight=_i32(d, sb + 16),
                        flags=_i32(d, sb + 8), grid=grid,
                        bbmin=_vec3(d, sb + 28), bbmax=_vec3(d, sb + 40),
-                       fade=_f32(d, sb + 612)))
+                       fade=_f32(d, sb + 612),
+                       autolayers=tuple(labels[t] for t in read_autolayers(d, sb, ns))))
     return out
 
 

@@ -56,6 +56,8 @@ private:
 	// at, as opposed to which body it is or what its garment is doing.
 	void RenderView(FElysiumGreenRoomRun& Lab);
 	void RenderCloth(FElysiumGreenRoomRun& Lab);
+	// The autolayer binding the standing clip declares, beside what the lab actually has riding.
+	void RenderAutoLayers(FElysiumGreenRoomRun& Lab);
 
 	void Stand(FElysiumGreenRoomRun& Lab, const FString& Stem, const FString& Clip);
 	// What a clip row does when it is picked. An additive row lays a layer over the standing body

@@ -67,6 +67,7 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 {
 	PoseParams.Reset();
 	Grids.Reset();
+	AutoLayers.Reset();
 
 	TSharedPtr<FJsonObject> Document;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
@@ -104,11 +105,44 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 		}
 	}
 
+	// The binding table, read before the grids because it is the half a model may carry alone. The
+	// entry ORDER is the payload — appended in document order and never sorted or deduped.
+	const TSharedPtr<FJsonObject>* LayerObject = nullptr;
+	if (Document->TryGetObjectField(TEXT("autolayers"), LayerObject) && LayerObject != nullptr)
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*LayerObject)->Values)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Entries = nullptr;
+			if (!Pair.Value.IsValid() || !Pair.Value->TryGetArray(Entries) || Entries == nullptr)
+			{
+				continue;
+			}
+			FElysiumAutoLayerBinding Binding;
+			for (const TSharedPtr<FJsonValue>& Entry : *Entries)
+			{
+				FString Clip;
+				if (Entry.IsValid() && Entry->TryGetString(Clip) && !Clip.IsEmpty())
+				{
+					Clip.RemoveFromStart(TEXT("@"));
+					Binding.Clips.Add(MoveTemp(Clip));
+				}
+			}
+			if (!Binding.Clips.IsEmpty())
+			{
+				AutoLayers.Add(Pair.Key, MoveTemp(Binding));
+			}
+		}
+	}
+
 	const TSharedPtr<FJsonObject>* GridObject = nullptr;
 	if (!Document->TryGetObjectField(TEXT("grids"), GridObject) || GridObject == nullptr)
 	{
-		OutError = TEXT("blend sidecar carries no `grids` object");
-		return false;
+		if (AutoLayers.IsEmpty())
+		{
+			OutError = TEXT("blend sidecar carries neither `grids` nor `autolayers`");
+			return false;
+		}
+		return true;
 	}
 
 	int32 Malformed = 0;
@@ -182,7 +216,7 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 	{
 		OutError = FString::Printf(TEXT("%d malformed grid(s) skipped"), Malformed);
 	}
-	return !Grids.IsEmpty();
+	return IsValid();
 }
 
 void ElysiumBlendGrids::ResolveAxis(const FElysiumBlendGrid& Grid, int32 Axis,

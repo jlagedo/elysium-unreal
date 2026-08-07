@@ -1519,4 +1519,219 @@ bool FElysiumBlendGridCorpusTest::RunTest(const FString&)
 	return true;
 }
 
+// The autolayer binding: which clips a host sequence is composed with, and in what order.
+//
+// Every assertion here crosses the table against something ANOTHER export declares — an animation
+// the owner's glb carries, a flag word in the clip vocabulary — rather than against the table's own
+// arithmetic. Whether the table is faithful to the `.mdl` is measured offline against the install,
+// which bring-your-own-game keeps out of the repo; what this asserts is that the binding survives
+// export, resolves in the namespace a standing body actually addresses, and keeps its order.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAutoLayerBindingTest,
+	"Elysium.Content.AutoLayers", GElysiumSkeletalContentFlags)
+bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	{
+		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Owner -> its table, for every owner declaring a binding. Only the two shared locomotion banks
+	// carry any, which is itself the census: a third carrier would be a decode fault, not content.
+	TMap<FString, FElysiumBlendTable> Tables;
+	TMap<FString, FString> OwnerGlb;
+	int32 Hosts = 0, Entries = 0;
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Banks)
+	{
+		if (Pair.Value.Blends.IsEmpty())
+		{
+			continue;
+		}
+		FElysiumBlendTable Table;
+		FString TableError;
+		if (!Table.Load(Pair.Value.Blends, TableError) || Table.AutoLayers.IsEmpty())
+		{
+			continue;
+		}
+		Hosts += Table.AutoLayers.Num();
+		for (const TPair<FString, FElysiumAutoLayerBinding>& Binding : Table.AutoLayers)
+		{
+			Entries += Binding.Value.Clips.Num();
+		}
+		OwnerGlb.Add(Pair.Key, Pair.Value.Glb);
+		Tables.Add(Pair.Key, MoveTemp(Table));
+	}
+	if (Tables.IsEmpty())
+	{
+		AddInfo(TEXT("skipping: this export declares no autolayer binding"));
+		return true;
+	}
+	AddInfo(FString::Printf(TEXT("%d owner(s), %d host(s), %d entr(ies)"),
+		Tables.Num(), Hosts, Entries));
+
+	// 1. Structure, against the owner's own baked animations.
+	bool bStructure = true;
+	for (const TPair<FString, FElysiumBlendTable>& Owner : Tables)
+	{
+		TSet<FString> Baked;
+		if (!ReadGlbAnimationNames(FElysiumContentPaths::NpcBankGlb(OwnerGlb[Owner.Key]), Baked))
+		{
+			AddError(FString::Printf(TEXT("cannot read animations from %s's glb"), *Owner.Key));
+			bStructure = false;
+			continue;
+		}
+		for (const TPair<FString, FElysiumAutoLayerBinding>& Binding : Owner.Value.AutoLayers)
+		{
+			const TArray<FString>& Clips = Binding.Value.Clips;
+			// Fan-out is 2 on shipped content and the runtime allocates for exactly that. A third
+			// entry would evict one silently, so it is an error here rather than a surprise there.
+			if (Clips.Num() > 2)
+			{
+				AddError(FString::Printf(TEXT("%s host '%s' declares %d entries"),
+					*Owner.Key, *Binding.Key, Clips.Num()));
+				bStructure = false;
+			}
+			if (!Baked.Contains(Binding.Key.ToLower()))
+			{
+				AddError(FString::Printf(TEXT("%s host '%s' is not an animation of its own glb"),
+					*Owner.Key, *Binding.Key));
+				bStructure = false;
+			}
+			TSet<FString> Seen;
+			for (const FString& Clip : Clips)
+			{
+				if (!Baked.Contains(Clip.ToLower()))
+				{
+					AddError(FString::Printf(TEXT("%s host '%s' names layer '%s', which its glb "
+						"does not carry"), *Owner.Key, *Binding.Key, *Clip));
+					bStructure = false;
+				}
+				if (Clip.Equals(Binding.Key, ESearchCase::IgnoreCase))
+				{
+					AddError(FString::Printf(TEXT("%s host '%s' layers itself"),
+						*Owner.Key, *Binding.Key));
+					bStructure = false;
+				}
+				bool bDuplicate = false;
+				Seen.Add(Clip.ToLower(), &bDuplicate);
+				if (bDuplicate)
+				{
+					AddError(FString::Printf(TEXT("%s host '%s' names '%s' twice"),
+						*Owner.Key, *Binding.Key, *Clip));
+					bStructure = false;
+				}
+				// Depth 1: the dispatcher recurses, and shipped content never gives it the chance.
+				// A layer that is itself a host would compose one, which nothing downstream expects.
+				if (Owner.Value.FindAutoLayers(Clip) != nullptr)
+				{
+					AddError(FString::Printf(TEXT("%s layer '%s' is itself a host"),
+						*Owner.Key, *Clip));
+					bStructure = false;
+				}
+			}
+		}
+	}
+	TestTrue(TEXT("every binding resolves inside its owner and stays depth 1"), bStructure);
+
+	// 2. Kind and order, against the clip vocabulary a standing body addresses. This is the
+	// resolution that matters: a body reaches its bank's clips through its own slice, so a target
+	// that resolves in the bank and not here would bind to nothing at runtime.
+	int32 Bodies = 0, Resolved = 0, OverlayFirst = 0, AdditiveFirst = 0, Singles = 0;
+	bool bVocabulary = true;
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Npc : Index.Npcs)
+	{
+		FElysiumNpcClipSet Set;
+		FString SetError;
+		if (!Set.Load(Npc.Key, SetError))
+		{
+			continue;
+		}
+		bool bCounted = false;
+		for (const TPair<FString, FElysiumNpcClip>& Clip : Set.Clips)
+		{
+			const FElysiumBlendTable* Table = Tables.Find(Clip.Value.Owner);
+			const FElysiumAutoLayerBinding* Binding =
+				Table != nullptr ? Table->FindAutoLayers(Clip.Key) : nullptr;
+			if (Binding == nullptr)
+			{
+				continue;
+			}
+			if (!bCounted)
+			{
+				++Bodies;
+				bCounted = true;
+			}
+			++Resolved;
+
+			TArray<bool> Additive;
+			for (const FString& Layer : Binding->Clips)
+			{
+				const FElysiumNpcClip* Target = Set.Find(Layer);
+				if (Target == nullptr)
+				{
+					AddError(FString::Printf(TEXT("%s: host '%s' names layer '%s', absent from "
+						"this body's vocabulary"), *Npc.Key, *Clip.Key, *Layer));
+					bVocabulary = false;
+					continue;
+				}
+				// A layer is composed, never selected. Retail's own census: no target carries an
+				// activity, so one that did would be reachable as a base clip and flatten the body.
+				if (!Target->Activity.IsEmpty())
+				{
+					AddError(FString::Printf(TEXT("%s: layer '%s' carries activity '%s'"),
+						*Npc.Key, *Layer, *Target->Activity));
+					bVocabulary = false;
+				}
+				Additive.Add(Target->IsAdditive());
+			}
+			// Exactly one of each on a two-entry host, and an overlay alone on a one-entry host —
+			// the flags say which, and the table says the order. Both are asserted; neither is
+			// assumed, and the order is deliberately NOT constrained: one shipped host declares its
+			// additive first, and a consumer that sorts would compose it differently from retail.
+			if (Additive.Num() == 2)
+			{
+				if (Additive[0] == Additive[1])
+				{
+					AddError(FString::Printf(TEXT("%s: host '%s' declares two layers of the same "
+						"kind (additive=%d)"), *Npc.Key, *Clip.Key, Additive[0] ? 1 : 0));
+					bVocabulary = false;
+				}
+				else if (Additive[0])
+				{
+					++AdditiveFirst;
+				}
+				else
+				{
+					++OverlayFirst;
+				}
+			}
+			else if (Additive.Num() == 1)
+			{
+				++Singles;
+				if (Additive[0])
+				{
+					AddError(FString::Printf(TEXT("%s: host '%s' declares a lone additive"),
+						*Npc.Key, *Clip.Key));
+					bVocabulary = false;
+				}
+			}
+		}
+	}
+	AddInfo(FString::Printf(
+		TEXT("%d bod(ies) reach %d host(s): %d overlay-first, %d additive-first, %d single overlay"),
+		Bodies, Resolved, OverlayFirst, AdditiveFirst, Singles));
+	TestTrue(TEXT("every layer resolves in the body's own vocabulary, carries no activity, and "
+		"pairs one overlay with one additive"), bVocabulary);
+	TestTrue(TEXT("some body reaches a host"), Resolved > 0);
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

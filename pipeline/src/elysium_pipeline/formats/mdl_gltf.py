@@ -832,12 +832,21 @@ def _reconcile_blends(blends, baked):
     return out
 
 
-def blend_sidecar(d, blends):
-    """The blend table a model ships beside its clips, or `{}` when it authors no grid.
+def blend_sidecar(d, blends, clips):
+    """The blend table and autolayer binding a model ships beside its clips, or `{}` when it
+    authors neither.
 
     The pose parameters travel with it because a grid's `paramindex` is an index into this
-    model's own array — the axis cannot be named, wrapped or normalized without it."""
-    if not blends:
+    model's own array — the axis cannot be named, wrapped or normalized without it.
+
+    `autolayers` maps a host clip's label to the labels it is composed with, in the order the
+    dispatcher walks them, and is read from the same 764-byte sequence descriptor the grids
+    are. It is a binding rather than a mix: the host is the base pose and each entry is
+    evaluated beside it and accumulated, a masked overlay or an additive according to its own
+    flags. Order is part of the data — an overlay blends toward its own pose and would
+    overwrite an additive already accumulated onto the bones it owns."""
+    autolayers = {c.label: list(c.autolayers) for c in clips if c.autolayers}
+    if not blends and not autolayers:
         return {}
     return {
         "pose_parameters": [
@@ -846,7 +855,18 @@ def blend_sidecar(d, blends):
             for p in S.pose_parameters(d)
         ],
         "grids": blends,
+        **({"autolayers": autolayers} if autolayers else {}),
     }
+
+
+def autolayer_orphans(clips):
+    """The autolayer targets none of `clips` baked -> sorted labels.
+
+    A target names a sequence of the declaring model's own array, so it should bake as a clip
+    of the same glb. One that does not is a dangling binding the host cannot compose, and the
+    sidecar still carries it because the file states it — this is the census that names them."""
+    baked = {c.label.lower() for c in clips}
+    return sorted({t for c in clips for t in c.autolayers if t.lower() not in baked})
 
 
 def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=None,
@@ -913,11 +933,13 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None, cloth_planner=N
         print(f"  ! {stem}: procedural rule - {fault}")
     for fault in built["eye_faults"]:
         print(f"  ! {stem}: eyeball - {fault}")
+    for orphan in autolayer_orphans(labels):
+        print(f"  ! {stem}: autolayer target '{orphan}' baked no clip")
     return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
                 bones=len(built["bones"]),
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
                 clips=labels, clip_extents=extents,
-                facial=face, blends=blend_sidecar(d, blends),
+                facial=face, blends=blend_sidecar(d, blends, labels),
                 procedural=rules, procedural_faults=rule_faults,
                 eyes=eyes, eye_faults=built["eye_faults"],
                 cloth=built.get("cloth"))
@@ -970,10 +992,14 @@ def export_bank(idx, model_path, out_dir, stem):
     glb = os.path.join(banks_dir, stem + ".glb")
     _write_glb(gltf, g.bin, glb)
     grids = f", {len(blends)} blend grids" if blends else ""
-    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips{grids} "
+    hosts = sum(1 for c in labels if c.autolayers)
+    layered = f", {hosts} autolayer hosts" if hosts else ""
+    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips{grids}{layered} "
           f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
+    for orphan in autolayer_orphans(labels):
+        print(f"  ! {stem}: autolayer target '{orphan}' baked no clip")
     return dict(stem=stem, glb="banks/" + os.path.basename(glb), model=model_path,
-                clips=labels, blends=blend_sidecar(d, blends))
+                clips=labels, blends=blend_sidecar(d, blends, labels))
 
 
 def _bone_root(name):
@@ -1122,7 +1148,7 @@ def export_cinematic(idx, model_path, out_dir, stem):
         print(f"  cinematic {name}: {len(sub)} bones, {len(labels)} clips{grids} "
               f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
         out.append(dict(stem=name, glb="banks/" + os.path.basename(glb), model=model_path,
-                        clips=labels, blends=blend_sidecar(d, rooted), root=root))
+                        clips=labels, blends=blend_sidecar(d, rooted, labels), root=root))
 
     return out or None
 

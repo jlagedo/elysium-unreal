@@ -21,10 +21,10 @@ later. A `SEVT` record witnesses when a request was made and a `SEQC` record whe
 a client entity changed; the causal claim is only ever that a scene asked and an
 entity changed inside its interval.
 
-An activity change is observable only as a sequence change. The selection data is
-recovered -- the activity name index, the weighted share, and the whole activity
-table -- but no selector function is located in either module, so this report
-counts sequence transitions and dispatched sequence labels and never an activity.
+An activity change is observable in this stream only as a sequence change. The
+server selector is located and indexed by the gameplay-actions specification,
+but this scene report does not record its translation stages; it counts sequence
+transitions and dispatched sequence labels and never infers an activity from one.
 
 Map scenes and dialogue scenes keep different clocks. One hook covers both
 because they share the dispatch body, and the record carries the vftable so the

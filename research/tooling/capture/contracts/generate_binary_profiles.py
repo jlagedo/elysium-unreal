@@ -42,10 +42,9 @@ def _integer(value: object, label: str, maximum: int = 0xFFFFFFFF) -> int:
     return result
 
 
-def _validate_source_spec(profile: dict[str, object]) -> None:
-    source = profile.get("source_spec")
-    if source is None:
-        return
+def _load_source_spec(
+    profile: dict[str, object], source: object
+) -> dict[str, object]:
     path = REPOSITORY_ROOT / str(source)
     specification = json.loads(path.read_text(encoding="utf-8"))
     binary = specification["binary"]
@@ -59,15 +58,36 @@ def _validate_source_spec(profile: dict[str, object]) -> None:
         "preferred_image_base"
     ]:
         raise ValueError(f"{profile['id']} source_spec image-base mismatch")
-    functions = {
-        function["label"]: int(str(function["address"]), 16)
-        for function in specification.get("functions", [])
+    return specification
+
+
+def _validate_source_spec(profile: dict[str, object]) -> None:
+    default_source = profile.get("source_spec")
+    sources = {
+        target.get("source_spec", default_source)
+        for target in profile["targets"]
+        if target.get("source_function_label") is not None
+    }
+    sources.discard(None)
+    specifications = {
+        source: _load_source_spec(profile, source) for source in sources
     }
     image_base = profile["pe"]["preferred_image_base"]
     for target in profile["targets"]:
         source_label = target.get("source_function_label")
         if source_label is None:
             continue
+        source = target.get("source_spec", default_source)
+        if source is None:
+            raise ValueError(
+                f"{profile['id']} target {target['semantic_label']} "
+                "names a source function without a source specification"
+            )
+        specification = specifications[source]
+        functions = {
+            function["label"]: int(str(function["address"]), 16)
+            for function in specification.get("functions", [])
+        }
         expected_address = image_base + target["rva"]
         if functions.get(source_label) != expected_address:
             raise ValueError(

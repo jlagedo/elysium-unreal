@@ -95,6 +95,10 @@ public:
 	// The layer label the lab last accepted, or empty. Cleared by LabClearLayers and by standing a
 	// new body, because a layer belongs to the body it was composed onto.
 	const FString& LabLayer() const { return ReviewLayer; }
+	// Every layer the lab currently has riding, in the order it accepted them. The proxy holds two
+	// slots and evicts the weakest for a third, so this is what was ASKED for; it is compared
+	// against the binding rather than trusted as what is running.
+	const TArray<FString>& LabLayers() const { return ReviewLayers; }
 	const FString& LabStem() const { return ReviewStem; }
 	const FString& LabClip() const { return ReviewClip; }
 
@@ -255,6 +259,9 @@ private:
 	// The autolayer riding over the stage body, or empty. Lab-only: the one-shot capture path
 	// composes nothing.
 	FString ReviewLayer;
+	// The same, accumulated in acceptance order, because a host declares an ordered pair and the
+	// order is the thing being verified.
+	TArray<FString> ReviewLayers;
 	// The blend grid the body is standing on, invalid when it is on an ordinary clip. Cleared with
 	// the body for the same reason the layer is — it belongs to the one it was stood on.
 	FElysiumResolvedGrid ReviewGrid;

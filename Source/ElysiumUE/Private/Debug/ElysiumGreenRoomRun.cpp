@@ -1512,6 +1512,7 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	// A layer belongs to the body it was composed onto, and that body has just been destroyed. So
 	// does a grid, and it is additionally what the clip above just replaced.
 	ReviewLayer.Reset();
+	ReviewLayers.Reset();
 	ReviewGrid = FElysiumResolvedGrid();
 	LabClipTime = 0.0f;
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s clip %s (%.3fs)"), *Stem, *ResolvedClip, Duration);
@@ -1564,6 +1565,7 @@ bool FElysiumGreenRoomRun::LabSetLayer(const FString& Clip, float Weight, FStrin
 		return false;
 	}
 	ReviewLayer = Clip;
+	ReviewLayers.AddUnique(Clip);
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s layer %s at %.2f"), *ReviewStem, *Clip, Weight);
 	return true;
 }
@@ -1636,6 +1638,7 @@ void FElysiumGreenRoomRun::LabClearLayers()
 		BodyFactory->StopNpcLayers(LabBody());
 	}
 	ReviewLayer.Reset();
+	ReviewLayers.Reset();
 }
 
 void FElysiumGreenRoomRun::ApplyLabHud(bool bShow) const

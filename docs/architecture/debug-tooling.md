@@ -287,6 +287,24 @@ disagreeing camera clocks, or any cast member never entering frame outside an op
 false and exits the batch with status 1. This separates model/clip/material faults from placement,
 framing, cuts, and fades before `newgame_ttd` is allowed to be the aggregate integration test.
 
+### The interactive green room
+
+`uv run elysium gr <stem>` is the same stage driven by hand rather than by a case list: one body on
+an empty map, with a Cog window (`ElysiumCogWindow_GreenRoom`) over the lab
+(`FElysiumGreenRoomRun`) that stands it, filters its clips, arms layers over it, and steers a blend
+grid's declared axes. It is the **primary verification surface for the skeletal animation
+programme** — the composition rules it exercises are pose arithmetic whose failures are visible
+before they are measurable, and the tiers underneath it assert transport and structure rather than
+plausibility.
+
+Two rules keep it honest. It drives the **production** loader, bake and proxy paths, never a copy,
+so what it stands is what a map stands; `LabRestand` exists because the mesh and clip caches are
+keyed by stem rather than by which path built them, and a toggle reads as dead without it. And it
+**observes** the runtime's own selection rather than substituting for it: where gameplay selects an
+animation, the lab's job is to display what was selected and let it be perturbed, so a panel reports
+the selecting authority beside the result. A control that can only be reached from the lab is
+scaffolding, and the phase that gives it a real caller retires it.
+
 `uv run elysium debug modelroom <mesh-stem> <clip> [map]` is the human-form review surface over the same production
 loader. For a cinematic bank, append `<anim-set-model> <bone-root> [map]`. It isolates exactly one
 body and clip, freezes it at 0/25/50/75/99 percent, captures front, three-quarter, profile, and back

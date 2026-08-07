@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import hashlib
 import json
 import math
@@ -30,6 +31,7 @@ from research.tooling.capture.capture_player_sequence import (
     read_load_command,
 )
 from research.tooling.capture.capture_theatre import (
+    HUB,
     PRE_MAP_WAITS,
     RECIPES,
     THEATRE,
@@ -38,6 +40,7 @@ from research.tooling.capture.capture_theatre import (
     beat_marks,
     build_config as build_theatre_config,
     transition_signal,
+    write_hook_ini,
 )
 from research.tooling.capture import calibrate_theatre_capture
 from research.tooling.capture.calibrate_theatre_capture import (
@@ -55,6 +58,8 @@ from research.tooling.capture.finalize_capture_database import (
     CENSUS_FILE_HEADER,
     CONTRIBUTION_FILE_HEADER,
     CONTRIBUTION_RECORD_HEADER,
+    GAMEPLAY_ACTION_FILE_HEADER,
+    GAMEPLAY_ACTION_RECORD_HEADER,
     MODEL_IMAGE_HEADER,
     MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
@@ -66,6 +71,15 @@ from research.tooling.capture.finalize_capture_database import (
     SCENE_REQUEST_HEADER,
     SEQUENCE_CHANGE_HEADER,
     finalize,
+)
+from research.tooling.capture.build_clip_table import (
+    best_ordering,
+    resolve_model_key,
+    score_orderings,
+)
+from research.tooling.capture.verify_gameplay_actions import (
+    REQUIRED_HUB_BEATS,
+    verify as verify_gameplay_actions,
 )
 from research.tooling.capture.verify_pose_build_generation import (
     verify as verify_generation,
@@ -416,6 +430,53 @@ def sequence_change_record(
         transitions_before,
         transitions_after,
         caller_address,
+        faults,
+    )
+
+
+def gameplay_action_record(
+    magic: bytes,
+    sequence: int,
+    qpc: int,
+    *,
+    server_entity: int = 0x5000,
+    ref_handle: int = (7 << 13) | 40,
+    caller_address: int = VAMPIRE_BASE + 0x1000,
+    input_value: int = 0,
+    output_value: int = 0,
+    selection_argument: int = -1,
+    selected_sequence: int = -1,
+    current_activity: int = 0,
+    ideal_activity: int = 0,
+    current_sequence: int = 0,
+    active_weapon_handle: int = 0xFFFFFFFF,
+    velocity: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    water_level: int = 0,
+    retained_action: int = 0,
+    jump_landing_state: int = 0,
+    faults: int = 0,
+) -> bytes:
+    return GAMEPLAY_ACTION_RECORD_HEADER.pack(
+        magic,
+        GAMEPLAY_ACTION_RECORD_HEADER.size,
+        sequence,
+        qpc,
+        7,
+        server_entity,
+        ref_handle,
+        caller_address,
+        input_value,
+        output_value,
+        selection_argument,
+        selected_sequence,
+        current_activity,
+        ideal_activity,
+        current_sequence,
+        active_weapon_handle,
+        *velocity,
+        water_level,
+        retained_action,
+        jump_landing_state,
         faults,
     )
 
@@ -1301,6 +1362,7 @@ def write_session(
     actor_records: bytes | None = None,
     contribution_records: bytes | None = None,
     scene_records: bytes | None = None,
+    gameplay_action_records: bytes | None = None,
     actor_version: int = 3,
     done: str = "complete=1\nqueued=2\nwritten=2\ndropped=0\n",
     boundary: dict[str, object] | None = None,
@@ -1457,6 +1519,26 @@ def write_session(
                 b"",
             )
             + scene_records
+        )
+    if gameplay_action_records is not None:
+        (session / "gameplay.elgact").write_bytes(
+            GAMEPLAY_ACTION_FILE_HEADER.pack(
+                b"ELGACT1",
+                1,
+                GAMEPLAY_ACTION_FILE_HEADER.size,
+                QPC_FREQUENCY,
+                90,
+                12,
+                VAMPIRE_BASE,
+                0x16BB50,
+                0x324500,
+                0x327EC0,
+                0x08DC40,
+                0x08DD30,
+                b"3" * 64 + b"\0",
+                b"",
+            )
+            + gameplay_action_records
         )
 
 
@@ -1634,6 +1716,40 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertNotIn("sp_theatre", "\n".join(lines))
         for forbidden in ("cl_mouselook 0", "cl_mouseenable 0", "quit"):
             self.assertNotIn(forbidden, lines)
+
+    def test_hub_recipe_marks_player_npc_dialogue_and_reaction_beats(self) -> None:
+        lines = build_theatre_config(HUB).splitlines()
+        entry = lines.index("map sm_hub_1")
+        self.assertEqual(lines[entry - 1], f"echo {HUB.map_marker}")
+        for key, marker in HUB.beat_binds:
+            self.assertIn(f'bind "{key}" "echo {marker}"', lines)
+        self.assertEqual(HUB.stop_console_tokens, ())
+        self.assertEqual(HUB.stop_tokens(True), ("ELYSIUM_RE37_STOP",))
+        self.assertFalse(HUB.requires_save)
+
+    def test_hook_ini_enables_all_hash_pinned_gameplay_action_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            ini = session / "live_pose_hook.ini"
+            write_hook_ini(ini, session, 120)
+            values = dict(
+                line.split("=", 1)
+                for line in ini.read_text(encoding="utf-16").splitlines()
+                if "=" in line
+            )
+            self.assertEqual(
+                values["gameplay_action_output"],
+                str(session / "gameplay.elgact"),
+            )
+            for name in (
+                "classify_player_animation_action",
+                "set_ideal_activity",
+                "weapon_translate_activity",
+                "select_weighted_sequence",
+                "select_heaviest_sequence",
+            ):
+                self.assertRegex(values[f"{name}_rva"], r"^0x[0-9a-f]+$")
+                self.assertRegex(values[f"{name}_expected"], r"^[0-9a-f]+$")
 
     def test_a_recipe_requiring_a_save_refuses_to_build_without_one(self) -> None:
         # A cfg that silently loads nothing captures an idle main menu and
@@ -1929,6 +2045,187 @@ class RetailCaptureTests(unittest.TestCase):
                 )
             finally:
                 connection.close()
+
+    def test_gameplay_actions_finalize_and_report_player_and_npc_choices(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory)
+            player_handle = (7 << 13) | 40
+            npc_handle = (8 << 13) | 41
+            boundary = {
+                "recipe": "sm_hub_1",
+                "beats": [
+                    {"marker": marker, "qpc": 190 + index * 100}
+                    for index, marker in enumerate(REQUIRED_HUB_BEATS)
+                ],
+            }
+            actions = b"".join(
+                (
+                    gameplay_action_record(
+                        b"PCLS", 3, 200, ref_handle=player_handle,
+                        output_value=2, velocity=(120.0, 0.0, 0.0),
+                    ),
+                    gameplay_action_record(
+                        b"SWGT", 4, 220, ref_handle=player_handle,
+                        input_value=6, output_value=6,
+                        selection_argument=-1, selected_sequence=12,
+                        current_activity=6, ideal_activity=6,
+                        current_sequence=12,
+                    ),
+                    gameplay_action_record(
+                        b"SHVY", 5, 310, server_entity=0x6000,
+                        ref_handle=npc_handle, input_value=8, output_value=8,
+                        selection_argument=-1, selected_sequence=22,
+                        current_activity=8, ideal_activity=8,
+                        current_sequence=22,
+                    ),
+                )
+            )
+            actors = b"".join(
+                (
+                    actor_record(
+                        6, 210, "character/pc/male.mdl",
+                        ref_handle=player_handle,
+                    ),
+                    actor_record(
+                        7, 320, "character/npc/common/cop.mdl",
+                        entity=0x2FFC, renderable=0x3000,
+                        ref_handle=npc_handle,
+                    ),
+                )
+            )
+            write_session(
+                session,
+                pose_records=pose_record(1, 100, "models/test.mdl"),
+                animation_records=animation_record(b"BASE", 2, 101),
+                actor_records=actors,
+                gameplay_action_records=actions,
+                boundary=boundary,
+                map_name="sm_hub_1",
+            )
+            final = finalize(session)
+            self.assertEqual(final["records"]["gameplay_action"], 3)
+            connection = sqlite3.connect(session / "capture.sqlite")
+            try:
+                row = connection.execute(
+                    "SELECT entity_index, entity_serial, selected_sequence,"
+                    " velocity_x, caller_rva FROM gameplay_action_events"
+                    " WHERE kind = 'SWGT'"
+                ).fetchone()
+                self.assertEqual(row[:3], (40, 7, 12))
+                self.assertAlmostEqual(row[3], 0.0)
+                self.assertEqual(row[4], 0x1000)
+                binding = connection.execute(
+                    "SELECT vampire_base, classify_player_action_rva,"
+                    " select_heaviest_sequence_rva, vampire_sha256"
+                    " FROM gameplay_action_binding"
+                ).fetchone()
+                self.assertEqual(
+                    binding[:3], (VAMPIRE_BASE, 0x16BB50, 0x08DD30)
+                )
+                self.assertEqual(binding[3], "3" * 64)
+            finally:
+                connection.close()
+            report = verify_gameplay_actions(session)
+            self.assertTrue(report["complete"])
+            self.assertEqual(report["by_kind"], {"PCLS": 1, "SHVY": 1, "SWGT": 1})
+            self.assertEqual(report["identity_join"]["unjoined_entity_indices"], [])
+            self.assertEqual(report["binding"]["vampire_base"], VAMPIRE_BASE)
+            # Every record shares one caller in this fixture, so the sites are
+            # one per boundary and each resolves to the preferred image base.
+            self.assertEqual(
+                sorted(
+                    (site["kind"], site["image_address"])
+                    for site in report["call_sites"]
+                ),
+                [
+                    ("PCLS", "0x10001000"),
+                    ("SHVY", "0x10001000"),
+                    ("SWGT", "0x10001000"),
+                ],
+            )
+            self.assertTrue((session / "gameplay-actions-report.json").is_file())
+            calibration = calibrate(session)
+            self.assertTrue(
+                calibration["volume"]["byte_closure"]["gameplay_action"]["closes"]
+            )
+            self.assertTrue(calibration["integrity"]["sequence_numbers"]["dense"])
+
+    def test_gameplay_action_faults_separate_dead_objects_from_bad_reads(
+        self,
+    ) -> None:
+        # These five boundaries are also reached with a `this` that is not a
+        # live entity, so the guards fire by design there. What must never pass
+        # is a fault on an entity the same run reads cleanly: that is a wrong
+        # offset wearing the same fault bit.
+        player_handle = (7 << 13) | 40
+        npc_handle = (8 << 13) | 41
+        boundary = {
+            "recipe": "sm_hub_1",
+            "beats": [
+                {"marker": marker, "qpc": 190 + index * 100}
+                for index, marker in enumerate(REQUIRED_HUB_BEATS)
+            ],
+        }
+        base = (
+            gameplay_action_record(
+                b"PCLS", 3, 200, ref_handle=player_handle, output_value=2,
+            ),
+            gameplay_action_record(
+                b"SWGT", 4, 220, ref_handle=player_handle, input_value=6,
+                output_value=6, selected_sequence=12,
+            ),
+            gameplay_action_record(
+                b"SHVY", 5, 310, server_entity=0x6000, ref_handle=npc_handle,
+                input_value=8, output_value=8, selected_sequence=22,
+            ),
+        )
+        actors = b"".join(
+            (
+                actor_record(
+                    6, 210, "character/pc/male.mdl", ref_handle=player_handle,
+                ),
+                actor_record(
+                    7, 320, "character/npc/common/cop.mdl", entity=0x2FFC,
+                    renderable=0x3000, ref_handle=npc_handle,
+                ),
+            )
+        )
+        # A probe on an object that never resolved to a networked entity.
+        unresolved = gameplay_action_record(
+            b"SHVY", 8, 330, ref_handle=0xFFFFFFFF, input_value=1,
+            caller_address=VAMPIRE_BASE + 0x8E40E, faults=0x2,
+        )
+        # The same read failing on the player, who is read cleanly above.
+        live = gameplay_action_record(
+            b"SWGT", 8, 330, ref_handle=player_handle, input_value=6,
+            selected_sequence=12, faults=0x4,
+        )
+        for label, extra, explained, expected in (
+            ("unresolved", unresolved, True, {"unresolved_object": 1}),
+            ("live", live, False, {"live_entity": 1}),
+        ):
+            with self.subTest(label):
+                with tempfile.TemporaryDirectory() as directory:
+                    session = Path(directory)
+                    write_session(
+                        session,
+                        pose_records=pose_record(1, 100, "models/test.mdl"),
+                        animation_records=animation_record(b"BASE", 2, 101),
+                        actor_records=actors,
+                        gameplay_action_records=b"".join(base) + extra,
+                        boundary=boundary,
+                        map_name="sm_hub_1",
+                    )
+                    finalize(session)
+                    report = verify_gameplay_actions(session)
+                    self.assertEqual(report["faulted_records"], 1)
+                    self.assertEqual(report["faults"]["by_class"], expected)
+                    self.assertEqual(
+                        report["checks"]["guarded_reads_explained"], explained
+                    )
+                    self.assertEqual(report["complete"], explained)
 
     def test_capture_finalizer_archives_the_run_zero_beside_the_records(self) -> None:
         # A calibration reading only the database has to find the trigger
@@ -5568,6 +5865,7 @@ class RetailCaptureTests(unittest.TestCase):
 
         self.assertIn("scene_events", SEQUENCE_TABLES)
         self.assertIn("sequence_changes", SEQUENCE_TABLES)
+        self.assertIn("gameplay_action_events", SEQUENCE_TABLES)
 
     def test_scene_layouts_match_the_probe_that_writes_them(self) -> None:
         source = (
@@ -5581,12 +5879,17 @@ class RetailCaptureTests(unittest.TestCase):
         self.assertEqual(SCENE_REQUEST_HEADER.size, 600)
         self.assertEqual(SEQUENCE_CHANGE_HEADER.size, 68)
         self.assertEqual(ACTOR_OBSERVATION_HEADER.size, 128)
+        self.assertEqual(GAMEPLAY_ACTION_FILE_HEADER.size, 128)
+        self.assertEqual(GAMEPLAY_ACTION_RECORD_HEADER.size, 100)
         self.assertIn("sizeof(SceneFileHeader) == 128", source)
         self.assertIn("sizeof(SceneRequestHeader) == 600", source)
         self.assertIn("sizeof(SequenceChangeHeader) == 68", source)
         self.assertIn("sizeof(ActorObservationHeader) == 128", source)
+        self.assertIn("sizeof(GameplayActionFileHeader) == 128", source)
+        self.assertIn("sizeof(GameplayActionRecordHeader) == 100", source)
         self.assertIn('std::memcpy(sceneHeader.magic, "ELSCN1", 6)', source)
         self.assertIn('std::memcpy(actorHeader.magic, "ELACT3", 6)', source)
+        self.assertIn('std::memcpy(actionHeader.magic, "ELGACT1", 7)', source)
 
     def test_scene_hooks_are_installed_inside_out_and_removed_outside_in(
         self,
@@ -5694,8 +5997,14 @@ class RetailCaptureTests(unittest.TestCase):
             for entry in spec["functions"]
         }
         image_base = int(spec["binary"]["image_base"], 0)
-        self.assertEqual(len(vampire["targets"]), 6)
-        for target in vampire["targets"]:
+        scene_spec = "research/cases/animation-pose/specs/scene_requests.json"
+        scene_targets = [
+            target
+            for target in vampire["targets"]
+            if target.get("source_spec", vampire["source_spec"]) == scene_spec
+        ]
+        self.assertEqual(len(scene_targets), 6)
+        for target in scene_targets:
             # An incrementally linked module holds E9 thunks in its vtable
             # slots, so a vtable backend would validate a thunk.
             self.assertEqual(target["kind"], "inline")
@@ -5707,13 +6016,41 @@ class RetailCaptureTests(unittest.TestCase):
             )
         widths = {
             target["source_function_label"]: len(target["expected_bytes"]) // 2
-            for target in vampire["targets"]
+            for target in scene_targets
         }
         # The inline backend refuses a decoded prologue wider than the
         # declaration, so the nine- and ten-byte widths are required.
         self.assertEqual(widths["scene_start_playback"], 9)
         self.assertEqual(widths["scene_cancel_playback"], 9)
         self.assertEqual(widths["scene_on_finished"], 10)
+
+        gameplay_spec_path = (
+            REPO_ROOT
+            / "research"
+            / "cases"
+            / "animation-pose"
+            / "specs"
+            / "gameplay_actions.json"
+        )
+        gameplay_spec = json.loads(gameplay_spec_path.read_text(encoding="utf-8"))
+        gameplay_functions = {
+            entry["label"]: int(entry["address"], 16)
+            for entry in gameplay_spec["functions"]
+        }
+        gameplay_targets = [
+            target
+            for target in vampire["targets"]
+            if target.get("source_spec")
+            == "research/cases/animation-pose/specs/gameplay_actions.json"
+        ]
+        self.assertEqual(len(gameplay_targets), 5)
+        for target in gameplay_targets:
+            self.assertEqual(target["kind"], "inline")
+            self.assertEqual(target["backend"], "inline_detour")
+            self.assertEqual(
+                gameplay_functions[target["source_function_label"]],
+                image_base + int(target["rva"], 0),
+            )
 
     def test_vampire_profile_names_the_module_the_process_loads(self) -> None:
         source = (
@@ -10231,6 +10568,85 @@ class ClipStageTests(unittest.TestCase):
         self.assertIn(("bone_to_world", "conventional"), pairs)
         for row in report["worst_bones"]:
             self.assertIn("candidate_rank_truncated", row)
+
+
+class ClipTableJoinTests(unittest.TestCase):
+    """The activity-name join's decisions, without needing a VtMB install.
+
+    `build_clip_table` reads real `.mdl` bytes, which are the user's and cannot
+    be fixtured. What it *decides* is pure: which include-tree ordering explains
+    the capture, and how a model name the actor stream truncated is recovered.
+    """
+
+    @staticmethod
+    def _name_at(flat: list[str | None], sequence: int) -> str | None:
+        if not 0 <= sequence < len(flat):
+            return None
+        return flat[sequence]
+
+    def test_ordering_that_labels_each_activity_once_is_chosen(self) -> None:
+        observed = {
+            ("m", 1): Counter({0: 90, 3: 10}),
+            ("m", 19): Counter({1: 50}),
+        }
+        flats = {
+            "m": {
+                # Right: both clips the engine chose for activity 1 are idles.
+                "nodedup": ["ACT_IDLE", "ACT_RUN", "ACT_WALK", "ACT_IDLE"],
+                # Wrong: activity 1 straddles an idle and a run, and 3 overruns.
+                "dedup": ["ACT_IDLE", "ACT_RUN", "ACT_WALK"],
+            }
+        }
+        scores = score_orderings(observed, flats, name_at=self._name_at)
+        self.assertEqual(
+            scores["nodedup"],
+            {"groups": 2, "contradictions": 0, "overruns": 0},
+        )
+        self.assertEqual(
+            scores["dedup"],
+            {"groups": 2, "contradictions": 0, "overruns": 1},
+        )
+        self.assertEqual(best_ordering(scores), "nodedup")
+
+    def test_a_contradiction_outranks_an_overrun(self) -> None:
+        # An index off the end is one missing answer; a group naming two
+        # activities means the whole array is shifted, so it must lose.
+        scores = {
+            "dedup": {"groups": 9, "contradictions": 1, "overruns": 0},
+            "nodedup": {"groups": 9, "contradictions": 0, "overruns": 4},
+        }
+        self.assertEqual(best_ordering(scores), "nodedup")
+
+    def test_truncated_model_name_resolves_by_unique_prefix(self) -> None:
+        # ACTOR records carry a fixed-width name, so a long path loses its tail.
+        index = {
+            "models/character/npc/prostitute_2_ref.mdl": object(),
+            "models/character/npc/other.mdl": object(),
+        }
+        load = lambda key: b"x" if key in index else None
+        key, truncated = resolve_model_key(
+            index, "character/npc/prostitute_2_Ref.md", load
+        )
+        self.assertEqual(key, "models/character/npc/prostitute_2_ref.mdl")
+        self.assertTrue(truncated)
+
+    def test_an_untruncated_name_is_not_reported_as_recovered(self) -> None:
+        index = {"models/character/npc/other.mdl": object()}
+        load = lambda key: b"x" if key in index else None
+        key, truncated = resolve_model_key(index, "character/npc/other", load)
+        self.assertEqual(key, "models/character/npc/other.mdl")
+        self.assertFalse(truncated)
+
+    def test_an_ambiguous_prefix_resolves_to_nothing(self) -> None:
+        # Attributing the wrong clip table to an NPC is worse than omitting it.
+        index = {
+            "models/character/npc/cop_a.mdl": object(),
+            "models/character/npc/cop_b.mdl": object(),
+        }
+        load = lambda key: b"x" if key in index else None
+        key, truncated = resolve_model_key(index, "character/npc/cop_", load)
+        self.assertIsNone(key)
+        self.assertFalse(truncated)
 
 
 if __name__ == "__main__":

@@ -35,6 +35,56 @@
       },
       "targets": [
         {
+          "semantic_label": "vampire.classify_player_animation_action",
+          "source_function_label": "classify_player_animation_action",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0016bb50",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18a86b01c0000"
+        },
+        {
+          "semantic_label": "vampire.set_ideal_activity",
+          "source_function_label": "set_ideal_activity",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00324500",
+          "calling_convention": "thiscall",
+          "expected_bytes": "85c974118b916c020000"
+        },
+        {
+          "semantic_label": "vampire.weapon_translate_activity",
+          "source_function_label": "weapon_translate_activity",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00327ec0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "85c974118b916c020000"
+        },
+        {
+          "semantic_label": "vampire.select_weighted_sequence",
+          "source_function_label": "select_weighted_sequence",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0008dc40",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b800400000"
+        },
+        {
+          "semantic_label": "vampire.select_heaviest_sequence",
+          "source_function_label": "select_heaviest_sequence",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0008dd30",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b800400000"
+        },
+        {
           "semantic_label": "vampire.scene_find_named_entity",
           "source_function_label": "scene_find_named_entity",
           "kind": "inline",

@@ -40,6 +40,8 @@ from research.tooling.capture.finalize_capture_database import (
     CONTRIBUTION_FILE_HEADER,
     CONTRIBUTION_RECORD_HEADER,
     CONTRIBUTION_RECORD_HEADER_V1,
+    GAMEPLAY_ACTION_FILE_HEADER,
+    GAMEPLAY_ACTION_RECORD_HEADER,
     MODEL_IMAGE_HEADER,
     MODEL_OBSERVATION_HEADER,
     POSE_FILE_HEADER,
@@ -188,6 +190,14 @@ def scene_bytes_expression() -> str:
     )
 
 
+def gameplay_action_bytes_expression() -> str:
+    """The fixed-width gameplay policy events from their dedicated table."""
+    return (
+        f"SELECT {GAMEPLAY_ACTION_RECORD_HEADER.size} AS bytes, kind, qpc "
+        "FROM gameplay_action_events"
+    )
+
+
 CAPTURE_ROOT = "retail-capture"
 
 
@@ -284,6 +294,8 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
             if name == "contribution"
             else SCENE_FILE_HEADER
             if name == "scene"
+            else GAMEPLAY_ACTION_FILE_HEADER
+            if name == "gameplay_action"
             else ANIMATION_FILE_HEADER
         )
         fields = layout.unpack(blob)
@@ -315,6 +327,10 @@ def stream_headers(connection: sqlite3.Connection) -> dict[str, dict[str, Any]]:
                     "client_base": f"0x{int(fields[7]):08x}",
                 }
                 if name == "scene"
+                else {
+                    "vampire_base": f"0x{int(fields[6]):08x}",
+                }
+                if name == "gameplay_action"
                 else {"client_base": f"0x{int(fields[6]):08x}"}
             ),
         }
@@ -332,6 +348,7 @@ SEQUENCE_TABLES = (
     "actor_observations",
     "scene_events",
     "sequence_changes",
+    "gameplay_action_events",
 )
 def table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
     """The column names a table actually carries.
@@ -463,6 +480,7 @@ def volume(
             ),
         ),
         ("scene", scene_bytes_expression()),
+        ("gameplay_action", gameplay_action_bytes_expression()),
     ):
         if stream not in headers:
             continue

@@ -103,6 +103,22 @@ struct FElysiumBlendPick
 	float Fraction[2] = { 0.f, 0.f };
 };
 
+// The clips one host sequence is composed with, in the order the engine walks them. Read from the
+// same sequence descriptor as the grids, which is why it rides in the same file.
+//
+// **The order is data.** An overlay blends toward its own pose with complementary weights, so it
+// overwrites an additive already accumulated onto the bones it owns; walking the array in the order
+// it declares is what keeps both contributions. Nearly every host declares its overlay first, and
+// exactly one — `throwing_star_midcrouch_idle`, on both shared banks — declares its additive first.
+// A consumer that sorts, dedupes by kind, or hardcodes overlay-first composes that host differently
+// from retail (`docs/vtmb/animation_and_movers.md` A.3).
+//
+// The record carries no weight, ramp or flags: what a layer contributes is the caller's to supply.
+struct FElysiumAutoLayerBinding
+{
+	TArray<FString> Clips;
+};
+
 struct FElysiumBlendTable
 {
 	FString Stem;
@@ -110,11 +126,18 @@ struct FElysiumBlendTable
 	// Keyed by sequence label. FString keys hash and compare case-insensitively in Unreal, which is
 	// what the clip vocabulary relies on too — content spells a label however it likes.
 	TMap<FString, FElysiumBlendGrid> Grids;
+	// Keyed the same way, by HOST label. Only the two shared `move_and_ranged` banks carry any.
+	TMap<FString, FElysiumAutoLayerBinding> AutoLayers;
 
-	// A table that parses but declares no grid is not worth caching as a table. The exporter writes
-	// no file at all in that case, so this only fires on a damaged one.
-	bool IsValid() const { return !Grids.IsEmpty(); }
+	// A table that parses but declares neither a grid nor a binding is not worth caching. The
+	// exporter writes no file at all in that case, so this only fires on a damaged one.
+	bool IsValid() const { return !Grids.IsEmpty() || !AutoLayers.IsEmpty(); }
 	const FElysiumBlendGrid* Find(const FString& Label) const { return Grids.Find(Label); }
+	// The layers `Label` declares, or null. Never reordered — see FElysiumAutoLayerBinding.
+	const FElysiumAutoLayerBinding* FindAutoLayers(const FString& Label) const
+	{
+		return AutoLayers.Find(Label);
+	}
 	const FElysiumPoseParamDesc* Param(int32 Index) const
 	{
 		return PoseParams.IsValidIndex(Index) ? &PoseParams[Index] : nullptr;

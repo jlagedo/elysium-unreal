@@ -278,6 +278,81 @@ change with a build, while the name is what the `.mdl` ships. Landmarks: `ACT_ID
 `ACT_DISPOSITION` = 0xf1. The tail of the table is a long knockback/ragdoll family
 (`ACT_KNOCKBACK_FLYING_*`), which is why the count is so much larger than any one model's vocabulary.
 
+### Player action selection is code around the model table [VtMB decompiled]
+
+The server-side player path is located in the pinned patch `vampire.dll`. It is not a direct
+button-to-clip table. `CBasePlayer::PostThink` reads the player's realized state, asks a compact
+classifier for an action code, and routes that code through the current animation mode before a
+base activity is translated and selected against the model:
+
+| Address | Working role | Established behavior |
+|---|---|---|
+| `0x1016be10` | `CBasePlayer::PostThink` | calls the classifier, then virtual `+0x704` with its result |
+| `0x1016bb50` | player action classifier | returns `-1` or a compact code from movement/ground/water/scripted state; symbolic names for the complete code set are not established |
+| `0x10164240` | animation-mode router | dispatches the action code through mode-specific virtuals; the ordinary mode reaches virtual `+0x684` |
+| `0x10164870` | ordinary player selector | writes `move_yaw`, `aim_yaw` and `aim_pitch`, chooses a base activity, then calls the apply path |
+| `0x101644f0` | activity/sequence apply | stores ideal activity, translates/sets the activity, chooses weighted or heaviest sequence, stores `m_nSequence`, calls `ResetSequenceInfo`, and derives playback rate |
+| `0x1008dc40` / `0x1008dd30` | `SelectWeightedSequence` / `SelectHeaviestSequence` | resolve one activity against the current studio header |
+| `0x10090950` | `ResetSequenceInfo` | resets cycle/sequence state after a changed selection |
+
+The classifier is driven by state after movement rather than by raw input. Its decompile tests the
+current velocity components, ground flags, water level, jump/landing state, a live interaction
+handle and special animation latches. Known returns in the ordinary path cover idle/moving,
+air/water and contextual states, but assigning a durable symbolic name to every compact code needs
+the controlled action trace; the integer is an internal dispatcher key, not the activity enum.
+
+The ordinary selector reaches these base activity families in the recovered branches, with the
+numeric identities independently fixed by the global registration table:
+
+- `ACT_IDLE` (1), `ACT_AIM` (5), `ACT_WALK` (9), `ACT_SNEAK` (`0x12`), `ACT_RUN` (`0x13`),
+  `ACT_WALK_RELAXED` (`0x16`) and `ACT_RUN_RELAXED` (`0x17`);
+- `ACT_SWIM` (`0x25`) and `ACT_TREADWATER` (`0x26`);
+- `ACT_HOP` through `ACT_HOP_DOWN` (`0x28`–`0x2a`), `ACT_LEAP` through
+  `ACT_LEAP_DESCEND` (`0x2c`–`0x2e`), `ACT_FALLING` (`0x2f`), and the three land activities
+  (`0x30`–`0x32`);
+- `ACT_CLIMB_UP` / `ACT_CLIMB_DOWN` (`0x33`/`0x34`) and `ACT_CROUCH` (`0x3f`).
+
+Presence in this selector does not prove a branch is reachable in shipped gameplay. In particular,
+the activity inventory is broader than the reconstructed movement system, so a controlled trace is
+what separates a live action from inherited/dead engine code.
+
+Activity translation is a second compiled-data layer. `CBaseCombatCharacter::Weapon_TranslateActivity`
+at `0x10327ec0` asks the active weapon's virtual `+0x5a4` for an override. A weapon exposes the same
+table independently through virtual `+0x5a8` (pointer) and `+0x5ac` (count); the table row is three
+dwords — base activity, weapon activity, and `required`. `0x1024edc0`, reached by retail's developer
+ConVar `activitydump`, prints those exact rows as **Base Act / Weapon Act / Required**. This is an
+extractable table per weapon class, not a set of clip-name heuristics.
+
+The apply path first calls `CBaseCombatCharacter::SetIdealActivity` at `0x10324500`, whose entire
+body stores the requested value at character `+0xff0`. The translation virtuals and final
+`SetActivity`/selection follow; preserving the exact order of all mode/form/class hooks is part of
+the open call-graph closure rather than something inferred from the setter's name.
+
+`CBasePlayer::NPC_TranslateActivity` at `0x101647a0` is a further player-specific translation: it
+maps `ACT_WALK_RELAXED` to `ACT_WALK` and `ACT_RUN_RELAXED` to `ACT_RUN`, leaving other activities
+unchanged. The complete ordering and the mode-specific/form-specific translation paths remain part
+of the gameplay-action investigation; the known functions and open edges are pinned in
+`research/cases/animation-pose/specs/gameplay_actions.json`.
+
+The model makes the final choice. `SelectWeightedSequence` enumerates sequences whose runtime
+activity ID matches, then uses `actweight`; the chosen sequence still carries the label, include
+owner, blend grid, flags, fade, events and autolayers described in this section. The player-body
+union currently contains 3,330 exact sequence descriptors and **1,202 distinct non-empty activity
+literals**. That population makes a manually authored remake table both incomplete and unnecessary:
+the model inventory is the table.
+
+The retail `player_sequence` command is the deliberate bypass. Its handler at `0x10348560` resolves
+an exact label through `LookupSequence` (`0x1008f7b0`), writes `m_nSequence`, calls
+`ResetSequenceInfo`, and zeros the cycle. It performs no activity or weapon translation. Scripted
+and choreographed content that names an exact sequence needs the same distinct route in a remake;
+ordinary gameplay does not.
+
+The equivalent NPC policy chain is not yet closed. NPCs clearly share the same activity registry,
+model vocabulary and final sequence selectors, while schedules/tasks and class overrides decide
+their desired activities. The exact `schedule/task → ideal activity → translation → selection`
+call graph, interrupt order, and weapon/class override order are open RE facts; they must be
+recovered rather than inferred from later public Source code.
+
 `numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
 array is located but not decoded. Whole-install scope is **1,044 event-bearing
 sequences / 1,714 events**. The current exporter writes no event timeline.
@@ -370,6 +445,23 @@ statement the empty-activity population above makes from the other side.
 
 The two-entry pattern is uniform: `<weapon>_aim_layer` plus `<weapon>_<action>_delta` — a masked
 partial-body overlay and an unmasked additive, one of each.
+
+**`autolayerindex`@664 is relative to the descriptor, and its entries index the declaring model's
+own local sequence array** [data-verified]. Read that way, all 345 entries on the male bank and all
+340 on the female resolve inside `NumLocalSeq`@272 and every one names a `_layer` or `_delta`
+sequence; read as an absolute file offset, 64 and 43 resolve and none is a layer. The two readings
+are distinguished by the data rather than by the SDK, and the name partition is the check.
+
+**Entry order is authored data, not a convention** [data-verified]. The dispatcher walks the array
+in index order, and on 112 of the male bank's 113 two-entry hosts — 110 of the female's 111 — the
+overlay is entry 0 and the additive entry 1, which is the only order in which both survive: an
+overlay blends toward its own pose with complementary weights and so overwrites an additive already
+accumulated onto the bones it owns. **One host inverts it, byte-identically on both banks**:
+`throwing_star_midcrouch_idle` declares `pistol_midcrouch_idle_delta` first and
+`throwing_star_aim_layer` second. It also borrows a *pistol* delta under a throwing-star host, which
+reads as authoring reuse rather than intent, but it is what the file states and a consumer that
+hardcodes overlay-first composes this one host differently from retail. Single-entry hosts are
+always an overlay — 119 male, 118 female, no additive among them.
 
 **The running game reproduces that census exactly.** Capture of the retail pose pipeline records
 **461 of 2,478** captured sequence descriptors carrying autolayers — the same 461 the static
@@ -1843,3 +1935,8 @@ move_and_ranged.mdl` (602 seq). Mover logic [VtMB]: `vampire.dll` Spawn function
 `FUN_10116030`; `CBaseDoor::Use` `FUN_100efc90`, `CBaseDoor::Blocked` `FUN_100f14a0`;
 `m_spawnflags` dword @entity+`0x204`, `m_toggle_state` @`0x4f8`, `m_flMoveDoneTime`
 @`0x10554988`; RTTI class recovery for the full lineage.
+
+Gameplay-action selection [VtMB — decompiled + data-verified]: hash-pinned
+`research/cases/animation-pose/specs/gameplay_actions.json`; player-model descriptor inventory from
+`research/tooling/capture/inventory_player_animations.py`. The specification records confirmed
+addresses and preserves the unresolved player-code vocabulary and NPC policy edges as questions.

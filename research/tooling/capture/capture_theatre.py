@@ -20,6 +20,10 @@ closing gunfight, so the operator plays the fight and the dialog after it and
 the authored transition to ``sm_pawnshop_1`` stops the run. It is the corpus
 that reaches the four-cell blend path: every 3x3 grid in the game is a weapon
 aim layer autolayered from a ranged activity, which no cutscene enters.
+
+``sm_hub_1`` is the operator-driven gameplay corpus. The operator marks player
+locomotion, NPC locomotion, dialogue and reaction beats, then ends the run with
+F12. It is deliberately hand-ended: the hub has no authored terminal boundary.
 """
 
 from __future__ import annotations
@@ -197,7 +201,39 @@ TUTORIAL = Recipe(
 )
 
 
-RECIPES = {recipe.name: recipe for recipe in (THEATRE, TUTORIAL)}
+HUB = Recipe(
+    name="sm_hub_1",
+    config_name="elysium_re37_sm_hub_1.cfg",
+    config_signature="// Generated retained RE37 sm_hub_1 action capture recipe.",
+    boot_marker="ELYSIUM_RE37_BOOT",
+    map_marker="ELYSIUM_RE37_MAP_SM_HUB_1",
+    entry_template="map sm_hub_1",
+    arm_marker=None,
+    stop_console_tokens=(),
+    stop_state_globs=(),
+    operator_stop_token="ELYSIUM_RE37_STOP",
+    beat_binds=(
+        ("F6", "ELYSIUM_RE37_BEAT_PLAYER_LOCOMOTION"),
+        ("F7", "ELYSIUM_RE37_BEAT_NPC_LOCOMOTION"),
+        ("F8", "ELYSIUM_RE37_BEAT_DIALOG"),
+        ("F9", "ELYSIUM_RE37_BEAT_REACTION"),
+        ("F12", "ELYSIUM_RE37_STOP"),
+    ),
+    run_zero_rule="map_load_batch",
+    session_root="gameplay-actions",
+    session_prefix="re37_sm_hub_1",
+    scene_seconds=300,
+    probe_seconds=120,
+    backstop_seconds=600,
+    operator_notes=(
+        "F6 marks player locomotion: walk, run, strafe, crouch and jump. ",
+        "F7 marks an NPC locomotion sample, F8 a dialogue, and F9 a visible "
+        "reaction or gesture. Press F12 only after those beats are complete.",
+    ),
+)
+
+
+RECIPES = {recipe.name: recipe for recipe in (THEATRE, TUTORIAL, HUB)}
 
 
 def sha256(path: Path) -> str:
@@ -458,6 +494,16 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
     decode_quaternion = target(client, "client.decode_bone_quaternion")
     decode_position = target(client, "client.decode_bone_position")
     vampire = _profile("vampire.dll")
+    gameplay_action_targets = {
+        name: target(vampire, f"vampire.{name}")
+        for name in (
+            "classify_player_animation_action",
+            "set_ideal_activity",
+            "weapon_translate_activity",
+            "select_weighted_sequence",
+            "select_heaviest_sequence",
+        )
+    }
     scene_targets = {
         name: target(vampire, f"vampire.{name}")
         for name in (
@@ -478,6 +524,7 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "actor_output": session / "actor.elact",
         "contribution_output": session / "contribution.elcon",
         "scene_output": session / "scene.elscn",
+        "gameplay_action_output": session / "gameplay.elgact",
         "ready": session / "ready.txt",
         "stop": session / "stop.txt",
         "done": session / "done.txt",
@@ -521,6 +568,9 @@ def write_hook_ini(path: Path, session: Path, duration_seconds: int) -> None:
         "duration_seconds": duration_seconds + 60,
     }
     for name, entry in scene_targets.items():
+        values[f"{name}_rva"] = f"0x{entry['rva']:x}"
+        values[f"{name}_expected"] = entry["expected_bytes"]
+    for name, entry in gameplay_action_targets.items():
         values[f"{name}_rva"] = f"0x{entry['rva']:x}"
         values[f"{name}_expected"] = entry["expected_bytes"]
     path.write_text(
@@ -902,12 +952,16 @@ def run(args: argparse.Namespace) -> int:
         session,
         retain_temporary_streams=args.retain_temporary_streams,
     )
+    from research.tooling.capture.verify_gameplay_actions import verify
+
+    gameplay_action_report = verify(session)
     clean = (
         int(hook_done.get("dropped", "0")) == 0
         and not any(database_report["incomplete_tail_bytes"].values())
         and list(boundary["markers"]) == list(recipe.markers)
         and watcher.arm_qpc is not None
         and (args.probe or watcher.signal is not None)
+        and (recipe is not HUB or gameplay_action_report["complete"])
     )
     result_path = session / "result.json"
     result_document = {
@@ -915,6 +969,7 @@ def run(args: argparse.Namespace) -> int:
         "boundary": boundary,
         "supervision": finalization,
         "hook": hook_done,
+        "gameplay_actions": gameplay_action_report,
         **database_report,
     }
     result_path.write_text(

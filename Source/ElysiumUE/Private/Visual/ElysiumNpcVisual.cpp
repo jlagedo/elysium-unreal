@@ -43,8 +43,12 @@ static TAutoConsoleVariable<int32> CVarBakedCharacters(
 		 "glTFRuntime at map load (0). Applied at map load."),
 	ECVF_Default);
 
+// Default 0 — the garment simulation is a spike and is off. It also gates the mesh path: a stem
+// the spike built is excluded from the baked mount while this is 1 (`IsStemBaked`), because a
+// garment rig names bones the shared skeleton does not carry, so turning it on puts that stem back
+// on glTFRuntime.
 static TAutoConsoleVariable<int32> CVarCloth(
-	TEXT("elysium.Cloth"), 1,
+	TEXT("elysium.Cloth"), 0,
 	TEXT("Simulate garments on the models the cloth spike built (1) or wear the faithful rigid "
 		 "mesh (0). Applied at map load."),
 	ECVF_Default);

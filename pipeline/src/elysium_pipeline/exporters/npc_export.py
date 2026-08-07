@@ -368,8 +368,9 @@ def write_procedural(stem, model, rules, prefix=""):
 
 
 def write_blends(stem, model, table, prefix=""):
-    """Write one model's blend grids to `<prefix>blends/<stem>.json` -> the manifest fields
-    naming it.
+    """Write one model's blend grids and autolayer binding to `<prefix>blends/<stem>.json` ->
+    the manifest fields naming it. Both are read from the same 764-byte sequence descriptor,
+    so they ship in one file; a model authoring neither writes none.
 
     Kept out of `npc_manifest.json` for the reason the flex rigs and procedural tables are:
     `move_and_ranged` alone authors 253 grids, and a map places 17-22 models. `{}` for a model
@@ -400,10 +401,18 @@ def write_blends(stem, model, table, prefix=""):
                            "carries authored movement also has a `motion` summary in seconds, "
                            "centimetres and centimetres/second for an in-place host motor. "
                            "Evaluate each cell and "
-                           "blend the results — never blend the clips. See "
-                           "docs/vtmb/animation_and_movers.md A.3.",
+                           "blend the results — never blend the clips. "
+                           "autolayers[label] names the clips composed WITH that host, in "
+                           "the order the engine walks them: the host is the base pose and "
+                           "each entry is evaluated beside it and accumulated onto it, as a "
+                           "masked overlay or as an additive according to that clip's own "
+                           "flags and mask. The order is data, not a convention — an overlay "
+                           "blends toward its own pose and would overwrite an additive "
+                           "already accumulated onto the bones it owns. The record carries no "
+                           "weight, ramp or flags; the weight a layer arrives with is the "
+                           "host's. See docs/vtmb/animation_and_movers.md A.3.",
                    **table}, f, separators=(",", ":"))
-    return {"blends": rel, "blend_grids": len(table["grids"])}
+    return {"blends": rel, "blend_grids": len(table.get("grids", {}))}
 
 
 def animated_prop_index_row(rec):

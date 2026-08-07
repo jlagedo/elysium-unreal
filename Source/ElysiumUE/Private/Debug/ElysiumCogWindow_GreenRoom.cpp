@@ -680,6 +680,8 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("the BACKWARD walk, and the middle of this slider is the forward one.");
 	}
 
+	RenderAutoLayers(Lab);
+
 	// The layer controls, drawn whether or not one is running: the weight has to be settable before
 	// the pick, because a layer picked at 1.0 and then dialled back reads as a different clip.
 	ImGui::SetNextItemWidth(GetDpiScale() * 160.f);
@@ -855,6 +857,95 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 	else
 	{
 		ImGui::TextDisabled("Both need a garment rig on the standing body - see the Cloth tab.");
+	}
+}
+
+void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
+{
+	// What the MODEL declares rides over the standing clip, in the order it declares them. The lab
+	// does not choose this list — it displays it and lets it be armed, so a disagreement between
+	// what was declared and what is riding is visible rather than inferred.
+	const FString Standing = Lab.LabClip();
+	if (Standing.IsEmpty())
+	{
+		return;
+	}
+	const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI != nullptr ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>()
+		: nullptr;
+	const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Lab.LabStem()) : nullptr;
+	const FElysiumNpcClip* Host = Set != nullptr ? Set->Find(Standing) : nullptr;
+	if (Host == nullptr)
+	{
+		return;
+	}
+	// The binding lives on the model that OWNS the clip, which for every shipped host is a shared
+	// locomotion bank rather than the body standing on the stage.
+	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(Host->Owner);
+	const FElysiumAutoLayerBinding* Binding = Table.IsValid()
+		? Table->FindAutoLayers(Standing) : nullptr;
+	if (Binding == nullptr || Binding->Clips.IsEmpty())
+	{
+		return;
+	}
+
+	ImGui::SeparatorText(COG_TCHAR_TO_CHAR(*FString::Printf(
+		TEXT("Autolayers declared by %s (%d)"), *Standing, Binding->Clips.Num())));
+
+	const TArray<FString>& Armed = Lab.LabLayers();
+	for (int32 Entry = 0; Entry < Binding->Clips.Num(); ++Entry)
+	{
+		const FString& Layer = Binding->Clips[Entry];
+		const FElysiumNpcClip* Target = Set->Find(Layer);
+		const bool bAdditive = Target != nullptr && Target->IsAdditive();
+		const bool bRiding = Armed.Contains(Layer);
+
+		ImGui::PushID(Entry);
+		if (ImGui::SmallButton(bRiding ? "re-arm" : "arm"))
+		{
+			Lab.LabSetLayer(Layer, LayerWeight, LastError);
+		}
+		ImGui::SameLine();
+		// The index is on the row because it is the payload: the engine walks this array in order,
+		// and an overlay armed after an additive overwrites it on every bone its mask owns.
+		ImGui::TextColored(bRiding ? ElysiumCogStyle::ColName : ElysiumCogStyle::ColDim,
+			"%d  %s   [%s]%s", Entry, COG_TCHAR_TO_CHAR(*Layer),
+			Target == nullptr ? "unresolved" : (bAdditive ? "additive" : "overlay"),
+			bRiding ? "  riding" : "");
+		ImGui::PopID();
+	}
+
+	if (ImGui::Button("Arm as declared"))
+	{
+		// In declaration order, and without clearing first: re-asking for a layer already riding
+		// only re-weights it, so this is idempotent and does not restart what is already correct.
+		LastError.Reset();
+		for (const FString& Layer : Binding->Clips)
+		{
+			Lab.LabSetLayer(Layer, LayerWeight, LastError);
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Reverse order"))
+	{
+		// The A/B for the composition order. Both contributions survive in exactly one order, so
+		// the wrong one is visible rather than argued: the overlay's bones lose the additive.
+		LastError.Reset();
+		Lab.LabClearLayers();
+		for (int32 Entry = Binding->Clips.Num() - 1; Entry >= 0; --Entry)
+		{
+			Lab.LabSetLayer(Binding->Clips[Entry], LayerWeight, LastError);
+		}
+	}
+
+	// The weight is the one number here that is not the model's. Until a capture measures what
+	// retail's dispatcher passes, the slider below IS the value, and saying so on screen is what
+	// keeps a stand-in from being read as a measurement.
+	ImGui::TextDisabled("Selected by: the model's own table.  Weight: the slider (a STAND-IN --");
+	ImGui::TextDisabled("the 4-byte record carries no weight, so retail's lives in the game DLL).");
+	if (!LastError.IsEmpty())
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
 	}
 }
 

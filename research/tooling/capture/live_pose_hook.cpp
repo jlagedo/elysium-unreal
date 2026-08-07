@@ -145,6 +145,27 @@ constexpr DWORD kChoreoActorRenameTo = 0x13c;
 constexpr DWORD kTransitionBuffer = 0x67c;
 constexpr DWORD kTransitionCount = 0x688;
 
+// Server animation state witnessed at the gameplay-action boundaries. The
+// common fields live on CBaseAnimating/CBaseCombatCharacter; the last three are
+// player-only classifier inputs and are read only by the PCLS hook.
+constexpr DWORD kServerSequence = 0x6f0;
+constexpr DWORD kServerCurrentActivity = 0xfec;
+constexpr DWORD kServerIdealActivity = 0xff0;
+constexpr DWORD kServerActiveWeapon = 0x19a4;
+constexpr DWORD kServerVelocity = 0x3d4;
+constexpr DWORD kPlayerWaterLevel = 0x3e0;
+constexpr DWORD kPlayerActionLatch = 0x1cb0;
+constexpr DWORD kPlayerRetainedAction = 0x1cb4;
+constexpr DWORD kPlayerJumpLandingState = 0x1db4;
+
+enum GameplayActionFault : std::uint32_t {
+    kGameplayActionFaultEntity = 1u << 0,
+    kGameplayActionFaultRefHandle = 1u << 1,
+    kGameplayActionFaultCommonState = 1u << 2,
+    kGameplayActionFaultCombatState = 1u << 3,
+    kGameplayActionFaultPlayerState = 1u << 4,
+};
+
 // Bounded string spans on a scene record. Every copy is bounded and flags its
 // own truncation, so a field width is measured by the run rather than assumed.
 constexpr DWORD kSceneFileBytes = 128;
@@ -188,6 +209,7 @@ enum StreamIndex : std::uint32_t {
     kStreamActor = 3,
     kStreamContribution = 4,
     kStreamScene = 5,
+    kStreamGameplayAction = 6,
 };
 
 // Why an observation was emitted. Reuse is a pointer that served one checksum
@@ -600,6 +622,52 @@ struct SequenceChangeHeader {
     std::uint32_t callerAddress;
     std::uint32_t faults;
 };
+
+struct GameplayActionFileHeader {
+    char magic[8];
+    std::uint32_t version;
+    std::uint32_t headerBytes;
+    std::uint64_t qpcFrequency;
+    std::int64_t startQpc;
+    std::uint32_t pid;
+    std::uint32_t vampireBase;
+    std::uint32_t classifyPlayerActionRva;
+    std::uint32_t setIdealActivityRva;
+    std::uint32_t weaponTranslateActivityRva;
+    std::uint32_t selectWeightedSequenceRva;
+    std::uint32_t selectHeaviestSequenceRva;
+    char vampireSha256[65];
+    char reserved[3];
+};
+
+// A fixed-width record at one policy boundary. `inputValue` and `outputValue`
+// are deliberately generic: PCLS carries the returned compact player code,
+// IDEA/WTRN carry activities, and SWGT/SHVY carry activity -> sequence. The
+// snapshots make the difference between ideal/current activity visible even
+// before every class-specific translation hook is located.
+struct GameplayActionRecordHeader {
+    char magic[4];
+    std::uint32_t recordBytes;
+    std::uint64_t sequence;
+    std::int64_t qpc;
+    std::uint32_t threadId;
+    std::uint32_t serverEntity;
+    std::uint32_t refHandle;
+    std::uint32_t callerAddress;
+    std::int32_t inputValue;
+    std::int32_t outputValue;
+    std::int32_t selectionArgument;
+    std::int32_t selectedSequence;
+    std::int32_t currentActivity;
+    std::int32_t idealActivity;
+    std::int32_t currentSequence;
+    std::uint32_t activeWeaponHandle;
+    float velocity[3];
+    std::int32_t waterLevel;
+    std::int32_t retainedAction;
+    std::int32_t jumpLandingState;
+    std::uint32_t faults;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(FileHeader) == 128, "capture file header changed");
@@ -638,6 +706,12 @@ static_assert(
 static_assert(
     sizeof(SequenceChangeHeader) == 68,
     "sequence change record header changed");
+static_assert(
+    sizeof(GameplayActionFileHeader) == 128,
+    "gameplay-action capture file header changed");
+static_assert(
+    sizeof(GameplayActionRecordHeader) == 100,
+    "gameplay-action record header changed");
 
 struct PendingRecord {
     PendingRecord* next;
@@ -718,6 +792,16 @@ using SceneApplyAnimSetFn = std::uint32_t(__thiscall*)(void*, void*);
 using MaintainSequenceTransitionsFn = std::uint32_t(__thiscall*)(
     void*, std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t,
     std::uint32_t);
+
+// Server action frames, pinned from their RET widths and call sites in
+// gameplay_actions.json. SelectWeighted/Heaviest take the requested activity
+// and the caller's current-sequence hint and return the selected sequence.
+using ClassifyPlayerAnimationActionFn = std::int32_t(__thiscall*)(void*);
+using SetIdealActivityFn = void(__thiscall*)(void*, std::int32_t);
+using WeaponTranslateActivityFn =
+    std::int32_t(__thiscall*)(void*, std::int32_t);
+using SelectActivitySequenceFn =
+    std::int32_t(__thiscall*)(void*, std::int32_t, std::int32_t);
 
 // The bracket a record was produced inside. Nothing here is shared between
 // threads, so a push and a pop cost no interlocked operation and no
@@ -821,6 +905,11 @@ SceneDispatchStartEventFn gOriginalSceneDispatchStartEvent = nullptr;
 SceneFindNamedEntityFn gOriginalSceneFindNamedEntity = nullptr;
 SceneApplyAnimSetFn gOriginalSceneApplyAnimSet = nullptr;
 MaintainSequenceTransitionsFn gOriginalMaintainSequenceTransitions = nullptr;
+ClassifyPlayerAnimationActionFn gOriginalClassifyPlayerAnimationAction = nullptr;
+SetIdealActivityFn gOriginalSetIdealActivity = nullptr;
+WeaponTranslateActivityFn gOriginalWeaponTranslateActivity = nullptr;
+SelectActivitySequenceFn gOriginalSelectWeightedSequence = nullptr;
+SelectActivitySequenceFn gOriginalSelectHeaviestSequence = nullptr;
 elysium::capture::HookHandle gDrawModelHook;
 elysium::capture::HookHandle gResolveVirtualModelPoseHook;
 elysium::capture::HookHandle gBuildTransformationsHook;
@@ -841,6 +930,11 @@ elysium::capture::HookHandle gSceneDispatchStartEventHook;
 elysium::capture::HookHandle gSceneFindNamedEntityHook;
 elysium::capture::HookHandle gSceneApplyAnimSetHook;
 elysium::capture::HookHandle gMaintainSequenceTransitionsHook;
+elysium::capture::HookHandle gClassifyPlayerAnimationActionHook;
+elysium::capture::HookHandle gSetIdealActivityHook;
+elysium::capture::HookHandle gWeaponTranslateActivityHook;
+elysium::capture::HookHandle gSelectWeightedSequenceHook;
+elysium::capture::HookHandle gSelectHeaviestSequenceHook;
 __declspec(thread) ThreadPoseState gThread{};
 HANDLE gOutput = INVALID_HANDLE_VALUE;
 HANDLE gAnimationOutput = INVALID_HANDLE_VALUE;
@@ -848,6 +942,7 @@ HANDLE gCensusOutput = INVALID_HANDLE_VALUE;
 HANDLE gActorOutput = INVALID_HANDLE_VALUE;
 HANDLE gContributionOutput = INVALID_HANDLE_VALUE;
 HANDLE gSceneOutput = INVALID_HANDLE_VALUE;
+HANDLE gGameplayActionOutput = INVALID_HANDLE_VALUE;
 // Census payloads are the largest allocation the probe ever makes. Taking the
 // game's process heap lock for a multi-megabyte block from a render callback
 // is the one hitch this design could introduce, so they come from a heap of
@@ -921,6 +1016,13 @@ volatile LONG gSceneTruncated = 0;
 // on the same terms as the per-call decoder totals the probe already refuses.
 volatile LONG gSceneResolutionsUnscoped = 0;
 volatile LONG64 gSceneBytes = 0;
+volatile LONG gGameplayActionClassifications = 0;
+volatile LONG gGameplayActionIdeals = 0;
+volatile LONG gGameplayActionTranslations = 0;
+volatile LONG gGameplayActionWeightedSelections = 0;
+volatile LONG gGameplayActionHeaviestSelections = 0;
+volatile LONG gGameplayActionFaults = 0;
+volatile LONG64 gGameplayActionBytes = 0;
 // Scene scope 0 is the unassigned sentinel, so the counter starts at 1.
 volatile LONG gSceneScope = 0;
 // Headers keyed by address, images keyed by checksum.
@@ -959,6 +1061,11 @@ DWORD gSceneDispatchStartEventRva = 0;
 DWORD gSceneFindNamedEntityRva = 0;
 DWORD gSceneApplyAnimSetRva = 0;
 DWORD gMaintainSequenceTransitionsRva = 0;
+DWORD gClassifyPlayerAnimationActionRva = 0;
+DWORD gSetIdealActivityRva = 0;
+DWORD gWeaponTranslateActivityRva = 0;
+DWORD gSelectWeightedSequenceRva = 0;
+DWORD gSelectHeaviestSequenceRva = 0;
 ConfiguredSignature gResolveExpected{};
 ConfiguredSignature gBuildExpected{};
 ConfiguredSignature gSetupBonesExpected{};
@@ -978,6 +1085,11 @@ ConfiguredSignature gSceneDispatchStartEventExpected{};
 ConfiguredSignature gSceneFindNamedEntityExpected{};
 ConfiguredSignature gSceneApplyAnimSetExpected{};
 ConfiguredSignature gMaintainSequenceTransitionsExpected{};
+ConfiguredSignature gClassifyPlayerAnimationActionExpected{};
+ConfiguredSignature gSetIdealActivityExpected{};
+ConfiguredSignature gWeaponTranslateActivityExpected{};
+ConfiguredSignature gSelectWeightedSequenceExpected{};
+ConfiguredSignature gSelectHeaviestSequenceExpected{};
 char gHookInstallError[128] = "unspecified";
 
 bool WriteAll(HANDLE file, const void* data, DWORD bytes) {
@@ -1050,6 +1162,8 @@ HANDLE StreamHandle(std::uint32_t stream) {
             return gContributionOutput;
         case kStreamScene:
             return gSceneOutput;
+        case kStreamGameplayAction:
+            return gGameplayActionOutput;
         default:
             return gOutput;
     }
@@ -2591,6 +2705,195 @@ void CaptureSequenceChange(
     Enqueue(pending);
 }
 
+void CaptureGameplayAction(
+    const char (&magic)[5], unsigned char* entity,
+    std::int32_t inputValue, std::int32_t outputValue,
+    std::int32_t selectionArgument, std::int32_t selectedSequence,
+    bool combatState, bool playerState, std::uintptr_t callerAddress) {
+    if (gGameplayActionOutput == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    const DWORD diskBytes =
+        static_cast<DWORD>(sizeof(GameplayActionRecordHeader));
+    const SIZE_T allocation =
+        offsetof(PendingRecord, payload) + static_cast<SIZE_T>(diskBytes);
+    auto* pending = static_cast<PendingRecord*>(
+        HeapAlloc(GetProcessHeap(), 0, allocation));
+    if (!pending) {
+        InterlockedIncrement(&gGameplayActionFaults);
+        return;
+    }
+    pending->next = nullptr;
+    pending->bytes = diskBytes;
+    pending->stream = kStreamGameplayAction;
+    auto* header =
+        reinterpret_cast<GameplayActionRecordHeader*>(pending->payload);
+    std::memset(header, 0, sizeof(*header));
+    std::memcpy(header->magic, magic, 4);
+    header->recordBytes = diskBytes;
+    header->sequence =
+        static_cast<std::uint32_t>(InterlockedIncrement(&gSequence));
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    header->qpc = now.QuadPart;
+    header->threadId = GetCurrentThreadId();
+    header->serverEntity = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(entity));
+    header->callerAddress = static_cast<std::uint32_t>(callerAddress);
+    header->inputValue = inputValue;
+    header->outputValue = outputValue;
+    header->selectionArgument = selectionArgument;
+    header->selectedSequence = selectedSequence;
+    header->currentActivity = -1;
+    header->idealActivity = -1;
+    header->currentSequence = -1;
+    header->activeWeaponHandle = kInvalidHandle;
+    header->retainedAction = -1;
+    header->jumpLandingState = -1;
+
+    std::uint32_t faults = 0;
+    if (!entity) {
+        faults |= kGameplayActionFaultEntity;
+    } else {
+        header->refHandle =
+            ReadRefHandle(entity, kServerEntityRefHandle);
+        if (header->refHandle == kInvalidHandle) {
+            faults |= kGameplayActionFaultRefHandle;
+        }
+        __try {
+            header->currentActivity = *reinterpret_cast<std::int32_t*>(
+                entity + kServerCurrentActivity);
+            header->currentSequence = *reinterpret_cast<std::int32_t*>(
+                entity + kServerSequence);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            faults |= kGameplayActionFaultCommonState;
+        }
+        if (combatState) {
+            __try {
+                header->idealActivity = *reinterpret_cast<std::int32_t*>(
+                    entity + kServerIdealActivity);
+                header->activeWeaponHandle =
+                    *reinterpret_cast<std::uint32_t*>(
+                        entity + kServerActiveWeapon);
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                faults |= kGameplayActionFaultCombatState;
+            }
+        }
+        if (playerState) {
+            __try {
+                std::memcpy(
+                    header->velocity, entity + kServerVelocity,
+                    sizeof(header->velocity));
+                header->waterLevel = *reinterpret_cast<std::int32_t*>(
+                    entity + kPlayerWaterLevel);
+                const bool latched =
+                    *reinterpret_cast<unsigned char*>(
+                        entity + kPlayerActionLatch) != 0;
+                header->retainedAction = latched
+                    ? *reinterpret_cast<std::int32_t*>(
+                          entity + kPlayerRetainedAction)
+                    : -1;
+                header->jumpLandingState =
+                    *reinterpret_cast<std::int32_t*>(
+                        entity + kPlayerJumpLandingState);
+            } __except (EXCEPTION_EXECUTE_HANDLER) {
+                faults |= kGameplayActionFaultPlayerState;
+            }
+        }
+    }
+    header->faults = faults;
+    if (faults) {
+        InterlockedIncrement(&gGameplayActionFaults);
+    }
+    if (std::memcmp(magic, "PCLS", 4) == 0) {
+        InterlockedIncrement(&gGameplayActionClassifications);
+    } else if (std::memcmp(magic, "IDEA", 4) == 0) {
+        InterlockedIncrement(&gGameplayActionIdeals);
+    } else if (std::memcmp(magic, "WTRN", 4) == 0) {
+        InterlockedIncrement(&gGameplayActionTranslations);
+    } else if (std::memcmp(magic, "SWGT", 4) == 0) {
+        InterlockedIncrement(&gGameplayActionWeightedSelections);
+    } else if (std::memcmp(magic, "SHVY", 4) == 0) {
+        InterlockedIncrement(&gGameplayActionHeaviestSelections);
+    }
+    InterlockedExchangeAdd64(
+        &gGameplayActionBytes, static_cast<LONG64>(diskBytes));
+    Enqueue(pending);
+}
+
+std::int32_t __fastcall HookClassifyPlayerAnimationAction(
+    void* self, void*) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::int32_t result =
+        gOriginalClassifyPlayerAnimationAction(self);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        CaptureGameplayAction(
+            "PCLS", static_cast<unsigned char*>(self), -1, result, -1, -1,
+            true, true,
+            reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    }
+    InterlockedDecrement(&gActiveHooks);
+    return result;
+}
+
+void __fastcall HookSetIdealActivity(
+    void* self, void*, std::int32_t activity) {
+    InterlockedIncrement(&gActiveHooks);
+    gOriginalSetIdealActivity(self, activity);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        CaptureGameplayAction(
+            "IDEA", static_cast<unsigned char*>(self), activity, activity,
+            -1, -1, true, false,
+            reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    }
+    InterlockedDecrement(&gActiveHooks);
+}
+
+std::int32_t __fastcall HookWeaponTranslateActivity(
+    void* self, void*, std::int32_t activity) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::int32_t result =
+        gOriginalWeaponTranslateActivity(self, activity);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        CaptureGameplayAction(
+            "WTRN", static_cast<unsigned char*>(self), activity, result,
+            -1, -1, true, false,
+            reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+    }
+    InterlockedDecrement(&gActiveHooks);
+    return result;
+}
+
+std::int32_t CaptureSelectedActivitySequence(
+    const char (&magic)[5], SelectActivitySequenceFn original,
+    void* self, std::int32_t activity, std::int32_t sequenceHint,
+    std::uintptr_t callerAddress) {
+    InterlockedIncrement(&gActiveHooks);
+    const std::int32_t result = original(self, activity, sequenceHint);
+    if (InterlockedCompareExchange(&gCapturing, 0, 0)) {
+        CaptureGameplayAction(
+            magic, static_cast<unsigned char*>(self), activity, result,
+            sequenceHint, result, false, false,
+            callerAddress);
+    }
+    InterlockedDecrement(&gActiveHooks);
+    return result;
+}
+
+std::int32_t __fastcall HookSelectWeightedSequence(
+    void* self, void*, std::int32_t activity, std::int32_t sequenceHint) {
+    return CaptureSelectedActivitySequence(
+        "SWGT", gOriginalSelectWeightedSequence, self, activity,
+        sequenceHint, reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+}
+
+std::int32_t __fastcall HookSelectHeaviestSequence(
+    void* self, void*, std::int32_t activity, std::int32_t sequenceHint) {
+    return CaptureSelectedActivitySequence(
+        "SHVY", gOriginalSelectHeaviestSequence, self, activity,
+        sequenceHint, reinterpret_cast<std::uintptr_t>(_ReturnAddress()));
+}
+
 std::uintptr_t __fastcall HookDrawModel(
     void* self, void*, std::uintptr_t argument0, std::uintptr_t argument1,
     std::uintptr_t argument2, std::uintptr_t argument3,
@@ -3286,6 +3589,29 @@ bool MatchesSceneProfile(
                gMaintainSequenceTransitionsExpected);
 }
 
+bool MatchesGameplayActionProfile(
+    const elysium::capture::BinaryProfile& vampire) {
+    return MatchesConfiguredTarget(
+               vampire, "vampire.classify_player_animation_action",
+               gClassifyPlayerAnimationActionRva,
+               gClassifyPlayerAnimationActionExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.set_ideal_activity",
+               gSetIdealActivityRva, gSetIdealActivityExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.weapon_translate_activity",
+               gWeaponTranslateActivityRva,
+               gWeaponTranslateActivityExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.select_weighted_sequence",
+               gSelectWeightedSequenceRva,
+               gSelectWeightedSequenceExpected) &&
+        MatchesConfiguredTarget(
+               vampire, "vampire.select_heaviest_sequence",
+               gSelectHeaviestSequenceRva,
+               gSelectHeaviestSequenceExpected);
+}
+
 bool MatchesConfiguredProfile(
     const elysium::capture::BinaryTargetProfile& drawModel,
     const elysium::capture::BinaryTargetProfile& resolvePose,
@@ -3349,6 +3675,100 @@ bool MatchesConfiguredProfile(
         MatchesConfiguredSignature(
             modelRenderDrawModelShadow, gModelRenderDrawModelShadowRva,
             gModelRenderDrawModelShadowExpected);
+}
+
+bool InstallGameplayActionHooks(HMODULE vampire) {
+    using elysium::capture::ActiveBinaryProfile;
+    using elysium::capture::HookBackendResult;
+    using elysium::capture::HookBackends;
+
+    const auto* profile = FindProfile(L"vampire.dll");
+    if (profile == nullptr) {
+        strcpy_s(gHookInstallError, "gameplay-action-profile-not-found");
+        return false;
+    }
+    if (!MatchesGameplayActionProfile(*profile)) {
+        strcpy_s(gHookInstallError, "gameplay-action-declaration-mismatch");
+        return false;
+    }
+    const ActiveBinaryProfile active{
+        profile,
+        reinterpret_cast<std::uintptr_t>(vampire),
+        profile->Pe.SizeOfImage,
+    };
+    struct ActionInstall {
+        const char* label;
+        void* detour;
+        elysium::capture::HookHandle* handle;
+    };
+    const ActionInstall installs[] = {
+        {"vampire.classify_player_animation_action",
+         reinterpret_cast<void*>(&HookClassifyPlayerAnimationAction),
+         &gClassifyPlayerAnimationActionHook},
+        {"vampire.set_ideal_activity",
+         reinterpret_cast<void*>(&HookSetIdealActivity),
+         &gSetIdealActivityHook},
+        {"vampire.weapon_translate_activity",
+         reinterpret_cast<void*>(&HookWeaponTranslateActivity),
+         &gWeaponTranslateActivityHook},
+        {"vampire.select_weighted_sequence",
+         reinterpret_cast<void*>(&HookSelectWeightedSequence),
+         &gSelectWeightedSequenceHook},
+        {"vampire.select_heaviest_sequence",
+         reinterpret_cast<void*>(&HookSelectHeaviestSequence),
+         &gSelectHeaviestSequenceHook},
+    };
+    for (std::size_t index = 0; index < ARRAYSIZE(installs); ++index) {
+        const auto& install = installs[index];
+        const auto* target = FindTarget(*profile, install.label);
+        if (target == nullptr) {
+            strcpy_s(gHookInstallError, "gameplay-action-target-not-found");
+            return false;
+        }
+        const HookBackendResult result = HookBackends::Install(
+            active, *target, install.detour, install.handle);
+        if (result != HookBackendResult::Installed) {
+            std::snprintf(
+                gHookInstallError, sizeof(gHookInstallError),
+                "gameplay-action-backend-%u rva=%08x bytes=%u",
+                static_cast<unsigned>(result),
+                static_cast<unsigned>(target->Rva),
+                static_cast<unsigned>(target->ExpectedByteCount));
+            return false;
+        }
+        // Publish each original call target before installing the next
+        // detour. Retail is already running, so this hook may be entered
+        // immediately; delaying all five assignments until the loop ends
+        // leaves a live detour with a null original during installation.
+        switch (index) {
+            case 0:
+                gOriginalClassifyPlayerAnimationAction =
+                    reinterpret_cast<ClassifyPlayerAnimationActionFn>(
+                        install.handle->Original);
+                break;
+            case 1:
+                gOriginalSetIdealActivity =
+                    reinterpret_cast<SetIdealActivityFn>(
+                        install.handle->Original);
+                break;
+            case 2:
+                gOriginalWeaponTranslateActivity =
+                    reinterpret_cast<WeaponTranslateActivityFn>(
+                        install.handle->Original);
+                break;
+            case 3:
+                gOriginalSelectWeightedSequence =
+                    reinterpret_cast<SelectActivitySequenceFn>(
+                        install.handle->Original);
+                break;
+            case 4:
+                gOriginalSelectHeaviestSequence =
+                    reinterpret_cast<SelectActivitySequenceFn>(
+                        install.handle->Original);
+                break;
+        }
+    }
+    return true;
 }
 
 // The scene set, installed inner frame first so a frame that opens a scope is
@@ -3768,9 +4188,14 @@ bool InstallHooks(
                 gDecodeSelectedBonesHook.Original);
     }
 
-    // Before the lifetime pair and after the contribution set, so the scene
-    // scopes exist for every record that will name one and the lifetime pair
-    // stays last.
+    if (gGameplayActionOutput != INVALID_HANDLE_VALUE &&
+        !InstallGameplayActionHooks(vampire)) {
+        return false;
+    }
+
+    // Before the lifetime pair and after the contribution/action sets, so the
+    // scene scopes exist for every record that will name one and the lifetime
+    // pair stays last.
     if (gSceneOutput != INVALID_HANDLE_VALUE &&
         !InstallSceneHooks(vampire, client)) {
         return false;
@@ -3835,6 +4260,11 @@ void RemoveHooks() {
     HookBackends::Disable(&gSceneApplyAnimSetHook);
     HookBackends::Disable(&gSceneFindNamedEntityHook);
     HookBackends::Disable(&gMaintainSequenceTransitionsHook);
+    HookBackends::Disable(&gSelectHeaviestSequenceHook);
+    HookBackends::Disable(&gSelectWeightedSequenceHook);
+    HookBackends::Disable(&gWeaponTranslateActivityHook);
+    HookBackends::Disable(&gSetIdealActivityHook);
+    HookBackends::Disable(&gClassifyPlayerAnimationActionHook);
     HookBackends::Disable(&gDecodeSelectedBonesHook);
     HookBackends::Disable(&gDecodeBonePositionHook);
     HookBackends::Disable(&gDecodeBoneQuaternionHook);
@@ -3858,6 +4288,11 @@ void RemoveHooks() {
     HookBackends::Release(&gSceneApplyAnimSetHook);
     HookBackends::Release(&gSceneFindNamedEntityHook);
     HookBackends::Release(&gMaintainSequenceTransitionsHook);
+    HookBackends::Release(&gSelectHeaviestSequenceHook);
+    HookBackends::Release(&gSelectWeightedSequenceHook);
+    HookBackends::Release(&gWeaponTranslateActivityHook);
+    HookBackends::Release(&gSetIdealActivityHook);
+    HookBackends::Release(&gClassifyPlayerAnimationActionHook);
     HookBackends::Release(&gDecodeSelectedBonesHook);
     HookBackends::Release(&gDecodeBonePositionHook);
     HookBackends::Release(&gDecodeBoneQuaternionHook);
@@ -3871,6 +4306,11 @@ void RemoveHooks() {
     HookBackends::Release(&gDrawModelHook);
     gOriginalBaseEntityDestruct = nullptr;
     gOriginalBaseEntityConstruct = nullptr;
+    gOriginalSelectHeaviestSequence = nullptr;
+    gOriginalSelectWeightedSequence = nullptr;
+    gOriginalWeaponTranslateActivity = nullptr;
+    gOriginalSetIdealActivity = nullptr;
+    gOriginalClassifyPlayerAnimationAction = nullptr;
     gOriginalDecodeSelectedBones = nullptr;
     gOriginalDecodeBonePosition = nullptr;
     gOriginalDecodeBoneQuaternion = nullptr;
@@ -3955,6 +4395,7 @@ bool ReadConfiguration(
     wchar_t* iniPath, wchar_t* outputPath, wchar_t* animationOutputPath,
     wchar_t* censusOutputPath, wchar_t* actorOutputPath,
     wchar_t* contributionOutputPath, wchar_t* sceneOutputPath,
+    wchar_t* gameplayActionOutputPath,
     wchar_t* studioHash, wchar_t* clientHash, wchar_t* vampireHash) {
     wchar_t modulePath[MAX_PATH * 4]{};
     const DWORD length =
@@ -3988,6 +4429,9 @@ bool ReadConfiguration(
     GetPrivateProfileStringW(
         L"capture", L"scene_output", L"", sceneOutputPath,
         MAX_PATH * 4, iniPath);
+    GetPrivateProfileStringW(
+        L"capture", L"gameplay_action_output", L"",
+        gameplayActionOutputPath, MAX_PATH * 4, iniPath);
     GetPrivateProfileStringW(
         L"capture", L"ready", L"", gReadyPath, ARRAYSIZE(gReadyPath), iniPath);
     GetPrivateProfileStringW(
@@ -4195,9 +4639,40 @@ bool ReadConfiguration(
              iniPath,
              L"maintain_sequence_transitions_expected",
              &gMaintainSequenceTransitionsExpected));
+    const bool gameplayActionProfile =
+        !gameplayActionOutputPath[0] ||
+        (ReadProfileDword(
+             iniPath, L"classify_player_animation_action_rva",
+             &gClassifyPlayerAnimationActionRva) &&
+         ReadExpectedBytes(
+             iniPath, L"classify_player_animation_action_expected",
+             &gClassifyPlayerAnimationActionExpected) &&
+         ReadProfileDword(
+             iniPath, L"set_ideal_activity_rva", &gSetIdealActivityRva) &&
+         ReadExpectedBytes(
+             iniPath, L"set_ideal_activity_expected",
+             &gSetIdealActivityExpected) &&
+         ReadProfileDword(
+             iniPath, L"weapon_translate_activity_rva",
+             &gWeaponTranslateActivityRva) &&
+         ReadExpectedBytes(
+             iniPath, L"weapon_translate_activity_expected",
+             &gWeaponTranslateActivityExpected) &&
+         ReadProfileDword(
+             iniPath, L"select_weighted_sequence_rva",
+             &gSelectWeightedSequenceRva) &&
+         ReadExpectedBytes(
+             iniPath, L"select_weighted_sequence_expected",
+             &gSelectWeightedSequenceExpected) &&
+         ReadProfileDword(
+             iniPath, L"select_heaviest_sequence_rva",
+             &gSelectHeaviestSequenceRva) &&
+         ReadExpectedBytes(
+             iniPath, L"select_heaviest_sequence_expected",
+             &gSelectHeaviestSequenceExpected));
     return outputPath[0] && gReadyPath[0] && gStopPath[0] &&
         gDonePath[0] && studioProfile && clientProfile && lifetimeProfile &&
-        contributionProfile && sceneProfile;
+        contributionProfile && sceneProfile && gameplayActionProfile;
 }
 
 DWORD WINAPI CaptureWorker(void*) {
@@ -4208,12 +4683,14 @@ DWORD WINAPI CaptureWorker(void*) {
     wchar_t actorOutputPath[MAX_PATH * 4]{};
     wchar_t contributionOutputPath[MAX_PATH * 4]{};
     wchar_t sceneOutputPath[MAX_PATH * 4]{};
+    wchar_t gameplayActionOutputPath[MAX_PATH * 4]{};
     wchar_t studioHash[80]{};
     wchar_t clientHash[80]{};
     wchar_t vampireHash[80]{};
     if (!ReadConfiguration(
             iniPath, outputPath, animationOutputPath, censusOutputPath,
             actorOutputPath, contributionOutputPath, sceneOutputPath,
+            gameplayActionOutputPath,
             studioHash, clientHash, vampireHash)) {
         return 1;
     }
@@ -4249,7 +4726,7 @@ DWORD WINAPI CaptureWorker(void*) {
         WriteMarker(gDonePath, "error=engine.dll not loaded\n");
         return 2;
     }
-    if (sceneOutputPath[0] && !vampire) {
+    if ((sceneOutputPath[0] || gameplayActionOutputPath[0]) && !vampire) {
         WriteMarker(gDonePath, "error=vampire.dll not loaded\n");
         return 2;
     }
@@ -4297,6 +4774,12 @@ DWORD WINAPI CaptureWorker(void*) {
             CREATE_NEW,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
     }
+    if (gameplayActionOutputPath[0]) {
+        gGameplayActionOutput = CreateFileW(
+            gameplayActionOutputPath, GENERIC_WRITE, FILE_SHARE_READ,
+            nullptr, CREATE_NEW,
+            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    }
     if (!gWake || gOutput == INVALID_HANDLE_VALUE ||
         (animationOutputPath[0] &&
          gAnimationOutput == INVALID_HANDLE_VALUE) ||
@@ -4307,7 +4790,9 @@ DWORD WINAPI CaptureWorker(void*) {
         (contributionOutputPath[0] && animationOutputPath[0] &&
          gContributionOutput == INVALID_HANDLE_VALUE) ||
         (sceneOutputPath[0] && animationOutputPath[0] &&
-         gSceneOutput == INVALID_HANDLE_VALUE)) {
+         gSceneOutput == INVALID_HANDLE_VALUE) ||
+        (gameplayActionOutputPath[0] &&
+         gGameplayActionOutput == INVALID_HANDLE_VALUE)) {
         WriteMarker(gDonePath, "error=cannot create capture output\n");
         return 3;
     }
@@ -4463,6 +4948,38 @@ DWORD WINAPI CaptureWorker(void*) {
         }
     }
 
+    if (gGameplayActionOutput != INVALID_HANDLE_VALUE) {
+        GameplayActionFileHeader actionHeader{};
+        std::memcpy(actionHeader.magic, "ELGACT1", 7);
+        actionHeader.version = 1;
+        actionHeader.headerBytes = sizeof(actionHeader);
+        actionHeader.qpcFrequency = frequency.QuadPart;
+        actionHeader.startQpc = gStartQpc.QuadPart;
+        actionHeader.pid = GetCurrentProcessId();
+        actionHeader.vampireBase = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(vampire));
+        actionHeader.classifyPlayerActionRva =
+            gClassifyPlayerAnimationActionRva;
+        actionHeader.setIdealActivityRva = gSetIdealActivityRva;
+        actionHeader.weaponTranslateActivityRva =
+            gWeaponTranslateActivityRva;
+        actionHeader.selectWeightedSequenceRva =
+            gSelectWeightedSequenceRva;
+        actionHeader.selectHeaviestSequenceRva =
+            gSelectHeaviestSequenceRva;
+        wcstombs_s(
+            &converted, actionHeader.vampireSha256,
+            sizeof(actionHeader.vampireSha256), vampireHash, _TRUNCATE);
+        if (!WriteAll(
+                gGameplayActionOutput, &actionHeader,
+                sizeof(actionHeader))) {
+            WriteMarker(
+                gDonePath,
+                "error=cannot write gameplay-action capture header\n");
+            return 4;
+        }
+    }
+
     if (!InstallHooks(studioRender, client, engine, vampire)) {
         RemoveHooks();
         char error[192]{};
@@ -4477,12 +4994,13 @@ DWORD WINAPI CaptureWorker(void*) {
     InterlockedExchange(&gCapturing, 1);
     char ready[192]{};
     std::snprintf(
-        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s%s%s\n",
+        ready, sizeof(ready), "ready=1\nformat=ELPOSE4%s%s%s%s%s%s\n",
         gAnimationOutput == INVALID_HANDLE_VALUE ? "" : "+ELANIM4",
         gCensusOutput == INVALID_HANDLE_VALUE ? "" : "+ELMDL1",
         gActorOutput == INVALID_HANDLE_VALUE ? "" : "+ELACT3",
         gContributionOutput == INVALID_HANDLE_VALUE ? "" : "+ELCON2",
-        gSceneOutput == INVALID_HANDLE_VALUE ? "" : "+ELSCN1");
+        gSceneOutput == INVALID_HANDLE_VALUE ? "" : "+ELSCN1",
+        gGameplayActionOutput == INVALID_HANDLE_VALUE ? "" : "+ELGACT1");
     WriteMarker(gReadyPath, ready);
 
     for (;;) {
@@ -4534,6 +5052,11 @@ DWORD WINAPI CaptureWorker(void*) {
         CloseHandle(gSceneOutput);
         gSceneOutput = INVALID_HANDLE_VALUE;
     }
+    if (gGameplayActionOutput != INVALID_HANDLE_VALUE) {
+        FlushFileBuffers(gGameplayActionOutput);
+        CloseHandle(gGameplayActionOutput);
+        gGameplayActionOutput = INVALID_HANDLE_VALUE;
+    }
 
     char done[2048]{};
     std::snprintf(
@@ -4558,7 +5081,14 @@ DWORD WINAPI CaptureWorker(void*) {
         "scene_animsets=%ld\nscene_sequence_changes=%ld\nscene_scopes=%ld\n"
         "scene_faults=%ld\nscene_overflow=%ld\nscene_unscoped=%ld\n"
         "scene_truncated=%ld\nscene_resolutions_unscoped=%ld\n"
-        "scene_bytes=%lld\n",
+        "scene_bytes=%lld\n"
+        "gameplay_action_classifications=%ld\n"
+        "gameplay_action_ideals=%ld\n"
+        "gameplay_action_translations=%ld\n"
+        "gameplay_action_weighted_selections=%ld\n"
+        "gameplay_action_heaviest_selections=%ld\n"
+        "gameplay_action_faults=%ld\n"
+        "gameplay_action_bytes=%lld\n",
         gQueued, gWritten, gDropped, gQueuePeak, gSkipped, gFiltered,
         static_cast<long long>(gBytesWritten), gGeneration, gUnbracketed,
         gBracketOverflow, gCensusRecords, gCensusImages, gCensusReplacements,
@@ -4573,7 +5103,11 @@ DWORD WINAPI CaptureWorker(void*) {
         gChannelStrideFaults, gChannelNested, gSceneLifecycles, gSceneEvents,
         gSceneBinds, gSceneAnimSets, gSceneSequenceChanges, gSceneScope,
         gSceneFaults, gSceneOverflow, gSceneUnscoped, gSceneTruncated,
-        gSceneResolutionsUnscoped, static_cast<long long>(gSceneBytes));
+        gSceneResolutionsUnscoped, static_cast<long long>(gSceneBytes),
+        gGameplayActionClassifications, gGameplayActionIdeals,
+        gGameplayActionTranslations, gGameplayActionWeightedSelections,
+        gGameplayActionHeaviestSelections, gGameplayActionFaults,
+        static_cast<long long>(gGameplayActionBytes));
     WriteMarker(gDonePath, done);
     CloseHandle(gWake);
     if (gCensusHeap) {

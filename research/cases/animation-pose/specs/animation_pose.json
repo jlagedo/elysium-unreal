@@ -15,7 +15,7 @@
     "How must the recovered post-blend split-inheritance correction be integrated across sequence-player, single-node, and direct playback paths, and which rendered retail invariant validates it?",
     "What do the chain-rebase branch's shorts at remap record +0x04 and +0x06 select, and which corpus reaches that branch at all? The branch structure, the parent-chain walk against the included model's StudioBone.parent, and the position-transform byte are read; no shipped model in the captured corpus carries a record that enters it, and its second loop cannot terminate unless the two shorts are equal.",
     "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?",
-    "Where are SetSequence, ResetSequence, SelectWeightedSequence and the activity-name lookup implemented? The selection data is fully recovered (szactivitynameindex, actweight, and the 3,045-name activity table registered by vampire.dll 0x104126e0) but no selector function is located in either module, so an activity change is observable only as the sequence change it produces."
+    "Which client receive/update path applies the server's networked activity and m_nSequence changes before SetupBones, and which sequence changes can originate only on the client? The server selector functions are located and tracked in gameplay_actions.json; this client-side specification now owns only the state handoff into pose evaluation."
   ],
   "field_probes": [
     {

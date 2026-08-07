@@ -27,10 +27,18 @@ A post-process Anim Blueprint runs once per component after the anim graph and b
 which is retail's slot exactly. Both engines blend **locals** and then compose, so the ordering VtMB
 requires falls out of Unreal's existing pipeline rather than having to be recreated inside it.
 
-That ordering is also why the correction cannot be baked into clips: the rule is non-linear, so
-evaluating per clip and blending the results is not the same as blending first and evaluating once
-(`docs/vtmb/procedural_bones.md`). Measured mid-crossfade between two of a real body's own clips,
-bake-then-blend departs from blend-then-evaluate by up to 9.6°.
+Only the *procedural* row survives into that slot. Everything above it is resolved at bake, under
+the root `CLAUDE.md` rule **"Poses are baked native"**: a clip on the mount is a complete,
+self-describing Unreal-native local pose, and the frame path applies no VtMB rule. Where a clip's
+meaning depends on state stored outside it, the bake resolves that state rather than forwarding the
+question.
+
+A rule that is non-linear across a blend has a residual when it is baked per clip: evaluating per
+clip and blending the results is not the same as blending first and evaluating once. **That residual
+is the accepted cost of the rule, and it is bounded and confined to crossfades** — over genuinely
+crossfadeable clips of a real body's own locomotion bank, 77.3% of bone samples land within 0.5°,
+99.7% within 5°, none above 10°, for the length of a fade. It is not a reason to keep the rule in the
+frame path; it is what baking one costs.
 
 ## 2. The asset set is baked, not built at runtime
 
@@ -46,19 +54,29 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   and glTF morph weights are mesh-level, so a target that spans two materials arrives as one
   same-named piece per primitive; those pieces are **merged**, never first-wins, or a jaw moves and
   leaves its teeth behind.
-- **A compressed `UAnimSequence` per clip.** The `_delta` family — the sequences carrying the
-  additive studio flags — is marked additive against the reference pose at bake. The composition
-  order does **not** carry over: every `EAdditiveAnimationType` pre-multiplies the delta
-  (`Delta * Base`, in `AccumulateLocalSpaceAdditivePoseInternal` and the mesh-space path alike),
-  while VtMB post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). Composing
-  one of these through `FAnimNode_ApplyAdditive` therefore reproduces the wrong order, and the
-  family needs a post-multiplying applier.
+- **A compressed `UAnimSequence` per clip.** Every clip is written as an ordinary parent-relative
+  local pose: a bone carrying `Flags & 0x2` stores a rotation VtMB reads as model-space, and the
+  bake re-expresses it against the parent's composed rotation from that clip's own frame, so
+  ordinary FK reproduces the pose retail draws. The mesh needs nothing — VtMB's own `poseToBone`
+  inverse binds are already conventional, so only the live pose ever disagreed.
 
-  **An additive sequence's raw keys are not what ships.** Setting the additive type makes the
-  compressor bake the sequence down by subtracting its base — the skeleton's reference pose —
-  before compressing, so the delta has to be written *composed onto* that pose for the subtraction
-  to hand it back. A bake that writes the bare delta ships every layered bone rotated by its own
-  inverse bind, from a run that logs nothing wrong.
+- **The `_delta` family is additive against the base the file names.** The composition order does
+  not carry over: every `EAdditiveAnimationType` pre-multiplies the delta (`Delta * Base`, in
+  `AccumulateLocalSpaceAdditivePoseInternal` and the mesh-space path alike), while VtMB
+  post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). The correction is a
+  conjugation by the base rotation, `Delta' = Base · Delta · Base⁻¹`, and **the base is a bake
+  input rather than a runtime one**: a delta is only meaningful over its own base, and the file
+  states which that is — `<weapon>_<stance>_idle` is the base for
+  `<weapon>_<stance>_attack_delta`. Conjugation commutes with Unreal's blend-from-identity, so a
+  conjugated delta is exact at any weight over the base it declares, and degrades away from it
+  exactly as any additive does.
+
+  The asset therefore names its own base: `RefPoseType = ABPT_AnimFrame` pointing at that clip,
+  not `ABPT_RefPose`. **An additive sequence's raw keys are not what ships** — setting the additive
+  type makes the compressor bake the sequence down by subtracting its base before compressing, so
+  the delta has to be written *composed onto* the same pose the conjugation used. The two are one
+  decision: change what is subtracted without changing what is conjugated and every layered bone
+  ships rotated by its own inverse bind, from a run that logs nothing wrong.
 - **Blend profiles** in blend-mask mode, one per distinct per-bone mask. The mask is binary in the
   source data and there are only a handful of distinct masks per bank, so this is a small table on
   the skeleton rather than per-clip data. A profile is named for the bones it owns rather than for
@@ -74,8 +92,31 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   absence, so the bake writes it out as a constant track. Left implicit it would evaluate to the
   shared skeleton's reference pose — whichever body of the family seeded it — and the overlay would
   quietly pull those bones onto another model's bind.
-- **Blend spaces** from the exported grids: one-dimensional for a `move_yaw` fan, two-dimensional
-  for an aim grid. A sample sits at the axis value its cell declares —
+- **The one overlay mask that owns the split bone bakes as a mesh-space additive.** Of the distinct
+  per-bone masks a bank ships, exactly one contains `Bip01 Spine1` — the 49-bone upper-body gate the
+  `*_aim_layer` and `*_bobble_layer` families carry. Those clips are the one place the split bone
+  cannot be re-expressed against its parent, because the mask excludes the parent chain: the
+  ancestors carry no rotation record, so the composed parent rotation the correction divides by is
+  not in the file and never can be. It arrives at runtime, from whatever host the overlay rides.
+
+  The representation changes instead of the frame path acquiring a rule. What the clip stores is a
+  rotation that is *already* independent of the parent chain, and Unreal has exactly one
+  representation whose defining property is that — the **mesh-space additive**
+  (`AAT_RotationOffsetMeshSpace`), whose asset form for a 3×3 grid is `UAimOffsetBlendSpace`. The
+  bake writes each clip as a component-space delta against the base its weapon declares. A VtMB aim
+  layer *is* an aim offset by construction — a grid on `aim_yaw`/`aim_pitch`, owning the upper body,
+  composed over locomotion, required not to follow the hips — so this is the native form of the
+  content rather than a conversion trick.
+
+  Two things fall out. The family needs **no blend profile**: an additive's untouched bones
+  contribute the additive identity, so masked-out and bind-holding are both a zero delta and the
+  three-state distinction the mask table exists to preserve does not arise. And the remaining masks
+  need **no split correction at all**, because none of them owns the split bone — they are ordinary
+  parent-relative overlays composed by a stock layered blend.
+- **Blend spaces** from the exported grids: `UBlendSpace1D` for a `move_yaw` fan,
+  `UAimOffsetBlendSpace` for an aim grid — the aim offset is a `UBlendSpace`, so the sample
+  placement below is the same arithmetic for both and only the sample *kind* differs. A sample sits
+  at the axis value its cell declares —
   `paramstart + k·(paramend − paramstart)/(groupsize − 1)` — and the axis spans the grid's own
   range with one grid division per gap between cells, so every cell lands on a division. The pose
   parameter's own range does not enter: it cancels out of retail's axis resolution exactly, leaving
@@ -100,7 +141,246 @@ The glTF reader stays the same one on both sides of the seam — it runs inside 
 rather than at runtime. Its vendored morph-target vertex-base patch is load-bearing and fails
 silently when lost, so keeping the same reader keeps that fix in the path.
 
-## 3. The animation graph
+## 3. Gameplay actions are resolved before the graph
+
+A key press never selects an animation asset. The player command says what the player asked for;
+movement decides what the body actually did; gameplay decides whether an attack, reaction or
+script owns the body; only then does animation select an activity and resolve that activity through
+the current model. NPCs enter the same path from an AI task or entity behaviour rather than from a
+user command.
+
+That distinction is load-bearing. Mapping `W` directly to `walk` would animate while a wall stops
+the player, choose walk during an airborne frame, and give NPC movement a second implementation.
+The animation layer reads the **post-solve body state** and the gameplay request, never raw input.
+
+The terms used by the layer are deliberately separate:
+
+| Term | Meaning | Example |
+|---|---|---|
+| command | one frame of requested player input | forward + slow gait + attack |
+| body sample | the movement result after collision and state transitions | grounded, 92 cm/s, ducked |
+| action request | a gameplay or script request that may own a channel | reload, light hit, scene gesture |
+| activity | the stable VtMB semantic key | `ACT_WALK`, `ACT_RELOAD_GLOCK` |
+| sequence | one model-vocabulary choice for an activity | `walk`, selected by `actweight` |
+| animation asset | the clip, blend space, layer or montage Unreal evaluates | baked `walk` blend space |
+
+The retail path and the remake path therefore have the same high-level shape:
+
+```mermaid
+flowchart LR
+    P["Player command + post-solve movement"] --> PI["Player animation intent"]
+    N["NPC task + motor sample"] --> NI["NPC animation intent"]
+    S["Scene, script, damage, weapon"] --> R["Action requests"]
+    PI --> A["Arbitrate channels and choose base activity"]
+    NI --> A
+    R --> A
+    A --> T["Translate for actor state, form and weapon"]
+    T --> V["Model vocabulary: activity to weighted sequence"]
+    V --> C["Baked catalog: clip, grid, layers and montage"]
+    C --> G["Animation Blueprint"]
+    G --> X["Post-process composition and skinning"]
+```
+
+### 3.1 It is code around authored tables, not one hardcoded table
+
+Retail splits responsibility across three places (`docs/vtmb/animation_and_movers.md` A.3):
+
+- **The game DLL contains policy.** The player state classifier and mode router, NPC schedules and
+  task handlers, the 3,045-name activity registry, per-class translations, and each weapon's
+  activity-override table are compiled code or static data in `vampire.dll`.
+- **The model contains choices.** `StudioSeqDesc` supplies the stable activity literal, sequence
+  label, `actweight`, flags, transition duration, events, blend grid and autolayer binding. The
+  include DAG says which shared bank owns the chosen sequence.
+- **Live state supplies context.** Velocity, facing, ground/water/duck/jump state, current weapon,
+  AI task, damage direction, form, scene ownership and other state decide which policy branch is
+  active.
+
+The remake preserves that separation without reproducing the binary's class layout. Generic
+classification, arbitration and resolution are code; the activity registry, weapon translations,
+model choices and layer bindings are generated data. There is no per-model switch in the player,
+NPC motor or Anim Blueprint, and there is no manually maintained list of thousands of clips.
+
+### 3.2 One contract, two producers
+
+The shared boundary is an engine-neutral **animation intent**. Its implementation type is
+`FElysiumAnimationIntent`; it carries no `UObject` and contains:
+
+- the logical character handle, model stem and source (`Player`, `Npc`, `Scene`, `Damage`,
+  `Interaction` or `Debug`);
+- a channel (`Base`, `FullBody`, `UpperBody`, `Additive`, `Gesture`), plus a request generation so
+  a completed one-shot cannot cancel its replacement;
+- either a stable `ACT_*` name or an explicit sequence label, never both;
+- the repeatable variant/RNG token used by weighted selection;
+- local velocity, speed, facing-relative movement yaw, aim yaw/pitch, ground/water/duck/air state,
+  and the current form/weapon tags needed by translation;
+- loop/one-shot intent and the request's completion owner, but no hand-authored blend time or asset
+  reference.
+
+An explicit sequence is an escape hatch for content that actually names one: choreographed-scene
+events, `scripted_sequence`, `SetAnimation`, and the retail `player_sequence` developer command.
+Ordinary locomotion, combat and reactions use activities. A gameplay system naming `walk_0` is a
+layer violation: it has skipped weighted choice, include ownership and the blend grid.
+
+The two producers are different only before this boundary:
+
+- **Player.** `FElysiumUserCmd` remains the input record, not an animation record. After
+  `UElysiumMovementComponent` (or the A/B `UCharacterMovementComponent`) has moved, the player body
+  publishes the realized velocity and its ground, water, duck and jump phase. The player entity
+  contributes weapon, attack, feed, use, discipline, damage and scripted state. Camera/body yaw
+  supplies the unambiguous `move_yaw` relationship.
+- **NPC.** The substrate publishes the desired activity or explicit scripted action; the motor
+  publishes realized velocity, facing and move status after its tick. Patrol, interesting-place,
+  dialogue and scripted-sequence behaviour are request producers, not clip players. Later combat AI
+  uses the same seam rather than growing an animation path inside a controller.
+
+`FElysiumLocomotionSample` is the smaller shared result both bodies publish: local planar velocity,
+speed, facing yaw, grounded/air/water state and stance. It is sampled after movement and merged with
+the current action requests into the intent. The Anim Blueprint never reads input, AI controllers,
+entity fields or weapons directly.
+
+### 3.3 Resolution and arbitration
+
+One resolver consumes the intent and the baked character catalog. It performs these steps in order
+and emits an `FElysiumAnimationSelection` diagnostic record:
+
+1. **Arbitrate requests by channel.** A full-body scene or paired interaction can own the base while
+   a dialogue gesture owns only its slot. Death, damage, combat and locomotion do not become an
+   accidental ordering of `if` statements inside an Anim Instance. The priority table is explicit,
+   data-tested and capture-verified before it is labelled retail behaviour.
+2. **Choose a base activity.** Locomotion classification operates on the body sample; gameplay
+   requests supply attacks, reactions and contextual actions. A direct-sequence request bypasses
+   only this and activity translation.
+3. **Translate the activity.** Apply the recovered actor/form and weapon tables in their witnessed
+   order. A table row's `required` bit is retained: a missing optional override falls back to the
+   incoming activity, while a missing required override is a catalog error.
+4. **Resolve the model vocabulary.** Find every sequence carrying the final activity, apply
+   `actweight` using the supplied selection token, and retain the exact model/sequence identity.
+   The chosen label then resolves through the include DAG to its owning bank.
+5. **Resolve the asset shape.** A plain label becomes a sequence, a movement fan or aim grid becomes
+   its baked blend space, and the exported base-to-layer binding supplies overlays/additives. A
+   masked sequence is rejected from the base channel.
+6. **Publish graph parameters.** The graph receives state-machine state, speed, `move_yaw`, aim
+   parameters, selected assets/slots and authored transition metadata. It does not repeat selection.
+
+The selection record contains the request source/channel, base activity, each translated activity,
+variant token, sequence label and raw index, owner stem, selected asset kind, active layer labels,
+pose parameters, and a success/fallback reason. The same record is rendered in Cog and written by
+headless acceptance runs. Without it, a wrong pose can be blamed on input, AI, translation, model
+data or blending with no way to distinguish them.
+
+### 3.4 The generated action corpus
+
+Game-derived output remains local and regenerable. Static/decompiler/capture evidence lives below
+`$ELYSIUM_WORK_ROOT/research/gameplay-actions/<run>/`; the normalized engine-neutral export lives
+below `$ELYSIUM_EXPORT_ROOT/out/animation/actions/`; the character bake turns it into a catalog on
+the gitignored `/ElysiumBaked` mount. Only the extractor, schemas and hash-pinned research
+specification are tracked.
+
+The normalized corpus has these logical artifacts. Their filenames are a file seam, not a second
+status tracker:
+
+| Artifact | Required contents | Source |
+|---|---|---|
+| `activity_registry.json` | stable name, pinned-build numeric ID, registration ordinal | `vampire.dll` activity registration |
+| `player_action_rules.json` | mode, compact action code, tested predicates, base activity, pose-parameter writes, confidence/evidence | player `PostThink` classifier/router and retail trace |
+| `npc_action_rules.json` | class, schedule/task or entity request, desired activity/direct label, interrupt/completion rules, confidence/evidence | NPC class/schedule call graph and retail trace |
+| `weapon_activity_tables.json` | weapon class, base activity, translated activity, `required`, table ordinal | each weapon's `acttable_t` or retail `activitydump` |
+| character catalog | exact owner model and raw sequence index, label, activity, weight, flags, fade, events, grid, movement, autolayers, target compatibility | existing MDL/include exporters and player inventory |
+| `action_coverage.json` | reachable rule → translation → sequence/asset closure per supported player body and NPC class/model | deterministic join of all artifacts above |
+
+The character catalog extends the existing `npc/clips`, blend and index sidecars; it does not
+invent a parallel clip inventory. The disposable raw player inventory produced by
+`research/tooling/capture/inventory_player_animations.py` preserves the full 764-byte sequence and
+72-byte animation descriptors for research, while the public export carries only decoded fields
+the runtime uses. Sequence events and autolayers must be decoded into that existing path rather than
+recovered later from baked assets.
+
+“All actions” is defined by **reachability**, not by copying every name in the global registry. It
+is the union of:
+
+- every action request and activity translation reachable from player input, movement, weapons,
+  disciplines, damage, forms and scripts;
+- every desired activity/direct sequence reachable from NPC schedules, tasks, dispositions,
+  interesting places, dialogue, damage, combat, scripted sequences and choreographed scenes;
+- every model sequence reachable through the 56 player bodies and every exported NPC's include DAG;
+- every emitted activity or direct label seen by the retail trace, including a population that no
+  static call-graph seed predicted.
+
+The coverage report groups that union into locomotion, stance/ambient/dialogue, combat, reactions
+and death, contextual/paired interactions, forms/disciplines, and scripted/cinematic overrides. An
+unresolved row remains named with its provenance; it is never dropped because a clip appears
+unused.
+
+### 3.5 Extraction and proof loop
+
+The working case is `research/cases/animation-pose/specs/gameplay_actions.json`. It uses the existing
+Ghidra driver and retail capture harness rather than a second hook project. The loop is:
+
+1. Run the player-model inventory and the ordinary NPC exporter to establish exact model/sequence
+   identities, weights, grids, movement records and include reachability.
+2. Generate a hash-pinned Ghidra context pack for the known player classifier, mode router,
+   activity apply/select path, registry, weapon translation and forced-sequence command.
+3. Locate the NPC schedule/task → ideal activity → translated activity → sequence path and every
+   class override by following calls into the same selection functions, then add the seeds and
+   relationships to the specification.
+4. Extract each weapon table statically where its vtable exposes the table/count pair; use retail's
+   `activitydump` as an independent textual oracle and to catch dynamically selected subclasses.
+5. Extend the existing retail trace with one compact record at each boundary: producer/action code,
+   base activity, each translation result, selected model/sequence, pose parameters and active
+   layers. Join on entity index/serial and model identity, as the pose capture already does.
+6. Drive a controlled action matrix and compare the retail selection record with the remake's
+   `FElysiumAnimationSelection`. Add a seed or rule for every unexplained transition; never patch the
+   expected output by clip name.
+
+Static extraction proves table completeness; live capture proves branch reachability and ordering.
+Neither replaces the other. A trace that did not happen to use a weapon cannot prove its table is
+empty, and a decompiled branch cannot prove gameplay reaches it.
+
+### 3.6 First playable slices
+
+The layer is implemented vertically so walking begins before all combat is decoded:
+
+1. **Shared locomotion.** Player and NPC idle/walk/run/sneak/crouch/air/land requests, post-solve
+   speed, `move_yaw`, authored ground speed and transition metadata. Existing NPC patrol and
+   scripted travel become callers of the shared intent seam; the player stops holding its spawn
+   idle while moving.
+2. **Reactions.** Directional light/heavy hit, knockback, death/ragdoll handoff and interruption.
+   This is the minimum for NPCs to visibly react to gameplay.
+3. **Weapons and interactions.** Draw/holster, aim, attack, reload/dryfire, block, feed/use and
+   paired actions, with weapon activity tables and partial-body layers.
+4. **Full behavior coverage.** NPC combat schedules, disciplines/forms and every remaining
+   contextual action in the coverage report.
+
+A slice is accepted only when every request it can emit resolves for its declared model set or
+names an explicit fallback. Runtime failure is visible but non-fatal: the body keeps its previous
+safe pose and emits a once-per-key diagnostic. Content tests fail any missing mapping inside an
+accepted slice, any required weapon override that misses, any masked sequence selected as a base,
+or any sequence whose owner/asset cannot be found.
+
+### 3.7 Integration with the current runtime
+
+The implementation grows the path already serving both actor kinds:
+
+- `UElysiumNpcAnimSubsystem` is broadened/renamed into the character catalog and resolver; a second
+  player-only clip cache would duplicate the same model vocabulary and shared banks.
+- `FElysiumNpcClipSet`, `ResolveActivityClip`, the baked blend spaces and the current player visual
+  are migration inputs. `PlayNpcActivity` remains a compatibility adapter while patrol/scripted
+  callers move to `FElysiumAnimationIntent`, and is removed with the native proxy scaffolding.
+- `IElysiumEmbodiment` carries the engine-neutral intent across the substrate boundary. NPC entity
+  behaviour can request an activity without knowing about an Anim Instance; player gameplay state
+  uses the same call. Body-local movement sampling stays on the engine side.
+- The per-body driver resolves once when discrete request/model/weapon state changes and updates
+  continuous locomotion parameters every animation frame. Asset lookup and weighted choice do not
+  repeat every tick.
+- The Animation Blueprint consumes only the resolved selection and continuous parameters. Its
+  graph owns state machines, blend spaces, layer nodes and montages; the post-process graph remains
+  the only custom pose stage.
+
+Both movement implementations and both actor kinds must produce the same trace schema. That is the
+architectural test that this is one gameplay-animation layer rather than four paths that happen to
+play the same files.
+
+## 4. The animation graph
 
 An Animation Blueprint per body archetype — biped, animal, skeletal prop — rather than a
 hand-written instance:
@@ -119,40 +399,47 @@ hand-written instance:
   `nlerp(base, layer, s)` on rotation and the matching lerp on translation, `s` the layer's weight
   times the bone's mask bit. An overlay therefore *replaces* the bones it owns rather than adding to
   them, which is what separates it from the additive below and why the two are never the same node.
-- **Additive nodes** for the `_delta` family.
+- **Additive nodes** for the `_delta` family, each over the base clip its asset names.
+- **An aim-offset node** for the upper-body overlay family. Its samples are mesh-space additives, so
+  it composes in component space and the upper body does not inherit the host's hip and spine
+  rotation — which is the property VtMB's split bone supplied and the reason that family is baked
+  this way rather than as a masked local overlay.
 - **Montage slots** for one-shots: scripted-sequence clips, scene gestures, disciplines, and the
   cinematic playback path. A slot is also what keeps a gesture layered over a sequence instead of
   replacing it.
-- **A post-process graph** carrying the two custom stages below, in retail's order.
+- **A post-process graph** carrying the one custom stage below.
 
 Two properties the graph must preserve. A **masked sequence is never selectable as a base clip** —
 retail composes those as layers and never selects one, so a base-clip path that can reach one is a
-defect. That extends to a whole grid: an aim grid's cells are masked overlays, so it is a layer's
-blend space and never a body pose. And **pose parameters drive the blend spaces**, so a nine-cell
-fan resolves off its neutral cell only when something writes the parameter.
+defect. That extends to a whole grid: an aim grid's cells are overlays, so it drives an aim-offset
+node and is never a body pose. And **pose parameters drive the blend spaces**, so a nine-cell fan
+resolves off its neutral cell only when something writes the parameter.
 
-## 4. Two custom stages, and only two
+## 5. One custom stage, and only one
 
-Both derive `FAnimNode_SkeletalControlBase` and run in the post-process graph.
+**Axis interpolation.** For each bone the model declares as procedurally driven, read the control
+bone's local rotation, evaluate the six-entry three-way blend, and replace the driven bone's local
+transform outright. The rule is `docs/vtmb/procedural_bones.md`. It derives
+`FAnimNode_SkeletalControlBase` and runs in the post-process graph.
 
-1. **Split inheritance.** For each bone carrying the split flag, take rotation from the component
-   root rather than the parent, and translation from the parent. The rule and its evidence are
-   `docs/vtmb/animation_and_movers.md`.
-2. **Axis interpolation.** For each bone the model declares as procedurally driven, read the control
-   bone's local rotation, evaluate the six-entry three-way blend, and replace the driven bone's
-   local transform outright. The rule is `docs/vtmb/procedural_bones.md`.
+**It is the standing exemption to "poses are baked native", and it earns that on one property:** it
+reads a *live* control-bone orientation, so its input is the blended pose rather than anything a
+file states. That makes it a rig rule of the same kind as an IK or look-at node, not a frame
+conversion. Every other VtMB rule — split inheritance, the additive combine order, the per-bone mask
+— names a value the file carries somewhere, so each is a bake input and none reaches the graph.
 
-**Their order in the graph is retail's**: split inheritance first, then axis interpolation, matching
-the composition order the capture establishes. On the shipped corpus the two commute — no rule names
-a split-inheritance bone as its driven bone *or* its control — and the axis rule is a pure function
-of a local rotation while split inheritance changes only component-space composition. So the order
-is kept because it is faithful, not because this data could catch getting it wrong.
+Split inheritance in particular is **not** a stage. `Flags & 0x2` is a 2004 toolchain defect the
+engine was taught to tolerate: the flagged bone's rotation is stored in model space while every
+other bone's is parent-relative, and `docs/vtmb/animation_and_movers.md` records that all 373
+flagged bones' `poseToBone` inverse binds are ordinary hierarchy FK — the animators authored a
+conventional pose and only the storage frame disagreed. Under
+`docs/project/remaster-direction.md`'s Behaviour test that is a defect fixed at bake, and §2 says
+how each of the two cases is written.
 
-These two are **correctness, not feel**. With split inheritance disabled a character's whole upper
-body folds about 90° forward. They are the irreducible delta between reading VtMB's rigs and not
+This stage is **correctness, not feel** — the irreducible delta between reading VtMB's rigs and not
 reading them.
 
-**The engine's pose-driver node is the wrong tool** for the second. Its shape matches — a driver
+**The engine's pose-driver node is the wrong tool** for it. Its shape matches — a driver
 bone, an evaluation space, target poses — but it interpolates with a radial basis function rather
 than the sign-selected three-way slerp the rule uses. It would approximate a stage that reproduces
 retail to `1e-4`.
@@ -162,15 +449,16 @@ slerps, against a skinning pass over the same mesh — the cost is negligible. R
 once in `InitializeBoneReferences`, never by name per evaluation. `LODThreshold` drops the
 correction on distant characters, where limb twist is not resolvable. Skeletal controls evaluate in
 component space while the axis rule reads a **local** rotation; deriving it as
-`parentComponent⁻¹ · boneComponent` is cheap and the base class supplies the conversion. Declare
-both thread-safe so they evaluate on animation worker threads with the rest of the graph.
+`parentComponent⁻¹ · boneComponent` is cheap and the base class supplies the conversion. Declare it
+thread-safe so it evaluates on animation worker threads with the rest of the graph.
 
-## 5. What the export carries, and the basis hazard
+## 6. What the export carries, and the basis hazard
 
-Exported clips store the raw decoded locals, which are the same channels retail decodes and then
-overrides — the correct thing to carry, given that something downstream does the overriding. Beside
-them the export must carry the procedural rule table, the per-bone mask inventory, the layer
-binding, and the blend grids.
+Exported clips store **resolved** locals, not raw decoded ones: the split bone's model-space
+rotation re-expressed against its parent, and a delta conjugated into Unreal's combine order. A
+channel retail decodes and then overrides is carried as what the override produces, because nothing
+downstream does the overriding any more. Beside the clips the export must carry the procedural rule
+table, the per-bone mask inventory, the layer binding, and the blend grids.
 
 The hazard is basis. The rule's six entries and its **axis index** are expressed in VtMB's basis,
 and a change of basis conjugates bone locals: the axis a rule names is not the same axis after
@@ -212,7 +500,7 @@ either, so both reach the exporter with no channel and would arrive as the same 
 opposite results when the clip is composed as a layer — the first keeps the base pose, the second
 replaces it with a bind pose the overlay authored.
 
-## 6. The face is a curve interface
+## 7. The face is a curve interface
 
 The facial rig writes named float curves flagged as morph-target curves over whatever pose the body
 produced; it writes no bones. The eyes read an eyeball bone's transform to build an aim basis and
@@ -223,18 +511,23 @@ pose — and nothing in the graph above changes that.
 What the bake owes the face is only this: the morph targets present, the duplicate-target pieces
 merged, and the curve metadata authored. `docs/vtmb/facial_animation.md` owns everything else.
 
-## 7. Adjacent stages
+## 8. Adjacent stages
 
 **The garment simulation** (`pipeline/src/elysium_pipeline/enhancement/cloth.py` writes its rig) runs
-after both composition stages, so the simulation sees the finished skeleton. It is an enhancement
-rather than a reproduction — VtMB simulates no cloth — and it is independent of both: a model may
+after the composition stage, so the simulation sees the finished skeleton. It is an enhancement
+rather than a reproduction — VtMB simulates no cloth — and the two are independent: a model may
 carry either, both or neither.
 
-**Secondary motion is a third stage, on disjoint bones.** VtMB clamps hair, ponytail, mane and
+It is **off** (`elysium.Cloth 0`), and it is not only a garment switch: the cvar selects the mesh
+path. A garment rig names bones the shared baked skeleton does not carry, so a stem the spike built
+is excluded from the baked mount while the cvar is 1 and loads through glTFRuntime instead. With it
+off, every stem resolves by the baked/loader toggle alone.
+
+**Secondary motion is a second stage, on disjoint bones.** VtMB clamps hair, ponytail, mane and
 breast bones to an authored per-bone angular limit read from a table in the model header
-(`docs/vtmb/secondary_motion.md`). It touches none of the bones the two stages above act on, so it
-is a further node rather than a change to either — but the solve the limit clamps is undecoded, so
-what that node evaluates below the ceiling is not yet designable.
+(`docs/vtmb/secondary_motion.md`). It touches none of the bones the stage above acts on, so it is a
+further node rather than a change to it — but the solve the limit clamps is undecoded, so what that
+node evaluates below the ceiling is not yet designable.
 
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are
