@@ -99,14 +99,18 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   ancestors carry no rotation record, so the composed parent rotation the correction divides by is
   not in the file and never can be. It arrives at runtime, from whatever host the overlay rides.
 
-  The representation changes instead of the frame path acquiring a rule. What the clip stores is a
-  rotation that is *already* independent of the parent chain, and Unreal has exactly one
-  representation whose defining property is that — the **mesh-space additive**
-  (`AAT_RotationOffsetMeshSpace`), whose asset form for a 3×3 grid is `UAimOffsetBlendSpace`. The
-  bake writes each clip as a component-space delta against the base its weapon declares. A VtMB aim
-  layer *is* an aim offset by construction — a grid on `aim_yaw`/`aim_pitch`, owning the upper body,
-  composed over locomotion, required not to follow the hips — so this is the native form of the
-  content rather than a conversion trick.
+  **Substituting the bind chain is not available, and the reason is measured.** The chain above the
+  split bone is `Bip01`, `Bip01 Pelvis`, `Bip01 Spine`, and retail's rule declines all three —
+  `Bip01` is an ordinary animated bone, not the entity transform. Every clip turns it: 63° from
+  bind on a weapon idle, 82–99° on a walk or run. An overlay normalised against the bind chain
+  therefore arrives rotated by the character's own root rotation, which is a larger error than the
+  model-space value it was correcting.
+
+  So the base has to be a real pose, and the autolayer table names one: the **host**. The family is
+  emitted once per declaring host, composed onto that host's own pose, exactly as the `_delta`
+  family above is — the two differ only in how the clip combines with the host (an overlay
+  *replaces* the bones it owns, an additive accumulates) and in which additive type the asset
+  carries. A grid's cells each derive against the same host, so the grid stays one thing.
 
   Two things fall out. The family needs **no blend profile**: an additive's untouched bones
   contribute the additive identity, so masked-out and bind-holding are both a zero delta and the
@@ -439,6 +443,12 @@ how each of the two cases is written.
 This stage is **correctness, not feel** — the irreducible delta between reading VtMB's rigs and not
 reading them.
 
+**There is one build of a character, and it is the baked one.** No runtime path constructs a
+character from `.glb`, so no clip reaches the graph carrying VtMB's rotations unchanged and there is
+no split-inheritance node to gate. A stem the character export has not covered cannot stand at all
+and fails by name — a missing export rather than a silent substitution. glTFRuntime remains the
+bake-time reader (§2), which is where the same code path serves both sides of the seam.
+
 **The engine's pose-driver node is the wrong tool** for it. Its shape matches — a driver
 bone, an evaluation space, target poses — but it interpolates with a radial basis function rather
 than the sign-selected three-way slerp the rule uses. It would approximate a stage that reproduces
@@ -518,10 +528,9 @@ after the composition stage, so the simulation sees the finished skeleton. It is
 rather than a reproduction — VtMB simulates no cloth — and the two are independent: a model may
 carry either, both or neither.
 
-It is **off** (`elysium.Cloth 0`), and it is not only a garment switch: the cvar selects the mesh
-path. A garment rig names bones the shared baked skeleton does not carry, so a stem the spike built
-is excluded from the baked mount while the cvar is 1 and loads through glTFRuntime instead. With it
-off, every stem resolves by the baked/loader toggle alone.
+It is **off** (`elysium.Cloth 0`) and it no longer selects a mesh. A garment rig names lattice
+bones the shared baked skeleton does not carry, so with the cvar on the chains resolve nothing;
+every body comes off the mount either way.
 
 **Secondary motion is a second stage, on disjoint bones.** VtMB clamps hair, ponytail, mane and
 breast bones to an authored per-bone angular limit read from a table in the model header

@@ -80,21 +80,17 @@ public:
 	// built, GI-scoped. Answered independently of the flex rig, because a player body carries a
 	// pair of eyeballs and no flex rig at all.
 	//
-	// **`bBaked` is part of the identity, not a hint.** Both sidecars state their geometry in the
-	// glb's frame, and the two body paths land in frames a 90 degree yaw apart, so the rig is
-	// carried into whichever one the body actually landed in
-	// (`ElysiumNpcVisual::ImportGlbLocal`). Pass it from the MESH in hand
-	// (`ElysiumNpcVisual::IsBakedMesh`), never re-derived from the cvar: a body can be on the
-	// loader while the toggle says baked, and a rig built in the wrong frame aims driven bones and
-	// irises sideways while every other bone looks correct. The cache is keyed on it too, so the
-	// two framings coexist rather than the first one built winning the map.
-	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem, bool bBaked);
+	// Both sidecars state their geometry in the glb's frame and are carried into the frame the
+	// baked body landed in (`ElysiumNpcVisual::ImportGlbLocal`). There is one such frame, because
+	// there is one build of a character; a rig built in the wrong one aims driven bones and irises
+	// sideways while every other bone looks correct.
+	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem);
 	// The two composition stages' rig for a stem (CAP7.2): `npc_index.json`'s `split_bones` plus
 	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
 	// the body then poses under Unreal's ordinary hierarchy composition, as it did before CAP7.2.
 	// Same shape and lifetime as GetFacialRig: shared, immutable once built, and GI-scoped so it
-	// outlives the map epoch the skeleton belongs to. `bBaked` as above.
-	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem, bool bBaked);
+	// outlives the map epoch the skeleton belongs to. Same frame rule as above.
+	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem);
 	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
 	// animated_props/.
 	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);

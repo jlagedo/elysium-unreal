@@ -297,9 +297,9 @@ programme** — the composition rules it exercises are pose arithmetic whose fai
 before they are measurable, and the tiers underneath it assert transport and structure rather than
 plausibility.
 
-Two rules keep it honest. It drives the **production** loader, bake and proxy paths, never a copy,
-so what it stands is what a map stands; `LabRestand` exists because the mesh and clip caches are
-keyed by stem rather than by which path built them, and a toggle reads as dead without it. And it
+Two rules keep it honest. It drives the **production** bake and proxy paths, never a copy, so what
+it stands is what a map stands; `LabRestand` exists because the mesh and clip caches are keyed by
+stem and pin one for the map epoch, so a re-export is invisible without it. And it
 **observes** the runtime's own selection rather than substituting for it: where gameplay selects an
 animation, the lab's job is to display what was selected and let it be perturbed, so a panel reports
 the selecting authority beside the result. A control that can only be reached from the lab is

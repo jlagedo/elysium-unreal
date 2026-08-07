@@ -55,6 +55,11 @@ rule; parsers and orchestration modules do not emit coordinate products. `mdl_gl
 the standing exemption because standard glTF 2.0 is self-describing and glTFRuntime
 performs its import transform.
 
+The skeletal **pose frame** is covered by the same contract, so `UE_mdl_skeletal.py` owes it
+too: every emitted rotation is parent-relative and every additive names the clip it is a
+difference from, leaving the runtime no VtMB rule to apply. The root `CLAUDE.md` rule
+"Poses are baked native" states it and names its one exemption.
+
 ## Products
 
 `UE_bsp_to_scene.py` writes per-map geometry and sidecars. The CLI task graph coordinates

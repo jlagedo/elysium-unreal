@@ -5,6 +5,11 @@
 namespace
 {
 	constexpr uint32 EskmMagic = 'M' << 24 | 'K' << 16 | 'S' << 8 | 'E';   // "ESKM", little-endian
+	// 4 -- a clip names the clip it is a difference FROM, empty for a pose of its own. An additive
+	// ships once per declaring host, composed onto that host's pose, because converting VtMB's
+	// post-multiplied delta into Unreal's pre-multiplied one is a conjugation by the base's
+	// rotation and the answer differs across the hosts one delta serves.
+	//
 	// 3 -- a clip carries the index of its per-bone `weight`@0 mask, and the masks ship as a
 	// de-duplicated table. Without it a bone a layer leaves at its bind pose is indistinguishable
 	// from one the layer does not own, which are opposite results when the layer is composed.
@@ -13,7 +18,7 @@ namespace
 	// ordinary inheritance reproduces the pose VtMB draws and no runtime rule is applied. A
 	// version 1 container carries the same bytes meaning the opposite, and nothing in the payload
 	// tells them apart, so a stale export is refused rather than posed wrongly with no error.
-	constexpr uint32 EskmVersion = 3;
+	constexpr uint32 EskmVersion = 4;
 
 	/**
 	 * A bounds-checked forward cursor over the loaded file.
@@ -195,6 +200,7 @@ namespace
 		{
 			FElysiumSourceClip& Clip = Out.Clips.AddDefaulted_GetRef();
 			Clip.Name = Cursor.ReadString();
+			Clip.BaseName = Cursor.ReadString();
 			Clip.FrameCount = static_cast<int32>(Cursor.Read<uint32>());
 			Clip.FrameRate = Cursor.Read<float>();
 			Clip.Flags = Cursor.Read<uint32>();

@@ -56,6 +56,40 @@ public:
 		const FString& MaterialPackagePath, const TMap<FString, FString>& MaterialTextures);
 
 	/**
+	 * Build and save a `USkeleton` from an `.eskm`'s bone tree alone, with no mesh.
+	 *
+	 * An animation bank carries no geometry, so it has no mesh to take a tree from -- and a bank
+	 * needs a skeleton of its own precisely so its clips can be baked ONCE and shared, rather than
+	 * rebuilt against every rig family that plays them. Called again with another bank's container
+	 * it merges: a bone the tree already carries keeps its index, so the banks that agree on a rig
+	 * land on one skeleton.
+	 *
+	 * Refuses a container that would give the skeleton a second root, which is what
+	 * `USkeleton::MergeBonesToBoneTree` rejects far downstream.
+	 *
+	 * Returns an empty string on success, otherwise the first thing that went wrong.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString BuildSkeletonFromSource(const FString& SourcePath,
+		const FString& SkeletonPackageName);
+
+	/**
+	 * Declare that this skeleton may play animations authored on the named ones.
+	 *
+	 * **This is what keeps one copy of a bank instead of one per rig family.** A `UAnimSequence` is
+	 * bound to exactly one `USkeleton`, so a bank recorded once would otherwise be rebuilt for every
+	 * family that reaches it -- 7,871 distinct clips across the cast becoming ~90,000 assets. A
+	 * compatibility declaration is non-destructive: the engine builds a name-keyed bone map per
+	 * skeleton pair and drops what the target lacks, which is the same binding rule the bake already
+	 * applies when it reports a bank track unbound.
+	 *
+	 * Returns an empty string on success, otherwise the first thing that went wrong.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
+		const TArray<FString>& SourceSkeletonPackageNames);
+
+	/**
 	 * Build and save one `UAnimSequence` per clip in an `.eskm`, as `<PackagePath>/A_<clip>`.
 	 *
 	 * Every clip in the file is baked in one pass because a shared animation bank holds hundreds

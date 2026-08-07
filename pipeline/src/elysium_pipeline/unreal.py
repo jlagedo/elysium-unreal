@@ -140,11 +140,10 @@ def bake_maps(
 def bake_characters(config, runner, stems: Sequence[str]) -> None:
     """Bake the named models onto /ElysiumBaked/Characters.
 
-    Deliberately NOT batched, unlike the map bake. The bake partitions the models into rig families
-    -- the sets whose bone trees one USkeleton can carry -- and that partition is a property of the
-    whole set it is given. Splitting the run into batches would compute a different partition per
-    batch, so the same model could land in differently-named families on different runs and a mesh
-    would point at a skeleton whose clips were written elsewhere.
+    The whole cast goes through one editor process. Animation compression reports no memory estimate
+    of its own, so the engine's throttler never engages against it -- the cap below is what keeps a
+    long queue of sequences from exhausting the address space, and the bank pass is what keeps the
+    queue short.
     """
     _run(
         config,
@@ -155,6 +154,10 @@ def bake_characters(config, runner, stems: Sequence[str]) -> None:
             "-run=pythonscript",
             f"-script={config.repo_root / 'pipeline/unreal/bake_characters.py'}",
             f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
+            # AnimationCompression estimates its own cost as 0 MB, so the async-compilation
+            # throttler lets an unbounded number of jobs run and the process dies of a failed
+            # allocation rather than of anything wrong with the model it was on.
+            "-ini:Engine:[ConsoleVariables]:Editor.AsyncAssetCompilationMaxMemoryUsage=8",
             "-unattended",
             "-nosplash",
             "-nopause",

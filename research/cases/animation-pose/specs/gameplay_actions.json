@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "topic": "gameplay_actions",
+  "consuming_document": "docs/vtmb/animation_and_movers.md",
+  "research_id": "RE37",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What symbolic action does every compact code returned or retained by the player classifier represent, and which exact movement, weapon, interaction, damage, form, script, and animation-mode predicates select it?",
+    "Which mode-specific leaves reached through CBasePlayer::SetAnimation's router choose activities, direct sequences, or layers, and what is their priority and interruption order?",
+    "Where does the NPC schedule/task path set ideal activity, translate it through NPC/weapon/class overrides, and commit the selected sequence for every exported NPC class?",
+    "What is the exact ordering among SetIdealActivity, Weapon_TranslateActivity, NPC_TranslateActivity, form/class translations, required-table fallback, SetActivity, and sequence selection on player and NPC paths?",
+    "Can every weapon acttable_t be recovered statically from its table/count virtual pair, including inherited and dynamically selected weapon subclasses, and does retail activitydump reproduce the same rows?",
+    "Which StudioSeqDesc events are gameplay-significant for locomotion, attacks, reloads, footsteps, reactions, and paired interactions, and what are their payload layouts and dispatch times?",
+    "Which activities and direct sequence labels are reachable only through scripts, dialogue, disciplines, forms, damage/knockback, or developer commands rather than ordinary player/NPC update loops?"
+  ],
+  "field_probes": [
+    {
+      "displacement": "6f0",
+      "label": "server_animation_sequence",
+      "role": "CBaseAnimating m_nSequence written by the ordinary apply path and the player_sequence bypass."
+    },
+    {
+      "displacement": "fec",
+      "label": "server_activity",
+      "role": "Current server activity compared before selecting a replacement sequence."
+    },
+    {
+      "displacement": "ff0",
+      "label": "server_ideal_activity",
+      "role": "Requested activity stored by CBaseCombatCharacter::SetIdealActivity before translation and sequence selection."
+    },
+    {
+      "displacement": "19a4",
+      "label": "active_weapon_handle",
+      "role": "CBaseCombatCharacter active weapon EHANDLE consumed by Weapon_TranslateActivity."
+    },
+    {
+      "displacement": "3d4",
+      "label": "server_velocity",
+      "role": "Three-component player velocity consumed by the compact action classifier and ordinary selector."
+    },
+    {
+      "displacement": "3e0",
+      "label": "player_water_level",
+      "role": "Player water level tested by the compact action classifier and ordinary selector."
+    },
+    {
+      "displacement": "1cb0",
+      "label": "player_action_latch",
+      "role": "One-byte latch whose retained action code is read from the adjacent 0x1cb4 dword by the classifier."
+    },
+    {
+      "displacement": "1db4",
+      "label": "player_jump_landing_state",
+      "role": "Compact jump/landing phase switched by the ordinary selector and tested by PostThink."
+    }
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "vampire.dll registers 3,045 activity names with numeric IDs 1 through 0xbfe at 0x104126e0.",
+      "evidence": "The registration body calls the one-name registration helper for ACT_IDLE=1 through the final ACT_KNOCKBACK_FLYING_* entries; StudioSeqDesc.activity is -1 on disk while szactivitynameindex is populated.",
+      "consequence": "The stable extraction key is the ACT_* literal; numeric IDs are pinned-build diagnostics and must not be authored into remake gameplay code."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CBasePlayer::PostThink calls a compact action classifier and forwards every non-negative result through the SetAnimation virtual.",
+      "evidence": "0x1016be10 calls 0x1016bb50, tests against -1, and invokes vtable +0x704 with the result and zero.",
+      "consequence": "Player input is not a clip selector; realized player state is classified before animation mode and activity selection."
+    },
+    {
+      "confidence": "partial",
+      "fact": "The player classifier reads movement, ground, water, interaction and retained-action state and returns compact dispatcher codes rather than activity IDs.",
+      "evidence": "0x1016bb50 returns -1 or values including 0, 1, 2, 7, 8, 9, 10, 11 and 13 from velocity, flags, water level, handles and latches; 0x10164870 interprets the code separately before choosing an activity.",
+      "consequence": "The complete code-to-action vocabulary needs controlled state traces; equating a compact code with ACT_* would merge two distinct enums."
+    },
+    {
+      "confidence": "partial",
+      "fact": "The ordinary player animation selector writes move_yaw, aim_yaw and aim_pitch, then chooses among base locomotion, water, air, land, climb, crouch and contextual activity families.",
+      "evidence": "0x10164870 looks up/writes the three named pose parameters and reaches registered IDs for ACT_IDLE, ACT_AIM, ACT_WALK/RUN/SNEAK/RELAXED, ACT_SWIM/TREADWATER, ACT_HOP/LEAP/FALLING/LAND, ACT_CLIMB and ACT_CROUCH before calling 0x101644f0.",
+      "consequence": "Pose parameters and discrete activity selection are sibling outputs of one policy frame and must be captured together."
+    },
+    {
+      "confidence": "partial",
+      "fact": "The ordinary apply path stores the requested ideal activity, translates/sets it through activity virtuals, selects a weighted or heaviest sequence, writes m_nSequence, resets sequence state, and derives playback rate.",
+      "evidence": "0x101644f0 calls CBaseCombatCharacter::SetIdealActivity at 0x10324500, reaches activity virtuals, calls 0x1008dc40 or 0x1008dd30, writes this+0x6f0, calls 0x10090950 and updates this+0x6f4.",
+      "consequence": "A live selection record can be captured at one narrow path, but exact translation ordering remains an explicit question rather than an assumed Source-SDK correspondence."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CBaseCombatCharacter::Weapon_TranslateActivity delegates to the active weapon's virtual +0x5a4 unless the weapon is absent or excluded.",
+      "evidence": "0x10327ec0 resolves the EHANDLE at this+0x19a4, checks the weapon flags, and replaces the incoming activity with the virtual return.",
+      "consequence": "Weapon-specific locomotion, aim, attack and reload activities come from the weapon class rather than from player-model label matching."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A weapon activity override row is three dwords: base activity, weapon activity and required, exposed by weapon virtuals +0x5a8 and +0x5ac.",
+      "evidence": "0x1024edc0 obtains the table pointer/count through those slots, walks at a 12-byte stride and prints Base Act, Weapon Act and Required using the activity-name lookup.",
+      "consequence": "Every weapon translation table is statically extractable and retail activitydump is an independent oracle for the normalized export."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CBasePlayer::NPC_TranslateActivity maps ACT_WALK_RELAXED to ACT_WALK and ACT_RUN_RELAXED to ACT_RUN and otherwise returns the input unchanged.",
+      "evidence": "0x101647a0 compares the input with 0x16 and 0x17 and returns 9 or 0x13 respectively.",
+      "consequence": "The player applies at least one class-specific translation after a base activity is selected."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The player_sequence console command bypasses activity translation and resolves an exact sequence label.",
+      "evidence": "0x10348560 reads the command argument, calls LookupSequence at 0x1008f7b0, writes this+0x6f0, calls ResetSequenceInfo at 0x10090950 and zeros the cycle.",
+      "consequence": "Direct authored/developer sequence requests require a separate resolver route from ordinary gameplay activities."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The installed player-body union resolves 56 target models through 122 owner models to 3,330 exact sequence descriptors and 3,615 animation descriptors with no missing includes.",
+      "evidence": "research/tooling/capture/inventory_player_animations.py generated the hash-closed cap12 inventory from clandoc000.txt and the patch-first model tree; the sequences contain 1,202 distinct non-empty activity literals.",
+      "consequence": "Coverage is keyed by exact owner model and raw sequence index, not by label, and is generated rather than maintained by hand."
+    }
+  ],
+  "functions": [
+    {
+      "address": "104126e0",
+      "label": "register_global_activity_table",
+      "confidence": "confirmed",
+      "role": "Registers the 3,045 ACT_* literals and pinned-build numeric IDs used to populate StudioSeqDesc.activity at load.",
+      "depth": 1,
+      "cap": 220,
+      "asm_count": 5000
+    },
+    {
+      "address": "1016be10",
+      "label": "cbaseplayer_postthink",
+      "confidence": "confirmed",
+      "role": "CBasePlayer::PostThink; updates player state, calls the action classifier, and forwards non-negative codes through SetAnimation virtual +0x704.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 3200
+    },
+    {
+      "address": "1016bb50",
+      "label": "classify_player_animation_action",
+      "confidence": "partial",
+      "role": "Classifies realized movement, water, interaction and animation-latch state into a compact action code or -1.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 1400
+    },
+    {
+      "address": "10164240",
+      "label": "cbaseplayer_set_animation_router",
+      "confidence": "partial",
+      "role": "Routes a compact action through special ownership/mode branches and mode-specific animation virtuals; ordinary mode reaches +0x684.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 2200
+    },
+    {
+      "address": "10164870",
+      "label": "set_normal_player_animation",
+      "confidence": "partial",
+      "role": "Writes movement/aim pose parameters, maps a compact action and live state to base activities, and calls the common apply path.",
+      "depth": 2,
+      "cap": 240,
+      "asm_count": 4200
+    },
+    {
+      "address": "101644f0",
+      "label": "apply_player_activity_and_sequence",
+      "confidence": "partial",
+      "role": "Applies activity translation/setting, chooses weighted or heaviest sequence, resets sequence state, and derives playback rate.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 2400
+    },
+    {
+      "address": "10324500",
+      "label": "set_ideal_activity",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::SetIdealActivity; stores the requested activity at this+0xff0 before translation and sequence selection.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 2200
+    },
+    {
+      "address": "10327ec0",
+      "label": "weapon_translate_activity",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::Weapon_TranslateActivity; delegates an activity to the active weapon virtual +0x5a4.",
+      "depth": 2,
+      "cap": 120,
+      "asm_count": 1200
+    },
+    {
+      "address": "101647a0",
+      "label": "player_npc_translate_activity",
+      "confidence": "confirmed",
+      "role": "CBasePlayer::NPC_TranslateActivity; maps relaxed walk/run to ordinary walk/run.",
+      "depth": 1,
+      "cap": 60,
+      "asm_count": 400
+    },
+    {
+      "address": "1024edc0",
+      "label": "dump_weapon_activity_table",
+      "confidence": "confirmed",
+      "role": "Prints one weapon's 12-byte activity override rows through its table/count virtuals.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 900
+    },
+    {
+      "address": "10411f10",
+      "label": "register_activitydump_convar",
+      "confidence": "confirmed",
+      "role": "Registers the developer ConVar described as Forces ActivityList Dump.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 200
+    },
+    {
+      "address": "1008dc40",
+      "label": "select_weighted_sequence",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::SelectWeightedSequence; selects a sequence for an activity using model weights.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 1800
+    },
+    {
+      "address": "1008dd30",
+      "label": "select_heaviest_sequence",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::SelectHeaviestSequence; deterministic heaviest-weight activity selection.",
+      "depth": 2,
+      "cap": 120,
+      "asm_count": 1400
+    },
+    {
+      "address": "1008f6c0",
+      "label": "lookup_activity",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::LookupActivity; resolves an activity literal against the current model.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 700
+    },
+    {
+      "address": "1008f7b0",
+      "label": "lookup_sequence",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::LookupSequence; resolves an exact sequence label against the current model.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 700
+    },
+    {
+      "address": "10090950",
+      "label": "reset_sequence_info",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::ResetSequenceInfo; resets cycle/sequence state after m_nSequence changes.",
+      "depth": 2,
+      "cap": 120,
+      "asm_count": 1400
+    },
+    {
+      "address": "10348560",
+      "label": "player_sequence_command",
+      "confidence": "confirmed",
+      "role": "CC_Player_Sequence; looks up an exact sequence label on player one and restarts it without activity translation.",
+      "depth": 2,
+      "cap": 120,
+      "asm_count": 1200
+    }
+  ],
+  "relationships": [
+    {
+      "from": "1016be10",
+      "to": "1016bb50",
+      "confidence": "confirmed",
+      "evidence": "direct call before the non-negative action-code test"
+    },
+    {
+      "from": "1016be10",
+      "to": "10164240",
+      "confidence": "partial",
+      "evidence": "CBasePlayer virtual +0x704 receives the classifier result"
+    },
+    {
+      "from": "10164240",
+      "to": "10164870",
+      "confidence": "partial",
+      "evidence": "ordinary animation mode dispatches through CBasePlayer virtual +0x684"
+    },
+    {
+      "from": "10164870",
+      "to": "101644f0",
+      "confidence": "confirmed",
+      "evidence": "direct call after base activity and optional secondary activity are chosen"
+    },
+    {
+      "from": "101644f0",
+      "to": "10324500",
+      "confidence": "confirmed",
+      "evidence": "direct CBaseCombatCharacter::SetIdealActivity call with the requested activity"
+    },
+    {
+      "from": "101644f0",
+      "to": "1008dc40",
+      "confidence": "confirmed",
+      "evidence": "ordinary weighted-selection branch"
+    },
+    {
+      "from": "101644f0",
+      "to": "1008dd30",
+      "confidence": "confirmed",
+      "evidence": "force-heaviest branch when flag 0x40000000 is set"
+    },
+    {
+      "from": "101644f0",
+      "to": "10090950",
+      "confidence": "confirmed",
+      "evidence": "direct call after writing a changed m_nSequence"
+    },
+    {
+      "from": "10327ec0",
+      "to": "1024edc0",
+      "confidence": "confirmed",
+      "evidence": "same weapon vtable exposes translation at +0x5a4 and its printable table/count at +0x5a8/+0x5ac"
+    },
+    {
+      "from": "10348560",
+      "to": "1008f7b0",
+      "confidence": "confirmed",
+      "evidence": "direct exact-label lookup when the command argument is not numeric"
+    },
+    {
+      "from": "10348560",
+      "to": "10090950",
+      "confidence": "confirmed",
+      "evidence": "direct call after writing the resolved sequence"
+    }
+  ]
+}

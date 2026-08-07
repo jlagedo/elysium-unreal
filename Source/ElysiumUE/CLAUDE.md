@@ -19,8 +19,8 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 
 - **Plugins:** `ProceduralMeshComponent`; `PythonScriptPlugin` (offline scaffolding only); `Cog`
   (vendored MIT debug-UI shell, `Plugins/External/Cog/`, stripped from Shipping via `ENABLE_COG`);
-  `glTFRuntime` (vendored MIT, the NPC skeletal path — `USkeletalMesh` + `UAnimSequence` from `.glb`
-  at runtime, no editor import).
+  `glTFRuntime` (vendored MIT, the character bake's `.glb` reader — it runs inside the bake
+  commandlet and inside the v4 animated-prop loader, never to build a character at runtime).
 - **Third party:** vendored `dr_wav`/`dr_mp3`; CPython 2.7.18 SDK under `ThirdParty/CPython27/`
   (**fetched, not committed** — `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
   Win64 only).
@@ -245,8 +245,12 @@ Hard-won, non-obvious, and easy to undo:
   replay the whole run's awards. `RestoreQuests` is the silent bulk door, and it is the only one.
 - **Save omission diffs against a post-Load baseline, not zero** — a fresh-constructed reference
   omits the wrong things and a restored map re-runs every `logic_auto` ignition.
-- **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — glTFRuntime binds each to
-  a specific `USkeleton`, and meshes are per-map-epoch.
+- **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — a sequence is bound to
+  one rig family's `USkeleton`, and meshes are per-map-epoch.
+- **A character has exactly one build: the `/ElysiumBaked` mount.** `ElysiumNpcVisual::LoadMesh`
+  fails by name for a stem the character export has not covered rather than substituting anything,
+  so a partial export is a missing body rather than a differently-posed one. `uv run elysium export
+  characters` with no arguments bakes the whole cast.
 - **`FElysiumEntityWorld::NowSeconds()` falls back to the last ticked time when there is no game
   state** — only `RunThinks`/`RunPlayerThink` see the tick argument, so without that fallback a
   headless think measuring elapsed time reads zero forever no matter what `Tick(t)` is passed.

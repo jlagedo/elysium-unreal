@@ -1,7 +1,7 @@
-// What `elysium.BakedCharacters` selects has to be the same character (ANM1). Everything compared
-// here fails silently in game -- a dropped bone plays part of a skeleton at bind pose, a lost morph
-// target leaves a face that evaluates its facial track and never moves, and a clip bound to the
-// wrong bone tree plays a plausible wrong pose.
+// The baked cast is the only build of a character (ANM1), so what the bake writes IS the game.
+// Everything compared here fails silently in game -- a dropped bone plays part of a skeleton at
+// bind pose, a lost morph target leaves a face that evaluates its facial track and never moves,
+// and a clip bound to the wrong bone tree plays a plausible wrong pose.
 //
 // THE CLIP ASSERTION IS COMPOSED, NOT PER KEY. Both sides are driven through the bone hierarchy
 // and compared in component space, so an error at any bone arrives amplified at every bone below
@@ -19,20 +19,22 @@
 // (bring-your-own-game). A `_delta` clip is skipped here for the same reason it is skipped at
 // export: it states a difference rather than a pose, so composing it answers nothing.
 //
-// THE MESH ASSERTION IS DELIBERATELY NOT "the two paths agree bone for bone". They reach Unreal
-// through different bases: glTFRuntime derives every bone from the inverse-bind matrices under its
-// own basis, and the bake writes the file's own locals in the repo's canonical Source-to-Unreal
-// frame (`bsp.source_to_unreal`, the `UE_` exporter convention). A rig can hold one shape in many
-// frames with the inverse binds absorbing the difference, so the two disagree about individual bone
-// transforms -- by whole degrees and centimetres, printed at the end of the run -- while drawing the
-// same body. Neither one's bone transforms predict the other's.
+// THE MESH ASSERTION IS DELIBERATELY NOT "the glb and the asset agree bone for bone". Nothing
+// builds a character from `.glb` at runtime any more; the file is read here as an INDEPENDENT
+// ORACLE for what the model contains, because it is the same source the bake consumed and it
+// arrives through completely different code. The two reach Unreal through different bases --
+// glTFRuntime derives every bone from the inverse-bind matrices under its own basis, and the bake
+// writes the file's own locals in the repo's canonical Source-to-Unreal frame
+// (`bsp.source_to_unreal`, the `UE_` exporter convention). A rig can hold one shape in many frames
+// with the inverse binds absorbing the difference, so the two disagree about individual bone
+// transforms -- by whole degrees and centimetres, printed at the end of the run -- while drawing
+// the same body. Neither one's bone transforms predict the other's.
 //
-// So the rest pose is asserted against the CONTAINER, not against the loader: the `.eskm` states
-// the bind pose in Unreal space with no import step to disagree about, which makes it the thing the
-// bake had to reproduce. The loader is held to the bone SET and the morph SET, which are basis-free
-// and are what says the two paths build the same rig. The bind-frame delta between them is
-// reported rather than failed -- a property of the path being retired, kept visible while both
-// remain selectable.
+// So the rest pose is asserted against the CONTAINER: the `.eskm` states the bind pose in Unreal
+// space with no import step to disagree about, which makes it the thing the bake had to reproduce.
+// The glb is held to the bone SET and the morph SET, which are basis-free and are what catch a
+// bake that silently dropped part of the model. The bind-frame delta between them is reported
+// rather than failed, because it is a change of basis rather than a defect.
 //
 // Self-skipping: the baked mount is gitignored and regenerable, so a checkout that has not run
 // `uv run elysium export characters` has nothing to compare and says so rather than failing.
@@ -72,8 +74,7 @@ namespace
 	// sampled frame of every clip it takes, so breadth costs real time and one body of each shape
 	// answers what a wider slice answers. `smiling_jack` SEEDS its rig family, so its own bone tree
 	// becomes the union every other male body merges into; `tremere_male_armor_0` merges INTO that
-	// union, which is the case where a bone can be lost. Neither carries a cloth mesh, so neither
-	// trips the cloth exclusion in `IsStemBaked`.
+	// union, which is the case where a bone can be lost.
 	const TCHAR* const GDefaultSliceStems[] = {
 		TEXT("smiling_jack"),
 		TEXT("tremere_male_armor_0"),
@@ -368,6 +369,30 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			{
 				continue;
 			}
+			if (Clip.BaseName.IsEmpty())
+			{
+				// A delta no host declares has no base to be a difference from, so no asset is
+				// built for it. Finding one means the mount is carrying a package from a previous
+				// export -- and one that is WRONG, because it was written against a different base
+				// and is still resolvable by the label the model references.
+				if (ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Clip.Name) != nullptr)
+				{
+					AddError(FString::Printf(
+						TEXT("%s '%s': an additive with no declared base is on the mount, so a ")
+						TEXT("stale package survived a re-export -- clean the mount"),
+						*Owner, *Clip.Name));
+				}
+				continue;
+			}
+			const FElysiumSourceClip* BaseClip = Container.Clips.FindByPredicate(
+				[&Clip](const FElysiumSourceClip& Candidate)
+				{ return Candidate.Name == Clip.BaseName; });
+			if (BaseClip == nullptr)
+			{
+				AddError(FString::Printf(TEXT("%s '%s': names base '%s', absent from the container"),
+					*Owner, *Clip.Name, *Clip.BaseName));
+				continue;
+			}
 			UAnimSequence* BakedDelta = ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Clip.Name);
 			if (BakedDelta == nullptr)
 			{
@@ -416,13 +441,32 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 						// defect, and the composed pass below is what asserts an own body's rig.
 						continue;
 					}
-					// A channel a delta leaves alone is a ZERO delta, not a bind value -- the
-					// opposite of the rule an ordinary clip's untouched channel follows.
+					// The container states the COMPOSED pose -- the base with the delta already on
+					// it -- so what the asset must hand back is whatever pre-multiplies onto the
+					// base to reproduce that. Re-applying it here is what makes this assertion
+					// cover the whole chain at once: the exporter's composition, the bake naming
+					// `ABPT_AnimFrame`, and the compressor's subtraction. Comparing the read-back
+					// delta against the container's track directly would assert none of them, and
+					// would pass just as happily against a delta conjugated by the wrong base.
+					const FElysiumSourceTrack* BaseBone = BaseClip->Tracks.FindByPredicate(
+						[&Track](const FElysiumSourceTrack& Candidate)
+						{ return Candidate.Bone == Track.Bone; });
+					const FQuat BaseRotation = (BaseBone != nullptr
+						&& BaseBone->Rotations.IsValidIndex(0))
+						? FQuat(BaseBone->Rotations[0])
+						: Container.Bones[Track.Bone].Local.GetRotation();
+					const FVector BasePosition = (BaseBone != nullptr
+						&& BaseBone->Translations.IsValidIndex(0))
+						? FVector(BaseBone->Translations[0])
+						: Container.Bones[Track.Bone].Local.GetTranslation();
+
 					const FQuat Expected = Track.Rotations.IsValidIndex(Frame)
-						? FQuat(Track.Rotations[Frame]) : FQuat::Identity;
+						? FQuat(Track.Rotations[Frame]) : BaseRotation;
 					const FVector ExpectedPos = Track.Translations.IsValidIndex(Frame)
-						? FVector(Track.Translations[Frame]) : FVector::ZeroVector;
-					const FTransform& Actual = Deltas[SkeletonBone];
+						? FVector(Track.Translations[Frame]) : BasePosition;
+					FTransform Actual = Deltas[SkeletonBone];
+					Actual.SetRotation((Actual.GetRotation() * BaseRotation).GetNormalized());
+					Actual.SetTranslation(Actual.GetTranslation() + BasePosition);
 
 					++Samples;
 					const double Degrees = FMath::RadiansToDegrees(
@@ -611,14 +655,22 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			++Taken;
 			++BlendGrids;
 
-			if (Space->GetSkeleton() != Baked->GetSkeleton())
+			// The body's own skeleton, or one it has DECLARED compatible. A bank is baked once
+			// against a skeleton of its own -- rebuilding it per rig family was 11x the assets for
+			// the same animation -- so equality is no longer the rule that makes a grid playable.
+			// The declaration is: it is what builds the name-keyed bone map the evaluator remaps
+			// through, and without it the samples really would not evaluate on this rig.
+			const USkeleton* BodySkeleton = Baked->GetSkeleton();
+			const USkeleton* SpaceSkeleton = Space->GetSkeleton();
+			if (SpaceSkeleton != BodySkeleton
+				&& !(BodySkeleton != nullptr && BodySkeleton->IsCompatibleForEditor(SpaceSkeleton)))
 			{
 				AddError(FString::Printf(
-					TEXT("%s grid '%s': bound to skeleton %s while the body wears %s, so no sample of "
-					     "it can evaluate on this rig"),
+					TEXT("%s grid '%s': bound to skeleton %s, which %s neither is nor declares "
+					     "compatible, so no sample of it can evaluate on this rig"),
 					*Owner, *Label,
-					Space->GetSkeleton() != nullptr ? *Space->GetSkeleton()->GetName() : TEXT("none"),
-					Baked->GetSkeleton() != nullptr ? *Baked->GetSkeleton()->GetName() : TEXT("none")));
+					SpaceSkeleton != nullptr ? *SpaceSkeleton->GetName() : TEXT("none"),
+					BodySkeleton != nullptr ? *BodySkeleton->GetName() : TEXT("none")));
 				continue;
 			}
 

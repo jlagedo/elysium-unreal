@@ -62,15 +62,41 @@ def glb_bone_parents(glb):
 
 
 def rig_trees_compatible(base, tree):
-    """Whether `tree` can merge into `base`: every bone they share must agree on its parent.
+    """Whether `tree` can merge into `base`: every bone they share must agree on its parent, and
+    the merge must leave exactly one root.
 
-    Strict, including the root. A bone that is parentless in one tree and parented in the other is a
-    conflict, because USkeleton::MergeBonesToBoneTree rejects exactly that -- a model whose VtMB
-    skeleton forks carries a synthetic root above Bip01, and no amount of interpretation makes that
-    the same shape as a Bip01-rooted one. Those models get their own family, which costs them
-    nothing: a clip binds to a skeleton by BONE NAME, so a bank still resolves against the Bip01
-    subtree inside their skeleton without ever merging into it."""
-    return all(bone not in base or base[bone] == par for bone, par in tree.items())
+    Strict about the parent, including the root. A bone that is parentless in one tree and parented
+    in the other is a conflict, because USkeleton::MergeBonesToBoneTree rejects exactly that -- a
+    model whose VtMB skeleton forks carries a synthetic root above Bip01, and no amount of
+    interpretation makes that the same shape as a Bip01-rooted one. Those models get their own
+    family, which costs them nothing: a clip binds to a skeleton by BONE NAME, so a bank still
+    resolves against the Bip01 subtree inside their skeleton without ever merging into it.
+
+    **Agreeing on every shared bone is not sufficient, because two trees can share nothing.** A prop
+    rooted at `Phone_bone_01` conflicts with no bone of a biped family and would merge in, giving
+    the skeleton a second parentless bone -- which Unreal's single-rooted reference skeleton
+    refuses, at mesh-build time, long after the partition was decided. So the root count is checked
+    here rather than discovered there."""
+    low_base = _casefold_tree(base)
+    low_tree = _casefold_tree(tree)
+    if not all(bone not in low_base or low_base[bone] == par
+               for bone, par in low_tree.items()):
+        return False
+    roots = {bone for bone, par in low_base.items() if not par}
+    roots |= {bone for bone, par in low_tree.items() if not par}
+    return len(roots) <= 1
+
+
+def _casefold_tree(tree):
+    """`tree` keyed and valued by lowercased bone name.
+
+    **`FName` is case-insensitive, so a comparison that is not agrees with Unreal by luck.** The
+    generic appendix names are exactly where the cast disagrees about case: `heather` hangs
+    `bone01` off `Bip01 Spine1` while `buch` hangs `Bone01` off `Bip01 HeadNub`, which a
+    case-sensitive dict reads as two unrelated bones and a skeleton reads as one bone with two
+    parents. The partition then hands them to the same family and the mesh build refuses it, long
+    after the decision was made and with nothing pointing back at the cause."""
+    return {bone.lower(): (par or "").lower() for bone, par in tree.items()}
 
 
 def rig_tree_merge(base, tree):

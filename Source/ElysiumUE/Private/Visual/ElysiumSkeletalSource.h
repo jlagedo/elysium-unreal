@@ -85,6 +85,14 @@ struct FElysiumSourceMask
 struct FElysiumSourceClip
 {
 	FString Name;
+	/**
+	 * The clip this one is a difference FROM, empty for a pose of its own. Set on the derived
+	 * `<additive>@<host>` clips the exporter writes once per declaring host: the tracks hold the
+	 * composed pose, and subtracting this base is what turns them back into the delta in Unreal's
+	 * own combine order. An additive whose base is empty was never bound to a host and is the raw
+	 * VtMB clip, which no additive asset is built from.
+	 */
+	FString BaseName;
 	int32 FrameCount = 0;
 	float FrameRate = 30.0f;
 	/** The raw `StudioSeqDesc.flags`; bit 0x4 marks the additive `_delta` family. */

@@ -23,6 +23,8 @@ CHARACTERS = MOUNT + "/Characters"
 SKELETON_PREFIX = "SKEL_Elysium_"
 MESHES = CHARACTERS + "/Meshes"
 ANIMS = CHARACTERS + "/Anims"
+#: Stands where a rig family goes in an anim path, for the banks every family shares.
+BANKS_FOLDER = "_banks"
 
 NPC_DIR = os.path.join(os.fspath(export_root()), "npc")
 
@@ -109,11 +111,30 @@ def verify_clips(family, owner, clips, errors):
         errors.append("%s/%s: no sequences baked" % (family, owner))
         return 0
 
+    # A clip the container binds to a host ships as `<clip>@<host>`, one per declaring host,
+    # because writing it needs that host's pose. The plain label is then deliberately absent:
+    # a delta has no base to be a difference from without one, and a masked overlay owning the
+    # split bone has no chain to express that bone's rotation against. Retail only ever reaches
+    # either through the same binding, so the derived forms are the whole story.
+    # The separator survives asset naming as an underscore, which an ordinary label also
+    # contains, so a derived form is recognised by PREFIX rather than by splitting on it.
+    baked_names = sorted(baked)
+
+    def has_derived(name):
+        prefix = name + "_"
+        return any(other.startswith(prefix) for other in baked_names)
+
     additive_expected = 0
     additive_found = 0
     for label, flags in sorted(clips.items()):
         name = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
         if name not in baked:
+            # Deliberately absent when the clip is one no asset can be written for on its own:
+            # it either shipped in derived form, or it carries the delta flag and no host
+            # declares it, which leaves it with no base to be a difference from. The orphan
+            # layers the model ships and never references are that second case.
+            if has_derived(name) or flags & 0x4:
+                continue
             errors.append("%s: clip '%s' is missing" % (owner, label))
             continue
         if not flags & 0x4:
@@ -133,6 +154,21 @@ def verify_clips(family, owner, clips, errors):
     return len(baked)
 
 
+def cell_is_baked(package, grid):
+    """Whether this grid's cells exist under their plain labels.
+
+    Absent means the cells ship only in derived `<cell>@<host>` form, which is what an aim grid's
+    do -- they own the split bone, so the chain their rotation is expressed against comes from a
+    host rather than from the file."""
+    for cell in grid.get("cells", ()):
+        clip = cell.get("clip") if isinstance(cell, dict) else cell
+        if not clip:
+            continue
+        name = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(clip)
+        return unreal.EditorAssetLibrary.does_asset_exist("%s/%s.%s" % (package, name, name))
+    return False
+
+
 def verify_blend_spaces(family, owner, blends, errors):
     """Every grid the sidecar declares has a BS_ asset, and it carries its samples.
 
@@ -141,23 +177,52 @@ def verify_blend_spaces(family, owner, blends, errors):
     to write one, so reaching this is a sign the asset did not survive the save."""
     package = "%s/%s/%s" % (ANIMS, family, owner)
     with open(os.path.join(NPC_DIR, *blends.split("/")), "r", encoding="utf-8") as handle:
-        grids = json.load(handle).get("grids", {})
+        sidecar = json.load(handle)
+    grids = sidecar.get("grids", {})
+
+    # A grid the autolayer table binds to hosts ships one blend space PER host, over that host's
+    # own cells -- an aim grid's cells own the split bone, so there is no host-free form of them
+    # to sample. Every other grid ships once under its plain label.
+    hosts_by_target = {}
+    for host, targets in sidecar.get("autolayers", {}).items():
+        for target in targets:
+            hosts_by_target.setdefault(target, []).append(host)
 
     found = 0
     for label, grid in sorted(grids.items()):
         # Single-cell grids are not blend spaces and neither the exporter nor the bake writes one.
         if len(grid.get("cells", ())) < 2:
             continue
-        name = "BS_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
-        space = unreal.EditorAssetLibrary.load_asset("%s/%s.%s" % (package, name, name))
-        if space is None:
-            errors.append("%s: blend grid '%s' has no baked blend space" % (owner, label))
+        hosts = sorted(hosts_by_target.get(label, ()))
+        if not hosts and not cell_is_baked(package, grid):
+            # An aim grid no host declares. Its cells own the split bone, so they ship only in
+            # derived form against a host -- and it has none, which leaves no correct form of
+            # either the cells or the grid. Orphan content the model carries and never reaches,
+            # the same case as an additive no host declares.
+            log("%s: grid '%s' is declared by no host and is not built" % (owner, label))
             continue
-        if not space.get_editor_property("sample_data"):
-            errors.append("%s: blend space '%s' carries no samples and would pose nothing"
-                          % (owner, label))
+        wanted = [label + "@" + h for h in hosts] or [label]
+        missing, loaded = [], []
+        for want in wanted:
+            name = "BS_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(want)
+            space = unreal.EditorAssetLibrary.load_asset("%s/%s.%s" % (package, name, name))
+            if space is None:
+                missing.append(want)
+            else:
+                loaded.append((want, space))
+        if missing:
+            errors.append("%s: blend grid '%s' has no baked blend space (%d of %d form(s): %s)"
+                          % (owner, label, len(missing), len(wanted), ", ".join(missing[:3])))
             continue
-        found += 1
+        # Every form is checked, not just one: a blend space that loads, lists its samples and
+        # poses nothing is the failure this exists to catch, and it can happen to one host's
+        # form alone.
+        empty = [w for w, s in loaded if not s.get_editor_property("sample_data")]
+        if empty:
+            errors.append("%s: blend space(s) '%s' carry no samples and would pose nothing"
+                          % (owner, ", ".join(empty[:3])))
+            continue
+        found += len(loaded)
     if found:
         log("%s/%s: %d blend space(s)" % (family, owner, found))
     return found
@@ -179,9 +244,12 @@ def main():
     # up as missing sequences rather than passing quietly.
     wanted = {}
     # {owner: blends sidecar path relative to npc/}. Keyed by owner alone rather than by family: a
-    # grid is declared by the model that owns the clips, and every family playing it wants the same
-    # set of grids baked against its own skeleton.
+    # grid is declared by the model that owns the clips.
     gridded = {}
+    # {bank owner: {clip label: flags}}. Banks are baked ONCE, under `_banks`, and reached by every
+    # body through its skeleton's compatibility declaration -- so they are checked once here rather
+    # than once per family that includes them.
+    bank_wanted = {}
 
     for stem in stems:
         record = manifest["npcs"].get(stem)
@@ -201,11 +269,11 @@ def main():
             if record.get("blends"):
                 gridded[stem] = record["blends"]
         for _label, bank in record.get("clips", {}).items():
-            if bank == stem or bank in owners:
+            if bank == stem or bank in bank_wanted:
                 continue
             bank_record = manifest["banks"].get(bank, {})
-            owners[bank] = {label: int(meta.get("flags", 0))
-                            for label, meta in bank_record.get("clips", {}).items()}
+            bank_wanted[bank] = {label: int(meta.get("flags", 0))
+                                 for label, meta in bank_record.get("clips", {}).items()}
             if bank_record.get("blends"):
                 gridded[bank] = bank_record["blends"]
 
@@ -221,6 +289,12 @@ def main():
             total += verify_clips(family, owner, clips, errors)
             if owner in gridded:
                 spaces += verify_blend_spaces(family, owner, gridded[owner], errors)
+
+    log("%d bank(s) shared across the cast" % len(bank_wanted))
+    for owner, clips in sorted(bank_wanted.items()):
+        total += verify_clips(BANKS_FOLDER, owner, clips, errors)
+        if owner in gridded:
+            spaces += verify_blend_spaces(BANKS_FOLDER, owner, gridded[owner], errors)
     log("%d sequences, %d blend spaces over %d famil%s"
         % (total, spaces, len(wanted), "y" if len(wanted) == 1 else "ies"))
 

@@ -62,25 +62,10 @@ namespace ElysiumNpcVisual
 	// generated. Callers compare a built slot's base material against this to find the eye slots.
 	UMaterialInterface* EyeMaster();
 
-	// Whether `elysium.BakedCharacters` selects the offline-baked cast (ANM1). Necessary but not
-	// sufficient: a stem the bake has not covered still loads through glTFRuntime, so every reader
-	// asks for the baked asset and accepts null rather than treating the toggle as a guarantee.
-	bool UseBakedCharacters();
-	// Whether this stem's body comes off the baked mount rather than the loader. Same predicate
-	// the mesh choice makes, exposed because the sidecar rigs are carried into whichever frame
-	// the body landed in.
+	// Whether the mount carries a body for this stem. There is no second build of a character, so
+	// false means the export has not covered it and nothing will stand — asked ahead of a load by
+	// callers that would rather report than fail.
 	bool IsStemBaked(const FString& Stem);
-	// Whether a mesh that ALREADY LOADED came off the baked mount, asked of the mesh rather than
-	// re-derived from the toggle. The two can disagree — `LoadMesh` selects the baked branch on
-	// `UseBakedCharacters() && !UseClothMesh` and then falls through when the package is absent,
-	// while `IsStemBaked` additionally asks the file system — so anything that must agree with the
-	// body actually standing there asks this. A glTFRuntime mesh answers false.
-	bool IsBakedMesh(const USkeletalMesh* Mesh);
-	// Whether a sequence that ALREADY RESOLVED came off the baked mount. Necessary separately from
-	// IsBakedMesh because the two are chosen independently: `ResolveClip` falls back to a
-	// glTFRuntime-built sequence whenever the bake has not covered a bank or a clip name, so a
-	// baked BODY routinely plays a non-baked CLIP. Only the baked ones carry the split correction.
-	bool IsBakedClip(const UAnimSequence* Sequence);
 	// One baked body / one baked clip off the /ElysiumBaked mount, or null when the bake has not
 	// covered it. `Owner` is the stem that owns the clip — the body for its own dialogue clips, the
 	// bank stem otherwise — and `ClipName` is the resolved animation name, after any blend-grid
@@ -109,12 +94,11 @@ namespace ElysiumNpcVisual
 	// these, which is why the constants are read back off the loader's own config rather than
 	// restated. Nothing here is a Source-to-Unreal conversion; that half already happened offline.
 	//
-	// `bBaked` selects which frame the body being fitted actually landed in. glTFRuntime imports
-	// under its own basis; the baked `.eskm` assets are in the repo's canonical Source-to-Unreal
-	// frame. The two are a 90 degree yaw apart, so a sidecar carried into the wrong one aims an eye
-	// or a driven bone sideways while everything else looks correct.
-	FTransform ImportGlbLocal(const FTransform& GlbLocal, bool bBaked = false);
-	FVector ImportGlbDirection(const FVector& GlbDirection, bool bBaked = false);
+	// The frame is the baked body's: the repo's canonical Source-to-Unreal one the `.eskm` assets
+	// are written in. A sidecar carried into any other aims an eye or a driven bone sideways while
+	// everything else looks correct.
+	FTransform ImportGlbLocal(const FTransform& GlbLocal);
+	FVector ImportGlbDirection(const FVector& GlbDirection);
 	// The loader's own metres->centimetres factor. A sidecar carrying a plain *length* — a radius,
 	// a body extent — has no basis to change and only needs this, and taking it from the same
 	// configuration the mesh is imported under is what keeps the two from drifting apart.

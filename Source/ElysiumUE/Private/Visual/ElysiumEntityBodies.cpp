@@ -136,7 +136,7 @@ USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bP
 	// part of the cache key, so a guess costs at worst one redundant parse; it can never hand a
 	// body the other frame's rig the way a stem-keyed cache did.
 	const TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
-		? Anims->GetEyeSet(Stem, ElysiumNpcVisual::IsStemBaked(Stem)) : nullptr;
+		? Anims->GetEyeSet(Stem) : nullptr;
 	TArray<FString> EyeMaterials;
 	if (EyeSet.IsValid())
 	{
@@ -860,7 +860,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// After the mesh, not before: the eye geometry is carried into the frame the body actually
 	// landed in, and only the loaded mesh can say which that is.
 	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
-		? Anims->GetEyeSet(Stem, ElysiumNpcVisual::IsBakedMesh(Mesh)) : nullptr;
+		? Anims->GetEyeSet(Stem) : nullptr;
 
 	// The standing idle. Two NPCs sharing a model can carry different dispositions and different
 	// variants, so the pick is per (stem, disposition, variant) — but the resolved clip caches per
@@ -915,23 +915,9 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 		if (Anims != nullptr)
 		{
 			Inst->SetFacialRig(Anims->GetFacialRig(Stem));
-			// The two composition stages (CAP7.2). Null for a model declaring neither a split
-			// bone nor a procedural rule, which poses under Unreal's own hierarchy alone.
-			// Split inheritance is a property of where this body's CLIPS came from: the baked
-			// `.eskm` carries the correction already, the `.glb` the loader reads does not, and
-			// both paths are live in one map — a stem with a cloth mesh or one the bake has not
-			// covered still loads through glTFRuntime whatever `elysium.BakedCharacters` says.
-			// Asked of the MESH that loaded rather than of the toggle, because re-deriving it
-			// can disagree with the branch the loader actually took, and disagreeing here applies
-			// the correction to clips that already carry it — a bend of the same size as the one
-			// it exists to remove.
-			//
-			// The same mesh answers BOTH halves. The procedural rule table is stated in the glb's
-			// frame and the two paths land 90 degrees apart, so the rig's contents depend on the
-			// path exactly as much as the split flag does.
-			const bool bBakedBody = ElysiumNpcVisual::IsBakedMesh(Comp->GetSkeletalMeshAsset());
-			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem, bBakedBody),
-				/*bSplitInheritance=*/!bBakedBody);
+			// The composition stage (CAP7.2). Null for a model declaring no procedural rule,
+			// which poses under Unreal's own hierarchy alone.
+			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
 			// The garment spike. Gated on the same predicate the mesh loader used, so the rig is
 			// installed only onto a body actually wearing the enhanced mesh — chains naming a
 			// lattice the faithful skeleton does not carry would resolve to nothing and cost a

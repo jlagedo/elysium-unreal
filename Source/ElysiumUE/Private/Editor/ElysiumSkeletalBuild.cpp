@@ -61,6 +61,41 @@ namespace
 		}
 	}
 
+	/**
+	 * Delete the package a previous export wrote for a clip this one does not build.
+	 *
+	 * A bake that stops writing an asset does not remove it, and the mount is resolved by NAME --
+	 * so an orphan stays loadable and answers for a label whose meaning has changed underneath it.
+	 * That is worse than a missing asset, which fails visibly.
+	 */
+	bool SweepOrphan(const FString& PackageName)
+	{
+		// Resolved to a filename directly rather than through `DoesPackageExist`, which answers
+		// false here for a package on disk that no asset-registry scan has reached in this
+		// commandlet -- the orphan is exactly the package nothing in this run opens.
+		const FString FileName = FPackageName::LongPackageNameToFilename(
+			PackageName, FPackageName::GetAssetPackageExtension());
+		if (FileName.IsEmpty() || !IFileManager::Get().FileExists(*FileName))
+		{
+			UE_LOG(LogElysiumSkeletalBuild, Verbose, TEXT("sweep: nothing at %s (%s)"),
+				*PackageName, FileName.IsEmpty() ? TEXT("unresolved") : *FileName);
+			return false;
+		}
+		// NOT loaded first. Loading it to detach its objects leaves the linker holding the file
+		// open, and Windows refuses to delete an open file -- the delete then fails silently and
+		// the orphan survives the sweep that reported it swept. Nothing in this run references an
+		// orphan, so there is nothing in memory to detach; the file is simply removed, read-only
+		// bit included, since a generated mount carries no authored state.
+		const bool bDeleted = IFileManager::Get().Delete(*FileName, /*RequireExists=*/false,
+			/*EvenReadOnly=*/true, /*Quiet=*/true);
+		if (!bDeleted)
+		{
+			UE_LOG(LogElysiumSkeletalBuild, Warning, TEXT("sweep: could not delete %s"), *FileName);
+		}
+		return bDeleted;
+		return false;
+	}
+
 	bool SavePackageTo(UPackage* Package, const FString& PackageName)
 	{
 		Package->MarkPackageDirty();
@@ -500,6 +535,122 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 #endif
 }
 
+FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& SourcePath,
+	const FString& SkeletonPackageName)
+{
+#if WITH_EDITOR
+	FElysiumSkeletalSource Source;
+	FString Error;
+	if (!FElysiumSkeletalSource::Load(SourcePath, Source, Error))
+	{
+		return Error;
+	}
+	if (Source.Bones.IsEmpty())
+	{
+		return FString::Printf(TEXT("%s carries no bones"), *SourcePath);
+	}
+
+	UPackage* Package = OpenPackage(SkeletonPackageName);
+	if (Package == nullptr)
+	{
+		return FString::Printf(TEXT("could not create package %s"), *SkeletonPackageName);
+	}
+	const FString AssetName = FPackageName::GetShortName(SkeletonPackageName);
+	USkeleton* Skeleton = FindObject<USkeleton>(Package, *AssetName);
+	const bool bNewSkeleton = Skeleton == nullptr;
+	if (bNewSkeleton)
+	{
+		ClearForRewrite(Package, AssetName);
+		Skeleton = NewObject<USkeleton>(Package, *AssetName, RF_Public | RF_Standalone);
+	}
+
+	// Authored straight onto the USkeleton, because a bank has no mesh to take a tree from. The
+	// modifier's USkeleton* constructor is the same door an importer uses; its destructor is what
+	// rebuilds the remapping tables, so the scope has to close before anything reads the tree.
+	{
+		FReferenceSkeletonModifier Modifier(Skeleton);
+		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+		// Source bone index -> index in the skeleton being built. A bank the tree already carries
+		// keeps the index it has, so a second bank merges in rather than duplicating the core.
+		TArray<int32> Mapped;
+		Mapped.Init(INDEX_NONE, Source.Bones.Num());
+		int32 Next = Ref.GetRawBoneNum();
+		for (int32 Index = 0; Index < Source.Bones.Num(); ++Index)
+		{
+			const FElysiumSourceBone& Bone = Source.Bones[Index];
+			const int32 Existing = Ref.FindRawBoneIndex(Bone.Name);
+			if (Existing != INDEX_NONE)
+			{
+				Mapped[Index] = Existing;
+				continue;
+			}
+			const int32 Parent = Bone.Parent == INDEX_NONE ? INDEX_NONE : Mapped[Bone.Parent];
+			if (Parent == INDEX_NONE && Next > 0)
+			{
+				// A second root is what USkeleton refuses at mesh-build time, long after this.
+				// Reported here, where the tree that caused it is still in hand.
+				return FString::Printf(
+					TEXT("%s: '%s' would be a second root on %s"),
+					*SourcePath, *Bone.Name.ToString(), *AssetName);
+			}
+			Modifier.Add(FMeshBoneInfo(Bone.Name, Bone.Name.ToString(), Parent), Bone.Local);
+			Mapped[Index] = Next++;
+		}
+	}
+
+	if (bNewSkeleton)
+	{
+		FAssetRegistryModule::AssetCreated(Skeleton);
+	}
+	if (!SavePackageTo(Package, SkeletonPackageName))
+	{
+		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
+	}
+	return FString();
+#else
+	return TEXT("editor only");
+#endif
+}
+
+FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
+	const TArray<FString>& SourceSkeletonPackageNames)
+{
+#if WITH_EDITOR
+	USkeleton* Target = LoadObject<USkeleton>(nullptr,
+		*(SkeletonPackageName + TEXT(".") + FPackageName::GetShortName(SkeletonPackageName)));
+	if (Target == nullptr)
+	{
+		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
+	}
+
+	// The direction is "this skeleton may play animations authored on that one", so the bank is the
+	// argument and the body's own rig is the target. Declaring it is not a merge: the engine builds
+	// a name-keyed bone map per pair, and a bank bone this rig has never had maps to INDEX_NONE and
+	// is dropped -- the same rule the per-family bake applied by leaving the track unbound.
+	for (const FString& SourceName : SourceSkeletonPackageNames)
+	{
+		USkeleton* Source = LoadObject<USkeleton>(nullptr,
+			*(SourceName + TEXT(".") + FPackageName::GetShortName(SourceName)));
+		if (Source == nullptr)
+		{
+			return FString::Printf(TEXT("compatible skeleton %s did not load"), *SourceName);
+		}
+		if (Source != Target)
+		{
+			Target->AddCompatibleSkeleton(Source);
+		}
+	}
+
+	if (!SavePackageTo(Target->GetPackage(), SkeletonPackageName))
+	{
+		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
+	}
+	return FString();
+#else
+	return TEXT("editor only");
+#endif
+}
+
 FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString& SourcePath,
 	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount,
 	int32& OutDroppedTracks)
@@ -658,8 +809,50 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			*FPackageName::GetShortName(SkeletonPackageName));
 	}
 
+	// Poses first, then the additives that are differences from them. An additive names its base
+	// as an asset, so the base has to exist and be resolvable by the time it is set; ordering the
+	// two passes here is what guarantees that without a second lookup pass or a fixup.
+	TArray<const FElysiumSourceClip*> Ordered;
+	Ordered.Reserve(Source.Clips.Num());
+	int32 UnboundAdditives = 0;
+	// Every asset name this run wrote into the owner's folder, which is what the sweep below
+	// measures the folder's contents against.
+	TSet<FString> WrittenAssets;
 	for (const FElysiumSourceClip& Clip : Source.Clips)
 	{
+		if (Clip.BaseName.IsEmpty())
+		{
+			// A `_delta` no host declares has nothing to be a difference FROM. Retail only ever
+			// reaches one through the autolayer binding that names its base, so an asset here would
+			// be a clip that is arithmetically a delta and semantically nothing -- exactly the trap
+			// of composing a delta over a base that did not declare it. It is not built.
+			if ((Clip.Flags & 0x4) != 0)
+			{
+				++UnboundAdditives;
+				continue;
+			}
+			Ordered.Add(&Clip);
+		}
+	}
+	for (const FElysiumSourceClip& Clip : Source.Clips)
+	{
+		if (!Clip.BaseName.IsEmpty())
+		{
+			Ordered.Add(&Clip);
+		}
+	}
+	if (UnboundAdditives > 0)
+	{
+		UE_LOG(LogElysiumSkeletalBuild, Verbose,
+			TEXT("%s: %d additive(s) no host declares, not built"),
+			*FPaths::GetBaseFilename(SourcePath), UnboundAdditives);
+	}
+
+	TMap<FString, UAnimSequence*> BuiltByName;
+	BuiltByName.Reserve(Ordered.Num());
+	for (const FElysiumSourceClip* ClipPtr : Ordered)
+	{
+		const FElysiumSourceClip& Clip = *ClipPtr;
 		if (Clip.FrameCount <= 0 || Clip.Tracks.IsEmpty())
 		{
 			continue;
@@ -689,14 +882,29 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		Controller.SetNumberOfFrames(FFrameNumber(KeyCount - 1), false);
 
 		// The `_delta` family. `STUDIO_DELTA` (0x4) marks a clip whose tracks state a DIFFERENCE
-		// from the running pose rather than a pose, which is what Unreal calls a local-space
-		// additive against the reference pose. Declared before the tracks are written because it
-		// changes what is written -- see the composition below.
-		const bool bAdditive = (Clip.Flags & 0x4) != 0;
+		// from a base pose rather than a pose of its own, which is what Unreal calls a local-space
+		// additive. The container names that base, because VtMB post-multiplies its delta and every
+		// `EAdditiveAnimationType` pre-multiplies: the conversion is a conjugation by the base's
+		// rotation, so which base is not a detail. The clip's tracks hold the base with the delta
+		// already composed onto it, and the compressor's subtraction is what performs that
+		// conjugation -- `(Base * Delta) * Base^-1` is the delta in Unreal's own order.
+		// Keyed on the studio flag, NOT on carrying a base. A derived OVERLAY carries one too --
+		// it is a masked layer written against the host whose chain resolves its split bone -- but
+		// it states a pose and composes through a layered blend, so it is an ordinary clip with a
+		// blend profile and no additive stamp.
+		const bool bAdditive = (Clip.Flags & 0x4) != 0 && !Clip.BaseName.IsEmpty();
+		UAnimSequence* const* BaseSequence = BuiltByName.Find(Clip.BaseName);
 		if (bAdditive)
 		{
+			if (BaseSequence == nullptr)
+			{
+				return FString::Printf(TEXT("%s is a difference from %s, which did not build"),
+					*Clip.Name, *Clip.BaseName);
+			}
 			Sequence->AdditiveAnimType = AAT_LocalSpaceBase;
-			Sequence->RefPoseType = ABPT_RefPose;
+			Sequence->RefPoseType = ABPT_AnimFrame;
+			Sequence->RefPoseSeq = *BaseSequence;
+			Sequence->RefFrameIndex = 0;
 		}
 
 		// Resolved in the pre-pass above. An ADDITIVE's mask needs no asset, and giving it one would
@@ -734,17 +942,14 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			// different chains on different bodies -- and taking the skeleton's would hand every
 			// member of a family whichever member happened to seed it.
 			//
-			// An ADDITIVE clip inverts both halves. Its untouched channel is a zero delta rather
-			// than a bind value, and its base is the SHARED SKELETON's reference pose rather than
-			// the container's bind -- because the base is not a choice here, it is whatever Unreal
-			// subtracts back out. `FCompressibleAnimData::BakeOutAdditiveIntoRawData` composes an
-			// additive sequence down by `Target * Base^-1` against the skeleton's reference pose
-			// before compressing, so the raw keys have to be the delta composed ONTO that pose or
-			// the shipped asset carries `delta * refpose^-1` -- every layered bone rotated by its
-			// own inverse bind, from a bake that logs nothing wrong. Composing here is what makes
-			// that subtraction hand VtMB's delta straight back.
+			// An ADDITIVE needs no special case here, and that is the point of the container naming
+			// its base. `FCompressibleAnimData::BakeOutAdditiveIntoRawData` composes an additive
+			// down by `Target * Base^-1` before compressing, so the raw keys have to be the delta
+			// composed ONTO the base it is declared against -- and that composed pose is exactly
+			// what the exporter wrote. A derived clip carries every bone for the same subtraction:
+			// a bone with no track evaluates to the shared skeleton's reference pose rather than to
+			// the base, which would subtract into a spurious delta rather than an identity one.
 			const FTransform& Bind = Source.Bones[Track.Bone].Local;
-			const FTransform& Base = RefSkeleton.GetRefBonePose()[SkeletonBone];
 			TArray<FVector3f> Positions;
 			TArray<FQuat4f> Rotations;
 			TArray<FVector3f> Scales;
@@ -754,22 +959,10 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			for (int32 Key = 0; Key < KeyCount; ++Key)
 			{
 				const int32 Frame = FMath::Min(Key, Clip.FrameCount - 1);
-				const FVector3f Fallback = bAdditive
-					? FVector3f::ZeroVector : FVector3f(Bind.GetTranslation());
-				const FQuat4f FallbackRotation = bAdditive
-					? FQuat4f::Identity : FQuat4f(Bind.GetRotation());
-				FVector3f Position = Track.Translations.IsValidIndex(Frame)
-					? Track.Translations[Frame] : Fallback;
-				FQuat4f Rotation = Track.Rotations.IsValidIndex(Frame)
-					? Track.Rotations[Frame] : FallbackRotation;
-				if (bAdditive)
-				{
-					// `Target = Delta * Base`, matching the order `ConvertPoseToAdditive` undoes.
-					Position += FVector3f(Base.GetTranslation());
-					Rotation = (Rotation * FQuat4f(Base.GetRotation())).GetNormalized();
-				}
-				Positions.Add(Position);
-				Rotations.Add(Rotation);
+				Positions.Add(Track.Translations.IsValidIndex(Frame)
+					? Track.Translations[Frame] : FVector3f(Bind.GetTranslation()));
+				Rotations.Add(Track.Rotations.IsValidIndex(Frame)
+					? Track.Rotations[Frame] : FQuat4f(Bind.GetRotation()));
 			}
 			Controller.AddBoneCurve(BoneName, false);
 			Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false);
@@ -832,11 +1025,45 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 
 		Sequence->PostEditChange();
 		FAssetRegistryModule::AssetCreated(Sequence);
+		// Only a clip that actually built is a base anything may name, which is why this is
+		// recorded here rather than when the package was opened.
+		BuiltByName.Add(Clip.Name, Sequence);
+		WrittenAssets.Add(AssetName);
 		if (!SavePackageTo(Package, PackageName))
 		{
 			return FString::Printf(TEXT("could not save %s"), *PackageName);
 		}
 		++OutClipCount;
+	}
+
+	// Sweep this owner's folder against what the run actually wrote.
+	//
+	// Deleting per skipped clip is not enough, because the strongest kind of orphan is one the
+	// CONTAINER no longer lists at all -- a clip that used to bake under its plain label and now
+	// ships only in derived form. There is no loop over those; the only record that they are stale
+	// is that nothing wrote them. The mount resolves by name, so an orphan keeps answering for a
+	// label whose meaning changed underneath it, which is worse than a missing asset.
+	//
+	// Scoped to the `A_` prefix: blend spaces are `BS_` and are written by a later pass over the
+	// same folder, so sweeping everything here would delete assets that have not been built yet.
+	{
+		const FString Directory = FPaths::GetPath(FPackageName::LongPackageNameToFilename(
+			PackagePath / TEXT("A"), FPackageName::GetAssetPackageExtension()));
+		TArray<FString> OnDisk;
+		IFileManager::Get().FindFiles(OnDisk, *(Directory / TEXT("A_*.uasset")), true, false);
+		int32 Swept = 0;
+		for (const FString& File : OnDisk)
+		{
+			if (!WrittenAssets.Contains(FPaths::GetBaseFilename(File)))
+			{
+				Swept += SweepOrphan(PackagePath / FPaths::GetBaseFilename(File)) ? 1 : 0;
+			}
+		}
+		if (Swept > 0)
+		{
+			UE_LOG(LogElysiumSkeletalBuild, Display, TEXT("%s: swept %d orphaned sequence(s)"),
+				*FPaths::GetBaseFilename(SourcePath), Swept);
+		}
 	}
 
 	if (!Unresolved.IsEmpty())
@@ -867,6 +1094,8 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 	OutSkippedGrids = 0;
 	OutSkippedCells = 0;
 #if WITH_EDITOR
+	// Every blend space this run wrote, which the sweep at the end measures the folder against.
+	TSet<FString> WrittenSpaces;
 	// The runtime's own reader, not a second parse of the same document. It already knows the
 	// sidecar's shape -- the pose-parameter array a grid's axes index into, the null cell, the
 	// leading '@' a raw label can carry -- and a bake that read the file its own way could disagree
@@ -885,13 +1114,49 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
 	}
 
+	// Which hosts declare each grid, from the autolayer binding the same sidecar carries. A grid
+	// whose cells ship only in derived form -- an aim grid, whose cells own the split bone -- has
+	// to be built once per declaring host over that host's cells, because there is no host-free
+	// form of those cells to sample. Every other grid builds once and this stays empty for it.
+	TMap<FString, TArray<FString>> HostsByTarget;
+	for (const TPair<FString, FElysiumAutoLayerBinding>& Binding : Table.AutoLayers)
+	{
+		for (const FString& Target : Binding.Value.Clips)
+		{
+			HostsByTarget.FindOrAdd(Target).AddUnique(Binding.Key);
+		}
+	}
+	for (TPair<FString, TArray<FString>>& Row : HostsByTarget)
+	{
+		Row.Value.Sort([](const FString& A, const FString& B) { return A < B; });
+	}
+
 	// Sorted so a re-bake writes the same assets in the same order; TMap iteration is not stable.
 	TArray<FString> Labels;
 	Table.Grids.GetKeys(Labels);
 	Labels.Sort([](const FString& A, const FString& B) { return A < B; });
 
+	// One entry per asset to write: the grid, and the host suffix its cells carry ("" for none).
+	TArray<TPair<FString, FString>> Builds;
 	for (const FString& Label : Labels)
 	{
+		const TArray<FString>* Hosts = HostsByTarget.Find(Label);
+		if (Hosts == nullptr || Hosts->IsEmpty())
+		{
+			Builds.Emplace(Label, FString());
+			continue;
+		}
+		for (const FString& Host : *Hosts)
+		{
+			Builds.Emplace(Label, Host);
+		}
+	}
+
+	for (const TPair<FString, FString>& Build : Builds)
+	{
+		const FString& Label = Build.Key;
+		const FString& Host = Build.Value;
+		const FString Suffix = Host.IsEmpty() ? FString() : TEXT("@") + Host;
 		const FElysiumBlendGrid& Grid = Table.Grids[Label];
 
 		// Which axes this grid actually spans. Axis 1 is absent on every 9x1 locomotion fan, and its
@@ -917,7 +1182,8 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 				++SkippedHere;
 				continue;
 			}
-			const FString ClipAsset = TEXT("A_") + FElysiumContentPaths::BakedAssetName(Cell.Clip);
+			const FString ClipAsset = TEXT("A_")
+				+ FElysiumContentPaths::BakedAssetName(Cell.Clip + Suffix);
 			UAnimSequence* Sequence = LoadObject<UAnimSequence>(nullptr,
 				*(PackagePath / ClipAsset + TEXT(".") + ClipAsset));
 			if (Sequence == nullptr)
@@ -989,7 +1255,8 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 			}
 		}
 
-		const FString AssetName = TEXT("BS_") + FElysiumContentPaths::BakedAssetName(Label);
+		const FString AssetName = TEXT("BS_")
+			+ FElysiumContentPaths::BakedAssetName(Label + Suffix);
 		const FString PackageName = PackagePath / AssetName;
 		UPackage* Package = OpenPackage(PackageName);
 		if (Package == nullptr)
@@ -1078,7 +1345,32 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 		{
 			return FString::Printf(TEXT("could not save %s"), *PackageName);
 		}
+		WrittenSpaces.Add(AssetName);
 		++OutSpaceCount;
+	}
+
+	// The same sweep the sequence pass runs, over this pass's own prefix. A blend space that stops
+	// resolving enough cells is not rewritten, so its previous asset survives -- still pointing at
+	// sequences the sequence pass may since have swept. That is a package which loads with
+	// "a sample with no/invalid animation" and fails the run, from a bake that logged nothing.
+	{
+		const FString Directory = FPaths::GetPath(FPackageName::LongPackageNameToFilename(
+			PackagePath / TEXT("BS"), FPackageName::GetAssetPackageExtension()));
+		TArray<FString> OnDisk;
+		IFileManager::Get().FindFiles(OnDisk, *(Directory / TEXT("BS_*.uasset")), true, false);
+		int32 Swept = 0;
+		for (const FString& File : OnDisk)
+		{
+			if (!WrittenSpaces.Contains(FPaths::GetBaseFilename(File)))
+			{
+				Swept += SweepOrphan(PackagePath / FPaths::GetBaseFilename(File)) ? 1 : 0;
+			}
+		}
+		if (Swept > 0)
+		{
+			UE_LOG(LogElysiumSkeletalBuild, Display, TEXT("%s: swept %d orphaned blend space(s)"),
+				*BlendsRelPath, Swept);
+		}
 	}
 
 	return FString();

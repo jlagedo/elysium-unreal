@@ -1555,13 +1555,13 @@ bool FElysiumGreenRoomRun::LabSetLayer(const FString& Clip, float Weight, FStrin
 	UElysiumEntityBodies* BodyFactory = Map->GetBodies();
 	if (BodyFactory == nullptr || !BodyFactory->PlayNpcLayer(Body, ReviewStem, Clip, Weight))
 	{
-		// The two refusals worth telling apart, because only one of them is about the clip. A
-		// sequence off the glTFRuntime loader is never stamped additive and never carries a bone
-		// mask, so neither combine can be read out of one and the layer is declined rather than
-		// composed out of reference-pose bones.
+		// The two refusals worth telling apart, because only one of them is about the clip. A layer
+		// needs both halves of the combine off the asset itself — an additive base and a bone mask —
+		// so a plain pose clip is declined rather than composed out of reference-pose bones.
 		OutError = FString::Printf(
 			TEXT("%s cannot layer '%s' — is it a `_delta` or a masked `_layer` clip, and is the ")
-			TEXT("body baked? (elysium.BakedCharacters 1, then Restand)"), *ReviewStem, *Clip);
+			TEXT("stem exported? (`uv run elysium export characters`, then Restand)"),
+			*ReviewStem, *Clip);
 		return false;
 	}
 	ReviewLayer = Clip;
@@ -1588,7 +1588,7 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
 		// those rather than leaving them to fail here.
 		OutError = FString::Printf(
 			TEXT("%s cannot stand '%s' as a grid — does the label name one, is the body baked ")
-			TEXT("(elysium.BakedCharacters 1, then Restand), and is elysium.BlendSpaces 1?"),
+			TEXT("(re-export, then Restand), and is elysium.BlendSpaces 1?"),
 			*ReviewStem, *Label);
 		return false;
 	}

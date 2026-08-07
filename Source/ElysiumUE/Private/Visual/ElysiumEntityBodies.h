@@ -126,12 +126,11 @@ public:
 	// Drop every cached NPC mesh, parsed glb and resolved clip so the next build re-resolves from
 	// scratch.
 	//
-	// **This is what makes `elysium.BakedCharacters` switchable without a map reload.** The cvar is
-	// read in exactly one place, `ElysiumNpcVisual::LoadMesh`, and the mesh cache is keyed by stem
-	// and material permutation -- NOT by which path answered. So a stem resolved once is pinned to
-	// that path for the rest of the map epoch: rebuilding the component hits the cache, LoadMesh is
-	// never reached, and the toggle appears to do nothing. Only the A/B harness should call this;
-	// gameplay has no reason to, and dropping the caches mid-map re-parses every bank glb.
+	// **This is what lets a re-export be picked up without a map reload.** The mesh cache is keyed
+	// by stem and material permutation, so a stem resolved once is pinned for the rest of the map
+	// epoch: rebuilding the component hits the cache and `ElysiumNpcVisual::LoadMesh` is never
+	// reached again. Only the green room should call this; gameplay has no reason to, and dropping
+	// the caches mid-map re-resolves every body.
 	void ForgetNpcVisuals();
 	// The transition a clip asks for when something fades INTO it: its authored `mstudioseqdesc_t`
 	// fade, or 0 when it carries the no-transition bit. The host takes the larger of this and the

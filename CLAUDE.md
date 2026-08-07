@@ -108,6 +108,35 @@ The Source→Unreal math lives once in `pipeline/src/elysium_pipeline/formats/bs
 reverses winding at OBJ-write time). Never inline it, and never convert at runtime. Full
 rules: `docs/project/rebuild-strategy.md` → "Coordinate conventions".
 
+### Poses are baked native — a VtMB rule never reaches the frame path
+
+The same rule as coordinates, applied to the **skeletal pose frame**, which is a coordinate
+convention like any other. A baked animation asset is a **complete, self-describing,
+Unreal-native local pose**: every track is parent-relative, an additive names its own base,
+and stock Unreal nodes compose it. The runtime applies no VtMB rule.
+
+A VtMB clip is not a pose. It is a set of channels whose meaning is completed by state stored
+outside the clip — the bone's `Flags & 0x2`, the animation record's per-bone `weight` mask, the
+sequence's additive flags, and at runtime whatever pose it is accumulated onto. **Where a clip's
+meaning depends on state the clip does not contain, the bake resolves that state and writes the
+answer.** It never forwards the question to the frame path.
+
+The decidable test: **if a clip has to know a fact about VtMB in order to be evaluated, the bake
+failed.** "It cannot be baked" is a claim about a *named* value the file does not carry, and it
+has to name it; a value the file states elsewhere — an additive's base clip, a bone's ancestor
+chain — is a bake input, not a runtime dependency. Where a frame genuinely is not recoverable,
+**change the representation** until the rule is unnecessary, the way blend grids became
+`UBlendSpace` assets, rather than adding a stage that carries it forward.
+
+A 2004 storage quirk is a **defect fixed at bake**, not semantics to reproduce
+(`docs/project/remaster-direction.md` → Behaviour test). VtMB's own inverse binds are
+conventional FK, so the authored pose is ordinary and recoverable; only the file's storage frame
+ever disagreed.
+
+**One standing exemption**, and it is different in kind: **axis interpolation** reads a *live*
+control-bone orientation, so it is a rig rule like an IK node rather than a frame conversion.
+The design is `docs/architecture/animation-architecture.md`.
+
 ### Docs describe design, RE, and status — not the current build
 
 Documentation exists for what the code cannot say for itself: design intent, VtMB

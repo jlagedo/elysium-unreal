@@ -31,11 +31,6 @@ namespace
 		return IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.Cloth"));
 	}
 
-	IConsoleVariable* BakedCVar()
-	{
-		return IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.BakedCharacters"));
-	}
-
 	/** One bone's pose at one time, off the sequence's raw data. False when the bone is absent. */
 	bool SampleClipBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
 		FTransform& OutTransform)
@@ -68,12 +63,10 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 		"session. Either way the stage stands in an empty world of its own with no VtMB map loaded, "
 		"so the room looks the same however it was entered -- entering from a session leaves that "
 		"map, and `elysium.map <name>` goes back.\n\n"
-		"Source: `elysium.BakedCharacters` picks which build of the body stands here -- the assets "
-		"on the /ElysiumBaked mount, or the one glTFRuntime builds from the .glb at load. The "
-		"choice is made when the body is built, so flip it and press Restand. Only the models the "
-		"character bake has run over are on the mount; anything else silently falls back to the "
-		"loader, which is why the line under the checkbox names the path the standing body "
-		"actually came from rather than the one the cvar asked for.\n\n"
+		"Source: the body comes off the /ElysiumBaked mount, which is the only build of a character "
+		"-- a stem the character bake has not covered cannot stand at all. The line under Restand "
+		"names the asset that is standing and the rig family whose skeleton it was built against, "
+		"and Restand is what picks up a re-export.\n\n"
 		"Cloth: VtMB simulates no garment at all -- a skirt or coat is skinned rigidly to the "
 		"pelvis and swings as one shell. The offline spike appends a bone lattice to a copy of the "
 		"mesh and hangs an AnimDynamics chain down each panel; `npc/cloth/<stem>.json` is the "
@@ -149,7 +142,7 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 		PendingClip = Clips[Index];
 		// A grid row stands the whole fan when there is a baked blend space for it, and the single
 		// resolved cell when there is not. The fallback is the A/B rather than an error path: with
-		// `elysium.BakedCharacters 0` or `elysium.BlendSpaces 0` this row must still stand something,
+		// With `elysium.BlendSpaces 0` this row must still stand something,
 		// and what it stands is exactly what the runtime played before the grids became assets.
 		const bool bGridRow = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
 		LastError.Reset();
@@ -188,28 +181,14 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 
 void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 {
-	IConsoleVariable* Baked = BakedCVar();
-	if (Baked == nullptr)
-	{
-		return;
-	}
+	// There is one build of a character, so this reports rather than chooses. It still reads the
+	// asset that is STANDING rather than a path re-derived from the stem: a body outlives the
+	// export that built it, and "the mount has it now" is a different question from "this body
+	// came off it".
+	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const USkeletalMeshComponent* Comp = Inst != nullptr ? Inst->GetSkelMeshComponent() : nullptr;
+	const USkeletalMesh* Mesh = Comp != nullptr ? Comp->GetSkeletalMeshAsset() : nullptr;
 
-	// Which build of the body to use is decided when the body is built, so the toggle takes effect
-	// on the next Restand -- and Restand has to be the cache-clearing one, or it silently reuses
-	// whichever mesh answered first (`UElysiumEntityBodies::ForgetNpcVisuals`).
-	bool bEnabled = Baked->GetInt() != 0;
-	if (ImGui::Checkbox("elysium.BakedCharacters - stand the baked asset", &bEnabled))
-	{
-		Baked->Set(bEnabled ? 1 : 0, ECVF_SetByConsole);
-		// Restand immediately. A toggle whose only visible effect is to arm a second button reads
-		// as broken, and this one had a whole debugging session spent on it.
-		if (!Lab.LabStem().IsEmpty())
-		{
-			LastError.Reset();
-			Lab.LabRestand(LastError);
-		}
-	}
-	ImGui::SameLine();
 	ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
 	if (ImGui::Button("Restand##source"))
 	{
@@ -218,44 +197,26 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 	}
 	ImGui::EndDisabled();
 
-	// Which path the body ACTUALLY came from, read off the asset that is standing rather than off
-	// the cvar. Only part of the cast is baked, and an unbaked model falls back to the loader
-	// without saying so -- which would otherwise make an A/B look like a null result.
-	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
-	const USkeletalMeshComponent* Comp = Inst != nullptr ? Inst->GetSkelMeshComponent() : nullptr;
-	const USkeletalMesh* Mesh = Comp != nullptr ? Comp->GetSkeletalMeshAsset() : nullptr;
 	if (Mesh == nullptr)
 	{
+		if (!Lab.LabStem().IsEmpty() && !ElysiumNpcVisual::IsStemBaked(Lab.LabStem()))
+		{
+			ImGui::TextColored(ImVec4(0.9f, 0.45f, 0.45f, 1.0f),
+				"'%s' is not on the baked mount - run `uv run elysium export characters`",
+				COG_TCHAR_TO_CHAR(*Lab.LabStem()));
+			return;
+		}
 		ImGui::TextDisabled("Nothing is standing on the stage.");
 		return;
 	}
+
 	const FString Path = Mesh->GetPathName();
-	if (Path.StartsWith(FElysiumContentPaths::BakedMount()))
-	{
-		const USkeleton* Skeleton = Mesh->GetSkeleton();
-		const FString Family = Skeleton != nullptr
-			? FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName()) : FString();
-		ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
-			"baked: %s (rig family '%s')", COG_TCHAR_TO_CHAR(*FPackageName::GetShortName(Path)),
-			COG_TCHAR_TO_CHAR(*Family));
-	}
-	else if (!bEnabled)
-	{
-		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f), "glTFRuntime: built at load");
-	}
-	else if (ElysiumNpcVisual::IsStemBaked(Lab.LabStem()))
-	{
-		// The asset IS there and this body did not come from it, so the toggle was off when this
-		// body was built. Said outright rather than guessed at: the old wording blamed the export
-		// for a stale cache, which sends the reader off to re-bake a model that was already baked.
-		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f),
-			"glTFRuntime: built at load - the baked asset EXISTS; this body predates the toggle");
-	}
-	else
-	{
-		ImGui::TextColored(ImVec4(0.85f, 0.75f, 0.35f, 1.0f),
-			"glTFRuntime: built at load - this model is not on the baked mount");
-	}
+	const USkeleton* Skeleton = Mesh->GetSkeleton();
+	const FString Family = Skeleton != nullptr
+		? FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName()) : FString();
+	ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
+		"baked: %s (rig family '%s')", COG_TCHAR_TO_CHAR(*FPackageName::GetShortName(Path)),
+		COG_TCHAR_TO_CHAR(*Family));
 }
 
 void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
@@ -279,8 +240,8 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 	for (int32 Index = 0; Index < Clips.Num(); ++Index)
 	{
 		FString Error;
-		// Null own-asset: on the baked path there is none, and on the loader path the lab's own
-		// body already parsed it, so this resolves through the same cache either way.
+		// Null own-asset: a baked sequence is addressed by owner and animation name off the standing
+		// mesh's own rig family, so there is no per-body glb to hand in.
 		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Clips[Index], Mesh,
 			nullptr, Error);
 		FTransform Start;

@@ -698,8 +698,8 @@ def write_character_sources(npc_dir: Path, stems: Sequence[str]) -> tuple[list[s
     return list(stems), sorted(banks)
 
 
-def export_characters(config, runner, models: Sequence[str]) -> list[str]:
-    """Bake the named models onto /ElysiumBaked/Characters (ANM1).
+def export_characters(config, runner, models: Sequence[str] | None = None) -> list[str]:
+    """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
     Two stages. First the `.eskm` containers are written from the user's own install, then a
     headless editor turns them into a shared skeleton per rig family, a mesh per model and a
@@ -707,16 +707,15 @@ def export_characters(config, runner, models: Sequence[str]) -> list[str]:
     which `export bundle npc` or a complete profile writes. The policy content is a prerequisite
     too, because a body is built against the same master materials the runtime names.
 
-    Unlike the map bake this runs wholesale for the models it is given. There is no per-model
-    receipt yet, so re-running re-bakes; the map bake's `bake_cache` store is keyed and staged by
-    map and does not carry over unchanged.
+    **The cast is the default because the mount is the only build of a character.** A stem the bake
+    has not covered cannot stand at all -- there is no loader to fall back to -- so a partial bake
+    is a broken game rather than a slower one. Naming models is for iterating on a few.
+
+    Unlike the map bake this runs wholesale. There is no per-model receipt yet, so re-running
+    re-bakes; the map bake's `bake_cache` store is keyed and staged by map and does not carry over
+    unchanged.
     """
     _require_export_config(config)
-    stems = [Path(model.replace("\\", "/")).stem.lower() for model in models]
-    stems = [stem for stem in dict.fromkeys(stems) if stem]
-    if not stems:
-        raise ValueError("no models named")
-
     npc_dir = config.export_root / "npc"
     index = npc_dir / "npc_index.json"
     if not index.is_file():
@@ -724,8 +723,22 @@ def export_characters(config, runner, models: Sequence[str]) -> list[str]:
             f"{index} is missing; run: uv run elysium export bundle npc"
         )
 
+    if models:
+        stems = [Path(model.replace("\\", "/")).stem.lower() for model in models]
+    else:
+        with index.open(encoding="utf-8-sig") as handle:
+            stems = sorted(json.load(handle).get("npcs", {}))
+    stems = [stem for stem in dict.fromkeys(stems) if stem]
+    if not stems:
+        raise ValueError("no models named and the manifest lists no character")
+
     write_character_sources(npc_dir, stems)
     ensure_policy_content(config, runner)
+
+    # One process for the whole cast. What used to exhaust its address space was the DUPLICATION --
+    # a bank rebuilt against every rig family that included it -- and the bank pass removes that at
+    # the source: 7,871 distinct clips instead of ~90,000 assets. The grouping is decided inside the
+    # bake again, because there is no longer a subset for it to be inconsistent across.
     unreal.bake_characters(config, runner, stems)
     unreal.verify_characters(config, runner, stems)
     return stems

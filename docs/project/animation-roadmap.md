@@ -102,6 +102,8 @@ which owns them; they appear here as the evidence for a project decision, not as
 | Blend grids in the export | **275** grids over 15 sidecars: 222 are 9×1 on `move_yaw`, 49 are 3×3 on `aim_yaw`/`aim_pitch`, 4 on `hit_yaw` | Directly `UBlendSpace1D` and `UBlendSpace` |
 | Split-inheritance forward-kinematics check | with the rule applied, `walk` head-rise `+0.428` (upright); a masked layer standing alone `+0.000` rise / `+0.431` forward (flat) | The fold is a reference-pose fallback on the split bone, which a layered blend removes by construction |
 | Layer masks containing the split bone | **1 of 4** — the 49-bone upper-body gate the `*_aim_layer`/`*_bobble_layer` families carry; the 24-bone right arm, 45-bone left arm and 1-bone head masks do not | Scopes the un-normalizable case to one family, which is why it gets a representation of its own rather than the frame path getting a rule |
+| Chain above the split bone, deviation from bind | `Bip01` / `Bip01 Pelvis` / `Bip01 Spine`, and `Bip01` alone carries almost all of it — **63°** on a weapon idle, **82–99°** on walk and run | Kills normalising a masked overlay against the bind chain: retail declines `Bip01` too, so the overlay would arrive rotated by the character's own root rotation. The base has to be a real host pose, which the autolayer table names |
+| Conjugation spread of one additive across the hosts that declare it | up to **19.65°** on the bobbles, **81.64°** worst (`throwing_star_attack_delta`, 6 hosts) | An additive bakes once per declaring host rather than once per delta; one asset per delta cannot serve them all |
 | Morph target names across the cast | **54 distinct**; 86 of 166 models carry a flex rig, each with the same 53 FACS action units | One shared skeleton carries one 54-name curve set — the face costs the bake nothing |
 | ▶ `numautolayers` bounds hazard | 7 single-sequence scenery and weapon models read **764**, the descriptor tail running past the file into the string table | A bounds gate is mandatory in the exporter, and its population is named |
 | ▶ Player action path | `PostThink` `0x1016be10` → classifier `0x1016bb50` → mode router `0x10164240` → ordinary selector `0x10164870` → apply/select `0x101644f0` | The player is driven by realized state and an activity policy, not by a button-to-clip table |
@@ -118,13 +120,15 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   the `_delta` family flagged `AAT_LocalSpaceBase` / `ABPRT_RefPose` at bake time.
 
   A new editor commandlet beside `pipeline/unreal/bake_map.py`, on the same `/ElysiumBaked` mount
-  and the same gitignored, regenerable posture. **glTFRuntime stays** as the bake-time reader rather
+  and the same gitignored, regenerable posture. **glTFRuntime stays** only as the bake-time reader rather
   than being replaced: the vendored multi-primitive morph-target patch is load-bearing and fails
   silently when lost, and keeping the same reader keeps it earning.
 
   *Retires:* the per-map-epoch retarget cache, the `RemoveTracks` bank filtering, and the constraint
   that resolved sequences cache on the map actor rather than the subsystem.
-  *Acceptance:* a character loads from the baked mount with no glTFRuntime call at runtime, and the
+  *Acceptance:* every character loads from the baked mount with no glTFRuntime call at runtime — it
+  is the only build of a character, so a stem the export misses fails by name rather than falling
+  back — and the
   facial morph-target contract still holds.
 
 - [ ] **ANM2 Carry the two discarded MDL fields.** `autolayerindex`, unioned across the include DAG
@@ -342,6 +346,7 @@ divergence, per the house rules.
 | Unreal blend-space interpolation replaces the authored grid's own cell selection | `docs/architecture/animation-architecture.md` |
 | Any change to the cast's movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | Baking a per-clip rule leaves a residual across a crossfade, since blend-then-evaluate and evaluate-then-blend differ for a non-linear rule. Bounded and measured: none above 10° over a real body's crossfadeable locomotion | `docs/architecture/animation-architecture.md` |
+| An overlay or additive composed over a host that does **not** declare it is approximate, because the asset was written against a declared host's pose. Retail's own rule is that a layer only means something over a base that declares it | `docs/architecture/animation-architecture.md` |
 
 **Not divergences**, and recorded as defect fixes with their numbers rather than as choices: keeping
 masked sequences out of the base clip path, resolving `Flags & 0x2`'s model-space storage at bake

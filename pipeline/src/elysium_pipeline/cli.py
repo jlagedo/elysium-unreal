@@ -385,13 +385,15 @@ def export_map(
 @export_app.command("characters")
 def export_characters(
     ctx: typer.Context,
-    models: list[str] = typer.Argument(...),
+    models: list[str] = typer.Argument(
+        None, help="Models to bake. Omit for the whole cast, which is what the game needs."
+    ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
         stems = export_manager.export_characters(config, runner, models)
-        console.print("character bake complete: " + ", ".join(stems))
+        console.print(f"character bake complete: {len(stems)} model(s)")
 
     _execute(
         _state(ctx),

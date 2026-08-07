@@ -84,7 +84,7 @@ public:
 	// idle policy for one, so a stem alone is a complete request.
 	bool LabSetBody(const FString& Stem, const FString& Clip, FString& OutError);
 	// Rebuild the standing body from scratch, discarding the map's cached meshes and clips first.
-	// This is the door `elysium.BakedCharacters` needs: the cache is keyed by stem, not by which
+	// This is the door a re-export needs: the cache is keyed by stem, not by which
 	// path built it, so an ordinary restand reuses whatever was resolved the first time and the
 	// toggle reads as dead. Same for `elysium.Cloth`.
 	bool LabRestand(FString& OutError);

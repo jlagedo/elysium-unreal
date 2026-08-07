@@ -34,7 +34,7 @@ namespace
 	}
 }
 
-bool FElysiumClothRig::Load(const FString& InStem, FString& OutError, bool bBaked)
+bool FElysiumClothRig::Load(const FString& InStem, FString& OutError)
 {
 	Stem = InStem;
 	const FString Path = FElysiumContentPaths::NpcClothRig(InStem);
@@ -48,7 +48,7 @@ bool FElysiumClothRig::Load(const FString& InStem, FString& OutError, bool bBake
 	{
 		return false;
 	}
-	ApplyAssetImport(bBaked);
+	ApplyAssetImport();
 	return true;
 }
 
@@ -333,7 +333,7 @@ bool ElysiumClothRig::SaveTuning(const FString& Stem, const FElysiumClothTuning&
 	return true;
 }
 
-void FElysiumClothRig::ApplyAssetImport(bool bBaked)
+void FElysiumClothRig::ApplyAssetImport()
 {
 	// The sidecar is metres in the glb's own basis, because the mesh it drives is. A collider
 	// offset is a point and takes the basis change as well as the scale; a radius and a body
@@ -342,7 +342,7 @@ void FElysiumClothRig::ApplyAssetImport(bool bBaked)
 	for (FElysiumClothCollider& Collider : Colliders)
 	{
 		Collider.Offset =
-			ElysiumNpcVisual::ImportGlbLocal(FTransform(Collider.Offset), bBaked).GetTranslation();
+			ElysiumNpcVisual::ImportGlbLocal(FTransform(Collider.Offset)).GetTranslation();
 		Collider.Radius *= Scale;
 	}
 	for (FElysiumClothChain& Chain : Chains)

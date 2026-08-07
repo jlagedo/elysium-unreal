@@ -14,72 +14,28 @@
 
 struct FElysiumCompositionRig;
 
-// VtMB's two composition stages as Unreal skeletal controls (roadmap CAP7.2).
+// VtMB's one composition stage as an Unreal skeletal control (roadmap CAP7.2).
 //
-// Both derive `FAnimNode_SkeletalControlBase` and both run in the slot a post-process Anim
-// Blueprint occupies — after the graph has blended locals, before skinning — which is retail's own
-// order. This runtime has no Anim Blueprint asset (`UElysiumNpcAnimInstance` is a native anim
-// instance with no graph), so that slot is the tail of `FElysiumNpcAnimProxy::Evaluate`, and the
-// nodes are driven through `ResolveBones` + `Apply` rather than through pose links.
+// It derives `FAnimNode_SkeletalControlBase` and runs in the slot a post-process Anim Blueprint
+// occupies — after the graph has blended locals, before skinning — which is retail's own order.
+// This runtime has no Anim Blueprint asset (`UElysiumNpcAnimInstance` is a native anim instance
+// with no graph), so that slot is the tail of `FElysiumNpcAnimProxy::Evaluate`, and the node is
+// driven through `ResolveBones` + `Apply` rather than through pose links.
 //
-// **Their order is load-bearing**: split inheritance first, then axis interpolation. A graph that
-// runs them the other way produces a different skeleton, because the split bone is `Bip01 Spine1`
-// and every driven arm bone hangs off it.
+// **It is the only VtMB rule left in the frame path**, and it earns that on one property: it reads
+// a LIVE control-bone orientation, so its input is the blended pose rather than anything a file
+// states. Every other rule names a value the file carries somewhere and is resolved at bake
+// instead (repo-root `CLAUDE.md`, "Poses are baked native").
 //
-// Both are safe to evaluate on an animation worker thread: they read a shared immutable rig held by
-// `TSharedPtr`, resolve every bone index once in `InitializeBoneReferences`, and touch no UObject
-// and no game-thread state while evaluating.
+// It is safe to evaluate on an animation worker thread: it reads a shared immutable rig held by
+// `TSharedPtr`, resolves every bone index once in `InitializeBoneReferences`, and touches no
+// UObject and no game-thread state while evaluating.
 //
 // The engine's own `FAnimNode_PoseDriver` is the wrong tool even though its shape matches. It
 // interpolates target poses with a radial basis function rather than the sign-selected three-way
 // slerp the rule uses, so it would approximate a stage that reproduces retail to 1e-4.
 
-// Stage 1 — `Flags & 0x2`: rotation from the component root rather than the parent, translation
-// from the parent (`docs/vtmb/animation_and_movers.md` A.4a).
-//
-// In component space the entity transform divides out, so retail's
-//
-//     rotation(boneToWorld[i])    = rotation(rootToWorld) * rotation(L)
-//     translation(boneToWorld[i]) = TransformPoint(boneToWorld[parent[i]], p[i])
-//
-// is exactly "replace the composed rotation with the bone's own local rotation and leave the
-// translation alone" — the ordinary hierarchy already puts the translation where the second line
-// wants it. That is the whole of this node.
-USTRUCT()
-struct FAnimNode_ElysiumSplitInheritance : public FAnimNode_SkeletalControlBase
-{
-	GENERATED_BODY()
-
-	FAnimNode_ElysiumSplitInheritance() = default;
-
-	// Install the body's rig; null clears it. Call from the game thread through the anim instance,
-	// which blocks on any in-flight evaluation first.
-	void SetRig(TSharedPtr<const FElysiumCompositionRig> InRig);
-	// Whether this stage has any bone to correct on this body.
-	bool HasWork() const;
-
-	// Resolve every bone index against a bone container, once. Driven from the proxy's CacheBones,
-	// which is the callback the container change actually arrives on.
-	void ResolveBones(const FBoneContainer& RequiredBones);
-	// Evaluate into Output and write the result back. No-op when the stage has nothing to do or the
-	// component's LOD is past LODThreshold.
-	void Apply(FComponentSpacePoseContext& Output);
-
-protected:
-	virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output,
-		TArray<FBoneTransform>& OutBoneTransforms) override;
-	virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
-	virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
-
-private:
-	TSharedPtr<const FElysiumCompositionRig> Rig;
-	// Ascending compact-pose order, which is what LocalBlendCSBoneTransforms requires and what
-	// keeps a parent resolved before a child if a rig ever nests two split bones.
-	TArray<FBoneReference> Bones;
-	bool bResolved = false;
-};
-
-// Stage 2 — `ProcType == 1`: read the control bone's LOCAL rotation, evaluate the six-entry
+// The one genuine stage — `ProcType == 1`: read the control bone's LOCAL rotation, evaluate the six-entry
 // three-way blend, and REPLACE the driven bone's local transform outright
 // (`docs/vtmb/procedural_bones.md`). The clip's channels for a driven bone are decoded, carried
 // through, and discarded; this does not adjust the animated value.
@@ -133,20 +89,20 @@ private:
 // The simulated-garment spike — one `FAnimNode_AnimDynamics` chain per lattice column, hosted
 // together so the proxy installs, updates and evaluates them as a unit (`Visual/ElysiumClothRig.h`).
 //
-// This one reproduces nothing. The two stages above exist because VtMB does something Unreal has no
+// This one reproduces nothing. The stage above exists because VtMB does something Unreal has no
 // equivalent for; this exists because VtMB does *nothing* — a skirt or coat is skinned rigidly to
 // one bone and never moves, and no garment bone appears in the format's one authored per-bone
-// stage (`docs/vtmb/secondary_motion.md`). It runs LAST, after both composition stages, so the
+// stage (`docs/vtmb/secondary_motion.md`). It runs LAST, after the composition stage, so the
 // simulation sees the finished skeleton rather than one still missing its corrections. The bone
-// sets are disjoint in any case: the lattice is synthesised and no clip, split flag or procedural
-// rule can name it.
+// sets are disjoint in any case: the lattice is synthesised and no clip or procedural rule can
+// name it.
 //
 // It is a container rather than another `FAnimNode_SkeletalControlBase` because AnimDynamics is
 // per-chain, and a garment is ten of them. Three things the engine does for a graph-hosted node and
 // cannot do for this one, all of which the proxy must therefore do by hand:
 //
 //  - The simulation timestep arrives ONLY through `UpdateInternal`, and the field it writes is
-//    private — so `Update` has to run even though the two stages above need no update at all.
+//    private — so `Update` has to run even though the stage above needs no update at all.
 //  - `PreUpdate` is a game-thread pass the engine drives from the node list
 //    `FAnimInstanceProxy::GetCustomNodes` reports. That list is gathered during
 //    `InitializeAnimation`, which is strictly before any rig is installed, so reporting these
@@ -171,7 +127,7 @@ private:
 //     discards the blended, composed pose and simulates the garment over a bind-pose body.
 //
 // So this evaluates the control directly and blends the result in, exactly as
-// `FAnimNode_ElysiumSplitInheritance::Apply` does for the same reason.
+// `FAnimNode_ElysiumAxisInterp::Apply` does for the same reason.
 struct FElysiumClothChainNode : public FAnimNode_AnimDynamics
 {
 	void ApplyTo(FComponentSpacePoseContext& Output);

@@ -130,15 +130,12 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	void SetFacialTrack(TArray<FName>&& InCurves);
 	void SetFacialWeights(TArrayView<const float> InWeights);
 
-	// VtMB's two composition stages (CAP7.2), installed together because one model can declare
-	// either, both or neither. Null clears both. `bSplitInheritance` false installs the axis stage
-	// alone, for a body whose clips already carry the split correction — see the anim instance.
-	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig,
-		bool bSplitInheritance = true);
+	// VtMB's one composition stage (CAP7.2); null clears it.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
 
-	// The garment spike's rig; null clears it. Independent of the two composition stages — a model
-	// can carry any combination, and nearly every model carries none of this one.
+	// The garment spike's rig; null clears it. Independent of the composition stage — a model can
+	// carry either, both or neither, and nearly every model carries none of this one.
 	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
 	int32 NumClothChains() const { return Cloth.NumChains(); }
 	void SetClothTuning(const FElysiumClothTuning& InTuning) { Cloth.SetTuning(InTuning); }
@@ -166,11 +163,10 @@ private:
 	TArray<FName> FacialCurves;
 	TArray<float> FacialWeights;
 
-	// Retail's own order. Both are plain members rather than a graph: this instance has no
-	// AnimGraph, so the post-process slot is the tail of Evaluate.
-	UPROPERTY(Transient) FAnimNode_ElysiumSplitInheritance Split;
+	// A plain member rather than a graph: this instance has no AnimGraph, so the post-process slot
+	// is the tail of Evaluate.
 	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
-	// The garment spike, evaluated after both of them so the simulation sees the finished skeleton.
+	// The garment spike, evaluated after it so the simulation sees the finished skeleton.
 	UPROPERTY(Transient) FAnimNode_ElysiumCloth Cloth;
 
 	// One clip still fading out. Retail keeps these in a CUtlVector with NO cap and evicts purely on
@@ -274,7 +270,7 @@ public:
 	// degrees, and `PlayClip` takes the body back.
 	//
 	// False for a grid of partial-body `*_layer` overlays, which are a layer's and not a base pose.
-	// Requires `elysium.BakedCharacters 1`: only the bake writes a `UBlendSpace` at all.
+	// Only the bake writes a `UBlendSpace` at all.
 	bool PlayGrid(UBlendSpace* Space, bool bLoop = true);
 	void SetGridPosition(float Axis0, float Axis1 = 0.f);
 	void StopGrid();
@@ -294,7 +290,7 @@ public:
 	// `.eskm` bake writes a delta in the form Unreal hands back as a delta (`AdditiveAnimType`) and
 	// only it carries the bone mask (`UElysiumAnimLayerMask`), so an unbaked layer is refused rather
 	// than composed out of a pose that is really the reference pose for every bone it does not
-	// touch. Layering therefore requires `elysium.BakedCharacters 1`.
+	// touch.
 	bool PlayLayer(UAnimSequence* Sequence, float Weight = 1.f, bool bLoop = true);
 	void StopLayer(UAnimSequence* Sequence);
 	void StopAllLayers();
@@ -318,22 +314,16 @@ public:
 
 	// --- the two composition stages (roadmap CAP7.2) -----------------------------------------
 	//
-	// Install the body's composition rig — the `Flags & 0x2` split-bone inventory and the
-	// `ProcType == 1` rule table. Null for a model declaring neither, which is an ordinary load:
-	// the body then poses under Unreal's own hierarchy composition alone. Both stages run in the
-	// proxy's evaluate, after the graph has blended locals and before skinning, split first.
+	// Install the body's composition rig — the `ProcType == 1` rule table. Null for a model that
+	// declares none, which is an ordinary load: the body then poses under Unreal's own hierarchy
+	// composition alone. The stage runs in the proxy's evaluate, after the graph has blended
+	// locals and before skinning.
 	//
-	// `bInSplitInheritance` is only the STARTING state of the split stage, for the window before
-	// any clip has been requested; `PlayClip` decides it per clip from there, because whether the
-	// rule is needed is a property of the clip and not of the body. `UE_mdl_skeletal.py` rewrites
-	// the split bone's rotation curve into the `.eskm`, so a baked clip must NOT have the rule
-	// applied a second time — the result is a fresh bend of the same size, which reads as a new bug
-	// rather than a doubled fix — while a glTFRuntime clip read from `.glb` carries VtMB's
-	// rotations unchanged and still needs it. A baked BODY plays both, so the two cannot be
-	// decided together. The axis-interpolation stage is unaffected: procedural bones read the
-	// control bone's live orientation, so they are runtime work on either path.
-	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig,
-		bool bInSplitInheritance = true);
+	// There is no split-inheritance decision to make here any more. `UE_mdl_skeletal.py` resolves
+	// `Flags & 0x2` into ordinary parent-relative rotations at export, so no clip that reaches
+	// this instance carries VtMB's model-space value (repo-root `CLAUDE.md`, "Poses are baked
+	// native").
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	const FElysiumCompositionRig* GetCompositionRig() const { return CompositionRig.Get(); }
 	// How many rules resolved against this body's actual skeleton — the number the debug surface
 	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
@@ -417,10 +407,6 @@ private:
 
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
 	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
-	// Whether the split stage is currently installed. Tracked so a clip request only re-installs
-	// the rig when the answer actually changes, and seeded by SetCompositionRig for the window
-	// before any clip has been requested.
-	bool bSplitInheritance = true;
 	TSharedPtr<const FElysiumClothRig> ClothRig;
 	float MouthOpen = 0.f;
 	FElysiumEyeInput EyeInput;

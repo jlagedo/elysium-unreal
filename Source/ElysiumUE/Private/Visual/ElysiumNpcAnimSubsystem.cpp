@@ -119,13 +119,13 @@ TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const
 	return Result;
 }
 
-TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FString& Stem, bool bBaked)
+TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FString& Stem)
 {
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
 	}
-	const FString CacheKey = FrameKey(Stem, bBaked);
+	const FString& CacheKey = Stem;
 	if (const TSharedPtr<const FElysiumEyeSet>* Cached = EyeSets.Find(CacheKey))
 	{
 		return *Cached;
@@ -139,7 +139,7 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 	{
 		TSharedPtr<FElysiumEyeSet> Set = MakeShared<FElysiumEyeSet>();
 		FString Error;
-		if (!Set->Load(Entry->Eyes, Error, bBaked))
+		if (!Set->Load(Entry->Eyes, Error))
 		{
 			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
 		}
@@ -252,7 +252,7 @@ namespace
 	// inventory and, when the model declares any driven bone, the rule table beside its glb. Either
 	// half may be empty; a model with neither is answered null, and that is a normal load.
 	TSharedPtr<const FElysiumCompositionRig> BuildCompositionRig(const FString& Stem,
-		const TArray<FString>& SplitBones, const FString& ProceduralRelPath, bool bBaked,
+		const TArray<FString>& SplitBones, const FString& ProceduralRelPath,
 		FString& OutError)
 	{
 		TSharedPtr<FElysiumCompositionRig> Rig = MakeShared<FElysiumCompositionRig>();
@@ -263,7 +263,7 @@ namespace
 			Rig->SplitBones.Add(FName(*BoneName));
 		}
 		if (!ProceduralRelPath.IsEmpty()
-			&& !Rig->LoadAxisRules(ProceduralRelPath, OutError, bBaked))
+			&& !Rig->LoadAxisRules(ProceduralRelPath, OutError))
 		{
 			// A named-but-unreadable table is a fault, not a model without one: the split half is
 			// still installed so the body keeps whatever composition it can have.
@@ -274,13 +274,13 @@ namespace
 }
 
 TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositionRig(
-	const FString& Stem, bool bBaked)
+	const FString& Stem)
 {
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
 	}
-	const FString CacheKey = FrameKey(Stem, bBaked);
+	const FString& CacheKey = Stem;
 	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(CacheKey))
 	{
 		return *Cached;
@@ -291,7 +291,7 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositio
 	if (Entry != nullptr)
 	{
 		FString Error;
-		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, bBaked, Error);
+		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
 		if (!Error.IsEmpty())
 		{
 			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural '%s': %s"), *Stem, *Error);
@@ -325,8 +325,7 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetAnimatedPr
 
 	FString Error;
 	TSharedPtr<const FElysiumCompositionRig> Result =
-		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural,
-			ElysiumNpcVisual::IsStemBaked(Entry->Stem), Error);
+		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
 	if (!Error.IsEmpty())
 	{
 		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
@@ -418,15 +417,12 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClip(const FString& Stem, const 
 	// The owner column decides where the clip comes from either way: the NPC itself for a dialogue
 	// clip, a bank for everything else.
 	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
-	if (ElysiumNpcVisual::UseBakedCharacters())
+	// A baked sequence is bound to the shared skeleton, so it is the same asset for every body and
+	// is addressed by owner and resolved animation name rather than rebuilt per mesh.
+	if (UAnimSequence* Baked =
+		ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, ResolveClipAnimName(Stem, ClipName)))
 	{
-		// A baked sequence is bound to the shared skeleton, so it is the same asset for every body
-		// and is addressed by owner and resolved animation name rather than rebuilt per mesh.
-		if (UAnimSequence* Baked =
-			ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, ResolveClipAnimName(Stem, ClipName)))
-		{
-			return Baked;
-		}
+		return Baked;
 	}
 
 	// The NPC's own dialogue clips live in the glb the mesh came from; everything else is a bank.
@@ -466,13 +462,6 @@ bool UElysiumNpcAnimSubsystem::ResolveGrid(const FString& Stem, const FString& C
 	USkeletalMesh* Mesh, FElysiumResolvedGrid& OutGrid)
 {
 	OutGrid = FElysiumResolvedGrid();
-	if (!ElysiumNpcVisual::UseBakedCharacters())
-	{
-		// Only the bake writes a UBlendSpace; there is no loader-side equivalent to fall back to, so
-		// the caller keeps playing the cell `ResolveGridClip` picks.
-		return false;
-	}
-
 	// Same ownership rule as every other resolver here: a grid is declared by whoever owns the
 	// animations, which is a bank for anything but a dialogue clip.
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
@@ -555,12 +544,9 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& Bank
 	}
 	// This path never consults the clip vocabulary, so the bank is both the asset and the grid owner.
 	const FString AnimName = ResolveGridClip(BankStem, ClipName);
-	if (ElysiumNpcVisual::UseBakedCharacters())
+	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, BankStem, AnimName))
 	{
-		if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, BankStem, AnimName))
-		{
-			return Baked;
-		}
+		return Baked;
 	}
 	UglTFRuntimeAsset* Asset = GetBankAsset(BankStem, OutError);
 	if (Asset == nullptr)
