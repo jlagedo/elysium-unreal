@@ -133,6 +133,36 @@ def verify_clips(family, owner, clips, errors):
     return len(baked)
 
 
+def verify_blend_spaces(family, owner, blends, errors):
+    """Every grid the sidecar declares has a BS_ asset, and it carries its samples.
+
+    A blend space that lost its samples is the failure worth catching here: it loads, it lists, and
+    it poses nothing -- the same shape as a sequence that lost its compressed data. The bake refuses
+    to write one, so reaching this is a sign the asset did not survive the save."""
+    package = "%s/%s/%s" % (ANIMS, family, owner)
+    with open(os.path.join(NPC_DIR, *blends.split("/")), "r", encoding="utf-8") as handle:
+        grids = json.load(handle).get("grids", {})
+
+    found = 0
+    for label, grid in sorted(grids.items()):
+        # Single-cell grids are not blend spaces and neither the exporter nor the bake writes one.
+        if len(grid.get("cells", ())) < 2:
+            continue
+        name = "BS_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
+        space = unreal.EditorAssetLibrary.load_asset("%s/%s.%s" % (package, name, name))
+        if space is None:
+            errors.append("%s: blend grid '%s' has no baked blend space" % (owner, label))
+            continue
+        if not space.get_editor_property("sample_data"):
+            errors.append("%s: blend space '%s' carries no samples and would pose nothing"
+                          % (owner, label))
+            continue
+        found += 1
+    if found:
+        log("%s/%s: %d blend space(s)" % (family, owner, found))
+    return found
+
+
 def main():
     stems = [s for s in cmdline_arg("BakeCharacters").split(",") if s]
     if not stems:
@@ -148,6 +178,10 @@ def main():
     # model whose mesh landed on one skeleton while its clips were written under another name shows
     # up as missing sequences rather than passing quietly.
     wanted = {}
+    # {owner: blends sidecar path relative to npc/}. Keyed by owner alone rather than by family: a
+    # grid is declared by the model that owns the clips, and every family playing it wants the same
+    # set of grids baked against its own skeleton.
+    gridded = {}
 
     for stem in stems:
         record = manifest["npcs"].get(stem)
@@ -164,14 +198,19 @@ def main():
                for label, meta in record.get("own_clips", {}).items()}
         if own:
             owners.setdefault(stem, {}).update(own)
+            if record.get("blends"):
+                gridded[stem] = record["blends"]
         for _label, bank in record.get("clips", {}).items():
             if bank == stem or bank in owners:
                 continue
             bank_record = manifest["banks"].get(bank, {})
             owners[bank] = {label: int(meta.get("flags", 0))
                             for label, meta in bank_record.get("clips", {}).items()}
+            if bank_record.get("blends"):
+                gridded[bank] = bank_record["blends"]
 
     total = 0
+    spaces = 0
     for family, owners in sorted(wanted.items()):
         skeleton = unreal.EditorAssetLibrary.load_asset(
             "%s/Skeletons/%s%s.%s%s" % (CHARACTERS, SKELETON_PREFIX, family,
@@ -180,8 +219,10 @@ def main():
         log("family '%s': %d bones, %d owners" % (family, bones, len(owners)))
         for owner, clips in sorted(owners.items()):
             total += verify_clips(family, owner, clips, errors)
-    log("%d sequences over %d famil%s"
-        % (total, len(wanted), "y" if len(wanted) == 1 else "ies"))
+            if owner in gridded:
+                spaces += verify_blend_spaces(family, owner, gridded[owner], errors)
+    log("%d sequences, %d blend spaces over %d famil%s"
+        % (total, spaces, len(wanted), "y" if len(wanted) == 1 else "ies"))
 
     for error in errors:
         unreal.log_error("[chars-verify] %s" % error)

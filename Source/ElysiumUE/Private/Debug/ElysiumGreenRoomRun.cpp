@@ -1509,8 +1509,10 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	Bodies.Add({ Case, Body, Duration });
 	ReviewStem = Stem;
 	ReviewClip = ResolvedClip;
-	// A layer belongs to the body it was composed onto, and that body has just been destroyed.
+	// A layer belongs to the body it was composed onto, and that body has just been destroyed. So
+	// does a grid, and it is additionally what the clip above just replaced.
 	ReviewLayer.Reset();
+	ReviewGrid = FElysiumResolvedGrid();
 	LabClipTime = 0.0f;
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s clip %s (%.3fs)"), *Stem, *ResolvedClip, Duration);
 	return true;
@@ -1564,6 +1566,65 @@ bool FElysiumGreenRoomRun::LabSetLayer(const FString& Clip, float Weight, FStrin
 	ReviewLayer = Clip;
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s layer %s at %.2f"), *ReviewStem, *Clip, Weight);
 	return true;
+}
+
+bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
+{
+	AElysiumMapActor* Map = GetMap();
+	USkeletalMeshComponent* Body = LabBody();
+	if (!IsLabReady() || Map == nullptr || Body == nullptr)
+	{
+		OutError = TEXT("nothing is standing on the stage");
+		return false;
+	}
+	UElysiumEntityBodies* BodyFactory = Map->GetBodies();
+	FElysiumResolvedGrid Grid;
+	if (BodyFactory == nullptr || !BodyFactory->PlayNpcGrid(Body, ReviewStem, Label, Grid))
+	{
+		// Three refusals share this message because the operator's next move is the same for all
+		// three, and the fourth — an aim grid — is the one worth naming apart, so the clip list marks
+		// those rather than leaving them to fail here.
+		OutError = FString::Printf(
+			TEXT("%s cannot stand '%s' as a grid — does the label name one, is the body baked ")
+			TEXT("(elysium.BakedCharacters 1, then Restand), and is elysium.BlendSpaces 1?"),
+			*ReviewStem, *Label);
+		return false;
+	}
+
+	ReviewGrid = Grid;
+	ReviewClip = Label;
+	// Mid-range on every axis, which is the resting value of every parameter VtMB declares: `move_yaw`
+	// 0 is straight ahead on a -180..180 fan, and `aim_yaw` 0 is level. So a grid stands at the pose
+	// a body nothing has steered would hold.
+	for (int32 Axis = 0; Axis < 2; ++Axis)
+	{
+		ReviewGridAt[Axis] = Axis < Grid.Axes
+			? 0.5f * (Grid.AxisMin[Axis] + Grid.AxisMax[Axis]) : 0.f;
+	}
+	BodyFactory->SetNpcGridPosition(Body, ReviewGridAt[0], ReviewGridAt[1]);
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s grid %s (%d axis) at %.1f, %.1f"),
+		*ReviewStem, *Label, Grid.Axes, ReviewGridAt[0], ReviewGridAt[1]);
+	return true;
+}
+
+void FElysiumGreenRoomRun::LabSetGridPosition(float Axis0, float Axis1)
+{
+	ReviewGridAt[0] = Axis0;
+	ReviewGridAt[1] = Axis1;
+	AElysiumMapActor* Map = GetMap();
+	if (UElysiumEntityBodies* BodyFactory = Map != nullptr ? Map->GetBodies() : nullptr)
+	{
+		BodyFactory->SetNpcGridPosition(LabBody(), Axis0, Axis1);
+	}
+}
+
+void FElysiumGreenRoomRun::LabClearGrid()
+{
+	ReviewGrid = FElysiumResolvedGrid();
+	// Back to a clip, because a body with neither a grid nor a clip stands in its reference pose and
+	// reads as a broken model rather than a cleared control.
+	FString Ignored;
+	LabSetBody(ReviewStem, FString(), Ignored);
 }
 
 void FElysiumGreenRoomRun::LabClearLayers()

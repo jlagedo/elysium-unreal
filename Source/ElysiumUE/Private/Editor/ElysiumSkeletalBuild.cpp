@@ -5,6 +5,8 @@
 #include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendProfile.h"
+#include "Animation/BlendSpace.h"
+#include "Animation/BlendSpace1D.h"
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -24,6 +26,7 @@
 #include "StaticMeshAttributes.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
@@ -850,6 +853,234 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			*FPaths::GetBaseFilename(SourcePath), OutDroppedTracks, Names.Num(),
 			*FPackageName::GetShortName(SkeletonPackageName), *FString::Join(Names, TEXT(", ")));
 	}
+	return FString();
+#else
+	return TEXT("editor only");
+#endif
+}
+
+FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& BlendsRelPath,
+	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutSpaceCount,
+	int32& OutSkippedGrids, int32& OutSkippedCells)
+{
+	OutSpaceCount = 0;
+	OutSkippedGrids = 0;
+	OutSkippedCells = 0;
+#if WITH_EDITOR
+	// The runtime's own reader, not a second parse of the same document. It already knows the
+	// sidecar's shape -- the pose-parameter array a grid's axes index into, the null cell, the
+	// leading '@' a raw label can carry -- and a bake that read the file its own way could disagree
+	// with the runtime about what a grid says while both looked correct.
+	FElysiumBlendTable Table;
+	FString Error;
+	if (!Table.Load(BlendsRelPath, Error))
+	{
+		return FString::Printf(TEXT("%s: %s"), *BlendsRelPath, *Error);
+	}
+
+	USkeleton* Skeleton = LoadObject<USkeleton>(nullptr,
+		*(SkeletonPackageName + TEXT(".") + FPackageName::GetShortName(SkeletonPackageName)));
+	if (Skeleton == nullptr)
+	{
+		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
+	}
+
+	// Sorted so a re-bake writes the same assets in the same order; TMap iteration is not stable.
+	TArray<FString> Labels;
+	Table.Grids.GetKeys(Labels);
+	Labels.Sort([](const FString& A, const FString& B) { return A < B; });
+
+	for (const FString& Label : Labels)
+	{
+		const FElysiumBlendGrid& Grid = Table.Grids[Label];
+
+		// Which axes this grid actually spans. Axis 1 is absent on every 9x1 locomotion fan, and its
+		// range is then a degenerate 0/0 that must not reach a divisor.
+		const int32 Axes = (Grid.GroupSize[1] > 1 && Grid.ParamIndex[1] != INDEX_NONE) ? 2 : 1;
+
+		// Resolve the samples BEFORE creating the package, so a grid that cannot be built leaves no
+		// half-written asset on the mount for the next run to load and trust.
+		struct FGridSample
+		{
+			UAnimSequence* Sequence = nullptr;
+			FVector Value = FVector::ZeroVector;
+			int32 Axis[2] = { 0, 0 };
+		};
+		TArray<FGridSample> Samples;
+		Samples.Reserve(Grid.Cells.Num());
+		int32 SkippedHere = 0;
+
+		for (const FElysiumBlendCell& Cell : Grid.Cells)
+		{
+			if (Cell.Clip.IsEmpty())
+			{
+				++SkippedHere;
+				continue;
+			}
+			const FString ClipAsset = TEXT("A_") + FElysiumContentPaths::BakedAssetName(Cell.Clip);
+			UAnimSequence* Sequence = LoadObject<UAnimSequence>(nullptr,
+				*(PackagePath / ClipAsset + TEXT(".") + ClipAsset));
+			if (Sequence == nullptr)
+			{
+				++SkippedHere;
+				continue;
+			}
+
+			FGridSample Sample;
+			Sample.Sequence = Sequence;
+			Sample.Axis[0] = Cell.Axis[0];
+			Sample.Axis[1] = Cell.Axis[1];
+			for (int32 Axis = 0; Axis < Axes; ++Axis)
+			{
+				// Where cell k sits on its axis. `ElysiumBlendGrids::ResolveAxis` normalizes the
+				// parameter over the DESCRIPTOR's start..end and then remaps through the grid's own
+				// paramstart..paramend -- and the descriptor cancels out of that pair exactly, leaving
+				// `(value - ParamStart) / (ParamEnd - ParamStart)`. So the sample positions are the
+				// grid's own range and owe the pose parameter nothing; only the wrap consults it.
+				//
+				// Divided by `GroupSize - 1` because the cells are the range's ENDPOINTS, not its
+				// buckets: on a 9-cell -180..180 fan cell 0 IS -180 and cell 8 IS +180, which is why
+				// those two share one clip, and why 0 degrees lands exactly on cell 4.
+				const int32 Count = Grid.GroupSize[Axis];
+				const float Alpha = Count > 1
+					? static_cast<float>(Sample.Axis[Axis]) / static_cast<float>(Count - 1) : 0.f;
+				Sample.Value[Axis] = Grid.ParamStart[Axis]
+					+ Alpha * (Grid.ParamEnd[Axis] - Grid.ParamStart[Axis]);
+			}
+			Samples.Add(Sample);
+		}
+
+		OutSkippedCells += SkippedHere;
+		if (Samples.Num() < 2)
+		{
+			// One sample is a clip, not a blend space, and the reader drops such a grid too. Reported
+			// rather than failed: a hole is a fact about the export, and refusing the whole owner over
+			// one damaged grid would cost every sound one beside it.
+			++OutSkippedGrids;
+			UE_LOG(LogElysiumSkeletalBuild, Warning,
+				TEXT("%s: grid '%s' resolved %d of %d cell(s) and is not a blend space"),
+				*BlendsRelPath, *Label, Samples.Num(), Grid.Cells.Num());
+			continue;
+		}
+
+		// A grid whose cells are partial-body `*_layer` overlays composes as ONE layer under ONE bone
+		// mask, so every cell has to name the same mask or there is no single gate to compose it
+		// under -- no Unreal blend node masks per sample. Fatal rather than reported: the whole reason
+		// these grids are baked now is to settle this, and a quiet warning would let a grid that
+		// cannot be layered ship looking like one that can.
+		auto ProfileOf = [](const UAnimSequence* Sequence)
+		{
+			const UElysiumAnimLayerMask* Mask = Sequence->FindMetaDataByClass<UElysiumAnimLayerMask>();
+			return Mask != nullptr ? Mask->Profile : NAME_None;
+		};
+		const FName LayerProfile = ProfileOf(Samples[0].Sequence);
+		for (int32 Index = 1; Index < Samples.Num(); ++Index)
+		{
+			const FName Profile = ProfileOf(Samples[Index].Sequence);
+			if (Profile != LayerProfile)
+			{
+				return FString::Printf(
+					TEXT("%s: grid '%s' mixes bone masks -- '%s' names %s and '%s' names %s. A grid ")
+					TEXT("composes as one layer under one mask, so this one cannot be layered at all"),
+					*BlendsRelPath, *Label, *Samples[0].Sequence->GetName(),
+					LayerProfile.IsNone() ? TEXT("no mask") : *LayerProfile.ToString(),
+					*Samples[Index].Sequence->GetName(),
+					Profile.IsNone() ? TEXT("no mask") : *Profile.ToString());
+			}
+		}
+
+		const FString AssetName = TEXT("BS_") + FElysiumContentPaths::BakedAssetName(Label);
+		const FString PackageName = PackagePath / AssetName;
+		UPackage* Package = OpenPackage(PackageName);
+		if (Package == nullptr)
+		{
+			return FString::Printf(TEXT("could not create package %s"), *PackageName);
+		}
+		ClearForRewrite(Package, AssetName);
+
+		// The class is the editor's view of the asset and what `GetAxisToScale` answers; it does not
+		// pick the evaluation path. `ResampleData` infers dimensionality from the samples' own bounding
+		// box, so a 9x1 fan takes the 1D path whichever class carries it.
+		UBlendSpace* Space = Axes == 2
+			? NewObject<UBlendSpace>(Package, *AssetName, RF_Public | RF_Standalone)
+			: NewObject<UBlendSpace1D>(Package, *AssetName, RF_Public | RF_Standalone);
+
+		// BEFORE the first sample. `AddSample` validates the sequence against the blend space's
+		// skeleton and drops it silently if they disagree, so a skeleton set afterwards yields an
+		// asset with no samples that saves perfectly well.
+		Space->SetSkeleton(Skeleton);
+
+		for (int32 Axis = 0; Axis < Axes; ++Axis)
+		{
+			const FElysiumPoseParamDesc* Desc = Table.Param(Grid.ParamIndex[Axis]);
+			// `BlendParameters` is protected and befriends only the editor's detail customizations,
+			// and the one public accessor is const. Nothing here is actually const -- the asset was
+			// constructed three lines ago -- so this reaches the axis the same way the details panel
+			// does, without a reflection walk over a fixed-size struct array to say the same thing.
+			FBlendParameter& Parameter = const_cast<FBlendParameter&>(Space->GetBlendParameter(Axis));
+			Parameter.DisplayName = Desc != nullptr ? Desc->Name : FString::Printf(TEXT("axis%d"), Axis);
+			Parameter.Min = Grid.ParamStart[Axis];
+			Parameter.Max = Grid.ParamEnd[Axis];
+			// One division per gap between cells, so every cell lands exactly on a grid point.
+			Parameter.GridNum = FMath::Max(1, Grid.GroupSize[Axis] - 1);
+			// Left OFF even on `move_yaw`, which does wrap. VtMB authors the wrap by DUPLICATING the
+			// clip at both ends of the fan -- cell 0 and cell 8 are the same animation -- so clamped
+			// interpolation already reproduces retail across the seam. Turning wrapping on would make
+			// -180 and +180 one point carrying two samples, and `IsTooCloseToExistingSamplePoint`
+			// would reject the second. The caller wraps its input instead, which is what the pose
+			// parameter's own `loop` is for.
+			Parameter.bWrapInput = false;
+		}
+
+		for (const FGridSample& Sample : Samples)
+		{
+			if (Space->AddSample(Sample.Sequence, Sample.Value) == INDEX_NONE)
+			{
+				// AddSample reports failure only through this return, so an unchecked add is how a
+				// blend space ends up on the mount with fewer samples than cells and nothing said.
+				return FString::Printf(
+					TEXT("%s: grid '%s' cell [%d,%d] at %s rejected sequence %s -- check the ")
+					TEXT("skeleton binding and that the value lies inside %.3f..%.3f"),
+					*BlendsRelPath, *Label, Sample.Axis[0], Sample.Axis[1], *Sample.Value.ToString(),
+					*Sample.Sequence->GetName(), Grid.ParamStart[0], Grid.ParamEnd[0]);
+			}
+		}
+
+		// `AddSample` widens the axis range to fit anything that falls outside it, so a range that no
+		// longer matches the grid is how a placement error shows itself -- the samples all took, and
+		// the asset spans something the sequence never declared.
+		for (int32 Axis = 0; Axis < Axes; ++Axis)
+		{
+			const FBlendParameter& Parameter = Space->GetBlendParameter(Axis);
+			if (!FMath::IsNearlyEqual(Parameter.Min, Grid.ParamStart[Axis], 1e-3f)
+				|| !FMath::IsNearlyEqual(Parameter.Max, Grid.ParamEnd[Axis], 1e-3f))
+			{
+				return FString::Printf(
+					TEXT("%s: grid '%s' axis %d widened to %.3f..%.3f from the declared %.3f..%.3f, ")
+					TEXT("so a sample was placed outside the range the grid states"),
+					*BlendsRelPath, *Label, Axis, Parameter.Min, Parameter.Max,
+					Grid.ParamStart[Axis], Grid.ParamEnd[Axis]);
+			}
+		}
+
+		// Builds the triangulation the evaluator reads. Without it the asset carries its samples and
+		// blends nothing, which looks like a correct asset in every list that counts samples.
+		Space->ResampleData();
+		if (Space->GetBlendSpaceData().IsEmpty())
+		{
+			return FString::Printf(TEXT("%s: grid '%s' produced no blend data from %d sample(s)"),
+				*BlendsRelPath, *Label, Samples.Num());
+		}
+
+		Space->PostEditChange();
+		FAssetRegistryModule::AssetCreated(Space);
+		if (!SavePackageTo(Package, PackageName))
+		{
+			return FString::Printf(TEXT("could not save %s"), *PackageName);
+		}
+		++OutSpaceCount;
+	}
+
 	return FString();
 #else
 	return TEXT("editor only");

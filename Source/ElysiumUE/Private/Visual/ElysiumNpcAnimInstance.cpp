@@ -9,6 +9,7 @@
 #include "Animation/AnimCurveElementFlags.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendProfile.h"
+#include "Animation/BlendSpace.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
 #include "HAL/IConsoleManager.h"
@@ -145,6 +146,12 @@ void FElysiumNpcAnimProxy::Request(UAnimSequence* Sequence, bool bLoop, float Fa
 	{
 		return;
 	}
+
+	// A clip takes the body back off a grid. The two are alternatives, not layers — leaving the grid
+	// standing would have it keep producing the body pose while the crossfade below advanced a clip
+	// nothing reads, which reads as a request that did nothing.
+	StopGrid();
+
 	if (Sequence == Playing)
 	{
 		// A repeated disposition/idle write must not visibly reset a looping stance. One-shots are
@@ -273,6 +280,65 @@ void FElysiumNpcAnimProxy::Stop()
 	Playing = nullptr;
 	bInitialized = false;
 	Fading.Reset();
+}
+
+// The A/B for the blend grids. 1 = a grid label stands the baked UBlendSpace and blends across its
+// cells, 0 = the caller falls back to the single cell `ElysiumBlendGrids::SelectCell` resolves,
+// which is what every body did before the grids became assets.
+static TAutoConsoleVariable<int32> CVarBlendSpaces(
+	TEXT("elysium.BlendSpaces"), 1,
+	TEXT("1 = stand a blend-grid label on its baked UBlendSpace, 0 = play the resolved cell alone."),
+	ECVF_Default);
+
+bool FElysiumNpcAnimProxy::RequestGrid(UBlendSpace* Space, bool bLoop)
+{
+	if (Space == nullptr || CVarBlendSpaces.GetValueOnAnyThread() == 0)
+	{
+		return false;
+	}
+
+	// The mirror of RequestLayer's gate, and it fails the same way from the other side. A grid whose
+	// cells are partial-body `*_layer` overlays owns only the bones its mask names; evaluated as a
+	// base pose there is no mask in the path at all, so every bone it does not own arrives at the
+	// shared skeleton's reference pose and the body loses its stance from the waist down. Retail
+	// composes those through the layer accumulator and never as a base — a masked sequence reaching
+	// the clip path is a defect, not a mode.
+	for (const FBlendSample& Sample : Space->GetBlendSamples())
+	{
+		if (Sample.Animation != nullptr
+			&& Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>() != nullptr)
+		{
+			return false;
+		}
+	}
+
+	if (GridPlayer.GetBlendSpace() != Space)
+	{
+		GridPlayer.SetBlendSpace(Space);
+		bGridNeedsReinit = true;   // reset the play time on the worker, like a sequence player
+	}
+	GridPlayer.SetLoop(bLoop);
+	GridPlayer.SetPlayRate(1.f);
+
+	// A grid REPLACES the crossfade rather than joining it, so the fades in flight are dropped along
+	// with the clip they were blending toward. Leaving them running would have EvaluateBody blend a
+	// pose nothing is producing any more.
+	Fading.Reset();
+	bInitialized = true;
+	return true;
+}
+
+void FElysiumNpcAnimProxy::SetGridPosition(float Axis0, float Axis1)
+{
+	// No reinit: the sample point is read fresh on every update, so moving it steers the blend
+	// without restarting the animations underneath it. That is the whole point of a grid over a
+	// per-cell clip pick, which had to swap the sequence to change direction.
+	GridPlayer.SetPosition(FVector(Axis0, Axis1, 0.f));
+}
+
+void FElysiumNpcAnimProxy::StopGrid()
+{
+	GridPlayer.SetBlendSpace(nullptr);
 }
 
 bool FElysiumNpcAnimProxy::RequestLayer(UAnimSequence* Sequence, bool bLoop, float Weight)
@@ -438,6 +504,22 @@ void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& In
 		return;
 	}
 
+	// The grid, when one is standing, IS the body — so it advances instead of the crossfade below
+	// rather than beside it, and takes the whole weight.
+	if (GridPlayer.GetBlendSpace() != nullptr)
+	{
+		if (bGridNeedsReinit)
+		{
+			bGridNeedsReinit = false;
+			FAnimationInitializeContext InitContext(this);
+			GridPlayer.Initialize_AnyThread(InitContext);
+			FAnimationCacheBonesContext BoneContext(this);
+			GridPlayer.CacheBones_AnyThread(BoneContext);
+		}
+		GridPlayer.Update_AnyThread(InContext);
+		return;
+	}
+
 	// A player whose clip changed restarts from its start position. Done here rather than in
 	// Request() because this is the thread and the context the node expects. Every slot, not the
 	// first two: TakeFreeSlot hands out all four, and a slot whose flag is never consumed keeps the
@@ -487,6 +569,15 @@ void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& In
 
 void FElysiumNpcAnimProxy::EvaluateBody(FPoseContext& Output)
 {
+	// A standing grid produces the whole body pose on its own. The blend across its cells is the
+	// blend space's, evaluated at the sample point `SetGridPosition` last wrote — there is nothing
+	// for the crossfade below to contribute, and `Request` cleared it when this was set.
+	if (bInitialized && GridPlayer.GetBlendSpace() != nullptr)
+	{
+		GridPlayer.Evaluate_AnyThread(Output);
+		return;
+	}
+
 	if (!bInitialized || Players[Current].GetSequence() == nullptr)
 	{
 		Output.ResetToRefPose();
@@ -899,6 +990,34 @@ void UElysiumNpcAnimInstance::SeekClip(float PositionSeconds)
 void UElysiumNpcAnimInstance::StopClip()
 {
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().Stop();
+}
+
+bool UElysiumNpcAnimInstance::PlayGrid(UBlendSpace* Space, bool bLoop)
+{
+	if (Space == nullptr)
+	{
+		return false;
+	}
+	// Same decision PlayClip makes, and for the same reason — split inheritance follows the pose's
+	// source. A blend space only exists on the baked mount, and every sequence it samples was
+	// written by the same bake that normalised the split bone out of them, so the stage must be off.
+	// Reached through the whole grid rather than a sample so an empty one cannot answer differently.
+	if (bSplitInheritance)
+	{
+		bSplitInheritance = false;
+		GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetCompositionRig(CompositionRig, false);
+	}
+	return GetProxyOnGameThread<FElysiumNpcAnimProxy>().RequestGrid(Space, bLoop);
+}
+
+void UElysiumNpcAnimInstance::SetGridPosition(float Axis0, float Axis1)
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetGridPosition(Axis0, Axis1);
+}
+
+void UElysiumNpcAnimInstance::StopGrid()
+{
+	GetProxyOnGameThread<FElysiumNpcAnimProxy>().StopGrid();
 }
 
 bool UElysiumNpcAnimInstance::PlayLayer(UAnimSequence* Sequence, float Weight, bool bLoop)

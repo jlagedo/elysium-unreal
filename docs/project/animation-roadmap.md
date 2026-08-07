@@ -139,11 +139,41 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   remains is exporting the table across the include DAG, not reverse-engineering it. Until it ships,
   a layer is played by explicit request and nothing in gameplay selects one.
 
-- [ ] **ANM3 Bake the blend spaces.** A `UBlendSpace1D` per 9×1 `move_yaw` fan and a `UBlendSpace`
+- [x] **ANM3 Bake the blend spaces.** A `UBlendSpace1D` per 9×1 `move_yaw` fan and a `UBlendSpace`
   per 3×3 aim grid, samples placed at the axis values the grid declares. The −180/+180 endpoint
   cells are already duplicates in the authored data, which is how a wrapping axis is authored.
-  The per-cell ground speed stays available to the motor and is re-read when the cell changes.
-  *Acceptance:* a walk grid blends across its cells instead of playing the base cell.
+  *Acceptance:* a walk grid blends across its cells instead of playing the base cell — met, and
+  witnessed on a stood body: dragging `move_yaw` sweeps the stride continuously rather than snapping
+  between the eight authored directions.
+
+  This also moves the runtime *toward* retail rather than away from it. Retail blends: across two
+  full `sp_theatre` captures every one of the 3,440 multi-blend contributions fired exactly two
+  adjacent cells (`docs/vtmb/animation_and_movers.md` §A.4b). Selecting a single nearest cell was
+  the simplification; what remains a divergence is the interpolation curve between two cells, which
+  is Unreal's, and it is recorded below.
+
+  **The assets.** The character bake turns every grid a clip owner declares into a
+  `UBlendSpace` beside the sequences it samples, reading the same sidecar and through the same
+  reader the runtime uses. A sample sits at `paramstart + k·(paramend − paramstart)/(groupsize − 1)`,
+  which is the grid's own range and owes the pose parameter nothing — the descriptor's `start`/`end`
+  cancel out of retail's axis resolution, and only the wrap consults it. Axis wrapping is left off
+  even on `move_yaw`: the fan duplicates its clip at both ends, so clamped interpolation already
+  reproduces retail across the seam, and enabling it would put two samples on one point where the
+  engine rejects the second. `Elysium.Content.BakedCharacterParity` asserts each baked grid's axis
+  ranges and divisions against the sidecar, each sample's position and animation, and that the
+  triangulation was built.
+
+  **A grid's cells agree on their bone mask, measured rather than assumed** — 135 grids over the six
+  male banks the parity slice reaches, with the bake refusing to write one that disagrees. That is
+  what lets a whole grid sit behind one layered-blend node in ANM4, since no Unreal blend node masks
+  per sample. The fact itself belongs to `docs/vtmb/animation_and_movers.md` §A.4.
+
+  **Nothing in gameplay drives one**, which is ANM5's. The runtime carries a base blend-space slot
+  in the proxy under `elysium.BlendSpaces`, with the green room as its only caller: a grid row
+  stands the whole fan and a slider per declared axis steers it. That slot is the same kind of
+  scaffolding as the layer slots below, and ANM4 retires it the same way. An aim grid is baked but
+  not standable — its cells are masked overlays, so it is a layer's grid and the base slot refuses
+  it for the reason a masked sequence must never reach the base clip path.
 
 - [ ] **ANM4 The animation graph.** An Animation Blueprint per body archetype, replacing the
   hand-rolled proxy: a locomotion state machine, layered blend per bone over the ANM2 profiles,
@@ -169,6 +199,13 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   player is the cleaner demonstration of the `move_yaw` fan — its facing is the camera yaw and its
   velocity is the mover's, so the angle between them is unambiguous. Depends on ANM4, and on the
   Source movement port for the player half.
+
+  **The per-cell ground speed lands here**, carried over from ANM3 because it is a driving question
+  rather than an asset one. `ResolveActivityClip` reads the authored speed off the cell the
+  *neutral* pose parameters select, so a body being steered keeps the speed of the cell it started
+  on. Once something writes `move_yaw` the motor has to re-read it as the blend moves — a sideways
+  run and a forward run are authored at different speeds, and holding one while playing the other is
+  what foot-sliding is.
 
 - [ ] **ANM6 Migrate the cinematic path.** Choreographed scene playback from the sequence player's
   absolute-time seek to a montage position. **Deliberately last.** The theatre is the project's

@@ -213,6 +213,20 @@ Hard-won, non-obvious, and easy to undo:
   other mode. A profile still in its constructed `WeightFactor` mode therefore discards every 1.0
   written into it and saves empty — which reads at evaluation as owning the whole rig, the exact
   opposite of the mask that was asked for, with nothing logged.
+- **`UBlendSpace::AddSample` reports failure only through its return value.** It validates the
+  sample against the blend space's own skeleton and axis bounds and returns `INDEX_NONE` without
+  logging, so a skeleton set *after* the first sample — or a value placed outside the axis range —
+  yields an asset that saves clean and carries fewer samples than it was given. Set the skeleton
+  before the first add and check every return. The related trap is `ExpandRangeForSample`, which
+  runs inside `AddSample` and quietly widens the axis to fit whatever it is handed: an axis range
+  that no longer matches what was written is the symptom of a misplaced sample, not a cosmetic
+  difference.
+- **A blend space with samples and no `ResampleData()` poses nothing.** That call builds the
+  segments or triangulation the evaluator reads and is not implied by adding samples or by
+  `PostEditChange`. Without it the asset lists its samples correctly everywhere that counts them and
+  evaluates to an empty blend; `GetBlendSpaceData().IsEmpty()` is how a caller tells. Dimensionality
+  is inferred there too, from the samples' bounding box rather than from the class, so a
+  `UBlendSpace` whose samples all share one axis value takes the 1D path regardless.
 - **`UAnimSequence::GetAnimationPose` silently falls back to the raw data model** whenever the
   compressed data for the current platform is not resident yet, and compression runs asynchronously
   after a bake. So the same call answers out of two different representations depending on how much

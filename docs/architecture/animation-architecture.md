@@ -75,7 +75,23 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   shared skeleton's reference pose — whichever body of the family seeded it — and the overlay would
   quietly pull those bones onto another model's bind.
 - **Blend spaces** from the exported grids: one-dimensional for a `move_yaw` fan, two-dimensional
-  for an aim grid.
+  for an aim grid. A sample sits at the axis value its cell declares —
+  `paramstart + k·(paramend − paramstart)/(groupsize − 1)` — and the axis spans the grid's own
+  range with one grid division per gap between cells, so every cell lands on a division. The pose
+  parameter's own range does not enter: it cancels out of retail's axis resolution exactly, leaving
+  the grid's range alone, and is consulted only for the wrap.
+
+  **The wrapping axis is authored as duplicate endpoints, and that is how it is baked.** A
+  `move_yaw` fan runs −180..180 with the same clip at both ends, so ordinary clamped interpolation
+  reproduces retail across the seam. Marking the axis as cyclic instead would make the two ends one
+  point carrying two samples, which the engine rejects — silently, by declining the second. Wrapping
+  the parameter into range is the caller's job, which is what the parameter's own `loop` states.
+
+  **A grid composes as one thing, so its cells must agree about what they are.** The cells of a
+  partial-body aim grid carry the same per-bone mask, which is what lets the whole grid sit behind a
+  single layered blend — no blend node masks per sample. The bake refuses to write a grid whose
+  cells disagree, because such a grid could not be layered at all and the failure would otherwise
+  surface only when the graph was built over it.
 - **Morph-target curve metadata**, authored at bake. Registering it at runtime transacts by default
   and reaches an editor transaction buffer that does not exist under the editor executable in game
   mode; authoring it at bake removes both that hazard and its workaround.
@@ -111,8 +127,9 @@ hand-written instance:
 
 Two properties the graph must preserve. A **masked sequence is never selectable as a base clip** —
 retail composes those as layers and never selects one, so a base-clip path that can reach one is a
-defect. And **pose parameters drive the blend spaces**, so a nine-cell fan resolves off its neutral
-cell only when something writes the parameter.
+defect. That extends to a whole grid: an aim grid's cells are masked overlays, so it is a layer's
+blend space and never a body pose. And **pose parameters drive the blend spaces**, so a nine-cell
+fan resolves off its neutral cell only when something writes the parameter.
 
 ## 4. Two custom stages, and only two
 

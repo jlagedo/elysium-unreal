@@ -14,6 +14,7 @@
 
 #include "Algo/Unique.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "HAL/FileManager.h"
@@ -146,7 +147,31 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 	if (!bLayerRow)
 	{
 		PendingClip = Clips[Index];
+		// A grid row stands the whole fan when there is a baked blend space for it, and the single
+		// resolved cell when there is not. The fallback is the A/B rather than an error path: with
+		// `elysium.BakedCharacters 0` or `elysium.BlendSpaces 0` this row must still stand something,
+		// and what it stands is exactly what the runtime played before the grids became assets.
+		const bool bGridRow = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
+		LastError.Reset();
+		LastNotice.Reset();
+		if (bGridRow)
+		{
+			FString GridError;
+			if (Lab.LabSetGrid(Clips[Index], GridError))
+			{
+				const FElysiumResolvedGrid& Grid = Lab.LabGrid();
+				LastNotice = FString::Printf(TEXT("blending %s across %d cells on %s"),
+					*Clips[Index], Grid.Space->GetBlendSamples().Num(), *Grid.AxisName[0]);
+				TunedStem.Reset();
+				return;
+			}
+		}
 		Stand(Lab, PendingStem, Clips[Index]);
+		if (bGridRow && LastError.IsEmpty())
+		{
+			LastNotice = FString::Printf(TEXT("%s: playing the resolved cell '%s' — no blend space"),
+				*Clips[Index], *ClipCells[Index]);
+		}
 		return;
 	}
 	// A layer row leaves PendingClip alone: the standing clip is still the standing clip, and the
@@ -620,6 +645,40 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	ImGui::TextDisabled("standing clip at the weight below; the standing clip does not change.");
 	ImGui::TextDisabled("[overlay layer] = a partial-body pose. It REPLACES the bones its mask owns");
 	ImGui::TextDisabled("(the spine up and both arms, for an aim layer) and leaves the legs alone.");
+
+	// The grid controls, drawn only while a grid is standing — unlike the layer weight there is
+	// nothing to pre-set, because the axes and their ranges are the grid's own and are not known
+	// until one is picked.
+	if (const FElysiumResolvedGrid& Grid = Lab.LabGrid(); Grid.IsValid())
+	{
+		ImGui::SeparatorText(COG_TCHAR_TO_CHAR(*FString::Printf(
+			TEXT("Blend grid: %s (%d cells)"), *Grid.Label, Grid.Space->GetBlendSamples().Num())));
+		bool bMoved = false;
+		float At[2] = { Lab.LabGridAxis(0), Lab.LabGridAxis(1) };
+		for (int32 Axis = 0; Axis < Grid.Axes; ++Axis)
+		{
+			ImGui::PushID(Axis);
+			ImGui::SetNextItemWidth(GetDpiScale() * 220.f);
+			bMoved |= ImGui::SliderFloat(COG_TCHAR_TO_CHAR(*Grid.AxisName[Axis]), &At[Axis],
+				Grid.AxisMin[Axis], Grid.AxisMax[Axis], "%.0f deg");
+			ImGui::PopID();
+		}
+		if (bMoved)
+		{
+			// Every frame the slider is dragged. Moving the sample point does not restart the
+			// animations underneath it, which is the whole difference from the per-cell clip pick
+			// this replaces — that one had to swap the sequence to change direction.
+			Lab.LabSetGridPosition(At[0], At[1]);
+		}
+		if (ImGui::Button("Back to one clip"))
+		{
+			Lab.LabClearGrid();
+			LastNotice.Reset();
+		}
+		ImGui::TextDisabled("0 deg is straight ahead: the fan runs -180..180 and its END CELLS SHARE");
+		ImGui::TextDisabled("one clip, which is how VtMB authors a wrapping axis. So `walk` itself is");
+		ImGui::TextDisabled("the BACKWARD walk, and the middle of this slider is the forward one.");
+	}
 
 	// The layer controls, drawn whether or not one is running: the weight has to be settable before
 	// the pick, because a layer picked at 1.0 and then dialled back reads as a different clip.

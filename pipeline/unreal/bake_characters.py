@@ -137,6 +137,16 @@ def owner_clips(manifest, stems):
     return owners
 
 
+def blend_source(manifest, owner, is_bank):
+    """One clip owner's blend sidecar path, relative to `npc/`, or "" when it declares no grid.
+
+    The value is the manifest's own `blends` field rather than a path this file builds, because the
+    same field addresses both "blends/<stem>.json" and the animated props' nested variant, and the
+    C++ reader resolves it the one way the runtime does."""
+    section = manifest["banks"] if is_bank else manifest["npcs"]
+    return section.get(owner, {}).get("blends", "")
+
+
 def rig_families(sources, stems):
     """Partition the models into sets that one USkeleton can carry.
 
@@ -219,6 +229,10 @@ def main():
 
         owners = owner_clips(manifest, family["stems"])
         total = 0
+        spaces_total = 0
+        # Grids the bake declined. A grid the exporter left with fewer than two live cells is not a
+        # blend space and is dropped by the runtime reader too, so it is reported rather than fatal.
+        grids_skipped = 0
         # Tracks a bank named against a bone this family has never had. Expected and reported: a
         # bank is recorded on another clan's rig, so its hair chains and ponytails have nowhere to
         # bind here. A body's OWN clips can never contribute to this -- the builder fails outright
@@ -237,8 +251,26 @@ def main():
                 failed.append(owner)
             total += count
             dropped_total += dropped
-        log("family '%s': %d clip owner(s), %d sequence(s), %d bank track(s) unbound"
-            % (name, len(owners), total, dropped_total))
+
+            # The blend spaces AFTER this owner's sequences, because a sample is one of them. Most
+            # owners declare no grid at all and so ship no sidecar -- 913 of the 1,166 sequences on
+            # either `move_and_ranged` are a single cell, which is a clip and needs no table.
+            blends = blend_source(manifest, owner, is_bank)
+            if not blends:
+                continue
+            error, spaces, skipped_grids, skipped_cells = library.build_blend_spaces_from_grids(
+                blends, "%s/%s/%s" % (ANIMS, name, owner), skeleton_package)
+            if error:
+                fail("%s blends: %s" % (owner, error))
+                failed.append(owner)
+            spaces_total += spaces
+            grids_skipped += skipped_grids
+            if skipped_cells:
+                log("%s: %d grid cell(s) had no baked clip" % (owner, skipped_cells))
+        log("family '%s': %d clip owner(s), %d sequence(s), %d blend space(s), "
+            "%d bank track(s) unbound%s"
+            % (name, len(owners), total, spaces_total, dropped_total,
+               ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
 
     if failed:
         raise SystemExit("[chars] failed: %s" % ", ".join(sorted(set(failed))))

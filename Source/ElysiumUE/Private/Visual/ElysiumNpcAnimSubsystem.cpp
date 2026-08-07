@@ -462,6 +462,54 @@ FString UElysiumNpcAnimSubsystem::ResolveClipAnimName(const FString& Stem, const
 	return ResolveGridClip(Owner, ClipName, Pose);
 }
 
+bool UElysiumNpcAnimSubsystem::ResolveGrid(const FString& Stem, const FString& ClipName,
+	USkeletalMesh* Mesh, FElysiumResolvedGrid& OutGrid)
+{
+	OutGrid = FElysiumResolvedGrid();
+	if (!ElysiumNpcVisual::UseBakedCharacters())
+	{
+		// Only the bake writes a UBlendSpace; there is no loader-side equivalent to fall back to, so
+		// the caller keeps playing the cell `ResolveGridClip` picks.
+		return false;
+	}
+
+	// Same ownership rule as every other resolver here: a grid is declared by whoever owns the
+	// animations, which is a bank for anything but a dialogue clip.
+	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
+	if (Clip == nullptr)
+	{
+		return false;
+	}
+	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
+
+	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(Owner);
+	const FElysiumBlendGrid* Grid = Table.IsValid() ? Table->Find(ClipName) : nullptr;
+	if (Grid == nullptr)
+	{
+		// Not a defect: most labels name one animation and declare no grid at all.
+		return false;
+	}
+
+	UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName);
+	if (Space == nullptr)
+	{
+		return false;
+	}
+
+	OutGrid.Space = Space;
+	OutGrid.Label = ClipName;
+	OutGrid.Axes = (Grid->GroupSize[1] > 1 && Grid->ParamIndex[1] != INDEX_NONE) ? 2 : 1;
+	for (int32 Axis = 0; Axis < OutGrid.Axes; ++Axis)
+	{
+		const FElysiumPoseParamDesc* Desc = Table->Param(Grid->ParamIndex[Axis]);
+		OutGrid.AxisName[Axis] = Desc != nullptr ? Desc->Name : FString::Printf(TEXT("axis%d"), Axis);
+		OutGrid.AxisMin[Axis] = Grid->ParamStart[Axis];
+		OutGrid.AxisMax[Axis] = Grid->ParamEnd[Axis];
+	}
+	return true;
+}
+
 bool UElysiumNpcAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,
 	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {

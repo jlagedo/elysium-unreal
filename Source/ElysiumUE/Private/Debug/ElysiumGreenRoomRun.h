@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "ElysiumEntityHandle.h"
+// By value: the resolved grid is a member, so the subsystem's own header rather than a declaration.
+#include "Visual/ElysiumNpcAnimSubsystem.h"
 
 class AActor;
 class AElysiumMapActor;
@@ -95,6 +97,19 @@ public:
 	const FString& LabLayer() const { return ReviewLayer; }
 	const FString& LabStem() const { return ReviewStem; }
 	const FString& LabClip() const { return ReviewClip; }
+
+	// Stand the body on a label's whole blend grid instead of the one cell the neutral pose
+	// parameters pick (ANM3). False, with a reason, for a label that names no grid, for an unbaked
+	// body, and for an aim grid — those are a layer's and have no base pose to be.
+	bool LabSetGrid(const FString& Label, FString& OutError);
+	// Move the sample point, in the pose parameters' own degrees. Drives every frame from a slider;
+	// it steers the blend without restarting the animations under it.
+	void LabSetGridPosition(float Axis0, float Axis1);
+	void LabClearGrid();
+	// What is standing, when a grid is. `Space` is null whenever the body is on an ordinary clip,
+	// which is what a caller tests to know which controls to draw.
+	const FElysiumResolvedGrid& LabGrid() const { return ReviewGrid; }
+	float LabGridAxis(int32 Axis) const { return ReviewGridAt[FMath::Clamp(Axis, 0, 1)]; }
 	USkeletalMeshComponent* LabBody() const;
 	float LabDuration() const;
 	float LabTime() const { return LabClipTime; }
@@ -240,6 +255,11 @@ private:
 	// The autolayer riding over the stage body, or empty. Lab-only: the one-shot capture path
 	// composes nothing.
 	FString ReviewLayer;
+	// The blend grid the body is standing on, invalid when it is on an ordinary clip. Cleared with
+	// the body for the same reason the layer is — it belongs to the one it was stood on.
+	FElysiumResolvedGrid ReviewGrid;
+	// Where on that grid's axes the body is being sampled, in the pose parameters' own degrees.
+	float ReviewGridAt[2] = { 0.f, 0.f };
 	FString ReviewAnimSet;
 	FString ReviewBoneRoot;
 	bool bEnsemble = false;

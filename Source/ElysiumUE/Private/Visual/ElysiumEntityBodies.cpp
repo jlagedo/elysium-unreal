@@ -258,6 +258,42 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	return Inst != nullptr && Inst->PlayLayer(Anim, Weight);
 }
 
+bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& ClipName, FElysiumResolvedGrid& OutGrid)
+{
+	OutGrid = FElysiumResolvedGrid();
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumNpcAnimInstance* Inst = Body
+		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Anims == nullptr || Inst == nullptr)
+	{
+		// No `elysium.NpcAnim 0` fallback, for the same reason a layer has none: the single-node
+		// instance the A/B drops to plays one sequence and cannot hold a blend space at all.
+		return false;
+	}
+	if (!Anims->ResolveGrid(Stem, ClipName, Body->GetSkeletalMeshAsset(), OutGrid))
+	{
+		return false;
+	}
+	if (!Inst->PlayGrid(OutGrid.Space))
+	{
+		OutGrid = FElysiumResolvedGrid();
+		return false;
+	}
+	return true;
+}
+
+void UElysiumEntityBodies::SetNpcGridPosition(USkeletalMeshComponent* Body, float Axis0, float Axis1)
+{
+	if (UElysiumNpcAnimInstance* Inst = Body
+		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr)
+	{
+		Inst->SetGridPosition(Axis0, Axis1);
+	}
+}
+
 void UElysiumEntityBodies::StopNpcLayers(USkeletalMeshComponent* Body)
 {
 	if (UElysiumNpcAnimInstance* Inst = Body

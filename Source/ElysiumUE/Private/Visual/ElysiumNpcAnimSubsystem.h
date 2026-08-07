@@ -14,8 +14,28 @@
 #include "ElysiumNpcAnimSubsystem.generated.h"
 
 class UAnimSequence;
+class UBlendSpace;
 class UglTFRuntimeAsset;
 class USkeletalMesh;
+
+// One blend grid resolved to everything a caller needs to stand it and steer it (ANM3). `Axes` is 1
+// for a `move_yaw` locomotion fan and 2 for an aim grid; the entries above it are unset.
+struct FElysiumResolvedGrid
+{
+	UBlendSpace* Space = nullptr;
+	// The label the grid was reached by, which is a clip name in the character's vocabulary. Kept so
+	// a caller that displays what is standing does not have to remember what it asked for.
+	FString Label;
+	int32 Axes = 0;
+	// Per axis: the pose parameter it binds to, and the range the grid spans in that parameter's own
+	// units (degrees). The range is the blend space's own axis range, so a slider built from it
+	// covers exactly the samples and nothing outside them.
+	FString AxisName[2];
+	float AxisMin[2] = { 0.f, 0.f };
+	float AxisMax[2] = { 0.f, 0.f };
+
+	bool IsValid() const { return Space != nullptr; }
+};
 
 // Which rule chose an NPC's standing idle. Reported by the console verbs and the Cog window so a
 // wrong-looking pose is traceable to the rule rather than guessed at.
@@ -125,6 +145,14 @@ public:
 	// cheaper than a cache keyed on a label that no longer identifies what it holds.
 	FString ResolveClipAnimName(const FString& Stem, const FString& ClipName,
 		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral());
+
+	// ANM3 — a label resolved to the whole grid rather than to one of its cells: the baked
+	// `UBlendSpace`, plus what a caller needs to steer and label its axes. The axis metadata travels
+	// with the asset because the blend space states its ranges in the pose parameter's own units but
+	// not which parameter that is — the sidecar owns that binding, and re-deriving it from the axis
+	// range would be guesswork on two parameters that share one.
+	bool ResolveGrid(const FString& Stem, const FString& ClipName, USkeletalMesh* Mesh,
+		struct FElysiumResolvedGrid& OutGrid);
 
 	// Resolve one ACT_* request all the way through its character vocabulary and the owning bank's
 	// neutral blend-grid cell. OutLabel is the vocabulary key (for example `walk`) that preserves

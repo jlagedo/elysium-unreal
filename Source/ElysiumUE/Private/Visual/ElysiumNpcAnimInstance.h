@@ -5,6 +5,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Animation/AnimNode_SequencePlayer.h"
+#include "AnimNodes/AnimNode_BlendSpacePlayer.h"
 #include "Visual/ElysiumAnimNodes.h"
 // By value: the eye input is a member, so the rig's own header rather than a forward declaration.
 #include "Visual/ElysiumFacialRig.h"
@@ -12,6 +13,7 @@
 #include "ElysiumNpcAnimInstance.generated.h"
 
 class UAnimSequence;
+class UBlendSpace;
 struct FElysiumClothRig;
 struct FElysiumCompositionRig;
 
@@ -76,6 +78,24 @@ struct FElysiumNpcAnimProxy : public FAnimInstanceProxy
 	// the play rate nor the start position nor the crossfade, so a clip mid-blend keeps blending
 	// and a free-running clip keeps running — it only moves where it is running from.
 	void ResyncPosition(float PositionSeconds);
+
+	// --- blend grids ---------------------------------------------------------------------------
+	//
+	// Stand the body on a blend space instead of a clip. A VtMB sequence label does not always name
+	// one animation: 275 of them name a grid of them, and the baked `BS_<label>` is that grid's mix.
+	// While one is set it IS the body pose — `Request` clears it, so exactly one thing owns the body.
+	//
+	// False for a blend space whose samples are partial-body `*_layer` overlays. Those are a layer's
+	// grid, not a base pose, and standing one would pull every bone outside its mask onto the
+	// reference pose — the same defect an unmasked `*_layer` reaching the clip path causes, which is
+	// what RequestLayer's gate refuses from the other side.
+	bool RequestGrid(UBlendSpace* Space, bool bLoop);
+	// Where on its axes the grid is sampled, in the pose parameters' own units (degrees). Axis 1 is
+	// ignored by a one-dimensional grid. Cheap enough to write every frame — it moves the sample
+	// point without touching the play position, so a body being steered keeps its stride.
+	void SetGridPosition(float Axis0, float Axis1);
+	void StopGrid();
+	UBlendSpace* GetGrid() const { return GridPlayer.GetBlendSpace(); }
 
 	// --- autolayers ----------------------------------------------------------------------------
 	//
@@ -181,6 +201,14 @@ private:
 	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone Players[MaxPlayers];
 	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone LayerPlayers[MaxLayers];
 
+	// The body's other possible source: one blend grid, standing in for the whole crossfade rather
+	// than beside it. One, because a grid IS the stance — there is no second grid to blend toward,
+	// and a stance change away from one goes back through the sequence players. Standalone for the
+	// same reason the sequence players are: the Blueprint-bound variant's setters are no-ops outside
+	// a compiled anim graph.
+	UPROPERTY(Transient) FAnimNode_BlendSpacePlayer_Standalone GridPlayer;
+	bool bGridNeedsReinit = false;
+
 	// Retail's `layer_weight` per layer, 0 for a slot carrying nothing. Not a fade: an autolayer
 	// has no authored transition, and a caller that wants one ramps this itself.
 	float LayerWeights[MaxLayers] = {};
@@ -238,6 +266,19 @@ public:
 	void PlayClip(UAnimSequence* Sequence, bool bLoop = true, float BlendSeconds = DefaultBlendSeconds);
 	void SeekClip(float PositionSeconds);
 	void StopClip();
+
+	// --- blend grids (ANM3) --------------------------------------------------------------------
+	//
+	// Stand the body on a baked blend grid — a `move_yaw` locomotion fan, an `aim_yaw`/`aim_pitch`
+	// grid — instead of one clip. `SetGridPosition` then steers it in the pose parameters' own
+	// degrees, and `PlayClip` takes the body back.
+	//
+	// False for a grid of partial-body `*_layer` overlays, which are a layer's and not a base pose.
+	// Requires `elysium.BakedCharacters 1`: only the bake writes a `UBlendSpace` at all.
+	bool PlayGrid(UBlendSpace* Space, bool bLoop = true);
+	void SetGridPosition(float Axis0, float Axis1 = 0.f);
+	void StopGrid();
+	UBlendSpace* GetPlayingGrid() const { return Proxy.GetGrid(); }
 
 	// --- autolayers ----------------------------------------------------------------------------
 	//

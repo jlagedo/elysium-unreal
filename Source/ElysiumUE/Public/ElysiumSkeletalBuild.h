@@ -85,6 +85,34 @@ public:
 	static FString BuildAnimSequencesFromSource(const FString& SourcePath, const FString& PackagePath,
 		const FString& SkeletonPackageName, int32& OutClipCount, int32& OutDroppedTracks);
 
+	/**
+	 * Build and save one `UBlendSpace` per blend grid in `npc/blends/<owner>.json`, as
+	 * `<PackagePath>/BS_<label>`, sampling the `A_<clip>` sequences already written there.
+	 *
+	 * A VtMB sequence label does not always name one animation. 275 of them name a **grid**: a 9x1
+	 * fan of `walk_0`..`walk_315` selected by the `move_yaw` pose parameter, or a 3x3 weapon-aim
+	 * layer on `aim_yaw`/`aim_pitch`. The exporter bakes every cell as its own clip and writes the
+	 * axes beside them; this turns the axes into the asset that mixes them.
+	 *
+	 * `BlendsRelPath` is `npc_index.json`'s own `blends` value, so one call reads both
+	 * "blends/<stem>.json" and "animated_props/blends/<stem>.json". An owner that declares no grid
+	 * has no sidecar at all, which is most of them -- the caller skips rather than asking.
+	 *
+	 * Must run AFTER `BuildAnimSequencesFromSource` for the same owner: a sample is one of the
+	 * sequences that pass writes, and a blend space whose samples do not resolve is not written.
+	 *
+	 * A cell the exporter recorded as null, or one whose sequence is absent, is skipped and counted
+	 * in `OutSkippedCells` -- the schema permits a hole and the runtime reader tolerates one. A grid
+	 * left with fewer than two live samples is not a blend space and is skipped whole, counted in
+	 * `OutSkippedGrids`.
+	 *
+	 * Returns an empty string on success, otherwise the first thing that went wrong.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString BuildBlendSpacesFromGrids(const FString& BlendsRelPath, const FString& PackagePath,
+		const FString& SkeletonPackageName, int32& OutSpaceCount, int32& OutSkippedGrids,
+		int32& OutSkippedCells);
+
 	/** Report what a saved sequence contains, for a fresh process to check against. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString DescribeAnimSequence(const FString& AssetPath);

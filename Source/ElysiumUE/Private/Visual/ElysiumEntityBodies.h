@@ -115,6 +115,14 @@ public:
 		float Weight);
 	void StopNpcLayers(USkeletalMeshComponent* Body);
 
+	// Stand this body on a label's whole blend grid rather than on the single cell the pose
+	// parameters resolve to (ANM3). `OutGrid` comes back with the axes the caller steers through
+	// `SetNpcGridPosition` and can label a control with. False when the label names no grid — which
+	// is most labels — when the bake has not covered it, or when the grid is a layer's.
+	bool PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
+		struct FElysiumResolvedGrid& OutGrid);
+	void SetNpcGridPosition(USkeletalMeshComponent* Body, float Axis0, float Axis1);
+
 	// Drop every cached NPC mesh, parsed glb and resolved clip so the next build re-resolves from
 	// scratch.
 	//

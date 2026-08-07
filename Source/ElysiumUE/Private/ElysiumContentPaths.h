@@ -131,6 +131,16 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
 		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
 	}
+	// One blend grid, as a UBlendSpace. It sits with the sequences it samples rather than in a
+	// directory of its own — the `BS_` prefix disambiguates it from their `A_` the way `MI_`, `T_`
+	// and `SK_` do elsewhere on the mount — because a grid's cells are always clips of the same
+	// owner, so the two are written by the same pass and go stale together.
+	static FString BakedCharacterBlendSpace(const FString& Family, const FString& Owner,
+		const FString& Label)
+	{
+		const FString Asset = TEXT("BS_") + BakedAssetName(Label);
+		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
+	}
 	// bake_lib.safe_name in C++: every run of characters illegal in an Unreal object name folds to a
 	// single underscore. Model stems are already safe, but 14 of the 2,494 shipped clip labels are
 	// not — `claws_aggressive_walk#50`, `wolf_Form_attack[Bite]`, `Lacroix_Line1_col_E&F`. The two

@@ -43,12 +43,14 @@
 
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumSkeletalSource.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendProfile.h"
+#include "Animation/BlendSpace.h"
 #include "Animation/AnimTypes.h"
 #include "Animation/AnimationPoseData.h"
 #include "BonePose.h"
@@ -129,6 +131,17 @@ namespace
 	// How many masked `*_layer` clips per model to check. The whole install states four distinct
 	// masks over 209 clips, so a handful covers every shape a wider slice would reach.
 	constexpr int32 GMaxLayerClipsPerModel = 4;
+
+	// How many blend grids per clip owner to check (ANM3). `move_and_ranged` alone declares 253, and
+	// they are two shapes -- a 9x1 `move_yaw` fan and a 3x3 aim grid -- so a handful reaches both.
+	// Sorted by label before the cap is applied, or which shapes it covers would drift with the map
+	// iteration order.
+	constexpr int32 GMaxGridsPerOwner = 6;
+
+	// Where a baked sample is allowed to sit against the arithmetic the sidecar states. Both sides
+	// are float32 over a range of 360, so agreement is exact to within representation; this is set
+	// far below the smallest gap between two cells (45 degrees on a nine-cell fan).
+	constexpr double GBlendSampleTolerance = 1e-3;
 
 	// The additive delta is read back through the COMPRESSED data, unlike everything else here,
 	// because that is the only form the runtime applier ever sees and the only one the additive
@@ -328,6 +341,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	TArray<UObject*> KeepAlive;
 	int32 AdditiveClips = 0;
 	int32 LayerClips = 0;
+	int32 BlendGrids = 0;
 
 	// The `_delta` round-trip, for one container's worth of clips against one baked body.
 	//
@@ -551,6 +565,199 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		}
 	};
 
+	// The blend grids (ANM3), against the sidecar that declares them.
+	//
+	// A blend space fails silently in three distinct ways and none of them is visible in a list that
+	// counts samples. Its axis range can be widened past what the grid states, which puts every cell
+	// somewhere the sequence never declared; a sample can be dropped -- `UBlendSpace::AddSample`
+	// reports failure only through its return value -- which leaves a hole the evaluator interpolates
+	// straight across; and `ResampleData` can be skipped, which leaves the samples in place with no
+	// triangulation to blend them, so the asset poses nothing at all.
+	//
+	// The fourth is why the aim grids are in scope. A grid of masked `*_layer` overlays composes as
+	// ONE layer under ONE bone mask, because no Unreal blend node masks per sample -- so if the cells
+	// of a grid disagree about their mask, that grid cannot be layered and the graph the mask assets
+	// were baked for cannot be built over it. The bake refuses to write one; this says the same thing
+	// about what actually landed.
+	auto CheckBlendSpaces = [&](const USkeletalMesh* Baked, const FString& Owner)
+	{
+		FElysiumBlendTable Table;
+		FString TableError;
+		if (!Table.Load(FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
+		{
+			// Most owners declare no grid and ship no sidecar at all, which is an ordinary load.
+			return;
+		}
+
+		TArray<FString> Labels;
+		Table.Grids.GetKeys(Labels);
+		Labels.Sort([](const FString& A, const FString& B) { return A < B; });
+
+		int32 Taken = 0;
+		for (const FString& Label : Labels)
+		{
+			if (Taken >= GMaxGridsPerOwner)
+			{
+				break;
+			}
+			const FElysiumBlendGrid& Grid = Table.Grids[Label];
+			UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Baked, Owner, Label);
+			if (Space == nullptr)
+			{
+				AddInfo(FString::Printf(TEXT("%s grid '%s': not on the baked mount"), *Owner, *Label));
+				continue;
+			}
+			KeepAlive.Add(Space);
+			++Taken;
+			++BlendGrids;
+
+			if (Space->GetSkeleton() != Baked->GetSkeleton())
+			{
+				AddError(FString::Printf(
+					TEXT("%s grid '%s': bound to skeleton %s while the body wears %s, so no sample of "
+					     "it can evaluate on this rig"),
+					*Owner, *Label,
+					Space->GetSkeleton() != nullptr ? *Space->GetSkeleton()->GetName() : TEXT("none"),
+					Baked->GetSkeleton() != nullptr ? *Baked->GetSkeleton()->GetName() : TEXT("none")));
+				continue;
+			}
+
+			const int32 Axes = (Grid.GroupSize[1] > 1 && Grid.ParamIndex[1] != INDEX_NONE) ? 2 : 1;
+			bool bAxesSound = true;
+			for (int32 Axis = 0; Axis < Axes; ++Axis)
+			{
+				const FBlendParameter& Parameter = Space->GetBlendParameter(Axis);
+				++Samples;
+				if (!FMath::IsNearlyEqual(Parameter.Min, Grid.ParamStart[Axis], 1e-3f)
+					|| !FMath::IsNearlyEqual(Parameter.Max, Grid.ParamEnd[Axis], 1e-3f)
+					|| Parameter.GridNum != FMath::Max(1, Grid.GroupSize[Axis] - 1))
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s' axis %d: the sidecar states %.3f..%.3f over %d cells and the "
+						     "asset carries %.3f..%.3f over %d divisions"),
+						*Owner, *Label, Axis, Grid.ParamStart[Axis], Grid.ParamEnd[Axis],
+						Grid.GroupSize[Axis], Parameter.Min, Parameter.Max, Parameter.GridNum));
+					bAxesSound = false;
+				}
+			}
+			if (!bAxesSound)
+			{
+				continue;
+			}
+
+			// The sample placement, cell by cell. Derived here rather than shared with the bake: an
+			// assertion that calls the code it is asserting cannot fail.
+			const TArray<FBlendSample>& SampleData = Space->GetBlendSamples();
+			int32 Live = 0;
+			bool bSamplesSound = true;
+			for (const FElysiumBlendCell& Cell : Grid.Cells)
+			{
+				if (Cell.Clip.IsEmpty())
+				{
+					continue;
+				}
+				const FString Wanted = TEXT("A_") + FElysiumContentPaths::BakedAssetName(Cell.Clip);
+				if (ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Cell.Clip) == nullptr)
+				{
+					// The bake skips a cell whose sequence is absent, so the asset is right to be
+					// short one and the count below must not expect it.
+					continue;
+				}
+				++Live;
+
+				FVector Expected = FVector::ZeroVector;
+				for (int32 Axis = 0; Axis < Axes; ++Axis)
+				{
+					const int32 Count = Grid.GroupSize[Axis];
+					const float Alpha = Count > 1
+						? static_cast<float>(Cell.Axis[Axis]) / static_cast<float>(Count - 1) : 0.f;
+					Expected[Axis] = Grid.ParamStart[Axis]
+						+ Alpha * (Grid.ParamEnd[Axis] - Grid.ParamStart[Axis]);
+				}
+
+				const FBlendSample* Found = SampleData.FindByPredicate(
+					[&](const FBlendSample& Candidate)
+					{
+						for (int32 Axis = 0; Axis < Axes; ++Axis)
+						{
+							if (FMath::Abs(Candidate.SampleValue[Axis] - Expected[Axis])
+								> GBlendSampleTolerance)
+							{
+								return false;
+							}
+						}
+						return true;
+					});
+				++Samples;
+				if (Found == nullptr)
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s' cell [%d,%d]: nothing is sampled at %s, so '%s' is a hole "
+						     "the blend interpolates straight across"),
+						*Owner, *Label, Cell.Axis[0], Cell.Axis[1], *Expected.ToString(), *Cell.Clip));
+					bSamplesSound = false;
+					break;
+				}
+				if (Found->Animation == nullptr || Found->Animation->GetName() != Wanted)
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s' cell [%d,%d]: the sidecar names '%s' and the sample at %s "
+						     "carries %s"),
+						*Owner, *Label, Cell.Axis[0], Cell.Axis[1], *Wanted, *Expected.ToString(),
+						Found->Animation != nullptr ? *Found->Animation->GetName() : TEXT("nothing")));
+					bSamplesSound = false;
+					break;
+				}
+			}
+			if (!bSamplesSound)
+			{
+				continue;
+			}
+			if (SampleData.Num() != Live)
+			{
+				AddError(FString::Printf(
+					TEXT("%s grid '%s': %d of the sidecar's cells baked and the asset carries %d "
+					     "sample(s)"), *Owner, *Label, Live, SampleData.Num()));
+				continue;
+			}
+			if (Space->GetBlendSpaceData().IsEmpty())
+			{
+				AddError(FString::Printf(
+					TEXT("%s grid '%s': %d samples and no blend data, so it evaluates to nothing"),
+					*Owner, *Label, SampleData.Num()));
+				continue;
+			}
+
+			// The measured half of the aim-grid question. Reported as an error rather than info: a
+			// grid whose cells disagree cannot be composed as a layer at all.
+			FName Profile = NAME_None;
+			bool bFirst = true;
+			for (const FBlendSample& Sample : SampleData)
+			{
+				const UElysiumAnimLayerMask* Mask = Sample.Animation != nullptr
+					? Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>() : nullptr;
+				const FName Named = Mask != nullptr ? Mask->Profile : NAME_None;
+				if (bFirst)
+				{
+					Profile = Named;
+					bFirst = false;
+					continue;
+				}
+				++Samples;
+				if (Named != Profile)
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s': its cells name different bone masks (%s and %s), so it "
+						     "cannot compose as one layer under one mask"),
+						*Owner, *Label,
+						Profile.IsNone() ? TEXT("none") : *Profile.ToString(),
+						Named.IsNone() ? TEXT("none") : *Named.ToString()));
+					break;
+				}
+			}
+		}
+	};
+
 	for (const FString& Stem : SliceStems())
 	{
 		USkeletalMesh* Baked = ElysiumNpcVisual::LoadBakedMesh(Stem);
@@ -740,19 +947,34 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		// and shares none of its machinery.
 		CheckAdditives(Baked, Stem, Source);
 		CheckLayerMasks(Baked, Stem, Source);
+		CheckBlendSpaces(Baked, Stem);
 		{
 			FElysiumNpcClipSet Vocabulary;
 			FString VocabularyError;
 			TSet<FString> AdditiveOwners;
+			// Every bank this body can play, which is a wider set than the additive owners below: a
+			// grid is declared wherever the animations live, and a bank owning grids need not own a
+			// `_delta`. Cheap to widen because a blend space is checked against its own sidecar and
+			// the mount, with no container to load.
+			TSet<FString> GridOwners;
 			if (Vocabulary.Load(Stem, VocabularyError))
 			{
 				for (const TPair<FString, FElysiumNpcClip>& Entry : Vocabulary.Clips)
 				{
-					if (Entry.Value.IsAdditive() && !Entry.Value.IsOwnedBy(Stem))
+					if (Entry.Value.IsOwnedBy(Stem))
+					{
+						continue;
+					}
+					GridOwners.Add(Entry.Value.Owner);
+					if (Entry.Value.IsAdditive())
 					{
 						AdditiveOwners.Add(Entry.Value.Owner);
 					}
 				}
+			}
+			for (const FString& Bank : GridOwners)
+			{
+				CheckBlendSpaces(Baked, Bank);
 			}
 			for (const FString& Bank : AdditiveOwners)
 			{
@@ -905,7 +1127,8 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	}
 	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d bone samples, %d `_delta` clip(s) ")
 		TEXT("round-tripped through the additive bake, %d masked `_layer` clip(s) checked against ")
-		TEXT("their blend masks"), Compared, Samples, AdditiveClips, LayerClips));
+		TEXT("their blend masks, %d blend grid(s) checked against their sidecar"),
+		Compared, Samples, AdditiveClips, LayerClips, BlendGrids));
 	AddInfo(FString::Printf(
 		TEXT("bind-frame delta against the glTFRuntime path: %.4f deg / %.4f cm at most, after ")
 		TEXT("each rig's own root is divided out -- expected, and not a defect: the two paths frame ")

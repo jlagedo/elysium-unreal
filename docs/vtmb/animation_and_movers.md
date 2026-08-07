@@ -426,6 +426,16 @@ the weapon props. Only **5 distinct masks** occur over the 722 animation descrip
 pelvis, spine and both legs, one keeping arms and props only, one on the abandoned throwing-star
 set, and the head-only one.
 
+**Every cell of a blend grid carries the same mask** [data-verified, partial corpus]. A grid
+(§A.3) names up to 16×16 animations behind one label, and each is its own animation record with its
+own `weight`@0 — nothing in the format ties them together. They agree anyway: over the **135
+multi-cell grids** of the six male shared banks (`move_and_ranged`, `misc`, `frenzy`, both
+`meleeshared` sets and the PC idle set), no grid mixes masks. A 9×1 `move_yaw` locomotion fan is
+unmasked on all nine cells; a 3×3 `<weapon>_aim_layer` carries one mask on all nine, the upper-body
+gate rooted at `Bip01 Spine1`. The female banks are not covered, so this is a property of the
+shipped content rather than one the format enforces — a consumer composing a grid as a single
+masked layer has to assert it rather than assume it.
+
 **No zero-weight record carries a non-zero channel offset** (0 of 736,208), so a decoder that
 gates on the offsets rather than on the weight never reaches the zero branch on shipped content.
 An earlier reading of this field as "always 1.0, ignorable" came from the theatre capture corpus,

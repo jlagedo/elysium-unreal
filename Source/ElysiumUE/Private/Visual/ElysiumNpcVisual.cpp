@@ -7,6 +7,7 @@
 #include "glTFRuntimeParser.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
 #include "Engine/SkeletalMesh.h"
@@ -375,6 +376,23 @@ namespace ElysiumNpcVisual
 		}
 		return LoadObject<UAnimSequence>(nullptr,
 			*FElysiumContentPaths::BakedCharacterAnim(Family, Owner, ClipName));
+	}
+
+	UBlendSpace* LoadBakedBlendSpace(const USkeletalMesh* Mesh, const FString& Owner,
+		const FString& Label)
+	{
+		const USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
+		if (Skeleton == nullptr)
+		{
+			return nullptr;
+		}
+		const FString Family = FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName());
+		if (Family.IsEmpty())
+		{
+			return nullptr;
+		}
+		return LoadObject<UBlendSpace>(nullptr,
+			*FElysiumContentPaths::BakedCharacterBlendSpace(Family, Owner, Label));
 	}
 
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,
