@@ -71,8 +71,8 @@ enum class EElysiumAnimAssetKind : uint8
 enum class EElysiumAnimOutcome : uint8
 {
 	Resolved = 0,
-	// A translation row's override was optional and its target has no sequence, so the incoming
-	// activity stands. Faithful: `required` is retained per row.
+	// A translation row's override has no sequence, so the incoming activity stands. The row's
+	// authored `required` bit does not change this: the pinned server translator never reads it.
 	TranslatedFallback,
 	// A missing translated ACT_RUN retried weighted ACT_WALK.
 	RunToWalk,
@@ -89,8 +89,6 @@ enum class EElysiumAnimOutcome : uint8
 	// A named miss with no fallback at all — ACT_LAND_CROUCH on a validated player body. Reported so
 	// the graph can name a fallback rather than being handed an invented clip.
 	MissingSequence,
-	// A REQUIRED translation override missed. A catalog error, not a fallback.
-	RequiredOverrideMissing,
 	// A masked or additive sequence was asked for on the base channel, which is never legal.
 	MaskedRejected,
 	// The stem resolves no clip vocabulary at all — the gym, a menu backdrop, an unexported model.
@@ -364,10 +362,20 @@ namespace ElysiumAnimIntent
 	EElysiumAnimActivityCode Classify(const FElysiumLocomotionSample& Sample,
 		const FElysiumJumpLatch& Latch, const FElysiumGaitReference& Gait);
 
-	// One row of a translation table: the incoming activity, the override, and whether the override is
-	// mandatory. A missing OPTIONAL override falls back to the incoming activity; a missing REQUIRED
-	// override is a catalog error. The bit is retained rather than collapsed because those two answers
-	// are opposite.
+	// One row of a translation table: the incoming activity, the override, and the authored `required`
+	// bit.
+	//
+	// **`bRequired` is provenance, and nothing branches on it.**
+	// `CBaseCombatWeapon::ActivityOverride` never reads the third dword of a table row, so the 201
+	// flagged rows and the 9,013 optional ones take the same availability path; the bit is carried
+	// because it is authored data that `activitydump` prints, not because a remake may give it
+	// behaviour retail does not have (`docs/vtmb/animation_and_movers.md` A.3).
+	//
+	// **Ordered duplicates are load-bearing, and this table cannot yet express them.** Retail keeps
+	// walking past a matching row whose output has no sequence, so a later duplicate-base row is an
+	// availability fallback. With an empty weapon table and no duplicate actor rows there is nothing
+	// to walk today; the ordered probe belongs with the weapon rung, where the data that needs it
+	// arrives.
 	struct FElysiumActivityTranslation
 	{
 		const TCHAR* From;
@@ -375,9 +383,9 @@ namespace ElysiumAnimIntent
 		bool bRequired;
 	};
 
-	// The actor/form table (`CBasePlayer::NPC_TranslateActivity`, virtual +0x5e0). Two recovered rows,
-	// and they are mandatory: a player body carries no ACT_WALK_RELAXED or ACT_RUN_RELAXED sequence,
-	// so without the translation an unarmed request for either selects nothing at all.
+	// The actor/form table (`CBasePlayer::NPC_TranslateActivity`, virtual +0x5e0). Two recovered rows.
+	// A player body carries no ACT_WALK_RELAXED or ACT_RUN_RELAXED sequence, so without the
+	// translation an unarmed request for either selects nothing at all.
 	TArrayView<const FElysiumActivityTranslation> ActorTranslations();
 
 	// The weapon table (`Weapon_TranslateActivity`, virtual +0x5f4) for a weapon tag. Empty for every
@@ -393,10 +401,9 @@ namespace ElysiumAnimIntent
 		FString FirstWeaponActivity;
 		FString WeaponActivity;
 		int32 Iterations = 0;
-		// The last applied row's required bit, so the resolver can tell a catalog error from a
-		// fallback when `Resolved` turns out to have no sequence.
+		// The last applied row's authored `required` bit, reported and never acted on.
 		bool bRequired = false;
-		// What a missed optional override falls back to.
+		// What a missed override falls back to.
 		FString Incoming;
 	};
 

@@ -135,7 +135,6 @@ namespace
 		case EElysiumAnimOutcome::Resolved:
 			return ElysiumCogStyle::ColOk;
 		case EElysiumAnimOutcome::MissingSequence:
-		case EElysiumAnimOutcome::RequiredOverrideMissing:
 		case EElysiumAnimOutcome::MaskedRejected:
 			return ElysiumCogStyle::ColError;
 		default:

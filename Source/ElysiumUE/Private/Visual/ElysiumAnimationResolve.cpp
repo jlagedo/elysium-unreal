@@ -124,9 +124,14 @@ namespace
 		int32 Candidates = 0;
 		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Candidates);
 
-		// An OPTIONAL override that resolves nothing falls back to the activity that came in; a
-		// REQUIRED one that misses is a catalog error, reported below rather than papered over.
-		if (Label.IsEmpty() && Translation.Iterations > 0 && !Translation.bRequired)
+		// An override that resolves nothing falls back to the activity that came in.
+		//
+		// **The authored `required` bit does not gate this**, and giving it a gate would be giving it
+		// behaviour retail does not have: `CBaseCombatWeapon::ActivityOverride` never reads the third
+		// dword, so the 201 flagged rows and the 9,013 optional ones take the same availability path
+		// (`docs/vtmb/animation_and_movers.md` A.3). The bit rides on the record as provenance —
+		// `activitydump` prints it — and nothing branches on it.
+		if (Label.IsEmpty() && Translation.Iterations > 0)
 		{
 			int32 Fallback = 0;
 			Label = TryActivity(Catalog, Translation.Incoming, Intent.Variant, Fallback);
@@ -139,7 +144,7 @@ namespace
 				{
 					Out.Outcome = EElysiumAnimOutcome::TranslatedFallback;
 					Out.Detail = FString::Printf(
-						TEXT("'%s' has no sequence on '%s'; the optional override fell back to '%s'"),
+						TEXT("'%s' has no sequence on '%s'; the override fell back to '%s'"),
 						*Translation.Resolved, *Intent.Stem, *Translation.Incoming);
 				}
 				return;
@@ -202,15 +207,13 @@ namespace
 
 		if (Label.IsEmpty())
 		{
+			// A miss is a miss whatever the row's authored bit said, because the translator does not
+			// read it. What the record names is the activity and the body, which is what a fallback
+			// has to be declared against.
 			Out.AssetKind = EElysiumAnimAssetKind::None;
-			Out.Outcome = Translation.bRequired
-				? EElysiumAnimOutcome::RequiredOverrideMissing : EElysiumAnimOutcome::MissingSequence;
-			Out.Detail = Translation.bRequired
-				? FString::Printf(
-					TEXT("required override '%s' -> '%s' has no sequence on '%s'"),
-					*Translation.Incoming, *Translation.Resolved, *Intent.Stem)
-				: FString::Printf(TEXT("'%s' has no sequence on '%s'"),
-					*Translation.Resolved, *Intent.Stem);
+			Out.Outcome = EElysiumAnimOutcome::MissingSequence;
+			Out.Detail = FString::Printf(TEXT("'%s' has no sequence on '%s'"),
+				*Translation.Resolved, *Intent.Stem);
 			return;
 		}
 

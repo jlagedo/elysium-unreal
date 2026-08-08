@@ -30,9 +30,8 @@ namespace
 		{ EElysiumAnimActivityCode::Treadwater,  TEXT("ACT_TREADWATER") },
 	};
 
-	// The actor/form table. Both rows are `required`: the relaxed forms are what the classifier
-	// emits and a player body carries no sequence for either, so a miss on the override is a broken
-	// catalog rather than a reason to fall back.
+	// The actor/form table. Both rows carry the authored `required` bit, which is reported and never
+	// acted on — the pinned server translator does not read it.
 	const FElysiumActivityTranslation GActorTranslations[] =
 	{
 		{ TEXT("ACT_WALK_RELAXED"), TEXT("ACT_WALK"), true },
@@ -142,7 +141,6 @@ const TCHAR* OutcomeName(EElysiumAnimOutcome Outcome)
 	case EElysiumAnimOutcome::ScriptedSequenceZero:    return TEXT("scripted sequence 0");
 	case EElysiumAnimOutcome::GestureNoOp:             return TEXT("gesture no-op");
 	case EElysiumAnimOutcome::MissingSequence:         return TEXT("missing sequence");
-	case EElysiumAnimOutcome::RequiredOverrideMissing: return TEXT("required override missing");
 	case EElysiumAnimOutcome::MaskedRejected:          return TEXT("masked, refused");
 	case EElysiumAnimOutcome::NoAsset:                 return TEXT("no asset");
 	default:                                           return TEXT("no vocabulary");

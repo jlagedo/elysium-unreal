@@ -257,8 +257,11 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 		const FElysiumTranslationResult Walk = TranslateActivity(TEXT("ACT_WALK_RELAXED"),
 			FString(), FString());
 		TestEqual(TEXT("the relaxed walk translates"), Walk.Resolved, FString(TEXT("ACT_WALK")));
-		TestEqual(TEXT("and it is a required override, not an optional one"), Walk.bRequired, true);
-		TestEqual(TEXT("a miss would fall back to what came in"), Walk.Incoming,
+		// The row's authored bit is REPORTED. Nothing branches on it, and the assertion that says so
+		// lives in the resolver test — the pinned server translator never reads the third dword, so
+		// giving it a gate would be giving it behaviour retail does not have.
+		TestEqual(TEXT("the authored required bit rides along as provenance"), Walk.bRequired, true);
+		TestEqual(TEXT("a miss falls back to what came in"), Walk.Incoming,
 			FString(TEXT("ACT_WALK_RELAXED")));
 
 		const FElysiumTranslationResult Run = TranslateActivity(TEXT("ACT_RUN_RELAXED"),
@@ -568,6 +571,32 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestTrue(TEXT("and the body it missed on"), Miss.Detail.Contains(TEXT("pc_body")));
 		TestEqual(TEXT("the request is still on the record"), Miss.RequestedActivity,
 			FString(TEXT("ACT_LAND_CROUCH")));
+	}
+
+	// --- A required override that misses is still just a miss ---------------------------------------------
+	{
+		// `CBaseCombatWeapon::ActivityOverride` never reads a row's third dword, so the flagged rows
+		// and the optional ones take the same availability path. Both actor rows are flagged, so a
+		// body carrying the relaxed form and NOT the translated one must fall back to what came in —
+		// if the resolver branched on the bit, this would report a catalog error instead.
+		FElysiumNpcClipSet RelaxedOnly;
+		RelaxedOnly.Stem = TEXT("relaxed_body");
+		RelaxedOnly.Clips.Add(TEXT("run_relaxed"),
+			MakeClip(CastBank, TEXT("ACT_RUN_RELAXED"), 30, 0x1));
+		FElysiumAnimationCatalog RelaxedCatalog;
+		RelaxedCatalog.Clips = &RelaxedOnly;
+		RelaxedCatalog.BlendTableFor = Tables;
+
+		FElysiumAnimationSelection Fell;
+		ElysiumAnimResolve::Resolve(
+			ActivityIntent(TEXT("relaxed_body"), TEXT("ACT_RUN_RELAXED")), RelaxedCatalog, Fell);
+		TestEqual(TEXT("a flagged override with no sequence falls back like any other"),
+			static_cast<int32>(Fell.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::TranslatedFallback));
+		TestEqual(TEXT("landing on the activity that came in"), Fell.ResolvedActivity,
+			FString(TEXT("ACT_RUN_RELAXED")));
+		TestEqual(TEXT("and it plays the sequence that body actually carries"), Fell.SequenceLabel,
+			FString(TEXT("run_relaxed")));
 	}
 
 	// --- The cast's fallback ladder, in the recovered order ---------------------------------------------
