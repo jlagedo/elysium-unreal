@@ -50,6 +50,12 @@ BANK_SKELETON_PREFIX = character_partition.BANK_SKELETON_PREFIX
 #: two differ only in the ModelAlpha the runtime drives, not in the asset.
 BODY_MASTER = "/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"
 
+#: The eyeball sections take this instead. `UElysiumEntityBodies::InstallEyes` finds an eye by
+#: asking whether a slot's base material IS this master -- two independent tests, it says, "because
+#: either alone can be defeated" -- so a body whose every section is parented to BODY_MASTER
+#: defeats both at once and no eye is ever installed.
+EYE_MASTER = "/Game/VtMB/Materials/M_Eyes.M_Eyes"
+
 NPC_DIR = os.path.join(os.fspath(export_root()), "npc")
 
 
@@ -161,6 +167,35 @@ def import_textures_for(paths):
             fail("could not save texture %s" % name)
     log("textures: %d imported, %d saved" % (len(imported), saved))
     return imported
+
+
+def eye_slot_masters(manifest, stem, blob):
+    """{material slot: EYE_MASTER} for the sections this model's eye sidecar claims.
+
+    Resolved against the container's OWN material names rather than used verbatim: the sidecar
+    writes `eyeball_r` and the container's slot is `Eyeball_r`. Unreal would call those one FName,
+    but the map the mesh builder looks the slot up in is an ordinary case-sensitive one, so the
+    match has to be made here where both spellings are in hand.
+    """
+    relative = manifest.get("npcs", {}).get(stem, {}).get("eyes", "")
+    if not relative:
+        return {}
+    path = os.path.join(NPC_DIR, relative.replace("/", os.sep))
+    if not os.path.isfile(path):
+        fail("eye sidecar missing: %s" % path)
+        return {}
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        rig = json.load(handle)
+    wanted = {entry["material"].lower() for entry in rig.get("meshes", [])
+              if entry.get("material")}
+    if not wanted:
+        return {}
+    slots = {name: EYE_MASTER for name in eskm.materials(blob) if name.lower() in wanted}
+    unmatched = wanted - {name.lower() for name in slots}
+    if unmatched:
+        fail("%s: eye sidecar names %s, which the container has no section for"
+             % (stem, ", ".join(sorted(unmatched))))
+    return slots
 
 
 def existing_textures():
@@ -409,10 +444,12 @@ def main():
         mesh_failed = False
         built = [s for s in members if s in stems] if wants(plan, scope, "meshes") else []
         for stem in built:
+            blob = eskm.read(source_path(stem))
             error = library.build_skeletal_mesh_from_source(
                 source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
                 BODY_MASTER, MATERIALS,
-                material_bindings(eskm.read(source_path(stem)), textures))
+                material_bindings(blob, textures),
+                eye_slot_masters(manifest, stem, blob))
             if error:
                 fail("SK_%s: %s" % (stem, error))
                 failed.append(stem)

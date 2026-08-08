@@ -53,7 +53,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildSkeletalMeshFromSource(const FString& SourcePath, const FString& PackageName,
 		const FString& SkeletonPackageName, const FString& MaterialParentPath,
-		const FString& MaterialPackagePath, const TMap<FString, FString>& MaterialTextures);
+		const FString& MaterialPackagePath, const TMap<FString, FString>& MaterialTextures,
+		const TMap<FString, FString>& MaterialParents);
 
 	/**
 	 * Build and save a `USkeleton` from an `.eskm`'s bone tree alone, with no mesh.

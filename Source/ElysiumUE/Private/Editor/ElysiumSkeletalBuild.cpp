@@ -288,7 +288,8 @@ FString UElysiumSkeletalBuildLibrary::BuildProbeSkeletalMesh(const FString& Pack
 FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString& SourcePath,
 	const FString& PackageName, const FString& SkeletonPackageName,
 	const FString& MaterialParentPath, const FString& MaterialPackagePath,
-	const TMap<FString, FString>& MaterialTextures)
+	const TMap<FString, FString>& MaterialTextures,
+	const TMap<FString, FString>& MaterialParents)
 {
 #if WITH_EDITOR
 	FElysiumSkeletalSource Source;
@@ -406,6 +407,22 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		return FString::Printf(
 			TEXT("%s is missing; run: uv run elysium export bundle policy"), *MaterialParentPath);
 	}
+	// A slot named here takes a different master. The eyeballs are the reason: the runtime's eye
+	// rig finds an eye by asking whether the slot's base material IS the eye master, and every
+	// section parented to the body master answers no -- so the iris, its gaze and its fidget grid
+	// were never installed on anything, with no diagnostic, because the test that would have
+	// reported it is behind the test that failed.
+	TMap<FString, UMaterialInterface*> SlotParents;
+	for (const TPair<FString, FString>& Pair : MaterialParents)
+	{
+		UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr, *Pair.Value);
+		if (Master == nullptr)
+		{
+			return FString::Printf(
+				TEXT("%s is missing; run: uv run elysium export bundle policy"), *Pair.Value);
+		}
+		SlotParents.Add(Pair.Key, Master);
+	}
 
 	for (const FElysiumSourceSection& Section : Source.Sections)
 	{
@@ -414,7 +431,9 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		SlotNames.Set(Group, SlotName);
 
 		FSkeletalMaterial Material;
-		Material.MaterialInterface = MakeSectionMaterial(MaterialParent, MaterialPackagePath,
+		UMaterialInterface* const Parent = SlotParents.FindRef(Section.Material) != nullptr
+			? SlotParents.FindRef(Section.Material) : MaterialParent;
+		Material.MaterialInterface = MakeSectionMaterial(Parent, MaterialPackagePath,
 			AssetName, Section.Material, MaterialTextures.FindRef(Section.Material));
 		Material.MaterialSlotName = SlotName;
 		Material.ImportedMaterialSlotName = SlotName;
