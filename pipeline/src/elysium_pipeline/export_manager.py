@@ -994,12 +994,32 @@ def export_characters(
     if not stems:
         raise ValueError("no models named and the manifest lists no character")
 
+    from elysium_pipeline import character_cache
+
+    with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
+        npc_manifest = json.load(handle)
+    stale = character_cache.plan_stages(
+        config, manifest, npc_dir, npc_manifest, partition, stems, force=force
+    )
+    todo = {scope: stages for scope, stages in stale.items() if stages}
+    if not todo:
+        # Nothing to author, so nothing to launch. This is the case the receipts exist for: the
+        # editor costs 20-40s of process lifetime before it does any work at all.
+        print(f"characters: {len(stems)} model(s) already current")
+        return stems
+
+    plan_path = npc_dir / ".elysium-character-plan.json"
+    _write_json(plan_path, {"schema": "elysium.character-bake-plan", "version": 1,
+                            "force": bool(force), "scopes": todo})
+    print("characters: " + ", ".join(
+        f"{scope}[{'+'.join(stages)}]" for scope, stages in sorted(todo.items())))
+
     ensure_policy_content(config, runner)
 
     # One process for the whole cast. What used to exhaust its address space was the DUPLICATION --
     # a bank rebuilt against every rig family that included it -- and the bank pass removes that at
     # the source: 7,871 distinct clips instead of ~90,000 assets.
-    unreal.bake_characters(config, runner, stems)
+    unreal.bake_characters(config, runner, stems, plan=plan_path)
     # After the bake, before the verify: the verifier walks the mount, and an orphan from a
     # partition that has since moved is exactly the thing it should not find.
     if sweep:
@@ -1009,6 +1029,9 @@ def export_characters(
         if result["removed"]:
             print(f"swept {result['removed']} orphaned character asset(s)")
     unreal.verify_characters(config, runner, stems)
+    # Promoted only now: a commandlet can save part of a scope and then fail, and a receipt
+    # written before the verifier agreed would make that partial scope look current forever.
+    character_cache.record(manifest, config, npc_dir, npc_manifest, partition, todo)
     return stems
 
 

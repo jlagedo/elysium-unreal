@@ -105,6 +105,14 @@ class Manifest:
         }
         self.write()
 
+    #: Windows fails an atomic replace with a sharing violation whenever anything else holds the
+    #: destination open for even a moment -- an indexer or a virus scanner reading the file this
+    #: process wrote microseconds earlier is enough. A profile records hundreds of receipts, so a
+    #: one-in-a-thousand collision is a run that fails for no reason the export can report. The
+    #: replace is still atomic; only the attempt is retried.
+    WRITE_ATTEMPTS = 8
+    WRITE_BACKOFF_SECONDS = 0.05
+
     def write(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(self.data, indent=2, sort_keys=True) + "\n"
@@ -113,7 +121,16 @@ class Manifest:
         ) as handle:
             handle.write(payload)
             temporary = Path(handle.name)
-        temporary.replace(self.path)
+        for attempt in range(self.WRITE_ATTEMPTS):
+            try:
+                temporary.replace(self.path)
+                return
+            except PermissionError:
+                if attempt == self.WRITE_ATTEMPTS - 1:
+                    # Do not leave the temporary behind for a future run to trip over.
+                    temporary.unlink(missing_ok=True)
+                    raise
+                time.sleep(self.WRITE_BACKOFF_SECONDS * (attempt + 1))
 
 
 class ContentDigestCache:

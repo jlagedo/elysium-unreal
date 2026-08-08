@@ -89,6 +89,29 @@ def read_partition():
         return character_partition.check(json.load(handle))
 
 
+def read_plan():
+    """{scope: set(stages)} the orchestrator still wants authored, or None for "everything".
+
+    A scope absent from the plan is current on the mount and must be left untouched -- not
+    rebuilt, because rebuilding a family skeleton renames its blend-mask profiles out from under
+    sequences that are not being rebuilt with it. No plan means a hand-run bake, which does the
+    lot; that is the recovery surface and it is deliberately not receipted.
+    """
+    path = cmdline_arg("BakeCharacterPlan")
+    if not path:
+        return None
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        document = json.load(handle)
+    if document.get("schema") != "elysium.character-bake-plan":
+        raise SystemExit("[chars] %s is not a character bake plan" % path)
+    return {scope: set(stages) for scope, stages in document.get("scopes", {}).items()}
+
+
+def wants(plan, scope, stage):
+    """Whether this run authors `stage` for `scope`."""
+    return plan is None or stage in plan.get(scope, ())
+
+
 def release_packages():
     """Drop the packages this pass saved, and say how many went.
 
@@ -140,6 +163,22 @@ def import_textures_for(paths):
     return imported
 
 
+def existing_textures():
+    """{asset name: Texture2D} already on the mount, for a run whose texture stage is current.
+
+    The bindings a mesh is built with resolve through this, so skipping the import must not mean
+    skipping the lookup -- a mesh built against an empty table binds no albedo and draws white.
+    """
+    out = {}
+    for path in unreal.EditorAssetLibrary.list_assets(TEXTURES, recursive=False,
+                                                      include_folder=False):
+        asset = unreal.EditorAssetLibrary.load_asset(path)
+        if asset is not None:
+            out[asset.get_name()] = asset
+    log("textures: %d already current" % len(out))
+    return out
+
+
 def material_bindings(blob, textures):
     """{material slot name: Texture2D asset path} for one model."""
     out = {}
@@ -186,7 +225,7 @@ def blend_source(manifest, owner, is_bank):
     return section.get(owner, {}).get("blends", "")
 
 
-def bake_banks(manifest, partition, stems, library, failed):
+def bake_banks(manifest, partition, stems, library, failed, plan):
     """Bake every bank the named bodies reach ONCE, and return the skeletons they play them from.
 
     A `UAnimSequence` is bound to exactly one `USkeleton`, so a bank recorded once was rebuilt for
@@ -224,26 +263,38 @@ def bake_banks(manifest, partition, stems, library, failed):
     for name in sorted(families):
         family = families[name]
         skeleton_package = family["skeleton"]
+        scope = "bank.%s" % name
+        # The package path is returned whether or not this run authors it: a body still declares
+        # compatibility with every bank family, and a skeleton left alone is still on the mount.
+        skeletons.append(skeleton_package)
+        if not (wants(plan, scope, "bank_skeletons") or wants(plan, scope, "banks")):
+            continue
         members = [b for b in family["members"] if os.path.isfile(source_path(b, bank=True))]
         if len(members) != len(family["members"]):
             fail("bank family %s: %d of %d member containers are missing"
                  % (name, len(family["members"]) - len(members), len(family["members"])))
             failed.append(name)
             continue
-        # Rebuilt from every declared member, in declared order, rather than merged into whatever a
-        # previous run left behind: a skeleton that only grows keeps the bones of banks a later
-        # partition moved elsewhere, and an untracked bone falls back to exactly that tree.
-        error, bones = library.build_family_skeleton(
-            [source_path(b, bank=True) for b in members], skeleton_package, True)
-        if error:
-            fail("bank skeleton %s: %s" % (name, error))
-            failed.append(name)
+        if wants(plan, scope, "bank_skeletons"):
+            # Rebuilt from every declared member, in declared order, rather than merged into
+            # whatever a previous run left behind: a skeleton that only grows keeps the bones of
+            # banks a later partition moved elsewhere, and an untracked bone falls back to exactly
+            # that tree.
+            error, bones = library.build_family_skeleton(
+                [source_path(b, bank=True) for b in members], skeleton_package, True)
+            if error:
+                fail("bank skeleton %s: %s" % (name, error))
+                failed.append(name)
+                continue
+            if bones != family["bones"]:
+                fail("bank skeleton %s: built %d bones, the partition declares %d"
+                     % (name, bones, family["bones"]))
+                failed.append(name)
+        else:
+            bones = family["bones"]
+
+        if not wants(plan, scope, "banks"):
             continue
-        if bones != family["bones"]:
-            fail("bank skeleton %s: built %d bones, the partition declares %d"
-                 % (name, bones, family["bones"]))
-            failed.append(name)
-        skeletons.append(skeleton_package)
 
         total = 0
         spaces_total = 0
@@ -301,20 +352,30 @@ def main():
 
     library = unreal.ElysiumSkeletalBuildLibrary
     partition = read_partition()
+    plan = read_plan()
+    if plan is not None:
+        log("plan: %d scope(s) -- %s" % (
+            len(plan), ", ".join("%s[%s]" % (s, "+".join(sorted(v)))
+                                 for s, v in sorted(plan.items()))))
     baking = sorted({partition["model_family_of"][stem] for stem in stems})
     log("%d model(s) in %d of %d declared rig famil%s"
         % (len(stems), len(baking), len(partition["models"]),
            "y" if len(partition["models"]) == 1 else "ies"))
 
-    textures = import_textures_for([source_path(stem) for stem in stems])
     failed = []
+    textures = (import_textures_for([source_path(stem) for stem in stems])
+                if wants(plan, "_global", "textures") else existing_textures())
 
-    bank_skeletons = bake_banks(manifest, partition, stems, library, failed)
+    bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan)
 
     for name in baking:
         family = partition["models"][name]
         skeleton_package = family["skeleton"]
+        scope = "model.%s" % name
         members = family["members"]
+        if not any(wants(plan, scope, stage)
+                   for stage in ("family_skeletons", "meshes", "clips")):
+            continue
         # Every declared member seeds the skeleton, not just the ones this run bakes. The tree and
         # the reference pose are therefore a function of the partition rather than of the slice --
         # which is what an untracked bone falls back to, and what a blend mask is content-addressed
@@ -326,16 +387,19 @@ def main():
                  % (name, len(missing), ", ".join(missing[:4])))
             failed.append(name)
             continue
-        error, bones = library.build_family_skeleton(
-            [source_path(s) for s in members], skeleton_package, True)
-        if error:
-            fail("family skeleton %s: %s" % (name, error))
-            failed.append(name)
-            continue
-        if bones != family["bones"]:
-            fail("family skeleton %s: built %d bones, the partition declares %d"
-                 % (name, bones, family["bones"]))
-            failed.append(name)
+        if wants(plan, scope, "family_skeletons"):
+            error, bones = library.build_family_skeleton(
+                [source_path(s) for s in members], skeleton_package, True)
+            if error:
+                fail("family skeleton %s: %s" % (name, error))
+                failed.append(name)
+                continue
+            if bones != family["bones"]:
+                fail("family skeleton %s: built %d bones, the partition declares %d"
+                     % (name, bones, family["bones"]))
+                failed.append(name)
+        else:
+            bones = family["bones"]
 
         # The meshes merge into a tree that already carries every bone the family declares, so the
         # merge can only be a no-op -- and a refusal means the declared partition disagrees with
@@ -343,7 +407,8 @@ def main():
         # than something to route around: a slice that invented a family here would write a second
         # answer for every clip label under a name nothing else points at.
         mesh_failed = False
-        for stem in [s for s in members if s in stems]:
+        built = [s for s in members if s in stems] if wants(plan, scope, "meshes") else []
+        for stem in built:
             error = library.build_skeletal_mesh_from_source(
                 source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
                 BODY_MASTER, MATERIALS,
@@ -352,8 +417,8 @@ def main():
                 fail("SK_%s: %s" % (stem, error))
                 failed.append(stem)
                 mesh_failed = True
-        log("family '%s': %d of %d declared model(s), %d bones"
-            % (name, sum(1 for s in members if s in stems), len(members), bones))
+        log("family '%s': %d mesh(es) of %d declared model(s), %d bones"
+            % (name, len(built), len(members), bones))
 
         # A family whose skeleton is short of a body's bones cannot bake that body's clips, and the
         # clip builder would report every owner in turn against a skeleton that was never finished.
@@ -365,10 +430,15 @@ def main():
         # What makes the editor offer this family's bodies and the banks' clips together. The
         # runtime needs no declaration -- `DecompressPose` builds the name-keyed remapping for any
         # skeleton pair -- but every editor-side validator consults it.
-        error = library.declare_compatible_skeletons(skeleton_package, bank_skeletons)
-        if error:
-            fail("family '%s': %s" % (name, error))
-            failed.append(name)
+        if wants(plan, scope, "family_skeletons"):
+            error = library.declare_compatible_skeletons(skeleton_package, bank_skeletons)
+            if error:
+                fail("family '%s': %s" % (name, error))
+                failed.append(name)
+
+        if not wants(plan, scope, "clips"):
+            release_packages()
+            continue
 
         owners = owner_clips(manifest, [s for s in members if s in stems])
         total = 0

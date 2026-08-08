@@ -138,34 +138,31 @@ def bake_maps(
             )
 
 
-def bake_characters(config, runner, stems: Sequence[str]) -> None:
+def bake_characters(config, runner, stems: Sequence[str], *, plan: Path | None = None) -> None:
     """Bake the named models onto /ElysiumBaked/Characters.
 
-    The whole cast goes through one editor process. Animation compression reports no memory estimate
-    of its own, so the engine's throttler never engages against it -- the cap below is what keeps a
-    long queue of sequences from exhausting the address space, and the bank pass is what keeps the
-    queue short.
+    The whole cast goes through one editor process, and `plan` names which scopes and stages of it
+    still have to be authored -- everything else on the mount is already current and is left alone.
+    Without a plan every scope is rebuilt, which is the recovery surface for a hand-run bake.
+
+    Memory is bounded by releasing each scope's packages as it completes rather than by the async
+    compilation throttler, which cannot see this work: only a task reporting -1 draws against that
+    budget and animation compression reports 0.
     """
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/bake_characters.py'}",
-            f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
-            # AnimationCompression estimates its own cost as 0 MB, so the async-compilation
-            # throttler lets an unbounded number of jobs run and the process dies of a failed
-            # allocation rather than of anything wrong with the model it was on.
-            "-ini:Engine:[ConsoleVariables]:Editor.AsyncAssetCompilationMaxMemoryUsage=8",
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-    )
+    arguments = [
+        str(config.project),
+        "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/bake_characters.py'}",
+        f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
+        "-unattended",
+        "-nosplash",
+        "-nopause",
+        "-stdout",
+        "-FullStdOutLogOutput",
+    ]
+    if plan is not None:
+        arguments.insert(4, f"-BakeCharacterPlan={plan}")
+    _run(config, runner, editor_executable(config, commandlet=True), arguments)
 
 
 def verify_characters(config, runner, stems: Sequence[str]) -> None:
