@@ -92,6 +92,10 @@ private:
 	bool bHaveDatum = false;
 	int32 GroundTransitions = 0;
 	bool bWasOnGround = false;
+	// The highest third-person weight the course reached. It saturates at 1 on every course, which
+	// is the point: it is the cheap catch for a camera that never engaged, and the only camera
+	// channel a committed gym baseline can carry.
+	double CamThirdMax = 0.0;
 };
 
 #endif // !UE_BUILD_SHIPPING

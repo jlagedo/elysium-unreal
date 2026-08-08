@@ -4,6 +4,7 @@
 
 #include "Debug/ElysiumGymBuilder.h"
 #include "Debug/ElysiumMoveCourses.h"
+#include "ElysiumCameraComponent.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumGymSpec.h"
 #include "ElysiumInputRouter.h"
@@ -12,6 +13,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumMovementComponent.h"
 #include "ElysiumPawn.h"
+#include "ElysiumPlayerCameraManager.h"
 #include "ElysiumPlayerController.h"
 
 #include "Engine/GameInstance.h"
@@ -98,6 +100,10 @@ namespace
 		TEXT("onground"), TEXT("ducked"), TEXT("ducking"), TEXT("canunduck"),
 		TEXT("water"), TEXT("surffric"),
 		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"),
+		TEXT("cam_boom"), TEXT("cam_damp"), TEXT("cam_pitch"), TEXT("cam_yaw"),
+		TEXT("cam_clip"), TEXT("cam_third"),
+		TEXT("mcam_boom"), TEXT("mcam_damp"), TEXT("mcam_pitch"), TEXT("mcam_yaw"),
+		TEXT("mcam_clip"),
 	};
 
 	// One place that resolves the harness's actors, so a null anywhere reads the same.
@@ -107,6 +113,10 @@ namespace
 		AElysiumPawn* Pawn = nullptr;
 		UElysiumMovementComponent* Move = nullptr;
 		UElysiumInputRouter* Router = nullptr;
+		// The camera half. Both are optional: a run whose view target is not a player body still
+		// records movement, and the camera columns hold their last settled values.
+		UElysiumCameraComponent* Camera = nullptr;
+		AElysiumPlayerCameraManager* CameraManager = nullptr;
 		explicit operator bool() const { return PC && Pawn && Move && Router; }
 	};
 
@@ -120,6 +130,9 @@ namespace
 		R.Move = R.Pawn
 			? Cast<UElysiumMovementComponent>(R.Pawn->GetMovementComponent()) : nullptr;
 		R.Router = R.PC ? R.PC->GetInputRouter() : nullptr;
+		R.Camera = R.Pawn ? R.Pawn->GetCameraComponent() : nullptr;
+		R.CameraManager = R.PC
+			? Cast<AElysiumPlayerCameraManager>(R.PC->PlayerCameraManager) : nullptr;
 		return R;
 	}
 
@@ -205,6 +218,15 @@ bool FElysiumMoveRun::BeginCourse(int32 Index)
 		/*bSweep*/ false, nullptr, ETeleportType::TeleportPhysics);
 	Body.PC->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
 
+	if (Body.Camera)
+	{
+		// The damper re-seeds per course for the same reason the mover's state is cleared: the body
+		// is teleported to the next start, and without this the opening frames record the spring
+		// flying in from wherever the previous course left it. Third person itself is armed once for
+		// the whole run, in `Tick`.
+		Body.Camera->RequestReseed();
+	}
+
 	for (const TPair<const TCHAR*, float>& Override : Course.JumpOverrides)
 	{
 		if (!Body.Move->SetJumpRuleOverride(Override.Key, Override.Value))
@@ -235,6 +257,7 @@ bool FElysiumMoveRun::BeginCourse(int32 Index)
 	bHaveDatum = false;
 	GroundTransitions = 0;
 	bWasOnGround = true;
+	CamThirdMax = 0.0;
 
 	// The stream is armed after the settle, not here — see `CourseSettleFrames`.
 	PendingStream = ElysiumMoveCourses::Expand(Course, StepSeconds);
@@ -287,6 +310,26 @@ void FElysiumMoveRun::Sample()
 	Recorder.Set(TEXT("move_yaw_wish"), Locomotion.MoveYawWish);
 	Recorder.Set(TEXT("move_yaw_vel"), Locomotion.MoveYawVelocity);
 
+	// The camera (CCC2), read off the manager's settled sample. This runs from the core ticker,
+	// which the engine ticks *after* the world — so the sample published inside this frame's view
+	// update is the one that was rendered, and no lag compensation is needed. The frame stamp is
+	// still checked, because a frame whose view never updated (a paused world, an unpossessed body)
+	// would otherwise be indistinguishable from a genuinely still camera.
+	const FElysiumCameraSample Cam = Body.CameraManager
+		? Body.CameraManager->GetCameraSample() : FElysiumCameraSample();
+	const bool bCamFresh = Cam.Frame == GFrameCounter;
+	Recorder.Set(TEXT("cam_boom"), (bCamFresh ? Cam.BoomLength : 0.0f) * Inv);
+	Recorder.Set(TEXT("cam_damp"), (bCamFresh ? Cam.DamperDistance : 0.0f) * Inv);
+	Recorder.Set(TEXT("cam_pitch"), bCamFresh ? Cam.BoomPitch : 0.0f);
+	Recorder.Set(TEXT("cam_yaw"), bCamFresh ? Cam.BoomYaw : 0.0f);
+	Recorder.Set(TEXT("cam_clip"), bCamFresh && Cam.bClipped);
+	Recorder.Set(TEXT("cam_third"), bCamFresh ? Cam.ThirdWeight : 0.0f);
+	Recorder.Set(TEXT("mcam_boom"), (bCamFresh ? Cam.ModernBoomLength : 0.0f) * Inv);
+	Recorder.Set(TEXT("mcam_damp"), (bCamFresh ? Cam.ModernDamperDistance : 0.0f) * Inv);
+	Recorder.Set(TEXT("mcam_pitch"), bCamFresh ? Cam.ModernBoomPitch : 0.0f);
+	Recorder.Set(TEXT("mcam_yaw"), bCamFresh ? Cam.ModernBoomYaw : 0.0f);
+	Recorder.Set(TEXT("mcam_clip"), bCamFresh && Cam.bModernClipped);
+
 	FString Error;
 	if (!Recorder.EndFrame(Error))
 	{
@@ -295,6 +338,10 @@ void FElysiumMoveRun::Sample()
 	}
 
 	PeakSpeed2D = FMath::Max(PeakSpeed2D, Speed2D * Inv);
+	if (bCamFresh)
+	{
+		CamThirdMax = FMath::Max(CamThirdMax, static_cast<double>(Cam.ThirdWeight));
+	}
 
 	// --- The run channels, which are what a committed baseline actually compares ---------------
 	// Each is written to **saturate**: how far the body got before something stopped it, and how
@@ -403,6 +450,7 @@ void FElysiumMoveRun::FinishCourse()
 	Recorder.SetRun(TEXT("ground_transitions"), GroundTransitions);
 	Recorder.SetRun(TEXT("ended_ducked"), bEndedDucked);
 	Recorder.SetRun(TEXT("peak_speed2d"), PeakSpeed2D);
+	Recorder.SetRun(TEXT("cam_third_max"), CamThirdMax);
 
 	const FString Stem = FString::Printf(TEXT("%s.%s.%dhz"), *Host, *Course.Name.ToString(), Hz);
 	FString Error;
@@ -444,6 +492,25 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 		bDone = true;
 		FPlatformMisc::RequestExit(false);
 		return false;
+	}
+
+	// The run records the camera, so the camera has to be doing something: in first person the boom
+	// is the zero vector and every channel would be a plausible-looking zero. Third person is armed
+	// once for the whole run — the latch persists across courses — and the run then **waits on the
+	// weight rather than on a frame count**. The ramp is a fixed 0.5 s at 2.0/s, so a fixed number
+	// of settle frames would land at 1.0 at 60 Hz and at 0.5 at 120, and the first course would
+	// record the tail of a transition at one rate and a settled boom at the other.
+	if (Body.Camera)
+	{
+		if (!Body.Camera->IsThirdPerson())
+		{
+			Body.Camera->SetThirdPerson(true);
+			return true;
+		}
+		if (Body.Camera->ThirdPersonWeight() < 1.0f)
+		{
+			return true;
+		}
 	}
 
 	if (bGym && !bGymBuilt)

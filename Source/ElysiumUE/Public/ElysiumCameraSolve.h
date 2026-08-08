@@ -287,6 +287,18 @@ namespace ElysiumCam
 	float SolveModelAlpha(const FVector& SolvedOffset, const FElysiumCameraWeights& Weights,
 		const FElysiumCameraCvars& Cvars);
 
+	// `ApplyScriptedBlend`, the tail of `CAM_ApplyToView` (`0x100ffb00`): the scripted channel is
+	// composed **over** whatever the base rig produced, at the shot stack's own timed weight. It is
+	// not a rival viewpoint — VtMB has one camera, and this is the last term applied to it.
+	//
+	// Taking the three view values rather than an `FMinimalViewInfo` is what keeps this header on
+	// Core types, so the composition is asserted with no engine view struct — and it is the reason
+	// the same function serves the faithful evaluator and the modern rig without either owning it.
+	// A `Weight` at or below zero leaves all three untouched; a `ShotFov` at or below zero keeps the
+	// player's field of view, which is what a shot file with no `FieldOfView` authors.
+	void ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
+		const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight);
+
 	// One row of the cvar surface: the VtMB name, its default **as typed** (Source units / degrees /
 	// a flag), and what it does. The table is the declaration; `FElysiumCameraCvars::LoadFrom` is the
 	// read. Ordered as `docs/vtmb/camera-view-modes.md` §1 lists them.

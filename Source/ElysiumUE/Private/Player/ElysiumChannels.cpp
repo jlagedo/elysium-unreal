@@ -56,6 +56,43 @@ namespace
 	{ TEXT("move_yaw_vel"),  TEXT("anim"), EScope::Frame, EKind::Angle, 1.0f, 3, TEXT("deg"),
 	  true,  TEXT("the realized velocity's direction, relative to facing") },
 
+	// --- The camera producer, per frame (CCC2) --------------------------------------------------
+	// The faithful evaluator's solve, read off the settled sample the camera manager publishes
+	// rather than re-derived, so a recording cannot disagree with the view that was rendered.
+	//
+	// Every one of these is speed-dependent by the registry's own invariant, which is not a
+	// formality here: the damper's position is a function of how fast the body moved, so `CCC7`
+	// really can move all of them. Their comparison therefore lives in the sited runs — whose
+	// baselines are full traces — and in the cross-rate `--hz` run, which is what actually asserts
+	// that the damper settles the same way at 60 and 120 Hz.
+	{ TEXT("cam_boom"),  TEXT("camera"), EScope::Frame, EKind::Numeric, 0.5f,  3, TEXT("u"),
+	  true,  TEXT("boom length, third-person weight applied") },
+	{ TEXT("cam_damp"),  TEXT("camera"), EScope::Frame, EKind::Numeric, 0.5f,  3, TEXT("u"),
+	  true,  TEXT("the damper's own distance from the eye, before the weight") },
+	{ TEXT("cam_pitch"), TEXT("camera"), EScope::Frame, EKind::Angle,   1.0f,  3, TEXT("deg"),
+	  true,  TEXT("the solved boom pitch") },
+	{ TEXT("cam_yaw"),   TEXT("camera"), EScope::Frame, EKind::Angle,   1.0f,  3, TEXT("deg"),
+	  true,  TEXT("the solved boom yaw") },
+	{ TEXT("cam_clip"),  TEXT("camera"), EScope::Frame, EKind::Exact,   0.0f,  0, TEXT(""),
+	  true,  TEXT("the collision sweep hit this frame") },
+	{ TEXT("cam_third"), TEXT("camera"), EScope::Frame, EKind::Numeric, 0.01f, 3, TEXT(""),
+	  true,  TEXT("the third-person blend weight") },
+
+	// The modern rig, recorded beside the faithful one **whether or not `elysium.ModernCamera` has
+	// it supplying the base**. That is the whole instrument: one deterministic run carries both
+	// booms, so the co-tune diffs them against each other rather than against a recollection, and
+	// a rig regression is the same kind of diff as a movement one.
+	{ TEXT("mcam_boom"),  TEXT("camera"), EScope::Frame, EKind::Numeric, 0.5f,  3, TEXT("u"),
+	  true,  TEXT("modern boom length, third-person weight applied") },
+	{ TEXT("mcam_damp"),  TEXT("camera"), EScope::Frame, EKind::Numeric, 0.5f,  3, TEXT("u"),
+	  true,  TEXT("the modern damper's own distance from the eye, before the weight") },
+	{ TEXT("mcam_pitch"), TEXT("camera"), EScope::Frame, EKind::Angle,   1.0f,  3, TEXT("deg"),
+	  true,  TEXT("the modern boom pitch") },
+	{ TEXT("mcam_yaw"),   TEXT("camera"), EScope::Frame, EKind::Angle,   1.0f,  3, TEXT("deg"),
+	  true,  TEXT("the modern boom yaw") },
+	{ TEXT("mcam_clip"),  TEXT("camera"), EScope::Frame, EKind::Exact,   0.0f,  0, TEXT(""),
+	  true,  TEXT("the modern collision sweep hit this frame") },
+
 	// --- The movement producer, per run ---------------------------------------------------------
 	// These are the gym's actual assertions, and they are written to **saturate**: a body either
 	// climbs a riser or is stopped by it, and either answer is reached at any gait given a long
@@ -76,6 +113,14 @@ namespace
 	  false, TEXT("how many samples the course produced") },
 	{ TEXT("peak_speed2d"), TEXT("move"), EScope::Run, EKind::Numeric, 2.0f,  3, TEXT("u/s"),
 	  true,  TEXT("fastest horizontal speed reached") },
+
+	// --- The camera producer, per run (CCC2) ----------------------------------------------------
+	// The one camera assertion a **committed** gym baseline can carry, and it saturates the way the
+	// movement run channels do: the harness puts the body in third person, so the weight reaches 1
+	// on every course at any gait. It is worth a row because it is the cheap catch for the camera
+	// never engaging at all — which would otherwise leave every frame channel a plausible zero.
+	{ TEXT("cam_third_max"), TEXT("camera"), EScope::Run, EKind::Numeric, 0.01f, 3, TEXT(""),
+	  false, TEXT("highest third-person weight the course reached") },
 	};
 }
 

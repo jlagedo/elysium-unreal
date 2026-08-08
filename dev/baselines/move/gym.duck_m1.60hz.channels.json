@@ -46,6 +46,17 @@
     { "name": "surffric", "producer": "move", "scope": "frame", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": true, "help": "the ground surface's friction scale" },
     { "name": "move_yaw_wish", "producer": "anim", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the commanded direction, relative to facing" },
     { "name": "move_yaw_vel", "producer": "anim", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the realized velocity's direction, relative to facing" },
+    { "name": "cam_boom", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": true, "help": "boom length, third-person weight applied" },
+    { "name": "cam_damp", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": true, "help": "the damper's own distance from the eye, before the weight" },
+    { "name": "cam_pitch", "producer": "camera", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the solved boom pitch" },
+    { "name": "cam_yaw", "producer": "camera", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the solved boom yaw" },
+    { "name": "cam_clip", "producer": "camera", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "the collision sweep hit this frame" },
+    { "name": "cam_third", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": true, "help": "the third-person blend weight" },
+    { "name": "mcam_boom", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": true, "help": "modern boom length, third-person weight applied" },
+    { "name": "mcam_damp", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": true, "help": "the modern damper's own distance from the eye, before the weight" },
+    { "name": "mcam_pitch", "producer": "camera", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the modern boom pitch" },
+    { "name": "mcam_yaw", "producer": "camera", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the modern boom yaw" },
+    { "name": "mcam_clip", "producer": "camera", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "the modern collision sweep hit this frame" },
     { "name": "frames", "producer": "move", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "how many samples the course produced", "value": 660 },
     { "name": "advance_max", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": false, "help": "furthest distance reached along the start heading", "value": 143.960 },
     { "name": "top_stand", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 0.250000, "precision": 3, "unit": "u", "speedDependent": false, "help": "highest the feet stood, above the start", "value": 0.000 },
@@ -53,6 +64,7 @@
     { "name": "peak_rise", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 0.250000, "precision": 3, "unit": "u", "speedDependent": false, "help": "highest rise above a takeoff, per airborne span", "value": 0.000 },
     { "name": "ground_transitions", "producer": "move", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "how many times the ground state flipped", "value": 0 },
     { "name": "ended_ducked", "producer": "move", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "the body was still ducked on the last frame", "value": 1 },
-    { "name": "peak_speed2d", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 2.000000, "precision": 3, "unit": "u/s", "speedDependent": true, "help": "fastest horizontal speed reached", "value": 75.000 }
+    { "name": "peak_speed2d", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 2.000000, "precision": 3, "unit": "u/s", "speedDependent": true, "help": "fastest horizontal speed reached", "value": 75.000 },
+    { "name": "cam_third_max", "producer": "camera", "scope": "run", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": false, "help": "highest third-person weight the course reached", "value": 1.000 }
   ]
 }

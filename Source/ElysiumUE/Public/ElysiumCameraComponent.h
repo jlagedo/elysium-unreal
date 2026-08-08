@@ -28,6 +28,23 @@
 //     `FElysiumUserCmd` (S5), like everything else;
 //   * **it does not know what an entity is.** A scripted shot is pushed as *values* and whoever
 //     pushed it keeps them current, so a `Follow` attach type is the pusher re-resolving each frame.
+// What the scripted channel resolved to this frame: the pose the top shot has chased to, its field
+// of view, and the stack's own timed weight. It is published as values because the layer that
+// composes it runs later in the frame than the solve that produced it — and because the same values
+// have to compose over either rig once `elysium.ModernCamera` has a second one to choose.
+struct FElysiumScriptedShotView
+{
+	FVector Location = FVector::ZeroVector;
+	FRotator Rotation = FRotator::ZeroRotator;
+	// 0 keeps the player's field of view, which is what a shot file with no `FieldOfView` authors.
+	float FieldOfView = 0.0f;
+	// The shot stack's timed ramp. This is the layer's alpha; it is never re-eased.
+	float Weight = 0.0f;
+	// False until the channel has framed its first shot, which is what stops a push being applied
+	// from wherever the camera happened to be.
+	bool bSeeded = false;
+};
+
 UCLASS()
 class UElysiumCameraComponent : public UCameraComponent
 {
@@ -46,13 +63,41 @@ public:
 	void UpdateCamera(float DeltaSeconds);
 
 	// `CAM_ApplyToView` (`0x100ffb00`): the boom offset and the angle lerp, then the scripted shot on
-	// top. The only place the view is modified.
+	// top. The composed whole, for the fallback path — the production path applies the two halves at
+	// their own points in the frame, because the scripted layer runs after the base is chosen.
 	void ApplyToView(FMinimalViewInfo& View) const;
 
+	// The base half: the strafe bank and the boom, at the third-person weight. This is what a base
+	// request produces; nothing scripted is in it.
+	void ApplyBaseToView(FMinimalViewInfo& View) const;
+
+	// The scripted half (`ApplyScriptedBlend`): composed **over** whatever base won, at the shot
+	// stack's own weight, plus the motion-blur suppression an authored edit needs. Retail composes
+	// rather than arbitrating — VtMB has one camera and this is the last term applied to it.
+	void ApplyScriptedShotToView(FMinimalViewInfo& View) const;
+
+	// What the scripted layer reads, as values.
+	FElysiumScriptedShotView ScriptedShotView() const;
+
 	// What both bodies' `CalcCamera` overrides call: `GetCameraView` first, then `UpdateCamera` +
-	// `ApplyToView`. One implementation, so the `elysium.SourceMovement` A/B compares the movers and
-	// not two camera paths.
+	// `ApplyToView` + the cut. One implementation, so the `elysium.SourceMovement` A/B compares the
+	// movers and not two camera paths. The manager does not go through this — it needs the halves
+	// apart — so this is the fallback a spectator, a scene capture and `UGameplayStatics` reach.
 	static bool CalcCameraFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
+
+	// The same, stopping at the base: `SolveFrameFor` then `ApplyBaseToView`. The scripted layer and
+	// the temporal cut are the modifier's, because both have to happen after the base request has
+	// been chosen and applied.
+	static bool CalcCameraBaseFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
+
+	// `GetCameraView` and the faithful solve, applying nothing. The manager needs the solve and the
+	// apply apart, because both rigs evaluate every frame and only one of them supplies the base.
+	static bool SolveFrameFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
+
+	// --- The A/B ----------------------------------------------------------------------------
+	// The frame's orbit/dolly latches, so the modern rig reads the same intent the faithful one
+	// does rather than polling input a second time.
+	const FElysiumUserCmd& GetUserCmd() const { return PendingCmd; }
 
 	// A cut request is latched when the entity world publishes it and consumed from CalcCamera, after
 	// the shot has been applied. Keeping it until that phase prevents an earlier engine camera update
@@ -96,6 +141,13 @@ public:
 	// --- Debug ------------------------------------------------------------------------------
 	// The solved boom length in cm (0 in first person), for `elysium_player_get` and the Cog window.
 	float BoomLength() const { return SolvedOffset.Size() * Weights.ThirdBlend(); }
+	// The damper's own result, before the weight is applied — what the boom solve left behind
+	// (`m_vecCameraOffset` / `m_vecCameraAngles`), and whether the sweep hit this frame. The channel
+	// recorder reads these rather than re-deriving them, so a recording cannot disagree with the
+	// solve it came from.
+	const FVector& SolvedBoomOffset() const { return SolvedOffset; }
+	const FRotator& SolvedBoomAngles() const { return SolvedAngles; }
+	bool IsBoomClipped() const { return bClipped; }
 	// The player-model alpha the fade band produces (`CInput+0x104`). Nothing reads it until a player
 	// mesh exists (8.11); it is solved now so the band is one number rather than a later guess.
 	float ModelAlpha() const { return PlayerModelAlpha; }

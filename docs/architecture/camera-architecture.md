@@ -27,10 +27,22 @@ The shipped target is a modern camera with two complete, persistent player choic
 - VtMB's recovered camera stays executable as a development A/B reference and as the compatibility
   evaluator for original scripts and map camera tracks. It is not the shipped feel target.
 
-This is a deliberate feel divergence. It removes the original's weapon-class camera arbitration,
-forced perspective churn, character-coupled third-person orbit, and reliance on one 2004 boom solve
-for gameplay, dialogue, feeding, and cinematics. It does not change original game logic, map I/O,
-shot-file grammar, or camera-track timing.
+This is a deliberate feel divergence. It removes forced perspective churn, character-coupled
+third-person orbit, and reliance on one 2004 boom solve for gameplay, dialogue, feeding, and
+cinematics. It does not change original game logic, map I/O, shot-file grammar, or camera-track
+timing.
+
+**Weapon-class camera arbitration is not part of that removal, and the call is deferred rather than
+made.** The charter's rule is that a divergence needs the faithful behaviour recovered and recorded
+first, and it is not: `docs/vtmb/camera-view-modes.md` lists the weapon-class bit meanings at player
+record `+0x2440` under *Not yet recovered*. What is known makes the classes look like behaviour
+rather than preference — `0x08` and `0x10` short-circuit `ApplyWeaponCameraPref` before the
+`camera_prefs` bitmask is consulted and `SaveWeaponCameraPref` refuses to record either, and `0x10`
+pulls in `inven_holster` and `force_sniper_third_person`. Under the three change layers that is
+Logic, which is reproduced, until RE shows otherwise. The seam is therefore kept: the forced-third,
+forced-first and feed latches on `FElysiumCameraWeights` stay, uncalled, as the entry point a weapon
+system will use. Nothing is lost by waiting — no weapon system exists yet — and the divergence can
+be made on evidence when the bits are read.
 
 ## Non-negotiable rules
 
@@ -146,8 +158,6 @@ integers:
 | `Focus` | prop inspect, map point of interest | inspect look; movement policy is explicit |
 | `Dialogue` | active conversation | dialogue input; movement suppressed |
 | `GameplayEvent` | feeding, death, takedown | event-specific |
-| `LegacyShot` | `SetCamera`, VCD camera event | source contract |
-| `LegacyTrack` | `camera_track` / `camera_keyframe` | cinematic suppression |
 | `Sequence` | project-authored Level Sequence | sequence policy |
 | `Emergency` | loading/failure/debug possession | no gameplay input |
 
@@ -155,18 +165,42 @@ The highest active class wins. Within a class, the most recently activated reque
 stack reports contention in diagnostics. Releasing any handle re-resolves the winner without LIFO
 assumptions, so a dialogue can end behind a still-running cutscene.
 
-Post layers are separate from base arbitration and execute in a fixed order:
+**The legacy scripted channel is not in that table, and that is the faithful arrangement.**
+`SetCamera`, the VCD camera event, `camera_track` and `camera_keyframe` are composed **over** the
+base rig as a post layer, not arbitrated against it. VtMB has one camera and a set of weights:
+`CAM_ApplyToView` adds the third-person boom offset and then blends the scripted pose on top of the
+result, and `CAM_IsThirdPerson` is a disjunction that counts a scripted camera *as* third person —
+which is how the player model comes to be drawn under a cutscene for free
+(`docs/vtmb/camera-view-modes.md` §2, §4). Arbitrating the channel as a base request would also put
+the manager's own transition machinery over an authored duration, easing a second time what the shot
+stack has already eased, which rule 4 forbids.
 
-1. authored/base pose and lens;
-2. locomotion response or head motion;
-3. recoil;
-4. camera shake;
-5. damage/status response;
-6. post-process blend.
+The shot stack therefore remains the single timeline. Its layer takes its alpha from the stack's own
+timed weight with no blend of its own, so a zero-duration edit stays a cut rather than becoming a
+very fast blend.
 
-Every base request has an allow mask. Legacy tracks and Sequencer disable locomotion, recoil, shake,
-auto-tracking, and gameplay motion blur by default so authored edits remain exact. Accessibility
-scales motion layers at the source rather than damping the final pose after a cut.
+Post layers are separate from base arbitration and execute in priority order, 0 first:
+
+| Layer | Priority | Status |
+|---|---|---|
+| legacy scripted channel (`SetCamera`, `camera_track`, VCD) | 0 | `UElysiumCameraModifier_LegacyShot` |
+| locomotion response or head motion | — | with the weapon rung |
+| recoil | — | with the weapon rung |
+| camera shake | stock `UCameraModifier_CameraShake`, default 127 | engine default |
+| damage/status response | — | with the weapon rung |
+| post-process blend | — | with the weapon rung |
+
+Only the layers with a producer exist. `UElysiumCameraModifier` is the shared base — it applies its
+own alpha (the engine's base class does not, despite its header comment) and guards on the frame
+counter, because `ApplyCameraModifiers` runs once per view target rather than once per frame and a
+view-target blend would otherwise advance a layer twice at the same delta.
+
+Suppression uses the engine's own mechanism rather than a parallel one: a layer returns `true` from
+`ModifyCamera` to stop the rest of the chain. While an authored shot has weight the legacy layer
+does exactly that, so an edit is exact and camera shake cannot run under it. A per-layer allow mask
+belongs here the first time a layer has to *survive* a cutscene; building one before there is a
+layer to exempt would be building it blind. Accessibility scales motion layers at the source rather
+than damping the final pose after a cut.
 
 ## Project-authored camera assets
 
@@ -204,6 +238,22 @@ Runtime code references profiles through soft object paths or Primary Asset ids.
 settings object identifies the default profile and generic fallback sets; gameplay code does not
 hard-load named packages or embed designer tuning.
 
+**Which tuning surface wins is settled by partition, not by precedence.** Three surfaces name
+overlapping axes — boom length, pitch offset, orbit limits, the fade band, the damper constants —
+and rather than rank them, each owns a different rig:
+
+| Surface | Owns | Never touches |
+|---|---|---|
+| the VtMB console store (`cam_*`, `c_*`, `cdamp_*`, `cl_roll*`) | the faithful evaluator | the modern rig |
+| `ElysiumRig::FElysiumCameraRigTuning`, later `UElysiumCameraProfile` | the modern rig | the faithful evaluator |
+| user settings | the player's own preferences over whichever rig is live — mode, shoulder, FOV, sensitivity, recenter, motion intensities | anything a designer tunes |
+
+So `cam_idealdist` retunes the faithful boom and the modern one does not move, which is what keeps
+the A/B honest: a run in which one rig changed and the other did not is a real comparison, and a
+shared value would make every recording ambiguous about which rig it described. It also preserves
+the existing contract that a user's `config.cfg` and the Unofficial Patch's aliases keep governing
+the evaluator they were written for (`docs/vtmb/camera-view-modes.md` §7).
+
 `UElysiumDialogueCameraSet` carries reusable shot grammar rather than one asset per retail line:
 single, close-up, over-shoulder, two-shot, and fallback profiles with screen-space margins and lens
 ranges. `UCurveFloat` owns intentional blend shapes. `UCameraShakeBase` assets own reusable shakes.
@@ -220,14 +270,58 @@ not depend on it.
 
 ## Player camera rig
 
-`UElysiumPlayerCameraRigComponent` lives on each player body and evaluates the `Player` base
-request. `UElysiumCameraBoomComponent : USpringArmComponent` supplies Unreal's standard obstruction
-probe and retract/recover behaviour for the modern third-person path. One `UCameraComponent`
-carries projection and post-process settings; the rig supplies candidate poses rather than
-activating multiple cameras.
+The modern rig is **manager-side state over pure rules**, not a component and not a spring arm.
+`ElysiumRig::` supplies the boom rotation, the boom target, the asymmetric collision response and
+the half-life damper as free functions; `AElysiumPlayerCameraManager` owns the integrator state and
+performs the one sweep.
+
+Both parts of that are decisions rather than defaults. It is not a component because
+`elysium.SourceMovement` swaps the pawn class at spawn: a component would have to be added to both
+bodies and kept in step, where manager-side state is resolved once from whatever is being viewed.
+And it is not `USpringArmComponent`, for the same reason the faithful evaluator is not — the spring
+arm's single-rate lag cannot express either rig's damper, and its retract/recover is symmetric where
+the modern rig's is deliberately not.
+
+One `UCameraComponent` — the faithful evaluator, which survives unmodified — still carries
+projection and post-process settings and is the eye both rigs hang their boom off. `GetCameraView`
+runs first regardless of which rig supplies the base, because it is the only thing that advances
+that component's world rotation and fills the first-person rendering fields.
 
 The recovered Hooke-spring evaluator remains in the legacy/A-B path. It is not reimplemented inside
 the modern boom merely to preserve a disliked result.
+
+### The A/B, and what it measures
+
+`elysium.ModernCamera` picks which rig supplies the base request — the faithful evaluator (`0`, the
+default) or the modern boom (`1`). **Both rigs solve every frame and record their channels every
+frame regardless of the setting**, so the switch changes only which one reaches the view. That is
+what makes the comparison an instrument rather than a recollection: one deterministic `uv run
+elysium debug move` run carries `cam_boom`/`cam_damp`/`cam_pitch`/`cam_yaw`/`cam_clip` beside
+`mcam_*`, so the two booms diff directly, and a rig regression is the same kind of diff as a
+movement one. It is also the co-tune's own instrument (`docs/project/three-cs-roadmap.md` `CCC3`).
+
+The default stays `0` until the co-tune resolves the modern rig's deltas one owner call at a time.
+The modern rig's tuning lives in `ElysiumRig::FElysiumCameraRigTuning`; its rules are pure and
+asserted with no world in `Elysium.Substrate.CameraRig`.
+
+Three deliberate feel divergences distinguish the modern rig from the recovered one, each marked as
+a divergence beside the faithful behaviour:
+
+- **The damper is frame-rate independent.** VtMB's is an Euler step scaled by `K * Dt` and clamped,
+  so the same motion settles differently at different rates; measured against the gym's `pop_*`
+  courses — where horizontal position and speed agree exactly between 60 and 120 Hz — the faithful
+  boom still lands 0.36–0.47 u apart. The modern damper decays by a half-life, which composes
+  exactly across any subdivision of a step.
+- **Collision is asymmetric.** The recovered rig forces a re-seed on contact, so the boom snaps both
+  in and out. Retracting instantly is kept — a wall must never be inside the near plane — but the
+  recovery is rate-limited, so the camera does not pop out of a doorway on the first frame the sweep
+  clears.
+- **The body is off-centre.** A shoulder offset applied in boom space frames the character to one
+  side. The recovered rig has no such term, and the offset is why the modern boom clips on geometry
+  a centred boom misses.
+
+The sphere probe substituted for VtMB's box hull is recorded as a feel delta in
+`docs/vtmb/camera-view-modes.md` and is shared by both rigs, so it is not a difference between them.
 
 ### Player modes
 
@@ -431,6 +525,15 @@ The existing `elysium.camera` diagnostic grows into this view. Cog/MCP expose th
 state rather than maintaining separate camera truth. Debug drawing can show the target anchor,
 desired pose, collision probe, final pose, safe framing bounds, and dialogue candidates.
 
+Per the F1-first rule (`docs/architecture/debug-tooling.md`), the Cog window is the primary surface:
+`Elysium.Characters.Camera` shows the weights and their latches, both rigs' booms side by side with
+the delta between them, the scripted-shot stack, and the post layers with their priorities and
+alphas. `showdebug camera` lists the same layers through the engine's own path, and
+`elysium_player_get` reports both rigs' boom lengths and clip state so an agent can read the A/B
+delta without flipping the cvar and aligning two samples by hand. The one value all three read is
+the sample the camera manager publishes at its view-update tail, which is also what the channel
+recorder reads — so a Cog readout and a channel diff cannot disagree.
+
 ### Automated contracts
 
 - request arbitration, out-of-order release, stale handles, equal-priority contention, map-epoch
@@ -463,12 +566,12 @@ The construction path keeps the theatre's verified legacy camera intact while re
 experience around it:
 
 1. Install `AElysiumPlayerCameraManager`, `UElysiumCameraService`, request values/handles,
-   diagnostics, and cut handling. Wrap the current `UElysiumCameraComponent` shot stack as the first
-   legacy adapter.
+   diagnostics, and cut handling. Compose the current `UElysiumCameraComponent` shot stack as the
+   first post layer.
 2. Add the project-authored asset namespace, default `UElysiumCameraProfile`, soft-loading library,
    and validation that rejects missing or game-derived dependencies.
-3. Add `UElysiumPlayerCameraRigComponent`, the modern Spring Arm path, direct first/third commands,
-   independent orbit/facing policies, settings, and exact override restoration.
+3. Add the modern boom over `ElysiumRig::`, direct first/third commands, independent orbit/facing
+   policies, settings, and exact override restoration.
 4. Route input and `FElysiumViewState` through the resolved control/presentation policy. Remove any
    camera-owned input-mode or widget changes.
 5. Add focus target/trigger components, prop inspect, map point-of-interest requests, and the C++ /
@@ -477,8 +580,9 @@ experience around it:
    conversation before scaling across the corpus.
 7. Add the Sequencer bridge and one small project-authored acceptance sequence. Preserve VCD and
    Worldcraft timing in their existing evaluator.
-8. Migrate feed/death and remaining direct producers, then make the remaster path the production
-   default while retaining the faithful player evaluator as a developer A/B mode.
+8. Migrate feed/death and remaining direct producers, then decide `elysium.ModernCamera`'s default
+   in the co-tune, one delta at a time, while retaining the faithful player evaluator as the
+   permanent A/B reference.
 
 ## References
 

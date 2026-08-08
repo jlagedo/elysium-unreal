@@ -1128,9 +1128,11 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   third-person orbit, character facing and navigation are independent. The complete responsibility,
   API, asset, fallback, and migration design is `docs/architecture/camera-architecture.md`.
   - **11.13a–c Director foundation, authored camera library, player rig** — delegated to
-    `docs/project/three-cs-roadmap.md` CCC2, which owns the camera service and its handle model, the
-    authored profile library, the modern rig, the two persistent player modes, and the A/B against
-    the faithful evaluator.
+    `docs/project/three-cs-roadmap.md` CCC2 `[x]`, which owns the camera service and its handle
+    model, the authored profile library, the modern rig, the two persistent player modes, and the
+    A/B against the faithful evaluator. The manager, the post-layer stack, the modern rig and
+    `elysium.ModernCamera` have landed; the `UElysiumCameraProfile` asset and the user-settings
+    surface deferred to 11.13d/8.10, where the screen that consumes them lives.
   - [ ] **11.13d Input, settings and presentation** — camera commands enter the action catalog;
     inspect/dialogue/cinematic scopes stay owned by `UElysiumInputSubsystem`; resolved reticle,
     HUD, body/viewmodel and letterbox state enters `FElysiumViewState`; accessibility covers

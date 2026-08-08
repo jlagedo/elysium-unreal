@@ -4,6 +4,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumCameraComponent.h"
+#include "ElysiumPlayerCameraManager.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -636,7 +637,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_player_get"),
-				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the camera (first/third person, its blend weight, the solved boom length and any scripted shot), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
+				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the camera (first/third person, its blend weight, both rigs' solved boom lengths and clip state, and any scripted shot), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -678,6 +679,20 @@ namespace ElysiumMcpImpl
 							Camera->SetNumberField(TEXT("model_alpha"), Cam->ModelAlpha());
 							const FElysiumCameraShot* Shot = Cam->GetShots().Top();
 							Camera->SetStringField(TEXT("shot"), Shot ? Shot->DebugName : FString());
+
+							// CCC2 — the modern rig solves every frame beside the faithful one, so an
+							// agent can read the A/B delta without flipping `elysium.ModernCamera`
+							// and taking a second sample it would then have to align by hand.
+							const APlayerController* CamPC = LivePlayerController();
+							if (const AElysiumPlayerCameraManager* Manager = CamPC
+									? Cast<AElysiumPlayerCameraManager>(CamPC->PlayerCameraManager)
+									: nullptr)
+							{
+								const FElysiumCameraSample& S = Manager->GetCameraSample();
+								Camera->SetNumberField(TEXT("modern_boom_length"), S.ModernBoomLength);
+								Camera->SetBoolField(TEXT("clipped"), S.bClipped);
+								Camera->SetBoolField(TEXT("modern_clipped"), S.bModernClipped);
+							}
 							Body->SetObjectField(TEXT("camera"), Camera);
 						}
 					}

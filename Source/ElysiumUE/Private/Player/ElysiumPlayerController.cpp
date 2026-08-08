@@ -7,6 +7,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumPlayerCameraManager.h"
 #include "Debug/ElysiumScreenshot.h"
 
 #include "Components/InputComponent.h"
@@ -21,6 +22,11 @@ AElysiumPlayerController::AElysiumPlayerController()
 	// The controller spawns this in non-Shipping / cheats-enabled builds; it is what makes the
 	// Elysium (and inherited stock) UFUNCTION(exec) cheats reachable from the console.
 	CheatClass = UElysiumCheatManager::StaticClass();
+
+	// The one final view per local player. This has to be the constructor: the manager is spawned
+	// from `APlayerController::PostInitializeComponents`, so a class assigned in `BeginPlay` is
+	// assigned to something that already exists.
+	PlayerCameraManagerClass = AElysiumPlayerCameraManager::StaticClass();
 }
 
 void AElysiumPlayerController::SetupInputComponent()

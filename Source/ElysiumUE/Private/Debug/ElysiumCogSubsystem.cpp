@@ -15,6 +15,7 @@
 #include "Debug/ElysiumCogWindow_Environment.h"
 #include "Debug/ElysiumCogWindow_EventQueue.h"
 #include "Debug/ElysiumCogWindow_GreenRoom.h"
+#include "Debug/ElysiumCogWindow_Camera.h"
 #include "Debug/ElysiumCogWindow_Inspector.h"
 #include "Debug/ElysiumCogWindow_Lights.h"
 #include "Debug/ElysiumCogWindow_Logic.h"
@@ -132,6 +133,7 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_Environment>("Elysium.Look.Wetness & Reflections");
 	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio.Playback");
 	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Audio.Soundscape");
+	Cog->AddWindow<FElysiumCogWindow_Camera>("Elysium.Characters.Camera");
 	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.Characters.NPCs");
 	GreenRoomWindow = Cog->AddWindow<FElysiumCogWindow_GreenRoom>("Elysium.Characters.Green Room");
 	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Gameplay.Scripting");

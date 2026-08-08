@@ -19,6 +19,7 @@
 #include "ElysiumBrushComponent.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
+#include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
@@ -6745,6 +6746,199 @@ bool FElysiumCameraTest::RunTest(const FString&)
 		Stack.Push(Cut);
 		Stack.Advance(1.0f / 60.0f);
 		TestEqual(TEXT("a zero-duration shot is a cut"), Stack.GetWeight(), 1.0f);
+	}
+
+	// --- the strafe bank (`V_CalcRoll`) ---
+	{
+		const FRotator Level = FRotator::ZeroRotator;   // right vector is +Y
+		const float Angle = 2.0f;                       // cl_rollangle
+		const float Speed = 200.0f;                     // cl_rollspeed, cm/s
+
+		TestEqual(TEXT("a still body does not bank"),
+			ElysiumCam::SolveViewRoll(FVector::ZeroVector, Level, Angle, Speed), 0.0f);
+
+		// Below `cl_rollspeed` the bank is proportional; the sign follows which way the strafe goes.
+		TestEqual(TEXT("half the roll speed banks half the angle"),
+			ElysiumCam::SolveViewRoll(FVector(0.0f, 100.0f, 0.0f), Level, Angle, Speed), 1.0f);
+		TestEqual(TEXT("and the other way banks the other way"),
+			ElysiumCam::SolveViewRoll(FVector(0.0f, -100.0f, 0.0f), Level, Angle, Speed), -1.0f);
+
+		// At or above it the bank saturates -- it never exceeds `cl_rollangle`.
+		TestEqual(TEXT("past the roll speed the bank saturates"),
+			ElysiumCam::SolveViewRoll(FVector(0.0f, 400.0f, 0.0f), Level, Angle, Speed), 2.0f);
+
+		// Running straight ahead is orthogonal to the right vector, so it never banks.
+		TestEqual(TEXT("forward motion does not bank"),
+			ElysiumCam::SolveViewRoll(FVector(400.0f, 0.0f, 0.0f), Level, Angle, Speed), 0.0f);
+
+		// Either cvar at zero disables it outright, which is what `cl_rollangle 0` is for.
+		TestEqual(TEXT("a zero angle disables the bank"),
+			ElysiumCam::SolveViewRoll(FVector(0.0f, 100.0f, 0.0f), Level, 0.0f, Speed), 0.0f);
+		TestEqual(TEXT("and so does a zero speed"),
+			ElysiumCam::SolveViewRoll(FVector(0.0f, 100.0f, 0.0f), Level, Angle, 0.0f), 0.0f);
+	}
+
+	// --- the scripted composition: the last term applied, over whatever the base rig produced ---
+	{
+		const FVector Base(0.0f, 0.0f, 0.0f);
+		const FVector Shot(100.0f, 0.0f, 0.0f);
+
+		// Weight 0 is the identity. This is the property that lets the layer run unconditionally.
+		{
+			FVector L = Base; FRotator R = FRotator::ZeroRotator; float Fov = 90.0f;
+			ElysiumCam::ComposeScriptedShot(L, R, Fov, Shot, FRotator(10.0f, 20.0f, 0.0f), 40.0f, 0.0f);
+			TestEqual(TEXT("a weightless shot leaves the base view alone"), L, Base);
+			TestEqual(TEXT("including its fov"), Fov, 90.0f);
+		}
+
+		// Weight 1 is the shot outright.
+		{
+			FVector L = Base; FRotator R = FRotator::ZeroRotator; float Fov = 90.0f;
+			ElysiumCam::ComposeScriptedShot(L, R, Fov, Shot, FRotator(10.0f, 20.0f, 0.0f), 40.0f, 1.0f);
+			TestEqual(TEXT("a full-weight shot is the view"), L, Shot);
+			TestEqual(TEXT("with its own fov"), Fov, 40.0f);
+		}
+
+		// Mid-ramp is the interpolation the cutscene was authored around.
+		{
+			FVector L = Base; FRotator R = FRotator::ZeroRotator; float Fov = 90.0f;
+			ElysiumCam::ComposeScriptedShot(L, R, Fov, Shot, FRotator::ZeroRotator, 40.0f, 0.5f);
+			TestEqual(TEXT("half weight is the midpoint"), (float)L.X, 50.0f);
+			TestEqual(TEXT("and the fov meets in the middle"), Fov, 65.0f);
+		}
+
+		// A shot file with no `FieldOfView` keeps the player's.
+		{
+			FVector L = Base; FRotator R = FRotator::ZeroRotator; float Fov = 90.0f;
+			ElysiumCam::ComposeScriptedShot(L, R, Fov, Shot, FRotator::ZeroRotator, 0.0f, 1.0f);
+			TestEqual(TEXT("a shot with no fov keeps the player's"), Fov, 90.0f);
+			TestEqual(TEXT("while still moving the camera"), L, Shot);
+		}
+
+		// The rotator lerp takes the short way round, so an edit across +/-180 does not spin. Going
+		// the long way would land on 0; the short way lands on +/-180, which is the same heading.
+		{
+			FVector L = Base; FRotator R(0.0f, 170.0f, 0.0f); float Fov = 90.0f;
+			ElysiumCam::ComposeScriptedShot(L, R, Fov, Base, FRotator(0.0f, -170.0f, 0.0f), 0.0f, 0.5f);
+			TestEqual(TEXT("a shot across the +/-180 boundary takes the short way"),
+				(float)FMath::Abs(FRotator::NormalizeAxis(R.Yaw)), 180.0f);
+		}
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The modern rig (CCC2) — the remaster half of the camera A/B.
+//
+// Nothing here reproduces a decompiled function; it is the project's own third-person rig, and the
+// assertions are about the three properties that make it *different* from the recovered one: the
+// damper is frame-rate independent, collision is asymmetric, and the body sits off-centre.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraRigTest, "Elysium.Substrate.CameraRig", GElysiumTestFlags)
+bool FElysiumCameraRigTest::RunTest(const FString&)
+{
+	using namespace ElysiumRig;
+
+	// --- the damper is exact at any step ---
+	{
+		// One step of 0.2 s must land exactly where two of 0.1 s do. This is the whole reason the
+		// decay is a half-life rather than the recovered rig's `Clamp(K * Dt, 0, 1)` Euler step,
+		// and it is what `uv run elysium debug move --hz` compares across rates.
+		const FVector Start(0.0f, 0.0f, 0.0f);
+		const FVector Target(100.0f, 0.0f, 0.0f);
+		const float HalfLife = 0.1f;
+
+		const FVector OneStep = DampToward(Start, Target, HalfLife, 0.2f);
+		const FVector TwoSteps = DampToward(DampToward(Start, Target, HalfLife, 0.1f), Target, HalfLife, 0.1f);
+		TestTrue(TEXT("the damper composes exactly across a subdivided step"),
+			OneStep.Equals(TwoSteps, KINDA_SMALL_NUMBER));
+
+		// And the half-life means what it says.
+		TestEqual(TEXT("one half-life closes exactly half the gap"),
+			(float)DampToward(Start, Target, HalfLife, HalfLife).X, 50.0f);
+
+		// The degenerate ends.
+		TestEqual(TEXT("a zero half-life snaps"),
+			(float)DampToward(Start, Target, 0.0f, 1.0f / 60.0f).X, 100.0f);
+		TestEqual(TEXT("and a zero step holds"),
+			(float)DampToward(Start, Target, HalfLife, 0.0f).X, 0.0f);
+	}
+
+	// --- the boom's rotation ---
+	{
+		FElysiumCameraRigTuning Tuning;
+		Tuning.PitchOffset = 10.0f;
+
+		// The camera sits at `Pivot - Forward * Distance`, so lifting it above the eye line pitches
+		// the boom DOWN. Getting this sign backwards puts the camera under the character, where it
+		// drags through the floor -- which is what the clip channel showed when it was.
+		const FRotator Level = BoomRotation(FRotator(0.0f, 90.0f, 0.0f), Tuning);
+		TestEqual(TEXT("lifting the camera pitches the boom down"), (float)Level.Pitch, -10.0f);
+		TestEqual(TEXT("and keeps the player's yaw"), (float)Level.Yaw, 90.0f);
+
+		// And the resulting camera really is above the pivot, which is the property the sign is for.
+		const FVector Above = BoomTarget(FVector::ZeroVector, Level, 200.0f, Tuning);
+		TestTrue(TEXT("so the camera ends up above the pivot"), Above.Z > 0.0);
+
+		// A banked view must not roll the arm, or the character swings across the frame.
+		const FRotator Banked = BoomRotation(FRotator(0.0f, 0.0f, 30.0f), Tuning);
+		TestEqual(TEXT("a banked view never rolls the boom"), (float)Banked.Roll, 0.0f);
+
+		// The pitch clamp is the rig's, not the controller's.
+		const FRotator Steep = BoomRotation(FRotator(-80.0f, 0.0f, 0.0f), Tuning);
+		TestEqual(TEXT("the boom pitch clamps at the rig's own limit"), (float)Steep.Pitch, Tuning.PitchMin);
+	}
+
+	// --- the shoulder offset is in boom space ---
+	{
+		FElysiumCameraRigTuning Tuning;
+		Tuning.ShoulderOffset = FVector(0.0f, 40.0f, 10.0f);
+
+		// Looking down +X: the camera sits back along -X, right along +Y and up along +Z.
+		const FVector Behind = BoomTarget(FVector::ZeroVector, FRotator::ZeroRotator, 200.0f, Tuning);
+		TestTrue(TEXT("the camera sits behind the pivot, offset to the shoulder"),
+			Behind.Equals(FVector(-200.0f, 40.0f, 10.0f), KINDA_SMALL_NUMBER));
+
+		// Turned 90 degrees, the offset turns with it -- it stays on the same shoulder rather than
+		// sliding across the frame.
+		const FVector Turned = BoomTarget(FVector::ZeroVector, FRotator(0.0f, 90.0f, 0.0f), 200.0f, Tuning);
+		TestTrue(TEXT("and it follows the boom rather than the world"),
+			Turned.Equals(FVector(-40.0f, -200.0f, 10.0f), 0.01f));
+	}
+
+	// --- collision is asymmetric ---
+	{
+		FElysiumCameraRigTuning Tuning;
+		Tuning.BoomLength = 220.0f;
+		Tuning.MinBoomLength = 40.0f;
+		Tuning.WallPullIn = 12.0f;
+		Tuning.ReturnSpeed = 260.0f;
+
+		// Contact retracts on the frame it happens. Easing here would leave the wall inside the
+		// near plane for the duration of the ease.
+		const float Hit = SolveBoomDistance(220.0f, 220.0f, /*bHit*/ true, 100.0f, Tuning, 1.0f / 60.0f);
+		TestEqual(TEXT("contact retracts immediately, less the wall pull-in"), Hit, 88.0f);
+
+		// A contact closer than the floor still respects it.
+		const float Crushed = SolveBoomDistance(220.0f, 220.0f, true, 20.0f, Tuning, 1.0f / 60.0f);
+		TestEqual(TEXT("but never past the minimum boom"), Crushed, 40.0f);
+
+		// Clearance grows back rate-limited -- this is the half that is *not* symmetric, and it is
+		// why the camera does not pop out of a doorway the first frame the sweep misses.
+		const float Recovering = SolveBoomDistance(88.0f, 220.0f, false, 0.0f, Tuning, 0.1f);
+		TestEqual(TEXT("clearance grows back at the return speed"), Recovering, 114.0f);
+		TestTrue(TEXT("which is slower than the retract that caused it"), Recovering < 220.0f);
+
+		// It never overshoots the rest length.
+		const float Restored = SolveBoomDistance(219.0f, 220.0f, false, 0.0f, Tuning, 1.0f);
+		TestEqual(TEXT("and stops at the rest length"), Restored, 220.0f);
+
+		// A zero return speed restores instantly, the A/B against the rate limit.
+		Tuning.ReturnSpeed = 0.0f;
+		TestEqual(TEXT("a zero return speed restores at once"),
+			SolveBoomDistance(88.0f, 220.0f, false, 0.0f, Tuning, 1.0f / 60.0f), 220.0f);
 	}
 
 	return true;

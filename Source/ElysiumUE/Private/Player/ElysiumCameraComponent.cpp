@@ -300,6 +300,12 @@ void UElysiumCameraComponent::SolveModelAlpha()
 
 void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 {
+	ApplyBaseToView(View);
+	ApplyScriptedShotToView(View);
+}
+
+void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
+{
 	// The strafe bank goes on FIRST, so the third-person blend below lerps it away along with
 	// everything else. VtMB's own gate is binary — it adds a literal 0.0 in third person — but the
 	// mode here is a weight rather than a flag, so the bank is scaled by the first-person share.
@@ -317,10 +323,13 @@ void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 		View.Location += SolvedOffset * E;
 		View.Rotation = FMath::Lerp(View.Rotation, SolvedAngles, E);
 	}
+}
 
-	const float S = Shots.GetWeight();
-	const FElysiumCameraShot* Top = Shots.Top();
-	if (S > 0.0f)
+void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) const
+{
+	const FElysiumScriptedShotView Shot = ScriptedShotView();
+
+	if (Shot.Weight > 0.0f)
 	{
 		// VtMB camera tracks author exact edits and deliberate dollies, but no camera-motion blur.
 		// UE's default blur turns even the small post-cut dollies into a radial smear and makes a
@@ -329,17 +338,29 @@ void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 		View.PostProcessSettings.bOverride_MotionBlurAmount = true;
 		View.PostProcessSettings.MotionBlurAmount = 0.0f;
 	}
-	if (S > 0.0f && bShotSeeded)
+	if (Shot.Weight > 0.0f && Shot.bSeeded)
 	{
 		// The scripted camera is applied on top: origin, look-at, roll and FOV all lerp by its own
 		// timed weight, which is what lets a cutscene cut on the beat it was authored for.
-		View.Location = FMath::Lerp(View.Location, ShotPosition, S);
-		View.Rotation = FMath::Lerp(View.Rotation, ShotRotation, S);
-		if (Top && Top->FieldOfView > 0.0f)
-		{
-			View.FOV = FMath::Lerp(View.FOV, Top->FieldOfView, S);
-		}
+		float Fov = View.FOV;
+		ElysiumCam::ComposeScriptedShot(View.Location, View.Rotation, Fov,
+			Shot.Location, Shot.Rotation, Shot.FieldOfView, Shot.Weight);
+		View.FOV = Fov;
 	}
+}
+
+FElysiumScriptedShotView UElysiumCameraComponent::ScriptedShotView() const
+{
+	FElysiumScriptedShotView Out;
+	Out.Location = ShotPosition;
+	Out.Rotation = ShotRotation;
+	Out.Weight = Shots.GetWeight();
+	Out.bSeeded = bShotSeeded;
+	if (const FElysiumCameraShot* Top = Shots.Top())
+	{
+		Out.FieldOfView = Top->FieldOfView;
+	}
+	return Out;
 }
 
 bool UElysiumCameraComponent::ConsumeTemporalCameraCutRequest()
@@ -349,7 +370,7 @@ bool UElysiumCameraComponent::ConsumeTemporalCameraCutRequest()
 	return bPending;
 }
 
-bool UElysiumCameraComponent::CalcCameraFor(UElysiumCameraComponent* Camera, float DeltaSeconds,
+bool UElysiumCameraComponent::SolveFrameFor(UElysiumCameraComponent* Camera, float DeltaSeconds,
 	FMinimalViewInfo& Out)
 {
 	if (!Camera || !Camera->IsActive())
@@ -358,9 +379,31 @@ bool UElysiumCameraComponent::CalcCameraFor(UElysiumCameraComponent* Camera, flo
 	}
 	// `GetCameraView` FIRST: it fills FOV, the post-process settings and the first-person-rendering
 	// fields, and skipping it is the documented cause of first-person rendering silently not applying.
+	// It is also the only thing that advances this component's world rotation, since it does not tick.
 	Camera->GetCameraView(DeltaSeconds, Out);
 	Camera->UpdateCamera(DeltaSeconds);
-	Camera->ApplyToView(Out);
+	return true;
+}
+
+bool UElysiumCameraComponent::CalcCameraBaseFor(UElysiumCameraComponent* Camera, float DeltaSeconds,
+	FMinimalViewInfo& Out)
+{
+	if (!SolveFrameFor(Camera, DeltaSeconds, Out))
+	{
+		return false;
+	}
+	Camera->ApplyBaseToView(Out);
+	return true;
+}
+
+bool UElysiumCameraComponent::CalcCameraFor(UElysiumCameraComponent* Camera, float DeltaSeconds,
+	FMinimalViewInfo& Out)
+{
+	if (!CalcCameraBaseFor(Camera, DeltaSeconds, Out))
+	{
+		return false;
+	}
+	Camera->ApplyScriptedShotToView(Out);
 	if (Camera->ConsumeTemporalCameraCutRequest())
 	{
 		// A camera cut resets temporal histories and has zero camera velocity by definition. The base

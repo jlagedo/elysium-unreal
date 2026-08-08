@@ -133,9 +133,14 @@ faithful body) over `ElysiumMoveSolve.h` (`docs/vtmb/source_movement.md`: `names
 constants + the `CGameMovement` math as free functions, plus `FElysiumMoveTuning`'s `sv_*` cvar
 surface — the same pure-rules/engine-half split as `ElysiumCameraSolve.h`),
 `AElysiumCapsulePawn` (the `elysium.SourceMovement 0` A/B baseline),
-`FElysiumCameraWeights`/`FElysiumCameraShotStack`/`UElysiumCameraComponent`,
-`FElysiumViewState`. Actors: `AElysiumGameMode`, `AElysiumPlayerController` (hosts
-`UElysiumCheatManager` and the router), `AElysiumPawn`, `AElysiumHUD` (Canvas, does not tick).
+`FElysiumCameraWeights`/`FElysiumCameraShotStack`/`UElysiumCameraComponent` (the faithful
+evaluator), `AElysiumPlayerCameraManager` + `FElysiumCameraSample` (the one final view, the
+post-layer stack and the modern rig's state), `UElysiumCameraModifier` /
+`UElysiumCameraModifier_LegacyShot` (`ElysiumCameraModifiers.h`), `ElysiumCameraRig.h`
+(`namespace ElysiumRig` — the modern rig's pure rules and its own tuning struct, the same
+pure-rules/engine-half split as `ElysiumCameraSolve.h`), `FElysiumViewState`. Actors:
+`AElysiumGameMode`, `AElysiumPlayerController` (hosts `UElysiumCheatManager`, the router and
+`PlayerCameraManagerClass`), `AElysiumPawn`, `AElysiumHUD` (Canvas, does not tick).
 
 **Scripting, audio, shared readers**: `IElysiumScriptHost` (`FElysiumCPythonScriptHost` over
 `FElysiumPythonVM` the map-load default; `FElysiumExprScriptHost`/`FElysiumNullScriptHost`
@@ -148,7 +153,7 @@ Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}`, `FElysiumSignDa
 
 `UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the Elysium
 ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `_WorldViz`,
-`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`, `_Environment`) over
+`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`, `_Camera`, `_Environment`) over
 `FElysiumCogWindow`.
 `UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and world-viz layers.
 `ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
@@ -182,8 +187,21 @@ Hard-won, non-obvious, and easy to undo:
 - **Activatable screens enter through `UElysiumPlayerUISubsystem` containers.** Adding one straight
   to a viewport bypasses CommonUI activation, Back routing and focus restoration; the composition
   policy test rejects direct insertion outside the one root owner.
-- **`UElysiumCameraComponent::CalcCameraFor` must delegate to `UCameraComponent::GetCameraView`
-  first** — overriding `CalcCamera` without it silently breaks first-person rendering.
+- **`UElysiumCameraComponent::SolveFrameFor` must delegate to `UCameraComponent::GetCameraView`
+  first** — skipping it silently breaks first-person rendering, and it is also the only thing that
+  advances the non-ticking component's world rotation, so the boom would hang off a stale eye.
+  Everything that produces a view goes through it.
+- **The camera manager overrides `UpdateViewTargetInternal`, never `UpdateViewTarget`.** The outer
+  function owns the `ACameraActor` branch that character generation's view target needs, the stock
+  debug `CameraStyle` modes, the per-frame POV reset and the modifier pass; the inner one is exactly
+  the `CalcCamera` dispatch being replaced. Overriding the outer silently breaks chargen.
+- **`UCameraModifier::ModifyCamera` does not scale by `Alpha`** despite its header comment saying
+  so, and `ApplyCameraModifiers` runs once per *view target* rather than once per frame — during a
+  view-target blend that is twice with the same delta. `UElysiumCameraModifier` applies its own
+  alpha, calls `Super` (without which `Alpha` never advances at all), and hands the repeat pass a
+  zero delta rather than skipping it, because the second target's POV still needs the layer.
+  Relatedly, `AddNewCameraModifier` returns null **silently** when `bExclusive` meets a duplicate
+  priority.
 - **The player hull is a box, not a capsule** — `StepMove` depends on a flat bottom, and `ACharacter`
   will not take a box root.
 - **An NPC movement tick already depends on the map actor while its character stands on map-owned

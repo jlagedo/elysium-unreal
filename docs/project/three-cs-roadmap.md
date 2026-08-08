@@ -45,7 +45,7 @@ rung: `CCC7` re-opens what `4.7` settled, by design.
 | Rung | Canonical step | Where this project stands |
 |---|---|---|
 | Character math | 1 | `4.7 [x]` — ported line-by-line, `Elysium.Substrate.Movement` green. Its **speed authority is open**, and its world half — `StepMove`, `CategorizePosition`, the jump against real geometry — is asserted nowhere; the gym is the unfinished half of the rung |
-| Camera | 2 | `11.7 [x]` faithful evaluator; the modern service and rig are `CCC2` |
+| Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig behind `elysium.ModernCamera` (default 0) |
 | Character ↔ camera co-tune | 3 | **absent** — `CCC3` creates it, deliberately after `CCC7` settles the speed |
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half is `CCC3` |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
@@ -93,7 +93,7 @@ trace, a bake) is a context switch rather than a slice stall.
 
 | Lane A — the camera platform | Lane B — the animation spine |
 |---|---|
-| `CCC2` — the service foundation, then the modern rig | `CCC1` — the body sample |
+| `CCC2 [x]` — the service foundation, then the modern rig | `CCC1 [x]` — the body sample |
 | `CCC3` — the response curve and the leniency courses | `CCC4` — intent, resolver, record |
 | | `CCC5` — the player graph |
 | | `CCC6` — drive it |
@@ -179,7 +179,7 @@ retires what they replaced.
   set at the press edge. `CCC5`'s `ACT_LEAP_DESCEND`/`ACT_LAND` chain is what decides whether it has
   to be.
 
-- [ ] **CCC2 Camera service foundation and the player rig.** The re-architecture the camera needs:
+- [x] **CCC2 Camera service foundation and the player rig.** The re-architecture the camera needs:
   the shipping component is one class carrying the weights, the boom, the orbit state, the shot
   stack and the command surface, and no object owns the final view alone. The modern half lands on
   the engine's own machinery rather than beside it. **Stage one, the foundation:**
@@ -217,6 +217,37 @@ retires what they replaced.
   live with both rigs' channels recorded in one run; boom length, clip state and damper position
   assert against `CCC0`'s recorded faithful baseline. *Deps:* `CCC0`; `11.5 [x]`, `11.7 [x]`,
   `11.8 [x]`, `12.1`'s verified sampler.
+  *Done:* the four corrections landed in `docs/architecture/camera-architecture.md` before it was
+  built from. `AElysiumPlayerCameraManager` owns the one final view through
+  **`UpdateViewTargetInternal`** — the narrow seam, so the `ACameraActor` branch character
+  generation uses, the stock debug camera styles and the POV reset all keep working — and it
+  resolves the rig from the live view target every frame, never cached, because
+  `elysium.SourceMovement` swaps the pawn class at spawn. The legacy scripted channel is a **post
+  layer** (`UElysiumCameraModifier_LegacyShot` over the shared `UElysiumCameraModifier` base),
+  which is the faithful arrangement rather than a divergence: `ApplyToView` split into
+  `ApplyBaseToView` + `ApplyScriptedShotToView` over the pure `ElysiumCam::ComposeScriptedShot`, so
+  the shot composes over *either* rig and choreo does not break when the base swaps. The shot stack
+  stays the single timeline — the layer's alpha is written from its weight with zero blend time, so
+  a zero-duration edit is still a cut. The modern rig is manager-side state over pure `ElysiumRig::`
+  rules (`Elysium.Substrate.CameraRig`), not a component and not a spring arm, with a
+  frame-rate-independent half-life damper, asymmetric collision and a shoulder offset. Eleven camera
+  channels ride the existing recorder; both rigs record every frame whichever supplies the base,
+  which a run under `elysium.ModernCamera 1` confirms by producing byte-identical channels. The Cog
+  window `Elysium.Characters.Camera` and `elysium_player_get` read the same published sample the
+  recorder does, so a readout and a channel diff cannot disagree.
+  *Instrument findings:* the A/B caught two defects on the first comparison — an inverted pitch sign
+  that put the modern camera below the eye line (visible only as `mcam_clip` firing on 78 frames
+  where `cam_clip` fired on none), and a harness defect of its own where the third-person weight was
+  armed per course, so recording began mid-ramp and a frame-counted settle landed at 1.0 at 60 Hz
+  and 0.5 at 120. The run now waits on the weight itself. The gym's `pop_*` courses also isolate the
+  faithful damper's frame-rate dependence: with horizontal position and speed agreeing exactly
+  between 60 and 120 Hz, the boom still lands 0.36–0.47 u apart — sub-tolerance, so nothing reddens.
+  *Deferred, with the seam kept:* weapon-class arbitration is **not** removed. The `+0x2440` bit
+  meanings are still unrecovered and classes `0x08`/`0x10` look like Logic rather than preference,
+  so the doc now records the removal as deferred pending RE and the forced-third/forced-first/feed
+  latches stay as the entry point a weapon system will use. `UElysiumCameraProfile` and the user
+  settings surface defer to `11.13d`/`8.10`, where the screen that consumes them lives; the tuning
+  partition that makes them unambiguous is recorded now.
 
 - [ ] **CCC3 Controls response, and the co-tune that waits.** The feel half of input, which no
   document tracks — `docs/architecture/input-architecture.md` records look-curve tuning as "a
@@ -435,15 +466,16 @@ is what `-ElysiumMove` exists to turn into a per-change headless run.
   two baseline sets are actually kept apart — promoting a course time before `CCC7` bakes in a number
   that is about to change. The co-tune waits for the same reason: the split protects assertions, not
   tuning hours.
-- **The camera is the C with no instrument.** The tested half of the camera is its bookkeeping and
-  its helpers — the approach, the spline, the model-alpha band are asserted; the four-stage boom
-  solve, the collision sweep, the damper and `SolveViewRoll` have no assertions as a composition.
-  The evaluator is not retro-unit-tested: it becomes the recorded reference `CCC0`'s channels
-  capture, and the modern rig is what asserts against it.
-- **A greenfield camera plan over a working camera.** `docs/architecture/camera-architecture.md`
-  describes ~2,700 lines of tested, RE-faithful code in one sentence. `CCC2` corrects the doc before
-  building from it; skipping that step silently converts retail's composition model into a
-  winner-takes-all stack.
+- **The camera is the C with no instrument** — closed by `CCC2`. `SolveViewRoll` is asserted, and
+  the four-stage boom solve, the collision sweep and the damper are now recorded per frame as
+  `cam_*` beside the modern rig's `mcam_*`, so the evaluator is the recorded reference rather than
+  an untested composition. What the instrument cannot bound is taste, which is `CCC3`'s and
+  `CCC8`'s.
+- **A greenfield camera plan over a working camera** — closed by `CCC2`, which corrected the four
+  defects in `docs/architecture/camera-architecture.md` before building from it. The one that would
+  have cost most was the priority table: composing retail's scripted channel as a base request
+  converts a one-camera-and-weights engine into a winner-takes-all stack and eases an authored
+  cutscene timeline twice.
 - **The portrait stack can regress without a log line.** The eye seam and the axis-interp/cloth tail
   live on the NPC anim instance today; a player graph that does not carry them ships frozen eyes and
   untwisted forearms, and neither the logs nor the Content Browser preview can show it. `CCC5` owns
@@ -470,7 +502,9 @@ per the house rules.
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
 | Input leniency of any kind — buffering, coyote time, a look-response curve that is not retail's. VtMB has none of these | `docs/architecture/input-architecture.md` |
 | A fixed-step accumulator, shipped behind `elysium.move.FixedStep` with the faithful variable delta as the default | `docs/vtmb/source_movement.md` |
-| Composing the legacy shot and track channels as post layers, or arbitrating them as base requests against the third-person weight — whichever `CCC2` chooses | `docs/architecture/camera-architecture.md` |
+| ~~Composing the legacy shot and track channels as post layers, or arbitrating them as base requests~~ — **settled as post layers, and therefore not a divergence**: retail composes the scripted channel over the third-person weight, so this is the faithful behaviour and the doc's table was corrected | `docs/architecture/camera-architecture.md` |
+| Weapon-class camera arbitration — **deferred, not made**. The `+0x2440` bits are unrecovered and `0x08`/`0x10` read as Logic; the forced-third/first/feed latches stay as the seam | `docs/vtmb/camera-view-modes.md` |
+| The modern rig's frame-rate-independent half-life damper, asymmetric collision recovery and shoulder offset — behind `elysium.ModernCamera`, default 0 until `CCC3`'s co-tune | `docs/architecture/camera-architecture.md` |
 
 **Not divergences**, and recorded as defect fixes rather than choices: the box hull that `StepMove`
 requires against `ACharacter`'s capsule, and keeping masked sequences out of the base clip path.

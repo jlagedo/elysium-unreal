@@ -79,6 +79,28 @@ float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 }
 
 // =====================================================================================
+// The scripted composition (`ApplyScriptedBlend`, tail of `CAM_ApplyToView`)
+// =====================================================================================
+
+void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
+	const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight)
+{
+	if (Weight <= 0.0f)
+	{
+		return;
+	}
+	// `FMath::Lerp` on a rotator interpolates the *normalized* delta, so a shot across the ±180
+	// boundary takes the short way round. That is the behaviour the shipped apply point has, and it
+	// is called rather than reimplemented so the two cannot drift.
+	InOutLocation = FMath::Lerp(InOutLocation, ShotLocation, Weight);
+	InOutRotation = FMath::Lerp(InOutRotation, ShotRotation, Weight);
+	if (ShotFov > 0.0f)
+	{
+		InOutFov = FMath::Lerp(InOutFov, ShotFov, Weight);
+	}
+}
+
+// =====================================================================================
 // The weight driver (0x100fc900)
 // =====================================================================================
 
