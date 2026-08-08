@@ -138,22 +138,46 @@ retires what they replaced.
   ships no ramp near the 0.7 standable normal, and the map's `.hulls` sidecar is not the walkable
   surface, so a coordinate picked out of it is picked off the wrong geometry.
 
-- [ ] **CCC1 Publish the body sample.** `UElysiumMovementComponent` holds every input a graph wants
-  and hands them to nothing: the post-solve state is private members behind scalar getters, and
-  only the harness reads them. `FElysiumLocomotionSample`
+- [x] **CCC1 Publish the body sample.** `FElysiumLocomotionSample`
   (`docs/architecture/animation-architecture.md` §3.2) is a POD struct publishing local planar
   velocity, speed, facing yaw, `move_yaw`, ground/air/water, stance and jump phase — the jump
-  phase is already carried as the hold window plus the vertical velocity's sign — written once at
-  the mover's tick tail, after the last stepper substep, where the state is settled. Consumers read
-  it by the standard split: a game-thread copy in `NativeUpdateAnimation`, latched into the proxy
-  in `PreUpdate`, so a worker thread only ever sees the copy. **Two yaw channels are recorded from
-  the first day** — the wish-direction yaw and the velocity yaw — because `CCC7`'s sign recovery
-  compares the retail selector's input against both, and the recordings should exist before the
-  question is asked. **The NPC motor fills the same struct**; one contract, two producers, so the
-  cast's locomotion and the player's cannot become two systems that happen to play the same files.
+  phase carried as the hold window plus the vertical velocity's sign — written once at
+  the mover's tick tail, after the last stepper substep, where the state is settled. **Two yaw
+  channels are recorded from the first day** — the wish-direction yaw and the velocity yaw —
+  because `CCC7`'s sign recovery compares the retail selector's input against both, and the
+  recordings exist before the question is asked. **The NPC motor fills the same struct**; one
+  contract, two producers, so the cast's locomotion and the player's cannot become two systems
+  that happen to play the same files.
   *Acceptance:* post-solve speed, `move_yaw`, ground state and stance are readable from one struct
   for both producers; both yaw channels are registered in the differ; the Cog Npc window shows both
   producers. *Deps:* none.
+  *Done:* the struct and its pure rules (`ElysiumLocomotionSample.h` — `RelativeYaw`, `StanceFrom`,
+  `FromCharacterMovement`, and `EElysiumWaterLevel`, which is body state rather than a solve rule),
+  asserted by `Elysium.Substrate.Locomotion`. `Speed2D` and `JumpPhase` are derivations rather than
+  stored fields, so they cannot disagree with the velocity they come from. The stance carries
+  **four** values, not three: `bDucked` and `bDucking` are independent and all four pairs are
+  reachable — the release edge sets `bDucking` while `bDucked` is still true, and under a low ceiling
+  the body stays in that unduck ramp rather than passing through it. Both producers answer one
+  contract — `IElysiumPlayerBody::GetLocomotionSample` and `IElysiumNpcMotor::SampleLocomotion` —
+  the player's stored because its wish belongs to the command that was integrated, an NPC's pulled
+  because it has no command to desynchronise against, and `FromCharacterMovement` serving both the
+  cast and the `elysium.SourceMovement 0` capsule body. Every wish reaches the sample through one
+  capture point inside `WishDirection`, which is why `WaterMove` goes through the member rather than
+  the free function; a frame that integrated nothing holds the previous sample. `move_yaw_wish` and
+  `move_yaw_vel` are registered as `EKind::Angle`, a third comparison rule taking a wrapped
+  difference, because a backpedalling body sits exactly on the ±180 boundary. The Cog Npc window's
+  Locomotion tab draws both producers through one row function. `Elysium.Substrate.FrameOrder`
+  gains the rung's assertion — the post-move pass is later than the mover — and the player visual
+  gains the mover tick prerequisite `ACharacter` installs for every other body.
+  *Scope note:* the consumer split — a game-thread copy in `NativeUpdateAnimation` latched into the
+  proxy in `PreUpdate` — lands with the graph at `CCC5`; a proxy member nothing evaluates is dead
+  until one exists. And the gym **registers** frame channels without comparing them: a committed
+  gym baseline is the manifest alone, so the two yaw channels are asserted by the sited baselines
+  and the cross-rate run, which is what the recordings were for.
+  *Open:* `JumpPhase` cannot separate a jump's descent from walking off a ledge — once the hold
+  window closes the two are identical in the state the sample carries — so closing it needs a latch
+  set at the press edge. `CCC5`'s `ACT_LEAP_DESCEND`/`ACT_LAND` chain is what decides whether it has
+  to be.
 
 - [ ] **CCC2 Camera service foundation and the player rig.** The re-architecture the camera needs:
   the shipping component is one class carrying the weights, the boom, the orbit state, the shot
