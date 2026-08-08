@@ -1164,7 +1164,8 @@ public:
 		{
 			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 			{
-				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y);
+				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y, ModelStem(),
+					FMath::Max(0, Handle.Index));
 				if (Motor)
 				{
 					Motor->SetEnabled(!IsInert());
@@ -1208,7 +1209,8 @@ public:
 		{
 			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 			{
-				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y);
+				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y, ModelStem(),
+					FMath::Max(0, Handle.Index));
 				if (Motor)
 				{
 					Motor->SetEnabled(!IsInert());

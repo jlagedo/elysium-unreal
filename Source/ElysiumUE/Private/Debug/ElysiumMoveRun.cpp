@@ -100,6 +100,8 @@ namespace
 		TEXT("onground"), TEXT("ducked"), TEXT("ducking"), TEXT("canunduck"),
 		TEXT("water"), TEXT("surffric"),
 		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"),
+		TEXT("act_code"), TEXT("act_route"), TEXT("act_outcome"), TEXT("act_asset"),
+		TEXT("air_phase"), TEXT("act_gen"), TEXT("act_stride"), TEXT("act_fade"),
 		TEXT("cam_boom"), TEXT("cam_damp"), TEXT("cam_pitch"), TEXT("cam_yaw"),
 		TEXT("cam_clip"), TEXT("cam_third"),
 		TEXT("mcam_boom"), TEXT("mcam_damp"), TEXT("mcam_pitch"), TEXT("mcam_yaw"),
@@ -117,6 +119,9 @@ namespace
 		// records movement, and the camera columns hold their last settled values.
 		UElysiumCameraComponent* Camera = nullptr;
 		AElysiumPlayerCameraManager* CameraManager = nullptr;
+		// The animation half (CCC4), also optional: the map actor is what publishes the player's
+		// selection record, and a run with none records the classifier's columns as their defaults.
+		AElysiumMapActor* Map = nullptr;
 		explicit operator bool() const { return PC && Pawn && Move && Router; }
 	};
 
@@ -133,6 +138,7 @@ namespace
 		R.Camera = R.Pawn ? R.Pawn->GetCameraComponent() : nullptr;
 		R.CameraManager = R.PC
 			? Cast<AElysiumPlayerCameraManager>(R.PC->PlayerCameraManager) : nullptr;
+		R.Map = Sub ? Sub->GetCurrentMap() : nullptr;
 		return R;
 	}
 
@@ -265,6 +271,11 @@ bool FElysiumMoveRun::BeginCourse(int32 Index, ECoursePhase InPhase)
 	GroundTransitions = 0;
 	bWasOnGround = true;
 	CamThirdMax = 0.0;
+	ActResolvedFrames = 0;
+	ActFallbackFrames = 0;
+	ActCodesSeen = 0;
+	AnimBanks.Reset();
+	AnimSelections.Reset();
 
 	if (Phase == ECoursePhase::Probe)
 	{
@@ -328,6 +339,47 @@ void FElysiumMoveRun::Sample()
 	const FElysiumLocomotionSample& Locomotion = Body.Move->GetLocomotionSample();
 	Recorder.Set(TEXT("move_yaw_wish"), Locomotion.MoveYawWish);
 	Recorder.Set(TEXT("move_yaw_vel"), Locomotion.MoveYawVelocity);
+
+	// The selection (CCC4), read off the record the post-move pass published rather than re-resolved,
+	// for the same reason the sample above is read rather than re-derived: two derivations of one
+	// answer are how a recording comes to disagree with what actually ran.
+	//
+	// In the gym these carry the classifier alone. There is no map, no player entity and no visual
+	// there, so the outcome is `NoVocabulary` and the asset is none — which is the right split: the
+	// gym brackets the classification `CCC7` will move, and the sited courses carry the resolution.
+	static const FElysiumAnimationSelection EmptySelection;
+	const FElysiumAnimationSelection& Sel = Body.Map
+		? Body.Map->GetPlayerAnimSelection() : EmptySelection;
+	// The classifier's own answer is the pre-translation activity, which is what the record keeps as
+	// the logical request; the resolved one is only different once a translation row applied.
+	const EElysiumAnimActivityCode Code = ElysiumAnimIntent::ActivityCode(Sel.RequestedActivity);
+	Recorder.Set(TEXT("act_code"), static_cast<int32>(Code));
+	Recorder.Set(TEXT("act_route"), static_cast<int32>(Sel.Route));
+	Recorder.Set(TEXT("act_outcome"), static_cast<int32>(Sel.Outcome));
+	Recorder.Set(TEXT("act_asset"), static_cast<int32>(Sel.AssetKind));
+	Recorder.Set(TEXT("air_phase"), static_cast<int32>(Sel.AirPhase));
+	Recorder.Set(TEXT("act_gen"), static_cast<int32>(Sel.Generation));
+	Recorder.Set(TEXT("act_stride"), Sel.GroundSpeedCmPerSecond * Inv);
+	Recorder.Set(TEXT("act_fade"), Sel.FadeSeconds);
+
+	ActCodesSeen |= (Code != EElysiumAnimActivityCode::Unknown)
+		? (1u << static_cast<uint32>(Code)) : 0u;
+	if (Sel.Outcome == EElysiumAnimOutcome::Resolved)
+	{
+		++ActResolvedFrames;
+	}
+	else
+	{
+		++ActFallbackFrames;
+	}
+	if (!Sel.OwnerStem.IsEmpty())
+	{
+		// A run course's manifest naming the PC-only bank IS the bank-ownership claim, in text, in the
+		// run's own output.
+		AnimBanks.Add(Sel.OwnerStem);
+		AnimSelections.Add(FString::Printf(TEXT("%s=%s@%s:%s"), *Sel.ResolvedActivity,
+			*Sel.SequenceLabel, *Sel.OwnerStem, *Sel.AnimationName));
+	}
 
 	// The camera (CCC2), read off the manager's settled sample. This runs from the core ticker,
 	// which the engine ticks *after* the world — so the sample published inside this frame's view
@@ -497,6 +549,21 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetOverride(Override.Key, Override.Value);
 	}
 
+	// The selection's string identities (CCC4). Sorted and joined so the line is deterministic across
+	// two runs of the same course; empty on the gym, which stands a body with no model behind it.
+	{
+		auto Joined = [](const TSet<FString>& Values)
+		{
+			TArray<FString> Sorted = Values.Array();
+			Sorted.Sort();
+			return FString::Join(Sorted, TEXT(" "));
+		};
+		Recorder.SetMeta(TEXT("anim_stem"), Body.Map ? Body.Map->GetPlayerAnimSelection().Stem
+			: FString());
+		Recorder.SetMeta(TEXT("anim_banks"), Joined(AnimBanks));
+		Recorder.SetMeta(TEXT("anim_selections"), Joined(AnimSelections));
+	}
+
 	Recorder.SetRun(TEXT("frames"), Recorder.FrameCount());
 	Recorder.SetRun(TEXT("advance_max"), AdvanceMax);
 	Recorder.SetRun(TEXT("top_stand"), TopStand);
@@ -506,6 +573,9 @@ void FElysiumMoveRun::FinishCourse()
 	Recorder.SetRun(TEXT("ended_ducked"), bEndedDucked);
 	Recorder.SetRun(TEXT("peak_speed2d"), PeakSpeed2D);
 	Recorder.SetRun(TEXT("cam_third_max"), CamThirdMax);
+	Recorder.SetRun(TEXT("act_resolved"), ActResolvedFrames);
+	Recorder.SetRun(TEXT("act_fallbacks"), ActFallbackFrames);
+	Recorder.SetRun(TEXT("act_codes"), static_cast<int32>(ActCodesSeen));
 
 	// Only the leniency courses carry these. A course that merely *holds* jump re-fires on landing at
 	// a gait-dependent moment, so declaring the count universally would commit a number `CCC7` moves.

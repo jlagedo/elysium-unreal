@@ -7,10 +7,45 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "Visual/ElysiumAnimationDriver.h"
+#include "Engine/GameInstance.h"
+#include "Engine/SkeletalMesh.h"
+
+void FElysiumNpcAnimTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
+	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	if (Target && IsValidChecked(Target) && !Target->IsUnreachable())
+	{
+		FScopeCycleCounterUObject ActorScope(Target);
+		Target->AnimTick(DeltaTime);
+	}
+}
+
+FString FElysiumNpcAnimTickFunction::DiagnosticMessage()
+{
+	return GetFullNameSafe(Target) + TEXT("[AElysiumNpcBody::AnimTick]");
+}
+
+FName FElysiumNpcAnimTickFunction::DiagnosticContext(bool bDetailed)
+{
+	if (bDetailed)
+	{
+		return FName(*FString::Printf(TEXT("ElysiumNpcBodyAnim/%s"), *GetFullNameSafe(Target)));
+	}
+	return FName(TEXT("ElysiumNpcBodyAnim"));
+}
 
 AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// CCC4 — the animation pass runs after this body's own movement has produced the frame's final
+	// velocity, which the tick group is what guarantees. It stops when the world is held, because a
+	// held body is not moving and re-classifying it every frame would only churn the record.
+	AnimTickFunction.bCanEverTick = true;
+	AnimTickFunction.bStartWithTickEnabled = true;
+	AnimTickFunction.TickGroup = TG_PostPhysics;
+	AnimTickFunction.bTickEvenWhenPaused = false;
+
 	AIControllerClass = ADetourCrowdAIController::StaticClass();
 	// A standing NPC needs a body, not a crowd agent. Spawn the controller on the first accepted
 	// MoveTo, after the runtime Recast graph has crossed the activation barrier.
@@ -45,6 +80,63 @@ void AElysiumNpcBody::SetRuntimeReady(bool bReady)
 {
 	bRuntimeReady = bReady;
 	ApplyEnabledState();
+}
+
+void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent* InVisual,
+	int32 InVariant)
+{
+	ModelStem = InStem;
+	Visual = InVisual;
+	AnimVariant = FMath::Max(0, InVariant);
+	if (AnimDriver.IsValid())
+	{
+		AnimDriver->Reset();
+	}
+}
+
+void AElysiumNpcBody::RegisterActorTickFunctions(bool bRegister)
+{
+	Super::RegisterActorTickFunctions(bRegister);
+
+	if (bRegister && AnimTickFunction.bCanEverTick)
+	{
+		AnimTickFunction.Target = this;
+		AnimTickFunction.SetTickFunctionEnable(AnimTickFunction.bStartWithTickEnabled);
+		AnimTickFunction.RegisterTickFunction(GetLevel());
+		// The tick group already separates the two; saying so in the graph as well keeps the
+		// dependency if anyone re-groups either end.
+		if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+		{
+			AnimTickFunction.AddPrerequisite(Movement, Movement->PrimaryComponentTick);
+		}
+	}
+	else if (!bRegister)
+	{
+		AnimTickFunction.UnRegisterTickFunction();
+	}
+}
+
+void AElysiumNpcBody::AnimTick(float DeltaSeconds)
+{
+	if (!AnimDriver.IsValid())
+	{
+		AnimDriver = MakePimpl<FElysiumAnimationDriver>();
+		AnimDriver->Source = EElysiumAnimSource::Npc;
+	}
+	AnimDriver->Stem = ModelStem;
+	AnimDriver->Variant = AnimVariant;
+
+	USkeletalMeshComponent* Body = Visual.Get();
+	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
+		Body ? Body->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr);
+}
+
+const FElysiumAnimationSelection& AElysiumNpcBody::GetAnimSelection() const
+{
+	static const FElysiumAnimationSelection Empty;
+	return AnimDriver.IsValid() ? AnimDriver->Selection : Empty;
 }
 
 FVector AElysiumNpcBody::FeetLocation() const

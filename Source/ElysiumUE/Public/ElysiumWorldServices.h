@@ -108,8 +108,16 @@ public:
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) = 0;
 	// Promote an ordinary NPC's visual to a native movement body. Null is the supported headless,
 	// backdrop, disabled-navigation, or failed-spawn path; the NPC remains a standing entity.
+	//
+	// `Stem` and `Variant` are what the body's own animation selection is keyed on (CCC4): the model
+	// names its clip vocabulary, and the variant is the repeatable token weighted choice rides on. The
+	// caller is the one place that knows both, so they travel with the body rather than being looked
+	// back up from it.
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FVector& FeetOrigin, float YawDegrees) { return nullptr; }
+		const FVector& FeetOrigin, float YawDegrees, const FString& Stem, int32 Variant)
+	{
+		return nullptr;
+	}
 	// The motor is engine-owned but logically belongs to the entity. Called on a model swap and
 	// entity-world teardown so a reload on a surviving map actor cannot leak collision capsules.
 	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) {}

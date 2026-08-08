@@ -56,6 +56,29 @@ namespace
 	{ TEXT("move_yaw_vel"),  TEXT("anim"), EScope::Frame, EKind::Angle, 1.0f, 3, TEXT("deg"),
 	  true,  TEXT("the realized velocity's direction, relative to facing") },
 
+	// --- The animation producer, per frame (CCC4) -----------------------------------------------
+	// Every discrete value rides as an enum ordinal under `Exact`, so a state flip is a behaviour
+	// change and never a rounding one. **The string identities are deliberately not here**: there is
+	// no string channel by design, because a value that reaches disk with no comparison rule is what
+	// this registry exists to refuse. The label, animation and owning bank ride the run metadata and
+	// are asserted by the Content tier, which can compare an identity against the real corpus.
+	{ TEXT("act_code"),    TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("EElysiumAnimActivityCode the classifier chose; 0 is outside the locomotion slice") },
+	{ TEXT("act_route"),   TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("EElysiumAnimRoute the record came from") },
+	{ TEXT("act_outcome"), TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("EElysiumAnimOutcome; 0 is a clean resolve and anything else names the fallback") },
+	{ TEXT("act_asset"),   TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("EElysiumAnimAssetKind the label resolved to") },
+	{ TEXT("air_phase"),   TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("EElysiumAirPhase the jump latch holds; what the sample alone cannot answer") },
+	{ TEXT("act_gen"),     TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("request generation; it advances only when the discrete request changes") },
+	{ TEXT("act_stride"),  TEXT("anim"), EScope::Frame, EKind::Numeric, 2.0f,   4, TEXT("u/s"),
+	  true,  TEXT("the selected cell's authored ground speed") },
+	{ TEXT("act_fade"),    TEXT("anim"), EScope::Frame, EKind::Numeric, 0.001f, 3, TEXT("s"),
+	  true,  TEXT("the authored transition duration the selection carries; 0 is a snap") },
+
 	// --- The camera producer, per frame (CCC2) --------------------------------------------------
 	// The faithful evaluator's solve, read off the settled sample the camera manager publishes
 	// rather than re-derived, so a recording cannot disagree with the view that was rendered.
@@ -133,6 +156,20 @@ namespace
 	// never engaging at all — which would otherwise leave every frame channel a plausible zero.
 	{ TEXT("cam_third_max"), TEXT("camera"), EScope::Run, EKind::Numeric, 0.01f, 3, TEXT(""),
 	  false, TEXT("highest third-person weight the course reached") },
+
+	// --- The animation producer, per run (CCC4) -------------------------------------------------
+	// The first two saturate the way the movement run channels do: "did every frame resolve" has the
+	// same answer at any gait, which is what makes them the assertion a **committed** gym baseline
+	// can actually carry — and the cheap catch for the resolver going dark, which would otherwise
+	// leave every frame column a plausible zero. `act_codes` is the opposite and is marked so: halve
+	// the walk speed and a course that ran now walks, so *which* activities it reaches genuinely
+	// moves with `CCC7`.
+	{ TEXT("act_resolved"),  TEXT("anim"), EScope::Run, EKind::Exact, 0.0f, 0, TEXT(""),
+	  false, TEXT("frames whose selection resolved to an asset") },
+	{ TEXT("act_fallbacks"), TEXT("anim"), EScope::Run, EKind::Exact, 0.0f, 0, TEXT(""),
+	  false, TEXT("frames whose outcome was not a clean resolve") },
+	{ TEXT("act_codes"),     TEXT("anim"), EScope::Run, EKind::Exact, 0.0f, 0, TEXT(""),
+	  true,  TEXT("bitmask of the activity codes the course reached") },
 	};
 }
 

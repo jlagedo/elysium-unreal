@@ -499,38 +499,116 @@ bool UElysiumNpcAnimSubsystem::ResolveGrid(const FString& Stem, const FString& C
 	return true;
 }
 
+FElysiumAnimationCatalog UElysiumNpcAnimSubsystem::BuildCatalog(const FString& Stem)
+{
+	FElysiumAnimationCatalog Catalog;
+	Catalog.Clips = GetClipSet(Stem);
+	Catalog.PropClips = Stem.IsEmpty() ? nullptr : GetIndex().AnimatedProps.Find(Stem);
+	// The owning bank is not known until the weighted pick has run, so the table arrives as a lookup
+	// rather than as a preloaded map. The shared pointer lives in this subsystem's session-lifetime
+	// cache, so the raw pointer outlives every resolve that reads it.
+	Catalog.BlendTableFor = [this](const FString& Owner) -> const FElysiumBlendTable*
+	{
+		return GetBlendTable(Owner).Get();
+	};
+	return Catalog;
+}
+
+void UElysiumNpcAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Intent,
+	USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset, FElysiumAnimationSelection& OutSelection,
+	FElysiumResolvedAnimation& OutAssets)
+{
+	OutAssets = FElysiumResolvedAnimation();
+
+	// The record comes out of the sidecars and is always producible. The asset needs a skeleton, and
+	// that is a separate question with a separate answer.
+	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Intent.Stem), OutSelection);
+	if (!OutSelection.IsResolved() || OutSelection.AssetKind == EElysiumAnimAssetKind::None)
+	{
+		return;
+	}
+
+	if (Mesh == nullptr)
+	{
+		OutSelection.Outcome = EElysiumAnimOutcome::NoAsset;
+		OutSelection.Detail = FString::Printf(
+			TEXT("'%s' resolved to '%s'@'%s', but the body has no skeletal mesh to bind against yet"),
+			*OutSelection.SequenceLabel, *OutSelection.AnimationName, *OutSelection.OwnerStem);
+		return;
+	}
+
+	if (OutSelection.AssetKind == EElysiumAnimAssetKind::BlendSpace)
+	{
+		// A grid is addressed by the LABEL: it is the thing a label names when it does not name one
+		// animation, so there is no cell to select first.
+		OutAssets.Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, OutSelection.OwnerStem,
+			OutSelection.SequenceLabel);
+		if (OutAssets.Space != nullptr)
+		{
+			return;
+		}
+		// A fan the bake has not covered still names its current cell, so the body can stand that one
+		// clip rather than nothing — and the record already says which cell it is.
+		OutSelection.AssetKind = EElysiumAnimAssetKind::Sequence;
+	}
+
+	// Addressed by owner and resolved animation name, matching what the record says rather than
+	// re-resolving the label at the neutral pose.
+	const bool bOwnsItself = OutSelection.OwnerStem.Equals(Intent.Stem, ESearchCase::IgnoreCase);
+	OutAssets.Sequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OutSelection.OwnerStem,
+		OutSelection.AnimationName);
+	if (OutAssets.Sequence == nullptr)
+	{
+		FString Error;
+		UglTFRuntimeAsset* Asset = bOwnsItself ? OwnAsset : GetBankAsset(OutSelection.OwnerStem, Error);
+		if (Asset != nullptr)
+		{
+			OutAssets.Sequence = ElysiumNpcVisual::RetargetClip(Asset, Mesh,
+				OutSelection.AnimationName, Error);
+		}
+		if (OutAssets.Sequence == nullptr)
+		{
+			OutSelection.AssetKind = EElysiumAnimAssetKind::None;
+			OutSelection.Outcome = EElysiumAnimOutcome::NoAsset;
+			OutSelection.Detail = Error.IsEmpty()
+				? FString::Printf(TEXT("'%s'@'%s' is not baked and its bank did not answer"),
+					*OutSelection.AnimationName, *OutSelection.OwnerStem)
+				: Error;
+		}
+	}
+}
+
 bool UElysiumNpcAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,
 	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {
 	OutLabel.Reset();
 	OutAnimName.Reset();
 	OutGroundSpeedCmPerSecond = 0.f;
-	const FString Label = PickActivityClip(Stem, Activity, Variant);
-	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
-	const FElysiumNpcClip* Clip = Set ? Set->Find(Label) : nullptr;
-	if (Clip == nullptr)
+
+	// Expressed over the one resolver rather than beside it: two implementations of one weighted pick
+	// and one owner rule are exactly how the player path and the cast path come to disagree about a
+	// bank with nothing reporting it.
+	FElysiumAnimationIntent Intent;
+	Intent.Stem = Stem;
+	Intent.Activity = Activity;
+	Intent.Variant = Variant;
+	Intent.Source = EElysiumAnimSource::Npc;
+	// This adapter's contract predates the fallback ladder and its callers read the miss — a scripted
+	// walk gait takes a false return as "no authored speed" and keeps its own. The ladder arrives with
+	// those callers when they move onto the intent seam, not underneath them.
+	Intent.bAllowFallbackLadder = false;
+
+	FElysiumAnimationSelection Selection;
+	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Stem), Selection);
+	if (Selection.SequenceLabel.IsEmpty() || Selection.AnimationName.IsEmpty())
 	{
 		return false;
 	}
 
-	OutLabel = Label;
-	OutAnimName = ResolveClipAnimName(Stem, Label, FElysiumPoseParams::Neutral());
-	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
-	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(Owner);
-	const FElysiumBlendGrid* Grid = Table.IsValid() ? Table->Find(Label) : nullptr;
-	if (Grid == nullptr)
-	{
-		return !OutAnimName.IsEmpty();
-	}
-
-	const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Grid, *Table,
-		FElysiumPoseParams::Neutral());
-	if (Pick.Cell != nullptr && Pick.Cell->Clip.Equals(OutAnimName, ESearchCase::IgnoreCase)
-		&& Pick.Cell->Motion.IsUsable())
-	{
-		OutGroundSpeedCmPerSecond = Pick.Cell->Motion.GroundSpeedCmPerSecond;
-	}
-	return !OutAnimName.IsEmpty();
+	OutLabel = Selection.SequenceLabel;
+	OutAnimName = Selection.AnimationName;
+	OutGroundSpeedCmPerSecond = Selection.GroundSpeedCmPerSecond;
+	return true;
 }
 
 UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
@@ -625,35 +703,10 @@ FString UElysiumNpcAnimSubsystem::PickIdleClip(const FString& Stem, const FStrin
 FString UElysiumNpcAnimSubsystem::PickActivityClip(const FString& Stem, const FString& Activity,
 	int32 Variant)
 {
+	// The pick itself is a pure rule over a vocabulary, so it lives with the resolver and this is the
+	// cache lookup in front of it.
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
-	if (!Set || Activity.IsEmpty())
-	{
-		return FString();
-	}
-	TArray<FString> Candidates = Set->ByActivity(Activity);
-	if (Candidates.IsEmpty())
-	{
-		return FString();
-	}
-	Candidates.Sort();
-	int32 TotalWeight = 0;
-	for (const FString& Label : Candidates)
-	{
-		const FElysiumNpcClip* Clip = Set->Find(Label);
-		TotalWeight += FMath::Max(1, Clip ? Clip->Weight : 1);
-	}
-	const uint32 Seed = HashCombineFast(GetTypeHash(Stem.ToLower()), static_cast<uint32>(FMath::Max(0, Variant)));
-	int32 Pick = static_cast<int32>(Seed % static_cast<uint32>(TotalWeight));
-	for (const FString& Label : Candidates)
-	{
-		const FElysiumNpcClip* Clip = Set->Find(Label);
-		Pick -= FMath::Max(1, Clip ? Clip->Weight : 1);
-		if (Pick < 0)
-		{
-			return Label;
-		}
-	}
-	return Candidates[0];
+	return Set != nullptr ? ElysiumAnimResolve::PickWeighted(*Set, Activity, Variant) : FString();
 }
 
 const TCHAR* UElysiumNpcAnimSubsystem::TierName(EElysiumIdleTier Tier)

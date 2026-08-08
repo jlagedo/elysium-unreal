@@ -6,6 +6,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMapActor.h"
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "Visual/ElysiumFacialRig.h"
@@ -125,9 +126,32 @@ namespace
 		}
 	}
 
+	// An outcome is a verdict, so it is coloured like one: a clean resolve reads plain, a fallback
+	// reads as a warning, and the two that mean the catalog is wrong read as errors.
+	ImVec4 OutcomeColor(EElysiumAnimOutcome Outcome)
+	{
+		switch (Outcome)
+		{
+		case EElysiumAnimOutcome::Resolved:
+			return ElysiumCogStyle::ColOk;
+		case EElysiumAnimOutcome::MissingSequence:
+		case EElysiumAnimOutcome::RequiredOverrideMissing:
+		case EElysiumAnimOutcome::MaskedRejected:
+			return ElysiumCogStyle::ColError;
+		default:
+			return ElysiumCogStyle::ColWarn;
+		}
+	}
+
 	// One row of the shared record. Producer-agnostic on purpose: if the player's row and an NPC's
 	// row ever need different columns, the contract has already split and this is where it shows.
-	void LocomotionRow(const char* Producer, const char* Name, const FElysiumLocomotionSample& S)
+	//
+	// The five selection columns are CCC4's, and `Owner bank` is the one that carries the acceptance
+	// visually: the player's row reads its PC-only bank while every cast row reads the shared one,
+	// side by side, out of one function. `Sel` is null-tolerant because a body can publish a sample
+	// before it has ever resolved anything.
+	void LocomotionRow(const char* Producer, const char* Name, const FElysiumLocomotionSample& S,
+		const FElysiumAnimationSelection* Sel)
 	{
 		ImGui::TableNextRow();
 		ImGui::TableNextColumn(); ImGui::TextColored(ElysiumCogStyle::ColName, "%s", Producer);
@@ -145,6 +169,39 @@ namespace
 		ImGui::TableNextColumn(); ImGui::TextUnformatted(S.bOnGround ? "yes" : "no");
 		ImGui::TableNextColumn(); ImGui::TextUnformatted(StanceName(S.Stance));
 		ImGui::TableNextColumn(); ImGui::TextUnformatted(PhaseName(S.JumpPhase()));
+
+		if (Sel == nullptr)
+		{
+			for (int32 Column = 0; Column < 5; ++Column)
+			{
+				ImGui::TableNextColumn(); ImGui::TextDisabled("--");
+			}
+			return;
+		}
+
+		ImGui::TableNextColumn();
+		if (Sel->ResolvedActivity.IsEmpty()) { ImGui::TextDisabled("--"); }
+		else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->ResolvedActivity)); }
+
+		ImGui::TableNextColumn();
+		if (Sel->SequenceLabel.IsEmpty()) { ImGui::TextDisabled("--"); }
+		else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->SequenceLabel)); }
+
+		ImGui::TableNextColumn();
+		if (Sel->OwnerStem.IsEmpty()) { ImGui::TextDisabled("--"); }
+		else { ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*Sel->OwnerStem)); }
+
+		ImGui::TableNextColumn();
+		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(ElysiumAnimIntent::AssetKindName(Sel->AssetKind)));
+
+		ImGui::TableNextColumn();
+		ImGui::TextColored(OutcomeColor(Sel->Outcome), "%s",
+			COG_TCHAR_TO_CHAR(ElysiumAnimIntent::OutcomeName(Sel->Outcome)));
+		// The one line naming what missed, where a reader is already looking at the verdict.
+		if (!Sel->Detail.IsEmpty() && ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Sel->Detail));
+		}
 	}
 }
 
@@ -162,8 +219,9 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 	}
 
 	const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-		ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
-	if (!ImGui::BeginTable("##Locomotion", 10, TableFlags, ImVec2(0, GetDpiScale() * 200.f)))
+		ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_Resizable |
+		ImGuiTableFlags_SizingStretchProp;
+	if (!ImGui::BeginTable("##Locomotion", 15, TableFlags, ImVec2(0, GetDpiScale() * 200.f)))
 	{
 		return;
 	}
@@ -179,13 +237,19 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 	ImGui::TableSetupColumn("Ground");
 	ImGui::TableSetupColumn("Stance");
 	ImGui::TableSetupColumn("Jump");
+	ImGui::TableSetupColumn("Activity");
+	ImGui::TableSetupColumn("Label");
+	ImGui::TableSetupColumn("Owner bank");
+	ImGui::TableSetupColumn("Asset");
+	ImGui::TableSetupColumn("Outcome");
 	ImGui::TableHeadersRow();
 
+	const AElysiumMapActor* Map = GetMapActor();
 	const APlayerController* PC = World->GetFirstPlayerController();
 	if (const IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr)
 	{
 		LocomotionRow("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
-			Body->GetLocomotionSample());
+			Body->GetLocomotionSample(), Map ? &Map->GetPlayerAnimSelection() : nullptr);
 	}
 
 	for (TActorIterator<AElysiumNpcBody> It(const_cast<UWorld*>(World)); It; ++It)
@@ -193,7 +257,8 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 		const AElysiumNpcBody* Npc = *It;
 		if (Npc)
 		{
-			LocomotionRow("npc", COG_TCHAR_TO_CHAR(*Npc->GetName()), Npc->SampleLocomotion());
+			LocomotionRow("npc", COG_TCHAR_TO_CHAR(*Npc->GetName()), Npc->SampleLocomotion(),
+				&Npc->GetAnimSelection());
 		}
 	}
 

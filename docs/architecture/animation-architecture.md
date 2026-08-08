@@ -275,6 +275,11 @@ events, `scripted_sequence`, `SetAnimation`, and the retail `player_sequence` de
 Ordinary locomotion, combat and reactions use activities. A gameplay system naming `walk_0` is a
 layer violation: it has skipped weighted choice, include ownership and the blend grid.
 
+A model selection is neither kind of animation request. `SetModel`, `MorphModel` and transform
+lifecycle tasks change the model/include graph that owns every later activity or exact-label
+answer. They update the intent's model identity and invalidate any selection tied to the old owner;
+they do not synthesize an idle or transform clip unless a separate task requests one.
+
 The two producers are different only before this boundary:
 
 - **Player.** `FElysiumUserCmd` remains the input record, not an animation record. After
@@ -310,8 +315,9 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
    requests supply attacks, reactions and contextual actions. A direct-sequence request bypasses
    only this and activity translation.
 3. **Translate the activity.** Apply the recovered actor/form and weapon tables in their witnessed
-   order. A table row's `required` bit is retained: a missing optional override falls back to the
-   incoming activity, while a missing required override is a catalog error.
+   order. Weapon rows remain ordered because a later duplicate-base row is a model-availability
+   fallback. Retain the authored `required` bit as provenance and a diagnostic only: the pinned
+   VtMB server translator never reads it, so optional and flagged rows follow the same path.
 4. **Resolve the model vocabulary.** Find every sequence carrying the final activity, apply
    `actweight` using the supplied selection token, and retain the exact model/sequence identity.
    The chosen label then resolves through the include DAG to its owning bank.
@@ -321,11 +327,43 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
 6. **Publish graph parameters.** The graph receives state-machine state, speed, `move_yaw`, aim
    parameters, selected assets/slots and authored transition metadata. It does not repeat selection.
 
-The selection record contains the request source/channel, base activity, each translated activity,
-variant token, sequence label and raw index, owner stem, selected asset kind, active layer labels,
-pose parameters, and a success/fallback reason. The same record is rendered in Cog and written by
-headless acceptance runs. Without it, a wrong pose can be blamed on input, AI, translation, model
-data or blending with no way to distinguish them.
+The selection record contains the request source/channel, logical requested activity, VtMB
+pre-translation, first weapon activity, each NPC/class → weapon iteration, resolved activity,
+weapon activity, target sequence, transition sequence/state, variant token, sequence label and raw
+index, selected model and owner stem, selected asset kind, active layer labels, pose parameters, and a
+success/fallback reason. The same record is rendered in Cog and written by headless acceptance
+runs. Without it, a wrong pose can be blamed on input, AI, translation, model data or blending with
+no way to distinguish them.
+
+**The fallback ladder belongs to step 4, and it is the cast's alone.** `CAI_BaseNPC` retries a
+missing translated `ACT_RUN` as weighted `ACT_WALK`, then the whole request as `ACT_DISPOSITION`,
+then sequence index 0. The player's chain has no ladder — the controlled corpus records a ducked
+phase-8 `ACT_LAND_CROUCH` request simply returning −1 — so a player miss resolves to nothing and is
+reported as a **named** miss with the activity and the body in the record. Substituting `ACT_LAND`
+for it would be inventing behaviour; naming the miss is what lets the graph declare a fallback.
+
+**Two locomotion-classification divergences, both shipped and both reconstructions.** The faithful
+behaviour is that the ordinary selector's compact code 1 chooses walk, run, sneak or their relaxed
+variants "from realized speed, flags and weapon state" (`docs/vtmb/animation_and_movers.md` A.3), and
+those flags are undecoded.
+
+- **`ACT_SNEAK` is reached from ducked-and-moving.** VtMB has no sneak input in the recovered command
+  surface, so the stance is what stands in for the undecoded flag. The evidence is the stride band:
+  the authored `sneak` cells run 69.7–79.3 cm/s and a ducked gait is a third of the base speed, which
+  is the same band. The stationary half is faithful — compact code 0 lists `ACT_CROUCH`.
+- **The walk/run split is taken from realized speed rather than the `+speed` key.** The body sample
+  carries no gait bit deliberately: the NPC producer has no user command to carry one, and one
+  contract with two producers cannot read something only one of them has. The consequence is visible
+  and stated — a body decelerating out of a run passes through the walk band on its way to idle, which
+  retail would not have shown. Hysteresis narrows that to a single crossing rather than a flicker.
+
+Neither classifier threshold is an absolute speed: every one is a fraction of an injected walk/run
+reference, so the speed authority moving takes them with it rather than leaving numbers to find.
+
+**The landing one-shot's hold is provisional rather than chosen.** A still, grounded body has to
+leave `ACT_LAND` somehow, and the classifier is content-free — it must not read the clip it is about
+to describe. A latch-local duration holds it until the graph can report a finished one-shot, at which
+point the completion callback replaces the timer.
 
 ### 3.4 The generated action corpus
 
@@ -342,8 +380,8 @@ status tracker:
 |---|---|---|
 | `activity_registry.json` | stable name, pinned-build numeric ID, registration ordinal | `vampire.dll` activity registration |
 | `player_action_rules.json` | mode, compact action code, tested predicates, base activity, pose-parameter writes, confidence/evidence | player `PostThink` classifier/router and retail trace |
-| `npc_action_rules.json` | class, schedule/task or entity request, desired activity/direct label, interrupt/completion rules, confidence/evidence | NPC class/schedule call graph and retail trace |
-| `weapon_activity_tables.json` | weapon class, base activity, translated activity, `required`, table ordinal | each weapon's `acttable_t` or retail `activitydump` |
+| `npc_action_rules.json` | class, schedule/task or entity request, desired activity/direct label/model change, base-versus-layer route, interrupt/completion rules, confidence/evidence | NPC class/schedule call graph, map/Python producer survey and retail trace |
+| `weapon_activity_tables.json` | weapon/RTTI/entity class, base activity, translated activity, inert authored `required`, table ordinal, shared-table identity | hash-pinned PE32 RTTI and each weapon's `acttable_t`; retail `activitydump` is an independent oracle |
 | character catalog | exact owner model and raw sequence index, label, activity, weight, flags, fade, events, grid, movement, autolayers, target compatibility | existing MDL/include exporters and player inventory |
 | `action_coverage.json` | reachable rule → translation → sequence/asset closure per supported player body and NPC class/model | deterministic join of all artifacts above |
 
@@ -379,14 +417,18 @@ Ghidra driver and retail capture harness rather than a second hook project. The 
    identities, weights, grids, movement records and include reachability.
 2. Generate a hash-pinned Ghidra context pack for the known player classifier, mode router,
    activity apply/select path, registry, weapon translation and forced-sequence command.
-3. Locate the NPC schedule/task → ideal activity → translated activity → sequence path and every
-   class override by following calls into the same selection functions, then add the seeds and
-   relationships to the specification.
-4. Extract each weapon table statically where its vtable exposes the table/count pair; use retail's
-   `activitydump` as an independent textual oracle and to catch dynamically selected subclasses.
+3. Starting from the recovered common NPC
+   `SetIdealActivity/SetActivity → TranslateActivity → ResolveActivityToSequence →
+   SetActivityAndSequence` chain, extract every schedule/task/direct-sequence/layer producer and
+   every class override of translation virtuals `+0x5dc` and `+0x5e0`; add each seed and
+   relationship to the specification.
+4. Reproduce the completed hash-pinned weapon extraction: PE32 RTTI and each vtable's table/count
+   pair recover all 169 subclasses and 9,214 ordered per-class rows; keep retail `activitydump` as
+   an independent textual oracle rather than a source for invented `required`-flag behavior.
 5. Extend the existing retail trace with one compact record at each boundary: producer/action code,
    base activity, each translation result, selected model/sequence, pose parameters and active
-   layers. Join on entity index/serial and model identity, as the pose capture already does.
+   layers. Join on the full serial-bearing entity handle and model identity, as the pose capture
+   already does; entity index alone is reusable and is not an identity key.
 6. Drive a controlled action matrix and compare the retail selection record with the remake's
    `FElysiumAnimationSelection`. Add a seed or rule for every unexplained transition; never patch the
    expected output by clip name.

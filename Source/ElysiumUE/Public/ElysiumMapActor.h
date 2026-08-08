@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Templates/PimplPtr.h"
+#include "ElysiumAnimationIntent.h" // FElysiumAnimationSelection — returned by value reference
 #include "ElysiumEnvironment.h"    // FElysiumSkyDef — a plain by-value member
 #include "ElysiumWorldServices.h"  // the four interfaces this actor implements
 #include "ElysiumMapActor.generated.h"
@@ -244,6 +245,11 @@ public:
 	UElysiumMapCollision* GetCollision() const { return Collision; }
 	UElysiumEntityBodies* GetBodies() const { return Bodies; }
 
+	// CCC4 — the player body's frame selection: which activity was classified, which label and owning
+	// bank it resolved through, and why if it did not. Never null: a body with no vocabulary answers a
+	// default record whose outcome says exactly that, so a reader has nothing to test.
+	const FElysiumAnimationSelection& GetPlayerAnimSelection() const;
+
 	// B7 — the uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
 	// a sky-scope entity (its origin and hulls are already carried through the transform by the
 	// def parser, but a mesh's own size is not a point), 1 for everything else.
@@ -275,8 +281,8 @@ public:
 	// engine seam (ElysiumWorldServices.h) — the substrate never learns that a body factory exists.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override;
-	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FVector& FeetOrigin, float YawDegrees) override;
+	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body, const FVector& FeetOrigin,
+		float YawDegrees, const FString& Stem, int32 Variant) override;
 	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) override;
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override;
@@ -463,6 +469,16 @@ private:
 	TPimplPtr<class FElysiumCameraDirector> CameraDirector;
 	// The pawn's camera, or null (a backdrop map seats no pawn).
 	class UElysiumCameraComponent* PlayerCamera() const;
+
+	// CCC4 — the player body's animation selection, driven from the post-move pass. Owned here rather
+	// than on a pawn because the resolution needs the entity world and the model stem, and because
+	// `IElysiumPlayerBody` is what serves both movement implementations through one interface. It dies
+	// with the map epoch, which is also what resets the jump latch across a travel.
+	TPimplPtr<struct FElysiumAnimationDriver> PlayerAnimDriver;
+	// The stem the player visual was built from, kept so the driver can name its catalog without
+	// re-deriving it from the entity record every frame.
+	FString PlayerVisualStem;
+	void TickPlayerAnimation(float DeltaSeconds);
 
 	void LoadMap();
 	// LoadMap's stage-world half: the substrate scaffolding a green room needs and nothing else —

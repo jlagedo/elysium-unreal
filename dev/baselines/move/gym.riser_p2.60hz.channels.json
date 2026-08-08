@@ -5,6 +5,9 @@
     "host": "gym",
     "course": "riser_p2",
     "baseline": "committed",
+    "anim_stem": "",
+    "anim_banks": "",
+    "anim_selections": "",
     "hz": 60.000000,
     "fixedStep": 0.000000,
     "constants": {
@@ -46,6 +49,14 @@
     { "name": "surffric", "producer": "move", "scope": "frame", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": true, "help": "the ground surface's friction scale" },
     { "name": "move_yaw_wish", "producer": "anim", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the commanded direction, relative to facing" },
     { "name": "move_yaw_vel", "producer": "anim", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the realized velocity's direction, relative to facing" },
+    { "name": "act_code", "producer": "anim", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "EElysiumAnimActivityCode the classifier chose; 0 is outside the locomotion slice" },
+    { "name": "act_route", "producer": "anim", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "EElysiumAnimRoute the record came from" },
+    { "name": "act_outcome", "producer": "anim", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "EElysiumAnimOutcome; 0 is a clean resolve and anything else names the fallback" },
+    { "name": "act_asset", "producer": "anim", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "EElysiumAnimAssetKind the label resolved to" },
+    { "name": "air_phase", "producer": "anim", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "EElysiumAirPhase the jump latch holds; what the sample alone cannot answer" },
+    { "name": "act_gen", "producer": "anim", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "request generation; it advances only when the discrete request changes" },
+    { "name": "act_stride", "producer": "anim", "scope": "frame", "kind": "numeric", "tolerance": 2.000000, "precision": 4, "unit": "u/s", "speedDependent": true, "help": "the selected cell's authored ground speed" },
+    { "name": "act_fade", "producer": "anim", "scope": "frame", "kind": "numeric", "tolerance": 0.001000, "precision": 3, "unit": "s", "speedDependent": true, "help": "the authored transition duration the selection carries; 0 is a snap" },
     { "name": "cam_boom", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": true, "help": "boom length, third-person weight applied" },
     { "name": "cam_damp", "producer": "camera", "scope": "frame", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": true, "help": "the damper's own distance from the eye, before the weight" },
     { "name": "cam_pitch", "producer": "camera", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the solved boom pitch" },
@@ -65,6 +76,9 @@
     { "name": "ground_transitions", "producer": "move", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "how many times the ground state flipped", "value": 0 },
     { "name": "ended_ducked", "producer": "move", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "the body was still ducked on the last frame", "value": 0 },
     { "name": "peak_speed2d", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 2.000000, "precision": 3, "unit": "u/s", "speedDependent": true, "help": "fastest horizontal speed reached", "value": 225.000 },
-    { "name": "cam_third_max", "producer": "camera", "scope": "run", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": false, "help": "highest third-person weight the course reached", "value": 1.000 }
+    { "name": "cam_third_max", "producer": "camera", "scope": "run", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": false, "help": "highest third-person weight the course reached", "value": 1.000 },
+    { "name": "act_resolved", "producer": "anim", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "frames whose selection resolved to an asset", "value": 0 },
+    { "name": "act_fallbacks", "producer": "anim", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "frames whose outcome was not a clean resolve", "value": 600 },
+    { "name": "act_codes", "producer": "anim", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "bitmask of the activity codes the course reached", "value": 22 }
   ]
 }

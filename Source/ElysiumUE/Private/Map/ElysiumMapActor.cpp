@@ -16,6 +16,7 @@
 #include "Map/ElysiumMapCollision.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
+#include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning — the gaze layer's content
@@ -742,7 +743,7 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 }
 
 IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
-	const FVector& FeetOrigin, float YawDegrees)
+	const FVector& FeetOrigin, float YawDegrees, const FString& Stem, int32 Variant)
 {
 	if (!Body || bMenuBackdrop || !GetWorld())
 	{
@@ -763,6 +764,7 @@ IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
 
 	Motor->InitializeAtFeet(FeetOrigin, YawDegrees);
 	Motor->SetRuntimeReady(RuntimePhase == EElysiumMapRuntimePhase::Active);
+	Motor->SetModelStem(Stem, Body, Variant);
 	NpcMotors.Add(Motor);
 	Body->AttachToComponent(Motor->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
 	if (UCharacterMovementComponent* Movement = Motor->GetCharacterMovement())
@@ -1047,7 +1049,59 @@ USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
 	}
 
 	Body->SetPlayerVisual(Visual);
+	// The stem the animation driver resolves its catalog from. Kept here rather than re-derived from
+	// the entity record each frame, because this is the one place that knows which model was built.
+	PlayerVisualStem = Stem;
+	if (PlayerAnimDriver.IsValid())
+	{
+		PlayerAnimDriver->Reset();
+	}
 	return Visual;
+}
+
+void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	if (Body == nullptr)
+	{
+		// A backdrop map seats no pawn. The driver simply does not advance; its record keeps saying
+		// what it last said rather than reporting a body that is not there.
+		return;
+	}
+
+	if (!PlayerAnimDriver.IsValid())
+	{
+		PlayerAnimDriver = MakePimpl<FElysiumAnimationDriver>();
+		PlayerAnimDriver->Source = EElysiumAnimSource::Player;
+	}
+
+	PlayerAnimDriver->Stem = PlayerVisualStem;
+	if (EntityWorld)
+	{
+		PlayerAnimDriver->Character = EntityWorld->PlayerHandle();
+		// The variant is the body's own index, so the same character resolves the same idle every load
+		// — repeatability is what makes a weighted pick assertable at all.
+		PlayerAnimDriver->Variant = FMath::Max(0, PlayerAnimDriver->Character.Index);
+	}
+
+	// The gait reference keeps its defaults, which name `ElysiumMove::WalkSpeed`/`RunSpeed` by symbol
+	// rather than by value — the same two constants `GetMaxSpeed` answers from. `CCC7` is where that
+	// authority moves, and moving it there moves every threshold in the classifier with it.
+
+	USkeletalMeshComponent* Visual = Body->GetPlayerVisual();
+	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
+		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr);
+}
+
+const FElysiumAnimationSelection& AElysiumMapActor::GetPlayerAnimSelection() const
+{
+	// A shared empty record rather than a null pointer: every reader — the recorder, Cog, the MCP
+	// surface — wants a row, and a default record's outcome already says there is no vocabulary.
+	static const FElysiumAnimationSelection Empty;
+	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->Selection : Empty;
 }
 
 void AElysiumMapActor::ClearPlayerVisual()
@@ -1062,6 +1116,11 @@ void AElysiumMapActor::ClearPlayerVisual()
 	{
 		Body->SetPlayerVisual(nullptr);
 		Visual->DestroyComponent();
+	}
+	PlayerVisualStem.Reset();
+	if (PlayerAnimDriver.IsValid())
+	{
+		PlayerAnimDriver->Reset();
 	}
 }
 
@@ -2279,6 +2338,12 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	{
 		Bodies->TickEyes(DeltaSeconds);
 	}
+
+	// CCC4 — the frame's animation selection, taken from the body sample the mover published at its
+	// tick tail. It belongs in this pass for the reason the three above do: the sample is settled only
+	// after the last stepper substep, and a selection read before that is a selection made from a
+	// half-integrated frame (`docs/architecture/animation-architecture.md` section 3.2).
+	TickPlayerAnimation(DeltaSeconds);
 
 	// The tail of a released frame: a dev step spends one here, and the last one re-holds the world.
 	if (const UGameInstance* GI = GetGameInstance())

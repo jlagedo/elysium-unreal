@@ -3306,6 +3306,33 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 				> static_cast<int32>(Mover->PrimaryComponentTick.TickGroup));
 	}
 
+	// CCC4 — the cast's half of the same rule. An NPC body's actor tick carries no ordering against
+	// its own CharacterMovement (the engine wires no such prerequisite; `ACharacter` orders only the
+	// mesh), so a selection read from `Tick` would be reading whichever of the two happened to
+	// register first. The animation pass is therefore its own tick function, in the same group as the
+	// player's — declared on the class, which is what makes it assertable here at all.
+	const AElysiumNpcBody* Npc = GetDefault<AElysiumNpcBody>();
+	if (TestNotNull(TEXT("NPC body class defaults"), Npc))
+	{
+		TestTrue(TEXT("the NPC animation pass ticks"), Npc->AnimTickFunction.bCanEverTick);
+		TestTrue(TEXT("the NPC animation pass starts enabled"),
+			Npc->AnimTickFunction.bStartWithTickEnabled);
+		TestEqual(TEXT("the NPC animation pass is TG_PostPhysics"),
+			static_cast<int32>(Npc->AnimTickFunction.TickGroup), static_cast<int32>(TG_PostPhysics));
+		TestFalse(TEXT("and it stops while the world is held"),
+			Npc->AnimTickFunction.bTickEvenWhenPaused);
+		if (const UCharacterMovementComponent* NpcMove = Npc->GetCharacterMovement())
+		{
+			TestTrue(TEXT("the NPC animation pass is later than its own mover, so its sample is settled"),
+				static_cast<int32>(Npc->AnimTickFunction.TickGroup)
+					> static_cast<int32>(NpcMove->PrimaryComponentTick.TickGroup));
+		}
+		// The turn-in-place stays where it was: adding the selection did not move an existing behaviour
+		// a frame later.
+		TestEqual(TEXT("the NPC actor tick stays in pre-physics"),
+			static_cast<int32>(Npc->PrimaryActorTick.TickGroup), static_cast<int32>(TG_PrePhysics));
+	}
+
 	// Step 10 rebuilds the view state after everything that could change it has run, so it is later
 	// than all four map passes (11.8).
 	const UElysiumPresentationSubsystem* Present = GetDefault<UElysiumPresentationSubsystem>();

@@ -103,6 +103,30 @@ namespace ElysiumMcpImpl
 		return Map ? Map->GetEntityWorld() : nullptr;
 	}
 
+	// The body sample's own two enums as words (CCC1). The animation record's live in
+	// `ElysiumAnimIntent` beside the types they name; these two belong to the sample, which predates
+	// it.
+	const TCHAR* StanceName(EElysiumStance Stance)
+	{
+		switch (Stance)
+		{
+		case EElysiumStance::Lowering: return TEXT("lowering");
+		case EElysiumStance::Ducked:   return TEXT("ducked");
+		case EElysiumStance::Rising:   return TEXT("rising");
+		default:                       return TEXT("standing");
+		}
+	}
+
+	const TCHAR* JumpPhaseName(EElysiumJumpPhase Phase)
+	{
+		switch (Phase)
+		{
+		case EElysiumJumpPhase::Ascend:  return TEXT("ascend");
+		case EElysiumJumpPhase::Descend: return TEXT("descend");
+		default:                         return TEXT("ground");
+		}
+	}
+
 	APlayerController* LivePlayerController()
 	{
 		UWorld* World = LiveWorld();
@@ -637,7 +661,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_player_get"),
-				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the camera (first/third person, its blend weight, both rigs' solved boom lengths and clip state, and any scripted shot), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
+				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the camera (first/third person, its blend weight, both rigs' solved boom lengths and clip state, and any scripted shot), the settled locomotion sample, the frame's animation selection record (classified activity, resolved label, OWNING BANK, asset kind and the outcome or fallback reason), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -696,6 +720,78 @@ namespace ElysiumMcpImpl
 							Body->SetObjectField(TEXT("camera"), Camera);
 						}
 					}
+					// CCC1/CCC4 — the body sample and the selection it produced. Together they are the
+					// whole diagnosis of a wrong pose: what the body was doing, what activity that
+					// classified to, which label and OWNING BANK it resolved through, and why if it
+					// did not. An agent can drive `+forward` and check the bank without a screenshot.
+					if (const IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
+					{
+						const FElysiumLocomotionSample S = PlayerBody->GetLocomotionSample();
+						TSharedRef<FJsonObject> Loco = Obj();
+						Loco->SetNumberField(TEXT("speed2d"), S.Speed2D());
+						Loco->SetObjectField(TEXT("local_velocity"), Vec(S.LocalVelocity));
+						Loco->SetNumberField(TEXT("facing_yaw"), S.FacingYaw);
+						Loco->SetNumberField(TEXT("move_yaw_wish"), S.MoveYawWish);
+						Loco->SetNumberField(TEXT("move_yaw_vel"), S.MoveYawVelocity);
+						// Zero means the wish yaw beside it is a placeholder, not a measurement.
+						Loco->SetNumberField(TEXT("wish_scale"), S.WishScale);
+						Loco->SetBoolField(TEXT("on_ground"), S.bOnGround);
+						Loco->SetNumberField(TEXT("water"), static_cast<int32>(S.Water));
+						Loco->SetStringField(TEXT("stance"), StanceName(S.Stance));
+						Loco->SetStringField(TEXT("jump_phase"), JumpPhaseName(S.JumpPhase()));
+						Loco->SetNumberField(TEXT("jump_hold"), S.JumpHoldRemaining);
+						Body->SetObjectField(TEXT("locomotion"), Loco);
+					}
+					if (const AElysiumMapActor* Map = MapActor())
+					{
+						const FElysiumAnimationSelection& Sel = Map->GetPlayerAnimSelection();
+						TSharedRef<FJsonObject> Anim = Obj();
+						Anim->SetStringField(TEXT("stem"), Sel.Stem);
+						Anim->SetStringField(TEXT("source"), ElysiumAnimIntent::SourceName(Sel.Source));
+						Anim->SetStringField(TEXT("channel"), ElysiumAnimIntent::ChannelName(Sel.Channel));
+						Anim->SetStringField(TEXT("route"), ElysiumAnimIntent::RouteName(Sel.Route));
+						Anim->SetNumberField(TEXT("generation"), Sel.Generation);
+						Anim->SetStringField(TEXT("requested_activity"), Sel.RequestedActivity);
+						Anim->SetStringField(TEXT("resolved_activity"), Sel.ResolvedActivity);
+						Anim->SetStringField(TEXT("first_weapon_activity"), Sel.FirstWeaponActivity);
+						Anim->SetStringField(TEXT("weapon_activity"), Sel.WeaponActivity);
+						Anim->SetNumberField(TEXT("translation_iterations"), Sel.TranslationIterations);
+						Anim->SetStringField(TEXT("label"), Sel.SequenceLabel);
+						Anim->SetStringField(TEXT("owner"), Sel.OwnerStem);
+						Anim->SetNumberField(TEXT("raw_index"), Sel.RawSequenceIndex);
+						Anim->SetNumberField(TEXT("variant"), Sel.Variant);
+						Anim->SetNumberField(TEXT("weight"), Sel.Weight);
+						Anim->SetNumberField(TEXT("candidates"), Sel.Candidates);
+						Anim->SetStringField(TEXT("asset"),
+							ElysiumAnimIntent::AssetKindName(Sel.AssetKind));
+						Anim->SetStringField(TEXT("animation"), Sel.AnimationName);
+						Anim->SetBoolField(TEXT("looping"), Sel.bLooping);
+						Anim->SetBoolField(TEXT("snap"), Sel.bSnap);
+						Anim->SetBoolField(TEXT("additive"), Sel.bAdditive);
+						Anim->SetNumberField(TEXT("fade"), Sel.FadeSeconds);
+						Anim->SetNumberField(TEXT("ground_speed"), Sel.GroundSpeedCmPerSecond);
+						Anim->SetNumberField(TEXT("move_yaw"), Sel.MoveYaw);
+						TArray<TSharedPtr<FJsonValue>> Axes;
+						for (int32 Axis = 0; Axis < Sel.Axes; ++Axis)
+						{
+							TSharedRef<FJsonObject> One = Obj();
+							One->SetStringField(TEXT("name"), Sel.AxisName[Axis]);
+							One->SetNumberField(TEXT("value"), Sel.AxisValue[Axis]);
+							Axes.Add(MakeShared<FJsonValueObject>(One));
+						}
+						Anim->SetArrayField(TEXT("axes"), Axes);
+						TArray<TSharedPtr<FJsonValue>> Layers;
+						for (const FString& Layer : Sel.LayerLabels)
+						{
+							Layers.Add(MakeShared<FJsonValueString>(Layer));
+						}
+						Anim->SetArrayField(TEXT("layers"), Layers);
+						Anim->SetStringField(TEXT("outcome"),
+							ElysiumAnimIntent::OutcomeName(Sel.Outcome));
+						Anim->SetStringField(TEXT("detail"), Sel.Detail);
+						Body->SetObjectField(TEXT("animation"), Anim);
+					}
+
 					if (UElysiumMapSubsystem* Maps = Sub<UElysiumMapSubsystem>())
 					{
 						Body->SetStringField(TEXT("map"), Maps->GetCurrentMapName());

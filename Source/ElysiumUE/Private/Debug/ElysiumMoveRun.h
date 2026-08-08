@@ -129,6 +129,20 @@ private:
 	// is the point: it is the cheap catch for a camera that never engaged, and the only camera
 	// channel a committed gym baseline can carry.
 	double CamThirdMax = 0.0;
+	// The selection's course totals (CCC4). The first two saturate at any gait — a course either
+	// resolves every frame or it does not — which is what makes them the assertion a committed gym
+	// baseline can carry, and the cheap catch for the resolver going dark. The bitmask is the
+	// opposite and is declared speed-dependent, because *which* activities a course reaches moves
+	// when the gait does.
+	int32 ActResolvedFrames = 0;
+	int32 ActFallbackFrames = 0;
+	uint32 ActCodesSeen = 0;
+	// The identities the course resolved through, as run metadata rather than as channels: there is
+	// no string channel by design, because a value on disk with no comparison rule is what the
+	// registry refuses. Metadata describes the run; the Content tier is what asserts an identity
+	// against the real corpus. Sorted on the way out so the text is deterministic.
+	TSet<FString> AnimBanks;
+	TSet<FString> AnimSelections;
 };
 
 #endif // !UE_BUILD_SHIPPING

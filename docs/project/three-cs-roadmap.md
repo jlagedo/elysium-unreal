@@ -49,7 +49,7 @@ rung: `CCC7` re-opens what `4.7` settled, by design.
 | Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, deliberately after `CCC7` settles the speed |
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
-| Real animation | 6 | `CCC4`–`CCC6` |
+| Real animation | 6 | `CCC4 [x]` the intent, resolver and selection record; `CCC5`–`CCC6` the graph and the green room |
 | Vertical slice | 7 | `CCC8` |
 
 **The gym splits its assertions by whether `CCC7` can move them**, which is what lets the Character
@@ -94,7 +94,7 @@ trace, a bake) is a context switch rather than a slice stall.
 | Lane A — the camera platform | Lane B — the animation spine |
 |---|---|
 | `CCC2 [x]` — the service foundation, then the modern rig | `CCC1 [x]` — the body sample |
-| `CCC3 [~]` — the response curve and the leniency courses; the co-tune waits for `CCC7` | `CCC4` — intent, resolver, record |
+| `CCC3 [~]` — the response curve and the leniency courses; the co-tune waits for `CCC7` | `CCC4 [x]` — intent, resolver, record |
 | | `CCC5` — the player graph |
 | | `CCC6` — drive it |
 
@@ -175,10 +175,11 @@ retires what they replaced.
   until one exists. And the gym **registers** frame channels without comparing them: a committed
   gym baseline is the manifest alone, so the two yaw channels are asserted by the sited baselines
   and the cross-rate run, which is what the recordings were for.
-  *Open:* `JumpPhase` cannot reproduce retail's latched jump/landing phases from velocity alone:
-  retail distinguishes phase 1 `ACT_LEAP`, phase 7 `ACT_FALLING`, and phase 8 gait/land, while a
-  descent and walking off a ledge are identical in the state the sample carries. `CCC5` therefore
-  needs a resolver-local latch set at the jump press and ground transitions.
+  *Closed by `CCC4`:* `JumpPhase` cannot reproduce retail's latched jump/landing phases from velocity
+  alone — retail distinguishes phase 1 `ACT_LEAP`, phase 7 `ACT_FALLING` and phase 8 gait/land, while
+  a descent and walking off a ledge are identical in the state the sample carries. The latch that
+  answers it is `FElysiumJumpLatch`, and it belongs to `CCC4` rather than `CCC5` because choosing
+  between those three activities *is* step 2, which the resolver cannot answer without it.
 
 - [x] **CCC2 Camera service foundation and the player rig.** The re-architecture the camera needs:
   the shipping component is one class carrying the weights, the boom, the orbit state, the shot
@@ -302,7 +303,7 @@ retires what they replaced.
   `ElysiumRig::FElysiumCameraRigTuning` and `elysium.ModernCamera`'s default, never the `cam_*`
   console store, or the A/B stops being a comparison.
 
-- [ ] **CCC4 Intent, resolver, selection record.** `FElysiumAnimationIntent` in,
+- [x] **CCC4 Intent, resolver, selection record.** `FElysiumAnimationIntent` in,
   `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
   `docs/architecture/animation-architecture.md` §3.3 — there is no channel to arbitrate and no
   weapon to translate through yet, and both seams exist rather than being stubbed away. Most of the
@@ -316,12 +317,59 @@ retires what they replaced.
   the catalog out of its NPC-named host waits for `CCC9`, because a big-bang split churns a
   subsystem five systems read. The record is not decoration — six things can produce a wrong pose,
   and without one line naming each, a wrong pose is a guess.
+  The current producer census is the concrete route test: the same record schema must distinguish
+  ordinary activity resolution from 198 map-authored exact-label requests, 18 prop
+  `SetAnimation` requests, scripted sequence-0 fallback and gesture no-op. It must also preserve a
+  model-owner change separately: three `MorphModel` fields and 356 Python `SetModel` calls change
+  the bank against which later requests resolve, while the decoded native schedule surface sends
+  task arguments through ideal activity, immediate activity, overlay layer, named fallback or
+  no-animation routes. The later weapon seam reads ordered table rows: duplicate-base entries are
+  availability fallbacks, while the stored `required` bit is provenance only because retail's
+  server translator does not consult it. Collapsing any of those into one activity string would erase behavior
+  already confirmed in the 22-map corpus; detailed facts stay in
+  `docs/vtmb/animation_and_movers.md`.
   *Acceptance:* a caller hands the resolver an intent built from `CCC1`'s sample and gets back an
   asset plus a record naming every step; the record is on screen in Cog and in the headless run's
   JSON; **and the player and the cast resolve to their own banks** — `ACT_RUN` reaches the PC-only
   bank for the player and the cast bank for an NPC (`docs/vtmb/animation_and_movers.md`), asserted
   for both producers, because a resolver keyed on the label alone hands the player the cast's
   gait. *Deps:* `CCC1`.
+  *Done:* the two records and the pure rules over them (`ElysiumAnimationIntent.h` — the classifier,
+  the jump latch, the translation pass, and the one place the slice's `ACT_*` literals are spelled),
+  asserted by `Elysium.Substrate.AnimationIntent`; the resolver
+  (`Visual/ElysiumAnimationResolve.h` — steps 4, 5 and 6 over a catalog **view**), asserted by
+  `Elysium.Substrate.AnimationResolve` against a two-bank fixture built on the stack. **The record
+  and the asset are two return values**, which is the rung's load-bearing shape: the record comes out
+  of the sidecars and is always producible, while an asset needs a `USkeletalMesh` that the gym, a
+  menu backdrop and any body before its visual is built do not have — so a missing asset reads
+  `NoAsset` rather than as a missing record, and `ANM1` does not gate this rung.
+  The catalog is a **view with a lookup callback** rather than a preloaded map, because the owning
+  bank is not known until after the weighted pick and one player body's DAG names dozens of banks;
+  that callback is also what lets a test hand it two stack `FElysiumBlendTable`s.
+  Both producers run one `FElysiumAnimationDriver`: the player's on the map actor's post-move pass,
+  the cast's on a new `TG_PostPhysics` tick function on `AElysiumNpcBody` — the engine wires no
+  prerequisite between an actor's tick and its own CharacterMovement, so a selection read from `Tick`
+  would read whichever registered first. `Elysium.Substrate.FrameOrder` asserts that as a class
+  default, and the turn-in-place stays in pre-physics. `BuildNpcMotor` carries the model stem and the
+  variant, which is the same seam `CCC11` widens into the intent.
+  Eight frame and three run `anim` channels ride the existing recorder; the differ refused all 43
+  committed gym baselines as unbaselined declarations before they were re-promoted, and the diff is
+  purely additive — no movement or camera value moved. The Cog Locomotion tab gained five columns
+  through the **same** row function, so the player's owning bank and the cast's are read side by side,
+  and `elysium_player_get` gained `locomotion` and `animation` blocks.
+  `ResolveActivityClip` and `PickActivityClip` are re-expressed over the one resolver, so the player
+  path and the five existing `PlayNpcActivity` callers cannot disagree about a bank silently.
+  *Instrument finding:* the acceptance clause reads out of the sited run's own manifest rather than
+  out of a test —`ACT_RUN=run@…runotherspc_pcidles_allsequences:run_0` beside
+  `ACT_WALK=walk@…move_and_ranged:walk_0`, 240 of 240 frames resolved with zero fallbacks. One body's
+  run and its walk come from different glbs, which is exactly what a label-keyed resolver erases.
+  `Elysium.Content.AnimationSliceCoverage` closes the slice rule over the real corpus: 52 player
+  bodies × 9 activities, with `ACT_LAND_CROUCH` the only named miss — the export agreeing with the
+  capture rather than a clip being invented for it.
+  *Scope note:* this rung resolves and records; it drives no pose. Nothing routes into
+  `FElysiumNpcAnimProxy`, so no scaffolding is built that `CCC9` exists to delete. The recovered
+  fallback ladder (run → walk → disposition → sequence zero) is `CAI_BaseNPC`'s and runs only for an
+  NPC source; the player has none, which is why a player miss is a **named** miss.
 
 - [ ] **CCC5 The player animation graph.** `ABP_ElysiumBiped`: a locomotion state machine whose
   transitions come from the authored `fade` duration, blend-space players on walk, run and sneak
@@ -532,6 +580,8 @@ per the house rules.
 | The player's gait speed is a constant rather than the current sequence's root motion — standing today, marked at `UElysiumMovementComponent::GetMaxSpeed`, and resolved either way by `CCC7` | `docs/architecture/movement-architecture.md` |
 | Any change to movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | A held crouch's hold rule, if the controlled trace cannot answer what retail does once ducked | `docs/vtmb/animation_and_movers.md` |
+| `ACT_SNEAK` reached from ducked-and-moving, and the walk/run split taken from realized speed rather than the `+speed` key — **both shipped, both reconstructions.** Retail selects all three gaits inside compact code 1 "from realized speed, flags and weapon state" and those flags are undecoded; there is no sneak button in `FElysiumUserCmd`, and the sample carries no gait bit because the NPC producer has no user command to carry one. The stride band is the evidence: the authored `sneak` cells run 69.7–79.3 cm/s against a ducked gait of a third of the base speed | `docs/architecture/animation-architecture.md` |
+| The landing one-shot's hold duration — **provisional, not a choice**: a still grounded body has to leave `ACT_LAND` somehow and one-shot completion is `CCC5`'s, so `FElysiumJumpLatch::LandHoldSeconds` holds it and the `NotifyOneShotComplete` seam replaces it | `docs/architecture/animation-architecture.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
 | A look-response curve that is not retail's — **built and shipped off**: `look_curve` defaults to 0, at which the gain is exactly 1.0 and the path is retail's linear one. Enabling it is an owner call not yet made | `docs/architecture/input-architecture.md` § Feel |
 | Input leniency — buffering or coyote time. VtMB has neither, **none is implemented**, and the `ledge_*`/`land_*` brackets now hold the committed before-picture, so adding either moves a number | `docs/architecture/input-architecture.md` § Feel |

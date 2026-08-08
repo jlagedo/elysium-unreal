@@ -11,6 +11,9 @@
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcClips.h"
 
+#include "ElysiumAnimationIntent.h"
+#include "Visual/ElysiumAnimationResolve.h"
+
 #include "ElysiumNpcAnimSubsystem.generated.h"
 
 class UAnimSequence;
@@ -35,6 +38,19 @@ struct FElysiumResolvedGrid
 	float AxisMax[2] = { 0.f, 0.f };
 
 	bool IsValid() const { return Space != nullptr; }
+};
+
+// What a selection resolved to on THIS body's skeleton (CCC4). Separate from the record on purpose:
+// the record comes out of the sidecars and is always producible, while an asset needs a
+// `USkeletalMesh` to bind against — and there is none in the gym, none on a menu backdrop, and none
+// until the player visual is built. A record with no assets is `EElysiumAnimOutcome::NoAsset`, which
+// is a true statement rather than a hole.
+struct FElysiumResolvedAnimation
+{
+	UAnimSequence* Sequence = nullptr;
+	UBlendSpace* Space = nullptr;
+
+	bool IsValid() const { return Sequence != nullptr || Space != nullptr; }
 };
 
 // Which rule chose an NPC's standing idle. Reported by the console verbs and the Cog window so a
@@ -149,6 +165,22 @@ public:
 	// range would be guesswork on two parameters that share one.
 	bool ResolveGrid(const FString& Stem, const FString& ClipName, USkeletalMesh* Mesh,
 		struct FElysiumResolvedGrid& OutGrid);
+
+	// CCC4 — the front door. One intent in, one selection record out, plus whatever of it could be
+	// bound to `Mesh`. **This is the only resolver**: the player path and the NPC motor both come
+	// through it, and `ResolveActivityClip` below is expressed over it, because two implementations of
+	// one pick are how the player and the cast come to disagree about a bank silently.
+	//
+	// `Mesh` and `OwnAsset` may both be null — the record is still complete, and `OutAssets` simply
+	// comes back empty. `docs/architecture/animation-architecture.md` section 3.3.
+	void ResolveAnimation(const FElysiumAnimationIntent& Intent, USkeletalMesh* Mesh,
+		UglTFRuntimeAsset* OwnAsset, FElysiumAnimationSelection& OutSelection,
+		FElysiumResolvedAnimation& OutAssets);
+
+	// The catalog view the resolver reads, gathered from this subsystem's own caches. Exposed so a
+	// caller that resolves repeatedly does not re-enter the cache lookups, and so the Content tier can
+	// run the same pure resolver over real sidecars.
+	FElysiumAnimationCatalog BuildCatalog(const FString& Stem);
 
 	// Resolve one ACT_* request all the way through its character vocabulary and the owning bank's
 	// neutral blend-grid cell. OutLabel is the vocabulary key (for example `walk`) that preserves

@@ -202,7 +202,7 @@ struct FElysiumRecordingServices final
 		return NewComponent<USkeletalMeshComponent>();
 	}
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FVector& FeetOrigin, float YawDegrees) override
+		const FVector& FeetOrigin, float YawDegrees, const FString& Stem, int32 Variant) override
 	{
 		if (!bProvideNpcMotor || !Body)
 		{
@@ -214,7 +214,8 @@ struct FElysiumRecordingServices final
 		Motor->Yaw = YawDegrees;
 		FElysiumRecordingNpcMotor* Result = Motor.Get();
 		NpcMotors.Add(MoveTemp(Motor));
-		Record(FString::Printf(TEXT("BuildNpcMotor %s yaw=%.1f"), *FeetOrigin.ToString(), YawDegrees));
+		Record(FString::Printf(TEXT("BuildNpcMotor %s yaw=%.1f stem=%s var=%d"),
+			*FeetOrigin.ToString(), YawDegrees, *Stem, Variant));
 		return Result;
 	}
 	virtual void DestroyNpcMotor(IElysiumNpcMotor*) override
