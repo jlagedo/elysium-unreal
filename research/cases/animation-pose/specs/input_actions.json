@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "topic": "input_actions",
+  "consuming_document": "docs/vtmb/controls.md",
+  "research_id": "RE36",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Does vhotkey selection defer by one frame?"
+  ],
+  "field_probes": [],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The four client command-name strings have unique absolute references in the pinned image.",
+      "evidence": "+attack2/-attack2 at 0x102bdbd8/0x102bdbe4 are referenced at 0x1010509c/0x101050ec; +wpn_secondaryatk/-wpn_secondaryatk at 0x102bdd58/0x102bdd6c are referenced at 0x10105ccc/0x10105d1c.",
+      "consequence": "The registration sites give bounded entry points for recovering both press/release handler pairs without guessing from key bindings."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "+attack2 owns the ordinary attack2 kbutton and contributes held bit 0x00000800 plus press-edge bit 0x01000000.",
+      "evidence": "The registered handlers at 0x10102130/0x10102140 press/release kbutton 0x104d2da0; the client button pack at 0x10104460 assigns it masks 0x00000800 and 0x01000000.",
+      "consequence": "+attack2 alone does not produce the server block bit."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "+wpn_secondaryatk is a held composite block command, not a persistent toggle.",
+      "evidence": "The handlers at 0x101024e0/0x101024f0 press/release kbutton 0x104d36e0 through 0x10102250/0x10102260 and then tail-jump to the ordinary +attack2/-attack2 handlers. The button pack emits 0x104d36e0 as held bit 0x08000000.",
+      "consequence": "While held, +wpn_secondaryatk contributes both ordinary attack2 state and the distinct block bit consumed by the server player classifier."
+    }
+  ],
+  "functions": [
+    {
+      "address": "10105090",
+      "label": "register_attack2_press",
+      "confidence": "confirmed",
+      "role": "Registers +attack2 with press handler 0x10102130.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "101050e0",
+      "label": "register_attack2_release",
+      "confidence": "confirmed",
+      "role": "Registers -attack2 with release handler 0x10102140.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10105cc0",
+      "label": "register_weapon_secondary_press",
+      "confidence": "confirmed",
+      "role": "Registers +wpn_secondaryatk with composite press handler 0x101024e0.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10105d10",
+      "label": "register_weapon_secondary_release",
+      "confidence": "confirmed",
+      "role": "Registers -wpn_secondaryatk with composite release handler 0x101024f0.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10102130",
+      "label": "attack2_press_handler",
+      "confidence": "confirmed",
+      "role": "+attack2 handler; presses ordinary attack2 kbutton 0x104d2da0.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10102140",
+      "label": "attack2_release_handler",
+      "confidence": "confirmed",
+      "role": "-attack2 handler; releases ordinary attack2 kbutton 0x104d2da0.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "101024e0",
+      "label": "weapon_secondary_press_handler",
+      "confidence": "confirmed",
+      "role": "+wpn_secondaryatk composite handler; presses block state then forwards to +attack2.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "101024f0",
+      "label": "weapon_secondary_release_handler",
+      "confidence": "confirmed",
+      "role": "-wpn_secondaryatk composite handler; releases block state then forwards to -attack2.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10102250",
+      "label": "weapon_secondary_mode_press",
+      "confidence": "confirmed",
+      "role": "Presses the separate weapon-secondary block kbutton 0x104d36e0.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "10102260",
+      "label": "weapon_secondary_mode_release",
+      "confidence": "confirmed",
+      "role": "Releases the separate weapon-secondary block kbutton 0x104d36e0.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "10104460",
+      "label": "pack_command_buttons",
+      "confidence": "confirmed",
+      "role": "Packs ordinary attack2 as held 0x00000800/edge 0x01000000 and weapon-secondary block as held 0x08000000.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 2000
+    }
+  ],
+  "relationships": [
+    {
+      "from": "10105090",
+      "to": "10102130",
+      "confidence": "confirmed",
+      "evidence": "the +attack2 registration embeds handler address 0x10102130"
+    },
+    {
+      "from": "101050e0",
+      "to": "10102140",
+      "confidence": "confirmed",
+      "evidence": "the -attack2 registration embeds handler address 0x10102140"
+    },
+    {
+      "from": "10105cc0",
+      "to": "101024e0",
+      "confidence": "confirmed",
+      "evidence": "the +wpn_secondaryatk registration embeds composite handler address 0x101024e0"
+    },
+    {
+      "from": "10105d10",
+      "to": "101024f0",
+      "confidence": "confirmed",
+      "evidence": "the -wpn_secondaryatk registration embeds composite handler address 0x101024f0"
+    },
+    {
+      "from": "101024e0",
+      "to": "10102250",
+      "confidence": "confirmed",
+      "evidence": "direct call presses the weapon-secondary block kbutton before the tail-jump to +attack2"
+    },
+    {
+      "from": "101024f0",
+      "to": "10102260",
+      "confidence": "confirmed",
+      "evidence": "direct call releases the weapon-secondary block kbutton before the tail-jump to -attack2"
+    }
+  ]
+}

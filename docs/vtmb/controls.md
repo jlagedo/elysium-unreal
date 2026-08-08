@@ -121,8 +121,8 @@ bare `+mlook` line, which is why mouse-look is on from a cold start and `m_side`
 
 | Command | Effect |
 |---|---|
-| ±`attack`, ±`attack2` | primary / secondary fire |
-| ±`wpn_secondaryatk` | secondary attack mode toggle |
+| ±`attack`, ±`attack2` | primary / ordinary secondary-fire buttons |
+| ±`wpn_secondaryatk` | held composite: the melee-block button plus ordinary `attack2` |
 | ±`reload` | reload |
 | ±`use` | the world-interaction verb (see `docs/vtmb/entity_io.md` for the trace, `use_icon`, `PassesUseFilter`) |
 | `slot1`…`slot8` | inventory categories (see below) |
@@ -177,16 +177,20 @@ and the argument form; `client.dll`'s `vhotkey_int` handler would confirm the de
 Unarmed and melee share one move set, selected by **`+attack` plus the movement direction held
 with it**: three directional combos, plus a fourth for `+attack` with no direction held.
 
-**The block verb is not identified, but its server animation endpoint is** [VtMB decompiled]. A
-grounded player whose block latch is set and whose active weapon passes the eligibility gate returns
-compact action code `13`; the ordinary player selector maps that code to `ACT_PREBLOCK`. Blocking is
-a real mechanic with a stat behind it — the `Defence` feat, raised by Wits
-(`docs/vtmb/game_runtime.md`) — but what command sets the latch is still open. `+attack2` is the
-strongest candidate: it is declared by `client.dll` and left **unbound by `default.cfg` in both
-retail and the patch**, because `MOUSE2` carries `vdiscipline_last` rather than `+attack2`.
-`+wpn_secondaryatk` is the other candidate, and its own semantics are equally unrecorded.
-Decompiling the client's attack handlers, or byte-scanning for the `Defence` feat's consumer, would
-settle both. *(Move set: community-sourced.)*
+**The block verb is `+wpn_secondaryatk`** [VtMB decompiled]. The pinned client registers two
+independent `kbutton_t` pairs. `+attack2` alone packs held bit `0x800` and press edge `0x01000000`.
+`+wpn_secondaryatk` presses a second button, then jumps into that same `+attack2` handler; its
+release path clears both in the same order. The second button packs held bit `0x08000000`, so this
+command is a held composite, not a persistent client toggle.
+
+On the server, player `+0x2088` is the current-button field and `0x10160ec0` is its only direct
+`0x08000000` test. The predicate additionally requires ground contact and an active weapon whose
+capability mask intersects `0x18000`; success makes the classifier return compact action code `13`,
+and the ordinary selector requests `ACT_PREBLOCK`. `+attack2` alone cannot set that block bit.
+Blocking remains a real mechanic with the `Defence` feat behind it, while the ordinary attack2 bits
+continue through weapon secondary-fire policy. `uv run elysium research input_action_survey`
+hash-pins both DLLs and every instruction span in this chain. *(Directional move set:
+community-sourced.)*
 
 ### Camera
 
@@ -438,7 +442,7 @@ for its own default-binding path.
 
 Two columns, `"<console command>" "<label>"`. Retail lists **39** actions. The patch rewrites the
 file to **68 rows — 64 actions plus 4 `" " " "` spacers** — relabelling several (`+duck` "Duck" → "Crouch", `+wpn_secondaryatk`
-"Toggle attack mode" → "Secondary Mode", `togglecamera` "Toggle 3rd person camera" → "Toggle
+"Toggle attack mode" → "Secondary Mode" despite the held composite recovered above, `togglecamera` "Toggle 3rd person camera" → "Toggle
 View") and adding the ten `vhotkey #N` slots, `slot1`/`slot4`, the camera verbs
 (`+camin`/`+camout`/`cam_rotateleft`/`cam_rotateright`/`cam_restore`), `autospeed`, `automove`,
 `+lookup`/`+lookdown`, `vm_passives`, `toggleuiside`, `pause` and `skip`. That is the patch's *"Added console key and all hotkeys to the controls options

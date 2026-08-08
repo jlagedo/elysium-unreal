@@ -333,12 +333,12 @@ base activity is translated and selected against the model:
 | Address | Working role | Established behavior |
 |---|---|---|
 | `0x1016be10` | `CBasePlayer::PostThink` | calls the classifier, then virtual `+0x704` with its result |
-| `0x1016bb50` | player action classifier | returns `-1` or a compact code from movement/ground/water/scripted state; symbolic names for the complete code set are not established |
-| `0x10164240` | animation-mode router | dispatches the action code through mode-specific virtuals; the ordinary mode reaches virtual `+0x684` |
+| `0x1016bb50` | player action classifier | returns `-1` or one of the compiled `PLAYER_*` compact codes from movement/ground/water/scripted state |
+| `0x10164240` | `CBasePlayer::SetAnimation` router | gives protected activities first refusal, otherwise dispatches an attacker-side paired-action mode or reaches the ordinary virtual `+0x684` |
 | `0x10164870` | ordinary player selector | writes `move_yaw`, `aim_yaw` and `aim_pitch`, chooses a base activity, then calls the apply path |
 | `0x101644f0` | activity/sequence apply | stores ideal activity, translates/sets the activity, chooses weighted or heaviest sequence, stores `m_nSequence`, calls `ResetSequenceInfo`, and derives playback rate |
 | `0x1008dc40` / `0x1008dd30` | `SelectWeightedSequence` / `SelectHeaviestSequence` | resolve one activity against the current studio header |
-| `0x10090950` | `ResetSequenceInfo` | resets cycle/sequence state after a changed selection |
+| `0x10090950` | `ResetSequenceInfo` | resets cycle/sequence state after a changed selection or a finished one-shot is reselected |
 
 The classifier is driven by state after movement rather than by raw input. Its decompile tests the
 current velocity components, ground flags, water level, jump/landing state, a live interaction
@@ -346,27 +346,41 @@ handle and special animation latches. Known returns in the ordinary path cover i
 air/water and contextual states. The integer is an internal dispatcher key, not the activity enum:
 one compact code can select several activities from the rest of the realized state.
 
-The ordinary selector's static compact-code map is [VtMB decompiled]:
+The complete symbolic enum is the 17-pointer table at `0x106ac3a0`. Targeted-discipline
+`Player_Anim` parsing at `0x101ddfb0` resolves against this same table before `0x101de660` can call
+the player's `SetAnimation`; it is not an analyst-assigned vocabulary. The ordinary selector and
+the complete native caller surface give this map [VtMB decompiled]:
 
-| Compact code | Recovered policy |
-|---|---|
-| `0` | stationary policy: `ACT_IDLE`, `ACT_AIM`, or `ACT_CROUCH`, with weapon/form state still able to translate the result |
-| `1` | moving policy: walk, run, sneak, or their relaxed variants, selected from realized speed, flags, and weapon state |
-| `2` | jump/landing phase switch: `ACT_LEAP`, `ACT_HOP*`, `ACT_LEAP_ASCEND`, `ACT_LEAP_DESCEND`, `ACT_FALLING`, `ACT_LAND`, `ACT_LAND_CROUCH`, or `ACT_LAND_HARD` |
-| `5` | attack policy: grounded/airborne melee activity, or a ranged attack layer when the weapon supplies that route |
-| `7` | prayer state machine: `ACT_PRAYING_BEGIN` → `ACT_PRAYING_IDLE` → `ACT_PRAYING_END` → `ACT_IDLE` |
-| `8` | released feeding/seduction idle attack, selected from the active interaction flags |
-| `9` | `ACT_SWIM` or `ACT_TREADWATER` |
-| `10` | the live interaction entity supplies the activity through its virtual policy |
-| `11` | `ACT_CLIMB_UP` or `ACT_CLIMB_DOWN`, selected from vertical velocity |
-| `12` | a contextual helper supplies the activity pair; its predicates and symbolic action are not yet closed |
-| `13` | `ACT_PREBLOCK` |
-| `14` | adds `ACT_RELOAD_LAYER` to the base policy when a weapon is present |
+| Code | Compiled name | Producer and selector policy |
+|---:|---|---|
+| `0` | `PLAYER_IDLE` | grounded stationary classifier or forced-idle helper; `ACT_AIM` for an eligible weapon, otherwise ducked `ACT_CROUCH`, else `ACT_IDLE` |
+| `1` | `PLAYER_WALK` | grounded nonzero horizontal velocity or movement helper; ducking selects `ACT_SNEAK`, otherwise realized speed and weapon state select walk/run or their relaxed variants |
+| `2` | `PLAYER_JUMP` | positive jump/landing state out of water or the jump helper; phases 1…11 select `ACT_HOP*`, `ACT_LEAP*`, `ACT_FALLING` and the land family |
+| `3` | `PLAYER_SUPERJUMP` | no classifier edge, native caller, retained-latch writer or effective `Player_Anim` value; no distinct ordinary-selector branch |
+| `4` | `PLAYER_DIE` | the player death routine at `0x10163af0`; death/protected activity ownership precedes the ordinary selector, which has no distinct code-4 branch |
+| `5` | `PLAYER_ATTACK1` | ranged, base/thrown, frag-grenade and discipline-weapon attack paths; melee capability selects `ACT_MELEE_ATTACK` / `ACT_MELEE_AIR_ATTACK`, while ranged capability adds `ACT_RANGE_ATTACK1_LAYER` |
+| `6` | `PLAYER_FEED` | no classifier edge, native caller, retained-latch writer or effective `Player_Anim` value; no distinct selector branch. Live feeding uses `PLAYER_GRAPPLE` plus the separate paired-action modes |
+| `7` | `PLAYER_PRAY` | `InPrayer` or both form/prayer gate bytes; `ACT_PRAYING_BEGIN` → `ACT_PRAYING_IDLE` → `ACT_PRAYING_END` → `ACT_IDLE` |
+| `8` | `PLAYER_GRAPPLE` | live feed/grapple target in release state zero; flags select `ACT_FEEDING_RELEASED_IDLE_ATTACKER` or `ACT_SEDUCTIVE_RELEASED_IDLE_ATTACKER` |
+| `9` | `PLAYER_SWIM` | water level above two, or level two while airborne; `ACT_SWIM` or `ACT_TREADWATER` from realized motion |
+| `10` | `PLAYER_USE` | live interaction handle; the interaction entity supplies the activity through its virtual policy |
+| `11` | `PLAYER_LADDER` | movement type ten; vertical velocity selects `ACT_CLIMB_UP` or `ACT_CLIMB_DOWN` |
+| `12` | `PLAYER_VOMIT` | two native purge/vomit paths and the only effective discipline `Player_Anim`; the protected retained owner advances `ACT_VOMIT_INTO` → `ACT_VOMIT_IDLE` → `ACT_VOMIT_GETOUT` → `ACT_IDLE` |
+| `13` | `PLAYER_BLOCK` | held `+wpn_secondaryatk` while grounded and an active weapon capability in `0x18000`; `ACT_PREBLOCK` |
+| `14` | `PLAYER_RELOAD` | common weapon reload and the frag-grenade reload-style path; adds `ACT_RELOAD_LAYER` when a weapon is present |
+| `15` | `PLAYER_START_AIMING` | no classifier edge, native caller, retained-latch writer, effective `Player_Anim` value or distinct selector branch |
+| `16` | `PLAYER_LEAVE_AIMING` | no classifier edge, native caller, retained-latch writer, effective `Player_Anim` value or distinct selector branch |
 
-Codes `3`, `4`, and `6` have no distinct ordinary-selector branch and have not been observed. The
-classifier itself directly returns only `0`, `1`, `2`, `7`, `8`, `9`, `10`, `11`, and `13`; a
-latched action can retain other values. That split is why static reachability and controlled traces
-are both required.
+`uv run elysium research player_action_survey` validates this table and every indirect call using
+numeric vtable offset `+0x704`. There are **15 genuine player-animation calls**: the `PostThink`
+classifier result, one paired-router re-entry, the death/idle/walk/jump/vomit paths, four attack
+paths, two reload paths and the discipline-data call. Another **14** calls use a different
+`CAI_BaseNPC` task-name virtual at the same numeric offset and are explicitly excluded. The
+patch-first vdata corpus supplies exactly two `Player_Anim` fields, both `PLAYER_VOMIT` in
+`vdata/system/disciplinetgt_004.txt`. The action latch at `+0x1cb0` retains only code `12`: the
+classifier clears any other retained value, constructors/spawn clear the latch, and the vomit owner
+is its only setter. Codes `3`, `6`, `15` and `16` are therefore dormant compiled vocabulary in this
+pinned binary and effective data, not missing cases inferred from an unexercised trace.
 
 The ordinary selector reaches these base activity families in the recovered branches, with the
 numeric identities independently fixed by the global registration table:
@@ -385,31 +399,136 @@ what separates a live action from inherited/dead engine code.
 
 Activity translation is a second compiled-data layer. `CBaseCombatCharacter::Weapon_TranslateActivity`
 at `0x10327ec0` asks the active weapon's virtual `+0x5a4` for an override. A weapon exposes the same
-table independently through virtual `+0x5a8` (pointer) and `+0x5ac` (count); the table row is three
-dwords — base activity, weapon activity, and `required`. `0x1024edc0`, reached by retail's developer
-ConVar `activitydump`, prints those exact rows as **Base Act / Weapon Act / Required**. This is an
-extractable table per weapon class, not a set of clip-name heuristics.
+flattened table independently through virtual `+0x5a8` (pointer) and `+0x5ac` (count); the table row
+is three dwords — base activity, weapon activity, and `required`. `0x1024edc0`, reached by retail's
+developer ConVar `activitydump`, prints those exact rows as **Base Act / Weapon Act / Required**.
+
+`uv run elysium research weapon_activity_survey` now extracts the complete pinned-build surface
+directly from PE32 RTTI and those two virtuals [data-verified]: **169**
+`CBaseCombatWeapon` subclasses, **61** non-empty per-class tables, **58** distinct table blobs and
+**9,214 ordered per-class rows** (9,211 after shared blobs are counted once). Every base/output ID
+resolves in the full 4,460-entry activity registry. The extractor also recovers entity classnames
+from their constructor/PostConstructor sites, so the table is joined to authored equipment rather
+than guessed from C++ spelling.
+
+`CBaseCombatWeapon::ActivityOverride` at `0x1024f210` gives the order semantic
+[VtMB decompiled]:
+
+1. walk the flattened table from ordinal zero and compare the requested base activity;
+2. if the weapon has no owning combat-character component, return the first matching output;
+3. otherwise pass that output through the owner's `NPC_TranslateActivity` and accept the row when
+   either the owner body or its alternate model has a heaviest sequence for the result;
+4. on absence, keep walking. A later duplicate-base row is therefore an ordered fallback; if no
+   row survives, return the incoming activity unchanged.
+
+The third dword is **not read anywhere in this translator**. The table contains 9,013 optional and
+201 `required`-flagged per-class rows, but both take the same availability path in the pinned server
+body. It remains exported because it is authored data and `activitydump` exposes it, not because a
+remake may give it behavior retail does not have. Ordered duplicates are load-bearing: the 58
+unique blobs contain 4,634 rows beyond their per-table distinct base-activity counts.
+
+Current-map weapon demand is closed to one bounded content miss. The 22 maps carry **270** live
+equipment references / 22 distinct classnames; **269** references / 21 names resolve to an exact
+RTTI class and table. `sm_junkyard_1`'s Night Watchman alone asks for `item_w_sw_m64`, a string
+absent from `vampire.dll` and from the exported item definitions, so no retail entity factory or
+acttable exists for it. It is not silently mapped to the `.38` table.
 
 The ordinary apply path's exact order is [VtMB decompiled, capture-verified]:
 `SetIdealActivity` → virtual `+0x5f4` (`Weapon_TranslateActivity`) → virtual `+0x5e0`
 (`CBasePlayer::NPC_TranslateActivity`) → `SetActivity` → weighted/heaviest sequence selection.
 `SetIdealActivity` at `0x10324500` only stores the requested value at character `+0xff0`; its return
 site is `0x10164577`, the weapon-translation return is `0x10164582`, and the player translation call
-follows at `0x10164587`. The order outside this ordinary player path — special modes, forms, and the
-NPC class chain — remains open.
+follows at `0x10164587`. The paired-action order is recovered separately below. PE32 RTTI exposes
+only `CBasePlayer` and `CHL2_Player`, and both use the same protected owner (`0x10161200`), ordinary
+selector (`0x10164870`) and router (`0x10164240`); forms are state branches inside this one policy,
+not undiscovered subclass overrides. The common NPC chain is separate and recovered below.
 
 `CBasePlayer::NPC_TranslateActivity` at `0x101647a0` is the player-specific translation after the
 weapon hook: it
 maps `ACT_WALK_RELAXED` to `ACT_WALK` and `ACT_RUN_RELAXED` to `ACT_RUN`, leaving other activities
-unchanged. The mode-specific/form-specific translation paths remain part of the gameplay-action
-investigation; the known functions and open edges are pinned in
-`research/cases/animation-pose/specs/gameplay_actions.json`.
+unchanged. No player subclass supplies another translation or commit order in the pinned RTTI
+surface.
 
 That row is what makes the unarmed case resolve at all. A player body carries **no
 `ACT_WALK_RELAXED` or `ACT_RUN_RELAXED` sequence**: the only relaxed gaits in
 `tremere_Male_Armor_0`'s whole resolved vocabulary are the weapon-suffixed
 `<weapon>_relaxed_walk` / `<weapon>_relaxed_run` pairs [data-verified, partial corpus]. Without
 the translation an unarmed request for either activity would select nothing.
+
+#### Protected activities and player paired-action modes [VtMB decompiled + data-verified]
+
+`CBasePlayer::SetAnimation` at `0x10164240` is a priority router, not another activity table. Its
+order is:
+
+1. virtual `+0x670` (`0x10161200`) tests whether the current ideal activity owns animation. While
+   it does, `0x101641d0` receives the compact action and the ordinary and paired routes are skipped;
+2. without a valid grapple peer, or with role `-1`, virtual `+0x684` runs the ordinary selector;
+3. a valid role `1` actor is the paired **victim** and does not independently advance the pair;
+4. a role `0` actor is the paired **attacker**. Its mode at `+0x1540` selects one of six stateful
+   virtuals or the common sequence-finished test;
+5. when that leaf reports completion, `CBaseCombatCharacter::EndGrapple` at `0x10329560` clears the
+   two-sided state. The router sets force-heaviest flag `0x40000000` and re-enters `SetAnimation`
+   so the same compact action can resume through the ordinary path.
+
+The protected predicate covers the block and blocked-reaction activities, the early portion of
+the four player melee activities, `ACT_FEEDING_ENGAGE_FAILURE`, its registered helper set, the
+contiguous protected range `0x75`–`0x93` plus `0x9d0`, and the vomit activities. The contextual
+compact code `12` has one confirmed protected owner: while the `+0x1cb0` latch is active,
+`0x101641d0` advances `ACT_VOMIT_INTO` → `ACT_VOMIT_IDLE` while blood is consumed →
+`ACT_VOMIT_GETOUT` → `ACT_IDLE`, then clears the latch. This is distinct from code `12`'s
+ordinary route only in ownership: both call the same `0x10164040` state helper, but the protected
+route keeps first refusal while the latch is set.
+
+The remaining protected-router side path is inventory policy rather than another animation
+selector. During a protected melee activity, the `+0x1df4` special-owner flag, elapsed cycle and
+active-weapon capability gate can clear that flag and call player virtual `+0x720` (`0x10170b50`).
+That method forwards the special owner's classname and `+0x4a0` identity to virtual `+0x724`
+(`0x100b7fe0`), which searches the player's 224 inventory slots for the matching item and may
+activate/equip it. It never chooses an activity, sequence label or layer.
+
+`uv run elysium research player_grapple_survey` validates the pinned DLL hash, decodes
+`CBaseCombatCharacter::GetInitialGrappleActivity` at `0x10328c80` as a nine-entry jump table,
+verifies all direct `StartGrappleAttack` call sites and inventories exported Python
+`SeductiveFeed` calls. The complete mode-to-base map is [VtMB decompiled, registry-verified]:
+
+| Mode | Initial base activity | Player continuation policy | Recovered producer |
+|---:|---|---|---|
+| `0` | `ACT_FEEDING_ENGAGE` (`0xf5b`) | feeding state machine at virtual `+0x68c` | `CBasePlayer::Replenish` / ordinary feed target |
+| `1` | `ACT_FEEDING_ENGAGE` (`0xf5b`) | the same `+0x68c` state machine | no caller supplies mode 1 in the pinned binary |
+| `2` | `ACT_SEDUCTIVE_ENGAGE` (`0xfa5`) | seductive state machine at virtual `+0x690` | Python `SeductiveFeed`; one executable corpus call in `vamputil.py` |
+| `3` | `ACT_SNEAKATTACK_SUCCESS` (`0x1015`) | virtual `+0x694` applies the completed sneak-attack result, then ends the pair | the player-use sneak-target path at `0x10167370` |
+| `4` | `ACT_SNEAKATTACK_FAILURE` (`0x101e`) | the common sequence-finished test ends the pair | no caller supplies mode 4 in the pinned binary |
+| `5` | `ACT_PAYPHONE_PICKUP` (`0xf40`) | payphone state machine at virtual `+0x688` | the payphone/dialogue path at `0x10178280` |
+| `6` | `ACT_RAT_FEED_ENGAGE` (`0x1027`) | rat-feed state machine at virtual `+0x698` | `CBasePlayer::Replenish` when the target type is rat |
+| `7` | `ACT_FINISHING_MOVE` (`0x94`) | the common sequence-finished test ends the pair | no caller supplies mode 7 in the pinned binary |
+| `8` | `ACT_ZOMBIE_FEEDING_ENGAGE` (`0xfca`) | zombie-feed state machine at virtual `+0x69c` | `CBasePlayer::BeFedOnByZombie` at `0x10168700` |
+
+The five references to `StartGrappleAttack` in the pinned server account for every recovered native
+or Python producer: ordinary/rat feeding, sneak success, payphone, zombie feeding and
+`SeductiveFeed`. The thunk has no data reference and modes `1`, `4` and `7` have no caller; their
+registered activities and router behavior exist, but shipped reachability is not inferred from
+that dormant surface.
+
+The stateful leaves advance named base activities before the pair translator runs:
+
+- modes `0`/`1` advance engage/idle to bite or release; bite/feed-loop stays in
+  `ACT_FEEDING_FEED_LOOP` while feeding is permitted, otherwise selects feed-release, ordinary
+  release, or the player flyback release;
+- mode `2` advances engage to loop while latched, then selects ordinary release or
+  `ACT_SEDUCTIVE_RELEASE_TO_MEZ` from the linked actor state;
+- mode `5` advances pickup → idle → hangup and requests hangup when the phone handle disappears;
+- mode `6` advances rat engage → loop → release;
+- mode `8` applies the analogous zombie engage/idle → bite/feed-loop → feed-release or
+  ordinary/flyback release family.
+
+`StartGrappleAttack` at `0x10328df0` chooses size and front/back alignment, validates that both
+models can answer the initial paired base, and enters both actors through virtual `+0x5ec`.
+`SetGrappleActivity` at `0x1032a100` then resolves the same base independently for attacker and
+victim through `TranslateBaseGrappleActivity`, passes each role-specific result through that
+actor's weapon translation, selects a weighted sequence, and writes current and ideal activity/
+sequence state on both actors. A missing answer warns and calls `EndGrapple`; it does not guess an
+unpaired label. This closes the paired-mode translation and commit order separately from the
+ordinary player order.
 
 The first controlled `sm_hub_1` action corpus closes the ordinary locomotion slice
 [capture-verified]. Its pinned `vampire.dll` produced **72,440** `ELGACT1` records and exercised all
@@ -432,8 +551,9 @@ the clip-table join resolves the selected sequence against
 | landing phase 8 while ducked | `ACT_LAND_CROUCH` → `ACT_LAND_CROUCH` | selection returns `-1` on this body; no clip was observed |
 
 Only compact codes `0`, `1`, and `2` occur in this controlled corpus. It therefore proves the
-three-Cs locomotion path, including the relaxed-gait translation and sequence ownership, but not the
-unobserved static branches above. In particular, the ordinary jump does **not** visit
+three-Cs locomotion path, including the relaxed-gait translation and sequence ownership, while the
+complete native/data survey above establishes the remaining static reachability without pretending
+those branches executed in this capture. In particular, the ordinary jump does **not** visit
 `ACT_LEAP_ASCEND` or `ACT_LEAP_DESCEND`: its observed chain is `ACT_LEAP` → `ACT_FALLING` → moving
 gait or land.
 
@@ -462,11 +582,261 @@ an exact label through `LookupSequence` (`0x1008f7b0`), writes `m_nSequence`, ca
 and choreographed content that names an exact sequence needs the same distinct route in a remake;
 ordinary gameplay does not.
 
-The equivalent NPC policy chain is not yet closed. NPCs clearly share the same activity registry,
-model vocabulary and final sequence selectors, while schedules/tasks and class overrides decide
-their desired activities. The exact `schedule/task → ideal activity → translation → selection`
-call graph, interrupt order, and weapon/class override order are open RE facts; they must be
-recovered rather than inferred from later public Source code.
+### NPC activity resolution, sequence choice and transition commit [VtMB decompiled, capture-verified]
+
+The common NPC resolver is now located. Later public Source code supplied useful function-name
+landmarks, but the rules below are from the pinned VtMB body and its retail trace; VtMB adds its own
+pre-translation, disposition path and fallback order.
+
+| Address | Recovered function | Established role |
+|---|---|---|
+| `0x10271ff0` | `CAI_BaseNPC::TranslateActivity` | alternates class/NPC and weapon translations, then selects an available logical activity |
+| `0x10272130` | `CAI_BaseNPC::ResolveActivityToSequence` | resolves one requested activity to translated/weapon activities plus an exact sequence |
+| `0x10272490` | `CAI_BaseNPC::SetActivityAndSequence` | commits the exact sequence, weapon activity and logical activity |
+| `0x102725d0` | `CAI_BaseNPC::SetActivity` | resolves and commits immediately, skipping transition traversal |
+| `0x10272650` | `CAI_BaseNPC::SetIdealActivity` | stores the logical target and resolves its target sequence without committing it |
+| `0x102726a0` | `CAI_BaseNPC::AdvanceToIdealActivity` | finds and commits the next transition sequence or the resolved target |
+| `0x102727d0` | `CAI_BaseNPC::MaintainActivity` | re-resolves a changed ideal and advances toward it while respecting scripted ownership |
+
+`TranslateActivity` applies the VtMB NPC order [VtMB decompiled]:
+
+1. virtual `+0x5dc` pre-translates the raw request;
+2. `Weapon_TranslateActivity` at virtual `+0x5f4` translates that result and preserves this first
+   weapon answer separately;
+3. up to five iterations call `NPC_TranslateActivity` at virtual `+0x5e0`, remember the latest
+   changed class/NPC answer, then call the weapon translator again; the loop stops when the weapon
+   answer equals the preceding activity;
+4. `ACT_SCRIPT_CUSTOM_MOVE` returns without an availability probe;
+5. otherwise availability is tried in order: the final weapon answer, the remembered class/NPC
+   answer, the first weapon answer, then the original logical request. If none exists and the
+   original request is `ACT_RUN`, the translated fallback is `ACT_WALK`.
+
+#### The complete NPC translation-virtual surface [VtMB decompiled + data-verified]
+
+`uv run elysium research npc_translation_survey` makes the class side reproducible from the pinned
+PE32 RTTI and vtables. The binary contains **77 `CAI_BaseNPC` descendants**, but they collapse to
+only **10** effective `+0x5dc` pre-translation bodies, **five** `+0x5e0` class-translation bodies,
+and two implementations each of the `+0x8e4` cover and `+0x8e8` reload delegates. The generated
+ledger remains below `$ELYSIUM_WORK_ROOT/research`.
+
+The inherited groups are [VtMB decompiled]:
+
+| Slot/body | Inheritors | Translation policy |
+|---|---:|---|
+| `+0x5dc` `0x10271f50` | 13 base/generic/cinematic classes | identity |
+| `+0x5dc` `0x10295590` | 17 Troika, generic-animal/boss, maker and payphone classes | common gait/frenzy/cover/reload and paired-action pre-translation below |
+| `+0x5dc` `0x103854f0` | 39 human/vampire/humanoid-boss classes | armed/alert translation, then the common Troika body |
+| `+0x5dc` `0x103690a0` | `CNPC_VCamera`, `CNPC_VCameraSecurity` | identity |
+| `+0x5e0` `0x10271f70` | 13 base/generic/cinematic classes | identity except the capability-gated cover/reload delegates |
+| `+0x5e0` `0x10295710` | 19 Troika/animal/boss/maker/payphone classes | `ACT_IDLE → ACT_LAUGH_IDLE` when `+0x14bc & 0x80000` |
+| `+0x5e0` `0x103858b0` | 42 human/vampire/humanoid-boss classes | alert turn/90/180 activities return to their ordinary forms, then the Troika rule |
+| `+0x5e0` `0x103690c0` | the two camera classes | identity |
+| `+0x5e0` `0x10394690` | `CNPC_VMingXiao` | the same six alert-turn normalizations, otherwise the Troika rule |
+
+The common Troika pre-translator first honors its global gait override: mode 1 changes
+`ACT_WALK`/`ACT_HUNT_WALK` to `ACT_RUN`, and mode 2 changes `ACT_RUN` to `ACT_WALK`. Its movement
+policy byte at `+0x5b84` then maps walk/run/relaxed/hunt/combat-move requests to
+`ACT_RUN_FRENZY` under bit `0x40`, or the walking subset to `ACT_RUN` under bit `0x20`;
+`ACT_FIDGET` becomes `ACT_IDLE`. A capability-gated `ACT_RELOAD_FAST` enters `+0x8e8`, while
+`ACT_COVER` or the flagged idle case enters `+0x8e4`; other requests finish through
+`CBaseCombatCharacter::NPC_EarlyTranslateActivity` at `0x10328030`.
+
+The human body first removes aim from gait when capability bit `0x40` is present:
+`ACT_WALK_AIM → ACT_WALK` and `ACT_RUN_AIM → ACT_RUN`. It computes its armed/alert branch from the
+active weapon and the NPC state/capability fields at `+0x14b8`, `+0x14bc`, `+0x5b84`, `+0x5cc0`
+and `+0x5d8c`. Outside that branch, walk/run become their relaxed forms. Inside it, an idle request
+becomes `ACT_AIM` when the active weapon's `+0x5a0` result has `0x6000`, and ordinary left/right,
+90-degree and 180-degree turns become their six `_ALERT` forms. The common Troika body then runs.
+
+Six classes replace that inherited pre-translation leaf [VtMB decompiled]:
+
+| Class/body | State-dependent mapping |
+|---|---|
+| `CNPC_VDog` `0x10374ad0` | preserves `ACT_FIDGET` directly; every other request enters the common Troika body |
+| `CNPC_VHengeyokai` `0x10381b50` | when its `+0x14b8` form bit is set, idle → `ACT_PICKUP_LIGHTIDLE` and walk/run → `ACT_PICKUP_LIGHTCARRY`; otherwise human translation |
+| `CNPC_VStalker` `0x103b2e60` | walk/run/hunt-walk → `ACT_COMBATMOVE`; every other request is identity |
+| `CNPC_VTzimisce` `0x103bde40` | under its form bit, idle and walk/run select `ACT_IDLE_BODY[_L]` and `ACT_WALK_BODY[_L]` from `+0x6688`; otherwise common Troika translation |
+| `CNPC_VTzimisceRunner` `0x103c3e10` | after common Troika translation, `+0x6672` selects `ACT_TZ_IDLE2`, `ACT_TZ_FIDGET2`, `ACT_TZ_WALK2` or `ACT_TZ_RUN2` |
+| `CNPC_VWolfMorph` `0x103dcdc0` | every request → `ACT_WOLF_MORPH` |
+
+The cover/reload delegates are also finite. The 13 base classes use `0x10274aa0` / `0x10274820`;
+all 64 Troika-derived classes—including every resolved current-map class—use `0x10297560` /
+`0x102954b0`. Base cover chooses `ACT_COVER_MED` or `ACT_COVER_LOW` for context types 100/101 when
+the model has the sequence, otherwise available `ACT_COVER`, otherwise `ACT_IDLE`. Troika cover
+adds forced low cover (`+0x14b8 & 0x200`) and prefers `ACT_MIDCRUNCH_IDLE`, `ACT_CRUNCH_IDLE` or
+`ACT_CORNER_COVER_IDLE` for context types 100, 101 or `0x27d8` before the base fallback. Base reload
+returns `ACT_RELOAD_LOW` for a compatible 100/101 cover context when its model/environment tests
+pass, otherwise `ACT_RELOAD`. Troika fast reload tries `ACT_RELOAD_LOW`, then the corresponding
+mid-crunch/crunch idle activity through the whole translator, then `ACT_RELOAD_FAST`.
+
+The tail at `0x10328030` is not a generic table lookup. It recognizes **29 specially registered
+paired-action bases**: `ACT_FINISHING_MOVE`; three payphone bases; eight feeding bases; four
+seductive-feeding bases; eight zombie-feeding bases; two sneak-attack bases; and three rat-feeding
+bases. `CBaseCombatCharacter::TranslateBaseGrappleActivity` at `0x10328380` leaves the base unchanged
+without a valid linked actor/role state. Otherwise it returns one of eight contiguous registered
+variants:
+
+| Offset | Exact role |
+|---:|---|
+| `+1` / `+2` | attacker, short/tall victim, front |
+| `+3` / `+4` | victim, short/tall attacker, front |
+| `+5` / `+6` | attacker, short/tall victim, back |
+| `+7` / `+8` | victim, short/tall attacker, back |
+
+All **232** variant activity names are present in the registry. The arithmetic is exact: start at
+base `+1`, add one when the linked actor's `GetGrappleSize` is tall, add two for the victim role,
+and add four for the back position. Thus an authored base such as `ACT_FEEDING_ENGAGE` resolves to
+the named `...ATTACKER_SHORTVICTIM_FRONT` through `...VICTIM_TALLATTACKER_BACK` family without
+model-label inference.
+
+The current 22-map join contains **426 class demands / 19 classnames**: 425 resolve to exact RTTI
+and all four virtual bodies, spanning four pre-translation bodies, three class-translation bodies
+and the one Troika cover/reload pair. The 18 resolved names cover the human/vampire family,
+rat/scurrying/newscaster/payphone Troika family, cameras and the dog exception. The sole miss is
+`sm_junkyard_1`'s Night Watchman classname `npc_BaseVampAI`, which is absent from the retail DLL;
+it is not silently treated as `npc_VVampire`. This is the same actor whose `item_w_sw_m64` weapon
+classname is also absent.
+
+The first weapon activity remains a separate output because
+`SetActivityAndSequence` also calls the weapon's activity update with the duration of the chosen
+body sequence. The logical `m_Activity` remains the un-translated request; translation changes the
+sequence set that realizes it rather than the AI-visible state.
+
+`ResolveActivityToSequence` then applies the sequence policy [VtMB decompiled]:
+
+- ordinary activities choose `SelectWeightedSequence(translated)`;
+- a missing translated `ACT_RUN` retries weighted `ACT_WALK`;
+- any remaining miss retries the whole request as `ACT_DISPOSITION`; disposition either delegates
+  to the NPC's disposition owner at `this+0x98` / virtual `+0x98c`, or uses the ordinary weighted
+  selector;
+- if disposition also has no sequence, sequence index `0` is the hard fallback;
+- `ACT_SCRIPT_CUSTOM_MOVE` reads the scripted-sequence custom-move label at the live owner
+  referenced by `this+0x5d74` and uses `LookupSequence`. A missing label retries weighted
+  `ACT_WALK`, then disposition and sequence zero by the same tail.
+
+The transition boundary is equally explicit. `SetIdealActivity` stores the target at `+0xff0`
+and pre-resolves its sequence. `MaintainActivity` does no work for ordinary script-controlled NPCs
+unless a transition is already active; otherwise, when current activity/sequence differs from the
+ideal, it resolves again and calls `AdvanceToIdealActivity`. That function asks for a transition
+sequence between the current and target sequence, commits `ACT_TRANSITION` while traversing an
+intermediate, and commits the saved logical/translated/weapon target on arrival. `SetActivity` is
+the immediate route that resolves and calls `SetActivityAndSequence` directly.
+
+The controlled `sm_hub_1` corpus independently reaches the four central return sites
+[capture-verified]. Grouping by the serial-bearing entity handle yields **1,232 complete NPC
+translation resolutions**: **795** continue to the ordinary weighted sequence choice and **437**
+are translation/availability queries from other NPC paths. No chain is incomplete. The joined
+clip table uses the same full handle rather than the reusable entity index, preventing a later
+weapon occupying the same index from being attributed to an earlier NPC lifetime. Its observed
+answers cover ten NPC bodies (Blueblood, regular cop, female/male bums, three citizen bodies,
+prostitute, Knox and Mercurio), with exact activity literal, sequence label, owner bank and weight
+when the model census contains that lifetime.
+
+### Native schedules, tasks and the complete custom class surface [VtMB decompiled + data-verified]
+
+The schedule corpus and the common task dispatch are now reproducible. Run
+`uv run elysium research native_schedule_survey`; the generated JSON belongs below
+`$ELYSIUM_WORK_ROOT/research`. On the pinned DLL, `0x10316ff0` registers **330 contiguous shared
+task IDs**, `TASK_INVALID` 0 through `TASK_PLAY_DEATH_SEQUENCE` `0x149`. A separate RTTI/task-slot
+pass finds **184 class-local task registrations across 20 owners**, for **514 registrations** in
+the complete server surface. Class-local numeric IDs intentionally overlap because each class owns
+its namespace; the durable key is `(owner, task literal)`, not the integer alone. The compiled constructors
+contain **691 unique schedules**, **4,139 task invocations** and **441 distinct task names**.
+Of those calls, 378 carry an explicit activity argument: 84 distinct `ACT_*` values across the
+following activity-bearing task families:
+
+| Compiled task | Calls |
+|---|---:|
+| `TASK_SET_ACTIVITY` | 216 |
+| `TASK_PLAY_SEQUENCE` / `TASK_PLAY_SEQUENCE_FACE_ENEMY` | 81 / 38 |
+| `TASK_DO_LOOP_ACTIVITY` | 17 |
+| `TASK_PLAY_DEATH_SEQUENCE` / `TASK_PLAY_COWER` | 6 / 6 |
+| `TASK_DO_BLEND_LOOP_ACTIVITY` / `TASK_DO_BLEND_ACTIVITY` | 4 / 3 |
+| `TASK_SET_COWER` / `TASK_SET_KNOCKBACK_ACTIVITY` | 3 / 2 |
+| `TASK_PLAY_CLAW_SEQUENCE` | 2 |
+
+The word **sequence** in a task name is not an exact-label contract. The shared dispatchers are
+`CAI_BaseNPC::StartTask` `0x102827f0`, `CAI_BaseNPC::RunTask` `0x10288780`,
+`CAI_BaseNPCTroika::StartTask` `0x102a1910` and
+`CAI_BaseNPCTroika::RunTask` `0x102aacf0`. The Troika byte dispatch tables delegate unhandled
+IDs to the base pair. The action-relevant cases are [VtMB decompiled]:
+
+| Task route | Requested animation policy |
+|---|---|
+| `TASK_SET_ACTIVITY`; `TASK_PLAY_SEQUENCE`, `_PRIVATE`, `_FACE_ENEMY`, `_FACE_TARGET` | the task argument is an **activity ID** passed to `SetIdealActivity` |
+| `TASK_RANGE_ATTACK1/2`, `TASK_MELEE_ATTACK1/2`, `TASK_RELOAD`, `TASK_SPECIAL_ATTACK1/2` | restart the corresponding `ACT_RANGE_ATTACK1/2`, `ACT_MELEE_ATTACK`, `ACT_MELEE_ATTACK_HEAVY`, `ACT_RELOAD`, or `ACT_SPECIAL_ATTACK1/2` ideal activity |
+| `TASK_SMALL_FLINCH`, `TASK_PLAY_HINT_ACTIVITY` | ask the class/hint policy for an activity, then use `SetIdealActivity` |
+| `TASK_WEAPON_PICKUP` | `ACT_PICKUP_GROUND` through the ideal-activity route |
+| `TASK_PRE_JUMP`, `TASK_LAND`, `TASK_LAND_HARD` | restart `ACT_PRE_JUMP`, `ACT_LAND`, or `ACT_LAND_HARD`; the physical `TASK_JUMP` has no new StartTask request |
+| `TASK_ON_FIRE_INTO/LOOP/OUTOF` | `ACT_BURNING_INTO/LOOP/OUTOF` |
+| `TASK_DO_LOOP_ACTIVITY` | resolve the activity argument first; if it has a sequence, commit it immediately with `SetActivity`; if it does not, complete without playback |
+| `TASK_DO_BLEND_ACTIVITY`, `TASK_DO_BLEND_LOOP_ACTIVITY` | remove an existing layer owned by the activity, resolve and immediately set the base activity, then let `RunTask` reassert it through the blend/loop completion rule |
+| `TASK_ADD_GESTURE` | choose a weighted sequence for the **activity argument**, allocate/find an activity-owned overlay layer and scale its rate to a 2.45-second duration |
+| `TASK_PLAY_COWER`, `TASK_SET_COWER` | offset `ACT_COWER_INTO` into one of the stored three-step cower variants and request/restart that activity |
+| comfort and partial/full-resist tasks | choose a stored comfort variant or the discipline-specific Dementation/Domination/Thaumaturgy resist activity, then use the ordinary activity route |
+| dive tasks | choose `ACT_DIVE_LEFT`, `ACT_DIVE_RIGHT`, or `ACT_SCRIPTEDBACKHIT`; the latter advances to `ACT_SLEEP_GETUP` after completion |
+| `TASK_PLAY_DEATH_SEQUENCE` | try the argument as an activity, then `ACT_DIESIMPLE`, then `ACT_IDLE`, and pass the surviving choice to `SetIdealActivity` |
+| `TASK_PLAY_COMBAT_START_SEQUENCE` | use the NPC's authored combat-start activity only when its lookup is valid; all 423 current fields are invalid sentinels |
+| movement wait/stop/range tasks | StartTask/RunTask use the navigator's selected movement activity, or `ACT_IDLE` when the navigator supplies none |
+
+The restart helper is significant: if the current logical activity already equals the requested
+one, it first clears the current activity, then calls `SetIdealActivity`. Repeated attacks,
+reloads, pre-jumps and lands therefore restart their sequence rather than being ignored as an
+unchanged ideal.
+
+The manifest join is an availability diagnostic, not a final resolver. The 84 explicit schedule
+activities are directly present on all tested current NPC model/include graphs for 65 activities;
+19 require class/weapon translation or the documented fallback chain. Those 19 are not content
+misses. The final answer still comes from `TranslateActivity` and
+`ResolveActivityToSequence`, including weighted choice and sequence-zero fallback.
+
+`uv run elysium research npc_task_override_survey` walks the `StartTask` `+0x6e8` and `RunTask`
+`+0x6f0` slots on all **77** NPC subclasses, resolves inheritance/thunks and joins both task
+registries. The surface collapses to **29 distinct StartTask bodies and 24 RunTask bodies**. After
+the shared Base/Troika pair is excluded there are **49 custom bodies**: **31** add a direct
+animation policy and **18** add only state, navigation, spawning, damage, timing or delegation.
+The 31 animation-bearing bodies produce **100 policy rows / 111 task routes**. Every one requests
+an **activity** through ideal, restart-ideal, immediate-activity or argument/navigator variants;
+there are **zero custom exact-label lookups and zero custom overlay-layer routes**.
+
+The complete custom action-to-activity map is:
+
+| Handler family | Custom or intercepted task → activity policy |
+|---|---|
+| Crow | `TAKEOFF` → runtime-registered `ACT_CROW_TAKEOFF`, then `ACT_FLY`; `FLY` → `ACT_FLY`; `HOP` → `ACT_HOP`, then `ACT_IDLE` |
+| Andrei Blood | teleport out/in and summon HeadRunner → `ACT_ANDREI_TELEPORT_OUT` / `_IN` / `ACT_ANDREI_SUMMON` |
+| Animal | melee feint 1/2 → `ACT_MELEE_ATTACK`; dodge → `ACT_DODGE`; block → `ACT_BLOCK` |
+| Asian Vampire | custom setup tasks only choose ledge/jump geometry; shared `TASK_JUMP` RunTask reasserts `ACT_LEAP_ASCEND` while meaningful vertical velocity remains |
+| Bach | delayed `TASK_WAIT_ATTACK_TIME2` → `ACT_AIM` when no pending target helper owns it |
+| Chang brothers, blade and claw | teleport pre/post → `ACT_CHANG_TELEPORT_IN` / `_OUT`; energy charge/release → `ACT_CHANG_UNITED_IDLE` / `ACT_CHANG_RANGE_ATTACK`; united pre/idle/post → corresponding `ACT_CHANG_UNITED_*`; RunTask jump → `ACT_LEAP_ASCEND` |
+| Dog | special idle commits `ACT_FIDGET`; melee attack 1 → `ACT_MELEE_ATTACK` |
+| Frenzy Shadow | circle/full-cycle → available `ACT_RUN`, otherwise `ACT_WALK`; attempt-feed changes target state but requests no animation |
+| Gargoyle | bash target → `ACT_SPECIAL_ATTACK1` |
+| Ghoul Croucher | unaware state 0/1/2/3 → madness/laugh/sobbing/madness `ACT_*_IDLE`; exit uses matching `ACT_*_GETOUT` |
+| Hengeyokai | pickup fish → `ACT_PICKUP_LIGHT`; throw/throw-fake → `ACT_PICKUP_LIGHTTHROW` |
+| Human family | melee feint 1/2 → `ACT_MELEE_ATTACK`; dodge → active-weapon sequence-descriptor activity when supplied, otherwise `ACT_STEPBACK`; preblock/block/heavy block/left reaction/right reaction → `ACT_PREBLOCK`, `ACT_BLOCK`, `ACT_BLOCK_HEAVY`, `ACT_BLOCKED_REACTION_LEFT`, `ACT_BLOCKED_REACTION_RIGHT` |
+| ManBat | takeoff/fall/land/rise/throw/screech → `ACT_HOP`, `ACT_FALLING`, `ACT_LAND`, `ACT_MANBAT_FLY_UP_WITH_MISSILE`, `ACT_THROW`, `ACT_MANBAT_SCREECH`; flyby/grab-cop → `ACT_MELEE_ATTACK`; break spotlight → `ACT_GETUP_BACK`; continuations → `ACT_MANBAT_WRITHE`, `ACT_IDLE`, `ACT_MELEE_ATTACK` |
+| Ming Xiao | melee feint/dodge/block → `ACT_MELEE_ATTACK` / `ACT_STEPBACK` / `ACT_BLOCK`; back-right/left → `ACT_THROW_RIGHT` / `_LEFT`; spit → `ACT_RANGE_ATTACK1`; pickup/throw selects matching left/right `ACT_PICKUP_*` / `ACT_THROW_*`; head/tentacle hit → `ACT_HIT_HEAD` / `ACT_HIT_TORSO`, then `ACT_IDLE` after tentacle hit |
+| Ming Xiao Tentacle | dodge/block/hit → `ACT_STEPBACK` / `ACT_BLOCK` / `ACT_SMALL_FLINCH`; hit completion → `ACT_IDLE` |
+| Sabbat Leader | dive in/out, roar, charge into/idle/release → corresponding `ACT_ANDREI_DIVE_*`, `ACT_ANDREI_ROAR`, `ACT_ANDREI_CHARGE_*` |
+| Rat / Scurrying | special idle commits `ACT_FIDGET`; Scurrying's two evade tasks add bookkeeping only |
+| Taxi Driver | run-dialog commits `ACT_FACING_IDLE`, then `ACT_IDLE` at completion |
+| Tzimisce | melee feint/dodge/block → `ACT_MELEE_ATTACK` / `ACT_DODGE` / `ACT_BLOCK`; throw/throw-fake/pickup body → `ACT_THROW_BODY` / `_FAKE` / side-selected `ACT_PICKUP_BODY_NORMAL[_L]`; pounce 0/1/2/3 → `ACT_POUNCE` / `ACT_POUNCE1/2/3`; `TASK_PLAY_CLAW_SEQUENCE` casts its float argument to an activity and RunTask retranslates/restarts it until completion |
+| Tzimisce HeadClaw / Runner | circle tasks remap to shared `TASK_SET_ACTIVITY ACT_IDLE` for HeadClaw and restart `ACT_IDLE` for Runner |
+| Werewolf | unreachable fidget → state-selected `ACT_ROAR_LONG` or random `ACT_SNIFFING` / `ACT_SEARCH`; teleport movement → navigator activity or `ACT_IDLE`; death into/attack/out/finale, play-dead and obstacle-door hint → corresponding `ACT_DEATH_*`, `ACT_PLAY_DEAD`, `ACT_OBS_DOOR_SQUEEZE`; RunTask reasserts movement/play-dead choices |
+| Zombie | melee attack 1 → `ACT_MELEE_ATTACK`; crawl from ground → `ACT_GETUP_FRONT`; animated death/flinch → `ACT_CAULDRON_DEATH` / `ACT_BIG_FLINCH`; fear mode 1/2/3 → `ACT_COWER` / `ACT_COWER2` / `ACT_COWER3`, while mode zero retains the current activity |
+
+The **18 non-animation custom bodies** are Asian-Vampire StartTask; Cop and Sabbat-Gunman
+StartTask; Sheriff-Man and base Vampire-Boss StartTask/RunTask; Andrei-Blood, Bach, Dog,
+Gargoyle, Ghoul-Croucher, Hengeyokai, Sabbat-Leader, Tzimisce-Runner and Zombie RunTask; the
+shared Animal/Rat/Scurrying RunTask; and the Human-family RunTask. They may delegate into a common
+animation-bearing task, but their own branches introduce no additional activity, exact sequence
+or layer. Base Vampire-Boss transformation creates/copies the morph NPC and hands state across
+after a timer; its schedule supplies `TASK_SET_ACTIVITY ACT_IDLE` through the common route.
+
+The native schedule/task and class-override action map is therefore closed for the complete pinned
+DLL, including boss and monster classes absent from the 22-map export. Layer/event timing and
+interruption remain separate evaluator questions.
 
 **The one activity override a map entity can author is never used** [data-verified].
 `combat_start_activity` is stamped on **423** NPC and `npc_maker` entities across the 22 exported
@@ -475,9 +845,140 @@ other classes — and every one of them reads `-1` or the literal `ACT_INVALID`.
 names a spawn-time combat activity, so the whole demand goes through the spawned class's own
 selection.
 
-`numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
-array is located but not decoded. Whole-install scope is **1,044 event-bearing
-sequences / 1,714 events**. The current exporter writes no event timeline.
+### The exported producer side [data-verified, VtMB decompiled where noted]
+
+`uv run elysium research action_animation_survey` makes the producer inventory a reproducible
+join rather than a hand-maintained list. It reads the 22 current `.ents` files, all 36 exported
+game-script files, 147 dialogues and the executable Python embedded in map outputs,
+`logic_pythoncheck`, `usescript` and literal `ScheduleTask` payloads. Its generated JSON stays below
+`$ELYSIUM_WORK_ROOT/research`; no game-derived label is tracked in Git.
+
+The map side is completely dispositioned:
+
+| Producer route | Current demand | Resolution |
+|---|---:|---|
+| scripted exact labels (`m_iszIdle` / `m_iszPlay` / `m_iszPostIdle` / `m_iszCustomMove`) | 134 | 129 resolve on the target body; five intentionally follow the retail sequence-0 miss path |
+| `prop_dynamic.LoopSequence` | 64 | 55 resolve in `npc_manifest.json`; three are verified single-frame static props omitted from that manifest; six `palmtree_idle` labels miss because the model spells its only sequence `idle` |
+| I/O `SetAnimation` | 18 | all 18 resolve to an exact clip on the addressed prop model |
+| scripted movement mode | 188 | `{No:56, Walk:54, Run:56, Custom:9, Instantaneous:9, Turn-to-face:4}`; custom names the nine exact labels above |
+| schedule control | 13 `aiscripted_schedule`, 8 `StartSchedule` wires | three `sm_junkyard_1` wires target absent schedule names; the other five resolve |
+| sequence control | 146 `BeginSequence`, 22 `CancelSequence` wires | 168 target resolutions, separate from exact-label choice |
+| model ownership | 3 `MorphModel` fields, 0 `SetModel`/`Transform` I/O wires | MingXiao2 selects Nines; Beckett and beckett_wolf select Beckett; transformation changes the later resolver's model owner rather than requesting a clip |
+
+The five scripted-label misses are exact and consequential. Three diner beats put the activity
+name `ACT_COWER` in `m_iszPlay`; AsianVamp's `pre_fight_bow` differs from the actual
+`prefight_bow`; and `ACT_DOORKNOCK` exists on none of the 56 exported PC bodies. The shared
+`scripted_sequence` start helper at `0x101a82d0` and the AI variant at `0x101a9510` both call
+`LookupSequence`, warn on −1, set sequence 0, zero the cycle and reset sequence info. An `ACT_*`
+token in this route is **not** sent through the activity resolver. The other six player-controller
+labels in these maps resolve on all 56 bodies, split only by their female/male `misc` owner bank.
+
+The executable-script survey finds 3,367 action-facing calls: `SetDisposition` 2,509 (2,508
+immediate plus one deferred `ScheduleTask`), `SetRelationship` 346 (334 immediate plus 12
+deferred), `BeginSequence` 70, `SeductiveFeed` 54, `SetAnimation` 20, `CancelSequence` 8,
+`StartSchedule` 2, `SetGesture` 2 and `SetModel` 356. The model changes contain 158 literal paths
+and 198 expressions/variables; adding the three `MorphModel` fields yields 161 literal ownership
+demands. Fifty-four resolve to an animation owner in `npc_manifest.json`; the other 107 are
+static, weapon, viewmodel, null or otherwise outside that character/animated-prop manifest, not
+failed animation labels. Scope matters: six literal `SetAnimation`s belong to
+Chinatown/E3/Hollywood modules whose maps are outside the current 22-map export, and the six
+Santa Monica `randomFighterAttack` labels address `fighter_*`, a target absent from all 17 exported
+maps that load that module. The two map-bound deferred clamp calls resolve case-insensitively to
+`clamp.open`. Both dialogue gestures address Tourette but name labels absent from Tourette's whole
+include vocabulary (`malk_female_idle`, `SM_Huddle`). `SetGesture` at `0x10197f60` simply returns
+when its `LookupSequence` result is negative, so those two shipped calls animate nothing.
+
+This closes the authored producer surface for the **current exported maps** without pretending it
+is the whole-install map corpus. The shared and custom native task/schedule surface, per-class
+activity translation, weapon tables, sequence-event dispatch and player one-shot completion are
+closed above and below. Python labels whose
+own maps have not been exported become resolvable when those maps join the corpus; they are not
+guessed against unrelated target names.
+
+### Sequence events and native dispatch [data-verified, VtMB decompiled]
+
+`numevents`@20 and descriptor-relative `eventindex`@24 address an old **76-byte** event record:
+
+| Offset | Field | Encoding |
+|---:|---|---|
+| 0 | cycle | `float32`, normalized to `[0,1]` |
+| 4 | event | signed 32-bit event ID |
+| 8 | type | signed 32-bit type |
+| 12 | options | fixed 64-byte NUL-terminated string |
+
+`uv run elysium research animation_event_survey` validates that layout against every patch-first
+model and hash-pins both native dispatchers. All **4,445** MDLs are v2531. **1,150** sequences
+carry **1,872** events spanning **58** IDs and **82** option strings; all 1,872 records have
+`type == 0`, every cycle is in range, the maximum is 11 events on one sequence, and no record is
+invalid. The character partition is **485 models / 1,044 sequences / 1,714 events**; weapons are
+**206 / 103 / 155**. The remaining three events belong to non-character/non-weapon models.
+
+Server `CBaseAnimating::DispatchAnimEvents` `0x10091880` stores the last checked cycle at
+animating-object `+0x658`, scans 76-byte records, and dispatches only IDs **below 5000**. In the
+ordinary interval it fires `last_cycle <= event.cycle < current_cycle`; when a looping sequence
+wraps after passing cycle 1.0 it also visits the wrapped interval exactly once. The runtime event
+copy preserves cycle, ID, the full 64-byte options field and the source pointer, calls virtual
+`HandleAnimEvent` `+0x40c`, and calls `OnSequenceFinish` when the sequence newly completes.
+
+The RTTI walk proves that all **300** server `CBaseAnimating` descendants collapse to these **20**
+effective handler bodies:
+
+| Body | Classes | Owner and event routes |
+|---|---:|---|
+| `0x10071900` | 1 | `CCameraAnimated`: 1003 options 1..8 fire `OnScriptEvent01..08` |
+| `0x10091da0` | 45 | base animating: 2070/2071 toggle a named attachment's paired state; 4005 selects the options-named weighted sequence |
+| `0x10178a10` | 2 | player: 2060 facial/breath envelope; 4050/4051 attach/detach the action object |
+| `0x1024f0c0` | 169 | combat weapons: empty here; weapon events arrive through `Operator_HandleAnimEvent` |
+| `0x10274e30` | 11 | base NPC: scripted 1000..1022 families; body-drop/swish 2001/2002/2010; turn/yaw 2020/2022; weapon pickup/drop/sequence/activity 2040..2044; feet 2050..2053 |
+| `0x1029b290` | 52 | Troika NPC: 2005/2006, 2021, 2040, facial/breath 2060, timed activity layer 2061, and interesting-place sound hooks 4150..4155 |
+| `0x1032e330` | 6 | combat character: every 3000..3999 or foreign-source event to active-weapon `+0x5c8`; weapon state 4006/4007; sound 4020; attached models 4100..4102 |
+| `0x1034a680` | 1 | generic NPC local event 1 callback |
+| `0x10357820` | 1 | crow events 2..4: takeoff/target helper, `ACT_FLY`, flight-physics helper |
+| `0x10368ec0` | 2 | camera-NPC family: empty handler |
+| `0x10374280` | 1 | dog 3001 bite |
+| `0x103786c0` | 1 | gargoyle 1 no-op, 2 roar, 2050/2051 foot impacts |
+| `0x1037fb60` | 1 | Hengeyokai 2040 pickup, 2050/2051 impacts, 3005 throw |
+| `0x1038e000` | 1 | ManBat local 1..3 form sounds/effects |
+| `0x10392a70` | 1 | Ming 2040 pickup, 2050/2051 no-op, 2100/2101 impacts, 3005 throw, 3031 weapon helper before base dispatch |
+| `0x103a7000` | 1 | Sabbat Leader 2050/2051 foot virtual |
+| `0x103ba410` | 1 | Tzimisce local 2..9 form events, 2040 pickup, 2050/2051 impacts, 3003 swish, 3005 throw |
+| `0x103c1540` | 1 | HeadClaw 2050/2051 side-selected claw impact |
+| `0x103c32c0` | 1 | Runner 2050/2051 side-selected foot event |
+| `0x103d88e0` | 1 | werewolf 1003 script owners, 2050..2053 impacts and 2100..2109 impact/damage family |
+
+The `CBaseCombatCharacter` hop is not a generic weapon-table lookup. Its active weapon receives the
+runtime event through virtual `Operator_HandleAnimEvent` `+0x5c8`. All **169** server weapon
+subclasses collapse to **seven** bodies:
+
+| Body | Classes | Policy |
+|---|---:|---|
+| `0x10238160` | 17 ranged | 3030..3044 commit the operator/global-mode-selected fire-state transition; 4001/4002 show/hide the options-selected bodygroup |
+| `0x1024f030` | 17 base/discipline/armor/thrown/unarmed | no accepted route; warn with event, operator and weapon classes |
+| `0x103e8be0` | 1 Tzimisce melee | swallow 3003; 3045/3046 select melee variant 1/2 and invoke the attack virtual when its operator gate permits; otherwise common melee |
+| `0x103ea5b0` | 29 common melee | swallow 3001, 3003 and 3030..3037; 3047 invokes the melee virtual when its operator gate permits; 4001/4002 show/hide bodygroup; otherwise warn |
+| `0x103ec460` | 1 Ming melee | swallow 3003; otherwise common melee |
+| `0x103eca20` | 1 Ming tentacle | swallow 3003; otherwise common melee |
+| `0x103f4470` | 103 inventory/non-combat | swallow 3014 and 3200; otherwise warn |
+
+Events at and above 5000 are excluded by the server scanner. Client virtual `FireEvent` `+0x1fc`
+has only **three** bodies across all **237** `C_BaseAnimating` descendants; the viewmodel first
+offers every event to the active weapon's `+0x3a8` hook, whose **214** weapon subclasses all share
+one body:
+
+| Body | Classes | Policy |
+|---|---:|---|
+| `0x100935a0` | 229 base animating | 5001/5011/5021/5031 player muzzle flashes; 5003/5013/5023/5033 NPC muzzle flashes; 5002 disabled spark warning; 5004 sound; 5005 `Disciplines/` sound; 5101/5102 bodygroup hide/show; 5103 effect teardown; 5105 options `ACT_*` lookup → weighted sequence commit + playback reset; 5111..5119 attachment/origin emitter variants |
+| `0x10099c00` | 7 combat character/player | prefer active-weapon attachments for NPC muzzle flashes; 5120 emits the options effect from weapon attachment `slampoint`; otherwise base |
+| `0x100ab530` | 1 viewmodel | after the weapon hook declines, 6001..6004 parse two integers and emit repeated effects on attachments 1..4; 6011..6014 parse one integer and emit one effect |
+| `0x1009c970` | 214 weapon hook | intercept eligible viewmodel/owner muzzle flashes and the same 600x effect families; return false to delegate everything else |
+
+The corpus actually uses these client IDs: 5001×48, 5003×101, 5005×1, 5101×2, 5102×2,
+5105×45, 5112×1, 5115×4, 5116×30, 5117×5, 5118×59, 5120×12, 6001×26,
+6002×24 and 6013×10. This both identifies the dormant cases and preserves the exact live demand.
+
+`mdl_skel.local_sequences()` now carries the decoded event list on each `Seq`. The public
+character clip/grid/index sidecars and Unreal bake still emit **no event timeline**, so reproducing
+these side effects is ANM4b implementation work, not further event-format or native-dispatch RE.
 
 ### What one player body answers the selector with [data-verified, partial corpus]
 
@@ -514,10 +1015,15 @@ player the cast's gait.
 
 **Nothing else in this vocabulary holds an unarmed crouch.** `crouch` is a 61-frame non-looping
 one-shot — an *into* pose — and the only crouched idles the body carries are `crouch_idle` under
-`ACT_CROUCH_MELEESHARED_TWOHAND` and the `<weapon>_crouch` / `<weapon>_midcrouch_idle` sets. What
-retail holds a ducked unarmed player on is not readable from the model inventory. The controlled
-trace shows sequence 8 being reused across 151 crouch requests, but it did not hold the input long
-enough to distinguish a frozen final frame from another end-of-sequence rule.
+`ACT_CROUCH_MELEESHARED_TWOHAND` and the `<weapon>_crouch` / `<weapon>_midcrouch_idle` sets. A held
+unarmed crouch therefore **repeats sequence 8 after completion**. Server
+`CBaseAnimating::StudioFrameAdvance` at `0x1008f120` clamps the non-looping cycle and sets
+`m_bSequenceFinished` at `+0x65c`; the next unchanged `ACT_CROUCH` request reaches
+`0x101644f0`, where that flag makes both the unchanged activity and unchanged weighted sequence
+dirty, and `ResetSequenceInfo` clears the finished flag and cycle. The controlled trace selects
+sequence 8 three times and reuses it across 151 requests; its longest uninterrupted 54-sample /
+1.791 s run independently proves the complementary rule that a held request does not restart the
+clip before it finishes.
 
 **`ACT_HOP` is two frames** — a stub rather than the observed jump. `leap_ascend` and
 `leap_descend` do carry looping 31-frame clips with a **0.45 s** crossfade (A.4c), but the controlled
@@ -605,16 +1111,18 @@ a bare sequence index** the dispatcher evaluates alongside the base. VtMB's reco
 index: unlike later Source's `mstudioautolayer_t`, it carries **no pose parameter, no flags and no
 ramp**, so whatever weight a layer contributes lives in the game DLL rather than in the file.
 
-**The combine an autolayer goes through is resolved; the weight it arrives with is not.**
-`FUN_10089c40` evaluates each entry and hands the result to the accumulator `FUN_10088e10`, whose
-arithmetic is given above — a complementary-weight blend for an ordinary layer, an accumulation for
-a `0x4` delta. What the file cannot supply is the scalar: the accumulator takes a layer weight from
-its caller and multiplies it by the record's per-bone `weight`@0, and the derivation of that
-caller-side value is **not established** [inferred]. A capture hook on the accumulator's entry
-would settle it; nothing readable from the shipped bytes can.
+**The combine and caller weight are both resolved.** `FUN_10089c40` evaluates each entry at the
+host sequence's cycle and hands the result to accumulator `FUN_10088e10`. Its call site at
+`0x1008a0ce` pushes literal **`1.0f`** as the accumulator's layer scalar; the accumulator then
+multiplies that full caller weight by the target animation's per-bone `weight`@0. The arithmetic is
+therefore exactly the one given above — a per-bone complementary-weight blend for an ordinary
+layer, or per-bone accumulation for a `0x4` delta — with no host-cycle ramp or hidden global scale.
+`animation_layer_survey.py` hash-pins the call and its target rather than inferring the scalar from
+the model record, which indeed carries none.
 
-The census is clean and small. Across **4,249** v2531 models / 10,739 sequences the count histogram
-is `{0: 10,278, 1: 237, 2: 224}`, and the only carriers are
+The patch-first census is clean and small. Across **4,445** v2531 models / **14,012** sequences,
+seven known malformed one-sequence tails declare the impossible count 764 and are rejected. The
+remaining histogram is `{0: 13,544, 1: 237, 2: 224}`, and the only carriers are
 `models/character/shared/{male,female}/move_and_ranged.mdl` — 232 declaring sequences and 345
 entries on the male bank, 229 and 340 on the female. **0 entries are out of range, 0 are
 self-referencing, and 0 of the 111 distinct targets themselves declare autolayers**, so the
@@ -1717,10 +2225,11 @@ identically in `FUN_100979b0`. Its only per-layer weight logic is a linear lerp 
 received snapshot values plus a deliberate snap to 0 or 1 when the sequence index changes,
 which **suppresses** smoothing across exactly the change a crossfade would want it for.
 
-**`SetLayer` initialises weight to `0.1f`**, and the client never substitutes a default, so
-a layer composes at 10% weight. That is measured from the code rather than reasoned from
-behaviour, and it is surprising enough to hold as unconfirmed: a live capture of a fired
-gesture, reading the composed weight back off the pose, would confirm or overturn it.
+**`SetLayer` initialises weight to `0.1f`**, and the client never substitutes a default, so a layer
+composes at 10% weight. This is confirmed pinned-binary behavior: `0x10099075` writes literal
+`0x3dcccccd` to slot `+0x0c`, while the same initializer writes cycle 0, playback rate 1.0 and the
+two 0.2 blend fields. The blend fields are inert as described above; the networked weight is not.
+`animation_layer_survey.py` validates all five immediates independently of the decompiler's types.
 
 The client advances a layer's cycle with the same routine it uses for the base sequence,
 `FUN_1008fa70`:
@@ -1733,6 +2242,14 @@ non-looping:  c = clamp(c, 0.0, 0.999)
 
 `dt` there is `frac * 0.1`, where `frac` is the snapshot fraction from `FUN_1008f960`
 clamped to `[0, 2]` — snapshot interpolation, not playback time.
+
+The behavioral order is therefore closed: evaluate the selected base (including its model-declared
+autolayers at full caller weight in authored order), blend surviving previous base sequences newest
+to oldest on their independent `SimpleSpline` clocks, then compose the four networked combat-layer
+slots in ascending index order. A new base sequence appends without evicting older transitions
+unless the incoming clip requests the documented hard cut; replacing or removing a combat layer
+kills that slot immediately. Player protected/paired/ordinary arbitration happens earlier in the
+selection router and is documented in A.3, not in the pose accumulator.
 
 **One layout inconsistency is open.** Four `0x30` entries from `0x73c` run to `0x7fc`, yet
 the server's flinch array is declared at `0x7f4`; on the client, four `0xE4` entries run
@@ -2132,4 +2649,4 @@ move_and_ranged.mdl` (602 seq). Mover logic [VtMB]: `vampire.dll` Spawn function
 Gameplay-action selection [VtMB — decompiled + data-verified]: hash-pinned
 `research/cases/animation-pose/specs/gameplay_actions.json`; player-model descriptor inventory from
 `research/tooling/capture/inventory_player_animations.py`. The specification records confirmed
-addresses and preserves the unresolved player-code vocabulary and NPC policy edges as questions.
+addresses for the closed player compact, protected, paired, completion and NPC policy surfaces.

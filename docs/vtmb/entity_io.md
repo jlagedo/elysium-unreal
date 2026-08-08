@@ -521,7 +521,10 @@ written by the builder `FUN_101901ae`. Its own records:
 (case-insensitive), so it is a Hammer/FGD-only field the engine never reads; `LoopSequence` is the
 only authored default, and it occurs exactly once in the image, in this datamap's string block at
 `0x1054eadc`. `demo_sequence` is nonetheless stamped on map entities — every cinematic prop in
-`sp_theatre` carries one.
+`sp_theatre` carries one. Across the current 22 maps it is present **1,619** times: 1,594 empty or
+`None` sentinels and 25 apparent labels, all ignored. A separate literal `m_iszPreIdle` occurs once
+on a `scripted_sequence`; that spelling is likewise ignored because the datamap exposes only
+external `m_iszIdle` for its internal `m_iszPreIdle` member.
 
 ### The resting pose
 
@@ -577,9 +580,12 @@ index 0 does arm:
 101906e8  JLE  0x1019072a               ; skip only when the result is <= -1
 ```
 
-That distinction decides whether the commonest animated props move at all: `palmtree`,
-`bats_smaller` and `stage_light` each declare their loop clip *as* sequence 0.
-`InputSetAnimation` carries the same `CMP EAX,-0x1` / `JLE` pair at `0x10190a2f`.
+That distinction decides whether the commonest animated props move at all. `bats_smaller`'s
+authored `fly` and the static `stage_light`'s `idle` are sequence 0 and therefore do arm. The six
+`palmtree` entities are different: their `LoopSequence` says **`palmtree_idle`**, while the model's
+only 61-frame sequence is **`idle`**. `LookupSequence` returns −1, so `Activate` never arms their
+think; they remain on the frame-0 pose selected during spawn. `InputSetAnimation` carries the same
+`CMP EAX,-0x1` / `JLE` pair at `0x10190a2f`.
 
 and that one-shot think (`FUN_10190750`) starts it:
 
@@ -660,9 +666,12 @@ Member offsets on the server `CBaseAnimating`: `m_nSequence` `+0x6f0`, `m_flPlay
 `m_bClientSideAnimation` `+0x70c`, `m_flNextThink` `+0x17c`.
 
 Corpus: `RandomAnimation` is `0` on all 749 entities that carry it, so the random animator never
-engages in shipped data. `LoopSequence` is live on 64 (`idle` ×54, `palmtree_idle` ×6, `fly` ×2,
-`only_sequence`, `running`). `OnAnimationBegun` / `OnAnimationDone` / `OnAnimationLoop` are wired
-**zero** times.
+engages in shipped data. `LoopSequence` is authored on 64 (`idle` ×54, `palmtree_idle` ×6, `fly`
+×2, `only_sequence`, `running`). The character manifest resolves 55 directly; three more `idle`
+requests are the deliberately unbaked single-frame `stage_light`, `lampfloor` and
+`junkyardcraneb`; the six `palmtree_idle` requests miss as described above. All **18** current-map
+`SetAnimation` wires resolve to an exact target-model clip. `OnAnimationBegun` /
+`OnAnimationDone` / `OnAnimationLoop` are wired **zero** times.
 
 ### Class chain and the complete I/O surface
 
@@ -1007,9 +1016,10 @@ undisassembled), plus the base `Kill`/`ScriptHide`/`ScriptUnhide`. `MoveToPositi
 the mark without running the action: it returns unless the NPC's script state is `0` or `2`, picks
 the move activity through vftable `+0x924`, validates it through `+0x788`, starts the move through
 `+0x91c`, and re-arms the `Use` throttle. No exported map wires it. **Outputs:** `OnBeginSequence`,
-`OnEndSequence`, and
-`OnScriptEvent01..08` — the last driven by animation events embedded in the clip, so they need
-decoded `.mdl` events to fire at all.
+`OnEndSequence`, and `OnScriptEvent01..08`. A 76-byte `.mdl` sequence event with ID **1003** and
+numeric options **1..8** reaches `CCameraAnimated::HandleAnimEvent` and fires the corresponding
+output; the record and dispatch are decoded in `docs/vtmb/animation_and_movers.md`. The rebuild
+still needs that decoded timeline exported and played before the outputs can fire.
 
 **`m_fMoveTo` selects the NPC's script state** (`FUN_101a9080`, NPC `+0x5d70`); an unrecognised value
 raises `DevWarning("aiscript: invalid Move To Positi[on]")`:
@@ -1106,15 +1116,28 @@ Each is a deliberate call, recorded beside the behaviour it departs from:
   inspecting the cine that holds the NPC; this runtime stamps "this owner refuses handover" onto the
   NPC when the claim is made, and distinguishes the two refusal messages by re-reading only the
   owner's spawnflags. A claim whose owner has been destroyed is cleared rather than honoured.
-- **`OnScriptEvent01..08` do not fire** — they need decoded `.mdl` animation events.
+- **`OnScriptEvent01..08` do not fire** — the `.mdl` event record and ID-1003 dispatch are decoded,
+  but the current character export/bake does not yet carry the event timeline into playback.
 
-**Demand across the 10 exported maps:** 104 `scripted_sequence` + 4 `aiscripted_sequence`;
-68 `BeginSequence` and 16 `CancelSequence` I/O wires, plus 68 and 8 receiver-qualified script calls
-(`script.BeginSequence()`) that reach the same registered input through the datamap lookup
-(`docs/vtmb/python_bridge.md`). 88 wires leave these entities — `OnEndSequence` 48, `OnBeginSequence` 35,
-`OnScriptEvent01/02/03` 5 — and they unlock doors, restore cameras, and open conversations, so a
-beat that never ends stalls the map's flow. 94 animation references across the set, of which the
-4 that name no NPC skeleton all belong to `!playercontroller`.
+**Demand across the 22 exported maps:** 182 `scripted_sequence` + 6 `aiscripted_sequence`;
+146 `BeginSequence` and 22 `CancelSequence` I/O wires. The exported Python/dialogue corpus adds
+70 `BeginSequence` and 8 `CancelSequence` calls through the same datamap lookup
+(`docs/vtmb/python_bridge.md`). **180** wires leave the sequence entities — `OnEndSequence` 109,
+`OnBeginSequence` 66 and `OnScriptEvent01/02/03` 5 — and they unlock doors, restore cameras, and
+open conversations, so a beat that never ends stalls the map's flow. The entities author **134**
+exact animation references: `m_iszPlay` 76, post-idle 31, pre-idle 18 and custom move 9; seven
+belong to `!playercontroller`.
+
+The action-demand join resolves **129 of those 134** exact references against their target body's
+complete include-model vocabulary. The five authored misses are content, not decoder gaps:
+`ACT_COWER` on three `sm_diner_1` actors, `pre_fight_bow` on AsianVamp (the model spells the label
+`prefight_bow`), and `ACT_DOORKNOCK` on `!playercontroller` (absent from all 56 exported player
+bodies). `FUN_101a82d0` (`scripted_sequence`) and `FUN_101a9510`
+(`aiscripted_sequence`) both handle a missing exact label by warning, assigning sequence **0**,
+zeroing the cycle and calling `ResetSequenceInfo`; they do not reinterpret an `ACT_*` spelling as
+an activity. One of the 42 `m_iszNextScript` links, `forky_thug_charge → cower3_outof` in
+`sm_warehouse_1`, names no exported sequence entity. The reproducible ledger is produced by
+`uv run elysium research action_animation_survey`.
 
 ## `point_teleport`
 

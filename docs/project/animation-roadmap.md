@@ -231,21 +231,61 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
 
   Ordered work inside the phase:
 
-  - [~] **ANM4a Decode and extract gameplay action selection (RE37).** The player core path,
-    activity registry, final selectors, forced-sequence bypass and weapon-table shape are located.
+  - [x] **ANM4a Decode and extract gameplay action selection (RE37).** The player core path,
+    common NPC translation/sequence/transition chain, activity registry, final selectors,
+    forced-sequence bypass and complete weapon-table surface are located.
     The hash-gated `ELGACT1` instrument and `sm_hub_1` controlled recipe capture classifier,
     ideal-activity, weapon-translation and weighted/heaviest selection boundaries into the shared
     SQLite evidence database. The first retail hub corpus passes all verifier gates with 72,440
     action records: it joins compact codes `0`/`1`/`2` through the ordinary player translation order
     to exact idle/walk/run/sneak/crouch/leap/falling/land sequence identities, and proves that the
-    ordinary jump does not use `ACT_LEAP_ASCEND`/`ACT_LEAP_DESCEND`. Recover the remaining player
-    compact-code reachability and special-mode vocabulary; a sustained crouch hold; the NPC
-    schedule/task → desired activity → class/weapon translation call graph; every weapon table; the
-    sequence-event payload; and the remaining override/interruption order. The tracked working set is
+    ordinary jump does not use `ACT_LEAP_ASCEND`/`ACT_LEAP_DESCEND`. Its NPC rows now form 1,232
+    complete caller-delimited translation resolutions: 795 ordinary weighted choices and 437
+    translation-only queries, joined by serial-bearing entity handle to avoid index reuse. The
+    reproducible demand survey now covers all 22 exported maps and their script/dialogue surfaces:
+    all 198 live map-authored exact-label requests and 18 `SetAnimation` wires have an explicit
+    manifest answer, retail fallback or bounded content-miss disposition. It also inventories all
+    three `MorphModel` fields and 356 Python `SetModel` calls. The weapon survey extracts all 169
+    combat-weapon subclasses, 61 non-empty class tables and 9,214 ordered rows; it proves the stored
+    `required` flag is inert in the server translator and joins 269 of 270 current-map equipment
+    references. The sole `item_w_sw_m64` reference has no retail factory string, item definition or
+    acttable and remains an explicit content miss. The NPC-class survey collapses all 77
+    `CAI_BaseNPC` descendants to 10 pre-translation, five class-translation and two cover/reload
+    delegate bodies; all 29 paired-action bases and their 232 role/size/side variants are resolved.
+    It joins 425 of 426 current-map class demands; the Night Watchman's `npc_BaseVampAI` is absent
+    from the retail DLL and remains an explicit content miss. The native schedule survey decodes
+    691 schedules / 4,139 task invocations. The complete RTTI task-slot survey adds all 184
+    class-local registrations across 20 owners to the 330 shared task IDs, collapses the 77 NPC
+    subclasses to 29 distinct StartTask and 24 RunTask bodies, and dispositions all 49 custom
+    bodies. Its 100 policy rows cover 111 task routes: 31 custom bodies request animation and 18
+    add no direct animation policy. Every custom animation request is an activity route; none looks
+    up an exact label or creates a layer. Sequence-event RE is closed separately: the 76-byte
+    record validates across all 4,445 retail MDLs (**1,150 event-bearing sequences / 1,872 events /
+    58 IDs**), server dispatch and all **300/20** animating plus **169/7** weapon-handler
+    class/body surfaces are decoded, and client dispatch collapses **237** animating classes to
+    three bodies plus all **214** weapon classes to one hook. The player paired-action router is
+    closed separately: all nine initial activities, the six stateful
+    continuation leaves, five producer sites and the two-actor translation/commit order are
+    recovered; modes `1`/`4`/`7` have no pinned-binary caller. Model autolayer composition and the
+    separate combat-layer/sequence-transition interruption order are also closed: autolayers enter
+    at full caller weight in authored order, while combat layers start at 0.1 and compose by slot.
+    The player compact/form surface is closed too: the compiled table names all 17 `PLAYER_*`
+    codes, the complete `+0x704` pass dispositions 15 genuine player-animation calls separately
+    from 14 NPC task-name calls, both player RTTI classes share one protected/router/ordinary
+    implementation, and patch-first vdata contributes only two `PLAYER_VOMIT` fields. Thirteen
+    codes are reachable; `PLAYER_SUPERJUMP`, legacy `PLAYER_FEED` and the two aiming-transition
+    codes have no pinned producer. One-shot completion is closed too: an unchanged activity reuses
+    its sequence until `StudioFrameAdvance` marks it finished, then the next request reselects the
+    same sequence and `ResetSequenceInfo` restarts it. Thus a sustained unarmed crouch repeats
+    sequence 8 after its 61@30 completion; the 1.791 s trace independently proves it is not restarted
+    early. The tracked working set is
     `research/cases/animation-pose/specs/gameplay_actions.json`; facts land in
     `docs/vtmb/animation_and_movers.md` A.3, never in this tracker.
   - [ ] **ANM4b Export and bake the action catalog.** Extend the existing clip/grid/index sidecars
-    with events and autolayers, emit activity/player/NPC/weapon rule artifacts, join them into a
+    with events, autolayers and the per-model sequence-transition graph — the NPC resolver's
+    `AdvanceToIdealActivity` traverses an intermediate transition sequence between the current and
+    ideal sequences, so the graph is a catalog input `docs/project/three-cs-roadmap.md` CCC11
+    depends on — emit activity/player/NPC/weapon rule artifacts, join them into a
     reachability report, and bake the resolved catalog beside the native character assets. Game
     data remains below `$ELYSIUM_EXPORT_ROOT` and `/ElysiumBaked`.
 

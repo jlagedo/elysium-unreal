@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "topic": "input_actions_server",
+  "consuming_document": "docs/vtmb/controls.md",
+  "research_id": "RE36",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [],
+  "field_probes": [
+    {
+      "displacement": "2088",
+      "label": "player_command_buttons",
+      "role": "Current player command-button state; its only direct 0x08000000 test in the pinned server is the grounded block predicate at 0x10160ec0."
+    }
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The player animation classifier's block predicate tests command-button bit 0x08000000.",
+      "evidence": "0x1016bb50 calls 0x10160ec0 before stationary/moving classification. The helper requires FL_ONGROUND, an active weapon whose +0x5a0 capabilities include 0x18000, and player+0x2088 bit 0x08000000 before returning true.",
+      "consequence": "Joining this bit to the client button pack identifies the block verb without relying on default bindings."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The block predicate is the pinned server's only direct current-button test for mask 0x08000000.",
+      "evidence": "The player+0x2088 field census found 35 references; exact text-section mask-test validation found one f7 /0 instruction for 0x08000000, inside 0x10160ec0.",
+      "consequence": "The recovered +wpn_secondaryatk path closes the block input-to-PLAYER_BLOCK-to-ACT_PREBLOCK route without an unidentified parallel consumer."
+    }
+  ],
+  "functions": [
+    {
+      "address": "10160ec0",
+      "label": "player_block_predicate",
+      "confidence": "confirmed",
+      "role": "Grounded weapon-eligible player block predicate used by the compact-action classifier.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "10141980",
+      "label": "clear_player_button_state",
+      "confidence": "confirmed",
+      "role": "Clears the current, pressed and released player button-state fields at +0x2088/+0x208c/+0x2090 when the requested clear mask intersects the pressed state.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    }
+  ],
+  "relationships": [
+    {
+      "from": "1016bb50",
+      "to": "10160ec0",
+      "confidence": "confirmed",
+      "evidence": "direct call immediately before compact code 13 is returned"
+    }
+  ]
+}

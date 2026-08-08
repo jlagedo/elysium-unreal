@@ -325,7 +325,21 @@ retires what they replaced.
   task arguments through ideal activity, immediate activity, overlay layer, named fallback or
   no-animation routes. The later weapon seam reads ordered table rows: duplicate-base entries are
   availability fallbacks, while the stored `required` bit is provenance only because retail's
-  server translator does not consult it. Collapsing any of those into one activity string would erase behavior
+  server translator does not consult it. NPC class translation is likewise generated policy: 77
+  RTTI classes share 10 pre-translation and five class-translation bodies. Their 49 custom
+  StartTask/RunTask bodies add 111 fully classified task routes, all activity-based rather than
+  exact-label or layer requests. The decoded 1,872 sequence events and their complete native
+  server/client dispatch map are **catalog playback metadata**, not another intent or resolver
+  branch; `ANM4b` still has to emit that timeline before a selected sequence can reproduce its
+  sounds, effects, attachments, weapon actions and script outputs. The same boundary holds for
+  the 685 decoded autolayer bindings: their authored order and full caller weight are recovered,
+  while emitting/composing them belongs to the catalog and graph rather than `CCC4`. Paired
+  actions fan 29 base activities into 232 exact attacker/victim, size and side variants. The
+  player side keeps
+  a separate nine-mode router: its initial paired base, continuation state, attacker/victim role
+  and two-model commit all belong in the selection record; three registered modes are dormant in
+  the pinned binary while the other six have exact producer sites. Collapsing any of those into
+  one activity string would erase behavior
   already confirmed in the 22-map corpus; detailed facts stay in
   `docs/vtmb/animation_and_movers.md`.
   *Acceptance:* a caller hands the resolver an intent built from `CCC1`'s sample and gets back an
@@ -407,10 +421,10 @@ retires what they replaced.
   The locomotion slice is `ACT_IDLE`, `ACT_WALK`, `ACT_RUN`, `ACT_SNEAK`, `ACT_CROUCH` and the
   `ACT_LEAP`/`ACT_FALLING`/`ACT_LAND` chain; none is masked and none is additive, so none needs
   the derived `<label>@<host>` naming, which is why the slice can be cut here. No aim node, no
-  layered blend, no additive node — those arrive with the weapon rung. The remaining open question
-  ships a **provisional answer** rather than stalling on another `ANM4a` trace: a non-looping player
-  holds its final frame, which is the held crouch until a sustained controlled trace distinguishes
-  that rule from another end-of-sequence policy.
+  layered blend, no additive node — those arrive with the weapon rung. The faithful held-crouch rule
+  is now exact: reuse sequence 8 while it is active, then restart the same non-looping sequence after
+  `StudioFrameAdvance` sets its finished flag. The graph must therefore drive one-shot completion
+  into the existing `NotifyOneShotComplete` seam rather than hold the terminal frame.
   *Acceptance:* the locomotion activities are reachable through the graph; the transitions assert
   against the authored fades in the Content tier; the eyes track and the forearms twist on the migrated
   body; `elysium.BlendSpaces 0` still A/Bs against the single resolved cell.
@@ -504,8 +518,17 @@ seam rather than a second one:
   action inside an accepted rung does. This is also where every remaining producer moves onto the
   intent seam: no NPC, weapon or script path asks for an activity through the resolver today, and
   `PlayNpcActivity` stays a compatibility adapter until patrol and scripted travel cross over — the
-  intent's source field already reserves the producers, so expansion is migration order, not new
-  mechanism. Two shapes build together because they are the same shape — a `scripted_sequence`'s
+  intent's source field already reserves the producers, so expansion is migration order plus a
+  bounded set of recovered resolver rules the NPC path carries and the player path lacks: the NPC
+  class/weapon translation alternation and its four-way availability ladder (with the first weapon
+  answer preserved separately, because the commit feeds it to the weapon's own animation update),
+  transition-sequence traversal between the current and ideal sequences, the restart rule that
+  clears and restarts a repeated identical request rather than ignoring it, and the paired-action
+  role/size/side variant arithmetic (`docs/vtmb/animation_and_movers.md`). All four are
+  resolver-level policy over baked catalog data — a transition clip is one more selection played
+  through the same one-shot slot — so none adds graph machinery. Transition traversal reads the
+  model's sequence-transition graph, which the exporter does not yet carry; that bake input is
+  `ANM4b`'s catalog scope and this rung's dependency on it. Two shapes build together because they are the same shape — a `scripted_sequence`'s
   `m_iszIdle → m_iszPlay → m_iszPostIdle`, and an interesting place's own enter/hold/leave segments,
   whose naming varies by type (`_INTO`/`_OUTOF`, `_BEGIN`/`_END`, `_PICKUP`/`_HANGUP`) and whose
   ordering comes from the three weighted lists the vdata table declares
@@ -579,7 +602,7 @@ per the house rules.
 |---|---|
 | The player's gait speed is a constant rather than the current sequence's root motion — standing today, marked at `UElysiumMovementComponent::GetMaxSpeed`, and resolved either way by `CCC7` | `docs/architecture/movement-architecture.md` |
 | Any change to movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
-| A held crouch's hold rule, if the controlled trace cannot answer what retail does once ducked | `docs/vtmb/animation_and_movers.md` |
+| Holding a sustained unarmed crouch on the terminal frame — **not faithful and therefore not an owner divergence**: retail reuses sequence 8 until its finished flag is set, then reselects and restarts that same one-shot on the next request | `docs/vtmb/animation_and_movers.md` |
 | `ACT_SNEAK` reached from ducked-and-moving, and the walk/run split taken from realized speed rather than the `+speed` key — **both shipped, both reconstructions.** Retail selects all three gaits inside compact code 1 "from realized speed, flags and weapon state" and those flags are undecoded; there is no sneak button in `FElysiumUserCmd`, and the sample carries no gait bit because the NPC producer has no user command to carry one. The stride band is the evidence: the authored `sneak` cells run 69.7–79.3 cm/s against a ducked gait of a third of the base speed | `docs/architecture/animation-architecture.md` |
 | The landing one-shot's hold duration — **provisional, not a choice**: a still grounded body has to leave `ACT_LAND` somehow and one-shot completion is `CCC5`'s, so `FElysiumJumpLatch::LandHoldSeconds` holds it and the `NotifyOneShotComplete` seam replaces it | `docs/architecture/animation-architecture.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |

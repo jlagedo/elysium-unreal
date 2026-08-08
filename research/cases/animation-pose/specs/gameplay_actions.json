@@ -11,15 +11,7 @@
     "image_base": "0x10000000"
   },
   "lock_delay_seconds": 9,
-  "questions": [
-    "What symbolic action does every compact code returned or retained by the player classifier represent, and which exact movement, weapon, interaction, damage, form, script, and animation-mode predicates select it?",
-    "Which mode-specific leaves reached through CBasePlayer::SetAnimation's router choose activities, direct sequences, or layers, and what is their priority and interruption order?",
-    "Where does the NPC schedule/task path set ideal activity, translate it through NPC/weapon/class overrides, and commit the selected sequence for every exported NPC class?",
-    "Outside the confirmed ordinary player order, what is the exact ordering among SetIdealActivity, Weapon_TranslateActivity, NPC_TranslateActivity, form/class translations, required-table fallback, SetActivity, and sequence selection on special player modes and NPC paths?",
-    "Can every weapon acttable_t be recovered statically from its table/count virtual pair, including inherited and dynamically selected weapon subclasses, and does retail activitydump reproduce the same rows?",
-    "Which StudioSeqDesc events are gameplay-significant for locomotion, attacks, reloads, footsteps, reactions, and paired interactions, and what are their payload layouts and dispatch times?",
-    "Which activities and direct sequence labels are reachable only through scripts, dialogue, disciplines, forms, damage/knockback, or developer commands rather than ordinary player/NPC update loops?"
-  ],
+  "questions": [],
   "field_probes": [
     {
       "displacement": "6f0",
@@ -60,6 +52,26 @@
       "displacement": "1db4",
       "label": "player_jump_landing_state",
       "role": "Compact jump/landing phase switched by the ordinary selector and tested by PostThink."
+    },
+    {
+      "displacement": "1538",
+      "label": "grapple_peer_handle",
+      "role": "CBaseCombatCharacter linked paired-action actor handle."
+    },
+    {
+      "displacement": "153c",
+      "label": "grapple_role",
+      "role": "Paired-action role: -1 absent, 0 attacker, 1 victim."
+    },
+    {
+      "displacement": "1540",
+      "label": "grapple_mode",
+      "role": "Nine-entry paired-action mode selecting the initial base activity and player continuation leaf."
+    },
+    {
+      "displacement": "1544",
+      "label": "grapple_side",
+      "role": "Front/back selector consumed by TranslateBaseGrappleActivity."
     }
   ],
   "findings": [
@@ -76,22 +88,40 @@
       "consequence": "Player input is not a clip selector; realized player state is classified before animation mode and activity selection."
     },
     {
-      "confidence": "partial",
-      "fact": "The player classifier reads movement, ground, water, interaction and retained-action state and returns compact dispatcher codes rather than activity IDs.",
-      "evidence": "0x1016bb50 returns -1 or values including 0, 1, 2, 7, 8, 9, 10, 11 and 13 from velocity, flags, water level, handles and latches; 0x10164870 interprets the code separately before choosing an activity.",
-      "consequence": "The complete code-to-action vocabulary needs controlled state traces; equating a compact code with ACT_* would merge two distinct enums."
+      "confidence": "confirmed",
+      "fact": "The player classifier returns a compact 17-entry PLAYER_* enum rather than activity IDs, and its complete symbolic vocabulary is compiled at 0x106ac3a0.",
+      "evidence": "0x10429200 resolves strings against 17 pointers from PLAYER_IDLE through PLAYER_LEAVE_AIMING, while 0x1016bb50 returns movement/water/interaction/form/block values and 0x10164870 interprets them before choosing an ACT_* activity. player_action_survey.py validates every table entry against the pinned hash.",
+      "consequence": "Compact action and activity remain distinct enums, but the compact side is now named completely rather than awaiting trace-assigned aliases."
     },
     {
-      "confidence": "partial",
-      "fact": "The ordinary player animation selector writes move_yaw, aim_yaw and aim_pitch, then maps compact codes to base locomotion, attack, prayer, feeding/seduction, water, interaction, climb, contextual, preblock and reload policies.",
-      "evidence": "0x10164870 maps codes 0/1 to stance and gait state, 2 to the jump/landing phase switch, 5 to melee/ranged attack, 7 to ACT_PRAYING_*, 8 to released feeding/seduction, 9 to swim/treadwater, 10 to an interaction-supplied activity, 11 to climb, 12 to a contextual helper, 13 to ACT_PREBLOCK and 14 to ACT_RELOAD_LAYER before calling 0x101644f0.",
-      "consequence": "Pose parameters and discrete activity selection are sibling outputs of one policy frame; static policy coverage is known, while branch reachability and the contextual helper remain trace questions."
+      "confidence": "confirmed",
+      "fact": "The ordinary player animation selector writes move_yaw, aim_yaw and aim_pitch, then maps every reachable compact code to a closed base or layer policy.",
+      "evidence": "0x10164870 maps PLAYER_IDLE/WALK to stance and gait, PLAYER_JUMP to the phase switch, PLAYER_ATTACK1 to melee/ranged policy, PLAYER_PRAY to ACT_PRAYING_*, PLAYER_GRAPPLE to released feeding/seduction, PLAYER_SWIM, PLAYER_USE, PLAYER_LADDER, PLAYER_VOMIT, PLAYER_BLOCK and PLAYER_RELOAD to their exact branches before 0x101644f0. Codes 3, 6, 15 and 16 have no distinct branch or producer.",
+      "consequence": "Pose parameters and discrete activity selection are sibling outputs of one policy frame; one-shot completion and restart are handled later by the common frame-advance/apply path."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The complete pinned +0x704 call surface contains 15 player-animation calls and 14 unrelated NPC task-name calls at the same numeric vtable offset.",
+      "evidence": "player_action_survey.py scans every FF /2 call [reg+0x704] in .text. The genuine set is PostThink, paired-router re-entry, death, forced idle/walk/jump, two vomit calls, four attack paths, two reload paths and discipline Player_Anim execution; every other site is a CAI_BaseNPC task-name formatter and is dispositioned separately.",
+      "consequence": "PLAYER_SUPERJUMP, legacy PLAYER_FEED, PLAYER_START_AIMING and PLAYER_LEAVE_AIMING have no hidden native producer; their dormant status is a complete call-surface result."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Targeted-discipline Player_Anim uses the same compact enum and contributes only PLAYER_VOMIT in the effective corpus.",
+      "evidence": "0x101ddfb0 reads Player_Anim, resolves it through 0x10429200 and stores the code at HitInfo+0x38; 0x101de660 passes that code to player +0x704. The patch-first vdata survey finds exactly two fields, both PLAYER_VOMIT in vdata/system/disciplinetgt_004.txt.",
+      "consequence": "Discipline data does not restore reachability for dormant compact codes, and its action request joins the same router as native player/weapon producers."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CBasePlayer and CHL2_Player share one protected-owner, ordinary-selector and SetAnimation-router implementation.",
+      "evidence": "The complete CBasePlayer RTTI descendant pass finds two classes; both resolve vtable +0x670 to 0x10161200, +0x684 to 0x10164870 and +0x704 to 0x10164240.",
+      "consequence": "Form behavior is state inside the recovered selector/router and not an undiscovered player subclass translation or commit order."
     },
     {
       "confidence": "confirmed",
       "fact": "The ordinary player apply order is SetIdealActivity, Weapon_TranslateActivity, CBasePlayer::NPC_TranslateActivity, SetActivity, then weighted or heaviest sequence selection.",
       "evidence": "0x101644f0 returns from SetIdealActivity at 0x10164577, calls virtual +0x5f4 and returns at 0x10164582, calls virtual +0x5e0 at 0x10164587, then calls SetActivity at +0x4d8 and the selector at 0x101645d5 or 0x101645de. ELGACT1 rows at the three instrumented return sites preserve the same base, weapon-output and selector-input order.",
-      "consequence": "The ordinary player resolver has a pinned order; only special-mode, form and NPC override ordering remains open."
+      "consequence": "The ordinary player resolver has a pinned order; paired-action ordering is separately recovered, and the player RTTI surface contains no form-specific override order."
     },
     {
       "confidence": "confirmed",
@@ -107,15 +137,87 @@
     },
     {
       "confidence": "confirmed",
+      "fact": "The pinned binary contains 169 CBaseCombatWeapon subclasses, 61 non-empty per-class activity tables, 58 distinct table blobs and 9,214 ordered per-class rows; CBaseCombatWeapon::ActivityOverride never reads the stored required dword.",
+      "evidence": "weapon_activity_survey.py validates the binary hash, parses PE32 RTTI, follows vtable +0x5a8/+0x5ac thunks, decodes every 12-byte row and resolves every activity through the 4,460-entry registry. At 0x1024f210, the server walks matching rows in ordinal order, passes each output through owner +0x5e0, accepts it when the body or alternate model has a sequence, and continues to later duplicate-base rows on absence; assembly reads only row offsets 0 and 4 before advancing by 12. The map join resolves 269 of 270 equipment references, with only absent retail classname item_w_sw_m64 unresolved.",
+      "consequence": "Weapon translation is a closed generated surface. Preserve row order and duplicate-base fallbacks; export required as inert authored provenance, and keep item_w_sw_m64 as an explicit content miss rather than guessing another table."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "CBasePlayer::NPC_TranslateActivity maps ACT_WALK_RELAXED to ACT_WALK and ACT_RUN_RELAXED to ACT_RUN and otherwise returns the input unchanged.",
       "evidence": "0x101647a0 compares the input with 0x16 and 0x17 and returns 9 or 0x13 respectively.",
       "consequence": "The player applies at least one class-specific translation after a base activity is selected."
     },
     {
       "confidence": "confirmed",
+      "fact": "CAI_BaseNPC::TranslateActivity applies VtMB's common NPC pre-translation, weapon, class/NPC and availability-fallback order.",
+      "evidence": "0x10271ff0 calls virtual +0x5dc on the raw request, virtual +0x5f4 for the first weapon answer, then alternates virtual +0x5e0 and +0x5f4 for at most five iterations. It returns ACT_SCRIPT_CUSTOM_MOVE directly; otherwise it probes the final weapon, remembered class/NPC, first weapon and original candidates with SelectHeaviestSequence and changes an unavailable original ACT_RUN to ACT_WALK.",
+      "consequence": "The common NPC translation order is closed; the RTTI/vtable survey supplies the complete semantic identity and inheritance of +0x5dc/+0x5e0."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "All 77 CAI_BaseNPC descendants collapse to 10 pre-translation bodies, five class-translation bodies and two implementations each of the cover/reload delegates.",
+      "evidence": "npc_translation_survey.py validates the pinned hash, walks PE32 RTTI, follows vtable +0x5dc/+0x5e0/+0x8e4/+0x8e8 thunks and joins direct plus npc_maker NPCTypE demands. The 22-map corpus has 426 class demands: 425 resolve to exact implementations and only sm_junkyard_1's absent npc_BaseVampAI classname does not.",
+      "consequence": "Per-class NPC activity translation is a closed generated policy surface; inheritance is retained instead of duplicating 77 switch tables, and the missing Night Watchman class remains explicit."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "NPC_EarlyTranslateActivity recognizes 29 paired-action base activities and TranslateBaseGrappleActivity expands each to one of eight contiguous attacker/victim, short/tall and front/back variants.",
+      "evidence": "0x104126a0 tests membership in the specially registered base list. 0x10328380 returns base+1, plus one for a tall linked actor, plus two for victim role and plus four for back position; invalid linked state preserves the base. The registry contains all 232 variant names for finishing moves, payphone, feeding, seductive feeding, zombie feeding, sneak attacks and rat feeding.",
+      "consequence": "Paired actions resolve by an exact arithmetic activity family, not label guessing; the generated catalog must preserve the base plus its eight named roles."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CBasePlayer's paired-action router has nine modes with exact initial activities and six stateful continuation leaves.",
+      "evidence": "player_grapple_survey.py validates the hash, decodes 0x10328c80 and verifies all five direct StartGrappleAttack calls. Modes 0/1 map to ACT_FEEDING_ENGAGE, 2 to ACT_SEDUCTIVE_ENGAGE, 3/4 to ACT_SNEAKATTACK_SUCCESS/FAILURE, 5 to ACT_PAYPHONE_PICKUP, 6 to ACT_RAT_FEED_ENGAGE, 7 to ACT_FINISHING_MOVE and 8 to ACT_ZOMBIE_FEEDING_ENGAGE. 0x10164240 routes attacker modes 0/1/2/3/5/6/8 through vtable +0x68c/+0x690/+0x694/+0x688/+0x698/+0x69c and uses sequence completion for 4/7; a victim does not drive the pair. Producers supply modes 0/6, 2, 3, 5 and 8, leaving 1/4/7 without a pinned-binary caller.",
+      "consequence": "Paired player action-to-activity selection is closed, including dormant registered modes; shipped reachability is retained separately from the static mode vocabulary."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Player paired actions use a two-actor activity resolver and commit rather than direct sequence-label playback.",
+      "evidence": "0x10328df0 selects the initial base, alignment and role state and enters both actors through virtual +0x5ec. 0x1032a100 resolves the base independently through 0x10328380, weapon-translates each role-specific activity, selects weighted sequences and commits current/ideal state on both; a missing sequence warns and calls 0x10329560 EndGrapple.",
+      "consequence": "A remake must resolve and commit attacker and victim as one transaction and preserve a hard failure, not guess labels or let each actor advance independently."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The router's first-priority branch protects activity-owned player animation, and contextual compact code 12 owns the vomit state machine while its latch is active.",
+      "evidence": "0x10164240 calls vtable +0x670 before testing grapple state. 0x10161200 protects timed ACT_BLOCK/ACT_BLOCK_HEAVY and blocked reactions, unfinished ACT_MELEE_ATTACK through ACT_MELEE_ATTACK_HEAVY, ACT_FEEDING_ENGAGE_FAILURE, knockback/protected ranges 0x75-0x93 plus 0x9d0, and ACT_VOMIT_INTO/IDLE/GETOUT. 0x101641d0 handles code 12 with the +0x1cb0 latch and advances ACT_VOMIT_INTO to IDLE, GETOUT and ACT_IDLE while consuming blood and finally clearing the latch.",
+      "consequence": "Protected activity ownership is a higher-priority policy than ordinary or paired selection; code 12 cannot be assigned one global activity without its latch/mode context."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The protected melee special-owner branch is inventory handoff, not another animation route.",
+      "evidence": "When the +0x1df4 gate, protected range, elapsed cycle and active-weapon capability agree, 0x10164240 clears the flag and calls player virtual +0x720 at 0x10170b50. It forwards the owner's classname and +0x4a0 identity to virtual +0x724 at 0x100b7fe0, which searches all 224 inventory slots for that item and may activate/equip it; neither body chooses an activity, sequence or layer.",
+      "consequence": "The complete protected-router surface has no hidden exact-label or layer producer."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CAI_BaseNPC::ResolveActivityToSequence selects ordinary NPC sequences, exact scripted custom moves, disposition fallbacks and the final sequence-zero fallback.",
+      "evidence": "0x10272130 calls TranslateActivity, then SelectWeightedSequence for ordinary requests. A missing translated ACT_RUN retries ACT_WALK; any remaining miss retries ACT_DISPOSITION, delegating through the disposition owner at this+0x98 / virtual +0x98c when present, and a missing disposition becomes sequence 0. ACT_SCRIPT_CUSTOM_MOVE resolves the owner label at this+0x5d74 through LookupSequence and a miss joins the ACT_WALK/disposition tail.",
+      "consequence": "Ordinary activity selection and exceptional custom-move/disposition fallbacks are explicit resolver routes rather than clip-label heuristics."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "NPC ideal activity, immediate activity and transition traversal are separate commit policies.",
+      "evidence": "0x10272650 stores and resolves the ideal without committing it; 0x102727d0 re-resolves a changed target and calls 0x102726a0 to traverse transition sequences; 0x102725d0 resolves and calls 0x10272490 immediately. The latter commits the exact sequence and weapon activity while preserving the un-translated logical activity.",
+      "consequence": "A remake action record must keep requested logical activity, translated activity, weapon activity, target sequence and transition state as separate fields."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The controlled sm_hub_1 corpus contains 1,232 complete common NPC translation resolutions.",
+      "evidence": "Caller-delimited ELGACT1 paths contain 1,232 first-weapon and heaviest-availability stages across 50 entity indices: 795 continue to the ordinary weighted selector and 437 are resolution-only queries. Grouping by the full serial-bearing entity handle leaves zero incomplete chains and joins ten NPC body lifetimes without index-reuse contamination.",
+      "consequence": "The captured NPC evidence is a staged resolution map with exact clip-table joins, not a flat sequence histogram."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "The first controlled sm_hub_1 corpus joins compact codes 0, 1 and 2 through ordinary player translation to exact sequence identities on tremere_Male_Armor_0.",
-      "evidence": "The hash-gated ELGACT1 database contains 72,440 records (6,197 PCLS, 6,077 IDEA, 26,757 WTRN, 4,214 SWGT and 29,195 SHVY), marks all four operator beats and passes every verifier gate. The clip-table join resolves walk=5, run=4, sneak=7, crouch=8, leap=1407, falling=1410 and land=1411 with exact owner banks.",
-      "consequence": "The three-Cs locomotion slice is trace-backed; unobserved compact codes and special modes are not implied complete by this corpus."
+      "evidence": "The hash-gated ELGACT1 database contains 72,440 records (6,197 PCLS, 6,077 IDEA, 26,757 WTRN, 4,214 SWGT and 29,195 SHVY), marks all four operator beats and passes every verifier gate. The clip-table join resolves walk=5, run=4, sneak=7, crouch=8, leap=1407, falling=1410 and land=1411 with exact owner banks. Crouch is selected three times and reused for 151 requests; its longest uninterrupted run is 54 classifier samples / 1.791 seconds.",
+      "consequence": "The three-Cs locomotion slice and pre-completion held-request reuse are trace-backed independently of the static completion/restart proof."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A sustained unarmed crouch repeats the same non-looping sequence after it finishes.",
+      "evidence": "CBaseAnimating::StudioFrameAdvance at 0x1008f120 clamps a completed non-looping sequence and sets m_bSequenceFinished at +0x65c. In 0x101644f0, that flag makes an unchanged activity dirty at 0x10164595 and forces ResetSequenceInfo even when weighted selection returns the unchanged sequence at 0x101645f1. ResetSequenceInfo at 0x10090950 clears both the finished flag and cycle. ACT_CROUCH has only sequence 8 on the validated player body.",
+      "consequence": "The faithful player graph must reuse crouch before completion and restart sequence 8 on completion; holding its terminal frame is a divergence."
     },
     {
       "confidence": "confirmed",
@@ -126,8 +228,62 @@
     {
       "confidence": "confirmed",
       "fact": "The server-side block animation endpoint is compact code 13 to ACT_PREBLOCK.",
-      "evidence": "0x1016bb50 returns 13 when the grounded block-state helper succeeds, and 0x10164870 maps code 13 to registered activity 0x1154 ACT_PREBLOCK.",
-      "consequence": "RE36 still needs the client command that sets the latch, but no longer needs to identify the server action or base activity."
+      "evidence": "input_action_survey.py proves +wpn_secondaryatk presses a dedicated client kbutton packed as held bit 0x08000000 and then forwards into +attack2. Server 0x10160ec0 tests that exact bit with ground and weapon-capability gates; 0x1016bb50 returns 13 on success, and 0x10164870 maps code 13 to registered activity 0x1154 ACT_PREBLOCK.",
+      "consequence": "The block producer is closed end to end: +attack2 alone is not the block verb, while held +wpn_secondaryatk reaches PLAYER_BLOCK then ACT_PREBLOCK."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The 22-map exported corpus contains 198 live exact-label map requests and 18 SetAnimation wires, each with an explicit owner-model disposition.",
+      "evidence": "action_animation_survey.py joins 134 scripted-sequence labels, 64 LoopSequence labels and 18 SetAnimation parameters to npc_manifest v6. Of the 198 map labels, 184 resolve through the manifest, three are verified single-frame static models intentionally omitted from it, and eleven are authored label misses. All 18 SetAnimation wires resolve.",
+      "consequence": "The current map corpus's authored exact-sequence producer surface is closed; remaining producer RE is native task/class/layer logic or belongs to maps outside the current export."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A missing scripted_sequence or aiscripted_sequence exact label warns and plays sequence zero rather than entering the activity resolver.",
+      "evidence": "0x101a82d0 and 0x101a9510 call LookupSequence, test for -1, emit their unknown scripted-sequence warning, write sequence 0, zero the cycle and call ResetSequenceInfo. The current misses are ACT_COWER on three diner actors, pre_fight_bow on AsianVamp and ACT_DOORKNOCK on the player controller.",
+      "consequence": "ACT_* text authored in m_iszPlay is still an exact-label request; the remake must preserve the sequence-zero miss route."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Character.SetGesture is an exact-label route whose missing-label behavior is a silent no-op.",
+      "evidence": "0x10197f60 calls LookupSequence on the character component at entity+0x98 and only starts the gesture when the result is non-negative. Both shipped calls, Tourette's malk_female_idle and SM_Huddle, are absent from her complete include-model vocabulary.",
+      "consequence": "The two shipped SetGesture calls animate nothing and must not be mapped to guessed activities or sequence zero."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The pinned binary registers 330 contiguous common/Troika task IDs and compiles 691 schedules containing 4,139 task invocations.",
+      "evidence": "0x10316ff0 registers TASK_INVALID=0 through TASK_PLAY_DEATH_SEQUENCE=0x149. native_schedule_survey.py decodes the compiled schedule constructors and finds 441 distinct task names, including 378 explicit activity arguments covering 84 ACT_* values.",
+      "consequence": "Schedule demand is reproducible ordered data; a task name alone is not an animation route until its StartTask/RunTask handler is classified."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CAI_BaseNPC and CAI_BaseNPCTroika schedule tasks request activities rather than exact labels, including the misleading TASK_PLAY_SEQUENCE family.",
+      "evidence": "0x102827f0 and 0x102a1910 pass TASK_SET_ACTIVITY, TASK_PLAY_SEQUENCE, TASK_PLAY_SEQUENCE_PRIVATE, TASK_PLAY_SEQUENCE_FACE_ENEMY and TASK_PLAY_SEQUENCE_FACE_TARGET arguments to SetIdealActivity. Attack/reload/special tasks choose their fixed ACT_* values; TASK_PLAY_DEATH_SEQUENCE tries its argument, ACT_DIESIMPLE, then ACT_IDLE.",
+      "consequence": "Compiled schedule arguments must enter the common activity translator/resolver; they must never be looked up as sequence names."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "VtMB's Troika tasks expose three distinct animation commit policies: ideal-activity playback, immediate loop/blend activity playback, and a timed activity-owned gesture layer.",
+      "evidence": "0x102a1910 uses SetIdealActivity for ordinary activity tasks, ResolveActivityToSequence plus SetActivity for TASK_DO_LOOP_ACTIVITY and the blend variants, and SelectWeightedSequence plus the four-slot overlay API for TASK_ADD_GESTURE. 0x102aacf0 reasserts loop/blend activities until their completion condition.",
+      "consequence": "The task-to-animation map must retain base-sequence versus overlay ownership and StartTask versus RunTask continuation separately."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The complete NPC task-override surface contains 330 shared and 184 class-local task registrations, 29 distinct StartTask bodies, 24 distinct RunTask bodies and 49 custom handler bodies across all 77 CAI_BaseNPC descendants.",
+      "evidence": "npc_task_override_survey.py validates the pinned hash, walks RTTI vtable slots +0x6e8/+0x6f0, decodes 20 class-local registration owners and materializes 100 policy rows covering 111 task routes. Thirty-one custom bodies add direct animation policy and 18 add none; bounded direct-call analysis finds zero custom exact-label and zero custom layer routes.",
+      "consequence": "The schedule/task action map is closed for current and out-of-corpus boss/monster classes. Every custom animation branch enters activity resolution; exact-label and overlay behavior remain only in their separately identified common/script routes."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Eighteen custom NPC task bodies introduce no direct animation request before delegation.",
+      "evidence": "The full task-slot survey classifies AsianVampire, Cop, SabbatGunman, SheriffMan and base VampireBoss custom starts plus the non-animation custom runs separately from the 31 animation-bearing bodies. AsianVampire setup chooses jump geometry, Scurrying evade tasks update bookkeeping, and base VampireBoss transformation creates/hands off the MorphModel NPC; its schedule requests ACT_IDLE through the common TASK_SET_ACTIVITY route.",
+      "consequence": "State, navigation, spawning, damage and timing work remains distinct from action selection, and no exact-label request may be inferred from a custom task merely because its schedule leads to animation elsewhere."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The current exported producer corpus carries three MorphModel fields, no SetModel or Transform I/O wires, and 356 executable Python SetModel calls.",
+      "evidence": "action_animation_survey.py records 161 literal model-selection paths and 198 dynamic expressions across map/Python producers. Fifty-four literals select owners present in npc_manifest v6; 107 select static, weapon, viewmodel or other models outside the character-animation manifest.",
+      "consequence": "Model selection is an owner-bank change, not a clip request; later activity/label resolution must use the selected model while non-character selections remain explicitly outside the character manifest."
     },
     {
       "confidence": "confirmed",
@@ -137,12 +293,159 @@
     },
     {
       "confidence": "confirmed",
+      "fact": "The v2531 StudioSeqDesc event record is 76 bytes: float cycle, signed event ID, signed type and a fixed 64-byte options string, addressed descriptor-relative by numevents/eventindex at +20/+24.",
+      "evidence": "animation_event_survey.py validates all 4,445 patch-first MDLs and finds 1,150 event-bearing sequences, 1,872 events, 58 event IDs, 82 options strings, type zero on every record, no invalid cycle or record and a maximum of 11 events on one sequence.",
+      "consequence": "Sequence events are closed model metadata and can be exported directly; their record must not be replaced by a modern Source event struct."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Server DispatchAnimEvents scans 76-byte records, dispatches only event IDs below 5000 over the half-open cycle interval, handles looping wrap once and calls OnSequenceFinish when the sequence newly completes.",
+      "evidence": "0x10091880 preserves the last checked cycle at animating+0x658, copies cycle, ID, the complete options field and source pointer into the runtime event, calls virtual +0x40c, and visits the wrapped interval after a loop crosses 1.0.",
+      "consequence": "Event timing and the server/client 5000 boundary are exact playback policy, not an exporter convention."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The complete native sequence-event surface is finite: 300 server animating classes use 20 HandleAnimEvent bodies, 169 server weapon classes use seven Operator_HandleAnimEvent bodies, 237 client animating classes use three FireEvent bodies and all 214 client weapons share one viewmodel event hook.",
+      "evidence": "animation_event_survey.py hash-pins vampire.dll and client.dll, walks MSVC RTTI and validates every effective body against its decompiled policy ledger. Server events include scripted, footstep, weapon, attachment, sound and model actions; client events include muzzle flashes, sounds, bodygroups, ACT_* sequence changes and attachment/origin effects.",
+      "consequence": "Native event dispatch RE is closed. ANM4b must now emit the decoded timeline and implement the documented handlers; no per-class event behavior may be guessed from model options alone."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Every model-declared autolayer is evaluated at its host cycle and accumulated at literal caller weight 1.0 in authored entry order.",
+      "evidence": "animation_layer_survey.py validates 4,445 MDLs / 14,012 sequences, rejects the seven known malformed count-764 tails and resolves 461 hosts / 685 entries with zero self-reference, recursion, out-of-range target or target activity. In pinned client.dll, 0x1008a0ce pushes 0x3f800000 as FUN_10088e10 parameter 7 after recursive FUN_10089c40 evaluation.",
+      "consequence": "The model autolayer scalar and order are closed: ordinary layers blend and delta layers accumulate at full caller weight times each target animation's per-bone mask."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Base-sequence transitions and the separate four-slot combat layer stack have complete composition and interruption order.",
+      "evidence": "Client transition records append without a cap, fade independently with SimpleSpline and compose newest previous to oldest unless the incoming sequence requests a hard cut. Server SetLayer at 0x10099020 initializes weight 0.1, cycle 0, playback rate 1 and two inert 0.2 blend fields; base pose then active slots compose in ascending index order, and replacement/removal kills a slot immediately.",
+      "consequence": "Layer/override/interruption order is no longer an RE37 question. Export/bake and graph implementation must preserve these three distinct stages rather than merge model autolayers, base crossfades and networked combat slots."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "The installed player-body union resolves 56 target models through 122 owner models to 3,330 exact sequence descriptors and 3,615 animation descriptors with no missing includes.",
       "evidence": "research/tooling/capture/inventory_player_animations.py generated the hash-closed cap12 inventory from clandoc000.txt and the patch-first model tree; the sequences contain 1,202 distinct non-empty activity literals.",
       "consequence": "Coverage is keyed by exact owner model and raw sequence index, not by label, and is generated rather than maintained by hand."
     }
   ],
   "functions": [
+    {
+      "address": "10091880",
+      "label": "base_animating_dispatch_anim_events",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::DispatchAnimEvents; scans 76-byte sequence events below ID 5000 over the current and looping-wrap cycle intervals, calls HandleAnimEvent +0x40c, then OnSequenceFinish.",
+      "depth": 2,
+      "cap": 240,
+      "asm_count": 2200
+    },
+    {
+      "address": "10091da0",
+      "label": "base_animating_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Base server HandleAnimEvent body for named-attachment state events 2070/2071 and options-named weighted sequence event 4005.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "10274e30",
+      "label": "npc_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC HandleAnimEvent; owns scripted, movement-yaw, item/weapon and footstep families before combat-character fallback.",
+      "depth": 2,
+      "cap": 280,
+      "asm_count": 2600
+    },
+    {
+      "address": "1029b290",
+      "label": "npc_troika_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika HandleAnimEvent; adds facial/breath, timed activity layer and Troika attachment/movement/interesting-place event families.",
+      "depth": 2,
+      "cap": 280,
+      "asm_count": 2600
+    },
+    {
+      "address": "1032e330",
+      "label": "combat_character_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter HandleAnimEvent; forwards every weapon-range or foreign-source event to active-weapon Operator_HandleAnimEvent +0x5c8 and owns weapon state, sound and attached-model events.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2400
+    },
+    {
+      "address": "10238160",
+      "label": "ranged_weapon_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Shared ranged-weapon +0x5c8 handler; routes 3030..3044 through the fire-state transition and 4001/4002 through bodygroup state.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "1024f030",
+      "label": "base_weapon_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Base combat-weapon +0x5c8 warning body used by 17 weapon classes and as the unhandled fallback for ranged/melee/inventory policies.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "103e8be0",
+      "label": "tzimisce_melee_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Tzimisce melee +0x5c8 handler; swallows 3003 and maps 3045/3046 to its two gated attack variants before common-melee fallback.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1500
+    },
+    {
+      "address": "103ea5b0",
+      "label": "common_melee_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Shared common-melee +0x5c8 handler for 29 classes; accepts the melee/ranged compatibility no-op set, gated event 3047 and bodygroup events 4001/4002.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "103ec460",
+      "label": "ming_melee_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Ming Xiao melee +0x5c8 handler; explicitly swallows 3003 and delegates all other events to common melee.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "103eca20",
+      "label": "ming_tentacle_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Ming Xiao tentacle +0x5c8 handler; explicitly swallows 3003 and delegates all other events to common melee.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "103f4470",
+      "label": "inventory_weapon_operator_handle_anim_event",
+      "confidence": "confirmed",
+      "role": "Shared inventory/non-combat +0x5c8 handler for 103 classes; swallows 3014 and 3200 and otherwise delegates to the base warning.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "10099020",
+      "label": "server_overlay_set_layer",
+      "confidence": "confirmed",
+      "role": "CBaseAnimatingOverlay::SetLayer; initializes one of four 0x30-byte slots with cycle 0, playback rate 1, weight 0.1 and two inert 0.2 blend fields.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 900
+    },
     {
       "address": "104126e0",
       "label": "register_global_activity_table",
@@ -164,7 +467,7 @@
     {
       "address": "1016bb50",
       "label": "classify_player_animation_action",
-      "confidence": "partial",
+      "confidence": "confirmed",
       "role": "Classifies realized movement, water, interaction and animation-latch state into a compact action code or -1.",
       "depth": 2,
       "cap": 140,
@@ -173,8 +476,8 @@
     {
       "address": "10164240",
       "label": "cbaseplayer_set_animation_router",
-      "confidence": "partial",
-      "role": "Routes a compact action through special ownership/mode branches and mode-specific animation virtuals; ordinary mode reaches +0x684.",
+      "confidence": "confirmed",
+      "role": "CBasePlayer::SetAnimation; gives protected activity ownership first refusal, then routes the attacker side of a paired mode or reaches the ordinary +0x684 selector. Victims do not independently drive a pair.",
       "depth": 2,
       "cap": 180,
       "asm_count": 2200
@@ -182,16 +485,52 @@
     {
       "address": "10164870",
       "label": "set_normal_player_animation",
-      "confidence": "partial",
+      "confidence": "confirmed",
       "role": "Writes movement/aim pose parameters, maps a compact action and live state to base activities, and calls the common apply path.",
       "depth": 2,
       "cap": 240,
       "asm_count": 4200
     },
     {
+      "address": "10429200",
+      "label": "lookup_player_animation_action",
+      "confidence": "confirmed",
+      "role": "Case-insensitively resolves the complete 17-entry PLAYER_* string table to its compact code.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 500
+    },
+    {
+      "address": "10429240",
+      "label": "player_animation_action_name",
+      "confidence": "confirmed",
+      "role": "Returns the compiled PLAYER_* name for a compact action code.",
+      "depth": 1,
+      "cap": 30,
+      "asm_count": 300
+    },
+    {
+      "address": "101ddfb0",
+      "label": "parse_discipline_hit_info",
+      "confidence": "confirmed",
+      "role": "Parses targeted-discipline HitInfo including Player_Anim and stores the resolved compact code at HitInfo+0x38.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1800
+    },
+    {
+      "address": "101de660",
+      "label": "execute_discipline_hit_info",
+      "confidence": "confirmed",
+      "role": "Applies targeted-discipline HitInfo and forwards a non-negative Player_Anim code through the affected player's +0x704 SetAnimation virtual.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 2600
+    },
+    {
       "address": "101644f0",
       "label": "apply_player_activity_and_sequence",
-      "confidence": "partial",
+      "confidence": "confirmed",
       "role": "Applies activity translation/setting, chooses weighted or heaviest sequence, resets sequence state, and derives playback rate.",
       "depth": 2,
       "cap": 180,
@@ -216,6 +555,15 @@
       "asm_count": 1200
     },
     {
+      "address": "1024f210",
+      "label": "weapon_activity_override",
+      "confidence": "confirmed",
+      "role": "CBaseCombatWeapon::ActivityOverride; walks ordered base/output rows, tests owner-translated model availability, retains duplicate-base fallback order and returns the input unchanged when no row survives. The stored required dword is not read.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
       "address": "101647a0",
       "label": "player_npc_translate_activity",
       "confidence": "confirmed",
@@ -223,6 +571,222 @@
       "depth": 1,
       "cap": 60,
       "asm_count": 400
+    },
+    {
+      "address": "10271ff0",
+      "label": "npc_translate_activity",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::TranslateActivity; alternates the VtMB pre-translation, NPC/class translation and weapon translation, then applies model-availability fallbacks.",
+      "depth": 2,
+      "cap": 120,
+      "asm_count": 900
+    },
+    {
+      "address": "10272130",
+      "label": "npc_resolve_activity_to_sequence",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::ResolveActivityToSequence; produces translated/weapon activities and an exact weighted, custom-move, disposition or sequence-zero answer.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 1200
+    },
+    {
+      "address": "10272490",
+      "label": "npc_set_activity_and_sequence",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::SetActivityAndSequence; commits sequence, weapon activity and logical activity while preserving the translated activity separately.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "102725d0",
+      "label": "npc_set_activity",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::SetActivity; resolves and commits immediately, skipping transition traversal.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "10272650",
+      "label": "npc_set_ideal_activity",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::SetIdealActivity; stores and resolves the logical target without committing it.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "102726a0",
+      "label": "npc_advance_to_ideal_activity",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::AdvanceToIdealActivity; commits a transition sequence or the saved resolved target.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 800
+    },
+    {
+      "address": "102727d0",
+      "label": "npc_maintain_activity",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::MaintainActivity; re-resolves a changed target and advances toward it unless script ownership suppresses ordinary maintenance.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 800
+    },
+    {
+      "address": "102827f0",
+      "label": "npc_start_task",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::StartTask switch for registered task IDs 1 through 0x120; task-to-activity and direct-sequence cases are indexed by the pinned binary's byte dispatch table.",
+      "depth": 1,
+      "cap": 120,
+      "asm_count": 5000
+    },
+    {
+      "address": "10288780",
+      "label": "npc_run_task",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC::RunTask implementation reached when the Troika override delegates an unhandled task.",
+      "depth": 1,
+      "cap": 120,
+      "asm_count": 5000
+    },
+    {
+      "address": "102a1910",
+      "label": "npc_troika_start_task",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika::StartTask override; owns VtMB task producers and delegates unhandled tasks to CAI_BaseNPC::StartTask.",
+      "depth": 1,
+      "cap": 120,
+      "asm_count": 7000
+    },
+    {
+      "address": "102aacf0",
+      "label": "npc_troika_run_task",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika::RunTask override for registered task IDs 2 through 0x149; owns VtMB completion-time producers and delegates unhandled tasks to CAI_BaseNPC::RunTask.",
+      "depth": 1,
+      "cap": 120,
+      "asm_count": 5000
+    },
+    {
+      "address": "10316ff0",
+      "label": "register_npc_tasks",
+      "confidence": "confirmed",
+      "role": "Registers the complete pinned-build CAI_BaseNPC and CAI_BaseNPCTroika task-name table: 330 contiguous IDs from TASK_INVALID 0 through TASK_PLAY_DEATH_SEQUENCE 0x149.",
+      "depth": 1,
+      "cap": 40,
+      "asm_count": 1800
+    },
+    {
+      "address": "103611a0",
+      "label": "asian_vampire_start_task",
+      "confidence": "confirmed",
+      "role": "npc_VAsianVampire StartTask override; its custom find/setup tasks select jump geometry and otherwise delegate to the vampire-boss chain.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 800
+    },
+    {
+      "address": "103612e0",
+      "label": "asian_vampire_run_task",
+      "confidence": "confirmed",
+      "role": "npc_VAsianVampire RunTask override; completes jump setup and reasserts ACT_LEAP_ASCEND while meaningful vertical velocity remains.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 900
+    },
+    {
+      "address": "103c5ac0",
+      "label": "vampire_boss_start_task",
+      "confidence": "confirmed",
+      "role": "npc_VVampireBoss StartTask override for teleport and MorphModel transformation lifecycle tasks; animation still delegates to activity-bearing schedules.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 1100
+    },
+    {
+      "address": "103c5f40",
+      "label": "vampire_boss_run_task",
+      "confidence": "confirmed",
+      "role": "npc_VVampireBoss RunTask override; waits for transformation handoff and delegates other tasks to the parent chain.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 700
+    },
+    {
+      "address": "103c60a0",
+      "label": "vampire_boss_transformation_start",
+      "confidence": "confirmed",
+      "role": "Creates and initializes the MorphModel NPC, copies transform/state and assigns the base vampire-boss transform schedule without looking up an exact animation label.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 1300
+    },
+    {
+      "address": "103c63c0",
+      "label": "vampire_boss_wait_for_transformation",
+      "confidence": "confirmed",
+      "role": "Completes the timed MorphModel effect and state handoff; it does not request an activity or exact sequence.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 1100
+    },
+    {
+      "address": "103c75f0",
+      "label": "vampire_boss_input_transform",
+      "confidence": "confirmed",
+      "role": "Transform input; chooses the transform classname/MorphModel route and schedules the vampire-boss transformation lifecycle.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 700
+    },
+    {
+      "address": "101a82d0",
+      "label": "scripted_sequence_set_animation",
+      "confidence": "confirmed",
+      "role": "CCineNPC exact-label start helper; a missing scripted sequence warns and becomes sequence zero.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 700
+    },
+    {
+      "address": "101a9510",
+      "label": "aiscripted_sequence_set_animation",
+      "confidence": "confirmed",
+      "role": "AI-scripted exact-label start helper; mirrors the scripted-sequence sequence-zero miss behavior.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 500
+    },
+    {
+      "address": "10197f60",
+      "label": "python_character_set_gesture",
+      "confidence": "confirmed",
+      "role": "Character.SetGesture; plays a looked-up exact sequence and silently does nothing on a negative lookup.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 500
+    },
+    {
+      "address": "101977a0",
+      "label": "python_entity_set_model",
+      "confidence": "confirmed",
+      "role": "Entity.SetModel Python binding; validates/interns a model path and calls the entity's SetModel virtual without requesting an activity or sequence.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 500
+    },
+    {
+      "address": "10095030",
+      "label": "base_animating_set_model",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::SetModel; installs the new studio model and rebuilds model-dependent bone/controller state after an index change.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 900
     },
     {
       "address": "1024edc0",
@@ -279,10 +843,19 @@
       "asm_count": 700
     },
     {
+      "address": "1008f120",
+      "label": "studio_frame_advance",
+      "confidence": "confirmed",
+      "role": "CBaseAnimating::StudioFrameAdvance; advances cycle, clamps a completed non-looping sequence and sets m_bSequenceFinished.",
+      "depth": 2,
+      "cap": 140,
+      "asm_count": 1600
+    },
+    {
       "address": "10090950",
       "label": "reset_sequence_info",
       "confidence": "confirmed",
-      "role": "CBaseAnimating::ResetSequenceInfo; resets cycle/sequence state after m_nSequence changes.",
+      "role": "CBaseAnimating::ResetSequenceInfo; clears cycle and m_bSequenceFinished after a changed sequence or same-sequence one-shot restart.",
       "depth": 2,
       "cap": 120,
       "asm_count": 1400
@@ -295,6 +868,384 @@
       "depth": 2,
       "cap": 120,
       "asm_count": 1200
+    },
+    {
+      "address": "10271f50",
+      "label": "npc_base_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC vtable +0x5dc identity implementation, called before weapon/class translation.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "10271f70",
+      "label": "npc_base_class_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC vtable +0x5e0 implementation; identity except for capability-gated cover/reload delegate branches.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "10295590",
+      "label": "npc_troika_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika vtable +0x5dc gait/frenzy/cover/reload and paired-action pre-translator inherited by generic animal and boss families.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "10295710",
+      "label": "npc_troika_class_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika vtable +0x5e0 implementation; conditionally maps ACT_IDLE to ACT_LAUGH_IDLE.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "103854f0",
+      "label": "npc_human_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VHuman vtable +0x5dc armed/alert/relaxed translator inherited by ordinary human, vampire and humanoid boss families.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "103858b0",
+      "label": "npc_human_class_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VHuman vtable +0x5e0 translator; normalizes six alert turns before the Troika class rule.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "103690a0",
+      "label": "npc_camera_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VCamera vtable +0x5dc identity implementation.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "103690c0",
+      "label": "npc_camera_class_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VCamera vtable +0x5e0 identity implementation.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "10394690",
+      "label": "npc_ming_xiao_class_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VMingXiao vtable +0x5e0 translator; normalizes six alert turns before the Troika class rule.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "10374ad0",
+      "label": "npc_dog_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VDog vtable +0x5dc translator; preserves ACT_FIDGET and delegates all other requests to Troika.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "10381b50",
+      "label": "npc_hengeyokai_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VHengeyokai vtable +0x5dc form translator for pickup-light idle/carry activities, otherwise human translation.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "103b2e60",
+      "label": "npc_stalker_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VStalker vtable +0x5dc translator; walk/run/hunt-walk become ACT_COMBATMOVE.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "103bde40",
+      "label": "npc_tzimisce_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VTzimisce vtable +0x5dc form translator for ACT_IDLE_BODY[_L]/ACT_WALK_BODY[_L], otherwise Troika translation.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "103c3e10",
+      "label": "npc_tzimisce_runner_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VTzimisceRunner vtable +0x5dc form translator for ACT_TZ_IDLE2/FIDGET2/WALK2/RUN2 after Troika translation.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "103dcdc0",
+      "label": "npc_wolf_morph_pre_translate_virtual",
+      "confidence": "confirmed",
+      "role": "CNPC_VWolfMorph vtable +0x5dc translator; every request becomes ACT_WOLF_MORPH.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "10274aa0",
+      "label": "npc_base_cover_activity_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC +0x8e4 delegate selecting medium/low/generic cover by context and model availability, then idle fallback.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "10274820",
+      "label": "npc_base_reload_activity_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPC +0x8e8 delegate selecting ACT_RELOAD_LOW for compatible cover context/model/environment, otherwise ACT_RELOAD.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "10297560",
+      "label": "npc_troika_cover_activity_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika +0x8e4 delegate adding forced-low, midcrunch, crunch and corner-cover activities before base fallback.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "102954b0",
+      "label": "npc_troika_reload_activity_virtual",
+      "confidence": "confirmed",
+      "role": "CAI_BaseNPCTroika +0x8e8 delegate selecting low reload or context-specific crunch activity before ACT_RELOAD_FAST fallback.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "10328030",
+      "label": "combat_character_early_translate_activity",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::NPC_EarlyTranslateActivity; recognizes a paired-action base and calls TranslateBaseGrappleActivity, otherwise identity.",
+      "depth": 2,
+      "cap": 240,
+      "asm_count": 2000
+    },
+    {
+      "address": "10328380",
+      "label": "combat_character_translate_base_grapple_activity",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::TranslateBaseGrappleActivity; selects one of eight contiguous attacker/victim, size and side variants.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "104126a0",
+      "label": "is_registered_base_grapple_activity",
+      "confidence": "confirmed",
+      "role": "Membership predicate for the 29 specially registered paired-action base activities.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1400
+    },
+    {
+      "address": "10328c80",
+      "label": "combat_character_get_initial_grapple_activity",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::GetInitialGrappleActivity; maps paired modes 0 through 8 to their exact registered base activities.",
+      "depth": 1,
+      "cap": 80,
+      "asm_count": 500
+    },
+    {
+      "address": "10328df0",
+      "label": "combat_character_start_grapple_attack",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::StartGrappleAttack; validates initial activities, chooses size/side alignment, enters both roles and commits their initial paired activity.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2600
+    },
+    {
+      "address": "10329760",
+      "label": "combat_character_enter_grapple",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::EnterGrapple; stores peer, role, mode, side and alignment state. CBasePlayer overrides it at 0x101695f0 to latch paired ownership.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "1032a100",
+      "label": "combat_character_set_grapple_activity",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::SetGrappleActivity; role-translates and weapon-translates one base for both actors, selects weighted sequences and commits both sides or ends the pair on failure.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2600
+    },
+    {
+      "address": "10167370",
+      "label": "player_start_sneakattack_success",
+      "confidence": "confirmed",
+      "role": "Player-use target path that calls StartGrappleAttack with mode 3 ACT_SNEAKATTACK_SUCCESS.",
+      "depth": 2,
+      "cap": 120,
+      "asm_count": 900
+    },
+    {
+      "address": "10168320",
+      "label": "player_replenish_start_feeding",
+      "confidence": "confirmed",
+      "role": "CBasePlayer feed/replenish producer; starts mode 0 feeding or mode 6 rat feeding from target type and sets the feed latch.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 2200
+    },
+    {
+      "address": "10168700",
+      "label": "player_be_fed_on_by_zombie",
+      "confidence": "confirmed",
+      "role": "CBasePlayer::BeFedOnByZombie producer; starts paired mode 8 and installs its feed timing latches.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 1600
+    },
+    {
+      "address": "10178280",
+      "label": "player_start_payphone_grapple",
+      "confidence": "confirmed",
+      "role": "Player payphone/dialogue path; starts paired mode 5 ACT_PAYPHONE_PICKUP when the partner is a retail payphone NPC.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "10198150",
+      "label": "python_seductive_feed",
+      "confidence": "confirmed",
+      "role": "Python SeductiveFeed binding; validates two character entities, starts paired mode 2 and sets the attacker's continuation latch.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1200
+    },
+    {
+      "address": "10161200",
+      "label": "player_protected_activity_active",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x670 predicate selecting the router's protected path for timed block/reaction activities, unfinished melee, feeding failure, knockback/protected ranges and vomit activities.",
+      "depth": 2,
+      "cap": 200,
+      "asm_count": 1600
+    },
+    {
+      "address": "101641d0",
+      "label": "player_protected_activity_action",
+      "confidence": "confirmed",
+      "role": "Protected-activity handler called before grapple/ordinary routing; contextual compact code 12 advances the latched vomit activity state machine.",
+      "depth": 2,
+      "cap": 240,
+      "asm_count": 2000
+    },
+    {
+      "address": "101654e0",
+      "label": "player_payphone_animation",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x688 leaf for paired mode 5; advances ACT_PAYPHONE_PICKUP to IDLE and HANGUP.",
+      "depth": 2,
+      "cap": 240,
+      "asm_count": 2000
+    },
+    {
+      "address": "101655b0",
+      "label": "player_feeding_animation",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x68c leaf for paired modes 0 and 1; owns the feeding engage/bite/loop/release state machine.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "10165ae0",
+      "label": "player_seductive_feeding_animation",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x690 leaf for paired mode 2; owns seductive engage/loop/release or release-to-mesmerized selection.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "10165d90",
+      "label": "player_sneakattack_success_animation",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x694 leaf for paired mode 3; applies the linked-target result when ACT_SNEAKATTACK_SUCCESS finishes.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "10165330",
+      "label": "player_rat_feeding_animation",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x698 leaf for paired mode 6; owns rat-feed engage/loop/release selection.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "10165f20",
+      "label": "player_zombie_feeding_animation",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x69c leaf for paired mode 8; owns zombie feeding engage/bite/loop/release selection.",
+      "depth": 2,
+      "cap": 260,
+      "asm_count": 2200
+    },
+    {
+      "address": "10329560",
+      "label": "combat_character_end_grapple",
+      "confidence": "confirmed",
+      "role": "CBaseCombatCharacter::EndGrapple; clears the two-sided paired state before the player router sets force-heaviest and re-enters SetAnimation.",
+      "depth": 2,
+      "cap": 200,
+      "asm_count": 1600
+    },
+    {
+      "address": "10170b50",
+      "label": "player_special_owner_inventory_forward",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x720 forwards a protected melee special owner's classname and identity to the inventory receiver; it selects no animation.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
+    },
+    {
+      "address": "100b7fe0",
+      "label": "player_special_owner_inventory_receiver",
+      "confidence": "confirmed",
+      "role": "CBasePlayer vtable +0x724 matches the forwarded classname/identity against 224 inventory slots and may activate or equip the item; it selects no activity, sequence or layer.",
+      "depth": 2,
+      "cap": 220,
+      "asm_count": 1800
     }
   ],
   "relationships": [
@@ -307,14 +1258,26 @@
     {
       "from": "1016be10",
       "to": "10164240",
-      "confidence": "partial",
+      "confidence": "confirmed",
       "evidence": "CBasePlayer virtual +0x704 receives the classifier result"
     },
     {
       "from": "10164240",
       "to": "10164870",
-      "confidence": "partial",
+      "confidence": "confirmed",
       "evidence": "ordinary animation mode dispatches through CBasePlayer virtual +0x684"
+    },
+    {
+      "from": "101ddfb0",
+      "to": "10429200",
+      "confidence": "confirmed",
+      "evidence": "a non-empty Player_Anim field is resolved through the complete PLAYER_* name table and stored at HitInfo+0x38"
+    },
+    {
+      "from": "101de660",
+      "to": "10164240",
+      "confidence": "confirmed",
+      "evidence": "a non-negative HitInfo Player_Anim code is passed through the affected player's +0x704 SetAnimation virtual"
     },
     {
       "from": "10164870",
@@ -359,6 +1322,54 @@
       "evidence": "direct call after writing a changed m_nSequence"
     },
     {
+      "from": "10271ff0",
+      "to": "10327ec0",
+      "confidence": "confirmed",
+      "evidence": "virtual +0x5f4 is called once after VtMB pre-translation and after every NPC/class translation iteration"
+    },
+    {
+      "from": "10271ff0",
+      "to": "1008dd30",
+      "confidence": "confirmed",
+      "evidence": "SelectHeaviestSequence tests final weapon, remembered class/NPC, first weapon and original availability candidates"
+    },
+    {
+      "from": "10272130",
+      "to": "10271ff0",
+      "confidence": "confirmed",
+      "evidence": "every ResolveActivityToSequence attempt first calls TranslateActivity and stores its translated/weapon outputs"
+    },
+    {
+      "from": "10272130",
+      "to": "1008dc40",
+      "confidence": "confirmed",
+      "evidence": "ordinary, ACT_RUN-to-ACT_WALK and non-owner disposition weighted-selection paths"
+    },
+    {
+      "from": "10272130",
+      "to": "1008f7b0",
+      "confidence": "confirmed",
+      "evidence": "ACT_SCRIPT_CUSTOM_MOVE resolves the live scripted owner label through LookupSequence"
+    },
+    {
+      "from": "102725d0",
+      "to": "10272130",
+      "confidence": "confirmed",
+      "evidence": "SetActivity resolves the logical request before its immediate SetActivityAndSequence commit"
+    },
+    {
+      "from": "10272650",
+      "to": "10272130",
+      "confidence": "confirmed",
+      "evidence": "SetIdealActivity stores and pre-resolves its target without committing it"
+    },
+    {
+      "from": "102727d0",
+      "to": "102726a0",
+      "confidence": "confirmed",
+      "evidence": "MaintainActivity advances a changed ideal through transition or target commit"
+    },
+    {
       "from": "10327ec0",
       "to": "1024edc0",
       "confidence": "confirmed",
@@ -375,6 +1386,84 @@
       "to": "10090950",
       "confidence": "confirmed",
       "evidence": "direct call after writing the resolved sequence"
+    },
+    {
+      "from": "10164240",
+      "to": "10161200",
+      "confidence": "confirmed",
+      "evidence": "CBasePlayer virtual +0x670 is tested before any linked-role or ordinary-mode dispatch"
+    },
+    {
+      "from": "10164240",
+      "to": "10170b50",
+      "confidence": "confirmed",
+      "evidence": "the protected melee special-owner gate clears +0x1df4 and calls player virtual +0x720"
+    },
+    {
+      "from": "10170b50",
+      "to": "100b7fe0",
+      "confidence": "confirmed",
+      "evidence": "the special owner's classname and +0x4a0 identity are forwarded through player virtual +0x724"
+    },
+    {
+      "from": "10164240",
+      "to": "10329560",
+      "confidence": "confirmed",
+      "evidence": "a completed attacker-side mode leaf ends the two-sided state before force-heaviest ordinary re-entry"
+    },
+    {
+      "from": "10328df0",
+      "to": "10328c80",
+      "confidence": "confirmed",
+      "evidence": "StartGrappleAttack asks the nine-entry table for the initial registered base activity"
+    },
+    {
+      "from": "10328df0",
+      "to": "10329760",
+      "confidence": "confirmed",
+      "evidence": "both attacker and victim enter through virtual +0x5ec after initial availability and alignment checks"
+    },
+    {
+      "from": "10328df0",
+      "to": "1032a100",
+      "confidence": "confirmed",
+      "evidence": "the initial base is committed to both actors after both EnterGrapple calls succeed"
+    },
+    {
+      "from": "1032a100",
+      "to": "10328380",
+      "confidence": "confirmed",
+      "evidence": "the same base is independently expanded to attacker and victim role activities before each weapon translation and weighted selection"
+    },
+    {
+      "from": "10168320",
+      "to": "10328df0",
+      "confidence": "confirmed",
+      "evidence": "ordinary targets pass mode 0 and rat targets pass mode 6"
+    },
+    {
+      "from": "10167370",
+      "to": "10328df0",
+      "confidence": "confirmed",
+      "evidence": "player-use sneak target passes mode 3"
+    },
+    {
+      "from": "10168700",
+      "to": "10328df0",
+      "confidence": "confirmed",
+      "evidence": "BeFedOnByZombie passes mode 8"
+    },
+    {
+      "from": "10178280",
+      "to": "10328df0",
+      "confidence": "confirmed",
+      "evidence": "payphone/dialogue path passes mode 5"
+    },
+    {
+      "from": "10198150",
+      "to": "10328df0",
+      "confidence": "confirmed",
+      "evidence": "Python SeductiveFeed passes mode 2"
     }
   ]
 }

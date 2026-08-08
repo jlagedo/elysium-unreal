@@ -389,8 +389,10 @@ The character catalog extends the existing `npc/clips`, blend and index sidecars
 invent a parallel clip inventory. The disposable raw player inventory produced by
 `research/tooling/capture/inventory_player_animations.py` preserves the full 764-byte sequence and
 72-byte animation descriptors for research, while the public export carries only decoded fields
-the runtime uses. Sequence events and autolayers must be decoded into that existing path rather than
-recovered later from baked assets.
+the runtime uses. Sequence events are decoded in the model reader and across the complete native
+server/client handler surface; ANM4b must emit them into this existing path. Autolayers and the
+sequence-transition graph likewise belong in the catalog rather than being recovered later from
+baked assets.
 
 “All actions” is defined by **reachability**, not by copying every name in the global registry. It
 is the union of:
@@ -415,13 +417,25 @@ Ghidra driver and retail capture harness rather than a second hook project. The 
 
 1. Run the player-model inventory and the ordinary NPC exporter to establish exact model/sequence
    identities, weights, grids, movement records and include reachability.
-2. Generate a hash-pinned Ghidra context pack for the known player classifier, mode router,
-   activity apply/select path, registry, weapon translation and forced-sequence command.
-3. Starting from the recovered common NPC
+2. Reproduce the completed player ordinary, compact and paired-action extraction from the
+   hash-pinned Ghidra pack: the 17-entry `PLAYER_*` table, all 15 genuine `+0x704` calls, both
+   effective discipline `Player_Anim` rows, shared player RTTI policy bodies, ordinary apply/select
+   order, full activity registry, forced-sequence command, nine-entry paired initial-activity table,
+   protected-first mode router, five paired producer sites, six continuation leaves, role/size/side
+   translation and two-actor commit. Keep the four dormant compiled codes distinct from reachable
+   gameplay. A sustained unarmed crouch repeats its non-looping sequence only after the server
+   finished flag is set: an unchanged request reuses the current sequence before completion, then
+   reselects it and resets cycle/finished state on the next policy frame.
+3. Reproduce the completed NPC-class extraction from the recovered
    `SetIdealActivity/SetActivity → TranslateActivity → ResolveActivityToSequence →
-   SetActivityAndSequence` chain, extract every schedule/task/direct-sequence/layer producer and
-   every class override of translation virtuals `+0x5dc` and `+0x5e0`; add each seed and
-   relationship to the specification.
+   SetActivityAndSequence` chain: PE32 RTTI collapses 77 descendants to 10 pre-translation, five
+   class-translation and two cover/reload delegate bodies, including all 29 paired-action bases and
+   their 232 role variants. The companion task-slot extraction reduces the same surface to 29
+   StartTask and 24 RunTask bodies and materializes all 111 custom animation task routes. The
+   sequence-event extraction separately validates 1,872 records and all server/client dispatch
+   bodies; the layer extraction fixes all 685 model bindings at full caller weight and the four
+   combat slots at their 0.1 networked weight. Event/layer emission remains a catalog/evaluator
+   input rather than a task-override guess.
 4. Reproduce the completed hash-pinned weapon extraction: PE32 RTTI and each vtable's table/count
    pair recover all 169 subclasses and 9,214 ordered per-class rows; keep retail `activitydump` as
    an independent textual oracle rather than a source for invented `required`-flag behavior.

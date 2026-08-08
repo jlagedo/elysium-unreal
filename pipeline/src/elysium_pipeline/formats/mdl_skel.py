@@ -29,10 +29,13 @@ included. The record names the eye's bone, its resting basis, the iris scale, an
 flexdescs the renderer's eye pass writes back into the flex weights; `StudioMesh.materialtype`
 flags which meshes it applies to.
 
-Not decoded here: procedural bones (`ProcType`!=0), IK, and animation events
-(`numevents`/`eventindex`, located but unread). Authored movement is decoded as metadata beside
-the in-place bone tracks; the glTF clip deliberately stays in place so a host motor can consume
-the same movement without translating the skeleton a second time.
+Animation events are carried beside each sequence as the old 76-byte VtMB record: cycle,
+numeric event id, type, and a fixed 64-byte options string.  The later Source record's event-name
+index is absent.  The records remain metadata; dispatch belongs to the host animation runtime.
+
+Not decoded here: procedural bones (`ProcType`!=0) and IK. Authored movement is decoded as
+metadata beside the in-place bone tracks; the glTF clip deliberately stays in place so a host
+motor can consume the same movement without translating the skeleton a second time.
 """
 import math
 import os
@@ -155,6 +158,14 @@ _POSEPARAM_STRIDE = 20
 
 _AUTOLAYER_STRIDE = 4
 
+#: VtMB v2531's old ``mstudioevent_t``.  The record stops after ``options[64]``; unlike
+#: Source 2013's 80-byte form it has no descriptor-relative event-name index.
+_EVENT_STRIDE = 76
+
+#: The shipped maximum is 11.  The generous format guard prevents a damaged descriptor from
+#: walking arbitrary model bytes while retaining room for independently authored models.
+_MAX_EVENTS = 256
+
 #: The gate on `numautolayers`@660. Seven single-sequence scenery and weapon models read 764
 #: there — the descriptor tail running past the end of the file into the string table — so a
 #: count this side of plausible is the first of the three bounds
@@ -167,6 +178,11 @@ _MAX_AUTOLAYERS = 16
 #: complete cycle's travel.
 _MOVEMENT_STRIDE = 44
 Movement = namedtuple("Movement", "endframe motionflags v0 v1 angle vector position")
+
+#: One sequence-timeline event. ``cycle`` is normalized over the sequence, ``event`` is the
+#: numeric dispatch id, ``type`` is the old event-type field, and ``options`` is its decoded
+#: NUL-terminated 64-byte payload.
+Event = namedtuple("Event", "cycle event type options")
 
 #: The scalar part a route motor needs from an in-place locomotion clip. Distances are converted
 #: from Source inches to centimetres here, at the offline seam; no coordinate direction is emitted.
@@ -199,10 +215,11 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: `grid` is the blend space the label names (see `read_grid`); `bbmin`/`bbmax` are the
 #: sequence's own model-space bounding box in Source units (see `local_sequences`);
 #: `fade` is the authored transition duration in seconds (see `local_sequences`);
-#: `autolayers` names the sequences this one is composed with (see `read_autolayers`).
+#: `autolayers` names the sequences this one is composed with (see `read_autolayers`);
+#: `events` carries the sequence timeline records (see `read_events`).
 Seq = namedtuple("Seq",
-                 "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers",
-                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, ()))
+                 "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers events",
+                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), ()))
 
 
 def pose_parameters(d):
@@ -263,7 +280,8 @@ def read_autolayers(d, sb, ns):
 
     `numautolayers`@660 / `autolayerindex`@664 declare a list of 4-byte entries, each a bare
     sequence index — VtMB's record carries no pose parameter, flags or ramp, so the binding is
-    the whole payload and the weight a layer arrives with lives in the game DLL
+    the whole payload. The client dispatcher supplies caller weight 1.0 and the accumulator then
+    multiplies it by the target animation's per-bone mask
     (`docs/vtmb/animation_and_movers.md` A.3).
 
     **The index is relative to the descriptor and the entries address this model's own local
@@ -287,6 +305,40 @@ def read_autolayers(d, sb, ns):
     if any(not (0 <= t < ns) for t in entries):
         return ()
     return entries
+
+
+def read_events(d, sb):
+    """One StudioSeqDesc's animation timeline -> tuple[Event, ...].
+
+    ``numevents``@20 and ``eventindex``@24 address descriptor-relative 76-byte records:
+    ``float cycle``@0, ``int event``@4, ``int type``@8 and ``char options[64]``@12.  VtMB's
+    v2531 form predates the later event-name index.  A non-positive relative index, implausible
+    count, out-of-image array, or options field without a NUL terminator yields no records rather
+    than interpreting an adjacent descriptor as events.
+    """
+    count = _i32(d, sb + 20)
+    relative = _i32(d, sb + 24)
+    if not (0 < count <= _MAX_EVENTS) or relative <= 0:
+        return ()
+    base = sb + relative
+    end = base + count * _EVENT_STRIDE
+    if base < 0 or end > len(d):
+        return ()
+
+    events = []
+    for index in range(count):
+        record = base + index * _EVENT_STRIDE
+        options_raw = bytes(d[record + 12:record + _EVENT_STRIDE])
+        terminator = options_raw.find(b"\0")
+        if terminator < 0:
+            return ()
+        events.append(Event(
+            cycle=_f32(d, record),
+            event=_i32(d, record + 4),
+            type=_i32(d, record + 8),
+            options=options_raw[:terminator].decode("ascii", "replace"),
+        ))
+    return tuple(events)
 
 
 def local_animation(d, index):
@@ -372,7 +424,8 @@ def local_sequences(d):
     weighted-random share among the sequences sharing an activity (`claws_aggressive_run` 7 vs
     its two alts at 3); `flags`@8 carries the studio sequence bits. The sibling `activity`@12
     int stays -1 on disk — the game DLL resolves the name to an enum at model load, so the
-    *name* is the durable key. `numevents`/`eventindex`@20/24 are located but not decoded.
+    *name* is the durable key. `events` carries the descriptor-relative timeline decoded from
+    `numevents`/`eventindex`@20/24.
 
     `bbox`@28 is two Vectors — the sequence's model-space bounding box over every frame it
     animates, in Source units. It is the authored envelope of the *posed* model, not of the
@@ -410,7 +463,8 @@ def local_sequences(d):
                        flags=_i32(d, sb + 8), grid=grid,
                        bbmin=_vec3(d, sb + 28), bbmax=_vec3(d, sb + 40),
                        fade=_f32(d, sb + 612),
-                       autolayers=tuple(labels[t] for t in read_autolayers(d, sb, ns))))
+                       autolayers=tuple(labels[t] for t in read_autolayers(d, sb, ns)),
+                       events=read_events(d, sb)))
     return out
 
 

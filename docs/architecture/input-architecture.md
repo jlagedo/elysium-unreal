@@ -252,9 +252,11 @@ is `docs/vtmb/controls.md`:
 - **The one-frame `vhotkey` deferral is not reproduced.** It is the defect the community's
   `wait 1` idiom exists to work around, not a behaviour worth carrying.
 
-Two entries are **blocked on RE rather than on design**: `LT`'s melee half needs the block verb
-identified, and D-pad ↑ needs `+wpn_secondaryatk`'s semantics. Both are open questions in
-`docs/vtmb/controls.md`.
+The input RE gate for `LT` and D-pad ↑ is cleared. Retail `+wpn_secondaryatk` is a held composite:
+it asserts the dedicated block bit and forwards into ordinary `+attack2`; releasing it clears both.
+The server accepts the block bit only while grounded with an eligible active weapon. The mapping
+above is therefore a design choice about presenting one faithful composite through contextual
+gamepad actions, not a guess about which retail verb blocks.
 
 ### Melee combos need the stick quantised
 

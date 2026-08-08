@@ -209,7 +209,7 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `WorldMap` | `10199520` | `(char)` | 12 | stub |
 | `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
 | `SewerMap` | `10199690` | `(char)` | 4 | stub |
-| `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | real (plays the named clip) |
+| `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | real exact-label lookup; a miss is a silent no-op |
 | `GetMasqueradeLevel` | `10199ce0` | `(char)` | 2 | real (the masquerade counter) |
 | `DialogDiscipline` | `10198310` | `(char, …)` | — | the rating, no blood spent (the power is P13) |
 | `SetExpression` | `10197ce0` | `(char, modifier:int, expr:str)` | — | stub |
@@ -227,6 +227,13 @@ state's **1-based ordinal in file order**, not the authored `"ID"`, and the call
 store a number — it resolves the state, pays `AwardMoney` then `AwardXP` then `Event`, and writes
 the journal row, all of it skipped when the state did not actually change. The whole walk:
 `docs/vtmb/game_runtime.md` → "Quests".
+**`SetGesture` is an exact sequence route, and both shipped calls miss.** `FUN_10197f60` resolves
+the character's component at entity `+0x98`, calls `LookupSequence`, and only on a non-negative
+answer reads the duration and starts the gesture. A negative lookup returns `None` without a
+warning or fallback. The two dialogue calls are Tourette lines 901 and 911, naming
+`malk_female_idle` and `SM_Huddle`; neither label exists anywhere in Tourette's complete
+include-model vocabulary, so both are inert in retail. This is distinct from
+`scripted_sequence`, whose missing-label path warns and plays sequence 0.
 
 Two of the sheet methods are decompiled in full; the semantics live in `docs/vtmb/game_runtime.md` §3, and
 what a *caller* needs is:
@@ -272,6 +279,22 @@ only model writer. All twelve are backed for real by the CPython host.
 (`0x1058f778`), documented as *"gets attributes of C++ object by their keyvalue name"* and
 *"checks name against members in game datatable"* — the datamap dispatch `docs/vtmb/python_bridge.md`
 describes.
+**`SetModel` changes animation ownership; it is not a sequence request.** The Python body at
+`0x101977a0` parses the entity and model path, resolves the entity, verifies that the engine model
+lookup returns an index greater than one, interns the path and calls virtual `+0x1a4`. On an
+animating entity that reaches `CBaseAnimating::SetModel` at `0x10095030`, which applies the new
+studio model and rebuilds model-dependent bone/controller state when the model index changes. The
+Python route does not call `LookupSequence`, `SetIdealActivity`, or `ResetSequenceInfo`; whatever
+action is requested next resolves against the new model/include graph. Every return path yields
+`None`, including an unresolved entity/model.
+
+The exported executable corpus contains **356** `SetModel` calls: 158 literal paths and 198
+expressions/variables. The map entities add three `MorphModel` ownership fields and no authored
+`SetModel` or `Transform` I/O wire. Across those 161 literal ownership demands, 54 name a model in
+the current character/animated-prop manifest; 107 name static, weapon, viewmodel, null or other
+models outside that manifest. That latter count is a classification boundary, not 107 missing
+character animations. The reproducible call ledger is
+`uv run elysium research action_animation_survey`.
 
 ## The datamap input surface
 
