@@ -52,8 +52,23 @@ class CleanContractTests(unittest.TestCase):
             self.assertEqual(incomplete.resolve(), (export / clean.INCOMPLETE_FILE).resolve())
             self.assertTrue(incomplete.is_file())
 
+            # Every domain is gated after a clean, and each clears on its own.
+            self.assertEqual(clean.incomplete_domains(export), clean.DOMAINS)
+
+            clean.mark_complete(export, ("npc",))
+            self.assertNotIn("npc", clean.incomplete_domains(export))
+            self.assertIn("maps", clean.incomplete_domains(export))
+            # The aggregate outlives any single domain.
+            self.assertTrue(incomplete.is_file())
+
             clean.mark_complete(export)
+            self.assertEqual(clean.incomplete_domains(export), ())
             self.assertFalse(incomplete.exists())
+
+    def test_unknown_domain_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaises(ValueError):
+                clean.domain_marker(Path(temporary), "not-a-domain")
 
     def test_custom_export_root_requires_existing_ownership_marker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

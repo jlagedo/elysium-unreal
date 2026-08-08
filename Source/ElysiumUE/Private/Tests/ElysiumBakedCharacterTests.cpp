@@ -637,18 +637,83 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		Table.Grids.GetKeys(Labels);
 		Labels.Sort([](const FString& A, const FString& B) { return A < B; });
 
-		int32 Taken = 0;
+		// Which hosts declare each grid as a layer, derived from the autolayer bindings in the same
+		// sidecar. A grid whose cells ship only in derived form has one asset PER declaring host and
+		// no host-free form at all, so a label alone does not name an asset — asking for the bare
+		// label found nothing for 299 of the mount's 527 spaces, and this loop then skipped every
+		// one of them as an ordinary absence.
+		TMap<FString, TArray<FString>> HostsByTarget;
+		for (const TPair<FString, FElysiumAutoLayerBinding>& Binding : Table.AutoLayers)
+		{
+			for (const FString& Target : Binding.Value.Clips)
+			{
+				HostsByTarget.FindOrAdd(Target).AddUnique(Binding.Key);
+			}
+		}
+		for (TPair<FString, TArray<FString>>& Row : HostsByTarget)
+		{
+			Row.Value.Sort([](const FString& A, const FString& B) { return A < B; });
+		}
+
+		// One entry per asset the bake should have written: the grid, and the host its cells carry.
+		TArray<TPair<FString, FString>> Builds;
 		for (const FString& Label : Labels)
+		{
+			const TArray<FString>* Hosts = HostsByTarget.Find(Label);
+			if (Hosts == nullptr || Hosts->IsEmpty())
+			{
+				Builds.Emplace(Label, FString());
+				continue;
+			}
+			for (const FString& Host : *Hosts)
+			{
+				Builds.Emplace(Label, Host);
+			}
+		}
+
+		int32 Taken = 0;
+		for (const TPair<FString, FString>& Build : Builds)
 		{
 			if (Taken >= GMaxGridsPerOwner)
 			{
 				break;
 			}
+			const FString& Label = Build.Key;
+			const FString& Host = Build.Value;
+			const FString Suffix = Host.IsEmpty() ? FString() : TEXT("@") + Host;
+			const FString Shown = Label + Suffix;
 			const FElysiumBlendGrid& Grid = Table.Grids[Label];
-			UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Baked, Owner, Label);
+
+			// How many of the grid's cells actually resolved to a clip, which is the bake's own test
+			// for whether the asset exists at all: it writes nothing for a grid that resolved fewer
+			// than two, because one sample is a clip rather than a blend space. Counted BEFORE the
+			// load so an absence can be judged against what was askable, not merely reported.
+			int32 Resolvable = 0;
+			for (const FElysiumBlendCell& Cell : Grid.Cells)
+			{
+				if (!Cell.Clip.IsEmpty()
+					&& ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Cell.Clip + Suffix) != nullptr)
+				{
+					++Resolvable;
+				}
+			}
+
+			UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Baked, Owner, Label, Host);
 			if (Space == nullptr)
 			{
-				AddInfo(FString::Printf(TEXT("%s grid '%s': not on the baked mount"), *Owner, *Label));
+				if (Resolvable < 2)
+				{
+					AddInfo(FString::Printf(
+						TEXT("%s grid '%s': %d of %d cell(s) resolved, so the bake wrote no space"),
+						*Owner, *Shown, Resolvable, Grid.Cells.Num()));
+				}
+				else
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s': %d cell(s) are on the mount and the space is not, so every "
+						     "label that names this grid falls back to one clip"),
+						*Owner, *Shown, Resolvable));
+				}
 				continue;
 			}
 			KeepAlive.Add(Space);
@@ -668,7 +733,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				AddError(FString::Printf(
 					TEXT("%s grid '%s': bound to skeleton %s, which %s neither is nor declares "
 					     "compatible, so no sample of it can evaluate on this rig"),
-					*Owner, *Label,
+					*Owner, *Shown,
 					SpaceSkeleton != nullptr ? *SpaceSkeleton->GetName() : TEXT("none"),
 					BodySkeleton != nullptr ? *BodySkeleton->GetName() : TEXT("none")));
 				continue;
@@ -687,7 +752,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					AddError(FString::Printf(
 						TEXT("%s grid '%s' axis %d: the sidecar states %.3f..%.3f over %d cells and the "
 						     "asset carries %.3f..%.3f over %d divisions"),
-						*Owner, *Label, Axis, Grid.ParamStart[Axis], Grid.ParamEnd[Axis],
+						*Owner, *Shown, Axis, Grid.ParamStart[Axis], Grid.ParamEnd[Axis],
 						Grid.GroupSize[Axis], Parameter.Min, Parameter.Max, Parameter.GridNum));
 					bAxesSound = false;
 				}
@@ -708,8 +773,9 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				{
 					continue;
 				}
-				const FString Wanted = TEXT("A_") + FElysiumContentPaths::BakedAssetName(Cell.Clip);
-				if (ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Cell.Clip) == nullptr)
+				const FString Wanted =
+					TEXT("A_") + FElysiumContentPaths::BakedAssetName(Cell.Clip + Suffix);
+				if (ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Cell.Clip + Suffix) == nullptr)
 				{
 					// The bake skips a cell whose sequence is absent, so the asset is right to be
 					// short one and the count below must not expect it.
@@ -746,7 +812,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					AddError(FString::Printf(
 						TEXT("%s grid '%s' cell [%d,%d]: nothing is sampled at %s, so '%s' is a hole "
 						     "the blend interpolates straight across"),
-						*Owner, *Label, Cell.Axis[0], Cell.Axis[1], *Expected.ToString(), *Cell.Clip));
+						*Owner, *Shown, Cell.Axis[0], Cell.Axis[1], *Expected.ToString(), *Cell.Clip));
 					bSamplesSound = false;
 					break;
 				}
@@ -755,7 +821,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					AddError(FString::Printf(
 						TEXT("%s grid '%s' cell [%d,%d]: the sidecar names '%s' and the sample at %s "
 						     "carries %s"),
-						*Owner, *Label, Cell.Axis[0], Cell.Axis[1], *Wanted, *Expected.ToString(),
+						*Owner, *Shown, Cell.Axis[0], Cell.Axis[1], *Wanted, *Expected.ToString(),
 						Found->Animation != nullptr ? *Found->Animation->GetName() : TEXT("nothing")));
 					bSamplesSound = false;
 					break;
@@ -769,14 +835,14 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			{
 				AddError(FString::Printf(
 					TEXT("%s grid '%s': %d of the sidecar's cells baked and the asset carries %d "
-					     "sample(s)"), *Owner, *Label, Live, SampleData.Num()));
+					     "sample(s)"), *Owner, *Shown, Live, SampleData.Num()));
 				continue;
 			}
 			if (Space->GetBlendSpaceData().IsEmpty())
 			{
 				AddError(FString::Printf(
 					TEXT("%s grid '%s': %d samples and no blend data, so it evaluates to nothing"),
-					*Owner, *Label, SampleData.Num()));
+					*Owner, *Shown, SampleData.Num()));
 				continue;
 			}
 
@@ -801,7 +867,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					AddError(FString::Printf(
 						TEXT("%s grid '%s': its cells name different bone masks (%s and %s), so it "
 						     "cannot compose as one layer under one mask"),
-						*Owner, *Label,
+						*Owner, *Shown,
 						Profile.IsNone() ? TEXT("none") : *Profile.ToString(),
 						Named.IsNone() ? TEXT("none") : *Named.ToString()));
 					break;

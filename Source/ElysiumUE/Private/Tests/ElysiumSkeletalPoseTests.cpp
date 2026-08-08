@@ -83,9 +83,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningPoseEnvelopeTest,
 
 bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete())
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		AddWarning(TEXT("skipping: the npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
@@ -99,16 +99,17 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 	for (const FOpeningPoseCase& PoseCase : GOpeningPoseCases)
 	{
 		FString Error;
-		UglTFRuntimeAsset* MeshAsset = nullptr;
-		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(PoseCase.MeshStem, MeshAsset, Error);
-		if (Mesh == nullptr || MeshAsset == nullptr)
+		// The mount is the only build of a character, so a body comes back as a real asset with
+		// NO parsed glb beside it -- the out-asset is null on that path by design.
+		UglTFRuntimeAsset* Unused = nullptr;
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(PoseCase.MeshStem, Unused, Error);
+		if (Mesh == nullptr)
 		{
 			AddError(FString::Printf(TEXT("%s: mesh load failed: %s"), PoseCase.Label, *Error));
 			bValid = false;
 			continue;
 		}
 		Mesh->AddToRoot();
-		MeshAsset->AddToRoot();
 
 		const FString BankPath = FElysiumContentPaths::NpcBankGlb(
 			FString::Printf(TEXT("banks/%s.glb"), PoseCase.BankStem));
@@ -120,7 +121,6 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 		{
 			AddError(FString::Printf(TEXT("%s: bank/clip load failed: %s"), PoseCase.Label, *Error));
 			if (BankAsset != nullptr) BankAsset->AddToRoot();
-			MeshAsset->RemoveFromRoot();
 			Mesh->RemoveFromRoot();
 			bValid = false;
 			continue;
@@ -211,7 +211,6 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 
 		Anim->RemoveFromRoot();
 		BankAsset->RemoveFromRoot();
-		MeshAsset->RemoveFromRoot();
 		Mesh->RemoveFromRoot();
 	}
 
@@ -227,9 +226,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningScenePlacementTest,
 
 bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete())
+	if (FElysiumContentPaths::IsIncomplete(TEXT("maps"))
+		|| FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		AddWarning(TEXT("skipping: the maps and npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
@@ -279,8 +279,9 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 			ElysiumSkeletalBasis::FromSourceAngles(SourceAngles).Yaw)));
 
 	FString Error;
-	UglTFRuntimeAsset* MeshAsset = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(TEXT("brujah_male_armor_0"), MeshAsset, Error);
+	// The mount is the only build of a character, so the out-asset is null on that path by design.
+	UglTFRuntimeAsset* Unused = nullptr;
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(TEXT("brujah_male_armor_0"), Unused, Error);
 	const FString BankPath = FElysiumContentPaths::NpcBankGlb(
 		TEXT("banks/cinematic_santa_monica_haven_embrace_bips1__bip01.glb"));
 	UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(BankPath, Error);
@@ -288,7 +289,6 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 		? ElysiumNpcVisual::RetargetClip(BankAsset, Mesh, TEXT("entire_scene"), Error)
 		: nullptr;
 	if (!TestNotNull(TEXT("player mesh loads for placement probe"), Mesh)
-		|| !TestNotNull(TEXT("player mesh asset is retained for placement probe"), MeshAsset)
 		|| !TestNotNull(TEXT("Bip01 bank loads for placement probe"), BankAsset)
 		|| !TestNotNull(TEXT("entire_scene binds for placement probe"), Anim))
 	{
@@ -296,7 +296,6 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 		return true;
 	}
 	Mesh->AddToRoot();
-	MeshAsset->AddToRoot();
 	BankAsset->AddToRoot();
 	Anim->AddToRoot();
 
@@ -324,7 +323,6 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 
 	Anim->RemoveFromRoot();
 	BankAsset->RemoveFromRoot();
-	MeshAsset->RemoveFromRoot();
 	Mesh->RemoveFromRoot();
 	return true;
 }

@@ -38,12 +38,25 @@ struct FElysiumContentPaths
 	static bool IsConfigured() { return !Root().IsEmpty(); }
 	// Offline/content-test completeness signal only. Gameplay reads the artifacts that are present
 	// and must never refuse to boot solely because this marker exists.
+	//
+	// The corpus is incomplete per DOMAIN, and the aggregate marker says only that SOMETHING is.
+	// A domain is named for the export bundle that clears it -- `npc`, `audio`, `vdata`, `scenes`,
+	// `scripts`, plus `maps` for the map exports -- so a test that reads one domain abstains only
+	// while THAT domain is missing. `pipeline/src/elysium_pipeline/clean.py` writes both.
 	static FString IncompleteMarker() { return Root() / TEXT(".elysium-incomplete"); }
+	static FString IncompleteMarker(const TCHAR* Domain)
+	{
+		return IncompleteMarker() + TEXT(".") + Domain;
+	}
 	static bool IsIncomplete()
 	{
 		const FString Value = Root();
-		return !Value.IsEmpty() &&
-			IFileManager::Get().FileExists(*(Value / TEXT(".elysium-incomplete")));
+		return !Value.IsEmpty() && IFileManager::Get().FileExists(*IncompleteMarker());
+	}
+	static bool IsIncomplete(const TCHAR* Domain)
+	{
+		const FString Value = Root();
+		return !Value.IsEmpty() && IFileManager::Get().FileExists(*IncompleteMarker(Domain));
 	}
 
 	// --- Baked content (pipeline/unreal/bake_map.py) ---------------------------------------------

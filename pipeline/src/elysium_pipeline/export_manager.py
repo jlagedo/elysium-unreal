@@ -511,6 +511,8 @@ def export_profile(
     force: bool = False,
     jobs: int | None = None,
 ) -> list[str]:
+    from elysium_pipeline.exporters.export_all import bundles_for_profile
+
     maps, _results = run_offline_profile(
         config,
         profile,
@@ -523,7 +525,9 @@ def export_profile(
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
     bake_and_verify(config, runner, maps, force=force or clean)
-    mark_complete(config.export_root)
+    # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
+    # this clears the corpus either way; a profile that dropped one would leave that one gated.
+    mark_complete(config.export_root, ("maps", "policy", *bundles_for_profile(profile)))
     return maps
 
 
@@ -592,6 +596,7 @@ def export_bundle(config, runner, bundle: str, *, force: bool = False) -> None:
     adopt_export_root(config.export_root, config.work_root)
     if bundle == "policy":
         ensure_policy_content(config, runner, force=force)
+        mark_complete(config.export_root, ("policy",))
         return
     from elysium_pipeline.exporters import export_all
     from elysium_pipeline.formats import install
@@ -605,6 +610,8 @@ def export_bundle(config, runner, bundle: str, *, force: bool = False) -> None:
             continue_on_error=False,
         )
     )
+    # This bundle's domain is now whole, whatever the rest of the corpus looks like.
+    mark_complete(config.export_root, (bundle,))
 
 
 def export_model(
@@ -1033,6 +1040,58 @@ def export_characters(
     # written before the verifier agreed would make that partial scope look current forever.
     character_cache.record(manifest, config, npc_dir, npc_manifest, partition, todo)
     return stems
+
+
+def read_character_partition(npc_dir: Path) -> dict:
+    """The declared partition as the bake wrote it, refusing a schema this build cannot read."""
+    from elysium_pipeline import character_partition
+
+    path = npc_dir / FAMILIES_FILE
+    if not path.is_file():
+        raise ValueError(
+            f"{path} is missing; run: uv run elysium export characters"
+        )
+    with path.open(encoding="utf-8-sig") as handle:
+        partition = json.load(handle)
+    character_partition.check(partition)
+    return partition
+
+
+def verify_characters(config, runner, models: Sequence[str] | None = None) -> list[str]:
+    """Re-run the character verifier over a slice, baking nothing.
+
+    A verify is not a cheap tail of the bake and cannot be folded into it: the verifier's whole
+    premise is that only a fresh process can tell what is ON THE MOUNT from what a bake left
+    resident in memory. So it is its own verb, and its own launch.
+
+    Reads the declared partition rather than recomputing one -- a verify that partitioned the
+    corpus its own way would be checking a different mount than the one the bake wrote.
+    """
+    _require_export_config(config)
+    npc_dir = config.export_root / "npc"
+    partition = read_character_partition(npc_dir)
+    stems = resolve_character_slice(partition, models, npc_dir)
+    if not stems:
+        raise ValueError("no models named and the manifest lists no character")
+    unreal.verify_characters(config, runner, stems)
+    return stems
+
+
+def verify_maps(config, runner, maps: Sequence[str] | None = None) -> list[str]:
+    """Re-run the map bake verifier, baking nothing. Every baked map unless told otherwise."""
+    _require_export_config(config)
+    names = list(dict.fromkeys(maps or ()))
+    if not names:
+        mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content"
+        names = sorted(
+            child.name
+            for child in (mount.iterdir() if mount.is_dir() else ())
+            if child.is_dir() and (child / f"{child.name}.uasset").is_file()
+        )
+    if not names:
+        raise ValueError("no maps named and /ElysiumBaked carries no baked level")
+    unreal.verify_bakes(config, runner, names)
+    return names
 
 
 def export_is_incomplete(export_root: Path) -> bool:

@@ -21,6 +21,7 @@ from elysium_pipeline.paths import export_root  # noqa: E402
 MOUNT = "/ElysiumBaked"
 CHARACTERS = MOUNT + "/Characters"
 SKELETON_PREFIX = "SKEL_Elysium_"
+BANK_SKELETON_PREFIX = "SKEL_ElysiumBank_"
 MESHES = CHARACTERS + "/Meshes"
 ANIMS = CHARACTERS + "/Anims"
 #: Stands where a rig family goes in an anim path, for the banks every family shares.
@@ -44,6 +45,63 @@ def cmdline_arg(key, default=""):
 def assets_under(package):
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     return registry.get_assets_by_path(package, recursive=True)
+
+
+def read_partition():
+    with open(os.path.join(NPC_DIR, "families.json"), "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def verify_declared_compat(partition, family, skeleton, errors):
+    """Every declared bank skeleton must be on this family skeleton's compatible list.
+
+    A bank is baked once against a skeleton of its own, and the declaration is what builds the
+    name-keyed bone map the evaluator remaps a bank clip through. Missing, the clips still load,
+    still name the right bones, and evaluate on a rig that never learned them.
+    """
+    if skeleton is None:
+        return
+    declared = {"%s%s" % (BANK_SKELETON_PREFIX, name) for name in partition.get("banks", {})}
+    if not declared:
+        return
+    # The binding resolves each TSoftObjectPtr to the USkeleton itself, or to None when the
+    # reference no longer points at an asset -- which is the interesting failure, so it counts as
+    # missing rather than being skipped.
+    carried = {entry.get_name()
+               for entry in skeleton.get_editor_property("compatible_skeletons")
+               if entry is not None}
+    missing = sorted(declared - carried)
+    if missing:
+        errors.append("family '%s': skeleton declares %d of %d bank skeleton(s) compatible, "
+                      "missing %s" % (family, len(declared) - len(missing), len(declared),
+                                      ", ".join(missing[:4])))
+
+
+def verify_mount_inventory(partition, errors):
+    """Nothing on the mount outside the declared partition.
+
+    Only sound against a COMPLETE run: the folders are flat and shared, so a slice cannot tell an
+    asset another family owns from an orphan. The caller decides; this assumes it already did.
+    """
+    families = set(partition.get("models", {}))
+    banks = set(partition.get("banks", {}))
+    declared_skeletons = {"%s%s" % (SKELETON_PREFIX, name) for name in families}
+    declared_skeletons |= {"%s%s" % (BANK_SKELETON_PREFIX, name) for name in banks}
+    for data in assets_under(CHARACTERS + "/Skeletons"):
+        name = str(data.asset_name)
+        if name not in declared_skeletons:
+            errors.append("Skeletons/%s: on the mount and not in the declared partition" % name)
+
+    declared_dirs = families | {BANKS_FOLDER}
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    seen = set()
+    for data in registry.get_assets_by_path(ANIMS, recursive=True):
+        rel = str(data.package_path)[len(ANIMS) + 1:]
+        if not rel:
+            continue
+        seen.add(rel.split("/")[0])
+    for directory in sorted(seen - declared_dirs):
+        errors.append("Anims/%s: a rig family the declared partition does not name" % directory)
 
 
 def verify_mesh(stem, manifest, albedo, errors):
@@ -246,6 +304,8 @@ def main():
 
     with open(os.path.join(NPC_DIR, "npc_manifest.json"), "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
+    partition = read_partition()
+    declared_family_of = partition.get("model_family_of", {})
 
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT],
                                                                            force_rescan=True)
@@ -272,6 +332,15 @@ def main():
         if not family:
             continue
 
+        # The family read off the baked body against the family the partition declares. These
+        # disagree exactly when a run partitioned the corpus its own way -- which renames the
+        # family, and with it the path contract for every clip and skeleton the body points at.
+        # It is the check that catches a whole second copy of a cast member under a second name.
+        declared = declared_family_of.get(stem, "")
+        if declared and declared != family:
+            errors.append("%s: baked onto rig family '%s' and the partition declares '%s'"
+                          % (stem, family, declared))
+
         owners = wanted.setdefault(family, {})
         own = {label: int(meta.get("flags", 0))
                for label, meta in record.get("own_clips", {}).items()}
@@ -296,6 +365,7 @@ def main():
                                         SKELETON_PREFIX, family))
         bones = unreal.ElysiumCharacterBakeLibrary.skeleton_bone_count(skeleton)
         log("family '%s': %d bones, %d owners" % (family, bones, len(owners)))
+        verify_declared_compat(partition, family, skeleton, errors)
         for owner, clips in sorted(owners.items()):
             total += verify_clips(family, owner, clips, errors)
             if owner in gridded:
@@ -308,6 +378,14 @@ def main():
             spaces += verify_blend_spaces(BANKS_FOLDER, owner, gridded[owner], errors)
     log("%d sequences, %d blend spaces over %d famil%s"
         % (total, spaces, len(wanted), "y" if len(wanted) == 1 else "ies"))
+
+    # Same rule as the sweep: an inventory check is only sound against a complete run, because
+    # Skeletons/ and Anims/ are flat folders every family shares.
+    if set(stems) >= set(declared_family_of):
+        verify_mount_inventory(partition, errors)
+    else:
+        log("skipping the mount inventory: %d of %d declared model(s) in this slice"
+            % (len(stems), len(declared_family_of)))
 
     for error in errors:
         unreal.log_error("[chars-verify] %s" % error)

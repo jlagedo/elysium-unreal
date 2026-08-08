@@ -45,9 +45,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCourtroomSeatedPoseTest,
 
 bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete())
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		AddWarning(TEXT("skipping: the npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
@@ -57,9 +57,10 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 	}
 
 	FString Error;
-	UglTFRuntimeAsset* MeshAsset = nullptr;
+	// The mount is the only build of a character; the out-asset is null on that path by design.
+	UglTFRuntimeAsset* Unused = nullptr;
 	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(
-		TEXT("ventrue_female_armor_1"), MeshAsset, Error);
+		TEXT("ventrue_female_armor_1"), Unused, Error);
 	const FString BankPath = FElysiumContentPaths::NpcBankGlb(
 		TEXT("banks/cinematic_santa_monica_courtroom_courtroom_bip5__bip01.glb"));
 	UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(BankPath, Error);
@@ -67,7 +68,6 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 		? ElysiumNpcVisual::RetargetClip(BankAsset, Mesh, TEXT("entire_scene"), Error)
 		: nullptr;
 	if (!TestNotNull(TEXT("Vampire4 mesh loads"), Mesh)
-		|| !TestNotNull(TEXT("Vampire4 mesh asset is retained"), MeshAsset)
 		|| !TestNotNull(TEXT("courtroom Bip01 bank loads"), BankAsset)
 		|| !TestNotNull(TEXT("courtroom entire_scene binds"), Anim))
 	{
@@ -75,7 +75,6 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 		return true;
 	}
 	Mesh->AddToRoot();
-	MeshAsset->AddToRoot();
 	BankAsset->AddToRoot();
 	Anim->AddToRoot();
 
@@ -118,7 +117,6 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 
 	Anim->RemoveFromRoot();
 	BankAsset->RemoveFromRoot();
-	MeshAsset->RemoveFromRoot();
 	Mesh->RemoveFromRoot();
 	return true;
 }

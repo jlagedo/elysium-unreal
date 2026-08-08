@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+from collections.abc import Sequence
 from pathlib import Path
 import shutil
 
@@ -12,6 +13,29 @@ import shutil
 OWNERSHIP_FILE = ".elysium-owned.json"
 INCOMPLETE_FILE = ".elysium-incomplete"
 MANIFEST_FILE = ".elysium-manifest.json"
+
+# The corpus is incomplete per DOMAIN, not as a whole: `export bundle npc` finishes the character
+# intermediates and nothing else, and a content test that reads only those has no reason to abstain
+# because the audio catalogue is still missing.  One marker per domain, named for the bundle that
+# clears it (`maps` for the map exports), plus INCOMPLETE_FILE as the aggregate the repository
+# policy check and the human-facing message read.  The aggregate survives while any domain does.
+DOMAINS = (
+    "maps",
+    "audio",
+    "cfg",
+    "npc",
+    "particles",
+    # `policy` is not an export bundle in the exporters' sense: it is the generated
+    # /Game/Elysium + /Game/VtMB packages `ensure_policy_content` writes, cleared by every profile
+    # export and by `export bundle policy`.
+    "policy",
+    "scenes",
+    "scripts",
+    "signs",
+    "ui",
+    "use-icons",
+    "vdata",
+)
 
 
 class UnsafeClean(RuntimeError):
@@ -127,7 +151,28 @@ def clean_generated(targets: CleanTargets) -> Path:
         targets.boot_map.unlink()
     if targets.baked_content.exists():
         shutil.rmtree(targets.baked_content)
-    incomplete = targets.export_root / INCOMPLETE_FILE
+    return mark_incomplete(targets.export_root)
+
+
+def domain_marker(export_root: Path, domain: str) -> Path:
+    if domain not in DOMAINS:
+        raise ValueError(f"unknown export domain: {domain!r}")
+    return export_root / f"{INCOMPLETE_FILE}.{domain}"
+
+
+def incomplete_domains(export_root: Path) -> tuple[str, ...]:
+    return tuple(
+        domain for domain in DOMAINS if domain_marker(export_root, domain).is_file()
+    )
+
+
+def mark_incomplete(export_root: Path, domains: Sequence[str] = DOMAINS) -> Path:
+    for domain in domains:
+        domain_marker(export_root, domain).write_text(
+            f"The {domain} half of the generated corpus is incomplete.\n",
+            encoding="utf-8",
+        )
+    incomplete = export_root / INCOMPLETE_FILE
     incomplete.write_text(
         "The generated corpus is incomplete. Run `uv run elysium export grid`, "
         "`uv run elysium export all`, or `uv run elysium reconstruct`.\n",
@@ -136,7 +181,15 @@ def clean_generated(targets: CleanTargets) -> Path:
     return incomplete
 
 
-def mark_complete(export_root: Path) -> None:
+def mark_complete(export_root: Path, domains: Sequence[str] | None = None) -> None:
+    for domain in DOMAINS if domains is None else domains:
+        marker = domain_marker(export_root, domain)
+        if marker.is_file():
+            marker.unlink()
+    # The aggregate outlives the domains: it says only that SOMETHING is missing, which the
+    # repository policy check and `reconstruct` still turn on.
+    if incomplete_domains(export_root):
+        return
     incomplete = export_root / INCOMPLETE_FILE
     if incomplete.exists():
         incomplete.unlink()

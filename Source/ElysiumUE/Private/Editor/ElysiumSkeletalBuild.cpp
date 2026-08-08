@@ -590,7 +590,7 @@ int32 UElysiumSkeletalBuildLibrary::ReleaseBakedPackages(const FString& PackageP
 			{
 				Object->ClearFlags(RF_Standalone);
 				return true;
-			}, /*bIncludeNestedObjects=*/false);
+			}, EGetObjectsFlags::None);
 	}
 	if (!Releasing.IsEmpty())
 	{
@@ -625,6 +625,46 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	// the family in an earlier partition. Their bind poses then answer for bones no current member
 	// declares, which is exactly the reference pose an untracked bone falls back to.
 	const bool bNewSkeleton = Skeleton == nullptr || bRebuild;
+
+	// What a rebuild must NOT take with it. This function owns the BONE TREE and nothing else; the
+	// morph-curve metadata and the layer blend masks are registered per member, by the mesh and
+	// clip stages, and a slice runs those only for the members it named. So replacing the asset
+	// wholesale silently unbinds every facial curve on every member the slice left alone -- the
+	// mesh keeps its morph targets, the animation keeps its curves, and nothing connects the two.
+	// Carried by NAME rather than by index, because the tree about to be rebuilt is what indices
+	// mean; a bone no current member declares simply fails to re-register, which is correct.
+	TArray<TPair<FName, FCurveMetaData>> CarriedCurves;
+	struct FCarriedProfile
+	{
+		FName Name;
+		EBlendProfileMode Mode = EBlendProfileMode::TimeFactor;
+		TArray<TPair<FName, float>> Bones;
+	};
+	TArray<FCarriedProfile> CarriedProfiles;
+	if (Skeleton != nullptr && bNewSkeleton)
+	{
+		Skeleton->ForEachCurveMetaData([&CarriedCurves](FName Name, const FCurveMetaData& Data)
+			{
+				CarriedCurves.Emplace(Name, Data);
+			});
+		for (const TObjectPtr<UBlendProfile>& Profile : Skeleton->BlendProfiles)
+		{
+			if (Profile == nullptr)
+			{
+				continue;
+			}
+			FCarriedProfile Carried;
+			Carried.Name = Profile->GetFName();
+			Carried.Mode = Profile->GetMode();
+			for (int32 Index = 0; Index < Profile->GetNumBlendEntries(); ++Index)
+			{
+				const FBlendProfileBoneEntry& Entry = Profile->GetEntry(Index);
+				Carried.Bones.Emplace(Entry.BoneReference.BoneName, Entry.BlendScale);
+			}
+			CarriedProfiles.Add(MoveTemp(Carried));
+		}
+	}
+
 	if (bNewSkeleton)
 	{
 		ClearForRewrite(Package, AssetName);
@@ -684,6 +724,37 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	}
 
 	OutBones = Skeleton->GetReferenceSkeleton().GetRawBoneNum();
+
+	// Re-registered only now: both resolve bone names against the tree, so they need the modifier
+	// scope closed and the remapping tables rebuilt.
+	for (const TPair<FName, FCurveMetaData>& Curve : CarriedCurves)
+	{
+		Skeleton->AddCurveMetaData(Curve.Key, /*bTransact=*/false);
+		if (FCurveMetaData* MetaData = Skeleton->GetCurveMetaData(Curve.Key))
+		{
+			*MetaData = Curve.Value;
+		}
+	}
+	for (const FCarriedProfile& Carried : CarriedProfiles)
+	{
+		UBlendProfile* Profile = Skeleton->GetBlendProfile(Carried.Name);
+		if (Profile == nullptr)
+		{
+			Profile = Skeleton->CreateNewBlendProfile(Carried.Name);
+		}
+		if (Profile == nullptr)
+		{
+			continue;
+		}
+		// The mode before the scales, always: an entry equal to the mode's own default is not
+		// stored, and that default is 0 for BlendMask against 1 for every other mode.
+		Profile->Mode = Carried.Mode;
+		for (const TPair<FName, float>& Bone : Carried.Bones)
+		{
+			Profile->SetBoneBlendScale(Bone.Key, Bone.Value, /*bRecurse=*/false, /*bCreate=*/true);
+		}
+	}
+
 	if (bNewSkeleton)
 	{
 		FAssetRegistryModule::AssetCreated(Skeleton);

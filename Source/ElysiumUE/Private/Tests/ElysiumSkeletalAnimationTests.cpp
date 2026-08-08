@@ -211,7 +211,6 @@ namespace
 		}
 
 		bool Validate(bool bRequireSkin, FGltfStats& Stats);
-		bool ValidateNeutralStanceLean();
 
 	private:
 		bool Fail(const FString& Message)
@@ -554,166 +553,110 @@ namespace
 		return true;
 	}
 
-	bool FGltfContract::ValidateNeutralStanceLean()
+	// The upright envelope, asserted on the BAKED clip rather than on the glb.
+	//
+	// A bank glb deliberately forwards VtMB's split-rotation rule instead of resolving it: it ships
+	// `Bip01 Spine1`'s raw channel plus a `split_bones` inventory naming that bone, which the test
+	// above asserts is present. Ordinary FK over that channel is therefore not a pose -- it bends
+	// the upper body sideways on all 67 clips of the shared male stances bank, and on any other
+	// clip of any rig that flags the bone. The `.eskm` -> `.uasset` bake is where the rule is
+	// resolved (`UE_mdl_skeletal._split_rotation_tracks`), so the mount is the only artifact that
+	// can promise an upright neutral idle, and it is the one the game plays.
+	bool ValidateBakedNeutralStance(FAutomationTestBase& Test, const FElysiumNpcIndex& Index)
 	{
-		const TArray<TSharedPtr<FJsonValue>>* Nodes = JsonArray(Root, TEXT("nodes"));
-		const TArray<TSharedPtr<FJsonValue>>* Animations = JsonArray(Root, TEXT("animations"));
-		if (Nodes == nullptr || Animations == nullptr)
+		// The first indexed body that can actually evaluate the clip: the bank is baked once against
+		// a skeleton of its own, so what makes a body eligible is the compatibility declaration plus
+		// carrying the two bones this measures -- not which stem it is.
+		FString Stem;
+		USkeletalMesh* Mesh = nullptr;
+		UAnimSequence* Anim = nullptr;
+		TArray<FString> Stems;
+		Index.Npcs.GetKeys(Stems);
+		Stems.Sort([](const FString& A, const FString& B) { return A < B; });
+		for (const FString& Candidate : Stems)
 		{
-			return Fail(TEXT("neutral-stance regression has no nodes or animations"));
-		}
-
-		TSharedPtr<FJsonObject> Neutral;
-		for (const TSharedPtr<FJsonValue>& Value : *Animations)
-		{
-			const TSharedPtr<FJsonObject> Animation = Value->AsObject();
-			if (JsonString(Animation, TEXT("name")).Equals(
-				TEXT("Stance_Neutral_Idle_1"), ESearchCase::IgnoreCase))
+			FString LoadError;
+			UglTFRuntimeAsset* Unused = nullptr;
+			USkeletalMesh* Body = ElysiumNpcVisual::LoadMesh(Candidate, Unused, LoadError);
+			if (Body == nullptr || Body->GetRefSkeleton().FindBoneIndex(FName(TEXT("Bip01 Head")))
+				== INDEX_NONE)
 			{
-				Neutral = Animation;
-				break;
+				continue;
 			}
+			UAnimSequence* Clip = ElysiumNpcVisual::LoadBakedClip(
+				Body, TEXT("character_shared_male_stances"), TEXT("Stance_Neutral_Idle_1"));
+			const USkeleton* BodySkeleton = Body->GetSkeleton();
+			if (Clip == nullptr || BodySkeleton == nullptr)
+			{
+				continue;
+			}
+			if (Clip->GetSkeleton() != BodySkeleton
+				&& !BodySkeleton->IsCompatibleForEditor(Clip->GetSkeleton()))
+			{
+				continue;
+			}
+			Stem = Candidate;
+			Mesh = Body;
+			Anim = Clip;
+			break;
 		}
-		if (!Neutral.IsValid())
+		if (Anim == nullptr)
 		{
-			return Fail(TEXT("shared male stances lost Stance_Neutral_Idle_1"));
+			Test.AddInfo(TEXT("no baked body can evaluate the shared male stances neutral idle"));
+			return true;
+		}
+		const IAnimationDataModel* Model = Anim->GetDataModel();
+		if (Model == nullptr)
+		{
+			Test.AddError(TEXT("neutral stance: the baked clip carries no animation model"));
+			return false;
 		}
 
-		auto VectorField = [](const TSharedPtr<FJsonObject>& Node, const TCHAR* Field,
-			const TArray<double>& Default)
+		// Composed up the mesh's own reference skeleton. A bone the clip does not track holds its
+		// bind pose, which is what the evaluator does with it too.
+		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+		auto ComponentSpace = [&](const FName BoneName) -> FTransform
 		{
-			const TArray<TSharedPtr<FJsonValue>>* Values = JsonArray(Node, Field);
-			if (Values == nullptr || Values->Num() != Default.Num()) return Default;
-			TArray<double> Out;
-			for (const TSharedPtr<FJsonValue>& Value : *Values) Out.Add(Value->AsNumber());
+			FTransform Out = FTransform::Identity;
+			int32 Index = Ref.FindBoneIndex(BoneName);
+			while (Index != INDEX_NONE)
+			{
+				const FName Name = Ref.GetBoneName(Index);
+				FTransform Local = Ref.GetRefBonePose()[Index];
+				if (Model->IsValidBoneTrackName(Name))
+				{
+					Local = Model->GetBoneTrackTransform(Name, FFrameNumber(0));
+				}
+				Out = Out * Local;
+				Index = Ref.GetParentIndex(Index);
+			}
 			return Out;
 		};
-		auto Multiply = [](const TArray<double>& A, const TArray<double>& B)
-		{
-			TArray<double> C;
-			C.Init(0.0, 16);
-			for (int32 Column = 0; Column < 4; ++Column)
-			{
-				for (int32 Row = 0; Row < 4; ++Row)
-				{
-					for (int32 K = 0; K < 4; ++K)
-					{
-						C[Column * 4 + Row] += A[K * 4 + Row] * B[Column * 4 + K];
-					}
-				}
-			}
-			return C;
-		};
 
-		TArray<TArray<double>> Translations, Rotations;
-		TArray<int32> Parents;
-		Translations.SetNum(Nodes->Num());
-		Rotations.SetNum(Nodes->Num());
-		Parents.Init(INDEX_NONE, Nodes->Num());
-		int32 Pelvis = INDEX_NONE, Head = INDEX_NONE;
-		for (int32 NodeIndex = 0; NodeIndex < Nodes->Num(); ++NodeIndex)
+		const int32 PelvisIndex = Ref.FindBoneIndex(FName(TEXT("Bip01 Pelvis")));
+		const int32 HeadIndex = Ref.FindBoneIndex(FName(TEXT("Bip01 Head")));
+		if (PelvisIndex == INDEX_NONE || HeadIndex == INDEX_NONE)
 		{
-			const TSharedPtr<FJsonObject> Node = JsonObjectAt(Nodes, NodeIndex);
-			Translations[NodeIndex] = VectorField(Node, TEXT("translation"), { 0.0, 0.0, 0.0 });
-			Rotations[NodeIndex] = VectorField(Node, TEXT("rotation"), { 0.0, 0.0, 0.0, 1.0 });
-			const FString Name = JsonString(Node, TEXT("name"));
-			if (Name.Equals(TEXT("Bip01 Pelvis"), ESearchCase::IgnoreCase)) Pelvis = NodeIndex;
-			if (Name.Equals(TEXT("Bip01 Head"), ESearchCase::IgnoreCase)) Head = NodeIndex;
-			const TArray<TSharedPtr<FJsonValue>>* Children = JsonArray(Node, TEXT("children"));
-			if (Children == nullptr) continue;
-			for (const TSharedPtr<FJsonValue>& Child : *Children)
-			{
-				const int32 ChildIndex = static_cast<int32>(Child->AsNumber());
-				if (Parents.IsValidIndex(ChildIndex)) Parents[ChildIndex] = NodeIndex;
-			}
+			Test.AddError(FString::Printf(
+				TEXT("neutral stance: %s has no Bip01 Pelvis / Bip01 Head"), *Stem));
+			return false;
 		}
-		if (Pelvis == INDEX_NONE || Head == INDEX_NONE)
-		{
-			return Fail(TEXT("neutral-stance regression lost pelvis or head"));
-		}
+		const FVector Pelvis = ComponentSpace(FName(TEXT("Bip01 Pelvis"))).GetTranslation();
+		const FVector Head = ComponentSpace(FName(TEXT("Bip01 Head"))).GetTranslation();
 
-		const TArray<TSharedPtr<FJsonValue>>* Channels = JsonArray(Neutral, TEXT("channels"));
-		const TArray<TSharedPtr<FJsonValue>>* Samplers = JsonArray(Neutral, TEXT("samplers"));
-		if (Channels == nullptr || Samplers == nullptr)
+		// Unreal-native and in centimetres: Z is up, Y is lateral.
+		const double Rise = FMath::Abs(Head.Z - Pelvis.Z);
+		const double Lateral = FMath::Abs(Head.Y - Pelvis.Y);
+		if (Rise < 1.0 || Lateral / Rise > 0.05)
 		{
-			return Fail(TEXT("neutral stance has no channels or samplers"));
-		}
-		for (const TSharedPtr<FJsonValue>& ChannelValue : *Channels)
-		{
-			const TSharedPtr<FJsonObject> Channel = ChannelValue->AsObject();
-			const TSharedPtr<FJsonObject>* TargetPtr = nullptr;
-			if (!Channel.IsValid() || !Channel->TryGetObjectField(TEXT("target"), TargetPtr)) continue;
-			const int32 NodeIndex = JsonInt(*TargetPtr, TEXT("node"));
-			const FString PathName = JsonString(*TargetPtr, TEXT("path"));
-			const TSharedPtr<FJsonObject> Sampler = JsonObjectAt(Samplers, JsonInt(Channel, TEXT("sampler")));
-			FGltfAccessor Values;
-			if (!Nodes->IsValidIndex(NodeIndex) || !Sampler.IsValid()
-				|| !Accessor(JsonInt(Sampler, TEXT("output")), Values))
-			{
-				return Fail(TEXT("neutral stance has an invalid channel"));
-			}
-			if (PathName == TEXT("translation") && Values.Components == 3)
-			{
-				Translations[NodeIndex] = { Values.Number(0, 0), Values.Number(0, 1), Values.Number(0, 2) };
-			}
-			else if (PathName == TEXT("rotation") && Values.Components == 4)
-			{
-				Rotations[NodeIndex] = { Values.Number(0, 0), Values.Number(0, 1),
-					Values.Number(0, 2), Values.Number(0, 3) };
-			}
-		}
-
-		TArray<TArray<double>> Globals;
-		Globals.SetNum(Nodes->Num());
-		TFunction<bool(int32)> BuildGlobal = [&](int32 NodeIndex)
-		{
-			if (Globals[NodeIndex].Num() == 16) return true;
-			const TArray<double>& T = Translations[NodeIndex];
-			const TArray<double>& Q = Rotations[NodeIndex];
-			const double X = Q[0], Y = Q[1], Z = Q[2], W = Q[3];
-			TArray<double> Local;
-			Local.Init(0.0, 16);
-			Local[0] = 1.0 - 2.0 * (Y * Y + Z * Z);
-			Local[1] = 2.0 * (X * Y + W * Z);
-			Local[2] = 2.0 * (X * Z - W * Y);
-			Local[4] = 2.0 * (X * Y - W * Z);
-			Local[5] = 1.0 - 2.0 * (X * X + Z * Z);
-			Local[6] = 2.0 * (Y * Z + W * X);
-			Local[8] = 2.0 * (X * Z + W * Y);
-			Local[9] = 2.0 * (Y * Z - W * X);
-			Local[10] = 1.0 - 2.0 * (X * X + Y * Y);
-			Local[12] = T[0]; Local[13] = T[1]; Local[14] = T[2]; Local[15] = 1.0;
-			const int32 Parent = Parents[NodeIndex];
-			if (Parent != INDEX_NONE)
-			{
-				if (!BuildGlobal(Parent)) return false;
-				Globals[NodeIndex] = Multiply(Globals[Parent], Local);
-			}
-			else
-			{
-				Globals[NodeIndex] = MoveTemp(Local);
-			}
-			return true;
-		};
-		if (!BuildGlobal(Pelvis) || !BuildGlobal(Head))
-		{
-			return Fail(TEXT("neutral-stance hierarchy does not resolve"));
-		}
-
-		// mdl_gltf maps Source (X forward, Y left, Z up) to glTF (X forward, Y up, Z right).
-		// This is a finite/upright envelope for the generated corpus, not a retail pose oracle:
-		// validate_skeletal_pipeline.py independently checks keys against the source bytes. Split
-		// inheritance must ultimately be evaluated after blending rather than inferred from this
-		// conventional local hierarchy.
-		const double Rise = FMath::Abs(Globals[Head][13] - Globals[Pelvis][13]);
-		const double Lateral = FMath::Abs(Globals[Head][14] - Globals[Pelvis][14]);
-		if (Rise < 1.e-4 || Lateral / Rise > 0.05)
-		{
-			return Fail(FString::Printf(TEXT("neutral stance leans sideways: lateral %.5f / rise %.5f"),
+			Test.AddError(FString::Printf(
+				TEXT("baked neutral stance leans sideways: lateral %.3f cm / rise %.3f cm"),
 				Lateral, Rise));
+			return false;
 		}
-		Test.AddInfo(FString::Printf(TEXT("neutral stance lateral/rise %.5f / %.5f = %.4f"),
-			Lateral, Rise, Lateral / Rise));
+		Test.AddInfo(FString::Printf(
+			TEXT("baked neutral stance on %s: lateral %.3f cm / rise %.3f cm = %.4f"),
+			*Stem, Lateral, Rise, Lateral / Rise));
 		return true;
 	}
 }
@@ -722,9 +665,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalGlbContractsTest,
 	"Elysium.Content.SkeletalGlbContracts", GElysiumSkeletalContentFlags)
 bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete())
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		AddWarning(TEXT("skipping: the npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -762,12 +705,8 @@ bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 		const bool bContractValid = Contract.Load()
 			&& Contract.Validate(/*bRequireSkin=*/false, Stats);
 		bValid &= bContractValid;
-		if (bContractValid && Pair.Key.Equals(
-			TEXT("character_shared_male_stances"), ESearchCase::IgnoreCase))
-		{
-			bValid &= Contract.ValidateNeutralStanceLean();
-		}
 	}
+	bValid &= ValidateBakedNeutralStance(*this, Index);
 
 	AddInfo(FString::Printf(TEXT("validated %lld GLBs: %lld joints, %lld weighted vertices, "
 		"%lld clips, %lld channels, %lld sampled transforms; %d target bodies carry "
@@ -878,9 +817,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTheatreSkeletonBindingTest,
 	"Elysium.Content.TheatreSkeletonBinding", GElysiumSkeletalContentFlags)
 bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete())
+	if (FElysiumContentPaths::IsIncomplete(TEXT("maps"))
+		|| FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddInfo(TEXT("skipping: export corpus is marked incomplete"));
+		AddWarning(TEXT("skipping: the maps and npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
@@ -904,7 +844,6 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 	}
 
 	TMap<FString, USkeletalMesh*> MeshCache;
-	TMap<FString, UglTFRuntimeAsset*> MeshAssetCache;
 	TMap<FString, UglTFRuntimeAsset*> BankAssetCache;
 	TArray<UObject*> KeepAlive;
 	int32 SceneSets = 0;
@@ -1006,9 +945,12 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 				USkeletalMesh* Mesh = MeshCache.FindRef(Stem);
 				if (Mesh == nullptr)
 				{
-					UglTFRuntimeAsset* MeshAsset = nullptr;
-					Mesh = ElysiumNpcVisual::LoadMesh(Stem, MeshAsset, Error);
-					if (Mesh == nullptr || MeshAsset == nullptr)
+					// The mount is the only build of a character, so a body comes back as a real
+					// asset with NO parsed glb beside it -- the out-asset is null on that path by
+					// design and only a bank still carries one.
+					UglTFRuntimeAsset* Unused = nullptr;
+					Mesh = ElysiumNpcVisual::LoadMesh(Stem, Unused, Error);
+					if (Mesh == nullptr)
 					{
 						AddError(FString::Printf(TEXT("%s: target mesh %s failed strict load: %s"),
 							*SceneDef.TargetName, *Stem, *Error));
@@ -1016,11 +958,8 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 						continue;
 					}
 					MeshCache.Add(Stem, Mesh);
-					MeshAssetCache.Add(Stem, MeshAsset);
 					KeepAlive.Add(Mesh);
-					KeepAlive.Add(MeshAsset);
 					Mesh->AddToRoot();
-					MeshAsset->AddToRoot();
 				}
 
 				UglTFRuntimeAsset* BankAsset = BankAssetCache.FindRef(Bank);

@@ -76,15 +76,29 @@ static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 
 namespace
 {
-	bool SkipIncompleteCorpus(FAutomationTestBase& Test)
+	// Abstain only while a domain this test actually reads is missing. Naming the domains is what
+	// lets `export bundle npc` un-gate the character tests without a whole-corpus export.
+	//
+	// A skip WARNS rather than informs, so a run that validated nothing lands in
+	// succeededWithWarnings instead of reporting a clean pass -- the whole failure mode Part C is
+	// about is a green tier that executed no assertion.
+	bool SkipIncompleteCorpus(FAutomationTestBase& Test, std::initializer_list<const TCHAR*> Domains)
 	{
-		if (!FElysiumContentPaths::IsIncomplete())
+		TArray<FString> Missing;
+		for (const TCHAR* Domain : Domains)
+		{
+			if (FElysiumContentPaths::IsIncomplete(Domain))
+			{
+				Missing.Add(Domain);
+			}
+		}
+		if (Missing.IsEmpty())
 		{
 			return false;
 		}
-		Test.AddInfo(FString::Printf(
-			TEXT("skipping content validation: export corpus is marked incomplete at %s"),
-			*FElysiumContentPaths::IncompleteMarker()));
+		Test.AddWarning(FString::Printf(
+			TEXT("skipping content validation: the %s export domain(s) are marked incomplete at %s.*"),
+			*FString::Join(Missing, TEXT(", ")), *FElysiumContentPaths::IncompleteMarker()));
 		return true;
 	}
 
@@ -206,7 +220,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialEntsTest,
 	"Elysium.Content.TutorialEnts", GElysiumContentTestFlags)
 bool FElysiumTutorialEntsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	FEntsSurvey Survey;
 	if (!SurveyMap(*this, TEXT("sp_tutorial_1"), Survey))
 	{
@@ -404,7 +418,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGenesisEntsTest,
 	"Elysium.Content.GenesisEnts", GElysiumContentTestFlags)
 bool FElysiumGenesisEntsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	const TCHAR* Map = TEXT("sp_genesisdevice_1");
 	const FString EntsPath = FElysiumContentPaths::MapEnts(Map);
 	if (!IFileManager::Get().FileExists(*EntsPath))
@@ -510,7 +524,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChangeLevelInputCoverageTest,
 	"Elysium.Content.ChangeLevelInputs", GElysiumContentTestFlags)
 bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	TArray<FString> EntsFiles;
 	IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
 		/*Files*/ true, /*Dirs*/ false);
@@ -596,7 +610,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPawnshopEntsTest,
 	"Elysium.Content.PawnshopEnts", GElysiumContentTestFlags)
 bool FElysiumPawnshopEntsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	FEntsSurvey Survey;
 	if (!SurveyMap(*this, TEXT("sm_pawnshop_1"), Survey))
 	{
@@ -620,7 +634,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialDecalsTest,
 	"Elysium.Content.TutorialDecals", GElysiumContentTestFlags)
 bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	const TCHAR* Map = TEXT("sp_tutorial_1");
 	const FString Path = FElysiumContentPaths::MapDecals(Map);
 	if (!IFileManager::Get().FileExists(*Path))
@@ -677,7 +691,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialRopesTest,
 	"Elysium.Content.TutorialRopes", GElysiumContentTestFlags)
 bool FElysiumTutorialRopesTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	const TCHAR* Map = TEXT("sp_tutorial_1");
 	const FString Path = FElysiumContentPaths::MapRopes(Map);
 	if (!IFileManager::Get().FileExists(*Path))
@@ -749,7 +763,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialMaterialsTest,
 	"Elysium.Content.TutorialMaterials", GElysiumContentTestFlags)
 bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	const TCHAR* Map = TEXT("sp_tutorial_1");
 	const FString Dir = FElysiumContentPaths::MapDir(Map);
 	const FString Path = Dir / (FString(Map) + TEXT(".mtl"));
@@ -1036,7 +1050,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgJackTutorialTest, "Elysium.Content.D
 	GElysiumContentTestFlags)
 bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("scripts") })) return true;
 	const FString Path = FElysiumContentPaths::DlgFromDialogname(TEXT("dlg/Main Characters/jack_tutorial.dlg"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
@@ -1137,7 +1151,7 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgCorpusTest, "Elysium.Content.DlgCorpus", GElysiumContentTestFlags)
 bool FElysiumDlgCorpusTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("scripts"), TEXT("maps") })) return true;
 	// Discover every exported map's `.ents` and collect the distinct `dialogname` values NPCs reference.
 	TArray<FString> EntsFiles;
 	IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
@@ -1291,7 +1305,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceClipsTest,
 	"Elysium.Content.ScriptedSequenceClips", GElysiumContentTestFlags)
 bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps"), TEXT("npc") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
 		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
@@ -1434,7 +1448,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodiesTest,
 	"Elysium.Content.PlayerBodies", GElysiumContentTestFlags)
 bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("npc"), TEXT("vdata") })) return true;
 	const FString ClanDoc = FElysiumContentPaths::VdataFile(TEXT("system/clandoc000.txt"));
 	if (!IFileManager::Get().FileExists(*ClanDoc) ||
 		!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
@@ -1579,7 +1593,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningCameraContentTest,
 	"Elysium.Content.OpeningCameraTracks", GElysiumContentTestFlags)
 bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
@@ -1855,7 +1869,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningAnimatedPropsContentTest,
 	"Elysium.Content.OpeningAnimatedProps", GElysiumContentTestFlags)
 bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
@@ -1979,7 +1993,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodyMaterialTest,
 	"Elysium.Content.PlayerBodyMaterial", GElysiumContentTestFlags)
 bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("policy") })) return true;
 	UMaterial* Material = LoadObject<UMaterial>(nullptr,
 		TEXT("/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"));
 	if (!TestNotNull(TEXT("M_PlayerBody asset loads"), Material))
@@ -2314,7 +2328,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapSnapshotTest,
 	"Elysium.Content.MapSnapshot", GElysiumContentTestFlags)
 bool FElysiumMapSnapshotTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
 	// Every map that has been exported, so the tier gets wider as the export set does. The maps
 	// are read straight off disk; nothing here needs a bake, an RHI or a world.
 	static const TCHAR* const Maps[] =
@@ -2502,7 +2516,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookContentTest,
 	"Elysium.Content.Rulebook", GElysiumContentTestFlags)
 bool FElysiumRulebookContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
 		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
@@ -3072,7 +3086,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetContentTest,
 	"Elysium.Content.Sheet", GElysiumContentTestFlags)
 bool FElysiumSheetContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
 		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
@@ -3220,7 +3234,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathContentTest,
 	"Elysium.Content.SheetMath", GElysiumContentTestFlags)
 bool FElysiumSheetMathContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/feats.txt"))))
 	{
 		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
@@ -3375,7 +3389,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestContentTest,
 
 bool FElysiumQuestContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(
 			*FElysiumContentPaths::VdataFile(TEXT("system/quests_santamonica.txt"))))
 	{
@@ -3529,7 +3543,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChargenContentTest,
 	"Elysium.Content.Chargen", GElysiumContentTestFlags)
 bool FElysiumChargenContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
 		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
@@ -3856,7 +3870,7 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneCorpusTest, "Elysium.Content.SceneCorpus", GElysiumContentTestFlags)
 bool FElysiumSceneCorpusTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("scenes"), TEXT("maps") })) return true;
 	const FString ScenesDir = FElysiumContentPaths::ScenesDir();
 
 	TArray<FString> Files;
@@ -4015,7 +4029,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneAnimSetsTest, "Elysium.Content.Sce
 	GElysiumContentTestFlags)
 bool FElysiumSceneAnimSetsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("scenes"), TEXT("maps") })) return true;
 	FElysiumNpcIndex Index;
 	FString Error;
 	if (!Index.Load(Error))
@@ -4188,7 +4202,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioCatalogContentTest,
 
 bool FElysiumAudioCatalogContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("audio") })) return true;
 	const FString Path = FElysiumContentPaths::Root() / TEXT("audio/catalog.json");
 	FString Text;
 	if (!FFileHelper::LoadFileToString(Text, *Path))
@@ -4243,7 +4257,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioRoutingAssetsContentTest,
 
 bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this)) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("policy") })) return true;
 	static const TCHAR* Packages[] = {
 		TEXT("/Game/VtMB/Audio/SC_Master"),
 		TEXT("/Game/VtMB/Audio/SC_Music"),

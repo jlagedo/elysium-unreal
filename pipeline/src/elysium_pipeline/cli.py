@@ -37,11 +37,13 @@ app = typer.Typer(
 )
 deps_app = typer.Typer(help="Restore and verify locked project dependencies.")
 export_app = typer.Typer(help="Export VtMB sources and generate Unreal packages.")
+verify_app = typer.Typer(help="Check baked packages against what the export declares.")
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
 ide_app = typer.Typer(help="Configure supported development environments.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
+app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
 app.add_typer(ide_app, name="ide")
@@ -410,6 +412,51 @@ def export_characters(
     _execute(
         _state(ctx),
         "export characters",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        require_ue=True,
+    )
+
+
+@verify_app.command("characters")
+def verify_characters(
+    ctx: typer.Context,
+    models: list[str] = typer.Argument(
+        None,
+        help="Models to check: a stem, family:<name>, or bank:<name>. Omit for the whole cast.",
+    ),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        stems = export_manager.verify_characters(config, runner, models)
+        console.print(f"character verify complete: {len(stems)} model(s)")
+
+    _execute(
+        _state(ctx),
+        "verify characters",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        require_ue=True,
+    )
+
+
+@verify_app.command("maps")
+def verify_maps(
+    ctx: typer.Context,
+    maps: list[str] = typer.Argument(None, help="Maps to check. Omit for every baked level."),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        names = export_manager.verify_maps(config, runner, maps)
+        console.print(f"map verify complete: {len(names)} map(s)")
+
+    _execute(
+        _state(ctx),
+        "verify maps",
         ExitCode.OFFLINE_EXPORT,
         action,
         require_game=True,
