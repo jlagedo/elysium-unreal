@@ -6,6 +6,7 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/bake_verify.py"
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 import json
+import math
 import os
 import unreal
 
@@ -141,6 +142,105 @@ def verify_sm_hub_1_weather(package, world_dir):
     if not errors:
         unreal.log("[verify] weather one system / 3 emitters / 4 sprites / "
                    "2 authored placements / 14 wet materials / 2048 R16 cover")
+    return errors
+
+
+#: `bake_map` writes these onto every light it places. Duplicated rather than imported because an
+#: assertion that calls the code it asserts cannot fail: these say what the bake was ASKED for.
+LIGHT_TAG = "elysium.light"
+LIGHT_RADIUS_SCALE = 1.0
+LIGHT_FALLBACK_RADIUS_CM = 2500.0
+LIGHT_SKY_SCALE = 16.0
+LIGHT_MIN_SKY_REACH_CM = 5000.0
+
+
+def verify_lights(actors, world_dir, map_name):
+    """Every baked light against its own `.lights` row.
+
+    Nothing read a baked light property before this, which is how every light in every map came to
+    carry Unreal's default 1000 cm radius and 44 degree cone: `APointLight` and `ASpotLight`
+    construct Stationary, and `SetAttenuationRadius` / `SetInnerConeAngle` / `SetOuterConeAngle`
+    all gate on `AreDynamicDataChangesAllowed(false)` and return SILENTLY on one. Intensity and
+    colour pass the same gate with `bIgnoreStationary`, so the level looked merely mistuned.
+
+    Mobility is therefore asserted first and on its own: it is the precondition the other three
+    depend on, and a Stationary light is the state in which they cannot be trusted at all.
+    """
+    errors = []
+    path = os.path.join(world_dir, "%s.lights" % map_name)
+    if not os.path.isfile(path):
+        return errors
+    rows = {}
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for index, line in enumerate(handle):
+            tok = line.split()
+            if len(tok) >= 15:
+                rows[index] = tok
+
+    # A source inside the 3D-skybox miniature has its reach scaled by the map's own sky scale, so
+    # the sidecar that states it is an input here too. 16 is Source's default when a map ships none.
+    sky_scale = LIGHT_SKY_SCALE
+    sky_path = os.path.join(world_dir, "%s.sky" % map_name)
+    if os.path.isfile(sky_path):
+        with open(sky_path, "r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                tok = line.split()
+                if len(tok) == 2 and tok[0] == "scale":
+                    sky_scale = float(tok[1])
+
+    checked = 0
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if LIGHT_TAG not in tags:
+            continue
+        source = next((t[len("elysium.src="):] for t in tags if t.startswith("elysium.src=")), "")
+        tok = rows.get(int(source)) if source.isdigit() else None
+        if tok is None:
+            errors.append("%s: carries no resolvable .lights row" % actor.get_actor_label())
+            continue
+        component = actor.light_component
+        if component is None:
+            errors.append("%s: has no light component" % actor.get_actor_label())
+            continue
+        checked += 1
+
+        if component.get_editor_property("mobility") != unreal.ComponentMobility.MOVABLE:
+            errors.append("%s: is not Movable, so its radius and cone were dropped in silence"
+                          % actor.get_actor_label())
+            continue
+
+        kind = int(tok[0])
+        is_sky = len(tok) >= 16 and int(tok[15]) != 0
+        if kind in (0, 1, 2):
+            radius_cm = float(tok[10])
+            reach = (radius_cm if radius_cm > 1.0 else LIGHT_FALLBACK_RADIUS_CM) \
+                * LIGHT_RADIUS_SCALE
+            if is_sky:
+                reach = max(reach * sky_scale, LIGHT_MIN_SKY_REACH_CM)
+            actual = float(component.get_editor_property("attenuation_radius"))
+            if abs(actual - reach) > max(1.0, reach * 1e-3):
+                errors.append("%s: .lights states %.1f cm of reach and the actor carries %.1f cm"
+                              % (actor.get_actor_label(), reach, actual))
+        if kind == 2:
+            inner = math.degrees(math.acos(max(-1.0, min(1.0, float(tok[11])))))
+            outer = math.degrees(math.acos(max(-1.0, min(1.0, float(tok[12])))))
+            inner = max(1.0, min(80.0, inner))
+            outer = max(1.0, min(80.0, outer))
+            for label, wanted, prop in (("outer", outer, "outer_cone_angle"),
+                                        ("inner", min(inner, outer), "inner_cone_angle")):
+                actual = float(component.get_editor_property(prop))
+                if abs(actual - wanted) > 0.05:
+                    errors.append("%s: .lights states a %s cone of %.2f deg and the actor "
+                                  "carries %.2f deg" % (actor.get_actor_label(), label,
+                                                        wanted, actual))
+    unreal.log("[verify] %d baked light(s) checked against %s.lights" % (checked, map_name))
+    # Named individually up to a point, then counted: one broken setter breaks every light in the
+    # map, and 395 identical lines bury whatever else the run found.
+    for message in errors[:8]:
+        unreal.log_error("[verify] " + message)
+    if len(errors) > 8:
+        unreal.log_error("[verify] ... and %d more baked light(s) disagree with %s.lights"
+                         % (len(errors) - 8, map_name))
     return errors
 
 
@@ -588,6 +688,7 @@ def verify_map(map_name):
         unreal.log("[verify] level %s: %d actors" % (level, len(actors)))
         for key in sorted(census, key=lambda k: -census[k]):
             unreal.log("[verify]   %-28s %d" % (key, census[key]))
+        errors.extend(verify_lights(actors, world_dir, map_name))
     else:
         message = "level missing: %s" % level
         unreal.log_error("[verify] " + message)
