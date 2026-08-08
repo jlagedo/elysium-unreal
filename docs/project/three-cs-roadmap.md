@@ -174,10 +174,10 @@ retires what they replaced.
   until one exists. And the gym **registers** frame channels without comparing them: a committed
   gym baseline is the manifest alone, so the two yaw channels are asserted by the sited baselines
   and the cross-rate run, which is what the recordings were for.
-  *Open:* `JumpPhase` cannot separate a jump's descent from walking off a ledge — once the hold
-  window closes the two are identical in the state the sample carries — so closing it needs a latch
-  set at the press edge. `CCC5`'s `ACT_LEAP_DESCEND`/`ACT_LAND` chain is what decides whether it has
-  to be.
+  *Open:* `JumpPhase` cannot reproduce retail's latched jump/landing phases from velocity alone:
+  retail distinguishes phase 1 `ACT_LEAP`, phase 7 `ACT_FALLING`, and phase 8 gait/land, while a
+  descent and walking off a ledge are identical in the state the sample carries. `CCC5` therefore
+  needs a resolver-local latch set at the jump press and ground transitions.
 
 - [x] **CCC2 Camera service foundation and the player rig.** The re-architecture the camera needs:
   the shipping component is one class carrying the weights, the boom, the orbit state, the shot
@@ -312,25 +312,26 @@ retires what they replaced.
   Browser preview cannot show it.
 
   One-shots ride dynamic slot montages over the baked sequences — no montage assets to bake. The
-  jump is **states, not montages**: ascend while the hold window is open or vertical velocity is
-  positive, descend airborne, land on the ground transition; `leap_ascend`'s authored 0.45 s fade
-  against a tap jump's entire ascent is the divergence table's row and lands in the transition
-  durations. Transition parity is a Content-tier test: retail combines a pair as
+  jump is **states, not montages**, and the controlled retail corpus fixes those states: the
+  ordinary path selects `ACT_LEAP` at jump phase 1, `ACT_FALLING` at phase 7, then a moving gait or
+  `ACT_LAND` at phase 8. It does not select `ACT_LEAP_ASCEND` or `ACT_LEAP_DESCEND`. A ducked phase-8
+  request asks for `ACT_LAND_CROUCH`, which returns no sequence on the validated player body and
+  therefore needs a named resolver fallback rather than an invented clip. Transition parity is a
+  Content-tier test: retail combines a pair as
   `max(outgoing, incoming)` and ships 0.2 s on nearly the whole vocabulary
   (`docs/vtmb/animation_and_movers.md`), so the six transitions assert against the authored table
   rather than being reviewed. Sync-group phase matching between gaits is a Feel modernization —
   retail's crossfades are phase-independent — recorded in the divergence table and off by default.
 
-  The six activities are `ACT_IDLE`, `ACT_WALK`, `ACT_RUN`, `ACT_SNEAK`, `ACT_CROUCH` and the
-  `ACT_LEAP_ASCEND`/`_DESCEND`/`ACT_LAND` chain; none is masked and none is additive, so none needs
+  The locomotion slice is `ACT_IDLE`, `ACT_WALK`, `ACT_RUN`, `ACT_SNEAK`, `ACT_CROUCH` and the
+  `ACT_LEAP`/`ACT_FALLING`/`ACT_LAND` chain; none is masked and none is additive, so none needs
   the derived `<label>@<host>` naming, which is why the slice can be cut here. No aim node, no
-  layered blend, no additive node — those arrive with the weapon rung. The two open questions ship
-  **provisional answers** rather than stalling on `ANM4a`'s retail trace: a non-looping player
-  holds its final frame, which is the held crouch until the trace answers what retail does once
-  ducked; and the jump family is `leap_*`, because `hop` is a two-frame stub. Both are marked
-  provisional and the trace confirms or corrects them.
-  *Acceptance:* the six activities are reachable through the graph; the transitions assert against
-  the authored fades in the Content tier; the eyes track and the forearms twist on the migrated
+  layered blend, no additive node — those arrive with the weapon rung. The remaining open question
+  ships a **provisional answer** rather than stalling on another `ANM4a` trace: a non-looping player
+  holds its final frame, which is the held crouch until a sustained controlled trace distinguishes
+  that rule from another end-of-sequence policy.
+  *Acceptance:* the locomotion activities are reachable through the graph; the transitions assert
+  against the authored fades in the Content tier; the eyes track and the forearms twist on the migrated
   body; `elysium.BlendSpaces 0` still A/Bs against the single resolved cell.
   *Deps:* `CCC4`; **`docs/project/animation-roadmap.md` ANM1** — an Animation Blueprint compiles
   against a native `USkeleton`, so the shared-skeleton bake gates this rung.
@@ -498,7 +499,6 @@ per the house rules.
 | The player's gait speed is a constant rather than the current sequence's root motion — standing today, marked at `UElysiumMovementComponent::GetMaxSpeed`, and resolved either way by `CCC7` | `docs/architecture/movement-architecture.md` |
 | Any change to movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | A held crouch's hold rule, if the controlled trace cannot answer what retail does once ducked | `docs/vtmb/animation_and_movers.md` |
-| Jump transition timing — `leap_ascend`'s authored 0.45 s fade is longer than a tap jump's entire ascent, so something has to give | `docs/architecture/animation-architecture.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
 | Input leniency of any kind — buffering, coyote time, a look-response curve that is not retail's. VtMB has none of these | `docs/architecture/input-architecture.md` |
 | A fixed-step accumulator, shipped behind `elysium.move.FixedStep` with the faithful variable delta as the default | `docs/vtmb/source_movement.md` |

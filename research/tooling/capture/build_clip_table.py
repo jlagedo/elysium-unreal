@@ -192,30 +192,32 @@ def describe_clip(flat: list[tuple[str, bytes, int]], sequence: int) -> dict[str
 def read_observations(
     database: Path,
 ) -> tuple[dict[tuple[str, int], Counter], dict[int, str]]:
-    """(model, activity) -> {sequence index: draws}, plus each entity's model."""
+    """(model, activity) -> {sequence index: draws}, plus each lifetime's model."""
     uri = database.as_uri() + "?mode=ro"
     connection = sqlite3.connect(uri, uri=True)
     try:
         models = {
-            int(index): str(model)
-            for index, model in connection.execute(
-                """SELECT a.entity_index, a.model_name FROM actor_observations a
-                   JOIN (SELECT entity_index, max(qpc) q FROM actor_observations
-                         WHERE model_name != '' GROUP BY 1) latest
-                     ON latest.entity_index = a.entity_index
+            int(handle): str(model)
+            for handle, model in connection.execute(
+                """SELECT a.ref_handle, a.model_name FROM actor_observations a
+                   JOIN (SELECT ref_handle, max(qpc) q FROM actor_observations
+                         WHERE ref_handle NOT IN (0, 4294967295)
+                           AND model_name != '' GROUP BY 1) latest
+                     ON latest.ref_handle = a.ref_handle
                         AND latest.q = a.qpc
                    WHERE a.model_name != ''"""
             )
         }
         observed: dict[tuple[str, int], Counter] = defaultdict(Counter)
-        for index, activity, sequence, draws in connection.execute(
-            f"""SELECT entity_index, input_value, selected_sequence, count(*)
+        for handle, activity, sequence, draws in connection.execute(
+            f"""SELECT ref_handle, input_value, selected_sequence, count(*)
                 FROM gameplay_action_events
                 WHERE kind IN {SELECTION_KINDS} AND entity_index IS NOT NULL
+                  AND ref_handle NOT IN (0, 4294967295)
                   AND selected_sequence >= 0
                 GROUP BY 1, 2, 3"""
         ):
-            model = models.get(int(index))
+            model = models.get(int(handle))
             if model:
                 observed[(model, int(activity))][int(sequence)] += int(draws)
     finally:

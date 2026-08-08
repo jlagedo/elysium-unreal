@@ -240,7 +240,7 @@ flowchart LR
 Retail splits responsibility across three places (`docs/vtmb/animation_and_movers.md` A.3):
 
 - **The game DLL contains policy.** The player state classifier and mode router, NPC schedules and
-  task handlers, the 3,045-name activity registry, per-class translations, and each weapon's
+  task handlers, the 4,460-entry activity registry, per-class translations, and each weapon's
   activity-override table are compiled code or static data in `vampire.dll`.
 - **The model contains choices.** `StudioSeqDesc` supplies the stable activity literal, sequence
   label, `actweight`, flags, transition duration, events, blend grid and autolayer binding. The

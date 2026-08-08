@@ -235,10 +235,13 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
     activity registry, final selectors, forced-sequence bypass and weapon-table shape are located.
     The hash-gated `ELGACT1` instrument and `sm_hub_1` controlled recipe capture classifier,
     ideal-activity, weapon-translation and weighted/heaviest selection boundaries into the shared
-    SQLite evidence database; a retail hub run has not yet supplied the branch-reachability corpus.
-    Recover the complete player compact-code/mode vocabulary; the NPC schedule/task → desired
-    activity → class/weapon translation call graph; every weapon table; the sequence-event payload;
-    and the override/interruption order. The tracked working set is
+    SQLite evidence database. The first retail hub corpus passes all verifier gates with 72,440
+    action records: it joins compact codes `0`/`1`/`2` through the ordinary player translation order
+    to exact idle/walk/run/sneak/crouch/leap/falling/land sequence identities, and proves that the
+    ordinary jump does not use `ACT_LEAP_ASCEND`/`ACT_LEAP_DESCEND`. Recover the remaining player
+    compact-code reachability and special-mode vocabulary; a sustained crouch hold; the NPC
+    schedule/task → desired activity → class/weapon translation call graph; every weapon table; the
+    sequence-event payload; and the remaining override/interruption order. The tracked working set is
     `research/cases/animation-pose/specs/gameplay_actions.json`; facts land in
     `docs/vtmb/animation_and_movers.md` A.3, never in this tracker.
   - [ ] **ANM4b Export and bake the action catalog.** Extend the existing clip/grid/index sidecars

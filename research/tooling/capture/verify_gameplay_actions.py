@@ -17,7 +17,7 @@ are named by address rather than inferred from which entities they touched.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
 import json
 from pathlib import Path
 import sqlite3
@@ -53,6 +53,25 @@ PREFERRED_IMAGE_BASE = 0x10000000
 # distinct inputs is reported beside them so a truncated tail stays visible.
 CALL_SITE_INPUTS = 8
 
+# Return sites inside CBasePlayer's ordinary activity apply path in the pinned
+# vampire.dll.  The five generic hooks see many callers; these four sites are
+# what turn their rows into one ordered player decision without guessing from
+# the entity model or from timing alone.
+PLAYER_APPLY_IDEAL_CALLER_RVA = 0x00164577
+PLAYER_APPLY_WEAPON_CALLER_RVA = 0x00164582
+PLAYER_APPLY_SELECTOR_CALLER_RVAS = frozenset((0x001645DA, 0x001645E3))
+
+# Return sites inside CAI_BaseNPC's ordinary requested-activity resolver.  The
+# first weapon call follows the actor/class pre-translation, the loop call
+# follows NPC_TranslateActivity, the heaviest selector validates the resolved
+# activity, and the weighted selector chooses the concrete sequence.  Keeping
+# the sites separate is important: their identical activity values in an idle
+# capture do not make them one semantic stage.
+NPC_FIRST_WEAPON_CALLER_RVA = 0x00272019
+NPC_LOOP_WEAPON_CALLER_RVA = 0x0027204A
+NPC_VALIDATE_HEAVIEST_CALLER_RVA = 0x00272070
+NPC_CHOOSE_WEIGHTED_CALLER_RVA = 0x00272299
+
 
 def _distribution(rows: Iterable[tuple[Any, int]]) -> list[dict[str, Any]]:
     return [
@@ -86,6 +105,27 @@ def _actor_models(connection: sqlite3.Connection) -> dict[int, str]:
                 GROUP BY entity_index
             ) latest
               ON latest.entity_index = a.entity_index AND latest.qpc = a.qpc
+            WHERE a.model_name != ''
+            """
+        )
+    }
+
+
+def _actor_handle_models(connection: sqlite3.Connection) -> dict[int, str]:
+    """Latest non-empty client model observed for each entity lifetime."""
+    return {
+        int(handle): str(model)
+        for handle, model in connection.execute(
+            """
+            SELECT a.ref_handle, a.model_name
+            FROM actor_observations a
+            JOIN (
+                SELECT ref_handle, max(qpc) AS qpc
+                FROM actor_observations
+                WHERE ref_handle NOT IN (0, 4294967295) AND model_name != ''
+                GROUP BY ref_handle
+            ) latest
+              ON latest.ref_handle = a.ref_handle AND latest.qpc = a.qpc
             WHERE a.model_name != ''
             """
         )
@@ -201,8 +241,375 @@ def _beat_intervals(
     ]
 
 
+def _player_action_paths(
+    rows: Iterable[sqlite3.Row], player_handles: set[int]
+) -> dict[str, Any]:
+    """Observed compact-code -> activity -> sequence paths for the player.
+
+    One classifier return owns the rows until the next classifier return for
+    the same player and thread.  Caller RVAs then select only the ordinary
+    apply path's SetIdealActivity, Weapon_TranslateActivity and final selector
+    calls.  A selector is intentionally optional: retail does not draw a new
+    weighted sequence when the translated activity is already current.
+
+    Current activity/sequence snapshots remain beside those reused paths.  We
+    do not silently promote them to a selector result, because the distinction
+    is the evidence for a held state rather than a fresh animation choice.
+    """
+    grouped: dict[tuple[int, int], list[sqlite3.Row]] = defaultdict(list)
+    for row in rows:
+        handle = row["ref_handle"]
+        if handle in player_handles:
+            grouped[(int(handle), int(row["thread_id"]))].append(row)
+
+    paths: Counter[tuple[Any, ...]] = Counter()
+    classifications = 0
+    for group in grouped.values():
+        for index, classifier in enumerate(group):
+            if classifier["kind"] != PLAYER_KIND:
+                continue
+            classifications += 1
+            following = []
+            for row in group[index + 1 :]:
+                if row["kind"] == PLAYER_KIND:
+                    break
+                following.append(row)
+
+            ideal = next(
+                (
+                    row
+                    for row in following
+                    if row["kind"] == "IDEA"
+                    and row["caller_rva"] == PLAYER_APPLY_IDEAL_CALLER_RVA
+                ),
+                None,
+            )
+            apply_rows = following
+            if ideal is not None:
+                ideal_index = following.index(ideal)
+                apply_rows = following[ideal_index + 1 :]
+                next_ideal = next(
+                    (
+                        offset
+                        for offset, row in enumerate(apply_rows)
+                        if row["kind"] == "IDEA"
+                        and row["caller_rva"] == PLAYER_APPLY_IDEAL_CALLER_RVA
+                    ),
+                    None,
+                )
+                if next_ideal is not None:
+                    apply_rows = apply_rows[:next_ideal]
+
+            weapon = next(
+                (
+                    row
+                    for row in apply_rows
+                    if row["kind"] == "WTRN"
+                    and row["caller_rva"] == PLAYER_APPLY_WEAPON_CALLER_RVA
+                ),
+                None,
+            )
+            selector = next(
+                (
+                    row
+                    for row in apply_rows
+                    if row["kind"] in SELECTION_KINDS
+                    and row["caller_rva"] in PLAYER_APPLY_SELECTOR_CALLER_RVAS
+                ),
+                None,
+            )
+
+            selection_mode = (
+                str(selector["kind"])
+                if selector is not None
+                else "reused"
+                if ideal is not None
+                else "no_apply"
+            )
+            paths[
+                (
+                    int(classifier["output_value"]),
+                    int(ideal["input_value"]) if ideal is not None else None,
+                    int(weapon["input_value"]) if weapon is not None else None,
+                    int(weapon["output_value"]) if weapon is not None else None,
+                    int(selector["input_value"]) if selector is not None else None,
+                    (
+                        int(selector["selected_sequence"])
+                        if selector is not None
+                        else None
+                    ),
+                    (
+                        int(ideal["current_activity"])
+                        if ideal is not None and selector is None
+                        else None
+                    ),
+                    (
+                        int(ideal["current_sequence"])
+                        if ideal is not None and selector is None
+                        else None
+                    ),
+                    int(classifier["jump_landing_state"]),
+                    int(classifier["water_level"]),
+                    int(classifier["active_weapon_handle"]),
+                    selection_mode,
+                )
+            ] += 1
+
+    names = (
+        "compact_code",
+        "base_activity",
+        "weapon_input_activity",
+        "weapon_output_activity",
+        "selector_activity",
+        "selected_sequence",
+        "current_activity_at_apply",
+        "current_sequence_at_apply",
+        "jump_landing_state",
+        "water_level",
+        "active_weapon_handle",
+        "selection_mode",
+    )
+    ordered = sorted(
+        paths.items(),
+        key=lambda item: (
+            item[0][0],
+            -item[1],
+            tuple(-1 if value is None else value for value in item[0][1:6]),
+        ),
+    )
+    return {
+        "classifications": classifications,
+        "ordinary_apply_callers": {
+            "ideal": _image_address(PLAYER_APPLY_IDEAL_CALLER_RVA),
+            "weapon_translation": _image_address(PLAYER_APPLY_WEAPON_CALLER_RVA),
+            "weighted_selector": _image_address(
+                min(PLAYER_APPLY_SELECTOR_CALLER_RVAS)
+            ),
+            "heaviest_selector": _image_address(
+                max(PLAYER_APPLY_SELECTOR_CALLER_RVAS)
+            ),
+        },
+        "paths": [
+            {**dict(zip(names, key)), "records": count}
+            for key, count in ordered
+        ],
+    }
+
+
+def _npc_resolution_paths(
+    rows: Iterable[sqlite3.Row],
+    player_handles: set[int],
+    actor_handle_models: dict[int, str],
+    clip_models: dict[str, dict[str, list[dict[str, Any]]]] | None = None,
+) -> dict[str, Any]:
+    """Observed NPC requested-activity -> resolved-activity -> sequence paths.
+
+    The four caller RVAs delimit one synchronous invocation without relying on
+    timing.  A path begins at the first weapon-translation return, may contain
+    up to five loop weapon translations, is validated by the heaviest selector,
+    and ends at the ordinary weighted selector.  Custom-move exact-label lookup
+    and disposition delegation do not cross that final boundary, so the static
+    resolver rules remain the authority for those exceptional paths.
+    """
+    central_callers = {
+        NPC_FIRST_WEAPON_CALLER_RVA,
+        NPC_LOOP_WEAPON_CALLER_RVA,
+        NPC_VALIDATE_HEAVIEST_CALLER_RVA,
+        NPC_CHOOSE_WEIGHTED_CALLER_RVA,
+    }
+    grouped: dict[tuple[int, int], list[sqlite3.Row]] = defaultdict(list)
+    for row in rows:
+        handle = row["ref_handle"]
+        if (
+            handle not in player_handles
+            and handle not in (None, 0, 0xFFFFFFFF)
+            and row["caller_rva"] in central_callers
+        ):
+            grouped[(int(handle), int(row["thread_id"]))].append(row)
+
+    paths: Counter[tuple[Any, ...]] = Counter()
+    invocations = 0
+    weighted_choices = 0
+    resolution_only = 0
+    incomplete = Counter()
+
+    def emit(
+        stages: list[sqlite3.Row],
+        validation: sqlite3.Row,
+        selector: sqlite3.Row | None,
+    ) -> None:
+        nonlocal invocations, weighted_choices, resolution_only
+        first = stages[0]
+        loop = stages[1:]
+        terminal = selector if selector is not None else validation
+        entity_index = (
+            int(terminal["entity_index"])
+            if terminal["entity_index"] is not None
+            else None
+        )
+        ideal_snapshot = int(first["ideal_activity"])
+        if ideal_snapshot < 0:
+            ideal_snapshot = None
+        key = (
+            int(first["ref_handle"]),
+            entity_index,
+            actor_handle_models.get(int(first["ref_handle"])),
+            ideal_snapshot,
+            int(first["input_value"]),
+            int(first["output_value"]),
+            tuple(
+                (int(stage["input_value"]), int(stage["output_value"]))
+                for stage in loop
+            ),
+            int(validation["input_value"]),
+            int(validation["selected_sequence"]),
+            "weighted" if selector is not None else "resolution_only",
+            int(selector["input_value"]) if selector is not None else None,
+            int(selector["selected_sequence"]) if selector is not None else None,
+            int(terminal["current_activity"]),
+            int(terminal["current_sequence"]),
+        )
+        paths[key] += 1
+        invocations += 1
+        if selector is None:
+            resolution_only += 1
+        else:
+            weighted_choices += 1
+
+    for group in grouped.values():
+        current: list[sqlite3.Row] = []
+        pending: tuple[list[sqlite3.Row], sqlite3.Row] | None = None
+        for row in group:
+            caller = row["caller_rva"]
+            if caller == NPC_FIRST_WEAPON_CALLER_RVA and row["kind"] == "WTRN":
+                if pending is not None:
+                    emit(*pending, None)
+                    pending = None
+                if current:
+                    incomplete["superseded_by_next_start"] += 1
+                current = [row]
+                continue
+            if not current:
+                if (
+                    pending is not None
+                    and caller == NPC_CHOOSE_WEIGHTED_CALLER_RVA
+                    and row["kind"] == "SWGT"
+                ):
+                    emit(*pending, row)
+                    pending = None
+                continue
+            if caller == NPC_LOOP_WEAPON_CALLER_RVA and row["kind"] == "WTRN":
+                current.append(row)
+                continue
+            if (
+                caller == NPC_VALIDATE_HEAVIEST_CALLER_RVA
+                and row["kind"] == "SHVY"
+            ):
+                if pending is not None:
+                    emit(*pending, None)
+                pending = (current, row)
+                current = []
+                continue
+
+        if current:
+            incomplete["unterminated_at_end"] += 1
+        if pending is not None:
+            emit(*pending, None)
+
+    names = (
+        "ref_handle",
+        "entity_index",
+        "model",
+        "ideal_activity_snapshot",
+        "actor_translation_activity",
+        "first_weapon_activity",
+        "npc_weapon_iterations",
+        "resolved_activity",
+        "validation_sequence",
+        "selection_mode",
+        "selector_activity",
+        "selected_sequence",
+        "current_activity_at_resolution",
+        "current_sequence_at_resolution",
+    )
+    ordered = sorted(
+        paths.items(),
+        key=lambda item: (
+            "" if item[0][2] is None else item[0][2],
+            item[0][0],
+            -1 if item[0][1] is None else item[0][1],
+            -1 if item[0][3] is None else item[0][3],
+            -item[1],
+        ),
+    )
+    rendered = []
+    for key, count in ordered:
+        path = dict(zip(names, key))
+        path["npc_weapon_iterations"] = [
+            {"npc_activity": source, "weapon_activity": translated}
+            for source, translated in path["npc_weapon_iterations"]
+        ]
+        model = path["model"]
+        if model is not None and clip_models:
+            for field, activity_field, sequence_field in (
+                (
+                    "validation_clip",
+                    "resolved_activity",
+                    "validation_sequence",
+                ),
+                ("selected_clip", "selector_activity", "selected_sequence"),
+            ):
+                activity = path[activity_field]
+                sequence = path[sequence_field]
+                clips = (
+                    clip_models.get(model, {}).get(str(activity), [])
+                    if activity is not None and sequence is not None
+                    else []
+                )
+                match = next(
+                    (
+                        clip
+                        for clip in clips
+                        if int(clip["sequence_index"]) == int(sequence)
+                    ),
+                    None,
+                )
+                if match is not None:
+                    path[field] = match
+        rendered.append({**path, "records": count})
+
+    return {
+        "invocations": invocations,
+        "weighted_choices": weighted_choices,
+        "resolution_only": resolution_only,
+        "distinct_paths": len(paths),
+        "callers": {
+            "first_weapon_translation": _image_address(
+                NPC_FIRST_WEAPON_CALLER_RVA
+            ),
+            "loop_weapon_translation": _image_address(
+                NPC_LOOP_WEAPON_CALLER_RVA
+            ),
+            "activity_validation": _image_address(
+                NPC_VALIDATE_HEAVIEST_CALLER_RVA
+            ),
+            "weighted_sequence_choice": _image_address(
+                NPC_CHOOSE_WEIGHTED_CALLER_RVA
+            ),
+        },
+        "incomplete": dict(sorted(incomplete.items())),
+        "paths": rendered,
+    }
+
+
 def verify(session_or_database: Path) -> dict[str, Any]:
     session, database = _database(session_or_database)
+    clip_table_path = session / "clip-table.json"
+    clip_table = (
+        json.loads(clip_table_path.read_text(encoding="utf-8"))
+        if clip_table_path.is_file()
+        else {}
+    )
     uri = database.as_uri() + "?mode=ro"
     connection = sqlite3.connect(uri, uri=True)
     connection.row_factory = sqlite3.Row
@@ -230,6 +637,11 @@ def verify(session_or_database: Path) -> dict[str, Any]:
         actor_models = (
             _actor_models(connection) if "actor_observations" in tables else {}
         )
+        actor_handle_models = (
+            _actor_handle_models(connection)
+            if "actor_observations" in tables
+            else {}
+        )
         binding = (
             connection.execute(
                 "SELECT * FROM gameplay_action_binding"
@@ -246,11 +658,13 @@ def verify(session_or_database: Path) -> dict[str, Any]:
         rows = list(
             connection.execute(
                 f"""
-                SELECT kind, qpc, ref_handle, entity_index, entity_serial,
+                SELECT kind, sequence_number, qpc, thread_id, ref_handle,
+                       entity_index, entity_serial,
                        caller_address, {rva_column},
                        input_value, output_value, selection_argument,
                        selected_sequence, current_activity, ideal_activity,
-                       current_sequence, faults
+                       current_sequence, active_weapon_handle, water_level,
+                       jump_landing_state, faults
                 FROM gameplay_action_events ORDER BY sequence_number
                 """
             )
@@ -275,7 +689,9 @@ def verify(session_or_database: Path) -> dict[str, Any]:
             if row["ref_handle"] not in player_handles
             and row["ref_handle"] not in (0, 0xFFFFFFFF)
             and row["entity_index"] is not None
-            and _character_role(actor_models.get(int(row["entity_index"]))) == "npc"
+            and _character_role(
+                actor_handle_models.get(int(row["ref_handle"]))
+            ) == "npc"
         ]
         entity_indices = {
             int(row["entity_index"])
@@ -409,6 +825,18 @@ def verify(session_or_database: Path) -> dict[str, Any]:
                         ).items()
                     )
                 ),
+            },
+            "player_action_paths": _player_action_paths(rows, player_handles),
+            "npc_resolution_paths": _npc_resolution_paths(
+                rows,
+                player_handles,
+                actor_handle_models,
+                clip_table.get("models", {}),
+            ),
+            "clip_table": {
+                "available": bool(clip_table),
+                "path": str(clip_table_path),
+                "ordering": clip_table.get("ordering"),
             },
             "npcs": {
                 "entity_indices": sorted(npc_indices),

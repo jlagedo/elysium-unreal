@@ -177,13 +177,16 @@ and the argument form; `client.dll`'s `vhotkey_int` handler would confirm the de
 Unarmed and melee share one move set, selected by **`+attack` plus the movement direction held
 with it**: three directional combos, plus a fourth for `+attack` with no direction held.
 
-**The block verb is not identified.** Blocking is a real mechanic with a stat behind it — the
-`Defence` feat, raised by Wits (`docs/vtmb/game_runtime.md`) — but no shipped file names the
-command. `+attack2` is the strongest candidate: it is declared by `client.dll` and left **unbound
-by `default.cfg` in both retail and the patch**, because `MOUSE2` carries `vdiscipline_last`
-rather than `+attack2`. `+wpn_secondaryatk` is the other candidate, and its own semantics are
-equally unrecorded. Decompiling the client's attack handlers, or byte-scanning for the `Defence`
-feat's consumer, would settle both. *(Move set: community-sourced.)*
+**The block verb is not identified, but its server animation endpoint is** [VtMB decompiled]. A
+grounded player whose block latch is set and whose active weapon passes the eligibility gate returns
+compact action code `13`; the ordinary player selector maps that code to `ACT_PREBLOCK`. Blocking is
+a real mechanic with a stat behind it — the `Defence` feat, raised by Wits
+(`docs/vtmb/game_runtime.md`) — but what command sets the latch is still open. `+attack2` is the
+strongest candidate: it is declared by `client.dll` and left **unbound by `default.cfg` in both
+retail and the patch**, because `MOUSE2` carries `vdiscipline_last` rather than `+attack2`.
+`+wpn_secondaryatk` is the other candidate, and its own semantics are equally unrecorded.
+Decompiling the client's attack handlers, or byte-scanning for the `Defence` feat's consumer, would
+settle both. *(Move set: community-sourced.)*
 
 ### Camera
 

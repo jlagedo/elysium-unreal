@@ -15,7 +15,7 @@
     "What symbolic action does every compact code returned or retained by the player classifier represent, and which exact movement, weapon, interaction, damage, form, script, and animation-mode predicates select it?",
     "Which mode-specific leaves reached through CBasePlayer::SetAnimation's router choose activities, direct sequences, or layers, and what is their priority and interruption order?",
     "Where does the NPC schedule/task path set ideal activity, translate it through NPC/weapon/class overrides, and commit the selected sequence for every exported NPC class?",
-    "What is the exact ordering among SetIdealActivity, Weapon_TranslateActivity, NPC_TranslateActivity, form/class translations, required-table fallback, SetActivity, and sequence selection on player and NPC paths?",
+    "Outside the confirmed ordinary player order, what is the exact ordering among SetIdealActivity, Weapon_TranslateActivity, NPC_TranslateActivity, form/class translations, required-table fallback, SetActivity, and sequence selection on special player modes and NPC paths?",
     "Can every weapon acttable_t be recovered statically from its table/count virtual pair, including inherited and dynamically selected weapon subclasses, and does retail activitydump reproduce the same rows?",
     "Which StudioSeqDesc events are gameplay-significant for locomotion, attacks, reloads, footsteps, reactions, and paired interactions, and what are their payload layouts and dispatch times?",
     "Which activities and direct sequence labels are reachable only through scripts, dialogue, disciplines, forms, damage/knockback, or developer commands rather than ordinary player/NPC update loops?"
@@ -65,8 +65,8 @@
   "findings": [
     {
       "confidence": "confirmed",
-      "fact": "vampire.dll registers 3,045 activity names with numeric IDs 1 through 0xbfe at 0x104126e0.",
-      "evidence": "The registration body calls the one-name registration helper for ACT_IDLE=1 through the final ACT_KNOCKBACK_FLYING_* entries; StudioSeqDesc.activity is -1 on disk while szactivitynameindex is populated.",
+      "fact": "vampire.dll makes 4,460 activity registrations at 0x104126e0, occupying numeric IDs 1 through 0x118c with 32 holes.",
+      "evidence": "The full registration body calls the activity helpers 4,460 times, from ACT_IDLE=1 through ACT_WALKIE_TALKIE=0x118c. Every registered ID is unique; StudioSeqDesc.activity is -1 on disk while szactivitynameindex is populated.",
       "consequence": "The stable extraction key is the ACT_* literal; numeric IDs are pinned-build diagnostics and must not be authored into remake gameplay code."
     },
     {
@@ -83,15 +83,15 @@
     },
     {
       "confidence": "partial",
-      "fact": "The ordinary player animation selector writes move_yaw, aim_yaw and aim_pitch, then chooses among base locomotion, water, air, land, climb, crouch and contextual activity families.",
-      "evidence": "0x10164870 looks up/writes the three named pose parameters and reaches registered IDs for ACT_IDLE, ACT_AIM, ACT_WALK/RUN/SNEAK/RELAXED, ACT_SWIM/TREADWATER, ACT_HOP/LEAP/FALLING/LAND, ACT_CLIMB and ACT_CROUCH before calling 0x101644f0.",
-      "consequence": "Pose parameters and discrete activity selection are sibling outputs of one policy frame and must be captured together."
+      "fact": "The ordinary player animation selector writes move_yaw, aim_yaw and aim_pitch, then maps compact codes to base locomotion, attack, prayer, feeding/seduction, water, interaction, climb, contextual, preblock and reload policies.",
+      "evidence": "0x10164870 maps codes 0/1 to stance and gait state, 2 to the jump/landing phase switch, 5 to melee/ranged attack, 7 to ACT_PRAYING_*, 8 to released feeding/seduction, 9 to swim/treadwater, 10 to an interaction-supplied activity, 11 to climb, 12 to a contextual helper, 13 to ACT_PREBLOCK and 14 to ACT_RELOAD_LAYER before calling 0x101644f0.",
+      "consequence": "Pose parameters and discrete activity selection are sibling outputs of one policy frame; static policy coverage is known, while branch reachability and the contextual helper remain trace questions."
     },
     {
-      "confidence": "partial",
-      "fact": "The ordinary apply path stores the requested ideal activity, translates/sets it through activity virtuals, selects a weighted or heaviest sequence, writes m_nSequence, resets sequence state, and derives playback rate.",
-      "evidence": "0x101644f0 calls CBaseCombatCharacter::SetIdealActivity at 0x10324500, reaches activity virtuals, calls 0x1008dc40 or 0x1008dd30, writes this+0x6f0, calls 0x10090950 and updates this+0x6f4.",
-      "consequence": "A live selection record can be captured at one narrow path, but exact translation ordering remains an explicit question rather than an assumed Source-SDK correspondence."
+      "confidence": "confirmed",
+      "fact": "The ordinary player apply order is SetIdealActivity, Weapon_TranslateActivity, CBasePlayer::NPC_TranslateActivity, SetActivity, then weighted or heaviest sequence selection.",
+      "evidence": "0x101644f0 returns from SetIdealActivity at 0x10164577, calls virtual +0x5f4 and returns at 0x10164582, calls virtual +0x5e0 at 0x10164587, then calls SetActivity at +0x4d8 and the selector at 0x101645d5 or 0x101645de. ELGACT1 rows at the three instrumented return sites preserve the same base, weapon-output and selector-input order.",
+      "consequence": "The ordinary player resolver has a pinned order; only special-mode, form and NPC override ordering remains open."
     },
     {
       "confidence": "confirmed",
@@ -113,6 +113,24 @@
     },
     {
       "confidence": "confirmed",
+      "fact": "The first controlled sm_hub_1 corpus joins compact codes 0, 1 and 2 through ordinary player translation to exact sequence identities on tremere_Male_Armor_0.",
+      "evidence": "The hash-gated ELGACT1 database contains 72,440 records (6,197 PCLS, 6,077 IDEA, 26,757 WTRN, 4,214 SWGT and 29,195 SHVY), marks all four operator beats and passes every verifier gate. The clip-table join resolves walk=5, run=4, sneak=7, crouch=8, leap=1407, falling=1410 and land=1411 with exact owner banks.",
+      "consequence": "The three-Cs locomotion slice is trace-backed; unobserved compact codes and special modes are not implied complete by this corpus."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The controlled ordinary jump selects ACT_LEAP, then ACT_FALLING, then a moving gait or ACT_LAND; it does not select ACT_LEAP_ASCEND or ACT_LEAP_DESCEND.",
+      "evidence": "Compact code 2 is observed with jump/landing state 1 selecting sequence 1407, state 7 selecting sequence 1410, and state 8 selecting translated ACT_WALK sequence 5 while moving or ACT_LAND sequence 1411 while still. The one ducked state-8 ACT_LAND_CROUCH request returns -1.",
+      "consequence": "The player graph uses leap/falling/land states and gives ACT_LAND_CROUCH a named missing-sequence fallback instead of treating the authored ascend/descend clips as observed gameplay."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The server-side block animation endpoint is compact code 13 to ACT_PREBLOCK.",
+      "evidence": "0x1016bb50 returns 13 when the grounded block-state helper succeeds, and 0x10164870 maps code 13 to registered activity 0x1154 ACT_PREBLOCK.",
+      "consequence": "RE36 still needs the client command that sets the latch, but no longer needs to identify the server action or base activity."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "The player_sequence console command bypasses activity translation and resolves an exact sequence label.",
       "evidence": "0x10348560 reads the command argument, calls LookupSequence at 0x1008f7b0, writes this+0x6f0, calls ResetSequenceInfo at 0x10090950 and zeros the cycle.",
       "consequence": "Direct authored/developer sequence requests require a separate resolver route from ordinary gameplay activities."
@@ -129,7 +147,7 @@
       "address": "104126e0",
       "label": "register_global_activity_table",
       "confidence": "confirmed",
-      "role": "Registers the 3,045 ACT_* literals and pinned-build numeric IDs used to populate StudioSeqDesc.activity at load.",
+      "role": "Registers the 4,460 ACT_* entries and pinned-build numeric IDs used to populate StudioSeqDesc.activity at load.",
       "depth": 1,
       "cap": 220,
       "asm_count": 5000
@@ -309,6 +327,18 @@
       "to": "10324500",
       "confidence": "confirmed",
       "evidence": "direct CBaseCombatCharacter::SetIdealActivity call with the requested activity"
+    },
+    {
+      "from": "101644f0",
+      "to": "10327ec0",
+      "confidence": "confirmed",
+      "evidence": "virtual +0x5f4 immediately after SetIdealActivity; ELGACT1 records its return at 0x10164582"
+    },
+    {
+      "from": "101644f0",
+      "to": "101647a0",
+      "confidence": "confirmed",
+      "evidence": "CBasePlayer virtual +0x5e0 immediately after weapon translation, before SetActivity"
     },
     {
       "from": "101644f0",

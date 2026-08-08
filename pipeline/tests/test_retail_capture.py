@@ -74,11 +74,14 @@ from research.tooling.capture.finalize_capture_database import (
 )
 from research.tooling.capture.build_clip_table import (
     best_ordering,
+    read_observations,
     resolve_model_key,
     score_orderings,
 )
 from research.tooling.capture.verify_gameplay_actions import (
     REQUIRED_HUB_BEATS,
+    _npc_resolution_paths,
+    _player_action_paths,
     verify as verify_gameplay_actions,
 )
 from research.tooling.capture.verify_pose_build_generation import (
@@ -2151,6 +2154,198 @@ class RetailCaptureTests(unittest.TestCase):
                 calibration["volume"]["byte_closure"]["gameplay_action"]["closes"]
             )
             self.assertTrue(calibration["integrity"]["sequence_numbers"]["dense"])
+
+    def test_player_action_paths_keep_each_translation_stage_distinct(self) -> None:
+        handle = 1
+
+        def row(kind: str, sequence: int, **values):
+            return {
+                "kind": kind,
+                "sequence_number": sequence,
+                "thread_id": 7,
+                "ref_handle": handle,
+                "caller_rva": None,
+                "input_value": -1,
+                "output_value": -1,
+                "selected_sequence": -1,
+                "current_activity": 1,
+                "current_sequence": 1375,
+                "jump_landing_state": 0,
+                "water_level": 0,
+                "active_weapon_handle": 1437,
+                **values,
+            }
+
+        report = _player_action_paths(
+            [
+                row("PCLS", 1, output_value=1),
+                row(
+                    "IDEA", 2, caller_rva=0x164577, input_value=23,
+                    output_value=23,
+                ),
+                row(
+                    "WTRN", 3, caller_rva=0x164582, input_value=23,
+                    output_value=19,
+                ),
+                row(
+                    "SWGT", 4, caller_rva=0x1645DA, input_value=19,
+                    output_value=4, selected_sequence=4,
+                ),
+                # No ordinary apply path follows this classifier return.  It
+                # remains explicit instead of inheriting the previous path.
+                row("PCLS", 5, output_value=0),
+            ],
+            {handle},
+        )
+
+        self.assertEqual(report["classifications"], 2)
+        self.assertEqual(
+            report["paths"][0],
+            {
+                "compact_code": 0,
+                "base_activity": None,
+                "weapon_input_activity": None,
+                "weapon_output_activity": None,
+                "selector_activity": None,
+                "selected_sequence": None,
+                "current_activity_at_apply": None,
+                "current_sequence_at_apply": None,
+                "jump_landing_state": 0,
+                "water_level": 0,
+                "active_weapon_handle": 1437,
+                "selection_mode": "no_apply",
+                "records": 1,
+            },
+        )
+        self.assertEqual(
+            report["paths"][1]["compact_code"], 1
+        )
+        self.assertEqual(report["paths"][1]["base_activity"], 23)
+        self.assertEqual(report["paths"][1]["weapon_output_activity"], 19)
+        self.assertEqual(report["paths"][1]["selector_activity"], 19)
+        self.assertEqual(report["paths"][1]["selected_sequence"], 4)
+        self.assertEqual(report["paths"][1]["selection_mode"], "SWGT")
+
+    def test_npc_resolution_paths_keep_translation_and_selection_stages(self) -> None:
+        handle = (8 << 13) | 41
+
+        def row(kind: str, sequence: int, **values):
+            return {
+                "kind": kind,
+                "sequence_number": sequence,
+                "thread_id": 7,
+                "ref_handle": handle,
+                "entity_index": 41,
+                "caller_rva": None,
+                "input_value": -1,
+                "output_value": -1,
+                "selected_sequence": -1,
+                "current_activity": 1,
+                "ideal_activity": 19,
+                "current_sequence": 80,
+                **values,
+            }
+
+        report = _npc_resolution_paths(
+            [
+                row(
+                    "WTRN", 1, caller_rva=0x272019,
+                    input_value=19, output_value=9,
+                ),
+                row(
+                    "WTRN", 2, caller_rva=0x27204A,
+                    input_value=9, output_value=9,
+                ),
+                row(
+                    "SHVY", 3, caller_rva=0x272070,
+                    input_value=9, selected_sequence=81,
+                ),
+                row(
+                    "SWGT", 4, caller_rva=0x272299,
+                    input_value=9, selected_sequence=82,
+                ),
+            ],
+            set(),
+            {handle: "character/npc/common/cop.mdl"},
+        )
+
+        self.assertEqual(report["invocations"], 1)
+        self.assertEqual(report["incomplete"], {})
+        self.assertEqual(
+            report["paths"],
+            [
+                {
+                    "ref_handle": handle,
+                    "entity_index": 41,
+                    "model": "character/npc/common/cop.mdl",
+                    "ideal_activity_snapshot": 19,
+                    "actor_translation_activity": 19,
+                    "first_weapon_activity": 9,
+                    "npc_weapon_iterations": [
+                        {"npc_activity": 9, "weapon_activity": 9}
+                    ],
+                    "resolved_activity": 9,
+                    "validation_sequence": 81,
+                    "selection_mode": "weighted",
+                    "selector_activity": 9,
+                    "selected_sequence": 82,
+                    "current_activity_at_resolution": 1,
+                    "current_sequence_at_resolution": 80,
+                    "records": 1,
+                }
+            ],
+        )
+
+    def test_clip_table_joins_model_by_serial_bearing_handle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "capture.sqlite"
+            connection = sqlite3.connect(database)
+            try:
+                connection.executescript(
+                    """
+                    CREATE TABLE actor_observations (
+                        ref_handle INTEGER, entity_index INTEGER,
+                        qpc INTEGER, model_name TEXT
+                    );
+                    CREATE TABLE gameplay_action_events (
+                        kind TEXT, ref_handle INTEGER, entity_index INTEGER,
+                        input_value INTEGER, selected_sequence INTEGER
+                    );
+                    """
+                )
+                npc_handle = (8 << 13) | 41
+                weapon_handle = (9 << 13) | 41
+                connection.executemany(
+                    "INSERT INTO actor_observations VALUES (?, 41, ?, ?)",
+                    (
+                        (npc_handle, 100, "character/npc/common/cop.mdl"),
+                        (
+                            weapon_handle,
+                            200,
+                            "weapons/pistol_glock/wield/w_m_pistol_glock.mdl",
+                        ),
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO gameplay_action_events VALUES "
+                    "('SWGT', ?, 41, 9, 81)",
+                    (npc_handle,),
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            observed, models = read_observations(database)
+
+        self.assertEqual(models[npc_handle], "character/npc/common/cop.mdl")
+        self.assertEqual(
+            observed[("character/npc/common/cop.mdl", 9)][81],
+            1,
+        )
+        self.assertNotIn(
+            ("weapons/pistol_glock/wield/w_m_pistol_glock.mdl", 9),
+            observed,
+        )
 
     def test_gameplay_action_faults_separate_dead_objects_from_bad_reads(
         self,

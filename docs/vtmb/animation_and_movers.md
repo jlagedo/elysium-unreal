@@ -314,10 +314,11 @@ and `Bed_Left_Idle` are not idles in any useful sense.
 
 **The enum the names resolve into is in the binary** [decompile-verified]. `FUN_104126e0`
 (`vampire.dll`) registers the whole activity table one name at a time — `("ACT_IDLE", 1)`,
-`("ACT_TRANSITION", 2)`, `("ACT_FIDGET", 3)`, … — **3,045 names recovered from the dump**, indices
-running 1…0xbfe. That is the map `activity`@12 is filled from at model load, and it confirms the
-literal is the stable identifier rather than an artefact: the index space is the DLL's, so it would
-change with a build, while the name is what the `.mdl` ships. Landmarks: `ACT_IDLE` = 1,
+`("ACT_TRANSITION", 2)`, `("ACT_FIDGET", 3)`, … — **4,460 registrations recovered from the full
+function**, occupying IDs 1…`0x118c` with 32 holes. That is the map `activity`@12 is filled from at
+model load, and it confirms the literal is the stable identifier rather than an artefact: the index
+space is the DLL's, so it would change with a build, while the name is what the `.mdl` ships.
+Landmarks: `ACT_IDLE` = 1,
 `ACT_SCRIPT_CUSTOM_MOVE` = 0x18 (the activity a `scripted_sequence`'s `m_iszCustomMove` selects),
 `ACT_DISPOSITION` = 0xf1. The tail of the table is a long knockback/ragdoll family
 (`ACT_KNOCKBACK_FLYING_*`), which is why the count is so much larger than any one model's vocabulary.
@@ -342,8 +343,30 @@ base activity is translated and selected against the model:
 The classifier is driven by state after movement rather than by raw input. Its decompile tests the
 current velocity components, ground flags, water level, jump/landing state, a live interaction
 handle and special animation latches. Known returns in the ordinary path cover idle/moving,
-air/water and contextual states, but assigning a durable symbolic name to every compact code needs
-the controlled action trace; the integer is an internal dispatcher key, not the activity enum.
+air/water and contextual states. The integer is an internal dispatcher key, not the activity enum:
+one compact code can select several activities from the rest of the realized state.
+
+The ordinary selector's static compact-code map is [VtMB decompiled]:
+
+| Compact code | Recovered policy |
+|---|---|
+| `0` | stationary policy: `ACT_IDLE`, `ACT_AIM`, or `ACT_CROUCH`, with weapon/form state still able to translate the result |
+| `1` | moving policy: walk, run, sneak, or their relaxed variants, selected from realized speed, flags, and weapon state |
+| `2` | jump/landing phase switch: `ACT_LEAP`, `ACT_HOP*`, `ACT_LEAP_ASCEND`, `ACT_LEAP_DESCEND`, `ACT_FALLING`, `ACT_LAND`, `ACT_LAND_CROUCH`, or `ACT_LAND_HARD` |
+| `5` | attack policy: grounded/airborne melee activity, or a ranged attack layer when the weapon supplies that route |
+| `7` | prayer state machine: `ACT_PRAYING_BEGIN` → `ACT_PRAYING_IDLE` → `ACT_PRAYING_END` → `ACT_IDLE` |
+| `8` | released feeding/seduction idle attack, selected from the active interaction flags |
+| `9` | `ACT_SWIM` or `ACT_TREADWATER` |
+| `10` | the live interaction entity supplies the activity through its virtual policy |
+| `11` | `ACT_CLIMB_UP` or `ACT_CLIMB_DOWN`, selected from vertical velocity |
+| `12` | a contextual helper supplies the activity pair; its predicates and symbolic action are not yet closed |
+| `13` | `ACT_PREBLOCK` |
+| `14` | adds `ACT_RELOAD_LAYER` to the base policy when a weapon is present |
+
+Codes `3`, `4`, and `6` have no distinct ordinary-selector branch and have not been observed. The
+classifier itself directly returns only `0`, `1`, `2`, `7`, `8`, `9`, `10`, `11`, and `13`; a
+latched action can retain other values. That split is why static reachability and controlled traces
+are both required.
 
 The ordinary selector reaches these base activity families in the recovered branches, with the
 numeric identities independently fixed by the global registration table:
@@ -367,15 +390,19 @@ dwords — base activity, weapon activity, and `required`. `0x1024edc0`, reached
 ConVar `activitydump`, prints those exact rows as **Base Act / Weapon Act / Required**. This is an
 extractable table per weapon class, not a set of clip-name heuristics.
 
-The apply path first calls `CBaseCombatCharacter::SetIdealActivity` at `0x10324500`, whose entire
-body stores the requested value at character `+0xff0`. The translation virtuals and final
-`SetActivity`/selection follow; preserving the exact order of all mode/form/class hooks is part of
-the open call-graph closure rather than something inferred from the setter's name.
+The ordinary apply path's exact order is [VtMB decompiled, capture-verified]:
+`SetIdealActivity` → virtual `+0x5f4` (`Weapon_TranslateActivity`) → virtual `+0x5e0`
+(`CBasePlayer::NPC_TranslateActivity`) → `SetActivity` → weighted/heaviest sequence selection.
+`SetIdealActivity` at `0x10324500` only stores the requested value at character `+0xff0`; its return
+site is `0x10164577`, the weapon-translation return is `0x10164582`, and the player translation call
+follows at `0x10164587`. The order outside this ordinary player path — special modes, forms, and the
+NPC class chain — remains open.
 
-`CBasePlayer::NPC_TranslateActivity` at `0x101647a0` is a further player-specific translation: it
+`CBasePlayer::NPC_TranslateActivity` at `0x101647a0` is the player-specific translation after the
+weapon hook: it
 maps `ACT_WALK_RELAXED` to `ACT_WALK` and `ACT_RUN_RELAXED` to `ACT_RUN`, leaving other activities
-unchanged. The complete ordering and the mode-specific/form-specific translation paths remain part
-of the gameplay-action investigation; the known functions and open edges are pinned in
+unchanged. The mode-specific/form-specific translation paths remain part of the gameplay-action
+investigation; the known functions and open edges are pinned in
 `research/cases/animation-pose/specs/gameplay_actions.json`.
 
 That row is what makes the unarmed case resolve at all. A player body carries **no
@@ -383,6 +410,32 @@ That row is what makes the unarmed case resolve at all. A player body carries **
 `tremere_Male_Armor_0`'s whole resolved vocabulary are the weapon-suffixed
 `<weapon>_relaxed_walk` / `<weapon>_relaxed_run` pairs [data-verified, partial corpus]. Without
 the translation an unarmed request for either activity would select nothing.
+
+The first controlled `sm_hub_1` action corpus closes the ordinary locomotion slice
+[capture-verified]. Its pinned `vampire.dll` produced **72,440** `ELGACT1` records and exercised all
+four operator beats; the verifier joins each classifier return to the ordinary apply call sites and
+the clip-table join resolves the selected sequence against
+`character/pc/male/tremere/armor0/tremere_Male_Armor_0.mdl`:
+
+| Realized action | Base → translated activity | Exact selected answer |
+|---|---|---|
+| stationary idle | `ACT_IDLE` → `ACT_IDLE` | weighted `idle01` / `fidget01` / `fidget02` from `misc`, plus the duplicate `idle01` entries from `pc_idles` |
+| unarmed ready | `ACT_AIM` → `ACT_READY_FISTS` | `fists_ready`, sequence 733, `fists` |
+| walk | `ACT_WALK_RELAXED` → `ACT_WALK` | `walk`, sequence 5, 9×1 `move_yaw`, `move_and_ranged` |
+| run | `ACT_RUN_RELAXED` → `ACT_RUN` | `run`, sequence 4, 9×1 `move_yaw`, `runotherspc_pcidles_allsequences` |
+| sneak | `ACT_SNEAK` → `ACT_SNEAK` | `sneak`, sequence 7, 9×1 `move_yaw`, `move_and_ranged` |
+| crouch request | `ACT_CROUCH` → `ACT_CROUCH` | `crouch`, sequence 8, `move_and_ranged`; reused while the request remained active |
+| jump phase 1 | `ACT_LEAP` → `ACT_LEAP` | `leap`, sequence 1407, `misc` |
+| jump phase 7 | `ACT_FALLING` → `ACT_FALLING` | `falling`, sequence 1410, `misc` |
+| landing phase 8 while moving | `ACT_WALK_RELAXED` → `ACT_WALK` | `walk`, sequence 5 |
+| landing phase 8 while still | `ACT_LAND` → `ACT_LAND` | `land`, sequence 1411, `misc` |
+| landing phase 8 while ducked | `ACT_LAND_CROUCH` → `ACT_LAND_CROUCH` | selection returns `-1` on this body; no clip was observed |
+
+Only compact codes `0`, `1`, and `2` occur in this controlled corpus. It therefore proves the
+three-Cs locomotion path, including the relaxed-gait translation and sequence ownership, but not the
+unobserved static branches above. In particular, the ordinary jump does **not** visit
+`ACT_LEAP_ASCEND` or `ACT_LEAP_DESCEND`: its observed chain is `ACT_LEAP` → `ACT_FALLING` → moving
+gait or land.
 
 The model makes the final choice. `SelectWeightedSequence` enumerates sequences whose runtime
 activity ID matches, then uses `actweight`; the chosen sequence still carries the label, include
@@ -459,14 +512,17 @@ All nine of the shared bank's cells are spelled `npc_run_*`. **The player and th
 a run**, and a resolver keyed on the label alone rather than on the owner the DAG names hands the
 player the cast's gait.
 
-**Nothing in this vocabulary holds an unarmed crouch.** `crouch` is a 61-frame non-looping
+**Nothing else in this vocabulary holds an unarmed crouch.** `crouch` is a 61-frame non-looping
 one-shot — an *into* pose — and the only crouched idles the body carries are `crouch_idle` under
 `ACT_CROUCH_MELEESHARED_TWOHAND` and the `<weapon>_crouch` / `<weapon>_midcrouch_idle` sets. What
-retail holds a ducked unarmed player on is not readable from the model inventory.
+retail holds a ducked unarmed player on is not readable from the model inventory. The controlled
+trace shows sequence 8 being reused across 151 crouch requests, but it did not hold the input long
+enough to distinguish a frozen final frame from another end-of-sequence rule.
 
-**`ACT_HOP` is two frames** — a stub rather than a jump. The airborne family carrying real
-animation is `leap_ascend`/`leap_descend`, both looping and both asking a **0.45 s** crossfade
-(A.4c), more than twice the 0.2 s the rest of this vocabulary asks for.
+**`ACT_HOP` is two frames** — a stub rather than the observed jump. `leap_ascend` and
+`leap_descend` do carry looping 31-frame clips with a **0.45 s** crossfade (A.4c), but the controlled
+ordinary jump does not select them; it selects non-looping `leap`, then looping `falling`, both at
+0.2 s.
 
 **A clip's rate is less uniform than the six-bank census above.** This body's DAG reads seven
 rates — 30.0 ×1,417, 18.0 ×26, 60.0 ×5, 20.0 ×5, 35.0 ×5, 38.0 ×3 and 25.0 ×1 — so 25, 35 and 38
