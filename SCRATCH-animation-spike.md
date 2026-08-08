@@ -5,6 +5,10 @@ it carries status and TODOs, which the real docs forbid. Delete it when the work
 disagrees with `docs/vtmb/` or `docs/architecture/`, those win. `uv run elysium doctor` flags it
 as a stray root file; that is expected and this is the file it means.
 
+**This file owns how a pose is built.** Its companion `SCRATCH-action-vocabulary.md` owns what asks
+for one — the activity/label census over `sp_tutorial_1`, `sp_theatre` and `sm_hub_1`, and the RE
+pendency list. Where this file says "the slice", that file says which six activities it means.
+
 **§1 is the work — all of it. §2 is one paragraph on what's done.** Everything after that is a
 fact, in the present tense, with no status attached. A task anywhere but §1, or a status marker
 anywhere but §1 and §2, is a bug in the file.
@@ -13,33 +17,177 @@ anywhere but §1 and §2, is a bug in the file.
 
 ## The goal
 
-Load one character into an empty map and animate it entirely with Unreal's own systems, fed by
-assets baked from VtMB's exports. Acceptance:
+The asset half is finished and is not the bottleneck. What is missing is that **nothing in the game
+asks for a pose** — every door into the animation stack is opened by hand, from the green room, by a
+human clicking a clip name. So the goal is now a vertical slice rather than another asset kind:
 
-- `USkeletalMesh` + shared `USkeleton` + `UAnimSequence` on `/ElysiumBaked`, built offline, no
-  glTFRuntime at runtime — **done**, and it is the only path
-- an `UAnimBlueprint` with a real graph — state machine, blend spaces, additive and layered
-  nodes — rather than the native anim instance
-- locomotion driven by `UBlendSpace` assets built from VtMB's own blend grids
-- correct **in the Content Browser preview and the anim editor**, not only in our runtime
+> **One player body — `tremere_male_armor_0` — standing in the green room, animating from the
+> movement command stream alone. Walk, run, sneak, crouch, idle, jump. No clip picker in the loop.**
+
+Acceptance:
+
+- an `UAnimBlueprint` with a real graph — locomotion state machine, `UBlendSpace` on `move_yaw`,
+  one-shots on a montage slot — rather than the native anim instance;
+- the graph's inputs come from the **post-solve movement state**, never from input;
+- `move_yaw` is written every frame and the stride follows the strafe continuously;
+- correct **in the Content Browser preview and the anim editor**, not only in our runtime;
 - no bespoke composition rule left in the frame path except the one that genuinely cannot be
-  baked (procedural / axis-interp bones)
+  baked (procedural / axis-interp bones).
 
-The bar the owner set: *if we can't author Unreal bone animations correctly, the bake isn't worth
-doing.* Self-describing assets are the point.
+The bar the owner set for the bake — *if we can't author Unreal bone animations correctly, the bake
+isn't worth doing* — was met. The bar for this slice is the next one down the same line: **if the
+game can't ask for a pose without a human naming it, the vocabulary isn't worth exporting.**
+
+**Why this slice and not the layer work.** None of the six activities the slice needs is masked and
+none is additive, so none of them is written in the per-host derived form the bake gives the layer
+families. The whole layer-addressing seam — which used to head this list — is *not* a prerequisite.
+This is the largest piece of the graph that can be built with nothing else finished, and it is the
+piece every later rung plugs into.
 
 ---
 
 ## 1. What's left
 
-Eight items. Everything else in this file is a fact, not a task. Ordered; each says what done means.
+### The slice — six items, ordered, each says what done means
 
-**1.1 is the seam the bake outran.** Every VtMB rule the frame path used to carry is now resolved
-offline, and the price is that the two clip families this spike is about — the additives and the
-overlays that own the split bone — exist on the mount only in a per-host form the runtime has no
-way to name. Nothing downstream of it can be demonstrated until a caller can ask for one.
+**1.1 is the seam that does not exist yet.** The mover knows everything the graph needs and
+publishes none of it; the anim instance reads nothing but explicit calls. Nothing downstream can be
+built until one value crosses.
 
-### 1.1 Reach a derived clip from the runtime
+#### 1.1 Publish a locomotion sample from the mover
+
+`UElysiumMovementComponent` already holds every input the graph wants — `Velocity` (post-solve, on
+`UPawnMovementComponent`), `bOnGround`, `bDucked`/`bDucking`, `JumpHoldRemaining`, `WaterLevel`,
+`SurfaceFriction` — and hands none of them to anything. `AElysiumPawn` owns both the mover and the
+player visual (`SetPlayerVisual`, `Private/Map/ElysiumMapActor.cpp:1038`) and does not connect them.
+
+What crosses is `FElysiumLocomotionSample`, the engine-neutral record
+`docs/architecture/animation-architecture.md` §3.2 already names: local planar velocity, speed,
+facing yaw, `move_yaw`, grounded/air/water, stance, and the jump phase. It is sampled **after** the
+move, in the same pass the camera director and the eye tick already run in — `PostMoveTick` — so no
+consumer reads a half-integrated frame.
+
+The NPC motor publishes the same record. That is the point: one struct, two producers, so the cast's
+locomotion and the player's cannot become two systems that happen to play the same files.
+
+**Done when:** the player's post-solve speed, `move_yaw`, ground state and stance are readable from
+one struct, the NPC motor fills the same struct, and the Cog Npc window shows both.
+
+#### 1.2 One intent, one resolver, one selection record
+
+`FElysiumAnimationIntent` in, `FElysiumAnimationSelection` out. The resolver's steps are
+`docs/architecture/animation-architecture.md` §3.3; for the slice only steps 2, 4, 5 and 6 do any
+work — there is no channel to arbitrate and no weapon to translate through yet, and the seams for
+both exist rather than being stubbed away.
+
+Almost all of the resolution already exists and is reachable:
+`UElysiumNpcAnimSubsystem::ResolveActivityClip` takes an `ACT_*` and returns the vocabulary label,
+the concrete animation and the cell's authored ground speed; `ResolveGrid` returns the baked
+`UBlendSpace` with its axis bindings. What is missing is the caller and the record.
+
+The record is not optional decoration. Six things can produce a wrong pose — the body sample, the
+activity choice, the translation, the weighted pick, the owner resolution and the asset load — and
+without one line naming each of them a wrong pose is a guess. It is what the green room displays
+instead of being the thing that selects.
+
+**Done when:** a caller hands the resolver an intent built from 1.1's sample and gets back an asset
+plus a selection record naming every step, and the record is on screen in Cog and in the headless
+run's JSON.
+
+#### 1.3 The animation graph
+
+`ABP_ElysiumBiped`, the first of the per-archetype Animation Blueprints
+(`docs/architecture/animation-architecture.md` §4). For the slice:
+
+- **a locomotion state machine** — `Idle`, `Walk`, `Run`, `Sneak`, `Crouch`, `Air`, `Land` — with
+  transitions timed from the authored `fade`@612 duration already on `FElysiumNpcClip`. VtMB ships
+  almost no authored transition clips, so a short engine blend is what reproduces the original's
+  feel; it belongs in a transition rule, not in a hand-integrated scalar the way the proxy has it;
+- **`FAnimNode_BlendSpacePlayer`** on `Walk`, `Run` and `Sneak`, driven by a `move_yaw` pose
+  parameter the graph reads off 1.1's sample;
+- **a montage slot** for the jump chain and for everything §3.1 of the vocabulary file calls the
+  direct door. `leap_ascend` is a *loop* — the ascent has no authored length because VtMB's jump is
+  a held push — so the ascend state holds it and the descend transition is a ground-state test, not
+  a clip-ended test;
+- **no aim node, no layered blend, no additive node.** Those arrive with the weapon rung and each
+  needs work this slice deliberately does not do.
+
+`ACT_RUN` resolves through the include DAG to the **PC-only** bank
+`character_shared_male_runotherspc_pcidles_allsequences`, whose `run` grid is not
+`move_and_ranged`'s. Resolving by label alone gives the player the cast's gait, silently.
+
+**Done when:** the six activities of the slice are all reachable through the graph, the state
+machine's transitions come from the authored fades, and `elysium.BlendSpaces 0` still A/Bs against
+the single resolved cell.
+
+#### 1.4 Stand it in the green room and drive it
+
+The green room today stands a body at a fixed origin under an orbit camera and steps clips by hand
+(`FElysiumGreenRoomRun`, `Debug/ElysiumCogWindow_GreenRoom.cpp`). The slice needs one more thing
+from it: a floor, a driven body, and the command stream reaching that body.
+
+Two ways, and the cheap one is right: the green room already pins the player pawn and forces
+`ApplyPlayerModelAlpha(1.0f)` so the PC's own body is fully visible
+(`PinCameraAndPlayerSurface`). So the stage body for this slice **is the player body** — the pawn
+drives, the visual follows, and the orbit camera watches it from outside. No second driver, and the
+thing under test is the shipping path rather than a lab replica of it.
+
+The panel gains a locomotion readout beside the existing clip list: the sample, the selection
+record, the live `move_yaw`, and which state the machine is in.
+
+**Done when:** `uv run elysium gr tremere_male_armor_0` stands the PC body on a floor, WASD walks
+and runs it, Shift changes the gait, Ctrl crouches it, Space jumps it, and the body's pose follows
+without a clip being named by hand.
+
+#### 1.5 Settle `move_yaw`'s sign, and decide the gait speed
+
+Two questions the slice cannot avoid, both in `SCRATCH-action-vocabulary.md` (PEND-1, PEND-6).
+
+**The sign** is recoverable and must be recovered rather than tuned: the retail selector at
+`0x10164870` writes `move_yaw` before it chooses an activity, so what it differences is the answer.
+A mirrored convention reproduces the same per-cell speeds, so a green-room A/B confirms a decision
+and cannot make one.
+
+**The speed** is the interesting one, and it is a design decision as much as an RE one. Retail's
+`m_flMaxSpeed` comes from the current sequence's own root motion
+(`docs/vtmb/source_movement.md` → "Player speed is animation-driven"); ours comes from
+`ElysiumMove::WalkSpeed`/`RunSpeed`, Troika's stated-but-dead ConVars, and the code says so at the
+seam. The authored data does not agree with the ConVars — `walk_0` is 53.8 u/s against
+`speed_walk` 100. Closing the loop makes movement speed a function of the animation blend, which is
+the only way a sideways run at 512 cm/s and a forward run at 479 cm/s stop being foot-sliding, and
+it is a real feel change under the charter's Feel layer.
+
+**Root motion is not a third question.** The exporter leaves the skeletal root in place and carries
+the per-cell displacement as `motion.{cycle_seconds,ground_distance_cm,ground_speed_cm_s}` metadata
+beside the resolved cell, precisely so a body whose motor consumes that metadata is not moved twice.
+So the locomotion clips hold the root and the motor translates; what is open is only which speed the
+motor reads. The green room's `ScanRootMotion` is the per-clip check for anything outside locomotion.
+
+**Done when:** the sign is read off the selector rather than chosen, and the speed source is either
+switched to the authored cell or named in the code as a divergence at the point `GetMaxSpeed`
+answers.
+
+#### 1.6 Retire what the graph replaced
+
+`FElysiumNpcAnimProxy` composes by hand what the graph now owns: the two-player crossfade, the
+`GridPlayer` base slot, `EvaluateLayers`, `LayerPlayers`, `LayerMasks`, and the
+`elysium.AnimLayers` / `elysium.BlendSpaces` A/Bs. The blend profiles they read are the same assets
+`FAnimNode_LayeredBoneBlend` consumes unchanged, so nothing is re-baked.
+
+**Only the parts the slice replaced go.** The layer slots survive until 1.10 lands the aim node, and
+the cinematic seek path survives until the theatre migrates — that one is last on purpose.
+
+**Done when:** the slice's bodies run through `ABP_ElysiumBiped` and the proxy's crossfade and grid
+slot are gone, with the theatre still on its verified seek path.
+
+---
+
+### The rungs after the slice
+
+Still tasks, listed here because §1 is where tasks live. Each was the head of this list before the
+slice was cut, and each is unchanged except for its position.
+
+#### 1.7 Reach a derived clip from the runtime
 
 The bake writes an additive and a split-bone overlay **once per declaring host**, as
 `<label>@<host>` (§5.9), and writes a grid whose cells ship only in derived form once per host as
@@ -50,10 +198,9 @@ an empty host even though `FElysiumContentPaths::BakedCharacterBlendSpace` takes
 `_delta` is never built as an asset (`ElysiumSkeletalBuild.cpp`: an additive no host declares "is
 not built"), and an overlay that ships only in derived form has no raw asset either.
 
-So `UElysiumEntityBodies::PlayNpcLayer` and `PlayNpcGrid` — the doors the green room uses and the
-doors gameplay will use — can only reach a layer that happens to still ship under its bare label.
-The green room's Autolayers panel arms `Binding->Clips[i]`, which is the bare label the table
-names, not the derived asset the bake wrote for the standing host.
+So `UElysiumEntityBodies::PlayNpcLayer` and `PlayNpcGrid` can only reach a layer that happens to
+still ship under its bare label, and the green room's Autolayers panel arms `Binding->Clips[i]`,
+which is the bare label the table names.
 
 The host is not a new unknown anywhere it matters: a layer's host is the clip the body is standing
 on, which is what the binding was looked up by in the first place.
@@ -62,25 +209,24 @@ on, which is what the binding was looked up by in the first place.
 standing on, `Arm as declared` stands every entry the table names rather than only the ones with a
 raw form, and a request for a layer whose host declares no derived form fails by name.
 
-### 1.2 Compose in the order the table states
+#### 1.8 Compose in the order the table states
 
 The table is exported, read and displayed; the accumulation is not driven by it.
 `FElysiumNpcAnimProxy::EvaluateLayers` walks its two slots in two passes, overlay-first and
-additive-second, and the comment at the loop still says the export does not carry the table —
-which it has since the binding shipped (§5.9, §8). Order is the one part of the binding that is
-data rather than inference: the dispatcher walks entries in index order, so entry 0 being the
-overlay and entry 1 the additive is a fact the file states.
+additive-second, and the comment at the loop still says the export does not carry the table — which
+it has since the binding shipped (§5.9, §8). Order is the one part of the binding that is data
+rather than inference: the dispatcher walks entries in index order, so entry 0 being the overlay and
+entry 1 the additive is a fact the file states.
 
 **Done when:** the accumulation order for the armed layers comes from the binding's own index
 order, the comment at the loop states what the code does, and the green room's `Reverse order`
 button is an A/B against a stated order instead of against an assumption.
 
-### 1.3 The weight the accumulator receives
+#### 1.9 The weight the accumulator receives
 
 The combine is resolved; the scalar the accumulator receives *from its caller* is not — the file
 carries no weight, ramp or flags, so it lives in the DLL. Today `RequestLayer` takes it as a
-caller argument and the green room's slider stands in, which the panel says on screen. The moment
-a weapon selects its own layers, that stand-in becomes a guess shipped as behaviour.
+caller argument and the green room's slider stands in, which the panel says on screen.
 
 The first move is an analysis pass over the finalized captures, not a new hook: the combine is
 closed arithmetic, so base local + layer local + composed local determine the scalar per bone, and
@@ -92,7 +238,7 @@ have varied it settles nothing.
 **Done when:** the weight is either measured or named in the code as a stand-in at the point a
 gameplay caller passes it.
 
-### 1.4 A layered blend-space path for the aim family
+#### 1.10 A layered blend-space path for the aim family
 
 `RequestGrid` refuses a blend space whose samples carry `UElysiumAnimLayerMask`, and that gate is
 right: a masked grid evaluated as a **base** pose loses the body's stance from the waist down.
@@ -102,37 +248,27 @@ is a property of the *blend node* and not of the pose feeding it, so a seam buil
 built wrong and then deleted.
 
 The load-bearing precondition is measured: every cell of an aim grid shares one bone mask (§5.4),
-so a whole grid sits behind one node. Needs 1.1 to name the asset and 1.6 to hold the node.
+so a whole grid sits behind one node. Needs 1.7 to name the asset and 1.3's graph to hold the node.
 
 **Done when:** an aim grid stands as a **layer** over a moving host, torso upright, through a node
 that owns the mask.
 
-### 1.5 A gameplay caller
+#### 1.11 The gameplay callers beyond the green room
 
-`UElysiumEntityBodies::PlayNpcLayer` and `PlayNpcGrid` are the doors and nothing walks through
-them. No NPC, weapon or script path asks for a layer or a grid; `FElysiumGreenRoomRun` is the only
-caller of either.
+The slice makes the *player* a caller through the intent seam. Everything else in
+`SCRATCH-action-vocabulary.md` §3 still is not: no NPC, weapon or script path asks for an activity
+through the resolver, and `UElysiumEntityBodies::PlayNpcLayer`/`PlayNpcGrid` have no caller but the
+green room. `PlayNpcActivity` stays as a compatibility adapter while patrol and scripted travel move
+across.
 
-**Done when:** a body moving with a weapon plays its layers and steers its locomotion grid with no
-green room in the loop.
+The two shapes worth building together, because they are the same shape: a `scripted_sequence`'s
+`m_iszIdle → m_iszPlay → m_iszPostIdle` and an interesting place's `INTO → IDLE → OUTOF`. One
+montage-slot mechanism serves both; building them apart is how there come to be two.
 
-### 1.6 The animation graph
+**Done when:** an NPC's ambient behaviour and a scripted beat both reach a pose through the intent
+seam rather than through a direct clip call, and `m_iszCustomMove` plays over a travelling body.
 
-An `UAnimBlueprint` per body archetype: locomotion state machine, blend spaces on the pose
-parameters, the additive and layered nodes, transitions timed from the authored `fade`@612
-duration (already on the `Seq` namedtuple and already on `FElysiumNpcClip`).
-
-For the aim family the node is `FAnimNode_AimOffsetBlendSpace` or a `FAnimNode_BlendSpacePlayer`
-under a `FAnimNode_LayeredBoneBlend`; for the three masks that do not own the split bone it is
-`FAnimNode_LayeredBoneBlend` over the profiles the bake already writes. No Unreal node masks per
-sample, which is why the one-mask-per-grid measurement is the precondition.
-
-This is what deletes the proxy's own composition: `EvaluateLayers`, `LayerPlayers`, `LayerMasks`,
-`GridPlayer` and the `elysium.AnimLayers` / `elysium.BlendSpaces` A/Bs go with it.
-
-**Done when:** `UElysiumNpcAnimInstance`'s native `Evaluate` tail is gone.
-
-### 1.7 Post-process ABP for axis interpolation
+#### 1.12 Post-process ABP for axis interpolation
 
 Procedural bones are genuinely runtime — they read the control bone's live orientation, which is
 why this one stage can never be baked. A post-process ABP on the skeletal mesh means the preview
@@ -142,26 +278,23 @@ today (`Private/Editor/` is bake code inside the runtime module).
 **Done when:** the Content Browser preview and the anim editor show a correct rig with no game
 running.
 
-### 1.8 Root motion
+#### 1.13 Extract the action corpus
 
-The green room is the harness and already does the job (`uv run elysium debug greenroom`, plus the
-Cog window): it stands any stem, filters a vocabulary by source, kind and root motion, arms
-layers, and steps a grid by hand.
+`docs/project/animation-roadmap.md` ANM4a/ANM4b. The slice runs on six activities read out of the
+model by hand; the other 1,100 on this body alone, and every weapon translation table, are the
+generated corpus. `SCRATCH-action-vocabulary.md` §5 is the pendency list this closes.
 
-Root motion is the open decision beside it. `ScanRootMotion` labels every clip as carrying the
-root or holding it; nothing consumes the answer. There is no decision on record either way —
-whether clips drive translation, whether the motor does, or how the two reconcile. A state machine
-built before this lands will bake an answer in by accident.
-
-**Done when:** the decision is recorded in the doc that owns locomotion, and the graph honours it.
+**Done when:** the activity registry, player and NPC rule artifacts, weapon tables and the
+reachability join land under `$ELYSIUM_EXPORT_ROOT/out/animation/actions/`, and a controlled
+retail/remake trace agrees on base activity, each translation and the final sequence.
 
 ---
 
 ## 2. What's already done
 
-Phases A, B and C, the blend spaces, the blend profiles, and the per-host derivation that closed
-both quirks in the bake. C2 was dropped on evidence — 0 of 14,004 sequences need the pre-multiply
-branch (§4).
+The whole asset half. Phases A, B and C, the blend spaces, the blend profiles, and the per-host
+derivation that closed both quirks in the bake. C2 was dropped on evidence — 0 of 14,004 sequences
+need the pre-multiply branch (§4).
 
 **Six asset kinds ship as self-describing data:** meshes with morph targets, ordinary sequences
 needing no runtime rule, additives Unreal hands back as deltas against the base their host
@@ -380,7 +513,8 @@ additive identity, so a profile there would be an asset nothing reads.
 
 **Every cell of a 3x3 `<weapon>_aim_layer` grid carries the same mask; every cell of a 9x1
 locomotion fan is unmasked.** Verified over 135 grids / 6 male banks by a bake that hard-fails on
-disagreement, plus `probe_grid_masks.py`. This is what makes 1.4's layered blend buildable.
+disagreement, plus `probe_grid_masks.py`. This is what makes 1.10's layered blend buildable, and
+the unmasked half is what lets the slice's three grids stand as base poses at all.
 
 Male banks only — the female bank is not in the parity slice. **Nothing needs writing to close
 that:** the bake hard-fails on disagreement, so baking a female body *is* the measurement.
@@ -421,7 +555,8 @@ Cell addressing is `anim[i0][i1]`. The transposed reading reproduced 1,858/8,302
 
 A grid whose cells ship only in derived form is built **once per declaring host**, sampling that
 host's derived cells, as `BS_<label>@<host>`; every other grid builds once as `BS_<label>`. Asking
-for the bare label found nothing for 299 of the mount's 527 spaces.
+for the bare label found nothing for 299 of the mount's 527 spaces — and found the other 228,
+which is the population the slice's locomotion fans belong to.
 
 The bake reads the sidecar with `FElysiumBlendTable`, the runtime's own reader, so bake and game
 cannot disagree about what a grid says.
@@ -470,7 +605,7 @@ reaches it under its plain label, and kept when something does: a cell can belon
 once, one bound to a host and one declared by nobody, and the unbound grid still has to be
 self-consistent.
 
-**Nothing on the runtime side speaks this vocabulary** — that is 1.1.
+**Nothing on the runtime side speaks this vocabulary** — that is 1.7.
 
 ---
 
@@ -503,7 +638,7 @@ accumulate in LOCAL space **under** the composition stage, not over it, which is
 - `RequestGrid` refuses a blend space whose samples carry `UElysiumAnimLayerMask`, which is why an
   aim grid bakes but cannot be stood. **Deliberately no layered blend-space path:** in a graph the
   mask is a property of the *blend node*, not of the pose feeding it, so that seam would be built
-  wrong and then deleted by 1.6.
+  wrong and then deleted by 1.3's graph.
 
 **`s = layer_weight` alone in the additive branch, and the reason does not generalise.**
 `bone_weight` is a binary mask and is *not* 1.0 everywhere — 5,972 records install-wide are zero.
@@ -526,7 +661,7 @@ update *ahead of* the `bInitialized` gate, like cloth, so one rides over the ref
 with no clip yet.
 
 **The order within the walk is an assumption** — overlay-first, additive-second, the only order in
-which both contributions survive. Stated in the code at the loop; 1.2 is what settles it.
+which both contributions survive. Stated in the code at the loop; 1.8 is what settles it.
 
 **Blend spaces: a BASE slot only.** `FAnimNode_BlendSpacePlayer_Standalone GridPlayer` in the
 proxy; when set it IS the body pose, and `Request` clears it. A grid row falls back to standing the
@@ -534,11 +669,18 @@ resolved cell when there is no baked blend space — that is D1's A/B, not an er
 
 **Clip resolution knows nothing about hosts.** `ResolveClip` finds the label in the stem's
 vocabulary, takes the owner column, and asks `LoadBakedClip` for `<owner>/<label>`; `ResolveGrid`
-passes an empty host. §5.9 is what that cannot reach.
+passes an empty host. §5.9 is what that cannot reach — and the slice's three fans are what it can.
 
-**Callers today:** `UElysiumNpcAnimInstance::PlayLayer/StopLayer/StopAllLayers/GetActiveLayers`,
-`UElysiumEntityBodies::PlayNpcLayer/PlayNpcGrid/SetNpcGridPosition/StopNpcLayers`, and the green
-room. **Nothing in gameplay selects a layer or a grid** — 1.5.
+**Nothing produces an animation request.** `UElysiumNpcAnimInstance::PlayLayer/StopLayer/…`,
+`UElysiumEntityBodies::PlayNpcLayer/PlayNpcGrid/SetNpcGridPosition/StopNpcLayers` and
+`PlayNpcActivity` are all doors; the callers are the green room, `scripted_sequence`, the choreo
+scene and the disposition-idle policy. **No movement state, no AI task and no weapon selects
+anything** — 1.1 through 1.4 for the player, 1.11 for the rest.
+
+**The player body already stands.** `AElysiumMapActor::BuildPlayerVisual` builds the PC's own clan
+model through the same skeletal path the cast uses, attaches it to the pawn's root offset by one
+body half-height, and hands it to `IElysiumPlayerBody::SetPlayerVisual`. It plays the standing idle
+its disposition selects and nothing else. The mover beside it publishes nothing.
 
 ---
 
@@ -546,7 +688,17 @@ room. **Nothing in gameplay selects a layer or a grid** — 1.5.
 
 - **A plain label does not name a derived asset.** `<layer>@<host>` is the whole point of the bake
   and none of the runtime's resolvers construct it, so a miss here looks exactly like an
-  unexported stem. §5.9, and 1.1 is the work.
+  unexported stem. §5.9, and 1.7 is the work.
+- **The label a locomotion sequence carries is its 180-degree cell.** A `move_yaw` fan places cell
+  *k* at `-180 + 45k` and names each cell by that angle mod 360, so `walk` *is* `walk_180` — the
+  backpedal — and `walk_0` is the forward walk. Standing the bare label as a clip stands the wrap
+  seam. `FElysiumPoseParams::Neutral()` reads every parameter as 0 and therefore lands on the
+  forward cell, which is correct by construction and not by any rule; the moment something writes
+  `move_yaw`, that construction is what moves.
+- **`ACT_RUN` on a player body is not `move_and_ranged`'s.** It resolves through the include DAG to
+  `character_shared_male_runotherspc_pcidles_allsequences`, a PC-only bank with its own faster
+  grid. Resolving by label instead of by the owner the DAG names gives the player the cast's gait
+  and logs nothing.
 - **A stem the character export missed cannot stand at all.** There is no second build of a
   character, so `LoadMesh` fails by name rather than substituting one. `uv run elysium export
   characters` with no arguments bakes the whole cast, which is what the game needs; naming models
@@ -557,7 +709,7 @@ room. **Nothing in gameplay selects a layer or a grid** — 1.5.
 - **The Cog green-room readout reports the MESH, not the clip.** A body standing green still says
   nothing about which sequence is playing; `LoadBakedClip` returns null silently.
 - **The Content Browser preview has no anim graph**, so it applies no axis interpolation — a rig
-  with driven bones previews with untwisted forearms. Expected, not a bug; 1.7 is what fixes it.
+  with driven bones previews with untwisted forearms. Expected, not a bug; 1.12 is what fixes it.
 - **A missing bone track evaluates to identity**, not to the ref pose. If a parity failure's
   magnitude equals a bone's full bind transform, the track is missing — don't hunt a rotation bug.
   **Corollary:** that holds for an *additive* (`ResetToAdditiveIdentity`) and is exactly backwards
@@ -587,6 +739,11 @@ room. **Nothing in gameplay selects a layer or a grid** — 1.5.
   for that host.
 - **The legs and torso are not a control group.** Whole-body sway is the data, not a defect — deltas
   stack down the chain to ~37 deg at the skull. What *would* be a defect is the root translating.
+- **The locomotion clips hold the root; the motor moves the body.** The exporter leaves the skeletal
+  root in place and carries the per-cell displacement as `motion.*` metadata beside the resolved
+  cell, so a body whose motor consumes that metadata is not moved twice. A graph that enables root
+  motion on a locomotion state double-moves. `ScanRootMotion` in the green room is the per-clip
+  check for anything outside locomotion.
 
 **Watch item (A1's unfound root cause).** Re-running the clip build against the finished on-disk
 skeleton produced all 58 tracks, so the bone was absent when the clips baked and present
@@ -606,6 +763,7 @@ on a body whose mesh built cleanly, that question is live again.**
 | `elysium.BlendSpaces` | 1 | 0 declines every grid, so a grid label plays the single resolved cell (D1's A/B) |
 | `elysium.Cloth` | **0** | the garment spike, off. It no longer selects a mesh — with it on, a chain whose lattice bones the shared skeleton lacks resolves nothing |
 | `elysium.NpcAnim` | 1 | 0 drops to the single-node instance, which refuses layers and cannot hold a blend space |
+| `elysium.SourceMovement` | 1 | 0 stands the body on `AElysiumCapsulePawn` instead — the slice's A/B for whether a pose problem is the mover's |
 
 `elysium.LayerDump` is a **command**: one-shot, logs the pose the next layer evaluation reads, per
 bone, largest first, with each bone's mask weight and the sequence's `AdditiveAnimType`. It is the
@@ -631,10 +789,15 @@ elysium.LayerDump                     # one-shot per-bone log of the pose being 
 clip filter `aggressive_run`          # rows marked `->` are grids
 pick one                              # stands the whole fan, not the cell
 drag `move_yaw`                       # 0 = forward, 90 = strafe; between cells both contribute
+
+# the slice's body
+uv run elysium gr tremere_male_armor_0
+clip filter `walk`                    # `walk` is a GRID row; standing the label alone gives
+                                      # the 180-degree cell, not the forward walk (see §7)
 ```
 
 The Autolayers panel names the selecting authority (the model's own table) and says on screen that
-the weight slider is a stand-in. It arms by the table's bare label, which is 1.1's gap.
+the weight slider is a stand-in. It arms by the table's bare label, which is 1.7's gap.
 
 ### Commands
 
@@ -642,7 +805,8 @@ the weight slider is a stand-in. It arms by the table's bare label, which is 1.1
 uv run elysium build
 uv run elysium export characters smiling_jack tremere_male_armor_0     # the parity slice
 uv run elysium test Elysium.Content.BakedCharacterParity
-uv run elysium gr smiling_jack        # the interactive lab; `debug greenroom` is the one-shot
+uv run elysium gr tremere_male_armor_0   # the interactive lab; `debug greenroom` is the one-shot
+uv run elysium debug move                # the movement courses, compared by move_diff.py
 ```
 
 A bake change is only visible after a re-export — the mount is not rebuilt by `build`. And
@@ -730,6 +894,9 @@ table, which owns it.
 | `FUN_10091110` | sequence transitions; `SimpleSpline` crossfade ramp | confirmed |
 | `FUN_1010a020` / `a2b0` / `a140` / `a180` | probably QuaternionAlign / Normalize / Blend / BlendNoAlign | **unverified**, and nothing depends on resolving them |
 
+The **selection**-side addresses the slice depends on live in `vampire.dll` and are listed in
+`SCRATCH-action-vocabulary.md` §5 with the question each one answers.
+
 Decompile one more:
 
 ```
@@ -763,6 +930,7 @@ Ghidra dumps      E:\elysium-work\research\ghidra\out\animation_pose\
 Source reference  E:\elysium-work\research\reference-source\source-engine\public\
                   bone_setup.cpp (SlerpBones ~L1373-1476), studio.h (flags ~L3066)
 RE spec           research/cases/animation-pose/specs/animation_pose.json
+                  research/cases/animation-pose/specs/gameplay_actions.json   <- the selection half
 Ghidra project    E:\elysium-work\research\ghidra\project  (ProjName `vtmb`, the default)
 Exports           E:\elysium-work\exports\npc\  → *.eskm, *.glb, banks/, blends/, cloth/, tex/
 Baked mount       Plugins/ElysiumBaked/Content/Characters/{Skeletons,Meshes,Materials,Textures,Anims}
@@ -772,4 +940,7 @@ Bake              Source/ElysiumUE/Private/Editor/ElysiumSkeletalBuild.cpp
 Verify sweep      pipeline/unreal/bake_verify_characters.py
 Runtime           Source/ElysiumUE/Private/Visual/ElysiumNpcAnimInstance.{h,cpp}
 Layer resolution  Source/ElysiumUE/Private/Visual/ElysiumNpcAnimSubsystem.cpp (ResolveClip/ResolveGrid)
+Player body       Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp (BuildPlayerVisual)
+Player mover      Source/ElysiumUE/Private/Player/ElysiumMovementComponent.cpp + Public/ElysiumMoveSolve.h
+Green room        Source/ElysiumUE/Private/Debug/ElysiumGreenRoomRun.cpp + Debug/ElysiumCogWindow_GreenRoom.cpp
 ```
