@@ -164,6 +164,11 @@ public:
 	// entered from the menu is a session like any other. False with the reason in OutError.
 	bool EnterGreenRoom(FString& OutError);
 
+	// The same stage world with nothing armed over it: the empty level and the pawn, and no lab.
+	// The movement gym's host — it brings its own geometry and runs under `-nullrhi`, where the lab
+	// refuses.
+	bool EnterStageWorld(FString& OutError);
+
 	// --- Pause ---------------------------------------------------------------------------------
 	// Playing <-> Paused: the world is held (clock + engine) and the pause menu is raised. Only
 	// legal from Playing — the front end is an empty shell and has no run to pause.
@@ -220,6 +225,10 @@ private:
 	void RegisterCommands();
 	void UnregisterCommands();
 
+	// The body both stage entries share: travel, then the Loading -> ready -> Playing path a map
+	// load takes. `bWithGreenRoom` decides only whether the lab is armed over it.
+	bool EnterStage(FString& OutError, bool bWithGreenRoom);
+
 	EElysiumAppState State = EElysiumAppState::Boot;
 	FOnElysiumAppStateChanged AppStateChanged;
 	EElysiumGameOverReason GameOverReason = EElysiumGameOverReason::Killed;
@@ -230,10 +239,13 @@ private:
 		Menu,      // raise the static main menu in the empty boot world
 		NewGame,   // straight into the story entry, seeded
 		DevMap,    // -ElysiumMap=<name>: a bare load with the mock character seeded
-		GreenRoom, // -ElysiumGreenRoom with no map named: the stage world, no VtMB map loaded
+		Stage,     // the stage world, no VtMB map loaded: -ElysiumGreenRoom, or -MoveGym
 	};
 	EBootKind BootKind = EBootKind::Menu;
 	FString   BootMap;             // DevMap only
+	// Whether a Stage boot also arms the green room's lab. The movement gym wants the empty level
+	// and nothing else, and it runs under `-nullrhi` where the lab refuses outright.
+	bool      bStageWantsGreenRoom = false;
 	bool      bBootExecuted = false;
 
 	FDelegateHandle PrepareLoadingScreenHandle;

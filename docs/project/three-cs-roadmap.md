@@ -101,7 +101,7 @@ trace, a bake) is a context switch rather than a slice stall.
 The lanes join at `CCC7` (the speed authority), the co-tune half of `CCC3`, and `CCC8`; `CCC9`
 retires what they replaced.
 
-- [ ] **CCC0 The instrument.** A code-built gym generated from `ElysiumMove`'s own constants, so a
+- [~] **CCC0 The instrument.** A code-built gym generated from `ElysiumMove`'s own constants, so a
   riser, ledge, slope or ceiling brackets the threshold it tests and cannot drift from the spec.
   The generator follows the module's own pure-rules/engine-half split (the `ElysiumMoveSolve.h` /
   `ElysiumCameraSolve.h` pattern): a pure spec — constants in, placement list out — asserted in the
@@ -123,6 +123,20 @@ retires what they replaced.
   a constant in `ElysiumMove` turns exactly the bracket that constant owns red; the differ fails on
   an unregistered or missing channel; the PC body stands **on** the gym rather than above it.
   *Deps:* none — `4.7`'s harness and the stage both exist.
+  *Done:* the gym (33 lanes in an empty stage world, `ElysiumGymSpec.h` + `ElysiumGymBuilder.h`), the
+  named-channel recorder and its manifest (`ElysiumChannels.h` + `FElysiumChannelRecorder`), the
+  channel differ chained into `debug move` with its five refusals
+  (`validation/channel_diff.py`), 33 committed gym baselines in `dev/baselines/move/` that reproduce
+  byte-for-byte, and the red test both ways — `StepSize` reddens only the riser lanes and
+  `StandableZ` only the slope lanes. `elysium.playerpos` sites a course the way `elysium.campos`
+  sites a vantage. The five open-floor `sp_tutorial_1` courses are surveyed onto real warehouse floor
+  and confirmed headless.
+  *Remaining:* three sited feature courses. `stairs`, `slope` and `doorway` carry surveyed
+  coordinates that a played session stands on and the headless run cannot — the body falls through or
+  is seated in a solid — so they are recorded and deferred rather than baselined. The floor the
+  harness is missing is map-collision work, not a survey. Two findings sit under it: `sp_tutorial_1`
+  ships no ramp near the 0.7 standable normal, and the map's `.hulls` sidecar is not the walkable
+  surface, so a coordinate picked out of it is picked off the wrong geometry.
 
 - [ ] **CCC1 Publish the body sample.** `UElysiumMovementComponent` holds every input a graph wants
   and hands them to nothing: the post-solve state is private members behind scalar getters, and
@@ -376,8 +390,9 @@ constant.
 
 **The sited courses on `sp_tutorial_1`** answer *whether we match retail*, and are permanently
 required for it — retail will not load a gym we authored, so course-time comparison against a capture
-is real-geometry-only. Their coordinates are placeholders today and must be surveyed before their
-baselines mean anything; that survey is `CCC0`'s.
+is real-geometry-only. The five open-floor courses are surveyed onto real warehouse floor; the three
+feature courses are surveyed but not yet standable in the headless run, so they record without a
+baseline (`CCC0` → *Remaining*).
 
 **The green room** answers *whether it looks right*. Locomotion, unlike pose composition, has numeric
 ground truth — walk-up-18-succeeds and walk-up-19-fails is a boolean — so most of this slice asserts

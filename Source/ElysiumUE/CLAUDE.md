@@ -158,8 +158,10 @@ ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `
 Headless self-driving harnesses, all armed from `UElysiumMapSubsystem::Initialize` on a
 command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProfile`),
 `FElysiumShotRun` (`-ElysiumShots`), `FElysiumProbeRun` (`-ElysiumProbe`), `FElysiumMoveRun`
-(`-ElysiumMove`, courses in `ElysiumMoveCourses.h`, driven by `uv run elysium debug move`, compared by
-`pipeline/src/elysium_pipeline/validation/move_diff.py`).
+(`-ElysiumMove`, courses in `ElysiumMoveCourses.h` over the generated gym `ElysiumGymSpec.h` /
+`ElysiumGymBuilder.h`, recorded through `FElysiumChannelRecorder` over the `ElysiumChannels.h`
+registry, driven by `uv run elysium debug move`, compared by
+`pipeline/src/elysium_pipeline/validation/channel_diff.py`).
 
 Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
 and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EXPORT_ROOT` is empty).

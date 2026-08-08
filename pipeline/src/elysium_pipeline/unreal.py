@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -297,18 +298,32 @@ def run_play(config, runner, map_name: str | None = None, extra: Sequence[str] =
     _run(config, runner, editor_executable(config), args)
 
 
-def _take_options(values: list[str]) -> tuple[list[str], list[str], bool]:
-    """Split harness-wide options out of the positional arguments.
+@dataclass(frozen=True)
+class HarnessOptions:
+    """Harness-wide switches, split out of the positional arguments.
 
-    Two of these exist because the harnesses are otherwise only drivable by editing files:
-    `--set` is the only way to put a console variable in front of a run, and `--live` is the
-    only way to watch one instead of reading stills afterwards.
+    These exist because the harnesses are otherwise only drivable by editing files: `--set` is the
+    only way to put a console variable in front of a run, `--live` is the only way to watch one
+    instead of reading stills afterwards, and `--promote` is the only way to say that what a run
+    just recorded is the new truth.
+    """
 
-    Returns `(positional, exec_cmds, live)`.
+    exec_cmds: tuple[str, ...] = ()
+    live: bool = False
+    gym: bool = False
+    sited: bool = False
+    promote: bool = False
+
+
+def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
+    """Returns `(positional, options)`.
+
+    Parsed before any harness branch reads a positional, because a switch left in the positional
+    list becomes an argument: `--gym` would arrive at the movement harness as `-MoveCourse=--gym`.
     """
     positional: list[str] = []
     exec_cmds: list[str] = []
-    live = False
+    flags = {"--live": False, "--gym": False, "--sited": False, "--promote": False}
     index = 0
     while index < len(values):
         value = values[index]
@@ -322,17 +337,26 @@ def _take_options(values: list[str]) -> tuple[list[str], list[str], bool]:
             exec_cmds.append(value.split("=", 1)[1])
             index += 1
             continue
-        if value == "--live":
-            live = True
+        if value in flags:
+            flags[value] = True
             index += 1
             continue
         positional.append(value)
         index += 1
-    return positional, exec_cmds, live
+    return positional, HarnessOptions(
+        exec_cmds=tuple(exec_cmds),
+        live=flags["--live"],
+        gym=flags["--gym"],
+        sited=flags["--sited"],
+        promote=flags["--promote"],
+    )
 
 
 def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
-    values, exec_cmds, live = _take_options(list(args))
+    values, options = _take_options(list(args))
+    exec_cmds = list(options.exec_cmds)
+    live = options.live
+    gym_only, sited_only, promote = options.gym, options.sited, options.promote
     common = common_game_args(config)
     editor = editor_executable(config)
     if kind == "profile":
@@ -391,14 +415,41 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         hz = values[1] if len(values) > 1 else "60"
         if course.isdigit():
             hz, course = course, ""
-        launch = [
-            *common, "-ElysiumMove", "-ElysiumMap=sp_tutorial_1", f"-MoveHz={hz}",
-            "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
-            "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
+
+        # Two hosts, two questions. The gym brackets where a threshold is, on geometry derived from
+        # the movement constants, in an empty stage world that needs no exported map. The sited
+        # courses answer whether we match retail, which is real-geometry-only.
+        hosts = ["gym", "sited"]
+        if gym_only:
+            hosts = ["gym"]
+        elif sited_only:
+            hosts = ["sited"]
+
+        for host in hosts:
+            if host == "sited" and not (config.export_root / "sp_tutorial_1").is_dir():
+                print("[move] sp_tutorial_1 is not exported; skipping the sited courses")
+                continue
+            launch = [
+                *common, "-ElysiumMove", f"-MoveHz={hz}",
+                "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
+                "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
+            ]
+            launch.append("-MoveGym" if host == "gym" else "-ElysiumMap=sp_tutorial_1")
+            if course:
+                launch.append(f"-MoveCourse={course}")
+            if exec_cmds:
+                launch.append("-ExecCmds=" + ";".join(exec_cmds))
+            _run(config, runner, editor, launch)
+
+        # Recording without judging is what this harness did before: the comparator existed but
+        # nothing ran it. Chained here, its verdict is the command's own exit code.
+        diff = [
+            "-m", "elysium_pipeline.validation.channel_diff",
+            "--gym-baseline", os.fspath(config.repo_root / "dev" / "baselines" / "move"),
         ]
-        if course:
-            launch.append(f"-MoveCourse={course}")
-        _run(config, runner, editor, launch)
+        if promote:
+            diff.append("--promote")
+        _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
         return None
     if kind == "gr":
         # The interactive green room. It shares the harness's stage and body factory and nothing

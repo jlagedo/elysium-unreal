@@ -632,6 +632,13 @@ def debug_shots(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> N
 
 @debug_app.command("move", context_settings=PASSTHROUGH)
 def debug_move(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
+    """Replay the movement courses and diff them against their baselines.
+
+    Usage: `debug move <course> <hz>`, both optional. Two hosts run by default -- the generated
+    gym, which brackets where a threshold is, and the sited courses on `sp_tutorial_1`, which
+    answer whether we match retail. `--gym` or `--sited` runs one of them; `--promote` makes what
+    the run just recorded the new baseline.
+    """
     _debug(ctx, "move", [*(args or ()), *ctx.args])
 
 

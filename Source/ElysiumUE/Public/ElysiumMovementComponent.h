@@ -56,6 +56,26 @@ public:
 	void SetWaterLevel(EElysiumWaterLevel InLevel) { WaterLevel = InLevel; }
 	float GetSurfaceFriction() const { return SurfaceFriction; }
 
+	// Would the standing hull fit where we are? What stops a stand-up under a low ceiling, and what
+	// `FinishUnDuck` gates on. Public because the gym's unduck-refusal brackets **measure** it: read
+	// off `ducked` plus the command stream it would be an inference, and an inference cannot tell a
+	// refused unduck from one that was never asked for.
+	bool CanUnduck() const;
+
+	// Override one `rules.txt` jump value for the run in flight, in the unit the key is authored
+	// in. The gym's pop brackets need it: `sv_jump_boost` is an origin displacement, and with the
+	// shipped 185 u/s held push also in play the body clears every roof that would bracket it, so
+	// the pop can only be isolated by suppressing the push. Latches the rulebook read, which is
+	// otherwise deferred to the first frame and would overwrite this.
+	//
+	// Cleared by `ResetState`, so an override belongs to one course and never leaks into the next.
+	bool SetJumpRuleOverride(const TCHAR* Key, float Value);
+
+	// The live tuning, for a harness that has to record what a run was made under — the gym is
+	// derived from these values, so a recording that does not say which ones it used cannot say
+	// what changed when it disagrees with its baseline.
+	const FElysiumMoveTuning& GetTuning() const { return Tuning; }
+
 private:
 	// One integration step of the pending command. `TickComponent` is a thin driver over this: it
 	// bounds the delta, asks the stepper how to chop it, and calls this N times. Both timestep
@@ -78,8 +98,6 @@ private:
 	void Duck();
 	void FinishDuck();
 	void FinishUnDuck();
-	// Would the standing hull fit where we are? What stops a stand-up under a low ceiling.
-	bool CanUnduck() const;
 
 	// `sv_jump_boost` — the instant origin pop on the jump's first frame, swept so a ceiling caps it.
 	void ApplyJumpBoost();

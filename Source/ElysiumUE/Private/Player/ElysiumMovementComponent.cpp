@@ -92,6 +92,25 @@ void UElysiumMovementComponent::ResetState()
 		FinishUnDuck();
 	}
 	DuckTime = 0.0f;
+
+	// The jump rules go back to the rulebook's. A harness override belongs to the course that set
+	// it, and a body arriving somewhere new is arriving with the shipped tuning.
+	Tuning.BaseJumpVelocity = ElysiumMove::BaseJumpVelocity;
+	Tuning.JumpGravityMultiplier = ElysiumMove::JumpGravityMultiplier;
+	Tuning.JumpHoldSeconds = ElysiumMove::JumpHoldSeconds;
+	bJumpTuningLoaded = false;
+}
+
+bool UElysiumMovementComponent::SetJumpRuleOverride(const TCHAR* Key, float Value)
+{
+	if (!Tuning.SetJumpRule(Key, Value))
+	{
+		return false;
+	}
+	// The rulebook read is deferred to the first frame that moves; without latching it here it
+	// would land on top of this and the override would last exactly zero frames.
+	bJumpTuningLoaded = true;
+	return true;
 }
 
 void UElysiumMovementComponent::SetFrozen(bool bInFrozen)

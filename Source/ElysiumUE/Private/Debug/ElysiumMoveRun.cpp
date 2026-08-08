@@ -2,8 +2,10 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Debug/ElysiumGymBuilder.h"
 #include "Debug/ElysiumMoveCourses.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumGymSpec.h"
 #include "ElysiumInputRouter.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -16,9 +18,8 @@
 #include "Engine/World.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Parse.h"
 #include "Misc/Paths.h"
+#include "Misc/Parse.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMove, Log, All);
 
@@ -27,6 +28,20 @@ namespace
 	// The same settle the other harnesses take: the spawn pass is done by then, but collision cooks
 	// over the first frames and a body dropped into a half-built scene falls through the floor.
 	constexpr int32 MoveSettleFrames = 30;
+
+	// And a second settle, per course, between seating the body and feeding it its first command.
+	//
+	// `ResetState` clears `bOnGround`, and `Duck` runs **before** `CategorizePosition` — so a course
+	// whose first frame holds `+duck` gets the *airborne* duck, which moves the origin up 18 units
+	// instead of leaving the feet planted. The body then lands two units high (inside
+	// `CategorizePosition`'s own down-trace tolerance, so it never settles further) and walks into a
+	// ceiling it would otherwise have fitted under. A handful of input-free frames is all it takes
+	// for the body to be grounded before the course says anything.
+	constexpr int32 CourseSettleFrames = 10;
+
+	// The gym stands at the world origin: every recorded coordinate then reads small, and a row's
+	// `py` divided by the lane pitch is the lane index by inspection.
+	const FVector GymOrigin = FVector::ZeroVector;
 
 	FString OutputDir()
 	{
@@ -39,6 +54,11 @@ bool FElysiumMoveRun::IsRequested()
 	return FParse::Param(FCommandLine::Get(), TEXT("ElysiumMove"));
 }
 
+bool FElysiumMoveRun::WantsGym()
+{
+	return FParse::Param(FCommandLine::Get(), TEXT("MoveGym"));
+}
+
 FElysiumMoveRun::FElysiumMoveRun(UElysiumMapSubsystem* InSubsystem)
 	: Subsystem(InSubsystem)
 {
@@ -47,8 +67,10 @@ FElysiumMoveRun::FElysiumMoveRun(UElysiumMapSubsystem* InSubsystem)
 	StepSeconds = 1.0f / static_cast<float>(Hz);
 
 	FParse::Value(FCommandLine::Get(), TEXT("MoveCourse="), CourseFilter);
+	bGym = WantsGym();
 
-	UE_LOG(LogElysiumMove, Log, TEXT("headless movement run armed: %d Hz%s."), Hz,
+	UE_LOG(LogElysiumMove, Log, TEXT("headless movement run armed: %s, %d Hz%s."),
+		bGym ? TEXT("the generated gym") : TEXT("a sited map"), Hz,
 		CourseFilter.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", course '%s'"), *CourseFilter));
 
 	TickHandle = FTSTicker::GetCoreTicker().AddTicker(
@@ -63,43 +85,149 @@ FElysiumMoveRun::~FElysiumMoveRun()
 	}
 }
 
+namespace
+{
+	// The move producer's frame channels, in column order. Every one resolves in
+	// `ElysiumChannels::Defs()` or the recorder refuses to open — which is what stops a value
+	// reaching disk with nothing that knows how to compare it.
+	const TCHAR* const GMoveChannels[] =
+	{
+		TEXT("frame"), TEXT("seq"), TEXT("dt"),
+		TEXT("px"), TEXT("py"), TEXT("pz"),
+		TEXT("vx"), TEXT("vy"), TEXT("vz"), TEXT("speed2d"),
+		TEXT("onground"), TEXT("ducked"), TEXT("ducking"), TEXT("canunduck"),
+		TEXT("water"), TEXT("surffric"),
+	};
+
+	// One place that resolves the harness's actors, so a null anywhere reads the same.
+	struct FBodyRefs
+	{
+		AElysiumPlayerController* PC = nullptr;
+		AElysiumPawn* Pawn = nullptr;
+		UElysiumMovementComponent* Move = nullptr;
+		UElysiumInputRouter* Router = nullptr;
+		explicit operator bool() const { return PC && Pawn && Move && Router; }
+	};
+
+	FBodyRefs ResolveBody(UElysiumMapSubsystem* Sub)
+	{
+		FBodyRefs R;
+		const UGameInstance* GI = Sub ? Sub->GetGameInstance() : nullptr;
+		UWorld* World = GI ? GI->GetWorld() : nullptr;
+		R.PC = World ? Cast<AElysiumPlayerController>(World->GetFirstPlayerController()) : nullptr;
+		R.Pawn = R.PC ? Cast<AElysiumPawn>(R.PC->GetPawn()) : nullptr;
+		R.Move = R.Pawn
+			? Cast<UElysiumMovementComponent>(R.Pawn->GetMovementComponent()) : nullptr;
+		R.Router = R.PC ? R.PC->GetInputRouter() : nullptr;
+		return R;
+	}
+
+	// The courses this run drives, rebuilt each time so a gym course reads the live tuning.
+	TArray<ElysiumMoveCourses::FCourse> CoursesFor(bool bGym, const FElysiumMoveTuning& T)
+	{
+		if (!bGym)
+		{
+			return TArray<ElysiumMoveCourses::FCourse>(ElysiumMoveCourses::Sited());
+		}
+		return ElysiumMoveCourses::Gym(ElysiumGym::Build(T));
+	}
+}
+
+bool FElysiumMoveRun::BuildGym()
+{
+	UElysiumMapSubsystem* Sub = Subsystem.Get();
+	const UGameInstance* GI = Sub ? Sub->GetGameInstance() : nullptr;
+	UWorld* World = GI ? GI->GetWorld() : nullptr;
+	const FBodyRefs Body = ResolveBody(Sub);
+	if (!World || !Body)
+	{
+		return false;
+	}
+
+	const ElysiumGym::FSpec Spec = ElysiumGym::Build(Body.Move->GetTuning());
+	if (!ElysiumGym::Spawn(World, Spec, GymOrigin))
+	{
+		UE_LOG(LogElysiumMove, Error, TEXT("could not stand the gym up"));
+		return false;
+	}
+
+	// The stage world freezes its body on arrival because a stage has no floor to stand on. The
+	// harness is what just gave it one, so releasing the freeze is the harness's to do — the map
+	// layer's rule is still right for every other caller.
+	Body.Pawn->SetMovementFrozen(false);
+	return true;
+}
+
 bool FElysiumMoveRun::BeginCourse(int32 Index)
 {
-	TArrayView<const ElysiumMoveCourses::FCourse> Courses = ElysiumMoveCourses::All();
+	UElysiumMapSubsystem* Sub = Subsystem.Get();
+	const FBodyRefs Body = ResolveBody(Sub);
+	if (!Body)
+	{
+		return false;
+	}
+
+	const TArray<ElysiumMoveCourses::FCourse> Courses = CoursesFor(bGym, Body.Move->GetTuning());
 	if (!Courses.IsValidIndex(Index))
 	{
 		return false;
 	}
 	const ElysiumMoveCourses::FCourse& Course = Courses[Index];
 
-	UElysiumMapSubsystem* Sub = Subsystem.Get();
-	const UGameInstance* GI = Sub ? Sub->GetGameInstance() : nullptr;
-	UWorld* World = GI ? GI->GetWorld() : nullptr;
-	AElysiumPlayerController* PC = World
-		? Cast<AElysiumPlayerController>(World->GetFirstPlayerController()) : nullptr;
-	AElysiumPawn* Pawn = PC ? Cast<AElysiumPawn>(PC->GetPawn()) : nullptr;
-	UElysiumInputRouter* Router = PC ? PC->GetInputRouter() : nullptr;
-	if (!Pawn || !Router)
+	// Where the body starts. A sited course carries its own point; a gym course reads its lane's,
+	// because the geometry is derived from tuning that is read live and a copied coordinate would
+	// be a coordinate that can go stale.
+	FVector Feet = Course.StartFeet;
+	float Yaw = Course.StartYaw;
+	if (Course.Host == ElysiumMoveCourses::EHost::GymStage)
 	{
-		return false;
+		const ElysiumGym::FSpec Spec = ElysiumGym::Build(Body.Move->GetTuning());
+		const ElysiumGym::FLane* Lane = Spec.FindLane(Course.GymLane);
+		if (!Lane)
+		{
+			UE_LOG(LogElysiumMove, Warning, TEXT("course '%s' names no gym lane"),
+				*Course.Name.ToString());
+			return false;
+		}
+		Feet = GymOrigin + Lane->FeetOrigin;
+		Yaw = Lane->Yaw;
 	}
 
 	// Seat the body and aim it. The start is absolute and the mover's state is cleared, so a course
 	// inherits neither the position nor the *motion* of the one before it — without the reset the
 	// duck course opened at 203 u/s carried over from the strafe course's last airborne frame.
-	Pawn->SetActorLocation(Course.Start, /*bSweep*/ false, nullptr, ETeleportType::TeleportPhysics);
-	PC->SetControlRotation(FRotator(0.0f, Course.StartYaw, 0.0f));
-	if (UElysiumMovementComponent* Move = Cast<UElysiumMovementComponent>(Pawn->GetMovementComponent()))
+	// `ResetState` also drops the previous course's jump overrides, which is why they are applied
+	// after it and not before.
+	Body.Move->ResetState();
+	Body.Pawn->SetActorLocation(
+		ElysiumGym::SeatOrigin(Feet, Body.Pawn->GetBodyHalfHeight()),
+		/*bSweep*/ false, nullptr, ETeleportType::TeleportPhysics);
+	Body.PC->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
+
+	for (const TPair<const TCHAR*, float>& Override : Course.JumpOverrides)
 	{
-		Move->ResetState();
+		if (!Body.Move->SetJumpRuleOverride(Override.Key, Override.Value))
+		{
+			UE_LOG(LogElysiumMove, Warning, TEXT("course '%s': '%s' is not a jump rule"),
+				*Course.Name.ToString(), Override.Key);
+		}
 	}
 
-	Router->StartReplay(ElysiumMoveCourses::Expand(Course, StepSeconds));
+	FString Error;
+	if (!Recorder.Open(GMoveChannels, Error))
+	{
+		UE_LOG(LogElysiumMove, Error, TEXT("%s"), *Error);
+		return false;
+	}
 
-	Rows.Reset();
-	Rows.Add(TEXT("frame,seq,dt,px,py,pz,vx,vy,vz,speed2d,onground,ducked,water,surffric"));
+	StartFeet = Feet;
+	StartForward = FRotator(0.0f, Yaw, 0.0f).Vector();
 	PeakSpeed2D = 0.0;
 	PeakApexUnits = 0.0;
+	AdvanceMax = 0.0;
+	TopStand = 0.0;
+	ReachMax = 0.0;
+	bEndedDucked = false;
 	// Apex is measured per airborne span, from the takeoff height (see Sample).
 	TakeoffZ = 0.0;
 	LastGroundedZ = 0.0;
@@ -107,51 +235,75 @@ bool FElysiumMoveRun::BeginCourse(int32 Index)
 	GroundTransitions = 0;
 	bWasOnGround = true;
 
+	// The stream is armed after the settle, not here — see `CourseSettleFrames`.
+	PendingStream = ElysiumMoveCourses::Expand(Course, StepSeconds);
+	CourseSettleRemaining = CourseSettleFrames;
+
 	UE_LOG(LogElysiumMove, Log, TEXT("course '%s' begins at %s yaw %.1f"),
-		Course.Name, *Course.Start.ToCompactString(), Course.StartYaw);
+		*Course.Name.ToString(), *Feet.ToCompactString(), Yaw);
 	return true;
 }
 
 void FElysiumMoveRun::Sample()
 {
-	UElysiumMapSubsystem* Sub = Subsystem.Get();
-	const UGameInstance* GI = Sub ? Sub->GetGameInstance() : nullptr;
-	UWorld* World = GI ? GI->GetWorld() : nullptr;
-	const AElysiumPlayerController* PC = World
-		? Cast<AElysiumPlayerController>(World->GetFirstPlayerController()) : nullptr;
-	const AElysiumPawn* Pawn = PC ? Cast<AElysiumPawn>(PC->GetPawn()) : nullptr;
-	const UElysiumInputRouter* Router = PC ? PC->GetInputRouter() : nullptr;
-	if (!Pawn || !Router)
-	{
-		return;
-	}
-	const UElysiumMovementComponent* Move =
-		Cast<UElysiumMovementComponent>(Pawn->GetMovementComponent());
-	if (!Move)
+	const FBodyRefs Body = ResolveBody(Subsystem.Get());
+	if (!Body)
 	{
 		return;
 	}
 
-	const FVector P = Pawn->GetActorLocation();
-	const FVector V = Move->Velocity;
+	const FVector P = Body.Pawn->GetActorLocation();
+	const FVector V = Body.Move->Velocity;
 	const double Speed2D = FVector2D(V.X, V.Y).Size();
-	const bool bGround = Move->IsOnGround();
+	const bool bGround = Body.Move->IsOnGround();
 
 	// Positions and velocities are emitted in **Source units**, not cm, so a row reads directly
-	// against `docs/vtmb/source_movement.md`'s numbers (and against a retail demo dump, if one is ever taken).
+	// against `docs/vtmb/source_movement.md`'s numbers (and against a retail demo dump, if one is
+	// ever taken).
 	const double Inv = 1.0 / ElysiumMove::U;
 
-	Rows.Add(FString::Printf(
-		TEXT("%d,%d,%.6f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%d,%.3f"),
-		Rows.Num() - 1, Router->CurrentCmd().Seq, StepSeconds,
-		P.X * Inv, P.Y * Inv, P.Z * Inv,
-		V.X * Inv, V.Y * Inv, V.Z * Inv, Speed2D * Inv,
-		bGround ? 1 : 0,
-		Move->IsDucked() ? 1 : 0,
-		static_cast<int32>(Move->GetWaterLevel()),
-		Move->GetSurfaceFriction()));
+	Recorder.BeginFrame();
+	Recorder.Set(TEXT("frame"), Recorder.FrameCount());
+	Recorder.Set(TEXT("seq"), static_cast<int32>(Body.Router->CurrentCmd().Seq));
+	Recorder.Set(TEXT("dt"), StepSeconds);
+	Recorder.Set(TEXT("px"), P.X * Inv);
+	Recorder.Set(TEXT("py"), P.Y * Inv);
+	Recorder.Set(TEXT("pz"), P.Z * Inv);
+	Recorder.Set(TEXT("vx"), V.X * Inv);
+	Recorder.Set(TEXT("vy"), V.Y * Inv);
+	Recorder.Set(TEXT("vz"), V.Z * Inv);
+	Recorder.Set(TEXT("speed2d"), Speed2D * Inv);
+	Recorder.Set(TEXT("onground"), bGround);
+	Recorder.Set(TEXT("ducked"), Body.Move->IsDucked());
+	Recorder.Set(TEXT("ducking"), Body.Move->IsDucking());
+	Recorder.Set(TEXT("canunduck"), Body.Move->CanUnduck());
+	Recorder.Set(TEXT("water"), static_cast<int32>(Body.Move->GetWaterLevel()));
+	Recorder.Set(TEXT("surffric"), Body.Move->GetSurfaceFriction());
+
+	FString Error;
+	if (!Recorder.EndFrame(Error))
+	{
+		UE_LOG(LogElysiumMove, Error, TEXT("%s"), *Error);
+		return;
+	}
 
 	PeakSpeed2D = FMath::Max(PeakSpeed2D, Speed2D * Inv);
+
+	// --- The run channels, which are what a committed baseline actually compares ---------------
+	// Each is written to **saturate**: how far the body got before something stopped it, and how
+	// high it stood or reached. A body either climbs a riser or is stopped by it, and either answer
+	// is the same at any gait — which is what no per-frame trace can be, because *when* a body
+	// arrives moves with its speed even when *whether* it arrives does not.
+	const double FeetZ = P.Z - Body.Pawn->GetBodyHalfHeight();
+	const double RiseUnits = (FeetZ - StartFeet.Z) * Inv;
+	ReachMax = FMath::Max(ReachMax, RiseUnits);
+	if (bGround)
+	{
+		TopStand = FMath::Max(TopStand, RiseUnits);
+	}
+	const double Advance = FVector::DotProduct(P - StartFeet, StartForward) * Inv;
+	AdvanceMax = FMath::Max(AdvanceMax, Advance);
+	bEndedDucked = Body.Move->IsDucked();
 
 	// The apex is measured from the height the body LEFT THE GROUND at, per airborne span — not
 	// from one datum for the whole course. Against a single datum a running jump taken from higher
@@ -184,40 +336,80 @@ void FElysiumMoveRun::Sample()
 
 void FElysiumMoveRun::FinishCourse()
 {
-	TArrayView<const ElysiumMoveCourses::FCourse> Courses = ElysiumMoveCourses::All();
-	if (!Courses.IsValidIndex(CourseIndex) || Rows.Num() <= 1)
+	const FBodyRefs Body = ResolveBody(Subsystem.Get());
+	if (!Body || Recorder.FrameCount() == 0)
+	{
+		return;
+	}
+	const TArray<ElysiumMoveCourses::FCourse> Courses = CoursesFor(bGym, Body.Move->GetTuning());
+	if (!Courses.IsValidIndex(CourseIndex))
 	{
 		return;
 	}
 	const ElysiumMoveCourses::FCourse& Course = Courses[CourseIndex];
+	const FString Host = bGym ? TEXT("gym") : FString(Course.Map ? Course.Map : TEXT("map"));
 
-	const FString Stem = FString::Printf(TEXT("%s.%s.%dhz"), Course.Map, Course.Name, Hz);
-	const FString CsvPath = FPaths::Combine(OutputDir(), Stem + TEXT(".csv"));
-	FFileHelper::SaveStringToFile(FString::Join(Rows, TEXT("\n")) + TEXT("\n"), *CsvPath);
-
-	// The summary is what a regression check compares first; the CSV is what a human reads when it
-	// disagrees.
-	const FString Json = FString::Printf(
-		TEXT("{\n")
-		TEXT("  \"map\": \"%s\",\n")
-		TEXT("  \"course\": \"%s\",\n")
-		TEXT("  \"hz\": %d,\n")
-		TEXT("  \"fixedStep\": %.6f,\n")
-		TEXT("  \"frames\": %d,\n")
-		TEXT("  \"peakSpeed2dUnits\": %.4f,\n")
-		TEXT("  \"peakRiseUnits\": %.4f,\n")
-		TEXT("  \"groundTransitions\": %d\n")
-		TEXT("}\n"),
-		Course.Map, Course.Name, Hz,
+	Recorder.SetMeta(TEXT("harness"), TEXT("move"));
+	Recorder.SetMeta(TEXT("host"), Host);
+	Recorder.SetMeta(TEXT("course"), Course.Name.ToString());
+	// Whether this recording may be promoted to a committed baseline yet. A course whose answer
+	// moves with the speed authority is validated but never compared until `CCC7` settles it.
+	Recorder.SetMeta(TEXT("baseline"), Course.bDeferBaseline ? TEXT("deferred") : TEXT("committed"));
+	Recorder.SetMetaNumber(TEXT("hz"), Hz);
+	Recorder.SetMetaNumber(TEXT("fixedStep"),
 		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.move.FixedStep"))
 			? IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.move.FixedStep"))->GetFloat()
-			: 0.0f,
-		Rows.Num() - 1, PeakSpeed2D, PeakApexUnits, GroundTransitions);
-	FFileHelper::SaveStringToFile(Json, *FPaths::Combine(OutputDir(), Stem + TEXT(".json")));
+			: 0.0f);
+
+	// What the geometry and the motion were derived from. A bracket that turns red is a bracket
+	// whose constant moved, and this is what says which one without anyone having to guess.
+	{
+		const FElysiumMoveTuning& T = Body.Move->GetTuning();
+		const float Inv = 1.0f / ElysiumMove::U;
+		Recorder.SetConstant(TEXT("StepSize"), T.StepSize * Inv);
+		Recorder.SetConstant(TEXT("JumpBoost"), T.JumpBoost);          // already Source units
+		Recorder.SetConstant(TEXT("JumpBoostScale"), ElysiumMove::JumpBoostScale);
+		Recorder.SetConstant(TEXT("StandableZ"), ElysiumMove::StandableZ);
+		Recorder.SetConstant(TEXT("StandHeight"), ElysiumMove::StandHeight * Inv);
+		Recorder.SetConstant(TEXT("DuckHeight"), ElysiumMove::DuckHeight * Inv);
+		Recorder.SetConstant(TEXT("HullHalfWidth"), ElysiumMove::HullHalfWidth * Inv);
+		Recorder.SetConstant(TEXT("BaseJumpVelocity"), T.BaseJumpVelocity * Inv);
+		Recorder.SetConstant(TEXT("JumpHoldTime"), T.JumpHoldSeconds);
+		Recorder.SetConstant(TEXT("JumpGravityMultiplier"), T.JumpGravityMultiplier);
+		Recorder.SetConstant(TEXT("Gravity"), T.Gravity * Inv);
+		Recorder.SetConstant(TEXT("Friction"), T.Friction);
+		Recorder.SetConstant(TEXT("StopSpeed"), T.StopSpeed * Inv);
+		Recorder.SetConstant(TEXT("Accelerate"), T.Accelerate);
+		Recorder.SetConstant(TEXT("WalkSpeed"), ElysiumMove::WalkSpeed * Inv);
+		Recorder.SetConstant(TEXT("RunSpeed"), ElysiumMove::RunSpeed * Inv);
+	}
+	for (const TPair<const TCHAR*, float>& Override : Course.JumpOverrides)
+	{
+		Recorder.SetOverride(Override.Key, Override.Value);
+	}
+
+	Recorder.SetRun(TEXT("frames"), Recorder.FrameCount());
+	Recorder.SetRun(TEXT("advance_max"), AdvanceMax);
+	Recorder.SetRun(TEXT("top_stand"), TopStand);
+	Recorder.SetRun(TEXT("reach_max"), ReachMax);
+	Recorder.SetRun(TEXT("peak_rise"), PeakApexUnits);
+	Recorder.SetRun(TEXT("ground_transitions"), GroundTransitions);
+	Recorder.SetRun(TEXT("ended_ducked"), bEndedDucked);
+	Recorder.SetRun(TEXT("peak_speed2d"), PeakSpeed2D);
+
+	const FString Stem = FString::Printf(TEXT("%s.%s.%dhz"), *Host, *Course.Name.ToString(), Hz);
+	FString Error;
+	if (!Recorder.Write(OutputDir(), Stem, Error))
+	{
+		UE_LOG(LogElysiumMove, Error, TEXT("%s"), *Error);
+		return;
+	}
 
 	UE_LOG(LogElysiumMove, Log,
-		TEXT("course '%s': %d frames, peak 2D %.1f u/s, peak rise %.2f u, %d ground transitions -> %s"),
-		Course.Name, Rows.Num() - 1, PeakSpeed2D, PeakApexUnits, GroundTransitions, *CsvPath);
+		TEXT("course '%s': %d frames, advance %.1f u, stood %.2f u, reached %.2f u, ")
+		TEXT("peak 2D %.1f u/s, %d ground transitions -> %s"),
+		*Course.Name.ToString(), Recorder.FrameCount(), AdvanceMax, TopStand, ReachMax,
+		PeakSpeed2D, GroundTransitions, *Stem);
 }
 
 bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
@@ -228,13 +420,10 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 	}
 
 	UElysiumMapSubsystem* Sub = Subsystem.Get();
-	const UGameInstance* GI = Sub ? Sub->GetGameInstance() : nullptr;
-	UWorld* World = GI ? GI->GetWorld() : nullptr;
 	AElysiumMapActor* MapActor = Sub ? Sub->GetCurrentMap() : nullptr;
-	AElysiumPlayerController* PC = World
-		? Cast<AElysiumPlayerController>(World->GetFirstPlayerController()) : nullptr;
+	const FBodyRefs Body = ResolveBody(Sub);
 
-	if (!(PC && MapActor && MapActor->IsSpawnDone()))
+	if (!(Body.PC && MapActor && MapActor->IsSpawnDone()))
 	{
 		return true;
 	}
@@ -242,17 +431,43 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 	{
 		return true;
 	}
-
-	UElysiumInputRouter* Router = PC->GetInputRouter();
-	if (!Router)
+	if (!Body)
 	{
+		UE_LOG(LogElysiumMove, Warning, TEXT("no body to drive; exiting."));
 		bDone = true;
 		FPlatformMisc::RequestExit(false);
 		return false;
 	}
 
+	if (bGym && !bGymBuilt)
+	{
+		bGymBuilt = true;
+		if (!BuildGym())
+		{
+			bDone = true;
+			FPlatformMisc::RequestExit(false);
+			return false;
+		}
+		// Give the freshly registered bodies a frame to enter the scene before seating anything on
+		// them.
+		return true;
+	}
+
+	// Let a freshly seated body find the floor before it is told to do anything. The datum for
+	// every run channel is taken here, once the body has stopped moving, so a course measures from
+	// where it actually stands rather than from where it was placed.
+	if (CourseSettleRemaining > 0)
+	{
+		if (--CourseSettleRemaining == 0)
+		{
+			StartFeet.Z = Body.Pawn->GetActorLocation().Z - Body.Pawn->GetBodyHalfHeight();
+			Body.Router->StartReplay(MoveTemp(PendingStream));
+		}
+		return true;
+	}
+
 	// A course is in flight for as long as the router is still feeding its stream.
-	if (CourseIndex >= 0 && Router->IsReplaying())
+	if (CourseIndex >= 0 && Body.Router->IsReplaying())
 	{
 		Sample();
 		return true;
@@ -265,10 +480,10 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 		FinishCourse();
 	}
 
-	TArrayView<const ElysiumMoveCourses::FCourse> Courses = ElysiumMoveCourses::All();
+	const TArray<ElysiumMoveCourses::FCourse> Courses = CoursesFor(bGym, Body.Move->GetTuning());
 	int32 Next = CourseIndex + 1;
 	while (Courses.IsValidIndex(Next) &&
-		!CourseFilter.IsEmpty() && CourseFilter != Courses[Next].Name)
+		!CourseFilter.IsEmpty() && CourseFilter != Courses[Next].Name.ToString())
 	{
 		++Next;
 	}
@@ -285,7 +500,7 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 	if (!BeginCourse(CourseIndex))
 	{
 		UE_LOG(LogElysiumMove, Warning, TEXT("could not seat the body for course '%s'; exiting."),
-			Courses[CourseIndex].Name);
+			*Courses[CourseIndex].Name.ToString());
 		bDone = true;
 		FPlatformMisc::RequestExit(false);
 		return false;

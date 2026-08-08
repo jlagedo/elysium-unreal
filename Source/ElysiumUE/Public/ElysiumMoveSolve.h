@@ -239,6 +239,15 @@ struct FElysiumMoveTuning
 	// defaults, so a run without the vdata mirror behaves like the shipped tuning.
 	void LoadJumpFrom(TFunctionRef<bool(const TCHAR*, float&)> Lookup);
 
+	// Write one field by its rulebook key (`BaseJumpVelocity`, `JumpGravityMultiplier`,
+	// `JumpHoldTime`), in the unit that key is authored in. Returns false for a key this does not
+	// carry, which is what keeps a caller from believing an override it never made.
+	//
+	// The `sv_*` half is deliberately not writable here: `LoadFrom` re-reads it from the console
+	// store every frame, so the console *is* the way to set one and a second door would silently
+	// lose to it on the next tick.
+	bool SetJumpRule(const TCHAR* Key, float Value);
+
 	// Re-read the whole surface. `Lookup` returns a cvar's value string or empty for one the store
 	// does not carry, which is how the console itself answers; an empty read keeps the default, so a
 	// run with no `out/cfg` on disk behaves exactly like a stock install. Taking the reader as a

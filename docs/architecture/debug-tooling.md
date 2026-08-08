@@ -322,34 +322,60 @@ Those observations are recorded from the owner before a pose hypothesis is enabl
 ### The movement and camera harness
 
 `uv run elysium debug move [course] [hz]` is the player-feel equivalent of the shot run: it arms
-`-ElysiumMove`, replays a fixed command stream over a table of named courses against real geometry,
-and writes one CSV row per frame plus a JSON summary under `$ELYSIUM_EXPORT_ROOT/_move/`. The engine
-is pinned to the same rate as the stream, so a run at 60, 120 and 240 Hz differs only in integration
-and the *intent* is identical — which is what makes frame-rate dependence measurable rather than
-anecdotal.
+`-ElysiumMove`, replays a fixed command stream over a table of named courses, records it, and diffs
+it against a baseline. The engine is pinned to the same rate as the stream, so a run at 60, 120 and
+240 Hz differs only in integration and the *intent* is identical — which is what makes frame-rate
+dependence measurable rather than anecdotal.
 
 A course is authored as **segments** — hold this intent for this long — rather than as frames, and
 expanded at run time. The mover's state is reset between courses, because a course that inherits the
-previous one's velocity measures the wrong thing. Position and velocity are emitted in **Source
-units**, so a row reads directly against `docs/vtmb/source_movement.md`.
+previous one's velocity measures the wrong thing, and the body then settles for a few frames before
+its first command: `Duck` runs ahead of `CategorizePosition`, so a course whose first frame crouches
+would get the *airborne* duck and start two units off the floor. Position and velocity are emitted in
+**Source units**, so a row reads directly against `docs/vtmb/source_movement.md`.
 
-`pipeline/src/elysium_pipeline/validation/move_diff.py` is the comparator: it diffs every current run
-against a promoted baseline, `--save` promotes, and `--hz` does the cross-rate comparison by elapsed
-time rather than by frame index. Its tolerance model has two classes, and **a channel belonging to
-neither is written and silently never compared** — numeric channels carry an absolute tolerance,
-while ground state, stance and water level are exact, because a flip there is a behaviour change
-rather than a rounding one.
+**Two hosts, and they answer different questions.** `--gym` builds the generated gym in an empty
+stage world, where each riser, roof, ramp and aperture is derived from the movement constants and
+brackets the threshold it tests — so a run locates a cliff rather than confirming that one particular
+staircase still works. `--sited` replays on `sp_tutorial_1`, which is the only thing a retail capture
+could ever be compared against, because retail will not load geometry we authored. Both run by
+default. The gym's derivation and its speed-invariant/speed-dependent split are
+`docs/architecture/movement-architecture.md`.
 
-Two properties make this the acceptance surface for the whole player-feel vertical rather than for
-movement alone. The command stream is deterministic and frame-pinned, so **camera and animation
-channels ride the same runs** — boom length, clip state, damper position and solved angles beside
-`move_yaw` and the state machine's state — and a camera regression becomes the same diff as a
-movement one. And the courses run against a **generated gym** whose risers, ledges, slopes and
-ceilings are derived from the movement constants themselves, so each brackets the threshold it tests
-and a run locates a cliff rather than confirming that one particular staircase still works. The gym's
-derivation and its speed-invariant/speed-dependent split are
-`docs/architecture/movement-architecture.md`; the sited courses on a real map remain the only thing
-that can be compared against a retail capture, because retail will not load geometry we authored.
+### The recorder and the differ
+
+Every run writes through one **named-channel recorder**: a CSV of the frame channels it declared and
+a `.channels.json` manifest beside it under `$ELYSIUM_EXPORT_ROOT/_move/`. The manifest carries each
+channel's comparison rule, the constants the geometry was derived from, any per-course tuning
+override, and the run channels. `ElysiumChannels::Defs()` is the registry, and a name that is not in
+it cannot be written at all — registering a channel *is* registering its comparison, which is what
+closes the old comparator's silent pass. A camera or animation producer joins by declaring rows there
+and writing them; there is no second format and the differ does not change.
+
+`pipeline/src/elysium_pipeline/validation/channel_diff.py` is the comparator, chained into
+`debug move` so its verdict is the command's exit code. It reads both manifests rather than one, and
+**refuses** rather than partly accepting: an undeclared CSV column, a declared channel with no
+column, a numeric channel with no usable tolerance, a channel the baseline has and the run does not
+(or the reverse), and a rule that changed between the two — because a run that reads its own
+tolerance could widen its own bar. `--promote` makes the current runs the baseline; `--hz` does the
+cross-rate comparison by elapsed time rather than by frame index.
+
+**Two baseline roots.** Gym runs happen in an empty stage world on geometry derived from this
+repository's own constants, so nothing game-derived is in them and their manifests are **committed**
+to `dev/baselines/move/`. What is compared there is the **run** channels — how far the body got, how
+high it stood or reached — which are written to saturate and are therefore the same at any gait. A
+per-frame trace is not, so committing one would turn every gym course red the day `CCC7` settles the
+speed authority. Sited runs are game-derived, so their baseline stays under the gitignored
+`_move/baseline/` and is compared in full, frame rows included.
+
+The command stream is deterministic and frame-pinned, which is what makes this the acceptance surface
+for the whole player-feel vertical rather than for movement alone: **camera and animation channels
+ride the same runs** — boom length, clip state, damper position and solved angles beside `move_yaw`
+and the state machine's state — so a camera regression becomes the same diff as a movement one.
+
+`elysium.playerpos` sites a course the way `elysium.campos` sites a vantage, and logs the **feet**
+rather than the view — the pawn's own origin is its box centre, so a coordinate read off either the
+camera or the actor is half a hull out.
 
 ## Tracking
 

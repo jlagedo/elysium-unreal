@@ -117,9 +117,14 @@ public:
 	// already exists only re-arms the lab. False with the reason in OutError.
 	bool EnterGreenRoom(FString& OutError);
 
-	// True while the current world is a stage world (see EnterGreenRoom): an empty level with no map
-	// in it. Read by the green room, which lights and frames its stage differently when nothing else
-	// is contributing either.
+	// The travel half of the above, with no lab armed over it: build the stage world and stop
+	// there. What a caller that brings its own geometry wants — the movement gym stands itself up
+	// in this same empty level and runs under `-nullrhi`, where the lab refuses outright.
+	bool EnterStageWorld(FString& OutError);
+
+	// True while the current world is a stage world (see EnterStageWorld): an empty level with no
+	// map in it. Read by the green room, which lights and frames its stage differently when nothing
+	// else is contributing either.
 	bool IsStageWorld() const { return bCurrentIsStageOnly; }
 
 	// The green room, if one is armed. Null in every ordinary session — the harness only exists

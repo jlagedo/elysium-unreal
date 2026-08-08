@@ -13,3 +13,7 @@ Content/ElysiumAuthored/**/*.umap filter=lfs diff=lfs merge=lfs -text
 Content/ElysiumAuthored/**/*.ubulk filter=lfs diff=lfs merge=lfs -text
 Content/ElysiumAuthored/**/*.uexp filter=lfs diff=lfs merge=lfs -text
 Content/ElysiumAuthored/**/*.uptnl filter=lfs diff=lfs merge=lfs -text
+
+# Committed movement-gym baselines are compared byte-for-byte against a fresh run,
+# so a checkout that rewrote their line endings would turn every bracket red.
+dev/baselines/move/** text eol=lf

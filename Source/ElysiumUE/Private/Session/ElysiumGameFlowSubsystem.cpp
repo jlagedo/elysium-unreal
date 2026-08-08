@@ -405,7 +405,15 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 	// map's entities — the theatre camera streams, the courtroom oracle — still get one.
 	else if (FParse::Param(FCommandLine::Get(), TEXT("ElysiumGreenRoom")))
 	{
-		BootKind = EBootKind::GreenRoom;
+		BootKind = EBootKind::Stage;
+		bStageWantsGreenRoom = true;
+	}
+	// The movement gym wants the same empty level and nothing else in it — the geometry it measures
+	// against is the one it builds itself, and a map behind it would only be something to fall
+	// through. Without this branch a gym launch with no `-ElysiumMap` falls to the menu.
+	else if (FParse::Param(FCommandLine::Get(), TEXT("MoveGym")))
+	{
+		BootKind = EBootKind::Stage;
 	}
 	else if (NewGameFlag == 0)
 	{
@@ -426,7 +434,8 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 	const FString Plan =
 		(BootKind == EBootKind::Menu)    ? FString(TEXT("static menu in the boot world")) :
 		(BootKind == EBootKind::NewGame) ? FString(TEXT("new game")) :
-		(BootKind == EBootKind::GreenRoom) ? FString(TEXT("green-room stage world")) :
+		(BootKind == EBootKind::Stage)   ? FString(bStageWantsGreenRoom
+			? TEXT("green-room stage world") : TEXT("stage world")) :
 		                                   FString::Printf(TEXT("dev map '%s'"), *BootMap);
 	UE_LOG(LogElysiumFlow, Log, TEXT("boot plan: %s"), *Plan);
 }
@@ -499,15 +508,15 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 		}
 		break;
 
-	case EBootKind::GreenRoom:
+	case EBootKind::Stage:
 	{
 		// The boot world is already the empty level the stage wants, so this builds in place: no
 		// travel, no map, and the state follows the same Loading -> ready -> Playing path a map load
 		// does.
 		FString Error;
-		if (!EnterGreenRoom(Error))
+		if (!EnterStage(Error, bStageWantsGreenRoom))
 		{
-			UE_LOG(LogElysiumFlow, Error, TEXT("green room boot failed: %s"), *Error);
+			UE_LOG(LogElysiumFlow, Error, TEXT("stage boot failed: %s"), *Error);
 		}
 		break;
 	}
@@ -802,10 +811,30 @@ bool UElysiumGameFlowSubsystem::EnterGreenRoom(FString& OutError)
 		OutError = TEXT("no map subsystem");
 		return false;
 	}
-	// Asked from inside a stage world, this only re-arms the lab: nothing loads, so nothing will
-	// publish ready, and moving to Loading would strand the app behind the overlay forever.
+	return EnterStage(OutError, /*bWithGreenRoom*/ true);
+}
+
+bool UElysiumGameFlowSubsystem::EnterStageWorld(FString& OutError)
+{
+	return EnterStage(OutError, /*bWithGreenRoom*/ false);
+}
+
+bool UElysiumGameFlowSubsystem::EnterStage(FString& OutError, bool bWithGreenRoom)
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	if (!Maps)
+	{
+		OutError = TEXT("no map subsystem");
+		return false;
+	}
+	// Asked from inside a stage world, this only re-arms whatever was armed over it: nothing loads,
+	// so nothing will publish ready, and moving to Loading would strand the app behind the overlay
+	// forever.
 	const bool bAlreadyStanding = Maps->IsStageWorld();
-	if (!Maps->EnterGreenRoom(OutError))
+	const bool bEntered = bWithGreenRoom
+		? Maps->EnterGreenRoom(OutError) : Maps->EnterStageWorld(OutError);
+	if (!bEntered)
 	{
 		return false;
 	}

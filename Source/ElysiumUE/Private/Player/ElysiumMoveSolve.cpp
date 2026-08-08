@@ -238,3 +238,25 @@ void FElysiumMoveTuning::LoadJumpFrom(TFunctionRef<bool(const TCHAR*, float&)> L
 	if (Lookup(TEXT("JumpGravityMultiplier"), V)) { JumpGravityMultiplier = V; }
 	if (Lookup(TEXT("JumpHoldTime"), V))          { JumpHoldSeconds = V; }
 }
+
+bool FElysiumMoveTuning::SetJumpRule(const TCHAR* Key, float Value)
+{
+	// The same three keys `LoadJumpFrom` reads, converted the same way, so an override and a
+	// rulebook read cannot disagree about what a key means.
+	if (FCString::Stricmp(Key, TEXT("BaseJumpVelocity")) == 0)
+	{
+		BaseJumpVelocity = Value * ElysiumMove::U;
+		return true;
+	}
+	if (FCString::Stricmp(Key, TEXT("JumpGravityMultiplier")) == 0)
+	{
+		JumpGravityMultiplier = Value;
+		return true;
+	}
+	if (FCString::Stricmp(Key, TEXT("JumpHoldTime")) == 0)
+	{
+		JumpHoldSeconds = Value;
+		return true;
+	}
+	return false;
+}

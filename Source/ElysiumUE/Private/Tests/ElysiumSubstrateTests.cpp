@@ -24,6 +24,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
 #include "ElysiumContentPaths.h"
+#include "Debug/ElysiumChannelRecorder.h"
 #include "Debug/ElysiumConsole.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumDecals.h"
@@ -43,6 +44,7 @@
 #include "ElysiumExpr.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumGymSpec.h"
 #include "ElysiumHUD.h"
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
@@ -1830,6 +1832,441 @@ bool FElysiumMovementTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(Tuned.JumpBoost, 100.0f, 0.01f));
 	}
 
+	return true;
+}
+
+// =====================================================================================
+// The gym's specification (CCC0). The layout is derived from `ElysiumMove`'s constants, so what
+// is asserted here is the **derivation** — that each lane straddles the value it names — and never
+// what a body will do on it. An expectation recomputed from the same constants as the geometry
+// moves with the geometry and could never fail; the behaviour is the headless run's to record.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecTest, "Elysium.Substrate.GymSpec", GElysiumTestFlags)
+bool FElysiumGymSpecTest::RunTest(const FString&)
+{
+	using namespace ElysiumMove;
+	const FElysiumMoveTuning T;
+	const ElysiumGym::FSpec Spec = ElysiumGym::Build(T);
+
+	TestTrue(TEXT("the gym has lanes"), Spec.Lanes.Num() > 0);
+	TestTrue(TEXT("the gym has solids"), Spec.Placements.Num() > 0);
+
+	// --- Structural invariants the spawner depends on -----------------------------------------
+	{
+		TSet<FName> LaneNames;
+		for (const ElysiumGym::FLane& L : Spec.Lanes)
+		{
+			TestFalse(TEXT("a lane is named"), L.Name.IsNone());
+			TestFalse(FString::Printf(TEXT("lane '%s' is declared once"), *L.Name.ToString()),
+				LaneNames.Contains(L.Name));
+			LaneNames.Add(L.Name);
+		}
+
+		// (Lane, Tag) becomes a spawned component's name, so a duplicate is a silently dropped solid.
+		TSet<FString> Keys;
+		for (const ElysiumGym::FPlacement& P : Spec.Placements)
+		{
+			const FString Key = P.Lane.ToString() + TEXT("_") + P.Tag.ToString();
+			TestFalse(FString::Printf(TEXT("solid '%s' is placed once"), *Key), Keys.Contains(Key));
+			Keys.Add(Key);
+
+			TestTrue(FString::Printf(TEXT("solid '%s' has a real extent"), *Key),
+				P.Extent.X > 0.0 && P.Extent.Y > 0.0 && P.Extent.Z > 0.0);
+			TestTrue(FString::Printf(TEXT("solid '%s' is finite"), *Key),
+				P.Center.ContainsNaN() == false && P.Rot.ContainsNaN() == false);
+			TestTrue(FString::Printf(TEXT("solid '%s' belongs to a declared lane"), *Key),
+				LaneNames.Contains(P.Lane));
+		}
+	}
+
+	// --- Lanes do not overlap, so one body's course cannot touch another's geometry -----------
+	{
+		for (const ElysiumGym::FLane& L : Spec.Lanes)
+		{
+			const double LaneY = L.FeetOrigin.Y;
+			for (const ElysiumGym::FPlacement& P : Spec.Placements)
+			{
+				if (P.Lane != L.Name)
+				{
+					continue;
+				}
+				const double Reach = FMath::Abs(P.Center.Y - LaneY) + P.Extent.Y;
+				// A doorway jamb reaches exactly to the band edge, and the spec derives its centre
+				// and half-extent in float — so the slack here is float rounding at cm scale, not a
+				// margin the layout is allowed to spend.
+				TestTrue(FString::Printf(TEXT("'%s/%s' stays inside its lane's Y band"),
+					*P.Lane.ToString(), *P.Tag.ToString()),
+					Reach <= ElysiumGym::LaneHalfWidth * U + 0.01);
+			}
+		}
+		TestTrue(TEXT("the lane pitch clears the lane width"),
+			ElysiumGym::LanePitch > 2.0f * ElysiumGym::LaneHalfWidth);
+	}
+
+	// --- Each bracket straddles the constant it names -----------------------------------------
+	auto Bracket = [&Spec, this](const TCHAR* Below, const TCHAR* At, const TCHAR* Above,
+		float Threshold, const TCHAR* What)
+	{
+		const ElysiumGym::FLane* B = Spec.FindLane(FName(Below));
+		const ElysiumGym::FLane* M = Spec.FindLane(FName(At));
+		const ElysiumGym::FLane* A = Spec.FindLane(FName(Above));
+		if (!B || !M || !A)
+		{
+			AddError(FString::Printf(TEXT("%s is missing a bracket lane"), What));
+			return;
+		}
+		TestEqual(FString::Printf(TEXT("%s: the middle rung IS the constant"), What),
+			M->BracketUnits, Threshold);
+		TestTrue(FString::Printf(TEXT("%s: one rung below, one above"), What),
+			B->BracketUnits < Threshold && A->BracketUnits > Threshold);
+	};
+
+	Bracket(TEXT("riser_m1"), TEXT("riser_0"), TEXT("riser_p1"), T.StepSize / U, TEXT("StepSize"));
+	Bracket(TEXT("pop_m1"), TEXT("pop_0"), TEXT("pop_p1"), T.JumpBoost, TEXT("JumpBoost"));
+	Bracket(TEXT("stand_m1"), TEXT("stand_0"), TEXT("stand_p1"), StandHeight / U, TEXT("StandHeight"));
+	Bracket(TEXT("duck_m1"), TEXT("duck_0"), TEXT("duck_p1"), DuckHeight / U, TEXT("DuckHeight"));
+	Bracket(TEXT("door_m1"), TEXT("door_0"), TEXT("door_p1"), 2.0f * HullHalfWidth / U,
+		TEXT("the hull width"));
+
+	// The riser bracket also has to reach past the cliff on both sides, which is what tells 19 from
+	// 20 and 24 — a two-sided bracket alone would only ever prove the first refusal.
+	{
+		const ElysiumGym::FLane* Low = Spec.FindLane(FName(TEXT("riser_m2")));
+		const ElysiumGym::FLane* High = Spec.FindLane(FName(TEXT("riser_p6")));
+		TestTrue(TEXT("the riser bracket reaches two below the step"),
+			Low && Low->BracketUnits < T.StepSize / U - 1.0f);
+		TestTrue(TEXT("and well above it"),
+			High && High->BracketUnits > T.StepSize / U + 1.0f);
+	}
+
+	// --- The slope bracket is a statement about a normal, not about a pitch --------------------
+	{
+		const float LimitDeg = FMath::RadiansToDegrees(FMath::Acos(StandableZ));
+		int32 Standable = 0;
+		int32 Steep = 0;
+		for (const ElysiumGym::FLane& L : Spec.Lanes)
+		{
+			if (L.Family != ElysiumGym::EFamily::Slope)
+			{
+				continue;
+			}
+			(L.BracketUnits < LimitDeg ? Standable : Steep)++;
+
+			// A ramp pitched at P has a top-face normal whose Z is cos(P). That identity is the
+			// whole reason a pitch brackets `StandableZ` at all, so assert it on the emitted solid
+			// rather than trusting the constructor.
+			const ElysiumGym::FPlacement* Ramp = Spec.Placements.FindByPredicate(
+				[&L](const ElysiumGym::FPlacement& P)
+				{ return P.Lane == L.Name && P.Tag == FName(TEXT("ramp")); });
+			if (!Ramp)
+			{
+				AddError(FString::Printf(TEXT("slope lane '%s' has no ramp"), *L.Name.ToString()));
+				continue;
+			}
+			const double NormalZ = Ramp->Rot.RotateVector(FVector::UpVector).Z;
+			TestTrue(FString::Printf(TEXT("'%s' top-face normal Z is cos(pitch)"), *L.Name.ToString()),
+				FMath::IsNearlyEqual(NormalZ,
+					FMath::Cos(FMath::DegreesToRadians(L.BracketUnits)), 1e-4));
+		}
+		TestTrue(TEXT("slopes straddle the standable limit on both sides"),
+			Standable >= 2 && Steep >= 2);
+	}
+
+	// --- The unduck chamber admits a ducked hull and refuses a standing one --------------------
+	{
+		const ElysiumGym::FLane* Chamber = Spec.FindLane(FName(TEXT("unduck_ground")));
+		TestNotNull(TEXT("the grounded unduck chamber exists"), Chamber);
+		TestNotNull(TEXT("the airborne unduck chamber exists"),
+			Spec.FindLane(FName(TEXT("unduck_air"))));
+		if (Chamber)
+		{
+			TestTrue(TEXT("the chamber is taller than the ducked hull"),
+				Chamber->BracketUnits > DuckHeight / U);
+			TestTrue(TEXT("and shorter than the standing one"),
+				Chamber->BracketUnits < StandHeight / U);
+		}
+	}
+
+	// --- The crouch-jump lane names the lift, which is half the hull difference ----------------
+	{
+		const ElysiumGym::FLane* DuckPop = Spec.FindLane(FName(TEXT("duckpop")));
+		TestNotNull(TEXT("the crouch-jump lane exists"), DuckPop);
+		if (DuckPop)
+		{
+			TestTrue(TEXT("its bracket is the airborne duck's own lift"),
+				FMath::IsNearlyEqual(DuckPop->BracketUnits,
+					(StandHeight - DuckHeight) * 0.5f / U, 1e-3f));
+		}
+	}
+
+	// --- What `CCC7` may move is flagged, and what it may not is not --------------------------
+	{
+		for (const ElysiumGym::FLane& L : Spec.Lanes)
+		{
+			const bool bHorizontalReach =
+				L.Family == ElysiumGym::EFamily::Gap || L.Family == ElysiumGym::EFamily::Flat;
+			TestEqual(FString::Printf(TEXT("'%s' declares the right speed class"), *L.Name.ToString()),
+				L.bSpeedDependent, bHorizontalReach);
+		}
+	}
+
+	return true;
+}
+
+// A constant owns exactly one bracket. This is the acceptance criterion "moving a constant in
+// `ElysiumMove` turns exactly the bracket that constant owns red", asserted on the geometry with
+// no world — the headless run then confirms it on behaviour.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecOwnershipTest,
+	"Elysium.Substrate.GymSpecOwnership", GElysiumTestFlags)
+bool FElysiumGymSpecOwnershipTest::RunTest(const FString&)
+{
+	const FElysiumMoveTuning Base;
+	const ElysiumGym::FSpec Before = ElysiumGym::Build(Base);
+
+	FElysiumMoveTuning Moved = Base;
+	Moved.StepSize += ElysiumMove::U;                 // one Source unit taller
+	const ElysiumGym::FSpec After = ElysiumGym::Build(Moved);
+
+	TestEqual(TEXT("moving a constant does not add or drop a solid"),
+		After.Placements.Num(), Before.Placements.Num());
+
+	int32 Moved3D = 0;
+	for (int32 i = 0; i < Before.Placements.Num() && i < After.Placements.Num(); ++i)
+	{
+		const ElysiumGym::FPlacement& A = Before.Placements[i];
+		const ElysiumGym::FPlacement& B = After.Placements[i];
+		TestEqual(TEXT("the lane order is stable"), B.Lane, A.Lane);
+		TestEqual(TEXT("the tag order is stable"), B.Tag, A.Tag);
+
+		const bool bSame = A.Center.Equals(B.Center, 1e-3) && A.Extent.Equals(B.Extent, 1e-3);
+		if (!bSame)
+		{
+			++Moved3D;
+			// Only the lanes `StepSize` owns may move, and every one of them must.
+			TestTrue(FString::Printf(TEXT("'%s/%s' moved, and it is a riser"),
+				*A.Lane.ToString(), *A.Tag.ToString()),
+				A.Lane.ToString().StartsWith(TEXT("riser_")));
+		}
+	}
+	TestTrue(TEXT("the risers did move"), Moved3D > 0);
+
+	// And the lane the constant *is* moves by exactly what the constant moved by.
+	{
+		const ElysiumGym::FLane* A = Before.FindLane(FName(TEXT("riser_0")));
+		const ElysiumGym::FLane* B = After.FindLane(FName(TEXT("riser_0")));
+		TestTrue(TEXT("the middle riser tracks the step exactly"),
+			A && B && FMath::IsNearlyEqual(B->BracketUnits - A->BracketUnits, 1.0f, 1e-3f));
+	}
+	return true;
+}
+
+// The one place the spec's feet-anchored convention meets the pawn's centre-anchored box. This is
+// the "stands **on** the gym rather than above it" acceptance in the form that can be asserted:
+// the hull's own underside, not its origin, is what has to land on the floor.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSeatTest, "Elysium.Substrate.GymSeat", GElysiumTestFlags)
+bool FElysiumGymSeatTest::RunTest(const FString&)
+{
+	// The pawn's constructed hull, read off the CDO rather than restated — a half-height typed
+	// twice is a half-height that can disagree with itself.
+	const AElysiumPawn* Pawn = GetDefault<AElysiumPawn>();
+	TestNotNull(TEXT("the player pawn has a CDO"), Pawn);
+	if (!Pawn)
+	{
+		return false;
+	}
+	const float HalfHeight = Pawn->GetBodyHalfHeight();
+	TestTrue(TEXT("the hull half-height is the standing hull's"),
+		FMath::IsNearlyEqual(HalfHeight, ElysiumMove::StandHeight * 0.5f, 0.01f));
+
+	const FVector Feet(1234.0, -567.0, 89.0);
+	const FVector Origin = ElysiumGym::SeatOrigin(Feet, HalfHeight);
+
+	TestTrue(TEXT("seating moves nothing horizontally"),
+		FMath::IsNearlyEqual(Origin.X, Feet.X, 1e-4) && FMath::IsNearlyEqual(Origin.Y, Feet.Y, 1e-4));
+
+	const double HullMinZ = Origin.Z - HalfHeight;
+	TestTrue(TEXT("the hull's underside clears the floor by exactly DistEpsilon"),
+		FMath::IsNearlyEqual(HullMinZ - Feet.Z, ElysiumMove::DistEpsilon, 1e-4));
+	TestTrue(TEXT("so the body is above the surface, never inside it"), HullMinZ > Feet.Z);
+
+	// And a gym lane's own start seats the same way — the lanes are authored at floor level, so a
+	// start that needed a per-lane fudge would mean the convention had leaked.
+	{
+		const FElysiumMoveTuning T;
+		const ElysiumGym::FSpec Spec = ElysiumGym::Build(T);
+		for (const ElysiumGym::FLane& L : Spec.Lanes)
+		{
+			TestTrue(FString::Printf(TEXT("lane '%s' starts at floor level"), *L.Name.ToString()),
+				FMath::IsNearlyEqual(L.FeetOrigin.Z, 0.0, 1e-4));
+		}
+	}
+	return true;
+}
+
+// =====================================================================================
+// The recorded channels (CCC0). A value that reaches disk with nothing that knows how to compare
+// it is the failure this registry exists to close, so what is asserted is that every declaration
+// carries a usable rule and that the recorder refuses anything undeclared.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChannelRegistryTest,
+	"Elysium.Substrate.ChannelRegistry", GElysiumTestFlags)
+bool FElysiumChannelRegistryTest::RunTest(const FString&)
+{
+	using namespace ElysiumChannels;
+
+	TSet<FString> Names;
+	int32 FrameChannels = 0;
+	int32 RunChannels = 0;
+
+	for (const FChannelDef& Def : Defs())
+	{
+		const FString Name = Def.Name ? FString(Def.Name) : FString();
+		TestFalse(TEXT("a channel is named"), Name.IsEmpty());
+		TestFalse(FString::Printf(TEXT("'%s' is declared once"), *Name), Names.Contains(Name));
+		Names.Add(Name);
+
+		TestTrue(FString::Printf(TEXT("'%s' names a producer"), *Name),
+			Def.Producer && FCString::Strlen(Def.Producer) > 0);
+		TestTrue(FString::Printf(TEXT("'%s' says what it is"), *Name),
+			Def.Help && FCString::Strlen(Def.Help) > 0);
+
+		// The rule itself. A numeric channel with no tolerance is exactly the silent-pass case the
+		// registry replaces, so it is a failure here rather than a surprise in the differ.
+		if (Def.Kind == EKind::Numeric)
+		{
+			TestTrue(FString::Printf(TEXT("numeric '%s' carries a tolerance"), *Name),
+				Def.Tolerance > 0.0f);
+			TestTrue(FString::Printf(TEXT("numeric '%s' names its unit or is dimensionless"), *Name),
+				Def.Unit != nullptr);
+		}
+		else
+		{
+			TestEqual(FString::Printf(TEXT("exact '%s' carries no tolerance"), *Name),
+				Def.Tolerance, 0.0f);
+			TestEqual(FString::Printf(TEXT("exact '%s' prints no decimals"), *Name),
+				static_cast<int32>(Def.Precision), 0);
+		}
+		TestTrue(FString::Printf(TEXT("'%s' prints a sane number of decimals"), *Name),
+			Def.Precision >= 0 && Def.Precision <= 6);
+
+		(Def.Scope == EScope::Frame ? FrameChannels : RunChannels)++;
+
+		TestEqual(FString::Printf(TEXT("'%s' is findable by name"), *Name), Find(Def.Name), &Def);
+	}
+
+	TestTrue(TEXT("there are frame channels"), FrameChannels > 0);
+	TestTrue(TEXT("there are run channels"), RunChannels > 0);
+	TestNull(TEXT("an unknown name resolves to nothing"), Find(TEXT("no_such_channel")));
+
+	// Every per-frame channel is speed-dependent, and that is structural rather than incidental:
+	// *when* a body reaches a feature moves with its gait even when *whether* it does not. The
+	// committed baselines are the run channels, which is what lets them be promoted before `CCC7`.
+	for (const FChannelDef& Def : Defs())
+	{
+		if (Def.Scope == EScope::Frame)
+		{
+			TestTrue(FString::Printf(TEXT("frame channel '%s' is speed-dependent"), Def.Name),
+				Def.bSpeedDependent);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChannelRecorderTest,
+	"Elysium.Substrate.ChannelRecorder", GElysiumTestFlags)
+bool FElysiumChannelRecorderTest::RunTest(const FString&)
+{
+	static const TCHAR* const Cols[] = { TEXT("frame"), TEXT("pz"), TEXT("onground") };
+
+	// --- Undeclared names are refused at the door ---------------------------------------------
+	{
+		FElysiumChannelRecorder R;
+		FString Error;
+		static const TCHAR* const Bogus[] = { TEXT("frame"), TEXT("no_such_channel") };
+		TestFalse(TEXT("an unregistered channel cannot be opened"), R.Open(Bogus, Error));
+		TestTrue(TEXT("and the refusal names it"), Error.Contains(TEXT("no_such_channel")));
+
+		static const TCHAR* const Dup[] = { TEXT("frame"), TEXT("frame") };
+		TestFalse(TEXT("a duplicated channel cannot be opened"), R.Open(Dup, Error));
+
+		// A run channel is not a column; putting one in the CSV is how a value ends up compared
+		// against the wrong thing.
+		static const TCHAR* const Mixed[] = { TEXT("frame"), TEXT("top_stand") };
+		TestFalse(TEXT("a run channel cannot be a column"), R.Open(Mixed, Error));
+	}
+
+	// --- A complete frame, and an incomplete one ----------------------------------------------
+	{
+		FElysiumChannelRecorder R;
+		FString Error;
+		TestTrue(TEXT("the declared channels open"), R.Open(Cols, Error));
+
+		R.BeginFrame();
+		R.Set(TEXT("frame"), 0);
+		R.Set(TEXT("pz"), 12.5);
+		TestFalse(TEXT("a frame missing a channel is refused"), R.EndFrame(Error));
+		TestTrue(TEXT("and the refusal names it"), Error.Contains(TEXT("onground")));
+		TestEqual(TEXT("the half-written frame is discarded"), R.FrameCount(), 0);
+
+		R.BeginFrame();
+		R.Set(TEXT("frame"), 0);
+		R.Set(TEXT("pz"), 12.5);
+		R.Set(TEXT("onground"), true);
+		TestTrue(TEXT("a complete frame is accepted"), R.EndFrame(Error));
+
+		R.BeginFrame();
+		R.Set(TEXT("frame"), 1);
+		R.Set(TEXT("pz"), -0.00001);      // rounds to all zeros at four decimals
+		R.Set(TEXT("onground"), false);
+		TestTrue(TEXT("a second frame is accepted"), R.EndFrame(Error));
+		TestEqual(TEXT("two frames were recorded"), R.FrameCount(), 2);
+
+		R.SetRun(TEXT("top_stand"), 18.0);
+		R.SetMeta(TEXT("course"), TEXT("gym_riser_0"));
+		R.SetConstant(TEXT("StepSize"), 45.72);
+
+		FString Csv;
+		FString Manifest;
+		R.Serialize(Csv, Manifest);
+
+		TArray<FString> Lines;
+		Csv.ParseIntoArrayLines(Lines);
+		TestEqual(TEXT("a header and one line per frame"), Lines.Num(), 3);
+		TestEqual(TEXT("the header is the declared order"), Lines[0], FString(TEXT("frame,pz,onground")));
+		TestEqual(TEXT("values print at the channel's own precision"), Lines[1],
+			FString(TEXT("0,12.5000,1")));
+		// A negative zero prints with a sign and compares equal to the one without, which is a
+		// baseline that fails for no reason.
+		TestEqual(TEXT("a negative zero loses its sign"), Lines[2], FString(TEXT("1,0.0000,0")));
+
+		TestTrue(TEXT("the manifest declares the frame channels"),
+			Manifest.Contains(TEXT("\"name\": \"pz\"")) && Manifest.Contains(TEXT("\"scope\": \"frame\"")));
+		TestTrue(TEXT("with the tolerance the differ must apply"),
+			Manifest.Contains(TEXT("\"tolerance\": 0.250000")));
+		TestTrue(TEXT("the run channel carries its measured value"),
+			Manifest.Contains(TEXT("\"name\": \"top_stand\"")) && Manifest.Contains(TEXT("\"value\": 18.000")));
+		TestTrue(TEXT("the metadata rides along"), Manifest.Contains(TEXT("\"course\": \"gym_riser_0\"")));
+		TestTrue(TEXT("and so do the constants the geometry came from"),
+			Manifest.Contains(TEXT("\"StepSize\": 45.720000")));
+	}
+
+	// --- A run channel that is not registered as one is reported, never accepted ---------------
+	{
+		FElysiumChannelRecorder R;
+		FString Error;
+		TestTrue(TEXT("open"), R.Open(Cols, Error));
+		R.SetRun(TEXT("pz"), 1.0);                 // frame-scoped, not a run channel
+		R.SetRun(TEXT("no_such_channel"), 1.0);
+		TestEqual(TEXT("both misuses are recorded"), R.Errors().Num(), 2);
+
+		FString Csv;
+		FString Manifest;
+		R.Serialize(Csv, Manifest);
+		TestTrue(TEXT("and the manifest carries them where a run cannot hide them"),
+			Manifest.Contains(TEXT("\"errors\"")));
+	}
 	return true;
 }
 

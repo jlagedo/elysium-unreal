@@ -119,43 +119,87 @@ translates. A graph that enables root motion on a locomotion state double-moves.
 ## The gym
 
 A movement gym's dimensions *are* its specification, so ours is **generated from `ElysiumMove` rather
-than authored**, and a threshold cannot drift from the constant it tests. It is built in code on the
-green room's stage, which already spawns its panels and needs only collision to carry a pawn.
+than authored**, and a threshold cannot drift from the constant it tests. It is built in code in an
+empty stage world — the same one the green room stands on — and each lane is a solid-walled corridor
+ending in a back wall, so a body that gets through its feature stops somewhere known.
+
+**The bracket is derived and the baseline is measured**, which is what keeps the gym able to fail. An
+expectation recomputed from the same constants as the geometry moves with the geometry and can never
+turn red, so nothing in the spec states what a course *should* record. A lane is named for its
+bracket offset rather than for the value it stands at — `riser_p1` is one unit above `StepSize`
+whatever `StepSize` becomes — so moving a constant changes what the lane records instead of what it
+is called, and the committed recording is what disagrees.
+
+A lane is also where nothing game-derived is: the geometry comes from this repository's own
+constants and the input from its own course table, so the recordings are committed rather than
+gitignored, and a gym run needs no exported map.
 
 Each axis brackets a constant so the cliff is visible rather than inferred:
 
 | Feature | Brackets | Constant |
 |---|---|---|
-| stair risers | 16 / 17 / **18** / 19 / 20 / 24 u | `StepSize` |
-| ledges | 24 / **25** / 26 u, and 42 / **43** / 44 u | `JumpBoost`, and the crouch-jump reach |
-| slopes | 44 / 45 / 46 / 50° | `StandableZ` 0.7 |
-| ceilings | 36 → 72 u | `DuckHeight`, `StandHeight`, `CanUnduck` |
-| gaps | graded against the held-jump arc | `BaseJumpVelocity`, `JumpHoldSeconds`, `JumpGravityMultiplier` |
-| a long flat run | — | `Friction`, `StopSpeed`, `Accelerate` |
-| a corner and doorway cluster | — | `WalkMove`'s two-attempt scheme, which special-cases neither |
+| stair risers | `StepSize` −2 / −1 / **0** / +1 / +2 / +6 u | `StepSize` |
+| capping roofs over a jump | `JumpBoost` −1 / **0** / +1 u of clearance | `JumpBoost`, `JumpBoostScale` |
+| a crouch-jump under a clear roof | — (recorded, see below) | the airborne duck's own lift |
+| ramps | `acos(StandableZ)` −1.5 / −0.5 / +0.5 / +4.5° | `StandableZ` 0.7 |
+| roofed spans, standing and ducked | `StandHeight` and `DuckHeight`, each ±1 u | `StandHeight`, `DuckHeight` |
+| a chamber between the two hulls | — | `CanUnduck`, grounded and airborne |
+| apertures | `2 × HullHalfWidth` −1 / **0** / +1 / +4 / +16 u | the hull width, and `WalkMove`'s two attempts |
+| gaps | 32 → 160 u | the held-jump arc |
+| a long clear run | — | `Friction`, `StopSpeed`, `Accelerate` |
+
+**`sv_jump_boost` is bracketed by a ceiling, not by a ledge.** It is an instant origin displacement
+and the sweep that applies it is capped by whatever is overhead, so a roof at `StandHeight + G`
+truncates the pop below the pop's own height and never touches it above — which brackets the constant
+without anything having to be landed on, and keeps the measurement purely vertical. The lane runs
+with `BaseJumpVelocity` overridden to zero so the pop is the only thing lifting the body; with the
+held push also in play the body clears every roof that could bracket it and the bracket says nothing.
+
+**The crouch-jump's reach is recorded rather than bracketed, and that is a property of the geometry
+rather than a gap in the gym.** No roof can cap the ducked reach without also capping the standing
+pop that precedes it — the standing body needs exactly the headroom the ducked measurement would have
+to deny it — so no geometry straddles the answer. The lane measures the lift itself, and `DuckHeight`
+moving is what changes it.
 
 **Assertions split by whether the speed authority can move them.** Vertical thresholds — step height,
-crouch-jump ceiling, slope standability, unduck refusal — are collision geometry and are invariant
-under a speed change, so they baseline permanently. Horizontal gap clearance, course times, air-strafe
-gain and stopping distance all move when the speed source changes, so they baseline only once that
-call is made. A vertical threshold that shifts when the speed changes is a collision regression, not
-a feel delta.
+the origin pop, slope standability, unduck refusal, aperture width — are collision geometry and are
+invariant under a speed change, so they baseline permanently. Horizontal gap clearance, course times,
+air-strafe gain and stopping distance all move when the speed source changes, so they baseline only
+once that call is made. A vertical threshold that shifts when the speed changes is a collision
+regression, not a feel delta.
 
 **A synthetic gym cannot replace the real map, and does not try.** Retail will not load geometry we
 authored, so any comparison against a retail capture is real-geometry-only; that is what the sited
 `sp_tutorial_1` courses are for. The gym answers where a threshold is; the sited courses answer
 whether we match.
 
+The reverse also holds, and it is why the gym is not optional: **`sp_tutorial_1` does not contain the
+features in bracketing form.** It ships no ramp anywhere near the 0.7 standable normal — every sloped
+surface in it is either a few degrees or effectively a wall — its doors are shut at map load, and its
+one curb near the step limit sits behind drains deep enough to swallow the body. A real map proves
+the shipped geometry behaves; it cannot locate a cliff, because nothing in it was built to straddle
+one.
+
 ## The recorded channels
 
-The harness replays a fixed command stream and writes one row per frame. Position and velocity are
-emitted in **Source units**, not centimetres, so a row reads directly against the decompile and
-against `docs/vtmb/source_movement.md`'s own numbers.
+The harness replays a fixed command stream and records it through one named-channel recorder.
+Position and velocity are emitted in **Source units**, not centimetres, so a row reads directly
+against the decompile and against `docs/vtmb/source_movement.md`'s own numbers.
 
-A channel is compared only if the comparator knows about it: a numeric channel needs an absolute
-tolerance, a state channel is compared for exact equality, and a channel registered as neither is
-written to the CSV and silently never checked. Ground state, stance and water level are exact —
-any flip is a behaviour change, never a rounding one.
+A channel's comparison rule is part of its declaration: a numeric channel carries an absolute
+tolerance, a state channel is compared for exact equality, and a name that is in neither class cannot
+be written at all. Ground state, stance and water level are exact — any flip is a behaviour change,
+never a rounding one. Each run publishes the declarations it used as a manifest beside its own
+output, and the comparator reads that rather than carrying a second copy.
+
+**A channel has a scope, and the scope decides what a baseline can assert.** A *frame* channel is one
+value per frame; a *run* channel is one value for the whole course. Every frame channel is
+speed-dependent, and that is structural rather than incidental — *when* a body reaches a feature moves
+with its gait even where *whether* it reaches it does not. So the gym's run channels are what a
+committed baseline compares, and they are written to **saturate**: how far the body got before
+something stopped it, how high it stood, how high it reached. A body either climbs a riser or is
+stopped by it, and either answer is the same at any gait given a course long enough to reach the
+feature at the slowest speed the mover can produce.
 
 Camera and animation channels ride the **same** runs rather than a second harness, because the
 command stream is already deterministic and frame-pinned: a camera regression and a movement

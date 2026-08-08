@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
@@ -89,6 +90,30 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		}),
 		ECVF_Cheat));
 
+	// The same capture for a movement course's start. `elysium.campos` logs the *camera*, and a
+	// course start is the **body's feet** — the pawn's own origin is its box centre, so a coordinate
+	// read off either the view or the actor is 36 units out. Fly to a staircase, run this, paste.
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.playerpos"),
+		TEXT("elysium.playerpos — log the player's feet as a sited-course row (for the move harness)"),
+		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		{
+			UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+			const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			if (!Pawn)
+			{
+				return;
+			}
+			const IElysiumPlayerBody* Body = Cast<const IElysiumPlayerBody>(Pawn);
+			const float HalfHeight = Body ? Body->GetBodyHalfHeight() : 0.0f;
+			const FVector Feet = Pawn->GetActorLocation() - FVector(0.0f, 0.0f, HalfHeight);
+			UE_LOG(LogElysiumMap, Display,
+				TEXT("elysium.playerpos: FVector(%.1ff, %.1ff, %.1ff), %.1ff  // %s, feet"),
+				Feet.X, Feet.Y, Feet.Z, PC->GetControlRotation().Yaw, *GetCurrentMapName());
+		}),
+		ECVF_Cheat));
+
 	// Under -ElysiumProfile, arm the headless profiling harness. It self-drives once the
 	// boot map settles, captures each configured vantage, writes a summary, and exits.
 	if (FElysiumProfileRun::IsRequested())
@@ -123,27 +148,36 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 bool UElysiumMapSubsystem::EnterGreenRoom(FString& OutError)
 {
-	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
-	if (!World)
-	{
-		OutError = TEXT("no current world");
-		return false;
-	}
 	// A green room armed from the command line — a lab or a capture run — already owns the harness,
 	// and the stage world is simply the world it runs in. Only a session that has none gets one armed
 	// here, which is the `elysium.gr` case. Arming happens before anything is torn down so its
 	// failure modes (no RHI) are reported while the current map is still standing. The run is owned
 	// by this GI-scoped subsystem and re-reads the current map every tick, so it survives the travel
 	// below and picks the stage actor up when it is ready.
+	//
+	// It is separate from the travel because the stage world has a second caller with no interest in
+	// the lab at all: the movement gym builds its own geometry into the same empty level and runs
+	// under `-nullrhi`, where arming the lab would refuse outright.
 	if (!GreenRoomRun.IsValid() && EnsureGreenRoomLab(OutError) == nullptr)
 	{
+		return false;
+	}
+	return EnterStageWorld(OutError);
+}
+
+bool UElysiumMapSubsystem::EnterStageWorld(FString& OutError)
+{
+	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
+	if (!World)
+	{
+		OutError = TEXT("no current world");
 		return false;
 	}
 	if (const AElysiumMapActor* Map = CurrentMap.Get())
 	{
 		if (Map->IsStageOnly())
 		{
-			return true;   // already standing in one; the lab has just been re-armed over it
+			return true;   // already standing in one; whatever armed it has just re-armed over it
 		}
 	}
 
@@ -166,12 +200,12 @@ bool UElysiumMapSubsystem::EnterGreenRoom(FString& OutError)
 
 	if (bInShell && bWorldHasPawn)
 	{
-		UE_LOG(LogElysiumMap, Log, TEXT("green room: building the stage world in place"));
+		UE_LOG(LogElysiumMap, Log, TEXT("stage: building the stage world in place"));
 		return SpawnPendingMap();
 	}
 
 	CurrentMap = nullptr;
-	UE_LOG(LogElysiumMap, Log, TEXT("green room: %s for the stage world"),
+	UE_LOG(LogElysiumMap, Log, TEXT("stage: %s for the stage world"),
 		bInShell ? TEXT("reopening the shell") : TEXT("leaving the map"));
 #if WITH_EDITOR
 	// Same editor-game world lifetime normalization Travel performs; see the comment there.
