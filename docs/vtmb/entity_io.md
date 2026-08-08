@@ -1033,8 +1033,12 @@ ideal yaw at `m_pAnim+0x34` **directly** when the yaw limit is exactly `180.0` �
 "no limit, snap" sentinel. Any other limit makes the turn a rate-limited approach.
 
 *Divergence, by owner call:* this runtime writes the mark's angles directly instead of driving them
-through a rate-limited yaw controller. No `sp_theatre` sequence uses `m_fMoveTo` 4 or 5, so the
-difference is confined to `sp_tutorial_1` and `sm_warehouse_1`.
+through a rate-limited yaw controller. No `sp_theatre` sequence uses `m_fMoveTo` 4 or 5, but **27 of
+the install's 108 maps do** — 81 authorings, 62 at value 4 and 19 at value 5 — so the difference
+reaches a quarter of the game rather than a couple of maps. The heaviest carriers are `ch_temple_2`
+(10), `la_ventruetower_1` and `la_bradbury_2` (9 each), `hw_cemetery_1` (5) and `sm_warehouse_1` (4);
+`sp_tutorial_1` carries 3. Over all 108 maps `m_fMoveTo` is authored 702 times across 68 maps,
+distributed `{0: 165, 1: 198, 2: 206, 3: 52, 4: 62, 5: 19}`.
 
 **Spawnflags** live at `CBaseEntity+0x204` and follow the HL1 `CCineMonster` set for bits 1–128; the
 VtMB additions are decoded from the bit tests in the class range `0x101a5000–0x101a9600`:

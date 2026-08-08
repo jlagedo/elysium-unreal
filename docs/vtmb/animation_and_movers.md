@@ -388,8 +388,20 @@ The model makes the final choice. `SelectWeightedSequence` enumerates sequences 
 activity ID matches, then uses `actweight`; the chosen sequence still carries the label, include
 owner, blend grid, flags, fade, events and autolayers described in this section. The player-body
 union currently contains 3,330 exact sequence descriptors and **1,202 distinct non-empty activity
-literals**. That population makes a manually authored remake table both incomplete and unnecessary:
-the model inventory is the table.
+literals case-insensitively**, 1,203 as spelled. That population makes a manually authored remake
+table both incomplete and unnecessary: the model inventory is the table.
+
+**One body already carries the whole vocabulary** [data-verified]. `tremere_male_armor_0`'s include
+DAG is 33 of those 122 models and 1,577 of the 3,330 descriptors, and it reaches every one of the
+1,203 spellings — the other 89 models add sequences, not activities. The union buys coverage of
+*which clip answers*, not of *what can be asked*.
+
+**The gap between the two counts is one authored inconsistency, not a decode artifact.**
+`ACT_MELEE_ATTACK_SLEDGEHAMMER` and `ACT_MELEE_ATTACK_sledgehammer` both occur, and both occur inside
+the same two models — `shared/male/sledgehammer.mdl` and `shared/female/sledgehammer.mdl`. Whether
+they name one activity or two depends on whether the DLL's name-to-enum resolution at model load
+case-folds, which is **not recovered**, so a consumer that lowercases the literal merges a pair
+retail may or may not merge.
 
 The retail `player_sequence` command is the deliberate bypass. Its handler at `0x10348560` resolves
 an exact label through `LookupSequence` (`0x1008f7b0`), writes `m_nSequence`, calls

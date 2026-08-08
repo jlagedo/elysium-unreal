@@ -113,7 +113,7 @@ which owns them; they appear here as the evidence for a project decision, not as
 | Morph target names across the cast | **54 distinct**; 86 of 166 models carry a flex rig, each with the same 53 FACS action units | One shared skeleton carries one 54-name curve set — the face costs the bake nothing |
 | ▶ `numautolayers` bounds hazard | 7 single-sequence scenery and weapon models read **764**, the descriptor tail running past the file into the string table | A bounds gate is mandatory in the exporter, and its population is named |
 | ▶ Player action path | `PostThink` `0x1016be10` → classifier `0x1016bb50` → mode router `0x10164240` → ordinary selector `0x10164870` → apply/select `0x101644f0` | The player is driven by realized state and an activity policy, not by a button-to-clip table |
-| ▶ Player-body activity reach | **56** player models → **122** exact owner models → **3,330** sequence descriptors carrying **1,202** distinct non-empty activity literals | The model inventory is generated data; a manually maintained action/clip list cannot be the runtime contract |
+| ▶ Player-body activity reach | **56** player models → **122** exact owner models → **3,330** sequence descriptors carrying **1,202** distinct non-empty activity literals case-insensitively (1,203 as spelled); one body's DAG of 33 models already reaches all of them | The model inventory is generated data; a manually maintained action/clip list cannot be the runtime contract |
 | ▶ Weapon translation table | virtual `+0x5a4` translates; `+0x5a8`/`+0x5ac` expose 12-byte `{base, weapon, required}` rows; `activitydump` prints them | Weapon-specific locomotion/combat is extracted per class rather than hardcoded in the player graph |
 
 ## Phases
