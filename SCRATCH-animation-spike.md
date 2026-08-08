@@ -34,78 +34,84 @@ doing.* Self-describing assets are the point.
 
 Eight items. Everything else in this file is a fact, not a task. Ordered; each says what done means.
 
-**1.2 and 1.3 are the frame path emptying out.** Both are the root `CLAUDE.md` rule "Poses are baked
-native" applied to the two rules still living in `Evaluate`: a clip carries a complete Unreal-native
-pose, and where its meaning depends on state stored outside it, the bake resolves that state rather
-than forwarding the question. Each deletes more code than it adds, and 1.4 is what deletes the
-switch they leave behind.
+**1.1 is the seam the bake outran.** Every VtMB rule the frame path used to carry is now resolved
+offline, and the price is that the two clip families this spike is about — the additives and the
+overlays that own the split bone — exist on the mount only in a per-host form the runtime has no
+way to name. Nothing downstream of it can be demonstrated until a caller can ask for one.
 
-### 1.1 Export the autolayer table, and the weight it carries
+### 1.1 Reach a derived clip from the runtime
 
-The RE is **done**; this is export work. `docs/vtmb/animation_and_movers.md` A.3 decodes the
-binding: `numautolayers`@660 / `autolayerindex`@664, four bytes per entry, each a bare sequence
-index, only ever on `move_and_ranged` (male 232 declaring sequences / 345 entries, female 229 /
-340), 0 out of range, 0 self-referencing, depth 1, fan-out ≤ 2. The uniform pattern is one
-`<weapon>_aim_layer` plus one `<weapon>_<action>_delta`. A second binding lives outside the model:
-46 masked sequences the DLL selects by an `ACT_*_LAYER_*` activity. Carry the table across the
-include DAG with the `numautolayers == 764` bounds hazard gated.
+The bake writes an additive and a split-bone overlay **once per declaring host**, as
+`<label>@<host>` (§5.9), and writes a grid whose cells ship only in derived form once per host as
+`BS_<label>@<host>`. The runtime addresses neither. `UElysiumNpcAnimSubsystem::ResolveClip` looks
+a label up in `npc/clips/<stem>.json` — VtMB's own labels, no derived ones — and hands
+`ElysiumNpcVisual::LoadBakedClip` that plain name; `ResolveGrid` calls `LoadBakedBlendSpace` with
+an empty host even though `FElysiumContentPaths::BakedCharacterBlendSpace` takes one. A raw
+`_delta` is never built as an asset (`ElysiumSkeletalBuild.cpp`: an additive no host declares "is
+not built"), and an overlay that ships only in derived form has no raw asset either.
 
-**The weight scalar is part of this item.** The combine is resolved; the scalar the accumulator
-receives *from its caller* is not — the file carries no weight, ramp or flags, so it lives in the
-DLL. A capture hook on `FUN_10088e10`'s entry settles it. Today C1 takes it as a caller argument
-and the green room's slider stands in; the moment a weapon selects its own layers, that stand-in
-becomes a guess shipped as behaviour.
+So `UElysiumEntityBodies::PlayNpcLayer` and `PlayNpcGrid` — the doors the green room uses and the
+doors gameplay will use — can only reach a layer that happens to still ship under its bare label.
+The green room's Autolayers panel arms `Binding->Clips[i]`, which is the bare label the table
+names, not the derived asset the bake wrote for the standing host.
 
-**Done when:** a weapon and action select their own `_aim_layer` + `_delta` through the runtime's own
-caller, at a weight either measured or named in code as a stand-in; the overlay-first /
-additive-second order in §6 is confirmed by the table instead of assumed; and the green room shows
-the declared entries, their order and the selecting authority beside what is actually running.
+The host is not a new unknown anywhere it matters: a layer's host is the clip the body is standing
+on, which is what the binding was looked up by in the first place.
 
-The green room is the instrument, not the caller. The table exports into `blends/<stem>.json` beside
-the grids — same 764-byte descriptor — and the panel reads it. Census is offline against the install;
-structure is a content-tier assertion; order is what the table itself states. The weight is the only
-part retail has to answer, and the first move there is an analysis pass over the finalized captures,
-not a new hook: the combine is closed, so base local + layer local + composed local determine the
-scalar per bone.
+**Done when:** `PlayNpcLayer`/`PlayNpcGrid` resolve the derived asset for the host the body is
+standing on, `Arm as declared` stands every entry the table names rather than only the ones with a
+raw form, and a request for a layer whose host declares no derived form fails by name.
 
-### 1.2 Bake the additives against their named base
+### 1.2 Compose in the order the table states
 
-§4 is the evidence and the arithmetic. `_split_rotation_tracks` currently skips a `DELTA_SEQUENCE`
-clip outright (`UE_mdl_skeletal.py`), and the proxy post-multiplies at evaluation. Both go: the
-exporter conjugates each delta by its declared base's rotation, and the bake sets
-`RefPoseType = ABPT_AnimFrame` naming that base so the compressor subtracts the same pose the
-conjugation used. The pairing is the one §7 states, resolved through the include DAG rather than by
-globbing a name.
+The table is exported, read and displayed; the accumulation is not driven by it.
+`FElysiumNpcAnimProxy::EvaluateLayers` walks its two slots in two passes, overlay-first and
+additive-second, and the comment at the loop still says the export does not carry the table —
+which it has since the binding shipped (§5.9, §8). Order is the one part of the binding that is
+data rather than inference: the dispatcher walks entries in index order, so entry 0 being the
+overlay and entry 1 the additive is a fact the file states.
 
-**Done when:** `FElysiumNpcAnimProxy::EvaluateLayers` has no additive branch, `RequestAdditive`'s
-`IsValidAdditive()` gate is gone, and the round-trip
-assertion in `Elysium.Content.BakedCharacterParity` reads against the declared base rather than the
-reference pose.
+**Done when:** the accumulation order for the armed layers comes from the binding's own index
+order, the comment at the loop states what the code does, and the green room's `Reverse order`
+button is an A/B against a stated order instead of against an assumption.
 
-### 1.3 Bake the upper-body overlays as mesh-space additives
+### 1.3 The weight the accumulator receives
 
-§3 and §5.3 are the evidence. One of the four masks owns the split bone, and its clips are the only
-ones whose ancestors are absent from their own frames. They bake as component-space deltas against
-the weapon's declared base; the 3×3 grids become `UAimOffsetBlendSpace`, which is a `UBlendSpace`,
-so §5.6's sample placement is unchanged and only the sample kind differs. The family needs no blend
-profile (§5.4: an additive's untouched bones are the additive identity).
+The combine is resolved; the scalar the accumulator receives *from its caller* is not — the file
+carries no weight, ramp or flags, so it lives in the DLL. Today `RequestLayer` takes it as a
+caller argument and the green room's slider stands in, which the panel says on screen. The moment
+a weapon selects its own layers, that stand-in becomes a guess shipped as behaviour.
 
-**Done when:** `FAnimNode_ElysiumSplitInheritance` is deleted along with the `bSplitInheritance`
-plumbing and `ElysiumNpcVisual::IsBakedClip`, `RequestGrid` no longer refuses a masked blend space,
-and the green room stands an aim grid over a moving host with the torso upright.
+The first move is an analysis pass over the finalized captures, not a new hook: the combine is
+closed arithmetic, so base local + layer local + composed local determine the scalar per bone, and
+a value consistent across the mask's bones measures it while confirming the combine. Acceptance is
+a coverage argument rather than a number — the recipe has to exercise a weapon draw, an aim
+transition and a sequence crossfade, since a constant witnessed over conditions that would not
+have varied it settles nothing.
 
-### 1.4 Collapse the composition-stage switch
+**Done when:** the weight is either measured or named in the code as a stand-in at the point a
+gameplay caller passes it.
 
-**Done.** The owner retired the glTFRuntime character path, so the mount is the only build of a
-character. `FAnimNode_ElysiumSplitInheritance`, the `bSplitInheritance` plumbing,
-`ElysiumNpcVisual::IsBakedClip`, `UseBakedCharacters`, the `elysium.BakedCharacters` cvar and the
-baked/loader frame split on every sidecar rig are deleted; `elysium.CompositionStages` gates axis
-interpolation alone. A stem the export has not covered fails by name rather than falling back.
+### 1.4 A layered blend-space path for the aim family
+
+`RequestGrid` refuses a blend space whose samples carry `UElysiumAnimLayerMask`, and that gate is
+right: a masked grid evaluated as a **base** pose loses the body's stance from the waist down.
+It is also why the 3×3 aim grids — which now bake, once per declaring host — cannot be stood at
+all. There is deliberately no layered blend-space path in the proxy, because in a graph the mask
+is a property of the *blend node* and not of the pose feeding it, so a seam built here would be
+built wrong and then deleted.
+
+The load-bearing precondition is measured: every cell of an aim grid shares one bone mask (§5.4),
+so a whole grid sits behind one node. Needs 1.1 to name the asset and 1.6 to hold the node.
+
+**Done when:** an aim grid stands as a **layer** over a moving host, torso upright, through a node
+that owns the mask.
 
 ### 1.5 A gameplay caller
 
-`UElysiumEntityBodies::PlayNpcLayer` is the door and nothing walks through it. No NPC, weapon or
-script path asks for a layer or a grid; the green room is the only caller of either.
+`UElysiumEntityBodies::PlayNpcLayer` and `PlayNpcGrid` are the doors and nothing walks through
+them. No NPC, weapon or script path asks for a layer or a grid; `FElysiumGreenRoomRun` is the only
+caller of either.
 
 **Done when:** a body moving with a weapon plays its layers and steers its locomotion grid with no
 green room in the loop.
@@ -114,12 +120,15 @@ green room in the loop.
 
 An `UAnimBlueprint` per body archetype: locomotion state machine, blend spaces on the pose
 parameters, the additive and layered nodes, transitions timed from the authored `fade`@612
-duration (already on the `Seq` namedtuple).
+duration (already on the `Seq` namedtuple and already on `FElysiumNpcClip`).
 
-The load-bearing precondition is already measured: every cell of an aim grid shares one bone mask
-(§5.4), so a whole grid sits behind one node. No Unreal node masks per sample, so this is the only
-shape that works — for the aim family after 1.3 that node is `FAnimNode_AimOffsetBlendSpace`, and
-for the three masks that do not own the split bone it is `FAnimNode_LayeredBoneBlend`.
+For the aim family the node is `FAnimNode_AimOffsetBlendSpace` or a `FAnimNode_BlendSpacePlayer`
+under a `FAnimNode_LayeredBoneBlend`; for the three masks that do not own the split bone it is
+`FAnimNode_LayeredBoneBlend` over the profiles the bake already writes. No Unreal node masks per
+sample, which is why the one-mask-per-grid measurement is the precondition.
+
+This is what deletes the proxy's own composition: `EvaluateLayers`, `LayerPlayers`, `LayerMasks`,
+`GridPlayer` and the `elysium.AnimLayers` / `elysium.BlendSpaces` A/Bs go with it.
 
 **Done when:** `UElysiumNpcAnimInstance`'s native `Evaluate` tail is gone.
 
@@ -127,21 +136,22 @@ for the three masks that do not own the split bone it is `FAnimNode_LayeredBoneB
 
 Procedural bones are genuinely runtime — they read the control bone's live orientation, which is
 why this one stage can never be baked. A post-process ABP on the skeletal mesh means the preview
-applies it too. Needs `UAnimGraphNode_*` wrappers in an editor module.
+applies it too. Needs `UAnimGraphNode_*` wrappers in an editor module; there is no such module
+today (`Private/Editor/` is bake code inside the runtime module).
 
 **Done when:** the Content Browser preview and the anim editor show a correct rig with no game
 running.
 
-### 1.8 Empty-map harness and root motion
+### 1.8 Root motion
 
-The green room already does most of the harness (`uv run elysium debug greenroom`, plus the Cog
-window). **Done when:** it stands a body with the full graph and steps blends by hand.
+The green room is the harness and already does the job (`uv run elysium debug greenroom`, plus the
+Cog window): it stands any stem, filters a vocabulary by source, kind and root motion, arms
+layers, and steps a grid by hand.
 
-Root motion is the open decision beside it.
-
-The green room scans it; nothing consumes it. There is no decision on record either way — whether
-clips drive translation, whether the motor does, or how the two reconcile. A state machine built
-before this lands will bake an answer in by accident.
+Root motion is the open decision beside it. `ScanRootMotion` labels every clip as carrying the
+root or holding it; nothing consumes the answer. There is no decision on record either way —
+whether clips drive translation, whether the motor does, or how the two reconcile. A state machine
+built before this lands will bake an answer in by accident.
 
 **Done when:** the decision is recorded in the doc that owns locomotion, and the graph honours it.
 
@@ -149,13 +159,16 @@ before this lands will bake an answer in by accident.
 
 ## 2. What's already done
 
-Phases A, B and C, plus the blend spaces and the blend profiles. C2 was dropped on evidence — 0 of
-14,004 sequences need the pre-multiply branch (§4).
+Phases A, B and C, the blend spaces, the blend profiles, and the per-host derivation that closed
+both quirks in the bake. C2 was dropped on evidence — 0 of 14,004 sequences need the pre-multiply
+branch (§4).
 
-**Five asset kinds ship as self-describing data:** meshes with morph targets, ordinary sequences
-needing no runtime rule, additives Unreal hands back as deltas, masked overlays naming their own
-blend profile, and grids as blend spaces. What each writes and why is §5; what the runtime does
-with them is §6; what breaks if you undo it is §7.
+**Six asset kinds ship as self-describing data:** meshes with morph targets, ordinary sequences
+needing no runtime rule, additives Unreal hands back as deltas against the base their host
+declares, masked overlays naming their own blend profile, split-bone overlays composed against
+their declaring host, and grids as blend spaces. The autolayer binding ships beside them as data.
+What each writes and why is §5; what the runtime does with them is §6; what breaks if you undo it
+is §7.
 
 How any of it got fixed is git history and is deliberately not here.
 
@@ -193,10 +206,9 @@ of the 2,044** clips that animate the split bone.
 
 **The remaining 118 are the one case `world_rot(parent)` is genuinely absent from the file**: a clip
 whose mask excludes the split bone's ancestors carries no rotation record for them, so there is
-nothing to compose and the value only ever arrives from the host at runtime. Exactly **one of the
-four distinct layer masks** owns `Bip01 Spine1` — the 49-bone upper-body gate, carried by the
-`*_aim_layer` and `*_bobble_layer` families; the 24-bone right arm, 45-bone left arm and 1-bone head
-masks do not, so they need no correction at all.
+nothing to compose. Exactly **one of the four distinct layer masks** owns `Bip01 Spine1` — the
+49-bone upper-body gate, carried by the `*_aim_layer` and `*_bobble_layer` families; the 24-bone
+right arm, 45-bone left arm and 1-bone head masks do not, so they need no correction at all.
 
 **The bind chain is not a usable substitute, measured.** The chain is `Bip01`, `Bip01 Pelvis`,
 `Bip01 Spine`, and retail declines all three — `Bip01` is an ordinary animated bone, not the entity
@@ -205,8 +217,10 @@ a bind-normalized overlay arrives rotated by the character's own root rotation. 
 value it corrects.
 
 The base has to be a real pose, and the autolayer table names one: the host. So the family derives
-per declaring host exactly as §4's additives do, and the asset carries
-`AAT_RotationOffsetMeshSpace` so the aim composes in component space. §1.3 is the work.
+per declaring host exactly as §4's additives do — `_composed_frames` writes the overlay against
+that host's own frame, every bone present so the chain is there to compose through, and the caller
+drops the bones the clip does not own. What ships is an ordinary masked clip carrying a blend
+profile, not an additive.
 
 **The residual is the blend, and only the blend.** A correction across a crossfade cannot be
 baked. Measured over genuinely crossfadeable clips (`probe_b1_blend.py`, male locomotion bank,
@@ -237,14 +251,21 @@ post-multiplies**. Every Unreal `EAdditiveAnimationType` **pre-multiplies**
 (`FinalAtom.Rotation = DeltaAtom.Rotation * FinalAtom.Rotation`, `TransformNonVectorized.h:1082` /
 `TransformVectorized.h:1163`). Opposite.
 
-**It bakes, because the base is named.** The correction is `Q_add' = Q_R · Q_d · Q_R^-1`,
+**It is baked, because the base is named.** The correction is `Q_add' = Q_R · Q_d · Q_R^-1`,
 conjugation by the base rotation — and the base is not a runtime unknown. §7 states it: a delta only
-means something over its own base, and the pairing is by name, `<weapon>_<stance>_idle` for
-`<weapon>_<stance>_attack_delta`. Conjugation commutes with Unreal's blend-from-identity, so a
-delta conjugated against its declared base is exact at any weight over that base, and degrades away
-from it exactly as any additive in any engine does. The asset names the same clip through
-`RefPoseType = ABPT_AnimFrame`, so what the compressor subtracts and what the conjugation used are
-one decision, not two. §1.2 is the work.
+means something over its own base, and the autolayer table is what names that base. Conjugation
+commutes with Unreal's blend-from-identity, so a delta conjugated against its declared base is exact
+at any weight over that base, and degrades away from it exactly as any additive in any engine does.
+
+Nobody performs the conjugation explicitly. The exporter writes the **composed** pose — the base
+with the delta already on it — and the asset names the same base through
+`RefPoseType = ABPT_AnimFrame`; `BakeOutAdditiveIntoRawData`'s subtraction is what conjugates. So
+what the compressor subtracts and what the delta was written against are one decision, not two.
+
+**One delta, several bases.** A delta declared by more than one host has no single conjugation:
+the spread across the hosts one delta serves reaches **81.6 deg** (`throwing_star_attack_delta`, 6
+hosts), and up to 19.7 deg on the bobbles. So an additive is emitted once per declaring host
+(§5.9) rather than once per delta, and one asset cannot serve them all.
 
 An earlier reading of this section concluded the opposite, on the grounds that the base is a
 *runtime* value. It is not: the file states it, so it is a bake input.
@@ -286,8 +307,9 @@ authored value. Doesn't change C1 — the post-multiply is right either way. **A
 
 `VERSION` in `UE_mdl_skeletal.py` and `eskm.py`; `EskmVersion` in `ElysiumSkeletalSource.cpp` must
 match. **v2** = split-bone normalization. **v3** = the de-duplicated `"MASK"` table plus an
-`i32 mask` per clip (`-1` = owns everything). `FElysiumSkeletalSource` refuses a stale container
-rather than misreading it.
+`i32 mask` per clip (`-1` = owns everything). **v4** = a clip names the clip it is a difference
+from, empty for a pose of its own, which is what carries the per-host derivation (§5.9).
+`FElysiumSkeletalSource` refuses a stale container rather than misreading it.
 
 ### 5.2 What a `_delta` clip's decoded track actually contains
 
@@ -358,7 +380,7 @@ additive identity, so a profile there would be an asset nothing reads.
 
 **Every cell of a 3x3 `<weapon>_aim_layer` grid carries the same mask; every cell of a 9x1
 locomotion fan is unmasked.** Verified over 135 grids / 6 male banks by a bake that hard-fails on
-disagreement, plus `probe_grid_masks.py`. This is what makes D3's layered blend buildable.
+disagreement, plus `probe_grid_masks.py`. This is what makes 1.4's layered blend buildable.
 
 Male banks only — the female bank is not in the parity slice. **Nothing needs writing to close
 that:** the bake hard-fails on disagreement, so baking a female body *is* the measurement.
@@ -368,12 +390,18 @@ that:** the bake hard-fails on disagreement, so baking a female body *is* the me
 **Unreal's compressor rewrites an additive sequence's content, and nothing says so.** Setting
 `AdditiveAnimType` makes `FCompressibleAnimData::Build` take `BakeOutAdditiveIntoRawData` instead
 of `ResampleAnimationTrackData`, which subtracts the base pose (`ConvertPoseToAdditive`,
-`Target * Base^-1`, against the *skeleton's* reference pose).
+`Target * Base^-1`).
 
-So a `0x4` clip's raw keys are written as `Target = Delta * Base` against the **shared skeleton's**
-reference pose, with untouched channels filled with a zero delta rather than a bind value. The base
-is not a choice: it is whatever the compressor subtracts. Both evaluation paths then hand the delta
-straight back — raw goes through `GetBonePose_Additive`, compressed was subtracted at bake time.
+Which base is a choice the asset makes: `RefPoseType = ABPT_AnimFrame` + `RefPoseSeq` +
+`RefFrameIndex = 0` name the host's own clip, so the subtraction is against the pose the delta was
+composed onto rather than against the shared skeleton's reference pose. A `0x4` clip's raw keys are
+therefore written as `Target = Base ∘ Delta` — the composed pose, every bone present, because a
+bone with no track would evaluate to the reference pose and subtract into a spurious delta rather
+than an identity one. Both evaluation paths then hand the delta straight back — raw goes through
+`GetBonePose_Additive`, compressed was subtracted at bake time.
+
+An additive whose base did not build fails the whole owner by name; an additive no host declares is
+not built at all.
 
 ### 5.6 Blend space sample placement
 
@@ -390,6 +418,10 @@ samples on it, and `IsTooCloseToExistingSamplePoint` rejects the second — **si
 
 Cell addressing is `anim[i0][i1]`. The transposed reading reproduced 1,858/8,302 against
 8,302/8,302 for the correct one — **do not re-derive this**.
+
+A grid whose cells ship only in derived form is built **once per declaring host**, sampling that
+host's derived cells, as `BS_<label>@<host>`; every other grid builds once as `BS_<label>`. Asking
+for the bare label found nothing for 299 of the mount's 527 spaces.
 
 The bake reads the sidecar with `FElysiumBlendTable`, the runtime's own reader, so bake and game
 cannot disagree about what a grid says.
@@ -414,37 +446,64 @@ legitimately names hair chains this family never had; they are counted into `Out
 The guard deliberately does **not** name a cause: the mesh build for the same stem may have failed
 earlier in the same run, in which case the skeleton never *saw* those bones.
 
+### 5.9 Derived clips — what ships under which name
+
+The autolayer table (`numautolayers`@660 / `autolayerindex`@664) names every (host, layer) pair, and
+two kinds of layer need the host's own pose written into them: an additive, because the pre/post
+conversion is a conjugation by the base (§4), and an overlay owning the split bone, because the
+chain it divides by is exactly what its mask excludes (§3). `_derived_bindings` walks the table
+across the include DAG with the `numautolayers == 764` bounds hazard gated, and `_composed_frames`
+writes each pair.
+
+```
+<layer>@<host>        the derived clip; BASE_SEPARATOR is `@`, which no VtMB label contains
+A_<layer>_<host>      the asset, after BakedAssetName folds the illegal character
+```
+
+The container carries the derived clip's own label, its base's label, and the tracks; the bake
+reads the base label to set `RefPoseSeq` for an additive and leaves an overlay an ordinary masked
+clip.
+
+**Which forms exist.** A raw additive still ships in the *container* — it is the label the model
+references — but is **not built** as an asset. A raw overlay is suppressed when nothing else still
+reaches it under its plain label, and kept when something does: a cell can belong to two grids at
+once, one bound to a host and one declared by nobody, and the unbound grid still has to be
+self-consistent.
+
+**Nothing on the runtime side speaks this vocabulary** — that is 1.1.
+
 ---
 
 ## 6. What the runtime does, and why
 
-`Evaluate` is `EvaluateBody` → `EvaluateLayers` → `EvaluateComposition` → facial curves.
+`Evaluate` is `EvaluateBody` → `EvaluateLayers` → `EvaluateComposition` → facial curves. There is
+no split-inheritance stage and no per-clip rig switch: the export resolves `Flags & 0x2`, so no
+clip reaching this instance carries VtMB's model-space value, and `elysium.CompositionStages` gates
+axis interpolation alone.
 
 **`FElysiumNpcAnimProxy::EvaluateLayers(FPoseContext&)`** operates on already-evaluated
 `FPoseContext`s rather than as an `FAnimNode_Base` with `FPoseLink`s, because there is no graph to
-plug them into. It branches on `IsValidAdditive()`:
+plug them into. It branches on the slot's latched `bLayerAdditive`:
 
-- **overlay:** `nlerp(out, layer, s)` + lerp on translation
-- **additive:** `out.quat = normalize(out.quat * scale(delta, s))`, `out.pos += delta.pos * s`
+- **overlay:** `nlerp(out, layer, s)` + lerp on translation, `s = layer_weight * mask`
+- **additive:** `out.quat = normalize(scale(delta, s) * out.quat)`, `out.pos += delta.pos * s`
 
-with `s = layer_weight * mask`. `scale(q,s)` is `FQuat::Slerp(Identity, q, s)` — retail's
-`QuaternionScale` is a true power, not the nlerp `FTransform::BlendFromIdentityAndAccumulate` uses,
-and slerp-from-identity reproduces it as a rotation. Scale is left alone: VtMB has no scale
-channel. Layers accumulate in LOCAL space **under** the composition stages, not over them.
+The additive branch is **pre-multiplied, which is Unreal's own order and not a VtMB rule** — the
+conjugation that converts VtMB's post-multiply happened at bake (§4, §5.5). `scale(q,s)` is
+`FQuat::Slerp(Identity, q, s)`, a true power like retail's `QuaternionScale` rather than the nlerp
+`BlendFromIdentityAndAccumulate` uses. Scale is left alone: VtMB has no scale channel. Layers
+accumulate in LOCAL space **under** the composition stage, not over it, which is retail's slot
+(`FUN_10089c40` walks autolayers before `BuildTransformations`).
 
 **Two gates, mirror-imaged, and both load-bearing:**
 
-- `RequestAdditive` refuses a sequence that is not `IsValidAdditive()`. Only an additive evaluates
-  to a delta — it starts from the additive identity, so an untouched bone comes back as *no
-  change*. An ordinary sequence starts from the **reference pose**, and accumulating that
-  post-multiplies every untouched bone by its own bind. So **layering requires
-  the mount**, which is now the only source a clip can have.
-- `RequestLayer` refuses a non-additive carrying no mask — an unmasked ordinary layer would pull
-  every bone it does not own onto the reference pose.
+- `RequestLayer` refuses a **non-additive carrying no mask** — an unmasked ordinary layer would
+  pull every bone it does not own onto the reference pose. An additive needs no mask: it starts
+  from the additive identity, so an untouched bone comes back as *no change*.
 - `RequestGrid` refuses a blend space whose samples carry `UElysiumAnimLayerMask`, which is why an
   aim grid bakes but cannot be stood. **Deliberately no layered blend-space path:** in a graph the
   mask is a property of the *blend node*, not of the pose feeding it, so that seam would be built
-  wrong and then deleted by D3.
+  wrong and then deleted by 1.6.
 
 **`s = layer_weight` alone in the additive branch, and the reason does not generalise.**
 `bone_weight` is a binary mask and is *not* 1.0 everywhere — 5,972 records install-wide are zero.
@@ -452,6 +511,12 @@ The product reduces only here, only for `0x4` additives: a zero-weight record ne
 channel offset (0 of 736,208), the exporter drops a channel-less track, and a missing track on an
 additive evaluates to the additive identity. **That equivalence belongs to the additive identity,
 not to the mask**, so it does not carry over to ordinary layers.
+
+**The mask array is resolved against the TARGET skeleton, not the sequence's.** The profile lives
+on the layer's skeleton, and `EvaluateLayers` reads it in the body's index space. Those were the
+same skeleton until banks moved onto their own; resolving the profile's bone *names* against the
+mesh's skeleton is the whole fix, and a lookup that missed reads as 0.f, which is also how "not
+owned" reads — so getting it wrong logs nothing.
 
 **Slot allocation.** Layers get their **own** `LayerPlayers[2]` array, not a share of
 `Players[MaxPlayers]`. That array belongs to the crossfade and `TakeFreeSlot` evicts from it by
@@ -461,27 +526,27 @@ update *ahead of* the `bInitialized` gate, like cloth, so one rides over the ref
 with no clip yet.
 
 **The order within the walk is an assumption** — overlay-first, additive-second, the only order in
-which both contributions survive. Stated in the code at the loop; §1.1 is what settles it.
-
-**The split-inheritance gate is PER CLIP.** `UElysiumNpcAnimInstance::PlayClip` asks
-`ElysiumNpcVisual::IsBakedClip(Sequence)` and flips the proxy's rig through `SetCompositionRig`
-only when the answer changes. Not per body and not on the cvar: a baked body still reaches for
-loader-sourced bank clips, which carry VtMB's rotations unchanged and *do* need the stage.
-`SetCompositionRig`'s bool is the **starting state** only. Stage 2 (axis interp) is unaffected and
-inherently un-bakeable — a driven bone needs a *live* control orientation.
+which both contributions survive. Stated in the code at the loop; 1.2 is what settles it.
 
 **Blend spaces: a BASE slot only.** `FAnimNode_BlendSpacePlayer_Standalone GridPlayer` in the
 proxy; when set it IS the body pose, and `Request` clears it. A grid row falls back to standing the
 resolved cell when there is no baked blend space — that is D1's A/B, not an error.
 
+**Clip resolution knows nothing about hosts.** `ResolveClip` finds the label in the stem's
+vocabulary, takes the owner column, and asks `LoadBakedClip` for `<owner>/<label>`; `ResolveGrid`
+passes an empty host. §5.9 is what that cannot reach.
+
 **Callers today:** `UElysiumNpcAnimInstance::PlayLayer/StopLayer/StopAllLayers/GetActiveLayers`,
-`UElysiumEntityBodies::PlayNpcLayer/StopNpcLayers`, and the green room. **Nothing in gameplay
-selects a layer or a grid** — §1.5.
+`UElysiumEntityBodies::PlayNpcLayer/PlayNpcGrid/SetNpcGridPosition/StopNpcLayers`, and the green
+room. **Nothing in gameplay selects a layer or a grid** — 1.5.
 
 ---
 
 ## 7. Traps
 
+- **A plain label does not name a derived asset.** `<layer>@<host>` is the whole point of the bake
+  and none of the runtime's resolvers construct it, so a miss here looks exactly like an
+  unexported stem. §5.9, and 1.1 is the work.
 - **A stem the character export missed cannot stand at all.** There is no second build of a
   character, so `LoadMesh` fails by name rather than substituting one. `uv run elysium export
   characters` with no arguments bakes the whole cast, which is what the game needs; naming models
@@ -492,7 +557,7 @@ selects a layer or a grid** — §1.5.
 - **The Cog green-room readout reports the MESH, not the clip.** A body standing green still says
   nothing about which sequence is playing; `LoadBakedClip` returns null silently.
 - **The Content Browser preview has no anim graph**, so it applies no axis interpolation — a rig
-  with driven bones previews with untwisted forearms. Expected, not a bug; §1.7 is what fixes it.
+  with driven bones previews with untwisted forearms. Expected, not a bug; 1.7 is what fixes it.
 - **A missing bone track evaluates to identity**, not to the ref pose. If a parity failure's
   magnitude equals a bone's full bind transform, the track is missing — don't hunt a rotation bug.
   **Corollary:** that holds for an *additive* (`ResetToAdditiveIdentity`) and is exactly backwards
@@ -506,8 +571,8 @@ selects a layer or a grid** — §1.5.
   same mount both passed and failed across runs. `EvaluateAdditiveFrame` now calls
   `WaitOnExistingCompression()` and warns if `IsCompressedDataValid()` is still false.
 - **`UAnimSequence::GetBoneTransform` never does the additive conversion.** A plain track read: on
-  a raw evaluation it hands back the keys as written. For a baked `_delta` that is the reference
-  pose, so a test built on it reports a correct asset as broken by exactly one bind — and would
+  a raw evaluation it hands back the keys as written. For a baked `_delta` that is the composed
+  pose, so a test built on it reports a correct asset as broken by exactly one base — and would
   pass just as happily if the subtraction never ran. `GetAnimationPose` is the door the runtime
   uses (`EvaluateAdditiveFrame` in `ElysiumBakedCharacterTests.cpp` is the worked example).
 - **`GetImportedModel()->LODModels` must grow in parallel with `AddLODInfo()`** or `PostLoad`
@@ -517,9 +582,9 @@ selects a layer or a grid** — §1.5.
   under `-game`.
 - **A delta only means something over ITS OWN base.** `twohanded_crouch_attack_delta` over a
   standing idle is arithmetically exact and anatomically nonsense — the crouch and the arm-raise
-  live in the base, the delta carries only the swing. Pairing is by name:
-  `<weapon>_<stance>_idle` is the base for `<weapon>_<stance>_attack_delta`. Same trap for an
-  overlay: judge it over a host that actually declares it.
+  live in the base, the delta carries only the swing. The pairing is the autolayer table's, not a
+  name convention: judge a layer over a host that declares it, and take the derived asset written
+  for that host.
 - **The legs and torso are not a control group.** Whole-body sway is the data, not a defect — deltas
   stack down the chain to ~37 deg at the skull. What *would* be a defect is the root translating.
 
@@ -539,8 +604,8 @@ on a body whose mesh built cleanly, that question is live again.**
 | `elysium.CompositionStages` | 1 | axis interpolation over the blended pose — the only stage left |
 | `elysium.AnimLayers` | 1 | 0 ignores every autolayer, `_delta` and masked `_layer` alike (C1/C3's A/B) |
 | `elysium.BlendSpaces` | 1 | 0 declines every grid, so a grid label plays the single resolved cell (D1's A/B) |
-| `elysium.Cloth` | **0** | the garment spike, off. Turning it on takes that stem off the baked path — see the `IsStemBaked` trap |
-| `elysium.NpcAnim` | 1 | 0 drops to the single-node instance (and refuses layers) |
+| `elysium.Cloth` | **0** | the garment spike, off. It no longer selects a mesh — with it on, a chain whose lattice bones the shared skeleton lacks resolves nothing |
+| `elysium.NpcAnim` | 1 | 0 drops to the single-node instance, which refuses layers and cannot hold a blend space |
 
 `elysium.LayerDump` is a **command**: one-shot, logs the pose the next layer evaluation reads, per
 bone, largest first, with each bone's mask weight and the sequence's `AdditiveAnimType`. It is the
@@ -552,23 +617,24 @@ separates "the asset or the read is wrong" from "the accumulate is wrong" in one
 Not guessable, and each was expensive to find.
 
 ```
-# additive over its own base
-uv run elysium gr smiling_jack        # any stem now; cloth is off, so nothing is excluded from baked
-tick elysium.BakedCharacters          # restands automatically; line must go green `baked: SK_...`
-clip filter `twohanded_crouch_idle`   # the BASE. A pose, not a delta.
-pick `twohanded_crouch_attack_delta`  # the layer, over it, at the weight slider's value
-elysium.LayerDump                     # one-shot per-bone log of the pose being read
+# stand a body; cloth is off, so nothing is excluded from the baked path
+uv run elysium gr smiling_jack
+clip filter `twohanded_crouch_idle`   # a POSE. The line must read `baked: SK_...`
 
-# overlay + additive, over a host that declares both (animation_and_movers.md A.3)
+# the layers a host declares — the panel under the clip list
 clip filter `smith_aggressive_run`    # -> smith_aim_layer PLUS smith_bobble_delta
-pick the [overlay layer] row          # legs keep walking; spine-up and both arms take the overlay
-pick the [additive layer] row         # the delta rides on top of that
+[Arm as declared]                     # in the table's own order, idempotent
+[Reverse order]                       # the A/B: the overlay's bones lose the additive
+elysium.LayerDump                     # one-shot per-bone log of the pose being read
 
 # blend space
 clip filter `aggressive_run`          # rows marked `->` are grids
 pick one                              # stands the whole fan, not the cell
 drag `move_yaw`                       # 0 = forward, 90 = strafe; between cells both contribute
 ```
+
+The Autolayers panel names the selecting authority (the model's own table) and says on screen that
+the weight slider is a stand-in. It arms by the table's bare label, which is 1.1's gap.
 
 ### Commands
 
@@ -597,12 +663,16 @@ In-repo, `Elysium.Content.BakedCharacterParity` carries:
   `.eskm`**, so this asserts transport and structure — not that the container is faithful to VtMB;
 - the rest pose against the container, the bone set and morph set against the loader;
 - three assertions that are **genuine** because each compares the bake against something the
-  container *declares* rather than against its own arithmetic: the `_delta` additive round-trip,
-  the layer masks and their bind-held bones, and the blend-grid axis configuration and sample
-  placement.
+  container *declares* rather than against its own arithmetic: the `_delta` round-trip re-applied
+  against the base the container names, the layer masks and their bind-held bones, and the
+  blend-grid axis configuration and sample placement — the last resolving each grid's declaring
+  hosts, because a label alone does not name an asset (§5.6).
 
 C1's was proven non-vacuous by disabling the composition, re-baking, and watching it go red with
 bind-sized errors.
+
+`pipeline/unreal/bake_verify_characters.py` is the editor-side sweep beside it: it loads what the
+bake claims to have written, including one blend space per declaring host.
 
 ---
 
@@ -640,6 +710,10 @@ overrides, then `vpk.index_all`) or it is sampling.
 | `probe_spine_quats.py` | isolates it to `Bip01 Spine1` — bind vs clip quaternion per spine bone |
 | `probe_channels.py` | which rotation channels each spine bone animates, with weights and scales |
 | `probe_diff.py` | source clip track list vs the baked track list (found the 2 dropped tracks) |
+
+The per-host conjugation spread (19.65 deg on the bobbles, 81.64 worst on
+`throwing_star_attack_delta` over 6 hosts) is in `docs/project/animation-roadmap.md`'s evidence
+table, which owns it.
 
 ### RE addresses (client.dll, image base `0x10000000`)
 
@@ -695,5 +769,7 @@ Baked mount       Plugins/ElysiumBaked/Content/Characters/{Skeletons,Meshes,Mate
 Anim asset path   Anims/<family>/<owner>/A_<clip>          ← note the TWO levels
 Exporter          pipeline/src/elysium_pipeline/exporters/UE_mdl_skeletal.py
 Bake              Source/ElysiumUE/Private/Editor/ElysiumSkeletalBuild.cpp
+Verify sweep      pipeline/unreal/bake_verify_characters.py
 Runtime           Source/ElysiumUE/Private/Visual/ElysiumNpcAnimInstance.{h,cpp}
+Layer resolution  Source/ElysiumUE/Private/Visual/ElysiumNpcAnimSubsystem.cpp (ResolveClip/ResolveGrid)
 ```
