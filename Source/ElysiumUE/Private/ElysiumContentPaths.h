@@ -167,11 +167,18 @@ struct FElysiumContentPaths
 			+ BakedAssetName(Host.IsEmpty() ? Label : Label + TEXT("@") + Host);
 		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
 	}
-	// bake_lib.safe_name in C++: every run of characters illegal in an Unreal object name folds to a
-	// single underscore. Model stems are already safe, but 14 of the 2,494 shipped clip labels are
-	// not — `claws_aggressive_walk#50`, `wolf_Form_attack[Bite]`, `Lacroix_Line1_col_E&F`. The two
-	// implementations must agree exactly or the runtime asks for a package the bake did not write;
+	// Every run of characters illegal in an Unreal object name folds to a single underscore. Model
+	// stems are already safe, but 14 of the 2,494 shipped clip labels are not —
+	// `claws_aggressive_walk#50`, `wolf_Form_attack[Bite]`, `Lacroix_Line1_col_E&F`. The runtime
+	// and the bake must agree exactly or the runtime asks for a package the bake did not write;
 	// folding introduces no collision on the shipped corpus, case-insensitively, within any owner.
+	//
+	// Its Python twin is `elysium_pipeline.asset_names.baked_asset_name`, and that module is where
+	// the contract is stated. It is NOT `bake_lib.safe_name`, which additionally strips leading and
+	// trailing underscores and substitutes a fallback for a name that folds away entirely: the two
+	// disagree on the 4 labels ending in an illegal character. They never meet on one input — clip
+	// and blend-space labels take this fold on both sides, texture and material names take the
+	// other on both — so a caller crossing from one namespace to the other must pick deliberately.
 	static FString BakedAssetName(const FString& Raw)
 	{
 		FString Out;

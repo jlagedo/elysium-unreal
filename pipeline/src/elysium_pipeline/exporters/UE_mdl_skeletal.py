@@ -494,7 +494,7 @@ def _authored_channels(d, bones, clip):
 
 
 def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_label="",
-                  label=None, owned=None, base_channels=None):
+                  label=None, owned=None, base_channels=None, forced_channels=None):
     """One clip's tracks, or None if it animates no channel at all.
 
     A bone gets a track only for the channels its animation record actually carries: the
@@ -547,12 +547,10 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
             # error with the sign flipped. Its composed value is the host's own, so it subtracts to
             # identity too.
             #
-            # This closes the neither-side case. It does NOT close the case where the DELTA
-            # authors a bone its host does not: there the composed value is the host's bind plus
-            # the delta, while Unreal's base is still the shared skeleton's reference pose, and the
-            # two differ by however far this container's bind sits from the family's. Closing that
-            # needs the host to carry a bind track wherever its additives carry one, which is a
-            # change to how the host is emitted rather than to this branch.
+            # The remaining case -- the DELTA authors a bone its host does not -- is closed from
+            # the other side, by `forced_channels` below: the host ships a bind track wherever any
+            # of its additives ships one, so both sides of the subtraction name this container's
+            # bind rather than one of them falling through to the family's reference pose.
             host_translation, host_rotation = (
                 base_channels[bone.index] if base_channels else (False, False))
             has_translation = has_translation or host_translation
@@ -564,6 +562,21 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
             if bone.index not in owned:
                 continue
             has_translation = has_rotation = True
+        elif forced_channels is not None:
+            # A HOST ships a bind track for every channel any additive declared against it carries.
+            #
+            # Unreal bakes an additive as (additive pose - base pose) over the whole skeleton, and
+            # resolves an untracked bone on either side to the SHARED skeleton's reference pose.
+            # So where the delta tracks a bone and the host does not, the additive side names this
+            # container's bind and the base side names the family's, and the difference between
+            # them survives into the composed pose -- measured at 19.74 degrees on
+            # `Bip01 R Clavicle` and 17.5 deg / 8.57 cm on `Bip01 Neck` across the 63-bank family.
+            #
+            # The track costs one bone's frames and is exactly the value the base already resolved
+            # to in retail, so this states what was always meant rather than changing a pose.
+            forced_translation, forced_rotation = forced_channels[bone.index]
+            has_translation = has_translation or forced_translation
+            has_rotation = has_rotation or forced_rotation
         if not (has_translation or has_rotation):
             continue
         tracks += struct.pack("<I2B", bone_map[bone.index], int(has_translation),
@@ -693,7 +706,20 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
             still_reached.add(cell.label.lower())
     unresolvable = {layer.label.lower() for layer, _host, owned in bindings
                     if owned is not None} - still_reached
-    payloads = [p for p in (_clip_payload(d, bones, c, bone_map, emitted, masks)
+
+    # Per host, the union of the channels its ADDITIVES author -- the tracks that host has to
+    # carry so that both sides of Unreal's subtraction name this container's bind pose. An overlay
+    # is excluded: it is masked and composed toward its own pose rather than differenced.
+    forced = {}
+    for layer, host, owned in bindings:
+        if owned is not None:
+            continue
+        union = forced.setdefault(host.label.lower(), [(False, False)] * len(bones))
+        for index, (translation, rotation) in enumerate(_authored_channels(d, bones, layer)):
+            union[index] = (union[index][0] or translation, union[index][1] or rotation)
+
+    payloads = [p for p in (_clip_payload(d, bones, c, bone_map, emitted, masks,
+                                          forced_channels=forced.get(c.label.lower()))
                             for c in clips if c.label.lower() not in unresolvable)
                 if p is not None]
     for layer, host, owned in bindings:
