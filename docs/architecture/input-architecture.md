@@ -269,34 +269,93 @@ keyboard and a pad present the same four inputs to the same code.
 
 | Mapping | Stack |
 |---|---|
-| Mouse → `IA_Look` | `UElysiumMouseSensitivity` → `Negate` on Y when `m_pitch` < 0. **No `ScaleByDeltaTime`** — mouse input is already a delta |
-| Stick → `IA_Look` | `DeadZone` (radial) → `ResponseCurveExponential` → `Negate` Y → `Scalar` → **`ScaleByDeltaTime`** → `FOVScaling` |
+| Mouse | **not an Enhanced Input mapping at all** — `UElysiumInputRouter::BindLookAxes` binds `EKeys::MouseX`/`MouseY` as legacy axis keys and scales the raw counts itself |
+| Stick → `IA_Look` | `DeadZone` (radial) → `Negate` Y → `Scalar`. **No `ScaleByDeltaTime`, no `FOVScaling`, and no `ResponseCurveExponential`** |
 | Stick → `IA_Move` | `DeadZone` (radial) |
-| WASD → `IA_Move` | `Negate` + `SwizzleAxis` per key |
+| WASD → `IA_Move` | not a mapping either — each key fires a `+cmd` console line through the command bus |
 
 The initial owner-selected stick profile is neutral and carries no aim assist. The left stick uses
 a `0.24` radial dead zone and the right stick uses `0.265`, rounded from Microsoft's established
 Xbox thresholds (`7849/32767` and `8689/32767`); Enhanced Input remaps the remaining radial range
-back to `0..1`. The look exponent is `1.0`; full deflection is `210°/s` yaw and `225°/s` pitch
-before FOV scaling. `Gamepad_Right2D` delivers physical stick-up on negative Y, while Elysium adds
+back to `0..1`. Full deflection is `210°/s` yaw and `225°/s` pitch. The look response curve is
+**not** in the stack — it is one pure function at the point the user command is built (`## Feel`),
+so the curve is asserted in a test tier and exactly one thing owns the look feel.
+`Gamepad_Right2D` delivers physical stick-up on negative Y, while Elysium adds
 the action's Y directly to Unreal pitch, where positive is look-up. The Y-only `Negate` therefore
 makes physical up look up and physical down look down without altering the GameInput device axis.
 `Gamepad_Left2D` is converted from `(right, forward)` into `FElysiumUserCmd.Move(forward, right)` by
 the router's one semantic swizzle before `SetAnalogMove`.
 
-Frame-rate-scaling mouse look is the classic failure of this system; per-device contexts make the
-two stacks physically separate, so it cannot be applied to both.
+Frame-rate-scaling mouse look is the classic failure of this system; the mouse and the stick are
+physically separate paths — one legacy axis binding, one Enhanced Input mapping — so it cannot be
+applied to both. The stick is a held *rate* and is multiplied by the clamped, dilation-normalised
+delta inside `FElysiumUserCmdBuilder::Build`; mouse counts arrive as finished degrees and are not.
 
-`UElysiumMouseSensitivity` reads `sensitivity`, `m_pitch`, `m_yaw` and `m_filter` **from
-`FElysiumConsole`**, reproducing VtMB's 0.066°/count (`docs/vtmb/source_movement.md`). The options slider
-writes the cvar and the cvar drives the modifier — one settings truth, and it is the one VtMB
-already had.
+`ElysiumInput::FElysiumLookTuning` reads `sensitivity`, `m_pitch` and `m_yaw` **from
+`FElysiumConsole`**, reproducing VtMB's 0.066°/count (`docs/vtmb/source_movement.md`). The options
+slider writes the cvar and the cvar drives the scale — one settings truth, and it is the one VtMB
+already had. `m_filter` is read by nothing: VtMB ships it at `0` and no smoothing is implemented.
+
+## Feel
+
+The tuning between a hand and the view. Two questions live here, and only one of them has a
+recovered answer.
+
+### Look response
+
+The faithful path is a **linear scale**: `sensitivity` 3 × `m_yaw`/`m_pitch` 0.022 = 0.066 degrees
+per mouse count, no smoothing (`m_filter` 0), pitch clamped to ±89, keyboard look at
+`cl_yawspeed` 210 / `cl_pitchspeed` 225. Those numbers are recovered and owned by
+`docs/vtmb/source_movement.md` § View / camera. **The code path is not recovered** — there is no
+decompile of `client.dll`'s `CInput` mouse handling, so what is known is the ConVar surface and its
+defaults, not the arithmetic between the device and the angle. Whether retail applies anything
+beyond the multiply is an open RE question, not a settled fact.
+
+The **divergence**, recorded beside it: `ElysiumInput::ShapeMouseLook` applies an optional
+acceleration curve, `look_curve` defaulting to `0`, at which the gain is exactly `1.0` and the path
+is bit-for-bit the linear one. Enabling it is an explicit owner call and none has been made.
+`FElysiumLookTuning::IsRetailLinear()` is the predicate the code names the divergence by, and the
+router logs a warning the first frame it goes false.
+
+Three properties are structural rather than conventional:
+
+- **The curve applies to the mouse contribution alone.** The turn keys and the stick are summed into
+  `FElysiumUserCmd::LookDelta` as rates × delta *before* the shaping; a magnitude-keyed curve over
+  the total would silently curve a held `+left` too. `Elysium.Substrate.UserCmd` asserts the
+  separation directly, so moving the call after the merge turns a test red.
+- **It shapes the whole 2D delta, never one axis.** Per-axis shaping would make a diagonal flick
+  curve differently from its components.
+- **It is one pure function, not an Enhanced Input modifier asset.** That is what lets it be asserted
+  with no device and no world (`Elysium.Substrate.LookCurve`) and A/B-ed against the decompile when
+  one exists. `IA_Look` carries no `ResponseCurveExponential` for the same reason — two owners of one
+  feel, and only one of them assertable.
+
+### Leniency: there is none, and it is measured
+
+VtMB has **no input buffer and no coyote time** (`docs/vtmb/source_movement.md` → "The jump is not
+stock Source's"). Neither is implemented here, and adding either would be a Feel divergence rather
+than a defect fix — so the decision is set up to be measured instead of argued.
+
+The gym carries two five-rung brackets whose recordings are committed
+(`docs/architecture/movement-architecture.md` → "The gym"). Each walks the body off a lip and places
+**exactly one** jump press at a frame offset from a body event — never from the clock, because the
+time to reach a lip moves with the gait and the offset does not:
+
+| Bracket | Lanes | Press placed |
+|---|---|---|
+| coyote | `ledge_m1`, `ledge_0`, `ledge_p1`, `ledge_p2`, `ledge_p4` | K frames from the frame the ground is lost |
+| buffer | `land_p1`, `land_0`, `land_m1`, `land_m2`, `land_m4` | K frames from the frame the ground returns |
+
+The measurement is the run channel `jumps_taken`, which is 0 or 1 at any gait. As recorded, the
+cliff is exactly one decision wide at both 60 and 120 Hz: `ledge_m1` and `ledge_0` jump and
+`ledge_p1` does not; `land_p1` jumps and `land_0` does not. Adding coyote time moves
+`ledge_p1`'s committed number; adding a buffer moves `land_m1`'s. Either becomes a red diff against
+a before-picture rather than a matter of recollection.
 
 ## Remapping and persistence
 
 `UElysiumInputUserSettings : UEnhancedInputUserSettings` holds the key profile plus sensitivity,
-invert-Y, `m_filter` and auto-aim (`sv_aim`, default off), and is where 8.10's accessibility
-settings land. `bEnableUserSettings` is on by engine default.
+invert-Y and auto-aim (`sv_aim`, default off), and is where 8.10's accessibility settings land. `bEnableUserSettings` is on by engine default.
 
 Rebind flow: `QueryMapKeyInActiveContextSet` for conflict detection → confirm or clear the loser →
 `MapPlayerKey(FMapPlayerKeyArgs{MappingName, Slot, NewKey})` → `ApplySettings()` →
@@ -394,10 +453,17 @@ routing while the input-scope stack stays the sole input-mode writer
 `CommonInputBaseControllerData`, which turns the `"DualSense"` hardware id above into the right
 button art; without it every pad draws generic glyphs.
 
-**Aim assist and further look-curve tuning.** The initial slice is linear with no assist and
-`sv_aim` defaults to off, but VtMB is a mouse game:
+**Aim assist.** `sv_aim` defaults to off and no assist is implemented, but VtMB is a mouse game:
 ranged combat on a stick with no assist, over a `+use` trace radius tuned for a mouse cursor, has
-no original to reproduce and no measured baseline. A Feel-axis decision with no owner yet.
+no original to reproduce and no measured baseline. A Feel-axis decision with no owner yet. The look
+curve itself is no longer among the open questions — it exists, defaults to retail's linear path,
+and is described in `## Feel`.
+
+**Retail's mouse arithmetic is unrecovered.** `docs/vtmb/source_movement.md` owns the ConVar surface
+and its defaults; nothing has decompiled `client.dll`'s `CInput` mouse handling, so "retail is
+linear" is an inference from the cvar set rather than a read. `m_customaccel*` has never been
+scanned for. The ConVar-enumeration technique that doc already describes would settle it cheaply,
+and until it does, `## Feel`'s curve stays off by default.
 
 **The weapon-class seam.** `LT`'s melee/ranged split and the `camera_prefs` arbitration both read
 the weapon-class bitmask, which the substrate does not currently expose to the input layer.

@@ -92,6 +92,10 @@ private:
 	float MouseYawScale() const;
 	float MousePitchScale() const;
 
+	// Re-read the mouse scale and the response curve from the console store, and hand them to the
+	// builder. Once per frame, at the head of `SampleFrame`.
+	void RefreshLookTuning();
+
 	TWeakObjectPtr<APlayerController> PC;
 	TWeakObjectPtr<UInputComponent> BoundInput;
 	UPROPERTY(Transient)
@@ -99,6 +103,8 @@ private:
 
 	FElysiumUserCmdBuilder CmdBuilder;
 	FElysiumUserCmd Current;
+	ElysiumInput::FElysiumLookTuning LookTuning;
+	bool bWarnedLookCurve = false;
 
 	bool bRecording = false;
 	bool bReplaying = false;

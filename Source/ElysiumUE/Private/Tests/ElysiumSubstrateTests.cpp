@@ -50,6 +50,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
 #include "ElysiumMapActor.h"
 #include "Map/ElysiumMapCollision.h"
 #include "ElysiumSoundCache.h"
@@ -573,6 +575,39 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	Cmd = Builder.Build(1.0f / 60.0f);
 	TestEqual(TEXT("the accumulator is consumed"), (float)Cmd.LookDelta.X, 0.0f, 0.001f);
 
+	// --- The look curve is the MOUSE's alone (CCC3) ----------------------------------------
+	// Three sources reach LookDelta and only one of them is a hand on a mouse. Build the same frame
+	// twice under a deliberately extreme curve, once with mouse counts and once without: the
+	// difference must be exactly what ShapeMouseLook returns, which means the turn key's
+	// `KeyboardYawSpeed * dt` and the stick's rate passed through untouched. Moving the curve after
+	// the merge in `Build` reddens this.
+	ElysiumInput::FElysiumLookTuning Curved;
+	Curved.Curve = 2.0f;
+	Builder.SetLookTuning(Curved);
+	const float CurveStep = 1.0f / 60.0f;
+	const FVector2D StickLook(30.0f, 12.0f);
+	const FVector2D MouseCounts(6.0f, -2.0f);
+
+	Builder.SetButton(EElysiumButton::Right, true);
+	Builder.SetAnalogLook(StickLook);
+	const FElysiumUserCmd Dry = Builder.Build(CurveStep);   // keyboard + stick, no mouse
+
+	Builder.SetAnalogLook(StickLook);
+	Builder.AddLook(MouseCounts.X, MouseCounts.Y);
+	const FElysiumUserCmd Wet = Builder.Build(CurveStep);   // the same frame, plus mouse
+	Builder.SetButton(EElysiumButton::Right, false);
+	Builder.SetLookTuning(ElysiumInput::FElysiumLookTuning());
+
+	const FVector2D Shaped = ElysiumInput::ShapeMouseLook(MouseCounts, Curved, CurveStep);
+	TestTrue(TEXT("the curve shaped the mouse counts at all"), !Shaped.Equals(MouseCounts, 1e-6));
+	TestEqual(TEXT("the curve moves the yaw by exactly the shaped mouse delta"),
+		(float)(Wet.LookDelta.X - Dry.LookDelta.X), (float)Shaped.X, 0.001f);
+	TestEqual(TEXT("the curve moves the pitch by exactly the shaped mouse delta"),
+		(float)(Wet.LookDelta.Y - Dry.LookDelta.Y), (float)Shaped.Y, 0.001f);
+	// And the keyboard term is the unshaped one it always was, curve or no curve.
+	TestEqual(TEXT("the turn key is untouched by the mouse curve"), (float)Dry.LookDelta.X,
+		ElysiumInput::KeyboardYawSpeed * CurveStep + (float)StickLook.X * CurveStep, 0.001f);
+
 	// A held button survives a build; ClearButtons is what a scope change does to it, and it must
 	// not produce a command of its own.
 	Builder.SetButton(EElysiumButton::Speed, true);
@@ -631,6 +666,149 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	TestTrue(TEXT("the text form parses"),
 		FElysiumUserCmdStream::FromText(Recorded.ToText(), RoundTrip));
 	TestTrue(TEXT("the text form round-trips"), Recorded.SameIntent(RoundTrip));
+
+	return true;
+}
+
+// =====================================================================================
+// CCC3 — the look response curve (`docs/architecture/input-architecture.md` § Feel). The whole
+// mouse path from counts to degrees is one pure function, which is what lets the retail claim be
+// asserted rather than recalled: at the shipped tuning the curve is the identity, exactly, so
+// `Elysium.Substrate.LookCurve` failing means the faithful path moved.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLookCurveTest, "Elysium.Substrate.LookCurve", GElysiumTestFlags)
+bool FElysiumLookCurveTest::RunTest(const FString&)
+{
+	using ElysiumInput::FElysiumLookTuning;
+	using ElysiumInput::ShapeMouseLook;
+
+	const FElysiumLookTuning Retail;
+
+	// --- The recovered scale ---------------------------------------------------------------
+	// `sensitivity` 3 x `m_yaw`/`m_pitch` 0.022 = 0.066 degrees per count.
+	TestEqual(TEXT("the shipped yaw scale is VtMB's 0.066 deg/count"),
+		Retail.YawScale(), 0.066f, 1e-6f);
+	TestEqual(TEXT("the shipped pitch scale is VtMB's 0.066 deg/count"),
+		Retail.PitchScale(), 0.066f, 1e-6f);
+	TestTrue(TEXT("the shipped tuning is retail-linear"), Retail.IsRetailLinear());
+
+	// A negative `m_pitch` is VtMB's invert-Y, and it is a sign on the scale rather than a setting
+	// anything branches on.
+	FElysiumLookTuning Inverted;
+	Inverted.MousePitch = -0.022f;
+	TestTrue(TEXT("a negative m_pitch inverts the pitch scale"), Inverted.PitchScale() < 0.0f);
+	TestEqual(TEXT("inverting does not change the yaw scale"), Inverted.YawScale(), 0.066f, 1e-6f);
+
+	// --- The identity, at zero tolerance ---------------------------------------------------
+	// The claim the whole rung rests on: shipping this curve does not move the shipped feel. Not
+	// "within a tolerance" — the gain is exactly 1.0, so the delta comes back bit-for-bit.
+	static const FVector2D Deltas[] = {
+		FVector2D(0.066, 0.0), FVector2D(1.0, 0.0), FVector2D(0.0, -1.0),
+		FVector2D(5.0, 5.0), FVector2D(40.0, -13.3), FVector2D(-3.3, 0.7),
+	};
+	static const float Steps[] = { 1.0f / 30.0f, 1.0f / 60.0f, 1.0f / 240.0f };
+	for (const FVector2D& D : Deltas)
+	{
+		for (const float Step : Steps)
+		{
+			TestTrue(TEXT("the shipped tuning returns the mouse delta unchanged"),
+				ShapeMouseLook(D, Retail, Step).Equals(D, 0.0));
+		}
+	}
+
+	// --- Engaged -----------------------------------------------------------------------------
+	FElysiumLookTuning Curved;
+	Curved.Curve = 1.0f;
+	TestFalse(TEXT("a non-zero curve is not retail-linear"), Curved.IsRetailLinear());
+
+	const float Step = 1.0f / 60.0f;
+	const FVector2D Slow(1.0, 0.0);
+	const FVector2D Fast(2.0, 0.0);
+	const double SlowOut = ShapeMouseLook(Slow, Curved, Step).X;
+	const double FastOut = ShapeMouseLook(Fast, Curved, Step).X;
+	TestTrue(TEXT("the curve does something at all"), SlowOut > Slow.X);
+	TestTrue(TEXT("the curve is monotonic in the delta"), FastOut > SlowOut);
+	TestTrue(TEXT("the curve is superlinear: twice the delta is more than twice the output"),
+		FastOut > 2.0 * SlowOut);
+
+	// The gain ceiling is what stops a hitch multiplying a frame without bound.
+	const FVector2D Flick(500.0, 0.0);
+	TestTrue(TEXT("the gain saturates at MaxScale"),
+		ShapeMouseLook(Flick, Curved, Step).X <= Flick.X * Curved.MaxScale + 1e-6);
+
+	// Both signs survive the shaping — the curve reads magnitude, never a component's sign.
+	const FVector2D Diagonal(-4.0, 3.0);
+	const FVector2D Shaped = ShapeMouseLook(Diagonal, Curved, Step);
+	TestTrue(TEXT("the shaped delta keeps the yaw sign"), Shaped.X < 0.0);
+	TestTrue(TEXT("the shaped delta keeps the pitch sign"), Shaped.Y > 0.0);
+	// ...and it scales as one vector, so a diagonal does not skew.
+	TestEqual(TEXT("the shaped delta keeps its direction"),
+		(float)(Shaped.X / Shaped.Y), (float)(Diagonal.X / Diagonal.Y), 1e-4f);
+
+	// --- The frame-rate property, stated rather than discovered -------------------------------
+	// A rate-keyed curve is frame-rate dependent by construction: the same delta over a shorter
+	// frame is a faster hand. The retail path is not, which is the whole reason the default is 0.
+	TestEqual(TEXT("retail-linear is frame-rate independent"),
+		(float)ShapeMouseLook(Slow, Retail, 1.0f / 30.0f).X,
+		(float)ShapeMouseLook(Slow, Retail, 1.0f / 240.0f).X, 1e-6f);
+	TestTrue(TEXT("the curve is frame-rate dependent, by construction"),
+		ShapeMouseLook(Slow, Curved, 1.0f / 240.0f).X > ShapeMouseLook(Slow, Curved, 1.0f / 30.0f).X);
+
+	// --- Guards -------------------------------------------------------------------------------
+	// Each returns the input rather than dividing by it, so a paused frame or a broken tuning
+	// cannot fling the view.
+	TestTrue(TEXT("a zero delta time leaves the delta alone"),
+		ShapeMouseLook(Slow, Curved, 0.0f).Equals(Slow, 0.0));
+	TestTrue(TEXT("a negative delta time leaves the delta alone"),
+		ShapeMouseLook(Slow, Curved, -1.0f).Equals(Slow, 0.0));
+	FElysiumLookTuning NoThreshold = Curved;
+	NoThreshold.Threshold = 0.0f;
+	TestTrue(TEXT("a zero threshold leaves the delta alone"),
+		ShapeMouseLook(Slow, NoThreshold, Step).Equals(Slow, 0.0));
+	TestTrue(TEXT("a still mouse stays still"),
+		ShapeMouseLook(FVector2D::ZeroVector, Curved, Step).IsNearlyZero());
+
+	// --- The cvar surface ---------------------------------------------------------------------
+	TArrayView<const ElysiumInput::FCvarDef> Defs = ElysiumInput::CvarDefs();
+	TestEqual(TEXT("the look cvar surface is seven names"), Defs.Num(), 7);
+	TSet<FString> Seen;
+	for (const ElysiumInput::FCvarDef& Def : Defs)
+	{
+		const FString Name(Def.Name);
+		TestFalse(FString::Printf(TEXT("'%s' is declared once"), *Name), Seen.Contains(Name));
+		Seen.Add(Name);
+		TestTrue(FString::Printf(TEXT("'%s' has help"), *Name), FCString::Strlen(Def.Help) > 0);
+		TestTrue(FString::Printf(TEXT("'%s' has a numeric default"), *Name),
+			FCString::IsNumeric(Def.Default));
+	}
+	TestTrue(TEXT("the three recovered names are declared"),
+		Seen.Contains(TEXT("sensitivity")) && Seen.Contains(TEXT("m_yaw"))
+			&& Seen.Contains(TEXT("m_pitch")));
+	// The declared defaults must BE the struct's defaults, or the console and the code disagree
+	// about what a stock install is.
+	for (const ElysiumInput::FCvarDef& Def : Defs)
+	{
+		if (FCString::Strcmp(Def.Name, TEXT("look_curve")) == 0)
+		{
+			TestEqual(TEXT("look_curve is declared off"), FCString::Atof(Def.Default), 0.0f);
+		}
+	}
+
+	// `LoadFrom` moves exactly the named field and leaves the rest at their defaults.
+	TMap<FString, FString> Store;
+	Store.Add(TEXT("sensitivity"), TEXT("5"));
+	Store.Add(TEXT("m_pitch"), TEXT("-0.022"));
+	FElysiumLookTuning Loaded;
+	Loaded.LoadFrom([&Store](const TCHAR* Name)
+	{
+		const FString* Found = Store.Find(Name);
+		return Found ? *Found : FString();
+	});
+	TestEqual(TEXT("LoadFrom reads sensitivity"), Loaded.Sensitivity, 5.0f, 1e-6f);
+	TestEqual(TEXT("LoadFrom reads a negative m_pitch"), Loaded.MousePitch, -0.022f, 1e-6f);
+	TestEqual(TEXT("an unread name keeps its default"), Loaded.MouseYaw, 0.022f, 1e-6f);
+	TestTrue(TEXT("a store with no curve keys stays retail-linear"), Loaded.IsRetailLinear());
 
 	return true;
 }
@@ -2002,10 +2180,92 @@ bool FElysiumGymSpecTest::RunTest(const FString&)
 		}
 	}
 
+	// --- The leniency lanes: one lip, one drop, brackets in frames (CCC3) ---------------------
+	{
+		static const TCHAR* const LedgeNames[] =
+			{ TEXT("ledge_m1"), TEXT("ledge_0"), TEXT("ledge_p1"),
+			  TEXT("ledge_p2"), TEXT("ledge_p4") };
+		static const float LedgeOffsets[] = { -1.0f, 0.0f, 1.0f, 2.0f, 4.0f };
+		static const TCHAR* const LandNames[] =
+			{ TEXT("land_p1"), TEXT("land_0"), TEXT("land_m1"),
+			  TEXT("land_m2"), TEXT("land_m4") };
+		static const float LandOffsets[] = { 1.0f, 0.0f, -1.0f, -2.0f, -4.0f };
+
+		auto CheckLeniencyLane = [&Spec, this](const TCHAR* Name, float Offset,
+			ElysiumGym::EFamily Family)
+		{
+			const ElysiumGym::FLane* L = Spec.FindLane(FName(Name));
+			if (!TestNotNull(FString::Printf(TEXT("leniency lane '%s' exists"), Name), L))
+			{
+				return;
+			}
+			TestEqual(FString::Printf(TEXT("'%s' brackets its own frame offset"), Name),
+				L->BracketUnits, Offset);
+			TestTrue(FString::Printf(TEXT("'%s' is the family it is named for"), Name),
+				L->Family == Family);
+			// It starts where every other lane starts, so the seat rule has no special case.
+			TestTrue(FString::Printf(TEXT("'%s' seats at the standard inset"), Name),
+				FMath::IsNearlyEqual(L->FeetOrigin.X,
+					(-ElysiumGym::RunUp + ElysiumGym::StartInset) * U, 1e-3));
+
+			// The lip is the upper slab's far face, at X = 0 — the feature-face convention every
+			// family uses — and the drop below it is `PitDepth`, deep enough that the fall spans far
+			// more frames than the widest bracket asks for.
+			const ElysiumGym::FPlacement* Upper = Spec.Placements.FindByPredicate(
+				[L](const ElysiumGym::FPlacement& P)
+				{ return P.Lane == L->Name && P.Tag == FName(TEXT("upper")); });
+			const ElysiumGym::FPlacement* Lower = Spec.Placements.FindByPredicate(
+				[L](const ElysiumGym::FPlacement& P)
+				{ return P.Lane == L->Name && P.Tag == FName(TEXT("lower")); });
+			if (!TestNotNull(FString::Printf(TEXT("'%s' has a run-up"), Name), Upper)
+				|| !TestNotNull(FString::Printf(TEXT("'%s' has a floor to land on"), Name), Lower))
+			{
+				return;
+			}
+			TestTrue(FString::Printf(TEXT("'%s' puts the lip at the feature face"), Name),
+				FMath::IsNearlyEqual(Upper->Center.X + Upper->Extent.X, 0.0, 1e-3));
+			TestTrue(FString::Printf(TEXT("'%s' walks off the top of the run-up"), Name),
+				FMath::IsNearlyEqual(Upper->Center.Z + Upper->Extent.Z, 0.0, 1e-3));
+			TestTrue(FString::Printf(TEXT("'%s' drops a full PitDepth"), Name),
+				FMath::IsNearlyEqual(Lower->Center.Z + Lower->Extent.Z,
+					-ElysiumGym::PitDepth * U, 1e-3));
+			// The lower floor starts under the lip and runs to the wall, so the body lands on it and
+			// then keeps going until it is stopped — which is what makes the reach saturate.
+			TestTrue(FString::Printf(TEXT("'%s' catches the body from the lip onward"), Name),
+				FMath::IsNearlyEqual(Lower->Center.X - Lower->Extent.X, 0.0, 1e-3)
+				&& FMath::IsNearlyEqual(Lower->Center.X + Lower->Extent.X,
+					ElysiumGym::LaneLength * U, 1e-3));
+		};
+
+		for (int32 i = 0; i < UE_ARRAY_COUNT(LedgeNames); ++i)
+		{
+			CheckLeniencyLane(LedgeNames[i], LedgeOffsets[i], ElysiumGym::EFamily::Ledge);
+			CheckLeniencyLane(LandNames[i], LandOffsets[i], ElysiumGym::EFamily::Landing);
+		}
+
+		// The brackets straddle the decision on both sides, which is what makes a refusal a cliff
+		// rather than an absence: `ledge_m1` must jump and `ledge_p1` must not, and if leniency is
+		// ever added it is `ledge_p1`/`land_m1` that move.
+		const ElysiumGym::FLane* LedgeBefore = Spec.FindLane(FName(TEXT("ledge_m1")));
+		const ElysiumGym::FLane* LedgeAfter = Spec.FindLane(FName(TEXT("ledge_p1")));
+		TestTrue(TEXT("the coyote bracket straddles the ground-loss frame"),
+			LedgeBefore && LedgeAfter
+			&& LedgeBefore->BracketUnits < 0.0f && LedgeAfter->BracketUnits > 0.0f);
+		const ElysiumGym::FLane* LandAfter = Spec.FindLane(FName(TEXT("land_p1")));
+		const ElysiumGym::FLane* LandBefore = Spec.FindLane(FName(TEXT("land_m1")));
+		TestTrue(TEXT("the buffer bracket straddles the landing frame"),
+			LandAfter && LandBefore
+			&& LandAfter->BracketUnits > 0.0f && LandBefore->BracketUnits < 0.0f);
+	}
+
 	// --- What `CCC7` may move is flagged, and what it may not is not --------------------------
 	{
 		for (const ElysiumGym::FLane& L : Spec.Lanes)
 		{
+			// Only the two families whose answer is a horizontal *distance* move with the gait. The
+			// leniency lanes are deliberately not among them: their answer is whether one press
+			// became a jump, and a press placed against a body event produces the same 0 or 1
+			// however fast the body reached the lip. This row is what enforces that claim.
 			const bool bHorizontalReach =
 				L.Family == ElysiumGym::EFamily::Gap || L.Family == ElysiumGym::EFamily::Flat;
 			TestEqual(FString::Printf(TEXT("'%s' declares the right speed class"), *L.Name.ToString()),
@@ -2105,6 +2365,137 @@ bool FElysiumGymSeatTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+#if !UE_BUILD_SHIPPING
+// =====================================================================================
+// The event-timed press (CCC3). A leniency course cannot say "jump at 2.4 seconds": the time it
+// takes to reach a lip moves with the gait, and `CCC7` may halve it. It says "jump K frames after
+// the ground is lost" instead, and the harness measures the event in a probe pass. What is pure —
+// and therefore asserted here — is the placement: given a resolved frame, exactly one command in
+// the stream carries the press, and nothing else about the stream moves.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveCoursesTest,
+	"Elysium.Substrate.MoveCourses", GElysiumTestFlags)
+bool FElysiumMoveCoursesTest::RunTest(const FString&)
+{
+	using namespace ElysiumMoveCourses;
+	const float Step = 1.0f / 60.0f;
+	const uint64 JumpBit = static_cast<uint64>(EElysiumButton::Jump);
+
+	FCourse C;
+	C.Name = FName(TEXT("test_ledge"));
+	C.Host = EHost::GymStage;
+	C.Segments.Add({ 2.0f, FVector2D(1.0, 0.0), 0, 0.0f });
+	C.EventJump = FEventJump{ EBodyEvent::GroundLost, 2 };
+
+	// The probe pass: the same course, no press. This is what makes the two passes comparable —
+	// the stream is the same length and carries the same intent, minus the one frame under test.
+	const FElysiumUserCmdStream Probe = Expand(C, Step, INDEX_NONE);
+	TestEqual(TEXT("the probe stream is the whole course"), Probe.Num(), 120);
+	int32 ProbePresses = 0;
+	for (const FElysiumUserCmd& Cmd : Probe.Cmds)
+	{
+		ProbePresses += Cmd.IsDown(EElysiumButton::Jump) ? 1 : 0;
+	}
+	TestEqual(TEXT("the probe pass presses nothing"), ProbePresses, 0);
+
+	// The record pass: the press lands at event + offset, and on exactly one frame.
+	const FElysiumUserCmdStream Record = Expand(C, Step, 40);
+	TestEqual(TEXT("both passes are the same length"), Record.Num(), Probe.Num());
+	int32 Presses = 0;
+	int32 PressAt = INDEX_NONE;
+	for (int32 i = 0; i < Record.Num(); ++i)
+	{
+		if (Record.Cmds[i].IsDown(EElysiumButton::Jump))
+		{
+			++Presses;
+			PressAt = i;
+		}
+	}
+	TestEqual(TEXT("exactly one frame presses jump"), Presses, 1);
+	TestEqual(TEXT("and it is the resolved frame plus the offset"), PressAt, 42);
+
+	// Nothing else moved: the press is OR-ed on, so the body keeps walking through it.
+	for (int32 i = 0; i < Record.Num(); ++i)
+	{
+		TestEqual(TEXT("the move intent is untouched by the press"),
+			Record.Cmds[i].Move, Probe.Cmds[i].Move);
+		TestEqual(TEXT("no other button is touched"),
+			Record.Cmds[i].Buttons & ~JumpBit, Probe.Cmds[i].Buttons & ~JumpBit);
+	}
+
+	// A negative offset is the buffer bracket, and it reaches backwards from the event.
+	C.EventJump = FEventJump{ EBodyEvent::GroundGained, -4 };
+	const FElysiumUserCmdStream Before = Expand(C, Step, 40);
+	TestTrue(TEXT("a negative offset presses before the event"),
+		Before.Cmds.IsValidIndex(36) && Before.Cmds[36].IsDown(EElysiumButton::Jump));
+
+	// An offset that would fall off either end places nothing rather than clamping — a press
+	// silently moved to frame 0 would be a course quietly measuring something else.
+	C.EventJump = FEventJump{ EBodyEvent::GroundLost, 500 };
+	const FElysiumUserCmdStream Past = Expand(C, Step, 40);
+	C.EventJump = FEventJump{ EBodyEvent::GroundLost, -500 };
+	const FElysiumUserCmdStream Under = Expand(C, Step, 40);
+	int32 OutOfRangePresses = 0;
+	for (int32 i = 0; i < Past.Num(); ++i)
+	{
+		OutOfRangePresses += Past.Cmds[i].IsDown(EElysiumButton::Jump) ? 1 : 0;
+		OutOfRangePresses += Under.Cmds[i].IsDown(EElysiumButton::Jump) ? 1 : 0;
+	}
+	TestEqual(TEXT("an out-of-range offset places no press at all"), OutOfRangePresses, 0);
+
+	// A course with no event jump ignores a resolved frame entirely, which is what lets the harness
+	// run every existing course through the same call unchanged.
+	FCourse Plain;
+	Plain.Segments.Add({ 1.0f, FVector2D(1.0, 0.0), 0, 0.0f });
+	const FElysiumUserCmdStream PlainStream = Expand(Plain, Step, 10);
+	int32 PlainPresses = 0;
+	for (const FElysiumUserCmd& Cmd : PlainStream.Cmds)
+	{
+		PlainPresses += Cmd.IsDown(EElysiumButton::Jump) ? 1 : 0;
+	}
+	TestEqual(TEXT("a course with no event jump is unaffected"), PlainPresses, 0);
+
+	// --- Every leniency lane gets a recipe, and it is a single press against the right edge -----
+	{
+		const FElysiumMoveTuning T;
+		const ElysiumGym::FSpec Spec = ElysiumGym::Build(T);
+		const TArray<FCourse> Courses = Gym(Spec);
+		int32 Leniency = 0;
+		for (const FCourse& Course : Courses)
+		{
+			const ElysiumGym::FLane* Lane = Spec.FindLane(Course.GymLane);
+			if (!Lane || (Lane->Family != ElysiumGym::EFamily::Ledge
+				&& Lane->Family != ElysiumGym::EFamily::Landing))
+			{
+				TestFalse(FString::Printf(TEXT("'%s' does not time a press against an event"),
+					*Course.Name.ToString()), Course.EventJump.IsSet());
+				continue;
+			}
+			++Leniency;
+			if (!TestTrue(FString::Printf(TEXT("'%s' times its press against an event"),
+				*Course.Name.ToString()), Course.EventJump.IsSet()))
+			{
+				continue;
+			}
+			const EBodyEvent Expected = Lane->Family == ElysiumGym::EFamily::Ledge
+				? EBodyEvent::GroundLost : EBodyEvent::GroundGained;
+			TestTrue(FString::Printf(TEXT("'%s' watches the edge its family is about"),
+				*Course.Name.ToString()), Course.EventJump->Event == Expected);
+			TestEqual(FString::Printf(TEXT("'%s' carries its lane's frame offset"),
+				*Course.Name.ToString()),
+				Course.EventJump->FrameOffset, FMath::RoundToInt32(Lane->BracketUnits));
+			// A committed bracket: nothing here may be deferred, or the measurement never lands.
+			TestFalse(FString::Printf(TEXT("'%s' is committed, not deferred"),
+				*Course.Name.ToString()), Course.bDeferBaseline);
+		}
+		TestEqual(TEXT("both leniency brackets are five rungs"), Leniency, 10);
+	}
+
+	return true;
+}
+#endif // !UE_BUILD_SHIPPING
 
 // =====================================================================================
 // The body sample (CCC1). One struct, two producers — so what is asserted here is the part of it

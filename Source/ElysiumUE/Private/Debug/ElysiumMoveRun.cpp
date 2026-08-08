@@ -172,8 +172,9 @@ bool FElysiumMoveRun::BuildGym()
 	return true;
 }
 
-bool FElysiumMoveRun::BeginCourse(int32 Index)
+bool FElysiumMoveRun::BeginCourse(int32 Index, ECoursePhase InPhase)
 {
+	Phase = InPhase;
 	UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FBodyRefs Body = ResolveBody(Sub);
 	if (!Body)
@@ -236,11 +237,17 @@ bool FElysiumMoveRun::BeginCourse(int32 Index)
 		}
 	}
 
-	FString Error;
-	if (!Recorder.Open(GMoveChannels, Error))
+	// The probe pass never opens the recorder. One `Open` per `Write` is the recorder's own
+	// invariant, and a probe that opened would leave a half-course in it whose frame indices the
+	// record pass would then continue from.
+	if (Phase == ECoursePhase::Record)
 	{
-		UE_LOG(LogElysiumMove, Error, TEXT("%s"), *Error);
-		return false;
+		FString Error;
+		if (!Recorder.Open(GMoveChannels, Error))
+		{
+			UE_LOG(LogElysiumMove, Error, TEXT("%s"), *Error);
+			return false;
+		}
 	}
 
 	StartFeet = Feet;
@@ -259,8 +266,20 @@ bool FElysiumMoveRun::BeginCourse(int32 Index)
 	bWasOnGround = true;
 	CamThirdMax = 0.0;
 
-	// The stream is armed after the settle, not here — see `CourseSettleFrames`.
-	PendingStream = ElysiumMoveCourses::Expand(Course, StepSeconds);
+	if (Phase == ECoursePhase::Probe)
+	{
+		ProbeFrame = 0;
+		bProbeWasOnGround = true;
+		bProbeSawGroundLoss = false;
+		ResolvedEventFrame = INDEX_NONE;
+		ProbeEvent = Course.EventJump.IsSet()
+			? Course.EventJump->Event : ElysiumMoveCourses::EBodyEvent::GroundLost;
+	}
+
+	// The stream is armed after the settle, not here — see `CourseSettleFrames`. The probe pass
+	// expands with INDEX_NONE, which is the same call with no press placed — so both passes drive
+	// streams of identical length carrying identical intent but for the one frame under test.
+	PendingStream = ElysiumMoveCourses::Expand(Course, StepSeconds, ResolvedEventFrame);
 	CourseSettleRemaining = CourseSettleFrames;
 
 	UE_LOG(LogElysiumMove, Log, TEXT("course '%s' begins at %s yaw %.1f"),
@@ -358,6 +377,7 @@ void FElysiumMoveRun::Sample()
 	const double Advance = FVector::DotProduct(P - StartFeet, StartForward) * Inv;
 	AdvanceMax = FMath::Max(AdvanceMax, Advance);
 	bEndedDucked = Body.Move->IsDucked();
+	JumpsTaken = Body.Move->GetJumpsTaken();
 
 	// The apex is measured from the height the body LEFT THE GROUND at, per airborne span — not
 	// from one datum for the whole course. Against a single datum a running jump taken from higher
@@ -386,6 +406,41 @@ void FElysiumMoveRun::Sample()
 	{
 		PeakApexUnits = FMath::Max(PeakApexUnits, (P.Z - TakeoffZ) * Inv);
 	}
+}
+
+void FElysiumMoveRun::ProbeSample()
+{
+	const FBodyRefs Body = ResolveBody(Subsystem.Get());
+	if (!Body)
+	{
+		return;
+	}
+
+	// One question per frame, and no recorder: which frame the ground state flipped on. The frame
+	// index is the replayed command's, counted the same way `Expand` numbers them, so the answer is
+	// directly the index the press is placed against.
+	const bool bGround = Body.Move->IsOnGround();
+	if (bGround != bProbeWasOnGround)
+	{
+		if (!bGround)
+		{
+			bProbeSawGroundLoss = true;
+			if (ResolvedEventFrame == INDEX_NONE
+				&& ProbeEvent == ElysiumMoveCourses::EBodyEvent::GroundLost)
+			{
+				ResolvedEventFrame = ProbeFrame;
+			}
+		}
+		// The landing that matters is the one after the body actually left the lip — a course whose
+		// settle ended airborne would otherwise resolve against its own first contact.
+		else if (bProbeSawGroundLoss && ResolvedEventFrame == INDEX_NONE
+			&& ProbeEvent == ElysiumMoveCourses::EBodyEvent::GroundGained)
+		{
+			ResolvedEventFrame = ProbeFrame;
+		}
+		bProbeWasOnGround = bGround;
+	}
+	++ProbeFrame;
 }
 
 void FElysiumMoveRun::FinishCourse()
@@ -451,6 +506,15 @@ void FElysiumMoveRun::FinishCourse()
 	Recorder.SetRun(TEXT("ended_ducked"), bEndedDucked);
 	Recorder.SetRun(TEXT("peak_speed2d"), PeakSpeed2D);
 	Recorder.SetRun(TEXT("cam_third_max"), CamThirdMax);
+
+	// Only the leniency courses carry these. A course that merely *holds* jump re-fires on landing at
+	// a gait-dependent moment, so declaring the count universally would commit a number `CCC7` moves.
+	if (Course.EventJump.IsSet())
+	{
+		Recorder.SetRun(TEXT("jumps_taken"), JumpsTaken);
+		Recorder.SetRun(TEXT("event_frame"), ResolvedEventFrame);
+		Recorder.SetOverride(TEXT("JumpFrameOffset"), Course.EventJump->FrameOffset);
+	}
 
 	const FString Stem = FString::Printf(TEXT("%s.%s.%dhz"), *Host, *Course.Name.ToString(), Hz);
 	FString Error;
@@ -543,7 +607,47 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 	// A course is in flight for as long as the router is still feeding its stream.
 	if (CourseIndex >= 0 && Body.Router->IsReplaying())
 	{
-		Sample();
+		if (Phase == ECoursePhase::Probe)
+		{
+			ProbeSample();
+		}
+		else
+		{
+			Sample();
+		}
+		return true;
+	}
+
+	const TArray<ElysiumMoveCourses::FCourse> Courses = CoursesFor(bGym, Body.Move->GetTuning());
+
+	// A probe pass ends by re-running the same course for record, now that the event frame is known.
+	// The body is re-seated and its state reset by `BeginCourse` exactly as for any other course, so
+	// the record pass starts from the same place the probe did.
+	if (CourseIndex >= 0 && Phase == ECoursePhase::Probe)
+	{
+		const FName Name = Courses.IsValidIndex(CourseIndex)
+			? Courses[CourseIndex].Name : FName(TEXT("?"));
+		if (ResolvedEventFrame == INDEX_NONE)
+		{
+			// Recorded as -1 rather than skipped: the sentinel rungs then disagree with their
+			// committed baselines and the run fails, which is the geometry reporting itself broken.
+			UE_LOG(LogElysiumMove, Error,
+				TEXT("course '%s': the probe pass never saw the ground edge it times against; ")
+				TEXT("recording with no press."), *Name.ToString());
+		}
+		else
+		{
+			UE_LOG(LogElysiumMove, Log, TEXT("course '%s': ground edge at probe frame %d"),
+				*Name.ToString(), ResolvedEventFrame);
+		}
+		if (!BeginCourse(CourseIndex, ECoursePhase::Record))
+		{
+			UE_LOG(LogElysiumMove, Warning, TEXT("could not seat the body to record '%s'; exiting."),
+				*Name.ToString());
+			bDone = true;
+			FPlatformMisc::RequestExit(false);
+			return false;
+		}
 		return true;
 	}
 
@@ -554,7 +658,6 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 		FinishCourse();
 	}
 
-	const TArray<ElysiumMoveCourses::FCourse> Courses = CoursesFor(bGym, Body.Move->GetTuning());
 	int32 Next = CourseIndex + 1;
 	while (Courses.IsValidIndex(Next) &&
 		!CourseFilter.IsEmpty() && CourseFilter != Courses[Next].Name.ToString())
@@ -571,7 +674,11 @@ bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)
 	}
 
 	CourseIndex = Next;
-	if (!BeginCourse(CourseIndex))
+	// A course that times a press against a body event has to find the event first; everything else
+	// goes straight to record, so every existing course's execution is unchanged.
+	const ECoursePhase NextPhase = Courses[Next].EventJump.IsSet()
+		? ECoursePhase::Probe : ECoursePhase::Record;
+	if (!BeginCourse(CourseIndex, NextPhase))
 	{
 		UE_LOG(LogElysiumMove, Warning, TEXT("could not seat the body for course '%s'; exiting."),
 			*Courses[CourseIndex].Name.ToString());

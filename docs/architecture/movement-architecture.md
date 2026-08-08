@@ -147,6 +147,8 @@ Each axis brackets a constant so the cliff is visible rather than inferred:
 | apertures | `2 × HullHalfWidth` −1 / **0** / +1 / +4 / +16 u | the hull width, and `WalkMove`'s two attempts |
 | gaps | 32 → 160 u | the held-jump arc |
 | a long clear run | — | `Friction`, `StopSpeed`, `Accelerate` |
+| a lip walked off, jumped after | −1 / **0** / +1 / +2 / +4 **frames** from ground-lost | `CheckJumpButton`'s airborne refusal — there is no coyote time |
+| the same lip, jumped before landing | +1 / **0** / −1 / −2 / −4 **frames** from ground-gained | the same refusal — there is no input buffer |
 
 **`sv_jump_boost` is bracketed by a ceiling, not by a ledge.** It is an instant origin displacement
 and the sweep that applies it is capped by whatever is overhead, so a roof at `StandHeight + G`
@@ -161,12 +163,29 @@ pop that precedes it — the standing body needs exactly the headroom the ducked
 to deny it — so no geometry straddles the answer. The lane measures the lift itself, and `DuckHeight`
 moving is what changes it.
 
+**The two leniency brackets are in frames, and they are the one thing the gym times rather than
+saturates.** Every other recipe holds its intent long enough that *when* the body arrives cannot
+matter; these place exactly one press, and it has to land on a chosen frame. Timing it off the clock
+would not survive a speed change — the walk to the lip moves with the gait — so the press is placed
+against a **body event** instead: the harness runs the course once with no press to find the frame
+the ground state flips, then replays it with the press at that frame plus the lane's offset. That is
+sound because a refused press is a provable no-op — `CheckJumpButton` returns on `!bOnGround`
+without touching velocity, gravity scale, the hold window or `m_nOldButtons` — so the event frame is
+identical in both passes. The press is one frame rather than held, because a *held* airborne jump
+already auto-fires on landing (the latch is only cleared by a release) and would measure that
+instead. The recorded answer is `jumps_taken`, 0 or 1 at any gait; `event_frame` is recorded beside
+it and deferred, because *when* the lip is reached does move with the speed. The faithful behaviour
+and the divergence either bracket would represent: `docs/architecture/input-architecture.md` §
+Feel.
+
 **Assertions split by whether the speed authority can move them.** Vertical thresholds — step height,
 the origin pop, slope standability, unduck refusal, aperture width — are collision geometry and are
 invariant under a speed change, so they baseline permanently. Horizontal gap clearance, course times,
 air-strafe gain and stopping distance all move when the speed source changes, so they baseline only
 once that call is made. A vertical threshold that shifts when the speed changes is a collision
-regression, not a feel delta.
+regression, not a feel delta. The leniency brackets sit on the invariant side despite involving a
+walk to a lip, because their answer is whether one press became a jump and their press is placed
+relative to a body event rather than to the clock.
 
 **A synthetic gym cannot replace the real map, and does not try.** Retail will not load geometry we
 authored, so any comparison against a retail capture is real-geometry-only; that is what the sited

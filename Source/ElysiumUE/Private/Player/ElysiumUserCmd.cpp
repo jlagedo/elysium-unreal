@@ -177,7 +177,19 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 	// The stick, on the same clamped delta the turn keys just used. Mouse counts are already
 	// finished degrees for this frame and are added raw; a stick is a held rate and is not.
 	Cmd.LookDelta += AnalogLook * DeltaSeconds;
-	Cmd.LookDelta += LookAccum;
+
+	// **The response curve applies to the mouse contribution alone**, which is why it is applied
+	// here and not to the sum. The turn keys and the stick were added above as rates x delta; a
+	// magnitude-keyed curve over the total would silently curve a held `+left` and a stick
+	// deflection too, and neither of those is a hand moving a mouse. Shaping the accumulator before
+	// it joins the sum is what keeps the three sources separable, and
+	// `Elysium.Substrate.UserCmd` asserts it stays that way.
+	//
+	// At the shipped tuning this is the identity — `look_curve` is 0, the gain is exactly 1.0, and
+	// VtMB's `sensitivity` x `m_yaw` path is unchanged. A non-zero `look_curve` is a **stated Feel
+	// divergence** (`docs/architecture/input-architecture.md` § Feel): VtMB's mouse path carries no
+	// acceleration and no filter, and no `CInput::MouseMove` decompile exists to recover one from.
+	Cmd.LookDelta += ElysiumInput::ShapeMouseLook(LookAccum, LookTuning, DeltaSeconds);
 
 	LookAccum = FVector2D::ZeroVector;
 	AnalogMove = FVector2D::ZeroVector;

@@ -48,6 +48,10 @@ public:
 	bool IsFrozen() const { return bFrozen; }
 
 	bool IsOnGround() const { return bOnGround; }
+	// Press-edge jumps taken since the last `ResetState`. The leniency courses' measurement: a jump
+	// refused for being airborne never increments it, so this is what the gym's `ledge_*`/`land_*`
+	// brackets read (CCC3).
+	int32 GetJumpsTaken() const { return JumpsTaken; }
 	bool IsDucked() const { return bDucked; }
 	bool IsDucking() const { return bDucking; }
 	EElysiumWaterLevel GetWaterLevel() const { return WaterLevel; }
@@ -151,6 +155,10 @@ private:
 	// Source's `m_nOldButtons`: the latch a press is consumed into, so a held button does not
 	// re-fire — and so one press cannot fire once per sub-step under a fixed timestep.
 	uint64 OldButtons = 0;
+
+	// How many times a press edge became a jump. Counted at the edge itself rather than derived
+	// from the trace, because a refused jump and a body that was already falling look identical.
+	int32 JumpsTaken = 0;
 
 	bool bOnGround = false;
 	bool bNoclip = false;

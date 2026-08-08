@@ -90,12 +90,12 @@ def modifiers_for(action_id, context):
     if action_id == "Look":
         return [
             dead_zone,
-            make_modifier(
-                unreal.InputModifierResponseCurveExponential,
-                context,
-                "Look_Response",
-                {"curve_exponent": unreal.Vector(1.0, 1.0, 1.0)},
-            ),
+            # No ResponseCurveExponential. The look response curve is one pure function at the
+            # point the user command is built (`ElysiumInput::ShapeMouseLook`, asserted as
+            # Elysium.Substrate.LookCurve), so that the curve is A/B-able against the decompile
+            # in a test tier rather than living in a data asset. A curve here as well would be
+            # two owners of one feel, and only one of them can be asserted.
+            #
             # Gamepad_Right2D reports physical stick-up on -Y. Elysium adds the action's Y
             # directly to FRotator::Pitch, where positive pitch is look-up, so invert Y once
             # in the mapping and leave the native GameInput axis untouched.

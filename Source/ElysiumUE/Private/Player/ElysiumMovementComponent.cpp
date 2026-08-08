@@ -80,6 +80,7 @@ void UElysiumMovementComponent::ResetState()
 {
 	Velocity = FVector::ZeroVector;
 	OldButtons = 0;
+	JumpsTaken = 0;
 	PrevCmd = FElysiumUserCmd();
 	Stepper.Reset();
 	bOnGround = false;
@@ -738,6 +739,12 @@ void UElysiumMovementComponent::CheckJumpButton()
 
 	bOnGround = false;
 	OldButtons |= static_cast<uint64>(EElysiumButton::Jump);
+
+	// The leniency courses' whole measurement (CCC3): a press that reached this line became a jump,
+	// and one that hit the `!bOnGround` bail above did not. Counted here rather than inferred from a
+	// trace because the two are indistinguishable in the recorded position of a body that was
+	// falling anyway.
+	++JumpsTaken;
 }
 
 void UElysiumMovementComponent::ApplyJumpBoost()

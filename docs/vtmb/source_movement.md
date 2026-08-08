@@ -211,6 +211,15 @@ a moving ground entity's own velocity is added on top.
 `m_nOldButtons` stops a held jump from *re-firing*; it does not stop the hold from extending the
 same jump, which is a separate timer on the player.
 
+**There is no jump buffer and no coyote time.** No accumulator and no press queue exist anywhere in
+the path: `CheckJumpButton` returns the instant the player is not on the ground, so a press one
+frame after the feet leave a ledge is discarded outright, and a press made while falling is
+discarded and never replayed on landing. The only forgiveness anywhere in the system is
+`CategorizePosition`'s 2-unit down-trace, and that is a ground-*detection* tolerance for descending
+a step — VtMB has no `StayOnGround`, so the trace is what re-finds the floor — not an input grace.
+The two are easy to conflate because both make a jump work that "should" have failed; only the
+first is about input.
+
 ### Formulas (verified against the decompile)
 
 `Friction` — called only while on ground, and scales all three velocity

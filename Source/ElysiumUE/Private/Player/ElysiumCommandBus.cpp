@@ -5,6 +5,7 @@
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumLookCurve.h"
 #include "ElysiumMoveSolve.h"
 #include "Scripting/ElysiumPythonVM.h"
 
@@ -41,6 +42,10 @@ FElysiumConsole& ElysiumCommandBus::Console()
 			Store.DeclareCvar(Def.Name, Def.Default);
 		}
 		for (const ElysiumMove::FCvarDef& Def : ElysiumMove::CvarDefs())
+		{
+			Store.DeclareCvar(Def.Name, Def.Default);
+		}
+		for (const ElysiumInput::FCvarDef& Def : ElysiumInput::CvarDefs())
 		{
 			Store.DeclareCvar(Def.Name, Def.Default);
 		}

@@ -46,8 +46,8 @@ rung: `CCC7` re-opens what `4.7` settled, by design.
 |---|---|---|
 | Character math | 1 | `4.7 [x]` — ported line-by-line, `Elysium.Substrate.Movement` green. Its **speed authority is open**, and its world half — `StepMove`, `CategorizePosition`, the jump against real geometry — is asserted nowhere; the gym is the unfinished half of the rung |
 | Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig behind `elysium.ModernCamera` (default 0) |
-| Character ↔ camera co-tune | 3 | **absent** — `CCC3` creates it, deliberately after `CCC7` settles the speed |
-| Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half is `CCC3` |
+| Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, deliberately after `CCC7` settles the speed |
+| Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
 | Real animation | 6 | `CCC4`–`CCC6` |
 | Vertical slice | 7 | `CCC8` |
@@ -94,7 +94,7 @@ trace, a bake) is a context switch rather than a slice stall.
 | Lane A — the camera platform | Lane B — the animation spine |
 |---|---|
 | `CCC2 [x]` — the service foundation, then the modern rig | `CCC1 [x]` — the body sample |
-| `CCC3` — the response curve and the leniency courses | `CCC4` — intent, resolver, record |
+| `CCC3 [~]` — the response curve and the leniency courses; the co-tune waits for `CCC7` | `CCC4` — intent, resolver, record |
 | | `CCC5` — the player graph |
 | | `CCC6` — drive it |
 
@@ -123,11 +123,12 @@ retires what they replaced.
   a constant in `ElysiumMove` turns exactly the bracket that constant owns red; the differ fails on
   an unregistered or missing channel; the PC body stands **on** the gym rather than above it.
   *Deps:* none — `4.7`'s harness and the stage both exist.
-  *Done:* the gym (33 lanes in an empty stage world, `ElysiumGymSpec.h` + `ElysiumGymBuilder.h`), the
+  *Done:* the gym (33 lanes at this rung, 43 once `CCC3` added the two leniency families, in an empty
+  stage world, `ElysiumGymSpec.h` + `ElysiumGymBuilder.h`), the
   named-channel recorder and its manifest (`ElysiumChannels.h` + `FElysiumChannelRecorder`), the
   channel differ chained into `debug move` with its five refusals
-  (`validation/channel_diff.py`), 33 committed gym baselines in `dev/baselines/move/` that reproduce
-  byte-for-byte, and the red test both ways — `StepSize` reddens only the riser lanes and
+  (`validation/channel_diff.py`), a committed gym baseline per lane in `dev/baselines/move/` that
+  reproduces byte-for-byte, and the red test both ways — `StepSize` reddens only the riser lanes and
   `StandableZ` only the slope lanes. `elysium.playerpos` sites a course the way `elysium.campos`
   sites a vantage. The five open-floor `sp_tutorial_1` courses are surveyed onto real warehouse floor
   and confirmed headless.
@@ -249,9 +250,9 @@ retires what they replaced.
   settings surface defer to `11.13d`/`8.10`, where the screen that consumes them lives; the tuning
   partition that makes them unambiguous is recorded now.
 
-- [ ] **CCC3 Controls response, and the co-tune that waits.** The feel half of input, which no
-  document tracks — `docs/architecture/input-architecture.md` records look-curve tuning as "a
-  Feel-axis decision with no owner yet" and has no `## Feel` section. Two questions land now. The
+- [~] **CCC3 Controls response, and the co-tune that waits.** The feel half of input, which no
+  document tracked — `docs/architecture/input-architecture.md` recorded look-curve tuning as "a
+  Feel-axis decision with no owner yet" and had no `## Feel` section. Two questions land now. The
   **response curve** between look input and view rotation, against retail's `sensitivity` ×
   `m_yaw`/`m_pitch` path — applied where `FElysiumUserCmd` is built, as one pure function in the
   `ElysiumInputScope.h` style rather than as Enhanced Input modifier assets, so the curve is
@@ -268,6 +269,38 @@ retires what they replaced.
   recorded courses whether or not leniency is added, so the decision is measured rather than
   argued; the co-tune is performed once, after `CCC7`, with both rigs' channels in one run.
   *Deps:* `CCC0`, `CCC2` for the curve and the courses; `CCC7` for the co-tune.
+  *Done:* the response curve is one pure function — `ElysiumInput::ShapeMouseLook` over
+  `FElysiumLookTuning` (`ElysiumLookCurve.h`), asserted by `Elysium.Substrate.LookCurve` — applied
+  at the point the command is built. **Its defaults are exactly retail**, so the shipped feel did
+  not move: `sensitivity` 3 × `m_yaw`/`m_pitch` 0.022 is the recovered 0.066°/count and `look_curve`
+  defaults to 0, at which the gain is identically 1.0 and the delta returns bit-for-bit. The curve
+  is applied to the **mouse contribution alone**, before the keyboard and stick terms merge — a
+  magnitude-keyed curve over the sum would silently curve a held `+left` — and
+  `Elysium.Substrate.UserCmd` asserts the separation, so moving the call after the merge reddens.
+  The scale left the router for the tuning struct's `LoadFrom` callback; `ElysiumInput::CvarDefs()`
+  now declares the seven names, which also fixes `sensitivity`/`m_yaw`/`m_pitch` having been read
+  but declared nowhere. `IA_Look`'s `ResponseCurveExponential` is retired and the Content tier
+  asserts its **absence**, so exactly one thing owns the look feel and it is the one that can be
+  asserted. The faithful path, the divergence and the leniency finding are recorded in
+  `docs/architecture/input-architecture.md` § Feel, the section that did not exist.
+  **The leniency question is now measured.** Two five-rung brackets — `ledge_*` and `land_*`, one
+  lip and one drop, ten committed baselines — place exactly one jump press at a frame offset from a
+  **body event** rather than from the clock, because the walk to a lip moves with the gait and the
+  offset does not. The harness resolves the event in a probe pass and replays for record;
+  `Expand` stays pure by taking the resolved frame as an argument. As recorded, the cliff is exactly
+  one decision wide at both 60 and 120 Hz: `ledge_m1`/`ledge_0` jump and `ledge_p1` does not;
+  `land_p1` jumps and `land_0` does not. There is no coyote time and no input buffer, and adding
+  either now moves a committed number (`ledge_p1`'s or `land_m1`'s `jumps_taken`) instead of
+  starting an argument. `advance_max` saturates against the back wall at 2.97 s of the 10 s hold —
+  a 3.37× margin — so the lanes stay speed-invariant through a halving of the gait at `CCC7`.
+  *Instrument finding:* the two new run channels changed **no** existing baseline. The recorder
+  emits only the channels a run opened, so a producer that writes rows nothing else writes is free;
+  the 33 gym baselines came back byte-identical and the commit adds ten files rather than rewriting
+  forty-three.
+  *Remaining:* the **co-tune**, and only the co-tune. It is gated on `CCC7` by design — tuning
+  against a walk speed the speed authority may halve is paid for twice — and it touches
+  `ElysiumRig::FElysiumCameraRigTuning` and `elysium.ModernCamera`'s default, never the `cam_*`
+  console store, or the A/B stops being a comparison.
 
 - [ ] **CCC4 Intent, resolver, selection record.** `FElysiumAnimationIntent` in,
   `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
@@ -500,7 +533,8 @@ per the house rules.
 | Any change to movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | A held crouch's hold rule, if the controlled trace cannot answer what retail does once ducked | `docs/vtmb/animation_and_movers.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
-| Input leniency of any kind — buffering, coyote time, a look-response curve that is not retail's. VtMB has none of these | `docs/architecture/input-architecture.md` |
+| A look-response curve that is not retail's — **built and shipped off**: `look_curve` defaults to 0, at which the gain is exactly 1.0 and the path is retail's linear one. Enabling it is an owner call not yet made | `docs/architecture/input-architecture.md` § Feel |
+| Input leniency — buffering or coyote time. VtMB has neither, **none is implemented**, and the `ledge_*`/`land_*` brackets now hold the committed before-picture, so adding either moves a number | `docs/architecture/input-architecture.md` § Feel |
 | A fixed-step accumulator, shipped behind `elysium.move.FixedStep` with the faithful variable delta as the default | `docs/vtmb/source_movement.md` |
 | ~~Composing the legacy shot and track channels as post layers, or arbitrating them as base requests~~ — **settled as post layers, and therefore not a divergence**: retail composes the scripted channel over the third-person weight, so this is the faithful behaviour and the doc's table was corrected | `docs/architecture/camera-architecture.md` |
 | Weapon-class camera arbitration — **deferred, not made**. The `+0x2440` bits are unrecovered and `0x08`/`0x10` read as Logic; the forced-third/first/feed latches stay as the seam | `docs/vtmb/camera-view-modes.md` |

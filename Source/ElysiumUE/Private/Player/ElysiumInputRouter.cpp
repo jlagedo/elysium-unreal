@@ -20,18 +20,12 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumRouter, Log, All);
 
-namespace
-{
-	// The mouse axes are read as **raw counts** and scaled here, not by the engine: `AxisConfig`
-	// sensitivity for MouseX/MouseY is 1.0 and FOV scaling is off in `DefaultInput.ini`, so
-	// `sensitivity x m_yaw` is the only multiplier between the device and the view. That is VtMB's
-	// own 0.066 degrees per count, and it is why look never picks up a frame-rate term.
-	float CvarFloat(const TCHAR* Name, float Default)
-	{
-		const FString Value = ElysiumCommandBus::Console().GetCvar(Name);
-		return Value.IsEmpty() ? Default : FCString::Atof(*Value);
-	}
-}
+// The mouse axes are read as **raw counts** and scaled here, not by the engine: `AxisConfig`
+// sensitivity for MouseX/MouseY is 1.0 and FOV scaling is off in `DefaultInput.ini`, so
+// `sensitivity x m_yaw` is the only multiplier between the device and the view. That is VtMB's own
+// 0.066 degrees per count, and it is why look never picks up a frame-rate term. The scale — and the
+// response curve over it — live on `ElysiumInput::FElysiumLookTuning`, refreshed once a frame in
+// `RefreshLookTuning`.
 
 void UElysiumInputRouter::Setup(APlayerController* Controller, UInputComponent* Input)
 {
@@ -260,15 +254,38 @@ void UElysiumInputRouter::OnCommandUp(FName Command)
 
 float UElysiumInputRouter::MouseYawScale() const
 {
-	return CvarFloat(TEXT("sensitivity"), ElysiumInput::DefaultSensitivity)
-		 * CvarFloat(TEXT("m_yaw"), ElysiumInput::DefaultMouseYaw);
+	return LookTuning.YawScale();
 }
 
 float UElysiumInputRouter::MousePitchScale() const
 {
 	// A negative `m_pitch` is VtMB's invert-Y, so the sign rides through untouched.
-	return CvarFloat(TEXT("sensitivity"), ElysiumInput::DefaultSensitivity)
-		 * CvarFloat(TEXT("m_pitch"), ElysiumInput::DefaultMousePitch);
+	return LookTuning.PitchScale();
+}
+
+void UElysiumInputRouter::RefreshLookTuning()
+{
+	// Read live, so a `sensitivity` write from the console or the options screen takes effect without
+	// a reload — the same thing `FElysiumMoveTuning::LoadFrom` does for the mover. The mouse *scale*
+	// therefore uses the tuning refreshed on the previous frame, because the axis callbacks run ahead
+	// of `PlayerTick`; that one-frame latency is the price of having a single reader of the cvar.
+	LookTuning.LoadFrom([](const TCHAR* Name)
+	{
+		return ElysiumCommandBus::Console().GetCvar(Name);
+	});
+	CmdBuilder.SetLookTuning(LookTuning);
+
+	// Say so out loud the first time the curve is engaged. VtMB's mouse path is linear, so this is a
+	// Feel divergence rather than a setting, and it belongs in any A/B run's log rather than only in
+	// a cvar dump (`docs/architecture/input-architecture.md` § Feel).
+	if (!LookTuning.IsRetailLinear() && !bWarnedLookCurve)
+	{
+		bWarnedLookCurve = true;
+		UE_LOG(LogElysiumRouter, Warning,
+			TEXT("look curve engaged (look_curve=%.3f exponent=%.2f threshold=%.1f max=%.2f): VtMB's ")
+			TEXT("mouse path is linear, so this is a stated Feel divergence, not a setting."),
+			LookTuning.Curve, LookTuning.Exponent, LookTuning.Threshold, LookTuning.MaxScale);
+	}
 }
 
 void UElysiumInputRouter::ClearHeldButtons()
@@ -287,6 +304,8 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 	const AWorldSettings* Settings = SampleWorld ? SampleWorld->GetWorldSettings() : nullptr;
 	const double FrameScale = Settings ? Settings->GetEffectiveTimeDilation() : 1.0;
 	DeltaSeconds = static_cast<float>(ElysiumFrame::ClampFrameDelta(DeltaSeconds, FrameScale));
+
+	RefreshLookTuning();
 
 	if (bReplaying)
 	{
@@ -338,7 +357,8 @@ void UElysiumInputRouter::ApplyLook(const FElysiumUserCmd& Cmd)
 	// without bound through a long session is a precision problem waiting to happen.
 	FRotator Rot = Controller->GetControlRotation();
 	Rot.Yaw = FRotator::NormalizeAxis(Rot.Yaw + Cmd.LookDelta.X);
-	Rot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Rot.Pitch + Cmd.LookDelta.Y), -89.0f, 89.0f);
+	Rot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Rot.Pitch + Cmd.LookDelta.Y),
+		-ElysiumInput::PitchClampDegrees, ElysiumInput::PitchClampDegrees);
 	Rot.Roll = 0.0f;
 	Controller->SetControlRotation(Rot);
 }

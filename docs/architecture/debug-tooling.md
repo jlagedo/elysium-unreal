@@ -334,6 +334,21 @@ its first command: `Duck` runs ahead of `CategorizePosition`, so a course whose 
 would get the *airborne* duck and start two units off the floor. Position and velocity are emitted in
 **Source units**, so a row reads directly against `docs/vtmb/source_movement.md`.
 
+**A course that has to press a button on an exact frame runs twice.** Most recipes saturate — they
+hold an intent long enough that *when* the body arrives cannot matter — but the leniency brackets
+place exactly one jump press, and it has to land a chosen number of frames from a **body event**
+rather than from the clock, because the walk to a lip moves with the gait and the offset does not.
+So the harness drives the course once as a **probe** with no press, watching only the ground state
+to find the frame it flips on, then re-seats the body and replays the same course with the press at
+that frame plus the lane's offset. Only the second pass touches the recorder, which keeps the
+recorder's one-open-one-write invariant intact. `Expand` stays pure by taking the resolved frame as
+an argument, so resolving the event is the engine's job and building the stream is still a function
+of the course, the step and that one number — and passing `INDEX_NONE` is what the probe pass uses,
+so both passes drive streams of identical length. The pass is sound because a refused press is a
+provable no-op: `CheckJumpButton` returns on `!bOnGround` without touching velocity, gravity scale,
+the hold window or the button latch, so nothing before the press can differ between the two runs.
+A course with no event-timed press skips the probe entirely.
+
 **Two hosts, and they answer different questions.** `--gym` builds the generated gym in an empty
 stage world, where each riser, roof, ramp and aperture is derived from the movement constants and
 brackets the threshold it tests — so a run locates a cliff rather than confirming that one particular

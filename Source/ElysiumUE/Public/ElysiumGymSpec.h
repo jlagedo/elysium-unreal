@@ -62,6 +62,14 @@ namespace ElysiumGym
 		Doorway,        // hold forward at an aperture the hull barely fits
 		Gap,            // run and jump a hole in the floor
 		Flat,           // run the length of the lane, then release and coast to a stop
+
+		// The two leniency families (CCC3). Identical geometry — walk off a lip into a drop — and
+		// they differ only in which body event the course times its one-frame jump against. VtMB has
+		// neither coyote time nor an input buffer, so both brackets are expected to record a refusal
+		// on every rung but the sentinel; what they exist for is that adding either later moves a
+		// committed number rather than an opinion.
+		Ledge,          // walk off the lip, then jump K frames AFTER the ground is lost
+		Landing,        // walk off the same lip, then tap jump K frames BEFORE the ground returns
 	};
 
 	// One solid. A ramp is a box with a pitch, and nothing in the table needs a second shape.
@@ -89,8 +97,10 @@ namespace ElysiumGym
 		// conversion between the two conventions is `SeatOrigin` and there is no other.
 		FVector FeetOrigin = FVector::ZeroVector;
 		float Yaw = 0.0f;
-		// The bracket value this lane stands at, in Source units, for the log line and the manifest.
-		// Not an expectation — it names which rung this is, not what the body will do on it.
+		// The bracket value this lane stands at, for the log line and the manifest. The unit is the
+		// family's: Source units for a riser or a doorway, degrees for a slope, and **frames** for a
+		// leniency lane, whose bracket is an offset from a body event rather than a distance. Not an
+		// expectation — it names which rung this is, not what the body will do on it.
 		float BracketUnits = 0.0f;
 		// True when what this lane measures moves with the speed authority, so its recording must
 		// not be promoted before `CCC7` settles it (`docs/project/three-cs-roadmap.md`).

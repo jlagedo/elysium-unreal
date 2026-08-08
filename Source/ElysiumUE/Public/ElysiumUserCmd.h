@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumLookCurve.h"
 
 // S5 — intent is data (roadmap 11.6, `docs/architecture/runtime-architecture.md` §8.3). One frame of player intent as
 // a value: what the player asked for, not which key is currently down. Movement, the camera and the
@@ -79,10 +80,8 @@ namespace ElysiumInput
 	inline constexpr float KeyboardPitchSpeed = 225.0f;   // cl_pitchspeed
 
 	// Mouse: `sensitivity` 3 × `m_yaw`/`m_pitch` 0.022 = 0.066 degrees per count. Held here as the
-	// shipped defaults; the router multiplies the live cvar values when the VtMB console has them.
-	inline constexpr float DefaultSensitivity = 3.0f;
-	inline constexpr float DefaultMouseYaw    = 0.022f;
-	inline constexpr float DefaultMousePitch  = 0.022f;
+	// shipped defaults on `ElysiumInput::FElysiumLookTuning` (`ElysiumLookCurve.h`), which also owns
+	// the response curve over them.
 
 	// Unreal's 2D gamepad keys are (right, up). The Source-shaped user command is (forward, right),
 	// so the device-neutral intent seam owns the one swizzle between them.
@@ -166,6 +165,11 @@ struct FElysiumUserCmdBuilder
 	// Mouse counts for this frame, in degrees (already scaled by sensitivity × m_yaw/m_pitch).
 	void AddLook(float YawDegrees, float PitchDegrees);
 
+	// The response curve applied to those counts at Build time. Held rather than looked up so the
+	// build stays free of the console; the router refreshes it from the cvar store each frame.
+	void SetLookTuning(const ElysiumInput::FElysiumLookTuning& InTuning) { LookTuning = InTuning; }
+	const ElysiumInput::FElysiumLookTuning& GetLookTuning() const { return LookTuning; }
+
 	// Analog move for this frame, −1..1 per axis, replacing whatever a stick contributed. Keyboard
 	// buttons are OR-ed on top at Build time, so a pad and a keyboard can drive the same frame.
 	void SetAnalogMove(const FVector2D& InMove) { AnalogMove = InMove; }
@@ -193,6 +197,7 @@ struct FElysiumUserCmdBuilder
 
 private:
 	uint64 Buttons = 0;
+	ElysiumInput::FElysiumLookTuning LookTuning;
 	FVector2D LookAccum = FVector2D::ZeroVector;
 	FVector2D AnalogMove = FVector2D::ZeroVector;
 	FVector2D AnalogLook = FVector2D::ZeroVector;

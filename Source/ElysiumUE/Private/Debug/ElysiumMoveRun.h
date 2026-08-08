@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "Debug/ElysiumChannelRecorder.h"
+#include "Debug/ElysiumMoveCourses.h"
 #include "ElysiumUserCmd.h"
 
 #if !UE_BUILD_SHIPPING
@@ -38,15 +39,33 @@ public:
 	explicit FElysiumMoveRun(UElysiumMapSubsystem* InSubsystem);
 	~FElysiumMoveRun();
 
+	// A leniency course runs twice (CCC3). The **probe** pass drives the course with no press at all
+	// and watches for the ground edge it is timed against; the **record** pass then replays the same
+	// course with the press placed at that frame plus the lane's offset, and is the only one that
+	// touches the recorder.
+	//
+	// Two passes rather than a live injection because `Router->StartReplay` takes a finished stream,
+	// and a stream built as it runs is not the stream that can be re-run. It is sound because a
+	// refused press is a **provable** no-op: `CheckJumpButton` returns on `!bOnGround` without
+	// touching velocity, gravity scale, the hold window or `OldButtons`, so nothing before the press
+	// can differ between the passes, and the event frame the probe measured is still the event frame.
+	enum class ECoursePhase : uint8
+	{
+		Probe,
+		Record,
+	};
+
 private:
 	bool Tick(float DeltaSeconds);
 
 	// Stand the gym up in the stage world. Once, before the first course.
 	bool BuildGym();
 	// Seat the body at the course start and arm its command stream.
-	bool BeginCourse(int32 Index);
+	bool BeginCourse(int32 Index, ECoursePhase InPhase);
 	// One sampled row.
 	void Sample();
+	// One probe frame: the ground state, and nothing else. No recorder, no output.
+	void ProbeSample();
 	// Flush the current course to disk.
 	void FinishCourse();
 
@@ -92,6 +111,20 @@ private:
 	bool bHaveDatum = false;
 	int32 GroundTransitions = 0;
 	bool bWasOnGround = false;
+
+	// --- The two-pass probe (CCC3) --------------------------------------------------------------
+	ECoursePhase Phase = ECoursePhase::Record;
+	// What the probe pass measured, or INDEX_NONE for "the event never happened" — which the record
+	// pass then turns into a course with no press, so the bracket's sentinel rungs disagree with
+	// their baselines and the run reddens rather than quietly recording a refusal.
+	int32 ResolvedEventFrame = INDEX_NONE;
+	int32 ProbeFrame = 0;
+	bool bProbeWasOnGround = true;
+	bool bProbeSawGroundLoss = false;
+	// Which ground edge the probe pass is watching for, read off the course when the pass opens.
+	ElysiumMoveCourses::EBodyEvent ProbeEvent = ElysiumMoveCourses::EBodyEvent::GroundLost;
+	// Press-edge jumps the record pass's body took. The leniency bracket's whole answer.
+	int32 JumpsTaken = 0;
 	// The highest third-person weight the course reached. It saturates at 1 on every course, which
 	// is the point: it is the cheap catch for a camera that never engaged, and the only camera
 	// channel a committed gym baseline can carry.

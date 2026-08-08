@@ -280,6 +280,68 @@ namespace
 		BeginLane(S, TEXT("flat"), EFamily::Flat, 0.0f, /*bSpeedDependent*/ true,
 			/*bFloor*/ true, /*Length*/ LaneLength * 4.0f);
 	}
+
+	// --- The leniency lanes (CCC3) ---------------------------------------------------------------
+	// One lip and one drop, shared by both families. The body walks off the edge at X = 0 and falls
+	// `PitDepth` to a lower floor it then keeps walking along until the back wall stops it.
+	//
+	// **Walking off, never jumping off.** A held jump would put `JumpHoldRemaining` and the reduced
+	// gravity scale into the fall, and releasing it mid-air calls `EndJumpHold`, which restores full
+	// gravity and perturbs the trajectory. Falling off a lip leaves both already neutral, so the
+	// one-frame tap the course places is the only thing the mover sees.
+	//
+	// Ground loss is unambiguous: `CategorizePosition` sweeps the whole box hull down, so the body
+	// stays grounded until its rear face clears the lip, and that resolves inside one frame at any
+	// gait. The drop is deep enough that the fall spans far more frames than the widest bracket.
+	void AddLedgeLanes(FSpec& S, EFamily Family, const TCHAR* const* Names, const float* Offsets,
+		int32 Count)
+	{
+		for (int32 i = 0; i < Count; ++i)
+		{
+			// The bracket is in FRAMES, not units: what is under test is `CheckJumpButton`'s per-step
+			// decision, so "one decision late" is the rate-invariant statement and a wall-clock offset
+			// would not be. Both families are speed-invariant — exactly one press exists in the whole
+			// stream and it is placed against a body event, so the count it produces is 0 or 1 at any
+			// gait, which is what lets these be committed before `CCC7`.
+			const float LaneY = BeginLane(S, Names[i], Family, Offsets[i],
+				/*bSpeedDependent*/ false, /*bFloor*/ false);
+			const FName Lane = S.Lanes.Last().Name;
+
+			// The run-up, ending at the lip.
+			S.Placements.Add(Block(Lane, TEXT("upper"), -RunUp, 0.0f,
+				LaneY - LaneHalfWidth, LaneY + LaneHalfWidth, -SlabThick, 0.0f));
+			// What it lands on. `BeginLane`'s back wall already reaches from `-PitDepth` up, so the
+			// body is stopped down here too and "how far did it get" still saturates.
+			S.Placements.Add(Block(Lane, TEXT("lower"), 0.0f, LaneLength,
+				LaneY - LaneHalfWidth, LaneY + LaneHalfWidth, -PitDepth - SlabThick, -PitDepth));
+		}
+	}
+
+	void AddLedges(FSpec& S, const FElysiumMoveTuning& T)
+	{
+		// Bracketing "there is no coyote time" the way the risers bracket `StepSize`. `ledge_m1` is
+		// the last grounded frame and must jump; `ledge_0` is the frame the press is taken on, where
+		// `CheckJumpButton` still sees the ground it is leaving. From `ledge_p1` on the body is
+		// airborne at the decision point and retail refuses — so p1 is the rung coyote time flips.
+		static const TCHAR* const Names[] =
+			{ TEXT("ledge_m1"), TEXT("ledge_0"), TEXT("ledge_p1"),
+			  TEXT("ledge_p2"), TEXT("ledge_p4") };
+		static const float Offsets[] = { -1.0f, 0.0f, 1.0f, 2.0f, 4.0f };
+		AddLedgeLanes(S, EFamily::Ledge, Names, Offsets, UE_ARRAY_COUNT(Names));
+	}
+
+	void AddLandings(FSpec& S, const FElysiumMoveTuning& T)
+	{
+		// The same bracket for an input buffer. The mover decides on the ground state as seen at the
+		// head of its step, so the frame at which ground is first *recorded* is still airborne at its
+		// own decision point — `land_p1`, one frame later, is the sentinel that must jump, and
+		// everything at or before the landing is what a buffer would flip.
+		static const TCHAR* const Names[] =
+			{ TEXT("land_p1"), TEXT("land_0"), TEXT("land_m1"),
+			  TEXT("land_m2"), TEXT("land_m4") };
+		static const float Offsets[] = { 1.0f, 0.0f, -1.0f, -2.0f, -4.0f };
+		AddLedgeLanes(S, EFamily::Landing, Names, Offsets, UE_ARRAY_COUNT(Names));
+	}
 }
 
 const FLane* FSpec::FindLane(const FName& Name) const
@@ -318,6 +380,13 @@ FSpec Build(const FElysiumMoveTuning& T)
 	AddDoorways(S, T);
 	AddGaps(S, T);
 	AddFlat(S, T);
+	// **Appended, never inserted.** `BeginLane` derives a lane's Y from the count so far, so adding a
+	// family anywhere but the end slides every later lane sideways. The recordings would still
+	// reproduce — every run channel is start-relative — so the damage would be invisible while
+	// `Elysium.Substrate.GymSpecOwnership`'s index-paired comparison quietly ran against different
+	// solids.
+	AddLedges(S, T);
+	AddLandings(S, T);
 	return S;
 }
 

@@ -4348,7 +4348,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
 	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
 	TestEqual(TEXT("Move has only its radial dead zone"), MoveMapping->Modifiers.Num(), 1);
-	TestEqual(TEXT("Look has the documented four-modifier stack"), LookMapping->Modifiers.Num(), 4);
+	TestEqual(TEXT("Look has the documented three-modifier stack"), LookMapping->Modifiers.Num(), 3);
 	TestEqual(TEXT("Jump has no modifier stack"), JumpMapping->Modifiers.Num(), 0);
 
 	const UInputModifierDeadZone* MoveDeadZone = MoveMapping->Modifiers.Num() > 0
@@ -4376,33 +4376,29 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		TestEqual(TEXT("Move dead zone remaps its remaining range"),
 			(float)MoveHalfRange.X, 0.5f, 0.001f);
 	}
-	if (LookMapping->Modifiers.Num() == 4)
+	if (LookMapping->Modifiers.Num() == 3)
 	{
-		const UInputModifierResponseCurveExponential* Response =
-			Cast<UInputModifierResponseCurveExponential>(LookMapping->Modifiers[1]);
 		const UInputModifierNegate* NativeY =
-			Cast<UInputModifierNegate>(LookMapping->Modifiers[2]);
-		const UInputModifierScalar* Scalar = Cast<UInputModifierScalar>(LookMapping->Modifiers[3]);
-		TestNotNull(TEXT("linear response modifier"), Response);
+			Cast<UInputModifierNegate>(LookMapping->Modifiers[1]);
+		const UInputModifierScalar* Scalar = Cast<UInputModifierScalar>(LookMapping->Modifiers[2]);
 		TestNotNull(TEXT("native right-stick Y correction"), NativeY);
 		TestNotNull(TEXT("look rate scalar"), Scalar);
-		// The stack ends at the rate, and the two modifiers that are NOT here are asserted as
+		// The stack ends at the rate, and the three modifiers that are NOT here are asserted as
 		// firmly as the ones that are. ScaleByDeltaTime would multiply by Enhanced Input's raw
 		// frame delta and bypass the ClampFrameDelta / dilation normalisation `SampleFrame`
 		// applies to every other look source; FOVScaling is not neutral even at FOVScale 1.0,
 		// because Standard normalises against an 80-degree base and would make a flat
-		// `cl_yawspeed` move with the camera.
+		// `cl_yawspeed` move with the camera. And the response curve lives in one pure function
+		// at the command seam (`Elysium.Substrate.LookCurve`) rather than in a data asset, so
+		// exactly one thing owns the look feel and it is the one that can be asserted.
 		for (const TObjectPtr<UInputModifier>& Modifier : LookMapping->Modifiers)
 		{
 			TestFalse(TEXT("look is not delta-time scaled in the asset"),
 				Modifier != nullptr && Modifier->IsA<UInputModifierScaleByDeltaTime>());
 			TestFalse(TEXT("look is not FOV scaled"),
 				Modifier != nullptr && Modifier->IsA<UInputModifierFOVScaling>());
-		}
-		if (Response)
-		{
-			TestTrue(TEXT("response exponent is neutral linear"),
-				Response->CurveExponent.Equals(FVector::OneVector));
+			TestFalse(TEXT("the response curve is not a modifier asset"),
+				Modifier != nullptr && Modifier->IsA<UInputModifierResponseCurveExponential>());
 		}
 		if (NativeY)
 		{

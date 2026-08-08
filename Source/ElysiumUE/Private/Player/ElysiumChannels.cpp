@@ -114,6 +114,18 @@ namespace
 	{ TEXT("peak_speed2d"), TEXT("move"), EScope::Run, EKind::Numeric, 2.0f,  3, TEXT("u/s"),
 	  true,  TEXT("fastest horizontal speed reached") },
 
+	// --- The leniency measurement, per run (CCC3) -----------------------------------------------
+	// Written only by the courses that place a jump against a body event, because a course that
+	// merely *holds* jump re-fires on landing at a gait-dependent moment and its count would not
+	// survive `CCC7`. On a leniency course the count is 0 or 1 at any gait, which is what makes it
+	// the committed boolean: `ledge_p1` going from 0 to 1 is coyote time being added, and nothing
+	// else. `event_frame` records what the probe pass resolved the press against — *when* the body
+	// reaches the lip does move with the gait, so it is recorded and deferred rather than compared.
+	{ TEXT("jumps_taken"),  TEXT("move"), EScope::Run, EKind::Exact,   0.0f,  0, TEXT(""),
+	  false, TEXT("press-edge jumps the body took") },
+	{ TEXT("event_frame"),  TEXT("move"), EScope::Run, EKind::Exact,   0.0f,  0, TEXT(""),
+	  true,  TEXT("probe-resolved body-event frame the jump was placed against; -1 if not found") },
+
 	// --- The camera producer, per run (CCC2) ----------------------------------------------------
 	// The one camera assertion a **committed** gym baseline can carry, and it saturates the way the
 	// movement run channels do: the harness puts the body in third person, so the weight reaches 1

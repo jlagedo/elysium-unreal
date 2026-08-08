@@ -149,10 +149,10 @@ namespace
 	// feature and runs on to the lane's back wall, or is stopped by it, and both answers are the
 	// same at any gait. That is the whole reason these recordings can be promoted before `CCC7`.
 
-	void Recipe(FCourse& C, ElysiumGym::EFamily Family)
+	void Recipe(FCourse& C, const ElysiumGym::FLane& Lane)
 	{
 		const float Hold = ElysiumGym::ApproachSeconds;
-		switch (Family)
+		switch (Lane.Family)
 		{
 		case ElysiumGym::EFamily::Riser:
 		case ElysiumGym::EFamily::Slope:
@@ -214,6 +214,20 @@ namespace
 			C.Segments.Add({ 3.0f, Fwd, 0, 0.0f });
 			C.Segments.Add({ 3.0f, Still, 0, NAN });
 			break;
+
+		case ElysiumGym::EFamily::Ledge:
+		case ElysiumGym::EFamily::Landing:
+			// Hold forward and nothing else. The body walks off the lip under its own steam — never
+			// jumps off it, because a held jump would put its own gravity scale and hold window into
+			// the fall — and the single press is placed by `Expand` against the frame the probe pass
+			// measured. The hold saturates against the back wall on the lower floor exactly as every
+			// other family's does, so the reach stays speed-invariant.
+			C.Segments.Add({ Hold, Fwd, 0, 0.0f });
+			C.EventJump = FEventJump{
+				Lane.Family == ElysiumGym::EFamily::Ledge
+					? EBodyEvent::GroundLost : EBodyEvent::GroundGained,
+				FMath::RoundToInt32(Lane.BracketUnits) };
+			break;
 		}
 	}
 }
@@ -246,13 +260,13 @@ TArray<FCourse> Gym(const ElysiumGym::FSpec& Spec)
 		C.GymLane = Lane.Name;
 		C.StartYaw = Lane.Yaw;
 		C.bDeferBaseline = Lane.bSpeedDependent;
-		Recipe(C, Lane.Family);
+		Recipe(C, Lane);
 		Courses.Add(MoveTemp(C));
 	}
 	return Courses;
 }
 
-FElysiumUserCmdStream Expand(const FCourse& Course, float StepSeconds)
+FElysiumUserCmdStream Expand(const FCourse& Course, float StepSeconds, int32 ResolvedEventFrame)
 {
 	FElysiumUserCmdStream Stream;
 	if (StepSeconds <= 0.0f)
@@ -272,6 +286,18 @@ FElysiumUserCmdStream Expand(const FCourse& Course, float StepSeconds)
 			Cmd.Move = Seg.Move;
 			Cmd.Buttons = Seg.Buttons;
 			Stream.Record(Cmd);
+		}
+	}
+
+	// The one press a leniency course makes, OR-ed onto the frame the probe pass resolved. OR rather
+	// than replace, so the body keeps walking through the press exactly as it was; one frame, so the
+	// release lands on the next and the latch never survives to auto-refire on landing.
+	if (Course.EventJump.IsSet() && ResolvedEventFrame != INDEX_NONE)
+	{
+		const int32 Index = ResolvedEventFrame + Course.EventJump->FrameOffset;
+		if (Stream.Cmds.IsValidIndex(Index))
+		{
+			Stream.Cmds[Index].Buttons |= static_cast<uint64>(EB::Jump);
 		}
 	}
 	return Stream;
