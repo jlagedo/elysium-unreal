@@ -106,6 +106,15 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		bIgnoreCharacterCollision = bIgnore;
 		Record(FString::Printf(TEXT("NpcMotor SetIgnoreCharacterCollision %d"), bIgnore ? 1 : 0));
 	}
+	// The stub has no movement component to derive one from, so it reports a body standing still at
+	// the yaw it was placed at. What a substrate test asserts is the request contract, not motion.
+	virtual FElysiumLocomotionSample SampleLocomotion() const override
+	{
+		FElysiumLocomotionSample Out;
+		Out.FacingYaw = Yaw;
+		Out.bOnGround = true;
+		return Out;
+	}
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override
 	{
 		OutFeetOrigin = Feet;

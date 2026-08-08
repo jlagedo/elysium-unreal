@@ -45,6 +45,17 @@ namespace
 	{ TEXT("surffric"), TEXT("move"), EScope::Frame, EKind::Numeric, 0.01f,   3, TEXT(""),
 	  true,  TEXT("the ground surface's friction scale") },
 
+	// --- The animation producer, per frame (CCC1) -----------------------------------------------
+	// The body sample's two candidate movement yaws, both facing-relative. **Both are recorded from
+	// the first day on purpose**: `CCC7` recovers the sign of `move_yaw` by comparing the retail
+	// selector's own input against them, and that comparison should run against recordings rather
+	// than against fresh instrumentation. Which one the graph steers on is that rung's call, not a
+	// property of the recording.
+	{ TEXT("move_yaw_wish"), TEXT("anim"), EScope::Frame, EKind::Angle, 1.0f, 3, TEXT("deg"),
+	  true,  TEXT("the commanded direction, relative to facing") },
+	{ TEXT("move_yaw_vel"),  TEXT("anim"), EScope::Frame, EKind::Angle, 1.0f, 3, TEXT("deg"),
+	  true,  TEXT("the realized velocity's direction, relative to facing") },
+
 	// --- The movement producer, per run ---------------------------------------------------------
 	// These are the gym's actual assertions, and they are written to **saturate**: a body either
 	// climbs a riser or is stopped by it, and either answer is reached at any gait given a long
@@ -91,7 +102,12 @@ const FChannelDef* Find(const TCHAR* Name)
 
 const TCHAR* KindName(EKind Kind)
 {
-	return Kind == EKind::Numeric ? TEXT("numeric") : TEXT("exact");
+	switch (Kind)
+	{
+	case EKind::Numeric: return TEXT("numeric");
+	case EKind::Angle:   return TEXT("angle");
+	default:             return TEXT("exact");
+	}
 }
 
 const TCHAR* ScopeName(EScope Scope)

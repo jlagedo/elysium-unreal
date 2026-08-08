@@ -65,8 +65,26 @@ class Channel:
     value: float | None
 
 
+# The comparison rules the recorder may declare, mirroring `ElysiumChannels::EKind`. A kind outside
+# this set is a channel with no rule, which is a refusal rather than a default.
+KINDS = ("numeric", "exact", "angle")
+# The ones whose declaration has to carry a tolerance. `exact` is the only kind compared without one.
+TOLERANCED_KINDS = ("numeric", "angle")
+
+
 def stem_of(manifest_path: Path) -> str:
     return manifest_path.name[: -len(MANIFEST_SUFFIX)]
+
+
+def delta(ch: Channel, a: float, b: float) -> float:
+    """How far apart two readings of this channel are, in its own unit.
+
+    An angle wraps: -179.9 and 179.9 are 0.2 degrees apart, not 359.8. A backpedalling body sits
+    exactly on that boundary, so comparing a yaw by subtraction reddens a run that did not change.
+    """
+    if ch.kind == "angle":
+        return abs((a - b + 180.0) % 360.0 - 180.0)
+    return abs(a - b)
 
 
 def read_manifest(path: Path) -> tuple[dict, dict[str, Channel], list[str]]:
@@ -111,12 +129,12 @@ def validate(stem: str, manifest_path: Path) -> list[str]:
         problems.append(f"{stem}: the manifest declares no channels")
 
     for name, ch in channels.items():
-        if ch.kind not in ("numeric", "exact"):
+        if ch.kind not in KINDS:
             problems.append(f"{stem}: channel '{name}' has no comparison rule (kind={ch.kind!r})")
-        elif ch.kind == "numeric" and not (isinstance(ch.tolerance, (int, float))
-                                           and ch.tolerance > 0):
+        elif ch.kind in TOLERANCED_KINDS and not (isinstance(ch.tolerance, (int, float))
+                                                  and ch.tolerance > 0):
             problems.append(
-                f"{stem}: numeric channel '{name}' declares no usable tolerance "
+                f"{stem}: {ch.kind} channel '{name}' declares no usable tolerance "
                 f"({ch.tolerance!r}) — it would be written and never checked")
         if ch.scope not in ("frame", "run"):
             problems.append(f"{stem}: channel '{name}' has no scope (scope={ch.scope!r})")
@@ -211,10 +229,10 @@ def compare_run_channels(base: dict[str, Channel], cur: dict[str, Channel],
                 notes.append(f"  {name}: {ch.value} -> {other.value}")
                 ok = False
         else:
-            delta = abs(float(other.value) - float(ch.value))
-            if delta > float(ch.tolerance):
+            d = delta(ch, float(other.value), float(ch.value))
+            if d > float(ch.tolerance):
                 notes.append(f"  {name}: {ch.value} -> {other.value} "
-                             f"(d={delta:.3f} > {ch.tolerance}{ch.unit})")
+                             f"(d={d:.3f} > {ch.tolerance}{ch.unit})")
                 ok = False
     return ok, notes, deferred
 
@@ -241,7 +259,7 @@ def compare_frames(base_csv: Path, cur_csv: Path, channels: dict[str, Channel],
                 if ra[name] != rb[name] and first_bad is None:
                     first_bad = f"  frame {i}: {name} {ra[name]} -> {rb[name]}"
                 continue
-            d = abs(float(ra[name]) - float(rb[name]))
+            d = delta(ch, float(ra[name]), float(rb[name]))
             if d > worst.get(name, 0.0):
                 worst[name] = d
             if d > float(ch.tolerance) and first_bad is None:

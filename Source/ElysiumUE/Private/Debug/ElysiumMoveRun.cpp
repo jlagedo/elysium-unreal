@@ -97,6 +97,7 @@ namespace
 		TEXT("vx"), TEXT("vy"), TEXT("vz"), TEXT("speed2d"),
 		TEXT("onground"), TEXT("ducked"), TEXT("ducking"), TEXT("canunduck"),
 		TEXT("water"), TEXT("surffric"),
+		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"),
 	};
 
 	// One place that resolves the harness's actors, so a null anywhere reads the same.
@@ -279,6 +280,12 @@ void FElysiumMoveRun::Sample()
 	Recorder.Set(TEXT("canunduck"), Body.Move->CanUnduck());
 	Recorder.Set(TEXT("water"), static_cast<int32>(Body.Move->GetWaterLevel()));
 	Recorder.Set(TEXT("surffric"), Body.Move->GetSurfaceFriction());
+
+	// The body sample (CCC1), read rather than re-derived: the mover published it at its tick tail,
+	// so these are the yaws of the frame that was actually integrated.
+	const FElysiumLocomotionSample& Locomotion = Body.Move->GetLocomotionSample();
+	Recorder.Set(TEXT("move_yaw_wish"), Locomotion.MoveYawWish);
+	Recorder.Set(TEXT("move_yaw_vel"), Locomotion.MoveYawVelocity);
 
 	FString Error;
 	if (!Recorder.EndFrame(Error))

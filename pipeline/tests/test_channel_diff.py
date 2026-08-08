@@ -201,6 +201,42 @@ class ChannelDiffRefusals(unittest.TestCase):
         write_run(self.out, "sp_tutorial_1.flat.60hz", host="sp_tutorial_1", rows=moved)
         self.assertEqual(self.diff(), 1)
 
+    # --- Angles wrap (CCC1) -----------------------------------------------------------------------
+
+    def yaw(self, name="move_yaw_vel"):
+        return channel(name, kind="angle", tolerance=1.0)
+
+    def test_an_angle_compares_across_the_wrap(self):
+        # A backpedalling body sits exactly on the +/-180 boundary, so plain subtraction reports
+        # ~360 degrees for two readings a fifth of a degree apart.
+        rows = [{"pz": 36.0, "move_yaw_vel": 179.9}]
+        channels = [channel("pz"), self.yaw()]
+        write_run(self.out, "sp_tutorial_1.back.60hz", host="sp_tutorial_1",
+                  channels=channels, rows=rows)
+        self.assertEqual(self.promote(), 0)
+
+        wrapped = [{"pz": 36.0, "move_yaw_vel": -179.9}]
+        write_run(self.out, "sp_tutorial_1.back.60hz", host="sp_tutorial_1",
+                  channels=channels, rows=wrapped)
+        self.assertEqual(self.diff(), 0)
+
+    def test_an_angle_still_catches_a_real_turn(self):
+        channels = [channel("pz"), self.yaw()]
+        write_run(self.out, "sp_tutorial_1.back.60hz", host="sp_tutorial_1",
+                  channels=channels, rows=[{"pz": 36.0, "move_yaw_vel": 0.0}])
+        self.assertEqual(self.promote(), 0)
+
+        write_run(self.out, "sp_tutorial_1.back.60hz", host="sp_tutorial_1",
+                  channels=channels, rows=[{"pz": 36.0, "move_yaw_vel": 90.0}])
+        self.assertEqual(self.diff(), 1)
+
+    def test_an_angle_with_no_tolerance_is_refused_like_a_numeric_one(self):
+        write_run(self.out, "gym.flat.60hz", channels=[
+            channel("pz"),
+            channel("move_yaw_vel", kind="angle", tolerance=None),
+        ])
+        self.assertEqual(self.diff(), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

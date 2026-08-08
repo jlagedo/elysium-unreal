@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumLocomotionSample.h"   // EElysiumWaterLevel — body state, which WaterMove branches on
 
 // The mover's rule set (roadmap 4.7, `docs/vtmb/source_movement.md`).
 //
@@ -79,15 +80,6 @@ namespace ElysiumMove
 	inline constexpr float NoclipSpeed  = 1200.0f;    // cm/s — a dev speed, no original
 	inline constexpr float NoclipBoost  = 3.0f;
 }
-
-// How deep the body is in water (`player+0x3e0`). The move branches on Waist and above.
-enum class EElysiumWaterLevel : uint8
-{
-	None  = 0,
-	Feet  = 1,
-	Waist = 2,
-	Eyes  = 3,
-};
 
 // --------------------------------------------------------------------------------------------
 // The math

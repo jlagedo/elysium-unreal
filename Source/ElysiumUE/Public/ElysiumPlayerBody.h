@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumLocomotionSample.h"
 #include "UObject/Interface.h"
 
 #include "ElysiumPlayerBody.generated.h"
@@ -52,6 +53,13 @@ public:
 	// One frame of intent (S5). The router calls this after it has built the command and applied the
 	// look delta to the controller; everything else the body does with it is the body's business.
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) = 0;
+
+	// The frame's settled body state (CCC1) — the same record the NPC motor publishes, so the
+	// player's locomotion and the cast's cannot become two systems that happen to play the same
+	// files (`docs/architecture/animation-architecture.md` §3.2). It is on the interface rather than
+	// on the pawn because both bodies can answer it: the box body hands back what its mover
+	// published, the capsule body derives it from CharacterMovement.
+	virtual FElysiumLocomotionSample GetLocomotionSample() const = 0;
 
 	// The body's camera (11.7): the weight stack, the boom solve and the scripted-shot channel. Both
 	// bodies carry the same one, so the `elysium.SourceMovement` A/B compares the movers and not two

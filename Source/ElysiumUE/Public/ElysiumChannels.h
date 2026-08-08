@@ -19,12 +19,18 @@
 
 namespace ElysiumChannels
 {
-	// How a value is compared. There is no third option on purpose — a channel the differ cannot
-	// place in one of these two is a channel it refuses to accept.
+	// How a value is compared. The set is closed — a channel the differ cannot place in one of these
+	// is a channel it refuses to accept — and it grows only when a value genuinely has a comparison
+	// no existing kind performs, which is what `Angle` is.
 	enum class EKind : uint8
 	{
 		Numeric,   // compared against an absolute tolerance in the channel's own unit
 		Exact,     // compared for equality — a state flip is a behaviour change, never a rounding one
+		// Degrees, compared as a **wrapped** difference. A yaw subtracted plainly reports ~360° at
+		// the ±180 boundary, and a backpedalling body sits exactly on it — so a numeric yaw is the
+		// silent-failure case this registry exists to close, running in reverse: a channel that is
+		// checked and reddens for no reason.
+		Angle,
 	};
 
 	// Where the value lives.
@@ -40,7 +46,7 @@ namespace ElysiumChannels
 		const TCHAR* Producer;  // "move", "camera", "anim" — who writes it
 		EScope Scope;
 		EKind Kind;
-		// Numeric: the absolute tolerance, in `Unit`. Exact: zero, and unused.
+		// Numeric and Angle: the absolute tolerance, in `Unit`. Exact: zero, and unused.
 		float Tolerance;
 		// Decimals printed. Fixed per channel, which is what makes the text a deterministic function
 		// of the value — a committed baseline that reformats between runs is a baseline that fails

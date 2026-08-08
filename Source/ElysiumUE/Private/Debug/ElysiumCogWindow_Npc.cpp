@@ -7,8 +7,13 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumNpcSubsystem.h"
+#include "ElysiumPlayerBody.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumNpcBody.h"
+
+#include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
@@ -95,6 +100,104 @@ void FElysiumCogWindow_Npc::RenderLiveNpcs()
 		}
 		ImGui::EndTable();
 	}
+}
+
+namespace
+{
+	const char* StanceName(EElysiumStance Stance)
+	{
+		switch (Stance)
+		{
+		case EElysiumStance::Lowering: return "lowering";
+		case EElysiumStance::Ducked:   return "ducked";
+		case EElysiumStance::Rising:   return "rising";
+		default:                       return "standing";
+		}
+	}
+
+	const char* PhaseName(EElysiumJumpPhase Phase)
+	{
+		switch (Phase)
+		{
+		case EElysiumJumpPhase::Ascend:  return "ascend";
+		case EElysiumJumpPhase::Descend: return "descend";
+		default:                         return "ground";
+		}
+	}
+
+	// One row of the shared record. Producer-agnostic on purpose: if the player's row and an NPC's
+	// row ever need different columns, the contract has already split and this is where it shows.
+	void LocomotionRow(const char* Producer, const char* Name, const FElysiumLocomotionSample& S)
+	{
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn(); ImGui::TextColored(ElysiumCogStyle::ColName, "%s", Producer);
+		ImGui::TableNextColumn(); ImGui::TextUnformatted(Name);
+		ImGui::TableNextColumn(); ImGui::Text("%.1f", S.Speed2D());
+		ImGui::TableNextColumn(); ImGui::Text("%.1f / %.1f",
+			S.LocalVelocity.X, S.LocalVelocity.Y);
+		ImGui::TableNextColumn(); ImGui::Text("%.1f", S.FacingYaw);
+		ImGui::TableNextColumn();
+		// The wish yaw is only a measurement while something is being asked for; at rest it is a
+		// placeholder, and the scale is what says so.
+		if (S.WishScale > 0.0f) { ImGui::Text("%.1f (x%.2f)", S.MoveYawWish, S.WishScale); }
+		else { ImGui::TextDisabled("--"); }
+		ImGui::TableNextColumn(); ImGui::Text("%.1f", S.MoveYawVelocity);
+		ImGui::TableNextColumn(); ImGui::TextUnformatted(S.bOnGround ? "yes" : "no");
+		ImGui::TableNextColumn(); ImGui::TextUnformatted(StanceName(S.Stance));
+		ImGui::TableNextColumn(); ImGui::TextUnformatted(PhaseName(S.JumpPhase()));
+	}
+}
+
+// The body sample, from both producers at once (CCC1). The player's mover published its row at its
+// own tick tail; each NPC row is pulled from its motor here. What the view is for is the claim the
+// contract makes — that these are the same record — so they are drawn by one function over one
+// struct rather than by two panels that happen to look alike.
+void FElysiumCogWindow_Npc::RenderLocomotion()
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		ImGui::TextDisabled("No world.");
+		return;
+	}
+
+	const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+		ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
+	if (!ImGui::BeginTable("##Locomotion", 10, TableFlags, ImVec2(0, GetDpiScale() * 200.f)))
+	{
+		return;
+	}
+
+	ImGui::TableSetupScrollFreeze(0, 1);
+	ImGui::TableSetupColumn("Producer");
+	ImGui::TableSetupColumn("Body");
+	ImGui::TableSetupColumn("Speed2D");
+	ImGui::TableSetupColumn("Fwd / Side");
+	ImGui::TableSetupColumn("Facing");
+	ImGui::TableSetupColumn("Yaw wish");
+	ImGui::TableSetupColumn("Yaw vel");
+	ImGui::TableSetupColumn("Ground");
+	ImGui::TableSetupColumn("Stance");
+	ImGui::TableSetupColumn("Jump");
+	ImGui::TableHeadersRow();
+
+	const APlayerController* PC = World->GetFirstPlayerController();
+	if (const IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr)
+	{
+		LocomotionRow("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
+			Body->GetLocomotionSample());
+	}
+
+	for (TActorIterator<AElysiumNpcBody> It(const_cast<UWorld*>(World)); It; ++It)
+	{
+		const AElysiumNpcBody* Npc = *It;
+		if (Npc)
+		{
+			LocomotionRow("npc", COG_TCHAR_TO_CHAR(*Npc->GetName()), Npc->SampleLocomotion());
+		}
+	}
+
+	ImGui::EndTable();
 }
 
 // The facial flex rig (12.3). Everything below a flex controller is arithmetic, so this tab is the
@@ -241,6 +344,14 @@ void FElysiumCogWindow_Npc::RenderContent()
 	if (ImGui::BeginTabItem("Facial"))
 	{
 		RenderFacial();
+		ImGui::EndTabItem();
+	}
+
+	// Ahead of "Preview lab" deliberately: that tab's body returns early out of the whole tab bar on
+	// a null subsystem, so anything declared after it can be skipped entirely.
+	if (ImGui::BeginTabItem("Locomotion"))
+	{
+		RenderLocomotion();
 		ImGui::EndTabItem();
 	}
 

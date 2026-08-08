@@ -112,6 +112,15 @@ void AElysiumCapsulePawn::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResul
 	ApplyPlayerModelAlpha(Camera ? Camera->ModelAlpha() : 0.0f);
 }
 
+FElysiumLocomotionSample AElysiumCapsulePawn::GetLocomotionSample() const
+{
+	// The view's yaw, which is what the box body reports too: the A/B is over the *mover*, so a
+	// `move_yaw` recorded on either side of `elysium.SourceMovement` has to be measured against the
+	// same reference or it compares two things at once.
+	return ElysiumLocomotion::FromCharacterMovement(*this,
+		static_cast<float>(GetControlRotation().Yaw));
+}
+
 void AElysiumCapsulePawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
 {
 	if (Camera)

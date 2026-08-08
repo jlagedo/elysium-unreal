@@ -86,6 +86,12 @@ void UElysiumMovementComponent::ResetState()
 	WaterLevel = EElysiumWaterLevel::None;
 	EndJumpHold();
 
+	// The published body state goes with the carried motion: a teleported body must not still be
+	// reporting the gait it left with.
+	LastSample = FElysiumLocomotionSample();
+	CapturedWish = FVector::ZeroVector;
+	CapturedWishScale = 0.0f;
+
 	// Stand up if we were crouched, so the hull the body arrives with is the standing one.
 	if (bDucked || bDucking)
 	{
@@ -122,13 +128,70 @@ void UElysiumMovementComponent::SetFrozen(bool bInFrozen)
 	}
 }
 
-FVector UElysiumMovementComponent::WishDirection(const FElysiumUserCmd& Cmd, float& OutScale) const
+FRotator UElysiumMovementComponent::ViewFrame() const
 {
 	const AController* C = PawnOwner ? PawnOwner->GetController() : nullptr;
-	const FRotator ViewRot = C ? C->GetControlRotation() : (PawnOwner ? PawnOwner->GetActorRotation() : FRotator::ZeroRotator);
+	return C ? C->GetControlRotation()
+		: (PawnOwner ? PawnOwner->GetActorRotation() : FRotator::ZeroRotator);
+}
 
-	// Walking is on the ground plane; noclip flies along the aim, pitch included.
-	return ElysiumMove::WishDirection(Cmd.Move, Cmd.Up, ViewRot, /*bIncludePitch*/ bNoclip, OutScale);
+FVector UElysiumMovementComponent::WishDirection(const FElysiumUserCmd& Cmd, float& OutScale,
+	bool bForcePitch)
+{
+	// Walking is on the ground plane; noclip flies along the aim and swimming aims where you look,
+	// both pitch included.
+	const FVector Wish = ElysiumMove::WishDirection(Cmd.Move, Cmd.Up, ViewFrame(),
+		/*bIncludePitch*/ bNoclip || bForcePitch, OutScale);
+	CapturedWish = Wish;
+	CapturedWishScale = OutScale;
+	return Wish;
+}
+
+void UElysiumMovementComponent::PublishLocomotionSample(bool bSolved)
+{
+	// The same expression the wish was framed in, or the sample's facing and its `move_yaw` would be
+	// two different frames wearing one name.
+	LastSample.FacingYaw = static_cast<float>(ViewFrame().Yaw);
+
+	// Into the facing frame. A yaw-only rotation, so the vertical component passes through unchanged.
+	const FVector Planar = FRotator(0.0f, -LastSample.FacingYaw, 0.0f).RotateVector(Velocity);
+	LastSample.LocalVelocity = FVector(Planar.X, Planar.Y, Velocity.Z);
+
+	LastSample.MoveYawVelocity = LastSample.Speed2D() > UE_KINDA_SMALL_NUMBER
+		? ElysiumLocomotion::RelativeYaw(
+			static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(Velocity.Y, Velocity.X))),
+			LastSample.FacingYaw)
+		: 0.0f;
+
+	// The wish the solve actually used, captured in `WishDirection` rather than re-derived here.
+	// `bSolved` is false on the frozen path, where no move function ran: a body nailed to the floor
+	// commanded nothing that took effect, and reporting last frame's wish would animate it walking.
+	//
+	// Noclip and swimming carry pitch, so the wish is projected before its yaw is taken — a wish
+	// pointing straight up has no horizontal direction to report.
+	const double WishPlanar = bSolved ? FVector2D(CapturedWish.X, CapturedWish.Y).Size() : 0.0;
+	if (WishPlanar > UE_KINDA_SMALL_NUMBER)
+	{
+		LastSample.MoveYawWish = ElysiumLocomotion::RelativeYaw(
+			static_cast<float>(FMath::RadiansToDegrees(
+				FMath::Atan2(CapturedWish.Y, CapturedWish.X))),
+			LastSample.FacingYaw);
+		LastSample.WishScale = CapturedWishScale;
+	}
+	else
+	{
+		// No commanded direction. The yaw is a placeholder and the zero scale is what says so — a
+		// consumer that cannot tell them apart reads "walk forward" out of a body standing still.
+		LastSample.MoveYawWish = 0.0f;
+		LastSample.WishScale = 0.0f;
+	}
+
+	// The body's own answer, not `CategorizePosition`'s raw one: a noclipping body is flying, and a
+	// graph asking whether it is grounded wants that to be false.
+	LastSample.bOnGround = IsMovingOnGround();
+	LastSample.Water = WaterLevel;
+	LastSample.Stance = ElysiumLocomotion::StanceFrom(bDucked, bDucking);
+	LastSample.JumpHoldRemaining = JumpHoldRemaining;
 }
 
 void UElysiumMovementComponent::CategorizePosition()
@@ -446,6 +509,10 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	if (bFrozen)
 	{
 		Velocity = FVector::ZeroVector;
+		// A frozen body is settled, not unknown: it publishes a standing-still sample rather than
+		// holding the last moving one, which would animate a spawn hold as a walk. No move function
+		// ran, so the wish is reported as absent rather than as whatever the last live frame asked.
+		PublishLocomotionSample(/*bSolved*/ false);
 		PrevCmd = PendingCmd;
 		return;
 	}
@@ -492,6 +559,20 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 
 	PrevCmd = PendingCmd;
 	UpdateComponentVelocity();
+
+	// The tick tail (CCC1). After the last substep is the only point where the state is settled, so
+	// no consumer can read a half-integrated frame; after `UpdateComponentVelocity` so the sample and
+	// `GetVelocity()` agree by construction.
+	//
+	// Two paths deliberately do not reach here, and both **hold the previous sample** rather than
+	// publishing a settled one. The `ShouldSkipUpdate` / `DeltaTime <= 0` guard above is a paused or
+	// dormant frame — zeroing there would snap a run cycle to idle and back on resume. And
+	// `Steps == 0` happens under a non-zero `elysium.move.FixedStep` whenever the accumulator has not
+	// reached a step: nothing integrated, so last frame's answer is still the true one.
+	if (Steps > 0)
+	{
+		PublishLocomotionSample(/*bSolved*/ true);
+	}
 }
 
 void UElysiumMovementComponent::PlayerMove(float DeltaTime)
@@ -582,19 +663,19 @@ void UElysiumMovementComponent::WaterMove(float DeltaTime)
 	// Formula-faithful and unexercised: nothing sets WaterLevel, because no exported map places a
 	// water brush (`docs/vtmb/source_movement.md` → "Water"). It is here so the state machine is Source's
 	// shape rather than a subset, and so the day a water map exports this is wiring, not a port.
-	const AController* C = PawnOwner ? PawnOwner->GetController() : nullptr;
-	const FRotator ViewRot = C ? C->GetControlRotation()
-		: (PawnOwner ? PawnOwner->GetActorRotation() : FRotator::ZeroRotator);
-
 	float Scale = 0.0f;
-	// Swimming aims where you look, pitch included.
-	FVector WishDir = ElysiumMove::WishDirection(PendingCmd.Move, PendingCmd.Up, ViewRot,
-		/*bIncludePitch*/ true, Scale);
+	// Swimming aims where you look, pitch included — which is why it goes through the member with
+	// the pitch forced rather than calling the free function: the wish the published sample reports
+	// has to be the one the solve used, and a planar re-derivation would disagree here and nowhere
+	// else.
+	FVector WishDir = WishDirection(PendingCmd, Scale, /*bForcePitch*/ true);
 	float WishSpeed = GetMaxSpeed() * Scale;
 
 	if (Scale <= 0.0f && PendingCmd.Buttons == 0)
 	{
-		// Idle in water sinks. VtMB's rate is 40, not HL2's 60.
+		// Idle in water sinks. VtMB's rate is 40, not HL2's 60. Substituted after the capture above:
+		// the sink is a water-locomotion state, not something the player asked for, and reporting it
+		// as the wish would read an idle swimmer as pressing down.
 		WishDir = -FVector::UpVector;
 		WishSpeed = ElysiumMove::WaterSinkSpeed;
 	}

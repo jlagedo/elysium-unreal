@@ -55,6 +55,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -2105,6 +2106,87 @@ bool FElysiumGymSeatTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The body sample (CCC1). One struct, two producers — so what is asserted here is the part of it
+// that is a *rule* rather than a reading: how a world yaw becomes a facing-relative one, how
+// Source's two duck flags become one stance, and how the jump phase falls out of the hold window
+// and the vertical sign. A reading needs a body; a rule does not, and a rule the two producers
+// disagreed about would be the contract failing quietly.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLocomotionSampleTest,
+	"Elysium.Substrate.Locomotion", GElysiumTestFlags)
+bool FElysiumLocomotionSampleTest::RunTest(const FString&)
+{
+	using namespace ElysiumLocomotion;
+
+	// --- The relative yaw, which has to wrap ---------------------------------------------------
+	// Every one of these is a body that is walking 20 degrees off its facing, or straight backwards.
+	// Written without the wrap they come out as 340, -340 and -360.
+	TestEqual(TEXT("a yaw right of facing is positive"), RelativeYaw(20.0f, 0.0f), 20.0f);
+	TestEqual(TEXT("a yaw left of facing is negative"), RelativeYaw(-20.0f, 0.0f), -20.0f);
+	TestEqual(TEXT("crossing north from the left"), RelativeYaw(10.0f, 350.0f), 20.0f);
+	TestEqual(TEXT("crossing north from the right"), RelativeYaw(350.0f, 10.0f), -20.0f);
+	TestEqual(TEXT("a full turn is no turn"), RelativeYaw(360.0f, 0.0f), 0.0f);
+	// The backpedal, which is the boundary itself: it must land on one side and stay there.
+	TestEqual(TEXT("straight backwards is the boundary"), FMath::Abs(RelativeYaw(180.0f, 0.0f)),
+		180.0f);
+	TestEqual(TEXT("and the boundary is reached the same way from either side"),
+		FMath::Abs(RelativeYaw(0.0f, 180.0f)), 180.0f);
+
+	// --- The stance, which is four values because the flags are two -----------------------------
+	// The pair that matters is the last one: the release edge sets `bDucking` while `bDucked` is
+	// still true, and under a low ceiling the body stays there rather than passing through it. A
+	// three-value stance reports that as an ordinary crouch and loses the stand-up entirely.
+	TestEqual(TEXT("neither flag is standing"),
+		static_cast<int32>(StanceFrom(false, false)),
+		static_cast<int32>(EElysiumStance::Standing));
+	TestEqual(TEXT("ducking alone is the duck ramp"),
+		static_cast<int32>(StanceFrom(false, true)),
+		static_cast<int32>(EElysiumStance::Lowering));
+	TestEqual(TEXT("ducked alone is the settled crouch"),
+		static_cast<int32>(StanceFrom(true, false)),
+		static_cast<int32>(EElysiumStance::Ducked));
+	TestEqual(TEXT("both is the unduck ramp, not a deeper crouch"),
+		static_cast<int32>(StanceFrom(true, true)),
+		static_cast<int32>(EElysiumStance::Rising));
+
+	// --- The jump phase, derived rather than stored ----------------------------------------------
+	FElysiumLocomotionSample S;
+	S.bOnGround = true;
+	S.LocalVelocity.Z = 400.0f;
+	S.JumpHoldRemaining = 0.1f;
+	TestEqual(TEXT("a grounded body is grounded whatever it carries"),
+		static_cast<int32>(S.JumpPhase()), static_cast<int32>(EElysiumJumpPhase::Grounded));
+
+	S.bOnGround = false;
+	TestEqual(TEXT("rising is ascending"),
+		static_cast<int32>(S.JumpPhase()), static_cast<int32>(EElysiumJumpPhase::Ascend));
+
+	// The held push is the other half: VtMB's jump keeps pushing while the button is down, so the
+	// window being open means ascending even on the frame the vertical sign has already turned.
+	S.LocalVelocity.Z = -1.0f;
+	TestEqual(TEXT("an open hold window is still ascending"),
+		static_cast<int32>(S.JumpPhase()), static_cast<int32>(EElysiumJumpPhase::Ascend));
+
+	S.JumpHoldRemaining = 0.0f;
+	TestEqual(TEXT("falling with the window closed is descending"),
+		static_cast<int32>(S.JumpPhase()), static_cast<int32>(EElysiumJumpPhase::Descend));
+
+	// --- The speed is a derivation, so it cannot disagree with the velocity ----------------------
+	S.LocalVelocity = FVector(30.0f, 40.0f, -900.0f);
+	TestEqual(TEXT("speed is the planar magnitude and ignores the fall"), S.Speed2D(), 50.0f);
+
+	// A default sample is a body standing still that is asking for nothing, and the zero wish scale
+	// is what distinguishes that from a body asking to walk straight ahead.
+	const FElysiumLocomotionSample Fresh;
+	TestEqual(TEXT("a fresh sample is at rest"), Fresh.Speed2D(), 0.0f);
+	TestEqual(TEXT("a fresh sample commands nothing"), Fresh.WishScale, 0.0f);
+	TestEqual(TEXT("a fresh sample is standing"),
+		static_cast<int32>(Fresh.Stance), static_cast<int32>(EElysiumStance::Standing));
+	return true;
+}
+
+// =====================================================================================
 // The recorded channels (CCC0). A value that reaches disk with nothing that knows how to compare
 // it is the failure this registry exists to close, so what is asserted is that every declaration
 // carries a usable rule and that the recorder refuses anything undeclared.
@@ -2132,21 +2214,29 @@ bool FElysiumChannelRegistryTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("'%s' says what it is"), *Name),
 			Def.Help && FCString::Strlen(Def.Help) > 0);
 
-		// The rule itself. A numeric channel with no tolerance is exactly the silent-pass case the
-		// registry replaces, so it is a failure here rather than a surprise in the differ.
-		if (Def.Kind == EKind::Numeric)
-		{
-			TestTrue(FString::Printf(TEXT("numeric '%s' carries a tolerance"), *Name),
-				Def.Tolerance > 0.0f);
-			TestTrue(FString::Printf(TEXT("numeric '%s' names its unit or is dimensionless"), *Name),
-				Def.Unit != nullptr);
-		}
-		else
+		// The rule itself. A toleranced channel with no tolerance is exactly the silent-pass case the
+		// registry replaces, so it is a failure here rather than a surprise in the differ. `Angle` is
+		// toleranced like `Numeric` — it differs only in how the difference is taken.
+		if (Def.Kind == EKind::Exact)
 		{
 			TestEqual(FString::Printf(TEXT("exact '%s' carries no tolerance"), *Name),
 				Def.Tolerance, 0.0f);
 			TestEqual(FString::Printf(TEXT("exact '%s' prints no decimals"), *Name),
 				static_cast<int32>(Def.Precision), 0);
+		}
+		else
+		{
+			TestTrue(FString::Printf(TEXT("toleranced '%s' carries a tolerance"), *Name),
+				Def.Tolerance > 0.0f);
+			TestTrue(FString::Printf(TEXT("toleranced '%s' names its unit or is dimensionless"), *Name),
+				Def.Unit != nullptr);
+			if (Def.Kind == EKind::Angle)
+			{
+				// The wrapped comparison is only meaningful on degrees. A radian channel declared
+				// Angle would be compared against a 360 that is not its period.
+				TestEqual(FString::Printf(TEXT("angle '%s' is measured in degrees"), *Name),
+					FString(Def.Unit ? Def.Unit : TEXT("")), FString(TEXT("deg")));
+			}
 		}
 		TestTrue(FString::Printf(TEXT("'%s' prints a sane number of decimals"), *Name),
 			Def.Precision >= 0 && Def.Precision <= 6);
@@ -2808,6 +2898,21 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	TestTrue(TEXT("the post-move pass is later than both pre-physics passes"),
 		static_cast<int32>(Map->PostMoveTickFunction.TickGroup)
 			> static_cast<int32>(Map->PreMoveTickFunction.TickGroup));
+
+	// CCC1 — and it is later than the mover too, which is what makes the post-move pass a safe place
+	// to read the published body sample: by the time it runs, the mover's tick tail has written it.
+	//
+	// What this does **not** cover is the player visual's own ordering. `AElysiumMapActor::
+	// BuildPlayerVisual` adds the mesh -> mover tick prerequisite when it attaches the visual, and a
+	// per-instance prerequisite created at runtime is not reachable from a class default. It is
+	// asserted by the built world or not at all; asserting an engine default here instead would be
+	// asserting somebody else's ordering and calling it ours.
+	if (Mover)
+	{
+		TestTrue(TEXT("the post-move pass is later than the mover, so the body sample is settled"),
+			static_cast<int32>(Map->PostMoveTickFunction.TickGroup)
+				> static_cast<int32>(Mover->PrimaryComponentTick.TickGroup));
+	}
 
 	// Step 10 rebuilds the view state after everything that could change it has run, so it is later
 	// than all four map passes (11.8).

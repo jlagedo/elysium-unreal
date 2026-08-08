@@ -242,6 +242,14 @@ void AElysiumNpcBody::ApplyEnabledState()
 	}
 }
 
+FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
+{
+	// An NPC faces where its actor is turned — `bOrientRotationToMovement` keeps that pointed along
+	// the path — where a player body faces where the view points.
+	return ElysiumLocomotion::FromCharacterMovement(*this,
+		static_cast<float>(GetActorRotation().Yaw));
+}
+
 EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& OutYawDegrees)
 {
 	OutFeetOrigin = FeetLocation();

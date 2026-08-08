@@ -149,6 +149,13 @@ void AElysiumPawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
 	}
 }
 
+FElysiumLocomotionSample AElysiumPawn::GetLocomotionSample() const
+{
+	// Handed straight back rather than recomputed: the mover published it at its tick tail, which is
+	// the only point in the frame where the state it describes is settled.
+	return Movement ? Movement->GetLocomotionSample() : FElysiumLocomotionSample();
+}
+
 void AElysiumPawn::SetPlayerVisual(USkeletalMeshComponent* InVisual)
 {
 	PlayerVisual = InVisual;

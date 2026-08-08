@@ -76,6 +76,15 @@ public:
 	// what changed when it disagrees with its baseline.
 	const FElysiumMoveTuning& GetTuning() const { return Tuning; }
 
+	// The frame's settled body state (CCC1), written once at the tick tail. This is the *published*
+	// half of the mover: every scalar getter above answers about the mover's own bookkeeping, while
+	// this answers about the body, in the vocabulary an animation graph steers on.
+	//
+	// It is stored rather than derived on demand because it carries the wish direction, which is a
+	// property of the command that was *integrated*. Derived on demand it would change the instant
+	// `SetUserCmd` lands for the next frame, reporting a body that has not moved yet.
+	const FElysiumLocomotionSample& GetLocomotionSample() const { return LastSample; }
+
 private:
 	// One integration step of the pending command. `TickComponent` is a thin driver over this: it
 	// bounds the delta, asks the stepper how to chop it, and calls this N times. Both timestep
@@ -111,8 +120,23 @@ private:
 	void TryPlayerMove(const FVector& Delta);
 	void NoclipMove(float DeltaTime);
 
-	// Wish direction in the controller's yaw frame (or the view frame while noclipping).
-	FVector WishDirection(const FElysiumUserCmd& Cmd, float& OutScale) const;
+	// The frame the wish is built in and the body is measured against: the controller's control
+	// rotation, falling back to the actor's when there is no controller. One expression, because a
+	// sample whose facing came from one source and whose `move_yaw` came from another is two frames
+	// wearing one name.
+	FRotator ViewFrame() const;
+
+	// Wish direction in the controller's yaw frame (or the view frame while noclipping or swimming).
+	// **Every wish the solve uses comes through here**, and it captures what it answered — so the
+	// published sample carries the wish the last substep actually moved on rather than a
+	// reconstruction of it, which is what stops the water branch (pitch included) from disagreeing
+	// with a planar re-derivation.
+	FVector WishDirection(const FElysiumUserCmd& Cmd, float& OutScale, bool bForcePitch = false);
+
+	// Fill `LastSample` from the state the frame just settled on. `bSolved` says whether a move
+	// function ran this frame; when it did not, the captured wish belongs to an older frame and is
+	// reported as absent rather than as current.
+	void PublishLocomotionSample(bool bSolved);
 
 	// The live tuning. Defaults are VtMB's own compiled-in ConVar defaults, so an install with no
 	// `cfg/` on disk moves exactly like a stock one.
@@ -158,4 +182,12 @@ private:
 	// by 1.25 and clamps to 1.0, and 1 of the install's 11,624 VMTs carries a `$surfaceprop`, so
 	// everything resolves to the `default` prop at 0.8 (`docs/vtmb/source_movement.md`).
 	float SurfaceFriction = 1.0f;
+
+	// The body state this mover publishes (CCC1). Written at the tick tail; read by everything that
+	// wants the body rather than the mover.
+	FElysiumLocomotionSample LastSample;
+
+	// What the last `WishDirection` answered, captured at the one point every move function asks.
+	FVector CapturedWish = FVector::ZeroVector;
+	float CapturedWishScale = 0.0f;
 };

@@ -4,6 +4,7 @@
 #include "ElysiumAudioSubsystem.h"   // FElysiumAudioVoiceHandle + FElysiumPlayParams (passed by value)
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
+#include "ElysiumLocomotionSample.h" // FElysiumLocomotionSample (returned by value)
 
 class FElysiumDlgConversation;
 class USceneComponent;
@@ -52,6 +53,17 @@ public:
 	// The body's live feet/yaw plus what its outstanding request is doing. A turn-in-place reports
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
+
+	// The body's realized locomotion (CCC1) — **the same record the player's mover publishes**, so
+	// the cast's locomotion and the player's cannot become two systems that happen to play the same
+	// files (`docs/architecture/animation-architecture.md` §3.2). Distinct from `Sample` above, which
+	// answers where the body is and whether its request is done; this answers how it is moving.
+	//
+	// Computed on demand rather than cached, and that is not an inconsistency with the player's
+	// stored sample: the mover's carries the wish direction of the command it *integrated*, which a
+	// pull would desynchronise the moment the next command lands. An NPC has no user command, so
+	// there is nothing to desynchronise against.
+	virtual FElysiumLocomotionSample SampleLocomotion() const = 0;
 };
 
 // The substrate's outbound seam (runtime-architecture.md §7, roadmap 11.2).

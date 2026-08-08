@@ -37,6 +37,7 @@ public:
 	virtual float GetBodyHalfHeight() const override { return GetDefaultHalfHeight(); }
 	virtual void SetMovementFrozen(bool bFrozen) override;
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) override;
+	virtual FElysiumLocomotionSample GetLocomotionSample() const override;
 	virtual UElysiumCameraComponent* GetCameraComponent() const override { return Camera; }
 	virtual USkeletalMeshComponent* GetPlayerVisual() const override { return PlayerVisual; }
 	virtual void SetPlayerVisual(USkeletalMeshComponent* InVisual) override;

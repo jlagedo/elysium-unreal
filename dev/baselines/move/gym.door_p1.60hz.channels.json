@@ -44,6 +44,8 @@
     { "name": "canunduck", "producer": "move", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "the standing hull would fit here" },
     { "name": "water", "producer": "move", "scope": "frame", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": true, "help": "EElysiumWaterLevel" },
     { "name": "surffric", "producer": "move", "scope": "frame", "kind": "numeric", "tolerance": 0.010000, "precision": 3, "unit": "", "speedDependent": true, "help": "the ground surface's friction scale" },
+    { "name": "move_yaw_wish", "producer": "anim", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the commanded direction, relative to facing" },
+    { "name": "move_yaw_vel", "producer": "anim", "scope": "frame", "kind": "angle", "tolerance": 1.000000, "precision": 3, "unit": "deg", "speedDependent": true, "help": "the realized velocity's direction, relative to facing" },
     { "name": "frames", "producer": "move", "scope": "run", "kind": "exact", "tolerance": 0.000000, "precision": 0, "unit": "", "speedDependent": false, "help": "how many samples the course produced", "value": 600 },
     { "name": "advance_max", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 0.500000, "precision": 3, "unit": "u", "speedDependent": false, "help": "furthest distance reached along the start heading", "value": 655.937 },
     { "name": "top_stand", "producer": "move", "scope": "run", "kind": "numeric", "tolerance": 0.250000, "precision": 3, "unit": "u", "speedDependent": false, "help": "highest the feet stood, above the start", "value": 0.000 },

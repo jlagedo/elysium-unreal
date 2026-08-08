@@ -30,6 +30,7 @@ public:
 	virtual void SetFrozen(bool bFrozen) override;
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) override;
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
+	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 
 private:
 	FVector FeetLocation() const;

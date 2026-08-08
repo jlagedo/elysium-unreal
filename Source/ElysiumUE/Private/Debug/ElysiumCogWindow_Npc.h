@@ -33,6 +33,12 @@ private:
 	// echo: elysium.npc.flex / elysium.npc.flex_dump.
 	void RenderFacial();
 
+	// The body sample both producers publish (CCC1): the player's mover and every live NPC motor
+	// filling one `FElysiumLocomotionSample`. Side by side on purpose — the contract's whole claim is
+	// that the cast's locomotion and the player's are the same record, and two rows that disagree
+	// about what a field means are visible here before they are visible in a pose.
+	void RenderLocomotion();
+
 	FString PendingStem;             // stem in the input box (glb under out/npc)
 	FString PendingAnim;             // clip name in the input box ("" = first animation)
 	FString LastError;               // last Load failure, shown inline

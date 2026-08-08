@@ -1035,6 +1035,17 @@ USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
 	Visual->AttachToComponent(Pawn->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
 	Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -Body->GetBodyHalfHeight()));
 	Visual->SetRelativeRotation(ElysiumSkeletalBasis::RelativeToPawn());
+
+	// The mesh animates from the body sample the mover publishes at its tick tail (CCC1), so it has
+	// to tick after the mover. `ACharacter` installs this prerequisite itself in
+	// PostInitializeComponents — which covers every NPC and the capsule A/B body — but `AElysiumPawn`
+	// is a plain `APawn` whose visual is built at runtime, so a skeletal mesh sharing the mover's
+	// tick group would otherwise be ordered by registration, i.e. not at all.
+	if (UPawnMovementComponent* Move = Pawn->GetMovementComponent())
+	{
+		Visual->AddTickPrerequisiteComponent(Move);
+	}
+
 	Body->SetPlayerVisual(Visual);
 	return Visual;
 }
