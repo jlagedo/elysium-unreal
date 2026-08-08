@@ -116,13 +116,24 @@ def verify_clips(family, owner, clips, errors):
     # a delta has no base to be a difference from without one, and a masked overlay owning the
     # split bone has no chain to express that bone's rotation against. Retail only ever reaches
     # either through the same binding, so the derived forms are the whole story.
-    # The separator survives asset naming as an underscore, which an ordinary label also
-    # contains, so a derived form is recognised by PREFIX rather than by splitting on it.
+    # The separator survives asset naming as an underscore, which an ordinary label also contains,
+    # so a prefix match alone cannot tell `leap@ascend` from the unrelated label `leap_ascend`.
+    # 352 of the 2,494 shipped labels are shadowed that way, and every one of them was a clip that
+    # could go missing and still pass. A candidate is only a derived form when it is NOT itself a
+    # declared label, and when what follows the prefix IS one -- the host.
     baked_names = sorted(baked)
+    declared = {"A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
+                for label in clips}
 
     def has_derived(name):
         prefix = name + "_"
-        return any(other.startswith(prefix) for other in baked_names)
+        for other in baked_names:
+            if not other.startswith(prefix) or other in declared:
+                continue
+            host = "A_" + other[len(prefix):]
+            if host in declared:
+                return True
+        return False
 
     additive_expected = 0
     additive_found = 0

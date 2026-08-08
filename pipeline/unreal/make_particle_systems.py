@@ -292,10 +292,13 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
             asset_name, package, template, layers)
         if not system:
             raise SystemExit("[particles] could not author %s" % asset_name)
-        for layer, sprite in zip(layers, sprites):
+        # By index: a definition a spawn graph reaches twice yields two layers with one name, and
+        # the engine uniquifies the second emitter's. Binding by the name we asked for wrote the
+        # first emitter twice and left the second on the Fountain template's own material.
+        for index, sprite in enumerate(sprites):
             material = materials.get(sprite)
             if material and not unreal.ElysiumParticleAssetBuilder.bind_layer_material(
-                system, layer.get_editor_property("name"), material
+                system, index, material
             ):
                 unreal.log_warning("[particles] %s: could not bind %s" % (asset_name, sprite))
         problems = unreal.ElysiumParticleAssetBuilder.validate_particle_system(system, len(layers))

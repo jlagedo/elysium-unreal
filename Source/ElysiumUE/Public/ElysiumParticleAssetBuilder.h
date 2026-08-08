@@ -83,7 +83,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Particles")
 	static bool BindLayerMaterial(
-		UNiagaraSystem* System, const FString& LayerName, UMaterialInterface* Material);
+		UNiagaraSystem* System, int32 LayerIndex, UMaterialInterface* Material);
 
 	/** Empty on success; otherwise a verifier-ready description of every discovered error. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Particles")

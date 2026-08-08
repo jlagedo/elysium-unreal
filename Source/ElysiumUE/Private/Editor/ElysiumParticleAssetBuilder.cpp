@@ -174,10 +174,35 @@ UNiagaraSystem* UElysiumParticleAssetBuilder::BuildParticleSystem(
 	Names.Reserve(Layers.Num());
 	for (int32 Index = 0; Index < Layers.Num(); ++Index)
 	{
-		const FName Name = LayerName(Layers[Index].Name, Index);
-		Names.Add(Name);
+		const FName Wanted = LayerName(Layers[Index].Name, Index);
+		const int32 Before = System->GetEmitterHandles().Num();
 		FNiagaraExt_EmitterTopology Topology;
-		UNiagaraExternalEditUtilities::AddEmitter(TemplateEmitter, Name, Topology, Context);
+		UNiagaraExternalEditUtilities::AddEmitter(TemplateEmitter, Wanted, Topology, Context);
+
+		// The name asked for is not necessarily the name given. `FNiagaraEmitterHandle::SetName`
+		// sanitizes it and then runs it through `FNiagaraUtilities::GetUniqueName`, which appends
+		// an index on collision -- and a VtMB spawn graph CAN name one particle twice, because the
+		// flatten walk's cycle guard is an ancestor path and a diamond legitimately yields two
+		// layers with one name. Configuring by the requested name then wrote both layers onto the
+		// first emitter and left the second holding the raw Fountain template, sprite material and
+		// all, with nothing reporting a difference.
+		const TArray<FNiagaraEmitterHandle>& Handles = System->GetEmitterHandles();
+		if (Handles.Num() != Before + 1)
+		{
+			UE_LOG(LogTemp, Error, TEXT("[particle-assets] %s: emitter '%s' was not added"),
+				*System->GetName(), *Wanted.ToString());
+			Names.Add(Wanted);
+			continue;
+		}
+		const FName Actual = Handles[Before].GetName();
+		if (Actual != Wanted)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[particle-assets] %s: emitter '%s' was renamed to '%s' -- ")
+				TEXT("the definition spawns it twice"),
+				*System->GetName(), *Wanted.ToString(), *Actual.ToString());
+		}
+		Names.Add(Actual);
 	}
 	// A VtMB emitter is placed at an entity and its offsets are authored around that origin, so the
 	// whole system rides its component rather than sitting in world space. This is what lets a
@@ -208,17 +233,27 @@ UNiagaraSystem* UElysiumParticleAssetBuilder::BuildParticleSystem(
 }
 
 bool UElysiumParticleAssetBuilder::BindLayerMaterial(
-	UNiagaraSystem* System, const FString& LayerName, UMaterialInterface* Material)
+	UNiagaraSystem* System, int32 LayerIndex, UMaterialInterface* Material)
 {
 #if WITH_EDITOR
 	if (!System || !Material)
 	{
 		return false;
 	}
-	const FName Target(*LayerName);
 	FNiagaraExternalEditContext Context(System);
 	FNiagaraExt_SystemSummary Summary;
 	UNiagaraExternalEditUtilities::GetSystemSummary(System, Summary, Context);
+	// By ORDINAL, not by name. Emitters are added in layer order, but the name one ends up with is
+	// the engine's -- a definition a spawn graph reaches twice gets its second emitter uniquified,
+	// and a caller that knows only the requested name would bind the first emitter twice and leave
+	// the second on the template's default material.
+	if (!Summary.Emitters.IsValidIndex(LayerIndex))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[particle-assets] %s: no emitter %d of %d"),
+			*System->GetName(), LayerIndex, Summary.Emitters.Num());
+		return false;
+	}
+	const FName Target = Summary.Emitters[LayerIndex].EmitterName;
 	const FString ObjectReference = FString::Printf(
 		TEXT("%s'%s'"), *Material->GetClass()->GetPathName(), *Material->GetPathName());
 	bool bFound = false;
@@ -259,7 +294,8 @@ bool UElysiumParticleAssetBuilder::BindLayerMaterial(
 	}
 	if (!bFound)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[particle-assets] no emitter named '%s'"), *LayerName);
+		UE_LOG(LogTemp, Error, TEXT("[particle-assets] %s: emitter %d ('%s') has no renderer"),
+			*System->GetName(), LayerIndex, *Target.ToString());
 		return false;
 	}
 	ReportParticleErrors(TEXT("bind layer material"), Context);
