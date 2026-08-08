@@ -74,10 +74,12 @@ Two tracks run in parallel:
 
 ## Cross-system invariants
 
-Project-wide sequencing and roll-up status live in `docs/project/roadmap.md`. Detailed retail
-capture and original-runtime animation/facial investigation status lives in its declared scoped
-subtracker, `docs/project/retail-capture-roadmap.md`. Current code inventories live beside the
-code in `/Source/ElysiumUE/CLAUDE.md`, `/pipeline/CLAUDE.md`, and `/Content/CLAUDE.md`.
+Project-wide sequencing and roll-up status live in `docs/project/roadmap.md`; detailed status for
+retail capture, the skeletal animation assets, and the Character/Camera/Controls vertical lives in
+its three declared scoped subtrackers, `docs/project/retail-capture-roadmap.md`,
+`docs/project/animation-roadmap.md` and `docs/project/three-cs-roadmap.md`. Current code
+inventories live beside the code in `/Source/ElysiumUE/CLAUDE.md`, `/pipeline/CLAUDE.md`, and
+`/Content/CLAUDE.md`.
 
 Two facts shape every downstream design:
 
@@ -448,8 +450,7 @@ exported.
 
 The M-numbers below are vocabulary for what each milestone means. Project sequencing, task
 mapping, and roll-up status live in `docs/project/roadmap.md`; its traceability table resolves
-these names to phases. The retail capture program delegates only its detailed task status to
-`docs/project/retail-capture-roadmap.md`.
+these names to phases. The three scoped subtrackers delegate only their detailed task status.
 
 Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 `sm_pawnshop_1`.**

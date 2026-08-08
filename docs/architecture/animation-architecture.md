@@ -4,8 +4,9 @@ This document owns the Unreal design of Elysium's character animation path. The 
 facts it consumes live in `docs/vtmb/animation_and_movers.md` (channel decode, the per-bone mask,
 split inheritance, hierarchy composition, the root/entity transform, the autolayer binding),
 `docs/vtmb/procedural_bones.md` (the axis-interpolation rule and the persistent pose array) and
-`docs/vtmb/mdl_v2531.md` (the format those rules read). Status and implementation order live only
-in `docs/project/animation-roadmap.md` and its roll-up in `docs/project/roadmap.md`.
+`docs/vtmb/mdl_v2531.md` (the format those rules read). Status and implementation order live only in
+`docs/project/animation-roadmap.md` for the asset stack, `docs/project/three-cs-roadmap.md` for the
+resolver seam and the player graph, and their roll-up in `docs/project/roadmap.md`.
 
 The goal is not to reimplement Source's animation system inside Unreal. It is to let Unreal own
 decoding, blending, skinning and LOD, and to add only the composition stages Unreal has no
@@ -65,9 +66,11 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   `AccumulateLocalSpaceAdditivePoseInternal` and the mesh-space path alike), while VtMB
   post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). The correction is a
   conjugation by the base rotation, `Delta' = Base · Delta · Base⁻¹`, and **the base is a bake
-  input rather than a runtime one**: a delta is only meaningful over its own base, and the file
-  states which that is — `<weapon>_<stance>_idle` is the base for
-  `<weapon>_<stance>_attack_delta`. Conjugation commutes with Unreal's blend-from-identity, so a
+  input rather than a runtime one**: a delta is only meaningful over its own base, and the
+  autolayer table states which that is. **The pairing is the table's, not a naming convention** — a
+  host can declare a delta from another weapon's family entirely, which no name would predict, so a
+  bake that pairs by name silently conjugates against the wrong pose. Conjugation commutes with
+  Unreal's blend-from-identity, so a
   conjugated delta is exact at any weight over the base it declares, and degrades away from it
   exactly as any additive does.
 
@@ -144,6 +147,53 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
 The glTF reader stays the same one on both sides of the seam — it runs inside the bake commandlet
 rather than at runtime. Its vendored morph-target vertex-base patch is load-bearing and fails
 silently when lost, so keeping the same reader keeps that fix in the path.
+
+### 2.1 What ships under which name
+
+A layer whose meaning depends on its host is emitted **once per declaring host**, so one label can
+produce several assets and the plain label names none of them. The container carries the derived
+clip's own label, the label of the clip it is a difference from, and the tracks. The separator is
+`@`, which no VtMB label contains:
+
+```text
+<layer>@<host>        the derived clip, as the container names it
+A_<layer>_<host>      the sequence asset, after the illegal character is folded
+BS_<label>@<host>     a grid whose cells ship only in derived form
+```
+
+**Which forms exist is not uniform, and a resolver has to know it.** A raw additive still appears in
+the container — it is the label the model's own table references — but is not built as an asset,
+because an additive no host declares has no base to be a difference from. A raw overlay is suppressed
+when nothing else reaches it under its plain label, and kept when something does: a cell can belong
+to two grids at once, one bound to a host and one declared by nobody, and the unbound grid still has
+to be self-consistent. **Asking for the bare label finds nothing for a grid that ships only per
+host**, and a miss there looks exactly like an unexported stem.
+
+### 2.2 Two guards, and what each refuses
+
+**A body's own clips never bake short.** Before writing a single clip, the bake checks every bone of
+a container that carries geometry — the whole bone list, not only the animated ones — against the
+skeleton, and fails the whole owner naming the missing bones. It deliberately does not name a cause:
+the mesh build for the same stem may have failed earlier in the same run, in which case the skeleton
+never saw those bones. A *bank's* unresolved bones are dropped and counted instead, because a bank
+recorded on another clan's rig legitimately names hair chains this family never had.
+
+**A stale container is refused rather than misread.** The exporter and the runtime reader carry the
+same version constant, and the loader rejects a container it does not recognise instead of reading an
+older layout as the current one. Each version is a change in what a clip may state about itself —
+whether its split bone is normalized, whether it indexes a de-duplicated mask table, and whether it
+names the clip it is a difference from — so an older layout read as the current one is silently wrong
+rather than absent.
+
+### 2.3 Two normalization details that are not obvious
+
+- **A bone with no animation record decodes to a zero quaternion, not to its bind rotation.** Some
+  clips carry no track at all for the split bone, so composing a correction through one yields
+  degenerate keys rather than a harmless identity. The bake pre-filters: it corrects a split bone only
+  where every frame of that clip has a readable rotation for it.
+- **"The clip animates nothing, so the track is absent" has to be preserved explicitly.** A channel
+  pre-pass carries that state through normalization. Without it the bake synthesises tracks the
+  source never had, which is indistinguishable at evaluation from an authored constant.
 
 ## 3. Gameplay actions are resolved before the graph
 
@@ -238,9 +288,14 @@ The two producers are different only before this boundary:
   uses the same seam rather than growing an animation path inside a controller.
 
 `FElysiumLocomotionSample` is the smaller shared result both bodies publish: local planar velocity,
-speed, facing yaw, grounded/air/water state and stance. It is sampled after movement and merged with
-the current action requests into the intent. The Anim Blueprint never reads input, AI controllers,
-entity fields or weapons directly.
+speed, facing yaw, `move_yaw`, grounded/air/water state, stance, and the jump phase. It is sampled
+after movement and merged with the current action requests into the intent. The Anim Blueprint never
+reads input, AI controllers, entity fields or weapons directly.
+
+**It is sampled in the post-move pass** — the one the camera director and the eye tick already run
+in — so no consumer reads a half-integrated frame. One struct, two producers, deliberately: the
+player's mover and the NPC motor fill the same record, so the cast's locomotion and the player's
+cannot become two systems that happen to play the same files.
 
 ### 3.3 Resolution and arbitration
 
@@ -418,6 +473,12 @@ retail composes those as layers and never selects one, so a base-clip path that 
 defect. That extends to a whole grid: an aim grid's cells are overlays, so it drives an aim-offset
 node and is never a body pose. And **pose parameters drive the blend spaces**, so a nine-cell fan
 resolves off its neutral cell only when something writes the parameter.
+
+That neutral cell is correct **by construction rather than by any rule**: reading every parameter as
+zero lands a `move_yaw` fan on the forward cell, which is what a body standing still should play.
+The moment something writes `move_yaw`, that construction is what moves — so a graph whose parameter
+is never written and one whose parameter is written correctly look identical at rest and diverge
+only in motion.
 
 ## 5. One custom stage, and only one
 

@@ -2,7 +2,8 @@ version: 1
 documents:
   - {path: project/roadmap.md, kind: tracker, owner: project, subject: project status}
   - {path: project/retail-capture-roadmap.md, kind: tracker, owner: retail capture, subject: retail animation capture and decoder verification status}
-  - {path: project/animation-roadmap.md, kind: tracker, owner: animation, subject: skeletal animation programme status}
+  - {path: project/animation-roadmap.md, kind: tracker, owner: animation, subject: skeletal animation asset programme status}
+  - {path: project/three-cs-roadmap.md, kind: tracker, owner: movement, subject: character camera and controls slice status}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}
   - {path: project/remaster-direction.md, kind: charter, owner: project, subject: remaster direction}
   - {path: operations/repository.md, kind: operations, owner: repository, subject: repository and workspace policy}
@@ -13,6 +14,7 @@ documents:
   - {path: architecture/animation-architecture.md, kind: architecture, owner: animation, subject: Unreal animation integration}
   - {path: architecture/audio-architecture.md, kind: architecture, owner: audio, subject: Unreal audio integration}
   - {path: architecture/camera-architecture.md, kind: architecture, owner: camera, subject: Unreal camera integration}
+  - {path: architecture/movement-architecture.md, kind: architecture, owner: movement, subject: Unreal movement integration}
   - {path: architecture/input-architecture.md, kind: architecture, owner: input, subject: Unreal input integration}
   - {path: architecture/save-architecture.md, kind: architecture, owner: persistence, subject: Unreal persistence}
   - {path: architecture/ui-architecture.md, kind: architecture, owner: user interface, subject: Unreal UI stack}

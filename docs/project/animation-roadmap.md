@@ -7,22 +7,25 @@ This tracker drives one decision and the work that follows from it:
 > **Bake VtMB's animation data into native Unreal assets and let Unreal's animation system run
 > it. Resolve every VtMB rule at bake; write only the stage that reads a live pose.**
 
-It owns the **skeletal animation stack**: the player/NPC action-to-activity resolver, character
-asset bake, shared skeleton, layer masks and their bindings, blend spaces, animation graph, and the
-locomotion that drives them — for both the cast and the player. It also owns the one custom
-composition stage, because it is the only part of retail's pose pipeline that survives into the
-Unreal design.
+It owns the **skeletal animation asset stack**: the character asset bake, shared skeleton, layer
+masks and their bindings, blend spaces, and the extraction and bake of the action catalog a resolver
+reads. It also owns the one custom composition stage, because it is the only part of retail's pose
+pipeline that survives into the Unreal design.
 
-**It does not own:** facial flex, eyes, the amplitude jaw or lipsync (`docs/vtmb/facial_animation.md`
-owns the specification, `docs/project/roadmap.md` owns their status); choreographed scene semantics
-(`docs/vtmb/choreographed_scenes.md`); secondary motion (`docs/project/retail-capture-roadmap.md`
-CAP5.5); or any VtMB format fact. Facts belong in the owning `docs/vtmb/` topic, the Unreal design
-belongs in `docs/architecture/animation-architecture.md`, and project priority and roll-up status
-belong in `docs/project/roadmap.md`. This file owns detailed status and task order for the
-programme, and nothing else.
+**It does not own:** the runtime resolver seam, the player animation graph, or the locomotion that
+drives them (`docs/project/three-cs-roadmap.md`); facial flex, eyes, the amplitude jaw or lipsync
+(`docs/vtmb/facial_animation.md` owns the specification, `docs/project/roadmap.md` owns their
+status); choreographed scene semantics (`docs/vtmb/choreographed_scenes.md`); secondary motion
+(`docs/project/retail-capture-roadmap.md` CAP5.5); or any VtMB format fact. Facts belong in the
+owning `docs/vtmb/` topic, the Unreal design belongs in
+`docs/architecture/animation-architecture.md`, and project priority and roll-up status belong in
+`docs/project/roadmap.md`. This file owns detailed status and task order for the programme, and
+nothing else.
 
-`docs/project/roadmap.md` and `docs/project/retail-capture-roadmap.md` are this tracker's siblings.
-Retail capture remains the oracle for VtMB behaviour; it is not a gate on anything here.
+`docs/project/roadmap.md`, `docs/project/three-cs-roadmap.md` and
+`docs/project/retail-capture-roadmap.md` are this tracker's siblings. The 3 C's slice consumes what
+this tracker bakes; retail capture remains the oracle for VtMB behaviour and is not a gate on
+anything here.
 
 ## The decision
 
@@ -36,18 +39,21 @@ The goal is not numerical equivalence. It is VtMB's animation *content*, running
 
 The mapping is close to one-to-one, which is the evidence the decision is right:
 
+`CCC*` rows are `docs/project/three-cs-roadmap.md`'s, which owns the resolver seam and the graph
+this tracker's assets feed.
+
 | VtMB | Unreal | Status |
 |---|---|---|
-| player/NPC state → base `ACT_*` → actor/weapon translation | one engine-neutral intent and shared activity resolver | ANM4, ANM5 |
+| player/NPC state → base `ACT_*` → actor/weapon translation | one engine-neutral intent and shared activity resolver | ANM4 · CCC4 |
 | Blend grid (9×1 `move_yaw`, 3×3 `aim_yaw`/`aim_pitch`) | `UBlendSpace1D` / `UBlendSpace` | ANM3 |
-| `StudioAnimRecord.weight`@0 per-bone mask | `UBlendProfile` in `BlendMask` mode + `FAnimNode_LayeredBoneBlend` | ANM2, ANM4 |
-| `flags & 0x14` `_delta` clips | `AAT_LocalSpaceBase` additive, conjugated at bake, `ABPT_AnimFrame` naming the base the file declares | ANM1, ANM4 |
+| `StudioAnimRecord.weight`@0 per-bone mask | `UBlendProfile` in `BlendMask` mode + `FAnimNode_LayeredBoneBlend` | ANM2 · CCC10 |
+| `flags & 0x14` `_delta` clips | `AAT_LocalSpaceBase` additive, conjugated at bake, `ABPT_AnimFrame` naming the base the file declares | ANM1 · CCC10 |
 | `autolayerindex`@664 | a binding table the graph consults — **data, not mechanism** | ANM2 |
 | Shared animation banks, `Bip01` naming | one shared `USkeleton` — zero retargeting | ANM1 |
-| Stance and locomotion transitions | state machine transitions | ANM4 |
-| One-shot clips, gestures, disciplines | montage slots | ANM4, ANM6 |
+| Stance and locomotion transitions | state machine transitions | CCC5 |
+| One-shot clips, gestures, disciplines | montage slots | CCC5 · ANM6 |
 | `Flags & 0x2` split inheritance, ancestors readable | re-expressed against the parent at bake — ordinary FK, no runtime rule | ANM1 |
-| `Flags & 0x2` split inheritance, ancestors masked out | `AAT_RotationOffsetMeshSpace` / `UAimOffsetBlendSpace` — the one mask that owns the split bone | ANM1, ANM4 |
+| `Flags & 0x2` split inheritance, ancestors masked out | `AAT_RotationOffsetMeshSpace` / `UAimOffsetBlendSpace` — the one mask that owns the split bone | ANM1 · CCC10 |
 | `ProcType == 1` axis interpolation | **no Unreal equivalent — ours stays** | done |
 
 The last row is **correctness, not feel**: it reads a live control-bone orientation, so it is a rig
@@ -209,19 +215,19 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   what lets a whole grid sit behind one layered-blend node in ANM4, since no Unreal blend node masks
   per sample. The fact itself belongs to `docs/vtmb/animation_and_movers.md` §A.4.
 
-  **Nothing in gameplay drives one**, which is ANM5's. The runtime carries a base blend-space slot
-  in the proxy under `elysium.BlendSpaces`, with the green room as its only caller: a grid row
-  stands the whole fan and a slider per declared axis steers it. That slot is the same kind of
-  scaffolding as the layer slots below, and ANM4 retires it the same way. An aim grid is baked but
-  not standable — its cells are masked overlays, so it is a layer's grid and the base slot refuses
-  it for the reason a masked sequence must never reach the base clip path.
+  **Nothing in gameplay drives one**, which is `docs/project/three-cs-roadmap.md` CCC5's. The runtime
+  carries a base blend-space slot in the proxy under `elysium.BlendSpaces`, with the green room as its
+  only caller: a grid row stands the whole fan and a slider per declared axis steers it. That slot is
+  the same kind of scaffolding as the layer slots below, and CCC9 retires it the same way. An aim
+  grid is baked but not standable — its cells are masked overlays, so it is a layer's grid and the
+  base slot refuses it for the reason a masked sequence must never reach the base clip path.
 
-- [ ] **ANM4 The shared action resolver and animation graph.** One engine-neutral intent enters
-  from either player state or NPC behaviour, resolves through actor/form/weapon activity
-  translation and the model vocabulary, then feeds an Animation Blueprint per body archetype. The
-  graph replaces the hand-rolled proxy: a locomotion state machine, layered blend per bone over the
-  ANM2 profiles, additive nodes for the `_delta` family, an aim-offset node for the upper-body
-  overlays, montage slots for one-shots, and a post-process graph carrying axis interpolation.
+- [ ] **ANM4 Extract and bake the action catalog.** The generated corpus a resolver reads: the
+  activity registry, the player and NPC selection rules, every weapon translation table, and the
+  reachability join that proves the set is complete. **The resolver and the graph that consume it are
+  `docs/project/three-cs-roadmap.md` CCC4 and CCC5**, which run on six activities read out of the
+  model by hand and therefore do not wait on this phase; what waits is every action family beyond
+  them.
 
   Ordered work inside the phase:
 
@@ -239,46 +245,11 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
     with events and autolayers, emit activity/player/NPC/weapon rule artifacts, join them into a
     reachability report, and bake the resolved catalog beside the native character assets. Game
     data remains below `$ELYSIUM_EXPORT_ROOT` and `/ElysiumBaked`.
-  - [ ] **ANM4c Implement one runtime resolver and graph.** Add the engine-neutral intent and
-    locomotion sample, explicit channel arbitration, selection diagnostics, common player/NPC
-    resolver, and graph inputs. Migrate the existing direct `PlayNpcActivity` callers through the
-    intent seam, retaining it only as a compatibility adapter until the proxy is retired.
 
   *Acceptance:* every producer in the accepted action families resolves to an exact model/sequence
   identity and baked asset or to a named fallback; a controlled retail/remake trace agrees on base
   activity, each translation and final sequence; missing required mappings fail content tests;
-  masked clips cannot enter the base channel; player and NPC records use one trace schema.
-
-  One defect closes here. A masked sequence stops being reachable as a base clip, which is what
-  currently lets an `ACT_LOOKBACK` pick flatten a character — a defect fix rather than a divergence,
-  since retail composes those as layers and never as bases.
-
-  Montage slots also un-collapse a stated simplification: gesture and sequence currently share one
-  clip slot, so a scene's gesture overwrites its sequence instead of layering over it.
-
-  **This is also what retires the proxy's own layer composition.** Both combines run there today —
-  a `_delta` accumulated post-multiplied and a masked `*_layer` blended under its profile, in two
-  slots of their own, under `elysium.AnimLayers` — because there is no graph to plug a layered blend
-  or an additive node into. The blend profiles they read are the assets `FAnimNode_LayeredBoneBlend`
-  consumes unchanged, so the graph replaces the mechanism without re-baking anything.
-
-- [ ] **ANM5 Drive the first playable action slices.** Locomotion state and `move_yaw` for the cast,
-  from the motor's own post-tick velocity and facing; and the player's gait from the movement
-  component's post-solve state. The player is the cleaner demonstration of the `move_yaw` fan — its
-  facing is the camera yaw and its velocity is the mover's, so the angle between them is
-  unambiguous. Depends on ANM4, and on the Source movement port for the player half.
-
-  The acceptance ladder is locomotion first (idle/walk/run/sneak/crouch/air/land on player and NPC),
-  then directional hit/knockback/death reactions, then weapon/interaction actions. Each rung closes
-  its own reachability slice; full combat coverage does not block walking, but an unexplained action
-  inside the rung being accepted does.
-
-  **The per-cell ground speed lands here**, carried over from ANM3 because it is a driving question
-  rather than an asset one. `ResolveActivityClip` reads the authored speed off the cell the
-  *neutral* pose parameters select, so a body being steered keeps the speed of the cell it started
-  on. Once something writes `move_yaw` the motor has to re-read it as the blend moves — a sideways
-  run and a forward run are authored at different speeds, and holding one while playing the other is
-  what foot-sliding is.
+  player and NPC records use one trace schema.
 
 - [ ] **ANM6 Migrate the cinematic path.** Choreographed scene playback from the sequence player's
   absolute-time seek to a montage position. **Deliberately last.** The theatre is the project's
@@ -322,9 +293,10 @@ the solve beneath its proved angular limit is decoded;
 
 ## Risks
 
-- **The theatre is the thing to protect.** Choreographed playback shares the animation instance
-  with everything ANM4 replaces. ANM6 is last for this reason, and the theatre stays on the
-  verified seek path until the stack under it is established.
+- **The theatre is the thing to protect.** Choreographed playback shares the animation instance with
+  everything the graph replaces (`docs/project/three-cs-roadmap.md` CCC5, CCC9). ANM6 is last for
+  this reason, and the theatre stays on the verified seek path until the stack under it is
+  established.
 - **Keep an A/B per stage.** Every composition and blending stage carries a console toggle. This is
   not ceremony: the split-inheritance fold that started this programme was diagnosed by turning the
   stage off and watching the pose change. Once a rule moves into the bake its A/B moves with it —
@@ -344,7 +316,6 @@ divergence, per the house rules.
 |---|---|
 | Layer blend-in and blend-out times are ours — VtMB's four-byte autolayer record carries no ramp, so whatever weight the dispatcher passes lives in the game DLL and not in the file | `docs/vtmb/animation_and_movers.md` |
 | Unreal blend-space interpolation replaces the authored grid's own cell selection | `docs/architecture/animation-architecture.md` |
-| Any change to the cast's movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | Baking a per-clip rule leaves a residual across a crossfade, since blend-then-evaluate and evaluate-then-blend differ for a non-linear rule. Bounded and measured: none above 10° over a real body's crossfadeable locomotion | `docs/architecture/animation-architecture.md` |
 | An overlay or additive composed over a host that does **not** declare it is approximate, because the asset was written against a declared host's pose. Retail's own rule is that a layer only means something over a base that declares it | `docs/architecture/animation-architecture.md` |
 

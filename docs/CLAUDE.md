@@ -6,12 +6,14 @@ Source code remains the as-built record.
 ## Ownership
 
 - `project/roadmap.md` owns master sequencing, playable-path priority, and roll-up status.
-- `project/retail-capture-roadmap.md` and `project/animation-roadmap.md` are the two scoped
-  subtrackers. The first owns detailed status for the retail capture harness and the
-  capture-index-inspect loop that verifies the original-runtime animation and facial decode
-  against the export. The second owns detailed status for the skeletal animation programme —
-  the character asset bake, the shared skeleton, layer masks, blend spaces, the animation graph,
-  and the locomotion that drives them.
+- `project/retail-capture-roadmap.md`, `project/animation-roadmap.md` and
+  `project/three-cs-roadmap.md` are the three scoped subtrackers. The first owns detailed status
+  for the retail capture harness and the capture-index-inspect loop that verifies the
+  original-runtime animation and facial decode against the export. The second owns detailed status
+  for the skeletal animation asset programme — the character asset bake, the shared skeleton, layer
+  masks, blend spaces, and the action catalog. The third owns detailed status for the player-feel
+  vertical — the mover's published body state, the resolver seam, the player animation graph, the
+  camera service and rig, input response, and the gym that measures them.
 - `project/rebuild-strategy.md` owns strategy, milestone vocabulary, and sidecar contracts.
 - `project/remaster-direction.md` owns modernization boundaries.
 - `architecture/` owns Unreal system designs and integration seams.
@@ -29,8 +31,9 @@ Source code remains the as-built record.
   identify the explicit owner call.
 - Mark uncertain reconstructions and say what evidence would verify them.
 - Correct contradicted facts in place.
-- Never place status outside `project/roadmap.md` and its two declared scoped subtrackers,
-  `project/retail-capture-roadmap.md` and `project/animation-roadmap.md`.
+- Never place status outside `project/roadmap.md` and its three declared scoped subtrackers,
+  `project/retail-capture-roadmap.md`, `project/animation-roadmap.md` and
+  `project/three-cs-roadmap.md`.
 
 Directory `CLAUDE.md` files orient readers to code and workflow. They do not own VtMB
 facts or roadmap status.

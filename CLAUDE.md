@@ -16,11 +16,15 @@ under the repository's explicit authored-content namespace.
 - **`docs/project/retail-capture-roadmap.md`** — a scoped subtracker: detailed status for
   the retail capture harness and original-runtime animation/facial investigation.
 - **`docs/project/animation-roadmap.md`** — a scoped subtracker: detailed status for the skeletal
-  animation programme — the character asset bake, the shared skeleton, layer masks, blend spaces,
-  the animation graph, and the locomotion that drives them.
+  animation asset programme — the character asset bake, the shared skeleton, layer masks, blend
+  spaces, and the action catalog.
+- **`docs/project/three-cs-roadmap.md`** — a scoped subtracker: detailed status for the player-feel
+  vertical — Character, Camera and Controls — the mover's published body state, the resolver seam,
+  the player animation graph, the camera service and rig, input response, and the gym that
+  measures them.
 
-  Those two are the only scoped subtrackers. The master roadmap owns their roll-up and priority.
-  Status lives in the three trackers and nowhere else, including this file. There is no as-built
+  Those three are the only scoped subtrackers. The master roadmap owns their roll-up and priority.
+  Status lives in the four trackers and nowhere else, including this file. There is no as-built
   archive and no decision log; git history is the as-built record, and a decision's outcome is a
   present-tense fact in the doc that owns the system.
 - **`docs/project/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
@@ -140,7 +144,7 @@ The design is `docs/architecture/animation-architecture.md`.
 ### Docs describe design, RE, and status — not the current build
 
 Documentation exists for what the code cannot say for itself: design intent, VtMB
-reverse-engineering facts, and status in the master roadmap plus its two declared
+reverse-engineering facts, and status in the master roadmap plus its three declared
 subtrackers. The source is the as-built record — read
 it rather than paraphrasing it. The five directory orientation `CLAUDE.md` files (`Source/ElysiumUE/
 CLAUDE.md`, `pipeline/CLAUDE.md`, `research/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) point at *where* something
@@ -148,7 +152,7 @@ lives — module/plugin list, folder → layer map, build/test commands — neve
 implementation behaves. The one exception is a hard-won gotcha: a non-obvious trap (lazy-init
 order, a silent side effect, an easy-to-undo fix) that a source read would not reliably surface on
 its own. A VtMB **format or behaviour fact** (byte layouts, discovered engine rules) belongs in
-the `docs/` topic file that owns it (`docs/CLAUDE.md` → "Where a given fact belongs") — **never**
+the `docs/` topic file that owns it (`docs/CLAUDE.md` → "Ownership") — **never**
 in a `CLAUDE.md`, including `pipeline/CLAUDE.md`, no matter how much it reads like "how something
 works," because it describes VtMB, not our own implementation.
 
@@ -158,14 +162,15 @@ Every `CLAUDE.md` in this repo — this file and its four sub-files (`Source/Ely
 `pipeline/CLAUDE.md`, `research/CLAUDE.md`, `docs/CLAUDE.md`, `Content/CLAUDE.md`) — states present-tense facts only, same
 as every other doc (`docs/CLAUDE.md` → "House rules"). **Never** write a roadmap task-ID
 parenthetical (`(11.9)`, `roadmap 8.6`, `(PL13)`), a date, or a change/migration narrative
-("was X, now Y") into any of them — task tracking lives only in the master roadmap and its two
+("was X, now Y") into any of them — task tracking lives only in the master roadmap and its three
 declared subtrackers. Cite a doc by name, with no date or task number attached.
 
 ## What runs today
 
 **Project priority and roll-up status: `docs/project/roadmap.md`; detailed retail-capture
 status: `docs/project/retail-capture-roadmap.md`; detailed skeletal-animation status:
-`docs/project/animation-roadmap.md`.** Runtime types and where they live:
+`docs/project/animation-roadmap.md`; detailed Character/Camera/Controls status:
+`docs/project/three-cs-roadmap.md`.** Runtime types and where they live:
 `Source/ElysiumUE/CLAUDE.md`.
 
 ## Target hardware

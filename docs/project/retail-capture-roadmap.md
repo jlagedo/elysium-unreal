@@ -1313,8 +1313,9 @@ have had no rung to sit on since CAP4.1 named them.
   `(animation, bone)` records across 4,508 models, with 18,346 zeros — and its zero set is a
   per-bone mask naming the bones a partial-body layer does *not* own. The theatre corpus reads
   1.0 throughout because a cutscene fires no layer sequence, not because the field is inert.
-  The fact belongs to `docs/vtmb/animation_and_movers.md`; carrying the mask to the runtime is
-  `docs/project/animation-roadmap.md`'s.
+  The fact belongs to `docs/vtmb/animation_and_movers.md`; baking the mask into a blend profile is
+  `docs/project/animation-roadmap.md`'s, and reaching it from a graph node is
+  `docs/project/three-cs-roadmap.md`'s.
 
   **The missing list is empty.** 9,938 → **0 of 3,430,830** bytes retail dereferences that the
   decoder does not read. The 2 bytes that remain retail-only are the quaternion look-ahead past
@@ -1603,10 +1604,11 @@ The recovered rules reach the built game here. The design — where the stages s
 pipeline, what the export has to carry, and why the basis forces a single exporter — is
 `docs/architecture/animation-architecture.md`.
 
-**This phase's scope is now the two composition stages alone.** Delivering the rest of the
-skeletal animation stack in Unreal is owned by `docs/project/animation-roadmap.md`, whose
-governing decision is that VtMB's animation data is baked into native Unreal assets and run by
-Unreal's animation system rather than reproduced by a bespoke evaluator. CAP7.1 and CAP7.2 are
+**This phase's scope is now the two composition stages alone.** Delivering the rest of the skeletal
+animation stack in Unreal is owned by `docs/project/animation-roadmap.md` for the assets and
+`docs/project/three-cs-roadmap.md` for the graph that plays them, under the governing decision that
+VtMB's animation data is baked into native Unreal assets and run by Unreal's animation system rather
+than reproduced by a bespoke evaluator. CAP7.1 and CAP7.2 are
 unaffected by that decision and stay here: they carry the two rules Unreal has no equivalent for,
 and both are complete. CAP7.3, CAP7.4 and CAP7.5 are superseded — see each entry.
 

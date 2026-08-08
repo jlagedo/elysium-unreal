@@ -305,6 +305,12 @@ animation, the lab's job is to display what was selected and let it be perturbed
 the selecting authority beside the result. A control that can only be reached from the lab is
 scaffolding, and the phase that gives it a real caller retires it.
 
+**Two things the panel does not tell you.** A body standing green says nothing about which sequence
+is playing — the readout reports the mesh, and the clip loader answers null silently when the mount
+carries no such asset. And root motion is a per-clip property rather than a body one:
+`ScanRootMotion` is the check for a clip outside locomotion carrying a moving root, which a motor
+already consuming that cell's displacement metadata would then double-move.
+
 `uv run elysium debug modelroom <mesh-stem> <clip> [map]` is the human-form review surface over the same production
 loader. For a cinematic bank, append `<anim-set-model> <bone-root> [map]`. It isolates exactly one
 body and clip, freezes it at 0/25/50/75/99 percent, captures front, three-quarter, profile, and back
@@ -313,10 +319,43 @@ visual acceptance surface: bounds and matrix checks may reject broken data, but 
 an anatomically plausible lean, seated posture, silhouette, cloth deformation, or facing direction.
 Those observations are recorded from the owner before a pose hypothesis is enabled in the runtime.
 
+### The movement and camera harness
+
+`uv run elysium debug move [course] [hz]` is the player-feel equivalent of the shot run: it arms
+`-ElysiumMove`, replays a fixed command stream over a table of named courses against real geometry,
+and writes one CSV row per frame plus a JSON summary under `$ELYSIUM_EXPORT_ROOT/_move/`. The engine
+is pinned to the same rate as the stream, so a run at 60, 120 and 240 Hz differs only in integration
+and the *intent* is identical — which is what makes frame-rate dependence measurable rather than
+anecdotal.
+
+A course is authored as **segments** — hold this intent for this long — rather than as frames, and
+expanded at run time. The mover's state is reset between courses, because a course that inherits the
+previous one's velocity measures the wrong thing. Position and velocity are emitted in **Source
+units**, so a row reads directly against `docs/vtmb/source_movement.md`.
+
+`pipeline/src/elysium_pipeline/validation/move_diff.py` is the comparator: it diffs every current run
+against a promoted baseline, `--save` promotes, and `--hz` does the cross-rate comparison by elapsed
+time rather than by frame index. Its tolerance model has two classes, and **a channel belonging to
+neither is written and silently never compared** — numeric channels carry an absolute tolerance,
+while ground state, stance and water level are exact, because a flip there is a behaviour change
+rather than a rounding one.
+
+Two properties make this the acceptance surface for the whole player-feel vertical rather than for
+movement alone. The command stream is deterministic and frame-pinned, so **camera and animation
+channels ride the same runs** — boom length, clip state, damper position and solved angles beside
+`move_yaw` and the state machine's state — and a camera regression becomes the same diff as a
+movement one. And the courses run against a **generated gym** whose risers, ledges, slopes and
+ceilings are derived from the movement constants themselves, so each brackets the threshold it tests
+and a run locates a cliff rather than confirming that one particular staircase still works. The gym's
+derivation and its speed-invariant/speed-dependent split are
+`docs/architecture/movement-architecture.md`; the sited courses on a real map remain the only thing
+that can be compared against a retail capture, because retail will not load geometry we authored.
+
 ## Tracking
 
-Implementation sequence and status live only in `docs/project/roadmap.md` P2; `docs/architecture/engine-core.md` owns the
-entity substrate design it observes.
+Implementation sequence and status live only in `docs/project/roadmap.md` P2, except the movement and
+camera harness, whose status is `docs/project/three-cs-roadmap.md`'s;
+`docs/architecture/engine-core.md` owns the entity substrate design it observes.
 
 ## Prior art / sources
 

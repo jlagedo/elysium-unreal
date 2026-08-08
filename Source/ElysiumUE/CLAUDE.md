@@ -200,6 +200,10 @@ Hard-won, non-obvious, and easy to undo:
   pinned by `post_patch_tree` in `dev/dependencies.lock.json`; `Plugins/External/` is gitignored,
   so editing the vendored tree directly is lost on the next `deps sync`. Change the patch, not the
   checkout, and re-pin the tree hash. `Elysium.Content.FacialMorphTargets` guards the contract.
+- **`GetImportedModel()->LODModels` must grow in parallel with `AddLODInfo()`.** A skeletal mesh's
+  LOD is two parallel arrays and both entries have to exist, but nothing reads the imported model
+  while the mesh is being built — so a bake that adds only the LOD info runs clean and saves, and
+  `PostLoad` then asserts in whichever process opens the package next.
 - **`UBodySetup::CalculateMass` reads the owning primitive's `FBodyInstance`**, which a runtime-built
   component never seeds from the asset — physics props re-apply mass to the component.
 - **`USkeleton::AddCurveMetaData` defaults `bTransact = true`**, which under `WITH_EDITOR` calls
@@ -233,6 +237,23 @@ Hard-won, non-obvious, and easy to undo:
   work happened earlier in the same process, and a test that reads an additive can pass and fail on
   the same assets across runs. Call `WaitOnExistingCompression()` first when the assertion is about
   what a cooked build ships; `IsCompressedDataValid()` is how a caller tells which one it got.
+- **`UAnimSequence::GetBoneTransform` never performs the additive conversion.** It is a plain track
+  read, so a raw evaluation hands back the keys as written — and a baked `_delta`'s keys are the
+  delta already composed onto its base, because the compressor subtracts that base back out. A test
+  built on it reports a correct additive as broken by exactly one base pose, and would pass just as
+  happily if the subtraction had never run. `GetAnimationPose` is the door the runtime uses;
+  `EvaluateAdditiveFrame` in `ElysiumBakedCharacterTests.cpp` is the worked example.
+- **A bone a sequence carries no track for evaluates to identity rather than to the reference pose —
+  on an additive.** The reset differs by kind: `ResetToAdditiveIdentity` for an additive against
+  `ResetToRefPose` for an ordinary sequence, so the single signature "the error equals that bone's
+  full bind transform" means a dropped track on one and the exact opposite on the other. Read the
+  additive stamp before hunting a rotation bug. On an additive that magnitude is ambiguous between
+  three causes — a dropped track, the additive round-trip above, and compressed data that is not
+  resident — so check `IsCompressedDataValid()` before reading anything into it.
+- **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
+  whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
+  blended pose rather than being baked into the clip, so the preview is showing what the asset says
+  and not a bake defect.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.

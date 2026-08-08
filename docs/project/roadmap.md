@@ -11,11 +11,16 @@ investigation delegate detailed task status to
 `docs/project/retail-capture-roadmap.md`; this file
 retains the parent rows `0.10`, `RE32`, and `RE33`.
 
-The skeletal animation programme — the character asset bake, the shared skeleton, layer masks,
-blend spaces, the animation graph, and the locomotion that drives them — delegates detailed task
-status to `docs/project/animation-roadmap.md`; this file retains the parent rows `8.5` and `8.11b`.
+The skeletal animation asset programme — the character asset bake, the shared skeleton, layer masks,
+blend spaces, and the extraction and bake of the action catalog — delegates detailed task status to
+`docs/project/animation-roadmap.md`; this file retains the parent row `8.5`.
 
-Those two are the only scoped subtrackers. There is no as-built archive and no decision log: git
+The player-feel vertical — the mover's published body state, the resolver seam, the player animation
+graph, the camera service and player rig, input response, and the gym that measures them — delegates
+detailed task status to `docs/project/three-cs-roadmap.md`; this file retains the parent rows `4.7`,
+`8.11b`, `10.6` and `11.13`.
+
+Those three are the only scoped subtrackers. There is no as-built archive and no decision log: git
 history is the as-built record, and a decision's outcome is a present-tense fact in the doc that
 owns the system.
 
@@ -95,9 +100,16 @@ it waits. Three standing rules:
 | **PP1 — New Game & genesis [x]** | chargen for real: clan, **name**, sex, spends — onto the player entity, Python-readable; `sp_genesisdevice_1` played, not skipped | **9.4 a–g [x]** *(RE24 [x], RE25 [x], RE27 [x], RE28 [x], RE29 [x])*, 8.6's New Game click path |
 | **PP2 — the theatre cinematic** | the intro plays start to finish: choreography, scripted camera, line audio, subtitles, **eyes and lipsync — all block** (cont. 5); the PC is on camera, so its body stands here | 12.1–12.5, 8.11a (+ `sp_theatre` export/bake) *(11.7 [x])* |
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
-| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), modern persistent first-/third-person camera, the body's gait, feeding, items + object interaction, dice, the vitals HUD | 4.7, **11.13**, 8.11b, 10.6, B6, 9.8, 9.6, 8.9 |
+| **PP4 — core mechanics** | faithful movement (owner call: **in** the path), modern persistent first-/third-person camera, the body's gait, feeding, items + object interaction, dice, the vitals HUD | **`docs/project/three-cs-roadmap.md` CCC0–CCC9** *(4.7, 11.13, 8.11b, 10.6)*, B6, 9.8, 9.6, 8.9 |
 | **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | **[x]** *(11.9 = 9.5)* |
 | **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `uv run elysium test Play` |
+
+**PP4's feel stack runs ahead of PP2 and PP3 — owner call.** The three C's are built and proven as
+one vertical before the theatre cinematic and the tutorial landing. The reason is recovered rather
+than preferential: VtMB's `m_flMaxSpeed` comes from the current sequence's own root motion, so the
+animation is the movement's speed authority and the mover cannot be closed behind it
+(`docs/project/three-cs-roadmap.md` → "The ladder"). The rest of PP4 — feeding, items, dice, the
+vitals HUD — keeps its place in the sequence.
 
 **After PP6 (the thaw):** 9.10 economy/barter, 8.8, 8.10, the P3/P7 look lanes, 10.1–10.5 and
 asset enhancement — re-sequenced then.
@@ -114,8 +126,11 @@ Open tasks whose dependencies are met, ordered by playable-path payoff:
    the first mismatching stage to choose focused skeletal, scene, facial/lip, or
    secondary-motion work. Detailed order and retail evidence gates:
    `docs/project/retail-capture-roadmap.md`.
-2. **11.10** — finish PP0 with the played-input harness.
-3. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
+2. **The 3 C's slice** — `docs/project/three-cs-roadmap.md` CCC0 onward: the gym and its channels,
+   the mover's published body state, the camera service and player rig, then the resolver seam and
+   the player animation graph. PP4's feel stack, promoted ahead of PP2/PP3 by owner call.
+3. **11.10** — finish PP0 with the played-input harness. `CCC8`'s acceptance depends on it.
+4. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
 
 P12's remaining content and behavior gaps are tracked on its task rows. The lighting/look lane
 (3.1–3.13 and the P7 remainder) stays frozen under playable-path rule 2.
@@ -422,64 +437,13 @@ M1 leftovers that live in this lane.
   seating the player at `dest_landmark + offset`. The scripted `ChangeMap()` is real;
   `elysium.map <map> [landmark]`; a Transitions section in the Maps window. *Verified headless:*
   tutorial → `sm_pawnshop_1` at `dest_newgame + offset`. *Deps:* 1.6, 0.3.
-- [x] **4.7 Source movement component** *(was M1.1; parallel-capable)* — port `CGameMovement`
-  friction/accel/airaccel/StepMove into a `UCharacterMovementComponent` override
-  (`docs/vtmb/source_movement.md`). **Faithful first** — this is the feel
-  layer's known-good baseline and the thing every later tuning delta is measured against, so it
-  lands line-by-line from the decompile and stays A/B-able (`docs/project/remaster-direction.md` axis 3).
-  Frame-rate independence, high-polling-rate mouse input and FOV control ride along (identical
-  behaviour, modern plumbing); any *behavioural* delta — accel curves, air control, step feel —
-  is a separate, owner-approved decision after this runs. **The body must be a box, so this is not a
-  `UCharacterMovementComponent` override**: `ACharacter` creates a capsule root that cannot be
-  substituted, and a capsule's rounded bottom reports ~0.65 against `StepMove`'s `0.7` standable test,
-  rejecting every climb (`docs/vtmb/source_movement.md`). **11.6 [x]** re-based the pawn to `APawn` + box +
-  `UElysiumMovementComponent` and supplies the `FElysiumUserCmd` this consumes; what is left here is
-  the line-by-line port — the gravity half-step split, the timestep, ducking and
-  water, against 11.6's Source-shaped shell. **`surfaceFriction` is closed**: it is 1.0 on every
-  world surface in retail (VtMB scales the material's friction by 1.25 and clamps to 1.0; 1 of
-  11,624 VMTs carries a `$surfaceprop`, so everything is the `default` prop at 0.8), so the shell's
-  hardcoded 1.0 is already faithful and there is nothing per-surface to export
-  (`docs/vtmb/source_movement.md`). **The two divergences this task carried are both settled by RE**
-  (`Host_FilterTime` `0x2008ba30`, decompiled): (a) **the frame-delta bound is `[0.001, 0.1]`
-  seconds** — VtMB clamps `host_frametime` to a hard 10 fps floor before the game sees it, so the
-  port pins that one number across `FElysiumTimeControl::AdvanceFrame` and the mover, which both
-  take Unreal's raw delta today. (b) **There is no tick.** `Host_FilterTime` bounds a *variable*
-  frametime and returns — no accumulator, no fixed-interval loop — which confirms
-  `docs/vtmb/game_runtime.md`'s pre-tick finding from the pacing side and retires the "fixed 66.7 Hz tick"
-  (that is *modern* Source's default). **A fixed-step accumulator is therefore a
-  divergence, not the baseline** — it ships behind `elysium.move.FixedStep` (default 0 = faithful
-  variable delta), recorded in `docs/vtmb/source_movement.md`. **And the residual frame-rate dependence is
-  smaller than the shape of the code suggested**, measured over `uv run elysium debug move` at 60/120/240 Hz: the
-  jump apex is a flat **25.00 units at every rate** — the half-step split plus VtMB's *additive*
-  `CheckJumpButton` (`0x101226b0`, `v.z += impulse`, not an overwrite) is exact velocity-Verlet, and
-  the old `25 − 100·dt` prediction was what a *full*-step gravity would give. What does drift is
-  air control alone: a strafe-jump exits at 259.5 / 259.8 / 261.0 u/s across the three rates, ~0.6%.
-  **RE22 is closed** and the ducked hull is
-  `(-16,-16,0)..(16,16,36)` with the eye at 30 (not stock Source's 28), over `TIME_TO_DUCK` 0.4 /
-  `TIME_TO_UNDUCK` 0.2. **Ladders are out of scope, not deferred**: VtMB's
-  `PlayerMove` switch has no ladder arm and no map places a ladder entity, so there is nothing to
-  reproduce. Water movement exists (`WaterMove` `0x101200c0`) and its wish-velocity build, `0.8`
-  speed clamp, `40` idle sink and friction step are transcribed, but no exported map places a water
-  brush, so it lands formula-faithful and unexercised; the accel tail and the `WaterJump` pair are
-  located, not read. Sequenced **in
-  the playable path (PP4)** by owner call — the tutorial is
-  played with VtMB feel, not UE feel. (c) **An owner call this task carried, now
-  discharged:** RE21 pinned retail as movement-*first*, called **reproduce** and landed by **11.11** — the mover already runs before the think pass, on the user
-  command's own delta, with the player's own think ahead of it. Port onto that order; the frame is
-  no longer moving under this task.
-  **As built:** the math is `Public/ElysiumMoveSolve.h` (constants + the `CGameMovement` formulas as
-  free functions + `FElysiumMoveTuning`'s `sv_*` console surface + `FElysiumMoveStepper`), the state
-  machine is `UElysiumMovementComponent` in `PlayerMove`/`FullWalkMove` order; the frame bound is
-  `ElysiumFrame::ClampFrameDelta` in `ElysiumGameClock.h`, read by the clock, the router and the
-  mover. *Verified:* `Elysium.Substrate.Movement` (content-free, the formulas and the hulls) plus
-  **`uv run elysium debug move`** — a new `-ElysiumMove` harness replaying fixed command streams over eight courses
-  against real geometry, with `pipeline/src/elysium_pipeline/validation/move_diff.py` as the comparator (`--save` promotes a baseline,
-  `--hz` does the cross-rate check). It caught two real defects the unit tests could not: the jump
-  overwriting `v.z` instead of adding to it, and courses inheriting the previous course's velocity.
-  *Remaining:* the `stairs`/`slope`/`doorway` courses are sited on placeholder coordinates and need
-  surveyed vantages (`elysium.campos`) before their baselines mean anything; ducked speed uses
-  Source's `/3` rather than a read-out VtMB value, since retail's is animation-driven.
-  *Deps:* 11.6, 11.11.
+- [x] **4.7 Source movement component** *(was M1.1)* — `CGameMovement` ported line-by-line from the
+  decompile onto an `APawn` + box hull, because `ACharacter`'s capsule cannot pass `StepMove`'s
+  standable test. → `docs/architecture/movement-architecture.md` (the object graph, the A/B, the
+  divergences, the measured frame-rate residual) and `docs/vtmb/source_movement.md` (the VtMB rules).
+  *Verified:* `Elysium.Substrate.Movement` plus `uv run elysium debug move`.
+  *Remaining:* delegated — the sited courses' surveyed coordinates and the gait/ducked speed
+  authority are `docs/project/three-cs-roadmap.md` CCC0 and CCC7. *Deps:* 11.6, 11.11.
 - [ ] **4.8 Rotating/linear/elevator family** — `func_elevator` is implemented from its recovered
   datamap/handlers: one-based `GotoFloor`, constant-speed vertical travel, lock/current/target
   state, start/pass/arrival outputs and sounds, same-floor completion, ignored mid-move retargets,
@@ -863,11 +827,10 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
     first-person/scripted-camera visibility tests. The aggregate theatre run shows the PC and
     `player_understudy` present, correctly skinned, and animating through the embrace.
     *Deps:* 8.2 [x], 8.5 [x], 11.7 [x], PL13 [x]; 9.4 for real identity.
-  - **b. Locomotion** *(PP4, beside 4.7)* — idle/walk/run/crouch driven by movement state.
-    **Detailed status and design: `docs/project/animation-roadmap.md`**, which owns the animation
-    graph the player's gait runs on; the states it blends between are the Source movement port's,
-    so it still lands beside 4.7 rather than ahead of it. *Deps:* 8.11a, 4.7, and the animation
-    tracker's graph.
+  - **b. Locomotion** *(PP4)* — idle/walk/run/sneak/crouch/air/land driven by the mover's post-solve
+    state. **Detailed status and design: `docs/project/three-cs-roadmap.md`**, which owns the
+    resolver seam and the player animation graph the gait runs on. *Deps:* 8.11a; the assets it
+    plays are `docs/project/animation-roadmap.md`'s.
   *Acceptance (a):* on `sp_tutorial_1`, `togglecamera` shows the PC's own clan model on the boom,
   dissolving in across `cam_fadeend`→`cam_fadestart` and culled at weight 0; the theatre's scenes
   animate it. *(b):* the gait matches the mover's reported state through a walk/run/crouch pass, and
@@ -1164,43 +1127,34 @@ Steps are ordered so each compiles, ships and is observable alone. **11.4 was th
   Sequencer scenes. Direct first-/third-person choices persist; the cycle contains only those two;
   third-person orbit, character facing and navigation are independent. The complete responsibility,
   API, asset, fallback, and migration design is `docs/architecture/camera-architecture.md`.
-  - [ ] **11.13a Director foundation** — `AElysiumPlayerCameraManager`, local-player
-    `UElysiumCameraService`, value requests, generation/map-epoch handles, semantic priority,
-    cut/reset handling, diagnostics, and `IElysiumCameraService`; wrap 11.7's shot stack and
-    camera-track sampler as legacy requests before changing their output. *Deps:* 11.5 [x],
-    11.7 [x], 11.8 [x], 12.1's verified sampler.
-  - [ ] **11.13b Authored camera library** — committed/LFS project-owned packages under
-    `/Game/ElysiumAuthored/Camera/**` and `/Game/ElysiumAuthored/Cinematics/**`; Primary Data Asset
-    profiles, dialogue shot sets, curves and shakes load by soft id. Game-derived packages remain
-    prohibited and the generated mount contracts remain unchanged. *Deps:* 11.13a.
-  - [ ] **11.13c Player rig and mode contract** — `UElysiumPlayerCameraRigComponent`, modern Spring
-    Arm obstruction, complete first/third views, direct binds plus a two-state cycle, independent
-    third-person orbit/facing/navigation, aim policy, shoulder/recenter preferences, exact nested
-    override restore, and a developer A/B path to the faithful evaluator. *Deps:* 11.13a–b;
-    full played gait acceptance joins 4.7 and 8.11b.
+  - **11.13a–c Director foundation, authored camera library, player rig** — delegated to
+    `docs/project/three-cs-roadmap.md` CCC2, which owns the camera service and its handle model, the
+    authored profile library, the modern rig, the two persistent player modes, and the A/B against
+    the faithful evaluator.
   - [ ] **11.13d Input, settings and presentation** — camera commands enter the action catalog;
     inspect/dialogue/cinematic scopes stay owned by `UElysiumInputSubsystem`; resolved reticle,
     HUD, body/viewmodel and letterbox state enters `FElysiumViewState`; accessibility covers
-    separate FOV, recenter, shake/head-motion/recoil response and motion blur. *Deps:* 11.13c,
+    separate FOV, recenter, shake/head-motion/recoil response and motion blur. *Deps:* CCC2,
     8.10 for the final options surface.
   - [ ] **11.13e Prop focus, map triggers and public API** — focusable target specs, soft-focus and
     inspect requests, collision/framing fallback, trigger component/volume, C++ value API, embedded
     Python 2.7 opaque handles, map-epoch teardown, and compatibility-safe `SetCamera`/`RemoveCamera`
-    ownership. The camera never moves or rotates the player to frame an item. *Deps:* 11.13a,
+    ownership. The camera never moves or rotates the player to frame an item. *Deps:* CCC2,
     11.13d; real inventory/interaction coverage joins 9.8 and B6.
   - [ ] **11.13f Dialogue director** — reusable two-shot/single/over-shoulder/close-up grammar over
     speaker/listener anchors; collision, visibility, eye-line, screen-side and subtitle-safe tests;
     original `vdata/camerashots/` through the legacy adapter; player-view fallback when no safe shot
-    exists. *Deps:* 11.13a–b, 11.13d, 9.2; played first-conversation coverage joins 9.9.
+    exists. *Deps:* CCC2, 11.13d, 9.2; played first-conversation coverage joins 9.9.
   - [ ] **11.13g Sequencer bridge** — project-authored Level Sequences and Cine Cameras acquire one
     `Sequence` request; Camera Cut Track owns authored transforms/lenses/cuts/blends without a second
     interpolation; stop, abort, skip and travel release cleanly. Original VCD and Worldcraft timing
-    stays in the legacy evaluator. *Deps:* 11.13a–b.
+    stays in the legacy evaluator. *Deps:* CCC2.
   - [ ] **11.13h Integration acceptance** — migrate feed/death and every remaining direct producer;
-    retain the theatre's 12.1 camera acceptance; add request/mode/collision/focus/dialogue/Python/
-    Sequencer automation and a mouse+gamepad played matrix through narrow interiors. Every scoped
-    camera returns to the exact chosen view and no camera path rotates or navigates the character.
-    *Deps:* 11.13a–g, 4.7, 8.11b, 9.8, 9.9, 11.10.
+    retain the theatre's 12.1 camera acceptance; add request/focus/dialogue/Python/Sequencer
+    automation over the whole director. Every scoped camera returns to the exact chosen view and no
+    camera path rotates or navigates the character. The player-view half of this acceptance — both
+    modes, obstruction, and the played mouse+gamepad matrix — is CCC8's. *Deps:* CCC2, 11.13d–g,
+    9.8, 9.9, 11.10.
 
 **Slice acceptance:** from a cold launch — the menu comes up over the backdrop, New Game runs chargen
 and enters the story, the tutorial's opening beats play on rebindable controls with a HUD, Esc pauses,
@@ -1489,7 +1443,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE34 | **VtMB's eye system is recovered end to end** — the `StudioEyeball` record and its true `StudioModel`+192/+196 slot, the `StudioMesh` eye-mesh flags, the renderer's iris/glint math and its eyelid write-back, the `Eyes` shader family including the `$vampire` variant, the server's gaze/fidget/blink behaviour and its `vdata/System/DispositionTable.txt` tuning, the four `LookAtEntity*` inputs, and the networked hop between them. Head turn (applied through bone controllers no model declares) and `LookAtEntityCenter` (pushes the `Eye` constant) are inert or defective in retail and are recorded as such. → `docs/vtmb/facial_animation.md`, `docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md`. | 12.4 | [x] |
 | RE35 | **The prop and trigger entity surface is recovered end to end.** `CDynamicProp`'s chain (`CBreakableProp → CBaseAnimating → CBaseToggle → CBaseEntity`, so every animating entity inherits the mover) with its complete 9 outputs / 25 inputs; `CDynamicProp::Activate` and the `SelectWeightedSequence(ACT_IDLE)` held-pose rest state; server-side `StudioFrameAdvance` versus the `m_bClientSideAnimation`-gated client path; the real `CBaseTrigger` spawnflag table including the absence of an allow-all fallback and the per-leaf reinterpretations of `0x2`/`0x10`/`0x20`/`0x80`; `filtername` resolution and the filter classes; `CTriggerHurt`'s datamap and its `×0.5`/`×3.0` cadence; `CPropSwitch`, `CBaseLockableEnt`/`CBaseVampireSkillEntity`, `CItemContainer`, `CBaseTerminal`/`CPropHacking`; the `EF_NOSHADOW`/`EF_NODRAW`/`EF_NORECEIVESHADOW` enum shift; `solid` → `VPhysicsInitStatic`. Proven-dead FGD keys: `demo_sequence`, `climbable`, `locksnd`, `npc_opaque`, `diceroll`, `actsnd`/`deactsnd`. The skin crossfade renders but is unreachable, so snapping is faithful. Extends RE1. Open: no consumer of `EF_NORECEIVESHADOW` found in `client.dll` (`engine.dll` unchecked); `rendermode`/`renderfx` per-value semantics undecoded; the `CPropHacking` `trigger`→`m_OnTrigger[n]` fire site inferred from the loader, not decompiled. → `docs/vtmb/entity_io.md`, `docs/vtmb/entity_visuals.md`, `docs/vtmb/phy_vphysics.md`, `docs/vtmb/animation_and_movers.md` B.0. | 4.11, 8.4a | [x] |
 | RE36 | Identify the **melee block verb** and `+wpn_secondaryatk`'s semantics. `+attack2` is declared by `client.dll` and left unbound by `default.cfg` in both retail and the patch (`MOUSE2` carries `vdiscipline_last`), which makes it the leading candidate; blocking is a real mechanic backed by the `Defence` feat. Also confirm the `vhotkey` one-frame deferral and the `vdiscipline_int` index table, both currently community-sourced. Decompiling the client attack handlers and `vampire.dll`'s `vdiscipline_int` would settle all four. → `docs/vtmb/controls.md`. | 10.6, 13.3 | [ ] |
-| RE37 | Recover the **player/NPC gameplay-action selection chain** from realized state or AI task through base activity, actor/form/weapon translation, weighted model sequence, pose parameters, layers and interruption. The player core path, 3,045-name registry, forced-sequence bypass and weapon-table shape are located. The hash-gated `ELGACT1` instrument and `sm_hub_1` recipe cover classifier, ideal-activity, weapon-translation and final-selector boundaries; their first retail corpus is pending. The complete player compact-code/mode vocabulary, NPC schedule/task path, all weapon tables, sequence-event payloads and override order remain open. Working specification: `research/cases/animation-pose/specs/gameplay_actions.json`; facts: `docs/vtmb/animation_and_movers.md` A.3; remake contract and detailed work: `docs/architecture/animation-architecture.md` §3 and `docs/project/animation-roadmap.md` ANM4–ANM5. | 8.5, 8.11b, 13.3 | [~] |
+| RE37 | Recover the **player/NPC gameplay-action selection chain** from realized state or AI task through base activity, actor/form/weapon translation, weighted model sequence, pose parameters, layers and interruption. The player core path, 3,045-name registry, forced-sequence bypass and weapon-table shape are located. The hash-gated `ELGACT1` instrument and `sm_hub_1` recipe cover classifier, ideal-activity, weapon-translation and final-selector boundaries; their first retail corpus is pending. The complete player compact-code/mode vocabulary, NPC schedule/task path, all weapon tables, sequence-event payloads and override order remain open. Working specification: `research/cases/animation-pose/specs/gameplay_actions.json`; facts: `docs/vtmb/animation_and_movers.md` A.3; remake contract and detailed work: `docs/architecture/animation-architecture.md` §3, `docs/project/animation-roadmap.md` ANM4 for the catalog, and `docs/project/three-cs-roadmap.md` CCC4 for the resolver that reads it. | 8.5, 8.11b, 13.3 | [~] |
 | SKY | The sky/ambience rework is complete; remaining work is tracked as 3.10–3.13 and RE17. Facts: `docs/vtmb/sky-ambience.md`. | 3.6, 3.7 | [x] |
 
 The Ghidra extraction findings behind the closed rows (the RE1/RE2/RE3/RE4 detail: addresses,

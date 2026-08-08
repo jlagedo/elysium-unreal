@@ -243,6 +243,50 @@ descriptor's `start`..`end`, remapping through the sequence's `paramstart`..`par
 clamping to 0..1, and scaling against `groupsize` to yield a cell index and a fractional
 weight. An axis whose `paramindex` is `-1` yields cell 0 and weight 0.
 
+### A `move_yaw` fan's cells are angles, and `anim[0][0]` is the 180° one [data-verified, partial corpus]
+
+A 9×1 locomotion fan places cell *k* at `move_yaw = −180 + 45k` and names that cell's animation
+`<label>_<the angle taken mod 360>`. The male `move_and_ranged` `walk` grid, with each cell's own
+length and authored ground speed:
+
+| k | `move_yaw` | animation | frames@fps | ground speed |
+|---|---|---|---|---|
+| 0 | −180 | `walk_180` | 46@30 | 88.6 cm/s |
+| 1 | −135 | `walk_225` | 41@30 | 113.9 cm/s |
+| 2 | −90 | `walk_270` | 21@30 | 97.1 cm/s |
+| 3 | −45 | `walk_315` | 33@30 | 88.1 cm/s |
+| 4 | 0 | `walk_0` | 37@30 | 136.7 cm/s |
+| 5 | +45 | `walk_45` | 33@30 | 88.1 cm/s |
+| 6 | +90 | `walk_90` | 33@30 | 60.7 cm/s |
+| 7 | +135 | `walk_135` | 41@30 | 113.9 cm/s |
+| 8 | +180 | `walk_180` | 46@30 | 88.6 cm/s |
+
+**Cells 0 and 8 are the same animation.** The fan closes on itself across the wrap seam, on 107 of
+107 9×1 fans in one player body's resolved vocabulary. **So `anim[0][0]`@56 is the 180° cell, not
+the 0° one**: the base cell of the sequence labelled `walk` is `walk_180`, the backpedal. A
+consumer taking the single-cell reading above — `seq → anim[0][0] → animdesc` — therefore gets a
+walk-backwards clip for `ACT_WALK`, and reads that cell's 46 frames as the sequence's where the
+forward `walk_0` has 37.
+
+**A fan's cells share neither a length nor a rate**, so they are independently authored clips
+rather than one clip sampled nine ways: `walk`'s span 21 to 46 frames, and `move_and_ranged`'s
+`run` fan mixes 18.0, 22.0 and 30.0 fps across its nine cells. Anything that blends two cells has
+to normalize them by cycle rather than by frame.
+
+947 of those 107 fans' 963 cells carry the `<label>_<angle>` name. Three keep the bare label on the
+0° cell (`claws_aggressive_walk`, `onehand_sneak`, `twohand_sneak`), four spell it
+`<base>_run_0_alt<N>` (the `claws` and `frenzy` aggressive-run alternates), and the remaining nine
+are `hit_torso`, whose cells are named by direction word (`hit_torso_back`,
+`hit_torso_front_left`, …) instead of by angle. `hit_torso` is also the one fan of the 107 bound to
+pose parameter 1, `hit_yaw`; the other 106 are all on `move_yaw`.
+
+Which physical direction `move_yaw = 0` is, is **not established** by the cell placement alone
+[inferred]. `walk`'s 0 cell is its fastest and its 90 cell its slowest, which reads like
+forward against strafe — but a mirrored convention reproduces the same per-cell speeds, and
+neither `run` nor `sneak` repeats the ordering (`run`'s extremes sit at ±90, `sneak`'s fastest at
+−135). Reading the two yaws that the ordinary player selector differences before it writes the
+parameter is what settles it.
+
 ### The activity name is the selection key [data-verified]
 
 `activity`@12 reads **`-1` on disk for every sequence** — the game DLL resolves the *name*
@@ -334,6 +378,12 @@ unchanged. The complete ordering and the mode-specific/form-specific translation
 of the gameplay-action investigation; the known functions and open edges are pinned in
 `research/cases/animation-pose/specs/gameplay_actions.json`.
 
+That row is what makes the unarmed case resolve at all. A player body carries **no
+`ACT_WALK_RELAXED` or `ACT_RUN_RELAXED` sequence**: the only relaxed gaits in
+`tremere_Male_Armor_0`'s whole resolved vocabulary are the weapon-suffixed
+`<weapon>_relaxed_walk` / `<weapon>_relaxed_run` pairs [data-verified, partial corpus]. Without
+the translation an unarmed request for either activity would select nothing.
+
 The model makes the final choice. `SelectWeightedSequence` enumerates sequences whose runtime
 activity ID matches, then uses `actweight`; the chosen sequence still carries the label, include
 owner, blend grid, flags, fade, events and autolayers described in this section. The player-body
@@ -353,9 +403,68 @@ their desired activities. The exact `schedule/task → ideal activity → transl
 call graph, interrupt order, and weapon/class override order are open RE facts; they must be
 recovered rather than inferred from later public Source code.
 
+**The one activity override a map entity can author is never used** [data-verified].
+`combat_start_activity` is stamped on **423** NPC and `npc_maker` entities across the 22 exported
+maps — `npc_VPedestrian` 118, `npc_maker` 109, `npc_VHumanCombatant` 80, `npc_VVampire` 55 and nine
+other classes — and every one of them reads `-1` or the literal `ACT_INVALID`. No shipped entity
+names a spawn-time combat activity, so the whole demand goes through the spawned class's own
+selection.
+
 `numevents`@20 is non-zero on **124 of `move_and_ranged`'s 602** sequences; the event
 array is located but not decoded. Whole-install scope is **1,044 event-bearing
 sequences / 1,714 events**. The current exporter writes no event timeline.
+
+### What one player body answers the selector with [data-verified, partial corpus]
+
+`tremere_Male_Armor_0` — the body the live capture validated (A.4b) — resolves **1,462 distinct
+sequence labels** through a 33-model include DAG, 28 of whose models own at least one label:
+`move_and_ranged` 601, `misc` 262, then the weapon, feed and per-clan `pc/*` banks, plus 4 clips of
+its own. What the ordinary selector's base activities above find on it, with `frames@fps` and
+`flags`@8 read off the **base cell**, which on a fan is the 180° one:
+
+| Activity | Label (`actweight`) | Owner bank | Shape | frames@fps | `flags` | fade | ground speed |
+|---|---|---|---|---|---|---|---|
+| `ACT_IDLE` | `idle01` (30), `fidget01`/`02`/`03` (1) | `misc` | clip | 61@30; `fidget03` 172@30 | `0x1`; fidgets `0x0` | 0.3 | — |
+| `ACT_WALK` | `walk` | `move_and_ranged` | 9×1 on `move_yaw` | 46@30 | `0x1` | 0.2 | 60.7–136.7 cm/s per cell |
+| `ACT_RUN` | `run` | `runotherspc_pcidles_allsequences` | 9×1 on `move_yaw` | 19@30 | `0x1` | 0.2 | 457.8–528.3 cm/s per cell |
+| `ACT_SNEAK` | `sneak` | `move_and_ranged` | 9×1 on `move_yaw` | 66@30 | `0x1` | 0.2 | 69.7–79.3 cm/s per cell |
+| `ACT_CROUCH` | `crouch` (30) | `move_and_ranged` | clip | 61@30 | `0x0` | 0.2 | — |
+| `ACT_HOP` / `ACT_HOP_UP` / `ACT_HOP_DOWN` | `hop` / `hop_up` / `hop_down` | `misc` | clip | 2@30 / 15@30 / 12@30 | `0x0` | 0.2 | — |
+| `ACT_LEAP` | `leap` | `misc` | clip | 46@30 | `0x0` | 0.2 | — |
+| `ACT_LEAP_ASCEND` / `ACT_LEAP_DESCEND` | `leap_ascend` / `leap_descend` | `misc` | clip | 31@30 | `0x1` | **0.45** | — |
+| `ACT_FALLING` | `falling` | `misc` | clip | 25@30 | `0x1` | 0.2 | — |
+| `ACT_LAND` / `ACT_LAND_HARD` | `land` / `land_hard` | `misc` | clip | 20@30 / 71@30 | `0x0` | 0.2 | — |
+| `ACT_SWIM` / `ACT_TREADWATER` | `swim` / `treadwater` | `misc` | clip | 39@30 | `0x1` | 0.2 | — |
+| `ACT_CLIMB_UP` / `ACT_CLIMB_DOWN` | `ladder_up` / `ladder_down` | `misc` | clip | 29@30 | `0x1` | 0.2 | — |
+
+**`ACT_RUN` does not resolve to `move_and_ranged`.** The include DAG reaches the PC-only bank
+`shared/male/runotherspc_pcidles_allsequences` first, and that bank re-authors the whole fan. Its
+nine cells run at a uniform 30 fps where the shared bank's mix 18.0, 22.0 and 30.0, so the player's
+whole fan cycles in 0.567–0.6 s where the cast's runs 0.6–1.0 s. The cells disagree in distance
+too: the two banks agree exactly on the 0° cell (478.7 cm/s on both) and diverge everywhere else,
+most sharply at 180°, where the shared bank backpedals at 313.2 cm/s against the PC bank's 522.0.
+All nine of the shared bank's cells are spelled `npc_run_*`. **The player and the cast do not share
+a run**, and a resolver keyed on the label alone rather than on the owner the DAG names hands the
+player the cast's gait.
+
+**Nothing in this vocabulary holds an unarmed crouch.** `crouch` is a 61-frame non-looping
+one-shot — an *into* pose — and the only crouched idles the body carries are `crouch_idle` under
+`ACT_CROUCH_MELEESHARED_TWOHAND` and the `<weapon>_crouch` / `<weapon>_midcrouch_idle` sets. What
+retail holds a ducked unarmed player on is not readable from the model inventory.
+
+**`ACT_HOP` is two frames** — a stub rather than a jump. The airborne family carrying real
+animation is `leap_ascend`/`leap_descend`, both looping and both asking a **0.45 s** crossfade
+(A.4c), more than twice the 0.2 s the rest of this vocabulary asks for.
+
+**A clip's rate is less uniform than the six-bank census above.** This body's DAG reads seven
+rates — 30.0 ×1,417, 18.0 ×26, 60.0 ×5, 20.0 ×5, 35.0 ×5, 38.0 ×3 and 25.0 ×1 — so 25, 35 and 38
+fps exist beside the four that census names. Every one of the 26 clips at 18.0 is a run:
+`move_and_ranged`'s own `run` and its `<weapon>_aggressive_run` / `<weapon>_relaxed_run` variants.
+
+**A player body does not include the disposition stance bank.** `shared/male/stances` is absent
+from this DAG, so the plain `ACT_DISPOSITION` of the table above is unreachable on it; what the
+body does carry is **8 `ACT_DISPOSITION_*` activities** — `AFRAID`, `ANGRY`, `COY`, `CRYING`,
+`MESMERIZED`, `MESMERIZED_PRE_INTO`, `NERVOUS` and `STUNNED`.
 
 ### `flags`@8 is a small, nearly-closed bit set [data + VtMB decompiled]
 
@@ -370,8 +479,10 @@ Only five values occur across **331 loose models / 5,836 sequences**: `0x0002` �
 | `0x10` | **selects the post-multiply additive combine** (`FUN_10088d60`) over the pre-multiply one (`FUN_10088d00`) inside the `0x4` branch — see below | read after the `0x4` gate in `FUN_10088e10`; set by every shipped `_delta` |
 | `0x400` | flips the crossfade-duration combine from `max` to `min` (A.4c) | set by no shipped sequence, so unreachable and untested |
 
-`0x1` is not a complete looping oracle: `idle01` reads 0 while being a looping idle, so a
-consumer still applies its own policy for the clips the authors left unflagged.
+`0x1` is not a complete looping oracle: `shared/male/pc_idles`'s `idle01` reads 0 while being a
+looping idle, so a consumer still applies its own policy for the clips the authors left unflagged.
+The label alone does not settle it either — `shared/male/misc.mdl` carries a second `idle01`, the
+copy a player body's include DAG resolves first, and that one reads `0x1`.
 
 **`0x14` marks the additive family.** All **118** sequences carrying it are named `*_delta`
 — 60 of them the male bank's — and conversely all 118 `*_delta`-named sequences across the
@@ -489,6 +600,14 @@ abandoned authoring.
 `libcolumn_*`, `malklifetube_trims.mdl`, `g_handleclaws.mdl`, `i_handleclaws.mdl`) read
 `numautolayers == 764` at sequence 0 — the descriptor tail runs past the end of the file and lands
 in the string table. A reader must bound both the count and the array against the image.
+
+**Two cautions when judging a layer by eye.** A delta over a host that does *not* declare it is
+arithmetically exact and anatomically nonsense — `twohanded_crouch_attack_delta` over a standing idle
+swings an arm that never raised, because the crouch and the arm-raise live in the base and the delta
+carries only the swing. The pairing to judge against is the table's, not the one the two names
+suggest. And **the legs and torso are not a control group**: whole-body sway under an additive is the
+authored data rather than a defect, since deltas stack down the chain to roughly 37° at the skull.
+A root that *translates* would be the defect.
 
 ## A.4 Animation data — the 32B/bone record + `{valid,total}` RLE [data-verified]
 
@@ -1445,6 +1564,12 @@ authoring: the 0.3 s ones are dialogue (`nines_damagedw.mdl`, `Jeanette.mdl`,
 (`hannah.mdl`, `heatherneardeath.mdl`, `lacroix.mdl`, `vv.mdl`). Capture of VPK-resident
 models additionally observes **0.45** on the female `stances.mdl`, so the loose-model
 survey above is a large sample rather than the complete corpus.
+
+The VPK-resident shared banks widen it further, and the non-default values are not only dialogue.
+Over one male player body's resolved vocabulary (A.3) the histogram is 0.2 ×1,401, **0.3 ×54**,
+0.5 ×5 and **0.45 ×2** [data-verified, partial corpus]: the 0.3 s carriers are `idle01`, the three
+`fidget` clips and the whole `bushhook`/`sledgehammer` attack sets, and the two 0.45 s carriers are
+the male `misc` bank's `leap_ascend` and `leap_descend`.
 
 **Capture agrees on the combine.** Scored against recorded transitions,
 `duration = max(fade(current), fade(previous))` is right on **80 of 80** across three

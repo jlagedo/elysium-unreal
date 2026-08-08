@@ -176,9 +176,10 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
 
 ## Where the work lives
 
-Project implementation status and sequencing live in `docs/project/roadmap.md`; detailed retail
-capture and original-runtime animation/facial investigation status lives in its declared scoped
-subtracker, `docs/project/retail-capture-roadmap.md`. Topic design remains split by
+Project implementation status and sequencing live in `docs/project/roadmap.md`; detailed status for
+retail capture, the skeletal animation assets, and the Character/Camera/Controls vertical lives in
+its three declared scoped subtrackers, `docs/project/retail-capture-roadmap.md`,
+`docs/project/animation-roadmap.md` and `docs/project/three-cs-roadmap.md`. Topic design remains split by
 concern: `docs/architecture/ui-architecture.md` for the Unreal UI,
 `docs/architecture/camera-architecture.md` for the remaster camera,
 `docs/architecture/asset-enhancement.md` for surfaces, and the owning behavior doc for every
