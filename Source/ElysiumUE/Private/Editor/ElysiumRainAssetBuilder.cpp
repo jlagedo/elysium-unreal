@@ -276,20 +276,37 @@ FString UElysiumRainAssetBuilder::ValidateRainSystem(
 	}
 	if (Material)
 	{
-		const UMaterial* BaseMaterial = Material->GetMaterial();
-		const FMaterialResource* Resource = BaseMaterial
-			? BaseMaterial->GetMaterialResource(GMaxRHIShaderPlatform)
-			: nullptr;
-		if (!BaseMaterial || !Resource)
+		UMaterial* BaseMaterial = Material->GetMaterial();
+		if (!BaseMaterial)
 		{
-			Errors.Add(TEXT("rain material has no compiled resource"));
+			Errors.Add(TEXT("rain material has no base material"));
 		}
 		else
 		{
-			for (const FString& CompileError : Resource->GetCompileErrors())
+			// The bake runs as a commandlet, which owns no rendering platform, so
+			// `GetMaterialResource(GMaxRHIShaderPlatform)` answers null for a material that
+			// compiles perfectly well -- an absent resource read as a shader failure. Compile the
+			// exact platform the game launches instead; DX12/SM6 is the only one it ships.
+			// `ElysiumContentTests`' player-body material check does the same for the same reason.
+			TArray<FMaterialResource*> Resources;
+			FMaterialResource* Sm6 = FindOrCreateMaterialResource(Resources, BaseMaterial, nullptr,
+				SP_PCD3D_SM6, EMaterialQualityLevel::High);
+			if (!Sm6)
 			{
-				Errors.Add(FString::Printf(TEXT("material: %s"), *CompileError));
+				Errors.Add(TEXT("rain material creates no PCD3D_SM6 resource"));
 			}
+			else
+			{
+				if (!Sm6->CacheShaders(EMaterialShaderPrecompileMode::None))
+				{
+					Errors.Add(TEXT("rain material does not compile for PCD3D_SM6"));
+				}
+				for (const FString& CompileError : Sm6->GetCompileErrors())
+				{
+					Errors.Add(FString::Printf(TEXT("material: %s"), *CompileError));
+				}
+			}
+			FMaterial::DeferredDeleteArray(Resources);
 		}
 	}
 	if (!System)
