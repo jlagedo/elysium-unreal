@@ -479,8 +479,22 @@ def _composed_frames(d, bones, delta, host, owned=None):
     return out
 
 
+def _authored_channels(d, bones, clip):
+    """[(has translation, has rotation)] per bone, from the clip's own animation record.
+
+    The seven offsets at `+4` are the per-channel RLE pointers, the first three positional and the
+    last four rotational; a zero there means the bone holds its bind value for the whole clip.
+    """
+    records = clip.base + struct.unpack_from("<i", d, clip.base + 48)[0]
+    out = []
+    for bone in bones:
+        offsets = struct.unpack_from("<7i", d, records + bone.index * 32 + 4)
+        out.append((any(offsets[:3]), any(offsets[3:])))
+    return out
+
+
 def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_label="",
-                  label=None, owned=None):
+                  label=None, owned=None, base_channels=None):
     """One clip's tracks, or None if it animates no channel at all.
 
     A bone gets a track only for the channels its animation record actually carries: the
@@ -497,15 +511,11 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     original record, so a derived clip carries exactly the bones its own delta owned."""
     if frames is None:
         frames = S.read_anim(d, bones, clip.base, clip.frames)
-    records = clip.base + struct.unpack_from("<i", d, clip.base + 48)[0]
 
     # Read the authored channels first, so "this clip animates nothing" stays a property of
     # what VtMB wrote rather than of the correction below, and such a clip is still absent
     # rather than present-and-silent.
-    channels = []
-    for bone in bones:
-        offsets = struct.unpack_from("<7i", d, records + bone.index * 32 + 4)
-        channels.append((any(offsets[:3]), any(offsets[3:])))
+    channels = _authored_channels(d, bones, clip)
     if not any(translation or rotation for translation, rotation in channels):
         return None
 
@@ -522,13 +532,31 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
         rotations = split_rotations.get(bone.index)
         has_rotation = has_rotation or rotations is not None
         if base_label and owned is None:
-            # A derived ADDITIVE is a whole POSE, so every bone ships even where the delta owned
-            # nothing. Unreal subtracts the base from every bone when it bakes an additive down,
-            # and a bone with no track evaluates to the skeleton's reference pose rather than to
-            # the base -- which would subtract into a spurious delta instead of an identity one.
-            # Where the delta owned nothing the composed value IS the base, so those bones cost a
-            # track and resolve to exact identity.
-            has_translation = has_rotation = True
+            # A derived ADDITIVE ships the bones ITS OWN delta authored, plus the bones its HOST
+            # tracks -- and nothing else.
+            #
+            # Unreal bakes an additive down over every bone of the skeleton, subtracting the base
+            # pose from the additive pose, and a bone NEITHER side tracks resolves to the shared
+            # skeleton's reference pose on both -- so it subtracts to exact identity and needs no
+            # track. Shipping one anyway put this CONTAINER's bind on the additive side against a
+            # base that still resolved to the shared skeleton's, which agree only when this
+            # container seeded the family.
+            #
+            # A bone the HOST tracks must still ship even where the delta authored nothing, or the
+            # additive resolves to the reference pose against a base that does not -- the same
+            # error with the sign flipped. Its composed value is the host's own, so it subtracts to
+            # identity too.
+            #
+            # This closes the neither-side case. It does NOT close the case where the DELTA
+            # authors a bone its host does not: there the composed value is the host's bind plus
+            # the delta, while Unreal's base is still the shared skeleton's reference pose, and the
+            # two differ by however far this container's bind sits from the family's. Closing that
+            # needs the host to carry a bind track wherever its additives carry one, which is a
+            # change to how the host is emitted rather than to this branch.
+            host_translation, host_rotation = (
+                base_channels[bone.index] if base_channels else (False, False))
+            has_translation = has_translation or host_translation
+            has_rotation = has_rotation or host_rotation
         elif owned is not None:
             # A derived OVERLAY ships only the bones its mask owns; the rest come from whatever
             # the layered blend is composed over at runtime, which is what the mask is for. An
@@ -673,6 +701,7 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
             d, bones, layer, bone_map, emitted, masks,
             frames=_composed_frames(d, bones, layer, host, owned),
             base_label=host.label.lstrip("@"), owned=owned,
+            base_channels=None if owned is not None else _authored_channels(d, bones, host),
             label=f"{layer.label.lstrip('@')}{BASE_SEPARATOR}{host.label.lstrip('@')}")
         if payload is not None:
             payloads.append(payload)
