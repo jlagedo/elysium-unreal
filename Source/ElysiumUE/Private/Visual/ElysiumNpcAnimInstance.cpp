@@ -421,10 +421,22 @@ void FElysiumNpcAnimProxy::ResolveLayerMask(int32 Layer, const UAnimSequence* Se
 	{
 		return;
 	}
+	// The profile LIVES on the layer's skeleton but this array is READ in the body's index space:
+	// EvaluateLayers looks it up at FBoneContainer::GetSkeletonPoseIndexFromCompactPoseIndex, which
+	// indexes the skeleton the container was made for -- the mesh's. Those were the same skeleton
+	// until banks moved onto their own, and a bank owns every masked overlay, so building the array
+	// against the sequence's skeleton now gates a shifted set of bones: an aim layer loses the
+	// upper-body bones that fell outside and gains whatever leg bones fell inside, at full weight.
+	// Nothing logs it, because a lookup that misses reads as 0.f, which is also how "not owned"
+	// reads. Resolving the profile's own bone NAMES against the target skeleton is the whole fix --
+	// it is the same name-keyed rule FSkeletonRemapping applies, without needing the table.
+	const USkeleton* TargetSkeleton = GetSkeleton();
+	const FReferenceSkeleton& Ref = TargetSkeleton != nullptr
+		? TargetSkeleton->GetReferenceSkeleton() : LayerSkeleton->GetReferenceSkeleton();
 	// Zero is the default a blend mask reads outside its own entries, and it is the answer that
 	// keeps the base pose — so the array is built from the profile's entries alone and every bone
-	// the mask does not name stays where the body put it.
-	const FReferenceSkeleton& Ref = LayerSkeleton->GetReferenceSkeleton();
+	// the mask does not name stays where the body put it. A bone the target skeleton does not carry
+	// resolves to INDEX_NONE and is simply absent, which is the same answer the remapping gives.
 	Weights.AddZeroed(Ref.GetNum());
 	for (int32 Entry = 0; Entry < Profile->GetNumBlendEntries(); ++Entry)
 	{

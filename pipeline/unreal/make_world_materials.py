@@ -840,6 +840,13 @@ def make_additive():
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
     mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    # REQUIRED, and the failure is cooked-build-only. This master is instanced as the sprite
+    # material for every VtMB emitter (make_particle_systems.py), and
+    # FNiagaraRendererSprites::IsMaterialValid gates on MATUSAGE_NiagaraSprites. In the editor
+    # CheckMaterialUsage_Concurrent adds the flag and dirties a package that is regenerated from
+    # scratch on the next content build, so it is silently re-lost every export; in a cook the
+    # permutation is simply absent and every sprite falls back to the default grey surface.
+    mat.set_editor_property("used_with_niagara_sprites", True)
     # $additive: the base texture RGB is added onto the framebuffer, full-bright (no lighting).
     albedo = _tex_param(mat, "Albedo", -520, -40)
     emis_scale = _scalar(mat, "EmissiveScale", 1.0, -520, 200)

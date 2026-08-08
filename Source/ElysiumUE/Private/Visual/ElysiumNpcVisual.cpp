@@ -357,10 +357,10 @@ namespace ElysiumNpcVisual
 	}
 
 	UBlendSpace* LoadBakedBlendSpace(const USkeletalMesh* Mesh, const FString& Owner,
-		const FString& Label)
+		const FString& Label, const FString& Host)
 	{
 		const FString BankPath = FElysiumContentPaths::BakedCharacterBlendSpace(
-			FElysiumContentPaths::BakedBankFolder(), Owner, Label);
+			FElysiumContentPaths::BakedBankFolder(), Owner, Label, Host);
 		if (IsOnMount(BankPath))
 		{
 			return LoadObject<UBlendSpace>(nullptr, *BankPath);
@@ -371,7 +371,7 @@ namespace ElysiumNpcVisual
 			return nullptr;
 		}
 		return LoadObject<UBlendSpace>(nullptr,
-			*FElysiumContentPaths::BakedCharacterBlendSpace(Family, Owner, Label));
+			*FElysiumContentPaths::BakedCharacterBlendSpace(Family, Owner, Label, Host));
 	}
 
 	USkeletalMesh* LoadMesh(const FString& Stem, UglTFRuntimeAsset*& OutAsset, FString& OutError,

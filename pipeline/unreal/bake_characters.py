@@ -24,13 +24,17 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
+from elysium_pipeline import asset_names, character_partition  # noqa: E402
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
 MOUNT = "/ElysiumBaked"
 CHARACTERS = MOUNT + "/Characters"
-SKELETONS = CHARACTERS + "/Skeletons"
-SKELETON_PREFIX = "SKEL_Elysium_"
+#: Every skeleton package path comes off `npc/families.json`; these two exist so the folder can be
+#: created and so the verifier can read a family back off a skeleton's name. The partition module
+#: is the one authority on the spelling.
+SKELETONS = character_partition.SKELETON_DIR
+SKELETON_PREFIX = character_partition.MODEL_SKELETON_PREFIX
 MESHES = CHARACTERS + "/Meshes"
 MATERIALS = CHARACTERS + "/Materials"
 TEXTURES = CHARACTERS + "/Textures"
@@ -39,7 +43,7 @@ ANIMS = CHARACTERS + "/Anims"
 #: every body that includes it, so baking it per rig family turned 7,871 distinct clips across the
 #: cast into ~90,000 assets. The families share these through `AddCompatibleSkeleton` instead.
 BANKS = ANIMS + "/_banks"
-BANK_SKELETON_PREFIX = "SKEL_ElysiumBank_"
+BANK_SKELETON_PREFIX = character_partition.BANK_SKELETON_PREFIX
 
 #: Every body section is instanced from this one master. Its parameter names are glTF's, which is
 #: what lets one instance serve a body drawn as an NPC and the same body worn by the player -- the
@@ -70,8 +74,34 @@ def source_path(stem, bank=False):
     return os.path.join(NPC_DIR, "banks" if bank else "", stem + ".eskm")
 
 
-def texture_asset_name(uri):
-    return "T_" + bl.safe_name(os.path.splitext(os.path.basename(uri))[0])
+def read_partition():
+    """The declared rig partition, written by the offline half over the WHOLE corpus.
+
+    Read rather than recomputed. `eskm.rig_families` is greedy over the set it is given, so
+    partitioning whatever a run happens to name renames families -- and can merge two the cast
+    keeps apart -- while the family name is the path contract for every clip and skeleton the
+    mount carries."""
+    path = os.path.join(NPC_DIR, "families.json")
+    if not os.path.isfile(path):
+        raise SystemExit(
+            "[chars] %s is missing (run: uv run elysium export characters)" % path)
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        return character_partition.check(json.load(handle))
+
+
+def release_packages():
+    """Drop the packages this pass saved, and say how many went.
+
+    Not `unreal.SystemLibrary.collect_garbage()`, which frees nothing here: it only raises flags
+    that the engine tick consumes, and a `-run=pythonscript` commandlet never ticks."""
+    released = unreal.ElysiumSkeletalBuildLibrary.release_baked_packages(CHARACTERS)
+    if released:
+        log("released %d package(s)" % released)
+
+
+#: Shared with the offline half, which names the same asset in `npc/textures.json` without an
+#: editor to ask. The two must agree or the bake imports under a name nothing looks up.
+texture_asset_name = asset_names.texture_asset_name
 
 
 def import_textures_for(paths):
@@ -156,8 +186,8 @@ def blend_source(manifest, owner, is_bank):
     return section.get(owner, {}).get("blends", "")
 
 
-def bake_banks(manifest, stems, library, failed):
-    """Bake every bank the cast reaches ONCE, and return the skeletons the bodies play them from.
+def bake_banks(manifest, partition, stems, library, failed):
+    """Bake every bank the named bodies reach ONCE, and return the skeletons they play them from.
 
     A `UAnimSequence` is bound to exactly one `USkeleton`, so a bank recorded once was rebuilt for
     every rig family that included it -- and the families are numerous for small reasons, mostly the
@@ -171,6 +201,11 @@ def bake_banks(manifest, stems, library, failed):
     applied when it left a Gangrel ponytail track unbound. The reference poses agree to a median of
     0.03 degrees across the shared bones, because VtMB's banks were recorded on character rigs, so
     the remapping is a pure index map with no pose correction in it.
+
+    **Every declared bank family's skeleton is built, whatever this run bakes.** A body declares
+    compatibility with all of them, and a skeleton missing because no named body happened to reach
+    its family is a body that cannot play a bank it does not yet need. Only the SEQUENCES are
+    restricted to what the named bodies reach.
     """
     needed = set()
     for bank in sorted(owner for owner, is_bank in owner_clips(manifest, stems).items() if is_bank):
@@ -179,39 +214,42 @@ def bake_banks(manifest, stems, library, failed):
         else:
             fail("no .eskm for clip owner %s" % bank)
             failed.append(bank)
-    if not needed:
-        return []
 
-    # Partitioned over EVERY bank the manifest carries, not just the ones this run reaches, because
-    # `rig_families` is greedy over the set it is given: naming two models would otherwise seed the
-    # families differently and write the same clips under a differently-named skeleton. Each
-    # skeleton is likewise built from all of its family's banks, so its bone tree does not depend on
-    # which models were named either. Only the SEQUENCES are restricted to what this run needs.
-    everything = sorted(bank for bank in manifest["banks"]
-                        if os.path.isfile(source_path(bank, bank=True)))
-    trees = {bank: eskm.bone_parents(eskm.read(source_path(bank, bank=True)))
-             for bank in everything}
-    bank_families = eskm.rig_families(trees, everything)
-    log("%d bank(s) in %d rig famil%s, %d to bake"
-        % (len(everything), len(bank_families), "y" if len(bank_families) == 1 else "ies",
-           len(needed)))
+    families = partition["banks"]
+    log("%d bank(s) in %d declared rig famil%s, %d to bake"
+        % (len(partition["bank_family_of"]), len(families),
+           "y" if len(families) == 1 else "ies", len(needed)))
 
     skeletons = []
-    for family in bank_families:
-        skeleton_package = "%s/%s%s" % (SKELETONS, BANK_SKELETON_PREFIX, family["name"])
-        for bank in family["stems"]:
-            error = library.build_skeleton_from_source(source_path(bank, bank=True),
-                                                       skeleton_package)
-            if error:
-                fail("bank skeleton %s: %s" % (bank, error))
-                failed.append(bank)
+    for name in sorted(families):
+        family = families[name]
+        skeleton_package = family["skeleton"]
+        members = [b for b in family["members"] if os.path.isfile(source_path(b, bank=True))]
+        if len(members) != len(family["members"]):
+            fail("bank family %s: %d of %d member containers are missing"
+                 % (name, len(family["members"]) - len(members), len(family["members"])))
+            failed.append(name)
+            continue
+        # Rebuilt from every declared member, in declared order, rather than merged into whatever a
+        # previous run left behind: a skeleton that only grows keeps the bones of banks a later
+        # partition moved elsewhere, and an untracked bone falls back to exactly that tree.
+        error, bones = library.build_family_skeleton(
+            [source_path(b, bank=True) for b in members], skeleton_package, True)
+        if error:
+            fail("bank skeleton %s: %s" % (name, error))
+            failed.append(name)
+            continue
+        if bones != family["bones"]:
+            fail("bank skeleton %s: built %d bones, the partition declares %d"
+                 % (name, bones, family["bones"]))
+            failed.append(name)
         skeletons.append(skeleton_package)
 
         total = 0
         spaces_total = 0
         dropped_total = 0
         grids_skipped = 0
-        for bank in [b for b in family["stems"] if b in needed]:
+        for bank in [b for b in family["members"] if b in needed]:
             package = "%s/%s" % (BANKS, bank)
             error, count, dropped = library.build_anim_sequences_from_source(
                 source_path(bank, bank=True), package, skeleton_package)
@@ -233,11 +271,11 @@ def bake_banks(manifest, stems, library, failed):
             grids_skipped += skipped_grids
             if skipped_cells:
                 log("%s: %d grid cell(s) had no baked clip" % (bank, skipped_cells))
-        log("bank family '%s': %d bank(s), %d sequence(s), %d blend space(s), "
+        log("bank family '%s': %d bank(s) (%d bones), %d sequence(s), %d blend space(s), "
             "%d track(s) unbound%s"
-            % (family["name"], len(family["stems"]), total, spaces_total, dropped_total,
+            % (name, len(members), bones, total, spaces_total, dropped_total,
                ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
-        unreal.SystemLibrary.collect_garbage()
+        release_packages()
     return skeletons
 
 
@@ -262,56 +300,60 @@ def main():
         bl.ensure_dir(package)
 
     library = unreal.ElysiumSkeletalBuildLibrary
-    # Bone trees only, NOT the containers. The cast's `.eskm` files are 400 MB together and the
-    # bake needs a container's bytes for exactly one call; holding all of them for the length of
-    # the run is most of a gigabyte that never gets used again. The bytes are released as each
-    # tree is taken.
-    trees = {stem: eskm.bone_parents(eskm.read(source_path(stem))) for stem in stems}
-    families = eskm.rig_families(trees, stems)
-    log("%d model(s) in %d rig famil%s"
-        % (len(stems), len(families), "y" if len(families) == 1 else "ies"))
+    partition = read_partition()
+    baking = sorted({partition["model_family_of"][stem] for stem in stems})
+    log("%d model(s) in %d of %d declared rig famil%s"
+        % (len(stems), len(baking), len(partition["models"]),
+           "y" if len(partition["models"]) == 1 else "ies"))
 
     textures = import_textures_for([source_path(stem) for stem in stems])
     failed = []
 
-    bank_skeletons = bake_banks(manifest, stems, library, failed)
+    bank_skeletons = bake_banks(manifest, partition, stems, library, failed)
 
-    # A WORKLIST, not a plain loop: `rig_families` PREDICTS what one USkeleton can carry, and
-    # `USkeleton::MergeAllBonesToBoneTree` is the authority on it. Where the two disagree the model
-    # is re-homed into a family of its own and built there, rather than the run failing on a
-    # partition it cannot revise. That keeps the prediction free to be imperfect -- it is a
-    # grouping heuristic that saves assets, not a correctness rule -- and it costs one extra
-    # skeleton for a model no other body could have shared anyway.
-    pending = list(families)
-    rehomed = []
-    while pending:
-        family = pending.pop(0)
-        name = family["name"]
-        skeleton_package = "%s/%s%s" % (SKELETONS, SKELETON_PREFIX, name)
+    for name in baking:
+        family = partition["models"][name]
+        skeleton_package = family["skeleton"]
+        members = family["members"]
+        # Every declared member seeds the skeleton, not just the ones this run bakes. The tree and
+        # the reference pose are therefore a function of the partition rather than of the slice --
+        # which is what an untracked bone falls back to, and what a blend mask is content-addressed
+        # against. A slice that seeded from its own members alone would hash the same authored mask
+        # to a different profile name and fail the next grid that spans two slices.
+        missing = [s for s in members if not os.path.isfile(source_path(s))]
+        if missing:
+            fail("family %s: %d declared member container(s) missing: %s"
+                 % (name, len(missing), ", ".join(missing[:4])))
+            failed.append(name)
+            continue
+        error, bones = library.build_family_skeleton(
+            [source_path(s) for s in members], skeleton_package, True)
+        if error:
+            fail("family skeleton %s: %s" % (name, error))
+            failed.append(name)
+            continue
+        if bones != family["bones"]:
+            fail("family skeleton %s: built %d bones, the partition declares %d"
+                 % (name, bones, family["bones"]))
+            failed.append(name)
 
-        # The meshes first: the skeleton's bone tree is the union of the bodies merged into it, and
-        # a clip cannot bind to a bone the tree does not carry yet.
+        # The meshes merge into a tree that already carries every bone the family declares, so the
+        # merge can only be a no-op -- and a refusal means the declared partition disagrees with
+        # `MergeAllBonesToBoneTree`, which is the authority. That is a fatal disagreement rather
+        # than something to route around: a slice that invented a family here would write a second
+        # answer for every clip label under a name nothing else points at.
         mesh_failed = False
-        for stem in list(family["stems"]):
+        for stem in [s for s in members if s in stems]:
             error = library.build_skeletal_mesh_from_source(
                 source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
                 BODY_MASTER, MATERIALS,
                 material_bindings(eskm.read(source_path(stem)), textures))
-            if error and "another rig family" in error and stem != family["stems"][0]:
-                # The seed is excluded: it CREATED this skeleton, so it cannot be incompatible
-                # with it, and re-homing it would leave the family without one.
-                family["stems"].remove(stem)
-                pending.append({"name": stem, "tree": dict(trees[stem]),
-                                "stems": [stem]})
-                rehomed.append(stem)
-                log("%s: own rig family -- the skeleton refused the merge the partition expected"
-                    % stem)
-                continue
             if error:
                 fail("SK_%s: %s" % (stem, error))
                 failed.append(stem)
                 mesh_failed = True
-        log("family '%s': %d model(s)" % (name, len(family["stems"])))
+        log("family '%s': %d of %d declared model(s), %d bones"
+            % (name, sum(1 for s in members if s in stems), len(members), bones))
 
         # A family whose skeleton is short of a body's bones cannot bake that body's clips, and the
         # clip builder would report every owner in turn against a skeleton that was never finished.
@@ -320,14 +362,15 @@ def main():
             fail("family '%s': skipping clips, a model in it did not build" % name)
             continue
 
-        # What lets this family play the banks without owning a copy of them. Declared after the
-        # meshes, because the skeleton does not exist until the first body merges into it.
+        # What makes the editor offer this family's bodies and the banks' clips together. The
+        # runtime needs no declaration -- `DecompressPose` builds the name-keyed remapping for any
+        # skeleton pair -- but every editor-side validator consults it.
         error = library.declare_compatible_skeletons(skeleton_package, bank_skeletons)
         if error:
             fail("family '%s': %s" % (name, error))
             failed.append(name)
 
-        owners = owner_clips(manifest, family["stems"])
+        owners = owner_clips(manifest, [s for s in members if s in stems])
         total = 0
         spaces_total = 0
         # Grids the bake declined. A grid the exporter left with fewer than two live cells is not a
@@ -373,15 +416,8 @@ def main():
             % (name, sum(1 for is_bank in owners.values() if not is_bank), total, spaces_total,
                ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
 
-        # Everything this family built is saved and will never be touched again, but it stays
-        # rooted in memory until something collects it. Over the whole cast that is tens of
-        # thousands of sequences, and the run dies of a failed allocation somewhere in the tail
-        # rather than of anything wrong with the model it was on.
-        unreal.SystemLibrary.collect_garbage()
+        release_packages()
 
-    if rehomed:
-        log("%d model(s) re-homed into their own rig family: %s"
-            % (len(rehomed), ", ".join(sorted(rehomed))))
     if failed:
         raise SystemExit("[chars] failed: %s" % ", ".join(sorted(set(failed))))
     log("done")

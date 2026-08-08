@@ -6,24 +6,23 @@
 # reversed at export), so every number is passed through verbatim. The factories wrap the
 # editor asset APIs the bake needs: texture import, material instances, static meshes.
 import os
-import re
 import hashlib
 import json
 import struct
 
 import unreal
 
+from elysium_pipeline import asset_names
+
 _tools = unreal.AssetToolsHelpers.get_asset_tools()
 _mel = unreal.MaterialEditingLibrary
 _collision = unreal.GeometryScript_Collision
 
-# Package-name-safe: Unreal object names allow letters, digits and underscore.
-_UNSAFE = re.compile(r"[^A-Za-z0-9_]+")
-
-
-def safe_name(text):
-    """An OBJ material / texture path turned into a legal Unreal object name."""
-    return _UNSAFE.sub("_", text).strip("_") or "unnamed"
+# Package-name-safe folding lives in elysium_pipeline.asset_names, which imports no `unreal` and
+# so is reachable from the offline half too -- the character partition has to name a texture
+# asset without an editor. That module also states how this fold differs from the C++
+# `FElysiumContentPaths::BakedAssetName`.
+safe_name = asset_names.safe_name
 
 
 def read_glb_json(path):
@@ -132,7 +131,7 @@ class MatDef(object):
     __slots__ = ("name", "albedo", "emissive", "bump", "refract_map", "env_mask",
                  "base_tex2", "scissor", "blend", "additive", "glass", "refract",
                  "refract_amount", "env_cube", "env_tint", "wetness_driven",
-                 "wetness_scale", "decal", "color")
+                 "wetness_scale", "decal", "water", "color")
 
     # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
     # dim-down. The population is bimodal -- 361 of the game's 362 grey tints sit at exactly
@@ -159,12 +158,16 @@ class MatDef(object):
         self.wetness_driven = False
         self.wetness_scale = 0.0
         self.decal = False        # decal 1    -> deferred-decal master
+        # water 1 -> a Source water surface. The exporter's flag chain is an if/elif, so a water
+        # material is written as `water 1` INSTEAD of `blend 1` and never carries the translucent
+        # flag -- reading only `blend` therefore calls every canal, sewer and pier surface opaque.
+        self.water = False
         self.color = (0.6, 0.6, 0.65)
 
     @property
     def opaque(self):
         """True when this surface can carry Nanite (Nanite is opaque/masked only)."""
-        return not (self.blend or self.additive or self.refract)
+        return not (self.blend or self.additive or self.refract or self.water)
 
     @property
     def chromatic(self):
@@ -221,6 +224,8 @@ def read_mtl(path):
                 cur.refract_map = tok[1]
             elif key == "decal" and len(tok) >= 2 and tok[1] == "1":
                 cur.decal = True
+            elif key == "water" and len(tok) >= 2 and tok[1] == "1":
+                cur.water = True
             elif key == "bumpmap" and len(tok) >= 2:
                 cur.bump = tok[1]
             elif key == "envmapmask" and len(tok) >= 2:

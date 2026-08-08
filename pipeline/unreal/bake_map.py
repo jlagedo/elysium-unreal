@@ -120,6 +120,20 @@ def log(msg):
     unreal.log("[bake] %s" % msg)
 
 
+def _make_movable(component):
+    """Make a spawned light dynamic BEFORE anything sets a property that only a movable light takes.
+
+    `APointLight`/`ASpotLight`/`ADirectionalLight` all construct Stationary, and
+    `SetAttenuationRadius`, `SetInnerConeAngle` and `SetOuterConeAngle` guard on
+    `AreDynamicDataChangesAllowed(false)` -- which rejects Stationary and returns **silently**, no
+    log and no return value. Setting mobility afterwards is therefore too late: the light keeps
+    ULocalLightComponent's constructed 1000 cm radius and 44 degree cone instead of the authored
+    ones. `SetIntensity` and `SetLightColor` pass the default `bIgnoreStationary=true` and do
+    apply, which is what made the loss look like a tuning problem rather than a dropped write.
+    """
+    component.set_mobility(unreal.ComponentMobility.MOVABLE)
+
+
 def _dir_rotator(direction):
     """Unreal spot/directional lights emit along +X, so aim that axis down the beam."""
     if direction.length() < 1e-6:
@@ -566,6 +580,12 @@ class Bake(object):
             return self.masters["refract"]
         if mat.glass:
             return self.masters["glass"]
+        # Before `blend`, because the exporter writes `water 1` INSTEAD of `blend 1` -- a water
+        # surface never carries the translucent flag, so testing `blend` alone bakes every canal
+        # and sewer as an opaque Nanite card. Most water authors no $basetexture either, so that
+        # card resolves no albedo and draws the master's own placeholder.
+        if mat.water:
+            return self.masters["translucent"]
         if mat.blend:
             return self.masters["translucent"]
         if mat.scissor:
@@ -1174,6 +1194,7 @@ class Bake(object):
                     actor = actors.spawn_actor_from_class(unreal.PointLight, origin)
                     component = actor.point_light_component if actor else None
                     if component:
+                        _make_movable(component)
                         component.set_attenuation_radius(reach)
                         component.set_intensity(soft)
                         # Texlights stay shadowless, as the rig has them.
@@ -1187,6 +1208,7 @@ class Bake(object):
                         unreal.SpotLight, origin, _dir_rotator(direction))
                     component = actor.spot_light_component if actor else None
                     if component:
+                        _make_movable(component)
                         component.set_attenuation_radius(reach)
                         component.set_intensity(soft)
                         component.set_outer_cone_angle(outer)
@@ -1198,6 +1220,7 @@ class Bake(object):
                     # ADirectionalLight exposes only ALight's generic component property.
                     component = actor.light_component if actor else None
                     if component:
+                        _make_movable(component)
                         component.set_intensity(max(mag * SUN_SCALE_LUX, 0.01))
                         component.set_cast_shadows(True)
                 else:
@@ -1212,7 +1235,6 @@ class Bake(object):
                 component.set_light_color(color)
                 # The VtMB world is pure Lambert -- kill specular so lights do not glare.
                 component.set_editor_property("specular_scale", SPECULAR_SCALE)
-                component.set_mobility(unreal.ComponentMobility.MOVABLE)
                 actor.set_actor_label("Light_%d_%s%s" % (
                     index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind],
                     "_sky" if is_sky else ""))

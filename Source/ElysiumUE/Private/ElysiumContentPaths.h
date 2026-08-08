@@ -142,10 +142,16 @@ struct FElysiumContentPaths
 	// directory of its own — the `BS_` prefix disambiguates it from their `A_` the way `MI_`, `T_`
 	// and `SK_` do elsewhere on the mount — because a grid's cells are always clips of the same
 	// owner, so the two are written by the same pass and go stale together.
+	//
+	// `Host` names the clip a LAYER grid was composed with, and is empty for a grid that stands on
+	// its own. A layer's cells are masked overlays whose pose only means anything accumulated onto
+	// a particular host, so the bake writes one asset per declaring host and the label alone does
+	// not identify one — asking for the bare label found nothing for 299 of the mount's 527 spaces.
 	static FString BakedCharacterBlendSpace(const FString& Family, const FString& Owner,
-		const FString& Label)
+		const FString& Label, const FString& Host = FString())
 	{
-		const FString Asset = TEXT("BS_") + BakedAssetName(Label);
+		const FString Asset = TEXT("BS_")
+			+ BakedAssetName(Host.IsEmpty() ? Label : Label + TEXT("@") + Host);
 		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
 	}
 	// bake_lib.safe_name in C++: every run of characters illegal in an Unreal object name folds to a

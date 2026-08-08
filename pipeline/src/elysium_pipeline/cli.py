@@ -386,13 +386,25 @@ def export_map(
 def export_characters(
     ctx: typer.Context,
     models: list[str] = typer.Argument(
-        None, help="Models to bake. Omit for the whole cast, which is what the game needs."
+        None,
+        help="Models to bake: a stem, family:<name>, or bank:<name>. "
+             "Omit for the whole cast, which is what the game needs.",
+    ),
+    force: bool = typer.Option(False, "--force", help="Rewrite every .eskm container."),
+    no_sweep: bool = typer.Option(
+        False, "--no-sweep", help="Leave assets the declared partition no longer produces."
+    ),
+    force_sweep: bool = typer.Option(
+        False, "--force-sweep", help="Sweep past the safety guard on how much may be removed."
     ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
-        stems = export_manager.export_characters(config, runner, models)
+        stems = export_manager.export_characters(
+            config, runner, models, force=force,
+            sweep=not no_sweep, force_sweep=force_sweep,
+        )
         console.print(f"character bake complete: {len(stems)} model(s)")
 
     _execute(
@@ -500,11 +512,28 @@ def reconstruct(
 def test_command(
     ctx: typer.Context,
     filter_name: str = typer.Argument("Elysium."),
+    stems: list[str] = typer.Option(
+        None, "--stem", help="Widen the per-model parity slice (repeatable)."
+    ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
-        unreal.run_tests(config, runner, filter_name)
+        summary = unreal.run_tests(config, runner, filter_name, parity_stems=stems or ())
+        if not summary["total"]:
+            return
+        # A test that declines to run still reports Success, so the executed count is the only
+        # honest measure of what a green tier covered.
+        console.print(
+            f"{summary['executed']} of {summary['total']} test(s) executed"
+            f" in {summary['seconds']:.1f}s"
+            + (f"; {summary['abstained']} abstained (corpus incomplete)"
+               if summary["abstained"] else "")
+        )
+        for name in summary["abstentions"][:8]:
+            console.print(f"  abstained: {name}")
+        if len(summary["abstentions"]) > 8:
+            console.print(f"  ... and {len(summary['abstentions']) - 8} more")
 
     _execute(
         _state(ctx),

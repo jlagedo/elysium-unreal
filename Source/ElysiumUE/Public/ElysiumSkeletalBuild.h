@@ -74,14 +74,51 @@ public:
 		const FString& SkeletonPackageName);
 
 	/**
+	 * Build and save one rig family's `USkeleton` from EVERY declared member's bone tree.
+	 *
+	 * The union of a family's trees, in the order the partition declares, is what makes the
+	 * skeleton a function of the declared partition rather than of whichever members a bake
+	 * happened to name. Two things downstream depend on that: an untracked bone falls back to this
+	 * skeleton's reference pose, and a blend mask is content-addressed by the bones it owns
+	 * INTERSECTED with this bone set -- so a skeleton that varies by slice silently varies both.
+	 *
+	 * `bRebuild` discards whatever is on disk first. `MergeBonesToBoneTree` only rebuilds an empty
+	 * tree and otherwise unions, so without it a family skeleton can only grow and keeps the bones
+	 * of members that a later partition moved elsewhere.
+	 *
+	 * Refuses a container that would give the skeleton a second root, which is what
+	 * `USkeleton::MergeBonesToBoneTree` rejects far downstream. `OutBones` is the resulting raw
+	 * bone count. Returns an empty string on success, otherwise the first thing that went wrong.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString BuildFamilySkeleton(const TArray<FString>& SourcePaths,
+		const FString& SkeletonPackageName, bool bRebuild, int32& OutBones);
+
+	/**
+	 * Drop every saved package under `PackagePath` from memory, and return how many were released.
+	 *
+	 * The bake writes ~10,000 assets in one process and they all stay resident to exit, because a
+	 * baked asset carries `RF_Standalone` and that is exactly what garbage collection is told to
+	 * keep while `GIsEditor`. Clearing the flag first is what makes a collect take anything.
+	 * A dirty package is skipped -- it is unsaved output, not slack.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static int32 ReleaseBakedPackages(const FString& PackagePath);
+
+	/**
 	 * Declare that this skeleton may play animations authored on the named ones.
 	 *
-	 * **This is what keeps one copy of a bank instead of one per rig family.** A `UAnimSequence` is
-	 * bound to exactly one `USkeleton`, so a bank recorded once would otherwise be rebuilt for every
-	 * family that reaches it -- 7,871 distinct clips across the cast becoming ~90,000 assets. A
-	 * compatibility declaration is non-destructive: the engine builds a name-keyed bone map per
-	 * skeleton pair and drops what the target lacks, which is the same binding rule the bake already
-	 * applies when it reports a bank track unbound.
+	 * **Editor-side bookkeeping, not the mechanism.** What actually lets a bank clip evaluate on a
+	 * foreign body is `DecompressPose`, which asks `FSkeletonRemappingRegistry` for a name-keyed
+	 * bone map for the (sequence skeleton, mesh skeleton) pair unconditionally -- there is no
+	 * compatibility gate anywhere on that path, and every reader of `CompatibleSkeletons` is inside
+	 * `WITH_EDITORONLY_DATA`. The declaration is what makes the editor offer these assets together:
+	 * the animation asset browser, `UBlendSpace::ValidateSampleInput`, anim-blueprint compatibility
+	 * and preview-mesh fixup all consult it, and a bake that skipped it would still produce a
+	 * working game but an editor that refuses to show one.
+	 *
+	 * The direction is not symmetric. The TARGET names the skeletons it may play, so the body's
+	 * family skeleton is the target and each bank skeleton is an argument.
 	 *
 	 * Returns an empty string on success, otherwise the first thing that went wrong.
 	 */

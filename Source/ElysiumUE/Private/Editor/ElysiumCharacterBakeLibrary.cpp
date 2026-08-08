@@ -303,14 +303,23 @@ bool UElysiumCharacterBakeLibrary::MaterialHasTexture(const UMaterialInterface* 
 	{
 		return false;
 	}
+	// OVERRIDDEN values only. `GetTextureParameterValue` defaults to resolving through the instance
+	// chain to the parent's own default, and both character masters give every texture parameter a
+	// real engine asset as its default -- WhiteSquareTexture and DefaultNormal. Reading the resolved
+	// value therefore returns true on the first parameter of every material ever passed here, which
+	// makes this the one check that cannot fail: an instance whose albedo never reached disk still
+	// answers yes.
+	const UMaterialInstance* Instance = Cast<UMaterialInstance>(Material);
 	TArray<FMaterialParameterInfo> Params;
 	TArray<FGuid> Ids;
 	Material->GetAllParameterInfoOfType(EMaterialParameterType::Texture, Params, Ids);
 	for (const FMaterialParameterInfo& Info : Params)
 	{
 		UTexture* Value = nullptr;
-		if (Material->GetTextureParameterValue(Info, Value) && Value != nullptr &&
-			!IsUnsaveable(Value))
+		const bool bFound = Instance != nullptr
+			? Instance->GetTextureParameterValue(Info, Value, /*bOveriddenOnly=*/true)
+			: Material->GetTextureParameterValue(Info, Value);
+		if (bFound && Value != nullptr && !IsUnsaveable(Value))
 		{
 			return true;
 		}

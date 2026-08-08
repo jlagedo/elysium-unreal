@@ -78,8 +78,9 @@ namespace ElysiumNpcVisual
 	// this takes the LABEL — a grid is the thing a label names when it does not name one animation,
 	// so there is no cell selection to resolve first. Null for every label that is one clip, which
 	// is most of them, and for every body the bake has not covered.
+	// `Host` names the clip a LAYER grid was composed with, empty for a standalone grid.
 	class UBlendSpace* LoadBakedBlendSpace(const USkeletalMesh* Mesh, const FString& Owner,
-		const FString& Label);
+		const FString& Label, const FString& Host = FString());
 
 	// Parse any .glb by absolute path — the shared animation banks (out/npc/banks/<stem>.glb), which
 	// carry a skeleton and clips but no mesh. Same config as LoadMesh, so a bank reorients into

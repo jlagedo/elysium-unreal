@@ -120,4 +120,14 @@ struct FElysiumSkeletalSource
 	 * mis-versioned file fails here rather than producing a half-built asset downstream.
 	 */
 	static bool Load(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError);
+
+	/**
+	 * Read only the bone tree, leaving every other array empty. Same validation, same errors.
+	 *
+	 * A rig family's skeleton is seeded from every declared member so its bone tree and reference
+	 * pose do not depend on which members a slice happened to name -- and a member contributes
+	 * nothing to that but its bones. Decoding the clips too would make seeding one family cost
+	 * more than baking it.
+	 */
+	static bool LoadBones(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError);
 };

@@ -30,6 +30,7 @@
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
+#include "UObject/UObjectIterator.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSkeletalBuild, Log, All);
 
@@ -93,7 +94,6 @@ namespace
 			UE_LOG(LogElysiumSkeletalBuild, Warning, TEXT("sweep: could not delete %s"), *FileName);
 		}
 		return bDeleted;
-		return false;
 	}
 
 	bool SavePackageTo(UPackage* Package, const FString& PackageName)
@@ -355,6 +355,13 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	// derived from the geometry the same way the glTF path derived them.
 	LodInfo.BuildSettings.bRecomputeNormals = true;
 	LodInfo.BuildSettings.bRecomputeTangents = true;
+	// Stated, not inherited. FSkeletalMeshBuildSettings defaults this to 0.015 cm, a heuristic
+	// sized for FBX character rigs, and FLODUtilities::BuildMorphTargets drops every delta under it
+	// -- 163,750 of the cast's 1,034,295 authored deltas, which is the soft outer ring of every
+	// FACS shape truncated to exactly zero. VtMB's flexes are small by construction and overlap in
+	// dozens, so the falloff is the expression. Nothing here is an import approximation of a DCC
+	// mesh, so nothing wants a weld threshold.
+	LodInfo.BuildSettings.MorphThresholdPosition = 0.0f;
 
 	FMeshDescription* MeshDescription = Mesh->CreateMeshDescription(0);
 	if (MeshDescription == nullptr)
@@ -535,19 +542,55 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& SourcePath,
-	const FString& SkeletonPackageName)
+int32 UElysiumSkeletalBuildLibrary::ReleaseBakedPackages(const FString& PackagePath)
 {
 #if WITH_EDITOR
-	FElysiumSkeletalSource Source;
-	FString Error;
-	if (!FElysiumSkeletalSource::Load(SourcePath, Source, Error))
+	// `unreal.SystemLibrary.collect_garbage()` frees NOTHING on this path, for two independent
+	// reasons. It forwards to UEngine::ForceGarbageCollection, which only raises flags that
+	// UEngine::ConditionalCollectGarbage consumes off the engine tick -- and a `-run=pythonscript`
+	// commandlet returns without ever ticking. And GARBAGE_COLLECTION_KEEPFLAGS is RF_Standalone
+	// whenever GIsEditor, which every baked asset carries by construction. So the standalone flag
+	// has to come off before a synchronous collect will take anything.
+	TArray<UPackage*> Releasing;
+	for (TObjectIterator<UPackage> It; It; ++It)
 	{
-		return Error;
+		UPackage* Package = *It;
+		// A dirty package is unsaved work; releasing it would discard the bake's own output.
+		if (Package == nullptr || Package->IsDirty() || Package == GetTransientPackage())
+		{
+			continue;
+		}
+		if (Package->GetName().StartsWith(PackagePath))
+		{
+			Releasing.Add(Package);
+		}
 	}
-	if (Source.Bones.IsEmpty())
+	for (UPackage* Package : Releasing)
 	{
-		return FString::Printf(TEXT("%s carries no bones"), *SourcePath);
+		ForEachObjectWithPackage(Package, [](UObject* Object)
+			{
+				Object->ClearFlags(RF_Standalone);
+				return true;
+			}, /*bIncludeNestedObjects=*/false);
+	}
+	if (!Releasing.IsEmpty())
+	{
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, /*bPerformFullPurge=*/true);
+	}
+	return Releasing.Num();
+#else
+	return 0;
+#endif
+}
+
+FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>& SourcePaths,
+	const FString& SkeletonPackageName, bool bRebuild, int32& OutBones)
+{
+	OutBones = 0;
+#if WITH_EDITOR
+	if (SourcePaths.IsEmpty())
+	{
+		return FString::Printf(TEXT("%s: a rig family names no member"), *SkeletonPackageName);
 	}
 
 	UPackage* Package = OpenPackage(SkeletonPackageName);
@@ -557,47 +600,71 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& Sou
 	}
 	const FString AssetName = FPackageName::GetShortName(SkeletonPackageName);
 	USkeleton* Skeleton = FindObject<USkeleton>(Package, *AssetName);
-	const bool bNewSkeleton = Skeleton == nullptr;
+	// `bRebuild` is not an optimisation switch. USkeleton::MergeBonesToBoneTree only rebuilds an
+	// EMPTY tree and otherwise unions, and OpenPackage loads whatever is already on disk -- so
+	// without this a family skeleton can only ever grow, and keeps the bones of members that left
+	// the family in an earlier partition. Their bind poses then answer for bones no current member
+	// declares, which is exactly the reference pose an untracked bone falls back to.
+	const bool bNewSkeleton = Skeleton == nullptr || bRebuild;
 	if (bNewSkeleton)
 	{
 		ClearForRewrite(Package, AssetName);
 		Skeleton = NewObject<USkeleton>(Package, *AssetName, RF_Public | RF_Standalone);
 	}
 
-	// Authored straight onto the USkeleton, because a bank has no mesh to take a tree from. The
+	// Authored straight onto the USkeleton, because a bank has no mesh to take a tree from -- and
+	// because a body family's tree must not depend on which of its members a slice named. The
 	// modifier's USkeleton* constructor is the same door an importer uses; its destructor is what
 	// rebuilds the remapping tables, so the scope has to close before anything reads the tree.
+	// One scope over every member, so the whole family costs one save rather than one per member.
 	{
 		FReferenceSkeletonModifier Modifier(Skeleton);
 		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
-		// Source bone index -> index in the skeleton being built. A bank the tree already carries
-		// keeps the index it has, so a second bank merges in rather than duplicating the core.
-		TArray<int32> Mapped;
-		Mapped.Init(INDEX_NONE, Source.Bones.Num());
-		int32 Next = Ref.GetRawBoneNum();
-		for (int32 Index = 0; Index < Source.Bones.Num(); ++Index)
+		for (const FString& SourcePath : SourcePaths)
 		{
-			const FElysiumSourceBone& Bone = Source.Bones[Index];
-			const int32 Existing = Ref.FindRawBoneIndex(Bone.Name);
-			if (Existing != INDEX_NONE)
+			FElysiumSkeletalSource Source;
+			FString Error;
+			if (!FElysiumSkeletalSource::LoadBones(SourcePath, Source, Error))
 			{
-				Mapped[Index] = Existing;
-				continue;
+				return Error;
 			}
-			const int32 Parent = Bone.Parent == INDEX_NONE ? INDEX_NONE : Mapped[Bone.Parent];
-			if (Parent == INDEX_NONE && Next > 0)
+			if (Source.Bones.IsEmpty())
 			{
-				// A second root is what USkeleton refuses at mesh-build time, long after this.
-				// Reported here, where the tree that caused it is still in hand.
-				return FString::Printf(
-					TEXT("%s: '%s' would be a second root on %s"),
-					*SourcePath, *Bone.Name.ToString(), *AssetName);
+				return FString::Printf(TEXT("%s carries no bones"), *SourcePath);
 			}
-			Modifier.Add(FMeshBoneInfo(Bone.Name, Bone.Name.ToString(), Parent), Bone.Local);
-			Mapped[Index] = Next++;
+
+			// Source bone index -> index in the skeleton being built. A bone the tree already
+			// carries keeps the index it has, so a later member merges in rather than duplicating
+			// the core. The FIRST member to declare a bone owns its reference transform, which is
+			// why the caller passes the family's members in a declared, stable order.
+			TArray<int32> Mapped;
+			Mapped.Init(INDEX_NONE, Source.Bones.Num());
+			int32 Next = Ref.GetRawBoneNum();
+			for (int32 Index = 0; Index < Source.Bones.Num(); ++Index)
+			{
+				const FElysiumSourceBone& Bone = Source.Bones[Index];
+				const int32 Existing = Ref.FindRawBoneIndex(Bone.Name);
+				if (Existing != INDEX_NONE)
+				{
+					Mapped[Index] = Existing;
+					continue;
+				}
+				const int32 Parent = Bone.Parent == INDEX_NONE ? INDEX_NONE : Mapped[Bone.Parent];
+				if (Parent == INDEX_NONE && Next > 0)
+				{
+					// A second root is what USkeleton refuses at mesh-build time, long after this.
+					// Reported here, where the tree that caused it is still in hand.
+					return FString::Printf(
+						TEXT("%s: '%s' would be a second root on %s"),
+						*SourcePath, *Bone.Name.ToString(), *AssetName);
+				}
+				Modifier.Add(FMeshBoneInfo(Bone.Name, Bone.Name.ToString(), Parent), Bone.Local);
+				Mapped[Index] = Next++;
+			}
 		}
 	}
 
+	OutBones = Skeleton->GetReferenceSkeleton().GetRawBoneNum();
 	if (bNewSkeleton)
 	{
 		FAssetRegistryModule::AssetCreated(Skeleton);
@@ -610,6 +677,13 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& Sou
 #else
 	return TEXT("editor only");
 #endif
+}
+
+FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& SourcePath,
+	const FString& SkeletonPackageName)
+{
+	int32 Bones = 0;
+	return BuildFamilySkeleton({ SourcePath }, SkeletonPackageName, /*bRebuild=*/false, Bones);
 }
 
 FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
@@ -874,8 +948,14 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		Controller.OpenBracket(NSLOCTEXT("Elysium", "BakeClip", "Baking VtMB clip"),
 			/*bShouldTransact=*/false);
 		Controller.InitializeModel();
-		Controller.SetFrameRate(FFrameRate(FMath::RoundToInt(FMath::Max(Clip.FrameRate, 1.0f)), 1),
-			false);
+		// Rational, not rounded. FFrameRate carries a numerator and a denominator, and
+		// IAnimationDataController accepts any rate whose interval is non-zero -- it does not
+		// require an integer, and while the model is unpopulated it does not even require a
+		// multiple of the current rate. Rounding cost `walk_0` 0.53% of its cycle, a permanent
+		// phase drift against every other cell of the same move_yaw fan; flooring at 1 fps made
+		// the two 0.1 fps payphone idles play ten times too fast.
+		const double AuthoredRate = FMath::Max(static_cast<double>(Clip.FrameRate), UE_KINDA_SMALL_NUMBER);
+		Controller.SetFrameRate(FFrameRate(FMath::RoundToInt(AuthoredRate * 1000.0), 1000), false);
 		// A model's playable frame count is one less than its key count, and it must be at least
 		// one -- so a single-frame pose becomes a two-key clip holding that pose.
 		const int32 KeyCount = FMath::Max(Clip.FrameCount, 2);
@@ -1290,13 +1370,15 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 			Parameter.Max = Grid.ParamEnd[Axis];
 			// One division per gap between cells, so every cell lands exactly on a grid point.
 			Parameter.GridNum = FMath::Max(1, Grid.GroupSize[Axis] - 1);
-			// Left OFF even on `move_yaw`, which does wrap. VtMB authors the wrap by DUPLICATING the
-			// clip at both ends of the fan -- cell 0 and cell 8 are the same animation -- so clamped
-			// interpolation already reproduces retail across the seam. Turning wrapping on would make
-			// -180 and +180 one point carrying two samples, and `IsTooCloseToExistingSamplePoint`
-			// would reject the second. The caller wraps its input instead, which is what the pose
-			// parameter's own `loop` is for.
-			Parameter.bWrapInput = false;
+			// ON for an axis whose pose parameter declares a loop, which is what `move_yaw` is:
+			// -180 and +180 are the same heading, and VtMB duplicates the clip at both ends of the
+			// fan to say so. Without it `GetClampedAndWrappedBlendInput` CLAMPS, so a heading past
+			// the end plays the far extreme -- a body told to move at 260 degrees walks backwards.
+			// Duplicating the endpoint stays legal: `IsSameSamplePoint` compares raw components and
+			// never consults bWrapInput, so -180 and +180 remain two distinct sample positions.
+			// Leave `bInterpolateUsingGrid` alone -- the triangulation path wraps the input into
+			// range before its segment search, and turning the grid on would empty the blend data.
+			Parameter.bWrapInput = Desc != nullptr && !FMath::IsNearlyZero(Desc->Loop);
 		}
 
 		for (const FGridSample& Sample : Samples)

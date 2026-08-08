@@ -562,7 +562,23 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     return header + bytes(tracks)
 
 
-def _derived_bindings(d, bones, clips):
+def _cell_names(clips):
+    """{animdesc base: the name a grid cell standing that animation goes by}.
+
+    A cell names an ANIMATION; a clip is named for the SEQUENCE that stands it. The two strings
+    part company at a grid's base cell, the one animation a grid sequence declares under its own
+    label -- a 3x3 aim grid's base cell is the animation `x_aim_UR` standing under the sequence
+    label `x_aim_layer`. The blend sidecar resolves every cell through this same table
+    (`mdl_gltf._blend_grids`), so a composed cell named any other way is a sample the blend space
+    asks for under a name nothing was ever written under, and the grid loses that corner.
+    """
+    names = {}
+    for clip in clips:
+        names.setdefault(clip.base, clip.label)
+    return names
+
+
+def _derived_bindings(d, bones, clips, names):
     """Every (layer, declaring host) pair that has to bake against that host, host-sorted.
 
     `numautolayers`@660 names the sequences a host is composed with. Two kinds need the host's
@@ -593,17 +609,18 @@ def _derived_bindings(d, bones, clips):
             # own mask -- so a 3x3 aim grid derives nine times against the same host, not once
             # against its base cell. The blend space is built over the cells, so a cell left raw
             # would carry the un-resolved rotation into eight of the nine samples.
-            for cell in _grid_animations(d, layer):
+            for cell in _grid_animations(d, layer, names):
                 if _owns_split_bone(d, bones, cell):
                     pairs.append((cell, host, _owned_bones(d, bones, cell)))
     return sorted(pairs, key=lambda p: (p[0].label.lower(), p[1].label.lower()))
 
 
-def _grid_animations(d, seq):
+def _grid_animations(d, seq, names):
     """The animations a sequence stands, as `Seq` rows -- its grid's cells, or itself.
 
     Deduped by animation index: a fan duplicates its clip at both ends of a wrapping axis
-    (`move_yaw`), so the same animation appears under two cells."""
+    (`move_yaw`), so the same animation appears under two cells. `names` is `_cell_names`, which
+    is what makes a cell's label the one the blend sidecar samples it by."""
     seen, out = set(), []
     for cell in seq.grid.cells:
         got = S.local_animation(d, cell.anim)
@@ -611,7 +628,8 @@ def _grid_animations(d, seq):
             continue
         seen.add(cell.anim)
         name, base, frames, fps = got
-        out.append(S.Seq(name, base, frames, fps, seq.activity, seq.actweight, seq.flags))
+        out.append(S.Seq(names.get(base, name), base, frames, fps,
+                         seq.activity, seq.actweight, seq.flags))
     return out or [seq]
 
 
@@ -631,7 +649,8 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
 
     `masks` accumulates the file's distinct bone masks in index order; it is written out as the
     "MASK" section once every clip has been read."""
-    bindings = _derived_bindings(d, bones, clips)
+    names = _cell_names(clips)
+    bindings = _derived_bindings(d, bones, clips, names)
     # An overlay that ships only in derived form is one NOTHING else still reaches under its plain
     # label. A cell can belong to two grids at once -- one an autolayer target, the other declared
     # by no host -- and suppressing the raw form then leaves the second grid with holes where its
@@ -642,7 +661,7 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
     for seq in clips:
         if seq.label.lower() in bound:
             continue
-        for cell in _grid_animations(d, seq):
+        for cell in _grid_animations(d, seq, names):
             still_reached.add(cell.label.lower())
     unresolvable = {layer.label.lower() for layer, _host, owned in bindings
                     if owned is not None} - still_reached

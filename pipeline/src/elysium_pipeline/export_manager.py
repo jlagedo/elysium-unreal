@@ -652,28 +652,67 @@ def export_model(
     return config.export_root / "npc"
 
 
-def write_character_sources(npc_dir: Path, stems: Sequence[str]) -> tuple[list[str], list[str]]:
-    """Write the `.eskm` container for each named body and for every bank those bodies play.
+FAMILIES_FILE = "families.json"
+CHARACTER_TEXTURES_FILE = "textures.json"
 
-    This is the offline half of the character bake: the Python side decodes VtMB's own formats
-    and writes one Unreal-native container per model, and the editor side reads nothing else.
-    Returns (bodies, banks) as written.
 
-    A bank is written whole. It is shared by the whole cast, it is the natural unit the manifest
-    already resolves ownership against, and the rollout to the rest of the corpus needs it
-    anyway.
+def _character_code_inputs(config) -> tuple[Path, ...]:
+    """The offline code a `.eskm` container's bytes depend on."""
+    root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+    return (
+        root / "exporters" / "UE_mdl_skeletal.py",
+        root / "formats" / "mdl_skel.py",
+        root / "formats" / "mdl.py",
+        root / "formats" / "mdl_gltf.py",
+    )
+
+
+def _character_source_detail(index: dict, model_rel: str) -> str:
+    """A stable identity for one model's own files inside the user's install.
+
+    A model is more than its `.mdl` -- the exporter also reads the sibling `.vvd`, `.vtx` and
+    `.ani` -- so every index entry sharing the model's directory and stem contributes. Its
+    INCLUDED banks deliberately do not: a bank is written as its own container by its own task,
+    and a body's container carries only the body's own clips.
     """
-    from elysium_pipeline.exporters import UE_mdl_skeletal
-    from elysium_pipeline.formats import install, mdl_gltf
+    key = model_rel.replace("\\", "/").lower()
+    prefix = key[: -len(".mdl")] + "." if key.endswith(".mdl") else key
+    digest = hashlib.sha256()
+    for name in sorted(k for k in index if k.startswith(prefix)):
+        kind, value = index[name]
+        digest.update(name.encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+        digest.update(str(kind).encode("ascii", errors="replace"))
+        if kind == "loose":
+            path = Path(value)
+            try:
+                stat = path.stat()
+                detail = f"{stat.st_size}:{stat.st_mtime_ns}"
+            except OSError:
+                detail = "missing"
+        else:
+            detail = repr(value)
+        digest.update(detail.encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+    return digest.hexdigest()
 
+
+def character_source_plan(npc_dir: Path) -> tuple[dict[str, str], dict[str, str]]:
+    """({model stem: install path}, {bank stem: install path}) for the WHOLE cast.
+
+    Deliberately not parameterised by a slice. The rig partition is a property of the entire
+    corpus (`elysium_pipeline.character_partition`), and it was previously derived from whichever
+    containers a slice happened to leave on disk -- so a workspace that had only ever baked two
+    models partitioned the banks differently from one that had baked all of them. Writing every
+    container on every run removes that filesystem side effect; making each write individually
+    skippable is what keeps it affordable.
+    """
     with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
         manifest = json.load(handle)
 
+    models = {stem: record["model"] for stem, record in manifest["npcs"].items()}
     banks: dict[str, str] = {}
-    for stem in stems:
-        record = manifest["npcs"].get(stem)
-        if record is None:
-            raise ValueError(f"{stem} is not in the NPC manifest")
+    for stem, record in manifest["npcs"].items():
         for owner in record.get("clips", {}).values():
             if owner == stem or owner in banks:
                 continue
@@ -683,37 +722,261 @@ def write_character_sources(npc_dir: Path, stems: Sequence[str]) -> tuple[list[s
                     f"{stem} names bank '{owner}', which the manifest does not carry"
                 )
             banks[owner] = bank["model"]
+    return models, banks
 
+
+def write_character_sources(
+    config, npc_dir: Path, *, manifest: Manifest, force: bool = False
+) -> tuple[list[str], list[str]]:
+    """Write every `.eskm` container the cast needs, skipping the ones already current.
+
+    This is the offline half of the character bake: the Python side decodes VtMB's own formats
+    and writes one Unreal-native container per model and per bank, and the editor side reads
+    nothing else. Returns (bodies, banks) as declared, whether or not each was rewritten.
+
+    Each container is its own task, fingerprinted on that model's own files in the install plus
+    the exporter code that turns them into a container. Rewriting all 233 costs ~90 s; confirming
+    all 233 are current costs a few seconds, which is what makes writing the whole corpus the
+    default rather than an expensive completeness gesture.
+    """
+    from elysium_pipeline.exporters import UE_mdl_skeletal
+    from elysium_pipeline.formats import install, mdl_gltf
+
+    models, banks = character_source_plan(npc_dir)
     index = install.build_index(verbose=False)
-    # Without the unit-vector table a compressed vertex-animation record has directions but no
-    # magnitudes, so a body is written with no morph section rather than a wrong one.
-    anorms = mdl_gltf.load_anorms()
+    code_fingerprint = fingerprint_paths(_character_code_inputs(config))
+    # Read once, lazily: without the unit-vector table a compressed vertex-animation record has
+    # directions but no magnitudes, so a body is written with no morph section rather than a
+    # wrong one. A fully-current run never needs it.
+    anorms: list = []
 
-    for stem in stems:
-        UE_mdl_skeletal.write_model(
-            index, manifest["npcs"][stem]["model"], str(npc_dir), stem=stem, anorms=anorms
+    def load_anorms():
+        if not anorms:
+            anorms.append(mdl_gltf.load_anorms())
+        return anorms[0]
+
+    tasks: list[Task] = []
+    for stem, model_rel in sorted(models.items()):
+        def model_action(stem=stem, model_rel=model_rel) -> None:
+            UE_mdl_skeletal.write_model(
+                index, model_rel, str(npc_dir), stem=stem, anorms=load_anorms()
+            )
+
+        def model_fingerprint(model_rel=model_rel, stem=stem) -> str:
+            return fingerprint_content(
+                (), extra=("eskm-model-v1", stem, code_fingerprint,
+                           _character_source_detail(index, model_rel))
+            )
+
+        tasks.append(Task(
+            name=f"eskm:{stem}",
+            action=model_action,
+            fingerprint=model_fingerprint,
+            outputs=(npc_dir / f"{stem}.eskm",),
+        ))
+
+    for stem, model_rel in sorted(banks.items()):
+        def bank_action(stem=stem, model_rel=model_rel) -> None:
+            UE_mdl_skeletal.write_bank(index, model_rel, str(npc_dir), stem)
+
+        def bank_fingerprint(model_rel=model_rel, stem=stem) -> str:
+            return fingerprint_content(
+                (), extra=("eskm-bank-v1", stem, code_fingerprint,
+                           _character_source_detail(index, model_rel))
+            )
+
+        tasks.append(Task(
+            name=f"eskm:bank:{stem}",
+            action=bank_action,
+            fingerprint=bank_fingerprint,
+            outputs=(npc_dir / "banks" / f"{stem}.eskm",),
+        ))
+
+    results = TaskGraph(tasks).run(force=force, manifest=manifest)
+    failures = [name for name, result in results.items() if result.status not in ("ok", "skipped")]
+    if failures:
+        raise OfflineExportFailure(
+            "character sources failed: " + ", ".join(sorted(failures))
         )
-    for stem in sorted(banks):
-        UE_mdl_skeletal.write_bank(index, banks[stem], str(npc_dir), stem)
-    return list(stems), sorted(banks)
+    return sorted(models), sorted(banks)
 
 
-def export_characters(config, runner, models: Sequence[str] | None = None) -> list[str]:
+def write_character_partition(npc_dir: Path) -> dict:
+    """Write `npc/families.json` and `npc/textures.json` over the whole corpus.
+
+    The rig partition is greedy and order-dependent, so it is a property of the set it is given
+    (`formats/eskm.rig_families`). Recomputing it per slice therefore renames families -- and can
+    merge two the whole cast keeps apart -- while the family name IS the path contract for every
+    baked clip and skeleton. Computing it once here and writing it down is what lets the bake
+    slice at all.
+
+    `textures.json` rides along because the same pass already has every container's material
+    table open. Without it the editor reopens 400 MB of containers just to recover which albedo
+    each material wants.
+    """
+    from elysium_pipeline import asset_names, character_partition
+    from elysium_pipeline.formats import eskm
+
+    models, banks = character_source_plan(npc_dir)
+    model_paths = {stem: npc_dir / f"{stem}.eskm" for stem in models}
+    bank_paths = {stem: npc_dir / "banks" / f"{stem}.eskm" for stem in banks}
+
+    model_trees: dict[str, dict[str, str]] = {}
+    bank_trees: dict[str, dict[str, str]] = {}
+    textures: dict[str, dict] = {}
+    bindings: dict[str, dict[str, str]] = {}
+    corpus = hashlib.sha256()
+
+    for kind, paths, trees in (
+        ("model", model_paths, model_trees),
+        ("bank", bank_paths, bank_trees),
+    ):
+        for stem, path in sorted(paths.items()):
+            if not path.is_file():
+                raise OfflineExportFailure(
+                    f"{path} is missing; the character sources did not complete"
+                )
+            blob = eskm.read(path)
+            trees[stem] = eskm.bone_parents(blob)
+            corpus.update(f"{kind}:{stem}:".encode("utf-8"))
+            corpus.update(character_partition.tree_fingerprint(trees[stem]).encode("ascii"))
+            for material, uri in sorted(eskm.materials(blob).items()):
+                if not uri:
+                    continue
+                name = asset_names.texture_asset_name(uri)
+                entry = textures.setdefault(name, {"uri": uri, "used_by": []})
+                if stem not in entry["used_by"]:
+                    entry["used_by"].append(stem)
+                bindings.setdefault(stem, {})[material] = name
+
+    partition = character_partition.build_partition(
+        model_trees, bank_trees, corpus_fingerprint=corpus.hexdigest()
+    )
+    _write_json(npc_dir / FAMILIES_FILE, partition)
+    _write_json(npc_dir / CHARACTER_TEXTURES_FILE, {
+        "schema": "elysium.character-textures",
+        "version": 1,
+        "textures": {name: {"uri": entry["uri"], "used_by": sorted(entry["used_by"])}
+                     for name, entry in sorted(textures.items())},
+        "bindings": {stem: dict(sorted(slots.items()))
+                     for stem, slots in sorted(bindings.items())},
+    })
+    return partition
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    """Write `payload` atomically, sorted and newline-terminated so a re-run diffs cleanly."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
+
+
+def resolve_character_slice(partition: dict, selectors: Sequence[str] | None,
+                            npc_dir: Path | None = None) -> list[str]:
+    """Selectors -> the model stems to bake, resolved against the declared partition.
+
+    A bare stem is that model. `family:<name>` is every member of a model rig family.
+    `bank:<name>` is every model that plays a bank in that bank family, which is the slice to take
+    when a bank container changed -- the partition names bank membership and the manifest names
+    who plays them, so it is the one selector that reads both.
+
+    No selectors is the whole cast, which is what the game needs and what a release must have.
+    """
+    from elysium_pipeline import character_partition
+
+    if not selectors:
+        return sorted(partition["model_family_of"])
+
+    players: dict[str, set[str]] | None = None
+
+    def bank_players() -> dict[str, set[str]]:
+        """{bank owner: stems that play it}, read once and only if a bank selector asks."""
+        nonlocal players
+        if players is None:
+            players = {}
+            if npc_dir is not None and (npc_dir / "npc_manifest.json").is_file():
+                with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
+                    manifest = json.load(handle)
+                for stem, record in manifest.get("npcs", {}).items():
+                    for owner in record.get("clips", {}).values():
+                        if owner != stem:
+                            players.setdefault(owner, set()).add(stem)
+        return players
+
+    stems: list[str] = []
+    unknown: list[str] = []
+    for raw in selectors:
+        selector = raw.replace("\\", "/").strip()
+        kind, _, value = selector.partition(":")
+        if not value:
+            kind, value = "", selector
+        value = value.lower() if kind else Path(value).stem.lower()
+
+        if kind == "family":
+            members = character_partition.members_for(partition, "models", value)
+            if members:
+                stems.extend(members)
+            else:
+                unknown.append(raw)
+        elif kind == "bank":
+            banks = character_partition.members_for(partition, "banks", value)
+            if not banks:
+                unknown.append(raw)
+                continue
+            reached = bank_players()
+            for bank in banks:
+                stems.extend(sorted(reached.get(bank, ())))
+        elif value in partition["model_family_of"]:
+            stems.append(value)
+        else:
+            unknown.append(raw)
+
+    if unknown:
+        raise ValueError("not in the declared partition: " + ", ".join(sorted(unknown)))
+    return sorted(dict.fromkeys(stem for stem in stems if stem))
+
+
+def sweep_characters(config, partition: dict, *, apply: bool = True,
+                     force: bool = False) -> dict:
+    """Remove baked character assets the declared partition no longer produces.
+
+    Safe on a slice, because the partition it checks against always covers the whole cast: a run
+    that baked two models still knows what the other 164 own. That is the property that makes a
+    global sweep possible at all -- the flat `Meshes/`, `Materials/` and `Skeletons/` folders give
+    no per-family answer.
+    """
+    from elysium_pipeline import character_sweep
+
+    mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content"
+    return character_sweep.sweep(
+        mount, config.export_root / "npc", partition, apply=apply, force=force
+    )
+
+
+def export_characters(
+    config, runner, models: Sequence[str] | None = None, *, force: bool = False,
+    sweep: bool = True, force_sweep: bool = False
+) -> list[str]:
     """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
-    Two stages. First the `.eskm` containers are written from the user's own install, then a
-    headless editor turns them into a shared skeleton per rig family, a mesh per model and a
-    compressed sequence per clip. The manifest and the eye sidecars have to be on disk already,
-    which `export bundle npc` or a complete profile writes. The policy content is a prerequisite
-    too, because a body is built against the same master materials the runtime names.
+    Three stages. The `.eskm` containers are written from the user's own install, the rig
+    partition is derived from them and written down, then a headless editor turns the pair into a
+    shared skeleton per rig family, a mesh per model and a compressed sequence per clip. The
+    manifest and the eye sidecars have to be on disk already, which `export bundle npc` or a
+    complete profile writes. The policy content is a prerequisite too, because a body is built
+    against the same master materials the runtime names.
 
-    **The cast is the default because the mount is the only build of a character.** A stem the bake
-    has not covered cannot stand at all -- there is no loader to fall back to -- so a partial bake
-    is a broken game rather than a slower one. Naming models is for iterating on a few.
+    **The containers and the partition always cover the whole cast; only the BAKE is sliced.**
+    Naming models bakes those models against the partition every other body already shares, so a
+    slice can no longer rename a family out from under the meshes that point at it. Each container
+    is individually skippable, so covering the cast costs seconds once it is current.
 
-    Unlike the map bake this runs wholesale. There is no per-model receipt yet, so re-running
-    re-bakes; the map bake's `bake_cache` store is keyed and staged by map and does not carry over
-    unchanged.
+    **The cast is the bake's default because the mount is the only build of a character.** A stem
+    the bake has not covered cannot stand at all -- there is no loader to fall back to -- so a
+    partial bake is a broken game rather than a slower one. Naming models is for iterating on a few.
     """
     _require_export_config(config)
     npc_dir = config.export_root / "npc"
@@ -723,23 +986,28 @@ def export_characters(config, runner, models: Sequence[str] | None = None) -> li
             f"{index} is missing; run: uv run elysium export bundle npc"
         )
 
-    if models:
-        stems = [Path(model.replace("\\", "/")).stem.lower() for model in models]
-    else:
-        with index.open(encoding="utf-8-sig") as handle:
-            stems = sorted(json.load(handle).get("npcs", {}))
-    stems = [stem for stem in dict.fromkeys(stems) if stem]
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    write_character_sources(config, npc_dir, manifest=manifest, force=force)
+    partition = write_character_partition(npc_dir)
+
+    stems = resolve_character_slice(partition, models, npc_dir)
     if not stems:
         raise ValueError("no models named and the manifest lists no character")
 
-    write_character_sources(npc_dir, stems)
     ensure_policy_content(config, runner)
 
     # One process for the whole cast. What used to exhaust its address space was the DUPLICATION --
     # a bank rebuilt against every rig family that included it -- and the bank pass removes that at
-    # the source: 7,871 distinct clips instead of ~90,000 assets. The grouping is decided inside the
-    # bake again, because there is no longer a subset for it to be inconsistent across.
+    # the source: 7,871 distinct clips instead of ~90,000 assets.
     unreal.bake_characters(config, runner, stems)
+    # After the bake, before the verify: the verifier walks the mount, and an orphan from a
+    # partition that has since moved is exactly the thing it should not find.
+    if sweep:
+        result = sweep_characters(config, partition, force=force_sweep)
+        if result["refused"]:
+            raise ExportBakeFailure("character sweep refused: " + result["refused"])
+        if result["removed"]:
+            print(f"swept {result['removed']} orphaned character asset(s)")
     unreal.verify_characters(config, runner, stems)
     return stems
 

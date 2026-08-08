@@ -242,8 +242,15 @@ namespace
 	}
 }
 
-bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError)
+namespace
 {
+	// Both entry points below. `bBonesOnly` skips every section but SKEL, which is what makes
+	// seeding a rig family's skeleton from all of its members affordable: a bank container is up
+	// to 30 MB and almost all of it is clip payload the bone tree does not need. The trailing
+	// validation still runs -- its mask and clip loops are simply empty on this path.
+	bool LoadContainer(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError,
+		bool bBonesOnly)
+	{
 	TArray<uint8> Blob;
 	if (!FFileHelper::LoadFileToArray(Blob, *Path))
 	{
@@ -300,6 +307,10 @@ bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& O
 				*Path);
 			return false;
 		}
+		if (bBonesOnly && Entry.Tag != TagSkel)
+		{
+			continue;
+		}
 		FCursor Section(Blob.GetData() + Entry.Offset, Entry.Size);
 		switch (Entry.Tag)
 		{
@@ -355,4 +366,16 @@ bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& O
 		}
 	}
 	return true;
+	}
+}
+
+bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError)
+{
+	return LoadContainer(Path, Out, OutError, /*bBonesOnly=*/false);
+}
+
+bool FElysiumSkeletalSource::LoadBones(const FString& Path, FElysiumSkeletalSource& Out,
+	FString& OutError)
+{
+	return LoadContainer(Path, Out, OutError, /*bBonesOnly=*/true);
 }

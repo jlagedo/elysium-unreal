@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import json
 import os
 from pathlib import Path
 
@@ -208,27 +209,66 @@ def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) ->
         )
 
 
-def run_tests(config, runner, filter_name: str = "Elysium.") -> None:
+def run_tests(config, runner, filter_name: str = "Elysium.", *,
+              parity_stems: Sequence[str] = ()) -> dict:
+    """Run an automation selection and report what actually executed.
+
+    `parity_stems` widens the per-model parity slice, which is otherwise two hard-coded bodies.
+    It is the only test in the suite built for slice iteration, and it was previously reachable
+    only by invoking the commandlet by hand.
+    """
     aliases = {"substrate": "Elysium.Substrate.", "content": "Elysium.Content."}
     selected = aliases.get(filter_name.lower(), filter_name)
     report = config.export_root / "_tests"
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            f"-ElysiumContentRoot={config.export_root}",
-            f"-ExecCmds=Automation RunTest {selected};Quit",
-            f"-ReportExportPath={report}",
-            "-unattended",
-            "-nopause",
-            "-nosplash",
-            "-nullrhi",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-    )
+    arguments = [
+        str(config.project),
+        f"-ElysiumContentRoot={config.export_root}",
+        f"-ExecCmds=Automation RunTest {selected};Quit",
+        f"-ReportExportPath={report}",
+        "-unattended",
+        "-nopause",
+        "-nosplash",
+        "-nullrhi",
+        "-stdout",
+        "-FullStdOutLogOutput",
+    ]
+    if parity_stems:
+        arguments.insert(2, "-ElysiumParityStems=" + ",".join(parity_stems))
+    _run(config, runner, editor_executable(config, commandlet=True), arguments)
+    return summarize_test_report(report)
+
+
+def summarize_test_report(report_dir: Path) -> dict:
+    """{total, executed, abstained, failed, seconds, abstentions} from an automation report.
+
+    The commandlet's exit code is the only verdict the pipeline reads, and a test that declines to
+    run reports Success -- so a tier can be green while most of it never touched an asset. This
+    reads the report back so the count that matters is visible: how many tests actually ran.
+    """
+    index = report_dir / "index.json"
+    summary = {"total": 0, "executed": 0, "abstained": 0, "failed": 0,
+               "seconds": 0.0, "abstentions": []}
+    if not index.is_file():
+        return summary
+    try:
+        with index.open(encoding="utf-8-sig") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return summary
+    tests = data.get("tests", [])
+    summary["total"] = len(tests)
+    summary["failed"] = int(data.get("failed", 0) or 0)
+    summary["seconds"] = float(data.get("totalDuration", 0.0) or 0.0)
+    for test in tests:
+        messages = " ".join(
+            entry.get("event", {}).get("message", "") for entry in test.get("entries", [])
+        )
+        if "marked incomplete" in messages or "skipping content validation" in messages:
+            summary["abstained"] += 1
+            summary["abstentions"].append(test.get("fullTestPath", "?"))
+        else:
+            summary["executed"] += 1
+    return summary
 
 
 def common_game_args(config) -> list[str]:

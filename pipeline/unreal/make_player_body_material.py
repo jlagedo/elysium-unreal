@@ -72,6 +72,11 @@ mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
 mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
 mat.set_editor_property("two_sided", True)
 mat.set_editor_property("used_with_skeletal_mesh", True)
+# REQUIRED, and the failure is delayed and confusing without it. A rigged model carries its
+# morph-target list on every primitive, so every body section has morph targets; the first time a
+# face blinks, UpdateMorphMaterialUsageOnProxy swaps any material lacking this usage for the
+# default grey and never swaps it back.
+mat.set_editor_property("used_with_morph_targets", True)
 mat.set_editor_property("dither_opacity_mask", True)
 mat.set_editor_property("opacity_mask_clip_value", 0.333)
 
