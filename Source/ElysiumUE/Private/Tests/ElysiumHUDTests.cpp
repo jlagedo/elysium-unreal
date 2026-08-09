@@ -192,6 +192,41 @@ bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("4K HUD metrics are exactly twice Full HD metrics"),
 		ElysiumUI::ScaleFor(2160.0f) / ElysiumUI::ScaleFor(1080.0f), 2.0f);
 
+	// The response band is authored from the retail framing, then kept resolution-independent by
+	// the shared virtual-canvas scale. All supported acceptance resolutions are 16:9, so both
+	// normalized dimensions must remain stable across the whole range.
+	for (const FVector2D Viewport : { FVector2D(1920.0, 1080.0), FVector2D(2560.0, 1440.0),
+		FVector2D(3840.0, 2160.0) })
+	{
+		const float Scale = ElysiumUI::ScaleFor(static_cast<float>(Viewport.Y));
+		constexpr float SlateRenderDPI = 96.0f;
+		constexpr float PointsPerInch = 72.0f;
+		TestTrue(*FString::Printf(TEXT("dialogue choice type follows the virtual canvas at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			FMath::IsNearlyEqual(
+				ElysiumDialogueUI::ChoiceFontPoints * (SlateRenderDPI / PointsPerInch) * Scale,
+				ElysiumDialogueUI::ChoiceFontVirtualPixels * Scale));
+		TestTrue(*FString::Printf(TEXT("dialogue line type follows the virtual canvas at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			FMath::IsNearlyEqual(
+				ElysiumDialogueUI::LineFontPoints * (SlateRenderDPI / PointsPerInch) * Scale,
+				ElysiumDialogueUI::LineFontVirtualPixels * Scale));
+		TestTrue(*FString::Printf(TEXT("dialogue speaker type follows the virtual canvas at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			FMath::IsNearlyEqual(
+				ElysiumDialogueUI::SpeakerFontPoints * (SlateRenderDPI / PointsPerInch) * Scale,
+				ElysiumDialogueUI::SpeakerFontVirtualPixels * Scale));
+		TestEqual(*FString::Printf(TEXT("dialogue width is 63.3%% at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			ElysiumDialogueUI::ResponsePanelWidth * Scale / static_cast<float>(Viewport.X),
+			0.6328125f);
+		TestEqual(*FString::Printf(TEXT("dialogue lower inset is 3.125%% at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			ElysiumDialogueUI::ResponsePanelBottomInset * Scale /
+				static_cast<float>(Viewport.Y),
+			0.03125f);
+	}
+
 	const TOptional<int32> Second = ElysiumDialogueUI::ChoiceForKey(EKeys::Two, 3, false);
 	TestTrue(TEXT("dialogue number key resolves"), Second.IsSet());
 	if (Second)

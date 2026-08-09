@@ -14,6 +14,24 @@ DECLARE_DELEGATE_OneParam(FElysiumOnDlgChoice, int32);   // choice index >= 0, o
 
 namespace ElysiumDialogueUI
 {
+	// The dialogue type ramp is authored in virtual pixels, but FSlateFontInfo takes typographic
+	// points and Slate rasterises them at 96 DPI. Convert once here; the screen-level SDPIScaler then
+	// applies the shared ScreenH / 768 resolution law without the implicit 96 / 72 size inflation.
+	inline constexpr float SlatePointsPerVirtualPixel = 72.0f / 96.0f;
+	inline constexpr float SpeakerFontVirtualPixels = 22.0f;
+	inline constexpr float LineFontVirtualPixels = 20.0f;
+	inline constexpr float ChoiceFontVirtualPixels = 18.0f;
+	inline constexpr float SpeakerFontPoints = SpeakerFontVirtualPixels * SlatePointsPerVirtualPixel;
+	inline constexpr float LineFontPoints = LineFontVirtualPixels * SlatePointsPerVirtualPixel;
+	inline constexpr float ChoiceFontPoints = ChoiceFontVirtualPixels * SlatePointsPerVirtualPixel;
+
+	// Dialogue is authored inside the shared 768-high virtual canvas. At 16:9 this width occupies
+	// 63.3% of the viewport, matching the low, centred response band without turning it into a
+	// full-width subtitle slab. The lower inset keeps the frame close to the bottom edge while
+	// remaining clear of display overscan.
+	inline constexpr float ResponsePanelWidth = 864.0f;
+	inline constexpr float ResponsePanelBottomInset = 24.0f;
+
 	// Pure input policy shared by the CommonUI wrapper and retained Slate body. An engaged optional
 	// carries the visible choice index; -1 advances a terminal line.
 	TOptional<int32> ChoiceForKey(const FKey& Key, int32 NumChoices, bool bTerminal);

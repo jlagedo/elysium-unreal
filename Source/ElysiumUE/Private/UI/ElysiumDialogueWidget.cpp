@@ -76,9 +76,12 @@ void SElysiumDialogueBox::SetDialogue(const FString& Speaker, const FString& Lin
 void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString& Line,
 	const TArray<FString>& Choices)
 {
-	const FSlateFontInfo SpeakerFont = FCoreStyle::GetDefaultFontStyle("Bold", 22);
-	const FSlateFontInfo LineFont = FCoreStyle::GetDefaultFontStyle("Regular", 20);
-	const FSlateFontInfo ChoiceFont = FCoreStyle::GetDefaultFontStyle("Regular", 18);
+	const FSlateFontInfo SpeakerFont = FCoreStyle::GetDefaultFontStyle(
+		"Bold", ElysiumDialogueUI::SpeakerFontPoints);
+	const FSlateFontInfo LineFont = FCoreStyle::GetDefaultFontStyle(
+		"Regular", ElysiumDialogueUI::LineFontPoints);
+	const FSlateFontInfo ChoiceFont = FCoreStyle::GetDefaultFontStyle(
+		"Regular", ElysiumDialogueUI::ChoiceFontPoints);
 
 	TSharedRef<SVerticalBox> Inner = SNew(SVerticalBox);
 
@@ -148,15 +151,17 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 		}
 	}
 
-	// Dock the panel to the lower-centre of the screen, capped to a readable width, with the world
-	// visible above it (VN framing). The outer fill slot pushes the panel to the bottom.
+	// Dock the response band low and centred, leaving the dialogue partner visible above it. These
+	// metrics are virtual-canvas values; the screen's SDPIScaler turns them into the same viewport
+	// proportions at every supported 16:9 resolution.
 	ChildSlot
 	[
 		SNew(SVerticalBox)
 		+ SVerticalBox::Slot().FillHeight(1.0f) [ SNullWidget::NullWidget ]
-		+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 0, 0, 40)
+		+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+		.Padding(0, 0, 0, ElysiumDialogueUI::ResponsePanelBottomInset)
 		[
-			SNew(SBox).WidthOverride(1100.0f)
+			SNew(SBox).WidthOverride(ElysiumDialogueUI::ResponsePanelWidth)
 			[
 				SNew(SBorder)
 				.BorderImage(WhiteBox())
