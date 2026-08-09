@@ -90,4 +90,41 @@ namespace ElysiumAnimGraph
 			|| State == EElysiumGraphState::Land
 			|| State == EElysiumGraphState::Crouch;
 	}
+
+	bool ShouldRepeatClip(EElysiumGraphState State, bool bAuthoredLooping)
+	{
+		// `Crouch` alone, and by name rather than by "is a one-shot": the other two one-shots are
+		// events that finish, and looping either would stop it ever reporting complete.
+		return bAuthoredLooping || State == EElysiumGraphState::Crouch;
+	}
+
+	bool IsPlayableRemaining(float RemainingSeconds, float ClipLengthSeconds)
+	{
+		// A clip with no length answers nothing rather than answering "already finished": a zero
+		// length is a missing asset, not an instant one.
+		return ClipLengthSeconds > 0.0f
+			&& RemainingSeconds >= 0.0f
+			&& RemainingSeconds <= ClipLengthSeconds + UE_KINDA_SMALL_NUMBER;
+	}
+
+	bool ShouldHoldPose(bool bHasAppliedOnce, bool bHasSequence, bool bHasBlendSpace)
+	{
+		return bHasAppliedOnce && !bHasSequence && !bHasBlendSpace;
+	}
+
+	EElysiumOneShotState OneShotStateFor(bool bHasAsset, bool bGenerationMatches,
+		bool bInOneShotState, bool bComplete)
+	{
+		// Checked first, and deliberately without consulting the report: the report describes a clip,
+		// and there is no clip. Nothing to wait for is finished, not unknown.
+		if (!bHasAsset)
+		{
+			return EElysiumOneShotState::Complete;
+		}
+		if (!bGenerationMatches || !bInOneShotState)
+		{
+			return EElysiumOneShotState::Unknown;
+		}
+		return bComplete ? EElysiumOneShotState::Complete : EElysiumOneShotState::Playing;
+	}
 }

@@ -13,9 +13,10 @@ void FElysiumAnimationDriver::Reset()
 }
 
 void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
-	UElysiumNpcAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset)
+	UElysiumNpcAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
+	EElysiumOneShotState OneShot)
 {
-	Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Sample, DeltaSeconds, Gait);
+	Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Sample, DeltaSeconds, Gait, OneShot);
 
 	FElysiumAnimationIntent Intent = ElysiumAnimIntent::BuildLocomotionIntent(Sample, Latch, Gait,
 		Source, Stem, Character, Variant);

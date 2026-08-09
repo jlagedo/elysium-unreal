@@ -54,8 +54,13 @@ struct FElysiumAnimationDriver
 	// Advance the latch, classify, and resolve if the request moved. `Anims` may be null (no game
 	// instance), and `Mesh`/`OwnAsset` may be null (no body built yet) — the record is produced either
 	// way, because it comes out of the sidecars rather than out of a skeleton.
+	//
+	// `OneShot` is the pose layer's answer about the clip the latch's current phase is riding, read
+	// by the **caller** before this runs — the driver never reaches for an anim instance, because it
+	// also serves bodies that have none. `Unknown` keeps the timer fallback.
 	void Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
-		UElysiumNpcAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset);
+		UElysiumNpcAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
+		EElysiumOneShotState OneShot = EElysiumOneShotState::Unknown);
 
 	// Forget the latch and the last request. A teleport or a map epoch is not a continuous motion, so
 	// carrying a jump phase across one would report a body mid-leap that is standing still.

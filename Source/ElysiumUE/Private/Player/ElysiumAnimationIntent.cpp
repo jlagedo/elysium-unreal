@@ -210,7 +210,8 @@ FElysiumTranslationResult TranslateActivity(const FString& Activity, const FStri
 }
 
 FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
-	const FElysiumLocomotionSample& Sample, float DeltaSeconds, const FElysiumGaitReference& Gait)
+	const FElysiumLocomotionSample& Sample, float DeltaSeconds, const FElysiumGaitReference& Gait,
+	EElysiumOneShotState OneShot)
 {
 	FElysiumJumpLatch Next = Prev;
 	Next.PhaseSeconds = Prev.PhaseSeconds + FMath::Max(0.0f, DeltaSeconds);
@@ -268,8 +269,19 @@ FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 		{
 			Next.Phase = EElysiumAirPhase::Falling;
 		}
-		else if (Sample.Speed2D() > Gait.StillSpeed()
-			|| Next.PhaseSeconds >= Prev.LandHoldSeconds)
+		// A moving landing never waits on a clip: retail's phase 8 takes the gait outright when the
+		// body is moving (`docs/vtmb/animation_and_movers.md` — "landing phase 8 while moving" ->
+		// ACT_WALK_RELAXED), so this outranks anything the pose layer has to say.
+		else if (Sample.Speed2D() > Gait.StillSpeed())
+		{
+			Next.Phase = EElysiumAirPhase::Grounded;
+		}
+		// Still and grounded: the landing ends when its clip does. `Playing` is an answer and it
+		// keeps the body here — only the absence of an answer falls back to the stopwatch, which is
+		// what a body with no pose layer gets.
+		else if (OneShot == EElysiumOneShotState::Complete
+			|| (OneShot == EElysiumOneShotState::Unknown
+				&& Next.PhaseSeconds >= Prev.LandHoldSeconds))
 		{
 			Next.Phase = EElysiumAirPhase::Grounded;
 		}

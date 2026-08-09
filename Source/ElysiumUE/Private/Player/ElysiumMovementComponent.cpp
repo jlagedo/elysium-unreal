@@ -93,7 +93,10 @@ void UElysiumMovementComponent::ResetState()
 	CapturedWish = FVector::ZeroVector;
 	CapturedWishScale = 0.0f;
 
-	// Stand up if we were crouched, so the hull the body arrives with is the standing one.
+	// Stand up if we were crouched, so the hull the body arrives with is the standing one. The
+	// retained request has to be cleared with it: a toggle survives a keypress by design, so a body
+	// teleported while crouched would otherwise re-duck itself on the very next frame.
+	bDuckRequested = false;
 	if (bDucked || bDucking)
 	{
 		FinishUnDuck();
@@ -378,8 +381,24 @@ void UElysiumMovementComponent::Duck()
 		return;
 	}
 
-	const bool bWantsDuck = PendingCmd.IsDown(EElysiumButton::Duck);
 	const uint64 DuckBit = static_cast<uint64>(EElysiumButton::Duck);
+	const bool bDuckDown = PendingCmd.IsDown(EElysiumButton::Duck);
+
+	// **The press edge toggles; the release does nothing.** This is the action layer, and it is the
+	// only place the crouch is retained: the command says whether the key is down this frame
+	// (`docs/architecture/animation-architecture.md` § 3 — "a key press never selects an animation
+	// asset"), the classifier reads the realized stance off the body sample, and neither of them
+	// holds a crouch between frames. `m_nOldButtons` keeps tracking the button's true level, because
+	// that is what makes the edge detectable at all — the same latch `CheckJumpButton` uses.
+	const bool bPressEdge = bDuckDown && !(OldButtons & DuckBit);
+	const bool bRequestRose = bPressEdge && !bDuckRequested;
+	if (bPressEdge)
+	{
+		bDuckRequested = !bDuckRequested;
+	}
+	OldButtons = bDuckDown ? (OldButtons | DuckBit) : (OldButtons & ~DuckBit);
+
+	const bool bWantsDuck = bDuckRequested;
 
 	// **Airborne, the transition does not ramp — it completes on the spot.** `Duck` only takes the
 	// `SetDuckedEyeOffset` lerp branch when `GetGroundEntity()` is non-null; every other path falls
@@ -391,16 +410,13 @@ void UElysiumMovementComponent::Duck()
 
 	if (bWantsDuck)
 	{
-		// The press edge, latched into OldButtons the same way the jump is — so a held duck does
-		// not restart the transition every step.
-		if (!(OldButtons & DuckBit))
+		// The ramp starts on the edge of the **request**, not of the button — under a toggle the key
+		// is up for almost the whole crouch, so keying this on the button would start the lowering
+		// ramp and then never advance it.
+		if (bRequestRose && !bDucked)
 		{
-			OldButtons |= DuckBit;
-			if (!bDucked)
-			{
-				bDucking = true;
-				DuckTime = ElysiumMove::GameMovementDuckTime;
-			}
+			bDucking = true;
+			DuckTime = ElysiumMove::GameMovementDuckTime;
 		}
 
 		if (bDucking && !bDucked)
@@ -420,13 +436,11 @@ void UElysiumMovementComponent::Duck()
 	}
 	else
 	{
-		OldButtons &= ~DuckBit;
-
 		if (bDucked || bDucking)
 		{
 			if (!bDucking)
 			{
-				// The release edge: start the unduck ramp.
+				// The request went false: start the unduck ramp.
 				bDucking = true;
 				DuckTime = ElysiumMove::GameMovementDuckTime;
 			}

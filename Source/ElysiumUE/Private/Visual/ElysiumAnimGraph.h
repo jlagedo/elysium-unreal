@@ -84,4 +84,50 @@ namespace ElysiumAnimGraph
 	// Whether a state plays a one-shot that has to end somehow. `Leap`, `Land` and `Crouch` are
 	// non-looping in the authored data; the other five run until the request changes.
 	bool IsOneShotState(EElysiumGraphState State);
+
+	// Whether the graph should repeat the clip a state is playing, given the model's own loop bit.
+	//
+	// It is the authored bit for every state but one. A **held stance** repeats its non-looping
+	// into-pose, because that is what retail does by a different mechanism: `StudioFrameAdvance`
+	// clamps the finished cycle, the next unchanged request marks the selection dirty, and
+	// `ResetSequenceInfo` replays the same clip (`docs/vtmb/animation_and_movers.md`). Freezing on
+	// the terminal frame instead is recorded as **not faithful**, so this is a defect fix.
+	//
+	// `Leap` and `Land` are one-shots that END, and must not be caught by this: a looping landing
+	// never reports complete, and the latch would hold the body in phase 8 forever.
+	bool ShouldRepeatClip(EElysiumGraphState State, bool bAuthoredLooping);
+
+	// =============================================================================================
+	// Three decisions that each cost a visible defect once. They are pure so they are asserted with
+	// no world and no body — every one of them failed in a way that compiled, exported and ran green.
+	// =============================================================================================
+
+	// Whether a `GetRelevantAnimTimeRemaining` answer describes the clip that was asked for.
+	//
+	// **The engine's failure value is `MAX_flt`, not zero.** Both
+	// `FAnimNode_StateMachine::GetRelevantAnimTimeRemaining` and `FAnimInstanceProxy`'s wrapper
+	// return it when no relevant asset player or no state machine is found. Read as a duration that
+	// is "a very long time left", it reports a clip as still playing forever — which parks whatever
+	// consumes it. Bounding against the clip's own length is what separates an answer from a
+	// refusal, because no honest remaining time exceeds the sequence it belongs to.
+	bool IsPlayableRemaining(float RemainingSeconds, float ClipLengthSeconds);
+
+	// Whether a request that resolved no asset should hold the pose it already has.
+	//
+	// Retail's answer, not a guard: a failed selection never reaches `ResetSequenceInfo`, so
+	// `m_nSequence` keeps what it held and the body goes on playing it. Projecting the miss instead
+	// leaves an asset pin null, and a sequence player with no asset evaluates to the skeleton's bind
+	// pose — a visible T-pose. A body that has published nothing yet has no pose to hold, so it
+	// cannot take this path.
+	bool ShouldHoldPose(bool bHasAppliedOnce, bool bHasSequence, bool bHasBlendSpace);
+
+	// The one-shot answer a caller should feed the jump latch, from what it can see.
+	//
+	// The two collapses that matter: a request resolving **no asset** is a finished one-shot rather
+	// than an unanswerable one — there is no clip to wait for, and treating it as unknown parks the
+	// body in its previous pose for the whole fallback window, which reads as floating after a
+	// ducked landing. And a report whose generation has moved on describes a clip that is no longer
+	// playing, so it must answer `Unknown` rather than end the request that replaced it.
+	EElysiumOneShotState OneShotStateFor(bool bHasAsset, bool bGenerationMatches,
+		bool bInOneShotState, bool bComplete);
 }

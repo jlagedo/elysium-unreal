@@ -107,7 +107,7 @@ gameplay verbs; `engine.dll` owns console/system verbs. `+`/`-` pairs are marked
 | ±`lookup`, ±`lookdown` | keyboard pitch (`cl_pitchspeed`) |
 | ±`speed` | walk modifier (held) |
 | ±`strafe` | strafe modifier — turn keys become strafe while held |
-| ±`duck` | crouch |
+| ±`duck` | crouch — **the press edge toggles the stance; the release does nothing** (see below) |
 | ±`jump` | jump |
 | ±`klook`, ±`mlook`, ±`jlook` | keyboard / mouse / joystick look modes |
 | `centerview`, `force_centerview` | recentre pitch |
@@ -116,6 +116,20 @@ gameplay verbs; `engine.dll` owns console/system verbs. `+`/`-` pairs are marked
 `in_mlook`, `in_jlook`, `in_graph` are the persisted toggle states; `default.cfg` ends with a
 bare `+mlook` line, which is why mouse-look is on from a cold start and `m_side`/`m_forward`
 (mouse-as-movement factors) are inert.
+
+**`+duck` toggles the crouch, and the bind tables do not show it** [observed in the shipped game].
+`CTRL` ducks on the press and stays ducked when the key is released; pressing again stands the
+player up, and a jump taken from a crouch lands still crouched. Nothing in the recovered material
+contradicts this and it is worth saying why the tables read otherwise: `default.cfg` binds `CTRL`
+to `+duck`, `kb_act.lst` lists it as a pair, and `CGameMovement::Duck` (`0x10126fd0`) reads held bit
+`4` off the **server's** button field — all three describe a held button, and a client-side latch
+that keeps `IN_DUCK` asserted satisfies every one of them exactly as a held key would. The layer
+that decides what sets that bit is `client.dll`'s `CInput`, which is not decompiled — the same gap
+that leaves the mouse response curve unrecovered (`docs/vtmb/source_movement.md` → "View / camera").
+
+The pair form is therefore still correct at the binding layer: `-duck` parses and a `.cfg` binding
+`+duck` is what the game ships. Only the *retention* is the toggle, and it belongs to the state
+`CGameMovement` keeps rather than to the button — see `docs/vtmb/source_movement.md` → "Ducking".
 
 ### Combat and items
 

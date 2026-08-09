@@ -168,6 +168,14 @@ private:
 	// Source carries both, and the pair is what lets a duck be released mid-transition.
 	bool bDucking = false;
 	bool bDucked = false;
+	// **The retained crouch request — the action, not the key and not the pose.** `IN_DUCK`'s press
+	// edge flips this and its release does nothing, so the crouch outlives the keypress the way an
+	// owner test against retail says it does: CTRL ducks, and a jump taken from a crouch lands still
+	// crouched. It is deliberately separate from `bDucked`, which is what the body actually *is*:
+	// `CanUnduck` can refuse a stand-up under a low ceiling, and when it does the request is already
+	// false while the hull is still small. Collapsing the two would either lose the refusal or make
+	// the ceiling re-duck the player.
+	bool bDuckRequested = false;
 	// Counts **down** in milliseconds from GameMovementDuckTime, exactly as `m_flDucktime` does.
 	float DuckTime = 0.0f;
 

@@ -113,13 +113,13 @@ namespace
 		{ TEXT("lookdown"),     EK::ButtonPair, EG::Movement, EB::LookDown,     TEXT("keyboard pitch down (cl_pitchspeed)") },
 		{ TEXT("speed"),        EK::ButtonPair, EG::Movement, EB::Speed,        TEXT("walk modifier -- held selects the slow gait") },
 		{ TEXT("strafe"),       EK::ButtonPair, EG::Movement, EB::Strafe,       TEXT("strafe modifier -- the turn keys strafe while held") },
+		// `duck` stays an ordinary pair carrying an ordinary button. **The crouch's retention is not
+		// here.** A command is one frame of requested input (`docs/architecture/animation-architecture.md`
+		// § 3), so `IN_DUCK` means "the key is down this frame" and nothing more; the mover's press
+		// edge is what toggles, and the retained state it toggles is `bDuckRequested` beside
+		// `m_bDucked`'s own. Faking a held button here would put a stance in the command stream and
+		// make a recording claim a key was down on frames it was not.
 		{ TEXT("duck"),         EK::ButtonPair, EG::Movement, EB::Duck,         TEXT("crouch -- 36u hull, eye at 30u") },
-		// **Ours, not VtMB's** — like `createplayer` below, this is deliberately absent from
-		// `docs/vtmb/controls.md`'s bindable inventory and therefore gets no keyboard default. It exists
-		// because a stick click cannot be held: L3 is where the gamepad layout puts crouch, and the
-		// hold that `+duck` is would mean keeping a thumb pressed into the stick while aiming with it.
-		// It flips the same `IN_DUCK` latch `+duck` sets, so the mover sees one crouch, not two.
-		{ TEXT("toggleduck"),   EK::Once,       EG::Movement, EB::None,         TEXT("flip the crouch latch -- the gamepad's crouch") },
 		{ TEXT("jump"),         EK::ButtonPair, EG::Movement, EB::Jump,         TEXT("jump") },
 		{ TEXT("klook"),        EK::ButtonPair, EG::Movement, EB::KLook,        TEXT("keyboard look mode") },
 		{ TEXT("mlook"),        EK::ButtonPair, EG::Movement, EB::MLook,        TEXT("mouse look mode -- on from a cold start (default.cfg ends with +mlook)") },

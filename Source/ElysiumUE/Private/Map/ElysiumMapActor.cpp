@@ -1093,16 +1093,38 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	USkeletalMeshComponent* Visual = Body->GetPlayerVisual();
 	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
 		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumBipedAnimInstance* Graph = Visual
+		? Cast<UElysiumBipedAnimInstance>(Visual->GetAnimInstance()) : nullptr;
+
+	// **What the graph said about the clip the latch is about to advance past.** Read BEFORE the
+	// tick, because the report describes the request that was published last frame and the latch is
+	// about to decide whether that request is over.
+	//
+	// The generation gate is the whole safety of it: a report stamped with a generation the driver
+	// has already moved past describes a clip that is no longer playing, and letting it answer would
+	// end the request that replaced it. A stale or absent report reads `Unknown`, which is exactly
+	// the timer fallback a body with no graph gets.
+	// The one-shot answer is `ElysiumAnimGraph::OneShotStateFor`'s, so the two collapses it exists to
+	// prevent — a missing clip read as unanswerable, and a stale report ending the request that
+	// replaced it — are asserted in the Substrate tier rather than living here.
+	static const FElysiumOneShotReport NoReport;
+	const FElysiumOneShotReport& Report = Graph ? Graph->GetOneShotReport() : NoReport;
+	const EElysiumOneShotState OneShot = ElysiumAnimGraph::OneShotStateFor(
+		/*bHasAsset*/ PlayerAnimDriver->Assets.Sequence != nullptr
+			|| PlayerAnimDriver->Assets.Space != nullptr,
+		/*bGenerationMatches*/ Graph != nullptr
+			&& Report.Generation == PlayerAnimDriver->Selection.Generation,
+		Report.bInOneShotState, Report.bComplete);
+
 	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
-		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr);
+		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr, OneShot);
 
 	// Hand the settled record to the graph (CCC5). The push is here rather than a pull from the
 	// instance because the driver lives on this actor behind a pimpl while the visual is a component
 	// of the pawn: an instance reaching for it would invert the layering and carry a null branch for
 	// every map that seats no pawn. A body still on the native instance — `elysium.PlayerGraph 0`, or
 	// a map whose graph package is missing — simply is not a biped instance and is skipped.
-	if (UElysiumBipedAnimInstance* Graph = Visual
-		? Cast<UElysiumBipedAnimInstance>(Visual->GetAnimInstance()) : nullptr)
+	if (Graph)
 	{
 		Graph->PublishSelection(PlayerAnimDriver->Selection, PlayerAnimDriver->Assets);
 	}

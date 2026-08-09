@@ -113,6 +113,20 @@ void AElysiumPawn::SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnc
 	AddActorWorldOffset(FVector(0.0f, 0.0f, Shift), /*bSweep*/ false, nullptr,
 		ETeleportType::TeleportPhysics);
 
+	// **The body surface re-bases with the hull, for exactly the reason the eye does.** It hangs off
+	// the box centre by one half-height so its authored feet sit on the hull's floor, and that
+	// offset is a function of the *current* height rather than a constant: shrinking to the ducked
+	// hull moves the centre down 18 while a surface still offset by the standing 36 keeps its feet
+	// 18 below the floor — the model wades into the ground for as long as the crouch lasts.
+	//
+	// It is re-based here rather than where it is attached because this is the one place the height
+	// changes. A crouch used to be a held key and the artefact flashed; it is a toggle now and it
+	// simply stands.
+	if (USkeletalMeshComponent* Visual = GetPlayerVisual())
+	{
+		Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -NewHalf));
+	}
+
 	SetEyeHeight(EyeAboveFeetCm);
 }
 

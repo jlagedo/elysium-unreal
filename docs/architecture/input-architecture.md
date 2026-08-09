@@ -272,26 +272,37 @@ keyboard and a pad present the same four inputs to the same code.
 | Mapping | Stack |
 |---|---|
 | Mouse | **not an Enhanced Input mapping at all** — `UElysiumInputRouter::BindLookAxes` binds `EKeys::MouseX`/`MouseY` as legacy axis keys and scales the raw counts itself |
-| Stick → `IA_Look` | `DeadZone` (radial) → `Negate` Y → `Scalar`. **No `ScaleByDeltaTime`, no `FOVScaling`, and no `ResponseCurveExponential`** |
-| Stick → `IA_Move` | `DeadZone` (radial) |
+| Stick → `IA_Look` | `Negate` Y, and nothing else |
+| Stick → `IA_Move` | **empty** |
+| L3 → `IA_Duck`, R3 → `IA_Camera` | empty; each fires a console line (`+duck`, `togglecamera`) |
 | WASD → `IA_Move` | not a mapping either — each key fires a `+cmd` console line through the command bus |
 
-The initial owner-selected stick profile is neutral and carries no aim assist. The left stick uses
-a `0.24` radial dead zone and the right stick uses `0.265`, rounded from Microsoft's established
-Xbox thresholds (`7849/32767` and `8689/32767`); Enhanced Input remaps the remaining radial range
-back to `0..1`. Full deflection is `210°/s` yaw and `225°/s` pitch. The look response curve is
-**not** in the stack — it is one pure function at the point the user command is built (`## Feel`),
-so the curve is asserted in a test tier and exactly one thing owns the look feel.
-`Gamepad_Right2D` delivers physical stick-up on negative Y, while Elysium adds
-the action's Y directly to Unreal pitch, where positive is look-up. The Y-only `Negate` therefore
-makes physical up look up and physical down look down without altering the GameInput device axis.
-`Gamepad_Left2D` is converted from `(right, forward)` into `FElysiumUserCmd.Move(forward, right)` by
-the router's one semantic swizzle before `SetAnalogMove`.
+**The mapping carries device-frame corrections only; every feel term lives at the command seam.**
+`Gamepad_Right2D` delivers physical stick-up on negative Y while Elysium adds the action's Y
+directly to Unreal pitch, where positive is look-up — so the Y-only `Negate` is a statement about
+the device's frame, which is why it is the one modifier that belongs in the asset. The dead zone,
+the saturation, the response curve, the filter and the sustained-turn ramp are all
+`ElysiumInput::ShapeStickLook` / `ShapeStickMove` (`## Feel` → "Stick response").
+
+That placement is forced rather than stylistic. The filter is a half-life and the ramp is a charge,
+so both need the frame's **clamped, dilation-normalised** delta, and an Enhanced Input modifier only
+ever sees Enhanced Input's raw one — `ScaleByDeltaTime` would hand the pad a level-load stall as a
+full turn and break replay across frame rates. The dead zone, saturation and curve all key on the
+deflection's **magnitude**, so they are one radial gesture, while Enhanced Input applies its stack
+per component. And a value living half in a `.uasset` and half in a function has two owners, only
+one of which can be asserted. The Content tier therefore asserts the **absence** of `DeadZone`,
+`Scalar`, `ScaleByDeltaTime`, `FOVScaling`, `ResponseCurveExponential` and `Smooth` in both stick
+mappings, as firmly as it asserts the one modifier that is there.
+
+`Gamepad_Left2D` is `(right, up)` and `FElysiumUserCmd.Move` is `(forward, right)`; `Build` applies
+the shaping in the stick's own frame **before** the swizzle, because an asymmetric zone applied
+after it would rotate with the axes.
 
 Frame-rate-scaling mouse look is the classic failure of this system; the mouse and the stick are
 physically separate paths — one legacy axis binding, one Enhanced Input mapping — so it cannot be
-applied to both. The stick is a held *rate* and is multiplied by the clamped, dilation-normalised
-delta inside `FElysiumUserCmdBuilder::Build`; mouse counts arrive as finished degrees and are not.
+applied to both. The stick is shaped into a held *rate* and multiplied by the clamped,
+dilation-normalised delta inside `FElysiumUserCmdBuilder::Build`; mouse counts arrive as finished
+degrees and are not.
 
 `ElysiumInput::FElysiumLookTuning` reads `sensitivity`, `m_pitch` and `m_yaw` **from
 `FElysiumConsole`**, reproducing VtMB's 0.066°/count (`docs/vtmb/source_movement.md`). The options
@@ -300,7 +311,7 @@ already had. `m_filter` is read by nothing: VtMB ships it at `0` and no smoothin
 
 ## Feel
 
-The tuning between a hand and the view. Two questions live here, and only one of them has a
+The tuning between a hand and the view. Three questions live here, and only one of them has a
 recovered answer.
 
 ### Look response
@@ -331,6 +342,57 @@ Three properties are structural rather than conventional:
   with no device and no world (`Elysium.Substrate.LookCurve`) and A/B-ed against the decompile when
   one exists. `IA_Look` carries no `ResponseCurveExponential` for the same reason — two owners of one
   feel, and only one of them assertable.
+
+### Stick response
+
+**A stick is not a mouse and cannot be shaped like one.** A mouse reports a *displacement the hand
+already made*, so it needs no dead zone and no filter. A stick reports a *held deflection* the game
+integrates into a turn — and integrates the device's noise along with it.
+
+**Gamepad feel has no original to reproduce** (§ Gamepad: VtMB ships raw joystick cvars, no UI, no
+default binds and a `joystick.cfg` that does not exist), so nothing here is a divergence from
+retail. It sits on the Feel axis outright.
+
+The device was **measured rather than assumed**, with `elysium.LookProbe` — a dev verb that logs the
+raw `Gamepad_Right2D` value beside the degrees that reached the view, counting down *deflected*
+frames so the window survives the gap between arming it and a hand reaching the pad. On the
+reference pad, at a stable 110 fps:
+
+- the axes quantise to `1/127` — 8-bit sticks;
+- the resting centre sits about **0.04** off zero, peaking near 0.05;
+- a steady hold swings **±0.2 on Y** between consecutive frames while X holds to ±0.04;
+- a hard diagonal reports a magnitude above 1, because the axes saturate independently.
+
+`ElysiumInput::ShapeStickLook` answers each of those, and `ShapeStickMove` answers the movement
+stick's smaller version of the same problem. Every term is one row of the `joy_*` console surface,
+declared into the VtMB store like `look_curve` so a live run tunes with `elysium.cmd` and a
+`config.cfg` keeps the answer:
+
+| Term | Answers |
+|---|---|
+| `joy_deadzone` / `joy_move_deadzone` | the resting offset — a **scaled radial** zone, so the shaped value leaves zero continuously rather than stepping off a threshold |
+| `joy_saturation` | the top of the travel, where noise rides a value that was going to clamp anyway |
+| `joy_response_look` | the fine-control region the dead zone costs; squared by default |
+| `joy_yawsensitivity` / `joy_pitchsensitivity` | the rate at full deflection, pitch slower — the shorter gesture, and the noisier axis |
+| `joy_smoothing` | the frame-to-frame swing, as a **half-life** so it is exact at any step |
+| `joy_accelscale` / `joy_acceltime` / `joy_accelenter` | a sustained-turn ramp; `1` is no ramp, and that is the shipped default |
+
+Three properties are structural rather than conventional, and mirror the mouse curve's:
+
+- **It shapes the whole 2D deflection, never one axis.** The dead zone, the saturation and the curve
+  all key on magnitude, so a diagonal push shapes as one gesture. Per-axis shaping is what makes a
+  stick feel square.
+- **A centred stick is taken, not filtered toward.** The dead zone has already decided there is no
+  input; letting the filter approach zero over its half-life coasts the view about ten degrees past
+  where the thumb let go. Snapping costs nothing because the scaled band reaches zero continuously.
+  The filter stays symmetric for every non-zero deflection — an attack/release split would bias a
+  steady hold's mean downward, turning noise into a turn quietly slower than the stick.
+- **The movement stick is deliberately curve-free, filter-free and ramp-free.** The mover already
+  owns acceleration, so a second ramp would be two owners of one feel, and a curve would move the
+  walk/run threshold away from where the stick says it is.
+
+`Elysium.Substrate.StickLook` asserts all of it with no device and no world, including the
+frame-rate property: the filter settles the same amount per second of real time at 60 and at 240 Hz.
 
 ### Leniency: there is none, and it is measured
 

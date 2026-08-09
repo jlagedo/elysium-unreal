@@ -122,12 +122,19 @@ namespace
 	FCourse MakeDuck()
 	{
 		FCourse C = MakeSitedCourse(TEXT("duck"), WarehouseFloor, 0.0f);
-		// Duck in place, walk ducked, release. The hull swap, the eye drop to 30u, the 0.4 s duck
-		// and 0.2 s unduck ramps, and the headroom gate all read off this one.
+		// Duck in place, walk ducked, stand back up. The hull swap, the eye drop to 30u, the 0.4 s
+		// duck and 0.2 s unduck ramps, and the headroom gate all read off this one.
+		//
+		// **Two taps, not one hold.** The crouch is a toggle at the action layer, so the button is
+		// pressed and released to enter it and pressed and released again to leave — holding it for
+		// the middle of the course would toggle on and then never off, and the unduck ramp would go
+		// unmeasured while the course still looked like it was exercising it.
 		C.Segments.Add({ 0.5f, Still, 0, 0.0f });
-		C.Segments.Add({ 1.0f, Still, Duck, NAN });
-		C.Segments.Add({ 1.5f, Fwd, Duck, NAN });
-		C.Segments.Add({ 1.0f, Still, 0, NAN });
+		C.Segments.Add({ 0.1f, Still, Duck, NAN });   // press edge: crouch
+		C.Segments.Add({ 0.9f, Still, 0, NAN });
+		C.Segments.Add({ 1.5f, Fwd, 0, NAN });        // walking, still crouched
+		C.Segments.Add({ 0.1f, Still, Duck, NAN });   // press edge: stand
+		C.Segments.Add({ 0.9f, Still, 0, NAN });
 		return C;
 	}
 

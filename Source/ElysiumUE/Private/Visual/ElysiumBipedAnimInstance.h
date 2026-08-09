@@ -87,8 +87,22 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	TObjectPtr<UAnimSequence> RequestedSequence = nullptr;
 
-	// The clip's own loop bit, read off the model rather than authored on the node: `crouch` is a
-	// 61-frame NON-looping into-pose while `walk_0` loops, and both play through the same states.
+	// **Whether the graph should repeat this clip** — which is the model's own loop bit for
+	// everything except a held stance. `crouch` is a 61-frame NON-looping into-pose while `walk_0`
+	// loops, and both play through the same states, so the bit is read off the model rather than
+	// authored on the node.
+	//
+	// The exception is `Crouch`, and it is faithful rather than a convenience. Retail holds a
+	// sustained unarmed crouch by **reselecting** sequence 8: `StudioFrameAdvance` clamps the
+	// non-looping cycle and sets `m_bSequenceFinished`, the next unchanged `ACT_CROUCH` request sees
+	// that flag and marks the selection dirty, and `ResetSequenceInfo` clears the cycle so the same
+	// clip plays again (`docs/vtmb/animation_and_movers.md`). Repeated indefinitely that is a loop,
+	// reached by a different mechanism — so the pin says loop, and the body does what retail's does
+	// instead of freezing on the terminal frame. Holding that last frame is recorded as **not
+	// faithful and therefore not an owner divergence**; this is the fix, not a choice.
+	//
+	// The **record is not touched**: `FElysiumAnimationSelection::bLooping` keeps the authored
+	// `false`, so Cog, the channel recorder and the MCP surface still report what the model says.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	bool bRequestedLooping = true;
 

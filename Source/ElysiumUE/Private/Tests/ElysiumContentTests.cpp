@@ -4335,13 +4335,15 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestEqual(TEXT("Jump preserves its command identity"), Jump->Command, FString(TEXT("+jump")));
 	TestTrue(TEXT("Jump is a press/release pair"), Jump->bButtonPair);
 
-	// **The stick clicks are one-shot toggles, not pairs.** A stick click cannot be held while the
-	// same stick is aiming, so L3 flips the crouch latch and R3 flips the view rather than either
-	// being a hold. `bButtonPair` false is what stops the router binding a Completed edge that would
-	// fire `-toggleduck` — a verb that does not exist, and would stand the player back up on release.
-	TestEqual(TEXT("L3 fires the gamepad crouch toggle"), Duck->Command, FString(TEXT("toggleduck")));
+	// **L3 fires the ordinary `+duck` pair, and the crouch is a toggle anyway.** The retention is the
+	// mover's — `IN_DUCK`'s press edge flips `bDuckRequested` — so there is no gamepad-only crouch
+	// verb to keep in step with the keyboard's, and a stick click that cannot be held costs nothing.
+	// The pair is what makes the press edge exist at all, which is the thing the toggle reads.
+	TestEqual(TEXT("L3 fires the ordinary crouch verb"), Duck->Command, FString(TEXT("+duck")));
+	TestTrue(TEXT("crouch is a press/release pair like the keyboard's"), Duck->bButtonPair);
+	// R3 is a genuine one-shot: `togglecamera` has no release half, so binding a Completed edge
+	// would fire `-togglecamera`, which is not a verb.
 	TestEqual(TEXT("R3 fires the view toggle"), Camera->Command, FString(TEXT("togglecamera")));
-	TestFalse(TEXT("crouch toggle is not a press/release pair"), Duck->bButtonPair);
 	TestFalse(TEXT("view toggle is not a press/release pair"), Camera->bButtonPair);
 	// Every mapped command names a declared verb, or the button is a no-op that logs nothing. The
 	// leading `+` is stripped first, because a pair's press edge is declared under its bare name.

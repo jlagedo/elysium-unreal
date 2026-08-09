@@ -330,6 +330,11 @@ def _policy_fingerprint(config) -> str:
     scripts = [
         *_policy_script_paths(config),
         config.repo_root / "Content" / "Fonts",
+        # `make_input_assets.py` reads this CSV, and script discovery above only walks imports --
+        # so without naming it here, editing the committed input table alone leaves the task
+        # cached and the generated actions, mapping context and action set stale. The failure is
+        # silent in the worst way: the export reports success and the button does nothing.
+        config.repo_root / "Config" / "ElysiumInputActions.csv",
         config.export_root / "particles" / "manifest.json",
         config.export_root / "particles" / "dropletfast.tga",
         config.export_root / "particles" / "fortituderings.tga",

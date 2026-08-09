@@ -99,11 +99,37 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		CacheStateMachine();
 	}
 
+	// --- a request that resolved no asset holds the pose it had -----------------------------------
+	//
+	// **This is retail's behaviour, not a guard bolted on.** A failed selection never reaches
+	// `ResetSequenceInfo`: `m_nSequence` keeps whatever it held and the body goes on playing it. The
+	// controlled corpus records exactly one such request on a validated player body — a ducked
+	// phase-8 landing asking for `ACT_LAND_CROUCH`, whose selection returns `-1` and for which no
+	// clip was ever observed (`docs/vtmb/animation_and_movers.md`).
+	//
+	// Projecting it anyway is what produced a visible **reference pose**: the state it routes to
+	// takes its clip from the pin below, an unresolved request leaves that pin null, and a sequence
+	// player with no asset evaluates to the skeleton's bind pose — a T-pose flash for as long as the
+	// landing lasts. Declaring a state was never the problem; entering it with nothing to play was.
+	//
+	// The **record is untouched** and still names the miss, which is the whole reason a player miss
+	// is a named one. Holding also leaves `OneShot` describing the pose that is actually on screen,
+	// so the generation gate in the driver's owner reads stale and the latch falls back to its
+	// timer — which is what ends the landing.
+	if (ElysiumAnimGraph::ShouldHoldPose(bHasApplied, PendingSequence != nullptr,
+			PendingBlendSpace != nullptr))
+	{
+		return;
+	}
+
 	// --- project the record onto what the graph reads --------------------------------------------
 	RequestedState = ElysiumAnimGraph::StateFor(Pending);
 	RequestedBlendSpace = PendingBlendSpace;
 	RequestedSequence = PendingSequence;
-	bRequestedLooping = Pending.bLooping;
+	// A held stance repeats its into-pose, which is retail's reselect-and-restart expressed as a
+	// loop (see `bRequestedLooping`). Every other state takes the model's own bit unchanged, and the
+	// record keeps the authored value either way.
+	bRequestedLooping = ElysiumAnimGraph::ShouldRepeatClip(RequestedState, Pending.bLooping);
 	GridAxis0 = Pending.AxisValue[0];
 	GridAxis1 = Pending.AxisValue[1];
 	Speed = Pending.Speed;
@@ -145,17 +171,28 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	OneShot = FElysiumOneShotReport();
 	OneShot.Generation = Pending.Generation;
 	const int32 State = StateIndex[static_cast<uint8>(RequestedState)];
-	// The clip guard is load-bearing: `GetRelevantAnimTimeRemaining` answers 0 when there is no
-	// relevant asset player, and 0 remaining reads as finished — so a body whose landing resolved
-	// nothing would end its landing on the frame it began.
+	// **`GetRelevantAnimTimeRemaining` answers `MAX_flt` when it finds no relevant asset player**,
+	// not 0 — `FAnimNode_StateMachine::GetRelevantAnimTimeRemaining` returns it from the bottom of
+	// the function, and `FAnimInstanceProxy` returns it again for an unknown machine. So the failure
+	// direction is "infinitely long", and reporting that as a clip still playing is what hangs a
+	// consumer: `Playing` is an answer, and an answer suppresses the latch's own timer. A body whose
+	// landing resolved nothing would then stay in ACT_LAND forever rather than standing up.
+	//
+	// Anything that is not a sane finite duration therefore reports **nothing at all**, which leaves
+	// `RemainingSeconds` at its "cannot say" −1 and routes the latch back to the fallback. The state
+	// weight and the resolved clip are checked for the same reason and in the same direction.
 	if (MachineIndex != INDEX_NONE && State != INDEX_NONE
 		&& ElysiumAnimGraph::IsOneShotState(RequestedState)
 		&& RequestedSequence != nullptr
 		&& GetInstanceStateWeight(MachineIndex, State) > 0.99f)
 	{
-		OneShot.bInOneShotState = true;
-		OneShot.RemainingSeconds = GetRelevantAnimTimeRemaining(MachineIndex, State);
-		OneShot.bComplete = OneShot.RemainingSeconds <= KINDA_SMALL_NUMBER;
+		const float Remaining = GetRelevantAnimTimeRemaining(MachineIndex, State);
+		if (ElysiumAnimGraph::IsPlayableRemaining(Remaining, RequestedSequence->GetPlayLength()))
+		{
+			OneShot.bInOneShotState = true;
+			OneShot.RemainingSeconds = Remaining;
+			OneShot.bComplete = Remaining <= KINDA_SMALL_NUMBER;
+		}
 	}
 }
 

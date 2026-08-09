@@ -45,7 +45,7 @@ rung: `CCC7` re-opens what `4.7` settled, by design.
 | Rung | Canonical step | Where this project stands |
 |---|---|---|
 | Character math | 1 | `4.7 [x]` — ported line-by-line, `Elysium.Substrate.Movement` green. Its **speed authority is open**, and its world half — `StepMove`, `CategorizePosition`, the jump against real geometry — is asserted nowhere; the gym is the unfinished half of the rung |
-| Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig behind `elysium.ModernCamera` (default 0) |
+| Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig behind `elysium.ModernCamera` (**default 1** — owner call; both rigs still solve and record every frame, so the A/B is intact and the co-tune is still outstanding) |
 | Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, deliberately after `CCC7` settles the speed |
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
@@ -95,7 +95,7 @@ trace, a bake) is a context switch rather than a slice stall.
 |---|---|
 | `CCC2 [x]` — the service foundation, then the modern rig | `CCC1 [x]` — the body sample |
 | `CCC3 [~]` — the response curve and the leniency courses; the co-tune waits for `CCC7` | `CCC4 [x]` — intent, resolver, record |
-| | `CCC5` — the player graph |
+| | `CCC5 [x]` — the player graph |
 | | `CCC6` — drive it |
 
 The lanes join at `CCC7` (the speed authority), the co-tune half of `CCC3`, and `CCC8`; `CCC9`
@@ -279,11 +279,24 @@ retires what they replaced.
   magnitude-keyed curve over the sum would silently curve a held `+left` — and
   `Elysium.Substrate.UserCmd` asserts the separation, so moving the call after the merge reddens.
   The scale left the router for the tuning struct's `LoadFrom` callback; `ElysiumInput::CvarDefs()`
-  now declares the seven names, which also fixes `sensitivity`/`m_yaw`/`m_pitch` having been read
-  but declared nowhere. `IA_Look`'s `ResponseCurveExponential` is retired and the Content tier
+  now declares the mouse's seven names, which also fixes `sensitivity`/`m_yaw`/`m_pitch` having been
+  read but declared nowhere. `IA_Look`'s `ResponseCurveExponential` is retired and the Content tier
   asserts its **absence**, so exactly one thing owns the look feel and it is the one that can be
   asserted. The faithful path, the divergence and the leniency finding are recorded in
   `docs/architecture/input-architecture.md` § Feel, the section that did not exist.
+  **The pad's whole path landed on the same seam**, for a reason the mouse's did not have: a stick
+  reports a *held deflection* the game integrates, so the device's noise is integrated with it.
+  `ElysiumInput::ShapeStickLook` / `ShapeStickMove` own the dead zone, the saturation, the response
+  curve, the filter and the sustained-turn ramp over a `joy_*` cvar surface, asserted by
+  `Elysium.Substrate.StickLook`; the mapping keeps **only** the device-frame Y negate, and the
+  Content tier asserts the absence of every feel modifier in the asset. The filter and the ramp are
+  what force that placement rather than style — a half-life and a charge both need the frame's
+  clamped, dilated delta, and an Enhanced Input modifier only ever sees the raw engine one.
+  *Instrument finding:* the pad was **measured, not assumed** (`elysium.LookProbe`, kept as a
+  permanent verb): the axes quantise to 1/127, the resting centre sits about 0.04 off zero, and a
+  steady hold swings ±0.2 on Y between consecutive frames while X holds to ±0.04 — at a stable
+  110 fps, so none of it was frame rate. That sized the dead zone, justified the filter, and is why
+  an unshaped stick read as unusable while the same build's mouse read as fine.
   **The leniency question is now measured.** Two five-rung brackets — `ledge_*` and `land_*`, one
   lip and one drop, ten committed baselines — place exactly one jump press at a frame offset from a
   **body event** rather than from the clock, because the walk to a lip moves with the gait and the
@@ -385,15 +398,16 @@ retires what they replaced.
   fallback ladder (run → walk → disposition → sequence zero) is `CAI_BaseNPC`'s and runs only for an
   NPC source; the player has none, which is why a player miss is a **named** miss.
 
-- [ ] **CCC5 The player animation graph.** `ABP_ElysiumBiped`: a locomotion state machine whose
-  transitions come from the authored `fade` duration, blend-space players on walk, run and sneak
-  driven by `move_yaw`, and a slot for one-shots. **One parameterized graph, not one per
+- [x] **CCC5 The player animation graph.** `ABP_ElysiumBiped`: a locomotion state machine whose
+  transitions carry the authored `fade` duration as a **runtime inertialization request**, blend-space
+  players on walk, run and sneak driven by `move_yaw`, and a slot for one-shots. **One parameterized
+  graph, not one per
   archetype:** every player node takes its asset dynamically — through the anim-node-function
   library setters or an exposed asset pin bound to an instance property the native update writes —
   which is the design's own step 6 (no re-selection in the graph) made structural. That choice
   serves two masters at once: one graph plays every model the resolver picks assets for, and the
-  committed `.uasset` under `Content/ElysiumAuthored/` carries zero references to generated
-  content, so the authored/generated boundary holds by construction. A per-archetype graph is
+  tracked graph source carries zero references to generated content, so the authored/generated
+  boundary holds by construction. A per-archetype graph is
   reserved for a skeleton that genuinely diverges, not for asset differences, which are catalog
   data. The native base is `UElysiumBipedAnimInstance`, whose proxy overrides `Evaluate` — the
   compiled graph runs, then the composition tail over the output pose, the same shape the NPC
@@ -411,7 +425,8 @@ retires what they replaced.
   ordinary path selects `ACT_LEAP` at jump phase 1, `ACT_FALLING` at phase 7, then a moving gait or
   `ACT_LAND` at phase 8. It does not select `ACT_LEAP_ASCEND` or `ACT_LEAP_DESCEND`. A ducked phase-8
   request asks for `ACT_LAND_CROUCH`, which returns no sequence on the validated player body and
-  therefore needs a named resolver fallback rather than an invented clip. Transition parity is a
+  therefore needs a named answer rather than an invented clip — the resolver keeps the miss and the
+  graph declares the state. Transition parity is a
   Content-tier test: retail combines a pair as
   `max(outgoing, incoming)` and ships 0.2 s on nearly the whole vocabulary
   (`docs/vtmb/animation_and_movers.md`), so the six transitions assert against the authored table
@@ -428,8 +443,42 @@ retires what they replaced.
   *Acceptance:* the locomotion activities are reachable through the graph; the transitions assert
   against the authored fades in the Content tier; the eyes track and the forearms twist on the migrated
   body; `elysium.BlendSpaces 0` still A/Bs against the single resolved cell.
-  *Deps:* `CCC4`; **`docs/project/animation-roadmap.md` ANM1** — an Animation Blueprint compiles
-  against a native `USkeleton`, so the shared-skeleton bake gates this rung.
+  *Deps:* `CCC4`. **`ANM1` does not gate this rung** — the same finding `CCC4` recorded, for the same
+  reason: `ABP_ElysiumBiped` is a **template** Animation Blueprint carrying no target skeleton
+  (`AnimBlueprintCompiler.cpp` compiles one with none, and `AnimGraphNode_AssetPlayerBase` permits
+  asset-player nodes carrying no asset), so it binds to whatever skeleton the mesh brings.
+  *Done:* the template graph, its tracked **T3D source** and the generator that rebuilds the package
+  from it (`pipeline/unreal/graphs/ABP_ElysiumBiped.t3d` + `make_player_anim_bp.py`) — the asset is
+  generated, never committed, which is the repo's "authored live, captured as text, rebuilt by a
+  generator" rule rather than an exception to it. `elysium.PlayerGraph` (default 1) installs it and
+  falls back to the NPC instance by name. The portrait stack is **shared, not duplicated**:
+  `UElysiumBodyAnimInstance` is the base both `UElysiumBipedAnimInstance` and
+  `UElysiumNpcAnimInstance` derive from, and `Elysium.Content.PlayerGraphInstance` stands a real
+  baked body on the graph and asserts the axis-interpolation rules resolve against that body's own
+  skeleton and that a `SetEyeInput` write lands — the regression that logs nothing.
+  The authored fade reaches the body as a **runtime inertialization request** rather than a
+  compile-time `CrossfadeDuration`: the pair combines as `max(outgoing, incoming)`, `flags & 0x2`
+  is a zero-duration request rather than a branch, and `Content/ElysiumAuthored/README.md` bars
+  encoding game-derived timings in a tracked package, so the graph asset carries a ceiling and
+  nothing else. `Elysium.Substrate.AnimationGraph`, `Elysium.Content.PlayerGraphTransitionParity`
+  and `Elysium.Content.PlayerGraphAssetKinds` close the tier half.
+  `ACT_LAND_CROUCH` is **declared by the graph, not fixed by the resolver**: the resolver keeps
+  returning the named miss, and the state projection routes it onto `Land` while the record still
+  names what was asked for.
+  *Instrument findings:* the live run found three defects the tiers could not, and each is now a
+  pure rule asserted in the Substrate tier rather than a fix at a call site. Anim-graph array pins
+  are `BlendPose_<index>` and the friendly labels match no pin, so an unchecked link compiled,
+  exported and ran as a **T-pose** — every link is now checked and the builder refuses to export on
+  a dead wire. `GetRelevantAnimTimeRemaining` answers **`MAX_flt`**, not zero, when it finds no
+  relevant asset player, so "cannot say" read as "still playing" and parked a landing for fourteen
+  seconds (`IsPlayableRemaining`). And a request that resolved nothing was projected anyway, leaving
+  an asset pin null and a sequence player evaluating to the bind pose — retail never reaches
+  `ResetSequenceInfo` on a failed selection, so the pose is now **held** (`ShouldHoldPose`), and a
+  one-shot with no clip is a **finished** one rather than an unanswerable one (`OneShotStateFor`),
+  which is what stops a ducked landing floating for the fallback window.
+  *Deferred, with the seam kept:* the sync-group phase matching named above is not built; the gait
+  speeds that decide stride and foot-sliding are `CCC7`'s by design, so no number here was tuned
+  against a walk speed that is about to move.
 
 - [ ] **CCC6 Drive it — the green room on the gym floor.** A construction rung, not a wiring rung:
   the green room detaches the player visual from the pawn and re-parents it to the stage root —
@@ -604,14 +653,16 @@ per the house rules.
 | Any change to movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | Holding a sustained unarmed crouch on the terminal frame — **not faithful and therefore not an owner divergence**: retail reuses sequence 8 until its finished flag is set, then reselects and restarts that same one-shot on the next request | `docs/vtmb/animation_and_movers.md` |
 | `ACT_SNEAK` reached from ducked-and-moving, and the walk/run split taken from realized speed rather than the `+speed` key — **both shipped, both reconstructions.** Retail selects all three gaits inside compact code 1 "from realized speed, flags and weapon state" and those flags are undecoded; there is no sneak button in `FElysiumUserCmd`, and the sample carries no gait bit because the NPC producer has no user command to carry one. The stride band is the evidence: the authored `sneak` cells run 69.7–79.3 cm/s against a ducked gait of a third of the base speed | `docs/architecture/animation-architecture.md` |
-| The landing one-shot's hold duration — **provisional, not a choice**: a still grounded body has to leave `ACT_LAND` somehow and one-shot completion is `CCC5`'s, so `FElysiumJumpLatch::LandHoldSeconds` holds it and the `NotifyOneShotComplete` seam replaces it | `docs/architecture/animation-architecture.md` |
+| ~~The landing one-shot's hold duration~~ — **settled at `CCC5`, and therefore not a divergence**: the landing ends when the graph reports its clip finished, and `FElysiumJumpLatch::LandHoldSeconds` survives only as the fallback for a body with no pose layer at all, which the gym stands | `docs/architecture/animation-architecture.md` |
+| The walk/run split keeping **gait memory with a hysteresis margin** — retail's selector picks from realized speed every frame and holds none. Ours exists so a decelerating body does not flicker between the two gaits and advance the request generation every frame. Shipped; the margin moves with `CCC7`'s speed authority | `docs/architecture/animation-architecture.md` |
+| The modern rig supplying the shipped base view — **owner call, made**: `elysium.ModernCamera` defaults to 1 ahead of `CCC3`'s co-tune, which stays outstanding. Both rigs solve and record every frame either way, so the A/B and the channel diff are unaffected | `docs/architecture/camera-architecture.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
 | A look-response curve that is not retail's — **built and shipped off**: `look_curve` defaults to 0, at which the gain is exactly 1.0 and the path is retail's linear one. Enabling it is an owner call not yet made | `docs/architecture/input-architecture.md` § Feel |
 | Input leniency — buffering or coyote time. VtMB has neither, **none is implemented**, and the `ledge_*`/`land_*` brackets now hold the committed before-picture, so adding either moves a number | `docs/architecture/input-architecture.md` § Feel |
 | A fixed-step accumulator, shipped behind `elysium.move.FixedStep` with the faithful variable delta as the default | `docs/vtmb/source_movement.md` |
 | ~~Composing the legacy shot and track channels as post layers, or arbitrating them as base requests~~ — **settled as post layers, and therefore not a divergence**: retail composes the scripted channel over the third-person weight, so this is the faithful behaviour and the doc's table was corrected | `docs/architecture/camera-architecture.md` |
 | Weapon-class camera arbitration — **deferred, not made**. The `+0x2440` bits are unrecovered and `0x08`/`0x10` read as Logic; the forced-third/first/feed latches stay as the seam | `docs/vtmb/camera-view-modes.md` |
-| The modern rig's frame-rate-independent half-life damper, asymmetric collision recovery and shoulder offset — behind `elysium.ModernCamera`, default 0 until `CCC3`'s co-tune | `docs/architecture/camera-architecture.md` |
+| The modern rig's frame-rate-independent half-life damper, asymmetric collision recovery and shoulder offset — behind `elysium.ModernCamera`, now the shipped default (row above) with `CCC3`'s co-tune still outstanding | `docs/architecture/camera-architecture.md` |
 
 **Not divergences**, and recorded as defect fixes rather than choices: the box hull that `StepMove`
 requires against `ACharacter`'s capsule, and keeping masked sequences out of the base clip path.

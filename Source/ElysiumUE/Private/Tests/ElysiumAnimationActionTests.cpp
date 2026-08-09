@@ -234,6 +234,79 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
 	}
 	{
+		// --- The landing ends when its CLIP ends, and the timer is only the fallback -------------
+		using ElysiumAnimIntent::AdvanceJumpLatch;
+		using EOne = EElysiumOneShotState;
+
+		auto Landed = []
+		{
+			FElysiumJumpLatch L;
+			L.Phase = EElysiumAirPhase::Landing;
+			return L;
+		};
+		const FElysiumLocomotionSample Still = Moving(0.0f);
+		const float Step60 = 1.0f / 60.0f;
+
+		// `Playing` outranks the stopwatch entirely. A landing clip longer than `LandHoldSeconds`
+		// would otherwise be cut off mid-pose by a timer racing the graph — which is the whole
+		// reason the report exists.
+		{
+			FElysiumJumpLatch L = Landed();
+			for (int32 Frame = 0; Frame < 120; ++Frame)   // two seconds, far past the 0.35 s fallback
+			{
+				L = AdvanceJumpLatch(L, Still, Step60, Gait, EOne::Playing);
+			}
+			TestEqual(TEXT("a landing whose clip is still playing does not time out"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Landing));
+			L = AdvanceJumpLatch(L, Still, Step60, Gait, EOne::Complete);
+			TestEqual(TEXT("and it ends on the frame the clip reports complete"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Grounded));
+		}
+
+		// `Complete` ends it immediately, well inside the fallback window — so a clip shorter than
+		// the timer is not held past its own end either.
+		{
+			FElysiumJumpLatch L = AdvanceJumpLatch(Landed(), Still, Step60, Gait, EOne::Complete);
+			TestEqual(TEXT("a completed landing clip ends the phase at once"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Grounded));
+		}
+
+		// `Unknown` is the body with no pose layer — the gym stands one, and it still has to stand
+		// up. **This is the path `LandHoldSeconds` exists for and it must not regress.**
+		{
+			FElysiumJumpLatch L = Landed();
+			L = AdvanceJumpLatch(L, Still, Step60, Gait, EOne::Unknown);
+			TestEqual(TEXT("with no report the landing holds while the timer runs"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Landing));
+			for (int32 Frame = 0; Frame < 60 && L.Phase == EElysiumAirPhase::Landing; ++Frame)
+			{
+				L = AdvanceJumpLatch(L, Still, Step60, Gait, EOne::Unknown);
+			}
+			TestEqual(TEXT("and the timer still ends it"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Grounded));
+		}
+
+		// The default argument IS the fallback, so every existing caller keeps the timer path
+		// without naming it — which is what stops this change reaching the gym.
+		{
+			FElysiumJumpLatch L = Landed();
+			for (int32 Frame = 0; Frame < 60 && L.Phase == EElysiumAirPhase::Landing; ++Frame)
+			{
+				L = AdvanceJumpLatch(L, Still, Step60, Gait);
+			}
+			TestEqual(TEXT("a caller passing no report gets the timer"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Grounded));
+		}
+
+		// A moving landing outranks every one of them: retail's phase 8 takes the gait outright.
+		{
+			FElysiumJumpLatch L = AdvanceJumpLatch(Landed(), Moving(Gait.RunSpeedCmPerSecond),
+				Step60, Gait, EOne::Playing);
+			TestEqual(TEXT("a moving landing leaves even while its clip plays"),
+				AsInt(L.Phase), AsInt(EElysiumAirPhase::Grounded));
+		}
+	}
+	{
 		// Water branches before everything else, because the move itself branches at Waist.
 		FElysiumJumpLatch Latch;
 		FElysiumLocomotionSample Deep = Moving(200.0f);
@@ -888,6 +961,79 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		TestEqual(TEXT("a ducked landing is declared onto the land state"),
 			AsInt(StateForActivity(EElysiumAnimActivityCode::LandCrouch)),
 			AsInt(EElysiumGraphState::Land));
+
+		// --- the repeat rule: a held stance replays, an event does not -------------------------
+		// Retail holds a sustained unarmed crouch by reselecting sequence 8 once its finished flag
+		// is set, which repeated is a loop. Freezing on the terminal frame is recorded as **not
+		// faithful**, so this is the defect fix rather than a choice.
+		using ElysiumAnimGraph::ShouldRepeatClip;
+		TestTrue(TEXT("a held crouch repeats its non-looping into-pose"),
+			ShouldRepeatClip(EElysiumGraphState::Crouch, /*bAuthoredLooping*/ false));
+		// And the two one-shots that END must not be caught by it: a looping landing never reports
+		// complete, and the latch would hold the body in phase 8 forever.
+		TestFalse(TEXT("a landing does not repeat"),
+			ShouldRepeatClip(EElysiumGraphState::Land, false));
+		TestFalse(TEXT("a leap does not repeat"),
+			ShouldRepeatClip(EElysiumGraphState::Leap, false));
+		// Everything else is the model's own bit, unchanged in both directions.
+		TestTrue(TEXT("an authored loop still loops"),
+			ShouldRepeatClip(EElysiumGraphState::Walk, true));
+		TestFalse(TEXT("and a non-looping ordinary state still does not"),
+			ShouldRepeatClip(EElysiumGraphState::Idle, false));
+
+		// --- the three rules that each cost a visible defect once --------------------------------
+		{
+			using ElysiumAnimGraph::IsPlayableRemaining;
+			using ElysiumAnimGraph::ShouldHoldPose;
+			using ElysiumAnimGraph::OneShotStateFor;
+			using EOne = EElysiumOneShotState;
+
+			// **`MAX_flt` is the engine's refusal, not a long clip.** Read as a duration it reports
+			// a clip as playing forever, which parks whatever waits on it — the body sat in ACT_LAND
+			// for fourteen seconds before this was bounded.
+			TestFalse(TEXT("MAX_flt is a refusal, not a remaining time"),
+				IsPlayableRemaining(MAX_flt, 1.5f));
+			TestFalse(TEXT("and so is anything past the clip's own length"),
+				IsPlayableRemaining(1.6f, 1.5f));
+			TestFalse(TEXT("a negative remaining answers nothing"), IsPlayableRemaining(-1.0f, 1.5f));
+			TestFalse(TEXT("a clip with no length answers nothing rather than 'finished'"),
+				IsPlayableRemaining(0.0f, 0.0f));
+			TestTrue(TEXT("a real remaining time is an answer"), IsPlayableRemaining(0.4f, 1.5f));
+			TestTrue(TEXT("and zero remaining on a real clip is 'finished'"),
+				IsPlayableRemaining(0.0f, 1.5f));
+
+			// **An unresolved request holds the pose it has**, which is what retail does: a failed
+			// selection never reaches ResetSequenceInfo. Projecting it leaves an asset pin null, and
+			// a sequence player with no asset evaluates to the bind pose — the T-pose.
+			TestTrue(TEXT("a request that resolved nothing holds the pose it has"),
+				ShouldHoldPose(/*bHasAppliedOnce*/ true, false, false));
+			TestFalse(TEXT("a resolved sequence is published"), ShouldHoldPose(true, true, false));
+			TestFalse(TEXT("a resolved blend space is published"), ShouldHoldPose(true, false, true));
+			TestFalse(TEXT("and a body that has published nothing yet has no pose to hold"),
+				ShouldHoldPose(/*bHasAppliedOnce*/ false, false, false));
+
+			// **No clip is a FINISHED one-shot, not an unanswerable one.** Treating the ducked
+			// landing's miss as unknown parked the body in its previous pose for the whole fallback
+			// window, which reads as floating after touching down.
+			auto OneAsInt = [](EOne State) { return static_cast<int32>(State); };
+			TestEqual(TEXT("a request with no clip is already complete"),
+				OneAsInt(OneShotStateFor(/*bHasAsset*/ false, true, true, false)),
+				OneAsInt(EOne::Complete));
+			TestEqual(TEXT("even when no report agrees with it"),
+				OneAsInt(OneShotStateFor(false, false, false, false)), OneAsInt(EOne::Complete));
+			// **A stale report describes a clip that is no longer playing.**
+			TestEqual(TEXT("a report from a superseded generation answers nothing"),
+				OneAsInt(OneShotStateFor(true, /*bGenerationMatches*/ false, true, true)),
+				OneAsInt(EOne::Unknown));
+			TestEqual(TEXT("and so does a state that is not a one-shot"),
+				OneAsInt(OneShotStateFor(true, true, /*bInOneShotState*/ false, true)),
+				OneAsInt(EOne::Unknown));
+			TestEqual(TEXT("a live one-shot still running is Playing"),
+				OneAsInt(OneShotStateFor(true, true, true, /*bComplete*/ false)),
+				OneAsInt(EOne::Playing));
+			TestEqual(TEXT("and a finished one is Complete"),
+				OneAsInt(OneShotStateFor(true, true, true, true)), OneAsInt(EOne::Complete));
+		}
 
 		// Reachable but outside the slice. Standing is a stated answer, not a hole.
 		TestEqual(TEXT("swimming stands rather than falling through the projection"),

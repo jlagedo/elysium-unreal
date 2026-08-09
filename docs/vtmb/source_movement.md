@@ -345,10 +345,19 @@ computes every frame anyway (above).
 
 ### Ducking
 
+**The crouch is a toggle, and the retention is state rather than the button** [observed in the
+shipped game]. `CTRL` ducks on the press edge and stays ducked when the key comes up; pressing again
+stands the player up, and a jump taken from a crouch lands still crouched. The decompiled surface
+below is entirely consistent with that and does not settle it either way: `Duck` reads a **held**
+bit off the server's button field, which a client-side latch keeps asserted exactly as a held key
+would. What decides when that bit is set is `client.dll`'s `CInput`, which is not decompiled.
+So the toggle lives at the client input layer, not in `CGameMovement`, and `m_bDucked` is the state
+it drives (`docs/vtmb/controls.md` → "What is bindable" carries the binding-layer half).
+
 `Duck` (`0x10126fd0`) is called from `PlayerMove` between the step-sound update and
 `CategorizePosition`, so the ground trace runs against the hull the rest of the frame will use. It
-latches `IN_DUCK` (button bit `4`) into `m_nOldButtons` itself, and drives four pieces of player
-state: `m_bDucked` (`+0x1edd`), `m_bDucking` (`+0x1ede`), `m_flDucktime` (`+0x1ee0`) and
+latches `IN_DUCK` (button bit `4`) into `m_nOldButtons` itself — the latch that makes a press edge
+detectable at all, which is what a toggle reads — and drives four pieces of player state: `m_bDucked` (`+0x1edd`), `m_bDucking` (`+0x1ede`), `m_flDucktime` (`+0x1ee0`) and
 `m_flDuckJumpTime` (`player[0x7b8]`). `m_bDucked` is the one the hull selector reads, which is why
 `CanUnduck` (`0x101265d0`) clears it around its own trace to make `TracePlayerBBox` pick the
 standing size.

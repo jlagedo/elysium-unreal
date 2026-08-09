@@ -326,10 +326,26 @@ struct FElysiumJumpLatch
 	bool bWasHolding = false;
 	bool bLastGaitWasRun = false;
 
-	// **Provisional.** A still, grounded body has to leave ACT_LAND somehow, and one-shot completion
-	// is `CCC5`'s — the classifier is content-free and must not read the clip it is about to
-	// describe. Replaced by `NotifyOneShotComplete` when the graph can report the end of a sequence.
+	// **The fallback, not the rule.** A still, grounded body leaves ACT_LAND when the pose layer says
+	// the landing clip finished; this timer answers only for a body that has no pose layer to ask —
+	// the gym stands bodies with no visual at all, and `Elysium.Substrate.AnimationIntent` asserts
+	// that path. It is deliberately not deleted: a body with no graph still has to stand up.
 	float LandHoldSeconds = 0.35f;
+};
+
+// What the pose layer can say about the one-shot the latch's phase is riding.
+//
+// Three values, not a bool, because "no answer" and "not finished" are different facts and
+// collapsing them picks the wrong one in both directions: a body with no graph would hold ACT_LAND
+// forever, and a body whose landing resolved no clip would leave it on the frame it began.
+// `Unknown` is what routes the latch back to `LandHoldSeconds`; `Playing` suppresses the timer
+// entirely, because a graph that is answering is the authority and a stopwatch racing it would cut
+// a long clip short.
+enum class EElysiumOneShotState : uint8
+{
+	Unknown,
+	Playing,
+	Complete,
 };
 
 namespace ElysiumAnimIntent
@@ -351,8 +367,13 @@ namespace ElysiumAnimIntent
 
 	// Advance the latch by one frame. Pure: previous latch and this frame's sample in, next latch
 	// out, so the whole transition table is asserted without a body.
+	//
+	// `OneShot` is what the pose layer said about the clip the current phase is riding, and it
+	// defaults to `Unknown` so every caller that has no graph — the gym, a headless think, a test —
+	// keeps the timer path it always had without naming it.
 	FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
-		const FElysiumLocomotionSample& Sample, float DeltaSeconds, const FElysiumGaitReference& Gait);
+		const FElysiumLocomotionSample& Sample, float DeltaSeconds, const FElysiumGaitReference& Gait,
+		EElysiumOneShotState OneShot = EElysiumOneShotState::Unknown);
 
 	// Step 2 — choose a base activity from the settled body sample plus the latch.
 	//
