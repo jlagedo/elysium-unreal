@@ -10,6 +10,7 @@
 #include "imgui.h"
 
 class FElysiumGreenRoomRun;
+class UElysiumBodyAnimInstance;
 class UElysiumNpcAnimInstance;
 
 // The green room's control surface: pick a body, pick a clip, watch it move, and tune the garment
@@ -45,7 +46,10 @@ private:
 	// The lab this window drives, or null when nothing is armed (which is every ordinary session).
 	FElysiumGreenRoomRun* GetLab() const;
 	// The anim instance of the body currently standing on the stage, or null.
-	UElysiumNpcAnimInstance* GetBodyInstance() const;
+	// The body's shared portrait/rig surface — the rows that read a cloth rig or a composition rig.
+	UElysiumBodyAnimInstance* GetBodyInstance() const;
+	// The native pose machinery — the clip and layer rows. Null on a body posing from an anim graph.
+	UElysiumNpcAnimInstance* GetNpcBodyInstance() const;
 
 	// Which build of the body stands on the stage -- the baked /ElysiumBaked assets or the
 	// glTFRuntime load -- and which one actually did, since only part of the cast is baked.

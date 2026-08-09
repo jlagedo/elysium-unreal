@@ -84,6 +84,23 @@ def generate_policy_content(config, runner) -> None:
             *common,
         ],
     )
+    # The player animation graph, rebuilt from its tracked text. A commandlet rather than the
+    # Slate-enabled editor above: it authors no font and needs no RHI.
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/make_player_anim_bp.py'}",
+            *common,
+        ],
+    )
+    graph_asset = config.repo_root / "Content" / "Elysium" / "Animation" / "ABP_ElysiumBiped.uasset"
+    if not graph_asset.is_file():
+        raise UnrealFailure("the player animation graph was not generated: " + str(graph_asset))
+
     font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
     missing = [name for name in FONT_ASSETS if not (font_root / name).is_file()]
     if missing:

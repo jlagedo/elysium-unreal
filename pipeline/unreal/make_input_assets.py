@@ -32,9 +32,16 @@ def load_rows():
     ids = [row["Id"].strip() for row in rows]
     if not ids or any(not value for value in ids) or len(ids) != len(set(ids)):
         raise RuntimeError("input action ids must be non-empty and unique")
-    if ids != ["Move", "Look", "Jump"]:
+    # The slice is stated rather than inferred: a row silently dropped from the CSV would generate a
+    # smaller mapping context that still loads, and the first sign of it would be a button that does
+    # nothing in a live run. `Elysium.Content.InputAssets` asserts the same set from the other side.
+    #
+    # Duck and Camera are the two stick clicks. Neither is a press/release pair -- a stick click
+    # cannot be held while the same stick is being used to aim, so both are one-shot toggles
+    # (`toggleduck`, `togglecamera`) rather than the `+duck` hold a keyboard gets.
+    if ids != ["Move", "Look", "Jump", "Duck", "Camera"]:
         raise RuntimeError(
-            "the gamepad vertical slice must contain exactly Move, Look and Jump; got %r" % ids
+            "the gamepad slice must contain exactly Move, Look, Jump, Duck and Camera; got %r" % ids
         )
     return rows
 
@@ -71,58 +78,36 @@ def make_modifier(cls, outer, name, properties=None):
 
 
 def modifiers_for(action_id, context):
-    # Microsoft publishes 7849/32767 and 8689/32767 as the established Xbox left/right
-    # thumbstick baselines. Rounded values keep the generated policy legible while retaining
-    # the radial shape and range remapping recommended by both Microsoft and Enhanced Input.
-    lower_threshold = 0.24 if action_id == "Move" else 0.265
-    dead_zone = make_modifier(
-        unreal.InputModifierDeadZone,
-        context,
-        action_id + "_DeadZone",
-        {
-            "lower_threshold": lower_threshold,
-            "upper_threshold": 1.0,
-            "type": unreal.DeadZoneType.RADIAL,
-        },
-    )
-    if action_id == "Move":
-        return [dead_zone]
+    """The mapping carries device-frame corrections only; feel lives at the command seam.
+
+    Neither stick has a dead zone, a saturation, a response curve, a scalar, a Smooth, a
+    ScaleByDeltaTime or an FOVScaling modifier here, and the omission is the design rather than an
+    oversight. All of it is `ElysiumInput::ShapeStickLook` / `ShapeStickMove`
+    (`Source/ElysiumUE/Public/ElysiumLookCurve.h`), asserted as Elysium.Substrate.StickLook:
+
+    * the filter is a half-life and the turn ramp is a charge, so both need the frame's *clamped,
+      dilated* delta -- an Enhanced Input modifier only ever sees Enhanced Input's raw one, so a
+      level-load stall would emit a full turn in one command and a replay would not reproduce
+      across frame rates;
+    * the dead zone, the saturation and the curve key on the deflection's magnitude, so they are
+      one radial gesture, not two per-axis ones -- Enhanced Input applies its stack per component;
+    * a value that lives half in a `.uasset` and half in a function has two owners and only one of
+      them can be asserted.
+
+    The tuning surface is the `joy_*` group in the VtMB console store, so a live run tunes with
+    `elysium.cmd joy_yawsensitivity 220` and a `config.cfg` keeps the answer.
+    """
     if action_id == "Look":
+        # Gamepad_Right2D reports physical stick-up on -Y. Elysium adds the action's Y directly to
+        # FRotator::Pitch, where positive pitch is look-up, so invert Y once in the mapping and
+        # leave the native GameInput axis untouched. This is a statement about the device's frame,
+        # not about feel, which is why it is the one modifier that belongs here.
         return [
-            dead_zone,
-            # No ResponseCurveExponential. The look response curve is one pure function at the
-            # point the user command is built (`ElysiumInput::ShapeMouseLook`, asserted as
-            # Elysium.Substrate.LookCurve), so that the curve is A/B-able against the decompile
-            # in a test tier rather than living in a data asset. A curve here as well would be
-            # two owners of one feel, and only one of them can be asserted.
-            #
-            # Gamepad_Right2D reports physical stick-up on -Y. Elysium adds the action's Y
-            # directly to FRotator::Pitch, where positive pitch is look-up, so invert Y once
-            # in the mapping and leave the native GameInput axis untouched.
             make_modifier(
                 unreal.InputModifierNegate,
                 context,
                 "Look_InvertNativeY",
                 {"x": False, "y": True, "z": False},
-            ),
-            # The stack ends at the RATE. It deliberately carries neither ScaleByDeltaTime nor
-            # FOVScaling:
-            #
-            # ScaleByDeltaTime would multiply by Enhanced Input's own raw frame delta, which
-            # bypasses the ClampFrameDelta / time-dilation normalisation `SampleFrame` applies to
-            # every other look source — a level-load stall would emit a full turn in one command
-            # and a replay would not reproduce across frame rates. `Build` applies the clamped
-            # delta instead.
-            #
-            # FOVScaling is not neutral at FOVScale 1.0: Standard normalises against an 80-degree
-            # base, so the rate would be multiplied by tan(FOV/2)/tan(40) — about 1.19 at the
-            # shipped 90-degree FOV, and roughly halved by any scene or scope that drops FOV.
-            # `cl_yawspeed` is a flat rate and does not move with the camera.
-            make_modifier(
-                unreal.InputModifierScalar,
-                context,
-                "Look_Rate",
-                {"scalar": unreal.Vector(210.0, 225.0, 1.0)},
             ),
         ]
     return []
@@ -170,7 +155,7 @@ def main():
 
     for asset in list(actions.values()) + [context, action_set]:
         unreal.EditorAssetLibrary.save_loaded_asset(asset, only_if_is_dirty=False)
-    unreal.log("[input-assets] generated 3 actions, IMC_Player_Gamepad and action set")
+    unreal.log("[input-assets] generated %d actions, IMC_Player_Gamepad and action set" % len(actions))
 
 
 main()

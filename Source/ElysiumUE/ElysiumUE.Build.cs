@@ -104,7 +104,13 @@ public class ElysiumUE : ModuleRules
 				// The character bake (UElysiumCharacterBakeLibrary) registers each asset it writes
 				// so the commandlet's own does-asset-exist checks and the verifier see it without a
 				// rescan.
-				"AssetRegistry"
+				"AssetRegistry",
+				// CCC5: the player animation graph is generated from tracked T3D text through
+				// FEdGraphUtilities -- the engine's own clipboard paste path -- plus the blueprint
+				// create/compile entry points beside it. Editor-only by construction: a graph is
+				// authored once and cooked into a generated class, and nothing reads UnrealEd at
+				// runtime.
+				"UnrealEd"
 			});
 			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only

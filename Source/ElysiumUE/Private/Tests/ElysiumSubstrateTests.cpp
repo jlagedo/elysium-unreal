@@ -771,7 +771,8 @@ bool FElysiumLookCurveTest::RunTest(const FString&)
 
 	// --- The cvar surface ---------------------------------------------------------------------
 	TArrayView<const ElysiumInput::FCvarDef> Defs = ElysiumInput::CvarDefs();
-	TestEqual(TEXT("the look cvar surface is seven names"), Defs.Num(), 7);
+	// Seven for the mouse (three recovered, four ours) and eleven for the pad (all ours).
+	TestEqual(TEXT("the look cvar surface is eighteen names"), Defs.Num(), 18);
 	TSet<FString> Seen;
 	for (const ElysiumInput::FCvarDef& Def : Defs)
 	{
@@ -809,6 +810,258 @@ bool FElysiumLookCurveTest::RunTest(const FString&)
 	TestEqual(TEXT("LoadFrom reads a negative m_pitch"), Loaded.MousePitch, -0.022f, 1e-6f);
 	TestEqual(TEXT("an unread name keeps its default"), Loaded.MouseYaw, 0.022f, 1e-6f);
 	TestTrue(TEXT("a store with no curve keys stays retail-linear"), Loaded.IsRetailLinear());
+
+	return true;
+}
+
+// =====================================================================================
+// The stick path (`docs/architecture/input-architecture.md` § Gamepad). A pad reports a *held
+// deflection* that the game integrates, so the device's noise is integrated with it — measured on
+// the shipped pad, the resting centre sits ~0.04 off zero and a steady hold swings ±0.2 between
+// frames. Every property below is one of the terms that answers that, asserted with no world, no
+// device and no local player.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStickLookTest, "Elysium.Substrate.StickLook", GElysiumTestFlags)
+bool FElysiumStickLookTest::RunTest(const FString&)
+{
+	using ElysiumInput::FElysiumStickTuning;
+	using ElysiumInput::FElysiumStickState;
+	using ElysiumInput::ShapeStickLook;
+	using ElysiumInput::ShapeStickMove;
+
+	const FElysiumStickTuning Ship;
+	const float Step = 1.0f / 60.0f;
+
+	// Unfiltered for the shape assertions, so each one reads the curve rather than the filter's
+	// approach to it. The filter gets its own section below.
+	FElysiumStickTuning Sharp = Ship;
+	Sharp.SmoothHalfLife = 0.0f;
+
+	auto RateOf = [&Sharp, Step](const FVector2D& Deflection)
+	{
+		FElysiumStickState State;
+		return ShapeStickLook(Deflection, Sharp, Step, State);
+	};
+
+	// --- The band -----------------------------------------------------------------------------
+	// The measured resting offset is ~0.04 and peaks near 0.05, so the shipped dead zone has to
+	// cover it with margin or the view drifts with the pad untouched.
+	TestTrue(TEXT("the shipped dead zone clears the measured resting noise"), Ship.DeadZone > 0.06f);
+	TestTrue(TEXT("a centred stick produces no rate"),
+		RateOf(FVector2D::ZeroVector).IsNearlyZero());
+	TestTrue(TEXT("resting noise produces no rate"),
+		RateOf(FVector2D(-0.0353, 0.0196)).IsNearlyZero());
+	TestTrue(TEXT("a deflection just inside the dead zone produces no rate"),
+		RateOf(FVector2D(Ship.DeadZone - 0.001f, 0.0)).IsNearlyZero());
+
+	// Saturation: the top of the travel is retired, so the noise riding on a hard push cannot reach
+	// the view. The measured pad reports magnitudes above 1 on a diagonal, which must also clamp
+	// rather than overshoot the rate.
+	TestEqual(TEXT("full deflection is the full yaw rate"),
+		(float)RateOf(FVector2D(1.0, 0.0)).X, Ship.YawRate, 0.01f);
+	TestEqual(TEXT("saturation reaches the full rate early"),
+		(float)RateOf(FVector2D(Ship.Saturation, 0.0)).X, Ship.YawRate, 0.01f);
+	TestEqual(TEXT("a magnitude past 1 does not exceed the full rate"),
+		(float)RateOf(FVector2D(-0.3098, 0.9608)).Size(), Ship.YawRate, Ship.YawRate);
+	TestTrue(TEXT("an over-unit diagonal clamps rather than overshooting"),
+		RateOf(FVector2D(0.7139, 0.7139)).Size() <= Ship.YawRate + 0.01);
+
+	// --- The curve ----------------------------------------------------------------------------
+	// Superlinear, which is the term that buys back the fine-control region the dead zone costs.
+	const double Half = RateOf(FVector2D(0.52, 0.0)).X;   // ~halfway up the band
+	const double Full = RateOf(FVector2D(0.92, 0.0)).X;
+	TestTrue(TEXT("the curve is monotonic"), Full > Half && Half > 0.0);
+	TestTrue(TEXT("the curve is superlinear: half the band is well under half the rate"),
+		Half < 0.5 * Full);
+
+	// It shapes speed, never direction — the whole point of keying on magnitude.
+	const FVector2D Diagonal(0.6, -0.45);
+	const FVector2D ShapedDiagonal = RateOf(Diagonal);
+	TestTrue(TEXT("the shaped rate keeps the yaw sign"), ShapedDiagonal.X > 0.0);
+	TestTrue(TEXT("the shaped rate keeps the pitch sign"), ShapedDiagonal.Y < 0.0);
+	// Rates differ per axis by design, so the direction is compared after dividing that back out.
+	TestEqual(TEXT("the shaped rate keeps the stick's direction"),
+		(float)((ShapedDiagonal.X / Ship.YawRate) / (ShapedDiagonal.Y / Ship.PitchRate)),
+		(float)(Diagonal.X / Diagonal.Y), 1e-3f);
+
+	// Pitch is the slower axis. It is the shorter gesture and the noisier axis on the measured pad,
+	// so rate spent there costs more than it buys.
+	TestTrue(TEXT("pitch is the slower axis"), Ship.PitchRate < Ship.YawRate);
+
+	// --- The filter ---------------------------------------------------------------------------
+	// The term that answers the measured frame-to-frame swing directly: feed the shaping a square
+	// wave at full deflection and assert the output does not follow it.
+	FElysiumStickState Noisy;
+	double Spread = 0.0;
+	double Previous = -1.0;
+	for (int32 Frame = 0; Frame < 240; ++Frame)
+	{
+		const double Deflection = (Frame % 2) ? 0.55 : 0.95;
+		const double Rate = ShapeStickLook(FVector2D(Deflection, 0.0), Ship, Step, Noisy).X;
+		if (Frame > 60)   // past the filter's approach to the mean
+		{
+			Spread = FMath::Max(Spread, FMath::Abs(Rate - Previous));
+		}
+		Previous = Rate;
+	}
+	const double UnfilteredSpread =
+		FMath::Abs(RateOf(FVector2D(0.95, 0.0)).X - RateOf(FVector2D(0.55, 0.0)).X);
+	TestTrue(TEXT("the filter is doing something at all"), UnfilteredSpread > 1.0);
+	// A quarter, not an order of magnitude. The shipped half-life is 35 ms, which is a deliberate
+	// latency budget of roughly two frames — enough to take the worst out of a noisy pad, not enough
+	// to make aiming feel like it is happening through water. `joy_smoothing` is the knob for a pad
+	// that needs more; this bound is what stops the shipped default quietly becoming less.
+	TestTrue(TEXT("the filter cuts a frame-alternating swing to under a quarter"),
+		Spread < UnfilteredSpread * 0.25);
+
+	// And it is a half-life, so it settles the same amount per second of real time at any step —
+	// the property that stops the pad feeling different at 60 and at 144.
+	auto SettleAfter = [&Ship](float Dt, int32 Frames)
+	{
+		FElysiumStickState State;
+		FVector2D Rate = FVector2D::ZeroVector;
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
+		{
+			Rate = ShapeStickLook(FVector2D(1.0, 0.0), Ship, Dt, State);
+		}
+		return Rate.X;
+	};
+	TestEqual(TEXT("the filter settles the same in a tenth of a second at 60 and at 240 Hz"),
+		(float)SettleAfter(1.0f / 60.0f, 6), (float)SettleAfter(1.0f / 240.0f, 24), 0.5f);
+
+	// A released stick decays to still rather than coasting — the filter's tail is bounded.
+	FElysiumStickState Releasing;
+	for (int32 Frame = 0; Frame < 60; ++Frame)
+	{
+		ShapeStickLook(FVector2D(1.0, 0.0), Ship, Step, Releasing);
+	}
+	TestTrue(TEXT("a held stick reached its rate"),
+		ShapeStickLook(FVector2D(1.0, 0.0), Ship, Step, Releasing).X > Ship.YawRate * 0.9f);
+	// **Release is instant, and that is a rule rather than a consequence of the filter being short.**
+	// Filtering toward zero would coast `YawRate * HalfLife / ln2` — about ten degrees at the
+	// shipped tuning — so a centred stick is taken rather than approached.
+	double Coast = 0.0;
+	for (int32 Frame = 0; Frame < 30; ++Frame)
+	{
+		Coast += FMath::Abs(ShapeStickLook(FVector2D::ZeroVector, Ship, Step, Releasing).X) * Step;
+	}
+	TestEqual(TEXT("releasing the stick stops the view on the same frame"), (float)Coast, 0.0f);
+	// It is the *zero* that snaps, not a threshold: the shaped value leaves the dead zone
+	// continuously, so nothing measurable is discarded at the boundary.
+	FElysiumStickState Edge;
+	TestTrue(TEXT("the shaped rate leaves the dead zone continuously"),
+		FMath::Abs(ShapeStickLook(FVector2D(Ship.DeadZone + 0.002f, 0.0), Ship, Step, Edge).X) < 0.1);
+
+	// --- The ramp -----------------------------------------------------------------------------
+	// Off at the shipped tuning: the curve is doing the work, and a ramp is the next delta to
+	// reach for rather than one already taken.
+	TestEqual(TEXT("the shipped ramp is inert"), Ship.AccelScale, 1.0f);
+	FElysiumStickTuning Ramped = Sharp;
+	Ramped.AccelScale = 2.0f;
+	Ramped.AccelTime = 0.4f;
+	FElysiumStickState Charging;
+	const double FirstFrame = ShapeStickLook(FVector2D(1.0, 0.0), Ramped, Step, Charging).X;
+	for (int32 Frame = 0; Frame < 60; ++Frame)   // a full second of hold
+	{
+		ShapeStickLook(FVector2D(1.0, 0.0), Ramped, Step, Charging);
+	}
+	const double Sustained = ShapeStickLook(FVector2D(1.0, 0.0), Ramped, Step, Charging).X;
+	// The ramp charges on the frame it is given, so the first sample already carries one step of it —
+	// `Step / AccelTime` of the way to `AccelScale`. That is the tolerance, not a round number.
+	const float OneStepOfCharge = Ramped.YawRate * (Step / Ramped.AccelTime);
+	TestEqual(TEXT("the ramp starts within one step of the unramped rate"),
+		(float)FirstFrame, Ramped.YawRate, OneStepOfCharge + 0.01f);
+	TestEqual(TEXT("a sustained hold reaches AccelScale"),
+		(float)Sustained, Ramped.YawRate * Ramped.AccelScale, 1.0f);
+	// It discharges on the raw band, not the filtered one, so letting go stops accelerating at once.
+	for (int32 Frame = 0; Frame < 60; ++Frame)
+	{
+		ShapeStickLook(FVector2D::ZeroVector, Ramped, Step, Charging);
+	}
+	TestEqual(TEXT("the ramp discharges when the stick is released"),
+		(float)ShapeStickLook(FVector2D(1.0, 0.0), Ramped, Step, Charging).X, Ramped.YawRate,
+		OneStepOfCharge + 0.01f);
+
+	// --- Guards -------------------------------------------------------------------------------
+	// A broken tuning returns a still stick rather than dividing by it or flinging the view.
+	FElysiumStickTuning Degenerate = Sharp;
+	Degenerate.Saturation = Degenerate.DeadZone;   // a band with no width
+	FElysiumStickState Guarded;
+	const FVector2D Switched = ShapeStickLook(FVector2D(0.5, 0.0), Degenerate, Step, Guarded);
+	TestFalse(TEXT("a zero-width band does not produce NaN"), Switched.ContainsNaN());
+	Guarded.Reset();
+	TestTrue(TEXT("a NaN deflection produces no rate"),
+		ShapeStickLook(FVector2D(NAN, 0.0), Sharp, Step, Guarded).IsNearlyZero());
+	Guarded.Reset();
+	TestTrue(TEXT("a zero frame delta produces the unfiltered rate rather than a division"),
+		!ShapeStickLook(FVector2D(1.0, 0.0), Ship, 0.0f, Guarded).ContainsNaN());
+
+	// --- The movement stick --------------------------------------------------------------------
+	// Deliberately curve-free and filter-free: the mover already owns acceleration, and a curve
+	// would move the walk/run threshold away from where the stick says it is.
+	TestTrue(TEXT("a centred move stick is still"),
+		ShapeStickMove(FVector2D::ZeroVector, Ship).IsNearlyZero());
+	TestTrue(TEXT("move resting noise is still"),
+		ShapeStickMove(FVector2D(-0.0353, 0.0196), Ship).IsNearlyZero());
+	TestEqual(TEXT("a full push is a unit wish"),
+		(float)ShapeStickMove(FVector2D(0.0, 1.0), Ship).Size(), 1.0f, 1e-3f);
+	const FVector2D Midway = ShapeStickMove(
+		FVector2D(0.0, Ship.MoveDeadZone + (Ship.MoveSaturation - Ship.MoveDeadZone) * 0.5f), Ship);
+	TestEqual(TEXT("move is linear across its band"), (float)Midway.Size(), 0.5f, 1e-3f);
+	// The band is wider than the look band, because a character that creeps is the louder failure.
+	TestTrue(TEXT("the move dead zone is the wider of the two"), Ship.MoveDeadZone > Ship.DeadZone);
+	// And it preserves direction, so a diagonal walks where the stick points.
+	const FVector2D MoveDiagonal = ShapeStickMove(FVector2D(0.6, 0.6), Ship);
+	TestEqual(TEXT("a move diagonal keeps its direction"),
+		(float)MoveDiagonal.X, (float)MoveDiagonal.Y, 1e-4f);
+
+	// --- The cvar surface ----------------------------------------------------------------------
+	// The declared defaults must BE the struct's defaults, or the console and the code disagree
+	// about what a stock install is.
+	TMap<FString, FString> Declared;
+	for (const ElysiumInput::FCvarDef& Def : ElysiumInput::CvarDefs())
+	{
+		Declared.Add(FString(Def.Name), FString(Def.Default));
+	}
+	FElysiumStickTuning FromStore;
+	FromStore.LoadFrom([&Declared](const TCHAR* Name)
+	{
+		const FString* Found = Declared.Find(Name);
+		return Found ? *Found : FString();
+	});
+	TestEqual(TEXT("joy_deadzone is declared at its default"), FromStore.DeadZone, Ship.DeadZone, 1e-6f);
+	TestEqual(TEXT("joy_saturation is declared at its default"),
+		FromStore.Saturation, Ship.Saturation, 1e-6f);
+	TestEqual(TEXT("joy_response_look is declared at its default"),
+		FromStore.Exponent, Ship.Exponent, 1e-6f);
+	TestEqual(TEXT("joy_yawsensitivity is declared at its default"),
+		FromStore.YawRate, Ship.YawRate, 1e-6f);
+	TestEqual(TEXT("joy_pitchsensitivity is declared at its default"),
+		FromStore.PitchRate, Ship.PitchRate, 1e-6f);
+	TestEqual(TEXT("joy_smoothing is declared at its default"),
+		FromStore.SmoothHalfLife, Ship.SmoothHalfLife, 1e-6f);
+	TestEqual(TEXT("joy_accelscale is declared at its default"),
+		FromStore.AccelScale, Ship.AccelScale, 1e-6f);
+	TestEqual(TEXT("joy_acceltime is declared at its default"),
+		FromStore.AccelTime, Ship.AccelTime, 1e-6f);
+	TestEqual(TEXT("joy_accelenter is declared at its default"),
+		FromStore.AccelEnter, Ship.AccelEnter, 1e-6f);
+	TestEqual(TEXT("joy_move_deadzone is declared at its default"),
+		FromStore.MoveDeadZone, Ship.MoveDeadZone, 1e-6f);
+	TestEqual(TEXT("joy_move_saturation is declared at its default"),
+		FromStore.MoveSaturation, Ship.MoveSaturation, 1e-6f);
+
+	// An unread name keeps its default, so a run with no `config.cfg` behaves like a stock install.
+	FElysiumStickTuning Partial;
+	Partial.LoadFrom([](const TCHAR* Name)
+	{
+		return FCString::Strcmp(Name, TEXT("joy_yawsensitivity")) == 0 ? FString(TEXT("260"))
+																	   : FString();
+	});
+	TestEqual(TEXT("LoadFrom reads joy_yawsensitivity"), Partial.YawRate, 260.0f, 1e-6f);
+	TestEqual(TEXT("an unread stick name keeps its default"),
+		Partial.SmoothHalfLife, Ship.SmoothHalfLife, 1e-6f);
 
 	return true;
 }

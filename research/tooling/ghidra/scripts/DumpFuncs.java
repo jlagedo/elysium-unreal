@@ -118,10 +118,10 @@ public class DumpFuncs extends GhidraScript {
             addWithCallees(c, depth - 1, "callee<-" + f.getEntryPoint(), targets);
     }
 
-    // Ghidra headless splits script args on ',' as well as '=', so multi-value
-    // args use ';' as the separator instead.
+    // Ghidra headless splits script args on ',' / ';' as well as '=', so a
+    // direct runner invocation can use '+' to preserve one multi-value token.
     static String[] csv(String s) {
         if (s == null || s.isEmpty()) return new String[0];
-        return s.split("[;,]");
+        return s.split("[;,+]");
     }
 }

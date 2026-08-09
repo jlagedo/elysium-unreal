@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "topic": "computer-terminal-client",
+  "consuming_document": "docs/vtmb/computer-terminals.md",
+  "research_id": "RE39",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "How is C_BaseTerminal's dynamic monitor texture bound to the exact model material/surface and released across dormancy or teardown?",
+    "Which server-to-client message payloads mutate character cells, cursor/style state, clear the screen, and close presentation?",
+    "How does ordinary player selection reach C_BaseTerminal KeyInput when no use_icon is authored?",
+    "What are the exact four color palettes, style-byte glyph variants, cursor blink rules, and behavior of non-default grid sizes?"
+  ],
+  "functions": [
+    {"address": "100c6890", "label": "BaseTerminalClientClassname", "confidence": "class string xref", "role": "C_BaseTerminal client class identity", "depth": 1, "cap": 60},
+    {"address": "100c6910", "label": "BaseTerminalClientFactory", "confidence": "client class registration target", "role": "C_BaseTerminal allocation and construction seed", "depth": 3, "cap": 220},
+    {"address": "100c69b0", "label": "BaseTerminalRecvTable", "confidence": "DT_BaseTerminal string xref", "role": "terminal replicated field registration", "depth": 2, "cap": 140},
+    {"address": "100c6d50", "label": "BaseTerminalScreenBufferConsumerA", "confidence": "character-buffer field reference", "role": "screen-buffer consumer to classify", "depth": 2, "cap": 200},
+    {"address": "100c7090", "label": "BaseTerminalKeyInput", "confidence": "client vtable slot 25 and body evidence", "role": "local line editing and hackcmd command production", "depth": 2, "cap": 240},
+    {"address": "100c7550", "label": "BaseTerminalClearScreenResources", "confidence": "OnDataChanged path callee", "role": "detach screen observers and release the client screen resource", "depth": 2, "cap": 220},
+    {"address": "100c7620", "label": "BaseTerminalOnDataChanged", "confidence": "client vtable slot 29", "role": "replicated-state change and screen update scheduling", "depth": 2, "cap": 160},
+    {"address": "100c7720", "label": "BaseTerminalRefreshTexture", "confidence": "character-buffer and client-effect body evidence", "role": "create or refresh the dynamic terminal texture when the cell buffer is dirty", "depth": 2, "cap": 220},
+    {"address": "100c77f0", "label": "BaseTerminalRasterizeTexture", "confidence": "character-buffer renderer body evidence", "role": "software-rasterize terminal cells and cursor into the 512x512 texture", "depth": 2, "cap": 220},
+    {"address": "100c8060", "label": "BaseTerminalInsertCharacter", "confidence": "key-input callee", "role": "character-cell buffer mutation", "depth": 2, "cap": 160}
+  ],
+  "field_probes": [
+    {"displacement": "7b4", "label": "terminal_character_cell_buffer"}
+  ],
+  "vtable_probes": [
+    {"address": "102334ac", "label": "C_BaseTerminal", "slots": 320, "cap": 320}
+  ],
+  "grep_probes": [
+    {
+      "label": "terminal_client_classes",
+      "str": "DT_BaseTerminal~C_BaseTerminal~CPropHacking~C_PropHacking~terminal~hacking~hackterm~computer~keypad_strings",
+      "cls": "C_BaseTerminal~CPropHacking~C_PropHacking~Terminal~Hacking",
+      "fn": "Terminal~Hacking~Hack~Input",
+      "cap": 320
+    },
+    {
+      "label": "terminal_client_commands_and_fields",
+      "str": "m_bInUse~m_nScreenColumns~m_nScreenRows~m_nColorScheme~m_HackFlags~m_nMaxInput~m_idxKeystrokeSnd~m_bAllowDirKeys~accept~access~typing~error~password~email~logon",
+      "fn": "Terminal~Hacking~Input~Key~Command",
+      "cap": 320
+    }
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The client presents a terminal through C_BaseTerminal's model-bound character texture, not a named VGUI terminal panel. Its default 36x24 screen is a 1,728-byte array of 864 two-byte character/style cells beginning at +0x7b4.",
+      "evidence": "Factory/constructor 0x100c6910/0x100c6b30 allocates 0xf20 bytes, initializes 0x1b0 dwords to 0x20202020, and installs vtable 0x102334ac. RefreshTexture 0x100c7720 creates a 512x512 client-effect texture named monitor; RasterizeTexture 0x100c77f0 converts the cell buffer, palette, cursor and glyph table into its pixels.",
+      "consequence": "Faithful presentation needs a character-cell terminal surface attached to the computer screen; the modern renderer may change, but terminal state must not be modeled as only a modal menu."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseTerminal edits the command line locally and sends only hackcmd commands to the server. Normal Enter sends hackcmd plus the line, Escape sends hackcmd quit, Ctrl-C sends hackcmd break, and raw-character mode sends hackcmd %c.",
+      "evidence": "Client vtable 0x102334ac slot 25 resolves to KeyInput 0x100c7090. The body gates on replicated m_bInUse, performs insertion/deletion/cursor movement against the cell buffer, enforces m_nMaxInput, and emits the four hackcmd forms. InsertCharacter 0x100c8060 mutates two-byte screen cells.",
+      "consequence": "The server remains authoritative for command meaning, while the client owns immediate line editing, cursor behavior and local keystroke feedback."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "m_HackFlags bit 0x4 selects raw-character transport, bit 0x1 selects continue/acknowledge input, and bit 0x8 enables local keystroke sound; m_bAllowDirKeys gates cursor navigation.",
+      "evidence": "KeyInput 0x100c7090 tests +0xf10 bits 4, 1 and 8, +0xf0d direction-key permission, +0xf14 maximum input, and +0xf18 keystroke sound. Server 0x10219120 clears bits 1 and 4; 0x10219240 sets bit 4 and 0x10219270 sets bit 1.",
+      "consequence": "These replicated flags are protocol state, not presentation-only decoration."
+    }
+  ]
+}

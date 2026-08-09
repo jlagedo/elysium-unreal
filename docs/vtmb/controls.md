@@ -119,6 +119,10 @@ bare `+mlook` line, which is why mouse-look is on from a cold start and `m_side`
 
 ### Combat and items
 
+The command list below is the input vocabulary. Its command → usercmd → predicate → gameplay
+action → effect routing is consolidated in `docs/vtmb/gameplay-verbs.md`; damage after an
+accepted attack is in `docs/vtmb/combat-and-damage.md`.
+
 | Command | Effect |
 |---|---|
 | ±`attack`, ±`attack2` | primary / ordinary secondary-fire buttons |

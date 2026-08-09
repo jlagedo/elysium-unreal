@@ -1700,7 +1700,7 @@ void FElysiumGreenRoomRun::DrawLabOverlays() const
 	{
 		return;
 	}
-	const UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
+	const UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
 	const FElysiumClothRig* Rig = Inst ? Inst->GetClothRig() : nullptr;
 
 	// The bones the lattice overlay owns. The skeleton view skips them, because a garment lattice

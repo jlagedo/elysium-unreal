@@ -14,11 +14,30 @@
 #include "EnhancedInputComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerInput.h"
 #include "GameFramework/WorldSettings.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumRouter, Log, All);
+
+// The stick telemetry probe: the tuning instrument for the `joy_*` surface. It counts down
+// *deflected* frames rather than frames, so the window survives the seconds between arming it and a
+// hand reaching the pad, and it reports the device's own value beside the degrees that reached the
+// view — which is the only way to tell a pad that is noisy from a shaping that is wrong. The
+// measured properties in `ElysiumLookCurve.h` were read off this.
+static TAutoConsoleVariable<int32> CVarLookProbe(
+	TEXT("elysium.LookProbe"), 0,
+	TEXT("Log this many deflected frames of right-stick telemetry: the raw device value, the ")
+	TEXT("frame delta and the yaw/pitch degrees applied."),
+	ECVF_Default);
+
+namespace
+{
+	// A file-static rather than a member: the probe reads a value the router does not otherwise
+	// keep, and nothing outside this file may come to depend on it.
+	FVector2D GProbeStickLook = FVector2D::ZeroVector;
+}
 
 // The mouse axes are read as **raw counts** and scaled here, not by the engine: `AxisConfig`
 // sensitivity for MouseX/MouseY is 1.0 and FOV scaling is off in `DefaultInput.ini`, so
@@ -225,17 +244,22 @@ void UElysiumInputRouter::OnMouseY(float Value)
 
 void UElysiumInputRouter::OnAnalogMove(const FInputActionValue& Value)
 {
-	CmdBuilder.SetAnalogMove(ElysiumInput::GamepadStickToMove(Value.Get<FVector2D>()));
+	// Raw, in the pad's own frame. The mapping carries no dead zone and no scalar: shaping a stick
+	// needs the frame's clamped delta and per-frame filter state, neither of which an Enhanced Input
+	// modifier has, and splitting it across an asset and a function would give one feel two owners.
+	CmdBuilder.SetStickMove(Value.Get<FVector2D>());
 }
 
 void UElysiumInputRouter::OnAnalogLook(const FInputActionValue& Value)
 {
-	// Degrees per SECOND, not degrees: the mapping's modifier stack scales the stick to a rate and
-	// stops there, so the delta is applied once in Build against the clamped, dilated frame time
-	// every other look source already uses. Multiplying it here (or in the asset, with
-	// ScaleByDeltaTime) would hand the pad the raw engine delta and let a level-load hitch emit a
-	// full turn in one command.
-	CmdBuilder.SetAnalogLook(Value.Get<FVector2D>());
+	// **Raw deflection, not a rate.** The mapping's only modifier is the device-frame Y negate; the
+	// dead zone, the saturation, the response curve, the filter and the ramp are all
+	// `ElysiumInput::ShapeStickLook`, applied in Build against the clamped, dilated frame time every
+	// other look source already uses. That placement is forced, not stylistic: the filter is a
+	// half-life and the ramp is a charge, so both need a delta they can trust, and an Enhanced Input
+	// modifier only ever sees the raw engine one.
+	CmdBuilder.SetStickLook(Value.Get<FVector2D>());
+	GProbeStickLook = Value.Get<FVector2D>();
 }
 
 void UElysiumInputRouter::OnCommandDown(FName Command)
@@ -269,11 +293,19 @@ void UElysiumInputRouter::RefreshLookTuning()
 	// a reload — the same thing `FElysiumMoveTuning::LoadFrom` does for the mover. The mouse *scale*
 	// therefore uses the tuning refreshed on the previous frame, because the axis callbacks run ahead
 	// of `PlayerTick`; that one-frame latency is the price of having a single reader of the cvar.
-	LookTuning.LoadFrom([](const TCHAR* Name)
+	const auto ReadCvar = [](const TCHAR* Name)
 	{
 		return ElysiumCommandBus::Console().GetCvar(Name);
-	});
+	};
+	LookTuning.LoadFrom(ReadCvar);
 	CmdBuilder.SetLookTuning(LookTuning);
+
+	// The pad's tuning off the same store, on the same frame, so `elysium.cmd joy_smoothing 0.06`
+	// takes effect the way `sensitivity` does. There is no retail-linear predicate to guard here:
+	// gamepad feel has no original, so no value of it is a divergence to announce.
+	ElysiumInput::FElysiumStickTuning StickTuning;
+	StickTuning.LoadFrom(ReadCvar);
+	CmdBuilder.SetStickTuning(StickTuning);
 
 	// Say so out loud the first time the curve is engaged. VtMB's mouse path is linear, so this is a
 	// Feel divergence rather than a setting, and it belongs in any A/B run's log rather than only in
@@ -331,6 +363,26 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 			Record.Record(Current);
 		}
 	}
+
+	if (const int32 ProbeFrames = CVarLookProbe.GetValueOnGameThread(); ProbeFrames > 0)
+	{
+		const APlayerController* Probe = PC.Get();
+		const FVector Raw = Probe && Probe->PlayerInput
+			? Probe->PlayerInput->GetRawVectorKeyValue(EKeys::Gamepad_Right2D)
+			: FVector::ZeroVector;
+		// Only a deflected frame spends the budget, so the window survives the seconds between
+		// arming the probe and a hand reaching the stick.
+		if (!Raw.IsNearlyZero() || !GProbeStickLook.IsNearlyZero())
+		{
+			UE_LOG(LogElysiumRouter, Warning,
+				TEXT("[lookprobe] f=%llu dt=%.5f raw=(%+.4f,%+.4f) |raw|=%.4f in=(%+.4f,%+.4f) ")
+				TEXT("deg=(%+.4f,%+.4f)"),
+				GFrameCounter, DeltaSeconds, Raw.X, Raw.Y, FVector2D(Raw.X, Raw.Y).Size(),
+				GProbeStickLook.X, GProbeStickLook.Y, Current.LookDelta.X, Current.LookDelta.Y);
+			CVarLookProbe->Set(ProbeFrames - 1, ECVF_SetByCode);
+		}
+	}
+	GProbeStickLook = FVector2D::ZeroVector;
 
 	ApplyLook(Current);
 

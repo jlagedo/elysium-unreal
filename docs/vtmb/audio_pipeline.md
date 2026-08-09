@@ -281,7 +281,7 @@ under `sound/usable/<category>/<token>/<subkey>.wav`:
 |---|---|---|
 | `openable` | doors | `open`, `close`, `swing`, `locked` |
 | `switches` | buttons | `on`, `off` |
-| `computers` | keypads/terminals (P-later) | `access`, `accept`, `error`, `typing` |
+| `computers` | keypads/terminals (`docs/vtmb/computer-terminals.md`) | `access`, `accept`, `error`, `typing` |
 
 Retail ships **22 openable + 8 switch + 4 computer** groups; a group may omit a subkey
 (`standard_door` has no `swing` in retail — the patch adds one). The same token can exist

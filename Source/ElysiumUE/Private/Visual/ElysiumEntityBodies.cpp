@@ -58,6 +58,42 @@ static TAutoConsoleVariable<int32> CVarNpcAnim(
 	TEXT("NPC animation host: the crossfading Elysium anim instance and its facial track (1) or single-node, no face (0). Applied at map load."),
 	ECVF_Default);
 
+// CCC5 — the player body poses from `ABP_ElysiumBiped` rather than from the crossfading native
+// instance. 0 puts it back on the cast's host, which is also how the theatre reaches the cinematic
+// seek path until `ANM6` migrates it. Applied at map load, per body.
+static TAutoConsoleVariable<int32> CVarPlayerGraph(
+	TEXT("elysium.PlayerGraph"), 1,
+	TEXT("Pose the player body from the ABP_ElysiumBiped animation graph (1, default) or from the "
+	     "native crossfading instance the cast uses (0). Applied at map load."),
+	ECVF_Default);
+
+namespace
+{
+	// Resolved once and cached, including the failure: a missing generated package is a build-step
+	// problem rather than something to retry per body.
+	UClass* PlayerGraphClass()
+	{
+		static bool bResolved = false;
+		static UClass* Cached = nullptr;
+		if (!bResolved)
+		{
+			bResolved = true;
+			const FString Path = FElysiumContentPaths::PlayerAnimBlueprintClass();
+			Cached = LoadClass<UAnimInstance>(nullptr, *Path);
+			if (Cached == nullptr)
+			{
+				// Named rather than substituted, the same rule `ElysiumNpcVisual::LoadMesh` follows:
+				// the body still stands, on the cast's host, and the line says what to run.
+				UE_LOG(LogElysiumBodies, Warning,
+					TEXT("player animation graph '%s' is not on the mount -- the player body falls "
+					     "back to the native instance. Run `uv run elysium export bundle policy`."),
+					*Path);
+			}
+		}
+		return Cached;
+	}
+}
+
 // A/B toggle for the prop skin pass (8.3/8.4). 1 applies alternate skin families; 0 leaves every
 // prop on its authored materials, so a look change can be attributed. Read per apply, so it takes
 // effect on the next Skin input without a reload.
@@ -214,7 +250,7 @@ float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& 
 	// A clip the vocabulary does not carry — a bank clip reached by name, a prop, the green room —
 	// transitions on the shipped default rather than snapping, which is what 5,762 of the 5,836
 	// shipped sequences authored anyway.
-	return Clip != nullptr ? Clip->FadeSeconds() : UElysiumNpcAnimInstance::DefaultBlendSeconds;
+	return Clip != nullptr ? Clip->FadeSeconds() : UElysiumBodyAnimInstance::DefaultBlendSeconds;
 }
 
 bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -231,9 +267,14 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	{
 		*OutSeconds = Anim->GetPlayLength();
 	}
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	// The shared one-shot seam rather than the NPC instance's own clip API: a graph-backed body
+	// answers it over a montage slot and a native body over its crossfade pool, and a caller holding
+	// an `IElysiumEmbodiment` body has no way to know which it has. Casting to the NPC instance here
+	// would miss a player body and fall through to `PlayAnimation`, which switches the component to
+	// single-node mode and destroys the anim graph for the rest of the map.
+	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()))
 	{
-		Inst->PlayClip(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
+		Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
 	}
 	else
 	{
@@ -490,23 +531,23 @@ int32 UElysiumEntityBodies::SetFlexControllers(USkeletalMeshComponent* Body,
 {
 	// No host under `elysium.NpcAnim 0`, and no rig on a model with no facial sidecar. Both stand a
 	// body with a still face rather than failing, so both answer the same way.
-	UElysiumNpcAnimInstance* Inst = Body
-		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	UElysiumBodyAnimInstance* Inst = Body
+		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	return Inst != nullptr ? Inst->SetFlexControllers(Writes, OutMissing) : INDEX_NONE;
 }
 
 bool UElysiumEntityBodies::SetMouthOpen(USkeletalMeshComponent* Body, float Open)
 {
-	UElysiumNpcAnimInstance* Inst = Body
-		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	UElysiumBodyAnimInstance* Inst = Body
+		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	return Inst != nullptr && Inst->SetMouthOpen(Open);
 }
 
 bool UElysiumEntityBodies::GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
 	float& OutMax) const
 {
-	const UElysiumNpcAnimInstance* Inst = Body
-		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	const UElysiumBodyAnimInstance* Inst = Body
+		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	const FElysiumFacialRig* Rig = Inst ? Inst->GetFacialRig() : nullptr;
 	if (Rig == nullptr)
 	{
@@ -826,7 +867,7 @@ void UElysiumEntityBodies::TickEyes(float)
 
 		// One write per body per frame, which is what re-evaluates the face. A body with no flex
 		// rig answers false and keeps its aiming irises — the player-body case.
-		if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
+		if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
 		{
 			Inst->SetEyeInput(EyeInput);
 		}
@@ -900,8 +941,13 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// `elysium.NpcAnim 0` drops back to the single-node instance for an A/B.
 	if (CVarNpcAnim.GetValueOnGameThread() != 0)
 	{
+		// The player body is the one that poses from a graph. The cast keeps the native instance
+		// until `CCC9` retires it, so this is the only place the two hosts diverge.
+		UClass* Graph = (bPlayerMaterial && CVarPlayerGraph.GetValueOnGameThread() != 0)
+			? PlayerGraphClass() : nullptr;
 		Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-		Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+		Comp->SetAnimInstanceClass(
+			Graph != nullptr ? Graph : UElysiumNpcAnimInstance::StaticClass());
 	}
 	Comp->RegisterComponent();
 	// The visible mesh never collides; mobile NPCs wrap it in a native character capsule.
@@ -910,7 +956,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// The face (12.3). A model with no facial sidecar gets a null rig and animates with a still
 	// face — the normal case for animals, crowd bodies and every player body, none of which carry
 	// flex data. Nothing drives the controllers yet: scene expressions are 12.1's and lipsync 12.5's.
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
+	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
 	{
 		if (Anims != nullptr)
 		{
@@ -1074,7 +1120,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	Owner->AddInstanceComponent(Comp);
 	// A skeletal prop declares the same two composition stages a character does — 19 of them carry
 	// a rule table — so it takes the same install (CAP7.2).
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance()))
+	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
 	{
 		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model));
 	}

@@ -2,3 +2,5 @@ Id,Command,Label,Group,ValueType,Pair,DefaultPrimary,DefaultAlt,DefaultPad
 Move,,Move,Movement,Axis2D,False,,,Gamepad_Left2D
 Look,,Look,Camera,Axis2D,False,,,Gamepad_Right2D
 Jump,+jump,Jump,Movement,Boolean,True,,,Gamepad_FaceButton_Bottom
+Duck,toggleduck,Crouch,Movement,Boolean,False,,,Gamepad_LeftThumbstick
+Camera,togglecamera,Camera Mode,Camera,Boolean,False,,,Gamepad_RightThumbstick

@@ -23,7 +23,7 @@ from pathlib import Path
 from elysium_pipeline.paths import repo_root, research_root
 
 
-KINDS = ("funcs", "asm", "xrefs", "fields")
+KINDS = ("funcs", "asm", "xrefs", "fields", "vtables", "grep")
 
 
 def _load_spec(path: Path) -> dict:
@@ -51,6 +51,11 @@ def _load_spec(path: Path) -> dict:
             raise ValueError(f"duplicate function address: {address}")
         seen.add(address)
         function["address"] = address
+    for probe in spec.get("vtable_probes", []):
+        address = probe.get("address", "").lower().removeprefix("0x")
+        if not address or any(ch not in "0123456789abcdef" for ch in address):
+            raise ValueError(f"invalid vtable address: {probe.get('address')!r}")
+        probe["address"] = address
     return spec
 
 
@@ -130,6 +135,43 @@ def _field_invocations(spec: dict, kinds: set[str], output_dir: Path) -> list[tu
     return calls
 
 
+def _vtable_invocations(spec: dict, kinds: set[str], output_dir: Path) -> list[tuple[str, str, Path]]:
+    if "vtables" not in kinds:
+        return []
+    calls = []
+    for probe in spec.get("vtable_probes", []):
+        address = probe["address"]
+        label = probe.get("label", address)
+        output = output_dir / f"vtable_{address}_{label}.txt"
+        args = (
+            f"vtables={address} "
+            f"vtslots={int(probe.get('slots', 384))} "
+            f"cap={int(probe.get('cap', 384))} "
+            f"out={output.as_posix()}"
+        )
+        calls.append(("DumpFuncs", args, output))
+    return calls
+
+
+def _grep_invocations(spec: dict, kinds: set[str], output_dir: Path) -> list[tuple[str, str, Path]]:
+    if "grep" not in kinds:
+        return []
+    calls = []
+    for probe in spec.get("grep_probes", []):
+        label = probe.get("label", "grep")
+        output = output_dir / f"grep_{label}.txt"
+        parts = []
+        for key in ("str", "cls", "fn"):
+            value = probe.get(key)
+            if value:
+                if any(ch in value for ch in (" ", ",", "|")):
+                    raise ValueError(f"grep {key} must use '~' for alternation and contain no spaces")
+                parts.append(f"{key}={value}")
+        parts.extend([f"cap={int(probe.get('cap', 80))}", f"out={output.as_posix()}"])
+        calls.append(("DumpGrep", " ".join(parts), output))
+    return calls
+
+
 def _write_index(spec: dict, selected: list[dict], output_dir: Path, command: str) -> None:
     selected_addresses = {item["address"] for item in selected}
     lines = [
@@ -205,8 +247,12 @@ def main() -> int:
                         help="only process this specified address; repeatable")
     parser.add_argument("--binary", type=Path,
                         help="verify a source DLL against the specification before running Ghidra")
+    parser.add_argument("--project-dir", type=Path,
+                        help="private analyzed Ghidra project directory to use instead of the shared default")
+    parser.add_argument("--project-name", default="vtmb",
+                        help="Ghidra project name inside --project-dir (default: vtmb)")
     parser.add_argument("--kinds", default=",".join(KINDS),
-                        help="comma-separated subset of funcs,asm,xrefs,fields")
+                        help="comma-separated subset of funcs,asm,xrefs,fields,vtables,grep")
     parser.add_argument("--dry-run", action="store_true",
                         help="print invocations and write no derived files")
     parser.add_argument("--index-only", action="store_true",
@@ -233,6 +279,8 @@ def main() -> int:
         calls.extend(_invocations(function, kinds, output_dir))
     if not args.address:
         calls.extend(_field_invocations(spec, kinds, output_dir))
+        calls.extend(_vtable_invocations(spec, kinds, output_dir))
+        calls.extend(_grep_invocations(spec, kinds, output_dir))
 
     command_text = " ".join(sys.argv)
     run_label = "planned Ghidra runs" if args.index_only else "Ghidra runs"
@@ -261,10 +309,14 @@ def main() -> int:
             command = [
                 "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
                 "-File", str(runner),
+            ]
+            if args.project_dir:
+                command.extend(["-ProjDir", str(args.project_dir), "-ProjName", args.project_name])
+            command.extend([
                 "-Program", spec["program"],
                 "-Script", script,
                 "-ScriptArgs", script_args,
-            ]
+            ])
             result = subprocess.run(
                 command, cwd=repo, stdout=log, stderr=subprocess.STDOUT,
                 text=True, check=False,

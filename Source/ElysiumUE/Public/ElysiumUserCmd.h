@@ -172,6 +172,7 @@ struct FElysiumUserCmdBuilder
 
 	// Analog move for this frame, −1..1 per axis, replacing whatever a stick contributed. Keyboard
 	// buttons are OR-ed on top at Build time, so a pad and a keyboard can drive the same frame.
+	// **Already shaped** — the raw-stick door is `SetStickMove`.
 	void SetAnalogMove(const FVector2D& InMove) { AnalogMove = InMove; }
 	void SetAnalogUp(float InUp) { AnalogUp = InUp; }
 
@@ -179,8 +180,21 @@ struct FElysiumUserCmdBuilder
 	// contributed. A rate rather than a finished delta so Build multiplies it by the same clamped,
 	// dilated delta the keyboard turn keys get: a stick is a held direction like `+left`, not a
 	// mouse count, and pre-multiplying it upstream would let a hitch or a time dilation reach the
-	// command stream through the pad alone.
+	// command stream through the pad alone. **Already shaped** — the raw-stick door is `SetStickLook`.
 	void SetAnalogLook(const FVector2D& InLookRate) { AnalogLook = InLookRate; }
+
+	// The raw stick, exactly as the device reported it, in the pad's own (right, up) frame. The
+	// shaping runs at Build time rather than here for the same reason the mouse curve does: the dead
+	// zone, the response curve and the filter all need the frame's *clamped* delta, and a router
+	// callback fires from the input stack with no delta it is allowed to trust. `SetStickMove` takes
+	// the pad's frame too and Build owns the one swizzle into the command's (forward, right).
+	void SetStickLook(const FVector2D& InDeflection) { StickLook = InDeflection; }
+	void SetStickMove(const FVector2D& InDeflection) { StickMove = InDeflection; }
+
+	// The stick tuning, refreshed from the cvar store each frame by the router — the same shape as
+	// `SetLookTuning`, and for the same reason: the build stays free of the console.
+	void SetStickTuning(const ElysiumInput::FElysiumStickTuning& InTuning) { StickTuning = InTuning; }
+	const ElysiumInput::FElysiumStickTuning& GetStickTuning() const { return StickTuning; }
 
 	// Compose the frame and advance Seq. Consumes the look accumulator and the analog values; the
 	// button latches persist, because a held key is held.
@@ -198,9 +212,13 @@ struct FElysiumUserCmdBuilder
 private:
 	uint64 Buttons = 0;
 	ElysiumInput::FElysiumLookTuning LookTuning;
+	ElysiumInput::FElysiumStickTuning StickTuning;
+	ElysiumInput::FElysiumStickState StickState;
 	FVector2D LookAccum = FVector2D::ZeroVector;
 	FVector2D AnalogMove = FVector2D::ZeroVector;
 	FVector2D AnalogLook = FVector2D::ZeroVector;
+	FVector2D StickLook = FVector2D::ZeroVector;
+	FVector2D StickMove = FVector2D::ZeroVector;
 	float AnalogUp = 0.0f;
 	uint32 Seq = 0;
 };

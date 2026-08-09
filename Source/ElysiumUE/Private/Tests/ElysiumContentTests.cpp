@@ -15,6 +15,7 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCameraSolve.h"
+#include "ElysiumCommands.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumDecals.h"
 #include "ElysiumDlg.h"
@@ -4312,24 +4313,48 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("the vertical slice defines exactly three actions"), ActionSet->Actions.Num(), 3);
+	TestEqual(TEXT("the gamepad slice defines exactly five actions"), ActionSet->Actions.Num(), 5);
 	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
 	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));
+	const FElysiumInputActionDefinition* Duck = ActionSet->Find(TEXT("Duck"));
+	const FElysiumInputActionDefinition* Camera = ActionSet->Find(TEXT("Camera"));
 	if (!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
 		!TestTrue(TEXT("Look definition exists"), Look && Look->Action) ||
-		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action))
+		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action) ||
+		!TestTrue(TEXT("Duck definition exists"), Duck && Duck->Action) ||
+		!TestTrue(TEXT("Camera definition exists"), Camera && Camera->Action))
 	{
 		return false;
 	}
 	TestTrue(TEXT("Move is Axis2D"), Move->Action->ValueType == EInputActionValueType::Axis2D);
 	TestTrue(TEXT("Look is Axis2D"), Look->Action->ValueType == EInputActionValueType::Axis2D);
 	TestTrue(TEXT("Jump is Boolean"), Jump->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("Duck is Boolean"), Duck->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("Camera is Boolean"), Camera->Action->ValueType == EInputActionValueType::Boolean);
 	TestEqual(TEXT("Jump preserves its command identity"), Jump->Command, FString(TEXT("+jump")));
 	TestTrue(TEXT("Jump is a press/release pair"), Jump->bButtonPair);
 
+	// **The stick clicks are one-shot toggles, not pairs.** A stick click cannot be held while the
+	// same stick is aiming, so L3 flips the crouch latch and R3 flips the view rather than either
+	// being a hold. `bButtonPair` false is what stops the router binding a Completed edge that would
+	// fire `-toggleduck` — a verb that does not exist, and would stand the player back up on release.
+	TestEqual(TEXT("L3 fires the gamepad crouch toggle"), Duck->Command, FString(TEXT("toggleduck")));
+	TestEqual(TEXT("R3 fires the view toggle"), Camera->Command, FString(TEXT("togglecamera")));
+	TestFalse(TEXT("crouch toggle is not a press/release pair"), Duck->bButtonPair);
+	TestFalse(TEXT("view toggle is not a press/release pair"), Camera->bButtonPair);
+	// Every mapped command names a declared verb, or the button is a no-op that logs nothing. The
+	// leading `+` is stripped first, because a pair's press edge is declared under its bare name.
+	for (const FElysiumInputActionDefinition* Definition : { Jump, Duck, Camera })
+	{
+		const FString Bare = Definition->Command.StartsWith(TEXT("+"))
+			? Definition->Command.Mid(1) : Definition->Command;
+		TestTrue(FString::Printf(TEXT("'%s' is a declared verb"), *Definition->Command),
+			FElysiumCommands::Get().IsDeclared(ElysiumCommands::Canonical(Bare)));
+	}
+
 	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
-	TestEqual(TEXT("only Move, Look and Jump are gameplay-mapped"), Mappings.Num(), 3);
+	TestEqual(TEXT("five actions are gameplay-mapped"), Mappings.Num(), 5);
 	auto FindMapping = [&Mappings](const UInputAction* Action) -> const FEnhancedActionKeyMapping*
 	{
 		return Mappings.FindByPredicate(
@@ -4338,68 +4363,59 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FEnhancedActionKeyMapping* MoveMapping = FindMapping(Move->Action);
 	const FEnhancedActionKeyMapping* LookMapping = FindMapping(Look->Action);
 	const FEnhancedActionKeyMapping* JumpMapping = FindMapping(Jump->Action);
+	const FEnhancedActionKeyMapping* DuckMapping = FindMapping(Duck->Action);
+	const FEnhancedActionKeyMapping* CameraMapping = FindMapping(Camera->Action);
 	if (!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
 		!TestNotNull(TEXT("Look mapping"), LookMapping) ||
-		!TestNotNull(TEXT("Jump mapping"), JumpMapping))
+		!TestNotNull(TEXT("Jump mapping"), JumpMapping) ||
+		!TestNotNull(TEXT("Duck mapping"), DuckMapping) ||
+		!TestNotNull(TEXT("Camera mapping"), CameraMapping))
 	{
 		return false;
 	}
 	TestEqual(TEXT("Move uses the left stick"), MoveMapping->Key, EKeys::Gamepad_Left2D);
 	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
 	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
-	TestEqual(TEXT("Move has only its radial dead zone"), MoveMapping->Modifiers.Num(), 1);
-	TestEqual(TEXT("Look has the documented three-modifier stack"), LookMapping->Modifiers.Num(), 3);
+	// L3 and R3 are the stick *clicks*, and each sits on the stick whose job it serves: crouch is a
+	// movement verb on the movement stick, the view toggle is a camera verb on the camera stick.
+	TestEqual(TEXT("crouch is on L3"), DuckMapping->Key, EKeys::Gamepad_LeftThumbstick);
+	TestEqual(TEXT("the view toggle is on R3"), CameraMapping->Key, EKeys::Gamepad_RightThumbstick);
+	TestEqual(TEXT("L3 carries no modifier stack"), DuckMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("R3 carries no modifier stack"), CameraMapping->Modifiers.Num(), 0);
+	// **The mapping carries device-frame corrections only.** Every feel term — dead zone,
+	// saturation, response curve, rate, filter, turn ramp — is `ElysiumInput::ShapeStickLook` /
+	// `ShapeStickMove` at the command seam (`Elysium.Substrate.StickLook`), because the filter is a
+	// half-life and the ramp is a charge and both need the frame's *clamped, dilated* delta, which
+	// no Enhanced Input modifier ever sees. So the modifiers that are NOT here are asserted at
+	// least as firmly as the one that is: a dead zone reappearing in the asset is a second owner of
+	// the same number, and only one of the two can be measured.
+	TestEqual(TEXT("Move carries no modifier stack at all"), MoveMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("Look carries only its device-frame correction"), LookMapping->Modifiers.Num(), 1);
 	TestEqual(TEXT("Jump has no modifier stack"), JumpMapping->Modifiers.Num(), 0);
 
-	const UInputModifierDeadZone* MoveDeadZone = MoveMapping->Modifiers.Num() > 0
-		? Cast<UInputModifierDeadZone>(MoveMapping->Modifiers[0]) : nullptr;
-	const UInputModifierDeadZone* LookDeadZone = LookMapping->Modifiers.Num() > 0
-		? Cast<UInputModifierDeadZone>(LookMapping->Modifiers[0]) : nullptr;
-	TestNotNull(TEXT("Move dead zone modifier"), MoveDeadZone);
-	TestNotNull(TEXT("Look dead zone modifier"), LookDeadZone);
-	if (MoveDeadZone && LookDeadZone)
+	for (const FEnhancedActionKeyMapping* Mapping : { MoveMapping, LookMapping })
 	{
-		TestEqual(TEXT("Move radial dead zone"), MoveDeadZone->Type, EDeadZoneType::Radial);
-		TestEqual(TEXT("Look radial dead zone"), LookDeadZone->Type, EDeadZoneType::Radial);
-		TestEqual(TEXT("Move dead-zone threshold"), MoveDeadZone->LowerThreshold, 0.24f);
-		TestEqual(TEXT("Look dead-zone threshold"), LookDeadZone->LowerThreshold, 0.265f);
-		TestEqual(TEXT("Move dead-zone upper range"), MoveDeadZone->UpperThreshold, 1.0f);
-		TestEqual(TEXT("Look dead-zone upper range"), LookDeadZone->UpperThreshold, 1.0f);
-		const FVector2D MoveInside = MoveDeadZone->ModifyRaw(
-			nullptr, FInputActionValue(FVector2D(0.20, 0.0)), 0.0f).Get<FVector2D>();
-		const FVector2D LookInside = LookDeadZone->ModifyRaw(
-			nullptr, FInputActionValue(FVector2D(0.25, 0.0)), 0.0f).Get<FVector2D>();
-		const FVector2D MoveHalfRange = MoveDeadZone->ModifyRaw(
-			nullptr, FInputActionValue(FVector2D(0.62, 0.0)), 0.0f).Get<FVector2D>();
-		TestTrue(TEXT("Move input inside the dead zone is zero"), MoveInside.IsNearlyZero());
-		TestTrue(TEXT("Look input inside the dead zone is zero"), LookInside.IsNearlyZero());
-		TestEqual(TEXT("Move dead zone remaps its remaining range"),
-			(float)MoveHalfRange.X, 0.5f, 0.001f);
-	}
-	if (LookMapping->Modifiers.Num() == 3)
-	{
-		const UInputModifierNegate* NativeY =
-			Cast<UInputModifierNegate>(LookMapping->Modifiers[1]);
-		const UInputModifierScalar* Scalar = Cast<UInputModifierScalar>(LookMapping->Modifiers[2]);
-		TestNotNull(TEXT("native right-stick Y correction"), NativeY);
-		TestNotNull(TEXT("look rate scalar"), Scalar);
-		// The stack ends at the rate, and the three modifiers that are NOT here are asserted as
-		// firmly as the ones that are. ScaleByDeltaTime would multiply by Enhanced Input's raw
-		// frame delta and bypass the ClampFrameDelta / dilation normalisation `SampleFrame`
-		// applies to every other look source; FOVScaling is not neutral even at FOVScale 1.0,
-		// because Standard normalises against an 80-degree base and would make a flat
-		// `cl_yawspeed` move with the camera. And the response curve lives in one pure function
-		// at the command seam (`Elysium.Substrate.LookCurve`) rather than in a data asset, so
-		// exactly one thing owns the look feel and it is the one that can be asserted.
-		for (const TObjectPtr<UInputModifier>& Modifier : LookMapping->Modifiers)
+		for (const TObjectPtr<UInputModifier>& Modifier : Mapping->Modifiers)
 		{
-			TestFalse(TEXT("look is not delta-time scaled in the asset"),
+			TestFalse(TEXT("the dead zone is not a modifier asset"),
+				Modifier != nullptr && Modifier->IsA<UInputModifierDeadZone>());
+			TestFalse(TEXT("the rate is not a modifier asset"),
+				Modifier != nullptr && Modifier->IsA<UInputModifierScalar>());
+			TestFalse(TEXT("the stick is not delta-time scaled in the asset"),
 				Modifier != nullptr && Modifier->IsA<UInputModifierScaleByDeltaTime>());
-			TestFalse(TEXT("look is not FOV scaled"),
+			TestFalse(TEXT("the stick is not FOV scaled"),
 				Modifier != nullptr && Modifier->IsA<UInputModifierFOVScaling>());
 			TestFalse(TEXT("the response curve is not a modifier asset"),
 				Modifier != nullptr && Modifier->IsA<UInputModifierResponseCurveExponential>());
+			TestFalse(TEXT("the look filter is not a modifier asset"),
+				Modifier != nullptr && Modifier->IsA<UInputModifierSmooth>());
 		}
+	}
+
+	if (LookMapping->Modifiers.Num() == 1)
+	{
+		const UInputModifierNegate* NativeY = Cast<UInputModifierNegate>(LookMapping->Modifiers[0]);
+		TestNotNull(TEXT("native right-stick Y correction"), NativeY);
 		if (NativeY)
 		{
 			TestFalse(TEXT("native Y correction preserves yaw"), NativeY->bX);
@@ -4413,11 +4429,6 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 				(float)PhysicalUp.Y, 1.0f);
 			TestEqual(TEXT("right-stick down becomes negative look pitch"),
 				(float)PhysicalDown.Y, -1.0f);
-		}
-		if (Scalar)
-		{
-			TestEqual(TEXT("yaw rate is 210 degrees/sec"), (float)Scalar->Scalar.X, 210.0f);
-			TestEqual(TEXT("pitch rate is 225 degrees/sec"), (float)Scalar->Scalar.Y, 225.0f);
 		}
 	}
 

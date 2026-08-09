@@ -4,6 +4,7 @@
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
 // CCC4 — the intent, the resolver and the selection record.
@@ -798,6 +799,139 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// CCC5 — the graph's own two rules: which state realizes a selection, and how long the transition
+// into it lasts.
+//
+// Both are content-free, and deliberately so. The transition duration is the one number the
+// authored graph asset may NOT carry — `Content/ElysiumAuthored/README.md` forbids encoding
+// game-derived timings in a tracked package — so it arrives at runtime from the clip's own record,
+// and this is where the combine is proven rather than in the asset.
+// =====================================================================================
+
+namespace
+{
+	// A resolved selection carrying one authored fade.
+	FElysiumAnimationSelection Faded(float FadeSeconds, bool bSnap = false)
+	{
+		FElysiumAnimationSelection S;
+		S.Outcome = EElysiumAnimOutcome::Resolved;
+		S.FadeSeconds = FadeSeconds;
+		S.bSnap = bSnap;
+		return S;
+	}
+
+	int32 AsInt(EElysiumGraphState State) { return static_cast<int32>(State); }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationGraphTest,
+	"Elysium.Substrate.AnimationGraph", GElysiumAnimationTestFlags)
+bool FElysiumAnimationGraphTest::RunTest(const FString&)
+{
+	using namespace ElysiumAnimGraph;
+
+	// --- The transition combine -------------------------------------------------------------------
+	{
+		// Retail's rule is `max`, not "the incoming clip's". The 0.2/0.3 pair is the one that
+		// actually occurs in this slice: `idle01` on a player body authors 0.3 while walk, run,
+		// sneak and crouch all author 0.2, so a graph that took either side alone would be wrong on
+		// every transition into and out of idle.
+		const FElysiumAnimationSelection Walk = Faded(0.2f);
+		const FElysiumAnimationSelection Idle = Faded(0.3f);
+		TestEqual(TEXT("walk -> idle takes idle's longer authored fade"),
+			TransitionSeconds(&Walk, Idle), 0.3f);
+		TestEqual(TEXT("and idle -> walk takes it too, because the combine is max and not incoming"),
+			TransitionSeconds(&Idle, Walk), 0.3f);
+
+		// The lying-down and damaged stance idles, the corpus's longest.
+		const FElysiumAnimationSelection Long = Faded(0.5f);
+		TestEqual(TEXT("the longest authored pair is the ceiling the asset bakes"),
+			TransitionSeconds(&Long, Long), TransitionCeilingSeconds);
+
+		// A fresh body has nothing to fade FROM. Taking a default-constructed record's zero would
+		// make the first clip of every map snap.
+		TestEqual(TEXT("a body that has played nothing takes the incoming fade alone"),
+			TransitionSeconds(nullptr, Idle), 0.3f);
+
+		// `flags & 0x2`, the most common authored transition behaviour in the corpus, and a property
+		// of the clip being ENTERED rather than of whatever is running.
+		const FElysiumAnimationSelection Snap = Faded(0.3f, /*bSnap=*/true);
+		TestEqual(TEXT("an incoming hard cut overrides the pair entirely"),
+			TransitionSeconds(&Long, Snap), 0.0f);
+		TestEqual(TEXT("and it is the incoming clip's property, so an outgoing snap does not cut"),
+			TransitionSeconds(&Snap, Long), 0.5f);
+	}
+
+	// --- The state projection ---------------------------------------------------------------------
+	{
+		// The relaxed forms are what the classifier emits before translation, and a player body
+		// carries no sequence for either — but they are the same gait and so the same state.
+		TestEqual(TEXT("ACT_WALK_RELAXED is the walk state"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::WalkRelaxed)),
+			AsInt(EElysiumGraphState::Walk));
+		TestEqual(TEXT("ACT_RUN_RELAXED is the run state"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::RunRelaxed)),
+			AsInt(EElysiumGraphState::Run));
+
+		// The jump chain the controlled corpus recorded: ACT_LEAP, then ACT_FALLING, then a moving
+		// gait or ACT_LAND. It does not visit ACT_LEAP_ASCEND or ACT_LEAP_DESCEND, and neither does
+		// this projection.
+		TestEqual(TEXT("phase 1 is the leap state"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::Leap)), AsInt(EElysiumGraphState::Leap));
+		TestEqual(TEXT("phase 7 is the falling state"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::Falling)),
+			AsInt(EElysiumGraphState::Falling));
+		TestEqual(TEXT("phase 8 standing is the land state"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::Land)), AsInt(EElysiumGraphState::Land));
+
+		// The one declared answer: ACT_LAND_CROUCH resolves nothing on a validated player body, so
+		// the graph says where the body stands instead of the resolver inventing a clip.
+		TestEqual(TEXT("a ducked landing is declared onto the land state"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::LandCrouch)),
+			AsInt(EElysiumGraphState::Land));
+
+		// Reachable but outside the slice. Standing is a stated answer, not a hole.
+		TestEqual(TEXT("swimming stands rather than falling through the projection"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::Swim)), AsInt(EElysiumGraphState::Idle));
+		TestEqual(TEXT("and so does an activity this slice cannot name"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::Unknown)),
+			AsInt(EElysiumGraphState::Idle));
+
+		// The record carries the LOGICAL request, so the projection reads it off the un-translated
+		// activity the way the resolver's own record does.
+		FElysiumAnimationSelection Sel;
+		Sel.RequestedActivity = ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::Sneak);
+		TestEqual(TEXT("a selection projects off its requested activity"),
+			AsInt(StateFor(Sel)), AsInt(EElysiumGraphState::Sneak));
+	}
+
+	// --- The names the authored asset is asserted against -----------------------------------------
+	{
+		// Every state has a distinct name, because the graph's state nodes carry exactly these and a
+		// duplicate would make two states indistinguishable to the asset check.
+		TSet<FString> Names;
+		for (int32 i = 0; i < NumGraphStates; ++i)
+		{
+			Names.Add(StateName(static_cast<EElysiumGraphState>(i)));
+		}
+		TestEqual(TEXT("the eight state names are distinct"), Names.Num(), NumGraphStates);
+
+		// The three non-looping clips the authored data actually carries.
+		TestTrue(TEXT("leap, land and crouch are the one-shots"),
+			IsOneShotState(EElysiumGraphState::Leap)
+			&& IsOneShotState(EElysiumGraphState::Land)
+			&& IsOneShotState(EElysiumGraphState::Crouch));
+		TestFalse(TEXT("and the gaits are not"),
+			IsOneShotState(EElysiumGraphState::Walk)
+			|| IsOneShotState(EElysiumGraphState::Run)
+			|| IsOneShotState(EElysiumGraphState::Sneak)
+			|| IsOneShotState(EElysiumGraphState::Idle)
+			|| IsOneShotState(EElysiumGraphState::Falling));
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // The same resolver, against the real corpus.
 //
 // The fixture above proves the *rule* — that a resolver keyed on the owner and not on the label
@@ -1147,6 +1281,181 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("every slice activity resolves on every player body, or is the one named miss"),
 		UnexplainedMisses.Num(), 0);
+	return true;
+}
+
+// =====================================================================================
+// CCC5 — the graph against the real corpus.
+//
+// The fixtures above prove the rules. These prove the two things a fixture cannot: that the
+// authored fades the transition arithmetic reads are really what the export carries, and that the
+// asset kind each graph state drives is really what the resolver answers with.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphTransitionParityTest,
+	"Elysium.Content.PlayerGraphTransitionParity", GElysiumAnimationContentFlags)
+bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error) || !Index.IsValid())
+	{
+		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		return true;
+	}
+
+	FRealTables Tables;
+	Tables.Index = &Index;
+
+	// One real player body. The parity claim is about the authored data, so it has to be read off a
+	// body the export actually carries rather than off a fixture.
+	TArray<FString> Stems;
+	Index.Npcs.GenerateKeyArray(Stems);
+	Stems.Sort();
+	FElysiumNpcClipSet Body;
+	FString Chosen;
+	for (const FString& Stem : Stems)
+	{
+		if (!Stem.Contains(TEXT("_Male_Armor_")) && !Stem.Contains(TEXT("_Female_Armor_")))
+		{
+			continue;
+		}
+		FString LoadError;
+		if (Body.Load(Stem, LoadError) && Body.ByActivity(TEXT("ACT_WALK")).Num() > 0)
+		{
+			Chosen = Stem;
+			break;
+		}
+	}
+	if (Chosen.IsEmpty())
+	{
+		AddInfo(TEXT("skipping: the export carries no player body with a walk"));
+		return true;
+	}
+
+	// The six ordered pairs the locomotion slice can actually make.
+	const TCHAR* Pairs[][2] = {
+		{ TEXT("ACT_IDLE"),    TEXT("ACT_WALK")    },
+		{ TEXT("ACT_WALK"),    TEXT("ACT_IDLE")    },
+		{ TEXT("ACT_WALK"),    TEXT("ACT_RUN")     },
+		{ TEXT("ACT_RUN"),     TEXT("ACT_WALK")    },
+		{ TEXT("ACT_LEAP"),    TEXT("ACT_FALLING") },
+		{ TEXT("ACT_FALLING"), TEXT("ACT_LAND")    },
+	};
+
+	int32 Checked = 0;
+	for (const TCHAR* (&Pair)[2] : Pairs)
+	{
+		const FElysiumAnimationSelection Out = ResolveOn(Body, Tables, Pair[0],
+			EElysiumAnimSource::Player);
+		const FElysiumAnimationSelection In = ResolveOn(Body, Tables, Pair[1],
+			EElysiumAnimSource::Player);
+		if (!Out.IsResolved() || !In.IsResolved())
+		{
+			continue;   // an activity this body does not carry is the coverage test's business
+		}
+		++Checked;
+		const float Expected = In.bSnap ? 0.0f : FMath::Max(Out.FadeSeconds, In.FadeSeconds);
+		TestEqual(*FString::Printf(TEXT("%s -> %s combines the authored fades (%.2f, %.2f)"),
+			Pair[0], Pair[1], Out.FadeSeconds, In.FadeSeconds),
+			ElysiumAnimGraph::TransitionSeconds(&Out, In), Expected);
+
+		// The runtime answer has to stay under the ceiling the graph asset bakes, or the min-merge
+		// that makes the ceiling a safety net silently becomes a cap on the authored value.
+		TestTrue(*FString::Printf(TEXT("%s -> %s stays under the baked ceiling"), Pair[0], Pair[1]),
+			ElysiumAnimGraph::TransitionSeconds(&Out, In)
+				<= ElysiumAnimGraph::TransitionCeilingSeconds);
+	}
+	TestTrue(TEXT("at least one slice transition was measured"), Checked > 0);
+	AddInfo(FString::Printf(TEXT("%d of 6 slice transitions measured on '%s'"), Checked, *Chosen));
+	return true;
+}
+
+// Which asset kind each state drives, against the real corpus. A graph state and a resolver answer
+// that disagree about node type is a pose that silently never plays: the blend-space branch of a
+// gait state would sit on a null fan while the sequence branch held the pose it was never given.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphAssetKindsTest,
+	"Elysium.Content.PlayerGraphAssetKinds", GElysiumAnimationContentFlags)
+bool FElysiumPlayerGraphAssetKindsTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error) || !Index.IsValid())
+	{
+		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		return true;
+	}
+
+	FRealTables Tables;
+	Tables.Index = &Index;
+
+	TArray<FString> Stems;
+	Index.Npcs.GenerateKeyArray(Stems);
+	Stems.Sort();
+
+	int32 Bodies = 0;
+	TSet<FString> Wrong;
+	for (const FString& Stem : Stems)
+	{
+		if (!Stem.Contains(TEXT("_Male_Armor_")) && !Stem.Contains(TEXT("_Female_Armor_")))
+		{
+			continue;
+		}
+		FElysiumNpcClipSet Body;
+		FString LoadError;
+		if (!Body.Load(Stem, LoadError))
+		{
+			continue;
+		}
+		++Bodies;
+
+		// The three gaits are the fan states; everything else in the slice plays one clip.
+		const TCHAR* Gaits[] = { TEXT("ACT_WALK"), TEXT("ACT_RUN"), TEXT("ACT_SNEAK") };
+		for (const TCHAR* Activity : Gaits)
+		{
+			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Activity,
+				EElysiumAnimSource::Player);
+			if (Sel.IsResolved() && Sel.AssetKind != EElysiumAnimAssetKind::BlendSpace)
+			{
+				Wrong.Add(FString::Printf(TEXT("%s on %s resolved %s, not a fan"), Activity, *Stem,
+					ElysiumAnimIntent::AssetKindName(Sel.AssetKind)));
+			}
+		}
+		const TCHAR* Singles[] = { TEXT("ACT_IDLE"), TEXT("ACT_CROUCH"), TEXT("ACT_LEAP"),
+			TEXT("ACT_FALLING"), TEXT("ACT_LAND") };
+		for (const TCHAR* Activity : Singles)
+		{
+			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Activity,
+				EElysiumAnimSource::Player);
+			if (Sel.IsResolved() && Sel.AssetKind != EElysiumAnimAssetKind::Sequence)
+			{
+				Wrong.Add(FString::Printf(TEXT("%s on %s resolved %s, not one clip"), Activity, *Stem,
+					ElysiumAnimIntent::AssetKindName(Sel.AssetKind)));
+			}
+		}
+	}
+	if (Bodies == 0)
+	{
+		AddInfo(TEXT("skipping: the export carries no player bodies"));
+		return true;
+	}
+	for (const FString& Line : Wrong)
+	{
+		AddError(Line);
+	}
+	AddInfo(FString::Printf(TEXT("%d player bodies checked"), Bodies));
+	TestEqual(TEXT("every slice state drives the asset kind the resolver answers with"),
+		Wrong.Num(), 0);
 	return true;
 }
 

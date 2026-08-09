@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "topic": "inventory-client",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "functions": [
+    {"address": "10180de0", "label": "CharEditCommandSeed", "confidence": "existing client context", "role": "known analyzed client function used only to anchor the specification", "depth": 1, "cap": 40}
+  ],
+  "grep_probes": [
+    {
+      "label": "inventory_commands",
+      "str": "toggleinven~inven_drop~showinventory~inventory~hotkey~barter~slot1~slot2~slot3~slot4~slot5~slot6~slot7~slot8",
+      "cls": "VHotkeysUI~VBarterUI",
+      "fn": "Inventory~Hotkey~Barter",
+      "cap": 180
+    }
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The client registers slot1 through slot8, toggleinven, showinventory, inven_drop, inven_drop_curr, showbarter and hidebarter; the inventory panel formats inven_drop with a selected id or uses inven_drop_curr.",
+      "evidence": "Hash-pinned client string/function grep joins the command strings to the inventory UI command producers.",
+      "consequence": "Inventory presentation selects an entry and sends a command; the server owns drop validation and mutation."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The barter/loot client sends vbarter take, buy, give or sell with a slot and retains a target entity index; the hotkey UI stores ten type/data pairs.",
+      "evidence": "VBarterUI string xrefs expose the four vbarter formats and m_iBarterTgtEntIdx; VHotkeysUI field strings expose m_iHotkeyTypes[10] and m_iHotkeyData[10].",
+      "consequence": "Loot and vendor panels share a command transport, while transfer authority and prices remain server-side."
+    }
+  ],
+  "questions": []
+}

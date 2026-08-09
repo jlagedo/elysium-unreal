@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "topic": "inventory-server-raw",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "functions": [
+    {"address": "10008760", "label": "InputGiveItem", "confidence": "datamap pointer", "role": "player GiveItem input handler", "asm_count": 500},
+    {"address": "1000b370", "label": "InputInventoryRemove", "confidence": "datamap pointer", "role": "combat-character entity-removal input", "asm_count": 500}
+  ],
+  "field_probes": [],
+  "relationships": [],
+  "findings": [],
+  "questions": []
+}

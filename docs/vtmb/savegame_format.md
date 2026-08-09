@@ -386,7 +386,8 @@ sheet plus every active modifier, and both are persisted.
   `int count;` then `int len; char[len]` per entry — `"clan (tremere)"`,
   `"history (affinity for magic)"`. The active passive-modifier set.
 - `m_GlobalEmailFlags` — `CUtlVector<GLOBAL_EMAIL { szEntityName[64], EmailFlags[512] }>` — per
-  computer terminal (`haven_pc`), 128 ints of read/unread state.
+  computer terminal (`haven_pc`), 128 ints of email state. Terminal-side semantics and the open
+  local/global reconciliation question belong to `docs/vtmb/computer-terminals.md`.
 
 **Masquerade and law** — the systems that make VtMB's world react: `m_LevelCriminalAct`,
 `m_iCriminalActCount`, `m_iSupernaturalActCount`, `m_flCriminalActTimer`,

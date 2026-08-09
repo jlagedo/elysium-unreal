@@ -14,7 +14,7 @@ import java.util.Map;
 // for a parser is usually in its caller) or every writer to a data address.
 //
 // Args (key=value, space separated):
-//   addrs=<hex;...>  addresses to find references to
+//   addrs=<hex+...>  addresses to find references to (plus survives headless tokenization)
 //   out=<path>       output file
 public class DumpXrefs extends GhidraScript {
 
@@ -30,7 +30,7 @@ public class DumpXrefs extends GhidraScript {
         new File(outPath).getParentFile().mkdirs();
         PrintWriter out = new PrintWriter(new FileWriter(outPath));
 
-        for (String s : (a.getOrDefault("addrs", "")).split("[;,]")) {
+        for (String s : (a.getOrDefault("addrs", "")).split("[;,+]")) {
             if (s.isEmpty()) continue;
             Address addr = toAddr(s);
             out.println("\n//======== refs to " + addr + " ========");

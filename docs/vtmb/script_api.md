@@ -178,11 +178,13 @@ Tested by `Elysium.Substrate.OneOfSet` (roadmap 9.7d).
 ## Character methods — table `0x1058f868`, 24 entries
 
 Every method takes the character as its first parsed argument and resolves it to a
-`CBaseEntity*`; two component pointers on that object carry the whole surface:
+`CBaseEntity*`; three component pointers on that object carry the whole surface:
 
 - **`+0x98`** — the dialogue/disposition component (`SetDisposition`, expression, gesture).
-- **`+0x9c`** — the *combat character* (inventory, money, stats, feats). `HasItem` also
-  consults a second container at `+0xa8` on it.
+- **`+0x9c`** — the *combat character* (inventory, money, stats, feats). Its inventory owns the
+  ordinary item handles and the carried keyring used by `HasItem`'s fallback.
+- **`+0xa8`** — the player extension used by player-only item grant and the player-facing
+  drop/barter services; it is not a second item container.
 
 A method whose receiver lacks the component it needs raises `AttributeError` with a
 method-specific message (`"SetDisposition needs to be called on …"`, `"invalid combat character
@@ -198,13 +200,13 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `RemoveItem` | `10199240` | `(char, item:str)` | 182 | stub |
 | `GiveItem` | `10199100` | `(char, item:str)` | 126 | stub |
 | `SetCamera` | `10198070` | `(char, shotfile:str)` | 115 | real (the 11.7 shot channel) |
-| `StartBarter` | `101993c0` | `(char)` | 108 | stub |
+| `StartBarter` | `101993c0` | `(char, arg0:int, arg1:int)` | 108 | stub |
 | `CurrentMoney` | `101998c0` | `(char)` | 86 | real (the `money` field) |
 | `SeductiveFeed` | `10198150` | `(char)` | 54 | stub |
 | `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | real (the feat rating over the sheet) |
-| `HasWeaponEquipped` | `101984c0` | `(char, …)` | 27 | stub |
-| `AmmoCount` | `101989b0` | `(char, weapon:str)` | 19 | stub |
-| `GiveAmmo` | `10198b30` | `(char, weapon:str, count:int)` | 19 | stub |
+| `HasWeaponEquipped` | `101984c0` | `(char, item:str)` | 27 | stub |
+| `AmmoCount` | `101989b0` | `(char, item:str)` | 19 | stub |
+| `GiveAmmo` | `10198b30` | `(char, item:str, count:int)` | 19 | stub |
 | `BumpStat` | `10199a70` | `(char, stat:str, times:int)` | 19 | real (dots onto the base) |
 | `WorldMap` | `10199520` | `(char)` | 12 | stub |
 | `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
@@ -214,6 +216,11 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `DialogDiscipline` | `10198310` | `(char, …)` | — | the rating, no blood spent (the power is P13) |
 | `SetExpression` | `10197ce0` | `(char, modifier:int, expr:str)` | — | stub |
 | `React` | `10197b00` | `(char, modifier:int, expr:str)` | 0 | stub |
+
+The retail item ownership, keyring, stack, active-weapon, ammo, container and barter behavior
+behind these signatures is recovered in `docs/vtmb/inventory.md`. The **Backing today** column
+continues to report the current Unreal source; closing the reverse-engineering contract does not
+turn those stubs into an implementation.
 
 Useful doc strings: `SetCamera` — *"Sets the entity to use the named shot file as their cinematic
 camera mode"* (so its argument keys `vdata/camerashots/`); `DialogDiscipline` — *"Uses a
@@ -227,6 +234,7 @@ state's **1-based ordinal in file order**, not the authored `"ID"`, and the call
 store a number — it resolves the state, pays `AwardMoney` then `AwardXP` then `Event`, and writes
 the journal row, all of it skipped when the state did not actually change. The whole walk:
 `docs/vtmb/game_runtime.md` → "Quests".
+
 **`SetGesture` is an exact sequence route, and both shipped calls miss.** `FUN_10197f60` resolves
 the character's component at entity `+0x98`, calls `LookupSequence`, and only on a non-negative
 answer reads the duration and starts the gesture. A negative lookup returns `None` without a
@@ -279,6 +287,7 @@ only model writer. All twelve are backed for real by the CPython host.
 (`0x1058f778`), documented as *"gets attributes of C++ object by their keyvalue name"* and
 *"checks name against members in game datatable"* — the datamap dispatch `docs/vtmb/python_bridge.md`
 describes.
+
 **`SetModel` changes animation ownership; it is not a sequence request.** The Python body at
 `0x101977a0` parses the entity and model path, resolves the entity, verifies that the engine model
 lookup returns an index greater than one, interns the path and calls virtual `+0x1a4`. On an

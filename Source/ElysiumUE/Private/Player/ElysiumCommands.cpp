@@ -114,6 +114,12 @@ namespace
 		{ TEXT("speed"),        EK::ButtonPair, EG::Movement, EB::Speed,        TEXT("walk modifier -- held selects the slow gait") },
 		{ TEXT("strafe"),       EK::ButtonPair, EG::Movement, EB::Strafe,       TEXT("strafe modifier -- the turn keys strafe while held") },
 		{ TEXT("duck"),         EK::ButtonPair, EG::Movement, EB::Duck,         TEXT("crouch -- 36u hull, eye at 30u") },
+		// **Ours, not VtMB's** — like `createplayer` below, this is deliberately absent from
+		// `docs/vtmb/controls.md`'s bindable inventory and therefore gets no keyboard default. It exists
+		// because a stick click cannot be held: L3 is where the gamepad layout puts crouch, and the
+		// hold that `+duck` is would mean keeping a thumb pressed into the stick while aiming with it.
+		// It flips the same `IN_DUCK` latch `+duck` sets, so the mover sees one crouch, not two.
+		{ TEXT("toggleduck"),   EK::Once,       EG::Movement, EB::None,         TEXT("flip the crouch latch -- the gamepad's crouch") },
 		{ TEXT("jump"),         EK::ButtonPair, EG::Movement, EB::Jump,         TEXT("jump") },
 		{ TEXT("klook"),        EK::ButtonPair, EG::Movement, EB::KLook,        TEXT("keyboard look mode") },
 		{ TEXT("mlook"),        EK::ButtonPair, EG::Movement, EB::MLook,        TEXT("mouse look mode -- on from a cold start (default.cfg ends with +mlook)") },

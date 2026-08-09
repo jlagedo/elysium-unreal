@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "topic": "inventory-server",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "functions": [
+    {"address": "10198640", "label": "PyHasItem", "confidence": "verified entry", "role": "Character.HasItem wrapper", "depth": 2, "cap": 100},
+    {"address": "10335950", "label": "InventoryByClassname", "confidence": "verified callee", "role": "case-insensitive weapon-slot lookup", "depth": 2, "cap": 100},
+    {"address": "10178470", "label": "KeyringHasItem", "confidence": "verified callee", "role": "secondary keyring lookup", "depth": 2, "cap": 100},
+    {"address": "10407e10", "label": "KeyringFind", "confidence": "working alias", "role": "keyring membership query", "depth": 2, "cap": 100},
+    {"address": "10199100", "label": "PyGiveItem", "confidence": "verified entry", "role": "Character.GiveItem wrapper", "depth": 2, "cap": 100},
+    {"address": "10199240", "label": "PyRemoveItem", "confidence": "verified entry", "role": "Character.RemoveItem wrapper", "depth": 2, "cap": 100},
+    {"address": "10335470", "label": "RemoveWeapon", "confidence": "verified callee", "role": "combat-character weapon removal", "depth": 2, "cap": 100},
+    {"address": "101784c0", "label": "KeyringRemoveItem", "confidence": "verified callee", "role": "secondary keyring removal", "depth": 2, "cap": 100},
+    {"address": "10407e90", "label": "KeyringRemove", "confidence": "working alias", "role": "keyring membership removal", "depth": 2, "cap": 100},
+    {"address": "101989b0", "label": "PyAmmoCount", "confidence": "verified entry", "role": "Character.AmmoCount wrapper", "depth": 2, "cap": 100},
+    {"address": "10198b30", "label": "PyGiveAmmo", "confidence": "verified entry", "role": "Character.GiveAmmo wrapper", "depth": 2, "cap": 100},
+    {"address": "101984c0", "label": "PyHasWeaponEquipped", "confidence": "verified entry", "role": "active-weapon classname predicate", "depth": 2, "cap": 100},
+    {"address": "10208c90", "label": "ContainerUse", "confidence": "verified datamap handler", "role": "container use and transfer boundary", "depth": 2, "cap": 120},
+    {"address": "10208e50", "label": "ContainerAddEntity", "confidence": "verified datamap handler", "role": "AddEntityToContainer", "depth": 2, "cap": 120},
+    {"address": "10208f30", "label": "ContainerSpawnItem", "confidence": "verified datamap handler", "role": "SpawnItemInContainer", "depth": 2, "cap": 120},
+    {"address": "10208fa0", "label": "ContainerDeleteItems", "confidence": "verified datamap handler", "role": "DeleteItems", "depth": 2, "cap": 120},
+    {"address": "10209350", "label": "ContainerSpawn", "confidence": "verified entry", "role": "authored equip-slot materialization", "depth": 2, "cap": 120},
+    {"address": "10216ca0", "label": "TriggerInventoryFactory", "confidence": "factory string xref", "role": "trigger_inventory_check factory and class seed", "depth": 2, "cap": 120},
+    {"address": "10216bc0", "label": "TriggerInventoryClassname", "confidence": "vtable slot 82", "role": "trigger class identity", "depth": 1, "cap": 40},
+    {"address": "10216d40", "label": "TriggerInventorySpawn", "confidence": "vtable slot 103", "role": "trigger spawn", "depth": 2, "cap": 100},
+    {"address": "10216d60", "label": "TriggerInventoryTouch", "confidence": "vtable slot 174", "role": "trigger touch evaluation", "depth": 2, "cap": 120},
+    {"address": "10171d10", "label": "PlayerInputGiveItem", "confidence": "resolved datamap thunk", "role": "player GiveItem input", "depth": 2, "cap": 120},
+    {"address": "103352b0", "label": "CombatCharacterInputInventoryRemove", "confidence": "resolved datamap thunk", "role": "InventoryRemove input", "depth": 2, "cap": 120},
+    {"address": "10014a97", "label": "CmdInventoryDropThunk", "confidence": "command registration callback", "role": "inven_drop command", "depth": 2, "cap": 140},
+    {"address": "1000abf5", "label": "CmdInventoryDropCurrentThunk", "confidence": "command registration callback", "role": "inven_drop_curr command", "depth": 2, "cap": 140},
+    {"address": "100146f0", "label": "CmdBarterThunk", "confidence": "command registration callback", "role": "vbarter transfer command", "depth": 2, "cap": 160},
+    {"address": "100d5d10", "label": "CmdInventoryDrop", "confidence": "resolved command thunk", "role": "inven_drop command handler", "depth": 3, "cap": 180},
+    {"address": "100d5e30", "label": "CmdInventoryDropCurrent", "confidence": "resolved command thunk", "role": "inven_drop_curr command handler", "depth": 3, "cap": 180},
+    {"address": "100da230", "label": "CmdBarter", "confidence": "resolved command thunk", "role": "vbarter transfer command handler", "depth": 3, "cap": 220},
+    {"address": "102577e0", "label": "ItemIsDroppable", "confidence": "Weapon_Drop predicate callee", "role": "item drop-eligibility predicate", "depth": 2, "cap": 100},
+    {"address": "1032d380", "label": "WeaponEquip", "confidence": "scope-trace name", "role": "combat-character weapon/item equip", "depth": 2, "cap": 160},
+    {"address": "101993c0", "label": "PyStartBarter", "confidence": "verified Character method entry", "role": "scripted NPC barter start", "depth": 3, "cap": 180}
+  ],
+  "field_probes": [
+    {"displacement": "11c", "label": "entity_classname"},
+    {"displacement": "73c", "label": "item_inventory_position"},
+    {"displacement": "744", "label": "item_primary_ammo_type"},
+    {"displacement": "74c", "label": "item_primary_magazine_count"},
+    {"displacement": "8d0", "label": "stack_count"},
+    {"displacement": "15a4", "label": "combat_character_ammo_pool"},
+    {"displacement": "1624", "label": "combat_character_item_handle_array"},
+    {"displacement": "19a4", "label": "active_weapon_handle"}
+  ],
+  "vtable_probes": [
+    {"address": "1048a134", "label": "CTriggerInventory", "slots": 384, "cap": 384}
+  ],
+  "grep_probes": [
+    {
+      "label": "inventory_commands",
+      "str": "inven_drop~vbarter~permanent_inventory~droppable~stackable~DropItem~GiveNamedItem~Weapon_Drop~Weapon_Equip",
+      "fn": "DropItem~GiveNamedItem~Weapon_Drop~Weapon_Equip",
+      "cap": 180
+    },
+    {
+      "label": "inventory_pickup",
+      "str": "DefaultTouch~BumpWeapon~CanAddPlayerItem~IsDroppable~IsStackable~PickupWeapon",
+      "fn": "DefaultTouch~BumpWeapon~CanAddPlayerItem~IsDroppable~IsStackable~PickupWeapon",
+      "cap": 160
+    }
+  ],
+  "relationships": [
+    {"from": "10198640", "to": "10335950", "confidence": "verified", "evidence": "primary case-insensitive item lookup"},
+    {"from": "10198640", "to": "10178470", "confidence": "verified", "evidence": "fallback keyring lookup"},
+    {"from": "10199240", "to": "10335470", "confidence": "verified", "evidence": "non-stack item removal"},
+    {"from": "10199240", "to": "101784c0", "confidence": "verified", "evidence": "fallback keyring removal"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "A combat character carries ordinary items as up to 224 full item-entity handles beginning at +0x1624; each item has an inventory position at +0x73c and 255 means unslotted.",
+      "evidence": "InventoryByClassname 0x10335950 iterates indices 0..223 and compares the pointed entity classname at +0x11c. Inventory removal 0x10335470 compacts the handle array and rewrites positions. Decoded tutorial saves show the same loose lockpick entity transition from owner -1/position 255 to player-owned/position 30.",
+      "consequence": "The remake inventory must preserve item identity, ownership and entity lifetime; a classname set is insufficient."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Character.HasItem searches ordinary slots case-insensitively and then searches logical records inside the carried item_g_keyring; Character.RemoveItem has the same fallback.",
+      "evidence": "PyHasItem 0x10198640 calls 0x10335950 then 0x10178470. KeyringFind 0x10407e10 searches count +0x920 in 0xc0-byte records at +0x914 with Q_strnicmp capped at 0x60. PyRemoveItem 0x10199240 falls through to 0x101784c0/0x10407e90.",
+      "consequence": "Keys are keyring membership records after collection but remain visible through the ordinary script predicate/removal surface."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Character.RemoveItem decrements m_iItemCount for a stack of at least two, but detaches and destroys a non-stackable item or the last stack member; no match still returns None.",
+      "evidence": "PyRemoveItem 0x10199240 calls the IsStackable virtual, reads +0x8d0, and selects decrement or Inventory_Remove 0x10335470 plus entity removal. Keyring removal is attempted only after ordinary lookup fails.",
+      "consequence": "Script removal is destructive and must not be conflated with player drop or the entity-valued Inventory_Remove input."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Character.AmmoCount is class-dependent: stackable items return +0x8d0, while non-stackable items return primary loaded-magazine count +0x74c; Character.GiveAmmo adds to stack count or the combat-character reserve pool for ammo type +0x744.",
+      "evidence": "PyAmmoCount 0x101989b0 and PyGiveAmmo 0x10198b30 select on IsStackable. The firearm return operand is +0x74c even though the path resolves its ammo type/reserve. GiveAmmo reaches the combat-character reserve-ammo virtual for non-stackable items.",
+      "consequence": "For firearms AmmoCount means clip, while GiveAmmo means reserve; the tutorial .38 dialogue depends on that asymmetry."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Character.HasWeaponEquipped compares the active handle at +0x19a4 against the supplied classname exactly and case-sensitively.",
+      "evidence": "PyHasWeaponEquipped 0x101984c0 resolves the active entity and performs an exact byte/string comparison rather than the case-insensitive inventory lookup.",
+      "consequence": "Owned and active are distinct predicates, and classname normalization must not change this retail edge."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "item_container is a CBaseCombatCharacter inventory. equip0..equip11 spawn real entities; SpawnItemInContainer creates one; AddEntityToContainer moves unowned targetname matches; DeleteItems destroys all contents.",
+      "evidence": "ContainerSpawn 0x10209350, AddEntity 0x10208e50, SpawnItem 0x10208f30 and DeleteItems 0x10208fa0 use the common inventory add/remove paths. DeleteItems calls entity removal for each of 224 slots and clears slot, active and last handles.",
+      "consequence": "Containers and actors share ownership/stack transfer machinery; authored equip keys are spawn seeds, not a second contents format."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Container use opens exclusive loot mode through the barter service, and server CmdBarter authoritatively implements Take, Give, Buy and Sell with entity transfer or stack split/merge.",
+      "evidence": "ContainerUse 0x10208c90 tracks one user and selects showloot/hidebarter. CmdBarter 0x100da230 maps Take container-to-player, Give player-to-container, Buy vendor-to-player and Sell player-to-vendor; Take/Give fire OnItemRemove/OnItemInsert.",
+      "consequence": "The client UI requests transfers but never owns inventory mutation. The separate price formula remains economy scope."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "trigger_inventory_check evaluates on accepted player StartTouch, searches ordinary slots and keyring case-insensitively, and fires OnPlayerHasItem without disabling itself.",
+      "evidence": "CTriggerInventory vtable 0x1048a134 slot 174 resolves to 0x10216d60. The body runs the base filter, requires the player component, performs both lookups and fires output +0x59c. No self-disable occurs.",
+      "consequence": "The predicate is entry-driven and player-only; a map output must author one-shot behavior."
+    }
+  ],
+  "questions": []
+}

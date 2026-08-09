@@ -95,6 +95,27 @@ contain bytes, transforms, timing, or other content derived from the user's game
   file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
   pipeline.) The architecture and what it costs: `docs/architecture/uasset-bake-spike.md`.
 
+### Authored live, captured as text, rebuilt by a generator
+
+The editor is the authoring tool for anything Unreal authors better than code — an animation
+graph, a material, a widget, a Niagara system. What it produces is **never** the tracked
+artifact. Every such asset is captured into a **reviewable text source** under `pipeline/unreal/`,
+and a generator rebuilds the package from that text.
+
+Live editing is the loop; the text is the record. A hand-edited binary package committed as-is
+breaks `reconstruct`, is unreviewable in a diff, and puts a generated package inside the tracked
+set — which is the boundary "Bring-your-own-game" exists to hold.
+
+The worked example is the player animation graph: `elysium.animbp.build` constructs it through
+the engine's own node-placement path, `UElysiumAnimGraphLibrary::ExportGraphToText` captures it as
+`pipeline/unreal/graphs/ABP_ElysiumBiped.t3d`, and `pipeline/unreal/make_player_anim_bp.py` rebuilds
+the asset from that text. The round trip is the authoring loop: open the generated asset, edit it in
+the editor, copy the graph, paste it back over the text.
+
+An editor MCP toolset drives all of it in-process (`docs/architecture/debug-tooling.md`). Whatever
+was proven live is proven again through `uv run elysium build` and `uv run elysium test`, which
+remain the only gate.
+
 ### The `UE_` exporter convention
 
 An exporter prefixed **`UE_`** (e.g. `UE_bsp_to_scene.py`) is verified to emit

@@ -17,6 +17,7 @@
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning — the gaze layer's content
@@ -1036,7 +1037,7 @@ USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
 	// half-height so movement, crouching and controller yaw carry the surface automatically.
 	Visual->AttachToComponent(Pawn->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
 	Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -Body->GetBodyHalfHeight()));
-	Visual->SetRelativeRotation(ElysiumSkeletalBasis::RelativeToPawn());
+	Visual->SetRelativeRotation(ElysiumSkeletalBasis::RelativeToParentFacing());
 
 	// The mesh animates from the body sample the mover publishes at its tick tail (CCC1), so it has
 	// to tick after the mover. `ACharacter` installs this prerequisite itself in
@@ -1094,6 +1095,17 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
 	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
 		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr);
+
+	// Hand the settled record to the graph (CCC5). The push is here rather than a pull from the
+	// instance because the driver lives on this actor behind a pimpl while the visual is a component
+	// of the pawn: an instance reaching for it would invert the layering and carry a null branch for
+	// every map that seats no pawn. A body still on the native instance — `elysium.PlayerGraph 0`, or
+	// a map whose graph package is missing — simply is not a biped instance and is skipped.
+	if (UElysiumBipedAnimInstance* Graph = Visual
+		? Cast<UElysiumBipedAnimInstance>(Visual->GetAnimInstance()) : nullptr)
+	{
+		Graph->PublishSelection(PlayerAnimDriver->Selection, PlayerAnimDriver->Assets);
+	}
 }
 
 const FElysiumAnimationSelection& AElysiumMapActor::GetPlayerAnimSelection() const

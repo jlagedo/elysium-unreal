@@ -86,11 +86,19 @@ FElysiumGreenRoomRun* FElysiumCogWindow_GreenRoom::GetLab() const
 	return Maps ? Maps->GetGreenRoom() : nullptr;
 }
 
-UElysiumNpcAnimInstance* FElysiumCogWindow_GreenRoom::GetBodyInstance() const
+UElysiumBodyAnimInstance* FElysiumCogWindow_GreenRoom::GetBodyInstance() const
 {
 	FElysiumGreenRoomRun* Lab = GetLab();
 	USkeletalMeshComponent* Body = Lab ? Lab->LabBody() : nullptr;
-	return Body ? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	return Body ? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
+}
+
+UElysiumNpcAnimInstance* FElysiumCogWindow_GreenRoom::GetNpcBodyInstance() const
+{
+	// The rows that read a clip or a layer rather than a rig. Those belong to the native instance's
+	// own pose machinery, so a body posing from an anim graph answers null and its rows read empty
+	// — which is the honest report, not a hidden failure.
+	return Cast<UElysiumNpcAnimInstance>(GetBodyInstance());
 }
 
 void FElysiumCogWindow_GreenRoom::OpenLab()
@@ -185,7 +193,7 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 	// asset that is STANDING rather than a path re-derived from the stem: a body outlives the
 	// export that built it, and "the mount has it now" is a different question from "this body
 	// came off it".
-	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const UElysiumBodyAnimInstance* Inst = GetBodyInstance();
 	const USkeletalMeshComponent* Comp = Inst != nullptr ? Inst->GetSkelMeshComponent() : nullptr;
 	const USkeletalMesh* Mesh = Comp != nullptr ? Comp->GetSkeletalMeshAsset() : nullptr;
 
@@ -665,7 +673,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 
 	// Read once: the proxy accessor behind it blocks on any in-flight parallel evaluation, which is
 	// not a thing to do twice a frame to draw one label.
-	const UElysiumNpcAnimInstance* LayerInst = GetBodyInstance();
+	const UElysiumNpcAnimInstance* LayerInst = GetNpcBodyInstance();
 	const int32 Composing = LayerInst != nullptr ? LayerInst->GetActiveLayers() : 0;
 	if (Composing > 0)
 	{
@@ -700,7 +708,7 @@ void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
 	// floor on Bip01 or animates only the limbs above a root that never moves, and which of the two
 	// it is decides whether a wrong-looking result is the clip, the rig, or the placement. Measured
 	// off the sequence rather than declared, so it answers for whichever path built the body.
-	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const UElysiumNpcAnimInstance* Inst = GetNpcBodyInstance();
 	const UAnimSequence* Playing = Inst != nullptr ? Inst->GetPlayingClip() : nullptr;
 	if (Playing != nullptr)
 	{
@@ -799,7 +807,7 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 	// touched — behind the Cloth tab it was unreachable on exactly those, because that tab returns
 	// early when no garment rig is installed.
 	ImGui::SeparatorText("Overlays");
-	const UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	const UElysiumBodyAnimInstance* Inst = GetBodyInstance();
 	const bool bHasRig = Inst != nullptr && Inst->GetClothRig() != nullptr;
 
 	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
@@ -934,7 +942,7 @@ void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 		ImGui::EndDisabled();
 	}
 
-	UElysiumNpcAnimInstance* Inst = GetBodyInstance();
+	UElysiumBodyAnimInstance* Inst = GetBodyInstance();
 	const FElysiumClothRig* Rig = Inst ? Inst->GetClothRig() : nullptr;
 	if (Inst == nullptr)
 	{

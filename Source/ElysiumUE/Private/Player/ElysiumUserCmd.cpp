@@ -166,6 +166,13 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 	Cmd.LookDelta.Y +=
 		Axis(EElysiumButton::LookUp, EElysiumButton::LookDown) * ElysiumInput::KeyboardPitchSpeed * DeltaSeconds;
 
+	// The movement stick, shaped here for the same reason the look stick is: the dead zone is feel,
+	// and feel has exactly one owner. The pad reports (right, up) and the command is (forward, side),
+	// so the swizzle is applied after the shaping — the radial band has to see the stick's own frame
+	// or an asymmetric zone would rotate with it.
+	Cmd.Move += ElysiumInput::GamepadStickToMove(
+		ElysiumInput::ShapeStickMove(StickMove, StickTuning));
+
 	// A stick adds to the keyboard rather than replacing it, then the pair is clamped to the unit
 	// square the way a digital-only frame already is.
 	Cmd.Move += AnalogMove;
@@ -176,6 +183,14 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 
 	// The stick, on the same clamped delta the turn keys just used. Mouse counts are already
 	// finished degrees for this frame and are added raw; a stick is a held rate and is not.
+	//
+	// `ShapeStickLook` is where the pad's dead zone, response curve, filter and ramp all live — a
+	// rate in, a rate out — so the pad's whole feel is one function reached from one line. It is
+	// deliberately called on **every** frame, including the ones where the stick is centred: the
+	// filter has to be given the zero target to decay toward, and the ramp has to be given the idle
+	// time to discharge over. Skipping the call on a still frame would freeze both mid-turn.
+	Cmd.LookDelta +=
+		ElysiumInput::ShapeStickLook(StickLook, StickTuning, DeltaSeconds, StickState) * DeltaSeconds;
 	Cmd.LookDelta += AnalogLook * DeltaSeconds;
 
 	// **The response curve applies to the mouse contribution alone**, which is why it is applied
@@ -194,6 +209,10 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 	LookAccum = FVector2D::ZeroVector;
 	AnalogMove = FVector2D::ZeroVector;
 	AnalogLook = FVector2D::ZeroVector;
+	// The stick is cleared like every other per-frame value. A centred stick stops producing
+	// Triggered events entirely, so a value left standing here would be a turn that never ends.
+	StickLook = FVector2D::ZeroVector;
+	StickMove = FVector2D::ZeroVector;
 	AnalogUp = 0.0f;
 	return Cmd;
 }
@@ -204,6 +223,11 @@ void FElysiumUserCmdBuilder::ClearButtons()
 	LookAccum = FVector2D::ZeroVector;
 	AnalogMove = FVector2D::ZeroVector;
 	AnalogUp = 0.0f;
+	// The filter and the ramp go with the latches: input taken away and given back must not resume a
+	// turn that was in flight when a screen opened.
+	StickLook = FVector2D::ZeroVector;
+	StickMove = FVector2D::ZeroVector;
+	StickState.Reset();
 }
 
 void FElysiumUserCmdBuilder::Reset()

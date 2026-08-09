@@ -8,12 +8,13 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
-// The A/B. **Default 0**: the faithful evaluator stays the shipped feel until `CCC3`'s co-tune
-// resolves the modern rig's deltas one owner call at a time. Both rigs evaluate and record their
-// channels every frame regardless — this picks only which one supplies the base request, so one
-// deterministic run diffs the two booms directly rather than against a recollection.
+// The A/B. **Default 1**: the modern rig supplies the shipped base view, and `0` reverts to the
+// faithful evaluator. Both rigs evaluate and record their channels every frame regardless — this
+// picks only which one supplies the base request, so one deterministic run diffs the two booms
+// directly rather than against a recollection, and `CCC3`'s co-tune still resolves the rig's
+// remaining deltas one owner call at a time.
 static TAutoConsoleVariable<int32> CVarModernCamera(
-	TEXT("elysium.ModernCamera"), 0,
+	TEXT("elysium.ModernCamera"), 1,
 	TEXT("Which rig supplies the third-person base view: the faithful VtMB evaluator (0) or the ")
 	TEXT("remaster boom (1). Both solve and record every frame either way."),
 	ECVF_Default);

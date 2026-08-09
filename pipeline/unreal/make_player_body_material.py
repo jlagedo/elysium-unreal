@@ -94,7 +94,13 @@ opacity = multiply(mat, base_tex, "A", model_alpha, "", -260, 80)
 connect_property(opacity, "", unreal.MaterialProperty.MP_OPACITY_MASK)
 
 mr_tex = texture(mat, "metallicRoughnessTexture", -1000, 360)
-metal_factor = scalar(mat, "metallicFactor", 1.0, -760, 300)
+# glTF's own default for this factor is 1.0, and that default is wrong for every body this master
+# serves: VtMB characters are skin and cloth with no metal, `mdl_gltf.py` writes `metallicFactor: 0`
+# into each `.glb`, and the bake binds `baseColorTexture` alone -- so an instance inherits whatever
+# stands here. At 1.0, with the unbound `metallicRoughnessTexture` sampling white, Metallic resolves
+# to 1 and the body has no diffuse at all: it renders black under every light while its base colour
+# still reads correctly in a base-colour view.
+metal_factor = scalar(mat, "metallicFactor", 0.0, -760, 300)
 rough_factor = scalar(mat, "roughnessFactor", 1.0, -760, 440)
 metal = multiply(mat, mr_tex, "B", metal_factor, "", -500, 320)
 rough = multiply(mat, mr_tex, "G", rough_factor, "", -500, 460)

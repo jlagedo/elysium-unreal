@@ -1,32 +1,14 @@
 #include "Visual/ElysiumNpcAnimInstance.h"
 
 #include "Visual/ElysiumAnimLayerMask.h"
-#include "Visual/ElysiumClothRig.h"
-#include "Visual/ElysiumCompositionRig.h"
-#include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumNpcVisual.h"
 
-#include "Animation/AnimCurveElementFlags.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendProfile.h"
 #include "Animation/BlendSpace.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
 #include "HAL/IConsoleManager.h"
-
-namespace
-{
-	// The reconstruction described in `Visual/ElysiumFacialRig.h`: the amplitude jaw's weight is also
-	// raised into the `jaw_drop` controller, because the flexdesc `mstudiomouth_t` actually names
-	// carries no flex record on any shipped model and so moves nothing on its own. 0 leaves only the
-	// faithful write, which is the A/B baseline for the divergence.
-	TAutoConsoleVariable<int32> CVarFacialJawBridge(
-		TEXT("elysium.FacialJawBridge"),
-		1,
-		TEXT("Bridge the amplitude jaw into the jaw_drop flex controller (1, default) or write only "
-		     "the mouth flexdesc, which no shipped model consumes (0)."),
-		ECVF_Default);
-}
 
 void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 {
@@ -77,6 +59,9 @@ void FElysiumNpcAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 
 void FElysiumNpcAnimProxy::CacheBones()
 {
+	// The composition stages and the garment first, through the shared base.
+	FElysiumBodyAnimProxy::CacheBones();
+
 	FAnimationCacheBonesContext Context(this);
 	for (FAnimNode_SequencePlayer_Standalone& Player : Players)
 	{
@@ -86,18 +71,6 @@ void FElysiumNpcAnimProxy::CacheBones()
 	{
 		Player.CacheBones_AnyThread(Context);
 	}
-	// The bone container is what a bone reference resolves against, and this is the callback its
-	// change arrives on — so both composition stages resolve their indices here, once, and never
-	// by name per evaluation.
-	AxisInterp.ResolveBones(GetRequiredBones());
-	// The cloth chains take the context rather than the container: they are constructed here too,
-	// because the reference skeleton their body definitions need is only reachable from it.
-	Cloth.CacheBones(Context);
-}
-
-void FElysiumNpcAnimProxy::PreUpdateCloth(const UAnimInstance* Instance)
-{
-	Cloth.PreUpdate(Instance);
 }
 
 float FElysiumNpcAnimProxy::FadeWeight(const FFadingClip& Fade)
@@ -488,7 +461,7 @@ void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& In
 	// Ahead of the initialised gate: the simulation's only source of a timestep is this call, and a
 	// body with no clip still evaluates — against the ref pose — so its garment must still hang and
 	// settle rather than freeze mid-air until something plays.
-	Cloth.Update(InContext);
+	UpdateCloth(InContext);
 
 	// Also ahead of the gate, and for the same reason as the garment: a layer rides over whatever
 	// the body produced, INCLUDING the reference pose a body with no clip falls back to. A weapon
@@ -835,113 +808,15 @@ void FElysiumNpcAnimProxy::EvaluateLayers(FPoseContext& Output)
 	}
 }
 
-// The A/B for the two composition stages. 1 = VtMB's own composition, 0 = Unreal's ordinary
-// hierarchy alone, which is what every body posed under before CAP7.2. Dropping it is visible
-// exactly where the docs measure it: up to 44.9 degrees on a shoulder, 26.9 on a bicep, 6.4 on a
-// wrist, and a `Flags & 0x2` spine rooted in its parent rather than the component.
-static TAutoConsoleVariable<int32> CVarCompositionStages(
-	TEXT("elysium.CompositionStages"), 1,
-	TEXT("1 = apply VtMB split inheritance + axis interpolation over the blended pose (CAP7.2), ")
-	TEXT("0 = ordinary Unreal hierarchy composition only."),
-	ECVF_Default);
-
-void FElysiumNpcAnimProxy::EvaluateComposition(FPoseContext& Output)
-{
-	const bool bStages = AxisInterp.HasWork()
-		&& CVarCompositionStages.GetValueOnAnyThread() != 0;
-	if (!bStages && !Cloth.HasWork())
-	{
-		return;
-	}
-
-	// Retail's slot: the locals are decoded and blended, the hierarchy composes, then these run,
-	// then skinning.
-	//
-	// Axis interpolation is the ONLY rule that belongs here, and the reason is a property rather
-	// than a convention: a driven bone reads its control bone's LIVE orientation, so it has no
-	// value at all until there is a finished pose to read one from and no offline pass can produce
-	// one. Every other VtMB rule names a value the file carries somewhere and is resolved by the
-	// bake instead (repo-root `CLAUDE.md`, "Poses are baked native").
-	// Copied in, not moved: the conversion back writes *into* Output.Pose and addresses it by bone
-	// index, so it has to still be a sized pose when we get there. Moving it out leaves it empty and
-	// the first write indexes an array of size zero.
-	FComponentSpacePoseContext Composed(this);
-	Composed.Pose.InitPose(Output.Pose);
-
-	if (bStages)
-	{
-		AxisInterp.Apply(Composed);
-	}
-	// Last, over the finished skeleton. The garment is synthesised geometry hanging off the pelvis
-	// and shares no bone with either stage above, but it should still swing from the pose that will
-	// actually be drawn rather than one still missing its corrections.
-	Cloth.Apply(Composed);
-
-	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have
-	// been asked for in component space, and the plain conversion ensures against exactly that.
-	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPosesSafe(Composed.Pose, Output.Pose);
-}
-
 bool FElysiumNpcAnimProxy::Evaluate(FPoseContext& Output)
 {
 	EvaluateBody(Output);
 	EvaluateLayers(Output);
-	EvaluateComposition(Output);
-
-	// The face is written last, over whatever the body produced — including the ref pose a body
-	// with no clip falls back to, so a facial-only preview still moves. VtMB's clips carry no curves
-	// at all, so nothing is being overwritten here; these names exist only because 12.3 puts them
-	// there. The curves reach the component's morph weights through the skeleton's morph-target
-	// curve metadata (`ElysiumNpcVisual::RegisterMorphTargetCurves`), and every morph is written
-	// every frame — including the zeros, which is what releases a controller that went back to rest.
-	const int32 Num = FMath::Min(FacialCurves.Num(), FacialWeights.Num());
-	for (int32 i = 0; i < Num; ++i)
-	{
-		Output.Curve.Set(FacialCurves[i], FacialWeights[i]);
-		Output.Curve.SetFlags(FacialCurves[i], UE::Anim::ECurveElementFlags::MorphTarget);
-	}
+	// The composition stages and the face, shared with every other body.
+	EvaluateTail(Output);
 	return true;
 }
 
-void FElysiumNpcAnimProxy::SetFacialTrack(TArray<FName>&& InCurves)
-{
-	FacialCurves = MoveTemp(InCurves);
-	FacialWeights.Reset(FacialCurves.Num());
-	FacialWeights.AddZeroed(FacialCurves.Num());
-}
-
-void FElysiumNpcAnimProxy::SetFacialWeights(TArrayView<const float> InWeights)
-{
-	const int32 Num = FMath::Min(FacialWeights.Num(), InWeights.Num());
-	for (int32 i = 0; i < Num; ++i)
-	{
-		FacialWeights[i] = InWeights[i];
-	}
-}
-
-void FElysiumNpcAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig)
-{
-	AxisInterp.SetRig(MoveTemp(InRig));
-	// A rig installed before the component has ever cached bones resolves on the first evaluate;
-	// one installed after re-resolves here, because the bone container is already valid.
-	if (const FBoneContainer& Container = GetRequiredBones(); Container.IsValid())
-	{
-		AxisInterp.ResolveBones(Container);
-	}
-}
-
-void FElysiumNpcAnimProxy::SetClothRig(TSharedPtr<const FElysiumClothRig> InRig)
-{
-	Cloth.SetRig(MoveTemp(InRig));
-	// Same rule as the composition rig, and the same reason: installed before the first CacheBones
-	// this resolves there, installed after it has to rebuild against the container already in force.
-	// The chains are torn down by SetRig, so this is a construction rather than a re-resolve.
-	if (const FBoneContainer& Container = GetRequiredBones(); Container.IsValid())
-	{
-		FAnimationCacheBonesContext Context(this);
-		Cloth.CacheBones(Context);
-	}
-}
 
 void UElysiumNpcAnimInstance::PlayClip(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
 {
@@ -1017,194 +892,22 @@ void UElysiumNpcAnimInstance::ResyncClip(float PositionSeconds)
 	GetProxyOnGameThread<FElysiumNpcAnimProxy>().ResyncPosition(PositionSeconds);
 }
 
-void UElysiumNpcAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig)
-{
-	FacialRig = MoveTemp(InRig);
-	ControllerValues.Reset();
-	FlexWeights.Reset();
-	MorphWeights.Reset();
-	MouthOpen = 0.f;
 
-	TArray<FName> Curves;
-	if (FacialRig.IsValid())
-	{
-		ControllerValues.AddZeroed(FacialRig->Controllers.Num());
-		Curves.Reserve(FacialRig->Morphs.Num());
-		for (const FElysiumFlexMorph& Morph : FacialRig->Morphs)
-		{
-			Curves.Add(Morph.Curve);
-		}
-	}
-	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetFacialTrack(MoveTemp(Curves));
-	// Publish the rest pose immediately: with every controller at zero the rules resolve each lid to
-	// its own hinge, so every morph target lands at exactly zero and the face is the authored mesh.
-	EvaluateFacial();
-}
-
-void UElysiumNpcAnimInstance::SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig)
+bool UElysiumNpcAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
 {
-	CompositionRig = MoveTemp(InRig);
-	// The state a body starts in, before any clip has been requested — a body posing its ref pose
-	// with no clip must not have the rule applied either. `PlayClip` refines it per clip.
-	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
-	// reading the rig this replaces.
-	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetCompositionRig(CompositionRig);
-}
-
-int32 UElysiumNpcAnimInstance::GetResolvedAxisInterpRules() const
-{
-	return const_cast<UElysiumNpcAnimInstance*>(this)
-		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().NumAxisInterpRules();
-}
-
-void UElysiumNpcAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
-{
-	Super::NativeUpdateAnimation(DeltaSeconds);
-	// Skipped entirely for the overwhelming majority of bodies, which carry no garment rig at all.
-	if (ClothRig.IsValid())
-	{
-		GetProxyOnGameThread<FElysiumNpcAnimProxy>().PreUpdateCloth(this);
-	}
-}
-
-void UElysiumNpcAnimInstance::SetClothRig(TSharedPtr<const FElysiumClothRig> InRig)
-{
-	ClothRig = MoveTemp(InRig);
-	// Same guarantee as the composition rig: GetProxyOnGameThread blocks on any in-flight parallel
-	// evaluation, so no worker can be simulating against the chains this replaces.
-	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetClothRig(ClothRig);
-}
-
-void UElysiumNpcAnimInstance::SetClothTuning(const FElysiumClothTuning& InTuning)
-{
-	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetClothTuning(InTuning);
-}
-
-FElysiumClothTuning UElysiumNpcAnimInstance::GetClothTuning() const
-{
-	return const_cast<UElysiumNpcAnimInstance*>(this)
-		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().GetClothTuning();
-}
-
-int32 UElysiumNpcAnimInstance::GetResolvedClothChains() const
-{
-	return const_cast<UElysiumNpcAnimInstance*>(this)
-		->GetProxyOnGameThread<FElysiumNpcAnimProxy>().NumClothChains();
-}
-
-bool UElysiumNpcAnimInstance::SetFlexController(const FString& Name, float Value)
-{
-	const int32 Index = FacialRig.IsValid() ? FacialRig->FindController(Name) : INDEX_NONE;
-	return Index != INDEX_NONE && SetFlexControllerByIndex(Index, Value);
-}
-
-bool UElysiumNpcAnimInstance::SetFlexControllerByIndex(int32 Index, float Value)
-{
-	if (!FacialRig.IsValid() || !ControllerValues.IsValidIndex(Index))
+	// The shared seam, answered over the crossfade pool: this instance IS a clip player, so a
+	// one-shot is an ordinary request rather than something layered over a base pose.
+	if (Sequence == nullptr)
 	{
 		return false;
 	}
-	const float Normalized = FacialRig->Controllers[Index].Normalize(Value);
-	if (ControllerValues[Index] != Normalized)
-	{
-		ControllerValues[Index] = Normalized;
-		EvaluateFacial();
-	}
+	PlayClip(Sequence, bLoop, BlendSeconds);
 	return true;
 }
 
-int32 UElysiumNpcAnimInstance::SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes,
-	TArray<FString>* OutMissing)
+void UElysiumNpcAnimInstance::StopOneShot(float /*BlendSeconds*/)
 {
-	if (!FacialRig.IsValid())
-	{
-		return INDEX_NONE;
-	}
-	int32 Applied = 0;
-	bool bChanged = false;
-	for (const FElysiumFlexWrite& Write : Writes)
-	{
-		const int32 Index = FacialRig->FindController(Write.Name);
-		if (!ControllerValues.IsValidIndex(Index))
-		{
-			// A key this model does not carry. Reported, never guessed at: the 249 shipped tables draw
-			// on 48 distinct key names and no single rig carries all of them.
-			if (OutMissing != nullptr)
-			{
-				OutMissing->AddUnique(Write.Name);
-			}
-			continue;
-		}
-		++Applied;
-		const float Normalized = FacialRig->Controllers[Index].Normalize(Write.Value);
-		if (ControllerValues[Index] != Normalized)
-		{
-			ControllerValues[Index] = Normalized;
-			bChanged = true;
-		}
-	}
-	if (bChanged)
-	{
-		EvaluateFacial();
-	}
-	return Applied;
-}
-
-void UElysiumNpcAnimInstance::ResetFlexControllers()
-{
-	if (ControllerValues.IsEmpty() && MouthOpen == 0.f)
-	{
-		return;
-	}
-	FMemory::Memzero(ControllerValues.GetData(), ControllerValues.Num() * sizeof(float));
-	MouthOpen = 0.f;
-	EvaluateFacial();
-}
-
-bool UElysiumNpcAnimInstance::HasMouth() const
-{
-	return FacialRig.IsValid() && FacialRig->Mouth.IsValid();
-}
-
-bool UElysiumNpcAnimInstance::SetMouthOpen(float Open)
-{
-	if (!HasMouth())
-	{
-		return false;
-	}
-	const float Clamped = FMath::Clamp(Open, 0.f, 1.f);
-	if (MouthOpen != Clamped)
-	{
-		MouthOpen = Clamped;
-		EvaluateFacial();
-	}
-	return true;
-}
-
-bool UElysiumNpcAnimInstance::SetEyeInput(const FElysiumEyeInput& Eyes)
-{
-	if (!FacialRig.IsValid())
-	{
-		return false;
-	}
-	EyeInput = Eyes;
-	EvaluateFacial();
-	return true;
-}
-
-void UElysiumNpcAnimInstance::EvaluateFacial()
-{
-	if (!FacialRig.IsValid())
-	{
-		return;
-	}
-	FElysiumJawInput Jaw;
-	Jaw.Open = MouthOpen;
-	// Read here rather than latched at the write, so toggling the cvar takes on the next evaluation
-	// of any kind instead of waiting for the next jaw write.
-	Jaw.bBridge = CVarFacialJawBridge.GetValueOnGameThread() != 0;
-	FacialRig->Evaluate(ControllerValues, Jaw, EyeInput, FlexWeights, MorphWeights);
-	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
-	// reading the weight array this overwrites.
-	GetProxyOnGameThread<FElysiumNpcAnimProxy>().SetFacialWeights(MorphWeights);
+	// No blend out: `Stop` clears the pool, which is what dropping the body's only clip means here.
+	// A caller wanting a ramp plays the pose it wants to end on.
+	StopClip();
 }

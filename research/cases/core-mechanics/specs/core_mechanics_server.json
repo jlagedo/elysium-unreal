@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "topic": "core-mechanics-server",
+  "consuming_documents": [
+    "docs/vtmb/skills-and-checks.md",
+    "docs/vtmb/combat-and-damage.md",
+    "docs/vtmb/gameplay-verbs.md"
+  ],
+  "research_id": "RE40",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which exact player and weapon predicates gate primary attack and reload before an attack record is produced?",
+    "Beyond the identified record accessors and reaction or AI consumers, which function turns melee lethality, defense and soak into CVDmg_t committed damage?",
+    "How does weapon SkillRequirement affect attacker adjustment, eligibility or presentation, and is it independent of BaseLethality at every consumer?",
+    "Which factors compose the ranged post-trace multiplier beyond the confirmed volley share, and in what order are hitgroup modifiers applied?",
+    "Where does CVDmg_t word 15 become a numerical post-soak modifier, including item DmgModifier and NPC DamageFilter fields?",
+    "What are the remaining special immunity, relationship and secondary-effect predicates in CVDmg_t::Apply?",
+    "What parser behavior handles the authored DMG_FIST token when it is absent from the recovered flag table?",
+    "Which OnTakeDamage_Alive prefilter owns its mutable verdict and where are all float-to-integer boundaries?",
+    "What exact activity codes and predicates control resisted feeding, stealth override, interruption and completion?",
+    "How do discipline selection, targeting, blood cost, cooldown, zone legality and active-effect transitions connect to player commands?"
+  ],
+  "functions": [
+    {"address": "101e56e0", "label": "FeatValue", "confidence": "scope string and body evidence", "role": "derive a feat rating from current traits and effects", "depth": 2, "cap": 180},
+    {"address": "101d88b0", "label": "DiceRollConstructor", "confidence": "verified RE5", "role": "construct a roll from pool weighting difficulty and free successes", "depth": 2, "cap": 160},
+    {"address": "101d8b40", "label": "DiceRollResolve", "confidence": "verified RE5", "role": "resolve data-weighted d10 successes botches and tier", "depth": 2, "cap": 220},
+    {"address": "10168910", "label": "PlayerFeedAttempt", "confidence": "body and diagnostic strings", "role": "target eligibility automatic success and resisted feeding check", "depth": 3, "cap": 240},
+    {"address": "101fb000", "label": "CVDmgParse", "confidence": "scope string", "role": "parse authored Dmg text into the 17-word descriptor", "depth": 3, "cap": 240},
+    {"address": "101fb180", "label": "CVDmgSetApplyCallback", "confidence": "scope string", "role": "install game-specific damage apply callback", "depth": 2, "cap": 100},
+    {"address": "101fb200", "label": "CVDmgApply", "confidence": "scope string", "role": "dispatch descriptor to installed apply callback", "depth": 2, "cap": 120},
+    {"address": "101fb2c0", "label": "CVDmgSetEvadeCallback", "confidence": "callback xref", "role": "install generic evade callback", "depth": 2, "cap": 100},
+    {"address": "101fb340", "label": "CVDmgEvadeCheck", "confidence": "scope string", "role": "dispatch descriptor evade callback", "depth": 2, "cap": 120},
+    {"address": "10230320", "label": "InstallDamageCallbacks", "confidence": "verified callsites", "role": "register Apply and EvadeCheck callbacks at startup", "depth": 3, "cap": 180},
+    {"address": "10230220", "label": "GenericEvadeCallback", "confidence": "body evidence", "role": "installed zero-return evade callback", "depth": 1, "cap": 60},
+    {"address": "1022f640", "label": "DamageApplyResolver", "confidence": "diagnostic strings and body evidence", "role": "damage roll automatic successes soak filters and final descriptor result", "depth": 3, "cap": 280},
+    {"address": "1022f4f0", "label": "SoakResolver", "confidence": "verified callee", "role": "select and roll mortal or Kindred soak feat", "depth": 3, "cap": 180},
+    {"address": "101e8430", "label": "SelectSoakFeat", "confidence": "verified callee", "role": "map damage family creature type and falling flag to feat id", "depth": 2, "cap": 120},
+    {"address": "101e8ec0", "label": "SoakDifficulty", "confidence": "verified callee", "role": "select player or NPC soak difficulty", "depth": 2, "cap": 80},
+    {"address": "101e8ef0", "label": "DefenseDifficulty", "confidence": "verified ranged and melee callee", "role": "select player or NPC defense difficulty", "depth": 2, "cap": 80},
+    {"address": "10259230", "label": "WeaponModeDataLoader", "confidence": "SkillRequirement string xref", "role": "load BaseLethality SkillRequirement Dmg and adjacent weapon-mode data", "depth": 2, "cap": 260},
+    {"address": "10258270", "label": "WeaponBaseLethality", "confidence": "verified field accessor", "role": "read BaseLethality at weapon-mode offset 0x3f8", "depth": 2, "cap": 80},
+    {"address": "10258230", "label": "WeaponLethalityAdjustment", "confidence": "body evidence", "role": "apply active Dmg attack feat reference to attacker and optional override", "depth": 3, "cap": 180},
+    {"address": "10258290", "label": "WeaponTotalLethality", "confidence": "diagnostic string and body evidence", "role": "sum BaseLethality and attacker adjustment with zero floor", "depth": 2, "cap": 120},
+    {"address": "10268330", "label": "RangedDamagePerVictim", "confidence": "diagnostic strings and caller join", "role": "ranged lethality defense trace multiplier and direct damage path", "depth": 3, "cap": 300},
+    {"address": "10268900", "label": "RangedVolley", "confidence": "verified caller", "role": "group ray hits by victim and pass volley share", "depth": 3, "cap": 260},
+    {"address": "101eec30", "label": "RangedStoredImpact", "confidence": "verified caller", "role": "alternate projectile or stored-impact path into ranged damage", "depth": 3, "cap": 240},
+    {"address": "10346380", "label": "MeleeCalcAndStore", "confidence": "scope string and body evidence", "role": "store attacker lethality defender defense and soak in melee result record", "depth": 3, "cap": 260},
+    {"address": "10346910", "label": "MeleeRollA", "confidence": "scope string and body evidence", "role": "invoke melee result calculation and defender reaction virtual", "depth": 3, "cap": 200},
+    {"address": "10349710", "label": "MeleeAddBonusSoakRolls", "confidence": "scope string", "role": "add bonus soak results to melee record", "depth": 3, "cap": 200},
+    {"address": "10345980", "label": "MeleeResultLookup", "confidence": "scope string and body evidence", "role": "find the defender-side melee result record keyed by attacker", "depth": 2, "cap": 140},
+    {"address": "10345de0", "label": "MeleeAttackSuccessAccessor", "confidence": "scope string and body evidence", "role": "return stored melee record word 1 for an attacker", "depth": 2, "cap": 140},
+    {"address": "103498b0", "label": "MeleeReactionClassifier", "confidence": "body evidence and custom NPC callers", "role": "classify a rounded melee margin against four reaction thresholds", "depth": 2, "cap": 100},
+    {"address": "1032ef60", "label": "CombatCharacterOnTakeDamage", "confidence": "scope string", "role": "route damage by alive dying or dead life state", "depth": 3, "cap": 260},
+    {"address": "103302e0", "label": "CombatCharacterOnTakeDamageAlive", "confidence": "scope string and body evidence", "role": "apply descriptor blood shield health aggravated and frenzy policy", "depth": 3, "cap": 320},
+    {"address": "1032fe60", "label": "HealthToPercent", "confidence": "verified body", "role": "project sheet damage counter onto Source health", "depth": 2, "cap": 120}
+  ],
+  "field_probes": [
+    {"displacement": "3f8", "label": "weapon_mode_base_lethality"},
+    {"displacement": "3fc", "label": "weapon_mode_skill_requirement"},
+    {"displacement": "a88", "label": "combat_character_melee_result_array"},
+    {"displacement": "a94", "label": "combat_character_melee_result_count"},
+    {"displacement": "e98", "label": "combat_character_last_damage_flags"},
+    {"displacement": "fc8", "label": "combat_character_unkillable"},
+    {"displacement": "13bc", "label": "combat_character_stat_list_count"},
+    {"displacement": "13c0", "label": "combat_character_stat_list_array"},
+    {"displacement": "19a4", "label": "combat_character_active_weapon_handle"}
+  ],
+  "grep_probes": [
+    {
+      "label": "damage_descriptor_and_rolls",
+      "str": "CVDmg_t::Parse~CVDmg_t::Apply~CVDmg_t::EvadeCheck~Remaining~Lethality~Rolling~Soak~Defense~Final~damage",
+      "fn": "OnTakeDamage~OnTakeDamage_Alive~MeleeRollA~CalcAndStore~AddBonusSoakRolls",
+      "cap": 320
+    },
+    {
+      "label": "damage_flags_and_weapon_fields",
+      "str": "BaseLethality~SkillRequirement~DMG_CLUB~DMG_SLASH~DMG_BULLET~DMG_BUCKSHOT~DMG_CLAWBITE~DMG_BURN~DMG_FAITH~DMG_SUNLIGHT~DMG_SUPERCLAWBITE",
+      "fn": "Parse~Lethality~Damage",
+      "cap": 280
+    },
+    {
+      "label": "feeding_and_check_policy",
+      "str": "Feed~attempt~CalcFeat~Defensive_Maneuvers~Automatic_Str_Successes~Automatic_Soak_Successes",
+      "fn": "Feed~FeatValue~Roll",
+      "cap": 260
+    }
+  ],
+  "relationships": [
+    {"from": "10230320", "to": "101fb180", "confidence": "verified", "evidence": "startup installs the Apply callback"},
+    {"from": "10230320", "to": "101fb2c0", "confidence": "verified", "evidence": "startup installs the EvadeCheck callback"},
+    {"from": "101fb200", "to": "1022f640", "confidence": "verified", "evidence": "registered Apply thunk reaches the game-specific resolver"},
+    {"from": "1022f640", "to": "1022f4f0", "confidence": "verified", "evidence": "common apply selects forced soak or invokes the soak resolver"},
+    {"from": "10258290", "to": "10258270", "confidence": "verified", "evidence": "total lethality reads BaseLethality"},
+    {"from": "10268330", "to": "10258290", "confidence": "verified", "evidence": "ranged per-victim path computes total weapon lethality"},
+    {"from": "10346910", "to": "10346380", "confidence": "verified", "evidence": "MeleeRollA calculates and stores the attack record"},
+    {"from": "103302e0", "to": "101fb200", "confidence": "verified", "evidence": "alive damage commit invokes CVDmg_t::Apply when a descriptor exists"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "CalcFeat returns a deterministic feat rating; consumers independently choose threshold comparison, dice roll, opposed comparison and outcome thresholds.",
+      "evidence": "FeatValue 0x101e56e0 returns the effect-adjusted integer. Dialogue compares it directly; lockables roll Intrusion or Hacking; feeding compares attacker Brawl rating to victim Hacking net successes; combat rolls defense and soak.",
+      "consequence": "The remake needs separate rating, roll and consumer-verdict APIs."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CVDmg_t is a 17-word descriptor parsed from item Dmg text and extended with damage family, base/applied/direct values, Source flags, trait references, source handle, forced soak, filter state and resolver flags.",
+      "evidence": "CVDmg_t::Parse 0x101fb000, 0x44-byte copies in ranged and melee paths, GetDmg and the apply resolver agree on word offsets.",
+      "consequence": "A scalar damage value cannot preserve retail attack and health policy."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The generic apply path rolls damage at difficulty 6 unless resolver flag 0x8 supplies direct input, then adds automatic strength success where applicable and resolves soak separately.",
+      "evidence": "DamageApplyResolver 0x1022f640 constructs the damage roll, reads Automatic_Str_Successes, reads Automatic_Soak_Successes and calls SoakResolver 0x1022f4f0 unless the Source damage bypass mask applies.",
+      "consequence": "Direct ranged damage bypasses the damage roll but does not by itself bypass soak."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Ranged damage uses max(BaseLethality plus attacker adjustment, zero), subtracts a Kindred victim defense roll, and computes direct damage as remaining lethality times BaseDamage times an accumulated trace multiplier.",
+      "evidence": "WeaponTotalLethality 0x10258290, RangedDamagePerVictim 0x10268330 and its debug strings/assembly close the factors; Volley 0x10268900 supplies hit share.",
+      "consequence": "SkillRequirement and the multiplier decomposition remain separate open joins."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Melee staging stores attacker handle, total lethality, defender defense successes and defender soak successes in a 16-byte defender-side record keyed by attacker.",
+      "evidence": "MeleeCalcAndStore 0x10346380 writes four consecutive words; GetMeleeDiceRolls 0x10345980 searches the +0xa88 array using count +0xa94; GetNumAttackSuccesses 0x10345de0 returns word 1; custom NPC RunTask handlers use the lookup and classifier 0x103498b0 for attack-task decisions.",
+      "consequence": "Record lookup and reaction or AI consumption are closed, but the downstream committed-damage consumer must be found before implementing the melee formula."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "OnTakeDamage_Alive applies HealthBuffer first, caps an unkillable character's Health damage counter at the literal 75, adds remaining damage to Health, and tracks designated Kindred damage in Health_Aggravated_Dmg.",
+      "evidence": "CombatCharacterOnTakeDamageAlive 0x103302e0 reads attribute slots 25, 15 and 16 and tests the unkillable byte at +0xfc8 before AddBase.",
+      "consequence": "Retail unkillable is not a generic one-HP floor; with default Max_Health 100 it leaves 25."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The installed CVDmg_t evade callback is inert; defense is rolled in attack-specific ranged and melee paths.",
+      "evidence": "InstallDamageCallbacks 0x10230320 installs 0x10230220, which always returns zero, while 0x10268330 and 0x10346380 explicitly roll feat id 12.",
+      "consequence": "Defense cannot be implemented as an unconditional generic damage-descriptor callback."
+    }
+  ]
+}

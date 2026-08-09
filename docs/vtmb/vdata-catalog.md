@@ -162,7 +162,7 @@ places start disabled, so enable state is behavioral data rather than an editor-
 |---|---|---|---|
 | `items/` | 244 | `WeaponData` | per-weapon/armor stats (view/world models, damage, `Magazine`, worth, `sound_group`) — "loaded by both Game and Client DLLs" |
 | `camerashots/` | 66 | `CameraShotTable` | per-scene conversation/cutscene camera framing (keyed by NPC/scene name) |
-| `hackterminals/` | 57 | `TerminalDefinition` (+ `keypad_strings`) | hacking-minigame computer content |
+| `hackterminals/` | 57 | `TerminalDefinition` (+ `keypad_strings`) | computer content; grammar and behavior: `docs/vtmb/computer-terminals.md` |
 | `precache/` | 1 | `PreCacheData` | `entities.txt` — entity precache list |
 | `signs/` | 278 | `SignData` | sign/popup panels — **already imported** via `UE_extract_signs.py` → `$ELYSIUM_EXPORT_ROOT/signs/` |
 

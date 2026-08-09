@@ -15,9 +15,14 @@ namespace ElysiumSkeletalBasis
 		return FRotator(0.0f, ModelYawOffset - SourceAngles.Y, 0.0f);
 	}
 
-	inline FRotator RelativeToPawn()
+	// A body parented under an actor that already carries the facing yaw takes NO offset: the model's
+	// authored forward is its component's own +X, and the offset above belongs to a placement whose
+	// component rotation *is* its world rotation. Every `AElysiumNpcBody::CharacterMesh0` sits at
+	// identity for this reason, with the yaw on the character actor; the pawn-attached player surface
+	// is the same case, because `AElysiumPawn` sets `bUseControllerRotationYaw`.
+	inline FRotator RelativeToParentFacing()
 	{
-		return FRotator(0.0f, ModelYawOffset, 0.0f);
+		return FRotator::ZeroRotator;
 	}
 
 	inline FRotator FromUnrealYaw(float UnrealYaw)

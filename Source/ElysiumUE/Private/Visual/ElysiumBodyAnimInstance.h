@@ -1,0 +1,210 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimInstanceProxy.h"
+#include "Visual/ElysiumAnimNodes.h"
+// By value: the eye input is a member, so the rig's own header rather than a forward declaration.
+#include "Visual/ElysiumFacialRig.h"
+
+#include "ElysiumBodyAnimInstance.generated.h"
+
+class UAnimSequence;
+struct FElysiumClothRig;
+struct FElysiumCompositionRig;
+
+// Everything a VtMB body wears over whatever produced its pose — and nothing about how the pose
+// was produced.
+//
+// Two instances answer this contract and they differ only above it: the cast composes its own pose
+// out of sequence players, while the player's comes out of a compiled anim graph. The tail is the
+// same either way — VtMB's one composition stage, the garment simulation, and the face's
+// morph-target curves — so it lives here once. A body that carried the tail on only one of the two
+// would ship frozen eyes and untwisted forearms, and neither the log nor the Content Browser
+// preview can show that.
+
+USTRUCT()
+struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
+{
+	GENERATED_BODY()
+
+	FElysiumBodyAnimProxy() = default;
+	explicit FElysiumBodyAnimProxy(UAnimInstance* Instance) : FAnimInstanceProxy(Instance) {}
+
+	// Walks a compiled graph's nodes if there is one, then resolves the tail's bone references —
+	// both stages resolve their indices here, once, and never by name per evaluation. The base call
+	// is free on the native path: it is guarded on `RootNode`, which is null when there is no graph.
+	// A derived proxy that owns nodes of its own caches them here too, through `Super::CacheBones`.
+	virtual void CacheBones() override;
+
+	// The cloth chains' game-thread pass, driven from the anim instance rather than through
+	// `GetCustomNodes`: that registration is gathered during InitializeAnimation, before any rig
+	// exists, and holds raw pointers into an array `SetClothRig` reallocates.
+	void PreUpdateCloth(const UAnimInstance* Instance);
+
+	// VtMB's one composition stage (CAP7.2); null clears it.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
+	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
+
+	// The garment spike's rig; null clears it. Independent of the composition stage — a model can
+	// carry either, both or neither, and nearly every model carries none of this one.
+	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
+	int32 NumClothChains() const { return Cloth.NumChains(); }
+	void SetClothTuning(const FElysiumClothTuning& InTuning) { Cloth.SetTuning(InTuning); }
+	const FElysiumClothTuning& GetClothTuning() const { return Cloth.GetTuning(); }
+
+	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
+	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
+	// parallel arrays in the rig's own morph order — a name list that changes only when the body's
+	// model does, and weights that change whenever a flex controller is written.
+	void SetFacialTrack(TArray<FName>&& InCurves);
+	void SetFacialWeights(TArrayView<const float> InWeights);
+
+protected:
+	// The tail, over whatever produced the pose. Order is load-bearing: the composition stages
+	// first, then the face's curves over whatever the body ended up in.
+	void EvaluateTail(FPoseContext& Output);
+
+	// The cloth node's own timestep. It runs ahead of anything else a derived proxy updates and
+	// outside any "is a clip playing" gate, because a body standing in its reference pose still has
+	// a garment that has to fall.
+	void UpdateCloth(const FAnimationUpdateContext& InContext) { Cloth.Update(InContext); }
+
+private:
+	// Split inheritance, then axis interpolation, in component space over whatever the body
+	// produced. Order is load-bearing — see the definition.
+	void EvaluateComposition(FPoseContext& Output);
+
+	TArray<FName> FacialCurves;
+	TArray<float> FacialWeights;
+
+	// Plain members rather than graph nodes: the post-process slot is the tail of Evaluate, so both
+	// are driven through `ResolveBones`/`CacheBones` + `Apply` rather than through pose links.
+	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
+	// The garment spike, evaluated after it so the simulation sees the finished skeleton.
+	UPROPERTY(Transient) FAnimNode_ElysiumCloth Cloth;
+};
+
+UCLASS(Transient, Abstract)
+class UElysiumBodyAnimInstance : public UAnimInstance
+{
+	GENERATED_BODY()
+
+public:
+	// The transition duration a clip gets when its own authored value is not known. VtMB stores one
+	// per sequence in `mstudioseqdesc_t` at +0x264 and combines a pair as `max(outgoing, incoming)`;
+	// across 5,836 shipped sequences 5,762 carry 0.2, with 0.3 on a handful of dialogue clips and
+	// 0.5 on the lying-down and damaged stance idles. So this default IS the shipped value for
+	// 98.7% of the vocabulary.
+	static constexpr float DefaultBlendSeconds = 0.2f;
+
+	// --- the one-shot seam ----------------------------------------------------------------------
+	//
+	// Play one clip over whatever owns the base pose. The two instances answer it differently — the
+	// cast routes it through its own crossfade pool, a graph-backed body plays it on a montage slot
+	// — and a caller holding an `IElysiumEmbodiment` body has no way to know which it has, so the
+	// question is answered here rather than at every call site.
+	//
+	// False when this instance cannot play the clip at all, which is an ordinary answer: a body
+	// whose visual has no vocabulary is not an error.
+	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds) { return false; }
+	virtual void StopOneShot(float BlendSeconds) {}
+
+	// --- the facial flex track (roadmap 12.3) ------------------------------------------------
+	//
+	// Install the body's flex rig (null for a model with no facial sidecar, which is an ordinary
+	// load — most animals, crowd bodies and every player body carry no flex data at all). Every
+	// controller starts at rest, which puts every morph target at exactly zero weight.
+	void SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig);
+	const FElysiumFacialRig* GetFacialRig() const { return FacialRig.Get(); }
+
+	// Flex controllers are the only writable facial state; the flexdesc weights and morph weights
+	// below them are arithmetic, re-derived on every write. Names are the rig's own (`blink`,
+	// `jaw_drop`, `right_lid_droop`), matched case-insensitively; false when this rig has no such
+	// controller. 12.1's scene expression tracks and 12.5's lipsync both land here.
+	bool SetFlexController(const FString& Name, float Value);
+	bool SetFlexControllerByIndex(int32 Index, float Value);
+	// A whole set of named writes, evaluated once rather than once per controller — an expression row
+	// touches up to 44 of them at a time. Purely additive: a controller the set does not name keeps
+	// its value. Returns the number that landed, INDEX_NONE when there is no rig here; names this rig
+	// does not carry are appended to OutMissing rather than dropped.
+	int32 SetFlexControllers(TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing = nullptr);
+	// Back to rest — every controller at zero, the jaw closed, every morph target off.
+	void ResetFlexControllers();
+
+	// --- the amplitude jaw (roadmap 12.5) ----------------------------------------------------
+	//
+	// The face's second input, and deliberately not a controller: `mstudiomouth_t` names a FLEXDESC,
+	// so this write lands *downstream* of the rule layer that every controller feeds. 0 is a closed
+	// mouth and 1 the line's own peak. False when this body carries no rig or no mouth record — the
+	// majority of the cast — which is an ordinary no-op. Precedence against the rules, and why the
+	// value alone moves nothing on the shipped models: `Visual/ElysiumFacialRig.h`.
+	bool SetMouthOpen(float Open);
+	float GetMouthOpen() const { return MouthOpen; }
+	bool HasMouth() const;
+
+	// --- the eyes (12.4) -----------------------------------------------------------------------
+	//
+	// The face's third input. Written once per frame by `UElysiumEntityBodies::TickEyes`, which is
+	// the only thing that has both the settled bone transforms the aim is built from and the gaze
+	// target it is aimed at. Everything below it is arithmetic replayed from the rig, so this
+	// write is what re-evaluates the face — the same contract every controller write has.
+	//
+	// False when this body carries no rig, which is an ordinary no-op: a model with eyeballs and no
+	// flex data still aims its irises, it just has no flexdesc for the lids to land on.
+	bool SetEyeInput(const FElysiumEyeInput& Eyes);
+	const FElysiumEyeInput& GetEyeInput() const { return EyeInput; }
+
+	// --- the two composition stages (roadmap CAP7.2) -----------------------------------------
+	//
+	// Install the body's composition rig — the `ProcType == 1` rule table. Null for a model that
+	// declares none, which is an ordinary load: the body then poses under Unreal's own hierarchy
+	// composition alone. The stage runs in the proxy's evaluate, after the pose has been produced
+	// and before skinning.
+	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
+	const FElysiumCompositionRig* GetCompositionRig() const { return CompositionRig.Get(); }
+	// How many rules resolved against this body's actual skeleton — the number the debug surface
+	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
+	int32 GetResolvedAxisInterpRules() const;
+
+	// Install the garment spike's rig (`npc/cloth/<stem>.json`). Null for every model the spike did
+	// not build, which is an ordinary load: the body then wears its faithful mesh and simulates
+	// nothing. Independent of the composition rig above — a model may carry either, both or neither.
+	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
+	const FElysiumClothRig* GetClothRig() const { return ClothRig.Get(); }
+	// The live edit sitting over that rig — what the green-room lab's sliders write, and what a
+	// freshly installed rig resets to its own authored values. Same game-thread door as SetClothRig:
+	// the proxy accessor blocks on any in-flight parallel evaluation first.
+	void SetClothTuning(const FElysiumClothTuning& InTuning);
+	FElysiumClothTuning GetClothTuning() const;
+	// How many chains were built against this body's actual skeleton — what distinguishes "no rig"
+	// from "a rig whose lattice bones this skeleton lacks", which is what wearing the faithful mesh
+	// with the enhanced sidecar would look like.
+	int32 GetResolvedClothChains() const;
+
+	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
+	// rules produced from them, and the ramped weight each morph target is driven at.
+	const TArray<float>& GetFlexControllerValues() const { return ControllerValues; }
+	const TArray<float>& GetFlexWeights() const { return FlexWeights; }
+	const TArray<float>& GetMorphWeights() const { return MorphWeights; }
+
+protected:
+	// The cloth chains' game-thread pass. Runs here rather than through the proxy's node
+	// registration, which is gathered before any rig is installed (`FAnimNode_ElysiumCloth`).
+	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+
+private:
+	// Run the three layers and publish the result to the proxy. Called on every controller write
+	// rather than every frame: nothing below a controller changes on its own.
+	void EvaluateFacial();
+
+	TSharedPtr<const FElysiumFacialRig> FacialRig;
+	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
+	TSharedPtr<const FElysiumClothRig> ClothRig;
+	float MouthOpen = 0.f;
+	FElysiumEyeInput EyeInput;
+	TArray<float> ControllerValues;
+	TArray<float> FlexWeights;
+	TArray<float> MorphWeights;
+};

@@ -26,6 +26,8 @@
 #include "Visual/ElysiumExpressionTable.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumFacialRig.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -2845,6 +2847,137 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	Filters.Sort();
 	AddInfo(FString::Printf(TEXT("phoneme filters: %s"), *FString::Join(Filters, TEXT(", "))));
 	TestEqual(TEXT("every speaker's rig carries a phoneme filter"), FilterByStem.Num(), Speakers.Num());
+
+	return true;
+}
+
+// CCC5 — the player body's portrait stack, on the graph-backed instance.
+//
+// This is the test for the regression that logs nothing. A player body carries eyeballs and
+// axis-interpolation rules and no flex rig, and both live on the shared base rather than on the host
+// that poses it. An instance that dropped the tail would ship frozen eyes and untwisted forearms
+// while every log line stayed clean and the Content Browser preview — which runs no anim graph at
+// all — showed nothing either. The counts below are the only observable.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphInstanceTest,
+	"Elysium.Content.PlayerGraphInstance", GElysiumFacialTestFlags)
+bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		return true;
+	}
+
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error) || !Index.IsValid())
+	{
+		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		return true;
+	}
+	TArray<FString> Stems;
+	Index.Npcs.GenerateKeyArray(Stems);
+	Stems.Sort();
+
+	// A player body that actually declares procedural bones, so the resolved count is a real
+	// number rather than a vacuous zero.
+	FString Stem;
+	TSharedPtr<FElysiumCompositionRig> Rig;
+	for (const FString& Candidate : Stems)
+	{
+		if (!Candidate.Contains(TEXT("_Male_Armor_")) && !Candidate.Contains(TEXT("_Female_Armor_")))
+		{
+			continue;
+		}
+		const FElysiumNpcIndexEntry* Entry = Index.Npcs.Find(Candidate);
+		if (Entry == nullptr || Entry->Procedural.IsEmpty())
+		{
+			continue;
+		}
+		FString RigError;
+		TSharedPtr<FElysiumCompositionRig> Loaded = MakeShared<FElysiumCompositionRig>();
+		Loaded->Stem = Candidate;
+		if (Loaded->LoadAxisRules(Entry->Procedural, RigError) && Loaded->AxisRules.Num() > 0)
+		{
+			Stem = Candidate;
+			Rig = Loaded;
+			break;
+		}
+	}
+	if (Stem.IsEmpty())
+	{
+		AddInfo(TEXT("skipping: no player body declares a composition rig"));
+		return true;
+	}
+
+	UglTFRuntimeAsset* Asset = nullptr;
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error, /*bPlayerMaterial=*/true);
+	if (!TestNotNull(TEXT("the player body loads off the baked mount"), Mesh))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
+		*FElysiumContentPaths::PlayerAnimBlueprintClass());
+	if (Graph == nullptr)
+	{
+		AddWarning(TEXT("skipping: the player animation graph is not generated "
+			"(run: uv run elysium export bundle policy)"));
+		return true;
+	}
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("body owner spawned"), Owner))
+	{
+		return false;
+	}
+
+	// The recipe BuildNpcVisual uses for a player body, minus the placement.
+	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
+	Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetSkeletalMeshAsset(Mesh);
+	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Comp->SetAnimInstanceClass(Graph);
+	Owner->SetRootComponent(Comp);
+	Comp->RegisterComponent();
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Every portrait write goes through the shared base, so that is what the graph host has to be.
+	UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance());
+	if (!TestNotNull(TEXT("the graph instance answers the shared body contract"), Inst))
+	{
+		return false;
+	}
+	TestNotNull(TEXT("and it is the biped host rather than the cast's"),
+		Cast<UElysiumBipedAnimInstance>(Inst));
+
+	// The composition stage, installed the way BuildNpcVisual installs it.
+	Inst->SetCompositionRig(Rig);
+	TestTrue(TEXT("the axis-interpolation rules resolve against the player body's own skeleton"),
+		Inst->GetResolvedAxisInterpRules() > 0);
+	AddInfo(FString::Printf(TEXT("'%s': %d of %d declared rules resolved"), *Stem,
+		Inst->GetResolvedAxisInterpRules(), Rig->AxisRules.Num()));
+
+	// The eye seam — the call `TickEyes` makes once per body per frame, reached through the shared
+	// base. A player body carries no flex rig (57 of the 59 do not), so the write answers false and
+	// stores nothing: the lids have no flexdesc to land on, while the irises still aim through the
+	// material parameters `InstallEyes` bound. That no-op is the documented contract, so what this
+	// asserts is that the seam exists and answers it — a body whose host had dropped the base would
+	// not compile the call at all, and one that had silently grown a second contract would store.
+	FElysiumEyeInput Eyes;
+	Eyes.Blink = 0.5f;
+	TestFalse(TEXT("a body with no flex rig reports the eye write as the ordinary no-op"),
+		Inst->SetEyeInput(Eyes));
+	TestEqual(TEXT("and stores nothing, so no lid is driven from a rig that is not there"),
+		Inst->GetEyeInput().Blink, 0.0f);
 
 	return true;
 }

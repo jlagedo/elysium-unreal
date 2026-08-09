@@ -103,6 +103,21 @@ void AElysiumPlayerController::RegisterCommands()
 		}
 	}));
 
+	// The gamepad's crouch. It writes the same latch `+duck` does rather than carrying a stance of
+	// its own, so the mover, the animation classifier and a recorded command stream all see one
+	// crouch — a second source of truth here would be a body that is ducked in the hull and standing
+	// in the pose. Going through the builder rather than the registry means `-duck` from a keyboard
+	// still lifts it, which is what a player who uses both devices in one session expects.
+	Bindings.Add(Registry.Bind(TEXT("toggleduck"), [this](const FElysiumCommandCall&)
+	{
+		if (!Router)
+		{
+			return;
+		}
+		FElysiumUserCmdBuilder& Builder = Router->Builder();
+		Builder.SetButton(EElysiumButton::Duck, !Builder.IsDown(EElysiumButton::Duck));
+	}));
+
 	Bindings.Add(Registry.Bind(TEXT("noclip"), [this](const FElysiumCommandCall&)
 	{
 		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(GetPawn()))

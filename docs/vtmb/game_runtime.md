@@ -392,6 +392,9 @@ block sets `Max_Health` literally, in the same flat container as `Strength`…`W
 
 ### Feats — the derived-roll layer (`feats.txt`)
 
+How dialogue, lockables, feeding and combat consume a feat rating — including which paths roll
+and which only compare — is consolidated in `docs/vtmb/skills-and-checks.md`.
+
 `.dlg` skill-checks and verb rolls are **Feats**, not raw stats. A Feat sums a **variable-length
 `Base%d` list** and is read via `pc.CalcFeat("<feat>")` (case-insensitive), each naming a
 `"Normal"` dice weighting table (where `docs/recovered/dice-system.md`'s d10 resolver plugs in):
@@ -467,9 +470,12 @@ DiceRolls table array (`101D9780`, stride `0x19C`, name at `+4`, **0 on miss**),
 feats name `Normal` for both, so the miss-fallback is `Normal` too. **The rating `CalcFeat`
 returns is the pool size handed to that table**; the resolver is `recovered/dice-system.md`'s.
 
-Two more loader keys sit beside the bases and are *not* summed into the rating: `Automatic%d`
-(automatic successes — used once, `Close_Combat_Brawl`'s `"Automatic0" "Automatic_Str_Successes"`)
-and `Display2nd%d`, which **no shipped feat sets** — a dead key.
+Two more loader-key families sit beside the bases and are *not* summed into the rating.
+`Automatic%d` names automatic-success traits: `Close_Combat_Brawl` and
+`Close_Combat_Melee` both set `"Automatic0" "Automatic_Str_Successes"`. `Display2nd%d` is
+also authored on those two feats and on all eight soak feats, pointing at the corresponding
+automatic Strength or soak trait. The common damage resolver reads the current automatic traits
+separately; the exact presentation consumer of `Display2nd%d` is not yet recovered.
 
 **Open residue.** For feat ids 9–20 (the four combat feats and the eight soak feats)
 `Feats::FeatValue` consults five global object pointers — `0x1073A104` Brawl, `0x10739BDC` Melee,

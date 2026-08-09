@@ -11,6 +11,9 @@ needed: the golden-test premise (drive retail's `vroll`) was superseded when the
 face-distribution turned out to be **data-driven** by that file, readable offline. See
 "Verification" below.
 
+The resolver does not decide what counts as success for dialogue, locks, feeding or combat.
+That consumer policy is consolidated in `docs/vtmb/skills-and-checks.md`.
+
 ## Roll struct field map (recovered)
 
 The constructor `FUN_101d88b0` initialises the struct; the roller `FUN_101d8b40` consumes it.

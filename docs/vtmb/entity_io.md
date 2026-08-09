@@ -711,7 +711,8 @@ damage call — there is no threshold — and from `InputSetHealth` / `InputAddH
 `Break()` at zero. The payload is variant type 4, `FIELD_INTEGER`: the raw health value, **not**
 stock Source's 0..1 ratio.
 
-`OnTrigger0`..`OnTrigger7` are **not** in this chain. They belong to `CPropHacking`, and
+`OnTrigger0`..`OnTrigger7` are **not** in this chain. They belong to `CPropHacking`
+(`docs/vtmb/computer-terminals.md`), and
 `CSceneEntity` separately declares `OnTrigger1`..`OnTrigger4`; a wire naming one on a `prop_dynamic`
 cannot connect and is dead in retail. `SetCausesImpactDamage` is likewise a `CPhysicsProp` input
 (record `0x1058d8d8` → `FUN_10191720`, which sets spawnflag bit `0x2` on `m_spawnflags` rather than
@@ -877,6 +878,19 @@ size `0x1a38`.
 | — | `m_BCCUser` | `+0x1a28` | EHANDLE, save |
 | — | `m_hLockEnt` | `+0x1a2c` | EHANDLE of the attached `item_container_lock`, save |
 
+`equip0`…`equip11` are spawn seeds, not a twelve-item storage cap. `CItemContainer::Spawn`
+materializes every non-empty seed as a real item entity in the inherited 224-slot combat-character
+inventory. `SpawnItemInContainer` does the same for one classname; `AddEntityToContainer` resolves
+all matching targetnames and accepts only items with no current combat-character owner.
+`DeleteItems` is destructive: it removes every contained entity and clears the slots and
+active/last handles.
+
+`Use` holds one exclusive player handle. Opening selects the lower barter service's loot mode and
+shows the loot panel; closing hides it and releases the user. The server-side `vbarter` path moves
+or splits the actual item entities and fires `OnItemRemove` / `OnItemInsert` for unpriced take/give
+transfers. The shared ownership, stack, keyring, drop, ammo and barter contract is owned by
+`docs/vtmb/inventory.md`.
+
 `Lock` / `Unlock` wires aimed at a container are handled by that attached lock entity, not by the
 container. The lid is the inherited `CBaseToggle` mover, selected by `use_pref`:
 
@@ -897,31 +911,10 @@ slot to `5`.
 
 ## `prop_hacking` (`CBaseTerminal` / `CPropHacking`)
 
-`CBaseTerminal` — datamap `0x105af268`, records `0x105af2ac`, 10, builder `FUN_10217650`:
-`start_enabled` → `m_bEnabled` `+0x80c`, `textcolumns` → `m_nScreenColumns` `+0x810`, `textrows` →
-`m_nScreenRows` `+0x814`, `colorscheme` → `m_nColorScheme` `+0x818`; save-only `m_bInUse` `+0x80d`,
-`m_HackFlags` `+0x81c`, `m_nMaxInput` `+0x820`, `m_szHackPWD` `+0x82c` (`char[16]`); inputs `Enable`
-(`0x10218080`) and `Disable` (`0x102180a0`). Its `soundgroup` events are `typing`, `accept`,
-`access`, `error` (`FUN_10217680`).
-
-`CPropHacking` — datamap `0x105af464`, records `0x105af4ac`, 18, builder `FUN_10219770`, factory
-`0x102196a0`: `hack_file` → `m_sHackFile` `+0x900`, `global_email` → `m_bHasGlobalEmail` `+0xa10`,
-`ss_delay` → `m_flSS_Delay` `+0x9e4`, `ss_start` → `m_flSS_Start` `+0x9e8`, plus save-only
-`m_bSubdirUnlocked` `+0x986` (`bool[5]`), `m_EmailFlags` `+0xa28` (128 ints), `m_bEmailUnlocked`
-`+0xc2c`, `m_SubDirAttempts` `+0x98c` (`FIELD_CUSTOM`), `m_nEmailAttempts` `+0xc28`, and the think
-`CPropHackingSS_Think` (`0x10014b82`).
-
-It declares **`OnTrigger0`…`OnTrigger7`**, `m_OnTrigger[0..7]` at `+0x840` stride `0x18`; the ctor
-`FUN_10219d40` builds the array in a loop. These are **not** outcome tiers — hack success and failure
-go through the inherited `OnSkillSuccess` / `OnSkillFail` / `OnSkillBotch`. `CPropHacking::LoadFromFile`
-(`0x1021cba0`) parses the `.hac` KeyValues tree
-`TerminalDefinition { screen_saver, brackets, email_password, email_username, LogonScreen{line_N},
-SubDir{ description, password, dependency, difficulty, Function{ description, runtext, dependency,
-runscript, trigger } }, Email{ subject, sender, dependency, runscript } }`, and each `Function`
-block's integer `trigger` key (default `-1`) names the output index that running that function
-fires. *The mapping from `trigger` to `m_OnTrigger[n]` is read from the loader's key name and
-default; the fire site is reached through a computed `0x840 + n*0x18` address and has not been
-decompiled.*
+The terminal-specific class surface, content grammar, skill attempts, `OnUse*` and
+`OnTrigger0`…`OnTrigger7` production, email state, tutorial worked chain and open call-path
+questions are owned by `docs/vtmb/computer-terminals.md`. Once a terminal output fires, the generic
+wire format, name resolution and event-queue delivery specified here apply unchanged.
 
 ## Proven-dead Hammer/FGD keys
 

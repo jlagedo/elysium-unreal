@@ -175,6 +175,13 @@ and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EX
 
 Hard-won, non-obvious, and easy to undo:
 
+- **A Live Coding patch exists only in the editor process that compiled it.** `CompileLiveCoding`
+  links a `UnrealEditor-ElysiumUE.patch_N.dll` into the running editor, and the on-disk module is
+  untouched — so a commandlet, a headless test run or a fresh editor launched alongside it all load
+  code that predates the patch. New `UPROPERTY`s are the sharp edge: a graph or asset authored live
+  against them regenerates against a class that does not have them, and the properties resolve to
+  nothing while the run still reports success. Anything proven live is proven again after
+  `uv run elysium build`, which needs the editor closed because it holds the module open.
 - **The vendored Cog shell has two local interaction patches.** `FCogImguiContext::SetEnableInput`
   fully restores high-precision locked mouselook when Cog closes, and `UCogSubsystem::RenderMenuItem`
   keeps navigation click-to-open instead of rendering whole live windows on hover. Reapply both when

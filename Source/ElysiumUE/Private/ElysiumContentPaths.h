@@ -111,6 +111,14 @@ struct FElysiumContentPaths
 	// generic `BoneNN` hair names mean a different chain on different bodies, and a handful of
 	// models fork into a second skinned root that Unreal's single-rooted reference skeleton has to
 	// unify. A family is named for its lowest-sorted member and is recomputed per bake run.
+	// The player animation graph's generated class (CCC5). A local, regenerable package like every
+	// other under `/Game/Elysium`, rebuilt from the tracked graph text by
+	// `pipeline/unreal/make_player_anim_bp.py`.
+	static FString PlayerAnimBlueprintClass()
+	{
+		return TEXT("/Game/Elysium/Animation/ABP_ElysiumBiped.ABP_ElysiumBiped_C");
+	}
+
 	static FString BakedCharacterDir() { return BakedMount() / TEXT("Characters"); }
 	static FString BakedCharacterSkeletonPrefix() { return TEXT("SKEL_Elysium_"); }
 	static FString BakedCharacterSkeleton(const FString& Family)
