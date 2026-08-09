@@ -350,6 +350,23 @@ the solve beneath its proved angular limit is decoded;
   whether the authored data was carried correctly, and only then whether the interpolation differs.
   The A/B toggles and the retail capture database are what separate those two.
 
+## Open defects
+
+- **`A_dance01` leaves a residual arm seam on some bodies.** With the skeleton reference pose
+  authored rotation-flat (`docs/architecture/animation-architecture.md` § 2.4),
+  `A_Stance_Joy_Idle_1` measures clean on every body sampled, but `A_dance01` still stretches 4 edges
+  past 5× their reference length on `goth_female` and on `tremere_female_armor_0`, and the two report
+  the same maximum to nine figures. `tremere_female_armor_0` carried those edges before the reference
+  pose changed and was treated as correct throughout, so the cause is independent of the retarget
+  path. On `female_dancer_2` the same clip lands at 3.590× on the tracked seam pair against 1.353×
+  for Joy. Whether any of it is visible is unmeasured — the metric is edge stretch under CPU skinning,
+  not an observed frame.
+
+  The instrument already exists: `Elysium.Content.DancerDecodeProbe3` reports per-bone remap state and
+  per-edge deformation for both clips on four bodies. The open question is which bones carry the
+  stretch, and then whether their translations, rotations or skin influences differ from Joy's on the
+  same body.
+
 ## Divergences to record when settled
 
 Each is recorded beside the faithful behaviour in the topic that owns it, and marked as a
