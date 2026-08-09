@@ -26,13 +26,17 @@
 #include "Visual/ElysiumExpressionTable.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumFacialRig.h"
+#include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumNpcAnimSubsystem.h"   // FElysiumResolvedAnimation, the assets half of a selection
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumPoseDeviation.h"
 
 #include "Animation/AnimCurveMetadata.h"
+#include "Animation/AnimSequence.h"
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -2851,13 +2855,21 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	return true;
 }
 
-// CCC5 — the player body's portrait stack, on the graph-backed instance.
+// CCC5 — the player body on the graph, and the two regressions that log nothing.
 //
-// This is the test for the regression that logs nothing. A player body carries eyeballs and
-// axis-interpolation rules and no flex rig, and both live on the shared base rather than on the host
-// that poses it. An instance that dropped the tail would ship frozen eyes and untwisted forearms
-// while every log line stayed clean and the Content Browser preview — which runs no anim graph at
-// all — showed nothing either. The counts below are the only observable.
+// The **portrait stack**: a player body carries eyeballs and axis-interpolation rules and no flex
+// rig, and both live on the shared base rather than on the host that poses it. An instance that
+// dropped the tail would ship frozen eyes and untwisted forearms while every log line stayed clean
+// and the Content Browser preview — which runs no anim graph at all — showed nothing either.
+//
+// The **evaluated pose**: every way the graph itself fails arrives at one place. A blend-list pin
+// left dead, an asset pin left null, a request that resolved nothing projected anyway — each of them
+// evaluates a sequence player with nothing to play, and a sequence player with nothing to play
+// answers the skeleton's bind pose. That is a visible T-pose that compiles, exports, and leaves the
+// Substrate tier green: `ElysiumAnimGraph::ShouldHoldPose` proves the RULE and cannot prove the
+// generated graph obeys it, because it never touches a graph.
+//
+// The bone transforms are the only observable either failure has. This is where they are read.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphInstanceTest,
 	"Elysium.Content.PlayerGraphInstance", GElysiumFacialTestFlags)
 bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
@@ -2956,8 +2968,172 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestNotNull(TEXT("and it is the biped host rather than the cast's"),
-		Cast<UElysiumBipedAnimInstance>(Inst));
+	UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst);
+	if (!TestNotNull(TEXT("and it is the biped host rather than the cast's"), Biped))
+	{
+		return false;
+	}
+
+	// --- the T-pose observable ---------------------------------------------------------------------
+	//
+	// Three poses off the real generated graph on a real baked body, measured before the composition
+	// rig is installed so that "the bind pose" means the bind pose and not the bind pose plus a twist.
+	//
+	// The first is taken before anything has been published, which IS the bind pose: a body that has
+	// held nothing cannot hold, so the graph enters its state with a null pin and poses the failure
+	// mode itself. Measuring it beats asserting against a computed reference — the number the other
+	// two are compared to is the one the defect actually produces.
+	const auto Evaluate = [Comp](int32 Frames, float DeltaSeconds, TArray<FTransform>& OutPose)
+	{
+		// A null tick function keeps the evaluation on this thread, so the transforms are readable
+		// the moment RefreshBoneTransforms returns rather than a frame later.
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
+		{
+			Comp->TickAnimation(DeltaSeconds, /*bNeedsValidRootMotion=*/false);
+			Comp->RefreshBoneTransforms(/*TickFunction=*/nullptr);
+		}
+		OutPose = Comp->GetComponentSpaceTransforms();
+	};
+	// The comparator is `ElysiumPose::Measure`, shared with the green room's live readout rather than
+	// written twice: the same number that reddens here is the one an operator watches while driving.
+
+	TArray<FTransform> BindPose;
+	Evaluate(/*Frames=*/1, 1.f / 30.f, BindPose);
+	const int32 PosedBones = BindPose.Num() - 1;
+	if (!TestTrue(TEXT("the graph evaluates the whole skeleton"),
+		BindPose.Num() == Mesh->GetRefSkeleton().GetNum() && PosedBones > 0))
+	{
+		return false;
+	}
+
+	// The resolver, over this body's real sidecars — the same pure entry point the driver calls, so a
+	// selection that would not reach the graph in the game does not reach it here either.
+	FElysiumNpcClipSet Vocabulary;
+	if (!TestTrue(TEXT("the player body's clip vocabulary loads"), Vocabulary.Load(Stem, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TMap<FString, TSharedPtr<FElysiumBlendTable>> Tables;
+	FElysiumAnimationCatalog Catalog;
+	Catalog.Clips = &Vocabulary;
+	Catalog.BlendTableFor = [&Index, &Tables](const FString& OwnerStem) -> const FElysiumBlendTable*
+	{
+		if (const TSharedPtr<FElysiumBlendTable>* Cached = Tables.Find(OwnerStem))
+		{
+			return Cached->Get();
+		}
+		// The owner may be a character or a bank; the include DAG names both.
+		const FElysiumNpcIndexEntry* Owned = Index.Npcs.Find(OwnerStem);
+		if (Owned == nullptr) { Owned = Index.Banks.Find(OwnerStem); }
+
+		TSharedPtr<FElysiumBlendTable> Table;
+		if (Owned != nullptr && !Owned->Blends.IsEmpty())
+		{
+			Table = MakeShared<FElysiumBlendTable>();
+			FString TableError;
+			if (!Table->Load(Owned->Blends, TableError))
+			{
+				Table.Reset();
+			}
+		}
+		Tables.Add(OwnerStem, Table);
+		return Table.Get();
+	};
+	const auto ResolveFor = [&Catalog, &Stem](const TCHAR* Activity, uint32 Generation)
+	{
+		FElysiumAnimationIntent Intent;
+		Intent.Stem = Stem;
+		Intent.Activity = Activity;
+		Intent.Source = EElysiumAnimSource::Player;
+		Intent.Generation = Generation;
+		// The ladder is an NPC rule, and a miss is exactly what the second half of this asserts on.
+		Intent.bAllowFallbackLadder = false;
+
+		FElysiumAnimationSelection Out;
+		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+		return Out;
+	};
+
+	// Second pose: a resolved idle, settled past the transition ceiling so what is measured is the
+	// clip rather than the inertialization still ramping out of the bind pose.
+	const FElysiumAnimationSelection Idle = ResolveFor(TEXT("ACT_IDLE"), /*Generation=*/1);
+	FElysiumResolvedAnimation Assets;
+	Assets.Sequence = ElysiumNpcVisual::LoadBakedClip(Mesh, Idle.OwnerStem, Idle.AnimationName);
+	if (!TestTrue(TEXT("the body resolves a baked idle to stand on"),
+		Idle.IsResolved() && Assets.Sequence != nullptr))
+	{
+		AddError(FString::Printf(TEXT("ACT_IDLE on '%s': %s"), *Stem, *Idle.Detail));
+		return false;
+	}
+	Biped->PublishSelection(Idle, Assets);
+	TArray<FTransform> IdlePose;
+	Evaluate(/*Frames=*/24, 1.f / 30.f,
+		IdlePose);   // 0.8 s, past ElysiumAnimGraph::TransitionCeilingSeconds
+
+	const ElysiumPose::FDeviation FromBind = ElysiumPose::Measure(BindPose, IdlePose);
+	AddInfo(FString::Printf(TEXT("'%s' stood '%s'@'%s': %d of %d non-root bones left the bind pose "
+		"(max %.1f deg)"), *Stem, *Idle.AnimationName, *Idle.OwnerStem, FromBind.MovedBones,
+		PosedBones, FromBind.MaxDegrees));
+	TestTrue(TEXT("a resolved request poses the body rather than leaving it in the bind pose"),
+		FromBind.MovedBones > PosedBones / 4 && FromBind.MaxDegrees > 5.f);
+
+	// The gait fan hangs off a SECOND asset pin, and a blend-space player with nothing to play fails
+	// exactly as the sequence player does. One clip standing proves one pin.
+	TArray<FTransform> StandingPose = IdlePose;
+	FString StandingName = Idle.AnimationName;
+	const FElysiumAnimationSelection Walk = ResolveFor(TEXT("ACT_WALK"), /*Generation=*/2);
+	FElysiumResolvedAnimation Fan;
+	Fan.Space = Walk.AssetKind == EElysiumAnimAssetKind::BlendSpace
+		? ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Walk.OwnerStem, Walk.SequenceLabel)
+		: nullptr;
+	if (Fan.Space != nullptr)
+	{
+		Biped->PublishSelection(Walk, Fan);
+		Evaluate(/*Frames=*/24, 1.f / 30.f, StandingPose);
+		StandingName = Biped->GetAppliedSelection().AnimationName;
+
+		const ElysiumPose::FDeviation Fanned = ElysiumPose::Measure(BindPose, StandingPose);
+		AddInfo(FString::Printf(TEXT("and the fan '%s'@'%s' moved %d of %d bones (max %.1f deg)"),
+			*Walk.SequenceLabel, *Walk.OwnerStem, Fanned.MovedBones, PosedBones, Fanned.MaxDegrees));
+		TestTrue(TEXT("a resolved fan poses the body through the blend-space pin"),
+			Fanned.MovedBones > PosedBones / 4 && Fanned.MaxDegrees > 5.f);
+	}
+	else
+	{
+		AddWarning(FString::Printf(
+			TEXT("the blend-space pin is unproven: ACT_WALK on '%s' baked no grid (%s)"),
+			*Stem, *Walk.Detail));
+	}
+
+	// Third pose: the one named miss on a validated player body. A ducked landing asks for
+	// ACT_LAND_CROUCH, the selection returns nothing, and retail never reaches `ResetSequenceInfo` on
+	// a failed selection — so the body goes on playing what it held. Projecting the miss instead is
+	// what put a T-pose on screen for as long as the landing lasted.
+	const FElysiumAnimationSelection Miss = ResolveFor(TEXT("ACT_LAND_CROUCH"), /*Generation=*/3);
+	// Named nothing, so there is nothing to load — asking anyway would log a missing-object warning
+	// for a package the record never claimed existed.
+	UAnimSequence* MissClip = Miss.AnimationName.IsEmpty()
+		? nullptr
+		: ElysiumNpcVisual::LoadBakedClip(Mesh, Miss.OwnerStem, Miss.AnimationName);
+	TestNull(TEXT("ACT_LAND_CROUCH is still the miss the resolver keeps rather than invents a clip for"),
+		MissClip);
+	Biped->PublishSelection(Miss, FElysiumResolvedAnimation());
+	TArray<FTransform> HeldPose;
+	// A zero delta, so a pose that stayed is identical rather than merely close: what is under test is
+	// that the request was refused, not that the clip it replaced advanced slowly.
+	Evaluate(/*Frames=*/1, 0.f, HeldPose);
+
+	const ElysiumPose::FDeviation FromStanding = ElysiumPose::Measure(StandingPose, HeldPose);
+	const ElysiumPose::FDeviation HeldFromBind = ElysiumPose::Measure(BindPose, HeldPose);
+	AddInfo(FString::Printf(TEXT("the unresolved request moved %d bones (max %.3f deg) and left the "
+		"body %.1f deg off the bind pose"), FromStanding.MovedBones, FromStanding.MaxDegrees,
+		HeldFromBind.MaxDegrees));
+	TestEqual(TEXT("a request that resolved no asset moves no bone"), FromStanding.MovedBones, 0);
+	TestTrue(TEXT("so the body is still posed rather than back in the bind pose"),
+		HeldFromBind.MovedBones > PosedBones / 4);
+	TestEqual(TEXT("and the graph still holds the selection it was actually playing"),
+		Biped->GetAppliedSelection().AnimationName, StandingName);
 
 	// The composition stage, installed the way BuildNpcVisual installs it.
 	Inst->SetCompositionRig(Rig);

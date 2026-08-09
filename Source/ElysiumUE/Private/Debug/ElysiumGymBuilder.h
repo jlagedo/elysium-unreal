@@ -13,6 +13,15 @@ class UWorld;
 // asserted with no world; what is left here is spawning.
 namespace ElysiumGym
 {
+	// Where a gym stands, for every harness that stands one. The world origin: every recorded
+	// coordinate then reads small, and a row's `py` divided by the lane pitch is the lane index by
+	// inspection.
+	//
+	// One symbol rather than one constant per harness. Two harnesses standing the same spec at two
+	// origins would produce two sets of coordinates for one geometry, and the committed baselines
+	// under `dev/baselines/move` are in these.
+	inline FVector DefaultOrigin() { return FVector::ZeroVector; }
+
 	// Stand the gym up at `Origin`. Returns the actor that owns every solid, so a caller can tear
 	// the whole thing down by destroying one thing.
 	//

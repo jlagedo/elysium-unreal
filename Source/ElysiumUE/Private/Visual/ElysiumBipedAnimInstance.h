@@ -170,6 +170,13 @@ public:
 	// The last record this instance was handed, for the debug surface.
 	const FElysiumAnimationSelection& GetAppliedSelection() const { return Applied; }
 
+	// Whether the last update took the hold branch — a request that resolved no asset, left playing
+	// what it already had. Published rather than recomputed: the inputs to `ShouldHoldPose` are
+	// private, and a reader deriving its own answer would be a second copy of the rule that decided
+	// the pose on screen. A held frame is the correct behaviour and looks exactly like the T-pose
+	// defect it prevents, so a debug surface has to be able to tell a reader which it is looking at.
+	bool IsHoldingPose() const { return bHoldingPose; }
+
 	// --- the shared one-shot seam -----------------------------------------------------------------
 	//
 	// Answered over a dynamic slot montage, which is the design's own shape for a one-shot and needs
@@ -199,6 +206,8 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingBlendSpace = nullptr;
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSequence = nullptr;
 	bool bHasApplied = false;
+	// The branch the last update took, for `IsHoldingPose` above.
+	bool bHoldingPose = false;
 
 	// The montage the one-shot seam is currently running, so `StopOneShot` ends that one rather than
 	// whatever else the slot may have picked up.

@@ -15,7 +15,11 @@
 #include "Debug/ElysiumCogWindow_Environment.h"
 #include "Debug/ElysiumCogWindow_EventQueue.h"
 #include "Debug/ElysiumCogWindow_GreenRoom.h"
+#include "Debug/ElysiumGreenRoomRun.h"
 #include "Debug/ElysiumCogWindow_Camera.h"
+#include "ElysiumMapSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 #include "Debug/ElysiumCogWindow_Inspector.h"
 #include "Debug/ElysiumCogWindow_Lights.h"
 #include "Debug/ElysiumCogWindow_Logic.h"
@@ -40,6 +44,21 @@
 #include "CogEngineWindow_TimeScale.h"
 #include "CogEngineWindow_Transform.h"
 #endif
+
+#if ENABLE_COG
+namespace
+{
+	// The armed green room, or null. Null in every ordinary session — the lab only exists under
+	// `-ElysiumGreenRoom` or after `elysium.gr` has stood one up.
+	const FElysiumGreenRoomRun* ResolveGreenRoomLab(const UWorldSubsystem* Owner)
+	{
+		const UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+		const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+		const UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+		return Maps ? Maps->GetGreenRoom() : nullptr;
+	}
+}
+#endif // ENABLE_COG
 
 bool UElysiumCogSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
@@ -154,7 +173,12 @@ void UElysiumCogSubsystem::PostInitialize()
 				return;
 			}
 			GreenRoomWindow->OpenLab();
-			if (!CogNow->GetContext().GetEnableInput())
+			// **Except while the lab is driving.** With ImGui holding input, every non-gamepad key is
+			// consumed before the input router sees it, so grabbing the keyboard here would silently
+			// stop the body the operator is walking. F1 is the way back in.
+			const FElysiumGreenRoomRun* Lab = ResolveGreenRoomLab(this);
+			const bool bDriving = Lab != nullptr && Lab->IsDriving();
+			if (!bDriving && !CogNow->GetContext().GetEnableInput())
 			{
 				CogNow->GetContext().SetEnableInput(true);
 			}
@@ -202,7 +226,11 @@ void UElysiumCogSubsystem::PostInitialize()
 					&& FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab")))
 				{
 					GreenRoomWindow->OpenLab();
-					if (!CogToHide->GetContext().GetEnableInput())
+					// A drive launch wants the window **visible and not holding the keyboard**: ImGui
+					// consumes every key while it has input, so grabbing it here would fail the
+					// acceptance on the first W. The window says F1 hands it over and back.
+					if (!FParse::Param(FCommandLine::Get(), TEXT("GreenRoomDrive"))
+						&& !CogToHide->GetContext().GetEnableInput())
 					{
 						CogToHide->GetContext().SetEnableInput(true);
 					}

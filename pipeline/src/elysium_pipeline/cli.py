@@ -660,6 +660,11 @@ def green_room(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
     comes up empty and the window picks one. Square brackets are Rich markup in a Typer
     help string, so the optional arguments are written in angle brackets here.
 
+    `--drive` opens the other mode instead: the named body on the player pawn, standing on
+    the generated movement gym, walked with WASD and framed by the shipping camera, with
+    the sample, the selection record and the evaluated pose read back in the window. F1
+    hands the keyboard between the game and the window.
+
     Top level rather than under `debug` because it is driven by hand rather than run as a
     check, and it captures nothing.
     """

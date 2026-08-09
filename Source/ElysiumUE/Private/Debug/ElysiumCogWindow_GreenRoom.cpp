@@ -2,21 +2,28 @@
 
 #if ENABLE_COG
 
+#include "Debug/ElysiumCogLocomotionRow.h"
 #include "Debug/ElysiumCogStyle.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumNpcSubsystem.h"
+#include "ElysiumPlayerBody.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumPoseDeviation.h"
 
 #include "Algo/Unique.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
+#include "Engine/SkinnedAsset.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 
@@ -1070,6 +1077,187 @@ void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 
 }
 
+// Drive mode's readout. Everything here is READ: the sample the mover published, the record the
+// resolver produced, the parameters the graph is posing from, and the bones that came out. Nothing
+// is re-derived, because a readout that computes its own answer is a second implementation of the
+// rule that decided the pose, and the two disagreeing is exactly the confusion this exists to end.
+void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
+{
+	const UWorld* World = GetWorld();
+	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	const IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr;
+	const AElysiumMapActor* Map = GetMapActor();
+	if (!Body || !Map)
+	{
+		ImGui::TextDisabled("No player body in this session.");
+		return;
+	}
+
+	ImGui::TextDisabled("WASD move  |  Shift gait  |  Ctrl crouch  |  Space jump  |  mouse look");
+	ImGui::TextDisabled("F1 hands the keyboard to this window, and hands it back.");
+	ImGui::Separator();
+
+	// --- what the mover published, and what the resolver made of it ---------------------------
+	const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+		ImGuiTableFlags_ScrollX | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
+	if (ImGui::BeginTable("##DriveLocomotion", ElysiumCogLocomotion::NumColumns, TableFlags,
+		ImVec2(0, GetDpiScale() * 56.f)))
+	{
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ElysiumCogLocomotion::SetupColumns();
+		ImGui::TableHeadersRow();
+		ElysiumCogLocomotion::Row("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
+			Body->GetLocomotionSample(), &Map->GetPlayerAnimSelection());
+		ImGui::EndTable();
+	}
+
+	USkeletalMeshComponent* Visual = Body->GetPlayerVisual();
+	if (Visual == nullptr)
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColWarn,
+			"No model on the pawn -- the mover is driving and nothing is drawn.");
+		ImGui::TextDisabled("Name one on the Model tab, or relaunch with `uv run elysium gr <stem> --drive`.");
+		return;
+	}
+	UElysiumBipedAnimInstance* Graph = Cast<UElysiumBipedAnimInstance>(Visual->GetAnimInstance());
+	if (Graph == nullptr)
+	{
+		// Not a defect and not an empty panel: `elysium.PlayerGraph 0` is the A/B, and every row below
+		// would honestly read blank on the cast's native host.
+		ImGui::TextColored(ElysiumCogStyle::ColWarn,
+			"The body is on the cast's native host, not ABP_ElysiumBiped.");
+		ImGui::TextDisabled("`elysium.PlayerGraph 1` and restand -- the graph rows below need it.");
+		return;
+	}
+
+	// --- what the graph is posing from ---------------------------------------------------------
+	ImGui::SeparatorText("Graph");
+	ImGui::Text("state %s%s", ElysiumAnimGraph::StateName(Graph->RequestedState),
+		Graph->bStateChanged ? "  (changing)" : "");
+	ImGui::Text("move_yaw %.1f    speed %.1f    axis0 %.1f    %s",
+		Graph->MoveYaw, Graph->Speed, Graph->GridAxis0,
+		Graph->bHasBlendSpace ? "blend space" : "one clip");
+
+	// --- held, playing, or nothing published yet ------------------------------------------------
+	//
+	// Three states rather than two, because a body that has never been handed a selection poses the
+	// bind pose BY CONSTRUCTION — it has nothing to hold — and that is a correct frame that looks
+	// exactly like the defect below it.
+	const FElysiumAnimationSelection& Applied = Graph->GetAppliedSelection();
+	if (Applied.AnimationName.IsEmpty() && !Graph->IsHoldingPose())
+	{
+		ImGui::TextDisabled("no selection yet -- the body is in its bind pose because it has none");
+	}
+	else if (Graph->IsHoldingPose())
+	{
+		// A warning, not an error. This is retail's own behaviour: a failed selection never restarts
+		// the sequence, so the body goes on playing what it had.
+		ImGui::TextColored(ElysiumCogStyle::ColWarn, "held: still playing '%s'",
+			COG_TCHAR_TO_CHAR(*Applied.AnimationName));
+		const FElysiumAnimationSelection& Asked = Map->GetPlayerAnimSelection();
+		ImGui::SameLine();
+		ImGui::TextDisabled("(asked for %s)", Asked.ResolvedActivity.IsEmpty()
+			? "nothing" : COG_TCHAR_TO_CHAR(*Asked.ResolvedActivity));
+	}
+	else
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColOk, "playing '%s'",
+			COG_TCHAR_TO_CHAR(*Applied.AnimationName));
+	}
+
+	// --- the one-shot report the jump chain rides on --------------------------------------------
+	const FElysiumOneShotReport& OneShot = Graph->GetOneShotReport();
+	const FElysiumAnimationSelection& Current = Map->GetPlayerAnimSelection();
+	ImGui::Text("one-shot: %s", OneShot.bInOneShotState ? "in state" : "--");
+	ImGui::SameLine();
+	// A negative remaining is "cannot say", never a duration: the engine answers MAX_flt when it
+	// finds no relevant asset player, and rendering that as a number is how it read as "playing".
+	if (OneShot.RemainingSeconds < 0.0f) { ImGui::TextDisabled("remaining: cannot say"); }
+	else { ImGui::Text("remaining %.2fs%s", OneShot.RemainingSeconds,
+		OneShot.bComplete ? " (complete)" : ""); }
+	ImGui::SameLine();
+	// The gate the driver reads. A mismatch means the report describes a request that has already
+	// been replaced, which is the state it must not end.
+	const bool bGenerationMatches = OneShot.Generation == Current.Generation;
+	ImGui::TextColored(bGenerationMatches ? ElysiumCogStyle::ColDim : ElysiumCogStyle::ColWarn,
+		"gen %u/%u", OneShot.Generation, Current.Generation);
+
+	// --- the T-pose observable -------------------------------------------------------------------
+	//
+	// A dead pin, a null asset, a miss projected anyway: all of them evaluate a player node with
+	// nothing to play, and all of them answer the bind pose. The bones are the only thing that says
+	// so, and this is the same measure `Elysium.Content.PlayerGraphInstance` asserts offline.
+	ImGui::SeparatorText("Pose");
+	const USkinnedAsset* Asset = Visual->GetSkinnedAsset();
+	if (Asset != DeviationAsset.Get())
+	{
+		DeviationAsset = Asset;
+		DeviationRefPose.Reset();
+		if (Asset != nullptr)
+		{
+			ElysiumPose::FillRefPoseComponentSpace(Asset->GetRefSkeleton(), DeviationRefPose);
+		}
+	}
+	const TArray<FTransform>& Pose = Visual->GetComponentSpaceTransforms();
+	if (DeviationRefPose.IsEmpty() || Pose.IsEmpty())
+	{
+		ImGui::TextDisabled("no evaluated pose yet");
+	}
+	else
+	{
+		const ElysiumPose::FDeviation Dev = ElysiumPose::Measure(DeviationRefPose, Pose);
+		const int32 Posed = FMath::Min(DeviationRefPose.Num(), Pose.Num()) - 1;
+		const bool bBind = Dev.MovedBones <= Posed / 4;
+		ImGui::TextColored(bBind ? ElysiumCogStyle::ColError : ElysiumCogStyle::ColOk,
+			"%d of %d bones off the bind pose (max %.1f deg)", Dev.MovedBones, Posed, Dev.MaxDegrees);
+		if (bBind)
+		{
+			ImGui::TextDisabled("that is a T-pose unless the row above says no selection yet.");
+		}
+	}
+
+	// --- where the body stands -------------------------------------------------------------------
+	ImGui::SeparatorText("Gym");
+	const ElysiumGym::FSpec& Spec = Lab.DriveGym();
+	const FName Seated = Lab.DriveLane();
+	if (ImGui::BeginCombo("Lane", COG_TCHAR_TO_CHAR(*Seated.ToString())))
+	{
+		for (const ElysiumGym::FLane& Lane : Spec.Lanes)
+		{
+			const bool bSelected = Lane.Name == Seated;
+			if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Lane.Name.ToString()), bSelected))
+			{
+				FString Error;
+				if (!Lab.LabSeatOnLane(Lane.Name, Error)) { LastError = Error; }
+				else { LastError.Reset(); }
+			}
+			if (ImGui::IsItemHovered())
+			{
+				// The bracket is what the lane is named for, and its unit is the family's.
+				ImGui::SetTooltip("bracket %.1f%s", Lane.BracketUnits,
+					Lane.bSpeedDependent ? " (speed-dependent)" : "");
+			}
+		}
+		ImGui::EndCombo();
+	}
+	if (ImGui::Button("Reseat"))
+	{
+		FString Error;
+		if (!Lab.LabSeatOnLane(Seated, Error)) { LastError = Error; }
+		else { LastError.Reset(); }
+	}
+	ImGui::SameLine();
+	bool bVisible = Lab.DriveGymVisible();
+	if (ImGui::Checkbox("Draw the gym", &bVisible))
+	{
+		FString Error;
+		if (!Lab.LabSetGymVisible(bVisible, Error)) { LastError = Error; }
+		else { LastError.Reset(); }
+	}
+	ImGui::TextDisabled("%d lanes, %d solids. The boxes collide either way.",
+		Spec.Lanes.Num(), Spec.Placements.Num());
+}
+
 void FElysiumCogWindow_GreenRoom::RenderContent()
 {
 	Super::RenderContent();
@@ -1103,6 +1291,34 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 		return;
 	}
 
+	// The mode selector, above the tabs because it changes what they mean. Review is the animation
+	// programme's stage — one body, one clip, the orbit; Drive is the shipping path with a floor
+	// under it (CCC6).
+	const bool bDriving = Lab->IsDriving();
+	const auto ModeButton = [Lab, this](const char* Label, FElysiumGreenRoomRun::ELabMode Mode,
+		bool bActive)
+	{
+		if (bActive) { ImGui::BeginDisabled(); }
+		if (ImGui::Button(Label))
+		{
+			FString Error;
+			if (!Lab->LabSetMode(Mode, Error)) { LastError = Error; }
+			else { LastError.Reset(); }
+		}
+		if (bActive) { ImGui::EndDisabled(); }
+	};
+	ModeButton("Review", FElysiumGreenRoomRun::ELabMode::Review, !bDriving);
+	ImGui::SameLine();
+	ModeButton("Drive", FElysiumGreenRoomRun::ELabMode::Drive, bDriving);
+	ImGui::SameLine();
+	ImGui::TextDisabled(bDriving
+		? "the pawn on the gym, posed by the shipping path"
+		: "one body on the stage, one clip, the orbit");
+	if (!LastError.IsEmpty())
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
+	}
+
 	if (!ImGui::BeginTabBar("##GreenRoom"))
 	{
 		return;
@@ -1112,7 +1328,13 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 		RenderModel(*Lab);
 		ImGui::EndTabItem();
 	}
-	if (ImGui::BeginTabItem("Playback"))
+	if (bDriving && ImGui::BeginTabItem("Drive"))
+	{
+		RenderDrive(*Lab);
+		ImGui::EndTabItem();
+	}
+	// The scrubber drives a clip seek, which has no meaning on a body the graph is posing.
+	if (!bDriving && ImGui::BeginTabItem("Playback"))
 	{
 		RenderPlayback(*Lab);
 		ImGui::EndTabItem();

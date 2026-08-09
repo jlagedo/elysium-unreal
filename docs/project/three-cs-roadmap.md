@@ -49,7 +49,7 @@ rung: `CCC7` re-opens what `4.7` settled, by design.
 | Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, deliberately after `CCC7` settles the speed |
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
-| Real animation | 6 | `CCC4 [x]` the intent, resolver and selection record; `CCC5`–`CCC6` the graph and the green room |
+| Real animation | 6 | `CCC4 [x]` the intent, resolver and selection record; `CCC5 [x]` the graph, `CCC6 [x]` the green room driving it on the gym floor |
 | Vertical slice | 7 | `CCC8` |
 
 **The gym splits its assertions by whether `CCC7` can move them**, which is what lets the Character
@@ -96,7 +96,7 @@ trace, a bake) is a context switch rather than a slice stall.
 | `CCC2 [x]` — the service foundation, then the modern rig | `CCC1 [x]` — the body sample |
 | `CCC3 [~]` — the response curve and the leniency courses; the co-tune waits for `CCC7` | `CCC4 [x]` — intent, resolver, record |
 | | `CCC5 [x]` — the player graph |
-| | `CCC6` — drive it |
+| | `CCC6 [x]` — drive it |
 
 The lanes join at `CCC7` (the speed authority), the co-tune half of `CCC3`, and `CCC8`; `CCC9`
 retires what they replaced.
@@ -480,7 +480,7 @@ retires what they replaced.
   speeds that decide stride and foot-sliding are `CCC7`'s by design, so no number here was tuned
   against a walk speed that is about to move.
 
-- [ ] **CCC6 Drive it — the green room on the gym floor.** A construction rung, not a wiring rung:
+- [x] **CCC6 Drive it — the green room on the gym floor.** A construction rung, not a wiring rung:
   the green room detaches the player visual from the pawn and re-parents it to the stage root —
   its pin writes the model alpha and the control rotation and nothing else — so "the stage body is
   the player body" is this rung's work, not an existing property. The attachment the player-visual
@@ -491,6 +491,67 @@ retires what they replaced.
   *Acceptance:* `uv run elysium gr tremere_male_armor_0` stands the PC body on the gym, WASD walks
   and runs it, Shift changes the gait, Ctrl crouches it, Space jumps it, and the pose follows
   without a clip being named by hand. *Deps:* `CCC0`, `CCC5`.
+  *Done:* the lab has **two modes over one stage** — `Review`, the animation programme's clip stage,
+  and `Drive`, reached by `uv run elysium gr <stem> --drive` (`-GreenRoomDrive`) or the window's mode
+  buttons. `LabSetMode` is the one door both come through, so neither mode's teardown can be
+  half-done by one caller and whole by another. The rung's construction is `LabSetDriveBody`: it
+  calls the shipping `BuildPlayerVisual` and **leaves the attachment the builder made** — the hull
+  offset, the facing basis, the mover tick prerequisite and the cached stem that `TickPlayerAnimation`
+  reads — where the capture path detaches and re-parents to the stage root.
+  **What drive mode does not do is the load-bearing half.** `PinCameraAndPlayerSurface` refuses
+  structurally while driving rather than merely not being called, because both pins fight the
+  shipping path — the control rotation is where mouse look lands and the model alpha is solved from
+  the fade band every frame; the orbit shot is popped off the player's own stack on entry, so the
+  view is the manager's and the rig's; and `TickDrive` writes nothing but the stage key/fill carried
+  with the body (a gym is unlit geometry in an empty level) and the requested overlays. No camera
+  shot, no control rotation, no clip seek, no placement.
+  The floor is the same gym the movement harness stands, built from the mover's **live** tuning
+  rather than a cached spec, and `ElysiumGym::DefaultOrigin()` is now one symbol both harnesses read
+  — two origins for one spec would produce two coordinate sets for one geometry, and
+  `dev/baselines/move/` is in these. The lane picker reseats with the harness's own sequence
+  (`ResetState`, `SeatOrigin`, control rotation to the lane yaw, a boom reseed so the damper does not
+  ease across the teleport), and `Elysium.Substrate.GymSeat` names the `flat` lane drive mode starts
+  on, so renaming it reddens instead of standing a body in the void. The stage world's movement
+  freeze is released only because a floor was supplied, third person is set once as the player's
+  persistent choice rather than pinned per frame, and driving on a real map is refused outright
+  rather than standing a second floor through a level.
+  The Drive tab **reads and never re-derives**: the shared 15-column locomotion row moved out to
+  `ElysiumCogLocomotionRow.h/.cpp` so the Npc window and the drive panel are one function over the
+  one contract; graph state, `move_yaw`, speed and axis come off the instance; the one-shot report
+  shows its generation against the driver's, and a negative remaining renders as "cannot say" rather
+  than as a number. Held-versus-playing needed a new published bit — `IsHoldingPose()`, rather than a
+  reader recomputing `ShouldHoldPose` from private inputs — and the readout carries **three** states,
+  because a body that has never been handed a selection poses the bind pose by construction and that
+  correct frame looks exactly like the defect below it.
+  That defect now has a shared measure: `ElysiumPose::Measure` /
+  `FillRefPoseComponentSpace` (`ElysiumPoseDeviation.h`), asserted by
+  `Elysium.Substrate.PoseDeviation` — bone 0 skipped, since in component space the root carries the
+  actor transform and a body that merely walked would otherwise read as a changed pose.
+  `Elysium.Content.PlayerGraphInstance` grew to the same measure over the real generated graph on a
+  real baked body: the bind pose taken *before* anything is published, a resolved idle through the
+  actual resolver over that body's own sidecars, the blend-space pin proven separately from the
+  sequence pin, and the `ACT_LAND_CROUCH` miss moving **zero** bones while staying posed.
+  `elysium gr <stem> --drive` needed the switch taken out of the positional list or it would have
+  arrived as `-GreenRoomClip=--drive` with the mode never armed — `pipeline/tests/test_harness_options.py`
+  is that assertion. Cog's auto-open stops grabbing the keyboard while driving on both the console
+  and the launch path, since ImGui consumes every key it holds; F1 hands it over and back.
+  *Instrument findings:* standing the PC body on the shipping path found two bake defects nothing
+  else could, both in the shared skeleton and both silent. The bone tree was **empty**:
+  `FReferenceSkeletonModifier` owns bones and bind poses while `USkeleton::BoneTree` is a parallel
+  array the build never touched, so every bone carried no retargeting data at all — fixed by merging
+  the authored reference skeleton back through `MergeAllBonesToBoneTree`, which is the one public
+  door that fills both halves. And every bone was on Unreal's default
+  `EBoneTranslationRetargetingMode::Animation`, which applies a shared clip's own translation tracks
+  verbatim: 96.6% of the 115,005 translation tracks across the 60 shared banks are constant across
+  every frame — the emitting model's bind pose, not movement — so one bank's clip dragged every other
+  body's joints onto the donor's proportions. Forearms stretched and hands fanned with no log line,
+  a clean Content Browser preview, and every other assertion green. Now `Skeleton` mode below the
+  root, with `Bip01` (a clip's displacement) and `Bip01 Pelvis` (an additive's hip delta, which
+  `Skeleton` mode zeroes outright) keeping the animation's own translation, asserted by
+  `Elysium.Content.BakedSkeletonRetargeting`. The spine and clavicle bones lose a small authored
+  translation under it — a stated simplification, marked in the bake; the faithful answer is for the
+  exporter to stop writing constant translation tracks at all, which would leave every untracked bone
+  on its own bind pose by construction.
 
 - [ ] **CCC7 `move_yaw` and the speed authority.** The rung where the ladder inverts — and the
   plumbing is shorter than the question. `ResolveActivityClip` already returns the authored cell

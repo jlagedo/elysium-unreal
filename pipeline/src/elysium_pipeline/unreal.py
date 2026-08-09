@@ -330,6 +330,7 @@ class HarnessOptions:
     gym: bool = False
     sited: bool = False
     promote: bool = False
+    drive: bool = False
 
 
 def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
@@ -340,7 +341,13 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
     """
     positional: list[str] = []
     exec_cmds: list[str] = []
-    flags = {"--live": False, "--gym": False, "--sited": False, "--promote": False}
+    flags = {
+        "--live": False,
+        "--gym": False,
+        "--sited": False,
+        "--promote": False,
+        "--drive": False,
+    }
     index = 0
     while index < len(values):
         value = values[index]
@@ -366,6 +373,7 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
         gym=flags["--gym"],
         sited=flags["--sited"],
         promote=flags["--promote"],
+        drive=flags["--drive"],
     )
 
 
@@ -483,6 +491,11 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             "-ElysiumGreenRoom", "-GreenRoomLab",
             "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
         ]
+        # `--drive` stands the named body on the PAWN, on the generated movement gym, driven by real
+        # input and framed by the shipping camera. Without it the lab stands a clip-review body on
+        # the stage, which is what the animation programme verifies on.
+        if options.drive:
+            launch.append("-GreenRoomDrive")
         if map_name:
             launch.append(f"-ElysiumMap={map_name}")
         # An empty `-Switch=` makes Unreal's parser swallow the NEXT token as the value, so a

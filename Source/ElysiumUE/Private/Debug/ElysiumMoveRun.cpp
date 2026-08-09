@@ -41,10 +41,6 @@ namespace
 	// for the body to be grounded before the course says anything.
 	constexpr int32 CourseSettleFrames = 10;
 
-	// The gym stands at the world origin: every recorded coordinate then reads small, and a row's
-	// `py` divided by the lane pitch is the lane index by inspection.
-	const FVector GymOrigin = FVector::ZeroVector;
-
 	FString OutputDir()
 	{
 		return FPaths::Combine(FElysiumContentPaths::Root(), TEXT("_move"));
@@ -165,7 +161,7 @@ bool FElysiumMoveRun::BuildGym()
 	}
 
 	const ElysiumGym::FSpec Spec = ElysiumGym::Build(Body.Move->GetTuning());
-	if (!ElysiumGym::Spawn(World, Spec, GymOrigin))
+	if (!ElysiumGym::Spawn(World, Spec, ElysiumGym::DefaultOrigin()))
 	{
 		UE_LOG(LogElysiumMove, Error, TEXT("could not stand the gym up"));
 		return false;
@@ -210,7 +206,7 @@ bool FElysiumMoveRun::BeginCourse(int32 Index, ECoursePhase InPhase)
 				*Course.Name.ToString());
 			return false;
 		}
-		Feet = GymOrigin + Lane->FeetOrigin;
+		Feet = ElysiumGym::DefaultOrigin() + Lane->FeetOrigin;
 		Yaw = Lane->Yaw;
 	}
 

@@ -1,17 +1,25 @@
 #include "Debug/ElysiumGreenRoomRun.h"
 
+#include "ElysiumCameraComponent.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMovementComponent.h"
+#include "ElysiumPawn.h"
 #include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Debug/ElysiumScreenshot.h"
+#if !UE_BUILD_SHIPPING
+// The gym's engine half is debug-only, while its spec is not. Drive mode is the only thing here that
+// needs the spawner, so the guard is on the one call rather than on the harness.
+#include "Debug/ElysiumGymBuilder.h"
+#endif
 #include "Substrate/ElysiumCameraTrack.h"
 #include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumEntityBodies.h"
@@ -95,7 +103,10 @@ FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem, bo
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomBoneRoot="), ReviewBoneRoot);
 	bLive = FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLive"));
 	Selector = Selector.ToLower();
-	bLab = bForceLab || FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab"))
+	// A drive request implies the lab — there is nothing to drive in a capture run — but it cannot be
+	// acted on here: there is no map, no pawn and no floor yet.
+	bDriveRequested = FParse::Param(FCommandLine::Get(), TEXT("GreenRoomDrive"));
+	bLab = bForceLab || bDriveRequested || FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab"))
 		|| Selector == TEXT("lab");
 	if (bLab)
 	{
@@ -125,6 +136,7 @@ FElysiumGreenRoomRun::~FElysiumGreenRoomRun()
 	{
 		ApplyLabHud(true);
 	}
+	DestroyDriveGym();
 	DestroyBodies();
 }
 
@@ -1130,6 +1142,15 @@ FRotator FElysiumGreenRoomRun::BodyRotation() const
 
 void FElysiumGreenRoomRun::PinCameraAndPlayerSurface()
 {
+	// **Drive mode refuses this structurally, not merely by not calling it.** Both pins fight the
+	// shipping path: the control rotation is where the mouse look lands, and the model alpha is
+	// solved by the camera manager from the fade band every frame. Pinning either would mean the
+	// acceptance was watching the lab rather than the game.
+	if (IsDriving())
+	{
+		return;
+	}
+
 	UWorld* World = GetWorld();
 	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
@@ -1429,6 +1450,15 @@ void FElysiumGreenRoomRun::Finish()
 
 USkeletalMeshComponent* FElysiumGreenRoomRun::LabBody() const
 {
+	// While driving, the body on the stage IS the player's — so the cloth tab, the source readout and
+	// the overlays all follow it without knowing which mode they are in.
+	if (IsDriving())
+	{
+		const UWorld* World = GetWorld();
+		const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		const IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr;
+		return Body ? Body->GetPlayerVisual() : nullptr;
+	}
 	return Bodies.IsEmpty() ? nullptr : Bodies[0].Body.Get();
 }
 
@@ -1456,6 +1486,14 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	{
 		OutError = TEXT("no model named");
 		return false;
+	}
+
+	// While driving, "stand this model up" means "put it on the pawn". One door for both modes, so
+	// the model list keeps working and no clip is named — the graph picks that.
+	if (IsDriving())
+	{
+		DestroyBodies();
+		return LabSetDriveBody(Stem, OutError);
 	}
 
 	// Resolve the clip before anything is destroyed, so a typo costs nothing: the body that is
@@ -1517,6 +1555,287 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	LabClipTime = 0.0f;
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s clip %s (%.3fs)"), *Stem, *ResolvedClip, Duration);
 	return true;
+}
+
+// --- drive mode (CCC6) ---------------------------------------------------------------------------
+
+namespace
+{
+	// Everything drive mode needs off the possessed body, resolved together so a half-built session
+	// is one refusal rather than five null checks scattered through the mode change.
+	struct FDriveRefs
+	{
+		APlayerController* PC = nullptr;
+		APawn* Pawn = nullptr;
+		IElysiumPlayerBody* Body = nullptr;
+		UElysiumMovementComponent* Move = nullptr;
+
+		explicit operator bool() const { return PC && Pawn && Body && Move; }
+	};
+
+	FDriveRefs ResolveDriveBody(UWorld* World)
+	{
+		FDriveRefs Refs;
+		Refs.PC = World ? World->GetFirstPlayerController() : nullptr;
+		Refs.Pawn = Refs.PC ? Refs.PC->GetPawn() : nullptr;
+		Refs.Body = Cast<IElysiumPlayerBody>(Refs.Pawn);
+		// The faithful mover specifically: the gym's brackets are its constants, and the capsule
+		// baseline under `elysium.SourceMovement 0` is a different body answering a different
+		// question. It is still driveable — it just cannot supply the tuning the gym is built from.
+		Refs.Move = Refs.Pawn ? Refs.Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr;
+		return Refs;
+	}
+}
+
+bool FElysiumGreenRoomRun::BuildDriveGym(FString& OutError)
+{
+	DestroyDriveGym();
+	UWorld* World = GetWorld();
+	const FDriveRefs Refs = ResolveDriveBody(World);
+	if (!World || !Refs)
+	{
+		OutError = TEXT("no player body to build a floor for");
+		return false;
+	}
+
+	// Built from the mover's live tuning, never from a cached spec: the geometry IS the constants,
+	// so a gym standing under a body whose tuning has since moved is measuring nothing.
+	GymSpec = ElysiumGym::Build(Refs.Move->GetTuning());
+#if !UE_BUILD_SHIPPING
+	GymActor = ElysiumGym::Spawn(World, GymSpec, ElysiumGym::DefaultOrigin(), bGymMeshes);
+#endif
+	if (!GymActor.IsValid())
+	{
+		GymSpec = ElysiumGym::FSpec();
+		OutError = TEXT("could not stand the gym up");
+		return false;
+	}
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("drive: gym standing — %d lanes, %d solids%s"),
+		GymSpec.Lanes.Num(), GymSpec.Placements.Num(), bGymMeshes ? TEXT("") : TEXT(" (hidden)"));
+	return true;
+}
+
+void FElysiumGreenRoomRun::DestroyDriveGym()
+{
+	if (AActor* Actor = GymActor.Get())
+	{
+		Actor->Destroy();
+	}
+	GymActor.Reset();
+	GymSpec = ElysiumGym::FSpec();
+}
+
+bool FElysiumGreenRoomRun::LabSeatOnLane(const FName& Lane, FString& OutError)
+{
+	if (!IsDriving())
+	{
+		OutError = TEXT("not driving");
+		return false;
+	}
+	const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+	if (!Refs)
+	{
+		OutError = TEXT("no player body to seat");
+		return false;
+	}
+	const ElysiumGym::FLane* Found = GymSpec.FindLane(Lane);
+	if (Found == nullptr)
+	{
+		OutError = FString::Printf(TEXT("the gym has no lane '%s'"), *Lane.ToString());
+		return false;
+	}
+
+	// The movement harness's own seating, minus the recorder. `ResetState` first, so the body
+	// inherits neither the position nor the *motion* of wherever it was; `SeatOrigin` is the one
+	// conversion between the spec's feet and the pawn's centre.
+	Refs.Move->ResetState();
+	Refs.Pawn->SetActorLocation(
+		ElysiumGym::SeatOrigin(ElysiumGym::DefaultOrigin() + Found->FeetOrigin,
+			Refs.Body->GetBodyHalfHeight()),
+		/*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
+	Refs.PC->SetControlRotation(FRotator(0.0f, Found->Yaw, 0.0f));
+	// The boom would otherwise ease across the whole teleport, which reads as the camera falling
+	// behind a body that did not move.
+	if (UElysiumCameraComponent* Camera = Refs.Body->GetCameraComponent())
+	{
+		Camera->RequestReseed();
+	}
+	SeatLane = Lane;
+	return true;
+}
+
+bool FElysiumGreenRoomRun::LabSetDriveBody(const FString& Stem, FString& OutError)
+{
+	AElysiumMapActor* Map = GetMap();
+	if (!Map)
+	{
+		OutError = TEXT("no map actor");
+		return false;
+	}
+	if (Stem.IsEmpty())
+	{
+		OutError = TEXT("no model named");
+		return false;
+	}
+
+	// **The attachment this makes is the rung.** `BuildPlayerVisual` parents the visual to the pawn,
+	// offsets it by the hull's half height, applies the facing basis and installs the mover tick
+	// prerequisite — and caches the stem, which is the one thing whose absence leaves
+	// `TickPlayerAnimation` idle in a stage world. The capture path's detach-and-re-parent is what
+	// this rung exists not to do.
+	USkeletalMeshComponent* Visual = Map->BuildPlayerVisual(Stem, TEXT("Neutral"), 0);
+	if (!Visual)
+	{
+		OutError = FString::Printf(TEXT("could not build %s — is npc/%s.glb exported?"), *Stem, *Stem);
+		return false;
+	}
+	// The same flag the capture path sets: it means "this run owns the map's player visual", and it
+	// is what makes the ordinary teardown clear it.
+	bPlayerSurfaceActive = true;
+	ReviewStem = Stem;
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("drive: %s standing on the pawn"), *Stem);
+	return true;
+}
+
+bool FElysiumGreenRoomRun::LabSetGymVisible(bool bVisible, FString& OutError)
+{
+	bGymMeshes = bVisible;
+	if (!IsDriving())
+	{
+		return true;
+	}
+	// The solids are spawned with their meshes or without them, so this is a rebuild rather than a
+	// visibility write. Seating survives it: the lane is a coordinate, not a reference.
+	if (!BuildDriveGym(OutError))
+	{
+		return false;
+	}
+	return LabSeatOnLane(SeatLane, OutError);
+}
+
+bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
+{
+	AElysiumMapActor* Map = GetMap();
+	if (!IsLabReady() || !Map)
+	{
+		OutError = TEXT("the green room stage is not ready yet");
+		return false;
+	}
+	if (Mode == NewMode)
+	{
+		return true;
+	}
+
+	UWorld* World = GetWorld();
+	const FDriveRefs Refs = ResolveDriveBody(World);
+	if (!Refs)
+	{
+		OutError = TEXT("this session has no player body with the faithful mover on it");
+		return false;
+	}
+	const UElysiumMapSubsystem* Sub = Subsystem.Get();
+	if (NewMode == ELabMode::Drive && Sub && !Sub->IsStageWorld())
+	{
+		// A real map already has a floor, a spawn point and its own player visual. Driving there is a
+		// reasonable thing to want and a different question from this one; refusing says so rather
+		// than standing a second floor through the middle of a level.
+		OutError = TEXT("drive mode is the stage world's — relaunch without -ElysiumMap");
+		return false;
+	}
+
+	// Whatever was standing belongs to the mode that is leaving.
+	DestroyBodies();
+
+	if (NewMode == ELabMode::Drive)
+	{
+		// The orbit is a camera shot on the player's own stack, so leaving it pushed would mean the
+		// "real camera" the rung is about is still being overridden. Popping it hands the view back
+		// to the manager and the rig.
+		if (CameraShotId != 0)
+		{
+			Map->PopCameraShot(CameraShotId);
+			CameraShotId = 0;
+		}
+		// The review stage's floor plate is a collision-free prop at the stage origin. Left visible it
+		// intersects nothing and means nothing, but it reads as a surface — which is the one confusion
+		// standing on a real floor exists to remove.
+		if (UStaticMeshComponent* FloorComp = Floor.Get())
+		{
+			FloorComp->SetVisibility(false);
+		}
+
+		Mode = ELabMode::Drive;
+		if (!BuildDriveGym(OutError))
+		{
+			Mode = ELabMode::Review;
+			return false;
+		}
+		// The stage world froze this body on arrival because it had no floor. It has one now, and
+		// releasing the freeze belongs to whoever supplied it.
+		Refs.Body->SetMovementFrozen(false);
+		if (!LabSeatOnLane(SeatLane, OutError))
+		{
+			return false;
+		}
+		// Third person or there is nothing to look at: the fade band takes the model to zero alpha at
+		// the first-person eye. The choice is the player's own persistent one, set here rather than
+		// pinned per frame, so the operator can still toggle it and watch what that does.
+		if (UElysiumCameraComponent* Camera = Refs.Body->GetCameraComponent())
+		{
+			Camera->SetThirdPerson(true);
+			Camera->RequestReseed();
+		}
+		// A stemless drive is a complete request: the mover, the gym and the camera are worth
+		// watching on their own, and inventing a default PC body would be inventing content.
+		if (!ReviewStem.IsEmpty())
+		{
+			FString BodyError;
+			if (!LabSetDriveBody(ReviewStem, BodyError))
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning, TEXT("drive: %s"), *BodyError);
+			}
+		}
+		UE_LOG(LogElysiumGreenRoom, Log,
+			TEXT("drive: the shipping path has the body — F1 hands the keyboard to the window"));
+		return true;
+	}
+
+	// Back to review: put the stage back the way it frames a model, and put the body back where a
+	// stage world seats it.
+	Mode = ELabMode::Review;
+	DestroyDriveGym();
+	Refs.Body->SetMovementFrozen(true);
+	Refs.Move->ResetState();
+	Refs.Pawn->SetActorLocation(FVector(0.0f, 0.0f, 100.0f), /*bSweep=*/false, nullptr,
+		ETeleportType::TeleportPhysics);
+	if (UStaticMeshComponent* FloorComp = Floor.Get())
+	{
+		FloorComp->SetVisibility(true);
+	}
+	// The next lab tick reframes the empty stage and pushes a fresh orbit shot.
+	return true;
+}
+
+void FElysiumGreenRoomRun::TickDrive(float DeltaSeconds)
+{
+	ApplyLabHud(LabViewState.bShowHud);
+
+	// The stage's key and fill travel with the body, which is the only reason the stage still exists
+	// in this mode: a gym is unlit geometry in an empty level, and a body walking out of two
+	// 18-metre lights would walk into the dark.
+	const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+	if (Refs)
+	{
+		FVector Origin = FVector::ZeroVector;
+		FVector Extent = FVector::ZeroVector;
+		Refs.Pawn->GetActorBounds(/*bOnlyCollidingComponents=*/false, Origin, Extent);
+		UpdateStage(FBox(Origin - Extent, Origin + Extent));
+	}
+
+	// Nothing else. No camera shot, no control rotation, no clip seek, no placement: every one of
+	// those is the shipping path's, and writing one here would be writing over the thing the
+	// acceptance is watching.
+	DrawLabOverlays();
 }
 
 bool FElysiumGreenRoomRun::LabRestand(FString& OutError)
@@ -1651,6 +1970,12 @@ void FElysiumGreenRoomRun::ApplyLabHud(bool bShow) const
 
 void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 {
+	if (IsDriving())
+	{
+		TickDrive(DeltaSeconds);
+		return;
+	}
+
 	ApplyLabHud(LabViewState.bShowHud);
 
 	AElysiumMapActor* Map = GetMap();
@@ -1693,7 +2018,7 @@ void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 void FElysiumGreenRoomRun::DrawLabOverlays() const
 {
 	UWorld* World = GetWorld();
-	USkeletalMeshComponent* Body = Bodies.IsEmpty() ? nullptr : Bodies[0].Body.Get();
+	USkeletalMeshComponent* Body = LabBody();
 	if (!World || !Body
 		|| (!LabViewState.bDrawLattice && !LabViewState.bDrawColliders
 			&& !LabViewState.bDrawSkeleton))
@@ -1842,9 +2167,18 @@ bool FElysiumGreenRoomRun::Tick(float DeltaSeconds)
 			Phase = EPhase::Lab;
 			UE_LOG(LogElysiumGreenRoom, Log,
 				TEXT("lab: stage ready — F1, or `elysium.gr`, opens the window that drives it"));
-			// `gr <model> [clip]` names a body up front. A failure here is reported and nothing
-			// else: the stage is up, and the window can name another one.
-			if (!ReviewStem.IsEmpty())
+			// `gr <model> [clip]` names a body up front, and `--drive` says which mode stands it. A
+			// failure here is reported and nothing else: the stage is up, and the window can ask
+			// again.
+			if (bDriveRequested)
+			{
+				FString Error;
+				if (!LabSetMode(ELabMode::Drive, Error))
+				{
+					UE_LOG(LogElysiumGreenRoom, Warning, TEXT("lab: %s"), *Error);
+				}
+			}
+			else if (!ReviewStem.IsEmpty())
 			{
 				FString Error;
 				if (!LabSetBody(ReviewStem, ReviewClip, Error))

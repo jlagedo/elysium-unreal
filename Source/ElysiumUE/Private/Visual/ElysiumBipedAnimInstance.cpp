@@ -116,8 +116,9 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// is a named one. Holding also leaves `OneShot` describing the pose that is actually on screen,
 	// so the generation gate in the driver's owner reads stale and the latch falls back to its
 	// timer — which is what ends the landing.
-	if (ElysiumAnimGraph::ShouldHoldPose(bHasApplied, PendingSequence != nullptr,
-			PendingBlendSpace != nullptr))
+	bHoldingPose = ElysiumAnimGraph::ShouldHoldPose(bHasApplied, PendingSequence != nullptr,
+		PendingBlendSpace != nullptr);
+	if (bHoldingPose)
 	{
 		return;
 	}

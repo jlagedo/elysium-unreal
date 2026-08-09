@@ -1256,4 +1256,84 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	return true;
 }
 
+// One clip serves many bodies only because VtMB's animation supplies ROTATIONS and each model
+// supplies its own bone LENGTHS. Unreal reproduces that with
+// `EBoneTranslationRetargetingMode::Skeleton`, which discards the sequence's translation track and
+// takes the translation from the playing mesh's own reference pose instead.
+//
+// Its default is the opposite, and the default is silent: with `Animation`, a shared clip drags
+// every joint onto the proportions of whichever body it was baked from. The bodies still load, the
+// clips still play, every other assertion in this file still passes, and the cast walks around with
+// stretched forearms and fanned-out hands. Only the bone tree's flags say which of the two is
+// happening, so they are what this reads.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBakedSkeletonRetargetingTest,
+	"Elysium.Content.BakedSkeletonRetargeting", GElysiumBakedCharacterFlags)
+bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
+{
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error))
+	{
+		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		return true;
+	}
+
+	TArray<FString> Stems;
+	Index.Npcs.GenerateKeyArray(Stems);
+	Stems.Sort();
+
+	TSet<const USkeleton*> Seen;
+	TArray<FString> Wrong;
+	int32 Checked = 0;
+	for (const FString& Stem : Stems)
+	{
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
+		const USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
+		if (Skeleton == nullptr || Seen.Contains(Skeleton))
+		{
+			continue;
+		}
+		Seen.Add(Skeleton);
+		++Checked;
+
+		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+		for (int32 Bone = 0; Bone < Ref.GetRawBoneNum(); ++Bone)
+		{
+			const EBoneTranslationRetargetingMode::Type Mode =
+				Skeleton->GetBoneTranslationRetargetingMode(Bone);
+			// Two bones keep the animation's translation. The root carries a clip's displacement, and
+			// the pelvis carries an additive's hip delta — which `Skeleton` mode zeroes outright on a
+			// baked additive, so putting the pelvis on it discards authored motion.
+			const FName Name = Ref.GetBoneName(Bone);
+			const bool bTranslates = Bone == 0 || Name == TEXT("Bip01 Pelvis");
+			const EBoneTranslationRetargetingMode::Type Want = bTranslates
+				? EBoneTranslationRetargetingMode::Animation
+				: EBoneTranslationRetargetingMode::Skeleton;
+			if (Mode != Want)
+			{
+				Wrong.Add(FString::Printf(TEXT("%s: '%s' retargets translation as %d, expected %d"),
+					*Skeleton->GetName(), *Ref.GetBoneName(Bone).ToString(),
+					static_cast<int32>(Mode), static_cast<int32>(Want)));
+			}
+		}
+	}
+
+	if (Checked == 0)
+	{
+		AddInfo(TEXT("skipping: no baked skeleton on the mount; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	// Capped: a whole family reading the wrong mode is one defect, and 111 lines of it buries every
+	// other failure in the run.
+	for (int32 Index2 = 0; Index2 < FMath::Min(Wrong.Num(), 12); ++Index2)
+	{
+		AddError(Wrong[Index2]);
+	}
+	AddInfo(FString::Printf(TEXT("%d baked skeleton(s) checked"), Checked));
+	TestEqual(TEXT("every bone below the root takes its translation from the body playing the clip"),
+		Wrong.Num(), 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

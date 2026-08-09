@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "ElysiumEntityHandle.h"
-// By value: the resolved grid is a member, so the subsystem's own header rather than a declaration.
+// By value: the gym spec and the resolved grid are members, so their own headers rather than
+// declarations. `ElysiumGymSpec.h` is the pure half and ships; only the builder is debug-only.
+#include "ElysiumGymSpec.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 
 class AActor;
@@ -80,6 +82,37 @@ public:
 	bool IsLab() const { return bLab; }
 	// The stage exists and the lab is accepting bodies.
 	bool IsLabReady() const { return bLab && Phase == EPhase::Lab; }
+
+	// --- the two lab modes ---------------------------------------------------------------------
+	//
+	// **Review** is the stage the animation programme verifies on: one body standing at the stage
+	// origin, its clip driven by absolute time, framed by the orbit. Nothing about it is the game —
+	// the body is a visual the map actor owns, posed by the cast's native host, and the orbit is a
+	// camera shot pushed over whatever the player's rig was doing.
+	//
+	// **Drive** is the opposite in every one of those respects, which is why it is a mode rather than
+	// a switch: the real pawn on real gym collision, wearing the real player visual on the real
+	// graph, driven by real input and framed by the shipping camera. The lab supplies the floor and
+	// then gets out of the way — no camera shot, no control-rotation pin, no clip seek. What is under
+	// test is the shipping path, so anything the lab does *to* the body is something the acceptance
+	// would not have proven (CCC6).
+	enum class ELabMode : uint8 { Review, Drive };
+	ELabMode LabMode() const { return Mode; }
+	bool IsDriving() const { return Mode == ELabMode::Drive; }
+	// The one door into and out of drive mode. The `--drive` flag, the boot path and the window's
+	// switch all come through here, so the teardown of whichever mode is leaving cannot be half-done
+	// by one caller and whole by another.
+	bool LabSetMode(ELabMode NewMode, FString& OutError);
+	// Seat the driven body at the feet of a gym lane, the way the movement harness seats a course.
+	bool LabSeatOnLane(const FName& Lane, FString& OutError);
+	// The gym standing under the driven body: the lane list a picker draws, and which lane the body
+	// was last seated on. Empty while reviewing.
+	const ElysiumGym::FSpec& DriveGym() const { return GymSpec; }
+	const FName& DriveLane() const { return SeatLane; }
+	// Whether the gym's solids are drawn. They are collision either way — a box shape needs no mesh —
+	// so this is only whether a human can see what they are walking on.
+	bool DriveGymVisible() const { return bGymMeshes; }
+	bool LabSetGymVisible(bool bVisible, FString& OutError);
 	// Stand a body on the stage, replacing whatever is there. An empty clip asks the model's own
 	// idle policy for one, so a stem alone is a complete request.
 	bool LabSetBody(const FString& Stem, const FString& Clip, FString& OutError);
@@ -210,6 +243,20 @@ private:
 	// One frame of the lab: advance the clip under the window's playback state, re-frame the stage
 	// and the orbit camera around whatever the body is doing now, and draw the requested overlays.
 	void TickLab(float DeltaSeconds);
+	// One frame of drive mode, which is deliberately almost nothing: carry the stage lights with the
+	// body and draw the overlays. The pose, the view and the position all belong to the shipping
+	// path, and every one of them would be a claim the acceptance no longer proves if the lab wrote
+	// it here.
+	void TickDrive(float DeltaSeconds);
+	// Stand the generated gym up at its own origin, so the pawn has a floor. The stage world freezes
+	// its body on arrival precisely because it has none; releasing that freeze belongs to whoever
+	// supplied one.
+	bool BuildDriveGym(FString& OutError);
+	void DestroyDriveGym();
+	// Build the player visual and leave it attached where the builder put it — on the pawn. This is
+	// the whole of "the stage body is the player body", and the one-shot capture path's
+	// detach-and-re-parent is exactly what it must not do.
+	bool LabSetDriveBody(const FString& Stem, FString& OutError);
 	void DrawLabOverlays() const;
 	// Push FLabView::bShowHud at the local-player HUD. Called every lab frame rather than on the
 	// edge: the HUD subsystem rebuilds its root on travel and on a controller change, and a
@@ -286,6 +333,18 @@ private:
 	FLabView LabViewState;
 	float LabClipTime = 0.0f;
 	int32 CameraShotId = 0;
+
+	// `-GreenRoomDrive`: enter drive mode as soon as the stage is ready, rather than standing a
+	// review body. Held as a request rather than acted on in the constructor, where there is no map,
+	// no pawn and no floor yet.
+	bool bDriveRequested = false;
+	ELabMode Mode = ELabMode::Review;
+	TWeakObjectPtr<AActor> GymActor;
+	ElysiumGym::FSpec GymSpec;
+	// The lane the body is seated on. `flat` is the only lane with room to build up to a run and
+	// nothing to trip over, which is what the acceptance walks first.
+	FName SeatLane = TEXT("flat");
+	bool bGymMeshes = true;
 
 	TArray<FCase> ActiveCases;
 	TArray<FBodyEntry> Bodies;

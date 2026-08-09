@@ -723,7 +723,74 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 		}
 	}
 
+	// **The bone tree is not the reference skeleton, and authoring one does not grow the other.**
+	// `FReferenceSkeletonModifier` owns bones and bind poses; `BoneTree` is `USkeleton`'s own
+	// parallel array, and it is where per-bone retargeting lives. Nothing above touches it, so a
+	// skeleton built straight through the modifier carries a full reference skeleton and an EMPTY
+	// tree — a state the engine's own merge asserts against
+	// (`check(NumBones == ReferenceSkeleton.GetRawRefBoneInfo().Num())`) and which leaves every bone
+	// with no retargeting data at all.
+	//
+	// `MergeAllBonesToBoneTree` is the one public door that fills both: with an empty tree it takes
+	// `CreateReferenceSkeletonFromMesh`, which rebuilds the reference skeleton and sizes the tree to
+	// match. The carrier holds the skeleton we just authored, so this re-states the same bones rather
+	// than changing any of them — it supplies the half the modifier does not own.
+	{
+		USkeletalMesh* Carrier =
+			NewObject<USkeletalMesh>(GetTransientPackage(), NAME_None, RF_Transient);
+		Carrier->SetRefSkeleton(Skeleton->GetReferenceSkeleton());
+		if (!Skeleton->MergeAllBonesToBoneTree(Carrier))
+		{
+			return FString::Printf(
+				TEXT("%s: the bone tree refused the reference skeleton just authored onto it"),
+				*AssetName);
+		}
+	}
+
 	OutBones = Skeleton->GetReferenceSkeleton().GetRawBoneNum();
+
+	// **Rotations from the clip, bone lengths from the body.** This is VtMB's own rule, and without
+	// it a shared skeleton cannot carry a shared clip: a VtMB animation names bones and supplies
+	// their rotations, while every bone's LENGTH comes from the model that is playing it, which is
+	// why one `character_shared_female_misc` clip drives bodies of visibly different proportions.
+	//
+	// Unreal's default is the opposite — `EBoneTranslationRetargetingMode::Animation` applies the
+	// sequence's own translation tracks verbatim, and those carry whichever body the clip was baked
+	// from. On any other member of the family every joint is then dragged onto the donor's offsets:
+	// forearms stretch, shoulders pull, and extremities fan out, in proportion to how far the two
+	// bodies differ. `Skeleton` mode replaces that translation with the one from the bone container's
+	// reference pose, which is the PLAYING MESH's own — the meshes keep their own reference skeleton
+	// (`bOverwriteRefSkeleton` stays false in `ElysiumNpcVisual`), so this is exactly VtMB's rule.
+	//
+	// **Two bones keep the animation's own translation, and the corpus is what names them.** Across
+	// the 60 shared banks, 115,005 translation tracks are emitted and 96.6% of them are CONSTANT
+	// across every frame — they are the emitting model's bind pose written into the clip, not
+	// movement, and they are what drags another body's joints onto the donor's proportions. The 3.4%
+	// that genuinely vary sit almost entirely on the root chain.
+	//
+	// `Bip01` is one of them and must stay `Animation` regardless: it is where a clip's displacement
+	// is authored, and taking that from the reference pose pins every body in place. `Bip01 Pelvis`
+	// is the other that matters, because an additive states a real hip delta there — and `Skeleton`
+	// mode ZEROES translation on a baked additive (`AnimationRuntime.cpp`), so leaving the pelvis on
+	// it silently discards that delta. `Elysium.Content.BakedCharacterParity` is what says so.
+	//
+	// The remaining varying bones — `Bip01 Spine`, `Spine1`, `Spine2` and the two clavicles — lose a
+	// small authored translation and take their own body's instead. That is a stated simplification
+	// rather than the faithful answer: the faithful one is for the exporter to stop writing a
+	// constant translation track at all, which would leave every untracked bone on its own bind pose
+	// by construction and need none of this.
+	static const FName GTranslatedBones[] = { TEXT("Bip01"), TEXT("Bip01 Pelvis") };
+	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::Skeleton,
+		/*bChildrenToo=*/true);
+	for (const FName& Bone : GTranslatedBones)
+	{
+		const int32 Index = Skeleton->GetReferenceSkeleton().FindRawBoneIndex(Bone);
+		if (Index != INDEX_NONE)
+		{
+			Skeleton->SetBoneTranslationRetargetingMode(Index,
+				EBoneTranslationRetargetingMode::Animation);
+		}
+	}
 
 	// Re-registered only now: both resolve bone names against the tree, so they need the modifier
 	// scope closed and the remapping tables rebuilt.

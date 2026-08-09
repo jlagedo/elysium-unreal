@@ -2,6 +2,7 @@
 
 #if ENABLE_COG
 
+#include "Debug/ElysiumCogLocomotionRow.h"
 #include "Debug/ElysiumCogStyle.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -103,107 +104,6 @@ void FElysiumCogWindow_Npc::RenderLiveNpcs()
 	}
 }
 
-namespace
-{
-	const char* StanceName(EElysiumStance Stance)
-	{
-		switch (Stance)
-		{
-		case EElysiumStance::Lowering: return "lowering";
-		case EElysiumStance::Ducked:   return "ducked";
-		case EElysiumStance::Rising:   return "rising";
-		default:                       return "standing";
-		}
-	}
-
-	const char* PhaseName(EElysiumJumpPhase Phase)
-	{
-		switch (Phase)
-		{
-		case EElysiumJumpPhase::Ascend:  return "ascend";
-		case EElysiumJumpPhase::Descend: return "descend";
-		default:                         return "ground";
-		}
-	}
-
-	// An outcome is a verdict, so it is coloured like one: a clean resolve reads plain, a fallback
-	// reads as a warning, and the two that mean the catalog is wrong read as errors.
-	ImVec4 OutcomeColor(EElysiumAnimOutcome Outcome)
-	{
-		switch (Outcome)
-		{
-		case EElysiumAnimOutcome::Resolved:
-			return ElysiumCogStyle::ColOk;
-		case EElysiumAnimOutcome::MissingSequence:
-		case EElysiumAnimOutcome::MaskedRejected:
-			return ElysiumCogStyle::ColError;
-		default:
-			return ElysiumCogStyle::ColWarn;
-		}
-	}
-
-	// One row of the shared record. Producer-agnostic on purpose: if the player's row and an NPC's
-	// row ever need different columns, the contract has already split and this is where it shows.
-	//
-	// The five selection columns are CCC4's, and `Owner bank` is the one that carries the acceptance
-	// visually: the player's row reads its PC-only bank while every cast row reads the shared one,
-	// side by side, out of one function. `Sel` is null-tolerant because a body can publish a sample
-	// before it has ever resolved anything.
-	void LocomotionRow(const char* Producer, const char* Name, const FElysiumLocomotionSample& S,
-		const FElysiumAnimationSelection* Sel)
-	{
-		ImGui::TableNextRow();
-		ImGui::TableNextColumn(); ImGui::TextColored(ElysiumCogStyle::ColName, "%s", Producer);
-		ImGui::TableNextColumn(); ImGui::TextUnformatted(Name);
-		ImGui::TableNextColumn(); ImGui::Text("%.1f", S.Speed2D());
-		ImGui::TableNextColumn(); ImGui::Text("%.1f / %.1f",
-			S.LocalVelocity.X, S.LocalVelocity.Y);
-		ImGui::TableNextColumn(); ImGui::Text("%.1f", S.FacingYaw);
-		ImGui::TableNextColumn();
-		// The wish yaw is only a measurement while something is being asked for; at rest it is a
-		// placeholder, and the scale is what says so.
-		if (S.WishScale > 0.0f) { ImGui::Text("%.1f (x%.2f)", S.MoveYawWish, S.WishScale); }
-		else { ImGui::TextDisabled("--"); }
-		ImGui::TableNextColumn(); ImGui::Text("%.1f", S.MoveYawVelocity);
-		ImGui::TableNextColumn(); ImGui::TextUnformatted(S.bOnGround ? "yes" : "no");
-		ImGui::TableNextColumn(); ImGui::TextUnformatted(StanceName(S.Stance));
-		ImGui::TableNextColumn(); ImGui::TextUnformatted(PhaseName(S.JumpPhase()));
-
-		if (Sel == nullptr)
-		{
-			for (int32 Column = 0; Column < 5; ++Column)
-			{
-				ImGui::TableNextColumn(); ImGui::TextDisabled("--");
-			}
-			return;
-		}
-
-		ImGui::TableNextColumn();
-		if (Sel->ResolvedActivity.IsEmpty()) { ImGui::TextDisabled("--"); }
-		else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->ResolvedActivity)); }
-
-		ImGui::TableNextColumn();
-		if (Sel->SequenceLabel.IsEmpty()) { ImGui::TextDisabled("--"); }
-		else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->SequenceLabel)); }
-
-		ImGui::TableNextColumn();
-		if (Sel->OwnerStem.IsEmpty()) { ImGui::TextDisabled("--"); }
-		else { ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*Sel->OwnerStem)); }
-
-		ImGui::TableNextColumn();
-		ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(ElysiumAnimIntent::AssetKindName(Sel->AssetKind)));
-
-		ImGui::TableNextColumn();
-		ImGui::TextColored(OutcomeColor(Sel->Outcome), "%s",
-			COG_TCHAR_TO_CHAR(ElysiumAnimIntent::OutcomeName(Sel->Outcome)));
-		// The one line naming what missed, where a reader is already looking at the verdict.
-		if (!Sel->Detail.IsEmpty() && ImGui::IsItemHovered())
-		{
-			ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Sel->Detail));
-		}
-	}
-}
-
 // The body sample, from both producers at once (CCC1). The player's mover published its row at its
 // own tick tail; each NPC row is pulled from its motor here. What the view is for is the claim the
 // contract makes — that these are the same record — so they are drawn by one function over one
@@ -220,34 +120,21 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 	const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
 		ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX | ImGuiTableFlags_Resizable |
 		ImGuiTableFlags_SizingStretchProp;
-	if (!ImGui::BeginTable("##Locomotion", 15, TableFlags, ImVec2(0, GetDpiScale() * 200.f)))
+	if (!ImGui::BeginTable("##Locomotion", ElysiumCogLocomotion::NumColumns, TableFlags,
+		ImVec2(0, GetDpiScale() * 200.f)))
 	{
 		return;
 	}
 
 	ImGui::TableSetupScrollFreeze(0, 1);
-	ImGui::TableSetupColumn("Producer");
-	ImGui::TableSetupColumn("Body");
-	ImGui::TableSetupColumn("Speed2D");
-	ImGui::TableSetupColumn("Fwd / Side");
-	ImGui::TableSetupColumn("Facing");
-	ImGui::TableSetupColumn("Yaw wish");
-	ImGui::TableSetupColumn("Yaw vel");
-	ImGui::TableSetupColumn("Ground");
-	ImGui::TableSetupColumn("Stance");
-	ImGui::TableSetupColumn("Jump");
-	ImGui::TableSetupColumn("Activity");
-	ImGui::TableSetupColumn("Label");
-	ImGui::TableSetupColumn("Owner bank");
-	ImGui::TableSetupColumn("Asset");
-	ImGui::TableSetupColumn("Outcome");
+	ElysiumCogLocomotion::SetupColumns();
 	ImGui::TableHeadersRow();
 
 	const AElysiumMapActor* Map = GetMapActor();
 	const APlayerController* PC = World->GetFirstPlayerController();
 	if (const IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr)
 	{
-		LocomotionRow("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
+		ElysiumCogLocomotion::Row("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
 			Body->GetLocomotionSample(), Map ? &Map->GetPlayerAnimSelection() : nullptr);
 	}
 
@@ -256,8 +143,8 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 		const AElysiumNpcBody* Npc = *It;
 		if (Npc)
 		{
-			LocomotionRow("npc", COG_TCHAR_TO_CHAR(*Npc->GetName()), Npc->SampleLocomotion(),
-				&Npc->GetAnimSelection());
+			ElysiumCogLocomotion::Row("npc", COG_TCHAR_TO_CHAR(*Npc->GetName()),
+				Npc->SampleLocomotion(), &Npc->GetAnimSelection());
 		}
 	}
 

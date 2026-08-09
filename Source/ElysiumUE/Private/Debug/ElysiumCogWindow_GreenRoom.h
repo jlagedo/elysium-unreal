@@ -12,6 +12,7 @@
 class FElysiumGreenRoomRun;
 class UElysiumBodyAnimInstance;
 class UElysiumNpcAnimInstance;
+class USkinnedAsset;
 
 // The green room's control surface: pick a body, pick a clip, watch it move, and tune the garment
 // simulation while it does.
@@ -56,6 +57,11 @@ private:
 	void RenderSource(FElysiumGreenRoomRun& Lab);
 	void RenderModel(FElysiumGreenRoomRun& Lab);
 	void RenderPlayback(FElysiumGreenRoomRun& Lab);
+	// Drive mode's readout (CCC6): what the mover published, what the resolver chose, what the graph
+	// is playing, and how far off the bind pose the body actually is. The last one is the only
+	// observable the T-pose failure has, and the middle two are what make a wrong pose traceable to
+	// a step instead of guessed at.
+	void RenderDrive(FElysiumGreenRoomRun& Lab);
 	// The orbit, the stage, and the drawn overlays — everything about how the body is being looked
 	// at, as opposed to which body it is or what its garment is doing.
 	void RenderView(FElysiumGreenRoomRun& Lab);
@@ -142,6 +148,12 @@ private:
 	FString ScannedStem;
 
 	void ScanRootMotion(FElysiumGreenRoomRun& Lab);
+
+	// The skeleton's own bind pose in component space, and which mesh it belongs to. Cached because
+	// it is a property of the asset rather than of the frame — recomputing a whole rig every frame to
+	// compare against it would be the panel doing more work than the thing it is measuring.
+	TWeakObjectPtr<const USkinnedAsset> DeviationAsset;
+	TArray<FTransform> DeviationRefPose;
 
 	// The live edit and the file it came from. Both are held here rather than read back from the
 	// node every frame because ImGui's sliders need a stable address to write into, and because

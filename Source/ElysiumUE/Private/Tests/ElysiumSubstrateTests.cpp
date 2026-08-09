@@ -46,6 +46,7 @@
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGymSpec.h"
+#include "Visual/ElysiumPoseDeviation.h"
 #include "ElysiumHUD.h"
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
@@ -2615,6 +2616,79 @@ bool FElysiumGymSeatTest::RunTest(const FString&)
 			TestTrue(FString::Printf(TEXT("lane '%s' starts at floor level"), *L.Name.ToString()),
 				FMath::IsNearlyEqual(L.FeetOrigin.Z, 0.0, 1e-4));
 		}
+
+		// The lane the green room's drive mode seats a body on by default (CCC6). It is named here
+		// because the harness names it: a lane that is renamed or dropped would otherwise turn a
+		// hand-driven session into a body standing in the void, with nothing red to say so.
+		const ElysiumGym::FLane* Drive = Spec.FindLane(TEXT("flat"));
+		TestNotNull(TEXT("the gym carries the 'flat' lane drive mode seats on"), Drive);
+		if (Drive != nullptr)
+		{
+			// Long enough to reach a run and stop again — that is what the flat lane is for, and it is
+			// why drive mode starts there rather than on a bracket rung.
+			TestTrue(TEXT("and it is the long clear run rather than a bracket rung"),
+				Drive->Family == ElysiumGym::EFamily::Flat);
+		}
+	}
+	return true;
+}
+
+// =====================================================================================
+// The pose deviation measure (CCC5/CCC6). Two callers share it: the Content tier asserts a real
+// baked body left its bind pose, and the green room's drive panel reports the same number live. It
+// is the only observable the T-pose failure has, so the arithmetic is worth pinning on its own.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPoseDeviationTest,
+	"Elysium.Substrate.PoseDeviation", GElysiumTestFlags)
+bool FElysiumPoseDeviationTest::RunTest(const FString&)
+{
+	TArray<FTransform> A;
+	A.SetNum(4);
+	TArray<FTransform> B = A;
+
+	{
+		const ElysiumPose::FDeviation Same = ElysiumPose::Measure(A, B);
+		TestEqual(TEXT("identical poses move no bone"), Same.MovedBones, 0);
+		TestTrue(TEXT("and deviate by nothing"), FMath::IsNearlyEqual(Same.MaxDegrees, 0.f, 1e-4f));
+	}
+
+	// One bone, one known angle.
+	B[2].SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(30.0)));
+	{
+		const ElysiumPose::FDeviation One = ElysiumPose::Measure(A, B);
+		TestEqual(TEXT("one rotated bone reads as one moved bone"), One.MovedBones, 1);
+		TestTrue(TEXT("at the angle it was rotated by"),
+			FMath::IsNearlyEqual(One.MaxDegrees, 30.0f, 0.01f));
+	}
+
+	// **Bone 0 is not a pose.** In component space the root carries the actor transform, so a body
+	// that merely walked across the gym would otherwise read as a changed pose — which is exactly the
+	// signal drive mode watches for a T-pose.
+	B = A;
+	B[0].SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(90.0)));
+	{
+		const ElysiumPose::FDeviation Root = ElysiumPose::Measure(A, B);
+		TestEqual(TEXT("the root is skipped"), Root.MovedBones, 0);
+		TestTrue(TEXT("and contributes no angle"), FMath::IsNearlyEqual(Root.MaxDegrees, 0.f, 1e-4f));
+	}
+
+	// The threshold separates a posed bone from arithmetic noise, and it is exclusive.
+	B = A;
+	B[1].SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(0.4)));
+	B[3].SetRotation(FQuat(FVector::UpVector, FMath::DegreesToRadians(0.6)));
+	{
+		const ElysiumPose::FDeviation Noise = ElysiumPose::Measure(A, B);
+		TestEqual(TEXT("only the bone past the threshold counts"), Noise.MovedBones, 1);
+	}
+
+	// Mismatched lengths compare what both carry rather than reading off the end: a component's
+	// transform array and a reference pose can legitimately disagree while an LOD is settling.
+	{
+		TArray<FTransform> Short;
+		Short.SetNum(2);
+		const ElysiumPose::FDeviation Ragged = ElysiumPose::Measure(A, Short);
+		TestEqual(TEXT("a shorter pose is compared as far as it goes"), Ragged.MovedBones, 0);
 	}
 	return true;
 }
