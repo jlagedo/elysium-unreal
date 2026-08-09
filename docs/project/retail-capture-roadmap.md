@@ -104,7 +104,7 @@ listed in the order work can start rather than in phase order.
 | 5 | Blend grids and the animation weight are carried out of the model | CAP5.3, then `docs/project/animation-roadmap.md` | CAP5.3 **done** — byte-coverage missing list empty; carrying them to the runtime is the animation tracker's |
 | 6 | The include-model remap route | CAP5.8 | **done**; 6,927 → 2,452, and it needed no capture |
 | 6b | Frame interpolation — is the host loader's LINEAR what retail does | CAP5.10 | open |
-| 7 | Secondary motion — cloth and hair | CAP5.5 | **the mechanism is located**; the clamp is proved, the solve it clamps is not |
+| 7 | Secondary motion — hair and clothing | CAP5.5 | **both mechanisms and solves located**; bone-chain replay and post-skin cloth capture/replay open |
 | 8 | The persistent partial update is adjudicated | CAP5.4 | open; the replay that measures it exists |
 | 9 | **The cast has living eyes** — a plain reproduction; the whole eye system is specified | `docs/project/roadmap.md` 12.4 | open as a build; nothing here gates it |
 | 10 | A visual-acceptance harness that actually isolates one body | `pipeline/` green-room path | open; **now blocking rows 1 and 4** |
@@ -140,10 +140,10 @@ the theatre is shot in close-up, but **capture is not what unblocks it**; the bu
 
 **Both of the path's known unknowns have resolved, and neither resolved badly.** The shipped
 decoder did *not* diverge, which retires the largest risk the program carried and makes every
-downstream visual discrepancy attributable. And secondary motion did *not* turn out to be
-runtime state outside the installed file — it is authored data in the model header, so it is
-reproducible rather than an owner call. What replaced them is narrower and better bounded:
-four undecoded floats beside a proved angular limit, and the biped-family defect at row 3.
+downstream visual discrepancy attributable. Secondary motion's bone-chain parameters and renderer
+cloth payloads are authored in the model image, and both persistent solves are located, so neither
+is an owner call. What remains is narrower and better bounded: game-independent numeric replays,
+a post-skin retail cloth series, and the biped-family defect at row 3.
 
 ## Working rules
 
@@ -1283,11 +1283,10 @@ have had no rung to sit on since CAP4.1 named them.
   and pointed-to spans, original addresses, copied lengths, neighbouring unknown bytes, and
   failures.
 
-  CAP4.3 names the first such site: the window between
-  `C_BaseAnimating::BuildTransformations` and the studio draw, where something reorients
-  bones no clip animates and no model field declares. It is CAP5.5's third step and runs only
-  if the two offline steps above it fail, because a hook costs a capture cycle and they do
-  not.
+  CAP4.3 names the first such site: bones no clip animates and no ordinary `StudioBone` field
+  declares are reoriented after ordinary hierarchy composition. CAP5.5 locates the writer inside
+  `C_BaseAnimating::BuildTransformations` itself, before the function hands its matrices to
+  StudioRender, and identifies the MDL extension table that declares the chains.
 - [x] **CAP5.3 The missing-data ranges, closed at the exporter.** CAP4.2 names five field
   ranges retail reads that nothing offline does, and CAP4.1 names the export shortfall they
   cause. Nothing mismatches here, so CAP5.1's shape does not apply: the work is to carry the
@@ -1374,11 +1373,12 @@ have had no rung to sit on since CAP4.1 named them.
   faithful behaviour in `docs/vtmb/procedural_bones.md`, with
   `docs/architecture/animation-architecture.md` carrying the number rather than the
   assertion.
-- [~] **CAP5.5 Secondary motion — the bones no rule covers.** **The mechanism is located and
-  it is authored data**: a count/index pair at `MDLHeader` +396/+400 addressing 28-byte
-  per-bone records whose last float is an angular limit in degrees. 107 of 4,445 models carry
-  one, 600 records, zero faults. The facts are `docs/vtmb/secondary_motion.md`; what remains
-  here is the four undecoded floats beside the limit.
+- [~] **CAP5.5 Secondary motion — bone chains and renderer cloth.** **The bone mechanism, writer
+  and solve are located.** A count/index pair at `MDLHeader` +396/+400 addresses 28-byte bone-chain
+  records. `C_BaseAnimating` constructs one stateful chain per record, updates it after ordinary
+  hierarchy composition inside `BuildTransformations`, and hands the corrected matrices to
+  StudioRender's normal CPU skinning path. 107 of 4,445 models carry one, 600 records, zero
+  faults. The full fact and confidence ledger are `docs/vtmb/secondary_motion.md`.
 
   **The limit is proved, three ways.** 48 of the 50 records across the capture's 7 carrying
   models equal the measured ceiling exactly, and the 2 that differ are both *below* the
@@ -1388,13 +1388,13 @@ have had no rung to sit on since CAP4.1 named them.
   `Smiling_Jack.mdl`'s three 100° records never engage across 1,570 paired draws, which is
   what separates a ceiling from a fixed per-bone offset.
 
-  **Steps 1 and 2 are firm negatives and should not be repeated.** Motion correlation is
-  refuted — Spearman medians of `+0.227`/`+0.030`/`+0.225`/`+0.183` spanning both signs, with
-  `Damsel` rooted on 673 of 683 samples while pinned at exactly 15.000°. So is a first-order
-  lag (`α` spreading 0.002–0.847 where one lag gives one `α`) and a visible spring (lag-1
-  autocorrelation `+0.728`, sign-change rate 0.08, no settling). VPhysics is eliminated
-  structurally: `Therese`, `VV` and `Damsel` ship byte-identical `.phy` files, and no hair,
-  breast or ponytail bone appears in their solids at all.
+  **The earlier correlation passes bound the capture, not the mechanism.** Divergence magnitude
+  is pinned at the authored ceiling on most sampled frames, so its weak correlation with root or
+  parent motion and its lack of visible settling cannot rule out the underlying dynamics. The
+  static path shows a Verlet-like state update driven by the current posed chain, with damping,
+  gravity, spring and a maximum angle. VPhysics remains eliminated structurally: `Therese`, `VV`
+  and `Damsel` ship byte-identical `.phy` files, and no hair, breast or ponytail bone appears in
+  their solids at all.
 
   **The residual is fully accounted.** 90 bones over 7 models: 47 named by the array, 43
   descendants of a named bone. Descendants inherit it because retail composes a child off the
@@ -1404,19 +1404,33 @@ have had no rung to sit on since CAP4.1 named them.
   independent analyses reached those numbers from opposite ends. `Sheriff Sword` was never
   part of this population and is corrected out of it.
 
-  *Remaining:* `+8` `{9, 30, 60}`, `+12` `0…10`, `+16` `{0.05 … 0.97}` and `+20` `0…7` are
-  almost certainly the solve the limit clamps, and nothing establishes that. The corpus
-  saturates most frames, so sub-ceiling behaviour is barely sampled. Two routes, and the first
-  costs nothing: work the samples that fall *short* of the limit, and look for a model whose
-  limit is loose enough to leave the solve visible unclamped — `Smiling_Jack`'s 100° is the
-  candidate the corpus already contains. Failing that, the CAP5.2 recipe on the window between
-  `C_BaseAnimating::BuildTransformations` and the studio draw.
+  **The fields are named by the binary's own override controls.** Record +12 is gravity, +16 is
+  damping, +20 is a spring exponent converted to `10^(-value)`, and +24 is maximum angle in
+  degrees. +8 is not read or passed by the located constructor and retains no invented semantic
+  name. The update targets 300 Hz, caps catch-up at ten steps, resets across a 0.15-second gap,
+  carries prior point positions as state, and optionally resolves a ground height.
 
-  *Acceptance:* the four floats named in `docs/vtmb/secondary_motion.md` with a
-  game-independent regression, or a recorded statement of what the rebuild does with a proved
-  clamp over an undecoded solve. **Reproducing the clamp alone is worth measuring first** —
-  the corpus sits at the ceiling on most frames, so a limit-only implementation may be visually
-  indistinguishable for the theatre without the solve ever being decoded.
+  **Clothing is a second mechanism, and the old negative was wrong.** Installed header flag
+  `0x400`, `StudioModel` +200..+220, and `StudioMesh` +48/+52/+56 carry a StudioRender particle
+  cloth definition, authored capsule/sphere collision, and per-render-vertex substitution maps.
+  The flag and payload agree exactly on 60 of 4,445 models; 84 of 9,741 meshes carry the complete
+  map triple. Bone skinning supplies the pinned attachment particles, then a persistent
+  double-buffered solve applies gravity, wind, distance and compression-only constraints and
+  collision before regenerating normals/tangents and replacing selected render vertices.
+
+  Jeanette's skirt selects 364 of 417 vertices into a 386-particle solve (56 pinned, 330 dynamic),
+  with 3 capsules and 2 spheres. Sheriff's shared definition has 374 particles (91 pinned, 283
+  dynamic), 6 capsules, and maps 2,028 `sheriffbody2` plus 20 `sheriffhead` vertices. The retained
+  theatre capture proves Sheriff is resident and drawn, but its streams stop before StudioRender's
+  particle buffers; it is reachability evidence, not cloth-output acceptance.
+
+  *Remaining and acceptance:* implement game-independent numeric replays of both decoded solves.
+  Compare the bone chain against a controlled retail series; for cloth, first add the smallest
+  post-skin particle capture around the StudioRender step/reset boundary, then compare Sheriff and
+  Jeanette series including delta, wind and collision inputs. That closes the task without naming
+  unused bone-record +8 or the cloth definition's two optional seed-table offsets. The nonnegative
+  bone-record +4 branch, `bc_ground` query, single-body `money` special case, and `r_cloth`'s exact
+  indirect runtime gating remain bounded follow-ups.
 - [x] **CAP5.7 Make the shipped-path candidate model the shipped path.** The difference
   instrument's `bone_name` candidate is documented as what the exporter bakes and the loader
   resolves, but it models the single-bank exporter only. On a multi-biped cinematic owner the

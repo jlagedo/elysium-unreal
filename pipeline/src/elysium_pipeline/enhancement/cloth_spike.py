@@ -2,12 +2,11 @@
 Simulated-garment spike: rebuild two VtMB character meshes with a synthesised cloth
 lattice, beside the faithful export rather than over it.
 
-VtMB skins a skirt or coat rigidly to `Bip01 Pelvis` and swings it as one shell, because
-Source 2003 had no cloth solver (`docs/vtmb/secondary_motion.md` establishes that the one
-authored per-bone stage names hair, ponytail, mane and breast bones only, and that no
-garment bone appears in it or in any `.phy`). `enhancement/cloth.py` segments that shell,
-hangs a bone lattice on the garment's own surface and re-weights the shell onto it; this
-module turns that plan into a real `.glb` plus the solver sidecar the runtime reads.
+VtMB's garment path is authored StudioRender particle cloth after ordinary skinning,
+independent from its custom hair/body chain solver (`docs/vtmb/secondary_motion.md`). This
+spike does not decode that payload. `enhancement/cloth.py` segments pelvis-dominant
+free-hanging geometry on the two allowlisted models, hangs an approximation bone lattice on
+that surface and re-weights it; this module emits the `.glb` and solver sidecar it needs.
 
 Outputs go to `$ELYSIUM_EXPORT_ROOT/npc/cloth/` and **nothing else is written**. The
 faithful `npc/<stem>.glb` is never touched, so the whole spike reverts by deleting one
@@ -80,8 +79,9 @@ def build(sample: Sample, idx, destination: Path, *, rows: int, columns: int) ->
     sidecar = {
         "stem": sample.stem,
         "model": sample.model,
-        "note": ("Synthesised garment lattice; VtMB authors no cloth at all "
-                 "(docs/vtmb/secondary_motion.md). Lengths are metres in this glb's own "
+        "note": ("Synthesised garment approximation; this does not consume VtMB's authored "
+                 "renderer-cloth payload (docs/vtmb/secondary_motion.md). Lengths are metres "
+                 "in this glb's own "
                  "space -- apply glTFRuntime's import scale, as the composition rig does."),
         "root": plan.root,
         "rows": plan.rows,

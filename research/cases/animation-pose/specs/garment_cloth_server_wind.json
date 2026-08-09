@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "topic": "garment_cloth_server_wind",
+  "consuming_document": "docs/vtmb/secondary_motion.md",
+  "research_id": "RE32",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which maps and scripts call CBaseAnimating::SetWind, and what ranges do they author?"
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "CBaseAnimating::SetWind and RemoveWind own a source entity plus angle, changes per second, minimum speed and maximum speed.",
+      "evidence": "0x1008e480 and 0x1008e630 write server entity +0x63c, +0x640, +0x644, +0x648 and +0x64c; matching send/recv field names identify the four floats.",
+      "consequence": "Wind is entity state replicated to the client cloth draw path, not a global renderer constant."
+    }
+  ],
+  "functions": [
+    {
+      "address": "1008e480",
+      "label": "cbaseanimating_set_wind",
+      "confidence": "confirmed",
+      "role": "Sets source, angle, change rate, minimum speed and maximum speed on an animating entity.",
+      "depth": 3,
+      "cap": 240,
+      "asm_count": 2400
+    },
+    {
+      "address": "1008e630",
+      "label": "cbaseanimating_remove_wind",
+      "confidence": "confirmed",
+      "role": "Clears the animating entity's wind source/state.",
+      "depth": 3,
+      "cap": 180,
+      "asm_count": 1800
+    }
+  ],
+  "field_probes": [
+    {
+      "displacement": "63c",
+      "label": "wind_source_entity"
+    },
+    {
+      "displacement": "640",
+      "label": "wind_angle"
+    },
+    {
+      "displacement": "644",
+      "label": "wind_changes_per_second"
+    },
+    {
+      "displacement": "648",
+      "label": "wind_min_speed"
+    },
+    {
+      "displacement": "64c",
+      "label": "wind_max_speed"
+    }
+  ],
+  "grep_probes": [
+    {
+      "label": "wind_surface",
+      "str": "CBaseAnimating::SetWind~CBaseAnimating::RemoveWind~m_hWindSourceEntity~m_flWindAngle~m_flWindChangesPerSecond~m_flWindMinSpeed~m_flWindMaxSpeed",
+      "fn": "SetWind~RemoveWind",
+      "cap": 240
+    }
+  ]
+}

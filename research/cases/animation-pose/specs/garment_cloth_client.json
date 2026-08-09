@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "topic": "garment_cloth_client",
+  "consuming_document": "docs/vtmb/secondary_motion.md",
+  "research_id": "RE32",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What public engine type names the 32-byte local-player collision record?",
+    "Which shipped entities call the server wind setter and with what authored ranges?"
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseAnimating::InternalDrawModel is the sole client consumer of the four replicated wind floats.",
+      "evidence": "0x10092970 reads entity +0x4f8, +0x4fc, +0x500 and +0x504 only inside the MDLHeader.Flags 0x400 draw branch.",
+      "consequence": "Wind is a cloth-render input, not an animation-channel or material parameter."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Retail computes a horizontal time-varying wind vector from angle, changes per second, and minimum/maximum speed.",
+      "evidence": "0x10092970 uses sine/cosine for XY, a lazily filled 256-entry random table for interpolation, clamps speed to the replicated range, and leaves Z zero.",
+      "consequence": "A faithful replay needs the same time/noise phase in addition to the four networked values."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The client passes one optional 32-byte dynamic collision record derived from the local player together with wind.",
+      "evidence": "0x10092970 derives position/orientation from the local player, stages radius-like float 18 and identifier 1, and calls VEngineModel006 slot +0x68.",
+      "consequence": "Garment/player interaction is distinct from model-authored capsule and sphere collision."
+    }
+  ],
+  "functions": [
+    {
+      "address": "10092970",
+      "label": "c_baseanimating_internal_draw_model",
+      "confidence": "confirmed",
+      "role": "Gates cloth by header flag, computes wind, builds the local-player collision record, and submits both to VEngineModel006.",
+      "depth": 4,
+      "cap": 300,
+      "asm_count": 4400
+    }
+  ],
+  "field_probes": [
+    {
+      "displacement": "4f8",
+      "label": "wind_angle"
+    },
+    {
+      "displacement": "4fc",
+      "label": "wind_changes_per_second"
+    },
+    {
+      "displacement": "500",
+      "label": "wind_min_speed"
+    },
+    {
+      "displacement": "504",
+      "label": "wind_max_speed"
+    }
+  ],
+  "grep_probes": [
+    {
+      "label": "cloth_wind",
+      "str": "m_flWindAngle~m_flWindChangesPerSecond~m_flWindMinSpeed~m_flWindMaxSpeed",
+      "fn": "DrawModel~Wind",
+      "cap": 220
+    }
+  ]
+}

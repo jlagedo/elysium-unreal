@@ -74,12 +74,14 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 		"-- a stem the character bake has not covered cannot stand at all. The line under Restand "
 		"names the asset that is standing and the rig family whose skeleton it was built against, "
 		"and Restand is what picks up a re-export.\n\n"
-		"Cloth: VtMB simulates no garment at all -- a skirt or coat is skinned rigidly to the "
-		"pelvis and swings as one shell. The offline spike appends a bone lattice to a copy of the "
+		"Cloth: retail carries renderer-side particle cloth after skeletal skinning, independently "
+		"from its hair/body bone-chain solver. The current offline spike does not decode that cloth "
+		"payload: it appends a substitute bone lattice to a copy of the "
 		"mesh and hangs an AnimDynamics chain down each panel; `npc/cloth/<stem>.json` is the "
 		"solver setup it derived from the model's own measurements. These sliders edit the live "
 		"simulation, never the file, until Save bakes them into it. Revert goes back to the "
-		"sidecar, and `elysium.Cloth 0` puts the faithful rigid mesh back on.\n\n"
+		"sidecar. The baked-character path currently does not select the approximation mesh, so "
+		"these controls remain a research surface until that route is reconnected.\n\n"
 		"Gravity, the two component scales, the iteration counts, the cone ramp and the collider "
 		"radii are re-read every frame, so those answer while you drag. Damping and the body "
 		"extents are baked into the rigid bodies when a chain initialises, so moving either "
@@ -958,9 +960,9 @@ void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 	}
 	if (Rig == nullptr)
 	{
-		ImGui::TextDisabled("%s wears its faithful rigid mesh - no garment rig is installed.",
+		ImGui::TextDisabled("%s wears its unmodified skinned mesh - no approximation rig is installed.",
 			COG_TCHAR_TO_CHAR(*Lab.LabStem()));
-		ImGui::TextDisabled("Either the cloth spike never built this model, or elysium.Cloth is 0.");
+		ImGui::TextDisabled("Either the cloth spike never built this model, or its lattice is absent.");
 		ImGui::TextDisabled("  uv run python -m elysium_pipeline.enhancement.cloth_spike");
 		return;
 	}

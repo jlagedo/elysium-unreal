@@ -207,9 +207,9 @@ void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 	{
 		AxisInterp.Apply(Composed);
 	}
-	// Last, over the finished skeleton. The garment is synthesised geometry hanging off the pelvis
-	// and shares no bone with either stage above, but it should still swing from the pose that will
-	// actually be drawn rather than one still missing its corrections.
+	// Last, over the finished skeleton. A synthesised lattice drives selected garment geometry from
+	// its pelvis anchor and shares no dynamic bone with either stage above, but it should swing from
+	// the pose that will actually be drawn rather than one still missing its corrections.
 	Cloth.Apply(Composed);
 
 	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have

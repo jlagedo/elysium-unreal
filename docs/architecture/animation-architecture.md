@@ -677,18 +677,22 @@ merged, and the curve metadata authored. `docs/vtmb/facial_animation.md` owns ev
 
 **The garment simulation** (`pipeline/src/elysium_pipeline/enhancement/cloth.py` writes its rig) runs
 after the composition stage, so the simulation sees the finished skeleton. It is an enhancement
-rather than a reproduction — VtMB simulates no cloth — and the two are independent: a model may
-carry either, both or neither.
+rather than a reproduction because it synthesizes a bone lattice instead of consuming VtMB's
+authored renderer-cloth payload. Retail selects that second payload with `MDLHeader.Flags & 0x400`,
+skins its pinned attachment particles, then simulates and substitutes selected render vertices
+after ordinary skinning. Jeanette's skirt and Sheriff's coat both use it. The exact carrier and
+solve are `docs/vtmb/secondary_motion.md`.
 
 It is **off** (`elysium.Cloth 0`) and it no longer selects a mesh. A garment rig names lattice
 bones the shared baked skeleton does not carry, so with the cvar on the chains resolve nothing;
 every body comes off the mount either way.
 
-**Secondary motion is a second stage, on disjoint bones.** VtMB clamps hair, ponytail, mane and
-breast bones to an authored per-bone angular limit read from a table in the model header
-(`docs/vtmb/secondary_motion.md`). It touches none of the bones the stage above acts on, so it is a
-further node rather than a change to it — but the solve the limit clamps is undecoded, so what that
-node evaluates below the ceiling is not yet designable.
+**Bone-chain secondary motion is another independent stage.** VtMB simulates hair, ponytail, mane
+and breast chains from an authored table in the model header, with gravity, damping, a spring
+coefficient and a maximum angle. It corrects bone-to-world matrices before skinning; renderer cloth
+instead consumes the finished palette only for its anchors and writes particle-derived vertices
+afterward. Both retail solves are decoded; game-independent numeric replays and a post-skin cloth
+capture still gate faithful implementations.
 
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are

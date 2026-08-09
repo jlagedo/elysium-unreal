@@ -89,10 +89,10 @@ private:
 // The simulated-garment spike — one `FAnimNode_AnimDynamics` chain per lattice column, hosted
 // together so the proxy installs, updates and evaluates them as a unit (`Visual/ElysiumClothRig.h`).
 //
-// This one reproduces nothing. The stage above exists because VtMB does something Unreal has no
-// equivalent for; this exists because VtMB does *nothing* — a skirt or coat is skinned rigidly to
-// one bone and never moves, and no garment bone appears in the format's one authored per-bone
-// stage (`docs/vtmb/secondary_motion.md`). It runs LAST, after the composition stage, so the
+// This one reproduces neither retail secondary-motion path. VtMB's garment solver consumes an
+// authored particle/constraint payload after ordinary skinning, independently from its custom
+// hair/body bone-chain solver (`docs/vtmb/secondary_motion.md`). This approximation synthesises a
+// bone lattice instead. It runs LAST, after the composition stage, so the
 // simulation sees the finished skeleton rather than one still missing its corrections. The bone
 // sets are disjoint in any case: the lattice is synthesised and no clip or procedural rule can
 // name it.

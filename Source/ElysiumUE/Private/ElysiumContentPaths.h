@@ -384,9 +384,10 @@ struct FElysiumContentPaths
 	static FString NpcBlends(const FString& RelPath) { return NpcDir() / RelPath; }
 
 	// The simulated-garment spike, beside the faithful mesh rather than over it
-	// (pipeline/src/elysium_pipeline/enhancement/cloth_spike.py). VtMB skins a skirt or coat
-	// rigidly to one bone and has no cloth solver at all, so the enhanced glb is the same mesh
-	// with a synthesised bone lattice appended and its garment shell re-weighted onto it, and the
+	// (pipeline/src/elysium_pipeline/enhancement/cloth_spike.py). Retail garment motion is an
+	// authored StudioRender particle solve after ordinary skinning, separate from its hair/body
+	// bone-chain solver. This approximation does not consume that payload: the enhanced glb has a
+	// synthesised bone lattice appended and its selected garment shell re-weighted onto it, and the
 	// sidecar is the solver setup over that lattice. Both are keyed by stem rather than named by
 	// `npc_index.json`: the spike writes nothing into the manifest, so the only thing that selects
 	// it is `elysium.Cloth` plus these files existing — which is why every reader tests before

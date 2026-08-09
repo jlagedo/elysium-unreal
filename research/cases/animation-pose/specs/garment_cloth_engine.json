@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "topic": "garment_cloth_engine",
+  "consuming_document": "docs/vtmb/secondary_motion.md",
+  "research_id": "RE32",
+  "program": "engine.dll",
+  "binary": {
+    "size": 1986620,
+    "sha256": "9d00b2c1e5edbad052fb0b514634ba54574666e12d1b408c46ce141d51ed2313",
+    "md5": "4c60ce9bc98fcf4c5253106b7d8468e1",
+    "image_base": "0x20000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What indirect path, if any, reads the r_cloth ConVar value after registration?",
+    "What exact lifecycle event destroys a StudioRender cloth handle rather than resetting it?"
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "engine.dll registers r_cloth and the cloth_reset command.",
+      "evidence": "r_cloth registration 0x200a5cb0; cloth_reset registration 0x200a84c0 and help string 'resets all cloth in the world'.",
+      "consequence": "Retail exposes a cloth control surface, but registration alone does not establish the exact r_cloth gate."
+    },
+    {
+      "confidence": "eliminated-lead",
+      "fact": "0x200a5ce0 is the static r_cloth ConVar destructor, not a value-change callback.",
+      "evidence": "The thunk loads ECX=0x20d63b88 and jumps to the common ConVar destructor 0x200405f0; its sole xref is static registration cleanup.",
+      "consequence": "Do not infer renderer state changes from this function; r_cloth's exact runtime consumer remains open."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "VEngineModel006 creates a StudioRender cloth-instance handle only when runtime MDLHeader.Flags has bit 0x400.",
+      "evidence": "0x200a7be0 tests studio header +0xe4 & 0x400 and calls TStudioRender012 slot +0x98; the returned 16-bit handle is retained by the engine model instance.",
+      "consequence": "The installed header flag is the engine-side authored garment-cloth gate."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "cloth_reset walks live engine model instances and resets their StudioRender cloth handles.",
+      "evidence": "0x200a84f0 reaches the live-instance walk at 0x200a8480, which forwards each valid handle to TStudioRender012 slot +0xa0.",
+      "consequence": "Persistent simulation state is instance-owned and can be forced to lazy reinitialization without reloading the model."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "VEngineModel006 slot +0x68 forwards wind and dynamic collision inputs to TStudioRender012 slot +0xa4.",
+      "evidence": "VEngineModel006 vtable 0x20174c54, slot function 0x200a85a0.",
+      "consequence": "Client entity wind and player collision cross the engine/renderer boundary through an explicit cloth method."
+    }
+  ],
+  "functions": [
+    {
+      "address": "200a5cb0",
+      "label": "register_r_cloth",
+      "confidence": "confirmed",
+      "role": "Constructs the r_cloth ConVar object at 0x20d63b88.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 1200
+    },
+    {
+      "address": "200a5ce0",
+      "label": "destroy_r_cloth",
+      "confidence": "confirmed eliminated lead",
+      "role": "Static ConVar destructor thunk; not a change callback.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 1200
+    },
+    {
+      "address": "200a7be0",
+      "label": "create_model_instance",
+      "confidence": "confirmed",
+      "role": "Tests MDLHeader.Flags 0x400 and creates the StudioRender cloth handle.",
+      "depth": 4,
+      "cap": 260,
+      "asm_count": 3200
+    },
+    {
+      "address": "200a8480",
+      "label": "reset_model_instance_cloth",
+      "confidence": "confirmed",
+      "role": "Forwards a live engine model instance's cloth handle to StudioRender reset.",
+      "depth": 3,
+      "cap": 180,
+      "asm_count": 2200
+    },
+    {
+      "address": "200a84f0",
+      "label": "cloth_reset_command",
+      "confidence": "confirmed",
+      "role": "Command callback that walks every live engine model instance.",
+      "depth": 4,
+      "cap": 220,
+      "asm_count": 2400
+    },
+    {
+      "address": "200a85a0",
+      "label": "submit_cloth_environment",
+      "confidence": "confirmed",
+      "role": "VEngineModel006 slot +0x68 forwarding wind and dynamic collision records.",
+      "depth": 3,
+      "cap": 180,
+      "asm_count": 2200
+    }
+  ],
+  "vtable_probes": [
+    {
+      "address": "20174c54",
+      "label": "VEngineModel006",
+      "slots": 64,
+      "cap": 64
+    }
+  ],
+  "grep_probes": [
+    {
+      "label": "cloth_controls",
+      "str": "r_cloth~cloth_reset~cloth",
+      "fn": "Cloth~CreateInstance~Reset",
+      "cap": 220
+    }
+  ]
+}

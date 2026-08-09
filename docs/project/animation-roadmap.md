@@ -330,9 +330,12 @@ belongs to `docs/vtmb/facial_animation.md`'s owner and to `docs/project/roadmap.
 
 ### Secondary motion
 
-A second post-process stage, beside axis interpolation, on disjoint bones. It is undesignable until
-the solve beneath its proved angular limit is decoded;
-`docs/project/retail-capture-roadmap.md` CAP5.5 owns that.
+Two independent retail stages are decoded in `docs/vtmb/secondary_motion.md`: the bone-chain
+post-process for hair, manes, ponytails and breasts, and StudioRender particle cloth for garments.
+The first corrects bone matrices; the second skins pinned attachment particles and substitutes
+simulated render vertices from authored `StudioModel`/`StudioMesh` payloads. Both are designable;
+game-independent numeric replays and the cloth path's post-skin retail capture remain owned by
+`docs/project/retail-capture-roadmap.md` CAP5.5.
 
 ## Risks
 

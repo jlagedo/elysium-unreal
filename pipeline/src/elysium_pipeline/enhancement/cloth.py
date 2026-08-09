@@ -1,11 +1,10 @@
-"""Synthesised garment lattice for VtMB's rigidly-weighted skirts and coats.
+"""Synthesised approximation for selected VtMB skirts and coats.
 
-VtMB has no cloth. A skirt or coat is skinned rigidly to one bone -- `Bip01 Pelvis` on
-every garment in the corpus -- and swings as a single shell while the legs move inside
-it. The only per-bone stage that does move is the authored angular limit in
-`docs/vtmb/secondary_motion.md`, and it names hair, ponytail, mane and breast bones
-only: no garment bone appears in it, and no garment vertex is driven by anything but
-its one rigid parent.
+VtMB has two independent secondary-motion systems: a bone-chain stage for hair/body rigs
+and StudioRender particle cloth for garments. The latter consumes authored particles,
+constraints, collision primitives and per-vertex substitution maps after ordinary skinning.
+This experiment does not decode that payload; it builds a host-native approximation instead.
+The exact retail carrier and solve are `docs/vtmb/secondary_motion.md`.
 
 This module segments that shell out of the decoded skin, hangs a bone lattice on the
 garment's own surface, and re-weights the shell onto the lattice, so a host animation
@@ -35,7 +34,8 @@ import numpy as np
 #: two garments, and every other model must keep loading its faithful mesh untouched.
 ALLOWLIST = ("tremere_female_armor_0", "sheriff")
 
-#: The bone every shipped garment is rigidly weighted to.
+#: The spike's attachment/segmentation root for its two allowlisted models. This is not a
+#: claim that every shipped garment is pelvis-rigid; the corpus explicitly disproves that.
 DEFAULT_ROOT = "Bip01 Pelvis"
 
 #: The joint whose height splits "hangs free" from "wraps the torso". A coat reaching

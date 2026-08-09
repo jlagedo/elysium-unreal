@@ -238,7 +238,7 @@ above and checked against the first bone for bone, is a regression in
 **What the rule does not explain is a different stage, and it is located.** **2,428**
 records stay outside the band with this rule applied, on **90 bones over 7 models** carrying
 neither `ProcType` nor `Flags & 0x2` — hair chains, `left`/`right breast`, ponytails. They
-are the authored per-bone angular limit `docs/vtmb/secondary_motion.md` owns: 47 of the 90
+are the table-driven bone-chain dynamics `docs/vtmb/secondary_motion.md` owns: 47 of the 90
 are named by that table and the remaining 43 descend from a named bone. Nothing about it
 bears on this rule, and the two stages act on disjoint bone sets.
 

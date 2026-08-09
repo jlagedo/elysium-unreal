@@ -15,7 +15,8 @@
     "How must the recovered post-blend split-inheritance correction be integrated across sequence-player, single-node, and direct playback paths, and which rendered retail invariant validates it?",
     "What do the chain-rebase branch's shorts at remap record +0x04 and +0x06 select, and which corpus reaches that branch at all? The branch structure, the parent-chain walk against the included model's StudioBone.parent, and the position-transform byte are read; no shipped model in the captured corpus carries a record that enters it, and its second loop cannot terminate unless the two shorts are equal.",
     "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?",
-    "Which client receive/update path applies the server's networked activity and m_nSequence changes before SetupBones, and which sequence changes can originate only on the client? The server selector functions are located and tracked in gameplay_actions.json; this client-side specification now owns only the state handoff into pose evaluation."
+    "Which client receive/update path applies the server's networked activity and m_nSequence changes before SetupBones, and which sequence changes can originate only on the client? The server selector functions are located and tracked in gameplay_actions.json; this client-side specification now owns only the state handoff into pose evaluation.",
+    "How does the MDLHeader +396/+400 record table construct, update, constrain and render table-driven hair and body chains? The writer and four runtime parameters are located; record +8 remains unnamed because the located consumer does not read it."
   ],
   "field_probes": [
     {
@@ -25,8 +26,8 @@
     },
     {
       "displacement": "724",
-      "label": "setupbones_output_source",
-      "role": "Enumerates readers of the field copied into SetupBones' optional output array."
+      "label": "secondary_chain_list",
+      "role": "Enumerates readers and writers of C_BaseAnimating's linked list of MDLHeader +396/+400 bone-chain owners."
     },
     {
       "displacement": "e4",
@@ -256,6 +257,36 @@
       "fact": "The bone mask handed to a resolved include model is rebuilt in that model's own bone index space, sized from its NumBones@240 and populated by mapping each set bit of the caller's mask through the group's remap array. It is not the caller's mask forwarded unchanged.",
       "evidence": "0x10089d1b-0x10089d2e calls 0x1008e370 as a __thiscall on a stack object with the caller's mask, the group's remap array base and the included studiohdr; 0x1008e370 reads NumBones@0xf0 from the studiohdr, zeroes ceil(bones/32) words, and for each set source bit sets the bit the remap short names when that short is non-negative. 0x10089d3e passes the rebuilt object as the recursion's seventh argument.",
       "consequence": "CAP2.5's finding that the selected-bone set reaches the cell unchanged is a measured property of this corpus's remap arrays rather than a structural identity, so a corpus whose remap is not a bijection on the selected set would break it."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseAnimating owns one linked secondary-chain object per MDLHeader +396/+400 record at entity +0x724; a data/model change rebuilds the list and entity destruction frees it.",
+      "evidence": "0x10096650 reads count@studiohdr+0x18c and offset@+0x190, allocates 0x50 bytes per 0x1c-byte record, calls 0x100ac0f0 and links the object at entity+0x724. The call at 0x10094bd5 rebuilds it; C_BaseEntity destruction calls 0x100966e0 at 0x1008f5e7.",
+      "consequence": "The table is a live per-entity dynamics system rather than metadata consumed by the offline model loader or by VPhysics."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Record +12 is gravity, +16 damping, +20 a spring exponent converted to pow(10,-value), and +24 a maximum angle converted from degrees to radians; record +8 is not passed to the located constructor.",
+      "evidence": "0x10096695-0x100966b2 passes +24,+20,+16,+12,+4,+0 and never reads +8. 0x100ac171-0x100ac1c5 converts and stores the values. Under bc_override, 0x100acac4-0x100acc64 maps bc_maxangle, bc_spring, bc_damp and bc_gravity onto the same four members.",
+      "consequence": "The four runtime fields are named by retail data flow rather than value-shape inference; +8 remains unknown instead of receiving an invented label."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A -1 record terminal makes the constructor follow the ordered StudioBone.parent child chain from the first moving bone; a nonnegative terminal takes a separate explicit-chain branch, and the first moving bone must have a parent.",
+      "evidence": "0x100ac12b-0x100ac16e emits the literal rootless-bone warning. 0x100ac1bc branches on -1; 0x100ac243-0x100ac279 appends children whose parent equals the current chain tail, while 0x100ac1cb-0x100ac241 walks the explicit-terminal form backward. All 600 installed records use -1.",
+      "consequence": "Automatic chain construction is confirmed; the explicit-terminal branch remains unexercised by shipped authored data."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The secondary-chain update is a stateful Verlet-like solve targeting 300 Hz, capped at ten catch-up steps, with a 0.001-second no-advance threshold and reset across gaps above 0.15 seconds.",
+      "evidence": "0x100ac8a2-0x100ac8c9 compares against float 0.001; 0x100ac974-0x100ac988 compares the gap against double 0.15; 0x100acc64-0x100acc9c computes ceil(delta*300) and caps at 10. 0x100ad1c0 carries current/previous points with damping and gravity; 0x100ad2c0 applies the spring and max-angle constraint.",
+      "consequence": "A faithful port needs persistent chain state, discontinuity handling and substeps; a stateless angular clamp is not the retail algorithm."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseAnimating::BuildTransformations runs every secondary-chain update after ordinary hierarchy composition and before returning the bone-to-world buffer to StudioRender.",
+      "evidence": "0x100901f7-0x10090235 loads entity+0x724, walks the linked list and calls 0x100ac880 at 0x1009022c after the selected-bone composition loop ends at 0x100901f1.",
+      "consequence": "The previously bounded post-composition writer is located exactly, and its output reaches the normal StudioRender palette and CPU skinning path."
     }
   ],
   "functions": [
@@ -586,6 +617,69 @@
       "role": "Scales a quaternion's rotation by a scalar weight - the q^s the two additive combines apply before multiplying. Role read from its use sites in this binary.",
       "depth": 0,
       "cap": 20
+    },
+    {
+      "address": "10096650",
+      "label": "secondary_chain_rebuild",
+      "confidence": "confirmed",
+      "role": "Replaces the entity+0x724 linked list with one chain owner per 28-byte MDLHeader +396/+400 record and passes the consumed record fields to 0x100ac0f0.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 900
+    },
+    {
+      "address": "100966e0",
+      "label": "secondary_chain_destroy",
+      "confidence": "confirmed",
+      "role": "Destroys every secondary-chain object linked at entity+0x724; called by rebuild and C_BaseEntity destruction.",
+      "depth": 1,
+      "cap": 60,
+      "asm_count": 300
+    },
+    {
+      "address": "100967e0",
+      "label": "secondary_chain_enabled",
+      "confidence": "confirmed",
+      "role": "Tests a record index against studiohdr+0x18c and the entity+0x788 per-record mask; the result drives bc_fade direction.",
+      "depth": 1,
+      "cap": 60,
+      "asm_count": 300
+    },
+    {
+      "address": "100ac0f0",
+      "label": "secondary_chain_construct",
+      "confidence": "confirmed",
+      "role": "Constructs an automatic or explicit bone chain, converts max angle and spring exponent, derives bind-segment frames, and allocates 100 bytes of state per moving bone.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 2600
+    },
+    {
+      "address": "100ac880",
+      "label": "secondary_chain_update",
+      "confidence": "confirmed",
+      "role": "Updates fade and optional ground state, handles time discontinuities, applies bc_override, runs bounded integration/constraint substeps and writes corrected bone-to-world matrices.",
+      "depth": 2,
+      "cap": 180,
+      "asm_count": 3600
+    },
+    {
+      "address": "100ad1c0",
+      "label": "secondary_chain_integrate",
+      "confidence": "confirmed",
+      "role": "Advances current/previous point state with step-ratio-scaled damped velocity, gravity and an optional ground-height clamp.",
+      "depth": 1,
+      "cap": 100,
+      "asm_count": 900
+    },
+    {
+      "address": "100ad2c0",
+      "label": "secondary_chain_constrain",
+      "confidence": "confirmed",
+      "role": "Reconstructs chain segment orientation against the posed bone matrices, applies spring and maximum-angle constraints, preserves segment relationships and recomposes corrected matrices.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 2400
     }
   ],
   "relationships": [

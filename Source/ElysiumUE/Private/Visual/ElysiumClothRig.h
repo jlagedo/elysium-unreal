@@ -6,12 +6,10 @@
 // `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
 // `UElysiumNpcAnimSubsystem`.
 //
-// Unlike the two composition stages, this reproduces nothing. VtMB has no cloth solver at all: a
-// skirt or coat is skinned rigidly to one bone and swings as a single shell, and the one authored
-// per-bone stage the format does carry names hair, ponytail, mane and breast bones only, with no
-// garment bone in it or in any `.phy` (`docs/vtmb/secondary_motion.md`). So there is no faithful
-// garment motion to diverge from — the artist authored the garment's shape, and its stillness is a
-// 2003 engine limit rather than a decision.
+// Unlike the two composition stages, this reproduces nothing. VtMB has two independent systems:
+// a custom bone-chain solver for hair/body rigs and a StudioRender particle solve that substitutes
+// selected garment vertices after ordinary skinning (`docs/vtmb/secondary_motion.md`). This rig
+// consumes neither authored payload; it is a bone-lattice approximation of the garment path.
 //
 // The mesh this rig drives is a *separate* artifact. `enhancement/cloth_spike.py` writes
 // `npc/cloth/<stem>.glb` — the same mesh with a bone lattice appended and its garment shell

@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "topic": "garment_cloth_studiorender",
+  "consuming_document": "docs/vtmb/secondary_motion.md",
+  "research_id": "RE32",
+  "program": "StudioRender.dll",
+  "binary": {
+    "size": 561222,
+    "sha256": "13d56ce90de2c5faedc0df26d36b24e90f30eded5055625f616cd97e301e124b",
+    "md5": "d9f4c7f9c19499976ae6c0324bdab4cc",
+    "image_base": "0x2c000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What are the exact authoring names and consumers of cloth-definition offsets +0x54 and +0x58?",
+    "Does the one definition-count-two installed model use those seed tables for adjacent LOD state transfer?",
+    "What exact fixed-step target selects the observed cap of 30 cloth substeps?"
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "TStudioRender012 slots +0x98 through +0xa8 create, reset, configure, and advance persistent cloth instances.",
+      "evidence": "Runtime vtable 0x2c06c150: 0x2c0011d0, 0x2c0012c0, 0x2c0012d0, 0x2c001100, 0x2c001030.",
+      "consequence": "Garment state is renderer-owned and persists across draws independently of the client's bone-chain list."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "StudioModel +200/+204 select cloth definitions, +208/+212 authored capsules, and +216/+220 authored spheres.",
+      "evidence": "0x2c003ad0 resolves the definition table; 0x2c014a00 transforms 36-byte two-endpoint records and 20-byte one-center records through the current bone palette before cloth simulation.",
+      "consequence": "Collision and solver topology are authored in the MDL image, not inferred from garment material names or the PHY file."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "StudioMesh +48/+52/+56 are per-render-vertex cloth selector, simulated position/normal, and tangent-output maps.",
+      "evidence": "Representative generated routines 0x2c023590 and 0x2c03a2e0 read the three arrays; selector 0xff takes ordinary palette skinning and other selectors substitute simulated output.",
+      "consequence": "Valid biped weights coexist with cloth and describe fallback/attachment input rather than the final free-surface position."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The cloth definition carries pinned and dynamic particles, general distance and compression-only constraints, collision triangles, and tangent-space reconstruction tables.",
+      "evidence": "0x2c003ad0 and 0x2c001850 construct state; 0x2c002d90 always solves its constraint set, while 0x2c0030a0 acts only when current length squared is below rest length squared; 0x2c002500 consumes the edge/contribution tables.",
+      "consequence": "The solver is sufficiently decoded for an engine-independent numerical implementation without inventing a garment lattice."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Each cloth advance integrates inertia, gravity and wind, then solves distance, compression-only, distance again, and collision for each substep.",
+      "evidence": "0x2c001e50 orchestrates 0x2c002a30, 0x2c002d90, 0x2c0030a0 and 0x2c0031a0; elapsed-time subdivision is capped at 30 steps.",
+      "consequence": "Gravity fall, inertial swing, wind response and body collision are one deterministic renderer solve."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Pinned particles are refreshed from source vertices skinned through the current bone palette before free particles advance.",
+      "evidence": "The definition +0x10 uint16 source-vertex list feeds the palette-skinning copy in the live-object update path.",
+      "consequence": "Animation drives the garment attachment boundary while simulation drives the hanging region."
+    }
+  ],
+  "functions": [
+    {
+      "address": "2c001030",
+      "label": "advance_cloth_instances",
+      "confidence": "confirmed",
+      "role": "TStudioRender012 slot +0xa8; advances timing and retires stale live objects.",
+      "depth": 4,
+      "cap": 240,
+      "asm_count": 2800
+    },
+    {
+      "address": "2c001100",
+      "label": "set_cloth_environment",
+      "confidence": "confirmed",
+      "role": "TStudioRender012 slot +0xa4; copies wind and dynamic collision records into renderer state.",
+      "depth": 4,
+      "cap": 240,
+      "asm_count": 2800
+    },
+    {
+      "address": "2c0011d0",
+      "label": "create_cloth_handle",
+      "confidence": "confirmed",
+      "role": "TStudioRender012 slot +0x98; allocates a per-engine-instance cloth handle.",
+      "depth": 3,
+      "cap": 180,
+      "asm_count": 2200
+    },
+    {
+      "address": "2c0012d0",
+      "label": "reset_cloth_handle",
+      "confidence": "confirmed",
+      "role": "TStudioRender012 slot +0xa0; resets every live cloth object owned by one handle.",
+      "depth": 4,
+      "cap": 220,
+      "asm_count": 2600
+    },
+    {
+      "address": "2c001310",
+      "label": "get_or_create_cloth_object",
+      "confidence": "confirmed",
+      "role": "Looks up persistent cloth state by instance handle, model variant, and definition, creating it on demand.",
+      "depth": 5,
+      "cap": 340,
+      "asm_count": 4400
+    },
+    {
+      "address": "2c001850",
+      "label": "cloth_object_constructor",
+      "confidence": "confirmed",
+      "role": "Initializes the 0x6c-byte object and its double-buffered particle storage.",
+      "depth": 4,
+      "cap": 280,
+      "asm_count": 3600
+    },
+    {
+      "address": "2c001e50",
+      "label": "cloth_simulation_advance",
+      "confidence": "confirmed",
+      "role": "Subdivides elapsed time and orchestrates integration, constraint solves, collision, and output refresh.",
+      "depth": 5,
+      "cap": 360,
+      "asm_count": 5600
+    },
+    {
+      "address": "2c002500",
+      "label": "regenerate_cloth_tangent_space",
+      "confidence": "confirmed",
+      "role": "Rebuilds normals and tangent outputs from simulated geometry and authored edge/contribution tables.",
+      "depth": 4,
+      "cap": 300,
+      "asm_count": 4200
+    },
+    {
+      "address": "2c002a30",
+      "label": "integrate_cloth_particles",
+      "confidence": "confirmed",
+      "role": "Advances double-buffered positions with inertia, gravity and wind.",
+      "depth": 3,
+      "cap": 240,
+      "asm_count": 3200
+    },
+    {
+      "address": "2c002d90",
+      "label": "solve_cloth_distance_constraints",
+      "confidence": "confirmed",
+      "role": "Applies the general distance constraint set.",
+      "depth": 3,
+      "cap": 240,
+      "asm_count": 3200
+    },
+    {
+      "address": "2c0030a0",
+      "label": "solve_cloth_compression_constraints",
+      "confidence": "confirmed",
+      "role": "Applies its set only when a particle pair is shorter than authored rest length.",
+      "depth": 3,
+      "cap": 240,
+      "asm_count": 3200
+    },
+    {
+      "address": "2c0031a0",
+      "label": "project_cloth_collisions",
+      "confidence": "confirmed",
+      "role": "Projects cloth collision triangles against authored capsules/spheres and dynamic records.",
+      "depth": 4,
+      "cap": 300,
+      "asm_count": 4200
+    },
+    {
+      "address": "2c003750",
+      "label": "reset_cloth_object",
+      "confidence": "confirmed",
+      "role": "Marks one persistent object for lazy state reinitialization.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 1200
+    },
+    {
+      "address": "2c003ad0",
+      "label": "create_live_cloth_object",
+      "confidence": "confirmed",
+      "role": "Resolves authored definition data, initializes runtime buffers, and links the live object.",
+      "depth": 5,
+      "cap": 340,
+      "asm_count": 4600
+    },
+    {
+      "address": "2c014a00",
+      "label": "build_authored_cloth_collision",
+      "confidence": "confirmed",
+      "role": "Transforms StudioModel capsule and sphere records through the current bone palette.",
+      "depth": 4,
+      "cap": 300,
+      "asm_count": 4200
+    },
+    {
+      "address": "2c023590",
+      "label": "mapped_cloth_vertex_entry",
+      "confidence": "confirmed",
+      "role": "Representative generated specialization substituting simulated position and normal.",
+      "depth": 4,
+      "cap": 300,
+      "asm_count": 5200
+    },
+    {
+      "address": "2c03a2e0",
+      "label": "mapped_cloth_vertex_tangent_entry",
+      "confidence": "confirmed",
+      "role": "Representative generated specialization also reading the simulated tangent map.",
+      "depth": 4,
+      "cap": 300,
+      "asm_count": 5600
+    }
+  ],
+  "vtable_probes": [
+    {
+      "address": "2c06c150",
+      "label": "TStudioRender012",
+      "slots": 64,
+      "cap": 64
+    }
+  ],
+  "field_probes": [
+    {
+      "displacement": "30",
+      "label": "studio_mesh_cloth_selector_offset"
+    },
+    {
+      "displacement": "34",
+      "label": "studio_mesh_cloth_position_normal_offset"
+    },
+    {
+      "displacement": "38",
+      "label": "studio_mesh_cloth_tangent_offset"
+    },
+    {
+      "displacement": "d0",
+      "label": "studio_model_cloth_capsule_count"
+    },
+    {
+      "displacement": "d8",
+      "label": "studio_model_cloth_sphere_count"
+    }
+  ]
+}
