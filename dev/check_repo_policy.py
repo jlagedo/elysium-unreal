@@ -57,21 +57,33 @@ AUTHORED_EXTENSIONS = {
     ".py", ".ps1", ".java", ".cpp", ".c", ".h", ".hpp",
     ".cs", ".md", ".json", ".yaml", ".yml",
 }
-IGNORED_AUTHORED_ALLOWLIST = (
+# Managed outputs: ignored, regenerable package roots a generator owns end to end. The first two
+# are game-derived; the rest are original project content whose tracked source is the generator
+# under pipeline/unreal/ (and, for a captured graph, its .t3d text). A package here is expected to
+# be absent until it is built and to be overwritten wholesale when it is.
+GENERATED_PACKAGE_ROOTS = (
+    "Content/VtMB/",
+    "Plugins/ElysiumBaked/Content/",
+    "Content/Elysium.umap",
+    "Content/Elysium/",
+    "Content/Input/",
+)
+# Local tool state: caches, build products and fetched dependencies. Never authored, never tracked.
+LOCAL_TOOL_ROOTS = (
     ".claude/",
+    ".pytest_cache/",
     ".vs/",
     ".vscode/",
     "Binaries/",
-    "Content/VtMB/",
     "DerivedDataCache/",
     "Intermediate/",
     ".venv/",
     "pipeline/.venv/",
     "Plugins/External/",
-    "Plugins/ElysiumBaked/Content/",
     "Saved/",
     "Source/ElysiumUE/ThirdParty/CPython27/",
 )
+IGNORED_AUTHORED_ALLOWLIST = GENERATED_PACKAGE_ROOTS + LOCAL_TOOL_ROOTS
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -134,10 +146,7 @@ def ignored_authored_warnings() -> list[str]:
         if not path or path.endswith("/"):
             continue
         lower = path.lower()
-        if (
-            lower == "content/elysium.umap"
-            or any(lower.startswith(prefix.lower()) for prefix in IGNORED_AUTHORED_ALLOWLIST)
-        ):
+        if any(lower.startswith(prefix.lower()) for prefix in IGNORED_AUTHORED_ALLOWLIST):
             continue
         if reason := prohibited(path):
             warnings.append(f"prohibited ignored file outside a managed output: {path} ({reason})")
