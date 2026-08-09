@@ -87,13 +87,36 @@ public:
 	 * tree and otherwise unions, so without it a family skeleton can only grow and keeps the bones
 	 * of members that a later partition moved elsewhere.
 	 *
+	 * `TranslatedBones` names the bones that keep an animation's own translation; every other bone
+	 * takes its translation from the body playing the clip, which is VtMB's own rule. The set is
+	 * derived rather than named -- `ScanTranslatedBones` answers it -- and it must cover every
+	 * container whose clips this skeleton can be the TARGET of, because that is the skeleton the
+	 * engine reads the mode from. A bone the tree does not carry is ignored.
+	 *
 	 * Refuses a container that would give the skeleton a second root, which is what
 	 * `USkeleton::MergeBonesToBoneTree` rejects far downstream. `OutBones` is the resulting raw
 	 * bone count. Returns an empty string on success, otherwise the first thing that went wrong.
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildFamilySkeleton(const TArray<FString>& SourcePaths,
-		const FString& SkeletonPackageName, bool bRebuild, int32& OutBones);
+		const TArray<FString>& TranslatedBones, const FString& SkeletonPackageName, bool bRebuild,
+		int32& OutBones);
+
+	/**
+	 * Name the bones whose translation actually MOVES anywhere in the given `.eskm` containers.
+	 *
+	 * The answer feeds `BuildFamilySkeleton`, and it exists as a separate call because the set a
+	 * skeleton needs is not the set its own members declare: the engine reads a bone's translation
+	 * retargeting mode from the skeleton being POSED, so a body's skeleton has to keep an
+	 * animation's translation on every bone that any bank it is declared compatible with moves.
+	 * Scanning is one pass per container and decodes no clip, so the caller scans each container
+	 * once and unions.
+	 *
+	 * `OutBones` is sorted and de-duplicated. Returns an empty string on success, otherwise the
+	 * first thing that went wrong.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString ScanTranslatedBones(const TArray<FString>& SourcePaths, TArray<FString>& OutBones);
 
 	/**
 	 * Drop every saved package under `PackagePath` from memory, and return how many were released.

@@ -59,10 +59,15 @@
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
 #include "BoneIndices.h"
+#include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "glTFRuntimeAsset.h"
 
 static constexpr EAutomationTestFlags GElysiumBakedCharacterFlags =
@@ -460,13 +465,32 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 						? FVector(BaseBone->Translations[0])
 						: Container.Bones[Track.Bone].Local.GetTranslation();
 
+					// **A bone the skeleton retargets by `Skeleton` carries no translation at all**,
+					// by design: an additive's translation is zeroed outright on that path
+					// (`AnimationRuntime.cpp`) and the body playing the clip supplies the bone
+					// length instead -- VtMB's own rule. Re-composing the container's position on
+					// top of the base would then measure the bind pose and call it an error.
+					//
+					// So the assertion CHANGES rather than lapses: what has to be true of such a
+					// bone is that the delta is exactly zero. That still catches a translation
+					// arriving where none should, and it is the same question the skeleton answers,
+					// asked of the asset.
+					const bool bKeepsTranslation =
+						BakedDelta->GetSkeleton()->GetBoneTranslationRetargetingMode(SkeletonBone)
+							!= EBoneTranslationRetargetingMode::Skeleton;
+
 					const FQuat Expected = Track.Rotations.IsValidIndex(Frame)
 						? FQuat(Track.Rotations[Frame]) : BaseRotation;
-					const FVector ExpectedPos = Track.Translations.IsValidIndex(Frame)
-						? FVector(Track.Translations[Frame]) : BasePosition;
+					const FVector ExpectedPos = bKeepsTranslation
+						? (Track.Translations.IsValidIndex(Frame)
+							? FVector(Track.Translations[Frame]) : BasePosition)
+						: FVector::ZeroVector;
 					FTransform Actual = Deltas[SkeletonBone];
 					Actual.SetRotation((Actual.GetRotation() * BaseRotation).GetNormalized());
-					Actual.SetTranslation(Actual.GetTranslation() + BasePosition);
+					if (bKeepsTranslation)
+					{
+						Actual.SetTranslation(Actual.GetTranslation() + BasePosition);
+					}
 
 					++Samples;
 					const double Degrees = FMath::RadiansToDegrees(
@@ -478,8 +502,10 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					{
 						AddError(FString::Printf(
 							TEXT("%s '%s' frame %d bone '%s': the baked delta is %.4f deg / %.4f cm ")
-							TEXT("off VtMB's own"),
-							*Owner, *Clip.Name, Frame, *BoneName.ToString(), Degrees, Centimetres));
+							TEXT("off %s"),
+							*Owner, *Clip.Name, Frame, *BoneName.ToString(), Degrees, Centimetres,
+							bKeepsTranslation ? TEXT("VtMB's own")
+								: TEXT("VtMB's own rotation with no translation of its own")));
 						bSound = false;
 						break;
 					}
@@ -1266,54 +1292,173 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 // clips still play, every other assertion in this file still passes, and the cast walks around with
 // stretched forearms and fanned-out hands. Only the bone tree's flags say which of the two is
 // happening, so they are what this reads.
+//
+// THE EXPECTED SET IS DERIVED HERE, NOT NAMED. Which bones keep their animated translation is a
+// property of the corpus -- the bones some clip actually moves -- so it is scanned back out of the
+// containers, unioned exactly the way the bake unions them. A bone list written down in this file
+// would agree with a bake that had stopped reading the corpus altogether, which is the one thing
+// worth catching. What a re-derivation still catches is the bake not APPLYING what it derived:
+// `USkeleton` carries the modes in a parallel array the reference skeleton knows nothing about, and
+// the last defect here was that array being empty on every family the cast ships.
+//
+// The union is over every container the skeleton can be asked to POSE, which for a body is its own
+// family plus every bank: the engine reads a bone's mode off the skeleton being posed, never off
+// the one the clip was authored against.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBakedSkeletonRetargetingTest,
 	"Elysium.Content.BakedSkeletonRetargeting", GElysiumBakedCharacterFlags)
 bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 {
-	FElysiumNpcIndex Index;
-	FString Error;
-	if (!Index.Load(Error))
+	// The declared partition, because that is what the bake derived from. Recomputing the families
+	// here would be a different partition -- the offline half is greedy over whatever set it is
+	// given -- and would compare a skeleton against members it was never built from.
+	FString Raw;
+	if (!FFileHelper::LoadFileToString(Raw, *FElysiumContentPaths::NpcFamilies()))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(TEXT("skipping: no npc/families.json; run: uv run elysium export characters"));
 		return true;
 	}
+	TSharedPtr<FJsonObject> Partition;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Raw);
+	if (!FJsonSerializer::Deserialize(Reader, Partition) || !Partition.IsValid())
+	{
+		AddError(TEXT("npc/families.json did not parse"));
+		return false;
+	}
 
-	TArray<FString> Stems;
-	Index.Npcs.GenerateKeyArray(Stems);
-	Stems.Sort();
+	// Scanned once per container and reused: a family's members and the banks are disjoint sets,
+	// but every body family asks for the same bank answer.
+	TMap<FString, TArray<FName>> Scanned;
+	auto Scan = [&Scanned](const FString& Path, TSet<FName>& Out) -> bool
+	{
+		if (const TArray<FName>* Cached = Scanned.Find(Path))
+		{
+			Out.Append(*Cached);
+			return true;
+		}
+		TArray<FName> Bones;
+		FString ScanError;
+		if (!FElysiumSkeletalSource::LoadTranslatedBones(Path, Bones, ScanError))
+		{
+			return false;
+		}
+		Out.Append(Bones);
+		Scanned.Add(Path, MoveTemp(Bones));
+		return true;
+	};
 
-	TSet<const USkeleton*> Seen;
+	// Members, as the partition declares them, or empty when one of their containers is absent --
+	// a partial export is a smaller expected set, which would report the bake's own answer as wrong.
+	auto Members = [](const TSharedPtr<FJsonObject>& Family, bool bBank, TArray<FString>& Out) -> bool
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Names = nullptr;
+		if (!Family->TryGetArrayField(TEXT("members"), Names))
+		{
+			return false;
+		}
+		for (const TSharedPtr<FJsonValue>& Name : *Names)
+		{
+			const FString Stem = Name.IsValid() ? Name->AsString() : FString();
+			const FString Path = bBank
+				? FElysiumContentPaths::NpcBankSource(Stem) : FElysiumContentPaths::NpcSource(Stem);
+			if (Stem.IsEmpty() || !FPaths::FileExists(Path))
+			{
+				return false;
+			}
+			Out.Add(Path);
+		}
+		return true;
+	};
+
+	const TSharedPtr<FJsonObject>* Banks = nullptr;
+	const TSharedPtr<FJsonObject>* Models = nullptr;
+	if (!Partition->TryGetObjectField(TEXT("banks"), Banks)
+		|| !Partition->TryGetObjectField(TEXT("models"), Models))
+	{
+		AddError(TEXT("npc/families.json carries no 'banks'/'models' partition"));
+		return false;
+	}
+
+	// Every declared bank family, whatever this export baked: a body plays them all.
+	TSet<FName> BankTranslated;
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Family : (*Banks)->Values)
+	{
+		const TSharedPtr<FJsonObject>* Object = nullptr;
+		TArray<FString> Paths;
+		if (!Family.Value.IsValid() || !Family.Value->TryGetObject(Object)
+			|| !Members(*Object, /*bBank=*/true, Paths))
+		{
+			AddInfo(FString::Printf(
+				TEXT("skipping: bank family '%s' has a member container missing"), *Family.Key));
+			return true;
+		}
+		for (const FString& Path : Paths)
+		{
+			if (!Scan(Path, BankTranslated))
+			{
+				AddError(FString::Printf(TEXT("could not scan %s"), *Path));
+				return false;
+			}
+		}
+	}
+
 	TArray<FString> Wrong;
 	int32 Checked = 0;
-	for (const FString& Stem : Stems)
+	int32 Absent = 0;
+	// Both halves of the partition, on the same rule. A bank family's skeleton is only ever the
+	// target of its own clips -- no mesh is bound to it -- so it takes its own members' set alone.
+	for (const bool bBank : { true, false })
 	{
-		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
-		const USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
-		if (Skeleton == nullptr || Seen.Contains(Skeleton))
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Family
+			: (bBank ? *Banks : *Models)->Values)
 		{
-			continue;
-		}
-		Seen.Add(Skeleton);
-		++Checked;
-
-		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
-		for (int32 Bone = 0; Bone < Ref.GetRawBoneNum(); ++Bone)
-		{
-			const EBoneTranslationRetargetingMode::Type Mode =
-				Skeleton->GetBoneTranslationRetargetingMode(Bone);
-			// Two bones keep the animation's translation. The root carries a clip's displacement, and
-			// the pelvis carries an additive's hip delta — which `Skeleton` mode zeroes outright on a
-			// baked additive, so putting the pelvis on it discards authored motion.
-			const FName Name = Ref.GetBoneName(Bone);
-			const bool bTranslates = Bone == 0 || Name == TEXT("Bip01 Pelvis");
-			const EBoneTranslationRetargetingMode::Type Want = bTranslates
-				? EBoneTranslationRetargetingMode::Animation
-				: EBoneTranslationRetargetingMode::Skeleton;
-			if (Mode != Want)
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			FString Package;
+			TArray<FString> Paths;
+			if (!Family.Value.IsValid() || !Family.Value->TryGetObject(Object)
+				|| !(*Object)->TryGetStringField(TEXT("skeleton"), Package)
+				|| !Members(*Object, bBank, Paths))
 			{
-				Wrong.Add(FString::Printf(TEXT("%s: '%s' retargets translation as %d, expected %d"),
-					*Skeleton->GetName(), *Ref.GetBoneName(Bone).ToString(),
-					static_cast<int32>(Mode), static_cast<int32>(Want)));
+				continue;
+			}
+			const USkeleton* Skeleton = LoadObject<USkeleton>(nullptr, *Package);
+			if (Skeleton == nullptr)
+			{
+				++Absent;
+				continue;
+			}
+			++Checked;
+
+			TSet<FName> Translated = bBank ? TSet<FName>() : BankTranslated;
+			for (const FString& Path : Paths)
+			{
+				if (!Scan(Path, Translated))
+				{
+					AddError(FString::Printf(TEXT("could not scan %s"), *Path));
+					return false;
+				}
+			}
+
+			const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+			for (int32 Bone = 0; Bone < Ref.GetRawBoneNum(); ++Bone)
+			{
+				const FName Name = Ref.GetBoneName(Bone);
+				// The root keeps the animation's translation whatever the scan says: it is where a
+				// clip's displacement is authored, and taking it from the reference pose pins the
+				// body in place.
+				const bool bTranslates = Bone == 0 || Translated.Contains(Name);
+				const EBoneTranslationRetargetingMode::Type Want = bTranslates
+					? EBoneTranslationRetargetingMode::Animation
+					: EBoneTranslationRetargetingMode::Skeleton;
+				const EBoneTranslationRetargetingMode::Type Mode =
+					Skeleton->GetBoneTranslationRetargetingMode(Bone);
+				if (Mode != Want)
+				{
+					Wrong.Add(FString::Printf(
+						TEXT("%s: '%s' retargets translation as %d, expected %d -- %s"),
+						*Skeleton->GetName(), *Name.ToString(), static_cast<int32>(Mode),
+						static_cast<int32>(Want),
+						bTranslates ? TEXT("a clip moves it") : TEXT("no clip moves it")));
+				}
 			}
 		}
 	}
@@ -1326,12 +1471,21 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 	}
 	// Capped: a whole family reading the wrong mode is one defect, and 111 lines of it buries every
 	// other failure in the run.
-	for (int32 Index2 = 0; Index2 < FMath::Min(Wrong.Num(), 12); ++Index2)
+	for (int32 Reported = 0; Reported < FMath::Min(Wrong.Num(), 12); ++Reported)
 	{
-		AddError(Wrong[Index2]);
+		AddError(Wrong[Reported]);
 	}
-	AddInfo(FString::Printf(TEXT("%d baked skeleton(s) checked"), Checked));
-	TestEqual(TEXT("every bone below the root takes its translation from the body playing the clip"),
+	TArray<FString> Moving;
+	for (const FName& Name : BankTranslated)
+	{
+		Moving.Add(Name.ToString());
+	}
+	Moving.Sort();
+	AddInfo(FString::Printf(
+		TEXT("%d baked skeleton(s) checked against %d scanned container(s), %d not on the mount; ")
+		TEXT("%d bone name(s) move across the banks: %s"),
+		Checked, Scanned.Num(), Absent, Moving.Num(), *FString::Join(Moving, TEXT(", "))));
+	TestEqual(TEXT("a bone keeps its animated translation exactly where a clip animates it"),
 		Wrong.Num(), 0);
 	return true;
 }

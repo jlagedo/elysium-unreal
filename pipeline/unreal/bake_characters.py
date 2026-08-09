@@ -118,6 +118,29 @@ def wants(plan, scope, stage):
     return plan is None or stage in plan.get(scope, ())
 
 
+#: One container path -> the bones its clips move, memoised for the run. A container is scanned once
+#: however many skeletons need its answer, which is what keeps the bank union off the disk again for
+#: every rig family.
+_TRANSLATED = {}
+
+
+def translated_bones(library, paths):
+    """The bones the named containers' clips actually MOVE, unioned and sorted.
+
+    Every other translation track states the emitting model's bind pose frame after frame, and
+    `EBoneTranslationRetargetingMode::Skeleton` replaces those with the playing body's own -- VtMB's
+    own rule that a clip supplies rotations while the model supplies bone lengths. Which bones are
+    which is only in the clip payload, so it is scanned rather than declared."""
+    for path in paths:
+        if path in _TRANSLATED:
+            continue
+        error, bones = library.scan_translated_bones([path])
+        if error:
+            raise SystemExit("[chars] %s" % error)
+        _TRANSLATED[path] = list(bones)
+    return sorted({bone for path in paths for bone in _TRANSLATED[path]})
+
+
 def release_packages():
     """Drop the packages this pass saved, and say how many went.
 
@@ -294,6 +317,16 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
         % (len(partition["bank_family_of"]), len(families),
            "y" if len(families) == 1 else "ies", len(needed)))
 
+    # Scanned over EVERY declared bank family, whatever this run bakes, because a body declares
+    # compatibility with all of them and the engine reads a bone's translation retargeting mode from
+    # the skeleton being POSED -- the body's, not the bank's. Deriving it from the families a slice
+    # happens to touch would author a different answer for the same body depending on the slice.
+    bank_translated = translated_bones(
+        library, sorted({source_path(b, bank=True) for f in families.values()
+                         for b in f["members"] if os.path.isfile(source_path(b, bank=True))}))
+    log("%d bone(s) carry animated translation across the banks: %s"
+        % (len(bank_translated), ", ".join(bank_translated) or "none"))
+
     skeletons = []
     for name in sorted(families):
         family = families[name]
@@ -315,8 +348,9 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
             # whatever a previous run left behind: a skeleton that only grows keeps the bones of
             # banks a later partition moved elsewhere, and an untracked bone falls back to exactly
             # that tree.
+            sources = [source_path(b, bank=True) for b in members]
             error, bones = library.build_family_skeleton(
-                [source_path(b, bank=True) for b in members], skeleton_package, True)
+                sources, translated_bones(library, sources), skeleton_package, True)
             if error:
                 fail("bank skeleton %s: %s" % (name, error))
                 failed.append(name)
@@ -362,7 +396,7 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
             % (name, len(members), bones, total, spaces_total, dropped_total,
                ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
         release_packages()
-    return skeletons
+    return skeletons, bank_translated
 
 
 def main():
@@ -401,7 +435,7 @@ def main():
     textures = (import_textures_for([source_path(stem) for stem in stems])
                 if wants(plan, "_global", "textures") else existing_textures())
 
-    bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan)
+    bank_skeletons, bank_translated = bake_banks(manifest, partition, stems, library, failed, plan)
 
     for name in baking:
         family = partition["models"][name]
@@ -423,8 +457,12 @@ def main():
             failed.append(name)
             continue
         if wants(plan, scope, "family_skeletons"):
+            # The banks' set as well as this family's own: the bodies play both, and the mode is
+            # read off the skeleton posing the clip rather than the one it was authored against.
+            sources = [source_path(s) for s in members]
+            translated = sorted(set(bank_translated) | set(translated_bones(library, sources)))
             error, bones = library.build_family_skeleton(
-                [source_path(s) for s in members], skeleton_package, True)
+                sources, translated, skeleton_package, True)
             if error:
                 fail("family skeleton %s: %s" % (name, error))
                 failed.append(name)

@@ -602,8 +602,37 @@ int32 UElysiumSkeletalBuildLibrary::ReleaseBakedPackages(const FString& PackageP
 #endif
 }
 
+FString UElysiumSkeletalBuildLibrary::ScanTranslatedBones(const TArray<FString>& SourcePaths,
+	TArray<FString>& OutBones)
+{
+	OutBones.Reset();
+#if WITH_EDITOR
+	TArray<FName> Names;
+	for (const FString& SourcePath : SourcePaths)
+	{
+		FString Error;
+		if (!FElysiumSkeletalSource::LoadTranslatedBones(SourcePath, Names, Error))
+		{
+			return Error;
+		}
+	}
+	OutBones.Reserve(Names.Num());
+	for (const FName& Name : Names)
+	{
+		OutBones.Add(Name.ToString());
+	}
+	// Sorted so the bake's own log reads the same across runs and a diff of two runs is a diff of
+	// the corpus rather than of container order.
+	OutBones.Sort();
+	return FString();
+#else
+	return TEXT("editor only");
+#endif
+}
+
 FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>& SourcePaths,
-	const FString& SkeletonPackageName, bool bRebuild, int32& OutBones)
+	const TArray<FString>& TranslatedBones, const FString& SkeletonPackageName, bool bRebuild,
+	int32& OutBones)
 {
 	OutBones = 0;
 #if WITH_EDITOR
@@ -762,29 +791,31 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	// reference pose, which is the PLAYING MESH's own — the meshes keep their own reference skeleton
 	// (`bOverwriteRefSkeleton` stays false in `ElysiumNpcVisual`), so this is exactly VtMB's rule.
 	//
-	// **Two bones keep the animation's own translation, and the corpus is what names them.** Across
-	// the 60 shared banks, 115,005 translation tracks are emitted and 96.6% of them are CONSTANT
-	// across every frame — they are the emitting model's bind pose written into the clip, not
-	// movement, and they are what drags another body's joints onto the donor's proportions. The 3.4%
-	// that genuinely vary sit almost entirely on the root chain.
+	// **Which bones keep the animation's own translation is DERIVED, never named.** Across the
+	// corpus's 115,005 translation tracks, 96.6% are CONSTANT across every frame — they are the
+	// emitting model's bind pose written into the clip, not movement, and they are what drags
+	// another body's joints onto the donor's proportions. `TranslatedBones` is the union of the
+	// bones the remaining 3.4% actually move, scanned out of the clip payload by
+	// `ScanTranslatedBones`; a name this family's tree does not carry simply fails to resolve.
 	//
-	// `Bip01` is one of them and must stay `Animation` regardless: it is where a clip's displacement
-	// is authored, and taking that from the reference pose pins every body in place. `Bip01 Pelvis`
-	// is the other that matters, because an additive states a real hip delta there — and `Skeleton`
-	// mode ZEROES translation on a baked additive (`AnimationRuntime.cpp`), so leaving the pelvis on
-	// it silently discards that delta. `Elysium.Content.BakedCharacterParity` is what says so.
+	// **The set has to cover every container whose clips this skeleton can be the TARGET of**, not
+	// only its own members'. The engine reads the mode from the skeleton being POSED
+	// (`FAnimationRuntime::GetBoneTranslationRetargetingMode` takes the target's, because
+	// `bUseRetargetModesFromCompatibleSkeleton` is off), so a body's skeleton answers for every bank
+	// clip it plays as much as for its own — and a bank's bones are absent from its own containers.
 	//
-	// The remaining varying bones — `Bip01 Spine`, `Spine1`, `Spine2` and the two clavicles — lose a
-	// small authored translation and take their own body's instead. That is a stated simplification
-	// rather than the faithful answer: the faithful one is for the exporter to stop writing a
-	// constant translation track at all, which would leave every untracked bone on its own bind pose
-	// by construction and need none of this.
-	static const FName GTranslatedBones[] = { TEXT("Bip01"), TEXT("Bip01 Pelvis") };
+	// Bone 0 stays `Animation` whatever the scan found: it is where a clip's displacement is
+	// authored, and taking that from the reference pose pins every body in place.
+	//
+	// `Skeleton` mode also ZEROES translation on a baked additive (`AnimationRuntime.cpp`), so a bone
+	// that states a real delta and is left on it loses that delta outright — the other half of why
+	// the set is scanned rather than assumed. `Elysium.Content.BakedCharacterParity` is what says so.
 	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::Skeleton,
 		/*bChildrenToo=*/true);
-	for (const FName& Bone : GTranslatedBones)
+	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::Animation);
+	for (const FString& Bone : TranslatedBones)
 	{
-		const int32 Index = Skeleton->GetReferenceSkeleton().FindRawBoneIndex(Bone);
+		const int32 Index = Skeleton->GetReferenceSkeleton().FindRawBoneIndex(FName(*Bone));
 		if (Index != INDEX_NONE)
 		{
 			Skeleton->SetBoneTranslationRetargetingMode(Index,
@@ -839,8 +870,15 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& SourcePath,
 	const FString& SkeletonPackageName)
 {
+	TArray<FString> Translated;
+	const FString Error = ScanTranslatedBones({ SourcePath }, Translated);
+	if (!Error.IsEmpty())
+	{
+		return Error;
+	}
 	int32 Bones = 0;
-	return BuildFamilySkeleton({ SourcePath }, SkeletonPackageName, /*bRebuild=*/false, Bones);
+	return BuildFamilySkeleton({ SourcePath }, Translated, SkeletonPackageName, /*bRebuild=*/false,
+		Bones);
 }
 
 FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
