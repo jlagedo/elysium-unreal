@@ -355,11 +355,6 @@ struct FElysiumContentPaths
 	// 15.8 MB and exists for the offline probes. The index also carries the 56 player bodies
 	// (PL13), which no map references and 8.11a resolves by clan through `clandoc000.txt`.
 	// NpcBankGlb takes the index's own relative path ("banks/x.glb").
-	// The declared rig partition over the WHOLE corpus: which models and which banks share a
-	// skeleton, what each family's skeleton package is called, and how many bones it has. Written
-	// by the export, consumed by the character bake -- and by anything that has to reproduce what
-	// the bake was given rather than what a slice happened to name.
-	static FString NpcFamilies() { return NpcDir() / TEXT("families.json"); }
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
 	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }

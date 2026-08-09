@@ -130,24 +130,4 @@ struct FElysiumSkeletalSource
 	 * more than baking it.
 	 */
 	static bool LoadBones(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError);
-
-	/**
-	 * Name the bones this container's clips actually MOVE, appending to OutBones. Same validation,
-	 * same errors.
-	 *
-	 * A clip carries a translation track wherever VtMB's own channel pointer is non-zero and
-	 * wherever the exporter forces a bind track so both sides of an additive subtraction name the
-	 * same container's bind -- so most tracks are the emitting model's bind pose repeated frame
-	 * after frame rather than motion. Only a track that TRAVELS is animation -- VtMB stores the
-	 * channel as integer counts of a per-bone scale, so a track that animates nothing still wobbles
-	 * by a step -- and every other bone's translation belongs to whichever body plays the clip.
-	 *
-	 * That distinction is what a shared skeleton's per-bone translation retargeting has to be
-	 * derived from, and it is not in the bone tree: only the clip payload says which bones move.
-	 * Nothing here is decoded -- rotations are stepped over and a track stops being read the moment
-	 * it is known to vary -- so the answer costs one pass over the file.
-	 *
-	 * Appending is deliberate: a caller unions a whole rig family's containers into one array.
-	 */
-	static bool LoadTranslatedBones(const FString& Path, TArray<FName>& OutBones, FString& OutError);
 };

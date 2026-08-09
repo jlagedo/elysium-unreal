@@ -192,79 +192,6 @@ namespace
 		}
 	}
 
-	/**
-	 * How far a translation has to travel, in centimetres, before the bone counts as moving.
-	 *
-	 * A QUANTISATION FLOOR, not a float epsilon. VtMB stores a positional channel as integer counts
-	 * of a per-bone scale, so a track that animates nothing still wobbles by a step or two, and the
-	 * corpus separates cleanly on it: every bone that genuinely moves travels at least 1.23 cm
-	 * (`Bip01 Jaw`), while the noise tops out at 0.0198 cm -- two steps -- on the fingers, hands,
-	 * neck and upper spine. Reading that wobble as animation is what puts a skinned finger back on
-	 * the donor body's translation for the 1,600 clips where it does not move at all.
-	 */
-	constexpr float MovementFloorCm = 0.1f;
-
-	/**
-	 * Flag every bone whose translation changes across a clip's frames, without decoding anything.
-	 *
-	 * Rotations are stepped over rather than read, and a bone already known to vary skips the
-	 * comparison entirely -- the answer is one bit per bone and the corpus is 115,005 tracks.
-	 */
-	void ScanTranslations(FCursor& Cursor, TArray<uint8>& OutVarying)
-	{
-		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
-		for (int32 Index = 0; Index < Count && Cursor.IsValid(); ++Index)
-		{
-			Cursor.ReadString();                                                   // name
-			Cursor.ReadString();                                                   // base
-			const int32 FrameCount = static_cast<int32>(Cursor.Read<uint32>());
-			Cursor.Read<float>();                                                  // frame rate
-			Cursor.Read<uint32>();                                                 // flags
-			Cursor.Read<int32>();                                                  // mask
-			const int32 TrackCount = static_cast<int32>(Cursor.Read<uint32>());
-			for (int32 Track = 0; Track < TrackCount && Cursor.IsValid(); ++Track)
-			{
-				const int32 Bone = static_cast<int32>(Cursor.Read<uint32>());
-				const bool bHasTranslation = Cursor.Read<uint8>() != 0;
-				const bool bHasRotation = Cursor.Read<uint8>() != 0;
-				if (bHasTranslation)
-				{
-					const uint8* At = Cursor.Take(sizeof(float) * 3 * FrameCount);
-					// A single-frame track states a pose and cannot express motion, so it is one of
-					// the constant ones by construction.
-					if (At != nullptr && Bone >= 0 && FrameCount > 1)
-					{
-						if (Bone >= OutVarying.Num())
-						{
-							OutVarying.SetNumZeroed(Bone + 1);
-						}
-						if (OutVarying[Bone] == 0)
-						{
-							float First[3];
-							FMemory::Memcpy(First, At, sizeof(First));
-							for (int32 Frame = 1; Frame < FrameCount; ++Frame)
-							{
-								float Value[3];
-								FMemory::Memcpy(Value, At + Frame * sizeof(Value), sizeof(Value));
-								if (!FMath::IsNearlyEqual(Value[0], First[0], MovementFloorCm)
-									|| !FMath::IsNearlyEqual(Value[1], First[1], MovementFloorCm)
-									|| !FMath::IsNearlyEqual(Value[2], First[2], MovementFloorCm))
-								{
-									OutVarying[Bone] = 1;
-									break;
-								}
-							}
-						}
-					}
-				}
-				if (bHasRotation)
-				{
-					Cursor.Take(sizeof(float) * 4 * FrameCount);
-				}
-			}
-		}
-	}
-
 	void ReadClips(FCursor& Cursor, FElysiumSkeletalSource& Out)
 	{
 		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
@@ -317,22 +244,12 @@ namespace
 
 namespace
 {
-	// What the three entry points below ask for. Anything but Full skips the sections it does not
-	// name, which is what makes reading the whole cast affordable: a bank container is up to 34 MB
-	// and almost all of it is clip payload. The trailing validation still runs on every mode -- its
-	// mask and clip loops are simply empty when nothing populated them.
-	enum class ELoadMode : uint8
-	{
-		/** Every section. */
-		Full,
-		/** SKEL alone -- a member contributes nothing but its bones to a family's skeleton. */
-		Bones,
-		/** SKEL, plus a variance scan of ANIM that decodes no clip. */
-		TranslatedBones,
-	};
-
+	// Both entry points below. `bBonesOnly` skips every section but SKEL, which is what makes
+	// seeding a rig family's skeleton from all of its members affordable: a bank container is up
+	// to 30 MB and almost all of it is clip payload the bone tree does not need. The trailing
+	// validation still runs -- its mask and clip loops are simply empty on this path.
 	bool LoadContainer(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError,
-		ELoadMode Mode, TArray<uint8>* OutVarying = nullptr)
+		bool bBonesOnly)
 	{
 	TArray<uint8> Blob;
 	if (!FFileHelper::LoadFileToArray(Blob, *Path))
@@ -390,10 +307,7 @@ namespace
 				*Path);
 			return false;
 		}
-		const bool bWanted = Mode == ELoadMode::Full
-			|| Entry.Tag == TagSkel
-			|| (Mode == ELoadMode::TranslatedBones && Entry.Tag == TagAnim);
-		if (!bWanted)
+		if (bBonesOnly && Entry.Tag != TagSkel)
 		{
 			continue;
 		}
@@ -405,17 +319,7 @@ namespace
 		case TagMesh: ReadMesh(Section, Out); break;
 		case TagMorf: ReadMorphs(Section, Out); break;
 		case TagMask: ReadMasks(Section, Out); break;
-		case TagAnim:
-			if (Mode == ELoadMode::TranslatedBones)
-			{
-				check(OutVarying != nullptr);
-				ScanTranslations(Section, *OutVarying);
-			}
-			else
-			{
-				ReadClips(Section, Out);
-			}
-			break;
+		case TagAnim: ReadClips(Section, Out); break;
 		default: continue;
 		}
 		if (!Section.IsValid())
@@ -467,32 +371,11 @@ namespace
 
 bool FElysiumSkeletalSource::Load(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError)
 {
-	return LoadContainer(Path, Out, OutError, ELoadMode::Full);
+	return LoadContainer(Path, Out, OutError, /*bBonesOnly=*/false);
 }
 
 bool FElysiumSkeletalSource::LoadBones(const FString& Path, FElysiumSkeletalSource& Out,
 	FString& OutError)
 {
-	return LoadContainer(Path, Out, OutError, ELoadMode::Bones);
-}
-
-bool FElysiumSkeletalSource::LoadTranslatedBones(const FString& Path, TArray<FName>& OutBones,
-	FString& OutError)
-{
-	FElysiumSkeletalSource Source;
-	TArray<uint8> Varying;
-	if (!LoadContainer(Path, Source, OutError, ELoadMode::TranslatedBones, &Varying))
-	{
-		return false;
-	}
-	// A track addresses a bone by index, so the names are this container's own -- which is what
-	// makes the answer unionable across a family whose members number their bones differently.
-	for (int32 Index = 0; Index < Source.Bones.Num(); ++Index)
-	{
-		if (Varying.IsValidIndex(Index) && Varying[Index] != 0)
-		{
-			OutBones.AddUnique(Source.Bones[Index].Name);
-		}
-	}
-	return true;
+	return LoadContainer(Path, Out, OutError, /*bBonesOnly=*/true);
 }

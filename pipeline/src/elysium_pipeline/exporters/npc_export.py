@@ -767,7 +767,14 @@ def main(only=None, *, index=None, integrate=False, strict=False):
     # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
     # what lets the runtime treat a hit in `clips` as a promise the glb can answer.
     bank_baked = {stem: set(rec["clips"]) for stem, rec in bank_index.items()}
+
+    def _activity(stem, rec, label, owner):
+        meta = (rec["own_clips"] if owner == stem
+                else bank_index.get(owner, {}).get("clips", {})).get(label)
+        return (meta or {}).get("activity", "")
+
     dropped = 0
+    foreign_clan = 0
     for stem, rec in npc_index.items():
         own = set(rec["own_clips"])
         # Resolve exactly the way the runtime does -- own stem first, then the bank index --
@@ -775,9 +782,23 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         keep = {lbl: owner for lbl, owner in rec["clips"].items()
                 if lbl in (own if owner == stem else bank_baked.get(owner, ()))}
         dropped += len(rec["clips"]) - len(keep)
-        rec["clips"] = keep
+        # A player body's include tree reaches `pcidles_allsequences`, which chains ALL SEVEN clan
+        # banks, so every PC body resolves every clan's character-sheet fidget:
+        # `tremere_female_armor_0` sees 24 of them and weighted order puts `Malk_Female_Idle2` (10)
+        # ahead of its own `Tremere_Female_Idle2` (3). The sheet screen picks by clan, and a body
+        # IS its clan -- the Tremere fidgets are the ones its own container carries -- so ownership
+        # is the clan test and needs no clan table.
+        #
+        # Scoped to this one activity deliberately. Every other shared label is shared on purpose:
+        # a walk from `character_shared_female_move_and_ranged` is the same walk for all of them.
+        clan = {lbl for lbl, owner in keep.items()
+                if owner != stem and _activity(stem, rec, lbl, owner) == "ACT_CHARSHEET_FIDGET"}
+        foreign_clan += len(clan)
+        rec["clips"] = {lbl: owner for lbl, owner in keep.items() if lbl not in clan}
     if dropped:
         print(f"[npc] dropped {dropped} unresolvable clip refs (owner did not bake them)")
+    if foreign_clan:
+        print(f"[npc] dropped {foreign_clan} charsheet fidget(s) belonging to another clan")
 
     manifest = {
         "manifest_version": MANIFEST_VERSION,
