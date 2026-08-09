@@ -25,6 +25,42 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
   (**fetched, not committed** — `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
   Win64 only).
 
+## C++ coding policy
+
+The baseline for new and touched runtime code is Epic's
+[C++ Coding Standard for Unreal Engine](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine).
+Use Epic's [Object Pointers](https://dev.epicgames.com/documentation/unreal-engine/object-pointers-in-unreal-engine),
+[Reflection System](https://dev.epicgames.com/documentation/unreal-engine/reflection-system-in-unreal-engine)
+and [Include What You Use](https://dev.epicgames.com/documentation/unreal-engine/include-what-you-use-iwyu-for-unreal-engine-programming)
+guides for the corresponding engine semantics. This is a code and review contract, not a license
+header: never copy Epic's copyright notice into
+project-owned source. Repository `.clang-format` owns C++ layout and `.editorconfig` owns the
+remaining whitespace rules. Format touched code only; do not mix a formatting sweep with a
+behavioral change.
+
+- **Language and portability:** UE 5.8 code is C++20, constrained by Epic's cross-compiler rules.
+  Prefer `nullptr`, `override`/`final`, `static_assert`, range-based loops, strongly typed enums and
+  const-correct code. Keep types explicit; use `auto` only for lambdas, unwieldy iterators or
+  template cases where spelling the type harms clarity. Use explicit lambda captures, especially
+  for deferred work, and never capture a short-lived reference or an untracked `UObject` into it.
+- **Unreal names and reflection:** use the `U`/`A`/`F`/`T`/`I`/`S`/`E` prefixes and `b` for
+  booleans; boolean queries read as questions. Add `UCLASS`, `USTRUCT`, `UFUNCTION` and `UPROPERTY`
+  only where the engine must see the type or member. The plain-C++ substrate remains
+  reflection-free.
+- **Object references:** a persistent, engine-tracked `UObject` field uses `UPROPERTY()` with
+  `TObjectPtr<T>`. Short-lived locals and parameters normally use `T*`; expiring non-owning
+  references use `TWeakObjectPtr<T>`; load-on-demand asset references use `TSoftObjectPtr<T>`.
+  `TStrongObjectPtr<T>` is reserved for the uncommon strong reference owned outside a `UObject`.
+- **Headers and modules:** every header includes what it needs; every `.cpp` includes its matching
+  header first. Prefer forward declarations and fine-grained includes, never `Engine.h` or
+  `UnrealEd.h`, and do not put `using` declarations in global scope. Dependencies belong in the
+  narrowest correct `Build.cs` list.
+- **APIs and diagnostics:** avoid boolean flag lists and long parameter lists; use an enum or a
+  parameter struct. Use `TEXT()` for Unreal string literals, sized integers for serialized or
+  replicated formats, named log categories, and the appropriate `check`/`verify`/`ensure` family.
+  Address compiler warnings. Comments explain intent, units, constraints and non-obvious safety,
+  not a paraphrase of the implementation.
+
 ## Source layout
 
 `Private/` is subfoldered **by layer**. A private header is included by its layer path
