@@ -199,6 +199,41 @@ bool FElysiumVariantTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignDismissPolicyTest,
+	"Elysium.Substrate.SignDismissPolicy", GElysiumTestFlags)
+bool FElysiumSignDismissPolicyTest::RunTest(const FString&)
+{
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Activate(10.0);
+	TSharedPtr<FElysiumSignData> Sign = MakeShared<FElysiumSignData>();
+	Sign->bParsed = true;
+	Sign->bCloseOnLeftClick = true;
+	Sign->MinShowTime = 2.0f;
+	World.OpenSign(FElysiumEntityHandle(0, World.GetEpoch()), Sign, 0.0f);
+
+	TestFalse(TEXT("sign dwell blocks immediate UI dismissal"), World.CanPlayerDismissSign());
+	TestFalse(TEXT("blocked dismissal reports rejection"), World.PlayerDismissSign());
+	TestTrue(TEXT("blocked dismissal leaves the sign open"), World.GetOpenSign().IsSet());
+	World.Tick(11.99);
+	TestFalse(TEXT("sign remains blocked before minimum dwell"), World.CanPlayerDismissSign());
+	World.Tick(12.0);
+	TestTrue(TEXT("sign becomes dismissible at minimum dwell"), World.CanPlayerDismissSign());
+	TestTrue(TEXT("authorized dismissal reports acceptance"), World.PlayerDismissSign());
+	TestFalse(TEXT("authorized dismissal closes the sign"), World.GetOpenSign().IsSet());
+
+	World.Tick(20.0);
+	Sign->bCloseOnLeftClick = false;
+	Sign->MinShowTime = 0.0f;
+	World.OpenSign(FElysiumEntityHandle(0, World.GetEpoch()), Sign, 0.0f);
+	TestFalse(TEXT("CloseOnLeftClick false rejects UI dismissal"), World.CanPlayerDismissSign());
+	World.Tick(200.0);
+	TestFalse(TEXT("forbidden click-close reports rejection"), World.PlayerDismissSign());
+	TestTrue(TEXT("forbidden click-close stays open after any dwell"), World.GetOpenSign().IsSet());
+	World.CloseSign(true);
+	TestFalse(TEXT("scripted close still closes a click-forbidden sign"), World.GetOpenSign().IsSet());
+	return true;
+}
+
 // =====================================================================================
 // ElysiumExpr — the restricted expression subset, and the load-bearing error-to-false.
 // =====================================================================================
@@ -3283,27 +3318,41 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 {
 	using EMode = EElysiumInputMode;
 	namespace Prio = ElysiumInput::Priority;
+	TestTrue(TEXT("Auto cursor is visible for mouse and keyboard"),
+		ElysiumInput::ResolveCursorVisible(EElysiumCursorPolicy::Auto, true));
+	TestFalse(TEXT("Auto cursor is hidden for gamepad"),
+		ElysiumInput::ResolveCursorVisible(EElysiumCursorPolicy::Auto, false));
+	TestTrue(TEXT("Always cursor ignores a gamepad device"),
+		ElysiumInput::ResolveCursorVisible(EElysiumCursorPolicy::Always, false));
+	TestFalse(TEXT("Never cursor ignores a mouse device"),
+		ElysiumInput::ResolveCursorVisible(EElysiumCursorPolicy::Never, true));
 
 	// The scopes the game actually pushes, as data — so a transition is a pair of these rather
 	// than a hand-written sequence, and the table below can walk every ordered pair.
-	auto MakeScope = [](const TCHAR* Name, int32 Priority, EMode Mode, bool bCursor)
+	auto MakeScope = [](const TCHAR* Name, int32 Priority, EMode Mode,
+		EElysiumCursorPolicy CursorPolicy)
 	{
 		FElysiumInputScope Scope;
 		Scope.Name = Name;
 		Scope.Priority = Priority;
 		Scope.Mode = Mode;
-		Scope.bShowCursor = bCursor;
+		Scope.CursorPolicy = CursorPolicy;
 		return Scope;
 	};
-	const FElysiumInputScope Sign      = MakeScope(TEXT("Sign"),      Prio::Sign,      EMode::GameOnly,  false);
-	const FElysiumInputScope Cinematic = MakeScope(TEXT("Cinematic"), Prio::Cinematic, EMode::GameOnly,  false);
-	const FElysiumInputScope Chargen   = MakeScope(TEXT("Chargen"),   Prio::Chargen,   EMode::UIOnly,    true);
-	const FElysiumInputScope Dialogue  = MakeScope(TEXT("Dialogue"),  Prio::Dialogue,  EMode::UIOnly,    true);
-	const FElysiumInputScope Character = MakeScope(TEXT("Character"), Prio::Character, EMode::UIOnly,    true);
-	const FElysiumInputScope Menu      = MakeScope(TEXT("Menu"),      Prio::Menu,      EMode::UIOnly,    true);
-	FElysiumInputScope SignWithGameplay = Sign;
-	ElysiumInput::AddPlayerContexts(SignWithGameplay.Contexts);
-	FElysiumInputScope Debug = MakeScope(TEXT("Debug"), Prio::Debug, EMode::GameOnly, true);
+	const FElysiumInputScope Sign = MakeScope(TEXT("Sign"), Prio::Sign,
+		EMode::UIOnly, EElysiumCursorPolicy::Auto);
+	const FElysiumInputScope Cinematic = MakeScope(TEXT("Cinematic"), Prio::Cinematic,
+		EMode::GameOnly, EElysiumCursorPolicy::Never);
+	const FElysiumInputScope Chargen = MakeScope(TEXT("Chargen"), Prio::Chargen,
+		EMode::UIOnly, EElysiumCursorPolicy::Auto);
+	const FElysiumInputScope Dialogue = MakeScope(TEXT("Dialogue"), Prio::Dialogue,
+		EMode::UIOnly, EElysiumCursorPolicy::Auto);
+	const FElysiumInputScope Character = MakeScope(TEXT("Character"), Prio::Character,
+		EMode::UIOnly, EElysiumCursorPolicy::Auto);
+	const FElysiumInputScope Menu = MakeScope(TEXT("Menu"), Prio::Menu,
+		EMode::UIOnly, EElysiumCursorPolicy::Auto);
+	FElysiumInputScope Debug = MakeScope(TEXT("Debug"), Prio::Debug,
+		EMode::GameOnly, EElysiumCursorPolicy::Always);
 	ElysiumInput::AddPlayerContexts(Debug.Contexts);
 
 	// --- the empty stack is the game holding the mouse ---
@@ -3312,7 +3361,8 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 		const FElysiumInputState Base = Stack.Resolve();
 		TestTrue(TEXT("an empty stack has no top"), Stack.Top() == nullptr);
 		TestTrue(TEXT("empty resolves to the gameplay default"), Base.Mode == EMode::GameOnly);
-		TestFalse(TEXT("no cursor over the world"), Base.bShowCursor);
+		TestEqual(TEXT("gameplay never shows a cursor"), Base.CursorPolicy,
+			EElysiumCursorPolicy::Never);
 		TestTrue(TEXT("no deciding scope"), Base.Name.IsNone());
 		TestEqual(TEXT("gameplay applies both device contexts"), Base.Contexts.Num(), 2);
 		TestEqual(TEXT("keyboard/mouse context is first"), Base.Contexts[0],
@@ -3325,7 +3375,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	{
 		FElysiumInputScopeStack Stack;
 		FElysiumInputScopeHandle MenuH = Stack.Push(Menu);
-		Stack.Push(SignWithGameplay);   // a sign opening under a menu changes nothing
+		Stack.Push(Sign);   // a sign opening under a menu changes nothing
 		TestEqual(TEXT("the menu still decides"), Stack.Resolve().Name, FName(TEXT("Menu")));
 		TestTrue(TEXT("still UI-only"), Stack.Resolve().Mode == EMode::UIOnly);
 
@@ -3338,8 +3388,8 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 
 		TestTrue(TEXT("the menu handle is still the menu's"), Stack.Pop(MenuH));
 		TestEqual(TEXT("the sign underneath is restored"), Stack.Resolve().Name, FName(TEXT("Sign")));
-		TestTrue(TEXT("and with it game input"), Stack.Resolve().Mode == EMode::GameOnly);
-		TestEqual(TEXT("the sign retains both device contexts"), Stack.Resolve().Contexts.Num(), 2);
+		TestTrue(TEXT("and with it UI-only capture"), Stack.Resolve().Mode == EMode::UIOnly);
+		TestTrue(TEXT("the sign removes gameplay contexts"), Stack.Resolve().Contexts.IsEmpty());
 	}
 
 	// --- same priority stacks like modals: the later push wins, and popping it restores the earlier ---
@@ -3385,7 +3435,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	//     open pause menu).
 	{
 		const TArray<FElysiumInputScope> Screens = {
-			SignWithGameplay, Cinematic, Chargen, Dialogue, Character, Menu, Debug
+			Sign, Cinematic, Chargen, Dialogue, Character, Menu, Debug
 		};
 		for (const FElysiumInputScope& Under : Screens)
 		{
@@ -3430,7 +3480,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	TestTrue(TEXT("so does a conversation"), ElysiumInput::RevokesDebugCapture(Dialogue));
 	TestTrue(TEXT("so does chargen"), ElysiumInput::RevokesDebugCapture(Chargen));
 	TestTrue(TEXT("so does the character screen"), ElysiumInput::RevokesDebugCapture(Character));
-	TestFalse(TEXT("a sign does not — it is dismissed by a world click"),
+	TestTrue(TEXT("a sign revokes debug capture because it is now a UI modal"),
 		ElysiumInput::RevokesDebugCapture(Sign));
 	TestFalse(TEXT("nor does a cutscene"), ElysiumInput::RevokesDebugCapture(Cinematic));
 	TestFalse(TEXT("and the debug scope never revokes itself"), ElysiumInput::RevokesDebugCapture(Debug));

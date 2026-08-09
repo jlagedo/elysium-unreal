@@ -1,5 +1,6 @@
 #include "UI/ElysiumMainMenu.h"
 
+#include "UI/ElysiumActionButton.h"
 #include "ElysiumContentPaths.h"
 #include "Player/ElysiumCommandBus.h"
 #include "ElysiumGameFlowSubsystem.h"
@@ -25,7 +26,6 @@
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SOverlay.h"
-#include "Widgets/Input/SButton.h"
 #include "Widgets/Text/STextBlock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMenu, Log, All);
@@ -309,31 +309,26 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRailRow(const FMenuEntry& Item, const
 	const EElysiumMenuCommand Command = Item.Command;
 	const bool bEnabled = Item.bEnabled;
 
-	// The row is left **enabled** even when its destination is missing. A disabled SButton takes
-	// neither hover nor focus, so it could never arm — and arming is the whole point of a drawn-but-
-	// dead row: the caption beneath the rail is where "no saved games yet" gets said. The click is
-	// gated instead, and the label colour is what reports the state.
-	const TSharedRef<SButton> Button =
-		SNew(SButton)
-		.ButtonStyle(FCoreStyle::Get(), "NoBorder")
-		.ContentPadding(FMargin(0.0f, 0.0f, Rail::TextInset, 0.0f))
+	// Executability is separate from focusability: a missing destination still arms so the caption
+	// beneath the rail can say "no saved games yet", but its shared semantic callback is gated.
+	const FName ActionId(Item.Token);
+	UElysiumActionButton* Button = CreateActionButton(
+		ActionId, TEXT("Menu"), Label, bEnabled,
+		[this, Command]() { Run(Command); }, {},
+		Item.Caption ? FText::FromString(Item.Caption) : FText::GetEmpty());
+	check(Button);
+	const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+	Button->SetSlateContent(
+		SNew(SBox)
+		.Padding(FMargin(0.0f, 0.0f, Rail::TextInset, 0.0f))
 		.HAlign(HAlign_Right)
 		.VAlign(VAlign_Center)
-		.OnClicked_Lambda([this, Command, bEnabled]()
-		{
-			if (bEnabled)
-			{
-				Run(Command);
-			}
-			return FReply::Handled();
-		});
-
-	Button->SetContent(
+		[
 		SNew(STextBlock)
 		.Text(Label)
 		.Font(Font)
 		.Justification(ETextJustify::Right)
-		.ColorAndOpacity_Lambda([this, Index, bEnabled]() -> FSlateColor
+		.ColorAndOpacity_Lambda([this, WeakButton, bEnabled]() -> FSlateColor
 		{
 			if (!bEnabled)
 			{
@@ -343,10 +338,12 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRailRow(const FMenuEntry& Item, const
 			}
 			// Bone at rest, blood when armed. The recovered 0xc00000a8 is the accent the token
 			// layer always said it was — it now marks *selection* instead of being the ground.
-			return FSlateColor(ArmedIndex == Index
+			const UElysiumActionButton* Action = WeakButton.Get();
+			return FSlateColor(Action && Action->IsActionSelected()
 				? ElysiumUI::Palette::BloodLit
 				: ElysiumUI::Palette::Bone);
-		}));
+		})
+		]);
 
 	FRailRow Row;
 	Row.Button = Button;
@@ -355,7 +352,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRailRow(const FMenuEntry& Item, const
 	RailRows.Add(Row);
 	RowTop += Height;
 
-	return SNew(SBox).HeightOverride(Height)[Button];
+	return SNew(SBox).HeightOverride(Height)[Button->TakeWidget()];
 }
 
 TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
@@ -650,8 +647,8 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Ite
 		const EElysiumMenuCommand Command = Items[i].Command;
 		const bool bEnabled = Items[i].bEnabled;
 
-		// A transparent SButton carries hover, click, focus and keyboard activation for free; the
-		// only visual it contributes is the label, whose colour reports the state.
+		// The transparent CommonUI action owns hover, click, focus and keyboard/controller activation;
+		// the retained Slate content contributes only the label whose colour reports the state.
 		//
 		// The button is built first and its content set afterwards, because the label's colour
 		// attribute has to see the button. Capturing the local TSharedPtr by reference would dangle
@@ -659,21 +656,17 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Ite
 		// by value would capture null, since SAssignNew has not run yet. A weak pointer taken after
 		// construction is the only form that is both valid and non-owning (the button owns the text,
 		// so an owning capture would be a cycle).
-		const TSharedRef<SButton> Button =
-			SNew(SButton)
-			.ButtonStyle(FCoreStyle::Get(), "NoBorder")
-			.ContentPadding(FMargin(0.0f))
-			.IsEnabled(bEnabled)
+		UElysiumActionButton* Button = CreateActionButton(
+			FName(Items[i].Token), TEXT("Menu"), Labels[i], bEnabled,
+			[this, Command]() { Run(Command); }, {},
+			Items[i].Caption ? FText::FromString(Items[i].Caption) : FText::GetEmpty());
+		check(Button);
+		const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+		Button->SetSlateContent(
+			SNew(SBox)
 			.HAlign(HAlign_Center)
 			.VAlign(VAlign_Center)
-			.OnClicked_Lambda([this, Command]()
-			{
-				Run(Command);
-				return FReply::Handled();
-			});
-
-		const TWeakPtr<SButton> WeakButton = Button;
-		Button->SetContent(
+			[
 			SNew(STextBlock)
 			.Text(Labels[i])
 			.Font(ItemFont)
@@ -688,17 +681,18 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Ite
 					const FLinearColor& B = ElysiumUI::Palette::Blood;
 					return FSlateColor(FLinearColor(B.R * 0.7f, B.G, B.B, 1.0f));
 				}
-				const TSharedPtr<SButton> Pinned = WeakButton.Pin();
-				const bool bHot = Pinned.IsValid() && (Pinned->IsHovered() || Pinned->HasKeyboardFocus());
+				const UElysiumActionButton* Pinned = WeakButton.Get();
+				const bool bHot = Pinned && Pinned->IsActionSelected();
 				return FSlateColor(bHot ? ElysiumUI::Palette::BloodLit : ElysiumUI::Palette::Blood);
-			}));
+			})
+			]);
 
 		Column->AddSlot()
 			.AutoHeight()
 			.HAlign(HAlign_Center)
 			.Padding(0.0f, 0.0f, 0.0f, Gutter)
 			[
-				SNew(SBox).WidthOverride(ButtonW).HeightOverride(ButtonH)[Button]
+				SNew(SBox).WidthOverride(ButtonW).HeightOverride(ButtonH)[Button->TakeWidget()]
 			];
 	}
 
@@ -788,6 +782,8 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 	// UCommonActivatableWidget announces this rebuild to the action router. Skipping it leaves the
 	// screen visible in its stack but absent from the activatable input tree.
 	(void)Super::RebuildWidget();
+	BeginNavigationBuild();
+	SetNavigationGroup(TEXT("Menu"), false, true);
 
 	const TArray<FMenuEntry> Items = BuildItemSet();
 
@@ -818,6 +814,7 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 	// owns the static plate that replaces the old live sm_hub_1 backdrop.
 	if (Mode != EElysiumMenuMode::Main)
 	{
+		FinalizeNavigationBuild(Items.IsEmpty() ? NAME_None : FName(Items[0].Token));
 		return MenuLayout;
 	}
 	if (!WallpaperTexture)
@@ -827,6 +824,7 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 		{
 			UE_LOG(LogElysiumMenu, Warning, TEXT("menu wallpaper not found or invalid: %s"),
 				*FElysiumContentPaths::UiMenuWallpaper());
+			FinalizeNavigationBuild(Items.IsEmpty() ? NAME_None : FName(Items[0].Token));
 			return MenuLayout;
 		}
 	}
@@ -840,7 +838,7 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 		WallpaperBrush->DrawAs = ESlateBrushDrawType::Image;
 	}
 
-	return SNew(SOverlay)
+	TSharedRef<SWidget> Result = SNew(SOverlay)
 		+ SOverlay::Slot()
 		.HAlign(HAlign_Fill).VAlign(VAlign_Fill)
 		[
@@ -858,6 +856,8 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 		[
 			MenuLayout
 		];
+	FinalizeNavigationBuild(Items.IsEmpty() ? NAME_None : FName(Items[0].Token));
+	return Result;
 }
 
 bool UElysiumMainMenu::NativeOnHandleBackAction()
@@ -882,8 +882,8 @@ void UElysiumMainMenu::NativeTick(const FGeometry& Geometry, float DeltaSeconds)
 	// — a mouse leaving the rail must not blank it and strand the keyboard user.
 	for (int32 i = 0; i < RailRows.Num(); ++i)
 	{
-		const TSharedPtr<SButton> Button = RailRows[i].Button.Pin();
-		if (Button.IsValid() && (Button->IsHovered() || Button->HasKeyboardFocus()))
+		const UElysiumActionButton* Button = RailRows[i].Button.Get();
+		if (Button && Button->IsActionSelected())
 		{
 			ArmedIndex = i;
 			break;

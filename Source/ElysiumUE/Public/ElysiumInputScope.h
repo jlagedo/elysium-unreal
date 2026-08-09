@@ -19,8 +19,28 @@ enum class EElysiumInputMode : uint8
 	UIOnly,      // FInputModeUIOnly       — a screen has it; the controller sees nothing
 };
 
+// Cursor intent is kept separate from the current device. Auto is the screen default: pointer
+// input shows the cursor, while a gamepad hides it without changing the active input scope.
+enum class EElysiumCursorPolicy : uint8
+{
+	Never,
+	Auto,
+	Always,
+};
+
 namespace ElysiumInput
 {
+	inline bool ResolveCursorVisible(EElysiumCursorPolicy Policy, bool bMouseAndKeyboard)
+	{
+		switch (Policy)
+		{
+		case EElysiumCursorPolicy::Always: return true;
+		case EElysiumCursorPolicy::Auto:   return bMouseAndKeyboard;
+		case EElysiumCursorPolicy::Never:  return false;
+		}
+		return false;
+	}
+
 	inline FName PlayerKeyboardMouseContext()
 	{
 		static const FName Name(TEXT("IMC_Player_KBM"));
@@ -46,6 +66,17 @@ namespace ElysiumInput
 		case EElysiumInputMode::GameOnly:  return TEXT("GameOnly");
 		case EElysiumInputMode::GameAndUI: return TEXT("GameAndUI");
 		case EElysiumInputMode::UIOnly:    return TEXT("UIOnly");
+		}
+		return TEXT("?");
+	}
+
+	inline const TCHAR* CursorPolicyName(EElysiumCursorPolicy Policy)
+	{
+		switch (Policy)
+		{
+		case EElysiumCursorPolicy::Never:  return TEXT("Never");
+		case EElysiumCursorPolicy::Auto:   return TEXT("Auto");
+		case EElysiumCursorPolicy::Always: return TEXT("Always");
 		}
 		return TEXT("?");
 	}
@@ -97,7 +128,7 @@ struct FElysiumInputScope
 	int32 Priority = ElysiumInput::Priority::Game;
 
 	EElysiumInputMode Mode = EElysiumInputMode::GameOnly;
-	bool bShowCursor = false;
+	EElysiumCursorPolicy CursorPolicy = EElysiumCursorPolicy::Never;
 
 	// The mapping contexts applied while this scope is top, by id. UElysiumInputSubsystem resolves
 	// and diffs this list, keeping the same arbiter as the sole owner of input mode and contexts.
@@ -119,7 +150,7 @@ struct FElysiumInputState
 {
 	FName Name;                       // the deciding scope, NAME_None for the empty stack
 	EElysiumInputMode Mode = EElysiumInputMode::GameOnly;
-	bool bShowCursor = false;
+	EElysiumCursorPolicy CursorPolicy = EElysiumCursorPolicy::Never;
 	TArray<FName> Contexts;
 	TSharedPtr<SWidget> FocusWidget;
 
@@ -135,7 +166,7 @@ struct FElysiumInputState
 	bool SameEngineState(const FElysiumInputState& Other) const
 	{
 		return Mode == Other.Mode
-			&& bShowCursor == Other.bShowCursor
+			&& CursorPolicy == Other.CursorPolicy
 			&& Contexts == Other.Contexts
 			&& FocusWidget == Other.FocusWidget;
 	}

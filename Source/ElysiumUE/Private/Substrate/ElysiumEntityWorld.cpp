@@ -1445,22 +1445,32 @@ void FElysiumEntityWorld::CloseSign(bool bSilent)
 	}
 }
 
-void FElysiumEntityWorld::PlayerDismissSign()
+bool FElysiumEntityWorld::CanPlayerDismissSign() const
 {
 	if (!OpenSignOwner.IsSet() || !OpenSignData.IsValid())
 	{
-		return;
+		return false;
 	}
 	if (!OpenSignData->bCloseOnLeftClick)
 	{
-		return;   // a Rules block can opt out (the panel then waits for a scripted CloseWindow)
+		return false;   // a Rules block can opt out (the panel then waits for a scripted CloseWindow)
 	}
 	if (OpenSignData->MinShowTime > 0.0f &&
 		(NowSeconds() - OpenSignTime) < double(OpenSignData->MinShowTime))
 	{
-		return;   // still inside the enforced dwell
+		return false;   // still inside the enforced dwell
+	}
+	return true;
+}
+
+bool FElysiumEntityWorld::PlayerDismissSign()
+{
+	if (!CanPlayerDismissSign())
+	{
+		return false;
 	}
 	CloseSign(/*bSilent*/ false);
+	return true;
 }
 
 FElysiumEntityHandle FElysiumEntityWorld::GetOpenSign(double* OutOpenTime) const

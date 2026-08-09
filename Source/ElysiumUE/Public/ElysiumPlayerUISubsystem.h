@@ -13,6 +13,7 @@ class UElysiumDialogueScreen;
 class UElysiumHUDModel;
 class UElysiumUIRoot;
 class UElysiumPresentationSubsystem;
+class UElysiumSignScreen;
 class UWorld;
 struct FElysiumDialogueView;
 class FElysiumDlgConversation;
@@ -70,6 +71,10 @@ private:
 	void OnViewPublished(const struct FElysiumViewState& View);
 	void OnPostLoadMap(UWorld* LoadedWorld);
 	void ReconcileDialogue(const FElysiumDialogueView& Dialogue);
+	void ReconcileSign(const struct FElysiumViewState& View);
+	void ShowSign(const struct FElysiumViewState& View);
+	void HideSign();
+	void OnSignDismiss();
 	void ShowDialogue(const FElysiumDialogueView& Dialogue);
 	void HideDialogue();
 	void OnDialogueChoice(int32 VisibleIndex);
@@ -83,9 +88,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumDialogueScreen> DialogueScreen;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UElysiumSignScreen> SignScreen;
+
 	TWeakObjectPtr<UElysiumPresentationSubsystem> BoundPresentation;
 	// Identity only: never dereferenced after publication, because the conversation is map-owned.
 	const FElysiumDlgConversation* ShownDialogue = nullptr;
+	const struct FElysiumSignData* ShownSign = nullptr;
 	uint32 ShownDialogueRevision = 0;
 	FDelegateHandle ViewPublishedHandle;
 	FDelegateHandle PostLoadMapHandle;

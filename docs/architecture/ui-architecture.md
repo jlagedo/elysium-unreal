@@ -29,12 +29,15 @@ UI requires a Widget Blueprint or data-table asset; the generated typefaces rema
 | Type | Role |
 |---|---|
 | `UElysiumUISubsystem` | GI-scoped flow facade. It owns menu/character/chargen policy and scratch state, but delegates screen lifetime and composition to the local-player owner. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
-| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles the retained dialogue screen, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation is one modal lifetime whose turns update in place. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
+| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles retained dialogue and sign screens, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation or sign is one modal lifetime whose published state updates in place. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
 | `UElysiumUIRoot` | The single local-player root. Paint order is structural rather than numeric: passive HUD, transient stack, notification queue, game-modal stack, system-modal stack, runtime-loading stack. Every root slot explicitly fills the player viewport and every layer is instant until it owns an authored transition. Hiding the HUD collapses only its passive surface, never the root or a menu/loading screen above it. |
-| `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one Elysium input scope on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. The scope owns mode, cursor and gameplay contexts; CommonUI owns focus and restores the screen's desired target. |
+| `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one centrally defined Elysium screen policy on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. The scope owns mode, cursor policy and gameplay contexts; CommonUI owns focus and restores the screen's desired target. |
+| `UElysiumActionButton` | The programmatic `UCommonButtonBase` used for every action. It carries a stable action id, executable state, label/caption and accessible text; mouse, CommonUI activation and shortcuts all reach the same semantic callback. A non-executable explanatory row remains focusable. |
+| `UElysiumNavigableScreen` | The focus/selection owner for interactive screens. It restores selection by action id, wraps linear lists, supports explicit neighbours and horizontal/vertical groups, synchronizes hover with focus, repairs dynamic lists, and suppresses duplicate activation until the action set transitions. |
 | `UElysiumHUDWidget` | The resolution-independent in-world surface: life, discrete vitae droplets, Masquerade readout, equipment/discipline regions, selector preview, reticle and full-viewport fade. Unowned regions collapse instead of displaying fabricated runtime data. |
-| `UElysiumMainMenu` | the main / pause menu (`UElysiumActivatableScreen`) |
+| `UElysiumMainMenu` | the main / pause / game-over menu (`UElysiumNavigableScreen`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
+| `UElysiumDialogueScreen` / `UElysiumChargenPopup` / `UElysiumSignScreen` | Dynamic game-modal screens. Responses/answers retain authored shortcuts; a sign presents one Continue action while the entity world remains the final dwell and close-policy authority. |
 | `ElysiumUIStyle.{h,cpp}` | the design tokens — palette, type ramp, spacing, the virtual canvas — plus `FElysiumUIFontLibrary` |
 | `ElysiumUIStrings.{h,cpp}` | the authored string table read from `$ELYSIUM_EXPORT_ROOT/ui/strings.json` |
 | `ElysiumUITexture.{h,cpp}` | PNG → transient texture, shared by the use-icon atlas, sign backgrounds and the title lockup |
@@ -57,10 +60,11 @@ push time, not continuously, because the front end has a menu up permanently.
 
 The runtime boundary is one-way: `UElysiumPresentationSubsystem` publishes an
 `FElysiumViewState`; the player UI subsystem projects it into the Blueprint-readable model and
-reconciles modal dialogue; widgets render that state. A selector sends commands through the
-input/command layer and never mutates the model or entity world. The faithful `game_sign` panel is
-the remaining Canvas surface because its world-click dismissal is gameplay input; dialogue is an
-activatable game-modal screen wrapping its retained Slate body. The blocking MoviePlayer loading
+reconciles modal dialogue and signs; widgets render that state. A selector sends commands through
+the input/command layer and never mutates the model or entity world. `UElysiumSignScreen` exposes a
+visible Continue action and sends dismissal through the presentation subsystem;
+`FElysiumEntityWorld` revalidates `MinShowTime` and `CloseOnLeftClick` before it closes anything.
+The legacy `+attack` request reaches the same world seam. The blocking MoviePlayer loading
 screen is the other deliberate exception: it
 must render with no UObjects while the game thread is inside `LoadMap`. Its post-load continuation
 uses the root's runtime-loading layer like every ordinary player surface.
@@ -177,9 +181,8 @@ front-end predicate before `OpenLevel`, so `PostLogin` seats no pawn in the dest
 - The **MCP `elysium_screenshot` tool** passes `true`, because its job is to show what the player
   sees and since 8.6 that includes the menu.
 
-The legacy Canvas sign panel draws with the world, while the unified HUD root is Slate UI and obeys
-`bShowUI`. A UI-free capture can therefore include an open faithful sign but omit life, vitae and
-the reticle; HUD regression captures must explicitly include UI.
+Signs, dialogue and the unified HUD root are Slate UI and obey `bShowUI`. A UI-free capture omits
+all of them; HUD and modal regression captures must explicitly include UI.
 
 UI regression captures must request `bShowUI`; tracker work for HUD/UI coverage lives in
 `docs/project/roadmap.md` 8.9.
@@ -212,11 +215,11 @@ design shape and constraints, not a second completion ledger.
     the PC's own clan in a session, resolved through `PlayerSheet()`. The emitter graph is not
     reproduced; its art is.
 
-  **Armed ≠ enabled.** A row whose destination is missing is left *enabled* so it can take hover and
-  focus — a disabled `SButton` takes neither, and arming is what makes its caption ("No saved games
-  yet.") reachable. The click is gated instead, and the label colour reports the state. The armed row
-  also *persists* when the pointer leaves the rail, so the marker reads as a cursor rather than a
-  hover highlight.
+  **Selected ≠ executable.** A row whose destination is missing remains a focusable
+  `UElysiumActionButton`, so keyboard, controller and hover can select it and expose its caption
+  ("No saved games yet."). Execution is gated separately and the label colour reports the state.
+  Selection persists when the pointer leaves the rail, so the marker reads as a cursor rather than
+  a transient hover highlight.
 
   **Classic (0).** `CVMainMenu::PerformLayout` verbatim: every item sized to the widest label +
   `20×4` virtual px, `pitch = height + 2`, the column centred, blood red at rest, the whole frame
@@ -263,7 +266,10 @@ the original's even where the backing system is missing.
 
   A row is drawn only while its **current** value is in `[0, 6)`, which is what gives a non-clan
   discipline no row at all rather than a greyed one. Left-click raises, right-click sells back, and
-  the whole row is the hit target rather than the bubbles.
+  the whole row is the hit target rather than the bubbles. The same row is a CommonUI action:
+  Up/Down selects, Right or Accept buys, and Left or X/Square sells. LB/RB and Q/E change major
+  tabs; horizontal base and hub rows cycle with Left/Right. Footer and Back paths are semantic
+  actions in the same focus graph.
 
   **The Base tab is chargen's only extra body**: clan, gender and history as rows of selectable
   words with a framed write-up beside them, and a single `NEXT` in the footer. Retail draws three
@@ -320,4 +326,20 @@ the original's even where the backing system is missing.
   nothing is prefixed. The authored `Region`/`TextRegion` are read as **intent**, not as a runtime
   coordinate system: the page is centred in the virtual canvas and its text column takes the
   proportion the data asks for. The widget draws and reports which line was clicked; everything that
-  decides what happens next is `ElysiumChargen::WizChoose`.
+  decides what happens next is `ElysiumChargen::WizChoose`. Up/Down wraps, Accept chooses the
+  focused answer, number keys 1–9 invoke those same action ids, and Back is consumed because the
+  authored graph has no backward edge.
+
+- **Dialogue** — one `UElysiumActionButton` per visible response, or one Continue action on a
+  terminal turn. Stable `.dlg` row ids preserve selection across turn refreshes; a removed response
+  repairs to the nearest surviving row. Up/Down wraps, Accept uses the focused response, number
+  keys 1–9 invoke the same actions, and Back is consumed. A turn rebuild replaces the response
+  controls before CommonUI refreshes focus, so focus never falls through to the screen wrapper.
+
+- **Tutorial/game signs** — `UElysiumSignScreen` is a game-modal, UI-only surface which does not
+  request time control. A centered floating text box exposes one focusable Continue button. Enter,
+  Space, Accept or a click on that button sends one dismiss request; before the dwell expires or
+  when click-close is forbidden, the action remains selected but non-executable and the input
+  cannot leak into gameplay. Back is consumed. The publisher exposes dismissibility for
+  presentation, but the entity world repeats the check on every request so stale view state cannot
+  close a sign.

@@ -65,6 +65,7 @@ struct FElysiumDialogueView
 	FString Speaker;                 // the owning NPC's targetname
 	FString Line;                    // the NPC subtitle for this turn (DisplayText, directions stripped)
 	TArray<FString> Choices;         // the visible PC choices, in author order
+	TArray<int32> ChoiceIds;          // stable .dlg row ids, parallel to Choices
 	bool bTerminal = false;          // no choices — the box offers a single "continue"
 
 	bool IsOpen() const { return Conversation != nullptr; }
@@ -106,6 +107,7 @@ struct FElysiumViewState
 	FElysiumEntityHandle SignOwner;
 	float SignAlpha = 1.0f;
 	bool bSignHidesHUD = false;
+	bool bSignDismissible = false;
 
 	// --- Conversation (9.1 / B4) ------------------------------------------------------------
 	FElysiumDialogueView Dialogue;

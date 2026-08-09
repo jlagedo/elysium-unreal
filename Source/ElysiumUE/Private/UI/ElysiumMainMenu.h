@@ -2,13 +2,13 @@
 
 #include "CoreMinimal.h"
 
-#include "UI/ElysiumActivatableScreen.h"
+#include "UI/ElysiumNavigableScreen.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumMainMenu.generated.h"
 
-class SButton;
 class UTexture2D;
+class UElysiumActionButton;
 struct FSlateBrush;
 
 // The commands `gamemenu.res` binds, reduced to the ones this rebuild can service. VtMB routes
@@ -45,7 +45,7 @@ enum class EElysiumMenuCommand : uint8
 //
 // Neither reproduces the craft: vector small caps instead of a 640x480 bitmap atlas.
 UCLASS()
-class UElysiumMainMenu : public UElysiumActivatableScreen
+class UElysiumMainMenu : public UElysiumNavigableScreen
 {
 	GENERATED_BODY()
 
@@ -148,7 +148,7 @@ private:
 	// height in virtual px. Non-owning — the tree owns the buttons.
 	struct FRailRow
 	{
-		TWeakPtr<SButton> Button;
+		TWeakObjectPtr<UElysiumActionButton> Button;
 		float             Top = 0.0f;
 		float             Height = 0.0f;
 	};

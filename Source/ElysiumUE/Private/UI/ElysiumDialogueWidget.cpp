@@ -1,7 +1,6 @@
 #include "UI/ElysiumDialogueWidget.h"
 
 #include "Styling/CoreStyle.h"
-#include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
@@ -12,8 +11,6 @@ namespace
 	// The one palette — geometry + transparency, no art. Warm bone type on a near-black translucent
 	// slab, a blood-tint accent for the speaker, matching the project's grimy gothic direction.
 	const FLinearColor ColPanel(0.02f, 0.02f, 0.03f, 0.86f);
-	const FLinearColor ColChoiceIdle(1.0f, 1.0f, 1.0f, 0.05f);
-	const FLinearColor ColChoiceHover(0.62f, 0.10f, 0.12f, 0.55f);
 	const FLinearColor ColSpeaker(0.80f, 0.18f, 0.18f, 1.0f);
 	const FLinearColor ColLine(0.92f, 0.90f, 0.85f, 1.0f);
 	const FLinearColor ColChoiceText(0.86f, 0.85f, 0.82f, 1.0f);
@@ -48,20 +45,7 @@ TOptional<int32> ElysiumDialogueUI::ChoiceForKey(
 
 void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 {
-	OnChooseEvent = InArgs._OnChoose;
-	// A flat, chrome-free button whose only visible state is our own translucent row fill (idle -> a
-	// faint white wash, hovered/pressed -> a blood tint), so the choice list reads as geometry. Held as
-	// a member (ChoiceRowStyle) because SButton keeps the style by pointer for its lifetime.
-	ChoiceRowStyle = FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("NoBorder");
-	ChoiceRowStyle.SetNormal(*WhiteBox());
-	ChoiceRowStyle.SetHovered(*WhiteBox());
-	ChoiceRowStyle.SetPressed(*WhiteBox());
-	ChoiceRowStyle.Normal.TintColor = FSlateColor(ColChoiceIdle);     // faint white wash at rest
-	ChoiceRowStyle.Hovered.TintColor = FSlateColor(ColChoiceHover);   // blood tint under the cursor
-	ChoiceRowStyle.Pressed.TintColor = FSlateColor(ColChoiceHover);
-	ChoiceRowStyle.NormalForeground = FSlateColor(ColChoiceText);
-	ChoiceRowStyle.HoveredForeground = FSlateColor(FLinearColor::White);
-	ChoiceRowStyle.PressedForeground = FSlateColor(FLinearColor::White);
+	BuildChoiceEvent = InArgs._OnBuildChoice;
 	SetDialogue(InArgs._Speaker, InArgs._Line, InArgs._Choices, InArgs._bTerminal);
 }
 
@@ -80,9 +64,6 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 		"Bold", ElysiumDialogueUI::SpeakerFontPoints);
 	const FSlateFontInfo LineFont = FCoreStyle::GetDefaultFontStyle(
 		"Regular", ElysiumDialogueUI::LineFontPoints);
-	const FSlateFontInfo ChoiceFont = FCoreStyle::GetDefaultFontStyle(
-		"Regular", ElysiumDialogueUI::ChoiceFontPoints);
-
 	TSharedRef<SVerticalBox> Inner = SNew(SVerticalBox);
 
 	// Speaker name.
@@ -118,15 +99,9 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 		// Terminal line — a single continue affordance ends the conversation.
 		Inner->AddSlot().AutoHeight().Padding(0, 2)
 		[
-			SNew(SButton)
-			.ButtonStyle(&ChoiceRowStyle)
-			.ContentPadding(FMargin(10, 6))
-			.HAlign(HAlign_Left)
-			.OnClicked(FOnClicked::CreateSP(this, &SElysiumDialogueBox::Pick, -1))
-			[
-				SNew(STextBlock).Font(ChoiceFont).ColorAndOpacity(FSlateColor(ColChoiceText))
-				.Text(FText::FromString(TEXT("[ Continue ]")))
-			]
+			BuildChoiceEvent.IsBound()
+				? BuildChoiceEvent.Execute(-1, FText::FromString(TEXT("[ Continue ]")))
+				: SNullWidget::NullWidget
 		];
 	}
 	else
@@ -137,16 +112,9 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 			const FString Label = FString::Printf(TEXT("%d.  %s"), i + 1, *Choices[i]);
 			Inner->AddSlot().AutoHeight().Padding(0, 2)
 			[
-				SNew(SButton)
-				.ButtonStyle(&ChoiceRowStyle)
-				.ContentPadding(FMargin(10, 6))
-				.HAlign(HAlign_Left)
-				.OnClicked(FOnClicked::CreateSP(this, &SElysiumDialogueBox::Pick, i))
-				[
-					SNew(STextBlock).Font(ChoiceFont).ColorAndOpacity(FSlateColor(ColChoiceText))
-					.AutoWrapText(true)
-					.Text(FText::FromString(Label))
-				]
+				BuildChoiceEvent.IsBound()
+					? BuildChoiceEvent.Execute(i, FText::FromString(Label))
+					: SNullWidget::NullWidget
 			];
 		}
 	}
@@ -173,20 +141,4 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 			]
 		]
 	];
-}
-
-FReply SElysiumDialogueBox::OnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent)
-{
-	if (const TOptional<int32> Choice = ElysiumDialogueUI::ChoiceForKey(
-		KeyEvent.GetKey(), NumChoices, bTerminal))
-	{
-		return Pick(Choice.GetValue());
-	}
-	return FReply::Unhandled();
-}
-
-FReply SElysiumDialogueBox::Pick(int32 Index)
-{
-	OnChooseEvent.ExecuteIfBound(Index);
-	return FReply::Handled();
 }

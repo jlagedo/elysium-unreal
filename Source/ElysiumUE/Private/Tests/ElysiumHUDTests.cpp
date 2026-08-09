@@ -1,9 +1,15 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumHUDModel.h"
+#include "Substrate/ElysiumSignData.h"
+#include "UI/ElysiumActionButton.h"
+#include "UI/ElysiumCharacterScreen.h"
+#include "UI/ElysiumChargenPopup.h"
+#include "UI/ElysiumDialogueScreen.h"
 #include "UI/ElysiumDialogueWidget.h"
 #include "UI/ElysiumCommonUIInputData.h"
 #include "UI/ElysiumMainMenu.h"
+#include "UI/ElysiumSignScreen.h"
 #include "UI/ElysiumUIRoot.h"
 #include "UI/ElysiumUIStyle.h"
 
@@ -17,6 +23,21 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Widgets/SWidget.h"
+
+namespace
+{
+	int32 CountSlateWidgetsOfType(const TSharedRef<SWidget>& Widget, FName WidgetType)
+	{
+		int32 Count = Widget->GetType() == WidgetType ? 1 : 0;
+		FChildren* Children = Widget->GetChildren();
+		for (int32 Index = 0; Children && Index < Children->Num(); ++Index)
+		{
+			Count += CountSlateWidgetsOfType(Children->GetChildAt(Index), WidgetType);
+		}
+		return Count;
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDModelProjectionTest,
 	"Elysium.Substrate.UI.HUDModelProjection",
@@ -100,7 +121,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUIRootPushTest,
 bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
 {
 	UElysiumUIRoot* Root = NewObject<UElysiumUIRoot>();
-	Root->TakeWidget();
+	// Keep the retained root alive for the whole test. A temporary TakeWidget() reference tears the
+	// Slate containers back down before AddWidget(), which can only prove UObject registration.
+	const TSharedRef<SWidget> RootSlate = Root->TakeWidget();
 	UOverlay* Overlay = Cast<UOverlay>(Root->GetWidgetFromName(TEXT("RootOverlay")));
 	TestNotNull(TEXT("root exposes its structural overlay"), Overlay);
 	if (Overlay)
@@ -150,16 +173,20 @@ bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("the system-modal layer exists"), SystemModalLayer);
 	TestTrue(TEXT("the pushed screen is registered with the requested layer"),
 		SystemModalLayer && SystemModalLayer->GetWidgetList().Contains(Screen));
-	// KNOWN GAP: registration is not display. GetWidgetList() holds every instance the container has
-	// ever been given, activated or not, while ACTIVATION is what runs NativeOnActivated and
-	// therefore what pushes the screen's input scope — so a regression that leaves screens
-	// registered but inactive passes here while in game the modal draws over a world still taking
-	// WASD and mouselook. Asserting `SystemModalLayer->GetActiveWidget() == Screen` is the check
-	// that would close it, and it FAILS against this tree: the container reports no active widget
-	// even though the root's Slate tree is constructed and every layer is asserted to transition
-	// instantly. Whether that is a container that never activates or an activation that needs a
-	// tick this harness does not run is unresolved, so the assertion is not made rather than made
-	// and disabled.
+	TestTrue(TEXT("the requested screen is the active CommonUI leaf"),
+		SystemModalLayer && SystemModalLayer->GetActiveWidget() == Screen);
+	TestTrue(TEXT("the active CommonUI leaf completed activation"), Screen && Screen->IsActivated());
+
+	UCommonActivatableWidget* Over = Root->PushWidget(
+		EElysiumUILayer::SystemModal,
+		UCommonActivatableWidget::StaticClass(),
+		[](UCommonActivatableWidget&) {});
+	TestTrue(TEXT("a later same-layer modal becomes the active leaf"),
+		SystemModalLayer && SystemModalLayer->GetActiveWidget() == Over);
+	Root->RemoveWidget(EElysiumUILayer::SystemModal, Over);
+	TestTrue(TEXT("closing the top modal restores the underlying leaf"),
+		SystemModalLayer && SystemModalLayer->GetActiveWidget() == Screen);
+	(void)RootSlate;
 	return !HasAnyErrors();
 }
 
@@ -187,6 +214,226 @@ bool FElysiumActivatableRebuildNotificationTest::RunTest(const FString& Paramete
 
 	TestEqual(TEXT("custom Slate screen announces its rebuild to the CommonUI action router"),
 		RebuildNotifications, 1);
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUINavigationStateTest,
+	"Elysium.Substrate.UI.NavigationState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
+{
+	ICommonInputModule::GetSettings().LoadData();
+
+	// Menu rows are real CommonUI targets, including unavailable rows whose captions explain why.
+	UElysiumMainMenu* Menu = NewObject<UElysiumMainMenu>();
+	Menu->SetMenuMode(EElysiumMenuMode::Pause);
+	const TSharedRef<SWidget> MenuSlate = Menu->TakeWidget();
+	TestEqual(TEXT("pause menu selects its first primary action"), Menu->GetSelectedActionId(),
+		FName(TEXT("VMainMenu_BTN_CONTINUE")));
+	UElysiumActionButton* Desired = Cast<UElysiumActionButton>(Menu->GetDesiredFocusTarget());
+	TestNotNull(TEXT("desired focus is a semantic action rather than the screen wrapper"), Desired);
+	TestTrue(TEXT("desired focus is the selected action"), Desired == Menu->GetSelectedAction());
+	TestTrue(TEXT("menu action retains its visible Slate label inside the CommonButton"),
+		Desired && Desired->HasSlateContent());
+	TestTrue(TEXT("vertical menu wraps to its last action"),
+		Menu->Navigate(EElysiumNavigationDirection::Up));
+	TestEqual(TEXT("wrapped menu action is stable by id"), Menu->GetSelectedActionId(),
+		FName(TEXT("VMainMenu_BTN_MAINMENU")));
+	TestTrue(TEXT("vertical menu wraps back to the first action"),
+		Menu->Navigate(EElysiumNavigationDirection::Down));
+	TestEqual(TEXT("menu wrap returns to Continue"), Menu->GetSelectedActionId(),
+		FName(TEXT("VMainMenu_BTN_CONTINUE")));
+
+	UElysiumActionButton* Disabled = Menu->FindAction(TEXT("VMainMenu_BTN_LOADGAME"));
+	TestNotNull(TEXT("disabled menu item remains an action target"), Disabled);
+	if (Disabled)
+	{
+		TestTrue(TEXT("disabled explanatory item remains focusable"), Disabled->GetIsFocusable());
+		TestFalse(TEXT("disabled explanatory item cannot execute"), Disabled->IsExecutable());
+		TestTrue(TEXT("disabled explanatory item can be selected"),
+			Menu->SelectAction(Disabled->GetActionId(), false));
+		TestFalse(TEXT("disabled explanatory activation is a no-op"),
+			Menu->ExecuteSelectedAction());
+		TestFalse(TEXT("disabled item carries an explanatory caption"),
+			Disabled->GetActionCaption().IsEmpty());
+	}
+
+	// Dialogue retains the durable response identity across a turn rebuild. If that response is
+	// removed, it repairs to the nearest surviving visible row rather than a dead widget address.
+	UElysiumDialogueScreen* Dialogue = NewObject<UElysiumDialogueScreen>();
+	FElysiumDialogueView Turn;
+	Turn.Choices = { TEXT("First"), TEXT("Second"), TEXT("Third") };
+	Turn.ChoiceIds = { 101, 202, 303 };
+	Dialogue->ApplyDialogue(Turn);
+	int32 ChoiceCount = 0;
+	int32 LastChoice = INDEX_NONE;
+	Dialogue->OnChoice.BindLambda([&ChoiceCount, &LastChoice](int32 Choice)
+	{
+		++ChoiceCount;
+		LastChoice = Choice;
+	});
+	const TSharedRef<SWidget> DialogueSlate = Dialogue->TakeWidget();
+	TestEqual(TEXT("dialogue defaults to its first stable response"),
+		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Choice.101")));
+	TestTrue(TEXT("dialogue moves to the next response"),
+		Dialogue->Navigate(EElysiumNavigationDirection::Down));
+	TestEqual(TEXT("dialogue selection names the response identity"),
+		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Choice.202")));
+
+	UElysiumActionButton* Second = Dialogue->GetSelectedAction();
+	TestNotNull(TEXT("selected dialogue response is a CommonUI action"), Second);
+	TestTrue(TEXT("dialogue action retains its visible response content inside the CommonButton"),
+		Second && Second->HasSlateContent());
+	if (Second)
+	{
+		Second->OnActionActivated().Broadcast(*Second);
+		Second->OnActionActivated().Broadcast(*Second);
+	}
+	TestEqual(TEXT("CommonUI activation reaches the semantic choice exactly once"), ChoiceCount, 1);
+	TestEqual(TEXT("semantic callback uses visible response order"), LastChoice, 1);
+
+	Turn.Revision = 2;
+	Dialogue->ApplyDialogue(Turn);
+	TestEqual(TEXT("same response identity survives dialogue refresh"),
+		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Choice.202")));
+	Dialogue->SelectAction(TEXT("Dialogue.Choice.303"), false);
+	Turn.Revision = 3;
+	Turn.Choices = { TEXT("First"), TEXT("Second") };
+	Turn.ChoiceIds = { 101, 202 };
+	Dialogue->ApplyDialogue(Turn);
+	TestEqual(TEXT("contracted dialogue repairs to nearest surviving row"),
+		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Choice.202")));
+	Turn.Revision = 4;
+	Turn.Choices.Reset();
+	Turn.ChoiceIds.Reset();
+	Turn.bTerminal = true;
+	Dialogue->ApplyDialogue(Turn);
+	TestEqual(TEXT("terminal dialogue exposes one Continue action"),
+		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Continue")));
+
+	// Chargen uses the same stable-selection and contraction rules, with a vertical wrap.
+	FElysiumWizPopup Popup;
+	Popup.InternalName = TEXT("TestPopup");
+	Popup.Text = TEXT("Choose");
+	Popup.Actions.SetNum(3);
+	Popup.Actions[0].Text = TEXT("One");
+	Popup.Actions[1].Text = TEXT("Two");
+	Popup.Actions[2].Text = TEXT("Three");
+	TSharedPtr<FElysiumWizRun> Run = MakeShared<FElysiumWizRun>();
+	Run->Popup = &Popup;
+	for (const FElysiumWizAction& Action : Popup.Actions)
+	{
+		Run->Choices.Add(&Action);
+	}
+	UElysiumChargenPopup* Chargen = NewObject<UElysiumChargenPopup>();
+	Chargen->SetRun(Run);
+	const TSharedRef<SWidget> ChargenSlate = Chargen->TakeWidget();
+	TestEqual(TEXT("chargen defaults to its first answer"), Chargen->GetSelectedActionId(),
+		FName(TEXT("Chargen.TestPopup.0")));
+	Chargen->Navigate(EElysiumNavigationDirection::Up);
+	TestEqual(TEXT("chargen answers wrap upward"), Chargen->GetSelectedActionId(),
+		FName(TEXT("Chargen.TestPopup.2")));
+	Run->Choices.SetNum(2);
+	Chargen->Refresh();
+	TestEqual(TEXT("contracted chargen choices repair to nearest answer"),
+		Chargen->GetSelectedActionId(), FName(TEXT("Chargen.TestPopup.1")));
+
+	// Character/chargen rows use explicit region routing: vertical enters/leaves the body, while
+	// horizontal selection executes the focused base option through the same semantic action.
+	UElysiumCharacterScreen* Character = NewObject<UElysiumCharacterScreen>();
+	FElysiumCharacterScreenMode CharacterMode;
+	CharacterMode.Tabs = { EElysiumCharacterTab::Base, EElysiumCharacterTab::Sheet };
+	CharacterMode.Spend = EElysiumSpendMode::Chargen;
+	Character->SetMode(CharacterMode);
+	TSharedPtr<FElysiumChargenState> CharacterState = MakeShared<FElysiumChargenState>();
+	CharacterState->Clan = 2;
+	Character->SetSpendState(CharacterState);
+	Character->SetActiveTab(EElysiumCharacterTab::Base);
+	int32 CharacterCancelCount = 0;
+	Character->OnCancel.BindLambda([&CharacterCancelCount]() { ++CharacterCancelCount; });
+	const TSharedRef<SWidget> CharacterSlate = Character->TakeWidget();
+	TestEqual(TEXT("character screen defaults to its active major tab"),
+		Character->GetSelectedActionId(),
+		FName(*FString::Printf(TEXT("Character.Tab.%d"), int32(EElysiumCharacterTab::Base))));
+	Character->Navigate(EElysiumNavigationDirection::Down);
+	TestEqual(TEXT("Down enters the first base-option row"), Character->GetSelectedActionId(),
+		FName(TEXT("Character.Base.Clan.0")));
+	Character->Navigate(EElysiumNavigationDirection::Right);
+	TestEqual(TEXT("Right cycles and selects the next base option"),
+		Character->GetSelectedActionId(), FName(TEXT("Character.Base.Clan.1")));
+	TestEqual(TEXT("base-option routing executes the same clan action"), CharacterState->Clan, 3);
+	Character->Navigate(EElysiumNavigationDirection::Up);
+	Character->Navigate(EElysiumNavigationDirection::Up);
+	TestEqual(TEXT("vertical region routing wraps from tabs to the footer cancel action"),
+		Character->GetSelectedActionId(), FName(TEXT("Character.Footer.Cancel")));
+	TestTrue(TEXT("footer cancel is an ordinary executable semantic action"),
+		Character->ExecuteSelectedAction());
+	TestEqual(TEXT("footer cancel and Back share one callback"), CharacterCancelCount, 1);
+
+	// A sign is one centered text panel and an ordinary visible Continue action. Legacy background
+	// metadata is deliberately ignored; dwell/CloseOnLeftClick still controls executability.
+	FElysiumSignData Sign;
+	Sign.bParsed = true;
+	Sign.SourceFile = TEXT("automation-sign");
+	Sign.Background.bValid = true;
+	Sign.Background.ImageName = TEXT("interface/pop_ups/automation_missing");
+	Sign.Background.bHasWide = true;
+	Sign.Background.bHasTall = true;
+	Sign.Background.Wide = 2048;
+	Sign.Background.Tall = 1024;
+	Sign.Background.bCentre = true;
+	FElysiumSignTextBlock BodyBlock;
+	BodyBlock.Text = TEXT("Authored popup body");
+	BodyBlock.XPos = 836;
+	BodyBlock.YPos = 310;
+	BodyBlock.Wide = 375;
+	BodyBlock.Tall = 375;
+	BodyBlock.TextColor = FLinearColor::White;
+	Sign.Blocks.Add(BodyBlock);
+	FElysiumSignTextBlock ContinueBlock;
+	ContinueBlock.Text = TEXT("left-click to continue");
+	ContinueBlock.XPos = 922;
+	ContinueBlock.YPos = 706;
+	ContinueBlock.Wide = 215;
+	ContinueBlock.Tall = 28;
+	ContinueBlock.TextColor = FLinearColor::White;
+	Sign.Blocks.Add(ContinueBlock);
+	UElysiumSignScreen* SignScreen = NewObject<UElysiumSignScreen>();
+	SignScreen->ApplySign(Sign, 1.0f, false);
+	int32 DismissCount = 0;
+	SignScreen->OnDismiss.BindLambda([&DismissCount]() { ++DismissCount; });
+	const TSharedRef<SWidget> SignSlate = SignScreen->TakeWidget();
+	UElysiumActionButton* SignAction = SignScreen->FindAction(TEXT("Sign.Dismiss"));
+	TestNotNull(TEXT("sign panel is one CommonUI action"), SignAction);
+	TestTrue(TEXT("sign action retains its visible Continue presentation"),
+		SignAction && SignAction->HasSlateContent());
+	SignSlate->SlatePrepass(1.0f);
+	TestTrue(TEXT("sign panel has a stable readable minimum presentation size"),
+		SignSlate->GetDesiredSize().X > 600.0f && SignSlate->GetDesiredSize().Y > 100.0f);
+	TestEqual(TEXT("sign renders one body and one replacement Continue label"),
+		CountSlateWidgetsOfType(SignSlate, FName(TEXT("STextBlock"))), 2);
+	TestEqual(TEXT("Continue is rendered inside the real CommonButton subtree"),
+		SignAction ? CountSlateWidgetsOfType(SignAction->TakeWidget(), FName(TEXT("STextBlock"))) : -1,
+		1);
+	TestEqual(TEXT("sign action exposes the same semantic Continue label"),
+		SignAction ? SignAction->GetActionLabel().ToString() : FString(), FString(TEXT("Continue")));
+	TestTrue(TEXT("sign action is the desired focus target"),
+		SignAction && SignScreen->GetDesiredFocusTarget() == SignAction);
+	TestFalse(TEXT("sign cannot execute before the world authorizes dismissal"),
+		SignScreen->ExecuteSelectedAction());
+	TestEqual(TEXT("blocked sign input is consumed without dismissal"), DismissCount, 0);
+	SignScreen->ApplySign(Sign, 1.0f, true);
+	TestTrue(TEXT("authorized sign action dismisses"), SignScreen->ExecuteSelectedAction());
+	TestFalse(TEXT("transition latch suppresses a repeated sign activation"),
+		SignScreen->ExecuteSelectedAction());
+	TestEqual(TEXT("sign dismissal reaches its semantic request exactly once"), DismissCount, 1);
+	(void)MenuSlate;
+	(void)DialogueSlate;
+	(void)ChargenSlate;
+	(void)CharacterSlate;
+	(void)SignSlate;
+
 	return !HasAnyErrors();
 }
 

@@ -764,7 +764,15 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `bShowUI` flag because the harness's UI-free capture silently omits every Slate widget — the MCP
   tool now passes true, the regression harness keeps false so baselines hold.
 
-  **Remaining:** live keyboard/gamepad navigation acceptance across the screen set; New Game click
+  **Unified navigation slice landed and is automated.** Menu, dialogue, chargen, character/chargen
+  sheets and signs use stable-id `UElysiumActionButton` targets under one
+  `UElysiumNavigableScreen` focus owner. Lists wrap, dynamic response lists repair focus, mouse
+  hover shares controller/keyboard selection, retained number shortcuts execute the same semantic
+  actions, and transition latching prevents duplicate activation. The root automation now asserts
+  the active leaf and underlying-modal restoration rather than registration alone.
+
+  **Remaining:** live mouse/keyboard, Xbox-style and DualSense navigation acceptance across the
+  screen set, including hot device switching, focus loss and reconnect; New Game click
   path untested end to end (the seam is wired, the console equivalent works); chargen ahead of New
   Game (9.4). **Open risk:** `uv run elysium debug shots` cannot see
   the UI layer, so 8.9's HUD needs UI-inclusive vantages or its regressions go unwatched.
@@ -776,7 +784,7 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   and node count reproduce VtMB's own arithmetic. **Open:** never put side by side with the running
   original, and `Subdiv` render tessellation has no analogue on `UCableComponent`. →
   `docs/vtmb/entity_visuals.md`.
-- [ ] **8.8 Sign / popup panels on the UI foundation** — 4.10's Canvas panel re-drawn on 8.6's
+- [~] **8.8 Sign / popup panels on the UI foundation** — 4.10's Canvas panel re-drawn on 8.6's
   stack. The **authored layout is honoured as proportion and grouping** (block rects, ordering,
   emphasis) and re-set with vector type on the resolution-independent layout — the `CSignUI`
   1024×768 uniform-scale canvas model stays the *reference* for what
@@ -788,6 +796,14 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `Columns`, and the panel keys `CloseOnLeftClick`/`MinShowTime`/`ClientCommand`. The
   per-resolution `Font_640`…`Font_1600` overrides are **dropped** — vector type scales
   continuously. *Deps:* 8.6, 4.10.
+
+  **Landed:** the Canvas input/render path is retired. `UElysiumSignScreen` reconciles the current
+  sign on the local-player game-modal layer, owns one visible CommonUI Continue action, consumes
+  Back, removes gameplay contexts without changing time control, and routes dismissal through the
+  presentation seam. `FElysiumEntityWorld` revalidates `CloseOnLeftClick` and `MinShowTime`; the
+  legacy `+attack` request remains compatible with that same world rule. Automation covers the
+  focus target, repeat suppression and both world gates. **Remaining:** the format/presentation
+  features listed above and physical-device/resolution acceptance.
 - [~] **8.9 HUD on the UI foundation** — retire the Canvas HUD as the player-facing surface:
   the +use reticle/use-icon (4.4), blood/health and status, the sign/screen-fade states, and a
   subtitle slot, composed on 8.6's stack with the same design tokens. Player pose/mode/FPS is
@@ -799,8 +815,8 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   **Landed:** the stable HUD model and local-player surface, reticle/use icons, health, discrete
   vitae droplets, Humanity/Masquerade, fade, cutscene suppression, bright-scene contrast veils and
   outlined glyph/icon treatments. Selector layouts have preview coverage but equipment,
-  disciplines and inventory still need authoritative gameplay data and command wiring; the sign
-  remains the faithful Canvas exception until 8.8, and subtitles remain open. *Deps:* 8.6, 4.4,
+  disciplines and inventory still need authoritative gameplay data and command wiring; signs now
+  occupy the game-modal CommonUI layer, and subtitles remain open. *Deps:* 8.6, 4.4,
   4.10, 11.8.
 - [ ] **8.10 Accessibility & options backing** *(`docs/project/remaster-direction.md` axis 4 — additive only;
   changes what the player can configure and perceive, never what the game does)* — full
@@ -812,6 +828,9 @@ original game's reference captures (RE17) on `sp_tutorial_1` + hub maps.
   `QueryMapKeyInActiveContextSet` for conflicts, `MapPlayerKey` per slot, `ResetAllPlayerKeysInRow`
   for Use Defaults — over three columns (Key/Button, Alternate, Gamepad) and filters its key
   selector against `FElysiumReservedKeys` (`docs/architecture/input-architecture.md`).
+  **Landed partial:** all current interactive surfaces have keyboard/gamepad focus navigation and
+  programmatic action labels/captions; options, remapping, scaling, subtitle controls, colour and
+  contrast settings remain open. Physical-device acceptance is not recorded yet.
   *Deps:* 8.6, 10.6 (input path built).
 - [ ] **8.11 The player body** *(design: `docs/vtmb/camera-view-modes.md` → "Player mesh, fade and
   first-person rendering")* — the PC's own skeletal body. The durable record resolves clan, sex,
@@ -863,6 +882,10 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   audio via 6.5/6.6's shared line service. Content is **reproduced verbatim** (lines, conditions, branch structure,
   ordering); presentation modernizes — vector type, reflowing line lists, speaker/emotion cues,
   the 8.10 subtitle path. *Deps:* 9.1, 6.5, 6.6, 8.6.
+  **UI slice landed:** visible responses and Continue are stable CommonUI actions; number keys and
+  Accept share the same choice callback, Back is consumed, response identity survives turn
+  refresh, and contracted lists repair to the nearest response. Audio/presentation completion and
+  live physical-device acceptance remain open.
 - [x] **9.3a Level-script wiring — CPython is the default host + auto-load at map load** —
   `MakePreferredScriptHost` installs the CPython host when the VM actually starts (else it falls
   back to expr with a warning — a dead VM is indistinguishable from error-to-false); the map's
@@ -991,9 +1014,10 @@ dialogue, scripted flow, quests, save/load included.
     `IA_*`/`IMC_*` assets emitted by `pipeline/unreal/build_content.py`, so `uv run elysium export bundle policy` keeps them in
     lockstep.
   - **b. `IMC_Player_KBM` + analog actions + `UElysiumInputRouter`** — retires the legacy
-    mappings and `bEnableLegacyInputScales`; contexts replace VtMB's `CClientMode*` split
-    (`IMC_Dialogue`/`_Menu`/`_Cinematic`), with `bIgnoreAllPressedKeysUntilRelease` settling the
-    held-input-into-conversation question on our side of the port. Every button-pair action binds
+    mappings and `bEnableLegacyInputScales`; gameplay contexts replace the gameplay portion of
+    VtMB's `CClientMode*` split, while CommonUI owns menu, dialogue and prompt navigation.
+    `bIgnoreAllPressedKeysUntilRelease` settles the held-input-into-conversation question on our
+    side of the port. Every button-pair action binds
     **`ETriggerEvent::Canceled` alongside `Completed`** — a Hold or Tap trigger released early
     fires `Canceled`, and the missing `-cmd` leaves the button latched for the session. Also wires
     the analog path. The gamepad slice calls `SetAnalogMove`; mouse look is the separate
@@ -1039,6 +1063,9 @@ dialogue, scripted flow, quests, save/load included.
   `UElysiumInputRouter` folds LS/RS into the existing `FElysiumUserCmd`, routes Mouse2D through the
   keyboard/mouse context's `Smooth` modifier, and routes Cross/A through the existing
   `+jump`/`-jump` bus; `UElysiumInputSubsystem` owns both contexts across scopes and travel.
+  UI navigation deliberately does not add Enhanced Input contexts: every UI-only scope removes the
+  gameplay contexts and CommonUI handles focus, Accept and Back. `CursorPolicy::Auto` follows
+  CommonInput device changes while leaving the active screen and its stable selection intact.
   `GameInputWindows` is the sole
   preferred Windows pad API: native Xbox plus the configured standard DualSense (`054C:0CE6`). Its
   native Gamepad processor owns standard controls, while its generic Controller processor is

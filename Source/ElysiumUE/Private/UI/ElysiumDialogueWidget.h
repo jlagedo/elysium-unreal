@@ -11,6 +11,8 @@
 // machine, the `.dlg` data, and OnDialogEnd all live in the substrate. 9.2 replaces it with the real
 // UI on the 8.6 stack. Number keys 1-9 select; a terminal line offers a single "continue".
 DECLARE_DELEGATE_OneParam(FElysiumOnDlgChoice, int32);   // choice index >= 0, or -1 to advance a terminal line
+DECLARE_DELEGATE_RetVal_TwoParams(TSharedRef<SWidget>, FElysiumBuildDlgChoice,
+	int32 /*choice index*/, const FText& /*label*/);
 
 namespace ElysiumDialogueUI
 {
@@ -45,27 +47,17 @@ public:
 		SLATE_ARGUMENT(FString, Line)                    // the NPC subtitle for this turn
 		SLATE_ARGUMENT(TArray<FString>, Choices)         // PC choice labels, in author order
 		SLATE_ARGUMENT(bool, bTerminal)                  // no choices — show a single "continue"
-		SLATE_EVENT(FElysiumOnDlgChoice, OnChoose)
+		SLATE_EVENT(FElysiumBuildDlgChoice, OnBuildChoice)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
 	void SetDialogue(const FString& Speaker, const FString& Line,
 		const TArray<FString>& Choices, bool bInTerminal);
 
-	// The CommonUI wrapper normally owns focus; retain this route for direct Slate focus as well.
-	virtual bool SupportsKeyboardFocus() const override { return true; }
-	virtual FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
-
 private:
 	void RebuildDialogue(const FString& Speaker, const FString& Line,
 		const TArray<FString>& Choices);
-	FReply Pick(int32 Index);
-
-	FElysiumOnDlgChoice OnChooseEvent;
+	FElysiumBuildDlgChoice BuildChoiceEvent;
 	int32 NumChoices = 0;
 	bool bTerminal = false;
-
-	// SButton stores the style by pointer, not by value, so it must outlive Construct — hold it on the
-	// widget (a Construct-local would dangle and crash on the first paint).
-	FButtonStyle ChoiceRowStyle;
 };

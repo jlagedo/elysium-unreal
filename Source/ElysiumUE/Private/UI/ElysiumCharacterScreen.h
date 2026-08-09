@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "Substrate/ElysiumChargen.h"
-#include "UI/ElysiumActivatableScreen.h"
+#include "UI/ElysiumNavigableScreen.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumCharacterScreen.generated.h"
@@ -47,7 +47,7 @@ struct FElysiumCharacterScreenMode
 // (`EElysiumChargenCurrency`). The spend state is a scratch — nothing reaches the character until
 // ACCEPT — so CANCEL is a discard rather than an undo log.
 UCLASS()
-class UElysiumCharacterScreen : public UElysiumActivatableScreen
+class UElysiumCharacterScreen : public UElysiumNavigableScreen
 {
 	GENERATED_BODY()
 
@@ -91,6 +91,9 @@ public:
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 	virtual bool NativeOnHandleBackAction() override;
+	virtual bool HandleNavigation(EElysiumNavigationDirection Direction) override;
+	virtual void HandleSelectedActionChanged(FName PreviousActionId,
+		FName NewActionId) override;
 
 private:
 	float VirtualScale() const;
@@ -142,7 +145,8 @@ private:
 
 	// --- the Base tab ---------------------------------------------------------------------------
 	TSharedRef<SWidget> BuildBase();
-	TSharedRef<SWidget> BuildChoiceRow(const FText& Heading, const TArray<FText>& Options,
+	TSharedRef<SWidget> BuildChoiceRow(FName GroupId, const FText& Heading,
+	                                   const TArray<FText>& Options,
 	                                   int32 Selected, TFunction<void(int32)> OnPick);
 
 	void Select(EElysiumTraitContainer Container, int32 TraitSlot);
@@ -150,6 +154,9 @@ private:
 	void TrySell(EElysiumTraitContainer Container, int32 TraitSlot);
 	// Re-derive the whole state after a clan / sex / history change, then redraw.
 	void RebuildBaseline();
+	void CycleTab(int32 Delta);
+	FName FirstBodyAction() const;
+	FName LastBodyAction() const;
 
 	FElysiumCharacterScreenMode Mode;
 	EElysiumCharacterTab Tab = EElysiumCharacterTab::QuestLog;
@@ -173,4 +180,12 @@ private:
 	TSharedPtr<class SBox> TabStripHost;
 	TSharedPtr<class SBox> BodyHost;
 	TSharedPtr<class SBox> FooterHost;
+	TSharedPtr<class SBox> DetailHost;
+
+	struct FTraitAction
+	{
+		EElysiumTraitContainer Container = EElysiumTraitContainer::Attributes;
+		int32 Slot = INDEX_NONE;
+	};
+	TMap<FName, FTraitAction> TraitActions;
 };

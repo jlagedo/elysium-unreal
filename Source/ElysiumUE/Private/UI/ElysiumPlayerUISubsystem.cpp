@@ -4,6 +4,7 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "UI/ElysiumDialogueScreen.h"
+#include "UI/ElysiumSignScreen.h"
 #include "UI/ElysiumUIRoot.h"
 
 #include "CommonActivatableWidget.h"
@@ -204,7 +205,9 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 		Root = nullptr;
 	}
 	DialogueScreen = nullptr;
+	SignScreen = nullptr;
 	ShownDialogue = nullptr;
+	ShownSign = nullptr;
 	ShownDialogueRevision = 0;
 }
 
@@ -228,7 +231,66 @@ void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 		Model->Apply(View, PreviewMode);
 	}
 	EnsureRoot();
+	ReconcileSign(View);
 	ReconcileDialogue(View.Dialogue);
+}
+
+void UElysiumPlayerUISubsystem::ReconcileSign(const FElysiumViewState& View)
+{
+	if (!View.Sign || !View.Sign->bParsed || !UElysiumSignScreen::ShouldDrawSigns())
+	{
+		HideSign();
+		return;
+	}
+	if (!SignScreen || ShownSign != View.Sign)
+	{
+		HideSign();
+		ShowSign(View);
+		return;
+	}
+	SignScreen->ApplySign(*View.Sign, View.SignAlpha, View.bSignDismissible);
+}
+
+void UElysiumPlayerUISubsystem::ShowSign(const FElysiumViewState& View)
+{
+	if (!View.Sign)
+	{
+		return;
+	}
+	SignScreen = Cast<UElysiumSignScreen>(PushWidget(
+		EElysiumUILayer::GameModal,
+		UElysiumSignScreen::StaticClass(),
+		[this, View](UCommonActivatableWidget& Widget)
+		{
+			UElysiumSignScreen* Screen = CastChecked<UElysiumSignScreen>(&Widget);
+			Screen->ApplySign(*View.Sign, View.SignAlpha, View.bSignDismissible);
+			Screen->OnDismiss.BindUObject(this, &UElysiumPlayerUISubsystem::OnSignDismiss);
+			Screen->ConfigureScreenPolicy(EElysiumUIScreenKind::Sign);
+		}));
+	ShownSign = SignScreen ? View.Sign : nullptr;
+}
+
+void UElysiumPlayerUISubsystem::HideSign()
+{
+	if (SignScreen)
+	{
+		RemoveWidget(EElysiumUILayer::GameModal, SignScreen);
+		SignScreen = nullptr;
+	}
+	ShownSign = nullptr;
+}
+
+void UElysiumPlayerUISubsystem::OnSignDismiss()
+{
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		if (Presentation->DismissSign())
+		{
+			// Pop the CommonUI leaf now so its input scope deactivates in the same route that accepted
+			// dismissal. Publish remains the authoritative repair path for scripted closes/replacements.
+			HideSign();
+		}
+	}
 }
 
 void UElysiumPlayerUISubsystem::OnPostLoadMap(UWorld* LoadedWorld)
@@ -282,7 +344,7 @@ void UElysiumPlayerUISubsystem::ShowDialogue(const FElysiumDialogueView& Dialogu
 			UElysiumDialogueScreen* Screen = CastChecked<UElysiumDialogueScreen>(&Widget);
 			Screen->ApplyDialogue(Dialogue);
 			Screen->OnChoice.BindUObject(this, &UElysiumPlayerUISubsystem::OnDialogueChoice);
-			Screen->ConfigureInputScope(TEXT("Dialogue"), ElysiumInput::Priority::Dialogue);
+			Screen->ConfigureScreenPolicy(EElysiumUIScreenKind::Dialogue);
 		}));
 }
 

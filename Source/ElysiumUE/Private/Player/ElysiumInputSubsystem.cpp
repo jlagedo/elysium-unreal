@@ -4,6 +4,7 @@
 #include "ElysiumInputRouter.h"
 #include "ElysiumPlayerController.h"
 
+#include "CommonInputSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -22,6 +23,16 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumInput, Log, All);
 void UElysiumInputSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+	Collection.InitializeDependency<UCommonInputSubsystem>();
+	if (ULocalPlayer* LocalPlayer = GetLocalPlayer<ULocalPlayer>())
+	{
+		if (UCommonInputSubsystem* CommonInput =
+			LocalPlayer->GetSubsystem<UCommonInputSubsystem>())
+		{
+			InputMethodChangedHandle = CommonInput->OnInputMethodChangedNative.AddUObject(
+				this, &UElysiumInputSubsystem::OnInputMethodChanged);
+		}
+	}
 
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.inputscopes"),
@@ -48,6 +59,18 @@ void UElysiumInputSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UElysiumInputSubsystem::Deinitialize()
 {
 	ApplyMappingContexts({});
+	if (InputMethodChangedHandle.IsValid())
+	{
+		if (ULocalPlayer* LocalPlayer = GetLocalPlayer<ULocalPlayer>())
+		{
+			if (UCommonInputSubsystem* CommonInput =
+				LocalPlayer->GetSubsystem<UCommonInputSubsystem>())
+			{
+				CommonInput->OnInputMethodChangedNative.Remove(InputMethodChangedHandle);
+			}
+		}
+		InputMethodChangedHandle.Reset();
+	}
 	if (DebugTicker.IsValid())
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(DebugTicker);
@@ -185,7 +208,7 @@ void UElysiumInputSubsystem::ApplyToController(APlayerController* PC, const FEly
 		break;
 	}
 
-	PC->SetShowMouseCursor(NewState.bShowCursor);
+	PC->SetShowMouseCursor(ResolveCursorVisible(NewState.CursorPolicy));
 
 	// A key held across a scope change must not bleed into what comes next: walking into a
 	// conversation with W down has to stop walking (11.6, S5). The engine's own answer at 10.6 is
@@ -294,6 +317,24 @@ void UElysiumInputSubsystem::PlayerControllerChanged(APlayerController* NewPlaye
 	Reapply();
 }
 
+void UElysiumInputSubsystem::OnInputMethodChanged(ECommonInputType InputType)
+{
+	// Auto cursor policy is resolved at apply time, so invalidate the remembered engine state even
+	// though the logical scope itself has not changed. Reapplying UIOnly also restores its current
+	// action focus when the player puts the mouse down and returns to a pad.
+	bApplied = false;
+	Apply();
+}
+
+bool UElysiumInputSubsystem::ResolveCursorVisible(EElysiumCursorPolicy Policy) const
+{
+	const ULocalPlayer* LocalPlayer = GetLocalPlayer<ULocalPlayer>();
+	const UCommonInputSubsystem* CommonInput = LocalPlayer
+		? LocalPlayer->GetSubsystem<UCommonInputSubsystem>() : nullptr;
+	return ElysiumInput::ResolveCursorVisible(Policy,
+		!CommonInput || CommonInput->GetCurrentInputType() == ECommonInputType::MouseAndKeyboard);
+}
+
 // --- Cog -----------------------------------------------------------------------------------------
 
 bool UElysiumInputSubsystem::ReconcileDebugCapture(float /*DeltaTime*/)
@@ -315,7 +356,7 @@ bool UElysiumInputSubsystem::ReconcileDebugCapture(float /*DeltaTime*/)
 		// input, and popping it restores exactly what was underneath. The cursor claim matches what
 		// Cog does to the controller anyway, so the two never disagree.
 		Scope.Mode = EElysiumInputMode::GameOnly;
-		Scope.bShowCursor = true;
+		Scope.CursorPolicy = EElysiumCursorPolicy::Always;
 		ElysiumInput::AddPlayerContexts(Scope.Contexts);
 		DebugScope = Scopes.Push(MoveTemp(Scope));
 		Apply();

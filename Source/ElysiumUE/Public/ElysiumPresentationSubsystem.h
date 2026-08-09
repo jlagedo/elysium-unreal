@@ -114,6 +114,9 @@ public:
 	// uses, so the UI never holds an FElysiumEntityWorld to talk back through.
 	void DialogueChoose(int32 VisibleIndex);
 	void DialogueAdvance();
+	// True means the request closed the panel without synchronously opening a replacement, so the
+	// local-player owner may remove its modal immediately instead of waiting for the next publish.
+	bool DismissSign();
 
 	// Step 9's tick function. Public so a test can read the declared frame order off the class.
 	UPROPERTY()

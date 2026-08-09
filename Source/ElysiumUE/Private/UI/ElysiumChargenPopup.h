@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "Substrate/ElysiumChargen.h"
-#include "UI/ElysiumActivatableScreen.h"
+#include "UI/ElysiumNavigableScreen.h"
 
 #include "ElysiumChargenPopup.generated.h"
 
@@ -21,7 +21,7 @@ struct FSlateBrush;
 // The run is the caller's — this widget draws `Run.Popup`, reports the index that was clicked and
 // asks to be redrawn. Everything that decides what happens next is `ElysiumChargen::WizChoose`.
 UCLASS()
-class UElysiumChargenPopup : public UElysiumActivatableScreen
+class UElysiumChargenPopup : public UElysiumNavigableScreen
 {
 	GENERATED_BODY()
 
@@ -40,11 +40,16 @@ public:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
 	virtual bool NativeOnHandleBackAction() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& Geometry,
+		const FKeyEvent& KeyEvent) override;
+	virtual void HandleSelectedActionChanged(FName PreviousActionId,
+		FName NewActionId) override;
 
 private:
 	float VirtualScale() const;
 	const FSlateBrush* Art(const FString& RelPath);
 	TSharedRef<SWidget> BuildPage();
+	FName AnswerActionId(int32 Index) const;
 
 	TSharedPtr<FElysiumWizRun> Run;
 
@@ -55,4 +60,5 @@ private:
 	TSet<FString> ArtMissing;
 
 	TSharedPtr<class SBox> PageHost;
+	int32 PreferredAnswerIndex = 0;
 };

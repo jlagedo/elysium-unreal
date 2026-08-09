@@ -2,10 +2,10 @@
 
 FString FElysiumInputState::Describe() const
 {
-	FString Out = FString::Printf(TEXT("%s mode=%s cursor=%d"),
+	FString Out = FString::Printf(TEXT("%s mode=%s cursor=%s"),
 		Name.IsNone() ? TEXT("<game>") : *Name.ToString(),
 		ElysiumInput::ModeName(Mode),
-		bShowCursor ? 1 : 0);
+		ElysiumInput::CursorPolicyName(CursorPolicy));
 	if (Contexts.Num() > 0)
 	{
 		Out += TEXT(" ctx=");
@@ -90,7 +90,7 @@ FElysiumInputState FElysiumInputScopeStack::Resolve() const
 	{
 		State.Name = Scope->Name;
 		State.Mode = Scope->Mode;
-		State.bShowCursor = Scope->bShowCursor;
+		State.CursorPolicy = Scope->CursorPolicy;
 		State.Contexts = Scope->Contexts;
 		State.FocusWidget = Scope->FocusWidget;
 	}
@@ -107,13 +107,13 @@ FString FElysiumInputScopeStack::Describe() const
 	FString Out;
 	for (const FElysiumInputScope& Scope : Entries)
 	{
-		Out += FString::Printf(TEXT("%s#%d %s prio=%d mode=%s cursor=%d\n"),
+		Out += FString::Printf(TEXT("%s#%d %s prio=%d mode=%s cursor=%s\n"),
 			(&Scope == TopScope) ? TEXT("* ") : TEXT("  "),
 			Scope.Handle.Id,
 			*Scope.Name.ToString(),
 			Scope.Priority,
 			ElysiumInput::ModeName(Scope.Mode),
-			Scope.bShowCursor ? 1 : 0);
+			ElysiumInput::CursorPolicyName(Scope.CursorPolicy));
 	}
 	return Out;
 }

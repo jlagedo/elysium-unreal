@@ -1,14 +1,14 @@
 #pragma once
 
 #include "ElysiumViewState.h"
-#include "UI/ElysiumActivatableScreen.h"
+#include "UI/ElysiumNavigableScreen.h"
 
 #include "ElysiumDialogueScreen.generated.h"
 
 // CommonUI host for the retained dialogue Slate body. One instance spans a conversation and updates
 // turns in place; choices return through the local-player UI owner to the presentation command seam.
 UCLASS()
-class UElysiumDialogueScreen final : public UElysiumActivatableScreen
+class UElysiumDialogueScreen final : public UElysiumNavigableScreen
 {
 	GENERATED_BODY()
 
@@ -28,6 +28,8 @@ protected:
 
 private:
 	float VirtualScale() const;
+	FName ActionIdForChoice(int32 Choice) const;
+	TSharedRef<SWidget> BuildChoiceAction(int32 Choice, const FText& Label);
 
 	FElysiumDialogueView Dialogue;
 	TSharedPtr<class SElysiumDialogueBox> DialogueBox;

@@ -121,22 +121,21 @@ game-agnostic, so they live in `Content/` under the same rule as the master mate
 
 ## Mapping contexts are the client modes
 
-Contexts replace VtMB's `CClientMode*` split. `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease`
-(default **true**) means a key held across a context swap does not bleed into the new context until
-it is physically released — which is the definitive answer to `docs/vtmb/controls.md` § "Open: what
-conversation does to held input" on our side of the port.
+Enhanced Input contexts are gameplay contexts, not UI navigation modes. With no modal scope,
+`IMC_Player_KBM` and `IMC_Player_Gamepad` are applied together so device switching is immediate and
+the remapping screen's Keyboard and Gamepad columns remain independent. A UI-only screen scope
+contains no gameplay contexts, so opening a menu, character screen, dialogue, chargen prompt or
+sign removes both. CommonUI/CommonInput then owns arrows/WASD, D-pad/left stick, Accept and Back;
+there are no duplicate `IMC_Menu` or `IMC_Dialogue` bindings.
 
-| Context | Priority | Applied when |
-|---|---|---|
-| `IMC_Player_KBM` | 0 | in world |
-| `IMC_Player_Gamepad` | 0 | in world (always — a pad key cannot collide with a keyboard key) |
-| `IMC_Dialogue` | 10 | conversation open — advance / choose / history / skip, movement removed |
-| `IMC_Inspect` | 15 | prop inspection — bounded orbit / zoom / cancel, gameplay movement removed |
-| `IMC_Menu` | 20 | pause, options, chargen |
-| `IMC_Cinematic` | 30 | `scripted_sequence`, scripted cameras |
+`FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` and the router's held-button clear make a
+key held across a scope transition inert until release. This is the definitive answer to
+`docs/vtmb/controls.md` § "Open: what conversation does to held input" on our side of the port.
 
-Both device contexts stay applied together so the remapping screen's Keyboard and Gamepad columns
-are independent and each device carries its own modifier stack.
+Screen policy is centralized: sign 10, chargen 30, dialogue 40, character 45 and menu 50. Every
+interactive screen is UI-only with `Auto` cursor policy. Loading creates no interactive scope;
+cinematic and debug claims remain separate owners. Scope priority controls input arbitration only:
+simulation pause/hold remains with the existing time-control owners.
 
 Player-camera actions — look, first person, third person, cycle view, recenter, shoulder swap and
 inspect — are ordinary commands in the two player contexts. A winning dialogue, inspect, or
@@ -146,13 +145,11 @@ adds a mapping context, or reads a key. Aim remains gameplay state inside the se
 not a mapping-context swap. Full ownership and restoration rules:
 `docs/architecture/camera-architecture.md`.
 
-**Cursor visibility is device-dependent, and a scope alone cannot decide it.**
-`FElysiumInputScope::bShowCursor` is a fixed value per scope, which is right for a mouse and wrong
-for a pad: a `GameAndUI` screen showing a cursor leaves a gamepad player holding a pointer they
-cannot move, over a screen with nothing focused. The scope's request is therefore filtered by the
-live device — `UCommonInputSubsystem::GetCurrentInputType`, with `OnInputMethodChanged`
-re-resolving the stack when the player switches device mid-screen. What a pad drives is **focus**,
-not the cursor, so every activatable screen names a default focus widget.
+**Cursor visibility is device-dependent.** `FElysiumInputScope::CursorPolicy` is `Never`, `Auto` or
+`Always`. Interactive screens use `Auto`: mouse/keyboard shows the cursor and gamepad hides it.
+`UCommonInputSubsystem::OnInputMethodChangedNative` re-resolves the active scope when the player
+switches device without changing the screen. What a pad drives is **focus**, not the cursor, and
+every navigable screen names its selected action button as the desired focus target.
 
 ## Gamepad
 
@@ -226,10 +223,10 @@ never on a face button** — that is attack, block, `+use` and the discipline ca
 | `Start` | `cancelselect` | |
 | `Back` | the character screen | the quest log is a tab on it |
 
-Everything absent from that table resolves to a **context** rather than a binding: `slot1`–`slot6`,
-`lastinv` and `dropitem` are operations inside the character screen (`IMC_Menu`); `skip` is any
-face button under `IMC_Cinematic`; `save quick` / `load quick` are pause-menu items; the dialogue
-verbs belong to `IMC_Dialogue`.
+Everything absent from that table resolves to a **surface** rather than a gameplay binding:
+`slot1`–`slot6`, `lastinv` and `dropitem` are semantic actions inside the CommonUI character
+screen; `skip` is a cinematic action; `save quick` / `load quick` are pause-menu actions; and
+dialogue responses are CommonUI actions. Those UI actions are not duplicated in Enhanced Input.
 
 **`LT` is contextual because the game already is.** `camera_prefs` forces third person for weapon
 class 1 and first person for classes 2 and 4 (`docs/vtmb/camera-view-modes.md`), so branching a
@@ -505,7 +502,9 @@ removes the mapping.
 ## Verification
 
 - **Automation** (Substrate tier): user-command analog/digital composition and stick-axis swizzle;
-  gameplay-context arbitration; the reserved-key assertion; `+`/`-` pairing (two keys on one
+  gameplay-context arbitration; UI-only context removal; device-resolved cursor policy; CommonUI
+  default focus, stable-id restoration, list wrap, dynamic-list repair, duplicate suppression and
+  modal restoration; the reserved-key assertion; `+`/`-` pairing (two keys on one
   action stay Triggered while either is held and fire Completed only on the last release, matching
   VtMB's one-key-owns-the-press rule); the `config.cfg` writer round-trip; rebind → save → load →
   rebuild.

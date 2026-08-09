@@ -12,6 +12,7 @@ class APlayerController;
 class IConsoleObject;
 class UGameInstance;
 class UInputMappingContext;
+enum class ECommonInputType : uint8;
 
 // S6 — the one input-mode arbiter (roadmap 11.5, `docs/architecture/runtime-architecture.md` §8.1). Mode, cursor and
 // (at 10.6) mapping contexts come from the top of one priority stack, and nothing else in the
@@ -72,6 +73,8 @@ private:
 	APlayerController* ResolveController() const;
 
 	void OnPostLoadMap(UWorld* LoadedWorld);
+	void OnInputMethodChanged(ECommonInputType InputType);
+	bool ResolveCursorVisible(EElysiumCursorPolicy Policy) const;
 
 	// --- Cog ------------------------------------------------------------------------------------
 	// Cog owns its own Slate capture and is not going to be taught about this stack (it is a
@@ -95,6 +98,7 @@ private:
 
 	FTSTicker::FDelegateHandle DebugTicker;
 	FDelegateHandle PostLoadMapHandle;
+	FDelegateHandle InputMethodChangedHandle;
 	TArray<IConsoleObject*> ConsoleObjects;
 
 	UPROPERTY(Transient)

@@ -259,7 +259,8 @@ public:
 	// The player's left-click. Dismisses the open panel when its Rules allow it (CloseOnLeftClick)
 	// and it has been up for at least MinShowTime; no-op when no sign is open. Firing OnUseEnd is
 	// what advances the tutorial, so this is a game path, not a UI convenience.
-	void PlayerDismissSign();
+	bool CanPlayerDismissSign() const;
+	bool PlayerDismissSign();
 	// The open sign's `fade_in` seconds (0 = appear instantly).
 	float GetOpenSignFadeIn() const { return OpenSignFadeIn; }
 

@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "Player/ElysiumCommandBus.h"
+#include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUITexture.h"
 
@@ -83,7 +84,12 @@ void UElysiumChargenPopup::Refresh()
 {
 	if (PageHost.IsValid())
 	{
+		BeginNavigationBuild();
+		SetNavigationGroup(TEXT("ChargenAnswers"), false, true);
 		PageHost->SetContent(BuildPage());
+		FinalizeNavigationBuild(Run.IsValid() && !Run->Choices.IsEmpty()
+			? AnswerActionId(FMath::Clamp(PreferredAnswerIndex, 0, Run->Choices.Num() - 1))
+			: NAME_None);
 	}
 }
 
@@ -150,17 +156,22 @@ TSharedRef<SWidget> UElysiumChargenPopup::BuildPage()
 		const FElysiumWizAction& Action = *Run->Choices[i];
 		// The answers are numbered in the data itself ("1. Male?"), so nothing is prefixed here —
 		// doing so would double the number on every shipped question.
-		Answers->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, Layout::AnswerGap)
-		[
+		UElysiumActionButton* Button = CreateActionButton(
+			AnswerActionId(i), TEXT("ChargenAnswers"), FText::FromString(Action.Text), true,
+			[this, i]() { OnAnswer.ExecuteIfBound(i); });
+		check(Button);
+		const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+		Button->SetSlateContent(
 			SNew(SBorder)
 			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FSlateColor(FLinearColor::Transparent))
-			.Padding(FMargin(Layout::AnswerPadX, ElysiumUI::Space::XS))
-			.OnMouseButtonDown_Lambda([this, i](const FGeometry&, const FPointerEvent&) -> FReply
+			.BorderBackgroundColor_Lambda([WeakButton]()
 			{
-				OnAnswer.ExecuteIfBound(i);
-				return FReply::Handled();
+				const UElysiumActionButton* Selected = WeakButton.Get();
+				return FSlateColor(Selected && Selected->IsActionSelected()
+					? ElysiumUI::Palette::Blood.CopyWithNewOpacity(0.32f)
+					: FLinearColor::Transparent);
 			})
+			.Padding(FMargin(Layout::AnswerPadX, ElysiumUI::Space::XS))
 			[
 				SNew(SVerticalBox)
 				+ SVerticalBox::Slot().AutoHeight()
@@ -186,7 +197,10 @@ TSharedRef<SWidget> UElysiumChargenPopup::BuildPage()
 									ElysiumUI::Palette::Amber.CopyWithNewOpacity(0.35f)))
 							])
 				]
-			]
+			]);
+		Answers->AddSlot().AutoHeight().Padding(0.0f, 0.0f, 0.0f, Layout::AnswerGap)
+		[
+			Button->TakeWidget()
 		];
 	}
 
@@ -206,6 +220,8 @@ TSharedRef<SWidget> UElysiumChargenPopup::BuildPage()
 TSharedRef<SWidget> UElysiumChargenPopup::RebuildWidget()
 {
 	(void)Super::RebuildWidget();
+	BeginNavigationBuild();
+	SetNavigationGroup(TEXT("ChargenAnswers"), false, true);
 
 	ArtBrushes.Reset();
 
@@ -230,7 +246,7 @@ TSharedRef<SWidget> UElysiumChargenPopup::RebuildWidget()
 	];
 	Root->AddSlot()[ SAssignNew(PageHost, SBox)[ BuildPage() ] ];
 
-	return SNew(SDPIScaler)
+	TSharedRef<SWidget> Result = SNew(SDPIScaler)
 		.DPIScale_Lambda([this]() { return VirtualScale(); })
 		[
 			SNew(SBox).WidthOverride(Layout::PageW).HeightOverride(Layout::PageH)
@@ -239,6 +255,52 @@ TSharedRef<SWidget> UElysiumChargenPopup::RebuildWidget()
 				Root
 			]
 		];
+	FinalizeNavigationBuild(Run.IsValid() && !Run->Choices.IsEmpty()
+		? AnswerActionId(FMath::Clamp(PreferredAnswerIndex, 0, Run->Choices.Num() - 1))
+		: NAME_None);
+	return Result;
+}
+
+FName UElysiumChargenPopup::AnswerActionId(int32 Index) const
+{
+	const FElysiumWizPopup* Popup = Run.IsValid() ? Run->Popup : nullptr;
+	const FString PopupName = Popup ? Popup->InternalName : TEXT("None");
+	return FName(*FString::Printf(TEXT("Chargen.%s.%d"), *PopupName, Index));
+}
+
+FReply UElysiumChargenPopup::NativeOnKeyDown(const FGeometry& Geometry,
+	const FKeyEvent& KeyEvent)
+{
+	static const FKey Row[] = { EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four,
+		EKeys::Five, EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine };
+	static const FKey Pad[] = { EKeys::NumPadOne, EKeys::NumPadTwo, EKeys::NumPadThree,
+		EKeys::NumPadFour, EKeys::NumPadFive, EKeys::NumPadSix, EKeys::NumPadSeven,
+		EKeys::NumPadEight, EKeys::NumPadNine };
+	for (int32 Index = 0; Run.IsValid() && Index < Run->Choices.Num()
+		&& Index < UE_ARRAY_COUNT(Row); ++Index)
+	{
+		if (KeyEvent.GetKey() == Row[Index] || KeyEvent.GetKey() == Pad[Index])
+		{
+			if (!KeyEvent.IsRepeat())
+			{
+				ExecuteAction(AnswerActionId(Index));
+			}
+			return FReply::Handled();
+		}
+	}
+	return Super::NativeOnKeyDown(Geometry, KeyEvent);
+}
+
+void UElysiumChargenPopup::HandleSelectedActionChanged(FName PreviousActionId,
+	FName NewActionId)
+{
+	Super::HandleSelectedActionChanged(PreviousActionId, NewActionId);
+	const FString Id = NewActionId.ToString();
+	int32 Separator = INDEX_NONE;
+	if (Id.FindLastChar(TEXT('.'), Separator))
+	{
+		PreferredAnswerIndex = FMath::Max(0, FCString::Atoi(*Id.Mid(Separator + 1)));
+	}
 }
 
 void UElysiumChargenPopup::ReleaseSlateResources(bool bReleaseChildren)

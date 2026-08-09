@@ -3,10 +3,10 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
-#include "Player/ElysiumCommandBus.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUITexture.h"
 
@@ -208,6 +208,37 @@ namespace
 		}
 	}
 
+	namespace ActionGroup
+	{
+		const FName Tabs(TEXT("Character.Tabs"));
+		const FName Hubs(TEXT("Character.Hubs"));
+		const FName Traits(TEXT("Character.Traits"));
+		const FName Footer(TEXT("Character.Footer"));
+		const FName BaseClan(TEXT("Character.Base.Clan"));
+		const FName BaseSex(TEXT("Character.Base.Sex"));
+		const FName BaseHistory(TEXT("Character.Base.History"));
+	}
+
+	FName TabActionId(EElysiumCharacterTab Tab)
+	{
+		return FName(*FString::Printf(TEXT("Character.Tab.%d"), int32(Tab)));
+	}
+
+	FName HubActionId(int32 Hub)
+	{
+		return FName(*FString::Printf(TEXT("Character.Hub.%d"), Hub));
+	}
+
+	FName TraitActionId(EElysiumTraitContainer Container, int32 Slot)
+	{
+		return FName(*FString::Printf(TEXT("Character.Trait.%d.%d"), int32(Container), Slot));
+	}
+
+	FName BaseActionId(FName Group, int32 Option)
+	{
+		return FName(*FString::Printf(TEXT("%s.%d"), *Group.ToString(), Option));
+	}
+
 	UElysiumGameStateSubsystem* StateFor(const UWidget* Widget)
 	{
 		UGameInstance* GI = Widget ? Widget->GetGameInstance() : nullptr;
@@ -224,7 +255,10 @@ UElysiumCharacterScreen::UElysiumCharacterScreen()
 
 bool UElysiumCharacterScreen::NativeOnHandleBackAction()
 {
-	OnCancel.ExecuteIfBound();
+	if (!ExecuteAction(TEXT("Character.Footer.Cancel")))
+	{
+		OnCancel.ExecuteIfBound();
+	}
 	return true;
 }
 
@@ -283,17 +317,30 @@ void UElysiumCharacterScreen::Refresh()
 	// The tab strip and the body are swapped in place rather than rebuilt through the subsystem: a
 	// teardown from inside the screen's own key handler would destroy the widget mid-callback, and
 	// it would drop keyboard focus and churn the input scope for what is a content change.
-	if (TabStripHost.IsValid())
+	if (TabStripHost.IsValid() || FooterHost.IsValid() || BodyHost.IsValid())
 	{
-		TabStripHost->SetContent(BuildTabStrip());
-	}
-	if (FooterHost.IsValid())
-	{
-		FooterHost->SetContent(BuildFooter());
-	}
-	if (BodyHost.IsValid())
-	{
-		BodyHost->SetContent(BuildBody());
+		BeginNavigationBuild();
+		TraitActions.Reset();
+		SetNavigationGroup(ActionGroup::Tabs, true, false);
+		SetNavigationGroup(ActionGroup::Hubs, true, false);
+		SetNavigationGroup(ActionGroup::Traits, false, true, true, false);
+		SetNavigationGroup(ActionGroup::Footer, true, false);
+		SetNavigationGroup(ActionGroup::BaseClan, true, false);
+		SetNavigationGroup(ActionGroup::BaseSex, true, false);
+		SetNavigationGroup(ActionGroup::BaseHistory, true, false);
+		if (TabStripHost.IsValid())
+		{
+			TabStripHost->SetContent(BuildTabStrip());
+		}
+		if (FooterHost.IsValid())
+		{
+			FooterHost->SetContent(BuildFooter());
+		}
+		if (BodyHost.IsValid())
+		{
+			BodyHost->SetContent(BuildBody());
+		}
+		FinalizeNavigationBuild(TabActionId(Tab));
 	}
 }
 
@@ -631,8 +678,13 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTabStrip()
 	for (EElysiumCharacterTab T : Mode.Tabs)
 	{
 		const bool bActive = (T == Tab);
-		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::TabGap, 0.0f)
-		[
+		const FName ActionId = TabActionId(T);
+		UElysiumActionButton* Button = CreateActionButton(
+			ActionId, ActionGroup::Tabs, TabLabel(T), true,
+			[this, T]() { SetActiveTab(T); });
+		check(Button);
+		const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+		Button->SetSlateContent(
 			SNew(SVerticalBox)
 			+ SVerticalBox::Slot().AutoHeight()
 			[
@@ -640,8 +692,12 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTabStrip()
 				.Text(TabLabel(T))
 				.Font(Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
 				                 ElysiumUI::Type::Heading, 1.0f))
-				.ColorAndOpacity(FSlateColor(bActive
-					? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::BoneDim))
+				.ColorAndOpacity_Lambda([WeakButton, bActive]()
+				{
+					const UElysiumActionButton* Action = WeakButton.Get();
+					return FSlateColor(bActive || (Action && Action->IsActionSelected())
+						? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::BoneDim);
+				})
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, ElysiumUI::Space::XS, 0.0f, 0.0f)
 			[
@@ -649,10 +705,17 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTabStrip()
 				[
 					SNew(SImage)
 					.Image(FCoreStyle::Get().GetBrush("WhiteBrush"))
-					.ColorAndOpacity(FSlateColor(bActive
-						? ElysiumUI::Palette::Cyan : FLinearColor::Transparent))
+					.ColorAndOpacity_Lambda([WeakButton, bActive]()
+					{
+						const UElysiumActionButton* Action = WeakButton.Get();
+						return FSlateColor(bActive || (Action && Action->IsActionSelected())
+							? ElysiumUI::Palette::Cyan : FLinearColor::Transparent);
+					})
 				]
-			]
+			]);
+		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::TabGap, 0.0f)
+		[
+			Button->TakeWidget()
 		];
 	}
 	return Row;
@@ -666,27 +729,31 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildFooter()
 	// Sheet tab the Skip Intro checkbox plus AUTO-SPEND / ACCEPT / CANCEL, and the in-game screen
 	// the level-up pair. A control with nothing behind it is drawn disabled rather than omitted.
 	TSharedRef<SHorizontalBox> Buttons = SNew(SHorizontalBox);
-	auto AddButton = [&](const FText& Label, bool bEnabled, TFunction<void()> OnClick)
+	auto AddButton = [&](FName ActionId, const FText& Label, bool bEnabled,
+		TFunction<void()> OnClick)
 	{
+		UElysiumActionButton* Button = CreateActionButton(
+			ActionId, ActionGroup::Footer, Label, bEnabled, MoveTemp(OnClick));
+		check(Button);
+		const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+		Button->SetSlateContent(
+			SNew(STextBlock)
+			.Text(Label)
+			.Font(ElysiumUIFonts().Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
+			                     ElysiumUI::Type::Label, 1.0f))
+			.ColorAndOpacity_Lambda([WeakButton, bEnabled]()
+			{
+				const UElysiumActionButton* Action = WeakButton.Get();
+				if (!bEnabled)
+				{
+					return FSlateColor(ElysiumUI::Palette::Disabled);
+				}
+				return FSlateColor(Action && Action->IsActionSelected()
+					? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::GoldLit);
+			}));
 		Buttons->AddSlot().AutoWidth().Padding(ElysiumUI::Space::L, 0.0f, 0.0f, 0.0f)
 		[
-			SNew(SBorder)
-			.BorderImage(FCoreStyle::Get().GetBrush("NoBorder"))
-			.Padding(FMargin(0.0f))
-			.OnMouseButtonDown_Lambda(
-				[bEnabled, OnClick](const FGeometry&, const FPointerEvent&) -> FReply
-				{
-					if (bEnabled && OnClick) { OnClick(); }
-					return FReply::Handled();
-				})
-			[
-				SNew(STextBlock)
-				.Text(Label)
-				.Font(ElysiumUIFonts().Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
-				                     ElysiumUI::Type::Label, 1.0f))
-				.ColorAndOpacity(FSlateColor(bEnabled
-					? ElysiumUI::Palette::GoldLit : ElysiumUI::Palette::Disabled))
-			]
+			Button->TakeWidget()
 		];
 	};
 
@@ -694,10 +761,12 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildFooter()
 
 	if (bChargen && Tab == EElysiumCharacterTab::Base)
 	{
-		// The Base tab's only control: pick a clan, then move on to spending.
-		AddButton(NSLOCTEXT("Elysium", "Next", "NEXT"),
+		// Pick a clan, move on to spending, or leave through the same semantic cancel action Back uses.
+		AddButton(TEXT("Character.Footer.Next"), NSLOCTEXT("Elysium", "Next", "NEXT"),
 			Spend.IsValid() && FElysiumSheet::IsValidClan(Spend->Clan),
 			[this]() { SetActiveTab(EElysiumCharacterTab::Sheet); });
+		AddButton(TEXT("Character.Footer.Cancel"), NSLOCTEXT("Elysium", "Cancel", "CANCEL"), true,
+			[this]() { OnCancel.ExecuteIfBound(); });
 	}
 	else if (Tab == EElysiumCharacterTab::Sheet && Mode.Spend != EElysiumSpendMode::None)
 	{
@@ -705,29 +774,29 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildFooter()
 		{
 			// Ours in placement only — retail draws the same checkbox here. It stores a preference
 			// the opening cinematic reads; nothing on this screen acts on it.
-			Buttons->AddSlot().AutoWidth().VAlign(VAlign_Center)
-			[
-				SNew(SBorder)
-				.BorderImage(FCoreStyle::Get().GetBrush("NoBorder"))
-				.Padding(FMargin(0.0f))
-				.OnMouseButtonDown_Lambda([this](const FGeometry&, const FPointerEvent&) -> FReply
+			const FText SkipLabel = Spend.IsValid() && Spend->bSkipIntro
+				? NSLOCTEXT("Elysium", "SkipIntroOn", "[x] Skip Intro")
+				: NSLOCTEXT("Elysium", "SkipIntroOff", "[ ] Skip Intro");
+			UElysiumActionButton* SkipButton = CreateActionButton(
+				TEXT("Character.Footer.SkipIntro"), ActionGroup::Footer, SkipLabel, true,
+				[this]()
 				{
 					if (Spend.IsValid())
 					{
 						Spend->bSkipIntro = !Spend->bSkipIntro;
 						Refresh();
 					}
-					return FReply::Handled();
-				})
-				[
-					SNew(STextBlock)
-					.Text(Spend.IsValid() && Spend->bSkipIntro
-						? NSLOCTEXT("Elysium", "SkipIntroOn", "[x] Skip Intro")
-						: NSLOCTEXT("Elysium", "SkipIntroOff", "[ ] Skip Intro"))
-					.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::SemiBold,
-					                 ElysiumUI::Type::Caption, 1.0f))
-					.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::BoneDim))
-				]
+				});
+			check(SkipButton);
+			SkipButton->SetSlateContent(
+				SNew(STextBlock)
+				.Text(SkipLabel)
+				.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::SemiBold,
+				                 ElysiumUI::Type::Caption, 1.0f))
+				.ColorAndOpacity(FSlateColor(ElysiumUI::Palette::BoneDim)));
+			Buttons->AddSlot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SkipButton->TakeWidget()
 			];
 
 			// **Disabled, deliberately.** Retail's auto-spend has no recovered algorithm: the clan's
@@ -735,25 +804,29 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildFooter()
 			// exist, so there is no authored spend order left to follow. Inventing one would be a
 			// silent divergence (`docs/vtmb/game_runtime.md`), so the button states its shape and does
 			// nothing until the handler is RE'd.
-			AddButton(NSLOCTEXT("Elysium", "AutoSpend", "AUTO-SPEND POINTS"), false, nullptr);
+			AddButton(TEXT("Character.Footer.AutoSpend"),
+				NSLOCTEXT("Elysium", "AutoSpend", "AUTO-SPEND POINTS"), false, nullptr);
 			// ACCEPT arms only once every pool is spent out, which is retail's own gate.
-			AddButton(NSLOCTEXT("Elysium", "Accept", "ACCEPT"),
+			AddButton(TEXT("Character.Footer.Accept"), NSLOCTEXT("Elysium", "Accept", "ACCEPT"),
 				Spend.IsValid() && Spend->IsSpentOut(), [this]() { OnAccept.ExecuteIfBound(); });
 		}
 		else
 		{
 			// The level-up screen: banked experience is allowed to stay banked, so ACCEPT is always
 			// armed. `Auto-Level is Off` is retail's own label for a toggle it never enables.
-			AddButton(NSLOCTEXT("Elysium", "AutoLevel", "Auto-Level is Off"), false, nullptr);
-			AddButton(NSLOCTEXT("Elysium", "Accept", "ACCEPT"), Spend.IsValid(),
+			AddButton(TEXT("Character.Footer.AutoLevel"),
+				NSLOCTEXT("Elysium", "AutoLevel", "Auto-Level is Off"), false, nullptr);
+			AddButton(TEXT("Character.Footer.Accept"), NSLOCTEXT("Elysium", "Accept", "ACCEPT"), Spend.IsValid(),
 				[this]() { OnAccept.ExecuteIfBound(); });
 		}
-		AddButton(NSLOCTEXT("Elysium", "Cancel", "CANCEL"), true,
+		AddButton(TEXT("Character.Footer.Cancel"), NSLOCTEXT("Elysium", "Cancel", "CANCEL"), true,
 			[this]() { OnCancel.ExecuteIfBound(); });
 	}
 	else
 	{
-		AddButton(NSLOCTEXT("Elysium", "Accept", "Accept"), false, nullptr);
+		AddButton(TEXT("Character.Footer.Accept"), NSLOCTEXT("Elysium", "Accept", "Accept"), false, nullptr);
+		AddButton(TEXT("Character.Footer.Cancel"), NSLOCTEXT("Elysium", "Close", "CLOSE"), true,
+			[this]() { OnCancel.ExecuteIfBound(); });
 	}
 
 	return SNew(SHorizontalBox)
@@ -869,8 +942,13 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHubRow(const int32* HubActive)
 	{
 		const bool bActive = (Table == Hub);
 		const int32 Count = HubActive[Table];
-		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::HubGap, 0.0f)
-		[
+		const FName ActionId = HubActionId(Table);
+		UElysiumActionButton* Button = CreateActionButton(
+			ActionId, ActionGroup::Hubs, HubLabel(Table), true,
+			[this, Table]() { SetHub(Table); });
+		check(Button);
+		const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+		Button->SetSlateContent(
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot().AutoWidth()
 			[
@@ -878,14 +956,17 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHubRow(const int32* HubActive)
 				.Text(HubLabel(Table))
 				.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::SemiBold,
 				                 ElysiumUI::Type::Label, 1.0f))
-				.ColorAndOpacity(FSlateColor(bActive ? ElysiumUI::Palette::Cyan
-					: (Count > 0 ? ElysiumUI::Palette::BoneDim : ElysiumUI::Palette::Disabled)))
+				.ColorAndOpacity_Lambda([WeakButton, bActive, Count]()
+				{
+					const UElysiumActionButton* Action = WeakButton.Get();
+					return FSlateColor(bActive || (Action && Action->IsActionSelected())
+						? ElysiumUI::Palette::Cyan
+						: (Count > 0 ? ElysiumUI::Palette::BoneDim : ElysiumUI::Palette::Disabled));
+				})
 			]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			  .Padding(ElysiumUI::Space::S, 0.0f, 0.0f, 0.0f)
 			[
-				// The count is what stops the tab row hiding work: open quests in a hub you are not
-				// looking at are still visible as a number.
 				SNew(STextBlock)
 				.Text(FText::AsNumber(Count))
 				.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::Regular,
@@ -893,7 +974,10 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHubRow(const int32* HubActive)
 				.ColorAndOpacity(FSlateColor(bActive
 					? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.7f)
 					: ElysiumUI::Palette::Disabled))
-			]
+			]);
+		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::HubGap, 0.0f)
+		[
+			Button->TakeWidget()
 		];
 	}
 	return Row;
@@ -1161,6 +1245,15 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTraitRow(EElysiumTraitContaine
 	int32 Cost = 0;
 	const bool bBuyable = Spend.IsValid() && Mode.Spend != EElysiumSpendMode::None
 		&& ElysiumChargen::CanBuy(*Spend, Rules, Container, TraitSlot, Cost);
+	const FText Label = FText::FromString(Stat ? Stat->Name : FString::FromInt(TraitSlot));
+	const FName ActionId = TraitActionId(Container, TraitSlot);
+	UElysiumActionButton* Button = CreateActionButton(
+		ActionId, ActionGroup::Traits, Label, true,
+		[this, Container, TraitSlot]() { TryBuy(Container, TraitSlot); },
+		[this, Container, TraitSlot]() { TrySell(Container, TraitSlot); });
+	check(Button);
+	TraitActions.Add(ActionId, { Container, TraitSlot });
+	const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
 
 	// Name, a leader dotted out to the bubbles, then the rating. The leader is what makes a long
 	// column readable at 1024 wide, and it is the one piece of the row VtMB draws as art.
@@ -1168,12 +1261,16 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTraitRow(EElysiumTraitContaine
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 		[
 			SNew(STextBlock)
-			.Text(FText::FromString(Stat ? Stat->Name : FString::FromInt(TraitSlot)))
+			.Text(Label)
 			.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::Regular,
 			                 ElysiumUI::Type::Label, 1.0f))
-			.ColorAndOpacity(FSlateColor(bSelected
-				? ElysiumUI::Palette::Cyan
-				: (bBuyable ? ElysiumUI::Palette::Bone : ElysiumUI::Palette::BoneDim)))
+			.ColorAndOpacity_Lambda([WeakButton, bSelected, bBuyable]()
+			{
+				const UElysiumActionButton* Action = WeakButton.Get();
+				return FSlateColor(bSelected || (Action && Action->IsActionSelected())
+					? ElysiumUI::Palette::Cyan
+					: (bBuyable ? ElysiumUI::Palette::Bone : ElysiumUI::Palette::BoneDim));
+			})
 		];
 
 	if (const FSlateBrush* Leader = Art(ArtPath::Leader, FLinearColor::White))
@@ -1191,33 +1288,25 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTraitRow(EElysiumTraitContaine
 
 	Row->AddSlot().AutoWidth().VAlign(VAlign_Center)[ BuildBubbles(Container, TraitSlot) ];
 
-	// The whole row is the hit target, not the bubbles: left raises, right sells back. An
-	// `SButton` would bring its own chrome, so this is a bare gesture handler over the row.
-	return SNew(SBox)
+	Button->SetSlateContent(
+		SNew(SBox)
 		.Padding(FMargin(0.0f, 1.0f))
 		[
 			SNew(SBorder)
 			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FSlateColor(bSelected
-				? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.10f) : FLinearColor::Transparent))
+			.BorderBackgroundColor_Lambda([WeakButton, bSelected]()
+			{
+				const UElysiumActionButton* Action = WeakButton.Get();
+				return FSlateColor(bSelected || (Action && Action->IsActionSelected())
+					? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.10f)
+					: FLinearColor::Transparent);
+			})
 			.Padding(FMargin(ElysiumUI::Space::XS, 0.0f))
-			.OnMouseButtonDown_Lambda(
-				[this, Container, TraitSlot](const FGeometry&, const FPointerEvent& Event) -> FReply
-				{
-					if (Event.GetEffectingButton() == EKeys::RightMouseButton)
-					{
-						TrySell(Container, TraitSlot);
-					}
-					else
-					{
-						TryBuy(Container, TraitSlot);
-					}
-					return FReply::Handled();
-				})
 			[
 				Row
 			]
-		];
+		]);
+	return Button->TakeWidget();
 }
 
 TSharedRef<SWidget> UElysiumCharacterScreen::BuildTraitBlock(EElysiumChargenPool Pool,
@@ -1456,7 +1545,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildSheet()
 		+ SVerticalBox::Slot().FillHeight(Layout::SheetDetailFill)
 		  .Padding(0.0f, ElysiumUI::Space::M, 0.0f, 0.0f)
 		[
-			BuildDetail()
+			SAssignNew(DetailHost, SBox)[ BuildDetail() ]
 		];
 }
 
@@ -1464,8 +1553,9 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildSheet()
 // The Base tab — chargen's own
 // ================================================================================================
 
-TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(const FText& Heading,
-	const TArray<FText>& Options, int32 Selected, TFunction<void(int32)> OnPick)
+TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(FName GroupId,
+	const FText& Heading, const TArray<FText>& Options, int32 Selected,
+	TFunction<void(int32)> OnPick)
 {
 	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 
@@ -1477,26 +1567,38 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(const FText& Heading
 	for (int32 i = 0; i < Options.Num(); ++i)
 	{
 		const bool bOn = (i == Selected);
-		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::ChoiceGap, 0.0f)
-		[
+		const FName ActionId = BaseActionId(GroupId, i);
+		UElysiumActionButton* Button = CreateActionButton(
+			ActionId, GroupId, Options[i], true,
+			[OnPick, i]() mutable { OnPick(i); });
+		check(Button);
+		const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+		Button->SetSlateContent(
 			SNew(SBorder)
 			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FSlateColor(bOn
-				? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.12f) : FLinearColor::Transparent))
-			.Padding(FMargin(ElysiumUI::Space::S, ElysiumUI::Space::XS))
-			.OnMouseButtonDown_Lambda([OnPick, i](const FGeometry&, const FPointerEvent&) -> FReply
+			.BorderBackgroundColor_Lambda([WeakButton, bOn]()
 			{
-				OnPick(i);
-				return FReply::Handled();
+				const UElysiumActionButton* Action = WeakButton.Get();
+				return FSlateColor(bOn || (Action && Action->IsActionSelected())
+					? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.12f)
+					: FLinearColor::Transparent);
 			})
+			.Padding(FMargin(ElysiumUI::Space::S, ElysiumUI::Space::XS))
 			[
 				SNew(STextBlock)
 				.Text(Options[i])
 				.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::SemiBold,
 				                 ElysiumUI::Type::Label, 1.0f))
-				.ColorAndOpacity(FSlateColor(bOn
-					? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::BoneDim))
-			]
+				.ColorAndOpacity_Lambda([WeakButton, bOn]()
+				{
+					const UElysiumActionButton* Action = WeakButton.Get();
+					return FSlateColor(bOn || (Action && Action->IsActionSelected())
+						? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::BoneDim);
+				})
+			]);
+		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::ChoiceGap, 0.0f)
+		[
+			Button->TakeWidget()
 		];
 	}
 
@@ -1562,7 +1664,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 	TSharedRef<SVerticalBox> Choices = SNew(SVerticalBox)
 		+ SVerticalBox::Slot().AutoHeight()
 		[
-			BuildChoiceRow(NSLOCTEXT("Elysium", "BaseClan", "Clan"), ClanNames, ClanAt,
+			BuildChoiceRow(ActionGroup::BaseClan,
+				NSLOCTEXT("Elysium", "BaseClan", "Clan"), ClanNames, ClanAt,
 				[this, ClanIndices](int32 Pick)
 				{
 					if (Spend.IsValid() && ClanIndices.IsValidIndex(Pick))
@@ -1574,7 +1677,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, ElysiumUI::Space::M, 0.0f, 0.0f)
 		[
-			BuildChoiceRow(NSLOCTEXT("Elysium", "BaseSex", "Gender"), Sexes,
+			BuildChoiceRow(ActionGroup::BaseSex,
+				NSLOCTEXT("Elysium", "BaseSex", "Gender"), Sexes,
 				Spend.IsValid() ? (Spend->bMale ? 1 : 0) : INDEX_NONE,
 				[this](int32 Pick)
 				{
@@ -1587,7 +1691,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, ElysiumUI::Space::M, 0.0f, 0.0f)
 		[
-			BuildChoiceRow(NSLOCTEXT("Elysium", "BaseHistory", "History"), HistoryNames,
+			BuildChoiceRow(ActionGroup::BaseHistory,
+				NSLOCTEXT("Elysium", "BaseHistory", "History"), HistoryNames,
 				Spend.IsValid() ? Spend->HistoryId : INDEX_NONE,
 				[this](int32 Pick)
 				{
@@ -1649,6 +1754,15 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBody()
 TSharedRef<SWidget> UElysiumCharacterScreen::RebuildWidget()
 {
 	(void)Super::RebuildWidget();
+	BeginNavigationBuild();
+	TraitActions.Reset();
+	SetNavigationGroup(ActionGroup::Tabs, true, false);
+	SetNavigationGroup(ActionGroup::Hubs, true, false);
+	SetNavigationGroup(ActionGroup::Traits, false, true, true, false);
+	SetNavigationGroup(ActionGroup::Footer, true, false);
+	SetNavigationGroup(ActionGroup::BaseClan, true, false);
+	SetNavigationGroup(ActionGroup::BaseSex, true, false);
+	SetNavigationGroup(ActionGroup::BaseHistory, true, false);
 
 	// Brushes are rebuilt per tree; the textures behind them stay cached on the widget.
 	ArtBrushes.Reset();
@@ -1742,11 +1856,13 @@ TSharedRef<SWidget> UElysiumCharacterScreen::RebuildWidget()
 	Root->AddSlot()[ Content ];
 
 	// Authored in 1024x768; the scaler converts once at the root.
-	return SNew(SDPIScaler)
+	TSharedRef<SWidget> Result = SNew(SDPIScaler)
 		.DPIScale_Lambda([this]() { return VirtualScale(); })
 		[
 			Root
 		];
+	FinalizeNavigationBuild(TabActionId(Tab));
+	return Result;
 }
 
 FReply UElysiumCharacterScreen::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent)
@@ -1757,30 +1873,229 @@ FReply UElysiumCharacterScreen::NativeOnKeyDown(const FGeometry& Geometry, const
 	// exactly as the menu routes Escape.
 	if (Key == EKeys::Escape)
 	{
-		ElysiumCommandBus::Exec(TEXT("cancelselect"));
+		NativeOnHandleBackAction();
 		return FReply::Handled();
 	}
 
-	if (Tab == EElysiumCharacterTab::QuestLog && (Key == EKeys::Left || Key == EKeys::Right))
+	if (Key == EKeys::Tab)
 	{
-		int32 At = 0;
-		for (int32 i = 0; i < 4; ++i)
+		if (!KeyEvent.IsRepeat())
 		{
-			if (FElysiumQuestTables::HubTabOrder[i] == Hub) { At = i; break; }
+			CycleTab(1);
 		}
-		At = (At + (Key == EKeys::Right ? 1 : 3)) % 4;
-		SetHub(FElysiumQuestTables::HubTabOrder[At]);
 		return FReply::Handled();
 	}
 
-	if (Key == EKeys::Tab && Mode.Tabs.Num() > 1)
+	if (Key == EKeys::Q || Key == EKeys::Gamepad_LeftShoulder)
 	{
-		const int32 At = FMath::Max(0, Mode.Tabs.IndexOfByKey(Tab));
-		SetActiveTab(Mode.Tabs[(At + 1) % Mode.Tabs.Num()]);
+		if (!KeyEvent.IsRepeat())
+		{
+			CycleTab(-1);
+		}
+		return FReply::Handled();
+	}
+	if (Key == EKeys::E || Key == EKeys::Gamepad_RightShoulder)
+	{
+		if (!KeyEvent.IsRepeat())
+		{
+			CycleTab(1);
+		}
+		return FReply::Handled();
+	}
+	if (Key == EKeys::Gamepad_FaceButton_Left)
+	{
+		if (!KeyEvent.IsRepeat())
+		{
+			ExecuteSelectedSecondaryAction();
+		}
 		return FReply::Handled();
 	}
 
 	return Super::NativeOnKeyDown(Geometry, KeyEvent);
+}
+
+void UElysiumCharacterScreen::CycleTab(int32 Delta)
+{
+	if (Mode.Tabs.Num() <= 1)
+	{
+		return;
+	}
+	const int32 At = FMath::Max(0, Mode.Tabs.IndexOfByKey(Tab));
+	const int32 Next = (At + Delta % Mode.Tabs.Num() + Mode.Tabs.Num()) % Mode.Tabs.Num();
+	SetActiveTab(Mode.Tabs[Next]);
+}
+
+FName UElysiumCharacterScreen::FirstBodyAction() const
+{
+	auto FirstIn = [this](FName Group)
+	{
+		const TArray<FName> Found = GetActionsInGroup(Group);
+		return Found.IsEmpty() ? NAME_None : Found[0];
+	};
+	switch (Tab)
+	{
+	case EElysiumCharacterTab::QuestLog:
+		return FindAction(HubActionId(Hub)) ? HubActionId(Hub) : FirstIn(ActionGroup::Hubs);
+	case EElysiumCharacterTab::Sheet:
+		return FirstIn(ActionGroup::Traits);
+	case EElysiumCharacterTab::Base:
+		return FirstIn(ActionGroup::BaseClan);
+	default:
+		return NAME_None;
+	}
+}
+
+FName UElysiumCharacterScreen::LastBodyAction() const
+{
+	auto LastIn = [this](FName Group)
+	{
+		const TArray<FName> Found = GetActionsInGroup(Group);
+		return Found.IsEmpty() ? NAME_None : Found.Last();
+	};
+	switch (Tab)
+	{
+	case EElysiumCharacterTab::QuestLog:
+		return FindAction(HubActionId(Hub)) ? HubActionId(Hub) : LastIn(ActionGroup::Hubs);
+	case EElysiumCharacterTab::Sheet:
+		return LastIn(ActionGroup::Traits);
+	case EElysiumCharacterTab::Base:
+		return LastIn(ActionGroup::BaseHistory);
+	default:
+		return NAME_None;
+	}
+}
+
+bool UElysiumCharacterScreen::HandleNavigation(EElysiumNavigationDirection Direction)
+{
+	const FName Selected = GetSelectedActionId();
+	const FName Group = GetActionGroup(Selected);
+	const bool bForward = Direction == EElysiumNavigationDirection::Down
+		|| Direction == EElysiumNavigationDirection::Right;
+
+	if (Direction == EElysiumNavigationDirection::Left
+		|| Direction == EElysiumNavigationDirection::Right)
+	{
+		if (Group == ActionGroup::Traits)
+		{
+			if (Direction == EElysiumNavigationDirection::Left)
+			{
+				ExecuteSelectedSecondaryAction();
+			}
+			else
+			{
+				ExecuteSelectedAction();
+			}
+			return true;
+		}
+		if (Group == ActionGroup::Hubs || Group == ActionGroup::BaseClan
+			|| Group == ActionGroup::BaseSex || Group == ActionGroup::BaseHistory)
+		{
+			SelectAdjacentInGroup(Group, bForward ? 1 : -1, true);
+			ExecuteSelectedAction();
+			return true;
+		}
+		return false;
+	}
+
+	if (Direction != EElysiumNavigationDirection::Up
+		&& Direction != EElysiumNavigationDirection::Down)
+	{
+		return false;
+	}
+
+	const TArray<FName> Footer = GetActionsInGroup(ActionGroup::Footer);
+	const FName ActiveTabAction = TabActionId(Tab);
+	if (Group == ActionGroup::Tabs)
+	{
+		const FName Body = Direction == EElysiumNavigationDirection::Down
+			? FirstBodyAction() : LastBodyAction();
+		if (!Body.IsNone())
+		{
+			return SelectAction(Body);
+		}
+		return Footer.IsEmpty() ? false
+			: SelectAction(Direction == EElysiumNavigationDirection::Down
+				? Footer[0] : Footer.Last());
+	}
+	if (Group == ActionGroup::Footer)
+	{
+		if (Direction == EElysiumNavigationDirection::Down)
+		{
+			return SelectAction(ActiveTabAction);
+		}
+		const FName Body = LastBodyAction();
+		return Body.IsNone() ? SelectAction(ActiveTabAction) : SelectAction(Body);
+	}
+	if (Group == ActionGroup::Hubs)
+	{
+		return Direction == EElysiumNavigationDirection::Up
+			? SelectAction(ActiveTabAction)
+			: (!Footer.IsEmpty() && SelectAction(Footer[0]));
+	}
+	if (Group == ActionGroup::Traits)
+	{
+		const TArray<FName> Traits = GetActionsInGroup(ActionGroup::Traits);
+		const int32 At = Traits.IndexOfByKey(Selected);
+		if (Direction == EElysiumNavigationDirection::Up && At <= 0)
+		{
+			return SelectAction(ActiveTabAction);
+		}
+		if (Direction == EElysiumNavigationDirection::Down && At >= Traits.Num() - 1)
+		{
+			return !Footer.IsEmpty() && SelectAction(Footer[0]);
+		}
+		return SelectAction(Traits[At + (Direction == EElysiumNavigationDirection::Down ? 1 : -1)]);
+	}
+
+	const FName BaseGroups[] = {
+		ActionGroup::BaseClan, ActionGroup::BaseSex, ActionGroup::BaseHistory };
+	int32 BaseGroupIndex = INDEX_NONE;
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(BaseGroups); ++Index)
+	{
+		if (Group == BaseGroups[Index])
+		{
+			BaseGroupIndex = Index;
+			break;
+		}
+	}
+	if (BaseGroupIndex != INDEX_NONE)
+	{
+		const int32 NextGroup = BaseGroupIndex
+			+ (Direction == EElysiumNavigationDirection::Down ? 1 : -1);
+		if (NextGroup < 0)
+		{
+			return SelectAction(ActiveTabAction);
+		}
+		if (NextGroup >= UE_ARRAY_COUNT(BaseGroups))
+		{
+			return !Footer.IsEmpty() && SelectAction(Footer[0]);
+		}
+		const TArray<FName> Current = GetActionsInGroup(Group);
+		const TArray<FName> Next = GetActionsInGroup(BaseGroups[NextGroup]);
+		if (Next.IsEmpty())
+		{
+			return false;
+		}
+		const int32 Option = FMath::Max(0, Current.IndexOfByKey(Selected));
+		return SelectAction(Next[FMath::Min(Option, Next.Num() - 1)]);
+	}
+	return false;
+}
+
+void UElysiumCharacterScreen::HandleSelectedActionChanged(FName PreviousActionId,
+	FName NewActionId)
+{
+	const FTraitAction* Trait = TraitActions.Find(NewActionId);
+	if (!Trait || (SelContainer == Trait->Container && SelSlot == Trait->Slot))
+	{
+		return;
+	}
+	SelContainer = Trait->Container;
+	SelSlot = Trait->Slot;
+	if (DetailHost.IsValid())
+	{
+		DetailHost->SetContent(BuildDetail());
+	}
 }
 
 void UElysiumCharacterScreen::ReleaseSlateResources(bool bReleaseChildren)
@@ -1790,4 +2105,6 @@ void UElysiumCharacterScreen::ReleaseSlateResources(bool bReleaseChildren)
 	TabStripHost.Reset();
 	BodyHost.Reset();
 	FooterHost.Reset();
+	DetailHost.Reset();
+	TraitActions.Reset();
 }

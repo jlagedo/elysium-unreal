@@ -5,6 +5,16 @@
 
 #include "ElysiumActivatableScreen.generated.h"
 
+UENUM()
+enum class EElysiumUIScreenKind : uint8
+{
+	Menu,
+	Character,
+	Dialogue,
+	Chargen,
+	Sign,
+};
+
 // Common lifecycle for every interactive screen hosted by the player UI root. CommonUI owns
 // activation, focus restoration, navigation and Back routing; Elysium's input scope remains the
 // sole authority that may call SetInputMode or change gameplay input contexts.
@@ -14,13 +24,9 @@ class UElysiumActivatableScreen : public UCommonActivatableWidget
 	GENERATED_BODY()
 
 public:
-	// Call from the container's pre-activation initializer on every push. Pooled widgets do not
-	// promise to retain prior state, so this deliberately overwrites the whole screen input policy.
-	void ConfigureInputScope(
-		FName Name,
-		int32 ScopePriority,
-		EElysiumInputMode Mode = EElysiumInputMode::UIOnly,
-		bool bShowCursor = true);
+	// Call from the container's pre-activation initializer on every push. This is the single policy
+	// table for interactive screens; callers select a semantic kind rather than rebuilding a scope.
+	void ConfigureScreenPolicy(EElysiumUIScreenKind Kind);
 	void ClearInputScope();
 
 protected:
@@ -33,6 +39,10 @@ protected:
 	{
 		return TOptional<FUIInputConfig>();
 	}
+
+	// A dynamic screen rebuild must update both CommonUI's desired target and the input mode's Slate
+	// focus widget. Keeping the two names identical prevents focus returning to a dead turn widget.
+	void RefreshInputFocusTarget(UWidget* Widget);
 
 private:
 	void PopInputScope();

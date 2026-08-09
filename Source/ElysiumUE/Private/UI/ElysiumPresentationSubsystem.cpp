@@ -197,6 +197,21 @@ void UElysiumPresentationSubsystem::DialogueAdvance()
 	}
 }
 
+bool UElysiumPresentationSubsystem::DismissSign()
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	if (FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr)
+	{
+		if (World->PlayerDismissSign())
+		{
+			// OnUseEnd may synchronously open the next tutorial sign. Keep the current modal in that
+			// case until Publish reconciles its replacement content, avoiding an input-capture gap.
+			return World->GetOpenSignData() == nullptr;
+		}
+	}
+	return false;
+}
+
 void UElysiumPresentationSubsystem::Publish()
 {
 	const FElysiumViewState Previous = ViewState;
@@ -236,6 +251,7 @@ void UElysiumPresentationSubsystem::Publish()
 			Next.SignOwner = World->GetOpenSign(&OpenTime);
 			Next.Sign = Sign;
 			Next.bSignHidesHUD = Sign->bHideHUD;
+			Next.bSignDismissible = World->CanPlayerDismissSign();
 
 			// fade_in ramps the whole panel up off the game clock, like every other timed entity
 			// state. Resolved here so nothing downstream needs the clock to draw a panel.
@@ -267,6 +283,7 @@ void UElysiumPresentationSubsystem::Publish()
 				if (const FElysiumDlgLine* Choice = Conv->VisibleChoice(v))
 				{
 					D.Choices.Add(Choice->DisplayText(bMale, bMalk));
+					D.ChoiceIds.Add(Choice->Id);
 				}
 			}
 			D.bTerminal = Conv->IsTerminalLine();

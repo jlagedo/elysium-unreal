@@ -361,10 +361,10 @@ and `Elysium.Substrate.WorldServices` is its first occupant.
 
 ## 8. The control surface
 
-`docs/architecture/input-architecture.md` owns the Enhanced Input design — four planes, one `UInputAction` per bindable
-command, `UPlayerMappableKeySettings` ids, contexts as client modes, the `config.cfg` projection. It
-is complete and unbuilt (10.6). Three pieces of the *spine* around it are not designed anywhere, and
-each is a live rough edge today.
+`docs/architecture/input-architecture.md` owns the Enhanced Input design — four planes, one
+`UInputAction` per bindable command, `UPlayerMappableKeySettings` ids, gameplay contexts, UI
+navigation ownership and the `config.cfg` projection. Roadmap 10.6 owns its staged status. The
+runtime spine below owns arbitration shared by gameplay, screens and debug input.
 
 ### 8.1 One input-mode arbiter (S6)
 
@@ -379,7 +379,7 @@ struct FElysiumInputScope            // plain C++ — ElysiumInputScope.h
     FName    Name;                   // "Menu", "Dialogue", "Sign", "Cinematic", "Chargen", "Debug"
     int32    Priority;               // ElysiumInput::Priority::*
     EElysiumInputMode Mode;          // GameOnly | GameAndUI | UIOnly
-    bool     bShowCursor;
+    EElysiumCursorPolicy CursorPolicy; // Never | Auto | Always
     TArray<FName> Contexts;          // mapping contexts applied while this scope is top (10.6)
     TSharedPtr<SWidget> FocusWidget; // where keyboard focus goes under UIOnly
 };
@@ -388,7 +388,7 @@ FElysiumInputScopeHandle UElysiumInputSubsystem::Push(FElysiumInputScope Scope);
 bool                     UElysiumInputSubsystem::Pop(FElysiumInputScopeHandle&);
 ```
 
-The **top scope decides everything** — mode, cursor, focus, which mapping contexts are applied.
+The **top scope decides everything** — mode, cursor policy, focus, which mapping contexts are applied.
 Push/pop is **handle-based, not last-in-first-out**, because screens genuinely close out of order: a
 conversation ends behind an open pause menu, and the menu has to find exactly the mode it pushed
 over. Ids are never reused, so a stale or doubled pop is a no-op rather than a mismatched pop.
@@ -396,10 +396,12 @@ Priority decides, and push order is the tie-break, so two screens at the same pr
 ordinary modal stack.
 
 One table answers "what happens when X opens over Y":
-`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Menu 50 < Debug 100`. Two rows carry
-weight. **The sign scope claims game input, not UI-only** — VtMB's popups are dismissed by a
-left-click, which is the `+attack` verb, so taking the mouse off the world would make them
-undismissable; the scope is there for the ordering. **Debug is the top of the table**, because F1
+`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Character 45 < Menu 50 < Debug 100`.
+Sign, chargen, dialogue, character and menu are UI-only and remove gameplay mapping contexts;
+CommonUI owns their focus, navigation, Accept and Back. The sign presents one Continue action which
+requests dismissal through presentation, while the entity world revalidates dwell and click-close
+policy. The legacy `+attack` command reaches the same world request without owning physical sign
+input. **Debug is the top of the table**, because F1
 over a screen is a developer asking for the debug UI and the front end has a menu up permanently.
 What keeps it from eating that screen's clicks is the other half of the rule: **a UI-only push
 revokes an inherited ImGui capture** (`ElysiumInput::RevokesDebugCapture`), at push time only, so the
@@ -413,15 +415,16 @@ a second writer, and a re-entrant one.
 
 The stack and its arbitration are plain C++, so the whole rule set is asserted with no local player,
 no controller and no viewport — `Elysium.Substrate.InputScopes` walks every ordered pair of scopes in
-both close orders. `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` (default true) settles
-held keys across a push, which is `docs/vtmb/controls.md`'s open "what does conversation do to held input"
-question on our side; it lands with the contexts at 10.6.
+both close orders. `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` plus the input router's
+held-button clear settles keys held across a push, which is `docs/vtmb/controls.md`'s open "what does
+conversation do to held input" question on our side.
 
 CommonUI brings its own input writer — `UCommonUIActionRouterBase` applies an `FUIInputConfig` per
 activated widget, a *fourth* mode owner living inside the engine. **The scope stack is the sole
 authority** (owner call): Elysium's activatable widgets return no
 desired input config (`GetDesiredInputConfig()` → unset) so the action router never writes mode or
-cursor, and `UElysiumUISubsystem` pushes/pops scopes instead.
+cursor, and `UElysiumActivatableScreen` pushes/pops the centralized screen scopes instead. An
+`Auto` cursor policy follows CommonInput's live device without changing the active screen.
 
 ### 8.2 One command registry (S7)
 

@@ -222,7 +222,7 @@ void UElysiumUISubsystem::ShowMenu(EElysiumMenuMode Mode)
 		{
 			UElysiumMainMenu& Screen = *CastChecked<UElysiumMainMenu>(&Widget);
 			Screen.SetMenuMode(Mode);
-			Screen.ConfigureInputScope(TEXT("Menu"), ElysiumInput::Priority::Menu);
+			Screen.ConfigureScreenPolicy(EElysiumUIScreenKind::Menu);
 		}));
 	if (!Menu)
 	{
@@ -330,7 +330,7 @@ void UElysiumUISubsystem::ShowCharacterScreen(EElysiumCharacterTab Tab)
 			Screen.OnCancel.BindUObject(this, &UElysiumUISubsystem::HideCharacterScreen);
 			Screen.OnCharacterChanged.BindUObject(
 				this, &UElysiumUISubsystem::UpdateCharacterStageBody);
-			Screen.ConfigureInputScope(TEXT("Character"), ElysiumInput::Priority::Character);
+			Screen.ConfigureScreenPolicy(EElysiumUIScreenKind::Character);
 		}));
 	if (!CharacterScreen)
 	{
@@ -407,7 +407,7 @@ void UElysiumUISubsystem::ShowChargen()
 					UElysiumChargenPopup& Popup = *CastChecked<UElysiumChargenPopup>(&Widget);
 					Popup.SetRun(ChargenRun);
 					Popup.OnAnswer.BindUObject(this, &UElysiumUISubsystem::AnswerChargenPopup);
-					Popup.ConfigureInputScope(TEXT("Chargen"), ElysiumInput::Priority::Chargen);
+					Popup.ConfigureScreenPolicy(EElysiumUIScreenKind::Chargen);
 				}));
 			if (ChargenPopup)
 			{
@@ -512,7 +512,7 @@ void UElysiumUISubsystem::OpenChargenSheet()
 			Screen.OnCancel.BindUObject(this, &UElysiumUISubsystem::HideCharacterScreen);
 			Screen.OnCharacterChanged.BindUObject(
 				this, &UElysiumUISubsystem::UpdateCharacterStageBody);
-			Screen.ConfigureInputScope(TEXT("Chargen"), ElysiumInput::Priority::Chargen);
+			Screen.ConfigureScreenPolicy(EElysiumUIScreenKind::Chargen);
 		}));
 	if (!CharacterScreen)
 	{
