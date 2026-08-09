@@ -104,6 +104,10 @@ private:
 	// tunes the faithful evaluator alone — that partition is what stops one value having two owners
 	// while both rigs are live.
 	ElysiumRig::FElysiumCameraRigTuning RigTuning;
+	// The damped pivot the boom hangs off. The damper lives here rather than on the camera position
+	// so it covers the pivot's own motion — stairs, crouch, gait bob — without also lagging the
+	// rotation, which is instant and must stay that way.
+	FVector ModernPivot = FVector::ZeroVector;
 	FVector ModernPosition = FVector::ZeroVector;
 	FRotator ModernAngles = FRotator::ZeroRotator;
 	float ModernDistance = 0.0f;

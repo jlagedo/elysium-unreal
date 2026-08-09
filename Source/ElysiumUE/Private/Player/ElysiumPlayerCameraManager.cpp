@@ -2,6 +2,7 @@
 
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraModifiers.h"
+#include "ElysiumLookCurve.h"
 #include "ElysiumPlayerBody.h"
 
 #include "Engine/Canvas.h"
@@ -19,6 +20,15 @@ static TAutoConsoleVariable<int32> CVarModernCamera(
 	TEXT("remaster boom (1). Both solve and record every frame either way."),
 	ECVF_Default);
 
+// The modern boom's translation damper, as a live override on `FElysiumCameraRigTuning`. Negative
+// takes the tuning's own value, which keeps the shipped number in one place; zero makes the rig
+// fully rigid, which is the direct read on how much of a given motion the damper owns.
+static TAutoConsoleVariable<float> CVarModernPositionHalfLife(
+	TEXT("elysium.cam.PositionHalfLife"), -1.0f,
+	TEXT("Half-life in seconds of the modern boom's pivot damper. Negative uses the rig tuning's ")
+	TEXT("own value; 0 snaps."),
+	ECVF_Default);
+
 AElysiumPlayerCameraManager::AElysiumPlayerCameraManager()
 {
 	// `DefaultModifiers` is instantiated per manager in `PostInitializeComponents`, so appending the
@@ -26,6 +36,13 @@ AElysiumPlayerCameraManager::AElysiumPlayerCameraManager()
 	// is left in place — `CachedCameraShakeMod` is only bound for a `UCameraModifier_CameraShake`,
 	// and removing it would quietly take every shake with it.
 	DefaultModifiers.Add(UElysiumCameraModifier_LegacyShot::StaticClass());
+
+	// VtMB's pitch clamp (`cl_pitchup` / `cl_pitchdown`, both 89). It lives here because
+	// `UpdateRotation` now owns the integration and runs these limits through
+	// `ProcessViewRotation`; the engine's own default is ±89.9, which would quietly widen the clamp
+	// the router used to apply by hand.
+	ViewPitchMin = -ElysiumInput::PitchClampDegrees;
+	ViewPitchMax = ElysiumInput::PitchClampDegrees;
 }
 
 // =====================================================================================
@@ -106,10 +123,32 @@ void AElysiumPlayerCameraManager::SolveModernRig(const UElysiumCameraComponent& 
 	// The eye the boom hangs off, and the view it derives from. Both are read the same way the
 	// faithful rig reads them, so the two booms answer the same question and the diff between them
 	// is the rig rather than the input.
-	const FVector Pivot = Camera.GetComponentLocation();
+	const FVector BodyPivot = Camera.GetComponentLocation();
 	const FRotator ViewRot = PCOwner ? PCOwner->GetControlRotation() : Camera.GetComponentRotation();
 
 	ModernAngles = ElysiumRig::BoomRotation(ViewRot, RigTuning);
+
+	// **The damper's domain is translation, never rotation.** A camera position damped in world
+	// space conflates two motions that want opposite treatment: the pivot moving — stairs, crouch,
+	// gait bob — wants weight, while the view turning wants none at all. Damping their sum makes the
+	// camera slide around the boom's arc after every turn, because a turn moves the target the
+	// length of that arc instantly. On a stick the slide is invisible: the rate is capped and
+	// pre-filtered, so the target only ever steps a few centimetres per frame and the damper keeps
+	// up. A mouse has no such bound — a flick can carry most of a metre of arc inside one frame, and
+	// the damper then spends a quarter of a second catching up to a rotation that already finished.
+	//
+	// So the damper runs on the **pivot** and on the boom **length**, and the camera hangs off both
+	// rigidly. Everything that should feel weighted still does; nothing that should be instant lags.
+	const float HalfLife = CVarModernPositionHalfLife.GetValueOnGameThread() >= 0.0f
+		? CVarModernPositionHalfLife.GetValueOnGameThread()
+		: RigTuning.PositionHalfLife;
+	ModernPivot = bModernNeedsReseed
+		? BodyPivot
+		: ElysiumRig::DampToward(ModernPivot, BodyPivot, HalfLife, Dt);
+
+	// Everything downstream — the collision sweep included — hangs off the damped pivot, so the
+	// probe traces from where the camera actually is rather than from where the body got to.
+	const FVector Pivot = ModernPivot;
 
 	// The sweep. A sphere, like the faithful rig's, so the two clip on the same geometry — the
 	// difference between them is the response, not the probe.
@@ -137,10 +176,9 @@ void AElysiumPlayerCameraManager::SolveModernRig(const UElysiumCameraComponent& 
 		: ElysiumRig::SolveBoomDistance(ModernDistance, Desired, bModernClipped, HitDistance,
 			RigTuning, Dt);
 
-	const FVector Target = ElysiumRig::BoomTarget(Pivot, ModernAngles, ModernDistance, RigTuning);
-	ModernPosition = bModernNeedsReseed
-		? Target
-		: ElysiumRig::DampToward(ModernPosition, Target, RigTuning.PositionHalfLife, Dt);
+	// Rigid: the pivot and the length are already damped, so a second damper here would be the one
+	// that puts rotation back into the lag.
+	ModernPosition = ElysiumRig::BoomTarget(Pivot, ModernAngles, ModernDistance, RigTuning);
 
 	// A first-person frame parks the rig on its target rather than letting it drift, so re-entering
 	// third person does not swing in from wherever the camera was left — the same rule the faithful
@@ -178,9 +216,11 @@ void AElysiumPlayerCameraManager::PublishSample(const UElysiumCameraComponent& C
 	Sample.ScriptedWeight = Weights.Scripted;
 	Sample.ModelAlpha = Camera.ModelAlpha();
 
-	const FVector ModernOffset = ModernPosition - Camera.GetComponentLocation();
-	Sample.ModernBoomLength = static_cast<float>(ModernOffset.Size()) * Weights.ThirdBlend();
-	Sample.ModernDamperDistance = static_cast<float>(ModernOffset.Size());
+	// Reported off the solved boom rather than off `ModernPosition - eye`. The two agreed while the
+	// camera hung rigidly off the live eye; now that the pivot is damped, that difference carries
+	// the pivot's lag as well as the boom, and a channel named for the boom would be reporting both.
+	Sample.ModernBoomLength = ModernDistance * Weights.ThirdBlend();
+	Sample.ModernDamperDistance = ModernDistance;
 	Sample.ModernBoomPitch = static_cast<float>(ModernAngles.Pitch);
 	Sample.ModernBoomYaw = static_cast<float>(ModernAngles.Yaw);
 	Sample.bModernClipped = bModernClipped;

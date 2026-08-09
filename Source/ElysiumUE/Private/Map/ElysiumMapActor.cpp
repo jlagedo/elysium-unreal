@@ -1853,6 +1853,12 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	bMotorsRetired = true;
 	NpcMotors.Reset();
 
+	// The substrate owns plain C++ entities, but its teardown reaches map-owned UObjects through the
+	// embodiment seam (interaction anchors, bodies and scripted cameras). Run that teardown while
+	// EndPlay still guarantees those objects have valid UObject indices; waiting for this actor's C++
+	// destructor is too late because world cleanup may already have reclaimed its components.
+	EntityWorld.Reset();
+
 	// The audio subsystem is GameInstance-scoped and outlives this map actor, but every voice it
 	// holds is map-scoped (ambient_generic + the scheme bed/music/random one-shots). Stop them all
 	// on unload so nothing bleeds into the next map. StopAllVoices also covers the scheme voices, so

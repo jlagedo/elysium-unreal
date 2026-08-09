@@ -39,8 +39,10 @@ public:
 	void Setup(APlayerController* Controller, UInputComponent* Input);
 	void Shutdown();
 
-	// Build the frame's command, apply its look delta, and hand it to the body. Called from
-	// `AElysiumPlayerController::PlayerTick`, after the bindings for the frame have run (step 1).
+	// Build the frame's command and hand it to the body. Called from
+	// `AElysiumPlayerController::ProcessPlayerInput`, after the bindings for the frame have run
+	// (step 1). The look delta is published on the command; the controller feeds it to the engine's
+	// rotation input, and `UpdateRotation` is what integrates it.
 	void SampleFrame(float DeltaSeconds);
 
 	const FElysiumUserCmd& CurrentCmd() const { return Current; }
@@ -72,20 +74,17 @@ private:
 		const FString& Line, bool bEngineCommand);
 	// Bind one row of the default table. A leading `+` binds the release to the matching `-cmd`.
 	void BindDefault(UInputComponent* Input, const struct FElysiumDefaultBind& Bind);
-	// Mouse look, and the dev chords the reserved-key rule keeps off bare keys.
-	void BindLookAxes(UInputComponent* Input);
+	// The dev chords the reserved-key rule keeps off bare keys.
 	void BindDebugChords(UInputComponent* Input);
 	void BindEnhancedActions(UInputComponent* Input);
 
 	void FireCommand(FString Line);
 	void FireEngineCommand(FString Line);
-	void OnMouseX(float Value);
-	void OnMouseY(float Value);
+	void OnMouseLook(const FInputActionValue& Value);
 	void OnAnalogMove(const FInputActionValue& Value);
 	void OnAnalogLook(const FInputActionValue& Value);
 	void OnCommandDown(FName Command);
 	void OnCommandUp(FName Command);
-	void ApplyLook(const FElysiumUserCmd& Cmd);
 
 	// Degrees per mouse count: `sensitivity` x `m_yaw` / `m_pitch`, read off the VtMB console store
 	// so the options slider and the cvar are one settings truth (`docs/architecture/input-architecture.md`).

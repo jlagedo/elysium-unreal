@@ -21,10 +21,22 @@ enum class EElysiumInputMode : uint8
 
 namespace ElysiumInput
 {
+	inline FName PlayerKeyboardMouseContext()
+	{
+		static const FName Name(TEXT("IMC_Player_KBM"));
+		return Name;
+	}
+
 	inline FName PlayerGamepadContext()
 	{
 		static const FName Name(TEXT("IMC_Player_Gamepad"));
 		return Name;
+	}
+
+	inline void AddPlayerContexts(TArray<FName>& Contexts)
+	{
+		Contexts.Add(PlayerKeyboardMouseContext());
+		Contexts.Add(PlayerGamepadContext());
 	}
 
 	inline const TCHAR* ModeName(EElysiumInputMode Mode)

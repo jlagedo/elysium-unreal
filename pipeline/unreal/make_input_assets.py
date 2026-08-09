@@ -1,4 +1,4 @@
-"""Generate the first Enhanced Input slice from Config/ElysiumInputActions.csv.
+"""Generate the current Enhanced Input slice from Config/ElysiumInputActions.csv.
 
 The CSV is committed policy. The UInputAction, UInputMappingContext and UElysiumInputActionSet
 packages are local, regenerable Unreal assets and remain ignored like every other policy package.
@@ -40,9 +40,9 @@ def load_rows():
     # keyboard and console input. Duck and Camera are the two stick clicks: neither is held while
     # the same stick is being used, so they remain one-shot toggles (`+duck` is normalized by the
     # router's toggle policy, and `togglecamera` is intrinsically one-shot).
-    if ids != ["Move", "Look", "Jump", "Use", "Duck", "Camera"]:
+    if ids != ["Move", "Look", "MouseLook", "Jump", "Use", "Duck", "Camera"]:
         raise RuntimeError(
-            "the gamepad slice must contain exactly Move, Look, Jump, Use, Duck and Camera; got %r"
+            "the input slice must contain exactly Move, Look, MouseLook, Jump, Use, Duck and Camera; got %r"
             % ids
         )
     return rows
@@ -79,8 +79,8 @@ def make_modifier(cls, outer, name, properties=None):
     return modifier
 
 
-def modifiers_for(action_id, context):
-    """The mapping carries device-frame corrections only; feel lives at the command seam.
+def modifiers_for(action_id, device, context):
+    """Build the modifier stack owned by one device mapping.
 
     Neither stick has a dead zone, a saturation, a response curve, a scalar, a Smooth, a
     ScaleByDeltaTime or an FOVScaling modifier here, and the omission is the design rather than an
@@ -99,7 +99,7 @@ def modifiers_for(action_id, context):
     The tuning surface is the `joy_*` group in the VtMB console store, so a live run tunes with
     `elysium.cmd joy_yawsensitivity 220` and a `config.cfg` keeps the answer.
     """
-    if action_id == "Look":
+    if device == "Gamepad" and action_id == "Look":
         # Gamepad_Right2D reports physical stick-up on -Y. Elysium adds the action's Y directly to
         # FRotator::Pitch, where positive pitch is look-up, so invert Y once in the mapping and
         # leave the native GameInput axis untouched. This is a statement about the device's frame,
@@ -112,7 +112,34 @@ def modifiers_for(action_id, context):
                 {"x": False, "y": True, "z": False},
             ),
         ]
+    # Mouse2D deliberately carries **no** modifier. It is a displacement the hand already made, so
+    # the only thing between the device and the view is `sensitivity x m_yaw/m_pitch`, which is
+    # where retail puts it too. `UInputModifierSmooth` is specifically excluded: it is the legacy
+    # `UPlayerInput::SmoothMouse` port, it averages against a hardcoded 0.0083s sample window
+    # regardless of the real frame rate, and it drops its residual whenever input returns to zero --
+    # so a fast flick lands short and a slow drag does not, which is inconsistent degrees per count.
     return []
+
+
+def make_context(name, device, key_column, rows, actions):
+    context = ensure_data_asset(name, ROOT, unreal.InputMappingContext)
+    mappings = []
+    for row in rows:
+        key_name = row[key_column].strip()
+        if not key_name:
+            continue
+        key = unreal.Key()
+        key.set_editor_property("key_name", key_name)
+        mapping = unreal.EnhancedActionKeyMapping()
+        mapping.set_editor_property("action", actions[row["Id"].strip()])
+        mapping.set_editor_property("key", key)
+        mapping.set_editor_property(
+            "modifiers", modifiers_for(row["Id"].strip(), device, context))
+        mappings.append(mapping)
+    mapping_data = unreal.InputMappingContextMappingData()
+    mapping_data.set_editor_property("mappings", mappings)
+    context.set_editor_property("default_key_mappings", mapping_data)
+    return context
 
 
 def main():
@@ -126,22 +153,10 @@ def main():
         action.set_editor_property("value_type", value_type(row["ValueType"].strip()))
         actions[action_id] = action
 
-    context = ensure_data_asset("IMC_Player_Gamepad", ROOT, unreal.InputMappingContext)
-    mappings = []
-    for row in rows:
-        pad_key = row["DefaultPad"].strip()
-        if not pad_key:
-            continue
-        key = unreal.Key()
-        key.set_editor_property("key_name", pad_key)
-        mapping = unreal.EnhancedActionKeyMapping()
-        mapping.set_editor_property("action", actions[row["Id"].strip()])
-        mapping.set_editor_property("key", key)
-        mapping.set_editor_property("modifiers", modifiers_for(row["Id"].strip(), context))
-        mappings.append(mapping)
-    mapping_data = unreal.InputMappingContextMappingData()
-    mapping_data.set_editor_property("mappings", mappings)
-    context.set_editor_property("default_key_mappings", mapping_data)
+    keyboard_mouse_context = make_context(
+        "IMC_Player_KBM", "KeyboardMouse", "DefaultPrimary", rows, actions)
+    gamepad_context = make_context(
+        "IMC_Player_Gamepad", "Gamepad", "DefaultPad", rows, actions)
 
     action_set = ensure_data_asset(
         "DA_ElysiumInputActions", ROOT, unreal.ElysiumInputActionSet)
@@ -155,9 +170,11 @@ def main():
         definitions.append(definition)
     action_set.set_editor_property("actions", definitions)
 
-    for asset in list(actions.values()) + [context, action_set]:
+    for asset in list(actions.values()) + [keyboard_mouse_context, gamepad_context, action_set]:
         unreal.EditorAssetLibrary.save_loaded_asset(asset, only_if_is_dirty=False)
-    unreal.log("[input-assets] generated %d actions, IMC_Player_Gamepad and action set" % len(actions))
+    unreal.log(
+        "[input-assets] generated %d actions, IMC_Player_KBM, IMC_Player_Gamepad and action set"
+        % len(actions))
 
 
 main()

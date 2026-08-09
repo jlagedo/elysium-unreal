@@ -21,8 +21,9 @@
 
 namespace ElysiumInput
 {
-	// VtMB's pitch clamp (`cl_pitchup` / `cl_pitchdown`, both 89). Applied where the command's look
-	// delta reaches the control rotation, which is the one place a view angle is integrated.
+	// VtMB's pitch clamp (`cl_pitchup` / `cl_pitchdown`, both 89). Carried onto
+	// `AElysiumPlayerCameraManager`'s `ViewPitchMin`/`ViewPitchMax`, so the one place a view angle is
+	// integrated — the engine's `UpdateRotation`, through `ProcessViewRotation` — applies it.
 	inline constexpr float PitchClampDegrees = 89.0f;
 
 	// The mouse scale and the curve over it. The first three are recovered and reproduce retail; the
@@ -79,8 +80,9 @@ namespace ElysiumInput
 	// =================================================================================================
 	//
 	// A thumbstick is not a mouse and cannot be shaped like one. The mouse reports a *displacement*
-	// the hand already made, so it needs no filter and no dead zone; a stick reports a *held
-	// deflection* that the game integrates into a turn, and the device's noise is integrated with it.
+	// the hand already made; IA_MouseLook's Enhanced Input Smooth modifier normalizes how those device
+	// samples reach frames before the router sees them. A stick reports a *held deflection* that the
+	// game integrates into a turn, and the device's noise is integrated with it.
 	//
 	// Measured on the shipped pad rather than assumed (`elysium.LookProbe`): the axes quantise to
 	// 1/127 (8-bit), the resting centre sits about 0.04 off zero, and during a steady hold the Y axis

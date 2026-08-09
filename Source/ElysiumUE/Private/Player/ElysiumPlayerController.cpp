@@ -60,28 +60,52 @@ void AElysiumPlayerController::EndPlay(const EEndPlayReason::Type Reason)
 	Super::EndPlay(Reason);
 }
 
-void AElysiumPlayerController::PlayerTick(float DeltaTime)
+void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const bool bGamePaused)
 {
-	Super::PlayerTick(DeltaTime);
+	// Super runs the input stack, so every Enhanced Input callback for this frame has landed in the
+	// builder by the time it returns. Building here rather than after `PlayerTick` is what puts the
+	// look delta *ahead* of `UpdateRotation` in the same frame: the engine then applies it, clamps
+	// the pitch through the camera manager, writes the control rotation and faces the pawn, all off
+	// this frame's input. Building afterwards left `FaceRotation` running on the previous frame's
+	// value, which a mouse flick shows as the body trailing the camera.
+	Super::ProcessPlayerInput(DeltaTime, bGamePaused);
 
-	if (Router)
+	// `TickPlayerInput` reaches here on two paths, and only one of them used to run the router:
+	// `PlayerTick` on a live frame, and `TickActor`'s pause path, which `PlayerTick` never sees. A
+	// held world must keep producing no command at all, so the paused entry stops here — the same
+	// thing that was true when this lived behind `PlayerTick`. Pause as an explicit input policy is
+	// the mapping-context landing's, not this one's.
+	if (!Router || bGamePaused)
 	{
-		Router->SampleFrame(DeltaTime);
-		const FElysiumUserCmd& Current = Router->CurrentCmd();
-		if (FElysiumEntityWorld* World = CurrentEntityWorld())
-		{
-			if (Current.JustPressed(EElysiumButton::Use, PreviousCmd))
-			{
-				World->QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
-			}
-			if (Current.JustReleased(EElysiumButton::Use, PreviousCmd))
-			{
-				World->QueuePlayerUseEdge(EElysiumUseEdge::Released);
-			}
-		}
-		PreviousCmd = Current;
+		return;
 	}
+
+	Router->SampleFrame(DeltaTime);
+	const FElysiumUserCmd& Current = Router->CurrentCmd();
+
+	// Degrees, straight into the engine's own rotation input. `bEnableLegacyInputScales` is off, so
+	// `AddYawInput`/`AddPitchInput` accumulate without a scale and the degrees in the command are
+	// the degrees applied — the property the user command exists to hold.
+	if (!Current.LookDelta.IsNearlyZero())
+	{
+		AddYawInput(Current.LookDelta.X);
+		AddPitchInput(Current.LookDelta.Y);
+	}
+
+	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	{
+		if (Current.JustPressed(EElysiumButton::Use, PreviousCmd))
+		{
+			World->QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+		}
+		if (Current.JustReleased(EElysiumButton::Use, PreviousCmd))
+		{
+			World->QueuePlayerUseEdge(EElysiumUseEdge::Released);
+		}
+	}
+	PreviousCmd = Current;
 }
+
 
 void AElysiumPlayerController::RegisterCommands()
 {

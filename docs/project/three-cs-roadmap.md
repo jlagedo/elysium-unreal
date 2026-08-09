@@ -270,20 +270,15 @@ retires what they replaced.
   recorded courses whether or not leniency is added, so the decision is measured rather than
   argued; the co-tune is performed once, after `CCC7`, with both rigs' channels in one run.
   *Deps:* `CCC0`, `CCC2` for the curve and the courses; `CCC7` for the co-tune.
-  *Done:* the response curve is one pure function — `ElysiumInput::ShapeMouseLook` over
-  `FElysiumLookTuning` (`ElysiumLookCurve.h`), asserted by `Elysium.Substrate.LookCurve` — applied
-  at the point the command is built. **Its defaults are exactly retail**, so the shipped feel did
-  not move: `sensitivity` 3 × `m_yaw`/`m_pitch` 0.022 is the recovered 0.066°/count and `look_curve`
-  defaults to 0, at which the gain is identically 1.0 and the delta returns bit-for-bit. The curve
-  is applied to the **mouse contribution alone**, before the keyboard and stick terms merge — a
-  magnitude-keyed curve over the sum would silently curve a held `+left` — and
-  `Elysium.Substrate.UserCmd` asserts the separation, so moving the call after the merge reddens.
-  The scale left the router for the tuning struct's `LoadFrom` callback; `ElysiumInput::CvarDefs()`
-  now declares the mouse's seven names, which also fixes `sensitivity`/`m_yaw`/`m_pitch` having been
-  read but declared nowhere. `IA_Look`'s `ResponseCurveExponential` is retired and the Content tier
-  asserts its **absence**, so exactly one thing owns the look feel and it is the one that can be
-  asserted. The faithful path, the divergence and the leniency finding are recorded in
-  `docs/architecture/input-architecture.md` § Feel, the section that did not exist.
+  *Done:* mouse look is a first-class modern Enhanced Input path:
+  `Mouse2D → IA_MouseLook → UInputModifierSmooth → UElysiumInputRouter::OnMouseLook` in
+  `IMC_Player_KBM`. It is separate from the pad's `IA_Look` because a mouse delivers a displacement
+  and a stick delivers a held deflection. Legacy `bEnableMouseSmoothing` is off, Mouse2D's legacy
+  scale is 1.0, and the Content tier asserts the generated action, context and sole `Smooth`
+  modifier. This is an explicit owner divergence from VtMB's mouse feel; the per-count
+  `sensitivity` × `m_yaw`/`m_pitch` names remain the settings surface, not a fidelity constraint.
+  The optional `ElysiumInput::ShapeMouseLook` acceleration stage remains after the mapping and
+  defaults to the identity (`look_curve 0`); enabling that separate curve is not part of this call.
   **The pad's whole path landed on the same seam**, for a reason the mouse's did not have: a stick
   reports a *held deflection* the game integrates, so the device's noise is integrated with it.
   `ElysiumInput::ShapeStickLook` / `ShapeStickMove` own the dead zone, the saturation, the response
@@ -719,6 +714,7 @@ per the house rules.
 | The modern rig supplying the shipped base view — **owner call, made**: `elysium.ModernCamera` defaults to 1 ahead of `CCC3`'s co-tune, which stays outstanding. Both rigs solve and record every frame either way, so the A/B and the channel diff are unaffected | `docs/architecture/camera-architecture.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
 | A look-response curve that is not retail's — **built and shipped off**: `look_curve` defaults to 0, at which the gain is exactly 1.0 and the path is retail's linear one. Enabling it is an owner call not yet made | `docs/architecture/input-architecture.md` § Feel |
+| Modern Enhanced Input mouse sample normalization — **owner call, made**: `Mouse2D → IA_MouseLook` carries `UInputModifierSmooth`; legacy `bEnableMouseSmoothing` is off, and removing the mapping modifier is the direct A/B | `docs/architecture/input-architecture.md` § Feel |
 | Input leniency — buffering or coyote time. VtMB has neither, **none is implemented**, and the `ledge_*`/`land_*` brackets now hold the committed before-picture, so adding either moves a number | `docs/architecture/input-architecture.md` § Feel |
 | A fixed-step accumulator, shipped behind `elysium.move.FixedStep` with the faithful variable delta as the default | `docs/vtmb/source_movement.md` |
 | ~~Composing the legacy shot and track channels as post layers, or arbitrating them as base requests~~ — **settled as post layers, and therefore not a divergence**: retail composes the scripted channel over the third-person weight, so this is the faithful behaviour and the doc's table was corrected | `docs/architecture/camera-architecture.md` |

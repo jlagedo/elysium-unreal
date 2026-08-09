@@ -6,7 +6,12 @@
 
 #include "Animation/AnimCurveElementFlags.h"
 #include "BonePose.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "HAL/IConsoleManager.h"
+#include "UObject/UObjectIterator.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumComposition, Log, All);
 
 namespace
 {
@@ -30,6 +35,124 @@ namespace
 		TEXT("1 = apply VtMB split inheritance + axis interpolation over the blended pose (CAP7.2), ")
 		TEXT("0 = ordinary Unreal hierarchy composition only."),
 		ECVF_Default);
+
+	// **The composition stage's only observable.** A body whose procedural bones are not driven
+	// holds them at their BIND, and the bind is the T-pose — so the helper bones skinned into each
+	// arm keep pointing sideways while the arm swings down, and the geometry tears into pieces.
+	// Nothing reports it: the rig is optional by design, an unresolved rule is silently skipped, and
+	// a model carrying no rules at all is the normal case for 36 of the 166 bodies.
+	//
+	// Three independent causes produce that one symptom, so all three are printed together —
+	// whether a rig was installed at all, how many of its rules resolved BOTH bones against the
+	// live bone container, and whether the A/B cvar is on. Rules declared but none resolved means
+	// the posed mesh does not carry the bones the sidecar names, which is a bake question rather
+	// than a frame one.
+	FAutoConsoleCommand GCompositionReport(
+		TEXT("elysium.CompositionReport"),
+		TEXT("Per posed body: whether a composition rig is installed, how many axis-interpolation "
+		     "rules it declares, and how many resolved against the mesh."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			int32 Bodies = 0;
+			for (TObjectIterator<UElysiumBodyAnimInstance> It; It; ++It)
+			{
+				UElysiumBodyAnimInstance* Instance = *It;
+				if (Instance == nullptr || Instance->HasAnyFlags(RF_ClassDefaultObject)
+					|| Instance->GetWorld() == nullptr)
+				{
+					continue;
+				}
+				const USkeletalMeshComponent* Owner = Instance->GetSkelMeshComponent();
+				const USkeletalMesh* Mesh = Owner != nullptr ? Owner->GetSkeletalMeshAsset() : nullptr;
+				const FElysiumCompositionRig* Rig = Instance->GetCompositionRig();
+				++Bodies;
+				UE_LOG(LogElysiumComposition, Display,
+					TEXT("[composition] %s mesh=%s bones=%d rig=%s declared=%d resolved=%d"),
+					*Instance->GetClass()->GetName(),
+					Mesh != nullptr ? *Mesh->GetName() : TEXT("<none>"),
+					Mesh != nullptr ? Mesh->GetRefSkeleton().GetRawBoneNum() : 0,
+					Rig != nullptr ? *Rig->Stem : TEXT("NONE"),
+					Rig != nullptr ? Rig->AxisRules.Num() : 0,
+					Instance->GetResolvedAxisInterpRules());
+			}
+			UE_LOG(LogElysiumComposition, Display,
+				TEXT("[composition] %d posed body(ies); elysium.CompositionStages=%d"),
+				Bodies, CVarCompositionStages.GetValueOnGameThread());
+		}));
+
+	// Where the bones actually ARE, in centimetres relative to `Bip01 Pelvis`, for every bone whose
+	// name contains the argument. A screenshot cannot separate "the arm is posed wrongly" from "the
+	// arm is posed correctly and the skinning is torn", and both look like the same broken picture.
+	//
+	// The reference to compare against is the container's own FK: composing `walk_0` out of
+	// `character_shared_female_move_and_ranged.eskm` by ordinary parent-relative hierarchy puts the
+	// hands 50.07 cm apart and just below the pelvis, against 108.58 cm apart and level with the
+	// chest in the bind T-pose. So a live reading near 108 means the arms are not being posed at
+	// all, one near 50 means they are and the fault is downstream of the pose.
+	FAutoConsoleCommand GBoneReport(
+		TEXT("elysium.BoneReport"),
+		TEXT("elysium.BoneReport <substring> - each matching bone's live position relative to "
+		     "Bip01 Pelvis, in centimetres."),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			const FString Filter = Args.Num() > 0 ? Args[0] : TEXT("Bip01");
+			for (TObjectIterator<USkeletalMeshComponent> It; It; ++It)
+			{
+				USkeletalMeshComponent* Comp = *It;
+				if (Comp == nullptr || Comp->GetWorld() == nullptr
+					|| Comp->GetSkinnedAsset() == nullptr
+					|| Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()) == nullptr)
+				{
+					continue;
+				}
+				const FReferenceSkeleton& Ref = Comp->GetSkinnedAsset()->GetRefSkeleton();
+				const int32 Pelvis = Ref.FindBoneIndex(TEXT("Bip01 Pelvis"));
+				if (Pelvis == INDEX_NONE)
+				{
+					continue;
+				}
+				const FVector Origin = Comp->GetBoneTransform(Pelvis).GetLocation();
+				UE_LOG(LogElysiumComposition, Display, TEXT("[bones] %s (%d bones)"),
+					*Comp->GetSkinnedAsset()->GetName(), Ref.GetNum());
+				for (int32 Bone = 0; Bone < Ref.GetNum(); ++Bone)
+				{
+					const FName Name = Ref.GetBoneName(Bone);
+					if (!Name.ToString().Contains(Filter))
+					{
+						continue;
+					}
+					const FTransform Live = Comp->GetBoneTransform(Bone);
+					const FVector Where = Live.GetLocation() - Origin;
+					// Position alone cannot tell a bone that is misplaced from one that is in the
+					// right place and twisted — and a twisted bone is what drags skinned geometry
+					// off a limb while leaving the limb itself looking correct. So the bone's own
+					// axes are reported beside it: `fwd` is its local X in world space, which for a
+					// Bip01 bone points down the limb at its child.
+					const int32 ParentIndex = Ref.GetParentIndex(Bone);
+					const double FromParentDeg = ParentIndex == INDEX_NONE ? 0.0
+						: FMath::RadiansToDegrees(Live.GetRotation().AngularDistance(
+							Comp->GetBoneTransform(ParentIndex).GetRotation()));
+					const FVector Forward = Live.GetRotation().GetForwardVector();
+					UE_LOG(LogElysiumComposition, Display,
+						TEXT("[bones]   %-24s parent=%-20s x %7.2f y %7.2f z %7.2f  ")
+						TEXT("fwd %5.2f %5.2f %5.2f  %6.1f deg from parent"),
+						*Name.ToString(),
+						ParentIndex == INDEX_NONE
+							? TEXT("-") : *Ref.GetBoneName(ParentIndex).ToString(),
+						Where.X, Where.Y, Where.Z,
+						Forward.X, Forward.Y, Forward.Z, FromParentDeg);
+				}
+				const int32 LeftHand = Ref.FindBoneIndex(TEXT("Bip01 L Hand"));
+				const int32 RightHand = Ref.FindBoneIndex(TEXT("Bip01 R Hand"));
+				if (LeftHand != INDEX_NONE && RightHand != INDEX_NONE)
+				{
+					UE_LOG(LogElysiumComposition, Display,
+						TEXT("[bones]   hand separation %.2f cm (bind T-pose is 108.58, walk is 50.07)"),
+						FVector::Distance(Comp->GetBoneTransform(LeftHand).GetLocation(),
+							Comp->GetBoneTransform(RightHand).GetLocation()));
+				}
+			}
+		}));
 }
 
 // ================================================================================================

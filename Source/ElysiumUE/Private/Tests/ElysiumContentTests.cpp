@@ -48,6 +48,7 @@
 #include "Engine/Texture2D.h"
 #include "Engine/TextureCube.h"
 #include "EnhancedActionKeyMapping.h"
+#include "GameFramework/InputSettings.h"
 #include "GameInputDeveloperSettings.h"
 #include "HAL/FileManager.h"
 #include "Materials/Material.h"
@@ -4298,6 +4299,62 @@ bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMouseInputAssetsContentTest,
+	"Elysium.Content.MouseInputAssets", GElysiumContentTestFlags)
+
+bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
+{
+	const UInputSettings* Settings = GetDefault<UInputSettings>();
+	if (!TestNotNull(TEXT("engine input settings"), Settings))
+	{
+		return false;
+	}
+	TestFalse(TEXT("legacy mouse smoothing is disabled"), Settings->bEnableMouseSmoothing);
+	const FInputAxisConfigEntry* Mouse2DConfig = Settings->AxisConfig.FindByPredicate(
+		[](const FInputAxisConfigEntry& Entry) { return Entry.AxisKeyName == EKeys::Mouse2D.GetFName(); });
+	if (TestNotNull(TEXT("Mouse2D axis config"), Mouse2DConfig))
+	{
+		TestEqual(TEXT("Mouse2D has no legacy sensitivity multiplier"),
+			Mouse2DConfig->AxisProperties.Sensitivity, 1.0f);
+	}
+
+	UElysiumInputActionSet* ActionSet = LoadObject<UElysiumInputActionSet>(
+		nullptr, ElysiumInputAssets::ActionSetPath);
+	UInputMappingContext* Context = LoadObject<UInputMappingContext>(
+		nullptr, ElysiumInputAssets::KeyboardMouseContextPath);
+	if (!TestNotNull(TEXT("generated input action set"), ActionSet) ||
+		!TestNotNull(TEXT("generated keyboard/mouse mapping context"), Context))
+	{
+		return false;
+	}
+	const FElysiumInputActionDefinition* MouseLook = ActionSet->Find(TEXT("MouseLook"));
+	if (!TestTrue(TEXT("MouseLook definition exists"), MouseLook && MouseLook->Action))
+	{
+		return false;
+	}
+	TestTrue(TEXT("MouseLook is Axis2D"), MouseLook->Action->ValueType == EInputActionValueType::Axis2D);
+
+	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
+	TestEqual(TEXT("the keyboard/mouse slice maps only mouse look"), Mappings.Num(), 1);
+	if (Mappings.Num() == 1)
+	{
+		const FEnhancedActionKeyMapping& Mapping = Mappings[0];
+		TestEqual(TEXT("MouseLook maps the paired mouse axis"), Mapping.Key, EKeys::Mouse2D);
+		TestTrue(TEXT("MouseLook mapping references IA_MouseLook"), Mapping.Action == MouseLook->Action);
+		// The **absence** is the assertion. Mouse2D is a displacement the hand already made, so the
+		// only multiplier between the device and the view is `sensitivity x m_yaw/m_pitch`.
+		// `UInputModifierSmooth` in particular must not come back: it averages against a hardcoded
+		// 0.0083s window whatever the real frame rate is, and discards its residual when input
+		// returns to zero, so a flick lands short where a slow drag does not.
+		TestEqual(TEXT("MouseLook carries no modifier"), Mapping.Modifiers.Num(), 0);
+		for (const UInputModifier* Modifier : Mapping.Modifiers)
+		{
+			TestNull(TEXT("MouseLook carries no Smooth modifier"), Cast<UInputModifierSmooth>(Modifier));
+		}
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGamepadInputAssetsContentTest,
 	"Elysium.Content.GamepadInputAssets", GElysiumContentTestFlags)
 
@@ -4313,7 +4370,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("the gamepad slice defines exactly six actions"), ActionSet->Actions.Num(), 6);
+	TestEqual(TEXT("the input slice defines exactly seven actions"), ActionSet->Actions.Num(), 7);
 	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
 	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));

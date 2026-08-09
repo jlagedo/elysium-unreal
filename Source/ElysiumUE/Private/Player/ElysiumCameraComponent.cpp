@@ -183,8 +183,10 @@ void UElysiumCameraComponent::SolveBoom(const FVector& Eye, const FRotator& View
 	// (`docs/project/rebuild-strategy.md` -> Coordinate conventions). The exact composition inside
 	// `0x100fd350` is only partially recovered (`docs/vtmb/camera-view-modes.md` -> Not yet recovered); this is
 	// the reading the observed cvar roles support.
+	// The view arrives in Unreal's canonical [0, 360), so pitch is normalized before it is clamped —
+	// a raw downward pitch reads as ~271..359 and would pin this at +89. Yaw is normalized already.
 	FRotator BoomRot;
-	BoomRot.Pitch = FMath::Clamp(View.Pitch - SolvedPitch, -89.0f, 89.0f);
+	BoomRot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(View.Pitch) - SolvedPitch, -89.0f, 89.0f);
 	BoomRot.Yaw = FRotator::NormalizeAxis(View.Yaw + Cvars.Yaw + SolvedYaw);
 	BoomRot.Roll = 0.0f;
 

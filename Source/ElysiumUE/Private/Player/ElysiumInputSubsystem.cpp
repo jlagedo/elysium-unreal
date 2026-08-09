@@ -242,9 +242,15 @@ UInputMappingContext* UElysiumInputSubsystem::ResolveMappingContext(FName Contex
 		return Found->Get();
 	}
 
-	const TCHAR* Path = ContextName == ElysiumInput::PlayerGamepadContext()
-		? ElysiumInputAssets::GamepadContextPath
-		: nullptr;
+	const TCHAR* Path = nullptr;
+	if (ContextName == ElysiumInput::PlayerKeyboardMouseContext())
+	{
+		Path = ElysiumInputAssets::KeyboardMouseContextPath;
+	}
+	else if (ContextName == ElysiumInput::PlayerGamepadContext())
+	{
+		Path = ElysiumInputAssets::GamepadContextPath;
+	}
 	if (!Path)
 	{
 		if (!MissingContextNames.Contains(ContextName))
@@ -310,7 +316,7 @@ bool UElysiumInputSubsystem::ReconcileDebugCapture(float /*DeltaTime*/)
 		// Cog does to the controller anyway, so the two never disagree.
 		Scope.Mode = EElysiumInputMode::GameOnly;
 		Scope.bShowCursor = true;
-		Scope.Contexts.Add(ElysiumInput::PlayerGamepadContext());
+		ElysiumInput::AddPlayerContexts(Scope.Contexts);
 		DebugScope = Scopes.Push(MoveTemp(Scope));
 		Apply();
 	}

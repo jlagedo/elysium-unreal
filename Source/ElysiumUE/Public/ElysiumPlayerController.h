@@ -31,9 +31,11 @@ public:
 	virtual void SetupInputComponent() override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
-	// Step 1 of the frame: the bindings for this frame have run by the time Super returns, so the
-	// user command is built here and lands before the substrate ticks (11.1).
-	virtual void PlayerTick(float DeltaTime) override;
+	// Step 1 of the frame. The bindings for this frame have run by the time Super returns, so the
+	// user command is built here — ahead of `UpdateRotation`, which is what applies the look delta,
+	// clamps the pitch and faces the pawn off the same frame's input, and still before the substrate
+	// ticks (11.1).
+	virtual void ProcessPlayerInput(const float DeltaTime, const bool bGamePaused) override;
 
 	UElysiumInputRouter* GetInputRouter() const { return Router; }
 

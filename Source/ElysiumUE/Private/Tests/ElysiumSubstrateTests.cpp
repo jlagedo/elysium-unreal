@@ -3302,9 +3302,9 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 	const FElysiumInputScope Character = MakeScope(TEXT("Character"), Prio::Character, EMode::UIOnly,    true);
 	const FElysiumInputScope Menu      = MakeScope(TEXT("Menu"),      Prio::Menu,      EMode::UIOnly,    true);
 	FElysiumInputScope SignWithGameplay = Sign;
-	SignWithGameplay.Contexts.Add(ElysiumInput::PlayerGamepadContext());
+	ElysiumInput::AddPlayerContexts(SignWithGameplay.Contexts);
 	FElysiumInputScope Debug = MakeScope(TEXT("Debug"), Prio::Debug, EMode::GameOnly, true);
-	Debug.Contexts.Add(ElysiumInput::PlayerGamepadContext());
+	ElysiumInput::AddPlayerContexts(Debug.Contexts);
 
 	// --- the empty stack is the game holding the mouse ---
 	{
@@ -3314,8 +3314,10 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 		TestTrue(TEXT("empty resolves to the gameplay default"), Base.Mode == EMode::GameOnly);
 		TestFalse(TEXT("no cursor over the world"), Base.bShowCursor);
 		TestTrue(TEXT("no deciding scope"), Base.Name.IsNone());
-		TestEqual(TEXT("gameplay applies one context"), Base.Contexts.Num(), 1);
-		TestEqual(TEXT("the gameplay context is the gamepad slice"), Base.Contexts[0],
+		TestEqual(TEXT("gameplay applies both device contexts"), Base.Contexts.Num(), 2);
+		TestEqual(TEXT("keyboard/mouse context is first"), Base.Contexts[0],
+			ElysiumInput::PlayerKeyboardMouseContext());
+		TestEqual(TEXT("gamepad context is second"), Base.Contexts[1],
 			ElysiumInput::PlayerGamepadContext());
 	}
 
@@ -3337,7 +3339,7 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 		TestTrue(TEXT("the menu handle is still the menu's"), Stack.Pop(MenuH));
 		TestEqual(TEXT("the sign underneath is restored"), Stack.Resolve().Name, FName(TEXT("Sign")));
 		TestTrue(TEXT("and with it game input"), Stack.Resolve().Mode == EMode::GameOnly);
-		TestEqual(TEXT("the sign retains the gamepad context"), Stack.Resolve().Contexts.Num(), 1);
+		TestEqual(TEXT("the sign retains both device contexts"), Stack.Resolve().Contexts.Num(), 2);
 	}
 
 	// --- same priority stacks like modals: the later push wins, and popping it restores the earlier ---
@@ -6594,6 +6596,50 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	return !HasAnyErrors();
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTeardownTest,
+	"Elysium.Substrate.MapActorTeardown", GElysiumTestFlags)
+bool FElysiumMapActorTeardownTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AElysiumMapActor* Map = World ? World->SpawnActorDeferred<AElysiumMapActor>(
+		AElysiumMapActor::StaticClass(), FTransform::Identity) : nullptr;
+	if (!TestNotNull(TEXT("stage map actor"), Map))
+	{
+		return false;
+	}
+	Map->bStageOnly = true;
+	Map->MapName.Reset();
+	Map->FinishSpawning(FTransform::Identity);
+
+	FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld();
+	if (!TestNotNull(TEXT("stage map owns an entity world before teardown"), EntityWorld))
+	{
+		return false;
+	}
+
+	// A non-brush source creates the owned query proxy that exposed the late-destruction crash.
+	UBoxComponent* Source = NewObject<UBoxComponent>(Map, TEXT("TeardownUseSource"));
+	Source->SetupAttachment(Map->GetRootComponent());
+	Source->RegisterComponent();
+	Map->AddInstanceComponent(Source);
+	Map->RegisterUseAnchor(Source, EntityWorld->PlayerHandle());
+
+	if (!TestWorld.EndPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	TestNull(TEXT("EndPlay destroys the substrate before UObject reclamation"), Map->GetEntityWorld());
+	return !HasAnyErrors();
+}
+
 // =====================================================================================
 // The theatre detour is a pure decision at the travel funnel: only the authored genesis→theatre
 // destination is rewritten, and a rewrite is a direct tutorial-landmark entry.
@@ -8105,6 +8151,20 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		// The pitch clamp is the rig's, not the controller's.
 		const FRotator Steep = BoomRotation(FRotator(-80.0f, 0.0f, 0.0f), Tuning);
 		TestEqual(TEXT("the boom pitch clamps at the rig's own limit"), (float)Steep.Pitch, Tuning.PitchMin);
+
+		// **A control rotation arrives in Unreal's canonical [0, 360), not signed.**
+		// `APlayerCameraManager::LimitViewPitch` ends with `FRotator::ClampAxis`, so a view looking
+		// down five degrees reaches here as 355 rather than -5. Clamping that without normalizing
+		// pins the boom at `PitchMax` for every downward view and only releases it once the angle
+		// wraps past 360 — which reads in game as the camera snapping to maximum-up the moment you
+		// look down, then recentring if you keep going. Yaw was always normalized here; pitch has to
+		// be too, and these two cases are the difference.
+		const FRotator DownWrapped = BoomRotation(FRotator(355.0f, 0.0f, 0.0f), Tuning);
+		TestEqual(TEXT("an unnormalized downward pitch is read as downward"),
+			(float)DownWrapped.Pitch, -15.0f);
+		const FRotator SteepWrapped = BoomRotation(FRotator(271.0f, 0.0f, 0.0f), Tuning);
+		TestEqual(TEXT("and still clamps to the rig's lower limit, never the upper"),
+			(float)SteepWrapped.Pitch, Tuning.PitchMin);
 	}
 
 	// --- the shoulder offset is in boom space ---

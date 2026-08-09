@@ -45,9 +45,9 @@ spaces make a poor persistence key.
 
 Two tiers:
 
-- **Analog / first-class** — `IA_Move` (Axis2D), `IA_Look` (Axis2D), `IA_MoveVertical`,
-  `IA_CameraDolly`. Bound natively in C++ to `UElysiumInputRouter`, which folds them into the
-  frame's `FElysiumUserCmd`. They carry real axis values and
+- **Analog / first-class** — `IA_Move` (Axis2D), `IA_Look` (Axis2D stick deflection),
+  `IA_MouseLook` (Axis2D mouse displacement), `IA_MoveVertical`, `IA_CameraDolly`. Bound natively
+  in C++ to `UElysiumInputRouter`, which folds them into the frame's `FElysiumUserCmd`. They carry real axis values and
   per-device modifier stacks; routing them through a string bus would discard both.
 - **Command actions** — everything else, bound generically off the action table:
 
@@ -271,13 +271,20 @@ keyboard and a pad present the same four inputs to the same code.
 
 | Mapping | Stack |
 |---|---|
-| Mouse | **not an Enhanced Input mapping at all** — `UElysiumInputRouter::BindLookAxes` binds `EKeys::MouseX`/`MouseY` as legacy axis keys and scales the raw counts itself |
+| Mouse2D → `IA_MouseLook` | `Smooth` |
 | Stick → `IA_Look` | `Negate` Y, and nothing else |
 | Stick → `IA_Move` | **empty** |
 | L3 → `IA_Duck`, R3 → `IA_Camera` | empty; each fires a console line (`+duck`, `togglecamera`) |
 | WASD → `IA_Move` | not a mapping either — each key fires a `+cmd` console line through the command bus |
 
-**The mapping carries device-frame corrections only; every feel term lives at the command seam.**
+The mouse and the stick use separate actions because their values mean different things. Mouse2D is
+a displacement already made during this frame; `UInputModifierSmooth` regularizes uneven sample
+buckets before `OnMouseLook` scales the counts and adds them to the command. `UInputModifierSmoothDelta`
+is deliberately absent: in UE 5.8 it normalizes the direction of `NewValue - OldValue`, discarding
+the mouse delta's magnitude. Legacy `bEnableMouseSmoothing` is off and Mouse2D's AxisConfig
+sensitivity is 1.0, so the Enhanced Input modifier is the one normalization owner.
+
+**The gamepad mapping carries device-frame corrections only; its feel lives at the command seam.**
 `Gamepad_Right2D` delivers physical stick-up on negative Y while Elysium adds the action's Y
 directly to Unreal pitch, where positive is look-up — so the Y-only `Negate` is a statement about
 the device's frame, which is why it is the one modifier that belongs in the asset. The dead zone,
@@ -298,16 +305,15 @@ mappings, as firmly as it asserts the one modifier that is there.
 the shaping in the stick's own frame **before** the swizzle, because an asymmetric zone applied
 after it would rotate with the axes.
 
-Frame-rate-scaling mouse look is the classic failure of this system; the mouse and the stick are
-physically separate paths — one legacy axis binding, one Enhanced Input mapping — so it cannot be
-applied to both. The stick is shaped into a held *rate* and multiplied by the clamped,
-dilation-normalised delta inside `FElysiumUserCmdBuilder::Build`; mouse counts arrive as finished
-degrees and are not.
+Frame-rate-scaling mouse look is the classic failure of this system. The stick is shaped into a held
+*rate* and multiplied by the clamped, dilation-normalised delta inside
+`FElysiumUserCmdBuilder::Build`; `IA_MouseLook` delivers smoothed counts as a finished displacement
+and the router never multiplies them by frame time.
 
 `ElysiumInput::FElysiumLookTuning` reads `sensitivity`, `m_pitch` and `m_yaw` **from
-`FElysiumConsole`**, reproducing VtMB's 0.066°/count (`docs/vtmb/source_movement.md`). The options
-slider writes the cvar and the cvar drives the scale — one settings truth, and it is the one VtMB
-already had. `m_filter` is read by nothing: VtMB ships it at `0` and no smoothing is implemented.
+`FElysiumConsole`**. The options slider writes the cvar and the cvar drives the per-count scale — one
+settings truth, retaining VtMB's names without constraining the modern mouse feel to its response.
+`m_filter` is read by nothing: sample normalization is the `Smooth` modifier in `IMC_Player_KBM`.
 
 ## Feel
 
@@ -324,11 +330,15 @@ decompile of `client.dll`'s `CInput` mouse handling, so what is known is the Con
 defaults, not the arithmetic between the device and the angle. Whether retail applies anything
 beyond the multiply is an open RE question, not a settled fact.
 
-The **divergence**, recorded beside it: `ElysiumInput::ShapeMouseLook` applies an optional
-acceleration curve, `look_curve` defaulting to `0`, at which the gain is exactly `1.0` and the path
-is bit-for-bit the linear one. Enabling it is an explicit owner call and none has been made.
-`FElysiumLookTuning::IsRetailLinear()` is the predicate the code names the divergence by, and the
-router logs a warning the first frame it goes false.
+The **shipped divergence, by explicit owner call**, is modern Enhanced Input mouse response rather
+than preservation of VtMB's mouse feel. `Mouse2D → IA_MouseLook` carries `UInputModifierSmooth`, so
+high-polling samples are normalized before they rotate the third-person view and rendered body.
+Legacy `UPlayerInput` smoothing stays off; removing the mapping modifier is the direct A/B.
+
+`ElysiumInput::ShapeMouseLook` remains an optional acceleration stage after the mapping,
+`look_curve` defaulting to `0`, at which its gain is exactly `1.0`. Enabling that second, distinct
+response term is an owner call not yet made. `FElysiumLookTuning::IsRetailLinear()` names whether
+that optional curve is engaged, and the router logs a warning the first frame it goes false.
 
 Three properties are structural rather than conventional:
 
@@ -346,7 +356,8 @@ Three properties are structural rather than conventional:
 ### Stick response
 
 **A stick is not a mouse and cannot be shaped like one.** A mouse reports a *displacement the hand
-already made*, so it needs no dead zone and no filter. A stick reports a *held deflection* the game
+already made*; IA_MouseLook's `Smooth` modifier only regularizes how its samples reach frames. A
+stick reports a *held deflection* the game
 integrates into a turn — and integrates the device's noise along with it.
 
 **Gamepad feel has no original to reproduce** (§ Gamepad: VtMB ships raw joystick cvars, no UI, no

@@ -42,8 +42,14 @@ FRotator ElysiumRig::BoomRotation(const FRotator& ViewRot, const FElysiumCameraR
 	// pitching the boom *down*: `Forward.Z < 0` puts `-Forward.Z` above the pivot. Hence the
 	// subtraction, and it is the reason `PitchOffset` is documented as "degrees above the eye line"
 	// rather than as a rotation — the sign of the rotation is the opposite of the sign of the lift.
+	// **Normalize before clamping.** A control rotation arrives in Unreal's canonical [0, 360)
+	// — `APlayerCameraManager::LimitViewPitch` ends with `FRotator::ClampAxis` — so looking down is
+	// 271..359, not -89..0. Clamping that raw pins the boom at `PitchMax` for every downward view
+	// and releases it only when the angle wraps back past 360, which reads as the camera snapping to
+	// maximum-up and then recentring. Yaw has always been normalized here for the same reason.
 	FRotator BoomRot;
-	BoomRot.Pitch = FMath::Clamp(ViewRot.Pitch - Tuning.PitchOffset, Tuning.PitchMin, Tuning.PitchMax);
+	BoomRot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRot.Pitch) - Tuning.PitchOffset,
+		Tuning.PitchMin, Tuning.PitchMax);
 	BoomRot.Yaw = FRotator::NormalizeAxis(ViewRot.Yaw);
 	// A banked view must not roll the boom: the strafe bank is a view effect and rotating the arm
 	// by it would swing the character across the frame.

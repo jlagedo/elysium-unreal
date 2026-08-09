@@ -996,15 +996,18 @@ dialogue, scripted flow, quests, save/load included.
     held-input-into-conversation question on our side of the port. Every button-pair action binds
     **`ETriggerEvent::Canceled` alongside `Completed`** — a Hold or Tap trigger released early
     fires `Canceled`, and the missing `-cmd` leaves the button latched for the session. Also wires
-    the analog path. The gamepad slice calls `SetAnalogMove`; `SetAnalogUp` and the keyboard/mouse
-    Enhanced Input migration remain in this sub-step.
+    the analog path. The gamepad slice calls `SetAnalogMove`; mouse look is the separate
+    `IA_MouseLook` displacement path in `IMC_Player_KBM`. `SetAnalogUp`, keyboard movement and the
+    remaining keyboard/mouse binds remain in this sub-step.
   - **c. Reserved keys** — console on `` ` `` (VtMB's own `toggleconsole` key; frees F10 for
     `snapshot`) **plus `F7`** for layouts with no `` ` `` left of `1`, Cog's shell shortcuts to
     `Ctrl+F1`–`Ctrl+F4`, all other dev keys on
     `BindDebugKey`. Enforced by a **Substrate-tier test** over every generated IMC, not by
     convention; `elysium.input.ReserveDebugKeys 0` A/Bs it in dev builds.
-  - **d. `UElysiumMouseSensitivity` modifier** — reads `sensitivity`/`m_pitch`/`m_yaw`/`m_filter`
-    off `FElysiumConsole` for VtMB's 0.066°/count; the options slider writes the cvar.
+  - **d. Mouse response** — `Mouse2D → IA_MouseLook` carries Enhanced Input's built-in `Smooth`
+    sample-normalization modifier; legacy `bEnableMouseSmoothing` is off. The router reads
+    `sensitivity`/`m_pitch`/`m_yaw` off `FElysiumConsole` for the per-count scale; the options slider
+    writes the cvar. A future user-settings modifier may move that scale without changing the action.
   - **e. `GameInputWindows` + PS device configs + `IMC_Player_Gamepad`** — the plugin and standard
     DualSense (`054C:0CE6`) configuration are enabled for the first slice. Xbox needs no config;
     additional DS4/Edge `FGameInputDeviceConfiguration` entries remain open. The native Gamepad
@@ -1032,13 +1035,15 @@ dialogue, scripted flow, quests, save/load included.
   - **g. Remapping screen** — lands with **8.10** on the 8.6 stack, not here.
 
   **Current partial slice:** the committed action table and generator emit `IA_Move`, `IA_Look`,
-  `IA_Jump`, `IMC_Player_Gamepad`, and their runtime action set. `UElysiumInputRouter` folds LS/RS
-  into the existing `FElysiumUserCmd` and routes Cross/A through the existing `+jump`/`-jump` bus;
-  `UElysiumInputSubsystem` owns the context across scopes and travel. `GameInputWindows` is the sole
+  `IA_MouseLook`, `IA_Jump`, `IMC_Player_KBM`, `IMC_Player_Gamepad`, and their runtime action set.
+  `UElysiumInputRouter` folds LS/RS into the existing `FElysiumUserCmd`, routes Mouse2D through the
+  keyboard/mouse context's `Smooth` modifier, and routes Cross/A through the existing
+  `+jump`/`-jump` bus; `UElysiumInputSubsystem` owns both contexts across scopes and travel.
+  `GameInputWindows` is the sole
   preferred Windows pad API: native Xbox plus the configured standard DualSense (`054C:0CE6`). Its
   native Gamepad processor owns standard controls, while its generic Controller processor is
-  extra-buttons-only; axes and D-pad are not published twice. Keyboard/mouse still uses the legacy
-  front end. The rest of a–g, the full pad layout, DS4/Edge, glyphs, haptics and the shipping
+  extra-buttons-only; axes and D-pad are not published twice. Keyboard and non-look mouse binds
+  still use the legacy front end. The rest of a–g, the full pad layout, DS4/Edge, glyphs, haptics and the shipping
   redistributable remain open; physical Xbox acceptance also remains open.
 
   **Acceptance:** the tutorial is playable start to finish on keyboard+mouse and on an Xbox *and*

@@ -39,12 +39,11 @@ namespace
 	FVector2D GProbeStickLook = FVector2D::ZeroVector;
 }
 
-// The mouse axes are read as **raw counts** and scaled here, not by the engine: `AxisConfig`
-// sensitivity for MouseX/MouseY is 1.0 and FOV scaling is off in `DefaultInput.ini`, so
-// `sensitivity x m_yaw` is the only multiplier between the device and the view. That is VtMB's own
-// 0.066 degrees per count, and it is why look never picks up a frame-rate term. The scale — and the
-// response curve over it — live on `ElysiumInput::FElysiumLookTuning`, refreshed once a frame in
-// `RefreshLookTuning`.
+// Mouse2D arrives through IA_MouseLook after Enhanced Input's Smooth modifier. Its AxisConfig scale
+// is 1.0 and FOV scaling is off, so `sensitivity x m_yaw/m_pitch` remains the only multiplier between
+// the smoothed counts and the view. The action stays separate from IA_Look: mouse input is a
+// displacement already made this frame, while the right stick is a held deflection that Build turns
+// into a rate.
 
 void UElysiumInputRouter::Setup(APlayerController* Controller, UInputComponent* Input)
 {
@@ -75,7 +74,6 @@ void UElysiumInputRouter::Setup(APlayerController* Controller, UInputComponent* 
 		}
 		BindDefault(Input, Bind);
 	}
-	BindLookAxes(Input);
 	BindDebugChords(Input);
 	BindEnhancedActions(Input);
 
@@ -134,12 +132,6 @@ void UElysiumInputRouter::BindDefault(UInputComponent* Input, const FElysiumDefa
 	}
 }
 
-void UElysiumInputRouter::BindLookAxes(UInputComponent* Input)
-{
-	Input->BindAxisKey(EKeys::MouseX, this, &UElysiumInputRouter::OnMouseX);
-	Input->BindAxisKey(EKeys::MouseY, this, &UElysiumInputRouter::OnMouseY);
-}
-
 void UElysiumInputRouter::BindDebugChords(UInputComponent* Input)
 {
 #if !UE_BUILD_SHIPPING
@@ -173,10 +165,11 @@ void UElysiumInputRouter::BindEnhancedActions(UInputComponent* Input)
 
 	const FElysiumInputActionDefinition* Move = EnhancedActions->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = EnhancedActions->Find(TEXT("Look"));
-	if (!Move || !Move->Action || !Look || !Look->Action)
+	const FElysiumInputActionDefinition* MouseLook = EnhancedActions->Find(TEXT("MouseLook"));
+	if (!Move || !Move->Action || !Look || !Look->Action || !MouseLook || !MouseLook->Action)
 	{
 		UE_LOG(LogElysiumRouter, Error,
-			TEXT("gamepad action set is incomplete: Move and Look must reference generated actions"));
+			TEXT("input action set is incomplete: Move, Look and MouseLook must reference generated actions"));
 		return;
 	}
 
@@ -184,6 +177,8 @@ void UElysiumInputRouter::BindEnhancedActions(UInputComponent* Input)
 		this, &UElysiumInputRouter::OnAnalogMove);
 	Enhanced->BindAction(Look->Action, ETriggerEvent::Triggered,
 		this, &UElysiumInputRouter::OnAnalogLook);
+	Enhanced->BindAction(MouseLook->Action, ETriggerEvent::Triggered,
+		this, &UElysiumInputRouter::OnMouseLook);
 
 	int32 CommandCount = 0;
 	for (const FElysiumInputActionDefinition& Definition : EnhancedActions->Actions)
@@ -206,7 +201,7 @@ void UElysiumInputRouter::BindEnhancedActions(UInputComponent* Input)
 	}
 
 	UE_LOG(LogElysiumRouter, Log,
-		TEXT("enhanced input: Move, Look and %d command action(s) installed"), CommandCount);
+		TEXT("enhanced input: Move, Look, MouseLook and %d command action(s) installed"), CommandCount);
 }
 
 void UElysiumInputRouter::FireCommand(FString Line)
@@ -226,19 +221,12 @@ void UElysiumInputRouter::FireEngineCommand(FString Line)
 	}
 }
 
-void UElysiumInputRouter::OnMouseX(float Value)
+void UElysiumInputRouter::OnMouseLook(const FInputActionValue& Value)
 {
-	if (Value != 0.0f)
+	const FVector2D Mouse = Value.Get<FVector2D>();
+	if (!Mouse.IsNearlyZero())
 	{
-		CmdBuilder.AddLook(Value * MouseYawScale(), 0.0f);
-	}
-}
-
-void UElysiumInputRouter::OnMouseY(float Value)
-{
-	if (Value != 0.0f)
-	{
-		CmdBuilder.AddLook(0.0f, Value * MousePitchScale());
+		CmdBuilder.AddLook(Mouse.X * MouseYawScale(), Mouse.Y * MousePitchScale());
 	}
 }
 
@@ -384,35 +372,16 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 	}
 	GProbeStickLook = FVector2D::ZeroVector;
 
-	ApplyLook(Current);
-
+	// The look delta is **not** applied here. `AElysiumPlayerController::ProcessPlayerInput` feeds it
+	// to `AddYawInput`/`AddPitchInput`, and the engine's own `UpdateRotation` — which runs later in
+	// the same `PlayerTick` — integrates it, runs the camera manager's pitch limits over it, writes
+	// the control rotation and faces the pawn. One writer, one frame.
 	APlayerController* Controller = PC.Get();
 	APawn* Pawn = Controller ? Controller->GetPawn() : nullptr;
 	if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn))
 	{
 		Body->ApplyUserCmd(Current);
 	}
-}
-
-void UElysiumInputRouter::ApplyLook(const FElysiumUserCmd& Cmd)
-{
-	APlayerController* Controller = PC.Get();
-	if (!Controller || Cmd.LookDelta.IsNearlyZero())
-	{
-		return;
-	}
-	// Written straight onto the control rotation rather than through AddYawInput/AddPitchInput: those
-	// apply the engine's own legacy input scales, and the whole point of the user command is that the
-	// degrees in it are the degrees applied.
-	// Yaw wraps and pitch clamps (cl_pitchup / cl_pitchdown 89). Yaw is normalized on the way in
-	// rather than left to accumulate: nothing downstream cares, but a control rotation that grows
-	// without bound through a long session is a precision problem waiting to happen.
-	FRotator Rot = Controller->GetControlRotation();
-	Rot.Yaw = FRotator::NormalizeAxis(Rot.Yaw + Cmd.LookDelta.X);
-	Rot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Rot.Pitch + Cmd.LookDelta.Y),
-		-ElysiumInput::PitchClampDegrees, ElysiumInput::PitchClampDegrees);
-	Rot.Roll = 0.0f;
-	Controller->SetControlRotation(Rot);
 }
 
 // =====================================================================================

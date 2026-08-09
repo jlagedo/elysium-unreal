@@ -45,6 +45,8 @@ namespace ElysiumInputAssets
 {
 	inline constexpr TCHAR ActionSetPath[] =
 		TEXT("/Game/Input/DA_ElysiumInputActions.DA_ElysiumInputActions");
+	inline constexpr TCHAR KeyboardMouseContextPath[] =
+		TEXT("/Game/Input/IMC_Player_KBM.IMC_Player_KBM");
 	inline constexpr TCHAR GamepadContextPath[] =
 		TEXT("/Game/Input/IMC_Player_Gamepad.IMC_Player_Gamepad");
 
