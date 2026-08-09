@@ -97,6 +97,19 @@ The rule these fields declare, what omitting it costs a composed pose, and the
 persistent bone-to-world array it is evaluated into are owned by
 `docs/vtmb/procedural_bones.md`.
 
+A sweep over the 166 exported models finds **one** whose arm bind mixes two
+rigs. `female_dancer_2` carries the male-length offsets on `Bip01 L/R Shoulder`,
+`Bicep`, `Ulna` and `Wrist` — 15.57, 13.07, 11.68, 23.36 cm — while its chain
+bones `Clavicle`, `UpperArm`, `Forearm` and `Hand` carry the female ones, 10.75,
+24.10 and 24.81 cm. Of the 81 models carrying both `Shoulder` and `UpperArm`,
+the other 80 place the pair coincident. The deviation is identical on both
+sides, which argues authored data over a decode slip, and it is not implicated
+in any pose defect: `Shoulder` takes 1.3 of that model's total skin weight
+against `UpperArm`'s 29.4. **Uncertain in origin** — the values are read from
+the exported container, not from the `.mdl` bone records directly; a raw re-read
+of those records at the model's `StudioBone` stride would settle whether the mix
+is VtMB's own.
+
 ## A.3 Sequences and animations
 
 **`StudioAnimDesc` — 72 bytes** [data-verified] (`NumLocalAnims`@264 /

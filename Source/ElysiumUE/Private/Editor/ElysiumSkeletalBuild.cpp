@@ -839,7 +839,31 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 						TEXT("%s: '%s' would be a second root on %s"),
 						*SourcePath, *Bone.Name.ToString(), *AssetName);
 				}
-				Modifier.Add(FMeshBoneInfo(Bone.Name, Bone.Name.ToString(), Parent), Bone.Local);
+				// Authored ROTATION-FLAT: translations verbatim, every local rotation identity.
+				// Nothing skins from this pose -- a body skins from its own mesh reference
+				// skeleton, an untracked bone resolves to that same mesh pose, and
+				// `OrientAndScale` compares against the mesh's bind -- but `FSkeletonRemapping`
+				// reads it, and reads it at BOTH ends. `DecompressPose` builds `Q0 = PT^-1 * PS`
+				// from the two skeletons' component rotations and applies it to every translation
+				// and rotation it decodes; `OrientAndScale` then declines to correct any bone whose
+				// authored and target bind translations agree, which is exactly the body the clip
+				// was authored on. A clip's limb tracks carry no translation of their own, so what
+				// reaches the skin is the authoring rig's limb lengths pointed along a foreign
+				// body's axes -- a folded arm on the bodies that match the clip best.
+				//
+				// Identity locals accumulate to identity component rotations in ANY tree, so `Q0`
+				// and `Q1` are identity for every skeleton pair however far two rigs diverge: the
+				// decoded quaternion reaches the body verbatim the way retail's does
+				// (`docs/vtmb/animation_and_movers.md` A.4b), and the only translation correction
+				// left is the one comparison that reads the playing body, `OrientAndScale`.
+				//
+				// Flat is what makes the result independent of the choice, and the choice is not
+				// free. One shared rotation per bone NAME does not survive: a generic appendix name
+				// sits under a different ancestor chain on two rigs -- `Bone19` is `Bip01 Head`'s
+				// child on one bank and `Bone18`'s on another -- so equal locals still give unequal
+				// component rotations, and `Q0` returns at up to 180 degrees on exactly those bones.
+				Modifier.Add(FMeshBoneInfo(Bone.Name, Bone.Name.ToString(), Parent),
+					FTransform(FQuat::Identity, Bone.Local.GetTranslation(), Bone.Local.GetScale3D()));
 				Mapped[Index] = Next++;
 			}
 		}

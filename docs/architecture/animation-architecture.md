@@ -195,6 +195,41 @@ rather than absent.
   pre-pass carries that state through normalization. Without it the bake synthesises tracks the
   source never had, which is indistinguishable at evaluation from an authored constant.
 
+### 2.4 The skeleton reference pose is rotation-flat
+
+Every baked `USkeleton` — bank and rig family alike — carries a **rotation-flat** reference pose:
+each bone's translation verbatim from its container, every local rotation identity.
+
+**Nothing skins from that pose.** A body skins from its own mesh reference skeleton, a bone no clip
+tracks resolves to that same mesh pose, and `OrientAndScale` compares against the mesh's bind. What
+reads the skeleton's reference pose is `FSkeletonRemapping`, and it reads it at **both** ends:
+`DecompressPose` builds `Q0 = PT⁻¹·PS` from the two skeletons' component rotations and applies it to
+every translation and rotation it decodes. `OrientAndScale` then declines to build a correcting entry
+for any bone whose authored and target bind translations agree within 0.001.
+
+**Those two rules combine into a failure that points the wrong way.** A clip's limb tracks carry no
+translation channel of their own, so the emitted translation is the authoring container's bind. A
+body whose bind matches that container is therefore exactly the body `OrientAndScale` declines to
+correct — leaving the remap's rotation to reach the skin, which keeps the authoring rig's limb
+lengths and points them along the target's axes. **The bodies that match the clip best are the ones
+that fold**, and a body with different proportions is repaired by the correction the matching body
+never gets.
+
+Identity locals accumulate to identity component rotations in any tree, so `Q0` and `Q1` are identity
+for every skeleton pair however far two rigs diverge. The decoded quaternion then reaches the body
+verbatim, which is what retail does (`docs/vtmb/animation_and_movers.md` → A.4b), and the only
+translation correction left is the one comparison that reads the playing body.
+
+**Flatness is what makes the result independent of the choice, and the choice is not free.** One
+shared rotation per bone *name* does not survive: a generic appendix name sits under a different
+ancestor chain on two rigs — `Bone19` is `Bip01 Head`'s child on one bank and `Bone18`'s on another —
+so equal locals still give unequal component rotations, and `Q0` returns at up to 180° on exactly
+those bones. Flat locals have no ancestor dependence to disagree about.
+
+**The stage cannot be switched off.** `RequiresReferencePoseRetarget()` reports whether the remapping
+table is non-empty, so it is true for any valid pair. A flat reference pose does not skip the
+retarget; it empties it of effect.
+
 ## 3. Gameplay actions are resolved before the graph
 
 A key press never selects an animation asset. The player command says what the player asked for;
