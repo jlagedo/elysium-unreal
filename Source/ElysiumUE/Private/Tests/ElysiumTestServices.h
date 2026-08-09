@@ -170,8 +170,10 @@ struct FElysiumRecordingServices final
 	FVector  PlayerLocation = FVector::ZeroVector;
 	FRotator PlayerRotation = FRotator::ZeroRotator;
 	FElysiumCameraShot LastCameraShot;
-	// What the next TraceUseCursor returns (Invalid = the ray hit nothing usable).
-	FElysiumEntityHandle UseCursorHit;
+	// What the next modern interaction query returns. Geometry-specific tests control the adapter;
+	// substrate tests remain pure and exercise focus/session policy over these records.
+	FElysiumUseQueryResult UseQuery;
+	TMap<FElysiumEntityHandle, bool> UseAnchorEnabled;
 	// Damage accumulated by DamagePlayer, so a trigger_hurt cadence is assertable as a number.
 	float DamageTaken = 0.f;
 	// Opt-in because most tests intentionally exercise the supported headless/no-motor path.
@@ -587,6 +589,15 @@ struct FElysiumRecordingServices final
 		OutRotation = PlayerRotation;
 		return true;
 	}
+	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const override
+	{
+		if (!bHasPlayer)
+		{
+			return false;
+		}
+		OutLocation = PlayerLocation;
+		return true;
+	}
 	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const override
 	{
 		if (!bHasPlayer)
@@ -609,9 +620,25 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("DamagePlayer %.1f"), Amount));
 		DamageTaken += Amount;
 	}
-	virtual FElysiumEntityHandle TraceUseCursor(const FVector& Start, const FVector& End) const override
+	virtual void RegisterUseAnchor(UPrimitiveComponent*, const FElysiumEntityHandle& Owner) override
 	{
-		return UseCursorHit;
+		UseAnchorEnabled.Add(Owner, true);
+		Record(FString::Printf(TEXT("RegisterUseAnchor %s"), *Owner.ToString()));
+	}
+	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override
+	{
+		UseAnchorEnabled.Add(Owner, bEnabled);
+		Record(FString::Printf(TEXT("SetUseAnchorEnabled %s %d"), *Owner.ToString(), bEnabled ? 1 : 0));
+	}
+	virtual void ClearUseAnchors() override
+	{
+		UseAnchorEnabled.Reset();
+		Record(TEXT("ClearUseAnchors"));
+	}
+	virtual FElysiumUseQueryResult QueryPlayerUse(
+		const FElysiumEntityHandle& CurrentFocus) const override
+	{
+		return UseQuery;
 	}
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override
 	{

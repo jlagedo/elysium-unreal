@@ -2,6 +2,7 @@
 
 #include "ElysiumHUDModel.h"
 #include "UI/ElysiumDialogueWidget.h"
+#include "UI/ElysiumCommonUIInputData.h"
 #include "UI/ElysiumMainMenu.h"
 #include "UI/ElysiumUIRoot.h"
 #include "UI/ElysiumUIStyle.h"
@@ -39,7 +40,7 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	View.Vitals.MaxBloodPool = 12;
 	View.Vitals.Humanity = 6;
 	View.Vitals.Masquerade = 2;
-	View.ReticleIcon = 0;
+	View.Interaction.Icon = 0;
 	Model->Apply(View);
 
 	TestTrue(TEXT("player surface displays HUD"), Model->bVisible);
@@ -50,13 +51,25 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("ordinary aim resolves to cross"), Model->Reticle, EElysiumHUDReticle::Cross);
 	TestFalse(TEXT("production projection never invents equipment"), Model->Equipment.bValid);
 
-	View.ReticleIcon = 4;
+	View.Interaction.bVisible = true;
+	View.Interaction.bActionable = true;
+	View.Interaction.Icon = 4;
+	View.Interaction.PromptAlpha = 0.75f;
 	Model->Apply(View);
 	TestEqual(TEXT("published use icon resolves to context cursor"),
 		Model->Reticle, EElysiumHUDReticle::UseIcon);
+	TestEqual(TEXT("prompt fade alpha projects exactly"), Model->UsePromptAlpha, 0.75f);
+	TestTrue(TEXT("actionable focus projects exactly"), Model->bUseActionable);
+	TestEqual(TEXT("interaction publishes the semantic Use action"),
+		Model->UseAction, FName(TEXT("Use")));
+	TestEqual(TEXT("keyboard use binding text"),
+		ElysiumInteraction::UseBindingText(false).ToString(), FString(TEXT("E")));
+	TestEqual(TEXT("gamepad use binding text"),
+		ElysiumInteraction::UseBindingText(true).ToString(), FString(TEXT("RB")));
 
 	View.bSignHidesHUD = true;
 	Model->Apply(View);
+	TestFalse(TEXT("HideHUD suppresses the complete heads-up model"), Model->bVisible);
 	TestEqual(TEXT("HideHUD suppresses the cursor through the shared rule"),
 		Model->Reticle, EElysiumHUDReticle::None);
 
@@ -254,12 +267,21 @@ bool FElysiumUICompositionPolicyTest::RunTest(const FString& Parameters)
 	CommonInput->LoadData();
 	const FDataTableRowHandle Click = CommonInput->GetDefaultClickAction();
 	const FDataTableRowHandle Back = CommonInput->GetDefaultBackAction();
+	const FDataTableRowHandle Use = GetDefault<UElysiumCommonUIInputData>()->GetUseAction();
 	TestFalse(TEXT("CommonUI never installs a competing default input mode"),
 		CommonInput->GetEnableDefaultInputConfig());
 	TestNotNull(TEXT("native Accept action table resolves"), Click.DataTable.Get());
 	TestEqual(TEXT("native Accept action row resolves"), Click.RowName, FName(TEXT("Accept")));
 	TestNotNull(TEXT("native Back action table resolves"), Back.DataTable.Get());
 	TestEqual(TEXT("native Back action row resolves"), Back.RowName, FName(TEXT("Back")));
+	TestNotNull(TEXT("native Use action table resolves"), Use.DataTable.Get());
+	TestEqual(TEXT("native Use action row resolves"), Use.RowName, FName(TEXT("Use")));
+	const FElysiumCommonInputActionData* UseData =
+		Use.GetRow<FElysiumCommonInputActionData>(TEXT("HUD test"));
+	TestTrue(TEXT("native Use action binds keyboard E"),
+		UseData && UseData->IsKeyBoundToInputActionData(EKeys::E));
+	TestTrue(TEXT("native Use action binds gamepad RB"),
+		UseData && UseData->IsKeyBoundToInputActionData(EKeys::Gamepad_RightShoulder));
 
 	const FString SourceRoot = FPaths::ConvertRelativePathToFull(
 		FPaths::ProjectDir() / TEXT("Source/ElysiumUE"));

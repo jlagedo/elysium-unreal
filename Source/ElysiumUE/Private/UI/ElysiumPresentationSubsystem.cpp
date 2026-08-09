@@ -79,8 +79,9 @@ void UElysiumPresentationSubsystem::Initialize(FSubsystemCollectionBase& Collect
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
 		{
 			const FElysiumViewState& V = ViewState;
-			UE_LOG(LogElysiumView, Display, TEXT("app=%s surface=%d cinematic=%d reticle=%d fade=(%.2f,%.2f,%.2f,%.2f)"),
-				ElysiumAppState::Name(V.App), V.bPlayerSurface ? 1 : 0, V.bCinematic ? 1 : 0, V.ReticleIcon,
+			UE_LOG(LogElysiumView, Display, TEXT("app=%s surface=%d cinematic=%d use=%d alpha=%.2f actionable=%d fade=(%.2f,%.2f,%.2f,%.2f)"),
+				ElysiumAppState::Name(V.App), V.bPlayerSurface ? 1 : 0, V.bCinematic ? 1 : 0,
+				V.Interaction.Icon, V.Interaction.PromptAlpha, V.Interaction.bActionable ? 1 : 0,
 				V.Fade.R, V.Fade.G, V.Fade.B, V.Fade.A);
 			UE_LOG(LogElysiumView, Display, TEXT("sign=%s alpha=%.2f hideHUD=%d"),
 				V.Sign ? *V.Sign->SourceFile : TEXT("<none>"), V.SignAlpha, V.bSignHidesHUD ? 1 : 0);
@@ -205,6 +206,7 @@ void UElysiumPresentationSubsystem::Publish()
 	const UGameInstance* GI = W ? W->GetGameInstance() : nullptr;
 	const UElysiumGameFlowSubsystem* Flow = GI ? GI->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr;
 	const UElysiumUISubsystem* UI = GI ? GI->GetSubsystem<UElysiumUISubsystem>() : nullptr;
+	const bool bModalScreen = UI && UI->IsModalScreenOpen();
 
 	Next.App = Flow ? Flow->AppState() : EElysiumAppState::Boot;
 	Next.bPlayerSurface = ElysiumView::ShowsPlayerSurface(Next.App, UI && UI->IsMenuOpen());
@@ -220,7 +222,7 @@ void UElysiumPresentationSubsystem::Publish()
 		// RestoreCameraToPlayerControl / RemoveCamera. Camera ownership is the exact suppression
 		// lifetime; scene playback alone would also catch ambient NPC choreography.
 		Next.bCinematic = World->HasTrackCamera() || World->HasScriptedCamera();
-		Next.ReticleIcon = World->GetAimedUseIcon();
+		Next.Interaction = World->GetInteractionView();
 
 		FLinearColor FadeColor;
 		if (World->GetScreenFade(FadeColor))
@@ -268,6 +270,11 @@ void UElysiumPresentationSubsystem::Publish()
 				}
 			}
 			D.bTerminal = Conv->IsTerminalLine();
+		}
+
+		if (Next.bCinematic || Next.bSignHidesHUD || bModalScreen || Next.Dialogue.IsOpen())
+		{
+			Next.Interaction = FElysiumInteractionView();
 		}
 
 		// The meters come off the player entity's own fields (11.4), live — the session record is

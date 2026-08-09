@@ -27,6 +27,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
+#include "Engine/OverlapResult.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
@@ -72,6 +73,9 @@ static TAutoConsoleVariable<float> CVarRainLightResponse(
 static TAutoConsoleVariable<float> CVarRainSourceRetain(
 	TEXT("elysium.RainSourceRetain"), 1.0f,
 	TEXT("Source cubemap weight retained at full wetness enhancement."));
+static TAutoConsoleVariable<int32> CVarUseAssist(
+	TEXT("elysium.UseAssist"), 1,
+	TEXT("Modern +use focus assistance: 1 enables the restrained cone fallback; 0 keeps exact-only targeting."));
 static TAutoConsoleVariable<float> CVarRainWetSpecular(
 	TEXT("elysium.RainWetSpecular"), 0.50f,
 	TEXT("Enhanced wet-surface dielectric specular level."));
@@ -1186,6 +1190,19 @@ bool AElysiumMapActor::GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRot
 	return true;
 }
 
+bool AElysiumMapActor::GetPlayerUseOrigin(FVector& OutLocation) const
+{
+	const APawn* Pawn = ResolvePlayerPawn();
+	const IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
+	const UElysiumCameraComponent* Camera = Body ? Body->GetCameraComponent() : nullptr;
+	if (!Camera)
+	{
+		return false;
+	}
+	OutLocation = Camera->GetComponentLocation();
+	return true;
+}
+
 bool AElysiumMapActor::GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const
 {
 	const APawn* Pawn = ResolvePlayerPawn();
@@ -1264,29 +1281,253 @@ void AElysiumMapActor::DamagePlayer(float Amount)
 	}
 }
 
-FElysiumEntityHandle AElysiumMapActor::TraceUseCursor(const FVector& Start, const FVector& End) const
+void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
+	const FElysiumEntityHandle& OwnerHandle)
 {
-	UWorld* W = GetWorld();
-	if (!W)
+	if (!Source || !OwnerHandle.IsSet())
 	{
-		return FElysiumEntityHandle::Invalid();
+		return;
 	}
-
-	// A single blocking trace naturally handles occlusion: a wall (or any solid) closer than the
-	// button ends the ray. The dedicated +use channel (ELYSIUM_USE_CHANNEL, default-Block) keeps
-	// world + solid bodies as occluders while staying isolated from ECC_Visibility;
-	// func_button/func_door bodies are Solid (BlockAll), so they block it.
-	FCollisionQueryParams Params(FName(TEXT("ElysiumUseCursor")), /*bTraceComplex*/ false);
-	Params.AddIgnoredActor(ResolvePlayerPawn());
-	FHitResult H;
-	if (W->LineTraceSingleByChannel(H, Start, End, ELYSIUM_USE_CHANNEL, Params))
+	for (const FUseAnchorRecord& Record : UseAnchors)
 	{
-		if (const UElysiumBrushComponent* B = Cast<UElysiumBrushComponent>(H.GetComponent()))
+		if (Record.Component.Get() == Source && Record.Owner == OwnerHandle)
 		{
-			return B->GetOwningEntity();
+			return;
 		}
 	}
-	return FElysiumEntityHandle::Invalid();
+
+	UPrimitiveComponent* Anchor = Source;
+	if (!Source->IsA<UElysiumBrushComponent>())
+	{
+		// A visual prop remains non-solid. Give only its rendered bounds a query body: this is a
+		// target surface, not a proximity/action volume, and it follows the source component through
+		// elevator attachment and animation transforms.
+		UBoxComponent* Proxy = NewObject<UBoxComponent>(this);
+		Proxy->SetCanEverAffectNavigation(false);
+		Proxy->SetMobility(EComponentMobility::Movable);
+		Proxy->InitBoxExtent(Source->Bounds.BoxExtent.ComponentMax(FVector(2.0f)));
+		Proxy->SetupAttachment(Source);
+		Proxy->SetWorldLocation(Source->Bounds.Origin);
+		Proxy->SetWorldRotation(FRotator::ZeroRotator);
+		Proxy->SetCollisionObjectType(ECC_WorldDynamic);
+		Proxy->SetCollisionResponseToAllChannels(ECR_Ignore);
+		Proxy->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
+		Proxy->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		Proxy->SetGenerateOverlapEvents(false);
+		Proxy->RegisterComponent();
+		AddInstanceComponent(Proxy);
+		OwnedUseAnchorComponents.Add(Proxy);
+		Anchor = Proxy;
+	}
+
+	FUseAnchorRecord& Record = UseAnchors.AddDefaulted_GetRef();
+	Record.Component = Anchor;
+	Record.Owner = OwnerHandle;
+}
+
+void AElysiumMapActor::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)
+{
+	for (FUseAnchorRecord& Record : UseAnchors)
+	{
+		if (Record.Owner != OwnerHandle)
+		{
+			continue;
+		}
+		Record.bEnabled = bEnabled;
+		UPrimitiveComponent* Component = Record.Component.Get();
+		if (Component && OwnedUseAnchorComponents.Contains(Component))
+		{
+			Component->SetCollisionEnabled(
+				bEnabled ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+		}
+	}
+}
+
+void AElysiumMapActor::ClearUseAnchors()
+{
+	UseAnchors.Reset();
+	for (UPrimitiveComponent* Component : OwnedUseAnchorComponents)
+	{
+		if (Component)
+		{
+			Component->DestroyComponent();
+		}
+	}
+	OwnedUseAnchorComponents.Reset();
+}
+
+FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
+	const FElysiumEntityHandle& CurrentFocus) const
+{
+	constexpr float UseReachCm = 225.0f;
+	constexpr float CameraMarginCm = 50.0f;
+	constexpr float MaxCameraRayCm = 1500.0f;
+	constexpr float AssistHalfAngleRadians = 2.5f * UE_PI / 180.0f;
+	constexpr float AssistMinRadiusCm = 4.0f;
+	constexpr float AssistMaxRadiusCm = 10.0f;
+	constexpr float HysteresisScale = 1.25f;
+
+	FElysiumUseQueryResult Result;
+	UWorld* World = GetWorld();
+	FVector CameraLocation;
+	FRotator CameraRotation;
+	FVector UseOrigin;
+	if (!World || !GetPlayerViewPoint(CameraLocation, CameraRotation)
+		|| !GetPlayerUseOrigin(UseOrigin))
+	{
+		return Result;
+	}
+
+	const FVector AimDirection = CameraRotation.Vector().GetSafeNormal();
+	const float RayLength = FMath::Clamp(
+		static_cast<float>(FVector::Distance(CameraLocation, UseOrigin))
+			+ UseReachCm + CameraMarginCm,
+		UseReachCm + CameraMarginCm, MaxCameraRayCm);
+	const FVector RayEnd = CameraLocation + AimDirection * RayLength;
+	FCollisionQueryParams Params(FName(TEXT("ElysiumPlayerUse")), /*bTraceComplex*/ false);
+	Params.AddIgnoredActor(ResolvePlayerPawn());
+
+	auto FindAnchor = [this](const UPrimitiveComponent* Component) -> const FUseAnchorRecord*
+	{
+		return UseAnchors.FindByPredicate([Component](const FUseAnchorRecord& Record)
+		{
+			return Record.bEnabled && Record.Component.Get() == Component;
+		});
+	};
+
+	auto ClearLineTo = [World, &Params, &FindAnchor](const FVector& Start, const FVector& End,
+		const FElysiumEntityHandle& Target) -> bool
+	{
+		FHitResult Hit;
+		if (!World->LineTraceSingleByChannel(Hit, Start, End, ELYSIUM_USE_CHANNEL, Params))
+		{
+			return true;
+		}
+		const FUseAnchorRecord* BlockingAnchor = FindAnchor(Hit.GetComponent());
+		return BlockingAnchor && BlockingAnchor->Owner == Target;
+	};
+
+	auto BuildCandidate = [&UseOrigin, &CameraLocation, &AimDirection, &ClearLineTo, UseReachCm](
+		const FUseAnchorRecord& Record, const FVector& SuggestedPoint,
+		EElysiumUseSelection Selection, FElysiumUseCandidate& Out,
+		EElysiumUseOutcome& OutFailure) -> bool
+	{
+		const UPrimitiveComponent* Component = Record.Component.Get();
+		if (!Component)
+		{
+			OutFailure = EElysiumUseOutcome::Unavailable;
+			return false;
+		}
+		const FBox Bounds = Component->Bounds.GetBox();
+		const FVector ReachPoint = Bounds.GetClosestPointTo(UseOrigin);
+		if (FVector::DistSquared(UseOrigin, ReachPoint) > FMath::Square(UseReachCm))
+		{
+			OutFailure = EElysiumUseOutcome::OutOfRange;
+			return false;
+		}
+		const FVector AnchorPoint = SuggestedPoint.ContainsNaN()
+			? ReachPoint : SuggestedPoint;
+		if (!ClearLineTo(UseOrigin, AnchorPoint, Record.Owner)
+			|| (Selection == EElysiumUseSelection::Assisted
+				&& !ClearLineTo(CameraLocation, AnchorPoint, Record.Owner)))
+		{
+			OutFailure = EElysiumUseOutcome::Occluded;
+			return false;
+		}
+
+		const float Depth = FVector::DotProduct(AnchorPoint - CameraLocation, AimDirection);
+		if (Depth <= 0.0f)
+		{
+			OutFailure = EElysiumUseOutcome::Unavailable;
+			return false;
+		}
+		Out.Owner = Record.Owner;
+		Out.AnchorPoint = AnchorPoint;
+		Out.Selection = Selection;
+		Out.BodyDistance = FVector::Distance(UseOrigin, ReachPoint);
+		Out.CameraDistance = FVector::Distance(CameraLocation, AnchorPoint);
+		Out.CameraDepth = Depth;
+		return true;
+	};
+
+	// Exact intent is absolute. A registered exact hit either validates or fails closed; assistance
+	// cannot jump through it to a neighbouring control.
+	FHitResult ExactHit;
+	if (World->LineTraceSingleByChannel(
+		ExactHit, CameraLocation, RayEnd, ELYSIUM_USE_CHANNEL, Params))
+	{
+		if (const FUseAnchorRecord* ExactAnchor = FindAnchor(ExactHit.GetComponent()))
+		{
+			FElysiumUseCandidate Candidate;
+			if (BuildCandidate(*ExactAnchor, ExactHit.ImpactPoint,
+				EElysiumUseSelection::Exact, Candidate, Result.MissOutcome))
+			{
+				Result.Candidates.Add(Candidate);
+			}
+			return Result;
+		}
+	}
+
+	if (CVarUseAssist.GetValueOnGameThread() == 0)
+	{
+		return Result;
+	}
+
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByObjectType(Overlaps, UseOrigin, FQuat::Identity, Objects,
+		FCollisionShape::MakeSphere(UseReachCm), Params);
+	TSet<FElysiumEntityHandle> Added;
+	bool bSawOccluded = false;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		const FUseAnchorRecord* Anchor = FindAnchor(Overlap.GetComponent());
+		if (!Anchor || Added.Contains(Anchor->Owner))
+		{
+			continue;
+		}
+		const UPrimitiveComponent* Component = Anchor->Component.Get();
+		const FBox Bounds = Component->Bounds.GetBox();
+		const float CenterDepth = FVector::DotProduct(Bounds.GetCenter() - CameraLocation, AimDirection);
+		if (CenterDepth <= 0.0f || CenterDepth > RayLength)
+		{
+			continue;
+		}
+		const FVector RayPoint = CameraLocation + AimDirection * CenterDepth;
+		const FVector AnchorPoint = Bounds.GetClosestPointTo(RayPoint);
+		const float Lateral = FVector::Distance(AnchorPoint, RayPoint);
+		const float ConeRadius = FMath::Clamp(
+			FMath::Tan(AssistHalfAngleRadians) * CenterDepth,
+			AssistMinRadiusCm, AssistMaxRadiusCm);
+		const bool bCurrent = Anchor->Owner == CurrentFocus;
+		const float AllowedRadius = ConeRadius * (bCurrent ? HysteresisScale : 1.0f);
+		if (Lateral > AllowedRadius)
+		{
+			continue;
+		}
+
+		FElysiumUseCandidate Candidate;
+		EElysiumUseOutcome Failure = EElysiumUseOutcome::NoTarget;
+		if (!BuildCandidate(*Anchor, AnchorPoint,
+			EElysiumUseSelection::Assisted, Candidate, Failure))
+		{
+			bSawOccluded |= Failure == EElysiumUseOutcome::Occluded;
+			continue;
+		}
+		Candidate.AimError = ConeRadius > 0.0f ? Lateral / ConeRadius : 0.0f;
+		Candidate.bHysteresis = bCurrent;
+		Result.Candidates.Add(Candidate);
+		Added.Add(Anchor->Owner);
+	}
+
+	ElysiumInteraction::SortCandidates(Result.Candidates);
+	if (Result.Candidates.IsEmpty() && bSawOccluded)
+	{
+		Result.MissOutcome = EElysiumUseOutcome::Occluded;
+	}
+	return Result;
 }
 
 UElysiumCameraComponent* AElysiumMapActor::PlayerCamera() const
@@ -2340,14 +2581,13 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 
 	// Step 8 — everything here reads the frame's final positions.
 	//
-	// P4.2 — the minimal +use look-cursor: re-pick the aimed usable and fire OnIn/OnOut on the
-	// transitions. It traces, so it belongs after physics: before the pawn's move it would pick
-	// against last frame's geometry, which reads as a door you cannot use until you stop walking.
-	// Its outputs enqueue against the same `now` the pre-move pass advanced to, so they service on
-	// the next frame's queue pass exactly like any other zero-delay wire.
+	// Settle camera/body interaction focus and consume this frame's queued command edges. The query
+	// belongs after physics: before the pawn's move it would target last frame's geometry, which
+	// reads as a door you cannot use until you stop walking. Focus outputs enqueue against the same
+	// `now` advanced by the pre-move pass and service on the next frame like any zero-delay wire.
 	if (EntityWorld)
 	{
-		EntityWorld->UpdateUseCursor();
+		EntityWorld->UpdatePlayerInteraction();
 	}
 
 	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same

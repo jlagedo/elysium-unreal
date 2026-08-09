@@ -33,8 +33,8 @@ Every piece of state has exactly one home, and the home is a lifetime, not a cla
 |---|---|---|---|
 | **Application** | the process exits | `UElysiumGameInstance` + its GI subsystems | settings, the key profile, the input scope stack, the CPython VM, the audio decode registry, the NPC animation banks, the UI screens, the map/flow subsystems |
 | **Session** | New Game, Load Game, or Quit to menu | `FElysiumSessionRecord` on `UElysiumGameStateSubsystem` | `G` + `G.morgue`, the quest map, the player record (sheet, inventory, counters), the game clock, the owned RNG streams (`docs/architecture/save-architecture.md` §8), per-map frozen snapshots, elapsed play time |
-| **Map epoch** | `OpenLevel` tears the world down | `AElysiumMapActor` → `FElysiumEntityWorld` | entities, bodies, the event queue, the light rig, sound schemes, the texture cache |
-| **Frame** | next tick | nobody — recomputed | the user command, the view state, the look cursor, camera weights |
+| **Map epoch** | `OpenLevel` tears the world down | `AElysiumMapActor` → `FElysiumEntityWorld` | entities, bodies, the event queue, interaction focus/prompt/session, the light rig, sound schemes, the texture cache |
+| **Frame** | next tick | nobody — recomputed | the user command, interaction candidates, the view state, camera weights |
 
 Two rules fall out, stated as prohibitions:
 
@@ -105,7 +105,7 @@ than left to registration order (**S2**).
 | 5 | run due thinks | `AElysiumMapActor::GameplayTick` → `FElysiumEntityWorld::RunThinks(Now)` | `GameFrame` begins here; movers issue their swept kinematic moves |
 | 6 | service the queue | `FElysiumEntityWorld::ServiceEvents(Now)` | delayed I/O, field-6 Python, `ScheduleTask`; the audio/scheme pass follows |
 | 7 | physics + overlaps | engine (`TG_DuringPhysics`) | Chaos overlap callbacks → `RouteBrushTouch` |
-| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick`, **fourth** tick function (`TG_PostPhysics`) | `+use` look-cursor trace, `Follow` camera shots |
+| 8 | post-move gameplay | `AElysiumMapActor::PostMoveTick`, **fourth** tick function (`TG_PostPhysics`) | settle camera/body `+use` focus, consume queued command edges, update `Follow` camera shots |
 | 9 | camera | `APawn::CalcCamera` via `APlayerCameraManager` | weight stack solved here (§9) |
 | 10 | publish | `UElysiumPresentationSubsystem` (`TG_PostUpdateWork`) | builds `FElysiumViewState`, fires discrete events |
 
@@ -315,13 +315,13 @@ not a fifth service, and nothing under the world casts it to a map actor or walk
 **What `IElysiumPresenter` carries is a moment, not the state.** The fade, the open sign and the
 open conversation stay on `FElysiumEntityWorld` — each is world state with the map epoch's lifetime,
 and 11.9 serialises it — and the publisher *samples* the clock-derived half (the fade's current
-alpha, the panel's `fade_in` ramp, the aimed use icon, the meters) once per frame. What has no clock
+alpha, the panel's `fade_in` ramp, the interaction view, the meters) once per frame. What has no clock
 behind it is announced: a fade starting, a panel opening, a conversation opening or closing. A diff
 over the published state cannot tell a conversation that closed and reopened inside one frame from
 one that never moved, which is why the announcement is kept rather than inferred (§11).
 
 The player's body lives on `IElysiumEmbodiment` because the pawn *is* the player's body (**S3**):
-view point, origin, teleport, damage, and the `+use` trace. Since 11.4 the substrate reaches them
+view point, body-use origin, origin, teleport, damage, and the registered-anchor `+use` query. Since 11.4 the substrate reaches them
 *through the player entity* rather than directly — `point_teleport` writes `SetRuntimeOrigin` and
 the entity places the body, `trigger_hurt` reduces the entity's health — so what is left on the
 interface is the body's own geometry, the eye, and the camera — 11.7 added the scripted-shot channel
@@ -428,10 +428,10 @@ cursor, and `UElysiumUISubsystem` pushes/pops scopes instead.
 VtMB has no action abstraction — **an action is a console command string**, and the patch's whole
 vocabulary is *aliases* (`f` → `vm_feed` → `checkFeed()`), so a key bound to a compiled verb and a key
 bound to a user alias must be indistinguishable (`docs/vtmb/controls.md`, `docs/architecture/input-architecture.md`). That already
-argues for routing bindings through `FElysiumConsole`. The missing half is the other end: the console
-knows aliases, cvars and Python, but has **no registry of gameplay verbs** — `+use` is hard-bound to a
-key on the pawn, and `togglecamera`, `holster`, `slotN`, `+feed`, `vdiscipline_*` have nowhere to
-land.
+argues for routing bindings through `FElysiumConsole`. The other end is the gameplay-verb registry:
+the console knows aliases, cvars and Python, while `FElysiumCommands` declares button-pair/one-shot
+verbs and their user-command bits. `+use` therefore has no pawn key callback and no direct entity
+handler; every source latches the same command bit.
 
 **Declaration and implementation are separate.** The inventory is static data — one table of every
 bindable verb with its kind, its group, and the user-command bit a `+`/`-` pair latches — while the
@@ -442,8 +442,10 @@ bindable verb with its kind, its group, and the user-command bit a `+`/`-` pair 
 Registry.Declare({ TEXT("use"), EElysiumCmdKind::ButtonPair, EElysiumCmdGroup::Combat,
                    uint64(EElysiumButton::Use), TEXT("world interaction") });
 
-// Implemented by whoever can answer it, for as long as it can.
-Binding = Registry.Bind(TEXT("use"), [this](const FElysiumCommandCall&) { World->PlayerUse(); });
+// Every input source writes the same latch. The controller compares consecutive commands and
+// queues the edge into the current entity world; no command callback chooses or uses an entity.
+if (Cmd.JustPressed(EElysiumButton::Use, PreviousCmd))
+    World->QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
 ```
 
 That split is what makes the registry usable before the systems exist: a declared verb with no
@@ -624,7 +626,7 @@ One publisher, one struct, one set of events (**S8**):
 struct FElysiumViewState                       // rebuilt each frame, TG_PostUpdateWork
 {
     EElysiumAppState App;
-    int32        ReticleIcon = 0;              // 0 = none; already resolves locked -> locked_icon
+    FElysiumInteractionView Interaction;       // focus/actionability/icon/lock/fade/semantic Use
     FLinearColor Fade;                         // rgb + alpha
     const FElysiumSignData*        Sign = nullptr;
     const FElysiumDlgConversation* Dialogue = nullptr;
@@ -651,6 +653,13 @@ Both writers are asked, because `elysium.menu` raises a screen without moving th
 conversation already on screen when the pause menu opens is republished as closed, the box comes
 down, and closing the screen rebuilds it from the next publish. The conversation itself is
 untouched in the entity world; only its UI is withheld.
+
+Within an admitted player surface, cinematic camera ownership, HideHUD signs, dialogues, CommonUI
+modal screens, and explicit interaction sessions suppress `Interaction`. The world still owns focus
+and any captured session; the presentation projection simply exposes no actionable prompt. Prompt
+transitions are world-clock values (0.10 s in, 0.15 s out), and a fading-out retained icon is marked
+non-actionable. The HUD preserves the use-icon ring and resolves the semantic `Use` binding from
+CommonInput, with `E`/`RB` text when a platform glyph is unavailable.
 
 That rule owns the complete player-facing surface. Inside an admitted surface, `bCinematic` marks
 the narrower heads-up layer suppressed while `FElysiumEntityWorld::HasTrackCamera()` or

@@ -2,9 +2,11 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumHUDModel.h"
+#include "UI/ElysiumCommonUIInputData.h"
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUITexture.h"
 
+#include "CommonInputSubsystem.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
@@ -301,7 +303,8 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		]
 	];
 
-	// Aim cursor. Exported original use-icon cells remain the only game-authored icon dependency.
+	// Aim cursor. Exported original use-icon cells remain the only game-authored icon dependency;
+	// the semantic Use binding follows CommonInput's active device and always has a text fallback.
 	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 	[
 		SNew(SOverlay)
@@ -329,18 +332,73 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 					SNew(SBox).WidthOverride(52).HeightOverride(52)
 					[
 						SNew(SImage).Image_Lambda([this]() { return UseIconBrush(); })
-						.ColorAndOpacity(HUDOutline)
+						.ColorAndOpacity_Lambda([M]()
+						{
+							return FLinearColor(HUDOutline.R, HUDOutline.G, HUDOutline.B,
+								HUDOutline.A * (M ? M->UsePromptAlpha : 0.0f));
+						})
 					]
 				]
 				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 				[
 					SNew(SBox).WidthOverride(52).HeightOverride(52)
 					[
-						SNew(SImage).Image(&UseRingBrush).ColorAndOpacity(HUDOutline)
+						SNew(SImage).Image(&UseRingBrush).ColorAndOpacity_Lambda([M]()
+						{
+							return FLinearColor(HUDOutline.R, HUDOutline.G, HUDOutline.B,
+								HUDOutline.A * (M ? M->UsePromptAlpha : 0.0f));
+						})
 					]
 				]
-				+ SOverlay::Slot()[SNew(SImage).Image_Lambda([this]() { return UseIconBrush(); })]
-				+ SOverlay::Slot()[SNew(SImage).Image(&UseRingBrush)]
+				+ SOverlay::Slot()
+				[
+					SNew(SImage).Image_Lambda([this]() { return UseIconBrush(); })
+					.ColorAndOpacity_Lambda([M]()
+					{
+						return FLinearColor(1, 1, 1, M ? M->UsePromptAlpha : 0.0f);
+					})
+				]
+				+ SOverlay::Slot()
+				[
+					SNew(SImage).Image(&UseRingBrush)
+					.ColorAndOpacity_Lambda([M]()
+					{
+						return FLinearColor(1, 1, 1, M ? M->UsePromptAlpha : 0.0f);
+					})
+				]
+			]
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(0, 70, 0, 0)
+		[
+			SNew(SBox).WidthOverride(36).HeightOverride(24)
+			.Visibility_Lambda([M]() { return M && M->UsePromptAlpha > KINDA_SMALL_NUMBER
+				? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			[
+				SNew(SOverlay)
+				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(SImage)
+					.Image_Lambda([this]() { return UseBindingBrush(); })
+					.Visibility_Lambda([this]() { return UseBindingBrush()
+						? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+					.ColorAndOpacity_Lambda([M]() { return FLinearColor(1, 1, 1,
+						M ? M->UsePromptAlpha : 0.0f); })
+				]
+				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+					.Font(Caption)
+					.Text_Lambda([this]() { return UseBindingText(); })
+					.Visibility_Lambda([this]() { return UseBindingBrush()
+						? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
+					.ColorAndOpacity_Lambda([M]()
+					{
+						const float Alpha = M ? M->UsePromptAlpha : 0.0f;
+						const FLinearColor Base = M && M->bUseLocked
+							? ElysiumUI::Palette::BloodLit : ElysiumUI::Palette::Bone;
+						return FLinearColor(Base.R, Base.G, Base.B, Base.A * Alpha);
+					})
+				]
 			]
 		]
 	];
@@ -376,6 +434,47 @@ float UElysiumHUDWidget::VirtualScale() const
 		GEngine->GameViewport->GetViewportSize(Size);
 	}
 	return ElysiumUI::ScaleFor(Size.Y);
+}
+
+FText UElysiumHUDWidget::UseBindingText() const
+{
+	const ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+	const UCommonInputSubsystem* CommonInput = LocalPlayer
+		? LocalPlayer->GetSubsystem<UCommonInputSubsystem>() : nullptr;
+	const bool bGamepad = CommonInput
+		&& CommonInput->GetCurrentInputType() == ECommonInputType::Gamepad;
+	const FDataTableRowHandle& Handle = GetDefault<UElysiumCommonUIInputData>()->GetUseAction();
+	const FElysiumCommonInputActionData* Action = Handle.GetRow<FElysiumCommonInputActionData>(
+		TEXT("HUD Use prompt"));
+	if (Action && CommonInput)
+	{
+		const FKey Key = Action->GetCurrentInputTypeInfo(CommonInput).GetKey();
+		if (Key == EKeys::E || Key == EKeys::Gamepad_RightShoulder)
+		{
+			return ElysiumInteraction::UseBindingText(bGamepad);
+		}
+		if (Key.IsValid())
+		{
+			return Key.GetDisplayName();
+		}
+	}
+	return ElysiumInteraction::UseBindingText(bGamepad);
+}
+
+const FSlateBrush* UElysiumHUDWidget::UseBindingBrush() const
+{
+	const ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+	const UCommonInputSubsystem* CommonInput = LocalPlayer
+		? LocalPlayer->GetSubsystem<UCommonInputSubsystem>() : nullptr;
+	const FDataTableRowHandle& Handle = GetDefault<UElysiumCommonUIInputData>()->GetUseAction();
+	const FElysiumCommonInputActionData* Action = Handle.GetRow<FElysiumCommonInputActionData>(
+		TEXT("HUD Use prompt"));
+	if (!Action || !CommonInput)
+	{
+		return nullptr;
+	}
+	CurrentUseBindingBrush = Action->GetCurrentInputActionIcon(CommonInput);
+	return CurrentUseBindingBrush.GetResourceObject() ? &CurrentUseBindingBrush : nullptr;
 }
 
 void UElysiumHUDWidget::EnsureUseIconAtlas()

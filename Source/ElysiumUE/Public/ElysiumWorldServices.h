@@ -4,12 +4,14 @@
 #include "ElysiumAudioSubsystem.h"   // FElysiumAudioVoiceHandle + FElysiumPlayParams (passed by value)
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
+#include "ElysiumInteraction.h"
 #include "ElysiumLocomotionSample.h" // FElysiumLocomotionSample (returned by value)
 
 class FElysiumDlgConversation;
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UPrimitiveComponent;
 struct FElysiumCameraShot;
 struct FElysiumEntityDef;
 struct FElysiumSignData;
@@ -268,6 +270,9 @@ public:
 	// The eye: where the player is looking from and along. False when there is no player (the menu
 	// backdrop seats no pawn), which every caller treats as "the player cannot see it".
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const = 0;
+	// The body-relative eye/pivot used for authoritative reach. It remains on the pawn when a
+	// third-person camera moves behind it.
+	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const = 0;
 	// The body: its world position and facing yaw. False when there is no player.
 	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const = 0;
 	// Place the player at a Source absorigin (feet) with the given yaw. The body owns the capsule
@@ -275,10 +280,14 @@ public:
 	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) = 0;
 	// trigger_hurt / a door closing on the player. No-op when there is no player.
 	virtual void DamagePlayer(float Amount) = 0;
-	// P4.2 — trace the +use look-cursor along a segment and return the brush entity it landed on
-	// (Invalid for a miss, or a hit on anything that is not an entity body). The trace runs on the
-	// dedicated ELYSIUM_USE_CHANNEL so world geometry occludes it; the pawn is ignored.
-	virtual FElysiumEntityHandle TraceUseCursor(const FVector& Start, const FVector& End) const = 0;
+	// Modern +use embodiment. Registration names engine components with substrate handles; the
+	// query returns geometry only and leaves class eligibility/session policy to EntityWorld.
+	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
+		const FElysiumEntityHandle& Owner) = 0;
+	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) = 0;
+	virtual void ClearUseAnchors() = 0;
+	virtual FElysiumUseQueryResult QueryPlayerUse(
+		const FElysiumEntityHandle& CurrentFocus) const = 0;
 
 	// 11.7 — the scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, the conversation
 	// camera and the feed camera all push onto the player camera's one weight stack through here, and

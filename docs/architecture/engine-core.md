@@ -111,10 +111,13 @@ and `UElysiumGameStateSubsystem` + script host live on the game instance;
   So an output fired *during* a think is serviced after all thinks that frame, not interleaved.
   Match retail unless a determinism reason argues otherwise (RE2, `docs/project/roadmap.md`).
 - **Touch/use:** brush bodies raise begin/end overlap → entity world translates to
-  `OnStartTouch`/`OnEndTouch` outputs (trigger classes), respecting dormancy. `+use` is
-  a camera trace against a use-only collision channel on usable bodies (13 classnames
-  carry `use_icon`); hit → `Use` input; the button's own `OnIn`/`OnOut` outputs arm the
-  reticle icon (M3).
+  `OnStartTouch`/`OnEndTouch` outputs (trigger classes), respecting dormancy. Player interaction is
+  one post-move pipeline: the embodiment queries registered brush/model anchors from the final
+  camera POV and player-body reach, the entity world settles focus and `OnIn`/`OnOut`, then consumes
+  queued `FElysiumUserCmd` press/release edges against the captured logical owner. Candidates are
+  ephemeral; only focus, prompt transition, and an optional held/explicit session persist. Scripted
+  entity `Use` input remains independent of spatial selection. The modern selection divergence and
+  faithful class rules live together in `docs/vtmb/entity_io.md`.
 - **Travel:** `trigger_changelevel` overlap (or scripted `ChangeNow`) →
   `UElysiumMapSubsystem::Travel(map, landmark)`; new player position = destination
   landmark + (player − source landmark). Entity world, queue, bodies die with the map

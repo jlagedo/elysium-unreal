@@ -28,6 +28,8 @@ private:
 	void EnsureUseIconAtlas();
 	void EnsureContrastVeils();
 	const FSlateBrush* UseIconBrush() const;
+	const FSlateBrush* UseBindingBrush() const;
+	FText UseBindingText() const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;
@@ -42,6 +44,7 @@ private:
 	TObjectPtr<UTexture2D> RightContrastVeil;
 
 	FSlateBrush UseRingBrush;
+	mutable FSlateBrush CurrentUseBindingBrush;
 	TMap<int32, FSlateBrush> UseIconBrushes;
 	FSlateBrush LeftContrastBrush;
 	FSlateBrush RightContrastBrush;

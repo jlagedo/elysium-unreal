@@ -297,6 +297,38 @@ a padlock — it names the Intrusion (lockpicking) skill the player would need.
 Patch author); it behaves as `prop_doorknob`. `func_door_rotating`, `func_monitor` and
 a few `trigger_multiple` in the patch pick up `73 valve`, absent from retail.
 
+### Modern targeting policy [owner-called Feel divergence]
+
+The remaster reproduces the entity-side facts above — eligibility, hidden/locked state, icons,
+logical owner, `Use`, and class outputs — but deliberately does not reproduce the retail client's
+near-object/look-cursor search. Player `+use` selection is a modern camera-driven policy shared by
+first and third person:
+
+- the final `PlayerCameraManager` POV supplies the aim ray, while the player camera pivot supplies
+  body reach and the second line-of-sight test;
+- closest-bounds body reach is 225 cm; the camera ray extends by camera-to-body distance plus that
+  reach and a 50 cm margin, capped at 1500 cm;
+- an exact registered anchor hit wins absolutely. Only a miss admits an ephemeral 2.5-degree
+  assistance query, whose radius is clamped to 4–10 cm at target depth;
+- the current assisted focus receives 25 percent hysteresis. Remaining ties resolve by angular
+  error, camera depth, then stable entity handle;
+- camera-to-target and body-to-target line of sight must both pass. `elysium.UseAssist 0` disables
+  the assistance tier for exact-only diagnosis.
+
+This is a **Feel divergence**, explicitly owner-called: the original interaction facts remain the
+content authority, while the selection feel is rebuilt for modern first-/third-person cameras.
+There is no persistent nearby-candidate set and no trigger-volume ownership contest. Unreal
+components register query anchors for their logical entities; knob-to-door and similar associations
+remain class behavior, so focus can never bypass a knob's lock state or outputs. Hidden, dead,
+disabled, 3D-sky, and unimplemented entities expose no active anchor.
+
+Input is likewise separated from selection. `use` remains a press/release command bit in the
+per-frame user command, and the entity world consumes its edges only after that frame's focus has
+settled. Scripted `AcceptInput("Use")` remains direct entity I/O and is not spatially selected.
+The foundation exposes anchors only for implemented doors, use-enabled `func_button`, and
+`prop_button`; doorknobs, switches, signs, terminals, and containers join only with their specialized
+interaction behavior.
+
 `func_button` emits three outputs: **`OnPressed`** (168), **`OnIn`** (167) and
 **`OnOut`** (154) — `OnIn`/`OnOut` fire as the look-cursor enters and leaves the
 volume, which is what arms the icon. `soundgroup` names the sound set — most

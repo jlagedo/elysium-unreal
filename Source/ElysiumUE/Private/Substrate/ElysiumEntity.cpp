@@ -192,6 +192,10 @@ void FElysiumEntity::OnDormancyChanged()
 	{
 		Body->SetDormant(IsInert());
 	}
+	if (World)
+	{
+		World->SetUseAnchorEnabled(Handle, !IsInert());
+	}
 	// P2.4 — the visual (colour/visibility) changed; let a retained gizmo layer dirty this one
 	// instance on the event rather than polling every entity every frame. No-op in normal play.
 	if (World)

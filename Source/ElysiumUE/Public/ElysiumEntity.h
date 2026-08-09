@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumInteraction.h"
 #include "ElysiumVariant.h"
 
 struct FElysiumEntityDef;
@@ -200,13 +201,21 @@ public:
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) {}
 	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) {}
 
-	// --- +use look-cursor terminus (P4.2) ----------------------------------------------
-	// The minimal look-cursor the entity world runs each frame (a camera-ray pick against the
-	// usable brush bodies in range) routes here. Base is un-usable and no-ops; func_button (P4.2)
-	// overrides IsUsable and translates cursor enter/leave into its OnIn/OnOut outputs and a +use
-	// (or the E key / a fired Press input) into a press. The full use-only trace channel + the
-	// use-icon HUD land in P4.4 — this is the activation + OnIn/OnOut slice it builds on.
+	// --- Player interaction -------------------------------------------------------------
+	// Spatial focus is separate from the class verb. The modern query supplies a context, the
+	// substrate owns eligibility/session state, and scripted AcceptInput("Use") continues to call
+	// Use directly without pretending it came from a player standing in front of the entity.
 	virtual bool IsUsable() const { return false; }
+	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const
+	{
+		return IsUsable() && !IsInert();
+	}
+	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context)
+	{
+		Use(Context.Activator);
+		return FElysiumUseBeginResult::Completed();
+	}
+	virtual void EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason Reason) {}
 	virtual void OnUseCursorEnter() {}                                  // look-cursor entered (OnIn)
 	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
 	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it

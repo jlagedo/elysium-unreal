@@ -13,7 +13,7 @@ namespace
 
 void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview Preview)
 {
-	bVisible = View.bPlayerSurface && !View.bCinematic;
+	bVisible = View.bPlayerSurface && !View.bCinematic && !View.bSignHidesHUD;
 	bVitalsValid = View.Vitals.bValid;
 	Health = View.Vitals.Health;
 	MaxHealth = View.Vitals.MaxHealth;
@@ -21,7 +21,11 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	BloodCapacity = View.Vitals.MaxBloodPool;
 	Humanity = View.Vitals.Humanity;
 	Masquerade = View.Vitals.Masquerade;
-	UseIcon = View.ReticleIcon;
+	UseIcon = View.Interaction.Icon;
+	UsePromptAlpha = View.Interaction.bVisible ? View.Interaction.PromptAlpha : 0.0f;
+	bUseActionable = View.Interaction.bActionable;
+	bUseLocked = View.Interaction.bLocked;
+	UseAction = View.Interaction.Action;
 
 	switch (ElysiumView::ResolveReticle(View))
 	{

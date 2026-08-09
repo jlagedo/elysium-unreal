@@ -356,6 +356,10 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 
 	Ent.Body = Body;
 	Bodies.Add(Body);
+	if (Ent.IsUsable() && !Ent.Def->bSky)
+	{
+		RegisterUseAnchor(Body, Ent.Handle);
+	}
 	if (!Ent.Def->BrushMesh.IsEmpty())
 	{
 		if (IElysiumEmbodiment* Embodiment = WorldServices.Embodiment)
@@ -981,11 +985,39 @@ void FElysiumEntityWorld::RegisterNpcBody(USkeletalMeshComponent* Component)
 	}
 }
 
-void FElysiumEntityWorld::RegisterPropBody(UStaticMeshComponent* Component)
+void FElysiumEntityWorld::RegisterPropBody(UStaticMeshComponent* Component,
+	const FElysiumEntityHandle& UseOwner)
 {
 	if (Component)
 	{
 		PropBodies.Add(Component);
+		if (UseOwner.IsSet())
+		{
+			RegisterUseAnchor(Component, UseOwner);
+		}
+	}
+}
+
+void FElysiumEntityWorld::RegisterUseAnchor(UPrimitiveComponent* Component,
+	const FElysiumEntityHandle& OwnerHandle)
+{
+	if (!Component || !OwnerHandle.IsSet())
+	{
+		return;
+	}
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->RegisterUseAnchor(Component, OwnerHandle);
+		const FElysiumEntity* Entity = Resolve(OwnerHandle);
+		Bodily->SetUseAnchorEnabled(OwnerHandle, Entity && !Entity->IsInert());
+	}
+}
+
+void FElysiumEntityWorld::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)
+{
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->SetUseAnchorEnabled(OwnerHandle, bEnabled);
 	}
 }
 
@@ -1064,95 +1096,231 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 		NowSeconds(), bBegin ? TEXT("begin") : TEXT("end"), *E->DebugString());
 }
 
-// --- +use look-cursor (P4.2) ------------------------------------------------------------
+// --- Player interaction ----------------------------------------------------------------
 
 namespace
 {
-	// Arm's-reach for the look-cursor pick. VtMB's player use radius is ~80 Source units; 200 cm is
-	// that in Unreal space. P4.4 calibrates it against the retail reach when the use-icon HUD lands.
-	constexpr double GElysiumUseReachCm = 200.0;
+	constexpr double GPromptFadeInSeconds = 0.10;
+	constexpr double GPromptFadeOutSeconds = 0.15;
 }
 
-void FElysiumEntityWorld::UpdateUseCursor()
+void FElysiumEntityWorld::QueuePlayerUseEdge(EElysiumUseEdge Edge)
 {
-	if (!bActive || !IsTriggerResolutionEnabled())
+	if (bActive)
 	{
+		PendingUseEdges.Add(Edge);
+	}
+}
+
+float FElysiumEntityWorld::InteractionPromptAlpha(double Now) const
+{
+	if (!InteractionPrompt.DisplayOwner.IsSet())
+	{
+		return 0.0f;
+	}
+	const double Duration = InteractionPrompt.bFadingIn
+		? GPromptFadeInSeconds : GPromptFadeOutSeconds;
+	const float Target = InteractionPrompt.bFadingIn ? 1.0f : 0.0f;
+	const float T = Duration > 0.0
+		? FMath::Clamp(static_cast<float>((Now - InteractionPrompt.TransitionTime) / Duration), 0.0f, 1.0f)
+		: 1.0f;
+	return FMath::Lerp(InteractionPrompt.StartAlpha, Target, T);
+}
+
+void FElysiumEntityWorld::TransitionUseFocus(const FElysiumUseCandidate* Candidate)
+{
+	const FElysiumEntityHandle Next = Candidate ? Candidate->Owner : FElysiumEntityHandle::Invalid();
+	if (Next == FocusedUsable)
+	{
+		if (FElysiumEntity* Current = Resolve(FocusedUsable))
+		{
+			InteractionPrompt.Icon = Current->GetUseIcon();
+			InteractionPrompt.bLocked = Current->IsUseLocked();
+		}
+		if (Candidate)
+		{
+			FocusContext.AnchorPoint = Candidate->AnchorPoint;
+			FocusContext.Selection = Candidate->Selection;
+		}
 		return;
 	}
 
-	// Camera-ray-pick the nearest usable, non-inert brush entity within reach. The trace itself is
-	// the embodiment's (it needs the pawn to ignore and the engine channel to trace on); what comes
-	// back is a handle, and the usability arbitration below is the substrate's.
-	FElysiumEntityHandle Hit;
-	FVector Loc; FRotator Rot;
-	if (IElysiumEmbodiment* Bodily = Embodiment(); Bodily && Bodily->GetPlayerViewPoint(Loc, Rot))
-	{
-		const FVector End = Loc + Rot.Vector() * GElysiumUseReachCm;
-		const FElysiumEntity* E = Resolve(Bodily->TraceUseCursor(Loc, End));
-		if (E && E->IsUsable() && !E->IsInert())
-		{
-			Hit = E->Handle;
-		}
-	}
-
-	if (Hit == AimedUsable)
-	{
-		return;   // no transition — nothing to fire
-	}
-
-	// Leave the old, enter the new (either may be empty). Resolve guards stale/dead handles, so an
-	// entity that was killed or hidden while aimed at silently drops out without a spurious OnOut.
-	if (FElysiumEntity* Old = Resolve(AimedUsable))
+	const double Now = NowSeconds();
+	const float CurrentAlpha = InteractionPromptAlpha(Now);
+	if (FElysiumEntity* Old = Resolve(FocusedUsable))
 	{
 		Old->OnUseCursorLeave();
 	}
-	AimedUsable = Hit;
-	if (FElysiumEntity* New = Resolve(AimedUsable))
+	FocusedUsable = Next;
+	FocusContext = FElysiumUseContext();
+	FocusContext.Activator = Player;
+	FocusContext.Owner = Next;
+	FocusContext.TimeSeconds = Now;
+	if (Candidate)
 	{
-		New->OnUseCursorEnter();
+		FocusContext.AnchorPoint = Candidate->AnchorPoint;
+		FocusContext.Selection = Candidate->Selection;
 	}
 
-	// The look-cursor transition is otherwise invisible when a button does not wire OnIn/OnOut
-	// (the tutorial buttons don't), so trace it — `log LogElysiumWorld Verbose` surfaces the aim
-	// enter/leave for UAT and confirms the pick even without a wired output.
-	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) use-cursor -> %s"),
-		NowSeconds(), AimedUsable.IsSet() ? *DescribeHandle(AimedUsable) : TEXT("<none>"));
+	if (FElysiumEntity* New = Resolve(FocusedUsable))
+	{
+		New->OnUseCursorEnter();
+		InteractionPrompt.DisplayOwner = New->Handle;
+		InteractionPrompt.Icon = New->GetUseIcon();
+		InteractionPrompt.bLocked = New->IsUseLocked();
+		InteractionPrompt.bFadingIn = true;
+		InteractionPrompt.StartAlpha = CurrentAlpha;
+		InteractionPrompt.TransitionTime = Now;
+	}
+	else if (InteractionPrompt.DisplayOwner.IsSet())
+	{
+		InteractionPrompt.bFadingIn = false;
+		InteractionPrompt.StartAlpha = CurrentAlpha;
+		InteractionPrompt.TransitionTime = Now;
+	}
+
+	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) interaction-focus -> %s"),
+		Now, FocusedUsable.IsSet() ? *DescribeHandle(FocusedUsable) : TEXT("<none>"));
 }
 
-void FElysiumEntityWorld::PlayerUse()
+void FElysiumEntityWorld::EndActiveUse(EElysiumUseEndReason Reason)
 {
-	if (!bActive || !IsTriggerResolutionEnabled())
+	if (!ActiveUse.IsSet())
 	{
 		return;
 	}
-
-	// Press whatever the cursor settled on this frame, with the player as the activator (11.4) —
-	// the same handle the trigger touch path carries, so a `+use` wire's `!activator` resolves.
-	if (FElysiumEntity* E = Resolve(AimedUsable))
+	const FActiveUse Ending = ActiveUse.GetValue();
+	ActiveUse.Reset();
+	if (FElysiumEntity* Entity = Resolve(Ending.Context.Owner))
 	{
-		// VtMB gates this press on CBaseEntity::PassesUseFilter (the 0x400 handler, FUN_100c9250).
-		// The keyvalue parses into UseFilterName and the save carries it, but no filter class
-		// evaluates it, so the press goes through whatever the filter would have said. Reported
-		// rather than silently allowed: a gate that always opens looks exactly like no gate, and
-		// this is the one holding sp_theatre's webcam button shut without a camera in hand.
-		if (!E->UseFilterName.IsEmpty())
+		Entity->EndPlayerUse(Ending.Context, Reason);
+	}
+	LastUseOutcome = (Reason == EElysiumUseEndReason::Released
+		|| Reason == EElysiumUseEndReason::Completed)
+		? EElysiumUseOutcome::Completed : EElysiumUseOutcome::Cancelled;
+}
+
+bool FElysiumEntityWorld::EndPlayerUseSession(const FElysiumEntityHandle& OwnerHandle,
+	EElysiumUseEndReason Reason)
+{
+	if (!ActiveUse.IsSet() || (OwnerHandle.IsSet() && ActiveUse->Context.Owner != OwnerHandle))
+	{
+		return false;
+	}
+	EndActiveUse(Reason);
+	return true;
+}
+
+void FElysiumEntityWorld::UpdatePlayerInteraction()
+{
+	if (!bActive || !IsTriggerResolutionEnabled())
+	{
+		PendingUseEdges.Reset();
+		TransitionUseFocus(nullptr);
+		return;
+	}
+
+	if (ActiveUse.IsSet())
+	{
+		FElysiumEntity* ActiveEntity = Resolve(ActiveUse->Context.Owner);
+		if (!ActiveEntity || ActiveEntity->IsInert())
 		{
-			ElysiumStub::Fired(TEXT("field"), TEXT("CBaseEntity.use_filter_name"), E->DebugString(),
+			EndActiveUse(EElysiumUseEndReason::TargetInvalid);
+		}
+	}
+
+	FElysiumUseQueryResult Query;
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Query = Bodily->QueryPlayerUse(FocusedUsable);
+	}
+
+	const FElysiumUseCandidate* Selected = nullptr;
+	for (const FElysiumUseCandidate& Candidate : Query.Candidates)
+	{
+		FElysiumEntity* Entity = Resolve(Candidate.Owner);
+		FElysiumUseContext Context;
+		Context.Activator = Player;
+		Context.Owner = Candidate.Owner;
+		Context.AnchorPoint = Candidate.AnchorPoint;
+		Context.Selection = Candidate.Selection;
+		Context.TimeSeconds = NowSeconds();
+		if (Entity && Entity->CanPlayerFocus(Context))
+		{
+			Selected = &Candidate;
+			break;
+		}
+		// An exact entity hit fails closed. Assistance must never jump through the object under
+		// the reticle to something merely close to it.
+		if (Candidate.Selection == EElysiumUseSelection::Exact)
+		{
+			break;
+		}
+	}
+	TransitionUseFocus(Selected);
+	LastUseOutcome = Selected ? EElysiumUseOutcome::Completed : Query.MissOutcome;
+
+	const TArray<EElysiumUseEdge, TInlineAllocator<2>> Edges = MoveTemp(PendingUseEdges);
+	PendingUseEdges.Reset();
+	for (EElysiumUseEdge Edge : Edges)
+	{
+		if (Edge == EElysiumUseEdge::Released)
+		{
+			if (ActiveUse.IsSet() && ActiveUse->Kind == EElysiumUseSessionKind::WhileHeld)
+			{
+				EndActiveUse(EElysiumUseEndReason::Released);
+			}
+			continue;
+		}
+
+		if (ActiveUse.IsSet())
+		{
+			LastUseOutcome = EElysiumUseOutcome::Busy;
+			continue;
+		}
+		FElysiumEntity* Entity = Resolve(FocusedUsable);
+		if (!Entity || !Entity->CanPlayerFocus(FocusContext))
+		{
+			LastUseOutcome = EElysiumUseOutcome::Unavailable;
+			continue;
+		}
+
+		if (!Entity->UseFilterName.IsEmpty())
+		{
+			ElysiumStub::Fired(TEXT("field"), TEXT("CBaseEntity.use_filter_name"), Entity->DebugString(),
 				FString::Printf(TEXT("filter=%s activator=%s"),
-					*E->UseFilterName, *Player.ToString()),
+					*Entity->UseFilterName, *Player.ToString()),
 				TEXT("PassesUseFilter is unbuilt — the +use gate always opens"));
 		}
-		E->Use(Player);
+		FocusContext.TimeSeconds = NowSeconds();
+		const bool bWasLocked = Entity->IsUseLocked();
+		const FElysiumUseBeginResult Result = Entity->BeginPlayerUse(FocusContext);
+		LastUseOutcome = bWasLocked ? EElysiumUseOutcome::Locked : Result.Outcome;
+		if (Result.Outcome == EElysiumUseOutcome::SessionStarted
+			&& Result.SessionKind != EElysiumUseSessionKind::None)
+		{
+			FActiveUse Session;
+			Session.Context = FocusContext;
+			Session.Kind = Result.SessionKind;
+			ActiveUse = Session;
+		}
 	}
 }
 
-int32 FElysiumEntityWorld::GetAimedUseIcon() const
+FElysiumInteractionView FElysiumEntityWorld::GetInteractionView() const
 {
-	// The reticle icon the HUD draws this frame: the aimed usable's GetUseIcon() (locked_icon when
-	// use-locked, else use_icon), or 0 when nothing usable is under the cursor. Const-resolves the
-	// sticky AimedUsable handle set by the last UpdateUseCursor.
-	const FElysiumEntity* E = Resolve(AimedUsable);
-	return E ? E->GetUseIcon() : 0;
+	FElysiumInteractionView View;
+	if (ActiveUse.IsSet() && ActiveUse->Kind == EElysiumUseSessionKind::Explicit)
+	{
+		return View;
+	}
+	View.PromptAlpha = InteractionPromptAlpha(NowSeconds());
+	View.bVisible = InteractionPrompt.DisplayOwner.IsSet()
+		&& View.PromptAlpha > KINDA_SMALL_NUMBER;
+	View.bActionable = FocusedUsable.IsSet() && !ActiveUse.IsSet();
+	View.Icon = InteractionPrompt.Icon;
+	View.bLocked = InteractionPrompt.bLocked;
+	return View;
 }
 
 // --- Screen fade (P4.5 env_fade) --------------------------------------------------------
@@ -2278,6 +2446,18 @@ FString FElysiumEntityWorld::FormatEventLine(double Now, const FElysiumIOEvent& 
 
 void FElysiumEntityWorld::Teardown()
 {
+	// A captured interaction belongs to this map epoch. Give the leaf its cancellation edge while
+	// its handle and any presentation/session owner are still valid.
+	EndActiveUse(EElysiumUseEndReason::WorldTeardown);
+	TransitionUseFocus(nullptr);
+	PendingUseEdges.Reset();
+	InteractionPrompt = FInteractionPrompt();
+	LastUseOutcome = EElysiumUseOutcome::NoTarget;
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->ClearUseAnchors();
+	}
+
 	bActive = false;
 	ActiveTouches.Empty();
 

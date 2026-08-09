@@ -511,17 +511,19 @@ removes the mapping.
 ## Open
 
 **Button glyphs.** CommonUI and CommonInput are adopted: `UElysiumCommonUIInputData` supplies the
-keyboard and generic-gamepad Accept/Back actions natively, and CommonUI owns focus and Back
+keyboard and generic-gamepad Accept/Back/Use actions natively, and CommonUI owns focus and Back
 routing while the input-scope stack stays the sole input-mode writer
 (`docs/architecture/ui-architecture.md`). What is **not** authored is
 `CommonInputBaseControllerData`, which turns the `"DualSense"` hardware id above into the right
-button art; without it every pad draws generic glyphs.
+button art; the world-interaction prompt therefore shows the CommonInput icon when one resolves and
+falls back to `E`/`RB` text when it does not.
 
-**Aim assist.** `sv_aim` defaults to off and no assist is implemented, but VtMB is a mouse game:
-ranged combat on a stick with no assist, over a `+use` trace radius tuned for a mouse cursor, has
-no original to reproduce and no measured baseline. A Feel-axis decision with no owner yet. The look
-curve itself is no longer among the open questions — it exists, defaults to retail's linear path,
-and is described in `## Feel`.
+**Combat aim assist.** `sv_aim` defaults to off and ranged-combat assist is not implemented. VtMB is
+a mouse game, so ranged combat on a stick has no original pad baseline to reproduce; that remains a
+Feel-axis decision with no owner yet. World `+use` selection is separate and owner-called: its
+exact-first camera/body query and restrained fallback cone are specified in
+`docs/vtmb/entity_io.md`. The look curve itself is no longer among the open questions — it exists,
+defaults to retail's linear path, and is described in `## Feel`.
 
 **Retail's mouse arithmetic is unrecovered.** `docs/vtmb/source_movement.md` owns the ConVar surface
 and its defaults; nothing has decompiled `client.dll`'s `CInput` mouse handling, so "retail is

@@ -27,8 +27,12 @@ class UElysiumCommonUIInputData final : public UCommonUIInputData
 
 public:
 	UElysiumCommonUIInputData();
+	const FDataTableRowHandle& GetUseAction() const { return UseAction; }
 
 private:
 	UPROPERTY()
 	TObjectPtr<class UDataTable> ActionTable;
+
+	UPROPERTY()
+	FDataTableRowHandle UseAction;
 };

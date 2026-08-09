@@ -749,6 +749,10 @@ private:
 			if (AnimatedVisual)
 			{
 				World->RegisterNpcBody(AnimatedVisual);
+				if (IsUsable() && Def && !Def->bSky)
+				{
+					World->RegisterUseAnchor(AnimatedVisual, Handle);
+				}
 			}
 		}
 		else if (!VisualStem.IsEmpty())
@@ -756,7 +760,8 @@ private:
 			Visual = Embodiment->BuildPropVisual(VisualStem, Loc, StaticRot, Embodiment->BodyScaleFor(*Def));
 			if (Visual)
 			{
-				World->RegisterPropBody(Visual);
+				World->RegisterPropBody(Visual,
+					IsUsable() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
 			}
 		}
 
@@ -770,6 +775,10 @@ private:
 	void GateVisual()
 	{
 		const bool bShown = !IsInert() && !bBroken;
+		if (World && IsUsable())
+		{
+			World->SetUseAnchorEnabled(Handle, bShown);
+		}
 		if (Visual)
 		{
 			Visual->SetVisibility(bShown);

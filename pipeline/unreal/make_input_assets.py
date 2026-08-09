@@ -36,12 +36,14 @@ def load_rows():
     # smaller mapping context that still loads, and the first sign of it would be a button that does
     # nothing in a live run. `Elysium.Content.InputAssets` asserts the same set from the other side.
     #
-    # Duck and Camera are the two stick clicks. Neither is a press/release pair -- a stick click
-    # cannot be held while the same stick is being used to aim, so both are one-shot toggles
-    # (`toggleduck`, `togglecamera`) rather than the `+duck` hold a keyboard gets.
-    if ids != ["Move", "Look", "Jump", "Duck", "Camera"]:
+    # Use and Jump are press/release pairs so their edges survive the same command/replay seam as
+    # keyboard and console input. Duck and Camera are the two stick clicks: neither is held while
+    # the same stick is being used, so they remain one-shot toggles (`+duck` is normalized by the
+    # router's toggle policy, and `togglecamera` is intrinsically one-shot).
+    if ids != ["Move", "Look", "Jump", "Use", "Duck", "Camera"]:
         raise RuntimeError(
-            "the gamepad slice must contain exactly Move, Look, Jump, Duck and Camera; got %r" % ids
+            "the gamepad slice must contain exactly Move, Look, Jump, Use, Duck and Camera; got %r"
+            % ids
         )
     return rows
 

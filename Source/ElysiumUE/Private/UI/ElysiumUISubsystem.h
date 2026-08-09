@@ -57,6 +57,10 @@ public:
 	// take the screen down and put it back up; no-op when no screen is up.
 	void RebuildMenu();
 	bool IsMenuOpen() const { return Menu != nullptr; }
+	bool IsModalScreenOpen() const
+	{
+		return Menu != nullptr || CharacterScreen != nullptr || ChargenPopup != nullptr;
+	}
 	EElysiumMenuMode MenuMode() const { return CurrentMode; }
 
 	// The character screen — one screen the whole game reuses, entered on a tab. `L` and `C` are two

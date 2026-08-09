@@ -133,7 +133,7 @@ namespace
 		{ TEXT("attack2"),      EK::ButtonPair, EG::Combat,   EB::Attack2,      TEXT("secondary fire -- 4.9") },
 		{ TEXT("wpn_secondaryatk"), EK::ButtonPair, EG::Combat, EB::SecondaryAtk, TEXT("secondary attack mode -- 4.9") },
 		{ TEXT("reload"),       EK::ButtonPair, EG::Combat,   EB::Reload,       TEXT("reload -- 4.9") },
-		{ TEXT("use"),          EK::ButtonPair, EG::Combat,   EB::Use,          TEXT("world interaction -- fires the look cursor's usable") },
+		{ TEXT("use"),          EK::ButtonPair, EG::Combat,   EB::Use,          TEXT("world interaction -- captured after camera focus settles") },
 		{ TEXT("feed"),         EK::ButtonPair, EG::Combat,   EB::Feed,         TEXT("feeding -- 9.7") },
 		{ TEXT("slot1"),        EK::Once,       EG::Combat,   EB::None,         TEXT("disciplines category -- 9.8") },
 		{ TEXT("slot2"),        EK::Once,       EG::Combat,   EB::None,         TEXT("melee category -- 9.8") },

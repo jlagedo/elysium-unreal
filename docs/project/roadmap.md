@@ -403,9 +403,9 @@ M1 leftovers that live in this lane.
   an in-game play test.* *Deps:* 1.5, 1.6.
 - [x] **4.2 `func_button`** — `FElysiumButton` over the mover primitive (press → `OnPressed` →
   spring-back / latch / toggle); spawnflags reconciled against the decompiled `CBaseButton::Spawn`
-  (`0x100`=TOUCH, `0x400`=USE — the `docs/vtmb/entity_io.md` label swap fixed). The minimal +use look-cursor
-  (`UpdateUseCursor`/`PlayerUse`, pawn `E` key) lands with it, firing `OnIn`/`OnOut` on aim
-  enter/leave. *Deps:* 4.1.
+  (`0x100`=TOUCH, `0x400`=USE — the `docs/vtmb/entity_io.md` label swap fixed). Use-enabled buttons
+  participate in the shared post-move interaction pipeline, firing `OnIn`/`OnOut` on focus
+  enter/leave and consuming the same user-command edge as doors/model controls. *Deps:* 4.1.
 - [x] **4.3 `func_door` / `func_door_rotating`** — the sliding `FElysiumFuncDoor` leaf (movedir
   translation by its own depth minus `lip`, per the decompiled `CBaseDoor::Spawn`); the full
   spawnflag table honoured (`START_OPEN`/`REVERSE`/`LOCKED`/`NO_AUTO_RETURN`/**`PUSE`**); the
@@ -417,11 +417,22 @@ M1 leftovers that live in this lane.
   dropping pawn/physics collision. *Verified:* the tutorial front doors and elevator door have
   annotated brush meshes; substrate coverage exercises attachment, override, PASSABLE and dormancy.
   *Deps:* 4.1.
-- [x] **4.4 `+use` verb + use-icon HUD** — a dedicated use-only trace channel (`ElysiumUse`,
-  `ECC_GameTraceChannel1`) + the context-icon HUD: `use_icon`/`locked_icon` base fields,
-  `GetUseIcon()` locked resolution, ring + icon cell drawn from the PL3 atlas
-  (`$ELYSIUM_EXPORT_ROOT/hud/use_icons.*`); the 72-entry enum in `ElysiumUseIcons.h`; a `+use` section in the Cog
-  Inspector. PL3 (use-icon atlas export) done. *Deps:* 4.2, PL3.
+- [x] **4.4 `+use` foundation + use-icon HUD** — `use` is one `FElysiumUserCmd` button pair for
+  keyboard, gamepad, console and replay (`E`, `RB`). The controller queues command edges; the
+  post-move entity pass settles focus first, fires focus transitions, and then begins/releases the
+  captured logical entity. `IElysiumEmbodiment` owns a component→entity anchor registry and the
+  exact-first modern camera/body query: 225 cm body reach, dual LOS, a restrained 2.5-degree assist
+  cone, 25 percent assisted-focus hysteresis, deterministic ties, and `elysium.UseAssist` exact-only
+  diagnosis. Only focus/prompt/session state persists; no nearby-candidate subsystem exists.
+  Brush doors/buttons use their bodies and `prop_button` uses query-only visual bounds, with
+  dormancy removing anchors. The presentation seam publishes `FElysiumInteractionView`; the PL3
+  ring/icon atlas fades 0.10 s in and 0.15 s out and labels the active CommonInput binding with
+  `E`/`RB` fallback. Modal/cinematic/HideHUD rules suppress it. Headless coverage proves command
+  edge/replay identity, deterministic selection, focus/session lifecycle, hidden/locked model
+  buttons, exact/assist/hysteresis, adjacent controls, body reach, occlusion, offset cameras, and
+  teardown. Live tutorial first-/third-person acceptance remains to run. The owner-called modern
+  Feel divergence is recorded beside the faithful facts in `docs/vtmb/entity_io.md`. *Deps:* 4.2,
+  PL3.
 - [x] **4.5 Tutorial logic classes** — the tutorial's logic/point/brush + trigger classes as
   decompile-grounded leaves (`ElysiumLogicClasses.cpp`): `math_counter`, `logic_timer`,
   `logic_case` + the VtMB-divergent **`logic_case_toggle`** (`InValue` matches case strings while
@@ -487,7 +498,10 @@ M1 leftovers that live in this lane.
   `idle_on`/`idle_off` whose `OnActivate` (117 wires) fires on clip end, not on use; the four
   lockable classes share one `CBaseLockableEnt`/`CBaseVampireSkillEntity` implementation.
   (d) **The doorknob handle sequence** is a virtual the *door* calls, which is why an animated
-  doorknob stands in bind pose. → `docs/vtmb/entity_io.md`. *Deps:* 4.1, 8.3.
+  doorknob stands in bind pose. Knobs, switches, signs, terminals, and containers intentionally
+  expose no player-focus anchor until these specialized leaf behaviors own the interaction; they
+  plug into 4.4 without another selection-system redesign. → `docs/vtmb/entity_io.md`. *Deps:* 4.1,
+  8.3.
 
 **Slice acceptance** *(M3 criterion)*: the tutorial elevator chain works — button →
 `Unlock`/`Trigger` → doors open → `thug_2` `ScriptUnhide` — and walking out of the tutorial

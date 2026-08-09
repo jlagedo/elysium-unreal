@@ -16,6 +16,7 @@ class UElysiumMapVisuals;
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class UPrimitiveComponent;
 class UMaterialParameterCollection;
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
@@ -126,8 +127,8 @@ struct TStructOpsTypeTraits<FElysiumGameplayTickFunction> : public TStructOpsTyp
 
 // S2 — the map's post-move tick (runtime-architecture.md §3, step 8). A fourth tick function on
 // the same actor, in TG_PostPhysics, carrying the work that must see the frame's FINAL positions:
-// the `+use` look cursor traces against where a door actually ended up this frame, not where it
-// was before its swept move and the pawn's. Four tick functions on one actor is the engine's own
+// the `+use` camera/body query sees where a door actually ended up this frame, not where it was
+// before its swept move and the pawn's. Four tick functions on one actor is the engine's own
 // answer to work that straddles physics — splitting into separate actors would reintroduce the
 // ordering question tick groups solve.
 USTRUCT()
@@ -345,10 +346,16 @@ public:
 	// route to the player until 11.4 makes the player an entity, at which point they become
 	// ordinary entity operations and these overrides shrink to the pawn's own transform.
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
+	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const override;
 	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const override;
 	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) override;
 	virtual void DamagePlayer(float Amount) override;
-	virtual FElysiumEntityHandle TraceUseCursor(const FVector& Start, const FVector& End) const override;
+	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
+		const FElysiumEntityHandle& Owner) override;
+	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
+	virtual void ClearUseAnchors() override;
+	virtual FElysiumUseQueryResult QueryPlayerUse(
+		const FElysiumEntityHandle& CurrentFocus) const override;
 	// 11.7 — the scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.
@@ -433,6 +440,16 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RainMaterial;
 	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> RainLayerMaterials;
 	UPROPERTY(Transient) TMap<int32, TObjectPtr<UNiagaraComponent>> RainComponents;
+	// Runtime-only target bounds. Brush entities register their existing body; model props receive
+	// a query-only box component and remain ordinary components of this one map actor.
+	UPROPERTY(Transient) TArray<TObjectPtr<UPrimitiveComponent>> OwnedUseAnchorComponents;
+	struct FUseAnchorRecord
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		FElysiumEntityHandle Owner;
+		bool bEnabled = true;
+	};
+	TArray<FUseAnchorRecord> UseAnchors;
 
 	/** Bind one emitter's component to its parent entity's bone, or to the map root when it has none. */
 	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);

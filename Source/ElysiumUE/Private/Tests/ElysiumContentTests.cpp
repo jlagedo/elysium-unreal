@@ -4313,15 +4313,17 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("the gamepad slice defines exactly five actions"), ActionSet->Actions.Num(), 5);
+	TestEqual(TEXT("the gamepad slice defines exactly six actions"), ActionSet->Actions.Num(), 6);
 	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
 	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));
+	const FElysiumInputActionDefinition* Use = ActionSet->Find(TEXT("Use"));
 	const FElysiumInputActionDefinition* Duck = ActionSet->Find(TEXT("Duck"));
 	const FElysiumInputActionDefinition* Camera = ActionSet->Find(TEXT("Camera"));
 	if (!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
 		!TestTrue(TEXT("Look definition exists"), Look && Look->Action) ||
 		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action) ||
+		!TestTrue(TEXT("Use definition exists"), Use && Use->Action) ||
 		!TestTrue(TEXT("Duck definition exists"), Duck && Duck->Action) ||
 		!TestTrue(TEXT("Camera definition exists"), Camera && Camera->Action))
 	{
@@ -4330,10 +4332,13 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestTrue(TEXT("Move is Axis2D"), Move->Action->ValueType == EInputActionValueType::Axis2D);
 	TestTrue(TEXT("Look is Axis2D"), Look->Action->ValueType == EInputActionValueType::Axis2D);
 	TestTrue(TEXT("Jump is Boolean"), Jump->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("Use is Boolean"), Use->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Duck is Boolean"), Duck->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Camera is Boolean"), Camera->Action->ValueType == EInputActionValueType::Boolean);
 	TestEqual(TEXT("Jump preserves its command identity"), Jump->Command, FString(TEXT("+jump")));
 	TestTrue(TEXT("Jump is a press/release pair"), Jump->bButtonPair);
+	TestEqual(TEXT("RB preserves the ordinary use command identity"), Use->Command, FString(TEXT("+use")));
+	TestTrue(TEXT("Use is a press/release pair"), Use->bButtonPair);
 
 	// **L3 fires the ordinary `+duck` pair, and the crouch is a toggle anyway.** The retention is the
 	// mover's — `IN_DUCK`'s press edge flips `bDuckRequested` — so there is no gamepad-only crouch
@@ -4347,7 +4352,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestFalse(TEXT("view toggle is not a press/release pair"), Camera->bButtonPair);
 	// Every mapped command names a declared verb, or the button is a no-op that logs nothing. The
 	// leading `+` is stripped first, because a pair's press edge is declared under its bare name.
-	for (const FElysiumInputActionDefinition* Definition : { Jump, Duck, Camera })
+	for (const FElysiumInputActionDefinition* Definition : { Jump, Use, Duck, Camera })
 	{
 		const FString Bare = Definition->Command.StartsWith(TEXT("+"))
 			? Definition->Command.Mid(1) : Definition->Command;
@@ -4356,7 +4361,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	}
 
 	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
-	TestEqual(TEXT("five actions are gameplay-mapped"), Mappings.Num(), 5);
+	TestEqual(TEXT("six actions are gameplay-mapped"), Mappings.Num(), 6);
 	auto FindMapping = [&Mappings](const UInputAction* Action) -> const FEnhancedActionKeyMapping*
 	{
 		return Mappings.FindByPredicate(
@@ -4365,11 +4370,13 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FEnhancedActionKeyMapping* MoveMapping = FindMapping(Move->Action);
 	const FEnhancedActionKeyMapping* LookMapping = FindMapping(Look->Action);
 	const FEnhancedActionKeyMapping* JumpMapping = FindMapping(Jump->Action);
+	const FEnhancedActionKeyMapping* UseMapping = FindMapping(Use->Action);
 	const FEnhancedActionKeyMapping* DuckMapping = FindMapping(Duck->Action);
 	const FEnhancedActionKeyMapping* CameraMapping = FindMapping(Camera->Action);
 	if (!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
 		!TestNotNull(TEXT("Look mapping"), LookMapping) ||
 		!TestNotNull(TEXT("Jump mapping"), JumpMapping) ||
+		!TestNotNull(TEXT("Use mapping"), UseMapping) ||
 		!TestNotNull(TEXT("Duck mapping"), DuckMapping) ||
 		!TestNotNull(TEXT("Camera mapping"), CameraMapping))
 	{
@@ -4378,6 +4385,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestEqual(TEXT("Move uses the left stick"), MoveMapping->Key, EKeys::Gamepad_Left2D);
 	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
 	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
+	TestEqual(TEXT("Use is on RB"), UseMapping->Key, EKeys::Gamepad_RightShoulder);
 	// L3 and R3 are the stick *clicks*, and each sits on the stick whose job it serves: crouch is a
 	// movement verb on the movement stick, the view toggle is a camera verb on the camera stick.
 	TestEqual(TEXT("crouch is on L3"), DuckMapping->Key, EKeys::Gamepad_LeftThumbstick);

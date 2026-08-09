@@ -18,6 +18,7 @@ class AActor;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
 class UPhysicsConstraintComponent;
+class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 
@@ -178,7 +179,13 @@ public:
 
 	// 8.3 — register a dynamic-prop body (built by AElysiumMapActor::BuildPropVisual) so the world
 	// tears it down with the map, exactly like NPC bodies. The FElysiumProp leaf calls this from Spawn().
-	void RegisterPropBody(UStaticMeshComponent* Component);
+	void RegisterPropBody(UStaticMeshComponent* Component,
+		const FElysiumEntityHandle& UseOwner = FElysiumEntityHandle::Invalid());
+	void RegisterUseAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
+	// Keep a registered model anchor in step with ScriptHide/Kill without teaching the entity about
+	// collision profiles. Brush bodies also report the edge, although their own SetDormant remains
+	// the physical collision authority.
+	void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
 
 	// 8.4 — register a physics constraint (built by a phys_hinge leaf) so the world tears it down
 	// with the map, like the prop/NPC bodies. The FElysiumPhysHinge leaf calls this from PostSpawn().
@@ -204,18 +211,18 @@ public:
 	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator, bool bBegin);
 
-	// +use look-cursor (P4.2): the minimal reticle slice. UpdateUseCursor camera-ray-picks the
-	// nearest usable, non-inert brush entity within arm's reach and arbitrates OnIn/OnOut as the aim
-	// enters/leaves it (fired through the entities, so a StartHidden→ScriptUnhide arm gates it for
-	// free); PlayerUse presses whatever the cursor is on. Driven from AElysiumMapActor::Tick and the
-	// player controller's use key. `PlayerUse` presses with the player entity as the activator
-	// (11.4), the same handle a trigger touch carries.
-	void UpdateUseCursor();
-	void PlayerUse();
-	FElysiumEntityHandle GetAimedUsable() const { return AimedUsable; }
-	// The reticle icon index for the currently aimed usable (0 = nothing usable aimed at). The HUD
-	// (P4.4) reads this each frame to pick the atlas cell; resolves locked -> locked_icon (GetUseIcon).
-	int32 GetAimedUseIcon() const;
+	// Player interaction: command edges queue in the controller's pre-move sample and are consumed
+	// only after this frame's post-move focus query. The focused entity and any captured session are
+	// world state; candidates are an ephemeral embodiment result.
+	void QueuePlayerUseEdge(EElysiumUseEdge Edge);
+	void UpdatePlayerInteraction();
+	// The explicit leaf/UI completion seam. Supplying the captured owner prevents a stale panel
+	// from ending a newer entity's session; Invalid intentionally means cancel whatever is active.
+	bool EndPlayerUseSession(const FElysiumEntityHandle& OwnerHandle, EElysiumUseEndReason Reason);
+	FElysiumEntityHandle GetFocusedUsable() const { return FocusedUsable; }
+	FElysiumEntityHandle GetAimedUsable() const { return FocusedUsable; } // debug compatibility
+	FElysiumInteractionView GetInteractionView() const;
+	EElysiumUseOutcome GetLastUseOutcome() const { return LastUseOutcome; }
 
 	// --- Screen fade (P4.5 env_fade) ---------------------------------------------------
 	// A full-screen colour fade driven by env_fade's `Fade` input, advanced off the game clock and
@@ -382,6 +389,9 @@ public:
 
 private:
 	void Teardown();
+	void TransitionUseFocus(const FElysiumUseCandidate* Candidate);
+	void EndActiveUse(EElysiumUseEndReason Reason);
+	float InteractionPromptAlpha(double Now) const;
 	// Build the brush body (P1.5) for one entity, if it is a brush with hulls: cook the convex
 	// UBodySetup from the def, place it at the def origin, attach it to the owner actor, store it
 	// on the entity, and start it dormant when born hidden. Point/logic entities get no body (R1).
@@ -465,9 +475,28 @@ private:
 	// always starts from the spawn pass.
 	TArray<FElysiumEntityState> Baseline;
 
-	// The usable brush entity currently under the +use look-cursor (P4.2), or Invalid when the aim
-	// is off every usable body / out of reach. OnIn/OnOut fire on the transitions of this handle.
-	FElysiumEntityHandle AimedUsable;
+	// The only retained player-interaction state. Candidate lists stay inside one query frame.
+	FElysiumEntityHandle FocusedUsable;
+	FElysiumUseContext FocusContext;
+	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingUseEdges;
+	struct FActiveUse
+	{
+		FElysiumUseContext Context;
+		EElysiumUseSessionKind Kind = EElysiumUseSessionKind::None;
+	};
+	TOptional<FActiveUse> ActiveUse;
+	EElysiumUseOutcome LastUseOutcome = EElysiumUseOutcome::NoTarget;
+
+	struct FInteractionPrompt
+	{
+		FElysiumEntityHandle DisplayOwner;
+		int32 Icon = 0;
+		bool bLocked = false;
+		bool bFadingIn = false;
+		float StartAlpha = 0.0f;
+		double TransitionTime = 0.0;
+	};
+	FInteractionPrompt InteractionPrompt;
 
 	// P4.5 env_fade screen-fade state (one at a time). GetScreenFade derives the current alpha from
 	// NowSeconds() against StartTime, so no per-frame advance is needed; an expired fade simply

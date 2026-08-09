@@ -21,4 +21,11 @@ UElysiumCommonUIInputData::UElysiumCommonUIInputData()
 	ActionTable->AddRow(TEXT("Back"), Back);
 	DefaultBackAction.DataTable = ActionTable;
 	DefaultBackAction.RowName = TEXT("Back");
+
+	FElysiumCommonInputActionData Use;
+	Use.DisplayName = NSLOCTEXT("ElysiumUI", "Use", "Use");
+	Use.SetKeys(EKeys::E, EKeys::Gamepad_RightShoulder);
+	ActionTable->AddRow(TEXT("Use"), Use);
+	UseAction.DataTable = ActionTable;
+	UseAction.RowName = TEXT("Use");
 }

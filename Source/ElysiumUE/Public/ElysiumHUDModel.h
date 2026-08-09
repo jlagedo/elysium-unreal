@@ -54,6 +54,18 @@ public:
 	int32 UseIcon = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	float UsePromptAlpha = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	bool bUseActionable = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	bool bUseLocked = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	FName UseAction = FName(TEXT("Use"));
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FLinearColor Fade = FLinearColor::Transparent;
 
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")

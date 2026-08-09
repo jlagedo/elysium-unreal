@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumAppState.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumInteraction.h"
 
 class FElysiumDlgConversation;
 struct FElysiumSignData;
@@ -87,10 +88,10 @@ struct FElysiumViewState
 	// NPC choreography is allowed to run during ordinary play.
 	bool bCinematic = false;
 
-	// --- Reticle (P4.4) ---------------------------------------------------------------------
-	// The +use context-icon cell for whatever the look-cursor is on (0 = nothing usable aimed at);
-	// already resolves locked -> locked_icon.
-	int32 ReticleIcon = 0;
+	// --- Interaction (P4.4) -----------------------------------------------------------------
+	// The complete +use presentation projection. A retained fade-out remains visible but is never
+	// actionable, so presentation cannot imply an entity which the same frame would use.
+	FElysiumInteractionView Interaction;
 
 	// --- Screen fade (P4.5 env_fade) --------------------------------------------------------
 	// rgb = the authored fade colour, a = the current 0..1 alpha. Alpha 0 means no fade is up.
@@ -135,7 +136,7 @@ namespace ElysiumView
 	{
 		None,      // no surface at all, or a panel with HideHUD covering the game
 		Cross,     // the plain aim cross
-		UseIcon,   // the +use context cursor: the ring frame around ReticleIcon's atlas cell
+		UseIcon,   // the +use context cursor: the ring frame around Interaction.Icon's atlas cell
 	};
 
 	inline EReticle ResolveReticle(const FElysiumViewState& V)
@@ -144,7 +145,8 @@ namespace ElysiumView
 		{
 			return EReticle::None;
 		}
-		return V.ReticleIcon > 0 ? EReticle::UseIcon : EReticle::Cross;
+		return V.Interaction.bVisible && V.Interaction.Icon > 0
+			? EReticle::UseIcon : EReticle::Cross;
 	}
 
 	// What the retained dialogue box has to do about this frame's state.

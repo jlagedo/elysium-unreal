@@ -801,7 +801,10 @@ namespace ElysiumMcpImpl
 					if (FElysiumEntityWorld* World = Entities())
 					{
 						const FElysiumEntityHandle Aimed = World->GetAimedUsable();
-						Body->SetNumberField(TEXT("use_icon"), World->GetAimedUseIcon());
+						const FElysiumInteractionView Interaction = World->GetInteractionView();
+						Body->SetNumberField(TEXT("use_icon"), Interaction.Icon);
+						Body->SetNumberField(TEXT("use_prompt_alpha"), Interaction.PromptAlpha);
+						Body->SetBoolField(TEXT("use_actionable"), Interaction.bActionable);
 						Body->SetStringField(TEXT("aimed_usable"),
 							Aimed.IsSet() ? World->DescribeHandle(Aimed) : FString());
 						Body->SetNumberField(TEXT("game_time"), World->NowSeconds());

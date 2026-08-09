@@ -84,6 +84,7 @@
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
+#include "ElysiumUseIcons.h"
 #include "ElysiumUserCmd.h"
 #include "ElysiumVariant.h"
 
@@ -93,12 +94,15 @@
 #include "Tests/AutomationCommon.h"
 
 #include "Components/SceneComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Engine/World.h"
+#include "Camera/CameraActor.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Sound/SoundGenerator.h"
 #include "Sound/SoundWaveProcedural.h"
@@ -111,6 +115,52 @@
 // makes the `|` yield an EAutomationTestFlags), not int32.
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+
+// A test-only leaf for the interaction world's captured-session rules. Production classes opt
+// into these same virtuals when terminals/containers land; keeping this leaf here proves the
+// foundation without prematurely making one of those content classes actionable.
+class FElysiumTestUseSessionEntity final : public FElysiumEntity
+{
+public:
+	int32 BeginCount = 0;
+	int32 EndCount = 0;
+	int32 EnterCount = 0;
+	int32 LeaveCount = 0;
+	EElysiumUseEndReason LastEndReason = EElysiumUseEndReason::Cancelled;
+
+	static int32 TeardownEndCount;
+
+	virtual bool IsUsable() const override { return true; }
+	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext&) override
+	{
+		++BeginCount;
+		return FElysiumUseBeginResult::Started(
+			TargetName == TEXT("explicit")
+				? EElysiumUseSessionKind::Explicit : EElysiumUseSessionKind::WhileHeld);
+	}
+	virtual void EndPlayerUse(const FElysiumUseContext&, EElysiumUseEndReason Reason) override
+	{
+		++EndCount;
+		LastEndReason = Reason;
+		if (Reason == EElysiumUseEndReason::WorldTeardown)
+		{
+			++TeardownEndCount;
+		}
+	}
+	virtual void OnUseCursorEnter() override { ++EnterCount; }
+	virtual void OnUseCursorLeave() override { ++LeaveCount; }
+};
+
+int32 FElysiumTestUseSessionEntity::TeardownEndCount = 0;
+
+static TUniquePtr<FElysiumEntity> MakeTestUseSessionEntity()
+{
+	return MakeUnique<FElysiumTestUseSessionEntity>();
+}
+
+static FElysiumClassRegistrar GTestUseSessionRegistrar(
+	TEXT("test_use_session"), ElysiumBaseClassName(), &MakeTestUseSessionEntity,
+	[](FElysiumClassDesc&) {});
 
 // =====================================================================================
 // FElysiumVariant — the tagged value all four chokepoints marshal through.
@@ -633,6 +683,44 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	Builder.ClearButtons();                              // Canceled/context removal -> clear
 	TestFalse(TEXT("jump cancellation cannot leave a latch"),
 		Builder.Build(0.016f).IsDown(EElysiumButton::Jump));
+
+	// +use is the same command value in live and replay. The interaction world consumes these two
+	// edges after focus settles; a held frame does not create a second press.
+	FElysiumUserCmd UseUp;
+	FElysiumUserCmd UseDown;
+	UseDown.Buttons = static_cast<uint64>(EElysiumButton::Use);
+	TestTrue(TEXT("use press is one command edge"),
+		UseDown.JustPressed(EElysiumButton::Use, UseUp));
+	TestFalse(TEXT("held use does not repeat"),
+		UseDown.JustPressed(EElysiumButton::Use, UseDown));
+	TestTrue(TEXT("use release is one command edge"),
+		UseUp.JustReleased(EElysiumButton::Use, UseDown));
+	const FElysiumUserCmd LiveUseFrames[] = { UseUp, UseDown, UseDown, UseUp };
+	TArray<EElysiumUseEdge> LiveUseEdges;
+	TArray<EElysiumUseEdge> ReplayUseEdges;
+	for (int32 Index = 1; Index < UE_ARRAY_COUNT(LiveUseFrames); ++Index)
+	{
+		if (LiveUseFrames[Index].JustPressed(EElysiumButton::Use, LiveUseFrames[Index - 1]))
+		{
+			LiveUseEdges.Add(EElysiumUseEdge::Pressed);
+		}
+		if (LiveUseFrames[Index].JustReleased(EElysiumButton::Use, LiveUseFrames[Index - 1]))
+		{
+			LiveUseEdges.Add(EElysiumUseEdge::Released);
+		}
+		const FElysiumUserCmd Replayed = LiveUseFrames[Index];
+		const FElysiumUserCmd ReplayPrevious = LiveUseFrames[Index - 1];
+		if (Replayed.JustPressed(EElysiumButton::Use, ReplayPrevious))
+		{
+			ReplayUseEdges.Add(EElysiumUseEdge::Pressed);
+		}
+		if (Replayed.JustReleased(EElysiumButton::Use, ReplayPrevious))
+		{
+			ReplayUseEdges.Add(EElysiumUseEdge::Released);
+		}
+	}
+	TestEqual(TEXT("live use produces press then release"), LiveUseEdges.Num(), 2);
+	TestTrue(TEXT("replay produces identical use edges"), LiveUseEdges == ReplayUseEdges);
 
 	// --- Record / replay -----------------------------------------------------------------
 	// The acceptance: a recorded stream replays identically. The whole of it is here because the
@@ -6331,6 +6419,181 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUseTargetingEmbodimentTest,
+	"Elysium.Substrate.UseTargetingEmbodiment", GElysiumTestFlags)
+bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	APlayerController* PC = World ? World->SpawnActor<APlayerController>() : nullptr;
+	AElysiumPawn* Pawn = World ? World->SpawnActor<AElysiumPawn>(
+		FVector(0, 0, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator) : nullptr;
+	if (!TestNotNull(TEXT("targeting controller"), PC)
+		|| !TestNotNull(TEXT("targeting player body"), Pawn))
+	{
+		return false;
+	}
+	PC->Possess(Pawn);
+	PC->SetControlRotation(FRotator::ZeroRotator);
+	if (PC->PlayerCameraManager)
+	{
+		PC->PlayerCameraManager->UpdateCamera(0.0f);
+	}
+
+	AElysiumMapActor* Map = World->SpawnActorDeferred<AElysiumMapActor>(
+		AElysiumMapActor::StaticClass(), FTransform::Identity);
+	if (!TestNotNull(TEXT("targeting map embodiment"), Map))
+	{
+		return false;
+	}
+	FVector CameraLocation;
+	FRotator CameraRotation;
+	FVector BodyOrigin;
+	if (!TestTrue(TEXT("final player camera POV resolves"),
+		Map->GetPlayerViewPoint(CameraLocation, CameraRotation))
+		|| !TestTrue(TEXT("player body use origin resolves"), Map->GetPlayerUseOrigin(BodyOrigin)))
+	{
+		return false;
+	}
+
+	auto AddTarget = [Map](const TCHAR* Name, const FVector& Location,
+		const FVector& Extent, const FElysiumEntityHandle& Handle)
+	{
+		UBoxComponent* Source = NewObject<UBoxComponent>(Map, FName(Name));
+		Source->InitBoxExtent(Extent);
+		Source->SetupAttachment(Map->GetRootComponent());
+		Source->SetWorldLocation(Location);
+		Source->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Source->RegisterComponent();
+		Map->AddInstanceComponent(Source);
+		Map->RegisterUseAnchor(Source, Handle);
+		return Source;
+	};
+
+	const FVector Aim = CameraRotation.Vector().GetSafeNormal();
+	const FVector Side = FRotationMatrix(CameraRotation).GetScaledAxis(EAxis::Y).GetSafeNormal();
+	const FElysiumEntityHandle ExactHandle(10, 1);
+	AddTarget(TEXT("ExactSource"), CameraLocation + Aim * 150.0f,
+		FVector(3.0f), ExactHandle);
+	FElysiumUseQueryResult Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("exact ray produces one target"), Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("exact ray selects its logical entity"), Query.Candidates[0].Owner, ExactHandle);
+		TestEqual(TEXT("exact ray is classified exact"),
+			Query.Candidates[0].Selection, EElysiumUseSelection::Exact);
+		TestTrue(TEXT("query reports body distance"), Query.Candidates[0].BodyDistance > 0.0f);
+		TestTrue(TEXT("query reports camera distance"), Query.Candidates[0].CameraDistance > 0.0f);
+	}
+
+	Map->SetUseAnchorEnabled(ExactHandle, false);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("disabled anchor is removed from exact targeting"), Query.Candidates.IsEmpty());
+
+	const FElysiumEntityHandle AssistedHandle(11, 1);
+	AddTarget(TEXT("AssistedSource"), CameraLocation + Aim * 150.0f + Side * 10.0f,
+		FVector(2.0f), AssistedHandle);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("outside the base cone is not assisted"), Query.Candidates.IsEmpty());
+	Query = Map->QueryPlayerUse(AssistedHandle);
+	TestEqual(TEXT("current focus receives the 25 percent assistance hysteresis"),
+		Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("near miss is classified assisted"),
+			Query.Candidates[0].Selection, EElysiumUseSelection::Assisted);
+	}
+
+	Map->SetUseAnchorEnabled(AssistedHandle, false);
+	const FElysiumEntityHandle NearHandle(12, 1);
+	AddTarget(TEXT("NearAssistSource"), CameraLocation + Aim * 150.0f + Side * 5.0f,
+		FVector(2.0f), NearHandle);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("small near miss receives restrained assistance"), Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("assistance returns the intended small prop"), Query.Candidates[0].Owner, NearHandle);
+	}
+
+	Map->SetUseAnchorEnabled(NearHandle, false);
+	const FElysiumEntityHandle LeftHandle(20, 1);
+	const FElysiumEntityHandle RightHandle(21, 1);
+	const FVector LeftPoint = CameraLocation + Aim * 160.0f - Side * 7.0f;
+	const FVector RightPoint = CameraLocation + Aim * 160.0f;
+	AddTarget(TEXT("LeftButtonSource"), LeftPoint, FVector(3.0f), LeftHandle);
+	AddTarget(TEXT("RightButtonSource"), RightPoint, FVector(3.0f), RightHandle);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("exact aim among adjacent buttons returns one control"), Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("exact aim picks the intended adjacent button"),
+			Query.Candidates[0].Owner, RightHandle);
+	}
+
+	Map->SetUseAnchorEnabled(LeftHandle, false);
+	Map->SetUseAnchorEnabled(RightHandle, false);
+	PC->SetControlRotation(FRotator::ZeroRotator);
+	if (PC->PlayerCameraManager)
+	{
+		PC->PlayerCameraManager->UpdateCamera(0.0f);
+	}
+	Map->GetPlayerViewPoint(CameraLocation, CameraRotation);
+	const FElysiumEntityHandle FarHandle(30, 1);
+	AddTarget(TEXT("FarSource"), CameraLocation + CameraRotation.Vector() * 240.0f,
+		FVector(2.0f), FarHandle);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("camera hit beyond body reach is rejected"), Query.Candidates.IsEmpty());
+	TestEqual(TEXT("body reach rejection is reported"), Query.MissOutcome, EElysiumUseOutcome::OutOfRange);
+
+	Map->SetUseAnchorEnabled(FarHandle, false);
+	const FElysiumEntityHandle OccludedHandle(31, 1);
+	const FVector OccludedPoint = CameraLocation + CameraRotation.Vector() * 150.0f;
+	AddTarget(TEXT("OccludedSource"), OccludedPoint, FVector(3.0f), OccludedHandle);
+	AActor* WallOwner = World->SpawnActor<AActor>();
+	UBoxComponent* Wall = NewObject<UBoxComponent>(WallOwner, TEXT("UseWall"));
+	WallOwner->SetRootComponent(Wall);
+	Wall->InitBoxExtent(FVector(4.0f, 50.0f, 50.0f));
+	Wall->SetWorldLocation(CameraLocation + CameraRotation.Vector() * 75.0f);
+	Wall->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Wall->SetCollisionObjectType(ECC_WorldStatic);
+	Wall->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Wall->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
+	Wall->RegisterComponent();
+	WallOwner->AddInstanceComponent(Wall);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("wall occlusion rejects the target"), Query.Candidates.IsEmpty());
+	TestEqual(TEXT("wall occlusion is reported"), Query.MissOutcome, EElysiumUseOutcome::Occluded);
+	Wall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Offset the final POV like a third-person camera while leaving body reach at the pawn pivot.
+	ACameraActor* OffsetCamera = World->SpawnActor<ACameraActor>();
+	const FVector OffsetLocation = BodyOrigin + FVector(-180.0f, 80.0f, 40.0f);
+	OffsetCamera->SetActorLocationAndRotation(OffsetLocation,
+		(OccludedPoint - OffsetLocation).Rotation());
+	PC->SetViewTarget(OffsetCamera);
+	if (PC->PlayerCameraManager)
+	{
+		PC->PlayerCameraManager->UpdateCamera(0.0f);
+	}
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("offset third-person POV still selects through body validation"),
+		Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("offset POV keeps the logical target"), Query.Candidates[0].Owner, OccludedHandle);
+	}
+
+	Map->ClearUseAnchors();
+	Map->Destroy();
+	return !HasAnyErrors();
+}
+
 // =====================================================================================
 // The theatre detour is a pure decision at the travel funnel: only the authored genesis→theatre
 // destination is rewritten, and a rewrite is a direct tutorial-landmark entry.
@@ -6634,14 +6897,192 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 		TestTrue(TEXT("the screen fade is still world state, not presenter state"),
 			Bare.GetScreenFade(Faded));
 
-		// The +use cursor with no embodiment: no view point, so nothing is ever aimed at, and
-		// pressing use is a safe no-op rather than a null deref.
-		Bare.UpdateUseCursor();
+		// Player interaction with no embodiment: no query result means no focus, and a queued press
+		// is a safe no-op rather than a null deref.
+		Bare.UpdatePlayerInteraction();
 		TestFalse(TEXT("no embodiment means no use cursor"), Bare.GetAimedUsable().IsSet());
-		Bare.PlayerUse();
+		Bare.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+		Bare.UpdatePlayerInteraction();
 	}
 
 	return true;
+}
+
+// =====================================================================================
+// Modern +use — deterministic selection order and the world-owned focus/session lifecycle.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInteractionLifecycleTest,
+	"Elysium.Substrate.InteractionLifecycle", GElysiumTestFlags)
+bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
+{
+	// Candidate scoring is total and stable. Exact beats assistance; hysteresis affects cone
+	// admission only, and assisted candidates still resolve by aim/depth/handle.
+	TArray<FElysiumUseCandidate> Scored;
+	auto Candidate = [](int32 Index, EElysiumUseSelection Selection, float Aim, float Depth,
+		bool bHysteresis = false)
+	{
+		FElysiumUseCandidate C;
+		C.Owner = FElysiumEntityHandle(Index, 7);
+		C.Selection = Selection;
+		C.AimError = Aim;
+		C.CameraDepth = Depth;
+		C.bHysteresis = bHysteresis;
+		return C;
+	};
+	Scored.Add(Candidate(3, EElysiumUseSelection::Assisted, 0.01f, 10.0f, true));
+	Scored.Add(Candidate(2, EElysiumUseSelection::Exact, 1.0f, 100.0f));
+	Scored.Add(Candidate(1, EElysiumUseSelection::Assisted, 0.0f, 1.0f));
+	ElysiumInteraction::SortCandidates(Scored);
+	TestEqual(TEXT("an exact hit always wins"), Scored[0].Owner.Index, 2);
+	TestEqual(TEXT("assisted angular error wins after cone admission"), Scored[1].Owner.Index, 1);
+	Scored.Reset();
+	Scored.Add(Candidate(9, EElysiumUseSelection::Assisted, 0.2f, 30.0f));
+	Scored.Add(Candidate(8, EElysiumUseSelection::Assisted, 0.1f, 40.0f));
+	Scored.Add(Candidate(7, EElysiumUseSelection::Assisted, 0.1f, 20.0f));
+	Scored.Add(Candidate(6, EElysiumUseSelection::Assisted, 0.1f, 20.0f));
+	ElysiumInteraction::SortCandidates(Scored);
+	TestEqual(TEXT("ties finish on the stable entity handle"), Scored[0].Owner.Index, 6);
+
+	auto SessionDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__interaction__");
+		for (const TCHAR* Name : { TEXT("hold"), TEXT("explicit") })
+		{
+			FElysiumEntityDef Def;
+			Def.Classname = TEXT("test_use_session");
+			Def.TargetName = Name;
+			Def.Keys.Add(TEXT("use_icon"), Name == FString(TEXT("hold")) ? TEXT("5") : TEXT("9"));
+			Defs.Defs.Add(MoveTemp(Def));
+		}
+		return Defs;
+	};
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(SessionDefs());
+	World.Activate(0.0);
+	auto* Hold = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("hold")));
+	auto* Explicit = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("explicit")));
+	if (!TestNotNull(TEXT("while-held test entity"), Hold)
+		|| !TestNotNull(TEXT("explicit test entity"), Explicit))
+	{
+		return false;
+	}
+
+	FElysiumUseCandidate HoldHit = Candidate(
+		Hold->Handle.Index, EElysiumUseSelection::Exact, 0.0f, 50.0f);
+	HoldHit.Owner = Hold->Handle;
+	HoldHit.AnchorPoint = FVector(50, 0, 0);
+	Services.UseQuery.Candidates = { HoldHit };
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("focus enters once"), Hold->EnterCount, 1);
+	TestEqual(TEXT("the exact entity becomes focus"), World.GetFocusedUsable(), Hold->Handle);
+	TestFalse(TEXT("the prompt starts its fade at zero"), World.GetInteractionView().bVisible);
+	World.Tick(0.05);
+	const FElysiumInteractionView HalfFade = World.GetInteractionView();
+	TestTrue(TEXT("the prompt is visible during fade-in"), HalfFade.bVisible);
+	TestTrue(TEXT("the 0.10 second fade is halfway at 0.05"),
+		FMath::IsNearlyEqual(HalfFade.PromptAlpha, 0.5f, 0.02f));
+	TestTrue(TEXT("focused prompt is actionable before capture"), HalfFade.bActionable);
+
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("one press begins one interaction"), Hold->BeginCount, 1);
+	TestEqual(TEXT("captured while-held session reports started"),
+		World.GetLastUseOutcome(), EElysiumUseOutcome::SessionStarted);
+	TestFalse(TEXT("a captured session is not actionable a second time"),
+		World.GetInteractionView().bActionable);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("held frames never repeat Begin"), Hold->BeginCount, 1);
+
+	FElysiumUseCandidate ExplicitHit = Candidate(
+		Explicit->Handle.Index, EElysiumUseSelection::Exact, 0.0f, 45.0f);
+	ExplicitHit.Owner = Explicit->Handle;
+	Services.UseQuery.Candidates = { ExplicitHit };
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("looking away fires leave"), Hold->LeaveCount, 1);
+	TestEqual(TEXT("new target receives focus while old session remains captured"),
+		Explicit->EnterCount, 1);
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("another press while captured is busy"),
+		World.GetLastUseOutcome(), EElysiumUseOutcome::Busy);
+	TestEqual(TEXT("busy press never begins the new target"), Explicit->BeginCount, 0);
+
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Released);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("release routes to the captured while-held owner"), Hold->EndCount, 1);
+	TestEqual(TEXT("release carries its reason"), Hold->LastEndReason, EElysiumUseEndReason::Released);
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("explicit session begins after capture clears"), Explicit->BeginCount, 1);
+	TestFalse(TEXT("an explicit modal session suppresses the world prompt"),
+		World.GetInteractionView().bVisible);
+
+	Services.UseQuery = FElysiumUseQueryResult();
+	World.UpdatePlayerInteraction();
+	TestFalse(TEXT("looking away clears focus"), World.GetFocusedUsable().IsSet());
+	TestEqual(TEXT("looking away does not end an explicit session"), Explicit->EndCount, 0);
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Released);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("release does not end an explicit session"), Explicit->EndCount, 0);
+	TestTrue(TEXT("the explicit leaf/UI can complete its captured session"),
+		World.EndPlayerUseSession(Explicit->Handle, EElysiumUseEndReason::Completed));
+	TestEqual(TEXT("explicit completion reaches the captured owner"), Explicit->EndCount, 1);
+	TestEqual(TEXT("explicit completion carries its reason"),
+		Explicit->LastEndReason, EElysiumUseEndReason::Completed);
+	TestEqual(TEXT("explicit completion reports completed"),
+		World.GetLastUseOutcome(), EElysiumUseOutcome::Completed);
+
+	Services.UseQuery.Candidates = { ExplicitHit };
+	World.UpdatePlayerInteraction();
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("the explicit owner can start another session"), Explicit->BeginCount, 2);
+	World.AcceptInput(TEXT("explicit"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
+		Explicit->Handle, Explicit->Handle);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("an inert captured owner is cancelled"), Explicit->EndCount, 2);
+	TestEqual(TEXT("target invalidation carries its reason"),
+		Explicit->LastEndReason, EElysiumUseEndReason::TargetInvalid);
+	World.Tick(0.125);
+	TestTrue(TEXT("the 0.15 second fade-out is halfway after 0.075 seconds"),
+		FMath::IsNearlyEqual(World.GetInteractionView().PromptAlpha, 0.25f, 0.02f));
+	World.Tick(0.20);
+	TestFalse(TEXT("the retained prompt is gone after its fade-out"),
+		World.GetInteractionView().bVisible);
+
+	const FElysiumEntityHandle Stale = Hold->Handle;
+	World.AcceptInput(TEXT("hold"), FName(TEXT("Kill")), FElysiumVariant::Void(),
+		Hold->Handle, Hold->Handle);
+	FElysiumUseCandidate StaleHit = Candidate(
+		Stale.Index, EElysiumUseSelection::Exact, 0.0f, 20.0f);
+	StaleHit.Owner = Stale;
+	Services.UseQuery.Candidates = { StaleHit };
+	World.UpdatePlayerInteraction();
+	TestFalse(TEXT("a stale handle cannot become focus"), World.GetFocusedUsable().IsSet());
+
+	const int32 TeardownsBefore = FElysiumTestUseSessionEntity::TeardownEndCount;
+	{
+		FElysiumRecordingServices TeardownServices;
+		FElysiumEntityWorld TeardownWorld(nullptr, nullptr, TeardownServices.Bundle());
+		TeardownWorld.Load(SessionDefs());
+		TeardownWorld.Activate(0.0);
+		FElysiumEntity* TeardownHold = TeardownWorld.FindByName(TEXT("hold"));
+		FElysiumUseCandidate Hit = Candidate(
+			TeardownHold->Handle.Index, EElysiumUseSelection::Exact, 0.0f, 10.0f);
+		Hit.Owner = TeardownHold->Handle;
+		TeardownServices.UseQuery.Candidates = { Hit };
+		TeardownWorld.UpdatePlayerInteraction();
+		TeardownWorld.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+		TeardownWorld.UpdatePlayerInteraction();
+	}
+	TestEqual(TEXT("map teardown cancels a captured session"),
+		FElysiumTestUseSessionEntity::TeardownEndCount, TeardownsBefore + 1);
+
+	return !HasAnyErrors();
 }
 
 // =====================================================================================
@@ -6835,6 +7276,8 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	TestTrue(TEXT("parentname attaches the cabin button visual to the elevator body"),
 		LiveButton->GetAttachBody()
 		&& LiveButton->GetAttachBody()->GetAttachParent() == LiveElevator->Body);
+	TestTrue(TEXT("model-backed prop_button registers an enabled use anchor"),
+		Services.UseAnchorEnabled.FindRef(LiveButton->Handle));
 	TestTrue(TEXT("attachment preserves the exported world pose"),
 		LiveDoor->Body->GetComponentLocation().Equals(FVector(50.f, 0.f, 0.f), 0.1f));
 
@@ -6853,6 +7296,17 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	TestEqual(TEXT("locked use does not emit OnPressed again"),
 		CounterValue(World.FindByName(TEXT("pressed"))), 1.f);
 	TestEqual(TEXT("locked button exposes locked icon"), LiveButton->GetUseIcon(), 8);
+	FElysiumUseCandidate LockedHit;
+	LockedHit.Owner = LiveButton->Handle;
+	LockedHit.Selection = EElysiumUseSelection::Exact;
+	LockedHit.CameraDepth = 40.0f;
+	Services.UseQuery.Candidates = { LockedHit };
+	World.UpdatePlayerInteraction();
+	const FElysiumInteractionView LockedView = World.GetInteractionView();
+	TestEqual(TEXT("locked focus publishes its locked icon"), LockedView.Icon, 8);
+	TestTrue(TEXT("locked focus publishes locked state"), LockedView.bLocked);
+	TestTrue(TEXT("a locked control remains actionable so it can emit its denial"),
+		LockedView.bActionable);
 
 	const FVector InvalidStart = LiveInvalid->Body->GetRelativeLocation();
 	World.AcceptInput(TEXT("invalid_override"), FName(TEXT("Use")), FElysiumVariant::Void(),
@@ -6950,6 +7404,23 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	TestEqual(TEXT("unhidden PASSABLE mover restores its profile"),
 		LiveDoor->Body->GetCollisionProfileName(), FName(TEXT("ElysiumBrushPassable")));
 	TestTrue(TEXT("unhidden mover restores its attached visual"), LiveDoor->Body->GetVisual()->IsVisible());
+
+	World.AcceptInput(TEXT("elev_button"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
+		LiveButton->Handle, LiveButton->Handle);
+	TestFalse(TEXT("hidden prop_button removes its use anchor"),
+		Services.UseAnchorEnabled.FindRef(LiveButton->Handle));
+	World.UpdatePlayerInteraction();
+	TestFalse(TEXT("a stale exact query cannot focus a hidden button"),
+		World.GetFocusedUsable().IsSet());
+	TestFalse(TEXT("hidden button has no actionable prompt"),
+		World.GetInteractionView().bActionable);
+	World.AcceptInput(TEXT("elev_button"), FName(TEXT("ScriptUnhide")), FElysiumVariant::Void(),
+		LiveButton->Handle, LiveButton->Handle);
+	TestTrue(TEXT("ScriptUnhide restores the prop_button use anchor"),
+		Services.UseAnchorEnabled.FindRef(LiveButton->Handle));
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("ScriptUnhide makes the button focusable again"),
+		World.GetFocusedUsable(), LiveButton->Handle);
 
 	return true;
 }
@@ -8253,7 +8724,8 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 	TestEqual(TEXT("the plain aim cross by default"),
 		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::Cross);
 
-	V.ReticleIcon = 7;
+	V.Interaction.bVisible = true;
+	V.Interaction.Icon = 7;
 	TestEqual(TEXT("a usable under the cursor swaps in the context icon"),
 		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::UseIcon);
 

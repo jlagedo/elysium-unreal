@@ -67,26 +67,25 @@ void AElysiumPlayerController::PlayerTick(float DeltaTime)
 	if (Router)
 	{
 		Router->SampleFrame(DeltaTime);
+		const FElysiumUserCmd& Current = Router->CurrentCmd();
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			if (Current.JustPressed(EElysiumButton::Use, PreviousCmd))
+			{
+				World->QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+			}
+			if (Current.JustReleased(EElysiumButton::Use, PreviousCmd))
+			{
+				World->QueuePlayerUseEdge(EElysiumUseEdge::Released);
+			}
+		}
+		PreviousCmd = Current;
 	}
 }
 
 void AElysiumPlayerController::RegisterCommands()
 {
 	FElysiumCommands& Registry = FElysiumCommands::Get();
-
-	// `+use` — press whatever the entity world's look cursor is aimed at (P4.2/P4.4). The release
-	// half latches IN_USE and does nothing else, which is what VtMB's own `+use` does.
-	Bindings.Add(Registry.Bind(TEXT("use"), [this](const FElysiumCommandCall& Call)
-	{
-		if (!Call.bPressed)
-		{
-			return;
-		}
-		if (FElysiumEntityWorld* World = CurrentEntityWorld())
-		{
-			World->PlayerUse();
-		}
-	}));
 
 	// `+attack` — until weapons exist (4.9) the primary click's only job is dismissing an open sign
 	// panel, which is what every VtMB popup instructs ("left-click to continue"). The world no-ops
