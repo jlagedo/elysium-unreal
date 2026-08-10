@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "topic": "disciplines-client",
+  "consuming_document": "docs/vtmb/disciplines.md",
+  "research_id": "RE41",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "How do quickbar selection, tier selection and vdiscipline_last targeting reach server commands?",
+    "What does the CDiscipline UI object own versus the server discipline runtime?",
+    "How are target highlight, legal-target feedback, cooldown, blood cost and active state presented?",
+    "What exact table does vdiscipline_int index?"
+  ],
+  "functions": [
+    {"address": "100a8de0", "label": "ClientQuickbarDisciplineDispatch", "confidence": "vdiscipline_int formatting and quickbar item-type branch", "role": "translate quickbar discipline selection into the server command surface", "depth": 4, "cap": 520},
+    {"address": "10059100", "label": "ClientSelectedDisciplineDispatch", "confidence": "vdiscipline_int formatting and HUD selection caller", "role": "issue the selected discipline tier from the HUD", "depth": 3, "cap": 360},
+    {"address": "100591b0", "label": "ClientHotkeyCommandDispatch", "confidence": "vhotkey_int formatting", "role": "translate a selected hotkey into the internal hotkey command", "depth": 3, "cap": 300},
+    {"address": "100a94d0", "label": "ClientDisciplineSelectionMap", "confidence": "quickbar vdiscipline_int formatter caller", "role": "map a quickbar discipline entry and selected tier onto the compiled server discipline index", "depth": 4, "cap": 620},
+    {"address": "10149450", "label": "ClientDisciplineTargetParse", "confidence": "BloodCost, RecoveryTime and TgtHightlightParticle string references", "role": "parse the client-facing selection and presentation fields of one DisciplineTgt record", "depth": 3, "cap": 360},
+    {"address": "10149ac0", "label": "ClientDisciplineTargetFileLoad", "confidence": "DisciplineTgt root-key reference", "role": "load client DisciplineTgt records from one data file", "depth": 3, "cap": 240}
+  ],
+  "grep_probes": [
+    {
+      "label": "discipline_client_commands",
+      "str": "vdiscipline~vdiscipline_int~vdiscipline_last~vdiscipline_endall~vhotkey~CDiscipline~DisciplineTgt~BloodCost~RecoveryTime",
+      "cls": "CDiscipline~CTargeted",
+      "fn": "Discipline~Target~Hotkey~Command",
+      "cap": 620
+    },
+    {
+      "label": "discipline_client_presentation",
+      "str": "TgtHightlightParticle~Targeting~cooldown~blood~renewable~active~Disciplines/",
+      "cls": "CDiscipline~CTargeted",
+      "fn": "Discipline~Target~Activate~Deactivate~Paint~Think",
+      "cap": 620
+    }
+  ],
+  "relationships": [
+    {"from": "100a8de0", "to": "100a94d0", "confidence": "verified", "evidence": "quickbar Discipline dispatch maps the visible entry before formatting vdiscipline_int"},
+    {"from": "10059100", "to": "100a94d0", "confidence": "verified", "evidence": "HUD Discipline selection uses the same visible-to-compiled mapping"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "Quickbar item type zero is a Discipline and dispatches a one-argument vdiscipline_int command.",
+      "evidence": "0x100a8de0 branches on item type zero, calls 0x100a94d0 and formats 'vdiscipline_int %d'.",
+      "consequence": "The server, not the quickbar widget, owns cast eligibility and payment."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The visible learned-Discipline ordinal is not the authoritative enum; the client walks the compiled table, filters unavailable entries and returns the actual slot index.",
+      "evidence": "0x100a94d0 iterates the compiled index array, reads the Disciplines stat list and counts only entries whose current value is nonnegative and below the display cap.",
+      "consequence": "Quickbar serialization must preserve or reconstruct compiled identity when clans expose different subsets."
+    },
+    {
+      "confidence": "partial",
+      "fact": "vhotkey_int and vdiscipline_int are distinct immediate client command bodies, but the reported one-frame selection deferral and exact upper-tier handoff are not closed.",
+      "evidence": "0x100591b0 formats vhotkey_int; 0x10059100 formats vdiscipline_int. The focused bodies do not establish command-buffer ordering or the separate tier writer.",
+      "consequence": "Preserve select-then-cast as two observable stages and validate frame/tier ordering live before freezing input behavior."
+    }
+  ]
+}

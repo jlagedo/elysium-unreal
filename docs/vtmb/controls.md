@@ -159,41 +159,68 @@ Inventory. Retail exposes only `slot2`/`slot3`/`slot5`/`slot6` in its action lis
 
 #### The quickbar is select-then-cast
 
-Activating a power is **two stages, two console commands**:
+The authored retail bindings expose **two stages, two console commands**:
 
 1. `vhotkey #N` **selects** slot N into the queue drawn below the blood meter;
 2. `vdiscipline_last` **casts** whatever is selected — retail's `MOUSE2` bind.
 
-The selection is **deferred by one frame**. Both commands in one statement cast the *previously*
-selected power and only then switch, so a one-key cast has to spend a frame between them —
-`bind "key" "vhotkey #X; wait 1; vdiscipline_last"`.
+Patch/community bindings insert a frame between the two —
+`bind "key" "vhotkey #X; wait 1; vdiscipline_last"`. The static client command bodies establish
+the separate selection and cast verbs, but not yet the reported one-frame queue order.
 
 `showhotkeys` (`k`) opens `VHotkeysUI`, where the ten slots are assigned. A slot holds a **weapon,
 a discipline or a blood pack** — it is a general quickbar, not a discipline bar — and a tiered
 discipline exposes its level in a drop-list on the slot.
 
-Two verbs cast **without** the `vdiscipline_last` confirm, reaching tier 1 only:
-`vdiscipline_int <N>` indexes the compiled discipline table, and `vdiscipline #N` takes the Nth
-discipline on the character sheet. Neither reaches the upper tiers of Animalism or Thaumaturgy.
-Passive disciplines (Bloodbuff, Celerity) therefore fire on the keypress alone.
+The client quickbar maps its visible learned-Discipline ordinal back onto the compiled thirteen-slot
+table, then issues `vdiscipline_int <N>`. The server stores that compiled index and a separate
+remembered tier, validates that the learned value is positive, and enters the common Discipline
+authority. `vdiscipline_last` re-enters the same authority with the remembered pair. The compiled
+indices are `0` Animalism, `1` Auspex, `2` Blood Healing, `3` Celerity, `4` Bloodbuff,
+`5` Dementation, `6` Dominate, `7` Fortitude, `8` Obfuscate, `9` Potence, `10` Presence,
+`11` Protean and `12` Thaumaturgy. The exact upper-tier UI handoff remains open.
 
-`vdiscipline_endall` (`F8`) ends every active discipline, so some are **sustained states** rather
-than instants.
+`vdiscipline_endall` (`F8`) and the entity input `ClearActiveDisciplines` converge on the same
+server teardown: owned Discipline events are removed through normal callbacks and active targeted
+effects are cleared. Full cast/effect behavior is in `docs/vtmb/disciplines.md`.
 
 `toggleuiside` (`t`, relabelled "Toggle Discipline/Weapon" by the patch, `client.dll`) switches
 **what the mouse wheel cycles** — weapons or disciplines. `invnext`/`invprev` act on whichever
 list is selected; the accompanying UI shift is cosmetic.
 
-*Community-sourced, pending decompilation:* the one-frame deferral, the slot contents, and the
-`vdiscipline_int` index table (`0` Nightwisp Ravens, `1` Auspex, `3` Celerity, `4` Bloodbuff,
-`5` Hysteria, `6` Trance, `7` Fortitude, `8` Obfuscate, `9` Potence, `10` Presence, `11` Protean,
-`12` Bloodstrike). Decompiling `vampire.dll`'s `vdiscipline_int` handler would confirm the table
-and the argument form; `client.dll`'s `vhotkey_int` handler would confirm the deferral.
+*Still pending:* confirm the one-frame `vhotkey` deferral and the exact upper-tier selection
+transaction in a controlled client trace.
 
-#### What `+attack` does — directional combos and the block
+#### Firearm attack, mode toggle and reload
 
-Unarmed and melee share one move set, selected by **`+attack` plus the movement direction held
-with it**: three directional combos, plus a fourth for `+attack` with no direction held.
+For `CWeaponRanged`, `+attack` selects the active primary mode and `+attack2` selects the authored
+secondary mode. That secondary record is weapon data, not a universal alternate shot: it may fire,
+cycle a scope or run `Toggle_Primary_Mode`. The latter swaps which `Primary`/`PrimaryMode2` record
+future `+attack` presses use; the Anaconda's fan mode and the Uzi's cadence toggle follow this
+pattern.
+
+Semi-automatic versus held automatic fire is also authored. The shared weapon frame preserves
+held primary/secondary intent only when the selected mode's `allow_autofire` bit permits it;
+otherwise a new press edge is required after the first accepted attack. `Attack_Rate` supplies the
+cadence timer. The accepted request starts `PLAYER_ATTACK1` and a weapon-specific attack layer;
+the actual shot is emitted by a later model animation event. `+reload` enters the separate reload
+path, whose accepted action is `PLAYER_RELOAD`; magazine/refill behavior and the complete event-to-
+shot chain are in `docs/vtmb/combat-and-damage.md`.
+
+`+wpn_secondaryatk` remains composite with a gun: it still forwards `+attack2`, but the extra block
+bit cannot produce `PLAYER_BLOCK` because ranged capability `0x2000` does not intersect the melee
+block mask `0x18000`. There is no firearm block action and no firearm input-combo buffer.
+
+#### Melee weighted attacks, automatic combos and the block
+
+The pinned server does **not** select three melee combos from held movement direction. A melee
+primary request starts as `ACT_MELEE_ATTACK` (or air/kick/sneak context), then the shared melee
+request body may replace the ordinary activity with `ACT_MELEE_ATTACK_2COMBO`. The substitution
+is automatic and random: it uses saved base `Melee` for weapons or base `Brawl` for fists, with
+rank chances `0/10/25/45/70/100%`. After weapon translation, the model chooses one matching
+ordinary or `2COMBO` sequence by `actweight`. Sequence labels such as `med`, `low` and `far` are
+authored variants, not evidence of directional input. The complete activity, sequence and damage
+path is in `docs/vtmb/combat-and-damage.md`.
 
 **The block verb is `+wpn_secondaryatk`** [VtMB decompiled]. The pinned client registers two
 independent `kbutton_t` pairs. `+attack2` alone packs held bit `0x800` and press edge `0x01000000`.
@@ -205,10 +232,12 @@ On the server, player `+0x2088` is the current-button field and `0x10160ec0` is 
 `0x08000000` test. The predicate additionally requires ground contact and an active weapon whose
 capability mask intersects `0x18000`; success makes the classifier return compact action code `13`,
 and the ordinary selector requests `ACT_PREBLOCK`. `+attack2` alone cannot set that block bit.
-Blocking remains a real mechanic with the `Defence` feat behind it, while the ordinary attack2 bits
-continue through weapon secondary-fire policy. `uv run elysium research input_action_survey`
-hash-pins both DLLs and every instruction span in this chain. *(Directional move set:
-community-sourced.)*
+Blocking remains a real mechanic: the held action enters `ACT_PREBLOCK`, impact performs a
+facing/weapon check, and the opposed melee margin selects normal block or the heavy-block stagger
+reaction. Positive damage can still pass through a block. The ordinary attack2 bits continue
+through weapon secondary-fire policy. `uv run elysium research input_action_survey` hash-pins both
+DLLs and every instruction span in the command chain; the combat research case owns the later
+impact and reaction chain.
 
 ### Camera
 

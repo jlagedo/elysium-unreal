@@ -62,10 +62,10 @@ stages and some re-enter the I/O or script layer after committing.
 | Family | Primary entries | Confirmed runtime checks/routing | Result owner |
 |---|---|---|---|
 | Movement/look | `+forward`, `+back`, strafe, jump, duck, look modes | client builds axes/bits; player command runs before the think/event pass; mover and camera read realized intent | movement/camera, then locomotion activity |
-| Primary attack | `+attack` | active weapon and weapon policy consume the bit; attack code resolves hit/defense/damage; exact global eligibility chain remains open | weapon/player combat, then damage and action resolver |
-| Ordinary secondary | `+attack2` | owns the ordinary secondary-fire bit; does not by itself assert melee block | weapon-specific secondary policy |
+| Primary attack | `+attack` | melee requests ordinary/air/kick/sneak activity and may substitute an automatic base-ability-ranked `2COMBO`; ranged dispatches the active authored mode, gates held repeat with `allow_autofire`, requests the attack layer and emits the shot from a sequence event | weapon/player combat, then trace/opposed record, impact and damage resolver |
+| Ordinary secondary | `+attack2` | owns the ordinary secondary-fire bit; ranged data may define a second attack, scope cycle or primary-mode toggle; does not by itself assert melee block | weapon-specific secondary policy |
 | Composite secondary/block | `+wpn_secondaryatk` | asserts a dedicated bit and forwards into `+attack2`; block also requires ground contact and active-weapon capability `0x18000` | player compact code 13 / `ACT_PREBLOCK`, or weapon secondary |
-| Reload | `+reload` | held command bit exists; active-firearm, clip/reserve and animation/state predicates still need an end-to-end join | active weapon/inventory ammo |
+| Reload | `+reload` | ranged weapon requires reserve and missing compatible-magazine capacity, requests `PLAYER_RELOAD`, then performs bulk refill or `reload_single` one-round transactions at sequence-timed completion | active weapon/inventory ammo |
 | World use | `+use` | look/use target, object capability, use filter and class-specific eligibility; then target `Use` | entity class and I/O queue |
 | Feed | `+feed` or patch alias/script helper | target eligibility and resistance policy; resisted branch uses Brawl rating vs target Hacking roll | player/target feeding state, camera and sheet effects |
 | Inventory select/equip/drop | `slotN`, cycle, holster, drop and inventory UI commands | selected category/item, ownership, droppable/permanent/stack/ammo policy; transfer is server-authoritative | combat-character inventory and item entities |
@@ -84,6 +84,31 @@ bit and ordinary attack2. The server emits compact action 13 only when the dedic
 ground contact and the active weapon's block capability agree. Animation then translates
 `ACT_PREBLOCK` through the current form/weapon rules. Treating `attack2` as "block" loses both
 the ordinary secondary-fire route and the eligibility check.
+
+### Melee primary is an activity request, not an input combo buffer
+
+The held primary bit reaches `CWeaponMelee::ItemPostFrame`; an accepted ordinary request starts as
+`ACT_MELEE_ATTACK`. Before activity translation, the weapon may probabilistically substitute
+`ACT_MELEE_ATTACK_2COMBO` from base `Melee` or base `Brawl`. Weapon/form translation and the
+model's activity weights then select the exact sequence. No movement-direction read or queued
+button-chain was found in this selection path. Impact later consumes the defender-side opposed
+record, applies block reactions where eligible, and commits the damage formula documented in
+`docs/vtmb/combat-and-damage.md`.
+
+### A firearm shot is a sequence-event commit
+
+The shared ranged post-frame distinguishes press-edge semi-auto from held `allow_autofire`, then
+dispatches the selected authored mode. Attack modes schedule `Attack_Rate`, request compact action
+`PLAYER_ATTACK1`, translate `ACT_RANGE_ATTACK1_LAYER` through the equipped weapon and select a
+model sequence. The actual ray/pellet/projectile consumer runs only when a matching attack event
+from that sequence re-enters the ranged mode dispatcher. `Ammo_Cost`, `Ammo_Fired`, current
+magazine, spread/range data and the active `CVDmg_t` are consumed there. Intent, animation and
+effect therefore remain three separately observable records; replaying only the button or only
+the chosen sequence cannot reproduce the shot.
+
+Firearm secondary input is not a combo continuation. It may toggle the current primary mode, cycle
+zoom or dispatch another authored attack. Ranged capability does not satisfy the melee block gate,
+so the composite `+wpn_secondaryatk` can reach gun `attack2` policy but cannot create a gun block.
 
 ### `+use` resolves an entity-owned verb
 
@@ -104,9 +129,11 @@ and opposed-check seam is closed; the full transaction state machine remains ope
 ### Selection and activation are different verbs
 
 The hotkey bar may select a weapon, discipline or blood pack. `vhotkey #N` selects a slot and
-`vdiscipline_last` casts the selected discipline; the selection is deferred by one frame.
-Inventory category commands similarly select before equip/use. A faithful input layer therefore
-cannot collapse selection, equip and activation into one button event.
+`vdiscipline_last` casts the selected discipline. Patch/community bindings insert a one-frame wait
+between them, but the exact command-buffer deferral remains open. Inventory category commands
+similarly select before equip/use. A faithful input layer therefore cannot collapse selection,
+equip and activation into one button event. The authoritative Discipline transaction is in
+`docs/vtmb/disciplines.md`.
 
 ## Content-driven verbs
 

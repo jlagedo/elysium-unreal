@@ -4,7 +4,9 @@
   "consuming_documents": [
     "docs/vtmb/skills-and-checks.md",
     "docs/vtmb/combat-and-damage.md",
-    "docs/vtmb/gameplay-verbs.md"
+    "docs/vtmb/gameplay-verbs.md",
+    "docs/vtmb/controls.md",
+    "docs/vtmb/animation_and_movers.md"
   ],
   "research_id": "RE40",
   "program": "vampire.dll",
@@ -16,8 +18,11 @@
   },
   "lock_delay_seconds": 9,
   "questions": [
-    "Which exact player and weapon predicates gate primary attack and reload before an attack record is produced?",
-    "Beyond the identified record accessors and reaction or AI consumers, which function turns melee lethality, defense and soak into CVDmg_t committed damage?",
+    "Which exact player predicates gate primary attack and reload before a melee attack activity is requested?",
+    "Which wider player-state predicates sit above the recovered CWeaponRanged primary, secondary, dry-fire and reload controller?",
+    "Which player or NPC code consumes authored BurstMin and BurstMax after the shared ranged player path has selected semi-automatic or allow_autofire behavior?",
+    "What exact formula combines SpreadAngle, Accuracy, WeaponRanges, GrossPointBlank, Presence and Shaky Hands into the final shot cone and crosshair presentation?",
+    "What authored sequence metadata supplies the left or right blocked-reaction activity read by GetBlockReaction?",
     "How does weapon SkillRequirement affect attacker adjustment, eligibility or presentation, and is it independent of BaseLethality at every consumer?",
     "Which factors compose the ranged post-trace multiplier beyond the confirmed volley share, and in what order are hitgroup modifiers applied?",
     "Where does CVDmg_t word 15 become a numerical post-soak modifier, including item DmgModifier and NPC DamageFilter fields?",
@@ -45,6 +50,26 @@
     {"address": "101e8ec0", "label": "SoakDifficulty", "confidence": "verified callee", "role": "select player or NPC soak difficulty", "depth": 2, "cap": 80},
     {"address": "101e8ef0", "label": "DefenseDifficulty", "confidence": "verified ranged and melee callee", "role": "select player or NPC defense difficulty", "depth": 2, "cap": 80},
     {"address": "10259230", "label": "WeaponModeDataLoader", "confidence": "SkillRequirement string xref", "role": "load BaseLethality SkillRequirement Dmg and adjacent weapon-mode data", "depth": 2, "cap": 260},
+    {"address": "102383b0", "label": "WeaponRangedModeDispatch", "confidence": "shared caller from input and animation-event paths", "role": "dispatch attack, zoom, primary-mode toggle and consumable mode behavior", "depth": 3, "cap": 360},
+    {"address": "10238580", "label": "WeaponRangedAttackStart", "confidence": "CWeaponRanged vtable and CWeaponRanged::Attack scope string", "role": "start a ranged attack, handle an empty magazine, request player attack activity and schedule due shots", "depth": 3, "cap": 360},
+    {"address": "102387b0", "label": "WeaponRangedShot", "confidence": "CWeaponRanged vtable adjacent to ranged attack entry", "role": "consume and resolve one scheduled ranged shot", "depth": 3, "cap": 420},
+    {"address": "10239270", "label": "WeaponRangedTogglePrimaryMode", "confidence": "mode-dispatch caller and body evidence", "role": "toggle the active primary firing mode, play the mode-change activity and notify the player", "depth": 3, "cap": 300},
+    {"address": "10239350", "label": "WeaponRangedFrameState", "confidence": "CWeaponRanged vtable slot adjacent to item post-frame", "role": "update held-fire and weapon-frame state", "depth": 3, "cap": 320},
+    {"address": "10239570", "label": "WeaponRangedReload", "confidence": "CWeaponRanged vtable +0x514 and reload-request body", "role": "choose the ranged reload activity and enter the common reload request", "depth": 3, "cap": 260},
+    {"address": "10238230", "label": "WeaponRangedFireOnEmpty", "confidence": "CWeaponRanged vtable +0x48c and base post-frame caller", "role": "handle fire intent when the active magazine cannot supply a shot", "depth": 3, "cap": 260},
+    {"address": "10254b00", "label": "WeaponReloadRequest", "confidence": "CWeaponRanged reload-slot caller and reserve checks", "role": "validate reserve ammunition and missing magazine capacity before beginning reload", "depth": 3, "cap": 360},
+    {"address": "10254cd0", "label": "WeaponReloadStart", "confidence": "direct caller from validated reload request", "role": "stage reload activity, timing and magazine transaction state", "depth": 3, "cap": 360},
+    {"address": "10255050", "label": "WeaponReloadFrame", "confidence": "base weapon vtable +0x508 and item-post-frame caller", "role": "advance or complete an active reload and apply its ammunition transaction", "depth": 3, "cap": 420},
+    {"address": "102552c0", "label": "WeaponReloadFinish", "confidence": "base weapon vtable +0x50c and reload-frame caller", "role": "finish a reload, including bulk magazine refill and reserve-ammo removal", "depth": 3, "cap": 420},
+    {"address": "102395c0", "label": "WeaponRangedInputPolicy", "confidence": "CWeaponRanged vtable slot", "role": "report ranged input or attack policy to the base weapon controller", "depth": 3, "cap": 240},
+    {"address": "10239680", "label": "WeaponRangedPostFrame", "confidence": "CWeaponRanged vtable +0x4fc and input-bit body evidence", "role": "per-frame ranged input handoff while fire intent and loaded ammunition are present", "depth": 3, "cap": 300},
+    {"address": "10239710", "label": "WeaponRangedBusyFrame", "confidence": "CWeaponRanged vtable +0x500 and delegation evidence", "role": "busy-frame ranged input handoff and base-weapon continuation", "depth": 3, "cap": 300},
+    {"address": "102397b0", "label": "WeaponRangedKick", "confidence": "shot-callback caller and raw attack-feat body evidence", "role": "apply mode-authored random view kick scaled quadratically by the raw attack feat", "depth": 3, "cap": 280},
+    {"address": "10239d10", "label": "WeaponRangedStateEvent", "confidence": "CWeaponRanged vtable slot", "role": "handle a ranged weapon state event", "depth": 3, "cap": 280},
+    {"address": "10238160", "label": "WeaponRangedHandleAnimEvent", "confidence": "CWeaponRanged vtable and animation-event range dispatch", "role": "translate ranged attack animation events into primary or secondary shot callbacks and handle weapon bodygroup events", "depth": 3, "cap": 320},
+    {"address": "102391c0", "label": "WeaponRangedActivityVariant", "confidence": "direct caller from primary attack activity selector", "role": "select the normal or alternate ranged attack activity variant", "depth": 2, "cap": 180},
+    {"address": "10257820", "label": "WeaponModeAllowsAutofire", "confidence": "shared item-post-frame held-fire predicate", "role": "report whether the active authored mode may repeat while its attack button remains held", "depth": 2, "cap": 160},
+    {"address": "10236110", "label": "WeaponSteyrPostFrame", "confidence": "CWeaponRanged_SteyrAug override at vtable +0x4fc", "role": "Steyr-specific per-frame zoom and fire-mode policy", "depth": 3, "cap": 320},
     {"address": "10258270", "label": "WeaponBaseLethality", "confidence": "verified field accessor", "role": "read BaseLethality at weapon-mode offset 0x3f8", "depth": 2, "cap": 80},
     {"address": "10258230", "label": "WeaponLethalityAdjustment", "confidence": "body evidence", "role": "apply active Dmg attack feat reference to attacker and optional override", "depth": 3, "cap": 180},
     {"address": "10258290", "label": "WeaponTotalLethality", "confidence": "diagnostic string and body evidence", "role": "sum BaseLethality and attacker adjustment with zero floor", "depth": 2, "cap": 120},
@@ -57,6 +82,26 @@
     {"address": "10345980", "label": "MeleeResultLookup", "confidence": "scope string and body evidence", "role": "find the defender-side melee result record keyed by attacker", "depth": 2, "cap": 140},
     {"address": "10345de0", "label": "MeleeAttackSuccessAccessor", "confidence": "scope string and body evidence", "role": "return stored melee record word 1 for an attacker", "depth": 2, "cap": 140},
     {"address": "103498b0", "label": "MeleeReactionClassifier", "confidence": "body evidence and custom NPC callers", "role": "classify a rounded melee margin against four reaction thresholds", "depth": 2, "cap": 100},
+    {"address": "102579f0", "label": "MeleeImpact", "confidence": "CWeaponMelee hit path and diagnostic strings", "role": "resolve a traced melee impact through block reactions, direct damage, effects and knockback", "depth": 3, "cap": 360},
+    {"address": "10345ab0", "label": "WasMeleeBlocked", "confidence": "scope string and impact caller", "role": "test facing, defender state and melee-result predicates for an incoming attack", "depth": 3, "cap": 260},
+    {"address": "10345f10", "label": "GetBlockReaction", "confidence": "scope string and body evidence", "role": "read the current sequence block-reaction activity or use the right-reaction fallback", "depth": 2, "cap": 120},
+    {"address": "103e9bf0", "label": "WeaponMeleeImpactPrelude", "confidence": "CWeaponMelee vtable +0x54c", "role": "weapon-specific prelude invoked at the start of every melee impact", "depth": 3, "cap": 260},
+    {"address": "103ea510", "label": "WeaponMeleeEventDispatch", "confidence": "CWeaponMelee vtable +0x4ec and body evidence", "role": "emit the sex-selected weapon sound and dispatch event 14 or 15 through the current weapon mode", "depth": 3, "cap": 260},
+    {"address": "103eaec0", "label": "WeaponMeleePostFrame", "confidence": "CWeaponMelee vtable +0x4fc and body evidence", "role": "per-frame input dispatcher that invokes the primary-attack virtual while attack is held and the weapon timer permits", "depth": 3, "cap": 360},
+    {"address": "103eaca0", "label": "WeaponMeleePrimaryAttack", "confidence": "CWeaponMelee vtable +0x518 and assembly evidence", "role": "request ordinary, air, kick or grapple melee activity and notify the player after acceptance", "depth": 3, "cap": 300},
+    {"address": "103eae00", "label": "WeaponMeleeHeavyAttack", "confidence": "CWeaponMelee vtable +0x51c and assembly evidence", "role": "request ACT_MELEE_ATTACK_HEAVY and notify the player after acceptance", "depth": 3, "cap": 260},
+    {"address": "103eaea0", "label": "WeaponMeleeCapabilities", "confidence": "CWeaponMelee vtable +0x5a0", "role": "melee capability bits consumed by player action gates", "depth": 2, "cap": 120},
+    {"address": "103eac30", "label": "WeaponMeleeModeA", "confidence": "CWeaponMelee vtable +0x5bc", "role": "melee mode-policy accessor", "depth": 2, "cap": 100},
+    {"address": "103eac60", "label": "WeaponMeleeModeB", "confidence": "CWeaponMelee vtable +0x5c0", "role": "melee mode-policy accessor", "depth": 2, "cap": 100},
+    {"address": "103e9e00", "label": "WeaponMeleeRequestActivity", "confidence": "CWeaponMelee vtable +0x5d0", "role": "validate and stage a requested melee activity, including any weapon-specific variant policy", "depth": 3, "cap": 320},
+    {"address": "103e4430", "label": "WeaponMeleeComboAbility", "confidence": "CWeaponMelee vtable +0x5d4", "role": "return the Abilities-list slot used to look up the ordinary melee combo chance", "depth": 2, "cap": 100},
+    {"address": "103e5890", "label": "WeaponFistsComboAbility", "confidence": "CWeaponMelee_Fists vtable +0x5d4 override", "role": "return Abilities slot 1, Brawl, for the fists combo chance", "depth": 2, "cap": 100},
+    {"address": "10200ca0", "label": "StatListBaseValue", "confidence": "CVStatList_t::GetBase scope string and body evidence", "role": "read the saved base value of one slot in a CVStatList_t", "depth": 2, "cap": 140},
+    {"address": "1015fe10", "label": "PlayerMeleeRollReaction", "confidence": "base-player vtable +0x4f0 and MeleeRollA caller", "role": "cache the staged melee attacker handles when the player's action state accepts a new pre-impact owner", "depth": 3, "cap": 280},
+    {"address": "10160bc0", "label": "PlayerDefenderBlockReaction", "confidence": "base-player vtable +0x4f8 and MeleeImpact caller", "role": "play ACT_BLOCK or ACT_BLOCK_HEAVY and update the defender's block timing", "depth": 3, "cap": 260},
+    {"address": "10160d00", "label": "PlayerAttackerBlockedReaction", "confidence": "base-player vtable +0x4fc and MeleeImpact caller", "role": "play the attacker's blocked reaction selected from attack-sequence metadata", "depth": 3, "cap": 260},
+    {"address": "101606e0", "label": "PlayerKnockbackReaction", "confidence": "base-player vtable +0x500 and MeleeImpact knockback caller", "role": "apply the player reaction selected for a valid melee knockback route", "depth": 3, "cap": 260},
+    {"address": "10160a60", "label": "PlayerMeleeHitReaction", "confidence": "base-player vtable +0x504 and MeleeImpact caller", "role": "apply the non-knockback player melee hit reaction", "depth": 3, "cap": 260},
     {"address": "1032ef60", "label": "CombatCharacterOnTakeDamage", "confidence": "scope string", "role": "route damage by alive dying or dead life state", "depth": 3, "cap": 260},
     {"address": "103302e0", "label": "CombatCharacterOnTakeDamageAlive", "confidence": "scope string and body evidence", "role": "apply descriptor blood shield health aggravated and frenzy policy", "depth": 3, "cap": 320},
     {"address": "1032fe60", "label": "HealthToPercent", "confidence": "verified body", "role": "project sheet damage counter onto Source health", "depth": 2, "cap": 120}
@@ -71,6 +116,19 @@
     {"displacement": "13bc", "label": "combat_character_stat_list_count"},
     {"displacement": "13c0", "label": "combat_character_stat_list_array"},
     {"displacement": "19a4", "label": "combat_character_active_weapon_handle"}
+  ],
+  "vtable_probes": [
+    {"address": "1046fbb4", "label": "base_player", "slots": 384, "cap": 520},
+    {"address": "104ddd7c", "label": "weapon_melee", "slots": 384, "cap": 520},
+    {"address": "104d5ecc", "label": "weapon_melee_fists", "slots": 384, "cap": 520},
+    {"address": "104d9004", "label": "weapon_melee_sledgehammer", "slots": 384, "cap": 520},
+    {"address": "104e7dbc", "label": "weapon_unarmed", "slots": 384, "cap": 520},
+    {"address": "10495a7c", "label": "weapon_ranged", "slots": 384, "cap": 520},
+    {"address": "104905bc", "label": "weapon_ranged_glock", "slots": 384, "cap": 520},
+    {"address": "104913dc", "label": "weapon_ranged_m37", "slots": 384, "cap": 520},
+    {"address": "1049301c", "label": "weapon_ranged_steyr_aug", "slots": 384, "cap": 520},
+    {"address": "10493e3c", "label": "weapon_ranged_uzi", "slots": 384, "cap": 520},
+    {"address": "1048f79c", "label": "weapon_ranged_crossbow", "slots": 384, "cap": 520}
   ],
   "grep_probes": [
     {
@@ -90,6 +148,18 @@
       "str": "Feed~attempt~CalcFeat~Defensive_Maneuvers~Automatic_Str_Successes~Automatic_Soak_Successes",
       "fn": "Feed~FeatValue~Roll",
       "cap": 260
+    },
+    {
+      "label": "melee_attack_block_and_reaction",
+      "str": "CWeaponMelee~MeleeRoll~Block~Stagger~ACT_MELEE_ATTACK~ACT_PREBLOCK~ACT_BLOCKED_REACTION",
+      "fn": "Attack~PrimaryAttack~SecondaryAttack~Melee~Block~Reaction",
+      "cap": 420
+    },
+    {
+      "label": "firearm_attack_reload_and_accuracy",
+      "str": "CWeaponRanged~PrimaryAttack~SecondaryAttack~DryFire~Reload~SpreadAngle~Accuracy~BurstMin~BurstMax~Ammo_Fired~Attack_Rate~ACT_RANGE_ATTACK1~ACT_RELOAD",
+      "fn": "Attack~Fire~Reload~Burst~Spread~Accuracy~Projectile~Zoom",
+      "cap": 520
     }
   ],
   "relationships": [
@@ -100,7 +170,20 @@
     {"from": "10258290", "to": "10258270", "confidence": "verified", "evidence": "total lethality reads BaseLethality"},
     {"from": "10268330", "to": "10258290", "confidence": "verified", "evidence": "ranged per-victim path computes total weapon lethality"},
     {"from": "10346910", "to": "10346380", "confidence": "verified", "evidence": "MeleeRollA calculates and stores the attack record"},
-    {"from": "103302e0", "to": "101fb200", "confidence": "verified", "evidence": "alive damage commit invokes CVDmg_t::Apply when a descriptor exists"}
+    {"from": "103302e0", "to": "101fb200", "confidence": "verified", "evidence": "alive damage commit invokes CVDmg_t::Apply when a descriptor exists"},
+    {"from": "103eaec0", "to": "103eaca0", "confidence": "verified", "evidence": "melee post-frame invokes the primary-attack virtual while the held attack bit and weapon timer permit"},
+    {"from": "103eaca0", "to": "103e9e00", "confidence": "verified", "evidence": "primary attack requests ordinary, air or kick activity through the shared melee activity body"},
+    {"from": "103e9e00", "to": "10200ca0", "confidence": "verified", "evidence": "ordinary-attack combo substitution reads the selected Abilities slot through CVStatList_t::GetBase"},
+    {"from": "102579f0", "to": "10345ab0", "confidence": "verified", "evidence": "melee impact tests block eligibility before damage commit"},
+    {"from": "102579f0", "to": "10160bc0", "confidence": "verified", "evidence": "blocked impact invokes the defender normal or heavy-block reaction"},
+    {"from": "102579f0", "to": "10160d00", "confidence": "verified", "evidence": "blocked impact invokes the attacker's sequence-authored blocked reaction"},
+    {"from": "102383b0", "to": "10238580", "confidence": "verified", "evidence": "input-mode dispatch invokes ranged attack start for an authored attack mode"},
+    {"from": "10238160", "to": "102383b0", "confidence": "verified", "evidence": "a ranged attack animation event re-enters mode dispatch in event mode"},
+    {"from": "102383b0", "to": "102387b0", "confidence": "verified", "evidence": "event-mode dispatch invokes the ranged shot virtual for an authored attack mode"},
+    {"from": "102387b0", "to": "102397b0", "confidence": "verified", "evidence": "each accepted scheduled shot invokes ranged view kick after constructing its fire packet"},
+    {"from": "10239570", "to": "10254b00", "confidence": "verified", "evidence": "the ranged reload virtual chooses an activity and enters the common reload request"},
+    {"from": "10254b00", "to": "10254cd0", "confidence": "verified", "evidence": "a validated reload request begins sequence-timed reload state"},
+    {"from": "10255050", "to": "102552c0", "confidence": "verified", "evidence": "reload-frame completion invokes the common bulk or single-round finish transaction"}
   ],
   "findings": [
     {
@@ -131,7 +214,55 @@
       "confidence": "confirmed",
       "fact": "Melee staging stores attacker handle, total lethality, defender defense successes and defender soak successes in a 16-byte defender-side record keyed by attacker.",
       "evidence": "MeleeCalcAndStore 0x10346380 writes four consecutive words; GetMeleeDiceRolls 0x10345980 searches the +0xa88 array using count +0xa94; GetNumAttackSuccesses 0x10345de0 returns word 1; custom NPC RunTask handlers use the lookup and classifier 0x103498b0 for attack-task decisions.",
-      "consequence": "Record lookup and reaction or AI consumption are closed, but the downstream committed-damage consumer must be found before implementing the melee formula."
+      "consequence": "The opposed-record boundary is stable; reactions and the downstream impact consumer can share it without recomputing rolls."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Ordinary melee attacks have a live automatic 2COMBO substitution based on the saved base weapon ability, not held movement direction.",
+      "evidence": "WeaponMeleeRequestActivity 0x103e9e00 handles only ACT_MELEE_ATTACK, reads CVStatList_t::GetBase, compares RandomInt(0,99) with the 0/10/25/45/70/100 table and recursively requests ACT_MELEE_ATTACK_2COMBO; vtable +0x5d4 returns Melee slot 6 for ordinary melee and Brawl slot 1 for fists.",
+      "consequence": "A faithful input layer sends primary attack intent; the combat resolver, not a directional combo buffer, chooses the combo activity."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Melee block is a real held action with distinct preblock, normal-block, heavy-block and attacker blocked-reaction activities; block contact does not guarantee zero damage.",
+      "evidence": "The dedicated command route produces ACT_PREBLOCK; WasMeleeBlocked 0x10345ab0 checks weapon/facing/state; PlayerDefenderBlockReaction 0x10160bc0 chooses ACT_BLOCK or ACT_BLOCK_HEAVY from the updated margin; PlayerAttackerBlockedReaction 0x10160d00 reads sequence metadata +0x2e0 with right-reaction fallback; MeleeImpact continues when positive damage remains.",
+      "consequence": "Block must preserve input eligibility, facing, opposed margin, both actors' reactions and damage-through-block as separate decisions."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The melee impact consumer computes final direct damage as DamageInflicted times (BaseDamage plus DamageModifier) times the trace multiplier, with Potence able to floor remaining lethality up to its active rank.",
+      "evidence": "MeleeImpact 0x102579f0 joins the defender record, block callbacks, direct descriptor route, Potence diagnostic branches and the retail format string 'DamageInflicted * (BaseDamage + DamageModifier) * Multiplier'.",
+      "consequence": "The prior melee result-to-damage join is closed statically; live capture is validation of impact windows and timing rather than discovery of the scalar formula."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The sampled firearms share one data-driven CWeaponRanged controller; authored modes select attack, zoom, primary-mode toggle or consumable behavior, and allow_autofire distinguishes held repeat from press-edge fire.",
+      "evidence": "CWeaponRanged and Glock, M37, Uzi, Steyr and crossbow vtables share the attack, shot, reload and mode slots; ModeDispatch 0x102383b0 branches on mode Type; WeaponModeAllowsAutofire 0x10257820 supplies the common held-fire predicate. Steyr only adds scope-sway work before the common frame.",
+      "consequence": "Firearms need an authored mode state machine, not a melee-style input combo buffer or one hard-coded secondary-fire rule."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Ranged input starts and schedules an attack, but a matching model animation event owns the actual shot commit.",
+      "evidence": "WeaponRangedAttackStart 0x10238580 schedules Attack_Rate and requests PLAYER_ATTACK1; WeaponRangedHandleAnimEvent 0x10238160 maps the ranged event-id band back into ModeDispatch; event mode invokes WeaponRangedShot 0x102387b0.",
+      "consequence": "Input intent, chosen animation and emitted shot must remain separately observable and replayable."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Ammo_Cost and Ammo_Fired are independent: the former limits and deducts magazine rounds per scheduled shot, while the latter supplies the ray or pellet count in that shot's fire packet.",
+      "evidence": "WeaponRangedShot 0x102387b0 reads both active-mode fields independently and clamps due shots by magazine divided by Ammo_Cost; the patch-first M37 record has Ammo_Cost 1 and Ammo_Fired 8.",
+      "consequence": "A shotgun shell transaction cannot be inferred from pellet count, and catch-up shot scheduling must pay ammunition per scheduled shot."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Reload is a reserve-backed, sequence-duration-timed transaction with bulk-magazine and reload_single branches; dry fire is a separate timed activity.",
+      "evidence": "WeaponReloadRequest 0x10254b00 checks reserve and missing capacity; WeaponReloadStart 0x10254cd0 requests PLAYER_RELOAD and derives end time from sequence duration/playback rate; WeaponReloadFrame 0x10255050 and WeaponReloadFinish 0x102552c0 perform single-round or bulk transfers; WeaponRangedFireOnEmpty 0x10238230 owns dry fire.",
+      "consequence": "Reload cannot be represented as an immediate clip refill or as a timer sourced only from the authored ReloadTime field."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A firearm has no melee block action or recovered firearm-specific stagger band.",
+      "evidence": "CWeaponRanged reports capability 0x2000, which does not intersect the player block mask 0x18000; the ranged per-victim callback into base player is empty, while generic DamageFlinch 0x103229d0 owns ACT_HIT_HEAD or ACT_HIT_TORSO without a closed all-firearm caller chain.",
+      "consequence": "Secondary firearm input may change mode, zoom or fire, but must not be translated into ACT_PREBLOCK or a fabricated melee-style stagger meter."
     },
     {
       "confidence": "confirmed",

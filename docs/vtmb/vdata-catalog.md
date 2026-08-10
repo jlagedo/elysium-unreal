@@ -67,7 +67,7 @@ catalogue and the prose schemas in `docs/vtmb/game_runtime.md`.
 
 | Root key | File(s) | What |
 |---|---|---|
-| `DisciplineTgtList` | `disciplinetgt_000.txt`…`004` (~300 KB) | discipline power targeting + effects |
+| `DisciplineTgtList` | `disciplinetgt_000.txt`…`004` (~300 KB) | ordered Discipline targeting, strata mappings, hit effects, projectiles, interruption and helper casts — native interpreter and full power catalog: `docs/vtmb/disciplines.md` |
 
 ### Quests
 

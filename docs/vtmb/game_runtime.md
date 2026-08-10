@@ -278,7 +278,8 @@ formula.
   Obfuscate, Potence, Presence, Protean, Thaumaturgy` (+ Hunter-mode ones). Each has
   `*_Targeting*` sub-stats. A discipline a clan **cannot** learn reads **`-1`** (sentinel);
   owned-but-unraised reads `0`. The sentinel is what keeps it off the sheet — "Buying a
-  dot" below.
+  dot" below. Selection, targeting, blood payment, active effects and teardown are owned by
+  `docs/vtmb/disciplines.md`.
 - **Active_Disciplines** — parallel `Active_*` stats holding the currently-toggled level;
   drive per-frame effects (e.g. `Active_Obfuscate` gates stealth-attack bonuses).
 - **Derived / bookkeeping** (flat `Stat`s, `Raise 10000` = priced out of reach — **not** the
@@ -321,7 +322,7 @@ current value under the bare name, the base under a `base_` prefix:
 | `m_iVAttributesCurrent` | `+0x117C` | 35 | `attrib_order`, `stamina`, `vmax_health`, `experience` |
 | `m_iVAbilitiesBase` / `Current` | `+0x1210` / `+0x1244` | 13 | `base_ability_order`(0), `base_brawl`(1) |
 | `m_iVDisciplinesBase` / `Current` | `+0x1280` / `+0x12B4` | 13 | `base_animalism`(0) |
-| `m_iVActiveDisciplinesBase` / `Current` | `+0x1310` / `+0x1344` | 13 | `base_active_animalism`(0) |
+| `m_iVActiveDisciplinesBase` / `Current` | `+0x1310` / `+0x1354` | 13 | `base_active_animalism`(0), `active_animalism`(0) |
 
 Four datamap external names are known to diverge from the `stats.txt` `InternalName`: `intimidate`
 ↔ `Intimidation`, `computers` ↔ `Computer`, `base_gender_` carries a trailing underscore, and

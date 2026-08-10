@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "topic": "disciplines-server",
+  "consuming_document": "docs/vtmb/disciplines.md",
+  "research_id": "RE41",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which authoritative function owns discipline selection, cast eligibility, blood payment, cooldown and renewal?",
+    "How do targeted DisciplineTgt records and native sustained disciplines converge on player state?",
+    "Which functions consume every Active_Disciplines slot?",
+    "How are overt use, AI sound and zone or Masquerade policy enforced?",
+    "How do event-queue entries identify, renew, expire and remove discipline effects?"
+  ],
+  "functions": [
+    {"address": "100d8490", "label": "DisciplineIntCommandHandler", "confidence": "vdiscipline_int registered JMP thunk 0x10008369 target", "role": "resolve a numbered discipline selection and issue or renew its authoritative cast", "depth": 4, "cap": 720},
+    {"address": "100d9750", "label": "DisciplineLastCommandHandler", "confidence": "vdiscipline_last registered JMP thunk 0x1000928c target", "role": "reuse the last targeted discipline against the current legal target", "depth": 4, "cap": 620},
+    {"address": "100db250", "label": "DisciplineEndAllCommandHandler", "confidence": "vdiscipline_endall registered JMP thunk 0x100057cc target", "role": "end active renewable disciplines from the console command surface", "depth": 4, "cap": 520},
+    {"address": "1033d8a0", "label": "ClearActiveDisciplinesInput", "confidence": "CBaseCombatCharacter scope string and datamap input target", "role": "route the entity input into the same global discipline teardown used by vdiscipline_endall", "depth": 4, "cap": 520},
+    {"address": "1031a600", "label": "BaseCombatCharacterDatamapBuilder", "confidence": "CBaseCombatCharacter datamap reconstruction", "role": "register saved discipline fields, ClearActiveDisciplines and scripted-discipline inputs", "depth": 0, "cap": 380},
+    {"address": "100d9220", "label": "NativeDisciplineSchedule", "confidence": "shared discipline authority duration and event-queue caller", "role": "derive a native power's modified duration, enqueue expiry and record its begin/end timers", "depth": 3, "cap": 420},
+    {"address": "101e2da0", "label": "TargetedDisciplineBegin", "confidence": "shared discipline authority targeted-record branch", "role": "begin targeting or immediate execution for a data-driven DisciplineTgt power", "depth": 4, "cap": 620},
+    {"address": "101e2f50", "label": "TargetedDisciplineCommit", "confidence": "TargetedDisciplineBegin accepted-cast successor", "role": "resolve the target set, deduct blood once, start source effects and apply the selected mapping per target", "depth": 4, "cap": 620},
+    {"address": "101e3730", "label": "TargetedDisciplineApplyToTarget", "confidence": "DisciplineCast and targeted commit caller", "role": "select and apply the legal Affects_Table or HitTable mapping for one target", "depth": 4, "cap": 620},
+    {"address": "100cf420", "label": "DisciplineTimedEventsClear", "confidence": "global discipline teardown wrapper caller", "role": "remove the character's owned discipline entries from the shared timed-event manager", "depth": 3, "cap": 440},
+    {"address": "101e3c80", "label": "TargetedDisciplineEffectsClear", "confidence": "global discipline teardown wrapper caller and 30-bit targeted-effect loop", "role": "remove every active DisciplineTgt effect tracked on the affected character", "depth": 4, "cap": 620},
+    {"address": "10147a60", "label": "DisciplineGlobalTeardown", "confidence": "vdiscipline_endall and ClearActiveDisciplines common callee", "role": "remove both owned native timed events and tracked targeted effects", "depth": 3, "cap": 440},
+    {"address": "101e06a0", "label": "DisciplineTargetParse", "confidence": "BloodCost and RecoveryTime string references", "role": "parse one DisciplineTgt record and its targeting/effect payload", "depth": 3, "cap": 420},
+    {"address": "101e1010", "label": "DisciplineTargetFileLoad", "confidence": "DisciplineTgt root-key reference", "role": "load and append DisciplineTgt records from one data file", "depth": 3, "cap": 260},
+    {"address": "101ddfb0", "label": "DisciplineHitInfoParse", "confidence": "gameplay-action survey", "role": "parse one targeted-discipline HitInfo payload including player animation", "depth": 3, "cap": 420},
+    {"address": "101de660", "label": "DisciplineHitInfoExecute", "confidence": "gameplay-action survey", "role": "execute a resolved HitInfo against source and affected character", "depth": 3, "cap": 520},
+    {"address": "101dd620", "label": "DisciplineProjectileSpawn", "confidence": "vdisciplineprojectile string and body evidence", "role": "spawn and initialize a targeted-discipline projectile", "depth": 3, "cap": 360},
+    {"address": "101e33c0", "label": "DisciplineCast", "confidence": "TriggerCasting caller", "role": "cast a resolved discipline effect from source to target", "depth": 3, "cap": 520},
+    {"address": "100d8830", "label": "DisciplineUseAuthority", "confidence": "vdiscipline_int and vdiscipline_last caller", "role": "authoritatively classify targeted versus native powers, toggle or renew state, pay blood and schedule expiry", "depth": 3, "cap": 520}
+  ],
+  "field_probes": [
+    {"displacement": "1354", "label": "active_animalism"},
+    {"displacement": "1358", "label": "active_auspex"},
+    {"displacement": "135c", "label": "active_blood_healing"},
+    {"displacement": "1360", "label": "active_celerity"},
+    {"displacement": "1364", "label": "active_corpus_vampirus"},
+    {"displacement": "1368", "label": "active_dementation"},
+    {"displacement": "136c", "label": "active_dominate"},
+    {"displacement": "1370", "label": "active_fortitude"},
+    {"displacement": "1374", "label": "active_obfuscate"},
+    {"displacement": "1378", "label": "active_potence"},
+    {"displacement": "137c", "label": "active_presence"},
+    {"displacement": "1380", "label": "active_protean"},
+    {"displacement": "1384", "label": "active_thaumaturgy"},
+    {"displacement": "14d4", "label": "last_obfuscate_level"},
+    {"displacement": "14d8", "label": "obfuscate_rules"},
+    {"displacement": "14dc", "label": "meets_obfuscate_rules"},
+    {"displacement": "155c", "label": "protean_transform_other"},
+    {"displacement": "1560", "label": "protean_transform_start_time"}
+  ],
+  "grep_probes": [
+    {
+      "label": "discipline_commands_and_cast",
+      "str": "vdiscipline~vdiscipline_int~vdiscipline_last~vdiscipline_endall~BloodCost~RecoveryTime~UserActivatable~SupernaturalLvl~TriggerAISound~ShouldRemove_OnTakeDamage~ShouldRemove_OnHearCombat~ShouldRemove_OnWasBumped",
+      "fn": "Discipline~Cast~Activate~Deactivate~Renew~Target",
+      "cap": 620
+    },
+    {
+      "label": "discipline_active_native_consumers",
+      "str": "active_animalism~active_auspex~active_blood_healing~active_celerity~active_corpus_vampirus~active_dementation~active_dominate~active_fortitude~active_obfuscate~active_potence~active_presence~active_protean~active_thaumaturgy~ClearActiveDisciplines~SetScriptedDiscipline",
+      "fn": "Discipline~Damage~Movement~Stealth~Visibility~Transform~Heal",
+      "cap": 720
+    },
+    {
+      "label": "discipline_target_effect_grammar",
+      "str": "DisciplineTgt~Affects_Table~HitTable~DisciplineStrata~TraitEffect~Trigger_Casting~Dmg_Health~Dmg_Blood~AI_Schedule~Player_Anim~Projectile~Knockback~Flinch",
+      "fn": "Discipline~HitInfo~Affects~Mapping~Projectile",
+      "cap": 720
+    }
+  ],
+  "relationships": [
+    {"from": "100d8490", "to": "100d8830", "confidence": "verified", "evidence": "vdiscipline_int dispatches the selected player index and remembered tier"},
+    {"from": "100d9750", "to": "100d8830", "confidence": "verified", "evidence": "vdiscipline_last reuses the stored index and tier"},
+    {"from": "100d8830", "to": "101e2da0", "confidence": "verified", "evidence": "a Discipline without Is_Instant enters the targeted-record manager"},
+    {"from": "100d8830", "to": "100d9220", "confidence": "verified", "evidence": "a native instant/passive power derives duration and schedules an owned event"},
+    {"from": "101e2da0", "to": "101e2f50", "confidence": "verified", "evidence": "accepted blood and learned-rank checks enter target-set commit"},
+    {"from": "101e33c0", "to": "101e3730", "confidence": "verified", "evidence": "cast execution applies the resolved target payload after the source payload"},
+    {"from": "100db250", "to": "10147a60", "confidence": "verified", "evidence": "vdiscipline_endall calls the shared teardown wrapper"},
+    {"from": "1033d8a0", "to": "10147a60", "confidence": "verified", "evidence": "the ClearActiveDisciplines entity input calls the same teardown wrapper"},
+    {"from": "10147a60", "to": "100cf420", "confidence": "verified", "evidence": "shared teardown removes owned timed Discipline events"},
+    {"from": "10147a60", "to": "101e3c80", "confidence": "verified", "evidence": "shared teardown removes every tracked targeted Discipline effect"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The compiled vampire sheet and save surface has thirteen learned Discipline slots and thirteen parallel active slots in Animalism-through-Thaumaturgy order; stats.txt's four later Numina records do not extend those arrays.",
+      "evidence": "The CBaseCombatCharacter datamap builder exposes learned base/current arrays and Active_Disciplines base at +0x1310/current at +0x1354 for exactly thirteen named slots.",
+      "consequence": "Selection, save identity and network/runtime storage use the thirteen-slot enum even though the authored file has seventeen entries."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "vdiscipline_int and vdiscipline_last converge on one authoritative use routine with a separately remembered compiled index and tier.",
+      "evidence": "0x100d8490 stores index at the player selection fields, resets tier on an index change, checks learned rank and calls 0x100d8830; 0x100d9750 calls 0x100d8830 with the same stored pair.",
+      "consequence": "Quickbar selection and cast confirmation must not implement separate power transactions."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The shared authority classifies Disciplines through the compiled Is_Instant flag: non-instant powers enter DisciplineTgt targeting, while instant/passive powers enter Active_Disciplines and timed-event logic.",
+      "evidence": "The stat parser stores Is_Instant as bit 0x2 at CVStatInfo+0x104; 0x100d8830 tests that bit before choosing 0x101e2da0 or the native active path. Current data makes Animalism, Dementation, Dominate and Thaumaturgy non-instant.",
+      "consequence": "Is_Instant is a native-path discriminator, not a literal promise that an effect has zero duration."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A targeted cast resolves its DisciplineTgt record, applies BloodCost modifiers, verifies blood and learned rank, builds legal targets, deducts blood once, increments the cast counter and applies source plus per-target payloads.",
+      "evidence": "TargetedDisciplineBegin 0x101e2da0 joins 0x101e1250, 0x101e0650 and stat-list reads; commit 0x101e2f50 performs the BloodPool mutation, source activation, cast-counter increment and per-target 0x101e3730 calls.",
+      "consequence": "Blood payment belongs after accepted target resolution and before per-target execution, not in the client or once per affected target."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "DisciplineTgt is an ordered target/effect interpreter supporting shapes, filters, strata mappings, chance/default hit tables, projectiles and nested helper casts.",
+      "evidence": "0x101e06a0 parses identity, level, BloodCost, SupernaturalLvl, overt/interruption/recovery flags, AoE, projectile and source effects; its callees parse ordered Affects_Table and HitTable structures.",
+      "consequence": "The remake needs a generic interpreter; five per-level hard-coded spell switches would lose boss, supernatural, template and helper behavior."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "HitInfo independently composes damage or blood mutation, trait effects, AI state, player/NPC animation, flinch, knockback, particles, sounds and nested casting.",
+      "evidence": "HitInfoParse 0x101ddfb0 stores the channels and HitInfoExecute 0x101de660 invokes them independently; Cast 0x101e33c0 applies source and target halves.",
+      "consequence": "Gameplay duration and authority cannot be inferred from a cast animation or particle lifetime."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Native renewable powers derive duration from Active_Disciplines data, apply duration modifiers, enqueue one owned expiry event and record per-Discipline begin/end timers.",
+      "evidence": "0x100d9220 reads CVStatInfo duration, folds trait modifier category Duration, inserts a shared-queue event and writes the player timer arrays; 0x100d8830 matches or renews existing events.",
+      "consequence": "Renewal must mutate the owned event and its timers rather than stacking unrelated modifiers."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "vdiscipline_endall and ClearActiveDisciplines share gameplay teardown, removing both owned timed events and tracked targeted effects through their normal removal paths.",
+      "evidence": "0x100db250 and 0x1033d8a0 call the same wrapper; it calls event removal 0x100cf420 and the 30-bit target-effect loop 0x101e3c80.",
+      "consequence": "Tutorial/script clearing must remove sheet, AI and combat effects, not only HUD or particles."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Nested Trigger_Casting records are internal spell graphs, not a player-facing Discipline combo system.",
+      "evidence": "The target interpreter invokes named zero-cost helper records during one accepted cast; no command authority branch, buffered input state or ordered cross-Discipline bonus was found.",
+      "consequence": "Do not add a combo buffer to reproduce Blood Strike return, Blood Theft or Blood Boil explosions."
+    },
+    {
+      "confidence": "partial",
+      "fact": "Overt, AI-sound and interruption metadata are parsed and used as separate channels, but the final zone/witness/Masquerade policy is not closed.",
+      "evidence": "0x101e06a0 stores Overt, TriggerAISound and three removal flags independently; the current files and help text describe safe-area risk, but no complete witness-to-Masquerade mutation caller is in the focused function set.",
+      "consequence": "The remake may reproduce classification and interruption now, but must not invent an immediate one-violation rule for every overt cast."
+    }
+  ]
+}

@@ -12,14 +12,24 @@ Ghidra projects remain below `ELYSIUM_WORK_ROOT`.
 - How does `CVDmg_t` parse authored `Dmg`, and which words carry damage family, damage values,
   trait references, Source flags, soak and resolver policy?
 - Where do ranged and melee paths roll defense, and how do their results reach damage?
+- How do primary, heavy and automatic `2COMBO` melee activities reach weighted model sequences?
+- Which command, facing, weapon, opposed-margin and sequence-metadata checks own block and stagger?
+- How do primary/secondary ranged modes, press-edge semi-auto, held automatic fire, mode toggles,
+  zoom and projectiles reach the animation-event shot commit?
+- How do `Ammo_Cost`, `Ammo_Fired`, `Attack_Rate`, magazine/reserve state and `reload_single`
+  control cadence, pellets and reload transactions?
+- Which remaining consumers own the exact spread/crosshair formula, NPC burst policy and generic
+  ranged-hit flinch?
 - How are damage successes, automatic successes, soak and NPC template filters ordered?
 - How do blood shield, unkillable, aggravated tracking and Source health projection commit?
 - Which command/usercmd/action/effect layers own attack, block, reload, use, feed and discipline
   verbs?
-- Which remaining joins prevent an implementation-grade melee and combat-state specification?
+- Which remaining joins prevent an implementation-grade firearm, melee and combat-state
+  specification?
 
 The established facts are consolidated in `docs/vtmb/skills-and-checks.md`,
-`docs/vtmb/combat-and-damage.md` and `docs/vtmb/gameplay-verbs.md`. The open joins remain in
+`docs/vtmb/combat-and-damage.md`, `docs/vtmb/controls.md`,
+`docs/vtmb/animation_and_movers.md` and `docs/vtmb/gameplay-verbs.md`. The open joins remain in
 those documents and RE40.
 
 ## Evidence and procedure
@@ -29,13 +39,17 @@ those documents and RE40.
 2. Copy the completed analyzed Ghidra project to a workstream-private directory. Never open or
    mutate the shared project directly.
 3. Run the server specification against the hash-pinned `vampire.dll`.
-4. Join `FeatValue`, dice construction/rolling and each consumer instead of assuming every
+4. Run `input_action_survey`, `weapon_activity_survey` and `inventory_player_animations` to join
+   the command surface, weapon activity translations and exact model sequence descriptors.
+5. Join `FeatValue`, dice construction/rolling and each consumer instead of assuming every
    feat use rolls.
-5. Follow `CVDmg_t` from parser and callback registration through ranged/melee attack paths,
-   common apply/soak and `OnTakeDamage_Alive`.
-6. Treat data-file comments as leads. A field's numerical role is confirmed only when joined to
+6. Follow `CVDmg_t` from parser and callback registration through ranged/melee attack paths,
+   common apply/soak and `OnTakeDamage_Alive`. For ranged weapons, keep input attack, selected
+   authored mode, requested activity, sequence event, shot packet and per-victim damage as
+   separate evidence records.
+7. Treat data-file comments as leads. A field's numerical role is confirmed only when joined to
    native reads/writes.
-7. Use live retail diagnostics only for the remaining timing and formula validation; preserve
+8. Use live retail diagnostics only for the remaining timing and formula validation; preserve
    captures below `ELYSIUM_WORK_ROOT`.
 
 The driver verifies the binary hash and writes derived output below
@@ -53,5 +67,7 @@ validate the specification and print the planned Ghidra calls without executing 
 - Check policy: `docs/vtmb/skills-and-checks.md`
 - Damage pipeline: `docs/vtmb/combat-and-damage.md`
 - Verb/action routing: `docs/vtmb/gameplay-verbs.md`
+- Input command surface: `docs/vtmb/controls.md`
+- Activity translation and weighted sequence selection: `docs/vtmb/animation_and_movers.md`
 - Dice algorithm: `docs/recovered/dice-system.md`
 - Project/research status: `docs/project/roadmap.md`
