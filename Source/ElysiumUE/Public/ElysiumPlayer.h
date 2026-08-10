@@ -390,7 +390,10 @@ public:
 
 	// Log-and-no-op body for the inputs whose system has not landed. Public because the registration
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.
-	void PendingInput(const TCHAR* Input, const TCHAR* Owner, const FElysiumInputArgs& Args) const;
+	// `DeclaringClass` is the chain level the input belongs to, so one reported row covers every
+	// classname that inherits it; null reads as CBaseCombatCharacter, where most of them live.
+	void PendingInput(const TCHAR* Input, const TCHAR* Owner, const FElysiumInputArgs& Args,
+		const TCHAR* DeclaringClass = nullptr) const;
 
 	// --- Gaze (12.4) --------------------------------------------------------------------------
 	// VtMB puts this on CBaseCombatCharacter and so do we. The class decides *where to look*; the

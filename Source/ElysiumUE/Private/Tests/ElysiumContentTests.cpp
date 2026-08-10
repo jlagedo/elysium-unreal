@@ -28,6 +28,7 @@
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumReflections.h"
 #include "ElysiumRng.h"
+#include "Scripting/ElysiumScriptNatives.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumCameraTrack.h"
 #include "Substrate/ElysiumDisposition.h"
@@ -4584,6 +4585,266 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	}
 #endif
 
+	return true;
+}
+
+// =====================================================================================
+// The script/entity action surface — every name the shipped content calls has to resolve.
+//
+// `docs/vtmb/script_api.md` is the recovered inventory: the `vampire` module's 11 globals, the 24
+// Character methods, and the datamap inputs on the character chain, each with its owning class and
+// the record's fieldType. This test asserts the runtime *offers* every one of those names — backed
+// for real or registered pending — so a gap is a build failure here rather than a
+// `[no input]` line discovered while playing. It asserts nothing about behaviour: a pending input
+// logs and no-ops, and that counts as resolved.
+//
+// **Source of truth: the transcribed manifest below, not the survey JSON.** The survey
+// (`uv run elysium research script_api_survey`) classifies a name as `entity-input` by scanning
+// this repository's own `D.Input(TEXT("..."))` calls, so its verdict on inputs is circular, and it
+// records no owning classname for them. Its module-global and Character-method tables are
+// independent of our source, so those halves are cross-checked against it when the export carries
+// it. The manifest is committed reverse-engineering fact about VtMB's binding tables, not game
+// data, which is why it can live in the checkout at all.
+// =====================================================================================
+
+namespace
+{
+	// One datamap input, and the classname whose chain has to resolve it. `Type` is the record's
+	// fieldType (VtMB's shifted enum) — the marshalling contract, reported so a failure line says
+	// what the missing registration owes.
+	struct FElysiumApiInput
+	{
+		const TCHAR* ClassName;
+		const TCHAR* Input;
+		const TCHAR* Type;
+	};
+
+	// Module globals — table 0x1058f7a8, 11 entries.
+	const TCHAR* const GScriptApiGlobals[] = {
+		TEXT("FindEntityByName"), TEXT("FindPlayer"), TEXT("OneOfSet"), TEXT("ScheduleTask"),
+		TEXT("FindEntitiesByName"), TEXT("ChangeMap"), TEXT("FindEntitiesByClass"),
+		TEXT("CreateEntityNoSpawn"), TEXT("CallEntitySpawn"), TEXT("IsPCMalk"),
+		TEXT("SquadSeesPlayer"),
+	};
+
+	// Character methods — table 0x1058f868, 24 entries.
+	const TCHAR* const GScriptApiCharacterMethods[] = {
+		TEXT("SetDisposition"), TEXT("SetQuest"), TEXT("GetQuestState"), TEXT("HasItem"),
+		TEXT("IsMale"), TEXT("RemoveItem"), TEXT("GiveItem"), TEXT("SetCamera"),
+		TEXT("StartBarter"), TEXT("CurrentMoney"), TEXT("SeductiveFeed"), TEXT("CalcFeat"),
+		TEXT("HasWeaponEquipped"), TEXT("AmmoCount"), TEXT("GiveAmmo"), TEXT("BumpStat"),
+		TEXT("WorldMap"), TEXT("IsFollowerOf"), TEXT("SewerMap"), TEXT("SetGesture"),
+		TEXT("GetMasqueradeLevel"), TEXT("DialogDiscipline"), TEXT("SetExpression"),
+		TEXT("React"),
+	};
+
+	// The receiver-split pair. `vamputil.py` defines both as script helpers AND both are datamap
+	// input names, so the binding is a property of the call site rather than of the name: a bare
+	// `Whisper(...)` must reach the script's own function while `pc.Whisper(...)` reaches the input.
+	// A row in the shared native table would collapse that split, so their absence from it is the
+	// assertion. (`Elysium.Substrate.OneOfSet` guards the same rule from the other side.)
+	const TCHAR* const GScriptApiReceiverSplit[] = { TEXT("Whisper"), TEXT("FrenzyTrigger") };
+
+	const FElysiumApiInput GScriptApiInputs[] = {
+		// CBaseCombatCharacter — datamap 0x1061664c, 25 inputs.
+		{ TEXT("CBaseCombatCharacter"), TEXT("MoneyAdd"),               TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("MoneyRemove"),            TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("WillTalk"),               TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("HumanityAdd"),            TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("ChangeMasqueradeLevel"),  TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("Bloodloss"),              TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("Bloodgain"),              TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("BloodHeal"),              TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("FrenzyTrigger"),          TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("FrenzyCheck"),            TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("HungerCheck"),            TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("FrenzyUpdate"),           TEXT("INTEGER") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("ClearActiveDisciplines"), TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("Inventory_Remove"),       TEXT("CLASSPTR") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("BarterBegin"),            TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("BarterEnd"),              TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("PlayFloat"),              TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("SetHeadAsCameraTarget"),  TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("SetBodyAsCameraTarget"),  TEXT("VOID") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("FadeHeadAsCameraTarget"), TEXT("FLOAT") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("FadeBodyAsCameraTarget"), TEXT("FLOAT") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("LookAtEntityEye"),        TEXT("STRING") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("LookAtEntityCenter"),     TEXT("STRING") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("LookAtEntityOrigin"),     TEXT("STRING") },
+		{ TEXT("CBaseCombatCharacter"), TEXT("LookAtEntityDefault"),    TEXT("VOID") },
+
+		// The player class — datamap 0x10580edc. Its header states 11 inputs; 10 were recovered
+		// from the builder dump and the eleventh is still unidentified, so it cannot be listed.
+		{ TEXT("player"), TEXT("GiveItem"),             TEXT("STRING") },
+		{ TEXT("player"), TEXT("AwardExperience"),      TEXT("STRING") },
+		{ TEXT("player"), TEXT("Whisper"),              TEXT("STRING") },
+		{ TEXT("player"), TEXT("SetCriminalLevel"),     TEXT("INTEGER") },
+		{ TEXT("player"), TEXT("RemoveCamera"),         TEXT("VOID") },
+		{ TEXT("player"), TEXT("PlayHUDParticle"),      TEXT("STRING") },
+		{ TEXT("player"), TEXT("StopHUDParticle"),      TEXT("FLOAT") },
+		{ TEXT("player"), TEXT("SetInvestigateLevel"),  TEXT("INTEGER") },
+		{ TEXT("player"), TEXT("SetSupernaturalLevel"), TEXT("INTEGER") },
+		{ TEXT("player"), TEXT("Holster"),              TEXT("VOID") },
+		// And the chain: everything CBaseCombatCharacter declares reaches the player unshadowed.
+		{ TEXT("player"), TEXT("MoneyAdd"),             TEXT("INTEGER") },
+		{ TEXT("player"), TEXT("FrenzyTrigger"),        TEXT("VOID") },
+
+		// CAI_BaseNPC — datamap 0x105c9814. `SetRelationship` is the recovered scripted input; the
+		// other three are map-fired at `npc_*` receivers across the exported maps
+		// (`docs/vtmb/sp_tutorial_1-event-surface.md` §7) with no datamap record recovered yet.
+		{ TEXT("npc_VVampire"),        TEXT("SetRelationship"),        TEXT("STRING") },
+		{ TEXT("npc_VVampire"),        TEXT("TeleportToEntity"),       TEXT("(unrecovered)") },
+		{ TEXT("npc_VVampire"),        TEXT("SetScriptedDiscipline"),  TEXT("(unrecovered)") },
+		{ TEXT("npc_VVampire"),        TEXT("TakeDamage"),             TEXT("(unrecovered)") },
+		{ TEXT("npc_VHumanCombatant"), TEXT("SetRelationship"),        TEXT("STRING") },
+		{ TEXT("npc_VHumanCombatant"), TEXT("TeleportToEntity"),       TEXT("(unrecovered)") },
+		// And the chain again, from the other leaf of it.
+		{ TEXT("npc_VVampire"),        TEXT("WillTalk"),               TEXT("INTEGER") },
+		{ TEXT("npc_VVampire"),        TEXT("SetBodyAsCameraTarget"),  TEXT("VOID") },
+	};
+
+	// Report a group of missing names as one work-list line rather than N unordered errors.
+	void ReportMissing(FAutomationTestBase& Test, const TCHAR* Kind, const TArray<FString>& Missing)
+	{
+		if (Missing.IsEmpty())
+		{
+			return;
+		}
+		Test.AddError(FString::Printf(TEXT("%d %s do not resolve: %s"),
+			Missing.Num(), Kind, *FString::Join(Missing, TEXT(", "))));
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptApiCoverageTest,
+	"Elysium.Content.ScriptApiCoverage", GElysiumContentTestFlags)
+bool FElysiumScriptApiCoverageTest::RunTest(const FString&)
+{
+	// --- The module globals and the Character methods, against the one shared native table ------
+	TArray<FString> MissingGlobals;
+	for (const TCHAR* Name : GScriptApiGlobals)
+	{
+		if (!ElysiumScriptNatives::IsNativeGlobal(FString(Name)))
+		{
+			MissingGlobals.Add(Name);
+		}
+	}
+	ReportMissing(*this, TEXT("module globals"), MissingGlobals);
+
+	TArray<FString> MissingMethods;
+	for (const TCHAR* Name : GScriptApiCharacterMethods)
+	{
+		if (!ElysiumScriptNatives::IsCharacterMethod(FString(Name)))
+		{
+			MissingMethods.Add(Name);
+		}
+	}
+	ReportMissing(*this, TEXT("Character methods"), MissingMethods);
+
+	for (const TCHAR* Name : GScriptApiReceiverSplit)
+	{
+		const FString AsString(Name);
+		TestFalse(FString::Printf(
+			TEXT("%s stays out of the native table (the receiver decides its binding)"), Name),
+			ElysiumScriptNatives::IsNativeGlobal(AsString)
+				|| ElysiumScriptNatives::IsCharacterMethod(AsString));
+	}
+
+	// --- The datamap inputs, through the registry's own chain walk ------------------------------
+	const FElysiumClassRegistry& Registry = FElysiumClassRegistry::Get();
+	TArray<FString> MissingInputs;
+	TSet<FString> MissingClasses;
+	for (const FElysiumApiInput& Row : GScriptApiInputs)
+	{
+		const FElysiumClassDesc* Desc = Registry.Find(FName(Row.ClassName));
+		if (Desc == nullptr)
+		{
+			MissingClasses.Add(Row.ClassName);
+			continue;
+		}
+		if (Registry.FindInput(*Desc, FName(Row.Input)) == nullptr)
+		{
+			MissingInputs.Add(FString::Printf(TEXT("%s.%s [%s]"),
+				Row.ClassName, Row.Input, Row.Type));
+		}
+	}
+	if (!MissingClasses.IsEmpty())
+	{
+		ReportMissing(*this, TEXT("owning classnames are unregistered"), MissingClasses.Array());
+	}
+	ReportMissing(*this, TEXT("datamap inputs"), MissingInputs);
+
+	AddInfo(FString::Printf(
+		TEXT("script API surface: %d module globals, %d Character methods, %d datamap inputs asserted"),
+		UE_ARRAY_COUNT(GScriptApiGlobals), UE_ARRAY_COUNT(GScriptApiCharacterMethods),
+		UE_ARRAY_COUNT(GScriptApiInputs)));
+
+	// --- The corpus survey, when the export carries it -------------------------------------------
+	// Cross-check only the two halves the survey derives independently of this repository. Its
+	// `entity-input` verdict is read back out of our own registrations, so it can neither confirm
+	// nor deny the manifest above.
+	const FString SurveyPath = FElysiumContentPaths::Root() / TEXT("_mcp/script_api.json");
+	FString SurveyJson;
+	if (!FElysiumContentPaths::IsConfigured() || !FFileHelper::LoadFileToString(SurveyJson, *SurveyPath))
+	{
+		// Not an abstention: the manifest above is the assertion and it ran. Only the optional
+		// cross-check is skipped, so the test stays counted as executed.
+		AddInfo(FString::Printf(
+			TEXT("no corpus survey at %s — the manifest ran without it; regenerate the survey with ")
+			TEXT("`uv run elysium research script_api_survey --json $ELYSIUM_EXPORT_ROOT/_mcp/script_api.json`"),
+			*SurveyPath));
+		return true;
+	}
+
+	TSharedPtr<FJsonObject> Survey;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(SurveyJson);
+	if (!TestTrue(TEXT("the corpus survey parses"), FJsonSerializer::Deserialize(Reader, Survey)
+		&& Survey.IsValid()))
+	{
+		return false;
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* Ledger = nullptr;
+	if (!TestTrue(TEXT("the corpus survey carries a ledger"), Survey->TryGetArrayField(TEXT("ledger"), Ledger)
+		&& Ledger != nullptr))
+	{
+		return false;
+	}
+
+	TArray<FString> SurveyMissing;
+	int32 CalledGlobals = 0;
+	int32 CalledMethods = 0;
+	int32 CalledInputs = 0;
+	for (const TSharedPtr<FJsonValue>& Value : *Ledger)
+	{
+		const TSharedPtr<FJsonObject> Row = Value.IsValid() ? Value->AsObject() : nullptr;
+		if (!Row.IsValid())
+		{
+			continue;
+		}
+		const FString Name = Row->GetStringField(TEXT("name"));
+		const FString Kind = Row->GetStringField(TEXT("kind"));
+		if (Kind == TEXT("engine-global"))
+		{
+			++CalledGlobals;
+			if (!ElysiumScriptNatives::IsNativeGlobal(Name)) { SurveyMissing.Add(Name + TEXT(" (global)")); }
+		}
+		else if (Kind == TEXT("character"))
+		{
+			++CalledMethods;
+			if (!ElysiumScriptNatives::IsCharacterMethod(Name)) { SurveyMissing.Add(Name + TEXT(" (method)")); }
+		}
+		else if (Kind == TEXT("entity-input"))
+		{
+			++CalledInputs;
+		}
+		// script / stdlib / entity-base / G-method / UNRESOLVED are not this runtime's obligation:
+		// the corpus defines them, CPython owns them, or nothing in the recovered tables explains
+		// them yet.
+	}
+	ReportMissing(*this, TEXT("corpus-called engine names"), SurveyMissing);
+	AddInfo(FString::Printf(
+		TEXT("corpus survey: %d ledger rows — %d module globals, %d Character methods, %d entity inputs called"),
+		Ledger->Num(), CalledGlobals, CalledMethods, CalledInputs));
 	return true;
 }
 

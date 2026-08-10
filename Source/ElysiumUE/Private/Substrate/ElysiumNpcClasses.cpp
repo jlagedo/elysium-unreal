@@ -33,6 +33,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
@@ -1485,6 +1486,25 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).InputFollowPatrolPath(Args); });
 	D.Input(TEXT("ClearPatrolPath"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputClearPatrolPath(Args); });
+
+	// CAI_BaseNPC's own inputs, registered so the name resolves through the chain walk and reports
+	// itself instead of dropping as an unknown input. Nothing is performed: the name, the argument
+	// type and the retail handler are recovered, the semantics are not. The declaring class is named
+	// as CAI_BaseNPC — the level VtMB puts them at — so one work-list row covers every `npc_*` leaf,
+	// even though this runtime folds that node into each registered classname.
+	using FN = FElysiumNpc;
+	// STRING — 334 corpus calls, the third-largest single gap in the game
+	// (`docs/vtmb/script_api.md`, datamap 0x105c9814).
+	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, SetRelationship, "9.9 — the NPC relationship model");
+	// Map-fired NPC inputs the shipped content wires (`docs/vtmb/sp_tutorial_1-event-surface.md` §7):
+	// 30 `TeleportToEntity`, 8 `SetScriptedDiscipline` and 4 `TakeDamage` wires across the exported
+	// maps, all of them aimed at an `npc_*` receiver. `TakeDamage` is a *method* on this chain
+	// (`FElysiumCombatCharacter::TakeDamage`) and a native the script surface dispatches, but the
+	// wire's own datamap record — and so its argument's field type — is unrecovered, which is why the
+	// input stays pending rather than forwarding a guessed number into the health track.
+	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, TeleportToEntity,      "10.7 — AI placement");
+	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, SetScriptedDiscipline, "P13 — disciplines");
+	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, TakeDamage,            "B5 — combat damage");
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);

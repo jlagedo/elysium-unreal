@@ -21,6 +21,7 @@
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -421,14 +422,15 @@ void FElysiumAnimating::GateVisual()
 // ============================================================================================
 
 void FElysiumCombatCharacter::PendingInput(const TCHAR* Input, const TCHAR* Owner,
-	const FElysiumInputArgs& Args) const
+	const FElysiumInputArgs& Args, const TCHAR* DeclaringClass) const
 {
 	// Registered so the name resolves through the R2 walk, but nothing behind it yet — the same
 	// condition as an unregistered classname's input, so it reports through the same surface and
 	// lands in the same work list. Keyed on the class the input is declared on, not on the
 	// receiver, so one row covers every NPC that receives it.
 	ElysiumStub::Fired(TEXT("input"),
-		FString::Printf(TEXT("%s.%s"), *ElysiumCombatCharacterClassName().ToString(), Input),
+		FString::Printf(TEXT("%s.%s"),
+			DeclaringClass ? DeclaringClass : *ElysiumCombatCharacterClassName().ToString(), Input),
 		DebugString(), ElysiumStub::DescribeInput(Args), Owner);
 }
 
@@ -1374,13 +1376,6 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 // Registration
 // ============================================================================================
 
-// One registered input that names itself in the log and does nothing else. The thunk is a
-// captureless function pointer (FElysiumInputThunk), so the name and the owning task have to be
-// baked into the lambda's body — hence the macro rather than a table.
-#define ELYSIUM_PENDING_INPUT(Class, Name, OwnerText)                                  \
-	D.Input(TEXT(#Name), [](FElysiumEntity& E, const FElysiumInputArgs& A)             \
-		{ static_cast<Class&>(E).PendingInput(TEXT(#Name), TEXT(OwnerText), A); })
-
 static TUniquePtr<FElysiumEntity> MakePlayer() { return MakeUnique<FElysiumPlayer>(); }
 
 // CBaseAnimating — a chain node, never a `.ents` classname, so it needs no factory.
@@ -1537,5 +1532,3 @@ static FElysiumClassRegistrar GRegPlayer(
 			D.Fields.Add(FName(TEXT("vhistory")), MoveTemp(Acc));
 		}
 	});
-
-#undef ELYSIUM_PENDING_INPUT
