@@ -15,6 +15,16 @@ struct FElysiumClothBuildResult
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Cloth")
 	FString AssetPath;
 
+	/**
+	 * The material this garment was tuned as, out of `pipeline/unreal/cloth_tuning.json`.
+	 *
+	 * Reported because it is the one input to the build that is a judgement rather than a decode —
+	 * a reading of what the garment is — so it belongs in the build log beside the counts that
+	 * came off the authored payload.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Cloth")
+	FString Material;
+
 	/** Simulation vertices written — VtMB's particle count for this garment. */
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Cloth")
 	int32 SimVertices = 0;
@@ -137,6 +147,10 @@ struct FElysiumClothBuildResult
  *  - **Colliders** become a generated `UPhysicsAsset` of capsule and sphere bodies on the
  *    authored bones, because Chaos gathers cloth collision from a physics asset rather than
  *    from the cloth collection.
+ *  - **Material is not decoded at all.** VtMB's solver had no density, friction or thickness to
+ *    state, so what a garment is MADE of is a reading of it rather than a fact in the file. It
+ *    lives in `pipeline/unreal/cloth_tuning.json` beside every other tuned value, and no number
+ *    in the implementation is a tuning value.
  */
 UCLASS()
 class ELYSIUMUE_API UElysiumClothBuildLibrary final : public UBlueprintFunctionLibrary
@@ -151,10 +165,16 @@ public:
 	 * the sidecar's bone indices are model bone indices, so they are resolved by NAME against
 	 * that skeleton rather than used directly — a baked family skeleton renumbers, and an index
 	 * carried across that boundary silently attaches a hem to the wrong limb.
+	 *
+	 * `TuningPath` is `pipeline/unreal/cloth_tuning.json`, which owns every material and solver
+	 * value the build applies. It is a required input rather than an optional override: the
+	 * implementation carries no fallback to substitute, which is what keeps the whole corpus
+	 * tunable from one reviewable file.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Cloth")
 	static TArray<FElysiumClothBuildResult> BuildClothAssetsFromSidecar(
 		const FString& SidecarPath,
 		const FString& PackageDirectory,
-		const FString& SkeletalMeshPath);
+		const FString& SkeletalMeshPath,
+		const FString& TuningPath);
 };

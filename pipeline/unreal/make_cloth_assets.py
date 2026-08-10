@@ -37,6 +37,12 @@ from elysium_pipeline.paths import export_root  # noqa: E402
 MESH_PACKAGE = "/ElysiumBaked/Characters/Meshes"
 CLOTH_PACKAGE = "/Game/VtMB/Cloth"
 
+# What each garment is MADE of, and every solver value the build applies. The authored payload
+# states a garment's shape and its constraint graph and nothing about its material -- VtMB's
+# solver had no density, friction or thickness to state -- so that call is authored here as
+# reviewable data rather than compiled into the build library.
+TUNING_PATH = os.path.join(_REPO, "pipeline", "unreal", "cloth_tuning.json")
+
 
 def requested_stems():
     """The `-ClothStems=` slice, or None for every sidecar on disk.
@@ -105,7 +111,7 @@ def main():
             continue
 
         results = unreal.ElysiumClothBuildLibrary.build_cloth_assets_from_sidecar(
-            path, CLOTH_PACKAGE, mesh)
+            path, CLOTH_PACKAGE, mesh, TUNING_PATH)
         for result in results:
             for error in result.errors:
                 unreal.log_error("[make_cloth_assets] %s: %s" % (stem, error))
@@ -123,10 +129,10 @@ def main():
                 unreal.EditorAssetLibrary.save_asset(physics, only_if_is_dirty=False)
             built += 1
             unreal.log(
-                "[make_cloth_assets] %s -> %s (%d sim vertices, %d faces, %d pinned, "
+                "[make_cloth_assets] %s -> %s [%s] (%d sim vertices, %d faces, %d pinned, "
                 "%d collision bodies, %d config properties)"
-                % (stem, package, result.sim_vertices, result.sim_faces,
-                   result.kinematic_vertices, result.collision_bodies,
+                % (stem, package, result.material or "UNTUNED", result.sim_vertices,
+                   result.sim_faces, result.kinematic_vertices, result.collision_bodies,
                    result.config_properties))
             # What the built model carries, not what the build intended. A garment whose
             # particles survive but whose kinematic set or tethers do not simulates as a sheet

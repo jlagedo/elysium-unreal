@@ -969,19 +969,26 @@ def sweep_characters(config, partition: dict, *, apply: bool = True,
 
 
 def _stale_garments(config, stems: Sequence[str]) -> list[str]:
-    """Named stems whose garment sidecar is newer than the cloth asset generated from it.
+    """Named stems whose cloth asset is older than an input it was generated from.
+
+    Two inputs, not one. The garment sidecar is the authored payload, and `cloth_tuning.json` is
+    every material and solver value applied on top of it -- so a tuning edit has to invalidate the
+    whole corpus the same way re-exporting one model invalidates that one. Without it the fast
+    path reports the assets current and the edit silently does nothing.
 
     Most stems author no garment and are absent from both sides, which is not staleness.
     """
     garment_dir = config.export_root / "npc" / "garment"
     cloth_dir = config.repo_root / "Content" / "VtMB" / "Cloth"
+    tuning = config.repo_root / "pipeline" / "unreal" / "cloth_tuning.json"
+    tuned_at = tuning.stat().st_mtime if tuning.is_file() else 0.0
     stale = []
     for stem in stems:
         sidecar = garment_dir / f"{stem}.json"
         if not sidecar.is_file():
             continue
         asset = cloth_dir / f"CLOTH_{stem}.uasset"
-        if not asset.is_file() or asset.stat().st_mtime < sidecar.stat().st_mtime:
+        if not asset.is_file() or asset.stat().st_mtime < max(sidecar.stat().st_mtime, tuned_at):
             stale.append(stem)
     return stale
 

@@ -32,32 +32,19 @@ namespace
 	const FName MaxDistanceMap(TEXT("MaxDistance"));
 
 	/**
-	 * How far a free particle may leave its skinned position, in centimetres.
-	 *
-	 * The map carries this in CENTIMETRES and the `MaxDistance` property keeps the unit range
-	 * `(0, 1)` — the legacy mask convention, and the one `FClothEngineTools::GenerateTethers`
-	 * detects to read the map as distances rather than as weights.
-	 *
-	 * It is a real ceiling, not a formality. Max distance is the constraint that keeps a garment on
-	 * the body at all; a value large enough to be "unconstrained" lets the whole skirt travel to
-	 * the floor while its waistband stays pinned, which does not read as a tuning problem.
-	 */
-	constexpr float FreeTravelCentimetres = 15.f;
-
-	/**
 	 * Retail gravity against Chaos's own, as a ratio.
 	 *
 	 * StudioRender integrates `gravity_scale * 384 * dt^2`, and 384 in/s^2 is 32 ft/s^2, so the
 	 * authored scale is measured against 975.36 cm/s^2 while Chaos measures against 980.665. The
 	 * difference is half a percent -- small enough to be invisible and cheap enough to remove.
+	 *
+	 * This is a conversion between two engines' constants, not a tuning value, which is why it is
+	 * the only number in this file. Everything a garment's solve needs beyond what VtMB itself
+	 * authored lives in `pipeline/unreal/cloth_tuning.json`.
 	 */
 	constexpr float RetailGravityRatio = 975.36f / 980.665f;
 
-	/** Retail's substep clock: a 300 Hz target, capped at 30 steps for one frame. */
-	constexpr float RetailSubstepMilliseconds = 1000.f / 300.f;
-	constexpr int32 RetailMaxSubsteps = 30;
-
-	TSharedPtr<FJsonObject> ReadSidecar(const FString& Path, FString& OutError)
+	TSharedPtr<FJsonObject> ReadJsonObject(const FString& Path, FString& OutError)
 	{
 		FString Text;
 		if (!FFileHelper::LoadFileToString(Text, *Path))
@@ -83,6 +70,196 @@ namespace
 				  static_cast<float>(Values[1]->AsNumber()),
 				  static_cast<float>(Values[2]->AsNumber()))
 			: FVector3f::ZeroVector;
+	}
+
+	/** Write every key of `Source` over `Target`, so a later layer wins key by key. */
+	void OverlayTuning(const TSharedPtr<FJsonObject>& Source, const TSharedRef<FJsonObject>& Target)
+	{
+		if (Source.IsValid())
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Source->Values)
+			{
+				Target->SetField(Pair.Key, Pair.Value);
+			}
+		}
+	}
+
+	/**
+	 * One garment's material parameters, resolved out of `pipeline/unreal/cloth_tuning.json`.
+	 *
+	 * VtMB's payload states a garment's shape and its constraint graph and says nothing about what
+	 * it is made of — the retail solver had no density, no friction and no thickness to state. So
+	 * the material is a reading of the garment rather than a decode of it, and no rule recovers
+	 * "heavy leather" from a vertex count. It is authored per garment as data, and this function
+	 * is the only thing here that knows about it: `defaults` <- `materials[<name>]` <- the
+	 * garment's own entry, each layer overriding the last key by key.
+	 *
+	 * A model that authors more than one garment gives its entry as an array, selected by
+	 * `Definition` — tremere_female_armor_3 tunes its hanging sleeves apart from its robe skirt.
+	 *
+	 * A stem the table does not name is an error rather than a default. The table is meant to
+	 * cover the cast, so a miss means a garment reached the build untuned, and quietly giving it
+	 * the average of everything else is how that stays unnoticed.
+	 */
+	TSharedRef<FJsonObject> ResolveTuning(const TSharedPtr<FJsonObject>& Table, const FString& Stem,
+		int32 Definition, FString& OutMaterial, TArray<FString>& Errors)
+	{
+		const TSharedRef<FJsonObject> Resolved = MakeShared<FJsonObject>();
+		const TSharedPtr<FJsonObject>* Section = nullptr;
+		if (Table->TryGetObjectField(TEXT("defaults"), Section))
+		{
+			OverlayTuning(*Section, Resolved);
+		}
+
+		TSharedPtr<FJsonObject> Entry;
+		if (Table->TryGetObjectField(TEXT("garments"), Section))
+		{
+			if (const TSharedPtr<FJsonValue> Value = (*Section)->TryGetField(Stem))
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Definitions = nullptr;
+				Entry = Value->TryGetArray(Definitions)
+					? (Definitions->IsValidIndex(Definition) ? (*Definitions)[Definition]->AsObject()
+															: nullptr)
+					: Value->AsObject();
+			}
+		}
+
+		FString Material;
+		if (Entry.IsValid())
+		{
+			Entry->TryGetStringField(TEXT("material"), Material);
+		}
+		if (Material.IsEmpty())
+		{
+			Table->TryGetStringField(TEXT("fallback_material"), Material);
+			Errors.Add(FString::Printf(
+				TEXT("cloth_tuning.json names no garment '%s' definition %d; fell back to '%s'"),
+				*Stem, Definition, *Material));
+		}
+		if (Table->TryGetObjectField(TEXT("materials"), Section))
+		{
+			const TSharedPtr<FJsonObject>* Declared = nullptr;
+			if ((*Section)->TryGetObjectField(Material, Declared))
+			{
+				OverlayTuning(*Declared, Resolved);
+			}
+			else
+			{
+				Errors.Add(FString::Printf(
+					TEXT("cloth_tuning.json declares no material '%s'"), *Material));
+			}
+		}
+		OverlayTuning(Entry, Resolved);
+
+		OutMaterial = Material;
+		return Resolved;
+	}
+
+	/**
+	 * A tuned value, or zero and an error when the table does not declare it.
+	 *
+	 * `defaults` declares every key the build reads, so an absence is an incomplete table rather
+	 * than an invitation to substitute something — which is the whole point of keeping the numbers
+	 * out of here.
+	 */
+	double TunedNumber(const TSharedRef<FJsonObject>& Tuning, const TCHAR* Key,
+		TArray<FString>& Errors)
+	{
+		double Value = 0.0;
+		if (!Tuning->TryGetNumberField(Key, Value))
+		{
+			Errors.Add(FString::Printf(TEXT("cloth_tuning.json declares no '%s'"), Key));
+		}
+		return Value;
+	}
+
+	bool TunedBool(const TSharedRef<FJsonObject>& Tuning, const TCHAR* Key, TArray<FString>& Errors)
+	{
+		bool bValue = false;
+		if (!Tuning->TryGetBoolField(Key, bValue))
+		{
+			Errors.Add(FString::Printf(TEXT("cloth_tuning.json declares no '%s'"), Key));
+		}
+		return bValue;
+	}
+
+	/**
+	 * Each particle's distance to the pinned set, measured ALONG the simulation mesh.
+	 *
+	 * How far a free particle may leave its skinned position is not a property of the garment as a
+	 * whole. A waistband particle should barely move and a hem particle legitimately swings, and
+	 * both are on the same sheet — so a single constant serves neither. Measured against each
+	 * garment's own edge length, the 15 cm this used to hand out was eighteen edge lengths on
+	 * Rosa's bead cord and a little over one on the Sheriff's cloak.
+	 *
+	 * Geodesic rather than straight-line because the leash bounds travel over the surface the
+	 * constraints act on, which is also what `FClothEngineTools::GenerateTethers` measures when it
+	 * builds the long range attachments from this same map.
+	 *
+	 * Dijkstra outward from every anchored particle at once. A particle no path reaches — a
+	 * disconnected island, or a garment with no anchors at all — keeps its starting infinity, and
+	 * the caller's own ceiling is what bounds it.
+	 */
+	TArray<float> ReachToPinned(const TArray<FVector3f>& Rest, const TArray<FIntVector3>& Faces,
+		const TArray<bool>& Anchored)
+	{
+		TArray<TArray<int32>> Adjacent;
+		Adjacent.SetNum(Rest.Num());
+		auto Link = [&Adjacent](int32 A, int32 B)
+		{
+			if (Adjacent.IsValidIndex(A) && Adjacent.IsValidIndex(B))
+			{
+				Adjacent[A].AddUnique(B);
+				Adjacent[B].AddUnique(A);
+			}
+		};
+		for (const FIntVector3& Face : Faces)
+		{
+			Link(Face.X, Face.Y);
+			Link(Face.Y, Face.Z);
+			Link(Face.Z, Face.X);
+		}
+
+		TArray<float> Reach;
+		Reach.Init(TNumericLimits<float>::Max(), Rest.Num());
+		TArray<bool> Settled;
+		Settled.Init(false, Rest.Num());
+		for (int32 Index = 0; Index < Rest.Num(); ++Index)
+		{
+			if (Anchored.IsValidIndex(Index) && Anchored[Index])
+			{
+				Reach[Index] = 0.f;
+			}
+		}
+		// A linear scan for the nearest unsettled particle rather than a heap: a garment is a few
+		// hundred particles and this runs once per build.
+		for (;;)
+		{
+			int32 Nearest = INDEX_NONE;
+			for (int32 Index = 0; Index < Reach.Num(); ++Index)
+			{
+				if (!Settled[Index] && Reach[Index] < TNumericLimits<float>::Max()
+					&& (Nearest == INDEX_NONE || Reach[Index] < Reach[Nearest]))
+				{
+					Nearest = Index;
+				}
+			}
+			if (Nearest == INDEX_NONE)
+			{
+				break;
+			}
+			Settled[Nearest] = true;
+			for (const int32 Next : Adjacent[Nearest])
+			{
+				const float Step =
+					Reach[Nearest] + FVector3f::Distance(Rest[Nearest], Rest[Next]);
+				if (Step < Reach[Next])
+				{
+					Reach[Next] = Step;
+				}
+			}
+		}
+		return Reach;
 	}
 
 	/**
@@ -317,14 +494,23 @@ namespace
 TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFromSidecar(
 	const FString& SidecarPath,
 	const FString& PackageDirectory,
-	const FString& SkeletalMeshPath)
+	const FString& SkeletalMeshPath,
+	const FString& TuningPath)
 {
 	TArray<FElysiumClothBuildResult> Results;
 
 	FElysiumClothBuildResult Fatal;
 	FString Error;
-	const TSharedPtr<FJsonObject> Root = ReadSidecar(SidecarPath, Error);
+	const TSharedPtr<FJsonObject> Root = ReadJsonObject(SidecarPath, Error);
 	if (!Root.IsValid())
+	{
+		Fatal.Errors.Add(Error);
+		Results.Add(Fatal);
+		return Results;
+	}
+
+	const TSharedPtr<FJsonObject> TuningTable = ReadJsonObject(TuningPath, Error);
+	if (!TuningTable.IsValid())
 	{
 		Fatal.Errors.Add(Error);
 		Results.Add(Fatal);
@@ -360,6 +546,11 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			Results.Add(Result);
 			continue;
 		}
+
+		// The material call for this garment, resolved before anything is built with it. Every
+		// number below that is not a decode of the authored payload comes from here.
+		const TSharedRef<FJsonObject> Tuning =
+			ResolveTuning(TuningTable, Stem, GarmentIndex, Result.Material, Result.Errors);
 
 		// --- the authored simulation mesh -------------------------------------------------
 		TArray<FVector3f> Rest;
@@ -536,12 +727,30 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// kinematic — below `KinematicDistanceThreshold` the particle is mass-infinite and stays
 		// on its skinned position, which is exactly what VtMB does by skinning its anchors from
 		// the bone palette instead of solving them.
+		//
+		// The free particles' leash is ours rather than VtMB's: the retail solve has no
+		// per-particle displacement limit at all and holds the surface on the body with its
+		// constraint graph alone. Chaos needs one at real-time substep counts, so it is scaled by
+		// each particle's own geodesic distance to the pinned set — a waistband particle gets a
+		// tight leash and a hem particle a loose one, and one tuned fraction means the same thing
+		// on a 35 cm necktie and a 228 cm cloak.
+		const TArray<float> Reach = ReachToPinned(Rest, Faces, Anchored);
+		const float LeashFraction =
+			static_cast<float>(TunedNumber(Tuning, TEXT("leash_reach_fraction"), Result.Errors));
+		const float LeashMin =
+			static_cast<float>(TunedNumber(Tuning, TEXT("leash_min_cm"), Result.Errors));
+		const float LeashMax =
+			static_cast<float>(TunedNumber(Tuning, TEXT("leash_max_cm"), Result.Errors));
+
 		Cloth.AddWeightMap(MaxDistanceMap);
 		TArrayView<float> MaxDistance = Cloth.GetWeightMap(MaxDistanceMap);
 		for (int32 Index = 0; Index < MaxDistance.Num(); ++Index)
 		{
 			const bool bPinned = Index < Anchored.Num() && Anchored[Index];
-			MaxDistance[Index] = bPinned ? 0.f : FreeTravelCentimetres;
+			const float Free = Reach.IsValidIndex(Index)
+				? FMath::Clamp(LeashFraction * Reach[Index], LeashMin, LeashMax)
+				: LeashMax;
+			MaxDistance[Index] = bPinned ? 0.f : Free;
 			Result.KinematicVertices += bPinned ? 1 : 0;
 		}
 
@@ -560,29 +769,78 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		UChaosClothConfig* const ClothConfig = NewObject<UChaosClothConfig>();
 		UChaosClothSharedSimConfig* const SharedConfig = NewObject<UChaosClothSharedSimConfig>();
 
+		auto Tuned = [&Tuning, &Result](const TCHAR* Key)
+		{
+			return static_cast<float>(TunedNumber(Tuning, Key, Result.Errors));
+		};
+		auto Weighted = [&Tuned](const TCHAR* Key)
+		{
+			const float Value = Tuned(Key);
+			return FChaosClothWeightedValue{ Value, Value };
+		};
+
 		// VtMB's authored gravity scale, carried as the solver's own multiplier rather than baked
 		// into a gravity vector, so the panel can move it live. The authored number really is
 		// about that many g -- StudioRender integrates `scale * 384 * dt^2`, and 384 in/s^2 is
 		// 32 ft/s^2 -- so a scale of 5 is a garment falling at five gravities and not a unit
-		// mismatch to be corrected away.
-		ClothConfig->GravityScale = static_cast<float>(GravityScale) * RetailGravityRatio;
+		// mismatch to be corrected away. The tuned multiplier rides on top of it, so a material
+		// can be adjusted without discarding what the artist asked for.
+		ClothConfig->GravityScale =
+			static_cast<float>(GravityScale) * RetailGravityRatio * Tuned(TEXT("gravity_multiplier"));
+
+		// What the garment is made of. VtMB states none of this — its solver had no material at
+		// all — so every value here is the tuning table's, keyed by the material this garment was
+		// read as. Density is Chaos's own kg scale, where the engine's reference points run from
+		// melton wool at 0.7 down to silk at 0.1.
+		ClothConfig->MassMode = EClothMassMode::Density;
+		ClothConfig->Density = Tuned(TEXT("density"));
+		ClothConfig->EdgeStiffnessWeighted = Weighted(TEXT("edge_stiffness"));
+		ClothConfig->BendingStiffnessWeighted = Weighted(TEXT("bend_stiffness"));
+		// Zero by default in the table, and deliberately: VtMB authors exactly two constraint
+		// sets, the mesh's edges and its bend diagonals, and no area-preservation set at all. The
+		// engine's default of 1 buys a constraint the garment was never designed around and
+		// charges for it every substep.
+		ClothConfig->AreaStiffnessWeighted = Weighted(TEXT("area_stiffness"));
 
 		// Retail retains 0.97 of the previous displacement per substep at a 300 Hz target, and
-		// Chaos states damping as the fraction removed per 60 Hz frame: 1 - 0.97^5. The engine
-		// default of 0.01 is a far floatier garment than the game's.
-		ClothConfig->DampingCoefficient = 1.f - FMath::Pow(0.97f, 5.f);
-		ClothConfig->LocalDampingCoefficient = 0.f;  // no retail equivalent
+		// Chaos states damping as the fraction removed per 60 Hz frame: 1 - 0.97^5. That is where
+		// the table's default came from; a material may still move it.
+		ClothConfig->DampingCoefficient = Tuned(TEXT("damping"));
+		ClothConfig->LocalDampingCoefficient = Tuned(TEXT("local_damping"));
 
-		// The substep clock, which is VtMB's own: `N = min(30, round(elapsed * 300))`. Chaos
-		// computes `Clamp(Round(DeltaTime * 1000 / DynamicSubstepDeltaTime), 1, NumSubsteps)`,
-		// so a 3.3333 ms target and a cap of 30 reproduce it rather than approximate it.
-		SharedConfig->SubdivisionCount = RetailMaxSubsteps;
+		ClothConfig->CollisionThickness = Tuned(TEXT("collision_thickness"));
+		ClothConfig->FrictionCoefficient = Tuned(TEXT("friction"));
+		ClothConfig->TetherStiffness = Weighted(TEXT("tether_stiffness"));
+		ClothConfig->TetherScale = Weighted(TEXT("tether_scale"));
+
+		const float LinearVelocityScale = Tuned(TEXT("linear_velocity_scale"));
+		ClothConfig->LinearVelocityScale =
+			FVector(LinearVelocityScale, LinearVelocityScale, LinearVelocityScale);
+		ClothConfig->AngularVelocityScale = Tuned(TEXT("angular_velocity_scale"));
+		ClothConfig->FictitiousAngularScale = Tuned(TEXT("fictitious_angular_scale"));
 
 		// Continuous collision detection. A garment on a character who turns, sits or takes a hit
 		// moves far enough in one substep to pass straight through a hip capsule, and a discrete
 		// test only ever asks where the particle ENDED — so the miss is silent and the hem comes
-		// out the far side. It costs performance against a garment that would not have tunnelled.
-		ClothConfig->bUseCCD = true;
+		// out the far side. It is per material because it is a real cost and most of what it buys
+		// is on the long coats: a necktie on a sternum never meets a fast collider.
+		ClothConfig->bUseCCD = TunedBool(Tuning, TEXT("use_ccd"), Result.Errors);
+
+		// The solver block, shared by every garment. The substep clock is VtMB's own --
+		// `N = min(30, round(elapsed * 300))` -- and Chaos computes
+		// `Clamp(Round(DeltaTime * 1000 / DynamicSubstepDeltaTime), 1, NumSubsteps)`, so the
+		// table's 3.3333 ms target and cap of 30 reproduce it rather than approximate it.
+		const TSharedPtr<FJsonObject>* Solver = nullptr;
+		const TSharedRef<FJsonObject> SolverConfig = TuningTable->TryGetObjectField(
+			TEXT("solver"), Solver) ? Solver->ToSharedRef() : MakeShared<FJsonObject>();
+		SharedConfig->IterationCount =
+			static_cast<int32>(TunedNumber(SolverConfig, TEXT("iteration_count"), Result.Errors));
+		SharedConfig->MaxIterationCount = static_cast<int32>(
+			TunedNumber(SolverConfig, TEXT("max_iteration_count"), Result.Errors));
+		SharedConfig->SubdivisionCount =
+			static_cast<int32>(TunedNumber(SolverConfig, TEXT("max_substeps"), Result.Errors));
+		ClothConfig->bUseSelfCollisions =
+			TunedBool(SolverConfig, TEXT("use_self_collisions"), Result.Errors);
 
 		::Chaos::FClothingSimulationConfig SimulationConfig;
 		SimulationConfig.Initialize(ClothConfig, SharedConfig);
@@ -594,7 +852,8 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		{
 			::Chaos::Softs::FCollectionPropertyMutableFacade Properties(Collection);
 			Properties.AddValue(FName(TEXT("DynamicSubstepDeltaTime")),
-				RetailSubstepMilliseconds);
+				static_cast<float>(
+					TunedNumber(SolverConfig, TEXT("substep_target_ms"), Result.Errors)));
 		}
 		Result.ConfigProperties =
 			::Chaos::Softs::FCollectionPropertyConstFacade(Collection).Num();
