@@ -82,6 +82,26 @@ EElysiumAnimActivityCode ActivityCode(const FString& Name)
 	return EElysiumAnimActivityCode::Unknown;
 }
 
+FElysiumGaitReference GaitFrom(const FElysiumGaitSpeeds& Speeds)
+{
+	FElysiumGaitReference Gait;
+	// The forward cells, because that is what the two gaits are *called* — a body's walk speed is
+	// the speed it walks forward at, and the strafe cells are the same gait pointed sideways.
+	if (Speeds.Walk.IsValid())
+	{
+		Gait.WalkSpeedCmPerSecond = Speeds.Walk.Forward();
+		// Retail's threshold: the body's own forward walk cell plus one Source unit. Deriving it from
+		// the same table the mover commands from is what stops the classifier calling a body a runner
+		// at a speed its run fan cannot produce.
+		Gait.RunSplitAbsoluteCmPerSecond = Speeds.Walk.Forward() + ElysiumMove::U;
+	}
+	if (Speeds.Run.IsValid())
+	{
+		Gait.RunSpeedCmPerSecond = Speeds.Run.Forward();
+	}
+	return Gait;
+}
+
 const TCHAR* SourceName(EElysiumAnimSource Source)
 {
 	switch (Source)
@@ -293,10 +313,18 @@ FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 		Next.PhaseSeconds = 0.0f;
 	}
 
-	// The gait memory, settled here so `Classify` stays a pure function of the state it is handed.
-	// Crossing the split by the margin is what stops a decelerating body flickering between the two
-	// gaits and advancing the request generation on every frame.
-	const float Speed = Sample.Speed2D();
+	// The gait, settled here so `Classify` stays a pure function of the state it is handed.
+	//
+	// **Both speeds, disjunctively** — retail tests the realized speed *or* the commanded one against
+	// the same threshold. The commanded term dominates in practice: it is already at full value on
+	// the first frame of a full input, so the run is selected immediately rather than after the body
+	// has accelerated into it, which is the ramp a realized-speed-only test produces and retail does
+	// not have. The realized term is what decides while coasting with the command released.
+	//
+	// The margin is a divergence and defaults to zero — retail holds no gait memory. It survives as a
+	// dial because the commanded term is what removed the flicker it existed for, and that reasoning
+	// should be falsifiable rather than assumed.
+	const float Speed = FMath::Max(Sample.Speed2D(), Sample.CommandedSpeed);
 	const float Split = Gait.RunSplitSpeed();
 	const float Margin = Gait.HysteresisSpeed();
 	Next.bLastGaitWasRun = Prev.bLastGaitWasRun
@@ -347,13 +375,11 @@ EElysiumAnimActivityCode Classify(const FElysiumLocomotionSample& Sample,
 	// not the classifier's, and a body held in `Rising` under a low ceiling is as ducked as one that
 	// settled.
 	//
-	// **Ducked-and-moving reads as ACT_SNEAK, and that is a reconstruction rather than a recovered
-	// fact.** The ordinary selector reaches sneak inside compact code 1 ("walk, run, sneak or their
-	// relaxed variants, selected from realized speed, flags and weapon state") and those flags are
-	// undecoded; there is no sneak button in `FElysiumUserCmd`. What supports it is the stride: the
-	// authored `sneak` cells run 69.7-79.3 cm/s and a ducked gait here is a third of the base speed,
-	// the same band. Recorded as a divergence in `docs/architecture/input-architecture.md` terms —
-	// an owner call, not an accident.
+	// **Ducked-and-moving reads as ACT_SNEAK, which is the recovered behaviour** — retail's ladder is
+	// `FL_DUCKING && speed2D > 5.0 u/s` for sneak and `ACT_CROUCH` below it, a flat two-state branch
+	// taken ahead of the walk/run split so a ducked body never reaches either gait or their relaxed
+	// variants (`docs/vtmb/animation_and_movers.md` -> "The gait ladder runs ahead of the
+	// compact-code dispatch"). Ours matches that shape: one branch, no split, no relaxed form.
 	if (Sample.Stance != EElysiumStance::Standing)
 	{
 		return bMoving ? EElysiumAnimActivityCode::Sneak : EElysiumAnimActivityCode::Crouch;

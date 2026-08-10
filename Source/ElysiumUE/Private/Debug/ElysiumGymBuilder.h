@@ -19,7 +19,7 @@ namespace ElysiumGym
 	//
 	// One symbol rather than one constant per harness. Two harnesses standing the same spec at two
 	// origins would produce two sets of coordinates for one geometry, and the committed baselines
-	// under `dev/baselines/move` are in these.
+	// under `$ELYSIUM_EXPORT_ROOT/_move/baseline` are in these.
 	inline FVector DefaultOrigin() { return FVector::ZeroVector; }
 
 	// Stand the gym up at `Origin`. Returns the actor that owns every solid, so a caller can tear

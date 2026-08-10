@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumGaitSpeeds.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumUserCmd.h"
 #include "GameFramework/PawnMovementComponent.h"
@@ -38,6 +39,30 @@ public:
 
 	void SetNoclip(bool bEnable);
 	bool IsNoclip() const { return bNoclip; }
+
+	// --- The speed authority (CCC7) ----------------------------------------------------------
+	// The animation's own per-direction speeds, pushed by whoever built the body's visual rather
+	// than pulled per frame: the tables depend on the body, not on the frame, and the mover runs
+	// ahead of the resolver that could answer for one.
+	//
+	// Absent tables are an ordinary state, not a failure — the gym before a body is built, a menu
+	// backdrop, a body whose export has no fan — and the mover falls back to
+	// `ElysiumMove::WalkSpeed`/`RunSpeed` **per gait**, which is also what
+	// `elysium.move.AnimSpeedAuthority 0` selects for the A/B.
+	void SetGaitSpeeds(const FElysiumGaitSpeeds& InSpeeds) { GaitSpeeds = InSpeeds; }
+	void ClearGaitSpeeds() { GaitSpeeds = FElysiumGaitSpeeds(); }
+	const FElysiumGaitSpeeds& GetGaitSpeeds() const { return GaitSpeeds; }
+
+	// `elysium.move.AnimSpeedAuthority` and `elysium.move.GaitSpeedInterpolate`, read here so every
+	// consumer of the seam answers off one cvar rather than each looking one up. The record's stride
+	// and the commanded speed disagreeing would read as a resolver defect.
+	static bool IsAnimSpeedAuthorityEnabled();
+	static bool IsGaitSpeedInterpolationEnabled();
+
+	// What the body is commanding this frame, cm/s — the wish speed the last solved substep used.
+	// Published so the animation classifier can take retail's `cmdMoveMag` term without recomputing
+	// the direction, and so a readout and the solve cannot disagree.
+	float GetCommandedSpeed() const { return CommandedSpeed; }
 
 	// Drop all carried motion and latches: velocity, the button latch, the duck, the step
 	// accumulator. What a teleport wants — a body arriving somewhere new must not still be running.
@@ -137,6 +162,25 @@ private:
 	// with a planar re-derivation.
 	FVector WishDirection(const FElysiumUserCmd& Cmd, float& OutScale, bool bForcePitch = false);
 
+	// **The speed authority's one seam** (CCC7). What the body commands in `WishDir`, cm/s, already
+	// scaled by the command's own deflection.
+	//
+	// Retail has no scalar gait speed to read: it publishes a per-direction table and the client
+	// writes one cell's absolute speed into the move command, so "how fast is a walk" is only
+	// answerable with a direction (`docs/vtmb/source_movement.md` → "Player speed is
+	// animation-driven"). `GetMaxSpeed()` is the ceiling over those cells — retail's `m_flMaxspeed` —
+	// and nothing inside the solve reads it.
+	//
+	// Airborne it answers the **last grounded** wish speed rather than `sv_jump_maxspeed`, because
+	// retail stops refreshing its tables for the whole jump while the client keeps writing the last
+	// grounded cell; 350 is a clamp that never fires at default settings.
+	float WishSpeed(const FVector& WishDir, float Scale) const;
+
+	// Which gait the command selects, for `WishSpeed` and for a readout. `+speed` picks the *slow*
+	// gait and a ducked body is always sneaking, which is retail's ladder minus the speed test the
+	// animation classifier owns.
+	const FElysiumGaitSpeedTable& GaitTableForCommand() const;
+
 	// Fill `LastSample` from the state the frame just settled on. `bSolved` says whether a move
 	// function ran this frame; when it did not, the captured wish belongs to an older frame and is
 	// reported as absent rather than as current.
@@ -163,6 +207,17 @@ private:
 	bool bOnGround = false;
 	bool bNoclip = false;
 	bool bFrozen = false;
+
+	// The animation's per-direction speeds for this body, or invalid tables when nothing pushed any.
+	FElysiumGaitSpeeds GaitSpeeds;
+
+	// The wish speed the last grounded substep commanded, cm/s. Retail's tables stop refreshing for
+	// the duration of a jump, so this is what an airborne body keeps commanding — the held value is
+	// the behaviour, not a cache.
+	float LastGroundedWishSpeed = 0.0f;
+
+	// This frame's commanded speed, published for the animation classifier's `cmdMoveMag` term.
+	float CommandedSpeed = 0.0f;
 
 	// The duck. `bDucking` is the transition, `bDucked` means the hull is already the small one —
 	// Source carries both, and the pair is what lets a duck be released mid-transition.

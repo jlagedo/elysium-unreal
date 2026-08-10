@@ -504,13 +504,196 @@ including the `0.7` standable normal (`0x104492d0`) and `TIME_TO_UNDUCK`.*
 
 ## Player speed is animation-driven
 
-`CHL2_Player::PreThink` (`vampire.dll` `0x10350830`, vftable `0x104a271c` slot
-436) sets `m_flMaxSpeed` from the **root motion of the current animation
-sequence** — move distance / frame count for the active activity — scaled by
-`sv_walkscale` / `sv_runscale` / `sv_sneakscale`. While airborne it is pinned to
-`sv_jump_maxspeed` (350).
+**There is no scalar player gait speed.** `CHL2_Player::PreThink` (`vampire.dll` `0x10350830`,
+vftable `0x104a271c` slot 436) builds **six networked per-direction speed tables** every grounded
+frame, and the client writes one cell of one table straight into the move command. `m_flMaxspeed`
+is a *ceiling* derived from those tables, not the speed the player travels at.
 
-So there is no ConVar holding the retail player speed. The intended figures are:
+### The tables
+
+Each frame `PreThink` runs a fan extractor three times — once per gait — over the model's own
+9×1 locomotion grids:
+
+```c
+float peak = 0.0f;
+Fan(ACT_WALK  /* 9*/, m_flWalkForwardSpeeds,  m_flWalkSideSpeeds,  &peak, sv_walkscale);
+Fan(ACT_RUN   /*19*/, m_flRunForwardSpeeds,   m_flRunSideSpeeds,   &peak, sv_runscale  * m_flSpeedScale);
+Fan(ACT_SNEAK /*18*/, m_flSneakForwardSpeeds, m_flSneakSideSpeeds, &peak, sv_sneakscale* m_flSpeedScale);
+if (m_bForceWalk) { copy 8+8 Walk*Speeds over Run*Speeds; }   // does NOT re-take the peak
+if (peak > 0.0f) m_flMaxspeed = peak;                          // else hold the previous value
+```
+
+| Field | Offset | Field | Offset |
+|---|---|---|---|
+| `m_flRunForwardSpeeds[8]` | `+0x1b84` | `m_flRunSideSpeeds[8]` | `+0x1ba4` |
+| `m_flWalkForwardSpeeds[8]` | `+0x1bc4` | `m_flWalkSideSpeeds[8]` | `+0x1be4` |
+| `m_flSneakForwardSpeeds[8]` | `+0x1c04` | `m_flSneakSideSpeeds[8]` | `+0x1c24` |
+| `m_flMaxspeed` | `+0x2310` | `m_flSpeedScale` | `+0x1488` |
+
+All six are declared in the player SendTable (`FUN_10179840`) with exactly 8 elements, 13 bits,
+range −2048…2048; `m_flMaxspeed` is 12 bits over 0…2048.
+
+The extractor `FUN_10350620(activity, fwd[8], side[8], &outMax, scale)` resolves the activity
+through `NPC_EarlyTranslateActivity` → `Weapon_TranslateActivity` → `NPC_TranslateActivity` →
+`SelectHeaviestSequence`, requires `seqdesc->numblends == 9`, and then walks **cells 0…7** of
+axis 0 — `anim[i][0]` at row stride 32 bytes. Cell 8 is skipped as the wrap duplicate of cell 0
+(`docs/vtmb/animation_and_movers.md` → "A `move_yaw` fan's cells are angles"). Per cell:
+
+```c
+if (!Studio_AnimMovement(anim, 0.0f, 1.0f, &dPos, &dAng)) continue;   // cell left untouched
+k = scale * anim->fps / (float)(anim->numframes - 1);                 // FMUL then FIDIV
+fwd[i]  =  dPos.x * k;
+side[i] = -dPos.y * k;
+peak    = fmaxf(peak, |dPos * k|);                                    // 3D magnitude, after scaling
+```
+
+`Studio_AnimMovement` is `0x100c5b00`, stock Source. **The scale multiplies** — `FMUL` at
+`0x10350728`, read at opcode level, with no reciprocal anywhere on the path.
+
+**`m_flMaxspeed` is the running peak over all 24 cells.** One local, initialized to 0.0 once,
+threaded through all three calls and never reset between them. It exists so the clamp below never
+cuts a cell — it is a ceiling, not a gait.
+
+### The scales, and the walk asymmetry
+
+`sv_walkscale`, `sv_runscale` and `sv_sneakscale` are function-local statics in `PreThink`:
+**1.0**, **1.0** and **2.3**.
+
+**Walk is the only gait not multiplied by `m_flSpeedScale`** — the walk call passes the ConVar as
+a raw copy while run and sneak apply `FMUL [ESI+0x1488]`. `m_flSpeedScale` defaults to 1.0 and is
+written by `CBaseCombatCharacter::UpdateDisciplineVisuals`; `NPC_VFrenzyShadow` hard-sets 8.0. So
+under any speed buff the run and sneak tables rise while the walk table and the walk/run threshold
+that reads from it do not.
+
+### The client picks one cell
+
+`client.dll`'s `CInput` writes a cell's **absolute speed** into the user command, choosing the
+table by duck state and the walk key:
+
+```c
+idx = DigitalKeyTable3x3();                       // FUN_10102940 -> DAT_102352c0, -1 when centred
+if (idx >= 0) {
+    if (playerFlags & FL_DUCKING) { forwardmove += sneakFwd[idx]; sidemove += sneakSide[idx]; }
+    else if (KeyState(in_walk))   { forwardmove += walkFwd[idx];  sidemove += walkSide[idx];  }
+    else                          { forwardmove += runFwd[idx];   sidemove += runSide[idx];   }
+}
+```
+
+The 3×3 table maps the eight digital directions onto the fan's cells, aligning with
+`move_yaw = −180 + 45k`:
+
+|  | strafe left | none | strafe right |
+|---|---|---|---|
+| **forward** | 3 | 4 | 5 |
+| **neither** | 2 | −1 | 6 |
+| **backward** | 1 | 0 | 7 |
+
+**Nothing fractional touches the speed at any stage.** The pose path blends two adjacent cells; the
+speed path snaps to one. There is no analog-input behaviour here — the source is digital direction
+keys only.
+
+This is also what `+speed` does: **`SHIFT` selects the walk table**, client-side. The server-side
+`IN_SPEED` crop in `CheckParameters` multiplies by virtual `+0x5c` (`FUN_1011ef00`), which is
+`return 1.0f` — a no-op whose only effect is setting the `m_bSpeedCropped` latch.
+
+### The ducking speed crop is dead code
+
+`CGameMovement::HandleDuckingSpeedCrop` (`FUN_10126f60`) is stock Source — `forwardmove`,
+`sidemove` and `upmove` each `*= 1/3` under `FL_DUCKING`, latched by `m_bSpeedCropped`
+(`CGameMovement+0xdc`) — and it is **never executed**. It occupies vtable slot 25 (`+0x64`) of the
+`CGameMovement` vftable `0x10462874`, and no `CALL dword ptr [reg+0x64]` exists anywhere in either
+DLL's movement region: Ghidra xrefs show only the ILT thunk and the vftable data slot, an operand
+scan over all 942,828 disassembled instructions finds none, and `Duck()` (`FUN_10126fd0`) makes 18
+calls to other slots. `client.dll`'s copy at `0x100ed950` is identical and equally uncalled.
+
+**So there is no duck speed multiplier.** Ducked movement differs only in which table the client
+reads.
+
+### The clamp
+
+`CGameMovement::CheckParameters` (`FUN_1011f140`) is Source 1:1:
+
+```c
+mv->m_flMaxSpeed = sv_maxspeed;                                   // 2048, set in ProcessMovement
+if (mv->m_flClientMaxSpeed != 0)
+    mv->m_flMaxSpeed = min(mv->m_flClientMaxSpeed, mv->m_flMaxSpeed);
+mv->m_flMaxSpeed *= min(m_pSurfaceData->game.maxSpeedFactor, ComputeConstraintSpeedFactor());
+if (|forwardmove, sidemove, upmove| > mv->m_flMaxSpeed) scale all three down to it;
+```
+
+`m_pSurfaceData->game.maxSpeedFactor` is the authored `"maxspeedfactor"` key from
+`scripts/surfaceproperties*.txt` (default `1.0`); `ComputeConstraintSpeedFactor` (`FUN_1011ef20`)
+is Source's constraint-ring leash and returns 1.0 unless a constraint entity is active.
+
+`CPlayerMove::SetupMove` copies `m_flMaxspeed` into `mv->m_flClientMaxSpeed` (`CMoveData+0x3c`) and
+`FinishMove` copies it back; `CheckParameters` only ever mutates `m_flMaxSpeed` (`+0x38`), so the
+round trip is an identity.
+
+### Effective speeds, and why crouching is faster than walking
+
+Every number in the DLL is **units/second**, one space, with no conversion between the animation
+displacement and the ConVar space. On `tremere_Male_Armor_0` with `m_flSpeedScale` = 1.0:
+
+| Gait | Authored cells | Effective | Ceiling relevance |
+|---|---|---|---|
+| walk | 60.7–136.7 cm/s | **23.9–53.8 u/s** | — |
+| sneak | 69.7–79.3 cm/s ×2.3 | **63.1–71.8 u/s** | — |
+| run | 457.8–528.3 cm/s | **180.2–208.0 u/s** | supplies the peak |
+
+`m_flMaxspeed` = **208.0 u/s**. A ducked move at 63.1–71.8 u/s sits a factor of 8.4 below the
+clamp's trigger in squared terms, so **the clamp never fires on a sneak move** — and the slowest
+ducked cell still beats the fastest walk cell. **Retail's crouch-move is faster than its walk**, a
+consequence of sneak's ×2.3 against a walk table that ignores `m_flSpeedScale` and carries no scale
+of its own.
+
+The repo's cm/s figures are `u/s × 2.54`, applied once in `mdl_skel.py` for presentation.
+Comparing an authored cm/s figure against `sv_maxspeed` or `sv_jump_maxspeed` is wrong by 2.54×.
+
+### Airborne
+
+While the jump-phase field (`+0x1db4`) is in 1…7 — `ACT_LEAP`, `ACT_HOP`, `ACT_HOP_UP`,
+`ACT_HOP_DOWN`, `ACT_LEAP_ASCEND`, `ACT_LEAP_DESCEND`, `ACT_FALLING` — `m_flMaxspeed` is pinned to
+`sv_jump_maxspeed` (**350**) and the six tables are **not refreshed**, so the client keeps reading
+the last grounded values for the whole jump. Since the largest of those is the run peak at 208.0
+u/s, **the 350 pin does not cut at default settings**. It becomes live only above
+`m_flSpeedScale > 1.683`, where airborne movement is capped while grounded movement is not.
+
+Whether `AirAccelerate` applies Source's separate 30 u/s air wish-speed cap is
+**[unresolved]** — the air branch reached from `FullWalkMove` is not read out.
+
+### Fallbacks
+
+Three, all "hold", none "zero": a cell whose `Studio_AnimMovement` reports no movement keeps its
+previous value and does not contribute to the peak; a gait whose resolved sequence is not a 9-blend
+grid leaves all 16 of its slots untouched; and if all three gaits yield a zero peak, `m_flMaxspeed`
+holds. The tables and `m_flMaxspeed` are zeroed exactly once, in `Spawn` (`FUN_1016d260`).
+
+`m_flMaxspeed`'s complete writer set is six sites, closed by two independent scans:
+`ClientDisconnect` → 0, `Spawn` → 0, `FinishMove` ← `m_flClientMaxSpeed`, and the three in
+`PreThink` (0.0, `sv_jump_maxspeed`, the peak).
+
+### `m_bForceWalk` is unwired
+
+`CHL2_Player::m_bForceWalk` (`+0x2544`, a `BOOLEAN` in `CHL2_Player`'s own 11-record datamap at
+`0x106266e4`) copies the walk tables over the run tables when set — a "cannot run" switch. **Nothing
+sets it.** It has exactly two code sites, the `PreThink` read and a clear at spawn; the string
+occurs once in `vampire.dll`, in no other game binary, and in none of the 15 shipped `.vpk`
+archives, so no level script reaches it through the datamap walk either. Note it does not re-take
+the peak, so under it the tables say walk speeds while `m_flMaxspeed` still says the run peak.
+
+### Ordering
+
+`CPlayerMove::RunCommand` (`FUN_101874a0`) runs `PreThink` → `SetupMove` → `ProcessMovement` /
+`PlayerMove` → `CheckParameters` → `FinishMove` → `PostThink`, all inside one command.
+
+**`PreThink` does not read the currently-playing sequence.** It re-resolves all three activities
+from scratch every frame and never consults `m_nSequence`, so there is no one-frame lag between the
+animation selection made in `PostThink` and the speed source. The lag that does exist is a network
+one: the client builds `forwardmove`/`sidemove` from the last received snapshot of the six tables.
+
+### The intended figures
+
+There is no ConVar holding the retail player speed. The intended figures are:
 
 | ConVar | Value |
 |---|---|
@@ -519,8 +702,8 @@ So there is no ConVar holding the retail player speed. The intended figures are:
 | `speed_runbonusathletics` | 5 |
 
 giving run = `225 + 5 * Athletics` (225–250) and walk = 100. `SHIFT` is bound to
-`+speed`, which in Source selects the *slow* gait: default locomotion is the run,
-holding Shift walks.
+`+speed`, which selects the *slow* gait: default locomotion is the run, holding Shift walks — in
+the retail build by selecting the walk table client-side, as above.
 
 ### Dead ConVars
 

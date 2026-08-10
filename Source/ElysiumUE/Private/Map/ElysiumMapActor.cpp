@@ -8,6 +8,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumMovementComponent.h"   // the gait-speed push (CCC7)
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumSkeletalBasis.h"
@@ -1090,10 +1091,6 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 		PlayerAnimDriver->Variant = FMath::Max(0, PlayerAnimDriver->Character.Index);
 	}
 
-	// The gait reference keeps its defaults, which name `ElysiumMove::WalkSpeed`/`RunSpeed` by symbol
-	// rather than by value — the same two constants `GetMaxSpeed` answers from. `CCC7` is where that
-	// authority moves, and moving it there moves every threshold in the classifier with it.
-
 	USkeletalMeshComponent* Visual = Body->GetPlayerVisual();
 	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
 		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
@@ -1122,6 +1119,25 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 
 	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
 		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr, OneShot);
+
+	// **The speed authority's push** (CCC7). The mover runs in the pre-physics pass and this driver
+	// in the post-move one, so the mover cannot ask for a table — it has to be handed one, and the
+	// tables are a property of the body rather than of the frame, so handing one over on change is
+	// the whole of it. The generation gate is what keeps it from being a per-frame struct copy.
+	//
+	// The gait reference is rebuilt from the same tables, so the classifier's walk/run threshold and
+	// the mover's commanded speed cannot come from two different numbers.
+	if (PlayerAnimDriver->GaitGeneration != PushedGaitGeneration)
+	{
+		PushedGaitGeneration = PlayerAnimDriver->GaitGeneration;
+		if (UElysiumMovementComponent* Move = Pawn->FindComponentByClass<UElysiumMovementComponent>())
+		{
+			Move->SetGaitSpeeds(PlayerAnimDriver->GaitSpeeds);
+		}
+		PlayerAnimDriver->Gait = ElysiumAnimIntent::GaitFrom(PlayerAnimDriver->GaitSpeeds);
+	}
+	PlayerAnimDriver->bInterpolateGaitSpeed =
+		UElysiumMovementComponent::IsGaitSpeedInterpolationEnabled();
 
 	// Hand the settled record to the graph (CCC5). The push is here rather than a pull from the
 	// instance because the driver lives on this actor behind a pimpl while the visual is a component
@@ -1159,6 +1175,13 @@ void AElysiumMapActor::ClearPlayerVisual()
 	if (PlayerAnimDriver.IsValid())
 	{
 		PlayerAnimDriver->Reset();
+	}
+	// The body is gone, so its authored speeds go with it — a mover left holding them would steer the
+	// next body by the last one's gait.
+	PushedGaitGeneration = 0;
+	if (UElysiumMovementComponent* Move = Pawn->FindComponentByClass<UElysiumMovementComponent>())
+	{
+		Move->ClearGaitSpeeds();
 	}
 }
 

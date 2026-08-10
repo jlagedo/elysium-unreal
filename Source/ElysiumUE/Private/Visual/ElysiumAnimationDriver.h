@@ -33,10 +33,38 @@ struct FElysiumAnimationDriver
 	// belong where one-shot completion lives.
 	int32 Variant = 0;
 
+	// The character's own rate multiplier (`m_flSpeedScale`). Scales the run and sneak fans and not
+	// the walk, which is faithful. Nothing writes it yet — the discipline that would is not built —
+	// and it is modelled here so the asymmetry is structural rather than a comment.
+	float SpeedScale = 1.0f;
+
 	// --- Per-frame state ---------------------------------------------------------------------------
 	FElysiumJumpLatch Latch;
 	FElysiumGaitReference Gait;
+	// The pose parameter's slew and hold. Owned here because this ticks once per body per frame,
+	// which a pull-style locomotion getter does not.
+	FElysiumMoveYawFilter MoveYawFilter;
 	uint32 Generation = 0;
+
+	// --- The body key, and the gait speed tables it resolves to (CCC7) -----------------------------
+	// Separate from the request key below because it moves for different reasons: the tables depend
+	// on the **body**, never on what the body is doing, so a turn, a sprint or a strafe cannot move
+	// them. Re-resolved only when this key does, which is what lets the mover be handed a table
+	// rather than asking for one per tick — and the mover runs before this driver, so a per-frame
+	// answer would always be a frame stale.
+	FElysiumGaitSpeedRequest GaitKey;
+	FElysiumGaitSpeeds GaitSpeeds;
+	// Advances on every re-resolve, so a consumer pushes on change instead of copying per frame.
+	// Zero until the first one.
+	uint32 GaitGeneration = 0;
+	// Mirrors `elysium.move.GaitSpeedInterpolate`, set by whoever pushes the tables. Held rather
+	// than read here so the stride the record reports and the speed the mover commands come from one
+	// answer — a diff in which they disagreed would read as a defect in the resolver.
+	bool bInterpolateGaitSpeed = true;
+
+	// The stride the current selection commands at a direction, cm/s. Falls back to the resolved
+	// cell's own authored speed for anything that is not one of the three gaits.
+	float GaitSpeedForSelection(float MoveYawDegrees) const;
 
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;

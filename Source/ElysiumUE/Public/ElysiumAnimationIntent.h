@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumEntityHandle.h"
+#include "ElysiumGaitSpeeds.h"
 #include "ElysiumLocomotionSample.h"
 #include "ElysiumMoveSolve.h"
 
@@ -282,26 +283,42 @@ struct FElysiumAnimationSelection
 
 // The speed authority, injected rather than read.
 //
-// **Nothing in the classifier names an absolute speed.** Every threshold is a fraction of these two,
-// so when `CCC7` settles whether the gait comes from the ConVars or from the current sequence's own
-// root motion, the whole classifier moves with it and no number here has to be found and edited.
+// **Nothing in the classifier names an absolute speed.** Every threshold comes from this struct, so
+// the whole classifier moves with the authority and no number in it has to be found and edited.
+// `ElysiumAnimIntent::GaitFrom` builds one from a body's own fans; the defaults are the constants
+// the `elysium.move.AnimSpeedAuthority 0` fallback uses, so the two halves of the A/B agree about
+// where the gait flips.
 struct FElysiumGaitReference
 {
 	float WalkSpeedCmPerSecond = ElysiumMove::WalkSpeed;
 	float RunSpeedCmPerSecond = ElysiumMove::RunSpeed;
 
-	// Below this fraction of the walk, the body is standing rather than moving slowly.
-	float StillFraction = 0.15f;
-	// Where between walk and run the gait flips.
-	float RunSplitFraction = 0.50f;
-	// How far past the split the speed must travel before the gait flips back, as a fraction of the
-	// walk-to-run span. Without it a decelerating body flickers across the boundary, which advances
-	// the request generation every frame and defeats "resolve once when the request changes".
-	float HysteresisFraction = 0.10f;
+	// Below this the body is standing rather than moving slowly. **Retail's is a flat 5 u/s**, not a
+	// fraction of the gait: the same absolute cut decides idle-versus-moving and crouch-versus-sneak
+	// however fast the body's authored walk happens to be.
+	float StillSpeedCmPerSecond = 5.0f * ElysiumMove::U;
 
-	float StillSpeed() const { return StillFraction * WalkSpeedCmPerSecond; }
+	// Where the gait flips. Retail's is the body's own **forward walk cell plus one unit** — not a
+	// point between walk and run — so it sits just above the fastest walk the body can author and a
+	// walk fan can never reach it. Zero falls back to `RunSplitFraction`, which is what a body with
+	// no resolved fans uses.
+	float RunSplitAbsoluteCmPerSecond = 0.0f;
+	float RunSplitFraction = 0.50f;
+
+	// How far past the split the speed must travel before the gait flips back, as a fraction of the
+	// walk-to-run span. **Retail holds no gait memory at all** — it recomputes every operand each
+	// call — so any non-zero value here is a divergence. It defaults to zero because the commanded
+	// term below makes the input a step function rather than a ramp, which is what stopped the
+	// flicker this existed for.
+	float HysteresisFraction = 0.0f;
+
+	float StillSpeed() const { return StillSpeedCmPerSecond; }
 	float RunSplitSpeed() const
 	{
+		if (RunSplitAbsoluteCmPerSecond > 0.0f)
+		{
+			return RunSplitAbsoluteCmPerSecond;
+		}
 		return WalkSpeedCmPerSecond
 			+ RunSplitFraction * (RunSpeedCmPerSecond - WalkSpeedCmPerSecond);
 	}
@@ -355,6 +372,11 @@ namespace ElysiumAnimIntent
 	// from drifting into four spellings of the same activity.
 	const TCHAR* ActivityName(EElysiumAnimActivityCode Code);
 	EElysiumAnimActivityCode ActivityCode(const FString& Name);
+
+	// The classifier's thresholds, taken from the body's own authored fans (CCC7). The walk/run
+	// split becomes the forward walk cell plus one unit, which is retail's rule and a **per-model**
+	// number. A set with no resolved fans yields the defaults, so this is safe to call on any body.
+	FElysiumGaitReference GaitFrom(const FElysiumGaitSpeeds& Speeds);
 
 	// The record's enums as words. One spelling each, shared by Cog, the MCP surface and any log
 	// line, so a reader comparing two of them is comparing the same vocabulary.

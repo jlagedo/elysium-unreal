@@ -156,9 +156,24 @@ namespace
 	// feature and runs on to the lane's back wall, or is stopped by it, and both answers are the
 	// same at any gait. That is the whole reason these recordings can be promoted before `CCC7`.
 
+	// **The crouch is a toggle, so releasing the key does not stand a body up.** The press edge flips
+	// the request and the release does nothing (`UElysiumMovementComponent::Duck`), which means a
+	// course that wants the body to try to stand has to press Duck a second time — and to get a
+	// second press edge it has to let the key up for a frame first. A segment that merely drops the
+	// button is a no-op, and a lane whose stand-up is a no-op measures nothing while still recording
+	// a plausible-looking "still ducked".
+	void ReleaseCrouch(FCourse& C)
+	{
+		C.Segments.Add({ 0.0f, Still, 0, NAN });        // one frame up, so the next press is an edge
+		C.Segments.Add({ 0.0f, Still, Duck, NAN });     // the edge that toggles the request off
+	}
+
 	void Recipe(FCourse& C, const ElysiumGym::FLane& Lane)
 	{
 		const float Hold = ElysiumGym::ApproachSeconds;
+		// A crouching body is the slowest thing the mover produces, and the authored sneak cell sits
+		// just under what a 10 s hold saturates at, so the ducked families get their own margin.
+		const float DuckHold = ElysiumGym::DuckApproachSeconds;
 		switch (Lane.Family)
 		{
 		case ElysiumGym::EFamily::Riser:
@@ -172,7 +187,7 @@ namespace
 			// Duck standing still first: on the ground the transition takes 0.4 s, and a body that
 			// walks into the span mid-duck is measuring the ramp rather than the hull.
 			C.Segments.Add({ 1.0f, Still, Duck, 0.0f });
-			C.Segments.Add({ Hold, Fwd, Duck, NAN });
+			C.Segments.Add({ DuckHold, Fwd, Duck, NAN });
 			break;
 
 		case ElysiumGym::EFamily::Pop:
@@ -190,6 +205,7 @@ namespace
 			C.Segments.Add({ 0.5f, Still, 0, 0.0f });
 			C.Segments.Add({ 0.0f, Still, Jump, NAN });            // exactly one frame
 			C.Segments.Add({ 2.0f, Still, Jump | Duck, NAN });
+			ReleaseCrouch(C);
 			C.Segments.Add({ 1.0f, Still, 0, NAN });
 			C.JumpOverrides.Add({ TEXT("BaseJumpVelocity"), 0.0f });
 			break;
@@ -199,7 +215,8 @@ namespace
 			// length of the lane so where the body ends up is the wall's business and not a
 			// course's timing.
 			C.Segments.Add({ 1.0f, Still, Duck, 0.0f });
-			C.Segments.Add({ Hold, Fwd, Duck, NAN });
+			C.Segments.Add({ DuckHold, Fwd, Duck, NAN });
+			ReleaseCrouch(C);
 			C.Segments.Add({ 2.0f, Still, 0, NAN });
 			break;
 
@@ -207,8 +224,9 @@ namespace
 			// The same refusal off the ground, where `CanUnduck` applies the airborne -18 before it
 			// traces — which is what stops a stand-up through the floor.
 			C.Segments.Add({ 1.0f, Still, Duck, 0.0f });
-			C.Segments.Add({ Hold, Fwd, Duck, NAN });
+			C.Segments.Add({ DuckHold, Fwd, Duck, NAN });
 			C.Segments.Add({ 0.0f, Still, Duck | Jump, NAN });      // exactly one frame
+			ReleaseCrouch(C);
 			C.Segments.Add({ 2.0f, Still, 0, NAN });
 			break;
 

@@ -87,8 +87,11 @@ the gravity half-step split plus VtMB's *additive* `CheckJumpButton` is exact ve
 drifts is air control alone: a strafe-jump exits at 259.5 / 259.8 / 261.0 u/s across the three rates,
 about 0.6%.
 
-**Ducked speed** uses Source's `/3` rather than a read-out VtMB value, because retail's is
-animation-driven. That, and the standing gait constants, are the speed-authority question below.
+**Ducked speed** is the sneak fan's own cell under the animation authority. Retail applies **no**
+duck speed multiplier at all — `HandleDuckingSpeedCrop` is dead code, unreachable through any call
+site in either DLL (`docs/vtmb/source_movement.md` → "The ducking speed crop is dead code") — and
+gets its slower crouch purely from reading the sneak table. Source's `/3` survives on the constants
+fallback alone, where there is no sneak table to read.
 
 **The frame bound is pinned in three places** — `ElysiumFrame::ClampFrameDelta` in
 `ElysiumGameClock.h`, read by the clock, the input router and the mover — because all three take
@@ -96,23 +99,68 @@ Unreal's raw delta and retail applies the bound once, ahead of all of them.
 
 ## The speed authority
 
-VtMB's `CHL2_Player::PreThink` sets `m_flMaxSpeed` from the **current sequence's own root motion**,
-scaled by `sv_walkscale`/`sv_runscale`/`sv_sneakscale` (`docs/vtmb/source_movement.md` → "Player speed
-is animation-driven"). The animation drives the movement, not the other way round.
+**Retail has no scalar gait speed to port.** `CHL2_Player::PreThink` builds six networked
+per-direction speed tables from the model's own 9×1 locomotion fans, and `client.dll` writes one
+cell's absolute speed straight into `forwardmove`/`sidemove`; `m_flMaxspeed` is the peak over all 24
+cells and serves only as the clamp ceiling
+(`docs/vtmb/source_movement.md` → "Player speed is animation-driven"). The animation drives the
+movement, not the other way round — and it does so **at the input seam, not at a max-speed read**.
 
 Ours does the opposite: `GetMaxSpeed` answers from `ElysiumMove::WalkSpeed`/`RunSpeed` — Troika's
 *stated* 100/225 u/s, which are dead ConVars in the retail build — and the authored cells disagree.
 `walk_0` is 136.7 cm/s, or **53.8 u/s** against `speed_walk` 100; the PC bank's `run_0` is 478.7 cm/s,
 or **188.5 u/s** against `speed_runbase` 225.
 
-**This is an open owner call, marked in the code at the point `GetMaxSpeed` answers**, and it is the
-reason the movement layer cannot be closed ahead of the animation layer. Closing the loop makes speed
-a function of the animation blend, which is the only way a sideways run and a forward run authored at
-different speeds stop producing foot-sliding — and it is a real feel change, not a defect fix. Two
-sub-questions sit under it: which cell the retail read samples (the neutral one, or the one the live
-`move_yaw` selects), and what `sv_sneakscale` 2.3 divides or multiplies.
+**The authority is the animation's, behind `elysium.move.AnimSpeedAuthority` (default 1).** The
+constants remain as the A/B's `0` path, as the fallback for a body with no resolved fan, and as what
+a port with no player animation should use.
 
-**Root motion is not a third question.** The exporter leaves the skeletal root in place and carries
+### The seam
+
+`GetMaxSpeed()` is the **ceiling** — retail's `m_flMaxspeed`, the peak over every cell of every gait
+table. Nothing inside the solve reads it, and no clamp against it can fire, because the peak is ≥
+every cell by construction. What the solve asks instead is
+`UElysiumMovementComponent::WishSpeed(WishDir, Scale)`, over the pure rule
+`ElysiumGait::WishSpeedFrom` (`ElysiumGaitSpeeds.h` — the same pure-rules/engine-half split as
+`ElysiumMoveSolve.h`), so the decision table is asserted with no pawn.
+
+`FElysiumGaitSpeedTable` is one gait's fan: nine authored cells, an axis range, and the gait's own
+scale kept as a field so a readout can show what the animation authored against what the scale did
+to it. `ElysiumBlendGrids::SpeedFan` fills one from a baked grid and interpolates across a cell that
+baked without motion; `UElysiumNpcAnimSubsystem::ResolveGaitSpeeds` resolves all three from the
+**un-relaxed** `ACT_WALK`/`ACT_RUN`/`ACT_SNEAK`, exactly as retail's extractor does.
+
+**The tables are pushed, not pulled.** They depend on the body — stem, weapon, form, variant — and
+never on what the body is doing, so `FElysiumAnimationDriver` re-resolves them only when that key
+moves and `AElysiumMapActor` hands them to the mover on change. That is what dissolves the ordering
+problem: the mover runs in the pre-physics pass and the driver in the post-move one, so a pulled
+table would always be a frame stale, while a pushed one is queried synchronously with the current
+wish direction. A weapon swap carries one frame of latency, which is strictly less than the network
+lag retail carries.
+
+### Three angles, and they are not interchangeable
+
+The **commanded** wish yaw picks the speed cell, instantaneously, inside `WishDirection` before the
+move — retail's digital-key direction. The **realized** velocity yaw is what the retail selector
+differences. The **pose parameter** follows the realized yaw through `ElysiumLocomotion::AdvanceMoveYaw`'s
+720 °/s slew, its 0.3 s re-arm and its hold at a standstill, and is the only one the blend grid sees.
+Steering the speed off the filtered angle would make a turning body's speed lag its direction.
+
+### What closing it settled
+
+- **Ducked speed** is the sneak fan, not a divisor. The `/3` in the constants path is Source's own
+  default and is a divergence (below), because retail applies no duck multiplier at all.
+- **The airborne wish speed is the last grounded one.** Retail stops refreshing its tables for the
+  duration of a jump while the client keeps writing the last grounded cell, so `sv_jump_maxspeed`
+  350 is a ceiling that never fires — the run peak is 208 u/s.
+- **There is no one-frame staleness to preserve.** `PreThink` never reads `m_nSequence`; it
+  re-resolves all three activities every frame. The lag in retail is a network snapshot lag with no
+  single-player analogue.
+- **The walk/run threshold is per-model** — the body's own forward walk cell plus one unit, which
+  `ElysiumAnimIntent::GaitFrom` builds from the same tables the mover commands from, so the
+  classifier cannot call a body a runner at a speed its run fan cannot produce.
+
+**Root motion is not a fifth question.** The exporter leaves the skeletal root in place and carries
 per-cell displacement as metadata beside the resolved cell, so the clips hold the root and the motor
 translates. A graph that enables root motion on a locomotion state double-moves.
 
@@ -130,9 +178,13 @@ bracket offset rather than for the value it stands at — `riser_p1` is one unit
 whatever `StepSize` becomes — so moving a constant changes what the lane records instead of what it
 is called, and the committed recording is what disagrees.
 
-A lane is also where nothing game-derived is: the geometry comes from this repository's own
-constants and the input from its own course table, so the recordings are committed rather than
-gitignored, and a gym run needs no exported map.
+A lane's **geometry** is where nothing game-derived is: it comes from this repository's own constants
+and its input from its own course table. The **body** standing on it is a real baked one, because a
+gym driving a body with no animation would measure the constants fallback rather than the speed
+authority — so the recordings are game-derived and live beside the sited courses' under
+`$ELYSIUM_EXPORT_ROOT/_move/baseline/`. They stay *measured recordings* rather than regenerated
+expectations, which is the property that lets the gym fail; what is given up is fresh-clone
+reproducibility, so a regression check needs a completed character export first.
 
 Each axis brackets a constant so the cliff is visible rather than inferred:
 
@@ -215,10 +267,15 @@ output, and the comparator reads that rather than carrying a second copy.
 value per frame; a *run* channel is one value for the whole course. Every frame channel is
 speed-dependent, and that is structural rather than incidental — *when* a body reaches a feature moves
 with its gait even where *whether* it reaches it does not. So the gym's run channels are what a
-committed baseline compares, and they are written to **saturate**: how far the body got before
+baseline compares, and they are written to **saturate**: how far the body got before
 something stopped it, how high it stood, how high it reached. A body either climbs a riser or is
 stopped by it, and either answer is the same at any gait given a course long enough to reach the
 feature at the slowest speed the mover can produce.
+
+That last clause is a number, not a hope. A lane's 656 travelable units over the hold gives the
+slowest gait that still saturates: `ApproachSeconds` 10 s puts it at 65.6 u/s, which the authored
+forward sneak cell (65.3) sits just under — so the ducked families take `DuckApproachSeconds` 16 s
+instead, a floor of 41 u/s that no authored crouch approaches.
 
 Camera and animation channels ride the **same** runs rather than a second harness, because the
 command stream is already deterministic and frame-pinned: a camera regression and a movement

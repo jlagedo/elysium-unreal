@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumGaitSpeeds.h"   // FElysiumGaitSpeedTable — what a locomotion fan's motion becomes
 
 // A model's blend spaces, off `npc/blends/<stem>.json` (CAP7.3). Plain C++ with no UObject
 // reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
@@ -164,12 +165,28 @@ namespace ElysiumBlendGrids
 	void ResolveAxis(const FElysiumBlendGrid& Grid, int32 Axis, const FElysiumPoseParamDesc* Desc,
 		float Value, int32& OutCell, float& OutFraction);
 
-	// The cell a grid selects at these pose parameters. Nearest cell — the fractions ride along on
-	// the pick for the two-cell blend that comes later.
+	// The cell a grid selects at these pose parameters. The **floor** cell, with the fractions riding
+	// along on the pick — so `Cell` and `Cell + 1` are the pair a two-cell blend interpolates, and
+	// `Fraction` is the weight of the second. A consumer wanting the nearest cell rounds the fraction
+	// itself; the gait speed fan (`ElysiumGaitSpeeds.h`) interpolates instead.
 	//
 	// A cell whose clip did not bake is skipped rather than played as silence: the pick walks to the
 	// neighbour the fraction points at, then outward, so a hole in a fan costs accuracy and never a
 	// missing animation.
 	FElysiumBlendPick SelectCell(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table,
 		const FElysiumPoseParams& Pose);
+
+	// One locomotion fan's authored per-cell ground speeds, as the table the mover steers by (CCC7).
+	//
+	// Refuses anything that is not a wrapping single-axis fan spanning its parameter's whole loop: a
+	// partial slice or a two-axis grid is not a gait, and answering a speed for one would be worse
+	// than falling back to the constants.
+	//
+	// A cell with no authored motion is a **hole**, and holes are interpolated across from the
+	// nearest cells that do carry one, circularly. That is a deliberate improvement on retail, which
+	// leaves such a cell holding whatever the previous frame's extraction wrote; our exporter simply
+	// omits unusable motion, so there is no stale value to hold and a gap in the fan is better filled
+	// than frozen. A fan with no usable cell at all is refused.
+	bool SpeedFan(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table, float Scale,
+		FElysiumGaitSpeedTable& Out);
 }

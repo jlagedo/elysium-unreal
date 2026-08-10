@@ -4,6 +4,8 @@
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumGaitSpeeds.h"               // the per-direction speed table (CCC7)
+#include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
 #include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
@@ -107,27 +109,80 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(Halved), AsInt(EElysiumAnimActivityCode::WalkRelaxed));
 	}
 
-	// --- Hysteresis, which is required rather than polish ------------------------------------------
+	// --- The gait split holds no memory, which is retail's behaviour --------------------------------
 	{
-		// Without it a body decelerating through the split flickers between the two gaits, advancing
-		// the request generation every frame and defeating "resolve once when the request changes".
+		// Retail recomputes every operand each call and holds nothing; the shipped margin is therefore
+		// zero, and a body that drops below the split walks on the very next frame.
 		FElysiumJumpLatch Latch;
 		Step(Latch, Moving(Gait.RunSpeedCmPerSecond), Gait);
 		TestTrue(TEXT("the run is latched"), Latch.bLastGaitWasRun);
 
 		const float Split = Gait.RunSplitSpeed();
-		const float Margin = Gait.HysteresisSpeed();
+		TestEqual(TEXT("the shipped margin is zero"), Gait.HysteresisSpeed(), 0.0f);
+		TestEqual(TEXT("so a hair below the split walks immediately"),
+			AsInt(Step(Latch, Moving(Split - 1.0f), Gait)),
+			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
+		TestEqual(TEXT("and a hair above it runs again, with no band to cross"),
+			AsInt(Step(Latch, Moving(Split + 1.0f), Gait)),
+			AsInt(EElysiumAnimActivityCode::RunRelaxed));
+	}
+
+	// --- The margin still works when it is asked for -------------------------------------------------
+	{
+		// It survives as a dial rather than being deleted, because the claim that the commanded term
+		// below removed the need for it should be falsifiable rather than assumed.
+		FElysiumGaitReference Damped = Gait;
+		Damped.HysteresisFraction = 0.10f;
+
+		FElysiumJumpLatch Latch;
+		Step(Latch, Moving(Damped.RunSpeedCmPerSecond), Damped);
+		const float Split = Damped.RunSplitSpeed();
+		const float Margin = Damped.HysteresisSpeed();
+		TestTrue(TEXT("a margin that was asked for is non-zero"), Margin > 0.0f);
 
 		TestEqual(TEXT("below the split but inside the margin, the run holds"),
-			AsInt(Step(Latch, Moving(Split - Margin * 0.5f), Gait)),
+			AsInt(Step(Latch, Moving(Split - Margin * 0.5f), Damped)),
 			AsInt(EElysiumAnimActivityCode::RunRelaxed));
 		TestEqual(TEXT("past the margin it walks, and only then"),
-			AsInt(Step(Latch, Moving(Split - Margin * 2.0f), Gait)),
+			AsInt(Step(Latch, Moving(Split - Margin * 2.0f), Damped)),
 			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
-		// And it does not flick back on the way down.
 		TestEqual(TEXT("and it stays walking as it slows further"),
-			AsInt(Step(Latch, Moving(Split - Margin * 3.0f), Gait)),
+			AsInt(Step(Latch, Moving(Split - Margin * 3.0f), Damped)),
 			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
+	}
+
+	// --- The commanded term: retail snaps to the run on the first frame of full input ----------------
+	{
+		// `speed2D > T || cmdMoveMag > T`. A body just off the mark is barely moving while already
+		// commanding the full gait, and retail selects the run there — a realized-speed-only test
+		// ramps into it instead, which is a visible walk-then-run at the start of every sprint.
+		//
+		// The disjunction is in the **split** and not in the still test: retail's idle/moving cut
+		// reads realized speed alone, so a body at a standstill is idle however hard it is being
+		// pushed. That is why this sample is moving at all.
+		FElysiumJumpLatch Latch;
+		FElysiumLocomotionSample Starting = Moving(Gait.StillSpeed() + 1.0f);
+		Starting.CommandedSpeed = Gait.RunSplitSpeed() + 1.0f;
+		TestEqual(TEXT("a body just off the mark at full command runs on frame one"),
+			AsInt(Step(Latch, Starting, Gait)), AsInt(EElysiumAnimActivityCode::RunRelaxed));
+
+		// The same frame without the command is the ramp retail does not have.
+		FElysiumJumpLatch Slow;
+		TestEqual(TEXT("...and walks without it, which is the ramp the term removes"),
+			AsInt(Step(Slow, Moving(Gait.StillSpeed() + 1.0f), Gait)),
+			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
+
+		// And the realized term is what still decides once the command is released.
+		FElysiumLocomotionSample Coasting = Moving(Gait.RunSplitSpeed() + 1.0f);
+		Coasting.CommandedSpeed = 0.0f;
+		TestEqual(TEXT("a coasting body is judged on the speed it actually has"),
+			AsInt(Step(Latch, Coasting, Gait)), AsInt(EElysiumAnimActivityCode::RunRelaxed));
+
+		// Neither term reaching the split is a walk, however the other is spelled.
+		FElysiumLocomotionSample Strolling = Moving(Gait.StillSpeed() + 1.0f);
+		Strolling.CommandedSpeed = Gait.StillSpeed() + 1.0f;
+		TestEqual(TEXT("and neither term past the split is a walk"),
+			AsInt(Step(Latch, Strolling, Gait)), AsInt(EElysiumAnimActivityCode::WalkRelaxed));
 	}
 
 	// --- The stance, which is four values and one branch --------------------------------------------
@@ -592,7 +647,10 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 		FElysiumAnimationIntent Backpedal = ActivityIntent(TEXT("pc_body"), TEXT("ACT_RUN"));
 		Backpedal.Body.LocalVelocity = FVector(-100.0f, 0.0f, 0.0f);
+		// The pose parameter, which is what steers a fan — its unfiltered input is set with it so the
+		// fixture is a body that has been backpedalling rather than one caught mid-turn.
 		Backpedal.Body.MoveYawVelocity = 180.0f;
+		Backpedal.Body.MoveYawPose = 180.0f;
 		FElysiumAnimationSelection Back;
 		ElysiumAnimResolve::Resolve(Backpedal, PcCatalog, Back);
 		TestEqual(TEXT("and a backpedalling body reaches the 180 degree cell"), Back.AnimationName,
@@ -860,6 +918,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		FElysiumAnimationIntent Strafing = ActivityIntent(TEXT("pc_body"), TEXT("ACT_RUN"));
 		Strafing.Body.LocalVelocity = FVector(0.0f, 400.0f, 0.0f);
 		Strafing.Body.MoveYawVelocity = 90.0f;
+		Strafing.Body.MoveYawPose = 90.0f;
 		FElysiumAnimationSelection Sideways;
 		ElysiumAnimResolve::Resolve(Strafing, PcCatalog, Sideways);
 		TestEqual(TEXT("the published speed is the body's own"), Sideways.Speed, 400.0f);
@@ -1427,6 +1486,142 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("every slice activity resolves on every player body, or is the one named miss"),
 		UnexplainedMisses.Num(), 0);
+	return true;
+}
+
+// =====================================================================================
+// CCC7 — the speed authority against the real corpus.
+//
+// The Substrate tier proves the table's arithmetic over numbers typed into a fixture. This proves
+// the numbers: that the export really carries a per-cell fan for each of the three gaits, that the
+// three come from the banks the include DAG names rather than from one, and that the speeds they
+// carry are the ones the mover is about to be steered by.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSpeedCorpusTest,
+	"Elysium.Content.GaitSpeeds", GElysiumAnimationContentFlags)
+bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error) || !Index.IsValid())
+	{
+		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		return true;
+	}
+	const FString Stem = FindPlayerStem(Index);
+	if (Stem.IsEmpty())
+	{
+		AddInfo(TEXT("skipping: the export carries no player bodies"));
+		return true;
+	}
+	FElysiumNpcClipSet Body;
+	if (!Body.Load(Stem, Error))
+	{
+		AddInfo(FString::Printf(TEXT("skipping: %s did not load (%s)"), *Stem, *Error));
+		return true;
+	}
+
+	FRealTables Tables;
+	Tables.Index = &Index;
+
+	// The same three resolves `UElysiumNpcAnimSubsystem::ResolveGaitSpeeds` performs, over the same
+	// pure resolver and the same `SpeedFan`. What is not shared is the subsystem's cache, which needs
+	// a GameInstance and answers nothing this is asking.
+	struct FGait
+	{
+		EElysiumAnimActivityCode Code;
+		float Scale;
+		const TCHAR* Name;
+	};
+	const FGait Gaits[] =
+	{
+		{ EElysiumAnimActivityCode::Walk,  ElysiumMove::WalkScale,  TEXT("walk") },
+		{ EElysiumAnimActivityCode::Run,   ElysiumMove::RunScale,   TEXT("run") },
+		{ EElysiumAnimActivityCode::Sneak, ElysiumMove::SneakScale, TEXT("sneak") },
+	};
+
+	FElysiumGaitSpeedTable Resolved[3];
+	FString Owners[3];
+	for (int32 Index0 = 0; Index0 < 3; ++Index0)
+	{
+		const FGait& Gait = Gaits[Index0];
+		const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables,
+			ElysiumAnimIntent::ActivityName(Gait.Code), EElysiumAnimSource::Player);
+		if (!TestTrue(FString::Printf(TEXT("%s resolves on %s"), Gait.Name, *Stem), Sel.IsResolved()))
+		{
+			continue;
+		}
+		Owners[Index0] = Sel.OwnerStem;
+		const FElysiumBlendTable* Owner = Tables(Sel.OwnerStem);
+		if (!TestNotNull(FString::Printf(TEXT("%s's owning bank has a blend table"), Gait.Name),
+				const_cast<FElysiumBlendTable*>(Owner)))
+		{
+			continue;
+		}
+		const FElysiumBlendGrid* Grid = Owner->Find(Sel.SequenceLabel);
+		if (!TestNotNull(FString::Printf(TEXT("%s names a fan and not one clip"), Gait.Name),
+				const_cast<FElysiumBlendGrid*>(Grid)))
+		{
+			continue;
+		}
+		TestTrue(FString::Printf(TEXT("%s's fan yields a speed table"), Gait.Name),
+			ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Gait.Scale, Resolved[Index0]));
+		AddInfo(FString::Printf(TEXT("%s = %s@%s, forward %.1f cm/s, peak %.1f cm/s"), Gait.Name,
+			*Sel.SequenceLabel, *Sel.OwnerStem, Resolved[Index0].Forward(), Resolved[Index0].Peak()));
+	}
+
+	// Nine cells, spanning the whole of `move_yaw`. A fan of any other shape would mean the speed the
+	// mover reads and the cell the graph plays came off different geometry.
+	for (int32 Index0 = 0; Index0 < 3; ++Index0)
+	{
+		if (!Resolved[Index0].IsValid())
+		{
+			continue;
+		}
+		TestEqual(FString::Printf(TEXT("%s carries nine cells"), Gaits[Index0].Name),
+			Resolved[Index0].Count, 9);
+		TestEqual(FString::Printf(TEXT("%s spans the whole parameter"), Gaits[Index0].Name),
+			Resolved[Index0].AxisMax - Resolved[Index0].AxisMin, 360.0f, 0.01f);
+	}
+
+	// **The bank-ownership claim, asserted through the speed path.** A body's walk and its run come
+	// from different banks, so a resolver keyed on the label alone would hand the player one bank's
+	// gait for both — and the speeds are where that stops being invisible.
+	if (!Owners[0].IsEmpty() && !Owners[1].IsEmpty())
+	{
+		TestNotEqual(TEXT("walk and run are owned by different banks"), Owners[0], Owners[1]);
+	}
+
+	// The three numbers CCC7 is built on, in Source units so they read against the decompile. The
+	// tolerance is a whole unit: this is asserting the export agrees with the recovered figures, not
+	// pinning a float.
+	const float U = ElysiumMove::U;
+	if (Resolved[0].IsValid() && Resolved[1].IsValid() && Resolved[2].IsValid())
+	{
+		TestEqual(TEXT("forward walk is 53.8 u/s"), Resolved[0].Forward() / U, 53.8f, 1.0f);
+		TestEqual(TEXT("forward run is 188.5 u/s"), Resolved[1].Forward() / U, 188.5f, 1.0f);
+		TestEqual(TEXT("forward sneak is 65.3 u/s once sv_sneakscale has multiplied"),
+			Resolved[2].Forward() / U, 65.3f, 1.0f);
+
+		// The recovered oddity, and the reason it is an owner call rather than a bug: with the duck
+		// crop dead code and sneak scaled by 2.3, retail's crouch outruns its walk.
+		TestTrue(TEXT("the scaled crouch outruns the walk, as retail's does"),
+			Resolved[2].Forward() > Resolved[0].Forward());
+
+		// The walk/run threshold is the body's own forward walk cell plus one unit — a per-model
+		// number, not a constant, and the thing `FElysiumGaitReference` has to be built from.
+		const float Threshold = Resolved[0].Forward() + U;
+		TestEqual(TEXT("the walk/run threshold is 54.8 u/s on this body"), Threshold / U, 54.8f, 1.0f);
+		TestTrue(TEXT("...which every run cell clears"), Resolved[1].SpeedAt(180.0f, true) > Threshold);
+		TestTrue(TEXT("...and no walk cell reaches"), Resolved[0].Peak() < Threshold);
+	}
+
 	return true;
 }
 

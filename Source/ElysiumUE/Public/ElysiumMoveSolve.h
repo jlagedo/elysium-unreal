@@ -45,9 +45,16 @@ namespace ElysiumMove
 
 	// The retail player speed is animation-driven and no ConVar holds it; `speed_walk` /
 	// `speed_runbase` are Troika's stated intent and are registered-but-never-read, which makes them
-	// what a port with no player animation should use.
+	// what a port with no player animation should use, and what `elysium.move.AnimSpeedAuthority 0`
+	// falls back to.
 	inline constexpr float WalkSpeed    = 100.0f * U; // speed_walk
 	inline constexpr float RunSpeed     = 225.0f * U; // speed_runbase (+5 per Athletics at 9.4)
+
+	// What the animation authority scales each gait's authored cells by — function-local statics in
+	// `CHL2_Player::PreThink`, and the reason retail's crouch outruns its walk. Dimensionless.
+	inline constexpr float WalkScale    = 1.0f;       // sv_walkscale
+	inline constexpr float RunScale     = 1.0f;       // sv_runscale
+	inline constexpr float SneakScale   = 2.3f;       // sv_sneakscale
 
 	// The standable-normal test (a **double** at 0x104492d0) and the epsilon that keeps a down-trace
 	// from arriving flush with the floor and reporting no contact.

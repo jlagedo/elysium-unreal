@@ -43,6 +43,7 @@
 #include "ElysiumFog.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumExpr.h"
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGymSpec.h"
@@ -2948,6 +2949,219 @@ bool FElysiumMoveCoursesTest::RunTest(const FString&)
 #endif // !UE_BUILD_SHIPPING
 
 // =====================================================================================
+// The animation's per-direction speed (CCC7). The fan below is the male body's authored `walk`
+// grid, in cm/s, read out of `docs/vtmb/animation_and_movers.md` — so what is asserted is the
+// table's arithmetic against numbers the export produces, not the export itself, which is
+// `Elysium.Content.GaitSpeeds`.
+// =====================================================================================
+
+namespace
+{
+	// `move_and_ranged`'s `walk`, cells 0..8 at move_yaw -180..+180 in 45-degree steps. Cells 0 and 8
+	// are the same clip across the wrap seam.
+	FElysiumGaitSpeedTable MaleWalkFan()
+	{
+		FElysiumGaitSpeedTable Fan;
+		Fan.Count = 9;
+		Fan.AxisMin = -180.0f;
+		Fan.AxisMax = 180.0f;
+		const float Authored[9] = { 88.6f, 113.9f, 97.1f, 88.1f, 136.7f, 88.1f, 60.7f, 113.9f, 88.6f };
+		FMemory::Memcpy(Fan.Cells, Authored, sizeof(Authored));
+		return Fan;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSpeedsTest,
+	"Elysium.Substrate.GaitSpeeds", GElysiumTestFlags)
+bool FElysiumGaitSpeedsTest::RunTest(const FString&)
+{
+	// --- A table with nothing in it answers nothing, rather than answering zero convincingly -----
+	const FElysiumGaitSpeedTable Empty;
+	TestFalse(TEXT("a default table is not valid"), Empty.IsValid());
+	TestEqual(TEXT("and it commands no speed"), Empty.SpeedAt(0.0f, true), 0.0f);
+	TestEqual(TEXT("and it has no ceiling"), Empty.Peak(), 0.0f);
+
+	FElysiumGaitSpeedTable Walk = MaleWalkFan();
+	TestTrue(TEXT("the authored walk fan is valid"), Walk.IsValid());
+
+	// --- The cells sit on the angles, and 0 lands exactly on cell 4 -----------------------------
+	// This is the whole reason the axis is divided by `Count - 1` rather than by `Count`: the cells
+	// are the range's endpoints, not its buckets.
+	TestEqual(TEXT("forward is the 0-degree cell"), Walk.Forward(), 136.7f, 0.01f);
+	TestEqual(TEXT("the backpedal is the wrap seam"), Walk.SpeedAt(-180.0f, true), 88.6f, 0.01f);
+	TestEqual(TEXT("+180 is the same direction as -180"), Walk.SpeedAt(180.0f, true), 88.6f, 0.01f);
+	TestEqual(TEXT("strafing right is the +90 cell"), Walk.SpeedAt(90.0f, true), 60.7f, 0.01f);
+	TestEqual(TEXT("strafing left is the -90 cell"), Walk.SpeedAt(-90.0f, true), 97.1f, 0.01f);
+
+	// --- Interpolated against snapped -----------------------------------------------------------
+	// 20 degrees is 4/9ths of the way from cell 4 to cell 5. Retail snaps here because its speed
+	// comes from digital keys and can only land on a cell; a stick lands between two.
+	const float Blended = FMath::Lerp(136.7f, 88.1f, 20.0f / 45.0f);
+	TestEqual(TEXT("an angle between two cells blends them"), Walk.SpeedAt(20.0f, true), Blended, 0.01f);
+	TestEqual(TEXT("and snaps to the nearer one when told to"), Walk.SpeedAt(20.0f, false), 136.7f, 0.01f);
+
+	// --- The wrap, which is where an unwrapped index walks off the front ------------------------
+	// A body 190 degrees off its facing is 170 degrees off it the other way. Written without the
+	// double `Fmod` this indexes negatively and reads the wrong cell or crashes.
+	TestEqual(TEXT("past the seam wraps rather than clamping"),
+		Walk.SpeedAt(190.0f, true), Walk.SpeedAt(-170.0f, true), 0.01f);
+	TestEqual(TEXT("and so does a full turn"), Walk.SpeedAt(360.0f, true), Walk.Forward(), 0.01f);
+	TestEqual(TEXT("a turn and a bit is the bit"), Walk.SpeedAt(380.0f, true),
+		Walk.SpeedAt(20.0f, true), 0.01f);
+
+	// --- The ceiling ----------------------------------------------------------------------------
+	TestEqual(TEXT("the peak is the largest cell"), Walk.Peak(), 136.7f, 0.01f);
+	TestTrue(TEXT("and no direction can command more than it"),
+		Walk.SpeedAt(-133.0f, true) <= Walk.Peak() && Walk.SpeedAt(47.0f, true) <= Walk.Peak());
+
+	// --- The scale is a field, not a pre-multiply ------------------------------------------------
+	// `sv_sneakscale` is 2.3, which is what makes retail's crouch faster than its walk.
+	FElysiumGaitSpeedTable Sneak;
+	Sneak.Count = 9;
+	Sneak.AxisMin = -180.0f;
+	Sneak.AxisMax = 180.0f;
+	for (int32 Index = 0; Index < 9; ++Index)
+	{
+		Sneak.Cells[Index] = 70.0f;
+	}
+	Sneak.Cells[2] = 79.3f;
+	Sneak.Scale = 2.3f;
+	TestEqual(TEXT("the scale multiplies the peak"), Sneak.Peak(), 79.3f * 2.3f, 0.01f);
+	TestEqual(TEXT("and every reading"), Sneak.Forward(), 70.0f * 2.3f, 0.01f);
+	TestTrue(TEXT("so a scaled sneak outruns the authored walk"), Sneak.Forward() > Walk.Forward());
+
+	// --- Symmetrization, which is a divergence and therefore has to be visible -------------------
+	// The authored fan walks left half again as fast as it walks right. Averaging the mirrored pairs
+	// removes that; the forward cell is unpaired and cannot move, and cells 0 and 8 are one clip so
+	// averaging them is a no-op.
+	const float MirroredMean = 0.5f * (97.1f + 60.7f);
+	Walk.Symmetrize();
+	TestEqual(TEXT("strafing right takes the mirrored mean"), Walk.SpeedAt(90.0f, true),
+		MirroredMean, 0.01f);
+	TestEqual(TEXT("and so does strafing left"), Walk.SpeedAt(-90.0f, true), MirroredMean, 0.01f);
+	TestEqual(TEXT("forward is unpaired and does not move"), Walk.Forward(), 136.7f, 0.01f);
+	TestEqual(TEXT("the seam cell is its own mirror"), Walk.SpeedAt(180.0f, true), 88.6f, 0.01f);
+
+	// --- The set answers for the body as a whole -------------------------------------------------
+	FElysiumGaitSpeeds Set;
+	TestFalse(TEXT("an unresolved set is not valid"), Set.IsValid());
+	Set.Walk = Walk;
+	TestTrue(TEXT("one resolved gait is enough to steer by"), Set.IsValid());
+	Set.Sneak = Sneak;
+	TestEqual(TEXT("the set's ceiling spans every gait"), Set.Peak(),
+		FMath::Max(Walk.Peak(), Sneak.Peak()), 0.01f);
+
+	// --- The seam's decision table ---------------------------------------------------------------
+	// The whole of what the mover asks. Asserted here rather than on the component because none of
+	// it needs a pawn: it is a decision over body state, two cvars and a table.
+	FElysiumGaitSpeeds Body;
+	Body.Walk = MaleWalkFan();
+	Body.Run = MaleWalkFan();
+	for (int32 Index = 0; Index < 9; ++Index)
+	{
+		Body.Run.Cells[Index] *= 3.5f;      // a run fan, roughly the shipped ratio
+	}
+	Body.Sneak = MaleWalkFan();
+	Body.Sneak.Scale = 2.3f;
+
+	FElysiumWishSpeedInput In;
+	In.JumpMaxSpeed = ElysiumMove::JumpMaxSpeed;
+	In.NoclipSpeed = ElysiumMove::NoclipSpeed;
+
+	// Authority off is the A/B, and it must be **exactly** the shipped constants — this is the
+	// assertion that keeps the cvar's 0 path value-neutral against every committed recording.
+	In.bAuthority = false;
+	TestEqual(TEXT("authority off runs at speed_runbase"),
+		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::RunSpeed, 0.01f);
+	In.bWalkKey = true;
+	TestEqual(TEXT("...and +speed selects the slow gait"),
+		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::WalkSpeed, 0.01f);
+	In.bDucked = true;
+	TestEqual(TEXT("...and a ducked body takes Source's third"),
+		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::WalkSpeed / 3.0f, 0.01f);
+	In.bDucked = false;
+	In.bWalkKey = false;
+
+	// Authority on: the gait's own fan, at the commanded direction.
+	In.bAuthority = true;
+	TestEqual(TEXT("authority on runs at the run fan's forward cell"),
+		ElysiumGait::WishSpeedFrom(In, Body), Body.Run.Forward(), 0.01f);
+	In.bWalkKey = true;
+	TestEqual(TEXT("+speed reads the walk fan"),
+		ElysiumGait::WishSpeedFrom(In, Body), Body.Walk.Forward(), 0.01f);
+	In.bDucked = true;
+	TestEqual(TEXT("a ducked body reads the sneak fan, with no third applied"),
+		ElysiumGait::WishSpeedFrom(In, Body), Body.Sneak.Forward(), 0.01f);
+	TestTrue(TEXT("...so the authored crouch outruns the authored walk, as retail's does"),
+		Body.Sneak.Forward() > Body.Walk.Forward());
+	In.bDucked = false;
+
+	// The direction is the point: a strafe commands a different speed from a walk forward.
+	In.WishYawDegrees = 90.0f;
+	TestEqual(TEXT("a strafe commands its own cell"),
+		ElysiumGait::WishSpeedFrom(In, Body), Body.Walk.SpeedAt(90.0f, true), 0.01f);
+	TestTrue(TEXT("...which is slower than forward on this fan"),
+		ElysiumGait::WishSpeedFrom(In, Body) < Body.Walk.Forward());
+	In.WishYawDegrees = 0.0f;
+
+	// The deflection scales it, so a half-pushed stick commands half the gait.
+	In.Scale = 0.5f;
+	TestEqual(TEXT("the command's deflection scales the answer"),
+		ElysiumGait::WishSpeedFrom(In, Body), Body.Walk.Forward() * 0.5f, 0.01f);
+	In.Scale = 1.0f;
+	In.bWalkKey = false;
+
+	// A gait that resolved no fan falls back on its own, not wholesale: this body walks and runs at
+	// its authored speed and sneaks at the constant.
+	FElysiumGaitSpeeds Partial = Body;
+	Partial.Sneak = FElysiumGaitSpeedTable();
+	In.bDucked = true;
+	TestEqual(TEXT("a missing sneak fan falls back to the constant"),
+		ElysiumGait::WishSpeedFrom(In, Partial), ElysiumMove::RunSpeed / 3.0f, 0.01f);
+	In.bDucked = false;
+	TestEqual(TEXT("...while the gaits that did resolve are unaffected"),
+		ElysiumGait::WishSpeedFrom(In, Partial), Body.Run.Forward(), 0.01f);
+
+	// Airborne: the held grounded speed, because retail's tables stop refreshing for the jump.
+	// `sv_jump_maxspeed` is the ceiling and never fires — the run peak is below it.
+	In.bOnGround = false;
+	In.LastGroundedWishSpeed = 400.0f;
+	TestEqual(TEXT("an airborne body keeps commanding what it left the ground with"),
+		ElysiumGait::WishSpeedFrom(In, Body), 400.0f, 0.01f);
+	In.LastGroundedWishSpeed = 0.0f;
+	TestEqual(TEXT("...and falls back to sv_jump_maxspeed with nothing held"),
+		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::JumpMaxSpeed, 0.01f);
+	In.bAuthority = false;
+	In.LastGroundedWishSpeed = 400.0f;
+	TestEqual(TEXT("...and ignores the held value entirely with the authority off"),
+		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::JumpMaxSpeed, 0.01f);
+	In.bOnGround = true;
+	In.bAuthority = true;
+
+	// Noclip short-circuits the ladder: a crouched fly is not a sneak.
+	In.bNoclip = true;
+	In.bDucked = true;
+	TestEqual(TEXT("noclip ignores the gait tables"),
+		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::NoclipSpeed, 0.01f);
+
+	// Snapping is retail's, interpolation is ours, and between two cells they differ.
+	FElysiumWishSpeedInput Between;
+	Between.bAuthority = true;
+	Between.WishYawDegrees = 20.0f;
+	Between.bWalkKey = true;
+	Between.bInterpolate = true;
+	const float Blended20 = ElysiumGait::WishSpeedFrom(Between, Body);
+	Between.bInterpolate = false;
+	const float Snapped20 = ElysiumGait::WishSpeedFrom(Between, Body);
+	TestTrue(TEXT("interpolating and snapping disagree between two cells"),
+		!FMath::IsNearlyEqual(Blended20, Snapped20, 0.01f));
+	TestEqual(TEXT("...and snapping is the cell retail would have picked"), Snapped20,
+		Body.Walk.Forward(), 0.01f);
+
+	return true;
+}
+
+// =====================================================================================
 // The body sample (CCC1). One struct, two producers — so what is asserted here is the part of it
 // that is a *rule* rather than a reading: how a world yaw becomes a facing-relative one, how
 // Source's two duck flags become one stance, and how the jump phase falls out of the hold window
@@ -2974,6 +3188,86 @@ bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 		180.0f);
 	TestEqual(TEXT("and the boundary is reached the same way from either side"),
 		FMath::Abs(RelativeYaw(0.0f, 180.0f)), 180.0f);
+
+	// --- The pose parameter: recovered sign, plus a slew and a hold that are behaviour ------------
+	// The three sign cases first. `RelativeYaw` is already right-positive with zero forward, which is
+	// what the retail selector's reversed subtraction produces — so a strafe right is +90 and the
+	// value maps onto `CalculateDirection` with no negation.
+	{
+		FElysiumLocomotionSample Body;
+		Body.FacingYaw = 0.0f;
+		Body.MoveYawPose = RelativeYaw(0.0f, Body.FacingYaw);
+		TestEqual(TEXT("running forward is zero"), Body.MoveYaw(), 0.0f);
+		Body.MoveYawPose = RelativeYaw(90.0f, Body.FacingYaw);
+		TestEqual(TEXT("strafing right is +90"), Body.MoveYaw(), 90.0f);
+		Body.MoveYawPose = RelativeYaw(-90.0f, Body.FacingYaw);
+		TestEqual(TEXT("strafing left is -90"), Body.MoveYaw(), -90.0f);
+		Body.MoveYawPose = RelativeYaw(180.0f, Body.FacingYaw);
+		TestEqual(TEXT("backpedalling is the seam"), FMath::Abs(Body.MoveYaw()), 180.0f);
+	}
+
+	// The slew. 720 deg/s, so a sixteenth of a second covers 45 degrees and no more.
+	{
+		FElysiumMoveYawFilter Filter;
+		// A fresh filter has never written, so its first moving frame snaps — that is what arms the
+		// slew for the frames after it.
+		TestEqual(TEXT("the first moving frame is where the body is going"),
+			AdvanceMoveYaw(Filter, 30.0f, 100.0f, 1.0f / 60.0f), 30.0f, 0.01f);
+		AdvanceMoveYaw(Filter, 0.0f, 100.0f, 1.0f / 16.0f);
+		TestEqual(TEXT("...and the frame after it slews"), Filter.Value, 0.0f, 0.01f);
+
+		const float Stepped = AdvanceMoveYaw(Filter, 90.0f, 100.0f, 1.0f / 16.0f);
+		TestEqual(TEXT("a 90-degree turn is rationed to 45 in a sixteenth of a second"), Stepped,
+			45.0f, 0.01f);
+		TestTrue(TEXT("...so it has not arrived yet"), Stepped < 90.0f);
+		// And it does arrive, rather than easing forever.
+		for (int32 Frame = 0; Frame < 8; ++Frame)
+		{
+			AdvanceMoveYaw(Filter, 90.0f, 100.0f, 1.0f / 16.0f);
+		}
+		TestEqual(TEXT("...and it lands exactly on the target"), Filter.Value, 90.0f, 0.01f);
+	}
+
+	// The wrap: a turn across the seam takes the short way round, which is the whole reason this is
+	// a fixed turn and not a lerp. Written as a lerp, -170 to +170 sweeps 340 degrees the wrong way.
+	{
+		FElysiumMoveYawFilter Filter;
+		AdvanceMoveYaw(Filter, -170.0f, 100.0f, 1.0f / 60.0f);
+		const float Crossed = AdvanceMoveYaw(Filter, 170.0f, 100.0f, 1.0f / 120.0f);
+		TestTrue(TEXT("a turn across the seam goes the short way"), Crossed < -170.0f);
+		TestTrue(TEXT("...staying on the near side of the boundary"), Crossed >= -180.0f);
+	}
+
+	// The hold. A body that stops keeps the direction it was going — retail's write is gated on
+	// movement, so nothing is written and the parameter does not fall back to forward.
+	{
+		FElysiumMoveYawFilter Filter;
+		AdvanceMoveYaw(Filter, 90.0f, 100.0f, 1.0f / 60.0f);
+		TestEqual(TEXT("a strafing body's stride is sideways"), Filter.Value, 90.0f, 0.01f);
+		const float Stopped = AdvanceMoveYaw(Filter, 0.0f, 0.0f, 1.0f / 60.0f);
+		TestEqual(TEXT("and stopping holds it rather than snapping forward"), Stopped, 90.0f, 0.01f);
+	}
+
+	// The re-arm. Because the write is gated on movement, 0.3 s without one means the body has been
+	// standing still — so a standing start snaps to the new direction instead of slewing into it,
+	// which is what stops an eighth of a second of walking forward out of every sidestep.
+	{
+		FElysiumMoveYawFilter Filter;
+		AdvanceMoveYaw(Filter, 0.0f, 100.0f, 1.0f / 60.0f);
+		for (int32 Frame = 0; Frame < 30; ++Frame)      // half a second stationary
+		{
+			AdvanceMoveYaw(Filter, 0.0f, 0.0f, 1.0f / 60.0f);
+		}
+		TestEqual(TEXT("a standing start snaps to the direction it leaves in"),
+			AdvanceMoveYaw(Filter, 90.0f, 100.0f, 1.0f / 60.0f), 90.0f, 0.01f);
+
+		// A brief stumble is not a standing start, and slews.
+		FElysiumMoveYawFilter Stumble;
+		AdvanceMoveYaw(Stumble, 0.0f, 100.0f, 1.0f / 60.0f);
+		AdvanceMoveYaw(Stumble, 0.0f, 0.0f, 0.1f);
+		const float Slewed = AdvanceMoveYaw(Stumble, 90.0f, 100.0f, 1.0f / 60.0f);
+		TestTrue(TEXT("a momentary stop still slews"), Slewed < 90.0f);
+	}
 
 	// --- The stance, which is four values because the flags are two -----------------------------
 	// The pair that matters is the last one: the release edge sets `bDucking` while `bDucked` is
@@ -12657,6 +12951,66 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 		// Case-insensitive, like every other label lookup in the module.
 		TestNotNull(TEXT("labels resolve case-insensitively"), Parsed.Find(TEXT("WALK")));
 	}
+
+	// --- The speed fan (CCC7): the same grid read as per-direction speed rather than as clips ------
+	// `MakeYawTable`'s fan authors motion on cell 4 alone, which is the hole case by construction: a
+	// body that walked at 136.7 cm/s forward and at nothing in every other direction would stand
+	// still the moment it strafed.
+	FElysiumGaitSpeedTable Sparse;
+	if (TestTrue(TEXT("a fan with one authored cell still yields a table"),
+			ElysiumBlendGrids::SpeedFan(Walk, Table, 1.0f, Sparse)))
+	{
+		TestEqual(TEXT("...answering that cell where it was authored"), Sparse.Forward(), 136.7f, 0.01f);
+		TestEqual(TEXT("...and filling every hole from it rather than with zero"),
+			Sparse.SpeedAt(90.0f, true), 136.7f, 0.01f);
+		TestEqual(TEXT("...including across the wrap seam"), Sparse.SpeedAt(180.0f, true), 136.7f, 0.01f);
+	}
+
+	// A fully authored fan, which is what a real sidecar carries. The hole fill must not touch it.
+	FElysiumBlendGrid Full = Walk;
+	const float Authored[9] = { 88.6f, 113.9f, 97.1f, 88.1f, 136.7f, 88.1f, 60.7f, 113.9f, 88.6f };
+	for (int32 i = 0; i < 9; ++i)
+	{
+		Full.Cells[i].Motion.CycleSeconds = 1.0f;
+		Full.Cells[i].Motion.GroundDistanceCm = Authored[i];
+		Full.Cells[i].Motion.GroundSpeedCmPerSecond = Authored[i];
+	}
+	FElysiumGaitSpeedTable Fan;
+	if (TestTrue(TEXT("a fully authored fan yields a table"),
+			ElysiumBlendGrids::SpeedFan(Full, Table, 2.3f, Fan)))
+	{
+		TestEqual(TEXT("...cell by cell"), Fan.SpeedAt(-90.0f, false), 97.1f * 2.3f, 0.01f);
+		TestEqual(TEXT("...with the gait's own scale applied"), Fan.Forward(), 136.7f * 2.3f, 0.01f);
+		TestEqual(TEXT("...and the peak is the largest cell scaled"), Fan.Peak(), 136.7f * 2.3f, 0.01f);
+	}
+
+	// One hole in an otherwise authored fan interpolates from its two neighbours, not from the whole.
+	FElysiumBlendGrid OneHole = Full;
+	OneHole.Cells[5].Motion = FElysiumClipMotion();
+	FElysiumGaitSpeedTable Patched;
+	if (TestTrue(TEXT("one hole does not refuse the fan"),
+			ElysiumBlendGrids::SpeedFan(OneHole, Table, 1.0f, Patched)))
+	{
+		TestEqual(TEXT("...it is filled from the cells either side"), Patched.SpeedAt(45.0f, false),
+			0.5f * (136.7f + 60.7f), 0.01f);
+		TestEqual(TEXT("...and its neighbours are untouched"), Patched.Forward(), 136.7f, 0.01f);
+	}
+
+	// The refusals. Each of these would otherwise produce a speed that is wrong rather than absent.
+	FElysiumGaitSpeedTable Refused;
+	FElysiumBlendGrid Motionless = Walk;
+	for (FElysiumBlendCell& Blank : Motionless.Cells)
+	{
+		Blank.Motion = FElysiumClipMotion();
+	}
+	TestFalse(TEXT("a fan with no authored motion is refused"),
+		ElysiumBlendGrids::SpeedFan(Motionless, Table, 1.0f, Refused));
+	TestFalse(TEXT("a non-wrapping axis is not a gait fan"),
+		ElysiumBlendGrids::SpeedFan(Aim, Table, 1.0f, Refused));
+	FElysiumBlendGrid Sliced = Full;
+	Sliced.ParamEnd[0] = 90.f;
+	TestFalse(TEXT("a fan spanning part of its parameter is refused"),
+		ElysiumBlendGrids::SpeedFan(Sliced, Table, 1.0f, Refused));
 
 	return true;
 }

@@ -66,10 +66,24 @@ struct FElysiumLocomotionSample
 	float MoveYawWish = 0.0f;
 	float MoveYawVelocity = 0.0f;
 
+	// **The pose parameter** — what the blend grid is steered by, and the third of the three angles.
+	// It follows `MoveYawVelocity` through `AdvanceMoveYaw`'s slew and hold, so it is neither of the
+	// raw yaws above. A producer seeds it with the unfiltered velocity yaw; the driver that ticks the
+	// body once per frame replaces it with the filtered value, because filtering is a rate and a
+	// getter that can be called twice cannot own one.
+	float MoveYawPose = 0.0f;
+
 	// The wish direction's magnitude, 0..1. Zero means there was no commanded direction at all, and
 	// `MoveYawWish` is then a placeholder rather than a measurement — a consumer that cannot tell
 	// those apart reads "walk forward" out of a body standing still.
 	float WishScale = 0.0f;
+
+	// What the body **commanded** this frame, cm/s — the wish speed the solve was handed, deflection
+	// already applied. Retail's gait test is `speed2D > T || commanded > T`, and the commanded term
+	// is the one that matters: it goes non-zero on the first frame of a full-throttle input, so the
+	// run is selected immediately instead of after the body has accelerated past the threshold.
+	// Zero on a producer with no command to read, which is every NPC.
+	float CommandedSpeed = 0.0f;
 
 	bool bOnGround = false;
 	EElysiumWaterLevel Water = EElysiumWaterLevel::None;
@@ -98,12 +112,29 @@ struct FElysiumLocomotionSample
 			? EElysiumJumpPhase::Ascend : EElysiumJumpPhase::Descend;
 	}
 
-	// **Provisional, and owned by `CCC7`.** Which of the two yaws the graph steers on — and the sign
-	// convention it steers in — is read off the retail selector at `0x10164870` rather than chosen,
-	// and until it is, this answers with the realized direction because that is what a strafing body
-	// visibly does. Both raw yaws stay on the struct so that rung can settle it here and nowhere
-	// else.
-	float MoveYaw() const { return MoveYawVelocity; }
+	// The pose parameter the blend grid is steered by, degrees, **right-positive with zero forward**.
+	//
+	// Recovered rather than chosen: the retail selector at `0x10164870` writes
+	// `AngleDiff(facingYaw, velocityYaw)` — the *realized* direction, never the commanded one — and
+	// because Source's yaw is left-positive that reversed subtraction is right-positive
+	// (`docs/vtmb/animation_and_movers.md` → "`move_yaw` is right-positive and zero is forward").
+	// `RelativeYaw` already answers in that convention, so the value maps onto
+	// `UKismetAnimationLibrary::CalculateDirection` with no negation.
+	float MoveYaw() const { return MoveYawPose; }
+};
+
+// The pose parameter's own state, because retail's write is a rate rather than a reading.
+struct FElysiumMoveYawFilter
+{
+	float Value = 0.0f;
+	// Time since the parameter was last written, seconds. It only advances while the body is too
+	// slow to write, which is what makes the re-arm mean "has been standing still".
+	//
+	// **A fresh filter has never written**, so it starts past the re-arm window and its first moving
+	// frame snaps. That is retail's own shape — its timestamp starts unset — and it is what makes a
+	// body that spawns, teleports or leaves a cutscene begin with the stride it is actually moving
+	// in rather than slewing into it from forward.
+	float IdleSeconds = 1.0f;
 };
 
 namespace ElysiumLocomotion
@@ -111,6 +142,22 @@ namespace ElysiumLocomotion
 	// A world yaw expressed against a facing, normalized to (-180, 180]. Positive is Unreal's own
 	// yaw direction, so a body strafing right reads positive.
 	float RelativeYaw(float WorldYaw, float FacingYaw);
+
+	// Advance the pose parameter one frame toward the realized direction, and answer it.
+	//
+	// Three recovered behaviours, none of them smoothing for its own sake:
+	//  - **Hold below a standstill.** The whole write is gated on the body moving, so a body that
+	//    stops keeps the direction it was last going rather than snapping to forward.
+	//  - **Slew at 720 deg/s** (`frametime * 4 * 180`) while the parameter is being written every
+	//    frame, so a turning body's stride rotates rather than teleporting.
+	//  - **Snap after 0.3 s of not writing.** Because the write is gated on movement, that window
+	//    elapses exactly when a body has been standing still — so a standing start into a strafe
+	//    begins with the right stride instead of spending an eighth of a second facing forward.
+	//
+	// The turn takes the short way round the wrap, which is why it is `FMath::FixedTurn` and not a
+	// lerp: a backpedalling body sits exactly on the +/-180 seam.
+	float AdvanceMoveYaw(FElysiumMoveYawFilter& Filter, float TargetYawDegrees, float Speed2D,
+		float DeltaSeconds);
 
 	// Source's two independent duck flags as the one stance they describe. A free function because
 	// the mapping is the whole of the rule and both producers have to agree on it.

@@ -450,10 +450,12 @@ def cmd_hz(out: Path, rates: list[int]) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    # The tracked root is passed in and never constructed here: no pipeline module builds a
-    # repository-relative path (`pipeline/CLAUDE.md`).
-    ap.add_argument("--gym-baseline", type=Path, required=True,
-                    help="the tracked directory holding the committed gym baselines")
+    # The gym's baselines live beside the sited courses' under the work root, because the gym now
+    # stands a real baked body and its recordings are therefore game-derived (CCC7). They are still
+    # measured recordings rather than regenerated expectations -- that is the property that lets the
+    # gym fail -- but they cannot be committed, so a regression check needs a completed export first.
+    ap.add_argument("--gym-baseline", type=Path, default=None,
+                    help="where the gym baselines live (default $ELYSIUM_EXPORT_ROOT/_move/baseline)")
     ap.add_argument("--out", type=Path, default=None,
                     help="the run directory (default $ELYSIUM_EXPORT_ROOT/_move)")
     ap.add_argument("--promote", action="store_true",
@@ -463,12 +465,13 @@ def main() -> int:
     args = ap.parse_args()
 
     out = args.out if args.out is not None else export_root() / "_move"
+    gym_baseline = args.gym_baseline if args.gym_baseline is not None else out / "baseline"
 
     if args.promote:
-        return cmd_promote(out, args.gym_baseline)
+        return cmd_promote(out, gym_baseline)
     if args.hz:
         return cmd_hz(out, args.hz)
-    return cmd_diff(out, args.gym_baseline)
+    return cmd_diff(out, gym_baseline)
 
 
 if __name__ == "__main__":

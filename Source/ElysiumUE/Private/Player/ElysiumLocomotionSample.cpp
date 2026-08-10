@@ -11,6 +11,39 @@ float RelativeYaw(float WorldYaw, float FacingYaw)
 	return FRotator::NormalizeAxis(WorldYaw - FacingYaw);
 }
 
+float AdvanceMoveYaw(FElysiumMoveYawFilter& Filter, float TargetYawDegrees, float Speed2D,
+	float DeltaSeconds)
+{
+	// Retail's re-arm window and slew rate, both function-local in the ordinary player selector.
+	constexpr float ReArmSeconds = 0.3f;
+	constexpr float DegreesPerSecond = 4.0f * 180.0f;
+
+	const float Delta = FMath::Max(DeltaSeconds, 0.0f);
+	if (!(Speed2D > UE_KINDA_SMALL_NUMBER))
+	{
+		// Not moving: nothing is written, so the parameter holds and the idle window runs. This is
+		// where the snap below is earned.
+		Filter.IdleSeconds += Delta;
+		return Filter.Value;
+	}
+
+	if (Filter.IdleSeconds <= ReArmSeconds)
+	{
+		// `FixedTurn` takes the short way round the wrap, which is the whole reason it is used here —
+		// but it answers in [0, 360), so the result is normalized back into the descriptor's own
+		// (-180, 180]. Left unnormalized a backpedalling body reads +184 where the fan wants -176,
+		// and the grid resolves the wrong cell only near the seam.
+		Filter.Value = FRotator::NormalizeAxis(
+			FMath::FixedTurn(Filter.Value, TargetYawDegrees, DegreesPerSecond * Delta));
+	}
+	else
+	{
+		Filter.Value = FRotator::NormalizeAxis(TargetYawDegrees);
+	}
+	Filter.IdleSeconds = 0.0f;
+	return Filter.Value;
+}
+
 FElysiumLocomotionSample FromCharacterMovement(const ACharacter& Body, float FacingYawDegrees)
 {
 	FElysiumLocomotionSample Out;
@@ -33,6 +66,9 @@ FElysiumLocomotionSample FromCharacterMovement(const ACharacter& Body, float Fac
 			static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(Velocity.Y, Velocity.X))),
 			Out.FacingYaw);
 	}
+	// Seeded unfiltered. A producer is a getter and may be called more than once a frame, so it
+	// cannot advance a rate; the body's driver replaces this with the slewed value once per frame.
+	Out.MoveYawPose = Out.MoveYawVelocity;
 
 	// The steering request, which is this path's analogue of the mover's wish direction: the path
 	// follower drives it through AddInputVector and it survives the move, where the input vector

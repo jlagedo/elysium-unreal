@@ -462,16 +462,19 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             launch.append("-MoveGym" if host == "gym" else "-ElysiumMap=sp_tutorial_1")
             if course:
                 launch.append(f"-MoveCourse={course}")
+            # Anything past the course and the rate reaches the editor verbatim, which is how
+            # `-MoveBody=<stem>` picks the body the gym stands and how a cvar is set for one run.
+            launch.extend(values[2:])
             if exec_cmds:
                 launch.append("-ExecCmds=" + ";".join(exec_cmds))
             _run(config, runner, editor, launch)
 
         # Recording without judging is what this harness did before: the comparator existed but
         # nothing ran it. Chained here, its verdict is the command's own exit code.
-        diff = [
-            "-m", "elysium_pipeline.validation.channel_diff",
-            "--gym-baseline", os.fspath(config.repo_root / "dev" / "baselines" / "move"),
-        ]
+        # No `--gym-baseline`: the gym stands a real baked body now, so its recordings are
+        # game-derived and live beside the sited courses' under the work root, which the comparator
+        # resolves for itself.
+        diff = ["-m", "elysium_pipeline.validation.channel_diff"]
         if promote:
             diff.append("--promote")
         _run(config, runner, os.fspath(Path(os.sys.executable)), diff)

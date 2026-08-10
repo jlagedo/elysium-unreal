@@ -182,6 +182,18 @@ public:
 	// run the same pure resolver over real sidecars.
 	FElysiumAnimationCatalog BuildCatalog(const FString& Stem);
 
+	// CCC7 — the three gait fans as per-direction speed tables, which is what the mover steers by.
+	//
+	// Resolved from the **un-relaxed** `ACT_WALK`/`ACT_RUN`/`ACT_SNEAK`, exactly as retail's
+	// `PreThink` extractor does (activities 9, 19 and 18), so no table depends on the gait currently
+	// selected or on where the body is pointing. That is what makes the set a property of the body
+	// rather than of the frame, and it is why the mover can be handed one on a body change instead of
+	// asking for one per tick.
+	//
+	// A gait that resolves to no fan leaves its table invalid rather than borrowing another's; the
+	// mover falls back to the constants per gait, not wholesale. Returns whether any gait resolved.
+	bool ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request, FElysiumGaitSpeeds& Out);
+
 	// Resolve one ACT_* request all the way through its character vocabulary and the owning bank's
 	// neutral blend-grid cell. OutLabel is the vocabulary key (for example `walk`) that preserves
 	// bank ownership for playback; OutAnimName is the concrete glb animation (`walk_0`), and the

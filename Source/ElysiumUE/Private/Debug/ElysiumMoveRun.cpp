@@ -95,7 +95,7 @@ namespace
 		TEXT("vx"), TEXT("vy"), TEXT("vz"), TEXT("speed2d"),
 		TEXT("onground"), TEXT("ducked"), TEXT("ducking"), TEXT("canunduck"),
 		TEXT("water"), TEXT("surffric"),
-		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"),
+		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"), TEXT("move_yaw"),
 		TEXT("act_code"), TEXT("act_route"), TEXT("act_outcome"), TEXT("act_asset"),
 		TEXT("air_phase"), TEXT("act_gen"), TEXT("act_stride"), TEXT("act_fade"),
 		TEXT("cam_boom"), TEXT("cam_damp"), TEXT("cam_pitch"), TEXT("cam_yaw"),
@@ -165,6 +165,25 @@ bool FElysiumMoveRun::BuildGym()
 	{
 		UE_LOG(LogElysiumMove, Error, TEXT("could not stand the gym up"));
 		return false;
+	}
+
+	// **The body the gym stands** (CCC7). Without one the speed authority has no tables and the whole
+	// run measures the constants fallback — which would make the promoted baselines a recording of
+	// the thing the rung replaced. It is the shipping `BuildPlayerVisual`, so the attachment, the
+	// hull offset, the mover tick prerequisite and the cached stem are the game's own.
+	//
+	// A body that will not build is not fatal: the run continues on the fallback, which is what a
+	// checkout with no character export gets, and the manifest records the empty stem so a recording
+	// made without a body cannot be mistaken for one made with it.
+	if (Body.Map)
+	{
+		FString Stem = TEXT("tremere_Male_Armor_0");
+		FParse::Value(FCommandLine::Get(), TEXT("MoveBody="), Stem);
+		if (Body.Map->BuildPlayerVisual(Stem, TEXT("Neutral"), 0) == nullptr)
+		{
+			UE_LOG(LogElysiumMove, Warning,
+				TEXT("no player body for '%s' — recording the constants fallback instead"), *Stem);
+		}
 	}
 
 	// The stage world freezes its body on arrival because a stage has no floor to stand on. The
@@ -355,6 +374,9 @@ void FElysiumMoveRun::Sample()
 	Recorder.Set(TEXT("act_asset"), static_cast<int32>(Sel.AssetKind));
 	Recorder.Set(TEXT("air_phase"), static_cast<int32>(Sel.AirPhase));
 	Recorder.Set(TEXT("act_gen"), static_cast<int32>(Sel.Generation));
+	// The pose parameter, off the same record. It comes from the driver rather than from the sample
+	// above because the slew is a rate the driver owns; the sample carries its unfiltered input.
+	Recorder.Set(TEXT("move_yaw"), Sel.MoveYaw);
 	Recorder.Set(TEXT("act_stride"), Sel.GroundSpeedCmPerSecond * Inv);
 	Recorder.Set(TEXT("act_fade"), Sel.FadeSeconds);
 
@@ -539,6 +561,17 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetConstant(TEXT("Accelerate"), T.Accelerate);
 		Recorder.SetConstant(TEXT("WalkSpeed"), ElysiumMove::WalkSpeed * Inv);
 		Recorder.SetConstant(TEXT("RunSpeed"), ElysiumMove::RunSpeed * Inv);
+		// Which speed authority produced this recording, and what the body's own fans answered under
+		// it (CCC7). The constants block is metadata and is never compared, so this is free — and it
+		// is what stops a recording made on the fallback being mistaken for one made on the animation.
+		Recorder.SetConstant(TEXT("AnimSpeedAuthority"),
+			UElysiumMovementComponent::IsAnimSpeedAuthorityEnabled() ? 1.0f : 0.0f);
+		Recorder.SetConstant(TEXT("GaitSpeedInterpolate"),
+			UElysiumMovementComponent::IsGaitSpeedInterpolationEnabled() ? 1.0f : 0.0f);
+		const FElysiumGaitSpeeds& Fans = Body.Move->GetGaitSpeeds();
+		Recorder.SetConstant(TEXT("GaitWalkForward"), Fans.Walk.Forward() * Inv);
+		Recorder.SetConstant(TEXT("GaitRunForward"), Fans.Run.Forward() * Inv);
+		Recorder.SetConstant(TEXT("GaitSneakForward"), Fans.Sneak.Forward() * Inv);
 	}
 	for (const TPair<const TCHAR*, float>& Override : Course.JumpOverrides)
 	{

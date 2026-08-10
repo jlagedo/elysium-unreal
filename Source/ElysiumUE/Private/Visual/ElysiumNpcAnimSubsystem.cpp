@@ -1,6 +1,7 @@
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMoveSolve.h"          // the sv_*scale constants the gait tables are built with
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
@@ -576,6 +577,73 @@ void UElysiumNpcAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& I
 				: Error;
 		}
 	}
+}
+
+bool UElysiumNpcAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request,
+	FElysiumGaitSpeeds& Out)
+{
+	Out = FElysiumGaitSpeeds();
+	if (!Request.IsValid())
+	{
+		return false;
+	}
+
+	// One catalog for all three gaits. The lookups behind it are cached per stem, but the view also
+	// carries the blend-table callback, and rebuilding it three times would re-enter those caches for
+	// an answer that cannot have changed between the calls.
+	const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
+
+	auto ResolveOne = [this, &Request, &Catalog](EElysiumAnimActivityCode Code, float Scale,
+		FElysiumGaitSpeedTable& Table) -> bool
+	{
+		FElysiumAnimationIntent Intent;
+		Intent.Stem = Request.Stem;
+		Intent.Activity = ElysiumAnimIntent::ActivityName(Code);
+		Intent.Variant = Request.Variant;
+		Intent.WeaponTag = Request.WeaponTag;
+		Intent.FormTag = Request.FormTag;
+		Intent.Source = EElysiumAnimSource::Player;
+		// A gait that resolves through the fallback ladder is not that gait. Reaching `walk` for a
+		// missing `sneak` and then calling its speeds the sneak table is exactly the silent
+		// substitution the record exists to prevent, and here it would also make the body move at
+		// walking pace while playing a crouch.
+		Intent.bAllowFallbackLadder = false;
+
+		FElysiumAnimationSelection Selection;
+		ElysiumAnimResolve::Resolve(Intent, Catalog, Selection);
+		if (Selection.SequenceLabel.IsEmpty() || Selection.OwnerStem.IsEmpty())
+		{
+			return false;
+		}
+		// The fan belongs to the bank the weighted pick landed in, not to the body — one body's walk
+		// and its run routinely come from different banks.
+		const TSharedPtr<const FElysiumBlendTable> Owner = GetBlendTable(Selection.OwnerStem);
+		if (!Owner.IsValid())
+		{
+			return false;
+		}
+		const FElysiumBlendGrid* Grid = Owner->Find(Selection.SequenceLabel);
+		if (Grid == nullptr)
+		{
+			return false;
+		}
+		return ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Scale, Table);
+	};
+
+	// `sv_walkscale` 1.0, `sv_runscale` 1.0, `sv_sneakscale` 2.3, and the rate multiplier on two of
+	// the three (`docs/vtmb/source_movement.md` -> "The scales, and the walk asymmetry").
+	const float Rate = FMath::IsFinite(Request.SpeedScale) ? FMath::Max(Request.SpeedScale, 0.0f) : 1.0f;
+	ResolveOne(EElysiumAnimActivityCode::Walk, ElysiumMove::WalkScale, Out.Walk);
+	ResolveOne(EElysiumAnimActivityCode::Run, ElysiumMove::RunScale * Rate, Out.Run);
+	ResolveOne(EElysiumAnimActivityCode::Sneak, ElysiumMove::SneakScale * Rate, Out.Sneak);
+
+	// Strafing left and strafing right command the same speed. A divergence, and the reason it is
+	// applied here rather than in the fan is that the fan is what the export says.
+	Out.Walk.Symmetrize();
+	Out.Run.Symmetrize();
+	Out.Sneak.Symmetrize();
+
+	return Out.IsValid();
 }
 
 bool UElysiumNpcAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,

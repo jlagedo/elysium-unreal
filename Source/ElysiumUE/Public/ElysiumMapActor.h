@@ -495,6 +495,10 @@ private:
 	// The stem the player visual was built from, kept so the driver can name its catalog without
 	// re-deriving it from the entity record every frame.
 	FString PlayerVisualStem;
+	// The driver's gait-table generation as last handed to the mover (CCC7). The push is on change
+	// rather than per frame, and the mover keeps the tables across a teleport because they belong to
+	// the body — so this is the only thing that has to remember whether it happened.
+	uint32 PushedGaitGeneration = 0;
 	void TickPlayerAnimation(float DeltaSeconds);
 
 	void LoadMap();

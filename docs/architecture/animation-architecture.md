@@ -332,6 +332,21 @@ speed, facing yaw, `move_yaw`, grounded/air/water state, stance, and the jump ph
 after movement and merged with the current action requests into the intent. The Anim Blueprint never
 reads input, AI controllers, entity fields or weapons directly.
 
+**`move_yaw` is three angles, not one.** The sample carries the commanded yaw and the realized one
+raw, and the **pose parameter** as a third field that follows the realized yaw through a 720 °/s
+slew, a 0.3 s re-arm and a hold at a standstill. The filter belongs to `FElysiumAnimationDriver`
+rather than to the sample, because it is a rate and a producer's sample is a getter a reader may
+take twice a frame; a producer therefore seeds the pose field unfiltered and the driver replaces it.
+The mover reads the *commanded* yaw for its speed cell and never the filtered one, or a turning
+body's speed would lag its direction.
+
+**The driver also owns the body's gait speed tables** (`docs/architecture/movement-architecture.md` →
+"The speed authority"). They key on the body — stem, weapon, form, variant — rather than on the
+frame, so they are re-resolved only when that key moves and pushed to the mover on change; a weapon
+swap therefore carries one frame of latency, which is deliberate and less than the network lag
+retail carries. The same tables build `FElysiumGaitReference`, so the classifier's walk/run threshold
+and the mover's commanded speed cannot come from two different numbers.
+
 **It is sampled in the post-move pass** — the one the camera director and the eye tick already run
 in — so no consumer reads a half-integrated frame. One struct, two producers, deliberately: the
 player's mover and the NPC motor fill the same record, so the cast's locomotion and the player's
@@ -377,20 +392,21 @@ phase-8 `ACT_LAND_CROUCH` request simply returning −1 — so a player miss res
 reported as a **named** miss with the activity and the body in the record. Substituting `ACT_LAND`
 for it would be inventing behaviour; naming the miss is what lets the graph declare a fallback.
 
-**Two locomotion-classification divergences, both shipped and both reconstructions.** The faithful
-behaviour is that the ordinary selector's compact code 1 chooses walk, run, sneak or their relaxed
-variants "from realized speed, flags and weapon state" (`docs/vtmb/animation_and_movers.md` A.3), and
-those flags are undecoded.
+**The locomotion ladder is recovered, and ours matches its shape.** Retail's runs ahead of the
+compact-code dispatch rather than inside code 1, and it is
+`ducked ? (speed2D > 5 u/s ? ACT_SNEAK : ACT_CROUCH) : (speed2D > T || commanded > T ? run : walk)`
+with `T` the body's own forward walk cell plus one unit
+(`docs/vtmb/animation_and_movers.md` → "The gait ladder runs ahead of the compact-code dispatch").
 
-- **`ACT_SNEAK` is reached from ducked-and-moving.** VtMB has no sneak input in the recovered command
-  surface, so the stance is what stands in for the undecoded flag. The evidence is the stride band:
-  the authored `sneak` cells run 69.7–79.3 cm/s and a ducked gait is a third of the base speed, which
-  is the same band. The stationary half is faithful — compact code 0 lists `ACT_CROUCH`.
-- **The walk/run split is taken from realized speed rather than the `+speed` key.** The body sample
-  carries no gait bit deliberately: the NPC producer has no user command to carry one, and one
-  contract with two producers cannot read something only one of them has. The consequence is visible
-  and stated — a body decelerating out of a run passes through the walk band on its way to idle, which
-  retail would not have shown. Hysteresis narrows that to a single crossing rather than a flicker.
+- **`ACT_SNEAK` from ducked-and-moving is faithful**, including the flat 5 u/s cut and the absence of
+  a walk/run split or a relaxed form below it.
+- **The walk/run split reads both speeds**, realized and commanded, which is retail's own
+  disjunction. The commanded term is what selects the run on the first frame of a full input instead
+  of after the body has accelerated into it. The body sample carries `CommandedSpeed` for it and
+  reports zero on a producer with no command, which is every NPC — so the cast is judged on realized
+  speed alone, as it must be.
+- **No gait memory.** `HysteresisFraction` defaults to zero because retail holds none and the
+  commanded term removed the flicker the margin existed to damp.
 
 Neither classifier threshold is an absolute speed: every one is a fraction of an injected walk/run
 reference, so the speed authority moving takes them with it rather than leaving numbers to find.

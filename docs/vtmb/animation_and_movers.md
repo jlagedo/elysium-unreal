@@ -293,12 +293,50 @@ are `hit_torso`, whose cells are named by direction word (`hit_torso_back`,
 `hit_torso_front_left`, …) instead of by angle. `hit_torso` is also the one fan of the 107 bound to
 pose parameter 1, `hit_yaw`; the other 106 are all on `move_yaw`.
 
-Which physical direction `move_yaw = 0` is, is **not established** by the cell placement alone
-[inferred]. `walk`'s 0 cell is its fastest and its 90 cell its slowest, which reads like
-forward against strafe — but a mirrored convention reproduces the same per-cell speeds, and
-neither `run` nor `sneak` repeats the ordering (`run`'s extremes sit at ±90, `sneak`'s fastest at
-−135). Reading the two yaws that the ordinary player selector differences before it writes the
-parameter is what settles it.
+### `move_yaw` is right-positive and zero is forward [VtMB decompiled]
+
+The ordinary player selector at `0x10164870` differences the body's own facing against the
+direction it is travelling, facing first:
+
+```c
+move_yaw = UTIL_AngleDiff( anglemod(GetAbsAngles().y), UTIL_VecToYaw(m_vecVelocity) );
+```
+
+`UTIL_AngleDiff(dest, src)` (`0x100097e6` → `FUN_1013d580`) returns `dest − src` wrapped to
+(−180, 180); `UTIL_VecToYaw` (`0x1000612c` → `FUN_101d2c70`) is `atan2(y, x)` in degrees folded
+to [0, 360). There is no negation anywhere on the path. **Facing is the minuend** — the deciding
+evidence is the push order at `0x101649c7`–`0x101649c8`, where `velYaw` is pushed before
+`bodyYaw`, so the last push, `arg0`, is the facing.
+
+Because Source's yaw is left-positive, that reversed subtraction makes the parameter
+**right-positive**: `+90` is a strafe right, `−90` a strafe left, `±180` the backpedal. Cell
+*k*=4 (`walk_0`) is therefore the **forward** clip and *k*=6 (`walk_90`) the strafe-right one,
+which is the reading the per-cell speeds suggest but cannot establish on their own — a mirrored
+convention reproduces the same speeds.
+
+The source is **realized velocity, not the commanded wish direction**: `m_vecVelocity` (`+0x3d4`),
+read in the post-movement `PostThink` path.
+
+Three behaviours ride on the same write:
+
+- **Raw degrees are passed** to `CBaseCombatCharacter::SetPoseParameter` (`FUN_1032fc50`), and the
+  descriptor does the remap inside `Studio_SetPoseParameter` (`FUN_100c43e0`), which wraps by
+  `v −= loop · floor((shift + v) / loop)` with `shift = (loop − start − end)/2`, then normalizes
+  to 0..1 against `start`..`end` and stores into `m_flPoseParameter[]` at `+0x690`.
+- **The write is slewed, not snapped**, when the previous one was recent: if
+  `curtime − 0.3 ≤` the last write's timestamp (`+0x2458`), the value approaches through
+  `UTIL_ApproachAngle` at `frametime × 4.0 × 180.0` = **720 °/s**. Otherwise it snaps. Both paths
+  agree on the cell, because `ApproachAngle` returns [0, 360) and the descriptor folds it back.
+- **A stationary body holds its last `move_yaw`.** The whole block is gated on `speed2D > 0`, so
+  nothing is written and the parameter does not return to zero.
+
+The parameter index is resolved by `LookupPoseParameter("move_yaw")` on every call rather than
+hardcoded, and the selector is the only writer of the parameter by name on the player path — the
+seven other `.text` references to the string are in the AI tree, and the one sampled
+(`0x1029d655`) is a debug overlay reader.
+
+`aim_yaw` is written as the literal `0.0f` here; `aim_pitch` comes from a separate field
+(`+0x206c`, unnamed — it carries no datamap record). Neither is computed from the pair above.
 
 ### The activity name is the selection key [data-verified]
 
@@ -367,7 +405,7 @@ the complete native caller surface give this map [VtMB decompiled]:
 | Code | Compiled name | Producer and selector policy |
 |---:|---|---|
 | `0` | `PLAYER_IDLE` | grounded stationary classifier or forced-idle helper; `ACT_AIM` for an eligible weapon, otherwise ducked `ACT_CROUCH`, else `ACT_IDLE` |
-| `1` | `PLAYER_WALK` | grounded nonzero horizontal velocity or movement helper; ducking selects `ACT_SNEAK`, otherwise realized speed and weapon state select walk/run or their relaxed variants |
+| `1` | `PLAYER_WALK` | grounded nonzero horizontal velocity or movement helper; no distinct selector branch — the gait ladder below runs ahead of the dispatch and stands |
 | `2` | `PLAYER_JUMP` | positive jump/landing state out of water or the jump helper; phases 1…11 select `ACT_HOP*`, `ACT_LEAP*`, `ACT_FALLING` and the land family |
 | `3` | `PLAYER_SUPERJUMP` | no classifier edge, native caller, retained-latch writer or effective `Player_Anim` value; no distinct ordinary-selector branch |
 | `4` | `PLAYER_DIE` | the player death routine at `0x10163af0`; death/protected activity ownership precedes the ordinary selector, which has no distinct code-4 branch |
@@ -409,6 +447,66 @@ numeric identities independently fixed by the global registration table:
 Presence in this selector does not prove a branch is reachable in shipped gameplay. In particular,
 the activity inventory is broader than the reconstructed movement system, so a controlled trace is
 what separates a live action from inherited/dead engine code.
+
+### The gait ladder runs ahead of the compact-code dispatch [VtMB decompiled]
+
+The idle/crouch/sneak/walk/run choice is **not** inside a compact code's arm. The selector computes
+it unconditionally right after the pose-parameter writes, and codes `0`, `1` and `-1` match no arm,
+so it survives to the apply path verbatim:
+
+```c
+float speed2D = hypot(m_vecVelocity.x, m_vecVelocity.y);
+float T       = m_flWalkForwardSpeeds[4] + 1.0f;          // ESI+0x1bd4, + _DAT_104454c0
+
+act = ACT_IDLE;
+if (GetActiveWeapon() && stricmp(weapon->classname, "item_w_unarmed") != 0
+    && IsInCombatStance() && !m_bIsMorphed)               act = ACT_AIM;
+
+if (speed2D <= 5.0f)                                      // _DAT_10454110
+    { if (GetFlags() & FL_DUCKING) act = ACT_CROUCH; }
+else if (GetFlags() & FL_DUCKING)                         act = ACT_SNEAK;
+else if (speed2D > T || cmdMoveMag > T)                   act = ACT_RUN;
+else                                                      act = ACT_WALK;
+// unarmed-or-out-of-combat maps RUN → ACT_RUN_RELAXED, WALK → ACT_WALK_RELAXED
+```
+
+Five facts in that ladder are load-bearing:
+
+- **The walk/run discriminator is a speed comparison, not a button.** No `IN_SPEED` bit and no
+  user-command flag is read anywhere in the branch. The `+speed` key reaches the gait only by
+  changing `forwardmove` (`docs/vtmb/source_movement.md` → "Player speed is animation-driven").
+- **Two speeds are tested, disjunctively.** `speed2D` is realized velocity; `cmdMoveMag`
+  (`+0x19ec`) is `hypot(forwardmove, sidemove)`, written in `CPlayerMove::SetupMove` at
+  `0x10186446` and refreshed per user command. Because the client writes an absolute animation
+  speed into those axes, the two are directly comparable against `T`. The commanded term goes
+  non-zero on the first frame of a full-throttle input, so the run is selected immediately rather
+  than after the body accelerates past `T`; the realized term only decides while coasting with the
+  command released.
+- **`T` is per-model, not a constant** — cell 4 of the body's own `ACT_WALK` fan, the `move_yaw = 0`
+  forward cell, scaled by `sv_walkscale`. On `tremere_Male_Armor_0` that is 53.8 u/s, so `T` ≈ 54.8.
+- **No gait memory and no hysteresis.** Every operand is recomputed each call; the `+1.0` is a fixed
+  additive offset applied identically in both directions and creates no band. The only stored state
+  on the path is `m_aLastplayerAnim` (`+0x1cb4`), replayed only while
+  `m_bPlayerAnimCyclePlaying` (`+0x1cb0`) is set, which is a scripted-cycle hold rather than a gait.
+- **The ducked branch is a flat two-state ladder** — `ACT_SNEAK` above 5.0 u/s and `ACT_CROUCH`
+  below, at any speed, with no walk/run split and no relaxed variant.
+
+Two consequences follow from the ladder's placement. An **airborne** body (code `-1`) with
+horizontal velocity is run through it too, so `ACT_RUN`/`ACT_SNEAK` is requested mid-air unless a
+jump-phase arm overrides; and the `ACT_LEAP` arms test for the gait explicitly at `0x10164cd0`
+(comparing against `ACT_WALK`/`ACT_RUN` and their relaxed forms) to preserve it, otherwise deriving
+`ACT_LAND` or `ACT_LAND_CROUCH` from `FL_DUCKING`.
+
+`IsInCombatStance` is virtual slot `+0x66c` (`0x1015ff40`): true while morphed, true for five
+seconds after the last melee-opponent contact (`m_flLastCombatAnimTime`, `+0x19b0`). The weapon
+test is `GetActiveWeapon() != NULL` plus a classname compare against `item_w_unarmed`; since the
+player always carries an unarmed entry, `IsInCombatStance` is the real discriminator.
+
+`m_fFlags` is `+0x434` (`CBaseEntity::GetFlags`, `0x100b3700`), bit 0 ground and bit 1 ducking
+— the bit *meanings* are recovered from behaviour, the `FL_*` spellings are conventional
+[inferred], as the image carries no `FL_` strings. `m_bIsMorphed` is `+0x1edc`, set by the Protean
+paths that spawn `npc_VWolfMorph` and `D_ProteanTransform_Emitter` and swap the model, cleared on
+un-morph; the name is this project's, the state is recovered.
 
 Activity translation is a second compiled-data layer. `CBaseCombatCharacter::Weapon_TranslateActivity`
 at `0x10327ec0` asks the active weapon's virtual `+0x5a4` for an override. A weapon exposes the same

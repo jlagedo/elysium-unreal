@@ -55,6 +55,11 @@ namespace
 	  true,  TEXT("the commanded direction, relative to facing") },
 	{ TEXT("move_yaw_vel"),  TEXT("anim"), EScope::Frame, EKind::Angle, 1.0f, 3, TEXT("deg"),
 	  true,  TEXT("the realized velocity's direction, relative to facing") },
+	// And the pose parameter itself, which is neither of them: the realized yaw after the 720 deg/s
+	// slew, the 0.3 s re-arm and the hold at a standstill. Recorded beside its own input so a stride
+	// that lags the body reads as the filter doing its job rather than as the resolver picking wrong.
+	{ TEXT("move_yaw"),      TEXT("anim"), EScope::Frame, EKind::Angle, 1.0f, 3, TEXT("deg"),
+	  true,  TEXT("the pose parameter the grid is steered by: move_yaw_vel, slewed and held") },
 
 	// --- The animation producer, per frame (CCC4) -----------------------------------------------
 	// Every discrete value rides as an enum ordinal under `Exact`, so a state flip is a behaviour

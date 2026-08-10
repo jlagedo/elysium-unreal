@@ -319,3 +319,88 @@ FElysiumBlendPick ElysiumBlendGrids::SelectCell(const FElysiumBlendGrid& Grid,
 	Pick.Cell = Cell;
 	return Pick;
 }
+
+bool ElysiumBlendGrids::SpeedFan(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table,
+	float Scale, FElysiumGaitSpeedTable& Out)
+{
+	Out = FElysiumGaitSpeedTable();
+
+	const int32 Count = Grid.GroupSize[0];
+	if (Count < 2 || Count > FElysiumGaitSpeedTable::MaxCells || Grid.GroupSize[1] > 1)
+	{
+		return false;
+	}
+	const FElysiumPoseParamDesc* Desc = Table.Param(Grid.ParamIndex[0]);
+	if (Desc == nullptr)
+	{
+		return false;
+	}
+
+	// A gait fan is the whole circle. A grid using part of a parameter's range is a legal shape the
+	// format allows and no shipped locomotion fan uses, and a speed table indexed by a wrapped angle
+	// cannot answer for one.
+	const float Span = Grid.ParamEnd[0] - Grid.ParamStart[0];
+	if (FMath::IsNearlyZero(Desc->Loop) || !FMath::IsNearlyEqual(Span, Desc->Loop, 0.01f))
+	{
+		return false;
+	}
+
+	float Authored[FElysiumGaitSpeedTable::MaxCells] = {};
+	bool bAuthored[FElysiumGaitSpeedTable::MaxCells] = {};
+	int32 Usable = 0;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		const FElysiumBlendCell* Cell = Grid.CellAt(Index, 0);
+		if (Cell != nullptr && Cell->Motion.IsUsable())
+		{
+			Authored[Index] = Cell->Motion.GroundSpeedCmPerSecond;
+			bAuthored[Index] = true;
+			++Usable;
+		}
+	}
+	if (Usable == 0)
+	{
+		return false;
+	}
+
+	// Fill the holes from the nearest authored cell on either side, weighted by how far each is.
+	// The walk round the fan wraps, so a hole at the seam reads from both ends rather than from one.
+	if (Usable < Count)
+	{
+		float Filled[FElysiumGaitSpeedTable::MaxCells] = {};
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			if (bAuthored[Index])
+			{
+				Filled[Index] = Authored[Index];
+				continue;
+			}
+			int32 Back = 0;
+			int32 BackIndex = Index;
+			do
+			{
+				BackIndex = (BackIndex - 1 + Count) % Count;
+				++Back;
+			} while (!bAuthored[BackIndex]);
+
+			int32 Forward = 0;
+			int32 ForwardIndex = Index;
+			do
+			{
+				ForwardIndex = (ForwardIndex + 1) % Count;
+				++Forward;
+			} while (!bAuthored[ForwardIndex]);
+
+			const float Alpha = static_cast<float>(Back) / static_cast<float>(Back + Forward);
+			Filled[Index] = FMath::Lerp(Authored[BackIndex], Authored[ForwardIndex], Alpha);
+		}
+		FMemory::Memcpy(Authored, Filled, sizeof(Authored));
+	}
+
+	FMemory::Memcpy(Out.Cells, Authored, sizeof(Authored));
+	Out.Count = Count;
+	Out.AxisMin = Grid.ParamStart[0];
+	Out.AxisMax = Grid.ParamEnd[0];
+	Out.Scale = Scale;
+	return Out.IsValid();
+}

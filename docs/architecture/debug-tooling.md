@@ -375,13 +375,14 @@ column, a numeric channel with no usable tolerance, a channel the baseline has a
 tolerance could widen its own bar. `--promote` makes the current runs the baseline; `--hz` does the
 cross-rate comparison by elapsed time rather than by frame index.
 
-**Two baseline roots.** Gym runs happen in an empty stage world on geometry derived from this
-repository's own constants, so nothing game-derived is in them and their manifests are **committed**
-to `dev/baselines/move/`. What is compared there is the **run** channels — how far the body got, how
-high it stood or reached — which are written to saturate and are therefore the same at any gait. A
-per-frame trace is not, so committing one would turn every gym course red the day `CCC7` settles the
-speed authority. Sited runs are game-derived, so their baseline stays under the gitignored
-`_move/baseline/` and is compared in full, frame rows included.
+**One baseline root, `$ELYSIUM_EXPORT_ROOT/_move/baseline/`, and it is gitignored.** Gym runs happen
+in an empty stage world on geometry derived from this repository's own constants, but the body
+standing on that geometry is a real baked one — `-MoveBody=<stem>` picks it — because a gym driving a
+body with no animation measures the constants fallback instead of the speed authority. That makes the
+recordings game-derived like the sited ones. What a gym baseline compares is still the **run**
+channels — how far the body got, how high it stood or reached — which are written to saturate and are
+therefore the same at any gait; a per-frame trace is not, and is deferred. Sited runs are compared in
+full, frame rows included.
 
 The command stream is deterministic and frame-pinned, which is what makes this the acceptance surface
 for the whole player-feel vertical rather than for movement alone: **camera and animation channels

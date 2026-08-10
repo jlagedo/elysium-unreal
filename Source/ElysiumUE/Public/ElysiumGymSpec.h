@@ -42,9 +42,15 @@ namespace ElysiumGym
 	// compares **saturates** — a body either climbs a riser or is stopped by it, and either answer
 	// is the same at any gait — but only if the course is long enough to reach the feature *and*
 	// the wall past it at the slowest speed the mover can produce. A lane is about 700 units end to
-	// end, which is 7 s even at the walk. `CCC7` can halve the speed the body actually moves at;
-	// this margin is what keeps the speed-invariant answers invariant when it does.
+	// end, which is 7 s even at the walk.
 	inline constexpr float ApproachSeconds = 10.0f;
+
+	// The ducked families need their own, and the number is not a matter of taste. A lane's 656
+	// travelable units divided by this hold is the slowest gait that still saturates: at 10 s that
+	// is 65.6 u/s, and the authored forward sneak cell is **65.3** — just under it, which would put
+	// three permanently-committed `advance_max` values a hair off saturation and make them move with
+	// the gait. At 16 s the floor is 41 u/s, which no authored crouch approaches.
+	inline constexpr float DuckApproachSeconds = 16.0f;
 
 	// What a lane exercises. The geometry is here; the command stream that drives it is the course
 	// table's (`ElysiumMoveCourses.h`), and this enum is the only join between them — so adding a

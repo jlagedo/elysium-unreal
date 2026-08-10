@@ -35,6 +35,28 @@ static TAutoConsoleVariable<float> CVarJumpHoldSeconds(
 	TEXT("Seconds the jump's upward push is sustained while held. 0 = rules.txt JumpHoldTime."),
 	ECVF_Default);
 
+// The speed authority A/B (CCC7). VtMB's player speed is the animation's own per-direction cell
+// speed; `speed_walk`/`speed_runbase` are registered-but-never-read in the retail build, which makes
+// the constants the *port's* baseline rather than the game's.
+static TAutoConsoleVariable<int32> CVarAnimSpeedAuthority(
+	TEXT("elysium.move.AnimSpeedAuthority"),
+	1,
+	TEXT("1 = the body's speed comes from the animation's per-direction cell speeds (faithful). ")
+	TEXT("0 = Troika's stated speed_walk/speed_runbase constants, which the retail build never ")
+	TEXT("reads. The A/B for the whole speed seam, air and water included."),
+	ECVF_Default);
+
+// Whether a direction between two cells blends them or snaps to the nearer. Retail snaps, because
+// its speed comes from a 3x3 digital key table and can never land between two cells; a stick can,
+// and on the walk fan the cells differ by more than 2x, so snapping reads as the stride popping.
+// A divergence, and the shipped default.
+static TAutoConsoleVariable<int32> CVarGaitSpeedInterpolate(
+	TEXT("elysium.move.GaitSpeedInterpolate"),
+	1,
+	TEXT("1 = interpolate the animation's cell speed across the move_yaw fan (a Feel divergence; ")
+	TEXT("what an analog stick needs). 0 = snap to the nearest cell, which is retail's behaviour."),
+	ECVF_Default);
+
 UElysiumMovementComponent::UElysiumMovementComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -45,8 +67,22 @@ UElysiumMovementComponent::UElysiumMovementComponent()
 	PrimaryComponentTick.TickGroup = TG_PrePhysics;
 }
 
+bool UElysiumMovementComponent::IsAnimSpeedAuthorityEnabled()
+{
+	return CVarAnimSpeedAuthority.GetValueOnAnyThread() != 0;
+}
+
+bool UElysiumMovementComponent::IsGaitSpeedInterpolationEnabled()
+{
+	return CVarGaitSpeedInterpolate.GetValueOnAnyThread() != 0;
+}
+
 float UElysiumMovementComponent::GetMaxSpeed() const
 {
+	// **The ceiling, not the gait.** This is retail's `m_flMaxspeed`: the peak over every cell of
+	// every gait table, published for `UNavMovementComponent`'s contract and for readouts, and read
+	// by nothing inside the solve — which asks `WishSpeed()` for a direction instead. The peak is
+	// >= every cell by construction, so a clamp against it can never fire.
 	if (bNoclip)
 	{
 		return ElysiumMove::NoclipSpeed * (PendingCmd.IsDown(EElysiumButton::Speed) ? ElysiumMove::NoclipBoost : 1.0f);
@@ -55,14 +91,40 @@ float UElysiumMovementComponent::GetMaxSpeed() const
 	{
 		return Tuning.JumpMaxSpeed;
 	}
-	// `+speed` selects the *slow* gait: the run is the default, holding the key walks.
-	const float Base = PendingCmd.IsDown(EElysiumButton::Speed)
-		? ElysiumMove::WalkSpeed : ElysiumMove::RunSpeed;
-	// Source's duck speed is a third of the gait — `sv_sneakscale` 2.3 divides it in the retail
-	// PreThink, but that path is animation-driven (`docs/vtmb/source_movement.md` § "Player speed is
-	// animation-driven"), so this is the one movement number still standing on Source's own default
-	// rather than a read-out VtMB value. Marked so it is not mistaken for RE'd.
-	return (bDucked || bDucking) ? Base / 3.0f : Base;
+	if (IsAnimSpeedAuthorityEnabled() && GaitSpeeds.IsValid())
+	{
+		return GaitSpeeds.Peak();
+	}
+	return FMath::Max(ElysiumMove::WalkSpeed, ElysiumMove::RunSpeed);
+}
+
+const FElysiumGaitSpeedTable& UElysiumMovementComponent::GaitTableForCommand() const
+{
+	return ElysiumGait::TableFor(GaitSpeeds, bDucked || bDucking,
+		PendingCmd.IsDown(EElysiumButton::Speed));
+}
+
+float UElysiumMovementComponent::WishSpeed(const FVector& WishDir, float Scale) const
+{
+	FElysiumWishSpeedInput In;
+	In.bNoclip = bNoclip;
+	In.bOnGround = bOnGround;
+	In.bDucked = bDucked || bDucking;
+	In.bWalkKey = PendingCmd.IsDown(EElysiumButton::Speed);
+	In.bAuthority = IsAnimSpeedAuthorityEnabled();
+	In.bInterpolate = IsGaitSpeedInterpolationEnabled();
+	// The **commanded** direction, not the realized one: retail picks the cell from the keys being
+	// held, before the move integrates. The pose parameter the graph steers on is a different angle
+	// and is deliberately filtered; this one never is.
+	In.WishYawDegrees = ElysiumLocomotion::RelativeYaw(
+		static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(WishDir.Y, WishDir.X))),
+		static_cast<float>(ViewFrame().Yaw));
+	In.Scale = Scale;
+	In.LastGroundedWishSpeed = LastGroundedWishSpeed;
+	In.JumpMaxSpeed = Tuning.JumpMaxSpeed;
+	In.NoclipSpeed = ElysiumMove::NoclipSpeed
+		* (In.bWalkKey ? ElysiumMove::NoclipBoost : 1.0f);
+	return ElysiumGait::WishSpeedFrom(In, GaitSpeeds);
 }
 
 void UElysiumMovementComponent::SetNoclip(bool bEnable)
@@ -92,6 +154,10 @@ void UElysiumMovementComponent::ResetState()
 	LastSample = FElysiumLocomotionSample();
 	CapturedWish = FVector::ZeroVector;
 	CapturedWishScale = 0.0f;
+	// The gait tables survive a teleport — they belong to the body, not to where it is standing —
+	// but the speed carried out of the last frame does not.
+	LastGroundedWishSpeed = 0.0f;
+	CommandedSpeed = 0.0f;
 
 	// Stand up if we were crouched, so the hull the body arrives with is the standing one. The
 	// retained request has to be cleared with it: a toggle survives a keypress by design, so a body
@@ -166,6 +232,9 @@ void UElysiumMovementComponent::PublishLocomotionSample(bool bSolved)
 			static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(Velocity.Y, Velocity.X))),
 			LastSample.FacingYaw)
 		: 0.0f;
+	// Seeded unfiltered, for the same reason as the cast's: the slew is a rate and belongs to the
+	// once-a-frame driver, not to a sample a readout may take twice.
+	LastSample.MoveYawPose = LastSample.MoveYawVelocity;
 
 	// The wish the solve actually used, captured in `WishDirection` rather than re-derived here.
 	// `bSolved` is false on the frozen path, where no move function ran: a body nailed to the floor
@@ -189,6 +258,11 @@ void UElysiumMovementComponent::PublishLocomotionSample(bool bSolved)
 		LastSample.MoveYawWish = 0.0f;
 		LastSample.WishScale = 0.0f;
 	}
+
+	// What the solve was commanded, for the classifier's `cmdMoveMag` term. It rides the same
+	// `bSolved` gate as the wish, and for the same reason: a frozen body commanded nothing that took
+	// effect, and reporting last frame's would have it break into a run standing still.
+	LastSample.CommandedSpeed = bSolved ? CommandedSpeed : 0.0f;
 
 	// The body's own answer, not `CategorizePosition`'s raw one: a noclipping body is flying, and a
 	// graph asking whether it is grounded wants that to be false.
@@ -278,7 +352,13 @@ void UElysiumMovementComponent::WalkMove(float DeltaTime)
 	// then hands over. The vertical component is dropped first, so a walk is planar.
 	float Scale = 0.0f;
 	const FVector WishDir = WishDirection(PendingCmd, Scale);
-	ElysiumMove::ApplyAccelerate(Velocity, WishDir, GetMaxSpeed() * Scale, Tuning.Accelerate,
+	const float Commanded = WishSpeed(WishDir, Scale);
+	// What an airborne body keeps commanding, because retail's tables stop refreshing for the jump.
+	// Written from the grounded solve rather than from `CategorizePosition`, so it is the speed that
+	// was actually integrated and not the one the state says should have been.
+	LastGroundedWishSpeed = Commanded;
+	CommandedSpeed = Commanded;
+	ElysiumMove::ApplyAccelerate(Velocity, WishDir, Commanded, Tuning.Accelerate,
 		SurfaceFriction, DeltaTime);
 	Velocity.Z = 0.0f;
 
@@ -490,7 +570,8 @@ void UElysiumMovementComponent::NoclipMove(float DeltaTime)
 {
 	float Scale = 0.0f;
 	const FVector WishDir = WishDirection(PendingCmd, Scale);
-	Velocity = WishDir * GetMaxSpeed() * Scale;
+	CommandedSpeed = WishSpeed(WishDir, Scale);
+	Velocity = WishDir * CommandedSpeed;
 	// No sweep: the point of noclip is to pass through geometry, and the pawn has already dropped
 	// its collision.
 	MoveUpdatedComponent(Velocity * DeltaTime, UpdatedComponent->GetComponentQuat(), /*bSweep*/ false);
@@ -664,9 +745,10 @@ void UElysiumMovementComponent::AirMove(float DeltaTime)
 {
 	float Scale = 0.0f;
 	const FVector WishDir = WishDirection(PendingCmd, Scale);
-	const float WishSpeed = GetMaxSpeed() * Scale;
+	const float AirWishSpeed = WishSpeed(WishDir, Scale);
+	CommandedSpeed = AirWishSpeed;
 
-	ElysiumMove::ApplyAirAccelerate(Velocity, WishDir, WishSpeed, Tuning.AirAccel,
+	ElysiumMove::ApplyAirAccelerate(Velocity, WishDir, AirWishSpeed, Tuning.AirAccel,
 		Tuning.AirSpeedCap, SurfaceFriction, DeltaTime);
 
 	// The air move slides against geometry too — it just never runs the step attempt.
@@ -684,7 +766,7 @@ void UElysiumMovementComponent::WaterMove(float DeltaTime)
 	// has to be the one the solve used, and a planar re-derivation would disagree here and nowhere
 	// else.
 	FVector WishDir = WishDirection(PendingCmd, Scale, /*bForcePitch*/ true);
-	float WishSpeed = GetMaxSpeed() * Scale;
+	float SwimSpeed = WishSpeed(WishDir, Scale);
 
 	if (Scale <= 0.0f && PendingCmd.Buttons == 0)
 	{
@@ -692,12 +774,13 @@ void UElysiumMovementComponent::WaterMove(float DeltaTime)
 		// the sink is a water-locomotion state, not something the player asked for, and reporting it
 		// as the wish would read an idle swimmer as pressing down.
 		WishDir = -FVector::UpVector;
-		WishSpeed = ElysiumMove::WaterSinkSpeed;
+		SwimSpeed = ElysiumMove::WaterSinkSpeed;
 	}
-	WishSpeed *= ElysiumMove::WaterSpeedScale;
+	SwimSpeed *= ElysiumMove::WaterSpeedScale;
+	CommandedSpeed = SwimSpeed;
 
 	ElysiumMove::ApplyWaterFriction(Velocity, Tuning.Friction, SurfaceFriction, DeltaTime);
-	ElysiumMove::ApplyAccelerate(Velocity, WishDir, WishSpeed, Tuning.Accelerate,
+	ElysiumMove::ApplyAccelerate(Velocity, WishDir, SwimSpeed, Tuning.Accelerate,
 		SurfaceFriction, DeltaTime);
 
 	TryPlayerMove(Velocity * DeltaTime);

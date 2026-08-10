@@ -35,27 +35,31 @@ capability slices → animation → vertical slice, with animation deliberately 
 cannot flatter a bad input curve. **This project cannot run that order unmodified, and the reason is
 recovered rather than stylistic.**
 
-VtMB's `CHL2_Player::PreThink` sets `m_flMaxSpeed` from the **current sequence's own root motion**
-(`docs/vtmb/source_movement.md` → "Player speed is animation-driven"). The animation is the
-movement's speed authority. Our mover instead reads `ElysiumMove::WalkSpeed`/`RunSpeed` — Troika's
-stated 100/225 u/s, which are dead ConVars in the retail build — and the authored cells disagree by
-roughly half (`walk_0` is 53.8 u/s). So the Character rung cannot be closed before the animation
-rung: `CCC7` re-opens what `4.7` settled, by design.
+VtMB has **no scalar player gait speed at all**. `CHL2_Player::PreThink` builds six networked
+per-direction speed tables from the model's own 9×1 locomotion fans, and the client writes one
+cell's absolute speed into `forwardmove`/`sidemove`; `m_flMaxspeed` is the peak over all 24 cells
+and serves only as a clamp ceiling (`docs/vtmb/source_movement.md` → "Player speed is
+animation-driven"). The animation is the movement's speed authority, **at the input seam**. Our
+mover instead reads `ElysiumMove::WalkSpeed`/`RunSpeed` — Troika's stated 100/225 u/s, which are
+dead ConVars in the retail build — and the authored cells disagree by roughly half (`walk_0` is
+53.8 u/s). So the Character rung cannot be closed before the animation rung: `CCC7` re-opens what
+`4.7` settled, by design.
 
 | Rung | Canonical step | Where this project stands |
 |---|---|---|
-| Character math | 1 | `4.7 [x]` — ported line-by-line, `Elysium.Substrate.Movement` green. Its **speed authority is open**, and its world half — `StepMove`, `CategorizePosition`, the jump against real geometry — is asserted nowhere; the gym is the unfinished half of the rung |
+| Character math | 1 | `4.7 [x]` — ported line-by-line, `Elysium.Substrate.Movement` green. Its **speed authority closed at `CCC7`**, and its world half — `StepMove`, `CategorizePosition`, the jump against real geometry — is bracketed by the gym |
 | Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig behind `elysium.ModernCamera` (**default 1** — owner call; both rigs still solve and record every frame, so the A/B is intact and the co-tune is still outstanding) |
-| Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, deliberately after `CCC7` settles the speed |
+| Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, and now unblocked: `CCC7` has settled the speed |
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
 | Real animation | 6 | `CCC4 [x]` the intent, resolver and selection record; `CCC5 [x]` the graph, `CCC6 [x]` the green room driving it on the gym floor |
 | Vertical slice | 7 | `CCC8` |
 
-**The gym splits its assertions by whether `CCC7` can move them**, which is what lets the Character
-rung be partly closed now despite the inversion:
+**The gym splits its assertions by whether the speed authority can move them**, which is what let the
+Character rung be partly closed ahead of the inversion and what now proves the inversion did not
+disturb collision:
 
-| Speed-invariant — baseline at `CCC0`, permanently | Speed-dependent — baseline only after `CCC7` |
+| Speed-invariant — baselined permanently | Speed-dependent — baselined from `CCC7` |
 |---|---|
 | the 18u step cliff, bracketed 16/17/**18**/19/20/24 | horizontal gap clearance |
 | the 25u `sv_jump_boost` pop and the 43u crouch-jump ceiling | every course completion time |
@@ -79,9 +83,9 @@ Three ordering facts are load-bearing. The sample is published at the mover's ti
 last substep, so no consumer reads a half-integrated frame. The player mesh ticks after the mover —
 a tick prerequisite installed where the visual is attached — and `Elysium.Substrate.FrameOrder`
 grows one assertion per rung as each stage lands, so the order is asserted rather than assumed. And
-the selection feeds `GetMaxSpeed` one frame stale, which is retail's own shape — `PreThink` reads
-the *currently playing* sequence, the previous frame's choice — so that latency is faithful, not a
-defect to engineer away.
+the speed the animation supplies is read **before** the solve, not after: retail's `PreThink` runs
+ahead of `PlayerMove` in the same command and re-resolves all three gait activities from scratch,
+never consulting `m_nSequence`, so there is no one-frame selection lag to preserve.
 
 ## Phases — two lanes off one gate
 
@@ -98,8 +102,8 @@ trace, a bake) is a context switch rather than a slice stall.
 | | `CCC5 [x]` — the player graph |
 | | `CCC6 [x]` — drive it |
 
-The lanes join at `CCC7` (the speed authority), the co-tune half of `CCC3`, and `CCC8`; `CCC9`
-retires what they replaced.
+The lanes joined at `CCC7 [x]` (the speed authority) and join again at the co-tune half of `CCC3`
+and at `CCC8`; `CCC9` retires what they replaced.
 
 - [~] **CCC0 The instrument.** A code-built gym generated from `ElysiumMove`'s own constants, so a
   riser, ledge, slope or ceiling brackets the threshold it tests and cannot drift from the spec.
@@ -114,9 +118,10 @@ retires what they replaced.
   channel, so registering a channel *is* registering its comparison, and a camera regression rides
   the same deterministic runs as a movement one. Camera and animation channels join when their
   producers land (`CCC2`, `CCC1`/`CCC4`), into this recorder and never a second format.
-  **Baselines are committed recordings, never regenerated expectations** — an expectation rebuilt
+  **Baselines are measured recordings, never regenerated expectations** — an expectation rebuilt
   from the same constants as the geometry moves with the geometry, and a gym that regenerates both
-  can never turn red. The sited `sp_tutorial_1` course coordinates are surveyed here — the course
+  can never turn red. They live under `$ELYSIUM_EXPORT_ROOT/_move/baseline/` and are gitignored:
+  `CCC7` stands a real baked body on the gym floor, which makes every recording game-derived. The sited `sp_tutorial_1` course coordinates are surveyed here — the course
   table marks them placeholders in code. Design: `docs/architecture/movement-architecture.md`;
   harness: `docs/architecture/debug-tooling.md`.
   *Acceptance:* the speed-invariant thresholds above are baselined as committed recordings; moving
@@ -127,9 +132,8 @@ retires what they replaced.
   stage world, `ElysiumGymSpec.h` + `ElysiumGymBuilder.h`), the
   named-channel recorder and its manifest (`ElysiumChannels.h` + `FElysiumChannelRecorder`), the
   channel differ chained into `debug move` with its five refusals
-  (`validation/channel_diff.py`), a committed gym baseline per lane in `dev/baselines/move/` that
-  reproduces byte-for-byte, and the red test both ways — `StepSize` reddens only the riser lanes and
-  `StandableZ` only the slope lanes. `elysium.playerpos` sites a course the way `elysium.campos`
+  (`validation/channel_diff.py`), a gym baseline per lane that reproduces byte-for-byte, and the red
+  test both ways — `StepSize` reddens only the riser lanes and `StandableZ` only the slope lanes. `elysium.playerpos` sites a course the way `elysium.campos`
   sites a vantage. The five open-floor `sp_tutorial_1` courses are surveyed onto real warehouse floor
   and confirmed headless.
   *Remaining:* three sited feature courses. `stairs`, `slope` and `doorway` carry surveyed
@@ -306,8 +310,9 @@ retires what they replaced.
   emits only the channels a run opened, so a producer that writes rows nothing else writes is free;
   the 33 gym baselines came back byte-identical and the commit adds ten files rather than rewriting
   forty-three.
-  *Remaining:* the **co-tune**, and only the co-tune. It is gated on `CCC7` by design — tuning
-  against a walk speed the speed authority may halve is paid for twice — and it touches
+  *Remaining:* the **co-tune**, and only the co-tune. It was gated on `CCC7` by design — tuning
+  against a walk speed the speed authority may halve is paid for twice — and that gate is now open:
+  the forward gaits are 53.8 / 188.5 / 65.3 u/s. It touches
   `ElysiumRig::FElysiumCameraRigTuning` and `elysium.ModernCamera`'s default, never the `cam_*`
   console store, or the A/B stops being a comparison.
 
@@ -503,7 +508,7 @@ retires what they replaced.
   The floor is the same gym the movement harness stands, built from the mover's **live** tuning
   rather than a cached spec, and `ElysiumGym::DefaultOrigin()` is now one symbol both harnesses read
   — two origins for one spec would produce two coordinate sets for one geometry, and
-  `dev/baselines/move/` is in these. The lane picker reseats with the harness's own sequence
+  the gym baselines are in these. The lane picker reseats with the harness's own sequence
   (`ResetState`, `SeatOrigin`, control rotation to the lane yaw, a boom reseed so the damper does not
   ease across the teleport), and `Elysium.Substrate.GymSeat` names the `flat` lane drive mode starts
   on, so renaming it reddens instead of standing a body in the void. The stage world's movement
@@ -548,27 +553,80 @@ retires what they replaced.
   exporter to stop writing constant translation tracks at all, which would leave every untracked bone
   on its own bind pose by construction.
 
-- [ ] **CCC7 `move_yaw` and the speed authority.** The rung where the ladder inverts — and the
-  plumbing is shorter than the question. `ResolveActivityClip` already returns the authored cell
-  speed; the selection record carries it; `GetMaxSpeed` reads it behind
-  `elysium.move.AnimSpeedAuthority`, with the ConVar constants as the A/B. The selection is one
-  frame stale at the read, which is retail's own shape and stays. **The sign** of `move_yaw` is
-  recoverable and must be recovered rather than tuned: the retail selector at `0x10164870` writes
-  it before choosing an activity, so what it differences is the answer — compared against both of
-  `CCC1`'s recorded yaw channels, wish and velocity, so the comparison runs against recordings
-  rather than re-instrumentation; a mirrored convention reproduces the same per-cell speeds, so a
-  green-room A/B confirms a decision and cannot make one. **The real new scope is the blend-space
-  case:** a strafing body's commanded speed is the *interpolated* cell speed at the current
-  `move_yaw`, so `FElysiumResolvedGrid` exposes the per-cell speed table beside its axis bindings —
-  that interpolation is what stops a sideways run authored at a different speed foot-sliding, and
-  it is a real feel change under the charter's Feel layer. Root motion is not a third question —
-  the exporter leaves the skeletal root in place and carries per-cell displacement as metadata, so
-  the clips hold the root and the motor translates; what is open is only which speed the motor
-  reads.
-  *Acceptance:* the sign is read off the selector rather than chosen; the speed source is either
-  switched to the authored cell — interpolated across the fan — or named in the code as a
-  divergence at the point `GetMaxSpeed` answers; and the speed-dependent gym baselines are promoted
-  for the first time, with the speed-invariant ones still green. *Deps:* `CCC6`.
+- [x] **CCC7 `move_yaw` and the speed authority.** The rung where the ladder inverts. **Its RE is
+  closed** — the recovered behaviour is in `docs/vtmb/source_movement.md` → "Player speed is
+  animation-driven" and `docs/vtmb/animation_and_movers.md` → "`move_yaw` is right-positive" and
+  "The gait ladder runs ahead of the compact-code dispatch" — so what remained was construction plus
+  four owner calls the recovery made unavoidable.
+
+  **The sign is recovered, not open.** `move_yaw = AngleDiff(facingYaw, velocityYaw)`, wrapped to
+  (−180, 180), right-positive, zero forward, sourced from *realized velocity* — so `move_yaw_vel`
+  is the channel and `move_yaw_wish` is not what retail differences. It maps onto
+  `UKismetAnimationLibrary::CalculateDirection` with **no negation**, Source's reversed subtraction
+  and Unreal's opposite handedness cancelling. Three retail behaviours ride the same write and are
+  the rung's actual plumbing: a 720 °/s slew that re-arms only when the previous write was within
+  0.3 s, a snap otherwise, and a **hold** at zero speed where `CalculateDirection` returns 0.
+
+  **The speed seam moves.** Retail publishes six per-direction tables and the client injects one
+  cell's absolute speed into the move command; `m_flMaxspeed` is only the clamp ceiling. So
+  `elysium.move.AnimSpeedAuthority` reading the selection record inside `GetMaxSpeed` reproduces a
+  scalar retail does not have. The faithful shape resolves a per-direction cell speed where the
+  wish vector is built, which is `FElysiumResolvedGrid` exposing its per-cell speed table beside
+  its axis bindings — the table is needed either way, but as an input to the command rather than
+  to a max-speed read. Root motion is not a further question: the exporter leaves the skeletal root
+  in place and carries per-cell displacement as metadata, so the clips hold the root and the motor
+  translates.
+
+  **Four owner calls, each with the faithful answer now known:**
+  1. **Interpolation across the fan.** Retail snaps to one of eight cells by a 3×3 digital-key
+     table and has no analog input to serve. Blending cell speed by `move_yaw` is what stops a
+     sideways run foot-sliding on a stick, and it is a Feel-layer divergence rather than the
+     faithful behaviour it was assumed to be.
+  2. **Crouch faster than walk.** With the duck crop dead code and `sv_sneakscale` 2.3 multiplying,
+     retail's sneak runs 63.1–71.8 u/s against a walk of 23.9–53.8. Reproducing the authority
+     reproduces that.
+  3. **The walk asymmetry.** Walk alone ignores `m_flSpeedScale`, so a speed buff pins the gait to
+     run. Faithful, and strange enough to be worth stating rather than inheriting silently.
+  4. **The `cmdMoveMag` term** — the one defect rather than a call. Retail's walk/run test is
+     `speed2D > T || cmdMoveMag > T`; ours has only the realized term, so we ramp into the run
+     where retail snaps on the first frame of full input. `T` is the body's own forward walk cell
+     plus 1.0, per-model.
+
+  *Acceptance:* `move_yaw` is produced from realized velocity with the slew, the re-arm and the
+  hold, asserted in the Substrate tier; the per-direction cell speed reaches the wish vector, or
+  the scalar shape is named in the code as a divergence at the point it applies; the four calls
+  above are each recorded in the divergence table with the faithful behaviour beside them; and the
+  speed-dependent gym baselines are promoted for the first time, with the speed-invariant ones
+  still green. *Deps:* `CCC6`.
+  *Done:* the pure table and its seam (`ElysiumGaitSpeeds.h` — `FElysiumGaitSpeedTable`,
+  `ElysiumGait::WishSpeedFrom`), asserted by `Elysium.Substrate.GaitSpeeds`;
+  `ElysiumBlendGrids::SpeedFan` over the baked grids and
+  `UElysiumNpcAnimSubsystem::ResolveGaitSpeeds` over the un-relaxed activities, asserted against the
+  real corpus by `Elysium.Content.GaitSpeeds` at 53.8 / 188.5 / 65.3 u/s with walk and run resolving
+  to **different banks**. `GetMaxSpeed()` is the ceiling and nothing in the solve reads it;
+  `WishSpeed(WishDir, Scale)` is the one seam, and the four call sites go through it.
+  **The tables are pushed rather than pulled** — the driver re-resolves them only when the body key
+  moves and the map actor hands them over on change — which is what dissolves the ordering problem
+  the rung was expected to have. `elysium.move.AnimSpeedAuthority` defaults to 1 with the constants
+  as the `0` path, and `elysium.move.GaitSpeedInterpolate` defaults to 1.
+  `move_yaw` is `MoveYawPose`, produced by `ElysiumLocomotion::AdvanceMoveYaw` — 720 °/s, the 0.3 s
+  re-arm, the hold at a standstill — owned by the driver because the slew is a rate and a producer's
+  sample is a getter a readout may take twice. It rides as its own frame channel beside the two raw
+  yaws. `FElysiumGaitReference` is built by `ElysiumAnimIntent::GaitFrom` from the same tables the
+  mover commands from, so its walk/run threshold is the body's own forward walk cell plus one unit;
+  the sample grew `CommandedSpeed` and the latch takes `max(realized, commanded)`.
+  *Instrument findings:* three defects the tiers could not have found, each now a pure rule.
+  `FMath::FixedTurn` answers in [0, 360), so an unnormalized slew read +184 where the fan wanted
+  −176 and resolved the wrong cell **only near the wrap seam**. A fresh `FElysiumMoveYawFilter` must
+  read as never-written or its first moving frame slews out of forward instead of snapping. And
+  standing a real body on the gym found that **the crouch has been a toggle since `CCC5`**, so every
+  course segment that released the Duck button was a no-op: `duckpop` never stood back up, and the
+  two `unduck_*` lanes never *asked* to, which meant they had been recording a refusal they never
+  requested. `ReleaseCrouch` presses the toggle a second time and the three lanes measure again.
+  *Deferred:* the per-(channel, lane) `speedDependent` granularity. `advance_max` and
+  `ground_transitions` are invariant on 36–37 lanes and are the measurement on 5–6, and the flag is
+  per-channel; with the baselines now freely re-promotable the cost of that is a promote rather than
+  a false green, so it is recorded and not built.
 
 - [ ] **CCC8 Played acceptance.** The slice's finish line, beat-scripted in the Play tier so the
   claim is a CI run rather than a recollection — playable-path rule 3. The Play tier itself is
@@ -671,11 +729,16 @@ is what `-ElysiumMove` exists to turn into a per-change headless run.
 
 ## Risks
 
-- **The speed authority moves the floor under every earlier measurement.** `CCC7` can halve the walk
-  speed. The speed-invariant/speed-dependent split above is the mitigation, and it only works if the
-  two baseline sets are actually kept apart — promoting a course time before `CCC7` bakes in a number
-  that is about to change. The co-tune waits for the same reason: the split protects assertions, not
-  tuning hours.
+- **The speed authority moves the floor under every earlier measurement** — closed by `CCC7`, and
+  the split held: with the authority on, moving `StepSize` reddens only the riser lanes and
+  `StandableZ` only the slope lanes, which is what says the inversion was a feel change and not a
+  collision regression. The walk did more than halve — 53.8 u/s against `speed_walk`'s 100 — so the
+  co-tune waiting was the right call.
+- **A harness can measure nothing and look green.** Standing a real body on the gym found that the
+  crouch has been a toggle since `CCC5`, so every course segment releasing the Duck button had been
+  a no-op and the two `unduck_*` lanes were recording a refusal they never requested. Nothing failed;
+  the recordings were stable and plausible. The general form is that a course's *intent* is not
+  asserted anywhere — only its output is — so a recipe can go stale against the mover it drives.
 - **The camera is the C with no instrument** — closed by `CCC2`. `SolveViewRoll` is asserted, and
   the four-stage boom solve, the collision sweep and the damper are now recorded per frame as
   `cam_*` beside the modern rig's `mcam_*`, so the evaluator is the recorded reference rather than
@@ -705,12 +768,19 @@ per the house rules.
 
 | Divergence | Owning document |
 |---|---|
-| The player's gait speed is a constant rather than the current sequence's root motion — standing today, marked at `UElysiumMovementComponent::GetMaxSpeed`, and resolved either way by `CCC7` | `docs/architecture/movement-architecture.md` |
+| ~~The player's gait speed is a scalar constant read at `GetMaxSpeed`~~ — **settled at `CCC7`, and therefore not a divergence**: the speed is the animation's own per-direction cell, injected at the wish vector, with `GetMaxSpeed` reduced to the ceiling retail's `m_flMaxspeed` is. The constants survive as `elysium.move.AnimSpeedAuthority 0` and as the fallback for a body with no fan | `docs/architecture/movement-architecture.md` |
+| **Symmetrizing each gait fan** — the authored walk is 38.2 u/s strafing left against 23.9 u/s strafing right, which is faithful and reads as a limp. Mirrored pairs are averaged at table build; on the male body only the ±90 pair differs, so it is one number | `docs/architecture/movement-architecture.md` |
+| **The pose parameter's slew, re-arm and hold are reproduced, and the graph steers on the filtered angle while the speed reads the unfiltered commanded one** — retail's three angles, kept apart rather than collapsed | `docs/vtmb/animation_and_movers.md` |
 | Any change to movement-orientation and strafing settings made so that `move_yaw` resolves off the neutral cell — **an open owner call, not yet made** | `docs/architecture/animation-architecture.md` |
 | Holding a sustained unarmed crouch on the terminal frame — **not faithful and therefore not an owner divergence**: retail reuses sequence 8 until its finished flag is set, then reselects and restarts that same one-shot on the next request | `docs/vtmb/animation_and_movers.md` |
-| `ACT_SNEAK` reached from ducked-and-moving, and the walk/run split taken from realized speed rather than the `+speed` key — **both shipped, both reconstructions.** Retail selects all three gaits inside compact code 1 "from realized speed, flags and weapon state" and those flags are undecoded; there is no sneak button in `FElysiumUserCmd`, and the sample carries no gait bit because the NPC producer has no user command to carry one. The stride band is the evidence: the authored `sneak` cells run 69.7–79.3 cm/s against a ducked gait of a third of the base speed | `docs/architecture/animation-architecture.md` |
+| ~~`ACT_SNEAK` reached from ducked-and-moving~~ — **settled, and therefore not a divergence**: retail's condition is exactly `FL_DUCKING && speed2D > 5.0 u/s`, with no walk/run split and no relaxed variant below it | `docs/vtmb/animation_and_movers.md` |
+| ~~The walk/run split taken from realized speed rather than the `+speed` key~~ — **settled in kind**: retail reads no button, and `+speed` reaches the gait only by selecting the walk table client-side. What remains is a **defect, not a divergence** — retail tests `speed2D > T \|\| cmdMoveMag > T` and ours omits the commanded term, so we ramp into the run where retail snaps on the first frame of full input | `docs/vtmb/animation_and_movers.md` |
 | ~~The landing one-shot's hold duration~~ — **settled at `CCC5`, and therefore not a divergence**: the landing ends when the graph reports its clip finished, and `FElysiumJumpLatch::LandHoldSeconds` survives only as the fallback for a body with no pose layer at all, which the gym stands | `docs/architecture/animation-architecture.md` |
-| The walk/run split keeping **gait memory with a hysteresis margin** — retail's selector picks from realized speed every frame and holds none. Ours exists so a decelerating body does not flicker between the two gaits and advance the request generation every frame. Shipped; the margin moves with `CCC7`'s speed authority | `docs/architecture/animation-architecture.md` |
+| ~~The walk/run split keeping **gait memory with a hysteresis margin**~~ — **removed at `CCC7`**: `HysteresisFraction` defaults to 0, which is retail's own behaviour, because the `cmdMoveMag` term made the input a step function rather than the ramp the margin existed to damp. The field survives as a dial, and the band is still asserted when one is asked for | `docs/architecture/animation-architecture.md` |
+| **The airborne wish speed holds the last grounded cell** rather than `sv_jump_maxspeed` — faithful, and a correctness fix: retail stops refreshing its tables for the whole jump while the client keeps writing the last grounded cell, so 350 is a ceiling that never fires against a run peak of 208 u/s | `docs/architecture/movement-architecture.md` |
+| **Interpolating cell speed across the `move_yaw` fan** — **owner call, made**: retail snaps to one of eight cells by a 3×3 digital-key table and has no analog input to serve, while the walk fan's cells differ by more than 2× and a stick lands between them. `elysium.move.GaitSpeedInterpolate` defaults to 1 and 0 is the faithful snap | `docs/architecture/movement-architecture.md` |
+| ~~Ducked movement scaled by Source's `/3`~~ — **settled at `CCC7`**: the ducked speed is the sneak fan's own cell, and retail applies no duck multiplier at all (`HandleDuckingSpeedCrop` occupies a vtable slot nothing calls in either DLL). The `/3` survives only on the constants fallback, which has no sneak table to read | `docs/architecture/movement-architecture.md` |
+| ~~Crouch-move slower than walk~~ — **owner call, made: reproduced.** Retail's crouch is *faster* than its walk (forward sneak 65.3 u/s against a forward walk of 53.8), because `sv_sneakscale` 2.3 multiplies and the walk table alone ignores `m_flSpeedScale`. The `Elysium.Content.GaitSpeeds` assertion is what holds it | `docs/vtmb/source_movement.md` |
 | The modern rig supplying the shipped base view — **owner call, made**: `elysium.ModernCamera` defaults to 1 ahead of `CCC3`'s co-tune, which stays outstanding. Both rigs solve and record every frame either way, so the A/B and the channel diff are unaffected | `docs/architecture/camera-architecture.md` |
 | Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
 | A look-response curve that is not retail's — **built and shipped off**: `look_curve` defaults to 0, at which the gain is exactly 1.0 and the path is retail's linear one. Enabling it is an owner call not yet made | `docs/architecture/input-architecture.md` § Feel |
