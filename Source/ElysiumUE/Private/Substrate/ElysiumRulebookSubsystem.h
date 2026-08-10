@@ -39,6 +39,7 @@ public:
 	const FElysiumLevelingTemplates&  Leveling();
 	const FElysiumWizard&             Wizard();
 	const FElysiumStrings&            Strings();
+	const FElysiumDiceTables&         Dice();
 
 	// Force every table. Returns the number that loaded clean.
 	int32 LoadAll();
@@ -58,6 +59,7 @@ public:
 private:
 	void RegisterCommands();
 	void ExecRules(const TArray<FString>& Args);
+	void ExecRoll(const TArray<FString>& Args);
 
 	// The lazy-load guard is set BEFORE the load, so a failure is remembered rather than retried
 	// on every read — the idiom `UElysiumNpcAnimSubsystem` established.
@@ -75,6 +77,7 @@ private:
 	FElysiumLevelingTemplates LevelingTemplates;
 	FElysiumWizard            WizardData;
 	FElysiumStrings           StringData;
+	FElysiumDiceTables        DiceTables;
 
 	bool bStatsLoaded = false;
 	bool bFeatsLoaded = false;
@@ -87,6 +90,7 @@ private:
 	bool bLevelingLoaded = false;
 	bool bWizardLoaded = false;
 	bool bStringsLoaded = false;
+	bool bDiceLoaded = false;
 
 	FString StatsError;
 	FString FeatsError;
@@ -99,6 +103,7 @@ private:
 	FString LevelingError;
 	FString WizardError;
 	FString StringsError;
+	FString DiceError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

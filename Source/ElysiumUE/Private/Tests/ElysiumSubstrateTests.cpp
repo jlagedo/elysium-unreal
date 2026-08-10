@@ -68,6 +68,7 @@
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -1544,6 +1545,260 @@ bool FElysiumRulebookTest::RunTest(const FString&)
 			TestEqual(TEXT("row 1 reads as a float"), Table.Lookup(1), 3.0f);
 			TestEqual(TEXT("clamping takes the nearest end"), Table.Lookup(99), 4.0f);
 		}
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// 9.6 — the World-of-Darkness d10 resolver, content-free.
+//
+// Most of it is asserted with no RNG at all: a weighting table IS the die, so a table whose every
+// entry is one face turns the roller into a known answer and pins the exploding 10, the two 250
+// caps, the botch branch and the difficulty compare exactly. The one genuinely random case is
+// cross-checked against the recovered algorithm applied by hand to the same stream's RAW draws,
+// which is what makes a wrong table lookup or a swapped branch visible rather than merely different.
+//
+// The facts: `docs/recovered/dice-system.md`. The consumer boundary this deliberately stops at:
+// `docs/vtmb/skills-and-checks.md`.
+// =====================================================================================
+
+namespace
+{
+	// A weighting table whose every raw draw maps to one face — the die a modder could author, and
+	// the only way to interrogate the roller without asking what the RNG did.
+	FElysiumDiceTable ElysiumTestDieShowing(int32 PhysicalFace)
+	{
+		FElysiumDiceTable Table;
+		Table.InternalName = FString::Printf(TEXT("always%d"), PhysicalFace);
+		for (int32 i = 0; i < FElysiumDiceTable::NumEntries; ++i)
+		{
+			Table.Faces[i] = PhysicalFace - 1;
+		}
+		return Table;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceTest, "Elysium.Substrate.Dice", GElysiumTestFlags)
+bool FElysiumDiceTest::RunTest(const FString&)
+{
+	// --- The uniform fallback is the shipped distribution ---------------------------------------
+	const FElysiumDiceTable& Uniform = FElysiumDiceTable::Uniform();
+	TestTrue(TEXT("the fallback table reports itself uniform"), Uniform.IsUniform());
+	TestEqual(TEXT("draw 0 is face 0"), Uniform.Face(0), 0);
+	TestEqual(TEXT("draw 9 is still face 0"), Uniform.Face(9), 0);
+	TestEqual(TEXT("draw 10 is face 1"), Uniform.Face(10), 1);
+	TestEqual(TEXT("draw 99 is face 9"), Uniform.Face(99), 9);
+	TestEqual(TEXT("an out-of-range draw clamps rather than reads off the end"), Uniform.Face(500), 9);
+
+	// --- An absent entry reads as face 1, not 0 -------------------------------------------------
+	// The loader's own `GetInt(key, 1)` default. Face 0 is the botch, so a reader defaulting to 0
+	// would turn a mod's unauthored entries into botches instead of 2s.
+	{
+		const TSharedPtr<ElysiumKeyValues::FKvNode> Node = ElysiumKeyValues::ParseText(
+			TEXT("Sparse { \"Name\" \"Sparse\" \"0\" \"9\" \"5\" \"3\" }"));
+		if (TestTrue(TEXT("the sparse table text parses"), Node.IsValid()))
+		{
+			FElysiumDiceTable Sparse;
+			Sparse.Load(*Node->Child(TEXT("Sparse")));
+			TestEqual(TEXT("an authored entry wins"), Sparse.Face(0), 9);
+			TestEqual(TEXT("  and another"), Sparse.Face(5), 3);
+			TestEqual(TEXT("an unauthored entry defaults to face 1"), Sparse.Face(42), 1);
+			TestEqual(TEXT("the block's Name is read"), Sparse.Name, FString(TEXT("Sparse")));
+			TestFalse(TEXT("and it is not uniform"), Sparse.IsUniform());
+		}
+	}
+
+	// --- The tier bands, every edge -------------------------------------------------------------
+	auto Tier = [](int32 S, int32 B) { return (int32)ElysiumDice::TierFor(S, B); };
+	TestEqual(TEXT("net 0 is a failure"), Tier(0, 0), (int32)EElysiumRollTier::Failure);
+	TestEqual(TEXT("net 1 is a partial success"), Tier(1, 0), (int32)EElysiumRollTier::PartialSuccess);
+	TestEqual(TEXT("net 2 is still partial"), Tier(2, 0), (int32)EElysiumRollTier::PartialSuccess);
+	TestEqual(TEXT("net 3 is a success"), Tier(3, 0), (int32)EElysiumRollTier::Success);
+	TestEqual(TEXT("net 4 is still a success"), Tier(4, 0), (int32)EElysiumRollTier::Success);
+	TestEqual(TEXT("net 5 is critical"), Tier(5, 0), (int32)EElysiumRollTier::CriticalSuccess);
+	TestEqual(TEXT("net 6 is critical"), Tier(6, 0), (int32)EElysiumRollTier::CriticalSuccess);
+	// The two ways a roll can end up at or below zero are NOT the same verdict.
+	TestEqual(TEXT("a negative net with no raw success botches"), Tier(0, 1),
+		(int32)EElysiumRollTier::Botched);
+	TestEqual(TEXT("a negative net WITH a raw success only fails"), Tier(1, 2),
+		(int32)EElysiumRollTier::Failure);
+	TestEqual(TEXT("successes cancelling botches exactly is a failure, not a botch"), Tier(2, 2),
+		(int32)EElysiumRollTier::Failure);
+	TestEqual(TEXT("net 5 through botches is still critical"), Tier(7, 2),
+		(int32)EElysiumRollTier::CriticalSuccess);
+
+	// --- An empty pool never reaches the loop ---------------------------------------------------
+	{
+		const FElysiumRollResult Empty = ElysiumDice::Roll(0, 6, Uniform);
+		TestEqual(TEXT("an empty pool fails"), (int32)Empty.Tier, (int32)EElysiumRollTier::Failure);
+		TestEqual(TEXT("  having rolled nothing"), Empty.Successes, 0);
+
+		// The successes counter is SEEDED, so the automatic successes survive the early-out even
+		// though the tier stays the constructor's default failure.
+		const FElysiumRollResult Seeded = ElysiumDice::Roll(0, 6, Uniform, /*Automatic*/ 4);
+		TestEqual(TEXT("the automatic successes survive the early-out"), Seeded.Successes, 4);
+		TestEqual(TEXT("  and are the net"), Seeded.Net, 4);
+		TestEqual(TEXT("  but the tier is still failure"), (int32)Seeded.Tier,
+			(int32)EElysiumRollTier::Failure);
+	}
+
+	// --- A die that always shows 5: the difficulty compare, with no RNG in the answer ------------
+	{
+		const FElysiumDiceTable Fives = ElysiumTestDieShowing(5);
+		const FElysiumRollResult Meets = ElysiumDice::Roll(5, 5, Fives);
+		TestEqual(TEXT("a 5 meets difficulty 5"), Meets.Successes, 5);
+		TestEqual(TEXT("  with no botches"), Meets.Botches, 0);
+		TestEqual(TEXT("  net 5"), Meets.Net, 5);
+		TestEqual(TEXT("  critical"), (int32)Meets.Tier, (int32)EElysiumRollTier::CriticalSuccess);
+
+		// One higher and the same die misses — this is the off-by-one the engine's stored
+		// `difficulty - 1` hides. A port comparing face(0..9) against a RAW difficulty would pass 5
+		// dice here.
+		const FElysiumRollResult Misses = ElysiumDice::Roll(5, 6, Fives);
+		TestEqual(TEXT("a 5 misses difficulty 6"), Misses.Successes, 0);
+		TestEqual(TEXT("  and does not botch either"), Misses.Botches, 0);
+		TestEqual(TEXT("  so the roll fails"), (int32)Misses.Tier, (int32)EElysiumRollTier::Failure);
+
+		// Automatic successes are added to a real roll, and they tier with it.
+		const FElysiumRollResult Auto = ElysiumDice::Roll(3, 6, Fives, /*Automatic*/ 3);
+		TestEqual(TEXT("automatic successes count on a failed pool"), Auto.Successes, 3);
+		TestEqual(TEXT("  and tier"), (int32)Auto.Tier, (int32)EElysiumRollTier::Success);
+
+		// The wound penalty comes off the pool the roller walks.
+		TestEqual(TEXT("a health penalty removes dice from the pool"),
+			ElysiumDice::Roll(5, 5, Fives, /*Automatic*/ 0, /*HealthPenalty*/ 2).Successes, 3);
+		TestEqual(TEXT("a health penalty that empties the pool fails outright"),
+			(int32)ElysiumDice::Roll(5, 5, Fives, 0, 5).Tier, (int32)EElysiumRollTier::Failure);
+
+		// The initial-pool clamp: 1000 dice are 250.
+		TestEqual(TEXT("the pool is clamped at 250"),
+			ElysiumDice::Roll(1000, 5, Fives).Successes, ElysiumDice::MaxPool);
+	}
+
+	// --- A die that always shows 1: the botch branch precedes the difficulty compare -------------
+	{
+		const FElysiumDiceTable Ones = ElysiumTestDieShowing(1);
+		// Difficulty 1 would otherwise admit every face, which is exactly why the branch order is
+		// asserted at difficulty 1.
+		const FElysiumRollResult Botch = ElysiumDice::Roll(5, 1, Ones);
+		TestEqual(TEXT("a 1 is never a success, even at difficulty 1"), Botch.Successes, 0);
+		TestEqual(TEXT("  every die botches"), Botch.Botches, 5);
+		TestEqual(TEXT("  net -5"), Botch.Net, -5);
+		TestEqual(TEXT("  botched"), (int32)Botch.Tier, (int32)EElysiumRollTier::Botched);
+	}
+
+	// --- A die that always shows 10: 10-again, and the roll cap that bounds it -------------------
+	{
+		const FElysiumDiceTable Tens = ElysiumTestDieShowing(10);
+		// A 10 succeeds and puts a die back, so one die explodes forever; the roller's SEPARATE cap
+		// on total rolls is the only thing that ends it. Difficulty 10 also proves the 10 is tested
+		// before the difficulty compare.
+		const FElysiumRollResult Explode = ElysiumDice::Roll(1, 10, Tens);
+		TestEqual(TEXT("one exploding die runs to the roll cap"), Explode.Successes,
+			ElysiumDice::MaxRolls);
+		TestEqual(TEXT("  every one of them a ten"), Explode.Tens, ElysiumDice::MaxRolls);
+		TestEqual(TEXT("  with no botches"), Explode.Botches, 0);
+		TestEqual(TEXT("  critical"), (int32)Explode.Tier, (int32)EElysiumRollTier::CriticalSuccess);
+	}
+
+	// --- The uniform table over the owned stream, against the algorithm applied by hand ----------
+	{
+		constexpr int32 Seed = 20250606;
+		constexpr int32 Pool = 8;
+		constexpr int32 Difficulty = 6;
+
+		// Harvest the RAW draws this seed produces, then walk them with the recovered algorithm.
+		// Reading raw draws rather than faces is what makes a wrong table lookup visible.
+		ElysiumRng::SeedAll(Seed);
+		TArray<int32> Draws;
+		for (int32 i = 0; i < ElysiumDice::MaxRolls; ++i)
+		{
+			Draws.Add(ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 99));
+		}
+
+		int32 ExpectSuccesses = 0, ExpectBotches = 0, ExpectTens = 0, DiceLeft = Pool;
+		for (int32 i = 0; DiceLeft >= 1 && i < Draws.Num(); ++i)
+		{
+			const int32 Face = Draws[i] / 10;      // the uniform weighting, by hand
+			if (Face == 9)      { ++ExpectSuccesses; ++ExpectTens; ++DiceLeft; }
+			else if (Face == 0) { ++ExpectBotches; }
+			else if (Face >= Difficulty - 1) { ++ExpectSuccesses; }
+			--DiceLeft;
+		}
+		TestTrue(TEXT("the harvested reference roll is not vacuous"),
+			ExpectSuccesses + ExpectBotches > 0);
+
+		ElysiumRng::SeedAll(Seed);
+		const FElysiumRollResult Rolled = ElysiumDice::Roll(Pool, Difficulty, Uniform);
+		TestEqual(TEXT("the resolver's successes match the hand-walked draws"),
+			Rolled.Successes, ExpectSuccesses);
+		TestEqual(TEXT("  its botches"), Rolled.Botches, ExpectBotches);
+		TestEqual(TEXT("  its tens"), Rolled.Tens, ExpectTens);
+		TestEqual(TEXT("  its net"), Rolled.Net, ExpectSuccesses - ExpectBotches);
+		TestEqual(TEXT("  and its tier"), (int32)Rolled.Tier,
+			(int32)ElysiumDice::TierFor(ExpectSuccesses, ExpectBotches));
+
+		// Determinism: the same seed is the same run.
+		ElysiumRng::SeedAll(Seed);
+		const FElysiumRollResult Again = ElysiumDice::Roll(Pool, Difficulty, Uniform);
+		TestEqual(TEXT("the same seed rolls the same result"), Again.Successes, Rolled.Successes);
+		TestEqual(TEXT("  down to the botches"), Again.Botches, Rolled.Botches);
+	}
+
+	// --- A restored stream continues the sequence (S8) -------------------------------------------
+	// Through `ElysiumRng`'s own API, because the save restores by re-initialising to the CURRENT
+	// position rather than replaying from the initial seed.
+	{
+		ElysiumRng::SeedAll(99);
+		ElysiumDice::Roll(6, 6, FElysiumDiceTable::Uniform());
+		TArray<ElysiumRng::FState> State;
+		ElysiumRng::Snapshot(State);
+
+		const FElysiumRollResult Next = ElysiumDice::Roll(6, 6, FElysiumDiceTable::Uniform());
+		ElysiumDice::Roll(6, 6, FElysiumDiceTable::Uniform());   // walk further off
+		ElysiumRng::Restore(State);
+
+		const FElysiumRollResult Resumed = ElysiumDice::Roll(6, 6, FElysiumDiceTable::Uniform());
+		TestEqual(TEXT("a restored stream rolls what the saved run would have"),
+			Resumed.Successes, Next.Successes);
+		TestEqual(TEXT("  and the same botches"), Resumed.Botches, Next.Botches);
+	}
+
+	// --- The feat -> weighting join, and the engine's fallback to index 0 ------------------------
+	{
+		// Two distinguishable tables, so "resolved by name" and "fell back to index 0" cannot be
+		// confused for each other.
+		FElysiumDiceTables Tables;
+		FElysiumDiceTable Normal = ElysiumTestDieShowing(5);
+		Normal.InternalName = TEXT("Normal");
+		FElysiumDiceTable Heavy = ElysiumTestDieShowing(10);
+		Heavy.InternalName = TEXT("Heavy");
+		Tables.Tables.Add(MoveTemp(Normal));
+		Tables.Tables.Add(MoveTemp(Heavy));
+		Tables.HealthModifiers = { 0, 0, 1, 2 };
+		Tables.Reindex();
+
+		TestEqual(TEXT("a table resolves by name"), Tables.Find(TEXT("Heavy")).Face(0), 9);
+		TestEqual(TEXT("  case-insensitively"), Tables.Find(TEXT("hEaVy")).Face(0), 9);
+		TestEqual(TEXT("the wound penalty reads by health level"), Tables.HealthModifier(3), 2);
+		TestEqual(TEXT("an unauthored health level costs nothing"), Tables.HealthModifier(99), 0);
+
+		FElysiumFeat Feat;
+		Feat.InternalName = TEXT("Intrusion");
+		Feat.PcWeighting = TEXT("Heavy");
+		Feat.NpcWeighting = TEXT("Nonexistent");
+		TestEqual(TEXT("a feat's PC weighting resolves to its named table"),
+			Tables.ForFeat(Feat, /*bNpc*/ false).Face(0), 9);
+		TestEqual(TEXT("an unmatched weighting name falls back to index 0"),
+			Tables.ForFeat(Feat, /*bNpc*/ true).Face(0), 4);
+	}
+	{
+		// With nothing loaded at all, every lookup is the uniform d10 — the fail-open contract.
+		const FElysiumDiceTables Absent;
+		TestFalse(TEXT("an unloaded dice table is not valid"), Absent.IsValid());
+		TestTrue(TEXT("but it still answers with the uniform d10"),
+			Absent.Find(TEXT("Normal")).IsUniform());
 	}
 
 	return true;

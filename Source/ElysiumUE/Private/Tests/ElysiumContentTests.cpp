@@ -31,6 +31,7 @@
 #include "Scripting/ElysiumScriptNatives.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumCameraTrack.h"
+#include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumQuestLog.h"
@@ -3070,6 +3071,142 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 			CheckGroup(H.InternalName, H.Effect);
 		}
 		TestEqual(TEXT("every ClanEffect/FrenzyEffect/history Effect resolves"), BadEffect, 0);
+	}
+
+	return true;
+}
+
+// =================================================================================================
+// 9.6 — `dicerolls.txt` against the real file, and the resolver over what it loaded.
+//
+// The claim under test is that the shipped weighting tables are a plain uniform d10, which is what
+// makes the resolver's fail-open fallback faithful rather than an approximation. A patched install
+// that reweights a die is not a failure — it is the mechanism working — so a non-uniform table is
+// reported rather than failed, and the structural assertions still hold.
+//
+// The algorithm itself is pinned content-free in `Elysium.Substrate.Dice`.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceContentTest,
+	"Elysium.Content.Dice", GElysiumContentTestFlags)
+bool FElysiumDiceContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/dicerolls.txt"))))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		return true;
+	}
+
+	FString Error;
+	FElysiumDiceTables Dice;
+	if (!TestTrue(TEXT("dicerolls.txt loads"), Dice.Load(Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// --- TableWeightings --------------------------------------------------------------------------
+	TestEqual(TEXT("three weighting tables"), Dice.Num(), 3);
+	for (const TCHAR* Named : { TEXT("Normal"), TEXT("Heavy"), TEXT("Light") })
+	{
+		TestEqual(FString::Printf(TEXT("`%s` is authored"), Named),
+			Dice.Find(Named).InternalName.ToLower(), FString(Named).ToLower());
+	}
+	// Index 0 is the engine's fallback for an unmatched name, and it is the table every feat asks
+	// for — so a re-ordered file would silently re-point every miss.
+	TestEqual(TEXT("index 0 is Normal"), Dice.At(0).InternalName.ToLower(), FString(TEXT("normal")));
+
+	int32 Weighted = 0;
+	for (const FElysiumDiceTable& Table : Dice.Tables)
+	{
+		// Structural, whatever the distribution: 100 entries covering the raw draw's whole domain.
+		int32 OutOfRange = 0;
+		for (int32 i = 0; i < FElysiumDiceTable::NumEntries; ++i)
+		{
+			OutOfRange += (Table.Face(i) < 0 || Table.Face(i) >= FElysiumDiceTable::NumFaces) ? 1 : 0;
+		}
+		TestEqual(FString::Printf(TEXT("`%s` maps every draw to a d10 face"), *Table.InternalName),
+			OutOfRange, 0);
+
+		if (!Table.IsUniform())
+		{
+			++Weighted;
+			// Report the shape rather than failing: a data mod is entitled to bias a die.
+			FString Histogram;
+			int32 Counts[FElysiumDiceTable::NumFaces] = {};
+			for (int32 i = 0; i < FElysiumDiceTable::NumEntries; ++i)
+			{
+				const int32 Face = Table.Face(i);
+				if (Face >= 0 && Face < FElysiumDiceTable::NumFaces) { ++Counts[Face]; }
+			}
+			for (int32 f = 0; f < FElysiumDiceTable::NumFaces; ++f)
+			{
+				Histogram += FString::Printf(TEXT("%s%d:%d"), f ? TEXT(" ") : TEXT(""),
+					f + 1, Counts[f]);
+			}
+			AddInfo(FString::Printf(
+				TEXT("weighting table `%s` is NOT a uniform d10 — face counts out of 100: %s"),
+				*Table.InternalName, *Histogram));
+		}
+	}
+	// The shipped claim. Stated as an equality so a patched install reports the delta in one line.
+	TestEqual(TEXT("every shipped weighting table is a uniform d10"), Weighted, 0);
+
+	// --- HealthModifiers --------------------------------------------------------------------------
+	TestEqual(TEXT("eight health levels"), Dice.HealthModifiers.Num(), 8);
+	int32 NonZeroPenalty = 0;
+	for (const int32 Penalty : Dice.HealthModifiers) { NonZeroPenalty += Penalty != 0 ? 1 : 0; }
+	if (NonZeroPenalty > 0)
+	{
+		AddInfo(FString::Printf(TEXT("%d health level(s) author a non-zero pool penalty"),
+			NonZeroPenalty));
+	}
+	TestEqual(TEXT("the shipped wound penalty is a no-op"), NonZeroPenalty, 0);
+
+	// --- the feat -> weighting join ---------------------------------------------------------------
+	FElysiumFeatTable Feats;
+	if (TestTrue(TEXT("feats.txt loads"), Feats.Load(Error)))
+	{
+		// Every feat names a table that exists, so no feat is silently rolling on the fallback.
+		int32 Unresolved = 0;
+		for (const FElysiumFeat& F : Feats.Feats)
+		{
+			for (const FString& Name : { F.PcWeighting, F.NpcWeighting })
+			{
+				if (Dice.Find(Name).InternalName.ToLower() != Name.ToLower())
+				{
+					++Unresolved;
+					AddError(FString::Printf(TEXT("feat %s names weighting '%s', which does not exist"),
+						*F.InternalName, *Name));
+				}
+			}
+		}
+		TestEqual(TEXT("every feat's PC/NPC weighting resolves to a real table"), Unresolved, 0);
+
+		if (const FElysiumFeat* Intrusion = Feats.Find(TEXT("Intrusion")))
+		{
+			TestEqual(TEXT("Intrusion rolls on Normal"),
+				Dice.ForFeat(*Intrusion, /*bNpc*/ false).InternalName.ToLower(),
+				FString(TEXT("normal")));
+		}
+	}
+
+	// --- the resolver over the real table ---------------------------------------------------------
+	// A seeded smoke over loaded data: the counters have to be internally consistent and the tier
+	// has to be the one the counters imply, whatever the draws were.
+	ElysiumRng::SeedAll(9600);
+	const FElysiumDiceTable& Normal = Dice.Find(TEXT("Normal"));
+	for (int32 Trial = 0; Trial < 32; ++Trial)
+	{
+		const FElysiumRollResult Result = ElysiumDice::Roll(6, 6, Normal);
+		TestEqual(TEXT("net is successes minus botches"), Result.Net,
+			Result.Successes - Result.Botches);
+		TestEqual(TEXT("the tier is the one the counters imply"), (int32)Result.Tier,
+			(int32)ElysiumDice::TierFor(Result.Successes, Result.Botches));
+		TestTrue(TEXT("no more dice were resolved than the roll cap allows"),
+			Result.Successes + Result.Botches <= ElysiumDice::MaxRolls);
+		TestTrue(TEXT("every ten counted as a success"), Result.Tens <= Result.Successes);
 	}
 
 	return true;

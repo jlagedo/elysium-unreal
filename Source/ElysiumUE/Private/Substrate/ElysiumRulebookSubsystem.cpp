@@ -1,5 +1,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
+#include "Substrate/ElysiumDice.h"
+
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumRulebook, Log, All);
@@ -93,6 +95,14 @@ const FElysiumStrings& UElysiumRulebookSubsystem::Strings()
 	return Get(StringData, bStringsLoaded, TEXT("strings"), StringsError);
 }
 
+// A failed load leaves the table empty, and an empty table answers every lookup with the uniform
+// d10 — which is what every shipped weighting is, so a missing export costs one warning and no
+// behavioural change.
+const FElysiumDiceTables& UElysiumRulebookSubsystem::Dice()
+{
+	return Get(DiceTables, bDiceLoaded, TEXT("dicerolls"), DiceError);
+}
+
 int32 UElysiumRulebookSubsystem::LoadAll()
 {
 	TArray<FStatus> Status;
@@ -151,6 +161,9 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 	// silently lost its tail is the regression that matters.
 	Out.Add({ TEXT("strings"),      TEXT("system/strings.txt + strings_internal.txt"),
 		Strings().NumEntries(), Strings().IsValid(), StringsError });
+
+	Out.Add({ TEXT("dicerolls"),    TEXT("system/dicerolls.txt"),
+		Dice().Num(), Dice().IsValid(), DiceError });
 }
 
 // ================================================================================================
@@ -213,6 +226,44 @@ void UElysiumRulebookSubsystem::RegisterCommands()
 			ExecRules(Args);
 		}),
 		ECVF_Default));
+
+	// The dice resolver's headless driver. It lives beside the rulebook because the weighting table
+	// it rolls on is one of the rulebook's, and nothing else in the game consumes a roll yet.
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.roll"),
+		TEXT("elysium.roll <pool> <difficulty> [automatic] [weighting] — resolve one World-of-")
+		TEXT("Darkness d10 roll off the owned Dice RNG stream and print the whole result. ")
+		TEXT("Difficulty is the human target number 1..10; weighting defaults to `Normal`."),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			ExecRoll(Args);
+		}),
+		ECVF_Default));
+}
+
+void UElysiumRulebookSubsystem::ExecRoll(const TArray<FString>& Args)
+{
+	if (Args.Num() < 2)
+	{
+		UE_LOG(LogElysiumRulebook, Display,
+			TEXT("usage: elysium.roll <pool> <difficulty> [automatic] [weighting]"));
+		return;
+	}
+
+	const int32 Pool = FCString::Atoi(*Args[0]);
+	const int32 Difficulty = FCString::Atoi(*Args[1]);
+	const int32 Automatic = Args.Num() > 2 ? FCString::Atoi(*Args[2]) : 0;
+	const FString Weighting = Args.Num() > 3 ? Args[3] : FString(TEXT("Normal"));
+
+	const FElysiumDiceTable& Table = Dice().Find(Weighting);
+	const FElysiumRollResult Result = ElysiumDice::Roll(Pool, Difficulty, Table, Automatic);
+
+	UE_LOG(LogElysiumRulebook, Display,
+		TEXT("roll pool %d vs difficulty %d (+%d automatic) on '%s'%s: %s"),
+		Pool, Difficulty, Automatic,
+		*(Table.Name.IsEmpty() ? FString(TEXT("uniform d10 fallback")) : Table.Name),
+		Table.IsUniform() ? TEXT("") : TEXT(" [weighted]"),
+		*Result.Describe());
 }
 
 void UElysiumRulebookSubsystem::ExecRules(const TArray<FString>& Args)
@@ -341,8 +392,31 @@ void UElysiumRulebookSubsystem::ExecRules(const TArray<FString>& Args)
 			return;
 		}
 
+		if (What == TEXT("dicerolls") || What == TEXT("dice"))
+		{
+			const FElysiumDiceTables& D = Dice();
+			for (const FElysiumDiceTable& T : D.Tables)
+			{
+				UE_LOG(LogElysiumRulebook, Display, TEXT("  table %-10s %s"),
+					*T.Name, T.IsUniform() ? TEXT("uniform d10") : TEXT("WEIGHTED"));
+			}
+			if (!D.HealthModifiers.IsEmpty())
+			{
+				FString Health;
+				for (int32 i = 0; i < D.HealthModifiers.Num(); ++i)
+				{
+					Health += FString::Printf(TEXT("%s%d"), i ? TEXT(" ") : TEXT(""),
+						D.HealthModifiers[i]);
+				}
+				UE_LOG(LogElysiumRulebook, Display, TEXT("  health modifiers (level 0..%d): %s"),
+					D.HealthModifiers.Num() - 1, *Health);
+			}
+			return;
+		}
+
 		UE_LOG(LogElysiumRulebook, Display, TEXT("unknown table '%s'. Tables: stats feats rules ")
-			TEXT("traiteffects clans npctemplates histories quests experience leveling"), *Args[0]);
+			TEXT("traiteffects clans npctemplates histories quests experience leveling dicerolls"),
+			*Args[0]);
 		return;
 	}
 
