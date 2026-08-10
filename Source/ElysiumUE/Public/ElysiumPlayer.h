@@ -214,6 +214,98 @@ struct FElysiumPlayerRecord
 };
 
 // ============================================================================================
+// FElysiumInventory — CBaseCombatCharacter's carried-item storage (9.8, `docs/vtmb/inventory.md` §2).
+//
+// Inventory is **not** a bag of class names. An ordinary carried item stays a full server entity;
+// what the character holds is a list of handles to those entities (`m_hMyWeapons[224]` at +0x1624)
+// plus the active-weapon handle (+0x19a4). Players, NPCs and item containers all reuse this, which
+// is why it sits on the shared chain node rather than on the player leaf.
+//
+// Item POLICY — stackability, droppability, permanence, ammunition — is never decided here. It is
+// read from the item's own `vdata/items` definition (`FElysiumItemDef`), never inferred from a
+// classname prefix.
+// ============================================================================================
+
+class FElysiumItem;
+class FElysiumKeyring;
+
+struct FElysiumInventory
+{
+	// Retail's array is 224 fixed slots kept COMPACT: `Inventory_Remove` closes the gap it leaves
+	// and repairs the following items' `m_iInvenPos`. A dense array of the occupied prefix is the
+	// same structure without 224 empty handles on every character in the map — an item's inventory
+	// position IS its index here, so the compaction rule is the container's invariant.
+	static constexpr int32 MaxSlots = 224;
+
+	TArray<FElysiumEntityHandle> Slots;
+	// The currently equipped/active weapon. `HasWeaponEquipped` compares against THIS entity's
+	// classname and nothing else — it does not mean "owned".
+	FElysiumEntityHandle ActiveWeapon;
+
+	// Reserve ammunition, keyed by the item data's `Magazine.Type` folded to lower case. The
+	// asymmetry that the tutorial's `.38` beat rides on lives across these two homes: `AmmoCount`
+	// reports the item's LOADED MAGAZINE, `GiveAmmo` adds to this RESERVE.
+	//
+	// Not persisted yet: it is character state no entity field can hold, so it needs the record /
+	// save-block half that slice (c) owns.
+	TMap<FString, int32> AmmoReserve;
+
+	int32 Num() const { return Slots.Num(); }
+	bool IsFull() const { return Slots.Num() >= MaxSlots; }
+
+	// `Inventory_Add` — the acquisition route every pickup, grant and container transfer passes
+	// through. The item becomes owned by `Char` and takes a compact position; a stackable item
+	// whose classname is already carried MERGES into that stack instead (and the passed entity is
+	// left for the caller to dispose of, which is what makes the merge visible). Returns false when
+	// the item is already owned, the list is full, or the merge target is at its stack limit.
+	bool Add(FElysiumCombatCharacter& Char, FElysiumItem& Item);
+
+	// `Weapon_Equip` — `Inventory_Add` plus the active-weapon switch for a wieldable item.
+	bool Equip(FElysiumCombatCharacter& Char, FElysiumItem& Item);
+
+	// `GiveNamedItem(classname, 0)` — create and spawn the named item entity, then run it through
+	// the same equip/add route. Returns the new item's handle, or Invalid when the classname has no
+	// `vdata/items` definition, there is no world to create in, or the add was refused.
+	FElysiumEntityHandle GiveNamedItem(FElysiumCombatCharacter& Char, const FString& Classname);
+
+	// Python `RemoveItem(classname)` — the DESTRUCTIVE removal. A stack of two or more decrements;
+	// otherwise the entity is detached and killed. With no ordinary match it falls back to removing
+	// a keyring record. Returns whether anything matched — the native returns None either way.
+	bool ScriptRemove(FElysiumCombatCharacter& Char, const FString& Classname);
+
+	// The `Inventory_Remove` INPUT — detach, compact and reindex. It never destroys the entity and
+	// it is not Python's `RemoveItem`; the item becomes unowned and unslotted.
+	bool Detach(FElysiumCombatCharacter& Char, FElysiumItem& Item);
+
+	// Case-insensitive, ordinary slots first and then the carried keyring's records — `HasItem`'s
+	// own order. The keyring arm answers with the keyring ENTITY, because a key record is not one.
+	bool Has(const FElysiumCombatCharacter& Char, const FString& Classname) const;
+	// Ordinary slots only, case-insensitive. What `AmmoCount`/`GiveAmmo` resolve against.
+	FElysiumItem* FindOrdinary(const FElysiumCombatCharacter& Char, const FString& Classname) const;
+	// The carried `item_g_keyring`, or null. It is an ordinary carried item like any other and is
+	// governed by its own item data (`is_droppable 0`, `permanent_inventory 1`).
+	FElysiumKeyring* FindKeyring(const FElysiumCombatCharacter& Char) const;
+	// The item at a compact position, or null.
+	FElysiumItem* At(const FElysiumCombatCharacter& Char, int32 Position) const;
+	FElysiumItem* Active(const FElysiumCombatCharacter& Char) const;
+
+	// Re-derive the handle list from the items themselves — every item entity whose owner is
+	// `Char`, ordered by the `m_iInvenPos` it restored with. The list is a cache of what the items'
+	// own Save-flagged fields already say, so a restore rebuilds rather than serializing it twice.
+	void RebuildFrom(FElysiumCombatCharacter& Char);
+
+	int32 Reserve(const FString& AmmoType) const;
+	// No clamp of its own: `GiveAmmo`'s wrapper has none either (`inventory.md` §6).
+	void AddReserve(const FString& AmmoType, int32 Amount);
+
+	// --- Declared, not built: slice (b) ---------------------------------------------------------
+	// Player drop (`inven_drop`, world entity PRESERVED — never a shortcut through ScriptRemove),
+	// container transfer (`SpawnItemInContainer`/`AddEntityToContainer`/`DeleteItems`) and the
+	// barter verbs (`vbarter Take|Give|Buy|Sell`) are distinct operations with distinct
+	// entity-lifetime effects (`inventory.md` §5.3, §7). They are absent rather than half-built.
+};
+
+// ============================================================================================
 // FElysiumAnimating — CBaseAnimating. Everything that owns a skeletal body: standing it, moving
 // it with the entity, gating it on dormancy, and playing clips on it. NPCs and the player share
 // this because in VtMB they share the class.
@@ -298,6 +390,10 @@ class FElysiumCombatCharacter : public FElysiumAnimating
 public:
 	FElysiumSheet Sheet;
 
+	// The 224 item-entity handles, the active weapon and the reserve ammo pools (9.8). On this node
+	// because VtMB puts them here: the player, every NPC and every `item_container` own one.
+	FElysiumInventory Inventory;
+
 	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
 
 	bool bWillTalk = false;       // WillTalk (79 calls) — this character will start a conversation
@@ -325,6 +421,9 @@ public:
 	void InputBloodgain(const FElysiumInputArgs& Args);
 	void InputBloodHeal(const FElysiumInputArgs& Args);
 	void InputWillTalk(const FElysiumInputArgs& Args);
+	// `Inventory_Remove` — a CLASSPTR input: it takes an ENTITY and only detaches/reindexes it.
+	// It is NOT Python's `RemoveItem(classname)`, which also destroys the final entity.
+	void InputInventoryRemove(const FElysiumInputArgs& Args);
 
 	// --- Damage and death -------------------------------------------------------------------
 	// The receiver `trigger_hurt`, a door closing, and (later) combat all reach.

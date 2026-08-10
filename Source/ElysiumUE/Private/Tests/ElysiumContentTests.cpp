@@ -4985,4 +4985,229 @@ bool FElysiumScriptApiCoverageTest::RunTest(const FString&)
 	return true;
 }
 
+
+// =====================================================================================
+// `vdata/items` (9.8a) — the item catalogue against the real exported corpus.
+//
+// The recovered figures in `docs/vtmb/inventory.md` §4 are PATCH-FIRST facts about the
+// content this project consumes, not stock-retail authoring facts, so a local corpus that
+// differs is reported rather than failed: each block asserts structural validity first and
+// reports the actuals through AddInfo when they disagree with the recorded numbers.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumItemsContentTest,
+	"Elysium.Content.Items", GElysiumContentTestFlags)
+bool FElysiumItemsContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/items.txt"))))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		return true;
+	}
+
+	FString Error;
+	FElysiumItemTable Items;
+	if (!TestTrue(TEXT("vdata/items parses"), Items.Load(Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// --- The eleven semantic types, and the compile-time mirror of them --------------------
+	// `system/items.txt`'s ItemTypes block is the vocabulary `EElysiumItemType` mirrors; the file
+	// order is the engine's enum, so a reordering there silently reinterprets every item.
+	{
+		FString Raw;
+		TSharedPtr<ElysiumKeyValues::FKvNode> Root;
+		if (FFileHelper::LoadFileToString(Raw, *FElysiumContentPaths::VdataFile(TEXT("system/items.txt"))))
+		{
+			Root = ElysiumKeyValues::ParseText(Raw);
+		}
+		const ElysiumKeyValues::FKvNode* Data = Root.IsValid() ? Root->Child(TEXT("ItemTypeData")) : nullptr;
+		const ElysiumKeyValues::FKvNode* Types = Data ? Data->Child(TEXT("ItemTypes")) : nullptr;
+		if (TestNotNull(TEXT("system/items.txt carries an ItemTypes block"), Types))
+		{
+			TArray<FString> Declared;
+			for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Kid : Types->Kids)
+			{
+				if (Kid.Key == TEXT("itemtype") && Kid.Value.IsValid())
+				{
+					Declared.Add(Kid.Value->Str(TEXT("InternalName"), FString()));
+				}
+			}
+			TestEqual(TEXT("it declares eleven item types"), Declared.Num(),
+				(int32)EElysiumItemType::Count);
+			for (int32 i = 0; i < Declared.Num() && i < (int32)EElysiumItemType::Count; ++i)
+			{
+				TestEqual(*FString::Printf(TEXT("type %d is %s"), i,
+					ElysiumItemTypeName((EElysiumItemType)i)),
+					Declared[i], FString(ElysiumItemTypeName((EElysiumItemType)i)));
+			}
+		}
+		// The eight authored inventory sections: hidden `None`, six displayed, hidden `Hidden`.
+		if (const ElysiumKeyValues::FKvNode* Sections = Data ? Data->Child(TEXT("InventorySections")) : nullptr)
+		{
+			int32 Total = 0;
+			int32 Displayed = 0;
+			for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Kid : Sections->Kids)
+			{
+				if (Kid.Key == TEXT("inventorysection") && Kid.Value.IsValid())
+				{
+					++Total;
+					Displayed += Kid.Value->Int(TEXT("IsDisplayed"), 0) != 0 ? 1 : 0;
+				}
+			}
+			TestEqual(TEXT("eight inventory sections are authored"), Total, 8);
+			TestEqual(TEXT("...six of them displayed"), Displayed, 6);
+		}
+	}
+
+	// --- The catalogue's shape -------------------------------------------------------------
+	// 244 definitions, and the type histogram, are the recorded patch-first figures.
+	constexpr int32 RecordedCount = 244;
+	if (Items.Num() != RecordedCount)
+	{
+		AddInfo(FString::Printf(
+			TEXT("vdata/items holds %d definitions; inventory.md records %d for the patch-first corpus"),
+			Items.Num(), RecordedCount));
+	}
+	TestTrue(TEXT("the catalogue is not empty"), Items.Num() > 0);
+
+	// The recorded histogram, visible + hidden per type (`inventory.md` §4).
+	struct FTypeExpectation { EElysiumItemType Type; int32 Total; };
+	const FTypeExpectation Recorded[] = {
+		{ EElysiumItemType::Generic,       106 },
+		{ EElysiumItemType::Powerup,        63 },
+		{ EElysiumItemType::WeaponFirearm,  17 },   // 16 visible + 1 hidden
+		{ EElysiumItemType::WeaponMelee,    18 },   // 15 visible + 3 hidden
+		{ EElysiumItemType::Armor,          13 },
+		{ EElysiumItemType::Hidden,         19 },   // 10 unmarked + 9 explicitly hidden
+		{ EElysiumItemType::WeaponThrown,    5 },
+		{ EElysiumItemType::Bloodpack,       3 },
+	};
+	int32 Histogrammed = 0;
+	for (const FTypeExpectation& Row : Recorded)
+	{
+		const int32 Actual = Items.CountOfType(Row.Type);
+		Histogrammed += Actual;
+		if (Actual != Row.Total)
+		{
+			AddInfo(FString::Printf(TEXT("item type %s: %d files (inventory.md records %d)"),
+				ElysiumItemTypeName(Row.Type), Actual, Row.Total));
+		}
+		// Structural, whatever the count: every recorded type is represented.
+		TestTrue(*FString::Printf(TEXT("%s items exist"), ElysiumItemTypeName(Row.Type)), Actual > 0);
+	}
+	TestEqual(TEXT("every definition resolved to one of the recorded types"),
+		Histogrammed, Items.Num());
+	// The two hidden-marked families are what makes `item_type` a SET rather than one word.
+	TestTrue(TEXT("some definitions carry the trailing `hidden` flag beside their type"),
+		Items.Items.ContainsByPredicate([](const FElysiumItemDef& D) { return D.bHidden; }));
+
+	// --- Policy: three distinct keys --------------------------------------------------------
+	int32 Stackable = 0;
+	int32 NonDroppable = 0;
+	int32 Permanent = 0;
+	int32 WithMagazine = 0;
+	for (const FElysiumItemDef& Def : Items.Items)
+	{
+		Stackable += Def.bStackable ? 1 : 0;
+		NonDroppable += Def.bDroppable ? 0 : 1;
+		Permanent += Def.bPermanentInventory ? 1 : 0;
+		WithMagazine += Def.AmmoType.IsEmpty() ? 0 : 1;
+		TestFalse(TEXT("every definition names its classname"), Def.Classname.IsEmpty());
+	}
+	const int32 RecordedStackable = 22;
+	const int32 RecordedNonDroppable = 39;
+	const int32 RecordedPermanent = 29;
+	if (Stackable != RecordedStackable || NonDroppable != RecordedNonDroppable
+		|| Permanent != RecordedPermanent)
+	{
+		AddInfo(FString::Printf(
+			TEXT("policy keys: is_stackable=1 on %d (recorded %d), is_droppable=0 on %d (recorded %d), ")
+			TEXT("permanent_inventory=1 on %d (recorded %d)"),
+			Stackable, RecordedStackable, NonDroppable, RecordedNonDroppable,
+			Permanent, RecordedPermanent));
+	}
+	// The three keys are distinct, which is the fact the runtime depends on: no two of the sets
+	// coincide, so none of them can be derived from another.
+	TestTrue(TEXT("is_stackable, is_droppable and permanent_inventory are three different sets"),
+		Stackable != NonDroppable && NonDroppable != Permanent && Stackable != Permanent);
+	TestTrue(TEXT("some items carry a magazine"), WithMagazine > 0);
+
+	// --- The keyring is an ordinary carried item with its own policy -------------------------
+	const FElysiumItemDef* Keyring = Items.Find(TEXT("item_g_keyring"));
+	if (TestNotNull(TEXT("item_g_keyring has an item definition"), Keyring))
+	{
+		TestFalse(TEXT("...and is not droppable"), Keyring->bDroppable);
+		TestTrue(TEXT("...and is permanent inventory"), Keyring->bPermanentInventory);
+		TestEqual(TEXT("...found case-insensitively"),
+			Items.Find(TEXT("ITEM_G_KeyRing")), Keyring);
+	}
+
+	// --- The tutorial's `.38`: the values its ammo beat rides on ------------------------------
+	if (const FElysiumItemDef* Gun = Items.Find(TEXT("item_w_thirtyeight")))
+	{
+		TestEqual(TEXT("the .38 is a firearm"), (int32)Gun->Type, (int32)EElysiumItemType::WeaponFirearm);
+		TestEqual(TEXT("...naming ammo type ThirtyeightRound"), Gun->AmmoType,
+			FString(TEXT("ThirtyeightRound")));
+		TestEqual(TEXT("...with a magazine of six"), Gun->MagazineSize, 6);
+		TestEqual(TEXT("...a default load of six"), Gun->DefaultAmmo, 6);
+		TestFalse(TEXT("...and it does not stack"), Gun->bStackable);
+	}
+	else
+	{
+		AddInfo(TEXT("item_w_thirtyeight is absent from this corpus"));
+	}
+
+	// The patch-authored stackable the doc warns not to read as stock behaviour.
+	if (const FElysiumItemDef* TireIron = Items.Find(TEXT("item_w_tire_iron")))
+	{
+		if (!TireIron->bStackable || TireIron->StackLimit != 10)
+		{
+			AddInfo(FString::Printf(
+				TEXT("item_w_tire_iron: stackable=%d limit=%d (the patch-first corpus records 1 / 10)"),
+				TireIron->bStackable ? 1 : 0, TireIron->StackLimit));
+		}
+	}
+
+	// --- Every item classname a map places has a definition ----------------------------------
+	// The three `item_container*` classnames are containers, not items, and deliberately have none.
+	{
+		TArray<FString> EntsFiles;
+		IFileManager::Get().FindFilesRecursive(EntsFiles, *FElysiumContentPaths::Root(), TEXT("*.ents"),
+			/*Files*/ true, /*Dirs*/ false);
+		TArray<FString> Missing;
+		int32 Placed = 0;
+		for (const FString& EntsPath : EntsFiles)
+		{
+			FElysiumEntityDefs MapDefs;
+			if (!FElysiumEntityDefs::Parse(EntsPath, MapDefs))
+			{
+				continue;
+			}
+			for (const FElysiumEntityDef& Def : MapDefs.Defs)
+			{
+				if (!Def.Classname.StartsWith(TEXT("item_"), ESearchCase::IgnoreCase)
+					|| Def.Classname.StartsWith(TEXT("item_container"), ESearchCase::IgnoreCase))
+				{
+					continue;
+				}
+				++Placed;
+				if (Items.Find(Def.Classname) == nullptr)
+				{
+					Missing.AddUnique(Def.Classname);
+				}
+			}
+		}
+		AddInfo(FString::Printf(TEXT("the exported maps place %d item entities"), Placed));
+		ReportMissing(*this, TEXT("placed item classnames with no vdata/items record"), Missing);
+	}
+
+	AddInfo(FString::Printf(TEXT("vdata/items: %d definitions, %d with a magazine"),
+		Items.Num(), WithMagazine));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

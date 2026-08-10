@@ -40,6 +40,10 @@ public:
 	const FElysiumWizard&             Wizard();
 	const FElysiumStrings&            Strings();
 	const FElysiumDiceTables&         Dice();
+	// `vdata/items/*.txt`. Its first load also registers one entity class per definition
+	// (`ElysiumItems::Install`), so it has to happen before a map's item entities are created —
+	// `FElysiumEntityWorld::Load` touches it for exactly that reason.
+	const FElysiumItemTable&          Items();
 
 	// Force every table. Returns the number that loaded clean.
 	int32 LoadAll();
@@ -78,6 +82,7 @@ private:
 	FElysiumWizard            WizardData;
 	FElysiumStrings           StringData;
 	FElysiumDiceTables        DiceTables;
+	FElysiumItemTable         ItemTable;
 
 	bool bStatsLoaded = false;
 	bool bFeatsLoaded = false;
@@ -91,6 +96,7 @@ private:
 	bool bWizardLoaded = false;
 	bool bStringsLoaded = false;
 	bool bDiceLoaded = false;
+	bool bItemsLoaded = false;
 
 	FString StatsError;
 	FString FeatsError;
@@ -104,6 +110,7 @@ private:
 	FString WizardError;
 	FString StringsError;
 	FString DiceError;
+	FString ItemsError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

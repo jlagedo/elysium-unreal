@@ -5,6 +5,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumItemClasses.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNative, Log, All);
@@ -43,13 +44,13 @@ namespace
 		{ TEXT("SetExpression"),       true,  TEXT("stub") },
 		{ TEXT("SetDisposition"),      true,  TEXT("stance only (9.9 owns reactions)") },
 		{ TEXT("SetGesture"),          true,  TEXT("plays the named clip") },
-		{ TEXT("HasItem"),             true,  TEXT("stub (no inventory)") },
-		{ TEXT("GiveItem"),            true,  TEXT("stub (no inventory)") },
-		{ TEXT("RemoveItem"),          true,  TEXT("stub (no inventory)") },
-		{ TEXT("AmmoCount"),           true,  TEXT("stub (no inventory)") },
-		{ TEXT("GiveAmmo"),            true,  TEXT("stub (no inventory)") },
-		{ TEXT("HasWeaponEquipped"),   true,  TEXT("stub (no inventory)") },
-		{ TEXT("StartBarter"),         true,  TEXT("stub") },
+		{ TEXT("HasItem"),             true,  TEXT("ordinary slots then the keyring") },
+		{ TEXT("GiveItem"),            true,  TEXT("player-only GiveNamedItem") },
+		{ TEXT("RemoveItem"),          true,  TEXT("stack decrement, else destroy, else keyring") },
+		{ TEXT("AmmoCount"),           true,  TEXT("stack count / loaded magazine") },
+		{ TEXT("GiveAmmo"),            true,  TEXT("stack count / reserve pool") },
+		{ TEXT("HasWeaponEquipped"),   true,  TEXT("the active weapon's classname, case-sensitive") },
+		{ TEXT("StartBarter"),         true,  TEXT("stub (9.8b owns barter and containers)") },
 		{ TEXT("WorldMap"),            true,  TEXT("stub") },
 		{ TEXT("SewerMap"),            true,  TEXT("stub") },
 		{ TEXT("SetQuest"),            true,  TEXT("quest map + the catalogue's awards and journal") },
@@ -114,9 +115,8 @@ namespace
 		{
 			return FElysiumVariant::Bool(State ? State->PlayerSheet().IsMale() : true);
 		}
-		if (Method == FName(TEXT("HasItem")) || Method == FName(TEXT("HasWeaponEquipped"))
-			|| Method == FName(TEXT("IsFollowerOf"))) { return FElysiumVariant::Bool(false); }
-		if (Method == FName(TEXT("AmmoCount")) || Method == FName(TEXT("DialogDiscipline")))
+		if (Method == FName(TEXT("IsFollowerOf"))) { return FElysiumVariant::Bool(false); }
+		if (Method == FName(TEXT("DialogDiscipline")))
 		{
 			return FElysiumVariant::Int(0);
 		}
@@ -304,6 +304,98 @@ namespace ElysiumScriptNatives
 		{
 			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
 			const FElysiumVariant R = FElysiumVariant::Int(Char ? Char->GetMasqueradeLevel() : 0);
+			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
+			return R;
+		}
+
+		// --- The inventory surface (9.8a, `docs/vtmb/inventory.md` §6) ----------------------------
+		// All six read or write the RECEIVER's own inventory, except `GiveItem`, which is a
+		// player-only service in retail and stays one here. Item names are classnames throughout.
+		if (Method == FName(TEXT("HasItem")))
+		{
+			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FString Item = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			// Case-insensitive across all ordinary slots, then the carried keyring's records.
+			const FElysiumVariant R = FElysiumVariant::Bool(Char && Char->Inventory.Has(*Char, Item));
+			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
+			return R;
+		}
+		if (Method == FName(TEXT("GiveItem")))
+		{
+			// Player-only: retail reaches `GiveNamedItem` through the receiver's player component,
+			// and a receiver without one has nothing to grant into.
+			FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr;
+			FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FString Item = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			const bool bIsPlayer = Player != nullptr && Char == static_cast<FElysiumCombatCharacter*>(Player);
+			const bool bGiven = bIsPlayer && Player->Inventory.GiveNamedItem(*Player, Item).IsSet();
+			if (!bGiven)
+			{
+				// Retail's own line. A failed grant is a reproduced failure posture, not a gap.
+				UE_LOG(LogElysiumNative, Log, TEXT("Could not give item (\"%s\")"), *Item);
+			}
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ false);
+			return FElysiumVariant::Void();   // VtMB returns None
+		}
+		if (Method == FName(TEXT("RemoveItem")))
+		{
+			FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FString Item = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			if (Char)
+			{
+				Char->Inventory.ScriptRemove(*Char, Item);
+			}
+			// **None even on no match** — the wrapper reports nothing either way.
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ Char == nullptr);
+			return FElysiumVariant::Void();
+		}
+		if (Method == FName(TEXT("AmmoCount")))
+		{
+			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FString Item = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			// The ORDINARY slots only. A stackable item answers with its stack count; a
+			// non-stackable one with its primary LOADED magazine; an item not owned, with zero.
+			const FElysiumItem* Owned = Char ? Char->Inventory.FindOrdinary(*Char, Item) : nullptr;
+			int32 Count = 0;
+			if (Owned)
+			{
+				Count = Owned->IsStackable() ? Owned->ItemCount : Owned->MagazineCount;
+			}
+			const FElysiumVariant R = FElysiumVariant::Int(Count);
+			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
+			return R;
+		}
+		if (Method == FName(TEXT("GiveAmmo")))
+		{
+			FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FString Item = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			const int32 Amount = Args.Num() >= 2 ? Args[1].ToInt() : 0;
+			// Requires the named item to be owned. A stackable item adds to its own count; a
+			// non-stackable one adds RESERVE rounds of its primary ammo type to the character —
+			// deliberately not the loaded magazine `AmmoCount` reads. The wrapper carries no clamp.
+			if (FElysiumItem* Owned = Char ? Char->Inventory.FindOrdinary(*Char, Item) : nullptr)
+			{
+				if (Owned->IsStackable())
+				{
+					Owned->ItemCount += Amount;
+				}
+				else
+				{
+					Char->Inventory.AddReserve(Owned->AmmoType, Amount);
+				}
+			}
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ Char == nullptr);
+			return FElysiumVariant::Void();
+		}
+		if (Method == FName(TEXT("HasWeaponEquipped")))
+		{
+			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
+			const FString Item = Args.Num() >= 1 ? Args[0].ToString() : FString();
+			// An EXACT, case-sensitive compare against the active weapon's classname — the one
+			// inventory predicate that is not case-folded, and it does not mean "owned".
+			const FElysiumItem* Active = Char ? Char->Inventory.Active(*Char) : nullptr;
+			const FElysiumVariant R = FElysiumVariant::Bool(
+				Active != nullptr && Active->ClassName().Equals(Item, ESearchCase::CaseSensitive));
 			Record(State, Method, Display, R, /*bStub*/ Char == nullptr);
 			return R;
 		}

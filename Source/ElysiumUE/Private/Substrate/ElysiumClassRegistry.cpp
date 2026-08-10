@@ -37,7 +37,8 @@ FElysiumClassRegistry& FElysiumClassRegistry::Get()
 
 FElysiumClassDesc& FElysiumClassRegistry::Register(FName ClassName, FName BaseName, FElysiumEntityFactory Factory)
 {
-	FElysiumClassDesc& Desc = Classes.Add(ClassName);
+	TUniquePtr<FElysiumClassDesc>& Slot = Classes.Add(ClassName, MakeUnique<FElysiumClassDesc>());
+	FElysiumClassDesc& Desc = *Slot;
 	Desc.ClassName = ClassName;
 	Desc.BaseName = BaseName;
 	Desc.Factory = Factory;
@@ -57,12 +58,13 @@ FElysiumClassDesc* FElysiumClassRegistry::RegisterStub(FName ClassName, FName Ba
 
 const FElysiumClassDesc* FElysiumClassRegistry::Find(FName ClassName) const
 {
-	return Classes.Find(ClassName);
+	const TUniquePtr<FElysiumClassDesc>* Slot = Classes.Find(ClassName);
+	return Slot ? Slot->Get() : nullptr;
 }
 
 const FElysiumClassDesc* FElysiumClassRegistry::BaseDesc() const
 {
-	return Classes.Find(ElysiumBaseClassName());
+	return Find(ElysiumBaseClassName());
 }
 
 FElysiumInputThunk FElysiumClassRegistry::FindInput(const FElysiumClassDesc& Desc, FName Input) const
@@ -130,9 +132,9 @@ TUniquePtr<FElysiumEntity> FElysiumClassRegistry::Create(const FElysiumEntityDef
 
 void FElysiumClassRegistry::ForEach(TFunctionRef<void(const FElysiumClassDesc&)> Fn) const
 {
-	for (const TPair<FName, FElysiumClassDesc>& Pair : Classes)
+	for (const TPair<FName, TUniquePtr<FElysiumClassDesc>>& Pair : Classes)
 	{
-		Fn(Pair.Value);
+		if (Pair.Value) { Fn(*Pair.Value); }
 	}
 }
 

@@ -147,6 +147,16 @@ double FElysiumEntityWorld::NowSeconds() const
 void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 {
 	bActive = false;
+	// The item catalogue registers one entity class per `vdata/items` definition, and the registry
+	// resolves a classname once, at Create. So the catalogue has to be loaded before this map's
+	// item entities are built — otherwise they spawn as inert records and stay that way.
+	if (GameState)
+	{
+		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+		{
+			Rules->Items();
+		}
+	}
 	Defs = MoveTemp(InDefs);
 	for (const FElysiumEntityDef& Def : Defs.Defs)
 	{
@@ -846,6 +856,14 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 				{
 					continue;   // the name index has to be re-keyed; handled below, once
 				}
+				if (F.Value.IsHandle())
+				{
+					// §6 — a saved handle carries a dead epoch, and re-stamping is this applier's
+					// job (the archive drops the epoch by design). An index that no longer exists
+					// reads Invalid, the same falsy value a killed entity produces.
+					Acc->Set(*E, FElysiumVariant::Handle(RebaseHandle(F.Value.AsHandle)));
+					continue;
+				}
 				Acc->Set(*E, F.Value);
 			}
 		}
@@ -898,6 +916,17 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
 		{
 			E->Kill();
+		}
+	}
+
+	// 9.8 — an inventory's handle list is a CACHE of what the items' own Save-flagged fields say, so
+	// it is re-derived rather than serialized twice. It runs here, after every record has landed and
+	// every dead flag is final, because an item may restore either side of the character carrying it.
+	for (const TUniquePtr<FElysiumEntity>& Candidate : EntityList)
+	{
+		if (FElysiumCombatCharacter* Char = Candidate ? Candidate->AsCombatCharacter() : nullptr)
+		{
+			Char->Inventory.RebuildFrom(*Char);
 		}
 	}
 

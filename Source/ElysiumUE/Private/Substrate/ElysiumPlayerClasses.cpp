@@ -16,6 +16,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
+#include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's entity parameter
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumSkeletalBasis.h"
@@ -678,6 +679,24 @@ void FElysiumCombatCharacter::InputWillTalk(const FElysiumInputArgs& Args)
 	bWillTalk = Args.Param.ToInt() != 0;
 }
 
+void FElysiumCombatCharacter::InputInventoryRemove(const FElysiumInputArgs& Args)
+{
+	// The recovered field type is CLASSPTR, so the parameter is an entity and nothing else. A wire
+	// carrying a string cannot convert to one in Source either, so a non-handle parameter performs
+	// nothing rather than being reinterpreted as a classname — that would be a contract this input
+	// does not have. No shipped map fires it (0 wires game-wide), so the handle form is the whole
+	// surface a runtime caller reaches.
+	FElysiumEntity* Named = (World && Args.Param.IsHandle()) ? World->Resolve(Args.Param.ToHandle()) : nullptr;
+	FElysiumItem* Item = Named ? Named->AsItem() : nullptr;
+	if (!Item)
+	{
+		UE_LOG(LogElysiumPlayer, Log, TEXT("%s Inventory_Remove — the parameter is not an item entity"),
+			*DebugString());
+		return;
+	}
+	Inventory.Detach(*this, *Item);
+}
+
 // ============================================================================================
 // Gaze — the selection cascade, the saccade layer and the integrator (12.4)
 // ============================================================================================
@@ -1331,9 +1350,15 @@ void FElysiumPlayer::OnKilled()
 
 void FElysiumPlayer::InputGiveItem(const FElysiumInputArgs& Args)
 {
-	// STRING — the item's `vdata/items` key, 126 wires game-wide. 9.8 owns the item model; until it
-	// lands the name is recorded so a beat that hands the player a weapon is visible in the log.
-	PendingInput(TEXT("GiveItem"), TEXT("9.8 — inventory"), Args);
+	// STRING — the item's `vdata/items` key, 126 wires game-wide. `GiveItem` exists twice, as this
+	// input and as a Character method, and the two need not share an implementation; both reach the
+	// one player-only service, `GiveNamedItem`.
+	const FString Classname = Args.Param.ToString();
+	if (!Inventory.GiveNamedItem(*this, Classname).IsSet())
+	{
+		// Retail's own line for a grant that did not land.
+		UE_LOG(LogElysiumPlayer, Log, TEXT("%s Could not give item (\"%s\")"), *DebugString(), *Classname);
+	}
 }
 
 void FElysiumPlayer::InputAwardExperience(const FElysiumInputArgs& Args)
@@ -1413,8 +1438,10 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		D.Input(TEXT("Bloodgain"),             [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputBloodgain(A); });
 		D.Input(TEXT("BloodHeal"),             [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputBloodHeal(A); });
 		D.Input(TEXT("WillTalk"),              [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputWillTalk(A); });
+		// CLASSPTR — an entity-valued detach that never destroys (9.8).
+		D.Input(TEXT("Inventory_Remove"),      [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputInventoryRemove(A); });
 
-		// The seventeen whose system has not landed. They register so the name resolves through the
+		// The sixteen whose system has not landed. They register so the name resolves through the
 		// R2 walk and reaches a defined place — fail-closed, not missing (roadmap 11.4). An input
 		// thunk is a captureless function pointer, so each row states its own name and owner.
 		ELYSIUM_PENDING_INPUT(FC, FrenzyTrigger,          "P13 — disciplines and frenzy");
@@ -1423,7 +1450,6 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		ELYSIUM_PENDING_INPUT(FC, HungerCheck,            "P13 — disciplines and frenzy");
 		ELYSIUM_PENDING_INPUT(FC, FrenzyUpdate,           "P13 — disciplines and frenzy");
 		ELYSIUM_PENDING_INPUT(FC, ClearActiveDisciplines, "P13 — disciplines");
-		ELYSIUM_PENDING_INPUT(FC, Inventory_Remove,       "9.8 — inventory");
 		ELYSIUM_PENDING_INPUT(FC, BarterBegin,            "9.8 — barter");
 		ELYSIUM_PENDING_INPUT(FC, BarterEnd,              "9.8 — barter");
 		ELYSIUM_PENDING_INPUT(FC, PlayFloat,              "8.9 — the floating HUD readout");
@@ -1442,6 +1468,24 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// `money` is `m_iMoney`, the one counter `stats.txt` does not carry as a Stat. Humanity,
 		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
 		AddCharField(D, TEXT("money"), &FC::Money);
+
+		// The active-weapon handle (+0x19a4). Saved as a handle so the equipped item survives a
+		// restore; the 224-slot list beside it is re-derived from the items' own owner/position
+		// fields (FElysiumInventory::RebuildFrom), so only this one needs a field.
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(ElysiumFieldDefault);
+			Acc.Type = EElysiumVariantType::Handle;
+			Acc.Get = [](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Handle(static_cast<const FC&>(E).Inventory.ActiveWeapon);
+			};
+			Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).Inventory.ActiveWeapon = V.ToHandle();
+			};
+			D.Fields.Add(FName(TEXT("m_hActiveWeapon")), MoveTemp(Acc));
+		}
 
 		// The gaze state, at the offsets the datamap carries them: the commanded and smoothed eye
 		// targets and the integration rate. `m_hEyeLookTarget` is a handle, which the registry has no

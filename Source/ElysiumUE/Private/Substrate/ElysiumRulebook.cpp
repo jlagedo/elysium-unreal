@@ -2165,3 +2165,201 @@ int32 FElysiumStrings::NumEntries() const
 	for (const TPair<FString, TArray<FString>>& Pair : Groups) { N += Pair.Value.Num(); }
 	return N;
 }
+
+// ================================================================================================
+// 15. vdata/items/*.txt — the item definitions
+// ================================================================================================
+
+namespace
+{
+	// In `EElysiumItemType` order, which is `system/items.txt`'s own `ItemTypes` order.
+	const TCHAR* const GItemTypeNames[] = {
+		TEXT("Weapon_Melee"), TEXT("Weapon_Firearm"), TEXT("Weapon_Thrown"), TEXT("Ammo"),
+		TEXT("Armor"), TEXT("Money"), TEXT("Jewelry"), TEXT("Generic"), TEXT("Powerup"),
+		TEXT("Bloodpack"), TEXT("Hidden"),
+	};
+	static_assert(UE_ARRAY_COUNT(GItemTypeNames) == (int32)EElysiumItemType::Count,
+		"the item-type mirror must match system/items.txt's ItemTypes block");
+}
+
+const TCHAR* ElysiumItemTypeName(EElysiumItemType Type)
+{
+	const int32 Index = (int32)Type;
+	return (Index >= 0 && Index < (int32)EElysiumItemType::Count) ? GItemTypeNames[Index] : TEXT("?");
+}
+
+bool ElysiumParseItemType(const FString& Raw, EElysiumItemType& OutType, bool& OutHidden)
+{
+	OutHidden = false;
+	TArray<FString> Tokens;
+	Raw.ParseIntoArrayWS(Tokens);
+
+	bool bFound = false;
+	for (const FString& Token : Tokens)
+	{
+		bool bMatched = false;
+		for (int32 i = 0; i < (int32)EElysiumItemType::Count; ++i)
+		{
+			if (!Token.Equals(GItemTypeNames[i], ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			bMatched = true;
+			if (!bFound)
+			{
+				OutType = (EElysiumItemType)i;
+				bFound = true;
+			}
+			else if ((EElysiumItemType)i == EElysiumItemType::Hidden)
+			{
+				// A trailing `hidden` beside a real type is the file's own visibility flag —
+				// `"weapon_firearm hidden"`, and `"hidden hidden"` for an item that is both.
+				OutHidden = true;
+			}
+			break;
+		}
+		if (!bMatched)
+		{
+			// An unrecognised token is not an error: the value is authored free-form and the
+			// caller keeps whatever type it already resolved.
+			continue;
+		}
+	}
+	return bFound;
+}
+
+bool FElysiumItemDef::IsWeaponType() const
+{
+	// `system/items.txt`'s `IsWeapon` column: the three wielded weapon families, Bloodpack (which
+	// the file marks a weapon because feeding is an attack), and Hidden (the intrinsic attacks).
+	switch (Type)
+	{
+	case EElysiumItemType::WeaponMelee:
+	case EElysiumItemType::WeaponFirearm:
+	case EElysiumItemType::WeaponThrown:
+	case EElysiumItemType::Bloodpack:
+	case EElysiumItemType::Hidden:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
+	FElysiumItemDef& Out, FString& OutError)
+{
+	TSharedPtr<FKvNode> Root = ElysiumKeyValues::ParseText(Text);
+	const FKvNode* Data = Root.IsValid() ? Root->Child(TEXT("WeaponData")) : nullptr;
+	if (Data == nullptr)
+	{
+		OutError = FString::Printf(TEXT("no WeaponData block in %s"), *Classname);
+		return false;
+	}
+
+	Out = FElysiumItemDef();
+	Out.Classname = Classname;
+	Out.PrintName = Data->Str(TEXT("printname"), FString());
+	Out.Description = Data->Str(TEXT("description"), FString());
+
+	ElysiumParseItemType(Data->Str(TEXT("item_type"), FString()), Out.Type, Out.bHidden);
+
+	Out.bStackable = Data->Bool(TEXT("is_stackable"), false);
+	// `stack_limit` only. One patch file authors `stacklimit` without the underscore, which the
+	// engine's own `GetInt("stack_limit")` never reads either — a defect reproduced, not repaired.
+	Out.StackLimit = Data->Int(TEXT("stack_limit"), 0);
+	Out.bDroppable = Data->Bool(TEXT("is_droppable"), true);
+	Out.bPermanentInventory = Data->Bool(TEXT("permanent_inventory"), false);
+	Out.bWieldable = Data->Bool(TEXT("is_wieldable"), false);
+	Out.bVisibleInHud = Data->Bool(TEXT("is_visible_in_hud"), true);
+
+	Out.Worth = Data->Int(TEXT("item_worth"), 0);
+	Out.PlayerSell = Data->Int(TEXT("player_sell"), 0);
+	Out.Weight = Data->Int(TEXT("weight"), 0);
+	Out.ItemFlags = Data->Int(TEXT("item_flags"), 0);
+
+	Out.PlayerModel = Data->Str(TEXT("playermodel"), FString());
+	Out.ViewModel = Data->Str(TEXT("viewmodel"), FString());
+	Out.InfoModel = Data->Str(TEXT("infomodel"), FString());
+
+	if (const FKvNode* Magazine = Data->Child(TEXT("Magazine")))
+	{
+		Out.AmmoType = Magazine->Str(TEXT("Type"), FString());
+		Out.MagazineSize = Magazine->Int(TEXT("Size"), 0);
+		// An unauthored `Default_Size` falls back to the magazine's capacity: the file states the
+		// two separately only where they differ.
+		Out.DefaultAmmo = Magazine->Int(TEXT("Default_Size"), Out.MagazineSize);
+		Out.DroppedAmmo = Magazine->Int(TEXT("Dropped_Ammo"), 0);
+		Out.ReloadTime = Magazine->Flt(TEXT("ReloadTime"), 0.0f);
+	}
+
+	OutError.Reset();
+	return true;
+}
+
+bool FElysiumItemTable::Load(FString& OutError)
+{
+	Items.Reset();
+	ByName.Reset();
+
+	const FString Dir = FElysiumContentPaths::VdataDir() / TEXT("items");
+	TArray<FString> Files;
+	IFileManager::Get().FindFiles(Files, *(Dir / TEXT("*.txt")), true, false);
+	Files.Sort();
+
+	for (const FString& Leaf : Files)
+	{
+		FString Raw;
+		if (!FFileHelper::LoadFileToString(Raw, *(Dir / Leaf)))
+		{
+			OutError = FString::Printf(TEXT("unreadable: %s"), *(Dir / Leaf));
+			continue;   // one unreadable file must not cost the other 243
+		}
+		FElysiumItemDef Def;
+		FString FileError;
+		if (!ParseText(FPaths::GetBaseFilename(Leaf), Raw, Def, FileError))
+		{
+			OutError = FileError;
+			continue;
+		}
+		Items.Add(MoveTemp(Def));
+	}
+
+	if (Items.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("no item definitions in %s"), *Dir);
+		return false;
+	}
+	Reindex();
+	OutError.Reset();
+	return true;
+}
+
+void FElysiumItemTable::Reindex()
+{
+	ByName.Reset();
+	for (int32 i = 0; i < Items.Num(); ++i)
+	{
+		Index(ByName, Items[i].Classname, i);
+	}
+}
+
+const FElysiumItemDef* FElysiumItemTable::Find(const FString& Classname) const
+{
+	const int32* Idx = ByName.Find(ElysiumFold(Classname));
+	return Idx ? &Items[*Idx] : nullptr;
+}
+
+const FElysiumItemDef* FElysiumItemTable::At(int32 InIndex) const
+{
+	return Items.IsValidIndex(InIndex) ? &Items[InIndex] : nullptr;
+}
+
+int32 FElysiumItemTable::CountOfType(EElysiumItemType Type) const
+{
+	int32 N = 0;
+	for (const FElysiumItemDef& Def : Items)
+	{
+		if (Def.Type == Type) { ++N; }
+	}
+	return N;
+}

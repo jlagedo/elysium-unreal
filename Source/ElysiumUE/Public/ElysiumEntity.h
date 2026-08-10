@@ -352,6 +352,14 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsCombatCharacter();
 	}
 
+	// The same, for the item leaf (9.8): an inventory holds handles, and resolving one has to
+	// recognise an item without reflection. Base returns null; FElysiumItem overrides.
+	virtual class FElysiumItem* AsItem() { return nullptr; }
+	const class FElysiumItem* AsItem() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsItem();
+	}
+
 	// --- Open-ended attribute names (11.4) ----------------------------------------------
 	// The registry's field table is a static list of names, which is exactly right for a datamap
 	// and wrong for the part of the character sheet that is `vdata`-driven (`base_<discipline>`,

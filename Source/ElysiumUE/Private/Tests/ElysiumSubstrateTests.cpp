@@ -69,6 +69,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -13234,6 +13235,311 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	Sliced.ParamEnd[0] = 90.f;
 	TestFalse(TEXT("a fan spanning part of its parameter is refused"),
 		ElysiumBlendGrids::SpeedFan(Sliced, Table, 1.0f, Refused));
+
+	return true;
+}
+
+
+// =====================================================================================
+// Inventory (9.8a): items are entities, the character owns handles to them, and the six
+// Character methods read and write that one container. The contract is
+// `docs/vtmb/inventory.md` §§2-6.
+//
+// Content-free: the item catalogue is built in code and installed for the length of this
+// case, so the classnames and the policy values below are this test's statement of the
+// retail contract rather than a reading of the export. `Elysium.Content.Items` is what
+// checks the same values against the corpus.
+// =====================================================================================
+
+namespace
+{
+	FElysiumItemDef MakeItemDef(const TCHAR* Classname, EElysiumItemType Type)
+	{
+		FElysiumItemDef Def;
+		Def.Classname = Classname;
+		Def.PrintName = Classname;
+		Def.Type = Type;
+		Def.PlayerModel = TEXT("models/items/test/ground.mdl");
+		return Def;
+	}
+
+	// The four classnames the tutorial's inventory chain turns on, with the policy their real
+	// `vdata/items` records carry.
+	FElysiumItemTable MakeTestItemTable()
+	{
+		FElysiumItemTable Table;
+
+		Table.Items.Add(MakeItemDef(TEXT("item_g_lockpick"), EElysiumItemType::Generic));
+
+		FElysiumItemDef Gun = MakeItemDef(TEXT("item_w_thirtyeight"), EElysiumItemType::WeaponFirearm);
+		Gun.bWieldable = true;
+		Gun.AmmoType = TEXT("ThirtyeightRound");
+		Gun.MagazineSize = 6;
+		Gun.DefaultAmmo = 6;
+		Table.Items.Add(MoveTemp(Gun));
+
+		// Patch-authored stackable with a limit of ten — the one the doc warns not to read as stock.
+		FElysiumItemDef TireIron = MakeItemDef(TEXT("item_w_tire_iron"), EElysiumItemType::WeaponMelee);
+		TireIron.bWieldable = true;
+		TireIron.bStackable = true;
+		TireIron.StackLimit = 10;
+		Table.Items.Add(MoveTemp(TireIron));
+
+		FElysiumItemDef Keyring = MakeItemDef(TEXT("item_g_keyring"), EElysiumItemType::Generic);
+		Keyring.bDroppable = false;
+		Keyring.bPermanentInventory = true;
+		Table.Items.Add(MoveTemp(Keyring));
+
+		Table.Reindex();
+		return Table;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventoryTest, "Elysium.Substrate.Inventory", GElysiumTestFlags)
+bool FElysiumInventoryTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeTestItemTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+
+	// --- The class list IS the catalogue --------------------------------------------------
+	const FElysiumClassDesc* ItemDesc = Reg.Find(FName(TEXT("item_g_lockpick")));
+	if (!TestNotNull(TEXT("a vdata/items classname is a registered entity class"), ItemDesc))
+	{
+		return false;
+	}
+	TestEqual(TEXT("an item sits under CBaseCombatWeapon"), ItemDesc->BaseName, ElysiumItemClassName());
+	if (const FElysiumClassDesc* Chain = Reg.Find(ElysiumItemClassName()))
+	{
+		TestEqual(TEXT("...which sits under CBaseAnimating"),
+			Chain->BaseName, ElysiumAnimatingClassName());
+	}
+	// The recovered datamap fields resolve through the same one R2 walk everything else does.
+	for (const TCHAR* Field : { TEXT("m_hOwner"), TEXT("m_iInvenPos"), TEXT("m_iItemCount"),
+		TEXT("m_iAmmoTypes"), TEXT("m_iMagazineCurAmts") })
+	{
+		TestNotNull(*FString::Printf(TEXT("item field %s resolves"), Field),
+			reinterpret_cast<const void*>(Reg.FindField(*ItemDesc, FName(Field))));
+	}
+	if (const FElysiumClassDesc* CharDesc = Reg.Find(ElysiumCombatCharacterClassName()))
+	{
+		TestNotNull(TEXT("the active-weapon handle is a combat-character field"),
+			reinterpret_cast<const void*>(Reg.FindField(*CharDesc, FName(TEXT("m_hActiveWeapon")))));
+	}
+
+	// --- A world with a player and one loose world item -----------------------------------
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__inventory_test__");
+	{
+		FElysiumEntityDef Loose;
+		Loose.Classname = TEXT("item_g_lockpick");
+		Loose.TargetName = TEXT("tut_lockpicks");
+		Loose.Origin = FVector(10, 20, 30);
+		Defs.Defs.Add(MoveTemp(Loose));
+	}
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	FElysiumEntity* LooseEnt = World.FindByName(TEXT("tut_lockpicks"));
+	FElysiumItem* Lockpick = LooseEnt ? LooseEnt->AsItem() : nullptr;
+	if (!TestNotNull(TEXT("the player exists"), Player)
+		|| !TestNotNull(TEXT("the map's item spawned as an item entity"), Lockpick))
+	{
+		return false;
+	}
+
+	// --- Ownership round trip: loose -> owned -> script-removed ---------------------------
+	TestFalse(TEXT("a loose world item has no owner"), Lockpick->IsOwned());
+	TestEqual(TEXT("...and is unslotted (255)"), Lockpick->InvenPos, FElysiumItem::Unslotted);
+	TestFalse(TEXT("HasItem does not see it yet"),
+		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
+
+	TestTrue(TEXT("pickup hands the SAME entity to the player"), Lockpick->AcquireBy(*Player));
+	TestEqual(TEXT("...which now owns it"), Lockpick->Owner, PlayerHandle);
+	TestEqual(TEXT("...at a compact position"), Lockpick->InvenPos, 0);
+	TestEqual(TEXT("...held as a handle, not a name"), Player->Inventory.Num(), 1);
+	TestTrue(TEXT("HasItem sees it"), Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
+	TestTrue(TEXT("...case-insensitively"), Player->Inventory.Has(*Player, TEXT("ITEM_G_LockPick")));
+	TestFalse(TEXT("a second pickup of an owned item is refused"), Lockpick->AcquireBy(*Player));
+
+	TestTrue(TEXT("RemoveItem matches the owned classname"),
+		Player->Inventory.ScriptRemove(*Player, TEXT("item_g_lockpick")));
+	TestTrue(TEXT("...and destroys the final entity"), Lockpick->IsDead());
+	TestEqual(TEXT("...leaving the slot list empty"), Player->Inventory.Num(), 0);
+	TestFalse(TEXT("RemoveItem on nothing matches nothing"),
+		Player->Inventory.ScriptRemove(*Player, TEXT("item_g_lockpick")));
+
+	// --- Stacking: decrement, then destroy the final entity --------------------------------
+	TestTrue(TEXT("GiveNamedItem creates and equips a named item"),
+		Player->Inventory.GiveNamedItem(*Player, TEXT("item_w_tire_iron")).IsSet());
+	TestTrue(TEXT("a second grant of a stackable item is accepted"),
+		Player->Inventory.GiveNamedItem(*Player, TEXT("item_w_tire_iron")).IsSet());
+	TestEqual(TEXT("...but merges rather than taking a second slot"), Player->Inventory.Num(), 1);
+	FElysiumItem* Iron = Player->Inventory.FindOrdinary(*Player, TEXT("item_w_tire_iron"));
+	if (!TestNotNull(TEXT("the merged stack is carried"), Iron))
+	{
+		return false;
+	}
+	TestEqual(TEXT("...counting two"), Iron->ItemCount, 2);
+
+	TestTrue(TEXT("RemoveItem on a stack of two"),
+		Player->Inventory.ScriptRemove(*Player, TEXT("item_w_tire_iron")));
+	TestEqual(TEXT("...decrements the count"), Iron->ItemCount, 1);
+	TestFalse(TEXT("...and destroys nothing"), Iron->IsDead());
+	TestTrue(TEXT("RemoveItem on the last of a stack"),
+		Player->Inventory.ScriptRemove(*Player, TEXT("item_w_tire_iron")));
+	TestTrue(TEXT("...destroys the entity"), Iron->IsDead());
+	TestEqual(TEXT("...and empties the slot"), Player->Inventory.Num(), 0);
+
+	// --- The keyring: one carried entity owning logical records ----------------------------
+	TestTrue(TEXT("the keyring is granted like any other item"),
+		Player->Inventory.GiveNamedItem(*Player, TEXT("item_g_keyring")).IsSet());
+	FElysiumKeyring* Ring = Player->Inventory.FindKeyring(*Player);
+	if (!TestNotNull(TEXT("item_g_keyring builds the keyring leaf"), Ring))
+	{
+		return false;
+	}
+	TestFalse(TEXT("its own item data says it cannot be dropped"), Ring->IsDroppable());
+	TestTrue(TEXT("...and that it is permanent inventory"), Ring->IsPermanentInventory());
+
+	const TCHAR* const StairsKey = TEXT("item_k_tutorial_chopshop_stairs_key");
+	TestTrue(TEXT("a collected key becomes a keyring record"), Ring->AddKey(StairsKey));
+	TestFalse(TEXT("...added once"), Ring->AddKey(StairsKey));
+	TestTrue(TEXT("HasItem falls through to the keyring"), Player->Inventory.Has(*Player, StairsKey));
+	TestTrue(TEXT("...case-insensitively"),
+		Player->Inventory.Has(*Player, TEXT("ITEM_K_Tutorial_ChopShop_Stairs_Key")));
+	TestTrue(TEXT("RemoveItem falls through to the keyring"),
+		Player->Inventory.ScriptRemove(*Player, TEXT("Item_K_Tutorial_ChopShop_Stairs_Key")));
+	TestFalse(TEXT("...removing the record"), Player->Inventory.Has(*Player, StairsKey));
+	TestNotNull(TEXT("...and leaving the keyring entity carried"),
+		Player->Inventory.FindKeyring(*Player));
+
+	// --- AmmoCount reports the magazine; GiveAmmo grants reserve ---------------------------
+	TestTrue(TEXT("the .38 is granted"),
+		Player->Inventory.GiveNamedItem(*Player, TEXT("item_w_thirtyeight")).IsSet());
+	FElysiumItem* Gun = Player->Inventory.FindOrdinary(*Player, TEXT("item_w_thirtyeight"));
+	if (!TestNotNull(TEXT("the .38 is carried"), Gun))
+	{
+		return false;
+	}
+	TestEqual(TEXT("a fresh firearm spawns loaded with its Default_Size"), Gun->MagazineCount, 6);
+	TestEqual(TEXT("...and names its ammo type from the item data"), Gun->AmmoType,
+		FString(TEXT("ThirtyeightRound")));
+	// The tutorial's beat: the gun is owned and its magazine is empty, so dialogue grants six
+	// RESERVE rounds — which must not move what AmmoCount reads.
+	Gun->MagazineCount = 0;
+
+	// --- The same container through the script surface -------------------------------------
+	// One dispatch per method, through the real `CallCharacterMethod` both hosts share.
+	auto Method = [&World, &PlayerHandle](const TCHAR* Name, TArrayView<const FElysiumVariant> Args)
+	{
+		return ElysiumScriptNatives::CallCharacterMethod(/*State*/ nullptr, &World, PlayerHandle,
+			FName(Name), Args);
+	};
+	const FElysiumVariant Lock = FElysiumVariant::String(TEXT("item_g_lockpick"));
+	TestTrue(TEXT("Character.GiveItem grants to the player"),
+		Method(TEXT("GiveItem"), { Lock }).IsVoid());
+	TestTrue(TEXT("Character.HasItem answers off the same container"),
+		Method(TEXT("HasItem"), { Lock }).ToBool());
+	TestFalse(TEXT("...and false for a classname nothing carries"),
+		Method(TEXT("HasItem"), { FElysiumVariant::String(TEXT("item_g_nothing")) }).ToBool());
+
+	// A stackable item: AmmoCount reads the STACK COUNT and GiveAmmo adds to it.
+	const FElysiumVariant TireIron = FElysiumVariant::String(TEXT("item_w_tire_iron"));
+	Method(TEXT("GiveItem"), { TireIron });
+	TestEqual(TEXT("Character.AmmoCount on a stackable item is its count"),
+		Method(TEXT("AmmoCount"), { TireIron }).ToInt(), 1);
+	Method(TEXT("GiveAmmo"), { TireIron, FElysiumVariant::Int(4) });
+	TestEqual(TEXT("...and GiveAmmo adds to that count directly"),
+		Method(TEXT("AmmoCount"), { TireIron }).ToInt(), 5);
+
+	// A non-stackable item: the LOADED MAGAZINE, which the same call does not move.
+	const FElysiumVariant ThirtyEight = FElysiumVariant::String(TEXT("item_w_thirtyeight"));
+	TestEqual(TEXT("Character.AmmoCount on a firearm is its loaded magazine"),
+		Method(TEXT("AmmoCount"), { ThirtyEight }).ToInt(), 0);
+	Method(TEXT("GiveAmmo"), { ThirtyEight, FElysiumVariant::Int(6) });
+	TestEqual(TEXT("...which GiveAmmo does not move"),
+		Method(TEXT("AmmoCount"), { ThirtyEight }).ToInt(), 0);
+	TestEqual(TEXT("...because it granted RESERVE rounds"),
+		Player->Inventory.Reserve(TEXT("ThirtyeightRound")), 6);
+	TestEqual(TEXT("...pooled case-insensitively by ammo type"),
+		Player->Inventory.Reserve(TEXT("thirtyeightround")), 6);
+	TestEqual(TEXT("AmmoCount for an item nothing carries is zero"),
+		Method(TEXT("AmmoCount"), { FElysiumVariant::String(TEXT("item_g_nothing")) }).ToInt(), 0);
+
+	// HasWeaponEquipped: the tire iron's grant made it active.
+	TestTrue(TEXT("Character.HasWeaponEquipped names the active weapon"),
+		Method(TEXT("HasWeaponEquipped"), { TireIron }).ToBool());
+	TestFalse(TEXT("...with an EXACT, case-sensitive compare"),
+		Method(TEXT("HasWeaponEquipped"), { FElysiumVariant::String(TEXT("Item_W_Tire_Iron")) }).ToBool());
+	TestFalse(TEXT("...and owning an item is not wielding it"),
+		Method(TEXT("HasWeaponEquipped"), { FElysiumVariant::String(TEXT("item_g_keyring")) }).ToBool());
+
+	// RemoveItem returns None whether or not anything matched.
+	TestTrue(TEXT("Character.RemoveItem returns None on a match"),
+		Method(TEXT("RemoveItem"), { Lock }).IsVoid());
+	TestFalse(TEXT("...having removed it"), Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
+	TestTrue(TEXT("...and None on no match"),
+		Method(TEXT("RemoveItem"), { FElysiumVariant::String(TEXT("item_g_nothing")) }).IsVoid());
+
+	// --- Detach compacts and reindexes; it never destroys ----------------------------------
+	// Carried now: keyring(0), .38(1), tire iron(2, active).
+	TestEqual(TEXT("three ordinary slots"), Player->Inventory.Num(), 3);
+	FElysiumItem* Slot0 = Player->Inventory.At(*Player, 0);
+	FElysiumItem* Slot1 = Player->Inventory.At(*Player, 1);
+	FElysiumItem* Slot2 = Player->Inventory.At(*Player, 2);
+	if (!TestNotNull(TEXT("slot 0 resolves"), Slot0) || !TestNotNull(TEXT("slot 1 resolves"), Slot1)
+		|| !TestNotNull(TEXT("slot 2 resolves"), Slot2))
+	{
+		return false;
+	}
+	TestEqual(TEXT("positions are the compact ordering"), Slot2->InvenPos, 2);
+
+	TestTrue(TEXT("Detach takes the middle item out"), Player->Inventory.Detach(*Player, *Slot1));
+	TestEqual(TEXT("...closing the gap"), Player->Inventory.Num(), 2);
+	TestFalse(TEXT("...without destroying it"), Slot1->IsDead());
+	TestFalse(TEXT("...leaving it unowned"), Slot1->IsOwned());
+	TestEqual(TEXT("...and unslotted"), Slot1->InvenPos, FElysiumItem::Unslotted);
+	TestEqual(TEXT("...while the item behind it is reindexed"), Slot2->InvenPos, 1);
+	TestEqual(TEXT("...and the one in front keeps its place"), Slot0->InvenPos, 0);
+	TestFalse(TEXT("detaching something not carried does nothing"),
+		Player->Inventory.Detach(*Player, *Slot1));
+
+	// --- The `Inventory_Remove` INPUT is entity-valued and only detaches --------------------
+	World.EnqueueInput(ElysiumPlayerTargetName(), FName(TEXT("Inventory_Remove")),
+		FElysiumVariant::Handle(Slot2->Handle), 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.Tick(0.0);
+	TestFalse(TEXT("Inventory_Remove detaches"), Slot2->IsOwned());
+	TestFalse(TEXT("...and never destroys"), Slot2->IsDead());
+	TestEqual(TEXT("...keeping the stack intact"), Slot2->ItemCount, 5);
+	TestEqual(TEXT("...leaving only the keyring carried"), Player->Inventory.Num(), 1);
+	TestNull(TEXT("...and clearing the active-weapon handle it named"),
+		reinterpret_cast<const void*>(Player->Inventory.Active(*Player)));
+
+	// --- Item policy comes ONLY from the catalogue ------------------------------------------
+	{
+		FElysiumEntityDef Unknown;
+		Unknown.Classname = TEXT("item_w_not_in_the_catalogue");
+		Unknown.TargetName = TEXT("phantom");
+		const FElysiumEntityHandle H = World.SpawnRuntimeEntity(MoveTemp(Unknown));
+		FElysiumEntity* Phantom = World.Resolve(H);
+		TestNull(TEXT("a classname the catalogue does not hold is not an item class"),
+			reinterpret_cast<const void*>(Phantom ? Phantom->AsItem() : nullptr));
+		TestTrue(TEXT("...it is an inert record, prefix or no prefix"),
+			Phantom != nullptr && Phantom->IsRecordOnly());
+		TestFalse(TEXT("GiveNamedItem refuses a classname with no item data"),
+			Player->Inventory.GiveNamedItem(*Player, TEXT("item_w_not_in_the_catalogue")).IsSet());
+	}
 
 	return true;
 }

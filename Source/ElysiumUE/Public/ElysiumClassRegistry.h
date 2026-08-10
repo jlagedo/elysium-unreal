@@ -192,7 +192,12 @@ public:
 	int32 Num() const { return Classes.Num(); }
 
 private:
-	TMap<FName, FElysiumClassDesc> Classes;
+	// Indirect because a live entity holds `Class` as a raw descriptor pointer for its whole life,
+	// and registration is no longer confined to static init: the item catalogue registers one class
+	// per `vdata/items` definition when it first loads (`ElysiumItems::Install`), which can happen
+	// while a world is standing. A `TMap<FName, FElysiumClassDesc>` rehashes on that insert and
+	// every one of those pointers dangles; a map of unique pointers moves only the table.
+	TMap<FName, TUniquePtr<FElysiumClassDesc>> Classes;
 };
 
 // A file-static instance registers one class at module-load time (before any Create/lookup).

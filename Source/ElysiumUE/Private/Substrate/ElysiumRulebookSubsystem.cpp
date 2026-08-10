@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumItemClasses.h"
 
 #include "HAL/IConsoleManager.h"
 
@@ -23,6 +24,9 @@ void UElysiumRulebookSubsystem::Deinitialize()
 		IConsoleManager::Get().UnregisterConsoleObject(Object);
 	}
 	ConsoleObjects.Reset();
+	// The item catalogue is this subsystem's memory, and the class registry outlives it — so the
+	// installed table has to go before the memory does.
+	ElysiumItems::Uninstall(ItemTable);
 	Super::Deinitialize();
 }
 
@@ -103,6 +107,20 @@ const FElysiumDiceTables& UElysiumRulebookSubsystem::Dice()
 	return Get(DiceTables, bDiceLoaded, TEXT("dicerolls"), DiceError);
 }
 
+const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
+{
+	const bool bWasLoaded = bItemsLoaded;
+	const FElysiumItemTable& Table = Get(ItemTable, bItemsLoaded, TEXT("items"), ItemsError);
+	if (!bWasLoaded)
+	{
+		// The catalogue IS the class list: an `item_*` classname is a live entity class exactly
+		// when this table holds a definition for it (`docs/vtmb/inventory.md` §4). Installing on
+		// the first load keeps that a single fact rather than two lists that can drift.
+		ElysiumItems::Install(Table);
+	}
+	return Table;
+}
+
 int32 UElysiumRulebookSubsystem::LoadAll()
 {
 	TArray<FStatus> Status;
@@ -164,6 +182,9 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 
 	Out.Add({ TEXT("dicerolls"),    TEXT("system/dicerolls.txt"),
 		Dice().Num(), Dice().IsValid(), DiceError });
+
+	Out.Add({ TEXT("items"),        TEXT("items/*.txt"),
+		Items().Num(), Items().IsValid(), ItemsError });
 }
 
 // ================================================================================================
