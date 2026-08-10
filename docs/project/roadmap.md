@@ -1108,6 +1108,22 @@ dialogue, scripted flow, quests, save/load included.
   outputs meet the `docs/architecture/rendering-perf.md` floor budget; no game-derived output is committed.
   *Deps:* PP6, 10.3, 7.4. *Design:* `docs/architecture/asset-enhancement.md`; governing test:
   `docs/project/remaster-direction.md`.
+- [ ] **10.10 Linux target** — package config only so far: `Config/DefaultEngine.ini` gained a
+  `LinuxTargetPlatform.LinuxTargetSettings` block (`SF_VULKAN_SM6`, same HWRT/MegaLights/VSM
+  requirement as the Windows DX12/SM6 block beside it), and `ElysiumUE.Build.cs` generalized the
+  CPython link to a `ThirdParty/CPython27/Linux/` branch parallel to the existing Win64 one.
+  `GameInputWindows`/`GameInput` need no change — both are already `SupportedTargetPlatforms:
+  [Win64]`-scoped in the `.uproject` and nothing in the module calls the GameInput API directly;
+  Enhanced Input (10.6) is the only input path the code uses, so Linux simply builds without
+  those two plugins. Packaging goes through Epic's Linux Cross-Compile Toolchain add-on on the
+  existing Windows engine install — the bake stays an editor-only step on Windows either way
+  (`pipeline/unreal/bake_map.py`), so a native Linux editor is not required.
+  **Not done:** no `libpython2.7.so` is vendored — one has to be built against Epic's own Linux
+  toolchain/sysroot (a generic distro Python won't link cleanly into the packaged binary), so
+  today `ELYSIUM_WITH_CPYTHON=0` on Linux and VtMB level scripts fall back to the null/expr host
+  the same way an unsupported platform already does; no packaged Linux build has run, so
+  Vulkan SM6 HWRT/MegaLights/VSM parity with the Windows DX12 path is unvalidated. *Deps:* 9.3
+  (script host fallback), 10.5 (packaging), 10.6e (GameInput scoping already in place).
 
 ## P11 — Runtime spine *(design: `docs/architecture/runtime-architecture.md` + `docs/architecture/save-architecture.md` + `docs/architecture/camera-architecture.md` — read them; steps here are the tracker)*
 
@@ -1542,6 +1558,8 @@ datamap shapes, method notes) live in the owning topic docs — `docs/vtmb/pytho
 | "Polish" leaks into the logic layer | silent divergence from retail behavior | `docs/project/remaster-direction.md`: RE first, owner call, and faithful/chosen behavior recorded once in the owning topic doc; default is reproduce |
 | No classic-UI mode to A/B against | a UI regression has no reference | the original's structure is captured as data (PL8) and in `docs/vtmb/m0_menu_build.md`, so screens are checked against intent rather than pixels; the *world* keeps its faithful A/B path unchanged |
 | A shots baseline silently invalidates across a re-bake or content rebuild (measured: up to ~10 mean on bounce-dominated vantages from **byte-identical** inputs) | a look regression hides in toolchain noise — or toolchain noise reads as a regression | B6's measured rule: re-baseline after any bake/content change; A/B a small effect as two runs over one fixed asset set (a cvar A/B), never across a rebuild |
+| Linux HWRT/MegaLights/VSM parity under Vulkan SM6 unproven (10.10) | the Windows-calibrated look or the perf floor could differ on Linux with no packaged run yet to catch it | 10.10 config lands first; a real Linux package + floor validation (10.3-equivalent) gates calling Linux supported |
+| No vendored Linux CPython build (10.10) | VtMB level scripts silently no-op on Linux (falls back to the expr/null host, same as any platform without the artifact) | build `libpython2.7.so` against Epic's own Linux toolchain/sysroot, not a generic distro Python, before claiming script parity |
 
 ## Traceability (old plan IDs → this doc)
 

@@ -141,29 +141,51 @@ public class ElysiumUE : ModuleRules
 		// P5.5 / 9.3 -- embedded CPython 2.7.18 (qnox/python-2.7) for VtMB level scripts.
 		// VtMB's VM is stock CPython 2.1 (vampire_python21.dll); the 2.1->2.7 script delta is ~0
 		// (no string-exceptions, no __future__ -- verified against all 36 loose scripts). We link
-		// the vendored release DLL by its import lib + point PythonHome at the vendored stdlib at
-		// runtime (ElysiumPythonVM). Win64 only; elsewhere ELYSIUM_WITH_CPYTHON=0 keeps the null/expr
-		// script hosts.
+		// a vendored release build and point PythonHome at the vendored stdlib at runtime
+		// (ElysiumPythonVM). Win64 links the release DLL's import lib; Linux would link
+		// libpython2.7.so the same way once a build lands under ThirdParty/CPython27/Linux/ --
+		// no such build exists yet (10.10: it has to be produced with Epic's own Linux
+		// cross-compile toolchain, not a generic system Python, to link cleanly into the packaged
+		// binary), so the Linux branch below never finds its files and ELYSIUM_WITH_CPYTHON stays
+		// 0, same as any other platform lacking the artifact -- the null/expr script hosts take
+		// over per ElysiumScriptHost.h, exactly as they already do today.
 		string PyRoot = Path.Combine(ModuleDirectory, "ThirdParty", "CPython27");
-		string PyImportLib = Path.Combine(PyRoot, "libs", "python27.lib");
-		string PyDll = Path.Combine(PyRoot, "bin", "python27.dll");
-		if (Target.Platform == UnrealTargetPlatform.Win64 && File.Exists(PyImportLib) && File.Exists(PyDll))
+		bool bHaveCPython = false;
+		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
-			PublicDefinitions.Add("ELYSIUM_WITH_CPYTHON=1");
-			PublicIncludePaths.Add(Path.Combine(PyRoot, "include"));
-			PublicAdditionalLibraries.Add(PyImportLib);
-			// python27.dll exports its sentinels/type objects/flags as dllimport DATA symbols
-			// (Py_None, PyType_Type, PyExc_*, Py_NoSiteFlag, ...) which /DELAYLOAD cannot thunk, so
-			// we link normally and stage the DLL next to the module binary. UE loads game modules
-			// with LOAD_WITH_ALTERED_SEARCH_PATH, so the co-located DLL resolves at module load.
-			RuntimeDependencies.Add("$(BinaryOutputDir)/python27.dll", PyDll);
-			// Ship the 2.7 stdlib tree so Py_Initialize can bootstrap (os/string/...) in a packaged
-			// build; in-editor the VM reads it in place from this ThirdParty folder.
-			RuntimeDependencies.Add(Path.Combine(PyRoot, "PythonHome", "Lib", "..."), StagedFileType.NonUFS);
+			string PyImportLib = Path.Combine(PyRoot, "libs", "python27.lib");
+			string PyDll = Path.Combine(PyRoot, "bin", "python27.dll");
+			if (File.Exists(PyImportLib) && File.Exists(PyDll))
+			{
+				PublicIncludePaths.Add(Path.Combine(PyRoot, "include"));
+				PublicAdditionalLibraries.Add(PyImportLib);
+				// python27.dll exports its sentinels/type objects/flags as dllimport DATA symbols
+				// (Py_None, PyType_Type, PyExc_*, Py_NoSiteFlag, ...) which /DELAYLOAD cannot thunk,
+				// so we link normally and stage the DLL next to the module binary. UE loads game
+				// modules with LOAD_WITH_ALTERED_SEARCH_PATH, so the co-located DLL resolves at
+				// module load.
+				RuntimeDependencies.Add("$(BinaryOutputDir)/python27.dll", PyDll);
+				// Ship the 2.7 stdlib tree so Py_Initialize can bootstrap (os/string/...) in a
+				// packaged build; in-editor the VM reads it in place from this ThirdParty folder.
+				RuntimeDependencies.Add(Path.Combine(PyRoot, "PythonHome", "Lib", "..."), StagedFileType.NonUFS);
+				bHaveCPython = true;
+			}
 		}
-		else
+		else if (Target.Platform == UnrealTargetPlatform.Linux)
 		{
-			PublicDefinitions.Add("ELYSIUM_WITH_CPYTHON=0");
+			string PyLinuxRoot = Path.Combine(PyRoot, "Linux");
+			string PySharedLib = Path.Combine(PyLinuxRoot, "lib", "libpython2.7.so.1.0");
+			if (File.Exists(PySharedLib))
+			{
+				PublicIncludePaths.Add(Path.Combine(PyLinuxRoot, "include", "python2.7"));
+				PublicAdditionalLibraries.Add(PySharedLib);
+				// Same co-location strategy as the Win64 DLL above, via RPATH/$ORIGIN instead of
+				// LOAD_WITH_ALTERED_SEARCH_PATH.
+				RuntimeDependencies.Add("$(BinaryOutputDir)/libpython2.7.so.1.0", PySharedLib);
+				RuntimeDependencies.Add(Path.Combine(PyLinuxRoot, "PythonHome", "lib", "..."), StagedFileType.NonUFS);
+				bHaveCPython = true;
+			}
 		}
+		PublicDefinitions.Add(bHaveCPython ? "ELYSIUM_WITH_CPYTHON=1" : "ELYSIUM_WITH_CPYTHON=0");
 	}
 }

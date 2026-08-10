@@ -18,6 +18,11 @@ The title must read **`PCD3D_SM6`**. This one config was the difference between 
 
 First launch after enabling SM6 recompiles the whole shader set (slow once, then cached).
 
+The Linux target carries the same requirement over Vulkan: `Config/DefaultEngine.ini` →
+`[/Script/LinuxTargetPlatform.LinuxTargetSettings]` → `TargetedRHIs=SF_VULKAN_SM6`. This is
+config-only — no packaged Linux run has measured whether HWRT/MegaLights/VSM hold the same
+frame budget under Vulkan as the DX12 numbers above; status: `docs/project/roadmap.md` 10.10.
+
 ## The cost profile is unusual
 
 VtMB is 2004 early-Source geometry (~20k tris/map), so draw calls and triangles are free.
