@@ -356,6 +356,7 @@ public:
 	virtual void ClearUseAnchors() override;
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const override;
+	virtual FElysiumEntityHandle QueryFeedTarget() const override;
 	// 11.7 — the scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.

@@ -148,6 +148,112 @@ namespace
 		Acc.Set = [](FElysiumEntity&, const FElysiumVariant&) {};
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
 	}
+
+	// B6 — the feed transaction's state, as Save-flagged chain fields (K8: a registered field, the
+	// session record, or a declared save block, and nothing else). The save schema names
+	// `m_flNextFeedPulse` and `m_flFeedStartTime`, which is what makes an in-progress feed survive a
+	// restore without duplicating a pulse; the rest of the block is registered beside them so the
+	// victim link and the accelerating interval come back with it. None of them is keyable — no map
+	// authors a feed — so the whole block is engine-written and save-enumerated only.
+	void AddFeedFields(FElysiumClassDesc& D)
+	{
+		using FC = FElysiumCombatCharacter;
+
+		auto AddFloat = [&D](const TCHAR* Name, float FElysiumFeedState::* Member)
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::Save);
+			Acc.Type = EElysiumVariantType::Float;
+			Acc.Get = [Member](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Float(static_cast<const FC&>(E).FeedState.*Member);
+			};
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).FeedState.*Member = V.ToFloat();
+			};
+			D.Fields.Add(FName(Name), MoveTemp(Acc));
+		};
+		auto AddInt = [&D](const TCHAR* Name, int32 FElysiumFeedState::* Member)
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::Save);
+			Acc.Type = EElysiumVariantType::Int;
+			Acc.Get = [Member](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Int(static_cast<const FC&>(E).FeedState.*Member);
+			};
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).FeedState.*Member = V.ToInt();
+			};
+			D.Fields.Add(FName(Name), MoveTemp(Acc));
+		};
+		auto AddBool = [&D](const TCHAR* Name, bool FElysiumFeedState::* Member)
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::Save);
+			Acc.Type = EElysiumVariantType::Bool;
+			Acc.Get = [Member](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Bool(static_cast<const FC&>(E).FeedState.*Member);
+			};
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).FeedState.*Member = V.ToInt() != 0;
+			};
+			D.Fields.Add(FName(Name), MoveTemp(Acc));
+		};
+		auto AddHandle = [&D](const TCHAR* Name, FElysiumEntityHandle FElysiumFeedState::* Member)
+		{
+			// A handle field, like `m_hActiveWeapon`: the applier re-stamps the saved index against
+			// the live epoch, and an index that no longer exists reads Invalid.
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::Save);
+			Acc.Type = EElysiumVariantType::Handle;
+			Acc.Get = [Member](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Handle(static_cast<const FC&>(E).FeedState.*Member);
+			};
+			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).FeedState.*Member = V.ToHandle();
+			};
+			D.Fields.Add(FName(Name), MoveTemp(Acc));
+		};
+
+		AddFloat(TEXT("m_flNextFeedPulse"), &FElysiumFeedState::NextPulse);
+		AddFloat(TEXT("m_flFeedStartTime"), &FElysiumFeedState::StartTime);
+		// The interval at +0x1494 and the counter at +0x14a0 are recovered by offset; the save
+		// schema's own names for them are not, so the spelling here follows the two it does name.
+		AddFloat(TEXT("m_flFeedInterval"),  &FElysiumFeedState::Interval);
+		AddInt(TEXT("m_iBloodStolen"),      &FElysiumFeedState::BloodStolen);
+		AddHandle(TEXT("m_hFeedTarget"),    &FElysiumFeedState::Target);
+		AddBool(TEXT("m_bFeedContinue"),    &FElysiumFeedState::bContinuation);
+		// The pairing half. Retail keeps the peer on the common paired-action state; this runtime
+		// has no grapple router, so the link and the phase schedule are ours and are named as such.
+		AddHandle(TEXT("m_hFeedPeer"),      &FElysiumFeedState::Peer);
+		AddBool(TEXT("m_bFeedVictim"),      &FElysiumFeedState::bVictim);
+		AddBool(TEXT("m_bFeedFroze"),       &FElysiumFeedState::bFrozenByFeed);
+		AddFloat(TEXT("m_flFeedPhaseEnd"),  &FElysiumFeedState::PhaseDeadline);
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::Save);
+			Acc.Type = EElysiumVariantType::Int;
+			Acc.Get = [](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Int(
+					static_cast<int32>(static_cast<const FC&>(E).FeedState.Phase));
+			};
+			Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).FeedState.Phase =
+					static_cast<EElysiumFeedPhase>(FMath::Clamp(V.ToInt(), 0,
+						static_cast<int32>(EElysiumFeedPhase::Release)));
+			};
+			D.Fields.Add(FName(TEXT("m_iFeedPhase")), MoveTemp(Acc));
+		}
+	}
 }
 
 // --- FElysiumSheet ---------------------------------------------------------------------------
@@ -637,10 +743,23 @@ int32 FElysiumCombatCharacter::BloodHeal(int32 Blood)
 		return 0;
 	}
 	AddBlood(-Spent);
+	return HealDamage(Spent * FMath::Max(1, Ratio));
+}
+
+int32 FElysiumCombatCharacter::HealDamage(int32 Points)
+{
+	if (Points <= 0)
+	{
+		return 0;
+	}
 	// `Health` counts damage TAKEN, so healing is a subtraction from it — and a subtraction
 	// bypasses the gain gate, which is exactly what makes the floor the authored `Min` of 0.
 	const int32 Damage = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Health);
-	const int32 Healed = FMath::Min(Damage, Spent * FMath::Max(1, Ratio));
+	const int32 Healed = FMath::Min(Damage, Points);
+	if (Healed <= 0)
+	{
+		return 0;
+	}
 	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, -Healed);
 	SyncHealthFromSheet();
 	return Healed;
@@ -1010,6 +1129,9 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 	{
 		return;
 	}
+	// B6 — incoming damage while paired tears the feed down BEFORE the damage commits, whichever
+	// half of the pair is hit (`docs/vtmb/feeding.md` § "Interruption, completion and outputs").
+	BreakFeed();
 	if (MaxHealth <= 0)
 	{
 		// No health track: the rulebook did not load, or the character was built without a sheet.
@@ -1147,6 +1269,14 @@ void FElysiumPlayer::Spawn()
 	}
 }
 
+void FElysiumPlayer::Think()
+{
+	// The player's only autonomous work today is the feed transaction. It runs here rather than off
+	// a timer because the pulse deadline is simulation state (R4/S8): the same think that advances
+	// it is the one the save's clock restores, so a load cannot duplicate or skip a pulse.
+	TickFeed(World ? World->NowSeconds() : 0.0);
+}
+
 void FElysiumPlayer::RefreshClanEffects()
 {
 	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
@@ -1266,6 +1396,26 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	LifetimeExperience  = Record.LifetimeExperience;
 	bUnkillable = Record.bUnkillable;
 	bDeathReported = false;
+	// B6 — a feed only resumes into the map it was taken in, and its handles have to be re-stamped
+	// against this world's epoch (the record's copy carries a dead one, exactly as a saved handle in
+	// the map snapshot does). Anything else drops the pair rather than pointing it at a stranger.
+	FeedState = FElysiumFeedState();
+	if (World && !Record.FeedMap.IsEmpty() && Record.FeedMap == World->MapName())
+	{
+		FeedState = Record.Feed;
+		auto Rebase = [this](FElysiumEntityHandle& H)
+		{
+			H = (H.IsSet() && World->Resolve(FElysiumEntityHandle(H.Index, World->GetEpoch())))
+				? FElysiumEntityHandle(H.Index, World->GetEpoch())
+				: FElysiumEntityHandle::Invalid();
+		};
+		Rebase(FeedState.Target);
+		Rebase(FeedState.Peer);
+		if (!FeedState.IsPaired())
+		{
+			FeedState = FElysiumFeedState();
+		}
+	}
 	// The names crossed the boundary; their resolution did not — the rulebook is re-read at load,
 	// which is what lets a patched rulebook re-apply to a run that started before it. Going through
 	// RefreshClanEffects rather than RebuildEffects reconciles the clan group with the clan slot
@@ -1286,6 +1436,8 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.ExperienceRemainder = ExperienceRemainder;
 	Record.LifetimeExperience  = LifetimeExperience;
 	Record.bUnkillable = bUnkillable;
+	Record.Feed = FeedState;
+	Record.FeedMap = (World && FeedState.IsPaired()) ? World->MapName() : FString();
 }
 
 void FElysiumPlayer::SyncFromBody()
@@ -1500,6 +1652,7 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// keyable nor saved, which reproduces that exactly.
 		AddCharField(D, TEXT("m_iEyeLookMode"), &FC::EyeLookMode, EElysiumField::None);
 
+		AddFeedFields(D);
 		AddSheetFields(D);
 	});
 

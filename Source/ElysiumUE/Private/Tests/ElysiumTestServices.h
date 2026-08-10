@@ -640,6 +640,14 @@ struct FElysiumRecordingServices final
 	{
 		return UseQuery;
 	}
+	// What the next `+feed` acquisition finds. Geometry is the embodiment's; a substrate test drives
+	// the acceptance policy and the transaction over whatever this answers.
+	FElysiumEntityHandle FeedTarget;
+	virtual FElysiumEntityHandle QueryFeedTarget() const override
+	{
+		Record(FString::Printf(TEXT("QueryFeedTarget -> %s"), *FeedTarget.ToString()));
+		return FeedTarget;
+	}
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override
 	{
 		Record(FString::Printf(TEXT("PushCameraShot %s"), *ShotFile));

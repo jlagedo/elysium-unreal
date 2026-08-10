@@ -216,6 +216,13 @@ public:
 	// world state; candidates are an ephemeral embodiment result.
 	void QueuePlayerUseEdge(EElysiumUseEdge Edge);
 	void UpdatePlayerInteraction();
+
+	// B6 — the `+feed` / `-feed` pair, queued in the controller's pre-move sample and consumed after
+	// the move beside `+use` (`docs/vtmb/feeding.md` § "Command and initial request"). The press
+	// runs the target query and `AttemptFeed`; the release only clears the continuation latch,
+	// because retail's release publisher does NOT call `FeedInterrupt`.
+	void QueuePlayerFeedEdge(EElysiumUseEdge Edge);
+	void UpdatePlayerFeed();
 	// The explicit leaf/UI completion seam. Supplying the captured owner prevents a stale panel
 	// from ending a newer entity's session; Invalid intentionally means cancel whatever is active.
 	bool EndPlayerUseSession(const FElysiumEntityHandle& OwnerHandle, EElysiumUseEndReason Reason);
@@ -480,6 +487,7 @@ private:
 	FElysiumEntityHandle FocusedUsable;
 	FElysiumUseContext FocusContext;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingUseEdges;
+	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingFeedEdges;
 	struct FActiveUse
 	{
 		FElysiumUseContext Context;

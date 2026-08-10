@@ -611,6 +611,12 @@ public:
 	// bodiless NPC (`elysium.NpcBodies 0`, a headless test, a failed spawn) silently does neither,
 	// which is correct: there is nothing to immobilise and nothing to collide with.
 
+	// An open conversation owns this body as surely as a beat does, so it refuses a feed (B6).
+	virtual bool IsFeedBusy() const override
+	{
+		return bInDialog || FElysiumCombatCharacter::IsFeedBusy();
+	}
+
 	virtual void SetBodyFrozen(bool bFrozen) override
 	{
 		if (Motor)
@@ -643,6 +649,12 @@ public:
 	virtual void Think() override
 	{
 		if (IsInert())
+		{
+			return;
+		}
+		// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
+		// the feeder's think and nothing else moves either actor while it runs.
+		if (TickFeed(World ? World->NowSeconds() : 0.0))
 		{
 			return;
 		}
@@ -1437,8 +1449,27 @@ public:
 			}
 		}
 
+		// CHILD OUTPUT PROVENANCE (`gameplay-systems-architecture.md` §5.5.1). A maker carries the
+		// lifecycle wires its children's events are supposed to reach — sp_tutorial_1's
+		// `blueblood_maker` alone holds 24 `OnDeath`, 8 `OnFoundPlayer`, 5 `OnFedUponEnd`, 3
+		// `OnDamaged` and 2 `OnFedUponBegin` rows — but the child, not the maker, is the entity whose
+		// lifecycle produces them.
+		//
+		// MARKED RECONSTRUCTION. Which retail object owns and fires a maker child's feeding, damage,
+		// incapacitation, found-player, dialogue and death outputs is open question 1 of
+		// `docs/vtmb/sp_tutorial_1-event-surface.md` §15. The reconstruction chosen here is to copy
+		// the maker's authored rows onto each synthesized child def, so the child fires them as
+		// caller with its own activator — which preserves provenance without inventing a relay
+		// object, and which a contradicting retail capture would undo at this one site. Every row is
+		// copied rather than a filtered "lifecycle" subset: an output row only fires on a name match,
+		// so a name the child never raises costs nothing, whereas guessing the subset would silently
+		// drop whichever wire the guess missed. Each child gets its own `times` countdown, since the
+		// counter is runtime state on the entity and not on the shared def.
+		Child.Outputs = Def->Outputs;
+
 		const FElysiumEntityHandle H = World->SpawnRuntimeEntity(MoveTemp(Child));
-		UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s Spawn -> %s"), *DebugString(), *World->DescribeHandle(H));
+		UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s Spawn -> %s (%d authored output rows carried)"),
+			*DebugString(), *World->DescribeHandle(H), Def->Outputs.Num());
 	}
 
 	void InputEnable(const FElysiumInputArgs&)  { bEnabled = true; }

@@ -5364,4 +5364,197 @@ bool FElysiumItemGroundModelsContentTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// B6 — the tutorial's authored feeding wires, against the real `sp_tutorial_1.ents`.
+//
+// `blueblood_maker.Spawn` creates the child; feeding the child has to reach the MAKER-authored
+// `OnFedUponBegin` / `OnFedUponEnd` rows (`docs/vtmb/sp_tutorial_1-event-surface.md` §11.2), which
+// on this map are `G.Tutorial_Blueblood = 1` (a Python-only wire) and
+// `trig_dialog_outside_chopshop.Enable`.
+// =====================================================================================
+
+namespace
+{
+	// Records what entered the event queue, with its provenance. The Python arm of a wire needs a
+	// script host to *evaluate*, which a headless world has none of — so the assertion that the
+	// authored `G.Tutorial_Blueblood = 1` payload was raised by the right entity is made here, at
+	// chokepoint 2, rather than on the `G` store.
+	class FElysiumQueuedWireSink final : public IElysiumIOSink
+	{
+	public:
+		struct FRow
+		{
+			FString Target;
+			FName Input;
+			FString Python;
+			int32 CallerIndex = INDEX_NONE;
+			int32 ActivatorIndex = INDEX_NONE;
+		};
+		TArray<FRow> Rows;
+
+		virtual void OnQueued(double, const FElysiumIOEvent& Event) override
+		{
+			FRow Row;
+			Row.Target = Event.Target;
+			Row.Input = Event.Input;
+			Row.Python = Event.PythonSrc;
+			Row.CallerIndex = Event.Caller.IsSet() ? Event.Caller.Index : INDEX_NONE;
+			Row.ActivatorIndex = Event.Activator.IsSet() ? Event.Activator.Index : INDEX_NONE;
+			Rows.Add(MoveTemp(Row));
+		}
+	};
+
+	int32 TriggerDisabledFlag(const FElysiumEntity& Ent)
+	{
+		const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+		if (!Ent.Class)
+		{
+			return INDEX_NONE;
+		}
+		const FElysiumFieldAccessor* Acc = Reg.FindField(*Ent.Class, FName(TEXT("StartDisabled")));
+		return (Acc && Acc->Get) ? Acc->Get(Ent).ToInt() : INDEX_NONE;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialFeedingContentTest,
+	"Elysium.Content.TutorialFeeding", GElysiumContentTestFlags)
+bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
+	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1"));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_tutorial_1 has not been exported"));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_tutorial_1.ents parses"), FElysiumEntityDefs::Parse(Path, Defs)))
+	{
+		return true;
+	}
+	Defs.MapName = TEXT("sp_tutorial_1");
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+
+	TUniquePtr<FElysiumQueuedWireSink> OwnedSink = MakeUnique<FElysiumQueuedWireSink>();
+	FElysiumQueuedWireSink* Sink = OwnedSink.Get();
+	World.AddSink(MoveTemp(OwnedSink));
+
+	World.Activate(0.0);
+	for (int32 i = 0; i < 8; ++i)
+	{
+		World.Tick(0.0);   // let the map's own openers run
+	}
+
+	FElysiumEntity* Maker = World.FindByName(TEXT("blueblood_maker"));
+	FElysiumEntity* Chopshop = World.FindByName(TEXT("trig_dialog_outside_chopshop"));
+	if (!TestNotNull(TEXT("blueblood_maker is a live entity"), Maker)
+		|| !TestNotNull(TEXT("trig_dialog_outside_chopshop is a live entity"), Chopshop))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the chopshop dialogue trigger starts disabled, as authored"),
+		TriggerDisabledFlag(*Chopshop), 1);
+
+	// The authored rows this test is about.
+	int32 AuthoredFedUponEnd = 0;
+	for (const FElysiumOutputDef& Row : Maker->Def->Outputs)
+	{
+		AuthoredFedUponEnd += (Row.Name == TEXT("OnFedUponEnd")) ? 1 : 0;
+	}
+	TestTrue(TEXT("the maker carries its OnFedUponEnd wiring"), AuthoredFedUponEnd >= 2);
+
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Maker->Handle);
+	World.Tick(0.0);
+
+	FElysiumEntity* ChildEnt = World.FindByName(TEXT("blueblood"));
+	if (!TestNotNull(TEXT("blueblood_maker.Spawn created the child"), ChildEnt))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the child def carries every one of the maker's authored output rows"),
+		ChildEnt->Def->Outputs.Num(), Maker->Def->Outputs.Num());
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	FElysiumCombatCharacter* Child = ChildEnt->AsCombatCharacter();
+	if (!TestNotNull(TEXT("the player entity exists"), Player)
+		|| !TestNotNull(TEXT("the child is a combat character"), Child))
+	{
+		return false;
+	}
+
+	// TEST SETUP, and what it costs. A headless world has no game-state subsystem, so it has no
+	// rulebook: every sheet reads zero (the child's authored `stattemplate BluebloodFastfood`
+	// resolves to nothing) and `CalcFeat` fails closed on both sides. So the blood the transaction
+	// moves is seeded here, and acceptance is taken through the automatic-state route rather than
+	// the opposed check — which is a real retail acceptance path, not a bypass of the policy. The
+	// opposed check itself is asserted in `Elysium.Substrate.Feeding`, over a pinned Dice stream.
+	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100);
+	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 0);
+	Player->RecomputeSheet();
+	Child->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100);
+	Child->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 2);
+	Child->RecomputeSheet();
+	Child->Disposition = TEXT("cower");
+
+	if (!TestTrue(TEXT("feeding on the spawned blueblood is accepted"),
+		ElysiumFeedAccepted(Player->AttemptFeed(*Child))))
+	{
+		return false;
+	}
+	const int32 RowsBefore = Sink->Rows.Num();
+	for (int32 Step = 1; Step <= 200; ++Step)
+	{
+		World.RunPlayerThink(Step * 0.05);
+		World.Tick(Step * 0.05);
+	}
+	TestFalse(TEXT("the feed ran to completion"), Player->IsFeedPaired());
+	TestTrue(TEXT("and took the blueblood's blood"), Player->FeedState.BloodStolen > 0);
+
+	// THE ACCEPTANCE. `OnFedUponEnd` is a maker-authored row, fired by the CHILD because the child
+	// carries the copied rows (§5.5.1's reconstruction), so both halves of the tutorial's authored
+	// consequence land: the trigger is enabled, and the Python payload that sets the flag is raised
+	// with the child as caller and the feeder as activator.
+	TestEqual(TEXT("trig_dialog_outside_chopshop is enabled by the feed"),
+		TriggerDisabledFlag(*Chopshop), 0);
+
+	bool bSawFlagWire = false;
+	bool bSawEnableWire = false;
+	for (int32 i = RowsBefore; i < Sink->Rows.Num(); ++i)
+	{
+		const FElysiumQueuedWireSink::FRow& Row = Sink->Rows[i];
+		// The maker authors `Tutorial_Blueblood` twice — `= 1` on OnFedUponEnd and `= 2` on OnDeath —
+		// so the payload is matched exactly. Both fire here (a drained victim dies), and they carry
+		// different activators, which is correct: a feed's activator is the feeder, and a death's is
+		// the entity that died.
+		if (Row.Python.Contains(TEXT("Tutorial_Blueblood = 1")))
+		{
+			bSawFlagWire = true;
+			TestEqual(TEXT("the flag wire is fired BY the child, not by the maker"),
+				Row.CallerIndex, ChildEnt->Handle.Index);
+			TestEqual(TEXT("...with the feeder as activator"),
+				Row.ActivatorIndex, Player->Handle.Index);
+		}
+		if (Row.Target == TEXT("trig_dialog_outside_chopshop")
+			&& Row.Input == FName(TEXT("Enable")))
+		{
+			bSawEnableWire = true;
+			TestEqual(TEXT("the Enable wire is fired BY the child too"),
+				Row.CallerIndex, ChildEnt->Handle.Index);
+		}
+	}
+	TestTrue(TEXT("the authored `G.Tutorial_Blueblood = 1` payload was raised"), bSawFlagWire);
+	TestTrue(TEXT("the authored chopshop Enable was raised"), bSawEnableWire);
+	// `G` itself is not asserted here: evaluating a field-6 payload needs a script host, which needs
+	// the game-state subsystem a headless entity world does not have. The wire reaching the queue
+	// with the right provenance is the whole of what this tier can prove; the flag write is the
+	// script host's, and is covered where that host is up.
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

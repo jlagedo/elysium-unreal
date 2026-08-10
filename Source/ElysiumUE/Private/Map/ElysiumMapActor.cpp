@@ -9,6 +9,8 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumMovementComponent.h"   // the gait-speed push (CCC7)
+#include "ElysiumMoveSolve.h"           // ElysiumMove::U — the one Source-unit conversion
+#include "ElysiumPlayer.h"              // FElysiumCombatCharacter — the feed probe's candidate set
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumSkeletalBasis.h"
@@ -1542,6 +1544,94 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 	return Result;
 }
 
+FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
+{
+	// `CBasePlayer::Replenish`'s direct victim search, reproduced in shape
+	// (`docs/vtmb/feeding.md` § "Target acquisition and acceptance"): a hull trace from the view
+	// position toward the local offset (32 forward, 0 right, -32 vertical) with extents
+	// (-8,-8,-8)..(8,8,8). The retail figures are Source units and are converted once, here, by the
+	// same `ElysiumMove::U` every other recovered distance in this runtime goes through.
+	//
+	// The recovered mask is `0x0201400b`. Source content masks are not portable to Unreal's channel
+	// set, so the semantics are adapted rather than the number: candidacy is restricted to live
+	// characters (the mask's player/NPC bits), and occlusion is tested on `ELYSIUM_USE_CHANNEL`
+	// (its solid-world bits) — the same channel `+use` reaches the world through, and the one the
+	// map's brush bodies and the walkable surface already answer on.
+	constexpr float ForwardUnits  = 32.0f;
+	constexpr float VerticalUnits = -32.0f;
+	constexpr float HullHalfUnits = 8.0f;
+	// The standing hull a bodiless candidate is measured by: VtMB's own 32x32x72-unit character box.
+	// Only reachable with `elysium.NpcBodies 0` or a failed model, where a rendered bound does not
+	// exist; a standing body is measured by its own rendered bounds like every `+use` candidate is.
+	constexpr float StandHalfWidthUnits = 16.0f;
+	constexpr float StandHeightUnits = 72.0f;
+
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	if (!EntityWorld || !GetPlayerViewPoint(ViewLocation, ViewRotation))
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+	const FVector Forward = ViewRotation.Vector().GetSafeNormal();
+	const FVector ProbeEnd = ViewLocation
+		+ Forward * (ForwardUnits * ElysiumMove::U)
+		+ FVector::UpVector * (VerticalUnits * ElysiumMove::U);
+	const FVector HullExtent(HullHalfUnits * ElysiumMove::U);
+
+	UWorld* World = GetWorld();
+	FCollisionQueryParams Params(FName(TEXT("ElysiumFeedTarget")), /*bTraceComplex*/ false);
+	Params.AddIgnoredActor(ResolvePlayerPawn());
+
+	const FElysiumEntityHandle PlayerHandle = EntityWorld->PlayerHandle();
+	FElysiumEntityHandle Best = FElysiumEntityHandle::Invalid();
+	double BestDistanceSq = TNumericLimits<double>::Max();
+
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
+	{
+		FElysiumEntity* Ent = EntPtr.Get();
+		if (!Ent || Ent->IsInert() || Ent->Handle == PlayerHandle || !Ent->AsCombatCharacter())
+		{
+			continue;
+		}
+		FBox Candidate(ForceInit);
+		if (const USkeletalMeshComponent* Body = Ent->GetSkeletalBody())
+		{
+			Candidate = Body->Bounds.GetBox();
+		}
+		else
+		{
+			const FVector Half(StandHalfWidthUnits * ElysiumMove::U,
+				StandHalfWidthUnits * ElysiumMove::U, 0.0f);
+			Candidate = FBox(Ent->Origin - Half,
+				Ent->Origin + Half + FVector(0.0f, 0.0f, StandHeightUnits * ElysiumMove::U));
+		}
+		// Sweeping a box along a segment against an AABB is exactly a segment test against the AABB
+		// grown by the hull's extents, so the recovered 16-cube is applied without a physics query.
+		const FBox Swept = Candidate.ExpandBy(HullExtent);
+		if (!FMath::LineBoxIntersection(Swept, ViewLocation, ProbeEnd, ProbeEnd - ViewLocation))
+		{
+			continue;
+		}
+		const FVector Chest = Candidate.GetCenter();
+		if (World)
+		{
+			FHitResult Blocked;
+			if (World->LineTraceSingleByChannel(Blocked, ViewLocation, Chest,
+				ELYSIUM_USE_CHANNEL, Params))
+			{
+				continue;   // a wall between the mouth and the neck
+			}
+		}
+		const double DistanceSq = FVector::DistSquared(ViewLocation, Chest);
+		if (DistanceSq < BestDistanceSq)
+		{
+			BestDistanceSq = DistanceSq;
+			Best = Ent->Handle;
+		}
+	}
+	return Best;
+}
+
 UElysiumCameraComponent* AElysiumMapActor::PlayerCamera() const
 {
 	const APawn* Pawn = ResolvePlayerPawn();
@@ -2606,6 +2696,9 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	if (EntityWorld)
 	{
 		EntityWorld->UpdatePlayerInteraction();
+		// The feed request is acquired against the same settled frame the use focus is, and for the
+		// same reason: retail's victim search is a trace off the player's final view position.
+		EntityWorld->UpdatePlayerFeed();
 	}
 
 	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same

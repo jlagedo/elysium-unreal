@@ -32,6 +32,7 @@ struct FElysiumSaveVersion
 		BodyIdentity  = 7,   // the authored M_BodyN/F_BodyN armor-slot appearance
 		Weather       = 8,   // map wetness transition and env_particle ramps
 		ScriptedBody  = 9,   // the cutscene body state: a scene's frozen cast, a beat's NPC claim
+		Feeding       = 10,  // an in-progress feed on the player record (B6)
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

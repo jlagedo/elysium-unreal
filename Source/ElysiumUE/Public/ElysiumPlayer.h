@@ -147,6 +147,83 @@ struct FElysiumLawState
 	int32 Investigate = 0;
 };
 
+// ============================================================================================
+// Feeding (B6) — the paired action's phase and the authoritative transaction's field set.
+// `docs/vtmb/feeding.md` owns the behaviour; `Substrate/ElysiumFeed.h` owns the rules over these.
+// ============================================================================================
+
+// The ordinary (paired mode 0) state family: engage, bite, feed loop, release. The attacker
+// advances the pair; a role-1 victim never chooses the next base activity.
+enum class EElysiumFeedPhase : uint8
+{
+	None = 0,
+	Engage,    // ACT_FEEDING_ENGAGE is playing; no transaction yet
+	Bite,      // the bite clip; its authored event 4007 sits at cycle 0.0, so FeedBegin runs here
+	Loop,      // FeedBegin has run; Feed() pulses against the substrate clock
+	Release,   // the release clip; its authored event 4006 requests teardown part-way through
+};
+
+// `FeedBegin`'s recovered field block (`feeding.md` § "Authoritative transaction state"), plus the
+// two members this runtime needs to own a pair without retail's grapple router: the peer handle and
+// the phase schedule. The save schema names `m_flNextFeedPulse` and `m_flFeedStartTime`, which is
+// what makes the cadence simulation state rather than an animation notification.
+struct FElysiumFeedState
+{
+	// +0x1490 `m_flNextFeedPulse` — the next pulse's absolute substrate time.
+	float NextPulse = 0.0f;
+	// +0x1494 — the current pulse interval, accelerating toward the 0.30 s floor.
+	float Interval = 0.0f;
+	// +0x1498 `m_flFeedStartTime`.
+	float StartTime = 0.0f;
+	// +0x149c — the authoritative feed target, set by FeedBegin and cleared by FeedInterrupt.
+	FElysiumEntityHandle Target;
+	// +0x14a0 `m_iBloodStolen` — counted only when the feeder's blood-pool increment succeeded.
+	int32 BloodStolen = 0;
+	// +0x14a8 — the player feed-continuation latch.
+	bool bContinuation = false;
+	// +0x14a9 — FeedInterrupt's re-entry guard.
+	bool bInterrupting = false;
+
+	// The grapple peer. Retail keeps this on the common paired-action state rather than in the feed
+	// block; this runtime has no grapple router (B6 is deliberately the transaction only), so the
+	// one pairing link lives here. On the attacker it is the victim, on the victim the attacker.
+	FElysiumEntityHandle Peer;
+	// This character is the role-1 half of the pair.
+	bool bVictim = false;
+	// This character's motor was frozen by the pair and must be released at teardown.
+	bool bFrozenByFeed = false;
+
+	EElysiumFeedPhase Phase = EElysiumFeedPhase::None;
+	// When the current phase's clip boundary is due, in absolute substrate seconds.
+	float PhaseDeadline = 0.0f;
+
+	// Part of a pair at all — what `Replenish` refuses a second request on.
+	bool IsPaired() const { return Peer.IsSet() || Target.IsSet(); }
+	// The authoritative transaction is open (event 4007 has fired and 4006 has not).
+	bool IsTransacting() const { return Target.IsSet(); }
+};
+
+// `AttemptFeed`'s verdict, kept as separate answers rather than a boolean: the four acceptance
+// routes of `feeding.md` § "Target acquisition and acceptance" are distinguishable in retail and
+// have to stay so (`docs/vtmb/skills-and-checks.md` — the consumer owns the policy).
+enum class EElysiumFeedVerdict : uint8
+{
+	AcceptedAutomaticState,   // ACT_DISPOSITION_MESMERIZED / ACT_DISORIENTED / ACT_LOST / ACT_COWER
+	AcceptedNotResisting,     // the target's ResistsFeeding predicate read false
+	AcceptedOpposedCheck,     // attacker Brawl RATING > victim's non-negative Hacking net at diff 6
+	RefusedOpposedCheck,      // ... and the stealth override that could still authorise it is a seam
+	RefusedBusy,              // either side is already paired, in dialogue, or script-owned
+	RefusedInvalidTarget,     // no target, dead/hidden, or not a combat character
+};
+
+const TCHAR* LexToString(EElysiumFeedVerdict Verdict);
+inline bool ElysiumFeedAccepted(EElysiumFeedVerdict Verdict)
+{
+	return Verdict == EElysiumFeedVerdict::AcceptedAutomaticState
+		|| Verdict == EElysiumFeedVerdict::AcceptedNotResisting
+		|| Verdict == EElysiumFeedVerdict::AcceptedOpposedCheck;
+}
+
 // The durable half of the player: session lifetime, so it crosses a map boundary. The entity is the
 // *live* view; this is the truth that survives the world it lived in. Hydrated into the player
 // entity at map build, dehydrated back out when the world is torn down (travel, quit, reload) and,
@@ -209,6 +286,18 @@ struct FElysiumPlayerRecord
 	// MakePlayerUnkillable / MakePlayerKillable (events_player). Latched here as well as on the
 	// entity because the tutorial sets it at map load and it must survive the warp into the next map.
 	bool bUnkillable = false;
+
+	// B6 — an in-progress feed, so a save taken mid-transaction restores without duplicating a pulse
+	// or losing the victim link (`docs/vtmb/feeding.md` recreation contract item 9; retail's own save
+	// schema names `m_flNextFeedPulse` and `m_flFeedStartTime`).
+	//
+	// It rides on the record rather than in the map snapshot because the player entity is excluded
+	// from that snapshot by design — the record IS the player's durable home. But the victim it names
+	// is a map entity, so `FeedMap` scopes it: hydrating into any other map drops the pair instead of
+	// resolving a stale index against a stranger. Every NPC's own half is an ordinary Save-flagged
+	// chain field and travels in the map snapshot with the rest of that entity.
+	FElysiumFeedState Feed;
+	FString FeedMap;
 
 	void Reset() { *this = FElysiumPlayerRecord(); }
 };
@@ -483,9 +572,76 @@ public:
 	// The masquerade counter. Reaching its authored ceiling (5) is the second game-over condition.
 	void ChangeMasqueradeLevel(int32 Delta);
 	void AddBlood(int32 Delta);
+	// The `BloodPool` slot's current value — what a feed pulse moves and what teardown reads.
+	int32 BloodPoolValue() const;
 	// Spend `Blood` blood points to heal `BloodToHealthRatio` (10) damage each — `VampHeal_Info`'s
 	// `VampFeedingHeal_Info`. Returns the damage actually healed.
 	int32 BloodHeal(int32 Blood);
+	// Take `Points` off the damage counter without spending anything. The blood-for-health trade
+	// above is one caller; the feed pulse is the other, and it must NOT spend, because the pulse's
+	// blood-pool increment already happened. Returns the damage actually healed.
+	int32 HealDamage(int32 Points);
+
+	// --- Feeding (B6, `docs/vtmb/feeding.md`) --------------------------------------------------
+	// The whole transaction is here rather than in a service because retail puts it here: `FeedBegin`,
+	// `Feed` and `FeedInterrupt` are CBaseCombatCharacter virtuals, and the fields they own are this
+	// class's. Implemented in `Substrate/ElysiumFeed.cpp`.
+	FElysiumFeedState FeedState;
+
+	// `CBasePlayer::Replenish` + `AttemptFeed`: eligibility, then the paired start. Returns the
+	// verdict whether or not it accepted; on acceptance the pair is running and this character is
+	// its attacker. Refuses while either side is already paired.
+	EElysiumFeedVerdict AttemptFeed(FElysiumCombatCharacter& Victim);
+
+	// The eligibility half on its own, with no side effects — what the acceptance-policy tests drive
+	// and what `AttemptFeed` calls. Rolls the victim's Hacking pool when it reaches the opposed
+	// branch, so it is not const.
+	EElysiumFeedVerdict EvaluateFeedAcceptance(FElysiumCombatCharacter& Victim);
+
+	// The four automatic-acceptance activity states. OPEN: this runtime has no ACT_* state machine,
+	// so the closest observable stand-in is the character's current disposition name.
+	bool IsFeedAutoAcceptState() const;
+	// Retail's `ResistsFeeding` predicate. OPEN: its body is unrecovered; what IS recovered is the
+	// `Fx_No_Resist_Feeding` trait-effect flag that names a target which does not resist.
+	virtual bool ResistsFeeding() const;
+
+	// Another owner already has this body, so it cannot be grappled (K7). The base answers for the
+	// one owner every character can have — a `scripted_sequence` beat; the NPC leaf adds its own
+	// dialogue session.
+	virtual bool IsFeedBusy() const;
+
+	// The animation-event bridge (`feeding.md` recreation contract item 5). 4007 opens FeedBegin,
+	// 4006 requests teardown, 5116 is presentation only. The bake carries no MDL animation events
+	// (see `ElysiumFeed.cpp`), so the feed state machine raises these itself off the decoded clip
+	// cycles; a real notify path replaces the caller, never this handler.
+	void OnFeedAnimEvent(int32 EventId);
+
+	// Event 4007's handler. Refuses a null/invalid target, a disallowed attacker and a second active
+	// feed; clears the per-feed counters, stores the victim, calls the victim's feed-begin callback
+	// (which fires `OnFedUponBegin`) and seeds the cadence from the victim's blood pool.
+	bool FeedBegin(FElysiumCombatCharacter& Victim);
+
+	// At most one scheduled pulse per update, against the substrate clock. Returns whether a pulse
+	// was performed.
+	bool Feed(double Now);
+
+	// The one idempotent teardown (`feeding.md` § "Interruption, completion and outputs"). Safe to
+	// call on a character that is not feeding.
+	void FeedInterrupt();
+
+	// End any pairing this character is part of, from either role — what incoming damage, death and
+	// world teardown reach for. On the victim it routes to the attacker's FeedInterrupt.
+	void BreakFeed();
+
+	// One step of the paired state machine, driven from the feeder's think. Returns true while the
+	// pair is still running (the caller then leaves the body alone).
+	bool TickFeed(double Now);
+
+	// `-feed`: the release edge clears the continuation latch and nothing else. Retail's release
+	// publisher does not call FeedInterrupt; teardown still comes out of the release family.
+	void SetFeedContinuation(bool bContinue) { FeedState.bContinuation = bContinue; }
+
+	bool IsFeedPaired() const { return FeedState.IsPaired(); }
 
 	// Log-and-no-op body for the inputs whose system has not landed. Public because the registration
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.
@@ -568,6 +724,29 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 protected:
+	// --- Feeding internals ---------------------------------------------------------------------
+	// The pair's other half as a combat character, or null.
+	FElysiumCombatCharacter* ResolveFeedPeer() const;
+	// `StartGrappleAttack(target, mode 0)` reduced to what B6 owns: claim both bodies, face the
+	// attacker at the victim, freeze the victim's motor, and start the engage clip on both.
+	void StartFeedPair(FElysiumCombatCharacter& Victim, double Now);
+	// `EndGrapple` — release both bodies and clear the pairing on both halves. Idempotent.
+	void EndFeedGrapple();
+	// Move to the next phase of the ordinary state family.
+	void AdvanceFeedPhase(double Now);
+	// Whether the loop should hand over to the release family. OPEN — see `ElysiumFeed.cpp`.
+	bool ShouldReleaseFeed() const;
+	void EnterFeedRelease(double Now);
+	// Play this phase's clip on both bodies, best effort. A body that cannot answer is logged and
+	// the transaction continues (K10: headless correctness never depends on a rendered body).
+	void PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now);
+	// The next think the pair needs: the earlier of the phase boundary and the next pulse.
+	void ScheduleFeedThink(double Now);
+	// The damage one pulse heals on the feeder. OPEN — see `ElysiumFeed.cpp`.
+	int32 FeedHealAmount() const;
+	// The victim half's teardown: unfreeze, forget the attacker, hand the body back.
+	void EndFeedVictimRole();
+
 	bool bUnkillable = false;
 	bool bDeathReported = false;   // OnKilled fires once, however much damage arrives after
 
@@ -599,6 +778,11 @@ public:
 	float LifetimeExperience = 0.f;
 
 	virtual void Spawn() override;
+
+	// The player's own think, run PRE-move by `FElysiumEntityWorld::RunPlayerThink` — which is
+	// where retail runs it, inside CPlayerMove::RunCommand. B6 drives the feed transaction from
+	// here, so a pulse deadline is measured on the substrate clock and never on a timer.
+	virtual void Think() override;
 
 	// `AwardExperience("<key>")` — the whole walk: refuse a key already in the give-once ledger,
 	// look it up (a miss awards and appends nothing, so it retries on every fire), add

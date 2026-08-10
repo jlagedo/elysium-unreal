@@ -289,6 +289,19 @@ public:
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const = 0;
 
+	// B6 — `CBasePlayer::Replenish`'s direct victim search (`docs/vtmb/feeding.md` § "Target
+	// acquisition and acceptance"): a hull trace from the view position toward the local offset
+	// (32 forward, 0 right, -32 vertical) with extents (-8,-8,-8)..(8,8,8). It is a separate query
+	// from `+use` because it is a separate retail search with its own shape and its own mask — the
+	// feed reaches DOWN and forward for a body, where `+use` reaches along the aim for a control.
+	//
+	// Geometry only: the handle it returns is a candidate, and every eligibility question
+	// (paired state, automatic acceptance, `ResistsFeeding`, the opposed check) stays in the
+	// substrate. Invalid means nothing was in the hull, which is the ordinary answer. The cone /
+	// radius survey that supplies the small-animal route (`rat_feed_arc`, `rat_feed_radius`) is
+	// deliberately absent: rat feeding is out of B6's scope.
+	virtual FElysiumEntityHandle QueryFeedTarget() const { return FElysiumEntityHandle::Invalid(); }
+
 	// 11.7 — the scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, the conversation
 	// camera and the feed camera all push onto the player camera's one weight stack through here, and
 	// `RemoveCamera` pops. `ShotFile` keys `vdata/camerashots/`; `Subject` is the entity the shot is

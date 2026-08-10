@@ -69,6 +69,7 @@
 #include "ElysiumRng.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -10187,8 +10188,13 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// floor up with it.
 	TestEqual(TEXT("the floor is the scripted-body schema"),
 		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::ScriptedBody);
-	TestEqual(TEXT("scripted body is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::ScriptedBody);
+	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
+	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
+	// being refused, and the floor stays where the last breaking schema left it.
+	TestEqual(TEXT("feeding is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Feeding);
+	TestTrue(TEXT("and it is additive, so the floor did not move with it"),
+		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::Feeding);
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would
@@ -13540,6 +13546,526 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 		TestFalse(TEXT("GiveNamedItem refuses a classname with no item data"),
 			Player->Inventory.GiveNamedItem(*Player, TEXT("item_w_not_in_the_catalogue")).IsSet());
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// B6 feeding — the cadence, the unit transaction, the acceptance policy, the paired state
+// machine, idempotent teardown, the depleted-victim death path, and save/restore of an
+// in-progress feed. `docs/vtmb/feeding.md` owns every number asserted here.
+// =====================================================================================
+
+namespace
+{
+	// A victim, three counters wired off its feed/death outputs, and (optionally) a second NPC to
+	// act as the attacker. The player is spawned by the test when it wants the retail attacker.
+	FElysiumEntityDefs MakeFeedTestDefs()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__feed_test__");
+
+		FElysiumEntityDef Victim;
+		Victim.Classname = TEXT("npc_VPedestrian");
+		Victim.TargetName = TEXT("victim");
+		Victim.Origin = FVector(100.0f, 0.0f, 0.0f);
+		auto Wire = [&Victim](const TCHAR* Output, const TCHAR* Target)
+		{
+			FElysiumOutputDef Row;
+			Row.Name = Output;
+			Row.Target = Target;
+			Row.Input = TEXT("Add");
+			Row.Param = TEXT("1");
+			Victim.Outputs.Add(MoveTemp(Row));
+		};
+		Wire(TEXT("OnFedUponBegin"), TEXT("begincount"));
+		Wire(TEXT("OnFedUponEnd"), TEXT("endcount"));
+		Wire(TEXT("OnDeath"), TEXT("deathcount"));
+		Defs.Defs.Add(MoveTemp(Victim));
+
+		// A second character, used by the save round trip as the feeder. The player entity is
+		// excluded from the map snapshot by design (its durable home is the Player block), and a
+		// headless world has no game-state subsystem to carry that block — so the *field* round trip
+		// is asserted on an ordinary map character, whose feed state is registered on the same chain.
+		FElysiumEntityDef Feeder;
+		Feeder.Classname = TEXT("npc_VVampire");
+		Feeder.TargetName = TEXT("feeder");
+		Defs.Defs.Add(MoveTemp(Feeder));
+
+		for (const TCHAR* Name : { TEXT("begincount"), TEXT("endcount"), TEXT("deathcount") })
+		{
+			FElysiumEntityDef Counter;
+			Counter.Classname = TEXT("math_counter");
+			Counter.TargetName = Name;
+			Defs.Defs.Add(MoveTemp(Counter));
+		}
+		return Defs;
+	}
+
+	FElysiumCombatCharacter* FeedTestCharacter(FElysiumEntityWorld& World, const TCHAR* Name)
+	{
+		FElysiumEntity* Ent = World.FindByName(Name);
+		return Ent ? Ent->AsCombatCharacter() : nullptr;
+	}
+
+	void SeedFeedSheet(FElysiumCombatCharacter& Char, int32 BloodPool, int32 MaxHealth, int32 Damage)
+	{
+		using EC = EElysiumTraitContainer;
+		Char.Sheet.SetBase(EC::Attributes, ElysiumSlot::BloodPool, BloodPool);
+		Char.Sheet.SetBase(EC::Attributes, ElysiumSlot::MaxHealth, MaxHealth);
+		Char.Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, Damage);
+		Char.RecomputeSheet();
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedingTest, "Elysium.Substrate.Feeding", GElysiumTestFlags)
+bool FElysiumFeedingTest::RunTest(const FString&)
+{
+	using EC = EElysiumTraitContainer;
+
+	// --- The cadence, pure ---------------------------------------------------------------------
+	// `initial interval = 0.30 + (B + 1) * 0.15`, so a fuller victim starts slower.
+	TestEqual(TEXT("an empty victim's first interval"), ElysiumFeed::InitialInterval(0), 0.45f);
+	TestEqual(TEXT("three blood points' first interval"), ElysiumFeed::InitialInterval(3), 0.90f);
+	TestEqual(TEXT("a full (15) victim's first interval"), ElysiumFeed::InitialInterval(15), 2.70f);
+	// `if (current > 0.30) current -= 0.15` — it accelerates to the floor and stays there.
+	float Interval = ElysiumFeed::InitialInterval(3);
+	const float Expected[] = { 0.75f, 0.60f, 0.45f, 0.30f, 0.30f, 0.30f };
+	for (int32 Step = 0; Step < UE_ARRAY_COUNT(Expected); ++Step)
+	{
+		Interval = ElysiumFeed::NextInterval(Interval);
+		TestEqual(*FString::Printf(TEXT("interval after %d steps"), Step + 1), Interval,
+			Expected[Step], 1e-4f);
+	}
+
+	// --- The unit transaction's two independent decisions, pure --------------------------------
+	// Healing is still evaluated when the feeder's pool is full; the successful-blood counter is
+	// not; the victim is drained either way (`DecBloodPool(false)` is called once regardless).
+	{
+		const ElysiumFeed::FPulseEffects Gained = ElysiumFeed::PulseEffects(/*bIncremented*/ true);
+		TestTrue(TEXT("a landed increment counts as stolen"), Gained.bCountStolen);
+		TestTrue(TEXT("...and heals"), Gained.bHeal);
+		TestTrue(TEXT("...and drains the victim"), Gained.bDrainVictim);
+		const ElysiumFeed::FPulseEffects Full = ElysiumFeed::PulseEffects(/*bIncremented*/ false);
+		TestFalse(TEXT("a full feeder's pool does NOT count as stolen"), Full.bCountStolen);
+		TestTrue(TEXT("...but the feed-heal is still evaluated"), Full.bHeal);
+		TestTrue(TEXT("...and the victim is still drained"), Full.bDrainVictim);
+	}
+
+	// --- The opposed comparison, pure ----------------------------------------------------------
+	{
+		FElysiumRollResult Roll;
+		Roll.Net = 2;
+		TestFalse(TEXT("an equal rating does not beat the roll (strictly greater)"),
+			ElysiumFeed::OpposedAccepts(2, Roll));
+		TestTrue(TEXT("one above does"), ElysiumFeed::OpposedAccepts(3, Roll));
+		Roll.Net = -3;   // a botched defence
+		TestFalse(TEXT("a negative net is floored at zero, so a zero rating still fails"),
+			ElysiumFeed::OpposedAccepts(0, Roll));
+		TestTrue(TEXT("...and one is enough against it"), ElysiumFeed::OpposedAccepts(1, Roll));
+		TestEqual(TEXT("the victim rolls at the recovered difficulty"),
+			ElysiumFeed::OpposedDifficulty, 6);
+	}
+
+	// --- Acceptance policy order ---------------------------------------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeFeedTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FeedTestCharacter(World, TEXT("victim"));
+		if (!TestNotNull(TEXT("the player entity exists"), Player)
+			|| !TestNotNull(TEXT("the victim exists"), Victim))
+		{
+			return false;
+		}
+		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 0);
+		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
+
+		// 1. The automatic-acceptance states accept with no roll at all. The stand-in for retail's
+		//    ACT_* state is the disposition name (see FElysiumCombatCharacter::IsFeedAutoAcceptState).
+		Victim->Disposition = TEXT("cower");
+		TestEqual(TEXT("a cowering victim accepts on the automatic-state route"),
+			static_cast<int32>(Player->EvaluateFeedAcceptance(*Victim)),
+			static_cast<int32>(EElysiumFeedVerdict::AcceptedAutomaticState));
+
+		// 2. A non-resisting victim accepts without a roll either. With no rulebook the effect layer
+		//    is empty, so the recovered `Fx_No_Resist_Feeding` flag is absent and the victim resists.
+		Victim->Disposition = TEXT("normal");
+		TestTrue(TEXT("an ordinary victim resists"), Victim->ResistsFeeding());
+
+		// 3. Which sends it to the opposed check. Both feats read 0 with no rulebook loaded, so a
+		//    zero rating cannot beat a floored-at-zero net and the request is refused — the same
+		//    fail-closed posture CalcFeat takes for an unresolved gate. The Dice stream is pinned so
+		//    the roll is the same one on every run.
+		ElysiumRng::SeedAll(4242);
+		TestEqual(TEXT("a resisting victim goes to the opposed check and wins it here"),
+			static_cast<int32>(Player->EvaluateFeedAcceptance(*Victim)),
+			static_cast<int32>(EElysiumFeedVerdict::RefusedOpposedCheck));
+
+		// 4. Body ownership outranks all of it: an open conversation refuses the grapple even for a
+		//    victim that would otherwise accept automatically.
+		Victim->Disposition = TEXT("cower");
+		World.EnqueueInput(TEXT("victim"), FName(TEXT("StartPlayerDialogRemote")),
+			FElysiumVariant::Int(256), 0.0, FElysiumEntityHandle::Invalid(), Victim->Handle);
+		World.Tick(0.0);
+		TestEqual(TEXT("a victim in dialogue refuses"),
+			static_cast<int32>(Player->EvaluateFeedAcceptance(*Victim)),
+			static_cast<int32>(EElysiumFeedVerdict::RefusedBusy));
+		World.EnqueueInput(TEXT("victim"), FName(TEXT("EndDialog")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Victim->Handle);
+		World.Tick(0.0);
+
+		// A refused attempt leaves no partial transaction behind.
+		Victim->Disposition = TEXT("normal");
+		Player->AttemptFeed(*Victim);
+		TestFalse(TEXT("a refused attempt pairs nobody"), Player->IsFeedPaired());
+		TestFalse(TEXT("...on either side"), Victim->IsFeedPaired());
+		TestEqual(TEXT("...and fires no OnFedUponBegin"),
+			SaveTestCounterValue(World.FindByName(TEXT("begincount"))), 0.0f);
+	}
+
+	// --- FeedBegin's field seeding, and one pulse per update ------------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeFeedTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FeedTestCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 45);
+		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
+		Victim->Disposition = TEXT("cower");
+
+		TestTrue(TEXT("the feed is accepted"),
+			ElysiumFeedAccepted(Player->AttemptFeed(*Victim)));
+		TestTrue(TEXT("both halves are paired"),
+			Player->IsFeedPaired() && Victim->IsFeedPaired());
+		TestFalse(TEXT("but the transaction is not open until the bite"),
+			Player->FeedState.IsTransacting());
+		TestTrue(TEXT("the victim's body is held for the duration"),
+			Victim->FeedState.bFrozenByFeed);
+
+		auto Advance = [&World](double To)
+		{
+			World.RunPlayerThink(To);
+			World.Tick(To);
+		};
+
+		// The engage clip runs first; event 4007 sits at cycle 0 of the bite that follows it.
+		Advance(0.4);
+		TestFalse(TEXT("no transaction part-way through the engage"),
+			Player->FeedState.IsTransacting());
+		Advance(ElysiumFeed::EngageSeconds + 0.01);
+		if (!TestTrue(TEXT("the bite opens the transaction (event 4007 -> FeedBegin)"),
+			Player->FeedState.IsTransacting()))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the cadence is seeded from the victim's blood pool at FeedBegin"),
+			Player->FeedState.Interval, ElysiumFeed::InitialInterval(3), 1e-4f);
+		TestEqual(TEXT("the first deadline is now + that interval"),
+			Player->FeedState.NextPulse,
+			static_cast<float>(ElysiumFeed::EngageSeconds + 0.01) + ElysiumFeed::InitialInterval(3),
+			1e-3f);
+		TestEqual(TEXT("OnFedUponBegin fired exactly once"),
+			SaveTestCounterValue(World.FindByName(TEXT("begincount"))), 1.0f);
+		TestEqual(TEXT("nothing is stolen before the first pulse"),
+			Player->FeedState.BloodStolen, 0);
+
+		// A single update that jumps far past several deadlines performs AT MOST ONE pulse — the
+		// cadence is a scheduled deadline, never a catch-up loop.
+		Advance(20.0);
+		TestEqual(TEXT("one update, one pulse"), Player->FeedState.BloodStolen, 1);
+		TestEqual(TEXT("...one blood point on the feeder"), Player->BloodPoolValue(), 1);
+		TestEqual(TEXT("...one off the victim"), Victim->BloodPoolValue(), 2);
+		// The feed-heal lands on the same pulse, from the recovered feeding ratio (10 per point).
+		TestEqual(TEXT("...and the feed-heal reduced the feeder's damage"),
+			Player->Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health), 35);
+	}
+
+	// --- Teardown: idempotency, and the depleted victim's death path ----------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeFeedTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FeedTestCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 45);
+		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
+		Victim->Disposition = TEXT("cower");
+		Player->AttemptFeed(*Victim);
+
+		auto Advance = [&World](double To)
+		{
+			World.RunPlayerThink(To);
+			World.Tick(To);
+		};
+		for (int32 Step = 1; Step <= 120; ++Step)
+		{
+			Advance(Step * 0.05);
+		}
+
+		TestFalse(TEXT("the feed ran to completion and left nobody paired"), Player->IsFeedPaired());
+		TestEqual(TEXT("the victim was drained dry"), Victim->BloodPoolValue(), 0);
+		TestEqual(TEXT("every point it had was stolen"), Player->FeedState.BloodStolen, 3);
+		TestEqual(TEXT("OnFedUponEnd fired exactly once"),
+			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
+		// Remaining blood below one selects the death path, deferred from the pulse to teardown.
+		TestEqual(TEXT("the depleted victim died, firing OnDeath"),
+			SaveTestCounterValue(World.FindByName(TEXT("deathcount"))), 1.0f);
+		TestFalse(TEXT("and its body was handed back"), Victim->FeedState.bFrozenByFeed);
+
+		// The single idempotent teardown: a second FeedInterrupt performs nothing and fires nothing.
+		Player->FeedInterrupt();
+		Player->FeedInterrupt();
+		World.Tick(6.5);
+		TestEqual(TEXT("a repeated interrupt does not fire OnFedUponEnd again"),
+			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
+	}
+
+	// --- Damage interrupts a running feed before the damage commits -----------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeFeedTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FeedTestCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 0);
+		SeedFeedSheet(*Victim, /*Blood*/ 8, /*MaxHealth*/ 100, /*Damage*/ 0);
+		Victim->Disposition = TEXT("cower");
+		Player->AttemptFeed(*Victim);
+		World.RunPlayerThink(1.0);
+		World.Tick(1.0);
+		if (!TestTrue(TEXT("the feed is running"), Player->FeedState.IsTransacting()))
+		{
+			return false;
+		}
+		// Hitting the VICTIM tears the pair down through its attacker.
+		Victim->TakeDamage(5.0f);
+		World.Tick(1.05);
+		TestFalse(TEXT("incoming damage broke the pair"), Player->IsFeedPaired());
+		TestEqual(TEXT("...and fired OnFedUponEnd once"),
+			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
+		TestEqual(TEXT("...leaving a surviving victim alive"),
+			SaveTestCounterValue(World.FindByName(TEXT("deathcount"))), 0.0f);
+	}
+
+	// --- Save/restore of an in-progress feed ----------------------------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld A(nullptr, nullptr, Services.Bundle());
+		A.Load(MakeFeedTestDefs());
+		A.SpawnPlayer();
+		A.Activate(0.0);
+		A.Tick(0.0);
+
+		FElysiumCombatCharacter* Feeder = FeedTestCharacter(A, TEXT("feeder"));
+		FElysiumCombatCharacter* Victim = FeedTestCharacter(A, TEXT("victim"));
+		if (!TestNotNull(TEXT("the feeder exists"), Feeder)
+			|| !TestNotNull(TEXT("the victim exists"), Victim))
+		{
+			return false;
+		}
+		SeedFeedSheet(*Feeder, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 0);
+		SeedFeedSheet(*Victim, /*Blood*/ 8, /*MaxHealth*/ 100, /*Damage*/ 0);
+		Victim->Disposition = TEXT("cower");
+		Feeder->AttemptFeed(*Victim);
+		// Into the loop, with a pulse already banked and the next one scheduled. A victim carrying 8
+		// blood starts on a 1.65 s interval, so 3 s is one pulse in and well short of the second.
+		constexpr double FreezeTime = 3.0;
+		for (int32 Step = 1; Step <= 60; ++Step)
+		{
+			A.Tick(Step * 0.05);
+		}
+		if (!TestTrue(TEXT("the feed is mid-loop at the freeze"),
+			Feeder->FeedState.IsTransacting() && Feeder->FeedState.BloodStolen > 0))
+		{
+			return false;
+		}
+		const int32 StolenBefore = Feeder->FeedState.BloodStolen;
+		const float PulseBefore = Feeder->FeedState.NextPulse;
+		const float IntervalBefore = Feeder->FeedState.Interval;
+		const int32 VictimBloodBefore = Victim->BloodPoolValue();
+		const int32 VictimIndex = Victim->Handle.Index;
+
+		FElysiumMapSnapshot Snapshot;
+		A.Freeze(Snapshot);
+
+		FElysiumRecordingServices ServicesB;
+		FElysiumEntityWorld B(nullptr, nullptr, ServicesB.Bundle());
+		B.Load(MakeFeedTestDefs());
+		B.SpawnPlayer();
+		B.ApplySnapshot(Snapshot);
+		B.Activate(FreezeTime);
+
+		FElysiumCombatCharacter* FeederB = FeedTestCharacter(B, TEXT("feeder"));
+		FElysiumCombatCharacter* VictimB = FeedTestCharacter(B, TEXT("victim"));
+		if (!TestNotNull(TEXT("the feeder restored"), FeederB)
+			|| !TestNotNull(TEXT("the victim restored"), VictimB))
+		{
+			return false;
+		}
+		TestTrue(TEXT("the restored feed is still open"), FeederB->FeedState.IsTransacting());
+		TestEqual(TEXT("the victim link survived (re-stamped against the live epoch)"),
+			FeederB->FeedState.Target.Index, VictimIndex);
+		TestTrue(TEXT("...and resolves in the new world"),
+			B.Resolve(FeederB->FeedState.Target) != nullptr);
+		TestEqual(TEXT("m_flNextFeedPulse survived"), FeederB->FeedState.NextPulse, PulseBefore, 1e-3f);
+		TestEqual(TEXT("the accelerating interval survived"),
+			FeederB->FeedState.Interval, IntervalBefore, 1e-3f);
+		TestEqual(TEXT("the stolen counter survived"),
+			FeederB->FeedState.BloodStolen, StolenBefore);
+		TestTrue(TEXT("the victim came back knowing it is the victim half"),
+			VictimB->FeedState.bVictim);
+		TestEqual(TEXT("and the victim's blood is where the freeze left it"),
+			VictimB->BloodPoolValue(), VictimBloodBefore);
+
+		// Resuming at the frozen instant must not replay the pulse that was already banked: the
+		// deadline is absolute simulation time, so a restore at that time is simply "not due yet".
+		B.Tick(FreezeTime);
+		TestEqual(TEXT("resuming does not duplicate a pulse"),
+			FeederB->FeedState.BloodStolen, StolenBefore);
+		TestEqual(TEXT("...nor re-drain the victim"), VictimB->BloodPoolValue(), VictimBloodBefore);
+
+		// And the restored schedule still fires: running past the stored deadline banks exactly the
+		// one pulse that was outstanding, on the interval the freeze had already accelerated to.
+		for (double At = FreezeTime; At <= static_cast<double>(PulseBefore) + 0.11; At += 0.05)
+		{
+			B.Tick(At);
+		}
+		TestEqual(TEXT("the outstanding pulse fires once, on the restored deadline"),
+			FeederB->FeedState.BloodStolen, StolenBefore + 1);
+
+		// The player's own half of the same contract cannot be driven here — the player entity is
+		// excluded from the map snapshot and its durable home is the Player block, which needs a
+		// game-state subsystem this tier does not have. `FElysiumPlayer::Hydrate`/`Dehydrate` carry
+		// `FElysiumPlayerRecord::Feed` for that path, scoped by the map it was taken in.
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The maker's child output provenance (§5.5.1): a synthesized child carries the maker's authored
+// lifecycle wires and fires them itself.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedMakerOutputsTest,
+	"Elysium.Substrate.FeedMakerOutputs", GElysiumTestFlags)
+bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__feed_maker_test__");
+
+	FElysiumEntityDef Maker;
+	Maker.Classname = TEXT("npc_maker");
+	Maker.TargetName = TEXT("blueblood_maker");
+	Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VPedestrian"));
+	Maker.Keys.Add(TEXT("NPCTargetname"), TEXT("blueblood"));
+	auto Wire = [&Maker](const TCHAR* Output, const TCHAR* Target)
+	{
+		FElysiumOutputDef Row;
+		Row.Name = Output;
+		Row.Target = Target;
+		Row.Input = TEXT("Add");
+		Row.Param = TEXT("1");
+		Maker.Outputs.Add(MoveTemp(Row));
+	};
+	Wire(TEXT("OnFedUponBegin"), TEXT("begincount"));
+	Wire(TEXT("OnFedUponEnd"), TEXT("endcount"));
+	Wire(TEXT("OnDeath"), TEXT("deathcount"));
+	Defs.Defs.Add(MoveTemp(Maker));
+
+	for (const TCHAR* Name : { TEXT("begincount"), TEXT("endcount"), TEXT("deathcount") })
+	{
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = Name;
+		Defs.Defs.Add(MoveTemp(Counter));
+	}
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumEntity* MakerEnt = World.FindByName(TEXT("blueblood_maker"));
+	if (!TestNotNull(TEXT("the maker exists"), MakerEnt))
+	{
+		return false;
+	}
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), MakerEnt->Handle);
+	World.Tick(0.0);
+
+	FElysiumEntity* ChildEnt = World.FindByName(TEXT("blueblood"));
+	if (!TestNotNull(TEXT("the child spawned"), ChildEnt))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the child def carries the maker's authored output rows"),
+		ChildEnt->Def->Outputs.Num(), MakerEnt->Def->Outputs.Num());
+	TestEqual(TEXT("...with its own times countdown"),
+		ChildEnt->OutputTimesRemaining.Num(), MakerEnt->Def->Outputs.Num());
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	FElysiumCombatCharacter* Child = ChildEnt->AsCombatCharacter();
+	if (!TestNotNull(TEXT("the player exists"), Player)
+		|| !TestNotNull(TEXT("the child is a combat character"), Child))
+	{
+		return false;
+	}
+	SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 0);
+	SeedFeedSheet(*Child, /*Blood*/ 1, /*MaxHealth*/ 100, /*Damage*/ 0);
+	Child->Disposition = TEXT("cower");
+	TestTrue(TEXT("feeding on the child is accepted"),
+		ElysiumFeedAccepted(Player->AttemptFeed(*Child)));
+
+	for (int32 Step = 1; Step <= 160; ++Step)
+	{
+		World.RunPlayerThink(Step * 0.05);
+		World.Tick(Step * 0.05);
+	}
+
+	// The child is the firing entity: the maker's wires resolve because the rows are on the child's
+	// own def, which is the §5.5.1 reconstruction this runtime carries.
+	TestEqual(TEXT("the maker-authored OnFedUponBegin reached its target"),
+		SaveTestCounterValue(World.FindByName(TEXT("begincount"))), 1.0f);
+	TestEqual(TEXT("...and OnFedUponEnd did too"),
+		SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
+	TestEqual(TEXT("...and the drained child's OnDeath"),
+		SaveTestCounterValue(World.FindByName(TEXT("deathcount"))), 1.0f);
+	TestFalse(TEXT("the maker itself is not left paired"), Player->IsFeedPaired());
 
 	return true;
 }

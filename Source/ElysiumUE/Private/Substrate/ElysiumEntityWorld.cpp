@@ -1141,6 +1141,62 @@ void FElysiumEntityWorld::QueuePlayerUseEdge(EElysiumUseEdge Edge)
 	}
 }
 
+void FElysiumEntityWorld::QueuePlayerFeedEdge(EElysiumUseEdge Edge)
+{
+	if (bActive)
+	{
+		PendingFeedEdges.Add(Edge);
+	}
+}
+
+void FElysiumEntityWorld::UpdatePlayerFeed()
+{
+	if (PendingFeedEdges.IsEmpty())
+	{
+		return;
+	}
+	TArray<EElysiumUseEdge, TInlineAllocator<2>> Edges = MoveTemp(PendingFeedEdges);
+	PendingFeedEdges.Reset();
+	if (!bActive || !IsTriggerResolutionEnabled())
+	{
+		return;
+	}
+	FElysiumPlayer* PlayerEnt = FindPlayer();
+	if (!PlayerEnt || PlayerEnt->IsInert())
+	{
+		return;
+	}
+
+	for (const EElysiumUseEdge Edge : Edges)
+	{
+		if (Edge == EElysiumUseEdge::Released)
+		{
+			// `-feed` publishes a release edge and clears the continuation latch. It does not tear
+			// the transaction down: retail's publisher does not call `FeedInterrupt`, and the
+			// accepted action exits through its own paired state and animation-event policy.
+			PlayerEnt->SetFeedContinuation(false);
+			continue;
+		}
+		// `Replenish` refuses to start another request while the player already has a paired peer.
+		if (PlayerEnt->IsFeedPaired())
+		{
+			continue;
+		}
+		FElysiumEntityHandle Candidate = FElysiumEntityHandle::Invalid();
+		if (IElysiumEmbodiment* Bodily = Embodiment())
+		{
+			Candidate = Bodily->QueryFeedTarget();
+		}
+		FElysiumEntity* TargetEnt = Resolve(Candidate);
+		FElysiumCombatCharacter* Victim = TargetEnt ? TargetEnt->AsCombatCharacter() : nullptr;
+		if (!Victim)
+		{
+			continue;   // nothing in the hull, or what is there is not a character
+		}
+		PlayerEnt->AttemptFeed(*Victim);
+	}
+}
+
 float FElysiumEntityWorld::InteractionPromptAlpha(double Now) const
 {
 	if (!InteractionPrompt.DisplayOwner.IsSet())

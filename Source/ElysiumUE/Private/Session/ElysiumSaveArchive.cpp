@@ -178,6 +178,32 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	// The History is the choice; the trait-effect group it names rides in `Effects` above, so a
 	// patched `histories000.txt` re-applies on load exactly as a patched rulebook does.
 	Ar << R.HistoryId;
+	// B6 — an in-progress feed. Appended, and read behind its own version, so a payload written
+	// before feeding existed simply restores with no feed rather than being refused.
+	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::Feeding)
+	{
+		Ar << R.FeedMap;
+		Ar << R.Feed.NextPulse << R.Feed.Interval << R.Feed.StartTime;
+		Ar << R.Feed.Target;
+		Ar << R.Feed.BloodStolen;
+		Ar << R.Feed.bContinuation;
+		Ar << R.Feed.Peer;
+		Ar << R.Feed.bVictim << R.Feed.bFrozenByFeed;
+		uint8 Phase = static_cast<uint8>(R.Feed.Phase);
+		Ar << Phase;
+		Ar << R.Feed.PhaseDeadline;
+		if (Ar.IsLoading())
+		{
+			R.Feed.Phase = static_cast<EElysiumFeedPhase>(
+				FMath::Min<uint8>(Phase, static_cast<uint8>(EElysiumFeedPhase::Release)));
+			R.Feed.bInterrupting = false;   // a teardown never survives a save
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		R.Feed = FElysiumFeedState();
+		R.FeedMap.Reset();
+	}
 	return Ar;
 }
 

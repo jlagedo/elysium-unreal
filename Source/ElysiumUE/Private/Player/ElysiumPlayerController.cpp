@@ -102,6 +102,18 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		{
 			World->QueuePlayerUseEdge(EElysiumUseEdge::Released);
 		}
+		// B6 — `+feed` / `-feed`. Retail packs the held state as usercmd bit 0x00400000 and the
+		// server consumer tests it every command; the edges are what this runtime carries, because
+		// the accepted action owns its own continuation latch from there on
+		// (`docs/vtmb/feeding.md` § "Command and initial request").
+		if (Current.JustPressed(EElysiumButton::Feed, PreviousCmd))
+		{
+			World->QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
+		}
+		if (Current.JustReleased(EElysiumButton::Feed, PreviousCmd))
+		{
+			World->QueuePlayerFeedEdge(EElysiumUseEdge::Released);
+		}
 	}
 	PreviousCmd = Current;
 }
