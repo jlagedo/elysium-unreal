@@ -18,6 +18,50 @@ override the export location. Command parameters override process environment; p
 environment overrides the local env file; Unreal may then be safely auto-detected. VtMB
 and work roots are never guessed from the repository.
 
+## Parallel QA lanes
+
+`uv run elysium lane` owns persistent detached Git worktrees used for export, bake,
+automation, and live acceptance while development continues on `main`. A lane has two
+independent roots:
+
+- a sibling checkout, defaulting to `<development-checkout>-<lane>`;
+- `$ELYSIUM_WORK_ROOT/lanes/<lane>`, containing that checkout's export corpus, reports,
+  logs, caches, and lane record.
+
+`lane create <name> [--at <ref>]` creates the detached worktree, writes its ignored
+`.elysium.local.env`, adopts its dedicated `work/exports` root, and records the exact
+candidate commit. It does not copy mutable generated packages from another checkout.
+Run `deps sync` and a real `build` in the new worktree before exporting or launching it.
+Creation and dispatch reject a commit that predates the lane runtime, because commands from
+that checkout could not participate in its ownership lease.
+
+`lane dispatch <name> [--at <ref>]` advances an existing clean lane to another exact
+commit and resets its automated and live evidence to `pending`. Dispatch refuses a dirty
+worktree, a different Git object store, an active lane command, or an Unreal process with
+that lane's project open. Ignored generated output survives the detached switch, preserving
+that lane's incremental export and bake state.
+
+`lane status [<name>]` reports source/candidate agreement, dirtiness, the active owner,
+disk-build readiness, corpus completeness, baked-map count, and the two evidence states.
+`lane mark [<name>] --automated pending|passed|failed --live pending|passed|failed` records
+the owner verdict and a snapshot of the commit, editor module, export manifest, and promoted
+bake receipts. Marking records evidence; it does not run or reinterpret a test.
+`passed` requires a successful managed automation/verification or play/debug run for the
+same candidate, so a label cannot outrun its evidence.
+Any later dependency, build, export, verification, automation, editor, play, or debug
+activity resets the evidence domains it can invalidate before it starts.
+
+Build, dependency restore, project-file generation, export, bake, verification, automation,
+editor, play, and debug commands take one OS-released lease below the resolved export root.
+The lease serializes all mutable activity within one lane and reports its command and PID;
+different export roots remain independent. Directly launched Unreal processes are also
+detected before managed activity starts.
+
+Git objects and Git LFS storage, the UE installation, and the read-only VtMB installation
+are shared. `$ELYSIUM_EXPORT_ROOT`, `Plugins/ElysiumBaked/Content`, generated `Content/`,
+`Binaries`, `Intermediate`, `Saved`, `.venv`, and `Plugins/External` remain lane-local. Never
+hardlink or junction those mutable trees between lanes.
+
 ## Git boundary
 
 The repository rejects:
@@ -58,8 +102,8 @@ ownership marker. Never place project source in `Plugins/External/`.
 
 `uv run elysium` is the sole development entrypoint. It owns dependency synchronization,
 repository diagnostics, UE compilation, export and bake orchestration, tests, play,
-profiling, probes, screenshots, movement, greenroom, modelroom, research, IDE setup, and
-MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
+profiling, probes, screenshots, movement, greenroom, modelroom, QA lanes, research, IDE
+setup, and MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
 that restores dependencies, compiles the editor, exports and bakes the corpus, verifies
 the products, and runs the required tests. No compatibility wrappers exist.
 
@@ -80,3 +124,7 @@ and verification remove the marker. Repository diagnostics and content tests ref
 incomplete corpus rather than treating it as valid. Runtime gameplay does not consult the marker;
 it loads the generated artifacts that are actually present and reports a missing map or sidecar at
 the point of use.
+
+Automation JSON and HTML are retained per run below
+`$ELYSIUM_WORK_ROOT/reports/tests/`; the generated corpus is an input to a content test, not
+the home of its result.

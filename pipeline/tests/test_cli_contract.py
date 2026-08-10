@@ -25,6 +25,7 @@ class CliContractTests(unittest.TestCase):
             "debug",
             "research",
             "ide",
+            "lane",
             "mcp",
         ):
             self.assertIn(command, result.output)
@@ -43,6 +44,12 @@ class CliContractTests(unittest.TestCase):
         )
         self.assertEqual(result.exit_code, 2, result.output)
         self.assertIn("No such option", result.output)
+
+    def test_lane_help_exposes_candidate_lifecycle(self) -> None:
+        result = self.runner.invoke(app, ["lane", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        for command in ("create", "dispatch", "status", "mark"):
+            self.assertIn(command, result.output)
 
     def test_targeted_model_export_rejects_clean(self) -> None:
         result = self.runner.invoke(

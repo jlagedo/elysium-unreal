@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 
+from elysium_pipeline import unreal
 from elysium_pipeline.unreal import TEST_ABSTENTION_TOKEN, summarize_test_report
 
 
@@ -47,6 +50,41 @@ class UnrealTestReportTests(unittest.TestCase):
 
         self.assertEqual(summary["executed"], 1)
         self.assertEqual(summary["abstained"], 0)
+
+    def test_each_run_retains_its_report_below_the_work_root(self) -> None:
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = SimpleNamespace(
+                work_root=root / "work",
+                export_root=root / "exports",
+                project=root / "repo" / "ElysiumUE.uproject",
+            )
+
+            def write_report(_config, _runner, _executable, arguments) -> None:
+                switch = next(
+                    value for value in arguments if str(value).startswith("-ReportExportPath=")
+                )
+                report = Path(str(switch).split("=", 1)[1])
+                report.mkdir(parents=True)
+                (report / "index.json").write_text(
+                    json.dumps({"tests": [], "failed": 0, "totalDuration": 0}),
+                    encoding="utf-8",
+                )
+
+            with (
+                mock.patch.object(unreal, "editor_executable", return_value=Path("editor")),
+                mock.patch.object(unreal, "_run", side_effect=write_report),
+            ):
+                first = unreal.run_tests(config, None, "Substrate")
+                second = unreal.run_tests(config, None, "Substrate")
+
+            first_path = Path(first["report_path"])
+            second_path = Path(second["report_path"])
+            report_root = (config.work_root / "reports" / "tests").resolve()
+            self.assertTrue(first_path.is_relative_to(report_root))
+            self.assertTrue(second_path.is_relative_to(report_root))
+            self.assertNotEqual(first_path, second_path)
+            self.assertFalse(first_path.is_relative_to(config.export_root.resolve()))
 
 
 if __name__ == "__main__":

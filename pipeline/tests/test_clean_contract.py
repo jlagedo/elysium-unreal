@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from elysium_pipeline import clean
+from elysium_pipeline.workspace_lock import LOCK_FILE, OWNER_FILE
 
 
 class CleanContractTests(unittest.TestCase):
@@ -23,6 +24,8 @@ class CleanContractTests(unittest.TestCase):
             repo, game, work, export = self._layout(Path(temporary))
             (export / "sp_tutorial_1").mkdir()
             (export / "sp_tutorial_1" / "map.obj").write_text("derived")
+            (export / LOCK_FILE).write_bytes(b"\0")
+            (export / OWNER_FILE).write_text("{}", encoding="utf-8")
             (repo / "Content" / "VtMB").mkdir(parents=True)
             (repo / "Content" / "VtMB" / "generated.uasset").write_text("derived")
             (repo / "Content" / "Fonts").mkdir(parents=True)
@@ -49,6 +52,8 @@ class CleanContractTests(unittest.TestCase):
             self.assertTrue((repo / "Content" / "Fonts" / "source.ttf").is_file())
             self.assertTrue((external / "source.cpp").is_file())
             self.assertTrue((export / clean.OWNERSHIP_FILE).is_file())
+            self.assertTrue((export / LOCK_FILE).is_file())
+            self.assertTrue((export / OWNER_FILE).is_file())
             self.assertEqual(incomplete.resolve(), (export / clean.INCOMPLETE_FILE).resolve())
             self.assertTrue(incomplete.is_file())
 

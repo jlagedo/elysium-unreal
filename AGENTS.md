@@ -165,6 +165,7 @@ then use `uv run elysium` as the only public command surface.
 - `reconstruct [--clean] [--rebuild]` restores the complete project from its declared inputs.
 - `deps sync|check` restores or verifies pinned external plugins and fetched SDKs.
 - `doctor` checks repository policy, local paths, dependency ownership and generated prerequisites.
+- `lane create|dispatch|status|mark` owns detached, generated-state-isolated QA worktrees.
 - `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
 - `export grid|all` runs a complete profile; `export map|model|bundle` handles focused work.
 - Export generates the required `/Game/Elysium`, `/Game/VtMB/**`, and

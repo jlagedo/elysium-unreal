@@ -117,6 +117,7 @@ def run_process(
         elif log is None:
             sys.stdout.write(line)
             sys.stdout.flush()
+    process.stdout.close()
     returncode = process.wait()
     result = ProcessResult(
         argv=command,

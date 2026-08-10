@@ -84,7 +84,7 @@ class RunReport:
 
     def write(self, log_root: Path) -> Path:
         log_root.mkdir(parents=True, exist_ok=True)
-        stamp = self.started_at[:19].replace(":", "").replace("-", "")
+        stamp = datetime.fromisoformat(self.started_at).strftime("%Y%m%dT%H%M%S.%fZ")
         slug = re.sub(r"[^a-z0-9]+", "-", self.command.lower()).strip("-") or "run"
         destination = log_root / f"{stamp}-{slug}.json"
         destination.write_text(
@@ -92,4 +92,3 @@ class RunReport:
             encoding="utf-8",
         )
         return destination
-

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 
 
 FONT_ASSETS = (
@@ -260,7 +262,15 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
     """
     aliases = {"substrate": "Elysium.Substrate.", "content": "Elysium.Content."}
     selected = aliases.get(filter_name.lower(), filter_name)
-    report = config.export_root / "_tests"
+    if config.work_root is None:
+        raise UnrealFailure("automation needs ELYSIUM_WORK_ROOT for its retained report")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+    slug = re.sub(r"[^a-z0-9]+", "-", selected.lower()).strip("-") or "all"
+    report = config.work_root / "reports" / "tests" / f"{stamp}-{slug}"
+    suffix = 1
+    while report.exists():
+        report = report.with_name(f"{stamp}-{slug}-{suffix}")
+        suffix += 1
     arguments = [
         str(config.project),
         f"-ElysiumContentRoot={config.export_root}",
@@ -276,7 +286,9 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
     if parity_stems:
         arguments.insert(2, "-ElysiumParityStems=" + ",".join(parity_stems))
     _run(config, runner, editor_executable(config, commandlet=True), arguments)
-    return summarize_test_report(report)
+    summary = summarize_test_report(report)
+    summary["report_path"] = str(report.resolve())
+    return summary
 
 
 def summarize_test_report(report_dir: Path) -> dict:

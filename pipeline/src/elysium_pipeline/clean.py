@@ -9,6 +9,8 @@ from collections.abc import Sequence
 from pathlib import Path
 import shutil
 
+from elysium_pipeline.workspace_lock import LOCK_FILE, OWNER_FILE
+
 
 OWNERSHIP_FILE = ".elysium-owned.json"
 INCOMPLETE_FILE = ".elysium-incomplete"
@@ -138,8 +140,13 @@ def validate_clean_targets(
 
 def clean_generated(targets: CleanTargets) -> Path:
     marker = targets.export_root / OWNERSHIP_FILE
+    controls = {
+        marker.resolve(),
+        (targets.export_root / LOCK_FILE).resolve(),
+        (targets.export_root / OWNER_FILE).resolve(),
+    }
     for child in targets.export_root.iterdir():
-        if child == marker:
+        if child.resolve() in controls:
             continue
         if child.is_dir():
             shutil.rmtree(child)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import importlib.util
@@ -16,6 +17,7 @@ from typing import Any, Callable
 import typer
 from rich.console import Console
 
+from elysium_pipeline import lanes
 from elysium_pipeline.config import ConfigError, ProjectConfig
 from elysium_pipeline.dependencies import (
     DependencyError,
@@ -25,6 +27,7 @@ from elysium_pipeline.dependencies import (
 )
 from elysium_pipeline.process import ProcessFailure, ProcessRunner
 from elysium_pipeline.reporting import ExitCode, RunReport
+from elysium_pipeline.workspace_lock import WorkspaceLease
 
 
 console = Console()
@@ -41,12 +44,14 @@ verify_app = typer.Typer(help="Check baked packages against what the export decl
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
 ide_app = typer.Typer(help="Configure supported development environments.")
+lane_app = typer.Typer(help="Manage detached, generated-state-isolated QA worktrees.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
 app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
 app.add_typer(ide_app, name="ide")
+app.add_typer(lane_app, name="lane")
 
 
 @dataclass(slots=True)
@@ -106,11 +111,15 @@ def _execute(
     require_work: bool = True,
     require_ue: bool = False,
     quiet_report: bool = False,
+    activity: bool = False,
+    require_built_lane: bool = False,
+    record_lane_run: bool = True,
 ) -> Any:
     report = RunReport(command=name, arguments=sys.argv[1:])
     config: ProjectConfig | None = None
     log_handle = None
     report_path: Path | None = None
+    lane: lanes.LaneRecord | None = None
     started = datetime.now(timezone.utc).isoformat()
     before = time.monotonic()
     try:
@@ -121,7 +130,9 @@ def _execute(
         )
         if config.log_root is not None:
             config.log_root.mkdir(parents=True, exist_ok=True)
-            stamp = report.started_at[:19].replace(":", "").replace("-", "")
+            stamp = datetime.fromisoformat(report.started_at).strftime(
+                "%Y%m%dT%H%M%S.%fZ"
+            )
             slug = name.replace(" ", "-").replace("/", "-")
             log_handle = (config.log_root / f"{stamp}-{slug}.log").open(
                 "w", encoding="utf-8", newline="\n"
@@ -136,7 +147,37 @@ def _execute(
                 else lambda line: console.print(line, markup=False)
             ),
         )
-        result = action(config, runner)
+        lane = lanes.current_lane(config.work_root, config.repo_root)
+        lease = nullcontext()
+        if lane is not None and record_lane_run:
+            report.metadata.update(
+                {
+                    "lane": lane.name,
+                    "candidate_commit": lane.candidate_commit,
+                    "worktree": str(lane.worktree),
+                    "export_root": str(lane.export_root),
+                }
+            )
+        if activity:
+            lanes.assert_project_idle(config.project)
+            if lane is not None:
+                candidate = lanes.assert_lane_runnable(lane, runner)
+                if require_built_lane and lane.build_commit != candidate:
+                    raise lanes.LaneError(
+                        f"lane {lane.name!r} needs `uv run elysium build` for candidate "
+                        f"{candidate[:12]} before {name}"
+                    )
+            if config.export_root is not None:
+                lease = WorkspaceLease(
+                    config.export_root,
+                    name,
+                    config.repo_root,
+                    metadata={"lane": lane.name} if lane is not None else None,
+                )
+        with lease:
+            if lane is not None and activity:
+                lanes.begin_activity(lane, name)
+            result = action(config, runner)
         report.add_task(
             name,
             status="ok",
@@ -148,6 +189,15 @@ def _execute(
             report_path = report.write(config.log_root)
         if report_path and not quiet_report:
             console.print(f"[dim]run report: {report_path}[/dim]")
+        if lane is not None and record_lane_run:
+            lanes.record_run(
+                lane,
+                command=name,
+                status="succeeded",
+                exit_code=0,
+                started_at=started,
+                report_path=report_path,
+            )
         return result
     except ConfigError as exc:
         code = int(ExitCode.USAGE_OR_CONFIG)
@@ -177,12 +227,210 @@ def _execute(
     report.finish(exit_code=code)
     if config is not None and config.log_root is not None:
         report_path = report.write(config.log_root)
+    if lane is not None and record_lane_run:
+        lanes.record_run(
+            lane,
+            command=name,
+            status="failed",
+            exit_code=code,
+            started_at=started,
+            report_path=report_path,
+        )
     if not quiet_report:
         console.print("[red]error:[/red] ", end="")
         console.print(detail, markup=False)
     if report_path and not quiet_report:
         console.print(f"[dim]run report: {report_path}[/dim]")
     raise typer.Exit(code)
+
+
+@lane_app.command("create")
+def lane_create(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Lane name, such as qa."),
+    at: str = typer.Option("HEAD", "--at", help="Commit or ref to detach at."),
+    path: Path | None = typer.Option(
+        None, "--path", help="Worktree path; defaults to a sibling named <repo>-<lane>."
+    ),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.game_root is None or config.work_root is None or config.ue_root is None:
+            raise RuntimeError("lane creation needs the game, work, and UE roots")
+        creation = lanes.create_lane(
+            source_repo=config.repo_root,
+            source_work_root=config.work_root,
+            game_root=config.game_root,
+            ue_root=config.ue_root,
+            runner=runner,
+            name=name,
+            ref=at,
+            worktree_path=path,
+        )
+        record = creation.record
+        console.print(
+            f"lane {record.name} created at {record.worktree} "
+            f"({record.candidate_commit[:12]})"
+        )
+        console.print(f"lane work root: {record.work_root}")
+        if creation.source_dirty:
+            console.print(
+                "[yellow]warning:[/yellow] the development checkout has changes; "
+                "the lane contains only the named commit"
+            )
+        console.print(f"next: cd {record.worktree}")
+        console.print("      uv run elysium deps sync")
+        console.print("      uv run elysium build")
+
+    _execute(
+        _state(ctx),
+        "lane create",
+        ExitCode.VALIDATION,
+        action,
+        require_game=True,
+        require_ue=True,
+    )
+
+
+@lane_app.command("dispatch")
+def lane_dispatch(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Lane to advance."),
+    at: str = typer.Option("HEAD", "--at", help="Candidate commit or ref."),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.work_root is None:
+            raise RuntimeError("lane dispatch needs ELYSIUM_WORK_ROOT")
+        record = lanes.lane_records(config.work_root, name)[0]
+        lanes.dispatch_lane(record, runner, at)
+        console.print(
+            f"lane {record.name} dispatched to {record.candidate_commit[:12]} at {record.worktree}"
+        )
+        if lanes.repository_has_changes(record.source_repo, runner):
+            console.print(
+                "[yellow]warning:[/yellow] the development checkout has changes; "
+                "the dispatched lane contains only the named commit"
+            )
+        console.print("evidence reset: automated pending; live pending")
+        console.print(f"next: cd {record.worktree}")
+        console.print("      uv run elysium deps sync")
+        console.print("      uv run elysium build")
+
+    _execute(
+        _state(ctx),
+        "lane dispatch",
+        ExitCode.VALIDATION,
+        action,
+    )
+
+
+def _print_lane_status(value: dict[str, Any]) -> None:
+    activity = value["activity"]
+    active = "idle" if activity is None else (
+        f"{activity.get('command', 'busy')} (pid {activity.get('pid', '?')})"
+    )
+    source = "candidate" if value["candidate_matches"] else "MISMATCH"
+    cleanliness = "clean" if not value["dirty"] else f"dirty ({len(value['dirty'])})"
+    incomplete = value["incomplete_domains"]
+    corpus = "complete" if not incomplete else "incomplete: " + ", ".join(incomplete)
+    console.print(f"{value['name']}: {value['worktree']}")
+    console.print(
+        f"  source {str(value['head'] or '?')[:12]} ({source}, {cleanliness}, "
+        f"{value['branch'] or '?'})"
+    )
+    console.print(
+        f"  activity {active}; build {'ready' if value['build_ready'] else 'required'}; "
+        f"{value['baked_map_count']} baked map(s)"
+    )
+    console.print(f"  corpus {corpus}")
+    console.print(
+        f"  evidence automated {value['automated']}; live {value['live']}"
+        + (f"; {value['note']}" if value["note"] else "")
+    )
+    if value["last_run"]:
+        run = value["last_run"]
+        console.print(
+            f"  last {run['command']}: {run['status']} ({run['candidate_commit'][:12]})"
+        )
+    if value["unreal_processes"]:
+        processes = ", ".join(
+            f"{item['name']} pid {item['pid']}" for item in value["unreal_processes"]
+        )
+        console.print(f"  Unreal {processes}")
+    if value["error"]:
+        console.print(f"  [red]error:[/red] {value['error']}")
+
+
+@lane_app.command("status")
+def lane_status_command(
+    ctx: typer.Context,
+    name: str | None = typer.Argument(None, help="One lane; omit to list every lane."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.work_root is None:
+            raise RuntimeError("lane status needs ELYSIUM_WORK_ROOT")
+        records = lanes.lane_records(config.work_root, name)
+        values = [lanes.lane_status(record, runner) for record in records]
+        if json_output:
+            typer.echo(json.dumps(values, indent=2, sort_keys=True))
+            return
+        if not values:
+            console.print("no QA lanes")
+            return
+        for index, value in enumerate(values):
+            if index:
+                console.print()
+            _print_lane_status(value)
+
+    _execute(
+        _state(ctx),
+        "lane status",
+        ExitCode.VALIDATION,
+        action,
+        quiet_report=True,
+        record_lane_run=False,
+    )
+
+
+@lane_app.command("mark")
+def lane_mark(
+    ctx: typer.Context,
+    name: str | None = typer.Argument(
+        None, help="Lane to mark; omit when running inside that lane."
+    ),
+    automated: str | None = typer.Option(None, "--automated"),
+    live: str | None = typer.Option(None, "--live"),
+    note: str | None = typer.Option(None, "--note"),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.work_root is None:
+            raise RuntimeError("lane mark needs ELYSIUM_WORK_ROOT")
+        records = lanes.lane_records(config.work_root, name)
+        if len(records) != 1:
+            raise lanes.LaneError("name one lane to mark")
+        record = lanes.mark_lane(
+            records[0],
+            runner,
+            automated=automated,
+            live=live,
+            note=note,
+        )
+        console.print(
+            f"lane {record.name}: automated {record.automated}; live {record.live}"
+        )
+        if record.snapshot is not None:
+            console.print(
+                f"snapshot {record.snapshot['commit'][:12]}: "
+                f"{record.snapshot['baked_map_count']} baked map(s), "
+                f"{record.snapshot['bake_receipt_count']} receipt file(s)"
+            )
+
+    _execute(
+        _state(ctx),
+        "lane mark",
+        ExitCode.VALIDATION,
+        action,
+    )
 
 
 @deps_app.command("sync")
@@ -197,6 +445,7 @@ def deps_sync(ctx: typer.Context) -> None:
         ExitCode.DEPENDENCY_OR_TOOLCHAIN,
         action,
         require_work=False,
+        activity=True,
     )
 
 
@@ -301,6 +550,7 @@ def build_command(
         ExitCode.BUILD,
         action,
         require_ue=True,
+        activity=True,
     )
 
 
@@ -332,6 +582,8 @@ def _export_profile_command(
         action,
         require_game=True,
         require_ue=True,
+        activity=True,
+        require_built_lane=True,
     )
 
 
@@ -381,6 +633,8 @@ def export_map(
         action,
         require_game=True,
         require_ue=not intermediate_only,
+        activity=True,
+        require_built_lane=not intermediate_only,
     )
 
 
@@ -416,6 +670,8 @@ def export_characters(
         action,
         require_game=True,
         require_ue=True,
+        activity=True,
+        require_built_lane=True,
     )
 
 
@@ -440,6 +696,8 @@ def verify_characters(
         action,
         require_game=True,
         require_ue=True,
+        activity=True,
+        require_built_lane=True,
     )
 
 
@@ -461,6 +719,8 @@ def verify_maps(
         action,
         require_game=True,
         require_ue=True,
+        activity=True,
+        require_built_lane=True,
     )
 
 
@@ -490,6 +750,8 @@ def export_model(
         action,
         require_game=True,
         require_ue=integrate,
+        activity=True,
+        require_built_lane=integrate,
     )
 
 
@@ -519,6 +781,8 @@ def export_bundle(
         action,
         require_game=bundle != "policy",
         require_ue=bundle == "policy",
+        activity=True,
+        require_built_lane=bundle == "policy",
     )
 
 
@@ -552,6 +816,7 @@ def reconstruct(
         action,
         require_game=True,
         require_ue=True,
+        activity=True,
     )
 
 
@@ -567,6 +832,7 @@ def test_command(
         from elysium_pipeline import unreal
 
         summary = unreal.run_tests(config, runner, filter_name, parity_stems=stems or ())
+        console.print(f"automation report: {summary['report_path']}")
         if not summary["total"]:
             return
         # A test that declines to run still reports Success, so the executed count is the only
@@ -588,6 +854,8 @@ def test_command(
         ExitCode.VALIDATION,
         action,
         require_ue=True,
+        activity=True,
+        require_built_lane=True,
     )
 
 
@@ -598,7 +866,15 @@ def run_editor(ctx: typer.Context, extra: list[str] = typer.Argument(None)) -> N
 
         unreal.run_editor(config, runner, [*(extra or ()), *ctx.args])
 
-    _execute(_state(ctx), "run editor", ExitCode.UNREAL_OR_BAKE, action, require_ue=True)
+    _execute(
+        _state(ctx),
+        "run editor",
+        ExitCode.UNREAL_OR_BAKE,
+        action,
+        require_ue=True,
+        activity=True,
+        require_built_lane=True,
+    )
 
 
 @run_app.command("play", context_settings=PASSTHROUGH)
@@ -619,7 +895,15 @@ def run_play(
 
         unreal.run_play(config, runner, map_name, [*(extra or ()), *ctx.args])
 
-    _execute(_state(ctx), "run play", ExitCode.UNREAL_OR_BAKE, action, require_ue=True)
+    _execute(
+        _state(ctx),
+        "run play",
+        ExitCode.UNREAL_OR_BAKE,
+        action,
+        require_ue=True,
+        activity=True,
+        require_built_lane=True,
+    )
 
 
 @debug_app.command("profile", context_settings=PASSTHROUGH)
@@ -700,6 +984,8 @@ def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
         ExitCode.VALIDATION,
         action,
         require_ue=True,
+        activity=True,
+        require_built_lane=True,
     )
 
 
@@ -779,6 +1065,7 @@ def ide_vscode(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
         ExitCode.DEPENDENCY_OR_TOOLCHAIN,
         action,
         require_ue=True,
+        activity=True,
     )
 
 

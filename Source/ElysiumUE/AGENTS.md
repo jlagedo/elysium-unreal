@@ -268,8 +268,8 @@ substrate, scripting, session, player or UI layers, `Content` when the change re
 are cheap: the build is adaptive non-unity (~10 s for a handful of files), and the Substrate tier
 runs in about the same under `-nullrhi`.
 
-**The result surface is the report, not stdout.** Every run writes JSON + HTML under
-`$ELYSIUM_EXPORT_ROOT/_tests/` and `uv run elysium test` reports the path and propagates the exit code.
+**The result surface is the report, not stdout.** Every run writes retained JSON + HTML under
+`$ELYSIUM_WORK_ROOT/reports/tests/` and `uv run elysium test` reports the path and propagates the exit code.
 
 **One run per change, not one per claim.** A green tier stays green until code moves. A roadmap
 task's acceptance list is a set of things that must be **true**, not a set of runs to perform.
