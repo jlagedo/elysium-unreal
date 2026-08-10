@@ -47,17 +47,10 @@ public:
 	//
 	// Absent tables are an ordinary state, not a failure — the gym before a body is built, a menu
 	// backdrop, a body whose export has no fan — and the mover falls back to
-	// `ElysiumMove::WalkSpeed`/`RunSpeed` **per gait**, which is also what
-	// `elysium.move.AnimSpeedAuthority 0` selects for the A/B.
+	// `ElysiumMove::WalkSpeed`/`RunSpeed` **per gait**.
 	void SetGaitSpeeds(const FElysiumGaitSpeeds& InSpeeds) { GaitSpeeds = InSpeeds; }
 	void ClearGaitSpeeds() { GaitSpeeds = FElysiumGaitSpeeds(); }
 	const FElysiumGaitSpeeds& GetGaitSpeeds() const { return GaitSpeeds; }
-
-	// `elysium.move.AnimSpeedAuthority` and `elysium.move.GaitSpeedInterpolate`, read here so every
-	// consumer of the seam answers off one cvar rather than each looking one up. The record's stride
-	// and the commanded speed disagreeing would read as a resolver defect.
-	static bool IsAnimSpeedAuthorityEnabled();
-	static bool IsGaitSpeedInterpolationEnabled();
 
 	// What the body is commanding this frame, cm/s — the wish speed the last solved substep used.
 	// Published so the animation classifier can take retail's `cmdMoveMag` term without recomputing
@@ -189,9 +182,6 @@ private:
 	// The live tuning. Defaults are VtMB's own compiled-in ConVar defaults, so an install with no
 	// `cfg/` on disk moves exactly like a stock one.
 	FElysiumMoveTuning Tuning;
-
-	// How the frame's delta is chopped. Driven from `elysium.move.FixedStep`, default 0 = faithful.
-	FElysiumMoveStepper Stepper;
 
 	FElysiumUserCmd PendingCmd;
 	FElysiumUserCmd PrevCmd;

@@ -713,9 +713,8 @@ namespace ElysiumMcpImpl
 									: nullptr)
 							{
 								const FElysiumCameraSample& S = Manager->GetCameraSample();
-								Camera->SetNumberField(TEXT("modern_boom_length"), S.ModernBoomLength);
+								Camera->SetNumberField(TEXT("boom_length"), S.BoomLength);
 								Camera->SetBoolField(TEXT("clipped"), S.bClipped);
-								Camera->SetBoolField(TEXT("modern_clipped"), S.bModernClipped);
 							}
 							Body->SetObjectField(TEXT("camera"), Camera);
 						}

@@ -165,46 +165,6 @@ TArrayView<const FCvarDef> CvarDefs()
 
 } // namespace ElysiumMove
 
-int32 FElysiumMoveStepper::BeginFrame(float DeltaSeconds, float& OutStepSeconds)
-{
-	if (DeltaSeconds <= 0.0f)
-	{
-		OutStepSeconds = 0.0f;
-		return 0;
-	}
-
-	// The faithful path: one step, at exactly the delta the command carries.
-	if (!IsFixed())
-	{
-		Accumulator = 0.0f;
-		OutStepSeconds = DeltaSeconds;
-		return 1;
-	}
-
-	OutStepSeconds = FixedStep;
-	Accumulator += DeltaSeconds;
-
-	int32 Steps = FMath::FloorToInt32(Accumulator / FixedStep);
-	if (Steps > MaxSubSteps)
-	{
-		// Drop the excess rather than carrying it: a carried backlog would spend the next several
-		// frames replaying stale input, which reads far worse than losing the time outright.
-		Steps = MaxSubSteps;
-		Accumulator = 0.0f;
-		return Steps;
-	}
-
-	// Keep the remainder — it is what makes a 60 Hz stream of 16.7 ms frames land on a 100 Hz step
-	// without drifting.
-	Accumulator -= Steps * FixedStep;
-	return Steps;
-}
-
-float FElysiumMoveStepper::Alpha() const
-{
-	return IsFixed() ? FMath::Clamp(Accumulator / FixedStep, 0.0f, 1.0f) : 0.0f;
-}
-
 void FElysiumMoveTuning::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 {
 	// An empty read keeps the default, so a run with no `out/cfg` on disk behaves like a stock

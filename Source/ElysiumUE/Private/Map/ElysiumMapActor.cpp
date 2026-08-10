@@ -74,9 +74,6 @@ static TAutoConsoleVariable<float> CVarRainLightResponse(
 static TAutoConsoleVariable<float> CVarRainSourceRetain(
 	TEXT("elysium.RainSourceRetain"), 1.0f,
 	TEXT("Source cubemap weight retained at full wetness enhancement."));
-static TAutoConsoleVariable<int32> CVarUseAssist(
-	TEXT("elysium.UseAssist"), 1,
-	TEXT("Modern +use focus assistance: 1 enables the restrained cone fallback; 0 keeps exact-only targeting."));
 static TAutoConsoleVariable<float> CVarRainWetSpecular(
 	TEXT("elysium.RainWetSpecular"), 0.50f,
 	TEXT("Enhanced wet-surface dielectric specular level."));
@@ -434,9 +431,9 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 	UPawnMovementComponent* Move = PC->GetPawn() ? PC->GetPawn()->GetMovementComponent() : nullptr;
 	if (Move && PrereqMovement.Get() != Move)
 	{
-		// A replaced pawn (the elysium.SourceMovement A/B swaps the whole body) leaves the outgoing
-		// component's edge behind, and the gameplay pass would then wait on a tick function that is
-		// never going to run again. Drop it before wiring the new one.
+		// A replaced pawn leaves the outgoing component's edge behind, and the gameplay pass would
+		// then wait on a tick function that is never going to run again. Drop it before wiring the
+		// new one.
 		if (UPawnMovementComponent* Previous = PrereqMovement.Get())
 		{
 			PrimaryActorTick.RemovePrerequisite(Previous, Previous->PrimaryComponentTick);
@@ -1136,14 +1133,11 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 		}
 		PlayerAnimDriver->Gait = ElysiumAnimIntent::GaitFrom(PlayerAnimDriver->GaitSpeeds);
 	}
-	PlayerAnimDriver->bInterpolateGaitSpeed =
-		UElysiumMovementComponent::IsGaitSpeedInterpolationEnabled();
-
 	// Hand the settled record to the graph (CCC5). The push is here rather than a pull from the
 	// instance because the driver lives on this actor behind a pimpl while the visual is a component
 	// of the pawn: an instance reaching for it would invert the layering and carry a null branch for
-	// every map that seats no pawn. A body still on the native instance — `elysium.PlayerGraph 0`, or
-	// a map whose graph package is missing — simply is not a biped instance and is skipped.
+	// every map that seats no pawn. A cast body, or a player body whose graph package is missing,
+	// simply is not a biped instance and is skipped.
 	if (Graph)
 	{
 		Graph->PublishSelection(PlayerAnimDriver->Selection, PlayerAnimDriver->Assets);
@@ -1489,11 +1483,6 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 			}
 			return Result;
 		}
-	}
-
-	if (CVarUseAssist.GetValueOnGameThread() == 0)
-	{
-		return Result;
 	}
 
 	FCollisionObjectQueryParams Objects;

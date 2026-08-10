@@ -21,11 +21,9 @@ class UElysiumPlayerBody : public UInterface
 // state lives on the player *entity* (`FElysiumPlayer`); a body is collision, movement, the camera
 // and nothing else, which is exactly the surface here.
 //
-// It is an interface because 11.6 ships two of them and they cannot share a base: `AElysiumPawn`
-// (`APawn` + a **box** root + `UElysiumMovementComponent` — the faithful hull, `docs/vtmb/source_movement.md`)
-// and `AElysiumCapsulePawn` (`ACharacter`, the A/B baseline behind `elysium.SourceMovement 0`).
-// `ACharacter` creates its capsule as its root and does not allow substitution, so the split is the
-// engine's, not a preference.
+// It is an interface rather than a base class because the player body is `AElysiumPawn` (`APawn` +
+// a **box** root + `UElysiumMovementComponent` — the faithful hull, `docs/vtmb/source_movement.md`)
+// while the bodies a view can retarget to are not all pawns.
 class IElysiumPlayerBody
 {
 	GENERATED_BODY()
@@ -61,9 +59,8 @@ public:
 	// published, the capsule body derives it from CharacterMovement.
 	virtual FElysiumLocomotionSample GetLocomotionSample() const = 0;
 
-	// The body's camera (11.7): the weight stack, the boom solve and the scripted-shot channel. Both
-	// bodies carry the same one, so the `elysium.SourceMovement` A/B compares the movers and not two
-	// camera paths. Never null on a spawned body.
+	// The body's camera (11.7): the weight stack, the boom solve and the scripted-shot channel.
+	// Never null on a spawned body.
 	virtual UElysiumCameraComponent* GetCameraComponent() const = 0;
 
 	// The skeletal surface shared by both movement implementations. It is animation-only and

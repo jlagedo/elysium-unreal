@@ -391,7 +391,8 @@ and at `CCC8`; `CCC9` retires what they replaced.
   `ACT_WALK=walk@…move_and_ranged:walk_0`, 240 of 240 frames resolved with zero fallbacks. One body's
   run and its walk come from different glbs, which is exactly what a label-keyed resolver erases.
   `Elysium.Content.AnimationSliceCoverage` closes the slice rule over the real corpus: 52 player
-  bodies × 9 activities, with `ACT_LAND_CROUCH` the only named miss — the export agreeing with the
+  bodies × 9 activities, the three gaits resolving as blend spaces and the remaining playable
+  states as sequences, with `ACT_LAND_CROUCH` the only named miss — the export agreeing with the
   capture rather than a clip being invented for it.
   *Scope note:* this rung resolves and records; it drives no pose. Nothing routes into
   `FElysiumNpcAnimProxy`, so no scaffolding is built that `CCC9` exists to delete. The recovered
@@ -461,7 +462,8 @@ and at `CCC8`; `CCC9` retires what they replaced.
   is a zero-duration request rather than a branch, and `Content/ElysiumAuthored/README.md` bars
   encoding game-derived timings in a tracked package, so the graph asset carries a ceiling and
   nothing else. `Elysium.Substrate.AnimationGraph`, `Elysium.Content.PlayerGraphTransitionParity`
-  and `Elysium.Content.PlayerGraphAssetKinds` close the tier half.
+  and the resolution plus asset-kind matrix in `Elysium.Content.AnimationSliceCoverage` close the
+  tier half.
   `ACT_LAND_CROUCH` is **declared by the graph, not fixed by the resolver**: the resolver keeps
   returning the named miss, and the state projection routes it onto `Land` while the record still
   names what was asked for.

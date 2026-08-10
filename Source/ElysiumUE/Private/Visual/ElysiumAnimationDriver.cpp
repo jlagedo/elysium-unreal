@@ -34,7 +34,7 @@ float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
 	}
 	if (Table != nullptr && Table->IsValid())
 	{
-		return Table->SpeedAt(MoveYawDegrees, bInterpolateGaitSpeed);
+		return Table->SpeedAt(MoveYawDegrees);
 	}
 	// Not a gait, or a body with no fan: the resolved cell's own authored speed, which is what the
 	// record already carries and is zero for a label naming one clip.

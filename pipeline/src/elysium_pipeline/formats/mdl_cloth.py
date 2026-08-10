@@ -419,7 +419,7 @@ def build(d, v):
 
                 # Topology induced from the render surface, deduplicated: the
                 # authored proxy array is not a manifold and cannot serve.
-                triangles = set()
+                windings = {}
                 for entry in render_maps:
                     surf = surfaces[entry["material"]]
                     rows = entry["vertices"]
@@ -435,7 +435,18 @@ def build(d, v):
                         # backwards. That is invisible against an unlit debug material and is
                         # black triangles and see-through gaps against a real one.
                         i = mapped.index(min(mapped))
-                        triangles.add((mapped[i], mapped[(i + 1) % 3], mapped[(i + 2) % 3]))
+                        wound = (mapped[i], mapped[(i + 1) % 3], mapped[(i + 2) % 3])
+                        counts = windings.setdefault(tuple(sorted(wound)), {})
+                        counts[wound] = counts.get(wound, 0) + 1
+
+                # A garment with a front and a back -- a coat, a robe -- collapses both onto one
+                # particle sheet, so the same three particles arrive wound both ways. Keeping
+                # both faces makes their normals cancel exactly, and a particle whose normal is
+                # zero shades every render vertex it drives black. The sheet has one side; which
+                # render vertices read it inverted is what the per-vertex flip bit is for. The
+                # winding more render triangles agreed on wins, and first seen breaks a tie.
+                triangles = {max(counts.items(), key=lambda kv: kv[1])[0]
+                             for counts in windings.values()}
 
                 # What the two constraint sets measure against the rest pose the
                 # lines above reconstructed. The distance ratio is the parser's

@@ -285,9 +285,9 @@ struct FElysiumAnimationSelection
 //
 // **Nothing in the classifier names an absolute speed.** Every threshold comes from this struct, so
 // the whole classifier moves with the authority and no number in it has to be found and edited.
-// `ElysiumAnimIntent::GaitFrom` builds one from a body's own fans; the defaults are the constants
-// the `elysium.move.AnimSpeedAuthority 0` fallback uses, so the two halves of the A/B agree about
-// where the gait flips.
+// `ElysiumAnimIntent::GaitFrom` builds one from a body's own fans; the defaults are the same
+// constants a body with no fan falls back to, so the classifier and the mover agree about where the
+// gait flips either way.
 struct FElysiumGaitReference
 {
 	float WalkSpeedCmPerSecond = ElysiumMove::WalkSpeed;

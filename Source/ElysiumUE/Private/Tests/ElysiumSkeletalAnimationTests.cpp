@@ -602,7 +602,7 @@ namespace
 		}
 		if (Anim == nullptr)
 		{
-			Test.AddInfo(TEXT("no baked body can evaluate the shared male stances neutral idle"));
+			Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body can evaluate the shared male stances neutral idle"));
 			return true;
 		}
 		const IAnimationDataModel* Model = Anim->GetDataModel();
@@ -667,14 +667,14 @@ bool FElysiumSkeletalGlbContractsTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
 	}
 
@@ -820,13 +820,13 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 	if (FElysiumContentPaths::IsIncomplete(TEXT("maps"))
 		|| FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the maps and npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the maps and npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{
-		AddInfo(TEXT("skipping: sp_theatre is not exported"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre is not exported"));
 		return true;
 	}
 
@@ -1053,7 +1053,7 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{
-		AddInfo(TEXT("skipping: sp_theatre is not exported"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre is not exported"));
 		return true;
 	}
 
@@ -1316,7 +1316,7 @@ bool FElysiumBlendGridCorpusTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -1353,7 +1353,7 @@ bool FElysiumBlendGridCorpusTest::RunTest(const FString&)
 	}
 	if (Owners.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: this export declares no blend grids"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: this export declares no blend grids"));
 		return true;
 	}
 
@@ -1452,7 +1452,7 @@ bool FElysiumBlendGridCorpusTest::RunTest(const FString&)
 	}
 	else
 	{
-		AddInfo(FString::Printf(TEXT("no female locomotion bank in this export (%s)"), *FemaleError));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no female locomotion bank in this export (%s)"), *FemaleError));
 	}
 
 	return true;
@@ -1471,7 +1471,7 @@ bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -1509,7 +1509,7 @@ bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
 	}
 	if (Tables.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: this export declares no autolayer binding"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: this export declares no autolayer binding"));
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("%d owner(s), %d host(s), %d entr(ies)"),

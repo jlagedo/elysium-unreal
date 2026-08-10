@@ -57,10 +57,6 @@ struct FElysiumAnimationDriver
 	// Advances on every re-resolve, so a consumer pushes on change instead of copying per frame.
 	// Zero until the first one.
 	uint32 GaitGeneration = 0;
-	// Mirrors `elysium.move.GaitSpeedInterpolate`, set by whoever pushes the tables. Held rather
-	// than read here so the stride the record reports and the speed the mover commands come from one
-	// answer — a diff in which they disagreed would read as a defect in the resolver.
-	bool bInterpolateGaitSpeed = true;
 
 	// The stride the current selection commands at a direction, cm/s. Falls back to the resolved
 	// cell's own authored speed for anything that is not one of the three gaits.

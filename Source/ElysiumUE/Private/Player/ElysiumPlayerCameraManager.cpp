@@ -9,17 +9,6 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
-// The A/B. **Default 1**: the modern rig supplies the shipped base view, and `0` reverts to the
-// faithful evaluator. Both rigs evaluate and record their channels every frame regardless — this
-// picks only which one supplies the base request, so one deterministic run diffs the two booms
-// directly rather than against a recollection, and `CCC3`'s co-tune still resolves the rig's
-// remaining deltas one owner call at a time.
-static TAutoConsoleVariable<int32> CVarModernCamera(
-	TEXT("elysium.ModernCamera"), 1,
-	TEXT("Which rig supplies the third-person base view: the faithful VtMB evaluator (0) or the ")
-	TEXT("remaster boom (1). Both solve and record every frame either way."),
-	ECVF_Default);
-
 // The modern boom's translation damper, as a live override on `FElysiumCameraRigTuning`. Negative
 // takes the tuning's own value, which keeps the shipped number in one place; zero makes the rig
 // fully rigid, which is the direct read on how much of a given motion the damper owns.
@@ -51,9 +40,8 @@ AElysiumPlayerCameraManager::AElysiumPlayerCameraManager()
 
 UElysiumCameraComponent* AElysiumPlayerCameraManager::ResolveRig(AActor* Target)
 {
-	// Resolved per frame from whatever is currently being viewed. Both movement bodies answer the
-	// same interface, which is what keeps the `elysium.SourceMovement` A/B comparing the movers
-	// rather than two camera paths.
+	// Resolved per frame from whatever is currently being viewed rather than cached at `BeginPlay`:
+	// the view target changes for character generation, a cutscene and a spectator.
 	if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Target))
 	{
 		return Body->GetCameraComponent();
@@ -74,21 +62,14 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 		return;
 	}
 
-	// **Both rigs solve, every frame.** Only one of them supplies the base, but a channel recording
-	// that carried whichever rig happened to be selected could not diff them against each other.
+	// The rig solves first and hands its boom to the component, so the apply below reads one boom.
 	SolveModernRig(*Camera, DeltaTime);
 
-	// The **base** only. The scripted channel and the temporal cut are the legacy post layer's,
-	// because both have to happen after the base request has been chosen — a shot composes over
-	// whichever rig won, and a history reset must describe the view that was actually rendered.
-	if (CVarModernCamera.GetValueOnGameThread() != 0)
-	{
-		ApplyModernBaseToView(*Camera, OutVT.POV);
-	}
-	else
-	{
-		Camera->ApplyBaseToView(OutVT.POV);
-	}
+	// The **base** only — the strafe bank and the boom, at the third-person weight. The scripted
+	// channel and the temporal cut are the legacy post layer's, because both have to happen after
+	// the base request has been chosen: a shot composes over the rig, and a history reset must
+	// describe the view that was actually rendered.
+	Camera->ApplyBaseToView(OutVT.POV);
 
 	// The body-visibility ramp travels with the view. It used to ride on the pawn's own
 	// `CalcCamera`, which the manager no longer goes through on the production path, and a player
@@ -105,24 +86,27 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 // The modern rig (CCC2 stage two)
 // =====================================================================================
 
-void AElysiumPlayerCameraManager::SolveModernRig(const UElysiumCameraComponent& Camera,
+void AElysiumPlayerCameraManager::SolveModernRig(UElysiumCameraComponent& Camera,
 	float DeltaSeconds)
 {
-	// Once per frame, for the same reason the faithful solve is guarded: `ApplyCameraModifiers` and
-	// a second view-target pass would otherwise integrate the damper twice at the same delta.
+	// Once per frame: `ApplyCameraModifiers` and a second view-target pass would otherwise integrate
+	// the damper twice at the same delta.
 	if (ModernSolvedFrame == GFrameCounter)
 	{
 		return;
 	}
 	ModernSolvedFrame = GFrameCounter;
 
+	if (Camera.ConsumeReseedRequest())
+	{
+		bModernNeedsReseed = true;
+	}
+
 	const UWorld* World = GetWorld();
-	// A held world holds the camera, exactly as the faithful rig does.
+	// A held world holds the camera.
 	const float Dt = (World && World->IsPaused()) ? 0.0f : FMath::Max(0.0f, DeltaSeconds);
 
-	// The eye the boom hangs off, and the view it derives from. Both are read the same way the
-	// faithful rig reads them, so the two booms answer the same question and the diff between them
-	// is the rig rather than the input.
+	// The eye the boom hangs off, and the view it derives from.
 	const FVector BodyPivot = Camera.GetComponentLocation();
 	const FRotator ViewRot = PCOwner ? PCOwner->GetControlRotation() : Camera.GetComponentRotation();
 
@@ -150,8 +134,7 @@ void AElysiumPlayerCameraManager::SolveModernRig(const UElysiumCameraComponent& 
 	// probe traces from where the camera actually is rather than from where the body got to.
 	const FVector Pivot = ModernPivot;
 
-	// The sweep. A sphere, like the faithful rig's, so the two clip on the same geometry — the
-	// difference between them is the response, not the probe.
+	// The sweep. A sphere against the camera channel.
 	const float Desired = RigTuning.BoomLength;
 	const FVector Reach = ElysiumRig::BoomTarget(Pivot, ModernAngles, Desired, RigTuning);
 	bModernClipped = false;
@@ -180,25 +163,13 @@ void AElysiumPlayerCameraManager::SolveModernRig(const UElysiumCameraComponent& 
 	// that puts rotation back into the lag.
 	ModernPosition = ElysiumRig::BoomTarget(Pivot, ModernAngles, ModernDistance, RigTuning);
 
-	// A first-person frame parks the rig on its target rather than letting it drift, so re-entering
-	// third person does not swing in from wherever the camera was left — the same rule the faithful
-	// re-seed flag encodes.
-	bModernNeedsReseed = Camera.GetWeights().Third <= 0.0f;
-}
+	// The boom the rest of the frame reads: the fade band, the readouts and the base apply all take
+	// it from here, so there is exactly one boom in the frame.
+	Camera.SetSolvedBoom(ModernPosition - Camera.GetComponentLocation(), ModernAngles, bModernClipped);
 
-void AElysiumPlayerCameraManager::ApplyModernBaseToView(const UElysiumCameraComponent& Camera,
-	FMinimalViewInfo& View) const
-{
-	// The same composition shape the faithful base uses: an offset and an angle lerp, both scaled
-	// by the third-person weight, so weight 0 is exactly the first-person view and there is no
-	// second camera anywhere. Keeping the shape identical is what makes the two channel families
-	// comparable row for row.
-	const float E = Camera.GetWeights().ThirdBlend();
-	if (E > 0.0f)
-	{
-		View.Location += (ModernPosition - Camera.GetComponentLocation()) * E;
-		View.Rotation = FMath::Lerp(View.Rotation, ModernAngles, E);
-	}
+	// A first-person frame parks the rig on its target rather than letting it drift, so re-entering
+	// third person does not swing in from wherever the camera was left.
+	bModernNeedsReseed = Camera.GetWeights().Third <= 0.0f;
 }
 
 void AElysiumPlayerCameraManager::PublishSample(const UElysiumCameraComponent& Camera)
@@ -208,7 +179,6 @@ void AElysiumPlayerCameraManager::PublishSample(const UElysiumCameraComponent& C
 
 	Sample.Frame = GFrameCounter;
 	Sample.BoomLength = Camera.BoomLength();
-	Sample.DamperDistance = static_cast<float>(Camera.SolvedBoomOffset().Size());
 	Sample.BoomPitch = static_cast<float>(Angles.Pitch);
 	Sample.BoomYaw = static_cast<float>(Angles.Yaw);
 	Sample.bClipped = Camera.IsBoomClipped();
@@ -216,14 +186,9 @@ void AElysiumPlayerCameraManager::PublishSample(const UElysiumCameraComponent& C
 	Sample.ScriptedWeight = Weights.Scripted;
 	Sample.ModelAlpha = Camera.ModelAlpha();
 
-	// Reported off the solved boom rather than off `ModernPosition - eye`. The two agreed while the
-	// camera hung rigidly off the live eye; now that the pivot is damped, that difference carries
-	// the pivot's lag as well as the boom, and a channel named for the boom would be reporting both.
-	Sample.ModernBoomLength = ModernDistance * Weights.ThirdBlend();
-	Sample.ModernDamperDistance = ModernDistance;
-	Sample.ModernBoomPitch = static_cast<float>(ModernAngles.Pitch);
-	Sample.ModernBoomYaw = static_cast<float>(ModernAngles.Yaw);
-	Sample.bModernClipped = bModernClipped;
+	// The damper's own reach, reported off the rig rather than off `ModernPosition - eye`: the pivot
+	// is damped too, so that difference would carry the pivot's lag as well as the boom.
+	Sample.DamperDistance = ModernDistance;
 }
 
 // =====================================================================================

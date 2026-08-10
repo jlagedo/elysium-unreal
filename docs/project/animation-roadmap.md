@@ -365,7 +365,7 @@ game-independent numeric replays and the cloth path's post-skin retail capture r
   for Joy. Whether any of it is visible is unmeasured — the metric is edge stretch under CPU skinning,
   not an observed frame.
 
-  The instrument already exists: `Elysium.Content.DancerDecodeProbe3` reports per-bone remap state and
+  The opt-in instrument `Instrument.Elysium.DancerDecodeProbe3` reports per-bone remap state and
   per-edge deformation for both clips on four bodies. The open question is which bones carry the
   stretch, and then whether their translations, rotations or skin influences differ from Joy's on the
   same body.

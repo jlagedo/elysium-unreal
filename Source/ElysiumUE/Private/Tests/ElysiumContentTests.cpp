@@ -1,7 +1,7 @@
 // P2.8 — the content-gated tier. These read the offline pipeline's real exported intermediates
-// from $ELYSIUM_EXPORT_ROOT and assert the parse contract holds against actual game data. They SELF-SKIP (log
-// + pass) when the map has not been exported, so a fresh checkout with an empty $ELYSIUM_EXPORT_ROOT stays
-// green; a machine that has run the exporter gets real regression coverage of the `.ents` decode.
+// from $ELYSIUM_EXPORT_ROOT and assert the parse contract holds against actual game data. They emit a
+// structured abstention when a required export is unavailable, so a fresh checkout stays green without
+// being reported as covered; a machine that has run the exporter gets real regression coverage.
 //
 // The app-context mask (not ClientContext alone) so they run in the editor commandlet uv run elysium test
 // drives as well as in a game/client session — the `.ents` are read from disk through
@@ -81,9 +81,8 @@ namespace
 	// Abstain only while a domain this test actually reads is missing. Naming the domains is what
 	// lets `export bundle npc` un-gate the character tests without a whole-corpus export.
 	//
-	// A skip WARNS rather than informs, so a run that validated nothing lands in
-	// succeededWithWarnings instead of reporting a clean pass -- the whole failure mode Part C is
-	// about is a green tier that executed no assertion.
+	// The structured event keeps abstention separate from execution in the command summary without
+	// misusing Unreal's warning channel for an expected missing-corpus state.
 	bool SkipIncompleteCorpus(FAutomationTestBase& Test, std::initializer_list<const TCHAR*> Domains)
 	{
 		TArray<FString> Missing;
@@ -98,8 +97,8 @@ namespace
 		{
 			return false;
 		}
-		Test.AddWarning(FString::Printf(
-			TEXT("skipping content validation: the %s export domain(s) are marked incomplete at %s.*"),
+		Test.AddInfo(FString::Printf(
+			TEXT("ELYSIUM_TEST_ABSTAIN: the %s export domain(s) are marked incomplete at %s.*"),
 			*FString::Join(Missing, TEXT(", ")), *FElysiumContentPaths::IncompleteMarker()));
 		return true;
 	}
@@ -425,7 +424,7 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 	const FString EntsPath = FElysiumContentPaths::MapEnts(Map);
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{
-		AddInfo(FString::Printf(TEXT("skipping %s: no exported .ents at %s"), Map, *EntsPath));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: %s has no exported .ents at %s"), Map, *EntsPath));
 		return true;
 	}
 
@@ -532,7 +531,7 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 		/*Files*/ true, /*Dirs*/ false);
 	if (EntsFiles.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no exported maps under $ELYSIUM_EXPORT_ROOT"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported maps under $ELYSIUM_EXPORT_ROOT"));
 		return true;
 	}
 
@@ -1056,7 +1055,7 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 	const FString Path = FElysiumContentPaths::DlgFromDialogname(TEXT("dlg/Main Characters/jack_tutorial.dlg"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no exported dialogue at %s (run the pipeline to enable)"), *Path));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no exported dialogue at %s (run the pipeline to enable)"), *Path));
 		return true;
 	}
 
@@ -1160,7 +1159,7 @@ bool FElysiumDlgCorpusTest::RunTest(const FString&)
 		/*Files*/ true, /*Dirs*/ false);
 	if (EntsFiles.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no exported maps under $ELYSIUM_EXPORT_ROOT (run the pipeline to enable)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported maps under $ELYSIUM_EXPORT_ROOT (run the pipeline to enable)"));
 		return true;
 	}
 
@@ -1189,7 +1188,7 @@ bool FElysiumDlgCorpusTest::RunTest(const FString&)
 
 	if (DialogNames.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no NPC dialognames in the exported maps"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC dialognames in the exported maps"));
 		return true;
 	}
 
@@ -1310,7 +1309,7 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 	if (SkipIncompleteCorpus(*this, { TEXT("maps"), TEXT("npc") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
 		return true;
 	}
 
@@ -1417,7 +1416,7 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 
 	if (Sequences == 0)
 	{
-		AddInfo(TEXT("skipping: no exported map carries a scripted_sequence"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported map carries a scripted_sequence"));
 		return true;
 	}
 
@@ -1455,7 +1454,7 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 	if (!IFileManager::Get().FileExists(*ClanDoc) ||
 		!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported vdata + npc data (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata + npc data (run: uv run elysium export grid)"));
 		return true;
 	}
 
@@ -1599,7 +1598,7 @@ bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
 	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
-		AddInfo(TEXT("skipping: sp_theatre has not been exported"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre has not been exported"));
 		return true;
 	}
 	FElysiumEntityDefs Defs;
@@ -1875,7 +1874,7 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
-		AddInfo(TEXT("skipping: sp_theatre has not been exported"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre has not been exported"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -2042,7 +2041,7 @@ bool FElysiumSantaMonicaNpcRoutesContentTest::RunTest(const FString&)
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sm_hub_1"));
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{
-		AddInfo(FString::Printf(TEXT("sm_hub_1 entities not exported - skipping: %s"), *EntsPath));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: sm_hub_1 entities not exported: %s"), *EntsPath));
 		return true;
 	}
 	FElysiumEntityDefs Defs;
@@ -2125,7 +2124,7 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 		/ TEXT("sm_hub_1.weather.json");
 	if (!IFileManager::Get().FileExists(*WeatherPath))
 	{
-		AddInfo(FString::Printf(TEXT("sm_hub_1 weather not exported - skipping: %s"),
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: sm_hub_1 weather not exported: %s"),
 			*WeatherPath));
 		return true;
 	}
@@ -2494,7 +2493,7 @@ bool FElysiumMapSnapshotTest::RunTest(const FString&)
 
 	if (Checked == 0)
 	{
-		AddInfo(TEXT("no exported maps — snapshot round trip skipped"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported maps for snapshot round trip"));
 	}
 	return true;
 }
@@ -2521,7 +2520,7 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
 		return true;
 	}
 
@@ -3091,7 +3090,7 @@ bool FElysiumSheetContentTest::RunTest(const FString&)
 	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
 		return true;
 	}
 
@@ -3239,7 +3238,7 @@ bool FElysiumSheetMathContentTest::RunTest(const FString&)
 	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/feats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
 		return true;
 	}
 
@@ -3395,7 +3394,7 @@ bool FElysiumQuestContentTest::RunTest(const FString&)
 	if (!IFileManager::Get().FileExists(
 			*FElysiumContentPaths::VdataFile(TEXT("system/quests_santamonica.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
 		return true;
 	}
 
@@ -3548,7 +3547,7 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("skipping: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
 		return true;
 	}
 
@@ -3879,7 +3878,7 @@ bool FElysiumSceneCorpusTest::RunTest(const FString&)
 	IFileManager::Get().FindFilesRecursive(Files, *ScenesDir, TEXT("*.vcd"), /*Files*/ true, /*Dirs*/ false);
 	if (Files.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no scenes under $ELYSIUM_EXPORT_ROOT/scenes (run the pipeline to enable)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no scenes under $ELYSIUM_EXPORT_ROOT/scenes (run the pipeline to enable)"));
 		return true;
 	}
 
@@ -4036,12 +4035,12 @@ bool FElysiumSceneAnimSetsTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
 	}
 	if (Index.Cinematics.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: the NPC export carries no cinematic anim sets (re-run npc_export)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the NPC export carries no cinematic anim sets (re-run npc_export)"));
 		return true;
 	}
 
@@ -4149,7 +4148,7 @@ bool FElysiumDispositionBlinkContentTest::RunTest(const FString&)
 	if (!IFileManager::Get().FileExists(
 		*FElysiumContentPaths::VdataFile(TEXT("system/dispositiontable.txt"))))
 	{
-		AddInfo(TEXT("disposition table not exported; skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: disposition table not exported"));
 		return true;
 	}
 	FElysiumDispositionTable Table;
@@ -4209,7 +4208,7 @@ bool FElysiumAudioCatalogContentTest::RunTest(const FString&)
 	FString Text;
 	if (!FFileHelper::LoadFileToString(Text, *Path))
 	{
-		AddInfo(TEXT("audio catalog not exported; skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: audio catalog not exported"));
 		return true;
 	}
 	TSharedPtr<FJsonObject> Root;

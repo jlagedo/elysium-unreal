@@ -226,6 +226,15 @@ void UElysiumCogSubsystem::PostInitialize()
 					&& FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab")))
 				{
 					GreenRoomWindow->OpenLab();
+					// `-GreenRoomDock=left|right` parks the window against an edge of Cog's dockspace
+					// instead of floating it over the stage, which is what `uv run elysium play gr`
+					// asks for. Anything else leaves the window free-floating.
+					FString DockSide;
+					if (FParse::Value(FCommandLine::Get(), TEXT("GreenRoomDock="), DockSide)
+						&& (DockSide == TEXT("left") || DockSide == TEXT("right")))
+					{
+						GreenRoomWindow->DockToSide(DockSide == TEXT("left"));
+					}
 					// A drive launch wants the window **visible and not holding the keyboard**: ImGui
 					// consumes every key while it has input, so grabbing it here would fail the
 					// acceptance on the first W. The window says F1 hands it over and back.

@@ -258,9 +258,9 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(Step(Latch, Off, Gait)), AsInt(EElysiumAnimActivityCode::Falling));
 	}
 	{
-		// Every NPC and the `elysium.SourceMovement 0` capsule body reach this path: their movement
-		// component's jump is an impulse, so the hold window is permanently zero and the press edge
-		// never fires. They must still reach falling and landing from the ground transitions alone.
+		// Every NPC reaches this path: their movement component's jump is an impulse, so the hold
+		// window is permanently zero and the press edge never fires. They must still reach falling
+		// and landing from the ground transitions alone.
 		FElysiumJumpLatch Latch;
 		FElysiumLocomotionSample Air = Moving(0.0f);
 		Air.bOnGround = false;
@@ -1223,15 +1223,14 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationBankOwnershipTest,
-	"Elysium.Content.AnimationBankOwnership", GElysiumAnimationContentFlags)
-bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSpeedCorpusTest,
+	"Elysium.Content.GaitSpeeds", GElysiumAnimationContentFlags)
+bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 {
-	// A skip WARNS rather than informs, so a run that validated nothing lands in
-	// succeededWithWarnings instead of reporting a clean pass.
+	// The runner reports this structured abstention separately from executed coverage.
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
 		return true;
 	}
 
@@ -1239,7 +1238,7 @@ bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
 		return true;
 	}
 
@@ -1249,7 +1248,7 @@ bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
 	const FString PlayerStem = FindPlayerStem(Index);
 	if (PlayerStem.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: the export carries no player body"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no player body"));
 		return true;
 	}
 
@@ -1259,11 +1258,15 @@ bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
 		AddError(Error);
 		return true;
 	}
+	const FElysiumAnimationSelection Run = ResolveOn(Player, Tables, TEXT("ACT_RUN"),
+		EElysiumAnimSource::Player);
+	const FElysiumAnimationSelection Walk = ResolveOn(Player, Tables, TEXT("ACT_WALK"),
+		EElysiumAnimSource::Player);
+	const FElysiumAnimationSelection Sneak = ResolveOn(Player, Tables, TEXT("ACT_SNEAK"),
+		EElysiumAnimSource::Player);
 
 	// --- The acceptance clause, against the export ------------------------------------------------
 	{
-		const FElysiumAnimationSelection Run = ResolveOn(Player, Tables, TEXT("ACT_RUN"),
-			EElysiumAnimSource::Player);
 		TestEqual(TEXT("the player's ACT_RUN resolves the label `run`"), Run.SequenceLabel,
 			FString(TEXT("run")));
 		TestTrue(FString::Printf(
@@ -1274,8 +1277,6 @@ bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
 			static_cast<int32>(Run.AssetKind),
 			static_cast<int32>(EElysiumAnimAssetKind::BlendSpace));
 
-		const FElysiumAnimationSelection Walk = ResolveOn(Player, Tables, TEXT("ACT_WALK"),
-			EElysiumAnimSource::Player);
 		TestEqual(TEXT("the walk resolves its own label"), Walk.SequenceLabel,
 			FString(TEXT("walk")));
 		TestTrue(FString::Printf(TEXT("off the shared bank (owner was '%s')"), *Walk.OwnerStem),
@@ -1285,8 +1286,6 @@ bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
 		TestTrue(TEXT("so one body's run and walk do not share a bank"),
 			Run.OwnerStem != Walk.OwnerStem);
 
-		const FElysiumAnimationSelection Sneak = ResolveOn(Player, Tables, TEXT("ACT_SNEAK"),
-			EElysiumAnimSource::Player);
 		TestEqual(TEXT("the sneak resolves"), Sneak.SequenceLabel, FString(TEXT("sneak")));
 		TestTrue(TEXT("off the shared bank too"),
 			Sneak.OwnerStem.Contains(TEXT("move_and_ranged")));
@@ -1378,19 +1377,91 @@ bool FElysiumAnimationBankOwnershipTest::RunTest(const FString&)
 		if (CastStem.IsEmpty())
 		{
 			AddInfo(TEXT("no exported cast body carries ACT_RUN; the cast half is not asserted"));
-			return true;
 		}
+		else
+		{
+			const FElysiumAnimationSelection CastRun = ResolveOn(Cast, Tables, TEXT("ACT_RUN"),
+				EElysiumAnimSource::Npc);
+			TestTrue(FString::Printf(TEXT("'%s' runs off the shared bank (owner was '%s')"),
+				*CastStem, *CastRun.OwnerStem),
+				CastRun.OwnerStem.Contains(TEXT("move_and_ranged")));
+			// The cells are spelled apart too, which is the numeric proof the export has not aliased
+			// the two fans onto one set of clips.
+			TestTrue(FString::Printf(TEXT("and its cells are the npc_run_* set ('%s')"),
+				*CastRun.AnimationName),
+				CastRun.AnimationName.StartsWith(TEXT("npc_run")));
+		}
+	}
 
-		const FElysiumAnimationSelection CastRun = ResolveOn(Cast, Tables, TEXT("ACT_RUN"),
-			EElysiumAnimSource::Npc);
-		TestTrue(FString::Printf(TEXT("'%s' runs off the shared bank (owner was '%s')"), *CastStem,
-			*CastRun.OwnerStem),
-			CastRun.OwnerStem.Contains(TEXT("move_and_ranged")));
-		// The cells are spelled apart too, which is the numeric proof the export has not aliased the
-		// two fans onto one set of clips.
-		TestTrue(FString::Printf(TEXT("and its cells are the npc_run_* set ('%s')"),
-			*CastRun.AnimationName),
-			CastRun.AnimationName.StartsWith(TEXT("npc_run")));
+	// The three resolves above are also the mover's speed authority. Crossing them through the real
+	// blend tables here keeps the bank and numeric contracts in one corpus pass.
+	struct FGait
+	{
+		const FElysiumAnimationSelection* Selection;
+		float Scale;
+		const TCHAR* Name;
+	};
+	const FGait Gaits[] =
+	{
+		{ &Walk,  ElysiumMove::WalkScale,  TEXT("walk") },
+		{ &Run,   ElysiumMove::RunScale,   TEXT("run") },
+		{ &Sneak, ElysiumMove::SneakScale, TEXT("sneak") },
+	};
+
+	FElysiumGaitSpeedTable Resolved[3];
+	for (int32 Index0 = 0; Index0 < UE_ARRAY_COUNT(Gaits); ++Index0)
+	{
+		const FGait& Gait = Gaits[Index0];
+		const FElysiumAnimationSelection& Selection = *Gait.Selection;
+		if (!Selection.IsResolved())
+		{
+			continue;
+		}
+		const FElysiumBlendTable* Owner = Tables(Selection.OwnerStem);
+		if (!TestNotNull(FString::Printf(TEXT("%s's owning bank has a blend table"), Gait.Name),
+				const_cast<FElysiumBlendTable*>(Owner)))
+		{
+			continue;
+		}
+		const FElysiumBlendGrid* Grid = Owner->Find(Selection.SequenceLabel);
+		if (!TestNotNull(FString::Printf(TEXT("%s names a fan and not one clip"), Gait.Name),
+				const_cast<FElysiumBlendGrid*>(Grid)))
+		{
+			continue;
+		}
+		TestTrue(FString::Printf(TEXT("%s's fan yields a speed table"), Gait.Name),
+			ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Gait.Scale, Resolved[Index0]));
+		AddInfo(FString::Printf(TEXT("%s = %s@%s, forward %.1f cm/s, peak %.1f cm/s"),
+			Gait.Name, *Selection.SequenceLabel, *Selection.OwnerStem,
+			Resolved[Index0].Forward(), Resolved[Index0].Peak()));
+	}
+
+	for (int32 Index0 = 0; Index0 < UE_ARRAY_COUNT(Gaits); ++Index0)
+	{
+		if (!Resolved[Index0].IsValid())
+		{
+			continue;
+		}
+		TestEqual(FString::Printf(TEXT("%s carries nine cells"), Gaits[Index0].Name),
+			Resolved[Index0].Count, 9);
+		TestEqual(FString::Printf(TEXT("%s spans the whole parameter"), Gaits[Index0].Name),
+			Resolved[Index0].AxisMax - Resolved[Index0].AxisMin, 360.0f, 0.01f);
+	}
+
+	const float U = ElysiumMove::U;
+	if (Resolved[0].IsValid() && Resolved[1].IsValid() && Resolved[2].IsValid())
+	{
+		TestEqual(TEXT("forward walk is 53.8 u/s"), Resolved[0].Forward() / U, 53.8f, 1.0f);
+		TestEqual(TEXT("forward run is 188.5 u/s"), Resolved[1].Forward() / U, 188.5f, 1.0f);
+		TestEqual(TEXT("forward sneak is 65.3 u/s once sv_sneakscale has multiplied"),
+			Resolved[2].Forward() / U, 65.3f, 1.0f);
+		TestTrue(TEXT("the scaled crouch outruns the walk, as retail's does"),
+			Resolved[2].Forward() > Resolved[0].Forward());
+
+		const float Threshold = Resolved[0].Forward() + U;
+		TestEqual(TEXT("the walk/run threshold is 54.8 u/s on this body"), Threshold / U, 54.8f, 1.0f);
+		TestTrue(TEXT("...which every run cell clears"), Resolved[1].SpeedAt(180.0f) > Threshold);
+		TestTrue(TEXT("...and no walk cell reaches"), Resolved[0].Peak() < Threshold);
 	}
 
 	return true;
@@ -1403,11 +1474,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationSliceCoverageTest,
 	"Elysium.Content.AnimationSliceCoverage", GElysiumAnimationContentFlags)
 bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 {
-	// A skip WARNS rather than informs, so a run that validated nothing lands in
-	// succeededWithWarnings instead of reporting a clean pass.
+	// The runner reports this structured abstention separately from executed coverage.
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
 		return true;
 	}
 
@@ -1415,7 +1485,7 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
 		return true;
 	}
 
@@ -1424,17 +1494,23 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 
 	// The whole locomotion slice, less the water pair — swimming is reachable but outside what the
 	// controlled corpus witnessed, so it is not held to the slice rule yet.
-	const EElysiumAnimActivityCode Slice[] =
+	struct FSliceRequirement
 	{
-		EElysiumAnimActivityCode::Idle,
-		EElysiumAnimActivityCode::Walk,
-		EElysiumAnimActivityCode::Run,
-		EElysiumAnimActivityCode::Sneak,
-		EElysiumAnimActivityCode::Crouch,
-		EElysiumAnimActivityCode::Leap,
-		EElysiumAnimActivityCode::Falling,
-		EElysiumAnimActivityCode::Land,
-		EElysiumAnimActivityCode::LandCrouch,
+		EElysiumAnimActivityCode Code;
+		EElysiumAnimAssetKind AssetKind;
+		bool bExpectedMiss = false;
+	};
+	const FSliceRequirement Slice[] =
+	{
+		{ EElysiumAnimActivityCode::Idle,       EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Walk,       EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Run,        EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Sneak,      EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Crouch,     EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Leap,       EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Falling,    EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Land,       EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::LandCrouch, EElysiumAnimAssetKind::None, true },
 	};
 
 	TArray<FString> Stems;
@@ -1442,7 +1518,7 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	Stems.Sort();
 
 	int32 BodiesChecked = 0;
-	TSet<FString> UnexplainedMisses;
+	TSet<FString> ContractFailures;
 	for (const FString& Stem : Stems)
 	{
 		if (!Stem.Contains(TEXT("_Male_Armor_")) && !Stem.Contains(TEXT("_Female_Armor_")))
@@ -1457,180 +1533,57 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 		}
 		++BodiesChecked;
 
-		for (EElysiumAnimActivityCode Code : Slice)
+		for (const FSliceRequirement& Requirement : Slice)
 		{
 			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables,
-				ElysiumAnimIntent::ActivityName(Code), EElysiumAnimSource::Player);
-			if (Sel.IsResolved() || Code == EElysiumAnimActivityCode::LandCrouch)
+				ElysiumAnimIntent::ActivityName(Requirement.Code), EElysiumAnimSource::Player);
+			if (Requirement.bExpectedMiss)
 			{
+				if (Sel.Outcome != EElysiumAnimOutcome::MissingSequence
+					|| Sel.AssetKind != EElysiumAnimAssetKind::None)
+				{
+					ContractFailures.Add(FString::Printf(TEXT("%s on %s resolved as %s/%s, not the named miss"),
+						ElysiumAnimIntent::ActivityName(Requirement.Code), *Stem,
+						ElysiumAnimIntent::OutcomeName(Sel.Outcome),
+						ElysiumAnimIntent::AssetKindName(Sel.AssetKind)));
+				}
 				continue;
 			}
-			UnexplainedMisses.Add(FString::Printf(TEXT("%s on %s (%s)"),
-				ElysiumAnimIntent::ActivityName(Code), *Stem,
-				ElysiumAnimIntent::OutcomeName(Sel.Outcome)));
+			if (!Sel.IsResolved() || Sel.AssetKind != Requirement.AssetKind)
+			{
+				ContractFailures.Add(FString::Printf(TEXT("%s on %s resolved as %s/%s; expected %s"),
+					ElysiumAnimIntent::ActivityName(Requirement.Code), *Stem,
+					ElysiumAnimIntent::OutcomeName(Sel.Outcome),
+					ElysiumAnimIntent::AssetKindName(Sel.AssetKind),
+					ElysiumAnimIntent::AssetKindName(Requirement.AssetKind)));
+			}
 		}
 	}
 
 	if (BodiesChecked == 0)
 	{
-		AddInfo(TEXT("skipping: the export carries no player bodies"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no player bodies"));
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("%d player bodies checked across %d activities"), BodiesChecked,
 		UE_ARRAY_COUNT(Slice)));
 
-	// `ACT_LAND_CROUCH` is the one named miss, and it is named in the code rather than tolerated here.
-	for (const FString& Miss : UnexplainedMisses)
+	// `ACT_LAND_CROUCH` is the one named miss. Every other state must also drive the asset kind
+	// the player graph expects, so resolution coverage and graph compatibility share one corpus pass.
+	for (const FString& Failure : ContractFailures)
 	{
-		AddError(FString::Printf(TEXT("unexplained miss inside the accepted slice: %s"), *Miss));
+		AddError(FString::Printf(TEXT("player animation corpus contract: %s"), *Failure));
 	}
-	TestEqual(TEXT("every slice activity resolves on every player body, or is the one named miss"),
-		UnexplainedMisses.Num(), 0);
-	return true;
-}
-
-// =====================================================================================
-// CCC7 — the speed authority against the real corpus.
-//
-// The Substrate tier proves the table's arithmetic over numbers typed into a fixture. This proves
-// the numbers: that the export really carries a per-cell fan for each of the three gaits, that the
-// three come from the banks the include DAG names rather than from one, and that the speeds they
-// carry are the ones the mover is about to be steered by.
-// =====================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGaitSpeedCorpusTest,
-	"Elysium.Content.GaitSpeeds", GElysiumAnimationContentFlags)
-bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
-{
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-	{
-		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
-		return true;
-	}
-	FElysiumNpcIndex Index;
-	FString Error;
-	if (!Index.Load(Error) || !Index.IsValid())
-	{
-		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
-		return true;
-	}
-	const FString Stem = FindPlayerStem(Index);
-	if (Stem.IsEmpty())
-	{
-		AddInfo(TEXT("skipping: the export carries no player bodies"));
-		return true;
-	}
-	FElysiumNpcClipSet Body;
-	if (!Body.Load(Stem, Error))
-	{
-		AddInfo(FString::Printf(TEXT("skipping: %s did not load (%s)"), *Stem, *Error));
-		return true;
-	}
-
-	FRealTables Tables;
-	Tables.Index = &Index;
-
-	// The same three resolves `UElysiumNpcAnimSubsystem::ResolveGaitSpeeds` performs, over the same
-	// pure resolver and the same `SpeedFan`. What is not shared is the subsystem's cache, which needs
-	// a GameInstance and answers nothing this is asking.
-	struct FGait
-	{
-		EElysiumAnimActivityCode Code;
-		float Scale;
-		const TCHAR* Name;
-	};
-	const FGait Gaits[] =
-	{
-		{ EElysiumAnimActivityCode::Walk,  ElysiumMove::WalkScale,  TEXT("walk") },
-		{ EElysiumAnimActivityCode::Run,   ElysiumMove::RunScale,   TEXT("run") },
-		{ EElysiumAnimActivityCode::Sneak, ElysiumMove::SneakScale, TEXT("sneak") },
-	};
-
-	FElysiumGaitSpeedTable Resolved[3];
-	FString Owners[3];
-	for (int32 Index0 = 0; Index0 < 3; ++Index0)
-	{
-		const FGait& Gait = Gaits[Index0];
-		const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables,
-			ElysiumAnimIntent::ActivityName(Gait.Code), EElysiumAnimSource::Player);
-		if (!TestTrue(FString::Printf(TEXT("%s resolves on %s"), Gait.Name, *Stem), Sel.IsResolved()))
-		{
-			continue;
-		}
-		Owners[Index0] = Sel.OwnerStem;
-		const FElysiumBlendTable* Owner = Tables(Sel.OwnerStem);
-		if (!TestNotNull(FString::Printf(TEXT("%s's owning bank has a blend table"), Gait.Name),
-				const_cast<FElysiumBlendTable*>(Owner)))
-		{
-			continue;
-		}
-		const FElysiumBlendGrid* Grid = Owner->Find(Sel.SequenceLabel);
-		if (!TestNotNull(FString::Printf(TEXT("%s names a fan and not one clip"), Gait.Name),
-				const_cast<FElysiumBlendGrid*>(Grid)))
-		{
-			continue;
-		}
-		TestTrue(FString::Printf(TEXT("%s's fan yields a speed table"), Gait.Name),
-			ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Gait.Scale, Resolved[Index0]));
-		AddInfo(FString::Printf(TEXT("%s = %s@%s, forward %.1f cm/s, peak %.1f cm/s"), Gait.Name,
-			*Sel.SequenceLabel, *Sel.OwnerStem, Resolved[Index0].Forward(), Resolved[Index0].Peak()));
-	}
-
-	// Nine cells, spanning the whole of `move_yaw`. A fan of any other shape would mean the speed the
-	// mover reads and the cell the graph plays came off different geometry.
-	for (int32 Index0 = 0; Index0 < 3; ++Index0)
-	{
-		if (!Resolved[Index0].IsValid())
-		{
-			continue;
-		}
-		TestEqual(FString::Printf(TEXT("%s carries nine cells"), Gaits[Index0].Name),
-			Resolved[Index0].Count, 9);
-		TestEqual(FString::Printf(TEXT("%s spans the whole parameter"), Gaits[Index0].Name),
-			Resolved[Index0].AxisMax - Resolved[Index0].AxisMin, 360.0f, 0.01f);
-	}
-
-	// **The bank-ownership claim, asserted through the speed path.** A body's walk and its run come
-	// from different banks, so a resolver keyed on the label alone would hand the player one bank's
-	// gait for both — and the speeds are where that stops being invisible.
-	if (!Owners[0].IsEmpty() && !Owners[1].IsEmpty())
-	{
-		TestNotEqual(TEXT("walk and run are owned by different banks"), Owners[0], Owners[1]);
-	}
-
-	// The three numbers CCC7 is built on, in Source units so they read against the decompile. The
-	// tolerance is a whole unit: this is asserting the export agrees with the recovered figures, not
-	// pinning a float.
-	const float U = ElysiumMove::U;
-	if (Resolved[0].IsValid() && Resolved[1].IsValid() && Resolved[2].IsValid())
-	{
-		TestEqual(TEXT("forward walk is 53.8 u/s"), Resolved[0].Forward() / U, 53.8f, 1.0f);
-		TestEqual(TEXT("forward run is 188.5 u/s"), Resolved[1].Forward() / U, 188.5f, 1.0f);
-		TestEqual(TEXT("forward sneak is 65.3 u/s once sv_sneakscale has multiplied"),
-			Resolved[2].Forward() / U, 65.3f, 1.0f);
-
-		// The recovered oddity, and the reason it is an owner call rather than a bug: with the duck
-		// crop dead code and sneak scaled by 2.3, retail's crouch outruns its walk.
-		TestTrue(TEXT("the scaled crouch outruns the walk, as retail's does"),
-			Resolved[2].Forward() > Resolved[0].Forward());
-
-		// The walk/run threshold is the body's own forward walk cell plus one unit — a per-model
-		// number, not a constant, and the thing `FElysiumGaitReference` has to be built from.
-		const float Threshold = Resolved[0].Forward() + U;
-		TestEqual(TEXT("the walk/run threshold is 54.8 u/s on this body"), Threshold / U, 54.8f, 1.0f);
-		TestTrue(TEXT("...which every run cell clears"), Resolved[1].SpeedAt(180.0f, true) > Threshold);
-		TestTrue(TEXT("...and no walk cell reaches"), Resolved[0].Peak() < Threshold);
-	}
-
+	TestEqual(TEXT("every slice activity resolves with the expected asset kind, or is the named miss"),
+		ContractFailures.Num(), 0);
 	return true;
 }
 
 // =====================================================================================
 // CCC5 — the graph against the real corpus.
 //
-// The fixtures above prove the rules. These prove the two things a fixture cannot: that the
-// authored fades the transition arithmetic reads are really what the export carries, and that the
-// asset kind each graph state drives is really what the resolver answers with.
+// The fixtures above prove the rule. This proves that the authored fades the transition arithmetic
+// reads are really what the export carries; AnimationSliceCoverage owns the graph asset-kind matrix.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphTransitionParityTest,
@@ -1639,14 +1592,14 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
 	if (!Index.Load(Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
 		return true;
 	}
 
@@ -1675,7 +1628,7 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 	}
 	if (Chosen.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: the export carries no player body with a walk"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no player body with a walk"));
 		return true;
 	}
 
@@ -1714,89 +1667,6 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("at least one slice transition was measured"), Checked > 0);
 	AddInfo(FString::Printf(TEXT("%d of 6 slice transitions measured on '%s'"), Checked, *Chosen));
-	return true;
-}
-
-// Which asset kind each state drives, against the real corpus. A graph state and a resolver answer
-// that disagree about node type is a pose that silently never plays: the blend-space branch of a
-// gait state would sit on a null fan while the sequence branch held the pose it was never given.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphAssetKindsTest,
-	"Elysium.Content.PlayerGraphAssetKinds", GElysiumAnimationContentFlags)
-bool FElysiumPlayerGraphAssetKindsTest::RunTest(const FString&)
-{
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-	{
-		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
-		return true;
-	}
-	FElysiumNpcIndex Index;
-	FString Error;
-	if (!Index.Load(Error) || !Index.IsValid())
-	{
-		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
-		return true;
-	}
-
-	FRealTables Tables;
-	Tables.Index = &Index;
-
-	TArray<FString> Stems;
-	Index.Npcs.GenerateKeyArray(Stems);
-	Stems.Sort();
-
-	int32 Bodies = 0;
-	TSet<FString> Wrong;
-	for (const FString& Stem : Stems)
-	{
-		if (!Stem.Contains(TEXT("_Male_Armor_")) && !Stem.Contains(TEXT("_Female_Armor_")))
-		{
-			continue;
-		}
-		FElysiumNpcClipSet Body;
-		FString LoadError;
-		if (!Body.Load(Stem, LoadError))
-		{
-			continue;
-		}
-		++Bodies;
-
-		// The three gaits are the fan states; everything else in the slice plays one clip.
-		const TCHAR* Gaits[] = { TEXT("ACT_WALK"), TEXT("ACT_RUN"), TEXT("ACT_SNEAK") };
-		for (const TCHAR* Activity : Gaits)
-		{
-			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Activity,
-				EElysiumAnimSource::Player);
-			if (Sel.IsResolved() && Sel.AssetKind != EElysiumAnimAssetKind::BlendSpace)
-			{
-				Wrong.Add(FString::Printf(TEXT("%s on %s resolved %s, not a fan"), Activity, *Stem,
-					ElysiumAnimIntent::AssetKindName(Sel.AssetKind)));
-			}
-		}
-		const TCHAR* Singles[] = { TEXT("ACT_IDLE"), TEXT("ACT_CROUCH"), TEXT("ACT_LEAP"),
-			TEXT("ACT_FALLING"), TEXT("ACT_LAND") };
-		for (const TCHAR* Activity : Singles)
-		{
-			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Activity,
-				EElysiumAnimSource::Player);
-			if (Sel.IsResolved() && Sel.AssetKind != EElysiumAnimAssetKind::Sequence)
-			{
-				Wrong.Add(FString::Printf(TEXT("%s on %s resolved %s, not one clip"), Activity, *Stem,
-					ElysiumAnimIntent::AssetKindName(Sel.AssetKind)));
-			}
-		}
-	}
-	if (Bodies == 0)
-	{
-		AddInfo(TEXT("skipping: the export carries no player bodies"));
-		return true;
-	}
-	for (const FString& Line : Wrong)
-	{
-		AddError(Line);
-	}
-	AddInfo(FString::Printf(TEXT("%d player bodies checked"), Bodies));
-	TestEqual(TEXT("every slice state drives the asset kind the resolver answers with"),
-		Wrong.Num(), 0);
 	return true;
 }
 

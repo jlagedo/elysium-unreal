@@ -106,21 +106,6 @@ namespace
 	{ TEXT("cam_third"), TEXT("camera"), EScope::Frame, EKind::Numeric, 0.01f, 3, TEXT(""),
 	  true,  TEXT("the third-person blend weight") },
 
-	// The modern rig, recorded beside the faithful one **whether or not `elysium.ModernCamera` has
-	// it supplying the base**. That is the whole instrument: one deterministic run carries both
-	// booms, so the co-tune diffs them against each other rather than against a recollection, and
-	// a rig regression is the same kind of diff as a movement one.
-	{ TEXT("mcam_boom"),  TEXT("camera"), EScope::Frame, EKind::Numeric, 0.5f,  3, TEXT("u"),
-	  true,  TEXT("modern boom length, third-person weight applied") },
-	{ TEXT("mcam_damp"),  TEXT("camera"), EScope::Frame, EKind::Numeric, 0.5f,  3, TEXT("u"),
-	  true,  TEXT("the modern damper's own distance from the eye, before the weight") },
-	{ TEXT("mcam_pitch"), TEXT("camera"), EScope::Frame, EKind::Angle,   1.0f,  3, TEXT("deg"),
-	  true,  TEXT("the modern boom pitch") },
-	{ TEXT("mcam_yaw"),   TEXT("camera"), EScope::Frame, EKind::Angle,   1.0f,  3, TEXT("deg"),
-	  true,  TEXT("the modern boom yaw") },
-	{ TEXT("mcam_clip"),  TEXT("camera"), EScope::Frame, EKind::Exact,   0.0f,  0, TEXT(""),
-	  true,  TEXT("the modern collision sweep hit this frame") },
-
 	// --- The movement producer, per run ---------------------------------------------------------
 	// These are the gym's actual assertions, and they are written to **saturate**: a body either
 	// climbs a riser or is stopped by it, and either answer is reached at any gait given a long

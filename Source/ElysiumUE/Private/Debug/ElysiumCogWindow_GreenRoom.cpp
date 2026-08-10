@@ -35,15 +35,10 @@
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
 #include "imgui.h"
+#include "imgui_internal.h"          // the dock builder, and the viewport dockspace's host window
 
 namespace
 {
-	IConsoleVariable* ClothCVar()
-	{
-		return IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.Cloth"));
-	}
-
-
 	/** One bone's pose at one time, off the sequence's raw data. False when the bone is absent. */
 	bool SampleClipBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
 		FTransform& OutTransform)
@@ -153,6 +148,44 @@ void FElysiumCogWindow_GreenRoom::OpenLab()
 	}
 }
 
+void FElysiumCogWindow_GreenRoom::DockToSide(const bool bLeft)
+{
+	PendingDock = bLeft ? EPendingDock::Left : EPendingDock::Right;
+}
+
+void FElysiumCogWindow_GreenRoom::PreBegin(ImGuiWindowFlags& WindowFlags)
+{
+	Super::PreBegin(WindowFlags);
+	if (PendingDock == EPendingDock::None)
+	{
+		return;
+	}
+
+	// Cog submits one dockspace over the viewport and keeps the id to itself, so the only way to
+	// reach the node is to re-derive it the way ImGui's own default does: `GetID("DockSpace")` inside
+	// a host window named after the viewport.
+	const ImGuiViewport* Viewport = ImGui::GetMainViewport();
+	ANSICHAR HostName[64];
+	ImFormatString(HostName, IM_ARRAYSIZE(HostName), "WindowOverViewport_%08X", Viewport->ID);
+	ImGuiWindow* Host = ImGui::FindWindowByName(HostName);
+	const ImGuiID DockspaceId = Host != nullptr ? Host->GetID("DockSpace") : 0;
+	// Nothing submitted yet — stay pending and try again next frame rather than dropping the request.
+	if (DockspaceId == 0 || ImGui::DockBuilderGetNode(DockspaceId) == nullptr)
+	{
+		return;
+	}
+
+	ImGuiID SideId = 0;
+	ImGui::DockBuilderSplitNode(DockspaceId,
+		PendingDock == EPendingDock::Left ? ImGuiDir_Left : ImGuiDir_Right,
+		0.34f, &SideId, nullptr);
+	// The docked name is the one Begin() is given, which Cog builds as `<title>##<short name>`.
+	const FString WindowTitle = GetTitle() + TEXT("##") + GetName();
+	ImGui::DockBuilderDockWindow(COG_TCHAR_TO_CHAR(*WindowTitle), SideId);
+	ImGui::DockBuilderFinish(DockspaceId);
+	PendingDock = EPendingDock::None;
+}
+
 void FElysiumCogWindow_GreenRoom::Stand(FElysiumGreenRoomRun& Lab, const FString& Stem,
 	const FString& Clip)
 {
@@ -181,9 +214,8 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 	{
 		PendingClip = Clips[Index];
 		// A grid row stands the whole fan when there is a baked blend space for it, and the single
-		// resolved cell when there is not. The fallback is the A/B rather than an error path: with
-		// With `elysium.BlendSpaces 0` this row must still stand something,
-		// and what it stands is exactly what the runtime played before the grids became assets.
+		// resolved cell when there is not. The cell is a fallback rather than an error path: a label
+		// with no baked fan must still stand something.
 		const bool bGridRow = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
 		LastError.Reset();
 		LastNotice.Reset();
@@ -949,25 +981,16 @@ void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
 
 void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 {
-	// The cvar is read when a body is BUILT, so flipping it changes nothing until one is built
-	// again -- attaching a simulating component to a body already posed this frame would drop the
-	// garment out of the bind pose in view. Restand is that rebuild, without going back to the
-	// model list.
-	if (IConsoleVariable* Cloth = ClothCVar())
+	// A garment is attached when the body is BUILT, so a regenerated asset reaches the stage only
+	// on the next build -- attaching a simulating component to a body already posed this frame
+	// would drop the garment out of the bind pose in view. Restand is that rebuild, without going
+	// back to the model list.
+	ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
+	if (ImGui::Button("Restand"))
 	{
-		bool bEnabled = Cloth->GetInt() != 0;
-		if (ImGui::Checkbox("elysium.Cloth - wear the generated garment", &bEnabled))
-		{
-			Cloth->Set(bEnabled ? 1 : 0, ECVF_SetByConsole);
-		}
-		ImGui::SameLine();
-		ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
-		if (ImGui::Button("Restand"))
-		{
-			Stand(Lab, Lab.LabStem(), Lab.LabClip());
-		}
-		ImGui::EndDisabled();
+		Stand(Lab, Lab.LabStem(), Lab.LabClip());
 	}
+	ImGui::EndDisabled();
 
 	UChaosClothComponent* Cloth = FindGarment();
 	if (Cloth == nullptr)
@@ -1147,11 +1170,11 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 	UElysiumBipedAnimInstance* Graph = Cast<UElysiumBipedAnimInstance>(Visual->GetAnimInstance());
 	if (Graph == nullptr)
 	{
-		// Not a defect and not an empty panel: `elysium.PlayerGraph 0` is the A/B, and every row below
-		// would honestly read blank on the cast's native host.
+		// A cast body, or a player body whose graph package is missing. Every row below would
+		// honestly read blank on the native host, so say so rather than drawing an empty panel.
 		ImGui::TextColored(ElysiumCogStyle::ColWarn,
 			"The body is on the cast's native host, not ABP_ElysiumBiped.");
-		ImGui::TextDisabled("`elysium.PlayerGraph 1` and restand -- the graph rows below need it.");
+		ImGui::TextDisabled("The graph rows below need a player body posed from the graph.");
 		return;
 	}
 

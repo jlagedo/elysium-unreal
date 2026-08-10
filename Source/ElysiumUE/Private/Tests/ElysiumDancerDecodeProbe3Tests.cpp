@@ -723,7 +723,7 @@ namespace ElysiumProbe3
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FElysiumDancerDecodeProbe3Test,
-	"Elysium.Content.DancerDecodeProbe3",
+	"Instrument.Elysium.DancerDecodeProbe3",
 	GElysiumDancerDecodeProbe3Flags)
 
 bool FElysiumDancerDecodeProbe3Test::RunTest(const FString&)
@@ -732,7 +732,7 @@ bool FElysiumDancerDecodeProbe3Test::RunTest(const FString&)
 
 	if (!FElysiumContentPaths::IsConfigured())
 	{
-		AddWarning(TEXT("PROBE3|stage=SKIP|reason=export_root_not_configured"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: PROBE3|stage=SKIP|reason=export_root_not_configured"));
 		return true;
 	}
 

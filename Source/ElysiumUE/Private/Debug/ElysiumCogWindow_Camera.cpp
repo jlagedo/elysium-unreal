@@ -26,10 +26,8 @@ void FElysiumCogWindow_Camera::RenderHelp()
 {
 	ImGui::Text(
 		"Live camera service state: the third-person / scripted / feed weights and the latches "
-		"that drive them, the faithful VtMB evaluator's boom beside the modern rig's, the "
-		"scripted-shot stack, and the post layers with their alphas. `elysium.ModernCamera` "
-		"picks which rig supplies the base view; both solve and record channels every frame "
-		"either way, so the delta shown here is the same one the gym records. Read-only.");
+		"that drive them, the rig's boom, the scripted-shot stack, and the post layers with their "
+		"alphas. The boom shown here is the one the gym records as `cam_*`. Read-only.");
 }
 
 void FElysiumCogWindow_Camera::RenderContent()
@@ -83,55 +81,36 @@ void FElysiumCogWindow_Camera::RenderContent()
 		ImGui::TextDisabled("The view target is not a player body.");
 	}
 
-	// --- the two rigs ---------------------------------------------------------------------------
+	// --- the rig --------------------------------------------------------------------------------
 	ImGui::Separator();
 	if (!bFresh)
 	{
 		ImGui::TextDisabled("The view has not updated this frame (paused, or no possessed body).");
 	}
 
-	// Which rig is supplying the base is read from the cvar rather than cached, so this row cannot
-	// drift from what the manager actually applied.
-	const IConsoleVariable* ModernVar =
-		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.ModernCamera"));
-	const bool bModernBase = ModernVar && ModernVar->GetInt() != 0;
-
-	if (ImGui::BeginTable("rigs", 3, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+	if (ImGui::BeginTable("rig", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 	{
 		ImGui::TableSetupColumn("");
-		ImGui::TableSetupColumn(bModernBase ? "faithful" : "faithful (base)");
-		ImGui::TableSetupColumn(bModernBase ? "modern (base)" : "modern");
+		ImGui::TableSetupColumn("boom");
 		ImGui::TableHeadersRow();
 
-		auto Pair = [](const char* Label, const FString& A, const FString& B)
+		auto BoomRow = [](const char* Label, const FString& Value)
 		{
 			ImGui::TableNextRow();
 			ImGui::TableNextColumn();
 			ImGui::TextDisabled("%s", Label);
 			ImGui::TableNextColumn();
-			ImGui::Text("%s", COG_TCHAR_TO_CHAR(*A));
-			ImGui::TableNextColumn();
-			ImGui::Text("%s", COG_TCHAR_TO_CHAR(*B));
+			ImGui::Text("%s", COG_TCHAR_TO_CHAR(*Value));
 		};
 
-		Pair("boom", FString::Printf(TEXT("%.1f cm"), Sample.BoomLength),
-			FString::Printf(TEXT("%.1f cm"), Sample.ModernBoomLength));
-		Pair("damper", FString::Printf(TEXT("%.1f cm"), Sample.DamperDistance),
-			FString::Printf(TEXT("%.1f cm"), Sample.ModernDamperDistance));
-		Pair("pitch", FString::Printf(TEXT("%.2f"), Sample.BoomPitch),
-			FString::Printf(TEXT("%.2f"), Sample.ModernBoomPitch));
-		Pair("yaw", FString::Printf(TEXT("%.2f"), Sample.BoomYaw),
-			FString::Printf(TEXT("%.2f"), Sample.ModernBoomYaw));
-		Pair("clipped", Sample.bClipped ? TEXT("yes") : TEXT("no"),
-			Sample.bModernClipped ? TEXT("yes") : TEXT("no"));
+		BoomRow("boom", FString::Printf(TEXT("%.1f cm"), Sample.BoomLength));
+		BoomRow("damper", FString::Printf(TEXT("%.1f cm"), Sample.DamperDistance));
+		BoomRow("pitch", FString::Printf(TEXT("%.2f"), Sample.BoomPitch));
+		BoomRow("yaw", FString::Printf(TEXT("%.2f"), Sample.BoomYaw));
+		BoomRow("clipped", Sample.bClipped ? TEXT("yes") : TEXT("no"));
 
 		ImGui::EndTable();
 	}
-
-	// The delta is the co-tune's own number, and the same one the gym records as `cam_*` against
-	// `mcam_*` — so what is read here and what a channel diff reports cannot disagree.
-	ImGui::TextDisabled("boom delta %+.1f cm   (elysium.ModernCamera %d)",
-		Sample.ModernBoomLength - Sample.BoomLength, bModernBase ? 1 : 0);
 
 	// --- the scripted stack ---------------------------------------------------------------------
 	if (Camera && ImGui::CollapsingHeader("Scripted shots"))

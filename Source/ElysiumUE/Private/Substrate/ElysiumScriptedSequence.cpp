@@ -60,22 +60,6 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSeq, Log, All);
 
-// A/B for the travel half. 0 sends no NPC to its mark under its own power and takes the placement
-// path for every `m_fMoveTo`, which is what a beat does anyway wherever there is no motor.
-static TAutoConsoleVariable<int32> CVarSeqLocomotion(
-	TEXT("elysium.SeqLocomotion"),
-	1,
-	TEXT("scripted_sequence walks/runs its NPC to the marker (1, default) or places it there (0)."),
-	ECVF_Default);
-
-// A/B for the placement half. 0 leaves every NPC where it stands and runs the beat as animation +
-// outputs; the outputs fire either way.
-static TAutoConsoleVariable<int32> CVarSeqTeleport(
-	TEXT("elysium.SeqTeleport"),
-	1,
-	TEXT("scripted_sequence places its NPC at the marker when it cannot travel there (1, default) or leaves it where it stands (0)."),
-	ECVF_Default);
-
 namespace
 {
 	// HL1 CCineMonster: the mapper's "don't move the NPC to the mark" override. One entity in the
@@ -227,8 +211,7 @@ public:
 	bool StartTravel(FElysiumEntity* Npc)
 	{
 		EElysiumScriptGait Gait = EElysiumScriptGait::Walk;
-		if (Npc == nullptr || !MovesTheNpc() || MoveTo == MOVETO_INSTANT
-			|| CVarSeqLocomotion.GetValueOnGameThread() == 0 || !TravelGait(Gait))
+		if (Npc == nullptr || !MovesTheNpc() || MoveTo == MOVETO_INSTANT || !TravelGait(Gait))
 		{
 			return false;
 		}
@@ -239,7 +222,7 @@ public:
 	// travel is unavailable. 5 means "turn to face" and takes the angles only.
 	void PlaceOnMark(FElysiumEntity* Npc) const
 	{
-		if (Npc == nullptr || !MovesTheNpc() || CVarSeqTeleport.GetValueOnGameThread() == 0)
+		if (Npc == nullptr || !MovesTheNpc())
 		{
 			return;
 		}
@@ -646,9 +629,8 @@ public:
 			Out.Emplace(TEXT("Ends in"), FString::Printf(TEXT("%.2f s"),
 				FMath::Max(0.0, NextThink - World->NowSeconds())));
 		}
-		Out.Emplace(TEXT("Move to"), FString::Printf(TEXT("%d%s%s"), MoveTo,
-			(SpawnFlags & SF_SCRIPT_NOSCRIPTMOVEMENT) != 0 ? TEXT(" (NOSCRIPTMOVEMENT)") : TEXT(""),
-			CVarSeqLocomotion.GetValueOnGameThread() == 0 ? TEXT(" [locomotion off]") : TEXT("")));
+		Out.Emplace(TEXT("Move to"), FString::Printf(TEXT("%d%s"), MoveTo,
+			(SpawnFlags & SF_SCRIPT_NOSCRIPTMOVEMENT) != 0 ? TEXT(" (NOSCRIPTMOVEMENT)") : TEXT("")));
 		for (const TPair<const TCHAR*, const FString*> F : {
 				TPair<const TCHAR*, const FString*>(TEXT("Pre-idle"),    &PreIdle),
 				TPair<const TCHAR*, const FString*>(TEXT("Play"),        &Play),

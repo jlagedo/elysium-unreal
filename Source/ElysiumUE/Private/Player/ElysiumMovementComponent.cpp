@@ -14,17 +14,6 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/WorldSettings.h"
 
-// The timestep A/B. **0 is the faithful baseline** — VtMB has no tick, so its movement really is
-// frame-rate dependent (`docs/vtmb/source_movement.md` → "Frame timing"). A non-zero value opts into
-// frame-rate independence and is a recorded divergence, not the reference behaviour.
-static TAutoConsoleVariable<float> CVarMoveFixedStep(
-	TEXT("elysium.move.FixedStep"),
-	0.0f,
-	TEXT("Seconds per movement integration step. 0 = the frame's own delta (faithful: VtMB has no ")
-	TEXT("tick and its air-accel/jump apex are frame-rate dependent). A non-zero value (e.g. 0.015) ")
-	TEXT("makes movement frame-rate independent — a divergence, kept A/B-able."),
-	ECVF_Default);
-
 // How long the jump's push keeps being applied. 0 = use `rules.txt`'s `JumpHoldTime` (0.2). This
 // is **ours, not a VtMB cvar** — it exists because `rules.txt` carries two candidate windows
 // (`JumpHoldTime` 0.2 and the Feat-indexed `JumpDuration`, 0.11 at rank 1) and which one the
@@ -35,28 +24,6 @@ static TAutoConsoleVariable<float> CVarJumpHoldSeconds(
 	TEXT("Seconds the jump's upward push is sustained while held. 0 = rules.txt JumpHoldTime."),
 	ECVF_Default);
 
-// The speed authority A/B (CCC7). VtMB's player speed is the animation's own per-direction cell
-// speed; `speed_walk`/`speed_runbase` are registered-but-never-read in the retail build, which makes
-// the constants the *port's* baseline rather than the game's.
-static TAutoConsoleVariable<int32> CVarAnimSpeedAuthority(
-	TEXT("elysium.move.AnimSpeedAuthority"),
-	1,
-	TEXT("1 = the body's speed comes from the animation's per-direction cell speeds (faithful). ")
-	TEXT("0 = Troika's stated speed_walk/speed_runbase constants, which the retail build never ")
-	TEXT("reads. The A/B for the whole speed seam, air and water included."),
-	ECVF_Default);
-
-// Whether a direction between two cells blends them or snaps to the nearer. Retail snaps, because
-// its speed comes from a 3x3 digital key table and can never land between two cells; a stick can,
-// and on the walk fan the cells differ by more than 2x, so snapping reads as the stride popping.
-// A divergence, and the shipped default.
-static TAutoConsoleVariable<int32> CVarGaitSpeedInterpolate(
-	TEXT("elysium.move.GaitSpeedInterpolate"),
-	1,
-	TEXT("1 = interpolate the animation's cell speed across the move_yaw fan (a Feel divergence; ")
-	TEXT("what an analog stick needs). 0 = snap to the nearest cell, which is retail's behaviour."),
-	ECVF_Default);
-
 UElysiumMovementComponent::UElysiumMovementComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -65,16 +32,6 @@ UElysiumMovementComponent::UElysiumMovementComponent()
 	// advanced clock and before a single think or queued event runs. That is where retail moves it —
 	// out of the `clc_move` drain, ahead of `GameFrame` entirely (RE21).
 	PrimaryComponentTick.TickGroup = TG_PrePhysics;
-}
-
-bool UElysiumMovementComponent::IsAnimSpeedAuthorityEnabled()
-{
-	return CVarAnimSpeedAuthority.GetValueOnAnyThread() != 0;
-}
-
-bool UElysiumMovementComponent::IsGaitSpeedInterpolationEnabled()
-{
-	return CVarGaitSpeedInterpolate.GetValueOnAnyThread() != 0;
 }
 
 float UElysiumMovementComponent::GetMaxSpeed() const
@@ -91,10 +48,11 @@ float UElysiumMovementComponent::GetMaxSpeed() const
 	{
 		return Tuning.JumpMaxSpeed;
 	}
-	if (IsAnimSpeedAuthorityEnabled() && GaitSpeeds.IsValid())
+	if (GaitSpeeds.IsValid())
 	{
 		return GaitSpeeds.Peak();
 	}
+	// The fallback for a body whose fan has not been pushed yet.
 	return FMath::Max(ElysiumMove::WalkSpeed, ElysiumMove::RunSpeed);
 }
 
@@ -111,8 +69,6 @@ float UElysiumMovementComponent::WishSpeed(const FVector& WishDir, float Scale) 
 	In.bOnGround = bOnGround;
 	In.bDucked = bDucked || bDucking;
 	In.bWalkKey = PendingCmd.IsDown(EElysiumButton::Speed);
-	In.bAuthority = IsAnimSpeedAuthorityEnabled();
-	In.bInterpolate = IsGaitSpeedInterpolationEnabled();
 	// The **commanded** direction, not the realized one: retail picks the cell from the keys being
 	// held, before the move integrates. The pose parameter the graph steers on is a different angle
 	// and is deliberately filtered; this one never is.
@@ -144,7 +100,6 @@ void UElysiumMovementComponent::ResetState()
 	OldButtons = 0;
 	JumpsTaken = 0;
 	PrevCmd = FElysiumUserCmd();
-	Stepper.Reset();
 	bOnGround = false;
 	WaterLevel = EElysiumWaterLevel::None;
 	EndJumpHold();
@@ -640,35 +595,23 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		}
 	}
 
-	// The command stays authoritative for HOW MUCH time to integrate (RE21); the stepper decides
-	// only how that time is chopped up. Total integrated time is the same in both modes, up to the
-	// carried remainder.
-	Stepper.FixedStep = FMath::Max(0.0f, CVarMoveFixedStep.GetValueOnGameThread());
-
-	float StepSeconds = 0.0f;
-	const int32 Steps = Stepper.BeginFrame(DeltaTime, StepSeconds);
-
-	for (int32 Step = 0; Step < Steps; ++Step)
-	{
-		PlayerMove(StepSeconds);
-	}
+	// One step, at exactly the delta the command carries (RE21). VtMB has no tick and no
+	// accumulator, so its movement really is frame-rate dependent — `AirAccelerate`'s `addspeed`
+	// clamp stops binding above ~117 fps, and the full-step gravity puts the jump apex at
+	// `JumpBoost - 100*dt` (`docs/vtmb/source_movement.md` → "Frame timing").
+	PlayerMove(DeltaTime);
 
 	PrevCmd = PendingCmd;
 	UpdateComponentVelocity();
 
-	// The tick tail (CCC1). After the last substep is the only point where the state is settled, so
-	// no consumer can read a half-integrated frame; after `UpdateComponentVelocity` so the sample and
+	// The tick tail (CCC1). After the move is the only point where the state is settled, so no
+	// consumer can read a half-integrated frame; after `UpdateComponentVelocity` so the sample and
 	// `GetVelocity()` agree by construction.
 	//
-	// Two paths deliberately do not reach here, and both **hold the previous sample** rather than
-	// publishing a settled one. The `ShouldSkipUpdate` / `DeltaTime <= 0` guard above is a paused or
-	// dormant frame — zeroing there would snap a run cycle to idle and back on resume. And
-	// `Steps == 0` happens under a non-zero `elysium.move.FixedStep` whenever the accumulator has not
-	// reached a step: nothing integrated, so last frame's answer is still the true one.
-	if (Steps > 0)
-	{
-		PublishLocomotionSample(/*bSolved*/ true);
-	}
+	// One path deliberately does not reach here and **holds the previous sample** rather than
+	// publishing a settled one: the `ShouldSkipUpdate` / `DeltaTime <= 0` guard above is a paused or
+	// dormant frame, and zeroing there would snap a run cycle to idle and back on resume.
+	PublishLocomotionSample(/*bSolved*/ true);
 }
 
 void UElysiumMovementComponent::PlayerMove(float DeltaTime)

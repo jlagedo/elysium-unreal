@@ -248,14 +248,14 @@ bool FElysiumCompositionRigCorpusTest::RunTest(const FString&)
 {
 	if (!FElysiumContentPaths::IsConfigured())
 	{
-		AddInfo(TEXT("no export root configured; skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no export root configured"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("no npc index (%s); skipping"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no npc index (%s)"), *Error));
 		return true;
 	}
 
@@ -309,7 +309,7 @@ bool FElysiumCompositionRigCorpusTest::RunTest(const FString&)
 
 	if (Declared == 0)
 	{
-		AddInfo(TEXT("no model in this export declares a procedural rule table; skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no model in this export declares a procedural rule table"));
 		return true;
 	}
 	TestEqual(TEXT("every declared rule table parses"), Loaded, Declared);
@@ -339,14 +339,14 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 {
 	if (!FElysiumContentPaths::IsConfigured())
 	{
-		AddInfo(TEXT("no export root configured; skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no export root configured"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("no npc index (%s); skipping"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no npc index (%s)"), *Error));
 		return true;
 	}
 
@@ -428,7 +428,7 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 
 	if (Checked == 0)
 	{
-		AddInfo(TEXT("none of the sampled models is exported here; skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: none of the sampled models is exported here"));
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("%d model(s), %d rules, %d on the driven bone's bind position"),

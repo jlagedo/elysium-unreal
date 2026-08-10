@@ -100,8 +100,6 @@ namespace
 		TEXT("air_phase"), TEXT("act_gen"), TEXT("act_stride"), TEXT("act_fade"),
 		TEXT("cam_boom"), TEXT("cam_damp"), TEXT("cam_pitch"), TEXT("cam_yaw"),
 		TEXT("cam_clip"), TEXT("cam_third"),
-		TEXT("mcam_boom"), TEXT("mcam_damp"), TEXT("mcam_pitch"), TEXT("mcam_yaw"),
-		TEXT("mcam_clip"),
 	};
 
 	// One place that resolves the harness's actors, so a null anywhere reads the same.
@@ -413,11 +411,6 @@ void FElysiumMoveRun::Sample()
 	Recorder.Set(TEXT("cam_yaw"), bCamFresh ? Cam.BoomYaw : 0.0f);
 	Recorder.Set(TEXT("cam_clip"), bCamFresh && Cam.bClipped);
 	Recorder.Set(TEXT("cam_third"), bCamFresh ? Cam.ThirdWeight : 0.0f);
-	Recorder.Set(TEXT("mcam_boom"), (bCamFresh ? Cam.ModernBoomLength : 0.0f) * Inv);
-	Recorder.Set(TEXT("mcam_damp"), (bCamFresh ? Cam.ModernDamperDistance : 0.0f) * Inv);
-	Recorder.Set(TEXT("mcam_pitch"), bCamFresh ? Cam.ModernBoomPitch : 0.0f);
-	Recorder.Set(TEXT("mcam_yaw"), bCamFresh ? Cam.ModernBoomYaw : 0.0f);
-	Recorder.Set(TEXT("mcam_clip"), bCamFresh && Cam.bModernClipped);
 
 	FString Error;
 	if (!Recorder.EndFrame(Error))
@@ -535,10 +528,6 @@ void FElysiumMoveRun::FinishCourse()
 	// moves with the speed authority is validated but never compared until `CCC7` settles it.
 	Recorder.SetMeta(TEXT("baseline"), Course.bDeferBaseline ? TEXT("deferred") : TEXT("committed"));
 	Recorder.SetMetaNumber(TEXT("hz"), Hz);
-	Recorder.SetMetaNumber(TEXT("fixedStep"),
-		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.move.FixedStep"))
-			? IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.move.FixedStep"))->GetFloat()
-			: 0.0f);
 
 	// What the geometry and the motion were derived from. A bracket that turns red is a bracket
 	// whose constant moved, and this is what says which one without anyone having to guess.
@@ -561,13 +550,9 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetConstant(TEXT("Accelerate"), T.Accelerate);
 		Recorder.SetConstant(TEXT("WalkSpeed"), ElysiumMove::WalkSpeed * Inv);
 		Recorder.SetConstant(TEXT("RunSpeed"), ElysiumMove::RunSpeed * Inv);
-		// Which speed authority produced this recording, and what the body's own fans answered under
-		// it (CCC7). The constants block is metadata and is never compared, so this is free — and it
-		// is what stops a recording made on the fallback being mistaken for one made on the animation.
-		Recorder.SetConstant(TEXT("AnimSpeedAuthority"),
-			UElysiumMovementComponent::IsAnimSpeedAuthorityEnabled() ? 1.0f : 0.0f);
-		Recorder.SetConstant(TEXT("GaitSpeedInterpolate"),
-			UElysiumMovementComponent::IsGaitSpeedInterpolationEnabled() ? 1.0f : 0.0f);
+		// What the body's own fans answered (CCC7). The constants block is metadata and is never
+		// compared, so this is free — and it is what stops a recording made on the no-fan fallback
+		// being mistaken for one made on the animation.
 		const FElysiumGaitSpeeds& Fans = Body.Move->GetGaitSpeeds();
 		Recorder.SetConstant(TEXT("GaitWalkForward"), Fans.Walk.Forward() * Inv);
 		Recorder.SetConstant(TEXT("GaitRunForward"), Fans.Run.Forward() * Inv);

@@ -19,6 +19,7 @@ FONT_ASSETS = (
     "FF_Inter_SemiBold.uasset",
 )
 DEFAULT_BAKE_STAGES = "textures,materials,world,sky,props,particles,level"
+TEST_ABSTENTION_TOKEN = "ELYSIUM_TEST_ABSTAIN"
 
 
 class UnrealFailure(RuntimeError):
@@ -183,6 +184,31 @@ def bake_characters(config, runner, stems: Sequence[str], *, plan: Path | None =
     _run(config, runner, editor_executable(config, commandlet=True), arguments)
 
 
+def make_cloth_assets(config, runner, stems: Sequence[str]) -> None:
+    """Generate a Chaos cloth asset per authored garment among `stems`.
+
+    Runs behind the character bake rather than under `build_content`'s umbrella: a cloth asset
+    binds to a skeletal mesh's reference skeleton, and the umbrella runs before any character
+    exists. Most named models author no garment and are simply absent from the sidecar directory.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/make_cloth_assets.py'}",
+            f"-ClothStems={','.join(dict.fromkeys(stems))}",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+    )
+
+
 def verify_characters(config, runner, stems: Sequence[str]) -> None:
     _run(
         config,
@@ -278,7 +304,12 @@ def summarize_test_report(report_dir: Path) -> dict:
         messages = " ".join(
             entry.get("event", {}).get("message", "") for entry in test.get("entries", [])
         )
-        if "marked incomplete" in messages or "skipping content validation" in messages:
+        # New tests emit the token explicitly. The legacy phrases keep reports from older editor
+        # builds readable while the C++ suite migrates; they can go once every supported build
+        # emits TEST_ABSTENTION_TOKEN.
+        if (TEST_ABSTENTION_TOKEN in messages
+                or "marked incomplete" in messages
+                or "skipping content validation" in messages):
             summary["abstained"] += 1
             summary["abstentions"].append(test.get("fullTestPath", "?"))
         else:
@@ -299,6 +330,11 @@ def run_editor(config, runner, extra: Sequence[str] = ()) -> None:
     )
 
 
+# `play gr` is not a map: it boots the session into the green room's own stage world instead of
+# naming a level, which is the same place `elysium.gr` goes from a running game.
+GREEN_ROOM_TARGETS = frozenset({"gr", "greenroom", "green-room", "green_room"})
+
+
 def run_play(config, runner, map_name: str | None = None, extra: Sequence[str] = ()) -> None:
     args = [
         *common_game_args(config),
@@ -309,9 +345,22 @@ def run_play(config, runner, map_name: str | None = None, extra: Sequence[str] =
         "-log",
         "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose",
     ]
-    if map_name:
+    values = list(extra)
+    if map_name and map_name.lower() in GREEN_ROOM_TARGETS:
+        # The window is the point of this launch, so it comes up open, holding the mouse and docked
+        # down the left edge rather than floating over the body it is there to inspect. F1 still
+        # hands the keyboard back to the game.
+        args += ["-ElysiumGreenRoom", "-GreenRoomLab", "-GreenRoomDock=left"]
+        # `play gr <model> <clip>`, both optional -- with no model the stage comes up empty and the
+        # window picks one. An empty `-Switch=` makes Unreal's parser swallow the NEXT token as the
+        # value, so a blank pair is omitted rather than passed.
+        for switch in ("GreenRoomStem", "GreenRoomClip"):
+            if not values or values[0].startswith("-"):
+                break
+            args.append(f"-{switch}={values.pop(0)}")
+    elif map_name:
         args.append(f"-ElysiumMap={map_name}")
-    args.extend(extra)
+    args.extend(values)
     _run(config, runner, editor_executable(config), args)
 
 
@@ -353,7 +402,7 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
         value = values[index]
         if value in {"--set", "--cvar"}:
             if index + 1 >= len(values):
-                raise ValueError(f"{value} needs a command, e.g. --set 'elysium.Cloth 0'")
+                raise ValueError(f"{value} needs a command, e.g. --set 'elysium.Mute 0'")
             exec_cmds.append(values[index + 1])
             index += 2
             continue

@@ -31,14 +31,6 @@
 // does not select them; every body comes from the mount.
 //
 // Applied at map load; NPC meshes and their rigs are resolved once per map epoch.
-// Whether a character wears its generated garment. Read once when a body is built, so a change
-// takes effect on the next map load rather than mid-frame — attaching a simulating component to a
-// body already posed for this frame would drop the garment from the bind pose in view.
-static TAutoConsoleVariable<int32> CVarCloth(
-	TEXT("elysium.Cloth"), 1,
-	TEXT("Wear generated Chaos garments on characters whose model authored one (0 disables). "
-		 "Read when a body is built."),
-	ECVF_Default);
 
 namespace
 {
@@ -360,16 +352,20 @@ namespace ElysiumNpcVisual
 	 * simulating, against a bind pose, and draws wherever the identity transform puts it. Several
 	 * rebuilds and a character has one skirt on her hips and a pile of them on the floor.
 	 *
-	 * Only garments whose leader has actually gone are removed. The others belong to bodies that
-	 * are still standing.
+	 * Only the previous body's garments are removed. The others belong to bodies that are still
+	 * standing, and one owner holds all of them.
 	 */
-	void SweepOrphanedGarments(AActor* Owner)
+	void SweepStaleGarments(AActor* Owner, const USkeletalMeshComponent* Body)
 	{
 		TArray<UChaosClothComponent*> Garments;
 		Owner->GetComponents(Garments);
 		for (UChaosClothComponent* Garment : Garments)
 		{
-			if (!Garment->LeaderPoseComponent.IsValid())
+			// Two ways to be stale, and both happen on a model swap: the body this garment
+			// followed was destroyed, or the body is being rebuilt and is about to be dressed
+			// again. Either way what is here now is the previous model's.
+			if (!Garment->LeaderPoseComponent.IsValid()
+				|| Garment->LeaderPoseComponent.Get() == Body)
 			{
 				Garment->DestroyComponent();
 			}
@@ -378,7 +374,19 @@ namespace ElysiumNpcVisual
 
 	UChaosClothComponent* InstallGarment(USkeletalMeshComponent* Body, const FString& Stem)
 	{
-		if (Body == nullptr || Stem.IsEmpty() || CVarCloth.GetValueOnGameThread() == 0)
+		AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner == nullptr)
+		{
+			return nullptr;
+		}
+		// FIRST, and unconditionally. Every reason this function has for declining to dress a body
+		// -- no garment on the model, no stem -- is a reason the PREVIOUS body's garment still
+		// needs taking away. Sweeping only on the path that installs one means a model swap cleans
+		// up exactly when the next model also happens to wear something, and leaves the old skirt
+		// hanging in the air the rest of the time.
+		SweepStaleGarments(Owner, Body);
+
+		if (Stem.IsEmpty())
 		{
 			return nullptr;
 		}
@@ -393,15 +401,6 @@ namespace ElysiumNpcVisual
 			return nullptr;
 		}
 
-		AActor* Owner = Body->GetOwner();
-		if (Owner == nullptr)
-		{
-			return nullptr;
-		}
-		// Before adding one, take away the ones whose body is gone. A body build is the only
-		// moment this owner is known to be mid-rebuild, so it is the only moment the sweep is
-		// certain not to be removing a garment that is simply between frames.
-		SweepOrphanedGarments(Owner);
 		UChaosClothComponent* Cloth = NewObject<UChaosClothComponent>(Owner);
 		Cloth->SetAsset(Asset);
 		// The garment is skinned by the body it hangs on, so it follows rather than animates: the

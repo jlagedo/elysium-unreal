@@ -254,17 +254,9 @@ void FElysiumNpcAnimProxy::Stop()
 	Fading.Reset();
 }
 
-// The A/B for the blend grids. 1 = a grid label stands the baked UBlendSpace and blends across its
-// cells, 0 = the caller falls back to the single cell `ElysiumBlendGrids::SelectCell` resolves,
-// which is what every body did before the grids became assets.
-static TAutoConsoleVariable<int32> CVarBlendSpaces(
-	TEXT("elysium.BlendSpaces"), 1,
-	TEXT("1 = stand a blend-grid label on its baked UBlendSpace, 0 = play the resolved cell alone."),
-	ECVF_Default);
-
 bool FElysiumNpcAnimProxy::RequestGrid(UBlendSpace* Space, bool bLoop)
 {
-	if (Space == nullptr || CVarBlendSpaces.GetValueOnAnyThread() == 0)
+	if (Space == nullptr)
 	{
 		return false;
 	}
@@ -595,17 +587,6 @@ void FElysiumNpcAnimProxy::EvaluateBody(FPoseContext& Output)
 	Output = Accumulated;
 }
 
-// The A/B for the autolayer accumulator. 1 = VtMB's own combines, 0 = no layer at all, which is
-// what every body composed before this existed. There is deliberately no "use Unreal's additive
-// node" setting: every Unreal additive mode pre-multiplies, and the cost of that order is measured
-// rather than offered — 89.1% of bone-frames within 0.5 degrees, 1.9% past 10, worst 162.9 on a
-// thigh (`docs/vtmb/animation_and_movers.md`).
-static TAutoConsoleVariable<int32> CVarAnimLayers(
-	TEXT("elysium.AnimLayers"), 1,
-	TEXT("1 = compose VtMB autolayers onto the body pose (`_delta` additives and masked `_layer` ")
-	TEXT("overlays), 0 = ignore every layer."),
-	ECVF_Default);
-
 // One-shot: dump the pose the NEXT layer evaluation reads, per bone, largest first.
 //
 // The question this exists to answer is the one no screenshot can: whether what the applier
@@ -679,13 +660,12 @@ void FElysiumNpcAnimProxy::DumpLayerPose(int32 Layer, const FPoseContext& Pose)
 	UE_LOG(LogTemp, Display, TEXT("   ... %d of %d bones under 1 deg"), Quiet, Rows.Num());
 }
 
+// The autolayer accumulator composes VtMB's own combines. There is deliberately no "use Unreal's
+// additive node" setting: every Unreal additive mode pre-multiplies, and the cost of that order is
+// measured rather than offered — 89.1% of bone-frames within 0.5 degrees, 1.9% past 10, worst 162.9
+// on a thigh (`docs/vtmb/animation_and_movers.md`).
 void FElysiumNpcAnimProxy::EvaluateLayers(FPoseContext& Output)
 {
-	if (CVarAnimLayers.GetValueOnAnyThread() == 0)
-	{
-		return;
-	}
-
 	// RETAIL'S SLOT, and it is not the obvious one. `FUN_10089c40` walks a sequence's autolayers
 	// and accumulates each through `FUN_10088e10` while the pose is still LOCAL, before
 	// `BuildTransformations` (`FUN_1008fd00`) composes the hierarchy and applies split inheritance.

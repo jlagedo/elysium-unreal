@@ -85,12 +85,12 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: NPC export is absent"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: NPC export is absent"));
 		return true;
 	}
 
@@ -229,14 +229,14 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 	if (FElysiumContentPaths::IsIncomplete(TEXT("maps"))
 		|| FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the maps and npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the maps and npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath)
 		|| !IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: theatre or NPC export is absent"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: theatre or NPC export is absent"));
 		return true;
 	}
 

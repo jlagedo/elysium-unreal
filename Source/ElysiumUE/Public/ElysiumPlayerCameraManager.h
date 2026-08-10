@@ -37,16 +37,6 @@ struct FElysiumCameraSample
 	float ThirdWeight = 0.0f;
 	float ScriptedWeight = 0.0f;
 	float ModelAlpha = 0.0f;
-
-	// --- the modern rig ------------------------------------------------------------------------
-	// The same four quantities from the remaster rig, which evaluates every frame whether or not
-	// `elysium.ModernCamera` has it supplying the base. Recording both unconditionally is what lets
-	// one run diff the two booms against each other instead of against a recollection.
-	float ModernBoomLength = 0.0f;
-	float ModernDamperDistance = 0.0f;
-	float ModernBoomPitch = 0.0f;
-	float ModernBoomYaw = 0.0f;
-	bool bModernClipped = false;
 };
 
 // The one final view per local player (`docs/architecture/camera-architecture.md` -> rule 1).
@@ -57,9 +47,9 @@ struct FElysiumCameraSample
 // modes, the per-frame POV reset, and the modifier pass. The inner one is exactly the
 // `Target->CalcCamera` dispatch — which is the only thing being replaced.
 //
-// The rig is resolved from the **live** view target every frame and never cached:
-// `elysium.SourceMovement` swaps the pawn class at spawn, so a pointer taken at `BeginPlay` would
-// be the wrong body's camera.
+// The rig is resolved from the **live** view target every frame and never cached: character
+// generation, a cutscene and a spectator each retarget the view, so a pointer taken at `BeginPlay`
+// would be the wrong body's camera.
 UCLASS()
 class AElysiumPlayerCameraManager : public APlayerCameraManager
 {
@@ -87,12 +77,10 @@ protected:
 	virtual void UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTime) override;
 
 private:
-	// One frame of the modern rig. It lives on the manager rather than as a second component
-	// because `elysium.SourceMovement` swaps the pawn class at spawn: a component would have to be
-	// added to both bodies and kept in step, where manager-side state is resolved once from
-	// whatever is being viewed. It solves every frame regardless of which rig supplies the base.
-	void SolveModernRig(const UElysiumCameraComponent& Camera, float DeltaSeconds);
-	void ApplyModernBaseToView(const UElysiumCameraComponent& Camera, FMinimalViewInfo& View) const;
+	// One frame of the modern rig. It lives on the manager rather than as a second component so its
+	// state is resolved once from whatever is being viewed, rather than added to each body that can
+	// be a view target and kept in step.
+	void SolveModernRig(UElysiumCameraComponent& Camera, float DeltaSeconds);
 
 	void PublishSample(const UElysiumCameraComponent& Camera);
 

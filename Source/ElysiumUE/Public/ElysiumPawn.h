@@ -21,8 +21,7 @@ class USkeletalMeshComponent;
 // it — a capsule's rounded bottom catches a step's top edge and reports a normal of ~0.65 against
 // the 0.7 standable test, so every climb is rejected (`docs/vtmb/source_movement.md`). `ACharacter`
 // creates a `UCapsuleComponent` as its root and does not allow substitution, so this derives from
-// `APawn` and brings its own `UElysiumMovementComponent`. `AElysiumCapsulePawn` is the A/B baseline
-// behind `elysium.SourceMovement 0`.
+// `APawn` and brings its own `UElysiumMovementComponent`.
 //
 // It binds no keys and reads no key state. One `FElysiumUserCmd` per frame arrives from
 // `UElysiumInputRouter` (S5) and the movement component consumes it.
@@ -60,8 +59,7 @@ public:
 	// Swap the hull between the standing and ducked sizes (`docs/vtmb/source_movement.md` → "The hulls
 	// and the view offsets"). The mover owns *when*; the pawn owns *how*, because the box extent
 	// and the camera's relative Z have to move together or the view detaches from the body for a
-	// frame. Not on `IElysiumPlayerBody` — `AElysiumCapsulePawn` has no mover and must not grow a
-	// no-op to satisfy an interface.
+	// frame. Not on `IElysiumPlayerBody` — it is the mover's own seam, not every body's.
 	void SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnchorFeet);
 
 	// Move the eye alone, leaving the hull as it is. The duck transition slides the view offset

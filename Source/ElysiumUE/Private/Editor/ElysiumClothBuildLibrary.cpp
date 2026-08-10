@@ -578,6 +578,12 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// so a 3.3333 ms target and a cap of 30 reproduce it rather than approximate it.
 		SharedConfig->SubdivisionCount = RetailMaxSubsteps;
 
+		// Continuous collision detection. A garment on a character who turns, sits or takes a hit
+		// moves far enough in one substep to pass straight through a hip capsule, and a discrete
+		// test only ever asks where the particle ENDED — so the miss is silent and the hem comes
+		// out the far side. It costs performance against a garment that would not have tunnelled.
+		ClothConfig->bUseCCD = true;
+
 		::Chaos::FClothingSimulationConfig SimulationConfig;
 		SimulationConfig.Initialize(ClothConfig, SharedConfig);
 		SimulationConfig.GetPropertyCollection(0)->CopyTo(&Collection.Get());
@@ -615,10 +621,44 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// none of those are cloth, and all of them are the same mesh as the garment.
 		//
 		// So the render mesh here is the material's entire surface rather than the simulation
-		// mesh. What makes a vertex cloth is its skinning blend: 1 takes its position from the
-		// particle the payload names, 0 leaves it to the bones. The `+52` map IS the binding, so
+		// mesh. What makes a vertex cloth is its skinning blend: 0 takes its position from the
+		// particle the payload names, 1 leaves it to the bones. The `+52` map IS the binding, so
 		// each influence is a degenerate triangle on that one particle with barycentric weight 1
 		// -- no proximity search and no approximation, the same correspondence the game reads.
+		// One incident simulation triangle per particle, rotated so the particle is corner A.
+		//
+		// A degenerate triangle would place the position perfectly and shade nothing: the deformer
+		// does not store a normal, it DERIVES one from the difference between two interpolated
+		// points on the triangle. Collapse the triangle and both points coincide, so every driven
+		// vertex gets a zero normal and renders black while the skinned ones beside it look right.
+		TMap<int32, FIntVector3> ParticleTriangle;
+		ParticleTriangle.Reserve(Rest.Num());
+		for (const FIntVector3& Face : Faces)
+		{
+			ParticleTriangle.FindOrAdd(Face.X, FIntVector3(Face.X, Face.Y, Face.Z));
+			ParticleTriangle.FindOrAdd(Face.Y, FIntVector3(Face.Y, Face.Z, Face.X));
+			ParticleTriangle.FindOrAdd(Face.Z, FIntVector3(Face.Z, Face.X, Face.Y));
+		}
+
+		// The same accumulation Chaos performs every frame — `cross(P2 - P0, P1 - P0)` summed over
+		// a particle's faces — run once here on the rest pose. It answers two things: a sheet
+		// whose faces cancel becomes a number in the build report rather than an unlit garment in
+		// the viewport, and each driven vertex's normal sign becomes measurable below.
+		TArray<FVector3f> ParticleNormal;
+		ParticleNormal.SetNumZeroed(Rest.Num());
+		for (const FIntVector3& Face : Faces)
+		{
+			const FVector3f Normal = FVector3f::CrossProduct(
+				Rest[Face.Z] - Rest[Face.X], Rest[Face.Y] - Rest[Face.X]);
+			ParticleNormal[Face.X] += Normal;
+			ParticleNormal[Face.Y] += Normal;
+			ParticleNormal[Face.Z] += Normal;
+		}
+		for (const TPair<int32, FIntVector3>& Incident : ParticleTriangle)
+		{
+			Result.DegenerateSimNormals += ParticleNormal[Incident.Key].IsNearlyZero() ? 1 : 0;
+		}
+
 		const TArray<TSharedPtr<FJsonValue>>* Maps = nullptr;
 		Garment->TryGetArrayField(TEXT("render_maps"), Maps);
 		for (int32 MapIndex = 0; Maps != nullptr && MapIndex < Maps->Num(); ++MapIndex)
@@ -675,6 +715,12 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			const TArrayView<TArray<float>> DeformerWeight = Render.GetRenderDeformerWeight();
 			const TArrayView<float> SkinningBlend = Render.GetRenderDeformerSkinningBlend();
 
+			// The binding cannot be written until the tangent basis exists, and that is
+			// accumulated over the faces below, so the particle each vertex follows is kept here
+			// and spent in the final pass.
+			TArray<int32> VertexParticle;
+			VertexParticle.SetNumUninitialized(Positions.Num());
+
 			for (int32 Index = 0; Index < Positions.Num(); ++Index)
 			{
 				RenderPosition[Index] = VectorFrom(Positions[Index]->AsArray());
@@ -722,17 +768,14 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 				{
 					Row->TryGetNumberField(TEXT("particle"), Particle);
 				}
-				const bool bDriven = Particle != INDEX_NONE;
-				SkinningBlend[Index] = bDriven ? 1.f : 0.f;
-				DeformerIndices[Index] = { bDriven
-					? FIntVector3(Particle, Particle, Particle) : FIntVector3(0, 0, 0) };
-				// The whole barycentric weight on the first corner of a degenerate triangle, and
-				// no offset along the normal: the result is that particle's position exactly.
-				const FVector4f Bary(bDriven ? 1.f : 0.f, 0.f, 0.f, 0.f);
-				DeformerPosition[Index] = { Bary };
-				DeformerNormal[Index] = { Bary };
-				DeformerTangent[Index] = { Bary };
-				DeformerWeight[Index] = { bDriven ? 1.f : 0.f };
+				const bool bDriven = Particle != INDEX_NONE && ParticleTriangle.Contains(Particle);
+				// INVERTED against its name, and the engine is the authority: the deformer reads
+				// this as the share that stays SKINNED, skips the deformation entirely at 1, and
+				// weights the simulation by `1 - blend`. So a driven vertex is 0 and the belt is
+				// 1. Reading it the other way round leaves the garment at its bind pose while the
+				// waistband is the only thing the solver moves.
+				SkinningBlend[Index] = bDriven ? 0.f : 1.f;
+				VertexParticle[Index] = bDriven ? Particle : INDEX_NONE;
 				Result.DrivenVertices += bDriven ? 1 : 0;
 				Result.SkinnedVertices += bDriven ? 0 : 1;
 			}
@@ -779,6 +822,75 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 					UE_SMALL_NUMBER, FVector3f::XAxisVector);
 				RenderTangentV[Index] = RenderTangentV[Index].GetSafeNormal(
 					UE_SMALL_NUMBER, FVector3f::YAxisVector);
+
+				// --- the binding -------------------------------------------------------------
+				//
+				// The deformer evaluates `Bary.X*(A + NA*W) + ...` three times, for the position,
+				// for a point offset along the normal, and for one offset along the tangent; it
+				// then takes the two offsets MINUS the position as the shading basis. So the W
+				// distances are what carry the normal and tangent, and the barycentric triple is
+				// what carries the position. `GpuSkinCacheComputeShader.usf` is the authority --
+				// the editor-side preview in `ClothGeometryTools.cpp` spells the same expression
+				// with the opposite sign and is not what ships the frame.
+				const int32 Particle = VertexParticle[Index];
+				if (Particle == INDEX_NONE)
+				{
+					// Skinned. The deformer skips a blend of 1 outright, so these are inert; they
+					// only have to be in range.
+					DeformerIndices[Index] = { FIntVector3(0, 0, 0) };
+					DeformerPosition[Index] = { FVector4f::Zero() };
+					DeformerNormal[Index] = { FVector4f::Zero() };
+					DeformerTangent[Index] = { FVector4f::Zero() };
+					DeformerWeight[Index] = { 0.f };
+					continue;
+				}
+
+				const FIntVector3 Triangle = ParticleTriangle.FindChecked(Particle);
+				DeformerIndices[Index] = { Triangle };
+				DeformerWeight[Index] = { 1.f };
+
+				// Corner A is the particle itself, so the whole weight there and no offset is its
+				// position exactly -- VtMB's own substitution, not an interpolation of it.
+				DeformerPosition[Index] = { FVector4f(1.f, 0.f, 0.f, 0.f) };
+
+				// The engine hands the deformer the simulation normal already NEGATED, so a
+				// distance of -1 recovers it and +1 its opposite. Which one a vertex wants is
+				// MEASURED here rather than taken from VtMB's high bit on the position index:
+				// that bit is stated against VtMB's own sheet orientation, and the sheet this
+				// build induces from the render surface carries its own. The authored render
+				// normal is the answer the shading has to reproduce, so the sign that reproduces
+				// it is the sign to store -- the bake resolving state instead of forwarding a
+				// question the frame path would have to know a VtMB rule to answer.
+				const bool bSimNormalAgrees = FVector3f::DotProduct(
+					RenderNormal[Index], ParticleNormal[Particle]) >= 0.f;
+				DeformerNormal[Index] = {
+					FVector4f(1.f, 0.f, 0.f, bSimNormalAgrees ? -1.f : 1.f) };
+
+				// The tangent is the one that needs the triangle to be real: it is recovered as a
+				// point minus the position, so it has to be reachable across the face. The
+				// authored tangent is resolved onto the two edges leaving A and stored as those
+				// barycentric weights.
+				const FVector3f A = Rest[Triangle.X];
+				const FVector3f EdgeB = Rest[Triangle.Y] - A;
+				const FVector3f EdgeC = Rest[Triangle.Z] - A;
+				const float BB = FVector3f::DotProduct(EdgeB, EdgeB);
+				const float BC = FVector3f::DotProduct(EdgeB, EdgeC);
+				const float CC = FVector3f::DotProduct(EdgeC, EdgeC);
+				const float TB = FVector3f::DotProduct(RenderTangentU[Index], EdgeB);
+				const float TC = FVector3f::DotProduct(RenderTangentU[Index], EdgeC);
+				const float Det = BB * CC - BC * BC;
+				if (FMath::Abs(Det) > UE_SMALL_NUMBER)
+				{
+					const float V = (TB * CC - TC * BC) / Det;
+					const float W = (TC * BB - TB * BC) / Det;
+					DeformerTangent[Index] = { FVector4f(1.f - V - W, V, W, 0.f) };
+				}
+				else
+				{
+					// A sliver: fall back to the far corner, which is a real direction across the
+					// face even when it is not the authored one.
+					DeformerTangent[Index] = { FVector4f(0.f, 1.f, 0.f, 0.f) };
+				}
 			}
 		}
 
@@ -794,7 +906,10 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			const TConstArrayView<float> Blend = Cloth.GetRenderDeformerSkinningBlend();
 			for (int32 Index = 0; Index < Bindings.Num(); ++Index)
 			{
-				if (!Blend.IsValidIndex(Index) || Blend[Index] <= 0.f)
+				// A blend of 1 is SKINNED, and the deformer skips those influences outright, so
+				// their indices are inert whatever compaction did to them. Only a driven vertex
+				// -- blend 0 -- is actually bound to the particle named here.
+				if (!Blend.IsValidIndex(Index) || Blend[Index] >= 1.f)
 				{
 					continue;
 				}

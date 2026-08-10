@@ -45,8 +45,7 @@ namespace ElysiumMove
 
 	// The retail player speed is animation-driven and no ConVar holds it; `speed_walk` /
 	// `speed_runbase` are Troika's stated intent and are registered-but-never-read, which makes them
-	// what a port with no player animation should use, and what `elysium.move.AnimSpeedAuthority 0`
-	// falls back to.
+	// what a body with no resolved gait fan falls back to.
 	inline constexpr float WalkSpeed    = 100.0f * U; // speed_walk
 	inline constexpr float RunSpeed     = 225.0f * U; // speed_runbase (+5 per Athletics at 9.4)
 
@@ -158,38 +157,8 @@ namespace ElysiumMove
 // and the full-step gravity puts the jump apex at `JumpBoost - 100*dt` rather than a flat
 // `JumpBoost`.
 //
-// **A fixed step is therefore a divergence, not the baseline** — `elysium.move.FixedStep` defaults
-// to 0 (raw delta, faithful) and a non-zero value opts into frame-rate independence. It is worth
-// having because it is the only way to A/B the two, and because the difference is measurable
-// rather than a matter of taste. Recorded as a divergence in `docs/vtmb/source_movement.md`.
-//
-// Either way the move body is written once: this decides only how many times and with what dt.
-struct FElysiumMoveStepper
-{
-	// Seconds per step. 0 = one step at the frame's own delta — the faithful path.
-	float FixedStep = 0.0f;
-
-	// A backstop, not a tuning knob. With the frame delta already bounded to 0.1 s x timescale, a
-	// 100 Hz step needs at most 10 at normal speed, so this can only be reached if FixedStep is set
-	// absurdly small or the world is running at more than 1.6x. Reaching it is the signal; do not
-	// raise the number to silence it.
-	int32 MaxSubSteps = 16;
-
-	// Begin a frame. Returns how many steps to run and writes the dt each one takes; the unspent
-	// remainder is carried, never dropped.
-	int32 BeginFrame(float DeltaSeconds, float& OutStepSeconds);
-
-	// How far through the pending step the accumulator sits, 0..1 — what a view interpolation would
-	// need to hide the up-to-one-step lag a fixed step introduces. Nothing consumes it yet.
-	float Alpha() const;
-
-	void Reset() { Accumulator = 0.0f; }
-
-	bool IsFixed() const { return FixedStep > 0.0f; }
-
-private:
-	float Accumulator = 0.0f;
-};
+// The mover therefore integrates the command's own delta once per frame, with no accumulator and
+// no substepping — the same shape retail has.
 
 // --------------------------------------------------------------------------------------------
 // The cvar surface

@@ -49,24 +49,6 @@ namespace ElysiumPropBounds
 	}
 }
 
-// The NPC animation host. 1 = UElysiumNpcAnimInstance (two sequence players + a crossfade, and the
-// facial flex track over them), 0 = Unreal's single-node instance, which cannot blend, so every clip
-// change pops — and which has no facial track at all, so 0 also stands the cast with still faces.
-// Applied at map load, per body.
-static TAutoConsoleVariable<int32> CVarNpcAnim(
-	TEXT("elysium.NpcAnim"), 1,
-	TEXT("NPC animation host: the crossfading Elysium anim instance and its facial track (1) or single-node, no face (0). Applied at map load."),
-	ECVF_Default);
-
-// CCC5 — the player body poses from `ABP_ElysiumBiped` rather than from the crossfading native
-// instance. 0 puts it back on the cast's host, which is also how the theatre reaches the cinematic
-// seek path until `ANM6` migrates it. Applied at map load, per body.
-static TAutoConsoleVariable<int32> CVarPlayerGraph(
-	TEXT("elysium.PlayerGraph"), 1,
-	TEXT("Pose the player body from the ABP_ElysiumBiped animation graph (1, default) or from the "
-	     "native crossfading instance the cast uses (0). Applied at map load."),
-	ECVF_Default);
-
 namespace
 {
 	// Resolved once and cached, including the failure: a missing generated package is a build-step
@@ -109,14 +91,6 @@ static TAutoConsoleVariable<int32> CVarEyeTrackPlayer(
 	TEXT("elysium.EyeTrackPlayer"), 0,
 	TEXT("Aim every NPC's eyes at the player camera (1) instead of the eyeball record's authored resting aim (0, default)."),
 	ECVF_Cheat);
-
-// 12.4 — A/B for the whole eye pass: the iris aim and the eyelid write-back together. 0 leaves the
-// irises on their authored resting aim and the lids on the FElysiumFlexLid reconstruction, which is
-// how the face evaluated before the eyeball records were decoded.
-static TAutoConsoleVariable<int32> CVarEyes(
-	TEXT("elysium.Eyes"), 1,
-	TEXT("Run the eye pass: iris aiming, the blink envelope and the authored eyelid write-back (1, default) or none of it (0)."),
-	ECVF_Default);
 
 UElysiumEntityBodies::UElysiumEntityBodies()
 {
@@ -272,14 +246,12 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// an `IElysiumEmbodiment` body has no way to know which it has. Casting to the NPC instance here
 	// would miss a player body and fall through to `PlayAnimation`, which switches the component to
 	// single-node mode and destroys the anim graph for the rest of the map.
-	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()))
+	UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
+	if (Inst == nullptr)
 	{
-		Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
+		return false;
 	}
-	else
-	{
-		Body->PlayAnimation(Anim, bLoop);   // elysium.NpcAnim 0 — single-node A/B, no crossfade
-	}
+	Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
 	return true;
 }
 
@@ -293,8 +265,8 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	{
 		return false;
 	}
-	// No `elysium.NpcAnim 0` fallback. The single-node instance the A/B drops to plays one sequence
-	// and composes nothing, so there is no honest way to lay a layer over it.
+	// A graph-backed body has no layer slot until `CCC10` lands the layered bone blend, so this is
+	// the native instance's own path and answers false for anything else.
 	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
 	return Inst != nullptr && Inst->PlayLayer(Anim, Weight);
 }
@@ -310,8 +282,8 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	if (Anims == nullptr || Inst == nullptr)
 	{
-		// No `elysium.NpcAnim 0` fallback, for the same reason a layer has none: the single-node
-		// instance the A/B drops to plays one sequence and cannot hold a blend space at all.
+		// The native instance's own path, for the same reason a layer has one: the grid slot is
+		// what holds a blend space, and only that host has it.
 		return false;
 	}
 	if (!Anims->ResolveGrid(Stem, ClipName, Body->GetSkeletalMeshAsset(), OutGrid))
@@ -478,9 +450,10 @@ bool UElysiumEntityBodies::GetCinematicClipPosition(USkeletalMeshComponent* Body
 		OutSeconds = Position;
 		return true;
 	}
-	// The single-node fallback (elysium.NpcAnim 0). GetPosition answers 0 for a component with no
-	// player at all, which is indistinguishable from a clip genuinely at frame 0 — so the presence
-	// of a sequence is the test, not the value.
+	// A component not on one of our hosts — a preview or chargen stage body driven straight through
+	// `PlayAnimation`. GetPosition answers 0 for a component with no player at all, which is
+	// indistinguishable from a clip genuinely at frame 0 — so the presence of a sequence is the
+	// test, not the value.
 	if (Body->GetAnimationMode() != EAnimationMode::AnimationSingleNode || Body->GetSingleNodeInstance() == nullptr)
 	{
 		return false;
@@ -529,8 +502,8 @@ void UElysiumEntityBodies::StopCinematicClip(USkeletalMeshComponent* Body)
 int32 UElysiumEntityBodies::SetFlexControllers(USkeletalMeshComponent* Body,
 	TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing)
 {
-	// No host under `elysium.NpcAnim 0`, and no rig on a model with no facial sidecar. Both stand a
-	// body with a still face rather than failing, so both answer the same way.
+	// No host on a component that is not one of ours, and no rig on a model with no facial sidecar.
+	// Both stand a body with a still face rather than failing, so both answer the same way.
 	UElysiumBodyAnimInstance* Inst = Body
 		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	return Inst != nullptr ? Inst->SetFlexControllers(Writes, OutMissing) : INDEX_NONE;
@@ -747,7 +720,7 @@ void UElysiumEntityBodies::TickEyes(float)
 	// `elysium.EyeTrackPlayer` overrides that with the player's camera, which is the cheapest
 	// unambiguous check that the basis math is right: if the irises converge on the camera as it
 	// moves, the record, the import transform, the solve and the plane parameters are all correct.
-	if (CVarEyes.GetValueOnGameThread() == 0 || EyeBindings.IsEmpty())
+	if (EyeBindings.IsEmpty())
 	{
 		return;
 	}
@@ -938,13 +911,11 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	}
 	// The animation host is installed before the first clip, so it owns the pose from frame one and
 	// every later change (stance, gesture, scripted sequence) crossfades instead of popping.
-	// `elysium.NpcAnim 0` drops back to the single-node instance for an A/B.
-	if (CVarNpcAnim.GetValueOnGameThread() != 0)
+	//
+	// The player body is the one that poses from a graph. The cast keeps the native instance until
+	// `CCC9` retires it, so this is the only place the two hosts diverge.
 	{
-		// The player body is the one that poses from a graph. The cast keeps the native instance
-		// until `CCC9` retires it, so this is the only place the two hosts diverge.
-		UClass* Graph = (bPlayerMaterial && CVarPlayerGraph.GetValueOnGameThread() != 0)
-			? PlayerGraphClass() : nullptr;
+		UClass* Graph = bPlayerMaterial ? PlayerGraphClass() : nullptr;
 		Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 		Comp->SetAnimInstanceClass(
 			Graph != nullptr ? Graph : UElysiumNpcAnimInstance::StaticClass());
@@ -1106,11 +1077,8 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	{
 		Comp->SetRelativeScale3D(FVector(UniformScale));
 	}
-	if (CVarNpcAnim.GetValueOnGameThread() != 0)
-	{
-		Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-		Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
-	}
+	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
 	Comp->RegisterComponent();
 	Owner->AddInstanceComponent(Comp);
 	// A skeletal prop declares the same two composition stages a character does — 19 of them carry

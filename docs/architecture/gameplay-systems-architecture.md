@@ -1,0 +1,579 @@
+# Gameplay systems — the legacy API layer and the domain decomposition
+
+This document owns the architecture of the **game-rule layer**: the defined API surface that
+answers VtMB's legacy script/entity/dialogue calls, and the decomposition of the gameplay domains
+behind it — rules and dice, inventory, damage and weapons, the NPC mind, disciplines, skill
+entities and terminals, economy, and stealth. It states, per domain, the design, the seams it
+joins, and the concrete refactor each one requires of the current runtime.
+
+It builds strictly on top of two existing designs and never restates them:
+
+- `docs/architecture/engine-core.md` — the object language **R1–R8** (entities are plain C++,
+  one name table per class, one clock and one queue, the two chokepoints, dormancy, handles).
+- `docs/architecture/runtime-architecture.md` — the spine **S1–S10** (the four lifetimes, the
+  frame, the player entity, world services, input, presentation, the save walk).
+
+The VtMB behavior this layer must answer is owned by the `docs/vtmb/` fact set —
+`script_api.md` (the action inventory), `python_bridge.md` (the binding mechanism),
+`entity_io.md` (I/O), `npc-ai-reverse-engineering.md` (the NPC), `combat-and-damage.md`
+(damage), `skills-and-checks.md` (check policy), `inventory.md` (items),
+`disciplines.md` (powers), `computer-terminals.md` (terminals), `game_runtime.md` (the RPG
+model). Where a fact there is still open, this design carries the seam and refuses to guess the
+body. Task sequencing and status live only in `docs/project/roadmap.md`.
+
+This document's own rules are numbered **K1–K10** — a fresh namespace beside R and S.
+
+## 1. The problem, stated once
+
+The shipped content drives the game through **16,860 executable call sites over 676 names**
+(`docs/vtmb/script_api.md`), plus 24,081 authored entity output wires. That demand does not
+arrive through one API: it arrives through five surfaces (output field 6, `logic_pythoncheck`,
+dialogue conditions/actions, `ScheduleTask`, and level scripts), it addresses three binding
+kinds (module globals, Character methods, datamap inputs/fields), and it lands on systems of
+very different maturity — the sheet, quests, dialogue and movers are real; inventory, dice,
+combat, disciplines, the NPC mind and the skill/terminal entities are stubs or absent.
+
+The architecture problem is therefore **not** designing a new API. VtMB itself proves there is
+no big API: `Entity.__getattr__` is a datamap walk, and the substrate's class registry (R2)
+already reproduces it. The problem is (a) freezing the *shape* of the legacy layer so every new
+system lands behind an existing name rather than minting a dispatcher, and (b) decomposing the
+missing domains so each one has exactly one home, one data source, one event posture, and one
+save story.
+
+## 2. The legacy API layer — three tiers, five surfaces, one rule
+
+The legacy API layer **already exists in shape**; this section fixes it as a contract. It has
+exactly three tiers, and no gameplay system may add a fourth.
+
+### 2.1 Tier 1 — the class-chain tables (the datamap mirror)
+
+`FElysiumClassRegistry`'s per-class input and field tables (engine-core R2) are the primary
+legacy surface. One case-folded, derived-shadows-base chain walk serves Hammer I/O wires,
+Python attribute get/set/call, keyvalue application, the save-field walk, and the inspector.
+The character chain mirrors VtMB's own:
+
+```text
+FElysiumEntity            CBaseEntity           keyfields, dormancy, I/O, think, Use
+ └ FElysiumAnimating      CBaseAnimating        body follow, clips, skin, disposition
+    └ FElysiumCombatCharacter  CBaseCombatCharacter  sheet, money, blood, humanity,
+      │                                          masquerade, damage/death, inventory
+      ├ FElysiumNpc       CAI_BaseNPC           relationships, senses, mind, NPC outputs
+      └ FElysiumPlayer    CBasePlayer           player inputs, law state, XP, body link
+```
+
+Every domain in §5 lands on this chain as registered fields (which makes it savable, S9),
+registered inputs (which makes it wire- and script-reachable), and registered outputs (which
+makes it authorable). The interim standard for a registered-but-unbacked input is the existing
+`ELYSIUM_PENDING_INPUT` log-and-no-op in `Substrate/ElysiumPlayerClasses.cpp` — 13 rows today
+(`FrenzyTrigger`, `ClearActiveDisciplines`, `Inventory_Remove`, `BarterBegin`/`End`, the
+camera-target quartet, …). Each row is retired by the domain that owns it, never by a generic
+sweep.
+
+### 2.2 Tier 2 — the shared native table (globals + Character methods)
+
+`Scripting/ElysiumScriptNatives.cpp` holds the **one** binding table (`GNativeBindings`, 36
+rows: 12 module globals + 24 Character methods) that both script hosts dispatch through
+(`FElysiumCPythonScriptHost` via `ElysiumPythonEntity.cpp`, the expr fallback via
+`ElysiumExpr.cpp`). This is the entire bespoke surface VtMB adds beyond the datamap —
+`docs/vtmb/script_api.md` is its per-row specification. The table's rules:
+
+- **Membership is closed by the retail evidence.** A name enters the table only if VtMB bound
+  it in a `PyMethodDef` table. `Whisper` and `FrenzyTrigger` stay out deliberately: their bare
+  spellings must resolve to `vamputil.py` in `__main__` while their receiver-qualified
+  spellings walk the datamap (K1). `Elysium.Substrate.OneOfSet` guards the split.
+- **Every row resolves its receiver through one helper** (`ResolveCharacter`) and reports
+  through one funnel (`Record()` → `ElysiumStub::Fired` for stubs), so `elysium.stubs` and the
+  Cog Scripting window are always a live, complete gap report (K3).
+- **A stub returns the retail-shaped default** (`CharMethodStubResult`: false/0/None), never a
+  guessed success.
+
+Domain services in §5 give real bodies to the stub rows: 9.8 takes `HasItem`/`GiveItem`/
+`RemoveItem`/`AmmoCount`/`GiveAmmo`/`HasWeaponEquipped`/`StartBarter`; 9.9 completes
+`SetDisposition` and takes `React`/`SetExpression`; 13.2 takes `DialogDiscipline` and
+`SeductiveFeed`'s power half; the terminal work takes nothing here (terminals are Tier 1
+entities). The table itself never grows a second dispatch path.
+
+### 2.3 Tier 3 — the console bridge
+
+`FElysiumConsole` with its fixed precedence — **registered command → alias expansion → cvar
+set → Python fallthrough** — is the third tier, serving `ccmd.<name>` script calls and the
+`.cfg` alias vocabulary. It is complete; new systems only *declare verbs* in
+`FElysiumCommands` (S7) and install implementations (`vbarter`, `inven_drop`, `save`,
+discipline selection verbs land here as their domains arrive).
+
+### 2.4 The five surfaces converge, and stay converged
+
+Output field 6, `logic_pythoncheck`, dialogue conditions/actions (through the `dlgexpr`
+normalizer `ElysiumDlgExpr::ConditionToPython`/`ActionToPython`), `ScheduleTask` source
+strings on the one queue, and the level scripts all execute through the installed
+`IElysiumScriptHost` against the same `__main__`. A domain service is therefore reachable from
+all five surfaces the moment it backs its Tier 1/Tier 2 names — no per-surface work exists,
+and none may be added.
+
+### 2.5 Events — the four kinds, each with one transport
+
+"Handling all events" decomposes into exactly four kinds; every domain in §5 classifies its
+events into these and adds no fifth transport:
+
+| Kind | Transport | Examples |
+|---|---|---|
+| Entity I/O output | the def's 7-field `outputs[]` through `FElysiumEventQueue` | `OnTrigger`, `OnDeath`, `OnSkillSuccess`, `OnTrigger0..7`, `OnFedUponEnd` |
+| Domain transition that *fires* an output | the domain service calls `FireOutput` on its owning entity at the real producer site | damage commit → `OnDamaged`; feed end → `OnFedUponEnd`; sense contact → `OnFoundPlayer` |
+| Game-sound stimulus | **new**: the substrate sound-event bus (§5.5) — `FElysiumEntityWorld::EmitGameSound(pos, category, radius, source)` | gunshots, `NPC_TAKE_DAMAGE`, footsteps, `NPC_DISCIPLINE_ALERT` |
+| Presentation announcement | `IElysiumPresenter` / `FElysiumViewState` (S8) | fade started, dialog opened, vitals changed |
+
+The second kind is the load-bearing one: acceptance fires outputs **from their real
+producers** (the tutorial brief's rule), so a domain lands only when its transitions raise the
+authored outputs itself — debug injection never counts.
+
+## 3. The compatibility contract — K1–K10
+
+Every domain service and every refactor in this document satisfies all ten. They are the
+review checklist for gameplay-layer code.
+
+- **K1 — A name is backed at its retail binding kind.** A Character method stays a Tier 2 row;
+  a datamap input stays a Tier 1 chain input; a script helper stays Python in `__main__`. The
+  receiver decides between same-named surfaces (`pc.Whisper` vs `Whisper`), never a merged
+  implementation. `GiveItem` exists twice (method and player input) and the two need not share
+  a body.
+- **K2 — Failure postures are reproduced, not repaired.** Script errors print and evaluate
+  false; a missing I/O target is a counted no-op; a zero `MoneyAdd` is silent; `SetGesture`'s
+  label miss is a silent `None`; authored defects (`spawnKeycard` on the wrong receiver, the
+  five dangling tutorial callbacks) stay defects. A "fix" here is a divergence and needs the
+  owner call in the owning VtMB doc.
+- **K3 — Absent is visible.** Every unbacked surface routes through `ElysiumStub::Fired` (or
+  `ELYSIUM_PENDING_INPUT`, or a stub class row); `elysium.stubs` and `elysium.classes` are the
+  live work list. A silently-succeeding stub is the bug.
+- **K4 — The three social domains never merge.** The combat relationship table
+  (`SetRelationship`, `D_HT/D_FR/D_LI/D_NU`), the emotional disposition
+  (`SetDisposition`, `DispositionTable.txt`), and the RPG reaction score (`reaction.txt`,
+  `reactions000.txt`) are three stores with three writers. No code path derives one from
+  another.
+- **K5 — A rating is not a roll.** `CalcFeat` returns the integer rating; only the dice
+  resolver rolls, it returns the whole result (successes, botches, net, tier), and the
+  *consumer* owns threshold/opposed/pacing policy (`docs/vtmb/skills-and-checks.md`'s
+  seven-step contract). Dialogue compares; locks roll; feeding opposes a rating to a roll.
+- **K6 — Damage is a descriptor.** Typed damage travels as the `FElysiumDmg` value object
+  through one shared apply path; the scalar `TakeDamage(float)` remains the compatibility
+  fallback and never grows semantics. Both commit through one typed health commit.
+- **K7 — Body ownership is explicit.** A character's motor has one owner at a time from a
+  closed set (§5.5); transfer, failure and restoration go through the owner arbiter, and the
+  owner serializes. The three solidity switches (enabled / frozen / character-ignoring) stay
+  independent.
+- **K8 — State has one of three homes.** A registered Save-flagged chain field, a member of
+  the session record, or a declared save block — nothing else (restates S4/S9 for the gameplay
+  layer). A domain that stores state anywhere else has already broken save/load.
+- **K9 — Rules are data, loaded once.** Every catalog this layer consumes —
+  `vdata/items/*`, `DiceRolls.txt`, `npctemplate*.txt`, `DispositionTable.txt`,
+  `reaction*.txt`, `disciplinetgt_*.txt`, `stealth.txt`, `interestingplacetypelist.txt`,
+  `hackterminals/*` — loads patch-first through `FElysiumRulebook`/`ElysiumKeyValues` readers
+  into typed tables. No constant recovered from a data file is re-typed into C++.
+- **K10 — Every domain runs headless.** Each service is plain C++ in `Substrate/` (or
+  `Scripting/`), reaches the engine only through `FElysiumWorldServices`, and lands with a
+  Substrate-tier test against the recording stub (`Private/Tests/ElysiumTestServices.h`)
+  before it is proven live (restates S10).
+
+## 4. The system map
+
+```mermaid
+flowchart TB
+    subgraph authored ["Authored data (patch-first, gitignored)"]
+        ENTS[".ents maps"] --- VDATA["vdata catalogs"] --- DLG[".dlg dialogue"] --- PY["level .py + vamputil"]
+    end
+    subgraph api ["Legacy API layer (fixed shape)"]
+        T1["Tier 1: class-chain tables (R2)"]
+        T2["Tier 2: native table (36 rows)"]
+        T3["Tier 3: console bridge"]
+    end
+    subgraph domains ["Domain services (this document)"]
+        DICE["Rules: dice + checks"]
+        INV["Inventory & items"]
+        DMG["Damage pipeline"]
+        WPN["Weapons"]
+        MIND["NPC mind"]
+        DISC["Disciplines"]
+        SKILL["Skill entities & terminals"]
+        ECON["Economy & barter"]
+        STL["Stealth"]
+    end
+    subgraph substrate ["Entity substrate (engine-core)"]
+        WORLD["FElysiumEntityWorld · queue · clock · chain"]
+    end
+    subgraph engine ["Engine, via FElysiumWorldServices only"]
+        EMB["IElysiumEmbodiment · IElysiumNpcMotor"]
+        AUD["IElysiumAudio"] 
+        PRES["IElysiumPresenter"]
+    end
+    authored --> api --> domains --> WORLD --> engine
+```
+
+Homes, by lifetime (S4): the rulebook tables and the sound-event category catalog are
+application-lifetime; the player record's inventory/journal/law halves are session-lifetime;
+every domain's live state (an NPC's schedule, a terminal's session, an item's owner) is
+map-epoch state on chain entities; a frame's sense queries and roll results are frame-local.
+
+## 5. The domain services
+
+Ordered by dependency: each subsection names the design, the data source (K9), the events
+(§2.5 classification), the save story (K8), and the refactor of the current source.
+
+### 5.1 Rules service — the dice resolver and check policy
+
+**Design.** `Substrate/ElysiumDice.{h,cpp}`, a pure namespace beside `ElysiumSheetMath`:
+
+```cpp
+struct FElysiumRollResult { int32 Successes; int32 Botches; int32 Net; int32 Tier; };
+FElysiumRollResult ElysiumDice::Roll(int32 Pool, int32 Difficulty,
+                                     const FElysiumDiceTable& Weighting,
+                                     int32 AutomaticSuccesses);
+```
+
+It draws only from `ElysiumRng::Stream(EElysiumRngStream::Dice)` (already reserved) and
+implements `docs/recovered/dice-system.md` verbatim. `FElysiumDiceTable` joins
+`FElysiumRulebook` beside `FElysiumFeat`, loaded from `DiceRolls.txt`
+(`TableWeightings`/`HealthModifiers`); `FElysiumFeat::PcWeighting`/`NpcWeighting` finally
+resolve to a table instead of a name. `ElysiumFeats::Calc` is untouched — it stays the rating
+(K5). Consumers each own their policy per the `skills-and-checks.md` matrix: dialogue keeps
+its threshold compare in the dlgexpr normalizer; locks/terminals take the `>2 / 0 / 1–2`
+bands; combat takes defense/soak difficulties from `rules.txt`; feeding opposes the attacker
+rating to the victim roll.
+
+**Events:** none of its own. **Save:** the RNG stream state already rides the Session block.
+
+**Refactor:** new files only, plus the `FElysiumDiceTable` loader in
+`ElysiumRulebook.{h,cpp}`. Roadmap 9.6.
+
+### 5.2 Inventory and items
+
+**Design** — the closed contract in `docs/vtmb/inventory.md`, on the chain:
+
+- `FElysiumItem : FElysiumAnimating`, registered for the `item_*` classnames through one
+  shared factory keyed by the presence of a `vdata/items/` definition. Registered fields:
+  owner handle, `m_iInvenPos` (255 = unslotted), stack count, primary ammo type, loaded
+  magazine count. Item *policy* (`is_stackable`, `is_droppable`, `permanent_inventory`, ammo
+  and magazine sizes, `worth`, weapon modes) comes from the parsed item record on the
+  rulebook, never from the classname prefix.
+- `FElysiumInventory`, a plain member on `FElysiumCombatCharacter`: the 224 item-entity
+  handles, the active-weapon handle, and the per-ammo-type reserve pools. Its operations are
+  the five distinct verbs with distinct entity-lifetime effects — pickup/equip,
+  `GiveNamedItem`, player drop (world entity preserved), destructive script remove (entity
+  destroyed), and container transfer — plus `DeleteItems`. Lookup and removal iterate the
+  handles; removal compacts and reindexes.
+- `FElysiumKeyring : FElysiumItem` — one carried entity owning logical key records;
+  `HasItem`/`RemoveItem` fall through to it after the ordinary slots, case-insensitively.
+- Containers (`item_container`, `item_container_animated`,
+  `item_container_one_item_filtered`) re-register on the **combat-character base** — they own
+  the same 224-slot inventory, spawn their `equip0..11` seeds as real item entities, hold one
+  exclusive user, and take `SpawnItemInContainer` / `AddEntityToContainer` / `DeleteItems`.
+- `trigger_inventory_check` becomes real: entry-driven, player-only, ordinary slots plus
+  keyring, `OnPlayerHasItem`; one-shot policy stays the map's.
+- Barter/loot transfer is one server-authoritative service behind declared verbs
+  (`vbarter Take|Give|Buy|Sell <slot>`, `inven_drop`); the UI only requests. Buy/sell pricing
+  is §5.8's.
+
+Tier 2 rows `HasItem`/`GiveItem`/`RemoveItem`/`AmmoCount`/`GiveAmmo`/`HasWeaponEquipped`/
+`StartBarter` get real bodies over this service; the pending inputs `Inventory_Remove`
+(entity-valued detach, not destroy), `BarterBegin`/`BarterEnd` retire. `AmmoCount` reports the
+loaded magazine while `GiveAmmo` grants reserve — the asymmetry is load-bearing for the
+tutorial's `.38` beat.
+
+**Events:** `OnItemRemove`/`OnItemInsert` on containers, `OnPlayerHasItem` on the trigger,
+`OnSellWeapon`/`OnBarterClose` on the character — all kind-2 producers.
+
+**Save:** items are entities, so persistence is entity persistence (save-architecture kept
+this on purpose). The one addition is the already-reserved predicate:
+`FElysiumItem::TravelsWithPlayer()` returns true for player-owned items, which fills the
+snapshot's `AbsentEntities` set; the player record additionally freezes the inventory as item
+records across map boundaries (the record's reserved half). Keyring records ride the leaf
+`Serialize`.
+
+**Refactor:** move the `item_container*` rows out of `BuildPropBodyClass`
+(`Substrate/ElysiumPropClasses.cpp`) onto the combat-character base; new
+`Substrate/ElysiumItemClasses.{h,cpp}`; `FElysiumInventory` on the combat character; real
+bodies in `ElysiumScriptNatives.cpp`; `vdata/items` loader in the rulebook. Roadmap 9.8.
+
+### 5.3 The damage pipeline
+
+**Design** — `docs/vtmb/combat-and-damage.md` made typed, in
+`Substrate/ElysiumDamage.{h,cpp}`:
+
+- `FElysiumDmg` mirrors the 17-word `CVDmg_t` as a value object: family
+  (none/bashing/lethal/aggravated), base damage, applied damage, extra/direct input, the
+  Source `DMG_*` mask, optional source stat ref, attack feat ref, source handle, forced soak,
+  the filter accumulator, and the resolver flags (bit `0x8` = direct input, `0x20` =
+  falling). `ElysiumDamage::ParseDmg(...)` parses the authored `Dmg` grammar off the item
+  record.
+- `ElysiumDamage::Apply(FElysiumDmg&, Attacker, Victim)` implements the confirmed order:
+  family reject → Kindred firearm lethal→bashing conversion → damage roll at difficulty 6 (or
+  direct input under flag `0x8`) → non-botch floor → automatic soak read → soak-feat selection
+  (the 8-feat family/Kindred/falling table) and roll at PC 3 / NPC 7 → `max(dmg − soak, 0)`.
+  The step-9 template filters and word-15 commit remain **open joins** — the accumulator field
+  exists, is populated, and is *not* multiplied in; the seam is marked so closing RE evidence
+  lands as one function body, not a redesign.
+- The typed health commit lives once, on `FElysiumCombatCharacter::CommitDamage`:
+  `HealthBuffer` absorbs first (ending `Thaumaturgy_Bloodshield` when exhausted) → the
+  unkillable cap (damage counter capped at the literal 75) → the `Health` damage counter →
+  aggravated tracking for Kindred under mask `0xC8000008` → `SyncHealthFromSheet` → death /
+  reaction consumers.
+
+Both entries commit through it: `TakeDamage(const FElysiumDmg&)` (weapons, disciplines) and
+the existing `TakeDamage(float)` scalar fallback (`trigger_hurt`, mover crush, script) — K6.
+The commit is also where the missing NPC outputs finally fire from their real producer:
+`OnDamaged`, `OnHalfHealth`, and the damage stimulus into §5.5's memory.
+
+**Events:** `OnDamaged`/`OnHalfHealth`/`OnDeath` (kind 2); `NPC_TAKE_DAMAGE` onto the sound
+bus (kind 3).
+
+**Save:** all inputs and counters are sheet slots / registered fields already.
+
+**Refactor:** `FElysiumCombatCharacter::TakeDamage` (`Substrate/ElysiumPlayerClasses.cpp`)
+splits into the two entries over one commit; `FElysiumTriggerHurt::HurtNow` also adopts the
+recovered retail cadence (entry half-tick, then `damage × 3` every 3 s) in place of the
+current 0.5 s loop, and fires `OnHurt`/`OnHurtPlayer`. Roadmap 13.3 / RE40.
+
+### 5.4 Weapons
+
+**Design.** A weapon is an `FElysiumItem` whose record carries modes (`BaseLethality`,
+`SkillRequirement` stored-but-inert until its consumer is recovered, parsed `Dmg`,
+`Attack_Rate`, ammo costs, `allow_autofire`, `reload_single`). `FElysiumWeapon :
+FElysiumItem` owns the controller: mode dispatch, next-attack scheduling on the substrate
+clock, reload transactions (bulk fill vs single-round with the interruption latch), and dry
+fire. The faithful order is preserved as a seam even before full animation:
+attack intent → mode/eligibility → activity request through the embodiment → **the shot/impact
+commit enters on the animation event**, with the clip's authored event time supplied by the
+activity resolution so the same path runs headless. Melee adds the recovered automatic combo
+substitution (base-ability rank → `2COMBO` chance table) and the opposed
+record/margin classifier; ranged adds the per-victim lethality → defense-roll → direct-damage
+route into §5.3. Block, stagger bands, and the full fire-mode state machines phase in behind
+the same seams; the tutorial's range and melee lessons are the acceptance scope, full combat
+AI is §5.5's later half.
+
+**Events:** compact player actions ride the command/user-cmd path (S5); gunshots and impacts
+emit on the sound bus (kind 3).
+
+**Refactor:** new `Substrate/ElysiumWeaponClasses.{h,cpp}` over 5.2 and 5.3; the `Holster`
+pending input retires; equip/holster joins `FElysiumInventory`'s active-weapon handle.
+Roadmap 13.3.
+
+### 5.5 The NPC mind
+
+The largest domain, built to the five-authority model in
+`docs/vtmb/npc-ai-reverse-engineering.md`: authored definition, native cognition, physical
+execution, scripted control, presentation. The reconstruction order there (identity →
+relationships → stimulus/memory → conditions/states → schedule kernel → navigation →
+combat/civilian reactions → authored controllers → presentation) is this design's build
+order.
+
+**5.5.1 Resolved identity.** `FElysiumNpcSpec` — the join of map keyvalues, the
+`npctemplate*.txt` sheet inheritance (already applied by `SeedSheet`), equipment, perception
+tuning, player-conduct thresholds, squad and ambient groups, and maker child inheritance —
+becomes one resolved struct on `FElysiumNpc`, visible in the inspector. `FElysiumNpcMaker`
+grows the full child specification (equipment, perception, relations, squad, `SpawnFrequency`,
+`MaxLiveChildren`, `MaxNPCCount`) and **child output provenance**: the maker's authored
+lifecycle wires (`OnDeath` ×24, `OnFoundPlayer`, `OnFedUpon*`, …) are copied onto each
+synthesized child def at spawn with the child as activator. This is a marked reconstruction —
+the retail owner of those firings is an open question in the tutorial brief — chosen because
+it preserves caller/activator provenance without inventing a relay object; a contradicting
+retail capture changes the copy site only.
+
+**5.5.2 Relationships.** `FElysiumRelationships` on `FElysiumNpc`: entity-override rows and
+class rows, `{target-or-class, disposition D_HT/D_FR/D_LI/D_NU, priority}`, resolved
+exact-entity → class → neutral. The `SetRelationship` chain input parses repeated triples with
+the trailing-`*` wildcard and the `player` special case. The map's `player_reaction` is the
+authored initial row. Priority arbitration between competing rows is open at the native level;
+until recovered, highest-priority-wins with insertion-order tiebreak, marked. Rows are
+save-backed through the leaf `Serialize` (K8). K4 holds: this table is combat targeting only.
+
+**5.5.3 Senses, stimulus, memory.** Two inputs and one memory:
+
+- **Sight** — a per-think cone/range/LOS test using the spec's `vision`/`npc_perception`
+  tuning; the lighting/stealth contribution joins from §5.9's scalars.
+- **Hearing** — the substrate **sound-event bus**: any domain emits
+  `EmitGameSound(pos, category, radius, source)` (categories and radii from
+  `sound_volume_table.txt`: quiet 180 / normal 240 / loud 1200 non-occluded, plus the named
+  special values); NPC hearing consumes events intersecting its range × `hearing` scalar.
+- **Memory** — enemy, last enemy, last-seen-by-relation-category, last-heard, last damage,
+  occlusion state, with **lost-LOS distinct from lost-target** (the four
+  `OnLost*` outputs need both).
+
+**5.5.4 Conditions, states, schedules.** A plain-C++ kernel in
+`Substrate/ElysiumNpcMind.{h,cpp}`, owned by `FElysiumNpc`, run from its think:
+
+- conditions gathered once per decision pass (damage, enemy, sensory, range/capability,
+  squad, investigation);
+- the six high-level states (idle / alert / combat / scripted / prone / dead) with current and
+  ideal;
+- `FElysiumSchedule` — an ordered task program with an interrupt mask, a fail schedule, and a
+  `DELAY_INTERRUPTS` flag — in a registry with class-local overrides, executed task-by-task
+  over thinks; tasks are the small recovered vocabulary (`SET_ACTIVITY`, `RUN_PATH`,
+  `WAIT_FOR_MOVEMENT`, `FACE_ENEMY`, `SET_SCHEDULE`, …) implemented against the motor and
+  activity seams.
+
+**Owner call — the kernel is substrate C++, not Behavior Trees/StateTree.** Schedule identity
+is script-visible API (`ChangeSchedule`/`StartSchedule` name native schedules;
+`SCHED_VDOG_SNARL` appears in shipped scripts), interrupts and task progress must serialize
+(K8), and decisions must run headless and deterministically (K10) — none of which a UObject
+asset graph gives. Unreal's stack keeps the half it is better at: **navigation and locomotion
+stay behind `IElysiumNpcMotor`** (Recast/Detour, `ACharacter` motors), exactly the existing
+seam. StateTree may later host purely-native leaf behaviors *behind* a schedule task without
+replacing the authored-visible seam.
+
+**5.5.5 Movement ownership (K7).** One arbiter on `FElysiumNpc`:
+`EElysiumBodyOwner { None, Schedule, Patrol, Ambient, Sequence, ScriptedSchedule, Follower,
+Dialogue }`. The existing patrol, interesting-place, and scripted-sequence participation
+(`BeginScriptMove`/`AdvanceScriptMove`/`EndScriptMove`) become owners in this set rather than
+parallel states; transfer, failure and restoration are arbiter transitions, and the owner
+serializes. `aiscripted_schedule` lands here with the recovered mode table (move-to-goal /
+assign-enemy-with-condition / follow-path) and the **non-identical** `forcestate` mapping
+(authored 2 = combat, 3 = alert).
+
+**5.5.6 Reactions, feeding, and the authored consequences.** The state machine's transitions
+fire the 16 base NPC outputs from their real producers (kind 2): sense contact →
+`OnFoundPlayer`/`OnFoundEnemy`/`OnHear*`; memory loss → the four `OnLost*`; §5.3's commit →
+`OnDamaged`/`OnHalfHealth`/`OnDeath`; the feed interaction → `OnFedUponBegin`/`OnFedUponEnd`
+plus grapple begin/end. Feeding itself is a small transaction on the combat character
+(eligibility → the asymmetric opposed check of `skills-and-checks.md` when resisted → blood
+transfer over the sheet → the outputs), reached from the player's `+use` feed verb — it is the
+tutorial's B6 gate and deliberately precedes the rest of the mind. Fear/flee/cower arrive as
+schedule families, not as a hardcoded "run away".
+
+**5.5.7 Disposition and the reaction score (9.9).** On the presentation side of K4:
+`DispositionTable.txt` loads into the rulebook; `SetDisposition(name, level)` becomes real on
+`FElysiumAnimating` — selecting stance/fidget/expression/gaze policy (the gaze machinery
+already exists) — and the native row drops its stub mark. The RPG reaction score
+(`reaction.txt` bands, `reactions000.txt` modifiers) is a separate pure calculator consumed by
+dialogue, never by combat targeting.
+
+**Save:** spec is def-derived (not saved); relationships, memory, state, current
+schedule/task/timers, and the body owner serialize on the leaf; the tutorial runs before the
+full mind exists, so every stage lands save-clean as it arrives.
+
+**Refactor:** `FElysiumNpc` (`Substrate/ElysiumNpcClasses.cpp`) grows the spec, relationship
+table, senses, and mind members stage by stage; the `SetRelationship` and
+`aiscripted_schedule` stub rows in `ElysiumStubClasses.cpp` retire; the sound bus lands in
+`FElysiumEntityWorld`; `TeleportToEntity` joins the NPC input table (it is wired 8× in the
+tutorial). Roadmap: B6, 9.9, then 10.7's promoted stages.
+
+### 5.6 Disciplines
+
+**Design** — `docs/vtmb/disciplines.md`'s two execution families, over existing seams:
+
+- **Native active states**: the thirteen learned/active slot pairs are sheet slots; activation
+  is a transaction (predependency gates → blood payment through the sheet → apply the
+  authored trait-effect group via `FElysiumSheetEffects` → schedule the expiry as an **owned
+  timed event on the one queue** (R4), keyed by character + discipline so renewal extends the
+  owned event rather than stacking). Celerity's time consumer is
+  `FElysiumTimeControl::SetScale`; Fortitude feeds automatic soak; Potence's floor is already
+  a step in §5.3's melee commit; Obfuscate/Protean carry their extra native gates.
+- **Targeted records**: `disciplinetgt_*.txt` parses into the rulebook; the cast transaction
+  (record lookup → adjusted blood check → AoE target-set build with ordered filters → single
+  payment → hit-mapping application) executes `HitInfo` as independent channels — health/blood
+  deltas (§5.3 for damage), trait-effect groups, AI schedule assignment (§5.5 kernel),
+  gestures, flinch/knockback, projectiles (deferred payload), nested `Trigger_Casting`.
+  Interruption flags subscribe to the damage commit, the sound bus, and bump events. Active
+  targeted effects are tracked on the affected character so `ClearActiveDisciplines` (and
+  `vdiscipline_endall`) is a real teardown: remove owned queue events through their normal
+  removal callbacks, clear tracked effects — the pending input retires.
+- Overt/AI-sound classification emits on the sound bus; the overt→Masquerade predicate stays
+  **unimplemented until recovered** (the doc explicitly refuses the help-text guess).
+
+**Refactor:** `Substrate/ElysiumDisciplines.{h,cpp}` + the rulebook loader;
+`FElysiumSheetEffects::FRow` extends to carry the payload operators it currently skips
+(`Cost`/`BloodCost`/`Duration`); selection verbs (`vdiscipline_int`/`_last`/`_endall`) declare
+in the command registry. Roadmap 13.2 / P13.
+
+### 5.7 Skill entities and terminals
+
+**Design.** One shared base delivers every lock and terminal:
+
+- `FElysiumSkillEntity : FElysiumEntity` — the `CBaseVampireSkillEntity` mirror: skilltype →
+  feat (1 = Intrusion, 2 = Hacking, preserved verbatim including the four authored anomalies),
+  attempt cadence `(K1 − rating·K2) / player_scale` on the think, the roll through §5.1, the
+  shared result field that *is* the lock state (`<3` locked; `Lock` writes 1, `Unlock` 3), and
+  the five outputs `OnSkillAttemptBegin/Cycle/Success/Fail/Botch`.
+- Lock leaves: `item_container_lock` (with `delete_key` policy against §5.2's keyring),
+  `prop_padlock`, and the doorknob families' lock halves — today body-only rows in
+  `BuildPropBodyClass`, re-registered onto this base with their use/lock icon state.
+- `FElysiumTerminal : FElysiumSkillEntity` — the exclusive session (one current user,
+  `m_bInUse` separate from `start_enabled` separate from `StartHidden`), entry/exit through
+  the ordinary `+use` focus path, and the authoritative `hackcmd` command surface.
+  `FElysiumPropHacking` adds the `TerminalDefinition` parse (§K9, tolerating the
+  patch-rewritten `haven_pc.txt`), directory/password/function state, the eight
+  `OnTrigger0..7` outputs fired **before** that function's `runscript` (the recovered order:
+  runtext → trigger → runscript → prompt), dependency evaluation through the script host, and
+  the email state (per-terminal flags via leaf `Serialize`; `global_email` promotes to the
+  player record's existing `EmailFlags`).
+- **Presentation divergence, owner-called:** the character-cell screen renders as a modern UI
+  surface on the presentation seam (S8) instead of a rasterized 512×512 model texture — a
+  Presentation-layer change under the remaster charter; the 36×24 grid semantics, content,
+  command vocabulary and server authority reproduce.
+
+**Refactor:** new `Substrate/ElysiumSkillClasses.{h,cpp}`; the `prop_hacking` /
+`item_container_lock` / `prop_padlock` rows leave `BuildPropBodyClass` and
+`ElysiumStubClasses.cpp`. The tutorial's `tuthack` chain (typed `Unlock` → `OnTrigger0` → safe
+lock/visibility/trigger state) is the acceptance transaction. Owned by the tutorial-mechanics
+lane beside 13.1–13.3.
+
+### 5.8 Economy and barter
+
+Money, `MoneyAdd`/`MoneyRemove`/`CurrentMoney` are real. The remaining design is one pricing
+function over the item record's `worth` and the Haggle feat inside §5.2's `Buy`/`Sell`
+transfer verbs — the retail formula is an open join (9.10 owns it); until closed the service
+carries a marked placeholder behind the same seam.
+
+### 5.9 Stealth
+
+`stealth.txt`'s light-to-visibility and view-cone scalars load into the rulebook and join
+§5.5.3's sight test; sneak posture is a movement/gait state publishing into the vitals view
+(S8); `trigger_stealth_mod` writes zone modifiers consumed by the same sight test. No second
+detection system exists — stealth is a parameter set on the one senses service. Roadmap 13.1.
+
+## 6. The refactor ledger
+
+The concrete deltas this decomposition requires of the current source, each owned by its
+roadmap task:
+
+| # | Refactor | Where | Owner |
+|---|---|---|---|
+| 1 | `FElysiumDiceTable` + `ElysiumDice::Roll`; wire `PcWeighting`/`NpcWeighting` to tables | `ElysiumRulebook.{h,cpp}`, new `Substrate/ElysiumDice.{h,cpp}` | 9.6 |
+| 2 | `FElysiumInventory` on the combat character; `FElysiumItem`/`FElysiumKeyring` classes; `vdata/items` loader | `Public/ElysiumPlayer.h`, new `Substrate/ElysiumItemClasses.{h,cpp}` | 9.8 |
+| 3 | `item_container*` rows move from body-only props to combat-character containers | `Substrate/ElysiumPropClasses.cpp` | 9.8 |
+| 4 | Real bodies behind the seven inventory natives; retire `Inventory_Remove`/`Barter*` pending inputs | `Scripting/ElysiumScriptNatives.cpp`, `Substrate/ElysiumPlayerClasses.cpp` | 9.8 |
+| 5 | `FElysiumDmg` + shared apply + typed `CommitDamage`; scalar `TakeDamage` becomes the fallback entry | new `Substrate/ElysiumDamage.{h,cpp}`, `ElysiumPlayerClasses.cpp` | 13.3 |
+| 6 | Fire `OnDamaged`/`OnHalfHealth` from the commit; adopt `trigger_hurt`'s retail cadence + `OnHurt*` outputs | `ElysiumPlayerClasses.cpp`, `Substrate/ElysiumStarterClasses.cpp` | 13.3 |
+| 7 | Weapon controller over item modes; equip/holster on the active-weapon handle | new `Substrate/ElysiumWeaponClasses.{h,cpp}` | 13.3 |
+| 8 | Feed transaction + `OnFedUponBegin/End`; maker child output provenance | `Substrate/ElysiumNpcClasses.cpp` | B6 |
+| 9 | `FElysiumRelationships` + `SetRelationship` input; `TeleportToEntity` input | `ElysiumNpcClasses.cpp`; retire the `ElysiumStubClasses.cpp` rows | 9.9/10.7 |
+| 10 | Disposition model behind `SetDisposition` (drop the stub mark); reaction-score calculator | `ElysiumScriptNatives.cpp`, rulebook loaders | 9.9 |
+| 11 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 10.7 |
+| 12 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 10.7 |
+| 13 | Discipline runtime (active events on the one queue + `DisciplineTgt` interpreter); `FElysiumSheetEffects::FRow` payload operators; retire `ClearActiveDisciplines`/frenzy pending inputs as each lands | new `Substrate/ElysiumDisciplines.{h,cpp}`, `Substrate/ElysiumSheetMath.{h,cpp}` | 13.2 |
+| 14 | `FElysiumSkillEntity`/`FElysiumTerminal`/`FElysiumPropHacking`; locks and terminals leave the body-only table | new `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
+| 15 | Stealth scalars + `trigger_stealth_mod` into the senses service; sneak posture into the view state | rulebook, `ElysiumNpcMind`, movement | 13.1 |
+
+Nothing in the ledger adds a dispatcher, a clock, an input owner, or a save path — each row is
+fields, inputs, outputs, one service, and (where player-facing) declared verbs, which is the
+runtime spine's own acceptance test for a new system.
+
+## 7. Observability and acceptance
+
+- **The gap is always enumerable live**: `elysium.stubs` (fired unimplemented surfaces),
+  `elysium.classes` (stub class rows), and the native table's per-row status render the
+  remaining work without reading source (K3).
+- **Per-NPC decision tracing** extends the existing sink pattern: the mind reports stimulus →
+  relationship result → condition delta → state transition → schedule/task → owner/activity
+  through a ring buffer surfaced in the Cog NPC window — the npc-ai survey's observability
+  requirement, satisfied with the same mechanism the I/O chokepoints use.
+- **Acceptance is the authored demand, not a feature list**: each domain closes against
+  `docs/vtmb/sp_tutorial_1-event-surface.md`'s slices (its §13 table maps one-to-one onto §5
+  here), fired from real producers, proven headlessly in the Substrate tier first (K10) and
+  end-to-end by the Play tier's beat scripts.
+
+## 8. Not covered here
+
+The substrate object model (engine-core), the frame/lifetimes/input/camera/presentation
+(runtime-architecture), persistence mechanics (save-architecture), animation selection and the
+activity→clip path (animation-architecture), audio (audio-architecture), UI composition
+(ui-architecture), and every VtMB behavioral fact (the `docs/vtmb/` owners). Open
+reverse-engineering joins named in §5 close in their owning VtMB documents first; this design
+reserves their seams and takes no guessed behavior.

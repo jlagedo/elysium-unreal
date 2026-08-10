@@ -47,12 +47,12 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain(s) are marked incomplete"));
 		return true;
 	}
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: NPC export is absent"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: NPC export is absent"));
 		return true;
 	}
 

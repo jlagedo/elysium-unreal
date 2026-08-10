@@ -107,7 +107,7 @@ namespace ElysiumNpcVisual
 	// configuration the mesh is imported under is what keeps the two from drifting apart.
 	float ImportGlbScale();
 
-	// Attach this stem's generated garment, if it has one and `elysium.Cloth` is on.
+	// Attach this stem's generated garment, if its model authored one.
 	//
 	// VtMB simulates a garment in its renderer and substitutes the result over ordinary skinning;
 	// the port bakes that authored payload into a `UChaosClothAsset` offline, so nothing of VtMB's

@@ -168,9 +168,8 @@ namespace ElysiumLocomotion
 			: (bDucking ? EElysiumStance::Lowering : EElysiumStance::Standing);
 	}
 
-	// The sample as stock `UCharacterMovementComponent` can answer it. Both `AElysiumCapsulePawn`
-	// (the `elysium.SourceMovement 0` A/B baseline) and `AElysiumNpcBody` are an `ACharacter` over
-	// that component, so one function serves the A/B body and the whole cast.
+	// The sample as stock `UCharacterMovementComponent` can answer it. `AElysiumNpcBody` is an
+	// `ACharacter` over that component, so this one function serves the whole cast.
 	//
 	// `FacingYawDegrees` is the caller's, not the actor's, because the two producers disagree about
 	// what facing means: a player body faces where the view points, an NPC where its actor is turned.

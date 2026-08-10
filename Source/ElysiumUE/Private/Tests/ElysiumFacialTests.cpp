@@ -710,7 +710,7 @@ bool FElysiumFacialRigCorpusTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -842,7 +842,7 @@ bool FElysiumFacialMorphTargetsTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -855,7 +855,7 @@ bool FElysiumFacialMorphTargetsTest::RunTest(const FString&)
 	const FString Stem = FirstRiggedStem(Index);
 	if (Stem.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: no exported model carries both a glb and a facial sidecar"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported model carries both a glb and a facial sidecar"));
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("checking the load contracts on '%s'"), *Stem));
@@ -1079,7 +1079,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 {
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("skipping: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
@@ -1092,7 +1092,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	const FString Stem = FirstRiggedStem(Index);
 	if (Stem.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: no exported model carries both a glb and a facial sidecar"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported model carries both a glb and a facial sidecar"));
 		return true;
 	}
 
@@ -1214,7 +1214,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	}
 	if (Bare.IsEmpty())
 	{
-		AddInfo(TEXT("no exported model lacks a facial sidecar; the absent-rig case is not covered here"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported model lacks a facial sidecar; absent-rig case unavailable"));
 		return true;
 	}
 
@@ -1555,6 +1555,8 @@ namespace
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneJawTest, "Elysium.Substrate.SceneJaw", GElysiumFacialTestFlags)
 bool FElysiumSceneJawTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("scene 'test/nolineenvelope.vcd' not found"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	// Exact levels rather than an asymptote: the lag has its own section below.
 	const float WasSmoothing = SwapFloatCVar(TEXT("elysium.JawSmoothing"), 0.f);
 	const float WasSpeech = SwapFloatCVar(TEXT("elysium.JawSpeechLevel"), 0.5f);
@@ -1759,7 +1761,7 @@ bool FElysiumTheatreExpressionsTest::RunTest(const FString&)
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{
-		AddInfo(TEXT("skipping: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
 		return true;
 	}
 	FElysiumEntityDefs Defs;
@@ -1771,7 +1773,7 @@ bool FElysiumTheatreExpressionsTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
 	}
 
@@ -1933,14 +1935,14 @@ bool FElysiumTheatreJawTest::RunTest(const FString&)
 	if (!FElysiumContentPaths::IsConfigured()
 		|| !IFileManager::Get().FileExists(*FElysiumContentPaths::MapEnts(TEXT("sp_theatre"))))
 	{
-		AddInfo(TEXT("skipping: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString IndexError;
 	if (!Index.Load(IndexError))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *IndexError));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *IndexError));
 		return true;
 	}
 
@@ -2621,7 +2623,7 @@ bool FElysiumLipCorpusTest::RunTest(const FString&)
 	IFileManager::Get().FindFilesRecursive(Files, *LipDir, TEXT("*.lip"), true, false);
 	if (Files.Num() == 0)
 	{
-		AddInfo(TEXT("skipping: no .lip files under $ELYSIUM_EXPORT_ROOT/lip (run: uv run elysium export bundle scenes)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no .lip files under $ELYSIUM_EXPORT_ROOT/lip (run: uv run elysium export bundle scenes)"));
 		return true;
 	}
 
@@ -2702,7 +2704,7 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath))
 	{
-		AddInfo(TEXT("skipping: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_theatre is not exported (run: uv run elysium export map sp_theatre)"));
 		return true;
 	}
 	FElysiumEntityDefs Defs;
@@ -2714,7 +2716,7 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	FString IndexError;
 	if (!Index.Load(IndexError))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *IndexError));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *IndexError));
 		return true;
 	}
 
@@ -2876,7 +2878,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
 	{
-		AddWarning(TEXT("skipping: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
 		return true;
 	}
 
@@ -2884,7 +2886,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("skipping: no exported npc index (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
 		return true;
 	}
 	TArray<FString> Stems;
@@ -2918,7 +2920,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 	}
 	if (Stem.IsEmpty())
 	{
-		AddInfo(TEXT("skipping: no player body declares a composition rig"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no player body declares a composition rig"));
 		return true;
 	}
 
@@ -2934,7 +2936,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		*FElysiumContentPaths::PlayerAnimBlueprintClass());
 	if (Graph == nullptr)
 	{
-		AddWarning(TEXT("skipping: the player animation graph is not generated "
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
 			"(run: uv run elysium export bundle policy)"));
 		return true;
 	}

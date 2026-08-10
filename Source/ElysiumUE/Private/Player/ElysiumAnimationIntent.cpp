@@ -253,7 +253,7 @@ FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 		{
 			// Walking off a ledge is not a jump, and the ordinary chain visits ACT_LEAP only on a
 			// press. This is also the whole air path for every body whose movement component has no
-			// hold window — the cast, and the `elysium.SourceMovement 0` capsule.
+			// hold window, which is the whole cast.
 			Next.Phase = EElysiumAirPhase::Falling;
 		}
 		break;

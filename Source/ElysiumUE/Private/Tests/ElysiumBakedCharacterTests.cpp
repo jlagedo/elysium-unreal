@@ -328,7 +328,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
 	}
 
@@ -1273,7 +1273,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 
 	if (Compared == 0)
 	{
-		AddInfo(TEXT("skipping: no slice model is baked; run: uv run elysium export characters"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no slice model is baked; run: uv run elysium export characters"));
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d bone samples, %d `_delta` clip(s) ")
@@ -1310,7 +1310,7 @@ bool FElysiumBakedBankChainAgreementTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
 	}
 
@@ -1407,7 +1407,7 @@ bool FElysiumBakedBankChainAgreementTest::RunTest(const FString&)
 
 	if (Pairs == 0)
 	{
-		AddInfo(TEXT("skipping: no NPC containers on disk; run: uv run elysium export characters"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC containers on disk; run: uv run elysium export characters"));
 		return true;
 	}
 	for (const FString& Line : Biped)
@@ -1444,7 +1444,7 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 	FString Error;
 	if (!Index.Load(Error))
 	{
-		AddInfo(FString::Printf(TEXT("skipping: no NPC index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
 	}
 
@@ -1492,7 +1492,7 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 
 	if (Checked == 0)
 	{
-		AddInfo(TEXT("skipping: no baked skeleton on the mount; "
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked skeleton on the mount; "
 			"run: uv run elysium export characters"));
 		return true;
 	}

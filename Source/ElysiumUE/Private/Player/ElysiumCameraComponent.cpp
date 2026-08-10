@@ -87,7 +87,6 @@ void UElysiumCameraComponent::UpdateCamera(float DeltaSeconds)
 	Cvars.LoadFrom([](const TCHAR* Name) { return ElysiumCommandBus::Console().GetCvar(Name); });
 
 	ConsumeCamCommand();
-	ReadOrbitInput(PendingCmd, Dt);
 
 	// The scripted channel's weight is written before the third-person driver advances, because
 	// `CAM_IsThirdPerson` reads it — a dialogue camera counts as third person, which is what gets the
@@ -96,21 +95,16 @@ void UElysiumCameraComponent::UpdateCamera(float DeltaSeconds)
 	Weights.Scripted = Shots.GetWeight();
 	Weights.Advance(Dt, /*TimeScale*/ 1.0f);
 
-	const FVector Eye = EyeLocation();
-	const FRotator View = ViewRotation();
-
-	if (Weights.Third > 0.0f)
+	// First person: the offset is the zero vector and the result is exactly the eye view. The rig is
+	// asked to re-seed so re-entering third person snaps rather than swinging in from wherever the
+	// camera was left (VtMB's `+0x4` flag). In third person the rig pushes its own boom in through
+	// `SetSolvedBoom` and this leaves it alone.
+	if (Weights.Third <= 0.0f)
 	{
-		SolveBoom(Eye, View, Dt);
-	}
-	else
-	{
-		// First person: the offset is the zero vector and the result is exactly the eye view. Mark the
-		// camera for a re-seed so re-entering third person snaps its smoothing rather than swinging in
-		// from wherever it was left (VtMB's `+0x4` flag).
 		SolvedOffset = FVector::ZeroVector;
-		SolvedAngles = View;
-		bNeedsReseed = true;
+		SolvedAngles = ViewRotation();
+		bClipped = false;
+		RequestReseed();
 	}
 
 	SolveShot(Dt);
@@ -131,120 +125,6 @@ void UElysiumCameraComponent::ConsumeCamCommand()
 	{
 		SetThirdPerson(false);
 	}
-}
-
-void UElysiumCameraComponent::ReadOrbitInput(const FElysiumUserCmd& Cmd, float Dt)
-{
-	// Un-orbited axes follow their cvar live, so editing `cam_idealdist` or `cam_targetangle` moves
-	// the camera at once; an axis the player has dollied or orbited keeps what they asked for until
-	// `snapto` puts it back.
-	if (!bDollied)      { RequestedDistance = Cvars.IdealDist; }
-	if (!bPitchOrbited) { RequestedPitch = Cvars.TargetAngle; }
-	if (!bYawOrbited)   { RequestedYaw = 0.0f; }
-
-	const float DollyStep = Cvars.DollySpeed * Dt;
-	const float OrbitStep = Cvars.OrbitSpeed * Dt;
-
-	if (Cmd.IsDown(EElysiumButton::CamIn))  { RequestedDistance -= DollyStep; bDollied = true; }
-	if (Cmd.IsDown(EElysiumButton::CamOut)) { RequestedDistance += DollyStep; bDollied = true; }
-
-	// Source's pitch is down-positive, and so are `c_minpitch` / `c_maxpitch`: `+campitchup` raises the
-	// camera above the eye line, which is a larger value here.
-	if (Cmd.IsDown(EElysiumButton::CamPitchUp))   { RequestedPitch += OrbitStep; bPitchOrbited = true; }
-	if (Cmd.IsDown(EElysiumButton::CamPitchDown)) { RequestedPitch -= OrbitStep; bPitchOrbited = true; }
-
-	if (Cmd.IsDown(EElysiumButton::CamYawLeft))  { RequestedYaw -= OrbitStep; bYawOrbited = true; }
-	if (Cmd.IsDown(EElysiumButton::CamYawRight)) { RequestedYaw += OrbitStep; bYawOrbited = true; }
-
-	RequestedDistance = FMath::Clamp(RequestedDistance, Cvars.MinDistance, Cvars.MaxDistance);
-	RequestedPitch = FMath::Clamp(RequestedPitch, Cvars.MinPitch, Cvars.MaxPitch);
-	RequestedYaw = FMath::Clamp(RequestedYaw, Cvars.MinYaw, Cvars.MaxYaw);
-}
-
-void UElysiumCameraComponent::SolveBoom(const FVector& Eye, const FRotator& View, float Dt)
-{
-	// 1) The rate-limited approach on distance, yaw and pitch. Nothing eases — the clamp is the whole
-	// smoothing, which is why the damper below is what the camera actually reads as.
-	if (bNeedsReseed)
-	{
-		SolvedDistance = RequestedDistance;
-		SolvedYaw = RequestedYaw;
-		SolvedPitch = RequestedPitch;
-	}
-	else
-	{
-		SolvedDistance = ElysiumCam::Approach(SolvedDistance, RequestedDistance, Cvars.ApproachDistSpeed, Dt);
-		SolvedYaw = ElysiumCam::ApproachAngle(SolvedYaw, RequestedYaw, Cvars.ApproachAngleSpeed, Dt);
-		SolvedPitch = ElysiumCam::ApproachAngle(SolvedPitch, RequestedPitch, Cvars.ApproachAngleSpeed, Dt);
-	}
-
-	// 2) The boom direction. The camera looks *along* it, from behind and above the eye — Source's
-	// pitch is down-positive, so a `cam_targetangle` of 15 (above the eye line) subtracts here
-	// (`docs/project/rebuild-strategy.md` -> Coordinate conventions). The exact composition inside
-	// `0x100fd350` is only partially recovered (`docs/vtmb/camera-view-modes.md` -> Not yet recovered); this is
-	// the reading the observed cvar roles support.
-	// The view arrives in Unreal's canonical [0, 360), so pitch is normalized before it is clamped —
-	// a raw downward pitch reads as ~271..359 and would pin this at +89. Yaw is normalized already.
-	FRotator BoomRot;
-	BoomRot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(View.Pitch) - SolvedPitch, -89.0f, 89.0f);
-	BoomRot.Yaw = FRotator::NormalizeAxis(View.Yaw + Cvars.Yaw + SolvedYaw);
-	BoomRot.Roll = 0.0f;
-
-	const FVector BoomDir = BoomRot.Vector();
-	float Allowed = SolvedDistance;
-
-	// 3) Collision. VtMB traces a box hull; a sphere is the closer match to how the retract actually
-	// reads in motion and is the substitution `docs/vtmb/camera-view-modes.md` records as a feel delta.
-	bClipped = false;
-	const UWorld* World = GetWorld();
-	if (Cvars.bCollide && World)
-	{
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumCameraBoom), /*bTraceComplex*/ false, GetOwner());
-		Params.AddIgnoredActor(GetOwner());
-		FHitResult Hit;
-		if (World->SweepSingleByChannel(Hit, Eye, Eye - BoomDir * SolvedDistance, FQuat::Identity,
-				ECC_Camera, FCollisionShape::MakeSphere(Cvars.TraceRadius), Params))
-		{
-			// The allowed distance is the swept fraction, then a further pull-in on contact so the
-			// near plane does not sit flush against the surface. Contact also forces a re-seed, which
-			// is what makes the camera snap in against a wall and ease back out.
-			Allowed = FMath::Max(0.0f, SolvedDistance * Hit.Time - Cvars.WallPullIn);
-			bClipped = true;
-		}
-	}
-
-	const FVector Target = Eye - BoomDir * Allowed;
-
-	// 4) The spring damper — **two constants**, stiffer while wall-clipped than in open space. This is
-	// the most characteristic part of the VtMB camera and the reason `USpringArmComponent` is not
-	// enough; `cdamp_on 0` bypasses it for A/B.
-	if (bNeedsReseed || !Cvars.bDampOn)
-	{
-		SpringPosition = Target;
-	}
-	else
-	{
-		const FVector Delta = Target - SpringPosition;
-		const float Dist = Delta.Size();
-		if (Dist >= Cvars.DampMaxDist || Dist <= Cvars.SpringLength)
-		{
-			// Past the clamp the camera never lags further; inside the rest length there is no force.
-			SpringPosition = Target;
-		}
-		else
-		{
-			const float K = bClipped ? Cvars.HookesConstantWall : Cvars.HookesConstant;
-			SpringPosition += Delta.GetSafeNormal() * (Dist - Cvars.SpringLength)
-				* FMath::Clamp(K * Dt, 0.0f, 1.0f);
-		}
-	}
-	bNeedsReseed = false;
-
-	// 5) What the weight is applied to: the boom offset scales 0 -> full and the view angles
-	// interpolate from the eye angles to the camera's own. At weight 0 the offset is the zero vector,
-	// so the result is exactly the first-person view — there is no second camera anywhere.
-	SolvedOffset = SpringPosition - Eye;
-	SolvedAngles = BoomRot;
 }
 
 void UElysiumCameraComponent::SolveShot(float Dt)
@@ -510,11 +390,10 @@ void UElysiumCameraComponent::RegisterCommands()
 			Call.Args.IsEmpty() ? TEXT("0") : *Call.Args);
 	}));
 
-	// `snapto` puts the orbit back on its cvars and re-seeds the smoothing, so the camera arrives at
-	// its ideal instead of easing there. (`cam_snapto` is registered but its role is unverified.)
+	// `snapto` re-seeds the smoothing, so the camera arrives at its ideal instead of easing there.
+	// (`cam_snapto` is registered but its role is unverified.)
 	Bindings.Add(Registry.Bind(TEXT("snapto"), [this](const FElysiumCommandCall&)
 	{
-		bDollied = bPitchOrbited = bYawOrbited = false;
 		RequestReseed();
 	}));
 
@@ -553,17 +432,17 @@ FString UElysiumCameraComponent::Describe() const
 		TEXT("camera: %s (driver %s)\n")
 		TEXT("  weights   third %.3f (eased %.3f)  scripted %.3f  feed %.3f  secondary %.3f\n")
 		TEXT("  latches   user %d  forced-third %d  forced-first %d  feed %d\n")
-		TEXT("  boom      requested %.1f cm / yaw %.1f / pitch %.1f -> solved %.1f / %.1f / %.1f%s\n")
-		TEXT("  applied   offset %s  length %.1f cm  model alpha %.2f\n")
+		TEXT("  boom      offset %s  length %.1f cm  pitch %.1f  yaw %.1f%s\n")
+		TEXT("  applied   model alpha %.2f\n")
 		TEXT("  shots     %s"),
 		Weights.IsThirdPerson() ? TEXT("third person") : TEXT("first person"),
 		Weights.Driver(),
 		Weights.Third, Weights.ThirdBlend(), Weights.Scripted, Weights.Feed, Weights.Secondary,
 		Weights.bUserThird ? 1 : 0, Weights.bForcedThird ? 1 : 0,
 		Weights.bForcedFirst ? 1 : 0, Weights.bFeed ? 1 : 0,
-		RequestedDistance, RequestedYaw, RequestedPitch,
-		SolvedDistance, SolvedYaw, SolvedPitch, bClipped ? TEXT("  [wall-clipped]") : TEXT(""),
-		*SolvedOffset.ToCompactString(), BoomLength(), PlayerModelAlpha,
+		*SolvedOffset.ToCompactString(), BoomLength(),
+		SolvedAngles.Pitch, SolvedAngles.Yaw, bClipped ? TEXT("  [wall-clipped]") : TEXT(""),
+		PlayerModelAlpha,
 		*Shots.Describe());
 }
 

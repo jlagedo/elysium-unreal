@@ -21,7 +21,7 @@ bool FElysiumGaitSpeedTable::IsValid() const
 	return false;
 }
 
-float FElysiumGaitSpeedTable::SpeedAt(float YawDegrees, bool bInterpolate) const
+float FElysiumGaitSpeedTable::SpeedAt(float YawDegrees) const
 {
 	if (!IsValid() || !FMath::IsFinite(YawDegrees))
 	{
@@ -38,12 +38,6 @@ float FElysiumGaitSpeedTable::SpeedAt(float YawDegrees, bool bInterpolate) const
 	const float Spacing = Span / static_cast<float>(Count - 1);
 	const float Position = (Wrapped - AxisMin) / Spacing;
 
-	if (!bInterpolate)
-	{
-		const int32 Nearest = FMath::Clamp(FMath::RoundToInt(Position), 0, Count - 1);
-		return Cells[Nearest] * Scale;
-	}
-
 	const int32 Lower = FMath::Clamp(FMath::FloorToInt(Position), 0, Count - 2);
 	const int32 Upper = Lower + 1;
 	const float Fraction = FMath::Clamp(Position - static_cast<float>(Lower), 0.0f, 1.0f);
@@ -52,7 +46,7 @@ float FElysiumGaitSpeedTable::SpeedAt(float YawDegrees, bool bInterpolate) const
 
 float FElysiumGaitSpeedTable::Forward() const
 {
-	return SpeedAt(0.0f, /*bInterpolate*/ true);
+	return SpeedAt(0.0f);
 }
 
 float FElysiumGaitSpeedTable::Peak() const
@@ -120,21 +114,18 @@ float ElysiumGait::WishSpeedFrom(const FElysiumWishSpeedInput& In, const FElysiu
 	// peak (208 u/s) is below it.
 	if (!In.bOnGround)
 	{
-		const float Held = (In.bAuthority && In.LastGroundedWishSpeed > 0.0f)
+		const float Held = In.LastGroundedWishSpeed > 0.0f
 			? In.LastGroundedWishSpeed : In.JumpMaxSpeed;
 		return Held * In.Scale;
 	}
 
-	if (In.bAuthority)
+	const FElysiumGaitSpeedTable& Table = TableFor(Speeds, In.bDucked, In.bWalkKey);
+	if (Table.IsValid())
 	{
-		const FElysiumGaitSpeedTable& Table = TableFor(Speeds, In.bDucked, In.bWalkKey);
-		if (Table.IsValid())
-		{
-			return Table.SpeedAt(In.WishYawDegrees, In.bInterpolate) * In.Scale;
-		}
+		return Table.SpeedAt(In.WishYawDegrees) * In.Scale;
 	}
 
-	// The fallback and the A/B. The ducked third is **Source's own default, not VtMB's**: retail
+	// The fallback for a body with no fan. The ducked third is **Source's own default, not VtMB's**: retail
 	// applies no duck speed multiplier at all and gets its slower crouch from the sneak table, which
 	// this path by definition does not have (`docs/vtmb/source_movement.md` → "The ducking speed crop
 	// is dead code").

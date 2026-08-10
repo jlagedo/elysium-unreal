@@ -574,7 +574,7 @@ def test_command(
         console.print(
             f"{summary['executed']} of {summary['total']} test(s) executed"
             f" in {summary['seconds']:.1f}s"
-            + (f"; {summary['abstained']} abstained (corpus incomplete)"
+            + (f"; {summary['abstained']} abstained (prerequisite unavailable)"
                if summary["abstained"] else "")
         )
         for name in summary["abstentions"][:8]:
@@ -607,6 +607,13 @@ def run_play(
     map_name: str | None = typer.Argument(None),
     extra: list[str] = typer.Argument(None),
 ) -> None:
+    """Launch the game. `play <map>` boots straight into that map; no argument goes to the menu.
+
+    `play gr <model> <clip>` is the one target that is not a map: it boots into the green room's
+    stage world with Cog up and the green-room window docked down the left edge, the same room
+    `elysium.gr` opens from a running session. The model and the clip are optional.
+    """
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 

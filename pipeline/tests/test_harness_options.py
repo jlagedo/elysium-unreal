@@ -30,11 +30,11 @@ class HarnessOptionTests(unittest.TestCase):
 
     def test_drive_composes_with_the_other_switches(self) -> None:
         positional, options = _take_options(
-            ["--drive", "--set", "elysium.PlayerGraph 1", "tremere_male_armor_0"]
+            ["--drive", "--set", "elysium.Mute 0", "tremere_male_armor_0"]
         )
         self.assertEqual(positional, ["tremere_male_armor_0"])
         self.assertTrue(options.drive)
-        self.assertEqual(options.exec_cmds, ("elysium.PlayerGraph 1",))
+        self.assertEqual(options.exec_cmds, ("elysium.Mute 0",))
 
 
 if __name__ == "__main__":

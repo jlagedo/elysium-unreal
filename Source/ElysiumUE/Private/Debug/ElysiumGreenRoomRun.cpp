@@ -1585,9 +1585,8 @@ namespace
 		Refs.PC = World ? World->GetFirstPlayerController() : nullptr;
 		Refs.Pawn = Refs.PC ? Refs.PC->GetPawn() : nullptr;
 		Refs.Body = Cast<IElysiumPlayerBody>(Refs.Pawn);
-		// The faithful mover specifically: the gym's brackets are its constants, and the capsule
-		// baseline under `elysium.SourceMovement 0` is a different body answering a different
-		// question. It is still driveable — it just cannot supply the tuning the gym is built from.
+		// The faithful mover specifically: the gym's brackets are its constants, so a body without
+		// one cannot supply the tuning the gym is built from.
 		Refs.Move = Refs.Pawn ? Refs.Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr;
 		return Refs;
 	}
@@ -1913,7 +1912,7 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
 		// those rather than leaving them to fail here.
 		OutError = FString::Printf(
 			TEXT("%s cannot stand '%s' as a grid — does the label name one, is the body baked ")
-			TEXT("(re-export, then Restand), and is elysium.BlendSpaces 1?"),
+			TEXT("(re-export, then Restand)?"),
 			*ReviewStem, *Label);
 		return false;
 	}

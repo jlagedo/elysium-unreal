@@ -49,10 +49,13 @@ struct FElysiumGaitSpeedTable
 
 	bool IsValid() const;
 
-	// The commanded speed at a facing-relative direction, cm/s, scaled. `bInterpolate` blends the
-	// two cells the angle falls between; false snaps to the nearest, which is what retail does
-	// (its speed source is a 3x3 digital key table, so it never lands between two cells).
-	float SpeedAt(float YawDegrees, bool bInterpolate) const;
+	// The commanded speed at a facing-relative direction, cm/s, scaled. The two cells the angle
+	// falls between are blended.
+	//
+	// **A divergence, and a deliberate one.** Retail snaps to the nearest cell — its speed source is
+	// a 3x3 digital key table, so it can never land between two. A stick can, and on the walk fan
+	// the cells differ by more than 2x, so snapping reads as the stride popping.
+	float SpeedAt(float YawDegrees) const;
 
 	// The 0-degree cell — the forward gait. Retail's walk/run threshold is this plus 1 u/s.
 	float Forward() const;
@@ -127,10 +130,6 @@ struct FElysiumWishSpeedInput
 	bool bDucked = false;
 	// `+speed`, which selects the **slow** gait — the run is the default.
 	bool bWalkKey = false;
-
-	// `elysium.move.AnimSpeedAuthority` and `elysium.move.GaitSpeedInterpolate`.
-	bool bAuthority = false;
-	bool bInterpolate = true;
 
 	// The **commanded** direction, facing-relative, and the command's own deflection.
 	float WishYawDegrees = 0.0f;

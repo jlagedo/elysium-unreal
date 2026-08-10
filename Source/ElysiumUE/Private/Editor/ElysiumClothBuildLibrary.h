@@ -76,6 +76,17 @@ struct FElysiumClothBuildResult
 	int32 OrphanedBindings = 0;
 
 	/**
+	 * Simulation particles whose incident faces cancel to a zero normal.
+	 *
+	 * The deformer carries no normal of its own — it hands a driven render vertex the simulation
+	 * mesh's normal at the particle it follows. A particle with no usable normal therefore shades
+	 * every vertex it drives black, and nothing between here and the frame says so. Nonzero is a
+	 * topology defect: the same three particles wound both ways, or a face with no area.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Cloth")
+	int32 DegenerateSimNormals = 0;
+
+	/**
 	 * Simulation particles that arrived with no skin weights and fell back to the root bone.
 	 *
 	 * Their animation position is then the rest shape carried rigidly by the root, which is what

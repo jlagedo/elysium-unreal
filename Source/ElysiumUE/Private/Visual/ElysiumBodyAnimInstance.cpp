@@ -14,27 +14,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumComposition, Log, All);
 
 namespace
 {
-	// The reconstruction described in `Visual/ElysiumFacialRig.h`: the amplitude jaw's weight is also
-	// raised into the `jaw_drop` controller, because the flexdesc `mstudiomouth_t` actually names
-	// carries no flex record on any shipped model and so moves nothing on its own. 0 leaves only the
-	// faithful write, which is the A/B baseline for the divergence.
-	TAutoConsoleVariable<int32> CVarFacialJawBridge(
-		TEXT("elysium.FacialJawBridge"),
-		1,
-		TEXT("Bridge the amplitude jaw into the jaw_drop flex controller (1, default) or write only "
-		     "the mouth flexdesc, which no shipped model consumes (0)."),
-		ECVF_Default);
-
-	// The A/B for the two composition stages. 1 = VtMB's own composition, 0 = Unreal's ordinary
-	// hierarchy alone, which is what every body posed under before CAP7.2. Dropping it is visible
-	// exactly where the docs measure it: up to 44.9 degrees on a shoulder, 26.9 on a bicep, 6.4 on a
-	// wrist, and a `Flags & 0x2` spine rooted in its parent rather than the component.
-	TAutoConsoleVariable<int32> CVarCompositionStages(
-		TEXT("elysium.CompositionStages"), 1,
-		TEXT("1 = apply VtMB split inheritance + axis interpolation over the blended pose (CAP7.2), ")
-		TEXT("0 = ordinary Unreal hierarchy composition only."),
-		ECVF_Default);
-
 	// **The composition stage's only observable.** A body whose procedural bones are not driven
 	// holds them at their BIND, and the bind is the T-pose — so the helper bones skinned into each
 	// arm keep pointing sideways while the arm swings down, and the geometry tears into pieces.
@@ -75,8 +54,7 @@ namespace
 					Instance->GetResolvedAxisInterpRules());
 			}
 			UE_LOG(LogElysiumComposition, Display,
-				TEXT("[composition] %d posed body(ies); elysium.CompositionStages=%d"),
-				Bodies, CVarCompositionStages.GetValueOnGameThread());
+				TEXT("[composition] %d posed body(ies)"), Bodies);
 		}));
 
 	// Where the bones actually ARE, in centimetres relative to `Bip01 Pelvis`, for every bone whose
@@ -172,9 +150,7 @@ void FElysiumBodyAnimProxy::CacheBones()
 
 void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 {
-	const bool bStages = AxisInterp.HasWork()
-		&& CVarCompositionStages.GetValueOnAnyThread() != 0;
-	if (!bStages)
+	if (!AxisInterp.HasWork())
 	{
 		return;
 	}
@@ -193,10 +169,7 @@ void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 	FComponentSpacePoseContext Composed(this);
 	Composed.Pose.InitPose(Output.Pose);
 
-	if (bStages)
-	{
-		AxisInterp.Apply(Composed);
-	}
+	AxisInterp.Apply(Composed);
 	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have
 	// been asked for in component space, and the plain conversion ensures against exactly that.
 	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPosesSafe(Composed.Pose, Output.Pose);
@@ -399,9 +372,10 @@ void UElysiumBodyAnimInstance::EvaluateFacial()
 	}
 	FElysiumJawInput Jaw;
 	Jaw.Open = MouthOpen;
-	// Read here rather than latched at the write, so toggling the cvar takes on the next evaluation
-	// of any kind instead of waiting for the next jaw write.
-	Jaw.bBridge = CVarFacialJawBridge.GetValueOnGameThread() != 0;
+	// The amplitude jaw's weight is also raised into the `jaw_drop` controller: the flexdesc
+	// `mstudiomouth_t` names carries no flex record on any shipped model, so it moves nothing on its
+	// own (`Visual/ElysiumFacialRig.h`). A stated divergence.
+	Jaw.bBridge = true;
 	FacialRig->Evaluate(ControllerValues, Jaw, EyeInput, FlexWeights, MorphWeights);
 	// GetProxyOnGameThread blocks on any in-flight parallel evaluation, so the worker cannot be
 	// reading the weight array this overwrites.

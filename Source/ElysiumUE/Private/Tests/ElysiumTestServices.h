@@ -315,7 +315,7 @@ struct FElysiumRecordingServices final
 
 	// Where each fake body's clip is "at". A test writes an entry to stage drift and reads it back
 	// to see what a resync corrected it to. An ABSENT entry is the ordinary "this body has no anim
-	// host" answer, which is what a prop under `elysium.NpcAnim 0` gets — keyed on the component so
+	// host" answer, which is what a prop with no anim instance gets — keyed on the component so
 	// a test with two bodies can drift one without touching the other.
 	TMap<const USkeletalMeshComponent*, float> ClipPositions;
 

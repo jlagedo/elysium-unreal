@@ -584,9 +584,8 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			}
 
 			// A gait stands on its baked fan, steered by `move_yaw`. The sequence player beside it is
-			// `elysium.BlendSpaces 0`: with the fan off the resolver answers with the single selected
-			// cell and the same state plays it. The graph knows nothing about the console variable,
-			// only about which asset it was handed.
+			// for a label with no baked fan: the resolver answers with the single selected cell and the
+			// same state plays it. The graph knows only which asset it was handed.
 			UEdGraphNode* Space = Place(*Inner,
 				TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpacePlayer"), -420, -220);
 			ExposePin(Space, TEXT("BlendSpace"));

@@ -38,9 +38,16 @@ public:
 	// as by the menu, so it must be safe from a cold session with a map already loaded.
 	void OpenLab();
 
+	// Park the window against one edge of Cog's viewport dockspace, so the stage keeps the rest of
+	// the screen instead of being covered by a floating panel. The dock is applied on the next
+	// rendered frame: the dockspace node only exists once Cog has submitted it, which has not
+	// happened yet when a launch switch is read.
+	void DockToSide(bool bLeft);
+
 protected:
 	virtual void Initialize() override;
 	virtual void RenderHelp() override;
+	virtual void PreBegin(ImGuiWindowFlags& WindowFlags) override;
 	virtual void RenderContent() override;
 
 private:
@@ -79,6 +86,12 @@ private:
 	// instead of standing the delta by itself, which is the only way to see what one is for: a
 	// `_delta` alone is a difference, and a difference posed as a pose folds the skeleton up.
 	void Pick(FElysiumGreenRoomRun& Lab, int32 Index);
+
+	// Which edge the window is still waiting to dock against, or None once it has (or was never
+	// asked to). Held rather than acted on immediately because ImGui's dock builder can only reach a
+	// node that has already been submitted this frame.
+	enum class EPendingDock : uint8 { None, Left, Right };
+	EPendingDock PendingDock = EPendingDock::None;
 
 	FString PendingStem;
 	FString PendingClip;

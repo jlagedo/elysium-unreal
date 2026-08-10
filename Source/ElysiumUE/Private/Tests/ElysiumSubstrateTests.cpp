@@ -1200,6 +1200,8 @@ bool FElysiumStickLookTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptFSTest, "Elysium.Substrate.ScriptFS", GElysiumTestFlags)
 bool FElysiumScriptFSTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("DENY ../../../Windows/system32/x.dll"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	const FString Root = FElysiumScriptFS::VirtualRoot();
 	FString Rel;
 
@@ -2294,35 +2296,6 @@ bool FElysiumMovementTest::RunTest(const FString&)
 			TailApex < Apex60);
 	}
 
-	// --- The timestep: 0 is the faithful path, a fixed step carries its remainder --------------
-	{
-		FElysiumMoveStepper Stepper;
-		float Step = 0.0f;
-
-		// Faithful: one step, at exactly the delta handed in.
-		TestFalse(TEXT("the default stepper is the raw variable delta"), Stepper.IsFixed());
-		TestEqual(TEXT("raw mode runs one step"), Stepper.BeginFrame(0.0321f, Step), 1);
-		TestTrue(TEXT("at the frame's own delta"), FMath::IsNearlyEqual(Step, 0.0321f, 1e-6f));
-
-		// Fixed: whole steps now, remainder carried rather than dropped.
-		Stepper.Reset();
-		Stepper.FixedStep = 0.01f;
-		TestEqual(TEXT("a 25 ms frame at a 10 ms step runs two"), Stepper.BeginFrame(0.025f, Step), 2);
-		TestTrue(TEXT("each at the fixed interval"), FMath::IsNearlyEqual(Step, 0.01f, 1e-6f));
-		// The carried 5 ms plus another 25 ms is 30 ms — three steps, not two.
-		TestEqual(TEXT("and the carried remainder lands the third step next frame"),
-			Stepper.BeginFrame(0.025f, Step), 3);
-
-		// The sub-step backstop: with the frame delta already bounded this is unreachable in
-		// practice, so it exists to stop an absurd FixedStep from hanging the frame.
-		Stepper.Reset();
-		Stepper.FixedStep = 0.0001f;
-		Stepper.MaxSubSteps = 4;
-		TestEqual(TEXT("the sub-step count is capped"), Stepper.BeginFrame(0.1f, Step), 4);
-		TestTrue(TEXT("and the backlog is dropped, not carried into the next frame"),
-			Stepper.Alpha() == 0.0f);
-	}
-
 	// --- The hulls (RE22) and the frame bound --------------------------------------------------
 	{
 		// Read off the CGameMovement constructor: the ducked hull keeps the standing footprint and
@@ -2978,7 +2951,7 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	// --- A table with nothing in it answers nothing, rather than answering zero convincingly -----
 	const FElysiumGaitSpeedTable Empty;
 	TestFalse(TEXT("a default table is not valid"), Empty.IsValid());
-	TestEqual(TEXT("and it commands no speed"), Empty.SpeedAt(0.0f, true), 0.0f);
+	TestEqual(TEXT("and it commands no speed"), Empty.SpeedAt(0.0f), 0.0f);
 	TestEqual(TEXT("and it has no ceiling"), Empty.Peak(), 0.0f);
 
 	FElysiumGaitSpeedTable Walk = MaleWalkFan();
@@ -2988,31 +2961,31 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	// This is the whole reason the axis is divided by `Count - 1` rather than by `Count`: the cells
 	// are the range's endpoints, not its buckets.
 	TestEqual(TEXT("forward is the 0-degree cell"), Walk.Forward(), 136.7f, 0.01f);
-	TestEqual(TEXT("the backpedal is the wrap seam"), Walk.SpeedAt(-180.0f, true), 88.6f, 0.01f);
-	TestEqual(TEXT("+180 is the same direction as -180"), Walk.SpeedAt(180.0f, true), 88.6f, 0.01f);
-	TestEqual(TEXT("strafing right is the +90 cell"), Walk.SpeedAt(90.0f, true), 60.7f, 0.01f);
-	TestEqual(TEXT("strafing left is the -90 cell"), Walk.SpeedAt(-90.0f, true), 97.1f, 0.01f);
+	TestEqual(TEXT("the backpedal is the wrap seam"), Walk.SpeedAt(-180.0f), 88.6f, 0.01f);
+	TestEqual(TEXT("+180 is the same direction as -180"), Walk.SpeedAt(180.0f), 88.6f, 0.01f);
+	TestEqual(TEXT("strafing right is the +90 cell"), Walk.SpeedAt(90.0f), 60.7f, 0.01f);
+	TestEqual(TEXT("strafing left is the -90 cell"), Walk.SpeedAt(-90.0f), 97.1f, 0.01f);
 
-	// --- Interpolated against snapped -----------------------------------------------------------
-	// 20 degrees is 4/9ths of the way from cell 4 to cell 5. Retail snaps here because its speed
-	// comes from digital keys and can only land on a cell; a stick lands between two.
+	// --- Between two cells ----------------------------------------------------------------------
+	// 20 degrees is 4/9ths of the way from cell 4 to cell 5. Retail would snap to cell 4 here — its
+	// speed comes from digital keys and can only land on a cell — and a stick lands between two, so
+	// the blend is the recorded divergence.
 	const float Blended = FMath::Lerp(136.7f, 88.1f, 20.0f / 45.0f);
-	TestEqual(TEXT("an angle between two cells blends them"), Walk.SpeedAt(20.0f, true), Blended, 0.01f);
-	TestEqual(TEXT("and snaps to the nearer one when told to"), Walk.SpeedAt(20.0f, false), 136.7f, 0.01f);
+	TestEqual(TEXT("an angle between two cells blends them"), Walk.SpeedAt(20.0f), Blended, 0.01f);
 
 	// --- The wrap, which is where an unwrapped index walks off the front ------------------------
 	// A body 190 degrees off its facing is 170 degrees off it the other way. Written without the
 	// double `Fmod` this indexes negatively and reads the wrong cell or crashes.
 	TestEqual(TEXT("past the seam wraps rather than clamping"),
-		Walk.SpeedAt(190.0f, true), Walk.SpeedAt(-170.0f, true), 0.01f);
-	TestEqual(TEXT("and so does a full turn"), Walk.SpeedAt(360.0f, true), Walk.Forward(), 0.01f);
-	TestEqual(TEXT("a turn and a bit is the bit"), Walk.SpeedAt(380.0f, true),
-		Walk.SpeedAt(20.0f, true), 0.01f);
+		Walk.SpeedAt(190.0f), Walk.SpeedAt(-170.0f), 0.01f);
+	TestEqual(TEXT("and so does a full turn"), Walk.SpeedAt(360.0f), Walk.Forward(), 0.01f);
+	TestEqual(TEXT("a turn and a bit is the bit"), Walk.SpeedAt(380.0f),
+		Walk.SpeedAt(20.0f), 0.01f);
 
 	// --- The ceiling ----------------------------------------------------------------------------
 	TestEqual(TEXT("the peak is the largest cell"), Walk.Peak(), 136.7f, 0.01f);
 	TestTrue(TEXT("and no direction can command more than it"),
-		Walk.SpeedAt(-133.0f, true) <= Walk.Peak() && Walk.SpeedAt(47.0f, true) <= Walk.Peak());
+		Walk.SpeedAt(-133.0f) <= Walk.Peak() && Walk.SpeedAt(47.0f) <= Walk.Peak());
 
 	// --- The scale is a field, not a pre-multiply ------------------------------------------------
 	// `sv_sneakscale` is 2.3, which is what makes retail's crouch faster than its walk.
@@ -3036,11 +3009,11 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	// averaging them is a no-op.
 	const float MirroredMean = 0.5f * (97.1f + 60.7f);
 	Walk.Symmetrize();
-	TestEqual(TEXT("strafing right takes the mirrored mean"), Walk.SpeedAt(90.0f, true),
+	TestEqual(TEXT("strafing right takes the mirrored mean"), Walk.SpeedAt(90.0f),
 		MirroredMean, 0.01f);
-	TestEqual(TEXT("and so does strafing left"), Walk.SpeedAt(-90.0f, true), MirroredMean, 0.01f);
+	TestEqual(TEXT("and so does strafing left"), Walk.SpeedAt(-90.0f), MirroredMean, 0.01f);
 	TestEqual(TEXT("forward is unpaired and does not move"), Walk.Forward(), 136.7f, 0.01f);
-	TestEqual(TEXT("the seam cell is its own mirror"), Walk.SpeedAt(180.0f, true), 88.6f, 0.01f);
+	TestEqual(TEXT("the seam cell is its own mirror"), Walk.SpeedAt(180.0f), 88.6f, 0.01f);
 
 	// --- The set answers for the body as a whole -------------------------------------------------
 	FElysiumGaitSpeeds Set;
@@ -3068,23 +3041,21 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	In.JumpMaxSpeed = ElysiumMove::JumpMaxSpeed;
 	In.NoclipSpeed = ElysiumMove::NoclipSpeed;
 
-	// Authority off is the A/B, and it must be **exactly** the shipped constants — this is the
-	// assertion that keeps the cvar's 0 path value-neutral against every committed recording.
-	In.bAuthority = false;
-	TestEqual(TEXT("authority off runs at speed_runbase"),
-		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::RunSpeed, 0.01f);
+	// A body with no fan at all falls back to the shipped constants.
+	const FElysiumGaitSpeeds NoFan;
+	TestEqual(TEXT("a body with no fan runs at speed_runbase"),
+		ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::RunSpeed, 0.01f);
 	In.bWalkKey = true;
 	TestEqual(TEXT("...and +speed selects the slow gait"),
-		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::WalkSpeed, 0.01f);
+		ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::WalkSpeed, 0.01f);
 	In.bDucked = true;
 	TestEqual(TEXT("...and a ducked body takes Source's third"),
-		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::WalkSpeed / 3.0f, 0.01f);
+		ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::WalkSpeed / 3.0f, 0.01f);
 	In.bDucked = false;
 	In.bWalkKey = false;
 
-	// Authority on: the gait's own fan, at the commanded direction.
-	In.bAuthority = true;
-	TestEqual(TEXT("authority on runs at the run fan's forward cell"),
+	// With a fan: the gait's own cells, at the commanded direction.
+	TestEqual(TEXT("a body with a fan runs at the run fan's forward cell"),
 		ElysiumGait::WishSpeedFrom(In, Body), Body.Run.Forward(), 0.01f);
 	In.bWalkKey = true;
 	TestEqual(TEXT("+speed reads the walk fan"),
@@ -3099,7 +3070,7 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	// The direction is the point: a strafe commands a different speed from a walk forward.
 	In.WishYawDegrees = 90.0f;
 	TestEqual(TEXT("a strafe commands its own cell"),
-		ElysiumGait::WishSpeedFrom(In, Body), Body.Walk.SpeedAt(90.0f, true), 0.01f);
+		ElysiumGait::WishSpeedFrom(In, Body), Body.Walk.SpeedAt(90.0f), 0.01f);
 	TestTrue(TEXT("...which is slower than forward on this fan"),
 		ElysiumGait::WishSpeedFrom(In, Body) < Body.Walk.Forward());
 	In.WishYawDegrees = 0.0f;
@@ -3131,12 +3102,7 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	In.LastGroundedWishSpeed = 0.0f;
 	TestEqual(TEXT("...and falls back to sv_jump_maxspeed with nothing held"),
 		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::JumpMaxSpeed, 0.01f);
-	In.bAuthority = false;
-	In.LastGroundedWishSpeed = 400.0f;
-	TestEqual(TEXT("...and ignores the held value entirely with the authority off"),
-		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::JumpMaxSpeed, 0.01f);
 	In.bOnGround = true;
-	In.bAuthority = true;
 
 	// Noclip short-circuits the ladder: a crouched fly is not a sneak.
 	In.bNoclip = true;
@@ -3144,19 +3110,16 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	TestEqual(TEXT("noclip ignores the gait tables"),
 		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::NoclipSpeed, 0.01f);
 
-	// Snapping is retail's, interpolation is ours, and between two cells they differ.
+	// Between two cells the answer is the blend, not the cell retail would have snapped to — the
+	// recorded divergence, asserted so it cannot quietly revert.
 	FElysiumWishSpeedInput Between;
-	Between.bAuthority = true;
 	Between.WishYawDegrees = 20.0f;
 	Between.bWalkKey = true;
-	Between.bInterpolate = true;
 	const float Blended20 = ElysiumGait::WishSpeedFrom(Between, Body);
-	Between.bInterpolate = false;
-	const float Snapped20 = ElysiumGait::WishSpeedFrom(Between, Body);
-	TestTrue(TEXT("interpolating and snapping disagree between two cells"),
-		!FMath::IsNearlyEqual(Blended20, Snapped20, 0.01f));
-	TestEqual(TEXT("...and snapping is the cell retail would have picked"), Snapped20,
-		Body.Walk.Forward(), 0.01f);
+	TestEqual(TEXT("an angle between two cells commands the blend"),
+		Blended20, Body.Walk.SpeedAt(20.0f), 0.01f);
+	TestTrue(TEXT("...which is not the cell retail would have snapped to"),
+		!FMath::IsNearlyEqual(Blended20, Body.Walk.Forward(), 0.01f));
 
 	return true;
 }
@@ -3502,19 +3465,6 @@ bool FElysiumChannelRecorderTest::RunTest(const FString&)
 // inferred from a play-through — including the two rules the acceptance turns on: the front end
 // deliberately does not pause, and Boot is reachable from nowhere.
 // =====================================================================================
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameFlowCommandsTest,
-	"Elysium.Substrate.GameFlowCommands", GElysiumTestFlags)
-bool FElysiumGameFlowCommandsTest::RunTest(const FString&)
-{
-	TestEqual(TEXT("the theatre replay registers exactly two spellings"),
-		static_cast<int32>(UE_ARRAY_COUNT(ElysiumStory::TheatreReplayCommands)), 2);
-	TestEqual(TEXT("the canonical theatre replay spelling"),
-		FString(ElysiumStory::TheatreReplayCommands[0]), FString(TEXT("elysium.newgame_ttd")));
-	TestEqual(TEXT("the compact theatre replay spelling used by QA"),
-		FString(ElysiumStory::TheatreReplayCommands[1]), FString(TEXT("newgame_ttd")));
-	return true;
-}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAppStateTest, "Elysium.Substrate.AppState", GElysiumTestFlags)
 bool FElysiumAppStateTest::RunTest(const FString&)
@@ -5164,7 +5114,7 @@ bool FElysiumCPythonWritersTest::RunTest(const FString&)
 	FString Err;
 	if (!VM.EnsureStarted(Err))
 	{
-		AddInfo(FString::Printf(TEXT("embedded CPython unavailable (%s) — skipping"), *Err));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: embedded CPython unavailable (%s)"), *Err));
 		return true;   // self-skip: never a false failure where the SDK is absent
 	}
 
@@ -5935,6 +5885,9 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Substrate.PlayerEntity", GElysiumTestFlags)
 bool FElysiumPlayerEntityTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("base_NotAStat"), EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("no entity named '!player' in this map"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
 	// --- The chain is VtMB's ------------------------------------------------------------
@@ -7484,6 +7437,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorElevatorTest,
 	"Elysium.Substrate.DoorElevator", GElysiumTestFlags)
 bool FElysiumDoorElevatorTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("does_not_exist.Use"), EAutomationExpectedErrorFlags::Contains, 1);
 	FTestWorldWrapper TestWorld;
 	if (!TestWorld.CreateTestWorld(EWorldType::Game)
 		|| !TestWorld.BeginPlayInTestWorld())
@@ -7828,6 +7782,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRotatingAttachTest,
 	"Elysium.Substrate.RotatingAttach", GElysiumTestFlags)
 bool FElysiumRotatingAttachTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("cannot attach to parent 'no_body'"),
+		EAutomationExpectedErrorFlags::Contains, 2);
 	FTestWorldWrapper TestWorld;
 	if (!TestWorld.CreateTestWorld(EWorldType::Game)
 		|| !TestWorld.BeginPlayInTestWorld())
@@ -9440,8 +9396,8 @@ bool FElysiumPropClipResyncTest::RunTest(const FString&)
 	World.Tick(1.0);
 	const int32 AfterStart = Services.Count(TEXT("ResyncCinematicClip"));
 
-	// A body that reports no position at all — no anim host, which is every prop under
-	// `elysium.NpcAnim 0` — is an ordinary no-op, not an error and not a correction.
+	// A body that reports no position at all — no anim host — is an ordinary no-op, not an error
+	// and not a correction.
 	World.Tick(1.2);
 	TestEqual(TEXT("a body that cannot report its position is never resynced"),
 		Services.Count(TEXT("ResyncCinematicClip")), AfterStart);
@@ -9631,6 +9587,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLogicRelayLifetimeTest,
 	"Elysium.Substrate.LogicRelayLifetime", GElysiumTestFlags)
 bool FElysiumLogicRelayLifetimeTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("no entity named '!self' in this map"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	auto AddRelay = [](FElysiumEntityDefs& Defs, const TCHAR* Name, const TCHAR* Spawnflags)
 	{
 		FElysiumEntityDef Relay;
@@ -10054,6 +10012,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSaveSchemaTest, "Elysium.Substrate.Save
 	GElysiumTestFlags)
 bool FElysiumSaveSchemaTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("has no saved field 'a_field_from_the_future'"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("is math_counter here but was logic_relay when saved"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
 	// --- The field flags ARE the enumeration (§4) ----------------------------------------------
@@ -11361,6 +11323,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneMixaheadTest, "Elysium.Substrate.S
 
 bool FElysiumSceneMixaheadTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("scene 'test/line.vcd' not found"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	IConsoleVariable* MixaheadVar = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.SceneMixahead"));
 	if (!TestNotNull(TEXT("elysium.SceneMixahead is registered"), MixaheadVar))
 	{
@@ -11472,6 +11436,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChoreoSceneTest, "Elysium.Substrate.Cho
 
 bool FElysiumChoreoSceneTest::RunTest(const FString&)
 {
+	AddExpectedError(TEXT("scene 'test/does_not_exist.vcd' not found"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("SceneFile 'test/does_not_exist.vcd' did not resolve"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	auto Wire = [](FElysiumEntityDef& On, const TCHAR* Output, const TCHAR* Param)
 	{
 		FElysiumOutputDef W;
@@ -12962,8 +12930,8 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("...answering that cell where it was authored"), Sparse.Forward(), 136.7f, 0.01f);
 		TestEqual(TEXT("...and filling every hole from it rather than with zero"),
-			Sparse.SpeedAt(90.0f, true), 136.7f, 0.01f);
-		TestEqual(TEXT("...including across the wrap seam"), Sparse.SpeedAt(180.0f, true), 136.7f, 0.01f);
+			Sparse.SpeedAt(90.0f), 136.7f, 0.01f);
+		TestEqual(TEXT("...including across the wrap seam"), Sparse.SpeedAt(180.0f), 136.7f, 0.01f);
 	}
 
 	// A fully authored fan, which is what a real sidecar carries. The hole fill must not touch it.
@@ -12979,7 +12947,7 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	if (TestTrue(TEXT("a fully authored fan yields a table"),
 			ElysiumBlendGrids::SpeedFan(Full, Table, 2.3f, Fan)))
 	{
-		TestEqual(TEXT("...cell by cell"), Fan.SpeedAt(-90.0f, false), 97.1f * 2.3f, 0.01f);
+		TestEqual(TEXT("...cell by cell"), Fan.SpeedAt(-90.0f), 97.1f * 2.3f, 0.01f);
 		TestEqual(TEXT("...with the gait's own scale applied"), Fan.Forward(), 136.7f * 2.3f, 0.01f);
 		TestEqual(TEXT("...and the peak is the largest cell scaled"), Fan.Peak(), 136.7f * 2.3f, 0.01f);
 	}
@@ -12991,7 +12959,7 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	if (TestTrue(TEXT("one hole does not refuse the fan"),
 			ElysiumBlendGrids::SpeedFan(OneHole, Table, 1.0f, Patched)))
 	{
-		TestEqual(TEXT("...it is filled from the cells either side"), Patched.SpeedAt(45.0f, false),
+		TestEqual(TEXT("...it is filled from the cells either side"), Patched.SpeedAt(45.0f),
 			0.5f * (136.7f + 60.7f), 0.01f);
 		TestEqual(TEXT("...and its neighbours are untouched"), Patched.Forward(), 136.7f, 0.01f);
 	}

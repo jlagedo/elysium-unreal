@@ -119,7 +119,7 @@ public:
 	// Rebuild the standing body from scratch, discarding the map's cached meshes and clips first.
 	// This is the door a re-export needs: the cache is keyed by stem, not by which
 	// path built it, so an ordinary restand reuses whatever was resolved the first time and the
-	// toggle reads as dead. Same for `elysium.Cloth`.
+	// toggle reads as dead.
 	bool LabRestand(FString& OutError);
 	// Lay a `_delta` autolayer over the standing body without disturbing it. Re-asking for the
 	// layer already running only re-weights it, so the slider drives this every frame.

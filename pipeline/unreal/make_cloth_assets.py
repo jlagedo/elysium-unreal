@@ -38,15 +38,30 @@ MESH_PACKAGE = "/ElysiumBaked/Characters/Meshes"
 CLOTH_PACKAGE = "/Game/VtMB/Cloth"
 
 
+def requested_stems():
+    """The `-ClothStems=` slice, or None for every sidecar on disk.
+
+    The character bake is sliceable and this runs behind it, so naming models there must not
+    silently regenerate the whole cast's garments beside them.
+    """
+    for argument in sys.argv:
+        if argument.startswith("-ClothStems="):
+            named = [s for s in argument[len("-ClothStems="):].split(",") if s]
+            return set(named) or None
+    return None
+
+
 def garment_sidecars():
     """Every `npc/garment/<stem>.json` the export wrote, as (stem, path)."""
     root = os.path.join(os.fspath(export_root()), "npc", "garment")
     if not os.path.isdir(root):
         return []
+    wanted = requested_stems()
     return sorted(
         (os.path.splitext(name)[0], os.path.join(root, name))
         for name in os.listdir(root)
         if name.endswith(".json")
+        and (wanted is None or os.path.splitext(name)[0] in wanted)
     )
 
 
@@ -74,7 +89,10 @@ def character_mesh(stem):
 def main():
     sidecars = garment_sidecars()
     if not sidecars:
-        unreal.log_warning("[make_cloth_assets] no garment sidecars under npc/garment")
+        # Ordinary for a slice: 60 of the 4,445 installed models author a garment at all, so most
+        # names the bake was given have nothing here. Only a whole-cast run finding nothing is odd.
+        if requested_stems() is None:
+            unreal.log_warning("[make_cloth_assets] no garment sidecars under npc/garment")
         return
 
     built = skipped = failed = 0
@@ -121,9 +139,10 @@ def main():
             # skinned. A garment whose skinned count is zero has swallowed its own waistband.
             unreal.log(
                 "[make_cloth_assets] %s   render: %d driven, %d skinned, %d orphaned, "
-                "%d root-bound particles"
+                "%d root-bound particles, %d particles with no normal"
                 % (stem, result.driven_vertices, result.skinned_vertices,
-                   result.orphaned_bindings, result.root_bound_particles))
+                   result.orphaned_bindings, result.root_bound_particles,
+                   result.degenerate_sim_normals))
 
     unreal.log("[make_cloth_assets] %d built, %d skipped, %d failed" % (built, skipped, failed))
 

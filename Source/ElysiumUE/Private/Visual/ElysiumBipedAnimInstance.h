@@ -79,9 +79,8 @@ public:
 	EElysiumGraphState RequestedState = EElysiumGraphState::Idle;
 
 	// The resolved assets. Exactly one is non-null: a movement fan resolves to its baked blend space
-	// and a plain label to a sequence. `elysium.BlendSpaces 0` makes the resolver answer with the
-	// single selected cell instead, which arrives here as a sequence with no blend space — so the
-	// A/B needs no knowledge in the graph beyond an "is valid" branch.
+	// and a plain label to a sequence. A label with no baked fan arrives here as a sequence with no
+	// blend space, so the graph needs no knowledge beyond an "is valid" branch.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	TObjectPtr<UBlendSpace> RequestedBlendSpace = nullptr;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
@@ -120,9 +119,8 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float MoveYaw = 0.0f;
 
-	// Whether the resolver answered with a fan or with a single cell. `elysium.BlendSpaces 0` makes
-	// it answer with the cell, and the gait states branch on this rather than on the cvar — the graph
-	// knows nothing about console variables, only about which asset it was handed.
+	// Whether the resolver answered with a fan or with a single cell. The gait states branch on this
+	// — the graph knows only which asset it was handed.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	bool bHasBlendSpace = false;
 

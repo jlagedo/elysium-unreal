@@ -262,9 +262,9 @@ namespace
 	}
 }
 
-// Not `elysium.cloth`: console names are case-insensitive and `elysium.Cloth` is already the
-// cvar that decides whether a body wears a garment at all. Registering a command over a variable
-// of the same name is fatal at startup, not a warning.
+// `garment` rather than `cloth` so the verb never collides with a `Cloth` cvar: console names are
+// case-insensitive, and registering a command over a variable of the same name is fatal at
+// startup rather than a warning.
 static FAutoConsoleCommandWithWorldArgsAndOutputDevice GElysiumGarmentCommand(
 	TEXT("elysium.garment"),
 	TEXT("Garment state and Chaos cloth overlays. `elysium.garment` reports what every built "

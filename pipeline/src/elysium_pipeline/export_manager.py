@@ -968,6 +968,24 @@ def sweep_characters(config, partition: dict, *, apply: bool = True,
     )
 
 
+def _stale_garments(config, stems: Sequence[str]) -> list[str]:
+    """Named stems whose garment sidecar is newer than the cloth asset generated from it.
+
+    Most stems author no garment and are absent from both sides, which is not staleness.
+    """
+    garment_dir = config.export_root / "npc" / "garment"
+    cloth_dir = config.repo_root / "Content" / "VtMB" / "Cloth"
+    stale = []
+    for stem in stems:
+        sidecar = garment_dir / f"{stem}.json"
+        if not sidecar.is_file():
+            continue
+        asset = cloth_dir / f"CLOTH_{stem}.uasset"
+        if not asset.is_file() or asset.stat().st_mtime < sidecar.stat().st_mtime:
+            stale.append(stem)
+    return stale
+
+
 def export_characters(
     config, runner, models: Sequence[str] | None = None, *, force: bool = False,
     sweep: bool = True, force_sweep: bool = False
@@ -1018,6 +1036,12 @@ def export_characters(
         # Nothing to author, so nothing to launch. This is the case the receipts exist for: the
         # editor costs 20-40s of process lifetime before it does any work at all.
         print(f"characters: {len(stems)} model(s) already current")
+        # Garments are not covered by those receipts -- they are generated from the sidecar, not
+        # from the bake's own inputs -- so a cast that is current can still be undressed. Compared
+        # by file rather than by receipt so the fast path stays free when it is not.
+        stale_garments = _stale_garments(config, stems)
+        if stale_garments:
+            unreal.make_cloth_assets(config, runner, stale_garments)
         return stems
 
     plan_path = npc_dir / ".elysium-character-plan.json"
@@ -1041,6 +1065,10 @@ def export_characters(
         if result["removed"]:
             print(f"swept {result['removed']} orphaned character asset(s)")
     unreal.verify_characters(config, runner, stems)
+    # The garments those bodies wear. After the verify, because a cloth asset resolves its bone
+    # names against the mesh's reference skeleton -- the mesh has to be on the mount and sound
+    # before a garment can bind to it. Most models author none and cost nothing here.
+    unreal.make_cloth_assets(config, runner, stems)
     # Promoted only now: a commandlet can save part of a scope and then fail, and a receipt
     # written before the verifier agreed would make that partial scope look current forever.
     character_cache.record(manifest, config, npc_dir, npc_manifest, partition, todo)
