@@ -201,6 +201,59 @@ public:
 	// it reads the frame's settled bone transforms, so the iris never lags the head by a frame.
 	void TickEyes(float DeltaSeconds);
 
+	// --- the eye pass's debug seam ---------------------------------------------------------------
+	//
+	// The green room stands a bare visual: no `FElysiumNpc`, so no gaze cascade, so nothing ever
+	// supplies a view target and every eye sits on its authored resting aim. That is a correct state
+	// and a useless one to look at — the whole of what the rig does is only visible when the aim
+	// moves. This is the surface that moves it, and it sits exactly where `elysium.EyeTrackPlayer`
+	// already sits in the priority order rather than beside it.
+	struct FElysiumEyeDebug
+	{
+		// Off leaves the shipping priority alone. Rest pins `bEyeMove` false, which is the retail
+		// configuration the cascade-less state already produces and is worth being able to A/B
+		// against. Camera aims at the player camera manager — in the lab, the orbit — which is the
+		// cheapest unambiguous check that the basis math is right. Point aims at `Target`.
+		enum class EGaze : uint8 { Off, Rest, Camera, Point };
+		EGaze Gaze = EGaze::Off;
+		// World space, read only under `EGaze::Point`.
+		FVector Target = FVector::ZeroVector;
+
+		// Hold the lids open regardless of the disposition's cadence, so a lid shape can be read
+		// without waiting for a blink that lands when it likes.
+		bool bHoldBlink = false;
+		// Consumed by the next tick, which starts one envelope on every bound body. The manual half of
+		// the same control: a blink is 300 ms and watching for a random one is not a way to inspect it.
+		bool bBlinkNow = false;
+
+		// The renderer-config knobs. Defaults reproduce the shipped config, so an untouched override
+		// changes nothing about what is drawn.
+		FElysiumEyeTuning Tuning;
+	};
+	FElysiumEyeDebug& EyeDebug() { return EyeDebugState; }
+
+	// What one body's eye pass resolved, for a panel to draw. The failure this answers is silent
+	// otherwise: a body whose slots match no record binds nothing, ticks nothing, and draws the eye
+	// master's default iris — which is a texture, so it still looks like an eye.
+	struct FElysiumEyeReadout
+	{
+		// Whether the model authors eye records at all, and how many.
+		bool bHasSet = false;
+		int32 RecordCount = 0;
+		// Slots whose base material IS the eye master — the sections that will draw as eyes whether or
+		// not a record was found for them.
+		int32 EyeSlotCount = 0;
+		// Records actually bound to a slot and ticking. Fewer than `EyeSlotCount` is the regression.
+		int32 BoundCount = 0;
+		// Every eye-master slot's name, and the record index it joined to (`INDEX_NONE` when none).
+		TArray<TPair<FString, int32>> Slots;
+		// This frame's blink weight, 0 open to 1 closed, and where the pass aimed.
+		float Blink = 0.f;
+		bool bAiming = false;
+	};
+	// Fill `Out` for `Comp`, or return false when this factory has no eye binding for it.
+	bool DescribeEyes(const USkeletalMeshComponent* Comp, FElysiumEyeReadout& Out) const;
+
 private:
 	USkeletalMesh* ResolveNpcMesh(const FString& Stem, bool bPlayerMaterial);
 	UAnimSequence* ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
@@ -260,8 +313,20 @@ private:
 		// the live animated head frame, so this is looked up by name and cached — never mixed with
 		// the `.mdl`'s own bone ordering, which is not the USkeleton's.
 		int32 HeadBoneIndex = INDEX_NONE;
+
+		// Every slot on this body whose base material IS the eye master, with the record index it
+		// joined to or `INDEX_NONE`. Kept for the readout rather than for the pass: a slot that draws
+		// as an eye and matched no record is the one eye failure that looks like a working eye, so it
+		// has to be reportable and not merely logged once at build.
+		TArray<TPair<FString, int32>> SlotJoins;
+		// This frame's envelope weight and whether the pass had an aim, latched for the same readout.
+		float LastBlink = 0.f;
+		bool bLastAiming = false;
 	};
+	// One entry per body carrying eye sections, INCLUDING a body none of whose sections joined a
+	// record — that one drives nothing and exists to be reported.
 	TArray<FElysiumEyeBinding> EyeBindings;
+	FElysiumEyeDebug EyeDebugState;
 	// The per-character iris is the `.vmt`'s `$iris`, decoded beside the glb rather than carried
 	// inside it, so it loads through the same per-map dedup index the world uses. Strong-ref'd for
 	// the epoch, released with this component.

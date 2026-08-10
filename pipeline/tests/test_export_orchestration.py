@@ -20,6 +20,7 @@ class ExportProfileTests(unittest.TestCase):
             "scripts",
             "signs",
             "vdata",
+            "items",
             "cfg",
             "scenes",
             "ui",

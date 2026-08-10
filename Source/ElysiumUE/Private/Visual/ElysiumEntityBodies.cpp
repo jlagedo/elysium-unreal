@@ -644,18 +644,13 @@ void UElysiumEntityBodies::InstallEyes(USkeletalMeshComponent* Comp,
 		{
 			continue;
 		}
-		// glTFRuntime names a slot `LOD_<n>_Section_<n>_<glTF material name>`.
+		// Both slot spellings reduce to the material name the sidecar keys on, and the join is exact:
+		// the baked slot is the container's own `Eyeball_r` against a sidecar that lowercases it, so a
+		// suffix test misses by the separator it has no room for.
 		const FString SlotName = Slots[Slot].MaterialSlotName.ToString();
-		const FElysiumEyeball* Eye = nullptr;
-		for (const FElysiumEyeball& Candidate : Set->Eyeballs)
-		{
-			if (!Candidate.Material.IsEmpty()
-				&& SlotName.EndsWith(TEXT("_") + Candidate.Material, ESearchCase::IgnoreCase))
-			{
-				Eye = &Candidate;
-				break;
-			}
-		}
+		const FElysiumEyeball* Eye = Set->FindByMaterial(
+			ElysiumEyes::MaterialNameFromSlot(Slots[Slot].MaterialSlotName));
+		Binding.SlotJoins.Emplace(SlotName, Eye != nullptr ? Eye->Index : INDEX_NONE);
 		if (Eye == nullptr)
 		{
 			UE_LOG(LogElysiumBodies, Warning,
@@ -702,10 +697,37 @@ void UElysiumEntityBodies::InstallEyes(USkeletalMeshComponent* Comp,
 		Binding.Slots.Add(Bound);
 	}
 
-	if (!Binding.Slots.IsEmpty())
+	// Registered on the presence of eye SECTIONS, not of bound slots: a body whose sections joined no
+	// record still has to be findable, because it is drawing the eye master's default iris and nothing
+	// else about it says so. Such a binding is skipped by the pass below.
+	if (!Binding.SlotJoins.IsEmpty())
 	{
 		EyeBindings.Add(MoveTemp(Binding));
 	}
+}
+
+bool UElysiumEntityBodies::DescribeEyes(const USkeletalMeshComponent* Comp,
+	FElysiumEyeReadout& Out) const
+{
+	Out = FElysiumEyeReadout();
+	if (Comp == nullptr)
+	{
+		return false;
+	}
+	const FElysiumEyeBinding* Binding = EyeBindings.FindByPredicate(
+		[Comp](const FElysiumEyeBinding& B) { return B.Comp.Get() == Comp; });
+	if (Binding == nullptr)
+	{
+		return false;
+	}
+	Out.bHasSet = Binding->Set.IsValid();
+	Out.RecordCount = Out.bHasSet ? Binding->Set->Eyeballs.Num() : 0;
+	Out.EyeSlotCount = Binding->SlotJoins.Num();
+	Out.BoundCount = Binding->Slots.Num();
+	Out.Slots = Binding->SlotJoins;
+	Out.Blink = Binding->LastBlink;
+	Out.bAiming = Binding->bLastAiming;
+	return true;
 }
 
 void UElysiumEntityBodies::TickEyes(float)
@@ -735,13 +757,21 @@ void UElysiumEntityBodies::TickEyes(float)
 	UElysiumNpcAnimSubsystem* Anims = GI
 		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
 
+	// The green room's override, consumed once for the whole pass. `bBlinkNow` is an edge, so it is
+	// cleared here rather than per body: one press is one blink on everything bound, not one per body.
+	FElysiumEyeDebug& Debug = EyeDebugState;
+	const bool bBlinkNow = Debug.bBlinkNow;
+	Debug.bBlinkNow = false;
+
 	// `elysium.EyeTrackPlayer` is the debug override, and it outranks the gaze cascade on purpose:
 	// it is the cheapest unambiguous check that the basis math is right, and it has to keep working
-	// when the cascade is the thing under suspicion.
+	// when the cascade is the thing under suspicion. The green room's Camera mode aims at the same
+	// place, so the two resolve one camera between them.
 	const bool bTrackPlayer = CVarEyeTrackPlayer.GetValueOnGameThread() != 0;
+	const bool bWantCamera = bTrackPlayer || Debug.Gaze == FElysiumEyeDebug::EGaze::Camera;
 	FVector TrackWorld = FVector::ZeroVector;
 	bool bHaveCamera = false;
-	if (bTrackPlayer)
+	if (bWantCamera)
 	{
 		if (const APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(this, 0))
 		{
@@ -749,6 +779,7 @@ void UElysiumEntityBodies::TickEyes(float)
 			bHaveCamera = true;
 		}
 	}
+
 	for (int32 i = EyeBindings.Num() - 1; i >= 0; --i)
 	{
 		FElysiumEyeBinding& Binding = EyeBindings[i];
@@ -756,6 +787,12 @@ void UElysiumEntityBodies::TickEyes(float)
 		if (Comp == nullptr || !Binding.Set.IsValid())
 		{
 			EyeBindings.RemoveAtSwap(i);
+			continue;
+		}
+		// A binding whose sections joined no record is a diagnostic entry: there is no MID to write
+		// and no aim to solve, and writing its blink would move lids the eye pass does not own.
+		if (Binding.Slots.IsEmpty())
+		{
 			continue;
 		}
 		// Retail runs the eye pass per *drawn* model, so skipping an unseen body is faithful as
@@ -777,7 +814,18 @@ void UElysiumEntityBodies::TickEyes(float)
 			}
 		}
 		FElysiumEyeInput EyeInput;
-		if (Binding.NextBlinkTime <= 0.f)
+		if (bBlinkNow)
+		{
+			Binding.BlinkEndsAt = Now + ElysiumEyes::BlinkSeconds;
+		}
+		else if (Debug.bHoldBlink)
+		{
+			// Held open, and the schedule is held with it: releasing the hold should not fire every
+			// blink the window was open for.
+			Binding.BlinkEndsAt = 0.f;
+			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
+		}
+		else if (Binding.NextBlinkTime <= 0.f)
 		{
 			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
 		}
@@ -788,21 +836,47 @@ void UElysiumEntityBodies::TickEyes(float)
 		}
 		EyeInput.Blink = ElysiumEyes::BlinkWeight(Binding.BlinkEndsAt - Now);
 
-		// Where this body is looking, in priority order: the debug override, then the gaze the
-		// substrate pushed for this character, then nothing — which leaves the eye on the record's
-		// own authored resting aim, the state retail produces with `bEyeMove` off.
-		FElysiumEyeTuning Tuning;
+		// Where this body is looking, in priority order: the green room's override, then the cvar,
+		// then the gaze the substrate pushed for this character, then nothing. The override outranks
+		// the cvar for the same reason the cvar outranks the cascade: it is the hand on the control,
+		// and it has to win over whatever a session was left set to.
+		//
+		// `bEyeMove` is assigned on every branch INCLUDING the last, and the last is what makes the
+		// fallback true. It defaults on, so leaving it alone with no gaze point does not rest the eye —
+		// it aims at the target a zero vector names, which is the world origin. That reads as a whole
+		// cast staring at one arbitrary point in the map and at nothing on a stage built far from it.
+		FElysiumEyeTuning Tuning = Debug.Tuning;
 		FVector GazeWorld = FVector::ZeroVector;
-		if (bTrackPlayer && bHaveCamera)
+		bool bHaveGaze = false;
+		if (Debug.Gaze == FElysiumEyeDebug::EGaze::Rest)
 		{
-			Tuning.bEyeMove = true;
+			bHaveGaze = false;
+		}
+		else if (Debug.Gaze == FElysiumEyeDebug::EGaze::Point)
+		{
+			GazeWorld = Debug.Target;
+			bHaveGaze = true;
+		}
+		else if (Debug.Gaze == FElysiumEyeDebug::EGaze::Camera && bHaveCamera)
+		{
 			GazeWorld = TrackWorld;
+			bHaveGaze = true;
 		}
-		else if (Binding.bHasViewTarget)
+		else if (Debug.Gaze == FElysiumEyeDebug::EGaze::Off && bTrackPlayer && bHaveCamera)
 		{
-			Tuning.bEyeMove = true;
-			GazeWorld = Binding.ViewTarget;
+			GazeWorld = TrackWorld;
+			bHaveGaze = true;
 		}
+		else if (Debug.Gaze == FElysiumEyeDebug::EGaze::Off && Binding.bHasViewTarget)
+		{
+			GazeWorld = Binding.ViewTarget;
+			bHaveGaze = true;
+		}
+		// The authored resting aim is what `bEyeMove` off selects — a real retail configuration, and
+		// the one a body with no gaze source sits in.
+		Tuning.bEyeMove = bHaveGaze;
+		Binding.LastBlink = EyeInput.Blink;
+		Binding.bLastAiming = bHaveGaze;
 
 		for (const FElysiumEyeSlot& Slot : Binding.Slots)
 		{
@@ -1303,6 +1377,14 @@ UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Stem)
 		return Mesh;
 	}
 	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(MapName, Stem));
+	if (Mesh == nullptr)
+	{
+		// An item's ground model is spawnable in any map, so it bakes onto the shared item scope
+		// rather than into this map's Props. Same asset shape, same stem — only the package
+		// differs, which makes this a lookup fallback and not a second build path. The map's own
+		// package wins where both carry the stem: they are the same model either way.
+		Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedItemMesh(Stem));
+	}
 	if (Mesh == nullptr)
 	{
 		UE_LOG(LogElysiumBodies, Warning, TEXT("prop '%s': no baked mesh (run: uv run elysium export map %s --force)"),

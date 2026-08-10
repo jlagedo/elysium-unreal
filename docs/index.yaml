@@ -44,6 +44,7 @@ documents:
   - {path: vtmb/game_runtime.md, kind: vtmb-fact, owner: game runtime, subject: game loop and RPG model}
   - {path: vtmb/skills-and-checks.md, kind: vtmb-fact, owner: rules, subject: feat ratings dice consumers and runtime check policy}
   - {path: vtmb/combat-and-damage.md, kind: vtmb-fact, owner: combat, subject: weapon lethality defense soak damage and health commit}
+  - {path: vtmb/feeding.md, kind: vtmb-fact, owner: game runtime, subject: feeding command paired action blood transfer and teardown}
   - {path: vtmb/disciplines.md, kind: vtmb-fact, owner: disciplines, subject: vampire powers targeting active states effects and teardown}
   - {path: vtmb/gameplay-verbs.md, kind: vtmb-fact, owner: game runtime, subject: command usercmd action effect and script verb routing}
   - {path: vtmb/python_bridge.md, kind: vtmb-fact, owner: scripting, subject: Python binding mechanism}

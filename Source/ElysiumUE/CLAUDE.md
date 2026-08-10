@@ -359,25 +359,18 @@ Hard-won, non-obvious, and easy to undo:
 
 ## Build and test loop
 
-After a C++ change: `uv run elysium build`, then `uv run elysium test <tier>` — `Substrate` for anything under the
-substrate, scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`. Both
-are cheap: the build is adaptive non-unity (~10 s for a handful of files), and the Substrate tier
-runs in about the same under `-nullrhi`.
+The build command is `uv run elysium build`.
 
-**The result surface is the report, not stdout.** Every run writes retained JSON + HTML under
-`$ELYSIUM_WORK_ROOT/reports/tests/` and `uv run elysium test` reports the path and propagates the exit code.
+The test command is `uv run elysium test <tier>` — `Substrate` for anything under the substrate,
+scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`.
 
-**One run per change, not one per claim.** A green tier stays green until code moves. A roadmap
-task's acceptance list is a set of things that must be **true**, not a set of runs to perform.
+**A live run is proposed, never assumed — ask the owner first, with a recommendation.**
 
-**A live run is proposed, never assumed — ask the owner first, with a recommendation.** The ask names
-what the live run would answer *that the tiers cannot*. **Worth it** when the claim only exists in a
-built world: the tick graph and its prerequisites, map build/adoption and activation barrier,
-pawn ↔ mover collision, the camera solve, anything tracing real geometry, or a script/dialogue path
-needing the level script running. **Not worth it** for plain-C++ work the Substrate tier covers, for
-doc-only changes, or for anything a green tier already answered. When in doubt the recommendation is
-*no* — the headless one-shot harnesses are the pattern for turning a repeated live check into a
-per-change one.
+**No feature flag and no A/B toggle without approval — ask the owner first.** Work lands as a
+complete change, not behind a switch.
+
+**Do not create cvars without explicit request or approval.** Cog is the debug surface: a new
+control is a tab, not a console variable.
 
 ## Console commands
 

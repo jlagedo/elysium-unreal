@@ -82,6 +82,40 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("SM_") + Stem;
 		return BakedMapDir(Map) / TEXT("Brushes") / Asset + TEXT(".") + Asset;
 	}
+	// --- The shared item corpus (pipeline/unreal/bake_map.py -> ItemBake) --------------------
+	// An item's ground model belongs to no map: a placed `item_*` states no `model` key, and a
+	// scripted grant or a drop can put any `vdata/items` definition in any map. So the meshes
+	// UE_extract_items.py decodes bake once onto this scope instead of into every map's Props.
+	// Same asset shape as a map prop, addressed by the same stem.
+	static FString BakedItemsDir() { return BakedMount() / TEXT("items"); }
+	static FString BakedItemMesh(const FString& Stem)
+	{
+		const FString Asset = TEXT("SM_") + Stem;
+		return BakedItemsDir() / TEXT("Props") / Asset + TEXT(".") + Asset;
+	}
+	// The decoded-model stem for a VtMB `models/...mdl` path, which is the whole path folded --
+	// NOT its base filename. `models/items/Rings/Ground/Ring03.mdl` is
+	// `models_items_rings_ground_ring03`, and that is the name the bake gives the asset.
+	//
+	// Its Python twin is `elysium_pipeline.formats.mdl.sanitize`: lower case, then every
+	// character outside [a-z0-9._-] replaced one-for-one by an underscore. Unlike BakedAssetName
+	// above it does NOT collapse runs and it keeps `.` and `-`, so the two must not be swapped.
+	static FString PropModelStem(const FString& ModelPath)
+	{
+		FString Raw = ModelPath;
+		Raw.RemoveFromEnd(TEXT(".mdl"), ESearchCase::IgnoreCase);
+		FString Out;
+		Out.Reserve(Raw.Len());
+		for (TCHAR Ch : Raw)
+		{
+			Ch = FChar::ToLower(Ch);
+			const bool bLegal = (Ch >= TEXT('a') && Ch <= TEXT('z')) ||
+				(Ch >= TEXT('0') && Ch <= TEXT('9')) ||
+				Ch == TEXT('.') || Ch == TEXT('_') || Ch == TEXT('-');
+			Out.AppendChar(bLegal ? Ch : TEXT('_'));
+		}
+		return Out;
+	}
 	// The map's prop skin table (UElysiumPropSkinSet) -- every alternate skin family of every
 	// prop model it places, as material instances resolved at bake time. Absent for a map whose
 	// models all carry a single family.
@@ -212,6 +246,13 @@ struct FElysiumContentPaths
 		}
 		return Out;
 	}
+
+	// The shared item corpus on disk: `items/props/` holds the decoded ground models in a map's
+	// own props layout, and `items/ground_models.json` names what UE_extract_items.py landed there
+	// — the stem per `playermodel`, its triangle count, and every model the install did not carry.
+	static FString ItemsDir() { return Root() / TEXT("items"); }
+	static FString ItemsPropsDir() { return ItemsDir() / TEXT("props"); }
+	static FString ItemGroundModels() { return ItemsDir() / TEXT("ground_models.json"); }
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }

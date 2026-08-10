@@ -149,6 +149,27 @@ const FElysiumEyeball* FElysiumEyeSet::FindByMaterial(const FString& MaterialNam
 		{ return !E.Material.IsEmpty() && E.Material.Equals(MaterialName, ESearchCase::IgnoreCase); });
 }
 
+FString ElysiumEyes::MaterialNameFromSlot(const FName SlotName)
+{
+	static const FString Marker = TEXT("_Section_");
+	const FString Slot = SlotName.ToString();
+	const int32 SectionAt = Slot.Find(Marker);
+	if (SectionAt == INDEX_NONE)
+	{
+		return Slot;
+	}
+	int32 Cursor = SectionAt + Marker.Len();
+	while (Cursor < Slot.Len() && FChar::IsDigit(Slot[Cursor]))
+	{
+		++Cursor;
+	}
+	if (Cursor < Slot.Len() && Slot[Cursor] == TEXT('_'))
+	{
+		++Cursor;
+	}
+	return Slot.Mid(Cursor);
+}
+
 float ElysiumEyes::BlinkWeight(float SecondsRemaining)
 {
 	const float A = SecondsRemaining * ElysiumEyes::BlinkRate;

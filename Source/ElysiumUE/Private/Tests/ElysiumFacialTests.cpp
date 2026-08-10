@@ -480,6 +480,31 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 		Set.FindByMaterial(TEXT("EYEBALL_R")) == &Set.Eyeballs[0]);
 	TestTrue(TEXT("and by its record index"), Set.Find(0) == &Set.Eyeballs[0]);
 
+	// --- the slot join, both spellings ------------------------------------------------------------
+	// `InstallEyes` reaches a record through a material SLOT NAME, and two paths name that slot
+	// differently: the baked mesh takes the container's own material name verbatim, and a glTFRuntime
+	// load prefixes it. Both must reduce to the same key, and the key is joined case-insensitively —
+	// the sidecar lowercases what the container capitalises.
+	//
+	// This is asserted because its failure is silent and looks like success: an unjoined section
+	// still draws the eye master, so it has a round iris of the master's default texture that simply
+	// never aims and never blinks.
+	TestEqual(TEXT("a baked slot is already the material name"),
+		ElysiumEyes::MaterialNameFromSlot(TEXT("Eyeball_r")), FString(TEXT("Eyeball_r")));
+	TestEqual(TEXT("a glTFRuntime slot drops its LOD/section prefix"),
+		ElysiumEyes::MaterialNameFromSlot(TEXT("LOD_0_Section_2_eyeball_r")),
+		FString(TEXT("eyeball_r")));
+	TestEqual(TEXT("a multi-digit section index is consumed whole"),
+		ElysiumEyes::MaterialNameFromSlot(TEXT("LOD_0_Section_11_eyeball_r")),
+		FString(TEXT("eyeball_r")));
+	TestTrue(TEXT("the baked slot spelling joins the record"),
+		Set.FindByMaterial(ElysiumEyes::MaterialNameFromSlot(TEXT("Eyeball_r"))) == &Set.Eyeballs[0]);
+	TestTrue(TEXT("and so does the glTFRuntime spelling"),
+		Set.FindByMaterial(ElysiumEyes::MaterialNameFromSlot(TEXT("LOD_0_Section_2_eyeball_r")))
+			== &Set.Eyeballs[0]);
+	TestTrue(TEXT("a body section is not mistaken for an eye"),
+		Set.FindByMaterial(ElysiumEyes::MaterialNameFromSlot(TEXT("ninesheadnew"))) == nullptr);
+
 	const FElysiumEyeball& Eye = Set.Eyeballs[0];
 	FElysiumEyeTuning Tuning;
 	FElysiumEyeState State;

@@ -5,6 +5,7 @@
     "docs/vtmb/skills-and-checks.md",
     "docs/vtmb/combat-and-damage.md",
     "docs/vtmb/gameplay-verbs.md",
+    "docs/vtmb/feeding.md",
     "docs/vtmb/controls.md",
     "docs/vtmb/animation_and_movers.md"
   ],
@@ -30,6 +31,7 @@
     "What parser behavior handles the authored DMG_FIST token when it is absent from the recovered flag table?",
     "Which OnTakeDamage_Alive prefilter owns its mutable verdict and where are all float-to-integer boundaries?",
     "What exact activity codes and predicates control resisted feeding, stealth override, interruption and completion?",
+    "How do FeedBegin, the server pulse, FeedEnd and paired animation coordinate target blood loss, player blood gain, pulse acceleration and release?",
     "How do discipline selection, targeting, blood cost, cooldown, zone legality and active-effect transitions connect to player commands?"
   ],
   "functions": [
@@ -37,6 +39,20 @@
     {"address": "101d88b0", "label": "DiceRollConstructor", "confidence": "verified RE5", "role": "construct a roll from pool weighting difficulty and free successes", "depth": 2, "cap": 160},
     {"address": "101d8b40", "label": "DiceRollResolve", "confidence": "verified RE5", "role": "resolve data-weighted d10 successes botches and tier", "depth": 2, "cap": 220},
     {"address": "10168910", "label": "PlayerFeedAttempt", "confidence": "body and diagnostic strings", "role": "target eligibility automatic success and resisted feeding check", "depth": 3, "cap": 240},
+    {"address": "10168320", "label": "PlayerReplenish", "confidence": "body and diagnostic strings", "role": "find an ordinary or rat feed target, run the feed attempt and start paired mode 0 or 6", "depth": 3, "cap": 320, "asm_count": 2600},
+    {"address": "101690b0", "label": "PlayerFindFeedTarget", "confidence": "direct PlayerReplenish callee", "role": "select the ordinary or rat target considered by the +feed path", "depth": 3, "cap": 320, "asm_count": 2600},
+    {"address": "10339d90", "label": "CombatCharacterFeedBegin", "confidence": "scope string and base-player vtable slot", "role": "initialize the authoritative feed target, blood counters and first pulse deadline", "depth": 3, "cap": 360, "asm_count": 3000},
+    {"address": "1033a400", "label": "CombatCharacterFeedPulse", "confidence": "scope string and base-player vtable slot", "role": "advance authoritative feeding pulses while a valid paired feeding mode remains active", "depth": 3, "cap": 420, "asm_count": 3400},
+    {"address": "1033a9e0", "label": "CombatCharacterFeedInterrupt", "confidence": "scope string and base-player vtable slot", "role": "idempotently stop feeding, resolve the victim and clear the paired transaction", "depth": 3, "cap": 320, "asm_count": 2600},
+    {"address": "10338cb0", "label": "CombatCharacterIncBloodPool", "confidence": "scope string and direct feed-pulse call", "role": "increment the attacker's blood-pool stat when capacity permits", "depth": 3, "cap": 280, "asm_count": 2200},
+    {"address": "10338df0", "label": "CombatCharacterDecBloodPool", "confidence": "scope string and direct feed-pulse target call", "role": "decrement the victim's blood-pool stat and optionally resolve depletion immediately", "depth": 3, "cap": 320, "asm_count": 2600},
+    {"address": "1033c340", "label": "CombatCharacterHealthHeal", "confidence": "scope string and direct feed-pulse attacker call", "role": "heal the attacker by the rules-derived amount for a successful blood gain", "depth": 3, "cap": 320, "asm_count": 2600},
+    {"address": "10146e20", "label": "PlayerFeedButtonPresentationState", "confidence": "unique 0x00400000 player-button test", "role": "consume the held feed command bit for player presentation state", "depth": 3, "cap": 360, "asm_count": 3000},
+    {"address": "101728f0", "label": "PlayerFeedCommandConsumer", "confidence": "0x00400000 player-button test and base-player vtable join", "role": "invoke PlayerReplenish while the authoritative feed command bit remains held and player state allows it", "depth": 3, "cap": 360, "asm_count": 3000},
+    {"address": "10118fca", "label": "PlayerInputReleaseEventPublisherProbe", "confidence": "0x00400000 released-button test in containing body 0x10118db0", "role": "publish the feed release edge through the general server input-event surface without directly interrupting the feed", "depth": 3, "cap": 360, "asm_count": 3000},
+    {"address": "10163110", "label": "PlayerDamageFeedInterruptProbe", "confidence": "direct virtual FeedInterrupt call in player damage body 0x10163020", "role": "interrupt ordinary or seductive feeding before applying incoming player damage", "depth": 3, "cap": 420, "asm_count": 3400},
+    {"address": "1016c333", "label": "PlayerPostThinkFeedPulseProbe", "confidence": "only direct virtual Feed call in player update body 0x1016be10", "role": "advance the authoritative feed pulse from the normal player update", "depth": 3, "cap": 420, "asm_count": 3400},
+    {"address": "1032e567", "label": "CombatCharacterHandleAnimEventFeedBoundaryProbe", "confidence": "only direct virtual FeedBegin call in HandleAnimEvent 0x1032e330", "role": "map model events 4007 and 4006 to FeedBegin and FeedInterrupt boundaries", "depth": 3, "cap": 420, "asm_count": 3400},
     {"address": "101fb000", "label": "CVDmgParse", "confidence": "scope string", "role": "parse authored Dmg text into the 17-word descriptor", "depth": 3, "cap": 240},
     {"address": "101fb180", "label": "CVDmgSetApplyCallback", "confidence": "scope string", "role": "install game-specific damage apply callback", "depth": 2, "cap": 100},
     {"address": "101fb200", "label": "CVDmgApply", "confidence": "scope string", "role": "dispatch descriptor to installed apply callback", "depth": 2, "cap": 120},
@@ -112,6 +128,13 @@
     {"displacement": "a88", "label": "combat_character_melee_result_array"},
     {"displacement": "a94", "label": "combat_character_melee_result_count"},
     {"displacement": "e98", "label": "combat_character_last_damage_flags"},
+    {"displacement": "1490", "label": "combat_character_next_feed_pulse"},
+    {"displacement": "1494", "label": "combat_character_next_feed_duration"},
+    {"displacement": "1498", "label": "combat_character_feed_start_time"},
+    {"displacement": "149c", "label": "combat_character_feed_target"},
+    {"displacement": "14a0", "label": "combat_character_blood_stolen"},
+    {"displacement": "14a4", "label": "combat_character_current_blood_stolen_modifier"},
+    {"displacement": "14a8", "label": "player_feed_continuation_latch"},
     {"displacement": "fc8", "label": "combat_character_unkillable"},
     {"displacement": "13bc", "label": "combat_character_stat_list_count"},
     {"displacement": "13c0", "label": "combat_character_stat_list_array"},
@@ -183,7 +206,15 @@
     {"from": "102387b0", "to": "102397b0", "confidence": "verified", "evidence": "each accepted scheduled shot invokes ranged view kick after constructing its fire packet"},
     {"from": "10239570", "to": "10254b00", "confidence": "verified", "evidence": "the ranged reload virtual chooses an activity and enters the common reload request"},
     {"from": "10254b00", "to": "10254cd0", "confidence": "verified", "evidence": "a validated reload request begins sequence-timed reload state"},
-    {"from": "10255050", "to": "102552c0", "confidence": "verified", "evidence": "reload-frame completion invokes the common bulk or single-round finish transaction"}
+    {"from": "10255050", "to": "102552c0", "confidence": "verified", "evidence": "reload-frame completion invokes the common bulk or single-round finish transaction"},
+    {"from": "101728f0", "to": "10168320", "confidence": "verified", "evidence": "the held 0x00400000 feed command bit invokes the base-player Replenish virtual"},
+    {"from": "10168320", "to": "10168910", "confidence": "verified", "evidence": "ordinary target acquisition enters AttemptFeed before starting the paired mode"},
+    {"from": "1032e567", "to": "10339d90", "confidence": "verified", "evidence": "HandleAnimEvent event 4007 invokes the FeedBegin virtual on the valid paired attacker"},
+    {"from": "1016c333", "to": "1033a400", "confidence": "verified", "evidence": "the normal player update invokes the Feed virtual while the transaction remains active"},
+    {"from": "10163110", "to": "1033a9e0", "confidence": "verified", "evidence": "incoming player damage interrupts an ordinary or seductive feed before damage commit"},
+    {"from": "1033a400", "to": "10338cb0", "confidence": "verified", "evidence": "a normal pulse attempts to increment the feeder BloodPool"},
+    {"from": "1033a400", "to": "10338df0", "confidence": "verified", "evidence": "each completed pulse decrements the victim BloodPool once"},
+    {"from": "1033a400", "to": "1033c340", "confidence": "verified", "evidence": "the normal gain branch applies the rules-derived feeder heal"}
   ],
   "findings": [
     {
@@ -263,6 +294,30 @@
       "fact": "A firearm has no melee block action or recovered firearm-specific stagger band.",
       "evidence": "CWeaponRanged reports capability 0x2000, which does not intersect the player block mask 0x18000; the ranged per-victim callback into base player is empty, while generic DamageFlinch 0x103229d0 owns ACT_HIT_HEAD or ACT_HIT_TORSO without a closed all-firearm caller chain.",
       "consequence": "Secondary firearm input may change mode, zoom or fire, but must not be translated into ACT_PREBLOCK or a fabricated melee-style stagger meter."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Ordinary +feed is a held command that enters Replenish, target selection, the asymmetric feed verdict and paired grapple mode 0 or 6.",
+      "evidence": "PlayerFeedCommandConsumer 0x101728f0 tests 0x00400000 and calls the Replenish virtual; Replenish 0x10168320 calls PlayerFindFeedTarget 0x101690b0 and AttemptFeed 0x10168910, then StartGrappleAttack and latches +0x14a8 on success.",
+      "consequence": "Feed intent, acceptance and paired performance must remain distinct from blood transfer and from patch Python aliases."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Feeding uses hard-coded paired activity policy over MDL-authored clips, not a choreographed scene, and model events 4007 and 4006 bracket the authoritative transaction.",
+      "evidence": "HandleAnimEvent 0x1032e330 maps event 4007 to FeedBegin virtual +0x57c and event 4006 to FeedInterrupt +0x584; the decoded shared feed banks carry those events on bite or late-engage and release sequences. Event 5116 on the forced-feed loop names force_feeding_emitter.",
+      "consequence": "The remake needs a paired activity resolver plus animation-event bridge, but no VCD timeline; loop cycle is not the blood-pulse clock."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "FeedBegin initializes an accelerating server-timed blood transaction and Feed advances at most one scheduled pulse per player update.",
+      "evidence": "FeedBegin 0x10339d90 stores target +0x149c, interval +0x1494, next pulse +0x1490 and start time +0x1498 as 0.30 + (victim BloodPool + 1) * 0.15; Feed 0x1033a400 compares the server clock, performs the pulse and subtracts 0.15 while the interval exceeds 0.30 before scheduling now plus interval.",
+      "consequence": "Blood transfer must run on authoritative simulation time and saved deadlines independently of a roughly two-second looping clip."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A normal feed pulse attempts feeder BloodPool gain, counts only successful gain, applies feed healing and decrements victim BloodPool once; victim depletion is resolved during idempotent FeedInterrupt.",
+      "evidence": "Feed 0x1033a400 calls IncBloodPool 0x10338cb0, rules-derived HealthHeal 0x1033c340 and DecBloodPool(false) 0x10338df0. FeedInterrupt 0x1033a9e0 guards +0x14a9, clears transaction latches, resolves a victim below one BloodPool, invokes the victim end callback and clears target/interval.",
+      "consequence": "The feeder/victim mutation and one teardown path form an atomic gameplay transaction; an animation notify cannot own either side alone."
     },
     {
       "confidence": "confirmed",

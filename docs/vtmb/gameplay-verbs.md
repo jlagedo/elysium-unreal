@@ -121,10 +121,12 @@ it is not a direct UI callback.
 ### Feed is a transaction, not just an animation
 
 The initial feed attempt has automatic-success branches, a target resistance branch and a
-stealth override. The resisted branch is the asymmetric check documented in
-`docs/vtmb/skills-and-checks.md`. Acceptance then has to coordinate player/target action state,
-camera, blood/health transfer, interruption and completion outputs. Only the first eligibility
-and opposed-check seam is closed; the full transaction state machine remains open.
+stealth override. Acceptance enters a native two-actor grapple; MDL event 4007 opens the
+authoritative transaction, and a separate accelerating server timer transfers blood and health
+until release/interruption. This is not a `.vcd` choreography or an animation-loop-owned stat
+change. The complete command, paired-state, animation-boundary, pulse and teardown chain is in
+`docs/vtmb/feeding.md`; the resisted check remains canonical in
+`docs/vtmb/skills-and-checks.md`.
 
 ### Selection and activation are different verbs
 
@@ -192,8 +194,8 @@ for a successful hit, and an animation for proof that damage committed.
 - Close the melee record-to-damage commit and the ranged multiplier decomposition.
 - Recover discipline selection/target/cost/cooldown/zone checks and the precise one-frame hotkey
   handoff.
-- Complete the feed transaction: target predicates, activity identities, blood/health cadence,
-  interruptions, completion and outputs.
+- Live-validate the statically joined feed transaction, exceptional trait branches, early cancel,
+  depleted-victim outcomes and output provenance described in `docs/vtmb/feeding.md`.
 - Recover conversation mode's treatment of already-held input.
 - Complete terminal difficulty/skill attempts (RE39).
 - Join representative NPC combat schedules/tasks to the same attack, defense and damage seams,

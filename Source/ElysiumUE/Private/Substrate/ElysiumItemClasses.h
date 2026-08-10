@@ -80,8 +80,8 @@ public:
 	// is the player. Returns whether the item was accepted.
 	//
 	// What CALLS it is the pickup ingress, which is retail's `CBaseCombatWeaponDefaultTouch` — a
-	// touch on the loose item's own body. Item world models are not part of the prop export yet, so
-	// there is no body to touch and no ingress; the script/`GiveItem` route reaches this same door.
+	// touch on the loose item's own body. That ingress is slice (b)'s; the script/`GiveItem` route
+	// reaches this same door.
 	bool AcquireBy(FElysiumCombatCharacter& Taker);
 
 	virtual void Spawn() override;

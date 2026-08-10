@@ -12,7 +12,8 @@
   },
   "lock_delay_seconds": 9,
   "questions": [
-    "Does vhotkey selection defer by one frame?"
+    "Does vhotkey selection defer by one frame?",
+    "Which state transition turns a player-requested feed release into paired release and FeedInterrupt?"
   ],
   "field_probes": [],
   "findings": [
@@ -33,6 +34,12 @@
       "fact": "+wpn_secondaryatk is a held composite block command, not a persistent toggle.",
       "evidence": "The handlers at 0x101024e0/0x101024f0 press/release kbutton 0x104d36e0 through 0x10102250/0x10102260 and then tail-jump to the ordinary +attack2/-attack2 handlers. The button pack emits 0x104d36e0 as held bit 0x08000000.",
       "consequence": "While held, +wpn_secondaryatk contributes both ordinary attack2 state and the distinct block bit consumed by the server player classifier."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "+feed and -feed own one ordinary client kbutton and pack its held state as usercmd bit 0x00400000.",
+      "evidence": "+feed/-feed at 0x102bdd14/0x102bdd1c have unique registration references at 0x10105a9c/0x10105aec; handlers 0x10102230/0x10102240 press/release kbutton 0x104d2e40; 0x10104460 packs its held state as 0x00400000.",
+      "consequence": "The ordinary feed request is a real command-button state, not a one-shot montage or Python-only verb."
     }
   ],
   "functions": [
@@ -130,10 +137,46 @@
       "address": "10104460",
       "label": "pack_command_buttons",
       "confidence": "confirmed",
-      "role": "Packs ordinary attack2 as held 0x00000800/edge 0x01000000 and weapon-secondary block as held 0x08000000.",
+      "role": "Packs ordinary attack2 as held 0x00000800/edge 0x01000000, weapon-secondary block as held 0x08000000 and feed as held 0x00400000.",
       "depth": 2,
       "cap": 220,
       "asm_count": 2000
+    },
+    {
+      "address": "10105a90",
+      "label": "register_feed_press",
+      "confidence": "confirmed",
+      "role": "Registers +feed with press handler 0x10102230.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10105ae0",
+      "label": "register_feed_release",
+      "confidence": "confirmed",
+      "role": "Registers -feed with release handler 0x10102240.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10102230",
+      "label": "feed_press_handler",
+      "confidence": "confirmed",
+      "role": "+feed handler; presses feed kbutton 0x104d2e40.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
+    },
+    {
+      "address": "10102240",
+      "label": "feed_release_handler",
+      "confidence": "confirmed",
+      "role": "-feed handler; releases feed kbutton 0x104d2e40.",
+      "depth": 2,
+      "cap": 160,
+      "asm_count": 1400
     }
   ],
   "relationships": [
@@ -172,6 +215,18 @@
       "to": "10102260",
       "confidence": "confirmed",
       "evidence": "direct call releases the weapon-secondary block kbutton before the tail-jump to -attack2"
+    },
+    {
+      "from": "10105a90",
+      "to": "10102230",
+      "confidence": "confirmed",
+      "evidence": "the +feed registration embeds handler address 0x10102230"
+    },
+    {
+      "from": "10105ae0",
+      "to": "10102240",
+      "confidence": "confirmed",
+      "evidence": "the -feed registration embeds handler address 0x10102240"
     }
   ]
 }

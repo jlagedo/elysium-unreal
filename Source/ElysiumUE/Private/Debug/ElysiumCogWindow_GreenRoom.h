@@ -11,6 +11,7 @@
 class FElysiumGreenRoomRun;
 class UChaosClothComponent;
 class UElysiumBodyAnimInstance;
+class UElysiumEntityBodies;
 class UElysiumNpcAnimInstance;
 class USkinnedAsset;
 
@@ -78,6 +79,14 @@ private:
 	void RenderView(FElysiumGreenRoomRun& Lab);
 	void RenderCloth(FElysiumGreenRoomRun& Lab);
 	void RenderClothDebugDraw();
+	// The eye rig (12.4). The stage carries no `FElysiumNpc`, so nothing supplies a gaze and every eye
+	// rests on its authored aim — a correct state that shows none of what the rig does. This tab is
+	// the aim, the blink and the two renderer knobs, plus the readout that separates "this model has
+	// no eyes" from "its sections drew as eyes and joined no record", which look identical on screen.
+	void RenderEyes(FElysiumGreenRoomRun& Lab);
+	// The body factory holding the eye bindings, or null. Off the map subsystem rather than the body's
+	// owner: in drive mode the visual hangs on the pawn, and the bindings never move off the map actor.
+	UElysiumEntityBodies* GetBodies() const;
 	// The autolayer binding the standing clip declares, beside what the lab actually has riding.
 	void RenderAutoLayers(FElysiumGreenRoomRun& Lab);
 
@@ -166,6 +175,17 @@ private:
 	FString ScannedStem;
 
 	void ScanRootMotion(FElysiumGreenRoomRun& Lab);
+
+	// Where the Eyes tab's manual aim sits, in the standing body's own frame rather than in world
+	// coordinates: the stage stands at (50000, 50000, 5000), so a world XYZ is a number nobody can
+	// steer. Yaw and pitch are degrees off the body's facing, measured about the head; the distance is
+	// centimetres out along that direction. The resolved world point is what reaches the eye pass.
+	float EyeAimYaw = 0.f;
+	float EyeAimPitch = 0.f;
+	float EyeAimDistance = 150.f;
+	// Draw the resolved point on the stage. On by default — convergence is the whole observable, and
+	// two irises aimed at a marker is the check, not two irises aimed somewhere plausible.
+	bool bEyeAimDraw = true;
 
 	// The skeleton's own bind pose in component space, and which mesh it belongs to. Cached because
 	// it is a property of the asset rather than of the frame — recomputing a whole rig every frame to

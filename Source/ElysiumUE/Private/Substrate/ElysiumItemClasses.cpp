@@ -10,6 +10,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
@@ -17,7 +18,6 @@
 #include "Substrate/ElysiumRulebook.h"
 
 #include "Components/StaticMeshComponent.h"
-#include "Misc/Paths.h"
 
 #include <type_traits>
 
@@ -135,12 +135,11 @@ void FElysiumItem::BuildWorldBody()
 	{
 		return;
 	}
-	// The exporter's own decoded stem when the map's prop pass covered this model, otherwise the
-	// item data's `playermodel` basename — the same fallback a runtime `SetModel` takes. Item ground
-	// models are not in the prop export corpus today, so this normally resolves to nothing and the
-	// loose item stands bodiless; the seam is here so the body appears the moment they are.
+	// The exporter's own decoded stem when the map's prop pass covered this model (an
+	// `item_container` states a `model` key like any prop), otherwise the stem the item data's
+	// `playermodel` path folds to — which is what the shared item corpus bakes its meshes under.
 	const FString Stem = Def->ModelMesh.IsEmpty()
-		? FPaths::GetBaseFilename(Model).ToLower()
+		? FElysiumContentPaths::PropModelStem(Model)
 		: Def->ModelMesh;
 	if (Stem.IsEmpty())
 	{

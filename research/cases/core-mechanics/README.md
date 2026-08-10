@@ -24,13 +24,15 @@ Ghidra projects remain below `ELYSIUM_WORK_ROOT`.
 - How do blood shield, unkillable, aggravated tracking and Source health projection commit?
 - Which command/usercmd/action/effect layers own attack, block, reload, use, feed and discipline
   verbs?
+- How do `+feed`, target/check policy, paired activities, animation events, the accelerating blood
+  timer and victim teardown compose one feed transaction?
 - Which remaining joins prevent an implementation-grade firearm, melee and combat-state
   specification?
 
 The established facts are consolidated in `docs/vtmb/skills-and-checks.md`,
 `docs/vtmb/combat-and-damage.md`, `docs/vtmb/controls.md`,
-`docs/vtmb/animation_and_movers.md` and `docs/vtmb/gameplay-verbs.md`. The open joins remain in
-those documents and RE40.
+`docs/vtmb/animation_and_movers.md`, `docs/vtmb/gameplay-verbs.md` and
+`docs/vtmb/feeding.md`. The open joins remain in those documents and RE40.
 
 ## Evidence and procedure
 
@@ -67,6 +69,7 @@ validate the specification and print the planned Ghidra calls without executing 
 - Check policy: `docs/vtmb/skills-and-checks.md`
 - Damage pipeline: `docs/vtmb/combat-and-damage.md`
 - Verb/action routing: `docs/vtmb/gameplay-verbs.md`
+- Feed transaction: `docs/vtmb/feeding.md`
 - Input command surface: `docs/vtmb/controls.md`
 - Activity translation and weighted sequence selection: `docs/vtmb/animation_and_movers.md`
 - Dice algorithm: `docs/recovered/dice-system.md`

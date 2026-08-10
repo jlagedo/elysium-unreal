@@ -762,11 +762,14 @@ def export_bundle(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     allowed = {
-        "audio", "particles", "scripts", "signs", "vdata", "cfg", "scenes",
+        "audio", "particles", "scripts", "signs", "vdata", "items", "cfg", "scenes",
         "ui", "use-icons", "npc", "policy",
     }
     if bundle not in allowed:
         raise typer.BadParameter("bundle must be one of: " + ", ".join(sorted(allowed)))
+    # `items` decodes offline AND bakes the shared /ElysiumBaked/items package, so it needs both
+    # the install and an editor; `policy` needs only the editor.
+    needs_editor = bundle in {"policy", "items"}
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
@@ -780,9 +783,9 @@ def export_bundle(
         ExitCode.UNREAL_OR_BAKE if bundle == "policy" else ExitCode.OFFLINE_EXPORT,
         action,
         require_game=bundle != "policy",
-        require_ue=bundle == "policy",
+        require_ue=needs_editor,
         activity=True,
-        require_built_lane=bundle == "policy",
+        require_built_lane=needs_editor,
     )
 
 

@@ -108,6 +108,13 @@ FOG_CPD_FLOATS = 6
 
 ALL_STAGES = ("textures", "materials", "world", "sky", "props", "particles", "level")
 
+# The shared, map-independent scope: item ground models. It is a scope name rather than a map
+# name -- `$ELYSIUM_EXPORT_ROOT/items/props` in, `/ElysiumBaked/items` out -- and only the three
+# stages a bodiless corpus has inputs for apply to it. Keep in sync with
+# FElysiumContentPaths::BakedItemMesh.
+ITEMS_SCOPE = "items"
+ITEM_STAGES = ("textures", "materials", "props")
+
 
 # Both are named profiles from Config/DefaultEngine.ini rather than per-channel edits, because
 # only the profile name survives the .umap save/load round-trip: loading re-applies the profile
@@ -356,6 +363,27 @@ class Bake(object):
             len(self.world_obj.groups), len(self.world_mats), len(self.decals),
             time.time() - start))
 
+        self._load_prop_sources()
+
+        brush_dir = os.path.join(self.dir, "brushes")
+        if os.path.isdir(brush_dir):
+            for entry in sorted(os.listdir(brush_dir)):
+                if not entry.endswith(".obj"):
+                    continue
+                stem = entry[:-4]
+                self.brush_models[stem] = bl.read_obj(os.path.join(brush_dir, entry))
+                self.brush_blend[stem] = bl.read_floats(
+                    os.path.join(brush_dir, stem + ".blend"))
+            log("brushes: %d local-space models / %d tris" % (
+                len(self.brush_models),
+                sum(m.tri_count for m in self.brush_models.values())))
+        return True
+
+    def _load_prop_sources(self):
+        """Read `<scope>/props/` -- one OBJ + MTL per model, plus its skin and physics sidecars.
+
+        Its own method because the shared item corpus is exactly this directory and nothing
+        else: no world, no sky, no level."""
         prop_dir = os.path.join(self.dir, "props")
         if os.path.isdir(prop_dir):
             start = time.time()
@@ -383,20 +411,6 @@ class Bake(object):
                 "%d physics (%d convex hulls) (%.1fs)" % (
                     len(self.prop_models), tris, len(self.prop_skins),
                     len(self.prop_phys), hulls, time.time() - start))
-
-        brush_dir = os.path.join(self.dir, "brushes")
-        if os.path.isdir(brush_dir):
-            for entry in sorted(os.listdir(brush_dir)):
-                if not entry.endswith(".obj"):
-                    continue
-                stem = entry[:-4]
-                self.brush_models[stem] = bl.read_obj(os.path.join(brush_dir, entry))
-                self.brush_blend[stem] = bl.read_floats(
-                    os.path.join(brush_dir, stem + ".blend"))
-            log("brushes: %d local-space models / %d tris" % (
-                len(self.brush_models),
-                sum(m.tri_count for m in self.brush_models.values())))
-        return True
 
     # ---------------------------------------------------------------- textures
 
@@ -1626,6 +1640,49 @@ class Bake(object):
         return failed
 
 
+class ItemBake(Bake):
+    """The shared item ground-model scope: `$ELYSIUM_EXPORT_ROOT/items/props` -> /ElysiumBaked/items.
+
+    An item's world model is not a map's prop. A placed `item_*` states no `model` key and a
+    scripted grant or a drop can put any of the 244 `vdata/items` definitions in any map, so the
+    meshes are decoded once into one corpus directory and baked once here. The scope reuses the
+    prop path verbatim -- same textures, materials, meshes and `.phys` collision -- and runs no
+    world, sky, particle or level stage, because it has none of those inputs.
+    """
+
+    def __init__(self, tracker, digest_cache):
+        super(ItemBake, self).__init__(ITEMS_SCOPE, tracker, digest_cache)
+
+    def load_sources(self):
+        if not os.path.isdir(os.path.join(self.dir, "props")):
+            fail("no item ground models at %s (run: uv run elysium export bundle items)"
+                 % os.path.join(self.dir, "props"))
+            return False
+        self._load_prop_sources()
+        return True
+
+
+def bake_items(stages, asset_plan, digest_cache):
+    """Bake the shared item corpus in the current editor process."""
+    tracker = AssetTracker(ITEMS_SCOPE, asset_plan, digest_cache)
+    bake = ItemBake(tracker, digest_cache)
+    if not bake.load_masters() or not bake.load_sources():
+        return False
+    if "textures" in stages:
+        bake.stage_textures()
+    bake.resolve_textures()
+    if "materials" in stages:
+        bake.stage_materials()
+    bake.resolve_materials()
+    if "props" in stages:
+        bake.stage_props()
+    if bake.flush():
+        return False
+    tracker.write_report()
+    log("%s done" % ITEMS_SCOPE)
+    return True
+
+
 def bake_one(map_name, stages, asset_plan, digest_cache):
     """Bake one map in the current editor process."""
     tracker = AssetTracker(map_name, asset_plan, digest_cache)
@@ -1668,7 +1725,40 @@ def _collect_garbage():
         collect()
 
 
+def _manual_plan(scopes, stages):
+    """The forced run plan a direct invocation uses. Never promoted by the outer orchestrator."""
+    return {
+        "schema": bake_cache.ASSET_RUN_SCHEMA,
+        "version": bake_cache.ASSET_SCHEMA_VERSION,
+        "run_id": "manual-%d" % int(time.time()),
+        "force": True,
+        "maps": {scope: {
+            "stages": list(stages),
+            "fingerprints": {stage: "manual" for stage in stages},
+            "policies": {stage: "manual" for stage in stages},
+        } for scope in scopes},
+    }
+
+
+def _run_items():
+    """-BakeItems=1: the shared item corpus, gated upstream by its own manifest task."""
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
+        [MOUNT], force_rescan=True)
+    digest_cache = ContentDigestCache(Path(OUT_ROOT) / bake_cache.DIGEST_CACHE_FILE)
+    try:
+        ok = bake_items(ITEM_STAGES, _manual_plan([ITEMS_SCOPE], ITEM_STAGES), digest_cache)
+    finally:
+        digest_cache.write()
+        _collect_garbage()
+    if not ok:
+        fail("item ground-model bake failed")
+        raise SystemExit(1)
+
+
 def main():
+    if cmdline_arg("BakeItems", ""):
+        _run_items()
+        return
     raw_maps = cmdline_arg("BakeMaps", "")
     map_names = [item.strip() for item in raw_maps.split(",") if item.strip()]
     if not map_names:
@@ -1692,19 +1782,8 @@ def main():
             fail("unsupported asset run plan schema")
             raise SystemExit(1)
     else:
-        # Direct developer invocation remains a recovery surface. It is deliberately forced and
-        # never promoted by the outer orchestrator.
-        asset_plan = {
-            "schema": bake_cache.ASSET_RUN_SCHEMA,
-            "version": bake_cache.ASSET_SCHEMA_VERSION,
-            "run_id": "manual-%d" % int(time.time()),
-            "force": True,
-            "maps": {name: {
-                "stages": list(stages),
-                "fingerprints": {stage: "manual" for stage in stages},
-                "policies": {stage: "manual" for stage in stages},
-            } for name in map_names},
-        }
+        # Direct developer invocation remains a recovery surface.
+        asset_plan = _manual_plan(map_names, stages)
     for map_name in map_names:
         planned = asset_plan.get("maps", {}).get(map_name)
         if not planned or set(planned.get("stages", [])) != set(stages):

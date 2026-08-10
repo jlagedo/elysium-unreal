@@ -12,6 +12,7 @@
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
 #include "ChaosClothAsset/ClothAsset.h"
@@ -24,6 +25,7 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkinnedAsset.h"
 #include "GameFramework/PlayerController.h"
@@ -1129,6 +1131,163 @@ void FElysiumCogWindow_GreenRoom::RenderClothDebugDraw()
 // resolver produced, the parameters the graph is posing from, and the bones that came out. Nothing
 // is re-derived, because a readout that computes its own answer is a second implementation of the
 // rule that decided the pose, and the two disagreeing is exactly the confusion this exists to end.
+UElysiumEntityBodies* FElysiumCogWindow_GreenRoom::GetBodies() const
+{
+	const UElysiumMapSubsystem* Maps = GetMapSubsystem();
+	AElysiumMapActor* Map = Maps ? Maps->GetCurrentMap() : nullptr;
+	return Map ? Map->GetBodies() : nullptr;
+}
+
+void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
+{
+	UElysiumEntityBodies* Bodies = GetBodies();
+	USkeletalMeshComponent* Body = Lab.LabBody();
+	if (Bodies == nullptr || Body == nullptr)
+	{
+		ImGui::TextDisabled("Nothing is standing on the stage.");
+		return;
+	}
+
+	// --- what the pass actually bound -------------------------------------------------------------
+	//
+	// First, because every control below is meaningless on a body that bound nothing, and because
+	// this is the one eye failure that looks like a working eye: an unjoined section still draws the
+	// eye master, whose default iris is a texture.
+	ImGui::SeparatorText("Binding");
+	UElysiumEntityBodies::FElysiumEyeReadout Eyes;
+	const bool bBound = Bodies->DescribeEyes(Body, Eyes);
+	if (!bBound)
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColWarn, "%s carries no eye sections.",
+			COG_TCHAR_TO_CHAR(*Lab.LabStem()));
+		ImGui::TextDisabled("Either the model authors no `StudioEyeball` record, or npc/eyes/<stem>.json");
+		ImGui::TextDisabled("was not exported. Animals and most crowd bodies are the normal case.");
+		return;
+	}
+	const bool bHealthy = Eyes.BoundCount > 0 && Eyes.BoundCount == Eyes.EyeSlotCount;
+	ImGui::TextColored(bHealthy ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColError,
+		"%d of %d eye sections bound, over %d record%s",
+		Eyes.BoundCount, Eyes.EyeSlotCount, Eyes.RecordCount, Eyes.RecordCount == 1 ? "" : "s");
+	for (const TPair<FString, int32>& Join : Eyes.Slots)
+	{
+		const bool bJoined = Join.Value != INDEX_NONE;
+		ImGui::TextColored(bJoined ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColError,
+			"  %s -> %s", COG_TCHAR_TO_CHAR(*Join.Key),
+			bJoined ? COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("eyeball %d"), Join.Value))
+				: "no record");
+	}
+	if (!bHealthy)
+	{
+		ImGui::TextDisabled("An unjoined section still draws M_Eyes, so it has a round iris that never");
+		ImGui::TextDisabled("aims and never blinks. The join is the slot's material name against the");
+		ImGui::TextDisabled("sidecar's `material` field, case-insensitive and exact.");
+	}
+	ImGui::BeginDisabled(Eyes.BoundCount == 0);
+
+	// --- where it looks ---------------------------------------------------------------------------
+	UElysiumEntityBodies::FElysiumEyeDebug& Debug = Bodies->EyeDebug();
+	ImGui::SeparatorText("Aim");
+	typedef UElysiumEntityBodies::FElysiumEyeDebug::EGaze EGaze;
+	const auto GazeButton = [&Debug](const char* Label, EGaze Mode, const char* Tip)
+	{
+		if (ImGui::RadioButton(Label, Debug.Gaze == Mode)) { Debug.Gaze = Mode; }
+		if (ImGui::IsItemHovered()) { ImGui::SetTooltip("%s", Tip); }
+	};
+	GazeButton("Shipping", EGaze::Off,
+		"The priority the game runs: elysium.EyeTrackPlayer, then the substrate's gaze, then rest. "
+		"On the stage there is no character behind the body, so this rests.");
+	ImGui::SameLine();
+	GazeButton("Rest", EGaze::Rest,
+		"bEyeMove off - the record's own authored resting aim. A real retail configuration, and NOT "
+		"guaranteed to point out of the face: it is whatever the model's QC authored.");
+	ImGui::SameLine();
+	GazeButton("Camera", EGaze::Camera,
+		"The orbit camera. The cheapest unambiguous check that the basis math is right: if both "
+		"irises converge on the lens as you orbit, the record, the import, the solve and the plane "
+		"parameters are all correct.");
+	ImGui::SameLine();
+	GazeButton("Point", EGaze::Point, "A marker you steer, below.");
+
+	if (Debug.Gaze == EGaze::Point)
+	{
+		ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+		ImGui::SliderFloat("Yaw##eye", &EyeAimYaw, -180.f, 180.f, "%.0f deg");
+		ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+		ImGui::SliderFloat("Pitch##eye", &EyeAimPitch, -80.f, 80.f, "%.0f deg");
+		ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+		ImGui::SliderFloat("Distance##eye", &EyeAimDistance, 20.f, 800.f, "%.0f cm");
+		ImGui::Checkbox("Draw the marker", &bEyeAimDraw);
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Centre")) { EyeAimYaw = 0.f; EyeAimPitch = 0.f; }
+		ImGui::TextDisabled("Degrees off the body's facing, about the head. Sweep the yaw past the");
+		ImGui::TextDisabled("shoulder: retail's eyes have no clamp, so the iris rolls to the corner.");
+	}
+	// Resolved every frame regardless of the mode, so switching to Point does not aim at where the
+	// body stood when the tab was opened.
+	{
+		const int32 Head = Body->GetBoneIndex(TEXT("Bip01 Head"));
+		const FTransform HeadWorld = Head != INDEX_NONE
+			? Body->GetBoneTransform(Head) : Body->GetComponentTransform();
+		const FRotator Facing = Body->GetComponentRotation();
+		const FVector Dir = FRotator(EyeAimPitch, Facing.Yaw + EyeAimYaw, 0.f).Vector();
+		Debug.Target = HeadWorld.GetLocation() + Dir * EyeAimDistance;
+		if (Debug.Gaze == EGaze::Point && bEyeAimDraw)
+		{
+			if (const UWorld* World = Body->GetWorld())
+			{
+				DrawDebugSphere(World, Debug.Target, 4.f, 12, FColor::Cyan, /*bPersistent=*/false,
+					/*LifeTime=*/-1.f, /*DepthPriority=*/0, /*Thickness=*/0.6f);
+			}
+		}
+	}
+	ImGui::TextColored(Eyes.bAiming ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColWarn,
+		Eyes.bAiming ? "aiming" : "resting on the authored aim");
+
+	// --- the lids ---------------------------------------------------------------------------------
+	ImGui::SeparatorText("Blink");
+	ImGui::Checkbox("Hold open", &Debug.bHoldBlink);
+	ImGui::SameLine();
+	// Disabled rather than made to win: the hold re-opens the lid on the frame after the envelope
+	// starts, so a press under it would fire a blink one frame long and read as a broken button.
+	ImGui::BeginDisabled(Debug.bHoldBlink);
+	if (ImGui::Button("Blink now")) { Debug.bBlinkNow = true; }
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	ImGui::TextDisabled("300 ms, and asymmetric: shut in 48, open over the rest.");
+	ImGui::ProgressBar(Eyes.Blink, ImVec2(-GetDpiScale() * 90.f, 0.f));
+	ImGui::SameLine();
+	ImGui::Text("lid");
+	const UElysiumBodyAnimInstance* Inst = GetBodyInstance();
+	const bool bHasLids = Eyes.bHasSet && Inst != nullptr;
+	if (!bHasLids)
+	{
+		ImGui::TextDisabled("The envelope drives the material either way; a morph needs a facial rig.");
+	}
+
+	// --- the renderer's own knobs -----------------------------------------------------------------
+	ImGui::SeparatorText("Tuning");
+	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+	ImGui::SliderFloat("Iris size", &Debug.Tuning.EyeSize, -1.f, 2.f, "%.2f");
+	ImGui::TextDisabled("Retail's eyeball_size: enters as 1/(1/iris_scale + this), so it widens the");
+	ImGui::TextDisabled("iris upward and narrows it downward. 0 is the shipped config.");
+	float Shift[3] = {
+		static_cast<float>(Debug.Tuning.EyeShift.X),
+		static_cast<float>(Debug.Tuning.EyeShift.Y),
+		static_cast<float>(Debug.Tuning.EyeShift.Z) };
+	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+	if (ImGui::SliderFloat3("Eye shift", Shift, -2.f, 2.f, "%.2f cm"))
+	{
+		Debug.Tuning.EyeShift = FVector(Shift[0], Shift[1], Shift[2]);
+	}
+	ImGui::TextDisabled("Applied by the sign of each component, so a mirrored pair moves apart. It");
+	ImGui::TextDisabled("shifts the iris planes but deliberately not the shading origin.");
+	if (ImGui::Button("Reset tuning"))
+	{
+		Debug.Tuning = FElysiumEyeTuning();
+	}
+	ImGui::EndDisabled();
+}
+
 void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 {
 	const UWorld* World = GetWorld();
@@ -1390,6 +1549,11 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 	if (ImGui::BeginTabItem("View"))
 	{
 		RenderView(*Lab);
+		ImGui::EndTabItem();
+	}
+	if (ImGui::BeginTabItem("Eyes"))
+	{
+		RenderEyes(*Lab);
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Cloth"))

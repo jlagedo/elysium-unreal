@@ -147,6 +147,16 @@ struct FElysiumEyeState
 
 namespace ElysiumEyes
 {
+	// The material name a mesh's material slot draws under, which is the key `FindByMaterial` joins
+	// on. Two spellings reach it and both are answered here so neither end can drift from the other:
+	// the baked path names a slot for the container's own material verbatim (`Eyeball_r`), and a
+	// glTFRuntime load spells the same name `LOD_<lod>_Section_<index>_<name>`. The prefix is trimmed
+	// when present; anything else is already the material name.
+	//
+	// The join is exact and case-insensitive rather than a suffix test, because the sidecar lowercases
+	// what the container capitalises and the two agree on nothing but the letters.
+	FString MaterialNameFromSlot(const FName SlotName);
+
 	// The original's `R_StudioEyeballPosition`, verbatim, in whatever space `BoneToSpace` and
 	// `Target` are expressed in — the runtime passes component space, because that is what the
 	// material's parameters are in and it keeps the arithmetic away from large world coordinates.

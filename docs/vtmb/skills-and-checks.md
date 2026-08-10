@@ -126,8 +126,9 @@ attacker Close_Combat_Brawl rating
 
 The use of the victim's `Hacking` feat is what the pinned binary does; it must not be renamed
 to a more intuitive trait without evidence. A separate target predicate can still authorize a
-stealth-kill/feed result after the opposed check fails. The exact activity list, target
-predicate identities and transition side effects remain open.
+stealth-kill/feed result after the opposed check fails. The automatic activity list and the
+transaction that consumes this verdict are in `docs/vtmb/feeding.md`; live predicate naming and
+transition validation remain open.
 
 ### Combat rolls defense and soak separately
 
@@ -163,8 +164,9 @@ different ways.
 
 - The `prop_hacking` terminal difficulty/skill-attempt route is not yet joined to its feat,
   retry and lockout policy; it remains part of RE39.
-- The exact feed activity codes, the "can resist" predicate and the stealth override predicate
-  need names and a live transition capture.
+- The feed activity codes and complete transaction are joined statically in
+  `docs/vtmb/feeding.md`; the resistance/stealth predicate identities and a live transition
+  capture remain open.
 - The melee attack record is known, but the later consumer that turns its lethality, defense and
   soak fields into committed damage remains unresolved.
 - `SkillRequirement` is loaded for weapon modes but its exact effect on attack lethality or use

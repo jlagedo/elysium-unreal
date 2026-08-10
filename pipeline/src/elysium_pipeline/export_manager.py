@@ -138,6 +138,7 @@ def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
         "scripts": (export_root / "scripts", export_root / "dlg"),
         "signs": (export_root / "signs" / "backgrounds.json",),
         "vdata": (export_root / "vdata",),
+        "items": (export_root / "items" / "ground_models.json",),
         "cfg": (export_root / "cfg",),
         "scenes": (export_root / "scenes",),
         "ui": (export_root / "ui" / "strings.json",),
@@ -193,6 +194,8 @@ def _bundle_tasks(
                 if bundle == "use-icons"
                 else "UE_extract_particles.py"
                 if bundle == "particles"
+                else "UE_extract_items.py"
+                if bundle == "items"
                 else "export_all.py"
             )
         )
@@ -381,6 +384,42 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
     return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:policy"]
 
 
+ITEMS_SCOPE = "items"
+
+
+def _baked_items_dir(config) -> Path:
+    return config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / ITEMS_SCOPE / "Props"
+
+
+def ensure_item_bake(config, runner, *, force: bool = False) -> TaskResult:
+    """Bake the decoded item ground models onto /ElysiumBaked/items.
+
+    A separate scope from the per-map bake because its product is: an item entity can be spawned
+    into any map, so its world mesh belongs to no map's package. Everything the scope consumes is
+    under `$ELYSIUM_EXPORT_ROOT/items/props`, so that directory plus the bake code is the whole
+    fingerprint.
+    """
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    unreal_root = config.repo_root / "pipeline" / "unreal"
+    fingerprint = fingerprint_content(
+        [
+            config.export_root / ITEMS_SCOPE / "ground_models.json",
+            config.export_root / ITEMS_SCOPE / "props",
+            unreal_root / "bake_map.py",
+            unreal_root / "bake_lib.py",
+        ],
+        extra=("bake-items-v1",),
+    )
+    baked = _baked_items_dir(config)
+    task = Task(
+        "unreal:items",
+        lambda: unreal.bake_items(config, runner),
+        fingerprint=lambda value=fingerprint: value,
+        outputs=tuple(sorted(baked.glob("SM_*.uasset"))) if baked.is_dir() else (),
+    )
+    return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:items"]
+
+
 def _baked_package(config, map_name: str) -> Path:
     return (
         config.repo_root
@@ -530,6 +569,8 @@ def export_profile(
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
     bake_and_verify(config, runner, maps, force=force or clean)
+    if ITEMS_SCOPE in bundles_for_profile(profile):
+        ensure_item_bake(config, runner, force=force or clean)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
     mark_complete(config.export_root, ("maps", "policy", *bundles_for_profile(profile)))
@@ -615,6 +656,13 @@ def export_bundle(config, runner, bundle: str, *, force: bool = False) -> None:
             continue_on_error=False,
         )
     )
+    if bundle == ITEMS_SCOPE:
+        # The decoded meshes are only half of it: a body resolves against the baked package, so
+        # the focused command carries the scope's bake the way a focused map export does.
+        try:
+            ensure_item_bake(config, runner, force=force)
+        except Exception as exc:
+            raise ExportBakeFailure(str(exc)) from exc
     # This bundle's domain is now whole, whatever the rest of the corpus looks like.
     mark_complete(config.export_root, (bundle,))
 

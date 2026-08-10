@@ -25,6 +25,7 @@ DOMAINS = (
     "maps",
     "audio",
     "cfg",
+    "items",
     "npc",
     "particles",
     # `policy` is not an export bundle in the exporters' sense: it is the generated

@@ -2,6 +2,7 @@
 
 #if WITH_EDITOR
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "glTFRuntimeAsset.h"
@@ -107,30 +108,10 @@ namespace
 		return Object;
 	}
 
-	// glTFRuntime names a slot `LOD_<lod>_Section_<index>_<glTF material name>`. The bake keys its
-	// imported textures by that trailing material name, which is the name mdl_gltf.py wrote.
-	// UElysiumEntityBodies::InstallEyes reads the same convention to find the eye slots, so a
-	// change to it breaks both ends at once.
-	FString MaterialNameFromSlot(const FName SlotName)
-	{
-		static const FString Marker = TEXT("_Section_");
-		const FString Slot = SlotName.ToString();
-		const int32 SectionAt = Slot.Find(Marker);
-		if (SectionAt == INDEX_NONE)
-		{
-			return Slot;
-		}
-		int32 Cursor = SectionAt + Marker.Len();
-		while (Cursor < Slot.Len() && FChar::IsDigit(Slot[Cursor]))
-		{
-			++Cursor;
-		}
-		if (Cursor < Slot.Len() && Slot[Cursor] == TEXT('_'))
-		{
-			++Cursor;
-		}
-		return Slot.Mid(Cursor);
-	}
+	// The bake keys its imported textures by the slot's trailing material name, which is the name
+	// mdl_gltf.py wrote. `UElysiumEntityBodies::InstallEyes` joins its eye records on the same name,
+	// so the two share one implementation rather than a convention each has to keep.
+	using ElysiumEyes::MaterialNameFromSlot;
 
 	bool IsUnsaveable(const UObject* Object)
 	{

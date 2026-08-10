@@ -5210,4 +5210,158 @@ bool FElysiumItemsContentTest::RunTest(const FString&)
 	return true;
 }
 
+
+// =====================================================================================
+// Item ground models — the shared corpus a loose item's body resolves against.
+//
+// A placed `item_*` states no `model` key, so the map prop pass never saw these meshes;
+// UE_extract_items.py decodes them from the same `vdata/items` table the runtime loads, and the
+// item bake scope stands them on /ElysiumBaked/items. This asserts the two halves agree: that the
+// stem the runtime derives from a `playermodel` is the stem the offline decode wrote, and that
+// every model carrying geometry has a baked mesh to load.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumItemGroundModelsContentTest,
+	"Elysium.Content.ItemGroundModels", GElysiumContentTestFlags)
+bool FElysiumItemGroundModelsContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata"), TEXT("items") })) return true;
+
+	FString Text;
+	if (!FFileHelper::LoadFileToString(Text, *FElysiumContentPaths::ItemGroundModels()))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no item ground models "
+			"(run: uv run elysium export bundle items)"));
+		return true;
+	}
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
+	if (!TestTrue(TEXT("the item ground-model manifest parses"),
+		FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid()))
+	{
+		return true;
+	}
+	TestEqual(TEXT("...under the expected schema"), Root->GetStringField(TEXT("schema")),
+		FString(TEXT("elysium.item-ground-models")));
+
+	const TSharedPtr<FJsonObject>* Models = nullptr;
+	if (!TestTrue(TEXT("...carrying a models table"), Root->TryGetObjectField(TEXT("models"), Models)))
+	{
+		return true;
+	}
+
+	// The catalogue is the enumeration's source of truth, so the manifest must cover every
+	// `playermodel` it names — a definition whose model is neither decoded nor listed as skipped
+	// would be an item the export silently forgot.
+	FString Error;
+	FElysiumItemTable Items;
+	TSet<FString> Referenced;
+	if (Items.Load(Error))
+	{
+		for (const FElysiumItemDef& Def : Items.Items)
+		{
+			FString Model = Def.PlayerModel.Replace(TEXT("\\"), TEXT("/")).ToLower().TrimStartAndEnd();
+			if (Model.IsEmpty())
+			{
+				continue;   // armour and the disciplines author no ground body at all
+			}
+			if (!Model.EndsWith(TEXT(".mdl")))
+			{
+				Model += TEXT(".mdl");   // two definitions write the path without its extension
+			}
+			Referenced.Add(Model);
+		}
+	}
+
+	TSet<FString> Covered;
+	TArray<FString> Unresolved;
+	TArray<FString> Geometryless;
+	int32 Resolved = 0;
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Models)->Values)
+	{
+		const TSharedPtr<FJsonObject>* Row = nullptr;
+		if (!Entry.Value.IsValid() || !Entry.Value->TryGetObject(Row))
+		{
+			continue;
+		}
+		Covered.Add(Entry.Key);
+		const FString Stem = (*Row)->GetStringField(TEXT("stem"));
+		// The load-bearing agreement: the runtime derives its stem from the `playermodel` path
+		// alone, so if its fold and the decoder's ever diverge every item body silently vanishes.
+		TestEqual(*FString::Printf(TEXT("%s folds to the stem the decode wrote"), *Entry.Key),
+			FElysiumContentPaths::PropModelStem(Entry.Key), Stem);
+		int32 Faces = 0;
+		if (!(*Row)->TryGetNumberField(TEXT("faces"), Faces))
+		{
+			AddError(FString::Printf(TEXT("%s: the manifest states no face count"), *Entry.Key));
+			continue;
+		}
+		if (Faces <= 0)
+		{
+			Geometryless.Add(Entry.Key);   // `w_null.mdl` and its kin: no triangles, so no asset
+			continue;
+		}
+		if (LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedItemMesh(Stem)) != nullptr)
+		{
+			++Resolved;
+		}
+		else
+		{
+			Unresolved.Add(Entry.Key);
+		}
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* Skipped = nullptr;
+	TArray<FString> SkipNotes;
+	if (Root->TryGetArrayField(TEXT("skipped"), Skipped))
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *Skipped)
+		{
+			const TSharedPtr<FJsonObject>* Row = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(Row))
+			{
+				continue;
+			}
+			const FString Model = (*Row)->GetStringField(TEXT("model"));
+			Covered.Add(Model);
+			SkipNotes.Add(FString::Printf(TEXT("%s (%s)"), *Model,
+				*(*Row)->GetStringField(TEXT("reason"))));
+		}
+	}
+
+	TArray<FString> Uncovered;
+	for (const FString& Model : Referenced)
+	{
+		if (!Covered.Contains(Model))
+		{
+			Uncovered.Add(Model);
+		}
+	}
+	ReportMissing(*this, TEXT("vdata/items playermodels the item export did not account for"),
+		Uncovered);
+
+	// Every decoded model that carries triangles must have a mesh to stand. A model the install
+	// does not contain is reported, never failed — that is the export's own contract.
+	TestEqual(TEXT("every decoded item ground model with geometry has a baked mesh"),
+		Unresolved.Num(), 0);
+	if (Unresolved.Num() > 0)
+	{
+		AddInfo(FString::Printf(TEXT("no baked mesh for: %s"),
+			*FString::Join(Unresolved, TEXT(", "))));
+	}
+	AddInfo(FString::Printf(
+		TEXT("item ground models: %d referenced, %d decoded, %d baked, %d without geometry, %d skipped"),
+		Referenced.Num(), (*Models)->Values.Num(), Resolved, Geometryless.Num(), SkipNotes.Num()));
+	if (Geometryless.Num() > 0)
+	{
+		AddInfo(FString::Printf(TEXT("no geometry (no asset expected): %s"),
+			*FString::Join(Geometryless, TEXT(", "))));
+	}
+	for (const FString& Note : SkipNotes)
+	{
+		AddInfo(FString::Printf(TEXT("not exported: %s"), *Note));
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

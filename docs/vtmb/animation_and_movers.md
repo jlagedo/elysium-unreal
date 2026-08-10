@@ -620,17 +620,15 @@ or Python producer: ordinary/rat feeding, sneak success, payphone, zombie feedin
 registered activities and router behavior exist, but shipped reachability is not inferred from
 that dormant surface.
 
+The feed-specific command, state progression, MDL event 4007/4006 boundary, blood-pulse timer and
+teardown are canonical in `docs/vtmb/feeding.md`. This document retains the common paired resolver
+and mode/activity inventory.
+
 The stateful leaves advance named base activities before the pair translator runs:
 
-- modes `0`/`1` advance engage/idle to bite or release; bite/feed-loop stays in
-  `ACT_FEEDING_FEED_LOOP` while feeding is permitted, otherwise selects feed-release, ordinary
-  release, or the player flyback release;
-- mode `2` advances engage to loop while latched, then selects ordinary release or
-  `ACT_SEDUCTIVE_RELEASE_TO_MEZ` from the linked actor state;
-- mode `5` advances pickup → idle → hangup and requests hangup when the phone handle disappears;
-- mode `6` advances rat engage → loop → release;
-- mode `8` applies the analogous zombie engage/idle → bite/feed-loop → feed-release or
-  ordinary/flyback release family.
+- modes `0`/`1`, `2`, `6` and `8` advance their feed-specific engage/loop/release families as
+  detailed in `docs/vtmb/feeding.md`;
+- mode `5` advances pickup → idle → hangup and requests hangup when the phone handle disappears.
 
 `StartGrappleAttack` at `0x10328df0` chooses size and front/back alignment, validates that both
 models can answer the initial paired base, and enters both actors through virtual `+0x5ec`.
