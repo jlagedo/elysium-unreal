@@ -77,6 +77,12 @@ mat.set_editor_property("used_with_skeletal_mesh", True)
 # face blinks, UpdateMorphMaterialUsageOnProxy swaps any material lacking this usage for the
 # default grey and never swaps it back.
 mat.set_editor_property("used_with_morph_targets", True)
+# REQUIRED for the same reason, one flag over. A garment reaches the frame on a cloth component,
+# and FSkeletalMeshSceneProxy gates a cloth section on MATUSAGE_Clothing -- without it the section
+# draws in the engine's default grey checker. The editor adds the usage and recompiles on demand,
+# so this only fails in `-game`, where the material cannot be recompiled and the fallback is
+# permanent. Every character body material is a garment material on the models that author one.
+mat.set_editor_property("used_with_clothing", True)
 mat.set_editor_property("dither_opacity_mask", True)
 mat.set_editor_property("opacity_mask_clip_value", 0.333)
 

@@ -33,9 +33,6 @@ bool FElysiumBipedAnimProxy::Evaluate(FPoseContext& Output)
 
 void FElysiumBipedAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
 {
-	// Ahead of the graph, and outside anything the graph gates: the garment is not a graph node, and
-	// a body whose state machine has resolved no clip at all still has a skirt that has to hang.
-	UpdateCloth(InContext);
 	FAnimInstanceProxy::UpdateAnimationNode(InContext);
 }
 

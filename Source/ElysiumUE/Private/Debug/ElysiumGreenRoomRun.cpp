@@ -1,5 +1,12 @@
 #include "Debug/ElysiumGreenRoomRun.h"
 
+#include "Debug/ElysiumClothDebug.h"
+
+#include "ChaosClothAsset/ClothAsset.h"
+#include "ChaosClothAsset/ClothComponent.h"
+#include "PhysicsEngine/PhysicsAsset.h"
+#include "PhysicsEngine/SkeletalBodySetup.h"
+
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumContentPaths.h"
@@ -21,7 +28,6 @@
 #include "Debug/ElysiumGymBuilder.h"
 #endif
 #include "Substrate/ElysiumCameraTrack.h"
-#include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
@@ -2025,24 +2031,31 @@ void FElysiumGreenRoomRun::DrawLabOverlays() const
 	{
 		return;
 	}
-	const UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
-	const FElysiumClothRig* Rig = Inst ? Inst->GetClothRig() : nullptr;
 
-	// The bones the lattice overlay owns. The skeleton view skips them, because a garment lattice
-	// drawn twice in two colours reads as a rig fault that is not there — and because what the
-	// skeleton view is for is the *model's* limbs, which the lattice hides among fifty of its own.
-	TSet<FName> Lattice;
-	if (Rig != nullptr)
+	// The garment, if this body wears one. Its collision comes from the generated physics asset
+	// rather than from the cloth collection, so the bones that own a collider are read from there
+	// and that is also what the skeleton view highlights.
+	const UChaosClothComponent* Garment = nullptr;
+	for (const USceneComponent* Child : Body->GetAttachChildren())
 	{
-		for (const FName& Anchor : Rig->AnchorRow)
+		if (const UChaosClothComponent* Candidate = Cast<UChaosClothComponent>(Child))
 		{
-			Lattice.Add(Anchor);
+			Garment = Candidate;
+			break;
 		}
-		for (const FElysiumClothChain& Chain : Rig->Chains)
+	}
+	const UChaosClothAsset* Asset = Garment
+		? Cast<UChaosClothAsset>(Garment->GetAsset()) : nullptr;
+	const UPhysicsAsset* Physics = Asset ? Asset->GetPhysicsAsset() : nullptr;
+
+	TSet<FName> Driving;
+	if (Physics != nullptr)
+	{
+		for (const USkeletalBodySetup* Setup : Physics->SkeletalBodySetups)
 		{
-			for (const FElysiumClothBody& Cell : Chain.Bodies)
+			if (Setup != nullptr)
 			{
-				Lattice.Add(Cell.Bone);
+				Driving.Add(Setup->BoneName);
 			}
 		}
 	}
@@ -2051,34 +2064,20 @@ void FElysiumGreenRoomRun::DrawLabOverlays() const
 	// overlay is a solid block.
 	if (LabViewState.bDrawSkeleton)
 	{
-		const USkinnedAsset* Asset = Body->GetSkinnedAsset();
-		const FReferenceSkeleton* Ref = Asset ? &Asset->GetRefSkeleton() : nullptr;
-		// The bones a collider hangs off, labelled. Every other bone is a joint and a line: naming
-		// ninety of them costs a DrawDebugString apiece and buries the four that are being judged.
-		TSet<FName> Driving;
-		if (Rig != nullptr)
-		{
-			for (const FElysiumClothCollider& Collider : Rig->Colliders)
-			{
-				Driving.Add(Collider.Bone);
-			}
-		}
+		const USkinnedAsset* Skinned = Body->GetSkinnedAsset();
+		const FReferenceSkeleton* Ref = Skinned ? &Skinned->GetRefSkeleton() : nullptr;
 		for (int32 Index = 0; Ref != nullptr && Index < Ref->GetNum(); ++Index)
 		{
 			const FName Name = Ref->GetBoneName(Index);
-			if (Lattice.Contains(Name))
-			{
-				continue;
-			}
+			// The bones a collider hangs off, labelled. Every other bone is a joint and a line:
+			// naming ninety of them costs a DrawDebugString apiece and buries the few being judged.
 			const bool bDrives = Driving.Contains(Name);
 			const FColor Colour = bDrives ? FColor(255, 90, 120) : FColor(150, 230, 160);
 			const FVector Here = Body->GetBoneTransform(Index).GetLocation();
 			DrawDebugPoint(World, Here, bDrives ? 8.0f : 5.0f, Colour, false, -1.0f, SDPG_Foreground);
 
 			const int32 Parent = Ref->GetParentIndex(Index);
-			// Only when the parent is drawn too — the lattice hangs off the pelvis, and a line to a
-			// skipped bone would draw the garment's own rig back in through the gap.
-			if (Parent != INDEX_NONE && !Lattice.Contains(Ref->GetBoneName(Parent)))
+			if (Parent != INDEX_NONE)
 			{
 				DrawDebugLine(World, Body->GetBoneTransform(Parent).GetLocation(), Here,
 					FColor(90, 190, 110), false, -1.0f, SDPG_Foreground, 0.4f);
@@ -2090,46 +2089,40 @@ void FElysiumGreenRoomRun::DrawLabOverlays() const
 			}
 		}
 	}
-	if (Rig != nullptr && LabViewState.bDrawLattice)
+
+	// What the garment actually occupies. A cloth that has collapsed onto its anchors and one that
+	// is simulating read identically in a lit viewport at rest; the bounds separate them.
+	if (Garment != nullptr && LabViewState.bDrawLattice)
 	{
-		// The anchors first: they are the row the panels hang from and never simulate, so a chain
-		// that has collapsed onto its anchor is only recognisable against them.
-		for (const FName& Anchor : Rig->AnchorRow)
-		{
-			DrawDebugPoint(World, Body->GetBoneLocation(Anchor), 7.0f, FColor(120, 200, 255),
-				false, -1.0f, SDPG_Foreground);
-		}
-		for (const FElysiumClothChain& Chain : Rig->Chains)
-		{
-			for (int32 Index = 0; Index < Chain.Bodies.Num(); ++Index)
-			{
-				const FVector Here = Body->GetBoneLocation(Chain.Bodies[Index].Bone);
-				DrawDebugPoint(World, Here, 6.0f, FColor(255, 190, 90), false, -1.0f, SDPG_Foreground);
-				if (Index > 0)
-				{
-					DrawDebugLine(World, Body->GetBoneLocation(Chain.Bodies[Index - 1].Bone), Here,
-						FColor(255, 190, 90), false, -1.0f, SDPG_Foreground, 0.6f);
-				}
-			}
-			// The link into the anchor, so the panel reads as hanging from something rather than
-			// floating at the waist.
-			if (!Chain.Bodies.IsEmpty() && Rig->AnchorRow.IsValidIndex(Chain.Column))
-			{
-				DrawDebugLine(World, Body->GetBoneLocation(Rig->AnchorRow[Chain.Column]),
-					Body->GetBoneLocation(Chain.Bodies[0].Bone), FColor(120, 200, 255),
-					false, -1.0f, SDPG_Foreground, 0.6f);
-			}
-		}
+		const FBoxSphereBounds Bounds = Garment->Bounds;
+		DrawDebugBox(World, Bounds.Origin, Bounds.BoxExtent, FColor(255, 190, 90),
+			false, -1.0f, SDPG_Foreground, 0.6f);
 	}
-	if (Rig != nullptr && LabViewState.bDrawColliders)
+
+	// The authored capsules and spheres the garment is solved against, on their own bones. This is
+	// what a hem passing through a leg is diagnosed with: a collider sitting off its limb reads at
+	// a glance against the labelled bone beside it.
+	if (Physics != nullptr && LabViewState.bDrawColliders)
 	{
-		for (const FElysiumClothCollider& Collider : Rig->Colliders)
+		for (const USkeletalBodySetup* Setup : Physics->SkeletalBodySetups)
 		{
-			const FTransform Frame = Body->GetSocketTransform(Collider.Bone, RTS_World);
-			const float Radius = Collider.Radius
-				* (Inst ? Inst->GetClothTuning().ColliderRadiusScale : 1.0f);
-			DrawDebugSphere(World, Frame.TransformPosition(Collider.Offset), Radius, 16,
-				FColor(255, 90, 120), false, -1.0f, SDPG_Foreground, 0.6f);
+			if (Setup == nullptr)
+			{
+				continue;
+			}
+			const FTransform Frame = Body->GetSocketTransform(Setup->BoneName, RTS_World);
+			for (const FKSphereElem& Sphere : Setup->AggGeom.SphereElems)
+			{
+				DrawDebugSphere(World, Frame.TransformPosition(Sphere.Center), Sphere.Radius, 16,
+					FColor(255, 90, 120), false, -1.0f, SDPG_Foreground, 0.6f);
+			}
+			for (const FKSphylElem& Sphyl : Setup->AggGeom.SphylElems)
+			{
+				DrawDebugCapsule(World, Frame.TransformPosition(Sphyl.Center),
+					Sphyl.Length * 0.5f + Sphyl.Radius, Sphyl.Radius,
+					Frame.GetRotation() * Sphyl.Rotation.Quaternion(),
+					FColor(255, 130, 90), false, -1.0f, SDPG_Foreground, 0.6f);
+			}
 		}
 	}
 }
@@ -2165,6 +2158,11 @@ bool FElysiumGreenRoomRun::Tick(float DeltaSeconds)
 			UpdateStage(EmptyStageBounds());
 			FrameLabCamera(EmptyStageBounds());
 			Phase = EPhase::Lab;
+			// Arm Chaos's debug drawing for the whole lab session. It is off at every launch and
+			// gates every cloth overlay, so leaving it to be discovered means the garment panel's
+			// checkboxes do nothing the first time anyone ticks one. Nothing is drawn until an
+			// overlay is actually selected, so arming it costs a bool.
+			ElysiumClothDebug::SetDrawEnabled(true);
 			UE_LOG(LogElysiumGreenRoom, Log,
 				TEXT("lab: stage ready — F1, or `elysium.gr`, opens the window that drives it"));
 			// `gr <model> [clip]` names a body up front, and `--drive` says which mode stands it. A

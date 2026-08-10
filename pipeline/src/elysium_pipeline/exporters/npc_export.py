@@ -48,6 +48,7 @@ import os
 import re
 
 from elysium_pipeline.formats import install, kv, mdl, mdl_gltf
+from elysium_pipeline.exporters import UE_mdl_cloth
 from elysium_pipeline.formats import mdl_skel as S
 from elysium_pipeline.paths import export_root
 from elysium_pipeline.exporters.source_warnings import (
@@ -65,6 +66,7 @@ CLIPS_DIR = os.path.join(NPC_DIR, "clips")
 FACIAL_DIR = os.path.join(NPC_DIR, "facial")
 PROCEDURAL_DIR = os.path.join(NPC_DIR, "procedural")
 BLENDS_DIR = os.path.join(NPC_DIR, "blends")
+GARMENT_DIR = os.path.join(NPC_DIR, "garment")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
 MANIFEST_VERSION = 6
 
@@ -335,6 +337,24 @@ def write_eyes(stem, model, rig):
     return {"eyes": "eyes/" + os.path.basename(path), "eyeballs": len(rig["eyeballs"])}
 
 
+def write_garment(stem, model, idx, model_key):
+    """Write one character's authored renderer-cloth garments to `garment/<stem>.json`.
+
+    The payload is VtMB's own simulated-garment data -- particles, constraints, collision
+    capsules and spheres, and the per-render-vertex substitution maps that replace skinned
+    output after skinning (`docs/vtmb/secondary_motion.md`). `{}` for a model that does not
+    carry it, which is 4,385 of the 4,445 installed models.
+
+    Unlike `facial/` and `eyes/` beside it this sidecar is **Unreal-native**, not in the glb's
+    basis, and the conversion lives in `UE_mdl_cloth.py` where the naming rule requires it. The
+    two differ because their consumers differ: those rigs are read back against the glb the
+    runtime loaded, while this one is baked into a Chaos cloth asset offline and never meets
+    glTFRuntime at all.
+    """
+    del model  # named by the sidecar itself, through the writer
+    return UE_mdl_cloth.write(stem, model_key, idx, GARMENT_DIR)
+
+
 def write_procedural(stem, model, rules, prefix=""):
     """Write one character's procedural bone rules to `<prefix>procedural/<stem>.json` -> the
     manifest fields naming it.
@@ -480,7 +500,10 @@ def write_sidecars(manifest):
                          "procedural_bones": r["procedural_bones"]} if r.get("procedural")
                         else {}),
                      **({"blends": r["blends"], "blend_grids": r["blend_grids"]}
-                        if r.get("blends") else {})}
+                        if r.get("blends") else {}),
+                     **({"garment": r["garment"],
+                         "garment_particles": r["garment_particles"]}
+                        if r.get("garment") else {})}
                  for s, r in manifest["npcs"].items()},
         "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"]),
                       **({"blends": r["blends"], "blend_grids": r["blend_grids"]}
@@ -703,6 +726,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             **write_eyes(info["stem"], info["model"], info["eyes"]),
             **write_procedural(info["stem"], info["model"], info["procedural"]),
             **write_blends(info["stem"], info["model"], info["blends"]),
+            **write_garment(info["stem"], info["model"], idx, m),
         }
         procedural_faults.extend((info["stem"], f) for f in info["procedural_faults"])
         eye_faults.extend((info["stem"], f) for f in info["eye_faults"])

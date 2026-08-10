@@ -31,6 +31,10 @@ public class ElysiumUE : ModuleRules
 			// Runtime asset loading: build meshes in code (no editor bake) and
 			// decode textures from disk into transient UTexture2D.
 			"ProceduralMeshComponent", "ImageWrapper", "ImageCore", "RenderCore", "RHI",
+			// Generated garments: a character wears a UChaosClothAsset through a stock
+			// UChaosClothComponent following its body as leader pose. Runtime, unlike the
+			// builder beside it — the asset is authored offline and only ever loaded here.
+			"ChaosClothAssetEngine",
 			// Static props: build UStaticMesh at runtime from mesh descriptions
 			// (BuildFromMeshDescriptions) with manual convex collision for solid props.
 			"MeshDescription", "StaticMeshDescription", "PhysicsCore",
@@ -110,7 +114,16 @@ public class ElysiumUE : ModuleRules
 				// create/compile entry points beside it. Editor-only by construction: a graph is
 				// authored once and cooked into a generated class, and nothing reads UnrealEd at
 				// runtime.
-				"UnrealEd"
+				"UnrealEd",
+				// UElysiumClothBuildLibrary turns VtMB's authored garment payload into a
+				// UChaosClothAsset. `Chaos` carries FManagedArrayCollection, which the cloth
+				// collection IS; the two ChaosClothAsset modules carry the facades that write it
+				// and the asset that consumes it; PhysicsCore carries the body setups the
+				// authored capsules and spheres become; `ChaosCloth` carries UChaosClothConfig and
+				// FClothingSimulationConfig, which is how a complete solver property set is
+				// produced rather than hand-written. Editor-only: an asset is generated once
+				// and the running game only ever loads the result.
+				"Chaos", "ChaosCloth", "ChaosClothAsset", "PhysicsCore"
 			});
 			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only

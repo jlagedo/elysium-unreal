@@ -14,6 +14,9 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcAnimInstance.h"
 #include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "ChaosClothAsset/ClothAsset.h"
+#include "ChaosClothAsset/ClothAssetInteractor.h"
+#include "ChaosClothAsset/ClothComponent.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumPoseDeviation.h"
 
@@ -27,6 +30,8 @@
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 
+#include "Debug/ElysiumClothDebug.h"
+
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
 #include "imgui.h"
@@ -37,6 +42,7 @@ namespace
 	{
 		return IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.Cloth"));
 	}
+
 
 	/** One bone's pose at one time, off the sequence's raw data. False when the bone is absent. */
 	bool SampleClipBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
@@ -102,6 +108,24 @@ UElysiumBodyAnimInstance* FElysiumCogWindow_GreenRoom::GetBodyInstance() const
 	return Body ? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
 }
 
+UChaosClothComponent* FElysiumCogWindow_GreenRoom::FindGarment() const
+{
+	FElysiumGreenRoomRun* Lab = GetLab();
+	USkeletalMeshComponent* Body = Lab ? Lab->LabBody() : nullptr;
+	if (Body == nullptr)
+	{
+		return nullptr;
+	}
+	for (USceneComponent* Child : Body->GetAttachChildren())
+	{
+		if (UChaosClothComponent* Cloth = Cast<UChaosClothComponent>(Child))
+		{
+			return Cloth;
+		}
+	}
+	return nullptr;
+}
+
 UElysiumNpcAnimInstance* FElysiumCogWindow_GreenRoom::GetNpcBodyInstance() const
 {
 	// The rows that read a clip or a layer rather than a rig. Those belong to the native instance's
@@ -140,7 +164,6 @@ void FElysiumCogWindow_GreenRoom::Stand(FElysiumGreenRoomRun& Lab, const FString
 		PendingStem = Lab.LabStem();
 		PendingClip = Lab.LabClip();
 		// The new body's rig is a different rig; whatever was being tuned no longer applies.
-		TunedStem.Reset();
 	}
 }
 
@@ -172,8 +195,7 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 				const FElysiumResolvedGrid& Grid = Lab.LabGrid();
 				LastNotice = FString::Printf(TEXT("blending %s across %d cells on %s"),
 					*Clips[Index], Grid.Space->GetBlendSamples().Num(), *Grid.AxisName[0]);
-				TunedStem.Reset();
-				return;
+						return;
 			}
 		}
 		Stand(Lab, PendingStem, Clips[Index]);
@@ -290,7 +312,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		StemHasCloth.Reserve(Stems.Num());
 		for (const FString& Stem : Stems)
 		{
-			StemHasCloth.Add(IFileManager::Get().FileExists(*FElysiumContentPaths::NpcClothGlb(Stem)));
+			StemHasCloth.Add(IFileManager::Get().FileExists(*FElysiumContentPaths::NpcGarment(Stem)));
 		}
 		bStemsDirty = false;
 	}
@@ -811,30 +833,28 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 	ImGui::Checkbox("Game HUD", &View.bShowHud);
 	ImGui::TextDisabled("Off by default - the reticle sits where the hem is.");
 
-	// The overlays belong to what is being LOOKED at, not to the garment. The skeleton in particular
-	// is the model's own rig and reads on any body, including every model the cloth spike never
-	// touched — behind the Cloth tab it was unreachable on exactly those, because that tab returns
-	// early when no garment rig is installed.
+	// The overlays belong to what is being LOOKED at, not to the garment. The skeleton in
+	// particular is the model's own rig and reads on any body, including every model that authors
+	// no cloth at all — behind the Cloth tab it would be unreachable on exactly those.
 	ImGui::SeparatorText("Overlays");
-	const UElysiumBodyAnimInstance* Inst = GetBodyInstance();
-	const bool bHasRig = Inst != nullptr && Inst->GetClothRig() != nullptr;
 
 	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
-	ImGui::TextDisabled("The model's own bones, garment lattice excluded. The bones a collider hangs");
-	ImGui::TextDisabled("off are named, so a sphere sitting off its limb reads at a glance.");
+	ImGui::TextDisabled("The model's own bones. The bones a garment collider hangs off are named,");
+	ImGui::TextDisabled("so one sitting off its limb reads at a glance.");
 
-	ImGui::BeginDisabled(!bHasRig);
-	ImGui::Checkbox("Lattice", &View.bDrawLattice);
+	const bool bHasGarment = FindGarment() != nullptr;
+	ImGui::BeginDisabled(!bHasGarment);
+	ImGui::Checkbox("Bounds", &View.bDrawLattice);
 	ImGui::SameLine();
 	ImGui::Checkbox("Colliders", &View.bDrawColliders);
 	ImGui::EndDisabled();
-	if (bHasRig)
+	if (bHasGarment)
 	{
-		ImGui::TextDisabled("Anchor row in blue, simulated rows in amber, leg spheres in red.");
+		ImGui::TextDisabled("Garment bounds in amber, its capsules and spheres in red.");
 	}
 	else
 	{
-		ImGui::TextDisabled("Both need a garment rig on the standing body - see the Cloth tab.");
+		ImGui::TextDisabled("Both need a generated garment on the standing body - see the Cloth tab.");
 	}
 }
 
@@ -929,14 +949,14 @@ void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
 
 void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 {
-	FElysiumGreenRoomRun::FLabView& View = Lab.LabView();
-
-	// The cvar first: it decides which of the two meshes a body is built from, so it is the one
-	// control here that needs the body rebuilt rather than re-tuned.
+	// The cvar is read when a body is BUILT, so flipping it changes nothing until one is built
+	// again -- attaching a simulating component to a body already posed this frame would drop the
+	// garment out of the bind pose in view. Restand is that rebuild, without going back to the
+	// model list.
 	if (IConsoleVariable* Cloth = ClothCVar())
 	{
 		bool bEnabled = Cloth->GetInt() != 0;
-		if (ImGui::Checkbox("elysium.Cloth - wear the simulated mesh", &bEnabled))
+		if (ImGui::Checkbox("elysium.Cloth - wear the generated garment", &bEnabled))
 		{
 			Cloth->Set(bEnabled ? 1 : 0, ECVF_SetByConsole);
 		}
@@ -944,139 +964,142 @@ void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 		ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
 		if (ImGui::Button("Restand"))
 		{
-			// The mesh is chosen when the body is built, so flipping the cvar changes nothing until
-			// one is built again. This is that, without going back to the model list.
 			Stand(Lab, Lab.LabStem(), Lab.LabClip());
 		}
 		ImGui::EndDisabled();
 	}
 
-	UElysiumBodyAnimInstance* Inst = GetBodyInstance();
-	const FElysiumClothRig* Rig = Inst ? Inst->GetClothRig() : nullptr;
-	if (Inst == nullptr)
+	UChaosClothComponent* Cloth = FindGarment();
+	if (Cloth == nullptr)
 	{
-		ImGui::TextDisabled("Nothing is standing on the stage.");
-		return;
-	}
-	if (Rig == nullptr)
-	{
-		ImGui::TextDisabled("%s wears its unmodified skinned mesh - no approximation rig is installed.",
-			COG_TCHAR_TO_CHAR(*Lab.LabStem()));
-		ImGui::TextDisabled("Either the cloth spike never built this model, or its lattice is absent.");
-		ImGui::TextDisabled("  uv run python -m elysium_pipeline.enhancement.cloth_spike");
-		return;
-	}
-
-	const int32 Chains = Inst->GetResolvedClothChains();
-	ImGui::Text("%d chains resolved - %d rows x %d columns - %d colliders",
-		Chains, Rig->Rows, Rig->Columns, Rig->Colliders.Num());
-	if (Chains == 0)
-	{
-		// A rig that loaded but resolved nothing is the signature of the enhanced sidecar sitting
-		// beside the faithful mesh: the lattice bones the chains name are not on this skeleton.
-		ImGui::TextColored(ElysiumCogStyle::ColError,
-			"The rig loaded but no chain resolved - this body's skeleton has no lattice.");
-	}
-
-	// The tuning follows the body. A different stem means a different rig and a different baseline.
-	if (TunedStem != Lab.LabStem())
-	{
-		TunedStem = Lab.LabStem();
-		Tuning = Inst->GetClothTuning();
-		Baseline = FElysiumClothTuning::FromRig(*Rig);
-	}
-
-	bool bChanged = false;
-	const float SliderWidth = -GetDpiScale() * 130.f;
-
-	ImGui::SeparatorText("Solver");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Gravity", &Tuning.Solver.GravityScale, 0.0f, 3.0f, "%.2f");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Follow (velocity)",
-		&Tuning.Solver.ComponentLinearVelScale, 0.0f, 2.0f, "%.2f");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Follow (acceleration)",
-		&Tuning.Solver.ComponentLinearAccScale, 0.0f, 2.0f, "%.2f");
-	ImGui::TextDisabled("Both follow scales at 0 and the garment ignores the character walking.");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderInt("Iterations (pre)", &Tuning.Solver.IterationsPre, 1, 16);
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderInt("Iterations (post)", &Tuning.Solver.IterationsPost, 0, 8);
-
-	ImGui::SeparatorText("Shape");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Cone x", &Tuning.ConeScale, 0.1f, 2.0f, "%.2f");
-	ImGui::TextDisabled("Scales the authored ramp - how far a panel may swing off vertical.");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Leg clearance x", &Tuning.ColliderRadiusScale, 0.4f, 2.0f, "%.2f");
-
-	ImGui::SeparatorText("Re-seats the chain");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Linear damping", &Tuning.Solver.LinearDamping, 0.0f, 1.0f, "%.2f");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Angular damping", &Tuning.Solver.AngularDamping, 0.0f, 1.0f, "%.2f");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= ImGui::SliderFloat("Body extent x", &Tuning.BoxExtentScale, 0.25f, 3.0f, "%.2f");
-	ImGui::TextDisabled("These three are baked in when a chain initialises, so moving one drops the");
-	ImGui::TextDisabled("garment from the pose and lets it settle again. That is the cost, not a bug.");
-
-	if (bChanged)
-	{
-		Inst->SetClothTuning(Tuning);
-		LastNotice.Reset();
-	}
-
-	ImGui::SeparatorText("Sidecar");
-	const bool bModified = !Tuning.EqualsTuning(Baseline);
-	ImGui::BeginDisabled(!bModified);
-	if (ImGui::Button("Save to sidecar"))
-	{
-		FString Error;
-		if (ElysiumClothRig::SaveTuning(Lab.LabStem(), Tuning, Error))
+		ImGui::TextDisabled("No garment component on the stage.");
+		// Three different causes read identically in the viewport, so they are separated here:
+		// the model authored no cloth at all, the export never ran, or the asset was never
+		// generated from an export that did.
+		const FString Stem = Lab.LabStem();
+		if (!Stem.IsEmpty())
 		{
-			// Deliberately not resetting the scales afterwards. The file now holds the authored
-			// values multiplied through, but the rig in memory still holds the originals — zeroing
-			// the scales here would snap the garment back to where it started, which is the exact
-			// opposite of what saving means.
-			Baseline = Tuning;
-			LastNotice = FString::Printf(TEXT("wrote %s — a fresh load reproduces this"),
-				*FElysiumContentPaths::NpcClothRig(Lab.LabStem()));
-			LastError.Reset();
+			const bool bSidecar = IFileManager::Get().FileExists(
+				*FElysiumContentPaths::NpcGarment(Stem));
+			if (!bSidecar)
+			{
+				ImGui::TextDisabled("%s exported no garment payload - either its model authors "
+					"none, or the character export has not run.", COG_TCHAR_TO_CHAR(*Stem));
+			}
+			else
+			{
+				ImGui::TextDisabled("%s exported a payload but no asset exists.",
+					COG_TCHAR_TO_CHAR(*Stem));
+				ImGui::TextDisabled("  uv run elysium build content   (make_cloth_assets.py)");
+			}
+		}
+		return;
+	}
+
+	const UChaosClothAsset* Asset = Cast<UChaosClothAsset>(Cloth->GetAsset());
+	ImGui::Text("%s", COG_TCHAR_TO_CHAR(*GetNameSafe(Asset)));
+	ImGui::Text("leader pose: %s",
+		Cloth->LeaderPoseComponent.IsValid() ? "bound" : "NONE - the garment will not follow");
+
+	ImGui::SeparatorText("Simulation");
+	bool bSuspended = Cloth->IsSimulationSuspended();
+	if (ImGui::Checkbox("Suspended", &bSuspended))
+	{
+		if (bSuspended)
+		{
+			Cloth->SuspendSimulation();
 		}
 		else
 		{
-			LastError = Error;
+			Cloth->ResumeSimulation();
 		}
 	}
-	ImGui::EndDisabled();
 	ImGui::SameLine();
-	ImGui::BeginDisabled(!bModified);
-	if (ImGui::Button("Revert"))
+	if (ImGui::Button("Teleport"))
 	{
-		Tuning = Baseline;
-		Inst->SetClothTuning(Tuning);
-		LastNotice.Reset();
+		// What a body moved by anything other than its own motion needs: without it the garment
+		// solves the jump as one enormous frame of velocity and flails.
+		Cloth->ForceNextUpdateTeleportAndReset();
 	}
-	ImGui::EndDisabled();
 	ImGui::SameLine();
-	if (bModified)
+	if (ImGui::Button("Reset config"))
 	{
-		ImGui::TextColored(ElysiumCogStyle::ColName, "modified");
-	}
-	else
-	{
-		ImGui::TextDisabled("matches the sidecar");
-	}
-	if (!LastNotice.IsEmpty())
-	{
-		ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*LastNotice));
-	}
-	if (!LastError.IsEmpty())
-	{
-		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
+		Cloth->ResetConfigProperties();
 	}
 
+	// Live tuning is the asset's OWN property set rather than a fixed list of sliders: a Chaos
+	// cloth config is data, and enumerating it means this panel does not go stale when the
+	// generator starts authoring a property it did not before.
+	if (UChaosClothAssetInteractor* Interactor =
+			Cast<UChaosClothAssetInteractor>(Cloth->GetClothOutfitInteractor()))
+	{
+		ImGui::SeparatorText("Properties");
+		const TArray<FName> Names = Interactor->GetAllPropertyNames();
+		for (const FName& Property : Names)
+		{
+			float Value = Interactor->GetFloatPropertyValue(Property, 0);
+			ImGui::SetNextItemWidth(-GetDpiScale() * 130.f);
+			if (ImGui::DragFloat(COG_TCHAR_TO_CHAR(*Property.ToString()), &Value, 0.01f))
+			{
+				// LOD -1 writes every LOD, which is what a live edit means here: the garment has
+				// one authored config and tuning it per LOD would diverge as the body walks away.
+				Interactor->SetFloatPropertyValue(Property, -1, Value);
+			}
+		}
+		if (Names.IsEmpty())
+		{
+			ImGui::TextDisabled("The asset exposes no float properties.");
+		}
+	}
+
+	RenderClothDebugDraw();
+}
+
+// Chaos's own cloth overlays, as toggles over the shared table in `Debug/ElysiumClothDebug.h`.
+// They are the instrument this vertical is debugged with, and a console command nobody can recall
+// is not an instrument.
+void FElysiumCogWindow_GreenRoom::RenderClothDebugDraw()
+{
+	ImGui::SeparatorText("Debug draw");
+
+	const int32 Active = ElysiumClothDebug::NumActiveDraws();
+	ImGui::BeginDisabled(Active == 0);
+	if (ImGui::Button("All off"))
+	{
+		ElysiumClothDebug::ClearDraws();
+	}
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	ImGui::TextDisabled("%d on  -  also elysium.garment", Active);
+
+	// Two columns: the list is long enough that one column pushes the properties above it off the
+	// top of the window at any sane panel height.
+	if (ImGui::BeginTable("##ClothDebugDraw", 2, ImGuiTableFlags_SizingStretchSame))
+	{
+		for (const ElysiumClothDebug::FDrawToggle& Toggle : ElysiumClothDebug::DrawToggles())
+		{
+			ImGui::TableNextColumn();
+			IConsoleVariable* const CVar = ElysiumClothDebug::DrawCVar(Toggle.Suffix);
+			if (CVar == nullptr)
+			{
+				// Unavailable rather than off: these are registered by the ChaosCloth module and
+				// compiled out with CHAOS_DEBUG_DRAW, so a missing one is worth seeing as missing.
+				ImGui::TextDisabled("%s", Toggle.Label);
+				continue;
+			}
+			bool bOn = CVar->GetBool();
+			if (ImGui::Checkbox(Toggle.Label, &bOn))
+			{
+				CVar->Set(bOn, ECVF_SetByConsole);
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("%s\n\np.ChaosCloth.DebugDraw%s", Toggle.Help,
+					COG_TCHAR_TO_CHAR(Toggle.Suffix));
+			}
+		}
+		ImGui::EndTable();
+	}
 }
 
 // Drive mode's readout. Everything here is READ: the sample the mover published, the record the

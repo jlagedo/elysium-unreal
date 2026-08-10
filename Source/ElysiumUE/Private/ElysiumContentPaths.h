@@ -383,18 +383,17 @@ struct FElysiumContentPaths
 	// single cell names none, which is most of them.
 	static FString NpcBlends(const FString& RelPath) { return NpcDir() / RelPath; }
 
-	// The simulated-garment spike, beside the faithful mesh rather than over it
-	// (pipeline/src/elysium_pipeline/enhancement/cloth_spike.py). Retail garment motion is an
-	// authored StudioRender particle solve after ordinary skinning, separate from its hair/body
-	// bone-chain solver. This approximation does not consume that payload: the enhanced glb has a
-	// synthesised bone lattice appended and its selected garment shell re-weighted onto it, and the
-	// sidecar is the solver setup over that lattice. Both are keyed by stem rather than named by
-	// `npc_index.json`: the spike writes nothing into the manifest, so the only thing that selects
-	// it is `elysium.Cloth` plus these files existing — which is why every reader tests before
-	// preferring them, exactly as the `tex_hi/` set does. Deleting npc/cloth/ reverts the spike.
-	static FString NpcClothDir() { return NpcDir() / TEXT("cloth"); }
-	static FString NpcClothGlb(const FString& Stem) { return NpcClothDir() / (Stem + TEXT(".glb")); }
-	static FString NpcClothRig(const FString& Stem) { return NpcClothDir() / (Stem + TEXT(".json")); }
+	// VtMB's authored renderer-cloth payload for one character, decoded offline into a simulation
+	// mesh: particles, constraints, collision primitives and the per-render-vertex substitution
+	// maps (`docs/vtmb/secondary_motion.md`). Written only for the 60 installed models whose
+	// `MDLHeader.Flags` carries 0x400, so a miss is the ordinary case rather than a fault.
+	//
+	// The runtime does not read this. It is the generator's input — `make_cloth_assets.py` turns it
+	// into a `UChaosClothAsset` under /Game/VtMB/Cloth, and the game loads that. The path is here
+	// so a debug surface can report whether a body's garment was ever exported, which is what
+	// separates "this character has no cloth" from "the export did not run".
+	static FString NpcGarmentDir() { return NpcDir() / TEXT("garment"); }
+	static FString NpcGarment(const FString& Stem) { return NpcGarmentDir() / (Stem + TEXT(".json")); }
 
 	// The eyeball pair beside a character's glb (12.4): the eye's bone and resting basis, the iris
 	// scale and texture, and the eyelid flexdescs the renderer's eye pass writes back into the flex

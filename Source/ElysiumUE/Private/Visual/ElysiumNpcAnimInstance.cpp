@@ -458,12 +458,7 @@ int32 FElysiumNpcAnimProxy::NumLayers() const
 
 void FElysiumNpcAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
 {
-	// Ahead of the initialised gate: the simulation's only source of a timestep is this call, and a
-	// body with no clip still evaluates — against the ref pose — so its garment must still hang and
-	// settle rather than freeze mid-air until something plays.
-	UpdateCloth(InContext);
-
-	// Also ahead of the gate, and for the same reason as the garment: a layer rides over whatever
+	// Ahead of the initialised gate: a layer rides over whatever
 	// the body produced, INCLUDING the reference pose a body with no clip falls back to. A weapon
 	// overlay on an NPC that has not been given a stance yet must still run rather than hold frame
 	// zero until one arrives.

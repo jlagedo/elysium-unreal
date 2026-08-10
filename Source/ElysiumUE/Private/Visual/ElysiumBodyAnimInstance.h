@@ -11,7 +11,6 @@
 #include "ElysiumBodyAnimInstance.generated.h"
 
 class UAnimSequence;
-struct FElysiumClothRig;
 struct FElysiumCompositionRig;
 
 // Everything a VtMB body wears over whatever produced its pose — and nothing about how the pose
@@ -38,21 +37,9 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 	// A derived proxy that owns nodes of its own caches them here too, through `Super::CacheBones`.
 	virtual void CacheBones() override;
 
-	// The cloth chains' game-thread pass, driven from the anim instance rather than through
-	// `GetCustomNodes`: that registration is gathered during InitializeAnimation, before any rig
-	// exists, and holds raw pointers into an array `SetClothRig` reallocates.
-	void PreUpdateCloth(const UAnimInstance* Instance);
-
 	// VtMB's one composition stage (CAP7.2); null clears it.
 	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
-
-	// The garment spike's rig; null clears it. Independent of the composition stage — a model can
-	// carry either, both or neither, and nearly every model carries none of this one.
-	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
-	int32 NumClothChains() const { return Cloth.NumChains(); }
-	void SetClothTuning(const FElysiumClothTuning& InTuning) { Cloth.SetTuning(InTuning); }
-	const FElysiumClothTuning& GetClothTuning() const { return Cloth.GetTuning(); }
 
 	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
 	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
@@ -66,11 +53,6 @@ protected:
 	// first, then the face's curves over whatever the body ended up in.
 	void EvaluateTail(FPoseContext& Output);
 
-	// The cloth node's own timestep. It runs ahead of anything else a derived proxy updates and
-	// outside any "is a clip playing" gate, because a body standing in its reference pose still has
-	// a garment that has to fall.
-	void UpdateCloth(const FAnimationUpdateContext& InContext) { Cloth.Update(InContext); }
-
 private:
 	// Split inheritance, then axis interpolation, in component space over whatever the body
 	// produced. Order is load-bearing — see the definition.
@@ -82,8 +64,6 @@ private:
 	// Plain members rather than graph nodes: the post-process slot is the tail of Evaluate, so both
 	// are driven through `ResolveBones`/`CacheBones` + `Apply` rather than through pose links.
 	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
-	// The garment spike, evaluated after it so the simulation sees the finished skeleton.
-	UPROPERTY(Transient) FAnimNode_ElysiumCloth Cloth;
 };
 
 UCLASS(Transient, Abstract)
@@ -168,31 +148,11 @@ public:
 	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
 	int32 GetResolvedAxisInterpRules() const;
 
-	// Install the garment spike's rig (`npc/cloth/<stem>.json`). Null for every model the spike did
-	// not build, which is an ordinary load: the body then wears its faithful mesh and simulates
-	// nothing. Independent of the composition rig above — a model may carry either, both or neither.
-	void SetClothRig(TSharedPtr<const FElysiumClothRig> InRig);
-	const FElysiumClothRig* GetClothRig() const { return ClothRig.Get(); }
-	// The live edit sitting over that rig — what the green-room lab's sliders write, and what a
-	// freshly installed rig resets to its own authored values. Same game-thread door as SetClothRig:
-	// the proxy accessor blocks on any in-flight parallel evaluation first.
-	void SetClothTuning(const FElysiumClothTuning& InTuning);
-	FElysiumClothTuning GetClothTuning() const;
-	// How many chains were built against this body's actual skeleton — what distinguishes "no rig"
-	// from "a rig whose lattice bones this skeleton lacks", which is what wearing the faithful mesh
-	// with the enhanced sidecar would look like.
-	int32 GetResolvedClothChains() const;
-
 	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
 	// rules produced from them, and the ramped weight each morph target is driven at.
 	const TArray<float>& GetFlexControllerValues() const { return ControllerValues; }
 	const TArray<float>& GetFlexWeights() const { return FlexWeights; }
 	const TArray<float>& GetMorphWeights() const { return MorphWeights; }
-
-protected:
-	// The cloth chains' game-thread pass. Runs here rather than through the proxy's node
-	// registration, which is gathered before any rig is installed (`FAnimNode_ElysiumCloth`).
-	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
 private:
 	// Run the three layers and publish the result to the proxy. Called on every controller write
@@ -201,7 +161,6 @@ private:
 
 	TSharedPtr<const FElysiumFacialRig> FacialRig;
 	TSharedPtr<const FElysiumCompositionRig> CompositionRig;
-	TSharedPtr<const FElysiumClothRig> ClothRig;
 	float MouthOpen = 0.f;
 	FElysiumEyeInput EyeInput;
 	TArray<float> ControllerValues;

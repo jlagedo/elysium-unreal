@@ -16,7 +16,6 @@ void UElysiumNpcAnimSubsystem::Deinitialize()
 	ClipSets.Reset();
 	FacialRigs.Reset();
 	CompositionRigs.Reset();
-	ClothRigs.Reset();
 	EyeSets.Reset();
 	BlendTables.Reset();
 	Super::Deinitialize();
@@ -332,38 +331,6 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetAnimatedPr
 		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
 	}
 	CompositionRigs.Add(Entry->Stem, Result);
-	return Result;
-}
-
-TSharedPtr<const FElysiumClothRig> UElysiumNpcAnimSubsystem::GetClothRig(const FString& Stem)
-{
-	if (Stem.IsEmpty())
-	{
-		return nullptr;
-	}
-	if (const TSharedPtr<const FElysiumClothRig>* Cached = ClothRigs.Find(Stem))
-	{
-		return *Cached;
-	}
-
-	// No index field to consult, so absence is discovered by probing rather than by lookup —
-	// which is exactly why the miss is cached. `npc/cloth/` holds two models; every other body
-	// asks once, gets null, and never touches the disk again.
-	TSharedPtr<const FElysiumClothRig> Result;
-	if (FPaths::FileExists(FElysiumContentPaths::NpcClothRig(Stem)))
-	{
-		TSharedPtr<FElysiumClothRig> Rig = MakeShared<FElysiumClothRig>();
-		FString Error;
-		if (!Rig->Load(Stem, Error))
-		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("cloth rig '%s': %s"), *Stem, *Error);
-		}
-		else if (Rig->HasWork())
-		{
-			Result = Rig;
-		}
-	}
-	ClothRigs.Add(Stem, Result);
 	return Result;
 }
 

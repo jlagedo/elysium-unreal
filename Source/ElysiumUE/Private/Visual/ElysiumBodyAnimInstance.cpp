@@ -1,6 +1,5 @@
 #include "Visual/ElysiumBodyAnimInstance.h"
 
-#include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumFacialRig.h"
 
@@ -169,22 +168,13 @@ void FElysiumBodyAnimProxy::CacheBones()
 	// change arrives on — so both composition stages resolve their indices here, once, and never
 	// by name per evaluation.
 	AxisInterp.ResolveBones(GetRequiredBones());
-	// The cloth chains take the context rather than the container: they are constructed here too,
-	// because the reference skeleton their body definitions need is only reachable from it.
-	FAnimationCacheBonesContext Context(this);
-	Cloth.CacheBones(Context);
-}
-
-void FElysiumBodyAnimProxy::PreUpdateCloth(const UAnimInstance* Instance)
-{
-	Cloth.PreUpdate(Instance);
 }
 
 void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 {
 	const bool bStages = AxisInterp.HasWork()
 		&& CVarCompositionStages.GetValueOnAnyThread() != 0;
-	if (!bStages && !Cloth.HasWork())
+	if (!bStages)
 	{
 		return;
 	}
@@ -207,11 +197,6 @@ void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 	{
 		AxisInterp.Apply(Composed);
 	}
-	// Last, over the finished skeleton. A synthesised lattice drives selected garment geometry from
-	// its pelvis anchor and shares no dynamic bone with either stage above, but it should swing from
-	// the pose that will actually be drawn rather than one still missing its corrections.
-	Cloth.Apply(Composed);
-
 	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have
 	// been asked for in component space, and the plain conversion ensures against exactly that.
 	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPosesSafe(Composed.Pose, Output.Pose);
@@ -262,32 +247,9 @@ void FElysiumBodyAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositi
 	}
 }
 
-void FElysiumBodyAnimProxy::SetClothRig(TSharedPtr<const FElysiumClothRig> InRig)
-{
-	Cloth.SetRig(MoveTemp(InRig));
-	// Same rule as the composition rig, and the same reason: installed before the first CacheBones
-	// this resolves there, installed after it has to rebuild against the container already in force.
-	// The chains are torn down by SetRig, so this is a construction rather than a re-resolve.
-	if (const FBoneContainer& Container = GetRequiredBones(); Container.IsValid())
-	{
-		FAnimationCacheBonesContext Context(this);
-		Cloth.CacheBones(Context);
-	}
-}
-
 // ================================================================================================
 // UElysiumBodyAnimInstance
 // ================================================================================================
-
-void UElysiumBodyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
-{
-	Super::NativeUpdateAnimation(DeltaSeconds);
-	// Skipped entirely for the overwhelming majority of bodies, which carry no garment rig at all.
-	if (ClothRig.IsValid())
-	{
-		GetProxyOnGameThread<FElysiumBodyAnimProxy>().PreUpdateCloth(this);
-	}
-}
 
 void UElysiumBodyAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig)
 {
@@ -327,31 +289,6 @@ int32 UElysiumBodyAnimInstance::GetResolvedAxisInterpRules() const
 {
 	return const_cast<UElysiumBodyAnimInstance*>(this)
 		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().NumAxisInterpRules();
-}
-
-void UElysiumBodyAnimInstance::SetClothRig(TSharedPtr<const FElysiumClothRig> InRig)
-{
-	ClothRig = MoveTemp(InRig);
-	// Same guarantee as the composition rig: GetProxyOnGameThread blocks on any in-flight parallel
-	// evaluation, so no worker can be simulating against the chains this replaces.
-	GetProxyOnGameThread<FElysiumBodyAnimProxy>().SetClothRig(ClothRig);
-}
-
-void UElysiumBodyAnimInstance::SetClothTuning(const FElysiumClothTuning& InTuning)
-{
-	GetProxyOnGameThread<FElysiumBodyAnimProxy>().SetClothTuning(InTuning);
-}
-
-FElysiumClothTuning UElysiumBodyAnimInstance::GetClothTuning() const
-{
-	return const_cast<UElysiumBodyAnimInstance*>(this)
-		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().GetClothTuning();
-}
-
-int32 UElysiumBodyAnimInstance::GetResolvedClothChains() const
-{
-	return const_cast<UElysiumBodyAnimInstance*>(this)
-		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().NumClothChains();
 }
 
 bool UElysiumBodyAnimInstance::SetFlexController(const FString& Name, float Value)

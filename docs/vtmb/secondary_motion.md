@@ -219,6 +219,32 @@ and float rest-length-squared. The first set is solved unconditionally. The seco
 when current length squared is below rest length squared, so it resists compression rather than
 enforcing distance in both directions.
 
+### Authored collision records and current-pose frame
+
+The `StudioModel` collision arrays have these exact on-disk layouts:
+
+| Record / off | Type | Runtime meaning |
+|---|---|---|
+| capsule +0x00 | int | first endpoint bone |
+| capsule +0x04 | int | second endpoint bone |
+| capsule +0x08 | float | radius |
+| capsule +0x0c | float3 | first endpoint in model bind space |
+| capsule +0x18 | float3 | second endpoint in model bind space |
+| sphere +0x00 | int | centre bone |
+| sphere +0x04 | float | radius |
+| sphere +0x08 | float3 | centre in model bind space |
+
+The points are not stored in bone-local space. For every `DrawModel`, StudioRender first builds
+`skinMatrix[bone] = currentBoneToWorld[bone] * poseToBone[bone]`, then transforms each authored
+bind-space point through the named bone's current skin matrix. Capsule endpoints can therefore
+follow different bones. Radius is copied without matrix scaling. The renderer builds this cache
+once per draw; each cloth substep linearly interpolates capsule endpoints and sphere centres from
+the previous cache to the current one.
+
+**Standing: Verified.** `0x2c014a00` reads the 36-byte and 20-byte records with these strides and
+field offsets, and uses the same current 0x30-byte matrix palette that the generated vertex
+routines consume. `0x2c004e10` establishes that palette as bone-to-world times inverse bind.
+
 ### Lifetime, solve, and final vertex substitution
 
 TStudioRender012 owns a 16-bit cloth handle per engine model instance and persistent cloth objects
@@ -244,6 +270,63 @@ On a cloth draw:
 4. StudioRender regenerates normals and tangents from the simulated surface.
 5. One of 72 generated vertex specializations reads `StudioMesh` +48/+52/+56. `0xFF` vertices keep
    ordinary skeletal output; selected vertices take the simulated position/normal/tangent output.
+
+The +0x10 anchor-source list and the per-render-vertex output maps are independent. A source
+vertex used to refresh a pinned particle can retain selector `0xFF` and render by ordinary
+skinning, while another selected render vertex can read that same pinned particle. Jeanette's
+selected position indices start at 28 although particles 0..55 are pinned; Sheriff's start at 50
+although particles 0..90 are pinned. This is one pinning mechanism, not a second anchor path: a
+selected vertex that names the pinned prefix receives a position already overwritten from the
+skinned source vertex.
+
+#### Gravity, integration and simulation clock
+
+The definition's gravity field is a physical multiplier, not a raw Source gameplay-gravity value.
+For a no-wind dynamic particle, `0x2c002a30` performs the equivalent of:
+
+```text
+ratio = 0.97 * currentStep / previousStep
+next = current + ratio * (current - previous)
+next.z -= gravityScale * 384 * currentStep * currentStep
+```
+
+The hard-coded acceleration is **384 model units/s²**. VtMB model units are inches, so this is
+32 ft/s² or 975.36 cm/s²: approximately one physical g. The authored values 5 for Jeanette and 3
+for Sheriff therefore mean approximately five and three g. Because acceleration is multiplied by
+the squared substep duration, subdivision does not multiply or attenuate the total gravity over a
+fixed elapsed interval.
+
+There is no separate authored inertia coefficient. The previous displacement is retained by 0.97
+per substep and corrected by the current-to-previous step-duration ratio. At the target cadence,
+the equivalent retention over 1/60 s is `0.97^5 = 0.858734`. When the submitted wind vector is
+nonzero, the previous displacement uses only the step-duration ratio and the wind displacement is
+scaled by approximately `0.97 - 0.027 * abs(dot(windDirection, particleNormal))`; gravity remains
+the same.
+
+Elapsed time uses a 300 Hz target rather than a strict fixed-step accumulator:
+
+```text
+stepCount = min(30, round(elapsedSeconds * 300))
+step      = elapsedSeconds / stepCount
+```
+
+At 60 and 30 Hz this selects five and ten substeps. The 30-step cap begins to matter above 0.1 s,
+and an accumulated gap above 0.25 s marks the object for reinitialization instead of carrying stale
+state. Initialization seeds the double buffers and performs 15
+distance -> compression -> distance -> collision settling passes before ordinary advancement.
+
+#### No animated-position leash
+
+Only the pinned prefix is refreshed from the skinned pose. After initialization, a dynamic
+particle's per-step path reads its two persistent positions, gravity, wind, the authored pair
+constraints and collision inputs; it never reads that particle's skinned or rest-pose position.
+There is no per-particle maximum displacement, animation-drive sphere or long-range tether in the
+retail solve. The general distance graph, including edges from pinned to dynamic particles, is what
+holds the free surface to the attachment boundary.
+
+**Standing: Verified by complete static data flow through the advance, integration, constraint and
+collision functions.** The optional definition seed tables' exact authoring roles remain unknown,
+but neither is read as a per-frame dynamic-particle target in the located solve.
 
 The client contributes horizontal wind in `C_BaseAnimating::InternalDrawModel` when the model has
 flag `0x400`: angle selects XY direction, a 256-entry random table and changes-per-second vary the
@@ -297,6 +380,10 @@ VtMB's decoded procedural enum stops at AxisInterp rather than later Source's JI
 | Installed flag `0x400` and `StudioModel`/`StudioMesh` extensions select renderer cloth | **Verified** | None for carrier identity or static gate. |
 | Jeanette's skirt and Sheriff's coat substitute simulated vertices after ordinary skinning | **Verified** | Capture the post-skin particle/output series for numerical retail acceptance. |
 | Cloth uses pinned skinned anchors, Verlet-like integration, distance/compression constraints, collision, wind, and regenerated tangent space | **Verified** | Implement and compare a standalone replay. |
+| Cloth gravity is `gravityScale * 384 in/s^2`, integrated with squared substep time | **Verified** | A standalone replay should confirm numeric equivalence under controlled frame deltas. |
+| Cloth targets 300 Hz with rounded subdivision, a 30-step cap, 0.97 no-wind retention and reset above 0.25 s | **Verified** | Host solvers still need an explicit parameter mapping and retail-series comparison. |
+| Dynamic cloth particles have no animated-position leash or long-range tether | **Verified** | None for retail mechanism; any host leash is a deliberate approximation. |
+| Capsule/sphere records are bind-space points transformed through the current skin palette per draw | **Verified** | None for layout or frame; capture remains useful for numerical output acceptance. |
 | `r_cloth` exact runtime gating semantics | **Unknown** | Establish with a controlled live toggle or locate its indirect consumer; the apparent callback is its static destructor. |
 | +4 is an explicit chain terminal when nonnegative | **Strong evidence** | No installed record exercises that branch. |
 | +8's authoring meaning | **Unknown** | The located retail constructor does not consume it; values alone do not justify a name. |

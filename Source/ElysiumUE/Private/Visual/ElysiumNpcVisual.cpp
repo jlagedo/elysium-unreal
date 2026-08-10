@@ -10,8 +10,16 @@
 #include "Animation/BlendSpace.h"
 #include "Animation/MorphTarget.h"
 #include "Animation/Skeleton.h"
+#include "ChaosClothAsset/ClothAsset.h"
+#include "ChaosClothAsset/ClothComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Materials/MaterialInterface.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Rendering/SkeletalMeshRenderData.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "UObject/UObjectGlobals.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
@@ -23,13 +31,13 @@
 // does not select them; every body comes from the mount.
 //
 // Applied at map load; NPC meshes and their rigs are resolved once per map epoch.
-// Default 0 — the garment simulation is a spike and is off. It no longer selects a mesh: the cast
-// comes off the baked mount, and a garment rig names lattice bones the shared skeleton does not
-// carry, so with it on the chains resolve nothing rather than choosing a different body.
+// Whether a character wears its generated garment. Read once when a body is built, so a change
+// takes effect on the next map load rather than mid-frame — attaching a simulating component to a
+// body already posed for this frame would drop the garment from the bind pose in view.
 static TAutoConsoleVariable<int32> CVarCloth(
-	TEXT("elysium.Cloth"), 0,
-	TEXT("Legacy synthesized garment approximation gate; the current baked-character path does "
-		 "not select its mesh."),
+	TEXT("elysium.Cloth"), 1,
+	TEXT("Wear generated Chaos garments on characters whose model authored one (0 disables). "
+		 "Read when a body is built."),
 	ECVF_Default);
 
 namespace
@@ -286,13 +294,125 @@ namespace ElysiumNpcVisual
 		return Mesh;
 	}
 
-	bool UseClothMesh(const FString& Stem)
+	/**
+	 * Stop the body drawing the surface the garment now simulates.
+	 *
+	 * VtMB does not add a garment to a character — it SUBSTITUTES simulated positions into the
+	 * body's own render vertices, so the skirt is drawn once either way. Here the garment is a
+	 * separate component drawing the same surface, so without this the body's skinned copy stays
+	 * on screen underneath and the character wears two skirts: one that moves and one that does
+	 * not.
+	 *
+	 * Removing the whole section is right BECAUSE the garment redraws the whole section: its
+	 * render patterns carry the material's entire surface, and only the vertices VtMB substitutes
+	 * take their position from the solver. What is left behind on the body would be a duplicate of
+	 * every vertex, not just of the moving ones.
+	 *
+	 * Matched on the material object rather than on a name, because the generated cloth asset
+	 * references the body's own material instance — the same pointer, so a rename cannot
+	 * desynchronise the two halves.
+	 */
+	void HideGarmentSectionsOnBody(USkeletalMeshComponent* Body, const UChaosClothAsset& Asset)
 	{
-		// Retained predicate for the legacy side-by-side experiment. The baked-character load path no
-		// longer calls it; if that route is restored, both approximation artifacts remain mandatory.
-		return CVarCloth.GetValueOnAnyThread() != 0
-			&& FPaths::FileExists(FElysiumContentPaths::NpcClothGlb(Stem))
-			&& FPaths::FileExists(FElysiumContentPaths::NpcClothRig(Stem));
+		const USkinnedAsset* const Skinned = Body->GetSkinnedAsset();
+		const FSkeletalMeshRenderData* const Render =
+			Skinned != nullptr ? Skinned->GetResourceForRendering() : nullptr;
+		if (Render == nullptr)
+		{
+			return;
+		}
+
+		TSet<const UMaterialInterface*> Garment;
+		for (const FSkeletalMaterial& Slot : Asset.GetMaterials())
+		{
+			if (Slot.MaterialInterface != nullptr)
+			{
+				Garment.Add(Slot.MaterialInterface);
+			}
+		}
+		if (Garment.IsEmpty())
+		{
+			return;
+		}
+
+		const TArray<FSkeletalMaterial>& BodyMaterials = Skinned->GetMaterials();
+		for (int32 Lod = 0; Lod < Render->LODRenderData.Num(); ++Lod)
+		{
+			const TArray<FSkelMeshRenderSection>& Sections = Render->LODRenderData[Lod].RenderSections;
+			for (int32 Section = 0; Section < Sections.Num(); ++Section)
+			{
+				const int32 Material = Sections[Section].MaterialIndex;
+				if (BodyMaterials.IsValidIndex(Material)
+					&& Garment.Contains(BodyMaterials[Material].MaterialInterface))
+				{
+					Body->ShowMaterialSection(Material, Section, /*bShow*/ false, Lod);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Destroy garments this owner is still carrying that no longer follow a body.
+	 *
+	 * A garment component belongs to the OWNING ACTOR, and the map actor owns every NPC body on
+	 * the map — so rebuilding one body leaves its garment behind, parented to an actor that is
+	 * still alive. The leader pose is a weak reference, so the leftover does not error: it keeps
+	 * simulating, against a bind pose, and draws wherever the identity transform puts it. Several
+	 * rebuilds and a character has one skirt on her hips and a pile of them on the floor.
+	 *
+	 * Only garments whose leader has actually gone are removed. The others belong to bodies that
+	 * are still standing.
+	 */
+	void SweepOrphanedGarments(AActor* Owner)
+	{
+		TArray<UChaosClothComponent*> Garments;
+		Owner->GetComponents(Garments);
+		for (UChaosClothComponent* Garment : Garments)
+		{
+			if (!Garment->LeaderPoseComponent.IsValid())
+			{
+				Garment->DestroyComponent();
+			}
+		}
+	}
+
+	UChaosClothComponent* InstallGarment(USkeletalMeshComponent* Body, const FString& Stem)
+	{
+		if (Body == nullptr || Stem.IsEmpty() || CVarCloth.GetValueOnGameThread() == 0)
+		{
+			return nullptr;
+		}
+		// Absence is the ordinary answer: 60 of 4,445 installed models author a garment at all, so
+		// this is a soft load rather than a resolve-or-fail. LoadObject logs nothing on a miss.
+		const FString AssetPath = FString::Printf(
+			TEXT("/Game/VtMB/Cloth/CLOTH_%s.CLOTH_%s"), *Stem, *Stem);
+		UChaosClothAsset* Asset = LoadObject<UChaosClothAsset>(nullptr, *AssetPath, nullptr,
+			LOAD_NoWarn | LOAD_Quiet);
+		if (Asset == nullptr)
+		{
+			return nullptr;
+		}
+
+		AActor* Owner = Body->GetOwner();
+		if (Owner == nullptr)
+		{
+			return nullptr;
+		}
+		// Before adding one, take away the ones whose body is gone. A body build is the only
+		// moment this owner is known to be mid-rebuild, so it is the only moment the sweep is
+		// certain not to be removing a garment that is simply between frames.
+		SweepOrphanedGarments(Owner);
+		UChaosClothComponent* Cloth = NewObject<UChaosClothComponent>(Owner);
+		Cloth->SetAsset(Asset);
+		// The garment is skinned by the body it hangs on, so it follows rather than animates: the
+		// leader pose supplies every bone the cloth's kinematic anchors are bound to. Attaching
+		// before registering keeps the component from ticking against an unset leader for a frame.
+		Cloth->SetupAttachment(Body);
+		Cloth->RegisterComponent();
+		Cloth->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		Cloth->SetLeaderPoseComponent(Body);
+		HideGarmentSectionsOnBody(Body, *Asset);
+		return Cloth;
 	}
 
 	USkeletalMesh* LoadBakedMesh(const FString& Stem, bool bPlayerMaterial)

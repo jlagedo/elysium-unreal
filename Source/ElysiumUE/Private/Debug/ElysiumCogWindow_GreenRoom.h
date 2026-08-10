@@ -6,10 +6,10 @@
 
 #include "CoreMinimal.h"
 #include "Debug/ElysiumCogWindow.h"
-#include "Visual/ElysiumClothRig.h"
 #include "imgui.h"
 
 class FElysiumGreenRoomRun;
+class UChaosClothComponent;
 class UElysiumBodyAnimInstance;
 class UElysiumNpcAnimInstance;
 class USkinnedAsset;
@@ -49,6 +49,10 @@ private:
 	// The anim instance of the body currently standing on the stage, or null.
 	// The body's shared portrait/rig surface — the rows that read a cloth rig or a composition rig.
 	UElysiumBodyAnimInstance* GetBodyInstance() const;
+	// The generated garment worn by whatever is standing, or null. Found by walking the body's
+	// attachments rather than cached: a Restand replaces the body, and a stale pointer here would
+	// draw an overlay for a component that no longer exists.
+	UChaosClothComponent* FindGarment() const;
 	// The native pose machinery — the clip and layer rows. Null on a body posing from an anim graph.
 	UElysiumNpcAnimInstance* GetNpcBodyInstance() const;
 
@@ -66,6 +70,7 @@ private:
 	// at, as opposed to which body it is or what its garment is doing.
 	void RenderView(FElysiumGreenRoomRun& Lab);
 	void RenderCloth(FElysiumGreenRoomRun& Lab);
+	void RenderClothDebugDraw();
 	// The autolayer binding the standing clip declares, beside what the lab actually has riding.
 	void RenderAutoLayers(FElysiumGreenRoomRun& Lab);
 
@@ -90,9 +95,9 @@ private:
 	// Rescanned on first open and on demand: an export can land while the game is up.
 	bool bStemsDirty = true;
 	TArray<FString> Stems;
-	// Parallel to Stems — whether the spike built a simulated garment for that model. Probing the
-	// disk once per rescan rather than once per frame per row, which is what drawing the list
-	// straight from `UseClothMesh` would cost.
+	// Parallel to Stems — whether that model exported an authored garment payload. Probed once per
+	// rescan rather than once per frame per row. This is the EXPORT, not the generated asset: it
+	// answers "does this character have cloth at all", which is what the list column is for.
 	TArray<bool> StemHasCloth;
 
 	// The selected model's clip vocabulary, sorted, cached per stem. A well-connected NPC resolves
@@ -155,13 +160,6 @@ private:
 	TWeakObjectPtr<const USkinnedAsset> DeviationAsset;
 	TArray<FTransform> DeviationRefPose;
 
-	// The live edit and the file it came from. Both are held here rather than read back from the
-	// node every frame because ImGui's sliders need a stable address to write into, and because
-	// Revert has to know what the sidecar said before the dragging started.
-	FElysiumClothTuning Tuning;
-	FElysiumClothTuning Baseline;
-	// Which body the two above belong to. A different body means re-reading both from its rig.
-	FString TunedStem;
 };
 
 #endif // ENABLE_COG

@@ -5,7 +5,6 @@
 
 #include "Substrate/ElysiumDisposition.h"
 #include "Visual/ElysiumBlendGrids.h"
-#include "Visual/ElysiumClothRig.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumFacialRig.h"
@@ -110,12 +109,6 @@ public:
 	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
 	// animated_props/.
 	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);
-	// The simulated-garment rig for a stem: `npc/cloth/<stem>.json`. Null for every model the spike
-	// did not build, which is nearly all of them and a normal load — the body then wears the
-	// faithful mesh and no garment simulation runs. Unlike the rigs above this one is NOT named by
-	// `npc_index.json`; the spike writes nothing into the manifest, so existence on disk is the
-	// whole selection rule and a miss costs one file probe, cached like every other miss here.
-	TSharedPtr<const FElysiumClothRig> GetClothRig(const FString& Stem);
 	// The blend spaces a stem declares (CAP7.3): `npc/blends/<stem>.json`. Null for every model whose
 	// sequences each name a single animation, which is most of them and a normal load. The stem may
 	// be a character, a bank or an animated prop — all three can declare grids.
@@ -256,7 +249,6 @@ private:
 		return Stem + (bBaked ? TEXT("|baked") : TEXT("|loader"));
 	}
 	// And again for the garment spike. A null entry here is the common case, not the exception.
-	TMap<FString, TSharedPtr<const FElysiumClothRig>> ClothRigs;
 	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that
 	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.
 	TMap<FString, TSharedPtr<const FElysiumBlendTable>> BlendTables;

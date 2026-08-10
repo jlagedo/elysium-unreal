@@ -964,16 +964,11 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			// The composition stage (CAP7.2). Null for a model declaring no procedural rule,
 			// which poses under Unreal's own hierarchy alone.
 			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
-			// The garment spike. Gated on the same predicate the mesh loader used, so the rig is
-			// installed only onto a body actually wearing the enhanced mesh — chains naming a
-			// lattice the faithful skeleton does not carry would resolve to nothing and cost a
-			// per-frame walk to discover it.
-			if (ElysiumNpcVisual::UseClothMesh(Stem))
-			{
-				Inst->SetClothRig(Anims->GetClothRig(Stem));
-			}
 		}
 	}
+	// The authored garment, if this model has one. After the anim instance is installed, because
+	// the cloth component follows this body as its leader pose and needs it already posed.
+	ElysiumNpcVisual::InstallGarment(Comp, Stem);
 	// The eyes (12.4). Independent of the facial rig above: a player body binds eyes here and no
 	// flex rig at all, which is the shipped state for 57 of the 59 of them.
 	InstallEyes(Comp, EyeSet, Disposition);

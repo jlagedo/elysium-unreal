@@ -32,6 +32,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "ChaosClothAsset",
+			"Enabled": true
+		},
+		{
 			"Name": "ElysiumBaked",
 			"Enabled": true
 		},
