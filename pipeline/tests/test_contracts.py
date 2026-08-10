@@ -497,6 +497,34 @@ class BakeTextureImportContractTests(unittest.TestCase):
         self.assertTrue(mat.wetness_driven)
 
 
+class UnrealPlayDriverContractTests(unittest.TestCase):
+    def test_play_opens_unreals_live_log_console_without_stdout_redirection(self) -> None:
+        submitted = []
+        runner = SimpleNamespace(
+            run=lambda command, cwd: submitted.append((command, cwd))
+            or SimpleNamespace(returncode=0)
+        )
+        config = SimpleNamespace(
+            repo_root=REPO,
+            project=REPO / "ElysiumUE.uproject",
+            export_root=REPO / "exports",
+        )
+        with mock.patch.object(
+                unreal_driver, "editor_executable", return_value=Path("UnrealEditor.exe")):
+            unreal_driver.run_play(config, runner)
+
+        self.assertEqual(len(submitted), 1)
+        arguments = submitted[0][0]
+        self.assertIn("-log", arguments)
+        self.assertIn("-NewConsole", arguments)
+        self.assertNotIn("-stdout", arguments)
+        self.assertNotIn("-FullStdOutLogOutput", arguments)
+        self.assertIn(
+            "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose",
+            arguments,
+        )
+
+
 class UnrealBakeDriverContractTests(unittest.TestCase):
     def test_texture_bake_enables_commandlet_rendering(self) -> None:
         submitted = []

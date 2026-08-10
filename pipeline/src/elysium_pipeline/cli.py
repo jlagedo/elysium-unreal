@@ -883,7 +883,9 @@ def run_play(
     map_name: str | None = typer.Argument(None),
     extra: list[str] = typer.Argument(None),
 ) -> None:
-    """Launch the game. `play <map>` boots straight into that map; no argument goes to the menu.
+    """Launch the game with Unreal's live log console and retained `Saved/Logs` session log.
+
+    `play <map>` boots straight into that map; no argument goes to the menu.
 
     `play gr <model> <clip>` is the one target that is not a map: it boots into the green room's
     stage world with Cog up and the green-room window docked down the left edge, the same room

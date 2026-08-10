@@ -355,6 +355,7 @@ def run_play(config, runner, map_name: str | None = None, extra: Sequence[str] =
         "-resx=1600",
         "-resy=900",
         "-log",
+        "-NewConsole",
         "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose",
     ]
     values = list(extra)
