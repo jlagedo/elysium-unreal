@@ -1201,9 +1201,10 @@ Animation/camera/gesture are **not** in the `.dlg` (cols 6–11 empty) — they 
    continues; later passing rows never override an earlier valid one.
 3. If no sentinel wins, a non-empty NPC `usescript` is executed through
    `CDialogDependency::CallPyDialogFunc` (`0x100ea2d0`) in Python eval mode `0x102`; an integer
-   result is the starting line. With no usable script result, the selector returns line `1`.
-   `Acquire` validates the selected id and, if it is invalid, falls back to the first stored line
-   id. The retail debug-only forced-line override precedes the scan and is not gameplay state.
+   result is the starting line. An absent `usescript` selects line `1`; a present script that errors
+   or returns a non-integer yields `0`. `Acquire` validates the selected id and, if it is invalid,
+   falls back to the first stored line id. The retail debug-only forced-line override precedes the
+   scan and is not gameplay state.
 4. The selected NPC line's col-4 is an **action**, run with col-5 when the line is spoken — not
    a gate. After NPC line **N** is spoken, gather the contiguous
    run of PC rows after it (N+1, N+2, … up to the next `#`). Show each PC row whose col-4
@@ -1248,8 +1249,9 @@ from current state on every acquisition:
    continue for a passing invalid link.
 3. Add one injected fallback callback returning an optional integer line id. The NPC adapter owns
    it because it has `UseScript`, world, player, `self`, and activator context: evaluate the raw
-   `usescript` through the installed script host and accept only an integer result. An absent or
-   non-integer result yields retail line `1`; an invalid final id yields the file's first stored id.
+   `usescript` through the installed script host and accept only an integer result. An absent script
+   yields retail line `1`; a script error or non-integer result becomes `0`, and any invalid final id
+   yields the file's first stored id.
 4. Feed the resolved index into the existing `EnterNpcLine` path so NPC actions, choice gates,
    audio/UI, close, `OnDialogEnd`, and `DialogPostProcess()` keep their existing ownership and
    ordering. The opener must never call `DialogPostProcess()` directly.

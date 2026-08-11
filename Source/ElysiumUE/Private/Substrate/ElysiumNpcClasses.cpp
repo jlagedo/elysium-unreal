@@ -1111,9 +1111,22 @@ public:
 		{
 			W->EvalCondition(ElysiumDlgExpr::ActionToPython(Raw), Self, Activator);
 		};
+		const FString DialogUseScript = UseScript;
+		auto StartFallback = [W, Self, Activator, DialogUseScript]() -> TOptional<int32>
+		{
+			if (DialogUseScript.IsEmpty())
+			{
+				return TOptional<int32>();   // no usescript: retail's default is line 1
+			}
+			const FElysiumVariant Result = W->EvalCondition(DialogUseScript, Self, Activator);
+			// CallPyDialogFunc accepts only a Python int; every other result (including an error/None)
+			// returns 0 and lets CDialog::Acquire apply its first-stored-line fallback.
+			return Result.IsInt() ? Result.ToInt() : 0;
+		};
 
 		TSharedRef<FElysiumDlgConversation> Conv =
-			MakeShared<FElysiumDlgConversation>(DlgFile, bMale, bMalk, MoveTemp(Cond), MoveTemp(Act));
+			MakeShared<FElysiumDlgConversation>(DlgFile, bMale, bMalk, MoveTemp(Cond), MoveTemp(Act),
+				MoveTemp(StartFallback));
 		Conv->Start();
 		World->OpenDialog(Self, Conv);
 		UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s opened dialogue '%s' (%d rows)"),

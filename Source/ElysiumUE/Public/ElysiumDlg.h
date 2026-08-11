@@ -54,6 +54,14 @@ struct FElysiumDlgLine
 
 	bool IsNpcLine() const { return Role == EElysiumDlgRole::NpcLine; }
 	bool IsPcChoice() const { return Role == EElysiumDlgRole::PcChoice; }
+	// Retail recognizes a starting-condition sentinel by a case-insensitive substring in raw col-1.
+	// All three spellings occur in the engine classifier; this is independent of the row's link role.
+	bool IsStartingCondition() const
+	{
+		return TextMale.Contains(TEXT("starting condition"), ESearchCase::IgnoreCase)
+			|| TextMale.Contains(TEXT("starting-condition"), ESearchCase::IgnoreCase)
+			|| TextMale.Contains(TEXT("starting_condition"), ESearchCase::IgnoreCase);
+	}
 
 	// A PC choice whose link is the literal 0 — picking it ends the conversation.
 	bool IsEnd() const { return Role == EElysiumDlgRole::PcChoice && Link == TEXT("0"); }
@@ -112,23 +120,27 @@ namespace ElysiumDlgExpr
 	FString ActionToPython(const FString& Raw);
 }
 
-// The conversation branch state machine (docs/vtmb/game_runtime.md §5 "Runtime / branching"), driven by two
+// The conversation branch state machine (docs/vtmb/game_runtime.md §5 "Runtime / branching"), driven by
 // injected callbacks so it is host-agnostic and unit-testable:
 //   * CondFn(rawCondition) -> bool : evaluate a PC choice's col-4 (the caller normalizes + routes to the
-//                                    script host, or fakes it in a test). Never called for an empty gate.
+//                                    script host, or fakes it in a test). Also evaluates starting sentinels.
 //   * ActFn(rawAction)            : execute an NPC line's col-4/col-5 or a chosen PC row's col-5. Never
 //                                    called for an empty string.
+//   * StartFallbackFn()           : run the owner NPC's non-empty `usescript`; unset means there is no
+//                                    usescript, while a set value (including 0) is its integer result.
 class FElysiumDlgConversation
 {
 public:
 	using FCondFn = TFunction<bool(const FString& RawCondition)>;
 	using FActFn = TFunction<void(const FString& RawAction)>;
+	using FStartFallbackFn = TFunction<TOptional<int32>()>;
 
 	FElysiumDlgConversation(TSharedRef<const FElysiumDlgFile> InFile, bool bInPlayerMale,
-		bool bInPlayerMalkavian, FCondFn InCond, FActFn InAct);
+		bool bInPlayerMalkavian, FCondFn InCond, FActFn InAct,
+		FStartFallbackFn InStartFallback = FStartFallbackFn());
 
-	// Open at the first NPC line with non-empty display text (the blank leading NPC lines are not real
-	// turns), running that line's col-4 + col-5 actions and gathering its passing PC choices.
+	// Recompute the retail state-based opener, then run that NPC line's col-4 + col-5 actions and gather
+	// its passing PC choices. Physical row order is authored control flow: first passing valid sentinel wins.
 	void Start();
 
 	// The NPC line currently being spoken, or null before Start()/after the conversation closes.
@@ -160,6 +172,7 @@ public:
 	const FElysiumDlgFile& File() const { return *DlgFile; }
 
 private:
+	int32 SelectStartingLineIndex() const;
 	void EnterNpcLine(int32 LineIndex);   // exec its actions, gather passing choices, mark terminal if none
 	bool PassesGate(const FString& RawCondition) const;  // empty -> true; else CondFn
 
@@ -168,6 +181,7 @@ private:
 	bool bMalk = false;
 	FCondFn CondFn;
 	FActFn ActFn;
+	FStartFallbackFn StartFallbackFn;
 
 	int32 CurrentIndex = INDEX_NONE;      // index into Lines of the current NPC line
 	TArray<int32> VisibleChoiceIndices;

@@ -7255,10 +7255,11 @@ bool FElysiumDlgDisplayTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgBranchTest, "Elysium.Substrate.DlgBranch", GElysiumTestFlags)
 bool FElysiumDlgBranchTest::RunTest(const FString&)
 {
-	// A miniature of the jack_tutorial shape: two blank leading NPC lines, then the real entry (11),
+	// A miniature of the jack_tutorial shape: a starting sentinel selects the real entry (11),
 	// a gated + an ungated choice, a follow NPC line (21) with a choice that sets a flag and ends.
 	TArray<FString> Rows;
-	Rows.Add(ElysiumDlgRow(1, TEXT(""), TEXT("#"), TEXT(""), TEXT("")));            // blank opener - skipped
+	Rows.Add(ElysiumDlgRow(100, TEXT("(Starting Condition)"), TEXT("11"), TEXT("START"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(1, TEXT(""), TEXT("#"), TEXT(""), TEXT("")));
 	Rows.Add(ElysiumDlgRow(11, TEXT("Greeting."), TEXT("#"), TEXT("SPEAK_11"), TEXT("")));
 	Rows.Add(ElysiumDlgRow(12, TEXT("Gated"), TEXT("21"), TEXT("SHOW"), TEXT("PICK_12")));
 	Rows.Add(ElysiumDlgRow(13, TEXT("Hidden"), TEXT("31"), TEXT("HIDE"), TEXT("")));
@@ -7280,7 +7281,7 @@ bool FElysiumDlgBranchTest::RunTest(const FString&)
 	FElysiumDlgConversation Conv(File, /*bMale*/ true, /*bMalk*/ false, Cond, Act);
 	Conv.Start();
 
-	// Entry skips the blank line 1 and opens at 11, running its col-4 action.
+	// The sentinel selects line 11 rather than the physical first NPC line, then its col-4 action runs.
 	if (TestNotNull(TEXT("opened on an NPC line"), Conv.CurrentNpcLine()))
 	{
 		TestEqual(TEXT("entry is line 11"), Conv.CurrentNpcLine()->Id, 11);
@@ -7306,6 +7307,97 @@ bool FElysiumDlgBranchTest::RunTest(const FString&)
 	TestTrue(TEXT("ran SET_FLAG"), Ran.Contains(TEXT("SET_FLAG")));
 	TestTrue(TEXT("conversation is over"), Conv.IsOver());
 	TestNull(TEXT("no current line after end"), Conv.CurrentNpcLine());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgStartingLineTest,
+	"Elysium.Substrate.DlgStartingLine", GElysiumTestFlags)
+bool FElysiumDlgStartingLineTest::RunTest(const FString&)
+{
+	// The retail classifier is a case-insensitive substring test over raw col-1 and accepts all three
+	// spellings. These rows are PC-role records because their col-3 is the target NPC line.
+	for (const TCHAR* Text : { TEXT("(Starting Condition)"), TEXT("prefix STARTING-CONDITION suffix"),
+		TEXT("starting_condition") })
+	{
+		FElysiumDlgLine Line;
+		Line.TextMale = Text;
+		TestTrue(FString::Printf(TEXT("'%s' classifies as a starting sentinel"), Text),
+			Line.IsStartingCondition());
+	}
+	FElysiumDlgLine Ordinary;
+	Ordinary.TextMale = TEXT("A normal response");
+	TestFalse(TEXT("ordinary dialogue is not a sentinel"), Ordinary.IsStartingCondition());
+
+	// A passing dangling link does not stop the scan; the first later passing valid link wins, and a
+	// still-later valid row cannot override it. The selected NPC action proves EnterNpcLine is reused.
+	TArray<FString> Rows;
+	Rows.Add(ElysiumDlgRow(100, TEXT("(Starting Condition)"), TEXT("999"), TEXT("BAD_LINK"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(101, TEXT("(starting-condition)"), TEXT("30"), TEXT("FALSE"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(102, TEXT("(STARTING_CONDITION)"), TEXT("20"), TEXT("FIRST_TRUE"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(103, TEXT("(Starting Condition)"), TEXT("30"), TEXT("LATER_TRUE"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(1, TEXT("Fallback."), TEXT("#"), TEXT(""), TEXT("")));
+	Rows.Add(ElysiumDlgRow(20, TEXT("Selected."), TEXT("#"), TEXT("ENTER_20"), TEXT("")));
+	Rows.Add(ElysiumDlgRow(30, TEXT("Too late."), TEXT("#"), TEXT("ENTER_30"), TEXT("")));
+
+	TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+	if (!TestTrue(TEXT("selector fixture parses"),
+		FElysiumDlgFile::ParseBytes(ElysiumDlgBytes(Rows), File.Get())))
+	{
+		return false;
+	}
+	TArray<FString> Ran;
+	FElysiumDlgConversation Ordered(File, true, false,
+		[](const FString& Condition)
+		{
+			return Condition == TEXT("BAD_LINK") || Condition == TEXT("FIRST_TRUE")
+				|| Condition == TEXT("LATER_TRUE");
+		},
+		[&Ran](const FString& Action) { Ran.Add(Action); });
+	Ordered.Start();
+	if (TestNotNull(TEXT("ordered selector opens"), Ordered.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("first passing valid link wins"), Ordered.CurrentNpcLine()->Id, 20);
+	}
+	TestTrue(TEXT("selected line enters through the ordinary action path"), Ran.Contains(TEXT("ENTER_20")));
+	TestFalse(TEXT("later passing row is not entered"), Ran.Contains(TEXT("ENTER_30")));
+
+	// A usescript integer overrides line 1 when no sentinel passes; no usescript means line 1.
+	FElysiumDlgConversation ScriptFallback(File, true, false,
+		[](const FString&) { return false; }, [](const FString&) {},
+		[]() -> TOptional<int32> { return 30; });
+	ScriptFallback.Start();
+	if (TestNotNull(TEXT("usescript fallback opens"), ScriptFallback.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("usescript integer is the starting line"), ScriptFallback.CurrentNpcLine()->Id, 30);
+	}
+
+	FElysiumDlgConversation LineOneFallback(File, true, false,
+		[](const FString&) { return false; }, [](const FString&) {});
+	LineOneFallback.Start();
+	if (TestNotNull(TEXT("line-1 fallback opens"), LineOneFallback.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("absent usescript selects line 1"), LineOneFallback.CurrentNpcLine()->Id, 1);
+	}
+
+	// A used script that returns no integer produces 0 in retail. Acquire then substitutes the first
+	// stored line id; use a file with neither line 0 nor line 1 to make that final fallback observable.
+	TSharedRef<FElysiumDlgFile> FirstStored = MakeShared<FElysiumDlgFile>();
+	if (!TestTrue(TEXT("first-stored fixture parses"), FElysiumDlgFile::ParseBytes(
+		ElysiumDlgBytes({ ElysiumDlgRow(50, TEXT("First stored."), TEXT("#"), TEXT(""), TEXT("")) }),
+		FirstStored.Get())))
+	{
+		return false;
+	}
+	FElysiumDlgConversation InvalidScriptResult(FirstStored, true, false,
+		[](const FString&) { return false; }, [](const FString&) {},
+		[]() -> TOptional<int32> { return 0; });
+	InvalidScriptResult.Start();
+	if (TestNotNull(TEXT("first-stored fallback opens"), InvalidScriptResult.CurrentNpcLine()))
+	{
+		TestEqual(TEXT("invalid usescript result falls back to first stored line"),
+			InvalidScriptResult.CurrentNpcLine()->Id, 50);
+	}
 
 	return true;
 }

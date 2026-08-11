@@ -1104,11 +1104,57 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 		TestNotEqual(TEXT("23 col-12 differs from col-1"), Malk->TextMalkavian, Malk->Text(true));
 	}
 
-	// Drive the branch machine to the acceptance action. Condition callback: pass every gate (so the
-	// full choice set shows regardless of clan/patch state); at each turn prefer a choice that advances
-	// Tut_Jack, else the first, so the walk is deterministic and cannot loop.
+	// The retail opener is first passing valid link in physical file order. Pin Jack's three collisions
+	// against the real exported file rather than copying the row order into a synthetic fixture.
+	auto NoAct = [](const FString&) {};
+	{
+		auto Cond = [](const FString& C)
+		{
+			return C == TEXT("G.Tut_Jack == 1 and G.Tut_Patch == 1")
+				|| C == TEXT("G.Tut_Jack == 1 and G.Tutorial_Blueblood == 0");
+		};
+		FElysiumDlgConversation PatchFirst(File, true, false, Cond, NoAct);
+		PatchFirst.Start();
+		if (TestNotNull(TEXT("patch-first overlap opens"), PatchFirst.CurrentNpcLine()))
+		{
+			TestEqual(TEXT("patch condition precedes blueblood condition"), PatchFirst.CurrentNpcLine()->Id, 85);
+		}
+	}
+	{
+		auto Cond = [](const FString& C)
+		{
+			return C == TEXT("G.Tut_Jack == 7 and IsClan(pc,\"Nosferatu\") and G.Tut_Ratfeed == 1")
+				|| C == TEXT("G.Tut_Jack == 7 and G.Tut_Ratfeed == 1");
+		};
+		FElysiumDlgConversation NosferatuFirst(File, true, false, Cond, NoAct);
+		NosferatuFirst.Start();
+		if (TestNotNull(TEXT("Nosferatu overlap opens"), NosferatuFirst.CurrentNpcLine()))
+		{
+			TestEqual(TEXT("Nosferatu-specific condition precedes generic condition"),
+				NosferatuFirst.CurrentNpcLine()->Id, 561);
+		}
+	}
+	{
+		auto Cond = [](const FString& C)
+		{
+			return C == TEXT("G.Tut_Jack == 18 and G.Tut_Ashot == 0");
+		};
+		FElysiumDlgConversation DuplicateFirst(File, true, false, Cond, NoAct);
+		DuplicateFirst.Start();
+		if (TestNotNull(TEXT("duplicate-condition overlap opens"), DuplicateFirst.CurrentNpcLine()))
+		{
+			TestEqual(TEXT("first duplicate shadows the later link"), DuplicateFirst.CurrentNpcLine()->Id, 425);
+		}
+	}
+
+	// Drive the branch machine to the acceptance action. The condition callback selects the plain
+	// Tut_Jack==0 starting sentinel at line 1082 and passes every unrelated gate; at each turn prefer
+	// a choice that advances Tut_Jack, else the first, so the walk is deterministic and cannot loop.
 	TArray<FString> Ran;
-	auto Cond = [](const FString&) { return true; };
+	auto Cond = [](const FString& C)
+	{
+		return !C.Contains(TEXT("G.Tut_Jack")) || C == TEXT("G.Tut_Jack == 0");
+	};
 	auto Act = [&Ran](const FString& A) { Ran.Add(A); };
 
 	FElysiumDlgConversation Conv(File, /*bMale*/ true, /*bMalk*/ false, Cond, Act);

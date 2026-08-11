@@ -369,12 +369,14 @@ FString ElysiumDlgExpr::ActionToPython(const FString& Raw)
 // ================================================================================================
 
 FElysiumDlgConversation::FElysiumDlgConversation(TSharedRef<const FElysiumDlgFile> InFile,
-	bool bInPlayerMale, bool bInPlayerMalkavian, FCondFn InCond, FActFn InAct)
+	bool bInPlayerMale, bool bInPlayerMalkavian, FCondFn InCond, FActFn InAct,
+	FStartFallbackFn InStartFallback)
 	: DlgFile(InFile)
 	, bMale(bInPlayerMale)
 	, bMalk(bInPlayerMalkavian)
 	, CondFn(MoveTemp(InCond))
 	, ActFn(MoveTemp(InAct))
+	, StartFallbackFn(MoveTemp(InStartFallback))
 {
 }
 
@@ -387,28 +389,67 @@ bool FElysiumDlgConversation::PassesGate(const FString& RawCondition) const
 	return CondFn ? CondFn(RawCondition) : false;
 }
 
+int32 FElysiumDlgConversation::SelectStartingLineIndex() const
+{
+	// CDialog::GetStartingLine walks the physical row array and stops at the first passing sentinel
+	// whose link resolves. A passing dangling link warns and does not prevent a later row from winning.
+	for (const FElysiumDlgLine& Line : DlgFile->Lines)
+	{
+		if (!Line.IsStartingCondition() || !PassesGate(Line.Condition))
+		{
+			continue;
+		}
+
+		if (!Line.Link.IsNumeric())
+		{
+			UE_LOG(LogElysiumDlg, Warning, TEXT("%s: starting condition row %d has non-numeric link '%s'"),
+				*DlgFile->SourcePath, Line.Id, *Line.Link);
+			continue;
+		}
+
+		const int32 TargetId = FCString::Atoi(*Line.Link);
+		const int32 TargetIndex = DlgFile->IndexOfId(TargetId);
+		if (TargetIndex != INDEX_NONE && DlgFile->Lines[TargetIndex].IsNpcLine())
+		{
+			UE_LOG(LogElysiumDlg, Verbose, TEXT("%s: starting condition row %d selected NPC line %d"),
+				*DlgFile->SourcePath, Line.Id, TargetId);
+			return TargetIndex;
+		}
+
+		UE_LOG(LogElysiumDlg, Warning, TEXT("%s: starting condition row %d links to missing/invalid NPC line %d"),
+			*DlgFile->SourcePath, Line.Id, TargetId);
+	}
+
+	// With no winning sentinel, retail executes a non-empty `usescript`. No script means line 1.
+	// A script error/non-int returns 0, which deliberately fails resolution below and reaches Acquire's
+	// first-stored-line fallback rather than being silently rewritten to line 1.
+	const TOptional<int32> ScriptLine = StartFallbackFn ? StartFallbackFn() : TOptional<int32>();
+	const int32 SelectedId = ScriptLine.IsSet() ? ScriptLine.GetValue() : 1;
+	const int32 SelectedIndex = DlgFile->IndexOfId(SelectedId);
+	if (SelectedIndex != INDEX_NONE && DlgFile->Lines[SelectedIndex].IsNpcLine())
+	{
+		return SelectedIndex;
+	}
+
+	// CDialog::Acquire validates GetStartingLine's result and substitutes the first stored line id.
+	if (!DlgFile->Lines.IsEmpty() && DlgFile->Lines[0].IsNpcLine())
+	{
+		UE_LOG(LogElysiumDlg, Verbose, TEXT("%s: invalid starting line %d; falling back to first stored line %d"),
+			*DlgFile->SourcePath, SelectedId, DlgFile->Lines[0].Id);
+		return 0;
+	}
+
+	UE_LOG(LogElysiumDlg, Warning, TEXT("%s: no valid NPC starting line"), *DlgFile->SourcePath);
+	return INDEX_NONE;
+}
+
 void FElysiumDlgConversation::Start()
 {
-	// Entry = the first NPC line with non-empty display text. The blank leading NPC lines (jack_tutorial
-	// 1-4) are not real turns. (Interim rule — VtMB's exact opener-selection among gated leading NPC
-	// lines is unresolved RE; the tutorial has a single content opener, so this is faithful there.)
-	for (int32 i = 0; i < DlgFile->Lines.Num(); ++i)
+	const int32 StartingIndex = SelectStartingLineIndex();
+	if (StartingIndex != INDEX_NONE)
 	{
-		const FElysiumDlgLine& L = DlgFile->Lines[i];
-		if (L.IsNpcLine() && !L.RawFor(bMale, bMalk).IsEmpty())
-		{
-			EnterNpcLine(i);
-			return;
-		}
-	}
-	// No content NPC line — fall back to the first NPC line, else nothing to say.
-	for (int32 i = 0; i < DlgFile->Lines.Num(); ++i)
-	{
-		if (DlgFile->Lines[i].IsNpcLine())
-		{
-			EnterNpcLine(i);
-			return;
-		}
+		EnterNpcLine(StartingIndex);
+		return;
 	}
 	bOver = true;
 	++Rev;
@@ -437,7 +478,7 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 		{
 			break;
 		}
-		if (L.IsPcChoice() && PassesGate(L.Condition))
+		if (L.IsPcChoice() && !L.IsStartingCondition() && PassesGate(L.Condition))
 		{
 			VisibleChoiceIndices.Add(j);
 		}
