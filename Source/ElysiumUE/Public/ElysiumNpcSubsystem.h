@@ -7,14 +7,14 @@
 class AActor;
 class USkeletalMesh;
 class UAnimSequence;
-class UElysiumNpcAnimInstance;
+class UElysiumBipedAnimInstance;
 class UglTFRuntimeAsset;
 class IConsoleObject;
 
 // One test NPC loaded through the runtime skeletal path (P8 8.2 spike). Records what glTFRuntime
 // produced from a single out/npc/<stem>.glb -- mesh + skeleton + one applied animation -- so the Cog
 // NPC window can display it without re-reading the asset. The spawned actor is a plain AActor with a
-// USkeletalMeshComponent root playing the clip on UElysiumNpcAnimInstance — the game's own host, so
+// USkeletalMeshComponent root playing the clip on UElysiumBipedAnimInstance — the game's own host, so
 // the preview body carries the facial flex track too.
 USTRUCT()
 struct FElysiumLoadedNpc
@@ -75,7 +75,7 @@ public:
 	// instance. StemFilter, when non-empty, keeps only rigs whose model stem contains it. The
 	// elysium.npc.flex verbs and the Cog NPC window's Facial tab read this one list, so they always
 	// address the same bodies.
-	TArray<UElysiumNpcAnimInstance*> FacialBodies(const FString& StemFilter = FString()) const;
+	TArray<UElysiumBipedAnimInstance*> FacialBodies(const FString& StemFilter = FString()) const;
 
 private:
 	// Feet-of-player + a short forward offset, facing the player (yaw only).

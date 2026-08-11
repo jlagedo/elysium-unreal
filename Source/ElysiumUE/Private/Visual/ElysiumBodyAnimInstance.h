@@ -16,12 +16,13 @@ struct FElysiumCompositionRig;
 // Everything a VtMB body wears over whatever produced its pose — and nothing about how the pose
 // was produced.
 //
-// Two instances answer this contract and they differ only above it: the cast composes its own pose
-// out of sequence players, while the player's comes out of a compiled anim graph. The tail is the
-// same either way — VtMB's one composition stage, the garment simulation, and the face's
-// morph-target curves — so it lives here once. A body that carried the tail on only one of the two
-// would ship frozen eyes and untwisted forearms, and neither the log nor the Content Browser
-// preview can show that.
+// The tail is VtMB's one composition stage, the garment simulation, and the face's morph-target
+// curves, and it belongs to a body rather than to a pose source: a body that carried it on only
+// some of its paths would ship frozen eyes and untwisted forearms, and neither the log nor the
+// Content Browser preview can show that. It stays split from `UElysiumBipedAnimInstance` because
+// the two answer different questions — this one is what a body wears, that one is where its pose
+// comes from — and the facial and composition rigs are installed by callers that have no business
+// knowing which graph is running.
 
 USTRUCT()
 struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
@@ -81,10 +82,10 @@ public:
 
 	// --- the one-shot seam ----------------------------------------------------------------------
 	//
-	// Play one clip over whatever owns the base pose. The two instances answer it differently — the
-	// cast routes it through its own crossfade pool, a graph-backed body plays it on a montage slot
-	// — and a caller holding an `IElysiumEmbodiment` body has no way to know which it has, so the
-	// question is answered here rather than at every call site.
+	// Play one clip over whatever owns the base pose. A graph-backed body plays it on a montage slot
+	// and a body with no compiled graph on its own clip player, and a caller holding an
+	// `IElysiumEmbodiment` body has no way to know which it has, so the question is answered here
+	// rather than at every call site.
 	//
 	// False when this instance cannot play the clip at all, which is an ordinary answer: a body
 	// whose visual has no vocabulary is not an error.

@@ -11,7 +11,7 @@
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "Visual/ElysiumFacialRig.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcBody.h"
 
 #include "EngineUtils.h"
@@ -34,7 +34,7 @@ void FElysiumCogWindow_Npc::RenderHelp()
 		"(mdl_gltf.py: mesh + StudioBone skeleton + one RLE animation, a standard glTF 2.0 file) and "
 		"Load it: UElysiumNpcSubsystem runs it through glTFRuntime into a runtime USkeletalMesh + "
 		"UAnimSequence and spawns a skeletal-mesh actor in front of the player, playing the clip on "
-		"the game's own UElysiumNpcAnimInstance. The table shows what each load produced -- bone count, the "
+		"the game's own UElysiumBipedAnimInstance. The table shows what each load produced -- bone count, the "
 		"animations present in the glb, the applied clip, load time, spawn location. Per-clip buttons "
 		"re-play any animation; Clear destroys the spawned NPCs. Same path the elysium.npc.* verbs drive.\n\n"
 		"The Facial tab drives the flex rig on any live rigged body (12.3): 44 flex controllers as "
@@ -169,7 +169,7 @@ void FElysiumCogWindow_Npc::RenderFacial()
 	ImGui::SameLine();
 	ImGui::Checkbox("Non-zero only", &bFacialNonZeroOnly);
 
-	const TArray<UElysiumNpcAnimInstance*> Bodies = Npc->FacialBodies(FacialFilter);
+	const TArray<UElysiumBipedAnimInstance*> Bodies = Npc->FacialBodies(FacialFilter);
 	if (Bodies.IsEmpty())
 	{
 		ImGui::TextDisabled("No live body carries a facial flex rig.");
@@ -180,7 +180,7 @@ void FElysiumCogWindow_Npc::RenderFacial()
 	ImGui::SameLine();
 	if (ImGui::SmallButton("Reset all"))
 	{
-		for (UElysiumNpcAnimInstance* Inst : Bodies)
+		for (UElysiumBipedAnimInstance* Inst : Bodies)
 		{
 			Inst->ResetFlexControllers();
 		}
@@ -188,7 +188,7 @@ void FElysiumCogWindow_Npc::RenderFacial()
 
 	for (int32 BodyIndex = 0; BodyIndex < Bodies.Num(); ++BodyIndex)
 	{
-		UElysiumNpcAnimInstance* Inst = Bodies[BodyIndex];
+		UElysiumBipedAnimInstance* Inst = Bodies[BodyIndex];
 		const FElysiumFacialRig& Rig = *Inst->GetFacialRig();
 		const TArray<float>& Values = Inst->GetFlexControllerValues();
 		const TArray<float>& Flexes = Inst->GetFlexWeights();

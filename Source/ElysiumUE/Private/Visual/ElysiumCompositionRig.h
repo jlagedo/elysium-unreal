@@ -5,7 +5,7 @@
 // The two composition stages VtMB runs between blended locals and the drawn skeleton, as data
 // (roadmap CAP7.1/CAP7.2). Plain C++ with no UObject reflection, like `FElysiumFacialRig`: this
 // holds a table and the arithmetic over it, and the cache that hands one out is
-// `UElysiumNpcAnimSubsystem`.
+// `UElysiumAnimSubsystem`.
 //
 // Neither stage is in the clips. Unreal owns decode, blending, skinning and LOD; these are the only
 // two things it has no equivalent for, and both run after the graph has blended locals and before
@@ -28,7 +28,7 @@
 // bakeable is the correction across a BLEND: the rule is non-linear, so normalising two clips
 // against their own parent chains and blending is not the same as blending first and correcting
 // once. That residual is bounded and measured — see `EvaluateComposition` in
-// `ElysiumNpcAnimInstance.cpp`.
+// `ElysiumBodyAnimInstance.cpp`.
 
 // One `mstudioaxisinterpbone_t`, as `npc/procedural/<stem>.json` states it.
 //

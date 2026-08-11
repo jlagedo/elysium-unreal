@@ -13,8 +13,8 @@
 #include "ElysiumPlayerBody.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumEntityBodies.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 #include "ChaosClothAsset/ClothAsset.h"
 #include "ChaosClothAsset/ClothAssetInteractor.h"
 #include "ChaosClothAsset/ClothComponent.h"
@@ -123,12 +123,12 @@ UChaosClothComponent* FElysiumCogWindow_GreenRoom::FindGarment() const
 	return nullptr;
 }
 
-UElysiumNpcAnimInstance* FElysiumCogWindow_GreenRoom::GetNpcBodyInstance() const
+UElysiumBipedAnimInstance* FElysiumCogWindow_GreenRoom::GetBipedInstance() const
 {
-	// The rows that read a clip or a layer rather than a rig. Those belong to the native instance's
-	// own pose machinery, so a body posing from an anim graph answers null and its rows read empty
-	// — which is the honest report, not a hidden failure.
-	return Cast<UElysiumNpcAnimInstance>(GetBodyInstance());
+	// The rows that read a clip or a layer rather than a rig. A component that is not one of our
+	// hosts at all — a preview driven straight through `PlayAnimation` — answers null and its rows
+	// read empty, which is the honest report rather than a hidden failure.
+	return Cast<UElysiumBipedAnimInstance>(GetBodyInstance());
 }
 
 void FElysiumCogWindow_GreenRoom::OpenLab()
@@ -298,7 +298,7 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 	ScannedStem.Reset();
 
 	const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	USkeletalMeshComponent* Body = Lab.LabBody();
 	USkeletalMesh* Mesh = Body != nullptr ? Body->GetSkeletalMeshAsset() : nullptr;
 	if (Anims == nullptr || Mesh == nullptr)
@@ -461,7 +461,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ClipCursor = INDEX_NONE;
 		ClipsStem = PendingStem;
 		const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
-		UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+		UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 		if (const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(PendingStem) : nullptr)
 		{
 			Set->Clips.GetKeys(Clips);
@@ -738,7 +738,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 
 	// Read once: the proxy accessor behind it blocks on any in-flight parallel evaluation, which is
 	// not a thing to do twice a frame to draw one label.
-	const UElysiumNpcAnimInstance* LayerInst = GetNpcBodyInstance();
+	const UElysiumBipedAnimInstance* LayerInst = GetBipedInstance();
 	const int32 Composing = LayerInst != nullptr ? LayerInst->GetActiveLayers() : 0;
 	if (Composing > 0)
 	{
@@ -773,7 +773,7 @@ void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
 	// floor on Bip01 or animates only the limbs above a root that never moves, and which of the two
 	// it is decides whether a wrong-looking result is the clip, the rig, or the placement. Measured
 	// off the sequence rather than declared, so it answers for whichever path built the body.
-	const UElysiumNpcAnimInstance* Inst = GetNpcBodyInstance();
+	const UElysiumBipedAnimInstance* Inst = GetBipedInstance();
 	const UAnimSequence* Playing = Inst != nullptr ? Inst->GetPlayingClip() : nullptr;
 	if (Playing != nullptr)
 	{
@@ -903,7 +903,7 @@ void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
 		return;
 	}
 	const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI != nullptr ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>()
+	UElysiumAnimSubsystem* Anims = GI != nullptr ? GI->GetSubsystem<UElysiumAnimSubsystem>()
 		: nullptr;
 	const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Lab.LabStem()) : nullptr;
 	const FElysiumNpcClip* Host = Set != nullptr ? Set->Find(Standing) : nullptr;

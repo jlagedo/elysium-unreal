@@ -273,11 +273,14 @@ public:
 	// The body-relative eye/pivot used for authoritative reach. It remains on the pawn when a
 	// third-person camera moves behind it.
 	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const = 0;
-	// The body: its world position and facing yaw. False when there is no player.
-	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const = 0;
-	// Place the player at a Source absorigin (feet) with the given yaw. The body owns the capsule
-	// compensation — Source places feet, an Unreal capsule is centred.
-	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) = 0;
+	// The entity transform: Source absorigin at the feet plus the complete Unreal view rotation.
+	virtual bool GetPlayerFeetTransform(FVector& OutFeetOrigin, FRotator& OutViewRotation) const = 0;
+	// The presentation/save placement: Unreal's centred body plus view. Kept separate so legacy save
+	// payloads retain their capsule-centre contract while entity logic never sees it as absorigin.
+	virtual bool GetPlayerCapsuleTransform(FVector& OutCapsuleCenter, FRotator& OutViewRotation) const = 0;
+	// Place the player at a Source absorigin (feet). The body owns capsule compensation and applies
+	// body yaw plus the complete controller view rotation.
+	virtual void TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation) = 0;
 	// trigger_hurt / a door closing on the player. No-op when there is no player.
 	virtual void DamagePlayer(float Amount) = 0;
 	// Modern +use embodiment. Registration names engine components with substrate handles; the
@@ -463,3 +466,17 @@ struct FElysiumWorldServices
 	IElysiumPresenter*  Presenter  = nullptr;
 	IElysiumWeather*    Weather    = nullptr;
 };
+namespace ElysiumPlayerView
+{
+	// Entity angles remain Source QAngles. The Source->Unreal handedness reflection reverses view
+	// pitch and yaw; roll retains its rotation about the reflected forward axis. Keep the inverse
+	// beside it so player synchronization and teleport delivery cannot drift.
+	inline FRotator ToUnreal(const FVector& SourceAngles)
+	{
+		return FRotator(-SourceAngles.X, -SourceAngles.Y, SourceAngles.Z);
+	}
+	inline FVector ToSource(const FRotator& UnrealRotation)
+	{
+		return FVector(-UnrealRotation.Pitch, -UnrealRotation.Yaw, UnrealRotation.Roll);
+	}
+}

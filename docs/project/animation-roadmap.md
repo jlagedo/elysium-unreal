@@ -73,10 +73,10 @@ file and each is recorded beside the faithful behaviour in the topic that owns i
 
 ## What it supersedes
 
-- **A bespoke layer stage as the destination.** The animation proxy composes both kinds of layer
-  itself because there is no graph to hold a layered blend or an additive node yet. What is
-  superseded is treating that stage as the design rather than as the stand-in; ANM4 says what
-  replaces it and what that costs.
+- **A bespoke layer stage as the destination.** `FElysiumBipedAnimProxy` composes both kinds of layer
+  itself because the graph holds no layered blend and no additive node yet. What is superseded is
+  treating that stage as the design rather than as the stand-in; ANM4 says what replaces it and what
+  that costs, and `docs/project/three-cs-roadmap.md` CCC10 is the rung that cuts it.
 - **A hand-rolled grid resolver.** `ElysiumBlendGrids`'s nearest-cell pick computes interpolation
   fractions and discards them. Replaced by baked blend spaces; the parse survives for provenance
   and for the per-cell ground speed the motor consumes.
@@ -215,12 +215,13 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   what lets a whole grid sit behind one layered-blend node in ANM4, since no Unreal blend node masks
   per sample. The fact itself belongs to `docs/vtmb/animation_and_movers.md` §A.4.
 
-  **Nothing in gameplay drives one**, which is `docs/project/three-cs-roadmap.md` CCC5's. The runtime
-  carries a base blend-space slot in the proxy under `elysium.BlendSpaces`, with the green room as its
-  only caller: a grid row stands the whole fan and a slider per declared axis steers it. That slot is
-  the same kind of scaffolding as the layer slots below, and CCC9 retires it the same way. An aim
-  grid is baked but not standable — its cells are masked overlays, so it is a layer's grid and the
-  base slot refuses it for the reason a masked sequence must never reach the base clip path.
+  **Gameplay drives one through the graph**, which is `docs/project/three-cs-roadmap.md` CCC5's, and
+  the green room reviews one through that same path: `CCC9` deleted the proxy's own base blend-space
+  slot and moved the grid lab onto a published selection naming the blend space, so a grid row stands
+  the whole fan and a slider per declared axis steers it over the graph's blend-space player rather
+  than over a second one. An aim grid is baked but not standable — its cells are masked overlays, so
+  it is a layer's grid and the base path refuses it for the reason a masked sequence must never reach
+  the base clip path.
 
 - [ ] **ANM4 Extract and bake the action catalog.** The generated corpus a resolver reads: the
   activity registry, the player and NPC selection rules, every weapon translation table, and the

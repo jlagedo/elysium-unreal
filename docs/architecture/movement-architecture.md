@@ -127,7 +127,7 @@ every cell by construction. What the solve asks instead is
 `FElysiumGaitSpeedTable` is one gait's fan: nine authored cells, an axis range, and the gait's own
 scale kept as a field so a readout can show what the animation authored against what the scale did
 to it. `ElysiumBlendGrids::SpeedFan` fills one from a baked grid and interpolates across a cell that
-baked without motion; `UElysiumNpcAnimSubsystem::ResolveGaitSpeeds` resolves all three from the
+baked without motion; `UElysiumAnimSubsystem::ResolveGaitSpeeds` resolves all three from the
 **un-relaxed** `ACT_WALK`/`ACT_RUN`/`ACT_SNEAK`, exactly as retail's extractor does.
 
 **The tables are pushed, not pulled.** They depend on the body — stem, weapon, form, variant — and

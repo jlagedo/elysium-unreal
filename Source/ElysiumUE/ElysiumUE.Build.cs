@@ -49,7 +49,7 @@ public class ElysiumUE : ModuleRules
 			"glTFRuntime",
 			// CAP7.2: VtMB's two composition stages are FAnimNode_SkeletalControlBase nodes, which
 			// live in AnimGraphRuntime. A runtime module -- the nodes are native and driven from
-			// UElysiumNpcAnimInstance's proxy, so none of the editor AnimGraph stack is involved.
+			// FElysiumBodyAnimProxy's tail, so none of the editor AnimGraph stack is involved.
 			"AnimGraphRuntime",
 			// 8.7 ropes: the stock (enabled-by-default) CableComponent plugin's UCableComponent
 			// renders each overhead cable as a Verlet-simulated strand built at map load.

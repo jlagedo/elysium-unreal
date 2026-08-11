@@ -4,7 +4,7 @@
 
 // VtMB's eye system, as data plus the arithmetic over it (roadmap 12.4). Plain C++ with no UObject
 // reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
-// `UElysiumNpcAnimSubsystem`, and the per-body application is `UElysiumEntityBodies`.
+// `UElysiumAnimSubsystem`, and the per-body application is `UElysiumEntityBodies`.
 //
 // An eye is not a UV-mapped feature of the mesh. The original renderer rebuilds a basis for each
 // eyeball every frame from the model's `StudioEyeball` record and the character's gaze point, turns

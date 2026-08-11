@@ -310,7 +310,7 @@ the original's even where the backing system is missing.
   actors in a pocket of whatever world is loaded — an `ACameraActor` the controller looks through,
   an unlit quad carrying
   `charactermaintenance/background` as a **fixed wallpaper**, and the body itself with collision off,
-  standing the idle `UElysiumNpcAnimSubsystem::PickIdleClip` would give an NPC. The mesh goes through
+  standing the idle `UElysiumAnimSubsystem::PickIdleClip` would give an NPC. The mesh goes through
   the same world-free `ElysiumNpcVisual::LoadMesh` the game's own NPC bodies use, resolved by
   `FElysiumClanTable::PlayerBodyStem` — the one lookup `Elysium.Content.PlayerBodies` also asserts.
 

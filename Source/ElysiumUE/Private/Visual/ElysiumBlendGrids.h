@@ -5,7 +5,7 @@
 
 // A model's blend spaces, off `npc/blends/<stem>.json` (CAP7.3). Plain C++ with no UObject
 // reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
-// `UElysiumNpcAnimSubsystem`.
+// `UElysiumAnimSubsystem`.
 //
 // A VtMB sequence does not always name one animation. 279 of the exported sequences name a **grid**
 // of them — a 9x1 fan of `walk_0`..`walk_315` selected by `move_yaw`, a 3x3 weapon-aim layer on

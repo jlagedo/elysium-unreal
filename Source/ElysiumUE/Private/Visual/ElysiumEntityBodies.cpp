@@ -2,11 +2,13 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumPropSkins.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
 #if WITH_EDITOR
 #include "Animation/IAnimationSequenceCompiler.h"
 #endif
@@ -53,7 +55,14 @@ namespace
 {
 	// Resolved once and cached, including the failure: a missing generated package is a build-step
 	// problem rather than something to retry per body.
-	UClass* PlayerGraphClass()
+	//
+	// The cache outlives every map epoch, so the class it holds has to as well: it is **rooted**.
+	// A `-game` run's map travel collects garbage with `GARBAGE_COLLECTION_KEEPFLAGS`, which is
+	// `RF_NoFlags` outside the editor — the loaded Blueprint's `RF_Standalone` does not survive it,
+	// and once the previous map's body component is gone nothing else references the generated
+	// class. Without the root, the second map to seat a player body hands `SetAnimInstanceClass` a
+	// freed class and `UAnimInstance::InitializeAnimation` faults reading it.
+	UClass* BodyGraphClass()
 	{
 		static bool bResolved = false;
 		static UClass* Cached = nullptr;
@@ -62,13 +71,19 @@ namespace
 			bResolved = true;
 			const FString Path = FElysiumContentPaths::PlayerAnimBlueprintClass();
 			Cached = LoadClass<UAnimInstance>(nullptr, *Path);
-			if (Cached == nullptr)
+			if (Cached != nullptr)
+			{
+				Cached->AddToRoot();
+			}
+			else
 			{
 				// Named rather than substituted, the same rule `ElysiumNpcVisual::LoadMesh` follows:
-				// the body still stands, on the cast's host, and the line says what to run.
+				// the body still stands and the line says what to run. Without the graph there is no
+				// state machine and no montage slot, so a body poses only what its own clip player is
+				// given — the standing idle, with no locomotion behind it.
 				UE_LOG(LogElysiumBodies, Warning,
-					TEXT("player animation graph '%s' is not on the mount -- the player body falls "
-					     "back to the native instance. Run `uv run elysium export bundle policy`."),
+					TEXT("animation graph '%s' is not on the mount -- every body falls back to the "
+					     "native instance and poses clips only. Run `uv run elysium export bundle policy`."),
 					*Path);
 			}
 		}
@@ -140,7 +155,7 @@ USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bP
 
 	AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	// Ahead of the mesh, so there is no built body to ask -- and that is fine here, because only
 	// the eye MATERIAL names are read below and those are frame-independent strings. The frame is
 	// part of the cache key, so a guess costs at worst one redundant parse; it can never hand a
@@ -186,7 +201,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 
 	// CAP7.3 — key on the animation the label will actually load, not the label. A blend-grid label
 	// selects a cell from the pose parameters, so a cache keyed on `walk` would pin whichever cell was
@@ -218,7 +233,7 @@ float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& 
 {
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
 	const FElysiumNpcClip* Clip = Set ? Set->Find(ClipName) : nullptr;
 	// A clip the vocabulary does not carry — a bank clip reached by name, a prop, the green room —
@@ -241,11 +256,11 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	{
 		*OutSeconds = Anim->GetPlayLength();
 	}
-	// The shared one-shot seam rather than the NPC instance's own clip API: a graph-backed body
-	// answers it over a montage slot and a native body over its crossfade pool, and a caller holding
-	// an `IElysiumEmbodiment` body has no way to know which it has. Casting to the NPC instance here
-	// would miss a player body and fall through to `PlayAnimation`, which switches the component to
-	// single-node mode and destroys the anim graph for the rest of the map.
+	// The shared one-shot seam rather than the clip API below it: a graph-backed body answers it over
+	// a montage slot and a body with no compiled graph over its clip player, and a caller holding an
+	// `IElysiumEmbodiment` body has no way to know which it has. Falling through to `PlayAnimation`
+	// instead would switch the component to single-node mode and destroy the anim graph for the rest
+	// of the map.
 	UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
 	if (Inst == nullptr)
 	{
@@ -265,9 +280,9 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	{
 		return false;
 	}
-	// A graph-backed body has no layer slot until `CCC10` lands the layered bone blend, so this is
-	// the native instance's own path and answers false for anything else.
-	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance());
+	// The accumulator lives on the proxy until `CCC10` lands the layered bone blend, so this is the
+	// biped host's own path and answers false for anything else.
+	UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance());
 	return Inst != nullptr && Inst->PlayLayer(Anim, Weight);
 }
 
@@ -277,40 +292,113 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 	OutGrid = FElysiumResolvedGrid();
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
-	UElysiumNpcAnimInstance* Inst = Body
-		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr;
-	if (Anims == nullptr || Inst == nullptr)
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumBipedAnimInstance* Inst = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Anims == nullptr || Inst == nullptr || !Inst->HasCompiledGraph())
 	{
-		// The native instance's own path, for the same reason a layer has one: the grid slot is
-		// what holds a blend space, and only that host has it.
+		// A grid is stood by publishing a selection that names it, so it needs the graph's own
+		// blend-space player. A body with no compiled graph has nowhere to put one.
 		return false;
 	}
 	if (!Anims->ResolveGrid(Stem, ClipName, Body->GetSkeletalMeshAsset(), OutGrid))
 	{
 		return false;
 	}
-	if (!Inst->PlayGrid(OutGrid.Space))
+
+	// The mirror of `PlayLayer`'s gate, and it fails the same way from the other side. A grid whose
+	// cells are partial-body `*_layer` overlays owns only the bones its mask names; stood as a BASE
+	// pose there is no mask in the path at all, so every bone it does not own arrives at the shared
+	// skeleton's reference pose and the body loses its stance from the waist down. Retail composes
+	// those through the layer accumulator and never as a base — a masked sequence reaching the base
+	// path is a defect, not a mode.
+	for (const FBlendSample& Sample : OutGrid.Space->GetBlendSamples())
 	{
-		OutGrid = FElysiumResolvedGrid();
-		return false;
+		if (Sample.Animation != nullptr
+			&& Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>() != nullptr)
+		{
+			OutGrid = FElysiumResolvedGrid();
+			return false;
+		}
 	}
+
+	StandGridSelection(*Inst, OutGrid, /*Axis0=*/0.f, /*Axis1=*/0.f);
 	return true;
 }
 
 void UElysiumEntityBodies::SetNpcGridPosition(USkeletalMeshComponent* Body, float Axis0, float Axis1)
 {
-	if (UElysiumNpcAnimInstance* Inst = Body
-		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr)
+	UElysiumBipedAnimInstance* Inst = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Inst == nullptr || StandingGrid.Space == nullptr)
 	{
-		Inst->SetGridPosition(Axis0, Axis1);
+		return;
 	}
+	// Re-published rather than written straight onto the instance: the graph reads its sample point
+	// off the same record every other consumer reads, so a readout and a pose cannot disagree.
+	// Moving the point does not restart the animations underneath it, because the generation is
+	// unchanged and only a generation change asks the graph for a blend.
+	StandGridSelection(*Inst, StandingGrid, Axis0, Axis1);
+}
+
+void UElysiumEntityBodies::StandGridSelection(UElysiumBipedAnimInstance& Inst,
+	const FElysiumResolvedGrid& Grid, float Axis0, float Axis1)
+{
+	const bool bNewGrid = StandingGrid.Space != Grid.Space;
+	StandingGrid = Grid;
+
+	FElysiumAnimationSelection Selection;
+	Selection.Source = EElysiumAnimSource::Debug;
+	Selection.Route = EElysiumAnimRoute::ExactLabel;
+	// The gait the fan belongs to is not knowable from the label alone, and it does not need to be:
+	// every movement state in the graph plays whatever blend space it is handed. `ACT_WALK` is the
+	// one that does so without a one-shot's completion contract attached.
+	Selection.ResolvedActivity = TEXT("ACT_WALK");
+	Selection.RequestedActivity = Selection.ResolvedActivity;
+	Selection.SequenceLabel = Grid.Label;
+	Selection.AssetKind = EElysiumAnimAssetKind::BlendSpace;
+	Selection.Outcome = EElysiumAnimOutcome::Resolved;
+	Selection.Axes = Grid.Axes;
+	Selection.AxisValue[0] = Axis0;
+	Selection.AxisValue[1] = Axis1;
+	for (int32 Axis = 0; Axis < 2; ++Axis)
+	{
+		Selection.AxisName[Axis] = Grid.AxisName[Axis];
+	}
+	// Advanced only when the grid itself changes. A slider drag re-publishes the same generation, so
+	// the graph moves the sample point instead of asking for a transition on every frame of the drag.
+	StandingGridGeneration += bNewGrid ? 1 : 0;
+	Selection.Generation = StandingGridGeneration;
+
+	FElysiumResolvedAnimation Assets;
+	Assets.Space = Grid.Space;
+	Inst.PublishSelection(Selection, Assets);
+}
+
+void UElysiumEntityBodies::StopNpcGrid(USkeletalMeshComponent* Body)
+{
+	StandingGrid = FElysiumResolvedGrid();
+	UElysiumBipedAnimInstance* Inst = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Inst == nullptr)
+	{
+		return;
+	}
+	// A selection naming no asset, which the graph answers by HOLDING the pose it has rather than by
+	// entering a state with an empty pin. Leaving the grid's selection published instead would keep
+	// the fan playing underneath whatever clip is started next, and it would reappear the moment that
+	// clip ended.
+	FElysiumAnimationSelection Cleared;
+	Cleared.Source = EElysiumAnimSource::Debug;
+	Cleared.Outcome = EElysiumAnimOutcome::NoAsset;
+	Cleared.Generation = ++StandingGridGeneration;
+	Inst->PublishSelection(Cleared, FElysiumResolvedAnimation());
 }
 
 void UElysiumEntityBodies::StopNpcLayers(USkeletalMeshComponent* Body)
 {
-	if (UElysiumNpcAnimInstance* Inst = Body
-		? Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()) : nullptr)
+	if (UElysiumBipedAnimInstance* Inst = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr)
 	{
 		Inst->StopAllLayers();
 	}
@@ -352,7 +440,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveCinematicClip(USkeletalMesh* Mesh, c
 	}
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	if (Anims == nullptr)
 	{
 		return nullptr;
@@ -391,7 +479,7 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	{
 		*OutSeconds = Anim->GetPlayLength();
 	}
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
 		Inst->PlayClip(Anim, bLoop);
 	}
@@ -422,7 +510,7 @@ bool UElysiumEntityBodies::SeekCinematicClip(USkeletalMeshComponent* Body, float
 	{
 		return false;
 	}
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
 		Inst->SeekClip(PositionSeconds);
 	}
@@ -440,7 +528,7 @@ bool UElysiumEntityBodies::GetCinematicClipPosition(USkeletalMeshComponent* Body
 	{
 		return false;
 	}
-	if (const UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	if (const UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
 		const float Position = Inst->GetClipPosition();
 		if (Position < 0.f)
@@ -468,7 +556,7 @@ bool UElysiumEntityBodies::ResyncCinematicClip(USkeletalMeshComponent* Body, flo
 	{
 		return false;
 	}
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
 		Inst->ResyncClip(PositionSeconds);
 		return true;
@@ -489,7 +577,7 @@ void UElysiumEntityBodies::StopCinematicClip(USkeletalMeshComponent* Body)
 	{
 		return;
 	}
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
 		Inst->StopClip();
 	}
@@ -584,7 +672,7 @@ bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FS
 {
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	if (Body == nullptr || Anims == nullptr)
 	{
 		return false;
@@ -754,8 +842,8 @@ void UElysiumEntityBodies::TickEyes(float)
 	// resolve — blinks fast enough to read as a tell.
 	const AActor* Owner = GetOwner();
 	const UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI
-		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI
+		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 
 	// The green room's override, consumed once for the whole pass. `bBlinkNow` is an edge, so it is
 	// cleared here rather than per body: one press is one blink on everything bound, not one per body.
@@ -935,10 +1023,10 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// Cache-checked load: a map-load preload may already have stood this skeleton in the cache even
 	// though no component existed yet (the future !playercontroller case). The eyeball data is still
 	// needed below to install this component's independent material instances.
-	UElysiumNpcAnimSubsystem* Anims = nullptr;
+	UElysiumAnimSubsystem* Anims = nullptr;
 	if (UGameInstance* GI = Owner->GetGameInstance())
 	{
-		Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>();
+		Anims = GI->GetSubsystem<UElysiumAnimSubsystem>();
 	}
 	USkeletalMesh* Mesh = ResolveNpcMesh(Stem, bPlayerMaterial);
 	if (Mesh == nullptr)
@@ -962,7 +1050,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			IdleClip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
 			UE_LOG(LogElysiumBodies, Verbose, TEXT("npc '%s' idle: %s (%s, disposition '%s', variant %d)"),
 				*Stem, IdleClip.IsEmpty() ? TEXT("<none>") : *IdleClip,
-				UElysiumNpcAnimSubsystem::TierName(Tier),
+				UElysiumAnimSubsystem::TierName(Tier),
 				Disposition.IsEmpty() ? TEXT("<unset>") : *Disposition, IdleVariant);
 		}
 	}
@@ -986,13 +1074,13 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// The animation host is installed before the first clip, so it owns the pose from frame one and
 	// every later change (stance, gesture, scripted sequence) crossfades instead of popping.
 	//
-	// The player body is the one that poses from a graph. The cast keeps the native instance until
-	// `CCC9` retires it, so this is the only place the two hosts diverge.
+	// One host for every body, player and cast alike: the graph owns the crossfade, the gait fans
+	// and the one-shot slot, so there is no second pose composition to diverge from it.
 	{
-		UClass* Graph = bPlayerMaterial ? PlayerGraphClass() : nullptr;
+		UClass* Graph = BodyGraphClass();
 		Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 		Comp->SetAnimInstanceClass(
-			Graph != nullptr ? Graph : UElysiumNpcAnimInstance::StaticClass());
+			Graph != nullptr ? Graph : UElysiumBipedAnimInstance::StaticClass());
 	}
 	Comp->RegisterComponent();
 	// The visible mesh never collides; mobile NPCs wrap it in a native character capsule.
@@ -1029,7 +1117,7 @@ bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const F
 {
 	AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FString Clip = Anims ? Anims->PickActivityClip(Stem, Activity, Variant) : FString();
 	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, bLoop, OutSeconds);
 }
@@ -1039,7 +1127,7 @@ bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FSt
 {
 	AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	if (Anims == nullptr)
 	{
 		OutLabel.Reset();
@@ -1055,7 +1143,7 @@ FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath)
 {
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FElysiumAnimatedPropEntry* Entry = Anims
 		? Anims->GetIndex().FindAnimatedProp(ModelPath) : nullptr;
 	return Entry ? Entry->Stem : FString();
@@ -1065,7 +1153,7 @@ const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(con
 {
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	return Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
 }
 
@@ -1090,7 +1178,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	AActor* Owner = GetOwner();
 	USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FElysiumAnimatedPropEntry* Entry = Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
 	if (!Root || !Entry)
 	{
@@ -1151,8 +1239,11 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	{
 		Comp->SetRelativeScale3D(FVector(UniformScale));
 	}
+	// The NATIVE host, not the graph: a skeletal prop is a named clip and nothing else — no gait, no
+	// activity, no selection is ever published for one — so it poses off the clip player alone and a
+	// compiled locomotion machine would sit inert behind it.
 	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-	Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+	Comp->SetAnimInstanceClass(UElysiumBipedAnimInstance::StaticClass());
 	Comp->RegisterComponent();
 	Owner->AddInstanceComponent(Comp);
 	// A skeletal prop declares the same two composition stages a character does — 19 of them carry
@@ -1173,7 +1264,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh
 	}
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FElysiumAnimatedPropEntry* Entry = Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
 	if (!Entry || !Entry->HasClip(ClipName))
 	{
@@ -1222,7 +1313,7 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 	{
 		*OutSeconds = Anim->GetPlayLength();
 	}
-	if (UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Body->GetAnimInstance()))
+	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
 		Inst->PlayClip(Anim, bLoop);
 	}

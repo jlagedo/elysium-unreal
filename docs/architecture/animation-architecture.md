@@ -527,11 +527,12 @@ or any sequence whose owner/asset cannot be found.
 
 The implementation grows the path already serving both actor kinds:
 
-- `UElysiumNpcAnimSubsystem` is broadened/renamed into the character catalog and resolver; a second
-  player-only clip cache would duplicate the same model vocabulary and shared banks.
+- `UElysiumAnimSubsystem` **is** the character catalog and resolver, serving every body rather than
+  the cast alone; a second player-only clip cache would duplicate the same model vocabulary and
+  shared banks.
 - `FElysiumNpcClipSet`, `ResolveActivityClip`, the baked blend spaces and the current player visual
   are migration inputs. `PlayNpcActivity` remains a compatibility adapter while patrol/scripted
-  callers move to `FElysiumAnimationIntent`, and is removed with the native proxy scaffolding.
+  callers move to `FElysiumAnimationIntent`.
 - `IElysiumEmbodiment` carries the engine-neutral intent across the substrate boundary. NPC entity
   behaviour can request an activity without knowing about an Anim Instance; player gameplay state
   uses the same call. Body-local movement sampling stays on the engine side.

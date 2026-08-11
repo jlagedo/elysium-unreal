@@ -42,7 +42,7 @@ float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
 }
 
 void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
-	UElysiumNpcAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
+	UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
 	EElysiumOneShotState OneShot)
 {
 	// The pose parameter is a rate, and this is the one place per body per frame — a producer's

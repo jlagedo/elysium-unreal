@@ -13,7 +13,7 @@
 // what lets `Elysium.Substrate.AnimationResolve` build a two-bank fixture on the stack and assert the
 // thing that actually matters, that the same label reaches different banks on a player body and on a
 // cast body. The engine half that turns the resolved label into a `UAnimSequence*`/`UBlendSpace*`
-// lives on `UElysiumNpcAnimSubsystem`.
+// lives on `UElysiumAnimSubsystem`.
 //
 // It sits in `Visual/` rather than beside the intent because the catalog types it reads are private,
 // and because `CCC9` moves this whole cluster out of its NPC-named host together.
@@ -44,7 +44,7 @@ namespace ElysiumAnimResolve
 {
 	// VtMB's own deterministic weighted choice, reproduced exactly: candidates sorted by label, each
 	// weight floored at 1, and the seed `hash(stem lowered) ^ variant`. Exposed because
-	// `UElysiumNpcAnimSubsystem::PickActivityClip` is expressed over it — two implementations of one
+	// `UElysiumAnimSubsystem::PickActivityClip` is expressed over it — two implementations of one
 	// pick are how the player path and the cast path come to disagree about a bank silently.
 	FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant);
 

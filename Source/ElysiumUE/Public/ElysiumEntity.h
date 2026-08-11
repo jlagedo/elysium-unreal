@@ -140,7 +140,13 @@ public:
 	// Spawn() has run. The world's spawn pass and the two-phase runtime create (CreateEntityNoSpawn
 	// → CallEntitySpawn) both gate on this so an entity is never Spawn()'d twice.
 	bool  bSpawnCalled = false;
+	// Activate() has run. Unlike PostSpawn(), this late phase is admitted only after the player has
+	// reached its final frozen placement and the complete entity graph is available.
+	bool  bActivateCalled = false;
 	float NextThink = ELYSIUM_NEVER_THINK;
+	// The successfully resolved runtime move parent. ParentName remains the authored key; this handle
+	// answers whether attachment actually succeeded, which point_teleport must re-check.
+	FElysiumEntityHandle MoveParent;
 
 	// --- Output firing state (R2) ------------------------------------------------------
 	// The runtime `times` countdown, one entry per Def->Outputs row (the def is immutable, so
@@ -187,6 +193,7 @@ public:
 	// world (FElysiumEntityWorld::RenameEntity), not here.
 	void SetRuntimeOrigin(const FVector& NewOrigin);
 	void SetRuntimeAngles(const FVector& NewAngles);
+	void SetRuntimeTransform(const FVector& NewOrigin, const FVector& NewAngles);
 	void SetRuntimeModel(const FString& NewModel);
 
 	// Body-follow hooks the runtime writers call after mutating the field. Base: a brush/point
@@ -200,6 +207,9 @@ public:
 	// P1.6 trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) {}
 	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) {}
+	// Admission precedes the world's active-touch latch. A rejected observation must never suppress
+	// a later real begin after a trigger is enabled or its activator filter changes.
+	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const { return !IsInert(); }
 
 	// --- Player interaction -------------------------------------------------------------
 	// Spatial focus is separate from the class verb. The modern query supplies a context, the
@@ -397,10 +407,15 @@ public:
 	void Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass);
 	virtual void Spawn() {}
 
-	// Second-phase init, run after EVERY entity on the map has Spawn()'d (Source's Activate()
-	// pass). The base resolves parentname and attaches this entity's body while preserving its
+	// Second-phase construction, run after EVERY entity on the map has Spawn()'d. The base resolves
+	// parentname and attaches this entity's body while preserving its
 	// exported world pose; constraints and other leaves extend this after every body exists.
 	virtual void PostSpawn();
+
+	// Source's late Activate pass. The entity world calls this exactly once after the player has been
+	// placed and synchronized but before gameplay ingress opens. Runtime spawns in an active world
+	// receive it immediately after PostSpawn.
+	virtual void Activate() {}
 
 	// Map-load residency pass. All map entities and the player have spawned, but the entity world is
 	// still dormant: a leaf contributes its authored animation references here without starting any
@@ -416,6 +431,10 @@ public:
 	// Body hook (R6): mirror dormancy onto the attached body's collision. No-op while an entity
 	// has no body (all point/logic entities).
 	virtual void OnDormancyChanged();
+	// Class state such as CBaseTrigger::StartDisabled participates in the same physical gate as
+	// hidden/dead without pretending the entity itself is dormant.
+	virtual bool IsBrushBodyEnabled() const { return !IsInert(); }
+	void RefreshBrushBodyState();
 
 	// `#<idx> <targetname>(<classname>)` — the canonical debug string (R3), used everywhere.
 	FString DebugString() const;

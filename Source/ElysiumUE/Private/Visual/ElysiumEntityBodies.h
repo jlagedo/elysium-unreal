@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
+// By value: the grid a review body is standing on is a member, so the resolver's own header.
+#include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumTextureCache.h"
 #include "ElysiumEntityBodies.generated.h"
@@ -56,7 +58,7 @@ public:
 	// glTFRuntime and stand a movable USkeletalMeshComponent on the owning actor at the given
 	// transform, playing the standing idle its disposition selects (reference pose when nothing
 	// resolves). The idle usually lives in a **shared animation bank**, not the NPC's own glb, and
-	// is retargeted onto this skeleton by bone name — UElysiumNpcAnimSubsystem owns that resolution
+	// is retargeted onto this skeleton by bone name — UElysiumAnimSubsystem owns that resolution
 	// and the session-lifetime bank cache. Null on a missing/failed glb or an empty stem.
 	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant,
@@ -110,7 +112,7 @@ public:
 	// so a layer owned by a shared bank is reached by label; the layer itself is independent of the
 	// standing clip and survives a stance change. False when the label does not resolve, when the
 	// body has no animation host, or when the resolved sequence is neither kind
-	// (`UElysiumNpcAnimInstance::PlayLayer`).
+	// (`UElysiumBipedAnimInstance::PlayLayer`).
 	bool PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		float Weight);
 	void StopNpcLayers(USkeletalMeshComponent* Body);
@@ -119,9 +121,16 @@ public:
 	// parameters resolve to (ANM3). `OutGrid` comes back with the axes the caller steers through
 	// `SetNpcGridPosition` and can label a control with. False when the label names no grid — which
 	// is most labels — when the bake has not covered it, or when the grid is a layer's.
+	//
+	// It is stood by **publishing a selection that names it**, over the graph's own blend-space
+	// player, so what a review body stands on is the path the game plays through rather than a
+	// second one that could drift from it.
 	bool PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		struct FElysiumResolvedGrid& OutGrid);
 	void SetNpcGridPosition(USkeletalMeshComponent* Body, float Axis0, float Axis1);
+	// Take the grid back off the body. The graph holds the pose it has, so the caller's next clip
+	// owns the body outright rather than riding over a fan that is still playing underneath it.
+	void StopNpcGrid(USkeletalMeshComponent* Body);
 
 	// Drop every cached NPC mesh, parsed glb and resolved clip so the next build re-resolves from
 	// scratch.
@@ -263,6 +272,17 @@ private:
 	// The manifest record for a prop stem, or null. Shared by the two query members above.
 	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
 
+	// Publish the selection that stands `Grid` at a point on its axes. Shared by the two grid
+	// members so the record a review body poses from is built in exactly one place.
+	void StandGridSelection(class UElysiumBipedAnimInstance& Inst,
+		const struct FElysiumResolvedGrid& Grid, float Axis0, float Axis1);
+	// The grid a body was last stood on, so steering it needs only the new axis values. One, because
+	// standing a grid is a review path and exactly one body is under review at a time.
+	struct FElysiumResolvedGrid StandingGrid;
+	// Advanced only when the grid changes, never when it is steered: the graph asks for a blend on a
+	// generation change, and a slider drag must move the sample point rather than transition.
+	uint32 StandingGridGeneration = 0;
+
 	FString MapName;
 
 	// One eye section on one body: which slot draws it, which record it draws, the head bone it
@@ -343,7 +363,7 @@ private:
 	// AddInstanceComponent), freed with it.
 	//
 	// The animation cache is keyed `<stem>|<clip>` and lives HERE rather than on the GI-scoped
-	// UElysiumNpcAnimSubsystem, because glTFRuntime binds every UAnimSequence it builds to one
+	// UElysiumAnimSubsystem, because glTFRuntime binds every UAnimSequence it builds to one
 	// USkeletalMesh's USkeleton — and meshes are per-map-epoch. The subsystem caches what is
 	// skeleton-independent: the parsed bank glbs and the clip vocabularies. An entry may be null
 	// (nothing resolved → reference pose); it is still cached, so a miss is not retried per NPC.

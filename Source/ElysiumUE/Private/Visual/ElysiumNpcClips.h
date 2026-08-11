@@ -12,7 +12,7 @@
 //
 // Plain C++ (no UObject), like the rest of the entity substrate: these types hold *names*, and
 // the UObject-side caches that turn a name into a USkeletalMesh/UAnimSequence live in
-// UElysiumNpcAnimSubsystem (banks, GI-scoped) and AElysiumMapActor (per-map-epoch).
+// UElysiumAnimSubsystem (banks, GI-scoped) and AElysiumMapActor (per-map-epoch).
 
 // Well-known activity literals. VtMB stores `StudioSeqDesc.activity` as -1 on disk and lets the
 // game DLL resolve the *name* at model load, so the name is the durable key (A.3).

@@ -17,7 +17,7 @@
 // logged once and remembered, so a missing export costs one warning rather than one per read.
 // `LoadAll` forces the set — what `elysium.rules` and `Elysium.Content.Rulebook` call.
 //
-// `dispositiontable.txt` is NOT here: it is owned by `UElysiumNpcAnimSubsystem`, beside the
+// `dispositiontable.txt` is NOT here: it is owned by `UElysiumAnimSubsystem`, beside the
 // animation data its `Animation Name` column keys.
 UCLASS()
 class UElysiumRulebookSubsystem : public UGameInstanceSubsystem
@@ -66,7 +66,7 @@ private:
 	void ExecRoll(const TArray<FString>& Args);
 
 	// The lazy-load guard is set BEFORE the load, so a failure is remembered rather than retried
-	// on every read — the idiom `UElysiumNpcAnimSubsystem` established.
+	// on every read — the idiom `UElysiumAnimSubsystem` established.
 	template <typename T>
 	const T& Get(T& Table, bool& bLoaded, const TCHAR* Name, FString& Error);
 

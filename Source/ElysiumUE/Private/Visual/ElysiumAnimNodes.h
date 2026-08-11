@@ -14,9 +14,10 @@ struct FElysiumCompositionRig;
 //
 // It derives `FAnimNode_SkeletalControlBase` and runs in the slot a post-process Anim Blueprint
 // occupies — after the graph has blended locals, before skinning — which is retail's own order.
-// This runtime has no Anim Blueprint asset (`UElysiumNpcAnimInstance` is a native anim instance
-// with no graph), so that slot is the tail of `FElysiumNpcAnimProxy::Evaluate`, and the node is
-// driven through `ResolveBones` + `Apply` rather than through pose links.
+// This runtime declares no post-process graph, so that slot is the tail of
+// `FElysiumBodyAnimProxy::Evaluate`, and the node is driven through `ResolveBones` + `Apply` rather
+// than through pose links. That is what makes it answer identically for a body posing from the
+// compiled locomotion graph and one posing from a clip.
 //
 // **It is the only VtMB rule left in the frame path**, and it earns that on one property: it reads
 // a LIVE control-bone orientation, so its input is the blended pose rather than anything a file

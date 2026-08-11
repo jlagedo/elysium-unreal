@@ -2,7 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "UI/ElysiumUITexture.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Camera/CameraActor.h"
@@ -178,7 +178,7 @@ void FElysiumCharacterStage::SetBody(const FString& InStem)
 	UAnimSequence* Anim = nullptr;
 	if (UGameInstance* GI = World->GetGameInstance())
 	{
-		if (UElysiumNpcAnimSubsystem* Anims = GI->GetSubsystem<UElysiumNpcAnimSubsystem>())
+		if (UElysiumAnimSubsystem* Anims = GI->GetSubsystem<UElysiumAnimSubsystem>())
 		{
 			EElysiumIdleTier Tier = EElysiumIdleTier::None;
 			const FString Clip = Anims->PickIdleClip(Stem, FString(), Tier);

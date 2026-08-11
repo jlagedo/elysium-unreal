@@ -347,8 +347,9 @@ public:
 	// ordinary entity operations and these overrides shrink to the pawn's own transform.
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
 	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const override;
-	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const override;
-	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) override;
+	virtual bool GetPlayerFeetTransform(FVector& OutFeetOrigin, FRotator& OutViewRotation) const override;
+	virtual bool GetPlayerCapsuleTransform(FVector& OutCapsuleCenter, FRotator& OutViewRotation) const override;
+	virtual void TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation) override;
 	virtual void DamagePlayer(float Amount) override;
 	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) override;

@@ -129,7 +129,8 @@ Open tasks whose dependencies are met, ordered by playable-path payoff:
 2. **The 3 C's slice** — `docs/project/three-cs-roadmap.md` CCC0 onward: the gym and its channels,
    the mover's published body state, the camera service and player rig, then the resolver seam and
    the player animation graph. PP4's feel stack, promoted ahead of PP2/PP3 by owner call.
-3. **11.10** — finish PP0 with the played-input harness. `CCC8`'s acceptance depends on it.
+3. **11.10** — finish PP0 with the played-input harness. It gates no rung of the 3 C's slice:
+   `CCC8` is an owner-played acceptance by owner call, not a beat script.
 4. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, and economy on the durable player/entity spine.
 
 P12's remaining content and behavior gaps are tracked on its task rows. The lighting/look lane
@@ -165,11 +166,10 @@ first popup arms itself:
   `OnDialogEnd` on close. The interim `SElysiumDialogueBox` is replaced by 9.2. → `docs/vtmb/game_runtime.md`.
 - [x] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — `unhidePlus()` resolves and
   `setPlus()` arms `trig_popup_move`, unassisted from map load. → `docs/vtmb/python_bridge.md`.
-- [ ] **B6 Feed interaction (post-warp-2 continuation)** — the dedicated Feed action on the blueblood fires
-  `OnFedUponBegin`/`OnFedUponEnd`; the maker's `OnFedUponEnd` wires set `G.Tutorial_Blueblood=1`
-  and enable `trig_dialog_outside_chopshop`, opening the `Tut_Jack=2` chopshop beat.
-  *Acceptance:* feeding on the blueblood enables the chopshop dialogue trigger. *Deps:* B3.
-  Retail transaction contract: `docs/vtmb/feeding.md`.
+- [x] **B6 Feed interaction (post-warp-2 continuation)** — the feed command, acceptance policy,
+  paired state machine, pulse transaction and maker child output wiring landed; feeding the
+  blueblood enables the chopshop trigger from the authored `OnFedUponEnd` wire. →
+  `docs/vtmb/feeding.md`, `docs/architecture/gameplay-systems-architecture.md`.
 
 Parallel, non-blocking: 4.7 Source movement (the current pawn walks the beat fine),
 `PlayDialogFile` is part of the 6.5/9.2 shared line-service gate (codec decode alone does not make
@@ -940,16 +940,13 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   the per-name inventory + demand-ranked build order. **d** landed `OneOfSet` for real (the 589
   dialogue gates now select) and guarded the `Whisper`/`FrenzyTrigger` receiver split. →
   `docs/vtmb/script_api.md`; roll model:.
-- [ ] **9.8 Inventory & items** — implement the now-recovered retail contract for **853 corpus
-  calls**: `HasItem` 327 / `RemoveItem` 182 / `GiveItem` 126 / `StartBarter` 108 / `AmmoCount` /
-  `GiveAmmo` / `HasWeaponEquipped`, plus pickup/drop, the entity-valued `Inventory_Remove` input,
-  keyring records, save state, and container take/give. Ordinary inventory is 224 item-entity
-  handles per combat character; containers reuse it, item data owns stack/drop/ammo policy,
-  firearm `AmmoCount` is loaded magazine while `GiveAmmo` grants reserve, and
-  `trigger_inventory_check` evaluates ordinary slots plus keyring on accepted player entry. The
-  current patch-first catalogue has 244 item files and the tutorial lockpick/key/safe/tire-iron/
-  `.38` graph is joined as the first acceptance contract. `StartBarter` still needs the barter UI
-  (8.6); buy/sell pricing remains 9.10. → `docs/vtmb/inventory.md`. *Deps:* 9.7c, 9.4.
+- [~] **9.8 Inventory & items** — **the ownership core landed:** items as chain entities over the
+  244-file catalogue, `FElysiumInventory` (slots, keyring, reserve ammo), the six inventory
+  natives and entity-valued `Inventory_Remove`, item save state, and the shared-scope ground-model
+  export/bake. **Remaining:** touch pickup and player drop, container take/give, `StartBarter`
+  (needs the 8.6 barter UI), `trigger_inventory_check`, and the `TravelsWithPlayer()` absent-set
+  half; buy/sell pricing remains 9.10. → `docs/vtmb/inventory.md`,
+  `docs/architecture/gameplay-systems-architecture.md`. *Deps:* 9.7c, 9.4.
 - [ ] **9.9 NPC disposition & reactions** — the single largest engine demand in the game,
   **2,862 calls**: `SetDisposition(name, level)` alone is 2,510, 2,467 of them in `.dlg` column 4
   (an NPC line's *action*), plus `SetRelationship` 334 on `CAI_BaseNPC` and
@@ -966,14 +963,9 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   the event queue incl. deferred script strings, think times, `G`, and owned RNG streams, inside a
   `UElysiumSaveGame` shell over a versioned compressed payload. The inventory half arrives with 9.8:
   an item that overrides `TravelsWithPlayer()` joins the absent set with no change here.
-- [ ] **9.6 Dice resolver** *(RE5 [x])* — **mechanic verified** by decompiling the full roll
-  cluster (ctor `FUN_101d88b0`, roller `FUN_101d8b40`, `vroll` handler `0x100d7040`, RNG/table
-  path, loader `FUN_101d92b0`) **plus reading `vdata/system/DiceRolls.txt`** — no running game
-  needed (the golden-test premise was void: the face distribution is data-driven by that file).
-  `recovered/dice-system.md` is now canonical. `DiceRolls.txt` is on disk (**PL5b [x]**,
-  `$ELYSIUM_EXPORT_ROOT/vdata/system/`). **Remaining build work:** the C++ resolver loading its
-  `TableWeightings`/`HealthModifiers` (shipped tables are uniform d10, so `rng(0..9)` matches
-  today). *Deps:* none.
+- [x] **9.6 Dice resolver** *(RE5 [x])* — `ElysiumDice::Roll` implements the recovered algorithm
+  over the rulebook's `DiceRolls.txt` tables and the owned Dice RNG stream; `elysium.roll` is the
+  headless driver. → `docs/recovered/dice-system.md`, `docs/architecture/gameplay-systems-architecture.md`.
 
 **Slice acceptance** *(M6 criterion)*: `sp_tutorial_1` is completable as in retail —
 dialogue, scripted flow, quests, save/load included.
@@ -1316,7 +1308,7 @@ rather than the centre. Full specification: `docs/vtmb/facial_animation.md`.
   three layers above them, which are runtime evaluation: 44 flex controllers → 60 RPN flex rules
   → 65 flexdesc weights → the per-flex target ramp → the morph weight. All four inputs are in
   `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`, index-aligned with the glb's morph targets;
-  `UElysiumNpcAnimInstance` grows a morph-track player over the body animation. Two load
+  `UElysiumBodyAnimInstance` grows a morph-track player over the body animation. Two load
   contracts the bake fixes: a morph that spans two materials arrives as one same-named piece per
   primitive, so the skeletal-mesh config must set `MorphTargetsDuplicateStrategy::Merge`, and a
   morph target is one *flex record*, not one flexdesc — the eyelid pairs hinge a single flexdesc

@@ -29,8 +29,8 @@
 #include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumCompositionRig.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"   // FElysiumResolvedAnimation, the assets half of a selection
+#include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumAnimSubsystem.h"   // FElysiumResolvedAnimation, the assets half of a selection
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumPoseDeviation.h"
@@ -1093,7 +1093,7 @@ bool FElysiumFacialMorphTargetsTest::RunTest(const FString&)
 // =====================================================================================
 //
 // Everything above this point checks one link. This drives the assembled thing — a registered
-// skeletal-mesh component running UElysiumNpcAnimInstance over the real mesh — and reads the answer
+// skeletal-mesh component running UElysiumBipedAnimInstance over the real mesh — and reads the answer
 // off USkeletalMeshComponent::MorphTargetWeights, which is what the skinning actually consumes. It
 // is the check that would otherwise only exist in a running game: the anim-curve route from the
 // proxy's Evaluate to a morph weight is silent when it fails.
@@ -1160,12 +1160,12 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
 	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-	Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+	Comp->SetAnimInstanceClass(UElysiumBipedAnimInstance::StaticClass());
 	Owner->SetRootComponent(Comp);
 	Comp->RegisterComponent();
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance());
+	UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Comp->GetAnimInstance());
 	if (!TestNotNull(TEXT("the Elysium animation host is installed"), Inst))
 	{
 		return false;
@@ -1255,11 +1255,11 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	BareComp->SetMobility(EComponentMobility::Movable);
 	BareComp->SetSkeletalMeshAsset(BareMesh);
 	BareComp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-	BareComp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+	BareComp->SetAnimInstanceClass(UElysiumBipedAnimInstance::StaticClass());
 	BareOwner->SetRootComponent(BareComp);
 	BareComp->RegisterComponent();
 
-	UElysiumNpcAnimInstance* BareInst = Cast<UElysiumNpcAnimInstance>(BareComp->GetAnimInstance());
+	UElysiumBipedAnimInstance* BareInst = Cast<UElysiumBipedAnimInstance>(BareComp->GetAnimInstance());
 	if (!TestNotNull(TEXT("the unrigged body gets an animation host"), BareInst))
 	{
 		return false;

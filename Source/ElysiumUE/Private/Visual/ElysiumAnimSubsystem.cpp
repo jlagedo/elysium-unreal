@@ -1,4 +1,4 @@
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumMoveSolve.h"          // the sv_*scale constants the gait tables are built with
@@ -8,9 +8,9 @@
 #include "Engine/SkeletalMesh.h"
 #include "HAL/FileManager.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpcAnim, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnim, Log, All);
 
-void UElysiumNpcAnimSubsystem::Deinitialize()
+void UElysiumAnimSubsystem::Deinitialize()
 {
 	BankAssets.Reset();
 	ClipSets.Reset();
@@ -21,7 +21,7 @@ void UElysiumNpcAnimSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-const FElysiumNpcIndex& UElysiumNpcAnimSubsystem::GetIndex()
+const FElysiumNpcIndex& UElysiumAnimSubsystem::GetIndex()
 {
 	if (!bIndexLoaded)
 	{
@@ -29,18 +29,18 @@ const FElysiumNpcIndex& UElysiumNpcAnimSubsystem::GetIndex()
 		FString Error;
 		if (!Index.Load(Error))
 		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("npc index: %s"), *Error);
+			UE_LOG(LogElysiumAnim, Warning, TEXT("npc index: %s"), *Error);
 		}
 		else
 		{
-			UE_LOG(LogElysiumNpcAnim, Log, TEXT("npc index: %d NPCs, %d animation banks"),
+			UE_LOG(LogElysiumAnim, Log, TEXT("npc index: %d NPCs, %d animation banks"),
 				Index.Npcs.Num(), Index.Banks.Num());
 		}
 	}
 	return Index;
 }
 
-const FElysiumDispositionTable& UElysiumNpcAnimSubsystem::GetDispositions()
+const FElysiumDispositionTable& UElysiumAnimSubsystem::GetDispositions()
 {
 	if (!bDispositionsLoaded)
 	{
@@ -48,13 +48,13 @@ const FElysiumDispositionTable& UElysiumNpcAnimSubsystem::GetDispositions()
 		FString Error;
 		if (!Dispositions.Load(Error))
 		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("disposition table: %s"), *Error);
+			UE_LOG(LogElysiumAnim, Warning, TEXT("disposition table: %s"), *Error);
 		}
 	}
 	return Dispositions;
 }
 
-const FElysiumNpcClipSet* UElysiumNpcAnimSubsystem::GetClipSet(const FString& Stem)
+const FElysiumNpcClipSet* UElysiumAnimSubsystem::GetClipSet(const FString& Stem)
 {
 	if (Stem.IsEmpty())
 	{
@@ -69,14 +69,14 @@ const FElysiumNpcClipSet* UElysiumNpcAnimSubsystem::GetClipSet(const FString& St
 	FString Error;
 	if (!Set->Load(Stem, Error))
 	{
-		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("npc clips '%s': %s"), *Stem, *Error);
+		UE_LOG(LogElysiumAnim, Warning, TEXT("npc clips '%s': %s"), *Stem, *Error);
 		Set.Reset();   // remembered as a miss, so this is not retried per NPC sharing the stem
 	}
 	ClipSets.Add(Stem, Set);
 	return Set.Get();
 }
 
-TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const FString& Stem)
+TSharedPtr<const FElysiumFacialRig> UElysiumAnimSubsystem::GetFacialRig(const FString& Stem)
 {
 	if (Stem.IsEmpty())
 	{
@@ -97,19 +97,19 @@ TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const
 		FString Error;
 		if (!Rig->Load(Entry->Facial, Error))
 		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("facial '%s': %s"), *Stem, *Error);
+			UE_LOG(LogElysiumAnim, Warning, TEXT("facial '%s': %s"), *Stem, *Error);
 		}
 		else if (!Rig->IsValid())
 		{
 			// A rig with nothing to weight is answered the same way as no rig at all, so no body
 			// carries a facial track that cannot move anything.
-			UE_LOG(LogElysiumNpcAnim, Verbose,
+			UE_LOG(LogElysiumAnim, Verbose,
 				TEXT("facial '%s': %d controllers, %d rules, no morph targets — no face to drive"),
 				*Stem, Rig->Controllers.Num(), Rig->Rules.Num());
 		}
 		else
 		{
-			UE_LOG(LogElysiumNpcAnim, Verbose,
+			UE_LOG(LogElysiumAnim, Verbose,
 				TEXT("facial '%s': %d controllers, %d rules, %d morphs, %d lid(s)"), *Stem,
 				Rig->Controllers.Num(), Rig->Rules.Num(), Rig->Morphs.Num(), Rig->Lids.Num());
 			Result = Rig;
@@ -119,7 +119,7 @@ TSharedPtr<const FElysiumFacialRig> UElysiumNpcAnimSubsystem::GetFacialRig(const
 	return Result;
 }
 
-TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FString& Stem)
+TSharedPtr<const FElysiumEyeSet> UElysiumAnimSubsystem::GetEyeSet(const FString& Stem)
 {
 	if (Stem.IsEmpty())
 	{
@@ -141,11 +141,11 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 		FString Error;
 		if (!Set->Load(Entry->Eyes, Error))
 		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
+			UE_LOG(LogElysiumAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
 		}
 		else
 		{
-			UE_LOG(LogElysiumNpcAnim, Verbose, TEXT("eyes '%s': %d record(s), lids %s"), *Stem,
+			UE_LOG(LogElysiumAnim, Verbose, TEXT("eyes '%s': %d record(s), lids %s"), *Stem,
 				Set->Eyeballs.Num(),
 				Set->Eyeballs[0].HasLids() ? TEXT("driven") : TEXT("absent (no flex rig)"));
 			Result = Set;
@@ -155,7 +155,7 @@ TSharedPtr<const FElysiumEyeSet> UElysiumNpcAnimSubsystem::GetEyeSet(const FStri
 	return Result;
 }
 
-TSharedPtr<const FElysiumBlendTable> UElysiumNpcAnimSubsystem::GetBlendTable(const FString& Stem)
+TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const FString& Stem)
 {
 	if (Stem.IsEmpty())
 	{
@@ -195,12 +195,12 @@ TSharedPtr<const FElysiumBlendTable> UElysiumNpcAnimSubsystem::GetBlendTable(con
 		FString Error;
 		if (!Table->Load(RelPath, Error) || !Table->IsValid())
 		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("blends '%s': %s"), *Stem,
+			UE_LOG(LogElysiumAnim, Warning, TEXT("blends '%s': %s"), *Stem,
 				Error.IsEmpty() ? TEXT("no usable grid") : *Error);
 		}
 		else
 		{
-			UE_LOG(LogElysiumNpcAnim, Verbose, TEXT("blends '%s': %d grid(s), %d pose parameter(s)"),
+			UE_LOG(LogElysiumAnim, Verbose, TEXT("blends '%s': %d grid(s), %d pose parameter(s)"),
 				*Stem, Table->Grids.Num(), Table->PoseParams.Num());
 			Result = Table;
 		}
@@ -209,7 +209,7 @@ TSharedPtr<const FElysiumBlendTable> UElysiumNpcAnimSubsystem::GetBlendTable(con
 	return Result;
 }
 
-FString UElysiumNpcAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const FString& Label,
+FString UElysiumAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const FString& Label,
 	const FElysiumPoseParams& Pose)
 {
 	if (OwnerStem.IsEmpty() || Label.IsEmpty())
@@ -234,13 +234,13 @@ FString UElysiumNpcAnimSubsystem::ResolveGridClip(const FString& OwnerStem, cons
 	{
 		// Every shipped grid has at least two live cells, so this is a damaged sidecar. Playing the
 		// label is what the runtime did before grids were read at all — worse, but never silent.
-		UE_LOG(LogElysiumNpcAnim, Warning,
+		UE_LOG(LogElysiumAnim, Warning,
 			TEXT("blend grid '%s' on '%s' selected no playable cell; falling back to the label"),
 			*Label, *OwnerStem);
 		return Label;
 	}
 
-	UE_LOG(LogElysiumNpcAnim, Verbose,
+	UE_LOG(LogElysiumAnim, Verbose,
 		TEXT("blend grid '%s' on '%s' -> cell [%d,%d] '%s'"), *Label, *OwnerStem,
 		Pick.Index[0], Pick.Index[1], *Pick.Cell->Clip);
 	return Pick.Cell->Clip;
@@ -273,7 +273,7 @@ namespace
 	}
 }
 
-TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositionRig(
+TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetCompositionRig(
 	const FString& Stem)
 {
 	if (Stem.IsEmpty())
@@ -294,11 +294,11 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositio
 		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
 		if (!Error.IsEmpty())
 		{
-			UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural '%s': %s"), *Stem, *Error);
+			UE_LOG(LogElysiumAnim, Warning, TEXT("procedural '%s': %s"), *Stem, *Error);
 		}
 		else if (Result.IsValid())
 		{
-			UE_LOG(LogElysiumNpcAnim, Verbose, TEXT("composition '%s': %d split bone(s), %d rule(s)"),
+			UE_LOG(LogElysiumAnim, Verbose, TEXT("composition '%s': %d split bone(s), %d rule(s)"),
 				*Stem, Result->SplitBones.Num(), Result->AxisRules.Num());
 		}
 	}
@@ -306,7 +306,7 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetCompositio
 	return Result;
 }
 
-TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetAnimatedPropCompositionRig(
+TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetAnimatedPropCompositionRig(
 	const FString& ModelPath)
 {
 	if (ModelPath.IsEmpty())
@@ -328,13 +328,13 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumNpcAnimSubsystem::GetAnimatedPr
 		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
 	if (!Error.IsEmpty())
 	{
-		UE_LOG(LogElysiumNpcAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
+		UE_LOG(LogElysiumAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
 	}
 	CompositionRigs.Add(Entry->Stem, Result);
 	return Result;
 }
 
-UglTFRuntimeAsset* UElysiumNpcAnimSubsystem::GetBankAsset(const FString& BankStem, FString& OutError)
+UglTFRuntimeAsset* UElysiumAnimSubsystem::GetBankAsset(const FString& BankStem, FString& OutError)
 {
 	OutError.Reset();
 	if (const TObjectPtr<UglTFRuntimeAsset>* Cached = BankAssets.Find(BankStem))
@@ -359,13 +359,13 @@ UglTFRuntimeAsset* UElysiumNpcAnimSubsystem::GetBankAsset(const FString& BankSte
 		return nullptr;
 	}
 	BankAssets.Add(BankStem, Asset);
-	UE_LOG(LogElysiumNpcAnim, Log, TEXT("npc bank '%s' parsed in %.0f ms (%.1f MB)"), *BankStem,
+	UE_LOG(LogElysiumAnim, Log, TEXT("npc bank '%s' parsed in %.0f ms (%.1f MB)"), *BankStem,
 		(FPlatformTime::Seconds() - Start) * 1000.0,
 		static_cast<double>(IFileManager::Get().FileSize(*Path)) / 1e6);
 	return Asset;
 }
 
-UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClip(const FString& Stem, const FString& ClipName,
+UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FString& ClipName,
 	USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset, FString& OutError)
 {
 	OutError.Reset();
@@ -411,7 +411,7 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClip(const FString& Stem, const 
 	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ResolveClipAnimName(Stem, ClipName), OutError);
 }
 
-FString UElysiumNpcAnimSubsystem::ResolveClipAnimName(const FString& Stem, const FString& ClipName,
+FString UElysiumAnimSubsystem::ResolveClipAnimName(const FString& Stem, const FString& ClipName,
 	const FElysiumPoseParams& Pose)
 {
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
@@ -426,7 +426,7 @@ FString UElysiumNpcAnimSubsystem::ResolveClipAnimName(const FString& Stem, const
 	return ResolveGridClip(Owner, ClipName, Pose);
 }
 
-bool UElysiumNpcAnimSubsystem::ResolveGrid(const FString& Stem, const FString& ClipName,
+bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& ClipName,
 	USkeletalMesh* Mesh, FElysiumResolvedGrid& OutGrid)
 {
 	OutGrid = FElysiumResolvedGrid();
@@ -467,7 +467,7 @@ bool UElysiumNpcAnimSubsystem::ResolveGrid(const FString& Stem, const FString& C
 	return true;
 }
 
-FElysiumAnimationCatalog UElysiumNpcAnimSubsystem::BuildCatalog(const FString& Stem)
+FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem)
 {
 	FElysiumAnimationCatalog Catalog;
 	Catalog.Clips = GetClipSet(Stem);
@@ -482,7 +482,7 @@ FElysiumAnimationCatalog UElysiumNpcAnimSubsystem::BuildCatalog(const FString& S
 	return Catalog;
 }
 
-void UElysiumNpcAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Intent,
+void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Intent,
 	USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset, FElysiumAnimationSelection& OutSelection,
 	FElysiumResolvedAnimation& OutAssets)
 {
@@ -546,7 +546,7 @@ void UElysiumNpcAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& I
 	}
 }
 
-bool UElysiumNpcAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request,
+bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request,
 	FElysiumGaitSpeeds& Out)
 {
 	Out = FElysiumGaitSpeeds();
@@ -613,7 +613,7 @@ bool UElysiumNpcAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest&
 	return Out.IsValid();
 }
 
-bool UElysiumNpcAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,
+bool UElysiumAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,
 	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {
 	OutLabel.Reset();
@@ -646,7 +646,7 @@ bool UElysiumNpcAnimSubsystem::ResolveActivityClip(const FString& Stem, const FS
 	return true;
 }
 
-UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
+UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
 	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError)
 {
 	OutError.Reset();
@@ -669,7 +669,7 @@ UAnimSequence* UElysiumNpcAnimSubsystem::ResolveClipFromBank(const FString& Bank
 	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, AnimName, OutError);
 }
 
-TArray<FString> UElysiumNpcAnimSubsystem::IdleCandidates(const FString& Stem,
+TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 	const FString& Disposition, EElysiumIdleTier& OutTier)
 {
 	OutTier = EElysiumIdleTier::None;
@@ -717,7 +717,7 @@ TArray<FString> UElysiumNpcAnimSubsystem::IdleCandidates(const FString& Stem,
 	return Candidates;
 }
 
-FString UElysiumNpcAnimSubsystem::PickIdleClip(const FString& Stem, const FString& Disposition,
+FString UElysiumAnimSubsystem::PickIdleClip(const FString& Stem, const FString& Disposition,
 	EElysiumIdleTier& OutTier, int32 Variant)
 {
 	const TArray<FString> Candidates = IdleCandidates(Stem, Disposition, OutTier);
@@ -735,7 +735,7 @@ FString UElysiumNpcAnimSubsystem::PickIdleClip(const FString& Stem, const FStrin
 	return Candidates[Variant % Candidates.Num()];
 }
 
-FString UElysiumNpcAnimSubsystem::PickActivityClip(const FString& Stem, const FString& Activity,
+FString UElysiumAnimSubsystem::PickActivityClip(const FString& Stem, const FString& Activity,
 	int32 Variant)
 {
 	// The pick itself is a pure rule over a vocabulary, so it lives with the resolver and this is the
@@ -744,7 +744,7 @@ FString UElysiumNpcAnimSubsystem::PickActivityClip(const FString& Stem, const FS
 	return Set != nullptr ? ElysiumAnimResolve::PickWeighted(*Set, Activity, Variant) : FString();
 }
 
-const TCHAR* UElysiumNpcAnimSubsystem::TierName(EElysiumIdleTier Tier)
+const TCHAR* UElysiumAnimSubsystem::TierName(EElysiumIdleTier Tier)
 {
 	switch (Tier)
 	{
@@ -755,7 +755,7 @@ const TCHAR* UElysiumNpcAnimSubsystem::TierName(EElysiumIdleTier Tier)
 	}
 }
 
-void UElysiumNpcAnimSubsystem::GetBankStats(int32& OutCount, int64& OutBytes) const
+void UElysiumAnimSubsystem::GetBankStats(int32& OutCount, int64& OutBytes) const
 {
 	OutCount = 0;
 	OutBytes = 0;

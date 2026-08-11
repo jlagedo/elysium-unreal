@@ -22,7 +22,7 @@
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumEntityBodies.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning — the gaze layer's content
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumMapVisuals.h"
@@ -853,7 +853,7 @@ bool AElysiumMapActor::PlayCinematicClip(USkeletalMeshComponent* Body, const FSt
 {
 	// The anim-set model + the actor's bonerename root name a bank the offline split produced.
 	UGameInstance* GI = GetGameInstance();
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	if (Anims == nullptr)
 	{
 		return false;
@@ -870,7 +870,7 @@ bool AElysiumMapActor::PreloadCinematicClip(USkeletalMeshComponent* Body, const 
 	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName)
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FString Bank = Anims ? Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot) : FString();
 	return Bodies && !Bank.IsEmpty()
 		&& Bodies->PreloadCinematicClip(Body, Stem, Bank, ClipName);
@@ -880,7 +880,7 @@ bool AElysiumMapActor::PreloadCinematicClipForModel(const FString& Stem, bool bP
 	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName)
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FString Bank = Anims ? Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot) : FString();
 	return Bodies && !Bank.IsEmpty()
 		&& Bodies->PreloadCinematicClipForModel(Stem, bPlayerMaterial, Bank, ClipName);
@@ -1091,8 +1091,8 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	}
 
 	USkeletalMeshComponent* Visual = Body->GetPlayerVisual();
-	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
-		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	UElysiumBipedAnimInstance* Graph = Visual
 		? Cast<UElysiumBipedAnimInstance>(Visual->GetAnimInstance()) : nullptr;
 
@@ -1222,20 +1222,36 @@ bool AElysiumMapActor::GetPlayerUseOrigin(FVector& OutLocation) const
 	return true;
 }
 
-bool AElysiumMapActor::GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const
+bool AElysiumMapActor::GetPlayerCapsuleTransform(FVector& OutCapsuleCenter, FRotator& OutViewRotation) const
 {
 	const APawn* Pawn = ResolvePlayerPawn();
 	if (!Pawn)
 	{
 		return false;
 	}
-	OutLocation = Pawn->GetActorLocation();
+	OutCapsuleCenter = Pawn->GetActorLocation();
 	const APlayerController* PC = Cast<APlayerController>(Pawn->GetController());
-	OutYaw = PC ? (float)PC->GetControlRotation().Yaw : (float)Pawn->GetActorRotation().Yaw;
+	OutViewRotation = PC ? PC->GetControlRotation() : Pawn->GetActorRotation();
 	return true;
 }
 
-void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, float Yaw)
+bool AElysiumMapActor::GetPlayerFeetTransform(FVector& OutFeetOrigin, FRotator& OutViewRotation) const
+{
+	if (!GetPlayerCapsuleTransform(OutFeetOrigin, OutViewRotation))
+	{
+		return false;
+	}
+	if (const APawn* Pawn = ResolvePlayerPawn())
+	{
+		if (const IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn))
+		{
+			OutFeetOrigin.Z -= Body->GetBodyHalfHeight();
+		}
+	}
+	return true;
+}
+
+void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation)
 {
 	APawn* Pawn = ResolvePlayerPawn();
 	if (!Pawn)
@@ -1251,10 +1267,11 @@ void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, float Yaw)
 	{
 		Dest.Z += Body->GetBodyHalfHeight();
 	}
-	Pawn->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
+	Pawn->SetActorLocationAndRotation(Dest, FRotator(0.0f, ViewRotation.Yaw, 0.0f),
+		false, nullptr, ETeleportType::TeleportPhysics);
 	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
 	{
-		PC->SetControlRotation(FRotator(0.0f, Yaw, 0.0f));
+		PC->SetControlRotation(ViewRotation);
 	}
 	ReconcilePlayerBrushTouches(Pawn);
 }
@@ -2616,8 +2633,8 @@ void AElysiumMapActor::TickGaze(float DeltaSeconds)
 		return;
 	}
 	const UGameInstance* GI = GetGameInstance();
-	UElysiumNpcAnimSubsystem* Anims = GI
-		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI
+		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const float Now = EntityWorld->NowSeconds();
 
 	// `DialogPOV` is a property of the shot in effect, not of any one character, so it resolves once

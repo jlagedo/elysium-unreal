@@ -13,7 +13,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
-#include "ElysiumNpcAnimSubsystem.generated.h"
+#include "ElysiumAnimSubsystem.generated.h"
 
 class UAnimSequence;
 class UBlendSpace;
@@ -74,7 +74,7 @@ enum class EElysiumIdleTier : uint8
 // The clip -> owning-stem resolution is entirely offline (pipeline/src/elysium_pipeline/exporters/npc_export.py walks the studiohdr
 // include DAG); this subsystem never sees an include.
 UCLASS()
-class UElysiumNpcAnimSubsystem : public UGameInstanceSubsystem
+class UElysiumAnimSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 

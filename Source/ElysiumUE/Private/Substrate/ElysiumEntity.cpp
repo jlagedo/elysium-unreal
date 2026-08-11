@@ -161,6 +161,7 @@ UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
 
 void FElysiumEntity::PostSpawn()
 {
+	MoveParent = FElysiumEntityHandle::Invalid();
 	if (ParentName.IsEmpty() || !World)
 	{
 		return;
@@ -181,6 +182,7 @@ void FElysiumEntity::PostSpawn()
 			*DebugString(), *ParentName);
 		return;
 	}
+	MoveParent = Parent->Handle;
 	OnParentAttached(ParentWorld);
 }
 
@@ -188,10 +190,7 @@ void FElysiumEntity::OnDormancyChanged()
 {
 	// R6 — one reversible switch. Inert (hidden or dead) drops the body's collision so it cannot
 	// be touched or traced; active restores its built solidity. Idempotent (SetDormant re-applies).
-	if (Body)
-	{
-		Body->SetDormant(IsInert());
-	}
+	RefreshBrushBodyState();
 	if (World)
 	{
 		World->SetUseAnchorEnabled(Handle, !IsInert());
@@ -204,6 +203,14 @@ void FElysiumEntity::OnDormancyChanged()
 	}
 }
 
+void FElysiumEntity::RefreshBrushBodyState()
+{
+	if (Body)
+	{
+		Body->SetDormant(!IsBrushBodyEnabled());
+	}
+}
+
 void FElysiumEntity::SetRuntimeOrigin(const FVector& NewOrigin)
 {
 	Origin = NewOrigin;
@@ -212,6 +219,13 @@ void FElysiumEntity::SetRuntimeOrigin(const FVector& NewOrigin)
 
 void FElysiumEntity::SetRuntimeAngles(const FVector& NewAngles)
 {
+	Angles = NewAngles;
+	OnRuntimeTransformChanged();
+}
+
+void FElysiumEntity::SetRuntimeTransform(const FVector& NewOrigin, const FVector& NewAngles)
+{
+	Origin = NewOrigin;
 	Angles = NewAngles;
 	OnRuntimeTransformChanged();
 }

@@ -598,22 +598,27 @@ struct FElysiumRecordingServices final
 		OutLocation = PlayerLocation;
 		return true;
 	}
-	virtual bool GetPlayerOrigin(FVector& OutLocation, float& OutYaw) const override
+	virtual bool GetPlayerFeetTransform(FVector& OutLocation, FRotator& OutRotation) const override
 	{
 		if (!bHasPlayer)
 		{
 			return false;
 		}
 		OutLocation = PlayerLocation;
-		OutYaw = PlayerRotation.Yaw;
+		OutRotation = PlayerRotation;
 		return true;
 	}
-	virtual void TeleportPlayer(const FVector& FeetOrigin, float Yaw) override
+	virtual bool GetPlayerCapsuleTransform(FVector& OutLocation, FRotator& OutRotation) const override
 	{
-		Record(FString::Printf(TEXT("TeleportPlayer %s yaw=%.1f"), *FeetOrigin.ToString(), Yaw));
+		return GetPlayerFeetTransform(OutLocation, OutRotation); // headless services have no centred hull
+	}
+	virtual void TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation) override
+	{
+		Record(FString::Printf(TEXT("TeleportPlayer %s rot=%s"),
+			*FeetOrigin.ToString(), *ViewRotation.ToCompactString()));
 		bHasPlayer = true;
 		PlayerLocation = FeetOrigin;
-		PlayerRotation = FRotator(0.f, Yaw, 0.f);
+		PlayerRotation = ViewRotation;
 	}
 	virtual void DamagePlayer(float Amount) override
 	{

@@ -6,7 +6,7 @@
 // By value: the gym spec and the resolved grid are members, so their own headers rather than
 // declarations. `ElysiumGymSpec.h` is the pure half and ships; only the builder is debug-only.
 #include "ElysiumGymSpec.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 
 class AActor;
 class AElysiumMapActor;
@@ -284,7 +284,9 @@ private:
 	float CurrentSceneTime() const;
 	float TheatreFadeAlpha(float SceneTime) const;
 	FVector BodyOrigin() const;
-	FRotator BodyRotation() const;
+	// The basis differs per representation (ElysiumSkeletalBasis), so a caller says which body it
+	// is placing rather than the theatre case answering for both.
+	FRotator BodyRotation(bool bAnimatedProp) const;
 	void PinCameraAndPlayerSurface();
 	void BeginCapture();
 	void Advance();
@@ -361,7 +363,7 @@ private:
 	FElysiumEntityHandle TheatreTargetOwner;
 	float TheatreDuration = 0.0f;
 	FVector TheatreSceneOrigin = FVector::ZeroVector;
-	FRotator TheatreSceneRotation = FRotator::ZeroRotator;
+	FVector TheatreSceneAngles = FVector::ZeroVector;
 
 	TWeakObjectPtr<AActor> StageActor;
 	TWeakObjectPtr<UStaticMeshComponent> Floor;

@@ -127,8 +127,8 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	AnimDriver->Variant = AnimVariant;
 
 	USkeletalMeshComponent* Body = Visual.Get();
-	UElysiumNpcAnimSubsystem* Anims = GetGameInstance()
-		? GetGameInstance()->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
 		Body ? Body->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr);
 }

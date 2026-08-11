@@ -16,7 +16,7 @@
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "ReferenceSkeleton.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Animation/AnimSequence.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"

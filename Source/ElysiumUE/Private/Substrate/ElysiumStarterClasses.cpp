@@ -206,6 +206,25 @@ public:
 	// 0x1) trigger correctly ignores the player. The activator IS resolved now (11.4), so the
 	// remaining bits (NPCs, physics objects) grow the test when those touchers exist.
 	bool PlayerPasses() const { return (SpawnFlags & 0x1) != 0; }   // 0x1 = ALLOW_CLIENTS
+	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override
+	{
+		return !bDisabled && !IsInert() && PlayerPasses();
+	}
+	virtual bool IsBrushBodyEnabled() const override
+	{
+		return !bDisabled && !IsInert();
+	}
+	void SetDisabled(bool bInDisabled)
+	{
+		if (bDisabled == bInDisabled)
+		{
+			return;
+		}
+		bDisabled = bInDisabled;
+		// SetDormant(false) explicitly refreshes overlaps, so enabling beneath an already-contained
+		// player produces the same late StartTouch that retail's FSOLID_TRIGGER re-add does.
+		RefreshBrushBodyState();
+	}
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
@@ -379,7 +398,7 @@ public:
 			{
 				static const FName OnTrigger(TEXT("OnTrigger"));
 				FireOutput(OnTrigger, LastActivator);
-				bDisabled = true;            // fire once
+				SetDisabled(true);            // fire once
 				NextThink = ELYSIUM_NEVER_THINK;
 				return;
 			}
@@ -436,7 +455,7 @@ public:
 			return;
 		}
 		++TriggerCount;
-		bDisabled = true;
+		SetDisabled(true);
 
 		UGameInstance* GI = World && World->GetGameState() ? World->GetGameState()->GetGameInstance() : nullptr;
 		UElysiumGameFlowSubsystem* Flow = GI ? GI->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr;
@@ -510,6 +529,10 @@ public:
 	// on walk-in. NB: trigger_changelevel does NOT use CBaseTrigger's ALLOW_CLIENTS (0x1) convention —
 	// its own Touch fires for the player directly — so PlayerPasses() is bypassed here.
 	static constexpr int32 SF_NOTOUCH = 0x0002;
+	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override
+	{
+		return !bDisabled && !IsInert() && (SpawnFlags & SF_NOTOUCH) == 0;
+	}
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
@@ -647,12 +670,12 @@ static TUniquePtr<FElysiumEntity> MakePythonCheck()     { return MakeUnique<FEly
 // lambda) so the module-static registrars can reference it without static-init ordering hazards.
 static void BuildCBaseTrigger(FElysiumClassDesc& D)
 {
-	D.Input(TEXT("Enable"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumTriggerBase&>(E).bDisabled = false; });
-	D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumTriggerBase&>(E).bDisabled = true; });
+	D.Input(TEXT("Enable"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumTriggerBase&>(E).SetDisabled(false); });
+	D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumTriggerBase&>(E).SetDisabled(true); });
 	D.Input(TEXT("Toggle"),  [](FElysiumEntity& E, const FElysiumInputArgs&)
 	{
 		FElysiumTriggerBase& T = static_cast<FElysiumTriggerBase&>(E);
-		T.bDisabled = !T.bDisabled;
+		T.SetDisabled(!T.bDisabled);
 	});
 	AddSubclassField(D, TEXT("StartDisabled"), &FElysiumTriggerBase::bDisabled);
 	AddSubclassField(D, TEXT("wait"),          &FElysiumTriggerBase::Wait);

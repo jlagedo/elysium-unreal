@@ -186,7 +186,7 @@ namespace
 	 * `GetAnimationPose` is the door the runtime uses. It resolves the two evaluation paths
 	 * itself: raw data goes through `GetBonePose_Additive`, which subtracts the base pose, and
 	 * compressed data was subtracted already at bake time. Both answer the delta, which is what
-	 * `FElysiumNpcAnimProxy::EvaluateAdditives` accumulates.
+	 * `FElysiumBipedAnimProxy::EvaluateLayers` accumulates.
 	 *
 	 * A bone the sequence carries no track for comes back as the ADDITIVE identity rather than as
 	 * the reference pose, which is the property that makes an unmasked layer safe to accumulate
@@ -349,7 +349,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	// This is the ONE assertion here that reads the compressed data, and it has to. Unreal bakes an
 	// additive sequence down by subtracting its base pose before compressing, so the raw keys the
 	// bake writes are the delta composed onto the skeleton's reference pose and the compressed data
-	// is the delta itself. The runtime accumulator (`FElysiumNpcAnimProxy::EvaluateAdditives`) reads
+	// is the delta itself. The runtime accumulator (`FElysiumBipedAnimProxy::EvaluateLayers`) reads
 	// the second, so the second is what has to equal what VtMB authored -- and a raw comparison
 	// would pass without the subtraction ever having run.
 	//

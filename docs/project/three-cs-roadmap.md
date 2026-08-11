@@ -53,7 +53,7 @@ dead ConVars in the retail build — and the authored cells disagree by roughly 
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
 | Real animation | 6 | `CCC4 [x]` the intent, resolver and selection record; `CCC5 [x]` the graph, `CCC6 [x]` the green room driving it on the gym floor |
-| Vertical slice | 7 | `CCC8` |
+| Vertical slice | 7 | `CCC8` — played by the owner, not beat-scripted; `CCC9 [x]` retired the scaffolding behind it |
 
 **The gym splits its assertions by whether the speed authority can move them**, which is what let the
 Character rung be partly closed ahead of the inversion and what now proves the inversion did not
@@ -103,7 +103,9 @@ trace, a bake) is a context switch rather than a slice stall.
 | | `CCC6 [x]` — drive it |
 
 The lanes joined at `CCC7 [x]` (the speed authority) and join again at the co-tune half of `CCC3`
-and at `CCC8`; `CCC9` retires what they replaced.
+and at `CCC8`. `CCC9 [x]` has retired what they replaced: there is one animation host for every
+body, so the cast and the player can no longer drift into two systems that happen to play the same
+files.
 
 - [~] **CCC0 The instrument.** A code-built gym generated from `ElysiumMove`'s own constants, so a
   riser, ledge, slope or ceiling brackets the threshold it tests and cannot drift from the spec.
@@ -320,7 +322,7 @@ and at `CCC8`; `CCC9` retires what they replaced.
   `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
   `docs/architecture/animation-architecture.md` §3.3 — there is no channel to arbitrate and no
   weapon to translate through yet, and both seams exist rather than being stubbed away. Most of the
-  resolution already exists and is reachable: `UElysiumNpcAnimSubsystem::ResolveActivityClip`
+  resolution already exists and is reachable: `UElysiumAnimSubsystem::ResolveActivityClip`
   returns the vocabulary label, the concrete animation and the cell's authored ground speed, and
   `ResolveGrid` returns the baked blend space with its axis bindings. What is missing is the caller
   and the record. **The caller is one shared function** — sample and catalog in, selection out —
@@ -394,8 +396,8 @@ and at `CCC8`; `CCC9` retires what they replaced.
   bodies × 9 activities, the three gaits resolving as blend spaces and the remaining playable
   states as sequences, with `ACT_LAND_CROUCH` the only named miss — the export agreeing with the
   capture rather than a clip being invented for it.
-  *Scope note:* this rung resolves and records; it drives no pose. Nothing routes into
-  `FElysiumNpcAnimProxy`, so no scaffolding is built that `CCC9` exists to delete. The recovered
+  *Scope note:* this rung resolves and records; it drives no pose. Nothing routed into the cast's
+  native proxy, so no scaffolding was built that `CCC9` then had to delete. The recovered
   fallback ladder (run → walk → disposition → sequence zero) is `CAI_BaseNPC`'s and runs only for an
   NPC source; the player has none, which is why a player miss is a **named** miss.
 
@@ -454,7 +456,7 @@ and at `CCC8`; `CCC9` retires what they replaced.
   generator" rule rather than an exception to it. `elysium.PlayerGraph` (default 1) installs it and
   falls back to the NPC instance by name. The portrait stack is **shared, not duplicated**:
   `UElysiumBodyAnimInstance` is the base both `UElysiumBipedAnimInstance` and
-  `UElysiumNpcAnimInstance` derive from, and `Elysium.Content.PlayerGraphInstance` stands a real
+  the cast's native instance derived from, and `Elysium.Content.PlayerGraphInstance` stands a real
   baked body on the graph and asserts the axis-interpolation rules resolve against that body's own
   skeleton and that a `SetEyeInput` write lands — the regression that logs nothing.
   The authored fade reaches the body as a **runtime inertialization request** rather than a
@@ -603,7 +605,7 @@ and at `CCC8`; `CCC9` retires what they replaced.
   *Done:* the pure table and its seam (`ElysiumGaitSpeeds.h` — `FElysiumGaitSpeedTable`,
   `ElysiumGait::WishSpeedFrom`), asserted by `Elysium.Substrate.GaitSpeeds`;
   `ElysiumBlendGrids::SpeedFan` over the baked grids and
-  `UElysiumNpcAnimSubsystem::ResolveGaitSpeeds` over the un-relaxed activities, asserted against the
+  `UElysiumAnimSubsystem::ResolveGaitSpeeds` over the un-relaxed activities, asserted against the
   real corpus by `Elysium.Content.GaitSpeeds` at 53.8 / 188.5 / 65.3 u/s with walk and run resolving
   to **different banks**. `GetMaxSpeed()` is the ceiling and nothing in the solve reads it;
   `WishSpeed(WishDir, Scale)` is the one seam, and the four call sites go through it.
@@ -630,31 +632,60 @@ and at `CCC8`; `CCC9` retires what they replaced.
   per-channel; with the baselines now freely re-promotable the cost of that is a promote rather than
   a false green, so it is recorded and not built.
 
-- [ ] **CCC8 Played acceptance.** The slice's finish line, beat-scripted in the Play tier so the
-  claim is a CI run rather than a recollection — playable-path rule 3. The Play tier itself is
-  `11.10`, the largest unbuilt dependency in this slice's graph, and it is named here as the gate
-  it is; if it has not landed when the lanes join, the fallback is one minimal beat script
-  sufficient for exactly this acceptance, generalized into the tier later rather than holding the
-  slice on the full harness.
+- [ ] **CCC8 Played acceptance.** The slice's finish line, and it is **the owner playing it** —
+  owner call: no beat script, no Play-tier automation, no `11.10` dependency. The gym and the
+  channel differ already bound correctness; what is left is feel, and feel is judged by playing.
+  The checklist below is what to play against, not a harness to build.
   *Acceptance:* the PC body walks, runs, sneaks, crouches and jumps around the gym from real input,
-  framed by both camera modes, with `move_yaw` written every frame and the stride following the
-  strafe continuously; every threshold the gym brackets holds where `docs/vtmb/source_movement.md`
-  says it should; and the pose is correct in the Content Browser preview and the anim editor, not
-  only in our runtime. *Deps:* `CCC7`, the co-tune half of `CCC3`, `11.10` (or its scoped minimal
-  beat).
+  framed by both camera modes, with the stride following the strafe continuously and no visible
+  pop at a gait change; every threshold the gym brackets still holds where
+  `docs/vtmb/source_movement.md` says it should (the headless run says this, not the play session);
+  and the pose is correct in the Content Browser preview and the anim editor, not only in our
+  runtime. *Deps:* `CCC7`, the co-tune half of `CCC3`.
 
-- [ ] **CCC9 Retire the scaffolding.** `FElysiumNpcAnimProxy` composes by hand what the graph now
+- [x] **CCC9 Retire the scaffolding.** `FElysiumNpcAnimProxy` composed by hand what the graph now
   owns: a four-slot sequence-player pool with an age-evicting fade list, plus the base grid slot —
   a larger cut than a single crossfade. Only the parts this slice replaced go: the two layer slots
   survive until the aim node lands, and the cinematic seek path — `Seek`/`ResyncPosition`, the
   substrate-clock phase lock a montage cannot replicate — survives until `ANM6` migrates the
-  theatre, which is last on purpose. The blend profiles the proxy reads are the same assets
+  theatre, which is last on purpose. The blend profiles the accumulator reads are the same assets
   `FAnimNode_LayeredBoneBlend` consumes unchanged, so nothing is re-baked. This is also where the
-  catalog and resolver are renamed out of their NPC-named host — once the proxy's callers are gone
+  catalog and resolver are renamed out of their NPC-named host — once the pool's callers are gone
   and the front door `CCC4` opened is the only door.
   *Acceptance:* the slice's bodies run through `ABP_ElysiumBiped`, the proxy's fade pool and grid
   slot are gone, the resolver's name matches what it serves, and the theatre is still on its
   verified seek path. *Deps:* `CCC8`.
+  *Done:* **the whole cast moved with the player**, which the acceptance forces rather than merely
+  permits — the pool *is* the cast's crossfade, so "the fade pool is gone" is only true once nothing
+  poses through it. `FElysiumNpcAnimProxy` and `UElysiumNpcAnimInstance` are deleted outright
+  (~1,150 lines: the four players, `FFadingClip`, `TakeFreeSlot`'s age eviction, `FadeWeight`, the
+  grid slot), the `bPlayerMaterial` branch in `BuildNpcVisual` is gone, and every body installs
+  `ABP_ElysiumBiped`. An NPC's stance now crossfades through the graph's own montage slot and its
+  inertialization request.
+  The two survivors live on `FElysiumBipedAnimProxy`: the autolayer accumulator **verbatim** — two
+  slots, the mask resolve against the target skeleton, the overlay-then-additive walk,
+  `elysium.LayerDump` — and the seek path as **one** standalone sequence player. While that player
+  holds a clip it replaces the graph's output outright rather than blending with it, which is what
+  keeps a scene's pose a function of scene time; the graph keeps advancing underneath, so a scene
+  hands the body back to a machine that kept up with the world instead of one frozen where the scene
+  began. `UElysiumAnimSubsystem` is the rename, files and log category with it.
+  *Divergence:* **a cinematic clip change no longer crossfades.** The seek path survived and the
+  pool's fade did not, and a scene's clip boundaries are the scene's own to time. Recorded here
+  because it is a behaviour change rather than a refactor; `ANM6` owns whether the theatre wants one
+  back.
+  *Findings:* two, both about what a cut exposes rather than what it removes. **The pool was also
+  the no-graph fallback** — with the generated package missing, the cast used to animate on the
+  native instance, and a graph-only host would have T-posed the whole game on a stale mount with
+  nothing but a warning. The clip player answers `PlayOneShot` when there is no compiled graph, so
+  the named failure stays named. And **the first clip on a body has to snap**: the montage slot's
+  source pose is a state machine that has been handed no asset yet, so an ordinary blend-in fades
+  every body up out of the reference pose on map load — the rule the pool's `bInitialized` guard
+  carried, now the blend-in on the first one-shot.
+  The green room's grid lab was **kept by moving it onto the graph** rather than deleted with the
+  slot it used: `PlayNpcGrid` publishes a selection naming the blend space, so a review body poses
+  through the path the game plays through. Skeletal props and preview bodies take the native host
+  deliberately — they stand one named clip and nothing publishes a selection for one, so a compiled
+  locomotion machine would sit inert behind them.
 
 **Past the first slice's finish line**, and tracked here because they reach the body through the same
 seam rather than a second one:
@@ -665,14 +696,16 @@ seam rather than a second one:
   overlay family. The 3×3 aim grids bake once per declaring host but cannot be stood at all today,
   because a masked grid evaluated as a *base* pose loses the body's stance from the waist down; in a
   graph the mask is a property of the blend node rather than of the pose feeding it, which is why no
-  layered blend-space path exists in the proxy and building one there would be building it wrong.
+  layered blend-space path exists in the accumulator and building one there would be building it
+  wrong.
   Every cell of an aim grid shares one bone mask — measured, not assumed — so a whole grid sits
   behind one node, **and the node is named**: not an aim-offset asset, which requires mesh-space
   additive samples the baked grids are not, but a layered bone blend — consuming the baked blend
-  profiles unchanged — over a plain blend-space player. This rung also retires the proxy's two
-  layer slots and `elysium.AnimLayers`, and un-collapses a stated simplification: gesture and
-  sequence share one clip slot today, so a scene's gesture overwrites its sequence instead of
-  layering over it.
+  profiles unchanged — over a plain blend-space player. This rung also retires the last two nodes
+  `FElysiumBipedAnimProxy` owns outside the graph — the layer slots `CCC9` left standing, and the
+  green room surface over them — and un-collapses a stated simplification: gesture and sequence
+  share one clip slot today, so a scene's gesture overwrites its sequence instead of layering over
+  it.
   *Acceptance:* an aim grid stands as a **layer** over a moving host, torso upright, through a node
   that owns the mask; a gesture layers over a sequence rather than replacing it.
   *Deps:* `CCC5`; `docs/project/animation-roadmap.md` ANM1 and ANM2's binding half.
@@ -755,11 +788,14 @@ is what `-ElysiumMove` exists to turn into a per-change headless run.
   live on the NPC anim instance today; a player graph that does not carry them ships frozen eyes and
   untwisted forearms, and neither the logs nor the Content Browser preview can show it. `CCC5` owns
   the migration and asserts it.
-- **`CCC8` is gated on `11.10`.** The Play tier is tracked in the master roadmap and open; the
-  scoped fallback in `CCC8` exists so the slice's finish line is not hostage to the full harness.
-- **The theatre is the thing to protect.** Same risk the animation programme carries: the slice's
-  graph shares an animation instance family with choreographed playback. `CCC9` retires only what it
-  replaced, and the theatre stays on its verified seek path.
+- **`CCC8` is played, not automated.** Owner call: the finish line is a played session against the
+  rung's checklist, so the slice depends on no Play-tier harness and `11.10` gates nothing here. The
+  cost is that the finish line is a recollection rather than a CI run — accepted deliberately,
+  because the gym and the channel differ are what carry the correctness claim.
+- **The theatre is the thing to protect** — held at `CCC9`, which retired only what it replaced. The
+  slice's graph shares an animation instance family with choreographed playback, and the phase-locked
+  clip player came through the cut intact; what a scene lost is the crossfade between its clips,
+  recorded as that rung's divergence. It stays on that path until `ANM6` migrates it.
 - **A gym is not a game.** Every threshold can pass while the game still feels wrong. The gym bounds
   correctness; the played acceptance at `CCC8` and the owner's judgement are what bound feel.
 

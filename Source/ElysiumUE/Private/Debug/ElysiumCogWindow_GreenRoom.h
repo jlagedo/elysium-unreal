@@ -12,7 +12,7 @@ class FElysiumGreenRoomRun;
 class UChaosClothComponent;
 class UElysiumBodyAnimInstance;
 class UElysiumEntityBodies;
-class UElysiumNpcAnimInstance;
+class UElysiumBipedAnimInstance;
 class USkinnedAsset;
 
 // The green room's control surface: pick a body, pick a clip, watch it move, and tune the garment
@@ -61,8 +61,8 @@ private:
 	// attachments rather than cached: a Restand replaces the body, and a stale pointer here would
 	// draw an overlay for a component that no longer exists.
 	UChaosClothComponent* FindGarment() const;
-	// The native pose machinery — the clip and layer rows. Null on a body posing from an anim graph.
-	UElysiumNpcAnimInstance* GetNpcBodyInstance() const;
+	// The pose machinery itself — the clip and layer rows, which read the proxy rather than a rig.
+	UElysiumBipedAnimInstance* GetBipedInstance() const;
 
 	// Which build of the body stands on the stage -- the baked /ElysiumBaked assets or the
 	// glTFRuntime load -- and which one actually did, since only part of the cast is baked.

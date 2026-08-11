@@ -71,6 +71,8 @@ difference from, leaving the runtime no VtMB rule to apply. The root `CLAUDE.md`
 `UE_bsp_to_scene.py` writes per-map geometry and sidecars. The CLI task graph coordinates
 the `grid` and `all` profiles, focused map or model exports, and the global mirrors.
 Integrated NPC export adds skeletal meshes, animation banks, indexes, and facial sidecars.
+`UE_extract_items.py` decodes every `vdata/items` ground model into the shared `items/props/`
+corpus with a `ground_models.json` manifest; the `items` bundle covers its decode and bake.
 These outputs are game-derived and never tracked.
 
 `pipeline/unreal/` consumes pre-exported files in an editor process:

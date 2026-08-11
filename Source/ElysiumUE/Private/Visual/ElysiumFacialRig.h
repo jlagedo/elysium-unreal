@@ -5,7 +5,7 @@
 
 // A rigged NPC's facial flex rig, read off `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json` (roadmap 12.3,
 // pipeline PL10). Plain C++ with no UObject reflection, like `FElysiumNpcClipSet`: this holds names
-// and arithmetic, and the UObject-side cache that hands one out is `UElysiumNpcAnimSubsystem`.
+// and arithmetic, and the UObject-side cache that hands one out is `UElysiumAnimSubsystem`.
 //
 // The morph targets themselves are baked into the NPC's `.glb`. Three layers sit between a flex
 // controller and one of those morph targets, and all three are replayed here rather than flattened

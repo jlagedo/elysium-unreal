@@ -210,6 +210,9 @@ public:
 	// Overlap routing (P1.5): a brush body's begin/end overlap lands here. Resolve the brush
 	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator, bool bBegin);
+	// Replace the player's retained touch set with one authoritative post-movement containment
+	// observation. Ends are emitted before begins; both groups are stable by entity index.
+	void ReconcilePlayerTouches(TConstArrayView<FElysiumEntityHandle> CurrentBrushes);
 
 	// Player interaction: command edges queue in the controller's pre-move sample and are consumed
 	// only after this frame's post-move focus query. The focused entity and any captured session are
@@ -404,6 +407,7 @@ private:
 	// UBodySetup from the def, place it at the def origin, attach it to the owner actor, store it
 	// on the entity, and start it dormant when born hidden. Point/logic entities get no body (R1).
 	void BuildBrushBody(FElysiumEntity& Ent);
+	void CallEntityActivate(FElysiumEntity& Ent);
 	// The queue.Add wrapper: assigns time/serial upstream, notifies OnQueued.
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
@@ -434,6 +438,7 @@ private:
 	TUniquePtr<FElysiumLineService> LineService;
 	uint32 Epoch = 0;
 	bool bActive = false;
+	bool bSnapshotApplied = false;
 
 	FElysiumEntityDefs Defs;
 	// Defs synthesized at runtime (npc_maker.Spawn): held so an entity's Def* stays valid past the

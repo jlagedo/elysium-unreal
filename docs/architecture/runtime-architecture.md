@@ -43,7 +43,7 @@ Two rules fall out, stated as prohibitions:
   *dehydrated back* at travel/save (§5). This is VtMB's own `.HL3` mechanism —
   "these entities travelled out with the player" (`docs/vtmb/savegame_format.md`).
 - **An application-lifetime object never holds session state.** `UElysiumAudioSubsystem`,
-  `UElysiumNpcAnimSubsystem` and the CPython VM survive New Game; nothing about a run may accumulate
+  `UElysiumAnimSubsystem` and the CPython VM survive New Game; nothing about a run may accumulate
   in them. Quit to menu clears the session record and nothing else.
 
 The session record is also the **entire** save payload's mutable half (`docs/architecture/save-architecture.md`) —
@@ -59,7 +59,7 @@ UElysiumGameInstance                                   ── application
  ├─ UElysiumSaveSubsystem          slots, autosave ring, serialize/deserialize      (new, 9.5)
  ├─ UElysiumUISubsystem            screens                                          (exists)
  ├─ UElysiumAudioSubsystem         voice pool + decode cache                        (exists)
- ├─ UElysiumNpcAnimSubsystem       banks + clip vocabularies + disposition table    (exists)
+ ├─ UElysiumAnimSubsystem          banks + clip vocabularies + disposition table    (exists)
  └─ UElysiumCogSubsystem / UElysiumMcpSubsystem                        (dev-only)   (exists)
 
 ULocalPlayer

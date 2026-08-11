@@ -424,7 +424,7 @@ FString FElysiumAnimatedPropEntry::RestSequence() const
 	// Highest weight wins and the declared ordinal breaks a tie, so the pick is identical on
 	// every load — a rest pose that moved across a save would be a visible pop.
 	//
-	// Not UElysiumNpcAnimSubsystem::PickActivityClip: that keys its walk on a (stem, variant)
+	// Not UElysiumAnimSubsystem::PickActivityClip: that keys its walk on a (stem, variant)
 	// seed to spread a crowd of NPCs across alternates, and a prop has no variant. The branch is
 	// defensive anyway — no exported prop model carries more than one ACT_IDLE clip.
 	static const FString ActIdle(TEXT("ACT_IDLE"));

@@ -147,6 +147,7 @@ double FElysiumEntityWorld::NowSeconds() const
 void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 {
 	bActive = false;
+	bSnapshotApplied = false;
 	// The item catalogue registers one entity class per `vdata/items` definition, and the registry
 	// resolves a classname once, at Create. So the catalogue has to be loaded before this map's
 	// item entities are built — otherwise they spawn as inert records and stay that way.
@@ -308,6 +309,28 @@ void FElysiumEntityWorld::Activate(double Now)
 		return;
 	}
 	LastTickNow = Now;
+	// The pawn has reached its final frozen placement by this point. Publish its Source feet/view
+	// transform before any late entity activation resolves !player (point_teleport spawnflag 1).
+	if (FElysiumPlayer* PlayerEnt = FindPlayer())
+	{
+		PlayerEnt->SyncFromBody();
+	}
+	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	{
+		if (Ent && !Ent->IsDead())
+		{
+			CallEntityActivate(*Ent);
+		}
+	}
+	// A fresh rebuild's omission baseline includes Source Activate. A restored map keeps the
+	// construction baseline so restored activation-derived state remains explicit in its snapshot.
+	if (!bSnapshotApplied)
+	{
+		for (int32 Index = 0; Index < EntityList.Num(); ++Index)
+		{
+			CaptureBaseline(Index);
+		}
+	}
 	bActive = true;
 	WeatherState.Tick(Now);
 	PublishWetness();
@@ -379,12 +402,9 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 		}
 	}
 
-	// Born hidden (R6) → the body starts non-solid/untouchable. Construct set bHidden without a
-	// body to gate; do it now.
-	if (Ent.IsInert())
-	{
-		Body->SetDormant(true);
-	}
+	// Construct/Spawn ran before a body existed. Apply every class's complete physical gate now;
+	// trigger StartDisabled participates without pretending the entity is hidden.
+	Ent.RefreshBrushBodyState();
 }
 
 FElysiumEntityHandle FElysiumEntityWorld::CreateRuntimeEntityNoSpawn(FElysiumEntityDef Def)
@@ -439,10 +459,24 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// A runtime-spawned entity has no "all entities" barrier to wait on; its attach targets (if any)
 	// already exist, so run its second-phase init immediately after Spawn().
 	Ent.PostSpawn();
+	if (bActive)
+	{
+		CallEntityActivate(Ent);
+	}
 	// 11.9 — a runtime entity's rebuild is this same create+spawn replayed from its saved def, so
 	// its baseline is taken at the same point in its life as a def entity's.
 	CaptureBaseline(Ent.Handle.Index);
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Ent.DebugString());
+}
+
+void FElysiumEntityWorld::CallEntityActivate(FElysiumEntity& Ent)
+{
+	if (Ent.bActivateCalled || !Ent.bSpawnCalled || Ent.IsDead())
+	{
+		return;
+	}
+	Ent.bActivateCalled = true;
+	Ent.Activate();
 }
 
 FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef Def)
@@ -783,6 +817,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	{
 		return 0;
 	}
+	bSnapshotApplied = true;
 	if (Snapshot.DefCount != Defs.Defs.Num())
 	{
 		// The map's `.ents` changed under the save. Every record is matched by index and guarded by
@@ -897,13 +932,11 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 
 		// Dormancy last, and written directly rather than through ScriptHide/ScriptUnhide: those are
 		// inputs with side effects (they stash and restore the think we have just restored ourselves).
-		const bool bWasInert = E->IsInert();
 		E->bHidden = S.bHidden;
 		E->bDead = S.bDead;
-		if (E->IsInert() != bWasInert)
-		{
-			E->OnDormancyChanged();
-		}
+		// Registered fields can alter a class-specific physical gate (notably trigger StartDisabled)
+		// without changing hidden/dead. Re-apply unconditionally after all restored state is present.
+		E->OnDormancyChanged();
 		NotifyVisualChanged(*E);
 		++Applied;
 	}
@@ -1104,6 +1137,10 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	// fires; an end releases the pair so a later genuine re-entry remains an edge.
 	if (bBegin)
 	{
+		if (!E->CanBeginTouch(Activator))
+		{
+			return;
+		}
 		if (ActiveTouches.Contains(TouchKey))
 		{
 			return;
@@ -1138,6 +1175,51 @@ void FElysiumEntityWorld::QueuePlayerUseEdge(EElysiumUseEdge Edge)
 	if (bActive)
 	{
 		PendingUseEdges.Add(Edge);
+	}
+}
+
+void FElysiumEntityWorld::ReconcilePlayerTouches(TConstArrayView<FElysiumEntityHandle> CurrentBrushes)
+{
+	if (!bActive || !Player.IsSet() || !IsTriggerResolutionEnabled())
+	{
+		return;
+	}
+
+	TSet<int32> CurrentIndices;
+	for (const FElysiumEntityHandle& Brush : CurrentBrushes)
+	{
+		if (FElysiumEntity* E = Resolve(Brush); E && E->CanBeginTouch(Player))
+		{
+			CurrentIndices.Add(Brush.Index);
+		}
+	}
+
+	TArray<int32> Ends;
+	for (uint64 Key : ActiveTouches)
+	{
+		const int32 ActivatorIndex = static_cast<int32>(static_cast<uint32>(Key));
+		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
+		if (ActivatorIndex == Player.Index && !CurrentIndices.Contains(BrushIndex))
+		{
+			Ends.Add(BrushIndex);
+		}
+	}
+	TArray<int32> Begins = CurrentIndices.Array();
+	Begins.RemoveAll([this](int32 BrushIndex)
+	{
+		const uint64 Key = (static_cast<uint64>(static_cast<uint32>(BrushIndex)) << 32)
+			| static_cast<uint32>(Player.Index);
+		return ActiveTouches.Contains(Key);
+	});
+	Ends.Sort();
+	Begins.Sort();
+	for (int32 BrushIndex : Ends)
+	{
+		RouteBrushTouch(FElysiumEntityHandle(BrushIndex, Epoch), Player, /*bBegin*/ false);
+	}
+	for (int32 BrushIndex : Begins)
+	{
+		RouteBrushTouch(FElysiumEntityHandle(BrushIndex, Epoch), Player, /*bBegin*/ true);
 	}
 }
 

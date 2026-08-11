@@ -29,8 +29,8 @@
 #endif
 #include "Substrate/ElysiumCameraTrack.h"
 #include "Visual/ElysiumEntityBodies.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 
 #include "Components/PointLightComponent.h"
 #include "Components/SceneComponent.h"
@@ -405,7 +405,7 @@ bool FElysiumGreenRoomRun::PrepareTheatreCase()
 	}
 
 	TheatreSceneOrigin = Scene->Origin;
-	TheatreSceneRotation = ElysiumSkeletalBasis::FromSourceAngles(Scene->Angles);
+	TheatreSceneAngles = Scene->Angles;
 	TheatrePositionOwner = PositionRoot->Handle;
 	TheatreTargetOwner = TargetRoot->Handle;
 	World->SelectTrackCameraRole(false, TheatrePositionOwner);
@@ -604,7 +604,7 @@ bool FElysiumGreenRoomRun::PrepareTheatreCase()
 	}
 	UE_LOG(LogElysiumGreenRoom, Log,
 		TEXT("embrace room ready: origin=%s yaw=%.1f camera=%.3fs samples=%d fades=%d"),
-		*TheatreSceneOrigin.ToCompactString(), TheatreSceneRotation.Yaw, TheatreDuration,
+		*TheatreSceneOrigin.ToCompactString(), TheatreSceneAngles.Y, TheatreDuration,
 		Fractions.Num(), TheatreFades.Num());
 	return true;
 }
@@ -658,7 +658,7 @@ bool FElysiumGreenRoomRun::BuildBodies()
 				continue;
 			}
 			Body = Map->BuildAnimatedPropVisual(ResolvedStem, BodyOrigin(),
-				FQuat(BodyRotation()), 1.0f);
+				FQuat(BodyRotation(/*bAnimatedProp=*/true)), 1.0f);
 			if (Body)
 			{
 				Map->ApplyAnimatedPropSkin(Body, FPaths::GetBaseFilename(Case.BoneRoot).ToLower(), 0);
@@ -676,8 +676,8 @@ bool FElysiumGreenRoomRun::BuildBodies()
 		}
 		else
 		{
-			Body = Map->BuildNpcVisual(Case.MeshStem, BodyOrigin(), BodyRotation(),
-				1.0f, TEXT("Neutral"), 0);
+			Body = Map->BuildNpcVisual(Case.MeshStem, BodyOrigin(),
+				BodyRotation(/*bAnimatedProp=*/false), 1.0f, TEXT("Neutral"), 0);
 		}
 		if (!Body)
 		{
@@ -686,7 +686,7 @@ bool FElysiumGreenRoomRun::BuildBodies()
 			bAnyFailure = true;
 			continue;
 		}
-		Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+		Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation(Case.bAnimatedProp));
 		Body->SetVisibility(true, true);
 		Body->SetComponentTickEnabled(true);
 
@@ -759,7 +759,8 @@ void FElysiumGreenRoomRun::SeekPose()
 	{
 		if (USkeletalMeshComponent* Body = Entry.Body.Get())
 		{
-			Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+			Body->SetWorldLocationAndRotation(BodyOrigin(),
+				BodyRotation(Entry.Case.bAnimatedProp));
 			const float ClipTime = bTheatreCamera
 				? FMath::Min(Entry.Duration, SceneTime)
 				: Entry.Duration * SceneTime;
@@ -783,7 +784,6 @@ bool FElysiumGreenRoomRun::PrepareFrame()
 	}
 	FBox Combined(ForceInit);
 	const FVector BaseOrigin = BodyOrigin();
-	const FRotator BaseRotation = BodyRotation();
 	const FVector IndividualCenter = BaseOrigin + FVector(0.0f, 0.0f, 105.0f);
 
 	for (FBodyEntry& Entry : Bodies)
@@ -794,6 +794,9 @@ bool FElysiumGreenRoomRun::PrepareFrame()
 			bAnyFailure = true;
 			continue;
 		}
+		// Per entry, not once for the pass: the measurements below are un-rotated back into the
+		// scene's own frame, and a prop body and a character body do not stand on the same basis.
+		const FRotator BaseRotation = BodyRotation(Entry.Case.bAnimatedProp);
 		Body->RefreshBoneTransforms();
 		Body->UpdateBounds();
 
@@ -1141,9 +1144,17 @@ FVector FElysiumGreenRoomRun::BodyOrigin() const
 	return bTheatreCamera ? TheatreSceneOrigin : StageOrigin;
 }
 
-FRotator FElysiumGreenRoomRun::BodyRotation() const
+FRotator FElysiumGreenRoomRun::BodyRotation(bool bAnimatedProp) const
 {
-	return bTheatreCamera ? TheatreSceneRotation : FRotator::ZeroRotator;
+	if (!bTheatreCamera)
+	{
+		return FRotator::ZeroRotator;   // the stage stands its cast on the world axes
+	}
+	// One anchor, two bases: the scene's understudies come off the baked mount and the props are
+	// loaded through glTFRuntime, so the same authored yaw resolves differently for each.
+	return bAnimatedProp
+		? ElysiumSkeletalBasis::GlbFromSourceAngles(TheatreSceneAngles)
+		: ElysiumSkeletalBasis::FromSourceAngles(TheatreSceneAngles);
 }
 
 void FElysiumGreenRoomRun::PinCameraAndPlayerSurface()
@@ -1506,7 +1517,7 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	// already standing there stays standing.
 	FString ResolvedClip = Clip;
 	const UGameInstance* GI = Subsystem.IsValid() ? Subsystem->GetGameInstance() : nullptr;
-	UElysiumNpcAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumNpcAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	if (ResolvedClip.IsEmpty())
 	{
 		// An empty clip is a complete request: ask the model's own idle policy, the same chain a
@@ -1524,15 +1535,15 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	}
 
 	DestroyBodies();
-	USkeletalMeshComponent* Body = Map->BuildNpcVisual(Stem, BodyOrigin(), BodyRotation(),
-		1.0f, TEXT("Neutral"), 0);
+	USkeletalMeshComponent* Body = Map->BuildNpcVisual(Stem, BodyOrigin(),
+		BodyRotation(/*bAnimatedProp=*/false), 1.0f, TEXT("Neutral"), 0);
 	if (!Body)
 	{
 		OutError = FString::Printf(TEXT("could not build %s — is npc/%s.glb exported?"),
 			*Stem, *Stem);
 		return false;
 	}
-	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation(/*bAnimatedProp=*/false));
 	Body->SetVisibility(true, true);
 	Body->SetComponentTickEnabled(true);
 
@@ -1946,6 +1957,11 @@ void FElysiumGreenRoomRun::LabSetGridPosition(float Axis0, float Axis1)
 
 void FElysiumGreenRoomRun::LabClearGrid()
 {
+	AElysiumMapActor* Map = GetMap();
+	if (UElysiumEntityBodies* BodyFactory = Map != nullptr ? Map->GetBodies() : nullptr)
+	{
+		BodyFactory->StopNpcGrid(LabBody());
+	}
 	ReviewGrid = FElysiumResolvedGrid();
 	// Back to a clip, because a body with neither a grid nor a clip stands in its reference pose and
 	// reads as a broken model rather than a cleared control.
@@ -2005,7 +2021,7 @@ void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 	{
 		LabClipTime = FMath::Fmod(LabClipTime + DeltaSeconds * LabViewState.Speed + Duration, Duration);
 	}
-	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation());
+	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation(/*bAnimatedProp=*/false));
 	Map->SeekCinematicClip(Body, LabClipTime);
 
 	Body->UpdateBounds();

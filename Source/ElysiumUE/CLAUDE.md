@@ -120,7 +120,9 @@ slot tables in `Public/ElysiumSheetSlots.h` + `Substrate/ElysiumSheet.cpp`; the 
 are the rulebook's, reached as `World->GetGameState()->Stats()`. The arithmetic over those slots is
 `Substrate/ElysiumSheetMath.{h,cpp}` — `FElysiumSheetEffects` (a character's resolved
 `m_tEffectList`), `ElysiumFeats::FeatValue`/`Calc` (what `CalcFeat` answers), `ElysiumXp` (the award
-banking) and `ElysiumSheetRules::EvalPredependency`. Quests sit beside it in the same shape:
+banking) and `ElysiumSheetRules::EvalPredependency`. `Substrate/ElysiumDice.{h,cpp}` is the d10
+resolver beside it (`ElysiumDice::Roll` over the rulebook's `FElysiumDiceTables` and the Dice RNG
+stream; `elysium.roll` drives it; `CalcFeat` stays a rating, never a roll). Quests sit beside it in the same shape:
 `Substrate/ElysiumQuestLog.{h,cpp}` is the pure decision (`ElysiumQuestLog::Apply` — resolve,
 gate, reconcile the `FElysiumAssignedQuest` rows on the player record), and
 `UElysiumGameStateSubsystem::SetQuestState` is the funnel that performs what it reports.
@@ -141,10 +143,16 @@ Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase`,
 `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
 `ElysiumEventClasses.cpp`, `ElysiumNpcClasses.cpp`, `ElysiumPlayerClasses.cpp`,
-`ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`, `ElysiumChoreoScene.cpp`
+`ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`, `ElysiumItemClasses.{h,cpp}`
+(`FElysiumItem`/`FElysiumKeyring` — one registered class per `vdata/items` definition, installed at
+the rulebook's first `Items()` load; `FElysiumInventory` lives on the combat character),
+`ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
+`ElysiumChoreoScene.cpp`
 (`logic_choreographed_scene`, over the `.vcd` reader `ElysiumSceneData.{h,cpp}` and the event
 timeline `ElysiumScenePlayer.{h,cpp}` — both free of the world so 12.2's per-line dialogue path can
-reuse them).
+reuse them). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
+input with no system behind it yet; `elysium.stubs` reads the fired set back, and
+`Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
 **The outbound seam** (`docs/architecture/runtime-architecture.md`): everything the substrate needs from the
 engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
@@ -157,7 +165,7 @@ dialog moments, `UElysiumPresentationSubsystem`), `IElysiumWeather` (wetness and
 **Subsystems by scope** (`docs/architecture/runtime-architecture.md`): GameInstance —
 `UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
 record, clock, snapshots, script host), `UElysiumMapSubsystem` (travel), `UElysiumSaveSubsystem`,
-`UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumNpcAnimSubsystem`,
+`UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumAnimSubsystem`,
 `UElysiumRulebookSubsystem`. World — `UElysiumPresentationSubsystem`. LocalPlayer —
 `UElysiumInputSubsystem` (the only `SetInputMode` caller). Engine — `UElysiumMcpSubsystem`.
 
@@ -273,8 +281,10 @@ Hard-won, non-obvious, and easy to undo:
   `GEditor->BeginTransaction`. `run play` is `UnrealEditor.exe -game`, where `GEditor` is null, so a
   runtime curve-metadata write crashes on a null dereference in `-game` while working fine in the
   editor. Pass `bTransact = false` from any runtime path.
-- **`UElysiumNpcAnimInstance`'s proxy must implement `UpdateAnimationNode`** — a sequence player never
-  `Update_AnyThread`'d holds its start frame forever.
+- **A proxy owning nodes outside the compiled graph must implement `UpdateAnimationNode`** —
+  `FElysiumBipedAnimProxy`'s clip player and its two layer players are not in the graph, so the base
+  call cannot reach them, and a sequence player never `Update_AnyThread`'d holds its start frame
+  forever.
 - **A `UBlendProfile`'s mode has to be set before its bone scales.** An entry equal to the mode's own
   default is not stored, and that default is 0 for `EBlendProfileMode::BlendMask` against 1 for every
   other mode. A profile still in its constructed `WeightFactor` mode therefore discards every 1.0

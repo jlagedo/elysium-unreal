@@ -303,8 +303,9 @@ void FElysiumAnimating::BuildBody()
 		return;   // bare test world, no embodiment, or a bodiless character (npc_VCamera has no model)
 	}
 
-	// Source `angles` is [pitch yaw roll]; a standing character needs yaw only. The skeletal glTF
-	// basis contributes a fixed -90 degrees before the reflected Source yaw.
+	// Source `angles` is [pitch yaw roll]; a standing character needs yaw only, and a baked body's
+	// authored forward is its own component +X, so the placement is the reflected yaw and nothing
+	// else (ElysiumSkeletalBasis).
 	const FRotator Rot = ElysiumSkeletalBasis::FromSourceAngles(Angles);
 	Visual = Embodiment->BuildNpcVisual(ModelStem(), Origin, Rot, Embodiment->BodyScaleFor(*Def),
 		Disposition, IdleVariant());
@@ -1443,17 +1444,15 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 void FElysiumPlayer::SyncFromBody()
 {
 	const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	FVector Loc; float Yaw = 0.f;
-	if (!Embodiment || !Embodiment->GetPlayerOrigin(Loc, Yaw))
+	FVector Feet; FRotator View = FRotator::ZeroRotator;
+	if (!Embodiment || !Embodiment->GetPlayerFeetTransform(Feet, View))
 	{
 		return;   // no pawn (a menu backdrop, a headless world): the entity keeps its last position
 	}
 	// Written straight into the fields: SetRuntimeOrigin would call OnRuntimeTransformChanged, which
 	// teleports the pawn — every frame, to where it already is.
-	Origin = Loc;
-	// The stored `angles` is Source-space [pitch yaw roll] like every other entity's, so the Unreal
-	// yaw is negated on the way in and back out again (the Source->Unreal Y reflection).
-	Angles.Y = -Yaw;
+	Origin = Feet;
+	Angles = ElysiumPlayerView::ToSource(View);
 }
 
 void FElysiumPlayer::OnRuntimeTransformChanged()
@@ -1464,7 +1463,7 @@ void FElysiumPlayer::OnRuntimeTransformChanged()
 	FElysiumEntity::OnRuntimeTransformChanged();
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
-		Embodiment->TeleportPlayer(Origin, -Angles.Y);
+		Embodiment->TeleportPlayer(Origin, ElysiumPlayerView::ToUnreal(Angles));
 	}
 }
 

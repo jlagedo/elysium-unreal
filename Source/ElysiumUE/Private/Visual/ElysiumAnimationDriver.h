@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumAnimationIntent.h"
-#include "Visual/ElysiumNpcAnimSubsystem.h"
+#include "Visual/ElysiumAnimSubsystem.h"
 
 class UglTFRuntimeAsset;
 class USkeletalMesh;
@@ -83,7 +83,7 @@ struct FElysiumAnimationDriver
 	// by the **caller** before this runs — the driver never reaches for an anim instance, because it
 	// also serves bodies that have none. `Unknown` keeps the timer fallback.
 	void Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
-		UElysiumNpcAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
+		UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
 		EElysiumOneShotState OneShot = EElysiumOneShotState::Unknown);
 
 	// Forget the latch and the last request. A teleport or a map epoch is not a continuous motion, so

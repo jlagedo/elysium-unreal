@@ -195,18 +195,18 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | stance only (9.9 owns reactions) |
 | `SetQuest` | `10199800` | `(char, quest:str, state:int)` | 732 | real (map + catalogue + awards + journal) |
 | `GetQuestState` | `101987b0` | `(char, quest:str)` | 377 | real (quest map) |
-| `HasItem` | `10198640` | `(char, item:str)` | 327 | stub |
+| `HasItem` | `10198640` | `(char, item:str)` | 327 | real (ordinary slots, then keyring) |
 | `IsMale` | `10199990` | `(char)` | 207 | real (sheet) |
-| `RemoveItem` | `10199240` | `(char, item:str)` | 182 | stub |
-| `GiveItem` | `10199100` | `(char, item:str)` | 126 | stub |
+| `RemoveItem` | `10199240` | `(char, item:str)` | 182 | real (stack decrement / final-entity destroy / keyring) |
+| `GiveItem` | `10199100` | `(char, item:str)` | 126 | real (player-only grant; a failed grant logs) |
 | `SetCamera` | `10198070` | `(char, shotfile:str)` | 115 | real (the 11.7 shot channel) |
 | `StartBarter` | `101993c0` | `(char, arg0:int, arg1:int)` | 108 | stub |
 | `CurrentMoney` | `101998c0` | `(char)` | 86 | real (the `money` field) |
 | `SeductiveFeed` | `10198150` | `(char)` | 54 | stub |
 | `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | real (the feat rating over the sheet) |
-| `HasWeaponEquipped` | `101984c0` | `(char, item:str)` | 27 | stub |
-| `AmmoCount` | `101989b0` | `(char, item:str)` | 19 | stub |
-| `GiveAmmo` | `10198b30` | `(char, item:str, count:int)` | 19 | stub |
+| `HasWeaponEquipped` | `101984c0` | `(char, item:str)` | 27 | real (exact compare vs the active weapon) |
+| `AmmoCount` | `101989b0` | `(char, item:str)` | 19 | real (stack count / loaded magazine) |
+| `GiveAmmo` | `10198b30` | `(char, item:str, count:int)` | 19 | real (stack add / reserve pool) |
 | `BumpStat` | `10199a70` | `(char, stat:str, times:int)` | 19 | real (dots onto the base) |
 | `WorldMap` | `10199520` | `(char)` | 12 | stub |
 | `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |

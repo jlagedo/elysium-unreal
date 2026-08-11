@@ -361,7 +361,7 @@ public:
 		if (AnimatedVisual)
 		{
 			AnimatedVisual->SetWorldLocationAndRotation(Origin,
-				FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)));
+				FQuat(ElysiumSkeletalBasis::GlbFromSourceAngles(Angles)));
 		}
 	}
 
@@ -717,7 +717,7 @@ private:
 			VisualStem = FPaths::GetBaseFilename(Model).ToLower();
 			Loc = Origin;
 			StaticRot = FQuat(FRotator(0.0f, -Angles.Y, 0.0f));
-			SkeletalRot = FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles));
+			SkeletalRot = FQuat(ElysiumSkeletalBasis::GlbFromSourceAngles(Angles));
 		}
 		else
 		{
@@ -727,8 +727,8 @@ private:
 			// A model that decoded no static geometry carries no `model_quat`, so composing against
 			// the identity default would silently drop the placement.
 			SkeletalRot = Def->ModelMesh.IsEmpty()
-				? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles))
-				: ElysiumSkeletalBasis::FromPlacementQuat(Def->ModelQuat);
+				? FQuat(ElysiumSkeletalBasis::GlbFromSourceAngles(Angles))
+				: ElysiumSkeletalBasis::GlbFromPlacementQuat(Def->ModelQuat);
 		}
 
 		AnimatedStem = Embodiment->AnimatedPropStemForModel(Model);

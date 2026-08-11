@@ -30,7 +30,7 @@
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumLightRig.h"
 #include "ElysiumDlg.h"
@@ -12111,14 +12111,18 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 		ElysiumEntityAnimation::NpcClipCacheKey(NormalVisual, Clip)
 			== ElysiumEntityAnimation::NpcClipCacheKey(PlayerVisual, Clip));
 
-	FElysiumNpcAnimProxy Proxy;
+	FElysiumBipedAnimProxy Proxy;
 	UAnimSequence* Sequence = NewObject<UAnimSequence>();
-	Proxy.Request(Sequence, /*bLoop=*/true, 0.25f);
+	Proxy.PlayDirect(Sequence, /*bLoop=*/true);
 	TestTrue(TEXT("the initial stance loops"), Proxy.IsPlayingLoop());
-	Proxy.Request(Sequence, /*bLoop=*/false, 0.25f);
+	Proxy.PlayDirect(Sequence, /*bLoop=*/false);
 	TestFalse(TEXT("the same clip can change from a loop to a one-shot"), Proxy.IsPlayingLoop());
-	Proxy.Request(Sequence, /*bLoop=*/true, 0.25f);
+	Proxy.PlayDirect(Sequence, /*bLoop=*/true);
 	TestTrue(TEXT("reset-to-idle restores looping on the same clip"), Proxy.IsPlayingLoop());
+	TestEqual(TEXT("the clip player names what it is standing"), Proxy.GetPlaying(), Sequence);
+	Proxy.StopDirect();
+	TestTrue(TEXT("a stopped clip player says it cannot answer a position"),
+		Proxy.GetClipPosition() < 0.f);
 
 	FElysiumCinematicSet Multi;
 	Multi.Roots.Add(TEXT("bip01"), TEXT("bank_one"));

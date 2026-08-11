@@ -63,11 +63,13 @@ FElysiumEntity            CBaseEntity           keyfields, dormancy, I/O, think,
 
 Every domain in §5 lands on this chain as registered fields (which makes it savable, S9),
 registered inputs (which makes it wire- and script-reachable), and registered outputs (which
-makes it authorable). The interim standard for a registered-but-unbacked input is the existing
-`ELYSIUM_PENDING_INPUT` log-and-no-op in `Substrate/ElysiumPlayerClasses.cpp` — 13 rows today
-(`FrenzyTrigger`, `ClearActiveDisciplines`, `Inventory_Remove`, `BarterBegin`/`End`, the
-camera-target quartet, …). Each row is retired by the domain that owns it, never by a generic
-sweep.
+makes it authorable). The interim standard for a registered-but-unbacked input is the shared
+`ELYSIUM_PENDING_INPUT` macro (`Substrate/ElysiumPendingInput.h`, with a declaring-class form
+so a chain-level input reports one work-list row) — the frenzy family,
+`ClearActiveDisciplines`, `BarterBegin`/`End`, the camera-target quartet, and the recovered
+`CAI_BaseNPC` inputs (`SetRelationship`, `TeleportToEntity`, `SetScriptedDiscipline`). Each
+row is retired by the domain that owns it, never by a generic sweep, and
+`Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
 ### 2.2 Tier 2 — the shared native table (globals + Character methods)
 
@@ -222,18 +224,24 @@ Ordered by dependency: each subsection names the design, the data source (K9), t
 **Design.** `Substrate/ElysiumDice.{h,cpp}`, a pure namespace beside `ElysiumSheetMath`:
 
 ```cpp
-struct FElysiumRollResult { int32 Successes; int32 Botches; int32 Net; int32 Tier; };
+enum class EElysiumRollTier : uint8 { Botched, Failure, PartialSuccess, Success, CriticalSuccess };
+struct FElysiumRollResult { int32 Successes; int32 Botches; int32 Net; int32 Tens;
+                            EElysiumRollTier Tier; };
 FElysiumRollResult ElysiumDice::Roll(int32 Pool, int32 Difficulty,
                                      const FElysiumDiceTable& Weighting,
-                                     int32 AutomaticSuccesses);
+                                     int32 AutomaticSuccesses = 0, int32 HealthPenalty = 0);
 ```
 
-It draws only from `ElysiumRng::Stream(EElysiumRngStream::Dice)` (already reserved) and
-implements `docs/recovered/dice-system.md` verbatim. `FElysiumDiceTable` joins
-`FElysiumRulebook` beside `FElysiumFeat`, loaded from `DiceRolls.txt`
-(`TableWeightings`/`HealthModifiers`); `FElysiumFeat::PcWeighting`/`NpcWeighting` finally
-resolve to a table instead of a name. `ElysiumFeats::Calc` is untouched — it stays the rating
-(K5). Consumers each own their policy per the `skills-and-checks.md` matrix: dialogue keeps
+It draws only from `ElysiumRng::Stream(EElysiumRngStream::Dice)` and implements
+`docs/recovered/dice-system.md` verbatim — including the recovered fields the first sketch
+lacked: `Tens` (the roll struct's count of exploding 10s), the tier as a closed enum whose
+names the data file's own `RollResult` block confirms, and `HealthPenalty` (the wound
+modifier subtracted from the pool; the *level* a character sits at is consumer-owned).
+`FElysiumDiceTables` lives on `FElysiumRulebook`, loaded from `DiceRolls.txt`
+(`TableWeightings`/`HealthModifiers`, absent-entry default face 1, uniform-d10 fail-open);
+`FElysiumDiceTables::ForFeat(Feat, bNpc)` joins a feat's weighting *name* to its table.
+`ElysiumFeats::Calc` is untouched — it stays the rating (K5). `elysium.roll` is the headless
+driver. Consumers each own their policy per the `skills-and-checks.md` matrix: dialogue keeps
 its threshold compare in the dlgexpr normalizer; locks/terminals take the `>2 / 0 / 1–2`
 bands; combat takes defense/soak difficulties from `rules.txt`; feeding opposes the attacker
 rating to the victim roll.
@@ -247,18 +255,24 @@ rating to the victim roll.
 
 **Design** — the closed contract in `docs/vtmb/inventory.md`, on the chain:
 
-- `FElysiumItem : FElysiumAnimating`, registered for the `item_*` classnames through one
-  shared factory keyed by the presence of a `vdata/items/` definition. Registered fields:
-  owner handle, `m_iInvenPos` (255 = unslotted), stack count, primary ammo type, loaded
-  magazine count. Item *policy* (`is_stackable`, `is_droppable`, `permanent_inventory`, ammo
-  and magazine sizes, `worth`, weapon modes) comes from the parsed item record on the
-  rulebook, never from the classname prefix.
-- `FElysiumInventory`, a plain member on `FElysiumCombatCharacter`: the 224 item-entity
-  handles, the active-weapon handle, and the per-ammo-type reserve pools. Its operations are
-  the five distinct verbs with distinct entity-lifetime effects — pickup/equip,
-  `GiveNamedItem`, player drop (world entity preserved), destructive script remove (entity
-  destroyed), and container transfer — plus `DeleteItems`. Lookup and removal iterate the
-  handles; removal compacts and reindexes.
+- `FElysiumItem : FElysiumAnimating` (`Substrate/ElysiumItemClasses.{h,cpp}`), one registered
+  class per `vdata/items/` definition under a `CBaseCombatWeapon` chain node — **the catalogue
+  is the class list**, installed at the rulebook's first `Items()` load (which is why the
+  class registry stores descriptors indirectly: a post-static-init insert must not dangle a
+  live entity's descriptor pointer). Registered Save-flagged fields: owner handle,
+  `m_iInvenPos` (255 = unslotted), stack count, primary ammo type, loaded magazine count.
+  Item *policy* (`is_stackable`, `is_droppable`, `permanent_inventory`, ammo and magazine
+  sizes, `worth`, weapon modes) comes from the parsed item record on the rulebook, never from
+  the classname prefix. A loose item's ground model is the definition's `playermodel`,
+  decoded by `UE_extract_items.py` and baked once onto the shared `/ElysiumBaked/items`
+  scope; `FElysiumContentPaths::PropModelStem` is the one-for-one C++ twin of the pipeline's
+  `mdl.sanitize`, and the prop resolver falls back from the map's package to the item scope.
+- `FElysiumInventory`, a plain member on `FElysiumCombatCharacter`: a dense slot array (an
+  item's position *is* its index; capacity 224), the active-weapon handle, and the
+  per-ammo-type reserve pools. Its operations are distinct verbs with distinct entity-lifetime
+  effects — acquisition/equip (a stackable acquisition merges and absorbs the world entity),
+  `GiveNamedItem`, destructive script remove (final entity destroyed), and detach (compact +
+  reindex, never destroy); player drop and container transfer arrive with the container half.
 - `FElysiumKeyring : FElysiumItem` — one carried entity owning logical key records;
   `HasItem`/`RemoveItem` fall through to it after the ordinary slots, case-insensitively.
 - Containers (`item_container`, `item_container_animated`,
@@ -271,26 +285,26 @@ rating to the victim roll.
   (`vbarter Take|Give|Buy|Sell <slot>`, `inven_drop`); the UI only requests. Buy/sell pricing
   is §5.8's.
 
-Tier 2 rows `HasItem`/`GiveItem`/`RemoveItem`/`AmmoCount`/`GiveAmmo`/`HasWeaponEquipped`/
-`StartBarter` get real bodies over this service; the pending inputs `Inventory_Remove`
-(entity-valued detach, not destroy), `BarterBegin`/`BarterEnd` retire. `AmmoCount` reports the
-loaded magazine while `GiveAmmo` grants reserve — the asymmetry is load-bearing for the
-tutorial's `.38` beat.
+The six Tier 2 rows `HasItem`/`GiveItem`/`RemoveItem`/`AmmoCount`/`GiveAmmo`/
+`HasWeaponEquipped` are real over this service, and `Inventory_Remove` is the entity-valued
+detach (the variant type already carries handles); `StartBarter` and `BarterBegin`/`BarterEnd`
+retire with the barter half. `AmmoCount` reports the loaded magazine while `GiveAmmo` grants
+reserve — the asymmetry is load-bearing for the tutorial's `.38` beat.
 
 **Events:** `OnItemRemove`/`OnItemInsert` on containers, `OnPlayerHasItem` on the trigger,
 `OnSellWeapon`/`OnBarterClose` on the character — all kind-2 producers.
 
 **Save:** items are entities, so persistence is entity persistence (save-architecture kept
-this on purpose). The one addition is the already-reserved predicate:
-`FElysiumItem::TravelsWithPlayer()` returns true for player-owned items, which fills the
-snapshot's `AbsentEntities` set; the player record additionally freezes the inventory as item
-records across map boundaries (the record's reserved half). Keyring records ride the leaf
-`Serialize`.
+this on purpose). The slot array is a *cache* of what the items' own Save-flagged fields say:
+`ApplySnapshot` rebases Handle-typed field values against the live epoch and rebuilds every
+combat character's slots after all records and dead flags land. Keyring records ride the leaf
+`Serialize`. Still to land: `FElysiumItem::TravelsWithPlayer()` filling the snapshot's
+`AbsentEntities` set, and the player record freezing the inventory as item records across map
+boundaries.
 
-**Refactor:** move the `item_container*` rows out of `BuildPropBodyClass`
-(`Substrate/ElysiumPropClasses.cpp`) onto the combat-character base; new
-`Substrate/ElysiumItemClasses.{h,cpp}`; `FElysiumInventory` on the combat character; real
-bodies in `ElysiumScriptNatives.cpp`; `vdata/items` loader in the rulebook. Roadmap 9.8.
+**Refactor (remaining):** move the `item_container*` rows out of `BuildPropBodyClass`
+(`Substrate/ElysiumPropClasses.cpp`) onto the combat-character base; the touch-pickup ingress
+(retail's default item touch) and player drop; `trigger_inventory_check`. Roadmap 9.8.
 
 ### 5.3 The damage pipeline
 
@@ -369,12 +383,12 @@ order.
 tuning, player-conduct thresholds, squad and ambient groups, and maker child inheritance —
 becomes one resolved struct on `FElysiumNpc`, visible in the inspector. `FElysiumNpcMaker`
 grows the full child specification (equipment, perception, relations, squad, `SpawnFrequency`,
-`MaxLiveChildren`, `MaxNPCCount`) and **child output provenance**: the maker's authored
-lifecycle wires (`OnDeath` ×24, `OnFoundPlayer`, `OnFedUpon*`, …) are copied onto each
-synthesized child def at spawn with the child as activator. This is a marked reconstruction —
-the retail owner of those firings is an open question in the tutorial brief — chosen because
-it preserves caller/activator provenance without inventing a relay object; a contradicting
-retail capture changes the copy site only.
+`MaxLiveChildren`, `MaxNPCCount`) and **child output provenance**, which is built:
+`FElysiumNpcMaker::InputSpawn` copies the maker's authored output wires onto each synthesized
+child def (all rows, each child with its own `times` countdown), the child being the firing
+entity. This is a marked reconstruction — the retail owner of those firings is an open
+question in the tutorial brief — chosen because it preserves caller/activator provenance
+without inventing a relay object; a contradicting retail capture changes the copy site only.
 
 **5.5.2 Relationships.** `FElysiumRelationships` on `FElysiumNpc`: entity-override rows and
 class rows, `{target-or-class, disposition D_HT/D_FR/D_LI/D_NU, priority}`, resolved
@@ -431,10 +445,15 @@ assign-enemy-with-condition / follow-path) and the **non-identical** `forcestate
 fire the 16 base NPC outputs from their real producers (kind 2): sense contact →
 `OnFoundPlayer`/`OnFoundEnemy`/`OnHear*`; memory loss → the four `OnLost*`; §5.3's commit →
 `OnDamaged`/`OnHalfHealth`/`OnDeath`; the feed interaction → `OnFedUponBegin`/`OnFedUponEnd`
-plus grapple begin/end. Feeding itself is a small transaction on the combat character
-(eligibility → the asymmetric opposed check of `skills-and-checks.md` when resisted → blood
-transfer over the sheet → the outputs), reached from the player's `+use` feed verb — it is the
-tutorial's B6 gate and deliberately precedes the rest of the mind. Fear/flee/cower arrive as
+plus grapple begin/end. Feeding lives in `Substrate/ElysiumFeed.{h,cpp}` on the combat character: the dedicated
+`feed` button-pair verb, the recovered acceptance order (automatic states → `ResistsFeeding`
+→ Brawl rating vs Hacking roll net at difficulty 6 → a declared stealth-override seam), a
+minimal pairing over the freeze seams, the accelerating `0.30 + (B+1)·0.15` pulse cadence at
+the recovered field set (Save-flagged, schema-versioned), and one idempotent teardown. The
+engage/bite/loop/release machine raises the 4007/4006/5116 boundaries itself from the decoded
+clip cycles through `OnFeedAnimEvent` — the seam a real notify path replaces by calling it,
+once the bake carries authored animation events. Seductive/rat/zombie modes, presentation,
+and the open retail questions are marked seams in that file. Fear/flee/cower arrive as
 schedule families, not as a hardcoded "run away".
 
 **5.5.7 Disposition and the reaction score (9.9).** On the presentation side of K4:
@@ -535,21 +554,20 @@ roadmap task:
 
 | # | Refactor | Where | Owner |
 |---|---|---|---|
-| 1 | `FElysiumDiceTable` + `ElysiumDice::Roll`; wire `PcWeighting`/`NpcWeighting` to tables | `ElysiumRulebook.{h,cpp}`, new `Substrate/ElysiumDice.{h,cpp}` | 9.6 |
-| 2 | `FElysiumInventory` on the combat character; `FElysiumItem`/`FElysiumKeyring` classes; `vdata/items` loader | `Public/ElysiumPlayer.h`, new `Substrate/ElysiumItemClasses.{h,cpp}` | 9.8 |
-| 3 | `item_container*` rows move from body-only props to combat-character containers | `Substrate/ElysiumPropClasses.cpp` | 9.8 |
-| 4 | Real bodies behind the seven inventory natives; retire `Inventory_Remove`/`Barter*` pending inputs | `Scripting/ElysiumScriptNatives.cpp`, `Substrate/ElysiumPlayerClasses.cpp` | 9.8 |
-| 5 | `FElysiumDmg` + shared apply + typed `CommitDamage`; scalar `TakeDamage` becomes the fallback entry | new `Substrate/ElysiumDamage.{h,cpp}`, `ElysiumPlayerClasses.cpp` | 13.3 |
-| 6 | Fire `OnDamaged`/`OnHalfHealth` from the commit; adopt `trigger_hurt`'s retail cadence + `OnHurt*` outputs | `ElysiumPlayerClasses.cpp`, `Substrate/ElysiumStarterClasses.cpp` | 13.3 |
-| 7 | Weapon controller over item modes; equip/holster on the active-weapon handle | new `Substrate/ElysiumWeaponClasses.{h,cpp}` | 13.3 |
-| 8 | Feed transaction + `OnFedUponBegin/End`; maker child output provenance | `Substrate/ElysiumNpcClasses.cpp` | B6 |
-| 9 | `FElysiumRelationships` + `SetRelationship` input; `TeleportToEntity` input | `ElysiumNpcClasses.cpp`; retire the `ElysiumStubClasses.cpp` rows | 9.9/10.7 |
-| 10 | Disposition model behind `SetDisposition` (drop the stub mark); reaction-score calculator | `ElysiumScriptNatives.cpp`, rulebook loaders | 9.9 |
-| 11 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 10.7 |
-| 12 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 10.7 |
-| 13 | Discipline runtime (active events on the one queue + `DisciplineTgt` interpreter); `FElysiumSheetEffects::FRow` payload operators; retire `ClearActiveDisciplines`/frenzy pending inputs as each lands | new `Substrate/ElysiumDisciplines.{h,cpp}`, `Substrate/ElysiumSheetMath.{h,cpp}` | 13.2 |
-| 14 | `FElysiumSkillEntity`/`FElysiumTerminal`/`FElysiumPropHacking`; locks and terminals leave the body-only table | new `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
-| 15 | Stealth scalars + `trigger_stealth_mod` into the senses service; sneak posture into the view state | rulebook, `ElysiumNpcMind`, movement | 13.1 |
+| 1 | `item_container*` rows move from body-only props to combat-character containers; touch-pickup ingress and player drop; `trigger_inventory_check`; `TravelsWithPlayer()` absent set | `Substrate/ElysiumPropClasses.cpp`, `Substrate/ElysiumItemClasses.{h,cpp}` | 9.8 |
+| 2 | Barter/loot transfer service; retire the `StartBarter` native stub and the `BarterBegin`/`End` pending inputs | `Scripting/ElysiumScriptNatives.cpp`, new barter service | 9.8/9.10 |
+| 3 | `FElysiumDmg` + shared apply + typed `CommitDamage`; scalar `TakeDamage` becomes the fallback entry | new `Substrate/ElysiumDamage.{h,cpp}`, `ElysiumPlayerClasses.cpp` | 13.3 |
+| 4 | Fire `OnDamaged`/`OnHalfHealth` from the commit; adopt `trigger_hurt`'s retail cadence + `OnHurt*` outputs | `ElysiumPlayerClasses.cpp`, `Substrate/ElysiumStarterClasses.cpp` | 13.3 |
+| 5 | Weapon controller over item modes; equip/holster on the active-weapon handle | new `Substrate/ElysiumWeaponClasses.{h,cpp}` | 13.3 |
+| 6 | `FElysiumRelationships` + a real `SetRelationship` body; `TeleportToEntity` body | `ElysiumNpcClasses.cpp` | 9.9/10.7 |
+| 7 | Disposition model behind `SetDisposition` (drop the stub mark); reaction-score calculator | `ElysiumScriptNatives.cpp`, rulebook loaders | 9.9 |
+| 8 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 10.7 |
+| 9 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence/feed states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 10.7 |
+| 10 | Discipline runtime (active events on the one queue + `DisciplineTgt` interpreter); `FElysiumSheetEffects::FRow` payload operators; retire `ClearActiveDisciplines`/frenzy pending inputs as each lands | new `Substrate/ElysiumDisciplines.{h,cpp}`, `Substrate/ElysiumSheetMath.{h,cpp}` | 13.2 |
+| 11 | `FElysiumSkillEntity`/`FElysiumTerminal`/`FElysiumPropHacking`; locks and terminals leave the body-only table | new `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
+| 12 | Stealth scalars + `trigger_stealth_mod` into the senses service; sneak posture into the view state | rulebook, `ElysiumNpcMind`, movement | 13.1 |
+| 13 | A runtime prop `SetModel` derives its stem with `PropModelStem`, not the basename (the same defect the item side fixed) | `Substrate/ElysiumPropClasses.cpp` | props lane |
+| 14 | Carry authored MDL animation events through the character bake so `OnFeedAnimEvent` (and future combat events) bind real notifies instead of the scheduler | pipeline character export/bake, `UElysiumAnimSubsystem` | animation lane |
 
 Nothing in the ledger adds a dispatcher, a clock, an input owner, or a save path — each row is
 fields, inputs, outputs, one service, and (where player-facing) declared verbs, which is the

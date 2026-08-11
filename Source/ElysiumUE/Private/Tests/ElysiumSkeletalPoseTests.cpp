@@ -274,9 +274,9 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the theatre scene keeps its authored 270 degree yaw"),
 		FMath::IsNearlyEqual(SourceAngles.Y, 270.0f));
-	TestTrue(TEXT("a 270 Source yaw plus the skeletal basis resolves to zero Unreal yaw"),
+	TestTrue(TEXT("a 270 Source yaw plus the glTF basis resolves to zero Unreal yaw"),
 		FMath::IsNearlyZero(FMath::UnwindDegrees(
-			ElysiumSkeletalBasis::FromSourceAngles(SourceAngles).Yaw)));
+			ElysiumSkeletalBasis::GlbFromSourceAngles(SourceAngles).Yaw)));
 
 	FString Error;
 	// The mount is the only build of a character, so the out-asset is null on that path by design.
@@ -308,7 +308,7 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 		const FVector RootLocal = Model->GetBoneTrackTransform(
 			Ref.GetBoneName(0), FFrameNumber(225)).GetTranslation();
 		const FVector CorrectWorld = Scene->Origin
-			+ ElysiumSkeletalBasis::FromSourceAngles(SourceAngles).RotateVector(RootLocal);
+			+ ElysiumSkeletalBasis::GlbFromSourceAngles(SourceAngles).RotateVector(RootLocal);
 		const FVector LegacyWorld = Scene->Origin
 			+ FRotator(0.0f, -SourceAngles.Y, 0.0f).RotateVector(RootLocal);
 		const float CorrectDistance = FVector::Distance(CorrectWorld, Target->Origin);

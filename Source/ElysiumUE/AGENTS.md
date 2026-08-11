@@ -156,7 +156,7 @@ it. `Private/Tests/ElysiumTestServices.h` is the recording stub implementing all
 **Subsystems by scope** (`docs/architecture/runtime-architecture.md`): GameInstance —
 `UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
 record, clock, snapshots, script host), `UElysiumMapSubsystem` (travel), `UElysiumSaveSubsystem`,
-`UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumNpcAnimSubsystem`,
+`UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumAnimSubsystem`,
 `UElysiumRulebookSubsystem`. World — `UElysiumPresentationSubsystem`. LocalPlayer —
 `UElysiumInputSubsystem` (the only `SetInputMode` caller). Engine — `UElysiumMcpSubsystem`.
 
@@ -239,8 +239,10 @@ Hard-won, non-obvious, and easy to undo:
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
 - **`UBodySetup::CalculateMass` reads the owning primitive's `FBodyInstance`**, which a runtime-built
   component never seeds from the asset — physics props re-apply mass to the component.
-- **`UElysiumNpcAnimInstance`'s proxy must implement `UpdateAnimationNode`** — a sequence player never
-  `Update_AnyThread`'d holds its start frame forever.
+- **A proxy owning nodes outside the compiled graph must implement `UpdateAnimationNode`** —
+  `FElysiumBipedAnimProxy`'s clip player and its two layer players are not in the graph, so the base
+  call cannot reach them, and a sequence player never `Update_AnyThread`'d holds its start frame
+  forever.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.

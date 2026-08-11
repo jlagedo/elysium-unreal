@@ -10,7 +10,7 @@
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Visual/ElysiumBlendGrids.h"
-#include "Visual/ElysiumNpcAnimInstance.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -1043,7 +1043,7 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 
 // The binding test above proves that the cinematic clip can be constructed, but not that the
 // native animation host evaluates it into a changing component pose. Drive one real theatre
-// `sequence` event through the same UAnimSequence and UElysiumNpcAnimInstance used by play, seek it
+// `sequence` event through the same UAnimSequence and UElysiumBipedAnimInstance used by play, seek it
 // to two authored scene times, and compare the bone transforms skinning consumes. This is pose data
 // only: no viewport, RHI, screenshot, or image comparison.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTheatreSequenceEvaluationTest,
@@ -1182,12 +1182,12 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
 	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-	Comp->SetAnimInstanceClass(UElysiumNpcAnimInstance::StaticClass());
+	Comp->SetAnimInstanceClass(UElysiumBipedAnimInstance::StaticClass());
 	Owner->SetRootComponent(Comp);
 	Comp->RegisterComponent();
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	UElysiumNpcAnimInstance* Inst = Cast<UElysiumNpcAnimInstance>(Comp->GetAnimInstance());
+	UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Comp->GetAnimInstance());
 	if (!TestNotNull(TEXT("the production NPC animation host is installed"), Inst))
 	{
 		return false;
@@ -1195,7 +1195,7 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 
 	const auto PoseAt = [Comp, Inst, Anim](float Seconds, TArray<FTransform>& OutPose)
 	{
-		Inst->PlayClip(Anim, /*bLoop=*/false, /*BlendSeconds=*/0.f);
+		Inst->PlayClip(Anim, /*bLoop=*/false);
 		Inst->SeekClip(Seconds);
 		// Seek is consumed by UpdateAnimationNode; refresh synchronously so the transforms copied below
 		// are this authored pose rather than the component's previous evaluation.
