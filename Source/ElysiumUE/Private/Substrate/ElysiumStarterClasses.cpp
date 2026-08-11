@@ -198,8 +198,10 @@ public:
 	FString FilterName;                        // filtername — resolved once during late Activate
 	float  Wait = 0.2f;                        // `wait` — min seconds between OnTrigger re-fires
 	double LastTriggerTime = -1.0e18;          // last OnTrigger fire (game seconds); primed to always-due
-
-	virtual bool IsOnce() const { return false; }
+	// wait == -1 (entity_io.md: the value CTriggerOnce::Spawn forces): after the one accepted
+	// activation, ActivateMultiTrigger nulls the touch handler and schedules SUB_Remove at
+	// curtime + 0.1. This latches that "touch handler nulled, removal pending" state.
+	bool   bTouchSuppressed = false;
 
 	// CBaseTrigger::PassesTriggerFilters (RE1, entity_io.md) reads the ALLOW_* spawnflag bits
 	// against the toucher's flags. The only toucher is still the player (a client), so the test
@@ -248,7 +250,9 @@ public:
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses(Activator))
+		// wait == -1 nulls the touch handler the instant the one accepted activation lands (below);
+		// a touch arriving before the scheduled self-removal think runs must see nothing at all.
+		if (bTouchSuppressed || bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
@@ -265,14 +269,17 @@ public:
 		{
 			LastTriggerTime = Now;
 			FireOutput(OnTrigger, Activator);
-		}
 
-		if (IsOnce())
-		{
-			// trigger_once removes itself after the first successful touch (CTriggerOnce). Kill drops
-			// the body's collision (R6), so no further begin/end overlap routes here — and OnEndTouch
-			// never fires, matching retail (the volume is gone before the player leaves it).
-			Kill();
+			if (Wait == -1.0f)
+			{
+				// entity_io.md "trigger_multiple / trigger_once edge and re-arm order": wait == -1
+				// (CTriggerOnce::Spawn's forced value) routes ActivateMultiTrigger into
+				// SetTouch(NULL); SetThink(SUB_Remove); next think at curtime + 0.1. Already-queued
+				// delayed output rows the OnTrigger fire above just enqueued stay valid queue
+				// entries — Kill() (called from Think(), below) never touches the event queue.
+				bTouchSuppressed = true;
+				NextThink = Now + 0.1;
+			}
 		}
 	}
 
@@ -284,6 +291,26 @@ public:
 		}
 		static const FName OnEndTouch(TEXT("OnEndTouch"));
 		FireOutput(OnEndTouch, Activator);
+	}
+
+	virtual void Think() override
+	{
+		// The self-removal scheduled by the wait == -1 route above. A subclass with its own Think()
+		// (trigger_hurt, trigger_look) never reaches this OnTouchStart, so it never arms this.
+		if (bTouchSuppressed)
+		{
+			Kill();
+		}
+	}
+
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		// LastTriggerTime is an absolute game-clock time (World->NowSeconds()); a restore resets the
+		// clock to the saved ClockNow before any entity's NextThink/wait gate is read back (11.9's
+		// save/restore pass), so the absolute value still means what it meant when written — the same
+		// reasoning that lets NextThink itself ride the generic entity record unconverted.
+		Ar << LastTriggerTime;
+		Ar << bTouchSuppressed;
 	}
 
 private:
@@ -397,7 +424,13 @@ class FElysiumTriggerMultiple final : public FElysiumTriggerBase {};
 class FElysiumTriggerOnce final : public FElysiumTriggerBase
 {
 public:
-	virtual bool IsOnce() const override { return true; }
+	virtual void Spawn() override
+	{
+		// CTriggerOnce::Spawn (entity_io.md) unconditionally sets m_flWait = -1.0f, overriding any
+		// authored `wait` keyvalue Construct may have applied — self-removal is the base's wait == -1
+		// route, not a distinct trigger_once mechanism.
+		Wait = -1.0f;
+	}
 };
 
 // ============================================================================================
@@ -449,7 +482,17 @@ public:
 		Out.Emplace(TEXT("Enabled"), bDisabled ? TEXT("no") : TEXT("yes"));
 	}
 
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Super::Serialize(Ar);
+		// Without this, a save mid-dwell restores bPlayerInside false while NextThink (restored
+		// generically) still fires Think() on schedule — which then reads bPlayerInside false and
+		// permanently cancels the damage tick even though the player never left the volume.
+		Ar << bPlayerInside;
+	}
+
 private:
+	using Super = FElysiumTriggerBase;
 	static constexpr double DamageIntervalSeconds = 0.5;   // Source trigger_hurt damage cadence
 
 	void HurtNow()
@@ -543,7 +586,38 @@ public:
 		Out.Emplace(TEXT("Player inside"), bPlayerInside ? TEXT("yes") : TEXT("no"));
 	}
 
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Super::Serialize(Ar);
+		Ar << bPlayerInside;
+		Ar << LookElapsed;
+		// LastThinkTime is the previous Think()'s absolute clock sample; Think() derives Dt from it
+		// on the very next tick. Restoring bPlayerInside true without also restoring this would make
+		// the first post-load Think() compute Dt against a stale/default time and either spike
+		// LookElapsed straight past LookTime (an instant, unearned fire) or corrupt it outright —
+		// the clock is preserved across restore (see FElysiumTriggerBase::Serialize), so the absolute
+		// value is safe to carry over as-is.
+		Ar << LastThinkTime;
+		// Think() re-fires OnTrigger with this activator once the dwell completes; without it, a
+		// restored dwell that finishes post-load would report an Invalid activator instead of the
+		// player actually standing there. Rides as a bare index and is re-stamped with the live
+		// epoch here — the same pattern ElysiumScriptedSequence.cpp's Activator/OwnedNpc use —
+		// because leaf state is an opaque blob to ApplySnapshot: the archive's own handle operator
+		// drops the epoch (§6) and only the world can put a live one back, but
+		// FElysiumEntityWorld::RebaseHandle is private to it, so a leaf reconstructs the handle
+		// itself off the world's public GetEpoch() instead of going through it.
+		int32 LastActivatorIndex = LastActivator.IsSet() ? LastActivator.Index : INDEX_NONE;
+		Ar << LastActivatorIndex;
+		if (Ar.IsLoading())
+		{
+			LastActivator = (LastActivatorIndex == INDEX_NONE || World == nullptr)
+				? FElysiumEntityHandle::Invalid()
+				: FElysiumEntityHandle(LastActivatorIndex, World->GetEpoch());
+		}
+	}
+
 private:
+	using Super = FElysiumTriggerBase;
 	bool IsLookingAtTarget() const
 	{
 		const IElysiumEmbodiment* Player = World ? World->Embodiment() : nullptr;
@@ -684,7 +758,18 @@ public:
 		Out.Emplace(TEXT("State"), bChanging ? TEXT("changing") : TEXT("armed"));
 	}
 
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Super::Serialize(Ar);
+		// A save landing in the single-frame window between DoChangeLevel's RequestLandmarkTravel
+		// and the deferred end-of-frame swap must restore with the transition still latched, or a
+		// touch/ChangeNow arriving before the (already-requested) travel actually runs could request
+		// a second one.
+		Ar << bChanging;
+	}
+
 private:
+	using Super = FElysiumTriggerBase;
 	bool bChanging = false;   // latched once the transition is requested (ignore further touches)
 
 	void DoChangeLevel()

@@ -123,7 +123,7 @@ namespace
 	// --- bound entity input --------------------------------------------------------------------
 	// `ent.<Input>` manufactures a callable on the spot, exactly as VtMB's __getattr__ does with
 	// PyCFunction_New over a generic thunk (python_bridge.md step 4). Self is the (entity, name)
-	// pair; calling it fires the input through the real chokepoint.
+	// pair; calling it delivers the input through the real chokepoint.
 
 	PyObject* Entity_fire_input(PyObject* Bound, PyObject* Args)
 	{
@@ -137,19 +137,27 @@ namespace
 		FElysiumEntityWorld* W = CurrentWorld();
 		if (W)
 		{
-			// Zero-delay delivery targeting "!self" with Caller = this entity: ResolveTargets maps
-			// "!self" back to that one handle, so it drains this same ServiceEvents pass, shows up in
-			// the Event Queue window, and single-steps — the same path a map's own I/O wire takes.
+			// The call is SYNCHRONOUS (`docs/vtmb/python_bridge.md` → "Synchronous calls versus
+			// queued Python"): retail's `entity_input_function` marshals the argument and calls the
+			// entity's AcceptInput virtual immediately, with null activator and null caller, and the
+			// input body completes before Python resumes — so a script observes its own mutation
+			// mid-handler. Queuing it instead would land the mutation behind the pending equal-time
+			// cohort and invent provenance retail does not pass. Outputs the body fires still go
+			// through FireOutput onto the ordinary queue, i.e. behind that cohort.
+			//
+			// The by-handle chokepoint targets exactly the bound entity without fanning out over a
+			// duplicate targetname, and still notifies the FElysiumIOSink taps.
 			const TArray<FElysiumVariant> Vals = ArgsToVariants(Args);
-			W->EnqueueInput(TEXT("!self"), FName(*PyStr(NameObj)),
-				Vals.Num() > 0 ? Vals[0] : FElysiumVariant::Void(), 0.0,
-				GContext.Activator, E->Handle);
+			const FElysiumEntityHandle Target = E->Handle;
+			W->AcceptInput(Target, FName(*PyStr(NameObj)),
+				Vals.Num() > 0 ? Vals[0] : FElysiumVariant::Void(),
+				FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 		}
 		Py_RETURN_NONE;   // an input call has no value
 	}
 
 	PyMethodDef GInputThunk = { "entity_input", Entity_fire_input, METH_VARARGS,
-		"fires this entity input through the event queue" };
+		"calls this entity input synchronously through the world's AcceptInput chokepoint" };
 
 	PyObject* MakeBoundInput(PyObject* EntObj, PyObject* NameObj)
 	{

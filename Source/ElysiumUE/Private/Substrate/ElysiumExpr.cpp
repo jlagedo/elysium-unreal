@@ -723,14 +723,17 @@ namespace
 			{
 			case FVal::EKind::BoundInput:
 			{
-				// Fire the input on exactly the bound entity, through the real chokepoints: enqueue a
-				// zero-delay delivery targeting "!self" with Caller = the entity (ResolveTargets maps
-				// "!self" back to that one handle). Drains this same ServiceEvents pass, is visible in
-				// the queue window, and single-steppable. A Python call returns None.
+				// The reflected input call is SYNCHRONOUS (`docs/vtmb/python_bridge.md` → "Synchronous
+				// calls versus queued Python"): the argument is marshalled and the entity's AcceptInput
+				// runs to completion before the script resumes, with null activator and null caller, so
+				// the script observes its own mutation mid-handler. Outputs the body fires still enter
+				// the ordinary queue, behind the pending equal-time cohort. Same by-handle chokepoint
+				// as the CPython host, so the two hosts cannot drift. A Python call returns None.
 				if (FElysiumEntityWorld* W = World())
 				{
 					const FElysiumVariant Param = Args.Num() > 0 ? Args[0] : FElysiumVariant::Void();
-					W->EnqueueInput(TEXT("!self"), Callee.Method, Param, 0.0, Env.Ctx.Activator, Callee.Self);
+					W->AcceptInput(Callee.Self, Callee.Method, Param,
+						FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 				}
 				return Void();
 			}

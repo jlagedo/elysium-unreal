@@ -717,6 +717,11 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 {
 	// CBaseDoor::Use @ vampire.dll 0x100efc90: use_override receives the ordinary Use input
 	// with the original activator and this door as caller. The leaf does not toggle as fallback.
+	//
+	// Transport: synchronous through chokepoint 1, not the queue. DoorUse is itself running inside
+	// the queue's (or +use's) already-executing Use handler, which is §2.5.1's sanctioned seam, and
+	// the recovered behaviour is a direct in-handler call that lands "exactly once" — hence the
+	// single resolved target rather than a by-name fan-out over every entity sharing the name.
 	if (!UseOverrideName.IsEmpty())
 	{
 		if (World)
@@ -738,12 +743,18 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 	}
 
 	// CBaseDoor::DoorknobUse: toggle this leaf, then the linked partner (the double-door swing). The
-	// partner is driven through InputToggle — NOT DoorUse — so it never mirrors back (no recursion),
-	// and each leaf still runs its own locked check (a locked half fires OnLockedUse and stays put).
+	// partner receives `Toggle` — NOT `Use` — so it never mirrors back (no recursion), and each leaf
+	// still runs its own locked check (a locked half fires OnLockedUse and stays put).
+	//
+	// The partner's half goes through chokepoint 1 so the sinks, the I/O ring and the queue debugger
+	// see the second leaf move; it stays synchronous because DoorUse is already inside an executing
+	// handler (§2.5.1's seam) and the swing is one action. `linked_door`'s transport is not itself
+	// recovered — the conservative call preserves the current timing and only adds visibility.
 	InputToggle(Activator);
 	if (FElysiumDoorBase* Partner = ResolveLinkedDoor())
 	{
-		Partner->InputToggle(Activator);
+		World->AcceptInput(Partner->Handle, FName(TEXT("Toggle")), FElysiumVariant::Void(),
+			Activator, Handle);
 	}
 }
 

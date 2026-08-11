@@ -872,15 +872,21 @@ private:
 // Line grammar: `<kind> <detail>`, kind being the first whitespace-delimited token.
 //
 //   fire      relay1.OnTrigger -> counter1.Add
-//   queue     counter1.Add(5) @1.200 +py
-//   deliver   #3 counter1.Add(5)
+//   queue     counter1.Add(5) @1.200 +py act=#4 cal=#1
+//   deliver   #3 counter1.Add(5) act=#4 cal=#1
 //   python    G.Tut_Key = 1
-//   no-target ghost.Add
+//   no-target ghost.Add act=#4 cal=#1
 //   no-input  #3 counter1.Nope
 //   loop-guard 10000
 //
 // An entity reads as `#<index> <targetname-or-classname>`, so a fan-out over three same-named
 // entities is distinguishable by index, which is what stable-entity-order assertions need.
+//
+// The three event-carrying kinds close with the dispatch provenance (`act=` activator, `cal=`
+// caller, `#<null>` when unbound), because a chokepoint's transport and its provenance are one
+// claim: an input that reaches a receiver with the wrong activator is as wrong as one that reaches
+// it in the wrong order. It rides at the END of the line so every needle written against the
+// leading `<target>.<Input>(<param>)` shape still matches.
 class FElysiumOrderedIOSink final : public IElysiumIOSink
 {
 public:
@@ -934,6 +940,16 @@ public:
 		return PositionOf(Kind, Needle) != INDEX_NONE;
 	}
 
+	// The first line of `Kind` containing `Needle`, whole. What a provenance assertion reads: the
+	// needle picks the record out of the stream, then the rest of the line carries the answer.
+	// Empty when there is no such line — which fails a Contains assertion, as it should.
+	FString FirstLine(const TCHAR* Kind, const FString& Needle) const
+	{
+		const TArray<FString> Kinds = OfKind(Kind);
+		const int32 At = PositionOf(Kind, Needle);
+		return Kinds.IsValidIndex(At) ? Kinds[At] : FString();
+	}
+
 	// Every needle appears among this kind's lines, and in the order given. The ordering assertion
 	// the whole determinism contract is written in.
 	bool AppearsInOrder(const TCHAR* Kind, const TArray<FString>& Needles) const
@@ -961,20 +977,22 @@ public:
 	}
 	virtual void OnQueued(double, const FElysiumIOEvent& Event) override
 	{
-		Lines.Add(FString::Printf(TEXT("queue %s.%s(%s) @%.3f%s"),
+		Lines.Add(FString::Printf(TEXT("queue %s.%s(%s) @%.3f%s%s"),
 			Event.Target.IsEmpty() ? TEXT("(python)") : *Event.Target,
 			*Event.Input.ToString(), *Event.Param.ToString(), Event.FireTime,
-			Event.PythonSrc.IsEmpty() ? TEXT("") : TEXT(" +py")));
+			Event.PythonSrc.IsEmpty() ? TEXT("") : TEXT(" +py"), *Provenance(Event)));
 	}
 	virtual void OnDelivered(double, const FElysiumEntity& Target,
 		const FElysiumIOEvent& Event) override
 	{
-		Lines.Add(FString::Printf(TEXT("deliver #%d %s.%s(%s)"),
-			Target.Handle.Index, *Name(Target), *Event.Input.ToString(), *Event.Param.ToString()));
+		Lines.Add(FString::Printf(TEXT("deliver #%d %s.%s(%s)%s"),
+			Target.Handle.Index, *Name(Target), *Event.Input.ToString(), *Event.Param.ToString(),
+			*Provenance(Event)));
 	}
 	virtual void OnUnknownTarget(double, const FElysiumIOEvent& Event) override
 	{
-		Lines.Add(FString::Printf(TEXT("no-target %s.%s"), *Event.Target, *Event.Input.ToString()));
+		Lines.Add(FString::Printf(TEXT("no-target %s.%s%s"), *Event.Target,
+			*Event.Input.ToString(), *Provenance(Event)));
 	}
 	virtual void OnUnknownInput(double, const FElysiumEntity& Target,
 		const FElysiumIOEvent& Event) override
@@ -992,6 +1010,14 @@ public:
 	}
 
 private:
+	// ` act=#<idx> cal=#<idx>` — the dispatch provenance an event carries, in the handle's own
+	// `#<index>` / `#<null>` spelling.
+	static FString Provenance(const FElysiumIOEvent& Event)
+	{
+		return FString::Printf(TEXT(" act=%s cal=%s"),
+			*Event.Activator.ToString(), *Event.Caller.ToString());
+	}
+
 	// A nameless entity still has to be distinguishable, so it reads as its classname.
 	static FString Name(const FElysiumEntity& Entity)
 	{

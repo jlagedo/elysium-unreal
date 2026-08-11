@@ -5387,6 +5387,616 @@ bool FElysiumLateBindingAndDropsTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The other half of the same contract: which TRANSPORT a caller is entitled to, and what a
+// trigger's own latched state is worth across a save.
+//
+// The five rules above say what the queue does with a record. These say who may bypass it:
+//
+//   6. A script calling a reflected entity input is SYNCHRONOUS — the receiver mutates
+//      before the evaluation returns, with null activator and null caller, while the
+//      outputs that receiver fires still enter the ordinary queue.        SyncScriptInput
+//      (`docs/vtmb/python_bridge.md` → "Synchronous calls versus queued Python")
+//   7. A door's linked partner is driven through chokepoint 1 rather than by a direct C++
+//      call, so the second leaf's swing is visible with its real provenance — and, because
+//      the partner receives `Toggle` and never `Use`, it cannot mirror back.
+//                                                                     DoorPartnerChokepoint
+//   8. The by-handle chokepoint accounts a dead receiver exactly as the by-name one does:
+//      a counted `target` miss, on the sinks and on the stub work list.   StaleDirectHandle
+//   9. A trigger's latched gate state — the `wait` window, a dwell in progress, a pending
+//      self-removal — survives freeze/restore, because none of it is derivable from the
+//      def.                                                                TriggerStateSave
+//  10. `wait == -1` is the whole of trigger_once: one activation, the touch handler nulled,
+//      removal at +0.1, and the delayed rows already queued still delivering after the
+//      entity is gone (`docs/vtmb/entity_io.md`).                              WaitMinusOne
+//
+// Rules 6-8 are transport claims, so they are asserted the same way the order rules are —
+// on the FElysiumOrderedIOSink stream, which now closes each event line with its `act=`/`cal=`
+// provenance. Rules 9-10 are state claims, asserted through the house freeze/rebuild/apply
+// round trip.
+// =====================================================================================
+
+namespace ElysiumEventTransportTests
+{
+	using namespace ElysiumEventOrderTests;
+
+	// A `wait`-carrying touch trigger. `spawnflags 1` is ALLOW_CLIENTS, without which
+	// PassesTriggerFilters rejects the only toucher there is (entity_io.md).
+	FElysiumEntityDef TriggerDef(const TCHAR* Classname, const TCHAR* Name, const TCHAR* Wait = nullptr)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = Classname;
+		Def.TargetName = Name;
+		Def.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+		if (Wait != nullptr)
+		{
+			Def.Keys.Add(TEXT("wait"), Wait);
+		}
+		return Def;
+	}
+
+	// The player walking in and back out. Begin/end are edges (the world retains the pair), so a
+	// re-entry has to be spelled as both.
+	void Enter(FElysiumEntityWorld& World, const TCHAR* Name)
+	{
+		if (const FElysiumEntity* T = World.FindByName(Name))
+		{
+			World.RouteBrushTouch(T->Handle, World.PlayerHandle(), /*bBegin*/ true);
+		}
+	}
+	void Leave(FElysiumEntityWorld& World, const TCHAR* Name)
+	{
+		if (const FElysiumEntity* T = World.FindByName(Name))
+		{
+			World.RouteBrushTouch(T->Handle, World.PlayerHandle(), /*bBegin*/ false);
+		}
+	}
+
+	// `act=#<idx>` / `cal=#<idx>` as the sink spells them, so a provenance assertion names the
+	// entity it means rather than a literal index.
+	FString ActIs(const FElysiumEntityHandle& H) { return FString::Printf(TEXT("act=%s"), *H.ToString()); }
+	FString CalIs(const FElysiumEntityHandle& H) { return FString::Printf(TEXT("cal=%s"), *H.ToString()); }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSyncScriptInputTest,
+	"Elysium.Substrate.SyncScriptInput", GElysiumTestFlags)
+bool FElysiumSyncScriptInputTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// The seam IS reachable headless, through the expression evaluator rather than through a script
+	// host: `ElysiumExpr::Exec` takes an FEnv whose `Ctx.World` is the entity world, and both
+	// installed hosts (FElysiumExprScriptHost, and the CPython host's own reflected-input thunk)
+	// bottom out in the same `AcceptInput(handle, ...)` call this drives. What a host adds on top is
+	// only the `G` store and the level-script namespace, neither of which a reflected input call
+	// touches — so evaluating the call string directly exercises the whole of the seam. The one
+	// thing that is NOT reachable here is the CPython half of it: `Entity_fire_input` needs the
+	// embedded VM, which is a build option, and the two paths are held together by review rather
+	// than by this test.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__sync_script_input__");
+	FElysiumEntityDef Producer = Relay(TEXT("sync_relay"));
+	Wire(Producer, TEXT("OnTrigger"), TEXT("out_counter"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Producer));
+	Defs.Defs.Add(Counter(TEXT("sync_counter")));
+	Defs.Defs.Add(Counter(TEXT("out_counter")));
+	Defs.Defs.Add(Counter(TEXT("cohort_one")));
+	Defs.Defs.Add(Counter(TEXT("cohort_two")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.Activate(0.0);
+
+	ElysiumExpr::FEnv Env;
+	Env.Ctx.World = &World;
+
+	// --- (a) the receiver has already mutated when the evaluation returns -------------------
+	// No tick between the call and the read: a queued delivery would still be pending here, and the
+	// counter would read 0.
+	const FElysiumVariant Result = ElysiumExpr::Exec(TEXT("sync_counter.Add(3)"), Env);
+	TestFalse(TEXT("the reflected call evaluates without error"), Env.bError);
+	TestFalse(TEXT("an input call has no value"), Result.ToBool());
+	TestEqual(TEXT("the receiver mutated before the evaluation returned"),
+		CounterValue(World, TEXT("sync_counter")), 3.f);
+	TestEqual(TEXT("the input itself was never queued"),
+		Sink->CountOf(TEXT("queue"), TEXT("sync_counter.Add")), 0);
+	TestTrue(TEXT("...it was delivered through chokepoint 1"),
+		Sink->Saw(TEXT("deliver"), TEXT("sync_counter.Add")));
+	TestEqual(TEXT("and nothing is pending"), World.Queue().Num(), 0);
+
+	// --- (c) provenance: retail passes null activator AND null caller -----------------------
+	const FString SyncLine = Sink->FirstLine(TEXT("deliver"), TEXT("sync_counter.Add"));
+	TestTrue(TEXT("the synchronous delivery carries a null activator"),
+		SyncLine.Contains(ActIs(FElysiumEntityHandle::Invalid())));
+	TestTrue(TEXT("...and a null caller"),
+		SyncLine.Contains(CalIs(FElysiumEntityHandle::Invalid())));
+
+	// --- (b) what the receiver FIRES is still ordinary queued work --------------------------
+	// Two records are made due first, so "behind the pending equal-time cohort" is a statement with
+	// something to be behind. The call runs between the enqueues and the tick.
+	Sink->Reset();
+	World.EnqueueInput(TEXT("cohort_one"), FName(TEXT("Add")), FElysiumVariant::Int(1), /*Delay*/ 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	World.EnqueueInput(TEXT("cohort_two"), FName(TEXT("Add")), FElysiumVariant::Int(1), /*Delay*/ 0.0,
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+
+	ElysiumExpr::Exec(TEXT("sync_relay.Trigger()"), Env);
+	TestFalse(TEXT("the reflected Trigger evaluates without error"), Env.bError);
+
+	TestTrue(TEXT("the relay's Trigger ran synchronously, ahead of the pending cohort"),
+		Sink->Saw(TEXT("deliver"), TEXT("sync_relay.Trigger")));
+	TestEqual(TEXT("...without a queue record of its own"),
+		Sink->CountOf(TEXT("queue"), TEXT("sync_relay.Trigger")), 0);
+	TestTrue(TEXT("the output the body fired IS queued"),
+		Sink->Saw(TEXT("queue"), TEXT("out_counter.Add")));
+	TestFalse(TEXT("...and therefore has not been delivered yet"),
+		Sink->Saw(TEXT("deliver"), TEXT("out_counter.Add")));
+	const bool bBehindCohort = Sink->AppearsInOrder(TEXT("queue"),
+		{ TEXT("cohort_one.Add"), TEXT("cohort_two.Add"), TEXT("out_counter.Add") });
+	TestTrue(TEXT("it lands behind the equal-time cohort already pending"), bBehindCohort);
+
+	// The fired output's own provenance: FireOutput names the relay as caller and propagates the
+	// activator the input arrived with — which the synchronous call left null (python_bridge.md).
+	const FElysiumEntity* Relay = World.FindByName(TEXT("sync_relay"));
+	if (TestNotNull(TEXT("sync_relay resolved"), Relay))
+	{
+		const FString QueuedLine = Sink->FirstLine(TEXT("queue"), TEXT("out_counter.Add"));
+		TestTrue(TEXT("the queued output carries the null activator the call passed"),
+			QueuedLine.Contains(ActIs(FElysiumEntityHandle::Invalid())));
+		TestTrue(TEXT("...and names the firing entity as caller"),
+			QueuedLine.Contains(CalIs(Relay->Handle)));
+	}
+
+	World.Tick(0.0);
+	const bool bDrained = Sink->AppearsInOrder(TEXT("deliver"),
+		{ TEXT("sync_relay.Trigger"), TEXT("cohort_one.Add"), TEXT("cohort_two.Add"),
+		  TEXT("out_counter.Add") });
+	TestTrue(TEXT("the synchronous call is delivered before the cohort, its output after"), bDrained);
+	if (!bBehindCohort || !bDrained)
+	{
+		AddInfo(FString::Printf(TEXT("sync-call stream: %s"), *Sink->Log()));
+	}
+	TestEqual(TEXT("the output arrived exactly once"), CounterValue(World, TEXT("out_counter")), 1.f);
+	TestEqual(TEXT("the pass drained"), World.Queue().Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorPartnerChokepointTest,
+	"Elysium.Substrate.DoorPartnerChokepoint", GElysiumTestFlags)
+bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// CBaseDoor::DoorknobUse toggles this leaf and then its `linked_door` partner. The partner's
+	// half is delivered through chokepoint 1 so the sinks, the I/O ring and the queue debugger see
+	// the second leaf swing — synchronously, because DoorUse is already running inside an executing
+	// Use handler (gameplay-systems-architecture.md §2.5.1's sanctioned seam).
+	//
+	// Both leaves are bodiless: a mover with no brush body cannot travel, but it still runs the
+	// whole decision — locked check, toggle-state flip, OnOpen — which is the half this asserts.
+	// The doors are linked BOTH ways on purpose: that is how a double door is authored, and it is
+	// what makes "the partner receives Toggle, never Use" load-bearing rather than incidental.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_partner__");
+	FElysiumEntityDef LeftLeaf;
+	LeftLeaf.Classname = TEXT("func_door");
+	LeftLeaf.TargetName = TEXT("door_a");
+	LeftLeaf.Keys.Add(TEXT("linked_door"), TEXT("door_b"));
+	Wire(LeftLeaf, TEXT("OnOpen"), TEXT("a_open"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(LeftLeaf));
+	FElysiumEntityDef RightLeaf;
+	RightLeaf.Classname = TEXT("func_door");
+	RightLeaf.TargetName = TEXT("door_b");
+	RightLeaf.Keys.Add(TEXT("linked_door"), TEXT("door_a"));
+	Wire(RightLeaf, TEXT("OnOpen"), TEXT("b_open"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(RightLeaf));
+	Defs.Defs.Add(Counter(TEXT("a_open")));
+	Defs.Defs.Add(Counter(TEXT("b_open")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	const FElysiumEntity* DoorA = World.FindByName(TEXT("door_a"));
+	const FElysiumEntity* DoorB = World.FindByName(TEXT("door_b"));
+	if (!TestNotNull(TEXT("door_a resolved"), DoorA) || !TestNotNull(TEXT("door_b resolved"), DoorB))
+	{
+		return false;
+	}
+
+	// The knob press, spelled as the ordinary Use input the +use path and `ent_fire` both reach.
+	World.AcceptInput(TEXT("door_a"), FName(TEXT("Use")), FElysiumVariant::Void(), Player, Player);
+
+	TestTrue(TEXT("the used leaf received Use"), Sink->Saw(TEXT("deliver"), TEXT("door_a.Use")));
+	TestEqual(TEXT("the partner's half is visible at the chokepoint exactly once"),
+		Sink->CountOf(TEXT("deliver"), TEXT("door_b.Toggle")), 1);
+	TestEqual(TEXT("...and did not go through the queue"),
+		Sink->CountOf(TEXT("queue"), TEXT("door_b.Toggle")), 0);
+	TestEqual(TEXT("the queue is untouched by the swing itself"),
+		Sink->CountOf(TEXT("queue"), TEXT("Toggle")), 0);
+
+	const FString PartnerLine = Sink->FirstLine(TEXT("deliver"), TEXT("door_b.Toggle"));
+	TestTrue(TEXT("the partner's delivery preserves the original activator"),
+		PartnerLine.Contains(ActIs(Player)));
+	TestTrue(TEXT("...and names the used leaf as caller"), PartnerLine.Contains(CalIs(DoorA->Handle)));
+
+	// No mirror-back: the partner is handed `Toggle`, which is not the input DoorUse hangs off, so
+	// the recursion is structurally impossible rather than guarded against.
+	TestEqual(TEXT("the partner never receives Use"),
+		Sink->CountOf(TEXT("deliver"), TEXT("door_b.Use")), 0);
+	TestEqual(TEXT("and the used leaf is never toggled back by its partner"),
+		Sink->CountOf(TEXT("deliver"), TEXT("door_a.Toggle")), 0);
+
+	// Both leaves actually moved — the assertion that the visibility change did not cost the swing.
+	World.Tick(0.0);
+	TestEqual(TEXT("the used leaf opened"), CounterValue(World, TEXT("a_open")), 1.f);
+	TestEqual(TEXT("and so did the partner"), CounterValue(World, TEXT("b_open")), 1.f);
+	TestEqual(TEXT("no wire named nothing"), World.UnknownTargets(), 0);
+	TestEqual(TEXT("no input was missing"), World.UnknownInputs(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStaleDirectHandleTest,
+	"Elysium.Substrate.StaleDirectHandle", GElysiumTestFlags)
+bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// The by-handle overload of chokepoint 1 has the same K3 obligation as the by-name one: a
+	// receiver this map cannot deliver to is a counted `target` miss on the sinks AND a row on the
+	// `elysium.stubs` work list, because a scene that silently does not happen looks identical from
+	// the outside either way.
+	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
+	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
+	if (Warn) { Warn->Set(0); }
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT
+	{
+		if (Warn) { Warn->Set(PrevWarn); }
+		ElysiumStub::ClearTally();
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__stale_handle__");
+	Defs.Defs.Add(Counter(TEXT("doomed")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.Activate(0.0);
+
+	FElysiumEntity* Doomed = World.FindByName(TEXT("doomed"));
+	if (!TestNotNull(TEXT("doomed resolved"), Doomed))
+	{
+		return false;
+	}
+	const FElysiumEntityHandle Handle = Doomed->Handle;
+
+	// The live case first, so the difference is the entity's death and nothing else.
+	World.AcceptInput(Handle, FName(TEXT("Add")), FElysiumVariant::Int(1),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("a live handle delivers"), CounterValue(World, TEXT("doomed")), 1.f);
+	TestEqual(TEXT("and is not a dead wire"), World.UnknownTargets(), 0);
+
+	Doomed->Kill();
+	const int32 UnknownBefore = World.UnknownTargets();
+	Sink->Reset();
+
+	World.AcceptInput(Handle, FName(TEXT("Add")), FElysiumVariant::Int(1),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+
+	TestEqual(TEXT("a handle with no live entity behind it counts one dead wire"),
+		World.UnknownTargets(), UnknownBefore + 1);
+	TestEqual(TEXT("...and is not reported as a missing input"), World.UnknownInputs(), 0);
+	TestTrue(TEXT("...the sinks see it as an unknown target"),
+		Sink->Saw(TEXT("no-target"), TEXT("<stale>.Add")));
+	TestEqual(TEXT("...and nothing was delivered"),
+		Sink->CountOf(TEXT("deliver"), TEXT("doomed.Add")), 0);
+
+	// The work-list row. The surface key is INSTANCE-shaped here — `#<index> <stale>.Add` — rather
+	// than the `<classname>.<Input>` shape the by-name path uses, because a dead handle no longer
+	// has a class to name. That makes each dead handle its own row instead of collapsing onto one
+	// per classname; the deviation is deliberate and is the price of reporting it at all.
+	auto TargetRowsMatching = [](const TCHAR* Fragment)
+	{
+		int32 N = 0;
+		TArray<ElysiumStub::FTally> Rows;
+		ElysiumStub::CollectTally(Rows);
+		for (const ElysiumStub::FTally& R : Rows)
+		{
+			if (R.Kind == TEXT("target") && R.Surface.Contains(Fragment))
+			{
+				N += R.Count;
+			}
+		}
+		return N;
+	};
+	TestEqual(TEXT("the stub work list gains the stale-handle row"),
+		TargetRowsMatching(TEXT("<stale>.Add")), 1);
+
+	// The by-handle path does not log-once the way the by-name path does, so a repeat is counted
+	// and reported again rather than silently swallowed.
+	World.AcceptInput(Handle, FName(TEXT("Add")), FElysiumVariant::Int(1),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("a second attempt counts again"), World.UnknownTargets(), UnknownBefore + 2);
+	TestEqual(TEXT("and tallies again"), TargetRowsMatching(TEXT("<stale>.Add")), 2);
+	TestEqual(TEXT("both attempts reached the sinks"),
+		Sink->CountOf(TEXT("no-target"), TEXT("<stale>.Add")), 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTriggerStateSaveTest,
+	"Elysium.Substrate.TriggerStateSave", GElysiumTestFlags)
+bool FElysiumTriggerStateSaveTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// A trigger's gate state is not derivable from its def: the `wait` window is measured from the
+	// last fire, a dwell is a partial accumulation, and a pending self-removal is a scheduled think
+	// with a reason. All of it rides the leaf blob (save-architecture.md §4), so all of it is
+	// asserted the same way — freeze one world, rebuild a second from the same defs, apply, and
+	// drive the second forward from where the first stopped.
+
+	// --- (a) trigger_multiple: the `wait` re-arm window survives ---------------------------
+	{
+		auto MakeDefs = []()
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__trigger_wait_save__");
+			FElysiumEntityDef Gate = TriggerDef(TEXT("trigger_multiple"), TEXT("gate"), TEXT("1.0"));
+			Wire(Gate, TEXT("OnTrigger"), TEXT("hits"), TEXT("Add"), TEXT("1"));
+			Defs.Defs.Add(MoveTemp(Gate));
+			Defs.Defs.Add(Counter(TEXT("hits")));
+			return Defs;
+		};
+
+		FElysiumEntityWorld Before(nullptr, nullptr);
+		Before.Load(MakeDefs());
+		Before.SpawnPlayer();
+		Before.Activate(0.0);
+
+		Enter(Before, TEXT("gate"));
+		Before.Tick(0.0);
+		TestEqual(TEXT("the first entry fires"), CounterValue(Before, TEXT("hits")), 1.f);
+		Leave(Before, TEXT("gate"));
+		Before.Tick(0.4);
+
+		FElysiumMapSnapshot MidWindow;
+		Before.Freeze(MidWindow);
+		TestTrue(TEXT("a fired trigger differs from its fresh build"), MidWindow.Entities.Num() > 0);
+
+		FElysiumEntityWorld After(nullptr, nullptr);
+		After.Load(MakeDefs());
+		After.SpawnPlayer();
+		After.ApplySnapshot(MidWindow);
+		After.Activate(0.4);
+
+		TestEqual(TEXT("the counter came back with the fire already on it"),
+			CounterValue(After, TEXT("hits")), 1.f);
+
+		// 0.4 into a 1.0 second window: swallowed, and NOT retried when the window re-arms.
+		Enter(After, TEXT("gate"));
+		After.Tick(0.4);
+		TestEqual(TEXT("a touch inside the restored window is swallowed"),
+			CounterValue(After, TEXT("hits")), 1.f);
+		Leave(After, TEXT("gate"));
+
+		// Past it: the same trigger fires again, which is what proves the window was a window and
+		// not a permanent lockout.
+		After.Tick(1.1);
+		Enter(After, TEXT("gate"));
+		After.Tick(1.1);
+		TestEqual(TEXT("a touch after it fires"), CounterValue(After, TEXT("hits")), 2.f);
+	}
+
+	// --- (b) trigger_once: fired, suppressed, and its removal still pending ------------------
+	{
+		auto MakeDefs = []()
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__trigger_once_save__");
+			FElysiumEntityDef Once = TriggerDef(TEXT("trigger_once"), TEXT("oneshot"));
+			Wire(Once, TEXT("OnTrigger"), TEXT("hits"), TEXT("Add"), TEXT("1"));
+			Defs.Defs.Add(MoveTemp(Once));
+			Defs.Defs.Add(Counter(TEXT("hits")));
+			return Defs;
+		};
+
+		FElysiumEntityWorld Before(nullptr, nullptr);
+		Before.Load(MakeDefs());
+		Before.SpawnPlayer();
+		Before.Activate(0.0);
+
+		Enter(Before, TEXT("oneshot"));
+		Before.Tick(0.0);
+		TestEqual(TEXT("the one-shot fired"), CounterValue(Before, TEXT("hits")), 1.f);
+		// CTriggerOnce::Spawn forces `wait -1`, which schedules SUB_Remove at +0.1 — so at +0.05 the
+		// entity is still alive with its removal pending. That is the state being saved.
+		Leave(Before, TEXT("oneshot"));
+		Before.Tick(0.05);
+		TestNotNull(TEXT("removal is scheduled, not yet done"), Before.FindByName(TEXT("oneshot")));
+
+		FElysiumMapSnapshot Pending;
+		Before.Freeze(Pending);
+
+		FElysiumEntityWorld After(nullptr, nullptr);
+		After.Load(MakeDefs());
+		After.SpawnPlayer();
+		After.ApplySnapshot(Pending);
+		After.Activate(0.05);
+
+		FElysiumEntity* Restored = After.FindByName(TEXT("oneshot"));
+		if (!TestNotNull(TEXT("the still-pending trigger restored alive"), Restored))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the counter came back fired"), CounterValue(After, TEXT("hits")), 1.f);
+
+		// Touch-suppressed: the restored trigger admits the contact and does nothing with it.
+		Enter(After, TEXT("oneshot"));
+		After.Tick(0.05);
+		TestEqual(TEXT("a restored one-shot cannot fire again"),
+			CounterValue(After, TEXT("hits")), 1.f);
+		TestNotNull(TEXT("...and is still alive before its removal is due"),
+			After.FindByName(TEXT("oneshot")));
+
+		// The pending think crosses the restore: +0.1 from the original fire, on the restored world.
+		// Serviced PAST the deadline rather than exactly on it, for the same reason the OutputTimes
+		// case ticks at 0.3 for a +0.2 row: NextThink is a float, so `0.0 + 0.1` stores as
+		// 0.100000001490…, which is strictly greater than the double 0.1. A real frame lands wherever
+		// it lands, so the tick does too.
+		After.Tick(0.15);
+		TestNull(TEXT("the scheduled self-removal runs across the save"),
+			After.FindByName(TEXT("oneshot")));
+	}
+
+	// --- (c) trigger_look: a partial dwell is not an instant fire ---------------------------
+	{
+		auto MakeDefs = []()
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__trigger_look_save__");
+			FElysiumEntityDef Look = TriggerDef(TEXT("trigger_look"), TEXT("watcher"));
+			Look.Keys.Add(TEXT("target"), TEXT("look_at"));
+			Look.Keys.Add(TEXT("LookTime"), TEXT("1.0"));
+			Look.Keys.Add(TEXT("FieldOfView"), TEXT("0.9"));
+			Wire(Look, TEXT("OnTrigger"), TEXT("look_hits"), TEXT("Add"), TEXT("1"));
+			Defs.Defs.Add(MoveTemp(Look));
+			FElysiumEntityDef Subject;
+			Subject.Classname = TEXT("info_landmark");
+			Subject.TargetName = TEXT("look_at");
+			Subject.Origin = FVector(500.f, 0.f, 0.f);
+			Defs.Defs.Add(MoveTemp(Subject));
+			Defs.Defs.Add(Counter(TEXT("look_hits")));
+			return Defs;
+		};
+		// The player stands at the origin looking down +X, which is where the subject is: the dot
+		// test passes for the whole run, so elapsed time is the only variable.
+		auto StandAndStare = [](FElysiumRecordingServices& S)
+		{
+			S.bHasPlayer = true;
+			S.PlayerLocation = FVector::ZeroVector;
+			S.PlayerRotation = FRotator::ZeroRotator;
+		};
+
+		FElysiumRecordingServices BeforeServices;
+		StandAndStare(BeforeServices);
+		FElysiumEntityWorld Before(nullptr, nullptr, BeforeServices.Bundle());
+		Before.Load(MakeDefs());
+		const FElysiumEntityHandle Player = Before.SpawnPlayer();
+		Before.Activate(0.0);
+
+		Enter(Before, TEXT("watcher"));
+		Before.Tick(0.4);   // 0.4 s of a 1.0 s dwell
+		TestEqual(TEXT("a partial dwell has not fired"), CounterValue(Before, TEXT("look_hits")), 0.f);
+
+		FElysiumMapSnapshot MidDwell;
+		Before.Freeze(MidDwell);
+
+		FElysiumRecordingServices AfterServices;
+		StandAndStare(AfterServices);
+		FElysiumEntityWorld After(nullptr, nullptr, AfterServices.Bundle());
+		After.Load(MakeDefs());
+		FElysiumOrderedIOSink* Sink = Record(After);
+		// Index only: the epoch is the world's teardown generation, so two loads never agree on it —
+		// which is exactly why the applier re-stamps every restored handle (save-architecture.md §6).
+		TestEqual(TEXT("the restored player takes the same entity index"),
+			After.SpawnPlayer().Index, Player.Index);
+		After.ApplySnapshot(MidDwell);
+		After.Activate(0.4);
+
+		// The first post-restore think samples Dt against the saved LastThinkTime, so it advances the
+		// dwell by zero rather than by the whole clock — the spurious instant fire this guards.
+		After.Tick(0.4);
+		TestEqual(TEXT("the first post-restore think does not fire"),
+			CounterValue(After, TEXT("look_hits")), 0.f);
+		After.Tick(0.9);
+		TestEqual(TEXT("nor does one still short of the remaining dwell"),
+			CounterValue(After, TEXT("look_hits")), 0.f);
+
+		After.Tick(1.1);
+		TestEqual(TEXT("the dwell completes only after the remaining time"),
+			CounterValue(After, TEXT("look_hits")), 1.f);
+		// The restored activator: without it the completed dwell would report an Invalid one.
+		TestTrue(TEXT("the completed dwell names the player who stood there"),
+			Sink->FirstLine(TEXT("queue"), TEXT("look_hits.Add")).Contains(ActIs(Player)));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWaitMinusOneTest,
+	"Elysium.Substrate.WaitMinusOne", GElysiumTestFlags)
+bool FElysiumWaitMinusOneTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// `wait == -1` is a `trigger_multiple` value like any other — trigger_once is only the classname
+	// whose Spawn forces it (entity_io.md: "trigger_once's self-removal is not a spawnflag"). So the
+	// route is asserted on an AUTHORED -1, where nothing but the keyvalue can be producing it.
+	//
+	// `ActivateMultiTrigger` takes it into `SetTouch(NULL); SetThink(SUB_Remove); nextthink =
+	// curtime + 0.1`: one activation, no further touches, removal a tenth of a second later — and
+	// the delayed rows the one activation already queued are ordinary queue entries that outlive the
+	// entity that fired them.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__wait_minus_one__");
+	FElysiumEntityDef Once = TriggerDef(TEXT("trigger_multiple"), TEXT("selfremove"), TEXT("-1"));
+	Wire(Once, TEXT("OnStartTouch"), TEXT("touches"), TEXT("Add"), TEXT("1"));
+	Wire(Once, TEXT("OnTrigger"), TEXT("now"), TEXT("Add"), TEXT("1"));
+	Wire(Once, TEXT("OnTrigger"), TEXT("later"), TEXT("Add"), TEXT("1"), /*Delay*/ 0.5f);
+	Defs.Defs.Add(MoveTemp(Once));
+	Defs.Defs.Add(Counter(TEXT("touches")));
+	Defs.Defs.Add(Counter(TEXT("now")));
+	Defs.Defs.Add(Counter(TEXT("later")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.SpawnPlayer();
+	World.Activate(0.0);
+
+	Enter(World, TEXT("selfremove"));
+	World.Tick(0.0);
+	TestEqual(TEXT("the one accepted activation fired"), CounterValue(World, TEXT("now")), 1.f);
+	TestEqual(TEXT("...and produced its edge output once"), CounterValue(World, TEXT("touches")), 1.f);
+	TestTrue(TEXT("its delayed row is queued and intact"), Sink->Saw(TEXT("queue"), TEXT("later.Add")));
+	TestEqual(TEXT("the delayed row is the only thing still pending"), World.Queue().Num(), 1);
+
+	// The touch handler is gone the instant the activation lands, so a genuine re-entry inside the
+	// removal window produces nothing at all.
+	Leave(World, TEXT("selfremove"));
+	Enter(World, TEXT("selfremove"));
+	World.Tick(0.05);
+	TestEqual(TEXT("no further activation is admitted"), CounterValue(World, TEXT("now")), 1.f);
+	TestEqual(TEXT("and no further edge output either"), CounterValue(World, TEXT("touches")), 1.f);
+	TestNotNull(TEXT("the entity is alive until its removal is due"),
+		World.FindByName(TEXT("selfremove")));
+
+	// SUB_Remove at +0.1, through the ordinary substrate think — not a synchronous kill inside the
+	// touch. The observable difference is exactly this tenth of a second of alive-but-suppressed.
+	// Ticked past the deadline rather than exactly on it: NextThink is a float, so the stored
+	// `0.0 + 0.1` is 0.100000001490…, strictly greater than the double 0.1.
+	World.Tick(0.15);
+	TestNull(TEXT("the trigger removes itself at +0.1"), World.FindByName(TEXT("selfremove")));
+
+	// Kill() never touches the event queue, so the row a dead entity queued still binds to its
+	// target by name at service time and delivers.
+	World.Tick(0.6);
+	TestEqual(TEXT("the delayed row delivers after the entity that queued it is gone"),
+		CounterValue(World, TEXT("later")), 1.f);
+	TestEqual(TEXT("the queue drained"), World.Queue().Num(), 0);
+	TestEqual(TEXT("a dead caller is not a dead wire"), World.UnknownTargets(), 0);
+
+	return true;
+}
+
+// =====================================================================================
 // FElysiumDecals — the `.decals` projector sidecar parser + the orientation contract the bake
 // places each ADecalActor by (7.2). Pure data + math, no RHI.
 // =====================================================================================

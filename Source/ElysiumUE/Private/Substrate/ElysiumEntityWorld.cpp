@@ -2413,6 +2413,15 @@ void FElysiumEntityWorld::AcceptInput(const FElysiumEntityHandle& Target, FName 
 		return;
 	}
 	++UnknownTargetCount;
+	// Same K3 accounting as the by-name overload: a handle whose entity is gone names a receiver
+	// this map cannot deliver to, so it reports as a `target` stub — not an unknown input — and
+	// stays on the `elysium.stubs` work list, where a scene that silently does not happen is
+	// visible.
+	ElysiumStub::Fired(TEXT("target"), FString::Printf(TEXT("%s.%s"), *Ev.Target, *Input.ToString()),
+		FString(),
+		FString::Printf(TEXT("param=%s activator=%s caller=%s"),
+			*Param.Describe(), *Activator.ToString(), *Caller.ToString()),
+		FString::Printf(TEXT("no live entity behind handle %s"), *Ev.Target));
 	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 	{
 		Sink->OnUnknownTarget(Now, Ev);
@@ -2892,26 +2901,4 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumWorldIoCmd(
 		{
 			UE_LOG(LogElysiumWorld, Display, TEXT("%s"), *L);
 		}
-	}));
-
-static FAutoConsoleCommandWithWorldAndArgs GElysiumWorldFireCmd(
-	TEXT("elysium.world.fireinput"),
-	TEXT("elysium.world.fireinput <target> <Input> [param] — inject an input through AcceptInput (test harness; P2's ent_fire supersedes)"),
-	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
-	{
-		FElysiumEntityWorld* EW = ElysiumCurrentWorld(World);
-		if (!EW)
-		{
-			UE_LOG(LogElysiumWorld, Warning, TEXT("elysium.world.fireinput: no live world (load a map first)"));
-			return;
-		}
-		if (Args.Num() < 2)
-		{
-			UE_LOG(LogElysiumWorld, Warning, TEXT("usage: elysium.world.fireinput <target> <Input> [param]"));
-			return;
-		}
-		const FString Param = Args.Num() >= 3 ? Args[2] : FString();
-		UE_LOG(LogElysiumWorld, Display, TEXT("fireinput %s.%s(%s)"), *Args[0], *Args[1], *Param);
-		EW->AcceptInput(Args[0], FName(*Args[1]), FElysiumVariant::String(Param),
-			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	}));
