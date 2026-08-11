@@ -48,6 +48,22 @@ namespace ElysiumAnimGraph
 	// `Content/ElysiumAuthored/README.md` forbids outright.
 	inline constexpr float TransitionCeilingSeconds = 0.5f;
 
+	// The graph tag on the upper-body `FAnimNode_LayeredBoneBlend` (CCC10), read by both the
+	// generator that stamps it and the native instance that looks the node up, so the two cannot
+	// drift into two spellings of one node.
+	//
+	// **The mask is not a pin, and that is the engine's design rather than an omission.**
+	// `FAnimNode_LayeredBoneBlend::BlendMasks` is edit-time state with no pin of its own, so a mask
+	// that changes per selection is supplied at runtime through `SetBlendMask` — which is exactly
+	// what Epic's own `ULayeredBoneBlendLibrary::SetBlendMask` does, resolving the mask BY NAME
+	// against the playing skeleton. `FAnimSubsystem_Tag` is how native code reaches a tagged node.
+	//
+	// A **null** mask on a template Animation Blueprint is legal by construction:
+	// `UAnimGraphNode_LayeredBoneBlend::ValidateAnimNodeDuringCompilation` raises its null-mask error
+	// only when `!bIsTemplate`, and this graph is a template. That is what keeps the tracked graph
+	// text free of any reference to a generated, game-derived profile asset.
+	inline constexpr const TCHAR* UpperBodyLayerTag = TEXT("ElysiumUpperBodyLayer");
+
 	// Retail's own combine (`docs/vtmb/animation_and_movers.md` A.4c): the transition takes the
 	// LARGER of the outgoing clip's authored fade and the incoming clip's, scored right on 80 of 80
 	// recorded transitions where a current-only rule scores 20 of 26.

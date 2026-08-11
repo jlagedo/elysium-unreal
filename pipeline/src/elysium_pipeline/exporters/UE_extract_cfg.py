@@ -7,8 +7,10 @@ on `__main__.ccmd` (`c.patchtype = ""` executes the alias `patchtype`), and an u
 console command falls through to Python. The **Unofficial Patch's Basic/Plus switch rides on
 exactly this** -- its installer writes one of two `user.cfg` files differing only in
 `alias patchtype "setBasic()"` vs `"setPlus()"`, so `setPlus`/`setBasic` are named nowhere in
-the `.py`/`.ents`/`.dlg`/`.bsp` trees; the sole reference is that one `.cfg` line. The runtime
-console bridge (roadmap 9.3b) seeds its alias/cvar store from this mirror.
+the `.py`/`.ents`/`.dlg`/`.bsp` trees; the sole reference is that one `.cfg` line. The copied file
+stays verbatim as install provenance. After seeding its alias/cvar store from this mirror, the
+runtime console bridge (roadmap 9.3b) replaces only `patchtype` with Elysium's Plus selector, so
+the source install's personal installer choice does not change the game's content profile.
 
 Copied **verbatim** -- no parse, no transcode -- same bring-your-own-game posture as the
 script/dialogue/sign/vdata mirrors: output lives under $ELYSIUM_EXPORT_ROOT/ (gitignored, regenerable),

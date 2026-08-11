@@ -312,8 +312,9 @@ struct FElysiumContentPaths
 	// Console config (PL5d / 9.3b). VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
 	// mirrored under the export root's cfg/ directory by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_cfg.py. The runtime console bridge
-	// (FElysiumConsole) seeds its alias/cvar store from these; `user.cfg` carries the Basic/Plus
-	// `patchtype` alias. VtMB's file-touching scripts reach the same tree through the script
+	// (FElysiumConsole) seeds its alias/cvar store from these. `user.cfg` records the source install's
+	// personal Basic/Plus choice, but the runtime replaces only `patchtype` with Elysium's Plus
+	// selector after parsing. VtMB's file-touching scripts reach the same tree through the script
 	// filesystem's `cfg/` mount (FElysiumScriptFS), which is what makes `FixKeyBindings` resolve.
 	static FString CfgDir() { return Root() / TEXT("cfg"); }
 	static FString CfgFile(const FString& File) { return CfgDir() / File; }

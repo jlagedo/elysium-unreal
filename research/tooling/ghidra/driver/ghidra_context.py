@@ -23,7 +23,7 @@ from pathlib import Path
 from elysium_pipeline.paths import repo_root, research_root
 
 
-KINDS = ("funcs", "asm", "xrefs", "fields", "vtables", "grep")
+KINDS = ("funcs", "asm", "xrefs", "fields", "vtables", "datamaps", "consts", "grep")
 
 
 def _load_spec(path: Path) -> dict:
@@ -55,6 +55,21 @@ def _load_spec(path: Path) -> dict:
         address = probe.get("address", "").lower().removeprefix("0x")
         if not address or any(ch not in "0123456789abcdef" for ch in address):
             raise ValueError(f"invalid vtable address: {probe.get('address')!r}")
+        probe["address"] = address
+    for probe in spec.get("datamap_probes", []):
+        for field in ("map", "recs"):
+            if field not in probe:
+                continue
+            address = probe.get(field, "").lower().removeprefix("0x")
+            if not address or any(ch not in "0123456789abcdef" for ch in address):
+                raise ValueError(f"invalid datamap {field}: {probe.get(field)!r}")
+            probe[field] = address
+        if "map" not in probe:
+            raise ValueError("datamap probe requires map")
+    for probe in spec.get("const_probes", []):
+        address = probe.get("address", "").lower().removeprefix("0x")
+        if not address or any(ch not in "0123456789abcdef" for ch in address):
+            raise ValueError(f"invalid constant address: {probe.get('address')!r}")
         probe["address"] = address
     return spec
 
@@ -150,6 +165,39 @@ def _vtable_invocations(spec: dict, kinds: set[str], output_dir: Path) -> list[t
             f"out={output.as_posix()}"
         )
         calls.append(("DumpFuncs", args, output))
+    return calls
+
+
+def _datamap_invocations(spec: dict, kinds: set[str], output_dir: Path) -> list[tuple[str, str, Path]]:
+    if "datamaps" not in kinds:
+        return []
+    calls = []
+    for probe in spec.get("datamap_probes", []):
+        address = probe["map"]
+        label = probe.get("label", address)
+        output = output_dir / f"datamap_{address}_{label}.txt"
+        parts = [f"map={address}"]
+        if probe.get("recs"):
+            parts.append(f"recs={probe['recs']}")
+        if probe.get("count") is not None:
+            parts.append(f"count={int(probe['count'])}")
+        parts.extend([
+            f"depth={int(probe.get('depth', 6))}",
+            f"out={output.as_posix()}",
+        ])
+        calls.append(("DumpDatamap", " ".join(parts), output))
+    return calls
+
+
+def _const_invocations(spec: dict, kinds: set[str], output_dir: Path) -> list[tuple[str, str, Path]]:
+    if "consts" not in kinds:
+        return []
+    calls = []
+    for probe in spec.get("const_probes", []):
+        address = probe["address"]
+        label = probe.get("label", address)
+        output = output_dir / f"const_{address}_{label}.txt"
+        calls.append(("DumpConst", f"addrs={address} out={output.as_posix()}", output))
     return calls
 
 
@@ -252,7 +300,7 @@ def main() -> int:
     parser.add_argument("--project-name", default="vtmb",
                         help="Ghidra project name inside --project-dir (default: vtmb)")
     parser.add_argument("--kinds", default=",".join(KINDS),
-                        help="comma-separated subset of funcs,asm,xrefs,fields,vtables,grep")
+                        help="comma-separated subset of funcs,asm,xrefs,fields,vtables,datamaps,consts,grep")
     parser.add_argument("--dry-run", action="store_true",
                         help="print invocations and write no derived files")
     parser.add_argument("--index-only", action="store_true",
@@ -280,6 +328,8 @@ def main() -> int:
     if not args.address:
         calls.extend(_field_invocations(spec, kinds, output_dir))
         calls.extend(_vtable_invocations(spec, kinds, output_dir))
+        calls.extend(_datamap_invocations(spec, kinds, output_dir))
+        calls.extend(_const_invocations(spec, kinds, output_dir))
         calls.extend(_grep_invocations(spec, kinds, output_dir))
 
     command_text = " ".join(sys.argv)

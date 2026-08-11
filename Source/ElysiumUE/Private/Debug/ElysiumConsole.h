@@ -15,9 +15,11 @@
 //   * a known **cvar** with args -> set it; with no args -> a no-op (retail prints the value);
 //   * otherwise -> **fall through to Python** (the sink evals the line in `__main__`).
 //
-// The Unofficial Patch's Basic/Plus switch rides on exactly this: `user.cfg` carries
-// `alias patchtype "setPlus()"`, so `c.patchtype = ""` -> alias -> `setPlus()` -> Python fallthrough
-// -> the level-script function. `setPlus`/`setBasic` are named nowhere else in the install.
+// The Unofficial Patch's Basic/Plus switch rides on exactly this: its installed `user.cfg` carries
+// `alias patchtype "setBasic()"` or `"setPlus()"`. Elysium deliberately owns that profile choice:
+// LoadFromCfgDir parses the personal cfg, then pins this one alias to `setPlus()` so the runtime's
+// patch-first content profile is reproducible. `setPlus`/`setBasic` are named nowhere else in the
+// install.
 //
 // Plain C++, no Python/UObject dependency, so it is unit-testable and the ccmd/cvar PyObjects
 // (ElysiumPythonEntity) forward into it. It is owned by FElysiumPythonVM, which supplies the sink.
@@ -32,7 +34,8 @@ public:
 	void SetPythonSink(FPythonSink InSink) { PythonSink = MoveTemp(InSink); }
 
 	// Parse default.cfg, config.cfg, autoexec.cfg, user.cfg (in that order; later shadows earlier)
-	// from `CfgDir`. Missing files are skipped. Clears the tables first, so it is safe to re-seed.
+	// from `CfgDir`, then pin `patchtype` to Elysium's Plus profile. Missing files are skipped. Clears
+	// the tables first, so it is safe to re-seed.
 	void LoadFromCfgDir(const FString& CfgDir);
 
 	// Parse cfg text (one directive per line) into the alias/cvar tables, additively. Used by

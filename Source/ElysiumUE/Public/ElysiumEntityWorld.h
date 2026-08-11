@@ -127,7 +127,8 @@ public:
 	// 11.4 — create this map's player entity (S3): an ordinary runtime entity of classname `player`,
 	// named `!player` so the 48 `point_teleport.target` keys the maps author resolve through the
 	// name index like any other targetname. Hydrated from the session record when a game state is
-	// attached. Call it once, after Load and before the first Tick; a second call is a no-op.
+	// attached. It also stands up the four engine-owned `viewmodel` companions patch Python expects.
+	// Call it once, after Load and before the first Tick; a second call is a no-op.
 	// A map built without a player (the menu backdrop, a headless logic test) simply never calls it,
 	// and every reader handles FindPlayer() being null — that is the same null-service discipline
 	// 11.2 established.

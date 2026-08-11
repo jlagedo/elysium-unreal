@@ -38,6 +38,68 @@ namespace
 		{ TEXT("ACT_RUN_RELAXED"),  TEXT("ACT_RUN"),  true },
 	};
 
+	// The layer rung's seeded weapon rows (CCC10, `docs/vtmb/combat-and-damage.md`). Every firearm's
+	// ordinary attack realizes `ACT_RANGE_ATTACK1_LAYER`; this is what turns it into the
+	// family-specific sequence set the shared `move_and_ranged` bank actually carries. `CCC11`
+	// extends the roster for real weapon-fire gameplay — this rung only needs enough of it to prove
+	// the resolver's activity-keyed path end to end.
+	const FElysiumActivityTranslation GGlockLayerTranslations[] =
+	{
+		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK"), true },
+	};
+	const FElysiumActivityTranslation GM37LayerTranslations[] =
+	{
+		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_M37"), true },
+	};
+	const FElysiumActivityTranslation GSteyrLayerTranslations[] =
+	{
+		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_STEYR"), true },
+	};
+	const FElysiumActivityTranslation GSubmachineGunLayerTranslations[] =
+	{
+		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_SUBMACHINEGUN"), true },
+	};
+	const FElysiumActivityTranslation GCrossbowLayerTranslations[] =
+	{
+		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_CROSSBOW"), true },
+	};
+
+	struct FElysiumWeaponTranslationTable
+	{
+		const TCHAR* WeaponTag;
+		TArrayView<const FElysiumActivityTranslation> Rows;
+	};
+
+	const FElysiumWeaponTranslationTable GWeaponTranslationTables[] =
+	{
+		{ TEXT("glock"),         MakeArrayView(GGlockLayerTranslations) },
+		{ TEXT("m37"),           MakeArrayView(GM37LayerTranslations) },
+		{ TEXT("steyr"),         MakeArrayView(GSteyrLayerTranslations) },
+		{ TEXT("submachinegun"), MakeArrayView(GSubmachineGunLayerTranslations) },
+		{ TEXT("crossbow"),      MakeArrayView(GCrossbowLayerTranslations) },
+	};
+
+	// The one-handed roster (`docs/vtmb/animation_and_movers.md` A.4, measured over both melee
+	// banks). Every other tag — every firearm/thrown weapon, and the melee `bushhook`/
+	// `sledgehammer` — takes the default two-handed mask; the two-handed melee pair is listed
+	// explicitly anyway so the "not melee-versus-ranged" rule has a row a test can pin.
+	struct FElysiumWeaponGripEntry
+	{
+		const TCHAR* WeaponTag;
+		EElysiumWeaponGrip Grip;
+	};
+
+	const FElysiumWeaponGripEntry GWeaponGrips[] =
+	{
+		{ TEXT("baseballbat"),  EElysiumWeaponGrip::OneHanded },
+		{ TEXT("katana"),       EElysiumWeaponGrip::OneHanded },
+		{ TEXT("knife"),        EElysiumWeaponGrip::OneHanded },
+		{ TEXT("stake"),        EElysiumWeaponGrip::OneHanded },
+		{ TEXT("tireiron"),     EElysiumWeaponGrip::OneHanded },
+		{ TEXT("bushhook"),     EElysiumWeaponGrip::TwoHanded },
+		{ TEXT("sledgehammer"), EElysiumWeaponGrip::TwoHanded },
+	};
+
 	const FElysiumActivityTranslation* FindRow(TArrayView<const FElysiumActivityTranslation> Table,
 		const FString& From)
 	{
@@ -185,11 +247,30 @@ TArrayView<const FElysiumActivityTranslation> ActorTranslations()
 
 TArrayView<const FElysiumActivityTranslation> WeaponTranslations(const FString& WeaponTag)
 {
-	// No weapon exists to translate through yet, and an unarmed body's table is empty in retail too.
-	// The pass below still runs over this view and terminates on its own stop condition, which is why
-	// the seam is exercised rather than skipped.
-	(void)WeaponTag;
+	for (const FElysiumWeaponTranslationTable& Table : GWeaponTranslationTables)
+	{
+		if (WeaponTag.Equals(Table.WeaponTag, ESearchCase::IgnoreCase))
+		{
+			return Table.Rows;
+		}
+	}
+	// Every other tag — unarmed, a melee weapon, a ranged family this rung has not seeded — has no
+	// override row, and an unarmed body's table is empty in retail too. The pass below still runs
+	// over this view and terminates on its own stop condition, which is why the seam is exercised
+	// rather than skipped.
 	return TArrayView<const FElysiumActivityTranslation>();
+}
+
+EElysiumWeaponGrip WeaponGrip(const FString& WeaponTag)
+{
+	for (const FElysiumWeaponGripEntry& Entry : GWeaponGrips)
+	{
+		if (WeaponTag.Equals(Entry.WeaponTag, ESearchCase::IgnoreCase))
+		{
+			return Entry.Grip;
+		}
+	}
+	return EElysiumWeaponGrip::TwoHanded;
 }
 
 FElysiumTranslationResult TranslateActivity(const FString& Activity, const FString& WeaponTag,

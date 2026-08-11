@@ -141,7 +141,42 @@ public:
 	// Lay a `_delta` autolayer over the standing body without disturbing it. Re-asking for the
 	// layer already running only re-weights it, so the slider drives this every frame.
 	bool LabSetLayer(const FString& Clip, float Weight, FString& OutError);
+	// Steer an armed aim grid, in the pose parameters' own degrees. Drives every frame from a slider,
+	// the same way `LabSetGridPosition` steers a base fan, and does not restart the layer under it.
+	void LabSetLayerAim(float Yaw, float Pitch);
+	// Where the aim was last put, so a preset case can move the sliders with it rather than leaving
+	// them reading one thing while the body wears another.
+	float LabLayerAimYaw() const { return ReviewLayerAim[0]; }
+	float LabLayerAimPitch() const { return ReviewLayerAim[1]; }
+	// Whether the armed grid's PITCH follows the view while driving — retail's own shape, since the
+	// player selector takes `aim_pitch` from a separate field and pins `aim_yaw` at 0. Off leaves both
+	// axes on the sliders, which is how the NPC-side yaw axis is exercised at all.
+	bool LabAimFollowsLook() const { return bLayerAimFollowsLook; }
+	void LabSetAimFollowsLook(bool bFollow) { bLayerAimFollowsLook = bFollow; }
 	void LabClearLayers();
+
+	// --- CCC10's acceptance, as preset cases ---------------------------------------------------
+	//
+	// One click stands a whole case: a base to layer over, the right layer armed in the right slot,
+	// and the aim steered somewhere the claim is visible. A body resolves ~1,500 clips and the four
+	// claims this rung has to answer each need a specific one, so hunting for it by hand is how the
+	// acceptance goes unrun.
+	//
+	// Each case names ORDERED candidate labels and takes the first the standing body actually
+	// carries, so it survives a body whose bank set differs rather than failing on one spelling.
+	static int32 LayerCaseCount();
+	static const TCHAR* LayerCaseName(int32 Index);
+	// `OutSummary` names what was armed, the grip the mask came from, and what should be on screen —
+	// the claim is on the panel beside the body, so a wrong pose is judged against a stated
+	// expectation rather than against recollection.
+	bool LabLoadLayerCase(int32 Index, FString& OutSummary, FString& OutError);
+
+private:
+	// The body a preset case stands when the session has none: the PC body the rung's acceptance
+	// names, falling back to the first baked body that carries one of `Candidates`.
+	bool PickLayerCaseBody(const TArray<FString>& Candidates, FString& OutStem);
+
+public:
 	// The layer label the lab last accepted, or empty. Cleared by LabClearLayers and by standing a
 	// new body, because a layer belongs to the body it was composed onto.
 	const FString& LabLayer() const { return ReviewLayer; }
@@ -336,6 +371,9 @@ private:
 	FElysiumResolvedGrid ReviewGrid;
 	// Where on that grid's axes the body is being sampled, in the pose parameters' own degrees.
 	float ReviewGridAt[2] = { 0.f, 0.f };
+	// The same for an armed aim grid's own two axes, which are the LAYER's rather than the base's.
+	float ReviewLayerAim[2] = { 0.f, 0.f };
+	bool bLayerAimFollowsLook = true;
 	FString ReviewAnimSet;
 	FString ReviewBoneRoot;
 	bool bEnsemble = false;

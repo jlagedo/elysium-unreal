@@ -185,8 +185,8 @@ namespace
 	 *
 	 * `GetAnimationPose` is the door the runtime uses. It resolves the two evaluation paths
 	 * itself: raw data goes through `GetBonePose_Additive`, which subtracts the base pose, and
-	 * compressed data was subtracted already at bake time. Both answer the delta, which is what
-	 * `FElysiumBipedAnimProxy::EvaluateLayers` accumulates.
+	 * compressed data was subtracted already at bake time. Both answer the delta, which is what the
+	 * graph's own `FAnimNode_ApplyAdditive` composes.
 	 *
 	 * A bone the sequence carries no track for comes back as the ADDITIVE identity rather than as
 	 * the reference pose, which is the property that makes an unmasked layer safe to accumulate
@@ -349,9 +349,9 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	// This is the ONE assertion here that reads the compressed data, and it has to. Unreal bakes an
 	// additive sequence down by subtracting its base pose before compressing, so the raw keys the
 	// bake writes are the delta composed onto the skeleton's reference pose and the compressed data
-	// is the delta itself. The runtime accumulator (`FElysiumBipedAnimProxy::EvaluateLayers`) reads
-	// the second, so the second is what has to equal what VtMB authored -- and a raw comparison
-	// would pass without the subtraction ever having run.
+	// is the delta itself. The graph's additive node (`FAnimNode_ApplyAdditive`) reads the second, so
+	// the second is what has to equal what VtMB authored -- and a raw comparison would pass without
+	// the subtraction ever having run.
 	//
 	// Un-composed, unlike everything else here: a delta has no hierarchy to inherit through. It is
 	// accumulated onto a bone's own local rotation, so a per-bone comparison IS the contract.
@@ -1566,6 +1566,253 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 		TEXT("retarget source"), Checked, Sequences, Unsourced));
 	TestEqual(TEXT("every bone rebases translation onto the body playing the clip, against the ")
 		TEXT("bind the clip was authored on"), Wrong.Num(), 0);
+	return true;
+}
+
+// The arming path a layer actually takes, end to end, with nothing standing.
+//
+// `UElysiumEntityBodies::PlayNpcLayer` turns a LABEL into the two things the graph's layered blend
+// needs — an overlay asset and the name of the bone mask it composes under — through four lookups
+// in a row: the body's vocabulary, the declaring host in the owner's autolayer table, the derived
+// `<label>@<host>` asset on the mount, and the mask profile on the PLAYING body's skeleton. Any one
+// of them missing refuses the whole arm, and in game all four failures read as one thing: the
+// button does nothing.
+//
+// So this walks the same four steps over the real mount and says which one broke. It is the only
+// place that can: the runtime path needs a compiled graph, a standing body and a drive-mode pawn
+// before it reaches the first lookup, and none of those are what fails.
+//
+// The work list is DERIVED, not named here. Every label an autolayer table binds to a host is a
+// label the resolver can produce and the lab can be asked for, so the set follows whatever the
+// export wrote rather than a list that drifts from it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUpperBodyLayerArmingTest,
+	"Elysium.Content.UpperBodyLayerArming", GElysiumBakedCharacterFlags)
+bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
+{
+	const TArray<FString> Stems = SliceStems();
+	TArray<UObject*> KeepAlive;
+	int32 Bodies = 0;
+	int32 Grids = 0;
+	int32 Additives = 0;
+	int32 MaskedClips = 0;
+	// Overlays that got all the way through step 4 — the count the summary line is about.
+	int32 Armable = 0;
+
+	for (const FString& Stem : Stems)
+	{
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
+		FElysiumNpcClipSet Clips;
+		FString ClipError;
+		if (Mesh == nullptr || !Clips.Load(Stem, ClipError))
+		{
+			continue;
+		}
+		USkeleton* BodySkeleton = Mesh->GetSkeleton();
+		if (BodySkeleton == nullptr)
+		{
+			AddError(FString::Printf(TEXT("%s: the baked body carries no skeleton"), *Stem));
+			continue;
+		}
+		KeepAlive.Add(Mesh);
+		++Bodies;
+
+		// Every bank this body plays through, plus its own container. An autolayer table ships in
+		// whichever sidecar declares the binding — the `move_and_ranged` banks carry all of them
+		// today — so the set has to be gathered from the vocabulary rather than assumed.
+		TSet<FString> Owners;
+		Owners.Add(Stem);
+		for (const TPair<FString, FElysiumNpcClip>& Entry : Clips.Clips)
+		{
+			Owners.Add(Entry.Value.Owner);
+		}
+
+		// Label -> the hosts declaring it, sorted, exactly as `PlayNpcLayer` sorts them: the derived
+		// asset is per host, so which host is picked decides which asset is asked for, and an
+		// unstable pick would make two identical clicks stand two different assets.
+		TMap<FString, TArray<FString>> HostsByLabel;
+		TArray<FString> OwnerList = Owners.Array();
+		OwnerList.Sort();
+		for (const FString& Owner : OwnerList)
+		{
+			FElysiumBlendTable Table;
+			FString TableError;
+			if (!Table.Load(FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
+			{
+				// Most owners declare no grid and ship no sidecar at all, which is an ordinary load.
+				continue;
+			}
+			for (const TPair<FString, FElysiumAutoLayerBinding>& Binding : Table.AutoLayers)
+			{
+				for (const FString& Target : Binding.Value.Clips)
+				{
+					HostsByLabel.FindOrAdd(Target).AddUnique(Binding.Key);
+				}
+			}
+		}
+		if (HostsByLabel.IsEmpty())
+		{
+			AddInfo(FString::Printf(
+				TEXT("%s: no owner in its vocabulary declares an autolayer binding, so no label can "
+				     "resolve as a layer"), *Stem));
+			continue;
+		}
+
+		TArray<FString> Labels;
+		HostsByLabel.GetKeys(Labels);
+		Labels.Sort([](const FString& A, const FString& B) { return A < B; });
+
+		for (const FString& Label : Labels)
+		{
+			TArray<FString>& Hosts = HostsByLabel[Label];
+			Hosts.Sort([](const FString& A, const FString& B) { return A < B; });
+			const FString& Host = Hosts[0];
+
+			// Step 1 — the vocabulary. A label bound by a table the body can reach and absent from
+			// the body's own clip map is not a missing asset; it is the two sidecars disagreeing,
+			// and the arm refuses before it ever looks at the mount.
+			const FElysiumNpcClip* LayerClip = Clips.Find(Label);
+			if (LayerClip == nullptr)
+			{
+				AddError(FString::Printf(
+					TEXT("%s: '%s' is bound as a layer of '%s' and is not in the body's vocabulary "
+					     "(%d clips), so nothing can arm it"),
+					*Stem, *Label, *Host, Clips.Clips.Num()));
+				continue;
+			}
+			const FString LayerOwner = LayerClip->IsOwnedBy(Stem) ? Stem : LayerClip->Owner;
+
+			// Step 2/3 — the asset. A grid stands as a blend space and a melee overlay as a plain
+			// sequence, decided the same way the arm decides it: does the label name a grid.
+			FName MaskName;
+			const TCHAR* Kind = nullptr;
+			// The skeleton the OVERLAY ASSET is bound to, which on a shared rig family need not be
+			// the body's. Carried so a missing mask can name which of the two carries it — "the
+			// profile is on the wrong skeleton" and "the bake never wrote it" are the same silence
+			// otherwise, and they are different repairs.
+			const USkeleton* AssetSkeleton = nullptr;
+			if (UBlendSpace* Space =
+				ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner, Label, Host))
+			{
+				KeepAlive.Add(Space);
+				AssetSkeleton = Space->GetSkeleton();
+				++Grids;
+				Kind = TEXT("grid");
+				for (const FBlendSample& Sample : Space->GetBlendSamples())
+				{
+					if (Sample.Animation != nullptr)
+					{
+						if (const UElysiumAnimLayerMask* Mask =
+							Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>())
+						{
+							MaskName = Mask->Profile;
+							break;
+						}
+					}
+				}
+				if (MaskName.IsNone())
+				{
+					AddError(FString::Printf(
+						TEXT("%s: grid '%s@%s' stands and no cell of it names a blend mask, so it "
+						     "would compose over the whole rig and lose the body's stance"),
+						*Stem, *Label, *Host));
+					continue;
+				}
+			}
+			else
+			{
+				// The derived form first and the plain label second, for the reason the arm does it
+				// in that order: an additive ships both ways and a mask-free overlay only plain.
+				UAnimSequence* Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+					FString::Printf(TEXT("%s@%s"), *Label, *Host));
+				if (Anim == nullptr)
+				{
+					Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner, Label);
+				}
+				if (Anim == nullptr)
+				{
+					AddError(FString::Printf(
+						TEXT("%s: '%s' is owned by '%s' and neither its grid, its derived form "
+						     "'%s@%s' nor its plain label is on the mount"),
+						*Stem, *Label, *LayerOwner, *Label, *Host));
+					continue;
+				}
+				KeepAlive.Add(Anim);
+				AssetSkeleton = Anim->GetSkeleton();
+				if (Anim->IsValidAdditive())
+				{
+					++Additives;
+					// An additive states its own base through the additive identity and composes in
+					// the other slot, which takes no mask. Nothing further to resolve.
+					continue;
+				}
+				const UElysiumAnimLayerMask* Mask =
+					Anim->FindMetaDataByClass<UElysiumAnimLayerMask>();
+				if (Mask == nullptr)
+				{
+					AddError(FString::Printf(
+						TEXT("%s: '%s' stands and is neither additive nor masked — an unmasked pose "
+						     "clip cannot be a layer, it would drag every bone it does not own to "
+						     "the reference pose"), *Stem, *Label));
+					continue;
+				}
+				++MaskedClips;
+				Kind = TEXT("clip");
+				MaskName = Mask->Profile;
+			}
+
+			// Step 4 — the mask, resolved against the PLAYING body's skeleton rather than the one
+			// the layer's own bank was baked against. Those are different assets on a shared rig
+			// family, and a profile taken from the wrong one gates a shifted set of bones and logs
+			// nothing, so the name is what travels and this is where it has to land.
+			const UBlendProfile* Profile = BodySkeleton->GetBlendProfile(MaskName);
+			if (Profile == nullptr)
+			{
+				USkeleton* Bound = const_cast<USkeleton*>(AssetSkeleton);
+				const bool bOnAsset = Bound != nullptr && Bound != BodySkeleton
+					&& Bound->GetBlendProfile(MaskName) != nullptr;
+				AddError(FString::Printf(
+					TEXT("%s: %s '%s' names blend mask '%s', which %s does not carry — the layer "
+					     "would compose unmasked over the whole rig (the asset is bound to %s, "
+					     "which %s carry it)"),
+					*Stem, Kind, *Label, *MaskName.ToString(), *BodySkeleton->GetName(),
+					Bound != nullptr ? *Bound->GetName() : TEXT("no skeleton"),
+					bOnAsset ? TEXT("DOES") : TEXT("does not")));
+				continue;
+			}
+			// `BlendMask` mode is load-bearing, not cosmetic: it is the only mode whose unwritten
+			// default is 0, and a profile left in any other mode reads at evaluation as owning
+			// every bone — the exact opposite of the gate that was asked for.
+			if (Profile->Mode != EBlendProfileMode::BlendMask)
+			{
+				AddError(FString::Printf(
+					TEXT("%s: blend mask '%s' is in mode %d rather than BlendMask, so every bone it "
+					     "does not name defaults to 1 and it gates nothing"),
+					*Stem, *MaskName.ToString(), static_cast<int32>(Profile->Mode)));
+				continue;
+			}
+			const int32 Entries = Profile->GetNumBlendEntries();
+			const int32 Bones = BodySkeleton->GetReferenceSkeleton().GetNum();
+			if (Entries <= 0 || Entries >= Bones)
+			{
+				AddError(FString::Printf(
+					TEXT("%s: blend mask '%s' gates %d of %d bone(s), which is not a partial gate — "
+					     "an upper-body overlay that owns none poses nothing and one that owns all "
+					     "replaces the base"),
+					*Stem, *MaskName.ToString(), Entries, Bones));
+			}
+			++Armable;
+		}
+	}
+
+	if (Bodies == 0)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body on the mount; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	AddInfo(FString::Printf(
+		TEXT("%d body/bodies, %d layer(s) armable: %d grid(s), %d masked clip(s), %d additive(s)"),
+		Bodies, Armable + Additives, Grids, MaskedClips, Additives));
 	return true;
 }
 

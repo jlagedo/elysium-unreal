@@ -1562,6 +1562,7 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 // ============================================================================================
 
 static TUniquePtr<FElysiumEntity> MakePlayer() { return MakeUnique<FElysiumPlayer>(); }
+static TUniquePtr<FElysiumEntity> MakeViewModel() { return MakeUnique<FElysiumAnimating>(); }
 
 // CBaseAnimating — a chain node, never a `.ents` classname, so it needs no factory.
 static FElysiumClassRegistrar GRegAnimating(
@@ -1581,6 +1582,13 @@ static FElysiumClassRegistrar GRegAnimating(
 				E.PlayAnimClip(A.Param.ToString(), /*bLoop=*/true);
 			});
 	});
+
+// Engine-owned first-person slots. They are real entities because patch Python finds them through
+// the ordinary class lookup and writes `model` on slot 3. Their visual bodies remain owned by the
+// first-person viewmodel programme; a bodiless entity is the faithful API boundary in the meantime.
+static FElysiumClassRegistrar GRegViewModel(
+	ElysiumViewModelClassName(), ElysiumAnimatingClassName(), &MakeViewModel,
+	[](FElysiumClassDesc&) {});
 
 // CBaseCombatCharacter — datamap 0x1061664c, 25 inputs (`docs/vtmb/script_api.md`).
 static FElysiumClassRegistrar GRegCombatCharacter(

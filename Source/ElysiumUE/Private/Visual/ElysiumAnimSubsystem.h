@@ -49,7 +49,32 @@ struct FElysiumResolvedAnimation
 	UAnimSequence* Sequence = nullptr;
 	UBlendSpace* Space = nullptr;
 
+	// CCC10 — the upper-body layer(s) the selection named through `LayerLabels`: the bake-time
+	// autolayer binding the base channel's own resolved host declared, or an activity-keyed
+	// `UpperBody`/`Additive`-channel selection's own single asset (routed here by the caller
+	// rather than into `Sequence`/`Space`). `OverlaySequence` and `OverlaySpace` are never both
+	// set — a melee `_bobble_layer` is a plain sequence, an aim grid is a blend space.
+	UAnimSequence* OverlaySequence = nullptr;
+	UBlendSpace* OverlaySpace = nullptr;
+	UAnimSequence* AdditiveSequence = nullptr;
+
+	// The overlay's baked bone mask, as the NAME the clip's own `UElysiumAnimLayerMask` metadata
+	// carries (the grid's base cell for `OverlaySpace` — every cell of a grid shares one mask), never
+	// guessed from a weapon's grip.
+	//
+	// **A name and not a resolved `UBlendProfile*`, deliberately.** A profile object belongs to one
+	// skeleton, while the node rebuilds its per-bone weights against the skeleton being *played* —
+	// and a bank owns every masked overlay, so those are routinely not the same asset. Resolving the
+	// name against the playing skeleton is what Epic's own `ULayeredBoneBlendLibrary::SetBlendMask`
+	// does, and it is the same trap `Source/ElysiumUE/CLAUDE.md` records for the retired accumulator:
+	// a profile taken off the layer's skeleton gates a shifted set of bones and logs nothing.
+	FName OverlayMaskName;
+
 	bool IsValid() const { return Sequence != nullptr || Space != nullptr; }
+	bool HasUpperBodyLayer() const
+	{
+		return OverlaySequence != nullptr || OverlaySpace != nullptr || AdditiveSequence != nullptr;
+	}
 };
 
 // Which rule chose an NPC's standing idle. Reported by the console verbs and the Cog window so a

@@ -335,8 +335,102 @@ hardcoded, and the selector is the only writer of the parameter by name on the p
 seven other `.text` references to the string are in the AI tree, and the one sampled
 (`0x1029d655`) is a debug overlay reader.
 
-`aim_yaw` is written as the literal `0.0f` here; `aim_pitch` comes from a separate field
-(`+0x206c`, unnamed — it carries no datamap record). Neither is computed from the pair above.
+`aim_yaw` and `aim_pitch` are written by the same selector and neither is computed from the pair
+above; the next section is what they carry.
+
+### The player's `aim_yaw` is a literal zero, so a weapon aim grid is pitch-only [VtMB decompiled, capture-verified]
+
+The write is unconditional — it sits at the **top level** of `0x10164870`, outside the
+`speed2D > 0` gate that wraps the `move_yaw` block above, so it lands on every call, in every
+state, with every weapon:
+
+```
+10164a5e  PUSH 0x0                     ; arg3
+10164a60  PUSH 0x0                     ; the value — 0.0f
+10164a62  PUSH 0x10586428              ; "aim_yaw"
+10164a69  CALL dword ptr [EDX + 0x564] ; CBaseCombatCharacter::SetPoseParameter
+```
+
+A work-root sweep for the string and its address `0x10586428` finds this writer and one reader,
+`FUN_1029d4e0`, the NPC debug overlay. `CBasePlayer::PostThink` writes no pose parameter by name
+at all. `aim_pitch` comes from a separate field (`+0x206c`, unnamed — it carries no datamap
+record), wrapped by 360 before the write, so it holds an absolute angle.
+
+**Retail agrees, on an armed player.** The capture hook sits on the client's blend resolver, so it
+observes whatever posed the model regardless of which side wrote it. Over 7,299 player pose
+evaluations in a session with the Smith revolver drawn, slot 2 holds **one** distinct value:
+`0.5009784698`, which is exactly `256/511` — the 9-bit network quantisation of 0.5, i.e. 0.000°
+written. The instrument is not blind to the parameter: in the same capture NPCs take 189, 279 and
+43 distinct values on the same slot, spanning **−42.1° … +45.0°** and saturating the descriptor's
+`+45` clamp. Only the player never moves it. At the consumption site the effect is visible
+directly — of 1,853 `smith_aim_layer` contributions the resolver logged, the yaw cell index is
+`1`, the centre column, in every one; only the pitch index varies.
+
+**There is nothing for a torso follower to drive.** `aim_yaw`/`aim_pitch` are Valve's
+**`CAI_BaseNPC`** parameter names (`ai_basenpc.cpp`, `PopulatePoseParameters`); the player's
+equivalent in that lineage is **`body_yaw`**, and no VtMB model declares it — §A.3 above records
+that across all 451 pose-parameter-bearing models index 0 is `move_yaw`, index 1 is `hit_yaw`, and
+only two models carry more. The HL1-era alternative is closed too: `NumBoneControllers` is **0** on
+all 4,255 retail `.mdl` and all 339 loose patch models, so `StudioProcessGait`'s quarter-difference
+torso twist — which drove controllers 0–3 — has nothing to act on. There is no
+`CBasePlayerAnimState`, `m_flGoalFeetYaw` or `mp_facefronttime` anywhere in VtMB material.
+
+The mechanism *existed* when VtMB forked — `CPlayerAnimState` is present as
+`game_shared/cstrike/cs_playeranimstate.cpp` in the October 2003 tree, before it acquired a base
+class. Troika did not adopt it. The reason is "not taken", not "not yet invented".
+
+**`+0x206c` has a yaw twin at `+0x2070`, and it is not used for the pose** [LIKELY].
+`CBasePlayer::PostThink` pairs them — `this[0x1efc]+this[0x206c]` for pitch,
+`this[0x1f00]+this[0x2070]` for yaw — feeding both through `UTIL_AngleDiff` against last-frame
+copies to derive the weapon's turn-rate spread penalty. The yaw counterpart was one field away
+from the selector that writes `0`.
+
+**What an observer reads as the torso leading the hips is the `move_yaw` fan, and it requires
+motion** [LIKELY]. Standing in combat stance with a firearm drawn resolves `ACT_AIM` →
+`ACT_AIM_<weapon>` → a single clip (`<weapon>_ready`) hosting the pitch-only aim layer, which has
+no yaw freedom at all. Moving resolves `<weapon>_aggressive_walk`/`_run`/`_sneak`, each a 9×1
+`move_yaw` fan hosting the same layer. Turning the view changes facing at once while velocity
+realigns over `sv_friction` 4 / `sv_accelerate` 10 — an e-folding time of 0.1–0.25 s — so
+`move_yaw` swings, the fan blends toward its strafe cells, and the **legs** step sideways under an
+upper body that points where the player is facing. Releasing the turn lets velocity catch up and
+the body squares. Every ingredient is recovered; the attribution of the percept to them is the
+inference. The discriminating observation is free: the effect must vanish entirely when turning on
+the spot.
+
+Separately, "the weapon stays raised for some seconds after firing, then drops to rest" is not an
+aiming mechanism — `ACT_AIM` is gated on `IsInCombatStance()`, a timer, and the selector falls to
+`ACT_IDLE_<weapon>` when it lapses.
+
+### The aim axes are left-positive and down-positive [data-verified]
+
+Measured rather than read off the cell names: each single-frame masked cell was composed through
+the bone hierarchy and the head's world delta rotation taken against the centre cell, across all
+**25** male aim grids.
+
+| axis | parameter | head delta | reads as |
+|---|---|---|---|
+| `aim_yaw` | −45 | −26.0° | character's **right** |
+| `aim_yaw` | +45 | +26.3° | character's **left** |
+| `aim_pitch` | −45 | +25.8° | **up** |
+| `aim_pitch` | +45 | −27.1° | **down** |
+
+Both are Source's native `QAngle` conventions, and both match the producer: `CAI_BaseNPC::SetAim`
+differences `UTIL_AngleDiff(angDir.y, GetAbsAngles().y)` in the natural order, which is
+left-positive.
+
+**The two yaw parameters disagree with each other, and that is real.** `move_yaw` is
+*right*-positive because the selector reverses the subtraction (§ above); `aim_yaw` is
+*left*-positive because the AI path does not. A decoder that assumes one handedness for both
+mirrors one of them.
+
+The cell naming is unanimous across all **49** grids and encodes the same thing: the pitch index
+runs `U`/`C`/`D` from `paramstart` to `paramend`, the yaw index `R`/`C`/`L`.
+
+**One authored defect.** Of the 25 male grids, `glock_aim_layer` is the single sign outlier — its
+`CR` cell poses the head ~42° to the *left* where every other family poses right, and its `CC` is
+off-family as well. Grid structure and animation indices match `anaconda`'s exactly, so this is
+Troika's clip content rather than a decode fault. It is the wrong grid to calibrate an axis
+mapping or a bone mask against.
 
 ### The activity name is the selection key [data-verified]
 
@@ -1298,6 +1392,22 @@ for free.
 `libcolumn_*`, `malklifetube_trims.mdl`, `g_handleclaws.mdl`, `i_handleclaws.mdl`) read
 `numautolayers == 764` at sequence 0 — the descriptor tail runs past the end of the file and lands
 in the string table. A reader must bound both the count and the array against the image.
+
+**The composition weight of an autolayer is not stated by the file** [open]. The 4-byte entry
+carries a sequence index and nothing else — no weight, and unlike later Source's
+`mstudioautolayer_t` no `start`/`peak`/`tail`/`end` to ramp one over the host's cycle (§ above).
+The recovered `0.1f` belongs to the *other* layer mechanism: `SetLayer` on
+`CBaseAnimatingOverlay` (§A.4c), which the DLL drives for gestures and `ACT_*_LAYER_*` selections,
+not for the model-declared autolayer table. The two must not be conflated.
+
+*Elysium divergence, owner-called.* The runtime composes a bake-time-bound autolayer at weight
+**1.0** — a named stand-in, not a recovered value. At 1.0 the masked overlay fully replaces the
+bones it owns rather than leaning the base pose toward them, which is the upper bound of the
+plausible range and the reading most likely to look mechanical. Recovering the real scalar is
+tracked in `docs/project/animation-roadmap.md` ANM2, whose oracle is an arithmetic recovery from the
+finalized captures — the combine is closed, so a host's decoded local, its layer's decoded local and
+the composed local determine the scalar per bone. The capture hook's per-contribution `blendWeight`
+is the blend-space *cell* weight and does not answer this.
 
 **The first-person body is a different skeleton with its own bank** [data-verified]. 21 viewmodels
 under `models/hands/**` as `v_<clan>_<gender>_hands.mdl` — seven clans plus `hunter` and a `shared`

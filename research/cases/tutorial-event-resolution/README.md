@@ -17,6 +17,8 @@ not recover animation blending, audio playback, or presentation internals.
 - What transform and safety checks does `point_teleport` perform, and where does touch
   reconciliation occur?
 - Do maker-authored NPC lifecycle rows fire on the maker or on each child?
+- Which quota, enable, obstruction, visibility, distance, and hull guards admit explicit and timed
+  maker spawns, and how do finite/infinite totals differ from the live-child ceiling?
 - What use lifecycle and output surface do `prop_switch`, `prop_button`, `prop_doorknob`,
   `prop_sign`, and `prop_hacking` expose?
 - When do VCD `firetrigger`, scene completion, start and cancel outputs enter the ordinary queue?

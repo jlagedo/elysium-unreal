@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumMoveSolve.h"          // the sv_*scale constants the gait tables are built with
+#include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
@@ -9,6 +10,98 @@
 #include "HAL/FileManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnim, Log, All);
+
+namespace
+{
+	// CCC10 — resolve `Selection.LayerLabels` (the bake-time autolayer binding the base channel's
+	// own resolved host declared) into the assets the graph's upper-body nodes read. Sorted by the
+	// CLIP's own additive flag, never by declaration position: the order in `LayerLabels` is
+	// composition order, not a kind tag, and exactly one shipped host (`throwing_star_midcrouch_idle`)
+	// declares its additive first.
+	void ResolveLayerAssets(const FElysiumAnimationCatalog& Catalog,
+		const FElysiumAnimationSelection& Selection, USkeletalMesh* Mesh,
+		FElysiumResolvedAnimation& Assets)
+	{
+		if (Mesh == nullptr || Catalog.Clips == nullptr)
+		{
+			return;
+		}
+
+		for (const FString& LayerLabel : Selection.LayerLabels)
+		{
+			const FElysiumNpcClip* LayerClip = Catalog.Clips->Find(LayerLabel);
+			if (LayerClip == nullptr)
+			{
+				// One of the five per-bank orphans the autolayer table can name but the catalog does
+				// not carry (`docs/vtmb/animation_and_movers.md` A.3) — there is nothing to load.
+				continue;
+			}
+
+			const FString LayerOwner = LayerClip->Owner;
+			const FElysiumBlendTable* LayerTable = Catalog.BlendTableFor
+				? Catalog.BlendTableFor(LayerOwner) : nullptr;
+			const FElysiumBlendGrid* LayerGrid = LayerTable != nullptr
+				? LayerTable->Find(LayerLabel) : nullptr;
+
+			if (LayerGrid != nullptr && LayerGrid->IsMultiCell())
+			{
+				// An aim grid, baked once per declaring host (`_derived_bindings` in
+				// `UE_mdl_skeletal.py`) — the loader's own `Host` parameter is the exporter's
+				// dedicated seam for this, not a mangled label.
+				Assets.OverlaySpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner,
+					LayerLabel, Selection.SequenceLabel);
+				if (Assets.OverlaySpace != nullptr)
+				{
+					// Every cell of a grid shares one bone mask (A.4), so reading it off the base
+					// cell [0][0] is reading it off the whole grid.
+					if (const FElysiumBlendCell* BaseCell = LayerGrid->CellAt(0, 0))
+					{
+						if (UAnimSequence* BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh,
+							LayerOwner, BaseCell->Clip))
+						{
+							if (const UElysiumAnimLayerMask* Mask =
+								BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>())
+							{
+								Assets.OverlayMaskName = Mask->Profile;
+							}
+						}
+					}
+				}
+				continue;
+			}
+
+			// A plain sequence — additive or masked overlay. A clip whose mask owns the shared
+			// ancestor split bone ships ONLY in derived `<clip>@<host>` form; one that does not
+			// ships once under its plain label, and every additive ships both. Trying the derived
+			// name first and falling back handles either shape without knowing which one applies.
+			const FString DerivedLabel = FString::Printf(TEXT("%s@%s"), *LayerLabel,
+				*Selection.SequenceLabel);
+			UAnimSequence* LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+				DerivedLabel);
+			if (LayerSequence == nullptr)
+			{
+				LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner, LayerLabel);
+			}
+			if (LayerSequence == nullptr)
+			{
+				continue;
+			}
+
+			if (LayerClip->IsAdditive())
+			{
+				Assets.AdditiveSequence = LayerSequence;
+				continue;
+			}
+
+			Assets.OverlaySequence = LayerSequence;
+			if (const UElysiumAnimLayerMask* Mask =
+				LayerSequence->FindMetaDataByClass<UElysiumAnimLayerMask>())
+			{
+				Assets.OverlayMaskName = Mask->Profile;
+			}
+		}
+	}
+}
 
 void UElysiumAnimSubsystem::Deinitialize()
 {
@@ -489,8 +582,10 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 	OutAssets = FElysiumResolvedAnimation();
 
 	// The record comes out of the sidecars and is always producible. The asset needs a skeleton, and
-	// that is a separate question with a separate answer.
-	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Intent.Stem), OutSelection);
+	// that is a separate question with a separate answer. Kept rather than re-built below: CCC10's
+	// layer resolution reads the same catalog the primary asset resolved against.
+	const FElysiumAnimationCatalog Catalog = BuildCatalog(Intent.Stem);
+	ElysiumAnimResolve::Resolve(Intent, Catalog, OutSelection);
 	if (!OutSelection.IsResolved() || OutSelection.AssetKind == EElysiumAnimAssetKind::None)
 	{
 		return;
@@ -513,6 +608,7 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 			OutSelection.SequenceLabel);
 		if (OutAssets.Space != nullptr)
 		{
+			ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets);
 			return;
 		}
 		// A fan the bake has not covered still names its current cell, so the body can stand that one
@@ -544,6 +640,10 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 				: Error;
 		}
 	}
+
+	// A layer rides a DIFFERENT pose than the one it composes onto, so it resolves whether or not
+	// the primary asset above loaded.
+	ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets);
 }
 
 bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request,

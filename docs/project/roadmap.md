@@ -164,8 +164,10 @@ first popup arms itself:
 - [x] **B4 `.dlg` parser + dialogue runner** *(9.1's core; UI is interim)* —
   `FElysiumDlgConversation` on `StartPlayerDialogRemote`, field-4/5 through the installed host,
   `OnDialogEnd` on close. The interim `SElysiumDialogueBox` is replaced by 9.2. → `docs/vtmb/game_runtime.md`.
-- [x] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — `unhidePlus()` resolves and
-  `setPlus()` arms `trig_popup_move`, unassisted from map load. → `docs/vtmb/python_bridge.md`.
+- [x] **B5 `ccmd` + the `cfg` alias table** *(= 9.3b + PL5d)* — `unhidePlus()` resolves through
+  Elysium's Plus-profile selector and `setPlus()` arms `trig_popup_move`, unassisted from map load;
+  the source install's personal Basic/Plus choice does not alter the runtime profile.
+  → `docs/vtmb/python_bridge.md`.
 - [x] **B6 Feed interaction (post-warp-2 continuation)** — the feed command, acceptance policy,
   paired state machine, pulse transaction and maker child output wiring landed; feeding the
   blueblood enables the chopshop trigger from the authored `OnFedUponEnd` wire. →
@@ -956,7 +958,8 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   *Deps:* 9.3a, B2. *Remaining blocked on:* the inventory follow-up, 9.4.
 - [x] **9.3b Console bridge — `ccmd` + the `cfg` alias table** *(the fifth scripting surface)* —
   `vampire.ccmd`/`cvar` over a host-agnostic `FElysiumConsole` store seeded from the PL5d `$ELYSIUM_EXPORT_ROOT/cfg`
-  mirror, with the console→Python fallthrough. Binding them lets the **real `vamputil.py` import**.
+  mirror, with the console→Python fallthrough. Elysium replaces only the imported personal `patchtype`
+  alias with its Plus-profile selector after parsing. Binding them lets the **real `vamputil.py` import**.
   → `docs/vtmb/python_bridge.md`; the `Character`-shim divergence:.
 - [x] **9.3c The script filesystem** — `FElysiumScriptFS` gives the VM its own filesystem namespace:
   reads union the `Saved/` overlay over the `$ELYSIUM_EXPORT_ROOT/` mirror, writes land in the overlay with copy-up,

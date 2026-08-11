@@ -154,6 +154,12 @@ private:
 	// scalar the accumulator actually receives in retail lives in the DLL and is not recovered, so
 	// this is a control surface rather than a reproduction.
 	float LayerWeight = 1.f;
+	// Where an armed aim grid is sampled, in the pose parameters' own degrees (CCC10). Distinct from
+	// the eye/gaze sliders: those aim a look, these pick the cell of a 3x3 weapon-aim grid. The
+	// ordinary player producer pins both at zero, so a grid that could not be steered here would read
+	// as a still pose and its whole point — that the torso tracks — would be invisible.
+	float LayerAimYaw = 0.f;
+	float LayerAimPitch = 0.f;
 	// Set when the cursor moved this frame, so the list scrolls to follow it.
 	bool bClipCursorMoved = false;
 

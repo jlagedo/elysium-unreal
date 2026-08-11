@@ -107,14 +107,24 @@ public:
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
-	// Compose an autolayer over whatever this body is already playing — a `_delta` additive or a
-	// masked partial-body `_layer`, decided from the sequence. Same resolution chain as PlayNpcClip,
-	// so a layer owned by a shared bank is reached by label; the layer itself is independent of the
-	// standing clip and survives a stance change. False when the label does not resolve, when the
-	// body has no animation host, or when the resolved sequence is neither kind
-	// (`UElysiumBipedAnimInstance::PlayLayer`).
+	// Compose an autolayer over whatever this body is already playing — a `_delta` additive, a masked
+	// partial-body `_layer`, or a masked aim grid, decided from the asset. Same resolution chain as
+	// PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself is
+	// independent of the standing clip and survives a stance change. False when the label does not
+	// resolve, when the body has no compiled graph, or when the resolved sequence is neither kind.
+	//
+	// Composed by the graph's own layered blend (CCC10), armed as the lab's hand driver — an
+	// **override** over the published record, so it survives a driven body republishing every frame
+	// and the owner can judge a layer over a moving host. The overlay and the additive are separate
+	// slots and do not displace each other.
+	// `OutError`, when given, names WHICH of the refusals happened. They have five different fixes —
+	// no graph, no vocabulary entry, nothing on the mount, an unmasked pose clip — and one bare
+	// `false` for all of them is a silence a caller cannot act on.
 	bool PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		float Weight);
+		float Weight, FString* OutError = nullptr);
+	// Steer the armed aim grid. The ordinary player producer pins both at zero, so without this a lab
+	// could not tell a 3x3 aim grid from a still pose.
+	void SetNpcLayerAim(USkeletalMeshComponent* Body, float Yaw, float Pitch);
 	void StopNpcLayers(USkeletalMeshComponent* Body);
 
 	// Stand this body on a label's whole blend grid rather than on the single cell the pose

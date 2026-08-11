@@ -428,6 +428,25 @@ bool FElysiumConsoleTest::RunTest(const FString&)
 	TestEqual(TEXT("cvar lookup is case-insensitive"), C.GetCvar(TEXT("FPS_MAX")), FString(TEXT("65")));
 	TestEqual(TEXT("missing cvar reads empty"), C.GetCvar(TEXT("nope")), FString());
 
+	// user.cfg is personal installer state, not the project's content profile. A source install
+	// configured as Basic must not change Elysium's owner-called Plus default.
+	const FString CfgDir = FPaths::AutomationTransientDir()
+		/ FString::Printf(TEXT("ElysiumConsoleProfile-%s"), *FGuid::NewGuid().ToString());
+	IFileManager::Get().MakeDirectory(*CfgDir, /*Tree*/ true);
+	ON_SCOPE_EXIT
+	{
+		IFileManager::Get().DeleteDirectory(*CfgDir, /*RequireExists*/ false, /*Tree*/ true);
+	};
+	TestTrue(TEXT("synthetic Basic user.cfg writes"), FFileHelper::SaveStringToFile(
+		TEXT("// Basic user.cfg\nalias patchtype \"setBasic()\"\n"), *(CfgDir / TEXT("user.cfg"))));
+	FElysiumConsole Profile;
+	Profile.LoadFromCfgDir(CfgDir);
+	const FString* PatchType = Profile.FindAlias(TEXT("patchtype"));
+	if (TestNotNull(TEXT("the profile alias exists"), PatchType))
+	{
+		TestEqual(TEXT("Elysium pins the Plus profile"), *PatchType, FString(TEXT("setPlus()")));
+	}
+
 	// The load-bearing path: `c.patchtype=""` -> alias patchtype -> "setPlus()" -> Python fallthrough.
 	TArray<FString> Fell;
 	C.SetPythonSink([&Fell](const FString& Line) { Fell.Add(Line); return true; });
@@ -488,6 +507,37 @@ bool FElysiumConsoleTest::RunTest(const FString&)
 	TestEqual(TEXT("and fires no verb"), Fired, 1);
 
 	FElysiumCommands::Get().SetUserCmdSink(nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerViewModelsTest,
+	"Elysium.Substrate.PlayerViewModels", GElysiumTestFlags)
+bool FElysiumPlayerViewModelsTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test_player_viewmodels__");
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+
+	TArray<FElysiumEntity*> ViewModels;
+	for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
+	{
+		if (Entity && Entity->Def
+			&& Entity->Def->Classname.Equals(
+				ElysiumViewModelClassName().ToString(), ESearchCase::IgnoreCase))
+		{
+			ViewModels.Add(Entity.Get());
+		}
+	}
+	TestEqual(TEXT("the player owns four script-addressable viewmodel slots"),
+		ViewModels.Num(), ElysiumViewModelSlotCount);
+	if (ViewModels.Num() == ElysiumViewModelSlotCount)
+	{
+		ViewModels[3]->SetRuntimeModel(TEXT("models/hands/male/tremere/v_tremere_male_hands.mdl"));
+		TestEqual(TEXT("patch Python can write the fourth slot's model"), ViewModels[3]->Model,
+			FString(TEXT("models/hands/male/tremere/v_tremere_male_hands.mdl")));
+	}
 	return true;
 }
 

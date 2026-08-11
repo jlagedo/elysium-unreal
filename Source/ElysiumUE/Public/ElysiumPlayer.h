@@ -35,6 +35,11 @@ inline FName ElysiumCombatCharacterClassName(){ return FName(TEXT("CBaseCombatCh
 // name index makes every one of those an ordinary targetname resolve — no magic target keyword.
 inline FName ElysiumPlayerClassName()         { return FName(TEXT("player")); }
 inline const TCHAR* ElysiumPlayerTargetName() { return TEXT("!player"); }
+// VtMB creates four engine-owned viewmodel entities with the player. The patch indexes slot 3
+// directly when selecting Tremere hands, so the entity/API shape exists before the first map-load
+// callback even while their rendered first-person bodies remain a later programme.
+inline FName ElysiumViewModelClassName()       { return FName(TEXT("viewmodel")); }
+inline constexpr int32 ElysiumViewModelSlotCount = 4;
 
 // The numeric character sheet — VtMB's own four containers, base and current.
 //

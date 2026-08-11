@@ -411,6 +411,68 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 		TestEqual(TEXT("and no row applied"), Idle.Iterations, 0);
 	}
 
+	// --- CCC10 — the weapon rung's seeded layer-activity translation ---------------------------------
+	{
+		// `Weapon_TranslateActivity` (virtual +0x5f4) is the SAME table `WeaponTranslations` already
+		// stood for the ordinary activity override — the layer rung only had to seed real rows into
+		// it, not build a second mechanism (`docs/vtmb/combat-and-damage.md`).
+		const FElysiumTranslationResult Glock = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
+			TEXT("glock"), FString());
+		TestEqual(TEXT("a named family translates its ordinary attack into its own layer activity"),
+			Glock.Resolved, FString(TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK")));
+		TestEqual(TEXT("kept as the first weapon answer too"), Glock.FirstWeaponActivity,
+			FString(TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK")));
+
+		const FElysiumTranslationResult Steyr = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
+			TEXT("STEYR"), FString());
+		TestEqual(TEXT("the weapon tag lookup is case-insensitive, like every vocabulary key"),
+			Steyr.Resolved, FString(TEXT("ACT_RANGE_ATTACK_LAYER_STEYR")));
+
+		const FElysiumTranslationResult Unseeded = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
+			TEXT("anaconda"), FString());
+		TestEqual(TEXT("a ranged family this rung has not seeded has no override row, same as an ")
+			TEXT("unarmed body's empty table"), Unseeded.Resolved,
+			FString(TEXT("ACT_RANGE_ATTACK1_LAYER")));
+		TestEqual(TEXT("and applies no row"), Unseeded.Iterations, 0);
+
+		const FElysiumTranslationResult Melee = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
+			TEXT("knife"), FString());
+		TestEqual(TEXT("a melee tag has no ranged override row either"), Melee.Resolved,
+			FString(TEXT("ACT_RANGE_ATTACK1_LAYER")));
+	}
+
+	// --- CCC10 — weapon grip, which is not melee-versus-ranged ---------------------------------------
+	{
+		// The property under test: a resolver keyed on "is this melee" gets `bushhook` and
+		// `sledgehammer` wrong, because their upper-body mask is the SAME 49-bone gate every firearm
+		// and every aim grid uses (`docs/vtmb/animation_and_movers.md` A.4).
+		TestEqual(TEXT("bushhook is two-handed, not one-handed melee"),
+			static_cast<int32>(WeaponGrip(TEXT("bushhook"))),
+			static_cast<int32>(EElysiumWeaponGrip::TwoHanded));
+		TestEqual(TEXT("sledgehammer is two-handed too"),
+			static_cast<int32>(WeaponGrip(TEXT("sledgehammer"))),
+			static_cast<int32>(EElysiumWeaponGrip::TwoHanded));
+
+		const TCHAR* OneHanded[] =
+			{ TEXT("baseballbat"), TEXT("katana"), TEXT("knife"), TEXT("stake"), TEXT("tireiron") };
+		for (const TCHAR* WeaponTag : OneHanded)
+		{
+			TestEqual(FString::Printf(TEXT("%s takes the right-arm mask"), WeaponTag),
+				static_cast<int32>(WeaponGrip(WeaponTag)),
+				static_cast<int32>(EElysiumWeaponGrip::OneHanded));
+		}
+
+		TestEqual(TEXT("a firearm defaults to the same two-handed mask the aim grids use"),
+			static_cast<int32>(WeaponGrip(TEXT("glock"))),
+			static_cast<int32>(EElysiumWeaponGrip::TwoHanded));
+		TestEqual(TEXT("and an unlisted tag takes the same default, never a guess"),
+			static_cast<int32>(WeaponGrip(TEXT("nonexistent_weapon"))),
+			static_cast<int32>(EElysiumWeaponGrip::TwoHanded));
+		TestEqual(TEXT("the lookup is case-insensitive"),
+			static_cast<int32>(WeaponGrip(TEXT("BUSHHOOK"))),
+			static_cast<int32>(EElysiumWeaponGrip::TwoHanded));
+	}
+
 	// --- The activity naming, which is one table read both ways ---------------------------------------
 	{
 		TestEqual(TEXT("the code names the activity"),
@@ -571,6 +633,10 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 	Pc.Clips.Add(TEXT("Jump2"), MakeClip(MiscBank, TEXT(""), 0, 0x0));
 	// An additive layer: flags 0x14, no activity, and never selectable as a base pose.
 	Pc.Clips.Add(TEXT("pistol_aim_layer"), MakeClip(CastBank, TEXT(""), 0, 0x14));
+	// CCC10's seeded weapon-layer translation target: an ordinary masked sequence, reached only
+	// through `ACT_RANGE_ATTACK_LAYER_GLOCK`, never through the untranslated `ACT_RANGE_ATTACK1_LAYER`.
+	Pc.Clips.Add(TEXT("glock_attack_layer"),
+		MakeClip(CastBank, TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK"), 30, 0x0));
 	// **No `land_crouch`.** The controlled corpus records the one ducked ACT_LAND_CROUCH request
 	// returning -1 on a validated player body, so the fixture must not invent one.
 
@@ -925,6 +991,57 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("the published move_yaw steers the fan"), Sideways.AxisValue[0], 90.0f);
 		TestEqual(TEXT("which lands on the right-strafe cell"), Sideways.AnimationName,
 			FString(TEXT("run_90")));
+	}
+
+	// --- CCC10 — the activity-keyed upper-body path, reached by weapon translation -------------------
+	{
+		// The bake-time bound path is asserted above (the "layer binding keeps its declaration
+		// order" block); this is the OTHER producer — an intent naming the ordinary player attack
+		// activity, translated per weapon family, never a host the bake wired by itself.
+		FElysiumAnimationIntent Attack;
+		Attack.Stem = TEXT("pc_body");
+		Attack.Activity = TEXT("ACT_RANGE_ATTACK1_LAYER");
+		Attack.WeaponTag = TEXT("glock");
+		Attack.Route = EElysiumAnimRoute::Activity;
+		Attack.Channel = EElysiumAnimChannel::UpperBody;
+		Attack.Source = EElysiumAnimSource::Debug;
+
+		FElysiumAnimationSelection Fired;
+		ElysiumAnimResolve::Resolve(Attack, PcCatalog, Fired);
+		TestEqual(TEXT("the ordinary attack activity translates per weapon family"),
+			Fired.WeaponActivity, FString(TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK")));
+		TestEqual(TEXT("and resolves the family's own sequence"), Fired.SequenceLabel,
+			FString(TEXT("glock_attack_layer")));
+		TestEqual(TEXT("resolved, not one of the fallback rungs"),
+			static_cast<int32>(Fired.Outcome), static_cast<int32>(EElysiumAnimOutcome::Resolved));
+
+		// An unarmed body — or any family this rung has not seeded — has no override row, exactly
+		// like retail's own empty table, and the untranslated activity is simply not in the
+		// vocabulary.
+		FElysiumAnimationIntent Unarmed = Attack;
+		Unarmed.WeaponTag.Reset();
+		FElysiumAnimationSelection Missed;
+		ElysiumAnimResolve::Resolve(Unarmed, PcCatalog, Missed);
+		TestEqual(TEXT("with no weapon the activity passes through untranslated"),
+			Missed.WeaponActivity, FString(TEXT("ACT_RANGE_ATTACK1_LAYER")));
+		TestEqual(TEXT("and misses, because the fixture carries no such clip"),
+			static_cast<int32>(Missed.Outcome), static_cast<int32>(EElysiumAnimOutcome::MissingSequence));
+	}
+
+	// --- CCC10 — AimYaw/AimPitch pass through the resolver unmodified, on any channel ----------------
+	{
+		// The player's own producer is what pins `AimYaw` at the literal 0.0f
+		// (`docs/vtmb/animation_and_movers.md`); the resolver's job is only to carry whatever it was
+		// handed through to step 6 without deriving or clamping it. Asserted with a NON-zero yaw
+		// precisely so this cannot pass by coincidentally matching the producer's own default.
+		FElysiumAnimationIntent Aiming = ActivityIntent(TEXT("pc_body"), TEXT("ACT_IDLE"));
+		Aiming.Channel = EElysiumAnimChannel::UpperBody;
+		Aiming.AimYaw = 27.0f;
+		Aiming.AimPitch = -12.5f;
+		FElysiumAnimationSelection AimSelection;
+		ElysiumAnimResolve::Resolve(Aiming, PcCatalog, AimSelection);
+		TestEqual(TEXT("aim yaw passes through unmodified"), AimSelection.AimYaw, 27.0f);
+		TestEqual(TEXT("aim pitch passes through unmodified"), AimSelection.AimPitch, -12.5f);
 	}
 
 	return true;

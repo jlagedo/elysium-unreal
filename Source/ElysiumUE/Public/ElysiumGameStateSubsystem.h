@@ -163,13 +163,13 @@ public:
 	// Seeded flags, and why each one:
 	//   Story_State = -4   the intro spine's "theatre done" value (chargen -5, leaving tutorial -2)
 	//   Tut_Jack    =  0   the tutorial beat counter DialogPostProcess dispatches on
-	//   Tut_Patch   =  0   arms the patch's beat-1 relocation (teleport_fade -> the retail start)
+	//   Tut_Patch   =  0   arms the Plus profile's beat-1 relocation after Jack's first exchange
 	//   Linux_Wine  =  1   set by BOTH vamputil.setBasic() and setPlus(), i.e. by the patch-type
 	//                      selection; `logic_pythoncheck linux_check` fires OnFalse -> popup_linux
 	//                      without it, so seeding it stands in for having configured the patch
-	// The Patch_Plus family (PP / Patch_Plus / Jack_Extra / Flynn_Extra / Extra_Lines) is left at
-	// G's default 0 = the patch's "Basic" profile, the closest to retail. `G` is default-0 on miss
-	// (RE3), so the zeros need no explicit seeding; only the non-zero flags are written.
+	// The Patch_Plus family (PP / Patch_Plus / Jack_Extra / Flynn_Extra / Extra_Lines) remains at
+	// G's default 0 only during pre-map bootstrap. The first map's `unhidePlus()` invokes Elysium's
+	// pinned Plus selector, and the patch's own `setPlus()` remains the sole writer of those values.
 	void BeginNewGame(int32 Clan, bool bMale);
 
 	// Chargen's ACCEPT: land a finished character on the record and on the live player entity — the

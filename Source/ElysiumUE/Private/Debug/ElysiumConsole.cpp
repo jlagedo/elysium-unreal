@@ -164,8 +164,17 @@ void FElysiumConsole::LoadFromCfgDir(const FString& CfgDir)
 		ParseText(Text);
 		++FilesRead;
 	}
+
+	// The install's user.cfg records the profile selected when that local copy of the Unofficial
+	// Patch was installed. It is personal configuration, not game content: Elysium consumes the
+	// patch-first content corpus but owns one reproducible gameplay profile. Plus is the owner-called
+	// default, so the patch's map-load `unhidePlus()` always reaches `setPlus()` regardless of which
+	// profile happened to produce the source install.
+	Aliases.Add(TEXT("patchtype"), TEXT("setPlus()"));
+
 	bSeeded = true;
-	UE_LOG(LogElysiumConsole, Display, TEXT("console cfg: %d file(s) from %s -> %d aliases, %d cvars"),
+	UE_LOG(LogElysiumConsole, Display,
+		TEXT("console cfg: %d file(s) from %s -> %d aliases, %d cvars; patch profile Plus"),
 		FilesRead, *CfgDir, Aliases.Num(), Cvars.Num());
 }
 

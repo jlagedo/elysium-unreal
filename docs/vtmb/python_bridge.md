@@ -76,6 +76,19 @@ trees. Ignition is `logic_auto.OnMapLoad -> unhidePlus()`, wired on **107 of 108
 `ScheduleTask`s the `c.patchtype = ""` assignment. Port task: roadmap **9.3b** (+ **PL5d** for the
 cfg copy).
 
+**Elysium profile divergence — owner call:** the rebuild always runs the Unofficial Patch's Plus
+profile. The imported patch-first maps, scripts, dialogue and data already establish that the patch
+is active; `Patch_Plus` distinguishes its Basic and Plus profiles rather than patched and unpatched
+content. The cfg mirror remains a verbatim record of the source install, but `FElysiumConsole`
+replaces only its personal `patchtype` selector with `setPlus()` after parsing. `unhidePlus()` and
+the patch's `setPlus()` body remain unchanged and own the profile's state and entity mutations.
+
+The Plus initializer also exposes an engine contract which is otherwise easy to miss:
+`setPlus() -> IsIdling()` indexes `FindEntitiesByClass("viewmodel")[3]` for a Tremere before it
+tests `Patch_Plus`. The original runtime therefore has at least four live, script-addressable
+`viewmodel` entities when map initialization runs. Elysium creates the same four ordinary substrate
+entities with the player; first-person rendering remains owned by the viewmodel programme.
+
 The Unofficial Patch shadows all of it (loose search paths resolve before the VPKs, per
 `## Asset resolution` in CLAUDE.md): **21 of the 26 shared scripts differ**, plus 9
 patch-only `.py` and 6 retail-only; it shadows all 138 `.dlg` and adds 9.

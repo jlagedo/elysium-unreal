@@ -690,7 +690,7 @@ files.
 **Past the first slice's finish line**, and tracked here because they reach the body through the same
 seam rather than a second one:
 
-- [ ] **CCC10 The weapon rung — layered, additive and aim nodes.** The graph nodes `CCC5`
+- [x] **CCC10 The weapon rung — layered, additive and aim nodes.** The graph nodes `CCC5`
   deliberately omits: `FAnimNode_LayeredBoneBlend` over the baked blend profiles, additive nodes for
   the `_delta` family over the base each asset names, and an aim node for the upper-body
   overlay family. The 3×3 aim grids bake once per declaring host but cannot be stood at all today,
@@ -786,6 +786,48 @@ seam rather than a second one:
   it. Split by instrument, per the surface below: the headless tiers carry mask resolution, node
   composition order and the activity-translation path, and **the owner judges the pose live in the
   green room**, which is why the layer lab has to survive this rung driving the graph.
+  *Landed:* the grip and weapon-translation tables, the `UpperBody`/`Additive` resolver branch, the
+  instance pins, and the four graph nodes — a `LayeredBoneBlend` carrying the tag the runtime finds
+  it by, an `ApplyAdditive`, the aim `BlendSpacePlayer` and the `BlendListByBool` that selects grid
+  or sequence — authored live and captured to `ABP_ElysiumBiped.t3d`. The proxy's layer accumulator
+  is deleted and the layer lab drives the graph, with four preset acceptance cases that stand a body,
+  enter drive and arm a case in one click. `Elysium.Content.UpperBodyLayerArming` walks the whole
+  arming path headlessly — vocabulary, declaring host, derived `<clip>@<host>` asset, mask profile on
+  the playing skeleton — over every label an autolayer table binds.
+  **The bone mask is not a graph pin**: `FAnimNode_LayeredBoneBlend::BlendMasks` is edit-time state,
+  so the node is found through `FAnimSubsystem_Tag` and set by name through `SetBlendMask`, which is
+  what Epic's own `ULayeredBoneBlendLibrary` does. A null mask is legal only because the graph is a
+  *template* Animation Blueprint, which is what keeps a generated profile asset out of the tracked
+  graph text.
+  *Findings:* three, all of them silent failures. **A blend profile does not travel with
+  `AddCompatibleSkeleton`** — the layer masks were created only on the bank skeleton that authored
+  them, and a profile's entries are bone references into the skeleton that owns them, so no body
+  could ever resolve its own mask and every masked layer was refused. `DeclareCompatibleSkeletons`
+  now mirrors them onto the declaring family skeleton, name preserved, bones intersected.
+  **`HasCompiledGraph` asked `IsChildOf(UAnimBlueprintGeneratedClass)`**, which is the metaclass of a
+  generated graph class rather than an ancestor of it — a predicate that was never true for any body,
+  gating not only the layer refusal but `PlayOneShot`/`StopOneShot`, which had been routing to the
+  clip-player fallback on every body while still animating.
+  **`glock_aim_layer` is an authored sign defect** and the wrong grid to calibrate against
+  (`docs/vtmb/animation_and_movers.md` → aim axes); the preset cases lead with `anaconda` instead.
+  *Scope moved out, owner-called.* Two of the four acceptance clauses leave this rung.
+  **The gesture/sequence un-collapse goes to `ANM6`**, which already owns choreographed playback. It
+  is the only clause with nothing built, it shares no machinery with the other three, and the RE
+  behind it landed against the shape this rung assumed: a gesture is an overlay in the same four-slot
+  `CBaseAnimatingOverlay` array, rate-scaled then free-running, so the second scene-time-pinned
+  player sketched here would reproduce timing retail does not have
+  (`docs/vtmb/animation_and_movers.md` A.4c).
+  **"Its sequence event fires while layered" goes to `CCC11`**, because the carrier does not exist:
+  nothing in the bake emits a `UAnimNotify`, so VtMB sequence events reach no Unreal notify today.
+  The risk the clause names is real and unchanged — those layer clips are 4–16 frames, and a
+  sub-threshold node weight during a blend drops queued notifies — but it is only testable once the
+  sequence-event bake that `CWeaponRanged::Shot` needs exists, and that bake is `CCC11`'s.
+  *Accepted live.* An aim grid stands as a layer over a moving host with the torso tracking view
+  pitch and the legs keeping their gait. The grip boundary reads correctly side by side, and the
+  **left arm is the discriminator**: under the two-handed `bushhook_bobble_layer` both arms and the
+  torso pose while the legs stay on the base, and under a one-handed overlay only the right arm
+  moves. The two grips resolve different profiles through one node, which is the claim a
+  melee-versus-ranged split fails.
   *Deps:* `CCC5`; `docs/project/animation-roadmap.md` ANM1 and ANM2's binding half;
   `docs/vtmb/combat-and-damage.md` for the weapon-layer producers.
 
@@ -953,10 +995,19 @@ seam rather than a second one:
   ordering comes from the three weighted lists the vdata table declares
   (`docs/vtmb/vdata-catalog.md`). One montage-slot mechanism serves both, and building them apart is
   how there come to be two.
+  **The sequence-event carrier is built here, and `CCC10` handed over a clause with it.** Nothing in
+  the bake emits a `UAnimNotify`, so a VtMB sequence event reaches no Unreal notify today and the
+  ballistics trigger has nothing to ride: an attack-layer sequence event is what reaches
+  `CWeaponRanged::Shot` (`docs/vtmb/combat-and-damage.md`). The clause `CCC10` could not test comes
+  with it — those layer clips are 4–16 frames at 30 fps, and a node whose weight is still below
+  threshold during a blend drops its queued notifies, so a shot can be lost outright with nothing
+  logged. The bake and the guard test land together; a guard written before the carrier exists would
+  assert against a synthetic notify and rot.
   *Acceptance:* an NPC's ambient behaviour and a scripted beat both reach a pose through the intent
   seam rather than a direct clip call, and `m_iszCustomMove` plays over a travelling body; a struck
   body flinches on the `hit_yaw` grid the hit direction selects, and a blocked attacker plays the
-  reaction its own sequence names rather than one chosen from a direction.
+  reaction its own sequence names rather than one chosen from a direction; a weapon's attack-layer
+  sequence event reaches the shot while the layer is still blending in.
   *Deps:* `CCC10`; `docs/project/animation-roadmap.md` ANM4's catalog for anything outside the
   hand-read set; `docs/vtmb/combat-and-damage.md` for the weapon and reaction chains, whose open
   joins are numeric (spread and crosshair math, the ranged multiplier decomposition, post-soak

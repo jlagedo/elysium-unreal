@@ -714,6 +714,37 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("the BACKWARD walk, and the middle of this slider is the forward one.");
 	}
 
+	// CCC10's acceptance, one click per claim. Ahead of the hand controls because this is the door
+	// the owner should come through: a body carries ~1,500 clips and each claim needs one specific
+	// layer, so a case that has to be hunted for is a case that does not get run.
+	ImGui::SeparatorText("Layer test cases (CCC10)");
+	for (int32 Case = 0; Case < FElysiumGreenRoomRun::LayerCaseCount(); ++Case)
+	{
+		if (Case > 0)
+		{
+			ImGui::SameLine();
+		}
+		if (ImGui::Button(COG_TCHAR_TO_CHAR(FElysiumGreenRoomRun::LayerCaseName(Case))))
+		{
+			LastError.Reset();
+			LastNotice.Reset();
+			FString Summary;
+			if (Lab.LabLoadLayerCase(Case, Summary, LastError))
+			{
+				LastNotice = Summary;
+				// The sliders follow what the case set, or the next drag would snap the aim back to
+				// wherever they happened to be sitting.
+				LayerAimYaw = Lab.LabLayerAimYaw();
+				LayerAimPitch = Lab.LabLayerAimPitch();
+				LayerWeight = 1.f;
+			}
+		}
+	}
+	if (!LastNotice.IsEmpty())
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*LastNotice));
+	}
+
 	RenderAutoLayers(Lab);
 
 	// The layer controls, drawn whether or not one is running: the weight has to be settable before
@@ -745,6 +776,54 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::SameLine();
 		ImGui::TextColored(ElysiumCogStyle::ColName, "%d composing", Composing);
 	}
+
+	// The aim pair, beside the weight and for the same reason: **drawn whether or not a host declares
+	// a layer**. It cannot live with the declared-autolayer list above, which returns early for a host
+	// that declares none — and a walking body is exactly such a host, so the one control the aim-grid
+	// acceptance needs would vanish precisely when the layer is being judged over a moving host.
+	//
+	// The range is the grids' own: every shipped aim grid is 3x3 spanning -45..45 on both axes, so a
+	// wider slider would spend half its travel clamped against a cell that does not exist.
+	const bool bFollowsLook = Lab.LabAimFollowsLook();
+	ImGui::SetNextItemWidth(GetDpiScale() * 160.f);
+	if (ImGui::SliderFloat("aim_yaw", &LayerAimYaw, -45.f, 45.f, "%.0f deg"))
+	{
+		Lab.LabSetLayerAim(LayerAimYaw, LayerAimPitch);
+	}
+	ImGui::SameLine();
+	if (ImGui::SmallButton("level"))
+	{
+		LayerAimYaw = 0.f;
+		LayerAimPitch = 0.f;
+		Lab.LabSetLayerAim(LayerAimYaw, LayerAimPitch);
+	}
+
+	// While the view drives the pitch, the slider REPORTS rather than sets it: two writers on one
+	// value is how a control comes to disagree with the body it is supposed to describe.
+	if (bFollowsLook)
+	{
+		LayerAimPitch = Lab.LabLayerAimPitch();
+	}
+	ImGui::BeginDisabled(bFollowsLook);
+	ImGui::SetNextItemWidth(GetDpiScale() * 160.f);
+	if (ImGui::SliderFloat("aim_pitch", &LayerAimPitch, -45.f, 45.f, "%.0f deg"))
+	{
+		Lab.LabSetLayerAim(LayerAimYaw, LayerAimPitch);
+	}
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+	bool bFollow = bFollowsLook;
+	if (ImGui::Checkbox("follows look", &bFollow))
+	{
+		Lab.LabSetAimFollowsLook(bFollow);
+	}
+
+	// **Retail's player selector writes `aim_yaw` as a literal 0**, taking pitch from a separate
+	// field (`docs/vtmb/animation_and_movers.md`), so the yaw axis is the NPC-side parameter and
+	// pitch is the half a player can steer by looking. Saying so keeps a swept yaw here from being
+	// read as evidence that the player's own grid sweeps.
+	ImGui::TextDisabled("Look up/down drives aim_pitch (retail's own shape). aim_yaw is NPC-side:");
+	ImGui::TextDisabled("retail's player selector writes it as a literal 0, so it stays on the slider.");
 }
 
 void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
@@ -917,7 +996,17 @@ void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
 	// What the MODEL declares rides over the standing clip, in the order it declares them. The lab
 	// does not choose this list — it displays it and lets it be armed, so a disagreement between
 	// what was declared and what is riding is visible rather than inferred.
-	const FString Standing = Lab.LabClip();
+	//
+	// **While driving there is no lab clip**: the graph is standing whatever the gait resolved, and
+	// that is precisely the host the owner wants a layer over. So the host is read off the live
+	// selection record rather than off what the lab last stood, which is what makes the declared
+	// list follow a walking body instead of emptying the moment drive mode starts.
+	FString Standing = Lab.LabClip();
+	if (Lab.IsDriving())
+	{
+		const UElysiumBipedAnimInstance* Driven = GetBipedInstance();
+		Standing = Driven != nullptr ? Driven->GetAppliedSelection().SequenceLabel : FString();
+	}
 	if (Standing.IsEmpty())
 	{
 		return;

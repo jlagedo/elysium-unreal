@@ -1015,6 +1015,8 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
 	}
 
+	const FReferenceSkeleton& TargetRef = Target->GetReferenceSkeleton();
+
 	// The direction is "this skeleton may play animations authored on that one", so the bank is the
 	// argument and the body's own rig is the target. Declaring it is not a merge: the engine builds
 	// a name-keyed bone map per pair, and a bank bone this rig has never had maps to INDEX_NONE and
@@ -1027,9 +1029,57 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 		{
 			return FString::Printf(TEXT("compatible skeleton %s did not load"), *SourceName);
 		}
-		if (Source != Target)
+		if (Source == Target)
 		{
-			Target->AddCompatibleSkeleton(Source);
+			continue;
+		}
+		Target->AddCompatibleSkeleton(Source);
+
+		// A blend profile does NOT travel with the compatibility declaration, and a layer that
+		// cannot find its bone mask composes over the whole rig instead of over the torso — which
+		// loses the body's stance from the waist down and logs nothing.
+		//
+		// The mask is resolved by NAME against the skeleton the clip is PLAYING on, because a
+		// profile's entries are bone references into the skeleton that owns them: the bank's copy
+		// indexes the bank's tree, so handing it to a body gates a shifted set of bones. So the
+		// declaration has to carry the profiles across as well — same name, because they are
+		// content-addressed and the sequence already points at that name, and restricted to the
+		// bones this rig actually has, on the same rule that drops a bank track with nowhere to
+		// bind. This is the only place that knows both skeletons; the bank pass that authors the
+		// profile has never heard of the bodies that will play its clips.
+		for (const TObjectPtr<UBlendProfile>& Carried : Source->BlendProfiles)
+		{
+			if (Carried == nullptr || Target->GetBlendProfile(Carried->GetFName()) != nullptr)
+			{
+				// Content-addressed, so a name the target already carries is already this mask.
+				continue;
+			}
+			TArray<TPair<FName, float>> Owned;
+			for (int32 Index = 0; Index < Carried->GetNumBlendEntries(); ++Index)
+			{
+				const FBlendProfileBoneEntry& Entry = Carried->GetEntry(Index);
+				if (TargetRef.FindBoneIndex(Entry.BoneReference.BoneName) != INDEX_NONE)
+				{
+					Owned.Emplace(Entry.BoneReference.BoneName, Entry.BlendScale);
+				}
+			}
+			if (Owned.IsEmpty())
+			{
+				// Nothing of this gate exists on this rig. Left absent rather than written empty:
+				// an empty mask reads at evaluation as a gate that owns nothing, which is a pose
+				// silently missing rather than a profile audibly missing.
+				continue;
+			}
+			UBlendProfile* Mirrored = Target->CreateNewBlendProfile(Carried->GetFName());
+			// The mode FIRST, for the reason the bank pass states: an entry equal to the mode's own
+			// default is not stored, and that default is 0 for a blend mask against 1 for every
+			// other mode, so writing the scales into a profile still in its constructed mode
+			// discards them and saves a profile that owns the whole rig.
+			Mirrored->Mode = Carried->Mode;
+			for (const TPair<FName, float>& Bone : Owned)
+			{
+				Mirrored->SetBoneBlendScale(Bone.Key, Bone.Value, /*bRecurse=*/false, /*bCreate=*/true);
+			}
 		}
 	}
 

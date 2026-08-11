@@ -534,8 +534,9 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 		return false;
 	}
 
-	// Seed the console alias/cvar store from out/cfg and wire its Python fallthrough back to us, so
-	// `ccmd.patchtype=""` -> alias `patchtype` -> `setPlus()` -> exec in __main__ (9.3b).
+	// Seed the console alias/cvar store from out/cfg and wire its Python fallthrough back to us. The
+	// console pins Elysium's Plus profile after parsing personal cfg, so `ccmd.patchtype=""` -> alias
+	// `patchtype` -> `setPlus()` -> exec in __main__ (9.3b).
 	ConsoleStore.SetPythonSink([this](const FString& Line) { return this->ExecConsoleLine(Line); });
 	ConsoleStore.LoadFromCfgDir(FElysiumContentPaths::CfgDir());
 

@@ -271,19 +271,144 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 }
 
 bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, float Weight)
+	const FString& ClipName, float Weight, FString* OutError)
 {
-	UAnimSequence* Anim = Body
-		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset())
-		: nullptr;
+	// Every refusal below says which one it was. Five paths answered one bare `false` before, and a
+	// caller cannot tell "this body has no graph" from "this label is not in the vocabulary" from
+	// "the mount has no asset" — three different fixes behind one silence.
+	auto Refuse = [OutError](FString&& Why) -> bool
+	{
+		if (OutError != nullptr)
+		{
+			*OutError = MoveTemp(Why);
+		}
+		return false;
+	};
+
+	UElysiumBipedAnimInstance* Inst = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Inst == nullptr)
+	{
+		return Refuse(TEXT("this body has no biped animation host"));
+	}
+	if (!Inst->HasCompiledGraph())
+	{
+		// The layer is composed by the graph's own layered blend (CCC10), so a body with no compiled
+		// graph has nowhere to put one — the same refusal `PlayNpcGrid` gives for the same reason.
+		return Refuse(TEXT("this body is on the native host, which carries no compiled graph — the "
+			"generated ABP is not on the mount. Run `uv run elysium export bundle policy`"));
+	}
+
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	if (Anims == nullptr)
+	{
+		return Refuse(TEXT("no animation subsystem"));
+	}
+
+	USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+	const FElysiumNpcClipSet* Set = Anims->GetClipSet(Stem);
+	const FElysiumNpcClip* LayerClip = Set != nullptr ? Set->Find(ClipName) : nullptr;
+	if (LayerClip == nullptr)
+	{
+		return Refuse(FString::Printf(
+			TEXT("'%s' is not in %s's vocabulary (%d clips)"), *ClipName, *Stem,
+			Set != nullptr ? Set->Clips.Num() : 0));
+	}
+	const FString LayerOwner = LayerClip->IsOwnedBy(Stem) ? Stem : LayerClip->Owner;
+
+	// **A masked overlay ships once per DECLARING HOST, not under its plain label.** An overlay whose
+	// mask owns the shared ancestor split bone has to be written against the chain that bone's
+	// rotation is expressed in, and that chain is the host's — so the exporter emits it as
+	// `<clip>@<host>` per host and suppresses the raw form outright, because ordinary FK reads the
+	// raw one as the upper body folded about the waist. Asking for the plain label therefore finds
+	// nothing for every aim layer, which is not a missing export.
+	//
+	// The host is whichever one the model's own autolayer table binds this layer to. Sorted, so the
+	// same click stands the same derived asset twice running.
+	FString Host;
+	if (const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(LayerOwner))
+	{
+		TArray<FString> Hosts;
+		for (const TPair<FString, FElysiumAutoLayerBinding>& Entry : Table->AutoLayers)
+		{
+			if (Entry.Value.Clips.Contains(ClipName))
+			{
+				Hosts.Add(Entry.Key);
+			}
+		}
+		Hosts.Sort();
+		Host = Hosts.IsEmpty() ? FString() : Hosts[0];
+	}
+
+	// An aim grid stands as a blend space and a melee overlay as a plain sequence — the same two
+	// shapes the resolver's own layer path produces, decided the same way: does the label name a grid.
+	if (UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner, ClipName, Host))
+	{
+		// Every cell of a grid shares one mask (`docs/vtmb/animation_and_movers.md` A.4), so the
+		// first sample that carries one names the whole grid's.
+		FName MaskName;
+		for (const FBlendSample& Sample : Space->GetBlendSamples())
+		{
+			if (Sample.Animation != nullptr)
+			{
+				if (const UElysiumAnimLayerMask* Mask =
+					Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>())
+				{
+					MaskName = Mask->Profile;
+					break;
+				}
+			}
+		}
+		Inst->ArmDebugUpperBodyOverlay(nullptr, Space, MaskName, Weight);
+		return true;
+	}
+
+	// The derived form first for the same reason, then the plain label — an additive ships both ways
+	// and a mask-free overlay ships only plain, so trying both covers either without knowing which.
+	UAnimSequence* Anim = Host.IsEmpty() ? nullptr
+		: ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+			FString::Printf(TEXT("%s@%s"), *ClipName, *Host));
 	if (Anim == nullptr)
 	{
-		return false;
+		Anim = ResolveNpcClip(Stem, ClipName, Mesh);
 	}
-	// The accumulator lives on the proxy until `CCC10` lands the layered bone blend, so this is the
-	// biped host's own path and answers false for anything else.
-	UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance());
-	return Inst != nullptr && Inst->PlayLayer(Anim, Weight);
+	if (Anim == nullptr)
+	{
+		return Refuse(FString::Printf(
+			TEXT("'%s' is owned by '%s' but neither its grid, its derived form '%s@%s' nor its plain "
+				"label is on the mount (host %s)"),
+			*ClipName, *LayerOwner, *ClipName, *Host,
+			Host.IsEmpty() ? TEXT("was not found in the owner's autolayer table") : *Host));
+	}
+	// The same two-sided gate the retired accumulator carried, and it still keeps the composition
+	// honest: an additive is read as a delta and needs no mask, while an ordinary layer is read as a
+	// pose and is meaningless without one — composed unmasked it would pull every bone it does not
+	// own toward the reference pose and lose the body's stance from the waist down.
+	if (Anim->IsValidAdditive())
+	{
+		Inst->ArmDebugUpperBodyAdditive(Anim, Weight);
+		return true;
+	}
+	if (const UElysiumAnimLayerMask* Mask = Anim->FindMetaDataByClass<UElysiumAnimLayerMask>())
+	{
+		Inst->ArmDebugUpperBodyOverlay(Anim, nullptr, Mask->Profile, Weight);
+		return true;
+	}
+	return Refuse(FString::Printf(
+		TEXT("'%s' loaded but is neither additive nor masked — an unmasked pose clip cannot be a "
+			"layer, it would drag every bone it does not own to the reference pose"),
+		*ClipName));
+}
+
+void UElysiumEntityBodies::SetNpcLayerAim(USkeletalMeshComponent* Body, float Yaw, float Pitch)
+{
+	if (UElysiumBipedAnimInstance* Inst = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr)
+	{
+		Inst->SetDebugUpperBodyAim(Yaw, Pitch);
+	}
 }
 
 bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem,
@@ -306,12 +431,12 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 		return false;
 	}
 
-	// The mirror of `PlayLayer`'s gate, and it fails the same way from the other side. A grid whose
+	// The mirror of `PlayNpcLayer`'s gate, and it fails the same way from the other side. A grid whose
 	// cells are partial-body `*_layer` overlays owns only the bones its mask names; stood as a BASE
 	// pose there is no mask in the path at all, so every bone it does not own arrives at the shared
 	// skeleton's reference pose and the body loses its stance from the waist down. Retail composes
-	// those through the layer accumulator and never as a base — a masked sequence reaching the base
-	// path is a defect, not a mode.
+	// those as layers and never as a base — a masked sequence reaching the base path is a defect,
+	// not a mode. Arming one as a layer is what `PlayNpcLayer` above is for.
 	for (const FBlendSample& Sample : OutGrid.Space->GetBlendSamples())
 	{
 		if (Sample.Animation != nullptr
@@ -400,7 +525,7 @@ void UElysiumEntityBodies::StopNpcLayers(USkeletalMeshComponent* Body)
 	if (UElysiumBipedAnimInstance* Inst = Body
 		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr)
 	{
-		Inst->StopAllLayers();
+		Inst->ClearDebugUpperBodyLayer();
 	}
 }
 

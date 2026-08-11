@@ -350,6 +350,16 @@ struct FElysiumJumpLatch
 	float LandHoldSeconds = 0.35f;
 };
 
+// A weapon's grip, which selects the upper-body mask a layer composes against (CCC10). It is not
+// melee-versus-ranged: every firearm and thrown weapon is two-handed, and so are the melee
+// `bushhook` and `sledgehammer` — a resolver keyed on "is this melee" gets those two wrong
+// (`docs/vtmb/animation_and_movers.md` A.4).
+enum class EElysiumWeaponGrip : uint8
+{
+	TwoHanded,
+	OneHanded,
+};
+
 // What the pose layer can say about the one-shot the latch's phase is riding.
 //
 // Three values, not a bool, because "no answer" and "not finished" are different facts and
@@ -431,9 +441,18 @@ namespace ElysiumAnimIntent
 	// translation an unarmed request for either selects nothing at all.
 	TArrayView<const FElysiumActivityTranslation> ActorTranslations();
 
-	// The weapon table (`Weapon_TranslateActivity`, virtual +0x5f4) for a weapon tag. Empty for every
-	// tag today — no weapon exists to translate through — and empty for the unarmed body forever.
+	// The weapon table (`Weapon_TranslateActivity`, virtual +0x5f4) for a weapon tag. Carries the
+	// layer rung's seeded rows — `ACT_RANGE_ATTACK1_LAYER` to a family-specific
+	// `ACT_RANGE_ATTACK_LAYER_*` (`docs/vtmb/combat-and-damage.md`) — for the small set of ranged
+	// families CCC10 exercises; empty for an unarmed body and for any tag this rung has not seeded,
+	// same as retail's own empty table for an unarmed body.
 	TArrayView<const FElysiumActivityTranslation> WeaponTranslations(const FString& WeaponTag);
+
+	// The weapon's grip (`docs/vtmb/animation_and_movers.md` A.4), which picks the 49-bone or
+	// 24-bone upper-body mask profile a layer composes against. Defaults to `TwoHanded`: every
+	// firearm and thrown weapon takes it, and so do the two-handed melee weapons, so an unlisted
+	// tag takes the mask every aim grid already assumes.
+	EElysiumWeaponGrip WeaponGrip(const FString& WeaponTag);
 
 	// What the translation pass answered, in the shape the record keeps it.
 	struct FElysiumTranslationResult

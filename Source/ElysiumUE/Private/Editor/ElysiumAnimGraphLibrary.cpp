@@ -327,6 +327,25 @@ namespace ElysiumAnimGraphBootstrap
 		return true;
 	}
 
+	// Resize an array member inside the node's own `FAnimNode_*` struct — CCC10's
+	// `FAnimNode_LayeredBoneBlend::BlendMasks`/`LayerSetup`, which a raw `BlendMode` write does not
+	// resize on its own. Mirrors what the editor's `PostEditChangeProperty` handler does
+	// (`SyncBlendMasksAndLayers`: `BlendMasks.SetNum(BlendPoses.Num()); LayerSetup.Reset();`), which
+	// a reflection-only write never triggers.
+	bool ResizeNodeArray(UEdGraphNode* Node, const TCHAR* Member, int32 Num)
+	{
+		FProperty* Prop = nullptr;
+		void* Container = StructMember(Node, TEXT("Node"), Member, Prop);
+		FArrayProperty* Array = CastField<FArrayProperty>(Prop);
+		if (Container == nullptr || Array == nullptr)
+		{
+			return false;
+		}
+		FScriptArrayHelper Helper(Array, Array->ContainerPtrToValuePtr<void>(Container));
+		Helper.Resize(Num);
+		return true;
+	}
+
 	// A plain property on the node itself rather than inside its runtime struct — a transition's
 	// `LogicType` and `CrossfadeDuration` are node-level editor settings.
 	template <typename T>
@@ -516,6 +535,99 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			TEXT("machine -> slot"));
 		Wire(Link(FirstPin(Slot, EGPD_Output), FirstPin(Inertia, EGPD_Input)),
 			TEXT("slot -> inertialization"));
+
+		// --- the upper-body layer (CCC10) ----------------------------------------------------------
+		//
+		// Sits after the inertializer, outside the machine: a weapon layer rides beside the
+		// locomotion state rather than through it, so it does not wait on a gait transition or
+		// interrupt one. Both riders are grip-agnostic and asset-driven, matching every other node
+		// in this graph — the resolver decides what plays, the graph only composes it.
+		{
+			// The layer's own pose source: an aim grid (BlendSpacePlayer, steered by AimYaw/AimPitch)
+			// or a melee overlay (a plain sequence) — never both, exactly the base channel's own
+			// "exactly one of these two" shape, picked the same way a gait state picks between its
+			// fan and its single-cell fallback.
+			UEdGraphNode* UpperBodySpace = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpacePlayer"), -160, 260);
+			UEdGraphNode* UpperBodySequence = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_SequencePlayer"), -160, 420);
+			UEdGraphNode* UpperBodyPick = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_BlendListByBool"), 40, 340);
+			UEdGraphNode* Layer = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), 280, 0);
+			UEdGraphNode* AdditiveSequence = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_SequencePlayer"), 280, 200);
+			UEdGraphNode* Additive = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_ApplyAdditive"), 520, 0);
+			if (UpperBodySpace == nullptr || UpperBodySequence == nullptr || UpperBodyPick == nullptr
+				|| Layer == nullptr || AdditiveSequence == nullptr || Additive == nullptr)
+			{
+				UE_LOG(LogTemp, Error, TEXT("[animbp] a CCC10 layer node class was not found"));
+				return;
+			}
+
+			ExposePin(UpperBodySpace, TEXT("BlendSpace"));
+			Wire(DriveFromBool(*Graph, PinNamed(UpperBodySpace, TEXT("BlendSpace")),
+				TEXT("RequestedUpperBodyBlendSpace"), -560, 220), TEXT("layer BlendSpace pin"));
+			Wire(DriveFromBool(*Graph, PinNamed(UpperBodySpace, TEXT("X")), TEXT("AimYaw"), -560, 280),
+				TEXT("layer X (AimYaw) pin"));
+			Wire(DriveFromBool(*Graph, PinNamed(UpperBodySpace, TEXT("Y")), TEXT("AimPitch"), -560, 340),
+				TEXT("layer Y (AimPitch) pin"));
+
+			ExposePin(UpperBodySequence, TEXT("Sequence"));
+			Wire(DriveFromBool(*Graph, PinNamed(UpperBodySequence, TEXT("Sequence")),
+				TEXT("RequestedUpperBodySequence"), -560, 420), TEXT("layer melee Sequence pin"));
+
+			Wire(DriveFromBool(*Graph, PinNamed(UpperBodyPick, TEXT("bActiveValue")),
+				TEXT("bUpperBodyHasBlendSpace"), -160, 100), TEXT("layer bActiveValue"));
+			// Index 0 is the TRUE branch, same convention the gait states use.
+			Wire(Link(FirstPin(UpperBodySpace, EGPD_Output), PinNamed(UpperBodyPick, TEXT("BlendPose_0"))),
+				TEXT("layer blend space -> true pose"));
+			Wire(Link(FirstPin(UpperBodySequence, EGPD_Output), PinNamed(UpperBodyPick, TEXT("BlendPose_1"))),
+				TEXT("layer sequence -> false pose"));
+
+			// The mask lives on the blend node, not on a dedicated aim node — the roadmap's own point.
+			// BlendMask mode over a single layer: one base pose, one masked rider, the mask read off
+			// whichever clip the resolver selected rather than guessed from a weapon's grip.
+			SetNodeValue<uint8>(Layer, TEXT("BlendMode"), 1);   // ELayeredBoneBlendMode::BlendMask
+			// `BlendMode` is a plain write here rather than an editor property change, so the resize
+			// the editor's own handler would do (`SyncBlendMasksAndLayers`) has to be done by hand:
+			// one mask slot per blend pose, and no branch-filter setup, which is what BlendMask mode
+			// means.
+			ResizeNodeArray(Layer, TEXT("BlendMasks"), 1);
+			ResizeNodeArray(Layer, TEXT("LayerSetup"), 0);
+			// **The mask slot is left NULL, and stays null in the tracked text.** It is not a pin —
+			// `BlendMasks` is edit-time state on the node — so the mask is written at runtime by
+			// `UElysiumBipedAnimInstance::ApplyUpperBodyMask` through the tag below, the same door
+			// Epic's own `ULayeredBoneBlendLibrary::SetBlendMask` uses. A null mask is legal here
+			// precisely because this is a TEMPLATE Animation Blueprint, which the engine's own
+			// `ValidateAnimNodeDuringCompilation` exempts from its null-mask error — and it is what
+			// keeps a generated, game-derived profile asset out of the tracked graph.
+			SetOwnValue<FName>(Layer, TEXT("Tag"), FName(ElysiumAnimGraph::UpperBodyLayerTag));
+
+			Wire(Link(FirstPin(Inertia, EGPD_Output), PinNamed(Layer, TEXT("BasePose"))),
+				TEXT("inertialization -> layer base pose"));
+			Wire(Link(FirstPin(UpperBodyPick, EGPD_Output), PinNamed(Layer, TEXT("BlendPoses_0"))),
+				TEXT("layer pick -> layer blend pose 0"));
+			Wire(DriveFromBool(*Graph, PinNamed(Layer, TEXT("BlendWeights_0")),
+				TEXT("UpperBodyLayerWeight"), 40, -100), TEXT("layer weight pin"));
+
+			// The `_delta` additive composes independently, on top — retail's own order, overlay
+			// first (this node), additive second.
+			ExposePin(AdditiveSequence, TEXT("Sequence"));
+			Wire(DriveFromBool(*Graph, PinNamed(AdditiveSequence, TEXT("Sequence")),
+				TEXT("RequestedAdditiveSequence"), 280, 260), TEXT("additive Sequence pin"));
+
+			Wire(Link(FirstPin(Layer, EGPD_Output), PinNamed(Additive, TEXT("Base"))),
+				TEXT("layer -> additive base"));
+			Wire(Link(FirstPin(AdditiveSequence, EGPD_Output), PinNamed(Additive, TEXT("Additive"))),
+				TEXT("additive sequence -> additive"));
+			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),
+				TEXT("AdditiveLayerWeight"), 520, 160), TEXT("additive Alpha pin"));
+			// Additive's Pose output is left unconnected on purpose: it becomes the graph's new sole
+			// terminal, the same way Inertia's was before this block, and ImportGraphFromText wires
+			// whichever single output pose pin nothing else took to the schema's own output node.
+		}
 
 		UEdGraph* MachineGraph = OwnedGraph(Machine, TEXT("EditorStateMachineGraph"));
 		if (MachineGraph == nullptr)

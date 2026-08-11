@@ -27,15 +27,18 @@ struct FElysiumResolvedAnimation;
 // model the resolver picks assets for, and the tracked graph source encodes nothing derived from
 // the user's game.
 //
-// Two stages ride beside the graph rather than inside it, and both are temporary by design:
+// One stage rides beside the graph rather than inside it, and it is temporary by design: the
+// **cinematic clip player**, one standalone sequence player the theatre pins to absolute scene
+// time. A montage cannot hold that phase lock, so the clip path survives until `ANM6` migrates
+// choreographed playback. While it holds a clip it IS the body pose — the graph's output is not
+// consumed at all — which is what makes a scene's pose a function of scene time rather than of
+// accumulated animation delta.
 //
-// - the **autolayer accumulator**, VtMB's own local-space combine, because no graph node owns a
-//   mask today. `CCC10`'s layered bone blend replaces it.
-// - the **cinematic clip player**, one standalone sequence player the theatre pins to absolute
-//   scene time. A montage cannot hold that phase lock, so the clip path survives until `ANM6`
-//   migrates choreographed playback. While it holds a clip it IS the body pose — the graph's
-//   output is not consumed at all — which is what makes a scene's pose a function of scene time
-//   rather than of accumulated animation delta.
+// The autolayer accumulator that used to sit beside it is gone: `CCC10` moved VtMB's layers into
+// the compiled graph, where the bone mask is a property of the blend node rather than of the pose
+// feeding it. The mask itself is the one thing the graph cannot carry as a pin — it is edit-time
+// state on `FAnimNode_LayeredBoneBlend` — so it is written at runtime through
+// `ApplyUpperBodyMask`, which is the same door Epic's own `ULayeredBoneBlendLibrary` uses.
 //
 // It also carries the answer for a body whose generated graph package is absent: the instance is
 // then the plain native class with no compiled graph, and the clip player is what still poses it.
@@ -102,49 +105,11 @@ struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
 
-	// --- autolayers (retired by `CCC10`) ----------------------------------------------------------
-	//
-	// Start or re-weight one autolayer. Weight is retail's `layer_weight`, the scalar the
-	// accumulator receives from its caller; 1 is the whole layer. Asking for a sequence already on
-	// a layer only re-weights it, so a caller may drive the weight every frame without restarting
-	// the clip.
-	//
-	// Which combine it goes through is the SEQUENCE's property, not the caller's — retail's one
-	// accumulator branches on the clip's own flags. An additive `_delta` accumulates
-	// post-multiplied over every bone; an ordinary `*_layer` is a complementary-weight blend gated
-	// by the bones that clip owns. False when the sequence is neither, which is the gate that keeps
-	// the second honest — see the definition.
-	bool RequestLayer(UAnimSequence* Sequence, bool bLoop, float Weight);
-	// Drop one layer, or every layer. Dropping is immediate: an autolayer carries no fade of its
-	// own, and the weight IS the ramp.
-	void StopLayer(const UAnimSequence* Sequence);
-	void StopAllLayers();
-	int32 NumLayers() const;
-
 private:
-	// The autolayer half: VtMB's layers composed onto the body pose in LOCAL space — a `_delta`
-	// accumulated post-multiplied, a `*_layer` blended under its bone mask. Runs between the body
-	// and the composition stages, which is retail's own order — see the definition.
-	void EvaluateLayers(FPoseContext& Output);
-	// Read one slot's bone gate out of the sequence's own metadata and the skeleton's blend
-	// profile. Game thread, at the request: the worker has no business resolving an asset.
-	void ResolveLayerMask(int32 Layer, const UAnimSequence* Sequence,
-		const UElysiumAnimLayerMask* Mask);
-	// `elysium.LayerDump`'s one-shot readout: what the layer pose actually contains, per bone, so
-	// what the applier reads can be checked against the container's own numbers instead of against
-	// a screenshot.
-	void DumpLayerPose(int32 Layer, const FPoseContext& Pose);
-
-	// Two, because retail's autolayer pattern is one masked `<weapon>_aim_layer` plus one unmasked
-	// `<weapon>_<action>_delta` and never more; a third request replaces the weakest, which is the
-	// smallest contribution by construction.
-	static constexpr int32 MaxLayers = 2;
-
 	// Standalone (not `_Standalone`-suffixed by accident): the plain-C++ variant of the sequence
 	// player whose setters actually write, unlike the Blueprint-bound `FAnimNode_SequencePlayer`
 	// whose `SetSequence` is a no-op outside a compiled anim graph.
 	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone ClipPlayer;
-	UPROPERTY(Transient) FAnimNode_SequencePlayer_Standalone LayerPlayers[MaxLayers];
 
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> Playing = nullptr;
 	bool bPlayingLoop = true;
@@ -152,19 +117,6 @@ private:
 	// `SetSequence` alone leaves it wherever the previous clip had run to. Flagged on the game
 	// thread, consumed on the worker where the contexts are valid.
 	bool bClipNeedsReinit = false;
-
-	// Retail's `layer_weight` per layer, 0 for a slot carrying nothing. Not a fade: an autolayer
-	// has no authored transition, and a caller that wants one ramps this itself.
-	float LayerWeights[MaxLayers] = {};
-	bool bLayerNeedsReinit[MaxLayers] = {};
-	// Which combine this slot's sequence asks for, latched at the request rather than re-derived
-	// per frame: `IsValidAdditive()` walks the sequence's additive settings, and the answer cannot
-	// change while the slot holds it.
-	bool bLayerAdditive[MaxLayers] = {};
-	// The bones an ordinary layer owns, as retail's per-bone `weight`@0 gate: 1 inside the mask, 0
-	// outside, indexed by SKELETON bone index. Empty for a layer that owns the whole rig and for
-	// every additive, where the mask is already expressed by the additive identity.
-	TArray<float> LayerMasks[MaxLayers];
 };
 
 UCLASS(Transient)
@@ -230,6 +182,47 @@ public:
 	// — the graph knows only which asset it was handed.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	bool bHasBlendSpace = false;
+
+	// --- the upper-body layer (CCC10) ---------------------------------------------------------------
+	//
+	// Either the bake-time autolayer binding the base channel's own resolved host declared, or an
+	// activity-keyed `UpperBody`/`Additive` selection's own single asset — the caller decides which
+	// by what it hands `PublishSelection`'s `Assets`. Exactly one of the two overlay fields is
+	// non-null: a melee `*_bobble_layer` is a plain sequence, an aim grid is a blend space (steered by
+	// `AimYaw`/`AimPitch` below). The `_delta` additive composes independently, on top, and carries no
+	// mask of its own.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UBlendSpace> RequestedUpperBodyBlendSpace = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> RequestedUpperBodySequence = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	bool bUpperBodyHasBlendSpace = false;
+	// The overlay's own baked mask, as the name its clip's metadata carries — never guessed from a
+	// weapon's grip; the mask is per-clip data, and a resolver that picked one from "is this melee"
+	// would get the two-handed melee weapons wrong (`docs/vtmb/animation_and_movers.md` A.4).
+	//
+	// **Read by no pin.** The layered blend's mask is edit-time state on the node rather than an
+	// input, so this reaches the graph through `ApplyUpperBodyMask` below instead of through a
+	// generated property copy. Published because the debug surface reads what the graph was given.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	FName RequestedUpperBodyMaskName;
+	// Retail's per-layer caller weight has no recovered value (`docs/project/animation-roadmap.md`
+	// ANM2): 1.0 is the named stand-in whenever `PublishSelection` hands over a layer, and
+	// `SetUpperBodyLayerWeight`/`SetAdditiveLayerWeight` below are the seam a caller ramps instead.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float UpperBodyLayerWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> RequestedAdditiveSequence = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float AdditiveLayerWeight = 0.0f;
+
+	// Where the upper-body layer aims, in the pose parameters' own degrees — the aim grid's own axes.
+	// The player's own producer pins this at the literal 0.0f/pitch-only
+	// (`docs/vtmb/animation_and_movers.md`); an NPC's own aim producer arrives with `CCC11`.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float AimYaw = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float AimPitch = 0.0f;
 
 	// --- the transition rules ---------------------------------------------------------------------
 	//
@@ -306,23 +299,51 @@ public:
 	float GetClipPosition() const;
 	void ResyncClip(float PositionSeconds);
 
-	// --- autolayers -------------------------------------------------------------------------------
+	// How many upper-body layers are composing — the overlay and the additive are separate slots, so
+	// this is 0, 1 or 2. Read off the published state rather than off a node, so a readout and the
+	// pose cannot disagree.
+	int32 GetActiveLayers() const
+	{
+		return ((RequestedUpperBodyBlendSpace != nullptr || RequestedUpperBodySequence != nullptr)
+				&& UpperBodyLayerWeight > 0.f ? 1 : 0)
+			+ (RequestedAdditiveSequence != nullptr && AdditiveLayerWeight > 0.f ? 1 : 0);
+	}
+
+	// The ramp seam a manual driver (the green room's layer lab) uses instead of the 1.0 stand-in
+	// `PublishSelection` writes whenever it hands over a layer. Written to the STAGED value, not the
+	// published one — `NativeUpdateAnimation` copies the staged value through every frame, so writing
+	// the published property directly would be undone on the very next tick.
+	void SetUpperBodyLayerWeight(float Weight)
+	{
+		PendingUpperBodyLayerWeight = FMath::Clamp(Weight, 0.f, 1.f);
+	}
+	void SetAdditiveLayerWeight(float Weight)
+	{
+		PendingAdditiveLayerWeight = FMath::Clamp(Weight, 0.f, 1.f);
+	}
+
+	// --- the layer lab's hand driver (CCC10) --------------------------------------------------------
 	//
-	// Compose a VtMB autolayer over whatever owns the body pose. Weight is retail's own layer scalar;
-	// re-asking with a new weight re-weights the running layer rather than restarting it. Independent
-	// of everything above it: a stance change underneath does not touch a layer, and a layer does not
-	// transition.
+	// Hold an upper-body layer OVER whatever the driver publishes. It is an override rather than a
+	// second publisher for one reason: a driven body republishes a selection every frame, so a write
+	// that only landed on the pending record would be overwritten before it was ever evaluated — and
+	// judging a layer over a moving host is exactly what the green room's layer lab exists to do.
 	//
-	// Either kind, decided from the sequence: a `_delta` accumulates as an additive over the whole
-	// rig, a partial-body `*_layer` blends in under the bones it owns. False when the sequence is
-	// neither — a plain pose clip, or one built by glTFRuntime. Only the `.eskm` bake writes a delta
-	// in the form Unreal hands back as a delta (`AdditiveAnimType`) and only it carries the bone mask
-	// (`UElysiumAnimLayerMask`), so an unbaked layer is refused rather than composed out of a pose
-	// that is really the reference pose for every bone it does not touch.
-	bool PlayLayer(UAnimSequence* Sequence, float Weight = 1.f, bool bLoop = true);
-	void StopLayer(UAnimSequence* Sequence);
-	void StopAllLayers();
-	int32 GetActiveLayers() const;
+	// **The overlay and the additive are separate slots and do not displace each other**, which is
+	// what lets a host's declared pair be armed one entry at a time — the shape retail's own
+	// two-entry autolayer binding takes, and the shape the retired accumulator's two slots had.
+	//
+	// `Sequence` and `Space` are the two shapes an overlay takes and are never both set; `MaskName`
+	// is the bone mask the clip's own metadata names, resolved against the playing skeleton like
+	// every other mask.
+	void ArmDebugUpperBodyOverlay(UAnimSequence* Sequence, UBlendSpace* Space, FName MaskName,
+		float Weight);
+	void ArmDebugUpperBodyAdditive(UAnimSequence* Sequence, float Weight);
+	// The aim grid's own axes, which the ordinary player producer pins at zero — so a lab that could
+	// not steer them could not tell an aim grid from a still pose.
+	void SetDebugUpperBodyAim(float Yaw, float Pitch);
+	void ClearDebugUpperBodyLayer();
+	bool HasDebugUpperBodyLayer() const { return bDebugUpperBody; }
 
 	// Whether this instance was built from a compiled Animation Blueprint. False for the plain
 	// native class, which is what a body falls back to when the generated graph package is not on
@@ -342,6 +363,21 @@ private:
 	// one, and the asset test is what catches the rename.
 	void CacheStateMachine();
 
+	// Project the upper-body half of the record — the layer, its mask, the aim pair and the two
+	// weights — with the lab's hand driver overriding it. Separate from the base projection because
+	// it runs ahead of the hold branch: a held gait must not freeze a weapon layer.
+	void ProjectUpperBodyLayer();
+
+	// Hand the layered blend its bone mask (CCC10). The node's mask is edit-time state with no pin,
+	// so it is written directly on the node — found through `FAnimSubsystem_Tag` under
+	// `ElysiumAnimGraph::UpperBodyLayerTag` — which is the same door Epic's own
+	// `ULayeredBoneBlendLibrary::SetBlendMask` goes through.
+	//
+	// Called from `NativeUpdateAnimation`, on the game thread, before the worker is dispatched, and
+	// **only when the name actually changes**: the setter invalidates the node's cached per-bone
+	// weights, so writing it every frame would rebuild them every frame.
+	void ApplyUpperBodyMask();
+
 	UPROPERTY(Transient) FElysiumBipedAnimProxy Proxy;
 
 	// The record whole rather than scattered scalars: the transition duration needs the OUTGOING
@@ -350,7 +386,28 @@ private:
 	FElysiumAnimationSelection Applied;
 	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingBlendSpace = nullptr;
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSequence = nullptr;
+	// CCC10 — the upper-body layer half of the same publish, staged the same way.
+	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingUpperBodySpace = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingUpperBodySequence = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingAdditiveSequence = nullptr;
+	FName PendingUpperBodyMaskName;
+	// What the node was last actually given, so the mask is written on change rather than per frame.
+	// `NAME_None` before the first write, which is also the name a body with no layer resolves to —
+	// the two agree by construction, so a body that never had a layer never touches the node.
+	FName AppliedUpperBodyMaskName;
+	float PendingUpperBodyLayerWeight = 0.0f;
+	float PendingAdditiveLayerWeight = 0.0f;
 	bool bHasApplied = false;
+
+	// The layer lab's override, applied over the published record every frame while it is armed.
+	bool bDebugUpperBody = false;
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> DebugOverlaySequence = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UBlendSpace> DebugOverlaySpace = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> DebugAdditiveSequence = nullptr;
+	FName DebugOverlayMaskName;
+	float DebugLayerWeight = 1.0f;
+	float DebugAimYaw = 0.0f;
+	float DebugAimPitch = 0.0f;
 	// The branch the last update took, for `IsHoldingPose` above.
 	bool bHoldingPose = false;
 

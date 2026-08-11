@@ -155,11 +155,21 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   `Elysium.Content.BakedCharacterParity` asserts each baked layer's profile against the container's
   mask bone for bone, and asserts that a bone the mask owns and the clip does not animate holds the
   container's bind pose rather than the skeleton's reference pose.
+  **A profile authored on a bank skeleton is not reachable from a body**, because its entries are
+  bone references into the skeleton that owns them and `AddCompatibleSkeleton` carries clips but not
+  blend profiles. `DeclareCompatibleSkeletons` therefore mirrors each bank's profiles onto the
+  declaring family skeleton — same content-addressed name, mode before scales, bones intersected with
+  the rig — and `Elysium.Content.UpperBodyLayerArming` holds the mask to the **playing** skeleton
+  rather than to the layer asset's own.
 
-  **The binding half is not**, and its blocker is gone rather than open: `numautolayers`@660 /
-  `autolayerindex`@664 are decoded and censused in `docs/vtmb/animation_and_movers.md` A.3, so what
-  remains is exporting the table across the include DAG, not reverse-engineering it. Until it ships,
-  a layer is played by explicit request and nothing in gameplay selects one.
+  **The binding half is delivered.** The table exports across the include DAG into
+  `blends/<stem>.json`, `FElysiumBlendTable::AutoLayers` parses it, the resolver copies each host's
+  ordered target list into `FElysiumAnimationSelection::LayerLabels`, and `CCC10` consumes them
+  through the graph's layered blend and additive nodes. `Elysium.Content.UpperBodyLayerArming` walks
+  every bound target on a real baked body and asserts it resolves to an asset and a mask, which is
+  the acceptance's first clause measured rather than assumed. What remains of the acceptance is the
+  orphan census reproducing. Selection is still by explicit request — a weapon equipping and
+  choosing its own layers is `docs/project/three-cs-roadmap.md` `CCC11`.
 
   The table exports beside the blend grids, in `blends/<stem>.json`, because it is read from the same
   764-byte sequence descriptor. Its verification splits three ways by what can answer each question.
@@ -299,6 +309,19 @@ Numbered for dependency, not for date. ANM1 and ANM2 are independent and start t
   absolute-time seek to a montage position. **Deliberately last.** The theatre is the project's
   proven ground and its seek path is verified; there is no reason to put it at risk before the
   stack underneath it is established.
+
+  **This rung also owns the gesture/sequence un-collapse**, handed over from
+  `docs/project/three-cs-roadmap.md` `CCC10` by owner call. A scene's `Sequence` and `Gesture` events
+  resolve through the same single clip player today, so the second overwrites the first instead of
+  layering over it. It lands here because the RE puts it on this rung's own mechanism rather than on
+  the graph's: a gesture is an overlay in the same four-slot `CBaseAnimatingOverlay` array as an
+  `ACT_*_LAYER_*` selection, composed by weighted slerp, **rate-scaled at start and then free-running
+  rather than pinned to scene time** (`docs/vtmb/animation_and_movers.md` A.4c). A second
+  scene-time-pinned player — the shape `CCC10` sketched — would therefore reproduce timing retail
+  does not have. Whether the composite wants a montage slot beside the migrated position, or the same
+  overlay treatment the weapon layers already have, is this rung's design call.
+  *Open:* the composition weight the caller supplies, which is `ANM2`'s open question above and gates
+  how a gesture reads against its base.
 
 ## Interface notes
 

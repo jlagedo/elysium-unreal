@@ -535,7 +535,20 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnPlayer()
 		Ent->Hydrate(GameState->PlayerRecord());
 	}
 	CallEntitySpawn(*Ent);
-	UE_LOG(LogElysiumWorld, Log, TEXT("player entity live: %s"), *Ent->DebugString());
+
+	// These are engine-created companions of the player, not map-authored entities. The Unofficial
+	// Patch's IsIdling() indexes FindEntitiesByClass("viewmodel")[3] during setPlus(), before the
+	// first-person rendering programme exists, so stand up the four addressable slots now and let
+	// their ordinary CBaseAnimating `model` field carry the script write.
+	for (int32 Slot = 0; Slot < ElysiumViewModelSlotCount; ++Slot)
+	{
+		FElysiumEntityDef ViewModelDef;
+		ViewModelDef.Classname = ElysiumViewModelClassName().ToString();
+		SpawnRuntimeEntity(MoveTemp(ViewModelDef));
+	}
+
+	UE_LOG(LogElysiumWorld, Log, TEXT("player entity live: %s (%d viewmodel slots)"),
+		*Ent->DebugString(), ElysiumViewModelSlotCount);
 	return Player;
 }
 

@@ -3000,6 +3000,13 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 	{
 		return false;
 	}
+	// **The body has to KNOW it has the graph.** Everything gated on this question degrades quietly
+	// when the answer is wrong: a one-shot routes to the clip player instead of the montage slot, and
+	// a layer is refused outright — with the body still standing and still animating, so nothing
+	// upstream reports it. This instance was built from the generated class two lines above, which
+	// makes it the one place the predicate can be held to a known answer.
+	TestTrue(TEXT("a body built from the generated class reports a compiled graph"),
+		Biped->HasCompiledGraph());
 
 	// --- the T-pose observable ---------------------------------------------------------------------
 	//
