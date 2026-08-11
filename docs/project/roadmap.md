@@ -278,13 +278,17 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
   records; `elysium.ents` verifies the round-trip off disk.
 - [x] **1.3 Class registry + base entity** — `FElysiumClassRegistry` + `FElysiumEntity`;
   unregistered classnames become inert records.
-- [~] **1.4 Entity world + event queue + chokepoints** — `FElysiumEntityWorld`, the two chokepoints
-  (`AcceptInput`, `FElysiumEventQueue::Add`), the `FElysiumIOSink` taps, stable equal-time FIFO and
-  recursive same-frame drain are live. **RE43 parity gaps:** `FireOutput` currently walks repeated
-  rows in export order while retail prepends and therefore fires them in reverse; authored
-  `times=0` remains spent instead of being normalized to unlimited; the 10,000-event
-  safety cap defers a due tail to the next think-first frame while retail has no gameplay cap and
-  can starve/hang the current frame; retail's backward-`curtime` enqueue adjustment is not present.
+- [x] **1.4 Entity world + event queue + chokepoints** — `FElysiumEntityWorld`, the two chokepoints
+  (`AcceptInput`, `FElysiumEventQueue::Add`), the `FElysiumIOSink` taps, stable equal-time FIFO,
+  recursive same-frame drain, reverse repeated-row firing, authored-`times=0`-as-unlimited
+  normalization at parse, stable entity-list fan-out order for duplicate targetnames, the
+  backward-`curtime` enqueue guard (save-versioned `EventClock`), and the single-result
+  leading-`!` path with `!pvsplayer` are live; the `Elysium.Substrate` ordering suite
+  (`OutputRowOrder`, `QueueDrainOrder`, `RecordServiceOrder`, `OutputTimes`,
+  `LateBindingAndDrops` over `FElysiumOrderedIOSink`) asserts the delivery contract. The
+  10,000-event safety cap is the intentional divergence: it defers a due tail to the next
+  think-first frame while retail has no gameplay cap and can starve/hang the current frame;
+  loop-guard trips are counted and marked in the I/O history.
 - [x] **1.5 Brush bodies** — `UElysiumBrushComponent` per brush entity, per-classname solidity,
   overlap → `OnTouchStart`/`OnTouchEnd`; disabled/hidden/dead trigger state is physical, touch
   admission precedes deduplication, ends release first, and runtime teleport containment is a

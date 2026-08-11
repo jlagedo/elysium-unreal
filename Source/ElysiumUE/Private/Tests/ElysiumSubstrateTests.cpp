@@ -4817,6 +4817,576 @@ bool FElysiumIOChainTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The event-resolution contract — `docs/architecture/gameplay-systems-architecture.md` §2.5.1,
+// over the retail facts in `docs/vtmb/entity_io.md` → "Output-list and queue order" and the two
+// worked orderings in `docs/vtmb/sp_tutorial_1-event-surface.md` §5.2 / §11.5.
+//
+// The five rules, each with a test below:
+//   1. Firing enumerates an output's repeated rows in REVERSE parsed order.       OutputRowOrder
+//   2. The queue is a deadline sort with equal-time FIFO, and zero-delay work a
+//      receiver produces drains breadth-first, behind the pending cohort.         QueueDrainOrder
+//   3. Servicing ONE record delivers to every name match in stable entity order,
+//      then runs its field-6 Python.                                              RecordServiceOrder
+//   4. `times` counts down only when positive; authored 0 and -1 both mean
+//      unlimited.                                                                 OutputTimes
+//   5. Binding is late (resolved at service, never prebound), and missing-at-
+//      service is a counted non-fatal drop with no retry.                         LateBindingAndDrops
+//
+// These are statements about ORDER, so they are asserted on one ordered stream: the shared
+// FElysiumOrderedIOSink (Private/Tests/ElysiumTestServices.h) records every chokepoint tap into a
+// single array. Everything is driven through the real chokepoints — EnqueueInput and Tick — on a
+// bare world of generic logic classes.
+// =====================================================================================
+
+namespace ElysiumEventOrderTests
+{
+	// Producer relays carry ALLOW_FAST_RETRIGGER (spawnflag 0x2) throughout. An ordinary relay
+	// queues itself an `EnableRefire` at its longest delay + 0.001 after every fire, and that
+	// self-event would land in the middle of the very sequences these tests assert. The lockout is
+	// its own contract with its own coverage; here it is noise.
+	FElysiumEntityDef Relay(const TCHAR* Name)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("logic_relay");
+		Def.TargetName = Name;
+		Def.Keys.Add(TEXT("spawnflags"), TEXT("2"));
+		return Def;
+	}
+
+	FElysiumEntityDef Counter(const TCHAR* Name)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("math_counter");
+		Def.TargetName = Name;
+		return Def;
+	}
+
+	// One authored output row, in the seven-field shape the `.ents` exporter writes.
+	void Wire(FElysiumEntityDef& Source, const TCHAR* Output, const TCHAR* Target,
+		const TCHAR* Input, const TCHAR* Param = TEXT(""), float Delay = 0.f,
+		int32 Times = -1, const TCHAR* Python = nullptr)
+	{
+		FElysiumOutputDef Row;
+		Row.Name = Output;
+		Row.Target = Target;
+		Row.Input = Input;
+		Row.Param = Param;
+		Row.Delay = Delay;
+		Row.Times = Times;
+		Row.Python = Python != nullptr ? Python : TEXT("");
+		Source.Outputs.Add(MoveTemp(Row));
+	}
+
+	// The sink is owned by the world; the raw pointer stays valid for the world's lifetime.
+	FElysiumOrderedIOSink* Record(FElysiumEntityWorld& World)
+	{
+		TUniquePtr<FElysiumOrderedIOSink> Owned = MakeUnique<FElysiumOrderedIOSink>();
+		FElysiumOrderedIOSink* Raw = Owned.Get();
+		World.AddSink(MoveTemp(Owned));
+		return Raw;
+	}
+
+	// A math_counter's live value, off the debug-state rows (the leaf class is file-local to
+	// ElysiumLogicClasses.cpp, so this base virtual is the seam). -1 means "no such counter" — a
+	// value no Add(1) chain here can produce.
+	float CounterValueOf(const FElysiumEntity* Entity)
+	{
+		if (Entity == nullptr)
+		{
+			return -1.f;
+		}
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	}
+
+	// The first live match's value — the ordinary case, where the name is unique.
+	float CounterValue(FElysiumEntityWorld& World, const TCHAR* Name)
+	{
+		return CounterValueOf(World.FindByName(Name));
+	}
+
+	// Fire a producer's Trigger through the queue, addressed at itself — the same shape a map's
+	// own wire has, so nothing bypasses chokepoint 2.
+	void Trigger(FElysiumEntityWorld& World, const TCHAR* Name)
+	{
+		if (FElysiumEntity* Source = World.FindByName(Name))
+		{
+			World.EnqueueInput(TEXT("!self"), FName(TEXT("Trigger")), FElysiumVariant::Void(),
+				/*Delay*/ 0.0, FElysiumEntityHandle::Invalid(), Source->Handle);
+		}
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOutputRowOrderTest,
+	"Elysium.Substrate.OutputRowOrder", GElysiumTestFlags)
+bool FElysiumOutputRowOrderTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	// --- (a) repeated rows on one output resolve in REVERSE parsed order -------------------
+	// `FUN_100cd6d0` PREPENDS each parsed action to the output object's list and `FireOutput`
+	// walks that list head to tail, so the last authored row is the first to reach the queue
+	// (entity_io.md). Three rows at equal zero delay isolate the enumeration from the sort.
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__row_order__");
+		FElysiumEntityDef Source = Relay(TEXT("fanout"));
+		Wire(Source, TEXT("OnTrigger"), TEXT("row_a"), TEXT("Add"), TEXT("1"));
+		Wire(Source, TEXT("OnTrigger"), TEXT("row_b"), TEXT("Add"), TEXT("1"));
+		Wire(Source, TEXT("OnTrigger"), TEXT("row_c"), TEXT("Add"), TEXT("1"));
+		Defs.Defs.Add(MoveTemp(Source));
+		Defs.Defs.Add(Counter(TEXT("row_a")));
+		Defs.Defs.Add(Counter(TEXT("row_b")));
+		Defs.Defs.Add(Counter(TEXT("row_c")));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		World.Load(MoveTemp(Defs));
+		FElysiumOrderedIOSink* Sink = Record(World);
+		World.Activate(0.0);
+
+		Trigger(World, TEXT("fanout"));
+		World.Tick(0.0);
+
+		const bool bQueued = Sink->AppearsInOrder(TEXT("queue"),
+			{ TEXT("row_c.Add"), TEXT("row_b.Add"), TEXT("row_a.Add") });
+		const bool bDelivered = Sink->AppearsInOrder(TEXT("deliver"),
+			{ TEXT("row_c.Add"), TEXT("row_b.Add"), TEXT("row_a.Add") });
+		TestTrue(TEXT("repeated rows enqueue in reverse parsed order"), bQueued);
+		TestTrue(TEXT("...and therefore deliver last-authored first"), bDelivered);
+		if (!bQueued || !bDelivered)
+		{
+			AddInfo(FString::Printf(TEXT("row order stream: %s"), *Sink->Log()));
+		}
+
+		TestEqual(TEXT("every row fired exactly once (row_a)"), CounterValue(World, TEXT("row_a")), 1.f);
+		TestEqual(TEXT("every row fired exactly once (row_b)"), CounterValue(World, TEXT("row_b")), 1.f);
+		TestEqual(TEXT("every row fired exactly once (row_c)"), CounterValue(World, TEXT("row_c")), 1.f);
+		TestEqual(TEXT("the pass drained the queue"), World.Queue().Num(), 0);
+	}
+
+	// --- (b) the office_knob worked example (sp_tutorial brief §5.2) -----------------------
+	// Authored: [gate.Enable @0] then [noblood.Add(0) @+0.2]. Reverse enumeration meets the
+	// delayed row FIRST, so it is the first into the queue — and the deadline sort then makes the
+	// VISIBLE order "Enable now, Add after 0.2 game seconds". The two orders disagree on purpose:
+	// that is exactly what distinguishes an enumeration bug from a sort bug.
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__knob_order__");
+		FElysiumEntityDef Knob = Relay(TEXT("knob"));
+		Wire(Knob, TEXT("OnTrigger"), TEXT("gate"), TEXT("Enable"));
+		Wire(Knob, TEXT("OnTrigger"), TEXT("noblood"), TEXT("Add"), TEXT("0"), /*Delay*/ 0.2f);
+		Defs.Defs.Add(MoveTemp(Knob));
+		// The receiver starts disabled, so `Enable` is observable as state rather than only as a
+		// delivery line.
+		FElysiumEntityDef Gate = Relay(TEXT("gate"));
+		Gate.Keys.Add(TEXT("StartDisabled"), TEXT("1"));
+		Defs.Defs.Add(MoveTemp(Gate));
+		Defs.Defs.Add(Counter(TEXT("noblood")));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		World.Load(MoveTemp(Defs));
+		FElysiumOrderedIOSink* Sink = Record(World);
+		World.Activate(0.0);
+
+		Trigger(World, TEXT("knob"));
+		World.Tick(0.0);
+
+		const bool bQueued = Sink->AppearsInOrder(TEXT("queue"),
+			{ TEXT("noblood.Add"), TEXT("gate.Enable") });
+		TestTrue(TEXT("reverse enumeration puts the delayed row into the queue first"), bQueued);
+		if (!bQueued)
+		{
+			AddInfo(FString::Printf(TEXT("knob queue stream: %s"), *Sink->Log()));
+		}
+		TestTrue(TEXT("the zero-delay row is delivered in this pass"),
+			Sink->Saw(TEXT("deliver"), TEXT("gate.Enable")));
+		TestFalse(TEXT("the +0.2 row is not"),
+			Sink->Saw(TEXT("deliver"), TEXT("noblood.Add")));
+		TestEqual(TEXT("it is still pending"), World.Queue().Num(), 1);
+
+		FElysiumEntity* GateEntity = World.FindByName(TEXT("gate"));
+		if (TestNotNull(TEXT("gate resolved"), GateEntity))
+		{
+			TArray<TPair<FString, FString>> State;
+			GateEntity->GetDebugState(State);
+			const TPair<FString, FString>* Disabled = State.FindByPredicate(
+				[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Disabled"); });
+			TestTrue(TEXT("Enable reached the receiver"),
+				Disabled != nullptr && Disabled->Value == TEXT("no"));
+		}
+
+		// Serviced PAST the deadline rather than exactly on it. `Delay` is a float (the `.ents`
+		// field's own width) and the deadline is `double Now + (double)0.2f`, which is
+		// 0.20000000298… — strictly greater than the double 0.2. Ticking at exactly 0.2 leaves the
+		// row correctly not-yet-due and would assert a precision artifact rather than the sort. A
+		// real frame lands wherever it lands, so the tick does too.
+		World.Tick(0.3);
+		TestTrue(TEXT("the deadline sort delivers Enable at t and Add at t+0.2"),
+			Sink->AppearsInOrder(TEXT("deliver"), { TEXT("gate.Enable"), TEXT("noblood.Add") }));
+		TestEqual(TEXT("both rows are spent"), World.Queue().Num(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQueueDrainOrderTest,
+	"Elysium.Substrate.QueueDrainOrder", GElysiumTestFlags)
+bool FElysiumQueueDrainOrderTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	// --- (a) breadth-first, never depth-first ----------------------------------------------
+	// `CEventQueue::AddEvent` advances while `fireTime <= newFireTime`, so a zero-delay event a
+	// receiver produces lands BEHIND the equal-time cohort already pending: with A and B due, if A
+	// produces C the order is A, B, C — never A, C, B (entity_io.md).
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__drain_order__");
+		FElysiumEntityDef RelayA = Relay(TEXT("relay_a"));
+		Wire(RelayA, TEXT("OnTrigger"), TEXT("out_a"), TEXT("Add"), TEXT("1"));
+		Defs.Defs.Add(MoveTemp(RelayA));
+		FElysiumEntityDef RelayB = Relay(TEXT("relay_b"));
+		Wire(RelayB, TEXT("OnTrigger"), TEXT("out_b"), TEXT("Add"), TEXT("1"));
+		Defs.Defs.Add(MoveTemp(RelayB));
+		Defs.Defs.Add(Counter(TEXT("out_a")));
+		Defs.Defs.Add(Counter(TEXT("out_b")));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		World.Load(MoveTemp(Defs));
+		FElysiumOrderedIOSink* Sink = Record(World);
+		World.Activate(0.0);
+
+		Trigger(World, TEXT("relay_a"));
+		Trigger(World, TEXT("relay_b"));
+		World.Tick(0.0);
+
+		const bool bBreadthFirst = Sink->AppearsInOrder(TEXT("deliver"),
+			{ TEXT("relay_a.Trigger"), TEXT("relay_b.Trigger"), TEXT("out_a.Add"), TEXT("out_b.Add") });
+		TestTrue(TEXT("a receiver's zero-delay work drains behind the pending equal-time cohort"),
+			bBreadthFirst);
+		if (!bBreadthFirst)
+		{
+			AddInfo(FString::Printf(TEXT("drain stream: %s"), *Sink->Log()));
+		}
+		TestEqual(TEXT("the whole chain drained in one pass"), World.Queue().Num(), 0);
+	}
+
+	// --- (b) the porch shape (sp_tutorial brief §11.5) -------------------------------------
+	// `trig_off_porch.OnEndTouch` resolves six equal-time actions in one visible order and then a
+	// delayed `Kill` at +0.5. The six are authored here in REVERSE of the expected delivery order,
+	// because reverse enumeration is what makes the authored tail come out first; the delayed row
+	// is authored LAST, so it is the FIRST thing enqueued and still the LAST thing delivered.
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__porch_order__");
+		FElysiumEntityDef Porch = Relay(TEXT("porch"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act6"), TEXT("Add"), TEXT("1"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act5"), TEXT("Add"), TEXT("1"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act4"), TEXT("Add"), TEXT("1"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act3"), TEXT("Add"), TEXT("1"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act2"), TEXT("Add"), TEXT("1"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act1"), TEXT("Add"), TEXT("1"));
+		Wire(Porch, TEXT("OnTrigger"), TEXT("act_late"), TEXT("Add"), TEXT("1"), /*Delay*/ 0.5f);
+		Defs.Defs.Add(MoveTemp(Porch));
+		Defs.Defs.Add(Counter(TEXT("act1")));
+		Defs.Defs.Add(Counter(TEXT("act2")));
+		Defs.Defs.Add(Counter(TEXT("act3")));
+		Defs.Defs.Add(Counter(TEXT("act4")));
+		Defs.Defs.Add(Counter(TEXT("act5")));
+		Defs.Defs.Add(Counter(TEXT("act6")));
+		Defs.Defs.Add(Counter(TEXT("act_late")));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		World.Load(MoveTemp(Defs));
+		FElysiumOrderedIOSink* Sink = Record(World);
+		World.Activate(0.0);
+
+		Trigger(World, TEXT("porch"));
+		World.Tick(0.0);
+		World.Tick(0.5);
+
+		const bool bQueued = Sink->AppearsInOrder(TEXT("queue"),
+			{ TEXT("act_late.Add"), TEXT("act1.Add"), TEXT("act2.Add"), TEXT("act3.Add"),
+			  TEXT("act4.Add"), TEXT("act5.Add"), TEXT("act6.Add") });
+		TestTrue(TEXT("the last authored row is the first enqueued, the delayed row included"),
+			bQueued);
+		const bool bDelivered = Sink->AppearsInOrder(TEXT("deliver"),
+			{ TEXT("act1.Add"), TEXT("act2.Add"), TEXT("act3.Add"), TEXT("act4.Add"),
+			  TEXT("act5.Add"), TEXT("act6.Add"), TEXT("act_late.Add") });
+		TestTrue(TEXT("six equal-time actions deliver in reverse-row order, the +0.5 row last"),
+			bDelivered);
+		if (!bQueued || !bDelivered)
+		{
+			AddInfo(FString::Printf(TEXT("porch stream: %s"), *Sink->Log()));
+		}
+		TestEqual(TEXT("the whole transaction is spent"), World.Queue().Num(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRecordServiceOrderTest,
+	"Elysium.Substrate.RecordServiceOrder", GElysiumTestFlags)
+bool FElysiumRecordServiceOrderTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	// Service of ONE record: deliver the input to every name match in stable entity order, then
+	// execute its field-6 Python (entity_io.md; §2.5.1). Targetnames are non-unique, so three defs
+	// share one name and the handle index — which IS the def-array index (R3) — is the order.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__record_service__");
+	Defs.Defs.Add(Counter(TEXT("trio")));   // #0
+	Defs.Defs.Add(Counter(TEXT("trio")));   // #1
+	Defs.Defs.Add(Counter(TEXT("trio")));   // #2
+	FElysiumEntityDef Fanout = Relay(TEXT("fanout"));   // #3
+	Wire(Fanout, TEXT("OnTrigger"), TEXT("trio"), TEXT("Add"), TEXT("1"), /*Delay*/ 0.f,
+		/*Times*/ -1, TEXT("G.Fanout = 1"));
+	Defs.Defs.Add(MoveTemp(Fanout));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.Activate(0.0);
+
+	Trigger(World, TEXT("fanout"));
+	World.Tick(0.0);
+
+	TestEqual(TEXT("one row produces exactly one queued record"),
+		Sink->CountOf(TEXT("queue"), TEXT("trio.Add")), 1);
+	TestTrue(TEXT("...carrying both the name target and the field-6 payload"),
+		Sink->Saw(TEXT("queue"), TEXT("+py")));
+
+	const bool bStableOrder = Sink->AppearsInOrder(TEXT("deliver"),
+		{ TEXT("#0 trio.Add"), TEXT("#1 trio.Add"), TEXT("#2 trio.Add") });
+	TestTrue(TEXT("one record fans out to every name match in ascending entity order"),
+		bStableOrder);
+	if (!bStableOrder)
+	{
+		AddInfo(FString::Printf(TEXT("fan-out stream: %s"), *Sink->Log()));
+	}
+	TestEqual(TEXT("one record produced three deliveries"),
+		Sink->CountOf(TEXT("deliver"), TEXT("trio.Add")), 3);
+	TestEqual(TEXT("each match received it once"), CounterValue(World, TEXT("trio")), 1.f);
+
+	// The Python step's POSITION (after the name deliveries, before the direct handle) is not
+	// observable at this tier: `DeliverEvent` hands field-6 to `GameState->ScriptHost()`, and a
+	// headless world has no game state, so the payload is a silent no-op and `OnPython` never
+	// fires. What is assertable here is that the payload rides the same single record — which is
+	// the part the ordering rule is about. Ordering the step itself needs a script host and
+	// belongs to the Content tier.
+	TestEqual(TEXT("a headless world runs no field-6 Python"),
+		Sink->CountOf(TEXT("python"), TEXT("G.Fanout")), 0);
+
+	// A runtime-spawned entity joins the fan-out at its own index — at the END, because its index
+	// is minted past the map's def array. It must never jump the map-authored matches.
+	const FElysiumEntityHandle Late = World.SpawnRuntimeEntity(Counter(TEXT("trio")));
+	TestTrue(TEXT("the runtime match takes the next index"), Late.IsSet() && Late.Index == 4);
+	Sink->Reset();
+
+	Trigger(World, TEXT("fanout"));
+	World.Tick(0.0);
+
+	const bool bLateLast = Sink->AppearsInOrder(TEXT("deliver"),
+		{ TEXT("#0 trio.Add"), TEXT("#1 trio.Add"), TEXT("#2 trio.Add"), TEXT("#4 trio.Add") });
+	TestTrue(TEXT("a runtime-spawned match does not jump ahead of the map-authored ones"),
+		bLateLast);
+	TestEqual(TEXT("the second record fanned out to four matches"),
+		Sink->CountOf(TEXT("deliver"), TEXT("trio.Add")), 4);
+	if (!bLateLast)
+	{
+		AddInfo(FString::Printf(TEXT("late fan-out stream: %s"), *Sink->Log()));
+	}
+	TestEqual(TEXT("a map-authored match received both fires"),
+		CounterValue(World, TEXT("trio")), 2.f);
+	TestEqual(TEXT("the runtime match received only the second"),
+		CounterValueOf(World.Resolve(Late)), 1.f);
+	TestEqual(TEXT("no wire named nothing"), World.UnknownTargets(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOutputTimesTest,
+	"Elysium.Substrate.OutputTimes", GElysiumTestFlags)
+bool FElysiumOutputTimesTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	// `FireOutput` decrements only a POSITIVE `times`; a row reaching zero is removed without
+	// disturbing the remaining rows, and an authored 0 is unlimited exactly like -1 (§2.5.1). The
+	// word in the contract is *authored*, so this one map is built the authored way — written as
+	// `.ents` and parsed — rather than by hand, which would settle by construction the question of
+	// where an authored 0 becomes unlimited.
+	IFileManager::Get().MakeDirectory(*FPaths::AutomationTransientDir(), /*Tree*/ true);
+	const FString EntsPath = FPaths::CreateTempFilename(
+		*FPaths::AutomationTransientDir(), TEXT("ElysiumOutputTimes_"), TEXT(".ents"));
+
+	auto RelayJson = [](const TCHAR* Name, const TCHAR* Target, int32 Times)
+	{
+		return FString::Printf(
+			TEXT("{\"classname\":\"logic_relay\",\"targetname\":\"%s\",")
+			TEXT("\"keys\":{\"spawnflags\":\"2\"},\"outputs\":[")
+			TEXT("{\"name\":\"OnTrigger\",\"target\":\"%s\",\"input\":\"Add\",")
+			TEXT("\"param\":\"1\",\"delay\":0,\"times\":%d}]}"),
+			Name, Target, Times);
+	};
+	auto CounterJson = [](const TCHAR* Name)
+	{
+		return FString::Printf(
+			TEXT("{\"classname\":\"math_counter\",\"targetname\":\"%s\"}"), Name);
+	};
+	const TArray<FString> Entities = {
+		RelayJson(TEXT("relay_twice"), TEXT("hit_twice"), 2),
+		RelayJson(TEXT("relay_minus_one"), TEXT("hit_minus_one"), -1),
+		RelayJson(TEXT("relay_zero"), TEXT("hit_zero"), 0),
+		CounterJson(TEXT("hit_twice")),
+		CounterJson(TEXT("hit_minus_one")),
+		CounterJson(TEXT("hit_zero")),
+	};
+	const FString Json = FString::Printf(TEXT("{\"map\":\"__output_times__\",\"entities\":[%s]}"),
+		*FString::Join(Entities, TEXT(",")));
+	if (!TestTrue(TEXT("synthetic .ents writes"), FFileHelper::SaveStringToFile(Json, *EntsPath)))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		IFileManager::Get().Delete(*EntsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+	};
+
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("synthetic .ents parses"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.Activate(0.0);
+
+	for (int32 Pass = 0; Pass < 3; ++Pass)
+	{
+		Trigger(World, TEXT("relay_twice"));
+		Trigger(World, TEXT("relay_minus_one"));
+		Trigger(World, TEXT("relay_zero"));
+		World.Tick(0.0);
+	}
+
+	TestEqual(TEXT("times=2 fires exactly twice"),
+		Sink->CountOf(TEXT("deliver"), TEXT("hit_twice.Add")), 2);
+	TestEqual(TEXT("...and the receiver counted two"), CounterValue(World, TEXT("hit_twice")), 2.f);
+	TestEqual(TEXT("times=-1 is unlimited"),
+		Sink->CountOf(TEXT("deliver"), TEXT("hit_minus_one.Add")), 3);
+	TestEqual(TEXT("...and the receiver counted three"),
+		CounterValue(World, TEXT("hit_minus_one")), 3.f);
+	// The other half of the same rule: retail's parser seeds `times` to -1 and rewrites an
+	// authored 0 back to -1, so both spellings mean unlimited and only a positive value is a
+	// countdown.
+	TestEqual(TEXT("an authored times=0 is unlimited too"),
+		Sink->CountOf(TEXT("deliver"), TEXT("hit_zero.Add")), 3);
+	TestEqual(TEXT("...and the receiver counted three"),
+		CounterValue(World, TEXT("hit_zero")), 3.f);
+
+	// A spent row is a SILENT skip: nothing is queued, so nothing can be diagnosed. The third
+	// attempt on the times=2 row must not look like a dead wire or a missing input.
+	TestEqual(TEXT("a spent row queues nothing"),
+		Sink->CountOf(TEXT("queue"), TEXT("hit_twice.Add")), 2);
+	TestEqual(TEXT("a spent row is not a dead wire"), World.UnknownTargets(), 0);
+	TestEqual(TEXT("a spent row is not a missing input"), World.UnknownInputs(), 0);
+	TestEqual(TEXT("every pass drained"), World.Queue().Num(), 0);
+	if (Sink->CountOf(TEXT("deliver"), TEXT("hit_zero.Add")) != 3)
+	{
+		AddInfo(FString::Printf(TEXT("times stream: %s"), *Sink->Log()));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLateBindingAndDropsTest,
+	"Elysium.Substrate.LateBindingAndDrops", GElysiumTestFlags)
+bool FElysiumLateBindingAndDropsTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	// Binding is late: a target name resolves at SERVICE time against the live entity set, never
+	// at parse — which is what makes maker children and script-spawned entities valid targets for
+	// statically absent names. The mirror of the same rule is that missing-at-service is a counted
+	// non-fatal drop, never a retry (§2.5.1).
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__late_binding__");
+	FElysiumEntityDef LateRelay = Relay(TEXT("late_relay"));
+	Wire(LateRelay, TEXT("OnTrigger"), TEXT("late_guy"), TEXT("Add"), TEXT("1"), /*Delay*/ 0.5f);
+	Defs.Defs.Add(MoveTemp(LateRelay));
+	FElysiumEntityDef DoomedRelay = Relay(TEXT("doomed_relay"));
+	Wire(DoomedRelay, TEXT("OnTrigger"), TEXT("doomed"), TEXT("Add"), TEXT("1"), /*Delay*/ 0.5f);
+	Defs.Defs.Add(MoveTemp(DoomedRelay));
+	Defs.Defs.Add(Counter(TEXT("doomed")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.Activate(0.0);
+
+	// --- (a) the target does not exist when the record is queued ---------------------------
+	Trigger(World, TEXT("late_relay"));
+	World.Tick(0.0);
+	TestEqual(TEXT("the wire queues against a name no entity holds"), World.Queue().Num(), 1);
+	TestTrue(TEXT("...without resolving anything at enqueue"),
+		Sink->Saw(TEXT("queue"), TEXT("late_guy.Add")));
+	TestEqual(TEXT("...and without counting a dead wire yet"), World.UnknownTargets(), 0);
+
+	World.SpawnRuntimeEntity(Counter(TEXT("late_guy")));
+	World.Tick(0.5);
+
+	TestTrue(TEXT("the record binds to the entity that appeared after it was queued"),
+		Sink->Saw(TEXT("deliver"), TEXT("late_guy.Add")));
+	TestEqual(TEXT("...delivering once"), CounterValue(World, TEXT("late_guy")), 1.f);
+	TestEqual(TEXT("late binding is not a dead wire"), World.UnknownTargets(), 0);
+	TestEqual(TEXT("the queue is drained"), World.Queue().Num(), 0);
+
+	// --- (b) the mirror: the target existed at enqueue and is gone at service ---------------
+	World.Tick(1.0);
+	Trigger(World, TEXT("doomed_relay"));
+	World.Tick(1.0);
+	TestEqual(TEXT("the delayed record is pending"), World.Queue().Num(), 1);
+
+	FElysiumEntity* Doomed = World.FindByName(TEXT("doomed"));
+	if (!TestNotNull(TEXT("doomed resolved"), Doomed))
+	{
+		return false;
+	}
+	Doomed->Kill();
+
+	const int32 UnknownBefore = World.UnknownTargets();
+	World.Tick(1.5);
+
+	TestEqual(TEXT("a target that died before service counts exactly one dead wire"),
+		World.UnknownTargets(), UnknownBefore + 1);
+	TestTrue(TEXT("...and is reported as a missing target, not a missing input"),
+		Sink->Saw(TEXT("no-target"), TEXT("doomed.Add")));
+	TestEqual(TEXT("...with no input reported missing"), World.UnknownInputs(), 0);
+	TestFalse(TEXT("...and nothing delivered"),
+		Sink->Saw(TEXT("deliver"), TEXT("doomed.Add")));
+	TestEqual(TEXT("the drop consumes the record"), World.Queue().Num(), 0);
+
+	World.Tick(1.6);
+	TestEqual(TEXT("a drop is never retried"), World.Queue().Num(), 0);
+	TestEqual(TEXT("...so it is counted once and only once"),
+		World.UnknownTargets(), UnknownBefore + 1);
+
+	return true;
+}
+
+// =====================================================================================
 // FElysiumDecals — the `.decals` projector sidecar parser + the orientation contract the bake
 // places each ADecalActor by (7.2). Pure data + math, no RHI.
 // =====================================================================================
@@ -10628,10 +11198,16 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
-	TestEqual(TEXT("feeding is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Feeding);
-	TestTrue(TEXT("and it is additive, so the floor did not move with it"),
+	TestTrue(TEXT("feeding is additive, so it did not move the floor"),
 		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::Feeding);
+	// `EventClock` adds the queue's backward-clock guard state beside the queue it guards. The field
+	// sits mid-record but is written and read behind its own version, so a `Feeding` payload skips
+	// those bytes and restores with the guard at its default — additive for the same reason, and the
+	// floor stays put again.
+	TestEqual(TEXT("the event-clock guard is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::EventClock);
+	TestTrue(TEXT("and it is additive, so the floor did not move with it"),
+		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::EventClock);
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would

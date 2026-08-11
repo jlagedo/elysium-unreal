@@ -33,6 +33,7 @@ struct FElysiumSaveVersion
 		Weather       = 8,   // map wetness transition and env_particle ramps
 		ScriptedBody  = 9,   // the cutscene body state: a scene's frozen cast, a beat's NPC claim
 		Feeding       = 10,  // an in-progress feed on the player record (B6)
+		EventClock    = 11,  // the event queue's backward-clock guard state
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -136,6 +137,10 @@ struct FElysiumMapSnapshot
 	// The one time-sorted queue, absolute times kept as-is (the restored clock is the saved clock).
 	TArray<FElysiumIOEvent> Queue;
 	uint64 QueueNextSerial = 1;
+	// The queue's backward-clock guard state, saved with the queue it guards. The restored clock is
+	// the saved clock, so the guard has to measure the first enqueue after a load against the time
+	// the save was written at rather than against whatever the live session had reached.
+	double QueueLastEnqueue = 0.0;
 
 	FElysiumSavedFade Fade;
 	FElysiumWeatherState Weather;

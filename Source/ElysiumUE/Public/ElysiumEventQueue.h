@@ -70,6 +70,14 @@ public:
 	uint64 NextSerialValue() const { return NextSerial; }
 	void SetNextSerial(uint64 In) { NextSerial = FMath::Max(In, (uint64)1); }
 
+	// The game time the last enqueue was observed at — retail's backward-clock guard state
+	// (`docs/vtmb/game_runtime.md` → "Queue service order, recursion and starvation"). The world's
+	// AddEvent chokepoint reads it, shifts a rewound deadline forward, and writes it back; the
+	// restore path sets it from the snapshot instead, so a load that rewinds the clock to the saved
+	// one cannot shift every restored deadline.
+	double LastEnqueueValue() const { return LastEnqueue; }
+	void SetLastEnqueue(double In) { LastEnqueue = In; }
+
 	// The head is the earliest event; due when its FireTime has been reached.
 	bool HasDue(double Now) const { return Events.Num() > 0 && Events[0].FireTime <= Now; }
 	const FElysiumIOEvent* PeekEarliest() const { return Events.Num() > 0 ? &Events[0] : nullptr; }
@@ -91,7 +99,7 @@ public:
 		return Events.RemoveAll([&Caller](const FElysiumIOEvent& E) { return E.Caller == Caller; });
 	}
 
-	void Reset() { Events.Reset(); NextSerial = 1; PendingSteps = 0; bPaused = false; }
+	void Reset() { Events.Reset(); NextSerial = 1; LastEnqueue = 0.0; PendingSteps = 0; bPaused = false; }
 	int32 Num() const { return Events.Num(); }
 	const TArray<FElysiumIOEvent>& Pending() const { return Events; }
 
@@ -106,6 +114,7 @@ public:
 private:
 	TArray<FElysiumIOEvent> Events;   // ascending by (FireTime, Serial)
 	uint64 NextSerial = 1;
+	double LastEnqueue = 0.0;         // game seconds at the last enqueue (backward-clock guard)
 	bool bPaused = false;
 	int32 PendingSteps = 0;
 };

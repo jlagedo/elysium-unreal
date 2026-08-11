@@ -14,7 +14,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumDlg.h"
+#include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEventQueue.h"
+#include "ElysiumIOSink.h"
+#include "ElysiumVariant.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumWorldServices.h"
 
@@ -857,6 +861,146 @@ private:
 	int32 NextCameraShotId = 0;
 	TSet<FElysiumVoiceHandle> LiveVoices;
 	TMap<FElysiumVoiceHandle, FElysiumAudioRequest> Requests;
+};
+
+// The ordered I/O recorder. Every sink tap writes ONE formatted line into ONE array, so the whole
+// causality stream of a headless world — what was fired, what entered the queue, what came back
+// out, in what order — is a single sequence a test can assert positions inside. The event-order
+// contract (`docs/architecture/gameplay-systems-architecture.md` §2.5.1) is a statement about
+// relative order, and relative order is what a per-facility counter cannot express.
+//
+// Line grammar: `<kind> <detail>`, kind being the first whitespace-delimited token.
+//
+//   fire      relay1.OnTrigger -> counter1.Add
+//   queue     counter1.Add(5) @1.200 +py
+//   deliver   #3 counter1.Add(5)
+//   python    G.Tut_Key = 1
+//   no-target ghost.Add
+//   no-input  #3 counter1.Nope
+//   loop-guard 10000
+//
+// An entity reads as `#<index> <targetname-or-classname>`, so a fan-out over three same-named
+// entities is distinguishable by index, which is what stable-entity-order assertions need.
+class FElysiumOrderedIOSink final : public IElysiumIOSink
+{
+public:
+	// Every recorded event, in occurrence order.
+	TArray<FString> Lines;
+
+	void Reset() { Lines.Reset(); }
+	FString Log() const { return FString::Join(Lines, TEXT(" | ")); }
+
+	// The lines of one kind, kind token included, in occurrence order.
+	TArray<FString> OfKind(const TCHAR* Kind) const
+	{
+		TArray<FString> Out;
+		const FString Prefix = FString(Kind) + TEXT(" ");
+		for (const FString& Line : Lines)
+		{
+			if (Line.StartsWith(Prefix, ESearchCase::CaseSensitive))
+			{
+				Out.Add(Line);
+			}
+		}
+		return Out;
+	}
+	FString Sequence(const TCHAR* Kind) const { return FString::Join(OfKind(Kind), TEXT(" | ")); }
+
+	// Position of the first line of `Kind` containing `Needle`, counted within that kind's own
+	// lines (so a `deliver` position is comparable against another `deliver`). INDEX_NONE if absent.
+	int32 PositionOf(const TCHAR* Kind, const FString& Needle) const
+	{
+		const TArray<FString> Kinds = OfKind(Kind);
+		for (int32 i = 0; i < Kinds.Num(); ++i)
+		{
+			if (Kinds[i].Contains(Needle))
+			{
+				return i;
+			}
+		}
+		return INDEX_NONE;
+	}
+	int32 CountOf(const TCHAR* Kind, const FString& Needle) const
+	{
+		int32 N = 0;
+		for (const FString& Line : OfKind(Kind))
+		{
+			N += Line.Contains(Needle) ? 1 : 0;
+		}
+		return N;
+	}
+	bool Saw(const TCHAR* Kind, const FString& Needle) const
+	{
+		return PositionOf(Kind, Needle) != INDEX_NONE;
+	}
+
+	// Every needle appears among this kind's lines, and in the order given. The ordering assertion
+	// the whole determinism contract is written in.
+	bool AppearsInOrder(const TCHAR* Kind, const TArray<FString>& Needles) const
+	{
+		int32 Last = INDEX_NONE;
+		for (const FString& Needle : Needles)
+		{
+			const int32 At = PositionOf(Kind, Needle);
+			if (At == INDEX_NONE || At <= Last)
+			{
+				return false;
+			}
+			Last = At;
+		}
+		return true;
+	}
+
+	// --- IElysiumIOSink --------------------------------------------------------------------
+	virtual void OnOutputFired(double, const FElysiumEntity& Source,
+		const FElysiumOutputDef& Output) override
+	{
+		Lines.Add(FString::Printf(TEXT("fire %s.%s -> %s.%s"),
+			*Name(Source), *Output.Name,
+			Output.Target.IsEmpty() ? TEXT("(python)") : *Output.Target, *Output.Input));
+	}
+	virtual void OnQueued(double, const FElysiumIOEvent& Event) override
+	{
+		Lines.Add(FString::Printf(TEXT("queue %s.%s(%s) @%.3f%s"),
+			Event.Target.IsEmpty() ? TEXT("(python)") : *Event.Target,
+			*Event.Input.ToString(), *Event.Param.ToString(), Event.FireTime,
+			Event.PythonSrc.IsEmpty() ? TEXT("") : TEXT(" +py")));
+	}
+	virtual void OnDelivered(double, const FElysiumEntity& Target,
+		const FElysiumIOEvent& Event) override
+	{
+		Lines.Add(FString::Printf(TEXT("deliver #%d %s.%s(%s)"),
+			Target.Handle.Index, *Name(Target), *Event.Input.ToString(), *Event.Param.ToString()));
+	}
+	virtual void OnUnknownTarget(double, const FElysiumIOEvent& Event) override
+	{
+		Lines.Add(FString::Printf(TEXT("no-target %s.%s"), *Event.Target, *Event.Input.ToString()));
+	}
+	virtual void OnUnknownInput(double, const FElysiumEntity& Target,
+		const FElysiumIOEvent& Event) override
+	{
+		Lines.Add(FString::Printf(TEXT("no-input #%d %s.%s"),
+			Target.Handle.Index, *Name(Target), *Event.Input.ToString()));
+	}
+	virtual void OnPython(double, const FElysiumIOEvent& Event, const FElysiumVariant&) override
+	{
+		Lines.Add(FString::Printf(TEXT("python %s"), *Event.PythonSrc));
+	}
+	virtual void OnLoopGuard(double, int32 Delivered) override
+	{
+		Lines.Add(FString::Printf(TEXT("loop-guard %d"), Delivered));
+	}
+
+private:
+	// A nameless entity still has to be distinguishable, so it reads as its classname.
+	static FString Name(const FElysiumEntity& Entity)
+	{
+		if (!Entity.TargetName.IsEmpty())
+		{
+			return Entity.TargetName;
+		}
+		return Entity.Def ? Entity.Def->Classname : FString(TEXT("?"));
+	}
 };
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

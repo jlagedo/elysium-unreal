@@ -371,8 +371,9 @@ public:
 	// never a candidate. Pure and static so the rule is testable without a world.
 	//
 	// NB the engine also accepts a leading `!` (`!player`, `!activator`, `!caller`, `!picker`,
-	// `!pvsplayer`, `!playercontroller`) through a separate single-result path; the I/O bus handles the
-	// three of those that appear in shipped wires in ResolveTargets, ahead of this matcher.
+	// `!pvsplayer`, `!playercontroller`) through a separate single-result path. ResolveTargets owns
+	// that path ahead of this matcher, and a leading-`!` name it does not recognise resolves to
+	// nothing rather than reaching here — `!picker` is a debug-verb argument, not a wire target.
 	static bool NameMatches(const FString& TargetName, const FString& Pattern);
 
 	// The map this world was built from (the snapshot key), or empty on a bare test world.
@@ -390,6 +391,9 @@ public:
 	double NowSeconds() const;
 	int32 UnknownTargets() const { return UnknownTargetCount; }
 	int32 UnknownInputs() const { return UnknownInputCount; }
+	// Service passes that hit the drain cap and deferred a still-due tail (the one enumerated
+	// ordering divergence from retail, which drains unbounded).
+	int32 LoopGuardTrips() const { return LoopGuardTripCount; }
 	int32 NumBrushBodies() const { return Bodies.Num(); }
 	int32 TouchBegins() const { return TouchBeginCount; }
 	int32 TouchEnds() const { return TouchEndCount; }
@@ -421,8 +425,8 @@ private:
 	void ResolveTargets(const FElysiumIOEvent& Event, TArray<FElysiumEntity*>& Out);
 	// The one name-search walk (RE29), shared by ForEachNamed / FindByName / ResolveTargets so a
 	// pattern can never mean different things to a script, the I/O bus and a console verb. Visits every
-	// live match until `Fn` returns false. An exact pattern takes the NameIndex hash; only a trailing-`*`
-	// pattern pays for the linear scan.
+	// live match in entity-list order until `Fn` returns false. An exact pattern takes the NameIndex
+	// hash and sorts what it finds; only a trailing-`*` pattern pays for the linear scan.
 	void ForEachMatch(const FString& Pattern, TFunctionRef<bool(FElysiumEntity&)> Fn);
 	// 11.9 — re-stamp a handle read out of a payload with this world's epoch (Invalid when its index
 	// no longer exists). The only place a saved handle becomes a live one.
@@ -585,6 +589,7 @@ private:
 	TSet<FString> UnknownLogged;
 	int32 UnknownTargetCount = 0;
 	int32 UnknownInputCount = 0;
+	int32 LoopGuardTripCount = 0;
 
 	// The last time this world was ticked. NowSeconds() reads it when there is no game state to
 	// hold the clock.

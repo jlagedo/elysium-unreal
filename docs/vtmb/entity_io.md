@@ -42,7 +42,9 @@ field 5 or turn the residue into behavior. (Retail corpus: 16,096 of 16,125 writ
 
 Fields 0–4 are stock Source. The parser initializes `times` to `-1` and rewrites an authored `0` to
 `-1`, so **both `0` and `-1` mean unlimited**; a positive value is the remaining-fire counter.
-**Field 5 is a Python call string** (6,956 outputs carry one) which is wrapped as `__main__.%s` —
+**Field 5 is a Python call string** (6,956 outputs carry one; this doc counts fields from zero —
+prose elsewhere in the doc set counts from one and calls the same payload "field 6") which is
+wrapped as `__main__.%s` —
 see `docs/vtmb/python_bridge.md`. The wrap format string lives in **`vampire.dll`** (`0x1055e370`,
 in the event-queue dispatch region), not `engine.dll`. A target of `!activator`/`!self` is a runtime
 reference, not a `targetname`.

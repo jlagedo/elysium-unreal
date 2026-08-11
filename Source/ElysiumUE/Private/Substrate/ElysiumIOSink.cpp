@@ -64,6 +64,24 @@ void FElysiumRingBufferSink::OnPython(double Now, const FElysiumIOEvent& Event, 
 		Now, *World.DescribeHandle(Event.Caller), *Event.PythonSrc, *Result.Describe()));
 }
 
+void FElysiumRingBufferSink::OnLoopGuard(double Now, int32 Delivered)
+{
+	// The cap defers a still-due tail across a think boundary retail never observes, so the history
+	// has to mark where the pass stopped — otherwise the deferred deliveries read as spontaneous
+	// next frame. The queue is time-sorted, so the due tail is its head run.
+	int32 StillDue = 0;
+	for (const FElysiumIOEvent& Pending : World.Queue().Pending())
+	{
+		if (Pending.FireTime > Now)
+		{
+			break;
+		}
+		++StillDue;
+	}
+	Push(FString::Printf(TEXT("(%8.3f) -- loop guard: %d delivered, %d still due --"),
+		Now, Delivered, StillDue));
+}
+
 // --- Log + VLOG sink --------------------------------------------------------------------
 
 FElysiumLogSink::FElysiumLogSink(const FElysiumEntityWorld& InWorld)

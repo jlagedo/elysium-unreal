@@ -191,6 +191,13 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 					OutDef.Delay = static_cast<float>(Delay);
 				}
 				O->TryGetNumberField(TEXT("times"), OutDef.Times);
+				if (OutDef.Times == 0)
+				{
+					// Retail's parser seeds `times` to -1 and rewrites an authored 0 back to -1, so
+					// both spell unlimited and only a positive value is a real countdown. Normalised
+					// here rather than in the exporter, so an already-exported corpus behaves.
+					OutDef.Times = -1;
+				}
 				O->TryGetStringField(TEXT("python"), OutDef.Python);
 				Def.Outputs.Add(MoveTemp(OutDef));
 			}

@@ -236,6 +236,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	Ar << M.Entities;
 	Ar << M.AbsentEntities;
 	Ar << M.Queue << M.QueueNextSerial;
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::EventClock)
+	{
+		Ar << M.QueueLastEnqueue;
+	}
 	Ar << M.Fade;
 	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Weather)
 	{

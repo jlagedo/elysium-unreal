@@ -48,6 +48,7 @@ public:
 	virtual void OnUnknownTarget(double Now, const FElysiumIOEvent& Event) override;
 	virtual void OnUnknownInput(double Now, const FElysiumEntity& Target, const FElysiumIOEvent& Event) override;
 	virtual void OnPython(double Now, const FElysiumIOEvent& Event, const FElysiumVariant& Result) override;
+	virtual void OnLoopGuard(double Now, int32 Delivered) override;
 
 	int32 Num() const { return Count; }
 	int32 Capacity() const { return Buffer.Num(); }

@@ -798,6 +798,7 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 
 	Out.Queue = EventQueue.Pending();
 	Out.QueueNextSerial = EventQueue.NextSerialValue();
+	Out.QueueLastEnqueue = EventQueue.LastEnqueueValue();
 
 	Out.Fade.bActive      = ScreenFade.bActive;
 	Out.Fade.Color        = ScreenFade.Color;
@@ -999,6 +1000,10 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		EventQueue.AddRestored(MoveTemp(E));
 	}
 	EventQueue.SetNextSerial(Snapshot.QueueNextSerial);
+	// AddRestored deliberately skips the backward-clock guard — a restored deadline is already
+	// absolute against the restored clock. The guard's own state comes back with it, so the first
+	// live enqueue after the load compares against the time the save was written at.
+	EventQueue.SetLastEnqueue(Snapshot.QueueLastEnqueue);
 
 	ScreenFade.bActive      = Snapshot.Fade.bActive;
 	ScreenFade.Color        = Snapshot.Fade.Color;
@@ -2196,6 +2201,7 @@ void FElysiumEntityWorld::ServiceEvents(double Now)
 
 		if (Delivered >= GElysiumMaxDrainPerFrame)
 		{
+			++LoopGuardTripCount;
 			for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 			{
 				Sink->OnLoopGuard(Now, Delivered);
@@ -2218,6 +2224,19 @@ void FElysiumEntityWorld::AddEvent(FElysiumIOEvent&& Event)
 	// event (Add sorts it into place, so it is not necessarily the tail afterwards); sinks read
 	// the event's fields, not its Serial, which Add assigns.
 	const double Now = NowSeconds();
+
+	// Retail's backward-clock guard: an enqueue at a curtime below the last one observed shifts the
+	// new deadline forward by the rewind plus 0.01 rather than landing spuriously in the past
+	// (`docs/vtmb/game_runtime.md` → "Queue service order, recursion and starvation"). Applied here
+	// because this is the one enqueue every producer funnels through; the restore path uses
+	// AddRestored and is deliberately outside it.
+	const double LastEnqueue = EventQueue.LastEnqueueValue();
+	if (Now < LastEnqueue)
+	{
+		Event.FireTime += (LastEnqueue - Now) + 0.01;
+	}
+	EventQueue.SetLastEnqueue(Now);
+
 	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 	{
 		Sink->OnQueued(Now, Event);
@@ -2233,7 +2252,11 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		return;
 	}
 	const double Now = NowSeconds();
-	for (int32 i = 0; i < Source.Def->Outputs.Num(); ++i)
+	// Retail PREPENDS each parsed action to the output object's linked list and then fires that list
+	// head to tail, so repeated rows for one output resolve in reverse lump/export order
+	// (`docs/vtmb/entity_io.md` → "Output-list and queue order"). The def keeps authoring order, so
+	// the walk runs backwards; OutputTimesRemaining is indexed by the def row and stays aligned.
+	for (int32 i = Source.Def->Outputs.Num() - 1; i >= 0; --i)
 	{
 		const FElysiumOutputDef& O = Source.Def->Outputs[i];
 		if (FName(*O.Name) != OutputName)   // FName compare folds case
@@ -2494,6 +2517,25 @@ void FElysiumEntityWorld::ResolveTargets(const FElysiumIOEvent& Event, TArray<FE
 		}
 		return;
 	}
+	// `!player` and `!pvsplayer` both name the one player. `!player` is also the player entity's
+	// literal targetname, so the index would answer it — it is named here so it does not fall into
+	// the unrecognized-`!` case below.
+	if (T.Equals(ElysiumPlayerTargetName(), ESearchCase::IgnoreCase)
+		|| T.Equals(TEXT("!pvsplayer"), ESearchCase::IgnoreCase))
+	{
+		if (FElysiumEntity* E = FindPlayer())
+		{
+			Out.Add(E);
+		}
+		return;
+	}
+	// Every other leading-`!` name is retail's separate single-result path (RE29) with no case for
+	// it, so it resolves to nothing rather than fanning out over the name index. AcceptInput counts
+	// the empty result as an unknown target — the same non-fatal posture as a dead wire (K2).
+	if (T.StartsWith(TEXT("!"), ESearchCase::CaseSensitive))
+	{
+		return;
+	}
 
 	// Targetnames are non-unique — fan out over every live (non-dead) match. A wire may name a
 	// trailing-`*` prefix (RE29); 68 shipped outputs do, `patrol_cop_*` alone 51 times.
@@ -2528,8 +2570,8 @@ FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 		// During snapshot reconstruction the relationship handle is rebound after the state walk;
 		// fall through to the entity's literal targetname so scene restore can bind in that window.
 	}
-	// FindEntityByName with a null start entity: the first live match, under the same matching rule
-	// everything else uses (RE29) — so a trailing-`*` name resolves here too.
+	// FindEntityByName with a null start entity: the first live match in entity-list order, under the
+	// same matching rule everything else uses (RE29) — so a trailing-`*` name resolves here too.
 	FElysiumEntity* Found = nullptr;
 	ForEachMatch(Name, [&Found](FElysiumEntity& E) { Found = &E; return false; });
 	return Found;
@@ -2594,11 +2636,20 @@ void FElysiumEntityWorld::ForEachMatch(const FString& Pattern, TFunctionRef<bool
 	if (Pattern[Pattern.Len() - 1] != TEXT('*'))
 	{
 		const FName Name(*Pattern);
+		// A TMultiMap hands its values back most-recently-added first, which would visit duplicate
+		// targetnames in reverse and put a runtime-spawned entity (a maker's child) ahead of every
+		// map entity. Retail delivers in global entity-list order, so gather and sort by index.
+		TArray<int32> Matches;
 		for (auto It = NameIndex.CreateConstKeyIterator(Name); It; ++It)
 		{
-			if (EntityList.IsValidIndex(It.Value()))
+			Matches.Add(It.Value());
+		}
+		Matches.Sort();
+		for (int32 Index : Matches)
+		{
+			if (EntityList.IsValidIndex(Index))
 			{
-				if (FElysiumEntity* E = EntityList[It.Value()].Get())
+				if (FElysiumEntity* E = EntityList[Index].Get())
 				{
 					if (!E->IsDead() && !Fn(*E))
 					{

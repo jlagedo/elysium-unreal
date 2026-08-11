@@ -14,7 +14,7 @@ struct FElysiumOutputDef
 	FString Input;   // input name on the target
 	FString Param;   // parameter string passed to the input
 	float   Delay = 0.0f;   // seconds to defer the delivery
-	int32   Times = -1;     // remaining fire count; -1 = unlimited (counted down at runtime)
+	int32   Times = -1;     // remaining fire count; -1 = unlimited (an authored 0 normalises to -1)
 	FString Python;         // field 5: a call string the engine evals as `__main__.<expr>`
 
 	// Fires nothing but Python (no I/O target). 6,851 of the game's outputs are this shape —
