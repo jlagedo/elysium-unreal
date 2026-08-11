@@ -250,9 +250,18 @@ public:
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
-		// wait == -1 nulls the touch handler the instant the one accepted activation lands (below);
-		// a touch arriving before the scheduled self-removal think runs must see nothing at all.
-		if (bTouchSuppressed || bDisabled || IsInert() || !PlayerPasses(Activator))
+		// entity_io.md "OnStartTouch still fires inside the wait == -1 removal window": what
+		// ActivateMultiTrigger nulls is `m_pfnTouch`, and CBaseEntity::Touch is its only consumer —
+		// so nulling it gates the ACTIVATION half alone. CBaseTrigger::StartTouch carries no wait
+		// or removal test of its own, and for the ~0.1 s before SUB_Remove runs the volume is still
+		// solid with a clean deletion flag. A genuine re-entry inside that window therefore still
+		// produces OnStartTouch and still produces no OnTrigger, which is why bTouchSuppressed gates
+		// the activation block below and not this admission test.
+		//
+		// The disabled/inert half of that test is retail's solidity, not an extra rule: a disabled
+		// trigger has no FSOLID_TRIGGER to link against, which here is the dormant brush body that
+		// already turned the begin away in CanBeginTouch.
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
@@ -265,7 +274,7 @@ public:
 		FireOutput(OnStartTouch, Activator);
 
 		const double Now = World ? World->NowSeconds() : 0.0;
-		if (Now - LastTriggerTime >= Wait)
+		if (!bTouchSuppressed && Now - LastTriggerTime >= Wait)
 		{
 			LastTriggerTime = Now;
 			FireOutput(OnTrigger, Activator);

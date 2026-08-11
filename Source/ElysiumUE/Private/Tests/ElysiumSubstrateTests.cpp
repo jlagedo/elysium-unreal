@@ -42,6 +42,7 @@
 #include "ElysiumWeatherState.h"
 #include "ElysiumFog.h"
 #include "ElysiumEventQueue.h"
+#include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
 #include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
 #include "ElysiumGameClock.h"
@@ -5968,13 +5969,18 @@ bool FElysiumWaitMinusOneTest::RunTest(const FString&)
 	TestTrue(TEXT("its delayed row is queued and intact"), Sink->Saw(TEXT("queue"), TEXT("later.Add")));
 	TestEqual(TEXT("the delayed row is the only thing still pending"), World.Queue().Num(), 1);
 
-	// The touch handler is gone the instant the activation lands, so a genuine re-entry inside the
-	// removal window produces nothing at all.
+	// The nulled touch handler is an OnTrigger gate, not a touch gate (entity_io.md, "OnStartTouch
+	// still fires inside the wait == -1 removal window"): for the ~0.1 s before SUB_Remove runs the
+	// trigger is still a solid FSOLID_TRIGGER volume with a clean deletion flag, so a genuine
+	// re-entry still allocates a link and still reaches CBaseTrigger::StartTouch — which carries no
+	// wait, removal or handler test of its own. What `SetTouch(NULL)` removes is the second call of
+	// the pair, so MultiTouch never runs and no activation is produced.
 	Leave(World, TEXT("selfremove"));
 	Enter(World, TEXT("selfremove"));
 	World.Tick(0.05);
 	TestEqual(TEXT("no further activation is admitted"), CounterValue(World, TEXT("now")), 1.f);
-	TestEqual(TEXT("and no further edge output either"), CounterValue(World, TEXT("touches")), 1.f);
+	TestEqual(TEXT("but the edge output fires again inside the removal window"),
+		CounterValue(World, TEXT("touches")), 2.f);
 	TestNotNull(TEXT("the entity is alive until its removal is due"),
 		World.FindByName(TEXT("selfremove")));
 
@@ -5992,6 +5998,569 @@ bool FElysiumWaitMinusOneTest::RunTest(const FString&)
 		CounterValue(World, TEXT("later")), 1.f);
 	TestEqual(TEXT("the queue drained"), World.Queue().Num(), 0);
 	TestEqual(TEXT("a dead caller is not a dead wire"), World.UnknownTargets(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDyingTriggerEndTouchTest,
+	"Elysium.Substrate.DyingTriggerEndTouch", GElysiumTestFlags)
+bool FElysiumDyingTriggerEndTouchTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// The closing asymmetry of entity_io.md's touch-dispatch recovery: `~CBaseEntity` reaches
+	// CBaseEntity::PhysicsRemoveTouchedList, which calls PhysicsNotifyOtherOfUntouch for every link
+	// — giving each OTHER entity its EndTouch — and then frees the link directly, WITHOUT
+	// PhysicsRemoveToucher. The dying entity never receives its own EndTouch, so a trigger_once that
+	// removes itself under a standing occupant produces no final OnEndTouch.
+	//
+	// Ours falls out of Kill() rather than out of a special case: bDead is set before the contact
+	// release, so RouteBrushTouch releases the retained pair (a later re-entry stays an edge) and
+	// then returns on the inert gate without dispatching OnTouchEnd.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__dying_trigger__");
+	FElysiumEntityDef Once = TriggerDef(TEXT("trigger_once"), TEXT("oneshot"));
+	Wire(Once, TEXT("OnStartTouch"), TEXT("starts"), TEXT("Add"), TEXT("1"));
+	Wire(Once, TEXT("OnEndTouch"), TEXT("ends"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Once));
+	// The control leaf: an ordinary trigger the player walks back out of, so the assertion below is
+	// about death and not about ends being broken in general.
+	FElysiumEntityDef Multi = TriggerDef(TEXT("trigger_multiple"), TEXT("revolving"), TEXT("0"));
+	Wire(Multi, TEXT("OnEndTouch"), TEXT("control_ends"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Multi));
+	Defs.Defs.Add(Counter(TEXT("starts")));
+	Defs.Defs.Add(Counter(TEXT("ends")));
+	Defs.Defs.Add(Counter(TEXT("control_ends")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+
+	// The player walks in and STAYS in: nothing but the removal can release this contact.
+	Enter(World, TEXT("oneshot"));
+	World.Tick(0.0);
+	TestEqual(TEXT("the begin edge fired"), CounterValue(World, TEXT("starts")), 1.f);
+	TestEqual(TEXT("no end edge yet — the player is still inside"),
+		CounterValue(World, TEXT("ends")), 0.f);
+
+	// SUB_Remove at +0.1, ticked past the deadline rather than exactly on it (NextThink is a float).
+	World.Tick(0.15);
+	TestNull(TEXT("the trigger removed itself"), World.FindByName(TEXT("oneshot")));
+	World.Tick(0.2);
+	TestEqual(TEXT("a self-removing trigger emits no final OnEndTouch to the occupant it dies under"),
+		CounterValue(World, TEXT("ends")), 0.f);
+	TestEqual(TEXT("and the release queued nothing that could deliver later"), World.Queue().Num(), 0);
+
+	Enter(World, TEXT("revolving"));
+	World.Tick(0.2);
+	Leave(World, TEXT("revolving"));
+	World.Tick(0.2);
+	TestEqual(TEXT("an ordinary walk-out still fires OnEndTouch"),
+		CounterValue(World, TEXT("control_ends")), 1.f);
+
+	return true;
+}
+
+// =====================================================================================
+// The per-wire accounting instrument (`ElysiumWireReport.h`): the tally that turns "are the map's
+// events working?" into a number per authored output row, and the report that joins it back to the
+// authored surface so a wire nothing ever reached is visible at all.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWireTallyTest,
+	"Elysium.Substrate.WireTally", GElysiumTestFlags)
+bool FElysiumWireTallyTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// Every counter on one def set, so the six numbers are asserted against each other rather than
+	// one at a time: a fan-out wire has Delivered > Fired, a dead wire has neither, and a spent row
+	// is a different finding from one nothing ever reached.
+	//
+	// The dead-target and unknown-input rows also drive the stub tally; silence it the way
+	// Elysium.Substrate.StaleDirectHandle does, so the deliberate misses do not warn.
+	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
+	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
+	if (Warn) { Warn->Set(0); }
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT
+	{
+		if (Warn) { Warn->Set(PrevWarn); }
+		ElysiumStub::ClearTally();
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__wire_tally__");
+	FElysiumEntityDef Hub = Relay(TEXT("hub"));
+	Wire(Hub, TEXT("OnTrigger"), TEXT("good"),  TEXT("Add"),   TEXT("1"));                    // 0
+	Wire(Hub, TEXT("OnTrigger"), TEXT("fan_*"), TEXT("Add"),   TEXT("1"));                    // 1
+	Wire(Hub, TEXT("OnTrigger"), TEXT("ghost"), TEXT("Add"),   TEXT("1"));                    // 2
+	Wire(Hub, TEXT("OnTrigger"), TEXT("good"),  TEXT("Nudge"), TEXT("1"));                    // 3
+	Wire(Hub, TEXT("OnTrigger"), TEXT("spent"), TEXT("Add"),   TEXT("1"), 0.f, /*Times*/ 1);  // 4
+	Wire(Hub, TEXT("OnTrigger"), TEXT(""),      TEXT(""),      TEXT(""),  0.f, -1, TEXT("1"));// 5
+	// `times 0` is the only shape that is spent before it ever fires, which is the one way the
+	// classifier's Exhausted label is reachable — Fired == 0 with a refusal on the record.
+	Wire(Hub, TEXT("OnTrigger"), TEXT("good"),  TEXT("Add"),   TEXT("1"), 0.f, /*Times*/ 0);  // 6
+	Defs.Defs.Add(MoveTemp(Hub));
+	Defs.Defs.Add(Counter(TEXT("good")));
+	Defs.Defs.Add(Counter(TEXT("fan_a")));
+	Defs.Defs.Add(Counter(TEXT("fan_b")));
+	Defs.Defs.Add(Counter(TEXT("spent")));
+	FElysiumEntityDef Quiet = Relay(TEXT("quiet"));
+	Wire(Quiet, TEXT("OnTrigger"), TEXT("good"), TEXT("Add"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Quiet));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	const FElysiumEntity* HubEnt = World.FindByName(TEXT("hub"));
+	const FElysiumEntity* QuietEnt = World.FindByName(TEXT("quiet"));
+	if (!TestNotNull(TEXT("hub resolved"), HubEnt) || !TestNotNull(TEXT("quiet resolved"), QuietEnt))
+	{
+		return false;
+	}
+	auto WireOn = [](const FElysiumEntity* Source, int32 Row)
+	{
+		FElysiumWireRef W;
+		W.SourceIndex = Source->Handle.Index;
+		W.Output = FName(TEXT("OnTrigger"));
+		W.Row = Row;
+		return W;
+	};
+	auto Tally = [&World, &WireOn, HubEnt](int32 Row) { return World.WireTallyFor(WireOn(HubEnt, Row)); };
+
+	Trigger(World, TEXT("hub"));
+	World.Tick(0.0);
+
+	// --- (a) the six counters, each on the row that produces it -----------------------------
+	TestEqual(TEXT("a plain wire fired once"), Tally(0).Fired, 1);
+	TestEqual(TEXT("...and delivered once"), Tally(0).Delivered, 1);
+
+	// A targetname is non-unique and a trailing-`*` fans out, so one fire is many deliveries. This
+	// is the asymmetry the instrument exists to record: Delivered is per receiver, Fired per row.
+	TestEqual(TEXT("a fan-out wire still fires once"), Tally(1).Fired, 1);
+	TestEqual(TEXT("...and delivers once per match"), Tally(1).Delivered, 2);
+
+	TestEqual(TEXT("a dead-target wire fires"), Tally(2).Fired, 1);
+	TestEqual(TEXT("...and resolves to nothing"), Tally(2).UnknownTarget, 1);
+	TestEqual(TEXT("...which is not a delivery"), Tally(2).Delivered, 0);
+
+	TestEqual(TEXT("a wrong-input wire fires"), Tally(3).Fired, 1);
+	TestEqual(TEXT("...reaches a live target that refuses it"), Tally(3).UnknownInput, 1);
+	TestEqual(TEXT("...which is also not a delivery"), Tally(3).Delivered, 0);
+
+	TestEqual(TEXT("a times=1 wire fires on its one budget"), Tally(4).Fired, 1);
+	TestEqual(TEXT("...and has not been refused yet"), Tally(4).TimesExhausted, 0);
+
+	// The field-6 half is only reachable with a script host, which hangs off the game state — null
+	// on a bare substrate world, so DeliverEvent's forward tap never runs here. What IS observable
+	// headless is that the row still fires and still queues: PythonForwarded distinguishes "the
+	// script failed" from "the script never happened", and this is the second case.
+	TestEqual(TEXT("a Python-carrying row fires like any other"), Tally(5).Fired, 1);
+	TestEqual(TEXT("...but forwards nothing with no host installed"), Tally(5).PythonForwarded, 0);
+
+	TestEqual(TEXT("a times=0 row is refused without firing"), Tally(6).Fired, 0);
+	TestEqual(TEXT("...and the refusal is the only witness it was reached"), Tally(6).TimesExhausted, 1);
+
+	TestTrue(TEXT("a wire nothing reached has no tally row at all"),
+		World.WireTallies().Find(WireOn(QuietEnt, 0)) == nullptr);
+	TestTrue(TEXT("...and reads all-zero anyway"),
+		World.WireTallyFor(WireOn(QuietEnt, 0)).IsUntouched());
+
+	// --- (b) the second fire: only the spent row changes its answer -------------------------
+	Trigger(World, TEXT("hub"));
+	World.Tick(0.0);
+	TestEqual(TEXT("the spent row does not fire again"), Tally(4).Fired, 1);
+	TestEqual(TEXT("...and the refusal is counted against its own identity"),
+		Tally(4).TimesExhausted, 1);
+	TestEqual(TEXT("...so its one delivery stands"), Tally(4).Delivered, 1);
+	TestEqual(TEXT("the unlimited row fired twice"), Tally(0).Fired, 2);
+	TestEqual(TEXT("and the receiver agrees with the tally"), CounterValue(World, TEXT("good")), 2.f);
+	TestEqual(TEXT("the fan-out receivers too"), CounterValue(World, TEXT("fan_a")), 2.f);
+	TestEqual(TEXT("the spent row's receiver took exactly one"),
+		CounterValue(World, TEXT("spent")), 1.f);
+
+	// --- (c) the report: the authored surface, whether or not it did anything ---------------
+	TArray<FElysiumWireReportRow> Report;
+	World.BuildWireReport(Report);
+	TestEqual(TEXT("every authored row is reported, fired or not"), Report.Num(), 8);
+
+	const FElysiumWireReportRow* QuietRow = Report.FindByPredicate(
+		[&](const FElysiumWireReportRow& R) { return R.SourceName == TEXT("quiet"); });
+	if (TestNotNull(TEXT("the never-fired wire is in the report"), QuietRow))
+	{
+		TestTrue(TEXT("with an all-zero tally"), QuietRow->Tally.IsUntouched());
+		TestEqual(TEXT("and the NeverFired label"), (int32)ElysiumWireOutcome(*QuietRow),
+			(int32)EElysiumWireOutcome::NeverFired);
+		TestEqual(TEXT("its authored target rides along"), QuietRow->Target, FString(TEXT("good")));
+		TestFalse(TEXT("and it is authored, not runtime-spawned"), QuietRow->bRuntimeSource);
+	}
+
+	// The per-output ordinal an offline inventory counts in: all seven hub rows hang off OnTrigger,
+	// so their OutputRow is 0..6 in authoring order while Wire.Row is the def-array position.
+	if (Report.Num() == 8)
+	{
+		TestEqual(TEXT("the report is in (entity, def row) order"), Report[3].Wire.Row, 3);
+		TestEqual(TEXT("...and states the per-output ordinal beside it"), Report[3].OutputRow, 3);
+		TestEqual(TEXT("the Python row carries its source"), Report[5].Python, FString(TEXT("1")));
+		TestTrue(TEXT("...and knows it has one"), Report[5].HasPython());
+		TestFalse(TEXT("...with no I/O target"), Report[5].HasTarget());
+		TestEqual(TEXT("the times=1 row reports its authored budget"), Report[4].AuthoredTimes, 1);
+	}
+
+	// Outcome per row, most-diagnostic-first: a wire that both delivered and hit a dead target is a
+	// broken wire, not a working one.
+	auto OutcomeOf = [&Report](int32 Index)
+	{
+		return Report.IsValidIndex(Index) ? (int32)ElysiumWireOutcome(Report[Index]) : -1;
+	};
+	TestEqual(TEXT("row 0 delivered"), OutcomeOf(0), (int32)EElysiumWireOutcome::Delivered);
+	TestEqual(TEXT("row 1 delivered (twice over)"), OutcomeOf(1), (int32)EElysiumWireOutcome::Delivered);
+	TestEqual(TEXT("row 2 is a dead wire"), OutcomeOf(2), (int32)EElysiumWireOutcome::UnknownTarget);
+	TestEqual(TEXT("row 3 reached a receiver that refused it"), OutcomeOf(3),
+		(int32)EElysiumWireOutcome::UnknownInput);
+	TestEqual(TEXT("row 4 delivered before it was spent"), OutcomeOf(4),
+		(int32)EElysiumWireOutcome::Delivered);
+	// Fired, nothing resolved: no I/O target to deliver to and no host to forward to. PythonOnly is
+	// the same row WITH a host, which is why the two labels are separate.
+	TestEqual(TEXT("row 5 fired and resolved nothing headless"), OutcomeOf(5),
+		(int32)EElysiumWireOutcome::Pending);
+	TestEqual(TEXT("row 6 was spent before it ever fired"), OutcomeOf(6),
+		(int32)EElysiumWireOutcome::Exhausted);
+
+	const FElysiumWireSummary Summary = ElysiumWireSummarize(Report);
+	TestEqual(TEXT("the whole authored surface is the denominator"), Summary.Authored, 8);
+	TestEqual(TEXT("nothing here was runtime-spawned"), Summary.RuntimeRows, 0);
+	TestEqual(TEXT("six rows produced a queued delivery"), Summary.Fired, 6);
+	TestEqual(TEXT("three resolved cleanly"), Summary.FullyDelivered, 3);
+	TestEqual(TEXT("one named nothing"), Summary.UnknownTarget, 1);
+	TestEqual(TEXT("one was refused by its receiver"), Summary.UnknownInput, 1);
+	TestEqual(TEXT("one is still unresolved"), Summary.Pending, 1);
+	TestEqual(TEXT("one was spent"), Summary.Exhausted, 1);
+	TestEqual(TEXT("one was never reached"), Summary.NeverFired, 1);
+	TestEqual(TEXT("the labels partition the authored surface"),
+		Summary.FullyDelivered + Summary.UnknownTarget + Summary.UnknownInput + Summary.Pending
+			+ Summary.Exhausted + Summary.NeverFired, Summary.Authored);
+	TestEqual(TEXT("one row carries Python"), Summary.PythonRows, 1);
+	TestEqual(TEXT("...which reached no host"), Summary.PythonForwarded, 0);
+
+	// The instrument measures one run, and a reset starts a new one without reloading the map.
+	World.ResetWireTallies();
+	TestEqual(TEXT("a reset empties the tally"), World.WireTallies().Num(), 0);
+	World.BuildWireReport(Report);
+	TestEqual(TEXT("...but not the authored surface"), Report.Num(), 8);
+	TestEqual(TEXT("...which now reads as never fired"),
+		ElysiumWireSummarize(Report).NeverFired, 8);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWireIdentitySaveTest,
+	"Elysium.Substrate.WireIdentitySave", GElysiumTestFlags)
+bool FElysiumWireIdentitySaveTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// The identity rides the queued record (FElysiumSaveVersion::WireIdentity) so a delayed
+	// delivery that lands on the far side of a save still attributes to the row that produced it
+	// rather than reading as an unattributed event. The TALLY is deliberately not saved: it measures
+	// one session, and a restore that claimed the writing run's firing history would answer a
+	// question nobody asked. Both halves are asserted here, because the second is what makes the
+	// first legible.
+	auto MakeDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__wire_identity_save__");
+		FElysiumEntityDef Source = Relay(TEXT("src"));
+		Wire(Source, TEXT("OnTrigger"), TEXT("sink"), TEXT("Add"), TEXT("1"), /*Delay*/ 0.5f);
+		Defs.Defs.Add(MoveTemp(Source));
+		Defs.Defs.Add(Counter(TEXT("sink")));
+		return Defs;
+	};
+
+	FElysiumEntityWorld Before(nullptr, nullptr);
+	Before.Load(MakeDefs());
+	Before.Activate(0.0);
+
+	const FElysiumEntity* SrcEnt = Before.FindByName(TEXT("src"));
+	if (!TestNotNull(TEXT("src resolved"), SrcEnt))
+	{
+		return false;
+	}
+	FElysiumWireRef Authored;
+	Authored.SourceIndex = SrcEnt->Handle.Index;
+	Authored.Output = FName(TEXT("OnTrigger"));
+	Authored.Row = 0;
+
+	Trigger(Before, TEXT("src"));
+	Before.Tick(0.0);
+	TestEqual(TEXT("the row fired"), Before.WireTallyFor(Authored).Fired, 1);
+	TestEqual(TEXT("...and is still pending at its half-second delay"), Before.Queue().Num(), 1);
+	TestEqual(TEXT("...having delivered nothing yet"), Before.WireTallyFor(Authored).Delivered, 0);
+
+	FElysiumMapSnapshot Frozen;
+	Before.Freeze(Frozen);
+	if (TestEqual(TEXT("the pending record was frozen"), Frozen.Queue.Num(), 1))
+	{
+		TestTrue(TEXT("carrying the wire it came from"), Frozen.Queue[0].Wire == Authored);
+	}
+
+	// Through the archive, not just through memory: the schema is the thing under test, so the
+	// snapshot is written and read back exactly as a save file would carry it.
+	TArray<uint8> Bytes;
+	{
+		FMemoryWriter Writer(Bytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+		Ar << Frozen;
+	}
+	FElysiumMapSnapshot Read;
+	{
+		FMemoryReader Reader(Bytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		Ar << Read;
+	}
+	if (TestEqual(TEXT("the record survived the archive"), Read.Queue.Num(), 1))
+	{
+		TestTrue(TEXT("with its wire identity intact"), Read.Queue[0].Wire == Authored);
+		TestTrue(TEXT("...and the identity is set, not a default"), Read.Queue[0].Wire.IsSet());
+	}
+
+	FElysiumEntityWorld After(nullptr, nullptr);
+	After.Load(MakeDefs());
+	After.ApplySnapshot(Read);
+	After.Activate(0.0);
+
+	TestEqual(TEXT("the restored world starts its own measurement"), After.WireTallies().Num(), 0);
+	TestTrue(TEXT("...so the row it inherited reads untouched"),
+		After.WireTallyFor(Authored).IsUntouched());
+	TestEqual(TEXT("the delayed record came back"), After.Queue().Num(), 1);
+
+	After.Tick(0.6);
+	const FElysiumWireTally Restored = After.WireTallyFor(Authored);
+	TestEqual(TEXT("the post-restore delivery attributes to the SAME authored row"),
+		Restored.Delivered, 1);
+	// Fired stays zero: the fire happened in the run that wrote the save. The two counters are what
+	// makes a restored delivery legible as one, rather than as a wire that fired out of nowhere.
+	TestEqual(TEXT("...while its fire belongs to the run that wrote the save"), Restored.Fired, 0);
+	TestEqual(TEXT("the receiver actually took it"), CounterValue(After, TEXT("sink")), 1.f);
+	TestEqual(TEXT("the queue drained"), After.Queue().Num(), 0);
+	TestEqual(TEXT("and nothing was unattributed"), After.WireTallies().Num(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLogicStateSaveTest,
+	"Elysium.Substrate.LogicStateSave", GElysiumTestFlags)
+bool FElysiumLogicStateSaveTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventTransportTests;
+
+	// The three logic leaves whose derived state is not a registered keyfield, so a restore without
+	// their own Serialize comes back to the Spawn() seed and diverges on the NEXT input rather than
+	// visibly at load. Each case therefore asserts the divergence, not the field: the observable is
+	// what the restored entity does next.
+	auto DebugRow = [](const FElysiumEntity* Ent, const TCHAR* Key)
+	{
+		if (!Ent)
+		{
+			return FString(TEXT("<no entity>"));
+		}
+		TArray<TPair<FString, FString>> State;
+		Ent->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == Key)
+			{
+				return Row.Value;
+			}
+		}
+		return FString(TEXT("<no row>"));
+	};
+
+	// --- (a) math_counter: the OnHitMax edge latch ------------------------------------------
+	{
+		auto MakeDefs = []()
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__counter_edge_save__");
+			FElysiumEntityDef Meter = Counter(TEXT("meter"));
+			Meter.Keys.Add(TEXT("min"), TEXT("0"));
+			Meter.Keys.Add(TEXT("max"), TEXT("3"));
+			Wire(Meter, TEXT("OnHitMax"), TEXT("maxhits"), TEXT("Add"), TEXT("1"));
+			Defs.Defs.Add(MoveTemp(Meter));
+			Defs.Defs.Add(Counter(TEXT("maxhits")));
+			return Defs;
+		};
+
+		FElysiumEntityWorld Before(nullptr, nullptr);
+		Before.Load(MakeDefs());
+		Before.Activate(0.0);
+
+		Before.AcceptInput(TEXT("meter"), FName(TEXT("Add")), FElysiumVariant::Float(3.0f),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		Before.Tick(0.0);
+		TestEqual(TEXT("reaching the bound is an edge"), CounterValue(Before, TEXT("maxhits")), 1.f);
+		TestEqual(TEXT("and the latch says so"),
+			DebugRow(Before.FindByName(TEXT("meter")), TEXT("At bound")), FString(TEXT("max")));
+
+		FElysiumMapSnapshot Clamped;
+		Before.Freeze(Clamped);
+
+		FElysiumEntityWorld After(nullptr, nullptr);
+		After.Load(MakeDefs());
+		After.ApplySnapshot(Clamped);
+		After.Activate(0.0);
+		TestEqual(TEXT("the value came back at the bound"), CounterValue(After, TEXT("meter")), 3.f);
+		TestEqual(TEXT("...and so did the latch that says it was already there"),
+			DebugRow(After.FindByName(TEXT("meter")), TEXT("At bound")), FString(TEXT("max")));
+
+		// The divergence: a restored-false latch would read this in-bound Set as a fresh crossing.
+		After.AcceptInput(TEXT("meter"), FName(TEXT("Add")), FElysiumVariant::Float(1.0f),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		After.Tick(0.0);
+		TestEqual(TEXT("a Set that stays clamped does not re-fire OnHitMax"),
+			CounterValue(After, TEXT("maxhits")), 1.f);
+
+		// ...and the latch is still a latch, not a permanent mute.
+		After.AcceptInput(TEXT("meter"), FName(TEXT("SetValue")), FElysiumVariant::Float(1.0f),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		After.Tick(0.0);
+		TestEqual(TEXT("stepping off the bound clears it"),
+			DebugRow(After.FindByName(TEXT("meter")), TEXT("At bound")), FString(TEXT("no")));
+		After.AcceptInput(TEXT("meter"), FName(TEXT("Add")), FElysiumVariant::Float(5.0f),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		After.Tick(0.0);
+		TestEqual(TEXT("crossing back in fires again"), CounterValue(After, TEXT("maxhits")), 2.f);
+	}
+
+	// --- (b) logic_case_toggle: the advanced current-case pointer ---------------------------
+	{
+		auto MakeDefs = []()
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__case_toggle_save__");
+			FElysiumEntityDef Toggle;
+			Toggle.Classname = TEXT("logic_case_toggle");
+			Toggle.TargetName = TEXT("toggle");
+			Toggle.Keys.Add(TEXT("Case01"), TEXT("a"));
+			Toggle.Keys.Add(TEXT("Case02"), TEXT("b"));
+			Toggle.Keys.Add(TEXT("Case03"), TEXT("c"));
+			Toggle.Keys.Add(TEXT("InitialCase"), TEXT("1"));
+			Wire(Toggle, TEXT("OnCase01"), TEXT("c1"), TEXT("Add"), TEXT("1"));
+			Wire(Toggle, TEXT("OnCase02"), TEXT("c2"), TEXT("Add"), TEXT("1"));
+			Wire(Toggle, TEXT("OnCase03"), TEXT("c3"), TEXT("Add"), TEXT("1"));
+			Defs.Defs.Add(MoveTemp(Toggle));
+			Defs.Defs.Add(Counter(TEXT("c1")));
+			Defs.Defs.Add(Counter(TEXT("c2")));
+			Defs.Defs.Add(Counter(TEXT("c3")));
+			return Defs;
+		};
+		auto Advance = [](FElysiumEntityWorld& World)
+		{
+			World.AcceptInput(TEXT("toggle"), FName(TEXT("InValueDelta")), FElysiumVariant::Int(1),
+				FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+			World.Tick(0.0);
+		};
+
+		FElysiumEntityWorld Before(nullptr, nullptr);
+		Before.Load(MakeDefs());
+		Before.Activate(0.0);
+
+		// Spawn prepositions the pointer one configured slot BEHIND InitialCase, so the first
+		// +1 delta lands on case 01.
+		Advance(Before);
+		TestEqual(TEXT("the first delta selects the initial case"),
+			CounterValue(Before, TEXT("c1")), 1.f);
+
+		FElysiumMapSnapshot Advanced;
+		Before.Freeze(Advanced);
+
+		FElysiumEntityWorld After(nullptr, nullptr);
+		After.Load(MakeDefs());
+		After.ApplySnapshot(Advanced);
+		After.Activate(0.0);
+		TestEqual(TEXT("the restored pointer reads where it was left"),
+			DebugRow(After.FindByName(TEXT("toggle")), TEXT("Current case")), FString(TEXT("01")));
+		// The receivers restore with the run's history on them, so the divergence below is read as a
+		// change from these values rather than from zero.
+		TestEqual(TEXT("case 01's receiver came back with its hit"),
+			CounterValue(After, TEXT("c1")), 1.f);
+		TestEqual(TEXT("...and case 02's with none"), CounterValue(After, TEXT("c2")), 0.f);
+
+		// The divergence: a pointer back at its InitialCase seed would select case 01 a second time.
+		Advance(After);
+		TestEqual(TEXT("the next delta continues from the restored case"),
+			CounterValue(After, TEXT("c2")), 1.f);
+		TestEqual(TEXT("...and does not restart at the initial one"),
+			CounterValue(After, TEXT("c1")), 1.f);
+	}
+
+	// --- (c) func_brush: the runtime Enable/Disable latch ------------------------------------
+	{
+		auto MakeDefs = []()
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__func_brush_save__");
+			FElysiumEntityDef Gate;
+			Gate.Classname = TEXT("func_brush");
+			Gate.TargetName = TEXT("gate");
+			// Authored ENABLED: StartDisabled is a saved keyfield and would restore the answer on its
+			// own, which is exactly the confusion this case has to avoid.
+			Gate.Keys.Add(TEXT("StartDisabled"), TEXT("0"));
+			Defs.Defs.Add(MoveTemp(Gate));
+			return Defs;
+		};
+
+		FElysiumEntityWorld Before(nullptr, nullptr);
+		Before.Load(MakeDefs());
+		Before.Activate(0.0);
+		Before.Tick(0.0);   // the one-shot think that seats the authored solidity
+		TestEqual(TEXT("an authored-enabled brush collides"),
+			DebugRow(Before.FindByName(TEXT("gate")), TEXT("Collides")), FString(TEXT("yes")));
+
+		Before.AcceptInput(TEXT("gate"), FName(TEXT("Disable")), FElysiumVariant::Void(),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		TestEqual(TEXT("Disable drops it"),
+			DebugRow(Before.FindByName(TEXT("gate")), TEXT("Collides")), FString(TEXT("no")));
+
+		FElysiumMapSnapshot Off;
+		Before.Freeze(Off);
+
+		// The control: the same defs with no restore come back enabled, so the assertions below are
+		// about the payload and not about func_brush defaulting off.
+		FElysiumEntityWorld Fresh(nullptr, nullptr);
+		Fresh.Load(MakeDefs());
+		Fresh.Activate(0.0);
+		Fresh.Tick(0.0);
+		TestEqual(TEXT("a fresh load of the same map is enabled"),
+			DebugRow(Fresh.FindByName(TEXT("gate")), TEXT("Enabled")), FString(TEXT("yes")));
+
+		FElysiumEntityWorld After(nullptr, nullptr);
+		After.Load(MakeDefs());
+		After.ApplySnapshot(Off);
+		After.Activate(0.0);
+		TestEqual(TEXT("the restored brush is disabled"),
+			DebugRow(After.FindByName(TEXT("gate")), TEXT("Enabled")), FString(TEXT("no")));
+		// The physical half. ApplySnapshot's tail calls OnDormancyChanged once every restored field
+		// and leaf byte has landed, and func_brush routes that through ApplyBrushSolidity — so the
+		// body's collision switch is re-seated from the restored latch rather than left at the value
+		// the spawn-time think wrote. Headless there is no body (no owning actor), so `Collides` is
+		// that same decision read one step before it reaches SetDormant.
+		TestEqual(TEXT("...and its collision was re-applied, not left at the spawn value"),
+			DebugRow(After.FindByName(TEXT("gate")), TEXT("Collides")), FString(TEXT("no")));
+
+		// The restored think must not undo it either: the one-shot already ran before the save.
+		After.Tick(1.0);
+		TestEqual(TEXT("and no later think re-enables it"),
+			DebugRow(After.FindByName(TEXT("gate")), TEXT("Collides")), FString(TEXT("no")));
+
+		After.AcceptInput(TEXT("gate"), FName(TEXT("Toggle")), FElysiumVariant::Void(),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+		TestEqual(TEXT("a Toggle on the restored latch turns it back on"),
+			DebugRow(After.FindByName(TEXT("gate")), TEXT("Collides")), FString(TEXT("yes")));
+	}
 
 	return true;
 }
@@ -11814,10 +12383,16 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// sits mid-record but is written and read behind its own version, so a `Feeding` payload skips
 	// those bytes and restores with the guard at its default — additive for the same reason, and the
 	// floor stays put again.
-	TestEqual(TEXT("the event-clock guard is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::EventClock);
-	TestTrue(TEXT("and it is additive, so the floor did not move with it"),
+	TestTrue(TEXT("the event-clock guard is additive, so the floor did not move with it"),
 		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::EventClock);
+	// `WireIdentity` appends the authored output row a pending queue record came from to the END of
+	// the event record, read behind its own version — so an `EventClock` payload restores with an
+	// unset wire rather than being refused. Additive again, and again the floor stays where the last
+	// breaking schema left it.
+	TestEqual(TEXT("the wire identity is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::WireIdentity);
+	TestTrue(TEXT("and it is additive, so the floor did not move with it"),
+		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::WireIdentity);
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would

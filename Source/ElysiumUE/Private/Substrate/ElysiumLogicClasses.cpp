@@ -109,6 +109,15 @@ public:
 		FireOutput(OnGetValue, A.Activator, FElysiumVariant::Float(Value));
 	}
 
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		// bHitMax/bHitMin are the edge latches Set() reads to decide whether OnHitMax/OnHitMin is a
+		// new edge or a repeat. Without them, a restore at an already-clamped bound reads false and
+		// the next in-bound Set() re-fires the output as if the bound had just been reached.
+		Ar << bHitMax;
+		Ar << bHitMin;
+	}
+
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		Out.Emplace(TEXT("Value"), FString::SanitizeFloat(Value));
@@ -390,6 +399,16 @@ public:
 		}
 	}
 
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Super::Serialize(Ar);
+		// CurrentCase is the advanced-selection pointer InValue/InValueDelta/PickRandom move; Spawn()
+		// only seeds it from InitialCase. Restore runs after Spawn() (ApplySnapshot applies leaf state
+		// once the def-array spawn pass, or the runtime-entity recreation pass, has already completed),
+		// so this rides on top of the InitialCase seed rather than being clobbered by it.
+		Ar << CurrentCase;
+	}
+
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
 		Out.Emplace(TEXT("Kind"), TEXT("match + delta-advance (VtMB toggle)"));
@@ -402,6 +421,8 @@ public:
 	}
 
 private:
+	using Super = FElysiumLogicCaseBase;
+
 	// FUN_101346e0: step the pointer by `Delta`, counting only configured cases, wrapping 0..15.
 	// Guards against an all-empty table (would otherwise spin forever).
 	void Advance(int32 Delta)
@@ -554,6 +575,16 @@ public:
 		{
 			World->NotifyVisualChanged(*this);
 		}
+	}
+
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		// bEnabled is the runtime Enable/Disable/Toggle latch; bStartDisabled (a saved field) only
+		// seeds it in Spawn(). ApplySnapshot calls OnDormancyChanged unconditionally once every
+		// restored field and this leaf state has landed, and this override already routes it through
+		// ApplyBrushSolidity() — which reads bEnabled — so restoring the member here is enough to
+		// re-seat the body's physical solidity; no separate re-apply hook is needed.
+		Ar << bEnabled;
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override

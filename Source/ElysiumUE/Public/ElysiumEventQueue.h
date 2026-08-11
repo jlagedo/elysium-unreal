@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWireReport.h"
 
 // One queued I/O delivery — the unit the event queue sorts and services. `Target` is the raw
 // output target string kept verbatim so `!self`/`!activator` resolve at *dispatch* time (R3),
@@ -18,6 +19,12 @@ struct FElysiumIOEvent
 	FElysiumEntityHandle Activator;        // propagated activator
 	FElysiumEntityHandle Caller;           // the entity that fired the output (`!self`)
 	uint64 Serial = 0;                     // FIFO tiebreaker for equal FireTime (set by Add)
+	// The authored output row this record came from, so a delivery can be attributed back to the
+	// wire that produced it. Unset for records nobody authored — EnqueueInput's console injection,
+	// EnqueuePython's ScheduleTask, and the transient event AcceptInput builds to carry dispatch
+	// context. Serialized with the record (FElysiumSaveVersion::WireIdentity) so a delivery that
+	// lands after a restore still attributes; the tally it feeds is per-session and is not saved.
+	FElysiumWireRef Wire;
 };
 
 // R4 — the one time-sorted event queue. Every delayed I/O, field-6 Python payload, and (later)

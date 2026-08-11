@@ -76,6 +76,21 @@ FArchive& operator<<(FArchive& Ar, FElysiumIOEvent& E)
 	Ar << E.Activator;
 	Ar << E.Caller;
 	Ar << E.Serial;
+	// The wire the record came from, so a delivery that lands after a restore still attributes to
+	// the authored row that produced it rather than reading as an unattributed event. Appended at
+	// the end of the record and read behind its own version, so an `EventClock` payload restores
+	// with no wire instead of being refused — additive, like the two schemas before it. Only the
+	// identity travels; the tally it feeds measures one session and is rebuilt from zero.
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::WireIdentity)
+	{
+		Ar << E.Wire.SourceIndex;
+		Ar << E.Wire.Output;
+		Ar << E.Wire.Row;
+	}
+	else if (Ar.IsLoading())
+	{
+		E.Wire = FElysiumWireRef();
+	}
 	return Ar;
 }
 

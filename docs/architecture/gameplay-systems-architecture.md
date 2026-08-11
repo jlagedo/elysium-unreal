@@ -676,7 +676,11 @@ runtime spine's own acceptance test for a new system.
 
 - **The gap is always enumerable live**: `elysium.stubs` (fired unimplemented surfaces),
   `elysium.classes` (stub class rows), and the native table's per-row status render the
-  remaining work without reading source (K3).
+  remaining work without reading source (K3). The authored wire surface itself is measured the
+  same way: the world keeps a per-wire tally (fired, delivered, unknown-target, unknown-input,
+  `times`-exhausted, Python-forwarded), and `elysium.wires` / `elysium_wire_report` dump it —
+  including the never-fired set — as a per-map JSON report, so the acceptance classification
+  below starts from counts, not impressions.
 - **Per-NPC decision tracing** extends the existing sink pattern: the mind reports stimulus →
   relationship result → condition delta → state transition → schedule/task → owner/activity
   through a ring buffer surfaced in the Cog NPC window — the npc-ai survey's observability

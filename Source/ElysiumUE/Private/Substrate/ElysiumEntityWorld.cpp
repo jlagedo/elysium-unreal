@@ -1143,7 +1143,13 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	FElysiumEntity* E = Resolve(Brush);
 	if (!E || E->IsInert())
 	{
-		return;   // a dormant/dead brush cannot be touched (R6)
+		// A dormant/dead brush cannot be touched (R6). On the end edge this is also the retail
+		// asymmetry: `~CBaseEntity` reaches PhysicsRemoveTouchedList, which notifies the OTHER side
+		// of each link and frees it without PhysicsRemoveToucher — so a dying trigger never receives
+		// its own EndTouch, and a self-removing trigger_once emits no final OnEndTouch to occupants
+		// still inside it (entity_io.md). Kill() flips bDead before releasing contacts, which is
+		// what routes the release here (`Elysium.Substrate.DyingTriggerEndTouch`).
+		return;
 	}
 
 	// Begin/end are edges, not level-triggered calls. Engine movement normally supplies exactly
@@ -2264,15 +2270,34 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 			continue;
 		}
 
+		// The wire this row IS. Built before the `times` gate so an exhausted row is still counted
+		// against its own identity — a wire that stops firing because it is spent is a different
+		// finding from one that never fired, and only the tally can tell them apart.
+		FElysiumWireRef Wire;
+		Wire.SourceIndex = Source.Handle.Index;
+		Wire.Output = FName(*O.Name);
+		Wire.Row = i;
+
 		// `times` countdown lives on the entity (the def is immutable); 0 = spent, -1 = unlimited.
 		int32& Remaining = Source.OutputTimesRemaining[i];
 		if (Remaining == 0)
 		{
+			// No sink fires here and no event exists, so the tally is the only witness that the row
+			// was reached at all.
+			if (FElysiumWireTally* Row = WireRowFor(Wire))
+			{
+				++Row->TimesExhausted;
+			}
 			continue;
 		}
 		if (Remaining > 0)
 		{
 			--Remaining;
+		}
+
+		if (FElysiumWireTally* Row = WireRowFor(Wire))
+		{
+			++Row->Fired;
 		}
 
 		for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
@@ -2281,6 +2306,7 @@ void FElysiumEntityWorld::FireOutput(FElysiumEntity& Source, FName OutputName, c
 		}
 
 		FElysiumIOEvent Ev;
+		Ev.Wire = Wire;
 		Ev.FireTime = Now + O.Delay;
 		Ev.Target = O.Target;
 		Ev.Input = FName(*O.Input);
@@ -2345,6 +2371,14 @@ FElysiumVariant FElysiumEntityWorld::EvalCondition(const FString& Source,
 void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const FElysiumVariant& Param,
 	const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller)
 {
+	// A hand-made dispatch belongs to no authored row, so it carries no wire and lands in no tally.
+	AcceptInputFromWire(Target, Input, Param, Activator, Caller, FElysiumWireRef());
+}
+
+void FElysiumEntityWorld::AcceptInputFromWire(const FString& Target, FName Input,
+	const FElysiumVariant& Param, const FElysiumEntityHandle& Activator,
+	const FElysiumEntityHandle& Caller, const FElysiumWireRef& Wire)
+{
 	// Chokepoint 1 (R5): the sole input path. A transient event carries the dispatch context to
 	// the sinks whether the caller is the queue (DeliverEvent) or a hand-fired console verb.
 	if (!IsTriggerResolutionEnabled())
@@ -2359,12 +2393,17 @@ void FElysiumEntityWorld::AcceptInput(const FString& Target, FName Input, const 
 	Ev.Param = Param;
 	Ev.Activator = Activator;
 	Ev.Caller = Caller;
+	Ev.Wire = Wire;
 
 	TArray<FElysiumEntity*> Targets;
 	ResolveTargets(Ev, Targets);
 	if (Targets.Num() == 0)
 	{
 		++UnknownTargetCount;
+		if (FElysiumWireTally* Row = WireRowFor(Wire))
+		{
+			++Row->UnknownTarget;
+		}
 		const FString Key = FString::Printf(TEXT("%s.%s"), *Target, *Input.ToString());
 		// Reported as its own kind rather than as `input`: the wire names an entity the map does
 		// not contain, so nothing is missing from the runtime here and no amount of implementing
@@ -2437,6 +2476,10 @@ void FElysiumEntityWorld::DeliverInputTo(
 	if (!Thunk)
 	{
 		++UnknownInputCount;
+		if (FElysiumWireTally* Row = WireRowFor(Event.Wire))
+		{
+			++Row->UnknownInput;
+		}
 		const FString Key = FString::Printf(
 			TEXT("%s.%s"), *Target.Def->Classname, *Event.Input.ToString());
 		// The generic stub surface: an input the R2 walk cannot resolve is unimplemented whether
@@ -2469,6 +2512,13 @@ void FElysiumEntityWorld::DeliverInputTo(
 	Args.Caller = Event.Caller;
 	Args.Input = Event.Input;
 	Thunk(Target, Args);
+	// Counted per TARGET, not per event: one fire of a `patrol_cop_*` wire is one Fired and as many
+	// Delivered as the pattern matched. "The output reached a receiver that accepted it" is the fact
+	// acceptance needs, and it is a per-receiver fact.
+	if (FElysiumWireTally* Row = WireRowFor(Event.Wire))
+	{
+		++Row->Delivered;
+	}
 	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 	{
 		Sink->OnDelivered(Now, Target, Event);
@@ -2481,7 +2531,8 @@ void FElysiumEntityWorld::DeliverEvent(const FElysiumIOEvent& Event, double Now)
 	// to the script host. An output can carry both (105 in the game do).
 	if (!Event.Target.IsEmpty())
 	{
-		AcceptInput(Event.Target, Event.Input, Event.Param, Event.Activator, Event.Caller);
+		AcceptInputFromWire(Event.Target, Event.Input, Event.Param, Event.Activator, Event.Caller,
+			Event.Wire);
 	}
 
 	if (!Event.PythonSrc.IsEmpty() && GameState)
@@ -2490,6 +2541,13 @@ void FElysiumEntityWorld::DeliverEvent(const FElysiumIOEvent& Event, double Now)
 		Ctx.Self = Event.Caller;
 		Ctx.Activator = Event.Activator;
 		Ctx.World = this;
+		// Counted at the hand-off, not at the result: a payload that raised still ran, while a row
+		// whose Python never reached a host (no game state) reads as authored-but-not-forwarded,
+		// which is the distinction between "the script failed" and "the script never happened".
+		if (FElysiumWireTally* Row = WireRowFor(Event.Wire))
+		{
+			++Row->PythonForwarded;
+		}
 		const FElysiumVariant Result = GameState->ScriptHost().Eval(Event.PythonSrc, Ctx);
 		for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 		{
@@ -2549,6 +2607,67 @@ void FElysiumEntityWorld::ResolveTargets(const FElysiumIOEvent& Event, TArray<FE
 	// Targetnames are non-unique — fan out over every live (non-dead) match. A wire may name a
 	// trailing-`*` prefix (RE29); 68 shipped outputs do, `patrol_cop_*` alone 51 times.
 	ForEachMatch(T, [&Out](FElysiumEntity& E) { Out.Add(&E); return true; });
+}
+
+// --- Per-wire accounting ------------------------------------------------------------------
+
+FElysiumWireTally* FElysiumEntityWorld::WireRowFor(const FElysiumWireRef& Wire)
+{
+	// An unset wire is the normal case for a console injection, a ScheduleTask and every direct
+	// AcceptInput; it stores nothing rather than accumulating a nameless bucket, so the map's size
+	// is bounded by the authored surface.
+	return Wire.IsSet() ? &WireTally.FindOrAdd(Wire) : nullptr;
+}
+
+FElysiumWireTally FElysiumEntityWorld::WireTallyFor(const FElysiumWireRef& Wire) const
+{
+	const FElysiumWireTally* Row = WireTally.Find(Wire);
+	return Row ? *Row : FElysiumWireTally();
+}
+
+void FElysiumEntityWorld::BuildWireReport(TArray<FElysiumWireReportRow>& Out) const
+{
+	Out.Reset();
+
+	// Walk the live entities rather than the def array: it covers the authored defs (whose entity
+	// index IS their def index) and the runtime-spawned entities past them, and it reads each row
+	// off the def the entity actually holds. A killed entity keeps its slot, so its wires stay in
+	// the report with whatever they managed before they died.
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
+	{
+		const FElysiumEntity* Ent = EntityList[Index].Get();
+		if (!Ent || !Ent->Def)
+		{
+			continue;
+		}
+		const FElysiumEntityDef& Def = *Ent->Def;
+
+		// The per-output ordinal an offline enumeration counts in ("the second OnTrigger row"),
+		// keyed by the case-folded output name so it agrees with how the rows are matched.
+		TMap<FName, int32> SeenPerOutput;
+
+		for (int32 RowIndex = 0; RowIndex < Def.Outputs.Num(); ++RowIndex)
+		{
+			const FElysiumOutputDef& O = Def.Outputs[RowIndex];
+
+			FElysiumWireReportRow Report;
+			Report.Wire.SourceIndex = Index;
+			Report.Wire.Output = FName(*O.Name);
+			Report.Wire.Row = RowIndex;
+			Report.OutputRow = SeenPerOutput.FindOrAdd(Report.Wire.Output)++;
+			Report.SourceName = Def.TargetName;
+			Report.SourceClass = Def.Classname;
+			Report.Target = O.Target;
+			Report.Input = O.Input;
+			Report.Param = O.Param;
+			Report.Python = O.Python;
+			Report.Delay = O.Delay;
+			Report.AuthoredTimes = O.Times;
+			Report.bRuntimeSource = Index >= Defs.Defs.Num();
+			Report.Tally = WireTallyFor(Report.Wire);
+			Out.Add(MoveTemp(Report));
+		}
+	}
 }
 
 // --- Resolution -------------------------------------------------------------------------
@@ -2809,6 +2928,8 @@ void FElysiumEntityWorld::Teardown()
 	EntityList.Empty();
 	Baseline.Empty();
 	RuntimeDefs.Empty();
+	// The tally is keyed by entity index, which means something only inside one map epoch.
+	WireTally.Empty();
 	Ring = nullptr;
 	Sinks.Empty();
 }

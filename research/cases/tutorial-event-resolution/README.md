@@ -20,6 +20,11 @@ not recover animation blending, audio playback, or presentation internals.
 - What use lifecycle and output surface do `prop_switch`, `prop_button`, `prop_doorknob`,
   `prop_sign`, and `prop_hacking` expose?
 - When do VCD `firetrigger`, scene completion, start and cancel outputs enter the ordinary queue?
+- During the `wait == -1` window between `SetTouch(NULL)` and `SUB_Remove`, does a new contact still
+  produce `OnStartTouch`, and does anything else — `EFL_KILLME`, solidity, touch-link state — gate it?
+- Which link state pairs an `EndTouch` to its begin, and does a self-removing entity receive its own?
+- Does anything on the synchronous reflected-input path — `AcceptInput`, the PyMethodDef body, or the
+  embedded interpreter — bound script→input→script recursion?
 
 ## Reproduction
 
@@ -48,3 +53,16 @@ Static `vampire.dll` inspection reaches `PhysicsTouchTriggers`, but the exact or
 ends and new-contact begins is below the `engine.dll` collision-property interface. The
 `trigger_autosave` save transaction is also not closed by this server-DLL pass. Keep both explicit
 rather than inferring them from Source SDK or the Unreal implementation.
+
+The server side of that boundary is closed: `CServerGameEnts::MarkEntitiesAsTouching`
+(`FUN_1011be20`, reachable only through the interface vtable slot at `0x1001017c`) is where
+`engine.dll` hands a pair over, and every gate after it — link dedup, the begin-flag bit,
+`EFL_KILLME`, the `StartTouch`/`Touch`/`EndTouch` slots — is recovered. What stays open is only
+*which* pairs the partition enumerates per frame and in what relative order.
+
+The recursion question is closed server-side and open on the C stack. The embedded interpreter is
+CPython 2.1.2 (`Bin/vampire_python21.dll`, SHA-256
+`2ce854ddd5191721f38ccbe6c19988655632c5c9a79fdfef03a4cd8f49b04645`, image base `0x1e100000`); its
+`recursion_limit` global at `0x1e1808d8` initializes to 1000 and `vampire.dll` imports neither
+`Py_SetRecursionLimit` nor `Py_GetRecursionLimit`. Whether 1000 nested levels fit in
+`Vampire.exe`'s 1 MB main-thread stack reserve is not decidable from the images and stays open.

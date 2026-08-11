@@ -557,9 +557,99 @@ arms `MultiWaitOver` at `curtime + wait`; attempted **`OnTrigger` activations** 
 are silently swallowed and are not retried when it re-arms. A genuinely new physical entry may
 still have produced its edge-only `OnStartTouch` before reaching that wait gate. `wait == -1` (the
 value forced by `trigger_once`) removes the touch
-handler immediately and schedules removal at `curtime + 0.1`, so it cannot fire again even though
-its delayed output rows remain valid queue entries. Enable/disable is independent: disabling clears
+handler immediately and schedules removal at `curtime + 0.1`, so it can never **activate** again even
+though its delayed output rows remain valid queue entries — but its edge outputs are unaffected for
+the ~0.1 s it stays alive, which is the subject of the two subsections below. Enable/disable is
+independent: disabling clears
 contacts, and re-enabling while still geometrically contained can create a fresh begin.
+
+### The touch dispatch path
+
+The server-side touch dispatch is fully recovered in `vampire.dll`; only *pair selection* is
+engine-owned. Two entry points hand pairs to the server: `CServerGameEnts::MarkEntitiesAsTouching`
+(`FUN_1011be20`, reached only through the interface vtable slot at `0x1001017c` — it has no ordinary
+call site in `vampire.dll`, which is exactly the `engine.dll` boundary), and
+`CBaseEntity::PhysicsImpact` (`FUN_1003e6c0`, which rejects the pair when
+`GetFlags(a) | GetFlags(b)` carries `0x4000000`). Both forward to
+`CBaseEntity::PhysicsMarkEntitiesAsTouching` (`FUN_1003e2e0`), which calls
+`CBaseEntity::PhysicsMarkEntityAsTouched` (`FUN_1003dc70`) once in each direction.
+`CBaseEntity::PhysicsTouchTriggers` (`FUN_100a53d0`) only hands the collision object (`+0x2e0`) to
+the engine partition interface at `vt+0x1e8`; which pairs come back, and in what order, stays below
+that boundary.
+
+`PhysicsMarkEntityAsTouched` is the entire begin decision:
+
+- rejects self-touch, and either entity being the other's move parent (`+0x25c`);
+- rejects when `GetFlags(a) | GetFlags(b)` carries `0x400000` (bit not otherwise named here);
+- when **both** sides carry `FSOLID_TRIGGER` (`m_usSolidFlags` `+0x2b4` bit `0x8`), requires at least
+  one of them to be solid (`m_nSolidType` `+0x2b0` non-zero and no `FSOLID_NOT_SOLID` bit `0x4`);
+- if a touchlink for the pair already exists, it only refreshes the link stamp from `m_touchStamp`
+  (`+0x1ac`) and calls `CBaseEntity::PhysicsTouch` (`FUN_1003daa0`) — an existing contact never
+  produces a second begin;
+- otherwise it allocates a link (pool ceiling `0x200`, `AllocTouchLink: MAX_TOUCHLINKS limit`) and,
+  when the *toucher* is not itself a trigger, sets link flag bit `0x1` and calls
+  `CBaseEntity::PhysicsStartTouch` (`FUN_1003db80`).
+
+`PhysicsStartTouch` is two virtual calls behind one gate:
+
+```c
+if (other != NULL && !this->vt[0x1d0]() && !other->vt[0x1d0]()) {
+    this->vt[0x2b8](other);   // StartTouch
+    this->vt[0x2bc](other);   // Touch
+}
+```
+
+`vt+0x1d0` (slot 116) is `FUN_10027490` = `m_iEFlags (+0x268) & EFL_KILLME (0x1)` —
+`IsMarkedForDeletion`. `PhysicsTouch` applies the same two-sided gate and calls only `vt+0x2bc`.
+For `CTriggerMultiple` (vftable `0x1047da24`) and `CTriggerOnce` (`0x1047dee4`) — both factories,
+`FUN_101c66e0` and `FUN_101c6a30`, write the base vftable `0x1047d08c` first and then the leaf's —
+those slots resolve to `CBaseTrigger::StartTouch` (`FUN_101c5590`), `CBaseEntity::Touch` (`FUN_100a4af0`) and
+`CBaseTrigger::EndTouch` (`FUN_101c55d0`). **`CBaseEntity::Touch` is the only consumer of
+`m_pfnTouch`** (`+0x1ec`): it calls the pointer when non-null, then forwards `Touch` to the move
+parent (`+0x254`). `CTriggerMultiple::Spawn` (`FUN_101c6860`) installs `MultiTouch` there through the
+thunk at `0x10015212` → `FUN_101c68b0`.
+
+Ends run from `CBaseEntity::PhysicsCheckForEntityUntouch` (`FUN_1003d490`), which expires every link
+whose stamp differs from the owner's `m_touchStamp`; a link stamped `0xffffffff` (written by
+`PhysicsMarkEntitiesAsTouchingEventDriven`, `FUN_1003e4e0`) never expires and re-enters
+`PhysicsTouch` instead. Expiry calls `PhysicsNotifyOtherOfUntouch` (`FUN_1003d640`) and then
+`PhysicsRemoveToucher` (`FUN_1003d770`), and each fires `EndTouch` (`vt+0x2c0`) **only when the link
+carries the `0x1` bit that `PhysicsMarkEntityAsTouched` set when it dispatched the begin** — ends are
+paired to begins by construction, not by a liveness test. Neither function tests `EFL_KILLME`.
+
+### `OnStartTouch` still fires inside the `wait == -1` removal window
+
+`ActivateMultiTrigger` (`FUN_101c68e0`) writes exactly three things on the `wait == -1` branch:
+`m_pfnTouch (+0x1ec) = NULL`, `m_flNextThink (+0x17c) = curtime + 0.1`, and the think pointer to
+`SUB_Remove` (`FUN_101c0b10`). It does not change solidity, does not touch the touchlink list, and
+does not set `m_iEFlags`. `EFL_KILLME` is set only inside `UTIL_Remove` (`FUN_101cd940` →
+`0x101cd8c0`), which `SUB_Remove` reaches only when that think runs.
+
+So for the ~0.1 s window the trigger is still a solid `FSOLID_TRIGGER` volume with a clean deletion
+flag, still linked into the touch graph. A **new** contact therefore still allocates a link, still
+passes the `IsMarkedForDeletion` gate in `PhysicsStartTouch`, and still reaches
+`CBaseTrigger::StartTouch` — whose body is only `PassesTriggerFilters` (`FUN_101c5460`) and then
+firing `m_OnStartTouch` (`+0x568`). **`CBaseTrigger::StartTouch` carries no wait, removal, enabled or
+`m_pfnTouch` gate at all**; the activator-class/filter test is its sole admission check.
+`CBaseTrigger::EndTouch` is the same two lines against `m_OnEndTouch` (`+0x580`).
+
+What the null `m_pfnTouch` suppresses is the *second* call of the pair: `CBaseEntity::Touch` finds no
+handler, so `CTriggerMultiple::MultiTouch` never runs and no `OnTrigger` is produced. `SetTouch(NULL)`
+is an `OnTrigger` gate, not a touch gate. The faithful behaviour inside the window is therefore
+`OnStartTouch` **yes**, `OnTrigger` **no**, `OnEndTouch` **yes** — ends behave exactly as on any other
+frame, because nothing about the trigger's links or stamps changed, and because the untouch path has
+no `EFL_KILLME` test even after the removal think has run.
+
+The one asymmetry is destruction itself. `CBaseEntity::~CBaseEntity` (`FUN_1009df20`, trace string
+`0x105554a0`) calls `CBaseEntity::PhysicsRemoveTouchedList` (`FUN_1003d8f0`), which calls
+`PhysicsNotifyOtherOfUntouch` for every link — giving each *other* entity its `EndTouch` — and then
+frees the link directly, **without** `PhysicsRemoveToucher`. The dying entity never receives its own
+`EndTouch`, so a `trigger_once` that removes itself produces no final `OnEndTouch` for occupants
+still standing inside it.
+
+What remains open is only the `engine.dll` half: which pairs the partition enumerates in a given
+frame, and the relative order of old-contact expiry against new-contact begins. Everything after
+`MarkEntitiesAsTouching`/`PhysicsImpact` is settled above.
 
 ## Other brush-trigger leaves in the current exports
 

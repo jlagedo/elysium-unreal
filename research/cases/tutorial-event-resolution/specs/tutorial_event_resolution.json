@@ -20,7 +20,14 @@
     "How are inherited NPC output keyvalues copied from CNPCMaker to each child?",
     "What event surfaces and user-session guards do tutorial specialized props expose?",
     "Where do CSceneEntity firetrigger, completion, start and cancel outputs cross the think-to-queue boundary?",
-    "Which save transaction does CTriggerAutosave invoke, and where is its continuous-occupancy guard?"
+    "Which save transaction does CTriggerAutosave invoke, and where is its continuous-occupancy guard?",
+    "What invokes CBaseTrigger::StartTouch, and is that path independent of the m_pfnTouch member SetTouch(NULL) clears?",
+    "Does the touch dispatch path test EFL_KILLME or any equivalent flag, and when is EFL_KILLME actually set relative to the wait==-1 window?",
+    "Do a trigger's solidity, touch links or stamps change between ActivateMultiTrigger's wait==-1 branch and the SUB_Remove think?",
+    "Which link state pairs an EndTouch to its begin, and does a self-removing entity receive its own EndTouch?",
+    "Does CBaseEntity::AcceptInput carry a depth counter, reentrancy guard or budget?",
+    "Does the reflected entity-input PyMethodDef body or its surrounding bridge carry one?",
+    "Which Python version does retail embed, what is its recursion limit, and does vampire.dll ever change it?"
   ],
   "functions": [
     {"address": "100ccf90", "label": "ParseOutputAction", "confidence": "body evidence", "role": "parse the first six comma fields and normalize times", "depth": 2, "cap": 180},
@@ -53,11 +60,41 @@
     {"address": "1034bc90", "label": "NPCMakerChildDeathNotice", "confidence": "body evidence", "role": "OnNPCDied OnLastNPCDied and live count", "depth": 2, "cap": 180},
     {"address": "100819b0", "label": "ScenePlaybackThink", "confidence": "verified vtable slot", "role": "game clock processing firetrigger and completion production", "depth": 3, "cap": 260},
     {"address": "10081b60", "label": "SceneFinished", "confidence": "body evidence", "role": "restore actors queue completion then unhide", "depth": 2, "cap": 220},
-    {"address": "100829e0", "label": "SceneStartPlayback", "confidence": "body evidence", "role": "start guards arm think and OnStart production", "depth": 2, "cap": 220}
+    {"address": "100829e0", "label": "SceneStartPlayback", "confidence": "body evidence", "role": "start guards arm think and OnStart production", "depth": 2, "cap": 220},
+    {"address": "1011be20", "label": "ServerGameEntsMarkEntitiesAsTouching", "confidence": "interface vtable slot 1001017c only", "role": "engine entry point that hands a touch pair to the server", "depth": 1, "cap": 60},
+    {"address": "1003e6c0", "label": "BaseEntityPhysicsImpact", "confidence": "trace string 1053bebc", "role": "impact-side pair admission and 0x4000000 rejection", "depth": 1, "cap": 60},
+    {"address": "1003e2e0", "label": "BaseEntityPhysicsMarkEntitiesAsTouching", "confidence": "trace string 1053be48", "role": "symmetric per-direction touch marking", "depth": 1, "cap": 80},
+    {"address": "1003e4e0", "label": "BaseEntityPhysicsMarkEntitiesAsTouchingEventDriven", "confidence": "trace string 1053be7c", "role": "non-expiring link stamp 0xffffffff", "depth": 1, "cap": 80},
+    {"address": "1003dc70", "label": "BaseEntityPhysicsMarkEntityAsTouched", "confidence": "trace string 1053bdf8", "role": "whole begin decision, link allocation and begin-flag bit", "depth": 1, "cap": 80},
+    {"address": "1003db80", "label": "BaseEntityPhysicsStartTouch", "confidence": "trace string 1053bcc8", "role": "EFL_KILLME gate then StartTouch and Touch virtuals", "depth": 1, "cap": 40},
+    {"address": "1003daa0", "label": "BaseEntityPhysicsTouch", "confidence": "trace string 1053bca8", "role": "ongoing-contact Touch dispatch under the same gate", "depth": 1, "cap": 40},
+    {"address": "1003d490", "label": "BaseEntityPhysicsCheckForEntityUntouch", "confidence": "trace string 1053bbd8", "role": "stale-stamp expiry and event-driven exemption", "depth": 1, "cap": 60},
+    {"address": "1003d640", "label": "BaseEntityPhysicsNotifyOtherOfUntouch", "confidence": "trace string 1053bc0c", "role": "reciprocal end on the other entity", "depth": 1, "cap": 60},
+    {"address": "1003d770", "label": "BaseEntityPhysicsRemoveToucher", "confidence": "trace string 1053bc50", "role": "link begin-flag test then EndTouch virtual and link free", "depth": 1, "cap": 60},
+    {"address": "1003d8f0", "label": "BaseEntityPhysicsRemoveTouchedList", "confidence": "trace string 1053bc78", "role": "destruction sweep that omits the dying entity's own EndTouch", "depth": 1, "cap": 60},
+    {"address": "1009df20", "label": "BaseEntityDestructor", "confidence": "trace string 105554a0", "role": "the caller that runs the destruction sweep", "depth": 0, "cap": 20},
+    {"address": "10027490", "label": "BaseEntityIsMarkedForDeletion", "confidence": "vtable slot 116", "role": "m_iEFlags +0x268 and EFL_KILLME", "depth": 0, "cap": 20},
+    {"address": "100a4af0", "label": "BaseEntityTouch", "confidence": "vtable slot 175", "role": "sole m_pfnTouch +0x1ec consumer and move-parent forward", "depth": 0, "cap": 20},
+    {"address": "101c0b10", "label": "BaseEntitySUB_Remove", "confidence": "warning string 1059c3a4", "role": "health warning then UTIL_Remove", "depth": 1, "cap": 40},
+    {"address": "101cd940", "label": "UtilRemove", "confidence": "body evidence", "role": "sets EFL_KILLME and queues destruction", "depth": 2, "cap": 60},
+    {"address": "101c6ad0", "label": "TriggerOnceSpawn", "confidence": "body evidence", "role": "forces m_flWait +0x500 to -1.0f", "depth": 1, "cap": 40},
+    {"address": "101c6860", "label": "TriggerMultipleSpawn", "confidence": "call target of TriggerOnceSpawn", "role": "installs MultiTouch in m_pfnTouch and defaults wait", "depth": 1, "cap": 40},
+    {"address": "101c66e0", "label": "TriggerMultipleFactory", "confidence": "classname string 1059f7e0", "role": "leaf vftable 1047da24 over base 1047d08c", "depth": 1, "cap": 60},
+    {"address": "101c6a30", "label": "TriggerOnceFactory", "confidence": "classname string 1059f814", "role": "leaf vftable 1047dee4 over base 1047d08c", "depth": 1, "cap": 60},
+    {"address": "100abc90", "label": "BaseEntityAcceptInput", "confidence": "trace string 1055714c", "role": "absence of any depth counter or reentrancy guard", "depth": 1, "cap": 60},
+    {"address": "100b5190", "label": "BaseEntityIsHidden", "confidence": "AcceptInput entry gate", "role": "the only entry gate, byte +0xf4", "depth": 0, "cap": 20},
+    {"address": "101962a0", "label": "PythonEntityInputFunction", "confidence": "PyMethodDef 1058f658 thunk 10006429", "role": "synchronous marshal and single AcceptInput call", "depth": 1, "cap": 140}
+  ],
+  "vtable_probes": [
+    {"address": "1047d08c", "label": "BaseTrigger", "slots": 252, "cap": 320},
+    {"address": "1047da24", "label": "TriggerMultiple", "slots": 252, "cap": 320},
+    {"address": "1047dee4", "label": "TriggerOnce", "slots": 252, "cap": 320}
   ],
   "grep_probes": [
     {"label": "queue_python", "str": "EventQueue~RUNNING~Invalid", "cap": 200},
     {"label": "guards_and_outputs", "str": "EnableRefire~OnReadEnd~OnSpawnNPC~OnLastNPCDied", "cap": 200},
-    {"label": "teleport", "str": "teleport~parent~target", "cap": 200}
+    {"label": "teleport", "str": "teleport~parent~target", "cap": 200},
+    {"label": "touch_dispatch", "str": "PhysicsTouchTriggers~PhysicsStartTouch~PhysicsMarkEntitiesAsTouching~PhysicsMarkEntityAsTouched~PhysicsCheckForEntityUntouch~PhysicsRemoveToucher~PhysicsRemoveTouchedList~PhysicsNotifyOtherOfUntouch", "cap": 200},
+    {"label": "accept_input", "str": "AcceptInput~SUB_Remove~UTIL_Remove", "cap": 200}
   ]
 }

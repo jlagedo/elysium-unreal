@@ -331,6 +331,47 @@ synchronously, converts only a Python integer result to truth, then queues ordin
 `OnFalse` output actions. An exception or non-integer prints and selects false; it does not cancel
 earlier work in the queue service pass.
 
+**Nothing in the server bounds recursion on the synchronous path.** A script→input→script cycle is
+possible whenever an input body itself re-enters Python — `logic_pythoncheck.Test` (`FUN_10135290`,
+`PyRun_String(..., Py_eval_input)`) and the `prop_hacking` runscript are the reachable examples — and
+no participant on that path counts depth:
+
+- `CBaseEntity::AcceptInput` is `FUN_100abc90` (vtable slot 118 = `+0x1d8`, identical in every
+  entity vftable checked; trace string `0x1055714c`). Its body is a profiler scope, one entry gate, a datamap walk
+  over the class chain, the `m_pfnInputActivator` / caller EHANDLE writes (`+0x10c` / `+0x110`),
+  developer `DevMsg` reporting, an optional debug-overlay record when `+0x224` carries `0x10`, the
+  variant-type conversion, and then the record's `inputFunc` call. It has **no depth counter, no
+  reentrancy flag and no budget**. The single entry gate is the hidden-state test
+  `FUN_100b5190` = `byte [this+0xf4]` (see "Hidden state" in `docs/vtmb/entity_io.md`): a hidden
+  entity returns `true` for every input whose name does not begin with `ScriptUnhide`. The byte
+  written at `+0x1b1` after a successful dispatch is set, never read at entry.
+- `entity_input_function`'s body `FUN_101962a0` carries none either. It validates the CObject, parses
+  the argument per the datamap field type, builds the `variant_t`, calls `vt+0x1d8` once, and returns
+  `None`. Neither `FUN_10135290` nor the field-5 caller `FUN_100ce990` holds a guard flag.
+
+The only bound is the embedded interpreter's own. Retail embeds **CPython 2.1.2**
+(`Bin/vampire_python21.dll`, version string at file offset `0x89d20`), whose `recursion_limit` global
+lives at `0x1e1808d8` (image base `0x1e100000`; `Py_GetRecursionLimit` at `0x1e10f340` is `MOV EAX,
+[0x1e1808d8]; RET`) and is initialized to **1000**. `vampire.dll` imports 69 symbols from that DLL and
+**neither `Py_SetRecursionLimit` nor `Py_GetRecursionLimit` is among them**, and no retail or patch
+script calls `sys.setrecursionlimit`, so the default stands for the whole session. Each cycle level
+adds at least one Python frame, so `tstate->recursion_depth` accumulates monotonically while the
+outer levels sit blocked inside `AcceptInput`.
+
+At exhaustion the interpreter raises `RuntimeError: maximum recursion depth exceeded` (string at file
+offset `0x80cf0`) out of the innermost `PyRun_String`. That lands on the ordinary error policy below:
+the C++ boundary calls `PyErr_Print()` and continues, so a `logic_pythoncheck` at the wall simply
+evaluates **false** and the stack unwinds normally — the limit converts a runaway cycle into a printed
+traceback plus error-to-false at the innermost level, not into an abort. It does not by itself
+terminate a cycle whose script re-enters after receiving that false.
+
+Whether 1000 nested levels are actually reachable before the native stack fails is **not settled by
+static evidence**: `Vampire.exe` reserves a 1 MB main-thread stack (PE optional header), and each
+cycle level costs one interpreter frame plus the whole `entity_input_function` → `AcceptInput` →
+input-body → `PyRun_String` C++ path, which is not measurable from the image alone. Treat "Python
+raises first" and "the C stack fails first" as both open; what *is* proven is that the server itself
+contributes no limit.
+
 `worldspawn` carries a `levelscript` keyvalue (92 of 101 maps) naming the hub module —
 `"levelscript" "chinatown"` loads `python/chinatown/chinatown.py`. Several maps share one
 module.

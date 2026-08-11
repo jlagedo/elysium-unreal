@@ -18,6 +18,8 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayer.h"
 #include "Debug/ElysiumScreenshot.h"
+#include "Debug/ElysiumWireDump.h"
+#include "ElysiumWireReport.h"
 #include "Audio/ElysiumSoundScheme.h"
 #include "ElysiumVariant.h"
 
@@ -1290,6 +1292,97 @@ namespace ElysiumMcpImpl
 					Body->SetNumberField(TEXT("recorded"), Ring.Num());
 					Body->SetNumberField(TEXT("capacity"), Ring.Capacity());
 					Body->SetArrayField(TEXT("lines"), Values);
+					return Structured(Body);
+				}));
+		}
+
+		{
+			FSchema Schema;
+			Schema.Add(TEXT("outcome"), TEXT("string"), TEXT("Return only wires with this outcome: never_fired, exhausted, unknown_target, unknown_input, delivered, python_only, pending. Omit for all of them."));
+			Schema.Add(TEXT("limit"), TEXT("integer"), TEXT("Maximum wire rows to return; `matched` still counts the whole set. Default 100."));
+			Schema.Add(TEXT("write"), TEXT("boolean"), TEXT("Also dump the full report to _wires/<map>.json for the offline joiner. Default false."));
+			Out.Add(MakeTool(TEXT("elysium_wire_report"),
+				TEXT("Per-wire I/O accounting for the live map: every authored output row and what it did — fired, refused because `times` was spent, delivered, dead target, unresolved input, Python forwarded. The summary answers 'is the event surface working?' as a number; filtering by outcome gives the work list, and never_fired is the one that matters most."),
+				Schema,
+				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
+				{
+					FElysiumEntityWorld* World = Entities();
+					if (!World)
+					{
+						return MakeErrorResult(TEXT("no entity world loaded"));
+					}
+
+					TArray<FElysiumWireReportRow> Rows;
+					World->BuildWireReport(Rows);
+					const FElysiumWireSummary S = ElysiumWireSummarize(Rows);
+
+					TSharedRef<FJsonObject> Summary = Obj();
+					Summary->SetNumberField(TEXT("authored"), S.Authored);
+					Summary->SetNumberField(TEXT("runtime_rows"), S.RuntimeRows);
+					Summary->SetNumberField(TEXT("fired"), S.Fired);
+					Summary->SetNumberField(TEXT("fully_delivered"), S.FullyDelivered);
+					Summary->SetNumberField(TEXT("never_fired"), S.NeverFired);
+					Summary->SetNumberField(TEXT("exhausted"), S.Exhausted);
+					Summary->SetNumberField(TEXT("unknown_target"), S.UnknownTarget);
+					Summary->SetNumberField(TEXT("unknown_input"), S.UnknownInput);
+					Summary->SetNumberField(TEXT("pending"), S.Pending);
+					Summary->SetNumberField(TEXT("python_rows"), S.PythonRows);
+					Summary->SetNumberField(TEXT("python_forwarded"), S.PythonForwarded);
+
+					const FString Filter = ParamStr(Params, TEXT("outcome"));
+					const int32 Limit = FMath::Clamp(ParamInt(Params, TEXT("limit"), 100), 1, 5000);
+
+					TArray<TSharedPtr<FJsonValue>> Wires;
+					int32 Matched = 0;
+					for (const FElysiumWireReportRow& R : Rows)
+					{
+						const TCHAR* Outcome = ElysiumWireOutcomeName(ElysiumWireOutcome(R));
+						if (Filter.IsEmpty() || FCString::Stricmp(*Filter, Outcome) == 0)
+						{
+							++Matched;
+							// `matched` keeps counting past the cap, so a truncated answer still
+							// states how big the work list actually is.
+							if (Wires.Num() >= Limit)
+							{
+								continue;
+							}
+							TSharedRef<FJsonObject> Row = Obj();
+							Row->SetNumberField(TEXT("entity"), R.Wire.SourceIndex);
+							Row->SetStringField(TEXT("name"), R.SourceName);
+							Row->SetStringField(TEXT("classname"), R.SourceClass);
+							Row->SetStringField(TEXT("output"), R.Wire.Output.ToString());
+							Row->SetNumberField(TEXT("row"), R.Wire.Row);
+							Row->SetNumberField(TEXT("output_row"), R.OutputRow);
+							Row->SetStringField(TEXT("target"), R.Target);
+							Row->SetStringField(TEXT("input"), R.Input);
+							Row->SetStringField(TEXT("param"), R.Param);
+							Row->SetNumberField(TEXT("delay"), R.Delay);
+							Row->SetNumberField(TEXT("times"), R.AuthoredTimes);
+							Row->SetBoolField(TEXT("python"), R.HasPython());
+							Row->SetBoolField(TEXT("runtime_source"), R.bRuntimeSource);
+							Row->SetStringField(TEXT("outcome"), Outcome);
+							Row->SetNumberField(TEXT("fired"), R.Tally.Fired);
+							Row->SetNumberField(TEXT("times_exhausted"), R.Tally.TimesExhausted);
+							Row->SetNumberField(TEXT("delivered"), R.Tally.Delivered);
+							Row->SetNumberField(TEXT("unknown_target"), R.Tally.UnknownTarget);
+							Row->SetNumberField(TEXT("unknown_input"), R.Tally.UnknownInput);
+							Row->SetNumberField(TEXT("python_forwarded"), R.Tally.PythonForwarded);
+							Wires.Add(MakeShared<FJsonValueObject>(Row));
+						}
+					}
+
+					TSharedRef<FJsonObject> Body = Obj();
+					Body->SetStringField(TEXT("map"), World->MapName());
+					Body->SetObjectField(TEXT("summary"), Summary);
+					Body->SetStringField(TEXT("outcome_filter"), Filter);
+					Body->SetNumberField(TEXT("matched"), Matched);
+					Body->SetArrayField(TEXT("wires"), Wires);
+					if (ParamBool(Params, TEXT("write"), false))
+					{
+						const FString Path = ElysiumWireDump::Write(*World);
+						Body->SetStringField(TEXT("report_path"), Path);
+						Body->SetBoolField(TEXT("written"), !Path.IsEmpty());
+					}
 					return Structured(Body);
 				}));
 		}

@@ -8,6 +8,7 @@
 #include "ElysiumIOSink.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWireReport.h"
 #include "ElysiumWorldServices.h"
 
 struct FElysiumSignData;
@@ -398,6 +399,30 @@ public:
 	int32 TouchBegins() const { return TouchBeginCount; }
 	int32 TouchEnds() const { return TouchEndCount; }
 
+	// --- Per-wire accounting (`docs/architecture/gameplay-systems-architecture.md` §7) -------------
+	// The instrument that turns "are events working?" into a number. Every authored output row is a
+	// wire; the tally says what each one did, so acceptance can tell "never fired" from "target not
+	// found" from "receiver refused" instead of reading a whole map as one pass/fail. Accounting
+	// only — nothing here participates in delivery, ordering or outcome.
+	//
+	// Live, keyed, and readable without the console (K10): the map holds only the wires something
+	// reached, which is why the report below joins it against the def array rather than being read
+	// straight. It is per-session and deliberately NOT serialized: a restored save that claimed the
+	// firing history of the run that wrote it would answer a question nobody asked — the question is
+	// what THIS run's wires did. The wire identity on the pending queue records IS saved, so a
+	// delivery that lands after a restore still attributes to its row.
+	const TMap<FElysiumWireRef, FElysiumWireTally>& WireTallies() const { return WireTally; }
+	// One wire's counts, all-zero for a wire nothing has reached (so a caller never distinguishes
+	// "absent from the map" from "did nothing").
+	FElysiumWireTally WireTallyFor(const FElysiumWireRef& Wire) const;
+	// Every authored wire in this map joined to its tally, in (entity index, def row) order —
+	// including the ones with no activity at all, which is the set acceptance exists to find.
+	// Runtime-spawned entities' rows come last-ish (their entities sit past the def array) and are
+	// flagged, because they are not part of the authored surface.
+	void BuildWireReport(TArray<FElysiumWireReportRow>& Out) const;
+	// Start the measurement over without reloading the map (one scene, one beat, one console run).
+	void ResetWireTallies() { WireTally.Reset(); }
+
 	// --- Formatting (used by the sinks; resolves handles to the canonical debug string) ----
 	// `#<idx> <name>(<class>)` for a handle, or `#<null>` / `#<stale>` when it cannot resolve.
 	FString DescribeHandle(const FElysiumEntityHandle& Handle) const;
@@ -415,6 +440,18 @@ private:
 	// on the entity, and start it dormant when born hidden. Point/logic entities get no body (R1).
 	void BuildBrushBody(FElysiumEntity& Ent);
 	void CallEntityActivate(FElysiumEntity& Ent);
+	// The by-name AcceptInput, carrying the wire the delivery came from. The public overload is this
+	// with no wire; DeliverEvent passes the queued record's, which is what attributes an outcome to
+	// the authored row rather than to "some input, somewhere". Nothing else about the dispatch
+	// changes with it.
+	void AcceptInputFromWire(const FString& Target, FName Input, const FElysiumVariant& Param,
+		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller,
+		const FElysiumWireRef& Wire);
+	// The tally row for a wire, created on first touch; null for an unset wire (a console injection,
+	// a ScheduleTask, an AcceptInput nobody wired). Every accounting site goes through it, so an
+	// unattributed event costs one branch and stores nothing.
+	FElysiumWireTally* WireRowFor(const FElysiumWireRef& Wire);
+
 	// The queue.Add wrapper: assigns time/serial upstream, notifies OnQueued.
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
@@ -590,6 +627,10 @@ private:
 	int32 UnknownTargetCount = 0;
 	int32 UnknownInputCount = 0;
 	int32 LoopGuardTripCount = 0;
+
+	// Per-wire accounting. Sparse: a row appears the first time something reaches it, and the report
+	// supplies the authored wires that never did. Cleared with the world.
+	TMap<FElysiumWireRef, FElysiumWireTally> WireTally;
 
 	// The last time this world was ticked. NowSeconds() reads it when there is no game state to
 	// hold the clock.
