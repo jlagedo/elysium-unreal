@@ -50,6 +50,15 @@ Vertex positions and UVs, `.dx80.vtx` topology, bones and the reference pose, se
 compressed animation tracks, skin weights, the skin table, materials and search paths,
 attachments, flex/facial data, and the secondary-motion table. These carry the export today.
 
+**Pose parameters are in this class, not the next one.** `MDLHeader`@384/388 is read by
+`mdl_skel.pose_parameters`, exported into each blend sidecar as `pose_parameters`, and consumed by
+the blend-space bake: the axis takes its `DisplayName` from the parameter's name, `Min`/`Max` from
+the sequence's own extents, and `bWrapInput` from a non-zero `Loop`. `move_yaw` is live end to end
+— the mover publishes it, the player graph blends on it, the gym records it as a channel.
+
+The unconsumed remainder is **`hit_yaw`**: its axis and blend spaces are built like any other, and
+nothing at runtime drives the parameter.
+
 ### 1.2 Decoded and **not** consumed — the actionable set
 
 | Data | Where | Reach | Confidence |
@@ -57,7 +66,6 @@ attachments, flex/facial data, and the secondary-motion table. These carry the e
 | **Per-vertex normals**, SKINNED — plain `float[3]`, no table, no unpacking | `StudioVertex`+24 | 3,124 of 4,567 `StudioModel` entries; every character | **Confirmed** |
 | **Per-vertex normals**, packed — byte offset / index into the `StudioRender` table | `StudioVertex2`+6, `StudioVertex3`+3 | 1,082 + 361 entries; the props | **Confirmed** |
 | **IK chains** — `rhand`/`lhand`/`rfoot`/`lfoot`, 3 links each, 28B links | `MDLHeader`@368/372 | 239 models | **Confirmed** |
-| **Pose parameters** — name, domain, wrap | `MDLHeader`@384/388 | 451 models | **Confirmed** |
 | **Surface property** — physical material name | `MDLHeader`@392 | 1,923 named; 2,522 genuinely unset | **Confirmed** |
 | **Contents** — `CONTENTS_SOLID`, plus the per-bone field at `StudioBone`+156 | `MDLHeader`@420 | 7 models non-solid | **Confirmed** |
 
@@ -91,8 +99,7 @@ one method gap that could still surface something large.
 |---|---|---|
 | Authored normals | `FMeshDescription` vertex-instance normals with `bRecomputeNormals = false` | Correct shading and authored hard edges; MikkTSpace tangents derive from them; facial morph normal deltas finally land on a matching base; Lumen reads them |
 | IK chains | `UIKRigDefinition` solver chains, Two Bone IK | Foot placement on stairs and slopes; weapon grip and prop interaction; optionally the engine's supported retargeting path |
-| `move_yaw` domain and wrap | `FBlendParameter::bWrapInput`, axis Min/Max | Continuous blending through ±180 instead of a pop; authored axis ranges make `ExpandRangeForSample` drift detectable |
-| `hit_yaw` | A second blend-space axis driven by damage direction | Directional hit reactions across the cast |
+| `hit_yaw` | An existing blend-space axis, driven by damage direction | Directional hit reactions across the cast — the axis is already built, only the driver is missing |
 | Surface property + `scripts/surfaceproperties.txt` | `UPhysicalMaterial`, `EPhysicalSurface`, a data-driven impact table | Physics (density/elasticity/friction), footsteps, and a 5×3 impact-sound matrix |
 | `Contents` | Collision channel setup on the baked body | The 7 non-solid models stop colliding |
 
@@ -116,15 +123,14 @@ Ranked by visible improvement against cost. Ranking only — sequencing belongs 
 | # | Item | Impact | Cost | Note |
 |---|---|---|---|---|
 | 1 | **Authored normals** | High — fixes a live regression | Low | One exporter field, one build flag, one fallback for zero-length normals |
-| 2 | **Blend-space wrap** | Medium — removes a pop | Very low | Answerable today with no re-bake; see caveat below |
-| 3 | **Surface properties** | Medium-high, very broad | Low-medium | A decoder against a shipped table; lands physics, footsteps and combat audio at once |
-| 4 | **Foot IK** | Highest visible feel gain | High | IK Rig per family, graph nodes, ground trace |
-| 5 | **`hit_yaw` reactions** | High for combat feel | Medium | Needs a direction through the damage path |
-| 6 | **`Contents`** | Low, but a correctness fix | Very low | 7 models |
-| 7 | **IK Rig retargeting** | Potentially structural | High | Evaluate before committing; the current compatible-skeleton path works |
+| 2 | **Surface properties** | Medium-high, very broad | Low-medium | A decoder against a shipped table; lands physics, footsteps and combat audio at once |
+| 3 | **Foot IK** | Highest visible feel gain | High | IK Rig per family, graph nodes, ground trace |
+| 4 | **`hit_yaw` reactions** | High for combat feel | Medium | The axis exists; needs a direction through the damage path |
+| 5 | **`Contents`** | Low, but a correctness fix | Very low | 7 models |
+| 6 | **IK Rig retargeting** | Potentially structural | High | Evaluate before committing; the current compatible-skeleton path works |
 
 Item 1 is first because it is the only entry that repairs something currently wrong rather than
-adding something absent. Item 4 has the largest payoff of any item here and is ranked below
+adding something absent. Item 3 has the largest payoff of any item here and is ranked below
 cheaper work only on cost.
 
 ---
@@ -133,8 +139,13 @@ cheaper work only on cost.
 
 - **Cast coverage is unverified.** IK chains reach 239 models and pose parameters 451. Whether
   those sets cover the playable cast or a subset has not been checked against the NPC manifest.
-- **The blend-space wrap claim is untested.** That current blend spaces omit `bWrapInput` is
-  inferred from the authored `loop=360`, not observed. Cheap to confirm.
+- **`SurfaceFriction` is hardcoded to 1.0 on the mover** (`ElysiumMovementComponent.h`), justified
+  by a comment stating that 1 of the install's 11,624 `.vmt` files carries a `$surfaceprop`.
+  **4,606 of 11,627 do.** The conclusion very nearly survives the correction — resolved through the
+  `base` chain and VtMB's ×1.25-clamped-to-1.0 rule, every common world surface lands on exactly
+  1.0 because `default` friction is 0.8 — but `glass` resolves to 0.5, giving 0.625 on 334
+  materials. So the constant is a simplification with one real exception, not the derivation the
+  comment claims.
 - **`kneeDir` is zero on all 2,928 IK links**, so no pole vectors are authored. Any IK solver must
   derive its own.
 - **Consuming packed normals makes `StudioRender.dll` a hard dependency for the prop path**, where
@@ -160,8 +171,12 @@ omits a field pair and drifts 8 bytes from `NumFlexDescs` onward; Crowbar has co
 placeholder names, and at @420 it struck out the correct field and substituted a placeholder.
 Neither is a Troika artifact. Past `SurfacePropIndex`@392, settle against the shipped binaries.
 
-**Check whether another document already owns the fact.** The secondary-motion pair at 396/400 was
-profiled as unknown while `docs/vtmb/secondary_motion.md` already documented it.
+**Check whether the codebase already reads the field, before calling it a gap.** Twice in one pass:
+the secondary-motion pair at 396/400 was profiled as unknown while `docs/vtmb/secondary_motion.md`
+already documented it, and pose parameters at 384/388 were called unconsumed while
+`mdl_skel.pose_parameters` read them, the exporter shipped them, and the blend-space bake set
+`bWrapInput` from them. A byte profile says what a field contains, never whether something already
+uses it — that question is answered by grepping the repository, and it costs one command.
 
 **An unauthored array's index is a write cursor, not a null.** `TransitionIndex` equals
 `BodyPartIndex` and `BoneControllerIndex` equals `AttachmentIndex`, both on all 4,445 models. Gate
