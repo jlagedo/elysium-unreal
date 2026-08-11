@@ -95,12 +95,12 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   absence, so the bake writes it out as a constant track. Left implicit it would evaluate to the
   shared skeleton's reference pose — whichever body of the family seeded it — and the overlay would
   quietly pull those bones onto another model's bind.
-- **The one overlay mask that owns the split bone bakes as a mesh-space additive.** Of the distinct
+- **The one overlay mask that owns the split bone derives once per declaring host.** Of the distinct
   per-bone masks a bank ships, exactly one contains `Bip01 Spine1` — the 49-bone upper-body gate the
   `*_aim_layer` and `*_bobble_layer` families carry. Those clips are the one place the split bone
-  cannot be re-expressed against its parent, because the mask excludes the parent chain: the
-  ancestors carry no rotation record, so the composed parent rotation the correction divides by is
-  not in the file and never can be. It arrives at runtime, from whatever host the overlay rides.
+  cannot be re-expressed against its parent *from the clip alone*, because the mask excludes the
+  parent chain: the ancestors carry no rotation record, so the composed parent rotation the
+  correction divides by is not in that clip.
 
   **Substituting the bind chain is not available, and the reason is measured.** The chain above the
   split bone is `Bip01`, `Bip01 Pelvis`, `Bip01 Spine`, and retail's rule declines all three —
@@ -111,19 +111,27 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
 
   So the base has to be a real pose, and the autolayer table names one: the **host**. The family is
   emitted once per declaring host, composed onto that host's own pose, exactly as the `_delta`
-  family above is — the two differ only in how the clip combines with the host (an overlay
-  *replaces* the bones it owns, an additive accumulates) and in which additive type the asset
-  carries. A grid's cells each derive against the same host, so the grid stays one thing.
+  family above is. The two differ in how the clip combines with the host — an overlay *replaces* the
+  bones it owns, an additive accumulates — and therefore in what ships: an additive is differenced
+  against its base and names it, while **an overlay is not additive at all**. It is a plain masked
+  local pose, composed toward its own result rather than differenced, and the host is what supplied
+  the ancestor chain rather than something the asset points at. A grid's cells each derive against
+  the same host, so the grid stays one thing.
+
+  The correction is therefore **spent at bake**. Nothing about the split bone survives into the
+  frame path, which is the rule rather than an optimization: a runtime that had to know the host's
+  chain in order to evaluate a cell would be the failure "Poses are baked native" names.
 
   Two things fall out. The family needs **no blend profile**: an additive's untouched bones
   contribute the additive identity, so masked-out and bind-holding are both a zero delta and the
   three-state distinction the mask table exists to preserve does not arise. And the remaining masks
   need **no split correction at all**, because none of them owns the split bone — they are ordinary
   parent-relative overlays composed by a stock layered blend.
-- **Blend spaces** from the exported grids: `UBlendSpace1D` for a `move_yaw` fan,
-  `UAimOffsetBlendSpace` for an aim grid — the aim offset is a `UBlendSpace`, so the sample
-  placement below is the same arithmetic for both and only the sample *kind* differs. A sample sits
-  at the axis value its cell declares —
+- **Blend spaces** from the exported grids: `UBlendSpace1D` for a `move_yaw` fan and a plain
+  `UBlendSpace` for an aim grid. An aim grid is **not** a `UAimOffsetBlendSpace`: that asset wants
+  mesh-space additive samples, and an aim layer's cells are ordinary masked local poses whose split
+  bone was already resolved at bake. The sample placement is the same arithmetic for both. A sample
+  sits at the axis value its cell declares —
   `paramstart + k·(paramend − paramstart)/(groupsize − 1)` — and the axis spans the grid's own
   range with one grid division per gap between cells, so every cell lands on a division. The pose
   parameter's own range does not enter: it cancels out of retail's axis resolution exactly, leaving
@@ -567,10 +575,11 @@ hand-written instance:
   times the bone's mask bit. An overlay therefore *replaces* the bones it owns rather than adding to
   them, which is what separates it from the additive below and why the two are never the same node.
 - **Additive nodes** for the `_delta` family, each over the base clip its asset names.
-- **An aim-offset node** for the upper-body overlay family. Its samples are mesh-space additives, so
-  it composes in component space and the upper body does not inherit the host's hip and spine
-  rotation — which is the property VtMB's split bone supplied and the reason that family is baked
-  this way rather than as a masked local overlay.
+- **A second layered bone blend** for the upper-body overlay family, over a plain blend-space player
+  standing the aim grid. Every cell of a grid carries the same mask, so one node holds the whole
+  grid. It is deliberately not an aim-offset node: that node's samples are mesh-space additives,
+  and this family bakes as masked local poses with the split bone already resolved against its
+  declaring host. The property VtMB's split bone supplied is spent at bake, not reproduced here.
 - **Montage slots** for one-shots: scripted-sequence clips, scene gestures, disciplines, and the
   cinematic playback path. A slot is also what keeps a gesture layered over a sequence instead of
   replacing it.
@@ -578,8 +587,8 @@ hand-written instance:
 
 Two properties the graph must preserve. A **masked sequence is never selectable as a base clip** —
 retail composes those as layers and never selects one, so a base-clip path that can reach one is a
-defect. That extends to a whole grid: an aim grid's cells are overlays, so it drives an aim-offset
-node and is never a body pose. And **pose parameters drive the blend spaces**, so a nine-cell fan
+defect. That extends to a whole grid: an aim grid's cells are overlays, so it feeds the layer input
+of a masked blend and is never a body pose. And **pose parameters drive the blend spaces**, so a nine-cell fan
 resolves off its neutral cell only when something writes the parameter.
 
 That neutral cell is correct **by construction rather than by any rule**: reading every parameter as

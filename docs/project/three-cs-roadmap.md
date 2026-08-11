@@ -48,7 +48,7 @@ dead ConVars in the retail build — and the authored cells disagree by roughly 
 | Rung | Canonical step | Where this project stands |
 |---|---|---|
 | Character math | 1 | `4.7 [x]` — ported line-by-line, `Elysium.Substrate.Movement` green. Its **speed authority closed at `CCC7`**, and its world half — `StepMove`, `CategorizePosition`, the jump against real geometry — is bracketed by the gym |
-| Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig behind `elysium.ModernCamera` (**default 1** — owner call; both rigs still solve and record every frame, so the A/B is intact and the co-tune is still outstanding) |
+| Camera | 2 | `11.7 [x]` faithful evaluator; `CCC2 [x]` the service, the post-layer stack and the modern rig, which supplies the shipped base view (owner call); the co-tune is still outstanding |
 | Character ↔ camera co-tune | 3 | **absent** — the remaining half of `CCC3 [~]`, and now unblocked: `CCC7` has settled the speed |
 | Controls polish | 4 | plumbing done (`11.5 [x]`, `11.6 [x]`); the feel half landed with `CCC3 [~]` — the look curve at the command seam, and leniency measured rather than assumed |
 | Capability slices | 5 | the jump chain, inside `CCC5` |
@@ -274,7 +274,7 @@ files.
   *Acceptance:* the response curve is either read off retail or named in the code as a divergence
   at the point it applies; a jump-at-the-lip and a jump-buffered-before-landing case exist as
   recorded courses whether or not leniency is added, so the decision is measured rather than
-  argued; the co-tune is performed once, after `CCC7`, with both rigs' channels in one run.
+  argued; the co-tune is performed once, after `CCC7`, against the camera channels the gym records.
   *Deps:* `CCC0`, `CCC2` for the curve and the courses; `CCC7` for the co-tune.
   *Done:* mouse look is a first-class modern Enhanced Input path:
   `Mouse2D → IA_MouseLook → UInputModifierSmooth → UElysiumInputRouter::OnMouseLook` in
@@ -315,8 +315,8 @@ files.
   *Remaining:* the **co-tune**, and only the co-tune. It was gated on `CCC7` by design — tuning
   against a walk speed the speed authority may halve is paid for twice — and that gate is now open:
   the forward gaits are 53.8 / 188.5 / 65.3 u/s. It touches
-  `ElysiumRig::FElysiumCameraRigTuning` and `elysium.ModernCamera`'s default, never the `cam_*`
-  console store, or the A/B stops being a comparison.
+  `ElysiumRig::FElysiumCameraRigTuning`, never the `cam_*` console store the faithful evaluator
+  reads.
 
 - [x] **CCC4 Intent, resolver, selection record.** `FElysiumAnimationIntent` in,
   `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
@@ -434,7 +434,7 @@ files.
   `max(outgoing, incoming)` and ships 0.2 s on nearly the whole vocabulary
   (`docs/vtmb/animation_and_movers.md`), so the six transitions assert against the authored table
   rather than being reviewed. Sync-group phase matching between gaits is a Feel modernization —
-  retail's crossfades are phase-independent — recorded in the divergence table and off by default.
+  retail's crossfades are phase-independent — recorded in the divergence table and deferred.
 
   The locomotion slice is `ACT_IDLE`, `ACT_WALK`, `ACT_RUN`, `ACT_SNEAK`, `ACT_CROUCH` and the
   `ACT_LEAP`/`ACT_FALLING`/`ACT_LAND` chain; none is masked and none is additive, so none needs
@@ -692,34 +692,255 @@ seam rather than a second one:
 
 - [ ] **CCC10 The weapon rung — layered, additive and aim nodes.** The graph nodes `CCC5`
   deliberately omits: `FAnimNode_LayeredBoneBlend` over the baked blend profiles, additive nodes for
-  the `_delta` family over the base each asset names, and an aim-offset node for the upper-body
+  the `_delta` family over the base each asset names, and an aim node for the upper-body
   overlay family. The 3×3 aim grids bake once per declaring host but cannot be stood at all today,
   because a masked grid evaluated as a *base* pose loses the body's stance from the waist down; in a
   graph the mask is a property of the blend node rather than of the pose feeding it, which is why no
   layered blend-space path exists in the accumulator and building one there would be building it
   wrong.
-  Every cell of an aim grid shares one bone mask — measured, not assumed — so a whole grid sits
-  behind one node, **and the node is named**: not an aim-offset asset, which requires mesh-space
-  additive samples the baked grids are not, but a layered bone blend — consuming the baked blend
-  profiles unchanged — over a plain blend-space player. This rung also retires the last two nodes
-  `FElysiumBipedAnimProxy` owns outside the graph — the layer slots `CCC9` left standing, and the
-  green room surface over them — and un-collapses a stated simplification: gesture and sequence
-  share one clip slot today, so a scene's gesture overwrites its sequence instead of layering over
-  it.
+  Every cell of an aim grid shares one bone mask — measured, not assumed, and rooted at
+  `Bip01 Spine1` across the six male shared banks only, so a consumer composing a grid as one masked
+  layer asserts the property rather than assuming it (`docs/vtmb/animation_and_movers.md` A.4) — so a
+  whole grid sits behind one node, **and the node is named**: not an aim-offset asset, which requires
+  mesh-space additive samples the baked grids are not, but a layered bone blend — consuming the baked
+  blend profiles unchanged — over a plain blend-space player. This rung also retires the last two
+  nodes `FElysiumBipedAnimProxy` owns outside the graph — the layer slots `CCC9` left standing — and
+  un-collapses a stated simplification: gesture and sequence share one clip slot today, so a scene's
+  gesture overwrites its sequence instead of layering over it.
+
+  **The green room surface moves onto the graph rather than going with the slots**, which is
+  `CCC9`'s grid-lab precedent applied to the layer lab: `RenderAutoLayers` — the declared-layer list,
+  the arm/re-arm per entry, the entry index and overlay/additive tag, `Arm as declared`, the weight
+  slider and the composing count — is how the owner drives a layer by hand, and deleting it with the
+  accumulator would leave the node with no live driver. It re-points at the graph's layered blend and
+  **gains what the aim grid needs to be steered at all**: an `aim_yaw`/`aim_pitch` pair over the
+  armed grid, distinct from the existing eye/gaze sliders, and a moving host under it so the torso
+  claim can be judged against a walk rather than an idle. The owner drives the live acceptance from
+  there; the headless tiers carry everything that can be asserted without a stage.
+
+  **A layer arrives two ways, and only one of them is in the model.** The autolayer table binds the
+  aim grid and the bobble/delta family to a host sequence and evaluates it at the host's own cycle
+  (`smith_ready → smith_aim_layer`). Beside that, 46 masked sequences per bank carry an
+  `ACT_*_LAYER_*` activity that **no autolayer entry names** — every weapon's attack, reload and
+  dry-fire layer, the discipline casts and both `lookback_*_layer` — and the game DLL selects them by
+  activity and composes them as layers (`docs/vtmb/animation_and_movers.md` A.3).
+  `docs/vtmb/combat-and-damage.md` closes that second producer: `PLAYER_ATTACK1` realizes
+  `ACT_RANGE_ATTACK1_LAYER`, the weapon activity table translates it per family
+  (`ACT_RANGE_ATTACK_LAYER_GLOCK`, `_M37`, `_STEYR`, `_SUBMACHINEGUN`, `_CROSSBOW`, over generic
+  pistol, two-handed and submachine-gun fallbacks), and `PLAYER_RELOAD` adds `ACT_RELOAD_LAYER`. So
+  the layer path needs a **resolver-driven** entry beside the bake-time binding — an intent arriving
+  on the `UpperBody` channel and resolving to a masked sequence — not only a host the bake already
+  wired. The contract carries it already (`EElysiumAnimChannel::UpperBody` and `AimYaw`/`AimPitch` on
+  `FElysiumAnimationIntent`, written through to the pose values by the resolver), so this is node
+  work rather than contract work.
+
+  **The player's aim yaw is pinned at zero.** The ordinary player selector writes `aim_yaw` as the
+  literal `0.0f` and takes `aim_pitch` from a separate field, neither derived from the movement pair
+  (`docs/vtmb/animation_and_movers.md`). The player's 3×3 grid therefore resolves as a pitch column
+  in retail and the yaw axis is NPC-side. That scopes the acceptance below; it is not a reason to
+  bake the grid differently, since the grid is shared and the parameter is the producer's.
+
+  **Melee is in this rung, but not for aiming.** Measured over the exported banks: all **49** 3×3
+  `aim_yaw`/`aim_pitch` grids live in `move_and_ranged` (25 male, 24 female) and every one belongs to
+  a firearm or thrown weapon — `glock`, `smith`, `anaconda`, `deserteagle`, `enfield`, `m37`,
+  `rem700`, `steyr`, `submachinegun`, `supershotgun`, `crossbow`, `flamet`, `throwing_star`, the
+  generic `pistol` and `twohanded` fallbacks, several with their own `crouch`/`midcrouch` variants.
+  The melee banks (`meleeshared_onehand`, `meleeshared_twohand`) carry **no 3×3 grid and no autolayer
+  host at all**. A melee weapon's upper body is instead a single masked overlay riding locomotion —
+  `<weapon>_bobble_layer` and `<weapon>_relaxed_move_layer` on `baseballbat`, `katana`, `knife`,
+  `sledgehammer`, `bushhook`, `stake`, `tireiron` and `claws`, with `fists` declaring none — which is
+  weapon carry and sway, not a direction. So melee needs the **same masked node** and no aim
+  parameter, and the ranged/melee split is also an asset-kind split: a ranged bobble is a `_delta`
+  additive, a melee bobble is a `_layer` overlay.
+
+  **But melee does not resolve to one blend profile, and the boundary is not melee-versus-ranged.**
+  The mask follows the weapon's **grip** (`docs/vtmb/animation_and_movers.md` §A.4, measured over
+  both banks): a two-handed grip takes the 49-bone upper-body gate — every firearm, *and* the melee
+  `bushhook` and `sledgehammer` — while a one-handed grip takes a 24-bone right-arm mask that leaves
+  the torso to the base, which is `baseballbat`, `katana`, `knife`, `stake` and `tireiron`. So this
+  rung stands **two** blend profiles behind one node kind, the aim grids and the two-handed melee
+  share one of them, and a resolver that picks the profile from "is this a melee weapon" gets
+  `bushhook` and `sledgehammer` wrong. The profiles are per-mask assets `ANM2` already bakes; what is
+  new here is only that the melee path cannot assume a single one.
+
+  **This rung is the third-person pass; first person is `CCC10.1`.** The aim layer poses the
+  player's **world model**, and `ShouldDrawLocalPlayer` draws that only in third person. The view
+  mode changes neither the aim/attack origin nor movement, so the aiming *math* is shared and only
+  what is drawn differs — and which mode a weapon starts in is a per-weapon-class bit, not an
+  animation property (`docs/vtmb/camera-view-modes.md`). So this rung builds the third-person body
+  and takes no viewmodel dependency, and nothing here waits on `PL14`.
+
+  **A layer clip carries a gameplay commit.** The shot is not traced from the input function — an
+  attack-layer sequence event reaches `CWeaponRanged::Shot`, so the notify riding a *layered* clip is
+  the ballistics trigger (`docs/vtmb/combat-and-damage.md`). Those clips are 4–16 frames at 30 fps
+  (the submachine gun's is 4, the Steyr's 7), so a blend-in sized like an ordinary crossfade is a
+  large fraction of the clip, and a notify that does not fire while the layer is blending loses the
+  shot outright. This is the property `CCC11`'s weapon actions build on.
+
   *Acceptance:* an aim grid stands as a **layer** over a moving host, torso upright, through a node
-  that owns the mask; a gesture layers over a sequence rather than replacing it.
-  *Deps:* `CCC5`; `docs/project/animation-roadmap.md` ANM1 and ANM2's binding half.
+  that owns the mask; a melee host's `_bobble_layer` rides the same node with no aim parameter, with
+  a one-handed weapon resolving the right-arm profile and a two-handed one resolving the same
+  upper-body profile the firearms use; a
+  weapon's attack layer is reached by activity translation rather than by an autolayer binding and
+  its sequence event fires while layered; and a gesture layers over a sequence rather than replacing
+  it. Split by instrument, per the surface below: the headless tiers carry mask resolution, node
+  composition order and the activity-translation path, and **the owner judges the pose live in the
+  green room**, which is why the layer lab has to survive this rung driving the graph.
+  *Deps:* `CCC5`; `docs/project/animation-roadmap.md` ANM1 and ANM2's binding half;
+  `docs/vtmb/combat-and-damage.md` for the weapon-layer producers.
+
+- [ ] **CCC10.1 The first-person rung — the viewmodel body.** `CCC10` is the third-person pass: it
+  poses the player's **world** model, which `ShouldDrawLocalPlayer` draws only in third person. This
+  rung is the other half — the viewmodel that is drawn instead, its rig, its clips, and the seam that
+  selects them. It is a **separate body, not a camera mode**: nothing in `CCC10`'s node set carries
+  over, because the viewmodel has its own skeleton and its own clip vocabulary.
+
+  **Melee has no first-person model, and that is measured rather than assumed.** The shared male
+  hands viewmodel carries **154 sequences over exactly 12 firearm families** — `anaconda`,
+  `crossbow`, `desert_eagle`, `flamethrower`, `m37`, `pistol_glock`, `rifle_rem700`,
+  `rifle_steyraug`, `submachine_mac10`, `submachine_uzi`, `supershotgun` and `thirtyeight` — each
+  with its own `idle`, `idleempty`, `fidget`, `draw`, `lower`, `fire`, `fireempty`, `reload` and
+  `dryfire`, plus the `m37`'s three-part `reload_begin`/`reload`/`reload_complete` answering its
+  authored `reload_single`. The only non-firearm entries are seven `v_lockpicks_*` sequences
+  (`equip`, `start`, `pick`, `atk`, `end`). **There is no fists, katana, baseball-bat, sledgehammer,
+  claws, stake or tire-iron family anywhere in the set**, and no melee weapon ships a `v_` model of
+  its own.
+
+  **The camera class is authored per item, and melee is a hard force.** Every `vdata/items` record
+  carries a symbolic `camera_class`, and the shipped census is: `noswitch` (119 — every quest item
+  and key, plus `item_w_unarmed` and the ghoul/Protean claws), `melee` (20 — fists, katana, baseball
+  bat, baton, knife, sledgehammer, tire iron, fire axe, torch and the rest), `ranged` (18 — every
+  firearm plus the crossbow, flamethrower and three Discipline records), `thrown` (4 — throwing star,
+  frag grenade and Chang's two) and `force_1st` (4 — the lockpick and the three physics-gun dev
+  items). Joined to the recovered arbitration (`docs/vtmb/camera-view-modes.md`) and **confirmed
+  against the live retail game**:
+
+  | Authored class | Bit | Behaviour |
+  |---|---|---|
+  | `ranged` | `0x02` | settable, first person under the shipped `camera_prefs 6`, toggleable to third and back |
+  | `thrown` | `0x04` | settable, likewise first by default — **out of this rung's scope**, see below |
+  | `force_1st` | `0x08` | always first person, not user-settable — which is why the hands bank carries `v_lockpicks_*` and nothing else non-firearm |
+  | `melee`, `force_3rd` | `0x10` | `ForceThirdPersonOn` — **always third**, not user-settable, sets `m_fForcedThird`. Two spellings of one class; `melee` *is* the engine's force-third class rather than a class that happens to default third |
+  | anything else, including `noswitch` and an absent key | `0` | the early-out — equipping changes nothing |
+
+  Retail plays this exactly: a gun works in **both** views, and drawing a melee weapon **forces you
+  out of first person**. That is what `m_fForcedThird` is for, and it is what makes the
+  `inven_holster` branch in `CAM_ToggleCamera` legible — the equipped item cannot leave third
+  person, so trying to toggle out of one holsters it. Bit `0x01` is **dead config**: no ladder arm
+  produces it and no item can carry it, so `camera_prefs`' shipped default `6` and the value `7`
+  differ only in a bit nothing matches.
+
+  **Divergence — owner call, made: the equipped weapon does not move the player's camera.** The
+  faithful behaviour is the table above: equipping re-arbitrates, `melee`/`force_3rd` yanks the
+  player out of first person, `force_1st` yanks them into it, and `togglecamera` on a forced weapon
+  holsters it rather than switching. We keep the view mode the **player's**, so switching to a melee
+  weapon in first person stays in first person. The consequence is accepted rather than solved:
+  **there is nothing to draw**, because no melee weapon has a viewmodel or a hands-bank family. What
+  that looks like — empty hands, a held pose, an automatic nudge to third — is deliberately left open
+  and revisited when the rung is built; it is not a reason to reinstate the yank. `camera_prefs` and
+  its per-class stickiness are the faithful path and stay implementable behind a toggle, per the Feel
+  layer's A/B rule.
+
+  The class is parsed by an inlined case-sensitive `memcmp` ladder in the item-record vdata parser,
+  present byte-identically in both DLLs — `client.dll` `0x101a5394`–`0x101a5438` inside the parser
+  at `0x101a48b0`, and `vampire.dll` `0x1025aa65`–`0x1025ab08` inside `0x10259f80`. `noswitch` is
+  **not a recognized literal**; it reaches `0` through the same fall-through as a typo or a missing
+  key, so the authored vocabulary is a convention rather than a checked enum.
+
+  **Scope — owner call, made: this rung is ranged only.** Its acceptance is the 12 firearm families
+  and nothing else. `thrown` is dropped: the throwing star has **zero models anywhere**, packed or
+  loose (one orphan `.vmt` survives, and the shipped item description is Troika stating outright that
+  it was never finished), and the frag grenade — which the Unofficial Patch restores as an obtainable
+  item — has a **complete model set but no animation**: it declares `"anim_prefix" "grenade"` and the
+  hands bank has no `grenade_*` family, which is a strong candidate for why the restored item is
+  non-functional in play (no camera response, no throw). The lockpick and the Discipline viewmodels
+  ride the same machinery and are deferred rather than designed out.
+
+  **The asset set.** 21 models under `models/hands/**` as `v_<clan>_<gender>_hands.mdl` — seven clans
+  plus `hunter` and a `shared` fallback, per gender, with two Tremere `_shield` variants; their
+  export is `docs/project/roadmap.md` `PL14`. They carry `NumFlexDescs` 0
+  (`docs/vtmb/facial_animation.md`), so the portrait stack is not a dependency here. Beside them sit
+  **17 packed per-weapon viewmodels**: one per firearm family (`v_anaconda`, `v_crossbow`,
+  `v_desert_eagle`, `v_flamethrower`, `v_m37`, `v_pistol_glock`, `v_rifle_rem700` and
+  `v_rem700_bach`, `v_rifle_steyraug`, `v_submachine_mac10`, `v_submachine_uzi`, `v_supershotgun`,
+  `v_thirtyeight`), plus `v_pineapple`, `v_lockpicks_ref` and the Disciplines `v_thaumaturgy`,
+  `v_holylight` and `v_dragonbreath`. These are small rigs carrying the weapon geometry itself — the
+  glock's is 12 bones: a right arm plus `Dummy_Mag` and `body`.
+
+  **Open RE, tracked as `docs/project/roadmap.md` `RE42` and listed here because it is what this rung
+  waits on.** The weapon camera class is closed inside `RE42` and needs no more work; the viewmodel
+  body does. In dependency order:
+  - **How the two viewmodels compose.** Every firearm family appears twice — as animation in the
+    hands bank and as a `v_` model of its own — and the hands rig carries arms and fingers while the
+    weapon rig carries the gun. The reading that fits is **two complementary slots rather than a
+    winner**: arms from the clan's hands model, geometry from the weapon's, which is what
+    `m_hViewModel[]` being an array beside a separate `m_pViewWeapon`
+    (`docs/vtmb/savegame_format.md`) would mean. Asset-layout inference, **not traced in code** — it
+    is the first thing to confirm, because the whole rung's shape follows from it.
+  - **The rig's pose convention.** The hands rig is 42 bones rooted at `Camera01`, not the
+    character skeleton's `Bip01` chain, so it is a different skeleton and the "poses are baked
+    native" rule has to be established for it rather than inherited from the character bake.
+  - **`viewmodel_fov` is 54** (`docs/vtmb/source_movement.md`) and how it composes with the camera's
+    own FOV is unread.
+  - **The sequence-event surface on a viewmodel clip.** `CCC10` establishes that the shot fires from
+    an attack-layer event on the world model; whether the first-person shot is driven by the same
+    event on the viewmodel clip, or the world model keeps driving it unseen, is unread — and it
+    decides whether the two bodies share one commit or need arbitration.
+
+  **Placeholder, and it is a joke until it is not:** with the camera divergence above, a melee weapon
+  can be held in first person and nothing exists to draw. The view shows a **Claude glyph** (✳) until
+  the real answer is chosen. It is deliberately absurd so that nobody mistakes it for a design, and
+  it is the visible marker of the open question rather than a silent empty frame.
+
+  *Acceptance:* a firearm draws, idles, fires, dry-fires and reloads in first person on the clan's
+  own hands model, driven through the same intent seam rather than a viewmodel-specific clip call;
+  the m37's three-part reload matches its `reload_single` transaction; **equipping a melee weapon
+  does not move the camera**, and whatever the empty first-person view shows is a stated choice
+  rather than an accident; and the owner judges it live in the green room, which needs a
+  first-person stage the layer lab does not have today.
+  *Deps:* `docs/project/roadmap.md` `RE42` for the viewmodel recovery — its (a) two-slot composition
+  question gates the rung's shape and is the one to answer first; `PL14` for the export, without
+  which the rung cannot start; `CCC10` for the resolver's weapon-family translation, which is shared;
+  `docs/vtmb/camera-view-modes.md` and `docs/architecture/camera-architecture.md` for the visibility
+  projection. Not `CCC10`'s nodes.
 
 - [ ] **CCC11 The action families beyond locomotion.** The acceptance ladder past the gait:
   directional hit, knockback and death reactions, then weapon and interaction actions. Each rung
   closes its own reachability slice — full combat coverage does not block walking, but an unexplained
-  action inside an accepted rung does. This is also where every remaining producer moves onto the
-  intent seam: no NPC, weapon or script path asks for an activity through the resolver today, and
+  action inside an accepted rung does. **This rung owns the pose, not the number**: lethality,
+  soak, the damage roll and the health commit are `docs/project/roadmap.md` `13.3`, and this rung
+  consumes their outcome rather than computing it.
+
+  **The combat half of that ladder now has its RE**, in `docs/vtmb/combat-and-damage.md`: the
+  activities are named (`ACT_PREBLOCK` from compact action 13, `ACT_BLOCK`, the heavy-block band's
+  `ACT_BLOCK_HEAVY`, the attacker's blocked reaction, hit and knockback as a separate outcome) and
+  `rules.txt` supplies the seven reaction margins that select between them. Three of its findings
+  change what this rung builds rather than merely feeding it:
+  - **A blocked reaction is authored, not directional.** The attacker plays the activity stored in
+    its *own current sequence descriptor*, falling back to `ACT_BLOCKED_REACTION_RIGHT`. Left and
+    right are a per-sequence authored field, so a direction-picking resolver rule here would be
+    invented rather than recovered. Only the flinch is directional — `ACT_HIT_HEAD` or
+    `ACT_HIT_TORSO` oriented by `hit_yaw`, which is what the four baked `hit_yaw` grids serve.
+  - **The melee combo is one more resolver rule with a recovered table.** `ACT_MELEE_ATTACK`
+    substitutes `ACT_MELEE_ATTACK_2COMBO` on a random draw against a rank table keyed by the *base*
+    Brawl or Melee ability, read before temporary adjustments. It is policy over baked catalog data
+    like the four rules below, and adds no graph machinery. There is no directional melee state
+    machine to reproduce: `med`, `low`, `far` and `jump` are sequence variants, not commands.
+  - **There is no firearm stagger to build.** Ranged capability `0x2000` does not satisfy the melee
+    block gate `0x18000`, and no firearm-specific stagger threshold is established. A firearm's
+    reaction is the generic flinch, and inventing a melee-style stagger meter for one would be a
+    divergence with nothing behind it.
+
+  This is also where every remaining producer moves onto the intent seam: no NPC, weapon or script
+  path asks for an activity through the resolver today, and
   `PlayNpcActivity` stays a compatibility adapter until patrol and scripted travel cross over — the
   intent's source field already reserves the producers, so expansion is migration order plus a
   bounded set of recovered resolver rules the NPC path carries and the player path lacks: the NPC
   class/weapon translation alternation and its four-way availability ladder (with the first weapon
-  answer preserved separately, because the commit feeds it to the weapon's own animation update),
+  answer preserved separately, because the commit feeds it to the weapon's own animation update —
+  reload start derives both the weapon's and the owner's end time from the *selected sequence's*
+  duration over its playback rate rather than from the magazine's authored `ReloadTime`, so the
+  resolver has to hand back the chosen sequence's duration and not only its asset),
   transition-sequence traversal between the current and ideal sequences, the restart rule that
   clears and restarts a repeated identical request rather than ignoring it, and the paired-action
   role/size/side variant arithmetic (`docs/vtmb/animation_and_movers.md`). All four are
@@ -733,9 +954,13 @@ seam rather than a second one:
   (`docs/vtmb/vdata-catalog.md`). One montage-slot mechanism serves both, and building them apart is
   how there come to be two.
   *Acceptance:* an NPC's ambient behaviour and a scripted beat both reach a pose through the intent
-  seam rather than a direct clip call, and `m_iszCustomMove` plays over a travelling body.
+  seam rather than a direct clip call, and `m_iszCustomMove` plays over a travelling body; a struck
+  body flinches on the `hit_yaw` grid the hit direction selects, and a blocked attacker plays the
+  reaction its own sequence names rather than one chosen from a direction.
   *Deps:* `CCC10`; `docs/project/animation-roadmap.md` ANM4's catalog for anything outside the
-  hand-read set.
+  hand-read set; `docs/vtmb/combat-and-damage.md` for the weapon and reaction chains, whose open
+  joins are numeric (spread and crosshair math, the ranged multiplier decomposition, post-soak
+  filters) and therefore gate `13.3` rather than this rung.
 
 ## The acceptance surface
 
@@ -819,15 +1044,16 @@ per the house rules.
 | **Interpolating cell speed across the `move_yaw` fan** — **owner call, made**: retail snaps to one of eight cells by a 3×3 digital-key table and has no analog input to serve, while the walk fan's cells differ by more than 2× and a stick lands between them. `elysium.move.GaitSpeedInterpolate` defaults to 1 and 0 is the faithful snap | `docs/architecture/movement-architecture.md` |
 | ~~Ducked movement scaled by Source's `/3`~~ — **settled at `CCC7`**: the ducked speed is the sneak fan's own cell, and retail applies no duck multiplier at all (`HandleDuckingSpeedCrop` occupies a vtable slot nothing calls in either DLL). The `/3` survives only on the constants fallback, which has no sneak table to read | `docs/architecture/movement-architecture.md` |
 | ~~Crouch-move slower than walk~~ — **owner call, made: reproduced.** Retail's crouch is *faster* than its walk (forward sneak 65.3 u/s against a forward walk of 53.8), because `sv_sneakscale` 2.3 multiplies and the walk table alone ignores `m_flSpeedScale`. The `Elysium.Content.GaitSpeeds` assertion is what holds it | `docs/vtmb/source_movement.md` |
-| The modern rig supplying the shipped base view — **owner call, made**: `elysium.ModernCamera` defaults to 1 ahead of `CCC3`'s co-tune, which stays outstanding. Both rigs solve and record every frame either way, so the A/B and the channel diff are unaffected | `docs/architecture/camera-architecture.md` |
-| Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; off by default | `docs/architecture/animation-architecture.md` |
+| **The equipped weapon does not move the player's camera** — **owner call, made**: retail arbitrates the view mode from the item's authored `camera_class` on every weapon change, so `melee`/`force_3rd` (`0x10`) yanks the player out of first person, `force_1st` (`0x08`) yanks them into it, and `togglecamera` on a forced weapon holsters the item rather than switching view. The view mode stays the player's instead. Accepted consequence: a melee weapon in first person has **nothing to draw**, since no melee weapon has a viewmodel or a hands-bank family; what that view shows is deliberately left open at `CCC10.1`. `camera_prefs` and its per-class stickiness remain the faithful path behind a toggle | `docs/architecture/camera-architecture.md` |
+| The modern rig supplying the shipped base view — **owner call, made**: it is the base request ahead of `CCC3`'s co-tune, which stays outstanding | `docs/architecture/camera-architecture.md` |
+| Sync-group phase matching between gaits in the player graph — retail's crossfades are phase-independent; not built, and an owner call not yet made | `docs/architecture/animation-architecture.md` |
 | A look-response curve that is not retail's — **built and shipped off**: `look_curve` defaults to 0, at which the gain is exactly 1.0 and the path is retail's linear one. Enabling it is an owner call not yet made | `docs/architecture/input-architecture.md` § Feel |
 | Modern Enhanced Input mouse sample normalization — **owner call, made**: `Mouse2D → IA_MouseLook` carries `UInputModifierSmooth`; legacy `bEnableMouseSmoothing` is off, and removing the mapping modifier is the direct A/B | `docs/architecture/input-architecture.md` § Feel |
 | Input leniency — buffering or coyote time. VtMB has neither, **none is implemented**, and the `ledge_*`/`land_*` brackets now hold the committed before-picture, so adding either moves a number | `docs/architecture/input-architecture.md` § Feel |
 | A fixed-step accumulator, shipped behind `elysium.move.FixedStep` with the faithful variable delta as the default | `docs/vtmb/source_movement.md` |
 | ~~Composing the legacy shot and track channels as post layers, or arbitrating them as base requests~~ — **settled as post layers, and therefore not a divergence**: retail composes the scripted channel over the third-person weight, so this is the faithful behaviour and the doc's table was corrected | `docs/architecture/camera-architecture.md` |
 | Weapon-class camera arbitration — **deferred, not made**. The `+0x2440` bits are unrecovered and `0x08`/`0x10` read as Logic; the forced-third/first/feed latches stay as the seam | `docs/vtmb/camera-view-modes.md` |
-| The modern rig's frame-rate-independent half-life damper, asymmetric collision recovery and shoulder offset — behind `elysium.ModernCamera`, now the shipped default (row above) with `CCC3`'s co-tune still outstanding | `docs/architecture/camera-architecture.md` |
+| The modern rig's frame-rate-independent half-life damper, asymmetric collision recovery and shoulder offset — shipped (row above), with `CCC3`'s co-tune still outstanding | `docs/architecture/camera-architecture.md` |
 
 **Not divergences**, and recorded as defect fixes rather than choices: the box hull that `StepMove`
 requires against `ACharacter`'s capsule, and keeping masked sequences out of the base clip path.

@@ -157,13 +157,41 @@ only `togglecamera` does.
 
 ### Weapon-class arbitration (sticky per weapon)
 
-The local player record carries a weapon-class bitmask at `+0x2440`. Two functions read it:
+The weapon-class bitmask lives at `+0x2440` on the **equipped item's record**, not on the player.
+Both readers reach it through `0x1007b160`, which is
+`mov ax,[player+0x95e]` (a 16-bit item id) → `push eax` → `call 0x101a4770` (the item-record lookup)
+→ the caller then does `mov esi,[eax+0x2440]` off the returned record [decompile-verified]. By the
+same helper, `+0x24d0` and `+0x4fe84` below are item-record fields too.
+
+The value is authored. Every `vdata/items` record carries a symbolic **`camera_class`**, parsed by
+an inlined case-sensitive `memcmp` ladder inside the item-record vdata parser — `client.dll`
+`0x101a5394`–`0x101a5438` (parser at `0x101a48b0`) and `vampire.dll` `0x1025aa65`–`0x1025ab08`
+(parser at `0x10259f80`), byte-identical in both [data-verified]:
+
+| `camera_class` | Bit | Effect | Shipped items |
+|---|---:|---|---|
+| `ranged` | `0x02` | settable; first person under `camera_prefs 6` | 18 — every firearm, the crossbow, the flamethrower, three Discipline records |
+| `thrown` | `0x04` | settable; first person under `camera_prefs 6` | 4 — throwing star, frag grenade, Chang's two |
+| `force_1st` | `0x08` | always first, no preference written | 4 — the lockpick and three physics-gun dev items |
+| `melee` | `0x10` | `ForceThirdPersonOn`; always third, no preference written | 20 — fists, katana, baseball bat, baton, knife, sledgehammer, tire iron, fire axe, torch… |
+| `force_3rd` | `0x10` | the same class under a second spelling | 0 — no item authors it |
+| anything else, including `noswitch`, and an absent key | `0` | the early-out; equipping changes nothing | 119 authored `noswitch` — every quest item and key, plus `item_w_unarmed` and the ghoul/Protean claws |
+
+Three consequences the bits alone do not show. **`melee` *is* the engine's force-third class** rather
+than a class that merely defaults third, so a melee weapon cannot be held in first person. **`noswitch`
+is not a recognized literal** — the string occurs in neither DLL and reaches `0` through the same
+fall-through as a typo or a missing key, so the authored vocabulary is a convention, not a checked
+enum, and a mis-cased `Ranged` would silently read as `0`. And **bit `0x01` is dead**: no ladder arm
+produces it and no item carries it, so `camera_prefs`' default `6` and the shipped `7` differ only in
+a bit nothing can match.
+
+Two functions read the class:
 
 ```c
 // 0x1009c250 — re-arbitrate on weapon change
 void ApplyWeaponCameraPref()
 {
-    int cls = LocalPlayerRecord()->weaponCameraClass;   // +0x2440
+    int cls = EquippedItemRecord()->cameraClass;        // 0x1007b160, then +0x2440
     if (!cls || !camera_weaponswitch.GetInt()) return;
     if (cls == 0x08) { input->CAM_ToFirstPerson(); return; }   // always first person
     if (cls == 0x10) { input->ForceThirdPersonOn(); return; }  // always third person
@@ -174,7 +202,7 @@ void ApplyWeaponCameraPref()
 // 0x1009c2e0 — remember what the player just chose, for this weapon class
 void SaveWeaponCameraPref(bool bThirdPerson)
 {
-    int cls = LocalPlayerRecord()->weaponCameraClass;
+    int cls = EquippedItemRecord()->cameraClass;        // same helper
     if (cls == 0x08 || cls == 0x10 || cls == 0) return;        // not user-settable
     int prefs = camera_prefs.GetInt();
     prefs = bThirdPerson ? (prefs & ~cls) : (prefs | cls);     // set bit = first person
@@ -183,9 +211,16 @@ void SaveWeaponCameraPref(bool bThirdPerson)
 ```
 
 So `togglecamera` is **sticky per weapon class and persisted to `config.cfg`**: toggle to third
-person while a melee weapon is out and every future draw of that class starts in third person.
+person while a gun is out and every future draw of that class starts in third person.
 Class `0x08` is pinned to first person and class `0x10` to third person, and neither writes a
-preference. Default `camera_prefs 6` = classes `2` and `4` first person, class `1` third person.
+preference. Default `camera_prefs 6` sets bits `0x02` (`ranged`) and `0x04` (`thrown`) to first
+person; bit `0x01` is set by the shipped `7` but matches no class.
+
+**Live retail confirms the mapping independently of the ladder.** An install carrying
+`camera_prefs "3"` — `0x02` set, `0x04` clear — plays a firearm in first person and throws a grenade
+in third. The reversed assignment would produce the opposite pairing, so `ranged` = `0x02` and
+`thrown` = `0x04` are fixed by behaviour as well as by the parsed constants. In the same install a
+melee weapon cannot be brought to first person at all, which is the `0x10` force.
 
 ---
 

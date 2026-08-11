@@ -1281,10 +1281,43 @@ selects them by activity and composes them as layers. No autolayer entry names t
 per bank are neither bound nor selectable, byte-identically on male and female, and read as
 abandoned authoring.
 
+**The one inverted host is cut content, and the game says so.** The single ordering exception above —
+`throwing_star_midcrouch_idle`, declaring a *pistol* delta before `throwing_star_aim_layer` — belongs
+to a weapon that was never finished. `item_w_throwing_star-null` ships no model of any kind: its
+record names a viewmodel, a ground model reused for playermodel, both wieldmodels and infomodel, and
+**none of the five exists** in the packages or loose, leaving one orphan
+`materials/models/weapons/throwing_star/throwingstar.vmt`. The record's own `description` field is
+Troika's note to itself — *"you wish you had infomodel, wieldmodels and a projectile model so you
+could finish implemented the damn thing"* — and its header comment still reads `// Fragmentation
+Grenade`, the file it was copied from. This is the same weapon whose bone mask §A.4 counts as the
+abandoned throwing-star set. The inversion is therefore an artefact of unfinished authoring rather
+than a rule, though a consumer that reads the table rather than assuming overlay-first reproduces it
+for free.
+
 **One decode hazard.** Seven single-sequence scenery and weapon models (`projector.mdl`, three
 `libcolumn_*`, `malklifetube_trims.mdl`, `g_handleclaws.mdl`, `i_handleclaws.mdl`) read
 `numautolayers == 764` at sequence 0 — the descriptor tail runs past the end of the file and lands
 in the string table. A reader must bound both the count and the array against the image.
+
+**The first-person body is a different skeleton with its own bank** [data-verified]. 21 viewmodels
+under `models/hands/**` as `v_<clan>_<gender>_hands.mdl` — seven clans plus `hunter` and a `shared`
+fallback, per gender, with two Tremere `_shield` variants — carry a **42-bone rig rooted at
+`Camera01`**, not the character banks' `Bip01` chain, with both arms and full finger chains. The
+shared male model holds **154 sequences over exactly 12 firearm families** (`anaconda`, `crossbow`,
+`desert_eagle`, `flamethrower`, `m37`, `pistol_glock`, `rifle_rem700`, `rifle_steyraug`,
+`submachine_mac10`, `submachine_uzi`, `supershotgun`, `thirtyeight`), each with `idle`, `idleempty`,
+`fidget`, `draw`, `lower`, `fire`, `fireempty`, `reload` and `dryfire`, plus the `m37`'s three-part
+`reload_begin`/`reload`/`reload_complete` answering its authored `reload_single`. The only
+non-firearm entries are seven `v_lockpicks_*` sequences. **No melee family exists in the set**, which
+agrees with `camera_class melee` being the force-third class
+(`docs/vtmb/camera-view-modes.md`) — a melee weapon is never drawn in first person.
+
+Beside them sit **17 packed per-weapon viewmodels**, one per firearm family plus `v_pineapple`,
+`v_lockpicks_ref`, and the Disciplines `v_thaumaturgy`, `v_holylight` and `v_dragonbreath`. These are
+small rigs carrying the weapon geometry itself — `v_pistol_glock` is 12 bones: a right arm plus
+`Dummy_Mag` and `body`. Every firearm family therefore appears twice, as animation in the hands bank
+and as geometry in its own model; how the two compose at runtime is unrecovered and is
+`docs/project/roadmap.md` RE42.
 
 **Two cautions when judging a layer by eye.** A delta over a host that does *not* declare it is
 arithmetically exact and anatomically nonsense — `twohanded_crouch_attack_delta` over a standing idle
@@ -1315,12 +1348,26 @@ reading no channel offset, no track and no bind field. So the zero set names the
 animation does **not** own, which is what lets a partial-body layer be composed over a base
 without disturbing the bones the base owns.
 
-The zero sets are authored masks, not physics groups: `lookback_left_layer` zeroes 59 of 60
-bones and keeps only `Bip01 Head`; `katana_bobble_layer` keeps exactly the right-arm chain and
-the weapon props. Only **5 distinct masks** occur over the 722 animation descriptors of the male
-`move_and_ranged` bank (and 5 over the female bank's 674) — an unmasked one, one zeroing root,
-pelvis, spine and both legs, one keeping arms and props only, one on the abandoned throwing-star
-set, and the head-only one.
+The zero sets are authored masks, not physics groups. Exactly **5 distinct masks** occur over the
+722 animation descriptors of the male `move_and_ranged` bank and 5 over the female bank's 674, and
+the two banks agree bone-for-bone [data-verified]:
+
+| Bones kept | Split bone (`Bip01 Spine1`) | Male / female clips | What it keeps | Carried by |
+|---:|---|---:|---|---|
+| 60 | — unmasked | 396 / 358 | everything | every clip that is not a layer |
+| **49** | **owned** | 308 / 298 | `Bip01 Spine1` upward, both arms with all fingers, and **all seven** weapon prop bones | all 25 `*_aim_layer` grid cells; every ranged `*_bobble_delta`, `*_bobble_layer` and `*_relaxed_move_layer`; **and the two-handed melee** `bushhook_*` and `sledgehammer_*` |
+| 24 | not owned | 12 / 12 | the **right** arm chain and five props (`Bat`, `handle`, `gerber`, `Cylinder01`, `tire iron`) | one-handed melee only — `baseballbat`, `katana`, `knife`, `stake`, `tireiron`, each a `_bobble_layer` and a `_relaxed_move_layer` |
+| 45 | not owned | 4 / 4 | **both** arm chains and all seven props, but no spine | the abandoned throwing-star set (`throwing_star_attack_layer`, `_idle_layer`, `_relaxed_run_layer`, `_run_layer`) |
+| 1 | not owned | 2 / 2 | `Bip01 Head` | `lookback_left_layer`, `lookback_right_layer` |
+
+**The mask follows the weapon's grip, not whether it shoots.** A two-handed grip — every firearm, and
+the bush hook and sledgehammer among melee weapons — takes the 49-bone upper-body gate, because both
+arms and the torso move. A one-handed grip takes the 24-bone right-arm mask and leaves the torso to
+the base. The prop bones corroborate it from the other side: the 24-bone mask omits exactly
+`bush hook` and `Sledgehammer`, the two two-handed melee props, and keeps the five one-handed ones.
+So "melee uses the right-arm mask" is false as stated — it is true only of one-handed melee, and a
+consumer that partitions these families by ranged-versus-melee resolves `bushhook` and
+`sledgehammer` to the wrong mask.
 
 **Every cell of a blend grid carries the same mask** [data-verified, partial corpus]. A grid
 (§A.3) names up to 16×16 animations behind one label, and each is its own animation record with its
