@@ -1461,6 +1461,15 @@ void FElysiumPlayer::OnRuntimeTransformChanged()
 	// FElysiumAnimating::OnRuntimeTransformChanged, which would treat its relative transform as a
 	// map-root world transform and double-apply the placement.
 	FElysiumEntity::OnRuntimeTransformChanged();
+	// CreateControllerNPC snapshots a scene-owned duplicate that RemoveControllerNPC later uses as
+	// the player's final pose anchor. An explicit player transform (point_teleport, console teleport,
+	// or script SetOrigin/SetAngles) is authoritative while that relationship exists; carry it onto
+	// the duplicate so delayed teardown cannot restore the pre-teleport mark. Ordinary pawn movement
+	// reaches SyncFromBody instead and deliberately leaves a scene-staged controller independent.
+	if (FElysiumEntity* Controller = World ? World->FindPlayerController() : nullptr)
+	{
+		Controller->SetRuntimeTransform(Origin, Angles);
+	}
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
 		Embodiment->TeleportPlayer(Origin, ElysiumPlayerView::ToUnreal(Angles));

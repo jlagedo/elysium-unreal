@@ -171,7 +171,7 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 	// Reach the world through the owning map actor: on map unload the actor drops its world
 	// (TPimplPtr reset) before destroying its components, so a late overlap sees a null world
 	// rather than a dangling pointer.
-	const AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner());
+	AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner());
 	if (!Map)
 	{
 		return;
@@ -189,6 +189,6 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 		{
 			return;
 		}
-		World->RouteBrushTouch(OwningEntity, Activator, bBegin);
+		Map->RouteBrushTouch(OwningEntity, Activator, bBegin);
 	}
 }

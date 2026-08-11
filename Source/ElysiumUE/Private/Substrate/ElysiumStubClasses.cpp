@@ -125,8 +125,6 @@ namespace
 		  TEXT("physics constraints") },
 		{ TEXT("trigger_checkvolume"),           TEXT("CheckNow"),
 		  TEXT("the volume-occupancy test") },
-		{ TEXT("filter_multi"),                  TEXT("TestActivator"),
-		  TEXT("entity filters — also unread by use_filter_name / dmg_filter_name") },
 		{ TEXT("point_explosion"),               TEXT("Explode"),
 		  TEXT("scripted explosions") },
 	};

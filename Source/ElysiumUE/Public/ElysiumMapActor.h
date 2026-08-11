@@ -270,6 +270,10 @@ public:
 	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
 	FElysiumEntityWorld* GetEntityWorld() const { return EntityWorld.Get(); }
+	// Engine overlap ingress from UElysiumBrushComponent. Runtime teleports suppress the callbacks
+	// Unreal emits inside SetActorLocation and replace them with one post-movement containment diff.
+	void RouteBrushTouch(const FElysiumEntityHandle& Brush,
+		const FElysiumEntityHandle& Activator, bool bBegin);
 
 	// The P6.3 SoundScheme playback manager (ambient bed + music state machine + random scheduler)
 	// for this map, or null if the map has no entity world. Owned by this actor (dies on unload); the
@@ -548,6 +552,8 @@ private:
 	// emitting a fresh begin edge. Refresh the pawn's overlap cache, then reconcile every runtime
 	// brush currently containing it into the deduplicating entity touch bus.
 	void ReconcilePlayerBrushTouches(APawn* Pawn);
+	bool bSuppressPlayerTouchIngress = false;
+	bool bPlayerTouchReconcilePending = false;
 
 	// The player pawn may not exist yet in BeginPlay, so final placement is performed by the
 	// readiness poll. It stays frozen through the activation transaction.
@@ -556,6 +562,7 @@ private:
 	bool bSpawnDone = false;
 	FVector PendingSpawnLoc = FVector::ZeroVector;
 	float PendingSpawnYaw = 0.f;
+	EElysiumPlayerPlacementSpace PendingSpawnSpace = EElysiumPlayerPlacementSpace::Feet;
 
 	EElysiumMapRuntimePhase RuntimePhase = EElysiumMapRuntimePhase::Building;
 	bool bRuntimeConstructionComplete = false;

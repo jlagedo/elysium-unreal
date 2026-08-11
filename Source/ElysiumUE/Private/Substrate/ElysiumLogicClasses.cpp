@@ -18,6 +18,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumRng.h"
+#include "ElysiumSaveArchive.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
@@ -593,60 +594,102 @@ private:
 // `angles` facing.
 //
 // 11.4 made that one path: `!player` is the player entity's real targetname, so it resolves through
-// the ordinary name index and the move is `SetRuntimeOrigin`/`SetRuntimeAngles`, exactly as it is
+// the ordinary name index and the move is one atomic `SetRuntimeTransform`, exactly as it is
 // for an NPC or a brush. Whether the moved entity carries a pawn, a skeletal body or a brush body
 // is the entity's own business — the teleporter no longer knows.
-//
-// Four engine behaviours are not reproduced (`docs/vtmb/entity_io.md` -> `point_teleport`): the
-// destination is read live here rather than cached at Activate; spawnflag 1 ("teleport home", two
-// entities, both `!player`) is ignored, so those land on the teleporter instead of on their own
-// spawn; a parented target is moved rather than refused; and a teleported player keeps its view
-// angles instead of having them snapped to the destination.
 // ============================================================================================
 
 class FElysiumPointTeleport final : public FElysiumEntity
 {
 public:
-	void InputTeleport(const FElysiumInputArgs& Args)
-	{
-		const FVector DestOrigin = Def ? Def->Origin : FVector::ZeroVector;
-		const FString TgtName = Def ? Def->Keys.FindRef(TEXT("target")) : FString();
+	virtual bool ActivationStateMustPersist() const override { return true; }
 
-		FElysiumEntity* Ent = nullptr;
-		if (!World)
+	virtual void Activate() override
+	{
+		if (bCachedDestination)
 		{
+			return; // restored cache: activation must not replace the original residency destination
+		}
+		if (Target.IsEmpty())
+		{
+			UE_LOG(LogElysiumLogic, Warning, TEXT("ERROR: %s given no target. Deleted"), *DebugString());
+			Kill();
 			return;
 		}
-		if (TgtName.IsEmpty())
-		{
-			Ent = World->FindPlayer();   // an unset target is the player, as Source has it
-		}
-		else if (TgtName.Equals(TEXT("!activator"), ESearchCase::IgnoreCase))
-		{
-			Ent = World->Resolve(Args.Activator);
-		}
-		else
-		{
-			Ent = World->FindByName(TgtName);
-		}
+
+		CachedOrigin = Origin;
+		CachedAngles = Angles;
+		bCachedDestination = true;
+		FElysiumEntity* Ent = ResolveTarget(nullptr);
 		if (!Ent)
 		{
+			return; // a named runtime target may appear before the input arrives
+		}
+		if (!CanTeleport(*Ent))
+		{
 			return;
 		}
+		if ((SpawnFlags & 0x1) != 0)
+		{
+			CachedOrigin = Ent->Origin;
+			CachedAngles = Ent->Angles;
+		}
+	}
 
-		// The stored `angles` is Source-space [pitch yaw roll] like the destination's own; each
-		// body-follow hook negates the yaw on its way out (the Source->Unreal Y reflection), so the
-		// value written here is in the same space every entity's angles are.
-		Ent->SetRuntimeOrigin(DestOrigin);
-		Ent->SetRuntimeAngles(FVector(0.0f, Angles.Y, 0.0f));
+	void InputTeleport(const FElysiumInputArgs& Args)
+	{
+		if (!World || !bCachedDestination)
+		{
+			return;
+		}
+		FElysiumEntity* Ent = ResolveTarget(&Args);
+		if (!Ent || !CanTeleport(*Ent))
+		{
+			return;
+		}
+		Ent->SetRuntimeTransform(CachedOrigin, CachedAngles);
+	}
+
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		Ar << bCachedDestination << CachedOrigin << CachedAngles;
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
-		Out.Emplace(TEXT("Target"), Def ? Def->Keys.FindRef(TEXT("target")) : FString(TEXT("(none)")));
-		Out.Emplace(TEXT("Dest"), FString::Printf(TEXT("%s  yaw %.0f"),
-			*(Def ? Def->Origin : FVector::ZeroVector).ToString(), -Angles.Y));
+		Out.Emplace(TEXT("Target"), Target.IsEmpty() ? TEXT("(none)") : Target);
+		Out.Emplace(TEXT("Dest"), bCachedDestination
+			? FString::Printf(TEXT("%s  angles %s"), *CachedOrigin.ToString(), *CachedAngles.ToString())
+			: TEXT("(not activated)"));
 	}
+
+private:
+	FElysiumEntity* ResolveTarget(const FElysiumInputArgs* Args) const
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+		if (Target.Equals(TEXT("!activator"), ESearchCase::IgnoreCase))
+		{
+			return Args ? World->Resolve(Args->Activator) : nullptr;
+		}
+		return World->FindByName(Target);
+	}
+	bool CanTeleport(const FElysiumEntity& Ent) const
+	{
+		if (!Ent.MoveParent.IsSet())
+		{
+			return true;
+		}
+		UE_LOG(LogElysiumLogic, Warning, TEXT("ERROR: %s can't teleport object (%s) which has a parent"),
+			*DebugString(), *Ent.DebugString());
+		return false;
+	}
+
+	bool bCachedDestination = false;
+	FVector CachedOrigin = FVector::ZeroVector;
+	FVector CachedAngles = FVector::ZeroVector;
 };
 
 // ============================================================================================

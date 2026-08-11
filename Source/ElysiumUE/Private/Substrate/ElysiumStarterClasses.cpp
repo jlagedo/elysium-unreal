@@ -195,6 +195,7 @@ class FElysiumTriggerBase : public FElysiumEntity
 {
 public:
 	bool   bDisabled = false;                 // StartDisabled keyvalue
+	FString FilterName;                        // filtername — resolved once during late Activate
 	float  Wait = 0.2f;                        // `wait` — min seconds between OnTrigger re-fires
 	double LastTriggerTime = -1.0e18;          // last OnTrigger fire (game seconds); primed to always-due
 
@@ -205,10 +206,29 @@ public:
 	// reduces to the ALLOW_CLIENTS bit: a client-allowing trigger fires, a physics-only (0x8, no
 	// 0x1) trigger correctly ignores the player. The activator IS resolved now (11.4), so the
 	// remaining bits (NPCs, physics objects) grow the test when those touchers exist.
-	bool PlayerPasses() const { return (SpawnFlags & 0x1) != 0; }   // 0x1 = ALLOW_CLIENTS
+	bool PlayerPasses(const FElysiumEntityHandle& Activator) const
+	{
+		return World && Activator == World->PlayerHandle() && (SpawnFlags & 0x1) != 0;
+	} // 0x1 = ALLOW_CLIENTS
+	virtual void Activate() override
+	{
+		FilterHandle = FElysiumEntityHandle::Invalid();
+		if (World && !FilterName.IsEmpty())
+		{
+			if (const FElysiumEntity* Filter = World->FindByName(FilterName))
+			{
+				FilterHandle = Filter->Handle;
+			}
+		}
+	}
 	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override
 	{
-		return !bDisabled && !IsInert() && PlayerPasses();
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
+		{
+			return false;
+		}
+		const FElysiumEntity* Filter = World ? World->Resolve(FilterHandle) : nullptr;
+		return !Filter || Filter->PassesFilter(Activator);
 	}
 	virtual bool IsBrushBodyEnabled() const override
 	{
@@ -228,7 +248,7 @@ public:
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses())
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
@@ -258,13 +278,118 @@ public:
 
 	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses())
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
 		static const FName OnEndTouch(TEXT("OnEndTouch"));
 		FireOutput(OnEndTouch, Activator);
 	}
+
+private:
+	FElysiumEntityHandle FilterHandle;
+};
+
+// ============================================================================================
+// CBaseFilter — the two filter leaves used by exported trigger `filtername` wires. Resolution is
+// deliberately late and handle-based: filters and triggers are all spawned before Activate, and a
+// killed/stale filter passes just as retail's invalid m_hFilter does.
+// ============================================================================================
+
+class FElysiumFilterBase : public FElysiumEntity
+{
+public:
+	bool bNegated = false; // reverse_outcome
+
+	virtual bool PassesFilter(const FElysiumEntityHandle& Activator) const override
+	{
+		const bool bPass = PassesFilterImpl(Activator);
+		return bNegated ? !bPass : bPass;
+	}
+
+	void TestActivator(const FElysiumInputArgs& Args)
+	{
+		FireOutput(PassesFilter(Args.Activator)
+			? FName(TEXT("OnPass")) : FName(TEXT("OnFail")), Args.Activator);
+	}
+
+protected:
+	virtual bool PassesFilterImpl(const FElysiumEntityHandle&) const { return true; }
+};
+
+class FElysiumFilterActivatorName final : public FElysiumFilterBase
+{
+public:
+	FString ActivatorName;
+
+protected:
+	virtual bool PassesFilterImpl(const FElysiumEntityHandle& Activator) const override
+	{
+		const FElysiumEntity* Entity = World ? World->Resolve(Activator) : nullptr;
+		if (!Entity)
+		{
+			return false;
+		}
+		// CFilterName's empty pattern is the one exception to the global name matcher: it matches a
+		// nameless entity. Non-empty values use the ordinary case-folded/trailing-star rule.
+		return ActivatorName.IsEmpty() ? Entity->TargetName.IsEmpty()
+			: FElysiumEntityWorld::NameMatches(Entity->TargetName, ActivatorName);
+	}
+};
+
+class FElysiumFilterMulti final : public FElysiumFilterBase
+{
+public:
+	int32 FilterType = 0; // 0 = AND, any other value = OR
+	FString Filter01;
+	FString Filter02;
+	FString Filter03;
+	FString Filter04;
+	FString Filter05;
+
+	virtual void Activate() override
+	{
+		FilterHandles.Reset();
+		for (const FString* Name : { &Filter01, &Filter02, &Filter03, &Filter04, &Filter05 })
+		{
+			if (World && Name && !Name->IsEmpty())
+			{
+				if (const FElysiumEntity* Filter = World->FindByName(*Name))
+				{
+					FilterHandles.Add(Filter->Handle);
+				}
+			}
+		}
+	}
+
+protected:
+	virtual bool PassesFilterImpl(const FElysiumEntityHandle& Activator) const override
+	{
+		const bool bOr = FilterType != 0;
+		bool bResult = !bOr;
+		for (const FElysiumEntityHandle& FilterHandle : FilterHandles)
+		{
+			const FElysiumEntity* Filter = World ? World->Resolve(FilterHandle) : nullptr;
+			if (!Filter)
+			{
+				continue;
+			}
+			const bool bChild = Filter->PassesFilter(Activator);
+			if (bOr && bChild)
+			{
+				return true;
+			}
+			if (!bOr && !bChild)
+			{
+				return false;
+			}
+			bResult = bOr ? bResult || bChild : bResult && bChild;
+		}
+		return bResult;
+	}
+
+private:
+	TArray<FElysiumEntityHandle> FilterHandles;
 };
 
 class FElysiumTriggerMultiple final : public FElysiumTriggerBase {};
@@ -289,7 +414,7 @@ public:
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses())
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
@@ -362,7 +487,7 @@ public:
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses())
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
@@ -448,9 +573,9 @@ private:
 class FElysiumTriggerAutosave final : public FElysiumTriggerBase
 {
 public:
-	virtual void OnTouchStart(const FElysiumEntityHandle& /*Activator*/) override
+	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
-		if (bDisabled || IsInert() || !PlayerPasses())
+		if (bDisabled || IsInert() || !PlayerPasses(Activator))
 		{
 			return;
 		}
@@ -531,7 +656,8 @@ public:
 	static constexpr int32 SF_NOTOUCH = 0x0002;
 	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override
 	{
-		return !bDisabled && !IsInert() && (SpawnFlags & SF_NOTOUCH) == 0;
+		return World && Activator == World->PlayerHandle()
+			&& !bDisabled && !IsInert() && (SpawnFlags & SF_NOTOUCH) == 0;
 	}
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
@@ -662,6 +788,9 @@ static TUniquePtr<FElysiumEntity> MakeTriggerOnce()     { return MakeUnique<FEly
 static TUniquePtr<FElysiumEntity> MakeTriggerHurt()     { return MakeUnique<FElysiumTriggerHurt>(); }
 static TUniquePtr<FElysiumEntity> MakeTriggerLook()     { return MakeUnique<FElysiumTriggerLook>(); }
 static TUniquePtr<FElysiumEntity> MakeTriggerAutosave() { return MakeUnique<FElysiumTriggerAutosave>(); }
+static TUniquePtr<FElysiumEntity> MakeFilterBase()       { return MakeUnique<FElysiumFilterBase>(); }
+static TUniquePtr<FElysiumEntity> MakeFilterName()       { return MakeUnique<FElysiumFilterActivatorName>(); }
+static TUniquePtr<FElysiumEntity> MakeFilterMulti()      { return MakeUnique<FElysiumFilterMulti>(); }
 static TUniquePtr<FElysiumEntity> MakeInfoLandmark()    { return MakeUnique<FElysiumInfoLandmark>(); }
 static TUniquePtr<FElysiumEntity> MakeChangeLevel()     { return MakeUnique<FElysiumChangeLevel>(); }
 static TUniquePtr<FElysiumEntity> MakePythonCheck()     { return MakeUnique<FElysiumPythonCheck>(); }
@@ -678,7 +807,15 @@ static void BuildCBaseTrigger(FElysiumClassDesc& D)
 		T.SetDisabled(!T.bDisabled);
 	});
 	AddSubclassField(D, TEXT("StartDisabled"), &FElysiumTriggerBase::bDisabled);
+	AddSubclassField(D, TEXT("filtername"),     &FElysiumTriggerBase::FilterName);
 	AddSubclassField(D, TEXT("wait"),          &FElysiumTriggerBase::Wait);
+}
+
+static void BuildFilterBase(FElysiumClassDesc& D)
+{
+	D.Input(TEXT("TestActivator"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumFilterBase&>(E).TestActivator(Args); });
+	AddSubclassField(D, TEXT("reverse_outcome"), &FElysiumFilterBase::bNegated);
 }
 
 static FElysiumClassRegistrar GRegLogicAuto(
@@ -707,6 +844,28 @@ static FElysiumClassRegistrar GRegLogicRelay(
 static FElysiumClassRegistrar GRegCBaseTrigger(
 	FName(TEXT("CBaseTrigger")), ElysiumBaseClassName(), &MakeTriggerBase, &BuildCBaseTrigger);
 
+static FElysiumClassRegistrar GRegFilterBase(
+	FName(TEXT("filter_base")), ElysiumBaseClassName(), &MakeFilterBase, &BuildFilterBase);
+
+static FElysiumClassRegistrar GRegFilterActivatorName(
+	TEXT("filter_activator_name"), FName(TEXT("filter_base")), &MakeFilterName,
+	[](FElysiumClassDesc& D)
+	{
+		AddSubclassField(D, TEXT("filtername"), &FElysiumFilterActivatorName::ActivatorName);
+	});
+
+static FElysiumClassRegistrar GRegFilterMulti(
+	TEXT("filter_multi"), FName(TEXT("filter_base")), &MakeFilterMulti,
+	[](FElysiumClassDesc& D)
+	{
+		AddSubclassField(D, TEXT("filtertype"), &FElysiumFilterMulti::FilterType);
+		AddSubclassField(D, TEXT("Filter01"), &FElysiumFilterMulti::Filter01);
+		AddSubclassField(D, TEXT("Filter02"), &FElysiumFilterMulti::Filter02);
+		AddSubclassField(D, TEXT("Filter03"), &FElysiumFilterMulti::Filter03);
+		AddSubclassField(D, TEXT("Filter04"), &FElysiumFilterMulti::Filter04);
+		AddSubclassField(D, TEXT("Filter05"), &FElysiumFilterMulti::Filter05);
+	});
+
 static FElysiumClassRegistrar GRegTriggerMultiple(
 	TEXT("trigger_multiple"), FName(TEXT("CBaseTrigger")), &MakeTriggerMultiple,
 	[](FElysiumClassDesc& /*D*/) { /* inherits everything from CBaseTrigger via the chain */ });
@@ -714,6 +873,13 @@ static FElysiumClassRegistrar GRegTriggerMultiple(
 static FElysiumClassRegistrar GRegTriggerOnce(
 	TEXT("trigger_once"), FName(TEXT("CBaseTrigger")), &MakeTriggerOnce,
 	[](FElysiumClassDesc& /*D*/) { /* inherits everything from CBaseTrigger via the chain */ });
+
+// Environmental room selection is not presented yet, but the brush is already a real CBaseTrigger:
+// StartDisabled must remove it from collision and touch admission. Leaving this classname on the
+// inert-record fallback makes disabled room brushes retain overlap pairs whenever an NPC spawns.
+static FElysiumClassRegistrar GRegTriggerEnvironmentalAudio(
+	TEXT("trigger_environmental_audio"), FName(TEXT("CBaseTrigger")), &MakeTriggerBase,
+	[](FElysiumClassDesc& /*D*/) { /* room_type is consumed when environmental audio presentation lands */ });
 
 // The P4.5 trigger family — CBaseTrigger leaves (Enable/Disable/Toggle + StartDisabled inherited).
 static FElysiumClassRegistrar GRegTriggerHurt(

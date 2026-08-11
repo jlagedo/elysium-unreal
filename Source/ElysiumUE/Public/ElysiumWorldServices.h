@@ -16,6 +16,26 @@ struct FElysiumCameraShot;
 struct FElysiumEntityDef;
 struct FElysiumSignData;
 
+// Every authored runtime placement is expressed in Source feet space. The one exception is the
+// existing save/stage payload, which predates the player entity and stores Unreal's capsule centre.
+// Carry the space with the value and convert exactly once, when the real body's half-height is known.
+enum class EElysiumPlayerPlacementSpace : uint8
+{
+	Feet,
+	CapsuleCenter,
+};
+
+namespace ElysiumPlayerPlacement
+{
+	inline FVector ToCapsuleCenter(const FVector& Placement, EElysiumPlayerPlacementSpace Space,
+		float BodyHalfHeight)
+	{
+		return Space == EElysiumPlayerPlacementSpace::Feet
+			? Placement + FVector(0.f, 0.f, BodyHalfHeight)
+			: Placement;
+	}
+}
+
 // Engine-neutral view of a native Unreal NPC movement body. The implementation is an ACharacter
 // possessed by an AI controller; the substrate only owns the request/state contract, so no Unreal
 // AI or navigation type crosses this seam.

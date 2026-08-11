@@ -1078,7 +1078,7 @@ public:
 	void InputUnlock() { bLocked = false; }
 	// A scripted press (ent_fire / a wire), bypassing the +use look-cursor's SF_USE gate — the way
 	// the button is exercised before P4.4's full +use HUD, mirroring how doors expose Use.
-	void InputPress(const FElysiumEntityHandle& Activator) { Activate(Activator); }
+	void InputPress(const FElysiumEntityHandle& Activator) { ActivateButton(Activator); }
 
 	// --- +use look-cursor terminus (P4.2) ----------------------------------------------
 	// Only USE-armed buttons (0x400) show the reticle / take a +use; touch-only buttons do not.
@@ -1094,7 +1094,7 @@ public:
 		static const FName OnOut(TEXT("OnOut"));
 		FireOutput(OnOut, FElysiumEntityHandle::Invalid());
 	}
-	virtual void Use(const FElysiumEntityHandle& Activator) override { Activate(Activator); }
+	virtual void Use(const FElysiumEntityHandle& Activator) override { ActivateButton(Activator); }
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
@@ -1161,7 +1161,7 @@ protected:
 private:
 	// The CBaseButton activation gate + direction pick (B.4). Locked/inert swallow it; otherwise a
 	// rest button presses in, and a TOGGLE button that is already pressed springs back (re-use).
-	void Activate(const FElysiumEntityHandle& Activator)
+	void ActivateButton(const FElysiumEntityHandle& Activator)
 	{
 		if (IsInert())
 		{

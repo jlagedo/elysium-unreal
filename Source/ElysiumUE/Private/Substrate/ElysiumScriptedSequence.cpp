@@ -556,9 +556,9 @@ public:
 
 	// The waiting pose. VtMB's script grabs its NPC at level start and holds it in the pre-idle
 	// until the beat is triggered — which is why plus_jenny is already sobbing and the prophet
-	// already praying when the player first walks up. Done in PostSpawn because the NPC's own
-	// Spawn() (where its body is built) must already have run.
-	virtual void PostSpawn() override
+	// already praying when the player first walks up. Done in Activate because the NPC's own body
+	// graph must already exist and the player must already occupy the final frozen placement.
+	virtual void Activate() override
 	{
 		const FString& Wait = PreIdle.IsEmpty() ? PreIdleAlt : PreIdle;
 		if (Wait.IsEmpty())

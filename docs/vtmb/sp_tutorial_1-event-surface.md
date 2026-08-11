@@ -143,7 +143,7 @@ Every system plan that consumes this brief needs to preserve this common contrac
 | Name resolution | Case-insensitive exact match; final-character `*` prefix match; handle `!self`, `!caller`, `!activator`, `!player`, `!picker`, and `!playercontroller`. | Patch helpers resolve `plus_*`/`basic_*`; choreography resolves its controller relationship. |
 | Input dispatch | Resolve through the entity class and base-map input surface from one `AcceptInput` seam. | `Kill`, `ScriptHide`, and `ScriptUnhide` work through the base entity instead of per-class copies. |
 | Missing target policy | A wire naming no entity is a non-fatal no-op with a diagnostic distinct from “receiver lacks input.” | Plans do not invent objects merely to silence authored dangling wires. |
-| Touch ingress | Produce begin/end/trigger events for the allowed activator classes, observe wait/one-shot state, filters, hidden/disabled state, and per-class spawnflag meanings. | A player, NPC, or physics object activates only the intended volume. |
+| Touch ingress | Produce begin/end/trigger events for the allowed activator classes, observe wait/one-shot state, filters, hidden/disabled state, per-class spawnflag meanings, and the movement-phase boundary after teleport. | A player, NPC, or physics object activates only the intended volume; rejected begins never poison edge deduplication. |
 | `+use` ingress | Select the intended usable entity, expose its icon/locked state, preserve activator/caller, and dispatch the class-specific interaction. | Doors, elevator buttons, signs, switches, terminals, knobs, and containers do not collapse to decorative bodies. |
 | Think/time | Drive timers, trigger wait gates, scripted sequences, delayed Python, fades, sounds, and autosave from the substrate clock. | Pausing/resuming dynamic resolution preserves rather than loses pending authored work. |
 | Python exec/eval | Execute output payloads and scheduled statements; evaluate `logic_pythoncheck` and dialogue conditions in the shared namespace. Errors print and continue; failed checks resolve false. | One bad optional callback does not abort the map, and a failed expression does not become true. |
@@ -171,6 +171,9 @@ Every system plan that consumes this brief needs to preserve this common contrac
   interpreted as the generic trigger `ALLOW_NPCS` bit.
 - `ScriptHide` turns collision, drawing, and thinking off. A hidden trigger is not an enabled
   invisible volume.
+- `StartDisabled`, `Enable`, `Disable`, and self-disable are physical brush state. Enabling while
+  contained rebuilds touch links; disabling releases the retained pair, so re-enable can emit a
+  new edge.
 - `trigger_hurt` entry, interval, force, direction, activator, and output behavior form one contract.
 - A no-output trigger can still be load-bearing: environmental-audio and stealth triggers update
   system state rather than fire ordinary wires.
@@ -489,7 +492,7 @@ Five `logic_auto` entities establish the starting policy and optional patch stat
 | Tutorial placement | Landmark `tutorial` seats the player at the porch. | Player and Jack start in their authored placements without an invented arrival callback. |
 | First beat | Leaving `trig_off_porch` fires Jack `WillTalk 1`, remote dialogue `256`, `blueblood_maker.Spawn`, and `events_player.CreateControllerNPC`. | Jack dialogue opens and the encounter actor/controller exist. |
 | Dialogue progression | Jack `OnDialogEnd` calls `DialogPostProcess()`, which branches on `G.Tut_Jack`. | The next sequence/trigger/popup is enabled exactly once for that beat. |
-| Second warp | `teleport_fade.OnBeginFade` teleports player and Jack to the alley. | Both actors arrive after the authored fade, with current progression state intact. |
+| Second warp | `teleport_fade.OnBeginFade` teleports player and Jack to the alley. | Both actors arrive after the authored fade, with current progression state intact; any destination trigger begins from the following movement/touch phase, not inside `point_teleport`. |
 | Feeding continuation | Feeding on the spawned blueblood reaches maker-owned `OnFedUponBegin`/`OnFedUponEnd`. | `G.Tutorial_Blueblood=1`; `trig_dialog_outside_chopshop` becomes enabled. |
 | Chopshop and office | Dialogue, door/knob use, safe/hacking, item and elevator events advance `G.Tut_Jack`. | Each world interaction unlocks only its authored next beat. |
 | Combat/discipline lessons | Damage, death, incapacitation, break, stealth, rat-feeding, weapon, and discipline events update counters/flags. | Jack's dialogue and tutorial popups follow observed outcomes rather than scripted time alone. |
@@ -498,6 +501,33 @@ Five `logic_auto` entities establish the starting policy and optional patch stat
 `teleport_very_beginning` carries `OnEnterMapHere` data, but the recovered owner of that output is
 `info_landmark`, not `point_teleport`. The port retains the inert wire rather than broadening the
 teleport API to make it fire.
+
+### 11.3 Teleport, placement, and trigger order
+
+The porch arrival and the ordinary fade warp intentionally use different containment boundaries:
+
+1. Map arrival places and freezes the pawn at the landmark's Source-feet origin, synchronizes
+   `!player`, runs late entity activation, opens the world, and immediately reconciles initial
+   containment before the frozen think/event pass. The first active frame does not replay it.
+2. `point_teleport.Teleport` changes the player feet and full view immediately during I/O delivery,
+   but suppresses Unreal's synchronous begin/end callbacks from entering the entity bus.
+3. The next post-movement pass performs a stable full containment diff: old ends first, then new
+   begins, each ordered by entity index. Multiple teleports before that pass have one final result.
+4. A setup event that enables a disabled trigger rebuilds that trigger's physical overlaps. If the
+   teleported player is already inside, its begin may follow the enabling event in the same queue
+   service pass, matching the authored setup-then-touch chain.
+5. An active `!playercontroller` mirrors explicit writes to the player's logical transform. Its
+   delayed removal therefore transfers the post-teleport alley mark back atomically instead of
+   restoring the porch mark captured by `CreateControllerNPC`.
+
+`trigger_environmental_audio` retains the same physical `StartDisabled` and client-admission gate
+as the rest of the trigger family even while environmental room presentation is absent. Spawning
+the blueblood inside disabled room brushes must not manufacture begin/end pairs.
+
+This is the ordering used by genesis's `teleport_player firetrans → firetrans.OnStartTouch →
+boogieout.ChangeNow` and by theatre's camera-keyframe output → `point_teleport` → movement
+touch → courtroom trigger. Choreography remains a producer of the teleport input; it does not
+own or shortcut touch delivery.
 
 ## 12. Implementation inspection anchors
 

@@ -281,7 +281,10 @@ Cheap tasks that unblock or de-risk everything downstream. Do these before/along
 - [x] **1.4 Entity world + event queue + chokepoints** — `FElysiumEntityWorld`, the two chokepoints
   (`AcceptInput`, `FElysiumEventQueue::Add`), the `FElysiumIOSink` taps.
 - [x] **1.5 Brush bodies** — `UElysiumBrushComponent` per brush entity, per-classname solidity,
-  overlap → `OnTouchStart`/`OnTouchEnd`.
+  overlap → `OnTouchStart`/`OnTouchEnd`; disabled/hidden/dead trigger state is physical, touch
+  admission precedes deduplication, ends release first, and runtime teleport containment is a
+  deterministic post-movement end-then-begin diff. Frozen map arrival retains its immediate
+  activation reconciliation.
 - [x] **1.6 Starter classes** — `logic_auto`, `logic_relay`, `trigger_multiple`/`trigger_once` over
   the `CBaseTrigger` chain node.
 - [x] **1.7 Labels & debug strings** — editor-only Outliner labels; `FElysiumEntity::DebugString`
@@ -440,13 +443,21 @@ M1 leftovers that live in this lane.
   the added `InValueDelta` advances a configured-case pointer), `env_fade`, `func_brush`, `point_teleport`,
   `trigger_hurt`/`trigger_look`/`trigger_autosave`; the Source `COutput<T>` value seam
   (`FireOutput` fills an empty map-param); the `Elysium.Logic` Cog window.
-  `trigger_stealth_mod`/`trigger_inventory_check`/`trigger_environmental_audio` stay inert (their
-  backing systems don't exist yet; environmental audio is owned by 6.7). *Deps:* 1.6.
+  `point_teleport` caches its live activation transform, implements spawnflag `1`, refuses parented
+  targets, restores all angles atomically, persists its cache, and resolves `!activator` at input.
+  The late `Activate` pass runs after final frozen player placement; runtime-spawned entities enter
+  it immediately once the world is active.
+  `trigger_environmental_audio` already inherits the physical `CBaseTrigger` disabled/admission
+  contract, while its room presentation stays inert and is owned by 6.7;
+  `trigger_stealth_mod`/`trigger_inventory_check` remain inert until their backing systems exist.
+  *Deps:* 1.6.
 - [x] **4.6 `trigger_changelevel` + landmark travel** — cross-map travel through a shared
   `info_landmark`, translation-only, grounded in the decompiled `CChangeLevel`: a touch or a
   scripted `ChangeLevel` fires `OnChangeLevel`, captures the player's source-landmark offset +
   view yaw, and `UElysiumMapSubsystem::RequestLandmarkTravel` runs the deferred travel next tick,
-  seating the player at `dest_landmark + offset`. The scripted `ChangeMap()` is real;
+  seating the player's Source feet at `dest_landmark + offset`. Authored spawns and landmarks are
+  feet-space; the stage and legacy save payload remain capsule-centre space, converted once when
+  the pawn body exists. The scripted `ChangeMap()` is real;
   `elysium.map <map> [landmark]`; a Transitions section in the Maps window. *Verified headless:*
   tutorial → `sm_pawnshop_1` at `dest_newgame + offset`. *Deps:* 1.6, 0.3.
 - [x] **4.7 Source movement component** *(was M1.1)* — `CGameMovement` ported line-by-line from the
@@ -486,13 +497,13 @@ M1 leftovers that live in this lane.
   `spawnflags 5` undecoded; real `.fnt`-role type is 8.8. *Acceptance (rest):* `+use` on
   `sign_chopshop_upstairs` reads "password: chopshop"; a dispatch-wrapper sign picks its variant
   from `G`. *Deps:* 4.4, 1.6, PL5c; 5.2 for the redirect.
-- [ ] **4.11 Close the trigger and `+use`-prop I/O gaps RE35 exposed** — four separable pieces.
+- [~] **4.11 Close the trigger and `+use`-prop I/O gaps RE35 exposed** — four separable pieces.
   (a) **`trigger_hurt` cadence is wrong**: retail deals `damage × 0.5` on entry then `damage × 3.0`
   every 3.0 s (sustained rate = `damage`); the runtime deals `damage` on entry then `damage` every
   0.5 s, i.e. double damage at six times the tick rate. Register `HurtNow`, `SetDamage`, `OnHurt`
   and `OnHurtPlayer` (6 + 11 shipped wires) while there.
-  (b) **`filtername` is unread** on 21 `trigger_multiple` volumes, so they admit activators retail
-  rejects; needs `m_hFilter` resolution plus `filter_activator_name` and `filter_multi`.
+  (b) **Trigger `filtername` is live:** late activation resolves the retained handle and
+  `filter_activator_name` plus AND/OR `filter_multi` reject before touch-pair deduplication.
   (c) **`prop_switch` and the lockable family have no inputs at all** — 49 shipped wires land
   nowhere, and because the classnames are already claimed the stub registrar skips them, so they are
   invisible to `elysium.stubs`. `CPropSwitch` is a sequence player over `activate`/`deactivate`/

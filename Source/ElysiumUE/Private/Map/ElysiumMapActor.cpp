@@ -500,6 +500,7 @@ void AElysiumMapActor::BuildStageWorld()
 	// being reviewed would be in every frame of it.
 	PendingSpawnLoc = FVector(0.0f, 0.0f, 100.0f);
 	PendingSpawnYaw = 0.0f;
+	PendingSpawnSpace = EElysiumPlayerPlacementSpace::CapsuleCenter;
 	bSpawnPending = true;
 
 	// An empty entity world, not the absence of one. The green room reaches the map through the same
@@ -613,6 +614,7 @@ void AElysiumMapActor::LoadMap()
 
 	if (!bMenuBackdrop && ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
 	{
+		PendingSpawnSpace = EElysiumPlayerPlacementSpace::Feet;
 		bSpawnPending = true;
 	}
 
@@ -1267,13 +1269,29 @@ void AElysiumMapActor::TeleportPlayer(const FVector& FeetOrigin, const FRotator&
 	{
 		Dest.Z += Body->GetBodyHalfHeight();
 	}
-	Pawn->SetActorLocationAndRotation(Dest, FRotator(0.0f, ViewRotation.Yaw, 0.0f),
-		false, nullptr, ETeleportType::TeleportPhysics);
-	if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
 	{
-		PC->SetControlRotation(ViewRotation);
+		TGuardValue<bool> SuppressIngress(bSuppressPlayerTouchIngress, true);
+		bPlayerTouchReconcilePending = true;
+		Pawn->SetActorLocationAndRotation(Dest, FRotator(0.0f, ViewRotation.Yaw, 0.0f),
+			false, nullptr, ETeleportType::TeleportPhysics);
+		if (APlayerController* PC = Cast<APlayerController>(Pawn->GetController()))
+		{
+			PC->SetControlRotation(ViewRotation);
+		}
 	}
-	ReconcilePlayerBrushTouches(Pawn);
+}
+
+void AElysiumMapActor::RouteBrushTouch(const FElysiumEntityHandle& Brush,
+	const FElysiumEntityHandle& Activator, bool bBegin)
+{
+	if (bSuppressPlayerTouchIngress)
+	{
+		return;
+	}
+	if (EntityWorld)
+	{
+		EntityWorld->RouteBrushTouch(Brush, Activator, bBegin);
+	}
 }
 
 void AElysiumMapActor::ReconcilePlayerBrushTouches(APawn* Pawn)
@@ -1288,21 +1306,25 @@ void AElysiumMapActor::ReconcilePlayerBrushTouches(APawn* Pawn)
 	// the pawn can already be inside a newly registered trigger, with no movement edge left to wake
 	// it. Dirty UE's overlap-skip cache and perform the query now that both player and entity world
 	// are live.
+	TGuardValue<bool> SuppressIngress(bSuppressPlayerTouchIngress, true);
 	if (USceneComponent* Root = Pawn->GetRootComponent())
 	{
 		Root->ClearSkipUpdateOverlaps();
 	}
 	Pawn->UpdateOverlaps(/*bDoNotifies*/ true);
 
+	TArray<FElysiumEntityHandle> CurrentBrushes;
 	TInlineComponentArray<UElysiumBrushComponent*> BrushComponents(this);
 	for (UElysiumBrushComponent* Brush : BrushComponents)
 	{
-		if (Brush && Brush->IsOverlappingActor(Pawn))
+		if (Brush && Brush->GetSolidity() == EElysiumBrushSolidity::Trigger
+			&& Brush->IsOverlappingActor(Pawn))
 		{
-			EntityWorld->RouteBrushTouch(
-				Brush->GetOwningEntity(), EntityWorld->PlayerHandle(), /*bBegin*/ true);
+			CurrentBrushes.Add(Brush->GetOwningEntity());
 		}
 	}
+	EntityWorld->ReconcilePlayerTouches(CurrentBrushes);
+	bPlayerTouchReconcilePending = false;
 }
 
 void AElysiumMapActor::DamagePlayer(float Amount)
@@ -1879,8 +1901,9 @@ bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
 		return false;
 	}
 
-	// Lift off the floor so the pawn's collision capsule clears the ground on spawn.
-	OutLocation = Origin + FVector(0.f, 0.f, 100.f);
+	// Authored Source origins are feet. The readiness poll adds the active body's exact half-height
+	// once the pawn exists; keeping the logical placement in feet avoids a magic 100 cm lift.
+	OutLocation = Origin;
 	// .spawn already carries Unreal-space yaw (UE_bsp_to_scene negates it at export).
 	OutYaw = YawSrc;
 	return true;
@@ -1912,10 +1935,7 @@ void AElysiumMapActor::ResolveLandmarkSpawn()
 		return;
 	}
 
-	// new pos = destination landmark origin + the offset captured at the source landmark. The offset
-	// already carries the player's capsule-centre height above the landmark, so a real transition
-	// needs no extra lift; a direct/console landmark entry (offset zero) seats the capsule centre by
-	// lifting off the landmark's feet origin, and faces the landmark's own angles.
+	// New feet = destination landmark origin + the Source-feet offset captured at the source.
 	PendingSpawnLoc = Lm->Def->Origin + Offset;
 	if (bHasYaw)
 	{
@@ -1923,9 +1943,9 @@ void AElysiumMapActor::ResolveLandmarkSpawn()
 	}
 	else
 	{
-		PendingSpawnLoc.Z += 100.0f;   // lift the capsule off the landmark feet (as ReadSpawn does)
 		PendingSpawnYaw = -Lm->Angles.Y;   // face the landmark's angles (Source yaw negated to Unreal)
 	}
+	PendingSpawnSpace = EElysiumPlayerPlacementSpace::Feet;
 	bSpawnPending = true;
 	EntryLandmark = Landmark;
 
@@ -1958,6 +1978,7 @@ void AElysiumMapActor::ResolveRestorePlacement()
 	}
 	PendingSpawnLoc = Origin;
 	PendingSpawnYaw = Yaw;
+	PendingSpawnSpace = EElysiumPlayerPlacementSpace::CapsuleCenter; // legacy save payload contract
 	bSpawnPending = true;
 	UE_LOG(LogElysium, Log, TEXT("restore placement: %s @ %s (yaw %.0f)"),
 		*MapName, *PendingSpawnLoc.ToString(), PendingSpawnYaw);
@@ -2067,6 +2088,13 @@ void AElysiumMapActor::GameplayTick(float DeltaSeconds)
 			// then CEventQueue::ServiceEvents).
 			if (EntityWorld)
 			{
+				// A runtime teleport performed during the prior event pass moved the body immediately but
+				// deliberately left its touch links dirty. Movement has now had its retail opportunity;
+				// settle the final containment before thinks and queued output delivery.
+				if (bPlayerTouchReconcilePending && FElysiumEntityWorld::IsTriggerResolutionEnabled())
+				{
+					ReconcilePlayerBrushTouches(ResolvePlayerPawn());
+				}
 				EntityWorld->Tick(GameState->GameClock().GetNow());
 			}
 
@@ -2410,12 +2438,14 @@ void AElysiumMapActor::PollRuntimeActivation()
 			// Freeze before changing the transform: even if movement's prerequisite runs later in this
 			// frame, the newly placed pawn cannot take an unguarded step.
 			Body->SetMovementFrozen(true);
-			Pawn->SetActorLocation(PendingSpawnLoc, false, nullptr, ETeleportType::TeleportPhysics);
+			const FVector Placement = ElysiumPlayerPlacement::ToCapsuleCenter(
+				PendingSpawnLoc, PendingSpawnSpace, Body->GetBodyHalfHeight());
+			Pawn->SetActorLocation(Placement, false, nullptr, ETeleportType::TeleportPhysics);
 			PC->SetControlRotation(FRotator(0.f, PendingSpawnYaw, 0.f));
 			bSpawnPlaced = true;
 			EnsureTickPrerequisites();
 			UE_LOG(LogElysium, Log, TEXT("map runtime %s: player placed and frozen at %s"),
-				*MapName, *PendingSpawnLoc.ToString());
+				*MapName, *Placement.ToString());
 		}
 	}
 

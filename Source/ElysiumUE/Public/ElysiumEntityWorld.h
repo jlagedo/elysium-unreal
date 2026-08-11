@@ -210,6 +210,9 @@ public:
 	// Overlap routing (P1.5): a brush body's begin/end overlap lands here. Resolve the brush
 	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator, bool bBegin);
+	// Deterministically release every retained pair owned by a brush before its physical collision
+	// is removed. Later engine end callbacks are harmless because the pairs are already absent.
+	void EndBrushTouches(const FElysiumEntityHandle& Brush);
 	// Replace the player's retained touch set with one authoritative post-movement containment
 	// observation. Ends are emitted before begins; both groups are stable by entity index.
 	void ReconcilePlayerTouches(TConstArrayView<FElysiumEntityHandle> CurrentBrushes);

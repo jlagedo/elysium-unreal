@@ -175,7 +175,7 @@ public:
 	// restore re-holds instead of starting the clip running.
 	bool   bRestPoseHeld = false;
 	// CDynamicProp::Activate armed the loop start and the think has not consumed it yet. Not saved:
-	// a restored map re-runs Load -> PostSpawn and re-arms, which is what retail's Activate does.
+	// a restored map re-runs Load -> Activate and re-arms, which is what retail's Activate does.
 	bool   bLoopStartPending = false;
 	double NextRandAnim = 0.0;          // m_flNextRandAnim @0x7c8
 	double AnimationEndTime = 0.0;      // absolute seconds the current one-shot ends; 0 = none pending
@@ -236,9 +236,8 @@ public:
 	// do not sway in lockstep. The think it arms (FUN_10190750) assigns the sequence, calls
 	// ResetSequenceInfo (which lifts the play rate off zero), fires OnAnimationBegun and hands over
 	// to the 10 Hz animate think.
-	virtual void PostSpawn() override
+	virtual void Activate() override
 	{
-		FElysiumEntity::PostSpawn();   // the base resolves `parentname` and attaches the body
 		bLoopSequenceResolved = false;
 		bLoopStartPending = false;
 		if (!AnimatedVisual || !World || !MeaningfulSequence(LoopSequence))
@@ -258,7 +257,7 @@ public:
 		}
 		bLoopSequenceResolved = true;
 		bLoopStartPending = true;
-		// NowSeconds() at PostSpawn equals the Now the world is activated with: the game clock only
+		// NowSeconds() at Activate equals the activation transaction's Now: the game clock only
 		// advances from AElysiumMapActor::PreMoveTick, which is gated on RuntimePhase == Active and
 		// so has not ticked yet. The stagger therefore survives the load gap intact. If that gate
 		// ever moves, every prop's start collapses onto the first frame.
@@ -527,7 +526,7 @@ private:
 
 	// CDynamicProp::Activate's `RandomFloat(0.1, 0.99)` start stagger. `FMath` for the same reason
 	// the interval above uses it: the draw is sub-second, fires once per map load, and no save can
-	// observe it — a restore re-runs PostSpawn and re-draws.
+	// observe it — a restore re-runs Activate and re-draws.
 	static double DrawLoopStartDelay()
 	{
 		return FMath::FRandRange(0.1f, 0.99f);

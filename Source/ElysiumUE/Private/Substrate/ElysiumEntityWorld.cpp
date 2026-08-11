@@ -328,7 +328,10 @@ void FElysiumEntityWorld::Activate(double Now)
 	{
 		for (int32 Index = 0; Index < EntityList.Num(); ++Index)
 		{
-			CaptureBaseline(Index);
+			if (EntityList[Index] && !EntityList[Index]->ActivationStateMustPersist())
+			{
+				CaptureBaseline(Index);
+			}
 		}
 	}
 	bActive = true;
@@ -609,9 +612,10 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 	if (Dest)
 	{
 		// Apply the final pose anchor before the stand-in disappears. SetModel goes through the
-		// player's rebuild path only when the controller actually changed it.
-		Dest->SetRuntimeOrigin(Controller->Origin);
-		Dest->SetRuntimeAngles(Controller->Angles);
+		// player's rebuild path only when the controller actually changed it. Origin and view are one
+		// body transaction: splitting them would briefly place the pawn at the final mark with its old
+		// view, and would issue two Unreal teleports for one retail SetAbs transform.
+		Dest->SetRuntimeTransform(Controller->Origin, Controller->Angles);
 		if (Dest->Model != Controller->Model)
 		{
 			Dest->SetRuntimeModel(Controller->Model);
@@ -937,6 +941,12 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		// Registered fields can alter a class-specific physical gate (notably trigger StartDisabled)
 		// without changing hidden/dead. Re-apply unconditionally after all restored state is present.
 		E->OnDormancyChanged();
+		// Leaf deserializers and dormancy hooks may arm an entity while rebuilding transient state
+		// (NPC patrol/interesting-place recovery does both). The generic saved schedule is the later,
+		// authoritative statement: restore it last so freeze -> apply -> freeze remains identical and
+		// a loaded entity cannot think earlier than the snapshot said.
+		E->NextThink = S.NextThink;
+		E->SetSavedNextThink(S.SavedNextThink);
 		NotifyVisualChanged(*E);
 		++Applied;
 	}
@@ -1104,14 +1114,6 @@ void FElysiumEntityWorld::AddSink(TUniquePtr<IElysiumIOSink> InSink)
 void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
 {
-	// Engine overlap callbacks can arrive while procedural collision and the pawn placement are
-	// still settling. Dormant observations are deliberately forgotten: activation reconciles the
-	// final overlap state once, after the pawn is at its authoritative transform.
-	if (!bActive || !IsTriggerResolutionEnabled())
-	{
-		return;
-	}
-
 	const uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
 		| static_cast<uint32>(Activator.Index);
 	if (!bBegin)
@@ -1123,6 +1125,14 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 		{
 			return;
 		}
+	}
+	// Engine overlap callbacks can arrive while procedural collision and the pawn placement are
+	// still settling. Dormant begins are deliberately forgotten: activation reconciles final
+	// containment after authoritative placement. Ends still release an already-retained pair above,
+	// even while the gameplay gate is closed or the brush has become inert.
+	if (!bActive || !IsTriggerResolutionEnabled())
+	{
+		return;
 	}
 
 	FElysiumEntity* E = Resolve(Brush);
@@ -1160,6 +1170,28 @@ void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
 	}
 	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) touch %s %s"),
 		NowSeconds(), bBegin ? TEXT("begin") : TEXT("end"), *E->DebugString());
+}
+
+void FElysiumEntityWorld::EndBrushTouches(const FElysiumEntityHandle& Brush)
+{
+	if (!Brush.IsSet() || Brush.Epoch != Epoch)
+	{
+		return;
+	}
+	TArray<int32> ActivatorIndices;
+	for (uint64 Key : ActiveTouches)
+	{
+		const int32 BrushIndex = static_cast<int32>(static_cast<uint32>(Key >> 32));
+		if (BrushIndex == Brush.Index)
+		{
+			ActivatorIndices.Add(static_cast<int32>(static_cast<uint32>(Key)));
+		}
+	}
+	ActivatorIndices.Sort();
+	for (int32 ActivatorIndex : ActivatorIndices)
+	{
+		RouteBrushTouch(Brush, FElysiumEntityHandle(ActivatorIndex, Epoch), /*bBegin*/ false);
+	}
 }
 
 // --- Player interaction ----------------------------------------------------------------

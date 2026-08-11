@@ -205,9 +205,14 @@ void FElysiumEntity::OnDormancyChanged()
 
 void FElysiumEntity::RefreshBrushBodyState()
 {
+	const bool bEnabled = IsBrushBodyEnabled();
+	if (!bEnabled && World)
+	{
+		World->EndBrushTouches(Handle);
+	}
 	if (Body)
 	{
-		Body->SetDormant(!IsBrushBodyEnabled());
+		Body->SetDormant(!bEnabled);
 	}
 }
 

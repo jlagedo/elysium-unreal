@@ -168,7 +168,7 @@ struct FElysiumSessionBlock
 struct FElysiumWorldBlock
 {
 	FString CurrentMap;
-	FVector PlayerOrigin = FVector::ZeroVector;
+	FVector PlayerOrigin = FVector::ZeroVector; // Unreal capsule centre; preserved for save compatibility
 	float   PlayerYaw = 0.0f;          // Unreal yaw (the pawn's), not the entity's Source-space angle
 	bool    bHasPlacement = false;     // false = place at info_player_start (a save with no live pawn)
 

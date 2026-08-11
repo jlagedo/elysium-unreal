@@ -1,6 +1,7 @@
 #include "ElysiumCommands.h"
 
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCmd, Log, All);
@@ -36,16 +37,12 @@ FName ElysiumCommands::Canonical(const FString& Word)
 
 bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& Args)
 {
-	IElysiumEmbodiment* Body = World.Embodiment();
-	if (!Body)
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!Player || !World.Embodiment())
 	{
 		UE_LOG(LogElysiumCmd, Warning, TEXT("teleport_player: no world"));
 		return false;
 	}
-
-	FVector CurrentOrigin = FVector::ZeroVector;
-	float KeepYaw = 0.0f;
-	Body->GetPlayerOrigin(CurrentOrigin, KeepYaw);
 
 	TArray<FString> Tokens;
 	Args.ParseIntoArrayWS(Tokens);
@@ -53,14 +50,25 @@ bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& 
 	{
 		const FVector Destination(
 			FCString::Atod(*Tokens[0]), FCString::Atod(*Tokens[1]), FCString::Atod(*Tokens[2]));
-		Body->TeleportPlayer(Destination, KeepYaw);
+		Player->SetRuntimeTransform(Destination, Player->Angles);
 		UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s"), *Destination.ToString());
+		return true;
+	}
+	if (Tokens.Num() == 6)
+	{
+		const FVector Destination(
+			FCString::Atod(*Tokens[0]), FCString::Atod(*Tokens[1]), FCString::Atod(*Tokens[2]));
+		const FVector SourceAngles(
+			FCString::Atod(*Tokens[3]), FCString::Atod(*Tokens[4]), FCString::Atod(*Tokens[5]));
+		Player->SetRuntimeTransform(Destination, SourceAngles);
+		UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s angles %s"),
+			*Destination.ToString(), *SourceAngles.ToString());
 		return true;
 	}
 	if (Tokens.Num() != 1)
 	{
 		UE_LOG(LogElysiumCmd, Warning,
-			TEXT("teleport_player <targetname> | teleport_player <x> <y> <z>"));
+			TEXT("teleport_player <targetname> | <x> <y> <z> [<pitch> <yaw> <roll>]"));
 		return false;
 	}
 
@@ -72,7 +80,7 @@ bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& 
 		return false;
 	}
 
-	Body->TeleportPlayer(Destination->Origin, KeepYaw);
+	Player->SetRuntimeTransform(Destination->Origin, Destination->Angles);
 	UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s at %s"),
 		*Tokens[0], *Destination->Origin.ToString());
 	return true;

@@ -2987,6 +2987,58 @@ bool FElysiumGymSeatTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerViewTransformTest,
+	"Elysium.Substrate.PlayerViewTransform", GElysiumTestFlags)
+bool FElysiumPlayerViewTransformTest::RunTest(const FString&)
+{
+	for (const FVector& SourceView : {
+		FVector::ZeroVector,
+		FVector(23.5f, -147.25f, 9.75f),
+		FVector(-89.f, 179.f, -31.f) })
+	{
+		const FRotator UnrealView = ElysiumPlayerView::ToUnreal(SourceView);
+		TestTrue(FString::Printf(TEXT("Source view %s round-trips"), *SourceView.ToString()),
+			ElysiumPlayerView::ToSource(UnrealView).Equals(SourceView));
+		TestTrue(TEXT("pitch follows the Source-to-Unreal handedness conversion"),
+			FMath::IsNearlyEqual(UnrealView.Pitch, -SourceView.X));
+		TestTrue(TEXT("yaw follows the Source-to-Unreal handedness conversion"),
+			FMath::IsNearlyEqual(UnrealView.Yaw, -SourceView.Y));
+		TestTrue(TEXT("roll retains its signed axis"),
+			FMath::IsNearlyEqual(UnrealView.Roll, SourceView.Z));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerPlacementSpaceTest,
+	"Elysium.Substrate.PlayerPlacementSpace", GElysiumTestFlags)
+bool FElysiumPlayerPlacementSpaceTest::RunTest(const FString&)
+{
+	constexpr float HalfHeight = 96.f;
+	const FVector AuthoredFeet(120.f, -340.f, 15.f);
+	const FVector ExpectedCenter = AuthoredFeet + FVector(0.f, 0.f, HalfHeight);
+
+	TestTrue(TEXT("authored map spawns convert feet to the capsule centre exactly once"),
+		ElysiumPlayerPlacement::ToCapsuleCenter(AuthoredFeet,
+			EElysiumPlayerPlacementSpace::Feet, HalfHeight).Equals(ExpectedCenter));
+
+	const FVector LandmarkOrigin(1000.f, 2000.f, -300.f);
+	const FVector LandmarkOffset(25.f, -50.f, 10.f);
+	TestTrue(TEXT("landmark-relative entry keeps the authored feet offset"),
+		ElysiumPlayerPlacement::ToCapsuleCenter(LandmarkOrigin + LandmarkOffset,
+			EElysiumPlayerPlacementSpace::Feet, HalfHeight).Equals(
+				LandmarkOrigin + LandmarkOffset + FVector(0.f, 0.f, HalfHeight)));
+	TestTrue(TEXT("direct landmark entry uses the landmark as feet origin"),
+		ElysiumPlayerPlacement::ToCapsuleCenter(LandmarkOrigin,
+			EElysiumPlayerPlacementSpace::Feet, HalfHeight).Equals(
+				LandmarkOrigin + FVector(0.f, 0.f, HalfHeight)));
+
+	const FVector LegacySaveCenter(-400.f, 20.f, 777.f);
+	TestTrue(TEXT("legacy save restoration preserves its capsule-centre payload"),
+		ElysiumPlayerPlacement::ToCapsuleCenter(LegacySaveCenter,
+			EElysiumPlayerPlacementSpace::CapsuleCenter, HalfHeight).Equals(LegacySaveCenter));
+	return true;
+}
+
 // =====================================================================================
 // The pose deviation measure (CCC5/CCC6). Two callers share it: the Content tier asserts a real
 // baked body left its bind pose, and the green room's drive panel reports the same number live. It
@@ -4205,6 +4257,159 @@ bool FElysiumActivationLifecycleTest::RunTest(const FString&)
 	FElysiumEntityWorld::SetTriggerResolutionEnabled(true);
 	World.Tick(10.0);
 	TestEqual(TEXT("trigger-on resumes the held timer and queued I/O"), CounterValue(CounterEntity), 49.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisabledTouchAdmissionTest,
+	"Elysium.Substrate.DisabledTouchAdmission", GElysiumTestFlags)
+bool FElysiumDisabledTouchAdmissionTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__disabled_touch__");
+	FElysiumEntityDef TriggerDef;
+	TriggerDef.Classname = TEXT("trigger_multiple");
+	TriggerDef.TargetName = TEXT("trigger1");
+	TriggerDef.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+	TriggerDef.Keys.Add(TEXT("StartDisabled"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(TriggerDef));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Trigger = World.FindByName(TEXT("trigger1"));
+	if (!TestNotNull(TEXT("disabled trigger resolved"), Trigger))
+	{
+		return false;
+	}
+
+	// A rejected begin must not occupy the deduplication set. Once Enable restores collision, the
+	// engine's refreshed overlap is admitted as a new edge.
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("a disabled begin is rejected before deduplication"), World.TouchBegins(), 0);
+	World.EnqueueInput(TEXT("trigger1"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0.0,
+		Player, Player);
+	World.Tick(0.0);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("enable-time overlap refresh produces one begin"), World.TouchBegins(), 1);
+
+	// Disabling clears the retained pair before physical collision is removed. A late raw end is a
+	// no-op, and a later re-enable can therefore create another genuine begin.
+	World.EnqueueInput(TEXT("trigger1"), FName(TEXT("Disable")), FElysiumVariant::Void(), 0.0,
+		Player, Player);
+	World.Tick(0.0);
+	TestEqual(TEXT("disable deterministically clears the active pair"), World.TouchEnds(), 1);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ false);
+	TestEqual(TEXT("a late physical end is deduplicated"), World.TouchEnds(), 1);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("disabled containment remains inadmissible"), World.TouchBegins(), 1);
+
+	World.EnqueueInput(TEXT("trigger1"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0.0,
+		Player, Player);
+	World.Tick(0.0);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("re-enable produces a fresh begin edge"), World.TouchBegins(), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEnvironmentalAudioTouchAdmissionTest,
+	"Elysium.Substrate.EnvironmentalAudioTouchAdmission", GElysiumTestFlags)
+bool FElysiumEnvironmentalAudioTouchAdmissionTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__environmental_audio_touch__");
+	FElysiumEntityDef TriggerDef;
+	TriggerDef.Classname = TEXT("trigger_environmental_audio");
+	TriggerDef.TargetName = TEXT("environmental1");
+	TriggerDef.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+	TriggerDef.Keys.Add(TEXT("StartDisabled"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(TriggerDef));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Trigger = World.FindByName(TEXT("environmental1"));
+	if (!TestNotNull(TEXT("environmental-audio trigger resolves"), Trigger))
+	{
+		return false;
+	}
+
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("StartDisabled environmental audio rejects containment"),
+		World.TouchBegins(), 0);
+
+	World.EnqueueInput(TEXT("environmental1"), FName(TEXT("Enable")),
+		FElysiumVariant::Void(), 0.0, Player, Player);
+	World.Tick(0.0);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("environmental audio inherits CBaseTrigger admission"),
+		World.TouchBegins(), 1);
+	TestEqual(TEXT("environmental audio Enable is a real inherited input"),
+		World.UnknownInputs(), 0);
+
+	World.EnqueueInput(TEXT("environmental1"), FName(TEXT("Disable")),
+		FElysiumVariant::Void(), 0.0, Player, Player);
+	World.Tick(0.0);
+	TestEqual(TEXT("disabling environmental audio clears its retained pair"),
+		World.TouchEnds(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFilteredTouchAdmissionTest,
+	"Elysium.Substrate.FilteredTouchAdmission", GElysiumTestFlags)
+bool FElysiumFilteredTouchAdmissionTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__filtered_touch__");
+
+	FElysiumEntityDef Accept;
+	Accept.Classname = TEXT("filter_activator_name");
+	Accept.TargetName = TEXT("accept_player");
+	Accept.Keys.Add(TEXT("filtername"), TEXT("!pla*"));
+	Defs.Defs.Add(MoveTemp(Accept));
+
+	FElysiumEntityDef Reject;
+	Reject.Classname = TEXT("filter_activator_name");
+	Reject.TargetName = TEXT("reject_player");
+	Reject.Keys.Add(TEXT("filtername"), TEXT("somebody_else"));
+	Defs.Defs.Add(MoveTemp(Reject));
+
+	FElysiumEntityDef Multi;
+	Multi.Classname = TEXT("filter_multi");
+	Multi.TargetName = TEXT("player_filter");
+	Multi.Keys.Add(TEXT("filtertype"), TEXT("0")); // AND
+	Multi.Keys.Add(TEXT("Filter01"), TEXT("accept_player"));
+	Multi.Keys.Add(TEXT("Filter02"), TEXT("reject_player"));
+	Defs.Defs.Add(MoveTemp(Multi));
+
+	FElysiumEntityDef TriggerDef;
+	TriggerDef.Classname = TEXT("trigger_multiple");
+	TriggerDef.TargetName = TEXT("trigger1");
+	TriggerDef.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+	TriggerDef.Keys.Add(TEXT("filtername"), TEXT("player_filter"));
+	Defs.Defs.Add(MoveTemp(TriggerDef));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Trigger = World.FindByName(TEXT("trigger1"));
+	if (!TestNotNull(TEXT("filtered trigger resolved"), Trigger))
+	{
+		return false;
+	}
+
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("a failed name/multi filter is rejected before touch deduplication"),
+		World.TouchBegins(), 0);
+
+	World.EnqueueInput(TEXT("reject_player"), FName(TEXT("Kill")), FElysiumVariant::Void(), 0.0,
+		Player, Player);
+	World.Tick(0.0);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("a stale child filter passes and the previously rejected pair can begin"),
+		World.TouchBegins(), 1);
 	return true;
 }
 
@@ -6216,7 +6421,7 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 	Tele.TargetName = TEXT("tp1");
 	Tele.Origin = FVector(500, 600, 70);
 	Tele.Keys.Add(TEXT("target"), TEXT("!player"));
-	Tele.Keys.Add(TEXT("angles"), TEXT("0 45 0"));
+	Tele.Keys.Add(TEXT("angles"), TEXT("10 45 5"));
 	Defs.Defs.Add(MoveTemp(Tele));
 
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
@@ -6290,7 +6495,7 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 	TestTrue(TEXT("the body was placed at the destination"),
 		Services.Saw(TEXT("TeleportPlayer")) && Services.PlayerLocation.Equals(FVector(500, 600, 70)));
 	TestTrue(TEXT("the body took the destination's facing"),
-		FMath::IsNearlyEqual((float)Services.PlayerRotation.Yaw, -45.f));
+		Services.PlayerRotation.Equals(FRotator(-10.f, -45.f, 5.f)));
 
 	// --- Damage, the unkillable latch, and the death path ---------------------------------
 	// The number lands on the sheet's `Health` slot, which counts damage TAKEN (RE24); the entity's
@@ -6355,6 +6560,192 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 		TestTrue(TEXT("it is reported as an unknown target"), Backdrop.UnknownTargets() > 0);
 	}
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPointTeleportContractTest,
+	"Elysium.Substrate.PointTeleportContract", GElysiumTestFlags)
+bool FElysiumPointTeleportContractTest::RunTest(const FString&)
+{
+	auto BuildNormalDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__point_teleport_contract__");
+		FElysiumEntityDef Tele;
+		Tele.Classname = TEXT("point_teleport");
+		Tele.TargetName = TEXT("tp");
+		Tele.Origin = FVector(100.f, 200.f, 300.f);
+		Tele.Keys.Add(TEXT("angles"), TEXT("10 20 30"));
+		Tele.Keys.Add(TEXT("target"), TEXT("!player"));
+		Defs.Defs.Add(MoveTemp(Tele));
+		return Defs;
+	};
+	auto CountBodyTeleports = [](const FElysiumRecordingServices& Services)
+	{
+		int32 Count = 0;
+		for (const FString& Call : Services.Calls)
+		{
+			Count += Call.StartsWith(TEXT("TeleportPlayer ")) ? 1 : 0;
+		}
+		return Count;
+	};
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.PlayerLocation = FVector(1.f, 2.f, 3.f);
+	Services.PlayerRotation = FRotator(4.f, 5.f, 6.f);
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(BuildNormalDefs());
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Teleport = World.FindByName(TEXT("tp"));
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("teleporter resolved"), Teleport)
+		|| !TestNotNull(TEXT("player resolved"), Player))
+	{
+		return false;
+	}
+
+	// The destination is sampled once in Activate. Moving the point afterwards cannot drag it,
+	// and the player's origin plus all Source angles reach the body through one atomic call.
+	Teleport->SetRuntimeTransform(FVector(900.f, 901.f, 902.f), FVector(40.f, 50.f, 60.f));
+	Services.Calls.Reset();
+	World.EnqueueInput(TEXT("tp"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		PlayerHandle, PlayerHandle);
+	World.Tick(0.0);
+	TestTrue(TEXT("moved point retains its activation-time destination"),
+		Player->Origin.Equals(FVector(100.f, 200.f, 300.f))
+		&& Player->Angles.Equals(FVector(10.f, 20.f, 30.f)));
+	TestEqual(TEXT("origin and all angles produce one body update"), CountBodyTeleports(Services), 1);
+	TestTrue(TEXT("the body receives converted pitch yaw and roll"),
+		Services.PlayerRotation.Equals(FRotator(-10.f, -20.f, 30.f)));
+
+	Player->MoveParent = Teleport->Handle;
+	Services.Calls.Reset();
+	AddExpectedError(TEXT("can't teleport object"), EAutomationExpectedErrorFlags::Contains, 1);
+	World.EnqueueInput(TEXT("tp"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		PlayerHandle, PlayerHandle);
+	World.Tick(0.0);
+	TestEqual(TEXT("a parented target receives no body update"), CountBodyTeleports(Services), 0);
+	Player->MoveParent = FElysiumEntityHandle::Invalid();
+
+	// !activator resolves when the input arrives, not during activation.
+	FElysiumEntityDef ActivatorTeleport;
+	ActivatorTeleport.Classname = TEXT("point_teleport");
+	ActivatorTeleport.TargetName = TEXT("tp_activator");
+	ActivatorTeleport.Origin = FVector(111.f, 222.f, 333.f);
+	ActivatorTeleport.Keys.Add(TEXT("angles"), TEXT("7 8 9"));
+	ActivatorTeleport.Keys.Add(TEXT("target"), TEXT("!activator"));
+	const FElysiumEntityHandle ActivatorTeleportHandle =
+		World.SpawnRuntimeEntity(MoveTemp(ActivatorTeleport));
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		PlayerHandle, ActivatorTeleportHandle);
+	World.Tick(0.0);
+	TestTrue(TEXT("!activator resolves at delivery"),
+		Player->Origin.Equals(FVector(111.f, 222.f, 333.f))
+		&& Player->Angles.Equals(FVector(7.f, 8.f, 9.f)));
+
+	// An unresolved named target remains live and uses the cache when that target appears later.
+	FElysiumEntityDef DeferredTeleport;
+	DeferredTeleport.Classname = TEXT("point_teleport");
+	DeferredTeleport.TargetName = TEXT("tp_deferred");
+	DeferredTeleport.Origin = FVector(444.f, 555.f, 666.f);
+	DeferredTeleport.Keys.Add(TEXT("angles"), TEXT("14 15 16"));
+	DeferredTeleport.Keys.Add(TEXT("target"), TEXT("late_target"));
+	const FElysiumEntityHandle DeferredTeleportHandle =
+		World.SpawnRuntimeEntity(MoveTemp(DeferredTeleport));
+	FElysiumEntity* Deferred = World.Resolve(DeferredTeleportHandle);
+	TestTrue(TEXT("an unresolved named target does not kill the teleporter"), Deferred && !Deferred->IsDead());
+	FElysiumEntityDef LateTarget;
+	LateTarget.Classname = TEXT("info_landmark");
+	LateTarget.TargetName = TEXT("late_target");
+	const FElysiumEntityHandle LateHandle = World.SpawnRuntimeEntity(MoveTemp(LateTarget));
+	World.EnqueueInput(TEXT("tp_deferred"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		PlayerHandle, PlayerHandle);
+	World.Tick(0.0);
+	FElysiumEntity* Late = World.Resolve(LateHandle);
+	TestTrue(TEXT("the late target uses the activation-time cache"), Late
+		&& Late->Origin.Equals(FVector(444.f, 555.f, 666.f))
+		&& Late->Angles.Equals(FVector(14.f, 15.f, 16.f)));
+
+	FElysiumEntityDef EmptyTeleport;
+	EmptyTeleport.Classname = TEXT("point_teleport");
+	EmptyTeleport.TargetName = TEXT("tp_empty");
+	AddExpectedError(TEXT("given no target. Deleted"), EAutomationExpectedErrorFlags::Contains, 1);
+	const FElysiumEntityHandle EmptyHandle = World.SpawnRuntimeEntity(MoveTemp(EmptyTeleport));
+	TestNull(TEXT("an empty target kills the teleporter"), World.Resolve(EmptyHandle));
+
+	// Spawnflag 1 samples the synchronized player transform during frozen activation.
+	FElysiumRecordingServices HomeServices;
+	HomeServices.bHasPlayer = true;
+	HomeServices.PlayerLocation = FVector(21.f, 22.f, 23.f);
+	HomeServices.PlayerRotation = FRotator(4.f, 5.f, 6.f);
+	FElysiumEntityDefs HomeDefs;
+	HomeDefs.MapName = TEXT("__point_teleport_home__");
+	FElysiumEntityDef HomeTeleport;
+	HomeTeleport.Classname = TEXT("point_teleport");
+	HomeTeleport.TargetName = TEXT("home");
+	HomeTeleport.Origin = FVector(700.f, 800.f, 900.f);
+	HomeTeleport.Keys.Add(TEXT("target"), TEXT("!player"));
+	HomeTeleport.Keys.Add(TEXT("spawnflags"), TEXT("1"));
+	HomeDefs.Defs.Add(MoveTemp(HomeTeleport));
+	FElysiumEntityWorld HomeWorld(nullptr, nullptr, HomeServices.Bundle());
+	HomeWorld.Load(MoveTemp(HomeDefs));
+	const FElysiumEntityHandle HomePlayerHandle = HomeWorld.SpawnPlayer();
+	HomeWorld.Activate(0.0);
+	FElysiumPlayer* HomePlayer = HomeWorld.FindPlayer();
+	HomePlayer->SetRuntimeTransform(FVector(80.f, 90.f, 100.f), FVector(1.f, 2.f, 3.f));
+	HomeWorld.EnqueueInput(TEXT("home"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		HomePlayerHandle, HomePlayerHandle);
+	HomeWorld.Tick(0.0);
+	TestTrue(TEXT("spawnflag 1 returns to activation-time player feet and view"),
+		HomePlayer->Origin.Equals(FVector(21.f, 22.f, 23.f))
+		&& HomePlayer->Angles.Equals(ElysiumPlayerView::ToSource(FRotator(4.f, 5.f, 6.f))));
+
+	// The activation cache stays explicit in snapshots. An old record with no leaf recomputes from
+	// the restored live point transform during Activate.
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+	const FElysiumEntityState* TeleportState = Snapshot.Entities.FindByPredicate(
+		[](const FElysiumEntityState& State) { return State.TargetName == TEXT("tp"); });
+	TestTrue(TEXT("the activation cache is serialized"),
+		TeleportState && !TeleportState->LeafState.IsEmpty());
+
+	FElysiumRecordingServices RestoredServices;
+	RestoredServices.bHasPlayer = true;
+	RestoredServices.PlayerLocation = FVector(9.f, 9.f, 9.f);
+	FElysiumEntityWorld Restored(nullptr, nullptr, RestoredServices.Bundle());
+	Restored.Load(BuildNormalDefs());
+	const FElysiumEntityHandle RestoredPlayer = Restored.SpawnPlayer();
+	Restored.ApplySnapshot(Snapshot);
+	Restored.Activate(0.0);
+	Restored.EnqueueInput(TEXT("tp"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		RestoredPlayer, RestoredPlayer);
+	Restored.Tick(0.0);
+	TestTrue(TEXT("restore retains the original activation cache"),
+		Restored.FindPlayer()->Origin.Equals(FVector(100.f, 200.f, 300.f))
+		&& Restored.FindPlayer()->Angles.Equals(FVector(10.f, 20.f, 30.f)));
+
+	FElysiumMapSnapshot Legacy = Snapshot;
+	if (FElysiumEntityState* LegacyTeleport = Legacy.Entities.FindByPredicate(
+		[](FElysiumEntityState& State) { return State.TargetName == TEXT("tp"); }))
+	{
+		LegacyTeleport->LeafState.Reset();
+	}
+	FElysiumRecordingServices LegacyServices;
+	LegacyServices.bHasPlayer = true;
+	LegacyServices.PlayerLocation = FVector(8.f, 8.f, 8.f);
+	FElysiumEntityWorld LegacyWorld(nullptr, nullptr, LegacyServices.Bundle());
+	LegacyWorld.Load(BuildNormalDefs());
+	const FElysiumEntityHandle LegacyPlayer = LegacyWorld.SpawnPlayer();
+	LegacyWorld.ApplySnapshot(Legacy);
+	LegacyWorld.Activate(0.0);
+	LegacyWorld.EnqueueInput(TEXT("tp"), FName(TEXT("Teleport")), FElysiumVariant::Void(), 0.0,
+		LegacyPlayer, LegacyPlayer);
+	LegacyWorld.Tick(0.0);
+	TestTrue(TEXT("an older record recomputes from restored live transform"),
+		LegacyWorld.FindPlayer()->Origin.Equals(FVector(900.f, 901.f, 902.f))
+		&& LegacyWorld.FindPlayer()->Angles.Equals(FVector(40.f, 50.f, 60.f)));
 	return true;
 }
 
@@ -6608,6 +6999,38 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 	TestTrue(TEXT("controller stands through the NPC skeletal path"),
 		Services.Saw(TEXT("BuildNpcVisual tremere_armor_0")));
 
+	// A point_teleport may move !player while the cinematic stand-in exists. The explicit player
+	// transform is authoritative for that move, so keep the stand-in's teardown anchor coherent;
+	// otherwise the later RemoveControllerNPC restores the stale pre-teleport position.
+	const FVector TeleportedOrigin(140.f, 250.f, 360.f);
+	const FVector TeleportedAngles(12.f, 34.f, 5.f);
+	Services.Calls.Reset();
+	Player->SetRuntimeTransform(TeleportedOrigin, TeleportedAngles);
+	TestTrue(TEXT("an explicit player teleport synchronizes the active controller origin"),
+		Controller->Origin.Equals(TeleportedOrigin));
+	TestTrue(TEXT("an explicit player teleport synchronizes the active controller angles"),
+		Controller->Angles.Equals(TeleportedAngles));
+	TestEqual(TEXT("controller synchronization does not duplicate the player body move"),
+		Services.Count(TEXT("TeleportPlayer ")), 1);
+
+	Services.Calls.Reset();
+	TestTrue(TEXT("controller removal after a player teleport succeeds"),
+		World.RemovePlayerControllerEntity());
+	TestTrue(TEXT("controller teardown cannot roll the player back after teleport"),
+		Player->Origin.Equals(TeleportedOrigin) && Player->Angles.Equals(TeleportedAngles));
+	TestEqual(TEXT("controller teardown transfers its final transform atomically"),
+		Services.Count(TEXT("TeleportPlayer ")), 1);
+	TestNull(TEXT("the synchronized controller relationship clears"), World.FindPlayerController());
+
+	// A scene remains allowed to stage the controller independently. Its final mark transfers back
+	// when that controller is removed, which is the other direction of the ownership contract.
+	World.CreatePlayerControllerEntity();
+	Controller = World.FindPlayerController();
+	if (!TestNotNull(TEXT("a second controller can be created for scene staging"), Controller))
+	{
+		return false;
+	}
+
 	Controller->SetRuntimeOrigin(FVector(400.f, 500.f, 600.f));
 	Controller->SetRuntimeAngles(FVector(0.f, 135.f, 0.f));
 	Controller->SetRuntimeModel(TEXT("models/character/pc/female/toreador_armor_0.mdl"));
@@ -6732,6 +7155,7 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 	Fire.Classname = TEXT("trigger_multiple");
 	Fire.TargetName = TEXT("firetrans");
 	Fire.Origin = FVector(400.f, 500.f, 60.f);
+	Fire.Keys.Add(TEXT("angles"), TEXT("12 34 5"));
 	Fire.Keys.Add(TEXT("spawnflags"), TEXT("1"));
 	{
 		FElysiumOutputDef Wire;
@@ -6781,13 +7205,21 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 		Commands.Execute(TEXT("teleport_player firetrans")));
 	TestTrue(TEXT("the named form moves through the embodiment seam"),
 		Services.PlayerLocation.Equals(Firetrans->Origin));
-	TestTrue(TEXT("the named form preserves yaw"),
-		FMath::IsNearlyEqual((float)Services.PlayerRotation.Yaw, 75.f));
+	TestTrue(TEXT("the named form takes the target's full Source facing"),
+		Services.PlayerRotation.Equals(FRotator(-12.f, -34.f, 5.f)));
 
 	TestTrue(TEXT("the coordinate form is a declared command"),
 		Commands.Execute(TEXT("teleport_player 7 8 9")));
 	TestTrue(TEXT("the coordinate form lands at the requested feet origin"),
 		Services.PlayerLocation.Equals(FVector(7.f, 8.f, 9.f)));
+	TestTrue(TEXT("the coordinate-only form preserves the current view"),
+		Services.PlayerRotation.Equals(FRotator(-12.f, -34.f, 5.f)));
+
+	TestTrue(TEXT("the six-coordinate form is a declared command"),
+		Commands.Execute(TEXT("teleport_player 10 20 30 1 2 3")));
+	TestTrue(TEXT("the six-coordinate form converts the full Source view"),
+		Services.PlayerLocation.Equals(FVector(10.f, 20.f, 30.f))
+		&& Services.PlayerRotation.Equals(FRotator(-1.f, -2.f, 3.f)));
 
 	const int32 CallsBeforeMissing = Services.Calls.Num();
 	AddExpectedError(TEXT("Could not find entity named missing_target"),
@@ -6797,14 +7229,16 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 	TestEqual(TEXT("an unresolved target does not move the player"),
 		Services.Calls.Num(), CallsBeforeMissing);
 
-	// Reproduce the complete close tail: move into firetrans, route the resulting touch, drain the
-	// output event, and observe the same travel request as direct ChangeNow.
+	// Reproduce the complete close tail: teleport itself does not publish a touch. The following
+	// movement reconciliation computes final containment, then the output queue reaches ChangeNow.
 	Services.Calls.Reset();
-	Commands.Execute(TEXT("teleport_player firetrans"));
 	const int32 TouchBeginsBefore = World.TouchBegins();
-	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ true);
-	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ true);
-	TestEqual(TEXT("movement and teleport reconciliation collapse to one begin edge"),
+	Commands.Execute(TEXT("teleport_player firetrans"));
+	TestEqual(TEXT("teleport leaves entity touch delivery deferred"),
+		World.TouchBegins(), TouchBeginsBefore);
+	TArray<FElysiumEntityHandle> FinalContainment { Firetrans->Handle };
+	World.ReconcilePlayerTouches(FinalContainment);
+	TestEqual(TEXT("the following movement reconciliation emits one begin edge"),
 		World.TouchBegins(), TouchBeginsBefore + 1);
 	for (int32 i = 0; i < 3; ++i)
 	{
@@ -6814,9 +7248,9 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 		Services.Saw(TEXT("RequestLandmarkTravel sp_theatre@newgame")));
 	TestEqual(TEXT("the recovered chain delivers no unknown input"), World.UnknownInputs(), 0);
 	const int32 TouchEndsBefore = World.TouchEnds();
-	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ false);
-	World.RouteBrushTouch(Firetrans->Handle, PlayerHandle, /*bBegin*/ false);
-	TestEqual(TEXT("duplicate reconciliation also collapses to one end edge"),
+	FinalContainment.Reset();
+	World.ReconcilePlayerTouches(FinalContainment);
+	TestEqual(TEXT("the next movement reconciliation emits one end edge"),
 		World.TouchEnds(), TouchEndsBefore + 1);
 
 	Commands.Unbind(TeleportBinding);
@@ -6825,8 +7259,8 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 
 // =====================================================================================
 // Engine integration for the one part GenesisExit cannot model on a bare entity world:
-// SetActorLocation(..., TeleportPhysics) must make UE recompute the real player hull's overlaps
-// and synchronously deliver BeginOverlap to the real runtime convex trigger component.
+// SetActorLocation(..., TeleportPhysics) may synchronously recompute the real hull overlap. The
+// map wrapper deliberately suppresses only entity-bus ingress; raw UE delegates remain observable.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSleepTest,
@@ -6959,7 +7393,8 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	MapActor->TeleportPlayer(FeetDestination, 37.f);
+	const FRotator ViewRotation(11.f, 37.f, 5.f);
+	MapActor->TeleportPlayer(FeetDestination, ViewRotation);
 
 	TestEqual(TEXT("engine teleport synchronously emits one begin overlap"), Probe->BeginCount, 1);
 	TestTrue(TEXT("begin overlap identifies the player pawn"), Probe->LastOther == Pawn);
@@ -6968,8 +7403,10 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 	TestTrue(TEXT("production wrapper lifts the feet-origin by the hull half-height"),
 		Pawn->GetActorLocation().Equals(
 			FeetDestination + FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f)));
-	TestTrue(TEXT("production wrapper applies the requested yaw"),
-		FMath::IsNearlyEqual((float)PC->GetControlRotation().Yaw, 37.f));
+	TestTrue(TEXT("production wrapper applies the full requested view"),
+		PC->GetControlRotation().Equals(ViewRotation));
+	TestTrue(TEXT("the body itself receives view yaw only"),
+		Pawn->GetActorRotation().Equals(FRotator(0.f, ViewRotation.Yaw, 0.f)));
 
 	MapActor->Destroy();
 	return true;

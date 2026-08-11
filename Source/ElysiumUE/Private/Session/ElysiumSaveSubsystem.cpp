@@ -8,6 +8,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveGame.h"
+#include "ElysiumWorldServices.h"
 
 #include "Engine/GameInstance.h"
 #include "HAL/FileManager.h"
@@ -258,13 +259,16 @@ bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutE
 	{
 		Out.World.CurrentMap = World->MapName();
 		Out.World.VisitedMaps.AddUnique(Out.World.CurrentMap);
-		if (const FElysiumPlayer* PlayerEnt = World->FindPlayer())
+		if (const IElysiumEmbodiment* Body = World->Embodiment())
 		{
-			// The entity's origin IS the pawn's actor location (11.4 samples it once a frame) and its
-			// stored yaw is the Source-space negation of the control yaw, so both go back verbatim.
-			Out.World.PlayerOrigin = PlayerEnt->Origin;
-			Out.World.PlayerYaw = -PlayerEnt->Angles.Y;
-			Out.World.bHasPlacement = true;
+			FRotator View = FRotator::ZeroRotator;
+			if (Body->GetPlayerCapsuleTransform(Out.World.PlayerOrigin, View))
+			{
+				// The save format deliberately retains its capsule-centre + Unreal-yaw contract. Entity
+				// logic now owns Source feet separately, so old payloads restore without migration.
+				Out.World.PlayerYaw = View.Yaw;
+				Out.World.bHasPlacement = true;
+			}
 		}
 	}
 	else if (Maps)

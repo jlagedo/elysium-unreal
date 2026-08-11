@@ -210,6 +210,9 @@ public:
 	// Admission precedes the world's active-touch latch. A rejected observation must never suppress
 	// a later real begin after a trigger is enabled or its activator filter changes.
 	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const { return !IsInert(); }
+	// CBaseFilter's virtual verdict. Ordinary entities pass so a stale/mistyped retail filter handle
+	// remains non-blocking; registered filter leaves override this exact seam.
+	virtual bool PassesFilter(const FElysiumEntityHandle& Activator) const { return true; }
 
 	// --- Player interaction -------------------------------------------------------------
 	// Spatial focus is separate from the class verb. The modern query supplies a context, the
@@ -416,6 +419,10 @@ public:
 	// placed and synchronized but before gameplay ingress opens. Runtime spawns in an active world
 	// receive it immediately after PostSpawn.
 	virtual void Activate() {}
+	// Activation normally becomes part of a fresh world's omission baseline. A leaf whose cached
+	// activation result depends on transient residency state can keep the pre-activation baseline
+	// so that result remains explicit in snapshots and survives a later rebuild.
+	virtual bool ActivationStateMustPersist() const { return false; }
 
 	// Map-load residency pass. All map entities and the player have spawned, but the entity world is
 	// still dormant: a leaf contributes its authored animation references here without starting any

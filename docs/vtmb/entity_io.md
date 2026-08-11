@@ -88,6 +88,13 @@ and applicable character state back to the player, then destroys it and clears t
 relationship handle is map-snapshot state: restoring a scene in progress rebinds
 `!playercontroller` to the restored runtime entity before event processing resumes.
 
+An explicit transform write to `!player` while this relationship is live also updates the
+controller's pose anchor. Ordinary player movement does not: it samples the pawn into `!player`
+without taking ownership of a scene-staged controller. This distinction is load-bearing in the
+tutorial porch chain. `teleport_fade` moves the player while the controller exists, and the delayed
+`RemoveControllerNPC` must preserve that destination rather than restoring the controller's
+pre-fade porch transform.
+
 The opening map also has one deliberately dangling authored wire:
 `walk_out_cam_k.OnReachedKeyframe → controls.Deactivate`, paired with a `trigger_once` sending
 `controls.Activate`. `sp_theatre` contains no target named `controls` and no `game_ui` entity. The
@@ -433,7 +440,17 @@ The engine names the two principal bits itself. `CBaseTrigger`'s datamap (`0x105
 `filtername` → `m_iFilterName` (`FIELD_STRING`, `+0x560`), `StartDisabled` → `m_bDisabled`
 (`+0x55c`), and the two touch outputs. `Enable` / `Disable` (`FUN_101c4bf0` / `FUN_101c4dd0`) work by
 adding and removing solid flag `0x8` (`FSOLID_TRIGGER`), so a disabled trigger stops receiving
-touches at the collision layer rather than filtering them.
+touches at the collision layer rather than filtering them. Adding `FSOLID_TRIGGER` rebuilds the
+touch links: enabling a volume around an already-contained player can therefore produce a fresh
+`StartTouch`. Removing it releases the existing touch pair before any late `EndTouch` callback can
+be rejected on disabled or dead state.
+
+The faithful runtime keeps the same physical invariant. Disabled, hidden, and dead state jointly
+gate the brush body's collision. A begin is admitted by the class/filter test before it enters the
+retained touch-pair set, so a rejected client cannot suppress a later valid edge. An end removes the
+pair before liveness checks. This is also why `Enable` while overlapping produces one begin,
+`Disable` clears it, and a later re-enable can produce another begin rather than being lost to
+deduplication.
 
 The remaining observed bits are **not activator classes**, and two of them are reinterpreted by a
 single leaf:
@@ -1190,11 +1207,21 @@ string `0x10558f08`) and whose body is a profiler scope push and pop with no wor
 adds nothing: re-establishing the entity's spatial links falls out of `SetAbsOrigin` itself, so
 there is no separate touch re-test in the teleport path.
 
-*Divergence, by owner call:* this runtime reads the destination from the entity's own origin at
-input time rather than caching it at `Activate`, ignores spawnflag `1`, and moves a parented target
-instead of refusing it. None of `sp_theatre`'s nine teleports sets the flag, carries a parent, or
-moves after spawn, so the three are confined to `sp_tutorial_1`'s two `!player` teleports. The view
-snap *is* reproduced — a teleported player's control rotation follows the destination angles.
+Touch delivery therefore belongs to the movement/touch phase, not to `InputTeleport`'s event-queue
+delivery. The transform changes immediately, but containment outputs produced by that move are
+observed after the following player-movement opportunity. Several teleports before that phase
+collapse to the final containment. A trigger explicitly enabled by a later setup event is a
+different operation: rebuilding its physical touch links may produce `StartTouch` after that setup
+event in the same queue service pass.
+
+The faithful runtime caches live origin and all Source angles in the late entity-activation pass,
+after the frozen player placement has been synchronized into `!player`. It preserves that cache in
+map snapshots, resolves `!activator` only when the input arrives, refuses parented targets, and
+applies position plus angles as one body update. The logical player's `origin` is Source feet and
+its `angles` are the complete Source view; the Unreal body owns the one feet-to-centre conversion,
+body yaw, and full controller view. Initial map containment remains an activation transaction:
+place and freeze the pawn, synchronize and activate entities, open the entity world, reconcile
+containment immediately, then run the frozen think/event pass.
 
 ## Skin families (`skin` / `SetSkin` / `FadeToSkin`)
 

@@ -278,7 +278,7 @@ Several real commands are content/UI machinery rather than player binds:
 
 | Command | Owner | Effect |
 |---|---|---|
-| `teleport_player <targetname>` / `<x> <y> <z>` | vampire | move the player to a named entity or coordinate; missing names report `Could not find entity named %s` |
+| `teleport_player <targetname>` / `<x> <y> <z> [<pitch> <yaw> <roll>]` | vampire | move the logical player atomically; a named target supplies origin and angles, three coordinates preserve view, and six use Source pitch/yaw/roll; missing names report `Could not find entity named %s` |
 | `player_immobilize` / `player_mobilize` | vampire | take and return player control for a scripted moment — a **server-side lock on the player**, not a client input-mode change |
 | `v_setpause`, `v_unpause` | client | take/release the character-panel modal hold |
 | `vskip_intro` | vampire | skip the current intro scene; not the `vchar_skip_intro` chargen-footer ConVar |

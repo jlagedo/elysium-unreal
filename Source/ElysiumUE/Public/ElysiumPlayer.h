@@ -807,6 +807,8 @@ public:
 	void SyncFromBody();
 
 	// The pawn follows the entity: a write to origin/angles places the body.
+	// If !playercontroller is live, explicit writes also update its teardown anchor; SyncFromBody's
+	// ordinary movement sampling does not, so choreography can still stage that duplicate itself.
 	virtual void OnRuntimeTransformChanged() override;
 	// SetModel swaps the skeletal surface attached to the movement pawn. The pawn/hull itself stays
 	// put; the same component remains the FElysiumAnimating visual used by choreo clip playback.

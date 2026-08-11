@@ -255,6 +255,18 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	TestNotNull(TEXT("npc_VVampire registered"), Reg.Find(FName(TEXT("npc_VVampire"))));
 	TestNotNull(TEXT("npc_maker registered"), Reg.Find(FName(TEXT("npc_maker"))));
+	TestTrue(TEXT("slice has environmental-audio trigger brushes"),
+		Survey.Classnames.Contains(TEXT("trigger_environmental_audio")));
+	const FElysiumClassDesc* EnvironmentalAudio =
+		Reg.Find(FName(TEXT("trigger_environmental_audio")));
+	if (TestNotNull(TEXT("trigger_environmental_audio is a registered trigger leaf"),
+		EnvironmentalAudio))
+	{
+		TestNotNull(TEXT("environmental audio inherits StartDisabled"),
+			Reg.FindField(*EnvironmentalAudio, FName(TEXT("StartDisabled"))));
+		TestNotNull(TEXT("environmental audio inherits Enable"),
+			Reg.FindInput(*EnvironmentalAudio, FName(TEXT("Enable"))));
+	}
 
 	// 8.3 — dynamic props render through the model_mesh annotation. The class registers, and the
 	// slice's prop_dynamic records carry a decoded OBJ the runtime can stand (the annotation is 8.1's,
@@ -469,8 +481,8 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 	});
 	TestTrue(TEXT("newplayer fires ccmd.createplayer and disables itself"), bCreatesPlayer);
 
-	// Read the same two-line sidecar contract as AElysiumMapActor::ReadSpawn, including its +100 cm
-	// feet-origin lift, then prove that lifted point remains inside newplayer's exported volume.
+	// Read the same two-line sidecar contract as AElysiumMapActor::ReadSpawn. The sidecar value is
+	// Source feet origin; capsule-centre compensation belongs to the pawn once its real height exists.
 	TArray<FString> SpawnLines;
 	FVector Spawn = FVector::ZeroVector;
 	bool bFoundOrigin = false;
@@ -484,7 +496,7 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 			if (Tokens.Num() == 4 && Tokens[0].Equals(TEXT("origin"), ESearchCase::IgnoreCase))
 			{
 				Spawn = FVector(FCString::Atod(*Tokens[1]), FCString::Atod(*Tokens[2]),
-					FCString::Atod(*Tokens[3])) + FVector(0.f, 0.f, 100.f);
+					FCString::Atod(*Tokens[3]));
 				bFoundOrigin = true;
 				break;
 			}
@@ -499,7 +511,7 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 			NewPlayerBounds += NewPlayer->Origin + Vertex;
 		}
 	}
-	TestTrue(TEXT("the lifted spawn point is inside newplayer's volume bounds"),
+	TestTrue(TEXT("the authored feet spawn is inside newplayer's volume bounds"),
 		bFoundOrigin && NewPlayerBounds.IsValid && NewPlayerBounds.IsInsideOrOn(Spawn));
 
 	const bool bFiresExit = Firetrans->Outputs.ContainsByPredicate([](const FElysiumOutputDef& W)
@@ -1865,6 +1877,142 @@ bool FElysiumOpeningCameraContentTest::RunTest(const FString&)
 	TestTrue(TEXT("walk_out_cam_k reaches the fade/travel clock at 40.21 seconds"),
 		FMath::IsNearlyEqual(ArrivalAt(EscortPosition, EscortPositionNames,
 			TEXT("walk_out_cam_k")), 40.21f, 0.001f));
+
+	// The Embrace transition is deliberately entity I/O rather than camera staging: the final camera
+	// key waits four seconds, point_teleport moves !player immediately, and the courtroom volume is
+	// admitted on the following movement-touch pass. Keep both the authored wire and that phase seam
+	// executable here so a content or runtime regression cannot silently turn the scene into a stall.
+	auto FindNamedDef = [&Defs](const TCHAR* Name) -> const FElysiumEntityDef*
+	{
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (Def.TargetName.Equals(Name, ESearchCase::IgnoreCase))
+			{
+				return &Def;
+			}
+		}
+		return nullptr;
+	};
+	const FElysiumEntityDef* EmbraceKey = FindNamedDef(TEXT("embrace_camera_22"));
+	const FElysiumEntityDef* MoveActors = FindNamedDef(TEXT("move_embrace_actors"));
+	const FElysiumEntityDef* StartCourtroom = FindNamedDef(TEXT("start_courtroom"));
+	if (!TestNotNull(TEXT("Embrace final camera key exists"), EmbraceKey)
+		|| !TestNotNull(TEXT("Embrace actor teleporter exists"), MoveActors)
+		|| !TestNotNull(TEXT("courtroom start trigger exists"), StartCourtroom))
+	{
+		return true;
+	}
+	const bool bAuthoredTeleportWire = EmbraceKey->Outputs.ContainsByPredicate(
+		[](const FElysiumOutputDef& Wire)
+		{
+			return Wire.Name.Equals(TEXT("OnReachedKeyframe"), ESearchCase::IgnoreCase)
+				&& Wire.Target.Equals(TEXT("move_embrace_actors"), ESearchCase::IgnoreCase)
+				&& Wire.Input.Equals(TEXT("Teleport"), ESearchCase::IgnoreCase)
+				&& FMath::IsNearlyEqual(Wire.Delay, 4.f, KINDA_SMALL_NUMBER);
+		});
+	TestTrue(TEXT("embrace_camera_22 waits four seconds before teleporting the actors"),
+		bAuthoredTeleportWire);
+	TestEqual(TEXT("the Embrace teleporter targets the player at input time"),
+		MoveActors->Keys.FindRef(TEXT("target")), FString(TEXT("!player")));
+	const bool bAuthoredCourtroomWire = StartCourtroom->Outputs.ContainsByPredicate(
+		[](const FElysiumOutputDef& Wire)
+		{
+			return Wire.Name.Equals(TEXT("OnTrigger"), ESearchCase::IgnoreCase)
+				&& Wire.Target.Equals(TEXT("courtroom_scene_relay"), ESearchCase::IgnoreCase)
+				&& Wire.Input.Equals(TEXT("Trigger"), ESearchCase::IgnoreCase)
+				&& FMath::IsNearlyEqual(Wire.Delay, 1.f, KINDA_SMALL_NUMBER);
+		});
+	TestTrue(TEXT("start_courtroom retains its one-second relay wire"), bAuthoredCourtroomWire);
+
+	FBox CourtroomBounds(ForceInit);
+	for (const FElysiumConvexHull& Hull : StartCourtroom->Hulls)
+	{
+		for (const FVector& Vertex : Hull.Vertices)
+		{
+			CourtroomBounds += StartCourtroom->Origin + Vertex;
+		}
+	}
+	TestTrue(TEXT("the cached teleporter destination is physically inside start_courtroom"),
+		CourtroomBounds.IsValid && CourtroomBounds.IsInsideOrOn(MoveActors->Origin));
+
+	FElysiumEntityDefs TransitionDefs;
+	TransitionDefs.MapName = TEXT("__sp_theatre_teleport_touch_test__");
+	{
+		FElysiumEntityDef Copy = *EmbraceKey;
+		Copy.Outputs.RemoveAll([](const FElysiumOutputDef& Wire)
+		{
+			return !Wire.Target.Equals(TEXT("move_embrace_actors"), ESearchCase::IgnoreCase);
+		});
+		TransitionDefs.Defs.Add(MoveTemp(Copy));
+	}
+	TransitionDefs.Defs.Add(*MoveActors);
+	{
+		FElysiumEntityDef Copy = *StartCourtroom;
+		Copy.Outputs.Reset();
+		FElysiumOutputDef Observe;
+		Observe.Name = TEXT("OnTrigger");
+		Observe.Target = TEXT("courtroom_counter");
+		Observe.Input = TEXT("Add");
+		Observe.Param = TEXT("1");
+		Observe.Delay = 1.f; // retain the authored start_courtroom -> relay delay
+		Copy.Outputs.Add(MoveTemp(Observe));
+		TransitionDefs.Defs.Add(MoveTemp(Copy));
+	}
+	FElysiumEntityDef CounterDef;
+	CounterDef.Classname = TEXT("math_counter");
+	CounterDef.TargetName = TEXT("courtroom_counter");
+	TransitionDefs.Defs.Add(MoveTemp(CounterDef));
+
+	FElysiumRecordingServices TransitionServices;
+	TransitionServices.bHasPlayer = true;
+	TransitionServices.PlayerLocation = FVector(-5000.f, -5000.f, 0.f);
+	FElysiumEntityWorld TransitionWorld(nullptr, nullptr, TransitionServices.Bundle());
+	TransitionWorld.Load(MoveTemp(TransitionDefs));
+	const FElysiumEntityHandle TransitionPlayer = TransitionWorld.SpawnPlayer();
+	TransitionWorld.Activate(0.0);
+	FElysiumEntity* LiveEmbraceKey = TransitionWorld.FindByName(TEXT("embrace_camera_22"));
+	FElysiumEntity* LiveStartCourtroom = TransitionWorld.FindByName(TEXT("start_courtroom"));
+	FElysiumEntity* CourtroomCounter = TransitionWorld.FindByName(TEXT("courtroom_counter"));
+	if (!TestNotNull(TEXT("live Embrace key resolves"), LiveEmbraceKey)
+		|| !TestNotNull(TEXT("live courtroom trigger resolves"), LiveStartCourtroom)
+		|| !TestNotNull(TEXT("live courtroom observer resolves"), CourtroomCounter))
+	{
+		return true;
+	}
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Pair : State)
+		{
+			if (Pair.Key.Equals(TEXT("Value"), ESearchCase::IgnoreCase))
+			{
+				return FCString::Atof(*Pair.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	LiveEmbraceKey->FireOutput(FName(TEXT("OnReachedKeyframe")), TransitionPlayer);
+	TransitionWorld.Tick(3.999);
+	TestFalse(TEXT("the player does not move before the authored four-second delay"),
+		TransitionServices.PlayerLocation.Equals(MoveActors->Origin));
+	TransitionWorld.Tick(4.0);
+	TestTrue(TEXT("the point teleport moves the player when the delayed I/O becomes due"),
+		TransitionServices.PlayerLocation.Equals(MoveActors->Origin));
+	TestEqual(TEXT("teleport alone does not run trigger outputs in the event phase"),
+		CounterValue(CourtroomCounter), 0.f);
+
+	const FElysiumEntityHandle StartCourtroomHandle = LiveStartCourtroom->Handle;
+	TransitionWorld.ReconcilePlayerTouches(MakeArrayView(&StartCourtroomHandle, 1));
+	TestEqual(TEXT("the following movement-touch pass admits the courtroom trigger"),
+		CounterValue(CourtroomCounter), 0.f);
+	TransitionWorld.Tick(4.999);
+	TestEqual(TEXT("the authored one-second courtroom delay remains pending"),
+		CounterValue(CourtroomCounter), 0.f);
+	TransitionWorld.Tick(5.0);
+	TestEqual(TEXT("the courtroom relay edge runs one second after movement touch"),
+		CounterValue(CourtroomCounter), 1.f);
 	return true;
 }
 
