@@ -61,7 +61,6 @@
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
-static TAtomic<uint64> GNextElysiumAudioMapEpoch(0);
 
 namespace
 {
@@ -471,10 +470,12 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
-	AudioMapEpoch = ++GNextElysiumAudioMapEpoch;
-	if (UElysiumCameraService* Camera = LocalCameraService(this))
+	// Open this map's epoch (S4). The subsystem mints it and tells every application-lifetime
+	// subscriber; a bare world with no subsystem leaves it 0, which matches no owner and retires
+	// nothing.
+	if (UElysiumMapSubsystem* Maps = GetMapSubsystem())
 	{
-		Camera->BeginMapEpoch(AudioMapEpoch);
+		MapEpoch = Maps->BeginMapEpoch();
 	}
 	RuntimePhase = EElysiumMapRuntimePhase::Building;
 	RuntimeWaitStartSeconds = FPlatformTime::Seconds();
@@ -530,7 +531,7 @@ void AElysiumMapActor::BuildStageWorld()
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
 			SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
-			SchemeManager->SetMapEpoch(AudioMapEpoch);
+			SchemeManager->SetMapEpoch(MapEpoch);
 
 			FElysiumWorldServices Services;
 			Services.Embodiment = this;
@@ -665,7 +666,7 @@ void AElysiumMapActor::LoadMap()
 				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3), and it
 				// reaches it through this actor's IElysiumAudio.
 				SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
-				SchemeManager->SetMapEpoch(AudioMapEpoch);
+				SchemeManager->SetMapEpoch(MapEpoch);
 
 				// 11.2 — hand the substrate its outbound seam. This actor is three of the four
 				// services; the fourth is the world-scoped presentation subsystem (11.8), which is
@@ -1868,7 +1869,7 @@ bool AElysiumMapActor::PopCameraShot(int32 ShotId, float BlendOutSeconds)
 
 FElysiumVoiceHandle AElysiumMapActor::Submit(FElysiumAudioRequest Request)
 {
-	Request.Owner.MapEpoch = AudioMapEpoch;
+	Request.Owner.MapEpoch = MapEpoch;
 	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	return Audio ? Audio->Submit(Request) : FElysiumVoiceHandle::Invalid();
 }
@@ -1907,7 +1908,7 @@ void AElysiumMapActor::SetVoicePitch(FElysiumVoiceHandle Handle, float Pitch)
 
 void AElysiumMapActor::CancelAudioOwner(FElysiumAudioOwner AudioOwner, float FadeSeconds)
 {
-	AudioOwner.MapEpoch = AudioMapEpoch;
+	AudioOwner.MapEpoch = MapEpoch;
 	if (UElysiumAudioSubsystem* Audio = GetAudioSubsystem())
 	{
 		Audio->CancelOwner(AudioOwner, FadeSeconds);
@@ -2156,15 +2157,9 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// EndPlay still guarantees those objects have valid UObject indices; waiting for this actor's C++
 	// destructor is too late because world cleanup may already have reclaimed its components.
 	EntityWorld.Reset();
-	if (UElysiumCameraService* Camera = LocalCameraService(this))
-	{
-		Camera->RetireMapEpoch(AudioMapEpoch);
-	}
 
-	// The audio subsystem is GameInstance-scoped and outlives this map actor, but every voice it
-	// holds is map-scoped (ambient_generic + the scheme bed/music/random one-shots). Stop them all
-	// on unload so nothing bleeds into the next map. StopAllVoices also covers the scheme voices, so
-	// the scheme manager only needs to drop its (now-dead) handles.
+	// The scheme manager is this actor's own, so its voices are stopped here rather than at the
+	// epoch boundary below — it will not exist to be asked once this actor is gone.
 	if (const UGameInstance* GI = GetGameInstance())
 	{
 		if (UElysiumAudioSubsystem* Audio = GI->GetSubsystem<UElysiumAudioSubsystem>())
@@ -2173,8 +2168,17 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 			{
 				SchemeManager->StopAll(Audio);
 			}
-			Audio->RetireMapEpoch(AudioMapEpoch);
 		}
+	}
+
+	// Close this map's epoch (S4). Every application-lifetime object holding state on this map's
+	// behalf — voices, camera requests, the character stage's actors, debug NPC bodies, the level
+	// script's path entry — frees it from this one broadcast. It happens here, and not in this
+	// actor's destructor, because the world is still standing: a subscriber may destroy actors and
+	// components rather than merely dropping references to them.
+	if (UElysiumMapSubsystem* Maps = GetMapSubsystem())
+	{
+		Maps->RetireMapEpoch(MapEpoch);
 	}
 	Super::EndPlay(EndPlayReason);
 }

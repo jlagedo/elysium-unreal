@@ -3,6 +3,7 @@
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumInputScope.h"
+#include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumChargen.h"
@@ -37,6 +38,15 @@ namespace
 void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+
+	// The character stage stands real actors in the map's world (UI/ElysiumCharacterStage.h), so the
+	// screen holding it is application-lifetime but its rig is map-epoch state (S4). Close the screen
+	// at the boundary, while that world is still standing.
+	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
+	{
+		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
+			this, &UElysiumUISubsystem::OnMapEpochRetired);
+	}
 
 	IConsoleManager& Console = IConsoleManager::Get();
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
@@ -171,19 +181,46 @@ void UElysiumUISubsystem::UnregisterCommands()
 	Bindings.Reset();
 }
 
+void UElysiumUISubsystem::ReleaseChargenHold()
+{
+	// Drop the wizard's pause without running its close tail. HideCharacterScreen's own tail
+	// unpauses and then executes `teleport_player firetrans`, which is the recovered CharEditPanel
+	// exit — correct when the panel closes, wrong when the world it would teleport into is going
+	// away. Clearing the latch first is what keeps that tail on the panel's own path.
+	if (!bChargenHold)
+	{
+		return;
+	}
+	if (UElysiumGameStateSubsystem* State = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+	{
+		State->TimeControl().SetPaused(false);
+	}
+	bChargenHold = false;
+}
+
+void UElysiumUISubsystem::OnMapEpochRetired(uint64 Epoch)
+{
+	// A map epoch ending is teardown, not a panel close — the same distinction Deinitialize makes.
+	// HideCharacterScreen then tears the stage down and drops both screen pointers; without it the
+	// stage's FGCObject keeps the outgoing world's camera, backdrop and body alive for the rest of
+	// the session, and chargen refuses to open again because CharacterScreen still reads as up.
+	ReleaseChargenHold();
+	HideCharacterScreen();
+}
+
 void UElysiumUISubsystem::Deinitialize()
 {
-	// Shutdown is teardown, not a panel close: release a chargen-owned hold without running the
-	// wizard's gameplay exit tail into a dying world.
-	if (bChargenHold)
+	if (MapEpochRetiredHandle.IsValid())
 	{
-		if (UElysiumGameStateSubsystem* State = GetGameInstance()
-			? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+		if (UElysiumMapSubsystem* Maps = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
 		{
-			State->TimeControl().SetPaused(false);
+			Maps->OnMapEpochRetired().Remove(MapEpochRetiredHandle);
 		}
-		bChargenHold = false;
+		MapEpochRetiredHandle.Reset();
 	}
+	ReleaseChargenHold();
 	HideCharacterScreen();
 	HideMenu();
 	UnregisterCommands();

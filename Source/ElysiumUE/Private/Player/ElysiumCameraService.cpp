@@ -1,7 +1,10 @@
 #include "ElysiumCameraService.h"
 
 #include "ElysiumDialogueCamera.h"
+#include "ElysiumMapSubsystem.h"
 #include "ElysiumUserSettings.h"
+
+#include "Engine/GameInstance.h"
 
 #include "Camera/CameraTypes.h"
 #include "Engine/Engine.h"
@@ -343,6 +346,42 @@ void UElysiumCameraService::GetDialogueProfiles(
 	// Headless tests and a clean checkout have no generated package. These values mirror the tracked
 	// JSON and preserve deterministic logic without manufacturing a UObject substitute.
 	Out = ElysiumDialogueCamera::DefaultProfiles();
+}
+
+namespace
+{
+	// The map subsystem is GameInstance-scoped and this service is LocalPlayer-scoped, so the
+	// collection cannot express the dependency. Local players are created after the game instance's
+	// own subsystems, so the lookup resolves for the whole of this service's life.
+	UElysiumMapSubsystem* MapsFor(const ULocalPlayer* Player)
+	{
+		UGameInstance* GI = Player ? Player->GetGameInstance() : nullptr;
+		return GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	}
+}
+
+void UElysiumCameraService::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	if (UElysiumMapSubsystem* Maps = MapsFor(GetLocalPlayer()))
+	{
+		MapEpochBeginHandle = Maps->OnMapEpochBegin().AddUObject(
+			this, &UElysiumCameraService::BeginMapEpoch);
+		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
+			this, &UElysiumCameraService::RetireMapEpoch);
+	}
+}
+
+void UElysiumCameraService::Deinitialize()
+{
+	if (UElysiumMapSubsystem* Maps = MapsFor(GetLocalPlayer()))
+	{
+		Maps->OnMapEpochBegin().Remove(MapEpochBeginHandle);
+		Maps->OnMapEpochRetired().Remove(MapEpochRetiredHandle);
+	}
+	MapEpochBeginHandle.Reset();
+	MapEpochRetiredHandle.Reset();
+	Super::Deinitialize();
 }
 
 void UElysiumCameraService::BeginMapEpoch(uint64 NewEpoch)

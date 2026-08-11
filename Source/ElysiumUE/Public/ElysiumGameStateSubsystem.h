@@ -278,6 +278,9 @@ public:
 private:
 	// `elysium.quest` — the journal, one quest, or a real state change.
 	void ExecQuest(const TArray<FString>& Args);
+	// The map-epoch boundary (S4): drop the leaving map's level-script state and forward the retire
+	// to the installed host, which is plain C++ and cannot subscribe on its own.
+	void OnMapEpochRetired(uint64 Epoch);
 
 	FElysiumGlobalMap Globals;
 	FElysiumQuestMap Quests;
@@ -306,4 +309,5 @@ private:
 	TMap<FName, int32> NativeCallCounts;
 
 	TArray<IConsoleObject*> ConsoleObjects;
+	FDelegateHandle MapEpochRetiredHandle;
 };

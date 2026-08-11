@@ -82,12 +82,28 @@ void UElysiumGameStateSubsystem::NotifyMasqueradeBreach()
 
 void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 {
+	// The running world stops owning any part of the session before anything below is cleared. New
+	// Game's travel is deferred to the end of the frame, so that world's teardown lands AFTER this
+	// function returns: without the disclaim it dehydrates the finished run's player over the fresh
+	// record and freezes a snapshot of the map being left into the fresh session, and the next visit
+	// there would replay the previous run's fired triggers and spent one-shots. This is the statement
+	// EndSession makes with ForgetPlayer — Detach is the same thing said one step wider, and New Game
+	// needs the wider half because it is the snapshot freeze that survives the reseeding.
+	if (FElysiumEntityWorld* Dying = CurrentEntityWorld())
+	{
+		Dying->Detach();
+	}
+
 	// A fresh run starts from a clean bag: travel keeps `G` alive (R8), so without this a second
 	// New Game would inherit the previous run's beat counter and latches.
 	ClearAllGlobals();
 	Quests.Reset();
 	Snapshots.Reset();
 	Visited.Reset();
+	// The clock is session time (`curtime`), so a fresh run starts at zero — every restored FireTime,
+	// think deadline and ScheduleTask delay is absolute against it. ResetClock also drops any hold,
+	// time scale and armed dev step, which is what makes the run pristine rather than merely reseeded.
+	TimeCtl.ResetClock();
 
 	// S8 — every game-visible draw comes from an owned, seeded stream whose state is in the save
 	// (`docs/architecture/save-architecture.md` §8). A run takes one session seed; the five streams derive from it.
@@ -102,12 +118,8 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	}
 	Record.Sheet.SetClan(FElysiumSheet::IsValidClan(Clan) ? Clan : 2);
 	Record.Sheet.SetMale(bMale);
-	// A live player entity would otherwise keep the previous run's numbers until the next map
-	// build; New Game is destructive by design, so re-seed it from the fresh record now.
-	if (FElysiumPlayer* Player = PlayerEntity())
-	{
-		Player->Hydrate(Record);
-	}
+	// No live player is re-seeded here: the disclaim above dropped this world's claim on one, and the
+	// entry map's own build hydrates a fresh player from this record.
 
 	SetGlobalInt(TEXT("Story_State"), -4);
 	SetGlobalInt(TEXT("Tut_Jack"), 0);
@@ -225,6 +237,14 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 	// is available (so level-script names resolve) and the expression evaluator otherwise.
 	// `elysium.script.live 0` swaps in the null host — the whole surface goes dark together.
 	ScriptHostPtr = MakePreferredScriptHost();
+
+	// The installed host is plain C++ and cannot subscribe to the map-epoch boundary itself, so this
+	// subsystem — which owns it across every host swap — forwards the retire (S4).
+	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
+	{
+		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
+			this, &UElysiumGameStateSubsystem::OnMapEpochRetired);
+	}
 
 	// `elysium.quest` — the journal, one quest, or drive a real state change. Quest titles carry
 	// spaces (`Kill Venus`, `Kings Way`), so the name is everything after the selector rejoined,
@@ -418,8 +438,30 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 		ECVF_Cheat));
 }
 
+void UElysiumGameStateSubsystem::OnMapEpochRetired(uint64 Epoch)
+{
+	// The level script belonged to the map that is leaving: drop the interpreter state that named it,
+	// so the next map's import starts from the same place a first import does.
+	LevelScriptModule.Reset();
+	LevelScriptLoadError.Reset();
+	bLevelScriptLoaded = false;
+	if (ScriptHostPtr)
+	{
+		ScriptHostPtr->OnMapEpochRetired();
+	}
+}
+
 void UElysiumGameStateSubsystem::Deinitialize()
 {
+	if (MapEpochRetiredHandle.IsValid())
+	{
+		if (UElysiumMapSubsystem* Maps = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
+		{
+			Maps->OnMapEpochRetired().Remove(MapEpochRetiredHandle);
+		}
+		MapEpochRetiredHandle.Reset();
+	}
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

@@ -80,8 +80,6 @@ namespace
 			Out = ElysiumDialogueCamera::DefaultProfiles();
 		}
 		virtual const FElysiumResolvedCameraState& ResolvedCamera() const override { return Resolved; }
-		virtual void BeginMapEpoch(uint64) override {}
-		virtual void RetireMapEpoch(uint64) override { LiveSlots.Reset(); }
 	};
 
 	TSharedRef<FElysiumDlgConversation> MakeOneLineConversation()

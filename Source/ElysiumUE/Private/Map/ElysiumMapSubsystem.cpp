@@ -193,10 +193,12 @@ bool UElysiumMapSubsystem::EnterStageWorld(FString& OutError)
 
 	PendingMapLoad = FPendingMapLoad{ true, FString(), FString(), false, /*bStageOnly*/ true };
 	bCurrentIsMenuBackdrop = false;
-	// Neither placement means anything without a map to resolve it against, and leaving either armed
-	// would leak it onto whatever map is entered after the green room.
+	// None of the three one-shots means anything without a map to resolve it against, and leaving any
+	// of them armed would leak it onto whatever map is entered after the green room. The stage
+	// consumes none of them itself: it parses no `.ents`, which is where the consume points sit.
 	NextLandmarkSpawn = FLandmarkSpawn{};
 	NextRestorePlacement = FRestorePlacement{};
+	bFreshMapState = false;
 
 	if (bInShell && bWorldHasPawn)
 	{
@@ -391,6 +393,27 @@ bool UElysiumMapSubsystem::SpawnPendingMap()
 	return true;
 }
 
+uint64 UElysiumMapSubsystem::BeginMapEpoch()
+{
+	const uint64 Epoch = MapEpoch.Begin();
+	MapEpochBegin.Broadcast(Epoch);
+	return Epoch;
+}
+
+void UElysiumMapSubsystem::RetireMapEpoch(uint64 Epoch)
+{
+	// The guard lives on the epoch value, so a late retire from an outgoing world cannot free the
+	// incoming map's state. Subscribers are told only about a retire that actually happened.
+	if (!MapEpoch.ShouldRetire(Epoch))
+	{
+		UE_LOG(LogElysiumMap, Verbose, TEXT("ignored stale map-epoch retire %llu (current %llu)"),
+			Epoch, MapEpoch.Current());
+		return;
+	}
+	MapEpoch.Retire(Epoch);
+	MapEpochRetired.Broadcast(Epoch);
+}
+
 void UElysiumMapSubsystem::HandleRuntimeReady(AElysiumMapActor* Map)
 {
 	if (!Map || CurrentMap.Get() != Map)
@@ -425,8 +448,10 @@ bool UElysiumMapSubsystem::EnterFrontEnd(bool& bOutTravelStarted)
 	PendingMapLoad = FPendingMapLoad{};
 	bCurrentIsMenuBackdrop = true;
 	bCurrentIsStageOnly = false;
+	// The front end resolves none of the three one-shots either, so none may survive it.
 	NextLandmarkSpawn = FLandmarkSpawn{};
 	NextRestorePlacement = FRestorePlacement{};
+	bFreshMapState = false;
 	// The other way out of the green room: quit to the menu. The shell has no pawn and no map, so a
 	// lab left armed here would drive a controller the front end is trying to point at its own
 	// character stage.

@@ -100,6 +100,12 @@ private:
 	// `ElysiumBinds.cpp`); this subsystem supplies what they do, because it owns the screen.
 	void RegisterCommands();
 	void UnregisterCommands();
+	// The map-epoch boundary (S4): close the character screen and its stage before the world the
+	// stage's actors live in goes away.
+	void OnMapEpochRetired(uint64 Epoch);
+	// Drop the wizard's pause latch without running its `teleport_player firetrans` close tail. What
+	// a teardown wants; a panel close goes through HideCharacterScreen's own tail instead.
+	void ReleaseChargenHold();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumMainMenu> Menu;
@@ -125,4 +131,5 @@ private:
 
 	TArray<IConsoleObject*> ConsoleObjects;
 	TArray<FElysiumCommandBinding> Bindings;
+	FDelegateHandle MapEpochRetiredHandle;
 };

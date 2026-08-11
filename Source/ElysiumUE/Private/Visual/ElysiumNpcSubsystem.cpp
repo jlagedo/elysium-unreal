@@ -1,6 +1,7 @@
 #include "ElysiumNpcSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMapSubsystem.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
@@ -154,6 +155,12 @@ TArray<FString> UElysiumNpcSubsystem::AvailableGlbStems()
 void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+
+	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
+	{
+		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
+			this, &UElysiumNpcSubsystem::OnMapEpochRetired);
+	}
 
 	IConsoleManager& CM = IConsoleManager::Get();
 
@@ -404,8 +411,24 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		ECVF_Cheat));
 }
 
+void UElysiumNpcSubsystem::OnMapEpochRetired(uint64 Epoch)
+{
+	// Each record's UPROPERTY mesh/anim/asset would otherwise keep the outgoing map's whole preview
+	// body resident for the session, long after its actor was torn down with the world.
+	ClearNpcs();
+}
+
 void UElysiumNpcSubsystem::Deinitialize()
 {
+	if (MapEpochRetiredHandle.IsValid())
+	{
+		if (UElysiumMapSubsystem* Maps = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
+		{
+			Maps->OnMapEpochRetired().Remove(MapEpochRetiredHandle);
+		}
+		MapEpochRetiredHandle.Reset();
+	}
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

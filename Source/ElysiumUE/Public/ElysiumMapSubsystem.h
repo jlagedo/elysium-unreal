@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Templates/PimplPtr.h"
+#include "ElysiumMapEpoch.h"   // FElysiumMapEpoch + its two delegates — a by-value member
 #include "ElysiumMapSubsystem.generated.h"
 
 class AElysiumMapActor;
@@ -70,6 +71,21 @@ public:
 	bool SpawnPendingMap();
 	FOnElysiumCurrentMapReady& OnCurrentMapReady() { return CurrentMapReady; }
 	FOnElysiumCurrentMapFailed& OnCurrentMapFailed() { return CurrentMapFailed; }
+
+	// --- The map-epoch boundary (S4) ------------------------------------------------------------
+	// Mint an epoch for a map actor entering play, and retire it when that actor leaves. The map
+	// actor drives both — it is the only object that knows the ordered teardown — but the epoch
+	// itself belongs here, with the rest of map lifecycle.
+	//
+	// Every application-lifetime object holding state on a map's behalf subscribes to
+	// OnMapEpochRetired and frees it there. Retire is broadcast from AElysiumMapActor::EndPlay,
+	// where the world is still standing and every UObject index is still valid, so a subscriber may
+	// destroy actors and components rather than merely dropping references to them.
+	uint64 BeginMapEpoch();
+	void RetireMapEpoch(uint64 Epoch);
+	uint64 CurrentMapEpoch() const { return MapEpoch.Current(); }
+	FOnElysiumMapEpochBegin& OnMapEpochBegin() { return MapEpochBegin; }
+	FOnElysiumMapEpochRetired& OnMapEpochRetired() { return MapEpochRetired; }
 
 	// Consumed once by the freshly-loaded map actor (P4.6): if this load is a landmark transition,
 	// returns true and fills the destination `info_landmark` name + the player offset/yaw to place
@@ -148,6 +164,9 @@ private:
 	TWeakObjectPtr<AElysiumMapActor> CurrentMap;
 	FOnElysiumCurrentMapReady CurrentMapReady;
 	FOnElysiumCurrentMapFailed CurrentMapFailed;
+	FElysiumMapEpoch MapEpoch;
+	FOnElysiumMapEpochBegin MapEpochBegin;
+	FOnElysiumMapEpochRetired MapEpochRetired;
 	TArray<IConsoleObject*> ConsoleObjects;
 
 	// The map Travel stowed for the fresh world to build. Set by Travel (survives OpenLevel — this

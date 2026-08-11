@@ -146,8 +146,6 @@ public:
 	virtual bool DialogueCamerasEnabled() const = 0;
 	virtual void GetDialogueProfiles(TArray<FElysiumDialogueCameraProfile>& Out) const = 0;
 	virtual const FElysiumResolvedCameraState& ResolvedCamera() const = 0;
-	virtual void BeginMapEpoch(uint64 Epoch) = 0;
-	virtual void RetireMapEpoch(uint64 Epoch) = 0;
 };
 
 // One request registry per local player. The player camera manager is still the sole final-view
@@ -158,6 +156,9 @@ class UElysiumCameraService final : public ULocalPlayerSubsystem, public IElysiu
 	GENERATED_BODY()
 
 public:
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+
 	virtual FElysiumCameraHandle AcquireCamera(const FElysiumCameraRequest& Request) override;
 	virtual bool UpdateCamera(FElysiumCameraHandle Handle,
 		const FElysiumCameraRequest& Request) override;
@@ -168,8 +169,12 @@ public:
 	virtual bool DialogueCamerasEnabled() const override;
 	virtual void GetDialogueProfiles(TArray<FElysiumDialogueCameraProfile>& Out) const override;
 	virtual const FElysiumResolvedCameraState& ResolvedCamera() const override { return Resolved; }
-	virtual void BeginMapEpoch(uint64 Epoch) override;
-	virtual void RetireMapEpoch(uint64 Epoch) override;
+
+	// A camera request is held on behalf of the map that pushed it, so the request set is map-epoch
+	// state (S4). Driven by UElysiumMapSubsystem's boundary, which this service subscribes to; both
+	// stay public so a headless test can step an epoch without a map.
+	void BeginMapEpoch(uint64 Epoch);
+	void RetireMapEpoch(uint64 Epoch);
 
 	void Advance(float DeltaSeconds);
 	void ApplyToView(FMinimalViewInfo& InOutView) const;
@@ -200,4 +205,6 @@ private:
 	FVector TrackingLocation = FVector::ZeroVector;
 	FRotator TrackingRotation = FRotator::ZeroRotator;
 	bool bTrackingSeeded = false;
+	FDelegateHandle MapEpochBeginHandle;
+	FDelegateHandle MapEpochRetiredHandle;
 };

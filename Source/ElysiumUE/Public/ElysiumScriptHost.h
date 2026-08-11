@@ -44,6 +44,11 @@ public:
 		return false;
 	}
 
+	// The map-epoch boundary (S4), forwarded by UElysiumGameStateSubsystem because a host is plain
+	// C++ and cannot subscribe to a UObject delegate itself. A host that resolves level scripts
+	// against per-map interpreter state releases it here. Hosts that carry none do nothing.
+	virtual void OnMapEpochRetired() {}
+
 	// Short identity for logs (e.g. "null").
 	virtual const TCHAR* Name() const = 0;
 };
@@ -91,6 +96,7 @@ public:
 	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
 		FString* OutError = nullptr) override;
 	virtual bool LoadLevelScript(const FString& Module, FString& OutError) override;
+	virtual void OnMapEpochRetired() override;
 	virtual const TCHAR* Name() const override { return TEXT("cpython"); }
 
 	// True when the embedded VM actually came up. A failed init leaves every eval Void, which is

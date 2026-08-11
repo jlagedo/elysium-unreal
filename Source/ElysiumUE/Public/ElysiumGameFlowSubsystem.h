@@ -54,6 +54,12 @@ struct FElysiumNewGameRequest
 	// `elysium.SkipIntro` does not act here: "story" always resolves to genesis, and the cvar governs
 	// only where genesis's exit leads (ResolveIntroSkip).
 	FString EntryPoint;
+
+	// Forget the entry map's stored snapshot on arrival, so its opening chain fires again. A run
+	// never asks for this — a fire-once trigger staying fired is the faithful behaviour and the
+	// snapshot is right to replay it — but a debug entry that exists to watch an opening does.
+	// NewGame owns arming and unwinding it, so a caller only states the intent.
+	bool bReplayEntryMap = false;
 };
 
 // The retail New Game chain, in order (`docs/architecture/runtime-architecture.md` §10). Held as data because the
@@ -67,14 +73,51 @@ namespace ElysiumStory
 	inline const TCHAR* const TutorialLandmark = TEXT("tutorial");
 	inline const TCHAR* const SantaMonicaMap = TEXT("sm_pawnshop_1");
 
-	// Both spellings invoke the same fresh-state theatre replay. The compact alias is the command
-	// used by the opening-scene QA loop; keeping the pair as data makes registration testable without
-	// constructing a game instance in the content-free automation tier.
-	inline const TCHAR* const TheatreReplayCommands[] =
+	// A fixed New Game entry: one verb (optionally a compact alias) that seeds a run and enters it at
+	// a named point. `elysium.newgame` is the parameterised door onto the same flow; these are the
+	// preset ones, and adding another is a row here rather than a second registration/failure path.
+	// Every row builds an ordinary FElysiumNewGameRequest and goes through NewGame, so a preset can
+	// never acquire session handling of its own.
+	struct FElysiumNewGameEntry
 	{
-		TEXT("elysium.newgame_ttd"),
-		TEXT("newgame_ttd"),
+		const TCHAR* Verb = nullptr;
+		const TCHAR* Alias = nullptr;    // null when the entry has one spelling
+		const TCHAR* Help = nullptr;
+		// Resolved through FElysiumSheet::ClanFromName, the same door `elysium.newgame`'s argument
+		// takes, so the name -> 2..8 encoding has one owner. Null = ask (NewGame seeds Brujah for
+		// chargen to edit).
+		const TCHAR* Clan = nullptr;
+		bool bMale = true;
+		const TCHAR* EntryPoint = nullptr;
+		bool bReplayEntryMap = false;
 	};
+
+	// The theatre replay: `sp_theatre`'s opening is a single trigger_once the player spawns straight
+	// onto at the `newgame` landmark, so once fired, re-entering correctly finds it spent. This is the
+	// dev way back in. The mock player is female Tremere because the chain reads `pc.clan`/`pc.IsMale`
+	// in `chooseSire`/`castUnderstudy` and expects `Story_State = -4`.
+	inline constexpr FElysiumNewGameEntry NewGameEntries[] =
+	{
+		{
+			TEXT("elysium.newgame_ttd"),
+			TEXT("newgame_ttd"),
+			TEXT("elysium.newgame_ttd — theatre debug: new run entered at sp_theatre's `newgame` "
+				"landmark with the map's state forgotten, so its opening chain fires again"),
+			TEXT("Tremere"),
+			/*bMale*/ false,
+			TEXT("sp_theatre@newgame"),
+			/*bReplayEntryMap*/ true,
+		},
+	};
+
+	inline TArrayView<const FElysiumNewGameEntry> NewGameEntryTable()
+	{
+		return MakeArrayView(NewGameEntries, UE_ARRAY_COUNT(NewGameEntries));
+	}
+
+	// The row as a request. Kept out of the table itself because the clan name resolves through the
+	// sheet's own encoding rather than being re-typed here.
+	FElysiumNewGameRequest MakeNewGameRequest(const FElysiumNewGameEntry& Entry);
 
 	// The intro skip, as a decision over a requested destination. Returns true when it rewrote one.
 	//

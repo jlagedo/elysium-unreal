@@ -57,7 +57,20 @@ public:
 
 	// Import a level script (absolute .py path) as a module after injecting the vampire builtins
 	// into __main__. On success OutModuleName is the module name and it becomes the eval namespace.
+	//
+	// The script's own directory is put on `sys.path` as ONE reserved slot: loading a second map
+	// replaces it rather than pushing beside it, so the path has a fixed length however many maps a
+	// session visits (each import walks it, and a map load is not a reason to make every later import
+	// slower).
 	bool LoadLevelScript(const FString& AbsPath, FString& OutModuleName, FString& OutError);
+
+	// Release the per-map interpreter state: the reserved `sys.path` slot above.
+	//
+	// **Seam.** The level script's names stay merged in `__main__` and its module stays in
+	// `sys.modules`, so re-entering a map does not re-execute its top level. Whether retail re-runs a
+	// level script on re-entry is unrecovered (`docs/vtmb/python_bridge.md`); until that fact lands
+	// or an owner calls the divergence, this releases only what is unambiguously ours to release.
+	void ReleaseMapScriptPath();
 
 	// Call a top-level callback (e.g. "OnMasqueradeEnd") in the loaded level script.
 	bool FireCallback(const FString& FuncName, FString& OutError);
@@ -85,6 +98,9 @@ private:
 	bool bStarted = false;
 	void* DllHandle = nullptr;
 	FString LoadedModule;
+	// The one `sys.path` entry LoadLevelScript reserves for the current map's script directory,
+	// forward-slashed as it was written. Empty when no map script is installed.
+	FString MapScriptPath;
 	FElysiumConsole ConsoleStore;
 	TWeakObjectPtr<UElysiumGameStateSubsystem> GameStateWeak;
 };

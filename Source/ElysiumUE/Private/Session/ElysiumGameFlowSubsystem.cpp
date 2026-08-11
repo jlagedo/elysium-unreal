@@ -1,6 +1,7 @@
 #include "ElysiumGameFlowSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumEntityWorld.h"   // FElysiumEntityWorld::Detach — New Game's session disclaim
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Substrate/ElysiumChargen.h"
@@ -158,50 +159,31 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		}),
 		ECVF_Cheat));
 
-	// The theatre-opening replay door. `sp_theatre`'s opening is a single trigger_once the player
-	// spawns straight onto at the `newgame` landmark, so once it has fired, re-entering the map
-	// correctly finds it spent — a fire-once trigger staying fired is faithful, and the map
-	// snapshot is right to replay it. This is the dev way back in: seed a female Tremere mock
-	// pre-chargen player (the chain reads pc.clan/pc.IsMale in chooseSire/castUnderstudy and expects
-	// Story_State=-4), and forget the theatre's map state so the whole embrace chain runs again.
-	//
-	// The forget is a request consumed on arrival, not a clear here: NewGame's travel tears the
-	// current map down at end of frame, and that teardown re-freezes it.
-	const FConsoleCommandDelegate TheatreReplay = FConsoleCommandDelegate::CreateWeakLambda(this,
-		[this]()
-		{
-			FElysiumNewGameRequest Request;
-			Request.Clan = FElysiumSheet::ClanFromName(TEXT("Tremere"));
-			Request.bMale = false;
-			Request.EntryPoint = TEXT("sp_theatre@newgame");
-
-			UGameInstance* GI = GetGameInstance();
-			UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-			if (Maps)
+	// The preset New Game entries, registered from their table. Each row is an ordinary request
+	// through the one NewGame funnel, so a preset carries no session handling of its own and adding
+	// another is a row rather than a second entry path.
+	for (const ElysiumStory::FElysiumNewGameEntry& Entry : ElysiumStory::NewGameEntryTable())
+	{
+		// By value: the row is trivially copyable, so the lambda outliving the loop is not a question
+		// a reader has to ask.
+		const FConsoleCommandDelegate Run = FConsoleCommandDelegate::CreateWeakLambda(this,
+			[this, Entry]()
 			{
-				Maps->RequestFreshMapState();
-			}
-			if (!NewGame(Request))
-			{
-				if (Maps)
+				if (!NewGame(ElysiumStory::MakeNewGameRequest(Entry)))
 				{
-					Maps->ConsumeFreshMapState();   // nothing travelled; do not leave it armed
+					UE_LOG(LogElysiumFlow, Warning, TEXT("%s: '%s' needs both an export and a bake"),
+						Entry.Verb, Entry.EntryPoint);
 				}
-				UE_LOG(LogElysiumFlow, Warning,
-					TEXT("elysium.newgame_ttd: sp_theatre needs both an export and a bake"));
-			}
-		});
-	ConsoleObjects.Add(Console.RegisterConsoleCommand(
-		ElysiumStory::TheatreReplayCommands[0],
-		TEXT("elysium.newgame_ttd — theatre debug: new run entered at sp_theatre's "
-			"`newgame` landmark with the map's state forgotten, so its opening chain fires again"),
-		TheatreReplay,
-		ECVF_Cheat));
-	ConsoleObjects.Add(Console.RegisterConsoleCommand(
-		ElysiumStory::TheatreReplayCommands[1],
-		TEXT("newgame_ttd — compact alias for elysium.newgame_ttd"),
-		TheatreReplay,
-		ECVF_Cheat));
+			});
+		ConsoleObjects.Add(Console.RegisterConsoleCommand(Entry.Verb, Entry.Help, Run, ECVF_Cheat));
+		if (Entry.Alias != nullptr)
+		{
+			const FString AliasHelp =
+				FString::Printf(TEXT("%s — compact alias for %s"), Entry.Alias, Entry.Verb);
+			ConsoleObjects.Add(
+				Console.RegisterConsoleCommand(Entry.Alias, *AliasHelp, Run, ECVF_Cheat));
+		}
+	}
 
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.quittomenu"),
@@ -576,6 +558,18 @@ void UElysiumGameFlowSubsystem::SetSkipIntro(bool bSkip)
 
 namespace ElysiumStory
 {
+	FElysiumNewGameRequest MakeNewGameRequest(const FElysiumNewGameEntry& Entry)
+	{
+		FElysiumNewGameRequest Request;
+		// A row naming no clan asks, which is what NewGame reads 0 as. A row naming one the sheet does
+		// not know is a table bug and reads the same way rather than substituting a different vampire.
+		Request.Clan = (Entry.Clan != nullptr) ? FElysiumSheet::ClanFromName(Entry.Clan) : 0;
+		Request.bMale = Entry.bMale;
+		Request.EntryPoint = (Entry.EntryPoint != nullptr) ? Entry.EntryPoint : FString();
+		Request.bReplayEntryMap = Entry.bReplayEntryMap;
+		return Request;
+	}
+
 	bool ResolveIntroSkip(bool bSkip, FString& Map, FString& Landmark,
 		FVector& Offset, bool& bHasYaw)
 	{
@@ -626,9 +620,9 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 	}
 
 	// Check the destination before touching the session. BeginNewGame is destructive — it clears
-	// `G`, the quests and the sheet — so a New Game that cannot travel must not have thrown the
-	// current run away on the way to failing. This is Travel's own precondition (an export beside a
-	// baked level), asked in advance.
+	// `G`, the quests, the snapshots, the sheet and the clock, and disclaims the running world — so a
+	// New Game that cannot travel must not have thrown the current run away on the way to failing.
+	// This is Travel's own precondition (an export beside a baked level), asked in advance.
 	if (!Maps->ExportedMaps().Contains(Map))
 	{
 		UE_LOG(LogElysiumFlow, Warning,
@@ -640,8 +634,8 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 	// existing player and overwrites the clan/sex when it commits.
 	const int32 Clan = (Request.Clan == 0) ? 2 : Request.Clan;
 
-	// BeginNewGame clears `G`, the quest map and the sheet, then writes the flags that survive
-	// retail's intro chain. It does not travel.
+	// BeginNewGame clears `G`, the quest map, the snapshots, the sheet and the clock, then writes the
+	// flags that survive retail's intro chain. It does not travel.
 	GameState->BeginNewGame(Clan, Request.bMale);
 
 	// A request that already carries a character — the MCP tool, a save-less dev entry, or a caller
@@ -695,8 +689,20 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 			Request.HistoryId, Applied, Refused);
 	}
 
+	// A replay entry forgets the destination's stored snapshot so its opening chain fires again. It is
+	// a request consumed on arrival rather than a clear here, because the travel below tears the
+	// current map down at end of frame and that teardown would re-freeze what was just cleared.
+	if (Request.bReplayEntryMap)
+	{
+		Maps->RequestFreshMapState();
+	}
+
 	if (!Maps->Travel(Map, Landmark))
 	{
+		if (Request.bReplayEntryMap)
+		{
+			Maps->ConsumeFreshMapState();   // nothing travelled; do not leave it armed for a later map
+		}
 		UE_LOG(LogElysiumFlow, Error, TEXT("New Game: travel to '%s' was refused"), *Map);
 		return false;
 	}

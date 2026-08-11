@@ -56,6 +56,7 @@
 #include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
 #include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
 #include "ElysiumMapActor.h"
+#include "ElysiumMapEpoch.h"
 #include "Map/ElysiumMapCollision.h"
 #include "ElysiumSoundCache.h"
 #include "ElysiumMovementComponent.h"
@@ -4112,6 +4113,132 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 // message, strictly before SV_Frame calls GameFrame — so the pawn has already moved by the
 // time the first think or queued event runs.
 // =====================================================================================
+
+// The preset New Game entries. Held as data so registration and the requests they build are
+// assertable without a game instance — every row must name a verb and an entry point, spell each
+// verb once across the whole table, and survive the trip through MakeNewGameRequest intact.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNewGameEntriesTest,
+	"Elysium.Substrate.NewGameEntries", GElysiumTestFlags)
+bool FElysiumNewGameEntriesTest::RunTest(const FString&)
+{
+	TSet<FString> Verbs;
+	for (const ElysiumStory::FElysiumNewGameEntry& Entry : ElysiumStory::NewGameEntryTable())
+	{
+		TestNotNull(TEXT("every entry names a verb"), Entry.Verb);
+		if (Entry.Verb == nullptr)
+		{
+			continue;
+		}
+		const FString Verb(Entry.Verb);
+		TestFalse(*FString::Printf(TEXT("verb '%s' is registered once"), *Verb), Verbs.Contains(Verb));
+		Verbs.Add(Verb);
+		if (Entry.Alias != nullptr)
+		{
+			const FString Alias(Entry.Alias);
+			TestFalse(*FString::Printf(TEXT("alias '%s' is registered once"), *Alias),
+				Verbs.Contains(Alias));
+			Verbs.Add(Alias);
+		}
+		TestNotNull(*FString::Printf(TEXT("'%s' names an entry point"), *Verb), Entry.EntryPoint);
+		TestNotNull(*FString::Printf(TEXT("'%s' carries help"), *Verb), Entry.Help);
+
+		const FElysiumNewGameRequest Request = ElysiumStory::MakeNewGameRequest(Entry);
+		TestEqual(*FString::Printf(TEXT("'%s' carries its entry point"), *Verb),
+			Request.EntryPoint, FString(Entry.EntryPoint ? Entry.EntryPoint : TEXT("")));
+		TestEqual(*FString::Printf(TEXT("'%s' carries its replay intent"), *Verb),
+			Request.bReplayEntryMap, Entry.bReplayEntryMap);
+		// A named clan must resolve: an unknown spelling reads as 0 ("ask"), which would silently
+		// route a preset through chargen instead of the character its opening chain reads.
+		if (Entry.Clan != nullptr)
+		{
+			TestTrue(*FString::Printf(TEXT("'%s' names a clan the sheet knows"), *Verb),
+				FElysiumSheet::IsValidClan(Request.Clan));
+		}
+	}
+
+	// The theatre replay is the one preset the opening-scene QA loop drives; it must keep both
+	// spellings and must ask for the map's state to be forgotten, or its trigger_once stays spent.
+	const ElysiumStory::FElysiumNewGameEntry* Theatre =
+		ElysiumStory::NewGameEntryTable().FindByPredicate(
+			[](const ElysiumStory::FElysiumNewGameEntry& E)
+			{ return E.Verb != nullptr && FString(E.Verb) == TEXT("elysium.newgame_ttd"); });
+	if (TestNotNull(TEXT("the theatre replay entry exists"), Theatre))
+	{
+		TestEqual(TEXT("it keeps its compact alias"), FString(Theatre->Alias), FString(TEXT("newgame_ttd")));
+		TestTrue(TEXT("it replays its entry map"), Theatre->bReplayEntryMap);
+	}
+	return true;
+}
+
+// The map-epoch boundary (S4). The mint and the stale-retire rule are a plain value precisely so
+// this can assert them without a world, and the broadcast contract is asserted over a real delegate
+// with counting subscribers: what an application-lifetime subsystem actually binds to.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEpochTest,
+	"Elysium.Substrate.MapEpoch", GElysiumTestFlags)
+bool FElysiumMapEpochTest::RunTest(const FString&)
+{
+	FElysiumMapEpoch Epochs;
+	TestEqual(TEXT("no epoch is live before the first map"), Epochs.Current(), uint64(0));
+	TestFalse(TEXT("epoch 0 never retires"), Epochs.ShouldRetire(0));
+
+	const uint64 First = Epochs.Begin();
+	const uint64 Second = Epochs.Begin();
+	TestTrue(TEXT("a minted epoch is never 0"), First != 0);
+	TestTrue(TEXT("epochs are strictly increasing"), Second > First);
+	TestEqual(TEXT("the newest mint is the live epoch"), Epochs.Current(), Second);
+
+	// Hard travel overlaps two worlds: the outgoing actor's EndPlay can run after the incoming epoch
+	// is minted, and that late retire must not free the new map's state.
+	TestFalse(TEXT("a stale epoch does not retire"), Epochs.ShouldRetire(First));
+	Epochs.Retire(First);
+	TestEqual(TEXT("a stale retire leaves the live epoch alone"), Epochs.Current(), Second);
+
+	TestTrue(TEXT("the live epoch retires"), Epochs.ShouldRetire(Second));
+	Epochs.Retire(Second);
+	TestEqual(TEXT("retiring clears the live epoch"), Epochs.Current(), uint64(0));
+	TestFalse(TEXT("retiring twice is a no-op"), Epochs.ShouldRetire(Second));
+
+	// Every subscriber sees exactly one begin and one retire per cycle, over as many cycles as a
+	// session has travels — the property the leak this boundary exists to close depends on.
+	FElysiumMapEpoch Cycles;
+	FOnElysiumMapEpochBegin Began;
+	FOnElysiumMapEpochRetired Retired;
+	int32 BeginCounts[2] = { 0, 0 };
+	int32 RetireCounts[2] = { 0, 0 };
+	uint64 LastRetired = 0;
+	for (int32 Subscriber = 0; Subscriber < 2; ++Subscriber)
+	{
+		Began.AddLambda([&BeginCounts, Subscriber](uint64) { ++BeginCounts[Subscriber]; });
+		Retired.AddLambda([&RetireCounts, &LastRetired, Subscriber](uint64 Epoch)
+		{
+			++RetireCounts[Subscriber];
+			LastRetired = Epoch;
+		});
+	}
+
+	constexpr int32 CycleCount = 8;
+	for (int32 Cycle = 0; Cycle < CycleCount; ++Cycle)
+	{
+		const uint64 Epoch = Cycles.Begin();
+		Began.Broadcast(Epoch);
+		// The subsystem broadcasts only a retire that actually happened, so a repeat is silent.
+		for (int32 Attempt = 0; Attempt < 2; ++Attempt)
+		{
+			if (Cycles.ShouldRetire(Epoch))
+			{
+				Cycles.Retire(Epoch);
+				Retired.Broadcast(Epoch);
+			}
+		}
+		TestEqual(TEXT("the retire carries the epoch that closed"), LastRetired, Epoch);
+	}
+	for (int32 Subscriber = 0; Subscriber < 2; ++Subscriber)
+	{
+		TestEqual(TEXT("one begin per cycle per subscriber"), BeginCounts[Subscriber], CycleCount);
+		TestEqual(TEXT("one retire per cycle per subscriber"), RetireCounts[Subscriber], CycleCount);
+	}
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapReadinessTest,
 	"Elysium.Substrate.MapReadiness", GElysiumTestFlags)

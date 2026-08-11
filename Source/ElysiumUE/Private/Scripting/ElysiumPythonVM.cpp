@@ -665,8 +665,22 @@ bool FElysiumPythonVM::LoadLevelScript(const FString& AbsPath, FString& OutModul
 	const FString Dir     = FPaths::GetPath(AbsPath).Replace(TEXT("\\"), TEXT("/"));
 	const FString ModName = FPaths::GetBaseFilename(AbsPath);
 
+	// Take the reserved slot: drop the outgoing map's directory and any earlier copy of this one,
+	// then install this one at the front. Only non-empty entries are ever filtered — `''` is Python's
+	// own "current directory" entry and removing it would change import resolution. A slice
+	// assignment binds no name, so nothing is left behind in the namespace this runs in.
+	FString Drop = FString::Printf(TEXT("u'%s',"), *Dir);
+	if (!MapScriptPath.IsEmpty() && MapScriptPath != Dir)
+	{
+		Drop += FString::Printf(TEXT("u'%s',"), *MapScriptPath);
+	}
 	FString PathErr;
-	RunRaw(FString::Printf(TEXT("import sys\nsys.path.insert(0, u'%s')\n"), *Dir), PathErr);
+	RunRaw(FString::Printf(
+		TEXT("import sys\n")
+		TEXT("sys.path[:] = [p for p in sys.path if p not in (%s)]\n")
+		TEXT("sys.path.insert(0, u'%s')\n"),
+		*Drop, *Dir), PathErr);
+	MapScriptPath = Dir;
 
 	PyObject* Mod = PyImport_ImportModule(TCHAR_TO_UTF8(*ModName));
 	if (!Mod)
@@ -707,6 +721,19 @@ bool FElysiumPythonVM::LoadLevelScript(const FString& AbsPath, FString& OutModul
 	OutModuleName  = ModName;
 	UE_LOG(LogElysiumPy, Display, TEXT("Loaded level script: %s (%s)"), *ModName, *AbsPath);
 	return true;
+}
+
+void FElysiumPythonVM::ReleaseMapScriptPath()
+{
+	if (!bStarted || MapScriptPath.IsEmpty())
+	{
+		return;
+	}
+	FString PathErr;
+	RunRaw(FString::Printf(
+		TEXT("import sys\n")
+		TEXT("sys.path[:] = [p for p in sys.path if p != u'%s']\n"), *MapScriptPath), PathErr);
+	MapScriptPath.Reset();
 }
 
 bool FElysiumPythonVM::FireCallback(const FString& FuncName, FString& OutError)
@@ -838,6 +865,7 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 bool FElysiumPythonVM::RunSimpleString(const FString&, FString& OutError) { OutError = TEXT("no cpython"); return false; }
 FElysiumVariant FElysiumPythonVM::Eval(const FString&, const FElysiumScriptContext&, FString& OutError) { OutError = TEXT("no cpython"); return FElysiumVariant::Void(); }
 bool FElysiumPythonVM::LoadLevelScript(const FString&, FString&, FString& OutError) { OutError = TEXT("no cpython"); return false; }
+void FElysiumPythonVM::ReleaseMapScriptPath() {}
 bool FElysiumPythonVM::FireCallback(const FString&, FString& OutError) { OutError = TEXT("no cpython"); return false; }
 bool FElysiumPythonVM::ExecConsoleLine(const FString&) { return false; }
 FString FElysiumPythonVM::GetVersion() const { return TEXT("(no cpython)"); }

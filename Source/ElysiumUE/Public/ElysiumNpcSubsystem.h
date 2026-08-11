@@ -82,7 +82,11 @@ private:
 	FVector ComputeSpawnLocation(FRotator& OutRotation) const;
 	// Drop records whose actor was torn down (e.g. by map travel) so the list stays truthful.
 	void PruneDead();
+	// The map-epoch boundary (S4): a preview body and the assets it resolved belong to the map it was
+	// spawned into, so both go when that map does.
+	void OnMapEpochRetired(uint64 Epoch);
 
 	UPROPERTY() TArray<FElysiumLoadedNpc> Loaded;
 	TArray<IConsoleObject*> ConsoleObjects;
+	FDelegateHandle MapEpochRetiredHandle;
 };

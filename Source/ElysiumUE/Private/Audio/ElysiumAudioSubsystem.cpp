@@ -2,6 +2,7 @@
 
 #include "Audio/ElysiumPcmSoundWave.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumMapSubsystem.h"
 #include "ElysiumUserSettings.h"
 
 #include "AudioDevice.h"
@@ -101,6 +102,14 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	BeginCatalogLoad();
+
+	// Every voice carries its owner's map epoch, so unloading a map is what stops the ambient bed
+	// and the dialogue line it was holding (S4).
+	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
+	{
+		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
+			this, &UElysiumAudioSubsystem::RetireMapEpoch);
+	}
 
 	IConsoleManager& CM = IConsoleManager::Get();
 	CVarMute->SetOnChangedCallback(FConsoleVariableDelegate::CreateWeakLambda(this,
@@ -234,6 +243,15 @@ void UElysiumAudioSubsystem::BeginCatalogLoad()
 
 void UElysiumAudioSubsystem::Deinitialize()
 {
+	if (MapEpochRetiredHandle.IsValid())
+	{
+		if (UElysiumMapSubsystem* Maps = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr)
+		{
+			Maps->OnMapEpochRetired().Remove(MapEpochRetiredHandle);
+		}
+		MapEpochRetiredHandle.Reset();
+	}
 	CVarMute->SetOnChangedCallback(FConsoleVariableDelegate());
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
@@ -242,7 +260,6 @@ void UElysiumAudioSubsystem::Deinitialize()
 	ConsoleObjects.Empty();
 	StopAllVoices();
 	DecodeResults.Empty();
-	Snapshots.Empty();
 	FElysiumSoundCache::FlushAll();
 	Super::Deinitialize();
 }
@@ -463,11 +480,6 @@ void UElysiumAudioSubsystem::Transition(FElysiumAudioVoice& Voice, EElysiumVoice
 {
 	Voice.Event.State = State;
 	Voice.Event.Completion = Completion;
-	if (FElysiumAudioRequestSnapshot* Snapshot = Snapshots.FindByPredicate(
-		[&Voice](const FElysiumAudioRequestSnapshot& Item) { return Item.Handle == Voice.Handle; }))
-	{
-		Snapshot->Event = Voice.Event;
-	}
 	VoiceEvents.Broadcast(Voice.Event);
 }
 
@@ -491,10 +503,6 @@ FElysiumVoiceHandle UElysiumAudioSubsystem::Submit(const FElysiumAudioRequest& R
 	// on the voice until there is one to hand it to.
 	Voice.SubmitSeconds = FPlatformTime::Seconds();
 
-	FElysiumAudioRequestSnapshot& Snapshot = Snapshots.AddDefaulted_GetRef();
-	Snapshot.Handle = Voice.Handle;
-	Snapshot.Request = Voice.Request;
-	Snapshot.Event = Voice.Event;
 	VoiceEvents.Broadcast(Voice.Event);
 	const FElysiumVoiceHandle Handle = Voice.Handle;
 	const FString ResolvedPath = Voice.Event.ResolvedPath;

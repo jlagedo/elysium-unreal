@@ -583,7 +583,10 @@ private:
 	bool bMotorsRetired = false;
 	double RuntimeWaitStartSeconds = 0.0;
 	double RuntimeWaitDurationSeconds = 0.0;
-	uint64 AudioMapEpoch = 0;
+	// This map's epoch, minted by UElysiumMapSubsystem at BeginPlay and retired at EndPlay (S4).
+	// Everything an application-lifetime object holds on this map's behalf is keyed by it. 0 in a
+	// bare world with no map subsystem, which owns nothing across a boundary that never fires.
+	uint64 MapEpoch = 0;
 	FString RuntimeFailureReason;
 	FOnElysiumMapRuntimeReady RuntimeReady;
 	FOnElysiumMapRuntimeFailed RuntimeFailed;

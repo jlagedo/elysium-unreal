@@ -193,13 +193,6 @@ struct FElysiumVoiceEvent
 	EElysiumVoiceCompletion Completion = EElysiumVoiceCompletion::None;
 };
 
-struct FElysiumAudioRequestSnapshot
-{
-	FElysiumVoiceHandle Handle;
-	FElysiumAudioRequest Request;
-	FElysiumVoiceEvent Event;
-};
-
 // Compatibility shape for callers while each source integration is migrated to Submit. It is
 // deliberately translated at the seam and never enters the ledger as a second request type.
 struct FElysiumPlayParams
@@ -268,7 +261,6 @@ public:
 	bool IsReadyForMapActivation() const { return bCatalogReady && PendingPrefetches == 0; }
 	const FString& CatalogError() const { return CatalogLoadError; }
 
-	const TArray<FElysiumAudioRequestSnapshot>& RequestSnapshots() const { return Snapshots; }
 	FElysiumVoiceEventDelegate& OnVoiceEvent() { return VoiceEvents; }
 	FElysiumNoiseEventDelegate& OnGameplayNoise() { return NoiseEvents; }
 
@@ -337,7 +329,7 @@ private:
 
 	TArray<uint32> SlotGenerations;
 	TArray<uint32> FreeSlots;
-	TArray<FElysiumAudioRequestSnapshot> Snapshots;
+	FDelegateHandle MapEpochRetiredHandle;
 	FElysiumVoiceEventDelegate VoiceEvents;
 	FElysiumNoiseEventDelegate NoiseEvents;
 	TArray<IConsoleObject*> ConsoleObjects;

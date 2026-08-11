@@ -72,6 +72,11 @@ bool FElysiumCPythonScriptHost::LoadLevelScript(const FString& Module, FString& 
 	return FElysiumPythonVM::Get().LoadLevelScript(Abs, ModName, OutError);
 }
 
+void FElysiumCPythonScriptHost::OnMapEpochRetired()
+{
+	FElysiumPythonVM::Get().ReleaseMapScriptPath();
+}
+
 FElysiumVariant FElysiumCPythonScriptHost::Eval(const FString& Source, const FElysiumScriptContext& Ctx,
 	FString* OutError)
 {
