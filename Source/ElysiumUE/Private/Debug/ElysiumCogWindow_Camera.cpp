@@ -5,11 +5,13 @@
 #include "Debug/ElysiumCogStyle.h"
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraModifiers.h"
+#include "ElysiumCameraService.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerCameraManager.h"
 
 #include "Camera/CameraModifier.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "imgui.h"
@@ -130,6 +132,42 @@ void FElysiumCogWindow_Camera::RenderContent()
 				Top->bCameraCut ? TEXT("  (cut)") : TEXT("")));
 			Row("FOV", Top->FieldOfView > 0.0f
 				? FString::Printf(TEXT("%.1f"), Top->FieldOfView) : FString(TEXT("(player's)")));
+		}
+	}
+
+	// --- scoped director requests ---------------------------------------------------------------
+	if (ImGui::CollapsingHeader("Director requests", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+		const UElysiumCameraService* Service = LocalPlayer
+			? LocalPlayer->GetSubsystem<UElysiumCameraService>() : nullptr;
+		if (!Service)
+		{
+			ImGui::TextDisabled("No local-player camera service.");
+		}
+		else
+		{
+			const FElysiumResolvedCameraState& Resolved = Service->ResolvedCamera();
+			Row("Epoch", FString::Printf(TEXT("%llu"), Service->CurrentEpoch()));
+			Row("Winner", Resolved.Request.DebugName.IsEmpty()
+				? TEXT("player view") : Resolved.Request.DebugName);
+			Row("Weight", FString::Printf(TEXT("%.3f"), Resolved.Weight));
+			Row("Source shot", Resolved.Request.SourceShot.IsEmpty()
+				? TEXT("(none)") : Resolved.Request.SourceShot);
+			Row("Profile", Resolved.Request.SelectedProfile.IsEmpty()
+				? TEXT("(none)") : Resolved.Request.SelectedProfile);
+			Row("Fallback", Resolved.Request.FallbackReason.IsEmpty()
+				? TEXT("(none)") : Resolved.Request.FallbackReason);
+			Row("Control", FString::FromInt(static_cast<int32>(Resolved.Request.Control)));
+			Row("Pose", FString::Printf(TEXT("%s  %s  fov %.1f"),
+				*Resolved.Location.ToCompactString(), *Resolved.Rotation.ToCompactString(),
+				Resolved.FieldOfView));
+			TArray<FString> Requests;
+			Service->DescribeRequests(Requests);
+			for (const FString& Request : Requests)
+			{
+				ImGui::BulletText("%s", COG_TCHAR_TO_CHAR(*Request));
+			}
 		}
 	}
 

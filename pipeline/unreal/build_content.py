@@ -29,6 +29,7 @@ GENERATORS = [
     "make_decal_material.py",       # M_Decal.uasset: the 7.2 deferred-decal master material
     "make_audio_routing.py",        # semantic classes/submixes/concurrency/attenuation templates
     "make_input_assets.py",         # six player actions + IMC_Player_Gamepad + action table
+    "make_dialogue_camera_set.py",  # project-owned two-shot/single/OTS/close-up grammar
     "make_boot_map.py",             # Elysium.umap: the empty boot persistent level
 ]
 

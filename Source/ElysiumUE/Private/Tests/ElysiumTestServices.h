@@ -173,6 +173,11 @@ struct FElysiumRecordingServices final
 	bool     bHasPlayer = false;
 	FVector  PlayerLocation = FVector::ZeroVector;
 	FRotator PlayerRotation = FRotator::ZeroRotator;
+	float NpcMakerGroundZ = 0.0f;
+	bool bUseNpcMakerGroundZ = false;
+	bool bNpcMakerVisible = false;
+	bool bNpcMakerInViewCone = false;
+	bool bNpcMakerOccupied = false;
 	FElysiumCameraShot LastCameraShot;
 	// What the next modern interaction query returns. Geometry-specific tests control the adapter;
 	// substrate tests remain pure and exercise focus/session policy over these records.
@@ -656,6 +661,31 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("QueryFeedTarget -> %s"), *FeedTarget.ToString()));
 		return FeedTarget;
+	}
+	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
+	{
+		const float Result = bUseNpcMakerGroundZ ? NpcMakerGroundZ : Origin.Z;
+		Record(FString::Printf(TEXT("ResolveNpcMakerGroundZ origin=%s depth=%.2f -> %.2f"),
+			*Origin.ToString(), Depth, Result));
+		return Result;
+	}
+	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& Origin) const override
+	{
+		Record(FString::Printf(TEXT("IsNpcMakerVisibleFromPlayer %s -> %s"), *Origin.ToString(),
+			bNpcMakerVisible ? TEXT("true") : TEXT("false")));
+		return bNpcMakerVisible;
+	}
+	virtual bool IsNpcMakerInPlayerViewCone(const FVector& Origin) const override
+	{
+		Record(FString::Printf(TEXT("IsNpcMakerInPlayerViewCone %s -> %s"), *Origin.ToString(),
+			bNpcMakerInViewCone ? TEXT("true") : TEXT("false")));
+		return bNpcMakerInViewCone;
+	}
+	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& Origin, float HalfExtent) const override
+	{
+		Record(FString::Printf(TEXT("IsNpcMakerSpawnAreaOccupied %s half=%.2f -> %s"),
+			*Origin.ToString(), HalfExtent, bNpcMakerOccupied ? TEXT("true") : TEXT("false")));
+		return bNpcMakerOccupied;
 	}
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override
 	{

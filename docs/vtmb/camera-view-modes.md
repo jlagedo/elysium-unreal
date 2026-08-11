@@ -619,6 +619,21 @@ holds them, and `CAM_Think`'s `kbutton_t` step (`0x100fc170`) is not recovered.
 
 ### The scripted-shot channel
 
+#### Dialogue source-shot demand
+
+The patch-first exported corpus contains **251** entities with `default_camera` across 15 maps,
+written in **11 literal forms**, and the external camera-shot directory contains **66** files
+**[data, RE46]**. Values occur both as bare names (`DialogDefault`, `Jack`) and as mixed-case paths
+such as `vdata/CameraShots/DialogDefaultWoman.txt`. Resolution is therefore
+separator-insensitive, case-insensitive basename-without-extension normalization; spelling form is
+not shot identity.
+
+Jack's `sp_tutorial_1` definition selects `Jack`. The corresponding source shot authors a
+`DialogTarget` `Follow` origin offset, a `DialogTarget` head target, FOV 40, `DialogPOV 1`, and
+`SyncRotateOnMove 1` **[data]**. This establishes shot demand and its value fields, not physical
+player/NPC placement. The pinned server opener does not write transforms and ignores the authored
+`Remote 256` argument; downstream client/body behavior remains behind RE46's hash-gated capture.
+
 The channel is a **handle-based** stack of shots-as-values (`FElysiumCameraShotStack`), not LIFO: a
 conversation ends behind a running cutscene, so a pop removes a shot from wherever it sits and the top
 re-resolves. Ids are never reused, so a stale or doubled pop is a no-op — the same discipline the input
@@ -700,9 +715,10 @@ The authored focal value is 35 mm focal length, not degrees. The unresolved clie
 behind the standard 36 mm horizontal-gate conversion
 `FOV = 2 * atan(18 / focalMm)`; non-positive values preserve the player's FOV, where retail instead
 clamps an out-of-range focal length once at spawn to a default of the same `18 / sin k` form (§6 —
-the default's exact value is not pinned). Both streams and their
-elapsed/output latches serialize with the map snapshot, so restore republishes the current sample
-without replaying crossed outputs.
+the default's exact value is not pinned). Both streams and their elapsed/output latches are runtime
+session state. The remaster refuses a save while an authored legacy or Sequencer camera track is
+active, so those latches are neither serialized nor republished after load
+(`docs/architecture/save-architecture.md`).
 
 ### `vdata/camerashots/` — the shot files
 

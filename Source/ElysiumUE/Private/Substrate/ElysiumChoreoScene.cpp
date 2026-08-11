@@ -268,6 +268,10 @@ public:
 	FElysiumScenePlayer Player;
 	bool bPlaying = false;
 	bool bPaused = false;
+	virtual const TCHAR* SaveBlockReason() const override
+	{
+		return bPlaying ? TEXT("a choreographed scene is active") : nullptr;
+	}
 	double StartTime = 0.0;                 // absolute game seconds the scene began
 	FElysiumEntityHandle Activator;         // whoever started it, carried to every output
 
@@ -987,6 +991,8 @@ public:
 		// and refreshes each actor's animation layers; it never touches origin or angles. The actors
 		// hold position because SaveAndPlaceActors froze their bodies.
 	}
+
+	virtual bool BlocksNpcMakerSpawns() const override { return bPlaying; }
 
 	// ============================================================================================
 	// IElysiumChoreoCallback — what an event MEANS.

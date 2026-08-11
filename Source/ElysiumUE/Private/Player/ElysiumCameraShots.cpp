@@ -116,6 +116,17 @@ namespace ElysiumCameraShotsImpl
 
 using namespace ElysiumCameraShotsImpl;
 
+FString ElysiumCameraShots::NormalizeKey(const FString& ShotFile)
+{
+	FString Normalized = ShotFile.TrimStartAndEnd();
+	Normalized.ReplaceInline(TEXT("\\"), TEXT("/"));
+	while (Normalized.EndsWith(TEXT("/")))
+	{
+		Normalized.LeftChopInline(1);
+	}
+	return FPaths::GetBaseFilename(Normalized).ToLower();
+}
+
 bool ElysiumCameraShots::ParseText(const FString& Text, FElysiumCameraShotDef& Out)
 {
 	const TSharedPtr<ElysiumKeyValues::FKvNode> Root = ElysiumKeyValues::ParseText(Text);
@@ -158,7 +169,11 @@ const FElysiumCameraShotDef* ElysiumCameraShots::Load(const FString& ShotFile)
 	{
 		return nullptr;
 	}
-	const FString Key = FPaths::GetBaseFilename(ShotFile).ToLower();
+	const FString Key = NormalizeKey(ShotFile);
+	if (Key.IsEmpty())
+	{
+		return nullptr;
+	}
 	if (const TSharedPtr<FElysiumCameraShotDef>* Hit = Cache().Find(Key))
 	{
 		return Hit->Get();   // a null entry is a remembered miss

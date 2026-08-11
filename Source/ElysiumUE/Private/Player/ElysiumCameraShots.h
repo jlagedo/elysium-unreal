@@ -103,6 +103,10 @@ struct FElysiumCameraShotDef
 
 namespace ElysiumCameraShots
 {
+	// Normalize every observed `default_camera` value form to one identity: separators are folded,
+	// directories/extensions removed, surrounding whitespace trimmed, and case lowered.
+	FString NormalizeKey(const FString& ShotFile);
+
 	// Parse one shot file's text. False when it carries no `CameraShotTable` with a shot in it.
 	bool ParseText(const FString& Text, FElysiumCameraShotDef& Out);
 
@@ -158,6 +162,11 @@ public:
 	// dialogue shot is skipped rather than answering false and masking the shot underneath.
 	bool WantsDialogPOV() const;
 
+	// Reusable legacy-shot adapter: resolve a parsed external definition to world-space values. The
+	// dialogue director uses this without entering the legacy post-layer stack.
+	static bool Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
+		const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out);
+
 private:
 	struct FLiveShot
 	{
@@ -167,10 +176,6 @@ private:
 		FElysiumCameraShotDef Def;
 		FElysiumEntityHandle Subject;
 	};
-
-	// Turn a def + subject into the value the camera blends. False when nothing it names resolves.
-	static bool Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
-		const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out);
 
 	// One anchor -> a world point. False when the entity it names is not there.
 	static bool ResolveAnchor(FElysiumEntityWorld* World, const FElysiumShotAnchor& Anchor,

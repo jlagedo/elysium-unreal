@@ -644,11 +644,45 @@ Fade output order is equally concrete:
 | `teleport_fade_basic.OnBeginFade` | `t0 Jack.WillTalk 0`; `t+1 teleport_jack.Teleport` then `teleport_player_basic.Teleport`; `t+3 Jack.WillTalk 1` |
 | `teleport_fade.OnBeginFade` | `t0 Jack.WillTalk 0`; `t+1 teleport_jack.Teleport` then `teleport_player.Teleport`; `t+3 Jack.WillTalk 1`; `t+4 Jack.StartPlayerDialogRemote` then `Jack.UseInteresting 1` |
 
+#### Jack dialogue-camera join
+
+Jack's entity authors `default_camera=Jack`; the external `Jack` camera shot carries FOV 40,
+`DialogTarget` follow/head anchors, `DialogPOV 1`, and `SyncRotateOnMove 1` **[data, RE46]**. Both
+remote dialogue acquisitions above select that same definition-derived shot. The first conversation
+must release its own camera ownership before `teleport_fade.OnBeginFade`; the +1-second Jack/player
+teleports and the +4-second second acquisition retain the exact queue order in the table.
+
+The `256` on the first `StartPlayerDialogRemote` is not a decoded camera or placement flag. The
+hash-pinned server handler at `0x1029f060` never reads its input variant and writes no player, Jack,
+or camera transform **[VtMB, RE46]**. `CreateControllerNPC` remains an earlier, independently authored
+event in the same zero-time batch. Whether downstream client/body code changes visibility or body
+ownership is an explicit capture question; no placement or forced-facing behavior follows from the
+map row alone.
+
 `teleport_very_beginning` is not an authored-position warp. Its spawnflag `1` changes the cached
 destination to the player's activation-time transform, so its visible map origin
 `(-14,7455,-164)` is discarded. It returns the player to that cached live position.
 
-### 11.6 Feeding child order and VCD event actions
+### 11.6 Blueblood maker admission
+
+`blueblood_maker` is authored with `Flag_StartDisabled=1`, `Flag_InfChild=1`,
+`MaxNPCCount=1`, `MaxLiveChildren=1`, and `SpawnFrequency=5`. The disabled latch suppresses only its
+automatic `MakerThink`; it does not suppress an explicit `Spawn` input. The main and Basic porch
+transactions can therefore both reach the maker, but they cannot create two simultaneous children:
+
+1. The first accepted `Spawn` creates the Blueblood and increments the live-child count to one.
+2. A later explicit `Spawn` enters the same native admission path and fails its first ordinary gate,
+   `live children >= MaxLiveChildren`, before allocation or `OnSpawnNPC`.
+3. `Flag_InfChild` preserves the maker for a replacement after the live child dies or is removed; it
+   bypasses finite-total exhaustion, not the simultaneous-live ceiling.
+
+The faithful static contract therefore has at most one live Blueblood from this maker even if both
+porch trigger routes produce their authored `Spawn` input. Whether a specific retail playthrough
+reaches both routes remains a live collision/route-capture question, but it cannot change that
+maker-local invariant. The generic admission, timer, construction and death ordering is owned by
+`docs/vtmb/entity_io.md`.
+
+### 11.7 Feeding child order and VCD event actions
 
 On each `blueblood_maker.Spawn`, the child receives cloned output action lists. Its two progression
 edges have these exact effects:

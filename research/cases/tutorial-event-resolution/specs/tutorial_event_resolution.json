@@ -17,9 +17,6 @@
     "Does ScheduleTask use CEventQueue and which Python calls remain synchronous?",
     "What gates and re-arm/removal states govern CBaseTrigger, CTriggerMultiple, CTriggerOnce and CLogicRelay?",
     "What checks and transform writes does CPointTeleport perform before engine-owned touch reconciliation?",
-    "How are inherited NPC output keyvalues copied from CNPCMaker to each child?",
-    "Which quota, enable, obstruction, visibility and distance guards admit CNPCMaker explicit and timed spawns, and in what order?",
-    "How do finite and infinite makers update remaining-total and live-child counts across spawn and child death?",
     "What event surfaces and user-session guards do tutorial specialized props expose?",
     "Where do CSceneEntity firetrigger, completion, start and cancel outputs cross the think-to-queue boundary?",
     "Which save transaction does CTriggerAutosave invoke, and where is its continuous-occupancy guard?",
@@ -128,6 +125,51 @@
     {"address": "104454c4", "label": "zero_float"},
     {"address": "1046bacc", "label": "maker_ground_trace_depth"},
     {"address": "1049ffac", "label": "maker_occupancy_half_extent"}
+  ],
+  "relationships": [
+    {"from": "1034b500", "to": "1034b7b0", "confidence": "verified", "evidence": "InputSpawnNPC tail-calls the ordinary virtual spawn slot with bypass argument zero"},
+    {"from": "1034bbf0", "to": "1034b7b0", "confidence": "verified", "evidence": "MakerThink calls the same ordinary virtual spawn slot with bypass argument zero"},
+    {"from": "1034b7b0", "to": "1034b580", "confidence": "verified", "evidence": "child construction calls the CanMakeNPC virtual after caching ground and before allocation"},
+    {"from": "1034b7b0", "to": "1034b430", "confidence": "verified", "evidence": "finite successful spawn decrements remaining total and tests depletion"},
+    {"from": "1034bc90", "to": "1034b430", "confidence": "verified", "evidence": "child death or removal tests finite depletion before decrementing the live count"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "Start-disabled controls only automatic MakerThink; public Spawn remains callable but shares the normal CanMakeNPC admission path.",
+      "evidence": "NPCMakerSpawn 0x1034afe0 installs no think when +0x66c0 is set. InputSpawnNPC 0x1034b500 and MakerThink 0x1034bbf0 both call the ordinary spawn virtual with bypass argument zero.",
+      "consequence": "A faithful runtime must not reject an explicit Spawn merely because the maker is disabled, and must not let that input bypass quotas or obstruction guards."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CanMakeNPC tests the live-child ceiling before the scene, player visibility, view-cone, minimum-distance and ground-occupancy gates; infinite mode does not bypass the live ceiling.",
+      "evidence": "CanMakeNPC 0x1034b580 compares +0x66b0 against positive +0x66b4 before reading the scene gate, +0x66c1, +0x66c5, +0x66c8 and the 68-by-68 ground query. Infinite flag +0x66c3 is read by IsDepleted instead.",
+      "consequence": "MaxLiveChildren is the maker-local invariant that prevents simultaneous duplicate tutorial Bluebloods."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Timed success and live-ceiling saturation retry after SpawnFrequency; other admission failures retry after a random one-to-two seconds.",
+      "evidence": "MakerThink 0x1034bbf0 branches on the spawn result and the live/max-live comparison before selecting +0x6664 or RandomFloat(1.0,2.0).",
+      "consequence": "Visibility, distance, active-scene and occupancy failures are deferred rather than consuming quota or outputs."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "On an accepted spawn, OnSpawnNPC fires before child spawn flags, template relationships, DispatchSpawn, maker ownership, NPCTargetname and quota updates.",
+      "evidence": "SpawnChild 0x1034b7b0 parses the raw template and copies type/model, calls output +0x6668, then prepares and dispatches the child; +0x66b0 increments only after dispatch and finite +0x6660 decrements afterward.",
+      "consequence": "Output timing and target resolution cannot be approximated as an after-spawn notification without changing observable I/O behavior."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Child notification is once-only; removing a still-alive child refunds finite remaining total without OnNPCDied, while a dead child fires OnNPCDied without a refund. Depletion is tested before live-count decrement.",
+      "evidence": "ChildDeathNotice 0x1034bc90 guards on child +0x44c, calls the IsAlive virtual, conditionally updates +0x6660 or output +0x6680, calls IsDepleted and output +0x6698, then decrements and clamps +0x66b0.",
+      "consequence": "Replacement capacity and OnLastNPCDied must follow native remaining-total semantics rather than a single generic alive count."
+    },
+    {
+      "confidence": "confirmed static join",
+      "fact": "The tutorial blueblood_maker can accept either porch route's explicit Spawn, but MaxLiveChildren=1 rejects every later attempt while its first child remains live.",
+      "evidence": "The hash-pinned sp_tutorial_1 entity record authors StartDisabled=1, InfChild=1, MaxNPCCount=1, MaxLiveChildren=1 and SpawnFrequency=5; both porch output transactions target the same maker.",
+      "consequence": "Two simultaneous Bluebloods from this maker are a runtime divergence even if trigger-route cross-talk also occurs."
+    }
   ],
   "grep_probes": [
     {"label": "queue_python", "str": "EventQueue~RUNNING~Invalid", "cap": 200},

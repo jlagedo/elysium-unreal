@@ -4,6 +4,7 @@ void UElysiumUserSettings::SetToDefaults()
 {
 	Super::SetToDefaults();
 	MasterVolume = MusicVolume = DialogueVolume = AmbienceVolume = SfxVolume = UiVolume = 1.f;
+	bDialogueCamerasEnabled = true;
 }
 
 float UElysiumUserSettings::AudioVolume(EElysiumAudioCategory Category) const

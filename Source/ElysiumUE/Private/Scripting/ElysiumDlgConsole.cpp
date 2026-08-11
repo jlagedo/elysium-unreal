@@ -52,6 +52,12 @@ static FAutoConsoleCommandWithWorld GElysiumDlgDump(
 		UE_LOG(LogElysiumDlgConsole, Display, TEXT("[%s] %s"),
 			Speaker.IsEmpty() ? TEXT("???") : *Speaker,
 			Line ? *Line->RawFor(bMale, bMalk) : TEXT("(no line)"));
+		TArray<TPair<FString, FString>> Director;
+		W->GetDialogueDebugState(Director);
+		for (const TPair<FString, FString>& Row : Director)
+		{
+			UE_LOG(LogElysiumDlgConsole, Display, TEXT("  %s: %s"), *Row.Key, *Row.Value);
+		}
 		if (Conv->IsTerminalLine())
 		{
 			UE_LOG(LogElysiumDlgConsole, Display, TEXT("  (terminal — elysium.dlg.advance to continue)"));

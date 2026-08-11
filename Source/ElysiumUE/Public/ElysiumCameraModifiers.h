@@ -48,8 +48,9 @@ private:
 	uint64 LastAppliedFrame = TNumericLimits<uint64>::Max();
 };
 
-// The legacy scripted channel — `SetCamera`, `camera_track`/`camera_keyframe`, the conversation and
-// feed cameras — composed over the base rig.
+// The legacy scripted channel — `SetCamera`, `camera_track`/`camera_keyframe`, and feed cameras —
+// composed over the base rig. Dialogue is a separately owned base request in
+// `UElysiumCameraService`; it never enters this post-layer stack.
 //
 // **It is a post layer, not a base request, and that is the faithful arrangement.** Retail's
 // `CAM_ApplyToView` adds the boom offset and then blends the scripted pose on top of it, and

@@ -155,6 +155,11 @@ public:
 	FElysiumEntityHandle OwnedNpc;
 	// Spawnflag 256 parked this beat in its post-idle instead of completing it.
 	bool bPostIdleHeld = false;
+	virtual const TCHAR* SaveBlockReason() const override
+	{
+		return (Phase != EPhase::Idle || bPostIdleHeld)
+			? TEXT("a scripted sequence is active") : nullptr;
+	}
 
 	// The RE'd CCineNPC::Use throttle (vampire.dll FUN_101a7390): a BeginSequence arriving
 	// before this gate is dropped instead of acted on, and the gate is pushed further out. A

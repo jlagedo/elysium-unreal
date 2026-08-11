@@ -2,10 +2,12 @@
 
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraModifiers.h"
+#include "ElysiumCameraService.h"
 #include "ElysiumLookCurve.h"
 #include "ElysiumPlayerBody.h"
 
 #include "Engine/Canvas.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
@@ -71,12 +73,34 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 	// describe the view that was actually rendered.
 	Camera->ApplyBaseToView(OutVT.POV);
 
+	// Scoped base requests compose between the selected player rig and the legacy post layers. The
+	// service publishes policy only; this manager remains the single writer of the final POV.
+	UElysiumCameraService* ScopedCamera = nullptr;
+	if (ULocalPlayer* LocalPlayer = PCOwner ? PCOwner->GetLocalPlayer() : nullptr)
+	{
+		ScopedCamera = LocalPlayer->GetSubsystem<UElysiumCameraService>();
+		if (ScopedCamera)
+		{
+			ScopedCamera->Advance(DeltaTime);
+			ScopedCamera->ApplyToView(OutVT.POV);
+		}
+	}
+
 	// The body-visibility ramp travels with the view. It used to ride on the pawn's own
 	// `CalcCamera`, which the manager no longer goes through on the production path, and a player
 	// mesh that never fades reports nothing — no log line, no failed check.
 	if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(OutVT.Target))
 	{
-		Body->ApplyPlayerModelAlpha(Camera->ModelAlpha());
+		float ModelAlpha = Camera->ModelAlpha();
+		if (ScopedCamera)
+		{
+			const FElysiumResolvedCameraState& Resolved = ScopedCamera->ResolvedCamera();
+			if (Resolved.Weight > 0.0f && !Resolved.Request.bShowPlayerBody)
+			{
+				ModelAlpha *= 1.0f - FMath::Clamp(Resolved.Weight, 0.0f, 1.0f);
+			}
+		}
+		Body->ApplyPlayerModelAlpha(ModelAlpha);
 	}
 
 	PublishSample(*Camera);

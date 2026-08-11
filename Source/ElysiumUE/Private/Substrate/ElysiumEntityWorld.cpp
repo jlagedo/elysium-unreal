@@ -1,6 +1,7 @@
 #include "ElysiumEntityWorld.h"
 
 #include "ElysiumBrushComponent.h"
+#include "ElysiumCameraService.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumDlg.h"
@@ -17,9 +18,11 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
+#include "Player/ElysiumCameraShots.h"
 
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
+#include "Algo/Rotate.h"
 
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -31,6 +34,40 @@
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWorld, Log, All);
+
+enum class EElysiumDialogueDirectorSource : uint8
+{
+	None,
+	SourceShot,
+	AuthoredProfile,
+	PlayerView,
+};
+
+// The one open conversation record. Everything with conversation lifetime lives here: branch
+// cursor, opener provenance, one camera handle and its selected-director state. No member is
+// serialized because CanSave refuses the whole session category.
+struct FElysiumDialogueSession
+{
+	FElysiumEntityHandle Owner;
+	FElysiumEntityHandle Listener;
+	TSharedPtr<FElysiumDlgConversation> Conversation;
+	EElysiumDialogOpenerKind Opener = EElysiumDialogOpenerKind::Remote;
+	int32 RawFlags = 0;
+	int32 DecodedFlags = 0;
+	FString DefaultCamera;
+	FString NormalizedCamera;
+	FElysiumCameraHandle CameraHandle;
+	FElysiumCameraRequest CameraRequest;
+	EElysiumDialogueDirectorSource DirectorSource = EElysiumDialogueDirectorSource::None;
+	EElysiumDialogueShotProfile SelectedProfile = EElysiumDialogueShotProfile::Fallback;
+	FString CandidateRejections;
+	FString FallbackReason;
+	int32 CurrentLineId = INDEX_NONE;
+	double SelectedAt = 0.0;
+	float MinimumHoldSeconds = 0.0f;
+	float ScreenSide = 1.0f;
+	bool bBodyOwnerAcquired = false; // no RE46 body behavior is currently proven
+};
 
 // A/B toggle for the P1.5 brush bodies (per-entity convex collision + trigger overlaps). Read at
 // Load, so it takes effect on the next map load (like elysium.BrushCollision for the world hulls).
@@ -608,6 +645,10 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
 	Controller->Health = Source->Health;
 	Controller->MaxHealth = Source->MaxHealth;
 	CallEntitySpawn(*Controller);
+	if (IElysiumEmbodiment* E = Embodiment())
+	{
+		E->SetPlayerVisualSuppressed(true);
+	}
 	UE_LOG(LogElysiumWorld, Log, TEXT("player controller entity live: %s"), *Controller->DebugString());
 	return PlayerControllerEntity;
 }
@@ -644,6 +685,10 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 	}
 	Controller->Kill();
 	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
+	if (IElysiumEmbodiment* E = Embodiment())
+	{
+		E->SetPlayerVisualSuppressed(false);
+	}
 	return true;
 }
 
@@ -1707,37 +1752,63 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenSign(double* OutOpenTime) const
 
 // --- Open dialogue (P9 9.1 / B4) ------------------------------------------------------------
 
-void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
-	TSharedRef<FElysiumDlgConversation> Conversation)
+FElysiumDlgConversation* FElysiumEntityWorld::GetOpenDialog() const
 {
-	// A second StartPlayerDialogRemote replaces the running one silently (its NPC's OnDialogEnd is not
-	// fired — the player never finished that conversation), mirroring the sign's replace-silently rule.
-	if (OpenDialogOwner.IsSet() && OpenDialogOwner != NewOwner)
+	return DialogueSession ? DialogueSession->Conversation.Get() : nullptr;
+}
+
+FElysiumEntityHandle FElysiumEntityWorld::GetOpenDialogOwner() const
+{
+	return DialogueSession ? DialogueSession->Owner : FElysiumEntityHandle::Invalid();
+}
+
+void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
+	TSharedRef<FElysiumDlgConversation> Conversation, EElysiumDialogOpenerKind Opener,
+	int32 RawFlags, const FString& DefaultCamera)
+{
+	// Any second acquisition replaces the running session silently. Release its camera before the new
+	// request is acquired so one conversation never owns two handles, even when the NPC is the same.
+	if (DialogueSession)
 	{
 		EndDialogSession(/*bSilent*/ true);
 	}
-	OpenDialogOwner = NewOwner;
-	OpenDialogConv = Conversation;
+	DialogueSession = MakeUnique<FElysiumDialogueSession>();
+	DialogueSession->Owner = NewOwner;
+	DialogueSession->Listener = PlayerHandle();
+	DialogueSession->Conversation = Conversation;
+	DialogueSession->Opener = Opener;
+	DialogueSession->RawFlags = RawFlags;
+	DialogueSession->DefaultCamera = DefaultCamera;
+	DialogueSession->NormalizedCamera = ElysiumCameraShots::NormalizeKey(DefaultCamera);
+	DialogueSession->ScreenSide = (NewOwner.Index & 1) == 0 ? 1.0f : -1.0f;
+	if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
+	{
+		DialogueSession->CurrentLineId = Line->Id;
+	}
+
+	// Camera acquisition precedes the presentation announcement. A headless/null-camera world still
+	// runs exactly the same dialogue and event order.
+	SelectDialogueCamera(/*bLineBoundary*/ true);
 	if (LineService)
 	{
-		if (const FElysiumDlgLine* Line = OpenDialogConv->CurrentNpcLine())
+		if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
 		{
-			FElysiumEntity* Speaker = Resolve(OpenDialogOwner);
-			LineService->PlayDialogueTurn(OpenDialogOwner, OpenDialogConv->File().SourcePath,
+			FElysiumEntity* Speaker = Resolve(NewOwner);
+			LineService->PlayDialogueTurn(NewOwner, Conversation->File().SourcePath,
 				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
 				Speaker ? Speaker->GetSkeletalBody() : nullptr);
-			BeginDialogueLipsync(OpenDialogConv->File().SourcePath, Line->Id);
+			BeginDialogueLipsync(Conversation->File().SourcePath, Line->Id);
 		}
 	}
 
 	if (IElysiumPresenter* P = Presenter())
 	{
-		P->OpenDialog(OpenDialogOwner, *OpenDialogConv);
+		P->OpenDialog(NewOwner, *Conversation);
 	}
 
 	// A conversation that opened already closed (no content NPC line) ends at once, so the beat still
 	// advances (OnDialogEnd -> DialogPostProcess) rather than hanging on an empty panel.
-	if (OpenDialogConv->IsOver())
+	if (Conversation->IsOver())
 	{
 		EndDialogSession(/*bSilent*/ false);
 	}
@@ -1745,25 +1816,31 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 
 void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
 {
-	if (!OpenDialogConv.IsValid())
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
 	{
 		return;
 	}
-	OpenDialogConv->Choose(VisibleIndex);
-	if (!OpenDialogConv->IsOver() && LineService)
+	TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+	Conversation->Choose(VisibleIndex);
+	if (!Conversation->IsOver())
 	{
-		if (const FElysiumDlgLine* Line = OpenDialogConv->CurrentNpcLine())
+		if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
 		{
-			FElysiumEntity* Speaker = Resolve(OpenDialogOwner);
-			LineService->PlayDialogueTurn(OpenDialogOwner, OpenDialogConv->File().SourcePath,
-				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
-				Speaker ? Speaker->GetSkeletalBody() : nullptr);
-			// Each answer starts a new line, so the previous turn's track is replaced rather than
-			// left to run out — otherwise two turns' phonemes would sum on one face.
-			BeginDialogueLipsync(OpenDialogConv->File().SourcePath, Line->Id);
+			DialogueSession->CurrentLineId = Line->Id;
+			SelectDialogueCamera(/*bLineBoundary*/ true);
+			if (LineService)
+			{
+				FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
+				LineService->PlayDialogueTurn(DialogueSession->Owner,
+					Conversation->File().SourcePath, Line->Id,
+					Speaker ? Speaker->Origin : FVector::ZeroVector,
+					Speaker ? Speaker->GetSkeletalBody() : nullptr);
+				// Each answer starts a new line, so the previous turn's track is replaced.
+				BeginDialogueLipsync(Conversation->File().SourcePath, Line->Id);
+			}
 		}
 	}
-	if (OpenDialogConv->IsOver())
+	if (Conversation->IsOver())
 	{
 		EndDialogSession(/*bSilent*/ false);
 	}
@@ -1771,12 +1848,12 @@ void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
 
 void FElysiumEntityWorld::PlayerDialogAdvance()
 {
-	if (!OpenDialogConv.IsValid())
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
 	{
 		return;
 	}
-	OpenDialogConv->AdvanceTerminal();
-	if (OpenDialogConv->IsOver())
+	DialogueSession->Conversation->AdvanceTerminal();
+	if (DialogueSession->Conversation->IsOver())
 	{
 		EndDialogSession(/*bSilent*/ false);
 	}
@@ -1784,12 +1861,301 @@ void FElysiumEntityWorld::PlayerDialogAdvance()
 
 void FElysiumEntityWorld::CloseDialog(bool bSilent)
 {
-	if (!OpenDialogConv.IsValid())
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
 	{
 		return;
 	}
-	OpenDialogConv->Close();
+	DialogueSession->Conversation->Close();
 	EndDialogSession(bSilent);
+}
+
+void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
+{
+	if (!DialogueSession)
+	{
+		return;
+	}
+	IElysiumCameraService* Service = Camera();
+	if (!Service)
+	{
+		DialogueSession->FallbackReason = TEXT("camera service unavailable");
+		return;
+	}
+	FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
+	FElysiumPlayer* Listener = FindPlayer();
+	if (!Speaker || Speaker->IsInert() || !Listener)
+	{
+		DialogueSession->FallbackReason = TEXT("dialogue target unavailable");
+		return;
+	}
+
+	auto Publish = [this, Service](FElysiumCameraRequest Request,
+		EElysiumDialogueDirectorSource Source, EElysiumDialogueShotProfile Profile,
+		float MinimumHold)
+	{
+		DialogueSession->CameraRequest = MoveTemp(Request);
+		DialogueSession->DirectorSource = Source;
+		DialogueSession->SelectedProfile = Profile;
+		DialogueSession->MinimumHoldSeconds = MinimumHold;
+		DialogueSession->SelectedAt = NowSeconds();
+		if (Service->IsCameraLive(DialogueSession->CameraHandle))
+		{
+			Service->UpdateCamera(DialogueSession->CameraHandle, DialogueSession->CameraRequest);
+		}
+		else
+		{
+			DialogueSession->CameraHandle = Service->AcquireCamera(DialogueSession->CameraRequest);
+		}
+	};
+
+	const FVector SpeakerEye = Speaker->EyePosition();
+	const FVector ListenerEye = Listener->EyePosition();
+	DialogueSession->CandidateRejections.Reset();
+
+	if (Service->DialogueCamerasEnabled() && !DialogueSession->NormalizedCamera.IsEmpty())
+	{
+		const FElysiumCameraShotDef* Def = ElysiumCameraShots::Load(DialogueSession->NormalizedCamera);
+		FElysiumCameraShot Shot;
+		if (Def && Def->IsValid()
+			&& FElysiumCameraDirector::Resolve(this, *Def, DialogueSession->Owner, Shot))
+		{
+			FElysiumCameraRequest Request;
+			Request.Kind = EElysiumCameraRequestKind::Dialogue;
+			Request.Owner = DescribeHandle(DialogueSession->Owner);
+			Request.DebugName = FString::Printf(TEXT("Dialogue:%s"), *Def->Name);
+			Request.Priority = 500;
+			Request.bOverridePose = true;
+			Request.Shot = Shot;
+			Request.BlendInSeconds = Shot.BlendSeconds;
+			Request.BlendOutSeconds = Shot.BlendSeconds;
+			Request.Control = EElysiumCameraControlPolicy::Preserve;
+			Request.bShowHud = Def->Constraints.bShowHud;
+			Request.bDrawViewmodel = Def->Constraints.bDrawViewmodel;
+			Request.bShowPlayerBody = !Def->Constraints.bDrawViewmodel;
+			Request.bDialogPOV = Def->Constraints.bDialogPOV;
+			Request.bRequireSubtitleSafe = false; // source shot authors its own subject framing
+			Request.Fallback = EElysiumCameraFallback::SourceShot;
+			Request.SourceShot = DialogueSession->NormalizedCamera;
+			Request.SelectedProfile = TEXT("source-shot");
+			Request.SpeakerAnchor.Position = SpeakerEye;
+			Request.SpeakerAnchor.Name = TEXT("speaker-eye");
+			Request.SpeakerAnchor.bValid = true;
+			Request.ListenerAnchor.Position = ListenerEye;
+			Request.ListenerAnchor.Name = TEXT("listener-eye");
+			Request.ListenerAnchor.bValid = true;
+			FString Reject;
+			if (Service->EvaluateDialogueCandidate(Request, Reject))
+			{
+				Publish(MoveTemp(Request), EElysiumDialogueDirectorSource::SourceShot,
+					EElysiumDialogueShotProfile::Fallback, 2.0f);
+				return;
+			}
+			DialogueSession->CandidateRejections += FString::Printf(TEXT("%s: %s"),
+				*DialogueSession->NormalizedCamera, *Reject);
+		}
+		else
+		{
+			DialogueSession->CandidateRejections += FString::Printf(TEXT("%s: missing/unresolved"),
+				*DialogueSession->NormalizedCamera);
+		}
+	}
+
+	if (Service->DialogueCamerasEnabled())
+	{
+		// Hold a selected grammar shot until its boundary minimum expires. Its anchors still track each
+		// frame through UpdateSelectedDialogueCamera; only candidate selection is held.
+		if (bLineBoundary
+			&& DialogueSession->DirectorSource == EElysiumDialogueDirectorSource::AuthoredProfile
+			&& NowSeconds() - DialogueSession->SelectedAt < DialogueSession->MinimumHoldSeconds)
+		{
+			UpdateSelectedDialogueCamera();
+			return;
+		}
+
+		FElysiumDialogueCameraContext Context;
+		Context.SpeakerEye = SpeakerEye;
+		Context.ListenerEye = ListenerEye;
+		Context.ScreenSide = DialogueSession->ScreenSide;
+		Context.bAllowCloseUp = false; // only explicit line/profile metadata may enable it
+		Context.Owner = DescribeHandle(DialogueSession->Owner);
+		TArray<FElysiumDialogueCameraProfile> Profiles;
+		Service->GetDialogueProfiles(Profiles);
+		if (DialogueSession->DirectorSource != EElysiumDialogueDirectorSource::None && Profiles.Num() > 1)
+		{
+			const int32 Rotate = FMath::Abs(DialogueSession->CurrentLineId) % (Profiles.Num() - 1);
+			Algo::Rotate(Profiles, Rotate);
+		}
+		for (const FElysiumDialogueCameraProfile& Profile : Profiles)
+		{
+			if (Profile.Kind == EElysiumDialogueShotProfile::Fallback
+				|| (Profile.bAllowCloseUp && !Context.bAllowCloseUp))
+			{
+				continue;
+			}
+			FElysiumCameraRequest Request = ElysiumDialogueCamera::BuildRequest(Profile, Context);
+			if (DialogueSession->CameraRequest.bOverridePose
+				&& !ElysiumDialogueCamera::PreservesScreenSide(DialogueSession->CameraRequest, Request))
+			{
+				DialogueSession->CandidateRejections += FString::Printf(TEXT("%s: screen-side; "),
+					*Profile.Name.ToString());
+				continue;
+			}
+			FString Reject;
+			if (Service->EvaluateDialogueCandidate(Request, Reject))
+			{
+				Publish(MoveTemp(Request), EElysiumDialogueDirectorSource::AuthoredProfile,
+					Profile.Kind, Profile.MinimumHoldSeconds);
+				return;
+			}
+			DialogueSession->CandidateRejections += FString::Printf(TEXT("%s: %s; "),
+				*Profile.Name.ToString(), *Reject);
+		}
+	}
+
+	FElysiumDialogueCameraProfile Fallback;
+	Fallback.Name = TEXT("PlayerViewFallback");
+	Fallback.Kind = EElysiumDialogueShotProfile::Fallback;
+	FElysiumDialogueCameraContext Context;
+	Context.SpeakerEye = SpeakerEye;
+	Context.ListenerEye = ListenerEye;
+	Context.Owner = DescribeHandle(DialogueSession->Owner);
+	FElysiumCameraRequest Request = ElysiumDialogueCamera::BuildRequest(Fallback, Context);
+	Request.FallbackReason = Service->DialogueCamerasEnabled()
+		? (DialogueSession->CandidateRejections.IsEmpty() ? TEXT("no camera candidate")
+			: DialogueSession->CandidateRejections)
+		: TEXT("dialogue cameras disabled by user");
+	DialogueSession->FallbackReason = Request.FallbackReason;
+	Publish(MoveTemp(Request), EElysiumDialogueDirectorSource::PlayerView,
+		EElysiumDialogueShotProfile::Fallback, 0.0f);
+}
+
+void FElysiumEntityWorld::UpdateSelectedDialogueCamera()
+{
+	if (!DialogueSession || !Camera()
+		|| !Camera()->IsCameraLive(DialogueSession->CameraHandle))
+	{
+		return;
+	}
+	FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
+	FElysiumPlayer* Listener = FindPlayer();
+	if (!Speaker || Speaker->IsInert() || !Listener)
+	{
+		EndDialogSession(/*bSilent*/ true);
+		return;
+	}
+
+	if (DialogueSession->DirectorSource == EElysiumDialogueDirectorSource::SourceShot)
+	{
+		const FElysiumCameraShotDef* Def = ElysiumCameraShots::Load(DialogueSession->NormalizedCamera);
+		FElysiumCameraShot Shot;
+		if (!Def || !FElysiumCameraDirector::Resolve(this, *Def, DialogueSession->Owner, Shot))
+		{
+			EndDialogSession(/*bSilent*/ true);
+			return;
+		}
+		DialogueSession->CameraRequest.Shot = Shot;
+	}
+	else if (DialogueSession->DirectorSource == EElysiumDialogueDirectorSource::AuthoredProfile)
+	{
+		FElysiumDialogueCameraContext Context;
+		Context.SpeakerEye = Speaker->EyePosition();
+		Context.ListenerEye = Listener->EyePosition();
+		Context.ScreenSide = DialogueSession->ScreenSide;
+		Context.Owner = DescribeHandle(DialogueSession->Owner);
+		TArray<FElysiumDialogueCameraProfile> Profiles;
+		Camera()->GetDialogueProfiles(Profiles);
+		for (const FElysiumDialogueCameraProfile& Profile : Profiles)
+		{
+			if (Profile.Kind == DialogueSession->SelectedProfile)
+			{
+				FElysiumCameraRequest Updated = ElysiumDialogueCamera::BuildRequest(Profile, Context);
+				Updated.FallbackReason = DialogueSession->CameraRequest.FallbackReason;
+				DialogueSession->CameraRequest = MoveTemp(Updated);
+				break;
+			}
+		}
+	}
+	Camera()->UpdateCamera(DialogueSession->CameraHandle, DialogueSession->CameraRequest);
+}
+
+void FElysiumEntityWorld::RefreshDialogueCamera()
+{
+	if (!DialogueSession)
+	{
+		return;
+	}
+	if (!Resolve(DialogueSession->Owner) || !FindPlayer())
+	{
+		EndDialogSession(/*bSilent*/ true);
+		return;
+	}
+	UpdateSelectedDialogueCamera();
+}
+
+bool FElysiumEntityWorld::GetDialogueCameraGaze(FVector& OutPoint) const
+{
+	if (!DialogueSession || !DialogueSession->CameraRequest.bDialogPOV
+		|| !DialogueSession->CameraRequest.bOverridePose)
+	{
+		return false;
+	}
+	OutPoint = DialogueSession->CameraRequest.Shot.Origin;
+	return true;
+}
+
+bool FElysiumEntityWorld::DialogueCameraHidesHud() const
+{
+	return DialogueSession && !DialogueSession->CameraRequest.bShowHud;
+}
+
+void FElysiumEntityWorld::GetDialogueDebugState(
+	TArray<TPair<FString, FString>>& Out) const
+{
+	if (!DialogueSession)
+	{
+		Out.Emplace(TEXT("Dialogue"), TEXT("closed"));
+		return;
+	}
+	Out.Emplace(TEXT("Opener"), ElysiumDialogueCamera::LexToString(DialogueSession->Opener));
+	Out.Emplace(TEXT("Raw flags"), FString::FromInt(DialogueSession->RawFlags));
+	Out.Emplace(TEXT("Decoded flags"), FString::FromInt(DialogueSession->DecodedFlags));
+	Out.Emplace(TEXT("default_camera"), DialogueSession->DefaultCamera);
+	Out.Emplace(TEXT("Camera handle"), FString::Printf(TEXT("slot=%d gen=%u epoch=%llu"),
+		DialogueSession->CameraHandle.Slot, DialogueSession->CameraHandle.Generation,
+		DialogueSession->CameraHandle.Epoch));
+	Out.Emplace(TEXT("Source shot"), DialogueSession->CameraRequest.SourceShot);
+	Out.Emplace(TEXT("Profile"), DialogueSession->CameraRequest.SelectedProfile);
+	Out.Emplace(TEXT("Fallback"), DialogueSession->FallbackReason);
+	Out.Emplace(TEXT("Candidate rejects"), DialogueSession->CandidateRejections);
+	Out.Emplace(TEXT("Body owner"), DialogueSession->bBodyOwnerAcquired
+		? TEXT("Dialogue") : TEXT("unchanged (no proven RE46 behavior)"));
+}
+
+FString FElysiumEntityWorld::ScriptedSessionSaveBlockReason() const
+{
+	if (DialogueSession)
+	{
+		return TEXT("a conversation is open");
+	}
+	if (HasTrackCamera())
+	{
+		return TEXT("an authored camera track is active");
+	}
+	if (HasScriptedCamera())
+	{
+		return TEXT("an authored legacy camera is active");
+	}
+	for (const TUniquePtr<FElysiumEntity>& Entity : EntityList)
+	{
+		if (Entity && !Entity->IsInert())
+		{
+			if (const TCHAR* Reason = Entity->SaveBlockReason())
+			{
+				return Reason;
+			}
+		}
+	}
+	return FString();
 }
 
 void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElysiumEntityHandle& Subject)
@@ -1979,7 +2345,7 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 	{
 		return;
 	}
-	FElysiumEntity* Speaker = Resolve(OpenDialogOwner);
+	FElysiumEntity* Speaker = Resolve(GetOpenDialogOwner());
 	if (Speaker == nullptr)
 	{
 		return;
@@ -2005,7 +2371,7 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 	{
 		return;
 	}
-	DialogueFaceOwner = OpenDialogOwner;
+	DialogueFaceOwner = GetOpenDialogOwner();
 	DialogueLineStart = NowSeconds();
 	DialogueLipsync = MakeShared<FElysiumLipSyncBinding>(MoveTemp(Binding));
 }
@@ -2068,7 +2434,7 @@ void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
-	const FElysiumEntityHandle Closing = OpenDialogOwner;
+	const FElysiumEntityHandle Closing = GetOpenDialogOwner();
 	if (LineService)
 	{
 		LineService->CancelDialogue(Closing);
@@ -2079,8 +2445,11 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	DialogueLipsync.Reset();
 	DialogueLineStart = -1.0;
 
-	OpenDialogOwner = FElysiumEntityHandle();
-	OpenDialogConv.Reset();
+	if (DialogueSession && Camera())
+	{
+		Camera()->ReleaseCamera(DialogueSession->CameraHandle);
+	}
+	DialogueSession.Reset();
 
 	if (IElysiumPresenter* P = Presenter())
 	{
@@ -2718,6 +3087,18 @@ FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 	return Found;
 }
 
+bool FElysiumEntityWorld::IsNpcMakerSceneBlocked() const
+{
+	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	{
+		if (Ent.IsValid() && !Ent->IsDead() && Ent->BlocksNpcMakerSpawns())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 FElysiumEntity* FElysiumEntityWorld::FindLandmark(const FString& Name)
 {
 	// info_landmark lookup for the P4.6 landmark transition (the source-map anchor a
@@ -2847,6 +3228,13 @@ FString FElysiumEntityWorld::FormatEventLine(double Now, const FElysiumIOEvent& 
 
 void FElysiumEntityWorld::Teardown()
 {
+	// Dialogue cursors and scoped camera handles never enter a map snapshot. Release silently before
+	// the teardown freeze so travel cannot serialize a half-open scripted session.
+	if (DialogueSession)
+	{
+		EndDialogSession(/*bSilent*/ true);
+	}
+
 	// A captured interaction belongs to this map epoch. Give the leaf its cancellation edge while
 	// its handle and any presentation/session owner are still valid.
 	EndActiveUse(EElysiumUseEndReason::WorldTeardown);

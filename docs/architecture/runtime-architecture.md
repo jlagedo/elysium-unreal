@@ -534,8 +534,9 @@ lifetime and dependency boundaries:
   adapter for original player behaviour, `SetCamera`, VCD camera actions, and
   `camera_keyframe`/`camera_track`. `docs/vtmb/camera-view-modes.md` owns their source semantics.
 - Map-scoped request handles carry the map epoch and die before travel. Player mode and accessibility
-  preferences live above the world; story-authoritative owners republish dialogue, track, feed/death,
-  or sequence requests after load rather than serializing transient camera handles.
+  preferences live above the world. Dialogue and scripted sessions refuse saving while active, so
+  dialogue cursors, body-owner tokens, camera handles, and transient scripted animation state are
+  neither serialized nor republished after load.
 
 ## 10. Session, boot and the app state machine
 

@@ -8,6 +8,7 @@
 #include "ElysiumLocomotionSample.h" // FElysiumLocomotionSample (returned by value)
 
 class FElysiumDlgConversation;
+class IElysiumCameraService;
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
@@ -285,6 +286,9 @@ public:
 	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) = 0;
 	virtual void ClearPlayerVisual() = 0;
+	// A scene-owned player-controller body is a stand-in, not a second visible subject. The authored
+	// controller lifecycle owns this presentation gate; dialogue camera code never calls it.
+	virtual void SetPlayerVisualSuppressed(bool bSuppressed) {}
 
 	// --- The player's body ------------------------------------------------------------------
 	// The eye: where the player is looking from and along. False when there is no player (the menu
@@ -325,12 +329,23 @@ public:
 	// deliberately absent: rat feeding is out of B6's scope.
 	virtual FElysiumEntityHandle QueryFeedTarget() const { return FElysiumEntityHandle::Invalid(); }
 
-	// 11.7 — the scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, the conversation
-	// camera and the feed camera all push onto the player camera's one weight stack through here, and
+	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
+	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the
+	// supported headless/fail-open posture.
+	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm, float TraceDepthCm) const
+	{
+		return MakerOriginCm.Z;
+	}
+	virtual bool IsNpcMakerVisibleFromPlayer(const FVector&) const { return false; }
+	virtual bool IsNpcMakerInPlayerViewCone(const FVector&) const { return false; }
+	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float) const { return false; }
+
+	// 11.7 — the legacy scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, and the feed
+	// camera push onto the player camera's one weight stack through here, and
 	// `RemoveCamera` pops. `ShotFile` keys `vdata/camerashots/`; `Subject` is the entity the shot is
 	// about, which is what its `DialogTarget` anchors resolve to. Returns 0 when the shot does not
 	// parse, nothing it anchors to is there, or there is no camera (a headless world runs the
-	// conversation without one). The channel is here, on the player's *body*, rather than on
+	// consumer without one). The channel is here, on the player's *body*, rather than on
 	// IElysiumPresenter: the camera is part of the body (S3), and the presenter carries what is put
 	// on *screen*, not what the player's body does.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) = 0;
@@ -485,6 +500,7 @@ struct FElysiumWorldServices
 	IElysiumTravel*     Travel     = nullptr;
 	IElysiumPresenter*  Presenter  = nullptr;
 	IElysiumWeather*    Weather    = nullptr;
+	IElysiumCameraService* Camera  = nullptr;
 };
 namespace ElysiumPlayerView
 {

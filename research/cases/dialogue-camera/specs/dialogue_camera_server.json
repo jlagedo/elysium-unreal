@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "topic": "dialogue-camera",
+  "consuming_document": "docs/vtmb/game_runtime.md",
+  "research_id": "RE46",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which gates and argument fields distinguish the three StartPlayerDialog input forms?",
+    "Which downstream path acquires and releases the player and NPC dialogue partners?",
+    "Does any server-side opener or acquisition body write transforms, velocity, facing, input state, or view state?",
+    "Where is default_camera read and where does responsibility cross into the client camera path?",
+    "How does CreateControllerNPC interact with the real player body during dialogue?"
+  ],
+  "functions": [
+    {"address": "1029ef80", "label": "InputStartPlayerDialog", "confidence": "datamap and body evidence", "role": "forced ordinary opener gates argument store and schedule", "depth": 3, "cap": 240},
+    {"address": "1029f060", "label": "InputStartPlayerDialogRemote", "confidence": "datamap and body evidence", "role": "remote opener gates ignored argument and distinct schedule", "depth": 3, "cap": 240},
+    {"address": "1029f120", "label": "InputStartPlayerDialogUnforced", "confidence": "datamap and body evidence", "role": "unforced extra refusal gate argument store and schedule", "depth": 3, "cap": 260},
+    {"address": "10178280", "label": "PlayerStartDialog", "confidence": "opener call target and trace evidence", "role": "player partner and CDialog Acquire boundary", "depth": 4, "cap": 420},
+    {"address": "100e05f0", "label": "DialogAcquire", "confidence": "trace string and caller evidence", "role": "dialogue state acquisition and starting-line selection", "depth": 4, "cap": 420},
+    {"address": "100e4ef0", "label": "DialogReleasePre", "confidence": "CDialog Release caller evidence", "role": "pre-release state and event-script flush", "depth": 3, "cap": 260},
+    {"address": "100e5c70", "label": "DialogReleasePlayerState", "confidence": "CDialog Release caller evidence", "role": "player dialogue state release", "depth": 3, "cap": 260},
+    {"address": "102c0360", "label": "NpcDialogEnd", "confidence": "CDialog Release owner call", "role": "NPC end notification and OnDialogEnd production", "depth": 3, "cap": 240}
+  ],
+  "grep_probes": [
+    {"str": "StartPlayerDialog~StartPlayerDialogRemote~StartPlayerDialogUnforced~default_camera~DialogPOV~CreateControllerNPC~camera_cinematic", "label": "dialogue_camera_surface", "confidence": "literal demand", "role": "datamap field and client boundary discovery", "cap": 500}
+  ],
+  "findings": [
+    {
+      "fact": "StartPlayerDialogRemote does not read its input argument in the pinned server binary.",
+      "evidence": "InputStartPlayerDialogRemote 0x1029f060 performs the shared guards, FinishTalking and virtual setup, writes the forced byte at NPC+0x6495, and schedules code 0x6e without loading the input variant.",
+      "consequence": "The authored Remote 256 value cannot select placement, first person, or a decoded flag in this handler; the port must not assign it inferred bit semantics."
+    },
+    {
+      "fact": "The ordinary, remote, and unforced openers are non-identical handlers.",
+      "evidence": "0x1029ef80 and 0x1029f120 store an integer at NPC+0x5bac and schedule 0x6d; 0x1029f060 does not store it and schedules 0x6e; unforced alone applies the player refusal predicate and clears NPC+0x6495.",
+      "consequence": "The three Tier-1 bindings require separate handlers and diagnostics even where they share later conversation primitives."
+    },
+    {
+      "fact": "No opener handler writes a player or NPC transform, velocity, camera pose, or input mode.",
+      "evidence": "The complete bodies at 0x1029ef80, 0x1029f060 and 0x1029f120 contain guards, dialogue cleanup/setup, two NPC state writes, and schedule selection only.",
+      "consequence": "Physical placement/facing cannot be implemented from the opener inputs; it remains gated on downstream static evidence or the hash-gated capture recipe."
+    }
+  ],
+  "open_questions": [
+    "What semantic field is stored at NPC+0x5bac by the ordinary and unforced forms?",
+    "Which client function reads default_camera and owns its camera blend lifetime?",
+    "Does the downstream acquisition path transfer body ownership or alter render visibility?",
+    "Which exact boundary consumes DialogPOV and whether it affects gaze only?"
+  ]
+}

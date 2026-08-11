@@ -5672,6 +5672,15 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("the child def carries every one of the maker's authored output rows"),
 		ChildEnt->Def->Outputs.Num(), Maker->Def->Outputs.Num());
+	const int32 EntitiesAfterFirstSpawn = World.NumEntities();
+	const FElysiumEntityHandle FirstChildHandle = ChildEnt->Handle;
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Maker->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("the tutorial maker's MaxLiveChildren rejects the second porch-equivalent Spawn"),
+		World.NumEntities(), EntitiesAfterFirstSpawn);
+	TestEqual(TEXT("the first Blueblood remains the only named live child"),
+		World.FindByName(TEXT("blueblood"))->Handle.Index, FirstChildHandle.Index);
 
 	FElysiumPlayer* Player = World.FindPlayer();
 	FElysiumCombatCharacter* Child = ChildEnt->AsCombatCharacter();
@@ -5710,7 +5719,7 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	TestTrue(TEXT("and took the blueblood's blood"), Player->FeedState.BloodStolen > 0);
 
 	// THE ACCEPTANCE. `OnFedUponEnd` is a maker-authored row, fired by the CHILD because the child
-	// carries the copied rows (§5.5.1's reconstruction), so both halves of the tutorial's authored
+	// carries the copied rows (`docs/vtmb/entity_io.md`), so both halves of the tutorial's authored
 	// consequence land: the trigger is enabled, and the Python payload that sets the flag is raised
 	// with the child as caller and the feeder as activator.
 	TestEqual(TEXT("trig_dialog_outside_chopshop is enabled by the feed"),

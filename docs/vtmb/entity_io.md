@@ -1209,7 +1209,7 @@ sequence 0) and emits the `soundgroup` events `open`, `close`, `swing`, `locked`
 `item_container_one_item_filtered` (factory `0x10209ef0`, vftable `0x10484c84`) presets a filter
 slot to `5`.
 
-## `npc_maker` output ownership
+## `npc_maker`
 
 `CNPCMaker` (constructor `FUN_1034ad80`) descends through the AI NPC chain rather than from a
 logic-only base. Its own datamap adds `OnSpawnNPC` (`+0x6668`), `OnNPCDied` (`+0x6680`) and
@@ -1217,18 +1217,76 @@ logic-only base. Its own datamap adds `OnSpawnNPC` (`+0x6668`), `OnNPCDied` (`+0
 `OnFedUponBegin`, `OnFedUponEnd`, `OnDamaged`, `OnIncapacitated`, `OnFoundPlayer`, `OnDialogEnd`
 and `OnDeath` syntactically valid on the maker record.
 
-Those inherited rows are **child templates, not maker-forwarded notifications**. `Spawn`
-(`FUN_1034b7b0`) creates the entity named by the maker's `NPCType`, copies the maker's raw keyvalue
-block through the child's ordinary keyvalue parser, assigns the maker relationship, fires
-`OnSpawnNPC`, and increments the live-child count. Each child consequently owns a newly parsed copy
-of the inherited action lists and its own positive `times` counters. Feeding, damage, perception,
-dialogue and `OnDeath` fire from that child with the child as caller; no proxy hop through the maker
-changes their activator/caller provenance.
+### State and admission
 
-The child-death notification (`FUN_1034bc90`) is separate: it decrements the maker count, fires
-`OnNPCDied`, and fires `OnLastNPCDied` when the count reaches zero. The child still fires its own
-inherited `OnDeath`. Killing and respawning a child therefore does not restore consumed counters on
-the old child; a newly spawned child receives new counters from the template.
+The maker keeps two independent quotas. `MaxNPCCount` (`+0x6660`) is the mutable number of finite
+children still available to create; `MaxLiveChildren` (`+0x66b4`) is a simultaneous-live ceiling,
+compared with `m_cLiveChildren` (`+0x66b0`). `Flag_InfChild` (`+0x66c3`) disables only finite-total
+exhaustion and forces `Flag_Fade` (`+0x66c2`) on. It does **not** bypass the live ceiling.
+
+Both `InputSpawnNPC` (`FUN_1034b500`) and `MakerThink` (`FUN_1034bbf0`) invoke the ordinary spawn
+path with its internal bypass argument clear. Before allocation, that path caches ground height by
+tracing 2,048 units down from the maker, then `CanMakeNPC` (`FUN_1034b580`) applies these gates in
+order:
+
+1. A true internal bypass argument accepts immediately. Neither the public `Spawn` input nor the
+   timer supplies it.
+2. If `MaxLiveChildren > 0` and `m_cLiveChildren >= MaxLiveChildren`, reject.
+3. If choreographed-scene actor capture/hiding is active, reject.
+4. Resolve the local player when one exists. With `Flag_NPCClip` (`+0x66c1`), reject when a
+   player-view trace can see the maker; with `Flag_ViewCone` (`+0x66c5`), reject when the maker is
+   inside the player's view cone.
+5. With positive `MinPCDistance` (`+0x66c8`), truncate the 3D player-to-maker distance to an integer
+   and reject when it is strictly less than the authored threshold. Equality is admitted.
+6. Query a 68-by-68-unit square at cached ground height, X/Y `origin +/- 34`, using native filter
+   value `0x2080`; admit only when it finds no blocking entity.
+
+A rejected attempt allocates no entity, changes neither quota, and fires no maker output.
+`Flag_StartDisabled` (`m_bDisabled`, `+0x66c0`) controls only automatic thinking: it does not block
+an explicit `Spawn` input. `Spawn` (`FUN_1034afe0`) initializes the live count to zero, installs
+`MakerThink` at `curtime + SpawnFrequency` when enabled, installs no think when disabled, and clears
+the cached ground height. `Enable` refuses a finite depleted maker; otherwise it clears the disabled
+latch and schedules an immediate think at current time. `Disable` sets the latch and clears the
+think; `Toggle` selects between those two operations.
+
+After a successful timed attempt, or a failure caused by the live ceiling, `MakerThink` retries at
+`curtime + SpawnFrequency`. Other admission failures retry after a random 1-to-2-second delay. This
+keeps transient visibility, distance, scene and occupancy failures responsive without polling them
+at the full authored frequency.
+
+### Child construction and output ownership
+
+On an admitted attempt, `FUN_1034b7b0` creates the class named by `NPCType`, rejects a null or
+non-Troika NPC, copies the maker's raw keyvalue template through the child's ordinary parser, runs
+the class initialization, and copies the maker's NPC type and model. It then fires `OnSpawnNPC`
+with the maker as both activator and caller **before** applying child spawn flags and relationship
+template data, dispatching the child spawn, associating the maker as owner, assigning
+`NPCTargetname`, or incrementing either quota. `Flag_Fade` adds child spawnflag `0x200` to the base
+value `4`.
+
+Only after successful dispatch does the maker increment `m_cLiveChildren`. A finite maker then
+decrements `MaxNPCCount`; reaching zero clears `MakerThink`. Infinite mode leaves the remaining
+total untouched. `Flag_NoDrop` (`+0x66c4`) is declared on this datamap but is not consumed by this
+base `CNPCMaker` child-construction body; a nearby specialized maker path references it, so its exact
+leaf-specific effect remains outside this base-class result.
+
+The inherited NPC rows are **child templates, not maker-forwarded notifications**. Each child owns
+a newly parsed copy of those action lists and its own positive `times` counters. Feeding, damage,
+perception, dialogue and `OnDeath` fire from that child with the child as caller; no proxy hop
+through the maker changes their activator/caller provenance.
+
+### Child death and removal
+
+The separate child notification (`FUN_1034bc90`) has a per-child once guard. If the notified child
+is still alive, removal refunds one finite remaining-total slot and does not fire `OnNPCDied`. A
+genuinely dead child fires `OnNPCDied` without a refund. The maker then tests finite-total
+depletion and fires `OnLastNPCDied` when depleted, before decrementing `m_cLiveChildren` and
+clamping it to zero. The code does not include a second `m_cLiveChildren == 1` test at that output,
+and infinite makers are never depleted through this path.
+
+The child still fires its own inherited `OnDeath`. Killing and respawning a child therefore does
+not restore consumed counters on the old child; an admitted replacement receives fresh counters
+from the maker template.
 
 ## `prop_sign`
 

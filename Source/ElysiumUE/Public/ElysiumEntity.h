@@ -38,6 +38,14 @@ enum class EElysiumScriptMove : uint8
 	Failed,
 };
 
+// Why an owned entity left its owner's live set. `npc_maker` is the first user: a dead child
+// consumes its finite slot and fires OnNPCDied, while removing a still-live child refunds it.
+enum class EElysiumOwnedEntityTermination : uint8
+{
+	Died,
+	RemovedAlive,
+};
+
 // The context an input carries to its thunk. `Param` is the marshalled parameter string
 // (field 2 of the output); `Activator`/`Caller` are the I/O provenance the entity world
 // resolves in P1.4 (Invalid for a hand-fired input). Kept a struct so P1.4 can grow the
@@ -148,6 +156,12 @@ public:
 	// answers whether attachment actually succeeded, which point_teleport must re-check.
 	FElysiumEntityHandle MoveParent;
 
+	// CBaseEntity ownership reduced to the lifecycle seam gameplay needs. The owner is assigned only
+	// after a runtime child has spawned, and the notification latch makes death followed by Kill a
+	// single transition. Maker NPCs persist both values in their leaf save block.
+	FElysiumEntityHandle OwnerEntity;
+	bool bOwnerTerminationNotified = false;
+
 	// --- Output firing state (R2) ------------------------------------------------------
 	// The runtime `times` countdown, one entry per Def->Outputs row (the def is immutable, so
 	// the mutable counter lives here). Seeded from each row's `Times` at Construct: -1 stays
@@ -167,6 +181,8 @@ public:
 	void PlayDialogFile(const FString& AuthoredPath);
 	void SetSoundOverrideEnt(const FString& EntityName);
 	void SetFakeSilence(bool bEnabled);
+	void SetOwnerEntity(const FElysiumEntityHandle& InOwner) { OwnerEntity = InOwner; }
+	FElysiumEntityHandle GetOwnerEntity() const { return OwnerEntity; }
 
 	// Fire a named output through the world (R2 → the event queue). No-op on a worldless probe
 	// entity. Leaf classes (P1.6+) call this from their inputs and touch hooks.
@@ -244,6 +260,9 @@ public:
 	// section (mover toggle-state, current move, resolved links, spawnflag decode) — the fields the
 	// registry tables don't carry because they are internal state, not keyvalues. Base emits nothing.
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const {}
+	// Non-null while this entity owns a scripted session that cannot be represented by a save
+	// payload. Ordinary animation deliberately returns null; only explicit session owners override.
+	virtual const TCHAR* SaveBlockReason() const { return nullptr; }
 
 	// The primitive used for parentname/physics attachment. Base returns a brush body; rendered
 	// point props return their standing component and physics props return their simulating body.
@@ -431,6 +450,14 @@ public:
 
 	virtual void Think() {}
 
+	// A playing choreographed scene blocks NPC-maker admission. The world derives the global gate
+	// from live entities so overlapping scenes and save restoration need no separate latch.
+	virtual bool BlocksNpcMakerSpawns() const { return false; }
+
+	// Owner callbacks remain ordinary substrate calls. Any outputs produced by the owner still join
+	// FElysiumEventQueue through FireOutput; this is lifecycle notification, not a second transport.
+	virtual void OnOwnedEntityTerminated(FElysiumEntity&, EElysiumOwnedEntityTermination) {}
+
 	// A mover whose endpoints were computed from exported world coordinates can translate them
 	// into its new parent-local space here. Point visuals and non-movers need no adjustment.
 	virtual void OnParentAttached(const FTransform& ParentWorldTransform) {}
@@ -447,5 +474,6 @@ public:
 	FString DebugString() const;
 
 protected:
+	void NotifyOwnerOfTermination(EElysiumOwnedEntityTermination Reason);
 	float SavedNextThink = ELYSIUM_NEVER_THINK;   // restored by ScriptUnhide
 };

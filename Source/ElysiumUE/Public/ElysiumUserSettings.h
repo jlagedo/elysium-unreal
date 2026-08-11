@@ -22,4 +22,6 @@ public:
 	UPROPERTY(Config) float AmbienceVolume = 1.f;
 	UPROPERTY(Config) float SfxVolume = 1.f;
 	UPROPERTY(Config) float UiVolume = 1.f;
+	// Player-view fallback is always available; this preference changes camera presentation only.
+	UPROPERTY(Config) bool bDialogueCamerasEnabled = true;
 };

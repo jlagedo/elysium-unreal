@@ -1,4 +1,5 @@
 #include "ElysiumCameraComponent.h"
+#include "ElysiumCameraService.h"
 
 #include "Player/ElysiumCommandBus.h"
 #include "Debug/ElysiumConsole.h"
@@ -6,6 +7,7 @@
 
 #include "Camera/PlayerCameraManager.h"
 #include "CollisionQueryParams.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -466,4 +468,25 @@ static FAutoConsoleCommandWithWorld GElysiumCameraDump(
 			return;
 		}
 		UE_LOG(LogElysiumCamera, Display, TEXT("%s"), *Camera->Describe());
+		if (const ULocalPlayer* LocalPlayer = PC ? PC->GetLocalPlayer() : nullptr)
+		{
+			if (const UElysiumCameraService* Service =
+				LocalPlayer->GetSubsystem<UElysiumCameraService>())
+			{
+				TArray<FString> Requests;
+				Service->DescribeRequests(Requests);
+				const FElysiumResolvedCameraState& Resolved = Service->ResolvedCamera();
+				UE_LOG(LogElysiumCamera, Display,
+					TEXT("director: epoch=%llu requests=%d winner=%s weight=%.3f source=%s profile=%s fallback=%s pose=%s %s fov=%.1f"),
+					Service->CurrentEpoch(), Requests.Num(), *Resolved.Request.DebugName,
+					Resolved.Weight, *Resolved.Request.SourceShot,
+					*Resolved.Request.SelectedProfile, *Resolved.Request.FallbackReason,
+					*Resolved.Location.ToCompactString(), *Resolved.Rotation.ToCompactString(),
+					Resolved.FieldOfView);
+				for (const FString& Request : Requests)
+				{
+					UE_LOG(LogElysiumCamera, Display, TEXT("  request %s"), *Request);
+				}
+			}
+		}
 	}));

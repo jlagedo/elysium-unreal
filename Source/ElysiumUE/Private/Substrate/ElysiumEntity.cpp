@@ -87,6 +87,7 @@ void FElysiumEntity::Kill()
 	{
 		return;
 	}
+	NotifyOwnerOfTermination(EElysiumOwnedEntityTermination::RemovedAlive);
 	if (World)
 	{
 		if (IElysiumAudio* Audio = World->Audio())
@@ -115,6 +116,23 @@ void FElysiumEntity::Kill()
 		// Already hidden (OnDormancyChanged is skipped), but the visual state still changed
 		// hidden -> dead, so a retained visualizer must still be told.
 		World->NotifyVisualChanged(*this);
+	}
+}
+
+void FElysiumEntity::NotifyOwnerOfTermination(EElysiumOwnedEntityTermination Reason)
+{
+	if (bOwnerTerminationNotified)
+	{
+		return;
+	}
+	bOwnerTerminationNotified = true; // latch before the callback: owner outputs may re-enter us
+	if (!World || !OwnerEntity.IsSet())
+	{
+		return;
+	}
+	if (FElysiumEntity* Owner = World->Resolve(OwnerEntity))
+	{
+		Owner->OnOwnedEntityTerminated(*this, Reason);
 	}
 }
 

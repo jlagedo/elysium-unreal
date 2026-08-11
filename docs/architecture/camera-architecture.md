@@ -503,10 +503,13 @@ User settings persist independently of a save slot:
 - camera shake, head motion, recoil response, and motion-blur intensity;
 - dialogue camera enabled where a player-view fallback exists.
 
-Save data retains story-authoritative owners, not transient handles. On load, dialogue, map track,
-feed/death, or sequence state republishes its request from its own snapshot. The player preference
-then remains underneath it. Travel invalidates every map-scoped request before the new map publishes
-readiness.
+Dialogue and every scripted session that can own camera, body, animation, or a branch cursor block
+saving. This includes choreographed scenes, scripted sequences, paired/feed actions, and authored
+legacy or Sequencer camera tracks; ordinary idle, locomotion, combat, and reaction clips do not.
+Their camera handles, dialogue cursors, body-owner tokens, and transient animation state are never
+serialized or republished after load because no snapshot may be taken while they are active. Player
+camera preferences remain user settings above the save slot. Travel invalidates every map-scoped
+request before the new map publishes readiness.
 
 ## Diagnostics, tests, and performance
 

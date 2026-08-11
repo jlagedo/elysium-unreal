@@ -236,7 +236,8 @@ void UElysiumPresentationSubsystem::Publish()
 		// Authored cutscenes take the view through camera_track or SetCamera and return it through
 		// RestoreCameraToPlayerControl / RemoveCamera. Camera ownership is the exact suppression
 		// lifetime; scene playback alone would also catch ambient NPC choreography.
-		Next.bCinematic = World->HasTrackCamera() || World->HasScriptedCamera();
+		Next.bCinematic = World->HasTrackCamera() || World->HasScriptedCamera()
+			|| World->DialogueCameraHidesHud();
 		Next.Interaction = World->GetInteractionView();
 
 		FLinearColor FadeColor;

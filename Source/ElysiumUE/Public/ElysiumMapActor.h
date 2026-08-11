@@ -343,6 +343,7 @@ public:
 	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override;
 	virtual void ClearPlayerVisual() override;
+	virtual void SetPlayerVisualSuppressed(bool bSuppressed) override;
 
 	// --- IElysiumEmbodiment: the player's body ----------------------------------------------
 	// All five resolve the pawn through this world's first player controller and report false /
@@ -362,6 +363,12 @@ public:
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const override;
 	virtual FElysiumEntityHandle QueryFeedTarget() const override;
+	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
+		float TraceDepthCm) const override;
+	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;
+	virtual bool IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) const override;
+	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm,
+		float HalfExtentCm) const override;
 	// 11.7 — the scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.
@@ -568,6 +575,7 @@ private:
 	bool bRuntimeConstructionComplete = false;
 	bool bAnimationPreloadReady = false;
 	bool bMenuBackdrop = false;
+	bool bPlayerVisualSuppressed = false;
 	bool bNavigationBuildRequested = false;
 	bool bNavigationBuildFailed = false;
 	// Set in EndPlay. After it, a DestroyNpcMotor call is the entity world's own teardown running

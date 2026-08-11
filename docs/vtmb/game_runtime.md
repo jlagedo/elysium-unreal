@@ -1191,6 +1191,21 @@ Animation/camera/gesture are **not** in the `.dlg` (cols 6–11 empty) — they 
    `CDialog::Acquire` (`0x100e05f0`), which calls `CDialog::GetStartingLine`
    (`0x100e0b10`) **[VtMB]**. The opener is selected from authored state; it is not the first
    NPC line with display text.
+
+   The three Tier-1 inputs are **not aliases** in the hash-pinned server binary **[VtMB, RE46]**:
+
+   | Input | Distinct server behavior |
+   |---|---|
+   | `StartPlayerDialog` (`0x1029ef80`) | Common player/partner and NPC-state guards; an integer input is stored at NPC `+0x5bac`; forced byte `+0x6495` is set; schedule/activity `0x6d`. |
+   | `StartPlayerDialogRemote` (`0x1029f060`) | Common guards; the input variant is **not read**; forced byte is set; distinct schedule/activity `0x6e`. |
+   | `StartPlayerDialogUnforced` (`0x1029f120`) | Common guards plus a player-side refusal predicate; an integer is stored at `+0x5bac`; forced byte is cleared; schedule/activity `0x6d`. |
+
+   Therefore the tutorial's authored `StartPlayerDialogRemote 256` does not decode into flags in
+   this handler. The purpose of the integer stored by the other forms remains open. None of the
+   three complete input bodies writes player/NPC origin, angles, velocity, camera pose, or input
+   state. They schedule downstream dialogue work; physical placement, facing, or controller
+   transfer must not be inferred from their final presentation. The gated comparison capture is
+   `research/cases/dialogue-camera/`.
 2. `GetStartingLine` scans the parsed rows in **physical file order**, record stride `0x34`.
    A row is a starting-condition sentinel when its male text at `+0x04` contains, case
    insensitively, `starting condition`, `starting-condition`, or `starting_condition`

@@ -6862,6 +6862,450 @@ bool FElysiumWorldMaterialsTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// CNPCMaker's recovered admission order, tutorial live ceiling, and saved owner lifecycle.
+// =====================================================================================
+
+namespace
+{
+	class FElysiumNpcMakerSceneBlockerTestEntity final : public FElysiumEntity
+	{
+	public:
+		virtual bool BlocksNpcMakerSpawns() const override { return !IsInert(); }
+	};
+	TUniquePtr<FElysiumEntity> MakeNpcMakerSceneBlockerTestEntity()
+	{
+		return MakeUnique<FElysiumNpcMakerSceneBlockerTestEntity>();
+	}
+	FElysiumClassRegistrar GRegNpcMakerSceneBlockerTest(
+		TEXT("elysium_test_npc_maker_scene_blocker"), ElysiumBaseClassName(),
+		&MakeNpcMakerSceneBlockerTestEntity, [](FElysiumClassDesc&) {});
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMakerLifecycleTest,
+	"Elysium.Substrate.NpcMakerLifecycle", GElysiumTestFlags)
+bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
+{
+	auto MakeDefs = []()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__npc_maker_lifecycle__");
+		FElysiumEntityDef Maker;
+		Maker.Classname = TEXT("npc_maker");
+		Maker.TargetName = TEXT("maker");
+		Maker.Origin = FVector(100.0f * ElysiumMove::U, 0.0f, 0.0f);
+		Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VPedestrian"));
+		Maker.Keys.Add(TEXT("NPCTargetname"), TEXT("child"));
+		Maker.Keys.Add(TEXT("model"), TEXT("models/test_child.mdl"));
+		Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
+		Maker.Keys.Add(TEXT("Flag_InfChild"), TEXT("1"));
+		Maker.Keys.Add(TEXT("Flag_NPCClip"), TEXT("1"));
+		Maker.Keys.Add(TEXT("Flag_ViewCone"), TEXT("1"));
+		Maker.Keys.Add(TEXT("MaxNPCCount"), TEXT("1"));
+		Maker.Keys.Add(TEXT("MaxLiveChildren"), TEXT("1"));
+		Maker.Keys.Add(TEXT("SpawnFrequency"), TEXT("5"));
+		Maker.Keys.Add(TEXT("MinPCDistance"), TEXT("200"));
+		FElysiumOutputDef Death;
+		Death.Name = TEXT("OnDeath");
+		Death.Target = TEXT("nobody");
+		Death.Input = TEXT("Trigger");
+		Death.Times = 1;
+		Maker.Outputs.Add(Death);
+		FElysiumOutputDef Spawned;
+		Spawned.Name = TEXT("OnSpawnNPC");
+		Spawned.Target = TEXT("spawncount");
+		Spawned.Input = TEXT("Add");
+		Spawned.Param = TEXT("1");
+		Maker.Outputs.Add(Spawned);
+		Defs.Defs.Add(MoveTemp(Maker));
+		FElysiumEntityDef SceneBlocker;
+		SceneBlocker.Classname = TEXT("elysium_test_npc_maker_scene_blocker");
+		SceneBlocker.TargetName = TEXT("scene_blocker");
+		SceneBlocker.bStartHidden = true;
+		Defs.Defs.Add(MoveTemp(SceneBlocker));
+		FElysiumEntityDef SpawnCounter;
+		SpawnCounter.Classname = TEXT("math_counter");
+		SpawnCounter.TargetName = TEXT("spawncount");
+		Defs.Defs.Add(MoveTemp(SpawnCounter));
+		return Defs;
+	};
+	auto ReadInt = [this](const FElysiumEntity& Ent, const TCHAR* Name) -> int32
+	{
+		const FElysiumFieldAccessor* Field = Ent.Class
+			? FElysiumClassRegistry::Get().FindField(*Ent.Class, FName(Name)) : nullptr;
+		if (!TestNotNull(FString::Printf(TEXT("field %s resolves"), Name), Field))
+		{
+			return static_cast<int32>(INDEX_NONE);
+		}
+		return Field->Get(Ent).ToInt();
+	};
+	auto SetInt = [this](FElysiumEntity& Ent, const TCHAR* Name, int32 Value)
+	{
+		const FElysiumFieldAccessor* Field = Ent.Class
+			? FElysiumClassRegistry::Get().FindField(*Ent.Class, FName(Name)) : nullptr;
+		if (!TestNotNull(FString::Printf(TEXT("field %s is writable"), Name), Field))
+		{
+			return;
+		}
+		Field->Set(Ent, FElysiumVariant::Int(Value));
+	};
+	auto ExplicitSpawn = [](FElysiumEntityWorld& World, const FElysiumEntityHandle& Maker)
+	{
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Maker);
+		World.Tick(0.0);
+	};
+	auto CounterValue = [](const FElysiumEntity* Counter)
+	{
+		TArray<TPair<FString, FString>> State;
+		if (Counter) { Counter->GetDebugState(State); }
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.0f;
+	};
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.PlayerLocation = FVector::ZeroVector;
+	Services.bUseNpcMakerGroundZ = true;
+	Services.NpcMakerGroundZ = 25.0f;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Maker = World.FindByName(TEXT("maker"));
+	if (!TestNotNull(TEXT("maker exists"), Maker))
+	{
+		return false;
+	}
+	TestEqual(TEXT("start-disabled installs no automatic think"), Maker->NextThink, ELYSIUM_NEVER_THINK);
+	const int32 Before = World.NumEntities();
+	FElysiumEntity* SceneBlocker = World.FindByName(TEXT("scene_blocker"));
+	if (!TestNotNull(TEXT("scene blocker exists"), SceneBlocker))
+	{
+		return false;
+	}
+	SceneBlocker->ScriptUnhide();
+	Services.Calls.Reset();
+	ExplicitSpawn(World, Maker->Handle);
+	TestEqual(TEXT("active scene rejection allocates nothing"), World.NumEntities(), Before);
+	TestEqual(TEXT("ground is resolved before admission"),
+		Services.Count(TEXT("ResolveNpcMakerGroundZ")), 1);
+	TestTrue(TEXT("ground depth converts 2048 Source units once"),
+		Services.Log().Contains(TEXT("depth=5201.92")));
+	TestEqual(TEXT("scene gate follows the live ceiling and precedes player guards"),
+		Services.Count(TEXT("IsNpcMakerVisible")), 0);
+	SceneBlocker->ScriptHide();
+
+	Services.Calls.Reset();
+	Services.bNpcMakerVisible = true;
+	Services.bNpcMakerInViewCone = true;
+	Services.bNpcMakerOccupied = true;
+	ExplicitSpawn(World, Maker->Handle);
+	TestEqual(TEXT("visible rejection allocates nothing"), World.NumEntities(), Before);
+	TestEqual(TEXT("cached ground is not retraced"), Services.Count(TEXT("ResolveNpcMakerGroundZ")), 0);
+	TestEqual(TEXT("visibility is the first player guard"), Services.Count(TEXT("IsNpcMakerVisible")), 1);
+	TestEqual(TEXT("visibility short-circuits the cone"), Services.Count(TEXT("IsNpcMakerInPlayerViewCone")), 0);
+
+	Services.Calls.Reset();
+	Services.bNpcMakerVisible = false;
+	ExplicitSpawn(World, Maker->Handle);
+	TestEqual(TEXT("view-cone rejection allocates nothing"), World.NumEntities(), Before);
+	TestEqual(TEXT("cached nonzero ground is not retraced"), Services.Count(TEXT("ResolveNpcMakerGroundZ")), 0);
+	TestEqual(TEXT("cone follows visibility"), Services.Count(TEXT("IsNpcMakerInPlayerViewCone")), 1);
+
+	Services.Calls.Reset();
+	Services.bNpcMakerInViewCone = false;
+	ExplicitSpawn(World, Maker->Handle);
+	TestEqual(TEXT("minimum-distance rejection allocates nothing"), World.NumEntities(), Before);
+	TestEqual(TEXT("distance short-circuits occupancy"), Services.Count(TEXT("IsNpcMakerSpawnAreaOccupied")), 0);
+
+	SetInt(*Maker, TEXT("MinPCDistance"), 100); // exact equality after truncation is admitted onward
+	Services.Calls.Reset();
+	ExplicitSpawn(World, Maker->Handle);
+	TestEqual(TEXT("occupancy rejection allocates nothing"), World.NumEntities(), Before);
+	TestEqual(TEXT("occupancy is the final guard"), Services.Count(TEXT("IsNpcMakerSpawnAreaOccupied")), 1);
+	TestTrue(TEXT("occupancy half-extent converts 34 Source units once"),
+		Services.Log().Contains(TEXT("half=86.36")));
+
+	Services.Calls.Reset();
+	Services.bNpcMakerOccupied = false;
+	ExplicitSpawn(World, Maker->Handle);
+	FElysiumEntity* Child = World.FindByName(TEXT("child"));
+	if (!TestNotNull(TEXT("disabled maker accepts explicit Spawn"), Child))
+	{
+		return false;
+	}
+	TestEqual(TEXT("one child was allocated"), World.NumEntities(), Before + 1);
+	TestEqual(TEXT("infinite mode forces fade spawnflags"), Child->SpawnFlags, 0x204);
+	TestEqual(TEXT("child owns the maker handle"), Child->GetOwnerEntity().Index, Maker->Handle.Index);
+	TestFalse(TEXT("maker controls are absent from the child template"),
+		Child->Def->Keys.Contains(TEXT("MaxLiveChildren")));
+	TestEqual(TEXT("ordinary template keys are cloned"), Child->Def->Keys.FindRef(TEXT("model")),
+		FString(TEXT("models/test_child.mdl")));
+	TestEqual(TEXT("child has fresh output counters"),
+		Child->OutputTimesRemaining.Num(), Maker->Def->Outputs.Num());
+	TestEqual(TEXT("maker live count increments after dispatch"),
+		ReadInt(*Maker, TEXT("m_cLiveChildren")), 1);
+	TestEqual(TEXT("successful construction fires one maker OnSpawnNPC"),
+		CounterValue(World.FindByName(TEXT("spawncount"))), 1.0f);
+
+	Services.Calls.Reset();
+	ExplicitSpawn(World, Maker->Handle);
+	TestEqual(TEXT("MaxLiveChildren rejects the second tutorial-equivalent Spawn"),
+		World.NumEntities(), Before + 1);
+	const int32 LiveLimitGeometryCalls =
+		Services.Count(TEXT("ResolveNpcMakerGroundZ"))
+		+ Services.Count(TEXT("IsNpcMakerVisible"))
+		+ Services.Count(TEXT("IsNpcMakerInPlayerViewCone"))
+		+ Services.Count(TEXT("IsNpcMakerSpawnAreaOccupied"));
+	TestEqual(TEXT("live limit short-circuits all host geometry"), LiveLimitGeometryCalls, 0);
+	TestEqual(TEXT("live-limit rejection fires no second OnSpawnNPC"),
+		CounterValue(World.FindByName(TEXT("spawncount"))), 1.0f);
+
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Maker->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("Enable schedules an immediate maker think"), Maker->NextThink, 0.0f);
+	World.Tick(0.0);
+	TestEqual(TEXT("a timed live-limit retry uses SpawnFrequency"), Maker->NextThink, 5.0f);
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Disable")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Maker->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("Disable clears the maker think"), Maker->NextThink, ELYSIUM_NEVER_THINK);
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Toggle")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Maker->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("Toggle delegates disabled to immediate Enable"), Maker->NextThink, 0.0f);
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Toggle")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Maker->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("Toggle delegates enabled to Disable"), Maker->NextThink, ELYSIUM_NEVER_THINK);
+
+	// Player-dependent guards fail open when no player entity exists; occupancy still runs.
+	FElysiumRecordingServices NoPlayerServices;
+	NoPlayerServices.bNpcMakerVisible = true;
+	NoPlayerServices.bNpcMakerInViewCone = true;
+	FElysiumEntityWorld NoPlayer(nullptr, nullptr, NoPlayerServices.Bundle());
+	NoPlayer.Load(MakeDefs());
+	NoPlayer.Activate(0.0);
+	FElysiumEntity* NoPlayerMaker = NoPlayer.FindByName(TEXT("maker"));
+	if (!TestNotNull(TEXT("missing-player maker exists"), NoPlayerMaker))
+	{
+		return false;
+	}
+	ExplicitSpawn(NoPlayer, NoPlayerMaker->Handle);
+	TestNotNull(TEXT("missing player admits past visibility, cone, and distance"),
+		NoPlayer.FindByName(TEXT("child")));
+	TestEqual(TEXT("missing player skips visibility host query"),
+		NoPlayerServices.Count(TEXT("IsNpcMakerVisible")), 0);
+	TestEqual(TEXT("missing player skips cone host query"),
+		NoPlayerServices.Count(TEXT("IsNpcMakerInPlayerViewCone")), 0);
+	TestEqual(TEXT("missing player still checks occupancy"),
+		NoPlayerServices.Count(TEXT("IsNpcMakerSpawnAreaOccupied")), 1);
+
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+	FElysiumRecordingServices RestoredServices;
+	RestoredServices.bHasPlayer = true;
+	FElysiumEntityWorld Restored(nullptr, nullptr, RestoredServices.Bundle());
+	Restored.Load(MakeDefs());
+	Restored.SpawnPlayer();
+	Restored.ApplySnapshot(Snapshot);
+	Restored.Activate(0.0);
+	FElysiumEntity* RestoredMaker = Restored.FindByName(TEXT("maker"));
+	FElysiumEntity* RestoredChild = Restored.FindByName(TEXT("child"));
+	if (!TestNotNull(TEXT("maker restores"), RestoredMaker)
+		|| !TestNotNull(TEXT("runtime child restores"), RestoredChild))
+	{
+		return false;
+	}
+	TestEqual(TEXT("live ceiling survives save/load"),
+		ReadInt(*RestoredMaker, TEXT("m_cLiveChildren")), 1);
+	TestEqual(TEXT("owner handle rebases to the restored maker"),
+		RestoredChild->GetOwnerEntity().Index, RestoredMaker->Handle.Index);
+	const int32 RestoredCount = Restored.NumEntities();
+	ExplicitSpawn(Restored, RestoredMaker->Handle);
+	TestEqual(TEXT("restored live child still blocks another spawn"),
+		Restored.NumEntities(), RestoredCount);
+
+	FElysiumCombatCharacter* RestoredCharacter = RestoredChild->AsCombatCharacter();
+	if (!TestNotNull(TEXT("restored child is a combat character"), RestoredCharacter))
+	{
+		return false;
+	}
+	RestoredCharacter->OnKilled();
+	TestEqual(TEXT("death decrements the restored maker once"),
+		ReadInt(*RestoredMaker, TEXT("m_cLiveChildren")), 0);
+	RestoredChild->Kill();
+	TestEqual(TEXT("death followed by Kill does not notify twice"),
+		ReadInt(*RestoredMaker, TEXT("m_cLiveChildren")), 0);
+
+	// Removing a live finite child refunds the consumed total and never needs a rendered body.
+	FElysiumEntityDefs FiniteDefs = MakeDefs();
+	FiniteDefs.MapName = TEXT("__npc_maker_finite_remove__");
+	FElysiumEntityDef& FiniteMakerDef = FiniteDefs.Defs[0];
+	FiniteMakerDef.Keys.Add(TEXT("Flag_InfChild"), TEXT("0"));
+	FiniteMakerDef.Keys.Add(TEXT("Flag_NPCClip"), TEXT("0"));
+	FiniteMakerDef.Keys.Add(TEXT("Flag_ViewCone"), TEXT("0"));
+	FiniteMakerDef.Keys.Add(TEXT("MinPCDistance"), TEXT("0"));
+	FiniteMakerDef.Outputs[0].Target = TEXT("childdeath");
+	FiniteMakerDef.Outputs[0].Input = TEXT("Add");
+	FiniteMakerDef.Outputs[0].Param = TEXT("1");
+	struct FMakerDeathWire { const TCHAR* Output; const TCHAR* Target; };
+	for (const FMakerDeathWire& Output : {
+		FMakerDeathWire{ TEXT("OnNPCDied"), TEXT("makerdeath") },
+		FMakerDeathWire{ TEXT("OnLastNPCDied"), TEXT("lastdeath") } })
+	{
+		FElysiumOutputDef Wire;
+		Wire.Name = Output.Output;
+		Wire.Target = Output.Target;
+		Wire.Input = TEXT("Add");
+		Wire.Param = TEXT("1");
+		FiniteMakerDef.Outputs.Add(MoveTemp(Wire));
+	}
+	for (const TCHAR* Name : { TEXT("childdeath"), TEXT("makerdeath"), TEXT("lastdeath") })
+	{
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = Name;
+		FiniteDefs.Defs.Add(MoveTemp(Counter));
+	}
+	FElysiumRecordingServices FiniteServices;
+	FElysiumEntityWorld Finite(nullptr, nullptr, FiniteServices.Bundle());
+	Finite.Load(MoveTemp(FiniteDefs));
+	Finite.Activate(0.0);
+	FElysiumEntity* FiniteMaker = Finite.FindByName(TEXT("maker"));
+	if (!TestNotNull(TEXT("finite maker exists"), FiniteMaker))
+	{
+		return false;
+	}
+	ExplicitSpawn(Finite, FiniteMaker->Handle);
+	FElysiumEntity* FiniteChild = Finite.FindByName(TEXT("child"));
+	if (!TestNotNull(TEXT("finite child spawns"), FiniteChild))
+	{
+		return false;
+	}
+	TestEqual(TEXT("finite child receives the non-fade spawnflags"), FiniteChild->SpawnFlags, 4);
+	TestEqual(TEXT("finite spawn consumes the remaining total"),
+		ReadInt(*FiniteMaker, TEXT("MaxNPCCount")), 0);
+	FiniteChild->Kill();
+	TestEqual(TEXT("live removal refunds the finite total"),
+		ReadInt(*FiniteMaker, TEXT("MaxNPCCount")), 1);
+	TestEqual(TEXT("live removal decrements the live count"),
+		ReadInt(*FiniteMaker, TEXT("m_cLiveChildren")), 0);
+	Finite.Tick(0.0);
+	TestEqual(TEXT("live removal fires no maker death output"),
+		CounterValue(Finite.FindByName(TEXT("makerdeath"))), 0.0f);
+	ExplicitSpawn(Finite, FiniteMaker->Handle);
+	FElysiumEntity* DeadChild = nullptr;
+	for (const TUniquePtr<FElysiumEntity>& Candidate : Finite.Entities())
+	{
+		if (Candidate.IsValid() && !Candidate->IsDead()
+			&& Candidate->TargetName.Equals(TEXT("child"), ESearchCase::IgnoreCase))
+		{
+			DeadChild = Candidate.Get();
+		}
+	}
+	if (!TestNotNull(TEXT("replacement finite child spawns"), DeadChild))
+	{
+		return false;
+	}
+	DeadChild->AsCombatCharacter()->OnKilled();
+	Finite.Tick(0.0);
+	TestEqual(TEXT("child OnDeath fires once"),
+		CounterValue(Finite.FindByName(TEXT("childdeath"))), 1.0f);
+	TestEqual(TEXT("genuine death fires maker OnNPCDied"),
+		CounterValue(Finite.FindByName(TEXT("makerdeath"))), 1.0f);
+	TestEqual(TEXT("finite depletion fires OnLastNPCDied"),
+		CounterValue(Finite.FindByName(TEXT("lastdeath"))), 1.0f);
+	TestEqual(TEXT("genuine death does not refund finite total"),
+		ReadInt(*FiniteMaker, TEXT("MaxNPCCount")), 0);
+	Finite.EnqueueInput(TEXT("!self"), FName(TEXT("Enable")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), FiniteMaker->Handle);
+	Finite.Tick(0.0);
+	TestEqual(TEXT("Enable refuses finite depletion"), FiniteMaker->NextThink, ELYSIUM_NEVER_THINK);
+	ExplicitSpawn(Finite, FiniteMaker->Handle);
+	TestEqual(TEXT("explicit Spawn ignores finite depletion and may cross below zero"),
+		ReadInt(*FiniteMaker, TEXT("MaxNPCCount")), -1);
+
+	// A non-live-limit timed rejection uses the named 1..2 second retry stream.
+	FElysiumEntityDefs TimedDefs = MakeDefs();
+	TimedDefs.MapName = TEXT("__npc_maker_timed_retry__");
+	TimedDefs.Defs[0].Keys.Add(TEXT("Flag_StartDisabled"), TEXT("0"));
+	TimedDefs.Defs[0].Keys.Add(TEXT("MinPCDistance"), TEXT("0"));
+	FElysiumRecordingServices TimedServices;
+	TimedServices.bHasPlayer = true;
+	TimedServices.bNpcMakerVisible = true;
+	FElysiumEntityWorld Timed(nullptr, nullptr, TimedServices.Bundle());
+	Timed.Load(MoveTemp(TimedDefs));
+	Timed.SpawnPlayer();
+	Timed.Activate(0.0);
+	FElysiumEntity* TimedMaker = Timed.FindByName(TEXT("maker"));
+	if (!TestNotNull(TEXT("timed maker exists"), TimedMaker))
+	{
+		return false;
+	}
+	TestEqual(TEXT("enabled maker initially uses SpawnFrequency"), TimedMaker->NextThink, 5.0f);
+	Timed.Tick(5.0);
+	TestTrue(TEXT("transient timed rejection retries at least one second later"),
+		TimedMaker->NextThink >= 6.0f);
+	TestTrue(TEXT("transient timed rejection retries no more than two seconds later"),
+		TimedMaker->NextThink <= 7.0f);
+	TimedServices.bNpcMakerVisible = false;
+	const float TimedSuccessAt = TimedMaker->NextThink;
+	Timed.Tick(TimedSuccessAt);
+	TestNotNull(TEXT("a later timed attempt can construct a child"), Timed.FindByName(TEXT("child")));
+	TestEqual(TEXT("timed success retries at SpawnFrequency"),
+		TimedMaker->NextThink, TimedSuccessAt + 5.0f);
+
+	// Version 12 ended at the pre-maker NPC leaf. Reading that exact shape leaves ownership unset.
+	FElysiumEntityDefs LegacyDefs;
+	LegacyDefs.MapName = TEXT("__npc_maker_v12__");
+	FElysiumEntityDef LegacyNpc;
+	LegacyNpc.Classname = TEXT("npc_VPedestrian");
+	LegacyNpc.TargetName = TEXT("legacy_child");
+	LegacyDefs.Defs.Add(MoveTemp(LegacyNpc));
+	FElysiumRecordingServices LegacyServices;
+	FElysiumEntityWorld LegacyBefore(nullptr, nullptr, LegacyServices.Bundle());
+	LegacyBefore.Load(MoveTemp(LegacyDefs));
+	FElysiumEntity* LegacySource = LegacyBefore.FindByName(TEXT("legacy_child"));
+	if (!TestNotNull(TEXT("v12 source NPC exists"), LegacySource))
+	{
+		return false;
+	}
+	TArray<uint8> LegacyLeaf;
+	{
+		FMemoryWriter Writer(LegacyLeaf, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::WireIdentity);
+		LegacySource->Serialize(Ar);
+	}
+	FElysiumEntityDefs LegacyReadDefs;
+	LegacyReadDefs.MapName = TEXT("__npc_maker_v12__");
+	FElysiumEntityDef LegacyReadNpc;
+	LegacyReadNpc.Classname = TEXT("npc_VPedestrian");
+	LegacyReadNpc.TargetName = TEXT("legacy_child");
+	LegacyReadDefs.Defs.Add(MoveTemp(LegacyReadNpc));
+	FElysiumEntityWorld LegacyAfter(nullptr, nullptr, LegacyServices.Bundle());
+	LegacyAfter.Load(MoveTemp(LegacyReadDefs));
+	FElysiumEntity* LegacyDest = LegacyAfter.FindByName(TEXT("legacy_child"));
+	if (!TestNotNull(TEXT("v12 destination NPC exists"), LegacyDest))
+	{
+		return false;
+	}
+	{
+		FMemoryReader Reader(LegacyLeaf, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::WireIdentity);
+		LegacyDest->Serialize(Ar);
+	}
+	TestFalse(TEXT("v12 NPC restores safely without a guessed maker"),
+		LegacyDest->GetOwnerEntity().IsSet());
+
+	return true;
+}
+
+// =====================================================================================
 // FElysiumNpc / npc_maker — registry coverage, npc_maker.Spawn creating a live child on a bare
 // world, dialogue latches, and the engine-neutral half of named patrol resolution/persistence.
 // =====================================================================================
@@ -6921,6 +7365,27 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		reinterpret_cast<const void*>(Reg.FindInput(*MakerDesc, FName(TEXT("Spawn")))));
 	TestNotNull(TEXT("npc_maker.Enable resolves"),
 		reinterpret_cast<const void*>(Reg.FindInput(*MakerDesc, FName(TEXT("Enable")))));
+	for (const TCHAR* Field : { TEXT("NPCType"), TEXT("MaxNPCCount"), TEXT("SpawnFrequency"),
+		TEXT("MaxLiveChildren"), TEXT("NPCTargetname"), TEXT("Flag_StartDisabled"),
+		TEXT("Flag_NPCClip"), TEXT("Flag_Fade"), TEXT("Flag_InfChild"), TEXT("Flag_NoDrop"),
+		TEXT("Flag_ViewCone"), TEXT("MinPCDistance") })
+	{
+		const FElysiumFieldAccessor* Accessor = Reg.FindField(*MakerDesc, FName(Field));
+		if (TestNotNull(FString::Printf(TEXT("npc_maker.%s resolves"), Field), Accessor))
+		{
+			TestTrue(FString::Printf(TEXT("npc_maker.%s is keyable"), Field), Accessor->bKeyable);
+			TestTrue(FString::Printf(TEXT("npc_maker.%s is saved"), Field), Accessor->bSave);
+		}
+	}
+	for (const TCHAR* Field : { TEXT("m_cLiveChildren"), TEXT("m_flGround") })
+	{
+		const FElysiumFieldAccessor* Accessor = Reg.FindField(*MakerDesc, FName(Field));
+		if (TestNotNull(FString::Printf(TEXT("npc_maker.%s resolves"), Field), Accessor))
+		{
+			TestFalse(FString::Printf(TEXT("npc_maker.%s is not keyable"), Field), Accessor->bKeyable);
+			TestTrue(FString::Printf(TEXT("npc_maker.%s is saved"), Field), Accessor->bSave);
+		}
+	}
 
 	// --- A recorded world: Jack, a counter wired off his OnDialogBegin, and the blueblood maker ---
 	FElysiumEntityDefs Defs;
@@ -6950,6 +7415,11 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	BluebloodMaker.TargetName = TEXT("blueblood_maker");
 	BluebloodMaker.Keys.Add(TEXT("NPCType"), TEXT("npc_VPedestrian"));
 	BluebloodMaker.Keys.Add(TEXT("NPCTargetname"), TEXT("blueblood"));
+	BluebloodMaker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
+	BluebloodMaker.Keys.Add(TEXT("Flag_InfChild"), TEXT("1"));
+	BluebloodMaker.Keys.Add(TEXT("MaxNPCCount"), TEXT("1"));
+	BluebloodMaker.Keys.Add(TEXT("MaxLiveChildren"), TEXT("1"));
+	BluebloodMaker.Keys.Add(TEXT("SpawnFrequency"), TEXT("5"));
 	BluebloodMaker.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
 	BluebloodMaker.Keys.Add(TEXT("use_interesting"), TEXT("1"));
 	BluebloodMaker.Keys.Add(TEXT("interesting_place_groups"), TEXT("31"));
@@ -7009,6 +7479,23 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		TestEqual(TEXT("blueblood is npc_VPedestrian"), Blueblood->Def->Classname, FString(TEXT("npc_VPedestrian")));
 		TestFalse(TEXT("blueblood is a real NPC, not an inert record"), Blueblood->IsRecordOnly());
 		TestNotNull(TEXT("blueblood handle resolves"), World.Resolve(Blueblood->Handle));
+	}
+	const int32 EntitiesAfterFirstSpawn = World.NumEntities();
+	const FElysiumEntityHandle FirstBlueblood = Blueblood
+		? Blueblood->Handle : FElysiumEntityHandle::Invalid();
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), MakerEnt->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("MaxLiveChildren rejects a second explicit child"),
+		World.NumEntities(), EntitiesAfterFirstSpawn);
+	if (FElysiumEntity* OnlyBlueblood = World.FindByName(TEXT("blueblood")))
+	{
+		TestEqual(TEXT("the original child remains the named live child"),
+			OnlyBlueblood->Handle.Index, FirstBlueblood.Index);
+	}
+	else
+	{
+		AddError(TEXT("the first Blueblood disappeared after a rejected second Spawn"));
 	}
 
 	// WillTalk latch + StartPlayerDialogRemote fires OnDialogBegin.
@@ -12531,10 +13018,14 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// the event record, read behind its own version — so an `EventClock` payload restores with an
 	// unset wire rather than being refused. Additive again, and again the floor stays where the last
 	// breaking schema left it.
-	TestEqual(TEXT("the wire identity is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::WireIdentity);
-	TestTrue(TEXT("and it is additive, so the floor did not move with it"),
+	TestTrue(TEXT("wire identity remains additive"),
 		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::WireIdentity);
+	// `NpcMaker` appends owner/notification state to the NPC leaf behind its own version. Legacy
+	// children remain unowned instead of being guessed, while the supported floor remains v9.
+	TestEqual(TEXT("npc_maker ownership is the current schema"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcMaker);
+	TestTrue(TEXT("and npc_maker ownership is additive"),
+		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::NpcMaker);
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would
@@ -12706,6 +13197,17 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 	ElysiumRng::Restore(State);
 	TestEqual(TEXT("a restored stream continues the saved sequence"),
 		ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 9), Next);
+
+	ElysiumRng::SeedAll(5678);
+	ElysiumRng::Stream(EElysiumRngStream::NpcMaker).FRandRange(1.0f, 2.0f);
+	ElysiumRng::Snapshot(State);
+	const double NextMakerRetry =
+		ElysiumRng::Stream(EElysiumRngStream::NpcMaker).FRandRange(1.0f, 2.0f);
+	ElysiumRng::Stream(EElysiumRngStream::NpcMaker).FRandRange(1.0f, 2.0f);
+	ElysiumRng::Restore(State);
+	TestEqual(TEXT("the named npc_maker stream continues its saved retry sequence"),
+		ElysiumRng::Stream(EElysiumRngStream::NpcMaker).FRandRange(1.0f, 2.0f),
+		NextMakerRetry);
 
 	return true;
 }
@@ -16334,6 +16836,9 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 	Maker.TargetName = TEXT("blueblood_maker");
 	Maker.Keys.Add(TEXT("NPCType"), TEXT("npc_VPedestrian"));
 	Maker.Keys.Add(TEXT("NPCTargetname"), TEXT("blueblood"));
+	Maker.Keys.Add(TEXT("Flag_StartDisabled"), TEXT("1"));
+	Maker.Keys.Add(TEXT("Flag_InfChild"), TEXT("1"));
+	Maker.Keys.Add(TEXT("MaxLiveChildren"), TEXT("1"));
 	auto Wire = [&Maker](const TCHAR* Output, const TCHAR* Target)
 	{
 		FElysiumOutputDef Row;
@@ -16402,7 +16907,7 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 	}
 
 	// The child is the firing entity: the maker's wires resolve because the rows are on the child's
-	// own def, which is the §5.5.1 reconstruction this runtime carries.
+	// own def, which is the recovered child-output contract in `docs/vtmb/entity_io.md`.
 	TestEqual(TEXT("the maker-authored OnFedUponBegin reached its target"),
 		SaveTestCounterValue(World.FindByName(TEXT("begincount"))), 1.0f);
 	TestEqual(TEXT("...and OnFedUponEnd did too"),

@@ -4,6 +4,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityHandle.h"
+#include "ElysiumDialogueCamera.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
 #include "ElysiumSaveTypes.h"
@@ -14,6 +15,7 @@
 struct FElysiumSignData;
 
 class FElysiumDlgConversation;
+struct FElysiumDialogueSession;
 class FElysiumLineService;
 class AActor;
 class UElysiumBrushComponent;
@@ -163,6 +165,12 @@ public:
 	// It **replaces** the event queue rather than appending to it, because Spawn() will have queued
 	// this load's own openers. Reports how many entity records were applied.
 	int32 ApplySnapshot(const FElysiumMapSnapshot& Snapshot);
+	// Leaf serializers that own handles use the same epoch re-stamping rule as the generic field
+	// applier. This keeps the epoch private and avoids duplicating handle validity checks.
+	FElysiumEntityHandle RebaseSavedHandle(const FElysiumEntityHandle& Saved) const
+	{
+		return RebaseHandle(Saved);
+	}
 
 	// Give up this world's claim on the session: forget the player (so Teardown dehydrates nothing)
 	// and suppress the teardown freeze. What a load means for the world being replaced — the record
@@ -284,11 +292,13 @@ public:
 	// by the visual-novel Slate box off the published view state (11.8 — same held-on-the-world
 	// lifetime as the sign/fade). The owning NPC's OnDialogEnd fires when it closes (the beat
 	// machine's hinge — DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
-	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation);
+	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation,
+		EElysiumDialogOpenerKind Opener = EElysiumDialogOpenerKind::Remote,
+		int32 RawFlags = 0, const FString& DefaultCamera = FString());
 	// The live conversation, or null when none is open. What the dialogue box renders.
-	FElysiumDlgConversation* GetOpenDialog() const { return OpenDialogConv.Get(); }
+	FElysiumDlgConversation* GetOpenDialog() const;
 	// The NPC the open conversation belongs to (Invalid when none is open).
-	FElysiumEntityHandle GetOpenDialogOwner() const { return OpenDialogOwner; }
+	FElysiumEntityHandle GetOpenDialogOwner() const;
 	// Player picked the Nth visible PC choice: advance the branch machine; end the session (firing the
 	// owner's OnDialogEnd) if the pick closed it. No-op when no conversation is open.
 	void PlayerDialogChoose(int32 VisibleIndex);
@@ -297,6 +307,13 @@ public:
 	// Force-close the open conversation. bSilent suppresses OnDialogEnd (a Kill/teardown must not
 	// resurrect the beat machine); a normal close fires it.
 	void CloseDialog(bool bSilent = false);
+	// Re-resolve the selected source/profile anchors against settled body positions and update the
+	// same scoped request. No candidate search occurs here; selection changes only at line boundaries.
+	void RefreshDialogueCamera();
+	bool GetDialogueCameraGaze(FVector& OutPoint) const;
+	bool DialogueCameraHidesHud() const;
+	void GetDialogueDebugState(TArray<TPair<FString, FString>>& Out) const;
+	FString ScriptedSessionSaveBlockReason() const;
 
 	// The one scripted camera the map has up (11.7), held here for exactly the reason the sign and the
 	// conversation are: it is world state with a lifetime, and the thing that draws it is replaceable.
@@ -339,6 +356,7 @@ public:
 	IElysiumTravel*     Travel() const     { return WorldServices.Travel; }
 	IElysiumPresenter*  Presenter() const  { return WorldServices.Presenter; }
 	IElysiumWeather*    Weather() const    { return WorldServices.Weather; }
+	IElysiumCameraService* Camera() const  { return WorldServices.Camera; }
 	const FElysiumWeatherState& GetWeatherState() const { return WeatherState; }
 	void FadeGlobalWetness(float Target);
 	FElysiumLineService* Lines() const { return LineService.Get(); }
@@ -361,6 +379,7 @@ public:
 	FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle);
 	const FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle) const;
 	FElysiumEntity* FindByName(const FString& Name);   // first live match, or null
+	bool IsNpcMakerSceneBlocked() const;
 	// First live info_landmark with this targetname (the P4.6 landmark-transition anchor), or null.
 	FElysiumEntity* FindLandmark(const FString& Name);
 	void ForEachNamed(const FString& Pattern, TFunctionRef<void(FElysiumEntity&)> Fn);
@@ -597,11 +616,12 @@ private:
 
 	// 9.1 / B4 open-dialogue state (one at a time). The conversation owns the branch cursor; the world
 	// tracks which NPC it belongs to so ending it can fire that NPC's OnDialogEnd.
-	FElysiumEntityHandle OpenDialogOwner;
-	TSharedPtr<FElysiumDlgConversation> OpenDialogConv;   // incomplete here; freed in the .cpp
+	TUniquePtr<FElysiumDialogueSession> DialogueSession;  // incomplete here; freed in the .cpp
 	// End the open session: clear the slot and (unless bSilent) enqueue the owner's EndDialog input so
 	// OnDialogEnd fires through the real chokepoint (the B3 seam the runner reuses).
 	void EndDialogSession(bool bSilent);
+	void SelectDialogueCamera(bool bLineBoundary);
+	void UpdateSelectedDialogueCamera();
 
 	// --- 12.5, the dialogue half of lipsync ----------------------------------------------------
 	// A conversation turn has no authored timeline — the line simply starts when the turn opens — so

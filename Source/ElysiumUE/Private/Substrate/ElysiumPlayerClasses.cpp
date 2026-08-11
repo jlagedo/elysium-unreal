@@ -1166,6 +1166,10 @@ void FElysiumCombatCharacter::OnKilled()
 	bDeathReported = true;
 	static const FName OnDeath(TEXT("OnDeath"));
 	FireOutput(OnDeath, Handle);   // one of CAI_BaseNPC's 16 outputs; the player wires none
+	// Preserve producer order: the child's own OnDeath rows enter the queue before its maker's
+	// OnNPCDied rows. Retail's relative order is still an open live-capture question; this is the
+	// existing producer first, followed by the newly recovered owner notification.
+	NotifyOwnerOfTermination(EElysiumOwnedEntityTermination::Died);
 	UE_LOG(LogElysiumPlayer, Log, TEXT("%s died"), *DebugString());
 }
 
@@ -1636,6 +1640,23 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// `money` is `m_iMoney`, the one counter `stats.txt` does not carry as a Stat. Humanity,
 		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
 		AddCharField(D, TEXT("money"), &FC::Money);
+
+		// The runtime's authoritative once-only death latch. Saving it is required by npc_maker's
+		// owner notification: a dead child restored and later Kill'd must not refund a live slot.
+		{
+			FElysiumFieldAccessor Acc;
+			Acc.ApplyFlags(EElysiumField::Save);
+			Acc.Type = EElysiumVariantType::Bool;
+			Acc.Get = [](const FElysiumEntity& E)
+			{
+				return FElysiumVariant::Bool(static_cast<const FC&>(E).HasReportedDeath());
+			};
+			Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+			{
+				static_cast<FC&>(E).SetDeathReportedForRestore(V.ToInt() != 0);
+			};
+			D.Fields.Add(FName(TEXT("m_bDeathReported")), MoveTemp(Acc));
+		}
 
 		// The active-weapon handle (+0x19a4). Saved as a handle so the equipped item survives a
 		// restore; the 224-slot list beside it is re-derived from the items' own owner/position

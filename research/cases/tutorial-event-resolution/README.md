@@ -34,7 +34,7 @@ Use a workstream-private copy of the analyzed Ghidra project; never mutate the s
 Generated decompilation and game-derived evidence remain below `ELYSIUM_WORK_ROOT`.
 
 ```powershell
-uv run elysium research tutorial-event-resolution research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json --binary "<VtMB>/Vampire/dlls/vampire.dll" --project-dir "<work>/research/ghidra/project_tutorial_events_<task>" --kinds funcs,xrefs,fields,vtables,grep
+uv run elysium research tutorial-event-resolution --binary "<VtMB>/Vampire/dlls/vampire.dll" --project-dir "<work>/research/ghidra/project_tutorial_events_<task>" --kinds funcs,xrefs,fields,vtables,datamaps,consts,grep
 uv run elysium research ent_survey --patch --map sp_tutorial_1
 ```
 
@@ -55,6 +55,12 @@ Static `vampire.dll` inspection reaches `PhysicsTouchTriggers`, but the exact or
 ends and new-contact begins is below the `engine.dll` collision-property interface. The
 `trigger_autosave` save transaction is also not closed by this server-DLL pass. Keep both explicit
 rather than inferring them from Source SDK or the Unreal implementation.
+
+The `CNPCMaker` boundary needed by the tutorial is closed. Public `Spawn` and timed spawning share
+the same admission path; start-disabled suppresses only the timer; infinite mode bypasses finite
+exhaustion but not the live-child ceiling; and rejected attempts neither allocate nor fire outputs.
+The exact guard, retry, accepted-child and death/removal order is recorded in
+`docs/vtmb/entity_io.md`, with the `blueblood_maker` join in the map-specific consumer.
 
 The server side of that boundary is closed: `CServerGameEnts::MarkEntitiesAsTouching`
 (`FUN_1011be20`, reachable only through the interface vtable slot at `0x1001017c`) is where

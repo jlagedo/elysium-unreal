@@ -11,7 +11,7 @@ namespace
 	const TCHAR* const GStreamNames[GStreamCount] =
 	{
 		TEXT("OneOfSet"), TEXT("LogicTimer"), TEXT("LogicCase"), TEXT("Dice"), TEXT("Ambient"),
-		TEXT("Chargen")
+		TEXT("Chargen"), TEXT("NpcMaker")
 	};
 
 	// Each stream's seed is derived from the session seed by a distinct odd multiplier, so a save's

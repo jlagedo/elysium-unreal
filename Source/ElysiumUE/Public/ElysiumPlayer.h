@@ -536,6 +536,8 @@ public:
 
 	// Fires the character's OnDeath output once. The player leaf overrides to end the run as well.
 	virtual void OnKilled();
+	bool HasReportedDeath() const { return bDeathReported; }
+	void SetDeathReportedForRestore(bool bValue) { bDeathReported = bValue; }
 
 	// The masquerade counter hit its ceiling. Only the player's ends the run — the counter is on
 	// this class because the sheet is — so the base only reports and the player leaf overrides.
@@ -647,6 +649,10 @@ public:
 	void SetFeedContinuation(bool bContinue) { FeedState.bContinuation = bContinue; }
 
 	bool IsFeedPaired() const { return FeedState.IsPaired(); }
+	virtual const TCHAR* SaveBlockReason() const override
+	{
+		return FeedState.IsPaired() ? TEXT("a paired feed action is active") : nullptr;
+	}
 
 	// Log-and-no-op body for the inputs whose system has not landed. Public because the registration
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.

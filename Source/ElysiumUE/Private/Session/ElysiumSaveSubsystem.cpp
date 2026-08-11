@@ -186,9 +186,9 @@ bool UElysiumSaveSubsystem::CanSave(FString& OutReason) const
 		OutReason = TEXT("a sign panel is open");
 		return false;
 	}
-	if (World->GetOpenDialog() != nullptr)
+	if (const FString Reason = World->ScriptedSessionSaveBlockReason(); !Reason.IsEmpty())
 	{
-		OutReason = TEXT("a conversation is open");
+		OutReason = Reason;
 		return false;
 	}
 	OutReason.Reset();

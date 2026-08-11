@@ -19,6 +19,7 @@
 #include "Map/ElysiumMapCollision.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
+#include "ElysiumCameraService.h"
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumEntityBodies.h"
@@ -30,12 +31,14 @@
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/OverlapResult.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMaterialLibrary.h"
 #include "Materials/MaterialInterface.h"
@@ -59,6 +62,17 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysium, Log, All);
 static TAtomic<uint64> GNextElysiumAudioMapEpoch(0);
+
+namespace
+{
+	UElysiumCameraService* LocalCameraService(const UObject* Context)
+	{
+		UWorld* World = Context ? Context->GetWorld() : nullptr;
+		UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+		ULocalPlayer* Player = GI ? GI->GetFirstGamePlayer() : nullptr;
+		return Player ? Player->GetSubsystem<UElysiumCameraService>() : nullptr;
+	}
+}
 
 static TAutoConsoleVariable<float> CVarRainEnhancement(
 	TEXT("elysium.RainEnhancement"), 0.0f,
@@ -458,6 +472,10 @@ void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
 	AudioMapEpoch = ++GNextElysiumAudioMapEpoch;
+	if (UElysiumCameraService* Camera = LocalCameraService(this))
+	{
+		Camera->BeginMapEpoch(AudioMapEpoch);
+	}
 	RuntimePhase = EElysiumMapRuntimePhase::Building;
 	RuntimeWaitStartSeconds = FPlatformTime::Seconds();
 
@@ -520,6 +538,7 @@ void AElysiumMapActor::BuildStageWorld()
 			Services.Travel     = this;
 			Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
 			Services.Weather    = this;
+			Services.Camera     = LocalCameraService(this);
 			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 			EntityWorld->Load(FElysiumEntityDefs());
 			EntityWorld->SpawnPlayer();
@@ -661,6 +680,7 @@ void AElysiumMapActor::LoadMap()
 				// crosses the same one-system boundary, but ApplyEmitter deliberately retains it as
 				// data only: Niagara stays disconnected until its retail semantics are resolved.
 				Services.Weather    = this;
+				Services.Camera     = LocalCameraService(this);
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
@@ -1056,6 +1076,8 @@ USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
 	}
 
 	Body->SetPlayerVisual(Visual);
+	Visual->SetVisibility(!bPlayerVisualSuppressed);
+	Visual->SetComponentTickEnabled(!bPlayerVisualSuppressed);
 	// The stem the animation driver resolves its catalog from. Kept here rather than re-derived from
 	// the entity record each frame, because this is the one place that knows which model was built.
 	PlayerVisualStem = Stem;
@@ -1180,6 +1202,18 @@ void AElysiumMapActor::ClearPlayerVisual()
 	if (UElysiumMovementComponent* Move = Pawn->FindComponentByClass<UElysiumMovementComponent>())
 	{
 		Move->ClearGaitSpeeds();
+	}
+}
+
+void AElysiumMapActor::SetPlayerVisualSuppressed(bool bSuppressed)
+{
+	bPlayerVisualSuppressed = bSuppressed;
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	if (USkeletalMeshComponent* Visual = Body ? Body->GetPlayerVisual() : nullptr)
+	{
+		Visual->SetVisibility(!bSuppressed);
+		Visual->SetComponentTickEnabled(!bSuppressed);
 	}
 }
 
@@ -1671,6 +1705,130 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 	return Best;
 }
 
+float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
+	float TraceDepthCm) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return MakerOriginCm.Z;
+	}
+	const FVector End = MakerOriginCm - FVector::UpVector * TraceDepthCm;
+	FCollisionQueryParams Params(FName(TEXT("ElysiumNpcMakerGround")), /*bTraceComplex*/ false);
+	Params.AddIgnoredActor(ResolvePlayerPawn());
+	FHitResult Hit;
+	return World->LineTraceSingleByChannel(Hit, MakerOriginCm, End, ELYSIUM_USE_CHANNEL, Params)
+		? Hit.ImpactPoint.Z : End.Z;
+}
+
+bool AElysiumMapActor::IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const
+{
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	UWorld* World = GetWorld();
+	if (!World || !GetPlayerViewPoint(ViewLocation, ViewRotation))
+	{
+		return false;
+	}
+	FCollisionQueryParams Params(FName(TEXT("ElysiumNpcMakerVisible")), /*bTraceComplex*/ false);
+	Params.AddIgnoredActor(ResolvePlayerPawn());
+	FHitResult Hit;
+	return !World->LineTraceSingleByChannel(
+		Hit, ViewLocation, MakerOriginCm, ELYSIUM_USE_CHANNEL, Params);
+}
+
+bool AElysiumMapActor::IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) const
+{
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	if (!GetPlayerViewPoint(ViewLocation, ViewRotation))
+	{
+		return false;
+	}
+	const FVector Local = ViewRotation.UnrotateVector(MakerOriginCm - ViewLocation);
+	if (Local.X <= UE_KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	float HorizontalFov = 90.0f;
+	float Aspect = 16.0f / 9.0f;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (PC->PlayerCameraManager)
+			{
+				HorizontalFov = PC->PlayerCameraManager->GetFOVAngle();
+			}
+			int32 SizeX = 0;
+			int32 SizeY = 0;
+			PC->GetViewportSize(SizeX, SizeY);
+			if (SizeX > 0 && SizeY > 0)
+			{
+				Aspect = static_cast<float>(SizeX) / static_cast<float>(SizeY);
+			}
+		}
+	}
+	const float TanHalfHorizontal = FMath::Tan(FMath::DegreesToRadians(HorizontalFov * 0.5f));
+	const float TanHalfVertical = TanHalfHorizontal / FMath::Max(Aspect, UE_KINDA_SMALL_NUMBER);
+	return FMath::Abs(Local.Y / Local.X) <= TanHalfHorizontal
+		&& FMath::Abs(Local.Z / Local.X) <= TanHalfVertical;
+}
+
+bool AElysiumMapActor::IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm,
+	float HalfExtentCm) const
+{
+	// Native enumerates solid entities through a 2D 68-unit square at the cached ground. A thin
+	// plane is sufficient here: any standing body that owns that ground point crosses it.
+	const FBox SpawnArea(
+		GroundOriginCm - FVector(HalfExtentCm, HalfExtentCm, 1.0f),
+		GroundOriginCm + FVector(HalfExtentCm, HalfExtentCm, 1.0f));
+	if (const APawn* Pawn = ResolvePlayerPawn())
+	{
+		if (SpawnArea.Intersect(Pawn->GetComponentsBoundingBox(/*bNonColliding*/ false)))
+		{
+			return true;
+		}
+	}
+	if (!EntityWorld)
+	{
+		return false;
+	}
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
+	{
+		const FElysiumEntity* Ent = EntPtr.Get();
+		if (!Ent || Ent->IsInert() || Ent->Handle == EntityWorld->PlayerHandle())
+		{
+			continue;
+		}
+		FBox Bounds(ForceInit);
+		if (const USkeletalMeshComponent* Skeletal = Ent->GetSkeletalBody())
+		{
+			if (Skeletal->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				Bounds = Skeletal->Bounds.GetBox();
+			}
+		}
+		else if (Ent->Body && Ent->Body->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+		{
+			Bounds = Ent->Body->Bounds.GetBox();
+		}
+		else if (Ent->AsCombatCharacter())
+		{
+			Bounds = FBox(
+				Ent->Origin - FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.0f),
+				Ent->Origin + FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth,
+					ElysiumMove::StandHeight));
+		}
+		if (Bounds.IsValid && SpawnArea.Intersect(Bounds))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 UElysiumCameraComponent* AElysiumMapActor::PlayerCamera() const
 {
 	const APawn* Pawn = ResolvePlayerPawn();
@@ -1998,6 +2156,10 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// EndPlay still guarantees those objects have valid UObject indices; waiting for this actor's C++
 	// destructor is too late because world cleanup may already have reclaimed its components.
 	EntityWorld.Reset();
+	if (UElysiumCameraService* Camera = LocalCameraService(this))
+	{
+		Camera->RetireMapEpoch(AudioMapEpoch);
+	}
 
 	// The audio subsystem is GameInstance-scoped and outlives this map actor, but every voice it
 	// holds is map-scoped (ambient_generic + the scheme bed/music/random one-shots). Stop them all
@@ -2672,7 +2834,11 @@ void AElysiumMapActor::TickGaze(float DeltaSeconds)
 	// it, against 40 authored `LookAtEntity*` wires in the whole of VtMB.
 	FVector DialogPovValue = FVector::ZeroVector;
 	const FVector* DialogPovPoint = nullptr;
-	if (CameraDirector && CameraDirector->WantsDialogPOV())
+	if (EntityWorld->GetDialogueCameraGaze(DialogPovValue))
+	{
+		DialogPovPoint = &DialogPovValue;
+	}
+	else if (CameraDirector && CameraDirector->WantsDialogPOV())
 	{
 		if (const UElysiumCameraComponent* Cam = PlayerCamera())
 		{
@@ -2754,6 +2920,10 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	if (CameraDirector)
 	{
 		CameraDirector->Tick(EntityWorld.Get(), PlayerCamera());
+	}
+	if (EntityWorld)
+	{
+		EntityWorld->RefreshDialogueCamera();
 	}
 
 	// 12.4 — decide where each character is looking, then rebuild each eye's basis against this
