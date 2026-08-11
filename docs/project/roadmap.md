@@ -898,8 +898,12 @@ draw on the same stack; NPCs stand in the world at their entity origins.
 
 ## P9 — Dialogue & persistence *(design: `docs/vtmb/game_runtime.md`, `docs/project/rebuild-strategy.md` B7/B9)*
 
-- [x] **9.1 `.dlg` parser + dlgexpr** — `ElysiumDlg.{h,cpp}`: the 13-field parser, the `dlgexpr`
-  front-normalizer, the host-agnostic branch machine. NPC col-4 = action, PC col-4 = gate. →
+- [~] **9.1 `.dlg` parser + dlgexpr** — `ElysiumDlg.{h,cpp}` carries the 13-field parser, the
+  `dlgexpr` front-normalizer, and the host-agnostic branch machine. NPC col-4 = action, PC col-4 =
+  gate. The remaining fidelity gap is retail `CDialog::GetStartingLine`: scan starting-condition
+  sentinels in physical file order, evaluate against live player/NPC/`G`, take the first passing
+  valid link, then honor `usescript`/line-1/first-stored-line fallbacks. Acceptance includes Jack's
+  overlapping and shadowed conditions plus line-action → `OnDialogEnd` ordering. →
   `docs/vtmb/game_runtime.md`.
 - [ ] **9.2 Conversation UI + audio-by-path** — dialogue screen on the 8.6 UI foundation, line
   audio via 6.5/6.6's shared line service. Content is **reproduced verbatim** (lines, conditions, branch structure,

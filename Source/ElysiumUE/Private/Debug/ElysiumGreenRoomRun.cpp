@@ -967,6 +967,50 @@ void FElysiumGreenRoomRun::UpdateStage(const FBox& Bounds)
 			? FVector(-260.0f, 220.0f, 220.0f)
 			: FVector(80.0f, 300.0f, 120.0f)));
 	}
+	ApplyStageLighting();
+}
+
+void FElysiumGreenRoomRun::ApplyStageLighting()
+{
+	// The one-shot capture path never leaves Studio and never reaches here, so every existing
+	// contact sheet keeps the rig it was measured against. A mood that moved a still would make two
+	// captures incomparable, which is the one thing the capture stage exists to prevent.
+	if (!bLab)
+	{
+		return;
+	}
+	const bool bInterior = LabViewState.Lighting == ELabLighting::Interior;
+	// Clamped rather than trusted: the slider is the only writer today, but a level of zero reads in
+	// the viewport exactly like a broken material, and negative intensity is not a state to debug.
+	const float Scale = FMath::Clamp(LabViewState.LightScale, 0.05f, 3.0f);
+
+	if (UPointLightComponent* Light = KeyLight.Get())
+	{
+		Light->SetLightColor(bInterior ? FLinearColor(1.0f, 0.72f, 0.44f) : FLinearColor::White);
+		Light->SetIntensity((bInterior ? 24000.0f : 80000.0f) * Scale);
+	}
+	if (UPointLightComponent* Light = FillLight.Get())
+	{
+		// The studio fill is cold on purpose -- it separates a silhouette from the backdrop. A room
+		// has no such lamp: its fill is bounce off warm surfaces, so it shares the key's colour
+		// instead of opposing it, and it is dim enough to leave the shadow side actually dark.
+		Light->SetLightColor(bInterior ? FLinearColor(1.0f, 0.55f, 0.30f)
+			: FLinearColor(0.30f, 0.45f, 1.0f));
+		Light->SetIntensity((bInterior ? 7000.0f : 30000.0f) * Scale);
+	}
+
+	// Null inside a real map, where the map's own environment is the ambient and this must not add
+	// a second one (see CreateStage).
+	USkyLightComponent* Sky = Ambient.Get();
+	if (Sky != nullptr && AmbientMood != LabViewState.Lighting)
+	{
+		Sky->Cubemap = ElysiumEnvironment::BuildConstantCube(bInterior
+			? FLinearColor(0.16f, 0.12f, 0.09f)
+			: FLinearColor(0.55f, 0.58f, 0.68f));
+		Sky->SetIntensity(bInterior ? 0.7f : 1.0f);
+		Sky->RecaptureSky();
+		AmbientMood = LabViewState.Lighting;
+	}
 }
 
 FBox FElysiumGreenRoomRun::EmptyStageBounds() const

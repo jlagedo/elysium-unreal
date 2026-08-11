@@ -867,6 +867,26 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 	ImGui::Checkbox("Game HUD", &View.bShowHud);
 	ImGui::TextDisabled("Off by default - the reticle sits where the hem is.");
 
+	ImGui::SeparatorText("Lighting");
+	int32 Mood = static_cast<int32>(View.Lighting);
+	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+	if (ImGui::Combo("Mood", &Mood, "studio (capture rig)\0warm interior\0"))
+	{
+		View.Lighting = static_cast<FElysiumGreenRoomRun::ELabLighting>(Mood);
+	}
+	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
+	ImGui::SliderFloat("Brightness", &View.LightScale, 0.1f, 2.0f, "%.2fx");
+	ImGui::SameLine();
+	if (ImGui::SmallButton("1x##light"))
+	{
+		View.LightScale = 1.0f;
+	}
+	ImGui::TextDisabled("Studio is the even two-point rig the contact sheets are captured under -");
+	ImGui::TextDisabled("bright and cold, so one still compares to another. It also clips a skin");
+	ImGui::TextDisabled("albedo to flat white, which is where a tone or a normal stops reading.");
+	ImGui::TextDisabled("Warm interior is one tungsten key at a third the level over a dim warm");
+	ImGui::TextDisabled("bounce. Lab only: the capture path always shoots studio.");
+
 	// The overlays belong to what is being LOOKED at, not to the garment. The skeleton in
 	// particular is the model's own rig and reads on any body, including every model that authors
 	// no cloth at all — behind the Cloth tab it would be unreachable on exactly those.

@@ -246,7 +246,7 @@ Python-side is call-triggered and needs no separate scheduler.
 | AI / NPC / nav | vampire.dll | `npc_VHumanCombatant` 28-input surface **[doc]** |
 | RPG rules (dice/combat/disciplines/feats) | vampire.dll (compiled), parameterised by data | `Failed to match Discipline Event` **[VtMB]**; `CalcFeat`/`BumpStat` **[doc]**; `docs/recovered/dice-system.md` |
 | Quests | vampire.dll state + Python logic | `SetQuest`/`GetQuestState` **[doc]** |
-| Dialogue | vampire.dll eval, `.dlg` data, Python expr half | `CDialogDependency::TestPython` `0x10563a90` **[VtMB]** |
+| Dialogue | vampire.dll eval, `.dlg` data, Python expr half | `CDialog::GetStartingLine` `0x100e0b10`, `CDialogDependency::TestPython` `0x100e9ff0` **[VtMB]** |
 | Camera (cutscene/track) | vampire.dll entities with thinks | `CCameraTrackTrackThink`, `RestoreCameraToPlayerControl` **[VtMB/doc]** |
 | Story flags `G`, deferred tasks | vampire.dll-owned, Python-facing | `m_pPythonObject`, `ScheduleTask` **[VtMB/doc]** |
 | Story/level scripts | Python (loose `.py`) | `worldspawn.levelscript` **[doc]** |
@@ -1159,7 +1159,7 @@ character model composited over it, not a rendered scene.
 ## 5. Dialogue, NPC conversation & subtitles
 
 Conversations are **`.dlg`** files (147 loose in `Unofficial_Patch/dlg/<hub>/`, ~50,393
-rows) **[data]**. No `.dlg` parser exists in the repo yet.
+rows) **[data]**.
 
 ### Physical format
 
@@ -1186,16 +1186,80 @@ Animation/camera/gesture are **not** in the `.dlg` (cols 6–11 empty) — they 
 
 ### Runtime / branching
 
-1. Open at the first NPC line with content (the leading blank NPC lines are not real turns).
-   An NPC line's col-4 is an **action**, run with col-5 when the line is spoken — not a gate
-   (9.1, resolved by data; see §7). VtMB's exact opener-selection among gated leading NPC lines
-   is not yet RE'd; the runtime uses the first-with-text rule as an interim.
-2. After an NPC line **N** is spoken (running its col-4/5 actions), gather the contiguous
+1. `StartPlayerDialog`, `StartPlayerDialogRemote`, and `StartPlayerDialogUnforced` gate the
+   request and schedule the NPC's dialogue work. The player-side path reaches
+   `CDialog::Acquire` (`0x100e05f0`), which calls `CDialog::GetStartingLine`
+   (`0x100e0b10`) **[VtMB]**. The opener is selected from authored state; it is not the first
+   NPC line with display text.
+2. `GetStartingLine` scans the parsed rows in **physical file order**, record stride `0x34`.
+   A row is a starting-condition sentinel when its male text at `+0x04` contains, case
+   insensitively, `starting condition`, `starting-condition`, or `starting_condition`
+   (`0x100df240`). For each sentinel it parses col-4 at `+0x10` through
+   `CDialogDependency::Parse` (`0x100e8fc0`) and tests it with the live player and NPC through
+   `CDialogDependency::Test` (`0x100e94e0`). The **first passing sentinel whose numeric col-3
+   link resolves to a line wins**. A passing sentinel with an invalid link warns and scanning
+   continues; later passing rows never override an earlier valid one.
+3. If no sentinel wins, a non-empty NPC `usescript` is executed through
+   `CDialogDependency::CallPyDialogFunc` (`0x100ea2d0`) in Python eval mode `0x102`; an integer
+   result is the starting line. With no usable script result, the selector returns line `1`.
+   `Acquire` validates the selected id and, if it is invalid, falls back to the first stored line
+   id. The retail debug-only forced-line override precedes the scan and is not gameplay state.
+4. The selected NPC line's col-4 is an **action**, run with col-5 when the line is spoken — not
+   a gate. After NPC line **N** is spoken, gather the contiguous
    run of PC rows after it (N+1, N+2, … up to the next `#`). Show each PC row whose col-4
    condition is true as a menu entry (text = the Malkavian col 12 when the PC is Malkavian, else col 1/2).
-3. Player picks → its col-5 action runs → jump to the NPC line in its col-3 link → repeat.
-4. **Link `0` ends** the conversation. `(Auto-End)`/`(Auto-Link)` are editor-generated
+5. Player picks → its col-5 action runs → jump to the NPC line in its col-3 link → repeat.
+6. **Link `0` ends** the conversation. `(Auto-End)`/`(Auto-Link)` are editor-generated
    silent-transition placeholders.
+
+The file order is authored control flow, not an incidental parser detail. In
+`jack_tutorial.dlg`, `G.Tut_Jack == 1 and G.Tut_Patch == 1` links to line 85 before the
+two blueblood alternatives; the Nosferatu rat-feeding condition links to 561 before the
+generic 551 condition; and duplicate `G.Tut_Jack == 18 and G.Tut_Ashot == 0` rows link to
+425 then 246, making the latter shadowed. A port must preserve row order and stop on the first
+passing valid link.
+
+### Dialogue close and `DialogPostProcess`
+
+`DialogPostProcess()` is downstream of opener selection and remains required. On close,
+`CDialog::Release` (`0x100e5240`) flushes the pending dialogue event script and
+`CDialog::CallPendingNPCEventScript` (`0x100e5c70`), clears the live dialogue state, then calls
+the owning NPC's dialogue-end path (`0x102c0360`) **[VtMB]**. That path fires the NPC's
+`m_OnDialogEnd` output at `+0x5f5c`. Jack's authored `OnDialogEnd` Python payload calls the level
+script's `DialogPostProcess()` **[data/script]**.
+
+The selected line and choices write authoritative `G` values before this output fires.
+`DialogPostProcess()` reads `G.Tut_Jack` and its secondary flags and performs the world-side beat
+transition: tutorial checkpoint snapshot, teleport/fade, popup, scripted sequence, trigger/door,
+or map travel. Its module-local `G_tut` dictionary is a reset checkpoint copied by `saveState()`;
+it is not the authoritative story-state store and it does not select a dialogue opener.
+
+### Port design: state-based opener selection
+
+Keep the selector inside the host-agnostic dialogue branch machine; do not special-case Jack or
+cache `G.Tut_Jack` on the conversation. `FElysiumDlgConversation::Start()` recomputes the opener
+from current state on every acquisition:
+
+1. Give `FElysiumDlgLine` a pure starting-sentinel predicate over raw `TextMale`, recognizing the
+   three retail spellings case-insensitively. Preserve the parser's physical `Lines` order.
+2. Add a pure `SelectStartingLine` pass to `FElysiumDlgConversation`. For each sentinel, evaluate
+   `Condition` through the existing injected `FCondFn`; parse `Link` as an integer; resolve it
+   through `FElysiumDlgFile`; return immediately on the first passing valid NPC target. Warn and
+   continue for a passing invalid link.
+3. Add one injected fallback callback returning an optional integer line id. The NPC adapter owns
+   it because it has `UseScript`, world, player, `self`, and activator context: evaluate the raw
+   `usescript` through the installed script host and accept only an integer result. An absent or
+   non-integer result yields retail line `1`; an invalid final id yields the file's first stored id.
+4. Feed the resolved index into the existing `EnterNpcLine` path so NPC actions, choice gates,
+   audio/UI, close, `OnDialogEnd`, and `DialogPostProcess()` keep their existing ownership and
+   ordering. The opener must never call `DialogPostProcess()` directly.
+
+Acceptance pins the rules rather than one Jack playthrough: synthetic overlap proves first-match
+file order; all three sentinel spellings classify; a passing invalid link continues; all-false
+conditions exercise `usescript` and line-1 fallback; and `jack_tutorial.dlg` selects 85 for the
+patch-first overlap, 561 before 551 for the Nosferatu overlap, and 425 before the duplicate 246.
+An end-to-end test writes a `G` flag from a selected dialogue line and observes that value from
+`OnDialogEnd`, proving line actions still precede `DialogPostProcess()`.
 
 ### Subtitles — literal text, no string table
 

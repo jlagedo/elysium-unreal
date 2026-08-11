@@ -113,8 +113,25 @@ rough = multiply(mat, mr_tex, "G", rough_factor, "", -500, 460)
 connect_property(metal, "", unreal.MaterialProperty.MP_METALLIC)
 connect_property(rough, "", unreal.MaterialProperty.MP_ROUGHNESS)
 
+# lerp(flat, normalTexture, normalScale) -- the same shape M_VtMBWorld gives $bumpmap, and for
+# the same reason. A texture parameter's default is an ENGINE asset, and
+# /Engine/EngineMaterials/DefaultNormal is not flat: it is a 1024x1024 BC5 map carrying plaster
+# relief and tile seams. Wired straight to MP_NORMAL that relief becomes the shading normal of
+# every body nothing binds a normal for -- which is all of them, since the bake binds
+# `baseColorTexture` alone -- and it appears only once the surface is lit.
+#
+# So flat comes from a constant here, never from an asset. `normalScale` is glTF's own name for
+# `normalTexture.scale`; it defaults to 0 rather than glTF's 1 because unbound has to resolve
+# flat, and anything that does bind a map states the scale alongside it.
 normal_tex = texture(mat, "normalTexture", -1000, 620, normal=True)
-connect_property(normal_tex, "RGB", unreal.MaterialProperty.MP_NORMAL)
+normal_scale = scalar(mat, "normalScale", 0.0, -1000, 740)
+flat_normal = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, -760, 560)
+flat_normal.set_editor_property("constant", unreal.LinearColor(0.0, 0.0, 1.0, 0.0))
+normal = mel.create_material_expression(mat, unreal.MaterialExpressionLinearInterpolate, -500, 620)
+connect(flat_normal, "", normal, "A")
+connect(normal_tex, "RGB", normal, "B")
+connect(normal_scale, "", normal, "Alpha")
+connect_property(normal, "", unreal.MaterialProperty.MP_NORMAL)
 
 emissive_tex = texture(mat, "emissiveTexture", -1000, 820)
 emissive_factor = vector(mat, "emissiveFactor", (0.0, 0.0, 0.0, 1.0), -1000, 1000)

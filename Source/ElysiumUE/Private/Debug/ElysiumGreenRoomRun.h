@@ -47,6 +47,17 @@ public:
 	// cannot hold: whether a garment settles, whether it flares too eagerly, whether a hem clears
 	// the knee at walking speed. The Cog window is the only thing that drives it.
 
+	// How the stage lights whatever is standing on it.
+	//
+	// **Studio** is the two-point rig with a cold fill and a neutral ambient. It is deliberately
+	// even and deliberately bright, because it exists to make a still comparable to another still.
+	//
+	// **Interior** is the opposite trade: one tungsten key at under a third the intensity, a dim
+	// warm bounce instead of the cold separation fill, and a warm ambient. Skin at 80000 cd and
+	// 450 cm reads as flat white with its albedo clipped, so a room-lit body is the only way to
+	// judge a skin tone, a garment colour or a normal that has just changed.
+	enum class ELabLighting : uint8 { Studio, Interior };
+
 	// What the window owns and the run reads back every frame. Kept as one struct passed by
 	// reference rather than a wall of setters: it is all display state, all written from the game
 	// thread by exactly one window, and a slider that has to round-trip through an accessor is a
@@ -68,6 +79,12 @@ public:
 		// anything: a masquerade meter and a reticle across a model being inspected are noise, and
 		// the reticle in particular sits exactly where a hem is being watched.
 		bool bShowHud = false;
+
+		// The stage's lighting mood, and a multiplier over both stage lights on top of it. Studio
+		// is the default because the one-shot capture path is measured against it; only the lab
+		// ever moves off it.
+		ELabLighting Lighting = ELabLighting::Studio;
+		float LightScale = 1.0f;
 
 		// The lattice chains and the collider spheres, drawn in the world. A collapsed chain or a
 		// thigh sphere in the wrong place is obvious here and invisible in the silhouette.
@@ -272,6 +289,9 @@ private:
 	void SeekPose();
 	bool PrepareFrame();
 	void UpdateStage(const FBox& Bounds);
+	// Push the view's lighting mood at the stage's own lights. Lab-only, so the capture path keeps
+	// the rig every existing contact sheet was shot under.
+	void ApplyStageLighting();
 	// The lab's orbit camera around a box, published as a camera shot. Separate from UpdateStage
 	// because the stage has to be *looked at* before the first body arrives, not merely built: in a
 	// stage world the level is otherwise empty and the pawn sits at the origin, half a world away.
@@ -373,6 +393,10 @@ private:
 	// The stage's own ambient, built only in a stage world (see CreateStage). Null inside a map,
 	// where the map's environment is the ambient.
 	TWeakObjectPtr<USkyLightComponent> Ambient;
+	// The mood that ambient's cubemap currently holds. Tracked because rebuilding one is a texture
+	// allocation and a sky recapture, which is an edge-triggered cost rather than a per-frame one
+	// like the two point lights beside it.
+	ELabLighting AmbientMood = ELabLighting::Studio;
 
 	FVector CameraLocation = FVector::ZeroVector;
 	FRotator CameraRotation = FRotator::ZeroRotator;
