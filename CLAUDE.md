@@ -3,9 +3,9 @@
 *Vampire: The Masquerade – Bloodlines* (VtMB, 2004, early Source engine) rebuilt as a
 playable game — **remastered** — on **Unreal Engine 5.8 + C++**. Every game-derived runtime input
 is produced by this repo's own offline decode/export pipeline from the user's own install: the
-world's *look* is baked into a gitignored `.uasset` plugin mount and adopted at load, while
-collision, entities, scripting, audio and NPCs are built in code at map-load time from
-engine-neutral intermediates. Original project-owned remaster assets may be authored in Unreal
+world's *look* and every NPC character are baked into a gitignored `.uasset` plugin mount and
+adopted/loaded at load, while collision, entities, scripting and audio are built in code at
+map-load time from engine-neutral intermediates. Original project-owned remaster assets may be authored in Unreal
 under the repository's explicit authored-content namespace.
 
 ## Read first
@@ -85,15 +85,17 @@ contain bytes, transforms, timing, or other content derived from the user's game
   exporter; `uv run elysium export` coordinates map and whole-game profiles. Its Python package,
   dependencies, and command entrypoint are declared in `pyproject.toml` and locked by `uv.lock`.
   The same export command invokes `pipeline/unreal/bake_map.py` to turn each exported map's
-  *look* into real assets and a `.umap` on the `/ElysiumBaked` mount. That stage is an editor
-  commandlet, so an editor build is a prerequisite for export, never for running.
+  *look* into real assets and a `.umap` on the `/ElysiumBaked` mount, and `pipeline/unreal/bake_characters.py`
+  to bake every NPC body and its clips onto the same mount. Both stages are editor commandlets, so
+  an editor build is a prerequisite for export, never for running.
 - **Runtime — `Source/ElysiumUE/`** (C++): opens the baked level and **adopts** its actors
-  (bucketed by the tags the bake stamped), then builds everything else in code from the
-  intermediates on disk — collision, ropes, the sky cubemap, the entity substrate, NPCs, audio,
-  scripting. Light values are re-derived from `.lights` at load rather than adopted, so live
-  calibration always wins. Python is **never** run at runtime to produce content — the seam is
-  file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
-  pipeline.) The architecture and what it costs: `docs/architecture/uasset-bake-spike.md`.
+  (bucketed by the tags the bake stamped), loads each NPC's baked `USkeletalMesh` and clips off the
+  same mount, then builds everything else in code from the intermediates on disk — collision,
+  ropes, the sky cubemap, the entity substrate, audio, scripting. Light values are re-derived from
+  `.lights` at load rather than adopted, so live calibration always wins. Python is **never** run at
+  runtime to produce content — the seam is file-based. (The embedded CPython 2.7 VM runs VtMB's
+  *own* level scripts; it is game logic, not pipeline.) The architecture and what it costs:
+  `docs/architecture/uasset-bake-spike.md`.
 
 ### Authored live, captured as text, rebuilt by a generator
 

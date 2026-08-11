@@ -37,6 +37,13 @@ missing `SceneFile` is map-data breakage, not a format question.
 The busiest maps: `sm_hub_1` 13, `sp_endsequences_b` 13, `hw_vesuvius_1` 12, **`sp_theatre`
 12**, `la_dane_1` 9, `sp_giovanni_3/4` 7 each, `sp_ninesintro` 5, `sp_tutorial_1` 3.
 
+The current 23-map export snapshot references 30 scene files. Relative to the three referenced by
+`sp_tutorial_1`, it introduces only `expression` (66 events in `sm_medical_1` and `sp_theatre`) and
+`gesture` (9 in `sm_diner_1`) as event tokens. Both remain actor-local facial/overlay dispatch;
+the delta adds no additional VCD `firetrigger` value and no VCD `python` payload. It therefore
+introduces no new entity-I/O producer from VCD. The manifest and entity-surface join are owned by
+`docs/vtmb/exported-map-event-surface.md`.
+
 ## The file format
 
 Plain ASCII, CRLF, opening with a version comment. The grammar is uniform: **every line is
@@ -504,8 +511,9 @@ Per call:
 2. if `m_bPaused`, run the paused think (`+0x3c4` = `0x10081020`) and return — the clock
    does not advance;
 3. **`m_flCurrentTime = curtime − m_flStartTime`**, where `m_flStartTime` (`0x4a8`) was
-   stamped at `Start`. Scene time is absolute elapsed wall-clock, **not** an accumulator, so
-   it cannot drift and cannot be scaled;
+   stamped at `Start`. Scene time is absolute elapsed **game-clock** time, **not** a per-scene
+   accumulator, so it cannot drift independently; `host_timescale` and global pause affect it
+   through `curtime`;
 4. hand the scene the sound-system latency — the `snd_mixahead` convar, cached in the
    constructor at `0x4c8` — so `speak` events are scheduled against the mixer's lead;
 5. `CChoreoScene::Process(m_flCurrentTime)` (`FUN_1007d7f0`), which classifies **every** event
@@ -546,10 +554,31 @@ save-and-teleport (`FUN_10081ed0`) → arm the think → `hide_ents` → and fir
 zero the clock → apply **`position_end`** → restore each actor's move type, move collide, solid
 type and solid flags → fire **`OnCompletion`** → unhide.
 
+### Scene think versus queue delivery
+
+The server runs every entity think before it services `CEventQueue`. That gives the scene lifecycle
+four precise boundaries:
+
+- A queued `Start` normally arrives **after** the scene-think phase. Its input body arms playback
+  and queues `OnStart`; that output can drain later in the same queue pass, but the VCD receives its
+  first `Process` call on the next `GameFrame`.
+- A `firetrigger` crossed during scene think queues `OnTriggerN`; delivery occurs later that same
+  frame, after all entity thinks. Several crossed events from a hitch dispatch in VCD start-time
+  order and join the ordinary equal-time FIFO cohort.
+- Completion performs actor stop/reset/position/restore first, then queues `OnCompletion`; its
+  actions can also deliver in the same frame's queue phase. Unhiding happens immediately after the
+  output is queued, before those receivers run.
+- A queued `Cancel` cannot undo an event that the scene already crossed in that frame's think. It
+  stops future scene work and queues `OnCanceled`; it never substitutes completion.
+
+VCD output actions are not special calls into targets. `OnTriggerN`, `OnCompletion`, `OnCanceled`
+and `OnStart` all use the generic output-list reversal, delay, `times`, name resolution, Python and
+same-frame recursive-drain rules in `docs/vtmb/entity_io.md` and `docs/vtmb/game_runtime.md`.
+
 **`Resume` does not re-base the clock.** `FUN_10082b00` re-applies the anim set and writes
 `m_flLastUpdateTime` (`+0x4a4`) and the next-think (`+0x17c`) — **not** `m_flStartTime` (`+0x4a8`),
 which is what `m_flCurrentTime = curtime − m_flStartTime` reads. Paused time is therefore *counted*:
-a resumed map scene snaps forward to wall-clock and dispatches everything that fell inside the pause
+a resumed map scene snaps forward to game-clock elapsed time and dispatches everything that fell inside the pause
 in one burst. Unobservable in shipped content — no map wires `Pause` or `Resume` — but it is what
 the code does. `Cancel` stops the scene's events, unhides, fires `OnCanceled` with the stored
 activator, and clears both flags — without touching `position_end`.
@@ -658,7 +687,7 @@ Cinematic clips are driven from absolute scene/event time. Start, resume, and lo
 the clip; event end, cancellation, restart, and teardown explicitly stop it. Before the last clip is
 stopped the actor's final `bip01` world transform is cached, so `position_end == 3` settles the entity
 under the actual final pose rather than its component origin. Pause suppresses processing without
-moving the scene's start time; resume seeks to wall-clock elapsed time and dispatches missed events.
+moving the scene's start time; resume seeks to game-clock elapsed time and dispatches missed events.
 
 Every accepted `Start` clears the missing-actor, missing-clip, and missing-speech one-shot diagnostics.
 `!dialogpartner` uses `override_speech_target` first and the player's active conversation partner only

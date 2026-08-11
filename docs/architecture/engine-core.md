@@ -38,7 +38,8 @@ These rules are load-bearing; every Track B system and every debug tool assumes 
   `FElysiumGameClock` (absolute game seconds, pausable, scalable — VtMB's `curtime`;
   variable step, no fixed tick). Delayed I/O, `ScheduleTask` source strings, think
   scheduling (per-entity next-think, FLT_MAX = never), and later timed discipline events
-  all live in **one time-sorted `FElysiumEventQueue`** keyed on absolute game seconds.
+  all live in **one time-sorted `FElysiumEventQueue`** keyed on absolute game seconds. Equal-time
+  entries retain insertion order, including entries produced recursively during service.
   Never `FTimerManager`, never `SetTimer` — the queue and think times must serialize
   (VtMB saves both — `docs/vtmb/game_runtime.md` §2).
 - **R5 — Two chokepoints, instrumented from day one.** All input delivery passes through
@@ -70,11 +71,11 @@ These rules are load-bearing; every Track B system and every debug tool assumes 
 |---|---|---|---|
 | `FElysiumVariant` | struct | — | Small tagged value: Void/Bool/Int/Float/String/Vector/Handle — the fieldtype marshalling currency for input params, fields, and script values. |
 | `FElysiumEntityHandle` | struct | — | `{int32 Index, uint32 Epoch}`; resolves via the entity world; falsy when dead/stale. |
-| `FElysiumEntityDef` | struct | `FElysiumEntityDefs` | Immutable parsed `.ents` record: classname, targetname, origin, `keys{}`, `hulls`+`contents`+`blocks_player`, `start_hidden`, 7-field `outputs[]`. The def array is the map's entity "asset". |
+| `FElysiumEntityDef` | struct | `FElysiumEntityDefs` | Immutable parsed `.ents` record: classname, targetname, origin, `keys{}`, `hulls`+`contents`+`blocks_player`, `start_hidden`, output rows whose first six fields are behavioral (the parser ignores trailing source fields). The def array is the map's entity "asset". |
 | `FElysiumEntity` | plain C++ base class | entity world | Live entity: handle, def, dormancy state (+saved solidity), next-think, optional body pointers. Base implements `Kill`, `ScriptHide`, `ScriptUnhide` once (they reach every class through the chain — `docs/vtmb/entity_io.md`). Virtuals: `Spawn()`, `Think()`, `AttachBody()`/`DetachBody()`. |
 | `FElysiumClassDesc` / `FElysiumClassRegistry` | structs + singleton | module | R2's per-classname descriptor: factory fn, base-class link, input table, field table. Registered by static per-class registration in each entity `.cpp`. Unregistered classnames spawn as **inert record entities** (still listed, pickable, dumpable — coverage grows classname-by-classname). |
 | `FElysiumIOEvent` | struct | queue | `{FireTime, TargetName/TargetHandle, Input, Param, PythonSrc, Activator, Caller}` — one queued delivery. |
-| `FElysiumEventQueue` | plain C++ | entity world | Time-sorted pending events; `Add`, `Service(now)`, `Cancel(caller)`, pause/step flags, serializes. Zero-delay chains drain in the same service pass with an iteration cap (loop guard, logged). |
+| `FElysiumEventQueue` | plain C++ | entity world | Time-sorted pending events; `Add`, `Service(now)`, `Cancel(caller)`, pause/step flags, serializes. Equal times are FIFO. Zero-delay chains drain in the same service pass, but the runtime stops after 10,000 deliveries and leaves the due tail for the next frame. That cap is an intentional safety divergence: retail has no gameplay cap and can hang/starve the frame. |
 | `FElysiumEntityWorld` | plain C++ | `AElysiumMapActor` (TUniquePtr) | The substrate: def parse, entity storage + name/class indices, spawn pass, `AcceptInput` chokepoint, output firing (`times` countdown on the def's outputs), think servicing, the queue, the debug sink list, teardown (epoch bump). Ticked by the map actor with game delta. |
 | `FElysiumIOSink` | interface | entity world | Debug tap: `OnQueued`, `OnDelivered`, `OnOutputFired`, `OnUnknownTarget/Input`. Ring buffer (1,000 entries, always on), log category `LogElysiumIO`, VLOG, and Phase 2 UI all implement it. |
 | `IElysiumScriptHost` | interface | `UElysiumGameInstance` | `Eval(source, ctx) → FElysiumVariant`. Phase 1 ships `FElysiumNullScriptHost` (logs the call, returns 0) so field-6 Python payloads flow through dispatch visibly from day one; the real evaluator is M4 and slots in behind the interface (B6). |
@@ -97,13 +98,15 @@ and `UElysiumGameStateSubsystem` + script host live on the game instance;
   `!self`/`!activator`, fans out over the name multimap, walks each entity's class-chain
   input table (case-folded), invokes the thunk, notifies sinks. Unknown target/input:
   log once, count, keep going (retail data contains dead wires).
-- **Output firing:** an entity fires a named output → for each matching 7-field def
-  output whose `times` has not run out: queue the I/O delivery at `now + delay`, and if
+- **Output firing:** an entity fires a named output → enumerate matching rows in **reverse parsed
+  order** (retail prepends actions), and for each output whose `times` has not run out: queue the I/O delivery at `now + delay`, and if
   field 6 carries Python, attach the source string — the queue forwards it to the script
   host at fire time. 1,500 outputs fire *only* Python; the queue entry is still real.
 - **Tick (map actor Tick, in order):** advance clock (unless paused) → run due thinks
   (entities whose next-think ≤ now) → `Service(now)` on the queue (deliver everything due;
-  drain zero-delay chains with the loop guard). **Retail is think-first** — confirmed in
+  drain zero-delay chains with the safety cap). If the cap defers an already-due tail, the next
+  frame's thinks run before that tail; retail would still be stuck in the original queue pass, so
+  diagnostics must identify this altered boundary. **Retail is think-first** — confirmed in
   `vampire.dll`: the server frame calls `Physics_RunThinkFunctions` (`FUN_1003bdd0`,
   `0x1011ac1b`) and *then*, at `0x1011ac34`, the single `CEventQueue::ServiceEvents`
   (`FUN_100cebb0`, fires each event with `fireTime ≤ curtime`: Entity I/O via `AcceptInput`

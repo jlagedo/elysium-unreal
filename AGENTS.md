@@ -3,9 +3,9 @@
 *Vampire: The Masquerade – Bloodlines* (VtMB, 2004, early Source engine) rebuilt as a
 playable game — **remastered** — on **Unreal Engine 5.8 + C++**. Every game-derived runtime input
 is produced by this repo's own offline decode/export pipeline from the user's own install: the
-world's *look* is baked into a gitignored `.uasset` plugin mount and adopted at load, while
-collision, entities, scripting, audio and NPCs are built in code at map-load time from
-engine-neutral intermediates. Original project-owned remaster assets may be authored in Unreal
+world's *look* and every NPC character are baked into a gitignored `.uasset` plugin mount and
+adopted/loaded at load, while collision, entities, scripting and audio are built in code at
+map-load time from engine-neutral intermediates. Original project-owned remaster assets may be authored in Unreal
 under the repository's explicit authored-content namespace.
 
 ## Read first
@@ -85,15 +85,38 @@ contain bytes, transforms, timing, or other content derived from the user's game
   exporter; `uv run elysium export` coordinates map and whole-game profiles. Its Python package,
   dependencies, and command entrypoint are declared in `pyproject.toml` and locked by `uv.lock`.
   The same export command invokes `pipeline/unreal/bake_map.py` to turn each exported map's
-  *look* into real assets and a `.umap` on the `/ElysiumBaked` mount. That stage is an editor
-  commandlet, so an editor build is a prerequisite for export, never for running.
+  *look* into real assets and a `.umap` on the `/ElysiumBaked` mount, and `pipeline/unreal/bake_characters.py`
+  to bake every NPC body and its clips onto the same mount. Both stages are editor commandlets, so
+  an editor build is a prerequisite for export, never for running.
 - **Runtime — `Source/ElysiumUE/`** (C++): opens the baked level and **adopts** its actors
-  (bucketed by the tags the bake stamped), then builds everything else in code from the
-  intermediates on disk — collision, ropes, the sky cubemap, the entity substrate, NPCs, audio,
-  scripting. Light values are re-derived from `.lights` at load rather than adopted, so live
-  calibration always wins. Python is **never** run at runtime to produce content — the seam is
-  file-based. (The embedded CPython 2.7 VM runs VtMB's *own* level scripts; it is game logic, not
-  pipeline.) The architecture and what it costs: `docs/architecture/uasset-bake-spike.md`.
+  (bucketed by the tags the bake stamped), loads each NPC's baked `USkeletalMesh` and clips off the
+  same mount, then builds everything else in code from the intermediates on disk — collision,
+  ropes, the sky cubemap, the entity substrate, audio, scripting. Light values are re-derived from
+  `.lights` at load rather than adopted, so live calibration always wins. Python is **never** run at
+  runtime to produce content — the seam is file-based. (The embedded CPython 2.7 VM runs VtMB's
+  *own* level scripts; it is game logic, not pipeline.) The architecture and what it costs:
+  `docs/architecture/uasset-bake-spike.md`.
+
+### Authored live, captured as text, rebuilt by a generator
+
+The editor is the authoring tool for anything Unreal authors better than code — an animation
+graph, a material, a widget, a Niagara system. What it produces is **never** the tracked
+artifact. Every such asset is captured into a **reviewable text source** under `pipeline/unreal/`,
+and a generator rebuilds the package from that text.
+
+Live editing is the loop; the text is the record. A hand-edited binary package committed as-is
+breaks `reconstruct`, is unreviewable in a diff, and puts a generated package inside the tracked
+set — which is the boundary "Bring-your-own-game" exists to hold.
+
+The worked example is the player animation graph: `elysium.animbp.build` constructs it through
+the engine's own node-placement path, `UElysiumAnimGraphLibrary::ExportGraphToText` captures it as
+`pipeline/unreal/graphs/ABP_ElysiumBiped.t3d`, and `pipeline/unreal/make_player_anim_bp.py` rebuilds
+the asset from that text. The round trip is the authoring loop: open the generated asset, edit it in
+the editor, copy the graph, paste it back over the text.
+
+An editor MCP toolset drives all of it in-process (`docs/architecture/debug-tooling.md`). Whatever
+was proven live is proven again through `uv run elysium build` and `uv run elysium test`, which
+remain the only gate.
 
 ### The `UE_` exporter convention
 
@@ -111,6 +134,35 @@ The Source→Unreal math lives once in `pipeline/src/elysium_pipeline/formats/bs
 `source_dir_to_unreal` for directions; the Y negation is a reflection, so the exporter
 reverses winding at OBJ-write time). Never inline it, and never convert at runtime. Full
 rules: `docs/project/rebuild-strategy.md` → "Coordinate conventions".
+
+### Poses are baked native — a VtMB rule never reaches the frame path
+
+The same rule as coordinates, applied to the **skeletal pose frame**, which is a coordinate
+convention like any other. A baked animation asset is a **complete, self-describing,
+Unreal-native local pose**: every track is parent-relative, an additive names its own base,
+and stock Unreal nodes compose it. The runtime applies no VtMB rule.
+
+A VtMB clip is not a pose. It is a set of channels whose meaning is completed by state stored
+outside the clip — the bone's `Flags & 0x2`, the animation record's per-bone `weight` mask, the
+sequence's additive flags, and at runtime whatever pose it is accumulated onto. **Where a clip's
+meaning depends on state the clip does not contain, the bake resolves that state and writes the
+answer.** It never forwards the question to the frame path.
+
+The decidable test: **if a clip has to know a fact about VtMB in order to be evaluated, the bake
+failed.** "It cannot be baked" is a claim about a *named* value the file does not carry, and it
+has to name it; a value the file states elsewhere — an additive's base clip, a bone's ancestor
+chain — is a bake input, not a runtime dependency. Where a frame genuinely is not recoverable,
+**change the representation** until the rule is unnecessary, the way blend grids became
+`UBlendSpace` assets, rather than adding a stage that carries it forward.
+
+A 2004 storage quirk is a **defect fixed at bake**, not semantics to reproduce
+(`docs/project/remaster-direction.md` → Behaviour test). VtMB's own inverse binds are
+conventional FK, so the authored pose is ordinary and recoverable; only the file's storage frame
+ever disagreed.
+
+**One standing exemption**, and it is different in kind: **axis interpolation** reads a *live*
+control-bone orientation, so it is a rig rule like an IK node rather than a frame conversion.
+The design is `docs/architecture/animation-architecture.md`.
 
 ### Docs describe design, RE, and status — not the current build
 
@@ -139,7 +191,9 @@ declared subtrackers. Cite a doc by name, with no date or task number attached.
 ## What runs today
 
 **Project priority and roll-up status: `docs/project/roadmap.md`; detailed retail-capture
-status: `docs/project/retail-capture-roadmap.md`.** Runtime types and where they live:
+status: `docs/project/retail-capture-roadmap.md`; detailed skeletal-animation status:
+`docs/project/animation-roadmap.md`; detailed Character/Camera/Controls status:
+`docs/project/three-cs-roadmap.md`.** Runtime types and where they live:
 `Source/ElysiumUE/CLAUDE.md`.
 
 ## Target hardware

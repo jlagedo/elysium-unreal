@@ -24,8 +24,8 @@ does not run or modify the game and it does not implement the Unreal terminal.
 The static entity/data/save surface and the `sp_tutorial_1` `tuthack` chain are
 bounded in `docs/vtmb/computer-terminals.md`. The first native pass also joins
 the server session virtuals, client character-texture renderer, `hackcmd`
-transport, input flags, and Function dependency → runtext → output → runscript
-order. The remaining parts of the questions above are kept explicit in that
+transport, input flags, and Function dependency → runtext → enqueue output → synchronous runscript
+order (ordinary output delivery follows in the queue). The remaining parts of the questions above are kept explicit in that
 document and the specifications.
 
 ## Best offline discovery sequence

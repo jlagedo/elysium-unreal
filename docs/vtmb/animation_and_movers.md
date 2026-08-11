@@ -211,7 +211,7 @@ The trailing region carries the blend space. Read from the runtime evaluator
 | Off | Type | Field | Note |
 |---|---|---|---|
 | 572 | int[2] | `groupsize` | extent of each axis; the grid is `groupsize[0] × groupsize[1]`, not 16×16 |
-| 580 | int[2] | `paramindex` | pose parameter driving each axis, `-1` when the axis is unused |
+| 580 | int[2] | `paramindex` | pose parameter driving each axis, `-1` when the axis is unused; indexes the model's `StudioPoseParamDesc[]`, which names the axis and states its domain and wrap (`docs/vtmb/mdl_v2531.md` → `StudioPoseParamDesc`) |
 | 588 | float[2] | `paramstart` | axis range, in the parameter's own units |
 | 596 | float[2] | `paramend` | |
 | 612 | float[3] | transition-duration triple | seconds; the crossfade time this sequence asks for, sampled piecewise-linearly over the *outgoing* sequence's cycle. Read by `FUN_1008de30`, not by the blend evaluator; the rule that consumes it is A.4c |

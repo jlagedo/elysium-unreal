@@ -317,9 +317,13 @@ On a passed dependency, executor `0x1021c6d0` performs this order:
 3. if `runscript` is non-empty, execute it through the same Python bridge with mode `0x100`;
 4. print the prompt and return to command mode.
 
-Therefore `OnTriggerN` enters ordinary Source I/O before that Function's `runscript`. Neither is
-required: `trigger = -1` skips the output, and an empty script skips Python. The terminal-specific
-sound ordering outside this executor remains open.
+Step 2 **fires the output object**, which only enqueues its actions; it does not synchronously deliver
+their target inputs. Step 3 then executes `runscript` inside the terminal input body. When this whole
+transaction itself is being serviced from `CEventQueue`, the newly enqueued `OnTriggerN` actions
+remain behind the current/equal-time cohort and normally deliver **after `runscript`**, later in the
+same queue pass. This distinction is observable if the script mutates state read by a target input.
+Neither effect is required: `trigger = -1` skips the output, and an empty script skips Python. The
+terminal-specific sound ordering outside this executor remains open.
 
 Once `OnTriggerN` fires, its map-authored wires use ordinary VtMB entity I/O. Each wire preserves
 target, input, parameter, delay, fire count, Python payload, caller and activator as specified in

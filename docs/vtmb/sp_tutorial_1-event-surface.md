@@ -5,7 +5,7 @@
 **Map:** `sp_tutorial_1`
 **Baseline:** patch-first export resolved from the user's installed game
 **Document role:** cross-system research brief; not a status tracker or a generic behavior owner
-**Last reviewed:** 2026-08-08
+**Last reviewed:** 2026-08-11
 
 The master sequence and completion state remain in `docs/project/roadmap.md`. Generic Source entity
 I/O behavior belongs in `docs/vtmb/entity_io.md`; Python hosting belongs in
@@ -78,6 +78,15 @@ counts, names, and derived behavioral inventory appear here.
 | `dlg/downtown la/tutorial_security_guard.dlg` | 6,146 | `A8217D4BE12E548BA3C91E60DCC408A945BF93512735C70BA7A9FF17EB72031F` |
 | `dlg/generic/hunter1.dlg` | 16,596 | `02EABAACB20283F3BA894E95A8F06309354D734005463D7E97CBADAFD2E7DDFA` |
 | `dlg/generic/hunterv.dlg` | 2,475 | `520D6E805E6667D4D9F28EF6B53577EAC2B5BE9DB67929281C74AA421E17676C` |
+| `scenes/character/dlg/main characters/jack_tutorial/line1001_col_e.vcd` | 875 | `5A723836F5E1779D2289E03E5E691DDE77CBB618D5FAB1E10501F399E2F293EF` |
+| `scenes/character/dlg/main characters/jack_tutorial/line1006_col_e.vcd` | 693 | `684D61C8C95AAF265E8EA4FD0E023E67BFBE16066E9AB962D51C728E4332A174` |
+| `scenes/cinematic/tutorial/jack_vs_sabbat.vcd` | 1,128 | `B396680CDBACD528A045832F9B078778DC18A89122606EDA2E2AB23C5D35D19D` |
+
+Native behavior is pinned separately to retail `Vampire/dlls/vampire.dll`: 7,860,281 bytes,
+SHA-256 `c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f`, MD5
+`1a10efcfe332036a9ee60bce223303db`. The reproducible address seeds and questions are tracked in
+`research/cases/tutorial-event-resolution/`; generated decompilation remains below
+`ELYSIUM_WORK_ROOT/research/ghidra/`.
 
 Primary reproduction command:
 
@@ -138,8 +147,8 @@ Every system plan that consumes this brief needs to preserve this common contrac
 | Contract surface | Required behavior | Map intent and acceptance observation |
 |---|---|---|
 | Level-script bootstrap | Load `tutorial/tutorial.py`, its imports, and public names before map activation; merge callable names into `__main__`. | A field-six payload such as `DialogPostProcess()` resolves both the level callback and engine globals not explicitly imported by that module. |
-| Output parser | Preserve target, input, parameter, delay, fire count, Python payload, and extra field for both six- and seven-field rows. | Surveyed wires retain their exact targets and delays; no Python payload is shifted into the wrong column. |
-| Event queue | Preserve ordering, delay, remaining fire count, caller, and activator; do not discard pending work when gameplay resolution is paused. | A traced relay chain fires once and in authored order after its delays. |
+| Output parser | Consume exactly target, input, parameter, delay, fire count and Python from fields 0–5; ignore any trailing field without shifting field 5. Treat authored `times` 0 and -1 as unlimited. | Repeated rows for one output fire in reverse lump/export order because retail prepends parsed actions. |
+| Event queue | Sort by deadline with equal-time FIFO; deliver all named targets, then field-5 Python, then a direct handle; recursively drain zero-delay work breadth-first in the same pass. | Delays follow game `curtime`. Retail has no gameplay budget, so a zero-delay cycle can starve/hang a frame; Elysium's 10,000-event cap is a visible safety divergence. |
 | Name resolution | Case-insensitive exact match; final-character `*` prefix match; handle `!self`, `!caller`, `!activator`, `!player`, `!picker`, and `!playercontroller`. | Patch helpers resolve `plus_*`/`basic_*`; choreography resolves its controller relationship. |
 | Input dispatch | Resolve through the entity class and base-map input surface from one `AcceptInput` seam. | `Kill`, `ScriptHide`, and `ScriptUnhide` work through the base entity instead of per-class copies. |
 | Missing target policy | A wire naming no entity is a non-fatal no-op with a diagnostic distinct from “receiver lacks input.” | Plans do not invent objects merely to silence authored dangling wires. |
@@ -150,11 +159,32 @@ Every system plan that consumes this brief needs to preserve this common contrac
 | State and persistence | Preserve `G`, morgue, player state, map-entity state, event queue state, controller relationships, inventory, and active tutorial systems across save/restore as required by their owning designs. | Restoring during a beat neither repeats consumed one-shots nor loses enabled follow-up triggers. |
 | Map travel | Route `ChangeNow`/`ChangeMap` through the level-transition contract and landmark placement. | `LeaveTutorial()` reaches `sm_pawnshop_1` at landmark `newgame`. |
 
+### 3.1 One host-frame event order
+
+1. The current user command runs player movement first. Movement/contact processing can call trigger
+   producers, but their outputs only enqueue actions.
+2. `GameFrame` runs the entity-think pass. Timers, fades, movers, scripted sequences and VCD scenes
+   can enqueue more actions. All entity thinks finish before any of those actions are delivered.
+3. `CEventQueue::ServiceEvents` drains every entry due at current `curtime`, including zero-delay
+   work produced by a receiver in the same pass. Python has no separate per-frame tick.
+4. Host/render progression resumes only when the queue returns. A retail zero-delay cycle prevents
+   that return; future deadlines cannot become due because game time is not advancing inside drain.
+
+`GameFrame(simulating=false)` narrows the think pass but does not skip queue service. `host_timescale`
+changes real-time duration through `curtime`; a global game-clock pause freezes deadlines. When an
+enqueue observes `curtime` moving backward, retail shifts that new deadline forward by the rollback
+amount plus 0.01 seconds.
+
+A `point_teleport` delivered in step 3 changes the transform immediately but cannot retroactively
+rerun step 1's touch reconciliation. Its destination contacts arrive at a later collision/movement
+opportunity. Conversely, a reflected entity input called from Python is synchronous *inside* the
+current step-3 Python handler; any output it fires rejoins the equal-time tail of the queue.
+
 ## 4. Trigger surface
 
 | Class | Count | Outgoing wires | Authored role | Required semantics and planning consequence |
 |---|---:|---:|---|---|
-| `trigger_multiple` | 44 | 140 | Repeating proximity ingress for dialogue, popups, encounter gates, reset zones, and progression. | Start/end touch, `OnTrigger`, wait/re-arm, enabled/hidden state, activator flags, and `filtername` all affect correctness. Four begin hidden; all but one accept the player, while one uses the physics-only flag. |
+| `trigger_multiple` | 44 | 140 | Repeating proximity ingress for dialogue, popups, encounter gates, reset zones, and progression. | Start/end touch, `OnTrigger`, wait/re-arm, enabled/hidden state and activator flags affect correctness. Four begin hidden; all but one accept the player, while one uses the physics-only flag. This map authors no `filtername`. |
 | `trigger_once` | 11 | 29 | One-way tutorial beats whose side effects must not repeat. | Same filtering contract as `trigger_multiple`, plus consumed-state persistence. |
 | `trigger_look` | 4 | 8 | Teach looking/aiming by holding view on a target for `0.5` seconds. | Requires a player-view ray/angle test, uninterrupted dwell time, target identity, and enable/disable state. All four begin disabled. |
 | `trigger_hurt` | 3 | 0 | Environmental damage volumes. | Two author `damage=13`, one `damage=8`; two use damage type `8`, one `0`. Recovered cadence is an entry half-tick followed by `damage * 3` every three seconds, not arbitrary per-frame or half-second damage. |
@@ -166,7 +196,8 @@ Every system plan that consumes this brief needs to preserve this common contrac
 
 ### 4.1 Trigger fidelity risks to keep explicit
 
-- `filtername` is data, not an editor hint. Ignoring it can activate unrelated actors or props.
+- `filtername` is live generic data, but this hash-pinned tutorial authors **zero** `filtername`
+  fields and contains **zero** `filter_*` entities. It cannot explain a tutorial-specific rejection.
 - Spawnflag bits are class-specific. `trigger_changelevel` bit `2` means `NOTOUCH`; it must not be
   interpreted as the generic trigger `ALLOW_NPCS` bit.
 - `ScriptHide` turns collision, drawing, and thinking off. A hidden trigger is not an enabled
@@ -196,7 +227,7 @@ addressable entity population carries the interaction contract.
 | `prop_doorknob` | 11 | Lock state and begin/end use semantics; `office_knob` gates no-blood logic. | A mesh attached to a working door does not replace the knob's own inputs and outputs. |
 | `prop_doorknob_electronic` | 2 | Electronic lock state and feedback. | Needs the same authoritative lock state exposed to use UI and scripting. |
 | `prop_hacking` | 2 | Start/complete a terminal interaction; `tuthack` locks/unlocks the safe, changes visibility, and enables/disables follow-up triggers. | The generic terminal contract lives in `docs/vtmb/computer-terminals.md`; this map requires its `tuthack` worked chain. |
-| `prop_sign` | 2 | Player use opens an authored document/sign window. | Needs a use producer and the same UI ownership path as `game_sign.OpenWindow`. |
+| `prop_sign` | 2 | Player use opens an authored document/sign window. | Retail grants one player an exclusive sign session; use begin/end fire `OnReadBegin`/`OnReadEnd`, and end closes and releases ownership. Neither tutorial sign authors an outgoing row. |
 | `item_container` | 1 | Receives `DeleteItems` and `SpawnItemInContainer`. | It owns the same real 224-slot item-entity inventory as a combat character. Here `DeleteItems` destroys all current contents and the delayed spawn creates/adds one new entity. |
 | `item_container_animated` | 2 | Safe/container animation and use completion. | `tutsafe.OnUseEnd` calls `OnSafeEnd()`; item removal writes `G.Tut_Key` and enables Jack teleport logic. |
 | `item_container_lock` | 1 | Lock/unlock/hide state around a container. | Lock state must govern both interaction and presentation. |
@@ -217,7 +248,32 @@ addressable entity population carries the interaction contract.
 | Breakable shell boxes | `OnBreak -> math_counter.Add` | Destruction count advances the relevant exercise. |
 | Physics bottle | `OnHealthChanged -> hide/reveal clip and popup state` | Damage to a prop demonstrates combat/discipline effect and advances presentation. |
 
-### 5.2 Inventory chain closure
+### 5.2 Specialized-prop event boundaries
+
+- The unnamed `prop_switch` starts activated (`spawnflags 8192`). An unlocked use queues `OnUse`,
+  flips its own state, then mirrors a linked switch (none is authored here). The tutorial's one row
+  consequently queues `chop_light.Toggle` immediately; `OnActivate`/`OnDeactivate`, if authored,
+  would occur only when the transition clip finishes. A locked use would fire only `OnLockedUse`.
+- `office_knob.OnUseBegin` queues `logic_noblood.Disable`. On use end, reverse-row enumeration first
+  encounters `counter_noblood.Add(0)` at +0.2 and then `logic_noblood.Enable` at zero; deadline sort
+  makes the visible order **Enable now, Add after 0.2 game seconds**. The knob's lock check and
+  begin/end session own these outputs; the attached door cannot replace them.
+- An unlocked `prop_button` queues `OnPressed`, advances/wraps its state, then queues `OnSetStateN`.
+  Here `elev_button_1_up` sends `tutelev.GotoFloor 1`; `elev_button_1` triggers `elev_down`; and
+  `elev_button_2` has two equal-time rows whose retail order is
+  `plus_elevarr.skin 1` then `elev_up.Trigger`. A locked button fires only `OnPressedLocked` and does
+  not advance.
+- `tuthack.OnTrigger0` resolves zero-time rows as `trig_popup_note.Disable` →
+  `trig_popup_safe.Enable` → `tutsafelock.Unlock`, then hides the lock at +0.5. `OnTrigger1`
+  unhides the lock now and locks it at +0.5. The terminal function enqueues `OnTriggerN`, then runs
+  its `runscript` synchronously; target delivery follows the script in the queue pass.
+- `tutsafe.OnItemRemove` enables `trig_jack_teleport_3` before the equal-time Python-only event
+  writes `G.Tut_Key = 1`. `OnUseEnd` is Python-only `OnSafeEnd()`.
+- The two `prop_sign`s own no map rows. The one-user session and `OnReadBegin`/`OnReadEnd`
+  production are still required behavior, but there is no tutorial target delivery to order. The
+  wider-export evidence for the begin output is in `docs/vtmb/exported-map-event-surface.md`.
+
+### 5.3 Inventory chain closure
 
 The map-specific inventory graph is now joined to the recovered generic contract in
 `docs/vtmb/inventory.md`:
@@ -268,14 +324,16 @@ This table answers “what must originate events?” It is distinct from the rec
 | `prop_doorknob` | 1 | 3 | Use begin/end and lock-related logic. |
 | `prop_dynamic` | 3 | 3 | Break/animation state. |
 | `trigger_inventory_check` | 1 | 3 | Inventory predicate success. |
-| `point_teleport` | 1 | 2 | Arrival-side effects. |
+| `point_teleport` | 1 | 2 | Raw data places two `OnEnterMapHere` rows on `teleport_very_beginning`; the class has no such output, so both are dropped and never produced. |
 | `prop_switch` | 1 | 1 | Use completion. |
 
-For `npc_maker`, “spawn a child” and “own the child's lifecycle outputs” are separate requirements.
-The maker carries 24 `OnDeath`, 8 `OnFoundPlayer`, 5 `OnFedUponEnd`, 3 `OnDamaged`, 2
-`OnFedUponBegin`, and individual incapacitation/dialogue outputs. A plan must define the stable
-maker-child relationship and which object fires each output; copying only class/name/model into a
-child does not establish that provenance.
+For `npc_maker`, the ownership question is closed. The maker carries 24 `OnDeath`, 8
+`OnFoundPlayer`, 5 `OnFedUponEnd`, 3 `OnDamaged`, 2 `OnFedUponBegin`, and individual
+incapacitation/dialogue rows because `CNPCMaker` inherits the NPC datamap. On every `Spawn`, retail
+copies the maker's raw keyvalue template through the new child's ordinary parser. The **child** thus
+owns independent action lists and fire counters and emits those lifecycle outputs directly; the
+maker separately emits `OnSpawnNPC`, `OnNPCDied` and `OnLastNPCDied`. This is cloning, not event
+forwarding, and a replacement child receives fresh counters.
 
 ## 7. Receiver API surface
 
@@ -346,11 +404,11 @@ Counts are authored calls in this map, not global popularity. Base inputs such a
 
 | Path | Form | Required namespace behavior |
 |---|---|---|
-| Output field six | Statement/call string on an entity output | Execute through `__main__` with the output's caller/activator context still valid. |
+| Output field six | Statement/call string on an entity output | Execute through `__main__` after all name-target input deliveries in that queue record. Stale caller/activator handles become null; they do not cancel Python. |
 | `logic_pythoncheck` | Expression | Evaluate in `__main__`; error or non-integer result is false; fire `OnTrue` or `OnFalse`. |
 | Dialogue condition | `dlgexpr` condition with optional engine skill check | Resolve player fields, `G`, character methods, and script helpers without treating the whole grammar as unrestricted Python. |
 | Dialogue action | Assignment/call statements | Mutate `G`, player state, quests, inventory, and map entities. |
-| `ScheduleTask` | Delayed source string | Evaluate later against the live `__main__` dictionary, not a captured module-local namespace. |
+| `ScheduleTask` | Delayed source string | Enqueue a Python-typed event at `curtime + delay` on the same queue, then evaluate later against the live `__main__` dictionary. |
 
 ### 8.2 Native and reflected API groups demanded by the closure
 
@@ -493,7 +551,7 @@ Five `logic_auto` entities establish the starting policy and optional patch stat
 | First beat | Leaving `trig_off_porch` fires Jack `WillTalk 1`, remote dialogue `256`, `blueblood_maker.Spawn`, and `events_player.CreateControllerNPC`. | Jack dialogue opens and the encounter actor/controller exist. |
 | Dialogue progression | Jack `OnDialogEnd` calls `DialogPostProcess()`, which branches on `G.Tut_Jack`. | The next sequence/trigger/popup is enabled exactly once for that beat. |
 | Second warp | `teleport_fade.OnBeginFade` teleports player and Jack to the alley. | Both actors arrive after the authored fade, with current progression state intact; any destination trigger begins from the following movement/touch phase, not inside `point_teleport`. |
-| Feeding continuation | Feeding on the spawned blueblood reaches maker-owned `OnFedUponBegin`/`OnFedUponEnd`. | `G.Tutorial_Blueblood=1`; `trig_dialog_outside_chopshop` becomes enabled. |
+| Feeding continuation | Feeding on the spawned blueblood reaches the child-owned clones of the maker-authored `OnFedUponBegin`/`OnFedUponEnd` rows. | `trig_dialog_outside_chopshop` enables before the equal-time Python event writes `G.Tutorial_Blueblood=1`. |
 | Chopshop and office | Dialogue, door/knob use, safe/hacking, item and elevator events advance `G.Tut_Jack`. | Each world interaction unlocks only its authored next beat. |
 | Combat/discipline lessons | Damage, death, incapacitation, break, stealth, rat-feeding, weapon, and discipline events update counters/flags. | Jack's dialogue and tutorial popups follow observed outcomes rather than scripted time alone. |
 | Exit | `LeaveTutorial()` sets story/quest/killability state and calls `ChangeMap` through `trig_leave_tutorial`. | Travel reaches `sm_pawnshop_1` at landmark `newgame`. |
@@ -504,30 +562,132 @@ teleport API to make it fire.
 
 ### 11.3 Teleport, placement, and trigger order
 
-The porch arrival and the ordinary fade warp intentionally use different containment boundaries:
+Map travel and `point_teleport` are different transactions. Retail changelevel placement is
+`destination landmark + (player - source landmark)`; it can carry a non-zero source-landmark
+offset. The zero-offset reference at tutorial landmark `tutorial` is Source feet
+`(-14, 7492, -156)`, yaw `270` (Unreal `(-35.56, -19029.68, -396.24)` cm). Initial containment is
+reconciled as part of map activation. It is not a `point_teleport`, and the landmark's arrival does
+not fire the inert `OnEnterMapHere` rows authored on `teleport_very_beginning`.
 
-1. Map arrival places and freezes the pawn at the landmark's Source-feet origin, synchronizes
-   `!player`, runs late entity activation, opens the world, and immediately reconciles initial
-   containment before the frozen think/event pass. The first active frame does not replay it.
-2. `point_teleport.Teleport` changes the player feet and full view immediately during I/O delivery,
-   but suppresses Unreal's synchronous begin/end callbacks from entering the entity bus.
-3. The next post-movement pass performs a stable full containment diff: old ends first, then new
-   begins, each ordered by entity index. Multiple teleports before that pass have one final result.
-4. A setup event that enables a disabled trigger rebuilds that trigger's physical overlaps. If the
-   teleported player is already inside, its begin may follow the enabling event in the same queue
-   service pass, matching the authored setup-then-touch chain.
-5. An active `!playercontroller` mirrors explicit writes to the player's logical transform. Its
-   delayed removal therefore transfers the post-teleport alley mark back atomically instead of
-   restoring the porch mark captured by `CreateControllerNPC`.
+`point_teleport` instead caches its own origin/all angles at entity activation, resolves `target`,
+and on input applies that exact cached transform immediately. No target deletes the point; a
+parented target is refused. Spawnflag `1` replaces the point's authored transform with the target's
+live activation transform, making a return point. There is no distance/activator/LOS check, hull
+trace, ground search, collision clearance, nearest-safe fallback, or velocity reset. The player view
+and controller relationship mirror the write. Several teleports before collision reconciliation
+collapse to the final position.
+
+Retail `vampire.dll` does **not** issue touch callbacks inside `InputTeleport`; the later
+`PhysicsTouchTriggers` path delegates contact ordering through the engine collision-property
+interface. The exact old-end/new-begin callback order below that interface remains unrecovered.
+Elysium's deterministic post-movement rule—old ends, then new begins, entity-index order—is a port
+rule, not retail evidence. Enabling a disabled trigger is separate: rebuilding its overlap links can
+produce a fresh begin while a player is already contained.
+
+### 11.4 Porch geometry and landing contacts
+
+The tutorial has two mutually selected porch paths. Distances below use the Source player standing
+hull, 16 units each side in X/Y and 72 units above the feet; multiply Source units by 2.54 for cm.
+
+**Main/Patch Plus path.** `trig_off_porch` has world AABB X `[-67,45]`, Y `[7341,7445]`,
+Z `[-204,-44]`. At the zero-offset landmark reference the player is not inside it: the feet centre
+is 47 units north of its Y face and the hull has a **31-unit / 78.74 cm clear gap**. Facing yaw 270
+toward negative Y, the first contact begins after 31 units plus overlap epsilon. `OnEndTouch`, which
+owns the first beat, occurs only after the hull clears the south face: feet Y below 7325, about
+**167 units / 424.18 cm** forward from the landmark. A carried landmark offset shifts both values.
+
+The same zero-offset landing hull does overlap five other records:
+
+- active `trigger_autosave trig_autosave`;
+- disabled `trigger_once trig_popup_move`, which cannot begin until enabled;
+- `trig_theater_to_tutorial`, `trig_leave_tutorial_short_1`, and
+  `trig_leave_tutorial_short`, all `trigger_changelevel` records with spawnflag `2` (`NOTOUCH`).
+
+Thus the only active collision ingress on that exact landing is `trig_autosave`; the first dialogue
+trigger is reached by walking. The autosave has no ordinary outputs. Its native leaf initializes a
+base trigger, but the actual engine/save transaction remains open and is not inferred from the
+classname.
+
+**Basic patch path.** When `G.Patch_Plus == 0`, `vamputil.basicInit` chooses
+`TutorialUnderground`, starts `teleport_fade_basic`, enables `trig_off_porch_basic`, and schedules
+popup 1 at +4 seconds. `teleport_player_basic` seats the player at Source feet `(-64,-368,0)`, yaw
+90. The basic trigger AABB is X `[-120,-8]`, Y `[-380,-276]`, Z `[-80,80]`, so the standing hull
+lands **already overlapping it by 4 units** at the south face. Facing positive Y, forward travel
+must put feet Y above `-260`: **108 units / 274.32 cm** to fire the north-side `OnEndTouch`. Leaving
+backward through the near south face takes only 28 units. The trigger is not start-disabled;
+`Enable` is idempotent as logical state, while physical overlap-link rebuild timing remains the
+collision boundary above.
+
+The later main alley warp is different again. `teleport_player` seats the player at
+`(-256,-176,-32)`, yaw 0, and no tutorial touch-trigger hull overlaps that destination. Its next
+beat is therefore not an accidental destination `StartTouch`.
+
+### 11.5 Exact porch and fade transactions
+
+Repeated output rows fire in reverse export order, then the queue sorts by deadline and keeps FIFO
+ties. `trig_off_porch.OnEndTouch` therefore resolves as:
+
+| Relative game time | Actual action order |
+|---:|---|
+| `0` | `pc_0.RemoveDisciplinesNow` → `blueblood_maker.Spawn` → `pc_0.CreateControllerNPC` → `Jack.WillTalk 1` → `Jack.StartPlayerDialogRemote 256` → `Jack.UseInteresting 0` |
+| `+0.5` | `trig_off_porch.Kill` |
+| `+5.0` | `pc_0.RemoveControllerNPC` |
+
+Killing the trigger does not retract the already queued +5 named delivery. Its caller handle may be
+stale by then, but named target resolution still runs. The Basic trigger has the same zero-time six,
+then `Kill` at +0.5, `Jack.UseInteresting 1` at +4, and controller removal at +5.
+
+Fade output order is equally concrete:
+
+| Fade | Actual queued/delivered order |
+|---|---|
+| `teleport_fade_basic.OnBeginFade` | `t0 Jack.WillTalk 0`; `t+1 teleport_jack.Teleport` then `teleport_player_basic.Teleport`; `t+3 Jack.WillTalk 1` |
+| `teleport_fade.OnBeginFade` | `t0 Jack.WillTalk 0`; `t+1 teleport_jack.Teleport` then `teleport_player.Teleport`; `t+3 Jack.WillTalk 1`; `t+4 Jack.StartPlayerDialogRemote` then `Jack.UseInteresting 1` |
+
+`teleport_very_beginning` is not an authored-position warp. Its spawnflag `1` changes the cached
+destination to the player's activation-time transform, so its visible map origin
+`(-14,7455,-164)` is discarded. It returns the player to that cached live position.
+
+### 11.6 Feeding child order and VCD event actions
+
+On each `blueblood_maker.Spawn`, the child receives cloned output action lists. Its two progression
+edges have these exact effects:
+
+- `OnFedUponEnd`: the named `trig_dialog_outside_chopshop.Enable` event is enqueued before the
+  Python-only `G.Tutorial_Blueblood = 1` event. Equal-time FIFO therefore enables the trigger first,
+  then writes `G`.
+- `OnDeath`: the +1-second popup action is enqueued while parsing/firing the reversed list, but the
+  zero-delay Python `G.Tutorial_Blueblood = 2` sorts ahead of it. State changes now; the popup opens
+  one game second later.
+
+Only one tutorial VCD carries map-event actions. `line1001_col_e.vcd` and `line1006_col_e.vcd`
+contain speech/silence/loudness only: no `firetrigger`, no Python, and no wired scene-completion
+output. `jack_vs_sabbat.vcd` carries four `firetrigger` events and no Python:
+
+| VCD game time | VCD event | Actual scene-output action order |
+|---:|---|---|
+| `8.600` | `firetrigger 1` | `timer_muzzle_flash_2.Enable` → `Jack.SetScriptedDiscipline` (`potence 5`) |
+| `8.967` | `firetrigger 3` | no authored `OnTrigger3` rows |
+| `9.200` | `firetrigger 4` | no authored `OnTrigger4` rows |
+| `10.033` | `firetrigger 2` | `Jack.SetScriptedDiscipline` (`potence 0`) → `potenced_emitter.TurnOn` → `timer_muzzle_flash_2.Disable` |
+| scene end | `OnCompletion` | fight sound `StopSound` → `logic_alley_cleanup.Trigger` |
+
+The scene thinks once per game frame using `curtime - startTime`; time scaling affects it and a
+global clock pause freezes it. A hitch crosses missed events in VCD start-time order. Each
+`firetrigger` merely queues `OnTriggerN` during scene think, so target delivery occurs later that
+same frame after all entity thinks. A `Start` delivered in the queue arms the scene after that
+frame's think; its first VCD processing is next frame. A same-frame queued `Cancel` cannot undo a
+trigger already emitted by that think.
+
+No `logic_relay` in the exported tutorial uses fast-retrigger spawnflag `2`. Ordinary relays lock
+until their longest output delay plus 0.001 seconds; inputs during that lock, `OnTrigger` attempts
+during trigger wait windows, disabled periods, and consumed once state are swallowed rather than
+retried. A new contact can still emit its edge-only `OnStartTouch` before the wait check. Those blockers reduce
+accidental recursion, but the underlying retail queue still has no starvation budget.
 
 `trigger_environmental_audio` retains the same physical `StartDisabled` and client-admission gate
 as the rest of the trigger family even while environmental room presentation is absent. Spawning
 the blueblood inside disabled room brushes must not manufacture begin/end pairs.
-
-This is the ordering used by genesis's `teleport_player firetrans → firetrans.OnStartTouch →
-boogieout.ChangeNow` and by theatre's camera-keyframe output → `point_teleport` → movement
-touch → courtroom trigger. Choreography remains a producer of the teleport input; it does not
-own or shortcut touch delivery.
 
 ## 12. Implementation inspection anchors
 
@@ -541,7 +701,7 @@ brief as an implementation-status snapshot. The questions below keep that inspec
 | Hurt trigger | Where are entry damage, periodic damage, victim outputs, force, and direction computed? | The implementation matches the recovered half-tick/three-second contract before tutorial damage is acceptance evidence. |
 | Dynamic props | Where are `solid`, shadow keyfields, animation, health, break, and physics behavior adopted? | Gameplay collision and output production are tested separately from visual/shadow acceptance. |
 | Specialized props | Which classes own switch, sign, hacking, doorknob, button, and container use/lock state? | Each class implements its general input/output contract rather than a targetname-based tutorial special case. |
-| NPC maker | How is a spawned child associated with the maker that owns lifecycle outputs? | Feeding, damage, incapacitation, found-player, dialogue, and death events retain stable caller/activator provenance. |
+| NPC maker | Does each spawn clone the raw maker template through the child's parser and keep maker count outputs separate? | Feeding, damage, incapacitation, found-player, dialogue, and death fire from the child with independent counters and stable provenance. |
 | Dialogue | Where do parse, condition/action execution, session closure, UI, line audio, lips, and facial state meet? | Logic acceptance stays distinguishable from final presentation acceptance. |
 | Inventory | Does the current source route every item query and mutation through one service matching `docs/vtmb/inventory.md`? | Python, dialogue, triggers, pickups, containers and save/restore observe the same entity, stack, keyring, equipment and ammo state. |
 | Player/world event buses | What real domain transition produces each discipline, frenzy, morph, cop, masquerade, and dialogue/combat output? | Acceptance fires outputs from their real producers, not a debug shortcut. |
@@ -563,9 +723,9 @@ their sequencing and status.
 
 | Slice | Required contract | Map-local acceptance evidence |
 |---|---|---|
-| Event transport | Parse and queue every wire; resolve names/aliases; dispatch inherited and class inputs; execute field six. | Structured trace for all outputs from one representative relay transaction, including delay, caller, activator, and Python. |
+| Event transport | Parse and queue every wire; reverse repeated rows; resolve names/aliases; dispatch inherited and class inputs; execute field six after named targets. | Structured trace for all outputs from one representative relay transaction, including delay, caller, activator, Python and recursive enqueue order. |
 | Trigger fidelity | Player/NPC/physics gates, `filtername`, once/wait state, look dwell, hurt cadence, autosave, inventory, stealth, environmental audio. | Positive and negative activation cases for every trigger class present in the map. |
-| NPC lifecycle and feeding | Stable maker-child ownership; use/feed start/end; damage; incapacitation; death; dialog; perception. | Blueblood feeding causes maker `OnFedUponBegin` then `OnFedUponEnd`, updates state, and enables the chopshop dialogue trigger without debug firing. |
+| NPC lifecycle and feeding | Stable maker-child ownership; use/feed start/end; damage; incapacitation; death; dialog; perception. | Blueblood feeding causes the child-cloned `OnFedUponBegin` then `OnFedUponEnd`, enables the chopshop trigger before the equal-time state write, and never relies on debug firing. |
 | Inventory and containers | Implement the closed `docs/vtmb/inventory.md` entity/stack/keyring/ammo/transfer contract across pickup, scripts, dialogue, triggers, containers and save/restore. | Lockpick, key, safe, weapon, ammo, and dialogue branches all agree on the same inventory state. |
 | Specialized interactions | Switch, sign, doorknob, hacking, button, container, door/elevator coupling. | Each `+use` chain produces its authored output and visible/physical side effect once. |
 | Combat and disciplines | Player/NPC/prop damage, weapons, discipline forcing/reset, stealth, frenzy, dispositions, break/death outputs. | Later tutorial counters and Jack branches advance only from actual player actions. |
@@ -598,24 +758,20 @@ an unmet prerequisite, or still unexplained. “No error in the log” is not cl
 
 ## 15. Open research questions
 
-1. What exact retail object owns and fires an `npc_maker` child's feeding, damage,
-   incapacitation, found-player, dialogue, and death outputs?
-2. What are the complete datamaps and use-state transitions for `prop_switch`, `prop_doorknob`,
-   and `prop_sign`? `docs/vtmb/computer-terminals.md` owns the corresponding terminal questions;
-   this brief needs only the subset exercised by `tuthack`.
-3. Which tutorial `trigger_multiple` volumes use `filtername`, and what entities pass each filter
-   in retail?
-4. How do damage type, velocity mode, force, and victim classification affect the three tutorial
+1. In retail `engine.dll`, after `PhysicsTouchTriggers` enters the collision-property interface,
+   what exact order delivers old-contact ends and new-contact begins for a teleported player?
+2. What save service and repeat/occupancy guard does the no-output `trigger_autosave` leaf invoke?
+3. How do damage type, velocity mode, force, and victim classification affect the three tutorial
    `trigger_hurt` volumes beyond their recovered timing?
-5. What is the precedence between `trigger_environmental_audio`, SoundScheme `RoomDSP`,
+4. What is the precedence between `trigger_environmental_audio`, SoundScheme `RoomDSP`,
    interior/exterior state, and scripted audio overrides? RE30/RE31 own the general answer.
-6. Are the five unresolved callback names version skew, missing patch imports, case drift, or
+5. Are the five unresolved callback names version skew, missing patch imports, case drift, or
    deliberately shipped errors?
-7. Which optional hunter/Patch Plus paths are reachable during the normal tutorial, and which
+6. Which optional hunter/Patch Plus paths are reachable during the normal tutorial, and which
    require later story-state re-entry?
-8. Which outputs rely on actual combat/AI perception, and which are script-forced during the
+7. Which outputs rely on actual combat/AI perception, and which are script-forced during the
    tutorial to make the lesson deterministic?
-9. What save/restore points were supported by the original tutorial, especially during feeding,
+8. What save/restore points were supported by the original tutorial, especially during feeding,
    dialogue, choreography, and elevator movement?
 
 ## 16. Ownership and consumption

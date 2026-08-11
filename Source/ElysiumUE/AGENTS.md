@@ -19,8 +19,8 @@ UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 
 - **Plugins:** `ProceduralMeshComponent`; `PythonScriptPlugin` (offline scaffolding only); `Cog`
   (vendored MIT debug-UI shell, `Plugins/External/Cog/`, stripped from Shipping via `ENABLE_COG`);
-  `glTFRuntime` (vendored MIT, the NPC skeletal path — `USkeletalMesh` + `UAnimSequence` from `.glb`
-  at runtime, no editor import).
+  `glTFRuntime` (vendored MIT, the character bake's `.glb` reader — it runs inside the bake
+  commandlet and inside the v4 animated-prop loader, never to build a character at runtime).
 - **Third party:** vendored `dr_wav`/`dr_mp3`; CPython 2.7.18 SDK under `ThirdParty/CPython27/`
   (**fetched, not committed** — `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
   Win64 only).
@@ -120,7 +120,9 @@ slot tables in `Public/ElysiumSheetSlots.h` + `Substrate/ElysiumSheet.cpp`; the 
 are the rulebook's, reached as `World->GetGameState()->Stats()`. The arithmetic over those slots is
 `Substrate/ElysiumSheetMath.{h,cpp}` — `FElysiumSheetEffects` (a character's resolved
 `m_tEffectList`), `ElysiumFeats::FeatValue`/`Calc` (what `CalcFeat` answers), `ElysiumXp` (the award
-banking) and `ElysiumSheetRules::EvalPredependency`. Quests sit beside it in the same shape:
+banking) and `ElysiumSheetRules::EvalPredependency`. `Substrate/ElysiumDice.{h,cpp}` is the d10
+resolver beside it (`ElysiumDice::Roll` over the rulebook's `FElysiumDiceTables` and the Dice RNG
+stream; `elysium.roll` drives it; `CalcFeat` stays a rating, never a roll). Quests sit beside it in the same shape:
 `Substrate/ElysiumQuestLog.{h,cpp}` is the pure decision (`ElysiumQuestLog::Apply` — resolve,
 gate, reconcile the `FElysiumAssignedQuest` rows on the player record), and
 `UElysiumGameStateSubsystem::SetQuestState` is the funnel that performs what it reports.
@@ -141,17 +143,24 @@ Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, tri
 func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase`,
 `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
 `ElysiumEventClasses.cpp`, `ElysiumNpcClasses.cpp`, `ElysiumPlayerClasses.cpp`,
-`ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`, `ElysiumChoreoScene.cpp`
+`ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`, `ElysiumItemClasses.{h,cpp}`
+(`FElysiumItem`/`FElysiumKeyring` — one registered class per `vdata/items` definition, installed at
+the rulebook's first `Items()` load; `FElysiumInventory` lives on the combat character),
+`ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
+`ElysiumChoreoScene.cpp`
 (`logic_choreographed_scene`, over the `.vcd` reader `ElysiumSceneData.{h,cpp}` and the event
 timeline `ElysiumScenePlayer.{h,cpp}` — both free of the world so 12.2's per-line dialogue path can
-reuse them).
+reuse them). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
+input with no system behind it yet; `elysium.stubs` reads the fired set back, and
+`Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
 **The outbound seam** (`docs/architecture/runtime-architecture.md`): everything the substrate needs from the
 engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
 teleport/damage/`+use`/camera, implemented by `AElysiumMapActor`), `IElysiumAudio` (voice,
 `AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
-dialog moments, `UElysiumPresentationSubsystem`). Any member may be null; every call site handles
-it. `Private/Tests/ElysiumTestServices.h` is the recording stub implementing all four.
+dialog moments, `UElysiumPresentationSubsystem`), `IElysiumWeather` (wetness and particle state,
+`AElysiumMapActor`). Any member may be null; every call site handles it.
+`Private/Tests/ElysiumTestServices.h` is the recording stub implementing all five.
 
 **Subsystems by scope** (`docs/architecture/runtime-architecture.md`): GameInstance —
 `UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
@@ -188,7 +197,8 @@ Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}`, `FElysiumSignDa
 
 `UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the Elysium
 ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `_WorldViz`,
-`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`, `_Camera`) over `FElysiumCogWindow`.
+`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`, `_Camera`, `_Environment`) over
+`FElysiumCogWindow`.
 `UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and world-viz layers.
 `ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
 `UElysiumMcpSubsystem` is Layer 3, reached through `pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`. Design:
@@ -209,8 +219,18 @@ and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EX
 
 Hard-won, non-obvious, and easy to undo:
 
-- **`FCogImguiContext::SetEnableInput` dereferences the ImGui context**, which Cog creates lazily on
-  its first tick. Every call site guards on `GetEnableInput()` first; unguarded at boot it crashes.
+- **A Live Coding patch exists only in the editor process that compiled it.** `CompileLiveCoding`
+  links a `UnrealEditor-ElysiumUE.patch_N.dll` into the running editor, and the on-disk module is
+  untouched — so a commandlet, a headless test run or a fresh editor launched alongside it all load
+  code that predates the patch. New `UPROPERTY`s are the sharp edge: a graph or asset authored live
+  against them regenerates against a class that does not have them, and the properties resolve to
+  nothing while the run still reports success. Anything proven live is proven again after
+  `uv run elysium build`, which needs the editor closed because it holds the module open.
+- **The vendored Cog shell has two local interaction patches.** `FCogImguiContext::SetEnableInput`
+  fully restores high-precision locked mouselook when Cog closes, and `UCogSubsystem::RenderMenuItem`
+  keeps navigation click-to-open instead of rendering whole live windows on hover. Reapply both when
+  updating Cog. `SetEnableInput` dereferences the lazily created ImGui context, so every boot-time call
+  guards on `GetEnableInput()` first.
 - **The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not `PreLoadMap`** — the
   movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem. Its blocking
   screen auto-completes; `PostLoadMapWithWorld` installs the same visual in the player UI root's
@@ -235,14 +255,88 @@ Hard-won, non-obvious, and easy to undo:
   priority.
 - **The player hull is a box, not a capsule** — `StepMove` depends on a flat bottom, and `ACharacter`
   will not take a box root.
+- **An NPC movement tick already depends on the map actor while its character stands on map-owned
+  collision.** CharacterMovement wires the primary tick of the movement base's owner. GameFrame
+  therefore runs from `GameplayTickFunction`, which depends on the motor ticks; adding those
+  prerequisites to `AElysiumMapActor::PrimaryActorTick` closes a cycle and floods `LogTick`.
 - **`ApplyMaterialOverrides` is lazy** — a runtime `SetMaterial` drops the primitive's built
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
+- **glTFRuntime's morph-target vertex base is a local patch, and losing it fails silently.**
+  `FMorphTargetDelta::SourceIdx` addresses the LOD's vertex buffer;
+  `FinalizeSkeletalMeshWithLODs` upstream advances its per-primitive base by `Indices.Num()`
+  instead of `Positions.Num()`, so on a multi-primitive mesh every primitive after the first
+  writes its deltas at out-of-range vertices and the GPU discards them. Nothing reports an
+  error — weights animate, curves arrive, delta magnitudes read correct, and the mesh never
+  moves. The fix lives in `dev/dependencies/patches/gltfruntime-skeletal-multiroot.patch` and is
+  pinned by `post_patch_tree` in `dev/dependencies.lock.json`; `Plugins/External/` is gitignored,
+  so editing the vendored tree directly is lost on the next `deps sync`. Change the patch, not the
+  checkout, and re-pin the tree hash. `Elysium.Content.FacialMorphTargets` guards the contract.
+- **`GetImportedModel()->LODModels` must grow in parallel with `AddLODInfo()`.** A skeletal mesh's
+  LOD is two parallel arrays and both entries have to exist, but nothing reads the imported model
+  while the mesh is being built — so a bake that adds only the LOD info runs clean and saves, and
+  `PostLoad` then asserts in whichever process opens the package next.
 - **`UBodySetup::CalculateMass` reads the owning primitive's `FBodyInstance`**, which a runtime-built
   component never seeds from the asset — physics props re-apply mass to the component.
+- **`USkeleton::AddCurveMetaData` defaults `bTransact = true`**, which under `WITH_EDITOR` calls
+  `GEditor->BeginTransaction`. `run play` is `UnrealEditor.exe -game`, where `GEditor` is null, so a
+  runtime curve-metadata write crashes on a null dereference in `-game` while working fine in the
+  editor. Pass `bTransact = false` from any runtime path.
 - **A proxy owning nodes outside the compiled graph must implement `UpdateAnimationNode`** —
   `FElysiumBipedAnimProxy`'s clip player and its two layer players are not in the graph, so the base
   call cannot reach them, and a sequence player never `Update_AnyThread`'d holds its start frame
   forever.
+- **A `UBlendProfile`'s mode has to be set before its bone scales.** An entry equal to the mode's own
+  default is not stored, and that default is 0 for `EBlendProfileMode::BlendMask` against 1 for every
+  other mode. A profile still in its constructed `WeightFactor` mode therefore discards every 1.0
+  written into it and saves empty — which reads at evaluation as owning the whole rig, the exact
+  opposite of the mask that was asked for, with nothing logged.
+- **`UBlendSpace::AddSample` reports failure only through its return value.** It validates the
+  sample against the blend space's own skeleton and axis bounds and returns `INDEX_NONE` without
+  logging, so a skeleton set *after* the first sample — or a value placed outside the axis range —
+  yields an asset that saves clean and carries fewer samples than it was given. Set the skeleton
+  before the first add and check every return. The related trap is `ExpandRangeForSample`, which
+  runs inside `AddSample` and quietly widens the axis to fit whatever it is handed: an axis range
+  that no longer matches what was written is the symptom of a misplaced sample, not a cosmetic
+  difference.
+- **A blend space with samples and no `ResampleData()` poses nothing.** That call builds the
+  segments or triangulation the evaluator reads and is not implied by adding samples or by
+  `PostEditChange`. Without it the asset lists its samples correctly everywhere that counts them and
+  evaluates to an empty blend; `GetBlendSpaceData().IsEmpty()` is how a caller tells. Dimensionality
+  is inferred there too, from the samples' bounding box rather than from the class, so a
+  `UBlendSpace` whose samples all share one axis value takes the 1D path regardless.
+- **`UAnimSequence::GetAnimationPose` silently falls back to the raw data model** whenever the
+  compressed data for the current platform is not resident yet, and compression runs asynchronously
+  after a bake. So the same call answers out of two different representations depending on how much
+  work happened earlier in the same process, and a test that reads an additive can pass and fail on
+  the same assets across runs. Call `WaitOnExistingCompression()` first when the assertion is about
+  what a cooked build ships; `IsCompressedDataValid()` is how a caller tells which one it got.
+- **`UAnimSequence::GetBoneTransform` never performs the additive conversion.** It is a plain track
+  read, so a raw evaluation hands back the keys as written — and a baked `_delta`'s keys are the
+  delta already composed onto its base, because the compressor subtracts that base back out. A test
+  built on it reports a correct additive as broken by exactly one base pose, and would pass just as
+  happily if the subtraction had never run. `GetAnimationPose` is the door the runtime uses;
+  `EvaluateAdditiveFrame` in `ElysiumBakedCharacterTests.cpp` is the worked example.
+- **A bone a sequence carries no track for evaluates to identity rather than to the reference pose —
+  on an additive.** The reset differs by kind: `ResetToAdditiveIdentity` for an additive against
+  `ResetToRefPose` for an ordinary sequence, so the single signature "the error equals that bone's
+  full bind transform" means a dropped track on one and the exact opposite on the other. Read the
+  additive stamp before hunting a rotation bug. On an additive that magnitude is ambiguous between
+  three causes — a dropped track, the additive round-trip above, and compressed data that is not
+  resident — so check `IsCompressedDataValid()` before reading anything into it.
+- **Compatible-skeleton retargeting has no off switch, and its repair skips exactly the bones that
+  look safest.** `RequiresReferencePoseRetarget()` reports whether the remapping table is non-empty,
+  so it is true for any valid pair — nothing stops `DecompressPose` rotating a decoded pose by
+  `Q0 = PT⁻¹·PS` taken from the two skeletons' reference poses. The `OrientAndScale` pass that would
+  repair it builds no cache entry for a bone whose authored and target bind translations agree within
+  0.001, so a body sharing the clip's authoring bind takes the rotation and no repair while a body of
+  different proportions takes both. The related misread: a bone no sequence tracks resolves to the
+  playing **mesh's** reference pose, not the skeleton's — the skeleton's is what the retarget math and
+  `GetRefLocalPoses(NAME_None)` read, never the pose reset. What the bake does about it:
+  `docs/architecture/animation-architecture.md` § 2.4.
+- **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
+  whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
+  blended pose rather than being baked into the clip, so the preview is showing what the asset says
+  and not a bake defect.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.
@@ -255,13 +349,23 @@ Hard-won, non-obvious, and easy to undo:
   replay the whole run's awards. `RestoreQuests` is the silent bulk door, and it is the only one.
 - **Save omission diffs against a post-Load baseline, not zero** — a fresh-constructed reference
   omits the wrong things and a restored map re-runs every `logic_auto` ignition.
-- **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — glTFRuntime binds each to
-  a specific `USkeleton`, and meshes are per-map-epoch.
+- **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — a sequence is bound to
+  one rig family's `USkeleton`, and meshes are per-map-epoch.
+- **A character has exactly one build: the `/ElysiumBaked` mount.** `ElysiumNpcVisual::LoadMesh`
+  fails by name for a stem the character export has not covered rather than substituting anything,
+  so a partial export is a missing body rather than a differently-posed one. `uv run elysium export
+  characters` with no arguments bakes the whole cast.
 - **`FElysiumEntityWorld::NowSeconds()` falls back to the last ticked time when there is no game
   state** — only `RunThinks`/`RunPlayerThink` see the tick argument, so without that fallback a
   headless think measuring elapsed time reads zero forever no matter what `Tick(t)` is passed.
 - **Cog boots dormant** (`elysium.CogPersist 0` deletes its layout ini before the dependency brings
   Cog up) — restored input capture makes the game's own UI unclickable otherwise.
+- **`IElysiumNpcMotor::SetEnabled(false)` also hides the body, so it cannot immobilise a cutscene
+  actor.** A choreographed scene's `position_start` cast has to stop moving while staying on
+  camera, which is what `SetFrozen` is for; `SetIgnoreCharacterCollision` is the separate
+  character-vs-character switch a `scripted_sequence` beat borrows. Collapsing any of the three into
+  the others makes a scene's cast vanish. They are resolved together in `ApplyCollisionState`, so a
+  new caller must go through it rather than touching the capsule directly.
 
 ## Build and test loop
 

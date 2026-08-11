@@ -178,21 +178,58 @@ entity I/O** (every output's `delay` field). VtMB added Python entry types to it
 - `ERROR: Failed to match Discipline Event in the EventQueue!` — RPG disciplines also
   schedule timed events here.
 
-`ScheduleTask(delay, "<source>")` posts a Python-typed event at `curtime + delay`
-**[inferred, strong — string co-location]**; `GameFrame` drains the queue each frame and
-`PyRun_String`s each due entry's stored source against `__main__`. **Delayed I/O,
-`ScheduleTask`, and timed disciplines all converge on this one time-ordered queue.**
+`ScheduleTask(delay, "<source>")` is confirmed end to end: PyMethodDef body `FUN_10196ea0`
+parses the two arguments and calls queue adapter `FUN_100ce0d0`; service executes the stored string
+through `FUN_100ce8a0` against live `__main__`. **Delayed I/O, `ScheduleTask`, and timed disciplines
+all converge on this one time-ordered queue.**
 
-> **Correction to the existing docs.** `docs/vtmb/python_bridge.md` and `docs/vtmb/entity_io.md`
-> attribute the `__main__.%s` wrap to `engine.dll`. The format string lives in
-> **`vampire.dll`** (`0x1055e370`, inside the event-queue region) **[VtMB]**, which is
-> where field-6 / `ScheduleTask` dispatch architecturally belongs. `engine.dll` owns
-> only the VM boot (`Py_Initialize`, search path `\vampire\python`); the game-logic
-> dispatch is all server-DLL.
+> The `__main__.%s` format string lives in **`vampire.dll`** (`0x1055e370`, inside the
+> event-queue region) **[VtMB]**, where field-6 and `ScheduleTask` dispatch belong.
+> `engine.dll` owns only the VM boot (`Py_Initialize`, search path `\vampire\python`);
+> game-logic dispatch is server-DLL-owned.
 
-**The Python "tick point" for a port:** drain a single time-ordered event queue inside
-the server step, evaluating any script/I/O entry whose time ≤ current game time.
-Everything else Python-side is call-triggered and needs no separate scheduler.
+### Queue service order, recursion and starvation
+
+Queue insertion is sorted by absolute `fireTime` and stable for ties: the insertion walk continues
+while an existing deadline is `<=` the new deadline. Service then drains the due head repeatedly.
+For one event it performs, in order:
+
+1. resolve its target-name expression and call `AcceptInput` on **all** matching entities in global
+   entity-list order;
+2. execute its field-5 Python call, if present;
+3. call a direct `EHANDLE` target, if present and still valid;
+4. remove the serviced event and continue at the head.
+
+Missing targets/inputs and Python errors are non-fatal. Stale activator/caller handles resolve null,
+so name delivery and Python still run; an invalid direct target is skipped. A handler's newly queued
+zero-delay event is placed after the equal-time cohort already pending. Thus due `A, B`, where `A`
+queues `C`, resolves `A, B, C`: same-frame recursive drain, but breadth-first FIFO rather than
+depth-first recursion. The reverse ordering of repeated output rows happens earlier, when output
+actions are parsed and fired; `docs/vtmb/entity_io.md` owns that rule.
+
+Entity death is not a general queue rollback. A named event already posted by a trigger still
+resolves after that trigger dies, with null caller if the handle is stale. A targeted cancellation
+path exists for the special typed discipline-event lookup, but this pass found no blanket retail
+"cancel everything by dead caller" rule for ordinary output actions.
+
+Retail has **no normal per-frame event budget**. Its debug pause/single-step state can deliberately
+stop service after a selected number, but gameplay service otherwise runs until the head is in the
+future. A zero-delay cycle can therefore monopolize or hang the server frame, starving rendering,
+later world work, and every delayed event. A future event cannot age into eligibility during that
+drain because `curtime` does not advance inside it. `logic_relay`'s ordinary refire lock and
+`trigger_multiple`'s wait suppress common accidental loops, but fast-retrigger relays and arbitrary
+entity cycles remain capable of this failure.
+
+The queue is serviced even when `GameFrame(simulating)` is false; that flag limits the earlier
+entity-think walk, not step 6. Deadlines still use game `curtime`: host time scaling changes their
+real-time duration, and a global pause that stops `curtime` freezes them. Enqueue also guards a
+backward clock jump: if current `curtime` is below the last observed enqueue time, the new deadline
+is shifted forward by `(lastCurtime - curtime) + 0.01` rather than being inserted spuriously in the
+past. Pending entries themselves are save/restore state.
+
+**The Python "tick point" for a port:** drain this single time-ordered event queue inside the server
+step, evaluating any script/I/O entry whose time is at or before current game time. Everything else
+Python-side is call-triggered and needs no separate scheduler.
 
 ### Responsibility matrix
 
@@ -1000,10 +1037,14 @@ rows.
 Entered via landmark `tutorial`. Two `logic_auto`s init on `OnMapLoad`:
 `pc_0,MakePlayerUnkillable`; `Jack,WillTalk 0` (silent until cued);
 `world,SetNoFrenzyArea 1`; `ccmd.wc_create` (runtime cubemap bake). Nothing fires on
-arrival itself: the first beat is armed by the `trig_off_porch` `trigger_multiple`, whose
+arrival as an authored landmark output. At the zero-offset landmark position the initial standing
+hull does enter the no-output `trig_autosave`; three overlapping changelevels are `NOTOUCH` and
+`trig_popup_move` is disabled. A carried source-landmark offset can shift those contacts. The first
+dialogue beat is armed by the `trig_off_porch` `trigger_multiple`, whose
 `OnEndTouch` (walking off the theatre porch) sets `Jack,WillTalk 1`, calls
 `Jack,StartPlayerDialogRemote 256` — opening `dlg/Main Characters/jack_tutorial.dlg` —
-and spawns `blueblood_maker` plus `pc_0,CreateControllerNPC`.
+and spawns `blueblood_maker` plus `pc_0,CreateControllerNPC`. Exact spatial thresholds and reversed
+equal-time action order are in `docs/vtmb/sp_tutorial_1-event-surface.md`.
 
 > **`OnEnterMapHere` is an `info_landmark`-only output** **[VtMB]**. Its datamap builder
 > (`FUN_100b7220`, the `CBaseLandmark` map alongside `OnSpawnOneCopCar` /
@@ -1044,7 +1085,7 @@ real game start.
 | trial | `start_courtroom` trigger_once | `courtroom_scene_relay,Trigger` + `courtroomSire()` |
 | trial → walk-out | camera keyframe | `OnReachedKeyframe → scene_over_relay → walk_out_relay` |
 | **theatre → tutorial** | `walk_out_cam_k` final keyframe | `tutorial_change,ScriptUnhide` + `controls,Deactivate` + `fade_to_tutorial,Fade`; then the (StartHidden) `tutorial_change` trigger_changelevel transitions. **Not** `tutorialLoad()`. |
-| tutorial entry | landmark `tutorial` placement (nothing fires on arrival) | Jack stands cued-silent (`WillTalk 0`); `teleport_very_beginning`'s `OnEnterMapHere` wires are inert (output is `info_landmark`-only) |
+| tutorial entry | landmark `tutorial` placement (no authored arrival output) | Jack stands cued-silent (`WillTalk 0`); `teleport_very_beginning`'s `OnEnterMapHere` wires are inert. Initial collision reconciliation can enter `trig_autosave` at the zero-offset reference. |
 | tutorial first beat | `trig_off_porch` trigger_multiple | `OnEndTouch → Jack,WillTalk 1` + `Jack,StartPlayerDialogRemote 256` + `blueblood_maker,Spawn` + `pc_0,CreateControllerNPC` |
 | tutorial beats | Jack `OnDialogEnd → DialogPostProcess()` | branch on `G.Tut_Jack`; + `logic_set_clan_stuff`, per-beat `scripted_sequence`/`ScheduleTask` |
 | tutorial → Santa Monica | `LeaveTutorial()` → `ChangeMap` | `trig_leave_tutorial` → `sm_pawnshop_1`, landmark `newgame` |
@@ -1224,8 +1265,9 @@ Consolidated from the four investigations; each gates a real decision.
   `0x1011ac34`).
 - ~~Where usercmd processing (player movement) sits relative to the think pass~~ —
   **resolved: movement runs first**, and not inside `GameFrame` at all (RE21, §1 above).
-- Confirm `ScheduleTask` truly enqueues into `CEventQueue` (vs. a separate list) — decompile
-  the thunk behind PyMethodDef `ScheduleTask` `0x10590530`.
+- ~~Whether `ScheduleTask` enqueues into `CEventQueue`~~ — **resolved:** PyMethodDef body
+  `FUN_10196ea0` reaches queue adapter `FUN_100ce0d0`, and service executes it through
+  `FUN_100ce8a0`.
 - Fixed vs. variable step is settled as **variable** from cvar absence; Elysium-Unreal may
   still *choose* a fixed physics tick instead — a deliberate divergence, not a fidelity break.
 

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "topic": "tutorial-event-resolution",
+  "consuming_document": "docs/vtmb/sp_tutorial_1-event-surface.md",
+  "research_id": "RE43",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What exact fields and repeated-row order does CBaseEntityOutput parse and fire?",
+    "How does CEventQueue order equal deadlines, recursively produced work, Python and direct handles, and what guards starvation or backward curtime?",
+    "Does ScheduleTask use CEventQueue and which Python calls remain synchronous?",
+    "What gates and re-arm/removal states govern CBaseTrigger, CTriggerMultiple, CTriggerOnce and CLogicRelay?",
+    "What checks and transform writes does CPointTeleport perform before engine-owned touch reconciliation?",
+    "How are inherited NPC output keyvalues copied from CNPCMaker to each child?",
+    "What event surfaces and user-session guards do tutorial specialized props expose?",
+    "Where do CSceneEntity firetrigger, completion, start and cancel outputs cross the think-to-queue boundary?",
+    "Which save transaction does CTriggerAutosave invoke, and where is its continuous-occupancy guard?"
+  ],
+  "functions": [
+    {"address": "100ccf90", "label": "ParseOutputAction", "confidence": "body evidence", "role": "parse the first six comma fields and normalize times", "depth": 2, "cap": 180},
+    {"address": "100cd300", "label": "BaseEntityOutputFireOutput", "confidence": "body evidence", "role": "walk action list enqueue decrement and unlink spent actions", "depth": 2, "cap": 220},
+    {"address": "100cd6d0", "label": "BaseEntityOutputParseAndPrepend", "confidence": "body evidence", "role": "prepend parsed actions to one output linked list", "depth": 2, "cap": 140},
+    {"address": "100ce0d0", "label": "EnqueuePythonSource", "confidence": "ScheduleTask call target", "role": "create Python typed queue event", "depth": 2, "cap": 140},
+    {"address": "100ce210", "label": "EventQueueAdd", "confidence": "body evidence", "role": "deadline insertion and equal time FIFO", "depth": 2, "cap": 200},
+    {"address": "100ce8a0", "label": "ExecuteQueuedPythonSource", "confidence": "body evidence", "role": "ScheduleTask and source string execution in main", "depth": 2, "cap": 160},
+    {"address": "100ce990", "label": "ExecuteOutputPython", "confidence": "body evidence", "role": "field 5 main attribute call and error continuation", "depth": 2, "cap": 160},
+    {"address": "100cebb0", "label": "EventQueueServiceEvents", "confidence": "GameFrame call target", "role": "due drain named Python and direct handle order", "depth": 3, "cap": 300},
+    {"address": "1011abc0", "label": "ServerGameDLLGameFrame", "confidence": "verified frame body", "role": "think first then event queue service", "depth": 2, "cap": 180},
+    {"address": "10135290", "label": "LogicPythonCheckEvaluate", "confidence": "body evidence", "role": "synchronous expression truth and error false", "depth": 2, "cap": 160},
+    {"address": "101364e0", "label": "LogicRelayInputTrigger", "confidence": "body evidence", "role": "disabled refire remove and max delay guards", "depth": 2, "cap": 180},
+    {"address": "1018da40", "label": "PointTeleportActivate", "confidence": "body evidence", "role": "cache destination target parent and spawnflag one", "depth": 2, "cap": 180},
+    {"address": "1018dc00", "label": "PointTeleportInputTeleport", "confidence": "body evidence", "role": "parent recheck exact transform view and controller writes", "depth": 3, "cap": 240},
+    {"address": "101c5460", "label": "BaseTriggerPassesTriggerFilters", "confidence": "body evidence", "role": "activator class bits and resolved filter", "depth": 2, "cap": 180},
+    {"address": "101c5590", "label": "BaseTriggerStartTouch", "confidence": "body evidence", "role": "accepted begin and OnStartTouch production", "depth": 2, "cap": 140},
+    {"address": "101c55d0", "label": "BaseTriggerEndTouch", "confidence": "body evidence", "role": "pair release and OnEndTouch production", "depth": 2, "cap": 140},
+    {"address": "101c68b0", "label": "TriggerMultipleMultiTouch", "confidence": "body evidence", "role": "begin to OnTrigger producer boundary", "depth": 2, "cap": 140},
+    {"address": "101c68e0", "label": "TriggerMultipleActivate", "confidence": "body evidence", "role": "wait rearm and once removal", "depth": 2, "cap": 180},
+    {"address": "101c9740", "label": "TriggerAutosaveConstructor", "confidence": "factory chain", "role": "autosave leaf identity and base trigger inheritance", "depth": 2, "cap": 120},
+    {"address": "101c97d0", "label": "TriggerAutosaveSpawn", "confidence": "body evidence", "role": "autosave spawn gate and trigger initialization", "depth": 3, "cap": 180},
+    {"address": "1020db30", "label": "PropSwitchUse", "confidence": "body evidence", "role": "locked output OnUse and state transition order", "depth": 2, "cap": 180},
+    {"address": "10211db0", "label": "PropSignUseBegin", "confidence": "body evidence", "role": "definition selection and exclusive session acquisition", "depth": 2, "cap": 180},
+    {"address": "10211e70", "label": "PropSignUseEnd", "confidence": "body evidence", "role": "OnReadEnd close and owner release", "depth": 2, "cap": 160},
+    {"address": "10215a30", "label": "PropButtonUse", "confidence": "body evidence", "role": "locked pressed state and OnSetState order", "depth": 2, "cap": 180},
+    {"address": "1021c6d0", "label": "PropHackingExecuteFunction", "confidence": "body evidence", "role": "enqueue numbered output then synchronous runscript", "depth": 2, "cap": 200},
+    {"address": "1034ad80", "label": "NPCMakerConstructor", "confidence": "constructor and base chain", "role": "NPC datamap inheritance", "depth": 2, "cap": 180},
+    {"address": "1034b7b0", "label": "NPCMakerSpawnChild", "confidence": "body evidence", "role": "raw keyvalue clone child ownership and OnSpawnNPC", "depth": 3, "cap": 260},
+    {"address": "1034bc90", "label": "NPCMakerChildDeathNotice", "confidence": "body evidence", "role": "OnNPCDied OnLastNPCDied and live count", "depth": 2, "cap": 180},
+    {"address": "100819b0", "label": "ScenePlaybackThink", "confidence": "verified vtable slot", "role": "game clock processing firetrigger and completion production", "depth": 3, "cap": 260},
+    {"address": "10081b60", "label": "SceneFinished", "confidence": "body evidence", "role": "restore actors queue completion then unhide", "depth": 2, "cap": 220},
+    {"address": "100829e0", "label": "SceneStartPlayback", "confidence": "body evidence", "role": "start guards arm think and OnStart production", "depth": 2, "cap": 220}
+  ],
+  "grep_probes": [
+    {"label": "queue_python", "str": "EventQueue~RUNNING~Invalid", "cap": 200},
+    {"label": "guards_and_outputs", "str": "EnableRefire~OnReadEnd~OnSpawnNPC~OnLastNPCDied", "cap": 200},
+    {"label": "teleport", "str": "teleport~parent~target", "cap": 200}
+  ]
+}

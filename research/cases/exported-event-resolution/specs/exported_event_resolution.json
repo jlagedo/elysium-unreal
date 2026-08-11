@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "topic": "exported-event-resolution",
+  "consuming_document": "docs/vtmb/exported-map-event-surface.md",
+  "research_id": "RE44",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What novel trigger classnames and output surfaces occur outside sp_tutorial_1?",
+    "What guards and transform writes does trigger_teleport apply on accepted touch?",
+    "Does trigger_push mutate velocity on touch or think, and how do speed and accel compose?",
+    "How do player activity and discipline context volumes acquire restore and arbitrate overlapping state?",
+    "What action causes trigger_bomb_site OnBombPlaced and can it refire?",
+    "What explicitly invokes trigger_checkvolume and which occupants satisfy it?",
+    "What begins and ends trigger_electric_bugaloo use, and can ownership be stolen?",
+    "Do VCD expression and gesture events cross the entity event layer?"
+  ],
+  "functions": [
+    {"address": "101c5460", "label": "BaseTriggerPassesTriggerFilters", "confidence": "RE43 body evidence", "role": "shared brush-trigger admission baseline", "depth": 2, "cap": 180},
+    {"address": "101c88c0", "label": "TriggerPushConstructor", "confidence": "factory call target", "role": "push vtable defaults and datamap identity", "depth": 3, "cap": 260},
+    {"address": "101c91e0", "label": "TriggerTeleportConstructor", "confidence": "factory call target", "role": "brush teleport vtable defaults and datamap identity", "depth": 3, "cap": 260},
+    {"address": "101cb730", "label": "TriggerCheckVolumeFactory", "confidence": "classname string reference", "role": "occupancy-query leaf factory and vtable", "depth": 3, "cap": 260},
+    {"address": "102107c0", "label": "TriggerPlayerActivityLevelConstructor", "confidence": "factory call target", "role": "activity-level defaults vtable and fields", "depth": 3, "cap": 280},
+    {"address": "10210ce0", "label": "TriggerDisciplineContextConstructor", "confidence": "factory call target", "role": "discipline context defaults vtable and fields", "depth": 3, "cap": 260},
+    {"address": "10210ec0", "label": "TriggerBombSiteFactory", "confidence": "classname string reference", "role": "bomb placement leaf factory and vtable", "depth": 3, "cap": 280},
+    {"address": "10231290", "label": "TriggerElectricBugalooConstructor", "confidence": "factory call target", "role": "use-session trigger defaults vtable and fields", "depth": 3, "cap": 260},
+    {"address": "101c8aa0", "label": "TriggerPushSpawn", "confidence": "vtable slot 103", "role": "push setup speed direction and acceleration think", "depth": 3, "cap": 260},
+    {"address": "101c8c40", "label": "TriggerPushTouch", "confidence": "vtable touch slot 175", "role": "accepted actor and velocity mutation", "depth": 3, "cap": 260},
+    {"address": "101c87c0", "label": "TriggerPushDatamap", "confidence": "vtable slot 82", "role": "push datamap identity", "depth": 1, "cap": 80},
+    {"address": "101c8820", "label": "TriggerPushDatamapBuilder", "confidence": "datamap xref", "role": "six-record push surface", "depth": 1, "cap": 80},
+    {"address": "101c89c0", "label": "TriggerPushInputSetSpeed", "confidence": "field reference", "role": "arm accelerated speed transition think", "depth": 3, "cap": 260},
+    {"address": "101c8a60", "label": "TriggerPushInputSetAcceleration", "confidence": "field reference", "role": "change later SetSpeed acceleration", "depth": 2, "cap": 180},
+    {"address": "101c8b60", "label": "TriggerPushAccelThink", "confidence": "field reference and think thunk", "role": "game-clock speed convergence", "depth": 3, "cap": 240},
+    {"address": "101c92c0", "label": "TriggerTeleportTouch", "confidence": "vtable touch slot 175", "role": "destination resolution transform writes and guards", "depth": 3, "cap": 280},
+    {"address": "101cb7d0", "label": "TriggerCheckVolumeInputCheck", "confidence": "leaf vtable slot 251", "role": "explicit occupancy query and output production", "depth": 3, "cap": 240},
+    {"address": "102108e0", "label": "TriggerPlayerActivityLevelTouch", "confidence": "vtable touch slot 175", "role": "per-touch activity override and absence of OnTrigger production", "depth": 3, "cap": 260},
+    {"address": "102109b0", "label": "TriggerPlayerActivityLevelEndTouch", "confidence": "vtable end-touch slot 176", "role": "activity override restore", "depth": 3, "cap": 260},
+    {"address": "10210dc0", "label": "TriggerDisciplineContextStartTouch", "confidence": "vtable start-touch slot 174", "role": "discipline context acquire", "depth": 3, "cap": 220},
+    {"address": "10210e50", "label": "TriggerDisciplineContextEndTouch", "confidence": "vtable end-touch slot 176", "role": "discipline context release", "depth": 3, "cap": 220},
+    {"address": "102110e0", "label": "TriggerBombSiteStartTouch", "confidence": "vtable start-touch slot 174", "role": "bomb actor admission and placement arming", "depth": 3, "cap": 280},
+    {"address": "10211160", "label": "TriggerBombSiteEndTouch", "confidence": "vtable end-touch slot 176", "role": "bomb actor release", "depth": 3, "cap": 240},
+    {"address": "10211280", "label": "TriggerBombSiteUseQuery", "confidence": "use-interface vtable slot 32", "role": "bomb use eligibility", "depth": 3, "cap": 260},
+    {"address": "102113a0", "label": "TriggerBombSiteUseDuration", "confidence": "use-interface vtable slot 36", "role": "bomb placement duration", "depth": 2, "cap": 180},
+    {"address": "102113c0", "label": "TriggerBombSiteUseBegin", "confidence": "use-interface vtable slot 39", "role": "bomb placement session acquisition and start time", "depth": 3, "cap": 240},
+    {"address": "10211410", "label": "TriggerBombSiteUseEnd", "confidence": "use-interface vtable slot 42", "role": "bomb use teardown", "depth": 3, "cap": 260},
+    {"address": "10211480", "label": "TriggerBombSiteUseComplete", "confidence": "use-interface vtable slot 41", "role": "OnBombPlaced production and inventory mutation", "depth": 3, "cap": 280},
+    {"address": "102116c0", "label": "TriggerBombSiteCompleteTransaction", "confidence": "progress-complete call target", "role": "disable inventory world spawn and OnBombPlaced order", "depth": 3, "cap": 280},
+    {"address": "10231370", "label": "TriggerElectricBugalooStartTouch", "confidence": "vtable start-touch slot 174", "role": "use-volume acquisition", "depth": 3, "cap": 260},
+    {"address": "102316d0", "label": "TriggerElectricBugalooTouch", "confidence": "vtable touch slot 175", "role": "use-volume held update", "depth": 3, "cap": 260},
+    {"address": "102313f0", "label": "TriggerElectricBugalooEndTouch", "confidence": "vtable end-touch slot 176", "role": "use-volume release and outputs", "depth": 3, "cap": 260},
+    {"address": "10231520", "label": "TriggerElectricBugalooUseQuery", "confidence": "use-interface vtable slot 32", "role": "dance use eligibility", "depth": 3, "cap": 260},
+    {"address": "102314a0", "label": "TriggerElectricBugalooUseIcon", "confidence": "use-interface vtable slot 35", "role": "dance interaction icon state", "depth": 2, "cap": 180},
+    {"address": "10231640", "label": "TriggerElectricBugalooUseBegin", "confidence": "use-interface vtable slot 39", "role": "begin held interaction", "depth": 3, "cap": 260},
+    {"address": "10231690", "label": "TriggerElectricBugalooUseEnd", "confidence": "use-interface vtable slot 42", "role": "end held interaction", "depth": 3, "cap": 260},
+    {"address": "10211970", "label": "PropSignDatamap", "confidence": "RE43 builder", "role": "resolve the non-tutorial OnReadBegin surface", "depth": 2, "cap": 180},
+    {"address": "10211db0", "label": "PropSignUseBegin", "confidence": "RE43 body evidence", "role": "verify OnReadBegin production order", "depth": 2, "cap": 180}
+  ],
+  "vtable_probes": [
+    {"address": "1047f1b4", "label": "TriggerPush", "slots": 252, "cap": 320},
+    {"address": "1047f694", "label": "TriggerTeleport", "slots": 252, "cap": 320},
+    {"address": "10481c4c", "label": "TriggerCheckVolume", "slots": 252, "cap": 320},
+    {"address": "10487a3c", "label": "TriggerPlayerActivityLevel", "slots": 252, "cap": 320},
+    {"address": "10487efc", "label": "TriggerDisciplineContext", "slots": 252, "cap": 320},
+    {"address": "104883bc", "label": "TriggerBombSite", "slots": 252, "cap": 320},
+    {"address": "1048e714", "label": "TriggerElectricBugaloo", "slots": 252, "cap": 320}
+  ],
+  "field_probes": [
+    {"displacement": "598", "label": "novel_leaf_primary"},
+    {"displacement": "59c", "label": "novel_leaf_secondary"},
+    {"displacement": "5a0", "label": "novel_leaf_tertiary"}
+  ],
+  "grep_probes": [
+    {"label": "novel_trigger_classes", "str": "trigger_discipline_context~trigger_player_activity_level~trigger_teleport~trigger_push~trigger_bomb_site~trigger_checkvolume~trigger_electric_bugaloo", "cap": 400},
+    {"label": "novel_trigger_outputs", "str": "OnBombPlaced~OnEntityInVolume~OnUseBegin~OnUseEnd~OnReadBegin", "cap": 300},
+    {"label": "novel_trigger_keys", "str": "Discipline_Context~supernatural_level~criminal_level~investigate_level~crossfade~accel", "cap": 300}
+  ]
+}

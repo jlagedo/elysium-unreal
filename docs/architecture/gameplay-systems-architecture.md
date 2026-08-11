@@ -21,7 +21,7 @@ The VtMB behavior this layer must answer is owned by the `docs/vtmb/` fact set �
 model). Where a fact there is still open, this design carries the seam and refuses to guess the
 body. Task sequencing and status live only in `docs/project/roadmap.md`.
 
-This document's own rules are numbered **K1–K10** — a fresh namespace beside R and S.
+This document's own rules are numbered **K1–K12** — a fresh namespace beside R and S.
 
 ## 1. The problem, stated once
 
@@ -112,14 +112,75 @@ strings on the one queue, and the level scripts all execute through the installe
 all five surfaces the moment it backs its Tier 1/Tier 2 names — no per-surface work exists,
 and none may be added.
 
-### 2.5 Events — the four kinds, each with one transport
+### 2.5 Events — the resolution contract
 
-"Handling all events" decomposes into exactly four kinds; every domain in §5 classifies its
-events into these and adds no fifth transport:
+The shipped maps are authored against an exact resolution order — the tutorial's porch, fade,
+feeding, safe, terminal and elevator chains each depend on which of two equal-time actions lands
+first (`docs/vtmb/sp_tutorial_1-event-surface.md` §11; map-wide,
+`docs/vtmb/exported-map-event-surface.md`). "Handling all events" is therefore two commitments,
+not one: a single transport, and a single deterministic order on it. This section is that
+contract; K11 and K12 make it reviewable.
+
+#### 2.5.1 One transport, one order
+
+Every authored or domain event resolves through `FElysiumEventQueue` under the recovered
+delivery contract. The queue mechanics are engine-core R4's; the retail facts are owned by
+`docs/vtmb/entity_io.md` → "Output-list and queue order" and `docs/vtmb/game_runtime.md` →
+"Queue service order, recursion and starvation". The load-bearing consequences for this layer:
+
+- **Firing** enumerates an output's repeated rows in **reverse parsed order** (retail prepends)
+  and enqueues one record per live row, counting down the def row's `times` (authored `0` and
+  `-1` both mean unlimited).
+- **Ordering** is deadline sort with **equal-time FIFO**; zero-delay work produced by a receiver
+  drains in the same pass **breadth-first**, behind the equal-time cohort already pending —
+  never depth-first.
+- **Service of one record** delivers the input to every name match in stable entity order, then
+  executes its field-6 Python, then the direct handle if still valid. Stale activator/caller
+  handles become null; they cancel nothing.
+- **Binding is late.** A target name resolves at service time against the live entity set —
+  maker children and script-spawned entities make statically absent names valid — and is never
+  prebound at parse. Missing-at-service is a counted non-fatal drop, not a retry.
+- **Validity is parse-time.** A row exists only if the producer's class chain declares that
+  output; an unknown key is dropped and can never fire. The corpus contains such rows
+  (`trigger_player_activity_level.OnTrigger`), and they are not gaps.
+
+Producers **enqueue**; only queue service **delivers**. No domain dispatches an input
+synchronously from a producer site, and none installs a private timer, latent action, or second
+scheduler — timed behavior is a substrate think or an owned queue event (R4). Three recovered
+seams look synchronous and are not exceptions, because each is a call made *inside* a handler
+the queue or script host is already executing, not a transport of its own: a script's reflected
+entity-input call (`docs/vtmb/python_bridge.md` → "Synchronous calls versus queued Python"),
+`logic_pythoncheck`'s `Test` evaluation, and a terminal Function's `runscript`
+(`docs/vtmb/computer-terminals.md`). Outputs fired inside any of them rejoin the queue behind
+the pending equal-time cohort.
+
+#### 2.5.2 Producers — the frame slot decides *when*, never *how*
+
+Every producer runs in a declared stage of the frame (S2) and does nothing at that site but
+fire outputs into the one queue. The recovered producer families:
+
+| Producer family | Frame slot (S2) | Examples |
+|---|---|---|
+| Collision edges and occupancy | movement/contact + overlap routing | trigger begin/end/`OnTrigger`, per-touch level refresh, discipline-context bits, hurt cadence |
+| Held-use sessions | `+use` focus + session callbacks | signs, terminals, containers, bomb site, feeding — begin/end/completion outputs |
+| Explicit query inputs | queue service (they *are* inputs) | `trigger_checkvolume.CheckNow`, `point_teleport.Teleport` |
+| Substrate thinks | think pass | `logic_timer`, movers, scripted sequences, VCD scenes, prop animation, the NPC mind, leaf thinks (`trigger_push` acceleration) |
+| Domain transitions | wherever the owning service commits | damage commit → `OnDamaged`; feed end → `OnFedUponEnd`; sense contact → `OnFoundPlayer` |
+| Scheduled Python | queue service | `ScheduleTask` source strings (same queue, live `__main__`) |
+| Map activation | the activation transaction | `logic_auto`; landmark placement fires **no** arrival output |
+
+Discovering a new authored output therefore never implies a new tick or dispatcher: the owning
+subsystem decides *when* the output object fires, and the transport is always the same queue —
+the seven trigger leaves recovered beyond the tutorial all reduce to collision, input, or
+held-use producers over it (`docs/vtmb/exported-map-event-surface.md`).
+
+#### 2.5.3 The four kinds — what a domain event rides
+
+Every domain in §5 classifies its events into these and adds no fifth transport:
 
 | Kind | Transport | Examples |
 |---|---|---|
-| Entity I/O output | the def's 7-field `outputs[]` through `FElysiumEventQueue` | `OnTrigger`, `OnDeath`, `OnSkillSuccess`, `OnTrigger0..7`, `OnFedUponEnd` |
+| Entity I/O output | the def's parsed `outputs[]` rows through `FElysiumEventQueue` | `OnTrigger`, `OnDeath`, `OnSkillSuccess`, `OnTrigger0..7`, `OnFedUponEnd` |
 | Domain transition that *fires* an output | the domain service calls `FireOutput` on its owning entity at the real producer site | damage commit → `OnDamaged`; feed end → `OnFedUponEnd`; sense contact → `OnFoundPlayer` |
 | Game-sound stimulus | **new**: the substrate sound-event bus (§5.5) — `FElysiumEntityWorld::EmitGameSound(pos, category, radius, source)` | gunshots, `NPC_TAKE_DAMAGE`, footsteps, `NPC_DISCIPLINE_ALERT` |
 | Presentation announcement | `IElysiumPresenter` / `FElysiumViewState` (S8) | fade started, dialog opened, vitals changed |
@@ -128,9 +189,34 @@ The second kind is the load-bearing one: acceptance fires outputs **from their r
 producers** (the tutorial brief's rule), so a domain lands only when its transitions raise the
 authored outputs itself — debug injection never counts.
 
-## 3. The compatibility contract — K1–K10
+#### 2.5.4 Diagnostics — the two failure kinds stay distinct
 
-Every domain service and every refactor in this document satisfies all ten. They are the
+A wire naming no live entity and a resolved receiver lacking the input are different conditions
+with different meanings — only the second is a reimplementation gap — and the chokepoint sinks
+count them separately (K3). Authored dead wires, invalid rows, and dangling Python names are
+preserved as counted no-ops, never repaired or silenced by inventing receivers (K2).
+
+#### 2.5.5 In-flight events are save state
+
+Pending queue records (with their Python source and remaining `times`), relay refire locks,
+trigger wait gates, consumed one-shots, scene clocks, and the `!playercontroller` relationship
+restore with the map epoch, and restore rebinds the controller relationship before service
+resumes (K8; mechanics in `docs/architecture/save-architecture.md`). A domain whose event state
+lives anywhere else has already broken a mid-beat save.
+
+#### 2.5.6 Divergences from retail resolution are a closed set
+
+The runtime's visible departures from retail event resolution are enumerated, owner-called, and
+recorded beside the faithful behavior in their owning docs: the **10,000-delivery service cap**
+(retail drains unbounded and can hang the frame on a zero-delay cycle; the cap defers a due
+tail across a think boundary retail never observes — engine-core R4), the **deterministic
+post-movement containment diff** (all old ends, then all new begins, stable entity order — a
+port rule, `docs/vtmb/entity_io.md`), and the frame's declared stage boundaries (S2). Any other
+observed ordering difference is a defect, not a tolerance (K12).
+
+## 3. The compatibility contract — K1–K12
+
+Every domain service and every refactor in this document satisfies all twelve. They are the
 review checklist for gameplay-layer code.
 
 - **K1 — A name is backed at its retail binding kind.** A Character method stays a Tier 2 row;
@@ -174,6 +260,16 @@ review checklist for gameplay-layer code.
   `Scripting/`), reaches the engine only through `FElysiumWorldServices`, and lands with a
   Substrate-tier test against the recording stub (`Private/Tests/ElysiumTestServices.h`)
   before it is proven live (restates S10).
+- **K11 — Producers enqueue; only queue service delivers.** Every event resolves through the
+  one queue under §2.5.1's order contract. No domain dispatches an input synchronously from a
+  producer site, installs a private timer/latent action/second scheduler, or prebinds a target
+  name at parse time. The three recovered synchronous seams (§2.5.1) are calls inside an
+  already-executing handler, not transports, and their fired outputs rejoin the queue tail.
+- **K12 — Determinism divergences are enumerated, or they are bugs.** The runtime's visible
+  departures from retail event resolution are exactly §2.5.6's closed set, each recorded beside
+  the faithful behavior in the doc owning the system. An ordering difference outside that set —
+  a domain reordering equal-time work, delivering depth-first, retrying a missed target, or
+  firing rows in export order — is a defect to fix, never a tolerance to document around.
 
 ## 4. The system map
 
@@ -386,9 +482,11 @@ grows the full child specification (equipment, perception, relations, squad, `Sp
 `MaxLiveChildren`, `MaxNPCCount`) and **child output provenance**, which is built:
 `FElysiumNpcMaker::InputSpawn` copies the maker's authored output wires onto each synthesized
 child def (all rows, each child with its own `times` countdown), the child being the firing
-entity. This is a marked reconstruction — the retail owner of those firings is an open
-question in the tutorial brief — chosen because it preserves caller/activator provenance
-without inventing a relay object; a contradicting retail capture changes the copy site only.
+entity. This is the recovered retail behavior: `CNPCMaker::Spawn` clones the maker's raw
+keyvalue template through each child's ordinary parser, so every child owns fresh action lists
+and its own fire counters and emits the lifecycle outputs directly — cloning, not event
+forwarding (`docs/vtmb/entity_io.md` → "npc_maker output ownership"). The maker separately
+fires only `OnSpawnNPC`/`OnNPCDied`/`OnLastNPCDied`.
 
 **5.5.2 Relationships.** `FElysiumRelationships` on `FElysiumNpc`: entity-override rows and
 class rows, `{target-or-class, disposition D_HT/D_FR/D_LI/D_NU, priority}`, resolved
@@ -518,8 +616,9 @@ in the command registry. Roadmap 13.2 / P13.
   the ordinary `+use` focus path, and the authoritative `hackcmd` command surface.
   `FElysiumPropHacking` adds the `TerminalDefinition` parse (§K9, tolerating the
   patch-rewritten `haven_pc.txt`), directory/password/function state, the eight
-  `OnTrigger0..7` outputs fired **before** that function's `runscript` (the recovered order:
-  runtext → trigger → runscript → prompt), dependency evaluation through the script host, and
+  `OnTrigger0..7` outputs **enqueued before** that function's synchronous `runscript`, so target
+  delivery follows the script in the queue pass (the recovered order: runtext → enqueue trigger
+  → runscript → prompt; K11's seam rule), dependency evaluation through the script host, and
   the email state (per-terminal flags via leaf `Serialize`; `global_email` promotes to the
   player record's existing `EmailFlags`).
 - **Presentation divergence, owner-called:** the character-cell screen renders as a modern UI
@@ -584,8 +683,14 @@ runtime spine's own acceptance test for a new system.
   requirement, satisfied with the same mechanism the I/O chokepoints use.
 - **Acceptance is the authored demand, not a feature list**: each domain closes against
   `docs/vtmb/sp_tutorial_1-event-surface.md`'s slices (its §13 table maps one-to-one onto §5
-  here), fired from real producers, proven headlessly in the Substrate tier first (K10) and
-  end-to-end by the Play tier's beat scripts.
+  here) and the cross-map demand in `docs/vtmb/exported-map-event-surface.md`, fired from real
+  producers, proven headlessly in the Substrate tier first (K10) and end-to-end by the Play
+  tier's beat scripts.
+- **Closure is a classification, not an absence of errors**: the acceptance trace records
+  enough to distinguish "never produced," "target not found," "input absent," "receiver
+  refused," and "side effect invisible" (the tutorial brief's schema), and the report
+  classifies every wire in scope as observed, conditionally unreachable, intentionally
+  dangling, blocked by an unmet prerequisite, or unexplained. A quiet log proves nothing.
 
 ## 8. Not covered here
 

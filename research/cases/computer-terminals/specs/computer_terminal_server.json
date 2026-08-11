@@ -112,7 +112,7 @@
       "confidence": "confirmed",
       "fact": "An authored Function executes in the order dependency, runtext, numbered output, runscript, prompt restoration. A failed dependency produces no runtext, output or script.",
       "evidence": "RouteContentCommand 0x1021b750 calls TestDependency 0x1021bec0 before ExecuteFunction 0x1021c6d0. ExecuteFunction prints the selected record's +0x30 runtext, validates trigger 0..7, fires COutputEvent at this+0x840+trigger*0x18 via 0x100cd660 with the active user, executes non-empty +0x270 runscript via 0x100ea2d0 mode 0x100, then emits the prompt and command mode.",
-      "consequence": "OnTriggerN must enter the ordinary entity I/O queue and run before runscript. Output and script are independent optional effects."
+      "consequence": "OnTriggerN is enqueued before runscript, but runscript executes synchronously in the terminal input body; queued target delivery therefore follows the script in the same service pass. Output and script are independent optional effects."
     },
     {
       "confidence": "confirmed",

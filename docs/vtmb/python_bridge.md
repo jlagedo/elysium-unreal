@@ -297,6 +297,40 @@ instead resolves the script's own functions but not the engine globals the scrip
 | Dialogue | `.dlg` field 4 (condition, eval) and field 5 (action, exec). |
 | Quest completion state | a `CompletionState`'s **`"Event"`** key in `vdata/system/quests_*.txt` — *"script data, such as a flag assignment or a function call, that will be passed to the script interpreter"*. `CVPlayer::SetQuest` runs it with **`PyRun_ConsoleString(src, Py_file_input, __main__.__dict__, __main__.__dict__)`** — so a statement, not an expression, in the same namespace field 6 resolves — traced as `RUNNING PYTHON AT TIME %f: %s` and `PyErr_Print`ed on failure. It fires **after** that state's `AwardMoney` and `AwardXP`, and only when the state actually changed (`docs/vtmb/game_runtime.md` → "Quests"). **No shipped row authors one.** |
 
+The current 23-map export survey finds 209 field-5 identifiers absent from `sp_tutorial_1`, but no
+new Python call path. They are level-callback and `G`-key vocabulary carried by the same entity
+output record, not new bridge functions, a Python tick or a parallel scheduler. The exhaustive
+names/examples and their manifest are in `docs/vtmb/exported-map-event-surface.md` and its generated
+survey report.
+
+### Synchronous calls versus queued Python
+
+The bridge has three distinct event boundaries:
+
+- Calling a reflected entity input from Python is **synchronous**. The PyMethodDef table entry
+  `entity_input_function` (`0x1058f658`, thunk `0x10006429`, body `FUN_101962a0`) marshals the
+  argument and calls the entity's `AcceptInput` virtual at `+0x1d8` immediately, with null
+  activator and caller. The input body completes before Python resumes. Outputs fired by that body
+  still enter the ordinary event queue.
+- Assigning a reflected entity field or a `G` key is a direct datamap/data-manager write. It does
+  not synthesize an input event unless the datamap member is explicitly an input function.
+- Output field 5 and `ScheduleTask` are queued. For a combined output event, service delivers the
+  named entity input(s) first and then evaluates the field-5 `__main__.%s` call. Consequently the
+  Python observes all synchronous mutations performed by those receivers, while their newly
+  emitted zero-delay outputs wait behind the equal-time cohort already queued.
+
+`ScheduleTask` is closed, not an inferred parallel scheduler. Its PyMethodDef body
+`FUN_10196ea0` parses `(delay, source)`, creates a Python string, and calls `FUN_100ce0d0`, which
+adds a Python-typed `CEventQueue` entry due at `curtime + delay`. Service calls `FUN_100ce8a0` to
+execute the stored source against the **live** `__main__` dictionary. The pending source therefore
+shares ordering, pause/scaling and save/restore with delayed entity I/O; it does not capture a
+module-local namespace or a state snapshot.
+
+`logic_pythoncheck` is the opposite boundary: its `Test` input evaluates the expression
+synchronously, converts only a Python integer result to truth, then queues ordinary `OnTrue` or
+`OnFalse` output actions. An exception or non-integer prints and selects false; it does not cancel
+earlier work in the queue service pass.
+
 `worldspawn` carries a `levelscript` keyvalue (92 of 101 maps) naming the hub module —
 `"levelscript" "chinatown"` loads `python/chinatown/chinatown.py`. Several maps share one
 module.

@@ -34,13 +34,50 @@ target , input , param , delay , times , python , extra
    0       1       2       3       4       5        6
 ```
 
-**Seven fields, not Source's five.** 24,065 of 24,081 outputs write 7; 14 write 6
-(one writes 5, one 8). (Retail: 16,096 of 16,125 write 7, 29 write 6.)
-Fields 0-4 are stock Source (`times` = -1 means unlimited). **Field 5 is a Python
-call string** (6,956 outputs carry one) which is wrapped as `__main__.%s` — see
-`docs/vtmb/python_bridge.md`. The wrap format string lives in **`vampire.dll`**
-(`0x1055e370`, in the event-queue dispatch region), not `engine.dll`. A target of `!activator`/`!self` is a runtime
+**The data normally writes seven fields, but retail consumes exactly six.** 24,065 of 24,081
+engine-loaded outputs write 7; 14 write 6 (one writes 5, one 8). Retail's parser
+`FUN_100ccf90` reads target, input, parameter, delay, count and Python, then stops. A seventh
+`extra` field and anything after it are inert authoring residue; accepting a wide row must not move
+field 5 or turn the residue into behavior. (Retail corpus: 16,096 of 16,125 write 7, 29 write 6.)
+
+Fields 0–4 are stock Source. The parser initializes `times` to `-1` and rewrites an authored `0` to
+`-1`, so **both `0` and `-1` mean unlimited**; a positive value is the remaining-fire counter.
+**Field 5 is a Python call string** (6,956 outputs carry one) which is wrapped as `__main__.%s` —
+see `docs/vtmb/python_bridge.md`. The wrap format string lives in **`vampire.dll`** (`0x1055e370`,
+in the event-queue dispatch region), not `engine.dll`. A target of `!activator`/`!self` is a runtime
 reference, not a `targetname`.
+
+An output-looking key in the entity lump is not proof that an output exists. Ordinary keyvalue
+parsing first resolves the external name through the entity's datamap/baseMap chain; only a record
+typed as an output receives these parsed actions. An unknown key is silently dropped. This is
+distinct from a valid output whose target later resolves to nothing or whose receiver refuses an
+unknown input. The current exports contain the concrete trap
+`trigger_player_activity_level.OnTrigger`: two rows are stamped in `sm_diner_1`, but that class has
+no such datamap output and retail never stores or fires them.
+
+### Output-list and queue order
+
+Retail order is mechanical and differs from the visual/export order in a non-obvious place:
+
+1. `FUN_100cd6d0` **prepends** each parsed action to the output object's linked list. The BSP
+   entity lump and exporter preserve repeated-key authoring order, so repeated rows for one output
+   fire in **reverse lump/export order**.
+2. `CBaseEntityOutput::FireOutput` (`FUN_100cd300`) walks that list head to tail. For every action it
+   first inserts one queue entry, then decrements a positive `times`; an action reaching zero is
+   removed immediately without disturbing the remaining rows.
+3. `CEventQueue::AddEvent` (`FUN_100ce210`) advances while existing `fireTime <= newFireTime`.
+   Earlier deadlines therefore lead; equal-time entries are **FIFO in enqueue order**.
+4. Service takes the due head repeatedly. If a handler enqueues another zero-delay event, it goes
+   behind the equal-time cohort already pending: with due `A, B`, if `A` produces `C`, delivery is
+   `A, B, C`, not depth-first `A, C, B`.
+
+One queued record may carry a name target, field-5 Python, and a direct `EHANDLE`. Service order
+inside that record is: deliver the input to **every** matching name target in global entity-list
+order; execute field-5 Python; then deliver to the direct handle if it is still valid. A missing name
+or input is non-fatal. A stale activator/caller becomes null: name delivery and Python still run,
+while an invalid direct target is skipped. Python errors print and continuation is not rolled back.
+The frame boundary, unbounded retail drain and starvation consequence are owned by
+`docs/vtmb/game_runtime.md`.
 
 ## Base inputs
 
@@ -504,6 +541,123 @@ reject but never admit. An unset or stale `m_hFilter` passes.
 Also present but unused by the exported maps: `filter_activator_class` (`FUN_10107d80`),
 `filter_mass` (`FUN_10107ef0`), `filter_inventory` (`FUN_10108090`), `filter_feat` (`FUN_101082d0`).
 
+### `trigger_multiple` / `trigger_once` edge and re-arm order
+
+An accepted new contact enters `CBaseTrigger::StartTouch` first, which queues `OnStartTouch`, then
+`CTriggerMultiple::MultiTouch` may activate the multiple and queue `OnTrigger`. Equal-time FIFO
+therefore preserves producer order: `OnStartTouch` deliveries precede `OnTrigger` deliveries, while
+the repeated rows *within* either output retain the reverse-row rule above. `EndTouch` releases the
+retained pair before it queues `OnEndTouch`, so a kill, disable, or rejection cannot leave a stale
+pair blocking the next valid begin.
+
+`ActivateMultiTrigger` is a gate, not a backlog. With `wait > 0`, the first accepted activation
+arms `MultiWaitOver` at `curtime + wait`; attempted **`OnTrigger` activations** during that window
+are silently swallowed and are not retried when it re-arms. A genuinely new physical entry may
+still have produced its edge-only `OnStartTouch` before reaching that wait gate. `wait == -1` (the
+value forced by `trigger_once`) removes the touch
+handler immediately and schedules removal at `curtime + 0.1`, so it cannot fire again even though
+its delayed output rows remain valid queue entries. Enable/disable is independent: disabling clears
+contacts, and re-enabling while still geometrically contained can create a fresh begin.
+
+## Other brush-trigger leaves in the current exports
+
+The whole-current-export delta from `sp_tutorial_1` adds seven trigger classnames. Their map-level
+inventory and worked output chains are in `docs/vtmb/exported-map-event-surface.md`; the retail leaf
+rules are recorded here.
+
+### `trigger_teleport`
+
+`CTriggerTeleport::Touch` (`FUN_101c92c0`, vftable `0x1047f694`) first applies
+`PassesTriggerFilters`, then resolves its target. A missing target is a silent no-op. Without a
+landmark it uses the target origin and angles; for a player/collision object it raises target Z by
+`-collisionMins.z`, so the authored target denotes the foot point. It clears on-ground state and
+passes no replacement velocity, preserving current velocity. A player controller also receives a
+crossfade start time and the authored duration.
+
+An optional landmark preserves the toucher's relative offset and rotates both angles and velocity
+by the landmark-to-target yaw delta. Retail does no trace, clearance/headroom test, ground search,
+depenetration, retry, delay or self-removal. The transform is immediate inside `Touch`; subsequent
+old/new contact reconciliation is engine-owned. The three current instances author no landmark.
+
+### `trigger_push`
+
+`CTriggerPush::Spawn` (`FUN_101c8aa0`) derives direction from `angles` (all-zero defaults to
+`0 180 0`), initializes the trigger and copies current `speed` to target speed. `Touch`
+(`FUN_101c8c40`) rejects null, non-solid and trigger-solid touchers plus one excluded
+collision/move-type path, then applies `PassesTriggerFilters`. Ordinary actors receive base
+velocity in the push direction; an upward push clears on-ground and slightly lifts a grounded
+actor. VPhysics bodies receive frame-time-scaled force. Spawnflag `0x80` adds one absolute-velocity
+impulse and removes the trigger.
+
+`accel` alone installs no think. `SetAcceleration` (`FUN_101c8a60`) only writes the field.
+`SetSpeed` (`FUN_101c89c0`) writes a target speed and last game time, then arms
+`CTriggerPushAccelThink` (`FUN_101c8b60`). The think clamps `dt`, converges current speed by
+`accel * dt`, rethinks until exact and then clears itself. No current exported output resolves to
+`trigger_push.SetSpeed`, so both current instances perform only collision-tick touch work.
+
+### `trigger_player_activity_level`
+
+The leaf's `supernatural_level`, `criminal_level` and `investigate_level` fields are `+0x598`,
+`+0x59c`, `+0x5a0`, all default `-1`. `Touch` (`FUN_102108e0`) checks enabled state and a
+player/controller-bearing toucher, but does **not** call `PassesTriggerFilters`. Every collision
+touch refreshes each authored non-negative level; supernatural and criminal use indefinite-duration
+setters, while investigate uses its direct setter.
+
+`EndTouch` (`FUN_102109b0`) uses exact-match release so it does not clear a value replaced by
+another source. With spawnflag `0x20`, matching supernatural/criminal values return to zero;
+matching investigate returns to zero regardless of that bit. The inherited edge path still owns
+valid `OnStartTouch`/`OnEndTouch`. There is no leaf `OnTrigger`, output object, think, stack or
+reference count; authored `OnTrigger` rows are discarded during keyvalue parsing.
+
+### `trigger_discipline_context`
+
+`StartTouch` (`FUN_10210dc0`) requires enabled state, a non-negative context, a non-null toucher and
+its context-state object, then sets `1 << (context & 31)` **before** calling inherited
+`CBaseTrigger::StartTouch`. The mutation is therefore not gated by the inherited class/filter test
+that controls `OnStartTouch`. `EndTouch` (`FUN_10210e50`) clears the bit and then invokes the base
+end path. Its `Touch` is empty: no per-tick refresh or think exists. The bit is not reference-counted,
+so same-context overlapping volumes can clear one another early on exit.
+
+### `trigger_checkvolume`
+
+`CheckNow` (`FUN_101cb7d0`, vftable `0x10481c4c`) refuses disabled state, obtains the brush world
+AABB, asks the engine partition for at most 2,048 candidates, applies `PassesTriggerFilters` to each
+and fires `OnEntityInVolume` once per accepted candidate. It stores no occupancy set and performs
+no deduplication, poll, wait or one-shot removal. Every explicit `CheckNow` repeats the query and can
+refire for the same entity. The server evidence proves a broadphase AABB query; exact partition-side
+containment remains an `engine.dll` boundary.
+
+### `trigger_bomb_site`
+
+`StartTouch` (`FUN_102110e0`) runs the inherited edge path, then stores this site on a toucher with
+a player controller even if the inherited filter rejected its output edge. `EndTouch`
+(`FUN_10211160`) clears the relationship only if it still names this site. Use query
+(`FUN_10211280`) rejects disabled state, a missing/mismatched player relationship, or a different
+live exclusive-use owner; no inventory guard is visible there.
+
+Use begin (`FUN_102113c0`) claims the generic session, records `curtime` and marks the player busy.
+The progress callback `FUN_10211480` completes at 100 percent or above. Completion
+(`FUN_102116c0`) disables the trigger, releases owner/relationship state, requests removal of
+`item_g_astrolite`, spawns/initializes an astrolite ahead of the player, then fires
+`OnBombPlaced`. The output is completion-owned and normally one-shot through self-disable, but an
+explicit re-enable permits another use/completion; there is no separate permanent latch. No entity
+think is installed.
+
+### `trigger_electric_bugaloo`
+
+This occupied-use leaf stores itself on player-controller `+0x1cbc` after the inherited
+`StartTouch`; the relationship write is not conditional on that inherited filter verdict.
+`EndTouch` clears only a still-matching relationship. Use query (`FUN_10231520`) rejects disabled
+state, a missing/mismatched relationship and a different live exclusive owner.
+
+Use begin (`FUN_10231640`) fires generic `OnUseBegin`, claims ownership, marks the player busy and
+records game time. Use end (`FUN_10231690`) clears busy/session state and fires generic
+`OnUseEnd`; both outputs refire per accepted session. Owner-only collision `Touch`
+(`FUN_102316d0`) also checks whether more than `300.0` game seconds have elapsed since begin. If so,
+it calls one player routine and sets a per-entity byte that neither begin nor end resets. That
+downstream action is once per entity lifetime and collision-touch-driven, not an entity think or
+queued timer.
+
 ## `logic_relay` spawnflags and refire
 
 `CLogicRelay`'s datamap is at `0x10579058` (records `0x1057909c`, 8 fields, builder `FUN_10136330`);
@@ -533,6 +687,11 @@ by its own longest authored `OnTrigger` delay plus `0.001` (`0x1044f020`), so it
 its last delayed output has gone out. The guard order is `m_bDisabled` first, then `m_bWaitForRefire`;
 either silently swallows the input. The activator is taken verbatim from `inputdata.pActivator` and
 `pCaller` is the relay itself.
+
+That lock is an intentional blocker, not a deferred retry. It also breaks an otherwise immediate
+self-cycle unless spawnflag `0x2` is set. A fast-retrigger relay or an ordinary zero-delay cycle has
+no retail event-budget protection and can monopolize the queue service pass; see
+`docs/vtmb/game_runtime.md`.
 
 Unlike `CBaseButton`, this class does **not** diverge from stock Source. The higher bits are a proven
 negative, from three exhaustive checks: an operand scan over all 942,828 disassembled instructions
@@ -958,6 +1117,46 @@ sequence 0) and emits the `soundgroup` events `open`, `close`, `swing`, `locked`
 `item_container_one_item_filtered` (factory `0x10209ef0`, vftable `0x10484c84`) presets a filter
 slot to `5`.
 
+## `npc_maker` output ownership
+
+`CNPCMaker` (constructor `FUN_1034ad80`) descends through the AI NPC chain rather than from a
+logic-only base. Its own datamap adds `OnSpawnNPC` (`+0x6668`), `OnNPCDied` (`+0x6680`) and
+`OnLastNPCDied` (`+0x6698`), while the inherited NPC datamaps make keys such as
+`OnFedUponBegin`, `OnFedUponEnd`, `OnDamaged`, `OnIncapacitated`, `OnFoundPlayer`, `OnDialogEnd`
+and `OnDeath` syntactically valid on the maker record.
+
+Those inherited rows are **child templates, not maker-forwarded notifications**. `Spawn`
+(`FUN_1034b7b0`) creates the entity named by the maker's `NPCType`, copies the maker's raw keyvalue
+block through the child's ordinary keyvalue parser, assigns the maker relationship, fires
+`OnSpawnNPC`, and increments the live-child count. Each child consequently owns a newly parsed copy
+of the inherited action lists and its own positive `times` counters. Feeding, damage, perception,
+dialogue and `OnDeath` fire from that child with the child as caller; no proxy hop through the maker
+changes their activator/caller provenance.
+
+The child-death notification (`FUN_1034bc90`) is separate: it decrements the maker count, fires
+`OnNPCDied`, and fires `OnLastNPCDied` when the count reaches zero. The child still fires its own
+inherited `OnDeath`. Killing and respawning a child therefore does not restore consumed counters on
+the old child; a newly spawned child receives new counters from the template.
+
+## `prop_sign`
+
+`CPropSign` — factory `FUN_102118a0`, constructor `FUN_10211a50`, datamap builder
+`FUN_10211970` — stores `definition_file` at `+0x730`, `OnReadBegin` at `+0x734` and
+`OnReadEnd` at `+0x74c`. The UI consumes `use_icon` separately from `+0x76c`; it is not the
+`+0x734` output field.
+
+Use begin (`FUN_10211db0`) runs the inherited use-begin path, fires `OnReadBegin` with the player
+activator, then loads the sign definition and acquires one exclusive player/sign session. The sign
+data's first dependency that evaluates true selects any redirected document. A second user cannot
+steal the live session. Use end (`FUN_10211e70`) runs the base use-end path, queues `OnReadEnd`,
+closes the sign view and releases the owner. Both outputs can refire on later accepted sessions.
+This is a held interaction lifecycle, not an `OnPressed`-style one-shot.
+
+Fifteen current-export rows across seven maps author `OnReadBegin`. The two `sp_tutorial_1` signs
+author no outgoing rows: `sign_chopshop_upstairs` selects
+`tutorial_note.txt` with icon 18, and the unnamed bus-stop sign uses icon 56. They still require the
+same ownership and open/close behavior even though `OnReadEnd` has nothing to deliver in this map.
+
 ## `prop_hacking` (`CBaseTerminal` / `CPropHacking`)
 
 The terminal-specific class surface, content grammar, skill attempts, `OnUse*` and
@@ -1200,26 +1399,37 @@ destination **captured at `Activate`**, not read at input time.
 `InputTeleport` (`FUN_1018dc00`) re-checks the parent (same warning, three arguments this time),
 then applies the cached transform with `SetAbsOrigin` / `SetAbsAngles` — all three angles, not yaw
 alone. When the target carries a player controller it additionally snaps the player's view angles to
-the destination's and stamps a teleport time on the player.
+the destination's and stamps a teleport time on the player. The controller relationship mirrors the
+explicit transform write, so later controller removal transfers the teleported pose rather than its
+pre-teleport pose.
+
+There is **no destination trace, hull-clearance test, ground search, nearest-safe-point search, or
+velocity reset** in the recovered path. The cached transform is authoritative even if it intersects
+world or entity collision; ordinary movement/physics resolves the consequence later. The only
+pre-write rejection is the target's transform parent. The input also does not test distance from the
+teleporter, activator identity, line of sight, or destination trigger state.
 
 Every teleport ends with `FUN_101cf600` on the target, which is **`CBaseEntity::Relink`** (trace
 string `0x10558f08`) and whose body is a profiler scope push and pop with no work between them. It
 adds nothing: re-establishing the entity's spatial links falls out of `SetAbsOrigin` itself, so
 there is no separate touch re-test in the teleport path.
 
-Touch delivery therefore belongs to the movement/touch phase, not to `InputTeleport`'s event-queue
-delivery. The transform changes immediately, but containment outputs produced by that move are
-observed after the following player-movement opportunity. Several teleports before that phase
-collapse to the final containment. A trigger explicitly enabled by a later setup event is a
-different operation: rebuilding its physical touch links may produce `StartTouch` after that setup
-event in the same queue service pass.
+Touch delivery therefore does not occur inside `InputTeleport`'s event-queue delivery. The transform
+changes immediately; later collision/touch reconciliation reaches the engine collision-property
+interface from `CBaseEntity::PhysicsTouchTriggers`. `vampire.dll` establishes this boundary but not
+the engine-owned ordering of old-contact ends versus new-contact begins. Several teleports before
+that reconciliation collapse observationally to the final containment. A trigger explicitly enabled
+by a later setup event is a different operation: rebuilding its physical touch links can create a
+fresh `StartTouch` after the enabling input.
 
 The faithful runtime caches live origin and all Source angles in the late entity-activation pass,
 after the frozen player placement has been synchronized into `!player`. It preserves that cache in
 map snapshots, resolves `!activator` only when the input arrives, refuses parented targets, and
 applies position plus angles as one body update. The logical player's `origin` is Source feet and
 its `angles` are the complete Source view; the Unreal body owns the one feet-to-centre conversion,
-body yaw, and full controller view. Initial map containment remains an activation transaction:
+body yaw, and full controller view. Its post-movement containment diff deliberately orders all old
+ends before all new begins, then orders by stable entity index; that is an Unreal determinism rule,
+not a recovered claim about the opaque retail engine callback order. Initial map containment remains an activation transaction:
 place and freeze the pawn, synchronize and activate entities, open the entity world, reconcile
 containment immediately, then run the frozen think/event pass.
 
