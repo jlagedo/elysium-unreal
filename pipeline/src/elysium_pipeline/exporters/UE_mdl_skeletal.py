@@ -30,7 +30,7 @@ bytes, unterminated.
                                                                        export root, "" if none
     "MESH"  u32 vertexCount, u32 triangleCount, u32 sectionCount
             sectionCount x { string material, u32 firstTriangle, u32 triangleCount }
-            vertexCount   x { f32 p[3], f32 uv[2], u16 bone[3], f32 weight[3] }
+            vertexCount   x { f32 p[3], f32 n[3], f32 uv[2], u16 bone[3], f32 weight[3] }
             triangleCount x { u32 index[3] }
     "MORF"  u32 morphCount
             morphCount x { string name, u32 deltaCount,
@@ -73,7 +73,11 @@ from elysium_pipeline.formats import bsp, mdl, mdl_skel as S
 #: inheritance reproduces the pose VtMB draws and the runtime applies no rule of its own. A version
 #: 1 container states the same bytes with the opposite meaning, and nothing in the payload
 #: distinguishes them, so a stale file has to be refused rather than read.
-VERSION = 4
+#: 5 -- "MESH" carries the authored per-vertex shading normal. VtMB stores one on every skinned
+#: vertex, and it holds the artist's smoothing including the split normals at a hard edge, which no
+#: averaging over adjacent faces can reproduce. A version 4 container states a vertex record of a
+#: different width, so a stale file has to be refused rather than read.
+VERSION = 5
 
 #: Separates an additive's own label from the label of the host it was composed onto, in the name
 #: of a derived clip. A VtMB sequence label never contains it, so the split is unambiguous.
@@ -273,6 +277,51 @@ def _matl_section(matnames, matinfo):
     return bytes(out)
 
 
+def _surface_normals(surface):
+    """One surface's per-vertex shading normals, Unreal-native and unit length.
+
+    VtMB authors a normal on every skinned vertex (`StudioVertex.VecNormal`,
+    `docs/vtmb/mdl_v2531.md`), and it carries the artist's smoothing -- including the split
+    normals at a hard edge, where studiomdl duplicated the vertex so each copy could face its own
+    way. Averaging adjacent face normals cannot reproduce a split by construction, so the authored
+    value is the only source for it.
+
+    **Negated after conversion.** The Source->Unreal Y negation is a reflection and the triangle
+    winding is reversed below to match; a direction carried through `_conv_dir` alone ends up
+    facing into the surface it belongs to. Verified against the exported winding rather than
+    reasoned about: as written the normals sit a median 12-20 degrees from their own face normal,
+    against ~160 unnegated.
+
+    A few vertices across the corpus store `(0,0,0)`. Those, and only those, take the
+    area-weighted geometric normal, so every exported vertex carries a usable one and the bake is
+    never left deciding what a missing normal means.
+    """
+    out = [tuple(-axis for axis in _conv_dir(n)) for n in surface["nrm"]]
+    missing = [i for i, n in enumerate(out) if n == (0.0, 0.0, 0.0)]
+    if not missing:
+        return out
+
+    positions = [_conv_pos(p) for p in surface["pos"]]
+    accumulated = [[0.0, 0.0, 0.0] for _ in out]
+    for i, j, k in surface["tris"]:
+        # The exported winding is (i, k, j), so this cross product already points outward.
+        ax, ay, az = (positions[k][c] - positions[i][c] for c in range(3))
+        bx, by, bz = (positions[j][c] - positions[i][c] for c in range(3))
+        # Unnormalised: the magnitude is twice the triangle area, which is the weighting.
+        face = (ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx)
+        for corner in (i, j, k):
+            for c in range(3):
+                accumulated[corner][c] += face[c]
+
+    for i in missing:
+        x, y, z = accumulated[i]
+        length = (x * x + y * y + z * z) ** 0.5
+        # A vertex no triangle references, or one whose faces cancel exactly. Up is arbitrary but
+        # deterministic, and it beats emitting a zero the bake would have to interpret.
+        out[i] = (x / length, y / length, z / length) if length > 1e-12 else (0.0, 0.0, 1.0)
+    return out
+
+
 def _mesh_section(surfaces, matnames, bone_map):
     """Concatenate the per-material surfaces into one vertex list plus a section table.
 
@@ -286,9 +335,11 @@ def _mesh_section(surfaces, matnames, bone_map):
         surface = surfaces[name]
         offsets[name] = vertex_total
         sections += _string(name) + struct.pack("<II", triangle_total, len(surface["tris"]))
-        for position, uv, joints, weights in zip(surface["pos"], surface["uv"],
-                                                 surface["joints"], surface["weights"]):
+        normals = _surface_normals(surface)
+        for position, normal, uv, joints, weights in zip(surface["pos"], normals, surface["uv"],
+                                                         surface["joints"], surface["weights"]):
             vertices += struct.pack("<3f", *_conv_pos(position))
+            vertices += struct.pack("<3f", *normal)
             vertices += struct.pack("<2f", float(uv[0]), float(uv[1]))
             vertices += struct.pack("<3H", *[bone_map[int(j)] if 0 <= int(j) < len(bone_map)
                                              else 0 for j in joints[:MAX_INFLUENCES]])

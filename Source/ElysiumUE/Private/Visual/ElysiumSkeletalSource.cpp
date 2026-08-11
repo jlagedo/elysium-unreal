@@ -18,7 +18,9 @@ namespace
 	// ordinary inheritance reproduces the pose VtMB draws and no runtime rule is applied. A
 	// version 1 container carries the same bytes meaning the opposite, and nothing in the payload
 	// tells them apart, so a stale export is refused rather than posed wrongly with no error.
-	constexpr uint32 EskmVersion = 4;
+	// Version 5 widened the "MESH" vertex record with the authored shading normal, so a version 4
+	// file parses at the wrong stride from the first vertex onward rather than merely lacking it.
+	constexpr uint32 EskmVersion = 5;
 
 	/**
 	 * A bounds-checked forward cursor over the loaded file.
@@ -134,6 +136,9 @@ namespace
 			Vertex.Position.X = Cursor.Read<float>();
 			Vertex.Position.Y = Cursor.Read<float>();
 			Vertex.Position.Z = Cursor.Read<float>();
+			Vertex.Normal.X = Cursor.Read<float>();
+			Vertex.Normal.Y = Cursor.Read<float>();
+			Vertex.Normal.Z = Cursor.Read<float>();
 			Vertex.UV.X = Cursor.Read<float>();
 			Vertex.UV.Y = Cursor.Read<float>();
 			for (uint16& Bone : Vertex.Bones)

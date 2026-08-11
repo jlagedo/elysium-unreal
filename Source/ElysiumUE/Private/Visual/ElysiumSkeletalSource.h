@@ -42,6 +42,14 @@ struct FElysiumSourceSection
 struct FElysiumSourceVertex
 {
 	FVector3f Position = FVector3f::ZeroVector;
+	/**
+	 * VtMB's authored shading normal, already Unreal-native and unit length.
+	 *
+	 * The exporter resolves it: it carries the artist's smoothing, substitutes an area-weighted
+	 * geometric normal for the handful of vertices the file stores as zero, and negates for the
+	 * reflected frame. Nothing downstream recomputes or repairs it.
+	 */
+	FVector3f Normal = FVector3f::ZAxisVector;
 	FVector2f UV = FVector2f::ZeroVector;
 	/** VtMB's skinned vertex carries exactly three influence slots; a zero weight is unused. */
 	uint16 Bones[3] = { 0, 0, 0 };

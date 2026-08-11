@@ -603,10 +603,10 @@ def decode_skinned(d, v, mesh_map=None):
     """Decode LOD0 geometry per material, carrying skin + the raw vertex id.
 
     Like `mdl.decode` but for skinned characters: returns a dict material -> surface
-    where surface = {pos:[(x,y,z)], uv:[(u,v)], joints:[[b0..b3]], weights:[[w..]],
-    tris:[(i,j,k)]} in **Source** coords, one deduped vertex list per material. Only
-    the SKINNED (44B) vertex format occurs on characters; skin comes from the same
-    StudioVertex BoneWeight this reads positions from.
+    where surface = {pos:[(x,y,z)], nrm:[(x,y,z)], uv:[(u,v)], joints:[[b0..b3]],
+    weights:[[w..]], tris:[(i,j,k)]} in **Source** coords, one deduped vertex list per
+    material. Only the SKINNED (44B) vertex format occurs on characters; skin and the
+    authored shading normal come from the same StudioVertex this reads positions from.
 
     `mesh_map`, when given a list, is filled with one record per StudioMesh:
     `{material, model_base, mesh_index, vertex_offset, remap}` where `remap` maps the
@@ -649,7 +649,7 @@ def decode_skinned(d, v, mesh_map=None):
                 num_sg = _u16(v, vmesh + 0)
                 sg_off = _i32(v, vmesh + 4)
                 matname = materials[material] if material < len(materials) else f"mat{material}"
-                surf = surfaces.setdefault(matname, dict(pos=[], uv=[], joints=[],
+                surf = surfaces.setdefault(matname, dict(pos=[], nrm=[], uv=[], joints=[],
                                                          weights=[], tris=[]))
                 remap = {}
                 for sg in range(num_sg):
@@ -678,6 +678,10 @@ def decode_skinned(d, v, mesh_map=None):
                                     j4 = (bs + [0, 0, 0, 0])[:4]
                                     w4 = (ws + [0.0, 0.0, 0.0, 0.0])[:4]
                                     surf["pos"].append((px, py, pz))
+                                    # The authored shading normal, `VecNormal`@24 -- a plain
+                                    # parent-of-nothing float3 in the same frame as the position,
+                                    # needing no table and no unpacking on this vertex format.
+                                    surf["nrm"].append(_vec3(d, sv + 24))
                                     surf["uv"].append((u, vv))
                                     surf["joints"].append(j4)
                                     surf["weights"].append(w4)

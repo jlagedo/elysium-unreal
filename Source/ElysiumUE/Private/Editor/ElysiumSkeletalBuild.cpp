@@ -455,9 +455,13 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	LodInfo.ReductionSettings.NumOfVertPercentage = 1.0f;
 	LodInfo.LODHysteresis = 0.02f;
 	LodInfo.bImportWithBaseMesh = true;
-	// VtMB's skinned vertex carries no normal, so there is nothing to preserve and both are
-	// derived from the geometry the same way the glTF path derived them.
-	LodInfo.BuildSettings.bRecomputeNormals = true;
+	// The container carries VtMB's own authored per-vertex normal, so the build must NOT derive
+	// one. Recomputing averages each vertex's adjacent face normals, which cannot reproduce a
+	// split normal by construction -- and studiomdl duplicated vertices precisely so a hard edge
+	// could carry two. Measured against the authored values, a recomputed set sits a mean 12-15
+	// degrees off with a quarter of vertices beyond 20, which reads as rougher skin.
+	// Tangents are still derived: MikkTSpace builds them from these normals and the UVs.
+	LodInfo.BuildSettings.bRecomputeNormals = false;
 	LodInfo.BuildSettings.bRecomputeTangents = true;
 	// Stated, not inherited. FSkeletalMeshBuildSettings defaults this to 0.015 cm, a heuristic
 	// sized for FBX character rigs, and FLODUtilities::BuildMorphTargets drops every delta under it
@@ -478,6 +482,7 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	FStaticMeshAttributes& Static = Attributes;
 	TVertexAttributesRef<FVector3f> Positions = Static.GetVertexPositions();
 	TVertexInstanceAttributesRef<FVector2f> UVs = Static.GetVertexInstanceUVs();
+	TVertexInstanceAttributesRef<FVector3f> Normals = Static.GetVertexInstanceNormals();
 	TPolygonGroupAttributesRef<FName> SlotNames = Static.GetPolygonGroupMaterialSlotNames();
 
 	MeshDescription->ReserveNewVertices(Source.Vertices.Num());
@@ -556,6 +561,10 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 				}
 				Corners[Corner] = MeshDescription->CreateVertexInstance(Vertices[VertexIndex]);
 				UVs.Set(Corners[Corner], 0, Source.Vertices[VertexIndex].UV);
+				// Per vertex INSTANCE, which is what carries a split normal: a hard edge is a
+				// duplicated source vertex, so its copies already differ here and the build keeps
+				// them apart rather than welding the pair to one averaged direction.
+				Normals.Set(Corners[Corner], Source.Vertices[VertexIndex].Normal);
 				InstancesOfVertex[VertexIndex].Add(Corners[Corner]);
 			}
 			MeshDescription->CreatePolygon(Group, TArrayView<FVertexInstanceID>(Corners, 3));
