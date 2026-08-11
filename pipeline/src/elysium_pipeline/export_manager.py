@@ -338,6 +338,24 @@ def _policy_fingerprint(config) -> str:
         # cached and the generated actions, mapping context and action set stale. The failure is
         # silent in the worst way: the export reports success and the button does nothing.
         config.repo_root / "Config" / "ElysiumInputActions.csv",
+        # `make_player_anim_bp.py` reads the tracked graph text, and script discovery above only
+        # walks imports -- so the text that IS the graph has to be named for the same reason the
+        # CSV above does. A directory rather than the one file, so a second graph is covered the
+        # day it is added rather than the day someone remembers this list.
+        config.repo_root / "pipeline" / "unreal" / "graphs",
+        # The generated Animation Blueprint is compiled against its native parent and binds to that
+        # class's reflected properties by name. A `-game` run loads the serialized class rather than
+        # recompiling it, so a property the graph binds to that the class no longer declares
+        # resolves to nothing: transitions read false, the machine never leaves its entry state, and
+        # the body poses one frame forever with no error anywhere. The class surface is a generator
+        # input exactly as `ElysiumRainAssetBuilder` below is.
+        config.repo_root / "Source" / "ElysiumUE" / "Private" / "Visual"
+        / "ElysiumBipedAnimInstance.h",
+        config.repo_root / "Source" / "ElysiumUE" / "Private" / "Visual"
+        / "ElysiumBodyAnimInstance.h",
+        config.repo_root / "Source" / "ElysiumUE" / "Public" / "ElysiumAnimGraphLibrary.h",
+        config.repo_root / "Source" / "ElysiumUE" / "Private" / "Editor"
+        / "ElysiumAnimGraphLibrary.cpp",
         config.export_root / "particles" / "manifest.json",
         config.export_root / "particles" / "dropletfast.tga",
         config.export_root / "particles" / "fortituderings.tga",

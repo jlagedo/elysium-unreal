@@ -1038,23 +1038,6 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
 		? Anims->GetEyeSet(Stem) : nullptr;
 
-	// The standing idle. Two NPCs sharing a model can carry different dispositions and different
-	// variants, so the pick is per (stem, disposition, variant) — but the resolved clip caches per
-	// (stem, clip), so a crowd spread across three stance idles still resolves three sequences,
-	// not one per NPC.
-	FString IdleClip;
-	{
-		if (Anims != nullptr)
-		{
-			EElysiumIdleTier Tier = EElysiumIdleTier::None;
-			IdleClip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
-			UE_LOG(LogElysiumBodies, Verbose, TEXT("npc '%s' idle: %s (%s, disposition '%s', variant %d)"),
-				*Stem, IdleClip.IsEmpty() ? TEXT("<none>") : *IdleClip,
-				UElysiumAnimSubsystem::TierName(Tier),
-				Disposition.IsEmpty() ? TEXT("<unset>") : *Disposition, IdleVariant);
-		}
-	}
-
 	// Standard runtime-component recipe (mirrors BuildBrushBody): NewObject → attach → place →
 	// RegisterComponent. The hulls-body path uses relative placement against the root at world origin;
 	// NPC origins are the same Unreal-space verbatim values, so relative == world here.
@@ -1105,10 +1088,12 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// The eyes (12.4). Independent of the facial rig above: a player body binds eyes here and no
 	// flex rig at all, which is the shipped state for 57 of the 59 of them.
 	InstallEyes(Comp, EyeSet, Disposition);
-	if (!IdleClip.IsEmpty())
-	{
-		PlayNpcClip(Comp, Stem, IdleClip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
-	}
+	// The body leaves the factory with no pose producer of its own. A direct clip REPLACES the
+	// compiled graph for as long as it is set (`FElysiumBipedAnimProxy::Evaluate`), so a clip
+	// installed here would own the body for its whole life and discard everything the animation
+	// driver publishes. Whoever owns this body's pose states it: `RefreshNpcIdle` for a standing
+	// cast member, a scene through `PlayCinematicClip`, the graph for a body whose driver
+	// publishes a selection.
 	return Comp;
 }
 
