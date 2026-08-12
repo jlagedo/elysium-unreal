@@ -567,6 +567,15 @@ extrapolated from a direction and a distance is a guess about a world the substr
 so the reachable-point projection is a query (S11) while the direction, the distance and the
 acceptance radius stay authored policy beside the task.
 
+The mechanism differs from retail's and the behavior does not. Retail takes its retreat from the
+node graph, so it never names a destination that is not there; this runtime has a navmesh instead
+and asks `IElysiumNpcMotor::ProjectToNavigable` where the body could stand. Projection minimizes
+distance to the point it is handed, which is a weaker question than the task is asking — the
+nearest navigable point to somewhere inside a wall can lie on the obstruction's far side — so the
+task re-tests the projected point against its own rule and fails when it is no longer a retreat.
+Failing is the faithful outcome: retail's move-away task fails when it finds no route, and the
+schedule already carries that through its fail schedule.
+
 **5.5.5 Movement ownership (K7).** One arbiter on `FElysiumNpc`:
 `EElysiumBodyOwner { None, Schedule, Patrol, Ambient, Sequence, ScriptedSchedule, Follower,
 Dialogue }`. The existing patrol, interesting-place, and scripted-sequence participation

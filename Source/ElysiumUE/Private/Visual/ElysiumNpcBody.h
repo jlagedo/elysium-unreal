@@ -66,6 +66,7 @@ public:
 
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
 		float SpeedCmPerSecond, bool bAllowPartialPath = false) override;
+	virtual bool ProjectToNavigable(const FVector& DesiredFeet, FVector& OutFeet) const override;
 	virtual void Face(float YawDegrees) override;
 	virtual void Stop() override;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override;

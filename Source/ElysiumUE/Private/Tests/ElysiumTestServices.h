@@ -46,6 +46,12 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// clearing bAcceptMoves is how "this mark has no path" is expressed.
 	bool bAcceptMoves = true;
 	EElysiumNpcMoveStatus SampleStatus = EElysiumNpcMoveStatus::Moving;
+	// What ProjectToNavigable answers. Clearing bNavigable is "nothing navigable near there", the
+	// same answer a world with no navigation gives. NavProjectionOffset stages the case the query
+	// exists for: a projected point that is NOT the one the caller asked for, which is how a test
+	// puts a retreat on the wrong side of what it was retreating from.
+	bool bNavigable = true;
+	FVector NavProjectionOffset = FVector::ZeroVector;
 
 	void Record(const FString& Call) const
 	{
@@ -66,6 +72,17 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 			*FeetDestination.ToString(), AcceptanceRadiusCm, SpeedCmPerSecond,
 			bAllowPartialPath ? 1 : 0));
 		return bMoving;
+	}
+	virtual bool ProjectToNavigable(const FVector& DesiredFeet, FVector& OutFeet) const override
+	{
+		Record(FString::Printf(TEXT("NpcMotor ProjectToNavigable %s -> %s"),
+			*DesiredFeet.ToString(), bNavigable ? TEXT("ok") : TEXT("none")));
+		if (!bNavigable)
+		{
+			return false;
+		}
+		OutFeet = DesiredFeet + NavProjectionOffset;
+		return true;
 	}
 	virtual void Face(float YawDegrees) override
 	{

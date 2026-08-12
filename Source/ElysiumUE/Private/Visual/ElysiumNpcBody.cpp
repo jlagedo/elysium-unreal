@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DetourCrowdAIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "NavigationSystem.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
@@ -230,6 +231,38 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 		Stop();
 	}
 	return bMoveRequested;
+}
+
+bool AElysiumNpcBody::ProjectToNavigable(const FVector& DesiredFeet, FVector& OutFeet) const
+{
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	if (Nav == nullptr)
+	{
+		return false;   // no navigation to ask; the caller decides what that means for its task
+	}
+	// The agent's own properties rather than the default: projection is asking where THIS body could
+	// stand, and a point that only fits a smaller capsule is not an answer. The properties live on
+	// the pawn, so this resolves before the lazily-spawned controller exists — which is what lets a
+	// task ask the question ahead of its first MoveTo.
+	const ANavigationData* Data = Nav->GetNavDataForProps(GetNavAgentPropertiesRef(), DesiredFeet);
+	if (Data == nullptr)
+	{
+		return false;
+	}
+	// A box the size of the agent. Larger would answer with points the body cannot walk back from;
+	// smaller misses the ordinary case of a destination a few centimetres inside a wall.
+	const float Radius = GetNavAgentPropertiesRef().AgentRadius > 0.f
+		? GetNavAgentPropertiesRef().AgentRadius : 34.f;
+	const float Height = GetNavAgentPropertiesRef().AgentHeight > 0.f
+		? GetNavAgentPropertiesRef().AgentHeight : 144.f;
+	FNavLocation Projected;
+	if (!Nav->ProjectPointToNavigation(DesiredFeet, Projected,
+		FVector(Radius, Radius, Height * 0.5f), Data))
+	{
+		return false;
+	}
+	OutFeet = Projected.Location;
+	return true;
 }
 
 void AElysiumNpcBody::Face(float YawDegrees)

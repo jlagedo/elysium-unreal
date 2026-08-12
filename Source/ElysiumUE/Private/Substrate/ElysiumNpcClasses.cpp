@@ -1199,8 +1199,29 @@ public:
 			return false;
 		}
 		Away.Normalize();
-		return Motor->MoveTo(Origin + Away * static_cast<double>(DistanceCm),
-			/*AcceptanceRadiusCm=*/16.f, /*SpeedCmPerSecond=*/0.f);
+		const FVector Desired = Origin + Away * static_cast<double>(DistanceCm);
+
+		// Extrapolating a direction names a point in space, not a place a body can stand. Retail
+		// picks its retreat out of the node graph and so never asks for one that is not there; the
+		// nearest equivalent here is to ask where this body could actually stand and decide on the
+		// answer. A refused projection fails the task, which is retail's own response to finding no
+		// route and which the schedule already carries through its fail schedule.
+		FVector Retreat = FVector::ZeroVector;
+		if (!Motor->ProjectToNavigable(Desired, Retreat))
+		{
+			return false;
+		}
+		// Projection minimises distance to what it was handed, so it can answer with a point on the
+		// obstruction's far side — closer to the thing being backed away from than the body already
+		// stands. Whether that still counts as a retreat is this layer's decision and not the
+		// query's, and one that fails the test fails the task rather than walking the NPC into the
+		// swing it is trying to clear.
+		if (FVector::DistSquared2D(Retreat, SavePosition)
+			<= FVector::DistSquared2D(Origin, SavePosition))
+		{
+			return false;
+		}
+		return Motor->MoveTo(Retreat, /*AcceptanceRadiusCm=*/16.f, /*SpeedCmPerSecond=*/0.f);
 	}
 
 	/**

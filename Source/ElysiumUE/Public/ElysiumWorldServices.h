@@ -79,6 +79,25 @@ public:
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
 
+	// The nearest point on the navigable surface to `DesiredFeet`. A query: it answers where this
+	// body *could* stand, never whether it should — the caller compares the answer against what it
+	// asked for and decides.
+	//
+	// Re-testing the result is the caller's job and is not optional. Projection minimises distance to
+	// the point it is handed, which is a different question from the one a retreat or an approach is
+	// asking: the nearest navigable point to somewhere inside a wall can sit on the far side of that
+	// wall. A caller that *extrapolated* a destination therefore has to re-check the projected point
+	// against its own rule rather than trusting the direction it started from.
+	//
+	// False when there is no navigation to ask, none built for this body's own agent size, or nothing
+	// navigable near the point — the headless run being the first of those. That is the honest answer
+	// rather than passing `DesiredFeet` back unchanged: a caller told "yes, exactly where you asked"
+	// by a world that never looked would go on to act on a fact nobody established.
+	virtual bool ProjectToNavigable(const FVector& DesiredFeet, FVector& OutFeet) const
+	{
+		return false;
+	}
+
 	// The body's realized locomotion (CCC1) — **the same record the player's mover publishes**, so
 	// the cast's locomotion and the player's cannot become two systems that happen to play the same
 	// files (`docs/architecture/animation-architecture.md` §3.2). Distinct from `Sample` above, which
@@ -109,6 +128,29 @@ public:
 // What it buys: a Substrate-tier test can drive a whole map's logic headlessly against a recording
 // stub — with no RHI, no actors and no `$ELYSIUM_EXPORT_ROOT` — which is the missing middle tier between
 // variant arithmetic and launching the game (Elysium.Substrate.WorldServices).
+//
+// **Every call across this seam is one of two kinds, and the kind decides what may cross (S11).** An
+// EXECUTION call carries a decision the substrate has already made and asks the engine to perform it
+// — `PlayNpcClip`, `MoveTo`, `StartFade`. A QUERY call asks the engine something the substrate cannot
+// know: geometry, visibility, reachability, a rendered fact. A query is the only place engine
+// knowledge reaches a rule, so each one owes three things AT ITS DECLARATION:
+//
+//   1. **It answers with geometry or a candidate, never a verdict.** Eligibility, thresholds, weights
+//      and selection order are authored VtMB facts and stay in the substrate. `QueryFeedTarget`
+//      returns whatever the hull found and leaves every acceptance question behind it;
+//      `QueryPlayerUse` returns focus geometry and leaves class eligibility to the entity world.
+//   2. **Its headless default is part of the contract, not a placeholder.** A `-nullrhi` run and an
+//      editor commandlet never render and carry no navigation, so a default that changed a decision
+//      there would break exactly the runs meant to prove it — which is why `IsNpcBodyVisible`
+//      answers true. Say which way the query fails and why.
+//   3. **A divergence from the oracle VtMB used is named here**, not discovered at the call site.
+//      `IsNpcBodyVisible` enumerates its own: Source's PVS is leaf-to-leaf and view-independent, a
+//      render-time query is not.
+//
+// A world question answered with substrate arithmetic because no query carries it is a **missing
+// seam, not a substrate rule** — add the query. The rule is stated in
+// `docs/architecture/runtime-architecture.md` §7 (S11); K13 in
+// `docs/architecture/gameplay-systems-architecture.md` is its review form.
 
 // --------------------------------------------------------------------------------------------
 // Embodiment — bodies, meshes, clips, skins, and the player's own body.
@@ -367,9 +409,16 @@ public:
 	// deliberately absent: rat feeding is out of B6's scope.
 	virtual FElysiumEntityHandle QueryFeedTarget() const { return FElysiumEntityHandle::Invalid(); }
 
-	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
-	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the
-	// supported headless/fail-open posture.
+	// CNPCMaker's host geometry — four queries. The substrate owns admission order and every policy
+	// term (`MaxLiveChildren`, `MinPcDistance`, the authored `bNpcClip`/`bViewCone` flags, the
+	// half-extent); these only answer the engine-shaped question at the point each guard is reached,
+	// and none of them decides whether a spawn happens.
+	//
+	// Each default is fail-open, and that is the contract rather than a convenience: a headless run
+	// has no floor to trace against, no rendered view to be seen from and no overlap world to be
+	// crowded in, so a query that refused there would silence every maker in exactly the runs meant
+	// to prove one fires. Stated per call, because they fail open in three different spellings —
+	// the ground stays at the maker's own Z, and the three guards each report "no refusal".
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm, float TraceDepthCm) const
 	{
 		return MakerOriginCm.Z;
