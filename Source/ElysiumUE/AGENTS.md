@@ -74,6 +74,14 @@ contract:
   `FElysiumEntity` classes and the declared session/save structures. Unreal actors and components
   are optional bodies for rendering, collision, movement and overlap; they do not become a second
   gameplay model. The substrate reaches them only through nullable `FElysiumWorldServices`.
+- **Ask the engine questions; decide in the substrate.** A `FElysiumWorldServices` call is either an
+  execution that performs a decision already made or a query that answers what only the live world
+  knows — **S11** and **K13** state the rule and its authored-or-observed test. A new query returns
+  geometry or a candidate and never a verdict, declares the headless default that keeps `-nullrhi`
+  and commandlet runs honest, and names any divergence from the oracle VtMB used at the declaration
+  rather than leaving it to the call site. Never hand an authored threshold, weight or selection
+  order to an Unreal AI, perception or environment-query subsystem to arbitrate, and never
+  substitute substrate arithmetic for a world question that has no seam yet — add the query.
 - **Preserve the addressability boundary.** Non-addressable GAME_LUMP dressing may be placed in the
   baked level. Anything a map or script can name, mutate, hide, use, save, receive an input on, or
   fire an output from remains a live `.ents` entity; baking its mesh must not bake away its entity
@@ -120,7 +128,8 @@ contract:
 
 For a gameplay change, review the diff by asking: does it put a real implementation behind these
 existing entity/API/event/save seams, or does it create another route around them? Only the former
-belongs in the runtime.
+belongs in the runtime. Ask the same of each service call it adds — does it fetch a fact the
+substrate then decides on, or does it let the engine decide?
 
 ## Source layout
 
