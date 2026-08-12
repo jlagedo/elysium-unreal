@@ -1119,7 +1119,16 @@ dialogue, scripted flow, quests, save/load included.
   nothing there blocks an NPC with a door. Two steps of the same order stay blocked on recovery
   rather than effort: the follower controller needs the unrecovered `follower_type` radii table, and
   return-to-initial has no producer. Facts:
-  `docs/vtmb/npc-ai-reverse-engineering.md`; the enemy half is RE48. Also: ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
+  `docs/vtmb/npc-ai-reverse-engineering.md`; the enemy half is RE48. Two follow-ups from the same
+  work: **`Elysium.Content.MapSnapshot` fails on a fixture gap, not a payload defect** — admission
+  now schedules a think for every NPC, which is what makes a standing NPC run its stance machine,
+  and the snapshot diffs a restored payload against a post-Load baseline that has not ticked, so
+  the baseline's NPCs are unadmitted and carry no `nextthink` while the restored ones carry 0.100;
+  both payloads are correct and the fix belongs in the fixture, as it did for the gaze fixture. And
+  a **comment-phrasing pass**: `ElysiumStance.cpp`, `ElysiumSoundScheme.{h,cpp}`,
+  `ElysiumSkeletalBuild.cpp` and `ElysiumMapActor.cpp` describe reimplementation-from-a-written-spec
+  as "transcription", which understates the analysis → `docs/vtmb/` spec → independent
+  implementation separation that the work actually follows. Also: ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
   parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
   commitment); retail `.sav` import (needs RE7 wire format — currently a non-goal). For the
   low-end contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster,
