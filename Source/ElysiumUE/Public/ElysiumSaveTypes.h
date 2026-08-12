@@ -37,6 +37,7 @@ struct FElysiumSaveVersion
 		WireIdentity  = 12,  // the authored output row a pending queue record came from
 		NpcMaker      = 13,  // maker ownership and once-only child termination notification
 		NpcMind       = 14,  // resumable NPC state/body intent; session capabilities remain transient
+		NpcSchedule   = 15,  // the running idle schedule; its task position is deliberately not saved
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

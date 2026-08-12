@@ -13250,12 +13250,24 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// breaking schema left it.
 	TestTrue(TEXT("wire identity remains additive"),
 		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::WireIdentity);
-	// `NpcMaker` appends owner/notification state to the NPC leaf behind its own version. Legacy
-	// children remain unowned instead of being guessed, while the supported floor remains v9.
-	TestEqual(TEXT("npc_maker ownership is the current schema"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcMaker);
-	TestTrue(TEXT("and npc_maker ownership is additive"),
-		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::NpcMaker);
+	// `NpcMaker` appends owner/notification state to the NPC leaf behind its own version, `NpcMind`
+	// the resumable state/body intent after it, and `NpcSchedule` the running idle schedule after
+	// that. Each is additive and each reads behind its own version, so the supported floor stays at
+	// v9 and a legacy NPC restores unowned, mindless and unscheduled rather than guessed.
+	//
+	// The equality below is a tripwire, not a fact about npc_maker: it fails the moment a version is
+	// appended without this block being extended, which is exactly when someone should be made to
+	// think about whether the new field is additive and what an old payload does without it.
+	TestEqual(TEXT("the newest schema is the one this test knows about"),
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcSchedule);
+	for (const TPair<const TCHAR*, int32>& Appended : {
+		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
+		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
+		TPair<const TCHAR*, int32>(TEXT("npc schedule"), (int32)FElysiumSaveVersion::NpcSchedule) })
+	{
+		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
+			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);
+	}
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the
 	// current operator. This is deliberately manual: asking the current writer to emit v6 would
@@ -15864,6 +15876,12 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		}
 		Player->Origin = FVector(500.f, 0.f, 0.f);
 		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+
+		// One think before the conversation opens. The mind admits an NPC on its first frozen-time
+		// think and refuses every body acquisition until then, so a dialogue opened against a
+		// never-ticked NPC is refused — a state the real path cannot reach, since an NPC has always
+		// thought at least once before the player can talk to it.
+		World.Tick(0.0);
 
 		// The smallest conversation that opens: one spoken NPC line.
 		TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();

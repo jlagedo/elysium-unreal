@@ -1114,6 +1114,7 @@ public:
 		// `bTalking` is the file's own distinction: a line playing on this character, not a dialogue
 		// being open. We have only the session latch until the per-line driver lands, and the two
 		// agree on the branch that matters -- a character in dialogue holds its stance either way.
+		const int32 Before = Stance.Current;
 		const FElysiumStanceChoice Choice = ElysiumStance::Select(StanceClips, StanceTuning, Stance,
 			/*bTalking=*/bInDialog, Now, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
 		float Seconds = 0.f;
@@ -1121,6 +1122,13 @@ public:
 			|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds))
 		{
 			return -1.f;
+		}
+		// Only a change is traced. An idle re-settling on the same stance is the common case by far,
+		// and recording it would push everything else out of a 16-row window.
+		if (Choice.bChangedStance)
+		{
+			Mind.RecordExternal(FString::Printf(TEXT("stance %d -> %d via %s"),
+				Before, Stance.Current, *Choice.Clip));
 		}
 		return Seconds;
 	}
@@ -1918,6 +1926,27 @@ public:
 					? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 				AmbientOwner = Owner == EElysiumBodyOwner::Ambient
 					? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+			}
+		}
+
+		// The schedule's IDENTITY is saved; its task position is not, and that is deliberate. A task
+		// holds a playing clip, a pending motor move or a wall-clock deadline, and none of those
+		// survive a load -- so resuming at task 3 would hold a pose nothing is playing. Restarting
+		// the same program preserves the intent (an NPC mid-lookaround resumes looking around rather
+		// than dropping to its stance) without pretending the state under it survived.
+		if (Ar.Version() >= FElysiumSaveVersion::NpcSchedule)
+		{
+			uint8 SavedSchedule = static_cast<uint8>(Schedule.Current);
+			Ar << SavedSchedule;
+			if (Ar.IsLoading())
+			{
+				Schedule.Clear();
+				const EElysiumScheduleId Restored = static_cast<EElysiumScheduleId>(SavedSchedule);
+				if (Restored != EElysiumScheduleId::None && ElysiumScheduleFor(Restored) != nullptr)
+				{
+					ElysiumSchedule::Start(Schedule, Restored, *this);
+				}
+				NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 			}
 		}
 	}
