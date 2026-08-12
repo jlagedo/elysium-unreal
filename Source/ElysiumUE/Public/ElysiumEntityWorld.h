@@ -234,9 +234,10 @@ public:
 	void UpdatePlayerInteraction();
 
 	// B6 — the `+feed` / `-feed` pair, queued in the controller's pre-move sample and consumed after
-	// the move beside `+use` (`docs/vtmb/feeding.md` § "Command and initial request"). The press
-	// runs the target query and `AttemptFeed`; the release only clears the continuation latch,
-	// because retail's release publisher does NOT call `FeedInterrupt`.
+	// the move beside `+use` (`docs/vtmb/feeding.md` § "Command and initial request"). An
+	// unpaired press runs one target query and `AttemptFeed`; a paired feeder press clears the
+	// continuation latch, while button-up is inert. The action owns the latch independently of the
+	// low-level button pair.
 	void QueuePlayerFeedEdge(EElysiumUseEdge Edge);
 	void UpdatePlayerFeed();
 	// The explicit leaf/UI completion seam. Supplying the captured owner prevents a stale panel
@@ -294,7 +295,8 @@ public:
 	// machine's hinge — DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
 	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation,
 		EElysiumDialogOpenerKind Opener = EElysiumDialogOpenerKind::Remote,
-		int32 RawFlags = 0, const FString& DefaultCamera = FString());
+		int32 RawFlags = 0, const FString& DefaultCamera = FString(),
+		const FElysiumBodyOwnerToken& BodyOwner = FElysiumBodyOwnerToken());
 	// The live conversation, or null when none is open. What the dialogue box renders.
 	FElysiumDlgConversation* GetOpenDialog() const;
 	// The NPC the open conversation belongs to (Invalid when none is open).

@@ -57,6 +57,7 @@
 #include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
+#include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
 #include "ElysiumSoundCache.h"
 #include "ElysiumMovementComponent.h"
@@ -9043,6 +9044,25 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 			TestEqual(TEXT("...reading the slot the sheet holds"), Celerity->Get(*Player).ToInt(), 3);
 		}
 	}
+	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::HealthBuffer, 80);
+	{
+		const FElysiumFieldAccessor* BaseHealthBuffer =
+			Reg.FindField(*Player->Class, FName(TEXT("base_health_buffer")));
+		if (TestNotNull(TEXT("retail base_health_buffer resolves as a datamap field"),
+			reinterpret_cast<const void*>(BaseHealthBuffer)))
+		{
+			TestEqual(TEXT("...reading the Blood Shield absorption pool"),
+				BaseHealthBuffer->Get(*Player).ToInt(), 80);
+		}
+		const FElysiumFieldAccessor* HealthBuffer =
+			Reg.FindField(*Player->Class, FName(TEXT("health_buffer")));
+		if (TestNotNull(TEXT("retail health_buffer resolves as a datamap field"),
+			reinterpret_cast<const void*>(HealthBuffer)))
+		{
+			TestEqual(TEXT("...reading the current Blood Shield absorption pool"),
+				HealthBuffer->Get(*Player).ToInt(), 80);
+		}
+	}
 	FElysiumVariant Dynamic;
 	TestTrue(TEXT("a base_ name no slot owns resolves to 0 rather than raising"),
 		Player->GetDynamicField(FName(TEXT("base_NotAStat")), Dynamic));
@@ -10089,6 +10109,83 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 
 	Map->ClearUseAnchors();
 	Map->Destroy();
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTargetingOcclusionTest,
+	"Elysium.Substrate.FeedTargetingOcclusion", GElysiumTestFlags)
+bool FElysiumFeedTargetingOcclusionTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	if (!TestNotNull(TEXT("feed targeting world"), World))
+	{
+		return false;
+	}
+
+	// Reproduce the production ownership shape: a separately owned skeletal visual is attached
+	// below the native NPC body's blocking capsule.
+	AActor* MotorOwner = World->SpawnActor<AActor>();
+	UCapsuleComponent* Capsule = MotorOwner
+		? NewObject<UCapsuleComponent>(MotorOwner, TEXT("FeedCandidateCapsule")) : nullptr;
+	AActor* VisualOwner = World->SpawnActor<AActor>();
+	USceneComponent* CandidateVisual = VisualOwner
+		? NewObject<USceneComponent>(VisualOwner, TEXT("FeedCandidateVisual")) : nullptr;
+	if (!TestNotNull(TEXT("candidate motor"), MotorOwner)
+		|| !TestNotNull(TEXT("candidate capsule"), Capsule)
+		|| !TestNotNull(TEXT("candidate visual"), CandidateVisual))
+	{
+		return false;
+	}
+	MotorOwner->SetRootComponent(Capsule);
+	Capsule->InitCapsuleSize(20.0f, 40.0f);
+	Capsule->SetWorldLocation(FVector(100.0f, 0.0f, 0.0f));
+	Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Capsule->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
+	Capsule->RegisterComponent();
+	MotorOwner->AddInstanceComponent(Capsule);
+
+	VisualOwner->SetRootComponent(CandidateVisual);
+	CandidateVisual->RegisterComponent();
+	VisualOwner->AddInstanceComponent(CandidateVisual);
+	CandidateVisual->AttachToComponent(Capsule, FAttachmentTransformRules::KeepWorldTransform);
+
+	FHitResult Hit;
+	TestTrue(TEXT("the feed occlusion ray reaches the candidate capsule"),
+		World->LineTraceSingleByChannel(Hit, FVector::ZeroVector, FVector(150.0f, 0.0f, 0.0f),
+			ELYSIUM_USE_CHANNEL));
+	TestTrue(TEXT("the candidate's ancestor capsule is an acceptable terminal hit"),
+		ElysiumFeedTargeting::HitBelongsToCandidate(Hit.GetComponent(), CandidateVisual));
+
+	AActor* WallOwner = World->SpawnActor<AActor>();
+	UBoxComponent* Wall = WallOwner
+		? NewObject<UBoxComponent>(WallOwner, TEXT("FeedOccludingWall")) : nullptr;
+	if (!TestNotNull(TEXT("feed wall"), Wall))
+	{
+		return false;
+	}
+	WallOwner->SetRootComponent(Wall);
+	Wall->InitBoxExtent(FVector(4.0f, 40.0f, 40.0f));
+	Wall->SetWorldLocation(FVector(50.0f, 0.0f, 0.0f));
+	Wall->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Wall->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Wall->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
+	Wall->RegisterComponent();
+	WallOwner->AddInstanceComponent(Wall);
+
+	Hit = FHitResult();
+	TestTrue(TEXT("the nearer wall blocks the feed ray"),
+		World->LineTraceSingleByChannel(Hit, FVector::ZeroVector, FVector(150.0f, 0.0f, 0.0f),
+			ELYSIUM_USE_CHANNEL));
+	TestFalse(TEXT("an intervening wall is not the candidate body"),
+		ElysiumFeedTargeting::HitBelongsToCandidate(Hit.GetComponent(), CandidateVisual));
 	return !HasAnyErrors();
 }
 
@@ -12666,11 +12763,11 @@ bool FElysiumPropClipResyncTest::RunTest(const FString&)
 }
 
 // ============================================================================================
-// A skeletal prop is placed with the glTF basis, not the static mesh's. `model_quat` is the
-// placement of the exporter's Unreal-native OBJ; a glTF body needs the fixed model-local
-// correction composed on top, because glTFRuntime imports mdl_gltf.py's Y-up output into its own
-// basis. Composing (rather than substituting a yaw-only rotation) is what keeps a placement's
-// pitch and roll — 15 of the corpus's animated-prop placements are leaning palms.
+// A skeletal prop is placed exactly like its static mesh. Both are built from the same model in
+// the same frame, so `model_quat` — the placement of the exporter's Unreal-native OBJ — is the
+// whole answer for either, and the two representations of one prop must not disagree. Taking the
+// full quaternion rather than rederiving a yaw is what keeps a placement's pitch and roll: 15 of
+// the corpus's animated-prop placements are leaning palms.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropPlacementTest,
 	"Elysium.Substrate.AnimatedPropPlacement", GElysiumTestFlags)
@@ -12700,8 +12797,7 @@ bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 	};
 
 	// `sp_theatre` ships eleven of its sixteen animated props at `angles "0 270 0"`, whose exported
-	// model_quat is a +90 degree Unreal yaw. The static mesh wants that verbatim; the skeletal body
-	// wants 0, because the glTF basis already carries the other -90.
+	// model_quat is a +90 degree Unreal yaw. Both representations want that verbatim.
 	const FQuat Yaw90(FRotator(0.f, 90.f, 0.f));
 	{
 		FElysiumRecordingServices Animated;
@@ -12709,8 +12805,9 @@ bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 		TestTrue(TEXT("the skeletal body is built"),
 			Animated.Saw(TEXT("BuildAnimatedPropVisual prop_anim")));
 		const FRotator Got = Animated.LastAnimatedPropRotation.Rotator();
-		TestTrue(FString::Printf(TEXT("a 270 degree Source yaw stands the skeletal body at 0 (got %s)"),
-			*Got.ToString()), Got.Equals(FRotator::ZeroRotator, 0.01f));
+		TestTrue(FString::Printf(
+			TEXT("a 270 degree Source yaw stands the skeletal body at model_quat (got %s)"),
+			*Got.ToString()), Got.Equals(FRotator(0.f, 90.f, 0.f), 0.01f));
 	}
 	{
 		FElysiumRecordingServices Static;
@@ -12721,8 +12818,8 @@ bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 	}
 
 	// `sm_oceanhouse_1`'s leaning palms — 15 of the corpus's animated-prop placements carry pitch
-	// or roll. A yaw-only derivation would stand these bolt upright; composing preserves the lean,
-	// which is the whole reason the correction is a quaternion rather than a replacement rotator.
+	// or roll. A yaw-only rederivation would stand these bolt upright, which is why the placement
+	// is taken as the authored quaternion rather than rebuilt from the `angles` yaw.
 	{
 		FElysiumRecordingServices Leaning;
 		const FRotator Authored(24.0994f, 284.031f, -4.27304f);
@@ -12730,12 +12827,18 @@ bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 		TestTrue(TEXT("the leaning skeletal body is built"),
 			Leaning.Saw(TEXT("BuildAnimatedPropVisual prop_anim")));
 		const FRotator Got = Leaning.LastAnimatedPropRotation.Rotator();
-		TestTrue(FString::Printf(TEXT("the authored lean survives the model fix (got %s)"),
+		TestTrue(FString::Printf(TEXT("the authored lean survives (got %s)"),
 			*Got.ToString()), FMath::Abs(Got.Pitch) > 1.f && FMath::Abs(Got.Roll) > 1.f);
-		// The fix is exactly a -90 degree model-local yaw on top of the authored placement.
-		const FQuat Expected = FQuat(Authored) * FQuat(FRotator(0.f, -90.f, 0.f));
-		TestTrue(TEXT("the composed rotation is placement * model fix"),
-			Leaning.LastAnimatedPropRotation.Equals(Expected, 0.001f));
+		TestTrue(TEXT("the skeletal rotation is model_quat verbatim"),
+			Leaning.LastAnimatedPropRotation.Equals(FQuat(Authored), 0.001f));
+
+		// The two representations of one prop must not disagree: a divergence here is a prop that
+		// turns as it starts animating.
+		FElysiumRecordingServices LeaningStatic;
+		BuildOne(LeaningStatic, FVector(24.0994f, 284.031f, -4.27304f), FQuat(Authored),
+			/*bAnimated=*/false);
+		TestTrue(TEXT("and the static mesh of the same placement takes the same rotation"),
+			LeaningStatic.LastPropRotation.Equals(Leaning.LastAnimatedPropRotation, 0.001f));
 	}
 	return true;
 }
@@ -16531,8 +16634,8 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 
 namespace
 {
-	// A victim, three counters wired off its feed/death outputs, and (optionally) a second NPC to
-	// act as the attacker. The player is spawned by the test when it wants the retail attacker.
+	// A victim and three counters wired off its feed/death outputs. The player is spawned by each
+	// test that wants the ordinary retail attacker.
 	FElysiumEntityDefs MakeFeedTestDefs()
 	{
 		FElysiumEntityDefs Defs;
@@ -16555,15 +16658,6 @@ namespace
 		Wire(TEXT("OnFedUponEnd"), TEXT("endcount"));
 		Wire(TEXT("OnDeath"), TEXT("deathcount"));
 		Defs.Defs.Add(MoveTemp(Victim));
-
-		// A second character, used by the save round trip as the feeder. The player entity is
-		// excluded from the map snapshot by design (its durable home is the Player block), and a
-		// headless world has no game-state subsystem to carry that block — so the *field* round trip
-		// is asserted on an ordinary map character, whose feed state is registered on the same chain.
-		FElysiumEntityDef Feeder;
-		Feeder.Classname = TEXT("npc_VVampire");
-		Feeder.TargetName = TEXT("feeder");
-		Defs.Defs.Add(MoveTemp(Feeder));
 
 		for (const TCHAR* Name : { TEXT("begincount"), TEXT("endcount"), TEXT("deathcount") })
 		{
@@ -16700,6 +16794,71 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		TestFalse(TEXT("...on either side"), Victim->IsFeedPaired());
 		TestEqual(TEXT("...and fires no OnFedUponBegin"),
 			SaveTestCounterValue(World.FindByName(TEXT("begincount"))), 0.0f);
+	}
+
+	// --- Toggle-style command routing ----------------------------------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeFeedTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FeedTestCharacter(World, TEXT("victim"));
+		if (!TestNotNull(TEXT("toggle player exists"), Player)
+			|| !TestNotNull(TEXT("toggle victim exists"), Victim))
+		{
+			return false;
+		}
+		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 0);
+		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
+		Victim->Disposition = TEXT("cower");
+		Services.FeedTarget = Victim->Handle;
+
+		World.QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
+		World.UpdatePlayerFeed();
+		TestTrue(TEXT("the first feed press starts the pair"), Player->IsFeedPaired());
+		TestTrue(TEXT("the new pair owns its continuation latch"), Player->FeedState.bContinuation);
+
+		// The patch's vm_feed producer emits this edge 0.1 seconds after the press. It releases the
+		// command button only; the paired action must keep running.
+		World.QueuePlayerFeedEdge(EElysiumUseEdge::Released);
+		World.UpdatePlayerFeed();
+		TestTrue(TEXT("the first button release leaves feeding active"), Player->IsFeedPaired());
+		TestTrue(TEXT("release does not clear paired continuation"), Player->FeedState.bContinuation);
+
+		auto Advance = [&World](double To)
+		{
+			World.RunPlayerThink(To);
+			World.Tick(To);
+		};
+		Advance(0.6);
+		Advance(1.2);
+		Advance(1.5);
+		TestEqual(TEXT("the tap survives long enough to transfer blood"),
+			Player->FeedState.BloodStolen, 1);
+		TestEqual(TEXT("the toggle feed drained its victim"), Victim->BloodPoolValue(), 2);
+
+		World.QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
+		World.UpdatePlayerFeed();
+		TestTrue(TEXT("the second press requests release through the latch"),
+			!Player->FeedState.bContinuation);
+		// The request is latched until the state machine's next scheduled boundary; input does not
+		// perform immediate teardown or bypass the release animation family.
+		Advance(static_cast<double>(Player->NextThink) + 0.01);
+		TestEqual(TEXT("the paired state enters its normal release family"),
+			static_cast<int32>(Player->FeedState.Phase),
+			static_cast<int32>(EElysiumFeedPhase::Release));
+
+		World.QueuePlayerFeedEdge(EElysiumUseEdge::Released);
+		World.UpdatePlayerFeed();
+		TestTrue(TEXT("the second button release is inert"), Player->IsFeedPaired());
+		Advance(static_cast<double>(Player->FeedState.PhaseDeadline) + 0.01);
+		TestFalse(TEXT("the release event tears the pair down"), Player->IsFeedPaired());
+		TestEqual(TEXT("toggle teardown fires OnFedUponEnd once"),
+			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
 	}
 
 	// --- FeedBegin's field seeding, and one pulse per update ------------------------------------
@@ -16860,9 +17019,9 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		A.Activate(0.0);
 		A.Tick(0.0);
 
-		FElysiumCombatCharacter* Feeder = FeedTestCharacter(A, TEXT("feeder"));
+		FElysiumPlayer* Feeder = A.FindPlayer();
 		FElysiumCombatCharacter* Victim = FeedTestCharacter(A, TEXT("victim"));
-		if (!TestNotNull(TEXT("the feeder exists"), Feeder)
+		if (!TestNotNull(TEXT("the player feeder exists"), Feeder)
 			|| !TestNotNull(TEXT("the victim exists"), Victim))
 		{
 			return false;
@@ -16876,6 +17035,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		constexpr double FreezeTime = 3.0;
 		for (int32 Step = 1; Step <= 60; ++Step)
 		{
+			A.RunPlayerThink(Step * 0.05);
 			A.Tick(Step * 0.05);
 		}
 		if (!TestTrue(TEXT("the feed is mid-loop at the freeze"),
@@ -16888,7 +17048,11 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		const float IntervalBefore = Feeder->FeedState.Interval;
 		const int32 VictimBloodBefore = Victim->BloodPoolValue();
 		const int32 VictimIndex = Victim->Handle.Index;
+		TestTrue(TEXT("an in-progress feed no longer blocks saving"),
+			A.ScriptedSessionSaveBlockReason().IsEmpty());
 
+		FElysiumPlayerRecord PlayerRecord;
+		Feeder->Dehydrate(PlayerRecord);
 		FElysiumMapSnapshot Snapshot;
 		A.Freeze(Snapshot);
 
@@ -16897,11 +17061,15 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		B.Load(MakeFeedTestDefs());
 		B.SpawnPlayer();
 		B.ApplySnapshot(Snapshot);
+		FElysiumPlayer* FeederB = B.FindPlayer();
+		if (FeederB)
+		{
+			FeederB->Hydrate(PlayerRecord);
+		}
 		B.Activate(FreezeTime);
 
-		FElysiumCombatCharacter* FeederB = FeedTestCharacter(B, TEXT("feeder"));
 		FElysiumCombatCharacter* VictimB = FeedTestCharacter(B, TEXT("victim"));
-		if (!TestNotNull(TEXT("the feeder restored"), FeederB)
+		if (!TestNotNull(TEXT("the player feeder restored"), FeederB)
 			|| !TestNotNull(TEXT("the victim restored"), VictimB))
 		{
 			return false;
@@ -16923,6 +17091,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 
 		// Resuming at the frozen instant must not replay the pulse that was already banked: the
 		// deadline is absolute simulation time, so a restore at that time is simply "not due yet".
+		B.RunPlayerThink(FreezeTime);
 		B.Tick(FreezeTime);
 		TestEqual(TEXT("resuming does not duplicate a pulse"),
 			FeederB->FeedState.BloodStolen, StolenBefore);
@@ -16932,15 +17101,11 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		// one pulse that was outstanding, on the interval the freeze had already accelerated to.
 		for (double At = FreezeTime; At <= static_cast<double>(PulseBefore) + 0.11; At += 0.05)
 		{
+			B.RunPlayerThink(At);
 			B.Tick(At);
 		}
 		TestEqual(TEXT("the outstanding pulse fires once, on the restored deadline"),
 			FeederB->FeedState.BloodStolen, StolenBefore + 1);
-
-		// The player's own half of the same contract cannot be driven here — the player entity is
-		// excluded from the map snapshot and its durable home is the Player block, which needs a
-		// game-state subsystem this tier does not have. `FElysiumPlayer::Hydrate`/`Dehydrate` carry
-		// `FElysiumPlayerRecord::Feed` for that path, scoped by the map it was taken in.
 	}
 
 	return true;

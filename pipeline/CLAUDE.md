@@ -58,8 +58,10 @@ coordinate conversion.
 An exporter with a `UE_` filename emits centimetres, Z-up, left-handed Unreal data with
 the required winding. Every tracked coordinate-bearing OBJ/sidecar exporter follows this
 rule; parsers and orchestration modules do not emit coordinate products. `mdl_gltf.py` is
-the standing exemption because standard glTF 2.0 is self-describing and glTFRuntime
-performs its import transform.
+the standing exemption: standard glTF 2.0 is self-describing and its `.glb` output is an
+inspection product that nothing the game loads reads. Every sidecar is Unreal-native,
+including the `eyes/` and `procedural/` tables, which `UE_mdl_skeletal.py` states in the
+body's own frame from the Source-space records `mdl_skel.py` parses.
 
 The skeletal **pose frame** is covered by the same contract, so `UE_mdl_skeletal.py` owes it
 too: every emitted rotation is parent-relative and every additive names the clip it is a

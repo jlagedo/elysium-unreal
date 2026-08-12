@@ -21,6 +21,7 @@ enum class EElysiumRngStream : uint8
 	Ambient,       // ambient idle picks and the RandomSound scheduler
 	Chargen,       // which phrasing of a wizard question the quiz asks (9.4f)
 	NpcMaker,      // npc_maker's transient-admission retry interval
+	NpcSchedule,   // the NPC idle branch: schedule selection and the disposition stance rolls
 	Count
 };
 

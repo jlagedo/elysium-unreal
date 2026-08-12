@@ -39,7 +39,7 @@ from elysium_pipeline.tasking import (
 #: Bump to invalidate every character receipt — a change in what a stage MEANS, not in its inputs.
 CACHE_REVISION = "elysium-character-stage-v1"
 
-STAGES = ("textures", "bank_skeletons", "banks", "family_skeletons", "meshes", "clips")
+STAGES = ("textures", "bank_skeletons", "banks", "family_skeletons", "meshes", "clips", "props")
 
 GLOBAL_SCOPE = "_global"
 
@@ -82,6 +82,12 @@ def stage_inputs(npc_dir: Path, manifest: dict, partition: dict,
         return [npc_dir / "textures.json"] if stage == "textures" else []
 
     kind, _, family = scope.partition(".")
+    if kind == "prop":
+        container = npc_dir / "animated_props" / f"{family}.eskm"
+        relative = manifest.get("animated_props", {}).get(family, {}).get("blends", "")
+        return ([container, npc_dir / "textures.json"]
+                + ([npc_dir / relative] if relative else []))
+
     is_bank = kind == "bank"
     members = character_partition.members_for(
         partition, "banks" if is_bank else "models", family)
@@ -116,12 +122,17 @@ def _own_clip_owners(manifest: dict, members) -> list[str]:
     return sorted(owners)
 
 
-def scopes_for(partition: dict, stems) -> list[str]:
-    """Every scope a bake of `stems` touches, banks first — they gate the compatibility call."""
+def scopes_for(partition: dict, stems, props=()) -> list[str]:
+    """Every scope a bake of `stems` touches, banks first — they gate the compatibility call.
+
+    A prop is its own scope. It joins no rig family, so there is nothing to slice it by and no
+    cascade to reach it: one stage builds its skeleton, its mesh and its clips together.
+    """
     banks = [f"bank.{family}" for family in sorted(partition["banks"])]
     families = sorted({partition["model_family_of"][stem] for stem in stems
                        if stem in partition["model_family_of"]})
-    return [GLOBAL_SCOPE, *banks, *[f"model.{family}" for family in families]]
+    return [GLOBAL_SCOPE, *banks, *[f"model.{family}" for family in families],
+            *[f"prop.{stem}" for stem in sorted(props)]]
 
 
 def plan_stages(config, manifest_store: Manifest, npc_dir: Path, manifest: dict,
@@ -139,13 +150,14 @@ def plan_stages(config, manifest_store: Manifest, npc_dir: Path, manifest: dict,
         )
 
     stale: dict[str, list[str]] = {}
-    for scope in scopes_for(partition, stems):
+    for scope in scopes_for(partition, stems, manifest.get("animated_props", {})):
         kind = scope.split(".")[0]
         wanted = {
             GLOBAL_SCOPE: ("textures",),
             "bank": ("bank_skeletons", "banks"),
             "model": ("family_skeletons", "meshes", "clips"),
-        }[kind if kind in ("bank", "model") else GLOBAL_SCOPE]
+            "prop": ("props",),
+        }[kind if kind in ("bank", "model", "prop") else GLOBAL_SCOPE]
         dirty = []
         for stage in wanted:
             task = Task(name=f"chars:{scope}:{stage}", action=lambda: None)

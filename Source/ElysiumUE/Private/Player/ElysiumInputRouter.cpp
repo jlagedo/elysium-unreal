@@ -252,6 +252,8 @@ void UElysiumInputRouter::OnAnalogLook(const FInputActionValue& Value)
 
 void UElysiumInputRouter::OnCommandDown(FName Command)
 {
+	UE_LOG(LogElysiumRouter, Display, TEXT("enhanced input action pressed: %s"),
+		*Command.ToString());
 	FireCommand(Command.ToString());
 }
 
@@ -260,7 +262,10 @@ void UElysiumInputRouter::OnCommandUp(FName Command)
 	const FString Press = Command.ToString();
 	if (Press.StartsWith(TEXT("+")))
 	{
-		FireCommand(TEXT("-") + Press.Mid(1));
+		const FString Release = TEXT("-") + Press.Mid(1);
+		UE_LOG(LogElysiumRouter, Display, TEXT("enhanced input action released: %s"),
+			*Release);
+		FireCommand(Release);
 	}
 }
 

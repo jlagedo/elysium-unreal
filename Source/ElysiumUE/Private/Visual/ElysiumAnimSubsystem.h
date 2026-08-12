@@ -17,7 +17,6 @@
 
 class UAnimSequence;
 class UBlendSpace;
-class UglTFRuntimeAsset;
 class USkeletalMesh;
 
 // One blend grid resolved to everything a caller needs to stand it and steer it (ANM3). `Axes` is 1
@@ -115,15 +114,12 @@ public:
 	// body and leaves the face still. Shared rather than raw: an anim instance holds one for as long
 	// as its body lives, across map epochs this GI-scoped cache outlasts.
 	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem);
-	// The eyeball pair for a stem (12.4): `npc/eyes/<stem>.json`, carried onto the skeleton through
-	// the glb's import transform. Same shape and lifetime as GetFacialRig — shared, immutable once
-	// built, GI-scoped. Answered independently of the flex rig, because a player body carries a
-	// pair of eyeballs and no flex rig at all.
+	// The eyeball pair for a stem (12.4): `npc/eyes/<stem>.json`. Same shape and lifetime as
+	// GetFacialRig — shared, immutable once built, GI-scoped. Answered independently of the flex
+	// rig, because a player body carries a pair of eyeballs and no flex rig at all.
 	//
-	// Both sidecars state their geometry in the glb's frame and are carried into the frame the
-	// baked body landed in (`ElysiumNpcVisual::ImportGlbLocal`). There is one such frame, because
-	// there is one build of a character; a rig built in the wrong one aims driven bones and irises
-	// sideways while every other bone looks correct.
+	// Both sidecars are Unreal-native, in the frame the baked body is in, so a rig is read verbatim
+	// and nothing here converts.
 	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem);
 	// The two composition stages' rig for a stem (CAP7.2): `npc_index.json`'s `split_bones` plus
 	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
@@ -139,16 +135,11 @@ public:
 	// be a character, a bank or an animated prop — all three can declare grids.
 	TSharedPtr<const FElysiumBlendTable> GetBlendTable(const FString& Stem);
 	// vdata/system/dispositiontable.txt, loaded once.
-	const FElysiumDispositionTable& GetDispositions();
 
-	// A bank's parsed glb, cached for the session. Null + OutError when it cannot be loaded.
-	UglTFRuntimeAsset* GetBankAsset(const FString& BankStem, FString& OutError);
-
-	// Retarget one named clip onto Mesh, resolving which glb owns it through the stem's clip set.
-	// OwnAsset is the NPC's own already-parsed glb (the owner for its dialogue clips); pass null
-	// and a clip the NPC owns cannot resolve. Returns null and fills OutError on any failure.
+	// One named clip off the baked mount, resolving which stem owns it through the stem's clip set.
+	// Returns null and fills OutError when the mount does not carry it.
 	UAnimSequence* ResolveClip(const FString& Stem, const FString& ClipName, USkeletalMesh* Mesh,
-		UglTFRuntimeAsset* OwnAsset, FString& OutError);
+		FString& OutError);
 
 	// 12.1 — retarget a clip out of a NAMED bank, bypassing the clip vocabulary. A choreo scene's
 	// `entire_scene` lives in a cinematic anim set that no NPC's include tree mentions, so there is
@@ -189,11 +180,10 @@ public:
 	// through it, and `ResolveActivityClip` below is expressed over it, because two implementations of
 	// one pick are how the player and the cast come to disagree about a bank silently.
 	//
-	// `Mesh` and `OwnAsset` may both be null — the record is still complete, and `OutAssets` simply
-	// comes back empty. `docs/architecture/animation-architecture.md` section 3.3.
+	// `Mesh` may be null — the record is still complete, and `OutAssets` simply comes back empty.
+	// `docs/architecture/animation-architecture.md` section 3.3.
 	void ResolveAnimation(const FElysiumAnimationIntent& Intent, USkeletalMesh* Mesh,
-		UglTFRuntimeAsset* OwnAsset, FElysiumAnimationSelection& OutSelection,
-		FElysiumResolvedAnimation& OutAssets);
+		FElysiumAnimationSelection& OutSelection, FElysiumResolvedAnimation& OutAssets);
 
 	// The catalog view the resolver reads, gathered from this subsystem's own caches. Exposed so a
 	// caller that resolves repeatedly does not re-enter the cache lookups, and so the Content tier can
@@ -224,14 +214,18 @@ public:
 	//   -> ACT_IDLE (by weight) -> a loose idle-named clip -> nothing.
 	// Selection is by **activity**, never by label substring: `regular_cop` resolves 229 clips with
 	// "idle" in the name, of which `Stance_Dead_Idle_1` and `Bed_Left_Idle` are not standing idles.
-	// Variant picks the candidate at that index, wrapping — the seam ambient variety rides on.
-	// VtMB authors three standing idles per disposition (`Stance_<D>_Idle_{1,2,3}`) and its
-	// dispositiontable pacing for cycling them is written for conversation only ("while waiting
-	// for the player to make a dialog choice"), so an NPC nobody is talking to just holds one.
-	// Spreading the cast across the authored three is a choice among clips VtMB wrote for exactly
-	// this disposition, not invented behaviour — it is what stops 42 cops standing identically.
+	// `Variant` means different things per tier, because the tiers are different kinds of set. On the
+	// stance tier it is `m_CurrStance` and **addresses** a cell of the disposition's own table; on the
+	// weighted tiers there is no index to address and it is ignored.
 	FString PickIdleClip(const FString& Stem, const FString& Disposition, EElysiumIdleTier& OutTier,
 		int32 Variant = 0);
+
+	// One model's disposition stance set for `AnimName` — three idles, three fidgets and the 3x3
+	// transition matrix, with retail's precache fallback ladder applied. The single owner of the
+	// `Stance_<Anim>_*` naming: both the standing-idle resolution above and the substrate's stance
+	// machine read this rather than deriving the labels twice.
+	bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
+		struct FElysiumStanceClips& OutClips);
 	// Deterministic weighted activity selection. VData interesting places name ACT_* values and
 	// frequencies; the clip manifest supplies the per-sequence weights within that activity.
 	FString PickActivityClip(const FString& Stem, const FString& Activity, int32 Variant = 0);
@@ -242,19 +236,13 @@ public:
 
 	static const TCHAR* TierName(EElysiumIdleTier Tier);
 
-	// Banks parsed so far and their total .glb bytes on disk — what the Cog window reports.
-	void GetBankStats(int32& OutCount, int64& OutBytes) const;
-
 private:
-	// Session-lifetime: a bank is map-independent, and re-parsing 11 MB per travel is the cost
-	// this cache exists to avoid.
-	UPROPERTY() TMap<FString, TObjectPtr<UglTFRuntimeAsset>> BankAssets;
+	// The disposition table belongs to the rulebook, like every other `vdata/system` catalog. This
+	// is the local reach for it — the two idle resolvers below need the `Animation Name` column.
+	const FElysiumDispositionTable& Dispositions();
 
 	FElysiumNpcIndex Index;
 	bool bIndexLoaded = false;
-
-	FElysiumDispositionTable Dispositions;
-	bool bDispositionsLoaded = false;
 
 	// Value is null for a stem whose slice is missing, so a failed read is remembered rather than
 	// retried on every NPC that shares the stem.

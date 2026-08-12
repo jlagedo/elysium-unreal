@@ -1,6 +1,6 @@
-// Headless contracts for the MDL -> glTF -> glTFRuntime skeletal-animation seam. The structural
-// test reads every generated NPC/bank GLB without constructing rendering resources; the theatre
-// test then exercises the real runtime loader and UAnimSequence-to-USkeleton binding on PP2's cast.
+// Headless contracts for the MDL -> `.eskm` -> baked-asset skeletal-animation seam. The structural
+// test reads every generated container without constructing rendering resources; the theatre test
+// then exercises the mount's own bodies and their UAnimSequence-to-USkeleton binding on PP2's cast.
 
 #include "Misc/AutomationTest.h"
 
@@ -26,7 +26,6 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Tests/AutomationCommon.h"
-#include "glTFRuntimeAsset.h"
 
 static constexpr EAutomationTestFlags GElysiumSkeletalContentFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -575,9 +574,7 @@ namespace
 		Stems.Sort([](const FString& A, const FString& B) { return A < B; });
 		for (const FString& Candidate : Stems)
 		{
-			FString LoadError;
-			UglTFRuntimeAsset* Unused = nullptr;
-			USkeletalMesh* Body = ElysiumNpcVisual::LoadMesh(Candidate, Unused, LoadError);
+			USkeletalMesh* Body = ElysiumNpcVisual::LoadBakedMesh(Candidate);
 			if (Body == nullptr || Body->GetRefSkeleton().FindBoneIndex(FName(TEXT("Bip01 Head")))
 				== INDEX_NONE)
 			{
@@ -844,7 +841,6 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 	}
 
 	TMap<FString, USkeletalMesh*> MeshCache;
-	TMap<FString, UglTFRuntimeAsset*> BankAssetCache;
 	TArray<UObject*> KeepAlive;
 	int32 SceneSets = 0;
 	int32 ActorRoots = 0;
@@ -945,15 +941,11 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 				USkeletalMesh* Mesh = MeshCache.FindRef(Stem);
 				if (Mesh == nullptr)
 				{
-					// The mount is the only build of a character, so a body comes back as a real
-					// asset with NO parsed glb beside it -- the out-asset is null on that path by
-					// design and only a bank still carries one.
-					UglTFRuntimeAsset* Unused = nullptr;
-					Mesh = ElysiumNpcVisual::LoadMesh(Stem, Unused, Error);
+					Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
 					if (Mesh == nullptr)
 					{
-						AddError(FString::Printf(TEXT("%s: target mesh %s failed strict load: %s"),
-							*SceneDef.TargetName, *Stem, *Error));
+						AddError(FString::Printf(TEXT("%s: target mesh %s is not on the baked mount"),
+							*SceneDef.TargetName, *Stem));
 						bValid = false;
 						continue;
 					}
@@ -962,29 +954,20 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 					Mesh->AddToRoot();
 				}
 
-				UglTFRuntimeAsset* BankAsset = BankAssetCache.FindRef(Bank);
-				if (BankAsset == nullptr)
+				// Off the mount, like the body. A cinematic bank read out of its `.glb` would bind
+				// through glTFRuntime's basis instead of the container's -- a 90 degree yaw on the
+				// `Bip01` root, which is exactly what this scene's cast would then stand at.
+				UAnimSequence* Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, Bank,
+					TEXT("entire_scene"));
+				const USkeleton* BodySkeleton = Mesh->GetSkeleton();
+				if (Anim == nullptr || Anim->GetPlayLength() <= 0.f
+					|| (Anim->GetSkeleton() != BodySkeleton
+						&& !(BodySkeleton != nullptr
+							&& BodySkeleton->IsCompatibleForEditor(Anim->GetSkeleton()))))
 				{
-					BankAsset = ElysiumNpcVisual::LoadAssetFromPath(Index.BankGlbPath(Bank), Error);
-					if (BankAsset == nullptr)
-					{
-						AddError(FString::Printf(TEXT("%s: bank %s failed load: %s"),
-							*SceneDef.TargetName, *Bank, *Error));
-						bValid = false;
-						continue;
-					}
-					BankAssetCache.Add(Bank, BankAsset);
-					KeepAlive.Add(BankAsset);
-					BankAsset->AddToRoot();
-				}
-
-				UAnimSequence* Anim = ElysiumNpcVisual::RetargetClip(
-					BankAsset, Mesh, TEXT("entire_scene"), Error);
-				if (Anim == nullptr || Anim->GetSkeleton() != Mesh->GetSkeleton()
-					|| Anim->GetPlayLength() <= 0.f)
-				{
-					AddError(FString::Printf(TEXT("%s: %s/%s did not bind entire_scene to %s: %s"),
-						*SceneDef.TargetName, *AnimModel, *Actor.BoneFrom, *Stem, *Error));
+					AddError(FString::Printf(
+						TEXT("%s: %s/%s did not bind a baked entire_scene from '%s' to %s"),
+						*SceneDef.TargetName, *AnimModel, *Actor.BoneFrom, *Bank, *Stem));
 					bValid = false;
 					continue;
 				}
@@ -999,16 +982,23 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 					bValid = false;
 					continue;
 				}
+				// A bank sequence is baked ONCE against a skeleton of its own and reached through
+				// each body's compatibility declaration, so it carries the union of the bank's
+				// bones by construction and a body that lacks one simply takes no track for it.
+				// What has to hold is that this body shares enough of the clip to be driven by it,
+				// and that every track it does share is a finite pose. (The old form asserted every
+				// track existed on every body, which was a property of the retargeter's
+				// `RemoveTracks` filter -- there is no filter on the mount, and asserting it of a
+				// shared sequence fails on a body missing an optional hair or footstep bone.)
 				const int32 LastFrame = DataModel->GetNumberOfFrames();
+				int32 Shared = 0;
 				for (const FName TrackName : TrackNames)
 				{
 					if (Mesh->GetRefSkeleton().FindBoneIndex(TrackName) == INDEX_NONE)
 					{
-						AddError(FString::Printf(TEXT("%s: retargeted track '%s' is absent from %s"),
-							*SceneDef.TargetName, *TrackName.ToString(), *Stem));
-						bValid = false;
-						break;
+						continue;
 					}
+					++Shared;
 					for (const int32 Frame : { 0, LastFrame / 2, LastFrame })
 					{
 						const FTransform Pose = DataModel->GetBoneTrackTransform(TrackName, FFrameNumber(Frame));
@@ -1020,6 +1010,14 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 							break;
 						}
 					}
+				}
+				if (Shared == 0)
+				{
+					AddError(FString::Printf(
+						TEXT("%s: '%s' shares no bone with %s, so the clip drives nothing on it"),
+						*SceneDef.TargetName, *Bank, *Stem));
+					bValid = false;
+					continue;
 				}
 #endif
 				KeepAlive.Add(Anim);
@@ -1143,25 +1141,16 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 		return false;
 	}
 
-	UglTFRuntimeAsset* MeshAsset = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, MeshAsset, Error);
-	if (!TestNotNull(TEXT("Nines' target mesh loads"), Mesh))
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
+	if (!TestNotNull(TEXT("Nines' target mesh is on the baked mount"), Mesh))
 	{
-		AddError(Error);
 		return false;
 	}
-	UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(
-		Index.BankGlbPath(Bank), Error);
-	if (!TestNotNull(TEXT("Nines' cinematic bank loads"), BankAsset))
+	// Off the mount, in the body's own frame. The `.glb` half binds through glTFRuntime's basis
+	// and would stand this actor a quarter turn off its mark.
+	UAnimSequence* Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, Bank, SequenceEvent->Param);
+	if (!TestNotNull(TEXT("the sequence event's clip is on the mount"), Anim))
 	{
-		AddError(Error);
-		return false;
-	}
-	UAnimSequence* Anim = ElysiumNpcVisual::RetargetClip(
-		BankAsset, Mesh, SequenceEvent->Param, Error);
-	if (!TestNotNull(TEXT("the sequence event retargets its clip"), Anim))
-	{
-		AddError(Error);
 		return false;
 	}
 

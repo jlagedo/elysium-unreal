@@ -115,6 +115,33 @@ void UElysiumActionButton::SetSlateContent(TSharedRef<SWidget> InContent)
 	}
 }
 
+void UElysiumActionButton::SetActionSelected(bool bInSelected)
+{
+	if (GetSelected() != bInSelected)
+	{
+		// UCommonButtonBase::SetIsSelected deliberately rejects deselection for a non-toggleable
+		// button. Elysium's screen is the exclusive-selection owner, so use the protected state
+		// transition directly without making activation toggle the focused action off.
+		SetSelectedInternal(bInSelected, false);
+	}
+}
+
+void UElysiumActionButton::NativeOnSelected(bool bBroadcast)
+{
+	Super::NativeOnSelected(bBroadcast);
+	// The retained Slate child reads selection through bound attributes. CommonButton refreshes its
+	// own style here, but that does not invalidate the child cached beneath the transparent style.
+	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UElysiumActionButton::NativeOnDeselected(bool bBroadcast)
+{
+	Super::NativeOnDeselected(bBroadcast);
+	// Deselecting must repaint the old row as well as selecting the new one; focus/hover only
+	// invalidates the newly highlighted button.
+	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
 FReply UElysiumActionButton::NativeOnFocusReceived(const FGeometry& InGeometry,
 	const FFocusEvent& InFocusEvent)
 {

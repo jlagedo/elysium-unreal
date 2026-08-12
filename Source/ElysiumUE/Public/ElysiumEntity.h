@@ -4,6 +4,7 @@
 #include "Containers/ArrayView.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
+#include "ElysiumNpcMindTypes.h"
 #include "ElysiumVariant.h"
 
 struct FElysiumEntityDef;
@@ -307,6 +308,15 @@ public:
 	// Release the script's ownership: stop the motor and hand the body back to its own behaviour
 	// (a parked patrol route or interesting-place search resumes). Leaves the pose alone.
 	virtual void EndScriptMove() {}
+
+	// --- Dialogue body ownership (K7) --------------------------------------------------
+	// The open world session holds this token beside its camera handle. Only the NPC leaf backs
+	// these calls; keeping the seam on the base avoids RTTI and lets replacement/teardown release
+	// exactly the resolved owner. A null token means acquisition was refused.
+	virtual FElysiumBodyOwnerToken BeginDialogueBodySession() { return FElysiumBodyOwnerToken(); }
+	// Silent release also clears the NPC's dialogue latch. Normal release leaves it for the queued
+	// EndDialog input, preserving OnDialogEnd ordering through the one event transport.
+	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) {}
 
 	// --- Body state a cutscene borrows (entity_io.md, choreographed_scenes.md) -----------
 	// A choreographed scene with `position_start 1` places its cast once and then immobilises it:

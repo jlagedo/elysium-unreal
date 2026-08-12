@@ -935,6 +935,140 @@ answers cover ten NPC bodies (Blueblood, regular cop, female/male bums, three ci
 prostitute, Knox and Mercurio), with exact activity literal, sequence label, owner bank and weight
 when the model census contains that lifetime.
 
+### The disposition stance machine [VtMB decompiled]
+
+A standing NPC's idle does not come out of the weighted sequence choice above. `ACT_DISPOSITION`
+(`0xf1`) has its own resolver bypass, its own name convention, and its own selection algorithm
+compiled into the DLL, tuned by `vdata/System/DispositionTable.txt`. All addresses are in the
+pinned `vampire.dll` (`sha256 c546f4de…a76f`, image base `0x10000000`).
+
+**Who owns it.** Only classes whose constructor sets the self-pointer `this+0x98` —
+`CAI_BaseNPCTroika` at `0x1028d3bc` (`MOV [ESI+0x98], ESI`) and its 62 descendants, including
+`CNPC_VVampire`. Plain `CAI_BaseNPC` leaves it null and carries no disposition machinery.
+
+**The bypass.** `ResolveActivityToSequence` (`0x10272130`) at `0x1027223c`: when the translated
+activity is `0xf1` and `this+0x98` is non-null it calls `0x10295a80` — whose whole body is
+`*outSeq = this->vtbl[+0x98c]()` — and skips weighted selection entirely. A failure prints
+`"%s has no sequence for act:ACT_DISPOSITION"`. Separately at `0x10272348` → `0x10272351`, any
+activity resolving to no sequence is retried once as `ACT_DISPOSITION`; that retry is the
+*fallback* path and is distinct from this one.
+
+**Who requests `ACT_DISPOSITION`.** No schedule names it as a task argument. It is requested by
+native code in four places: `0x10293e50` (virtual `+0x930`, from the idle tasks below),
+`0x102c0f70` (`SetDisposition`), `0x102c1400` (the `TASK_RUN_DIALOG` RunTask helper) and
+`0x102c1680` (the dialogue-pause handler, vtable `+0x478`).
+
+**The idle tasks.** `CAI_BaseNPC::StartTask` (`0x102827f0`) handles none of tasks 186–189 — all four
+index its default arm `0x10286f63` (`"No StartTask entry for %s"`) — and `CAI_BaseNPC::RunTask`
+covers only 2…177. The Troika overrides own them:
+
+| Task | `CAI_BaseNPCTroika::StartTask` `0x102a1910` | `RunTask` `0x102aacf0` |
+|---|---|---|
+| 186 `TASK_RUN_DISPOSITION` | `0x102a49bc`: `m_flWaitFinished(+0x5db4) = curtime + arg` | `0x102ab351` |
+| 187 `_RANDOM` | `0x102a49da`: `= RandomFloat(0,arg) + curtime` | `0x102ab351` |
+| 188 `TASK_SPECIAL_IDLE_ACTIVITY` | `0x102a49bc` | `0x102ab369` |
+| 189 `_RANDOM` | `0x102a49da` | `0x102ab369` |
+
+`StartTask` only arms a wait; the activity is committed by `RunTask`, which calls virtual `+0x930`
+(`0x10293e50`) once per tick: `if (IsSequenceFinished(+0x3ec)) RestartIdealActivity(this, 0xf1)`,
+where the restart helper `0x10289ee0` clears `m_Activity(+0xfec)` first so the request is not
+swallowed as a no-op. **The re-evaluation cadence is therefore one selection per idle-clip loop** —
+nothing re-enters the resolver mid-sequence.
+
+`0x102ab369` adds a pre-branch: `m_hClosestPlayer(+0x628c)` valid, `m_flPlayerDist(+0x6264) <= 128.0`
+(`DAT_1046dcd0`) and `COND_SEE_PLAYER (0x5a)` → a `SelectWeightedSequence(ACT_IDLE_PLAYER_IN_FACE)`
+test. **The shipped branch is inverted** — it requests `ACT_IDLE_PLAYER_IN_FACE` when the lookup
+returns `-1` (the model has no such sequence) and calls `+0x930` when it returns a real one, so a
+model that owns the clip never plays it from this task. The binary's only comparable idiom is
+`0x10289d10` (the turn-in-place chooser), whose three sites all commit on `!= -1`; 3:1 against, this
+reads as a defect rather than intent, but the author's intent is not recovered. Marked uncertain:
+a live capture with the player inside 128 units and `COND_SEE_PLAYER` set, observing whether retail
+ever plays `idle_player_in_face` on a model that owns it, would settle it.
+
+**The name convention.** `DispositionTable.txt` loads into the global `CDispositionTable`
+(`DAT_10924980`; loader `0x100eb870`, per-block parser `0x100eba00`, record stride `0x264`).
+`Animation Name` sits at record `+0xc8` and is **lowercased at parse** by `Q_strnlwr`, which is why
+the format strings below are lowercase while the model labels are `Stance_Neutral_Idle_1` —
+`LookupSequence` is case-insensitive. `CopyDataFrom` memcpys a prior record before overrides, which
+is how `Joy` L2/L3, `Anger` L2, `Fear` L2 and `ChairDamaged` inherit their tuning.
+
+At model precache `0x100ec640` builds one **0x44-byte, 17-int stance record per (model,
+disposition)** — up to `0x40` dispositions, model stride `0x41`:
+
+| Slot | Built from |
+|---|---|
+| `idle[1..3]` at `+0x08/+0x0c/+0x10` | `stance_<anim>_idle_<n>` |
+| `fidget[1..3]` at `+0x14/+0x18/+0x1c` | `stance_<anim>_fidget_<n>` |
+| `trans[n][m]` at `+0x20`…`+0x40` | `stance_<anim>_trans_<n>_<m>` |
+
+Misses are resolved **once, at precache**, not at play time: a missing `idle[n]` becomes `idle[1]`
+(logging `"%s does not have a stance %d idle animation for %s!!"`), a missing `fidget[n]` becomes
+`idle[n]`, and a missing `trans[n][m]` becomes `idle[m]`.
+
+A **cross-disposition** transition is a different name form, built live by
+`CDispositionTable::GetTransitionAnim` (`0x100ed150`) when `SetDisposition` (`0x102c0f70`) changes
+the index: `stance_trans_<oldAnim>_<stance+1>_<newAnim>_<stance+1>`, falling back to
+`stance_trans_<oldAnim>_1_<newAnim>_1` and then to the new disposition's `idle[stance]`.
+
+**The algorithm.** Virtual `+0x98c` = `0x102c12a0` for 63 classes. `0x100ecee0` supplies the record
+and the three tuning numbers, selecting the Talking or Standing pair on `m_bIsTalking(+0x64c0)`:
+
+```
+if (m_bIsTalking)                                    -> idle[m_CurrStance]
+else if (m_bInDispositionFidget || m_bInStanceChange) -> idle[m_CurrStance], clear the flag
+else if (idle[s] != fidget[s] && fidgetChance > RandomInt(1,100))
+                                                     -> fidget[s], set m_bInDispositionFidget
+else if (curtime - m_flStanceTime > threshold && RandomInt(1,100) < chance)
+                                                     -> ChangeStance(), set m_bInStanceChange
+else                                                 -> idle[m_CurrStance]
+if (result == -1) keep m_nSequence(+0x6f0)
+
+ChangeStance (0x102c1230):
+    do { new = RandomInt(0,2) } while (new == m_CurrStance)
+    seq = trans[m_CurrStance][new]                    // 0x100ecfc0
+    m_CurrStance(+0x64c8) = new;  m_flStanceTime(+0x64e4) = curtime
+```
+
+**Exactly three stances, chosen by explicit index and never by `SelectWeightedSequence`**, uniform
+over the two non-current ones, gated by a per-disposition time floor and a percentage roll. A
+transition plays first and the next evaluation settles onto the destination idle.
+`m_CurrStance` is zero-initialised, so the first pose a body ever shows is `Stance_<Anim>_Idle_1`.
+
+`m_bIsTalking` tracks **a line actually playing**, not the dialogue session: set at `0x102c0923`
+and cleared at `0x102c0e73`, both driven from the `TASK_RUN_DIALOG` helper `0x102c1400`. A body
+standing in front of an open dialogue box with no line playing is therefore on the Standing pair.
+
+`m_CurrStance` and `m_flStanceTime` are never reset by a schedule, state, dialogue or disposition
+change — their complete writer sets are the Troika constructor, `ChangeStance`, and the
+`npc_changestance` console command — and both carry datamap flag `0x2`, so they survive save/load.
+
+**The authored tuning**, per disposition, with the shipped `Neutral` values:
+
+| Key | Record offset | Neutral | Meaning |
+|---|---|---|---|
+| `Animation Name` | `+0xc8` | `Neutral` | the stance family key |
+| `Talking Stance Change Threshold` | `+0x108` | 0.15 s | dialogue pause that arms a change |
+| `Talking Stance Change Chance` | `+0x10c` | 65 | roll on that pause |
+| `Standing Stance Change Threshold` | `+0x110` | 3.0 s | floor since the last change |
+| `Standing stance Change Chance` | `+0x114` | 80 | roll once the floor passes |
+| `Standing Fidget Chance` | `+0x118` | 50 | roll for a fidget where a distinct fidget clip exists |
+
+The lowercase `s` in `Standing stance Change Chance` is the file's. Two accessors read these:
+`0x100ecee0` (fidget chance always, then the Talking or Standing pair) called only from `+0x98c`,
+and `0x100ec5d0` (the Talking pair only) called only from the dialogue-pause handler `0x102c1680`.
+
+**The dialogue-pause driver.** `CNPC_VVampire` vtable slot 286 (`+0x478`) = `0x102c1680`, event
+type `0xd`: `pause = atof(event data)`, and when `threshold < pause` and the roll passes it calls
+the same `ChangeStance`, committing the sequence with `m_IdealActivity = m_Activity = 0xf1`,
+`ResetSequenceInfo`, cycle 0. This is the authored comment made literal — a 65 % chance of changing
+stance on every dialogue pause longer than 0.15 s.
+
+**Worked case.** `smiling_jack` in `Neutral` carries `Stance_Neutral_Idle_1/2/3` and
+`Stance_Neutral_Trans_1_2`, and **no** `Stance_Neutral_Fidget_*`. After precache `fidget[n] ==
+idle[n]`, so the fidget branch is structurally dead for him, and only the 1→2 move has a real
+transition clip — the other five snap to the destination idle. Free-standing and not talking he
+rolls once per idle-clip loop: past 3.0 s, an 80 % chance of moving to one of the other two stances.
+
 ### Native schedules, tasks and the complete custom class surface [VtMB decompiled + data-verified]
 
 The schedule corpus and the common task dispatch are now reproducible. Run

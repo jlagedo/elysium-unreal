@@ -8485,6 +8485,11 @@ AXIS_RULE = (
 # a proper rotation, `(x, y, z) -> (x, z, -y)`, and the scale is inches to metres.
 GLTF_M = ((1.0, 0.0, 0.0), (0.0, 0.0, 1.0), (0.0, -1.0, 0.0))
 GLTF_SCALE = 0.0254
+#: `bsp.source_to_unreal` as a basis matrix and a scale: the Y negation that flips handedness,
+#: and inches to centimetres. Stated here rather than imported so the assertion is between two
+#: formulations.
+UNREAL_M = ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 0.0, 1.0))
+UNREAL_SCALE = 2.54
 
 
 def _raw_axis_interp(image: bytes, bone: int) -> bytes:
@@ -8507,8 +8512,8 @@ def _decoded_axis_interp(raw: bytes):
     return control, axis, positions, quaternions
 
 
-def _to_gltf_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
-    """A Source-basis 3x4 in the glb's basis.
+def _to_basis_3x4(matrix: tuple[float, ...], basis, scale: float) -> tuple[float, ...]:
+    """A Source-basis 3x4 in another basis.
 
     A change of basis conjugates a transform, so the rotation goes to `M R M^T`
     while the translation is carried through `M` once and scaled.
@@ -8516,7 +8521,7 @@ def _to_gltf_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
     rotation = [
         [
             sum(
-                GLTF_M[row][k] * matrix[k * 4 + l] * GLTF_M[column][l]
+                basis[row][k] * matrix[k * 4 + l] * basis[column][l]
                 for k in range(3)
                 for l in range(3)
             )
@@ -8525,7 +8530,7 @@ def _to_gltf_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
         for row in range(3)
     ]
     translation = [
-        GLTF_SCALE * sum(GLTF_M[row][k] * matrix[k * 4 + 3] for k in range(3))
+        scale * sum(basis[row][k] * matrix[k * 4 + 3] for k in range(3))
         for row in range(3)
     ]
     return tuple(
@@ -8693,7 +8698,7 @@ class BlendGridTests(unittest.TestCase):
             (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
         )
         image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
-        _extra, blends = mdl_gltf.blend_clip_plan(image, mdl_skel.local_sequences(image))
+        _extra, blends = mdl_skel.blend_clip_plan(image, mdl_skel.local_sequences(image))
         forward = next(cell for cell in blends["walk"]["cells"] if cell["axis"] == [4, 0])
         self.assertEqual(forward["clip"], "aim#4")
         self.assertEqual(
@@ -8787,7 +8792,7 @@ class BlendGridTests(unittest.TestCase):
 
         image = self._image({0: NINE_BY_ONE, 1: THREE_BY_THREE})
         sequences = mdl_skel.local_sequences(image)
-        extra, blends = mdl_gltf.blend_clip_plan(image, sequences)
+        extra, blends = mdl_skel.blend_clip_plan(image, sequences)
 
         # One extra clip per distinct animation the two grids reach that the
         # base-cell bake does not: animations 1-6 over the two of them, each
@@ -8829,7 +8834,7 @@ class BlendGridTests(unittest.TestCase):
         from elysium_pipeline.formats import mdl_gltf, mdl_skel
 
         image = self._image({0: Grid((3, 1), {(0, 0): 0, (1, 0): 1, (2, 0): 99})})
-        _extra, blends = mdl_gltf.blend_clip_plan(
+        _extra, blends = mdl_skel.blend_clip_plan(
             image, mdl_skel.local_sequences(image)
         )
         self.assertEqual(
@@ -8915,28 +8920,32 @@ class ProceduralRuleExportTests(unittest.TestCase):
         )
 
     def _rules(self, image):
-        from elysium_pipeline.formats import mdl_gltf, mdl_skel
+        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+        from elysium_pipeline.formats import mdl_skel
 
-        return mdl_gltf.axis_interp_rules(image, mdl_skel.read_bones(image))
+        records, faults = mdl_skel.axis_interp_records(image, mdl_skel.read_bones(image))
+        return UEK.unreal_axis_rules(records), faults
 
-    def test_the_exporter_carries_the_source_axes_into_the_glb_basis(self) -> None:
+    def test_the_exporter_carries_the_source_axes_into_the_unreal_basis(self) -> None:
         """The three vectors every exported rule is read against.
 
-        Source Y becomes negative glTF Z and Source Z becomes glTF Y, so an export
-        that carried the axis index through unchanged would name the wrong one on
-        two rules in three. This is the assertion that says so out loud.
+        Source Y becomes negative Unreal Y, so an export that carried the axis index
+        through unchanged would name a sign-flipped axis on one rule in three. This
+        is the assertion that says so out loud.
         """
-        from elysium_pipeline.formats import mdl_gltf
+        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
-        self.assertTrue(np.allclose(np.asarray(mdl_gltf.M), np.asarray(GLTF_M)))
-        self.assertEqual(mdl_gltf.SCALE, GLTF_SCALE)
         self.assertEqual(
-            mdl_gltf.DRIVER_AXES,
-            [[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]],
+            UEK.DRIVER_AXES,
+            [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
         )
+        # `-0.0` is normalized away, so the table reads as the signed unit vectors it is.
+        for axis in UEK.DRIVER_AXES:
+            for component in axis:
+                self.assertFalse(math.copysign(1.0, component) < 0.0 and component == 0.0)
 
     def test_the_table_takes_the_same_basis_change_the_mesh_and_clips_take(self) -> None:
-        """The quaternion route the table uses names the rotation `conv_quat` does.
+        """The quaternion route the table uses names the rotation the matrix does.
 
         The table is read back and re-evaluated rather than only drawn, so it goes
         through the quaternion rather than the rotation matrix -- which keeps the
@@ -8944,22 +8953,35 @@ class ProceduralRuleExportTests(unittest.TestCase):
         from. That is a different route to the same conjugation, and this is what
         says so: the two agree as rotations to floating-point noise.
         """
-        from elysium_pipeline.formats import mdl_gltf
+        from elysium_pipeline.formats import bsp, mdl_skel
 
+        basis = np.asarray(UNREAL_M)
         for quaternion in (*AXIS_RULE[3], OBLIQUE, (0.0, HALF, 0.0, -HALF)):
             with self.subTest(quaternion=quaternion):
-                exact = mdl_gltf.conv_quat_exact(quaternion)
+                exact = bsp.source_quat_to_unreal(*quaternion)
                 self.assertTrue(
                     np.allclose(
-                        mdl_gltf.rot_matrix(exact),
-                        mdl_gltf.rot_matrix(mdl_gltf.conv_quat(quaternion)),
+                        mdl_skel.rot_matrix(exact),
+                        basis @ mdl_skel.rot_matrix(quaternion) @ basis,
                         atol=1.0e-12,
                     )
                 )
-                self.assertEqual(mdl_gltf.unconv_quat(exact), tuple(quaternion))
+                # A component negation is its own inverse, so the exported table
+                # recovers the bytes it was read from exactly rather than nearly.
+                self.assertEqual(
+                    bsp.source_quat_to_unreal(*exact), tuple(quaternion)
+                )
 
     def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(self) -> None:
-        from elysium_pipeline.formats import mdl_gltf
+        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+
+        # `source_to_unreal` and `source_quat_to_unreal` are their own inverses up to the
+        # inch-to-centimetre scale, so undoing them is a division and two sign flips.
+        def unconv_pos(p):
+            return (p[0] / UNREAL_SCALE, -p[1] / UNREAL_SCALE, p[2] / UNREAL_SCALE)
+
+        def unconv_quat(q):
+            return (-q[0], q[1], -q[2], q[3])
 
         for axis in range(3):
             with self.subTest(axis=axis):
@@ -8975,43 +8997,44 @@ class ProceduralRuleExportTests(unittest.TestCase):
                 # The axis is carried as a direction, so recovering the index it
                 # was written from is a lookup rather than a conversion.
                 rebuilt = struct.pack(
-                    "<ii", rule["control_index"], mdl_gltf.DRIVER_AXES.index(rule["axis"])
+                    "<ii", rule["control_index"], UEK.DRIVER_AXES.index(rule["axis"])
                 )
                 rebuilt += struct.pack(
                     "<18f",
-                    *[c for entry in rule["pos"] for c in mdl_gltf.unconv_pos(entry)],
+                    *[c for entry in rule["pos"] for c in unconv_pos(entry)],
                 )
                 rebuilt += struct.pack(
                     "<24f",
-                    *[c for entry in rule["quat"] for c in mdl_gltf.unconv_quat(entry)],
+                    *[c for entry in rule["quat"] for c in unconv_quat(entry)],
                 )
                 self.assertEqual(rebuilt, _raw_axis_interp(image, 3))
 
     def test_the_exported_table_evaluates_to_the_converted_correction(self) -> None:
-        from elysium_pipeline.formats import mdl_gltf
+        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
         locals_ = _bind_locals(PROCEDURAL_BONES)
         # The control bone's bind is oblique, so the driver has three non-zero
         # components on every axis and the whole rule runs rather than landing on
         # one table entry.
         world = _expected_world(PROCEDURAL_BONES, locals_, TRANSFORM_ROOT, split=True)
-        converted = [_to_gltf_3x4(matrix) for matrix in world]
+        to_unreal = lambda m: _to_basis_3x4(m, UNREAL_M, UNREAL_SCALE)
+        converted = [to_unreal(matrix) for matrix in world]
         for axis in range(3):
             with self.subTest(axis=axis):
                 image = self._image(axis)
                 raw = _decoded_axis_interp(_raw_axis_interp(image, 3))
                 self.assertEqual(raw[1], axis)
-                expected = _to_gltf_3x4(_axis_interp_local(raw, world, PROCEDURAL_BONES))
+                expected = to_unreal(_axis_interp_local(raw, world, PROCEDURAL_BONES))
                 rules, _ = self._rules(image)
                 produced = _exported_axis_interp_local(
-                    rules[0], mdl_gltf.DRIVER_AXES, converted, PROCEDURAL_BONES
+                    rules[0], UEK.DRIVER_AXES, converted, PROCEDURAL_BONES
                 )
                 for index, (a, b) in enumerate(zip(produced, expected)):
                     self.assertAlmostEqual(a, b, places=9, msg=f"element {index}")
                 # The rule has to be doing work, or agreeing about nothing would
                 # pass: the correction is not the bone's own animated local.
                 self.assertFalse(
-                    np.allclose(produced, _to_gltf_3x4(world[3]), atol=1.0e-3)
+                    np.allclose(produced, to_unreal(world[3]), atol=1.0e-3)
                 )
 
     def test_a_rule_that_does_not_resolve_is_a_named_fault(self) -> None:

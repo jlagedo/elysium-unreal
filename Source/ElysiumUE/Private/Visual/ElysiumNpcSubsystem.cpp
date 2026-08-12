@@ -7,9 +7,6 @@
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
-#include "glTFRuntimeAsset.h"
-#include "glTFRuntimeParser.h"
-
 #include "Animation/AnimSequence.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
@@ -164,12 +161,12 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	IConsoleManager& CM = IConsoleManager::Get();
 
-	// elysium.npc.load [stem] [anim] -- load out/npc/<stem>.glb via glTFRuntime and spawn it in
-	// front of the player, playing <anim> (or the first animation). Defaults to the exported test
+	// elysium.npc.load [stem] [anim] -- stand the baked body for <stem> in front of the player,
+	// playing <anim> (or the default idle its disposition selects). Defaults to the exported test
 	// NPC. Scriptable echo of the Cog NPC window's Load button (F1-first: the window is primary).
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(
 		TEXT("elysium.npc.load"),
-		TEXT("elysium.npc.load [stem] [anim] -- load out/npc/<stem>.glb (mesh+skeleton+anim) via glTFRuntime and spawn it near the player (default: gangmember_male_2)"),
+		TEXT("elysium.npc.load [stem] [anim] -- stand the baked body for <stem> near the player (default: gangmember_male_2)"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
 			const FString Stem = Args.Num() > 0 ? Args[0] : TEXT("gangmember_male_2");
@@ -453,21 +450,21 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 
 	const double StartSeconds = FPlatformTime::Seconds();
 
-	// Load the mesh through the shared glTF path (ElysiumNpcVisual) -- the same loader the game NPC
-	// bodies (B3) use. The parsed asset comes back so this harness can still audition any clip.
-	UglTFRuntimeAsset* Asset = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, OutError);
+	// One body off the baked mount -- the same one the game NPC bodies stand.
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
 	if (Mesh == nullptr)
 	{
-		return nullptr;   // OutError set by LoadMesh
+		OutError = FString::Printf(
+			TEXT("'%s' is not on the baked mount -- run: uv run elysium export characters"), *Stem);
+		return nullptr;
 	}
 
 	// Animation. A named clip resolves through the manifest, so the harness reaches the whole
-	// resolved vocabulary (~1,540 clips per NPC) and not just the handful baked into this glb --
-	// which is the point: an NPC's own clips are mostly dialogue, and idle/locomotion/combat live
-	// in shared banks. With no name, the same default-idle policy the game uses picks one, so what
-	// the harness stands matches what a map stands. Failure leaves the mesh in its ref pose.
-	const TArray<FString> AnimNames = Asset->GetAnimationsNames(true);
+	// resolved vocabulary (~1,540 clips per NPC) and not just the handful the body's own model
+	// carries -- which is the point: an NPC's own clips are mostly dialogue, and idle/locomotion/
+	// combat live in shared banks. With no name, the same default-idle policy the game uses picks
+	// one, so what the harness stands matches what a map stands. Failure leaves the mesh in its
+	// ref pose.
 	UAnimSequence* Anim = nullptr;
 	FString AppliedAnim;
 	UElysiumAnimSubsystem* Anims = GetGameInstance()
@@ -489,15 +486,7 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		FString AnimError;
 		if (Anims != nullptr)
 		{
-			Anim = Anims->ResolveClip(Stem, Want, Mesh, Asset, AnimError);
-		}
-		if (Anim == nullptr)
-		{
-			// No manifest (NPC export not run) -- fall back to this glb's own clips. Still through the
-			// grid resolver: without an index it answers the label unchanged, but a stem that does
-			// carry a sidecar must not play the base cell just because the vocabulary lookup missed.
-			const FString AnimName = Anims != nullptr ? Anims->ResolveGridClip(Stem, Want) : Want;
-			Anim = ElysiumNpcVisual::RetargetClip(Asset, Mesh, AnimName, AnimError);
+			Anim = Anims->ResolveClip(Stem, Want, Mesh, AnimError);
 		}
 		if (Anim != nullptr)
 		{
@@ -505,15 +494,9 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		}
 		else
 		{
-			UE_LOG(LogElysiumNpc, Warning, TEXT("npc.load: clip '%s' on %s: %s (own glb has: %s)"),
-				*Want, *Stem, *AnimError, *FString::Join(AnimNames, TEXT(", ")));
+			UE_LOG(LogElysiumNpc, Warning, TEXT("npc.load: clip '%s' on %s: %s"),
+				*Want, *Stem, *AnimError);
 		}
-	}
-	else if (Asset->GetNumAnimations() > 0)
-	{
-		FglTFRuntimeSkeletalAnimationConfig AnimConfig;
-		Anim = Asset->LoadSkeletalAnimation(Mesh, 0, AnimConfig);
-		AppliedAnim = AnimNames.Num() > 0 ? AnimNames[0] : TEXT("anim0");
 	}
 
 	// Spawn a plain actor with a skeletal-mesh component root, in front of the player.
@@ -563,16 +546,31 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 
 	PruneDead();
 
+	// The clips this body OWNS, off the resolved vocabulary rather than off a parsed glb: same set
+	// the model's own file used to answer with -- its dialogue -- and the only one whose names are
+	// short enough to be a row of buttons. Everything else it can play belongs to a shared bank.
+	TArray<FString> OwnClips;
+	if (const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Stem) : nullptr)
+	{
+		for (const TPair<FString, FElysiumNpcClip>& Entry : Set->Clips)
+		{
+			if (Entry.Value.IsOwnedBy(Stem))
+			{
+				OwnClips.Add(Entry.Key);
+			}
+		}
+		OwnClips.Sort([](const FString& A, const FString& B) { return A < B; });
+	}
+
 	FElysiumLoadedNpc Record;
 	Record.Actor = Actor;
-	Record.Asset = Asset;
 	Record.Mesh = Mesh;
 	Record.Anim = Anim;
 	Record.Stem = Stem;
 	Record.AnimName = AppliedAnim;
 	Record.NumBones = Mesh->GetRefSkeleton().GetNum();
-	Record.NumAnims = Asset->GetNumAnimations();
-	Record.AnimNames = AnimNames;
+	Record.NumAnims = OwnClips.Num();
+	Record.AnimNames = OwnClips;
 	Record.Location = Location;
 	Record.LoadMilliseconds = LoadMs;
 	Loaded.Add(Record);
@@ -607,9 +605,9 @@ bool UElysiumNpcSubsystem::PlayClipOn(int32 Index, const FString& ClipName, FStr
 	UAnimSequence* Anim = nullptr;
 	if (Anims != nullptr)
 	{
-		// Resolves the owning glb through the manifest — the NPC's own for a dialogue clip, a
-		// shared bank otherwise, with the bank parsed once per session.
-		Anim = Anims->ResolveClip(Record.Stem, ClipName, Record.Mesh, Record.Asset, OutError);
+		// Resolves the owning stem through the manifest — the NPC's own for a dialogue clip, a
+		// shared bank otherwise — and loads that owner's baked sequence off the mount.
+		Anim = Anims->ResolveClip(Record.Stem, ClipName, Record.Mesh, OutError);
 	}
 	if (Anim == nullptr)
 	{

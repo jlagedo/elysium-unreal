@@ -27,7 +27,9 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 
+#include "ChaosClothAsset/ClothComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "Misc/Paths.h"
 
 #include <type_traits>
@@ -522,6 +524,35 @@ void FElysiumAnimating::GateVisual()
 		const bool bShown = !IsInert();
 		Visual->SetVisibility(bShown);
 		Visual->SetComponentTickEnabled(bShown);   // pause the idle clip while hidden
+
+		// A generated garment is a separate full-surface renderer: for Sheriff it redraws both
+		// sheriffbody2 and sheriffhead while substituting only the simulated vertices. Component
+		// visibility does not inherit from its attach parent, so gating only Visual leaves a complete
+		// hidden character on screen. Gate only cloth components led by this body; propagating to every
+		// child would incorrectly turn independently controlled particles back on at ScriptUnhide.
+		TArray<USceneComponent*> Children;
+		Visual->GetChildrenComponents(/*bIncludeAllDescendants=*/false, Children);
+		for (USceneComponent* Child : Children)
+		{
+			UChaosClothComponent* Garment = Cast<UChaosClothComponent>(Child);
+			if (!Garment || Garment->LeaderPoseComponent.Get() != Visual)
+			{
+				continue;
+			}
+
+			// HiddenInGame is distinct from bVisible: UChaosClothComponent::UpdateVisibility may
+			// restore bVisible after an asset update, but it does not override this gameplay gate.
+			Garment->SetHiddenInGame(!bShown);
+			if (bShown)
+			{
+				Garment->ForceNextUpdateTeleportAndReset();
+				Garment->ResumeSimulation();
+			}
+			else
+			{
+				Garment->SuspendSimulation();
+			}
+		}
 	}
 }
 
@@ -1419,6 +1450,17 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 		if (!FeedState.IsPaired())
 		{
 			FeedState = FElysiumFeedState();
+		}
+		else if (!FeedState.bVictim)
+		{
+			// The player record owns the feeder half, while the map snapshot owns its victim. Preserve
+			// the absolute phase/pulse deadlines and re-arm the player think at their earlier boundary;
+			// otherwise a correctly restored pair can remain inert behind ELYSIUM_NEVER_THINK.
+			NextThink = FeedState.PhaseDeadline;
+			if (FeedState.IsTransacting())
+			{
+				NextThink = FMath::Min(NextThink, FeedState.NextPulse);
+			}
 		}
 	}
 	// The names crossed the boundary; their resolution did not — the rulebook is re-read at load,

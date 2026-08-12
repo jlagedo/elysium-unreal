@@ -6,6 +6,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSkeletalBasis.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "HAL/FileManager.h"
@@ -333,7 +334,7 @@ bool FElysiumCameraDirector::ResolveAnchor(FElysiumEntityWorld* World, const FEl
 	const bool bRotateOffset = Anchor.Attach == EElysiumShotAttach::Follow
 		|| Anchor.Attach == EElysiumShotAttach::FollowEntAngles;
 	OutPoint = bRotateOffset
-		? Base + FRotator(0.0f, -Entity->Angles.Y, 0.0f).RotateVector(Anchor.OffsetOrigin)
+		? Base + ElysiumSkeletalBasis::FromSourceAngles(Entity->Angles).RotateVector(Anchor.OffsetOrigin)
 		: Base + Anchor.OffsetOrigin;
 	return true;
 }

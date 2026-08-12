@@ -23,8 +23,8 @@
 // One `StudioEyeball`, as `npc/eyes/<stem>.json` states it.
 //
 // Two coordinate regimes meet here and mixing them is the classic way to get a plausible-but-wrong
-// eye. `Org`/`Up`/`Forward` are geometry: written in the glb's own basis and metres, and carried
-// onto the loaded skeleton by `ApplyAssetImport` exactly as the procedural rule table is.
+// eye. `Org`/`Up`/`Forward` are geometry: Unreal-native in the sidecar, written by the same
+// conversion the body's own bones are, so they line up with the loaded skeleton verbatim.
 // `Radius`, `ZOffset` and the lid targets are **eyeball units** (the model's own inches) and stay
 // that way: the lid math is `asin(target / radius)`, a ratio, so converting one without the other
 // silently changes the lid shape. `IrisScale` is neither — it becomes an inverse length, and
@@ -41,7 +41,7 @@ struct FElysiumEyeball
 	// The `.mdl`'s own index. Diagnostics only, for the same reason the composition rig keeps one.
 	int32 BoneIndex = INDEX_NONE;
 
-	// Bone-local. Metres in the sidecar, centimetres after `ApplyAssetImport`.
+	// Bone-local, in centimetres.
 	FVector Org = FVector::ZeroVector;
 	// Bone-local unit vectors: the authored resting basis.
 	FVector Up = FVector::ZeroVector;
@@ -88,17 +88,16 @@ struct FElysiumEyeSet
 	// Every shipped character carries two. A model with none simply has no eyes to draw.
 	bool IsValid() const { return !Eyeballs.IsEmpty(); }
 
-	// Read `npc/<RelPath>` — `npc_index.json`'s own `eyes` value — and carry the geometry onto the
-	// skeleton through the glb's import transform. This is the door the runtime uses.
+	// Read `npc/<RelPath>` — `npc_index.json`'s own `eyes` value. The sidecar is Unreal-native, so
+	// the geometry lines up with the loaded skeleton with nothing applied to it. This is the door
+	// the runtime uses.
 	bool Load(const FString& RelPath, FString& OutError);
-	// Parse the same JSON **verbatim**, in the glb's own space and metres. Split out so a test can
-	// see what the file says before and after the import.
+	// Parse the same JSON from a string rather than from the export root, so a test can state a
+	// record inline. Same result; `Load` is the door.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
-	// Convert the geometry from the glb's basis/metres into the loaded skeleton's space, in place.
-	void ApplyAssetImport();
 
 	const FElysiumEyeball* Find(int32 Index) const;
-	// The eye a glTF material name draws, or null. The join the slot lookup uses.
+	// The eye a material name draws, or null. The join the slot lookup uses.
 	const FElysiumEyeball* FindByMaterial(const FString& MaterialName) const;
 };
 

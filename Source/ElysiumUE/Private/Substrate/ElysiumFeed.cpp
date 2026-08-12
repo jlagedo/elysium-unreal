@@ -150,7 +150,8 @@ bool FElysiumCombatCharacter::ResistsFeeding() const
 	// states exactly this predicate's negative, so it is the one authored input honoured here.
 	// Everything else resists and goes to the opposed check.
 	const FElysiumSheetEffects* Layer = SheetEffects();
-	return !(Layer && Layer->Flag(TEXT("Fx_No_Resist_Feeding")) > 0);
+	return ElysiumFeed::ResistsByAuthoredPolicy(
+		/*bFastFood*/ false, Layer && Layer->Flag(TEXT("Fx_No_Resist_Feeding")) > 0);
 }
 
 EElysiumFeedVerdict FElysiumCombatCharacter::EvaluateFeedAcceptance(FElysiumCombatCharacter& Victim)
@@ -567,14 +568,12 @@ void FElysiumCombatCharacter::ScheduleFeedThink(double Now)
 
 bool FElysiumCombatCharacter::ShouldReleaseFeed() const
 {
-	// OPEN — retail's exact transition predicate out of the feed loop is not recovered, and neither
-	// is the player-controlled early-cancel gesture: `-feed` publishes a release edge but its
-	// publisher does not call `FeedInterrupt` (`feeding.md` § "Command and initial request"). What
-	// IS recovered is the continuation latch at +0x14a8 and the fact that the ordinary state family
-	// ends in a release. The reconstruction: a cleared latch, or a victim with nothing left to take,
-	// selects the release family — and teardown still arrives through event 4006, never from the
-	// button. Evaluated every update rather than at a loop boundary, so a drained victim is released
-	// at once instead of being drained past empty for the rest of a cycle.
+	// The gameplay cancel gesture is a second Feed press. It clears the recovered continuation latch
+	// at +0x14a8; button-up is inert and does not call `FeedInterrupt` (`feeding.md` § "Command and
+	// initial request"). A cleared latch, or a victim with nothing left to take, selects the release
+	// family, and teardown still arrives through event 4006 rather than directly from input. This is
+	// evaluated every update so a drained victim releases at once instead of being drained past empty
+	// for the rest of a cycle.
 	if (!FeedState.bContinuation)
 	{
 		return true;

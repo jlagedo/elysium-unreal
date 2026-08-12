@@ -521,6 +521,13 @@ save-backed through the leaf `Serialize` (K8). K4 holds: this table is combat ta
   `WAIT_FOR_MOVEMENT`, `FACE_ENEMY`, `SET_SCHEDULE`, …) implemented against the motor and
   activity seams.
 
+The first kernel stage is intentionally narrower than that final vocabulary. Spawn builds the
+sheet, presentation and motor; Activate arms admission; the first frozen-time think admits one
+`Idle` state without selecting an activity, schedule, controller or movement goal. `Idle`,
+`Scripted` and `Dead` are live state transitions. `Alert`, `Combat` and `Prone` remain named,
+diagnostic refusals until their recovered producers land. This preserves the complete state surface
+without filling the unknown first schedule or first-render activity with an invented choice.
+
 **Owner call — the kernel is substrate C++, not Behavior Trees/StateTree.** Schedule identity
 is script-visible API (`ChangeSchedule`/`StartSchedule` name native schedules;
 `SCHED_VDOG_SNARL` appears in shipped scripts), interrupts and task progress must serialize
@@ -539,18 +546,30 @@ serializes. `aiscripted_schedule` lands here with the recovered mode table (move
 assign-enemy-with-condition / follow-path) and the **non-identical** `forcestate` mapping
 (authored 2 = combat, 3 = alert).
 
+The arbiter issues generation-checked transient tokens. Patrol is resumable, ambient owns only a
+successfully claimed place, sequence explicitly parks an autonomous owner, and dialogue releases
+ambient, cancels sequence, parks patrol and stops its current request without freezing, turning or
+placing either participant. Normal dialogue close releases the token before queued `EndDialog`;
+silent replacement additionally clears the displaced NPC latch without firing `OnDialogEnd`.
+`Schedule`, `ScriptedSchedule` and `Follower` remain rejected diagnostics until their domain
+implementations arrive.
+
 **5.5.6 Reactions, feeding, and the authored consequences.** The state machine's transitions
 fire the 16 base NPC outputs from their real producers (kind 2): sense contact →
 `OnFoundPlayer`/`OnFoundEnemy`/`OnHear*`; memory loss → the four `OnLost*`; §5.3's commit →
 `OnDamaged`/`OnHalfHealth`/`OnDeath`; the feed interaction → `OnFedUponBegin`/`OnFedUponEnd`
 plus grapple begin/end. Feeding lives in `Substrate/ElysiumFeed.{h,cpp}` on the combat character: the dedicated
-`feed` button-pair verb, the recovered acceptance order (automatic states → `ResistsFeeding`
+`feed` button-pair transport drives a toggle action (first press acquires, release is inert, second
+press requests the paired release family), the recovered acceptance order (automatic states → `ResistsFeeding`
 → Brawl rating vs Hacking roll net at difficulty 6 → a declared stealth-override seam), a
 minimal pairing over the freeze seams, the accelerating `0.30 + (B+1)·0.15` pulse cadence at
 the recovered field set (Save-flagged, schema-versioned), and one idempotent teardown. The
 engage/bite/loop/release machine raises the 4007/4006/5116 boundaries itself from the decoded
 clip cycles through `OnFeedAnimEvent` — the seam a real notify path replaces by calling it,
-once the bake carries authored animation events. Seductive/rat/zombie modes, presentation,
+once the bake carries authored animation events. NPC `General.FastFood` resolves through the
+inherited stat template into `ResistsFeeding == false`; it is not a tutorial special case. An
+in-progress ordinary pair is saveable through the player record plus victim map snapshot.
+Seductive/rat/zombie modes, presentation,
 and the open retail questions are marked seams in that file. Fear/flee/cower arrive as
 schedule families, not as a hardcoded "run away".
 
@@ -562,8 +581,10 @@ already exists) — and the native row drops its stub mark. The RPG reaction sco
 dialogue, never by combat targeting.
 
 **Save:** spec is def-derived (not saved); relationships, memory, state, current
-schedule/task/timers, and the body owner serialize on the leaf; the tutorial runs before the
-full mind exists, so every stage lands save-clean as it arrives.
+schedule/task/timers, and resumable body intent serialize on the leaf. Capability generations,
+dialogue cursors and other session tokens never serialize because their sessions block saving.
+`None`, `Patrol` and `Ambient` restore by revalidating their authored route or place; unsupported or
+stale intent falls back to `None` diagnostically.
 
 **Refactor:** `FElysiumNpc` (`Substrate/ElysiumNpcClasses.cpp`) grows the spec, relationship
 table, senses, and mind members stage by stage; the `SetRelationship` and

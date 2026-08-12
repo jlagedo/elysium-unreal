@@ -36,6 +36,7 @@ struct FElysiumSaveVersion
 		EventClock    = 11,  // the event queue's backward-clock guard state
 		WireIdentity  = 12,  // the authored output row a pending queue record came from
 		NpcMaker      = 13,  // maker ownership and once-only child termination notification
+		NpcMind       = 14,  // resumable NPC state/body intent; session capabilities remain transient
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

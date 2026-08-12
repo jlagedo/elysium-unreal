@@ -18,9 +18,9 @@ object graph, ownership rationale — belongs to `docs/architecture/runtime-arch
 UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
 
 - **Plugins:** `ProceduralMeshComponent`; `PythonScriptPlugin` (offline scaffolding only); `Cog`
-  (vendored MIT debug-UI shell, `Plugins/External/Cog/`, stripped from Shipping via `ENABLE_COG`);
-  `glTFRuntime` (vendored MIT, the character bake's `.glb` reader — it runs inside the bake
-  commandlet and inside the v4 animated-prop loader, never to build a character at runtime).
+  (vendored MIT debug-UI shell, `Plugins/External/Cog/`, stripped from Shipping via `ENABLE_COG`).
+  Cog is the only vendored plugin; every skeletal asset is constructed from the `.eskm` container
+  by `UElysiumSkeletalBuildLibrary`, so nothing third-party reads a model.
 - **Third party:** vendored `dr_wav`/`dr_mp3`; CPython 2.7.18 SDK under `ThirdParty/CPython27/`
   (**fetched, not committed** — `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
   Win64 only).
@@ -322,16 +322,11 @@ Hard-won, non-obvious, and easy to undo:
   prerequisites to `AElysiumMapActor::PrimaryActorTick` closes a cycle and floods `LogTick`.
 - **`ApplyMaterialOverrides` is lazy** — a runtime `SetMaterial` drops the primitive's built
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
-- **glTFRuntime's morph-target vertex base is a local patch, and losing it fails silently.**
-  `FMorphTargetDelta::SourceIdx` addresses the LOD's vertex buffer;
-  `FinalizeSkeletalMeshWithLODs` upstream advances its per-primitive base by `Indices.Num()`
-  instead of `Positions.Num()`, so on a multi-primitive mesh every primitive after the first
-  writes its deltas at out-of-range vertices and the GPU discards them. Nothing reports an
-  error — weights animate, curves arrive, delta magnitudes read correct, and the mesh never
-  moves. The fix lives in `dev/dependencies/patches/gltfruntime-skeletal-multiroot.patch` and is
-  pinned by `post_patch_tree` in `dev/dependencies.lock.json`; `Plugins/External/` is gitignored,
-  so editing the vendored tree directly is lost on the next `deps sync`. Change the patch, not the
-  checkout, and re-pin the tree hash. `Elysium.Content.FacialMorphTargets` guards the contract.
+- **A morph target only drives when its curve is flagged on the skeleton.**
+  `USkeletalMeshComponent::ActiveMorphTargets` is populated from the bone container's flags, and
+  those come from `FCurveMetaData::Type.bMorphtarget` — so a curve registered without the flag
+  evaluates to the right weight on a face that cannot receive it. `RegisterMorphTargetCurves` sets
+  both halves; `Elysium.Content.FacialMorphTargets` guards the contract.
 - **`GetImportedModel()->LODModels` must grow in parallel with `AddLODInfo()`.** A skeletal mesh's
   LOD is two parallel arrays and both entries have to exist, but nothing reads the imported model
   while the mesh is being built — so a bake that adds only the LOD info runs clean and saves, and
@@ -343,9 +338,18 @@ Hard-won, non-obvious, and easy to undo:
   runtime curve-metadata write crashes on a null dereference in `-game` while working fine in the
   editor. Pass `bTransact = false` from any runtime path.
 - **A proxy owning nodes outside the compiled graph must implement `UpdateAnimationNode`** —
-  `FElysiumBipedAnimProxy`'s clip player and its two layer players are not in the graph, so the base
-  call cannot reach them, and a sequence player never `Update_AnyThread`'d holds its start frame
-  forever.
+  `FElysiumBipedAnimProxy`'s cinematic clip player is not in the graph, so the base call cannot
+  reach it, and a sequence player never `Update_AnyThread`'d holds its start frame forever.
+- **A layered blend's bone mask is not a pin.** `FAnimNode_LayeredBoneBlend::BlendMasks` is
+  edit-time state, so a mask that changes per selection cannot be driven by a graph pin the way
+  every other asset on `ABP_ElysiumBiped` is. It is written at runtime instead — the node is found
+  by `FAnimSubsystem_Tag` under `ElysiumAnimGraph::UpperBodyLayerTag` and set through
+  `SetBlendMask`, which is what Epic's own `ULayeredBoneBlendLibrary` does. Two consequences:
+  a **null** mask is legal only because the graph is a *template* Animation Blueprint
+  (`ValidateAnimNodeDuringCompilation` exempts one), which is what keeps a generated profile asset
+  out of the tracked graph text; and the mask must be resolved by NAME against the **playing**
+  skeleton, because the profile a bank's own skeleton hands back gates a shifted set of bones and
+  logs nothing.
 - **A `UBlendProfile`'s mode has to be set before its bone scales.** An entry equal to the mode's own
   default is not stored, and that default is 0 for `EBlendProfileMode::BlendMask` against 1 for every
   other mode. A profile still in its constructed `WeightFactor` mode therefore discards every 1.0

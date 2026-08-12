@@ -153,6 +153,33 @@ struct FElysiumContentPaths
 		return TEXT("/Game/Elysium/Animation/ABP_ElysiumBiped.ABP_ElysiumBiped_C");
 	}
 
+	// --- Baked animated props (pipeline/unreal/bake_characters.py) -------------------------------
+	// Apart from the cast, because a prop owns its own skeleton rather than joining a rig family:
+	// a crane, a wolf and a wineglass share no bone tree with each other or with a biped. So there
+	// is no family segment in any of these paths — a prop's stem is the whole address.
+	static FString BakedPropDir() { return BakedMount() / TEXT("Props"); }
+	static FString BakedPropPackage(const FString& Stem) { return BakedPropDir() / Stem; }
+	static FString BakedPropSkeleton(const FString& Stem)
+	{
+		const FString Asset = TEXT("SKEL_") + Stem;
+		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
+	}
+	static FString BakedPropSkeletalMesh(const FString& Stem)
+	{
+		const FString Asset = TEXT("SK_") + Stem;
+		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
+	}
+	static FString BakedPropAnim(const FString& Stem, const FString& Clip)
+	{
+		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
+		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
+	}
+	static FString BakedPropBlendSpace(const FString& Stem, const FString& Label)
+	{
+		const FString Asset = TEXT("BS_") + BakedAssetName(Label);
+		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
+	}
+
 	static FString BakedCharacterDir() { return BakedMount() / TEXT("Characters"); }
 	static FString BakedCharacterSkeletonPrefix() { return TEXT("SKEL_Elysium_"); }
 	static FString BakedCharacterSkeleton(const FString& Family)
@@ -400,7 +427,6 @@ struct FElysiumContentPaths
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
 	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
-	static FString AnimatedPropGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
 
 	// The facial flex rig beside a rigged NPC's glb (12.3, PL10): the FACS flexdesc names, the 44
 	// flex controllers, the 60 RPN flex rules, the amplitude jaw and the per-morph target ramps,

@@ -121,6 +121,64 @@ def _conv_quat(q):
     return bsp.source_quat_to_unreal(q[0], q[1], q[2], q[3])
 
 
+#: The three Source axes a procedural rule's terms are indexed by, carried into Unreal space by
+#: the same basis change the skeleton and the clips go through. `+ 0.0` normalizes `-0.0` away so
+#: the exported vectors read as the signed unit vectors they are.
+DRIVER_AXES = [[c + 0.0 for c in _conv_dir(a)] for a in S.SOURCE_AXES]
+
+
+def unreal_axis_rules(records):
+    """`mdl_skel.axis_interp_records` stated Unreal-native -> the `procedural/` sidecar's rows.
+
+    The basis is the difficulty. The six entries and the axis index are Source quantities, and
+    a change of basis conjugates a bone local -- so the axis a rule names is not the same axis
+    afterwards, and may be negated. Carrying the axis as a *direction* and the three term
+    weights as the images of the Source axes states the rule in the body's own space: with `w`
+    the control bone's local rotation applied to `axis`, term `k`'s signed weight is
+    `dot(DRIVER_AXES[k], w)`, a positive weight selecting entry `2k` and a negative one `2k+1`.
+
+    The entries go through the same `_conv_pos`/`_conv_quat` that write the skeleton and the
+    clips, which makes the table and the container consistent by construction rather than by
+    agreement -- and leaves the runtime nothing to convert.
+    """
+    return [{
+        "bone": r["bone"], "bone_index": r["bone_index"],
+        "control": r["control"], "control_index": r["control_index"],
+        "axis": list(DRIVER_AXES[r["axis_index"]]),
+        "pos": [[float(c) for c in _conv_pos(p)] for p in r["pos"]],
+        # Exact rather than through the rotation matrix: `source_quat_to_unreal` is a component
+        # negation, so it keeps which of the two quaternions naming the rotation comes back and
+        # enough precision to invert to the float32 the value was read from. A stored table is
+        # read back and re-evaluated rather than only drawn, so both matter to it.
+        "quat": [[float(c) for c in _conv_quat(q)] for q in r["quat"]],
+    } for r in records]
+
+
+def unreal_eye_rig(rig):
+    """`mdl_skel.eye_records` stated Unreal-native -> the `eyes/` sidecar's payload.
+
+    `org` is a point and `up`/`forward` are directions, so they take the position and direction
+    conversions respectively. Everything else the record carries is a magnitude, a ratio or a
+    name and is already frame-free; `uppertarget` in particular is a linear offset read through
+    `asin(t / radius)` against a radius in the same units, so converting it alone would break
+    the ratio.
+
+    Returns a new payload; the records it was given are left alone, so a caller that reports on
+    them afterwards still sees what the file said.
+    """
+    if not rig:
+        return rig
+    return {
+        **rig,
+        "eyeballs": [{
+            **e,
+            "org": [float(c) for c in _conv_pos(e["org"])],
+            "up": [float(c) for c in _conv_dir(e["up"])],
+            "forward": [float(c) for c in _conv_dir(e["forward"])],
+        } for e in rig["eyeballs"]],
+    }
+
+
 def _qmul(a, b):
     """Hamilton product, matching `FUN_1010a450` and Unreal's `FQuat::operator*` convention."""
     ax, ay, az, aw = a
@@ -449,11 +507,17 @@ def _bone_mask(d, bones, clip, bone_map, emitted):
     records = clip.base + struct.unpack_from("<i", d, clip.base + 48)[0]
     mask = bytearray(emitted)
     owned = 0
+    present = 0
     for bone in bones:
+        if bone_map[bone.index] < 0:
+            # Outside this container's emitted set -- one actor's slice of a cinematic model's
+            # co-located skeletons. It has no row to gate.
+            continue
+        present += 1
         if struct.unpack_from("<f", d, records + bone.index * 32)[0] != 0.0:
             mask[bone_map[bone.index]] = 1
             owned += 1
-    return None if owned == len(bones) else bytes(mask)
+    return None if owned == present else bytes(mask)
 
 
 def _owned_bones(d, bones, clip):
@@ -586,6 +650,11 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     tracks = bytearray()
     count = 0
     for bone in bones:
+        if bone_map[bone.index] < 0:
+            # Not emitted by this container. A cinematic model packs several actors' skeletons
+            # into one file and each is written as its own bank, so the clip is decoded against
+            # the whole bone list and written against one actor's slice of it.
+            continue
         has_translation, has_rotation = channels[bone.index]
         rotations = split_rotations.get(bone.index)
         has_rotation = has_rotation or rotations is not None
@@ -668,8 +737,8 @@ def _cell_names(clips):
     part company at a grid's base cell, the one animation a grid sequence declares under its own
     label -- a 3x3 aim grid's base cell is the animation `x_aim_UR` standing under the sequence
     label `x_aim_layer`. The blend sidecar resolves every cell through this same table
-    (`mdl_gltf._blend_grids`), so a composed cell named any other way is a sample the blend space
-    asks for under a name nothing was ever written under, and the grid loses that corner.
+    (`mdl_skel.blend_clip_plan`), so a composed cell named any other way is a sample the blend
+    space asks for under a name nothing was ever written under, and the grid loses that corner.
     """
     names = {}
     for clip in clips:
@@ -845,9 +914,8 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None):
     morph_payload, morph_names = (_morph_section(d, mesh_map, matnames, offsets, anorms)
                                   if anorms and S.flex_descs(d) else (b"", []))
 
-    from elysium_pipeline.formats.mdl_gltf import blend_clip_plan
     own = S.local_sequences(d)
-    extra, _blends = blend_clip_plan(d, own)
+    extra, _blends = S.blend_clip_plan(d, own)
     masks = {}
     anim_payload, clip_count = _anim_section(d, bones, own + extra, bone_map, len(rows), masks)
 
@@ -877,7 +945,6 @@ def write_bank(idx, model_path, out_dir, stem):
     """Write `<out_dir>/banks/<stem>.eskm` -- skeleton + clips, no geometry. Returns None for
     an aggregator model that defines no animated clip."""
     from elysium_pipeline.formats import install
-    from elysium_pipeline.formats.mdl_gltf import blend_clip_plan
 
     key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
     d = install.read(idx, key + ".mdl")
@@ -887,7 +954,7 @@ def write_bank(idx, model_path, out_dir, stem):
     if not clips:
         return None
     bones = S.read_bones(d)
-    extra, _blends = blend_clip_plan(d, clips)
+    extra, _blends = S.blend_clip_plan(d, clips)
     rows, bone_map = unreal_bones(bones)
     masks = {}
     anim_payload, count = _anim_section(d, bones, clips + extra, bone_map, len(rows), masks)
@@ -905,3 +972,94 @@ def write_bank(idx, model_path, out_dir, stem):
           f"-> {path} ({os.path.getsize(path) // 1024} KB)")
     return dict(stem=stem, eskm="banks/" + os.path.basename(path), model=model_path,
                 bones=len(bones), clips=count)
+
+
+def _cinematic_rows(sub, root):
+    """One actor's bones as (rows, {StudioBone index: emitted index}), prefix folded to `Bip01`.
+
+    Folded for the reason the glb half folds: a scene's `bonerename "BipNN" "Bip01"` is how an
+    actor picks its own skeleton out of the shared performance, so writing the bank under the
+    ordinary names is what lets the existing bone-name binding apply it to an ordinary body with
+    no runtime rule of its own.
+
+    Parents are remapped into the subset. A subset normally has exactly one bone whose parent
+    lies outside it -- that actor's own root -- and takes the same synthetic root as any other
+    multi-rooted rig when it does not (`unreal_bones`).
+    """
+    low = root.lower()
+    order = {b.index: slot for slot, b in enumerate(sub)}
+    rows = [((("Bip01" + b.name[len(root):]) if b.name[:len(root)].lower() == low else b.name),
+             order.get(b.parent, -1), b.pos, b.quat)
+            for b in sub]
+    if sum(1 for row in rows if row[1] == -1) <= 1:
+        return rows, order
+    shifted = [(SYNTHETIC_ROOT, -1, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    shifted += [(name, 0 if parent == -1 else parent + 1, pos, quat)
+                for name, parent, pos, quat in rows]
+    return shifted, {index: slot + 1 for index, slot in order.items()}
+
+
+def write_cinematic(idx, model_path, out_dir, stem):
+    """Write one bank per bone root of a cinematic `.mdl` -> `<out_dir>/banks/<stem>__<root>.eskm`.
+
+    The `.eskm` twin of `mdl_gltf.export_cinematic`, and it exists for the same reason the rest of
+    this module does: the mount is the only build of a character, so a clip a scene can name has
+    to be here or the runtime resolves it through the glb bank instead -- which lands in
+    glTFRuntime's own basis rather than this file's, a quarter turn away
+    (`Elysium.Content.BakedClipCoverage`).
+
+    A cinematic model is a whole multi-actor performance in one file: N co-located skeletons
+    (`Bip01`..`BipNN`) sharing one clip, usually `entire_scene`. Every clip is decoded once
+    against the FULL bone list, because the animation records are indexed by the model's own bone
+    order, and each actor's bank is written through a bone map that emits only that actor's slice.
+
+    Returns a list of bank dicts (as `write_bank`), each with an extra `root` key, or None.
+    """
+    from elysium_pipeline.formats import install
+
+    key = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
+    d = install.read(idx, key + ".mdl")
+    if not d:
+        return None
+    clips = S.local_sequences(d)
+    if not clips:
+        return None
+    bones = S.read_bones(d)
+    roots = S.cinematic_roots(bones)
+    if len(roots) <= 1:
+        # A single-root performance is an ordinary bank, written unsuffixed like any other.
+        one = write_bank(idx, model_path, out_dir, stem)
+        if one:
+            one["root"] = roots[0] if roots else None
+        return [one] if one else None
+
+    extra, _blends = S.blend_clip_plan(d, clips)
+    all_clips = clips + extra
+    banks_dir = os.path.join(out_dir, "banks")
+    os.makedirs(banks_dir, exist_ok=True)
+
+    out = []
+    for root in roots:
+        low = root.lower()
+        sub = [b for b in bones if (S._bone_root(b.name) or "").lower() == low]
+        if not sub:
+            continue
+        rows, order = _cinematic_rows(sub, root)
+        bone_map = [-1] * len(bones)
+        for index, slot in order.items():
+            bone_map[index] = slot
+        masks = {}
+        anim_payload, count = _anim_section(d, bones, all_clips, bone_map, len(rows), masks)
+        if not count:
+            continue
+        name = f"{stem}__{low}"
+        path = os.path.join(banks_dir, name + ".eskm")
+        with open(path, "wb") as fh:
+            fh.write(_assemble([(b"SKEL", _skel_section(rows)),
+                                (b"MASK", _mask_section(masks, len(rows))),
+                                (b"ANIM", anim_payload)]))
+        print(f"  eskm cinematic {name}: {len(sub)} bones, {count} clips, {len(masks)} bone "
+              f"mask(s) -> {path} ({os.path.getsize(path) // 1024} KB)")
+        out.append(dict(stem=name, eskm="banks/" + os.path.basename(path), model=model_path,
+                        bones=len(rows), clips=count, root=root))
+    return out or None

@@ -299,6 +299,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				FElysiumAnimatedPropEntry Entry;
 				Entry.Stem = Pair.Key;
 				(*Obj)->TryGetStringField(TEXT("glb"), Entry.Glb);
+				(*Obj)->TryGetStringField(TEXT("eskm"), Entry.Eskm);
 				(*Obj)->TryGetStringField(TEXT("model"), Entry.Model);
 				(*Obj)->TryGetNumberField(TEXT("bones"), Entry.Bones);
 				ReadStringArray(*Obj, TEXT("split_bones"), Entry.SplitRotationBones);

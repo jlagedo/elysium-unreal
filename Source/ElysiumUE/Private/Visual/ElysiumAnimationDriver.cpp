@@ -42,7 +42,7 @@ float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
 }
 
 void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
-	UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset,
+	UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh,
 	EElysiumOneShotState OneShot)
 {
 	// The pose parameter is a rate, and this is the one place per body per frame — a producer's
@@ -128,7 +128,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		return;
 	}
 
-	Anims->ResolveAnimation(Intent, Mesh, OwnAsset, Selection, Assets);
+	Anims->ResolveAnimation(Intent, Mesh, Selection, Assets);
 	// The resolver answers with the one cell it selected; the stride the body will actually travel
 	// at is the table's reading at this direction, which is the same number the mover commands.
 	Selection.GroundSpeedCmPerSecond = GaitSpeedForSelection(Intent.Body.MoveYaw());

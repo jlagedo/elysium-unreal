@@ -4,5 +4,6 @@ Look,,Look,Camera,Axis2D,False,,,Gamepad_Right2D
 MouseLook,,Mouse Look,Camera,Axis2D,False,Mouse2D,,
 Jump,+jump,Jump,Movement,Boolean,True,,,Gamepad_FaceButton_Bottom
 Use,+use,Use,Interaction,Boolean,True,,,Gamepad_RightShoulder
+Feed,+feed,Feed,Interaction,Boolean,True,,,Gamepad_FaceButton_Top
 Duck,+duck,Crouch,Movement,Boolean,True,,,Gamepad_LeftThumbstick
 Camera,togglecamera,Camera Mode,Camera,Boolean,False,,,Gamepad_RightThumbstick

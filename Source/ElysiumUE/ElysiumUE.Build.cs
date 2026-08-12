@@ -43,10 +43,6 @@ public class ElysiumUE : ModuleRules
 			// importer writes into. SkeletalMeshDescription carries FSkeletalMeshAttributes;
 			// AnimationCore carries the bone-weight types it stores.
 			"SkeletalMeshDescription", "AnimationCore",
-			// P8 NPCs: glTFRuntime loads USkeletalMesh + UAnimSequence from the .glb NPC exports
-			// (out/npc, standard glTF 2.0) at runtime -- no editor import. Vendored under
-			// Plugins/External/glTFRuntime; a runtime module, so it stays in every config.
-			"glTFRuntime",
 			// CAP7.2: VtMB's two composition stages are FAnimNode_SkeletalControlBase nodes, which
 			// live in AnimGraphRuntime. A runtime module -- the nodes are native and driven from
 			// FElysiumBodyAnimProxy's tail, so none of the editor AnimGraph stack is involved.

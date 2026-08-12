@@ -162,11 +162,10 @@ void FElysiumCharacterStage::SetBody(const FString& InStem)
 		return;
 	}
 
-	// The same world-free glTF loader the game's own NPC bodies go through, so what the screen
-	// stands is the body a map would stand.
-	UglTFRuntimeAsset* Asset = nullptr;
+	// The same mount the game's own NPC bodies come off, so what the screen stands is the body a
+	// map would stand.
 	FString Error;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error);
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Error);
 	if (Mesh == nullptr)
 	{
 		UE_LOG(LogElysiumCharStage, Warning, TEXT("no body for '%s': %s"), *Stem, *Error);
@@ -185,7 +184,7 @@ void FElysiumCharacterStage::SetBody(const FString& InStem)
 			if (!Clip.IsEmpty())
 			{
 				FString AnimError;
-				Anim = Anims->ResolveClip(Stem, Clip, Mesh, Asset, AnimError);
+				Anim = Anims->ResolveClip(Stem, Clip, Mesh, AnimError);
 			}
 		}
 	}

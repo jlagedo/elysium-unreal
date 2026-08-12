@@ -634,6 +634,13 @@ Jack's `sp_tutorial_1` definition selects `Jack`. The corresponding source shot 
 player/NPC placement. The pinned server opener does not write transforms and ignores the authored
 `Remote 256` argument; downstream client/body behavior remains behind RE46's hash-gated capture.
 
+The source-shot offset is expressed in the subject's authored character basis: a baked character's
+forward is component +X and Source yaw is reflected once into Unreal. The legacy-shot adapter and
+the character body therefore use the same `ElysiumSkeletalBasis::FromSourceAngles` conversion.
+For UP Jack at Source yaw 190, `[50, 0, 65]` lies 50 authored units along his rendered forward and
+65 units above his origin; no extra model yaw or camera-side facing correction is applied. This is
+a coordinate/basis fact and does not imply that retail turns Jack before the shot.
+
 The channel is a **handle-based** stack of shots-as-values (`FElysiumCameraShotStack`), not LIFO: a
 conversation ends behind a running cutscene, so a pop removes a shot from wherever it sits and the top
 re-resolves. Ids are never reused, so a stale or doubled pop is a no-op — the same discipline the input

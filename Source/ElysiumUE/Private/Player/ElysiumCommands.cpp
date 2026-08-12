@@ -142,7 +142,7 @@ namespace
 		{ TEXT("wpn_secondaryatk"), EK::ButtonPair, EG::Combat, EB::SecondaryAtk, TEXT("secondary attack mode -- 4.9") },
 		{ TEXT("reload"),       EK::ButtonPair, EG::Combat,   EB::Reload,       TEXT("reload -- 4.9") },
 		{ TEXT("use"),          EK::ButtonPair, EG::Combat,   EB::Use,          TEXT("world interaction -- captured after camera focus settles") },
-		{ TEXT("feed"),         EK::ButtonPair, EG::Combat,   EB::Feed,         TEXT("feeding -- the press acquires and attempts a victim; the release only clears the continuation latch") },
+		{ TEXT("feed"),         EK::ButtonPair, EG::Combat,   EB::Feed,         TEXT("feeding -- first press attempts a victim; button-up is inert; second press requests release") },
 		{ TEXT("slot1"),        EK::Once,       EG::Combat,   EB::None,         TEXT("disciplines category -- 9.8") },
 		{ TEXT("slot2"),        EK::Once,       EG::Combat,   EB::None,         TEXT("melee category -- 9.8") },
 		{ TEXT("slot3"),        EK::Once,       EG::Combat,   EB::None,         TEXT("ranged category -- 9.8") },

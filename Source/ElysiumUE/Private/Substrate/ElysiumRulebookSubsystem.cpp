@@ -107,6 +107,11 @@ const FElysiumDiceTables& UElysiumRulebookSubsystem::Dice()
 	return Get(DiceTables, bDiceLoaded, TEXT("dicerolls"), DiceError);
 }
 
+const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
+{
+	return Get(DispositionTable, bDispositionsLoaded, TEXT("dispositiontable"), DispositionsError);
+}
+
 const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
 {
 	const bool bWasLoaded = bItemsLoaded;
@@ -185,6 +190,9 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 
 	Out.Add({ TEXT("items"),        TEXT("items/*.txt"),
 		Items().Num(), Items().IsValid(), ItemsError });
+
+	Out.Add({ TEXT("dispositiontable"), TEXT("system/dispositiontable.txt"),
+		Dispositions().Rows.Num(), Dispositions().IsValid(), DispositionsError });
 }
 
 // ================================================================================================

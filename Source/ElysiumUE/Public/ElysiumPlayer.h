@@ -459,9 +459,11 @@ public:
 	FString ModelStem() const;
 
 protected:
-	// The disposition idle is spread across the three standing idles VtMB authors per disposition,
-	// seeded from the entity's own index so the pick survives a reload.
-	int32 IdleVariant() const { return FMath::Max(0, Handle.Index); }
+	// Which of the three standing idles a disposition's stance set poses. Virtual because only the
+	// NPC chain carries VtMB's stance machine — the `+0x98` self-pointer that reaches it is set in
+	// `CAI_BaseNPCTroika`'s constructor, so the player has none. The base answer spreads the pick by
+	// entity index, which keeps a crowd from posing identically and survives a reload.
+	virtual int32 IdleVariant() const { return FMath::Max(0, Handle.Index); }
 	void GateVisual();
 };
 
@@ -644,15 +646,11 @@ public:
 	// pair is still running (the caller then leaves the body alone).
 	bool TickFeed(double Now);
 
-	// `-feed`: the release edge clears the continuation latch and nothing else. Retail's release
-	// publisher does not call FeedInterrupt; teardown still comes out of the release family.
+	// The second Feed press clears the continuation latch. The physical button-up edge is inert;
+	// teardown still comes out of the paired release family rather than the input handler.
 	void SetFeedContinuation(bool bContinue) { FeedState.bContinuation = bContinue; }
 
 	bool IsFeedPaired() const { return FeedState.IsPaired(); }
-	virtual const TCHAR* SaveBlockReason() const override
-	{
-		return FeedState.IsPaired() ? TEXT("a paired feed action is active") : nullptr;
-	}
 
 	// Log-and-no-op body for the inputs whose system has not landed. Public because the registration
 	// thunks are free lambdas, not members. Named so the log line reads as a recorded gap.

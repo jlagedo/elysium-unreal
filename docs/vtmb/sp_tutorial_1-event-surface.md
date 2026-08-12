@@ -88,10 +88,15 @@ SHA-256 `c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f`, MD5
 `research/cases/tutorial-event-resolution/`; generated decompilation remains below
 `ELYSIUM_WORK_ROOT/research/ghidra/`.
 
+Retail/UP character comparison and the native construct/Spawn/Activate/`NPCInitThink` join are
+tracked separately in `research/cases/tutorial-npc-bootstrap/` (RE47). Its generated ledger remains
+below `ELYSIUM_WORK_ROOT/research/tutorial-npc-bootstrap.json`.
+
 Primary reproduction command:
 
 ```powershell
 uv run elysium research ent_survey --patch --map sp_tutorial_1
+uv run elysium research tutorial_npc_bootstrap --json E:\elysium-work\research\tutorial-npc-bootstrap.json
 ```
 
 The command reports the patch-first entity and I/O surface. The Python/dialogue closure in this
@@ -139,6 +144,96 @@ named by this map. Re-run that join whenever any input hash changes.
 | `math_counter` | 2 |
 | `npc_VRat` | 1 |
 | `logic_relay` | 1 |
+
+### 2.2 Retail, Unofficial Patch, and Plus character baselines
+
+RE47 compares the original game files with the installed Unofficial Patch 11.5 replacement before
+joining either map to native startup. This distinction is load-bearing: `Unofficial_Patch` replaces
+the BSP and level script, while Basic and Plus are two runtime profiles over that one replacement
+map. The installed `user.cfg` selects Plus with `alias patchtype "setPlus()"`; it is not a third BSP.
+
+| Variant input | Bytes | SHA-256 |
+|---|---:|---|
+| Retail `Vampire/maps/sp_tutorial_1.bsp` | 5,123,508 | `026cd8ee971c64c5d595e72285351782a402d83f2a4c9fcc3a0d9dd5a4477770` |
+| Retail `Vampire/python/tutorial/tutorial.py` | 19,570 | `e5f78fb50cbc0c592b5c875d7aecf56d2d5a902874d3a5ea8ae691df0e5676fe` |
+| UP `Unofficial_Patch/maps/sp_tutorial_1.bsp` | 19,034,426 | `6cc1b53d0dd9b4b511107b72a9a3fb35b6a7b16f6a7ae1067f5b540fb00ac16c` |
+| UP `Unofficial_Patch/python/tutorial/tutorial.py` | 21,972 | `22bb91612f80123864fd4353e4c022639af28b11ff71c43f4e155924e3ca6a01` |
+
+The retail BSP contains 1,226 entities, 13 direct `npc_*` characters, 13 `npc_maker` templates and
+one `logic_auto`. The UP BSP contains 1,868 entities, 20 direct characters, 14 maker templates and
+five autos. The thirteen retail direct characters are Jack, two thugs, five Sabbat redshirts, the
+Sheriff, three rats and `sabbat_redshirt_2_proxy`. UP retains that cohort, adds seven direct
+hunter/Society actors in its remote Society section, and adds `talkguy_maker`. The maker templates
+do **not** represent live children at map load: all fourteen UP makers start disabled, and their
+children are allocated only when an authored `Spawn` is later accepted.
+
+| Initial direct cohort | Original retail | UP replacement | Load-time state |
+|---|---:|---:|---|
+| Jack | 1 | 1 | Visible direct actor. |
+| `thug_2`, `thug_3` | 2 | 2 | `StartHidden=1`. |
+| `sabbat_redshirt_1` … `_5`, Sheriff | 6 | 6 | `StartHidden=1`. |
+| Three `rat_2` rows | 3 | 3 | Two visible, one `StartHidden=1`; the repeated targetname is intentional data and not one actor overwritten three times. |
+| `sabbat_redshirt_2_proxy` | 1 | 1 | Visible direct actor. |
+| Hunter/Society cohort | 0 | 7 | Direct actors in the added remote Society section; `Hunter1`, `sentry2`, `mercenary_upstairs`, `monk_upstairs_podium`, `condotierre_upstairs`, `sentry3`, and `Hunterv` do not start hidden. |
+| Maker children | 0 live / 13 templates | 0 live / 14 templates | Every maker starts disabled; explicit later `Spawn` owns allocation. |
+
+UP changes ten shared named-character records. Most changes add explicit gender or equipment;
+`thug_3` receives its alternate model; two late Sabbat actors move slightly. The opening-critical
+difference is Jack:
+
+| Field | Original retail BSP | UP replacement BSP |
+|---|---|---|
+| Entity index | 401 | 1363 |
+| Source origin / angles | `-221 -258 -40` / `0 90 0` | `144 7352 -199` / `0 190 0` |
+| Initial visibility | no `StartHidden` key | no `StartHidden` key |
+| Equipment additions | none | `item_w_claws` |
+
+Both variants otherwise author the same opening-relevant identity: `npc_VVampire`,
+`Tutorial_Jack`, the Smiling Jack model, `spawnflags=4`, invincibility, `no_alert_state=1`,
+`Neutral` / `D_NU 0`, `npc_perception=3`, `vision=0`, `hearing=0.10`,
+`use_interesting=1`, interesting group 32, `default_camera=Jack`, and `jack_tutorial.dlg`.
+UP therefore relocates and re-yaws Jack in authored map data before any dialogue exists.
+
+Group 32 contains exactly three authored `intersting_place` rows in the UP map:
+`ip_by_window` at `85 132 112` (`wall_lean`, enabled), `ip_0b2` at `-208 -16 -40`
+(`wall_lean`, disabled), and `ip_lean_1` at `-221 -258 -32` (`wall_lean`, enabled). The last is
+at original retail Jack's site; none is a porch node near UP Jack at `144 7352 -199`. The authored
+`min_bounds`/`max_bounds` values remain occupancy geometry, not evidence for a global search radius.
+A rebuild must neither manufacture a porch node nor reinterpret those bounds to keep Jack there.
+
+The coincidence at `ip_lean_1` is exact rather than approximate: original retail Jack spawns at
+`-221 -258 -40` with angles `0 90 0`, the node sits at `-221 -258 -32` with angles `0 90 0`, and it
+carries `match_orientation 1`. Retail Jack is authored to stand on his own `wall_lean` in the pose
+and facing the node names, which is what a rebuild has to account for before attributing his
+pre-dialogue idle to a disposition stance or to a plain `ACT_IDLE`.
+
+The eligibility gate is now recovered (`npc-ai-reverse-engineering.md` → "Interesting-place
+eligibility"): a straight-line 10,000 units, with no pathfinding and no line-of-sight test in the
+find stage. UP Jack sits 7,227 and 7,621 units from the two enabled group-32 nodes, so
+`TASK_FIND_INTERESTING_PLACE` **succeeds** for him and hands back a goal across the map. He
+demonstrably does not walk there, so the stop lies past the find stage — in
+`SCHED_TROIKA_WALK_TO_INTERESTING_PLACE` failing to its `Idle_Stand` fail-schedule, in
+`m_eInterestingPlaceMode` (`+0x6304`, an unsurveyed save field), or in a UP script mutation of
+`use_interesting`. That is a named question for the controlled capture, not a licence to assume he
+falls through to a stance idle.
+The recovered `CNPC_VVampire` spawn chain caches the resulting live origin and angles and contains
+no turn-to-player operation. `NPCInitThink` can repair ground placement but likewise contains no
+player-facing write. Static evidence consequently does **not** justify rotating Jack at spawn or
+dialogue acquisition. His first rendered sequence, the first selected AI schedule, and any later
+motor/gaze turn before the porch trigger remain controlled-capture questions.
+
+The player is not one of these BSP NPC rows. Map travel supplies the existing player and landmark
+placement. `CreateControllerNPC` is also not load-time population: the UP porch trigger creates it
+only when the player leaves the volume. A rebuild must not pre-spawn that stand-in or count it as
+Jack's initial character state.
+
+The first authored mutation also differs by map version. Original retail `trig_off_porch`
+(BSP index 479) sends `Jack.WillTalk 1` at `t0` and `Jack.StartPlayerDialog 256` at `t+0.1`; it has
+no load-time dialogue. UP's relocated `trig_off_porch` (index 1367) sends `WillTalk 1`,
+`StartPlayerDialogRemote 256`, and `UseInteresting 0` at `t0` while separately spawning the
+Blueblood and creating the controller stand-in. The UP main trigger is already the authored active
+path; Basic explicitly enables `trig_off_porch_basic` after its fade. `setPlus()` does not rewrite
+either trigger.
 
 ## 3. Load-bearing event API contract
 
@@ -534,14 +629,51 @@ retargeting it to `tutsafe`.
 
 ### 11.1 Map-load autos
 
-Five `logic_auto` entities establish the starting policy and optional patch state:
+The native and authored startup join is:
 
-| Initialization group | Authored actions and intent |
-|---|---|
-| Core player/world policy | Make the player unkillable, set Jack `WillTalk 0`, and mark the tutorial as a no-frenzy area. |
-| Source cubemap compatibility | Schedule `ccmd.wc_create`; Unreal supplies the map look through the offline bake instead. |
-| Patch patrol setup | Configure/unhide optional patrol NPCs. |
-| Patch content setup | `masterRefill('container_hunter 5')`, lock front doors, call `unhidePlus()`, and test `G.Linux_Wine`. |
+1. `CServerGameDLL::LevelInit` reads entity blocks in BSP order. For each block it resolves
+   `classname`, constructs that registered class, passes the complete block through map-data /
+   keyvalue parsing, and dispatches virtual `Spawn`. Parented entities are retained, sorted for
+   parent-before-child setup, attached and then spawned; they are not activated early.
+2. `CLogicAuto::Spawn` sets its first think deadline. Jack's concrete `CNPC_VVampire::Spawn`
+   executes the Vampire → Human/Troika → `CAI_BaseNPC` chain, applies model/solid/capability,
+   equipment, relationship and template-driven state, caches the live transform, and admits the
+   NPC to native AI. It does not select a dialogue target or rotate toward the player.
+3. After map entity creation/spawn completes, `ServerActivate` walks every surviving entity in the
+   server entity list and invokes virtual `Activate`, then runs post-entity systems. Jack's Troika
+   activation chains through base activation and performs its recovered class-specific setup; it
+   still does not run a porch/dialogue transform transaction.
+4. The entity-think pass reaches the autos and NPC initialization. Each auto enqueues its
+   `OnMapLoad` rows. `NPCInitThink` resolves authored relationship overrides, performs the native
+   ground/target/readiness work, installs the ordinary AI think, and applies the relevant
+   spawnflag branch. Jack's concrete Troika override then resolves follower tuning and records the
+   closest player handle, but performs no turn toward it; its base second virtual stage is empty.
+   This recovered path contains no explicit `SetActivity(ACT_IDLE)`, no player-facing write, and no
+   dialogue call.
+5. The ordinary-vampire UP path calls `unhidePlus()` from the last auto. That helper schedules
+   `c.patchtype=""` one game second later; the installed cfg alias invokes `setPlus()`. `setPlus`
+   establishes `G.Patch_Plus=1`, unhides `plus_*`, hides `basic_*`, and invokes `IsIdling()`.
+   Despite its name, `IsIdling()` is the Patch Plus **player** idle monitor; it does not initialize
+   Jack or any NPC animation.
+6. Only later movement across `trig_off_porch` sets Jack `WillTalk 1`, creates the Blueblood child
+   and player controller stand-in, disables Jack's interesting-place use, and requests the first
+   dialogue. None of those objects or dialogue mutations belongs to Jack's load-time state.
+
+The original retail BSP has one auto. Its per-producer execution is the reverse of stored repeated
+row order: `world.SetNoFrenzyArea 1`, `Jack.WillTalk 0`, then
+`pc_0.MakePlayerUnkillable`. The UP replacement retains that core auto and adds four more:
+
+| BSP index | Deadlines relative to the auto | Authored actions |
+|---:|---|---|
+| 667 | `t0` | Core world no-frenzy, Jack non-talking and player unkillable policy. |
+| 1358 | `t+1.5` | Source-only `ccmd.wc_create`; Unreal supplies the look through the offline bake. |
+| 1627 | `t+2`, `t+2.1` | Configure `sentry2`, then start its walking patrol. |
+| 1832 | `t0`, `t+0.1` | Configure `monk_upstairs_podium`, then start its walking patrol. |
+| 1862 | `t0`, `t+0.1` | At `t0`, call `unhidePlus()`, lock `frontdoor2`, lock `frontdoor1`, then refill the hunter container; test `G.Linux_Wine` at `t+0.1`. |
+
+Reverse repeated-row order establishes each row above. The relative order between separate autos
+whose thinks become due together is not claimed by this static case; all their queued side effects
+still enter the recovered equal-time FIFO event service once each producer runs.
 
 ### 11.2 Core beat dependency chain
 

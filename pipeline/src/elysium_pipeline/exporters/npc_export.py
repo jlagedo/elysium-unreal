@@ -48,7 +48,7 @@ import os
 import re
 
 from elysium_pipeline.formats import install, kv, mdl, mdl_gltf
-from elysium_pipeline.exporters import UE_mdl_cloth
+from elysium_pipeline.exporters import UE_mdl_cloth, UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel as S
 from elysium_pipeline.paths import export_root
 from elysium_pipeline.exporters.source_warnings import (
@@ -272,9 +272,9 @@ def authored_radius_m(c):
     the glb is written in -- `mdl_skel.Seq.bbmin`/`bbmax` reduced to its largest coordinate.
 
     A radius rather than the box: the box is in Source axes and the runtime holds the model in
-    glTFRuntime's, so a box would have to carry its basis across the seam while a magnitude
-    does not care which way the axes point."""
-    return max(max(abs(v) for v in c.bbmin), max(abs(v) for v in c.bbmax)) * mdl_gltf.SCALE
+    the repo's canonical Unreal frame, so a box would have to carry its basis across the seam
+    while a magnitude does not care which way the axes point."""
+    return max(max(abs(v) for v in c.bbmin), max(abs(v) for v in c.bbmax)) * S.SCALE
 
 
 def clip_bounds_radius_m(c, measured_m):
@@ -327,13 +327,14 @@ def write_eyes(stem, model, rig):
     path = os.path.join(eyes_dir, stem + ".json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"stem": stem, "model": model,
-                   "note": "org/up/forward are in <stem>.glb's own basis, written by the same "
-                           "conversion that basis's mesh and clips are. uppertarget/lowertarget "
-                           "are LINEAR OFFSETS in eyeball units, not angles - the renderer takes "
+                   "note": "org/up/forward are Unreal-native - centimetres, Z-up, left-handed - "
+                           "written by the same conversion the body's own bones are, so the "
+                           "runtime reads them verbatim. uppertarget/lowertarget are LINEAR "
+                           "OFFSETS in eyeball units, not angles - the renderer takes "
                            "asin(t/radius); reading them as radians still moves a lid. `meshes` "
-                           "joins a glTF material name to the eyeball it draws. See "
+                           "joins a material name to the eyeball it draws. See "
                            "docs/vtmb/facial_animation.md.",
-                   **rig}, f, separators=(",", ":"))
+                   **UEK.unreal_eye_rig(rig)}, f, separators=(",", ":"))
     return {"eyes": "eyes/" + os.path.basename(path), "eyeballs": len(rig["eyeballs"])}
 
 
@@ -345,11 +346,8 @@ def write_garment(stem, model, idx, model_key):
     output after skinning (`docs/vtmb/secondary_motion.md`). `{}` for a model that does not
     carry it, which is 4,385 of the 4,445 installed models.
 
-    Unlike `facial/` and `eyes/` beside it this sidecar is **Unreal-native**, not in the glb's
-    basis, and the conversion lives in `UE_mdl_cloth.py` where the naming rule requires it. The
-    two differ because their consumers differ: those rigs are read back against the glb the
-    runtime loaded, while this one is baked into a Chaos cloth asset offline and never meets
-    glTFRuntime at all.
+    Unreal-native like every coordinate-bearing sidecar beside it, and the conversion lives in
+    `UE_mdl_cloth.py` where the naming rule requires it.
     """
     del model  # named by the sidecar itself, through the writer
     return UE_mdl_cloth.write(stem, model_key, idx, GARMENT_DIR)
@@ -379,11 +377,11 @@ def write_procedural(stem, model, rules, prefix=""):
                            "by the control bone's local rotation to get w; term k's signed "
                            "weight is dot(driver_axes[k], w), selecting entry 2k when "
                            "positive and 2k+1 when negative and weighting it by |weight|. "
-                           "pos/quat are in <stem>.glb's own basis, written by the same "
-                           "conversion that basis's mesh and clips are. See "
+                           "pos/quat are Unreal-native, written by the same conversion the "
+                           "body's own bones are, so the runtime reads them verbatim. See "
                            "docs/vtmb/procedural_bones.md.",
-                   "driver_axes": mdl_gltf.DRIVER_AXES,
-                   "rules": rules}, f, separators=(",", ":"))
+                   "driver_axes": UEK.DRIVER_AXES,
+                   "rules": UEK.unreal_axis_rules(rules)}, f, separators=(",", ":"))
     return {"procedural": rel, "procedural_bones": len(rules)}
 
 
@@ -705,7 +703,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
     # unit-vector table the compressed vertex-animation records index is read once, from the
     # user's own StudioRender.dll -- without it the morph magnitudes are unknowable, so the
     # export ships the meshes and skips the faces rather than baking wrong deltas.
-    anorms = mdl_gltf.load_anorms()
+    anorms = S.load_anorms()
     print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
     npc_index = {}
     procedural_faults = []
@@ -778,6 +776,9 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             prop_clips[c.label] = _clip_meta(c, clip_bounds_radius_m(c, measured))
         animated_prop_index[stem] = {
             "glb": "animated_props/" + info["glb"],
+            # The container the bake reads. The `.glb` beside it stays an inspection product;
+            # nothing the game loads comes off it.
+            "eskm": "animated_props/%s.eskm" % stem,
             "model": info["model"],
             "bones": info["bones"],
             "split_bones": info["split_bones"],

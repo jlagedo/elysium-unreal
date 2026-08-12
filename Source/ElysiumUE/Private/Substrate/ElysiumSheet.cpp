@@ -63,7 +63,7 @@ namespace
 		SLOT(22, "soak_pool",                "Soak_Pool"),
 		SLOT(23, "automatic_soak_successes", "Automatic_Soak_Successes"),
 		SLOT(24, "automatic_str_successes",  "Automatic_Str_Successes"),
-		SLOT(25, "healthbuffer",             "HealthBuffer"),
+		SLOT(25, "health_buffer",            "HealthBuffer"),
 		SLOT(26, "encumbrance",              "Encumbrance"),
 		SLOT(27, "humanity",                 "Humanity"),
 		SLOT(28, "masquerade",               "Masquerade"),

@@ -291,6 +291,10 @@ public:
 	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) override;
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override;
+	virtual bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
+		FElysiumStanceClips& OutClips) override;
+	virtual bool ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow) override;
+	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
 	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,

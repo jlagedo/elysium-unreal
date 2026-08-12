@@ -6,6 +6,9 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "ElysiumStanceTypes.h"
+#include "Substrate/ElysiumDisposition.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
@@ -22,6 +25,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/App.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBodies, Log, All);
 
@@ -153,38 +157,16 @@ USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bP
 		return Cached->Get();
 	}
 
-	AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	// Ahead of the mesh, so there is no built body to ask -- and that is fine here, because only
-	// the eye MATERIAL names are read below and those are frame-independent strings. The frame is
-	// part of the cache key, so a guess costs at worst one redundant parse; it can never hand a
-	// body the other frame's rig the way a stem-keyed cache did.
-	const TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
-		? Anims->GetEyeSet(Stem) : nullptr;
-	TArray<FString> EyeMaterials;
-	if (EyeSet.IsValid())
-	{
-		for (const FElysiumEyeball& Eye : EyeSet->Eyeballs)
-		{
-			if (!Eye.Material.IsEmpty())
-			{
-				EyeMaterials.AddUnique(Eye.Material);
-			}
-		}
-	}
-
-	UglTFRuntimeAsset* Asset = nullptr;
+	// The eye sections carry M_Eyes from the bake, which is where the eye sidecar's material names
+	// are read; nothing about the material is decided here any more.
 	FString Error;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(
-		Stem, Asset, Error, bPlayerMaterial, &EyeMaterials);
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Error, bPlayerMaterial);
 	if (Mesh == nullptr)
 	{
 		UE_LOG(LogElysiumBodies, Warning, TEXT("ResolveNpcMesh '%s': %s"), *Stem, *Error);
 		return nullptr;
 	}
 	NpcMeshCache.Add(VisualKey, Mesh);
-	NpcAssetCache.Add(VisualKey, Asset);
 	return Mesh;
 }
 
@@ -215,11 +197,10 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 
 	UAnimSequence* Anim = nullptr;
 	const TObjectPtr<USkeletalMesh>* Mesh = NpcMeshCache.Find(VisualKey);
-	const TObjectPtr<UglTFRuntimeAsset>* Own = NpcAssetCache.Find(VisualKey);
 	if (Anims != nullptr && Mesh != nullptr && *Mesh != nullptr)
 	{
 		FString Error;
-		Anim = Anims->ResolveClip(Stem, ClipName, Mesh->Get(), Own ? Own->Get() : nullptr, Error);
+		Anim = Anims->ResolveClip(Stem, ClipName, Mesh->Get(), Error);
 		if (Anim == nullptr)
 		{
 			UE_LOG(LogElysiumBodies, Warning, TEXT("npc '%s' clip '%s': %s"), *Stem, *ClipName, *Error);
@@ -538,7 +519,6 @@ void UElysiumEntityBodies::ForgetNpcVisuals()
 	const int32 Meshes = NpcMeshCache.Num();
 	NpcMeshCache.Empty();
 	NpcAnimCache.Empty();
-	NpcAssetCache.Empty();
 	UE_LOG(LogElysiumBodies, Log, TEXT("forgot %d cached NPC visual(s); the next build re-resolves"),
 		Meshes);
 }
@@ -807,6 +787,65 @@ bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FS
 	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
 }
 
+bool UElysiumEntityBodies::ResolveStanceClips(const FString& Stem, const FString& AnimName,
+	FElysiumStanceClips& OutClips)
+{
+	OutClips = FElysiumStanceClips();
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	return Anims != nullptr && Anims->ResolveStanceClips(Stem, AnimName, OutClips);
+}
+
+bool UElysiumEntityBodies::ResolveDisposition(const FString& Disposition,
+	FElysiumDisposition& OutRow)
+{
+	OutRow = FElysiumDisposition();
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumRulebookSubsystem* Rules = GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
+	if (Rules == nullptr)
+	{
+		return false;
+	}
+	// `Resolve` already falls back to Neutral for a name the table does not carry, which is the
+	// table's own documented rule rather than a repair -- so a null here means the table failed to
+	// load at all, not that the disposition was unknown.
+	const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Disposition);
+	if (Row == nullptr)
+	{
+		return false;
+	}
+	OutRow = *Row;
+	return true;
+}
+
+bool UElysiumEntityBodies::IsNpcBodyVisible(USkeletalMeshComponent* Body) const
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	const UWorld* W = Body->GetWorld();
+	if (W == nullptr)
+	{
+		return true;
+	}
+	// A run with no renderer never advances any render time, so every body would read as invisible
+	// and every idle schedule would stall on `TASK_WAIT_PVS`. Report visible instead: a headless run
+	// is not a run in which everything is off-screen, it is a run in which the question has no
+	// meaning.
+	if (!FApp::CanEverRender())
+	{
+		return true;
+	}
+	// The tolerance is a frame budget, not a dwell time -- long enough that a body skipped by one
+	// frame's occlusion query does not flicker out of its schedule, short enough that turning away
+	// stops the selector within a think.
+	constexpr float ToleranceSeconds = 0.25f;
+	return W->GetTimeSeconds() - Body->GetLastRenderTimeOnScreen() <= ToleranceSeconds;
+}
+
 void UElysiumEntityBodies::InstallEyes(USkeletalMeshComponent* Comp,
 	const TSharedPtr<const FElysiumEyeSet>& Set, const FString& Disposition)
 {
@@ -967,8 +1006,8 @@ void UElysiumEntityBodies::TickEyes(float)
 	// resolve — blinks fast enough to read as a tell.
 	const AActor* Owner = GetOwner();
 	const UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI
-		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumRulebookSubsystem* Rules = GI
+		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
 
 	// The green room's override, consumed once for the whole pass. `bBlinkNow` is an edge, so it is
 	// cleared here rather than per body: one press is one blink on everything bound, not one per body.
@@ -1018,9 +1057,9 @@ void UElysiumEntityBodies::TickEyes(float)
 		// from `vdata/system/dispositiontable.txt`, which the disposition table already carries.
 		float BlinkMin = 2.5f;
 		float BlinkMax = 6.f;
-		if (Anims != nullptr)
+		if (Rules != nullptr)
 		{
-			if (const FElysiumDisposition* Row = Anims->GetDispositions().Resolve(Binding.Disposition))
+			if (const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Binding.Disposition))
 			{
 				BlinkMin = Row->MinBlinkInterval;
 				BlinkMax = Row->MaxBlinkInterval;
@@ -1302,17 +1341,16 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	}
 	if (!Mesh)
 	{
-		UglTFRuntimeAsset* Asset = nullptr;
-		FString Error;
-		Mesh = ElysiumNpcVisual::LoadMeshFromPath(
-			FElysiumContentPaths::AnimatedPropGlb(Entry->Glb), Asset, Error);
+		Mesh = LoadObject<USkeletalMesh>(nullptr,
+			*FElysiumContentPaths::BakedPropSkeletalMesh(Stem));
 		if (!Mesh)
 		{
-			UE_LOG(LogElysiumBodies, Warning, TEXT("animated prop '%s': %s"), *Stem, *Error);
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("animated prop '%s' is not on the baked mount -- run: uv run elysium export characters"),
+				*Stem);
 			return nullptr;
 		}
 		AnimatedPropMeshCache.Add(Stem, Mesh);
-		AnimatedPropAssetCache.Add(Stem, Asset);
 
 		// Widen the bind-pose bounds to the furthest reach of any clip this model owns, once, here —
 		// see ElysiumPropBounds. The union rather than the playing clip's own radius: one mesh is
@@ -1322,8 +1360,8 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 		double ReachCm = 0.0;
 		for (const FElysiumPropClip& Clip : Entry->Clips)
 		{
-			// glTFRuntime loads with SceneScale 100 (ElysiumNpcVisual's AssetConfig), so the mesh is
-			// in centimetres while the index states the reach in the glb's own metres.
+			// The container is centimetres by the `UE_` convention; the index states the reach in
+			// metres, which is a magnitude and survives the change of basis unchanged.
 			ReachCm = FMath::Max(ReachCm, static_cast<double>(Clip.BoundsRadiusMeters) * 100.0);
 		}
 		FVector Positive, Negative;
@@ -1393,16 +1431,13 @@ UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh
 	}
 	else
 	{
-		const TObjectPtr<UglTFRuntimeAsset>* Asset = AnimatedPropAssetCache.Find(Stem);
-		FString Error;
-		if (Asset)
-		{
-			Anim = ElysiumNpcVisual::RetargetClip(Asset->Get(), Mesh, AnimName, Error);
-		}
+		Anim = LoadObject<UAnimSequence>(nullptr,
+			*FElysiumContentPaths::BakedPropAnim(Stem, AnimName));
 		if (!Anim)
 		{
-			UE_LOG(LogElysiumBodies, Warning, TEXT("animated prop '%s' clip '%s': %s"),
-				*Stem, *ClipName, Error.IsEmpty() ? TEXT("asset not loaded") : *Error);
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("animated prop '%s' clip '%s' (%s) is not on the baked mount"),
+				*Stem, *ClipName, *AnimName);
 		}
 		AnimatedPropAnimCache.Add(Key, Anim);
 	}

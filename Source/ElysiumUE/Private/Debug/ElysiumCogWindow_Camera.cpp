@@ -6,6 +6,7 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraModifiers.h"
 #include "ElysiumCameraService.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerCameraManager.h"
 
@@ -168,6 +169,23 @@ void FElysiumCogWindow_Camera::RenderContent()
 			{
 				ImGui::BulletText("%s", COG_TCHAR_TO_CHAR(*Request));
 			}
+		}
+	}
+
+	if (ImGui::CollapsingHeader("Dialogue director", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		if (const FElysiumEntityWorld* EntityWorld = GetEntityWorld())
+		{
+			TArray<TPair<FString, FString>> DialogueRows;
+			EntityWorld->GetDialogueDebugState(DialogueRows);
+			for (const TPair<FString, FString>& DialogueRow : DialogueRows)
+			{
+				Row(COG_TCHAR_TO_CHAR(*DialogueRow.Key), DialogueRow.Value);
+			}
+		}
+		else
+		{
+			ImGui::TextDisabled("No entity world.");
 		}
 	}
 

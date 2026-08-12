@@ -2,6 +2,8 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumMoveSolve.h"          // the sv_*scale constants the gait tables are built with
+#include "ElysiumStanceTypes.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -105,7 +107,6 @@ namespace
 
 void UElysiumAnimSubsystem::Deinitialize()
 {
-	BankAssets.Reset();
 	ClipSets.Reset();
 	FacialRigs.Reset();
 	CompositionRigs.Reset();
@@ -133,18 +134,14 @@ const FElysiumNpcIndex& UElysiumAnimSubsystem::GetIndex()
 	return Index;
 }
 
-const FElysiumDispositionTable& UElysiumAnimSubsystem::GetDispositions()
+const FElysiumDispositionTable& UElysiumAnimSubsystem::Dispositions()
 {
-	if (!bDispositionsLoaded)
-	{
-		bDispositionsLoaded = true;
-		FString Error;
-		if (!Dispositions.Load(Error))
-		{
-			UE_LOG(LogElysiumAnim, Warning, TEXT("disposition table: %s"), *Error);
-		}
-	}
-	return Dispositions;
+	UGameInstance* GI = GetGameInstance();
+	UElysiumRulebookSubsystem* Rules = GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
+	// A table rather than a null: an empty one resolves nothing, which is what the callers already
+	// handle, and it keeps a reachable-but-unloaded rulebook from being a crash.
+	static const FElysiumDispositionTable Empty;
+	return Rules != nullptr ? Rules->Dispositions() : Empty;
 }
 
 const FElysiumNpcClipSet* UElysiumAnimSubsystem::GetClipSet(const FString& Stem)
@@ -427,39 +424,8 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetAnimatedPropC
 	return Result;
 }
 
-UglTFRuntimeAsset* UElysiumAnimSubsystem::GetBankAsset(const FString& BankStem, FString& OutError)
-{
-	OutError.Reset();
-	if (const TObjectPtr<UglTFRuntimeAsset>* Cached = BankAssets.Find(BankStem))
-	{
-		if (*Cached != nullptr)
-		{
-			return Cached->Get();
-		}
-	}
-
-	const FString Path = GetIndex().BankGlbPath(BankStem);
-	if (Path.IsEmpty())
-	{
-		OutError = FString::Printf(TEXT("'%s' is not a known animation bank"), *BankStem);
-		return nullptr;
-	}
-
-	const double Start = FPlatformTime::Seconds();
-	UglTFRuntimeAsset* Asset = ElysiumNpcVisual::LoadAssetFromPath(Path, OutError);
-	if (Asset == nullptr)
-	{
-		return nullptr;
-	}
-	BankAssets.Add(BankStem, Asset);
-	UE_LOG(LogElysiumAnim, Log, TEXT("npc bank '%s' parsed in %.0f ms (%.1f MB)"), *BankStem,
-		(FPlatformTime::Seconds() - Start) * 1000.0,
-		static_cast<double>(IFileManager::Get().FileSize(*Path)) / 1e6);
-	return Asset;
-}
-
 UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FString& ClipName,
-	USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset, FString& OutError)
+	USkeletalMesh* Mesh, FString& OutError)
 {
 	OutError.Reset();
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
@@ -480,28 +446,20 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FSt
 	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
 	// A baked sequence is bound to the shared skeleton, so it is the same asset for every body and
 	// is addressed by owner and resolved animation name rather than rebuilt per mesh.
-	if (UAnimSequence* Baked =
-		ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, ResolveClipAnimName(Stem, ClipName)))
+	const FString AnimName = ResolveClipAnimName(Stem, ClipName);
+	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, AnimName))
 	{
 		return Baked;
 	}
 
-	// The NPC's own dialogue clips live in the glb the mesh came from; everything else is a bank.
-	UglTFRuntimeAsset* Asset = OwnAsset;
-	if (!Clip->IsOwnedBy(Stem))
-	{
-		Asset = GetBankAsset(Clip->Owner, OutError);
-	}
-	else if (Asset == nullptr)
-	{
-		OutError = FString::Printf(TEXT("clip '%s' is owned by '%s' itself, but its glb was not passed"),
-			*ClipName, *Stem);
-	}
-	if (Asset == nullptr)
-	{
-		return nullptr;
-	}
-	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, ResolveClipAnimName(Stem, ClipName), OutError);
+	// The mount is the only build of a clip, so this fails by name. It used to fall back to
+	// retargeting the owner's `.glb`, which lands in glTFRuntime's basis rather than the
+	// container's and stood the body a quarter turn off with nothing logged.
+	// `Elysium.Content.BakedClipCoverage` holds the mount to every clip a vocabulary can name.
+	OutError = FString::Printf(
+		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),
+		*AnimName, *Owner);
+	return nullptr;
 }
 
 FString UElysiumAnimSubsystem::ResolveClipAnimName(const FString& Stem, const FString& ClipName,
@@ -576,7 +534,7 @@ FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem
 }
 
 void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Intent,
-	USkeletalMesh* Mesh, UglTFRuntimeAsset* OwnAsset, FElysiumAnimationSelection& OutSelection,
+	USkeletalMesh* Mesh, FElysiumAnimationSelection& OutSelection,
 	FElysiumResolvedAnimation& OutAssets)
 {
 	OutAssets = FElysiumResolvedAnimation();
@@ -618,27 +576,14 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 
 	// Addressed by owner and resolved animation name, matching what the record says rather than
 	// re-resolving the label at the neutral pose.
-	const bool bOwnsItself = OutSelection.OwnerStem.Equals(Intent.Stem, ESearchCase::IgnoreCase);
 	OutAssets.Sequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OutSelection.OwnerStem,
 		OutSelection.AnimationName);
 	if (OutAssets.Sequence == nullptr)
 	{
-		FString Error;
-		UglTFRuntimeAsset* Asset = bOwnsItself ? OwnAsset : GetBankAsset(OutSelection.OwnerStem, Error);
-		if (Asset != nullptr)
-		{
-			OutAssets.Sequence = ElysiumNpcVisual::RetargetClip(Asset, Mesh,
-				OutSelection.AnimationName, Error);
-		}
-		if (OutAssets.Sequence == nullptr)
-		{
-			OutSelection.AssetKind = EElysiumAnimAssetKind::None;
-			OutSelection.Outcome = EElysiumAnimOutcome::NoAsset;
-			OutSelection.Detail = Error.IsEmpty()
-				? FString::Printf(TEXT("'%s'@'%s' is not baked and its bank did not answer"),
-					*OutSelection.AnimationName, *OutSelection.OwnerStem)
-				: Error;
-		}
+		OutSelection.AssetKind = EElysiumAnimAssetKind::None;
+		OutSelection.Outcome = EElysiumAnimOutcome::NoAsset;
+		OutSelection.Detail = FString::Printf(TEXT("'%s'@'%s' is not on the baked mount"),
+			*OutSelection.AnimationName, *OutSelection.OwnerStem);
 	}
 
 	// A layer rides a DIFFERENT pose than the one it composes onto, so it resolves whether or not
@@ -761,12 +706,14 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankSte
 	{
 		return Baked;
 	}
-	UglTFRuntimeAsset* Asset = GetBankAsset(BankStem, OutError);
-	if (Asset == nullptr)
-	{
-		return nullptr;
-	}
-	return ElysiumNpcVisual::RetargetClip(Asset, Mesh, AnimName, OutError);
+	// A cinematic bank is named by a scene rather than by any vocabulary, so it used to be the one
+	// owner the character bake never reached — and every actor of every scene posed through the
+	// glb instead, a quarter turn off, which the scene then wrote back into the entity's angles.
+	// `Elysium.Content.BakedClipCoverage` holds the mount to every bank a scene can name.
+	OutError = FString::Printf(
+		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),
+		*AnimName, *BankStem);
+	return nullptr;
 }
 
 TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
@@ -782,7 +729,10 @@ TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 	// 1. The disposition stance set. `default_disposition` names a row whose "Animation Name"
 	//    keys the `Stance_<Name>_Idle_*` clips in the NPC's gendered stances bank — the include
 	//    DAG already picked male vs female, so there is no gender branch here.
-	const FString AnimName = GetDispositions().AnimNameFor(Disposition);
+	//    This is a listing of what the body carries, not an addressable table: the stance index is
+	//    resolved against `ResolveStanceClips` instead, which fills the holes the way precache does.
+	//    Here it only has to answer whether this body has a stance set at all.
+	const FString AnimName = Dispositions().AnimNameFor(Disposition);
 	TArray<FString> Candidates = Set->StanceClips(AnimName);
 	if (!Candidates.IsEmpty())
 	{
@@ -825,14 +775,68 @@ FString UElysiumAnimSubsystem::PickIdleClip(const FString& Stem, const FString& 
 	{
 		return FString();
 	}
-	// Variant only spreads across a *stance* set, whose members are equal-weight alternatives of
-	// one pose. An ACT_IDLE set is not interchangeable — `idle01` carries weight 30 against three
-	// fidgets at 1, so index 0 is the resting pick and the rest are one-shot fidgets.
-	if (OutTier != EElysiumIdleTier::Stance || Variant <= 0)
+	// An ACT_IDLE or loose set is not interchangeable — `idle01` carries weight 30 against three
+	// fidgets at 1 — so index 0 is the resting pick and the variant has nothing to address.
+	if (OutTier != EElysiumIdleTier::Stance)
 	{
 		return Candidates[0];
 	}
-	return Candidates[Variant % Candidates.Num()];
+	// The stance tier is addressed, not chosen: the variant is `m_CurrStance`, and it names a cell
+	// of the disposition's table. Reading it out of a weight-sorted list of whatever clips happen to
+	// exist would make stance 1 mean "the second-heaviest idle" — which is a different clip from
+	// `Idle_2` on any body whose stance idles carry unequal weights, and drifts a restored save onto
+	// a pose the index never meant.
+	FElysiumStanceClips Clips;
+	if (!ResolveStanceClips(Stem, Dispositions().AnimNameFor(Disposition), Clips))
+	{
+		return Candidates[0];
+	}
+	return Clips.Idle[FMath::Clamp(Variant, 0, ElysiumStance::Count - 1)];
+}
+
+bool UElysiumAnimSubsystem::ResolveStanceClips(const FString& Stem, const FString& AnimName,
+	FElysiumStanceClips& OutClips)
+{
+	OutClips = FElysiumStanceClips();
+	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
+	if (Set == nullptr || AnimName.IsEmpty())
+	{
+		return false;
+	}
+
+	// The labels are built rather than searched. `StanceClips` answers "which stance clips does this
+	// body have", which is the wrong question here: the machine addresses an exact index, and a body
+	// that authored `Idle_1` and `Idle_3` must put `Idle_3` at index 2 rather than at whatever
+	// position a filtered list happens to give it. Missing entries stay empty and the fallback ladder
+	// below resolves them, once, exactly as retail's precache does.
+	for (int32 Slot = 0; Slot < ElysiumStance::Count; ++Slot)
+	{
+		const FString Idle = FString::Printf(TEXT("Stance_%s_Idle_%d"), *AnimName, Slot + 1);
+		if (Set->Find(Idle) != nullptr)
+		{
+			OutClips.Idle[Slot] = Idle;
+		}
+		const FString Fidget = FString::Printf(TEXT("Stance_%s_Fidget_%d"), *AnimName, Slot + 1);
+		if (Set->Find(Fidget) != nullptr)
+		{
+			OutClips.Fidget[Slot] = Fidget;
+		}
+	}
+	for (int32 From = 0; From < ElysiumStance::Count; ++From)
+	{
+		for (int32 To = 0; To < ElysiumStance::Count; ++To)
+		{
+			const FString Trans = FString::Printf(TEXT("Stance_%s_Trans_%d_%d"),
+				*AnimName, From + 1, To + 1);
+			if (Set->Find(Trans) != nullptr)
+			{
+				OutClips.Trans[From][To] = Trans;
+			}
+		}
+	}
+
+	ElysiumStance::ApplyPrecacheFallbacks(OutClips);
+	return OutClips.IsValid();
 }
 
 FString UElysiumAnimSubsystem::PickActivityClip(const FString& Stem, const FString& Activity,
@@ -855,21 +859,3 @@ const TCHAR* UElysiumAnimSubsystem::TierName(EElysiumIdleTier Tier)
 	}
 }
 
-void UElysiumAnimSubsystem::GetBankStats(int32& OutCount, int64& OutBytes) const
-{
-	OutCount = 0;
-	OutBytes = 0;
-	for (const TPair<FString, TObjectPtr<UglTFRuntimeAsset>>& Pair : BankAssets)
-	{
-		if (Pair.Value == nullptr)
-		{
-			continue;
-		}
-		++OutCount;
-		const FElysiumNpcIndexEntry* E = Index.Banks.Find(Pair.Key);
-		if (E != nullptr)
-		{
-			OutBytes += IFileManager::Get().FileSize(*FElysiumContentPaths::NpcBankGlb(E->Glb));
-		}
-	}
-}

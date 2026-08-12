@@ -14,7 +14,6 @@
 #include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/AnimSequence.h"
 #include "Engine/SkeletalMesh.h"
-#include "glTFRuntimeAsset.h"
 
 static constexpr EAutomationTestFlags GElysiumSkeletalPoseFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -98,34 +97,28 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 	int32 Evaluated = 0;
 	for (const FOpeningPoseCase& PoseCase : GOpeningPoseCases)
 	{
-		FString Error;
-		// The mount is the only build of a character, so a body comes back as a real asset with
-		// NO parsed glb beside it -- the out-asset is null on that path by design.
-		UglTFRuntimeAsset* Unused = nullptr;
-		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(PoseCase.MeshStem, Unused, Error);
+		// Both sides off the baked mount: the body and the performance have to be in one frame for
+		// a pose envelope to mean anything, and the mount is the only build of either.
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(PoseCase.MeshStem);
 		if (Mesh == nullptr)
 		{
-			AddError(FString::Printf(TEXT("%s: mesh load failed: %s"), PoseCase.Label, *Error));
+			AddError(FString::Printf(TEXT("%s: '%s' is not on the baked mount"),
+				PoseCase.Label, PoseCase.MeshStem));
 			bValid = false;
 			continue;
 		}
 		Mesh->AddToRoot();
 
-		const FString BankPath = FElysiumContentPaths::NpcBankGlb(
-			FString::Printf(TEXT("banks/%s.glb"), PoseCase.BankStem));
-		UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(BankPath, Error);
-		UAnimSequence* Anim = BankAsset != nullptr
-			? ElysiumNpcVisual::RetargetClip(BankAsset, Mesh, TEXT("entire_scene"), Error)
-			: nullptr;
-		if (BankAsset == nullptr || Anim == nullptr)
+		UAnimSequence* Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, PoseCase.BankStem,
+			TEXT("entire_scene"));
+		if (Anim == nullptr)
 		{
-			AddError(FString::Printf(TEXT("%s: bank/clip load failed: %s"), PoseCase.Label, *Error));
-			if (BankAsset != nullptr) BankAsset->AddToRoot();
+			AddError(FString::Printf(TEXT("%s: '%s' carries no baked entire_scene"),
+				PoseCase.Label, PoseCase.BankStem));
 			Mesh->RemoveFromRoot();
 			bValid = false;
 			continue;
 		}
-		BankAsset->AddToRoot();
 		Anim->AddToRoot();
 
 		IAnimationDataModel* Model = Anim->GetDataModel();
@@ -210,7 +203,6 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 		}
 
 		Anim->RemoveFromRoot();
-		BankAsset->RemoveFromRoot();
 		Mesh->RemoveFromRoot();
 	}
 
@@ -274,29 +266,23 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the theatre scene keeps its authored 270 degree yaw"),
 		FMath::IsNearlyEqual(SourceAngles.Y, 270.0f));
-	TestTrue(TEXT("a 270 Source yaw plus the glTF basis resolves to zero Unreal yaw"),
-		FMath::IsNearlyZero(FMath::UnwindDegrees(
-			ElysiumSkeletalBasis::GlbFromSourceAngles(SourceAngles).Yaw)));
 
-	FString Error;
-	// The mount is the only build of a character, so the out-asset is null on that path by design.
-	UglTFRuntimeAsset* Unused = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(TEXT("brujah_male_armor_0"), Unused, Error);
-	const FString BankPath = FElysiumContentPaths::NpcBankGlb(
-		TEXT("banks/cinematic_santa_monica_haven_embrace_bips1__bip01.glb"));
-	UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(BankPath, Error);
-	UAnimSequence* Anim = Mesh && BankAsset
-		? ElysiumNpcVisual::RetargetClip(BankAsset, Mesh, TEXT("entire_scene"), Error)
+	// Both sides off the baked mount, which is what fixes the expected answer below. A clip read out
+	// of a `.glb` used to arrive in glTFRuntime's basis -- `(y, x, z)` against the container's
+	// `(x, -y, z)`, a 90 degree yaw carried on the `Bip01` root -- and needed a compensating
+	// quarter turn at placement. Nothing loads a `.glb` any more, so the placement is the reflected
+	// Source yaw and nothing else (`ElysiumSkeletalBasis`).
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(TEXT("brujah_male_armor_0"));
+	UAnimSequence* Anim = Mesh != nullptr
+		? ElysiumNpcVisual::LoadBakedClip(Mesh,
+			TEXT("cinematic_santa_monica_haven_embrace_bips1__bip01"), TEXT("entire_scene"))
 		: nullptr;
-	if (!TestNotNull(TEXT("player mesh loads for placement probe"), Mesh)
-		|| !TestNotNull(TEXT("Bip01 bank loads for placement probe"), BankAsset)
-		|| !TestNotNull(TEXT("entire_scene binds for placement probe"), Anim))
+	if (!TestNotNull(TEXT("player baked mesh loads for placement probe"), Mesh)
+		|| !TestNotNull(TEXT("entire_scene is on the mount for placement probe"), Anim))
 	{
-		AddError(Error);
 		return true;
 	}
 	Mesh->AddToRoot();
-	BankAsset->AddToRoot();
 	Anim->AddToRoot();
 
 	IAnimationDataModel* Model = Anim->GetDataModel();
@@ -307,22 +293,26 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 	{
 		const FVector RootLocal = Model->GetBoneTrackTransform(
 			Ref.GetBoneName(0), FFrameNumber(225)).GetTranslation();
+		// The baked basis: a character's authored forward is its own component +X, so the placement
+		// is the reflected Source yaw and nothing else.
 		const FVector CorrectWorld = Scene->Origin
-			+ ElysiumSkeletalBasis::GlbFromSourceAngles(SourceAngles).RotateVector(RootLocal);
-		const FVector LegacyWorld = Scene->Origin
-			+ FRotator(0.0f, -SourceAngles.Y, 0.0f).RotateVector(RootLocal);
+			+ ElysiumSkeletalBasis::FromSourceAngles(SourceAngles).RotateVector(RootLocal);
+		// The same placement with the retired glb correction still on it -- the quarter turn this
+		// test exists to catch, stated here rather than through a helper because nothing in the
+		// runtime carries one any more.
+		const FRotator QuarterTurned(0.0f, -90.0f - SourceAngles.Y, 0.0f);
+		const FVector QuarterTurnedWorld = Scene->Origin + QuarterTurned.RotateVector(RootLocal);
 		const float CorrectDistance = FVector::Distance(CorrectWorld, Target->Origin);
-		const float LegacyDistance = FVector::Distance(LegacyWorld, Target->Origin);
-		TestTrue(TEXT("the corrected player root lands inside the authored 7.5s shot envelope"),
+		const float QuarterTurnedDistance = FVector::Distance(QuarterTurnedWorld, Target->Origin);
+		TestTrue(TEXT("the baked player root lands inside the authored 7.5s shot envelope"),
 			CorrectDistance < 150.0f);
-		TestTrue(TEXT("the previous extra quarter-turn misses that shot by over three metres"),
-			LegacyDistance > 300.0f);
-		AddInfo(FString::Printf(TEXT("7.5s placement: corrected %.1f cm, legacy %.1f cm"),
-			CorrectDistance, LegacyDistance));
+		TestTrue(TEXT("adding the glb quarter-turn misses that shot by over three metres"),
+			QuarterTurnedDistance > 300.0f);
+		AddInfo(FString::Printf(TEXT("7.5s placement: baked %.1f cm, quarter-turned %.1f cm"),
+			CorrectDistance, QuarterTurnedDistance));
 	}
 
 	Anim->RemoveFromRoot();
-	BankAsset->RemoveFromRoot();
 	Mesh->RemoveFromRoot();
 	return true;
 }

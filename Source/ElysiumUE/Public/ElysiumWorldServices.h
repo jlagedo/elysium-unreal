@@ -16,6 +16,8 @@ class UPrimitiveComponent;
 struct FElysiumCameraShot;
 struct FElysiumEntityDef;
 struct FElysiumSignData;
+struct FElysiumStanceClips;
+struct FElysiumDisposition;
 
 // Every authored runtime placement is expressed in Source feet space. The one exception is the
 // existing save/stage payload, which predates the player entity and stores Unreal's capsule centre.
@@ -176,6 +178,42 @@ public:
 		OutGroundSpeedCmPerSecond = 0.f;
 		return false;
 	}
+	// One model's disposition stance set: three idles, three fidgets and the 3x3 transition matrix
+	// for `AnimName`, with the precache fallbacks already applied. Resolved once per (stem,
+	// disposition) and cached by the caller, because that is when retail resolves it — a body that
+	// authored no `Fidget_2` gets `fidget[2] == idle[2]` at load and is never asked again.
+	//
+	// The whole set rather than one label at a time: the selector's fidget-availability test is an
+	// equality between two entries, so handing it anything less would make it ask the vocabulary
+	// mid-decision and put engine access inside a substrate rule.
+	virtual bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
+		FElysiumStanceClips& OutClips) { return false; }
+
+	// The disposition row a `default_disposition` name resolves to. It carries both halves the
+	// stance machine needs — the `Stance_<AnimName>_*` token that keys the clips, and the
+	// fidget/stance-change pacing the selector rolls against — so a caller resolves once rather
+	// than asking the table twice for two fields of the same row.
+	//
+	// Handing the row down by value is what keeps the selector a pure rule: the table is engine-side
+	// and its Load() needs the export root, so a substrate test that reached for it could not run
+	// content-free. The same shape as the gaze layer's `FElysiumEyeTargetTuning`.
+	virtual bool ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow)
+	{
+		return false;
+	}
+
+	// Whether this body was drawn recently enough to count as visible, standing in for the leaf-set
+	// answer Source's PVS gives `TASK_WAIT_PVS`.
+	//
+	// Divergence, enumerated: Source's PVS is leaf-to-leaf and view-independent, so retail keeps
+	// running the idle schedule for an NPC standing behind the player in the same room. A render-time
+	// query is frustum-dependent, so that NPC holds its pose and resumes a frame after it comes back
+	// into view.
+	//
+	// The `true` default is load-bearing, not a placeholder: a `-nullrhi` test run and an editor
+	// commandlet never render, so an implementation that reported "not visible" there would stall
+	// every idle schedule in exactly the headless runs meant to prove it.
+	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) { return true; }
 
 	// 12.1 — a choreo scene's whole-cast performance. The clip lives in a cinematic anim set that
 	// no NPC's include tree names, so it is addressed by the scene's own anim-set model plus the

@@ -1,0 +1,200 @@
+#include "Substrate/ElysiumNpcMind.h"
+
+void FElysiumNpcMind::Record(const FString& Row)
+{
+	Last = Row;
+	Transitions.Add(Row);
+	if (Transitions.Num() > MaxTraceRows)
+	{
+		Transitions.RemoveAt(0, Transitions.Num() - MaxTraceRows, EAllowShrinking::No);
+	}
+}
+
+void FElysiumNpcMind::ArmAdmission()
+{
+	if (AdmissionPhase == EAdmission::Spawned)
+	{
+		AdmissionPhase = EAdmission::Armed;
+		Record(TEXT("admission: spawned -> armed"));
+	}
+}
+
+bool FElysiumNpcMind::Admit()
+{
+	if (AdmissionPhase != EAdmission::Armed)
+	{
+		return false;
+	}
+	AdmissionPhase = EAdmission::Admitted;
+	CurrentState = EElysiumNpcState::Idle;
+	DesiredState = EElysiumNpcState::Idle;
+	Record(TEXT("admission: armed -> admitted (Idle, no executor)"));
+	return true;
+}
+
+bool FElysiumNpcMind::IsSupportedState(EElysiumNpcState State)
+{
+	return State == EElysiumNpcState::Idle
+		|| State == EElysiumNpcState::Scripted
+		|| State == EElysiumNpcState::Dead;
+}
+
+bool FElysiumNpcMind::IsResumableOwner(EElysiumBodyOwner Owner)
+{
+	return Owner == EElysiumBodyOwner::None
+		|| Owner == EElysiumBodyOwner::Patrol
+		|| Owner == EElysiumBodyOwner::Ambient;
+}
+
+bool FElysiumNpcMind::RequestState(EElysiumNpcState NewState, const TCHAR* Reason)
+{
+	DesiredState = NewState;
+	if (!IsSupportedState(NewState))
+	{
+		Record(FString::Printf(TEXT("state rejected: %s (%s)"), LexToString(NewState),
+			Reason ? Reason : TEXT("no reason")));
+		return false;
+	}
+	const EElysiumNpcState Before = CurrentState;
+	CurrentState = NewState;
+	Record(FString::Printf(TEXT("state: %s -> %s (%s)"), LexToString(Before),
+		LexToString(NewState), Reason ? Reason : TEXT("no reason")));
+	return true;
+}
+
+bool FElysiumNpcMind::IsAcquisitionAllowed(EElysiumBodyOwner Requested) const
+{
+	if (Requested == EElysiumBodyOwner::None || AdmissionPhase != EAdmission::Admitted
+		|| CurrentState == EElysiumNpcState::Dead)
+	{
+		return false;
+	}
+	if (Requested == CurrentOwner)
+	{
+		return true;
+	}
+	switch (Requested)
+	{
+	case EElysiumBodyOwner::Patrol:
+	case EElysiumBodyOwner::Ambient:
+		return CurrentOwner == EElysiumBodyOwner::None;
+	case EElysiumBodyOwner::Sequence:
+		return CurrentOwner == EElysiumBodyOwner::None
+			|| CurrentOwner == EElysiumBodyOwner::Patrol
+			|| CurrentOwner == EElysiumBodyOwner::Ambient;
+	case EElysiumBodyOwner::Dialogue:
+		return CurrentOwner == EElysiumBodyOwner::None
+			|| CurrentOwner == EElysiumBodyOwner::Patrol;
+	default:
+		return false;
+	}
+}
+
+void FElysiumNpcMind::RefreshStateFromOwner()
+{
+	const bool bScripted = CurrentOwner == EElysiumBodyOwner::Sequence
+		|| CurrentOwner == EElysiumBodyOwner::Dialogue
+		|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule
+		|| CurrentOwner == EElysiumBodyOwner::Follower;
+	CurrentState = bScripted ? EElysiumNpcState::Scripted : EElysiumNpcState::Idle;
+	DesiredState = CurrentState;
+}
+
+bool FElysiumNpcMind::Acquire(EElysiumBodyOwner Requested, bool bSuspendCurrent,
+	FElysiumBodyOwnerToken& OutToken, const TCHAR* Reason)
+{
+	OutToken.Reset();
+	if (!IsAcquisitionAllowed(Requested))
+	{
+		Record(FString::Printf(TEXT("owner rejected: %s -> %s (%s)"),
+			LexToString(CurrentOwner), LexToString(Requested), Reason ? Reason : TEXT("no reason")));
+		return false;
+	}
+	if (Requested == CurrentOwner)
+	{
+		OutToken = { CurrentOwner, OwnerGeneration };
+		return OutToken.IsSet();
+	}
+	const EElysiumBodyOwner Before = CurrentOwner;
+	ParkedOwner = bSuspendCurrent ? CurrentOwner : EElysiumBodyOwner::None;
+	CurrentOwner = Requested;
+	++OwnerGeneration;
+	if (OwnerGeneration == 0)
+	{
+		++OwnerGeneration;
+	}
+	OutToken = { CurrentOwner, OwnerGeneration };
+	RefreshStateFromOwner();
+	Record(FString::Printf(TEXT("owner: %s -> %s gen=%u%s (%s)"), LexToString(Before),
+		LexToString(CurrentOwner), OwnerGeneration, ParkedOwner != EElysiumBodyOwner::None
+			? *FString::Printf(TEXT(" parked=%s"), LexToString(ParkedOwner)) : TEXT(""),
+		Reason ? Reason : TEXT("no reason")));
+	return true;
+}
+
+bool FElysiumNpcMind::Release(const FElysiumBodyOwnerToken& Token, const TCHAR* Reason)
+{
+	if (!Token.IsSet() || Token.Owner != CurrentOwner || Token.Generation != OwnerGeneration)
+	{
+		Record(FString::Printf(TEXT("release rejected: token=%s/%u live=%s/%u (%s)"),
+			LexToString(Token.Owner), Token.Generation, LexToString(CurrentOwner), OwnerGeneration,
+			Reason ? Reason : TEXT("no reason")));
+		return false;
+	}
+	const EElysiumBodyOwner Before = CurrentOwner;
+	CurrentOwner = ParkedOwner;
+	ParkedOwner = EElysiumBodyOwner::None;
+	++OwnerGeneration;
+	if (OwnerGeneration == 0)
+	{
+		++OwnerGeneration;
+	}
+	RefreshStateFromOwner();
+	Record(FString::Printf(TEXT("owner: %s -> %s gen=%u (%s)"), LexToString(Before),
+		LexToString(CurrentOwner), OwnerGeneration, Reason ? Reason : TEXT("no reason")));
+	return true;
+}
+
+void FElysiumNpcMind::ForgetSuspended(EElysiumBodyOwner Owner, const TCHAR* Reason)
+{
+	if (ParkedOwner == Owner)
+	{
+		ParkedOwner = EElysiumBodyOwner::None;
+		Record(FString::Printf(TEXT("parked owner cleared: %s (%s)"), LexToString(Owner),
+			Reason ? Reason : TEXT("no reason")));
+	}
+}
+
+void FElysiumNpcMind::Invalidate(const TCHAR* Reason, bool bDead)
+{
+	const EElysiumBodyOwner Before = CurrentOwner;
+	CurrentOwner = EElysiumBodyOwner::None;
+	ParkedOwner = EElysiumBodyOwner::None;
+	++OwnerGeneration;
+	if (OwnerGeneration == 0)
+	{
+		++OwnerGeneration;
+	}
+	CurrentState = bDead ? EElysiumNpcState::Dead : EElysiumNpcState::Idle;
+	DesiredState = CurrentState;
+	Record(FString::Printf(TEXT("invalidate: %s -> None gen=%u state=%s (%s)"),
+		LexToString(Before), OwnerGeneration, LexToString(CurrentState),
+		Reason ? Reason : TEXT("no reason")));
+}
+
+void FElysiumNpcMind::Restore(EElysiumNpcState SavedState, EElysiumBodyOwner SavedOwner)
+{
+	AdmissionPhase = EAdmission::Admitted;
+	CurrentOwner = IsResumableOwner(SavedOwner) ? SavedOwner : EElysiumBodyOwner::None;
+	ParkedOwner = EElysiumBodyOwner::None;
+	++OwnerGeneration;
+	CurrentState = IsSupportedState(SavedState) && SavedState != EElysiumNpcState::Scripted
+		? SavedState : EElysiumNpcState::Idle;
+	if (CurrentState == EElysiumNpcState::Dead)
+	{
+		CurrentOwner = EElysiumBodyOwner::None;
+	}
+	DesiredState = CurrentState;
+	Record(FString::Printf(TEXT("restore: state=%s owner=%s gen=%u"), LexToString(CurrentState),
+		LexToString(CurrentOwner), OwnerGeneration));
+}

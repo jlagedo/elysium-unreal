@@ -55,12 +55,7 @@ bool FElysiumEyeSet::Load(const FString& RelPath, FString& OutError)
 		OutError = FString::Printf(TEXT("cannot read %s"), *Path);
 		return false;
 	}
-	if (!LoadJsonText(Text, OutError))
-	{
-		return false;
-	}
-	ApplyAssetImport();
-	return true;
+	return LoadJsonText(Text, OutError);
 }
 
 bool FElysiumEyeSet::LoadJsonText(const FString& JsonText, FString& OutError)
@@ -121,21 +116,6 @@ bool FElysiumEyeSet::LoadJsonText(const FString& JsonText, FString& OutError)
 		return false;
 	}
 	return true;
-}
-
-void FElysiumEyeSet::ApplyAssetImport()
-{
-	// The same door the procedural rule table goes through: the sidecar states its geometry in the
-	// glb's own basis and metres, and glTFRuntime imports that file under a declared basis and
-	// scale. Positions take both; directions take the basis alone.
-	for (FElysiumEyeball& E : Eyeballs)
-	{
-		const FTransform Imported = ElysiumNpcVisual::ImportGlbLocal(
-			FTransform(FQuat::Identity, E.Org, FVector::OneVector));
-		E.Org = Imported.GetLocation();
-		E.Up = ElysiumNpcVisual::ImportGlbDirection(E.Up).GetSafeNormal();
-		E.Forward = ElysiumNpcVisual::ImportGlbDirection(E.Forward).GetSafeNormal();
-	}
 }
 
 const FElysiumEyeball* FElysiumEyeSet::Find(int32 Index) const

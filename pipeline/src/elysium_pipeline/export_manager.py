@@ -181,11 +181,9 @@ def _bundle_tasks(
                 )
             )
 
-        code = (
-            config.repo_root
-            / "pipeline"
-            / "src"
-            / "elysium_pipeline"
+        package = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+        code = [
+            package
             / "exporters"
             / (
                 "npc_export.py"
@@ -198,14 +196,20 @@ def _bundle_tasks(
                 if bundle == "items"
                 else "export_all.py"
             )
-        )
+        ]
+        if bundle == "npc":
+            # The eye and procedural sidecars are parsed by `mdl_skel` and stated in the body's
+            # own frame by `UE_mdl_skeletal`, so a change to either changes what this bundle
+            # writes without touching `npc_export.py` itself.
+            code += [package / "exporters" / "UE_mdl_skeletal.py",
+                     package / "formats" / "mdl_skel.py"]
         tasks.append(
             Task(
                 name=name,
                 action=action,
                 dependencies=dependencies,
-                fingerprint=lambda b=bundle, p=code: fingerprint_paths(
-                    [p], extra=("bundle", b, source_fingerprint, *maps)
+                fingerprint=lambda b=bundle, p=tuple(code): fingerprint_paths(
+                    list(p), extra=("bundle", b, source_fingerprint, *maps)
                 ),
                 outputs=_bundle_outputs(config.export_root, bundle),
             )
@@ -694,7 +698,7 @@ def export_model(
     integrate: bool = False,
 ) -> Path:
     _require_export_config(config)
-    from elysium_pipeline.formats import install, mdl_gltf
+    from elysium_pipeline.formats import install, mdl_gltf, mdl_skel
 
     index = install.build_index()
     normalized = model.replace("\\", "/")
@@ -775,8 +779,10 @@ def _character_source_detail(index: dict, model_rel: str) -> str:
     return digest.hexdigest()
 
 
-def character_source_plan(npc_dir: Path) -> tuple[dict[str, str], dict[str, str]]:
-    """({model stem: install path}, {bank stem: install path}) for the WHOLE cast.
+def character_source_plan(
+    npc_dir: Path,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
+    """({model stem}, {bank stem}, {cinematic stem}, {prop stem}) -> install path, whole cast.
 
     Deliberately not parameterised by a slice. The rig partition is a property of the entire
     corpus (`elysium_pipeline.character_partition`), and it was previously derived from whichever
@@ -800,7 +806,32 @@ def character_source_plan(npc_dir: Path) -> tuple[dict[str, str], dict[str, str]
                     f"{stem} names bank '{owner}', which the manifest does not carry"
                 )
             banks[owner] = bank["model"]
-    return models, banks
+
+    # A cinematic bank is reached by a choreographed SCENE, not by any body's clip map, so the
+    # loop above -- which walks vocabularies -- never names one. Left out, its clips are absent
+    # from the mount and `ResolveClipFromBank` answers them out of the glb instead, in
+    # glTFRuntime's basis rather than this pipeline's (`Elysium.Content.BakedClipCoverage`).
+    #
+    # One model yields one bank PER ACTOR ROOT, so the writer is keyed by the model's own stem
+    # and the per-root stems join `banks` for the partition and the paths that follow it.
+    cinematics: dict[str, str] = {}
+    for model, record in manifest.get("cinematics", {}).items():
+        stem = record.get("stem")
+        if not stem:
+            continue
+        cinematics[stem] = model
+        for root in record.get("roots", []):
+            bank = manifest["banks"].get(root.get("bank"))
+            if bank is not None:
+                banks[root["bank"]] = bank["model"]
+
+    # An animated prop is a skeletal model like any other, so it takes the same container. It is
+    # NOT a cast member: it carries its own skeleton rather than joining a rig family, because a
+    # crane and a wolf share no tree with each other or with a biped.
+    props = {stem: record["model"]
+             for stem, record in manifest.get("animated_props", {}).items()
+             if record.get("model")}
+    return models, banks, cinematics, props
 
 
 def write_character_sources(
@@ -818,9 +849,13 @@ def write_character_sources(
     default rather than an expensive completeness gesture.
     """
     from elysium_pipeline.exporters import UE_mdl_skeletal
-    from elysium_pipeline.formats import install, mdl_gltf
+    from elysium_pipeline.formats import install, mdl_gltf, mdl_skel
 
-    models, banks = character_source_plan(npc_dir)
+    models, banks, cinematics, props = character_source_plan(npc_dir)
+    # Every per-root container of a cinematic model is produced by one `write_cinematic` call, so
+    # its stems are not their own tasks -- they would each rewrite the whole performance.
+    cinematic_stems = {stem for stem in banks if any(
+        stem == prefix or stem.startswith(prefix + "__") for prefix in cinematics)}
     index = install.build_index(verbose=False)
     code_fingerprint = fingerprint_paths(_character_code_inputs(config))
     # Read once, lazily: without the unit-vector table a compressed vertex-animation record has
@@ -830,7 +865,7 @@ def write_character_sources(
 
     def load_anorms():
         if not anorms:
-            anorms.append(mdl_gltf.load_anorms())
+            anorms.append(mdl_skel.load_anorms())
         return anorms[0]
 
     tasks: list[Task] = []
@@ -854,6 +889,9 @@ def write_character_sources(
         ))
 
     for stem, model_rel in sorted(banks.items()):
+        if stem in cinematic_stems:
+            continue
+
         def bank_action(stem=stem, model_rel=model_rel) -> None:
             UE_mdl_skeletal.write_bank(index, model_rel, str(npc_dir), stem)
 
@@ -868,6 +906,49 @@ def write_character_sources(
             action=bank_action,
             fingerprint=bank_fingerprint,
             outputs=(npc_dir / "banks" / f"{stem}.eskm",),
+        ))
+
+    for stem, model_rel in sorted(cinematics.items()):
+        # Every root of this performance at once, so the task's outputs are the whole set it
+        # writes rather than the one its name carries.
+        roots = sorted(bank for bank in cinematic_stems
+                       if bank == stem or bank.startswith(stem + "__"))
+
+        def cinematic_action(stem=stem, model_rel=model_rel) -> None:
+            UE_mdl_skeletal.write_cinematic(index, model_rel, str(npc_dir), stem)
+
+        def cinematic_fingerprint(model_rel=model_rel, stem=stem) -> str:
+            return fingerprint_content(
+                (), extra=("eskm-cinematic-v1", stem, code_fingerprint,
+                           _character_source_detail(index, model_rel))
+            )
+
+        tasks.append(Task(
+            name=f"eskm:cinematic:{stem}",
+            action=cinematic_action,
+            fingerprint=cinematic_fingerprint,
+            outputs=tuple(npc_dir / "banks" / f"{root}.eskm" for root in roots),
+        ))
+
+    prop_dir = npc_dir / "animated_props"
+    for stem, model_rel in sorted(props.items()):
+        # The same container a body takes, geometry and all -- an animated prop IS a skeletal
+        # model, and the only thing that made it a separate path was the loader it used to go
+        # through. Morph targets are not read: no shipped prop authors a flex rig.
+        def prop_action(stem=stem, model_rel=model_rel) -> None:
+            UE_mdl_skeletal.write_model(index, model_rel, str(prop_dir), stem=stem, anorms=None)
+
+        def prop_fingerprint(model_rel=model_rel, stem=stem) -> str:
+            return fingerprint_content(
+                (), extra=("eskm-prop-v1", stem, code_fingerprint,
+                           _character_source_detail(index, model_rel))
+            )
+
+        tasks.append(Task(
+            name=f"eskm:prop:{stem}",
+            action=prop_action,
+            fingerprint=prop_fingerprint,
+            outputs=(prop_dir / f"{stem}.eskm",),
         ))
 
     results = TaskGraph(tasks).run(force=force, manifest=manifest)
@@ -895,9 +976,14 @@ def write_character_partition(npc_dir: Path) -> dict:
     from elysium_pipeline import asset_names, character_partition
     from elysium_pipeline.formats import eskm
 
-    models, banks = character_source_plan(npc_dir)
+    # Props are deliberately absent from the partition: each carries its own skeleton, so it is
+    # not a member of any rig family and has no family folder to be addressed through. They are
+    # present in the texture table all the same -- one texture package serves the whole mount, and
+    # a prop albedo missing from it is swept as an orphan the moment anything sweeps.
+    models, banks, _cinematics, props = character_source_plan(npc_dir)
     model_paths = {stem: npc_dir / f"{stem}.eskm" for stem in models}
     bank_paths = {stem: npc_dir / "banks" / f"{stem}.eskm" for stem in banks}
+    prop_paths = {stem: npc_dir / "animated_props" / f"{stem}.eskm" for stem in props}
 
     model_trees: dict[str, dict[str, str]] = {}
     bank_trees: dict[str, dict[str, str]] = {}
@@ -926,6 +1012,24 @@ def write_character_partition(npc_dir: Path) -> dict:
                 if stem not in entry["used_by"]:
                     entry["used_by"].append(stem)
                 bindings.setdefault(stem, {})[material] = name
+
+    # Props contribute textures but not the corpus fingerprint: that fingerprint is what every rig
+    # family's receipt is keyed on, and a prop shares no bone tree with any of them.
+    for stem, path in sorted(prop_paths.items()):
+        if not path.is_file():
+            raise OfflineExportFailure(
+                f"{path} is missing; the character sources did not complete"
+            )
+        for material, uri in sorted(eskm.materials(eskm.read(path)).items()):
+            if not uri:
+                continue
+            name = asset_names.texture_asset_name(uri)
+            # A prop's uri is relative to its own container; the table states npc-relative paths.
+            entry = textures.setdefault(name, {"uri": f"animated_props/{uri}", "used_by": []})
+            key = f"prop:{stem}"
+            if key not in entry["used_by"]:
+                entry["used_by"].append(key)
+            bindings.setdefault(key, {})[material] = name
 
     partition = character_partition.build_partition(
         model_trees, bank_trees, corpus_fingerprint=corpus.hexdigest()

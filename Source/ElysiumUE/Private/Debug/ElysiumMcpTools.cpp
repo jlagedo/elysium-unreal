@@ -4,6 +4,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumCameraComponent.h"
+#include "ElysiumCameraService.h"
 #include "ElysiumPlayerCameraManager.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
@@ -26,6 +27,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "IModelContextProtocolModule.h"
@@ -126,6 +128,41 @@ namespace ElysiumMcpImpl
 		case EElysiumJumpPhase::Ascend:  return TEXT("ascend");
 		case EElysiumJumpPhase::Descend: return TEXT("descend");
 		default:                         return TEXT("ground");
+		}
+	}
+
+	const TCHAR* CameraRequestKindName(EElysiumCameraRequestKind Kind)
+	{
+		switch (Kind)
+		{
+		case EElysiumCameraRequestKind::Aim:      return TEXT("aim");
+		case EElysiumCameraRequestKind::Inspect:  return TEXT("inspect");
+		case EElysiumCameraRequestKind::Dialogue: return TEXT("dialogue");
+		case EElysiumCameraRequestKind::Feed:     return TEXT("feed");
+		case EElysiumCameraRequestKind::Death:    return TEXT("death");
+		case EElysiumCameraRequestKind::Sequence: return TEXT("sequence");
+		default:                                  return TEXT("player");
+		}
+	}
+
+	const TCHAR* CameraControlName(EElysiumCameraControlPolicy Control)
+	{
+		switch (Control)
+		{
+		case EElysiumCameraControlPolicy::LookOnly: return TEXT("look-only");
+		case EElysiumCameraControlPolicy::Locked:   return TEXT("locked");
+		default:                                     return TEXT("preserve");
+		}
+	}
+
+	const TCHAR* CameraFallbackName(EElysiumCameraFallback Fallback)
+	{
+		switch (Fallback)
+		{
+		case EElysiumCameraFallback::SourceShot:      return TEXT("source-shot");
+		case EElysiumCameraFallback::AuthoredProfile: return TEXT("authored-profile");
+		case EElysiumCameraFallback::PlayerView:      return TEXT("player-view");
+		default:                                      return TEXT("none");
 		}
 	}
 
@@ -663,7 +700,7 @@ namespace ElysiumMcpImpl
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_player_get"),
-				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the camera (first/third person, its blend weight, both rigs' solved boom lengths and clip state, and any scripted shot), the settled locomotion sample, the frame's animation selection record (classified activity, resolved label, OWNING BANK, asset kind and the outcome or fallback reason), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
+				TEXT("Read the player's pose and state: world position (Unreal cm) and view rotation, noclip on/off, the legacy first/third-person camera state plus the modern camera director's resolved winner, request policy, pose, weight, and FOV, the settled locomotion sample, the frame's animation selection record (classified activity, resolved label, OWNING BANK, asset kind and the outcome or fallback reason), the current map, average FPS, and what the +use look-cursor is currently aimed at."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
 				{
@@ -691,11 +728,13 @@ namespace ElysiumMcpImpl
 					{
 						Body->SetBoolField(TEXT("noclip"), PlayerBody->IsNoclip());
 
-						// 11.7 — the camera as one weight, so an agent can drive `togglecamera` and
-						// assert the transition rather than eyeball a screenshot.
+						// Keep the original fields at camera.* for compatibility, and report the
+						// modern local-player director separately at camera.director.*. During a
+						// dialogue the legacy component can correctly remain in first person while
+						// the director owns the final view.
+						TSharedRef<FJsonObject> Camera = Obj();
 						if (const UElysiumCameraComponent* Cam = PlayerBody->GetCameraComponent())
 						{
-							TSharedRef<FJsonObject> Camera = Obj();
 							Camera->SetStringField(TEXT("mode"),
 								Cam->IsThirdPerson() ? TEXT("third") : TEXT("first"));
 							Camera->SetStringField(TEXT("driver"), Cam->GetWeights().Driver());
@@ -706,20 +745,79 @@ namespace ElysiumMcpImpl
 							const FElysiumCameraShot* Shot = Cam->GetShots().Top();
 							Camera->SetStringField(TEXT("shot"), Shot ? Shot->DebugName : FString());
 
-							// CCC2 — the modern rig solves every frame beside the faithful one, so an
-							// agent can read the A/B delta without flipping `elysium.ModernCamera`
-							// and taking a second sample it would then have to align by hand.
-							const APlayerController* CamPC = LivePlayerController();
-							if (const AElysiumPlayerCameraManager* Manager = CamPC
-									? Cast<AElysiumPlayerCameraManager>(CamPC->PlayerCameraManager)
-									: nullptr)
-							{
-								const FElysiumCameraSample& S = Manager->GetCameraSample();
-								Camera->SetNumberField(TEXT("boom_length"), S.BoomLength);
-								Camera->SetBoolField(TEXT("clipped"), S.bClipped);
-							}
-							Body->SetObjectField(TEXT("camera"), Camera);
 						}
+
+						// The modern rig solves every frame beside the faithful one, so an agent can
+						// read the A/B delta without flipping the mode and taking a second sample.
+						const APlayerController* CamPC = LivePlayerController();
+						if (const AElysiumPlayerCameraManager* Manager = CamPC
+								? Cast<AElysiumPlayerCameraManager>(CamPC->PlayerCameraManager)
+								: nullptr)
+						{
+							const FElysiumCameraSample& S = Manager->GetCameraSample();
+							Camera->SetNumberField(TEXT("boom_length"), S.BoomLength);
+							Camera->SetBoolField(TEXT("clipped"), S.bClipped);
+						}
+
+						const ULocalPlayer* LocalPlayer = CamPC ? CamPC->GetLocalPlayer() : nullptr;
+						const UElysiumCameraService* CameraService = LocalPlayer
+							? LocalPlayer->GetSubsystem<UElysiumCameraService>()
+							: nullptr;
+						if (CameraService)
+						{
+							const FElysiumResolvedCameraState& Resolved =
+								CameraService->ResolvedCamera();
+							const FElysiumCameraRequest& Request = Resolved.Request;
+							TSharedRef<FJsonObject> Director = Obj();
+							Director->SetBoolField(TEXT("active"), Resolved.bActive);
+							Director->SetNumberField(TEXT("epoch"),
+								static_cast<double>(CameraService->CurrentEpoch()));
+							Director->SetStringField(TEXT("kind"), CameraRequestKindName(Request.Kind));
+							Director->SetStringField(TEXT("winner"), Request.DebugName);
+							Director->SetStringField(TEXT("owner"), Request.Owner);
+							Director->SetNumberField(TEXT("priority"), Request.Priority);
+							Director->SetNumberField(TEXT("weight"), Resolved.Weight);
+							Director->SetBoolField(TEXT("override_pose"), Request.bOverridePose);
+							Director->SetObjectField(TEXT("position"), Vec(Resolved.Location));
+							TSharedRef<FJsonObject> DirectorRotation = Obj();
+							DirectorRotation->SetNumberField(TEXT("pitch"), Resolved.Rotation.Pitch);
+							DirectorRotation->SetNumberField(TEXT("yaw"), Resolved.Rotation.Yaw);
+							DirectorRotation->SetNumberField(TEXT("roll"), Resolved.Rotation.Roll);
+							Director->SetObjectField(TEXT("rotation"), DirectorRotation);
+							Director->SetNumberField(TEXT("fov"), Resolved.FieldOfView);
+							Director->SetStringField(TEXT("control"), CameraControlName(Request.Control));
+							Director->SetBoolField(TEXT("show_hud"), Request.bShowHud);
+							Director->SetBoolField(TEXT("draw_viewmodel"), Request.bDrawViewmodel);
+							Director->SetBoolField(TEXT("show_player_body"), Request.bShowPlayerBody);
+							Director->SetBoolField(TEXT("dialog_pov"), Request.bDialogPOV);
+							Director->SetStringField(TEXT("source_shot"), Request.SourceShot);
+							Director->SetStringField(TEXT("profile"), Request.SelectedProfile);
+							Director->SetStringField(TEXT("fallback"),
+								CameraFallbackName(Request.Fallback));
+							Director->SetStringField(TEXT("fallback_reason"), Request.FallbackReason);
+							Director->SetStringField(TEXT("candidate_rejections"),
+								Resolved.CandidateRejections);
+
+							TSharedRef<FJsonObject> Handle = Obj();
+							Handle->SetNumberField(TEXT("slot"), Resolved.Handle.Slot);
+							Handle->SetNumberField(TEXT("generation"), Resolved.Handle.Generation);
+							Handle->SetNumberField(TEXT("epoch"),
+								static_cast<double>(Resolved.Handle.Epoch));
+							Director->SetObjectField(TEXT("handle"), Handle);
+
+							TArray<FString> RequestDescriptions;
+							CameraService->DescribeRequests(RequestDescriptions);
+							TArray<TSharedPtr<FJsonValue>> Requests;
+							Requests.Reserve(RequestDescriptions.Num());
+							for (const FString& Description : RequestDescriptions)
+							{
+								Requests.Add(MakeShared<FJsonValueString>(Description));
+							}
+							Director->SetNumberField(TEXT("request_count"), Requests.Num());
+							Director->SetArrayField(TEXT("requests"), Requests);
+							Camera->SetObjectField(TEXT("director"), Director);
+						}
+						Body->SetObjectField(TEXT("camera"), Camera);
 					}
 					// CCC1/CCC4 — the body sample and the selection it produced. Together they are the
 					// whole diagnosis of a wrong pose: what the body was doing, what activity that

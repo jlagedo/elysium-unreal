@@ -1196,11 +1196,10 @@ FRotator FElysiumGreenRoomRun::BodyRotation(bool bAnimatedProp) const
 	{
 		return FRotator::ZeroRotator;   // the stage stands its cast on the world axes
 	}
-	// One anchor, two bases: the scene's understudies come off the baked mount and the props are
-	// loaded through glTFRuntime, so the same authored yaw resolves differently for each.
-	return bAnimatedProp
-		? ElysiumSkeletalBasis::GlbFromSourceAngles(TheatreSceneAngles)
-		: ElysiumSkeletalBasis::FromSourceAngles(TheatreSceneAngles);
+	// One anchor, one basis: understudies and props alike come off the baked mount, so the authored
+	// yaw resolves the same way for both.
+	(void)bAnimatedProp;
+	return ElysiumSkeletalBasis::FromSourceAngles(TheatreSceneAngles);
 }
 
 void FElysiumGreenRoomRun::PinCameraAndPlayerSurface()

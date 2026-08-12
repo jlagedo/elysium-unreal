@@ -58,6 +58,7 @@ public:
 		bool bInExecutable);
 	void SetSlateContent(TSharedRef<SWidget> InContent);
 	void SetExecutable(bool bInExecutable) { bExecutable = bInExecutable; }
+	void SetActionSelected(bool bInSelected);
 
 	FName GetActionId() const { return ActionId; }
 	const FText& GetActionLabel() const { return Label; }
@@ -72,6 +73,8 @@ public:
 
 protected:
 	virtual void SynchronizeProperties() override;
+	virtual void NativeOnSelected(bool bBroadcast) override;
+	virtual void NativeOnDeselected(bool bBroadcast) override;
 	virtual FReply NativeOnFocusReceived(const FGeometry& InGeometry,
 		const FFocusEvent& InFocusEvent) override;
 	virtual void NativeOnHovered() override;

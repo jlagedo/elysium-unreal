@@ -8,14 +8,12 @@ class AActor;
 class USkeletalMesh;
 class UAnimSequence;
 class UElysiumBipedAnimInstance;
-class UglTFRuntimeAsset;
 class IConsoleObject;
 
-// One test NPC loaded through the runtime skeletal path (P8 8.2 spike). Records what glTFRuntime
-// produced from a single out/npc/<stem>.glb -- mesh + skeleton + one applied animation -- so the Cog
-// NPC window can display it without re-reading the asset. The spawned actor is a plain AActor with a
-// USkeletalMeshComponent root playing the clip on UElysiumBipedAnimInstance — the game's own host, so
-// the preview body carries the facial flex track too.
+// One test NPC standing off the baked mount. Records the body and the applied clip so the Cog NPC
+// window can display them without re-reading the packages. The spawned actor is a plain AActor with
+// a USkeletalMeshComponent root playing the clip on UElysiumBipedAnimInstance — the game's own host,
+// so the preview body carries the facial flex track too.
 USTRUCT()
 struct FElysiumLoadedNpc
 {
@@ -24,24 +22,20 @@ struct FElysiumLoadedNpc
 	UPROPERTY() TObjectPtr<AActor> Actor = nullptr;
 	UPROPERTY() TObjectPtr<USkeletalMesh> Mesh = nullptr;
 	UPROPERTY() TObjectPtr<UAnimSequence> Anim = nullptr;
-	// The model's own parsed glb, kept so a clip it owns itself (its dialogue anims) can be
-	// re-applied later — the shared-bank path does not go through it.
-	UPROPERTY() TObjectPtr<UglTFRuntimeAsset> Asset = nullptr;
 
-	FString Stem;                 // glb stem under out/npc (e.g. "gangmember_male_2")
+	FString Stem;                 // model stem on the baked mount (e.g. "gangmember_male_2")
 	FString AnimName;             // the clip that was applied ("" if none)
 	int32   NumBones = 0;         // ref-skeleton bone count
-	int32   NumAnims = 0;         // animations present in the glb
+	int32   NumAnims = 0;         // clips this body owns itself (its dialogue), not what it can play
 	TArray<FString> AnimNames;    // their names (for the window's per-clip re-play buttons)
 	FVector Location = FVector::ZeroVector;
 	double  LoadMilliseconds = 0.0;
 };
 
-// GameInstance-scoped test harness for the glTFRuntime skeletal path (roadmap 8.2). Loads a VtMB NPC
-// exported to out/npc/<stem>.glb (mdl_gltf.py: mesh + StudioBone skeleton + one RLE animation, a
-// standard glTF 2.0 file) into a runtime USkeletalMesh + UAnimSequence via glTFRuntime, and spawns it
-// in front of the player. This is the proof-of-concept for the P8 NPC track (8.5 builds real NPC
-// presence on the same mechanism). Drives the elysium.npc.* verbs and the Cog "Elysium.NPC" window.
+// GameInstance-scoped test harness for the character path. Stands one baked body in front of the
+// player, playing a named clip resolved through the same vocabulary the game resolves against, so
+// what the harness stands is what a map stands. Drives the elysium.npc.* verbs and the Cog
+// "Elysium.NPC" window.
 // GI scope (like UElysiumAudioSubsystem) so its console commands register exactly once, not once per
 // world.
 UCLASS()

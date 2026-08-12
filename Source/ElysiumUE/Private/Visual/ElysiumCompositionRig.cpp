@@ -61,12 +61,7 @@ bool FElysiumCompositionRig::LoadAxisRules(const FString& RelPath, FString& OutE
 		OutError = FString::Printf(TEXT("not found: %s"), *Path);
 		return false;
 	}
-	if (!LoadAxisRulesJson(JsonText, OutError))
-	{
-		return false;
-	}
-	ApplyAssetImport();
-	return true;
+	return LoadAxisRulesJson(JsonText, OutError);
 }
 
 bool FElysiumCompositionRig::LoadAxisRulesJson(const FString& JsonText, FString& OutError)
@@ -166,25 +161,6 @@ bool FElysiumCompositionRig::LoadAxisRulesJson(const FString& JsonText, FString&
 		AxisRules.Add(MoveTemp(Rule));
 	}
 	return true;
-}
-
-void FElysiumCompositionRig::ApplyAssetImport()
-{
-	for (int32 i = 0; i < 3; ++i)
-	{
-		DriverAxes[i] = ElysiumNpcVisual::ImportGlbDirection(DriverAxes[i]);
-	}
-	for (FElysiumAxisInterpRule& Rule : AxisRules)
-	{
-		Rule.Axis = ElysiumNpcVisual::ImportGlbDirection(Rule.Axis);
-		for (int32 i = 0; i < 6; ++i)
-		{
-			const FTransform Imported =
-				ElysiumNpcVisual::ImportGlbLocal(FTransform(Rule.Quat[i], Rule.Pos[i]));
-			Rule.Quat[i] = Imported.GetRotation();
-			Rule.Pos[i] = Imported.GetTranslation();
-		}
-	}
 }
 
 // --- evaluation ------------------------------------------------------------------------------

@@ -33,6 +33,7 @@
 #include "Substrate/ElysiumCameraTrack.h"
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumDisposition.h"
+#include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -45,6 +46,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumTestServices.h"
+#include "Tests/ElysiumNpcTestHooks.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
@@ -2171,8 +2173,13 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 		{
 			continue;
 		}
-		TestTrue(FString::Printf(TEXT("%s generated GLB exists"), Want.Target),
-			IFileManager::Get().FileExists(*FElysiumContentPaths::AnimatedPropGlb(Entry->Glb)));
+		// The container the bake reads, not the `.glb` beside it -- nothing the game loads comes
+		// off that one any more.
+		TestTrue(FString::Printf(TEXT("%s declares its .eskm container"), Want.Target),
+			!Entry->Eskm.IsEmpty());
+		TestTrue(FString::Printf(TEXT("%s generated container exists"), Want.Target),
+			IFileManager::Get().FileExists(
+				*(FElysiumContentPaths::NpcDir() / Entry->Eskm)));
 		TestTrue(FString::Printf(TEXT("%s clip %s resolves"), Want.Target, Want.ClipA),
 			Entry->HasClip(Want.ClipA));
 		if (Want.ClipB)
@@ -2307,6 +2314,65 @@ bool FElysiumSantaMonicaNpcRoutesContentTest::RunTest(const FString&)
 		TestTrue(TEXT("retail north cop route remains authored"),
 			Script.Contains(TEXT("FollowPatrolPath(\"n1 n2 n3 n4 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 n1 n2 n3 n4\")")));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialJackBootstrapContentTest,
+	"Elysium.Content.TutorialJackBootstrap", GElysiumContentTestFlags)
+
+bool FElysiumTutorialJackBootstrapContentTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1"));
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: sp_tutorial_1 entities not exported: %s"),
+			*EntsPath));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_tutorial_1 entities parse"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+
+	const FElysiumEntityDef* Jack = nullptr;
+	TMap<FString, FString> Group32Places;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (Def.TargetName.Equals(TEXT("Jack"), ESearchCase::IgnoreCase))
+		{
+			Jack = &Def;
+		}
+		if (Def.Classname.Equals(TEXT("intersting_place"), ESearchCase::IgnoreCase)
+			&& Def.Keys.FindRef(TEXT("group_id")) == TEXT("32"))
+		{
+			Group32Places.Add(Def.TargetName, Def.Keys.FindRef(TEXT("origin")));
+		}
+	}
+	if (!TestNotNull(TEXT("UP Plus Jack is exported"), Jack))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Jack authored source origin remains the UP relocation"),
+		Jack->Keys.FindRef(TEXT("origin")), FString(TEXT("144 7352 -199")));
+	TestEqual(TEXT("Jack authored yaw remains 190"),
+		Jack->Keys.FindRef(TEXT("angles")), FString(TEXT("0 190 0")));
+	TestEqual(TEXT("Jack retains neutral disposition"),
+		Jack->Keys.FindRef(TEXT("default_disposition")), FString(TEXT("Neutral")));
+	TestEqual(TEXT("Jack selects the authored source shot"),
+		Jack->Keys.FindRef(TEXT("default_camera")), FString(TEXT("Jack")));
+	TestEqual(TEXT("Jack retains interesting-place admission"),
+		Jack->Keys.FindRef(TEXT("use_interesting")), FString(TEXT("1")));
+	TestEqual(TEXT("Jack remains constrained to group 32"),
+		Jack->Keys.FindRef(TEXT("interesting_place_groups")), FString(TEXT("32")));
+
+	TestEqual(TEXT("the UP map authors exactly three group-32 places"), Group32Places.Num(), 3);
+	TestEqual(TEXT("group-32 window place remains remote"), Group32Places.FindRef(TEXT("ip_by_window")),
+		FString(TEXT("85 132 112")));
+	TestEqual(TEXT("group-32 disabled place remains remote"), Group32Places.FindRef(TEXT("ip_0b2")),
+		FString(TEXT("-208 -16 -40")));
+	TestEqual(TEXT("group-32 lean place remains at retail Jack's site"),
+		Group32Places.FindRef(TEXT("ip_lean_1")), FString(TEXT("-221 -258 -32")));
 	return true;
 }
 
@@ -4701,17 +4767,19 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("the input slice defines exactly seven actions"), ActionSet->Actions.Num(), 7);
+	TestEqual(TEXT("the input slice defines exactly eight actions"), ActionSet->Actions.Num(), 8);
 	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
 	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));
 	const FElysiumInputActionDefinition* Use = ActionSet->Find(TEXT("Use"));
+	const FElysiumInputActionDefinition* Feed = ActionSet->Find(TEXT("Feed"));
 	const FElysiumInputActionDefinition* Duck = ActionSet->Find(TEXT("Duck"));
 	const FElysiumInputActionDefinition* Camera = ActionSet->Find(TEXT("Camera"));
 	if (!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
 		!TestTrue(TEXT("Look definition exists"), Look && Look->Action) ||
 		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action) ||
 		!TestTrue(TEXT("Use definition exists"), Use && Use->Action) ||
+		!TestTrue(TEXT("Feed definition exists"), Feed && Feed->Action) ||
 		!TestTrue(TEXT("Duck definition exists"), Duck && Duck->Action) ||
 		!TestTrue(TEXT("Camera definition exists"), Camera && Camera->Action))
 	{
@@ -4721,12 +4789,16 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestTrue(TEXT("Look is Axis2D"), Look->Action->ValueType == EInputActionValueType::Axis2D);
 	TestTrue(TEXT("Jump is Boolean"), Jump->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Use is Boolean"), Use->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("Feed is Boolean"), Feed->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Duck is Boolean"), Duck->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Camera is Boolean"), Camera->Action->ValueType == EInputActionValueType::Boolean);
 	TestEqual(TEXT("Jump preserves its command identity"), Jump->Command, FString(TEXT("+jump")));
 	TestTrue(TEXT("Jump is a press/release pair"), Jump->bButtonPair);
 	TestEqual(TEXT("RB preserves the ordinary use command identity"), Use->Command, FString(TEXT("+use")));
 	TestTrue(TEXT("Use is a press/release pair"), Use->bButtonPair);
+	TestEqual(TEXT("Y/Triangle preserves the ordinary feed command identity"),
+		Feed->Command, FString(TEXT("+feed")));
+	TestTrue(TEXT("Feed keeps the low-level press/release command pair"), Feed->bButtonPair);
 
 	// **L3 fires the ordinary `+duck` pair, and the crouch is a toggle anyway.** The retention is the
 	// mover's — `IN_DUCK`'s press edge flips `bDuckRequested` — so there is no gamepad-only crouch
@@ -4740,7 +4812,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestFalse(TEXT("view toggle is not a press/release pair"), Camera->bButtonPair);
 	// Every mapped command names a declared verb, or the button is a no-op that logs nothing. The
 	// leading `+` is stripped first, because a pair's press edge is declared under its bare name.
-	for (const FElysiumInputActionDefinition* Definition : { Jump, Use, Duck, Camera })
+	for (const FElysiumInputActionDefinition* Definition : { Jump, Use, Feed, Duck, Camera })
 	{
 		const FString Bare = Definition->Command.StartsWith(TEXT("+"))
 			? Definition->Command.Mid(1) : Definition->Command;
@@ -4749,7 +4821,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	}
 
 	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
-	TestEqual(TEXT("six actions are gameplay-mapped"), Mappings.Num(), 6);
+	TestEqual(TEXT("seven actions are gameplay-mapped"), Mappings.Num(), 7);
 	auto FindMapping = [&Mappings](const UInputAction* Action) -> const FEnhancedActionKeyMapping*
 	{
 		return Mappings.FindByPredicate(
@@ -4759,12 +4831,14 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FEnhancedActionKeyMapping* LookMapping = FindMapping(Look->Action);
 	const FEnhancedActionKeyMapping* JumpMapping = FindMapping(Jump->Action);
 	const FEnhancedActionKeyMapping* UseMapping = FindMapping(Use->Action);
+	const FEnhancedActionKeyMapping* FeedMapping = FindMapping(Feed->Action);
 	const FEnhancedActionKeyMapping* DuckMapping = FindMapping(Duck->Action);
 	const FEnhancedActionKeyMapping* CameraMapping = FindMapping(Camera->Action);
 	if (!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
 		!TestNotNull(TEXT("Look mapping"), LookMapping) ||
 		!TestNotNull(TEXT("Jump mapping"), JumpMapping) ||
 		!TestNotNull(TEXT("Use mapping"), UseMapping) ||
+		!TestNotNull(TEXT("Feed mapping"), FeedMapping) ||
 		!TestNotNull(TEXT("Duck mapping"), DuckMapping) ||
 		!TestNotNull(TEXT("Camera mapping"), CameraMapping))
 	{
@@ -4774,6 +4848,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
 	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
 	TestEqual(TEXT("Use is on RB"), UseMapping->Key, EKeys::Gamepad_RightShoulder);
+	TestEqual(TEXT("Feed is on Y/Triangle"), FeedMapping->Key, EKeys::Gamepad_FaceButton_Top);
 	// L3 and R3 are the stick *clicks*, and each sits on the stick whose job it serves: crouch is a
 	// movement verb on the movement stick, the view toggle is a camera verb on the camera stick.
 	TestEqual(TEXT("crouch is on L3"), DuckMapping->Key, EKeys::Gamepad_LeftThumbstick);
@@ -5627,6 +5702,20 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 		return true;
 	}
 	Defs.MapName = TEXT("sp_tutorial_1");
+	FElysiumClanTable Clans;
+	FElysiumClanTemplate BluebloodTemplate;
+	FString TemplateError;
+	if (!TestTrue(TEXT("the NPC template table loads"), Clans.Load(TemplateError))
+		|| !TestTrue(TEXT("BluebloodFastfood resolves through its real parent chain"),
+			Clans.Resolve(TEXT("BluebloodFastfood"), BluebloodTemplate)))
+	{
+		AddError(TemplateError);
+		return false;
+	}
+	TestEqual(TEXT("the resolved tutorial victim authors FastFood"),
+		BluebloodTemplate.GeneralInt(TEXT("FastFood")), 1);
+	TestFalse(TEXT("FastFood takes the non-resisting acceptance route"),
+		ElysiumFeed::ResistsByAuthoredPolicy(/*bFastFood*/ true, /*bNoResistEffect*/ false));
 
 	FElysiumRecordingServices Services;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
@@ -5689,34 +5778,52 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	{
 		return false;
 	}
-
-	// TEST SETUP, and what it costs. A headless world has no game-state subsystem, so it has no
-	// rulebook: every sheet reads zero (the child's authored `stattemplate BluebloodFastfood`
-	// resolves to nothing) and `CalcFeat` fails closed on both sides. So the blood the transaction
-	// moves is seeded here, and acceptance is taken through the automatic-state route rather than
-	// the opposed check — which is a real retail acceptance path, not a bypass of the policy. The
-	// opposed check itself is asserted in `Elysium.Substrate.Feeding`, over a pinned Dice stream.
-	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100);
-	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 0);
-	Player->RecomputeSheet();
-	Child->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100);
-	Child->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 2);
-	Child->RecomputeSheet();
-	Child->Disposition = TEXT("cower");
-
-	if (!TestTrue(TEXT("feeding on the spawned blueblood is accepted"),
-		ElysiumFeedAccepted(Player->AttemptFeed(*Child))))
+	TestEqual(TEXT("the spawned child retains its authored stattemplate"),
+		ChildEnt->Def->Keys.FindRef(TEXT("stattemplate")), FString(TEXT("BluebloodFastfood")));
+	if (!TestTrue(TEXT("the resolved template applies to the real spawned NPC"),
+		ElysiumNpcTestHooks::ApplyResolvedTemplate(*ChildEnt, BluebloodTemplate)))
 	{
 		return false;
 	}
+
+	// The bare world has no persistent player record, so seed only the feeder half. The victim's
+	// BloodPool and FastFood flag came from the real resolved template above; its neutral disposition
+	// is left untouched, and the request enters through QueuePlayerFeedEdge + the embodiment service.
+	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::MaxHealth, 100);
+	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 0);
+	Player->RecomputeSheet();
+	TestEqual(TEXT("the real template supplies the blueblood's blood pool"), Child->BloodPoolValue(), 9);
+	TestTrue(TEXT("the neutral FastFood blueblood does not resist"), !Child->ResistsFeeding());
+	Services.FeedTarget = Child->Handle;
 	const int32 RowsBefore = Sink->Rows.Num();
-	for (int32 Step = 1; Step <= 200; ++Step)
+	World.QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerFeed();
+	World.QueuePlayerFeedEdge(EElysiumUseEdge::Released);
+	World.UpdatePlayerFeed();
+	if (!TestTrue(TEXT("the first feed-button tap accepts the spawned blueblood"),
+		Player->IsFeedPaired()))
+	{
+		return false;
+	}
+	for (int32 Step = 1; Step <= 70; ++Step)
 	{
 		World.RunPlayerThink(Step * 0.05);
 		World.Tick(Step * 0.05);
 	}
-	TestFalse(TEXT("the feed ran to completion"), Player->IsFeedPaired());
-	TestTrue(TEXT("and took the blueblood's blood"), Player->FeedState.BloodStolen > 0);
+	TestEqual(TEXT("the first tap remains active through one transfer"),
+		Player->FeedState.BloodStolen, 1);
+	TestEqual(TEXT("the blueblood loses that transferred point"), Child->BloodPoolValue(), 8);
+	World.QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerFeed();
+	World.QueuePlayerFeedEdge(EElysiumUseEdge::Released);
+	World.UpdatePlayerFeed();
+	for (int32 Step = 71; Step <= 120; ++Step)
+	{
+		World.RunPlayerThink(Step * 0.05);
+		World.Tick(Step * 0.05);
+	}
+	TestFalse(TEXT("the second feed-button tap releases the pair"), Player->IsFeedPaired());
+	TestFalse(TEXT("stopping after one point leaves the blueblood alive"), Child->IsDead());
 
 	// THE ACCEPTANCE. `OnFedUponEnd` is a maker-authored row, fired by the CHILD because the child
 	// carries the copied rows (`docs/vtmb/entity_io.md`), so both halves of the tutorial's authored
@@ -5727,13 +5834,12 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 
 	bool bSawFlagWire = false;
 	bool bSawEnableWire = false;
+	bool bSawDeathFlagWire = false;
 	for (int32 i = RowsBefore; i < Sink->Rows.Num(); ++i)
 	{
 		const FElysiumQueuedWireSink::FRow& Row = Sink->Rows[i];
-		// The maker authors `Tutorial_Blueblood` twice — `= 1` on OnFedUponEnd and `= 2` on OnDeath —
-		// so the payload is matched exactly. Both fire here (a drained victim dies), and they carry
-		// different activators, which is correct: a feed's activator is the feeder, and a death's is
-		// the entity that died.
+		// The maker authors `Tutorial_Blueblood` twice, so match the successful feed payload exactly;
+		// this toggle release leaves the victim alive and therefore must not take the OnDeath branch.
 		if (Row.Python.Contains(TEXT("Tutorial_Blueblood = 1")))
 		{
 			bSawFlagWire = true;
@@ -5742,6 +5848,7 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 			TestEqual(TEXT("...with the feeder as activator"),
 				Row.ActivatorIndex, Player->Handle.Index);
 		}
+		bSawDeathFlagWire |= Row.Python.Contains(TEXT("Tutorial_Blueblood = 2"));
 		if (Row.Target == TEXT("trig_dialog_outside_chopshop")
 			&& Row.Input == FName(TEXT("Enable")))
 		{
@@ -5752,6 +5859,7 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the authored `G.Tutorial_Blueblood = 1` payload was raised"), bSawFlagWire);
 	TestTrue(TEXT("the authored chopshop Enable was raised"), bSawEnableWire);
+	TestFalse(TEXT("toggle release does not raise the blueblood death payload"), bSawDeathFlagWire);
 	// `G` itself is not asserted here: evaluating a field-6 payload needs a script host, which needs
 	// the game-state subsystem a headless entity world does not have. The wire reaching the queue
 	// with the right provenance is the whole of what this tier can prove; the flag write is the

@@ -78,27 +78,13 @@ struct FElysiumCompositionRig
 
 	const FElysiumAxisInterpRule* FindRule(const FName Bone) const;
 
-	// Read `npc/procedural/<RelPath>` — `npc_index.json`'s own `procedural` value — and carry it
-	// onto the skeleton through the glb's import transform (see `ApplyAssetImport`). This is the
-	// door the runtime uses.
+	// Read `npc/procedural/<RelPath>` — `npc_index.json`'s own `procedural` value. The sidecar is
+	// Unreal-native, written by the same conversion the body's own bones are, so the table lines
+	// up with the skeleton with nothing applied to it. This is the door the runtime uses.
 	bool LoadAxisRules(const FString& RelPath, FString& OutError);
-	// Parse the same JSON **verbatim**, in the glb's own space and metres. Split out so a test can
-	// see what the file says before and after the import; a caller wanting rules that line up with
-	// a loaded skeleton wants `LoadAxisRules`.
+	// Parse the same JSON from a string rather than from the export root, so a test can state a
+	// table inline. Same result; `LoadAxisRules` is the door.
 	bool LoadAxisRulesJson(const FString& JsonText, FString& OutError);
-
-	// Carry a verbatim table onto the skeleton glTFRuntime built from the same .glb.
-	//
-	// The sidecar states its entries in the glb's own basis and metres — deliberately, because that
-	// is the one space in which the table and the mesh and the clips are consistent by
-	// construction rather than by agreement. glTFRuntime then imports that file under a declared
-	// basis and scale, conjugating every node transform and scaling every translation, so the
-	// skeleton in memory is *not* in the space the sidecar is written in. Passing the table through
-	// the loader's own import transform is what puts the two back in one space; it is the glb
-	// exemption's other half, not a coordinate conversion this runtime authors — the constants come
-	// from the same `FglTFRuntimeConfig` the mesh was loaded with, and metres to centimetres alone
-	// is a factor of 100 on every driven bone's translation.
-	void ApplyAssetImport();
 
 	// The rule body, verbatim from `docs/vtmb/procedural_bones.md`, as a pure function of one local
 	// rotation — no pose, no component space, no skeleton:

@@ -11,6 +11,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumSkeletalBasis.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
@@ -66,7 +67,7 @@ struct FElysiumDialogueSession
 	double SelectedAt = 0.0;
 	float MinimumHoldSeconds = 0.0f;
 	float ScreenSide = 1.0f;
-	bool bBodyOwnerAcquired = false; // no RE46 body behavior is currently proven
+	FElysiumBodyOwnerToken BodyOwner;
 };
 
 // A/B toggle for the P1.5 brush bodies (per-entity convex collision + trigger overlaps). Read at
@@ -1354,17 +1355,24 @@ void FElysiumEntityWorld::UpdatePlayerFeed()
 	{
 		if (Edge == EElysiumUseEdge::Released)
 		{
-			// `-feed` publishes a release edge and clears the continuation latch. It does not tear
-			// the transaction down: retail's publisher does not call `FeedInterrupt`, and the
-			// accepted action exits through its own paired state and animation-event policy.
-			PlayerEnt->SetFeedContinuation(false);
+			// The low-level `-feed` edge only releases the command button. Feeding is a toggle-style
+			// action: the first PRESS starts it and a later PRESS requests the paired release family.
+			// Treating this edge as cancellation makes the patch's 0.1-second `vm_feed` tap abort
+			// before the first blood pulse.
 			continue;
 		}
-		// `Replenish` refuses to start another request while the player already has a paired peer.
+		// A second press while this player is the feeder requests the ordinary release transition.
+		// The continuation latch belongs to the paired action; it is not the physical button's held
+		// state. A victim-role player is not part of the ordinary slice and cannot cancel its attacker.
 		if (PlayerEnt->IsFeedPaired())
 		{
+			if (!PlayerEnt->FeedState.bVictim)
+			{
+				PlayerEnt->SetFeedContinuation(false);
+			}
 			continue;
 		}
+		// One unpaired press is one `Replenish` request. A miss does not become a held retry.
 		FElysiumEntityHandle Candidate = FElysiumEntityHandle::Invalid();
 		if (IElysiumEmbodiment* Bodily = Embodiment())
 		{
@@ -1764,13 +1772,43 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenDialogOwner() const
 
 void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	TSharedRef<FElysiumDlgConversation> Conversation, EElysiumDialogOpenerKind Opener,
-	int32 RawFlags, const FString& DefaultCamera)
+	int32 RawFlags, const FString& DefaultCamera, const FElysiumBodyOwnerToken& SuppliedBodyOwner)
 {
-	// Any second acquisition replaces the running session silently. Release its camera before the new
-	// request is acquired so one conversation never owns two handles, even when the NPC is the same.
+	FElysiumEntity* OwnerEntity = Resolve(NewOwner);
+	FElysiumBodyOwnerToken BodyOwner = SuppliedBodyOwner;
+	// A different NPC can acquire before the old session is displaced, making replacement atomic:
+	// refusal leaves the old conversation untouched. The same NPC must release its existing token
+	// first; that path is already live and can only fail after owner loss, when retaining the old
+	// conversation would be invalid too.
+	const bool bSameOwnerReplacement = DialogueSession && DialogueSession->Owner == NewOwner;
+	if (!BodyOwner.IsSet() && OwnerEntity && !bSameOwnerReplacement)
+	{
+		BodyOwner = OwnerEntity->BeginDialogueBodySession();
+	}
+	if (!OwnerEntity || (!BodyOwner.IsSet() && !bSameOwnerReplacement))
+	{
+		UE_LOG(LogElysiumWorld, Warning, TEXT("dialogue body acquisition refused for %s"),
+			*DescribeHandle(NewOwner));
+		return;
+	}
+	// Any accepted second acquisition replaces the running session silently. Release its camera
+	// before selecting the new request so one conversation never owns two handles.
 	if (DialogueSession)
 	{
 		EndDialogSession(/*bSilent*/ true);
+	}
+	if (bSameOwnerReplacement)
+	{
+		OwnerEntity = Resolve(NewOwner);
+		BodyOwner = OwnerEntity ? OwnerEntity->BeginDialogueBodySession()
+			: FElysiumBodyOwnerToken();
+		if (!BodyOwner.IsSet())
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("same-owner dialogue replacement lost body ownership for %s"),
+				*DescribeHandle(NewOwner));
+			return;
+		}
 	}
 	DialogueSession = MakeUnique<FElysiumDialogueSession>();
 	DialogueSession->Owner = NewOwner;
@@ -1779,6 +1817,7 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	DialogueSession->Opener = Opener;
 	DialogueSession->RawFlags = RawFlags;
 	DialogueSession->DefaultCamera = DefaultCamera;
+	DialogueSession->BodyOwner = BodyOwner;
 	DialogueSession->NormalizedCamera = ElysiumCameraShots::NormalizeKey(DefaultCamera);
 	DialogueSession->ScreenSide = (NewOwner.Index & 1) == 0 ? 1.0f : -1.0f;
 	if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
@@ -2127,8 +2166,23 @@ void FElysiumEntityWorld::GetDialogueDebugState(
 	Out.Emplace(TEXT("Profile"), DialogueSession->CameraRequest.SelectedProfile);
 	Out.Emplace(TEXT("Fallback"), DialogueSession->FallbackReason);
 	Out.Emplace(TEXT("Candidate rejects"), DialogueSession->CandidateRejections);
-	Out.Emplace(TEXT("Body owner"), DialogueSession->bBodyOwnerAcquired
-		? TEXT("Dialogue") : TEXT("unchanged (no proven RE46 behavior)"));
+	Out.Emplace(TEXT("Body owner"), FString::Printf(TEXT("%s gen=%u"),
+		LexToString(DialogueSession->BodyOwner.Owner), DialogueSession->BodyOwner.Generation));
+	if (const FElysiumEntity* Speaker = Resolve(DialogueSession->Owner))
+	{
+		const float RenderedYaw = ElysiumSkeletalBasis::FromSourceAngles(Speaker->Angles).Yaw;
+		const FVector ToSpeaker = Speaker->EyePosition() - DialogueSession->CameraRequest.Shot.Origin;
+		const FVector SpeakerForward = FRotator(0.0f, RenderedYaw, 0.0f).Vector();
+		const float Error = ToSpeaker.IsNearlyZero() ? 0.0f
+			: FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(
+				FVector::DotProduct((-ToSpeaker).GetSafeNormal2D(), SpeakerForward), -1.0f, 1.0f)));
+		Out.Emplace(TEXT("Speaker yaw"), FString::Printf(TEXT("source %.2f / rendered %.2f"),
+			Speaker->Angles.Y, RenderedYaw));
+		Out.Emplace(TEXT("Camera-to-speaker"), ToSpeaker.ToCompactString());
+		Out.Emplace(TEXT("Forward angular error"), FString::Printf(TEXT("%.2f deg"), Error));
+		Out.Emplace(TEXT("Gaze target"), DialogueSession->CameraRequest.bDialogPOV
+			? DialogueSession->CameraRequest.Shot.Origin.ToCompactString() : TEXT("listener"));
+	}
 }
 
 FString FElysiumEntityWorld::ScriptedSessionSaveBlockReason() const
@@ -2435,6 +2489,11 @@ void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
 	const FElysiumEntityHandle Closing = GetOpenDialogOwner();
+	FElysiumBodyOwnerToken ClosingBodyOwner;
+	if (DialogueSession)
+	{
+		ClosingBodyOwner = DialogueSession->BodyOwner;
+	}
 	if (LineService)
 	{
 		LineService->CancelDialogue(Closing);
@@ -2448,6 +2507,10 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	if (DialogueSession && Camera())
 	{
 		Camera()->ReleaseCamera(DialogueSession->CameraHandle);
+	}
+	if (FElysiumEntity* OwnerEntity = Resolve(Closing))
+	{
+		OwnerEntity->EndDialogueBodySession(ClosingBodyOwner, bSilent);
 	}
 	DialogueSession.Reset();
 

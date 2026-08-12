@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "topic": "tutorial-npc-bootstrap-capture",
+  "research_id": "RE47",
+  "required_runs": 2,
+  "profile": "Unofficial Patch 11.5 Plus",
+  "hash_gate": {
+    "vampire_dll_sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "retail_bsp_sha256": "026cd8ee971c64c5d595e72285351782a402d83f2a4c9fcc3a0d9dd5a4477770",
+    "retail_script_sha256": "e5f78fb50cbc0c592b5c875d7aecf56d2d5a902874d3a5ea8ae691df0e5676fe",
+    "up_bsp_sha256": "6cc1b53d0dd9b4b511107b72a9a3fb35b6a7b16f6a7ae1067f5b540fb00ac16c",
+    "up_script_sha256": "22bb91612f80123864fd4353e4c022639af28b11ff71c43f4e155924e3ca6a01",
+    "up_readme_sha256": "4a31d7f7558283bb37a277da6893f4a6f97af770f31e522ab2211d10b939a546",
+    "plus_user_cfg_sha256": "f799534720b7ad3078c2773708a9405fd33899a2e48de1a0458991288a2d6f9e"
+  },
+  "window": {
+    "begin": "before LevelInit map entity construction",
+    "end": "after the first porch dialogue publishes its first rendered view"
+  },
+  "events": [
+    "construct", "spawn", "activate", "npc_init_think", "first_run_ai",
+    "activity_change", "schedule_change", "motor_change", "interesting_place_claim",
+    "porch_end_touch", "dialogue_acquire", "view_update", "dialogue_first_frame"
+  ],
+  "fields": [
+    "player_transform_velocity_visibility", "controller_transform_velocity_visibility",
+    "jack_transform_velocity_visibility", "jack_activity_ideal_sequence",
+    "jack_state_schedule_task", "jack_navigation_goal_motor_yaw",
+    "interesting_place_candidate_claim_path_group", "view_origin_angles_fov",
+    "camera_weights_active_shot_fallback", "dialog_pov_gaze",
+    "input_command_suppression", "dialogue_owner_partner_line"
+  ],
+  "output_root": "$ELYSIUM_WORK_ROOT/research/tutorial-npc-bootstrap/capture"
+}

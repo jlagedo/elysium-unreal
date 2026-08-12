@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
+#include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumRulebook.h"
 
 #include "ElysiumRulebookSubsystem.generated.h"
@@ -17,8 +18,6 @@
 // logged once and remembered, so a missing export costs one warning rather than one per read.
 // `LoadAll` forces the set — what `elysium.rules` and `Elysium.Content.Rulebook` call.
 //
-// `dispositiontable.txt` is NOT here: it is owned by `UElysiumAnimSubsystem`, beside the
-// animation data its `Animation Name` column keys.
 UCLASS()
 class UElysiumRulebookSubsystem : public UGameInstanceSubsystem
 {
@@ -40,6 +39,10 @@ public:
 	const FElysiumWizard&             Wizard();
 	const FElysiumStrings&            Strings();
 	const FElysiumDiceTables&         Dice();
+	// `vdata/system/dispositiontable.txt`. Both halves of a row are read from here: the
+	// `Animation Name` column the standing-idle vocabulary is keyed on, and the fidget/stance-change
+	// pacing the disposition stance machine rolls against.
+	const FElysiumDispositionTable&   Dispositions();
 	// `vdata/items/*.txt`. Its first load also registers one entity class per definition
 	// (`ElysiumItems::Install`), so it has to happen before a map's item entities are created —
 	// `FElysiumEntityWorld::Load` touches it for exactly that reason.
@@ -83,6 +86,7 @@ private:
 	FElysiumStrings           StringData;
 	FElysiumDiceTables        DiceTables;
 	FElysiumItemTable         ItemTable;
+	FElysiumDispositionTable  DispositionTable;
 
 	bool bStatsLoaded = false;
 	bool bFeatsLoaded = false;
@@ -97,6 +101,7 @@ private:
 	bool bStringsLoaded = false;
 	bool bDiceLoaded = false;
 	bool bItemsLoaded = false;
+	bool bDispositionsLoaded = false;
 
 	FString StatsError;
 	FString FeatsError;
@@ -111,6 +116,7 @@ private:
 	FString StringsError;
 	FString DiceError;
 	FString ItemsError;
+	FString DispositionsError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

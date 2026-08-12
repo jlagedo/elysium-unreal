@@ -12,7 +12,6 @@
 #include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/AnimSequence.h"
 #include "Engine/SkeletalMesh.h"
-#include "glTFRuntimeAsset.h"
 
 static constexpr EAutomationTestFlags GElysiumCourtroomPoseFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -56,26 +55,21 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 		return true;
 	}
 
-	FString Error;
-	// The mount is the only build of a character; the out-asset is null on that path by design.
-	UglTFRuntimeAsset* Unused = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(
-		TEXT("ventrue_female_armor_1"), Unused, Error);
-	const FString BankPath = FElysiumContentPaths::NpcBankGlb(
-		TEXT("banks/cinematic_santa_monica_courtroom_courtroom_bip5__bip01.glb"));
-	UglTFRuntimeAsset* BankAsset = ElysiumNpcVisual::LoadAssetFromPath(BankPath, Error);
-	UAnimSequence* Anim = Mesh && BankAsset
-		? ElysiumNpcVisual::RetargetClip(BankAsset, Mesh, TEXT("entire_scene"), Error)
+	// Both sides off the baked mount. A cinematic bank read out of its `.glb` instead would arrive
+	// in glTFRuntime's basis while this body is in the container's, which is a quarter turn on the
+	// `Bip01` root -- the pose would still be finite and human-scaled, so this test would pass on
+	// it and prove nothing (`Elysium.Content.BakedClipCoverage`).
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(TEXT("ventrue_female_armor_1"));
+	UAnimSequence* Anim = Mesh != nullptr
+		? ElysiumNpcVisual::LoadBakedClip(Mesh,
+			TEXT("cinematic_santa_monica_courtroom_courtroom_bip5__bip01"), TEXT("entire_scene"))
 		: nullptr;
-	if (!TestNotNull(TEXT("Vampire4 mesh loads"), Mesh)
-		|| !TestNotNull(TEXT("courtroom Bip01 bank loads"), BankAsset)
-		|| !TestNotNull(TEXT("courtroom entire_scene binds"), Anim))
+	if (!TestNotNull(TEXT("Vampire4 baked mesh loads"), Mesh)
+		|| !TestNotNull(TEXT("courtroom entire_scene is on the mount"), Anim))
 	{
-		AddError(Error);
 		return true;
 	}
 	Mesh->AddToRoot();
-	BankAsset->AddToRoot();
 	Anim->AddToRoot();
 
 	IAnimationDataModel* Model = Anim->GetDataModel();
@@ -116,7 +110,6 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 	}
 
 	Anim->RemoveFromRoot();
-	BankAsset->RemoveFromRoot();
 	Mesh->RemoveFromRoot();
 	return true;
 }

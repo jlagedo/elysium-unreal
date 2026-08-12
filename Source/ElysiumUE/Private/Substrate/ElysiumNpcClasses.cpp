@@ -18,15 +18,15 @@
 // chain, shared with the player. `elysium.NpcBodies` is the one thing that stays here: it is this
 // class's A/B, not the animating node's.
 //
-// Deliberately out of scope (8.5 / B4 / B6): all AI, scripted_sequence anim-at-marker, the +use talk
-// path (an NPC has no use-body yet — the porch trigger drives dialog directly), the real .dlg runner
-// (B4 replaces the manual EndDialog seam), and feeding (OnFedUpon*, B6). `npc_maker` itself follows
-// the recovered admission, quota, timer and child-lifecycle contract in `docs/vtmb/entity_io.md`.
+// The bounded plain-C++ mind below owns deterministic admission and arbitration only. Existing
+// patrol, interesting-place, scripted-sequence and dialogue executors keep their recovered bodies;
+// combat perception and the general schedule/task library remain outside this slice.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDlg.h"
 #include "ElysiumDialogueCamera.h"
+#include "ElysiumStanceTypes.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -38,10 +38,15 @@
 #include "ElysiumStub.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumDisposition.h"
+#include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
+#include "Substrate/ElysiumNpcMind.h"
+#include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumNpcTestHooks.h"
 
 #include "HAL/IConsoleManager.h"
 
@@ -238,7 +243,7 @@ private:
 // model at its origin, follows named patrols or interesting-place routes, and owns dialogue gates.
 // ============================================================================================
 
-class FElysiumNpc final : public FElysiumCombatCharacter
+class FElysiumNpc final : public FElysiumCombatCharacter, public IElysiumScheduleRunner
 {
 public:
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
@@ -248,7 +253,45 @@ public:
 	EElysiumDialogOpenerKind DialogOpener = EElysiumDialogOpenerKind::Remote;
 	FString DefaultCamera;            // definition-derived Tier-1 `default_camera`, never save state
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
+
+	// VtMB's disposition stance machine (`docs/vtmb/animation_and_movers.md`). The index and the
+	// clock are retail's own saved pair; the two latches beside them are not saved, because retail's
+	// datamap does not carry them either — a save taken mid-fidget restores as not fidgeting.
+	FElysiumStanceState Stance;
+
+	// Resolved once per (model, disposition) and re-resolved only when one of those two changes,
+	// which is where retail resolves it: at model precache, with the fallback ladder baked in. The
+	// row travels with the clips because they are two halves of the same table entry.
+	FElysiumStanceClips StanceClips;
+	FElysiumDisposition StanceTuning;
+	FString StanceResolvedFor;        // "<stem>|<disposition>" the pair above was resolved for
+	bool bStanceUnavailable = false;  // this model authors no stance set; do not ask again
+
+	// The running schedule and the variant token its activity picks ride on.
+	FElysiumScheduleState Schedule;
+	int32 ScheduleActivityCycle = 0;
+
+	// `m_bAllowAlertLookaround` (+0x6434), authored per NPC.
+	bool bAllowAlertLookaround = false;
+	// `m_iEnemySightings` (+0x60a8). Nothing increments it: an enemy is never assigned in this
+	// runtime (roadmap RE48), so it holds 0 and the lookaround gate reads a flat 10%.
+	int32 EnemySightings = 0;
+
+	// The door-obstruction selector's own state. `m_hBlockedDoor` (+0x5d28) and `m_hCondHitByDoor`
+	// (+0x5d2c) are the two obstruction sources this runtime can carry; `m_vSavePosition` (+0x5dd0)
+	// is where the chosen one was standing when the schedules were picked.
+	FElysiumEntityHandle BlockedDoor;
+	double BlockedDoorExpiresAt = 0.0;
+	FElysiumEntityHandle CondHitByDoor;
+	bool bCondHitByDoor = false;
+	FVector SavePosition = FVector::ZeroVector;
+
+	// The stance index is what selects among a disposition's three idles, so it is this chain's
+	// answer for the variant the animation layer asks for. Retail zero-initialises it, which is why
+	// the first pose any body shows is `Stance_<Anim>_Idle_1` rather than an index-spread guess.
+	virtual int32 IdleVariant() const override { return FMath::Clamp(Stance.Current, 0, ElysiumStance::Count - 1); }
 	FString StatTemplate;             // stattemplate — the `npctemplate*.txt` stat block this NPC wears
+	bool bFastFood = false;            // inherited General.FastFood — authored non-resistance to feeding
 	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names
@@ -275,6 +318,20 @@ public:
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
+	virtual bool ResistsFeeding() const override
+	{
+		// `FastFood` is inherited through the resolved NPC template. It is the authored data switch
+		// used by tutorial and ambient victims that must accept without the Brawl/Hacking check.
+		return ElysiumFeed::ResistsByAuthoredPolicy(
+			bFastFood, !FElysiumCombatCharacter::ResistsFeeding());
+	}
+
+	void ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
+		const FElysiumStatTable* Table)
+	{
+		bFastFood = Resolved.GeneralInt(TEXT("FastFood")) != 0;
+		Sheet.ApplyTemplate(Resolved, Table);
+	}
 
 	void InputUseInteresting(const FElysiumInputArgs& Args)
 	{
@@ -303,6 +360,12 @@ public:
 		PatrolIndex = 0;
 		bPatrolActive = ResolvePatrolPoints();
 		bMoveIssued = false;
+		if (bPatrolActive && Mind.IsAdmitted() && Mind.Owner() == EElysiumBodyOwner::None
+			&& !PatrolOwner.IsSet())
+		{
+			bPatrolActive = Mind.Acquire(EElysiumBodyOwner::Patrol, /*bSuspendCurrent=*/false,
+				PatrolOwner, TEXT("FollowPatrolPath"));
+		}
 		if (bPatrolActive)
 		{
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
@@ -320,6 +383,18 @@ public:
 		PatrolPath.Reset();
 		PatrolNames.Reset();
 		PatrolPoints.Reset();
+		if (PatrolOwner.IsSet())
+		{
+			if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+			{
+				Mind.Release(PatrolOwner, TEXT("ClearPatrolPath"));
+			}
+			else
+			{
+				Mind.ForgetSuspended(EElysiumBodyOwner::Patrol, TEXT("ClearPatrolPath"));
+			}
+			PatrolOwner.Reset();
+		}
 		// A cutscene beat outranks the route inputs: clearing the route while a script owns the
 		// body drops the route only, and leaves the beat's travel and its cycle running.
 		if (ScriptPhase == EScriptPhase::None)
@@ -437,6 +512,11 @@ public:
 		// The ambient claim is released the same way dialogue releases it — one exit, so an
 		// `intersting_place` cannot stay reserved by an NPC a cutscene has taken away.
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		if (!Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
+			SequenceOwner, TEXT("BeginScriptMove")))
+		{
+			return false;
+		}
 		Motor->Stop();
 		bMoveIssued = false;
 		bWalkingAnimation = false;
@@ -485,6 +565,12 @@ public:
 			/*bAllowPartialPath=*/true))
 		{
 			ScriptPhase = EScriptPhase::None;
+			Mind.Release(SequenceOwner, TEXT("script path unavailable"));
+			SequenceOwner.Reset();
+			if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+			{
+				PatrolOwner = Mind.CurrentToken();
+			}
 			return false;   // no path to the mark: the beat falls back to placing the NPC there
 		}
 		ScriptPhase = EScriptPhase::Travel;
@@ -595,7 +681,7 @@ public:
 
 	virtual void EndScriptMove() override
 	{
-		if (ScriptPhase == EScriptPhase::None)
+		if (ScriptPhase == EScriptPhase::None && !SequenceOwner.IsSet())
 		{
 			return;
 		}
@@ -606,12 +692,19 @@ public:
 		}
 		bMoveIssued = false;
 		bWalkingAnimation = false;
-		// The pose belongs to the beat (`m_iszPlay` / `m_iszPostIdle` / back to the stance idle),
-		// so nothing is played here. Hand the body back to its own behaviour.
-		if (bPatrolActive || bUseInteresting)
+		if (SequenceOwner.IsSet())
 		{
-			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+			Mind.Release(SequenceOwner, TEXT("EndScriptMove"));
+			SequenceOwner.Reset();
+			if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+			{
+				PatrolOwner = Mind.CurrentToken();
+			}
 		}
+		// The pose belongs to the beat (`m_iszPlay` / `m_iszPostIdle` / back to the stance idle),
+		// so nothing is played here. Hand the body back to its own behaviour -- which for a standing
+		// character is its stance machine, so this wakes every NPC and not only the routed ones.
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 	}
 
 	// --- Body state a cutscene borrows ------------------------------------------------------
@@ -660,6 +753,15 @@ public:
 		{
 			return;
 		}
+		// The activation barrier admits the mind on its first frozen-time think. Admission is a
+		// no-op for body, motor and animation; executors may run only on a later think.
+		if (Mind.Admit())
+		{
+			// Every admitted NPC gets a next think, not just the ones with an executor: a standing
+			// character's stance machine is an executor too, and without this it would never run.
+			NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + 0.1);
+			return;
+		}
 		// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
 		// the feeder's think and nothing else moves either actor while it runs.
 		if (TickFeed(World ? World->NowSeconds() : 0.0))
@@ -684,7 +786,21 @@ public:
 		}
 		if (bInDialog)
 		{
+			// A character in conversation still runs its stance machine -- retail's Talking
+			// threshold/chance pair exists precisely for this case. The selector settles it onto its
+			// current idle rather than fidgeting through a line, so the reschedule is what keeps it
+			// posed rather than what makes it move.
+			ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
 			return;
+		}
+		if (bPatrolActive && !PatrolOwner.IsSet())
+		{
+			if (!Mind.Acquire(EElysiumBodyOwner::Patrol, /*bSuspendCurrent=*/false,
+				PatrolOwner, TEXT("patrol executor admission")))
+			{
+				NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + 0.25);
+				return;
+			}
 		}
 		if (bPatrolActive && !PatrolPoints.IsEmpty())
 		{
@@ -694,6 +810,95 @@ public:
 		{
 			ThinkAmbient();
 		}
+		else
+		{
+			// A standing NPC. Before this it fell off the end of Think() without touching NextThink,
+			// which is why it was never asked again and held whatever pose it spawned in.
+			ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
+		}
+	}
+
+	/**
+	 * `CAI_BaseNPCTroika::SelectSchedule` case 1, in recovered priority order
+	 * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The idle branch, decided"). First match wins.
+	 *
+	 * The steps this runtime cannot answer refuse by name rather than guessing, and the refusal
+	 * records what would settle it -- a refusal that says nothing is indistinguishable from a step
+	 * that silently did not apply.
+	 */
+	EElysiumScheduleId SelectIdleSchedule()
+	{
+		// 1. Choreo scene or an active discipline. `m_bInChoreoScene` maps onto the scripted body
+		//    owner we already issue; the discipline flag has no domain in this runtime yet, so only
+		//    the choreo half is answerable -- and it answers the same schedule either way.
+		if (Mind.Owner() == EElysiumBodyOwner::Sequence)
+		{
+			return EElysiumScheduleId::IdleDisposition;
+		}
+
+		// 2. The follower controller at virtual `+0x97c`. Refused: `EElysiumBodyOwner::Follower` is
+		//    already rejected by the mind, and the three `follower_type` radii it compares against
+		//    are unrecovered.
+		//
+		// 3. Patrol, and 4. `use_interesting`. Both keep their existing executors rather than being
+		//    re-expressed as task programs -- they own the body through the mind's own token, which
+		//    is the arbitration this selection order would otherwise duplicate.
+		if (bPatrolActive || bUseInteresting)
+		{
+			return EElysiumScheduleId::None;
+		}
+
+		// 5. Alert lookaround. `m_iEnemySightings` has no producer (roadmap RE48), so it sits at 0
+		//    and the gate is a flat 10% -- which is the faithful value at that state, not a
+		//    stand-in. `no_alert_state` does NOT suppress this route: the recovered base
+		//    `SelectIdealState` carries no such test.
+		if (bAllowAlertLookaround)
+		{
+			const int32 Chance = FMath::Min(30, (EnemySightings + 2) * 5);
+			if (ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99) < Chance)
+			{
+				return EElysiumScheduleId::AlertLookAroundNi;
+			}
+		}
+
+		// 6. Door obstruction (`CAI_BaseNPCTroika::SelectDoorObstructionSchedule`).
+		if (const EElysiumScheduleId Door = SelectDoorObstructionSchedule();
+			Door != EElysiumScheduleId::None)
+		{
+			return Door;
+		}
+
+		// 7. Return-to-initial, else the disposition stance. `m_bReturnToInitialPos` has no producer
+		//    here, so this resolves to the stance -- which is also retail's own default.
+		return EElysiumScheduleId::IdleDisposition;
+	}
+
+	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
+	void ThinkStanceOrIdle(double Now)
+	{
+		double Delay = 0.25;
+		if (Schedule.IsRunning() && ElysiumSchedule::Tick(Schedule, *this, Now, Delay))
+		{
+			NextThink = static_cast<float>(Now + Delay);
+			return;
+		}
+
+		const EElysiumScheduleId Next = SelectIdleSchedule();
+		if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(Schedule, Next, *this))
+		{
+			// No idle schedule applies -- an executor owns this body, or this model carries no
+			// stance set at all. Either way it is re-asked on a slow cadence rather than dropped.
+			NextThink = static_cast<float>(Now + 1.0);
+			return;
+		}
+		if (!ElysiumSchedule::Tick(Schedule, *this, Now, Delay))
+		{
+			// The schedule ended inside its first think -- a body with no stance machine takes this
+			// path, because `TASK_SPECIAL_IDLE_ACTIVITY` fails for it.
+			NextThink = static_cast<float>(Now + 1.0);
+			return;
+		}
+		NextThink = static_cast<float>(Now + Delay);
 	}
 
 	void ThinkPatrol()
@@ -793,6 +998,12 @@ public:
 		}
 		if (Best && Best->Claim(Handle))
 		{
+			if (!Mind.Acquire(EElysiumBodyOwner::Ambient, /*bSuspendCurrent=*/false,
+				AmbientOwner, TEXT("interesting-place claim")))
+			{
+				Best->Release(Handle);
+				return nullptr;
+			}
 			CurrentSpotIndex = Best->Handle.Index;
 			return Best;
 		}
@@ -835,6 +1046,205 @@ public:
 		}
 		OutEnd = Now + FMath::Max(0.25f, Seconds);
 		return true;
+	}
+
+	// --- the disposition stance machine ---------------------------------------------------------
+	// `docs/vtmb/animation_and_movers.md` -> "The disposition stance machine". The decision itself is
+	// `ElysiumStance::Select`, a pure rule over a resolved clip table and a tuning row; everything
+	// here is the resolution and the cadence around it.
+
+	// Bring `StanceClips`/`StanceTuning` up to date for the current model and disposition. Returns
+	// false for a body that authors no stance set at all, which is an ordinary answer -- the monsters
+	// and one-off models idle off ACT_IDLE instead, and the caller falls back to that.
+	bool EnsureStanceResolved()
+	{
+		const FString Key = ModelStem() + TEXT("|") + Disposition;
+		if (StanceResolvedFor == Key)
+		{
+			return !bStanceUnavailable;
+		}
+		StanceResolvedFor = Key;
+		bStanceUnavailable = true;
+		StanceClips = FElysiumStanceClips();
+		StanceTuning = FElysiumDisposition();
+
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment == nullptr
+			|| !Embodiment->ResolveDisposition(Disposition, StanceTuning)
+			|| !Embodiment->ResolveStanceClips(ModelStem(), StanceTuning.AnimName, StanceClips))
+		{
+			return false;
+		}
+		bStanceUnavailable = false;
+		return true;
+	}
+
+	// A disposition change re-keys the whole table: a new row means a new `AnimName`, so the clips
+	// and the tuning both move. The stance *index* deliberately survives it -- retail's datamap
+	// carries `m_CurrStance` across the change and never resets it.
+	virtual bool SetDispositionName(const FString& NewDisposition) override
+	{
+		// The base answers `true` for a write that changes nothing, so the *field* is what says
+		// whether the table has to be re-keyed, not the return value.
+		const FString Previous = Disposition;
+		const bool bAccepted = FElysiumCombatCharacter::SetDispositionName(NewDisposition);
+		if (!Disposition.Equals(Previous, ESearchCase::IgnoreCase))
+		{
+			StanceResolvedFor.Reset();
+			if (World)
+			{
+				NextThink = static_cast<float>(World->NowSeconds());
+			}
+		}
+		return bAccepted;
+	}
+
+	// --- IElysiumScheduleRunner: the task bodies -------------------------------------------------
+
+	// `TASK_SPECIAL_IDLE_ACTIVITY`. One stance selection played on the body; the schedule holds the
+	// task open for the clip's own length, which is retail's cadence -- the idle task re-requests
+	// `ACT_DISPOSITION` only once the current sequence has finished, so nothing re-enters mid-clip.
+	virtual float RunSpecialIdleActivity(double Now) override
+	{
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment == nullptr || Visual == nullptr || !EnsureStanceResolved())
+		{
+			return -1.f;
+		}
+		// `bTalking` is the file's own distinction: a line playing on this character, not a dialogue
+		// being open. We have only the session latch until the per-line driver lands, and the two
+		// agree on the branch that matters -- a character in dialogue holds its stance either way.
+		const FElysiumStanceChoice Choice = ElysiumStance::Select(StanceClips, StanceTuning, Stance,
+			/*bTalking=*/bInDialog, Now, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
+		float Seconds = 0.f;
+		if (!Choice.IsSet()
+			|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds))
+		{
+			return -1.f;
+		}
+		return Seconds;
+	}
+
+	virtual bool IsBodyVisible() const override
+	{
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		// No embodiment is a headless run, where the question has no renderer to answer it. The
+		// service's own default says visible for the same reason.
+		return Embodiment == nullptr || Embodiment->IsNpcBodyVisible(Visual);
+	}
+
+	virtual float PlayActivity(const FString& Activity) override
+	{
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment == nullptr || Visual == nullptr)
+		{
+			return -1.f;
+		}
+		float Seconds = 0.f;
+		if (!Embodiment->PlayNpcActivity(Visual, ModelStem(), Activity, ScheduleActivityCycle++,
+			/*bLoop=*/false, &Seconds))
+		{
+			return -1.f;
+		}
+		return Seconds;
+	}
+
+	virtual float RandomSeconds(float Max) override
+	{
+		return Max > 0.f
+			? ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(0.f, Max) : 0.f;
+	}
+
+	virtual void RecordScheduleEvent(const FString& Row) override
+	{
+		Mind.RecordExternal(Row);
+	}
+
+	virtual bool FaceSavePosition() override
+	{
+		if (Motor == nullptr)
+		{
+			return false;
+		}
+		const FVector ToSource = SavePosition - Origin;
+		if (ToSource.IsNearlyZero())
+		{
+			return false;
+		}
+		Motor->Face(static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(ToSource.Y, ToSource.X))));
+		return true;
+	}
+
+	virtual bool StepAwayFromSavePosition(float DistanceCm) override
+	{
+		if (Motor == nullptr)
+		{
+			return false;
+		}
+		// A step back, not a path to a goal: retail's near-door schedules repeat a short retreat
+		// rather than choosing a destination, which is what keeps the NPC out of the swing without
+		// it walking off somewhere.
+		FVector Away = Origin - SavePosition;
+		Away.Z = 0.0;
+		if (Away.IsNearlyZero())
+		{
+			return false;
+		}
+		Away.Normalize();
+		return Motor->MoveTo(Origin + Away * static_cast<double>(DistanceCm),
+			/*AcceptanceRadiusCm=*/16.f, /*SpeedCmPerSecond=*/0.f);
+	}
+
+	/**
+	 * `CAI_BaseNPCTroika::SelectDoorObstructionSchedule` (`0x102b7370`), transcribed.
+	 *
+	 * Returns `None` when this policy declines -- which is every call today, because neither
+	 * obstruction source has a producer yet: nothing sets `m_hBlockedDoor` (a door blocking this
+	 * NPC's path) and nothing sets `COND_HIT_BY_DOOR`. The decision itself is complete and is what
+	 * those producers will feed; the third recovered source is gated on `COND_ENEMY_UNREACHABLE`,
+	 * which presupposes an enemy and so is never set (roadmap RE48).
+	 */
+	EElysiumScheduleId SelectDoorObstructionSchedule()
+	{
+		const double Now = World ? World->NowSeconds() : 0.0;
+
+		// The source order is retail's own. A blocked-door handle outlives its usefulness, so an
+		// expired one is cleared rather than reused.
+		const FElysiumEntity* Source = nullptr;
+		if (BlockedDoor.IsSet() && World)
+		{
+			if (Now < BlockedDoorExpiresAt)
+			{
+				Source = World->Resolve(BlockedDoor);
+			}
+			else
+			{
+				BlockedDoor = FElysiumEntityHandle::Invalid();
+			}
+		}
+		if (Source == nullptr && bCondHitByDoor && CondHitByDoor.IsSet() && World)
+		{
+			Source = World->Resolve(CondHitByDoor);
+		}
+		if (Source == nullptr)
+		{
+			return EElysiumScheduleId::None;
+		}
+
+		// With a source chosen, retail asks the hint machinery for cover and takes it when the claim
+		// is medium, low or corner cover. We carry no hint-node reader yet, so this falls through to
+		// the distance test -- the authored `info_node_cover_med/low/corner` entities the branch
+		// needs are exported but unread.
+		SavePosition = Source->Origin;
+
+		// 256 units, compared squared, in Source units -- the same 2.54 cm/inch the whole runtime
+		// reads verbatim.
+		constexpr double ThresholdCm = 256.0 * 2.54;
+		const bool bNear = FVector::DistSquared(Origin, SavePosition) <= ThresholdCm * ThresholdCm;
+		// `GetEnemy` is unconditionally null here, so both rows resolve to their `_NE` variant --
+		// the faithful answer for an NPC with no enemy, not a fallback (roadmap RE48).
+		return bNear ? EElysiumScheduleId::BackAwayFromDoorNe
+			: EElysiumScheduleId::BackAwayFromDoorWaitNe;
 	}
 
 	void BeginAmbientUse(FElysiumInterestingPlace& Spot, double Now)
@@ -909,6 +1319,11 @@ public:
 		bAmbientArrived = false;
 		bMoveIssued = false;
 		bWalkingAnimation = false;
+		if (AmbientOwner.IsSet())
+		{
+			Mind.Release(AmbientOwner, TEXT("interesting-place release"));
+			AmbientOwner.Reset();
+		}
 		if (ScriptPhase == EScriptPhase::None)
 		{
 			ResetAnimToIdle();   // a script that owns the body owns its pose too
@@ -1029,6 +1444,53 @@ public:
 	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
 	// conversation (B4). When the `dialogname` file is missing/unloadable the session falls back to the
 	// B3 seam — it waits for a manual EndDialog (ent_fire), so the beat is still driveable by hand.
+	virtual FElysiumBodyOwnerToken BeginDialogueBodySession() override
+	{
+		if (IsInert())
+		{
+			return FElysiumBodyOwnerToken();
+		}
+		if (DialogueBodyOwner.IsSet())
+		{
+			return DialogueBodyOwner;
+		}
+		if (!Mind.Acquire(EElysiumBodyOwner::Dialogue, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
+			DialogueBodyOwner, TEXT("dialogue open")))
+		{
+			return FElysiumBodyOwnerToken();
+		}
+		if (Motor && bPatrolActive)
+		{
+			Motor->Stop();
+			bMoveIssued = false;
+		}
+		bInDialog = true;
+		return DialogueBodyOwner;
+	}
+
+	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) override
+	{
+		if (DialogueBodyOwner.IsSet() && Token.Owner == DialogueBodyOwner.Owner
+			&& Token.Generation == DialogueBodyOwner.Generation)
+		{
+			Mind.Release(DialogueBodyOwner, bSilent ? TEXT("dialogue silent close")
+				: TEXT("dialogue normal close"));
+			DialogueBodyOwner.Reset();
+			if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+			{
+				PatrolOwner = Mind.CurrentToken();
+			}
+		}
+		if (bSilent)
+		{
+			bInDialog = false;
+		}
+		if (!bInDialog && (bPatrolActive || bUseInteresting))
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
+	}
+
 	void BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags,
 		const FElysiumInputArgs& Args)
 	{
@@ -1046,7 +1508,12 @@ public:
 			Motor->Stop();
 			bMoveIssued = false;
 		}
-		bInDialog = true;
+		if (!BeginDialogueBodySession().IsSet())
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s refused dialogue body ownership"),
+				*DebugString());
+			return;
+		}
 		DialogOpener = Opener;
 		DialogFlags = RawFlags;
 		DecodedDialogFlags = 0;
@@ -1111,15 +1578,18 @@ public:
 		{
 			return;
 		}
+		if (DialogueBodyOwner.IsSet())
+		{
+			EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/false);
+		}
 		bInDialog = false;
 		++TimesTalked;
 		static const FName OnDialogEnd(TEXT("OnDialogEnd"));
 		FireOutput(OnDialogEnd, Args.Activator);
 		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s EndDialog (times_talked=%d)"), *DebugString(), TimesTalked);
-		if (bPatrolActive || bUseInteresting)
-		{
-			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
-		}
+		// Unconditional: leaving a conversation releases the stance machine's talking branch, so a
+		// standing character has a decision to make on the very next think.
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 	}
 
 	// Load this NPC's `dialogname` `.dlg`, open a branch conversation bound to the installed script host,
@@ -1183,7 +1653,7 @@ public:
 			MakeShared<FElysiumDlgConversation>(DlgFile, bMale, bMalk, MoveTemp(Cond), MoveTemp(Act),
 				MoveTemp(StartFallback));
 		Conv->Start();
-		World->OpenDialog(Self, Conv, Opener, DialogFlags, DefaultCamera);
+		World->OpenDialog(Self, Conv, Opener, DialogFlags, DefaultCamera, DialogueBodyOwner);
 		UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s opened dialogue '%s' (%d rows)"),
 			*DebugString(), *DialogName, DlgFile->Lines.Num());
 		return true;
@@ -1197,6 +1667,11 @@ public:
 	{
 		UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
 		const FElysiumStatTable* Table = GameState ? GameState->Stats() : nullptr;
+		UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
+		FElysiumClanTemplate Resolved;
+		const bool bResolvedTemplate = !StatTemplate.IsEmpty()
+			&& Rules && Rules->Clans().Resolve(StatTemplate, Resolved);
+		bFastFood = false;
 		if (!Table)
 		{
 			return;   // no rulebook: the sheet stays zeroed and the damage path stays fail-closed
@@ -1205,11 +1680,9 @@ public:
 
 		if (!StatTemplate.IsEmpty())
 		{
-			UElysiumRulebookSubsystem* Rules = GameState->Rulebook();
-			FElysiumClanTemplate Resolved;
-			if (Rules && Rules->Clans().Resolve(StatTemplate, Resolved))
+			if (bResolvedTemplate)
 			{
-				Sheet.ApplyTemplate(Resolved, Table);
+				ApplyResolvedTemplate(Resolved, Table);
 				// A template names its clan's `TraitEffectGroup`; that group is where the clan's
 				// gifts and banes live, for an NPC exactly as for the player.
 				const FString ClanEffect = Resolved.GeneralStr(TEXT("ClanEffect"));
@@ -1253,11 +1726,14 @@ public:
 				}
 			}
 		}
-		if (bUseInteresting && !IsInert())
-		{
-			NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0)
-				+ 0.1 * static_cast<double>(FMath::Max(0, Handle.Index) % 10));
-		}
+		// Spawn constructs presentation only. Activate arms the first deterministic admission think;
+		// no autonomous decision, controller wake or activity write occurs in this phase.
+	}
+
+	virtual void Activate() override
+	{
+		Mind.ArmAdmission();
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 	}
 
 	virtual void OnRuntimeTransformChanged() override
@@ -1305,11 +1781,28 @@ public:
 		FElysiumCombatCharacter::OnDormancyChanged();
 		if (IsInert())
 		{
+			if (DialogueBodyOwner.IsSet())
+			{
+				if (World && World->GetOpenDialogOwner() == Handle)
+				{
+					World->CloseDialog(/*bSilent=*/true);
+				}
+				else
+				{
+					EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/true);
+				}
+			}
 			EndScriptMove();
 			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+			Mind.Invalidate(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
+			PatrolOwner.Reset();
+			AmbientOwner.Reset();
+			SequenceOwner.Reset();
+			DialogueBodyOwner.Reset();
 		}
-		else if (bPatrolActive || bUseInteresting)
+		else
 		{
+			// Waking, not going dormant: every NPC gets a think back, standing ones included.
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 		}
 		if (Motor)
@@ -1391,6 +1884,54 @@ public:
 				bOwnerTerminationNotified = OwnerNotified != 0;
 			}
 		}
+
+		if (Ar.Version() >= FElysiumSaveVersion::NpcMind)
+		{
+			uint8 SavedState = static_cast<uint8>(Mind.State());
+			EElysiumBodyOwner ResumableOwner = Mind.Owner();
+			if (!FElysiumNpcMind::IsResumableOwner(ResumableOwner))
+			{
+				ResumableOwner = EElysiumBodyOwner::None;
+			}
+			uint8 SavedOwner = static_cast<uint8>(ResumableOwner);
+			Ar << SavedState;
+			Ar << SavedOwner;
+			if (Ar.IsLoading())
+			{
+				const EElysiumNpcState State = static_cast<EElysiumNpcState>(SavedState);
+				EElysiumBodyOwner Owner = static_cast<EElysiumBodyOwner>(SavedOwner);
+				if (!FElysiumNpcMind::IsSupportedState(State)
+					|| !FElysiumNpcMind::IsResumableOwner(Owner))
+				{
+					Owner = EElysiumBodyOwner::None;
+				}
+				if (Owner == EElysiumBodyOwner::Patrol && !bPatrolActive)
+				{
+					Owner = EElysiumBodyOwner::None;
+				}
+				if (Owner == EElysiumBodyOwner::Ambient && AmbientPhase == EAmbientPhase::None)
+				{
+					Owner = EElysiumBodyOwner::None;
+				}
+				Mind.Restore(State, Owner);
+				PatrolOwner = Owner == EElysiumBodyOwner::Patrol
+					? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+				AmbientOwner = Owner == EElysiumBodyOwner::Ambient
+					? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+			}
+		}
+	}
+
+	virtual const TCHAR* SaveBlockReason() const override
+	{
+		switch (Mind.Owner())
+		{
+		case EElysiumBodyOwner::Dialogue:          return TEXT("a conversation is open");
+		case EElysiumBodyOwner::Sequence:          return TEXT("a scripted sequence is active");
+		case EElysiumBodyOwner::ScriptedSchedule:  return TEXT("a scripted schedule is active");
+		case EElysiumBodyOwner::Follower:          return TEXT("a follower session is active");
+		default:                                   return nullptr;
+		}
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
@@ -1409,9 +1950,19 @@ public:
 		{
 			Out.Emplace(TEXT("Stat template"), StatTemplate);
 		}
+		Out.Emplace(TEXT("Fast food"), bFastFood ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 		Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal (standing)") : TEXT("(none)"));
 		Out.Emplace(TEXT("Motor"), Motor ? TEXT("Unreal character + Detour crowd") : TEXT("(none)"));
+		const TCHAR* Admission = Mind.Admission() == FElysiumNpcMind::EAdmission::Spawned
+			? TEXT("spawned") : (Mind.Admission() == FElysiumNpcMind::EAdmission::Armed
+				? TEXT("armed") : TEXT("admitted"));
+		Out.Emplace(TEXT("Mind"), FString::Printf(TEXT("%s current=%s ideal=%s"), Admission,
+			LexToString(Mind.State()), LexToString(Mind.IdealState())));
+		Out.Emplace(TEXT("Body owner"), FString::Printf(TEXT("%s gen=%u parked=%s"),
+			LexToString(Mind.Owner()), Mind.Generation(), LexToString(Mind.SuspendedOwner())));
+		Out.Emplace(TEXT("Mind transition"), Mind.LastTransition().IsEmpty()
+			? TEXT("(none)") : Mind.LastTransition());
 		Out.Emplace(TEXT("Patrol"), bPatrolActive
 			? FString::Printf(TEXT("point %d/%d: %s"), PatrolIndex + 1, PatrolPoints.Num(), *PatrolPath)
 			: TEXT("inactive"));
@@ -1427,7 +1978,12 @@ public:
 	}
 
 private:
+	FElysiumNpcMind Mind;
 	IElysiumNpcMotor* Motor = nullptr; // engine-owned; destroyed through the embodiment seam
+	FElysiumBodyOwnerToken PatrolOwner;
+	FElysiumBodyOwnerToken AmbientOwner;
+	FElysiumBodyOwnerToken SequenceOwner;
+	FElysiumBodyOwnerToken DialogueBodyOwner;
 	TArray<FString> PatrolNames;
 	TArray<FVector> PatrolPoints;
 	bool bPatrolActive = false;
@@ -1758,6 +2314,20 @@ public:
 	}
 };
 
+#if WITH_DEV_AUTOMATION_TESTS
+bool ElysiumNpcTestHooks::ApplyResolvedTemplate(FElysiumEntity& Entity,
+	const FElysiumClanTemplate& Resolved)
+{
+	if (!Entity.Def || !Entity.Def->Classname.StartsWith(TEXT("npc_V"), ESearchCase::IgnoreCase)
+		|| !Entity.AsCombatCharacter())
+	{
+		return false;
+	}
+	static_cast<FElysiumNpc&>(Entity).ApplyResolvedTemplate(Resolved, /*Table*/ nullptr);
+	return true;
+}
+#endif
+
 // --- Registration -----------------------------------------------------------------------------
 
 static TUniquePtr<FElysiumEntity> MakeNpc()       { return MakeUnique<FElysiumNpc>(); }
@@ -1807,6 +2377,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, TakeDamage,            "B5 — combat damage");
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
+	AddNpcField(D, TEXT("allow_alert_lookaround"), &FElysiumNpc::bAllowAlertLookaround);
 	AddNpcField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera, EElysiumField::Key);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
 	AddNpcField(D, TEXT("interesting_place_groups"), &FElysiumNpc::InterestingPlaceGroups);
@@ -1814,6 +2385,37 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
 	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.
 	AddNpcField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, EElysiumField::Save);
+
+	// The stance pair, under retail's own datamap names. Save-only: they carry flag `0x2` there, so
+	// they persist and no keyvalue or script writes them. Nothing in the recovered writer set resets
+	// either on a schedule, state, dialogue or disposition change, which is why a character keeps its
+	// stance across a conversation.
+	//
+	// The index is clamped on restore rather than trusted: it addresses a three-slot array, and a
+	// payload written by another build must not be able to index past it.
+	{
+		FElysiumFieldAccessor Acc;
+		Acc.ApplyFlags(EElysiumField::Save);
+		Acc.Type = EElysiumVariantType::Int;
+		Acc.Get = [](const FElysiumEntity& E)
+		{ return FElysiumVariant::Int(static_cast<const FElysiumNpc&>(E).Stance.Current); };
+		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{
+			static_cast<FElysiumNpc&>(E).Stance.Current =
+				FMath::Clamp(V.ToInt(), 0, ElysiumStance::Count - 1);
+		};
+		D.Fields.Add(FName(TEXT("m_CurrStance")), MoveTemp(Acc));
+	}
+	{
+		FElysiumFieldAccessor Acc;
+		Acc.ApplyFlags(EElysiumField::Save);
+		Acc.Type = EElysiumVariantType::Float;
+		Acc.Get = [](const FElysiumEntity& E)
+		{ return FElysiumVariant::Float(static_cast<const FElysiumNpc&>(E).Stance.LastChangeTime); };
+		Acc.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{ static_cast<FElysiumNpc&>(E).Stance.LastChangeTime = V.ToFloat(); };
+		D.Fields.Add(FName(TEXT("m_flStanceTime")), MoveTemp(Acc));
+	}
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)

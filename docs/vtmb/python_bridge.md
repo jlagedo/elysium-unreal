@@ -89,6 +89,15 @@ tests `Patch_Plus`. The original runtime therefore has at least four live, scrip
 `viewmodel` entities when map initialization runs. Elysium creates the same four ordinary substrate
 entities with the player; first-person rendering remains owned by the viewmodel programme.
 
+`sp_tutorial_1` makes the profile timing explicit **[data/native, RE47]**. The UP replacement BSP
+first creates, keyvalues, spawns and activates its direct NPC population. A `logic_auto` then runs
+`unhidePlus()`, which schedules the ordinary-vampire `patchtype` console assignment one game second
+later; the installed alias finally enters `setPlus()`. `setPlus()` mutates already-live entities by
+name (`plus_*` unhidden, `basic_*` hidden). It does not load the map's NPCs, and the opening Jack
+entity matches neither wildcard. Its `IsIdling()` call initializes Patch Plus's **player** idle
+monitor and proximity checks; it does not issue an NPC idle, facing, movement or dialogue command.
+The separate core auto sets `Jack.WillTalk(0)` before the porch trigger later reenables talking.
+
 The Unofficial Patch shadows all of it (loose search paths resolve before the VPKs, per
 `## Asset resolution` in CLAUDE.md): **21 of the 26 shared scripts differ**, plus 9
 patch-only `.py` and 6 retail-only; it shadows all 138 `.dlg` and adds 9.

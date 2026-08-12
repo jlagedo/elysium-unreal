@@ -169,7 +169,8 @@ struct FElysiumPropClip
 struct FElysiumAnimatedPropEntry
 {
 	FString Stem;
-	FString Glb;       // relative to out/npc, normally animated_props/<stem>.glb
+	FString Glb;       // relative to out/npc — an inspection product; nothing the game loads
+	FString Eskm;      // relative to out/npc, normally animated_props/<stem>.eskm
 	FString Model;     // normalized source .mdl path
 	int32 Bones = 0;
 	TArray<FString> SplitRotationBones;

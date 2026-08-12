@@ -24,10 +24,9 @@ class DependencyLockTests(unittest.TestCase):
             plugins["Cog"].post_patch_tree,
             "d48490e2cd42fc2563a44d30062cbf003648716b",
         )
-        self.assertEqual(
-            plugins["glTFRuntime"].post_patch_tree,
-            "0fb2e26f5b311fc76bbbf504c341a38e24f0ce81",
-        )
+        # Cog is the only managed plugin: the character path builds its assets from `.eskm`
+        # containers through the module's own editor library, so nothing vendored reads a model.
+        self.assertEqual(set(plugins), {"Cog"})
         self.assertEqual(
             artifacts["CPython27"].sha256,
             "0eab8de590076f74a17802d8b613ad74ec050b0081ccd0e2c7a47432c9b169b8",

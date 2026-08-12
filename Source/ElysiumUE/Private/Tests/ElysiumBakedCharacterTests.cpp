@@ -19,22 +19,10 @@
 // (bring-your-own-game). A `_delta` clip is skipped here for the same reason it is skipped at
 // export: it states a difference rather than a pose, so composing it answers nothing.
 //
-// THE MESH ASSERTION IS DELIBERATELY NOT "the glb and the asset agree bone for bone". Nothing
-// builds a character from `.glb` at runtime any more; the file is read here as an INDEPENDENT
-// ORACLE for what the model contains, because it is the same source the bake consumed and it
-// arrives through completely different code. The two reach Unreal through different bases --
-// glTFRuntime derives every bone from the inverse-bind matrices under its own basis, and the bake
-// writes the file's own locals in the repo's canonical Source-to-Unreal frame
-// (`bsp.source_to_unreal`, the `UE_` exporter convention). A rig can hold one shape in many frames
-// with the inverse binds absorbing the difference, so the two disagree about individual bone
-// transforms -- by whole degrees and centimetres, printed at the end of the run -- while drawing
-// the same body. Neither one's bone transforms predict the other's.
-//
-// So the rest pose is asserted against the CONTAINER: the `.eskm` states the bind pose in Unreal
-// space with no import step to disagree about, which makes it the thing the bake had to reproduce.
-// The glb is held to the bone SET and the morph SET, which are basis-free and are what catch a
-// bake that silently dropped part of the model. The bind-frame delta between them is reported
-// rather than failed, because it is a change of basis rather than a defect.
+// THE MESH ASSERTION IS AGAINST THE CONTAINER, bone for bone and morph for morph. The `.eskm`
+// states the bind pose in Unreal space with no import step to disagree about, which makes it the
+// thing the bake had to reproduce; the bone set and the morph set are what catch a bake that
+// silently dropped part of the model.
 //
 // Self-skipping: the baked mount is gitignored and regenerable, so a checkout that has not run
 // `uv run elysium export characters` has nothing to compare and says so rather than failing.
@@ -63,7 +51,6 @@
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
-#include "glTFRuntimeAsset.h"
 
 static constexpr EAutomationTestFlags GElysiumBakedCharacterFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -165,9 +152,8 @@ namespace
 		{
 			return false;
 		}
-		// Raw data on both sides. The two sequences are compressed independently -- one by the
-		// editor's DDC at bake, one by glTFRuntime at load -- and this test is about the authored
-		// content surviving the bake, not about two compressors agreeing bit for bit.
+		// Raw data, because this is about the authored content surviving the bake rather than
+		// about what the compressor made of it.
 		Sequence->GetBoneTransform(OutTransform, FSkeletonPoseBoneIndex(BoneIndex),
 			FAnimExtractContext(Time), /*bUseRawData=*/true);
 		return true;
@@ -272,33 +258,6 @@ namespace
 		}
 	}
 
-	/**
-	 * Re-express a composed pose against the rig's own root.
-	 *
-	 * Two rigs can hold the same world pose while distributing it differently between the root and
-	 * its first child -- which is exactly what a basis difference at the root does -- and a raw
-	 * comparison reports that as a large divergence on a body that renders identically.
-	 */
-	void RelativeToRoot(const FReferenceSkeleton& Ref, const TArray<FTransform>& Locals,
-		TArray<FTransform>& Out)
-	{
-		const int32 Num = Locals.Num();
-		TArray<FTransform> World;
-		World.SetNum(Num);
-		for (int32 Index = 0; Index < Num; ++Index)
-		{
-			const int32 Parent = Ref.GetParentIndex(Index);
-			World[Index] = Ref.GetRefBonePose().IsValidIndex(Index) && Parent != INDEX_NONE
-				? Locals[Index] * World[Parent] : Locals[Index];
-		}
-		const FTransform RootInverse = Num > 0 ? World[0].Inverse() : FTransform::Identity;
-		Out.SetNum(Num);
-		for (int32 Index = 0; Index < Num; ++Index)
-		{
-			Out[Index] = World[Index] * RootInverse;
-		}
-	}
-
 	TSet<FName> MorphTargetNames(const USkeletalMesh* Mesh)
 	{
 		TSet<FName> Names;
@@ -337,8 +296,6 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	// How far apart the two paths frame the same bone, accumulated across the slice and reported
 	// once. Taken relative to each rig's own root, so it is what remains after the basis difference
 	// at the root is divided out.
-	double BindRotationDeg = 0.0;
-	double BindTranslationCm = 0.0;
 	TArray<UObject*> KeepAlive;
 	int32 AdditiveClips = 0;
 	int32 LayerClips = 0;
@@ -917,82 +874,38 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			AddInfo(FString::Printf(TEXT("skipping %s: not on the baked mount"), *Stem));
 			continue;
 		}
-		if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcGlb(Stem)))
-		{
-			AddInfo(FString::Printf(TEXT("skipping %s: no source .glb to compare against"), *Stem));
-			continue;
-		}
-
 		// The container the bake read. It states the bind pose and every clip key in Unreal space
-		// with no import step to disagree about, which makes it the reference the bake is held to.
+		// with no import step to disagree about, which makes it the reference the bake is held to
+		// -- and, since nothing else builds a character, the only one.
 		FElysiumSkeletalSource Source;
 		if (!FElysiumSkeletalSource::Load(FElysiumContentPaths::NpcSource(Stem), Source, Error))
 		{
 			AddInfo(FString::Printf(TEXT("%s: no .eskm to check against (%s)"), *Stem, *Error));
 			continue;
 		}
-
-		UglTFRuntimeAsset* Asset = nullptr;
-		USkeletalMesh* Loaded = ElysiumNpcVisual::LoadMeshFromPath(
-			FElysiumContentPaths::NpcGlb(Stem), Asset, Error);
-		if (Loaded == nullptr)
-		{
-			AddError(FString::Printf(TEXT("%s: the glTFRuntime path does not load (%s)"), *Stem, *Error));
-			continue;
-		}
-		KeepAlive.Add(Loaded);
-		KeepAlive.Add(Asset);
 		KeepAlive.Add(Baked);
 		++Compared;
 
 		// The body's own bone set, in its own order. The baked mesh keeps its own reference
-		// skeleton -- only the SKELETON asset is shared -- so these must match exactly, or a baked
-		// body is a different shape from the one the loader builds.
+		// skeleton -- only the SKELETON asset is shared -- so it must carry exactly what the
+		// container declared.
 		const FReferenceSkeleton& BakedRef = Baked->GetRefSkeleton();
-		const FReferenceSkeleton& LoadedRef = Loaded->GetRefSkeleton();
 		if (!TestEqual(FString::Printf(TEXT("%s bone count"), *Stem),
-			BakedRef.GetNum(), LoadedRef.GetNum()))
+			BakedRef.GetNum(), Source.Bones.Num()))
 		{
-			continue;
-		}
-		if (Source.Bones.Num() != BakedRef.GetNum())
-		{
-			AddError(FString::Printf(TEXT("%s: %d bones baked against %d in the container"),
-				*Stem, BakedRef.GetNum(), Source.Bones.Num()));
 			continue;
 		}
 
-		// Bone SETS have to agree; bone ORDER does not. glTFRuntime walks the node tree and the
-		// bake emits StudioBone declaration order, so the same rig comes out indexed differently --
-		// and nothing cares, because every clip binds to a rig by bone name.
 		TMap<FName, int32> BakedIndexOf;
 		BakedIndexOf.Reserve(BakedRef.GetNum());
 		for (int32 BoneIndex = 0; BoneIndex < BakedRef.GetNum(); ++BoneIndex)
 		{
 			BakedIndexOf.Add(BakedRef.GetBoneName(BoneIndex), BoneIndex);
 		}
-		TArray<FName> Missing;
-		for (int32 BoneIndex = 0; BoneIndex < LoadedRef.GetNum(); ++BoneIndex)
-		{
-			if (!BakedIndexOf.Contains(LoadedRef.GetBoneName(BoneIndex)))
-			{
-				Missing.Add(LoadedRef.GetBoneName(BoneIndex));
-			}
-		}
-		if (!Missing.IsEmpty())
-		{
-			AddError(FString::Printf(TEXT("%s: %d bone(s) did not survive the bake (%s%s)"),
-				*Stem, Missing.Num(), *Missing[0].ToString(),
-				Missing.Num() > 1 ? TEXT(", ...") : TEXT("")));
-			continue;
-		}
 
-		// The rest pose is asserted against the CONTAINER, bone for bone. The loader is not a
-		// reference for it: the two paths frame their bones differently -- glTFRuntime derives every
-		// bone from the inverse-bind matrices under its own basis, the bake writes the file's own
-		// Unreal-space locals -- and a rig can hold one shape in many frames, with the inverse binds
-		// absorbing the difference. Both bodies render identically and neither's bone transforms
-		// predict the other's, so the thing worth asserting is that the bake reproduced what it read.
+		// The rest pose is asserted against the CONTAINER, bone for bone: the bake writes the
+		// file's own Unreal-space locals, so the thing worth asserting is that it reproduced what
+		// it read.
 		bool bRestPoseSound = true;
 		for (int32 BoneIndex = 0; BoneIndex < Source.Bones.Num(); ++BoneIndex)
 		{
@@ -1031,30 +944,17 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			}
 		}
 
-		// The frame difference itself, recorded rather than failed, so its size stays visible
-		// while both paths are selectable.
-		{
-			TArray<FTransform> BakedPoses;
-			TArray<FTransform> LoadedPoses;
-			RelativeToRoot(BakedRef, BakedRef.GetRefBonePose(), BakedPoses);
-			RelativeToRoot(LoadedRef, LoadedRef.GetRefBonePose(), LoadedPoses);
-			for (int32 BoneIndex = 1; BoneIndex < LoadedPoses.Num(); ++BoneIndex)
-			{
-				const FTransform& BakedPose = BakedPoses[BakedIndexOf[LoadedRef.GetBoneName(BoneIndex)]];
-				BindRotationDeg = FMath::Max(BindRotationDeg, FMath::RadiansToDegrees(
-					BakedPose.GetRotation().AngularDistance(LoadedPoses[BoneIndex].GetRotation())));
-				BindTranslationCm = FMath::Max(BindTranslationCm, FVector::Distance(
-					BakedPose.GetTranslation(), LoadedPoses[BoneIndex].GetTranslation()));
-			}
-		}
-
 		// The face is a curve interface, so its whole contract on this seam is that the same
 		// targets exist and the skeleton flags them as morph-target curves.
 		const TSet<FName> BakedMorphs = MorphTargetNames(Baked);
-		const TSet<FName> LoadedMorphs = MorphTargetNames(Loaded);
+		TSet<FName> SourceMorphs;
+		for (const FElysiumSourceMorph& Morph : Source.Morphs)
+		{
+			SourceMorphs.Add(FName(*Morph.Name));
+		}
 		TestEqual(FString::Printf(TEXT("%s morph target count"), *Stem),
-			BakedMorphs.Num(), LoadedMorphs.Num());
-		for (const FName& Name : LoadedMorphs)
+			BakedMorphs.Num(), SourceMorphs.Num());
+		for (const FName& Name : SourceMorphs)
 		{
 			if (!BakedMorphs.Contains(Name))
 			{
@@ -1280,12 +1180,6 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		TEXT("round-tripped through the additive bake, %d masked `_layer` clip(s) checked against ")
 		TEXT("their blend masks, %d blend grid(s) checked against their sidecar"),
 		Compared, Samples, AdditiveClips, LayerClips, BlendGrids));
-	AddInfo(FString::Printf(
-		TEXT("bind-frame delta against the glTFRuntime path: %.4f deg / %.4f cm at most, after ")
-		TEXT("each rig's own root is divided out -- expected, and not a defect: the two paths frame ")
-		TEXT("their bones differently and their inverse binds absorb it, so both render the same ")
-		TEXT("body from different rigs"),
-		BindRotationDeg, BindTranslationCm));
 	return true;
 }
 

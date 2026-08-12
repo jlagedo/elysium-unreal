@@ -313,10 +313,9 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 	for (int32 Index = 0; Index < Clips.Num(); ++Index)
 	{
 		FString Error;
-		// Null own-asset: a baked sequence is addressed by owner and animation name off the standing
-		// mesh's own rig family, so there is no per-body glb to hand in.
-		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Clips[Index], Mesh,
-			nullptr, Error);
+		// A baked sequence is addressed by owner and animation name off the standing mesh's own rig
+		// family.
+		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Clips[Index], Mesh, Error);
 		FTransform Start;
 		FTransform End;
 		const float Length = Sequence != nullptr ? Sequence->GetPlayLength() : 0.0f;

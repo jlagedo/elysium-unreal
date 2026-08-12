@@ -154,7 +154,7 @@ bool UElysiumNavigableScreen::SelectAction(FName ActionId, bool bGiveFocus)
 	{
 		if (Button)
 		{
-			Button->SetIsSelected(Button == Wanted, false);
+			Button->SetActionSelected(Button == Wanted);
 		}
 	}
 	if (PreviousActionId != SelectedActionId)

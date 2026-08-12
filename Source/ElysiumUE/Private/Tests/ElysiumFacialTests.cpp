@@ -481,17 +481,17 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 	TestTrue(TEXT("and by its record index"), Set.Find(0) == &Set.Eyeballs[0]);
 
 	// --- the slot join, both spellings ------------------------------------------------------------
-	// `InstallEyes` reaches a record through a material SLOT NAME, and two paths name that slot
-	// differently: the baked mesh takes the container's own material name verbatim, and a glTFRuntime
-	// load prefixes it. Both must reduce to the same key, and the key is joined case-insensitively —
-	// the sidecar lowercases what the container capitalises.
+	// `InstallEyes` reaches a record through a material SLOT NAME. A baked mesh takes the
+	// container's own material name verbatim; a slot built per LOD section carries a
+	// `LOD_<lod>_Section_<index>_` prefix. Both must reduce to the same key, and the key is joined
+	// case-insensitively — the sidecar lowercases what the container capitalises.
 	//
 	// This is asserted because its failure is silent and looks like success: an unjoined section
 	// still draws the eye master, so it has a round iris of the master's default texture that simply
 	// never aims and never blinks.
 	TestEqual(TEXT("a baked slot is already the material name"),
 		ElysiumEyes::MaterialNameFromSlot(TEXT("Eyeball_r")), FString(TEXT("Eyeball_r")));
-	TestEqual(TEXT("a glTFRuntime slot drops its LOD/section prefix"),
+	TestEqual(TEXT("a sectioned slot drops its LOD/section prefix"),
 		ElysiumEyes::MaterialNameFromSlot(TEXT("LOD_0_Section_2_eyeball_r")),
 		FString(TEXT("eyeball_r")));
 	TestEqual(TEXT("a multi-digit section index is consumed whole"),
@@ -499,7 +499,7 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 		FString(TEXT("eyeball_r")));
 	TestTrue(TEXT("the baked slot spelling joins the record"),
 		Set.FindByMaterial(ElysiumEyes::MaterialNameFromSlot(TEXT("Eyeball_r"))) == &Set.Eyeballs[0]);
-	TestTrue(TEXT("and so does the glTFRuntime spelling"),
+	TestTrue(TEXT("and so does the sectioned spelling"),
 		Set.FindByMaterial(ElysiumEyes::MaterialNameFromSlot(TEXT("LOD_0_Section_2_eyeball_r")))
 			== &Set.Eyeballs[0]);
 	TestTrue(TEXT("a body section is not mistaken for an eye"),
@@ -787,7 +787,7 @@ bool FElysiumFacialRigCorpusTest::RunTest(const FString&)
 		}
 		++Rigged;
 
-		// glTFRuntime keys a UMorphTarget by name, so a repeat would silently merge two ramps into
+		// A UMorphTarget is keyed by name, so a repeat would silently merge two ramps into
 		// one. The `#k` suffix on the second and later ramp of one flexdesc is what prevents it.
 		TSet<FString> Names;
 		for (const FElysiumFlexMorph& Morph : Rig.Morphs)
@@ -892,8 +892,7 @@ bool FElysiumFacialMorphTargetsTest::RunTest(const FString&)
 		return false;
 	}
 
-	UglTFRuntimeAsset* Asset = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error);
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Error);
 	if (!TestNotNull(TEXT("the rigged mesh loads"), Mesh))
 	{
 		AddError(Error);
@@ -1134,8 +1133,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 		return false;
 	}
 
-	UglTFRuntimeAsset* Asset = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error);
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Error);
 	if (!TestNotNull(TEXT("the rigged mesh loads"), Mesh))
 	{
 		AddError(Error);
@@ -1243,8 +1241,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 		return true;
 	}
 
-	UglTFRuntimeAsset* BareAsset = nullptr;
-	USkeletalMesh* BareMesh = ElysiumNpcVisual::LoadMesh(Bare, BareAsset, Error);
+	USkeletalMesh* BareMesh = ElysiumNpcVisual::LoadMesh(Bare, Error);
 	if (!TestNotNull(FString::Printf(TEXT("the unrigged mesh '%s' loads"), *Bare), BareMesh))
 	{
 		AddError(Error);
@@ -2949,8 +2946,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		return true;
 	}
 
-	UglTFRuntimeAsset* Asset = nullptr;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, Error, /*bPlayerMaterial=*/true);
+	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Error, /*bPlayerMaterial=*/true);
 	if (!TestNotNull(TEXT("the player body loads off the baked mount"), Mesh))
 	{
 		AddError(Error);

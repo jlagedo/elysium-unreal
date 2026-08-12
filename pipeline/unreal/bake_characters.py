@@ -45,6 +45,12 @@ ANIMS = CHARACTERS + "/Anims"
 BANKS = ANIMS + "/_banks"
 BANK_SKELETON_PREFIX = character_partition.BANK_SKELETON_PREFIX
 
+#: Animated props sit apart from the cast. Each carries its OWN skeleton rather than joining a rig
+#: family -- a crane, a wolf and a wineglass share no tree with each other or with a biped -- so
+#: there is no partition to consult and no family folder to address one through. Everything a prop
+#: owns lives under its own stem.
+PROPS = MOUNT + "/Props"
+
 #: Every body section is instanced from this one master. Its parameter names are glTF's, which is
 #: what lets one instance serve a body drawn as an NPC and the same body worn by the player -- the
 #: two differ only in the ModelAlpha the runtime drives, not in the asset.
@@ -78,6 +84,89 @@ def cmdline_arg(key, default=""):
 
 def source_path(stem, bank=False):
     return os.path.join(NPC_DIR, "banks" if bank else "", stem + ".eskm")
+
+
+def prop_source_path(stem):
+    return os.path.join(NPC_DIR, "animated_props", stem + ".eskm")
+
+
+def prop_package(stem):
+    """Where one animated prop's assets live. Its own folder, because it owns its own skeleton."""
+    return "%s/%s" % (PROPS, stem)
+
+
+def bake_props(manifest, library, failed, plan, textures):
+    """One skeleton, one mesh and one clip set per animated prop.
+
+    A prop takes the same container and the same builders a body does -- it IS a skeletal model,
+    and the only thing that ever made it a separate path was the loader it went through. What
+    differs is the rig: a prop shares no bone tree with anything, so it gets a skeleton of its own
+    instead of a rig family's, and nothing declares compatibility with it.
+
+    Returns the number of props baked."""
+    props = manifest.get("animated_props", {})
+    if not props:
+        return 0
+    bl.ensure_dir(PROPS)
+    baked = 0
+    for stem in sorted(props):
+        if not wants(plan, "prop.%s" % stem, "props"):
+            continue
+        path = prop_source_path(stem)
+        if not os.path.isfile(path):
+            fail("no .eskm for animated prop %s (run: uv run elysium export characters)" % stem)
+            failed.append(stem)
+            continue
+        package = prop_package(stem)
+        bl.ensure_dir(package)
+        skeleton_package = "%s/SKEL_%s" % (package, stem)
+        error, bones = library.build_family_skeleton([path], skeleton_package, True)
+        if error:
+            fail("prop skeleton %s: %s" % (stem, error))
+            failed.append(stem)
+            continue
+
+        blob = eskm.read(path)
+        bindings = material_bindings(blob, textures)
+        # A slot that names an albedo but resolves to nothing binds no texture and the prop draws
+        # white, which reads as a material authoring choice rather than as a missing import.
+        unbound = [m for m, uri in eskm.materials(blob).items() if uri and m not in bindings]
+        if unbound:
+            fail("prop %s: no imported texture for %s" % (stem, ", ".join(sorted(unbound))))
+            failed.append(stem)
+            continue
+        error = library.build_skeletal_mesh_from_source(
+            path, "%s/SK_%s" % (package, stem), skeleton_package,
+            BODY_MASTER, MATERIALS, bindings, {})
+        if error:
+            fail("prop SK_%s: %s" % (stem, error))
+            failed.append(stem)
+            continue
+
+        error, count, dropped = library.build_anim_sequences_from_source(
+            path, package, skeleton_package)
+        if error:
+            fail("prop %s clips: %s" % (stem, error))
+            failed.append(stem)
+            continue
+
+        spaces = 0
+        blends = props[stem].get("blends", "")
+        if blends:
+            error, spaces, skipped_grids, skipped_cells = library.build_blend_spaces_from_grids(
+                blends, package, skeleton_package)
+            if error:
+                fail("prop %s blends: %s" % (stem, error))
+                failed.append(stem)
+            elif skipped_cells:
+                log("prop %s: %d grid cell(s) had no baked clip" % (stem, skipped_cells))
+        log("prop '%s': %d bones, %d clip(s)%s%s"
+            % (stem, bones, count,
+               ", %d blend space(s)" % spaces if spaces else "",
+               ", %d track(s) dropped" % dropped if dropped else ""))
+        baked += 1
+        release_packages()
+    return baked
 
 
 def read_partition():
@@ -139,14 +228,20 @@ def import_textures_for(paths):
     a per-model copy, which is also what keeps a re-bake of one body from re-importing them all.
 
     Takes PATHS and reads one container at a time: the cast's containers are 400 MB together, and
-    this pass needs nothing from one after its material table has been read."""
+    this pass needs nothing from one after its material table has been read.
+
+    A material uri is relative to its OWN container, not to the export root: the cast writes
+    `npc/tex/`, the animated props write `npc/animated_props/tex/`. Both land in one texture
+    package because the asset name is the file's, so a texture a prop shares with a body -- the
+    wolf's fur, the sheriff's sword -- is imported once whichever container is read first."""
     wanted = {}
     for path in paths:
         blob = eskm.read(path)
+        base = os.path.dirname(path)
         for uri in eskm.materials(blob).values():
             if not uri:
                 continue
-            source = os.path.join(NPC_DIR, uri.replace("/", os.sep))
+            source = os.path.join(base, uri.replace("/", os.sep))
             if os.path.isfile(source):
                 wanted[texture_asset_name(uri)] = source
             else:
@@ -247,6 +342,22 @@ def owner_clips(manifest, stems):
                 fail("%s names bank '%s', which the manifest does not carry" % (stem, owner))
                 continue
             owners[owner] = True
+
+    # A cinematic bank is named by a choreographed SCENE rather than by any body's clip map, so
+    # the walk above never reaches one. Without it the performance is absent from the mount and
+    # `ResolveClipFromBank` answers out of the glb instead -- in glTFRuntime's basis rather than
+    # the container's, which stands every actor of every scene a quarter turn off, and the scene
+    # writes that facing back into the entity's angles when it ends
+    # (`Elysium.Content.BakedClipCoverage`).
+    for record in manifest.get("cinematics", {}).values():
+        for root in record.get("roots", []):
+            bank = root.get("bank")
+            if not bank or bank in owners:
+                continue
+            if bank not in manifest["banks"]:
+                fail("cinematic root names bank '%s', which the manifest does not carry" % bank)
+                continue
+            owners[bank] = True
     return owners
 
 
@@ -398,10 +509,20 @@ def main():
            "y" if len(partition["models"]) == 1 else "ies"))
 
     failed = []
-    textures = (import_textures_for([source_path(stem) for stem in stems])
+    # Props draw from the same texture corpus as the cast -- `gallerynoir` and `zodiac` are wall
+    # art, `palmtree` is scenery -- so their containers seed the import beside the bodies rather
+    # than importing a second set under different names.
+    prop_stems = sorted(manifest.get("animated_props", {}))
+    texture_sources = [source_path(stem) for stem in stems]
+    texture_sources += [prop_source_path(stem) for stem in prop_stems
+                        if os.path.isfile(prop_source_path(stem))]
+    textures = (import_textures_for(texture_sources)
                 if wants(plan, "_global", "textures") else existing_textures())
 
     bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan)
+    props_baked = bake_props(manifest, library, failed, plan, textures)
+    if props_baked:
+        log("%d animated prop(s) baked to %s" % (props_baked, PROPS))
 
     for name in baking:
         family = partition["models"][name]

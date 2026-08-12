@@ -8,6 +8,7 @@
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumSkeletalBasis.h"
 #include "Player/ElysiumCameraShots.h"
 
 #include "Camera/CameraTypes.h"
@@ -106,6 +107,11 @@ namespace
 		Npc.TargetName = TEXT("speaker");
 		Npc.Origin = FVector(200.0f, 0.0f, 0.0f);
 		Defs.Defs.Add(MoveTemp(Npc));
+		FElysiumEntityDef SecondNpc;
+		SecondNpc.Classname = TEXT("npc_VPedestrian");
+		SecondNpc.TargetName = TEXT("speaker2");
+		SecondNpc.Origin = FVector(250.0f, 100.0f, 0.0f);
+		Defs.Defs.Add(MoveTemp(SecondNpc));
 		return Defs;
 	}
 
@@ -147,6 +153,9 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	{
 		FElysiumEntityWorld Probe(nullptr, nullptr);
 		Probe.Load(MakeDialogueWorldDefs());
+		Probe.SpawnPlayer();
+		Probe.Activate(0.0);
+		Probe.Tick(0.0);
 		FElysiumEntity* ProbeSpeaker = Probe.FindByName(TEXT("speaker"));
 		if (!ProbeSpeaker)
 		{
@@ -176,6 +185,8 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	FElysiumEntityWorld World(nullptr, nullptr, Services);
 	World.Load(MakeDialogueWorldDefs());
 	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0); // deterministic NPC admission, no executor action
 	FElysiumEntity* Speaker = World.FindByName(TEXT("speaker"));
 	if (!TestNotNull(TEXT("dialogue speaker"), Speaker))
 	{
@@ -241,6 +252,8 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 	FElysiumEntityWorld HeadlessWorld(nullptr, nullptr);
 	HeadlessWorld.Load(MakeDialogueWorldDefs());
 	HeadlessWorld.SpawnPlayer();
+	HeadlessWorld.Activate(0.0);
+	HeadlessWorld.Tick(0.0);
 	FElysiumEntity* HeadlessSpeaker = HeadlessWorld.FindByName(TEXT("speaker"));
 	if (TestNotNull(TEXT("null-camera speaker"), HeadlessSpeaker))
 	{
@@ -255,6 +268,8 @@ bool FElysiumDialogueCameraSessionTest::RunTest(const FString&)
 		FElysiumEntityWorld TeardownWorld(nullptr, nullptr, TeardownServices);
 		TeardownWorld.Load(MakeDialogueWorldDefs());
 		TeardownWorld.SpawnPlayer();
+		TeardownWorld.Activate(0.0);
+		TeardownWorld.Tick(0.0);
 		if (FElysiumEntity* TeardownSpeaker = TeardownWorld.FindByName(TEXT("speaker")))
 		{
 			TeardownWorld.OpenDialog(TeardownSpeaker->Handle, MakeOneLineConversation());
@@ -314,6 +329,61 @@ bool FElysiumDialogueCameraRegistryTest::RunTest(const FString&)
 	TestFalse(TEXT("map teardown retires all epoch handles"), Service->IsCameraLive(Second));
 	TestFalse(TEXT("a stale epoch handle cannot update"), Service->UpdateCamera(Second, Sequence));
 	TestFalse(TEXT("a stale epoch handle cannot release"), Service->ReleaseCamera(Second));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueBodyOwnerLifecycleTest,
+	"Elysium.Substrate.DialogueCamera.BodyOwnerLifecycle", GElysiumDialogueCameraTestFlags)
+
+bool FElysiumDialogueBodyOwnerLifecycleTest::RunTest(const FString&)
+{
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MakeDialogueWorldDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+	FElysiumEntity* First = World.FindByName(TEXT("speaker"));
+	FElysiumEntity* Second = World.FindByName(TEXT("speaker2"));
+	if (!TestNotNull(TEXT("first speaker"), First)
+		|| !TestNotNull(TEXT("replacement speaker"), Second))
+	{
+		return false;
+	}
+	auto DebugValue = [](const FElysiumEntity& Entity, const TCHAR* Key)
+	{
+		TArray<TPair<FString, FString>> Rows;
+		Entity.GetDebugState(Rows);
+		for (const TPair<FString, FString>& Row : Rows)
+		{
+			if (Row.Key == Key)
+			{
+				return Row.Value;
+			}
+		}
+		return FString();
+	};
+
+	World.OpenDialog(First->Handle, MakeOneLineConversation());
+	TestTrue(TEXT("open session owns the first NPC body"),
+		DebugValue(*First, TEXT("Body owner")).StartsWith(TEXT("Dialogue")));
+	World.OpenDialog(Second->Handle, MakeOneLineConversation());
+	TestEqual(TEXT("silent replacement clears displaced NPC latch"),
+		DebugValue(*First, TEXT("In dialog")), FString(TEXT("no")));
+	TestEqual(TEXT("silent replacement does not count a completed conversation"),
+		DebugValue(*First, TEXT("Times talked")), FString(TEXT("0")));
+	TestTrue(TEXT("replacement owns the second NPC body"),
+		DebugValue(*Second, TEXT("Body owner")).StartsWith(TEXT("Dialogue")));
+
+	World.CloseDialog(/*bSilent=*/false);
+	TestTrue(TEXT("normal close leaves latch until queued EndDialog"),
+		DebugValue(*Second, TEXT("In dialog")).StartsWith(TEXT("YES")));
+	World.Tick(0.0);
+	TestEqual(TEXT("queued EndDialog clears the latch"),
+		DebugValue(*Second, TEXT("In dialog")), FString(TEXT("no")));
+	TestEqual(TEXT("normal close counts exactly once"),
+		DebugValue(*Second, TEXT("Times talked")), FString(TEXT("1")));
+	TestTrue(TEXT("normal close restores no autonomous owner"),
+		DebugValue(*Second, TEXT("Body owner")).StartsWith(TEXT("None")));
 	return true;
 }
 
@@ -405,6 +475,78 @@ bool FElysiumDialogueCameraGrammarTest::RunTest(const FString&)
 		Headless->EvaluateDialogueCandidate(NearPlane, Reason));
 	TestEqual(TEXT("near-plane rejection is classified"), Reason,
 		FString(TEXT("near-plane distance")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumJackCameraBasisTest,
+	"Elysium.Substrate.DialogueCamera.JackBasis", GElysiumDialogueCameraTestFlags)
+
+bool FElysiumJackCameraBasisTest::RunTest(const FString&)
+{
+	const FString JackText = TEXT(R"KV(
+		CameraShotTable
+		{
+			Jack
+			{
+				End
+				{
+					Position DialogTarget
+					AttachPos Origin
+					AttachType Follow
+					OffsetOrigin "[50, 0, 65]"
+				}
+				Target
+				{
+					Point1
+					{
+						Position DialogTarget
+						AttachPos "Bone: Bip01 Head"
+						AttachType Follow
+					}
+				}
+				CameraConstraints
+				{
+					FieldOfView 40
+					DialogPOV 1
+					SyncRotateOnMove 1
+				}
+			}
+		}
+	)KV");
+	FElysiumCameraShotDef Def;
+	if (!TestTrue(TEXT("Jack source shot parses"), ElysiumCameraShots::ParseText(JackText, Def)))
+	{
+		return false;
+	}
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MakeDialogueWorldDefs());
+	FElysiumEntity* Jack = World.FindByName(TEXT("speaker"));
+	if (!TestNotNull(TEXT("Jack fixture"), Jack))
+	{
+		return false;
+	}
+	Jack->Origin = FVector(144.0f, -7352.0f, -199.0f) * ElysiumCam::U;
+	Jack->Angles = FVector(0.0f, 190.0f, 0.0f);
+
+	FElysiumCameraShot Shot;
+	if (!TestTrue(TEXT("Jack source shot resolves"),
+		FElysiumCameraDirector::Resolve(&World, Def, Jack->Handle, Shot)))
+	{
+		return false;
+	}
+	const FVector RenderedForward = ElysiumSkeletalBasis::FromSourceAngles(Jack->Angles).Vector();
+	const FVector CameraOffset = Shot.Origin - Jack->Origin;
+	TestTrue(TEXT("camera lies on Jack rendered forward axis"),
+		FVector::DotProduct(CameraOffset.GetSafeNormal2D(), RenderedForward.GetSafeNormal2D()) > 0.9999f);
+	TestTrue(TEXT("authored forward distance is preserved"),
+		FMath::IsNearlyEqual(CameraOffset.Size2D(), 50.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("authored camera height is preserved"),
+		FMath::IsNearlyEqual(CameraOffset.Z, 65.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("Jack shot tracks its head/eye target"), Shot.bUseLookAt);
+	TestTrue(TEXT("Jack shot carries FOV 40"), FMath::IsNearlyEqual(Shot.FieldOfView, 40.0f));
+	TestTrue(TEXT("Jack shot carries DialogPOV"), Def.Constraints.bDialogPOV);
+	TestTrue(TEXT("Jack shot carries SyncRotateOnMove"), Def.Constraints.bSyncRotateOnMove);
 	return true;
 }
 

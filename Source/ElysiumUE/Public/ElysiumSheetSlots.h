@@ -78,6 +78,7 @@ namespace ElysiumSlot
 	constexpr int32 HealthAggDmg   = 16;
 	constexpr int32 MaxHealth      = 17;
 	constexpr int32 Generation     = 18;
+	constexpr int32 HealthBuffer   = 25;
 	constexpr int32 Humanity       = 27;
 	constexpr int32 Masquerade     = 28;
 	constexpr int32 ExpModifier    = 29;

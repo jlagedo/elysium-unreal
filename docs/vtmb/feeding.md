@@ -49,7 +49,7 @@ The transaction therefore has five separate owners:
 
 | Layer | Owner | Result |
 |---|---|---|
-| intent | client command button | held `+feed` bit and release edge |
+| intent | client command button | low-level `+feed`/`-feed` transport; first press starts, second press releases |
 | eligibility | `CBasePlayer::Replenish` / `AttemptFeed` | accepted target and paired mode |
 | performance | paired grapple router plus MDL sequences | synchronized attacker/victim animation |
 | commit | `FeedBegin` / `Feed` / `FeedInterrupt` | blood, health, timer and victim outcome |
@@ -74,7 +74,13 @@ has a paired peer. `[VtMB]`
 The released-button bit is also published by the server's general input-edge event surface at
 `0x10118db0`. That body does **not** call `FeedInterrupt` directly. The accepted action has its own
 continuation latch and exits through paired state, animation-event and interruption policy; the
-exact player-controlled early-cancel gesture still needs a live trace.
+exact native route from a second press into that latch still needs a live trace. `[VtMB]`
+
+The accepted gameplay interaction is toggle-style, not hold-to-feed: the first Feed press makes
+one acquisition request, releasing the physical button does not stop an accepted pair, and a
+second Feed press requests the ordinary release family. The following release edge is inert again.
+That interaction contract is owner-confirmed; it does not turn the low-level held bit into paired
+action state, and it does not claim the still-untraced native call path behind the second press.
 
 ### Patch alias is a producer, not the transaction
 
@@ -280,17 +286,19 @@ Confirmed interruption producers include:
 - paired sequence resolution failure or normal paired state completion;
 - invalid feed target/state detected by the common grapple lifecycle.
 
-The exact user-requested early-release route is not closed by static command inspection alone:
-`-feed` updates the command button and publishes a release edge, but does not directly call
-`FeedInterrupt` in that publisher.
+The exact native second-press route is not closed by static command inspection alone: `-feed`
+updates the command button and publishes a release edge, but does not directly call
+`FeedInterrupt` in that publisher. The recreation therefore maps the second press to the paired
+continuation latch and still exits through the release activity and event 4006.
 
 ## Recreation contract
 
 The narrow first faithful slice is ordinary player-on-humanoid feeding, including the tutorial
 blueblood. It needs:
 
-1. A `Feed` input action that preserves press, held and release state; ordinary input maps to the
-   retail `0x00400000` intent rather than directly playing a montage.
+1. A toggle-style `Feed` action over the low-level button pair: the first press makes one request,
+   release is inert, and a second press clears paired continuation; input still maps to the retail
+   `0x00400000` intent rather than directly playing a montage.
 2. A target query and acceptance service that retains automatic states, `ResistsFeeding`, the
    asymmetric Brawl/Hacking decision and stealth override as separate verdicts.
 3. One paired-action owner that aligns two actors and resolves role/size/front-back activities
@@ -313,8 +321,8 @@ rather than introduce separate montage-owned implementations.
 
 - Capture one ordinary humanoid feed with command down/up, grapple mode/role, activities,
   sequences, events 4007/4006/5116, timer fields, both BloodPool values, health and outputs.
-- Identify the exact player-controlled early-cancel gesture and its transition into a release
-  activity; static `-feed` inspection alone does not prove it.
+- Trace the exact native route by which the second Feed press clears continuation and transitions
+  into a release activity; static `-feed` inspection proves only that button-up is not teardown.
 - Name and capture every exceptional trait-effect branch, especially Nosferatu rat gain, Ventrue
   rat rejection and the two feed-bonus histories.
 - Resolve the exact depleted mortal/Kindred/unkillable victim outcome matrix, humanity and

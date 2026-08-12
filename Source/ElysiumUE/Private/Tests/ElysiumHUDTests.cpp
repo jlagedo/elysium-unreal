@@ -276,6 +276,7 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 	const TSharedRef<SWidget> DialogueSlate = Dialogue->TakeWidget();
 	TestEqual(TEXT("dialogue defaults to its first stable response"),
 		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Choice.101")));
+	UElysiumActionButton* First = Dialogue->GetSelectedAction();
 	TestTrue(TEXT("dialogue moves to the next response"),
 		Dialogue->Navigate(EElysiumNavigationDirection::Down));
 	TestEqual(TEXT("dialogue selection names the response identity"),
@@ -283,6 +284,10 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 
 	UElysiumActionButton* Second = Dialogue->GetSelectedAction();
 	TestNotNull(TEXT("selected dialogue response is a CommonUI action"), Second);
+	TestFalse(TEXT("the previous dialogue response loses its selected visual state"),
+		First && First->IsActionSelected());
+	TestTrue(TEXT("the focused dialogue response gains the selected visual state"),
+		Second && Second->IsActionSelected());
 	TestTrue(TEXT("dialogue action retains its visible response content inside the CommonButton"),
 		Second && Second->HasSlateContent());
 	if (Second)

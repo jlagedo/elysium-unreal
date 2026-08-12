@@ -352,15 +352,15 @@ public:
 	virtual void OnRuntimeTransformChanged() override
 	{
 		FElysiumEntity::OnRuntimeTransformChanged();
-		// Each representation keeps its own basis (see BuildBody).
+		// One basis for both representations (see BuildBody).
+		const FQuat Rot(ElysiumSkeletalBasis::FromSourceAngles(Angles));
 		if (Visual)
 		{
-			Visual->SetWorldLocationAndRotation(Origin, FQuat(FRotator(0.0f, -Angles.Y, 0.0f)));
+			Visual->SetWorldLocationAndRotation(Origin, Rot);
 		}
 		if (AnimatedVisual)
 		{
-			AnimatedVisual->SetWorldLocationAndRotation(Origin,
-				FQuat(ElysiumSkeletalBasis::GlbFromSourceAngles(Angles)));
+			AnimatedVisual->SetWorldLocationAndRotation(Origin, Rot);
 		}
 	}
 
@@ -700,34 +700,31 @@ private:
 			return;
 		}
 
-		// The two representations do NOT share a rotation. `model_quat` is the placement of the
-		// exporter's Unreal-native OBJ; a glTF body needs the fixed model-local correction on top
-		// of it, because glTFRuntime imports mdl_gltf.py's standard Y-up glTF into its own basis
-		// (ElysiumSkeletalBasis). Passing the static quat to the skeletal factory yaws the body 90
-		// degrees — which on a cinematic prop, whose clip carries the whole scene motion relative
-		// to its anchor, sweeps it through the wrong part of the room.
+		// Both representations share one rotation. A prop's skeletal body is baked from its `.eskm`
+		// in the repo's canonical Source->Unreal frame, exactly like its static mesh, so
+		// `model_quat` — the placement of the exporter's Unreal-native OBJ — is the whole answer for
+		// either, pitch and roll included (`ElysiumSkeletalBasis`).
 		FVector Loc;
 		FQuat StaticRot, SkeletalRot;
 		if (bFromSetModel)
 		{
-			// `Def->ModelQuat` belongs to the model this one replaced, so it cannot be reused. Both
-			// representations fall back to the yaw-only runtime derivation, as the static path
-			// already did.
+			// `Def->ModelQuat` belongs to the model this one replaced, so it cannot be reused; both
+			// representations fall back to the yaw-only runtime derivation.
 			VisualStem = FPaths::GetBaseFilename(Model).ToLower();
 			Loc = Origin;
-			StaticRot = FQuat(FRotator(0.0f, -Angles.Y, 0.0f));
-			SkeletalRot = FQuat(ElysiumSkeletalBasis::GlbFromSourceAngles(Angles));
+			StaticRot = FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles));
+			SkeletalRot = StaticRot;
 		}
 		else
 		{
 			VisualStem = Def->ModelMesh;
 			Loc = Def->Origin;
 			StaticRot = Def->ModelQuat;
-			// A model that decoded no static geometry carries no `model_quat`, so composing against
+			// A model that decoded no static geometry carries no `model_quat`, so falling back to
 			// the identity default would silently drop the placement.
 			SkeletalRot = Def->ModelMesh.IsEmpty()
-				? FQuat(ElysiumSkeletalBasis::GlbFromSourceAngles(Angles))
-				: ElysiumSkeletalBasis::GlbFromPlacementQuat(Def->ModelQuat);
+				? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles))
+				: Def->ModelQuat;
 		}
 
 		AnimatedStem = Embodiment->AnimatedPropStemForModel(Model);

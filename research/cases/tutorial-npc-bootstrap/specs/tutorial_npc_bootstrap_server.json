@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "topic": "tutorial-npc-bootstrap",
+  "consuming_document": "docs/vtmb/sp_tutorial_1-event-surface.md",
+  "research_id": "RE47",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "In what order does the server activate the BSP-created entity list and start load-time outputs?",
+    "What exact state does CAI_BaseNPC::NPCInitThink establish before ordinary RunAI?",
+    "Which initial activity, schedule, motor yaw, navigator, visibility and think fields are written?",
+    "Does initial native work depend on entity-lump order or an independently scheduled think deadline?",
+    "Which CLogicAuto path produces OnMapLoad and where does it cross into CEventQueue?"
+  ],
+  "functions": [
+    {"address": "1011a7a0", "label": "ServerLevelInit", "confidence": "CServerGameDLL::LevelInit profiler string", "role": "create, keyvalue, spawn and pre-activate the map entity set", "depth": 5, "cap": 620},
+    {"address": "10130d10", "label": "LogicAutoSpawn", "confidence": "CLogicAuto vtable slot +0x19c", "role": "recover OnMapLoad scheduling from map spawn", "depth": 4, "cap": 460},
+    {"address": "10136b40", "label": "ParseOneMapEntity", "confidence": "CServerGameDLL::LevelInit map-entity loader direct call", "role": "create entity and apply authored keyvalues", "depth": 5, "cap": 620},
+    {"address": "101d1280", "label": "DispatchSpawn", "confidence": "map-entity loader direct call and negative failure result", "role": "invoke concrete Spawn and reject failed entities", "depth": 5, "cap": 620},
+    {"address": "101828b0", "label": "ClosestPlayerInitJoin", "confidence": "Troika NPC initialization direct call after closest-player selection", "role": "recover any facing or state write caused by the closest-player join", "depth": 5, "cap": 620},
+    {"address": "1011aaf0", "label": "ServerActivate", "confidence": "entity-list walk and interface position", "role": "activate every live BSP entity then run post-entity systems", "depth": 3, "cap": 320},
+    {"address": "101a6540", "label": "BaseNpcInitVirtual694", "confidence": "CAI_BaseNPC primary vtable slot +0x694", "role": "second NPCInitThink virtual stage", "depth": 4, "cap": 420},
+    {"address": "10273760", "label": "BaseNpcInitPreamble", "confidence": "direct NPCInitThink call", "role": "NPCInitThink preamble", "depth": 4, "cap": 420},
+    {"address": "10273790", "label": "BaseNpcRelationshipParser", "confidence": "direct NPCInitThink preamble delegate", "role": "parse and install authored relationship overrides", "depth": 4, "cap": 480},
+    {"address": "10273aa0", "label": "BaseNpcInitThink", "confidence": "CAI_BaseNPC datamap think registration", "role": "delayed native NPC initialization", "depth": 5, "cap": 520},
+    {"address": "10273ad0", "label": "BaseNpcInitVirtual698", "confidence": "CAI_BaseNPC primary vtable slot +0x698", "role": "first NPCInitThink virtual stage", "depth": 4, "cap": 480},
+    {"address": "1026f110", "label": "BaseNpcRunAI", "confidence": "profile string and recovered AI loop", "role": "first ordinary condition state and schedule pass", "depth": 3, "cap": 320},
+    {"address": "102725d0", "label": "BaseNpcSetActivity", "confidence": "recovered activity resolver", "role": "immediate initial activity commit", "depth": 3, "cap": 280},
+    {"address": "10272650", "label": "BaseNpcSetIdealActivity", "confidence": "recovered activity resolver", "role": "initial ideal activity resolution", "depth": 3, "cap": 280},
+    {"address": "10273200", "label": "BaseNpcSpawn", "confidence": "CAI_BaseNPC::Spawn profiler string and vtable slot +0x19c", "role": "base NPC spawn state and AI admission", "depth": 5, "cap": 620},
+    {"address": "10273720", "label": "BaseNpcSpawnVirtual37c", "confidence": "CNPC_VVampire vtable slot +0x37c called by CAI_BaseNPC::Spawn", "role": "recovered base-spawn virtual stage", "depth": 4, "cap": 420},
+    {"address": "1028e310", "label": "TroikaNpcActivate", "confidence": "CNPC_VVampire vtable slot +0x1c4", "role": "Jack activation override", "depth": 5, "cap": 560},
+    {"address": "10298d30", "label": "TroikaNpcSpawnChain", "confidence": "CNPC_VVampire concrete Spawn parent call", "role": "Troika and base NPC spawn state", "depth": 6, "cap": 720},
+    {"address": "1029a0b0", "label": "TroikaNpcSpawnVirtual690", "confidence": "CNPC_VVampire vtable slot +0x690 called during spawn", "role": "initial Troika NPC state stage", "depth": 5, "cap": 620},
+    {"address": "1029a8b0", "label": "TroikaNpcInitVirtual698", "confidence": "CNPC_VVampire vtable slot +0x698 called by NPCInitThink", "role": "Jack's derived NPC initialization stage", "depth": 5, "cap": 620},
+    {"address": "103c4ef0", "label": "JackClassSpawn", "confidence": "CNPC_VVampire primary vtable slot +0x19c", "role": "Jack's concrete spawn chain", "depth": 6, "cap": 720}
+  ],
+  "vtable_probes": [
+    {"address": "104995c4", "label": "CAI_BaseNPC", "slots": 431, "cap": 80},
+    {"address": "104cdd24", "label": "CNPC_VVampire", "slots": 431, "cap": 80},
+    {"address": "10465694", "label": "CLogicAuto", "slots": 120, "cap": 80}
+  ],
+  "grep_probes": [
+    {"label": "logic_auto_load", "cls": "CLogicAuto", "str": "logic_auto~OnMapLoad~m_OnMapLoad", "cap": 260},
+    {"label": "server_level_init", "str": "CServerGameDLL~LevelInit~Map~Entities~ServerActivate", "cap": 360},
+    {"label": "npc_spawn_activate", "str": "CAI_BaseNPC::Spawn~CAI_BaseNPC::Activate~CAI_BaseNPCTroika::Spawn~CNPC_VVampire::Spawn", "cap": 420},
+    {"label": "npc_init_surface", "str": "NPCInitThink~CAI_BaseNPC::NPCInit~RunAI", "cap": 320}
+  ],
+  "findings": [
+    {"confidence": "confirmed", "fact": "LevelInit constructs and keyvalues map entities before DispatchSpawn, deferring parented entities; ServerActivate is a later complete live-entity pass.", "evidence": "0x1011a7a0 -> 0x10136b40/0x101d1280; 0x1011aaf0 walks the live entity list and invokes vtable +0x1c4.", "consequence": "Creation, Spawn and Activate remain distinct ordered phases."},
+    {"confidence": "confirmed", "fact": "Jack's npc_VVampire concrete Spawn reaches the Human/Troika and CAI_BaseNPC spawn bodies, then caches its live transform.", "evidence": "CNPC_VVampire vtable +0x19c -> 0x103c4ef0 -> 0x10384690 -> 0x10298d30 -> 0x10273200.", "consequence": "The BSP origin and angles are real spawn inputs, not a dialogue placement request."},
+    {"confidence": "confirmed", "fact": "The traced Jack Spawn, Activate and concrete NPCInitThink path contains no turn-to-player and no direct SetActivity or SetIdealActivity call.", "evidence": "0x103c4ef0, 0x10298d30, 0x10273200, 0x1028e310, 0x10273aa0, base 0x10273ad0, Troika override 0x1029a8b0 and closest-player join 0x101828b0 were decompiled; 0x101a6540 is the empty base +0x694 virtual.", "consequence": "Do not invent a spawn-time idle or facing command; capture the first visible sequence and later AI/gaze behavior."},
+    {"confidence": "confirmed", "fact": "CLogicAuto Spawn installs a delayed think deadline rather than firing OnMapLoad inside entity parsing.", "evidence": "CLogicAuto vtable +0x19c -> 0x10130d10 writes current time plus the class delay to the next-think field.", "consequence": "Map-load outputs occur after direct character construction and Spawn."}
+  ]
+}

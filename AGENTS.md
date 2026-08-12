@@ -125,8 +125,8 @@ An exporter prefixed **`UE_`** (e.g. `UE_bsp_to_scene.py`) is verified to emit
 so the C++ runtime reads every file 1:1 with **no coordinate conversion**. Every tracked
 coordinate-bearing OBJ/sidecar exporter is Unreal-native; do not add a coordinate exporter
 without the prefix. Format parsers and orchestration modules are not coordinate exporters.
-`mdl_gltf.py` is the one standing exemption: standard glTF 2.0 is self-describing, so
-glTFRuntime reorients it at load. Details: `pipeline/CLAUDE.md`.
+`mdl_gltf.py` is the one standing exemption: it writes self-describing standard glTF 2.0 as an
+inspection product, and nothing the game loads comes off it. Details: `pipeline/CLAUDE.md`.
 
 ### Coordinates are read verbatim
 

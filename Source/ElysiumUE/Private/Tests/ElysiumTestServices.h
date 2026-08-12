@@ -21,6 +21,8 @@
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumWorldServices.h"
+#include "ElysiumStanceTypes.h"
+#include "Substrate/ElysiumDisposition.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -238,6 +240,34 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("RefreshNpcIdle %s disp=%s var=%d"), *Stem, *Disposition, IdleVariant));
 		return Body != nullptr;
+	}
+	// The stance set a test hands the machine. Empty by default, which is the "this model carries no
+	// stance clips" answer — a test that wants the machine to run fills `StanceClips` first, the same
+	// way `ResolvedNpcActivityLabel` seeds the activity resolver.
+	FElysiumStanceClips StanceClips;
+	virtual bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
+		FElysiumStanceClips& OutClips) override
+	{
+		Record(FString::Printf(TEXT("ResolveStanceClips %s anim=%s"), *Stem, *AnimName));
+		OutClips = StanceClips;
+		return OutClips.IsValid();
+	}
+	// The disposition row the machine is tuned by. Default-constructed is a row with an empty name,
+	// which `IsValid()` rejects — a test that wants the machine to run seeds this the same way it
+	// seeds `StanceClips`, so the literals it asserts against are visible in the test body.
+	FElysiumDisposition DispositionRow;
+	virtual bool ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow) override
+	{
+		Record(FString::Printf(TEXT("ResolveDisposition %s"), *Disposition));
+		OutRow = DispositionRow;
+		return OutRow.IsValid();
+	}
+	// `TASK_WAIT_PVS`'s answer, settable so a test drives both branches. True by default because
+	// that is what a headless run means: the question has no renderer to answer it.
+	bool bNpcBodyVisible = true;
+	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) override
+	{
+		return bNpcBodyVisible;
 	}
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override

@@ -47,6 +47,15 @@ namespace ElysiumFeed
 	// net is floored at zero so a botched defence cannot help the attacker past a zero rating.
 	bool OpposedAccepts(int32 AttackerBrawlRating, const FElysiumRollResult& VictimHackingRoll);
 
+	// The two authored ways a humanoid skips that opposed check. `FastFood` is inherited from the
+	// NPC template's General block; `Fx_No_Resist_Feeding` is the live trait-effect flag. Keeping
+	// their OR here lets content tests prove the real BluebloodFastfood row through the same policy
+	// the NPC leaf calls, without teaching a bare entity world to load the rulebook.
+	inline bool ResistsByAuthoredPolicy(bool bFastFood, bool bNoResistEffect)
+	{
+		return !bFastFood && !bNoResistEffect;
+	}
+
 	// --- The baseline unit transaction ---------------------------------------------------------
 	// What one pulse does, given only whether the feeder's blood-pool increment landed. The rule
 	// worth isolating is the asymmetry: healing is still evaluated in the normal branch when the

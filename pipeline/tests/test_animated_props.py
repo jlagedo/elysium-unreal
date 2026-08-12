@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 
 from elysium_pipeline.exporters import npc_export
-from elysium_pipeline.formats import mdl_gltf, mdl_skel
+from elysium_pipeline.formats import mdl_skel
 
 
 def _run(valid_keys, total, stored=None):
@@ -177,21 +177,21 @@ class ClipExtentTests(unittest.TestCase):
         rest = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
         turn = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.7071067811865476, 0.7071067811865476)),
                 ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
-        with mock.patch.object(mdl_gltf.S, "read_anim", return_value=[rest, turn]):
-            self.assertAlmostEqual(mdl_gltf.clip_extent(b"", bones, 0, 2), 100.0 * 0.0254, places=6)
+        with mock.patch.object(mdl_skel, "read_anim", return_value=[rest, turn]):
+            self.assertAlmostEqual(mdl_skel.clip_extent(b"", bones, 0, 2), 100.0 * 0.0254, places=6)
 
     def test_a_clip_with_no_bones_or_no_frames_claims_nothing(self) -> None:
-        self.assertEqual(mdl_gltf.clip_extent(b"", [], 0, 16), 0.0)
-        self.assertEqual(mdl_gltf.clip_extent(b"", [mdl_skel.Bone(index=0, parent=-1)], 0, 0), 0.0)
+        self.assertEqual(mdl_skel.clip_extent(b"", [], 0, 16), 0.0)
+        self.assertEqual(mdl_skel.clip_extent(b"", [mdl_skel.Bone(index=0, parent=-1)], 0, 0), 0.0)
 
     def test_the_vectorised_rotation_matches_the_scalar_one(self) -> None:
         import numpy as np
         quats = np.array([[0.0, 0.0, 0.0, 1.0],
                           [0.5, -0.5, 0.5, 0.5],
                           [0.0, 0.0, 0.7071067811865476, 0.7071067811865476]])
-        stacked = mdl_gltf.rot_matrices(quats)
+        stacked = mdl_skel.rot_matrices(quats)
         for i, q in enumerate(quats):
-            np.testing.assert_allclose(stacked[i], mdl_gltf.rot_matrix(q), atol=1e-12)
+            np.testing.assert_allclose(stacked[i], mdl_skel.rot_matrix(q), atol=1e-12)
 
 
 if __name__ == "__main__":

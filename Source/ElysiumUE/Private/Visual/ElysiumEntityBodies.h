@@ -12,7 +12,6 @@
 class UAnimSequence;
 class UElysiumPropSkinSet;
 class UMaterialInstanceDynamic;
-class UglTFRuntimeAsset;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 class UStaticMesh;
@@ -69,6 +68,19 @@ public:
 	// of them a .dlg line's action, so an NPC's stance follows the conversation.
 	bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 IdleVariant);
+
+	// One model's disposition stance set for `AnimName`, with the precache fallbacks applied. The
+	// substrate's stance machine reads the resolved table; this is the only place that touches the
+	// clip vocabulary on its behalf.
+	bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
+		struct FElysiumStanceClips& OutClips);
+
+	// The disposition table row behind a `default_disposition` name — the stance token and the
+	// pacing the selector rolls against, resolved together because they are one row.
+	bool ResolveDisposition(const FString& Disposition, struct FElysiumDisposition& OutRow);
+
+	// Whether this body was drawn recently enough to count as visible. `TASK_WAIT_PVS`'s oracle.
+	bool IsNpcBodyVisible(USkeletalMeshComponent* Body) const;
 
 	// Crossfade a live NPC body to a named clip, resolved through the manifest. Returns false when
 	// the name resolves nothing. OutSeconds receives the clip's authored length — what a
@@ -373,22 +385,18 @@ private:
 	// AddInstanceComponent), freed with it.
 	//
 	// The animation cache is keyed `<stem>|<clip>` and lives HERE rather than on the GI-scoped
-	// UElysiumAnimSubsystem, because glTFRuntime binds every UAnimSequence it builds to one
-	// USkeletalMesh's USkeleton — and meshes are per-map-epoch. The subsystem caches what is
-	// skeleton-independent: the parsed bank glbs and the clip vocabularies. An entry may be null
-	// (nothing resolved → reference pose); it is still cached, so a miss is not retried per NPC.
+	// UElysiumAnimSubsystem, because a baked UAnimSequence is bound to one rig family's USkeleton
+	// and the meshes that carry it are per-map-epoch. The subsystem caches what is
+	// skeleton-independent: the clip vocabularies. An entry may be null (nothing resolved →
+	// reference pose); it is still cached, so a miss is not retried per NPC.
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> NpcMeshCache;
 	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> NpcAnimCache;
 
-	// The NPC's own parsed glb, kept for the epoch so a clip it owns itself (its dialogue anims)
-	// can still be retargeted after the mesh is cached — the bank path does not go through it.
-	UPROPERTY() TMap<FString, TObjectPtr<UglTFRuntimeAsset>> NpcAssetCache;
 	FString NpcVisualKeyForMesh(const FString& Stem, const USkeletalMesh* Mesh) const;
 
 	// v4 animated props are their own model/asset/clip namespace. Keeping separate maps prevents a
 	// prop and NPC with the same basename from aliasing skeleton-bound UAnimSequences.
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> AnimatedPropMeshCache;
-	UPROPERTY() TMap<FString, TObjectPtr<UglTFRuntimeAsset>> AnimatedPropAssetCache;
 	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> AnimatedPropAnimCache;
 
 	// 8.3 dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several

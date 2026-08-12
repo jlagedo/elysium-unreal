@@ -321,15 +321,15 @@ bool FElysiumCompositionRigCorpusTest::RunTest(const FString&)
 }
 
 // ---------------------------------------------------------------------------------------------
-// The import transform, checked against the skeleton the same .glb produced.
+// The sidecar's frame, checked against the baked body the same model produced.
 //
-// This is the one thing about the rule table that cannot be checked without real data: the sidecar
-// states its entries in the glb's own basis and metres, and the skeleton glTFRuntime builds from
-// that same file is conjugated and scaled. `docs/vtmb/procedural_bones.md` measured that `pos[6]`
-// holds six copies of one position at the median and that the position IS the driven bone's bind
-// position on 79.3% of rules — so after the import, a rule's position must land on that bone's
-// reference-skeleton translation. A wrong basis or a missing metres-to-centimetres would miss by
-// a limb length or by a factor of a hundred.
+// This is the one thing about the rule table that cannot be checked without real data. The table
+// and the body are written by the same export, in the same frame, and the runtime reads both
+// verbatim -- so the assertion is that the export actually put them in one space.
+// `docs/vtmb/procedural_bones.md` measured that `pos[6]` holds six copies of one position at the
+// median and that the position IS the driven bone's bind position on 79.3% of rules, so a rule's
+// position must land on that bone's reference-skeleton translation with nothing applied to it. A
+// wrong basis misses by a limb length; inches or metres instead of centimetres miss by a factor.
 // ---------------------------------------------------------------------------------------------
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCompositionImportTest,
@@ -350,9 +350,9 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 		return true;
 	}
 
-	// A handful of ordinary bipeds rather than the whole cast: each one loads a multi-megabyte glb,
-	// and the rule table is a shared rig template, so the corpus adds coverage of the *export* (the
-	// test above) rather than of the basis.
+	// A handful of ordinary bipeds rather than the whole cast: the rule table is a shared rig
+	// template, so the corpus adds coverage of the *export* (the test above) rather than of the
+	// basis.
 	const TCHAR* Stems[] = { TEXT("lacroix"), TEXT("skelter"), TEXT("isaac") };
 	int32 Checked = 0;
 	int32 OnBind = 0;
@@ -361,8 +361,7 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 	for (const TCHAR* Stem : Stems)
 	{
 		const FElysiumNpcIndexEntry* Entry = Index.Npcs.Find(Stem);
-		if (Entry == nullptr || Entry->Procedural.IsEmpty()
-			|| !FPaths::FileExists(FElysiumContentPaths::NpcGlb(Stem)))
+		if (Entry == nullptr || Entry->Procedural.IsEmpty())
 		{
 			continue;
 		}
@@ -375,9 +374,8 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 			continue;
 		}
 
-		UglTFRuntimeAsset* Asset = nullptr;
 		FString MeshError;
-		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Asset, MeshError);
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, MeshError);
 		if (Mesh == nullptr)
 		{
 			AddError(FString::Printf(TEXT("mesh '%s': %s"), Stem, *MeshError));
@@ -385,8 +383,8 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 		}
 		++Checked;
 
-		// The three Source axes come back as unit directions, which is the cheapest signal that the
-		// import applied a basis rather than an arbitrary matrix.
+		// The three Source axes arrive as unit directions, which is the cheapest signal that the
+		// export stated a basis rather than an arbitrary matrix.
 		for (int32 k = 0; k < 3; ++k)
 		{
 			TestTrue(FString::Printf(TEXT("'%s' driver axis %d is a unit direction"), Stem, k),
@@ -409,7 +407,7 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 			}
 			++Total;
 
-			// The axis and every driver axis survive the import as unit directions.
+			// The axis is a direction, so the basis change leaves it unit length.
 			TestTrue(FString::Printf(TEXT("'%s' rule axis is a unit direction"), Stem),
 				FMath::IsNearlyEqual(Rule.Axis.Size(), 1.0, 1e-4));
 
@@ -434,11 +432,8 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 	AddInfo(FString::Printf(TEXT("%d model(s), %d rules, %d on the driven bone's bind position"),
 		Checked, Total, OnBind));
 	// procedural_bones.md measures 79.3% over the whole corpus. Requiring a clear majority is what
-	// separates "the import transform is right" from "the import transform is off by a basis or a
-	// factor of a hundred", without pinning the test to a corpus statistic.
-	// procedural_bones.md measures 79.3% over the whole corpus. Requiring a clear majority is what
-	// separates "the import transform is right" from "the import transform is off by a basis or a
-	// factor of a hundred", without pinning the test to a corpus statistic.
+	// separates "the sidecar is in the body's frame" from "it is off by a basis or by a factor",
+	// without pinning the test to a corpus statistic.
 	TestTrue(TEXT("most rules pin the driven bone at its own bind position, in centimetres"),
 		Total > 0 && OnBind * 2 > Total);
 	return true;

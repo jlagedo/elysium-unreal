@@ -40,6 +40,8 @@ motor can consume the same movement without translating the skeleton a second ti
 import math
 import os
 import struct
+
+import numpy as np
 from collections import namedtuple
 
 _i32 = lambda b, o: struct.unpack_from("<i", b, o)[0]
@@ -922,3 +924,358 @@ def vert_anims(d, flex, anorms=None):
                 nv = tuple(c * nm for c in anorms[_u16(d, vb + 16) // 12])
             out.append((idx, _vec3(d, vb + 4), nv))
     return out
+
+
+# ---------------------------------------------------------------------------------------
+# Facts decoded from the model that carry no basis: the unit-vector table, a cinematic's actor
+# roots, and the blend-grid / autolayer plan. They live here rather than beside an exporter
+# because every consumer needs them and none of them states a coordinate -- a cell is a clip
+# name and an animation index, a root is a bone-name prefix, and the table is raw as shipped.
+# ---------------------------------------------------------------------------------------
+
+def load_anorms():
+    """The unit-vector table a compressed vertex-animation record indexes, or None with a
+    warning if the user's `StudioRender.dll` cannot be read. It is compiled into the renderer
+    rather than shipped as data, so it is extracted from the install at export time and never
+    committed; without it the flexes have directions but no magnitudes, and the export drops
+    morph targets rather than baking wrong ones."""
+    try:
+        return read_anorms()
+    except (OSError, RuntimeError, struct.error) as e:
+        print(f"  ! no unit-vector table ({e}) - exporting without morph targets")
+        return None
+
+
+def _bone_root(name):
+    """A bone's root token if it names one of a cinematic model's actor skeletons.
+
+    `Bip01 Spine1` -> `Bip01`; `Dummy01` -> None. The match is on the leading word only, so
+    every bone of one actor's skeleton answers the same root.
+    """
+    head = name.split()[0] if name.split() else name
+    low = head.lower()
+    if low.startswith("bip") and low[3:].isdigit():
+        return head
+    return None
+
+
+def cinematic_roots(bones):
+    """The distinct `BipNN` roots a model carries, in first-seen order."""
+    roots, seen = [], set()
+    for b in bones:
+        r = _bone_root(b.name)
+        if r and r.lower() not in seen:
+            seen.add(r.lower())
+            roots.append(r)
+    return roots
+
+
+def blend_clip_plan(d, clips):
+    """Expand a model's sequences into the clips their blend grids need -> (extra, blends).
+
+    A multi-cell sequence selects a different animation per pose-parameter value, and baking
+    the base cell alone drops the rest — the male and female `move_and_ranged` `walk` grids
+    are nine `walk_0`..`walk_315` animations behind one label. `extra` is one `mdl_skel.Seq`
+    per animation an active cell selects that the base-cell bake does not already reach,
+    labelled by the animation's own name, so every cell ships as its own clip. `blends` maps a
+    sequence label to `{numblends, groupsize, paramindex, paramstart, paramend, cells}`, each
+    cell carrying its position, the owner-local animation index it selects, the clip that
+    animation baked as, and optional authored movement metadata. The index travels because it is
+    the identity a contribution record names, so a cell joins back to the model image it was read
+    from.
+
+    **Nothing is blended here.** The grid rides beside the clips because the mix depends on a
+    pose parameter the exporter cannot know, and because blending clips is not the same pose
+    as blending the transforms they decode to — the host evaluates each cell and mixes the
+    results (`docs/vtmb/animation_and_movers.md` A.3).
+
+    A cell whose animation index falls outside the model's declaration resolves to `None`,
+    which is a shortfall carried in the sidecar rather than a silently shortened grid."""
+    by_base = {}
+    taken = set()
+    for c in clips:
+        by_base.setdefault(c.base, c.label)
+        taken.add(c.label.lower())
+
+    extra, blends = [], {}
+    for c in clips:
+        grid = c.grid
+        if len(grid.cells) <= 1:
+            continue
+        cells = []
+        for cell in grid.cells:
+            found = local_animation(d, cell.anim)
+            if found is None:
+                cells.append(
+                    {"axis": [cell.axis0, cell.axis1], "anim": cell.anim, "clip": None}
+                )
+                continue
+            name, ab, frames, fps = found
+            if ab not in by_base:
+                # The animation's own name is the cell's clip name. It collides with a
+                # sequence label only where content gave a sequence and an animation the
+                # same string, so the index disambiguates and the common case reads
+                # `walk_45` rather than a synthetic id.
+                base_name = name or f"anim{cell.anim}"
+                clip, suffix = base_name, 0
+                while clip.lower() in taken:
+                    suffix += 1
+                    clip = (f"{base_name}#{cell.anim}" if suffix == 1
+                            else f"{base_name}#{cell.anim}#{suffix}")
+                taken.add(clip.lower())
+                by_base[ab] = clip
+                extra.append(Seq(label=clip, base=ab, frames=frames, fps=fps,
+                                   activity="", actweight=0, flags=0))
+            exported = {
+                "axis": [cell.axis0, cell.axis1], "anim": cell.anim,
+                "clip": by_base[ab],
+            }
+            motion = movement_summary(d, ab, frames, fps)
+            if motion is not None:
+                exported["motion"] = {
+                    "cycle_seconds": round(motion.cycle_seconds, 6),
+                    "ground_distance_cm": round(motion.ground_distance_cm, 6),
+                    "ground_speed_cm_s": round(motion.ground_speed_cm_s, 6),
+                }
+            cells.append(exported)
+        blends[c.label] = {
+            "numblends": grid.numblends,
+            "groupsize": list(grid.groupsize),
+            "paramindex": list(grid.paramindex),
+            "paramstart": [round(v, 4) for v in grid.paramstart],
+            "paramend": [round(v, 4) for v in grid.paramend],
+            "cells": cells,
+        }
+    return extra, blends
+
+
+def blend_sidecar(d, blends, clips):
+    """The blend table and autolayer binding a model ships beside its clips, or `{}` when it
+    authors neither.
+
+    The pose parameters travel with it because a grid's `paramindex` is an index into this
+    model's own array — the axis cannot be named, wrapped or normalized without it.
+
+    `autolayers` maps a host clip's label to the labels it is composed with, in the order the
+    dispatcher walks them, and is read from the same 764-byte sequence descriptor the grids
+    are. It is a binding rather than a mix: the host is the base pose and each entry is
+    evaluated beside it and accumulated, a masked overlay or an additive according to its own
+    flags. Order is part of the data — an overlay blends toward its own pose and would
+    overwrite an additive already accumulated onto the bones it owns."""
+    autolayers = {c.label: list(c.autolayers) for c in clips if c.autolayers}
+    if not blends and not autolayers:
+        return {}
+    return {
+        "pose_parameters": [
+            {"index": p.index, "name": p.name, "flags": p.flags,
+             "start": round(p.start, 4), "end": round(p.end, 4), "loop": round(p.loop, 4)}
+            for p in pose_parameters(d)
+        ],
+        "grids": blends,
+        **({"autolayers": autolayers} if autolayers else {}),
+    }
+
+
+def autolayer_orphans(clips):
+    """The autolayer targets none of `clips` baked -> sorted labels.
+
+    A target names a sequence of the declaring model's own array, so it should bake as a clip
+    of the same glb. One that does not is a dangling binding the host cannot compose, and the
+    sidecar still carries it because the file states it — this is the census that names them."""
+    baked = {c.label.lower() for c in clips}
+    return sorted({t for c in clips for t in c.autolayers if t.lower() not in baked})
+
+
+# ---------------------------------------------------------------------------------------
+# Magnitudes and Source-space rotation helpers. A radius survives a change of basis unchanged,
+# so the measurement belongs beside the decode rather than beside whichever exporter happened
+# to need it first.
+# ---------------------------------------------------------------------------------------
+
+#: VtMB authors in inches; every exported length is metres.
+SCALE = 0.0254
+
+
+def rot_matrix(q):
+    """Source-space 3x3 rotation matrix of a quaternion (x,y,z,w)."""
+    x, y, z, w = q
+    return np.array([
+        [1-2*(y*y+z*z), 2*(x*y-z*w),   2*(x*z+y*w)],
+        [2*(x*y+z*w),   1-2*(x*x+z*z), 2*(y*z-x*w)],
+        [2*(x*z-y*w),   2*(y*z+x*w),   1-2*(x*x+y*y)],
+    ])
+
+
+def rot_matrices(q):
+    """`rot_matrix` over an (N,4) array of (x,y,z,w) quaternions -> (N,3,3)."""
+    x, y, z, w = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    return np.stack([
+        1-2*(y*y+z*z), 2*(x*y-z*w),   2*(x*z+y*w),
+        2*(x*y+z*w),   1-2*(x*x+z*z), 2*(y*z-x*w),
+        2*(x*z-y*w),   2*(y*z+x*w),   1-2*(x*x+y*y),
+    ], axis=-1).reshape(-1, 3, 3)
+
+
+def clip_extent(d, bones, animdesc_base, nframes):
+    """The furthest any bone reaches from the model origin over one clip, in this glb's
+    metres -- the radius a renderer needs to keep the posed model on screen.
+
+    This is the *measured* answer to the question `mdl_skel.Seq.bbmin`/`bbmax` already
+    answers from the file. Both exist because a descriptor carrying zeros would otherwise
+    hand the runtime a bound smaller than the geometry it has to cover, and this corpus does
+    ship zeroed bounds -- every model's header `ViewBBMin`/`ViewBBMax` is (0,0,0).
+
+    Composed in Source space and scaled once at the end: M is a rotation, so a magnitude
+    survives the basis change and the per-frame conversion is wasted work here."""
+    if not bones or nframes <= 0:
+        return 0.0
+    frames = read_anim(d, bones, animdesc_base, nframes)
+    n = len(bones)
+    lt = np.array([[frames[f][i][0] for i in range(n)] for f in range(nframes)], dtype=np.float64)
+    lq = np.array([[frames[f][i][1] for i in range(n)] for f in range(nframes)], dtype=np.float64)
+    lr = rot_matrices(lq.reshape(-1, 4)).reshape(nframes, n, 3, 3)
+    wt, wr = np.empty_like(lt), np.empty_like(lr)
+    for i, b in enumerate(bones):
+        p = b.parent
+        # A root, or a parent declared after its child -- which the composition cannot honour
+        # and no v2531 skeleton writes. Either way the bone stands on the model origin.
+        if not 0 <= p < i:
+            wt[:, i], wr[:, i] = lt[:, i], lr[:, i]
+            continue
+        wt[:, i] = wt[:, p] + np.einsum("fab,fb->fa", wr[:, p], lt[:, i])
+        wr[:, i] = np.einsum("fab,fbc->fac", wr[:, p], lr[:, i])
+    return float(np.abs(wt).max()) * SCALE
+
+
+AXIS_INTERP = 1                    # StudioBone.ProcType; the only rule kind VtMB declares
+BONE_STRIDE = 160
+BONE_FLAGS, BONE_PROC_TYPE, BONE_PROC_INDEX = 136, 140, 144
+AXIS_INTERP_BYTES = 176
+#: The three Source axes a rule's six entries are indexed by, in the order the file uses them.
+SOURCE_AXES = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+
+def axis_interp_records(d, bones):
+    """Every `ProcType == 1` correction table the model declares, in **Source** space.
+
+    A procedural bone ignores its animation channels: its local transform is recomputed from
+    the current orientation of a control bone through a six-entry table authored into the
+    model, after the locals blend and the hierarchy composes. That correction is in no clip,
+    so it ships as a sidecar. The rule, its evidence and the order it evaluates in are
+    `docs/vtmb/procedural_bones.md`.
+
+    `axis` rides as an INDEX into `SOURCE_AXES` rather than as a vector, because a change of
+    basis conjugates a bone local: the axis a rule names is not the same axis afterwards and
+    may be negated. Carrying the index leaves that decision to whichever exporter states the
+    table in a frame -- `UE_mdl_skeletal.axis_interp_rules` is the one that does.
+
+    Returns `(records, faults)`. A rule that does not resolve inside the image, or names a
+    control bone or an axis out of range, is a named fault rather than a silent drop.
+    """
+    base = struct.unpack_from("<i", d, 244)[0]
+    records, faults = [], []
+    for b in bones:
+        record = base + b.index * BONE_STRIDE
+        proc_type = struct.unpack_from("<i", d, record + BONE_PROC_TYPE)[0]
+        # Either field identifies a driven bone on its own over the shipped corpus, so a
+        # disagreement is a model this reader has not seen before rather than a preference.
+        if bool(b.flags & 0x1) != bool(proc_type):
+            faults.append(f"{b.name}: Flags 0x{b.flags:x} and ProcType {proc_type} disagree")
+        if not proc_type:
+            continue
+        if proc_type != AXIS_INTERP:
+            faults.append(f"{b.name}: ProcType {proc_type} is not axis interpolation")
+            continue
+        offset = record + struct.unpack_from("<i", d, record + BONE_PROC_INDEX)[0]
+        if offset < 0 or offset + AXIS_INTERP_BYTES > len(d):
+            faults.append(f"{b.name}: ProcIndex resolves to {offset}, outside the image")
+            continue
+        control, axis = struct.unpack_from("<ii", d, offset)
+        if not 0 <= control < len(bones):
+            faults.append(f"{b.name}: control bone {control} outside 0..{len(bones) - 1}")
+            continue
+        if not 0 <= axis <= 2:
+            faults.append(f"{b.name}: axis {axis} outside 0..2")
+            continue
+        records.append({
+            "bone": b.name, "bone_index": b.index,
+            "control": bones[control].name, "control_index": control,
+            "axis_index": axis,
+            "pos": [struct.unpack_from("<3f", d, offset + 8 + 12 * i) for i in range(6)],
+            "quat": [struct.unpack_from("<4f", d, offset + 80 + 16 * i) for i in range(6)],
+        })
+    return records, faults
+
+
+def eye_records(d, bones, mesh_map, matinfo, sanitize):
+    """The model's `StudioEyeball` records in **Source** space, joined to the eye meshes.
+
+    Two per character model. The record carries the eye's bone and resting basis, the iris
+    scale, and the eyelid flexdescs the renderer's eye pass writes back into the flex weights
+    after the rules have run -- so it is the authored bridge between the four eyelid rules and
+    the lid morphs, not a reconstruction. `StudioMesh.materialtype == 1` flags which meshes the
+    pass applies to and `materialparam` says which eyeball, which is how a material name (and
+    therefore the `.vmt`'s `$iris` and `$vampire`) reaches a record.
+
+    The bone rides as a **name**: a model with more than one parent-less bone gets a synthetic
+    root appended at assembly, so the emitted skeleton's bone order is not the `.mdl`'s.
+
+    `uppertarget`/`lowertarget` stay verbatim -- they are linear offsets read through
+    `asin(t / radius)` against a radius in the same units, so converting either alone breaks
+    the ratio. Same for `zoffset` and `radius`. Only `org`, `up` and `forward` are geometry,
+    and they are left in Source space for the exporter to state in its own frame.
+
+    `sanitize` names a material the way the artifact naming it does, so this parser owes
+    nothing to whichever exporter calls it. Format and the whole system these feed:
+    `docs/vtmb/facial_animation.md`.
+
+    Returns `(rig, faults)`; `rig` is None when the model authors no eyeball.
+    """
+    faults = []
+    eye_mat, seen = {}, {}
+    for r in mesh_map:
+        seen.setdefault(r["material"], set()).add(r.get("materialtype", 0))
+        if r.get("materialtype") != 1:
+            continue
+        param = r.get("materialparam", 0)
+        if param not in (0, 1):
+            faults.append(f"eye mesh {r['material']}: materialparam {param} outside 0..1")
+            continue
+        eye_mat.setdefault(param, r["material"])
+    for name, types in seen.items():
+        if len(types) > 1:
+            faults.append(f"{name}: used by both eye and non-eye meshes, so the primitives merge")
+
+    records = []
+    for model_base in dict.fromkeys(r["model_base"] for r in mesh_map):
+        for e in eyeballs(d, model_base):
+            if not 0 <= e["bone"] < len(bones):
+                faults.append(f"eyeball {e['index']}: bone {e['bone']} outside 0..{len(bones) - 1}")
+                continue
+            mat = eye_mat.get(e["index"])
+            info = matinfo.get(mat) or {}
+            records.append({
+                "index": e["index"],
+                "bone": bones[e["bone"]].name, "bone_index": e["bone"],
+                "org": tuple(e["org"]), "up": tuple(e["up"]), "forward": tuple(e["forward"]),
+                "zoffset": float(e["zoffset"]), "radius": float(e["radius"]),
+                "iris_scale": float(e["iris_scale"]),
+                "upperflexdesc": e["upperflexdesc"], "lowerflexdesc": e["lowerflexdesc"],
+                "uppertarget": [round(t, 6) for t in e["uppertarget"]],
+                "lowertarget": [round(t, 6) for t in e["lowertarget"]],
+                "upperlidflexdesc": e["upperlidflexdesc"],
+                "lowerlidflexdesc": e["lowerlidflexdesc"],
+                "material": sanitize(mat) if mat else None,
+                "iris": ("tex/" + info["iris"]) if info.get("iris") else None,
+                "vampire": bool(info.get("vampire")),
+            })
+            if mat is None:
+                faults.append(f"eyeball {e['index']}: no mesh carries materialtype 1 for it")
+
+    if not records:
+        return None, faults
+    if len(records) != 2:
+        faults.append(f"{len(records)} eyeball records; every shipped character carries two")
+    return {"eyeballs": records,
+            "meshes": [{"material": sanitize(m), "eyeball": p}
+                       for p, m in sorted(eye_mat.items())]}, faults

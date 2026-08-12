@@ -8,6 +8,8 @@
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
+#include "Visual/ElysiumAnimGraph.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 
@@ -129,8 +131,37 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	USkeletalMeshComponent* Body = Visual.Get();
 	UElysiumAnimSubsystem* Anims = GetGameInstance()
 		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumBipedAnimInstance* Graph = Body
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+
+	// Read BEFORE the tick, on the same generation gate the player's producer uses: the report
+	// describes the request published last frame, and the latch is about to decide whether that
+	// request is over. A report stamped with a generation the driver has moved past describes a
+	// clip that is no longer playing, and letting it answer would end the request that replaced it.
+	static const FElysiumOneShotReport NoReport;
+	const FElysiumOneShotReport& Report = Graph ? Graph->GetOneShotReport() : NoReport;
+	const EElysiumOneShotState OneShot = ElysiumAnimGraph::OneShotStateFor(
+		/*bHasAsset*/ AnimDriver->Assets.Sequence != nullptr
+			|| AnimDriver->Assets.Space != nullptr,
+		/*bGenerationMatches*/ Graph != nullptr
+			&& Report.Generation == AnimDriver->Selection.Generation,
+		Report.bInOneShotState, Report.bComplete);
+
 	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
-		Body ? Body->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr);
+		Body ? Body->GetSkeletalMeshAsset() : nullptr, OneShot);
+
+	// Hand the settled record to this body's own graph, the same push `AElysiumMapActor` makes for
+	// the player. Both producers fill one contract (`FElysiumAnimationDriver`), so a cast member's
+	// locomotion and the player's cannot become two systems that happen to play the same files —
+	// and a driver that resolved without publishing leaves the graph with no selection at all, which
+	// the component answers with its reference pose.
+	//
+	// A body whose graph package is missing is not a biped instance and is skipped; it poses through
+	// its own clip player instead, with no locomotion behind it.
+	if (Graph != nullptr)
+	{
+		Graph->PublishSelection(AnimDriver->Selection, AnimDriver->Assets);
+	}
 }
 
 const FElysiumAnimationSelection& AElysiumNpcBody::GetAnimSelection() const

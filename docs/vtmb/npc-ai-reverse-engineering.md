@@ -104,6 +104,7 @@ uv run elysium research npc_task_override_survey
 uv run elysium research npc_translation_survey
 uv run elysium research action_animation_survey
 uv run elysium research script_api_survey --json E:\elysium-work\research\npc_ai_script_api.json
+uv run elysium research tutorial_npc_bootstrap --json E:\elysium-work\research\tutorial-npc-bootstrap.json
 ```
 
 The JSON path above is an external work artifact. Exact paths to the user's game and generated
@@ -324,6 +325,47 @@ sequence/activity/weapon activity, and the last state-change time. This separati
 enemy handle, an alert/combat state, a schedule, a movement goal, and a playing animation are
 related but not interchangeable pieces of state.
 
+### Map creation, spawn, activation, and first AI admission
+
+RE47 pins the general bootstrap to the retail DLL instead of borrowing the similar Source SDK
+implementation. For a normal fresh map, the recovered order is:
+
+1. `CServerGameDLL::LevelInit` (`0x1011a7a0`) enters the map-entity loader. The loader reads one
+   block, resolves its `classname`, constructs the registered native class, and sends the complete
+   block through the entity's map-data/keyvalue path (`0x10136b40`).
+2. Unparented entities enter `DispatchSpawn` (`0x101d1280`) immediately. Parented entities are
+   collected, hierarchy-sorted, attached, and spawned afterward. `DispatchSpawn` invokes virtual
+   slot `+0x19c`, rejects an entity deleted or marked for deletion by `Spawn`, then completes its
+   post-spawn bookkeeping.
+3. A `npc_VVampire` uses `CNPC_VVampire::Spawn` at `0x103c4ef0`. Its recovered chain enters the
+   Human/Troika spawn body at `0x10298d30`, which performs model, hull/solid, capability, equipment,
+   cached-transform and Troika state setup around `CAI_BaseNPC::Spawn` at `0x10273200`. The base
+   spawn performs its AI-admission gate, optional equipment path and base combat-character spawn.
+4. Only after creation/spawn finishes does `ServerActivate` (`0x1011aaf0`) iterate every surviving
+   server entity and invoke virtual `Activate` (`+0x1c4`) before post-entity systems run. Spawn and
+   activation are therefore distinct passes; BSP entity order is not permission to interleave one
+   actor's activation with the next actor's keyvalue load.
+5. The NPC initialization think at `0x10273aa0` first applies an authored relationship override
+   when present, then invokes virtual `+0x698` followed by `+0x694`. The `CAI_BaseNPC` `+0x698`
+   body (`0x10273ad0`) performs readiness work: clears initialization flags, repairs ground
+   placement where applicable, resolves an optional target, installs the ordinary AI think, and
+   applies target/spawnflag-driven state/schedule changes. `CNPC_VVampire` inherits the Troika
+   override at `0x1029a8b0`: it calls that base body, reinstalls the AI think, resolves follower
+   activity/distance data, and records the closest player handle. It does not turn toward that
+   player. The base `+0x694` body at `0x101a6540` is empty.
+6. Ordinary `RunAI`, condition gathering, state/schedule selection, motor work and activity
+   maintenance occur only after that admission path.
+
+The recovered concrete `npc_VVampire` path contains no turn-to-player operation and no direct call
+to `SetActivity`/`SetIdealActivity` during the traced Spawn → Activate → concrete `NPCInitThink`
+chain.
+This is a negative call-path result, not proof that the character remains static: the subsequent
+AI schedule, motor, interesting-place, gaze, dialogue and scripted-scene owners can all change
+facing or presentation. Static recovery also does not identify the exact sequence visible on the
+first rendered frame or the exact frame of the first ordinary AI schedule. Those require a
+hash-gated live capture; a rebuild must not fill the gap by inventing an unconditional idle or
+face-player action.
+
 ### AI update loop
 
 `CAI_BaseNPC::RunAI` at `0x1026f110` begins a decision pass by clearing the gathered marker. Unless
@@ -354,6 +396,137 @@ The base selector at `0x1028a380` switches on the high-level state. Recovered ca
 The combat branch further tests enemy state, damage, attack capability, range/occlusion, and other
 conditions before choosing a schedule. Derived VtMB NPC classes override or extend the selection
 and task machinery, which is why the native class is a load-bearing part of authored NPC identity.
+
+### The idle branch, decided
+
+`CNPC_VVampire` has no `SelectSchedule` of its own: vtable `+0x6d8` is `CNPC_VHuman::SelectSchedule`
+(`0x10384ee0`, 12 clan classes), which handles only `m_NPCState == 2` and tail-calls
+`CAI_BaseNPCTroika::SelectSchedule` (`0x102af660`). **There is no `SCHED_VVAMPIRE_IDLE_STAND` in the
+binary** — the only `SCHED_VVAMPIRE*` names are the two VampireBoss transform schedules.
+
+`0x102af660` `case 1` evaluates in this order, and the first match wins:
+
+| Step | Test | Result |
+|---:|---|---|
+| 1 | `IsBusyWithDiscipline` (`0x1033e2b0`, returns `this+0x14b8 & 1`) **or** `m_bInChoreoScene(+0x5bc4)` | `SCHED_TROIKA_IDLE_DISPOSITION` `0x6b` |
+| 2 | virtual `+0x97c` (`0x102b93c0`) returns non-zero | returned verbatim |
+| 3 | a patrol path is present | the patrol schedule |
+| 4 | `m_bUseInteresting(+0x63d9)` | `0xff` SETUP, or `0x102`/`0x106`/`0x105` on the crosswalk/interact/loiter conditions, else `0x100` |
+| 5 | `m_bAllowAlertLookaround(+0x6434)` and `RandomInt(0,99) < min(30, (m_iEnemySightings(+0x60a8)+2)*5)` | `SCHED_TROIKA_ALERT_LOOK_AROUND_NI` `0x4f` |
+| 6 | `m_hBlockedDoor` or `m_hCondHitByDoor` is valid and `SelectDoorObstructionSchedule` (`0x102b7370`) returns non-zero | returned verbatim |
+| 7 | `m_bReturnToInitialPos(+0x6494)` | `0x45`, else `SCHED_TROIKA_IDLE_DISPOSITION` `0x6b` |
+
+`SCHED_TROIKA_IDLE_STAND` (`0x44`) is returned only for state `0xd`; `_NT` (`0x6c`) is never
+returned here. Registered IDs decoded from their registration sites: `0x44` `SCHED_TROIKA_IDLE_STAND`,
+`0x45` `SCHED_TROIKA_IDLE_RETURN_TO_INITIAL`, `0x4f` `SCHED_TROIKA_ALERT_LOOK_AROUND_NI`,
+`0x6b` `SCHED_TROIKA_IDLE_DISPOSITION`, `0x6c` `_NT`, `0xff`
+`SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP`, `0x100` `SCHED_TROIKA_WALK_TO_INTERESTING_PLACE`,
+`0x102` `SCHED_TROIKA_WAIT_AT_CROSSWALK`, `0x105` `SCHED_TROIKA_LOITER`, `0x106`
+`SCHED_TROIKA_INTERACT`.
+
+Two consequences carry weight. **An NPC inside a choreographed scene always takes the disposition
+stance**, ahead of `use_interesting`, patrol and alert-lookaround. And **virtual `+0x97c` is the
+follower controller, not a general priority hook**: it returns `0` immediately unless the follow
+target EHANDLE at `+0x647c` is valid, and otherwise picks
+`SCHED_TROIKA_FOLLOWER_BACKAWAY`/`_FOLLOW_WALK`/`_FOLLOW_RUN`/`_WAIT` (`0x10c`/`0x112`/`0x113`/`0x115`)
+by comparing squared distance against the three radii at `+0x6484`/`+0x6488`/`+0x648c`, which a
+`follower_type` row supplies.
+
+`SCHED_TROIKA_IDLE_DISPOSITION` is `TASK_SPECIAL_IDLE_ACTIVITY 5; TASK_WAIT_PVS 0`, and
+`SCHED_TROIKA_ALERT_LOOK_AROUND_NI` is
+`TASK_SET_ACTIVITY ACT_ALERT_FIDGET_LOOKAROUND; WAIT 3; WAIT_RANDOM 3; SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 2`.
+What those idle tasks commit, and how a stance is chosen, is the disposition stance machine in
+`animation_and_movers.md`.
+
+### Door-obstruction schedule selection
+
+`FUN_102b7370` at `0x102b7370` is the Troika NPC's door-obstruction selector; the working semantic
+name is `CAI_BaseNPCTroika::SelectDoorObstructionSchedule`. It is not an idle or disposition
+helper. Idle state calls it only when `m_hBlockedDoor(+0x5d28)` or
+`m_hCondHitByDoor(+0x5d2c)` is valid, and combat state calls it after the two higher-priority
+combat helpers. A non-zero result is a selected schedule returned through
+`CAI_BaseNPCTroika::SelectSchedule`; zero means this policy declined to handle the obstruction.
+
+The selector first rejects an NPC that already owns `m_pHintNode(+0x5ddc)`. It then chooses the
+obstruction source in this order:
+
+1. A valid `m_hBlockedDoor`, provided the door's expiry value at `+0x640` is later than game
+   `curtime`; an expired handle is cleared.
+2. Under `COND_ENEMY_UNREACHABLE` (`0x59`), no active movement-state entry at `+0x5bb0`, and a
+   valid timed record rooted at `+0x5da4`, the entity held by that record.
+3. A valid `m_hCondHitByDoor`, but only while `COND_HIT_BY_DOOR` (`0x34`) is set.
+
+With a source selected, the eligible path records its handle at `+0x6448` and asks the ordinary
+hint-node machinery to find and claim cover. A claimed medium-cover, low-cover or corner-cover
+context (type `100`, `101` or `0x27d8`) returns
+`SCHED_TROIKA_TAKE_COVER_HINT_DOOR` (`0x9c`). Any other claimed hint is released with a five-second
+delay and the selector returns zero.
+
+When no hint is claimed, the source origin becomes `m_vSavePosition(+0x5dd0)`. The squared
+NPC-to-source distance is compared with `65536.0` (256 units), and virtual `+0x29c` is
+`GetEnemy`; the resulting schedules are:
+
+| Distance from source | Enemy | Schedule |
+|---:|---|---|
+| at most 256 units | present | `SCHED_TROIKA_BACK_AWAY_FROM_DOOR` (`0x90`) |
+| at most 256 units | absent | `SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE` (`0x91`) |
+| over 256 units | present | `SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT` (`0x94`) |
+| over 256 units | absent | `SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE` (`0x96`) |
+
+The nearby schedules perform repeated step-backs and fail over to their run variants. The distant
+schedules wait while facing the enemy, or the saved obstruction position in the `_NE` variants.
+This makes the helper a complete obstruction reaction policy: cover at a compatible door hint,
+back away while near the obstruction, and wait once already clear of it.
+
+### Interesting-place eligibility
+
+`TASK_FIND_INTERESTING_PLACE` (task 164) is Troika `StartTask` case 48, body `0x102a1f23`: it calls
+`PickRandomInterestingPlace` (`0x102db590`), stores the result at `+0x62ec`, then requires
+`PickSpotFor` (`0x102da0d0`) to sample a free spot inside the node's bounds; either failure is
+`TaskFail(0x22)`.
+
+`BuildCandidates` (`0x102db470`) walks the global place list (head `DAT_10927194`, next at `+0x540`)
+at **rating 5 down to 0**, takes the first rating level that yields any eligible node, and picks
+uniformly within it. Eligibility (`0x102dad60`) is:
+
+```
+place->+0x57c != 0                                   // authored `enabled`
+place->+0x57d == 0                                   // runtime-disabled
+(place->+0x584 - place->+0x58c - place->+0x588) > 0  // max_npcs - reserved - users
+(place->+0x574 & npc->+0x62dc) != 0                  // group mask & interesting_place_groups
+|place - npc|² <= 1.0e8                              // 10000 units, straight line
+```
+
+There is **no pathfinding and no line-of-sight test in the find stage** — a node 9,000 units away
+behind a wall is eligible, and the walk schedule is where such a goal fails. The entity classname
+is `intersting_place`, misspelled in VtMB itself.
+
+`vdata/system/interestingplacetypelist.txt` binds a node's `type` to activities. `wall_lean` is
+`ACT_WALL_LEAN_INTO` → `ACT_WALL_LEAN_IDLE` → `ACT_WALL_LEAN_OUTOF`, and unlike `sitting` and the
+`conversation_*` types it declares no `AcceptedClasses` block, so any NPC may claim one.
+
+### `no_alert_state` does not suppress the alert state
+
+Datamap offsets, from the `typedescription_t` records: `m_bNoAlertState` `0x65f6`,
+`m_bAllowAlertLookaround` `0x6434`, `m_iNPCPerception` `0x63b0`, `m_flSeekDistBase` `0x63b4`,
+`m_flHearingScalarBase` `0x63bc`.
+
+The keyvalue does real work in four places — `TASK_SUGGEST_STATE` rewrites a request for state 3 to
+state 1 (`0x102a1bc8`); `CAI_BaseNPCTroika::SelectIdealState` (`0x102ad660`) skips its damage and
+sense promotions; `CNPC_VHuman::SelectIdealState` (`0x103851e0`) and
+`CNPC_VHumanCombatPatrol::SelectIdealState` (`0x10387380`) gate theirs on it; and `CNPCMaker`'s
+spawn helper (`0x10310c10`) puts a child into state 1 rather than 3.
+
+It is nonetheless **not a suppression**. `0x102ad660` ends in an unconditional
+`return CAI_BaseNPC::SelectIdealState(this)` (`0x1026f660`), whose `case 1` promotes idle → alert on
+`COND_LIGHT_DAMAGE`, `COND_HEAVY_DAMAGE` and the whole hear-family **with no `m_bNoAlertState`
+test**. A second route is independent of it entirely: `SCHED_TROIKA_ALERT_LOOK_AROUND_NI` is
+selected from state 1 gated only on `m_bAllowAlertLookaround` and its chance roll.
+
+`InitPerceptionDistances` (`0x1028fb70`) reads `vision` and `hearing` as sentinels: **`-1.0f` means
+derive from `npc_perception`**, indexing the `Inspection_Vision_Distances` and
+`Inspection_Hearing_Scalars` tables into the effective values at `+0x63b8` and `+0x63c0`; any other
+authored value is copied through and `npc_perception` is then inert for that NPC.
 
 ## Perception, sound, memory, and hostility
 

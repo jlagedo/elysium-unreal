@@ -16,6 +16,7 @@
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumUseIcons.h"
 #include "Audio/ElysiumSoundScheme.h"
+#include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
 #include "Player/ElysiumCameraShots.h"
 #include "ElysiumCameraComponent.h"
@@ -25,6 +26,7 @@
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning — the gaze layer's content
+#include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumMapVisuals.h"
 
@@ -839,6 +841,22 @@ bool AElysiumMapActor::RefreshNpcIdle(USkeletalMeshComponent* Body, const FStrin
 	return Bodies->RefreshNpcIdle(Body, Stem, Disposition, IdleVariant);
 }
 
+bool AElysiumMapActor::ResolveStanceClips(const FString& Stem, const FString& AnimName,
+	FElysiumStanceClips& OutClips)
+{
+	return Bodies->ResolveStanceClips(Stem, AnimName, OutClips);
+}
+
+bool AElysiumMapActor::ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow)
+{
+	return Bodies->ResolveDisposition(Disposition, OutRow);
+}
+
+bool AElysiumMapActor::IsNpcBodyVisible(USkeletalMeshComponent* Body)
+{
+	return Bodies->IsNpcBodyVisible(Body);
+}
+
 bool AElysiumMapActor::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
 {
@@ -1142,7 +1160,7 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 		Report.bInOneShotState, Report.bComplete);
 
 	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
-		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, /*OwnAsset=*/nullptr, OneShot);
+		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, OneShot);
 
 	// **The speed authority's push** (CCC7). The mover runs in the pre-physics pass and this driver
 	// in the post-move one, so the mover cannot ask for a table — it has to be handed one, and the
@@ -1668,9 +1686,10 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 			continue;
 		}
 		FBox Candidate(ForceInit);
-		if (const USkeletalMeshComponent* Body = Ent->GetSkeletalBody())
+		const USkeletalMeshComponent* CandidateBody = Ent->GetSkeletalBody();
+		if (CandidateBody)
 		{
-			Candidate = Body->Bounds.GetBox();
+			Candidate = CandidateBody->Bounds.GetBox();
 		}
 		else
 		{
@@ -1691,7 +1710,9 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 		{
 			FHitResult Blocked;
 			if (World->LineTraceSingleByChannel(Blocked, ViewLocation, Chest,
-				ELYSIUM_USE_CHANNEL, Params))
+				ELYSIUM_USE_CHANNEL, Params)
+				&& !ElysiumFeedTargeting::HitBelongsToCandidate(
+					Blocked.GetComponent(), CandidateBody))
 			{
 				continue;   // a wall between the mouth and the neck
 			}
@@ -2829,8 +2850,8 @@ void AElysiumMapActor::TickGaze(float DeltaSeconds)
 		return;
 	}
 	const UGameInstance* GI = GetGameInstance();
-	UElysiumAnimSubsystem* Anims = GI
-		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumRulebookSubsystem* Rules = GI
+		? const_cast<UGameInstance*>(GI)->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
 	const float Now = EntityWorld->NowSeconds();
 
 	// `DialogPOV` is a property of the shot in effect, not of any one character, so it resolves once
@@ -2884,9 +2905,9 @@ void AElysiumMapActor::TickGaze(float DeltaSeconds)
 		// Every rate and interval is content. A character whose disposition does not resolve gets
 		// the table's own `Neutral`, which is what the table says it should.
 		FElysiumEyeTargetTuning Tuning;
-		if (Anims != nullptr)
+		if (Rules != nullptr)
 		{
-			if (const FElysiumDisposition* Row = Anims->GetDispositions().Resolve(Character->Disposition))
+			if (const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Character->Disposition))
 			{
 				Tuning = Row->EyeTarget;
 			}

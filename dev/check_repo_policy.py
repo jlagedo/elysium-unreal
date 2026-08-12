@@ -179,7 +179,7 @@ def workspace_warnings() -> list[str]:
             warnings.append(f"{name} is not configured in the current environment")
         elif not Path(raw).is_dir():
             warnings.append(f"{name} does not exist: {raw}")
-    for plugin in ("Cog", "glTFRuntime"):
+    for plugin in locked_plugins:
         root = REPO / "Plugins" / "External" / plugin
         marker = root / ".elysium-managed.json"
         if not marker.is_file():

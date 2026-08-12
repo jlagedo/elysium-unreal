@@ -525,10 +525,19 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 	// otherwise every body would fade up out of the reference pose on map load, because the slot's
 	// source pose is a state machine that has been handed no asset yet.
 	const float BlendIn = Montage_IsPlaying(ActiveSlotMontage) ? BlendSeconds : 0.0f;
-	// A loop count of 0 is infinite. The blend in and out are the clip's own authored fade — the same
-	// number the locomotion transition uses, so one authority serves both consumers.
+	// A loop count of 0 is infinite. The blend IN is the clip's own authored fade — the same number
+	// the locomotion transition uses, so one authority serves both consumers.
+	//
+	// A LOOPING clip carries no blend out, and that is not a tidiness choice. The blend-out trigger
+	// is armed relative to the montage's own length, so on a looping montage it fires at every pass
+	// of the loop point and dips the slot's weight before the next pass restores it. The slot's
+	// source pose is the state machine underneath, which for a body that has been handed no
+	// selection is the REFERENCE pose — so the dip shows as a single frame of the container's bind
+	// pose, and a VtMB bind pose is a T-pose yawed 90 degrees off the model's own forward. A clip
+	// that never ends has nothing to blend out to; only the one-shot does.
+	const float BlendOut = bLoop ? 0.0f : BlendSeconds;
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
-		BlendIn, BlendSeconds, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? 0 : 1);
+		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? 0 : 1);
 	return ActiveSlotMontage != nullptr;
 }
 
