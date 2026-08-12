@@ -1107,7 +1107,19 @@ dialogue, scripted flow, quests, save/load included.
   stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, chargen → **9.4**,
   choreography → **P12**; conversation camera → **11.13**)* — full combat AI (beyond 13.3's basics); NPC perception, reactions and
   the schedule graph beyond 8.5's native patrol/interesting-place locomotion (BT/StateTree where
-  it adds value without replacing authored entity I/O); ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
+  it adds value without replacing authored entity I/O). The state-1 idle branch and its task kernel
+  are implemented; what remains of the recovered graph is the **door-obstruction reaction**, whose
+  decision is written and tested but has no producer for either obstruction source. It needs three
+  things, in dependency order: **actor→entity resolution** (a reverse lookup from a body back to its
+  `FElysiumEntity`, which nothing provides today and which is reusable well beyond doors),
+  `COND_HIT_BY_DOOR` from `FElysiumDoorBase::OnMoveBlocked` past its player-only pawn check plus a
+  separate door-blocks-NPC-path producer for `m_hBlockedDoor`, and a **hint-node reader** over the
+  authored `info_node_cover_corner`/`_med`/`_low` (342/81/36 across the exported maps) with the
+  claim-release shape `FElysiumInterestingPlace` already uses. Unreachable on the tutorial path —
+  nothing there blocks an NPC with a door. Two steps of the same order stay blocked on recovery
+  rather than effort: the follower controller needs the unrecovered `follower_type` radii table, and
+  return-to-initial has no producer. Facts:
+  `docs/vtmb/npc-ai-reverse-engineering.md`; the enemy half is RE48. Also: ragdoll/IK/anim blends; `.emc`-style cache for `.ents` if
   parse time bites; lump-8 lighting bake as a low-end contingency (parked with the dynamic-path
   commitment); retail `.sav` import (needs RE7 wire format — currently a non-goal). For the
   low-end contingency, **Lumen Lite** (5.8's medium-quality irradiance-field GI, ~2× faster,

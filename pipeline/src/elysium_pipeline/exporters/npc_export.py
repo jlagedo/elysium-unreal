@@ -450,6 +450,10 @@ def animated_prop_index_row(rec):
     """
     return {
         "glb": rec["glb"],
+        # The container the character bake actually reads. The `.glb` beside it is an inspection
+        # product; nothing the game loads comes off it, so a row that carried only the glb told the
+        # runtime where to find a file it never opens.
+        "eskm": rec["eskm"],
         "model": rec["model"],
         "bones": rec.get("bones", 0),
         "split_bones": rec.get("split_bones", []),

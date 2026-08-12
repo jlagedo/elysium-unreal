@@ -1946,7 +1946,9 @@ public:
 				{
 					ElysiumSchedule::Start(Schedule, Restored, *this);
 				}
-				NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+				// NextThink is deliberately NOT touched here. The base record serializes it, so a
+				// restored NPC already carries the cadence it was saved on -- rewriting it to "now"
+				// would discard saved state and make the payload fail its own round trip.
 			}
 		}
 	}
