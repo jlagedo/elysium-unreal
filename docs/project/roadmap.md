@@ -1158,7 +1158,7 @@ dialogue, scripted flow, quests, save/load included.
 
 The structure *between* the systems P1–P10 design: lifetimes, the frame, the player object, the
 session, and the seams. It exists because the slice ladder now reaches "boot a New Game and play it",
-and that is the one thing no current doc owns. Its rules are **S1–S10** (`docs/architecture/runtime-architecture.md`
+and that is the one thing no current doc owns. Its rules are **S1–S11** (`docs/architecture/runtime-architecture.md`
 §13), orthogonal to `docs/architecture/engine-core.md`'s R1–R8.
 
 Steps are ordered so each compiles, ships and is observable alone. **11.4 was the hinge** — 9.4, 9.5,

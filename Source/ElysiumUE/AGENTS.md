@@ -65,8 +65,8 @@ behavioral change.
 
 Read `docs/architecture/gameplay-systems-architecture.md` before changing map entities, entity
 I/O, the script bridge, interactive props, or a gameplay domain. It composes the entity rules
-**R1–R8** in `docs/architecture/engine-core.md`, the runtime rules **S1–S10** in
-`docs/architecture/runtime-architecture.md`, and its own compatibility rules **K1–K12**. Exact
+**R1–R8** in `docs/architecture/engine-core.md`, the runtime rules **S1–S11** in
+`docs/architecture/runtime-architecture.md`, and its own compatibility rules **K1–K13**. Exact
 VtMB behavior remains in the owning `docs/vtmb/` document; this file carries only the coding
 contract:
 

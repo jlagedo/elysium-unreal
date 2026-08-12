@@ -10,7 +10,7 @@ It builds strictly on top of two existing designs and never restates them:
 
 - `docs/architecture/engine-core.md` — the object language **R1–R8** (entities are plain C++,
   one name table per class, one clock and one queue, the two chokepoints, dormancy, handles).
-- `docs/architecture/runtime-architecture.md` — the spine **S1–S10** (the four lifetimes, the
+- `docs/architecture/runtime-architecture.md` — the spine **S1–S11** (the four lifetimes, the
   frame, the player entity, world services, input, presentation, the save walk).
 
 The VtMB behavior this layer must answer is owned by the `docs/vtmb/` fact set —
@@ -21,7 +21,7 @@ The VtMB behavior this layer must answer is owned by the `docs/vtmb/` fact set �
 model). Where a fact there is still open, this design carries the seam and refuses to guess the
 body. Task sequencing and status live only in `docs/project/roadmap.md`.
 
-This document's own rules are numbered **K1–K12** — a fresh namespace beside R and S.
+This document's own rules are numbered **K1–K13** — a fresh namespace beside R and S.
 
 ## 1. The problem, stated once
 
@@ -214,9 +214,9 @@ post-movement containment diff** (all old ends, then all new begins, stable enti
 port rule, `docs/vtmb/entity_io.md`), and the frame's declared stage boundaries (S2). Any other
 observed ordering difference is a defect, not a tolerance (K12).
 
-## 3. The compatibility contract — K1–K12
+## 3. The compatibility contract — K1–K13
 
-Every domain service and every refactor in this document satisfies all twelve. They are the
+Every domain service and every refactor in this document satisfies all thirteen. They are the
 review checklist for gameplay-layer code.
 
 - **K1 — A name is backed at its retail binding kind.** A Character method stays a Tier 2 row;
@@ -270,6 +270,17 @@ review checklist for gameplay-layer code.
   the faithful behavior in the doc owning the system. An ordering difference outside that set —
   a domain reordering equal-time work, delivering depth-first, retrying a missed target, or
   firing rows in export order — is a defect to fix, never a tolerance to document around.
+- **K13 — A domain asks the engine questions and answers them itself** (restates S11 for this
+  layer). A gameplay domain reaches `FElysiumWorldServices` for geometry, visibility or
+  reachability, and decides on what comes back. The authored half of every question is a rulebook
+  value (K9) resolved in the substrate, never a parameter handed to an engine subsystem to
+  arbitrate: the `cover`/`walk`/`flank`/`chase` occlusion weights, `player_reaction`, the
+  `investigate_mode` policies, the `pl_criminal_*`/`pl_supernatural_*` thresholds and the
+  perception tuning are all decisions. A perception component that owns *who is my enemy*, or a
+  spatial query returning *the cover to take* rather than the reachable points to choose among,
+  has moved a decision across the seam. The failure is symmetric and both halves are defects:
+  importing an engine subsystem's policy, and reimplementing in substrate arithmetic a question the
+  live world should have been asked.
 
 ## 4. The system map
 
@@ -508,6 +519,13 @@ save-backed through the leaf `Serialize` (K8). K4 holds: this table is combat ta
   occlusion state, with **lost-LOS distinct from lost-target** (the four
   `OnLost*` outputs need both).
 
+Only sight crosses the seam, and it crosses as a query (K13): the service answers whether a
+line of sight exists between two points, and the cone, the range, the `vision`/`npc_perception`
+scalars and §5.9's lighting contribution are all applied in the substrate on that answer.
+Hearing needs no service at all — the bus, its radii and the intersection test are substrate
+throughout — and memory is leaf state (K8). A service that answered *this NPC can see the
+player* would have taken the decision instead of supplying its one missing term.
+
 **5.5.4 Conditions, states, schedules.** A plain-C++ kernel in
 `Substrate/ElysiumNpcMind.{h,cpp}`, owned by `FElysiumNpc`, run from its think:
 
@@ -536,6 +554,18 @@ asset graph gives. Unreal's stack keeps the half it is better at: **navigation a
 stay behind `IElysiumNpcMotor`** (Recast/Detour, `ACharacter` motors), exactly the existing
 seam. StateTree may later host purely-native leaf behaviors *behind* a schedule task without
 replacing the authored-visible seam.
+
+**Spatial tasks split on the same line (K13), and not where instinct puts it.** Cover is authored
+rather than solved: the obstruction selector claims a hint node and takes medium, low or corner
+cover before it ever reaches the distance test
+(`docs/vtmb/npc-ai-reverse-engineering.md` → the door-obstruction selector), so the cover task
+reads `info_node_cover_*` entities filtered by the NPC's `hint_groups` out of
+`FElysiumEntityWorld`. That is an entity read with no spatial query in it, and an environment
+query answering *where should I take cover* would be inventing map data that the map already
+carries. What a retreat task does need from the engine is reachability — a destination
+extrapolated from a direction and a distance is a guess about a world the substrate cannot see —
+so the reachable-point projection is a query (S11) while the direction, the distance and the
+acceptance radius stay authored policy beside the task.
 
 **5.5.5 Movement ownership (K7).** One arbiter on `FElysiumNpc`:
 `EElysiumBodyOwner { None, Schedule, Patrol, Ambient, Sequence, ScriptedSchedule, Follower,
