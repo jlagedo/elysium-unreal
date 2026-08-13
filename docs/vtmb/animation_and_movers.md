@@ -1538,7 +1538,7 @@ not for the model-declared autolayer table. The two must not be conflated.
 **1.0** — a named stand-in, not a recovered value. At 1.0 the masked overlay fully replaces the
 bones it owns rather than leaning the base pose toward them, which is the upper bound of the
 plausible range and the reading most likely to look mechanical. Recovering the real scalar is
-tracked in `docs/project/animation-roadmap.md` ANM2, whose oracle is an arithmetic recovery from the
+tracked in `docs/project/roadmap.md` ANM2, whose oracle is an arithmetic recovery from the
 finalized captures — the combine is closed, so a host's decoded local, its layer's decoded local and
 the composed local determine the scalar per bone. The capture hook's per-contribution `blendWeight`
 is the blend-space *cell* weight and does not answer this.
@@ -1854,36 +1854,17 @@ That correction changes as the parent pose changes. A fixed left or right
 multiplier cannot reproduce it, and independently correcting each source clip
 does not automatically preserve the rule after runtime sequence/layer blending.
 The faithful representation therefore needs either split-inheritance evaluation
-at runtime or fully evaluated model-space animation data with explicit blending
-semantics.
-
-`npc_index.json` v3/v4 accepts an optional `split_bones` array on each target
-mesh; the exporter fills it directly from that model's
-`StudioBone.Flags & 0x2`. This is retained as diagnostic metadata only. Shared
-and cinematic banks remain raw local channels.
-
-The source-to-output validator found that the local generated corpus predates
-that raw-key policy: **286 GLBs / 4,276 flagged-bone rotation tracks / 611,191
-samples** contain the exact discarded fixed rewrite
-`q_generated = (0.5,0.5,-0.5,0.5) * q_raw` (xyzw). All non-flagged tracks match
-the current exporter equation. The live experiment that subsequently replaced
-the flagged component rotation after crossfading therefore operated on already
-rewritten keys. Its quarter-turn discontinuity is evidence of stale output plus
-double/misapplied correction, not evidence against the decompiled retail branch.
-
-The coordinate seam itself is closed below. After regenerating raw keys, the
-equivalent Unreal local rotation for a flagged bone is the parent component
-rotation inverse multiplied by the raw decoded local rotation, evaluated
-**after** sequence/layer blending; the fixed skeletal-component yaw remains
-outside the pose. The current runtime still evaluates a conventional hierarchy
-and does not consume `split_bones`, so the post-blend correction remains
-implementation work. The rendered retail invariant below pins the behavior it
-must reproduce.
+after blending or a complete pose representation that re-expresses the result as
+ordinary parent-relative locals. Which representation Elysium uses is an Unreal
+design decision owned by `docs/architecture/animation-architecture.md`; this RE
+constrains both choices. In particular, **no fixed left or right multiplier, no
+model-wide quarter-turn and no skeletal-component yaw follows from the retail
+rule**. Every required rotation varies with authored pose state.
 
 ## A.4b Retail pose pipeline — durable Ghidra proof path
 
-Detailed capture and experiment status is tracked in
-`docs/project/retail-capture-roadmap.md`. Three tracked investigation specifications divide the
+Capture status is tracked in `docs/project/roadmap.md`; the open capture tasks are specified
+in `docs/project/plans/capture.md`. Three tracked investigation specifications divide the
 retail path at its DLL boundaries: `animation_pose.json` (`client.dll`),
 `animation_skinning.json` (`engine.dll`), and `animation_studiorender.json`
 (`StudioRender.dll`) under `research/cases/animation-pose/specs/`. They preserve pinned binary
@@ -2728,14 +2709,11 @@ be reachable from the skin root.
 `m_iszPlay` and friends name a **sequence label** (`StudioSeqDesc.szlabel`@0 → `anim[0][0]`@56 →
 local anim); the pipeline keys clips by that label.
 
-**Pipeline** (`elysium_pipeline.formats.mdl_skel.resolve_tree`/`local_sequences`, `elysium_pipeline.formats.mdl_gltf.export_npc`/
-`export_bank`, `pipeline/src/elysium_pipeline/exporters/npc_export.py`; roadmap PL4): rather than merge every bank into each NPC
-(a ~94 MB / ~90k-accessor monolith × the cast ≈ 4.2 GB), each model's own clips bake **once** —
-the NPC's dialogue into `$ELYSIUM_EXPORT_ROOT/npc/<npc>.glb`, each shared bank into `$ELYSIUM_EXPORT_ROOT/npc/banks/<bank>.glb`
-(skeleton + clips, no mesh) — and `npc_manifest.json` records the per-NPC `clip → owning-stem`
-resolution plus the target mesh's diagnostic `split_bones` inventory. The runtime loads a bank
-glb once and applies its clips to any NPC skeletal mesh by bone name (glTFRuntime
-`LoadSkeletalAnimation(mesh, …)`), which is VtMB's own virtualmodel bank-sharing.
+The consuming representation must retain the include DAG's `clip → owning model` resolution and
+bind shared clips by bone name. It need not merge every included bank into every model, but an
+engine's own cross-skeleton retargeter is not part of Troika's rule. Elysium's generated-asset
+layout and the reason bank sequences are family-bound live in
+`docs/architecture/animation-architecture.md`.
 
 The patch-first grid contains one explicit source exception. The Night Watchman in
 `sm_junkyard_1` references
@@ -2744,49 +2722,44 @@ The patch-first grid contains one explicit source exception. The Night Watchman 
 exact path to a structured warning in `npc_manifest.json` and `npc_index.json`; every
 other missing model or decode failure remains fatal.
 
-**An authored `LoopSequence` is not proof of motion.** Six models a `prop_dynamic` selects
-declare exactly one **single-frame** sequence: `stage_light`, `lampfloor`, `glassa`,
-`junkyardcraneb`, `bottleb` and `bottlec`. They are static dressing wearing an animation
-keyvalue — there is nothing to bake, and standing a skeletal body for one would replace the
-decoded static mesh with a bind pose. The animated-prop seed therefore requires at least one
-sequence carrying more than one frame. The test is *any* sequence, not every one: `clamp`'s
-`idle` is a single frame beside its real 45-frame `open`/`close`, and `wolf_form` carries
-twelve single-frame hit poses among its clips.
+**An authored `LoopSequence` is not proof of temporal motion, but a single-frame sequence is still
+an authored pose.** Six models selected by `prop_dynamic` declare exactly one single-frame sequence:
+`stage_light`, `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec`. Retail still routes
+them through `CBaseAnimating`, selects a sequence, and evaluates frame zero; sequence length does not
+authorize a consumer to show the MDL bind instead. `clamp` makes the distinction obvious: its
+single-frame `idle` sits beside real 45-frame `open` and `close` clips. The exact retail held-pose
+selection is recovered in `docs/vtmb/entity_io.md` → "The resting pose".
 
 Two of those six (`bottleb`, `bottlec`) and `stage_light` also use the compact vertex formats
 (`StudioVertex2` 12B, `StudioVertex3` 8B) rather than the 44-byte skinned layout. Those formats
 carry a quantized position, a packed normal and a UV — **no `BoneWeight` at all** — so the
-skinned decode path cannot read them, and the model's whole geometry is rigidly bound to its
-single bone. Only `vlist == 0` models can take the skeletal path.
+model's whole geometry is rigidly bound to its single bone. That changes how weights are recovered,
+not whether the model has a skeleton or whether its selected frame is evaluated.
 
 Retail first evaluates the included model's complete pose. Its outer mapping then
 copies the donor quaternion verbatim and either copies its position or transforms
 that position by the authored 3×4 mapping matrix. A channel absent from the donor
 animation therefore falls back to the **donor bind**, not the target bind.
 
-The runtime instead binds the bank's sparse local tracks to the target reference
-skeleton by **bone name** and deliberately leaves glTFRuntime's generic
-rest-pose retargeter disabled. Source-node tracks with no target bone are removed
-before animation construction. Across **4,515** ordinary target/bank pairs,
+Across **4,515** ordinary target/bank pairs,
 **3,158** have at least one donor/target bind difference, **154** differ in parent
 topology, and **2,692** actually use a source clip whose absent channel selects a
-different donor versus target bind fallback. This is a live virtual-model
-fidelity gap. Generic proportion retargeting is still not the answer: a faithful
-resolver must evaluate donor fallback and apply the recovered per-record outer
-position mapping, while the nested remap record semantics remain open. A
+different donor versus target bind fallback. Generic proportion retargeting is
+not the answer: a faithful consumer evaluates donor fallback before mapping and
+applies the recovered per-record outer position mapping, while the nested remap
+record semantics remain open. A
 whole-cast cinematic bank also encodes authored stage placement in its `Bip01`
 root, so applying an unrelated rest-frame transform can double that placement.
 
-`mdl_gltf.py` writes Source position `(x,y,z)` as right-handed Y-up glTF
-`(x,z,-y) * 0.0254`. glTFRuntime's default basis and `SceneScale=100` map that to
-skeletal-component position `(y,x,z) * 2.54` centimetres. The component's fixed
-**−90° yaw** then maps it to world `(x,-y,z) * 2.54`, exactly this project's
-Source→Unreal position convention. Quaternion conversion at both steps is basis
-conjugation, so it preserves multiplication order; the component yaw is outside
-the local pose. Ordinary NPCs, scene understudies, controller NPCs, and the
-pawn-attached player body use that same basis. NPC and player-material skeletal
-permutations keep separate mesh, asset, and clip cache identities; rebuilding the
-player body cannot replace an ordinary NPC's materials.
+The Source and Unreal coordinate frames differ, so a consumer must perform one
+formal basis conversion over positions, directions, quaternions and entity
+placements. That mathematical conversion is not an authored model rotation.
+Retail pose construction provides no second model-class correction: the selected
+locals compose under the entity's `rootToWorld`. Consequently, a mesh that appears
+sideways in its raw bind but becomes correct under its selected sequence is
+showing the distinction between storage bind and displayed pose. Applying a fixed
+quarter-turn to the mesh, component or actor would double-count that distinction
+for the animated result.
 
 ## A.8 Deviations from modern Source (v44–49) [ref/SDK]
 

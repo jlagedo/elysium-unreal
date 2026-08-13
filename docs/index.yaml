@@ -1,9 +1,17 @@
 version: 1
 documents:
   - {path: project/roadmap.md, kind: tracker, owner: project, subject: project status}
-  - {path: project/retail-capture-roadmap.md, kind: tracker, owner: retail capture, subject: retail animation capture and decoder verification status}
-  - {path: project/animation-roadmap.md, kind: tracker, owner: animation, subject: skeletal animation asset programme status}
-  - {path: project/three-cs-roadmap.md, kind: tracker, owner: movement, subject: character camera and controls slice status}
+  - {path: project/plans/world.md, kind: plan, owner: rendering, subject: open-task specs for the look and scale lane}
+  - {path: project/plans/gameplay.md, kind: plan, owner: gameplay systems, subject: open-task specs for interaction dialogue and tutorial mechanics}
+  - {path: project/plans/audio.md, kind: plan, owner: audio, subject: open-task specs for the audio stack}
+  - {path: project/plans/characters-ui.md, kind: plan, owner: user interface, subject: open-task specs for characters and UI}
+  - {path: project/plans/input.md, kind: plan, owner: input, subject: open-task specs for the input path}
+  - {path: project/plans/spine.md, kind: plan, owner: runtime, subject: open-task specs for the runtime spine and camera director}
+  - {path: project/plans/theatre.md, kind: plan, owner: choreographed scenes, subject: open-task specs for the theatre cinematic}
+  - {path: project/plans/capture.md, kind: plan, owner: retail capture, subject: open-task specs for the retail capture programme}
+  - {path: project/plans/animation.md, kind: plan, owner: animation, subject: open-task specs for the skeletal animation programme}
+  - {path: project/plans/three-cs.md, kind: plan, owner: movement, subject: open-task specs for the character camera controls slice}
+  - {path: project/plans/pipeline.md, kind: plan, owner: pipeline, subject: open-task specs for the pipeline backlog}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}
   - {path: project/remaster-direction.md, kind: charter, owner: project, subject: remaster direction}
   - {path: operations/repository.md, kind: operations, owner: repository, subject: repository and workspace policy}

@@ -10,7 +10,7 @@ content inputs.
 
 **Remaster, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
 is raised with tools 2004 did not have — modern UI and typography first, then assets, feel, and
-quality-of-life. The stance, the three change layers (presentation / feel / logic), the two adjudication
+quality-of-life. The stance, the three change layers (presentation / feel / logic), the three adjudication
 tests, and the rule that **every behavioural divergence needs the RE done first and an explicit
 owner's call** live in **`docs/project/remaster-direction.md`** — read it with this doc.
 
@@ -74,10 +74,8 @@ Two tracks run in parallel:
 
 ## Cross-system invariants
 
-Project-wide sequencing and roll-up status live in `docs/project/roadmap.md`; detailed status for
-retail capture, the skeletal animation assets, and the Character/Camera/Controls vertical lives in
-its three declared scoped subtrackers, `docs/project/retail-capture-roadmap.md`,
-`docs/project/animation-roadmap.md` and `docs/project/three-cs-roadmap.md`. Current code
+Project-wide sequencing and all task status live in `docs/project/roadmap.md`, including its
+CAP, ANM and CCC programme sections. Current code
 inventories live beside the code in `/Source/ElysiumUE/CLAUDE.md`, `/pipeline/CLAUDE.md`, and
 `/Content/CLAUDE.md`.
 
@@ -292,19 +290,17 @@ to matter — not before.
 - **Physics props** (`prop_physics` ×54, `phys_hinge` ×12): **Chaos rigid bodies** with
   convex hulls from the render mesh, constraints for hinges — this system is built from
   scratch, with no prior implementation to de-risk it against.
-- **NPCs**: spawn from `npc_*` / `npc_maker` entity data at their origins;
-  **glTFRuntime** plugin loads `npc/*.glb` (skeletal mesh + skeleton + animation)
-  at runtime. *Pipeline additions*: batch NPC model export beyond the one test
-  character; include-model resolution in `mdl_skel.py` (shared animation banks —
-  currently only per-model animations decode). Blends/IK/ragdoll stay deferred.
+- **NPCs**: spawn from `npc_*` / `npc_maker` entity data at their origins and stand baked
+  native skeletal bodies off the `/ElysiumBaked` mount — the character bake is the only build
+  of a character, and glTF stays an inspection product (`docs/architecture/animation-architecture.md`).
+  IK/ragdoll stay deferred.
 - **AI later**: runtime-generated NavMesh (dynamic navmesh generation over the loaded
-  world collision) + Behavior Trees/StateTree — Unreal's stock AI stack replaces the
-  `info_node` graph (×154 + patrol points) rather than reimplementing Source AI
-  navigation. `scripted_sequence` (×104, plus 4 `aiscripted_sequence`) gets a minimal
-  handler long before real AI: it reproduces the beat's animation and its
-  `OnBeginSequence`/`OnEndSequence` gate, and **places** the NPC on the marker instead of
-  walking it there. Real travel is the AI task's — it needs the navmesh above and the
-  root motion `docs/vtmb/animation_and_movers.md` A.3 leaves undecoded.
+  world collision) replaces the `info_node` graph (×154 + patrol points) rather than
+  reimplementing Source AI navigation; decision-making stays the substrate schedule kernel
+  (`docs/architecture/gameplay-systems-architecture.md` owns that owner call). `scripted_sequence`
+  (×104, plus 4 `aiscripted_sequence`) runs ahead of real AI: the beat's animation, its
+  `OnBeginSequence`/`OnEndSequence` gate, and scripted Walk travel through the NPC motor at the
+  selected clip's decoded ground speed.
 
 ## B6. The Python connection (scripting host)
 
@@ -380,28 +376,49 @@ plays end-to-end.
 
 ---
 
-## What Unreal's own tech gives this build
+## The ownership register — what Unreal owns, what this repo reproduces
 
-- **Baked geometry + fully dynamic lighting**: the offline bake gives every surface real
-  DDC-fitted Lumen surface-cache cards and distance fields — the thing a runtime-built mesh
-  can never have, and the reason the bake exists. Hardware ray-traced Lumen for
-  GI/reflections. **MegaLights** for the many
-  shadowed point lights (394 lights in the tutorial alone). Virtual Shadow Maps. Can
-  eventually replace per-surface `$envmap` cubemaps with real reflections.
-- **Native subsystems replace hand-rolled ones**: deferred decals, Single Layer Water,
-  post-process LUT, exponential height fog, Niagara.
-- **Chaos physics**: `prop_physics`, `phys_hinge`, breakables, later ragdoll.
-- **AI stack**: runtime NavMesh + Behavior Trees/StateTree instead of porting Source
-  node-graph navigation.
-- **Audio engine**: submixes/attenuation/concurrency native; MS-ADPCM is the only
-  custom code.
-- **Ropes**: `keyframe_rope`/`move_rope` (×107 in the tutorial) → Cable Components.
-- **Nanite is on** for every baked mesh that can take it (311 of 339 on the tutorial; the
-  28 exceptions are the translucent/additive surfaces Nanite does not support). It buys no
-  throughput at ~20k world tris — the value is the bake's surface-cache/distance-field win,
-  above, not raw triangle count.
-- **C++ hot path**: parsing is already fast enough with the `.emc` cook-cache; if
-  load time ever matters again, extend the cache.
+Which half builds a system is adjudicated before the work by the **Ownership test** in
+`docs/project/remaster-direction.md`: a system is reproduced here only when authored content or a
+game rule names it; everything the world merely needs in order to work is Unreal's. Troika's
+source is the RE oracle for rules, orders, thresholds and data — never an implementation to
+port. This register is the closed set on both sides. **A reproduction of a Source subsystem that
+appears in neither column is a defect, not a tolerance** — the same enforcement shape as the
+event layer's closed divergence set (`docs/architecture/gameplay-systems-architecture.md` K12).
+
+**Unreal owns the mechanism** (the authored values ride it as data):
+
+| Source subsystem | Unreal mechanism | What stays ours |
+|---|---|---|
+| Lightmaps + static visibility (PVS) | HWRT Lumen GI, MegaLights, VSM; render visibility behind the `IsNpcBodyVisible` query, divergence enumerated at its declaration | the `.lights` values and calibration; every rule that consults visibility |
+| `info_node` graph navigation | Recast/Detour navmesh and `ACharacter` motors behind `IElysiumNpcMotor` | authored routes, marks and cover/hint *entities*; gaits, speeds, arrival and failure policy |
+| VPhysics | Chaos rigid bodies + constraints | the `.phy` convex hulls and authored mass |
+| Rope simulation (`CRopeKeyframe`) | one `UCableComponent` per segment | the RE'd endpoints, node counts and rest length (the sag) as data |
+| Collision and trace queries | engine sweeps, overlap components, dedicated trace channels | authored hull shapes; every eligibility rule applied on the answer |
+| Studio animation runtime | `UAnimSequence`/blend spaces/anim graph over the baked native pose | clip selection rules, the activity catalog, the bake that resolves VtMB storage |
+| `$envmap` reflection composite | the PBR/Lumen specular response (`ElysiumReflections.h`) | which surfaces reflect, mask and tint — the authored intent |
+| Audio playback: attenuation, spatialization, submix, concurrency | Unreal audio, `FSoundAttenuationSettings` built from authored radii | MS-ADPCM/MP3 **decode** and the SoundScheme rules — no engine reader exists for the bytes |
+| Decals, water, fog, LUT, sprites, particles | `UDecalComponent`, Single Layer Water, native fog/LUT, Niagara | the authored placements and parameters |
+
+**This repo reproduces** (a game rule or authored content names it):
+
+| Reproduction | The observable that requires it |
+|---|---|
+| The entity substrate, thinks and the I/O queue | equal-time order, pending records and `times` are authored-visible and saved |
+| Player movement math, call order and the box hull | step climb, accel and friction are the feel; pure half in `ElysiumMoveSolve.h`, engine half runs retail's order over Unreal's traces |
+| The legacy camera evaluator and shot stack | recovered feel rules, kept A/B-able against the modern rig |
+| Dice, sheet math and check policy | `DiceRolls.txt` and the rulebook are authored data |
+| The NPC schedule kernel, senses policy and relationships | schedule names are script-visible API; decisions serialize and run headless |
+| Embedded CPython 2.7 and the three legacy API tiers | VtMB's own scripts and bindings are content, not engine |
+| Format decode (BSP, MDL, TTH/TTZ, VPK, WAV/MP3, `.dlg`, `.vcd`, `.res`) | no engine reader exists for the bytes |
+| Mover state machines and timings | authored-visible timing, outputs and spawnflag semantics |
+
+Standing engine facts that shape the build: the offline bake exists to give every surface real
+DDC-fitted Lumen surface-cache cards and distance fields — the thing a runtime-built mesh can
+never have. Nanite is on for every baked mesh that can take it (311 of 339 on the tutorial; the
+28 exceptions are translucent/additive surfaces Nanite does not support) — the value is the
+surface-cache/distance-field win, not raw triangle count at ~20k world tris. Parsing stays on
+the C++ hot path with the `.emc` cook-cache; if load time ever matters again, extend the cache.
 
 ## Pipeline & tooling
 
@@ -438,7 +455,7 @@ are hypotheses, not a durable capture contract. Writer and reader evolve
 together. Offline indexes are disposable and rebuildable. Only measured
 callback cost, memory pressure, writer backlog, trace volume, startup cost, or
 query time justifies capture/storage optimization. The detailed order is
-`docs/project/retail-capture-roadmap.md`.
+`docs/project/plans/capture.md`.
 
 New sidecar formats and decoder fixes land in `pipeline/`. The pipeline backlog
 (entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +
@@ -450,7 +467,7 @@ exported.
 
 The M-numbers below are vocabulary for what each milestone means. Project sequencing, task
 mapping, and roll-up status live in `docs/project/roadmap.md`; its traceability table resolves
-these names to phases. The three scoped subtrackers delegate only their detailed task status.
+these names to phases.
 
 Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 `sm_pawnshop_1`.**

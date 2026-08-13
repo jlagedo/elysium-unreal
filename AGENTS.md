@@ -10,21 +10,13 @@ under the repository's explicit authored-content namespace.
 
 ## Read first
 
-- **`docs/project/roadmap.md`** — the master work tracker: the playable-path ladder
-  (PP0–PP6, the master sequence), phases P0–P13, project roll-up status, pipeline + RE backlogs,
-  and risk register.
-- **`docs/project/retail-capture-roadmap.md`** — a scoped subtracker: detailed status for
-  the retail capture harness and original-runtime animation/facial investigation.
-- **`docs/project/animation-roadmap.md`** — a scoped subtracker: detailed status for the skeletal
-  animation asset programme — the character asset bake, the shared skeleton, layer masks, blend
-  spaces, and the action catalog.
-- **`docs/project/three-cs-roadmap.md`** — a scoped subtracker: detailed status for the player-feel
-  vertical — Character, Camera and Controls — the mover's published body state, the resolver seam,
-  the player animation graph, the camera service and rig, input response, and the gym that
-  measures them.
+- **`docs/project/roadmap.md`** — the sole status and sequencing surface: the playable-path
+  ladder (PP0–PP6), phases P0–P13 and the CAP/ANM/CCC programmes as one-line task rows, the
+  pipeline + RE backlogs, and the risk register. While a task is open, its row links to its
+  specification in **`docs/project/plans/<area>.md`**; a plan file carries specs only, never a
+  status mark, and landing a task deletes its entry.
 
-  Those three are the only scoped subtrackers. The master roadmap owns their roll-up and priority.
-  Status lives in the four trackers and nowhere else, including this file. There is no as-built
+  Status lives in that one file and nowhere else, including this file. There is no as-built
   archive and no decision log; git history is the as-built record, and a decision's outcome is a
   present-tense fact in the doc that owns the system.
 - **`docs/project/rebuild-strategy.md`** — the strategy reference: north star, principles, the two
@@ -65,6 +57,18 @@ reproduce. The **world** keeps its
 faithful baseline (lightmap calibration, plus the planned `elysium.EnhancedTextures` A/B
 toggle); only the UI drops its.
 Full charter: `docs/project/remaster-direction.md`.
+
+### Unreal owns the engine; the substrate owns the game
+
+Troika's source is an RE oracle, never an implementation to port. A system is reproduced in this
+repo only when **authored content or a game rule names it** — a keyfield, an entity input or
+output, a script call, a rulebook row, a save field, a timing the player can observe. Everything
+the world merely needs in order to work — traces, visibility, pathfinding, physics solving,
+skinning, audio mixing — is Unreal's, reached through a query on the service seam. Reproducing
+Source's *rules* (formulas, call order, thresholds) is faithful work; porting Source's
+*mechanisms* is a defect. The adjudication is the Ownership test in
+`docs/project/remaster-direction.md`; the closed register of deliberate reproductions is in
+`docs/project/rebuild-strategy.md`. A port outside the register is a bug, not a tolerance.
 
 ### Bring-your-own-game
 
@@ -190,10 +194,8 @@ declared subtrackers. Cite a doc by name, with no date or task number attached.
 
 ## What runs today
 
-**Project priority and roll-up status: `docs/project/roadmap.md`; detailed retail-capture
-status: `docs/project/retail-capture-roadmap.md`; detailed skeletal-animation status:
-`docs/project/animation-roadmap.md`; detailed Character/Camera/Controls status:
-`docs/project/three-cs-roadmap.md`.** Runtime types and where they live:
+**Project priority and all task status: `docs/project/roadmap.md`**, including the CAP, ANM and
+CCC programme sections. Runtime types and where they live:
 `Source/ElysiumUE/CLAUDE.md`.
 
 ## Target hardware

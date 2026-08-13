@@ -5,8 +5,8 @@ facts it consumes live in `docs/vtmb/animation_and_movers.md` (channel decode, t
 split inheritance, hierarchy composition, the root/entity transform, the autolayer binding),
 `docs/vtmb/procedural_bones.md` (the axis-interpolation rule and the persistent pose array) and
 `docs/vtmb/mdl_v2531.md` (the format those rules read). Status and implementation order live only in
-`docs/project/animation-roadmap.md` for the asset stack, `docs/project/three-cs-roadmap.md` for the
-resolver seam and the player graph, and their roll-up in `docs/project/roadmap.md`.
+`docs/project/roadmap.md` — the ANM programme for the asset stack, the CCC slice for the
+resolver seam and the player graph.
 
 The goal is not to reimplement Source's animation system inside Unreal. It is to let Unreal own
 decoding, blending, skinning and LOD, and to add only the composition stages Unreal has no
@@ -20,7 +20,7 @@ This is the load-bearing observation, because it is what makes a bespoke evaluat
 |---|---|
 | decode locals | `UAnimSequence` evaluation |
 | blend sequences, layers, transitions | blend spaces, layered blends, state machines, montages |
-| compose hierarchy, split inheritance | post-process Anim Blueprint, component space |
+| compose hierarchy, including split inheritance | ordinary FK over locals re-expressed at bake |
 | apply the procedural rule | post-process Anim Blueprint, component space |
 | skin | skinning |
 
@@ -41,16 +41,43 @@ crossfadeable clips of a real body's own locomotion bank, 77.3% of bone samples 
 99.7% within 5°, none above 10°, for the length of a fade. It is not a reason to keep the rule in the
 frame path; it is what baking one costs.
 
+### 1.1 Rotation provenance is closed
+
+Every rotation that reaches a baked asset or an actor has one named source:
+
+1. an authored MDL bind transform, animation sample, attachment, or entity placement;
+2. the single formal Source-to-Unreal change of basis performed by the `UE_` exporter; or
+3. a semantic re-expression required to make Unreal evaluate the same pose, such as resolving split
+   inheritance into parent-relative locals or conjugating a VtMB post-multiplied additive into
+   Unreal's pre-multiplied form.
+
+There is no fourth category. In particular, the pipeline and runtime carry no fixed quarter-turn,
+model-family facing correction, reference-pose flattening, asset-name exception, or rest-pose bake.
+The mesh reference skeleton and the `USkeleton` both preserve the converted MDL bind transforms,
+and entity placement is the converted entity placement alone.
+
+This makes a visible quarter-turn a useful failure. A raw bind-pose inspection may be sideways
+because the bind frame is storage, not necessarily the pose retail displays. A placed runtime model
+that remains sideways after its selected sequence has been evaluated is missing a semantic input or
+stage; it is not repaired by adding another rotation. The diagnostic records, in order, the entity
+placement, selected sequence and frame, decoded local pose, and final component transform.
+
+Any MDL retail evaluates through `CBaseAnimating` remains skeletal at runtime, including animated
+props and rigid one-bone models. At rest it evaluates the same held sequence and frame retail chose;
+converting that result into a static mesh would erase the distinction between authored bind and
+authored rest.
+
 ## 2. The asset set is baked, not built at runtime
 
 Characters are baked into native assets on the `/ElysiumBaked` mount by an editor commandlet beside
 the map bake, under the same gitignored, regenerable posture. What the bake produces:
 
-- **One shared biped `USkeleton`** from the `Bip01` hierarchy. VtMB's shared animation banks are
-  already Unreal's shared-skeleton model — the whole cast uses one bone naming convention and the
-  banks carry clips authored against it — so every bank clip is playable on every character with no
-  retargeting at all. Models outside the convention (animals, skeletal props, the wolf form) carry
-  their own skeletons.
+- **One authored `USkeleton` per compatible rig family.** Each skeleton is built from the converted
+  MDL bind locals of its family, not from an identity-rotation surrogate. VtMB's shared animation
+  banks are decoded once but their Unreal sequences are authored once per compatible model family,
+  on that family's exact skeleton. This avoids Unreal's cross-skeleton reference-pose remapper
+  without altering either side's rotations. Models outside the biped convention — animals,
+  skeletal props and the wolf form — naturally form their own families.
 - **A `USkeletalMesh` per model**, morph targets preserved. A face spans several material primitives
   and glTF morph weights are mesh-level, so a target that spans two materials arrives as one
   same-named piece per primitive; those pieces are **merged**, never first-wins, or a jaw moves and
@@ -90,11 +117,11 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   sequence that states which bones it owns can be composed correctly by anything that opens it,
   including the animation editor, which is the same reason the assets are baked at all.
 
-  A masked clip also needs one thing written that the source file states by omission: a bone the
-  clip **owns and does not animate** holds its bind pose, which is an authored pose rather than an
-  absence, so the bake writes it out as a constant track. Left implicit it would evaluate to the
-  shared skeleton's reference pose — whichever body of the family seeded it — and the overlay would
-  quietly pull those bones onto another model's bind.
+  A clip also needs one thing written that the source file states by omission: for every bone the
+  clip owns, each absent position or rotation channel holds the **donor MDL bind value**. The
+  exporter therefore materializes that value as a constant track. A bone the mask does not own
+  remains absent and leaves the base pose untouched. This preserves VtMB's distinction without
+  making Unreal consult either a donor file or an arbitrary family reference pose at evaluation.
 - **The one overlay mask that owns the split bone derives once per declaring host.** Of the distinct
   per-bone masks a bank ships, exactly one contains `Bip01 Spine1` — the 49-bone upper-body gate the
   `*_aim_layer` and `*_bobble_layer` families carry. Those clips are the one place the split bone
@@ -152,9 +179,8 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   and reaches an editor transaction buffer that does not exist under the editor executable in game
   mode; authoring it at bake removes both that hazard and its workaround.
 
-The glTF reader stays the same one on both sides of the seam — it runs inside the bake commandlet
-rather than at runtime. Its vendored morph-target vertex-base patch is load-bearing and fails
-silently when lost, so keeping the same reader keeps that fix in the path.
+The commandlet consumes the Unreal-native ESKM container directly. Standard glTF remains an
+inspection product only and participates in neither the baked pose nor runtime placement.
 
 ### 2.1 What ships under which name
 
@@ -193,50 +219,34 @@ whether its split bone is normalized, whether it indexes a de-duplicated mask ta
 names the clip it is a difference from — so an older layout read as the current one is silently wrong
 rather than absent.
 
-### 2.3 Two normalization details that are not obvious
+### 2.3 Two channel details that are not obvious
 
-- **A bone with no animation record decodes to a zero quaternion, not to its bind rotation.** Some
-  clips carry no track at all for the split bone, so composing a correction through one yields
-  degenerate keys rather than a harmless identity. The bake pre-filters: it corrects a split bone only
-  where every frame of that clip has a readable rotation for it.
-- **"The clip animates nothing, so the track is absent" has to be preserved explicitly.** A channel
-  pre-pass carries that state through normalization. Without it the bake synthesises tracks the
-  source never had, which is indistinguishable at evaluation from an authored constant.
+- **Ownership and channel presence are independent.** A weighted animation record owns its bone;
+  an absent channel on that record reads the donor bind value. A zero-weight record does not own the
+  bone and must not acquire a synthesized track. The exported mask preserves the first distinction
+  and complete owned tracks preserve the second.
+- **A split bone can be resolved only from a complete sampled pose.** The exporter composes the
+  donor bind fallback before re-expressing the flagged rotation. It never treats an absent channel
+  as identity or as an unreadable quaternion.
 
-### 2.4 The skeleton reference pose is rotation-flat
+### 2.4 The skeleton reference pose is authored
 
-Every baked `USkeleton` — bank and rig family alike — carries a **rotation-flat** reference pose:
-each bone's translation verbatim from its container, every local rotation identity.
+Every baked family `USkeleton` carries the converted MDL local transform for every bone, including
+rotation. The mesh carries its own converted bind skeleton. No build step substitutes identity
+rotations, and no runtime step counter-rotates the result.
 
-**Nothing skins from that pose.** A body skins from its own mesh reference skeleton, a bone no clip
-tracks resolves to that same mesh pose, and `OrientAndScale` compares against the mesh's bind. What
-reads the skeleton's reference pose is `FSkeletonRemapping`, and it reads it at **both** ends:
-`DecompressPose` builds `Q0 = PT⁻¹·PS` from the two skeletons' component rotations and applies it to
-every translation and rotation it decodes. `OrientAndScale` then declines to build a correcting entry
-for any bone whose authored and target bind translations agree within 0.001.
+A bank `UAnimSequence` is built on each model family skeleton that consumes it. The sequence and the
+mesh therefore present the same `USkeleton` pointer to Unreal, so `FSkeletonRemapping` never enters
+the path. Optional donor bones that the family lacks are dropped by name, exactly as VtMB's outer
+mapping skips absent targets. This is deliberately generated duplication: sharing one bank sequence
+across distinct `USkeleton`s would save disk by introducing an engine rotation stage Troika did not
+have.
 
-**Those two rules combine into a failure that points the wrong way.** A clip's limb tracks carry no
-translation channel of their own, so the emitted translation is the authoring container's bind. A
-body whose bind matches that container is therefore exactly the body `OrientAndScale` declines to
-correct — leaving the remap's rotation to reach the skin, which keeps the authoring rig's limb
-lengths and points them along the target's axes. **The bodies that match the clip best are the ones
-that fold**, and a body with different proportions is repaired by the correction the matching body
-never gets.
-
-Identity locals accumulate to identity component rotations in any tree, so `Q0` and `Q1` are identity
-for every skeleton pair however far two rigs diverge. The decoded quaternion then reaches the body
-verbatim, which is what retail does (`docs/vtmb/animation_and_movers.md` → A.4b), and the only
-translation correction left is the one comparison that reads the playing body.
-
-**Flatness is what makes the result independent of the choice, and the choice is not free.** One
-shared rotation per bone *name* does not survive: a generic appendix name sits under a different
-ancestor chain on two rigs — `Bone19` is `Bip01 Head`'s child on one bank and `Bone18`'s on another —
-so equal locals still give unequal component rotations, and `Q0` returns at up to 180° on exactly
-those bones. Flat locals have no ancestor dependence to disagree about.
-
-**The stage cannot be switched off.** `RequiresReferencePoseRetarget()` reports whether the remapping
-table is non-empty, so it is true for any valid pair. A flat reference pose does not skip the
-retarget; it empties it of effect.
+`OrientAndScale` remains only for VtMB's authored donor-to-target **translation** mapping. Each
+container registers its converted bind as the sequence's retarget source; rotation tracks pass
+verbatim. Owned missing channels have already become donor-bind constants (§2.3), while unowned
+bones remain on the playing mesh's pose. Thus neither fallback depends on which family member seeded
+the `USkeleton` reference pose.
 
 ## 3. Gameplay actions are resolved before the graph
 
@@ -622,10 +632,9 @@ This stage is **correctness, not feel** — the irreducible delta between readin
 reading them.
 
 **There is one build of a character, and it is the baked one.** No runtime path constructs a
-character from `.glb`, so no clip reaches the graph carrying VtMB's rotations unchanged and there is
+character from `.glb` or `.eskm`, so no unresolved VtMB storage rule reaches the graph and there is
 no split-inheritance node to gate. A stem the character export has not covered cannot stand at all
-and fails by name — a missing export rather than a silent substitution. glTFRuntime remains the
-bake-time reader (§2), which is where the same code path serves both sides of the seam.
+and fails by name — a missing export rather than a silent substitution.
 
 **The engine's pose-driver node is the wrong tool** for it. Its shape matches — a driver
 bone, an evaluation space, target poses — but it interpolates with a radial basis function rather
@@ -640,7 +649,7 @@ component space while the axis rule reads a **local** rotation; deriving it as
 `parentComponent⁻¹ · boneComponent` is cheap and the base class supplies the conversion. Declare it
 thread-safe so it evaluates on animation worker threads with the rest of the graph.
 
-## 6. What the export carries, and the basis hazard
+## 6. What the export carries, and the basis boundary
 
 Exported clips store **resolved** locals, not raw decoded ones: the split bone's model-space
 rotation re-expressed against its parent, and a delta conjugated into Unreal's combine order. A
@@ -648,7 +657,7 @@ channel retail decodes and then overrides is carried as what the override produc
 downstream does the overriding any more. Beside the clips the export must carry the procedural rule
 table, the per-bone mask inventory, the layer binding, and the blend grids.
 
-The hazard is basis. The rule's six entries and its **axis index** are expressed in VtMB's basis,
+The boundary is basis. The rule's six entries and its **axis index** are expressed in VtMB's basis,
 and a change of basis conjugates bone locals: the axis a rule names is not the same axis after
 conversion, and may be negated.
 
@@ -658,23 +667,18 @@ agreement. A separately authored native exporter reintroduces exactly the reconc
 avoids. One exporter emitting a companion table beside the artifact it already writes is the
 arrangement that holds.
 
-**The axis survives as a direction, not as an index.** Under the glTF conjugation Source Y maps to
-−Z and Source Z to Y, so a carried-through axis index is wrong on two axes in three — 2,356 of the
-install's 3,123 rules. Folding the change into the entry ordering does not work either: terms 1 and
-2 are interchangeable under the inner slerp, but term 3 is distinguished as both the `a1 + a2 == 0`
-fallback and the outer slerp target, and after conversion the distinguished term reads glTF Y. The
-table therefore ships the axis as a converted direction plus the three converted Source axes, and
-the runtime takes each term's signed weight as a dot product. Entry order is the raw record's, and
-the rule body stays retail's verbatim.
+**The axis survives as a direction, not as an index.** A carried-through Source axis index can name
+the wrong Unreal axis or sign. Folding the change into the entry ordering does not work either:
+terms 1 and 2 are interchangeable under the inner slerp, but term 3 is distinguished as both the
+`a1 + a2 == 0` fallback and the outer slerp target. The table therefore ships the axis as a converted
+direction plus the three converted Source axes, and the runtime takes each term's signed weight as a
+dot product. Entry order is the raw record's, and the rule body stays retail's verbatim.
 
-**Consistency has to hold on the import side too.** The table ships in the glb's basis and in
-metres, and the glTF loader conjugates every node by its scene basis and scales translation by 100 —
-so the sidecar takes the *same* import transform the mesh does, read once from the same loader
-configuration rather than restated as a constant. This does not breach "convert nothing at
-runtime": the glTF exporter is the standing exemption to the `UE_` convention because glTF is
-self-describing, and a table written by that exporter in that basis inherits the exemption. Omitting
-it costs a factor of 100 on every driven bone's translation, silently. The check that catches it is
-the driven bone's own bind position, which arrives independently through the mesh.
+**There is no import-side transform.** ESKM writes centimetres, Unreal handedness and Unreal-native
+local rotations by calling the same `source_to_unreal`, `source_dir_to_unreal` and quaternion basis
+conversion used for the mesh and clips. The commandlet reads those values 1:1, and the runtime reads
+the resulting assets 1:1. A fixed yaw or scale at either consumer would be a second coordinate
+conversion and violates §1.1.
 
 The mask ships **inside the character container**, as a de-duplicated table the clips index into,
 rather than beside it: it is per animation record, so a sidecar would restate the clip list to say
@@ -729,5 +733,5 @@ takes, and it is recorded as one in the owning topic.
 **Blend-space interpolation is a divergence.** The authored grid states its cells and the parameter
 range each axis spans; Unreal interpolates between samples by its own scheme rather than by retail's
 cell selection. The authored content is reproduced; the interpolation between authored values is
-Unreal's. Recorded in `docs/project/animation-roadmap.md` with the rest of the programme's
-divergences.
+Unreal's. Tracked with the rest of the ANM programme's divergences in
+`docs/project/plans/animation.md`.

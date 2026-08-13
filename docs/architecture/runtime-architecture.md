@@ -300,17 +300,20 @@ classnames as inert records.
 ```cpp
 struct FElysiumWorldServices
 {
-    IElysiumEmbodiment* Embodiment = nullptr;  // bodies, meshes, clips, skins, and the player's body
-    IElysiumAudio*      Audio      = nullptr;  // PlayVoice/StopVoice/scheme control
-    IElysiumTravel*     Travel     = nullptr;  // RequestLandmarkTravel, ChangeMap
-    IElysiumPresenter*  Presenter  = nullptr;  // OpenDialog/OpenSign/StartFade -> the view state
+    IElysiumEmbodiment*    Embodiment = nullptr;  // bodies, meshes, clips, skins, and the player's body
+    IElysiumAudio*         Audio      = nullptr;  // PlayVoice/StopVoice/scheme control
+    IElysiumTravel*        Travel     = nullptr;  // RequestLandmarkTravel, ChangeMap
+    IElysiumPresenter*     Presenter  = nullptr;  // OpenDialog/OpenSign/StartFade -> the view state
+    IElysiumWeather*       Weather    = nullptr;  // wetness transitions and particle emitter state
+    IElysiumCameraService* Camera     = nullptr;  // the camera seam
 };
 ```
 
-`AElysiumMapActor` implements the first three and hands the bundle to `FElysiumEntityWorld` at
-construction; the fourth is the world-scoped `UElysiumPresentationSubsystem` (11.8), which the actor
-looks up and threads in. The actor is still the world's component outer and VLOG context — that is
-not a fifth service, and nothing under the world casts it to a map actor or walks it to a subsystem.
+`AElysiumMapActor` implements embodiment, audio, travel and weather and hands the bundle to
+`FElysiumEntityWorld` at construction; the presenter is the world-scoped
+`UElysiumPresentationSubsystem` (11.8), which the actor looks up and threads in. The actor is still
+the world's component outer and VLOG context — that is not another service, and nothing under the
+world casts it to a map actor or walks it to a subsystem.
 
 **What `IElysiumPresenter` carries is a moment, not the state.** The fade, the open sign and the
 open conversation stay on `FElysiumEntityWorld` — each is world state with the map epoch's lifetime,
@@ -350,6 +353,44 @@ live capsule collision, then its movement component remains inactive and its con
 the first request. Stop, arrival, failure and path-following loss all return the movement component
 to that sleeping state; abandoning an ambient place cancels its outstanding request before releasing
 the authored claim.
+
+### Execution and query are separate kinds (S11)
+
+Every call across the bundle is one of two kinds, and naming which one it is decides what may
+cross. An **execution** call carries a decision the substrate has already made and asks the engine
+to perform it — `PlayNpcClip`, `MoveTo`, `StartFade`. A **query** call asks the engine something the
+substrate cannot know: geometry, visibility, reachability, a rendered fact. The distinction matters
+because a query's answer enters a decision as its premise — an execution's return only reports what
+the engine did with a decision already made, a clip's authored length or a request's refusal — so
+the query seam is where a rule can quietly stop being VtMB's.
+
+A query carries three obligations, all discharged at its declaration:
+
+- **It returns geometry or a candidate, never a verdict.** `QueryFeedTarget` hands back whatever the
+  hull trace found, and every eligibility question — paired state, automatic acceptance,
+  `ResistsFeeding`, the opposed check — stays in the substrate. `QueryPlayerUse` returns focus
+  geometry and leaves class eligibility and session policy to `FElysiumEntityWorld`.
+- **Its headless answer is part of the contract, not a placeholder** — stated in its default
+  implementation, or in the null-service branch its call sites share when the method is pure
+  virtual. A `-nullrhi` run and an editor
+  commandlet never render, so `IsNpcBodyVisible` defaults to `true`: a query answering "not visible"
+  there would stall every idle schedule in exactly the runs meant to prove it. A query whose absent
+  implementation changes a decision has to say which way it fails and why.
+- **A divergence from the oracle VtMB used is named where the query is declared.** Source's PVS is
+  leaf-to-leaf and view-independent; a render-time query is frustum-dependent, so an NPC standing
+  behind the player holds its pose and resumes a frame after it returns to view. That belongs on
+  `IsNpcBodyVisible`, not discovered at a call site.
+
+**The decidable test is who arbitrates.** A value someone typed — a keyfield, a table row, a
+threshold, a weight, a selection order — is a decision: the rule that reads it runs in the
+substrate, and it is never handed to an engine subsystem as a parameter to arbitrate (K13 states
+the same test for the gameplay layer). Authored *data* may still cross the seam as data —
+`ResolveDisposition` hands a typed row down by value because the table's loader needs the export
+root — and an execution's receipt may feed a rule, the way a clip's authored length paces the
+idle schedule. A fact only the live world can answer is a
+query, and Unreal answers it. **A query approximated with substrate arithmetic because no seam
+carries it is a missing query, not a substrate rule**: the arithmetic and the world it stands in for
+will disagree, and the schedule built on it fails for a reason retail never had.
 
 Any member may be null, and every call site has to handle "no body" (`elysium.NpcBodies 0`,
 `elysium.BrushBodies 0`), so null-service is the existing A/B path formalised.
@@ -753,6 +794,19 @@ Numbered like `docs/architecture/engine-core.md`'s R1–R8, and orthogonal to th
 - **S10 — Every capability has a headless driver.** `docs/architecture/debug-tooling.md`'s F1-first rule says a feature
   needs a Cog control; this extends it — a feature also needs a named command, so a script, a test and
   an agent can reach it. A capability reachable only by hand is incomplete.
+- **S11 — A service answers; the substrate decides.** Every call across `FElysiumWorldServices` is an
+  execution (perform a decision already made) or a query (answer what only the live world knows). A
+  query returns geometry or a candidate and never a verdict, states its headless answer, and names
+  any divergence from the oracle VtMB used. An authored value is arbitrated in the substrate, never
+  by an engine subsystem; a query approximated with substrate arithmetic is a missing seam, not a
+  rule (§7).
+- **S12 — Unreal owns the engine; the substrate owns the game.** A system is reproduced in this
+  runtime only when authored content or a game rule names it — the Ownership test in
+  `docs/project/remaster-direction.md`. Everything the world merely needs in order to work —
+  traces, visibility, pathfinding, physics solving, skinning, mixing — is Unreal's, reached
+  through a query (S11). Reproducing Source's rules (formulas, call order, thresholds) is
+  faithful; porting Source's mechanisms is a defect. The deliberate reproductions are the closed
+  register in `docs/project/rebuild-strategy.md`; a port outside it is a bug, not a tolerance.
 
 ## 14. Tracking
 

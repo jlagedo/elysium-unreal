@@ -298,7 +298,7 @@ frame regardless of the setting**, so the switch changes only which one reaches 
 what makes the comparison an instrument rather than a recollection: one deterministic `uv run
 elysium debug move` run carries `cam_boom`/`cam_damp`/`cam_pitch`/`cam_yaw`/`cam_clip` beside
 `mcam_*`, so the two booms diff directly, and a rig regression is the same kind of diff as a
-movement one. It is also the co-tune's own instrument (`docs/project/three-cs-roadmap.md` `CCC3`).
+movement one. It is also the co-tune's own instrument (`docs/project/roadmap.md` `CCC3`).
 
 The default stays `0` until the co-tune resolves the modern rig's deltas one owner call at a time.
 The modern rig's tuning lives in `ElysiumRig::FElysiumCameraRigTuning`; its rules are pure and

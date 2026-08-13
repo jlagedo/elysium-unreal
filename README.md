@@ -62,11 +62,9 @@ written into ignored local mounts. Git LFS is not an exception to this boundary.
 
 ## Current status
 
-[The master roadmap](docs/project/roadmap.md) is the canonical project tracker, with three
-declared scoped subtrackers: [retail capture](docs/project/retail-capture-roadmap.md),
-[skeletal animation](docs/project/animation-roadmap.md), and
-[Character/Camera/Controls](docs/project/three-cs-roadmap.md). This section is a readable
-summary, not a second checklist.
+[The master roadmap](docs/project/roadmap.md) is the sole status surface — one line per task,
+linked while open to its specification under [`docs/project/plans/`](docs/project/plans/).
+This section is a readable summary, not a second checklist.
 
 | Area | State |
 |---|---|
@@ -330,7 +328,7 @@ visible at the top of each file.
 - UI reads the published `FElysiumViewState`; it does not reach into the entity world.
 - Put implementation in source, design in `docs/architecture/`, VtMB facts in
   `docs/vtmb/`, uncertain reconstruction in `docs/recovered/`, and status only in the
-  master roadmap or one of its three declared scoped subtrackers.
+  master roadmap.
 
 ## Getting started
 
@@ -457,7 +455,7 @@ The documentation set is intentionally split by what each kind of fact means:
 
 | Question | Canonical location |
 |---|---|
-| What is next, in progress, or verified? | [Master roadmap](docs/project/roadmap.md), plus the [retail-capture](docs/project/retail-capture-roadmap.md), [animation](docs/project/animation-roadmap.md) and [3 C's](docs/project/three-cs-roadmap.md) subtrackers |
+| What is next, in progress, or verified? | [Master roadmap](docs/project/roadmap.md) — one line per task, linked while open to its spec under [`docs/project/plans/`](docs/project/plans/) |
 | What is the project's strategy? | [Rebuild strategy](docs/project/rebuild-strategy.md) |
 | What may be modernized? | [Remaster direction](docs/project/remaster-direction.md) |
 | How should an Unreal system be designed? | [`docs/architecture/`](docs/architecture/) |

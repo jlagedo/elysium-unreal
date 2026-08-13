@@ -395,8 +395,8 @@ camera or the actor is half a hull out.
 
 ## Tracking
 
-Implementation sequence and status live only in `docs/project/roadmap.md` P2, except the movement and
-camera harness, whose status is `docs/project/three-cs-roadmap.md`'s;
+Implementation sequence and status live only in `docs/project/roadmap.md` — P2, with the movement
+and camera harness under its CCC slice;
 `docs/architecture/engine-core.md` owns the entity substrate design it observes.
 
 ## Prior art / sources

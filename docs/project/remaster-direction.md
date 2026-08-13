@@ -48,7 +48,7 @@ game state is presentation; anything that changes what the game does is not. A m
 a sign is presentation. Making that sign readable at a distance the original did not allow is
 a feel/logic question — ask.
 
-## The two adjudication tests
+## The three adjudication tests
 
 **Presentation test** (extends `docs/architecture/asset-enhancement.md`'s):
 
@@ -67,6 +67,33 @@ art direction, it was the hardware.
 
 Constraint or defect → may be fixed, with an owner's call. Design decision → reproduce, even
 where it is unfashionable. An unclear case goes to the owner, not to taste.
+
+**Ownership test** (for every system — which half builds it, decided before the work):
+
+> Does **authored content or a game rule name this**, or is it something the **world merely
+> needs in order to work**?
+
+Named by content → game logic → reproduced in the substrate, however Unreal would have modelled
+it. Needed by the world → engine service → **Unreal owns it**, and the substrate reaches it
+through a query on the service seam. "Named by content" is decidable, not taste: a keyfield, an
+entity input or output, a `.dlg` condition, a script call, a rulebook row, a save field, or a
+timing the player can observe. Everything else — traces, visibility, pathfinding, physics
+solving, skinning, audio mixing, culling, streaming — is a service Unreal already provides, and
+porting Source's version of it is a defect. Troika's source is the RE oracle for rules and data,
+never an implementation to port.
+
+The change layer decides the default; this test decides the mechanism. A feel-layer system
+reproduces Source's **rules** — formulas, call order, thresholds — because those rules *are* the
+feel; it never reproduces Source's **mechanisms**. The movement split is the worked example:
+`ElysiumMoveSolve.h` carries the `CGameMovement` math as pure functions over values, and the
+engine half runs retail's call order over Unreal's own traces.
+
+Before any Source subsystem is reproduced, name the **observable** that requires it — the
+authored value, the script-visible name, the save field, the measurable feel. If Unreal's
+equivalent produces that observable, with any divergence enumerated where the two disagree, the
+port is refused; render visibility standing in for the PVS, with its divergence recorded at the
+query, is the model. The deliberate reproductions form a closed register in
+`docs/project/rebuild-strategy.md`; a port outside it is a defect, not a tolerance.
 
 ## The four axes in scope
 
@@ -176,10 +203,8 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
 
 ## Where the work lives
 
-Project implementation status and sequencing live in `docs/project/roadmap.md`; detailed status for
-retail capture, the skeletal animation assets, and the Character/Camera/Controls vertical lives in
-its three declared scoped subtrackers, `docs/project/retail-capture-roadmap.md`,
-`docs/project/animation-roadmap.md` and `docs/project/three-cs-roadmap.md`. Topic design remains split by
+Project implementation status and sequencing live in `docs/project/roadmap.md`, including its
+CAP, ANM and CCC programme sections. Topic design remains split by
 concern: `docs/architecture/ui-architecture.md` for the Unreal UI,
 `docs/architecture/camera-architecture.md` for the remaster camera,
 `docs/architecture/asset-enhancement.md` for surfaces, and the owning behavior doc for every

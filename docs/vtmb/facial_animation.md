@@ -1055,8 +1055,8 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
   drive and no `facial/` sidecar — but 57 of the 59 carry eyeball records, so the faithful
   player face is a **still face with live, aiming eyes**.
 
-Implementation roll-up status for this system is in `docs/project/roadmap.md`; detailed retail
-facial/lip capture status is in `docs/project/retail-capture-roadmap.md`.
+Implementation roll-up status for this system is in `docs/project/roadmap.md`; the open retail
+facial/lip capture work is specified in `docs/project/plans/capture.md`.
 
 ## Provenance
 

@@ -953,8 +953,7 @@ an unmet prerequisite, or still unexplained. “No error in the log” is not cl
 - Confirmed audio behavior is written into `docs/vtmb/audio_pipeline.md`; Unreal integration stays
   in `docs/architecture/audio-architecture.md`.
 - Unreal system seams remain in the appropriate `docs/architecture/` document.
-- Priority, task identifiers, and completion state remain only in `docs/project/roadmap.md` and its
-  declared scoped subtrackers.
+- Priority, task identifiers, and completion state remain only in `docs/project/roadmap.md`.
 
 This brief remains the cross-system demand inventory. It should be regenerated or corrected when
 the patch-first input hashes change, a retail trace contradicts an intent inference, or a new

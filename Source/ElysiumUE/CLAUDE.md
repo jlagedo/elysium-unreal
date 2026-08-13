@@ -70,8 +70,8 @@ domain. When working in existing gameplay code, assess the touched code against 
 and propose concrete changes for every divergence needed to bring it into conformance. Implement
 those corrections when they are within the requested scope; otherwise report them explicitly
 rather than expanding the task without authorization. The architecture composes the entity rules
-**R1–R8** in `docs/architecture/engine-core.md`, the runtime rules **S1–S10** in
-`docs/architecture/runtime-architecture.md`, and its own compatibility rules **K1–K12**. Exact
+**R1–R8** in `docs/architecture/engine-core.md`, the runtime rules **S1–S12** in
+`docs/architecture/runtime-architecture.md`, and its own compatibility rules **K1–K13**. Exact
 VtMB behavior remains in the owning `docs/vtmb/` document; this file carries only the coding
 contract:
 
@@ -79,6 +79,13 @@ contract:
   `FElysiumEntity` classes and the declared session/save structures. Unreal actors and components
   are optional bodies for rendering, collision, movement and overlap; they do not become a second
   gameplay model. The substrate reaches them only through nullable `FElysiumWorldServices`.
+- **Unreal owns the engine; the substrate owns the game.** A Source subsystem is reproduced only
+  when authored content or a game rule names its behavior — the Ownership test in
+  `docs/project/remaster-direction.md`, with the closed register of deliberate reproductions in
+  `docs/project/rebuild-strategy.md`. Geometry, visibility, reachability and physics are asked of
+  the engine through the service seam, never approximated with substrate arithmetic. Reproducing
+  Source's rules (formulas, call order, thresholds) is faithful; porting its mechanisms is a
+  defect, and a port outside the register is a bug.
 - **Preserve the addressability boundary.** Non-addressable GAME_LUMP dressing may be placed in the
   baked level. Anything a map or script can name, mutate, hide, use, save, receive an input on, or
   fire an output from remains a live `.ents` entity; baking its mesh must not bake away its entity
@@ -123,9 +130,10 @@ contract:
   never produced, missing target, missing input, refused receiver and invisible side effect. A quiet
   log is not acceptance, and debug injection does not prove an authored event producer.
 
-For a gameplay change, review the diff by asking: does it put a real implementation behind these
-existing entity/API/event/save seams, or does it create another route around them? Only the former
-belongs in the runtime.
+For a gameplay change, review the diff by asking two questions: does it put a real implementation
+behind these existing entity/API/event/save seams, or does it create another route around them —
+and does it use Unreal's mechanism for everything the ownership register does not reserve? Only a
+change that passes both belongs in the runtime.
 
 ## Source layout
 

@@ -7,10 +7,12 @@
 **Document role:** Exploration research brief; not a status tracker or fact owner  
 **Last reviewed:** 2026-07-30
 
-Detailed work status and the executable capture program are tracked in
-`docs/project/retail-capture-roadmap.md`. Confirmed VtMB behavior belongs in
+Work status is tracked in `docs/project/roadmap.md` (the CAP rows); the open capture tasks are
+specified in `docs/project/plans/capture.md`. Confirmed VtMB behavior belongs in
 `docs/vtmb/animation_and_movers.md`, `docs/vtmb/facial_animation.md`, and
-`docs/vtmb/choreographed_scenes.md`.
+`docs/vtmb/choreographed_scenes.md`. This document owns the programme's evidence
+model and method, including the working rules and evidence gate in
+§ "Programme method".
 
 ---
 
@@ -1991,9 +1993,9 @@ Next experiment:
 
 ## 13. Investigation order
 
-This document owns the evidence model and method, not task status. The only
-detailed task order and current front are in
-`docs/project/retail-capture-roadmap.md`.
+This document owns the evidence model and method, not task status. Status is
+`docs/project/roadmap.md`'s; the open-task specifications are
+`docs/project/plans/capture.md`'s.
 
 The durable investigation sequence is:
 
@@ -2019,12 +2021,98 @@ capture for the corpus, add the smallest raw record only when a selected
 mismatch needs an earlier stage, measure it in retail, and add queue, blob,
 index, process-reuse, or compression machinery only for an observed limit.
 
-## 14. Task ownership
+## 14. Task ownership and programme method
 
 Completed capabilities, open research slices, priorities, and acceptance gates
-are not duplicated here. They live in
-`docs/project/retail-capture-roadmap.md`; project roll-up and playable-path
-priority live in `docs/project/roadmap.md`.
+are not duplicated here. Status lives in `docs/project/roadmap.md` (the CAP
+rows and the parents `0.10`/`RE32`/`RE33`); open-task specifications live in
+`docs/project/plans/capture.md`.
+
+### 14.1 Working rules
+
+1. **Capture what the runtime reads, not only what it emits.** A pose that matches proves
+   nothing about a field the decoder silently skipped. Consumed byte spans are first-class
+   evidence.
+2. **Immutable source bytes are a dictionary, not a stream.** Model images, skeletons, and
+   animation descriptors are stored once by content hash; per-call records keep identity
+   and offsets only.
+3. **Start from a visible output.** Use the final matrix, flex, vertex, or draw state as an
+   oracle, then trace backward only to the first unexplained stage.
+4. **Capture raw evidence before decoding it.** A record keeps registers, stack bytes,
+   pointer values, bounded pointed-to spans, original addresses, and copy outcomes. Field
+   names are analyzer hypotheses.
+5. **Keep the live path bounded.** The game callback validates and copies bounded spans,
+   accounts for failures and drops, and returns. It does not decode, index, compress, or
+   retain a run in memory.
+6. **Measure before optimizing.** Rates, counts, and joins replace estimates.
+7. **Evolve the tool freely.** No schema registry, migration system, or public
+   compatibility promise. A finalized run is nevertheless one self-contained, queryable
+   evidence file whose raw payloads stay readable by the current research tools.
+8. **Do not build ahead, and do not capture behind.** Later systems justify no capture
+   infrastructure before a difference report names them; a rule that passes the evidence
+   gate carries into the export and runtime without waiting for its phase; a system whose
+   format is already closed is built from that specification, not re-derived by capture.
+9. **Delete dead machinery.** A hook, reader, control, dependency, or test stays only while
+   it protects the exact build, preserves useful evidence, or answers a current question.
+
+### 14.2 Evidence gate for a research conclusion
+
+A task that claims retail behavior closes only when: (1) the executable/module hashes, tool
+commit, and capture recipe are recorded; (2) captured, written, dropped, truncated,
+unreadable, unjoined, and incomplete counts are reported; (3) the relevant input and output
+spans are preserved as raw bytes; (4) an offline analyzer can use the database without
+reading the live process; (5) a repeat capture or independent byte comparison supports the
+conclusion; (6) the fact is written in its owning `docs/vtmb/` document; and (7) the
+recovered rule has a game-independent regression or a local hash-gated retail comparison.
+Synthetic tests establish probe safety and recorder mechanics only; they never close a task
+that claims game behavior.
+
+### 14.3 Candidate causes for a transform mismatch
+
+A classification vocabulary, not a work plan — a row becomes work only when a difference
+report points at it: sampling and time (frame selection, interpolation, loop/clamp boundary,
+rate, seek, first-frame reset); selection, blends and layers (sequence/activity choice,
+blend inputs, pose parameters, overlays, gestures, transitions, masks, missing-channel
+defaults); included-model remapping; controllers and procedural order; root and entity
+motion; hierarchy composition (split inheritance, multiplication order, inverse-bind
+convention); post-composition writes (a bone-to-world slot the composed locals do not
+explain — secondary motion, a follow constraint, or any stage between the pose build and
+the draw).
+
+### 14.4 Triggered capture and storage improvements
+
+Responses to measurement, never scheduled prerequisites: fixed-size slots for measurable
+callback cost; narrow spans or filters before queue-cap tuning; content-hash blob storage
+when immutable bytes dominate; offline content-deduplication when exact payloads dominate
+(compression is not the response — measured, it buys 5.4% after deduplication and costs an
+inflate per read); an index only for a demonstrated slow query; writer-thread batching only
+for a measured disk bottleneck; per-experiment filters for a noisy hook. No triggered
+improvement becomes a general subsystem unless more than one real experiment needs it.
+
+### 14.5 Explicit non-goals
+
+Hot-unloading the probe; multiple game builds, schema versions, or public consumers; a
+general hook SDK, remote collector, or live capture service; a pre-planned ladder for scene
+lifecycle, save/load, ragdoll, or teardown (each is a CAP5 case only when a difference
+report names it); a complete process dump or pointer-graph crawler; forcing or enumerating
+every possible animation; duplicate captures for clan/armor models resolving to the same
+owner and data; explaining every unknown bit before useful behavior is reproduced; native
+VtMB authoring or writing animation back into the original game.
+
+### 14.6 Programme risks
+
+The standing responses: bracket a cutscene on its own events, not wall clock; keep the game
+window focused (`host_framerate` pins the step but an unfocused window halves the rate with
+no cvar to stop it); the draw/skeletal streams join on the measured fixed +4 with CAP2.1's
+generations scoping every record; filter first and measure before optimizing; unread bytes
+stay visible rather than inferred correct; validate pages, cap reads, catch faults, fail
+closed; scoped generation identities rather than raw addresses; record every evaluator call
+under its pose-build generation; distinguish fired evaluation, completed pose build, and
+draw coverage; keep records self-bounded with disposable indexes; infrastructure grows only
+inside the two tracks (the evidence loop and the delivery) with one current task each; CAP7
+is authorized by the evidence gate, not phase completion; a closed-format system is never
+re-derived by capture; and closure is stated against the adjudicated baseline (CAP5.4)
+rather than against retail unconditionally.
 
 ---
 
