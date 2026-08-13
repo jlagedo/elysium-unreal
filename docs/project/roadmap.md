@@ -217,8 +217,8 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
 
 Governing decision — bake native, let Unreal run it: `docs/architecture/animation-architecture.md`.
 
-- [ ] **[ANM1 Bake the character assets](plans/animation.md)** — one skeleton per rig family,
-  no runtime glTF.
+- [ ] **[ANM1 Bake the character assets](plans/animation.md)** — shared banks packaged once across
+  compatible rig families; no bank/body cross-product and no runtime glTF.
 - [~] **[ANM2 The two discarded MDL fields](plans/animation.md)** — masks and bindings
   delivered; orphan census + the dispatcher weight open.
 - [x] **ANM3 Bake the blend spaces** — parity-asserted `UBlendSpace` per declared grid.

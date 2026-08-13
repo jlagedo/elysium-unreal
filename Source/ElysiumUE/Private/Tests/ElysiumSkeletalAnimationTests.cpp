@@ -954,9 +954,7 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 					Mesh->AddToRoot();
 				}
 
-				// Off the mount, like the body. A cinematic bank read out of its `.glb` would bind
-				// through glTFRuntime's basis instead of the container's -- a 90 degree yaw on the
-				// `Bip01` root, which is exactly what this scene's cast would then stand at.
+				// Off the mount, like the body. The shared bank clip must be compatible with its body.
 				UAnimSequence* Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, Bank,
 					TEXT("entire_scene"));
 				const USkeleton* BodySkeleton = Mesh->GetSkeleton();
@@ -1146,8 +1144,7 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	// Off the mount, in the body's own frame. The `.glb` half binds through glTFRuntime's basis
-	// and would stand this actor a quarter turn off its mark.
+	// Off the mount, resolved through the body's compatible shared bank.
 	UAnimSequence* Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, Bank, SequenceEvent->Param);
 	if (!TestNotNull(TEXT("the sequence event's clip is on the mount"), Anim))
 	{

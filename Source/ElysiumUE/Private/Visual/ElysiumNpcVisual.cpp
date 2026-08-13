@@ -209,12 +209,6 @@ namespace ElysiumNpcVisual
 				FElysiumContentPaths::BakedCharacterMesh(Stem)));
 	}
 
-	// Whether the mount carries this asset, answered off the registry rather than by loading it.
-	// A bank is baked once, under `_banks`, and reached through the compatible-skeleton declaration
-	// on the body's own rig; a body's dialogue clips stay under their rig family. Which of the two
-	// an owner is, is a property of the owner and not of the caller — a bank stem is never a body
-	// stem — so the folder that actually carries the asset is the answer, and no call site has to
-	// hold a flag that could disagree with what was baked.
 	bool IsOnMount(const FString& ObjectPath)
 	{
 		return FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(ObjectPath));

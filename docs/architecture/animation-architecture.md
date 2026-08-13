@@ -72,12 +72,13 @@ authored rest.
 Characters are baked into native assets on the `/ElysiumBaked` mount by an editor commandlet beside
 the map bake, under the same gitignored, regenerable posture. What the bake produces:
 
-- **One authored `USkeleton` per compatible rig family.** Each skeleton is built from the converted
-  MDL bind locals of its family, not from an identity-rotation surrogate. VtMB's shared animation
-  banks are decoded once but their Unreal sequences are authored once per compatible model family,
-  on that family's exact skeleton. This avoids Unreal's cross-skeleton reference-pose remapper
-  without altering either side's rotations. Models outside the biped convention — animals,
-  skeletal props and the wolf form — naturally form their own families.
+- **Shared banks are assets, not copies per body.** Models with the same named bone tree share one
+  body-family `USkeleton`; animals, skeletal props and `wolf_form` naturally form separate
+  families. Each shared bank is built once on the smallest compatible bank-family skeleton, and
+  body-family skeletons declare that bank skeleton compatible. A body's own clips remain on its
+  body-family skeleton. Bank storage therefore scales with the number of source clips, never with
+  `bank clips × consuming body families`. Cinematic actor banks are likewise emitted once in the
+  shared namespace; no body family, biped or otherwise, receives an empty scene-package copy.
 - **A `USkeletalMesh` per model**, morph targets preserved. A face spans several material primitives
   and glTF morph weights are mesh-level, so a target that spans two materials arrives as one
   same-named piece per primitive; those pieces are **merged**, never first-wins, or a jaw moves and
@@ -229,24 +230,30 @@ rather than absent.
   donor bind fallback before re-expressing the flagged rotation. It never treats an absent channel
   as identity or as an unreadable quaternion.
 
-### 2.4 The skeleton reference pose is authored
+### 2.4 Skeleton compatibility is rotation-neutral
 
-Every baked family `USkeleton` carries the converted MDL local transform for every bone, including
-rotation. The mesh carries its own converted bind skeleton. No build step substitutes identity
-rotations, and no runtime step counter-rotates the result.
+Every `USkeletalMesh` carries its exact converted MDL bind skeleton. The `USkeleton` assets used to
+share banks have a separate job: name and index the compatible tree. Their common reference
+rotations are identity, so Unreal's automatic compatible-skeleton remap has an identity rotation
+delta. This metadata frame never changes a mesh bind, an animation rotation, or an actor transform.
+Rotation keys pass verbatim. A visible quarter-turn is therefore still evidence of a missing
+authored animation or a decode defect; it is not repaired by a family, model-name, or asset-type
+rotation exception.
 
-A bank `UAnimSequence` is built on each model family skeleton that consumes it. The sequence and the
-mesh therefore present the same `USkeleton` pointer to Unreal, so `FSkeletonRemapping` never enters
-the path. Optional donor bones that the family lacks are dropped by name, exactly as VtMB's outer
-mapping skips absent targets. This is deliberately generated duplication: sharing one bank sequence
-across distinct `USkeleton`s would save disk by introducing an engine rotation stage Troika did not
-have.
+VtMB's include-model position rule is represented by Unreal's stock translation retargeting. Each
+bank sequence names a `RetargetSource` containing its donor bind pose, and common bones use
+`OrientAndScale`: Unreal maps the donor translation vector to the playing mesh's reference vector
+while leaving rotation untouched. Optional donor bones absent from the target are dropped by name,
+as VtMB's outer mapping skips absent targets. The sequence, donor pose, skeleton compatibility, and
+translation mode are saved together as a self-describing native Unreal asset; there is no custom
+VtMB retarget node, source-file lookup, or hard-wired runtime rotation.
 
-`OrientAndScale` remains only for VtMB's authored donor-to-target **translation** mapping. Each
-container registers its converted bind as the sequence's retarget source; rotation tracks pass
-verbatim. Owned missing channels have already become donor-bind constants (§2.3), while unowned
-bones remain on the playing mesh's pose. Thus neither fallback depends on which family member seeded
-the `USkeleton` reference pose.
+Owned missing channels have already become donor-bind constants (§2.3), while unowned bones remain
+on the playing mesh's reference pose. The former pass through the same declared translation rule;
+the latter acquire no synthesized track. The bake has a cardinality invariant: a source bank clip
+may produce its declared base/overlay derivatives, but changing the number of compatible body
+families must not multiply the bank's base sequences or packages. Planning fails before an editor
+commandlet starts if the projected inventory violates that invariant.
 
 ## 3. Gameplay actions are resolved before the graph
 

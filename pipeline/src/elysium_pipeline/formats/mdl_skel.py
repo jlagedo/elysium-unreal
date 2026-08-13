@@ -607,8 +607,9 @@ def decode_skinned(d, v, mesh_map=None):
     Like `mdl.decode` but for skinned characters: returns a dict material -> surface
     where surface = {pos:[(x,y,z)], nrm:[(x,y,z)], uv:[(u,v)], joints:[[b0..b3]],
     weights:[[w..]], tris:[(i,j,k)]} in **Source** coords, one deduped vertex list per
-    material. Only the SKINNED (44B) vertex format occurs on characters; skin and the
-    authored shading normal come from the same StudioVertex this reads positions from.
+    material. The 44-byte format carries skin and an authored shading normal. Compact 12- and
+    8-byte rigid models carry neither: their vertices bind to their sole bone and their normals are
+    reconstructed geometrically by the Unreal-native exporter.
 
     `mesh_map`, when given a list, is filled with one record per StudioMesh:
     `{material, model_base, mesh_index, vertex_offset, remap}` where `remap` maps the
@@ -616,6 +617,7 @@ def decode_skinned(d, v, mesh_map=None):
     bake needs — a `StudioVertAnim` addresses a mesh-local vertex, and the surface
     dedupes across meshes, so nothing else can line the two up."""
     from elysium_pipeline.formats import mdl
+    hmin, hmax = _vec3(d, 180), _vec3(d, 192)
     materials = []
     ntex = _i32(d, 292); tex_index = _i32(d, 296)
     for i in range(ntex):
@@ -638,7 +640,7 @@ def decode_skinned(d, v, mesh_map=None):
             vertex_index = _i32(d, model_base + 148)
             vlist = _i32(d, model_base + 156)
             vstride = mdl.VSTRIDE.get(vlist, 44)
-            skin = read_skin(d, model_base, vertex_index, num_verts)
+            skin = read_skin(d, model_base, vertex_index, num_verts, vlist)
             vmodel = vbp + vtx_model_off + m * 8
             vlod = vmodel + _i32(v, vmodel + 4)
             vtx_mesh_off = _i32(v, vlod + 4)
@@ -675,15 +677,17 @@ def decode_skinned(d, v, mesh_map=None):
                                 if gvid not in remap:
                                     remap[gvid] = len(surf["pos"])
                                     sv = model_base + vertex_index + gvid * vstride
-                                    px, py, pz, u, vv = mdl._read_vertex(d, sv, vlist, None, None)
+                                    px, py, pz, u, vv = mdl._read_vertex(
+                                        d, sv, vlist, hmin, hmax)
                                     bs, ws = skin[gvid]
                                     j4 = (bs + [0, 0, 0, 0])[:4]
                                     w4 = (ws + [0.0, 0.0, 0.0, 0.0])[:4]
                                     surf["pos"].append((px, py, pz))
-                                    # The authored shading normal, `VecNormal`@24 -- a plain
-                                    # parent-of-nothing float3 in the same frame as the position,
-                                    # needing no table and no unpacking on this vertex format.
-                                    surf["nrm"].append(_vec3(d, sv + 24))
+                                    # Compact rigid formats carry only a packed normal that the
+                                    # static decoder deliberately does not interpret. Zero selects
+                                    # the skeletal exporter's area-weighted geometric fallback.
+                                    surf["nrm"].append(
+                                        _vec3(d, sv + 24) if vlist == 0 else (0.0, 0.0, 0.0))
                                     surf["uv"].append((u, vv))
                                     surf["joints"].append(j4)
                                     surf["weights"].append(w4)
@@ -700,12 +704,22 @@ def decode_skinned(d, v, mesh_map=None):
     return surfaces
 
 
-def read_skin(d, model_base, vertex_index, num_vertices):
+def read_skin(d, model_base, vertex_index, num_vertices, vlist=0):
     """Per-vertex skin from the SKINNED StudioVertex BoneWeight (44B verts).
 
     BoneWeight @ vert+0: byte Weight[3], short Bone[3]@4, byte NumBones@10 (unused on
     VtMB — derive from nonzero weights). Returns [(bones3, weights3), ...] with
-    weights normalized to sum 1."""
+    weights normalized to sum 1.
+
+    Compact vertex formats carry no weights. They occur on rigid one-bone studio models, so their
+    only faithful skin is weight 1 on bone 0; a compact model with any other bone count is refused
+    rather than guessed."""
+    if vlist != 0:
+        num_bones = _i32(d, 240)
+        if num_bones != 1:
+            raise ValueError(
+                f"compact vertex list {vlist} has {num_bones} bones; rigid binding is ambiguous")
+        return [([0], [1.0]) for _ in range(num_vertices)]
     out = []
     for i in range(num_vertices):
         sv = model_base + vertex_index + i * 44

@@ -12,7 +12,7 @@
  * engine's own authoring path -- FMeshDescription plus FSkeletalMeshAttributes for geometry, skin
  * weights and morph deltas -- which is the same path every shipped importer writes into. Owning
  * this removes the vendored glTFRuntime patch, removes glTF's standing exemption from the repo's
- * "coordinates are read verbatim" rule, and removes the mesh-less animation bank as a special case.
+	 * "coordinates are read verbatim" rule, and writes mesh-less animation banks as native assets.
  *
  * This header currently carries the construction spike that proves the path before the format work
  * commits to it: the one risk in the whole approach is whether a mesh built this way keeps its
@@ -106,23 +106,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static int32 ReleaseBakedPackages(const FString& PackagePath);
 
-	/**
-	 * Declare that this skeleton may play animations authored on the named ones.
-	 *
-	 * **Editor-side bookkeeping, not the mechanism.** What actually lets a bank clip evaluate on a
-	 * foreign body is `DecompressPose`, which asks `FSkeletonRemappingRegistry` for a name-keyed
-	 * bone map for the (sequence skeleton, mesh skeleton) pair unconditionally -- there is no
-	 * compatibility gate anywhere on that path, and every reader of `CompatibleSkeletons` is inside
-	 * `WITH_EDITORONLY_DATA`. The declaration is what makes the editor offer these assets together:
-	 * the animation asset browser, `UBlendSpace::ValidateSampleInput`, anim-blueprint compatibility
-	 * and preview-mesh fixup all consult it, and a bake that skipped it would still produce a
-	 * working game but an editor that refuses to show one.
-	 *
-	 * The direction is not symmetric. The TARGET names the skeletons it may play, so the body's
-	 * family skeleton is the target and each bank skeleton is an argument.
-	 *
-	 * Returns an empty string on success, otherwise the first thing that went wrong.
-	 */
+	/** Declare that this skeleton may play animations authored on the named bank skeletons. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
 		const TArray<FString>& SourceSkeletonPackageNames);
@@ -134,7 +118,7 @@ public:
 	 * of them and re-reading the container per clip is the whole cost of the bake.
 	 *
 	 * Tracks bind to the skeleton by bone NAME, which is what lets a bank recorded on one rig play
-	 * on every body in the family. How hard an unresolved name is depends on which kind of
+	 * on every compatible body. How hard an unresolved name is depends on which kind of
 	 * container this is, and the container says which: a body carries its own geometry, a bank
 	 * carries none.
 	 *
@@ -147,7 +131,7 @@ public:
 	 *   `OutDroppedTracks` counts them so a bake that quietly loses more than it should is visible.
 	 *
 	 * A clip that owns only part of the rig -- VtMB's partial-body `*_layer` overlays -- also gets a
-	 * `UBlendProfile` blend mask on the shared skeleton and a `UElysiumAnimLayerMask` naming it, and
+	 * `UBlendProfile` blend mask on the sequence skeleton and a `UElysiumAnimLayerMask` naming it, and
 	 * its owned-but-unanimated bones are written out at the container's bind pose rather than left
 	 * to the skeleton's reference pose.
 	 *

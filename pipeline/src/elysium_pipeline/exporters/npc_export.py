@@ -94,21 +94,14 @@ def _meaningful_sequence(value):
 
 
 def has_animation(d):
-    """True when the model declares a sequence carrying more than one frame.
+    """True when the model declares any sequence pose.
 
-    A `prop_dynamic` may author `LoopSequence` on a model whose only sequence is a single
-    static frame. Six models in the shipped seed do exactly that -- `stage_light`,
-    `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec` each declare one
-    1-frame `idle`. They are static dressing wearing an animation keyvalue: there is no
-    motion to bake, and standing a skeletal body for one replaces the baked static mesh
-    with a bind pose.
-
-    The test is *any* sequence with more than one frame, not every one: `clamp`'s `idle`
-    is a single frame beside its real 45-frame `open`/`close`, and `wolf_form` carries
-    twelve 1-frame hit poses among its real clips.
+    Frame count decides whether a sequence moves over time, not whether its frame zero is an
+    authored pose. Retail still evaluates a single-frame sequence through `CBaseAnimating`, so
+    excluding it would display the storage bind instead of the selected held pose.
     """
     try:
-        return any(s.frames > 1 for s in S.local_sequences(d))
+        return bool(S.local_sequences(d))
     except Exception:
         return False
 
@@ -588,15 +581,14 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         pc_models = set(pc_models_from_clandoc())
         cinematics = cinematic_models_from_ents()
         animated_props = animated_prop_models_from_ents()
-        # An authored LoopSequence is not proof of motion. Drop the models whose sequences
-        # are all single frames before anything tries to bake them: they keep their decoded
-        # static mesh, which is what they already look like in the original game.
+        # A model with no sequence has no authored pose for the animation layer to select. A
+        # single-frame sequence does and stays skeletal: frame count is not a bind-pose licence.
         still = [m for m in animated_props
                  if (r := load_mdl(m)) is not None and not has_animation(r)]
         if still:
             animated_props = [m for m in animated_props if m not in set(still)]
-            print(f"[npc] {len(still)} animated-prop candidate(s) declare no multi-frame "
-                  f"sequence and stay static: {', '.join(_basename_stem(m) for m in still)}")
+            print(f"[npc] {len(still)} animated-prop candidate(s) declare no sequence pose and "
+                  f"stay static: {', '.join(_basename_stem(m) for m in still)}")
         print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
               f"{len(pc_models)} player body model(s) from {CLANDOC} + "
               f"{len(cinematics)} cinematic anim-set(s) + "

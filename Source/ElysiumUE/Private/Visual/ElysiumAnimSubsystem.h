@@ -249,18 +249,11 @@ private:
 	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipSets;
 	// Same shape, same reason: a null entry is the remembered "this model has no flex rig".
 	TMap<FString, TSharedPtr<const FElysiumFacialRig>> FacialRigs;
-	// These two are keyed `<stem>|baked` / `<stem>|loader`, not by stem: their contents depend on
-	// which frame the body landed in, so a single entry per stem would pin whichever path was built
-	// first and hand the other one a rig aimed 90 degrees off.
+	// Eye and composition sidecars are authored in the same Unreal-native frame as the baked body,
+	// so the owning stem is the complete cache identity.
 	TMap<FString, TSharedPtr<const FElysiumEyeSet>> EyeSets;
-	// And again for the composition stages. Keyed by stem+frame for characters and by the
-	// normalized model path for animated props, which is how each is addressed upstream.
+	// Character rigs are keyed by stem; animated-prop rigs use the normalized model's indexed stem.
 	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;
-	// The key those two share.
-	static FString FrameKey(const FString& Stem, bool bBaked)
-	{
-		return Stem + (bBaked ? TEXT("|baked") : TEXT("|loader"));
-	}
 	// And again for the garment spike. A null entry here is the common case, not the exception.
 	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that
 	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.

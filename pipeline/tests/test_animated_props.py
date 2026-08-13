@@ -1,4 +1,4 @@
-"""Animated-prop export contract: the RLE clamp, the motion filter, the index projection.
+"""Animated-prop export contract: the RLE clamp, pose selection, and index projection.
 
 Every buffer here is synthesised in-code, so nothing depends on the user's game install.
 """
@@ -10,6 +10,7 @@ import unittest
 from unittest import mock
 
 from elysium_pipeline.exporters import npc_export
+from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel
 
 
@@ -61,11 +62,11 @@ class _Seq:
 
 
 class HasAnimationTests(unittest.TestCase):
-    def test_a_single_frame_sequence_is_not_animation(self) -> None:
+    def test_a_single_frame_sequence_is_an_authored_pose(self) -> None:
         # `stage_light`, `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec` each
         # declare exactly one 1-frame `idle` while authoring LoopSequence.
         with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1)]):
-            self.assertFalse(npc_export.has_animation(b""))
+            self.assertTrue(npc_export.has_animation(b""))
 
     def test_any_multi_frame_sequence_qualifies(self) -> None:
         # `clamp`'s `idle` is one frame beside its real 45-frame open/close, so the test is "any",
@@ -82,11 +83,102 @@ class HasAnimationTests(unittest.TestCase):
             self.assertFalse(npc_export.has_animation(b""))
 
 
+class CompactRigidSkinTests(unittest.TestCase):
+    def test_a_compact_one_bone_model_binds_every_vertex_to_its_bone(self) -> None:
+        data = bytearray(244)
+        struct.pack_into("<i", data, 240, 1)
+        self.assertEqual(mdl_skel.read_skin(bytes(data), 0, 0, 3, vlist=2),
+                         [([0], [1.0]), ([0], [1.0]), ([0], [1.0])])
+
+    def test_a_compact_multi_bone_model_is_refused_as_ambiguous(self) -> None:
+        data = bytearray(244)
+        struct.pack_into("<i", data, 240, 2)
+        with self.assertRaisesRegex(ValueError, "rigid binding is ambiguous"):
+            mdl_skel.read_skin(bytes(data), 0, 0, 1, vlist=1)
+
+
+class CompleteOwnedPoseTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.bones = [mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,
+                                    pos=(1.0, 2.0, 3.0),
+                                    quat=(0.0, 0.0, 0.0, 1.0))]
+        self.clip = mdl_skel.Seq(label="idle", base=0, frames=1, fps=30.0,
+                                 activity="", actweight=0, flags=0)
+        self.pose = [[((1.0, 2.0, 3.0), (0.0, 0.0, 0.0, 1.0))]]
+
+    def test_an_owned_bind_only_frame_writes_both_local_tracks(self) -> None:
+        with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
+              mock.patch.object(UEK, "_owned_bones", return_value={0}),
+              mock.patch.object(UEK, "_bone_mask", return_value=None),
+              mock.patch.object(mdl_skel, "read_anim", return_value=self.pose)):
+            payload = UEK._clip_payload(
+                b"", self.bones, self.clip, [0], 1, {})
+        self.assertIsNotNone(payload)
+        offset = 0
+        for _ in range(2):
+            length = struct.unpack_from("<I", payload, offset)[0]
+            offset += 4 + length
+        _frames, _fps, _flags, _mask, tracks = struct.unpack_from("<IfIiI", payload, offset)
+        offset += struct.calcsize("<IfIiI")
+        bone, has_translation, has_rotation = struct.unpack_from("<I2B", payload, offset)
+        self.assertEqual((tracks, bone, has_translation, has_rotation), (1, 0, 1, 1))
+
+    def test_a_zero_weight_bone_does_not_become_a_track(self) -> None:
+        with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
+              mock.patch.object(UEK, "_owned_bones", return_value=set()),
+              mock.patch.object(mdl_skel, "read_anim", return_value=self.pose)):
+            self.assertIsNone(UEK._clip_payload(
+                b"", self.bones, self.clip, [0], 1, {}))
+
+    def test_an_additive_forces_its_owned_bind_only_bones_onto_the_host(self) -> None:
+        host = self.clip._replace(label="host")
+        layer = self.clip._replace(label="delta", flags=UEK.DELTA_SEQUENCE)
+        with (mock.patch.object(UEK, "_derived_bindings",
+                               return_value=[(layer, host, None)]),
+              mock.patch.object(UEK, "_owned_channels",
+                               side_effect=[[(True, True)], [(False, False)]]),
+              mock.patch.object(UEK, "_composed_frames", return_value=self.pose),
+              mock.patch.object(UEK, "_clip_payload", return_value=b"clip") as payload):
+            UEK._anim_section(b"", self.bones, [host, layer], [0], 1, {})
+
+        host_call = next(call for call in payload.call_args_list
+                         if call.args[2].label == "host")
+        self.assertEqual(host_call.kwargs["forced_channels"], [(True, True)])
+
+    def test_a_forced_host_track_uses_donor_bind_not_zero_weight_sentinels(self) -> None:
+        masked_frame = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))]]
+        with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
+              mock.patch.object(UEK, "_owned_bones", return_value=set()),
+              mock.patch.object(UEK, "_bone_mask", return_value=None),
+              mock.patch.object(mdl_skel, "read_anim", return_value=masked_frame)):
+            payload = UEK._clip_payload(
+                b"", self.bones, self.clip, [0], 1, {},
+                forced_channels=[(True, True)])
+
+        self.assertIsNotNone(payload)
+        offset = 0
+        for _ in range(2):
+            length = struct.unpack_from("<I", payload, offset)[0]
+            offset += 4 + length
+        offset += struct.calcsize("<IfIiI")
+        bone, has_translation, has_rotation = struct.unpack_from("<I2B", payload, offset)
+        offset += struct.calcsize("<I2B")
+        position = struct.unpack_from("<3f", payload, offset)
+        offset += struct.calcsize("<3f")
+        rotation = struct.unpack_from("<4f", payload, offset)
+        self.assertEqual((bone, has_translation, has_rotation), (0, 1, 1))
+        for actual, expected in zip(position, UEK._conv_pos(self.bones[0].pos)):
+            self.assertAlmostEqual(actual, expected, places=5)
+        for actual, expected in zip(rotation, UEK._conv_quat(self.bones[0].quat)):
+            self.assertAlmostEqual(actual, expected, places=6)
+
+
 class AnimatedPropIndexRowTests(unittest.TestCase):
     # `drknobantique`'s real shape: declaration order puts `idle` first, alphabetical order would
     # put `handle_locked` first, and retail's rest pose is sequence index 0.
     RECORD = {
         "glb": "animated_props/drknobantique.glb",
+        "eskm": "animated_props/drknobantique.eskm",
         "model": "models/scenery/doorknoba/drknobantique.mdl",
         "bones": 2,
         "clips": {
@@ -117,7 +209,7 @@ class AnimatedPropIndexRowTests(unittest.TestCase):
         self.assertEqual(row["split_bones"], [])
 
     def test_a_clipless_record_projects_an_empty_list(self) -> None:
-        row = npc_export.animated_prop_index_row({"glb": "g", "model": "m"})
+        row = npc_export.animated_prop_index_row({"glb": "g", "eskm": "e", "model": "m"})
         self.assertEqual(row["clips"], [])
 
     def test_a_bounds_radius_reaches_the_runtime_row(self) -> None:

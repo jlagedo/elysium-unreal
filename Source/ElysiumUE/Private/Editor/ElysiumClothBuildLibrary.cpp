@@ -322,11 +322,9 @@ namespace
 	/**
 	 * Where a bone's bind pose puts it, in the mesh's own space.
 	 *
-	 * The authored colliders are stated in bind space, so placing one means asking THIS skeleton
-	 * where that bone was, rather than trusting a local frame computed against VtMB's. The two
-	 * disagree — a baked reference pose is authored rotation-flat, so VtMB's bone axes are not
-	 * this skeleton's — and the disagreement is a rotation, which puts a hip capsule across a
-	 * chest rather than slightly off.
+	 * The authored colliders are stated in bind space, so placing one means asking THIS mesh's
+	 * authored reference skeleton where that bone is. This also resolves bone-index renumbering
+	 * without introducing a second rotation convention.
 	 */
 	FTransform BoneBindTransform(const FReferenceSkeleton& Ref, int32 BoneIndex)
 	{
@@ -426,9 +424,8 @@ namespace
 				{
 					continue;
 				}
-				// Bind space -> this skeleton's bone frame. Asking the target skeleton where the
-				// bone was is the only step that survives the two rigs disagreeing about bind
-				// rotations, which they do.
+				// Bind space -> this mesh's authored bone frame. This is a frame expression, not a
+				// facing correction; the reference transform comes straight from the ESKM bind.
 				const FTransform Bind = BoneBindTransform(
 					Mesh->GetRefSkeleton(), Mesh->GetRefSkeleton().FindBoneIndex(FName(*BoneName)));
 				const FVector Start = Bind.InverseTransformPosition(

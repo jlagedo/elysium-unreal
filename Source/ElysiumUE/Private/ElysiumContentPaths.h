@@ -205,16 +205,13 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("SK_") + Stem;
 		return BakedCharacterDir() / TEXT("Meshes") / Asset + TEXT(".") + Asset;
 	}
-	// Where a bank's clips live, in place of a rig family. A UAnimSequence is bound to exactly one
-	// USkeleton, so a bank included by many families used to be rebuilt once per family — 7,871
-	// distinct clips across the cast becoming ~90,000 assets. A bank is baked once against a skeleton
-	// of its own instead, and every body's skeleton declares that one compatible.
+	// Where a bank's clips live, in place of a rig family. Banks are packaged once and reused by
+	// compatible body skeletons.
 	static FString BakedBankFolder()
 	{
 		return TEXT("_banks");
 	}
-	// One clip. `Family` is the rig family for a body's own dialogue clips, or `BakedBankFolder()`
-	// for a bank's — a stem can never collide with the latter, because a bank is not a body.
+	// One clip. `Family` is a body's rig family or `BakedBankFolder()` for a shared bank.
 	static FString BakedCharacterAnim(const FString& Family, const FString& Owner, const FString& Clip)
 	{
 		const FString Asset = TEXT("A_") + BakedAssetName(Clip);

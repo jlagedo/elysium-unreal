@@ -14,7 +14,7 @@ MAGIC = b"ESKM"
 #: Must match `UE_mdl_skeletal.VERSION` and `EskmVersion` in `ElysiumSkeletalSource.cpp`. This
 #: reader touches only the sections above the clips, so a bump it does not otherwise care about
 #: still lands here -- reading a stale container is what the check exists to prevent.
-VERSION = 5
+VERSION = 7
 
 
 def _string(blob, offset):
@@ -58,6 +58,37 @@ def bones(blob):
         offset += 4 + 12 + 16                       # parent, then the transform this skips
         out.append((name, parent))
     return out
+
+
+def bone_locals(blob):
+    """[(name, parent index, translation, rotation)] in file order.
+
+    Values are the float32 Unreal-native locals stated by the container. Keeping the decoded
+    floats, rather than rounding them into a presentation form, lets the character partition ask
+    whether two targets are genuinely the same baked pose.
+    """
+    where = directory(blob).get(b"SKEL")
+    if where is None:
+        return []
+    offset = where[0]
+    count = struct.unpack_from("<I", blob, offset)[0]
+    offset += 4
+    out = []
+    for _ in range(count):
+        name, offset = _string(blob, offset)
+        parent = struct.unpack_from("<i", blob, offset)[0]
+        offset += 4
+        translation = struct.unpack_from("<3f", blob, offset)
+        offset += 12
+        rotation = struct.unpack_from("<4f", blob, offset)
+        offset += 16
+        out.append((name, parent, translation, rotation))
+    return out
+
+
+def bone_translations(blob):
+    """{bone name: float32 local translation}, for exact family-pose compatibility."""
+    return {name: translation for name, _parent, translation, _rotation in bone_locals(blob)}
 
 
 def bone_parents(blob):

@@ -532,9 +532,8 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 	// is armed relative to the montage's own length, so on a looping montage it fires at every pass
 	// of the loop point and dips the slot's weight before the next pass restores it. The slot's
 	// source pose is the state machine underneath, which for a body that has been handed no
-	// selection is the REFERENCE pose — so the dip shows as a single frame of the container's bind
-	// pose, and a VtMB bind pose is a T-pose yawed 90 degrees off the model's own forward. A clip
-	// that never ends has nothing to blend out to; only the one-shot does.
+	// selection is the REFERENCE pose — so the dip shows as a single frame of the authored bind
+	// pose. A clip that never ends has nothing to blend out to; only the one-shot does.
 	const float BlendOut = bLoop ? 0.0f : BlendSeconds;
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
 		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? 0 : 1);
@@ -597,4 +596,3 @@ void UElysiumBipedAnimInstance::ResyncClip(float PositionSeconds)
 {
 	GetProxyOnGameThread<FElysiumBipedAnimProxy>().ResyncPosition(PositionSeconds);
 }
-

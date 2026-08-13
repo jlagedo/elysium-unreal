@@ -55,10 +55,8 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 		return true;
 	}
 
-	// Both sides off the baked mount. A cinematic bank read out of its `.glb` instead would arrive
-	// in glTFRuntime's basis while this body is in the container's, which is a quarter turn on the
-	// `Bip01` root -- the pose would still be finite and human-scaled, so this test would pass on
-	// it and prove nothing (`Elysium.Content.BakedClipCoverage`).
+	// Both sides off the baked mount. The cinematic bank is the copy authored on this mesh's exact
+	// family skeleton; there is no inspection-format or cross-skeleton runtime path.
 	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(TEXT("ventrue_female_armor_1"));
 	UAnimSequence* Anim = Mesh != nullptr
 		? ElysiumNpcVisual::LoadBakedClip(Mesh,

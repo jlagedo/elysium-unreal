@@ -12,16 +12,23 @@ explaining, never as a gate. The CCC slice consumes what this programme bakes.
 
 ### ANM1 Bake the character assets
 
-One authored `USkeleton` per compatible rig family (animals, skeletal props and `wolf_form`
-naturally on their own), a `USkeletalMesh` per model with morph targets intact, a compressed
-`UAnimSequence` per clip; shared-bank sequences generated once per consuming family on that
-exact skeleton so no cross-skeleton reference-pose remapping ever runs; the `_delta` family
-names and subtracts its own baked base. The editor commandlet consumes the Unreal-native ESKM
-container on the same `/ElysiumBaked` mount; glTF stays an inspection product. *Retires:* the
+One body `USkeleton` per compatible named bone tree (animals, skeletal props and `wolf_form`
+naturally on their own), a `USkeletalMesh` per model with its exact authored bind and morph targets
+intact, and a compressed `UAnimSequence` per distinct clip. Shared-bank sequences are generated
+once on compatible bank skeletons and reused by body skeletons through Unreal's compatible-skeleton
+and `RetargetSource`/`OrientAndScale` asset metadata. Common `USkeleton` reference rotations are
+neutral so compatible-skeleton remapping cannot rotate a decoded pose; animation rotations pass
+verbatim and translation retargeting implements the recovered donor-to-target position mapping.
+The `_delta` family names and subtracts its own baked base. The editor commandlet consumes the
+Unreal-native ESKM container on the same `/ElysiumBaked` mount; glTF stays an inspection product.
+Cinematic actor banks are emitted once in the shared namespace; no body family receives an empty
+scene-package copy. *Retires:* the
 per-map-epoch retarget cache, `RemoveTracks` bank filtering, and map-actor sequence caching.
 *Acceptance:* every character loads from the baked mount with no glTFRuntime call at runtime —
 the only build of a character, so a missed stem fails by name — and the facial morph-target
-contract holds.
+contract holds. A preflight inventory proves that every source bank clip is packaged once (plus
+named base/overlay derivatives): adding a compatible body family cannot increase the bank package
+count, and any projected `bank clips × body families` cross-product fails before Unreal starts.
 
 ### ANM2 Carry the two discarded MDL fields — remaining
 

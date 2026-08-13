@@ -63,12 +63,9 @@ def build_sidecar(data: bytes, vtx: bytes) -> list[dict]:
 
         # Colliders are carried in BIND space, not in their bone's local frame.
         #
-        # The decode can express an endpoint in VtMB's own bone frame, and that frame does not
-        # exist on the far side: the baked skeleton's reference pose is authored rotation-flat,
-        # so a point stated against VtMB's rotated bone axes lands somewhere else entirely --
-        # a hip capsule ends up pointing across the chest. Bind space is the one frame both
-        # skeletons agree on, so the bone-relative step is left to the generator, which can ask
-        # the actual skeleton where its bones are.
+        # Bind space is invariant across bone-index renumbering and keeps this payload independent
+        # of which compatible rig-family skeleton consumes it. The generator converts it to the
+        # actual mesh bone's local frame from that mesh's authored reference skeleton.
         for cap in g["capsules"]:
             cap["a_bind"] = _point(cap["a_bind"])
             cap["b_bind"] = _point(cap["b_bind"])
@@ -114,9 +111,8 @@ def write(stem: str, model_key: str, idx: dict, out_dir: str) -> dict:
                         "proxy, which is not a manifold. `render_maps[].vertices` is indexed by "
                         "the glb's own vertex order for that material; a null entry keeps "
                         "ordinary skinning. `anchor_skin` and the collider bones are named, not "
-                        "indexed, because the host skeleton renumbers. Collider points are in BIND space, "
-                        "not bone-local, because the baked skeleton's bind rotations are "
-                        "not VtMB's. See "
+                        "indexed, because the host skeleton renumbers. Collider points are in BIND space "
+                        "so the generator resolves them through the consuming mesh's authored bind. See "
                         "docs/vtmb/secondary_motion.md.",
                 "garments": garments,
             },

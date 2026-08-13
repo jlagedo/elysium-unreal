@@ -1,22 +1,14 @@
 // Every clip the runtime can resolve for a baked body is on the mount.
 //
-// WHY THIS IS A CONTRACT AND NOT A COVERAGE STATISTIC. Clip resolution has a fallback: when
-// `LoadBakedClip` misses, `UElysiumAnimSubsystem` parses the owner's `.glb` bank and binds the
-// clip through `ElysiumNpcVisual::RetargetClip` instead. Those two paths do not land in the same
-// frame. A baked body is built from the `.eskm` container in the repo's canonical Source-to-Unreal
-// frame `(x, -y, z)`; a bank parsed through glTFRuntime's default scene basis lands in `(y, x, z)`,
-// which is that frame yawed by 90 degrees. `Bip01` is the root, so its track carries the file's
-// global orientation with no parent to divide the difference out -- and a body posed by such a
-// clip stands a quarter-turn off while every other thing about it reads correct.
+// WHY THIS IS A CONTRACT AND NOT A COVERAGE STATISTIC. Runtime has no second character build and
+// no glTF animation fallback. A bank clip is authored once in the shared bank namespace and reused
+// by compatible body skeletons. Missing one is a missing semantic bake stage, not permission to
+// apply a corrective rotation at runtime.
 //
-// Nothing reports it. The fallback logs on failure only, the pose is finite and human-scaled so the
-// structural tests pass, and `ElysiumChoreoScene` reads the live `Bip01` back into the entity's
-// Source angles at scene end -- so a cast member posed by one keeps the quarter-turn after the
-// scene, and saves it.
-//
-// So the property asserted here is not "the facing looks right", which the repo has no oracle for.
-// It is that the fallback is UNREACHABLE: if every clip a body's vocabulary can name is on the
-// mount, no body can ever be posed by a glb-frame clip, whatever the pose parameters do.
+// The property asserted here is not "the facing looks right", which the repo has no visual oracle
+// for. It is that every clip name runtime can resolve has exactly one package in the namespace its
+// owner selects. Any visible quarter-turn must remain visible until its missing semantic stage is
+// identified.
 //
 // EVERY CELL OF A GRID, not the neutral pick. A grid's cell is chosen from pose parameters driven
 // at runtime, so checking only what `move_yaw = 0` selects would leave eight of a nine-cell fan
@@ -24,13 +16,8 @@
 // space standing on the mount does not excuse its cells: `ResolveClip` and `ResolveClipFromBank`
 // never consult the space, they resolve a cell and ask for that clip by name.
 //
-// NOTHING IS LOADED. This asks only whether a package is there, and it resolves a body's rig family
-// off the mount's own folder layout rather than off the body's skeleton -- because reading the
-// skeleton means loading the mesh, and a baked asset carries RF_Standalone, which is
-// GARBAGE_COLLECTION_KEEPFLAGS in the editor. Loading one body per stem would therefore hold the
-// whole cast resident for the run (`ElysiumSkeletalBuild.cpp`, ReleaseBakedPackages). The cost is
-// that this says the package exists, not that the playing body's skeleton can bind it;
-// `Elysium.Content.BakedSkeletonRetargeting` and `Elysium.Content.BakedBankChainAgreement` own that.
+// NOTHING IS LOADED. A bank owner resolves to `_banks`; a body's own owner resolves to its one
+// family folder. The fresh-process character verifier owns deeper load and compatibility checks.
 //
 // TWO REACHES, BECAUSE THERE ARE TWO RESOLVERS. `ResolveClip`/`ResolveAssets` are driven by a
 // body's own resolved vocabulary, which is enumerable per stem. `ResolveClipFromBank` is handed a
@@ -41,8 +28,7 @@
 //
 // Autolayer targets and additives are covered by `Elysium.Content.UpperBodyLayerArming` and are
 // deliberately not repeated here -- they are composed rather than selected, the bake writes them
-// under the derived `Label@Host` name, and `ResolveLayerAssets` has no glb fallback at all, so a
-// missing layer is a missing overlay rather than a rotated body.
+// under the derived `Label@Host` name, so a missing layer is a missing overlay.
 //
 // A body the export has not covered is COUNTED, not failed: it stands no mesh at all
 // (`ElysiumNpcVisual::LoadMesh` fails by name), which is a visible missing body rather than a
@@ -59,6 +45,8 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "HAL/FileManager.h"
+#include "Animation/Skeleton.h"
+#include "Engine/SkeletalMesh.h"
 #include "Misc/CommandLine.h"
 #include "Misc/PackageName.h"
 #include "Misc/Parse.h"
@@ -78,7 +66,7 @@ namespace
 		return FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(ObjectPath));
 	}
 
-	// The rig-family folders the character bake wrote, plus the shared bank folder. A family is
+	// The rig-family folders the character bake wrote. A family is
 	// named for its lowest-sorted member and is recomputed per bake run, so the set is discovered
 	// rather than declared.
 	TArray<FString> AnimFamilyFolders()
@@ -97,10 +85,6 @@ namespace
 		return Families;
 	}
 
-	// Which family folder carries this owner's clips. A bank is baked once under the shared bank
-	// folder and a body's own dialogue clips under its own family, so the folder that actually
-	// holds the owner is the answer -- the same rule `ElysiumNpcVisual::LoadBakedClip` follows, and
-	// one a call site cannot get wrong by holding a stale flag.
 	FString FamilyFolderForOwner(const TArray<FString>& Families, const FString& Owner)
 	{
 		for (const FString& Family : Families)
@@ -163,12 +147,6 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 
 	const TArray<FString> Stems = CoverageStems(Index);
 	const TArray<FString> Families = AnimFamilyFolders();
-
-	// One resolution per OWNER, not per body: a shared bank is played by most of the cast, and both
-	// its folder lookup and its grid sidecar would otherwise be repeated hundreds of times. An owner
-	// that declares no grid caches as an empty table rather than being retried.
-	// By value: a later insertion can rehash the map, so a reference into it would not survive the
-	// next owner this loop meets.
 	TMap<FString, FString> OwnerFolders;
 	auto FolderFor = [&Families, &OwnerFolders](const FString& Owner) -> FString
 	{
@@ -183,7 +161,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 	// composed onto a host rather than selected, so the bake writes it once per declaring host under
 	// the derived `Label@Host` name and the bare label is on the mount for nothing
 	// (`FElysiumContentPaths::BakedCharacterBlendSpace`). Those labels reach the mount through
-	// `ResolveLayerAssets`, which has no glb fallback at all, so they are outside this contract and
+	// `ResolveLayerAssets`, so they are outside this contract and
 	// belong to `Elysium.Content.UpperBodyLayerArming`.
 	struct FOwnerTables
 	{
@@ -235,7 +213,6 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 			continue;
 		}
 		++BodiesOnMount;
-
 		FElysiumNpcClipSet Clips;
 		FString ClipError;
 		if (!Clips.Load(Stem, ClipError))
@@ -243,7 +220,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 			++BodiesWithoutVocabulary;
 			AddError(FString::Printf(
 				TEXT("%s: stands on the mount and has no clip vocabulary (%s), so every label it is "
-				     "asked for falls through to the bank"), *Stem, *ClipError));
+				     "asked for is unresolved"), *Stem, *ClipError));
 			continue;
 		}
 
@@ -284,8 +261,8 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 			if (Folder.IsEmpty())
 			{
 				Report(FString::Printf(
-					TEXT("%s: '%s' is owned by '%s', which has no folder on the mount at all, so every "
-					     "clip it owns resolves through the glb bank"), *Stem, *Label, *Owner));
+					TEXT("%s: '%s' is owned by '%s', which has no folder on the mount"),
+					*Stem, *Label, *Owner));
 				continue;
 			}
 
@@ -296,8 +273,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 				if (!PackageExists(FElysiumContentPaths::BakedCharacterAnim(Folder, Owner, Label)))
 				{
 					Report(FString::Printf(
-						TEXT("%s: '%s' is owned by '%s' and is not on the mount, so it resolves through "
-						     "the glb bank and stands the body 90 degrees off"),
+						TEXT("%s: '%s' is owned by '%s' and is not on the mount"),
 						*Stem, *Label, *Owner));
 				}
 				continue;
@@ -326,8 +302,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 					FElysiumContentPaths::BakedCharacterAnim(Folder, Owner, Cell.Clip)))
 				{
 					Report(FString::Printf(
-						TEXT("%s: grid '%s' on '%s' has cell [%d][%d] = '%s', which is not on the mount "
-						     "-- driving its pose parameters there resolves through the glb bank"),
+						TEXT("%s: grid '%s' on '%s' has cell [%d][%d] = '%s', which is not on the mount"),
 						*Stem, *Label, *Owner, Cell.Axis[0], Cell.Axis[1], *Cell.Clip));
 				}
 			}
@@ -343,10 +318,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 	// The scene half. `ResolveClipFromBank` is handed a bank stem and a clip name straight from a
 	// choreographed scene, with no vocabulary in between, so the loop above cannot reach it -- but
 	// the set of banks a scene can name IS enumerable: it is the cinematic sets' roots, one bank per
-	// `bonerename` actor. The stakes are higher here than for an ordinary clip, because
-	// `FElysiumChoreoScene` reads the posed `Bip01` back into the actor's Source angles when the
-	// scene ends and that value is saved -- so a cast member posed through the glb frame keeps the
-	// quarter-turn after the scene and carries it into the save.
+	// `bonerename` actor. Each of these banks is packaged once in the shared bank namespace.
 	TSet<FString> CinematicBanks;
 	for (const TPair<FString, FElysiumCinematicSet>& Set : Index.Cinematics)
 	{
@@ -371,9 +343,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 		if (CinematicUnbaked <= GMaxErrorsPerBody)
 		{
 			AddError(FString::Printf(
-				TEXT("cinematic bank '%s' is named by a scene and is not on the mount, so every actor "
-				     "it poses resolves through the glb bank and stands 90 degrees off -- and the "
-				     "scene writes that facing back into the entity's angles when it ends"),
+				TEXT("cinematic bank '%s' is named by a scene and is not on the mount"),
 				*BankStem));
 		}
 	}
@@ -416,7 +386,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 	}
 	else if (MissingAssets == 0 && CinematicUnbaked == 0)
 	{
-		AddInfo(TEXT("the glb clip fallback is unreachable for every body and scene checked"));
+		AddInfo(TEXT("every body and scene checked resolves native clips from shared bank assets"));
 	}
 	return true;
 }

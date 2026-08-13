@@ -77,7 +77,13 @@ from elysium_pipeline.formats import bsp, mdl, mdl_skel as S
 #: vertex, and it holds the artist's smoothing including the split normals at a hard edge, which no
 #: averaging over adjacent faces can reproduce. A version 4 container states a vertex record of a
 #: different width, so a stale file has to be refused rather than read.
-VERSION = 5
+#: 6 -- an owned bone carries a complete donor-local translation and rotation even when one or all
+#: seven RLE offsets are zero. Zero weight remains no track. This makes the baked clip's pose
+#: self-describing instead of letting Unreal substitute a consuming family's reference local.
+#: 7 -- the host of a derived additive carries a complete bind track for every bone the additive
+#: owns, including owned bones with seven zero RLE offsets. Both sides of Unreal's additive
+#: subtraction now state the same donor local instead of one side falling through to family bind.
+VERSION = 7
 
 #: Separates an additive's own label from the label of the host it was composed onto, in the name
 #: of a derived clip. A VtMB sequence label never contains it, so the split is unambiguous.
@@ -615,17 +621,21 @@ def _authored_channels(d, bones, clip):
     return out
 
 
+def _owned_channels(d, bones, clip):
+    """Both complete local channels for every bone the clip's weight mask owns."""
+    owned = _owned_bones(d, bones, clip)
+    return [(bone.index in owned, bone.index in owned) for bone in bones]
+
+
 def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_label="",
                   label=None, owned=None, base_channels=None, forced_channels=None):
-    """One clip's tracks, or None if it animates no channel at all.
+    """One complete owned pose, or None if the clip's mask owns no emitted bone.
 
-    A bone gets a track only for the channels its animation record actually carries: the
-    seven offsets at `+4` are the per-channel RLE pointers, the first three positional and
-    the last four rotational, and a zero there means the bone holds its bind value. Writing
-    a constant track for those would triple most clips for nothing.
-
-    The one exception is a split bone, whose rewritten rotation is emitted whether or not the
-    clip authored that channel -- see `_split_rotation_tracks`.
+    The seven offsets at `+4` only say which components have samples. On an owned bone retail
+    fills every absent component from the DONOR bind, while a zero-weight bone contributes no
+    pose at all. ESKM therefore writes complete translation and rotation tracks for the former and
+    no track for the latter. Leaving an owned channel implicit would make Unreal substitute the
+    consuming family's reference pose and silently change the donor pose.
 
     `frames` overrides the decode, which is how a derived additive ships the pose it was
     composed into rather than the bytes at `clip.base`; `label` and `base_label` name the
@@ -634,16 +644,20 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     if frames is None:
         frames = S.read_anim(d, bones, clip.base, clip.frames)
 
-    # Read the authored channels first, so "this clip animates nothing" stays a property of
-    # what VtMB wrote rather than of the correction below, and such a clip is still absent
-    # rather than present-and-silent.
+    # Channel presence is still needed by the derived additive bookkeeping below, but it does not
+    # decide whether the clip exists. Ownership does: a one-frame clip with no RLE offsets is a real
+    # held donor-bind pose when its weight record owns bones.
     channels = _authored_channels(d, bones, clip)
-    if not any(translation or rotation for translation, rotation in channels):
+    clip_owned = _owned_bones(d, bones, clip)
+    has_owned = any(bone.index in clip_owned and bone_map[bone.index] >= 0 for bone in bones)
+    has_forced = bool(forced_channels) and any(
+        bone_map[bone.index] >= 0 and any(forced_channels[bone.index]) for bone in bones)
+    if not has_owned and not has_forced:
         return None
 
     # A raw delta is not a pose, so there is no parent chain to divide out of it; the derived
     # clip that ships in its place IS a pose (its host's, with the delta on it) and normalizes
-    # like any other. `frames is None` is exactly the "not derived" test.
+    # like any other. `base_label` distinguishes that derived form from the raw record.
     split_rotations = ({} if (clip.flags & DELTA_SEQUENCE and not base_label)
                        else _split_rotation_tracks(bones, frames, clip.frames))
 
@@ -662,12 +676,9 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
             # A derived ADDITIVE ships the bones ITS OWN delta authored, plus the bones its HOST
             # tracks -- and nothing else.
             #
-            # Unreal bakes an additive down over every bone of the skeleton, subtracting the base
-            # pose from the additive pose, and a bone NEITHER side tracks resolves to the shared
-            # skeleton's reference pose on both -- so it subtracts to exact identity and needs no
-            # track. Shipping one anyway put this CONTAINER's bind on the additive side against a
-            # base that still resolved to the shared skeleton's, which agree only when this
-            # container seeded the family.
+            # Unreal bakes an additive down over every bone of the family skeleton, subtracting the
+            # base pose from the additive pose. A bone neither side owns falls through to that same
+            # family reference on both sides, so it subtracts to exact identity and needs no track.
             #
             # A bone the HOST tracks must still ship even where the delta authored nothing, or the
             # additive resolves to the reference pose against a base that does not -- the same
@@ -690,10 +701,11 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
                 continue
             has_translation = has_rotation = True
         elif forced_channels is not None:
-            # A HOST ships a bind track for every channel any additive declared against it carries.
+            # A HOST ships a complete bind track for every bone any additive declared against it
+            # owns.
             #
             # Unreal bakes an additive as (additive pose - base pose) over the whole skeleton, and
-            # resolves an untracked bone on either side to the SHARED skeleton's reference pose.
+            # resolves an untracked bone on either side to the family skeleton's reference pose.
             # So where the delta tracks a bone and the host does not, the additive side names this
             # container's bind and the base side names the family's, and the difference between
             # them survives into the composed pose -- measured at 19.74 degrees on
@@ -704,17 +716,35 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
             forced_translation, forced_rotation = forced_channels[bone.index]
             has_translation = has_translation or forced_translation
             has_rotation = has_rotation or forced_rotation
+        carried_by_base = bool(base_label and owned is None and base_channels
+                               and any(base_channels[bone.index]))
+        carried_by_force = bool(forced_channels and any(forced_channels[bone.index]))
+        if bone.index not in clip_owned and not carried_by_base and not carried_by_force:
+            # In particular, a split bone outside a partial-body mask must not acquire the
+            # normalized rotation `_split_rotation_tracks` can compute from its zero pose slot.
+            continue
+        if bone.index in clip_owned:
+            # Complete, self-describing donor local. `read_anim` has already filled each absent
+            # component from this container's MDL bind and normalized the quaternion.
+            has_translation = has_rotation = True
         if not (has_translation or has_rotation):
             continue
         tracks += struct.pack("<I2B", bone_map[bone.index], int(has_translation),
                               int(has_rotation))
+        # A host may mask this bone out even though an additive declared against the host owns it.
+        # Retail's host pose still has the donor bind there; read_anim correctly returns zeros for
+        # the masked-out record, so a forced track must state that bind explicitly rather than
+        # serialising those mask sentinels as a real zero transform.
+        force_bind = carried_by_force and bone.index not in clip_owned
         if has_translation:
             for frame in range(clip.frames):
-                tracks += struct.pack("<3f", *_conv_pos(frames[frame][bone.index][0]))
+                position = bone.pos if force_bind else frames[frame][bone.index][0]
+                tracks += struct.pack("<3f", *_conv_pos(position))
         if has_rotation:
             for frame in range(clip.frames):
-                quat = (rotations[frame] if rotations is not None
-                        else frames[frame][bone.index][1])
+                quat = (bone.quat if force_bind else
+                        rotations[frame] if rotations is not None else
+                        frames[frame][bone.index][1])
                 tracks += struct.pack("<4f", *_conv_quat(quat))
         count += 1
     if not count:
@@ -834,15 +864,16 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
     unresolvable = {layer.label.lower() for layer, _host, owned in bindings
                     if owned is not None} - still_reached
 
-    # Per host, the union of the channels its ADDITIVES author -- the tracks that host has to
-    # carry so that both sides of Unreal's subtraction name this container's bind pose. An overlay
-    # is excluded: it is masked and composed toward its own pose rather than differenced.
+    # Per host, the union of the BONES its ADDITIVES own -- complete donor locals the host has to
+    # carry so both sides of Unreal's subtraction name this container's bind pose. An owned bone
+    # remains semantic even when all seven RLE offsets are zero. An overlay is excluded: it is
+    # masked and composed toward its own pose rather than differenced.
     forced = {}
     for layer, host, owned in bindings:
         if owned is not None:
             continue
         union = forced.setdefault(host.label.lower(), [(False, False)] * len(bones))
-        for index, (translation, rotation) in enumerate(_authored_channels(d, bones, layer)):
+        for index, (translation, rotation) in enumerate(_owned_channels(d, bones, layer)):
             union[index] = (union[index][0] or translation, union[index][1] or rotation)
 
     payloads = [p for p in (_clip_payload(d, bones, c, bone_map, emitted, masks,
@@ -854,7 +885,7 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
             d, bones, layer, bone_map, emitted, masks,
             frames=_composed_frames(d, bones, layer, host, owned),
             base_label=host.label.lstrip("@"), owned=owned,
-            base_channels=None if owned is not None else _authored_channels(d, bones, host),
+            base_channels=None if owned is not None else _owned_channels(d, bones, host),
             label=f"{layer.label.lstrip('@')}{BASE_SEPARATOR}{host.label.lstrip('@')}")
         if payload is not None:
             payloads.append(payload)
@@ -1003,9 +1034,8 @@ def write_cinematic(idx, model_path, out_dir, stem):
     """Write one bank per bone root of a cinematic `.mdl` -> `<out_dir>/banks/<stem>__<root>.eskm`.
 
     The `.eskm` twin of `mdl_gltf.export_cinematic`, and it exists for the same reason the rest of
-    this module does: the mount is the only build of a character, so a clip a scene can name has
-    to be here or the runtime resolves it through the glb bank instead -- which lands in
-    glTFRuntime's own basis rather than this file's, a quarter turn away
+    this module does: the mount is the only build of a character, so every clip a scene can name
+    must be present as a native container and then as one shared-bank asset
     (`Elysium.Content.BakedClipCoverage`).
 
     A cinematic model is a whole multi-actor performance in one file: N co-located skeletons

@@ -444,17 +444,16 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FSt
 	// The owner column decides where the clip comes from either way: the NPC itself for a dialogue
 	// clip, a bank for everything else.
 	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
-	// A baked sequence is bound to the shared skeleton, so it is the same asset for every body and
-	// is addressed by owner and resolved animation name rather than rebuilt per mesh.
+	// A baked bank sequence is the same asset for every compatible body and is addressed by owner
+	// and resolved animation name rather than rebuilt per mesh.
 	const FString AnimName = ResolveClipAnimName(Stem, ClipName);
 	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, AnimName))
 	{
 		return Baked;
 	}
 
-	// The mount is the only build of a clip, so this fails by name. It used to fall back to
-	// retargeting the owner's `.glb`, which lands in glTFRuntime's basis rather than the
-	// container's and stood the body a quarter turn off with nothing logged.
+	// The mount is the only build of a clip, so this fails by name. There is no runtime format
+	// decoder and no alternate transform path.
 	// `Elysium.Content.BakedClipCoverage` holds the mount to every clip a vocabulary can name.
 	OutError = FString::Printf(
 		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),
@@ -706,9 +705,8 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankSte
 	{
 		return Baked;
 	}
-	// A cinematic bank is named by a scene rather than by any vocabulary, so it used to be the one
-	// owner the character bake never reached — and every actor of every scene posed through the
-	// glb instead, a quarter turn off, which the scene then wrote back into the entity's angles.
+	// A cinematic bank is named by a scene rather than by any vocabulary, so the bake enumerates it
+	// separately into the shared bank namespace.
 	// `Elysium.Content.BakedClipCoverage` holds the mount to every bank a scene can name.
 	OutError = FString::Printf(
 		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),

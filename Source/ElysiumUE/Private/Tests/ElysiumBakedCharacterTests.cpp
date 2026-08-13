@@ -456,7 +456,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	//
 	// Both halves fail silently and neither is visible in the sequence's own tracks. A lost mask
 	// composes the overlay over the whole rig at full weight, which erases the body's stance from
-	// the waist down; a lost bind track leaves an owned bone on the shared skeleton's reference
+	// the waist down; a lost bind track leaves an owned bone on the family skeleton's reference
 	// pose, which is another body of the family's bind rather than this clip's own.
 	auto CheckLayerMasks = [&](const USkeletalMesh* Baked, const FString& Owner,
 		const FElysiumSkeletalSource& Container)
@@ -561,7 +561,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				}
 				// An owned bone the clip animates nothing on holds its BIND pose, which is a pose
 				// the overlay states rather than an absence. The bake writes it out; without that
-				// the sequence would evaluate to the shared skeleton's reference pose here.
+				// the sequence would evaluate to the family skeleton's reference pose here.
 				//
 				// **Except in the appendix of a shared bank**, where the bake deliberately writes
 				// nothing. That bind belongs to the bank's own rig, and binding it by name hands it
@@ -710,19 +710,15 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			++Taken;
 			++BlendGrids;
 
-			// The body's own skeleton, or one it has DECLARED compatible. A bank is baked once
-			// against a skeleton of its own -- rebuilding it per rig family was 11x the assets for
-			// the same animation -- so equality is no longer the rule that makes a grid playable.
-			// The declaration is: it is what builds the name-keyed bone map the evaluator remaps
-			// through, and without it the samples really would not evaluate on this rig.
+			// A bank blend space is authored on its shared bank skeleton and must be compatible with
+			// the body that consumes it.
 			const USkeleton* BodySkeleton = Baked->GetSkeleton();
 			const USkeleton* SpaceSkeleton = Space->GetSkeleton();
 			if (SpaceSkeleton != BodySkeleton
 				&& !(BodySkeleton != nullptr && BodySkeleton->IsCompatibleForEditor(SpaceSkeleton)))
 			{
 				AddError(FString::Printf(
-					TEXT("%s grid '%s': bound to skeleton %s, which %s neither is nor declares "
-					     "compatible, so no sample of it can evaluate on this rig"),
+					TEXT("%s grid '%s': skeleton %s is not compatible with body skeleton %s"),
 					*Owner, *Shown,
 					SpaceSkeleton != nullptr ? *SpaceSkeleton->GetName() : TEXT("none"),
 					BodySkeleton != nullptr ? *BodySkeleton->GetName() : TEXT("none")));
@@ -1111,7 +1107,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					const FElysiumSourceTrack& Track = *Pair.Value;
 					const FTransform& Bind = Source.Bones[Pair.Key].Local;
 					// A channel the clip leaves alone holds the bind value from the file that
-					// AUTHORED the clip, which is what the bake wrote for it.
+					// authored the clip, which is what the sequence carries.
 					ExpectedLocals[Pair.Key] = FTransform(
 						Track.Rotations.IsValidIndex(Frame)
 							? FQuat(Track.Rotations[Frame]) : Bind.GetRotation(),
@@ -1184,7 +1180,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 }
 
 // VtMB binds a chained bank's bones to a body's by case-insensitive NAME and nothing else
-// (`docs/vtmb/animation_and_movers.md` A.4b), and so does Unreal's compatible-skeleton remapping.
+// (`docs/vtmb/animation_and_movers.md` A.4b), and the shared-bank bake uses that name join.
 // A name is therefore only as good as the two rigs' agreement about what it denotes, and the
 // generic `BoneNN` appendix names are exactly where they disagree: `Bone19` hangs off `Bip01 Head`
 // on `character_shared_female_pc_g2` and off `Bone18` on `tremere_female_armor_0` — one name, two
@@ -1316,20 +1312,9 @@ bool FElysiumBakedBankChainAgreementTest::RunTest(const FString&)
 	return true;
 }
 
-// One clip serves many bodies only because VtMB rebases it onto each: where a chained bank and the
-// body disagree on a bone's bind position, VtMB's loader compiles a per-bone 3x4 that rotates the
-// bank's bind direction onto the body's and scales by the length ratio, applies it to the decoded
-// position, and copies the rotation verbatim (`docs/vtmb/animation_and_movers.md` A.4b).
-// `EBoneTranslationRetargetingMode::OrientAndScale` is that same construction in Unreal, so it is
-// the one mode every bone takes.
-//
-// **The mode is inert without the pose it measures against**, and that is the half with no symptom.
-// `UAnimSequence::RetargetSource` names the bind the clip was authored on; unset, the engine
-// substitutes the skeleton's own reference pose — whichever body the partition listed first — and
-// the correction silently computes a body against itself. The assets still load, the clips still
-// play, every other assertion in this file still passes, and a shared clip drags every joint onto
-// the proportions of an arbitrary donor. So this reads both halves: the mode on the tree, and a
-// registered retarget source behind every sequence that names one.
+// Shared bank assets use standard Unreal compatibility. `USkeleton` reference rotations are
+// neutral so compatible-skeleton remapping cannot rotate a decoded pose; translation alone uses
+// `OrientAndScale` against the donor pose named by each sequence.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBakedSkeletonRetargetingTest,
 	"Elysium.Content.BakedSkeletonRetargeting", GElysiumBakedCharacterFlags)
 bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
@@ -1347,7 +1332,6 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 	Stems.Sort();
 
 	TSet<const USkeleton*> Seen;
-	TSet<const USkeleton*> Skeletons;
 	TArray<FString> Wrong;
 	int32 Checked = 0;
 	for (const FString& Stem : Stems)
@@ -1373,15 +1357,13 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 					static_cast<int32>(Mode),
 					static_cast<int32>(EBoneTranslationRetargetingMode::OrientAndScale)));
 			}
+			if (!Ref.GetRefBonePose()[Bone].GetRotation().Equals(FQuat::Identity, 1e-6))
+			{
+				Wrong.Add(FString::Printf(
+					TEXT("%s: '%s' has a non-neutral compatibility rotation"),
+					*Skeleton->GetName(), *Ref.GetBoneName(Bone).ToString()));
+			}
 		}
-		if (Skeleton->AnimRetargetSources.IsEmpty())
-		{
-			Wrong.Add(FString::Printf(
-				TEXT("%s carries no retarget source at all, so every bone's OrientAndScale ")
-				TEXT("correction resolves against the skeleton's own reference pose"),
-				*Skeleton->GetName()));
-		}
-		Skeletons.Add(Skeleton);
 	}
 
 	if (Checked == 0)
@@ -1391,14 +1373,7 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 		return true;
 	}
 
-	// The other half: a sequence has to NAME one of those poses. A sequence naming nothing, or
-	// naming a pose its skeleton does not carry, retargets against the skeleton's reference pose
-	// with nothing logged — so both are read here rather than trusted.
-	//
-	// The sequences are LOADED rather than iterated off whatever is resident. A `TObjectIterator`
-	// over a fresh process finds almost nothing, so the assertion would pass by having checked
-	// nothing at all — and a retarget source that fails to register is exactly the defect that
-	// leaves no other trace.
+	// Load representative body and bank sequences rather than relying on whatever is resident.
 	int32 Sequences = 0;
 	int32 Unsourced = 0;
 	TArray<UAnimSequence*> KeepAlive;
@@ -1430,20 +1405,25 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 			OwnersSeen.Add(Clip.Value.Owner);
 			KeepAlive.Add(Sequence);
 			++Sequences;
-			const USkeleton* Skeleton = Sequence->GetSkeleton();
-			if (Skeleton == nullptr)
+			const USkeleton* SequenceSkeleton = Sequence->GetSkeleton();
+			const USkeleton* BodySkeleton = Mesh->GetSkeleton();
+			if (SequenceSkeleton == nullptr || (SequenceSkeleton != BodySkeleton
+				&& !(BodySkeleton != nullptr
+					&& BodySkeleton->IsCompatibleForEditor(SequenceSkeleton))))
 			{
-				continue;
+				Wrong.Add(FString::Printf(
+					TEXT("%s (owner %s) is not compatible with the playing mesh"),
+					*Sequence->GetName(), *Clip.Value.Owner));
 			}
-			if (Sequence->RetargetSource.IsNone()
-				|| Skeleton->AnimRetargetSources.Find(Sequence->RetargetSource) == nullptr)
+			if (SequenceSkeleton == nullptr || Sequence->RetargetSource.IsNone()
+				|| SequenceSkeleton->AnimRetargetSources.Find(Sequence->RetargetSource) == nullptr)
 			{
 				if (Unsourced++ < 6)
 				{
 					Wrong.Add(FString::Printf(
-						TEXT("%s (owner %s) names retarget source '%s', which %s does not carry"),
+						TEXT("%s (owner %s) has no resolvable retarget source '%s'"),
 						*Sequence->GetName(), *Clip.Value.Owner,
-						*Sequence->RetargetSource.ToString(), *Skeleton->GetName()));
+						*Sequence->RetargetSource.ToString()));
 				}
 			}
 		}
@@ -1458,8 +1438,8 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 	AddInfo(FString::Printf(
 		TEXT("%d baked skeleton(s) checked, %d loaded sequence(s), %d without a resolvable ")
 		TEXT("retarget source"), Checked, Sequences, Unsourced));
-	TestEqual(TEXT("every bone rebases translation onto the body playing the clip, against the ")
-		TEXT("bind the clip was authored on"), Wrong.Num(), 0);
+	TestEqual(TEXT("shared skeletons are rotation-neutral and every sequence declares its donor"),
+		Wrong.Num(), 0);
 	return true;
 }
 

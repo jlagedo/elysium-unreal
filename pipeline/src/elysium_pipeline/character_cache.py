@@ -37,7 +37,7 @@ from elysium_pipeline.tasking import (
 )
 
 #: Bump to invalidate every character receipt — a change in what a stage MEANS, not in its inputs.
-CACHE_REVISION = "elysium-character-stage-v1"
+CACHE_REVISION = "elysium-character-stage-v2-shared-banks"
 
 STAGES = ("textures", "bank_skeletons", "banks", "family_skeletons", "meshes", "clips", "props")
 

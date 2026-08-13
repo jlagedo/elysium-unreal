@@ -118,7 +118,7 @@ struct FElysiumClothBuildResult
  * compression constraints, collision capsules and spheres, and per-render-vertex substitution
  * maps (`docs/vtmb/secondary_motion.md`). The offline decode is
  * `elysium_pipeline.formats.mdl_cloth`, which writes `npc/garment/<stem>.json` beside the
- * character's `.glb` and in that glb's own basis.
+ * character's Unreal-native ESKM container and in the same basis.
  *
  * This turns that sidecar into a `UChaosClothAsset`, so the running game carries **no VtMB
  * cloth rule at all** — a stock Chaos solver consumes a generated asset, the same way blend

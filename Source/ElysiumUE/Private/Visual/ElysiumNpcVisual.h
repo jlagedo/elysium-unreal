@@ -23,7 +23,7 @@ namespace ElysiumNpcVisual
 	// curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone container flags
 	// it, and the bone container takes those flags from this metadata — so without this the facial
 	// track evaluates correctly and moves nothing. The mesh loader calls it; the bake calls it again
-	// on the shared skeleton so the metadata is serialised rather than rebuilt per load.
+	// on the family skeleton so the metadata is serialised rather than rebuilt per load.
 	void RegisterMorphTargetCurves(USkeletalMesh* Mesh);
 
 	// The master an eye section is drawn with, or null when the policy content has not been

@@ -401,16 +401,14 @@ Hard-won, non-obvious, and easy to undo:
   additive stamp before hunting a rotation bug. On an additive that magnitude is ambiguous between
   three causes — a dropped track, the additive round-trip above, and compressed data that is not
   resident — so check `IsCompressedDataValid()` before reading anything into it.
-- **Compatible-skeleton retargeting has no off switch, and its repair skips exactly the bones that
-  look safest.** `RequiresReferencePoseRetarget()` reports whether the remapping table is non-empty,
-  so it is true for any valid pair — nothing stops `DecompressPose` rotating a decoded pose by
-  `Q0 = PT⁻¹·PS` taken from the two skeletons' reference poses. The `OrientAndScale` pass that would
-  repair it builds no cache entry for a bone whose authored and target bind translations agree within
-  0.001, so a body sharing the clip's authoring bind takes the rotation and no repair while a body of
-  different proportions takes both. The related misread: a bone no sequence tracks resolves to the
-  playing **mesh's** reference pose, not the skeleton's — the skeleton's is what the retarget math and
-  `GetRefLocalPoses(NAME_None)` read, never the pose reset. What the bake does about it:
-  `docs/architecture/animation-architecture.md` § 2.4.
+- **Compatible-skeleton remapping always reads both skeleton reference rotations.** Any valid pair
+  can make `DecompressPose` apply that rotation delta even without an explicit retarget node, so
+  every skeleton that shares a bank uses identity common-bone reference rotations. The mesh keeps
+  its exact authored bind, rotation keys pass verbatim, and `OrientAndScale` reads the sequence's
+  named donor pose only to map translations onto the playing mesh. A bone no ordinary sequence
+  tracks resolves to that playing **mesh's** reference pose, not the `USkeleton`'s. Never restore a
+  per-body bank copy to avoid this engine path; bank package count is independent of body-family
+  count. See `docs/architecture/animation-architecture.md` § 2.4.
 - **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
   whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
   blended pose rather than being baked into the clip, so the preview is showing what the asset says

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from elysium_pipeline import character_partition as cp, character_sweep
 from elysium_pipeline.export_manager import resolve_character_slice
@@ -78,6 +79,28 @@ class SweepTests(unittest.TestCase):
         result = character_sweep.plan(self.root, self.npc, self.partition)
         self.assertEqual(result["orphan_assets"], [])
         self.assertGreater(result["total"], 0)
+
+    def test_shared_bank_layout_is_independent_of_body_family_count(self):
+        character_sweep.assert_shared_bank_layout(self.partition, MANIFEST)
+        dirs = character_sweep._expected_dirs(self.partition, MANIFEST)
+        self.assertEqual(
+            sorted(path for path in dirs if path.startswith("Anims/_banks/")),
+            ["Anims/_banks/bank_a", "Anims/_banks/bank_b"],
+        )
+        self.assertFalse(any(
+            path.rpartition("/")[2] in MANIFEST["banks"]
+            for path in dirs if not path.startswith("Anims/_banks/")
+        ))
+
+    def test_bank_body_cross_product_is_rejected_before_bake(self):
+        original = character_sweep._expected_dirs
+
+        def multiplied(partition, manifest):
+            return original(partition, manifest) | {"Anims/amy/bank_a"}
+
+        with mock.patch.object(character_sweep, "_expected_dirs", multiplied):
+            with self.assertRaisesRegex(ValueError, "multiplies shared banks"):
+                character_sweep.assert_shared_bank_layout(self.partition, MANIFEST)
 
     def test_finds_a_renamed_family_folder(self):
         # The real failure: a slice partitioned itself, wrote clips under an invented family name,

@@ -18,9 +18,10 @@ namespace
 	// ordinary inheritance reproduces the pose VtMB draws and no runtime rule is applied. A
 	// version 1 container carries the same bytes meaning the opposite, and nothing in the payload
 	// tells them apart, so a stale export is refused rather than posed wrongly with no error.
-	// Version 5 widened the "MESH" vertex record with the authored shading normal, so a version 4
-	// file parses at the wrong stride from the first vertex onward rather than merely lacking it.
-	constexpr uint32 EskmVersion = 5;
+	// Version 5 widened the "MESH" vertex record with the authored shading normal. Version 6 made
+	// every owned bone a complete donor-local pose. Version 7 also makes the host side of an
+	// additive subtraction carry every bone the additive owns, including bind-only channels.
+	constexpr uint32 EskmVersion = 7;
 
 	/**
 	 * A bounds-checked forward cursor over the loaded file.

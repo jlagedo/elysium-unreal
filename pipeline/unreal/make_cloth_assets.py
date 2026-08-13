@@ -3,7 +3,7 @@
 # VtMB carries renderer-side particle cloth in the model image and the game's own StudioRender
 # solves it (`docs/vtmb/secondary_motion.md`). The offline decode is
 # `elysium_pipeline.formats.mdl_cloth`, which writes `npc/garment/<stem>.json` beside the
-# character's `.glb` and in that glb's own basis. This turns each garment in that sidecar into a
+# character's Unreal-native ESKM container and in the same basis. This turns each garment into a
 # generated asset, so the running game carries no VtMB cloth rule at all -- a stock Chaos solver
 # consumes a generated asset, the same way blend grids became `UBlendSpace` assets.
 #

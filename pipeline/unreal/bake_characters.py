@@ -381,11 +381,10 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
     11x the mount for no additional animation.
 
     The banks get their own skeletons, partitioned exactly the way the bodies are, and the bodies
-    declare compatibility with them. That is non-destructive: the engine maps bones by NAME per
-    skeleton pair and drops what a body's rig lacks -- the same binding rule the per-family bake
-    applied when it left a Gangrel ponytail track unbound. The reference poses agree to a median of
-    0.03 degrees across the shared bones, because VtMB's banks were recorded on character rigs, so
-    the remapping is a pure index map with no pose correction in it.
+    declare compatibility with them. The common `USkeleton` reference rotations are deliberately
+    neutral, so Unreal's compatible-skeleton remap is an index map and cannot rotate the decoded
+    pose. Each sequence names its donor bind as a retarget source; stock `OrientAndScale` maps only
+    translation onto the playing mesh. The mesh itself retains its exact authored bind.
 
     **Every declared bank family's skeleton is built, whatever this run bakes.** A body declares
     compatibility with all of them, and a skeleton missing because no named body happened to reach

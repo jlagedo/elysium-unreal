@@ -70,6 +70,33 @@ def _expected_dirs(partition: dict, manifest: dict) -> set[str]:
     return out
 
 
+def assert_shared_bank_layout(partition: dict, manifest: dict) -> None:
+    """Refuse any plan whose bank folders scale with body-family count.
+
+    Bank sequences have exactly one namespace, `Anims/_banks/<owner>`. Body-family folders may
+    contain only owners from the model partition. This assertion runs before the editor: a
+    bank/body cross-product can consume tens of hours and gigabytes before output size exposes it.
+    """
+    expected = _expected_dirs(partition, manifest)
+    banks = set(manifest.get("banks", {}))
+    illegal = sorted(
+        path for path in expected
+        if path.startswith("Anims/")
+        and not path.startswith("Anims/_banks/")
+        and path.rpartition("/")[2] in banks
+    )
+    if illegal:
+        raise ValueError(
+            "character plan multiplies shared banks across body families: "
+            + ", ".join(illegal[:4])
+        )
+
+    bank_dirs = {path for path in expected if path.startswith("Anims/_banks/")}
+    declared = {f"Anims/_banks/{bank}" for bank in partition["bank_family_of"]}
+    if bank_dirs != declared:
+        raise ValueError("character plan does not package each declared bank exactly once")
+
+
 def plan(mount_root: Path, npc_dir: Path, partition: dict) -> dict:
     """{orphan_assets, orphan_dirs, total} -- what a sweep would remove, and out of how many."""
     character_partition.check(partition)

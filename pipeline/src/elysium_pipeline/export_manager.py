@@ -1170,7 +1170,7 @@ def export_characters(
     """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
     Three stages. The `.eskm` containers are written from the user's own install, the rig
-    partition is derived from them and written down, then a headless editor turns the pair into a
+    partition is derived from them and written down, then a headless editor turns the pair into an
     shared skeleton per rig family, a mesh per model and a compressed sequence per clip. The
     manifest and the eye sidecars have to be on disk already, which `export bundle npc` or a
     complete profile writes. The policy content is a prerequisite too, because a body is built
@@ -1205,6 +1205,10 @@ def export_characters(
 
     with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
         npc_manifest = json.load(handle)
+    # Fail before Unreal starts if orchestration reintroduces bank clips below body families. The
+    # previous cross-product generated 95 GB before it was diagnosed.
+    from elysium_pipeline import character_sweep
+    character_sweep.assert_shared_bank_layout(partition, npc_manifest)
     stale = character_cache.plan_stages(
         config, manifest, npc_dir, npc_manifest, partition, stems, force=force
     )
@@ -1229,9 +1233,8 @@ def export_characters(
 
     ensure_policy_content(config, runner)
 
-    # One process for the whole cast. What used to exhaust its address space was the DUPLICATION --
-    # a bank rebuilt against every rig family that included it -- and the bank pass removes that at
-    # the source: 7,871 distinct clips instead of ~90,000 assets.
+    # One process for the whole cast. Banks are built once on their declared skeleton families and
+    # reused by compatible body skeletons; package count must not scale with the number of bodies.
     unreal.bake_characters(config, runner, stems, plan=plan_path)
     # After the bake, before the verify: the verifier walks the mount, and an orphan from a
     # partition that has since moved is exactly the thing it should not find.

@@ -150,23 +150,7 @@ namespace
 		return Instance;
 	}
 
-	/**
-	 * Register this container's own bind pose on the skeleton as a named retarget source, and
-	 * return the name a sequence built from it must carry.
-	 *
-	 * This is the input `EBoneTranslationRetargetingMode::OrientAndScale` cannot work without: the
-	 * pose the clip was AUTHORED against, which the correction is a difference from. Retail reads
-	 * it straight off the chained bank's own header when it compiles the include-model remap
-	 * (`docs/vtmb/animation_and_movers.md` A.4b); Unreal reads it from `AnimRetargetSources`, and
-	 * with nothing registered `GetRefLocalPoses(NAME_None)` hands back the skeleton's own reference
-	 * pose -- whichever member the partition listed first, which is an arbitrary body and is why
-	 * every per-bone mode tried before this one was computing against noise.
-	 *
-	 * The array is indexed by SKELETON bone, because that is how the engine subscripts it
-	 * (`AuthoredOnRefSkeleton[SourceSkeletonBoneIndex]`). It is seeded from the skeleton's own
-	 * reference pose so a bone this container does not declare still reads as itself -- a difference
-	 * of zero, which the mode skips -- and overwritten wherever the container has an opinion.
-	 */
+	/** Register the donor bind pose that stock `OrientAndScale` evaluates this sequence against. */
 	FName RegisterRetargetSource(USkeleton* Skeleton, const FString& SourcePath,
 		const FElysiumSkeletalSource& Source)
 	{
@@ -270,8 +254,7 @@ FString UElysiumSkeletalBuildLibrary::BuildProbeSkeletalMesh(const FString& Pack
 		RF_Public | RF_Standalone);
 
 	// The reference skeleton is authored on the MESH; the USkeleton then takes its bone tree from
-	// it. That is the same order an importer uses, and it is what keeps a body's own proportions on
-	// the body rather than on the shared skeleton.
+	// it. That is the same order an importer uses, and it keeps this probe mesh self-contained.
 	FReferenceSkeleton RefSkeleton;
 	{
 		FReferenceSkeletonModifier Modifier(RefSkeleton, Skeleton);
@@ -437,8 +420,8 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	USkeletalMesh* Mesh = NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
 
 	// --- the reference skeleton -------------------------------------------------------------
-	// Authored on the MESH, which the USkeleton then takes its bone tree from. That order is
-	// what keeps a body's own proportions on the body rather than on the shared skeleton.
+	// Authored on the MESH. It keeps the exact MDL bind; the separate family `USkeleton` carries the
+	// rotation-neutral compatibility frame used to share bank assets.
 	FReferenceSkeleton RefSkeleton;
 	{
 		FReferenceSkeletonModifier Modifier(RefSkeleton, Skeleton);
@@ -753,16 +736,6 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 		TArray<TPair<FName, float>> Bones;
 	};
 	TArray<FCarriedProfile> CarriedProfiles;
-	// Carried for the same reason, and it matters as much: a retarget source is registered by the
-	// CLIP stage, which a slice runs only for the owners it named, so replacing the asset wholesale
-	// would leave every sequence built by an earlier slice naming a pose that is no longer there --
-	// and a missing retarget source does not fail, it silently falls back to this skeleton's own
-	// reference pose, which is the arbitrary-member bind the mode exists to avoid.
-	//
-	// Unlike those two it cannot be carried by name, because a reference pose is an array indexed
-	// by bone with no names in it. So the OLD tree's names are captured beside it and the pose is
-	// re-indexed through them below; a bone the new tree does not carry simply drops out, and one
-	// it gains takes the new reference pose's own value.
 	TMap<FName, FReferencePose> CarriedRetargetSources;
 	TArray<FName> PreviousBoneNames;
 	if (Skeleton != nullptr && bNewSkeleton)
@@ -848,29 +821,9 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 						TEXT("%s: '%s' would be a second root on %s"),
 						*SourcePath, *Bone.Name.ToString(), *AssetName);
 				}
-				// Authored ROTATION-FLAT: translations verbatim, every local rotation identity.
-				// Nothing skins from this pose -- a body skins from its own mesh reference
-				// skeleton, an untracked bone resolves to that same mesh pose, and
-				// `OrientAndScale` compares against the mesh's bind -- but `FSkeletonRemapping`
-				// reads it, and reads it at BOTH ends. `DecompressPose` builds `Q0 = PT^-1 * PS`
-				// from the two skeletons' component rotations and applies it to every translation
-				// and rotation it decodes; `OrientAndScale` then declines to correct any bone whose
-				// authored and target bind translations agree, which is exactly the body the clip
-				// was authored on. A clip's limb tracks carry no translation of their own, so what
-				// reaches the skin is the authoring rig's limb lengths pointed along a foreign
-				// body's axes -- a folded arm on the bodies that match the clip best.
-				//
-				// Identity locals accumulate to identity component rotations in ANY tree, so `Q0`
-				// and `Q1` are identity for every skeleton pair however far two rigs diverge: the
-				// decoded quaternion reaches the body verbatim the way retail's does
-				// (`docs/vtmb/animation_and_movers.md` A.4b), and the only translation correction
-				// left is the one comparison that reads the playing body, `OrientAndScale`.
-				//
-				// Flat is what makes the result independent of the choice, and the choice is not
-				// free. One shared rotation per bone NAME does not survive: a generic appendix name
-				// sits under a different ancestor chain on two rigs -- `Bone19` is `Bip01 Head`'s
-				// child on one bank and `Bone18`'s on another -- so equal locals still give unequal
-				// component rotations, and `Q0` returns at up to 180 degrees on exactly those bones.
+				// `USkeleton` is compatibility metadata; the mesh below keeps its exact authored bind.
+				// Identity common-bone rotations make Unreal's cross-skeleton Q0/Q1 correction identity,
+				// so decoded animation rotations pass through verbatim for every compatible pair.
 				Modifier.Add(FMeshBoneInfo(Bone.Name, Bone.Name.ToString(), Parent),
 					FTransform(FQuat::Identity, Bone.Local.GetTranslation(), Bone.Local.GetScale3D()));
 				Mapped[Index] = Next++;
@@ -904,40 +857,11 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 
 	OutBones = Skeleton->GetReferenceSkeleton().GetRawBoneNum();
 
-	// **`OrientAndScale` is VtMB's own rule, not an approximation of it**, and it is the only mode
-	// this skeleton ever sets — there is no per-bone table, because the correction is per bone and
-	// the mode computes it.
-	//
-	// When VtMB's loader chains a shared bank into a body (`$includemodel`), it builds one 56-byte
-	// remap record per body bone by case-insensitive NAME match, and where the two models' BIND
-	// positions for a matched bone differ it compiles a 3x4 into that record: an axis-angle taken
-	// between the two bind direction vectors, scaled by the ratio of their lengths. The pose path
-	// then applies that matrix to the decoded position and copies the quaternion VERBATIM
-	// (`docs/vtmb/animation_and_movers.md` A.4b). Unreal's `OrientAndScale` builds the same thing —
-	// skip when the two translations are equal, `FQuat::FindBetweenNormals(SourceDir, TargetDir)`,
-	// `Scale = TargetLength / SourceLength`, rotation untouched (`BoneContainer.cpp`) — so the mode
-	// reproduces retail's compiled matrix rather than standing in for it.
-	//
-	// It also subsumes what the two earlier modes were reaching for. A bone whose bind the two
-	// models agree on gets no cached entry and passes through verbatim, which is right because
-	// agreeing binds make verbatim correct; a CONSTANT translation track — 96.6% of the corpus, the
-	// emitting model's bind written into the clip — hits the mode's own shortcut and resolves to the
-	// playing body's bind. `Animation` got the first case right and the second catastrophically
-	// wrong (the clavicle's bind spread across the cast is 17.53 cm against 15.16 cm of authored
-	// travel); `Skeleton` got the second right and discarded the first, and ZEROED translation
-	// outright on a baked additive. `OrientAndScale` skips baked additives too, but there the bind
-	// cancels out of the difference on its own, so nothing is lost.
-	//
-	// **The mode is meaningless without a retarget source**, which is the bind pose the clip was
-	// authored against — retail reads it straight off the bank's own header. Unreal takes it from
-	// `UAnimSequence::RetargetSource`, and with none set it falls back to this skeleton's reference
-	// pose, i.e. whichever member the partition happened to list first. `RegisterRetargetSource`
-	// below is what supplies it; a sequence built without one has no correction to compute.
+	// Stock Unreal translation retargeting reproduces the donor-bind direction and length mapping.
+	// Rotation is never retargeted by this mode.
 	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::OrientAndScale,
 		/*bChildrenToo=*/true);
 
-	// Re-indexed into the tree just authored, one bone at a time through the names captured above.
-	// A pose that survives this is the same authored bind it always was; only its subscripts moved.
 	for (TPair<FName, FReferencePose>& Carried : CarriedRetargetSources)
 	{
 		const TArray<FTransform> Previous = MoveTemp(Carried.Value.ReferencePose);
@@ -979,6 +903,12 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 		Profile->Mode = Carried.Mode;
 		for (const TPair<FName, float>& Bone : Carried.Bones)
 		{
+			// A changed partition may rebuild a family with a smaller tree. Drop stale entries by
+			// name before SetBoneBlendScale can index an unresolved bone.
+			if (Skeleton->GetReferenceSkeleton().FindBoneIndex(Bone.Key) == INDEX_NONE)
+			{
+				continue;
+			}
 			Profile->SetBoneBlendScale(Bone.Key, Bone.Value, /*bRecurse=*/false, /*bCreate=*/true);
 		}
 	}
@@ -1016,11 +946,6 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 	}
 
 	const FReferenceSkeleton& TargetRef = Target->GetReferenceSkeleton();
-
-	// The direction is "this skeleton may play animations authored on that one", so the bank is the
-	// argument and the body's own rig is the target. Declaring it is not a merge: the engine builds
-	// a name-keyed bone map per pair, and a bank bone this rig has never had maps to INDEX_NONE and
-	// is dropped -- the same rule the per-family bake applied by leaving the track unbound.
 	for (const FString& SourceName : SourceSkeletonPackageNames)
 	{
 		USkeleton* Source = LoadObject<USkeleton>(nullptr,
@@ -1035,23 +960,12 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 		}
 		Target->AddCompatibleSkeleton(Source);
 
-		// A blend profile does NOT travel with the compatibility declaration, and a layer that
-		// cannot find its bone mask composes over the whole rig instead of over the torso — which
-		// loses the body's stance from the waist down and logs nothing.
-		//
-		// The mask is resolved by NAME against the skeleton the clip is PLAYING on, because a
-		// profile's entries are bone references into the skeleton that owns them: the bank's copy
-		// indexes the bank's tree, so handing it to a body gates a shifted set of bones. So the
-		// declaration has to carry the profiles across as well — same name, because they are
-		// content-addressed and the sequence already points at that name, and restricted to the
-		// bones this rig actually has, on the same rule that drops a bank track with nowhere to
-		// bind. This is the only place that knows both skeletons; the bank pass that authors the
-		// profile has never heard of the bodies that will play its clips.
+		// Compatibility does not carry blend profiles. Mirror each bank mask by name onto the
+		// playing skeleton, restricted to bones that target actually owns.
 		for (const TObjectPtr<UBlendProfile>& Carried : Source->BlendProfiles)
 		{
 			if (Carried == nullptr || Target->GetBlendProfile(Carried->GetFName()) != nullptr)
 			{
-				// Content-addressed, so a name the target already carries is already this mask.
 				continue;
 			}
 			TArray<TPair<FName, float>> Owned;
@@ -1065,20 +979,14 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 			}
 			if (Owned.IsEmpty())
 			{
-				// Nothing of this gate exists on this rig. Left absent rather than written empty:
-				// an empty mask reads at evaluation as a gate that owns nothing, which is a pose
-				// silently missing rather than a profile audibly missing.
 				continue;
 			}
 			UBlendProfile* Mirrored = Target->CreateNewBlendProfile(Carried->GetFName());
-			// The mode FIRST, for the reason the bank pass states: an entry equal to the mode's own
-			// default is not stored, and that default is 0 for a blend mask against 1 for every
-			// other mode, so writing the scales into a profile still in its constructed mode
-			// discards them and saves a profile that owns the whole rig.
 			Mirrored->Mode = Carried->Mode;
 			for (const TPair<FName, float>& Bone : Owned)
 			{
-				Mirrored->SetBoneBlendScale(Bone.Key, Bone.Value, /*bRecurse=*/false, /*bCreate=*/true);
+				Mirrored->SetBoneBlendScale(Bone.Key, Bone.Value,
+					/*bRecurse=*/false, /*bCreate=*/true);
 			}
 		}
 	}
@@ -1250,17 +1158,14 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			MaskProfileFor(Clip.Mask);
 		}
 	}
-	// Unconditional, because the retarget source registered above already changed the skeleton
-	// whether or not this container also contributed a blend mask. A sequence whose
-	// `RetargetSource` names a pose the saved skeleton does not carry retargets against the
-	// skeleton's own reference pose instead, silently and only in whichever process reloads it.
+	// The retarget source and any profiles live on the skeleton. Persist them before a sequence
+	// names either; a missing source silently falls back to the skeleton reference pose.
 	{
 		UPackage* SkeletonPackage = Skeleton->GetPackage();
 		if (SkeletonPackage == nullptr || !SavePackageTo(SkeletonPackage, SkeletonPackage->GetName()))
 		{
-			return FString::Printf(TEXT("could not save %s after registering retarget source %s%s"),
-				*SkeletonPackageName, *RetargetSource.ToString(),
-				ProfilesCreated > 0 ? TEXT(" and its blend mask(s)") : TEXT(""));
+			return FString::Printf(TEXT("could not save %s after registering retarget source %s"),
+				*SkeletonPackageName, *RetargetSource.ToString());
 		}
 		if (ProfilesCreated > 0)
 		{
@@ -1330,8 +1235,6 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		UAnimSequence* Sequence = NewObject<UAnimSequence>(Package, *AssetName,
 			RF_Public | RF_Standalone);
 		Sequence->SetSkeleton(Skeleton);
-		// Names the bind pose these keys were authored against, which is what `OrientAndScale`
-		// measures the playing body's own bind against. Set before anything reads the sequence.
 		Sequence->RetargetSource = RetargetSource;
 
 		IAnimationDataController& Controller = Sequence->GetController();
@@ -1415,7 +1318,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			}
 
 			// A channel the clip leaves alone holds the bind value from the file that AUTHORED the
-			// clip, not from the shared skeleton. The two differ on exactly the bones a rig family
+			// clip, not from the consuming family skeleton. The two differ on exactly the bones a family
 			// disagrees about -- the `[2]` fork and the appendix chains, whose generic names denote
 			// different chains on different bodies -- and taking the skeleton's would hand every
 			// member of a family whichever member happened to seed it.
@@ -1425,7 +1328,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			// down by `Target * Base^-1` before compressing, so the raw keys have to be the delta
 			// composed ONTO the base it is declared against -- and that composed pose is exactly
 			// what the exporter wrote. A derived clip carries every bone for the same subtraction:
-			// a bone with no track evaluates to the shared skeleton's reference pose rather than to
+			// a bone with no track evaluates to the family skeleton's reference pose rather than to
 			// the base, which would subtract into a spurious delta rather than an identity one.
 			const FTransform& Bind = Source.Bones[Track.Bone].Local;
 			TArray<FVector3f> Positions;
