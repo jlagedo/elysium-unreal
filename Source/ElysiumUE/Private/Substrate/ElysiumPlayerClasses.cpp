@@ -26,6 +26,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Visual/ElysiumExpressionTable.h"
 
 #include "ChaosClothAsset/ClothComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -314,6 +315,8 @@ void FElysiumAnimating::BuildBody()
 	if (Visual)
 	{
 		World->RegisterNpcBody(Visual);
+		Embodiment->UpdateNpcDisposition(Visual, Disposition, DispositionLevel);
+		RefreshDispositionExpression();
 		if (IsInert())
 		{
 			GateVisual();   // born hidden (start_hidden / a Spawn()-time Kill)
@@ -423,20 +426,138 @@ bool FElysiumAnimating::ResetAnimToIdle()
 	{
 		return false;
 	}
-	return Embodiment->RefreshNpcIdle(Visual, ModelStem(), Disposition, IdleVariant());
+	return Embodiment->RefreshNpcIdle(
+		Visual, ModelStem(), Disposition, DispositionLevel, IdleVariant());
 }
 
 bool FElysiumAnimating::SetDispositionName(const FString& NewDisposition)
 {
-	if (NewDisposition.IsEmpty() || Disposition.Equals(NewDisposition, ESearchCase::IgnoreCase))
+	return SetDisposition(NewDisposition, 1);
+}
+
+bool FElysiumAnimating::CommitDisposition(const FString& NewDisposition, int32 NewLevel,
+	bool& bOutChanged, FElysiumDisposition* OutOld, FElysiumDisposition* OutNew)
+
+{
+	bOutChanged = false;
+	if (NewDisposition.IsEmpty())
 	{
-		return true;   // already there — the write is answered, it just changes nothing
+		return false;
 	}
-	Disposition = NewDisposition;
-	// 9.9 owns the emotional-state half; this is its animation half, and it is what makes the 2,467
-	// `.dlg` column-4 SetDisposition actions visible on screen.
-	ResetAnimToIdle();
+	FElysiumDisposition OldRow;
+	FElysiumDisposition NewRow;
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	const bool bOldResolved = Embodiment
+		&& Embodiment->ResolveDisposition(Disposition, DispositionLevel, OldRow);
+	const bool bNewResolved = Embodiment
+		&& Embodiment->ResolveDisposition(NewDisposition, FMath::Max(1, NewLevel), NewRow);
+	if (OutOld)
+	{
+		*OutOld = bOldResolved ? OldRow : FElysiumDisposition();
+	}
+	if (OutNew)
+	{
+		*OutNew = bNewResolved ? NewRow : FElysiumDisposition();
+	}
+
+	const FString ResolvedName = bNewResolved ? NewRow.Name : NewDisposition;
+	const int32 ResolvedLevel = bNewResolved ? NewRow.Level : FMath::Max(1, NewLevel);
+	bOutChanged = !Disposition.Equals(ResolvedName, ESearchCase::IgnoreCase)
+		|| DispositionLevel != ResolvedLevel;
+	if (!bOutChanged)
+	{
+		return true;
+	}
+	Disposition = ResolvedName;
+	DispositionLevel = ResolvedLevel;
+	if (Embodiment && Visual)
+	{
+		Embodiment->UpdateNpcDisposition(Visual, Disposition, DispositionLevel);
+	}
+	RefreshDispositionExpression();
 	return true;
+}
+
+bool FElysiumAnimating::SetDisposition(const FString& NewDisposition, int32 NewLevel)
+{
+	bool bChanged = false;
+	if (!CommitDisposition(NewDisposition, NewLevel, bChanged))
+	{
+		return false;
+	}
+	if (bChanged)
+	{
+		ResetAnimToIdle();
+	}
+	return true;
+}
+
+void FElysiumAnimating::SetDispositionTalking(bool bTalking)
+{
+	if (bDispositionTalking == bTalking)
+	{
+		return;
+	}
+	bDispositionTalking = bTalking;
+	RefreshDispositionExpression();
+}
+
+void FElysiumAnimating::AccumulateDispositionFacialPose(TMap<FString, float>& InOutPose) const
+{
+	for (const TPair<FString, float>& Key : DispositionFacialPose)
+	{
+		InOutPose.Add(Key.Key, Key.Value);
+	}
+}
+
+void FElysiumAnimating::RefreshDispositionExpression()
+{
+	TMap<FString, float> Next;
+	FElysiumDisposition Row;
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment && Visual
+		&& Embodiment->ResolveDisposition(Disposition, DispositionLevel, Row))
+	{
+		const FString Expression = bDispositionTalking && !Row.TalkingExpression.IsEmpty()
+			? Row.TalkingExpression : Row.DefaultExpression;
+		const TSharedPtr<const FElysiumExpressionTable> Table =
+			ElysiumExpressions::Load(ModelStem(), TEXT("expressions"));
+		const int32 Index = Table.IsValid() ? Table->FindRow(Expression) : INDEX_NONE;
+		if (Table.IsValid() && Table->Rows.IsValidIndex(Index))
+		{
+			const FElysiumExpressionRow& ExpressionRow = Table->Rows[Index];
+			for (int32 Key = 0; Key < Table->Keys.Num(); ++Key)
+			{
+				const float Influence = FMath::Clamp(
+					ExpressionRow.Weights[Key] * Row.ExpressionIntensity, 0.f, 1.f);
+				if (Influence > 0.f)
+				{
+					Next.Add(Table->Keys[Key], ExpressionRow.Values[Key] * Influence);
+				}
+			}
+		}
+	}
+
+	TArray<FElysiumFlexWrite> Writes;
+	for (const TPair<FString, float>& Key : Next)
+	{
+		Writes.Add({ Key.Key, Key.Value });
+	}
+	for (const TPair<FString, float>& Key : DispositionFacialPose)
+	{
+		if (!Next.Contains(Key.Key))
+		{
+			Writes.Add({ Key.Key, 0.f });
+		}
+	}
+	if (!Writes.IsEmpty())
+	{
+		SetFlexControllers(Writes, nullptr);
+	}
+	DispositionFacialPose = MoveTemp(Next);
+
+	// The body policy above is the emotional/presentation transaction. Relationship and RPG
+	// reaction remain independent stores; no value is derived from this one.
 }
 
 void FElysiumAnimating::OnRuntimeTransformChanged()
@@ -1619,6 +1740,10 @@ static FElysiumClassRegistrar GRegAnimating(
 		// the same direct write, so the field alone serves all three (entity_io.md).
 		AddCharField(D, TEXT("skin"), &FElysiumAnimating::Skin);
 		AddCharField(D, TEXT("default_disposition"), &FElysiumAnimating::Disposition);
+		// Project save-only companion for SetDisposition's second argument. It is deliberately not a
+		// script field: retail exposes the pair through the method, not as two writable attributes.
+		AddCharField(D, TEXT("elysium_disposition_level"),
+			&FElysiumAnimating::DispositionLevel, EElysiumField::Save);
 
 		D.Input(TEXT("SetAnimation"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{

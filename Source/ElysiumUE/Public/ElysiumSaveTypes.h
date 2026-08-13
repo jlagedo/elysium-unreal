@@ -38,6 +38,8 @@ struct FElysiumSaveVersion
 		NpcMaker      = 13,  // maker ownership and once-only child termination notification
 		NpcMind       = 14,  // resumable NPC state/body intent; session capabilities remain transient
 		NpcSchedule   = 15,  // the running idle schedule; its task position is deliberately not saved
+		NpcSocial     = 16,  // disposition level and the independent combat-relationship table
+		Activation    = 17,  // whether Source Activate already ran for this entity
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -88,6 +90,9 @@ struct FElysiumEntityState
 	bool  bDead = false;
 	bool  bHidden = false;
 	bool  bSpawnCalled = true;
+	// Saves are taken from an active map. Default true preserves that fact for older supported
+	// payloads which predate this explicit latch; a freshly captured dormant entity overwrites it.
+	bool  bActivateCalled = true;
 	float NextThink = 0.0f;           // absolute game seconds, rebased onto the restored clock
 	float SavedNextThink = 0.0f;      // what ScriptUnhide restores
 

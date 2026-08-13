@@ -394,9 +394,14 @@ namespace
 			const float Blend = Args.Param.IsVoid() || Param.IsEmpty()
 				? ToPlayerTime
 				: FMath::Max(0.0f, Args.Param.ToFloat());
-			StopPlayback(false, PositionPlayback, Blend);
-			StopPlayback(true, TargetPlayback, Blend);
-			ScheduleNextThink();
+			// Retail's input is a player-camera restore, not a request to stop this entity's two
+			// clocks. It is accepted only while this entity remains the player's position track and
+			// releases the complete position/target pair. The clocks may continue to fire authored
+			// outputs, but the cleared world leases prevent them from reclaiming the view.
+			if (World && World->TrackCameraOwner(/*bTargetRole*/ false) == Handle)
+			{
+				World->ClearTrackCamera(Blend);
+			}
 		}
 
 		virtual void Think() override
@@ -552,9 +557,12 @@ namespace
 				P.bActive = false;
 				P.bHeld = bHoldAtEnd;
 				FireOutput(FName(TEXT("OnAnimationCompleted")), Activator(P));
-				if (!bHoldAtEnd && World)
+				if (!bHoldAtEnd && World && World->TrackCameraOwner(bTarget) == Handle)
 				{
-					World->RestoreTrackCamera(bTarget, Handle, ToPlayerTime);
+					// A selected non-held stream returning to player control releases the complete
+					// camera session. This matters when the paired stream has already completed with
+					// HoldAtEnd, as sp_tutorial_1's lockpick focus shot deliberately does.
+					World->ClearTrackCamera(ToPlayerTime);
 				}
 			}
 		}

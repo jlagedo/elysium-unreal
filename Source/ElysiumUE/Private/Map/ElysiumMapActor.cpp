@@ -836,9 +836,15 @@ void AElysiumMapActor::DestroyNpcMotor(IElysiumNpcMotor* Motor)
 }
 
 bool AElysiumMapActor::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Disposition, int32 IdleVariant)
+	const FString& Disposition, int32 DispositionLevel, int32 IdleVariant)
 {
-	return Bodies->RefreshNpcIdle(Body, Stem, Disposition, IdleVariant);
+	return Bodies->RefreshNpcIdle(Body, Stem, Disposition, DispositionLevel, IdleVariant);
+}
+
+void AElysiumMapActor::UpdateNpcDisposition(USkeletalMeshComponent* Body,
+	const FString& Disposition, int32 DispositionLevel)
+{
+	Bodies->UpdateNpcDisposition(Body, Disposition, DispositionLevel);
 }
 
 bool AElysiumMapActor::ResolveStanceClips(const FString& Stem, const FString& AnimName,
@@ -847,9 +853,10 @@ bool AElysiumMapActor::ResolveStanceClips(const FString& Stem, const FString& An
 	return Bodies->ResolveStanceClips(Stem, AnimName, OutClips);
 }
 
-bool AElysiumMapActor::ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow)
+bool AElysiumMapActor::ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
+	FElysiumDisposition& OutRow)
 {
-	return Bodies->ResolveDisposition(Disposition, OutRow);
+	return Bodies->ResolveDisposition(Disposition, DispositionLevel, OutRow);
 }
 
 bool AElysiumMapActor::IsNpcBodyVisible(USkeletalMeshComponent* Body)
@@ -1376,6 +1383,14 @@ void AElysiumMapActor::ReconcilePlayerBrushTouches(APawn* Pawn)
 			CurrentBrushes.Add(Brush->GetOwningEntity());
 		}
 	}
+	for (const FTouchAnchorRecord& Record : TouchAnchors)
+	{
+		UPrimitiveComponent* Component = Record.Component.Get();
+		if (Record.bEnabled && Component && Component->IsOverlappingActor(Pawn))
+		{
+			CurrentBrushes.Add(Record.Owner);
+		}
+	}
 	EntityWorld->ReconcilePlayerTouches(CurrentBrushes);
 	bPlayerTouchReconcilePending = false;
 }
@@ -1465,6 +1480,84 @@ void AElysiumMapActor::ClearUseAnchors()
 		}
 	}
 	OwnedUseAnchorComponents.Reset();
+}
+
+void AElysiumMapActor::RegisterTouchAnchor(UPrimitiveComponent* Source,
+	const FElysiumEntityHandle& OwnerHandle)
+{
+	if (!Source || !OwnerHandle.IsSet())
+	{
+		return;
+	}
+	UBoxComponent* Proxy = NewObject<UBoxComponent>(this);
+	Proxy->SetCanEverAffectNavigation(false);
+	Proxy->SetMobility(EComponentMobility::Movable);
+	Proxy->InitBoxExtent(Source->Bounds.BoxExtent.ComponentMax(FVector(4.0f)));
+	Proxy->SetupAttachment(Source);
+	Proxy->SetWorldLocation(Source->Bounds.Origin);
+	Proxy->SetWorldRotation(FRotator::ZeroRotator);
+	Proxy->SetCollisionObjectType(ECC_WorldDynamic);
+	Proxy->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Proxy->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	Proxy->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Proxy->SetGenerateOverlapEvents(true);
+	Proxy->OnComponentBeginOverlap.AddDynamic(this, &AElysiumMapActor::HandleTouchAnchorBegin);
+	Proxy->RegisterComponent();
+	AddInstanceComponent(Proxy);
+	OwnedTouchAnchorComponents.Add(Proxy);
+
+	FTouchAnchorRecord& Record = TouchAnchors.AddDefaulted_GetRef();
+	Record.Component = Proxy;
+	Record.Owner = OwnerHandle;
+}
+
+void AElysiumMapActor::SetTouchAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)
+{
+	for (FTouchAnchorRecord& Record : TouchAnchors)
+	{
+		if (Record.Owner != OwnerHandle)
+		{
+			continue;
+		}
+		Record.bEnabled = bEnabled;
+		if (UPrimitiveComponent* Component = Record.Component.Get())
+		{
+			Component->SetCollisionEnabled(
+				bEnabled ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+		}
+	}
+}
+
+void AElysiumMapActor::ClearTouchAnchors()
+{
+	TouchAnchors.Reset();
+	for (UPrimitiveComponent* Component : OwnedTouchAnchorComponents)
+	{
+		if (Component)
+		{
+			Component->DestroyComponent();
+		}
+	}
+	OwnedTouchAnchorComponents.Reset();
+}
+
+void AElysiumMapActor::HandleTouchAnchorBegin(UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor, UPrimitiveComponent*, int32, bool, const FHitResult&)
+{
+	if (!EntityWorld || OtherActor != ResolvePlayerPawn())
+	{
+		return;
+	}
+	const FTouchAnchorRecord* Record = TouchAnchors.FindByPredicate(
+		[OverlappedComponent](const FTouchAnchorRecord& Candidate)
+		{
+			return Candidate.bEnabled && Candidate.Component.Get() == OverlappedComponent;
+		});
+	if (Record)
+	{
+		EntityWorld->RouteEntityTouch(
+			Record->Owner, EntityWorld->PlayerHandle(), /*bBegin*/ true);
+	}
 }
 
 FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
@@ -2907,7 +3000,8 @@ void AElysiumMapActor::TickGaze(float DeltaSeconds)
 		FElysiumEyeTargetTuning Tuning;
 		if (Rules != nullptr)
 		{
-			if (const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Character->Disposition))
+			if (const FElysiumDisposition* Row = Rules->Dispositions().Resolve(
+				Character->Disposition, Character->DispositionLevel))
 			{
 				Tuning = Row->EyeTarget;
 			}

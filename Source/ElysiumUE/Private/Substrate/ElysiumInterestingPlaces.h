@@ -1,12 +1,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Math/RandomStream.h"
 
 struct FElysiumWeightedName
 {
 	FString Name;
 	float Weight = 1.0f;
 };
+
+namespace ElysiumInterestingPlaces
+{
+	// Retail scans rating 5 down through 0, stops at the first populated tier, then picks one
+	// candidate uniformly. Ratings and returned values are indices into the caller's already-
+	// eligible candidate array; values outside the recovered rating range are not candidates.
+	int32 PickHighestRatedCandidate(TConstArrayView<int32> Ratings, FRandomStream& Random);
+}
 
 // One row of vdata/system/interestingplacetypelist.txt. This remains engine-neutral: the table
 // describes who may use a place and which ACT_* vocabulary to request; Unreal supplies movement

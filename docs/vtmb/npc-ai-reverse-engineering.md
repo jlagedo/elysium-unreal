@@ -1172,16 +1172,24 @@ The current Unreal runtime already has useful lower layers. `FElysiumNpc` create
 body, exposes dialogue gates, follows named patrol paths, uses eligible interesting places,
 participates in scripted-sequence movement ownership, and saves/restores its implemented state.
 `FElysiumCombatCharacter` owns the resolved character sheet, money, talk gating, damage, and death
-surface. The character presentation path consumes disposition for animation stance.
+surface. The character presentation path resolves disposition name plus level into stance,
+default/talking expression, gaze and blink policy; dialogue lipsync composes over that baseline.
+
+The independent combat-relationship store is present on `FElysiumNpc`: `player_reaction` seeds an
+exact player row, `SetRelationship` writes exact-entity or class rows (including `player` and
+wildcards), ordinary lookup is exact entity then class then neutral, and the table survives save.
+This is deliberately state only. Nothing in the current runtime derives it from emotional
+disposition or RPG reaction, and nothing consumes it to assign an enemy or enter combat.
 
 The current `npc_maker` child specification propagates model, stat template, base gender, default
 disposition, angles, interesting-place enablement, and groups. That is narrower than the authored
-maker/NPC surface catalogued above. Full equipment, perception, relation, squad, child I/O, and
-other maker inheritance remain part of the gap.
+maker/NPC surface catalogued above. Full equipment, perception, squad, child I/O, and other maker
+inheritance remain part of the gap.
 
-The general native senses/memory, `SetRelationship` tables, high-level state/condition loop,
-schedule/task graph, class-specific combat policy, full follower policy, and broad reaction model
-are not yet reconstructed. `aiscripted_schedule.StartSchedule` is presently a stub. Existing
+The general native senses/memory, relationship priority arbitration, relationship consumers,
+high-level state/condition loop, combat schedule/task graph, class-specific combat policy, full
+follower policy, and RPG reaction-score model are not yet reconstructed.
+`aiscripted_schedule.StartSchedule` is presently a stub. Existing
 patrol, dialogue, sequence, animation, damage, and entity-I/O foundations should be extended at
 their existing ownership seams rather than replaced by a parallel NPC runtime.
 

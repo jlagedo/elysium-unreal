@@ -192,10 +192,12 @@ public:
 	void RegisterPropBody(UStaticMeshComponent* Component,
 		const FElysiumEntityHandle& UseOwner = FElysiumEntityHandle::Invalid());
 	void RegisterUseAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
+	void RegisterTouchAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
 	// Keep a registered model anchor in step with ScriptHide/Kill without teaching the entity about
 	// collision profiles. Brush bodies also report the edge, although their own SetDormant remains
 	// the physical collision authority.
 	void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
+	void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
 
 	// 8.4 — register a physics constraint (built by a phys_hinge leaf) so the world tears it down
 	// with the map, like the prop/NPC bodies. The FElysiumPhysHinge leaf calls this from PostSpawn().
@@ -219,7 +221,13 @@ public:
 
 	// Overlap routing (P1.5): a brush body's begin/end overlap lands here. Resolve the brush
 	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
-	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator, bool bBegin);
+	void RouteEntityTouch(const FElysiumEntityHandle& Touched, const FElysiumEntityHandle& Activator,
+		bool bBegin);
+	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator,
+		bool bBegin)
+	{
+		RouteEntityTouch(Brush, Activator, bBegin);
+	}
 	// Deterministically release every retained pair owned by a brush before its physical collision
 	// is removed. Later engine end callbacks are harmless because the pairs are already absent.
 	void EndBrushTouches(const FElysiumEntityHandle& Brush);
@@ -505,6 +513,10 @@ private:
 	uint32 Epoch = 0;
 	bool bActive = false;
 	bool bSnapshotApplied = false;
+	// Indices whose state came from the applied snapshot. On restored activation, untouched rebuilt
+	// entities join the post-Activate omission baseline; these records keep the construction baseline
+	// so their saved activation-derived differences remain explicit.
+	TSet<int32> SnapshotEntityIndices;
 
 	FElysiumEntityDefs Defs;
 	// Defs synthesized at runtime (npc_maker.Spawn): held so an entity's Def* stays valid past the

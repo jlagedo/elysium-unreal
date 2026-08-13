@@ -23,6 +23,33 @@ namespace
 	}
 }
 
+int32 ElysiumInterestingPlaces::PickHighestRatedCandidate(
+	TConstArrayView<int32> Ratings, FRandomStream& Random)
+{
+	for (int32 Rating = 5; Rating >= 0; --Rating)
+	{
+		int32 Count = 0;
+		for (const int32 CandidateRating : Ratings)
+		{
+			Count += CandidateRating == Rating ? 1 : 0;
+		}
+		if (Count == 0)
+		{
+			continue;
+		}
+
+		int32 Pick = Random.RandRange(0, Count - 1);
+		for (int32 CandidateIndex = 0; CandidateIndex < Ratings.Num(); ++CandidateIndex)
+		{
+			if (Ratings[CandidateIndex] == Rating && Pick-- == 0)
+			{
+				return CandidateIndex;
+			}
+		}
+	}
+	return INDEX_NONE;
+}
+
 bool FElysiumInterestingPlaceType::Accepts(const FString& ClassName,
 	const FString& StatTemplate) const
 {

@@ -38,12 +38,124 @@ namespace
 			Out[i] = FCString::Atoi(*Parts[i]);
 		}
 	}
+
+	const FElysiumDisposition* FindExact(const TArray<FElysiumDisposition>& Rows,
+		const FString& Name, int32 Level)
+	{
+		for (const FElysiumDisposition& Row : Rows)
+		{
+			if (Row.Level == Level && Row.Name.Equals(Name, ESearchCase::IgnoreCase))
+			{
+				return &Row;
+			}
+		}
+		return nullptr;
+	}
+
+	const FElysiumDisposition* FindAtOrBelow(const TArray<FElysiumDisposition>& Rows,
+		const FString& Name, int32 RequestedLevel)
+	{
+		for (int32 Level = FMath::Max(1, RequestedLevel); Level >= 1; --Level)
+		{
+			if (const FElysiumDisposition* Row = FindExact(Rows, Name, Level))
+			{
+				return Row;
+			}
+		}
+		return nullptr;
+	}
+
+	void ApplyEyeOverrides(const ElysiumKeyValues::FKvNode& Eye, FElysiumEyeTargetTuning& Out)
+	{
+		if (Eye.Has(TEXT("Default Direction")))
+		{
+			Out.DefaultDirection = Eye.Int(TEXT("Default Direction"), Out.DefaultDirection);
+		}
+		if (Eye.Has(TEXT("Fidget Points")))
+		{
+			ParseFidgetPoints(Eye.Str(TEXT("Fidget Points"), FString()), Out.FidgetPoints);
+		}
+		if (Eye.Has(TEXT("Min Interval"))) { Out.MinInterval = Eye.Flt(TEXT("Min Interval"), Out.MinInterval); }
+		if (Eye.Has(TEXT("Max Interval"))) { Out.MaxInterval = Eye.Flt(TEXT("Max Interval"), Out.MaxInterval); }
+		if (Eye.Has(TEXT("Hold Min"))) { Out.HoldMin = Eye.Flt(TEXT("Hold Min"), Out.HoldMin); }
+		if (Eye.Has(TEXT("Hold Max"))) { Out.HoldMax = Eye.Flt(TEXT("Hold Max"), Out.HoldMax); }
+		if (Eye.Has(TEXT("Eye Turn Rate"))) { Out.TurnRate = Eye.Flt(TEXT("Eye Turn Rate"), Out.TurnRate); }
+	}
+
+	void ApplyOverrides(const FString& Name, const ElysiumKeyValues::FKvNode& Node,
+		FElysiumDisposition& Out)
+	{
+		Out.Name = Name;
+		if (Node.Has(TEXT("Animation Name")))
+		{
+			Out.AnimName = Node.Str(TEXT("Animation Name"), Out.AnimName);
+		}
+		if (Node.Has(TEXT("DispositionLevel")))
+		{
+			Out.Level = Node.Int(TEXT("DispositionLevel"), Out.Level);
+		}
+		if (Node.Has(TEXT("Talking Stance Change Threshold")))
+		{
+			Out.TalkingStanceChangeThreshold = Node.Flt(
+				TEXT("Talking Stance Change Threshold"), Out.TalkingStanceChangeThreshold);
+		}
+		if (Node.Has(TEXT("Talking Stance Change Chance")))
+		{
+			Out.TalkingStanceChangeChance = Node.Int(
+				TEXT("Talking Stance Change Chance"), Out.TalkingStanceChangeChance);
+		}
+		if (Node.Has(TEXT("Standing Fidget Chance")))
+		{
+			Out.StandingFidgetChance = Node.Int(TEXT("Standing Fidget Chance"), Out.StandingFidgetChance);
+		}
+		if (Node.Has(TEXT("Standing Stance Change Threshold")))
+		{
+			Out.StandingStanceChangeThreshold = Node.Flt(
+				TEXT("Standing Stance Change Threshold"), Out.StandingStanceChangeThreshold);
+		}
+		if (Node.Has(TEXT("Standing stance Change Chance")))
+		{
+			Out.StandingStanceChangeChance = Node.Int(
+				TEXT("Standing stance Change Chance"), Out.StandingStanceChangeChance);
+		}
+		if (Node.Has(TEXT("Min Blink Interval")) || Node.Has(TEXT("MinBlinkInterval")))
+		{
+			Out.MinBlinkInterval = Node.Flt(TEXT("Min Blink Interval"),
+				Node.Flt(TEXT("MinBlinkInterval"), Out.MinBlinkInterval));
+		}
+		if (Node.Has(TEXT("Max Blink Interval")) || Node.Has(TEXT("MaxBlinkInterval")))
+		{
+			Out.MaxBlinkInterval = Node.Flt(TEXT("Max Blink Interval"),
+				Node.Flt(TEXT("MaxBlinkInterval"), Out.MaxBlinkInterval));
+		}
+		if (Node.Has(TEXT("Eye Turn Rate")))
+		{
+			Out.EyeTurnRate = Node.Flt(TEXT("Eye Turn Rate"), Out.EyeTurnRate);
+		}
+		if (const ElysiumKeyValues::FKvNode* Expression = Node.Child(TEXT("DefaultExpression")))
+		{
+			if (Expression->Has(TEXT("Expression Name")))
+			{
+				Out.DefaultExpression = Expression->Str(TEXT("Expression Name"), Out.DefaultExpression);
+			}
+			if (Expression->Has(TEXT("Talking Expression")))
+			{
+				Out.TalkingExpression = Expression->Str(TEXT("Talking Expression"), Out.TalkingExpression);
+			}
+			if (Expression->Has(TEXT("Intensity")))
+			{
+				Out.ExpressionIntensity = Expression->Flt(TEXT("Intensity"), Out.ExpressionIntensity);
+			}
+		}
+		if (const ElysiumKeyValues::FKvNode* Eye = Node.Child(TEXT("EyeTarget")))
+		{
+			ApplyEyeOverrides(*Eye, Out.EyeTarget);
+		}
+	}
 }
 
 bool FElysiumDispositionTable::Load(FString& OutError)
 {
-	Rows.Reset();
-
 	const FString Path = FElysiumContentPaths::VdataFile(TEXT("system/dispositiontable.txt"));
 	FString Raw;
 	if (!FFileHelper::LoadFileToString(Raw, *Path))
@@ -51,12 +163,20 @@ bool FElysiumDispositionTable::Load(FString& OutError)
 		OutError = FString::Printf(TEXT("not found: %s"), *Path);
 		return false;
 	}
+	return ParseText(Raw, Path, OutError);
+}
+
+bool FElysiumDispositionTable::ParseText(const FString& Raw, const FString& Source,
+	FString& OutError)
+{
+	Rows.Reset();
+	OutError.Reset();
 	const TSharedPtr<ElysiumKeyValues::FKvNode> Root = ElysiumKeyValues::ParseText(Raw);
 	// One top-level `DispositionTable` block whose children are the dispositions.
 	const ElysiumKeyValues::FKvNode* Table = Root.IsValid() ? Root->Child(TEXT("DispositionTable")) : nullptr;
 	if (Table == nullptr)
 	{
-		OutError = FString::Printf(TEXT("no DispositionTable block in %s"), *Path);
+		OutError = FString::Printf(TEXT("no DispositionTable block in %s"), *Source);
 		return false;
 	}
 
@@ -67,62 +187,49 @@ bool FElysiumDispositionTable::Load(FString& OutError)
 		{
 			continue;
 		}
+		// Retail constructs every record from Neutral, then lets CopyDataFrom replace that base with
+		// an earlier named record before this block's own fields override it. This is why Joy L2 can
+		// author only its fidget chance and expression while retaining Joy L1's animation and gaze.
 		FElysiumDisposition Row;
-		// The KV reader folds keys to lower but keeps values' case, and the block key is the
-		// disposition's authored name — which is also the token the stance clips are named for.
-		Row.Name = Kid.Key;
-		Row.AnimName = N->Str(TEXT("Animation Name"), Kid.Key);
-		Row.Level = N->Int(TEXT("DispositionLevel"), 0);
-		Row.TalkingStanceChangeThreshold = N->Flt(TEXT("Talking Stance Change Threshold"), 0.f);
-		Row.TalkingStanceChangeChance = N->Int(TEXT("Talking Stance Change Chance"), 0);
-		Row.StandingFidgetChance = N->Int(TEXT("Standing Fidget Chance"), 0);
-		Row.StandingStanceChangeThreshold = N->Flt(TEXT("Standing Stance Change Threshold"), 0.f);
-		// Authored with a lowercase `stance` in the middle on every row — the KV reader folds keys
-		// to lower, so this reads as spelled either way.
-		Row.StandingStanceChangeChance = N->Int(TEXT("Standing stance Change Chance"), 0);
-		// Authored under two spellings, and reading only one is a silent content loss rather than a
-		// parse failure: four rows space the words and six run them together, and two of the six carry
-		// the only cadences in the file that are not 2.5/6.0 — `Error`, the row a character falls to
-		// when its disposition does not resolve, blinks at 1.5/2.0.
-		Row.MinBlinkInterval = N->Flt(TEXT("Min Blink Interval"), N->Flt(TEXT("MinBlinkInterval"), 2.5f));
-		Row.MaxBlinkInterval = N->Flt(TEXT("Max Blink Interval"), N->Flt(TEXT("MaxBlinkInterval"), 6.f));
-		// The disposition-level "Eye Turn Rate", which is a different key from the one inside the
-		// `EyeTarget` block below and carries a different value on every row that authors both.
-		Row.EyeTurnRate = N->Flt(TEXT("Eye Turn Rate"), 0.9f);
-		if (const ElysiumKeyValues::FKvNode* Eye = N->Child(TEXT("EyeTarget")))
+		if (!Rows.IsEmpty())
 		{
-			Row.EyeTarget.DefaultDirection = Eye->Int(TEXT("Default Direction"), 0);
-			ParseFidgetPoints(Eye->Str(TEXT("Fidget Points"), FString()), Row.EyeTarget.FidgetPoints);
-			Row.EyeTarget.MinInterval = Eye->Flt(TEXT("Min Interval"), 5.f);
-			Row.EyeTarget.MaxInterval = Eye->Flt(TEXT("Max Interval"), 8.f);
-			Row.EyeTarget.HoldMin = Eye->Flt(TEXT("Hold Min"), 0.15f);
-			Row.EyeTarget.HoldMax = Eye->Flt(TEXT("Hold Max"), 0.25f);
-			Row.EyeTarget.TurnRate = Eye->Flt(TEXT("Eye Turn Rate"), 0.3f);
+			Row = Rows[0];
 		}
-		Rows.Add(Kid.Key, MoveTemp(Row));
+		if (const FString* CopyName = N->Value(TEXT("CopyDataFrom")))
+		{
+			if (const FElysiumDisposition* Copy = FindExact(Rows, *CopyName, 1))
+			{
+				Row = *Copy;
+			}
+		}
+		Row.Name = Kid.Key;
+		if (Row.AnimName.IsEmpty())
+		{
+			Row.AnimName = Kid.Key;
+		}
+		ApplyOverrides(Kid.Key, *N, Row);
+		Rows.Add(MoveTemp(Row));
 	}
 	if (Rows.IsEmpty())
 	{
-		OutError = FString::Printf(TEXT("DispositionTable in %s has no rows"), *Path);
+		OutError = FString::Printf(TEXT("DispositionTable in %s has no rows"), *Source);
 		return false;
 	}
 	return true;
 }
 
-const FElysiumDisposition* FElysiumDispositionTable::Resolve(const FString& Disposition) const
+const FElysiumDisposition* FElysiumDispositionTable::Resolve(const FString& Disposition, int32 Level) const
 {
-	// The KV reader lowercased the block keys, and the maps spell the keyfield with mixed case
-	// (`Neutral`, `fear`, `Damaged`), so both ends fold before comparing.
-	if (const FElysiumDisposition* Row = Rows.Find(Disposition.ToLower()))
+	if (const FElysiumDisposition* Row = FindAtOrBelow(Rows, Disposition, Level))
 	{
 		return Row;
 	}
-	return Rows.Find(FString(NeutralName).ToLower());
+	return FindExact(Rows, NeutralName, 1);
 }
 
-FString FElysiumDispositionTable::AnimNameFor(const FString& Disposition) const
+FString FElysiumDispositionTable::AnimNameFor(const FString& Disposition, int32 Level) const
 {
-	const FElysiumDisposition* Row = Resolve(Disposition);
+	const FElysiumDisposition* Row = Resolve(Disposition, Level);
 	if (Row != nullptr && !Row->AnimName.IsEmpty())
 	{
 		return Row->AnimName;

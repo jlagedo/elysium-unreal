@@ -8,6 +8,8 @@
 
 #include "Substrate/ElysiumMover.h"
 
+#include "Substrate/ElysiumSkillClasses.h"
+
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBrushComponent.h"
 #include "ElysiumClassRegistry.h"
@@ -508,6 +510,49 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 		bRestoreSeatPending = true;
 		bStartOpenSeatPending = false;
 		NextThink = 0.0f;
+	}
+}
+
+void FElysiumDoorBase::InputLock()
+{
+	bLocked = true;
+	SyncDoorknobs();
+}
+
+void FElysiumDoorBase::InputUnlock()
+{
+	bLocked = false;
+	SyncDoorknobs();
+}
+
+void FElysiumDoorBase::RegisterDoorknob(FElysiumLockableEntity& Doorknob)
+{
+	if (Doorknobs.Contains(Doorknob.Handle))
+	{
+		return;
+	}
+	if (Doorknobs.Num() >= 2)
+	{
+		UE_LOG(LogElysiumMover, Warning, TEXT("Door %s already has 2 doorknobs"), *DebugString());
+		Doorknob.Kill();
+		return;
+	}
+	Doorknobs.Add(Doorknob.Handle);
+	Doorknob.ApplyDoorLockState(bLocked);
+}
+
+void FElysiumDoorBase::SyncDoorknobs()
+{
+	for (int32 Index = Doorknobs.Num() - 1; Index >= 0; --Index)
+	{
+		FElysiumEntity* Entity = World ? World->Resolve(Doorknobs[Index]) : nullptr;
+		FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr;
+		if (!Doorknob || Doorknob->IsDead())
+		{
+			Doorknobs.RemoveAt(Index);
+			continue;
+		}
+		Doorknob->ApplyDoorLockState(bLocked);
 	}
 }
 

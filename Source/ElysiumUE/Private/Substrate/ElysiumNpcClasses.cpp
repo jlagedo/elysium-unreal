@@ -41,6 +41,7 @@
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumPendingInput.h"
+#include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
@@ -252,6 +253,8 @@ public:
 	int32 DecodedDialogFlags = 0;     // no bit is named until RE46 closes it
 	EElysiumDialogOpenerKind DialogOpener = EElysiumDialogOpenerKind::Remote;
 	FString DefaultCamera;            // definition-derived Tier-1 `default_camera`, never save state
+	FString PlayerReaction;           // player_reaction — authored `D_* priority` seed
+	FElysiumRelationships Relationships;
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
 
 	// VtMB's disposition stance machine (`docs/vtmb/animation_and_movers.md`). The index and the
@@ -344,6 +347,82 @@ public:
 		{
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 		}
+	}
+
+	void SeedPlayerRelationship()
+	{
+		const FElysiumEntityHandle Player = World ? World->PlayerHandle()
+			: FElysiumEntityHandle::Invalid();
+		if (!Player.IsSet() || PlayerReaction.IsEmpty() || Relationships.HasEntity(Player))
+		{
+			return;
+		}
+		TArray<FString> Tokens;
+		PlayerReaction.ParseIntoArrayWS(Tokens);
+		EElysiumRelationship Value = EElysiumRelationship::Neutral;
+		if (Tokens.Num() != 2 || !ElysiumRelationships::Parse(Tokens[0], Value))
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s invalid player_reaction '%s'"),
+				*DebugString(), *PlayerReaction);
+			return;
+		}
+		Relationships.SetEntity(Player, Value, FCString::Atoi(*Tokens[1]));
+	}
+
+	void InputSetRelationship(const FElysiumInputArgs& Args)
+	{
+		TArray<FString> Tokens;
+		Args.Param.ToString().ParseIntoArrayWS(Tokens);
+		if (Tokens.IsEmpty() || Tokens.Num() % 3 != 0)
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("%s SetRelationship expects target D_* priority triples, got '%s'"),
+				*DebugString(), *Args.Param.ToString());
+			return;
+		}
+
+		for (int32 Index = 0; Index < Tokens.Num(); Index += 3)
+		{
+			const FString& TargetSpec = Tokens[Index];
+			EElysiumRelationship Value = EElysiumRelationship::Neutral;
+			if (!ElysiumRelationships::Parse(Tokens[Index + 1], Value))
+			{
+				UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s SetRelationship unknown value '%s'"),
+					*DebugString(), *Tokens[Index + 1]);
+				continue;
+			}
+			const int32 Priority = FCString::Atoi(*Tokens[Index + 2]);
+			bool bMatchedEntity = false;
+			if (World && TargetSpec.Equals(TEXT("player"), ESearchCase::IgnoreCase))
+			{
+				bMatchedEntity = Relationships.SetEntity(World->PlayerHandle(), Value, Priority);
+			}
+			else if (World)
+			{
+				const bool bWildcard = TargetSpec.Contains(TEXT("*")) || TargetSpec.Contains(TEXT("?"));
+				for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
+				{
+					if (!Candidate || Candidate->IsDead() || Candidate->TargetName.IsEmpty())
+					{
+						continue;
+					}
+					const bool bMatches = bWildcard
+						? Candidate->TargetName.MatchesWildcard(TargetSpec, ESearchCase::IgnoreCase)
+						: Candidate->TargetName.Equals(TargetSpec, ESearchCase::IgnoreCase);
+					if (bMatches)
+					{
+						Relationships.SetEntity(Candidate->Handle, Value, Priority);
+						bMatchedEntity = true;
+					}
+				}
+			}
+			if (!bMatchedEntity && !TargetSpec.Contains(TEXT("*")) && !TargetSpec.Contains(TEXT("?")))
+			{
+				Relationships.SetClass(TargetSpec, Value, Priority);
+			}
+		}
+		Mind.RecordExternal(FString::Printf(TEXT("relationship table %d entity / %d class; combat consumer pending"),
+			Relationships.NumEntityRules(), Relationships.NumClassRules()));
 	}
 
 	void InputSetupPatrolType(const FElysiumInputArgs& Args)
@@ -969,8 +1048,14 @@ public:
 		{
 			return nullptr;
 		}
-		FElysiumInterestingPlace* Best = nullptr;
-		float BestDistanceSq = TNumericLimits<float>::Max();
+
+		// PickRandomInterestingPlace admits nodes within 10,000 Source units, but distance does not
+		// rank them. It walks rating 5 -> 0, stops at the first populated tier, and chooses uniformly
+		// within that tier. The NPC schedule stream makes the choice replayable across save/load.
+		constexpr double FindRadiusCm = 10000.0 * ElysiumMove::U;
+		constexpr double FindRadiusSqCm = FindRadiusCm * FindRadiusCm;
+		TArray<FElysiumInterestingPlace*> Candidates;
+		TArray<int32> CandidateRatings;
 		for (const TUniquePtr<FElysiumEntity>& Candidate : World->Entities())
 		{
 			if (!Candidate || !Candidate->Def
@@ -987,25 +1072,28 @@ public:
 			{
 				continue;
 			}
-			const float DistanceSq = FVector::DistSquared2D(Origin, Spot->Origin);
-			if (!Best || DistanceSq < BestDistanceSq
-				|| (FMath::IsNearlyEqual(DistanceSq, BestDistanceSq)
-					&& Spot->Handle.Index < Best->Handle.Index))
+			if (FVector::DistSquared(Origin, Spot->Origin) > FindRadiusSqCm)
 			{
-				Best = Spot;
-				BestDistanceSq = DistanceSq;
+				continue;
 			}
+			Candidates.Add(Spot);
+			CandidateRatings.Add(Spot->Rating);
 		}
-		if (Best && Best->Claim(Handle))
+
+		const int32 PickedIndex = ElysiumInterestingPlaces::PickHighestRatedCandidate(
+			CandidateRatings, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
+		FElysiumInterestingPlace* Picked = Candidates.IsValidIndex(PickedIndex)
+			? Candidates[PickedIndex] : nullptr;
+		if (Picked && Picked->Claim(Handle))
 		{
 			if (!Mind.Acquire(EElysiumBodyOwner::Ambient, /*bSuspendCurrent=*/false,
 				AmbientOwner, TEXT("interesting-place claim")))
 			{
-				Best->Release(Handle);
+				Picked->Release(Handle);
 				return nullptr;
 			}
-			CurrentSpotIndex = Best->Handle.Index;
-			return Best;
+			CurrentSpotIndex = Picked->Handle.Index;
+			return Picked;
 		}
 		return nullptr;
 	}
@@ -1058,7 +1146,8 @@ public:
 	// and one-off models idle off ACT_IDLE instead, and the caller falls back to that.
 	bool EnsureStanceResolved()
 	{
-		const FString Key = ModelStem() + TEXT("|") + Disposition;
+		const FString Key = FString::Printf(TEXT("%s|%s|%d"),
+			*ModelStem(), *Disposition, DispositionLevel);
 		if (StanceResolvedFor == Key)
 		{
 			return !bStanceUnavailable;
@@ -1070,7 +1159,7 @@ public:
 
 		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 		if (Embodiment == nullptr
-			|| !Embodiment->ResolveDisposition(Disposition, StanceTuning)
+			|| !Embodiment->ResolveDisposition(Disposition, DispositionLevel, StanceTuning)
 			|| !Embodiment->ResolveStanceClips(ModelStem(), StanceTuning.AnimName, StanceClips))
 		{
 			return false;
@@ -1082,21 +1171,68 @@ public:
 	// A disposition change re-keys the whole table: a new row means a new `AnimName`, so the clips
 	// and the tuning both move. The stance *index* deliberately survives it -- retail's datamap
 	// carries `m_CurrStance` across the change and never resets it.
-	virtual bool SetDispositionName(const FString& NewDisposition) override
+	virtual bool SetDisposition(const FString& NewDisposition, int32 NewLevel) override
 	{
-		// The base answers `true` for a write that changes nothing, so the *field* is what says
-		// whether the table has to be re-keyed, not the return value.
-		const FString Previous = Disposition;
-		const bool bAccepted = FElysiumCombatCharacter::SetDispositionName(NewDisposition);
-		if (!Disposition.Equals(Previous, ESearchCase::IgnoreCase))
+		FElysiumDisposition OldRow;
+		FElysiumDisposition NewRow;
+		bool bChanged = false;
+		if (!CommitDisposition(NewDisposition, NewLevel, bChanged, &OldRow, &NewRow))
 		{
-			StanceResolvedFor.Reset();
+			return false;
+		}
+		if (!bChanged)
+		{
+			return true;
+		}
+
+		StanceResolvedFor.Reset();
+		bool bPlayedTransition = false;
+		const EElysiumBodyOwner Owner = Mind.Owner();
+		if (Visual && !IsFeedBusy()
+			&& (Owner == EElysiumBodyOwner::None || Owner == EElysiumBodyOwner::Dialogue))
+		{
+			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+			if (Embodiment)
+			{
+				const FString OldAnim = !OldRow.AnimName.IsEmpty() ? OldRow.AnimName : OldRow.Name;
+				const FString NewAnim = !NewRow.AnimName.IsEmpty() ? NewRow.AnimName : NewRow.Name;
+				const int32 StanceNumber = FMath::Clamp(
+					Stance.Current, 0, ElysiumStance::Count - 1) + 1;
+				auto TryTransition = [&](int32 Number)
+				{
+					if (OldAnim.IsEmpty() || NewAnim.IsEmpty())
+					{
+						return false;
+					}
+					const FString Clip = FString::Printf(TEXT("Stance_Trans_%s_%d_%s_%d"),
+						*OldAnim, Number, *NewAnim, Number);
+					float Seconds = 0.f;
+					if (!Embodiment->PlayNpcClip(Visual, ModelStem(), Clip,
+						/*bLoop=*/false, &Seconds))
+					{
+						return false;
+					}
+					Mind.RecordExternal(FString::Printf(TEXT("disposition %s L%d -> %s L%d via %s"),
+						*OldRow.Name, OldRow.Level, *NewRow.Name, NewRow.Level, *Clip));
+					if (World)
+					{
+						NextThink = static_cast<float>(World->NowSeconds() + FMath::Max(0.05f, Seconds));
+					}
+					return true;
+				};
+				bPlayedTransition = TryTransition(StanceNumber)
+					|| (StanceNumber != 1 && TryTransition(1));
+			}
+		}
+		if (!bPlayedTransition)
+		{
+			ResetAnimToIdle();
 			if (World)
 			{
 				NextThink = static_cast<float>(World->NowSeconds());
 			}
 		}
-		return bAccepted;
+		return true;
 	}
 
 	// --- IElysiumScheduleRunner: the task bodies -------------------------------------------------
@@ -1116,7 +1252,8 @@ public:
 		// agree on the branch that matters -- a character in dialogue holds its stance either way.
 		const int32 Before = Stance.Current;
 		const FElysiumStanceChoice Choice = ElysiumStance::Select(StanceClips, StanceTuning, Stance,
-			/*bTalking=*/bInDialog, Now, ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
+			/*bTalking=*/IsDispositionTalking(), Now,
+			ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
 		float Seconds = 0.f;
 		if (!Choice.IsSet()
 			|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds))
@@ -1740,6 +1877,7 @@ public:
 
 	virtual void Activate() override
 	{
+		SeedPlayerRelationship();
 		Mind.ArmAdmission();
 		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 	}
@@ -1951,6 +2089,15 @@ public:
 				// would discard saved state and make the payload fail its own round trip.
 			}
 		}
+
+		if (Ar.Version() >= FElysiumSaveVersion::NpcSocial)
+		{
+			Relationships.Serialize(Ar);
+			if (Ar.IsLoading() && World)
+			{
+				Relationships.Rebase(*World);
+			}
+		}
 	}
 
 	virtual const TCHAR* SaveBlockReason() const override
@@ -1977,6 +2124,14 @@ public:
 			: TEXT("no"));
 		Out.Emplace(TEXT("default_camera"), DefaultCamera.IsEmpty() ? TEXT("(none)") : DefaultCamera);
 		Out.Emplace(TEXT("Times talked"), FString::FromInt(TimesTalked));
+		const FElysiumEntityHandle Player = World ? World->PlayerHandle()
+			: FElysiumEntityHandle::Invalid();
+		Out.Emplace(TEXT("Disposition"), FString::Printf(TEXT("%s L%d%s"), *Disposition,
+			DispositionLevel, IsDispositionTalking() ? TEXT(" talking") : TEXT("")));
+		Out.Emplace(TEXT("Relationship to player"), FString::Printf(
+			TEXT("%s (table %d entity / %d class; combat consumer NOT IMPLEMENTED)"),
+			ElysiumRelationships::LexToString(Relationships.Resolve(Player, TEXT("player"))),
+			Relationships.NumEntityRules(), Relationships.NumClassRules()));
 		if (!StatTemplate.IsEmpty())
 		{
 			Out.Emplace(TEXT("Stat template"), StatTemplate);
@@ -2387,6 +2542,8 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).InputFollowPatrolPath(Args); });
 	D.Input(TEXT("ClearPatrolPath"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputClearPatrolPath(Args); });
+	D.Input(TEXT("SetRelationship"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputSetRelationship(Args); });
 
 	// CAI_BaseNPC's own inputs, registered so the name resolves through the chain walk and reports
 	// itself instead of dropping as an unknown input. Nothing is performed: the name, the argument
@@ -2394,9 +2551,8 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// as CAI_BaseNPC — the level VtMB puts them at — so one work-list row covers every `npc_*` leaf,
 	// even though this runtime folds that node into each registered classname.
 	using FN = FElysiumNpc;
-	// STRING — 334 corpus calls, the third-largest single gap in the game
-	// (`docs/vtmb/script_api.md`, datamap 0x105c9814).
-	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, SetRelationship, "9.9 — the NPC relationship model");
+	// SetRelationship's store/writer is live above. Enemy assignment, senses and combat schedules
+	// are intentionally absent from this talk/feed slice and remain visible in NPC diagnostics.
 	// Map-fired NPC inputs the shipped content wires (`docs/vtmb/sp_tutorial_1-event-surface.md` §7):
 	// 30 `TeleportToEntity`, 8 `SetScriptedDiscipline` and 4 `TakeDamage` wires across the exported
 	// maps, all of them aimed at an `npc_*` receiver. `TakeDamage` is a *method* on this chain
@@ -2410,6 +2566,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("allow_alert_lookaround"), &FElysiumNpc::bAllowAlertLookaround);
 	AddNpcField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera, EElysiumField::Key);
+	AddNpcField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction, EElysiumField::Key);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
 	AddNpcField(D, TEXT("interesting_place_groups"), &FElysiumNpc::InterestingPlaceGroups);
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat

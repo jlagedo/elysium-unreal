@@ -717,7 +717,7 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankSte
 }
 
 TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
-	const FString& Disposition, EElysiumIdleTier& OutTier)
+	const FString& Disposition, EElysiumIdleTier& OutTier, int32 DispositionLevel)
 {
 	OutTier = EElysiumIdleTier::None;
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
@@ -732,7 +732,7 @@ TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 	//    This is a listing of what the body carries, not an addressable table: the stance index is
 	//    resolved against `ResolveStanceClips` instead, which fills the holes the way precache does.
 	//    Here it only has to answer whether this body has a stance set at all.
-	const FString AnimName = Dispositions().AnimNameFor(Disposition);
+	const FString AnimName = Dispositions().AnimNameFor(Disposition, DispositionLevel);
 	TArray<FString> Candidates = Set->StanceClips(AnimName);
 	if (!Candidates.IsEmpty())
 	{
@@ -768,9 +768,10 @@ TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 }
 
 FString UElysiumAnimSubsystem::PickIdleClip(const FString& Stem, const FString& Disposition,
-	EElysiumIdleTier& OutTier, int32 Variant)
+	EElysiumIdleTier& OutTier, int32 Variant, int32 DispositionLevel)
 {
-	const TArray<FString> Candidates = IdleCandidates(Stem, Disposition, OutTier);
+	const TArray<FString> Candidates = IdleCandidates(
+		Stem, Disposition, OutTier, DispositionLevel);
 	if (Candidates.IsEmpty())
 	{
 		return FString();
@@ -787,7 +788,8 @@ FString UElysiumAnimSubsystem::PickIdleClip(const FString& Stem, const FString& 
 	// `Idle_2` on any body whose stance idles carry unequal weights, and drifts a restored save onto
 	// a pose the index never meant.
 	FElysiumStanceClips Clips;
-	if (!ResolveStanceClips(Stem, Dispositions().AnimNameFor(Disposition), Clips))
+	if (!ResolveStanceClips(
+		Stem, Dispositions().AnimNameFor(Disposition, DispositionLevel), Clips))
 	{
 		return Candidates[0];
 	}
@@ -858,4 +860,3 @@ const TCHAR* UElysiumAnimSubsystem::TierName(EElysiumIdleTier Tier)
 	default:                        return TEXT("none");
 	}
 }
-

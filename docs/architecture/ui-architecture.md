@@ -38,6 +38,7 @@ UI requires a Widget Blueprint or data-table asset; the generated typefaces rema
 | `UElysiumMainMenu` | the main / pause / game-over menu (`UElysiumNavigableScreen`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
 | `UElysiumDialogueScreen` / `UElysiumChargenPopup` / `UElysiumSignScreen` | Dynamic game-modal screens. Responses/answers retain authored shortcuts; a sign presents one Continue action while the entity world remains the final dwell and close-policy authority. |
+| `UElysiumTerminalScreen` | A transparent game-modal screen which clips a modern 36×24 terminal panel to the physical monitor's projected screen rectangle. It renders revisioned terminal view state and routes text or semantic actions; the entity world owns commands and effects. Full contract: `docs/architecture/computer-terminal-architecture.md`. |
 | `ElysiumUIStyle.{h,cpp}` | the design tokens — palette, type ramp, spacing, the virtual canvas — plus `FElysiumUIFontLibrary` |
 | `ElysiumUIStrings.{h,cpp}` | the authored string table read from `$ELYSIUM_EXPORT_ROOT/ui/strings.json` |
 | `ElysiumUITexture.{h,cpp}` | PNG → transient texture, shared by the use-icon atlas, sign backgrounds and the title lockup |
@@ -60,7 +61,7 @@ push time, not continuously, because the front end has a menu up permanently.
 
 The runtime boundary is one-way: `UElysiumPresentationSubsystem` publishes an
 `FElysiumViewState`; the player UI subsystem projects it into the Blueprint-readable model and
-reconciles modal dialogue and signs; widgets render that state. A selector sends commands through
+reconciles modal dialogue, signs and computer terminals; widgets render that state. A selector sends commands through
 the input/command layer and never mutates the model or entity world. `UElysiumSignScreen` exposes a
 visible Continue action and sends dismissal through the presentation subsystem;
 `FElysiumEntityWorld` revalidates `MinShowTime` and `CloseOnLeftClick` before it closes anything.
@@ -343,3 +344,13 @@ the original's even where the backing system is missing.
   cannot leak into gameplay. Back is consumed. The publisher exposes dismissibility for
   presentation, but the entity world repeats the check on every request so stale view state cannot
   close a sign.
+
+- **Computer terminals** — `UElysiumTerminalScreen` leaves the computer and bezel in the world and
+  projects only the modern character-grid panel onto screen metadata recovered from the model's
+  `screen` material. It preserves authored strings and terminal rules without using VtMB's terminal
+  font or VGUI styling. Keyboard line editing and the controller's semantic action list submit the
+  same authoritative command; a nested CommonUI character grid handles the exceptional password or
+  free-text value without requiring a physical keyboard. The widget never parses terminal content.
+  Scope `ElysiumInput::Priority::Terminal` (42) is UI-only, above Dialogue and below Character. Camera,
+  projection, controller, lifetime and acceptance contracts:
+  `docs/architecture/computer-terminal-architecture.md`.

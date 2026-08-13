@@ -13,6 +13,7 @@ struct FElysiumSaveArchive;
 class FElysiumEntityWorld;
 class UElysiumBrushComponent;
 class FElysiumDoorBase;
+class FElysiumLockableEntity;
 
 // Next-think sentinel: an entity with this next-think never runs Think(). Matches VtMB's
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
@@ -385,6 +386,7 @@ public:
 	// returns null; FElysiumDoorBase overrides to return itself, so a resolved `linked_door` name can
 	// be recognised as a door without reflection.
 	virtual FElysiumDoorBase* AsDoorBase() { return nullptr; }
+	virtual FElysiumLockableEntity* AsLockableEntity() { return nullptr; }
 
 	// No-RTTI downcast to the combat character (11.4), for the callers that need the sheet or the
 	// damage receiver off a base pointer — the same reason AsDoorBase exists.
@@ -400,6 +402,14 @@ public:
 	const class FElysiumItem* AsItem() const
 	{
 		return const_cast<FElysiumEntity*>(this)->AsItem();
+	}
+
+	// The same, for the loot-container leaf (9.8). Containers sit on the combat-character chain,
+	// but callers resolving an arbitrary entity still need to distinguish the leaf without RTTI.
+	virtual class FElysiumItemContainer* AsItemContainer() { return nullptr; }
+	const class FElysiumItemContainer* AsItemContainer() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsItemContainer();
 	}
 
 	// --- Open-ended attribute names (11.4) ----------------------------------------------

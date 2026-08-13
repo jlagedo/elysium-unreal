@@ -1125,6 +1125,20 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 	{
 		auto Cond = [](const FString& C)
 		{
+			return C == TEXT("G.Tut_Jack == 1 and G.Tutorial_Blueblood == 1");
+		};
+		FElysiumDlgConversation FedBlueblood(File, true, false, Cond, NoAct);
+		FedBlueblood.Start();
+		if (TestNotNull(TEXT("completed-blueblood condition opens Jack"),
+			FedBlueblood.CurrentNpcLine()))
+		{
+			TestEqual(TEXT("Jack selects the post-feed tutorial line"),
+				FedBlueblood.CurrentNpcLine()->Id, 141);
+		}
+	}
+	{
+		auto Cond = [](const FString& C)
+		{
 			return C == TEXT("G.Tut_Jack == 7 and IsClan(pc,\"Nosferatu\") and G.Tut_Ratfeed == 1")
 				|| C == TEXT("G.Tut_Jack == 7 and G.Tut_Ratfeed == 1");
 		};
@@ -2373,6 +2387,67 @@ bool FElysiumTutorialJackBootstrapContentTest::RunTest(const FString&)
 		FString(TEXT("-208 -16 -40")));
 	TestEqual(TEXT("group-32 lean place remains at retail Jack's site"),
 		Group32Places.FindRef(TEXT("ip_lean_1")), FString(TEXT("-221 -258 -32")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialLockpickDoorContentTest,
+	"Elysium.Content.TutorialLockpickDoor", GElysiumContentTestFlags)
+bool FElysiumTutorialLockpickDoorContentTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1"));
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: sp_tutorial_1 entities not exported: %s"),
+			*EntsPath));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_tutorial_1 entities parse"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+
+	auto Find = [&Defs](const TCHAR* Classname, const TCHAR* Targetname)
+		-> const FElysiumEntityDef*
+	{
+		return Defs.Defs.FindByPredicate([Classname, Targetname](const FElysiumEntityDef& Def)
+		{
+			return Def.Classname.Equals(Classname, ESearchCase::IgnoreCase)
+				&& Def.TargetName.Equals(Targetname, ESearchCase::IgnoreCase);
+		});
+	};
+
+	const FElysiumEntityDef* Lockpick = Find(TEXT("item_g_lockpick"), TEXT("tut_lockpicks"));
+	const FElysiumEntityDef* Knob = Find(TEXT("prop_doorknob"), TEXT("office_knob"));
+	const FElysiumEntityDef* Door = Find(TEXT("func_door_rotating"), TEXT("tutchopdoorc"));
+	if (!TestNotNull(TEXT("tutorial lockpick is authored"), Lockpick)
+		|| !TestNotNull(TEXT("office lock doorknob is authored"), Knob)
+		|| !TestNotNull(TEXT("office rotating door is authored"), Door))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("office knob is attached to the office door"),
+		Knob->Keys.FindRef(TEXT("parentname")), FString(TEXT("tutchopdoorc")));
+	TestEqual(TEXT("office knob uses Intrusion"),
+		Knob->Keys.FindRef(TEXT("skilltype")), FString(TEXT("1")));
+	TestEqual(TEXT("office knob difficulty is one"),
+		Knob->Keys.FindRef(TEXT("difficulty")), FString(TEXT("1")));
+	TestEqual(TEXT("the lockpick is reusable"),
+		Knob->Keys.FindRef(TEXT("delete_key")), FString(TEXT("0")));
+	TestTrue(TEXT("office door starts locked"),
+		(FCString::Atoi(*Door->Keys.FindRef(TEXT("spawnflags"))) & 2048) != 0);
+	TestTrue(TEXT("opening the office door advances the authored tutorial flag"),
+		Door->Outputs.ContainsByPredicate([](const FElysiumOutputDef& Output)
+		{
+			return Output.Name.Equals(TEXT("OnOpen"), ESearchCase::IgnoreCase)
+				&& Output.Python.Contains(TEXT("G.Tut_Officedoor = 1"));
+		}));
+
+	const FElysiumClassDesc* KnobClass = FElysiumClassRegistry::Get().Find(
+		FName(TEXT("prop_doorknob")));
+	TestTrue(TEXT("the authored doorknob resolves to a live lockable class"),
+		KnobClass && KnobClass->BaseName == FName(TEXT("CBaseLockableEnt")));
 	return true;
 }
 
@@ -4559,15 +4634,14 @@ bool FElysiumDispositionBlinkContentTest::RunTest(const FString&)
 
 	int32 Cadences = 0;
 	TSet<FString> Distinct;
-	for (const TPair<FString, FElysiumDisposition>& Pair : Table.Rows)
+	for (const FElysiumDisposition& Row : Table.Rows)
 	{
-		const FElysiumDisposition& Row = Pair.Value;
-		TestTrue(FString::Printf(TEXT("'%s' blinks at a positive interval"), *Pair.Key),
+		TestTrue(FString::Printf(TEXT("'%s' L%d blinks at a positive interval"), *Row.Name, Row.Level),
 			Row.MinBlinkInterval > 0.f);
-		TestTrue(FString::Printf(TEXT("'%s' has a usable blink range"), *Pair.Key),
+		TestTrue(FString::Printf(TEXT("'%s' L%d has a usable blink range"), *Row.Name, Row.Level),
 			Row.MaxBlinkInterval >= Row.MinBlinkInterval);
 		// Long enough for the 0.3 s envelope to finish before the next toggle is scheduled.
-		TestTrue(FString::Printf(TEXT("'%s' blinks slower than the envelope"), *Pair.Key),
+		TestTrue(FString::Printf(TEXT("'%s' L%d blinks slower than the envelope"), *Row.Name, Row.Level),
 			Row.MinBlinkInterval > 0.3f);
 		++Cadences;
 		Distinct.Add(FString::Printf(TEXT("%.2f/%.2f"), Row.MinBlinkInterval, Row.MaxBlinkInterval));
@@ -4576,15 +4650,13 @@ bool FElysiumDispositionBlinkContentTest::RunTest(const FString&)
 	// More than one cadence reaches the rows. A single distinct value means the unspaced spelling
 	// stopped being read and every row collapsed onto the default.
 	//
-	// The file authors three; the reader keys rows by name alone, so where a disposition is authored
-	// several times over — `Anger` four times, once per `DispositionLevel` — only the last block
-	// survives and `Enraged`'s 4.5/7.0 is not among them.
+	// The file authors several; duplicate names remain distinct by DispositionLevel.
 	TestTrue(FString::Printf(TEXT("the authored cadences survive the parse (%d distinct)"),
 		Distinct.Num()), Distinct.Num() >= 2);
 
 	// `Error` is the row a character falls to when its own disposition does not resolve, and it is
 	// authored to blink fast enough to read as a tell. It is also spelled the unspaced way.
-	if (const FElysiumDisposition* Err = Table.Rows.Find(TEXT("error")))
+	if (const FElysiumDisposition* Err = Table.Resolve(TEXT("Error"), 1))
 	{
 		TestEqual(TEXT("Error blinks fast"), Err->MinBlinkInterval, 1.5f, 1e-3f);
 		TestEqual(TEXT("and closes its range"), Err->MaxBlinkInterval, 2.f, 1e-3f);
@@ -5107,6 +5179,12 @@ namespace
 		// And the chain again, from the other leaf of it.
 		{ TEXT("npc_VVampire"),        TEXT("WillTalk"),               TEXT("INTEGER") },
 		{ TEXT("npc_VVampire"),        TEXT("SetBodyAsCameraTarget"),  TEXT("VOID") },
+
+		// CItemContainer — Python receiver calls used by patch refill helpers. The animated leaf is
+		// asserted because that is the concrete class of `container_hunter` and `tutsafe`.
+		{ TEXT("item_container_animated"), TEXT("SpawnItemInContainer"), TEXT("STRING") },
+		{ TEXT("item_container_animated"), TEXT("AddEntityToContainer"), TEXT("STRING") },
+		{ TEXT("item_container_animated"), TEXT("DeleteItems"),          TEXT("VOID") },
 	};
 
 	// Report a group of missing names as one work-list line rather than N unordered errors.
@@ -5741,6 +5819,15 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("the chopshop dialogue trigger starts disabled, as authored"),
 		TriggerDisabledFlag(*Chopshop), 1);
+	bool bTriggerNotifiesJack = false;
+	for (const FElysiumOutputDef& Row : Chopshop->Def->Outputs)
+	{
+		bTriggerNotifiesJack |= Row.Name.Equals(TEXT("OnStartTouch"), ESearchCase::IgnoreCase)
+			&& Row.Target.Equals(TEXT("Jack"), ESearchCase::IgnoreCase)
+			&& Row.Input.Equals(TEXT("StartPlayerDialog"), ESearchCase::IgnoreCase);
+	}
+	TestTrue(TEXT("the enabled chopshop trigger notifies Jack through StartPlayerDialog"),
+		bTriggerNotifiesJack);
 
 	// The authored rows this test is about.
 	int32 AuthoredFedUponEnd = 0;
@@ -5750,7 +5837,10 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the maker carries its OnFedUponEnd wiring"), AuthoredFedUponEnd >= 2);
 
-	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+	// The full map's activation queue is intentionally not part of this content assertion. Exercise
+	// the maker through the direct-input harness tier; queued delivery and the live-child ceiling are
+	// covered by Elysium.Substrate.NpcMakerLifecycle.
+	World.AcceptInput(Maker->Handle, FName(TEXT("Spawn")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), Maker->Handle);
 	World.Tick(0.0);
 
@@ -5763,7 +5853,7 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 		ChildEnt->Def->Outputs.Num(), Maker->Def->Outputs.Num());
 	const int32 EntitiesAfterFirstSpawn = World.NumEntities();
 	const FElysiumEntityHandle FirstChildHandle = ChildEnt->Handle;
-	World.EnqueueInput(TEXT("!self"), FName(TEXT("Spawn")), FElysiumVariant::Void(), 0.0,
+	World.AcceptInput(Maker->Handle, FName(TEXT("Spawn")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), Maker->Handle);
 	World.Tick(0.0);
 	TestEqual(TEXT("the tutorial maker's MaxLiveChildren rejects the second porch-equivalent Spawn"),

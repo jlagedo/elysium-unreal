@@ -304,6 +304,13 @@ void FElysiumCombatCharacter::EndFeedVictimRole()
 		// Hand the body back to its own behaviour: the standing idle its disposition selects. A
 		// bodiless character answers false and nothing happens, which is the ordinary headless case.
 		ResetAnimToIdle();
+		// RunThinks clears NextThink before entering Think(). A victim whose due NPC think was
+		// consumed while the pair owned its body therefore has no ambient/stance appointment left.
+		// Re-arm the ordinary scheduler at release; the leaf mind chooses its next owner and cadence.
+		if (!IsInert())
+		{
+			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		}
 	}
 }
 
@@ -499,23 +506,29 @@ void FElysiumCombatCharacter::FeedInterrupt()
 		// 1. stop feeder/victim loop and heartbeat presentation — presentation, not built.
 		// 2. read the victim's remaining BloodPool.
 		const int32 Remaining = Victim->BloodPoolValue();
-		if (Remaining < 1)
+		const bool bDepleted = Remaining < 1;
+		if (!bDepleted)
 		{
-			// 3. below one selects the native death/incapacitation outcome.
+			// 3. a surviving victim returns to its non-depleted post-feed path.
+			Victim->EndFeedVictimRole();
+		}
+		// 4. the victim feed-end callback. Same activator/caller identity as FeedBegin: the feeder
+		//    activates, the victim is the firing entity.
+		//
+		// The native death outcome completes after this callback. Our narrow outcome collapses that
+		// lifecycle into immediate OnKilled(), so enqueue the callback first: equal-time FIFO then
+		// keeps the later OnDeath consequence terminal. The tutorial authors both results on the
+		// victim; reversing them would let its success assignment overwrite its death assignment.
+		Victim->FireOutput(GOnFedUponEnd, Handle);
+		if (bDepleted)
+		{
+			// 5. below one selects the native death/incapacitation outcome.
 			// OPEN — the full mortal / Kindred / unkillable outcome matrix, its humanity and
 			// Masquerade consequences and the frenzy interaction are unresolved (`feeding.md` §
 			// "Open verification gaps"). Only death-vs-survive is taken here; `OnKilled` is the same
 			// door the damage path uses, so `OnDeath` fires exactly once either way.
 			Victim->OnKilled();
 		}
-		else
-		{
-			// 4. otherwise the victim returns to its non-depleted post-feed path.
-			Victim->EndFeedVictimRole();
-		}
-		// 5. the victim feed-end callback. Same activator/caller identity as FeedBegin: the feeder
-		//    activates, the victim is the firing entity.
-		Victim->FireOutput(GOnFedUponEnd, Handle);
 		UE_LOG(LogElysiumFeed, Log, TEXT("%s FeedInterrupt on %s: %d stolen, %d left"),
 			*DebugString(), *Victim->DebugString(), FeedState.BloodStolen, Remaining);
 	}

@@ -218,7 +218,7 @@ public:
 	// stance tier it is `m_CurrStance` and **addresses** a cell of the disposition's own table; on the
 	// weighted tiers there is no index to address and it is ignored.
 	FString PickIdleClip(const FString& Stem, const FString& Disposition, EElysiumIdleTier& OutTier,
-		int32 Variant = 0);
+		int32 Variant = 0, int32 DispositionLevel = 1);
 
 	// One model's disposition stance set for `AnimName` — three idles, three fidgets and the 3x3
 	// transition matrix, with retail's precache fallback ladder applied. The single owner of the
@@ -232,7 +232,7 @@ public:
 
 	// Every candidate the idle policy considered, best first — the debug/verification view.
 	TArray<FString> IdleCandidates(const FString& Stem, const FString& Disposition,
-		EElysiumIdleTier& OutTier);
+		EElysiumIdleTier& OutTier, int32 DispositionLevel = 1);
 
 	static const TCHAR* TierName(EElysiumIdleTier Tier);
 

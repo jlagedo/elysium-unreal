@@ -389,6 +389,14 @@ Two focus forms cover the remaster:
   orbit. It never moves or rotates the player. Losing the target or pressing cancel releases the
   request and restores the exact previous view.
 
+Computer terminals use a constrained form of Inspect: generated model metadata supplies the local
+screen centre, normal, up axis and extents; the `Focus` request faces that plane orthogonally and
+solves distance from its size and FOV. It has no orbit because the UI bridge projects the four
+screen corners into the owning viewport and clips a crisp CommonUI terminal panel to that rectangle.
+The terminal entity owns the session and the camera owns only framing. Target loss or invalid
+projection ends the use session and restores the previous view. Full contract:
+`docs/architecture/computer-terminal-architecture.md`.
+
 Candidate validation uses camera-channel sweeps and target visibility. Selection traces do not run
 inside camera code, and framing failure falls back to the normal player view plus the ordinary
 interaction prompt.
@@ -544,7 +552,8 @@ recorder reads — so a Cog readout and a channel diff cannot disagree.
 - first/third cycle with aim, inspect, dialogue, and sequence overrides active;
 - third-person independent orbit, facing-policy output, obstruction, shoulder hysteresis,
   teleport/load resets, and frame-rate-independent recovery;
-- prop focus success/fallback and target destruction;
+- prop focus success/fallback and target destruction; terminal screen-plane framing, projection
+  and exact restore;
 - dialogue two-shot/single selection, screen side, visibility rejection, subtitle-safe framing, and
   player-view fallback;
 - Python/C++/entity trigger ownership and teardown;
@@ -552,9 +561,9 @@ recorder reads — so a Cog readout and a channel diff cannot disagree.
 - every existing legacy shot and `camera_track` timing test, including the theatre's live acceptance.
 
 The played acceptance matrix covers mouse and gamepad in first person, third-person exploration,
-third-person aim, a narrow interior obstruction, a prop inspect, a multi-speaker dialogue, an
-original map track, and a project-authored Level Sequence. Each override must return to the exact
-chosen player view without rotating or navigating the character.
+third-person aim, a narrow interior obstruction, a prop inspect, a computer terminal, a
+multi-speaker dialogue, an original map track, and a project-authored Level Sequence. Each override
+must return to the exact chosen player view without rotating or navigating the character.
 
 ### Runtime budget
 

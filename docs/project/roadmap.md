@@ -75,7 +75,7 @@ The phases below are **vertical slices** — each ends with something observable
 | **P10 — Scale & ship-shape** | all maps, floor validated, packaged story | ongoing after P4 |
 | **P11 — Runtime spine** | New Game boots, plays, pauses, saves and loads on one clear API | P4, P8, P9 |
 | **P12 — The theatre** | the intro cinematic plays for real — choreo, camera, audio, subtitles, live faces | P8 tail |
-| **P13 — Tutorial mechanics** | stealth, disciplines, firearms — every retail tutorial beat | P9 |
+| **P13 — Tutorial mechanics** | stealth, disciplines, firearms, computer hacking — every retail tutorial beat | P9 |
 
 ## The playable path (PP0–PP6) — the master sequence
 
@@ -102,7 +102,7 @@ it waits. Three standing rules:
 | **PP3 — land the tutorial** | the chain hands the player to Jack; the first conversation runs with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement (owner call: **in** the path), modern persistent first-/third-person camera, the body's gait, feeding, items + object interaction, dice, the vitals HUD | **`docs/project/three-cs-roadmap.md` CCC0–CCC9** *(4.7, 11.13, 8.11b, 10.6)*, B6, 9.8, 9.6, 8.9 |
 | **PP5 — persistence** | save / quick / autosave + load mid-run; `trigger_autosave` live | **[x]** *(11.9 = 9.5)* |
-| **PP6 — complete the tutorial** | stealth, disciplines, firearms — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3 → P9's slice acceptance as `uv run elysium test Play` |
+| **PP6 — complete the tutorial** | stealth, disciplines, firearms, computer hacking — every retail beat to the exit, proven headlessly | 13.1, 13.2, 13.3, 13.4 → P9's slice acceptance as `uv run elysium test Play` |
 
 **PP4's feel stack runs ahead of PP2 and PP3 — owner call.** The three C's are built and proven as
 one vertical before the theatre cinematic and the tutorial landing. The reason is recovered rather
@@ -971,18 +971,33 @@ draw on the same stack; NPCs stand in the world at their entity origins.
   the per-name inventory + demand-ranked build order. **d** landed `OneOfSet` for real (the 589
   dialogue gates now select) and guarded the `Whisper`/`FrenzyTrigger` receiver split. →
   `docs/vtmb/script_api.md`; roll model:.
-- [~] **9.8 Inventory & items** — **the ownership core landed:** items as chain entities over the
-  244-file catalogue, `FElysiumInventory` (slots, keyring, reserve ammo), the six inventory
-  natives and entity-valued `Inventory_Remove`, item save state, and the shared-scope ground-model
-  export/bake. **Remaining:** touch pickup and player drop, container take/give, `StartBarter`
-  (needs the 8.6 barter UI), `trigger_inventory_check`, and the `TravelsWithPlayer()` absent-set
-  half; buy/sell pricing remains 9.10. → `docs/vtmb/inventory.md`,
+- [~] **9.8 Inventory & items** — **the ownership, loose-pickup and loot-container core landed:** items as chain
+  entities over the 244-file catalogue; `FElysiumInventory` (slots, keyring, reserve ammo); the six
+  inventory natives and entity-valued `Inventory_Remove`; item save state; the shared-scope
+  ground-model export/bake; `DefaultTouch` pickup through an embodiment-only overlap proxy and the
+  authoritative inventory transaction; combat-character-backed containers with `equip0`–`equip11` seeds,
+  recovered spawn/add/delete inputs, queued insert/remove outputs, save-safe contents, and
+  authoritative headless `vbarter Take|Give`. The tutorial lockpick now enters inventory on touch,
+  starts the shared held Intrusion attempt on `office_knob`, and unlocks/uses `tutchopdoorc`; its
+  attempt HUD remains a logged stub. The real CommonUI loot panel remains stubbed.
+  **Remaining:** player drop, `StartBarter` plus the loot/barter UI (8.6),
+  `trigger_inventory_check`, and the `TravelsWithPlayer()` absent-set half; buy/sell pricing remains
+  9.10. → `docs/vtmb/inventory.md`,
   `docs/architecture/gameplay-systems-architecture.md`. *Deps:* 9.7c, 9.4.
-- [ ] **9.9 NPC disposition & reactions** — the single largest engine demand in the game,
-  **2,862 calls**: `SetDisposition(name, level)` alone is 2,510, 2,467 of them in `.dlg` column 4
-  (an NPC line's *action*), plus `SetRelationship` 334 on `CAI_BaseNPC` and
-  `React`/`SetExpression`/`SetGesture`. Needs `vdata/dispositiontable` + `reaction*` and an NPC
-  emotional-state model; the dialogue runner (B4) is the caller. *Deps:* 9.7c, B4.
+- [~] **9.9 NPC disposition & reactions** — **the tutorial talk/feed presentation slice landed:**
+  `SetDisposition(name, level)` resolves the level-aware `DispositionTable.txt` row, persists the
+  level, updates stance/expression/gaze/blink policy, uses an authored cross-disposition stance
+  transition when one exists (otherwise selecting the target idle), and switches default/talking
+  faces around the real dialogue line while lipsync
+  composes over that baseline. `player_reaction` and `SetRelationship` now write a separate saved
+  exact-entity/class combat-relationship table with `player`/wildcard handling and inspectable
+  precedence; they do **not** start combat. This makes Jack's Joy/Neutral/Anger/Disgust changes and
+  the tutorial blueblood's Neutral/Apathy/Fear/Anger changes observable while the existing feed
+  pair and `OnFedUponBegin`/`OnFedUponEnd` remain their own interaction path. **Not finished:** no
+  senses, enemy assignment, alert/combat/flee schedule consumer, or retail priority arbitration;
+  the RPG reaction-score calculator (`reaction.txt`/`reactions000.txt`) remains absent, as do
+  `React`, loud-expression policy and broader explicit expression/gesture semantics. The three
+  social domains remain independent. *Deps:* 9.7c, B4.
 - [ ] **9.10 Economy** — **250 calls**: `MoneyAdd`/`MoneyRemove` (INTEGER inputs on the combat
   character) + `CurrentMoney`/`SetMoney`. The smallest self-contained system on the ledger; one
   integer on the sheet plus vendor `worth` when 9.8 lands. *Deps:* 9.7c.
@@ -1104,7 +1119,8 @@ dialogue, scripted flow, quests, save/load included.
   contexts are pushed through) and **11.6** (the command registry every action's string resolves
   against, and the `FElysiumUserCmd` the analog actions fill); 8.6/8.10 for the screen only.
 - [P] **10.7 Long tail** *(post-tutorial; promote to tasks when reached — **promoted 2026-07-26:**
-  stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, chargen → **9.4**,
+  stealth → **13.1**, disciplines → **13.2**, weapons/combat basics → **13.3**, tutorial hacking →
+  **13.4**, chargen → **9.4**,
   choreography → **P12**; conversation camera → **11.13**)* — full combat AI (beyond 13.3's basics); NPC perception, reactions and
   the schedule graph beyond 8.5's native patrol/interesting-place locomotion (BT/StateTree where
   it adds value without replacing authored entity I/O). The state-1 idle branch and its task kernel
@@ -1136,7 +1152,8 @@ dialogue, scripted flow, quests, save/load included.
   **vdata-driven gameplay systems** — data already on disk (PL5b, `$ELYSIUM_EXPORT_ROOT/vdata/`); each table's
   consumer + schema is mapped in `docs/vtmb/vdata-catalog.md`, and these are the systems that read
   them: **disciplines/vampire powers** (`disciplinetgt_*`, ~300 KB — the largest; → **13.2**),
-  **stealth** (`stealth`/`stealthkillrules`; → **13.1**), the **hacking minigame** (`hackterminals/`),
+  **stealth** (`stealth`/`stealthkillrules`; → **13.1**), the **hacking minigame**
+  (`hackterminals/`; tutorial slice → **13.4**, wider email/screensaver completion remains here),
   **economy/vendors** (`vendors`, item `worth`), **NPC disposition + reactions**
   (`dispositiontable`/`reaction*`), **data-driven conversation camera** (`camerashots/`; → **11.13f**),
   **radio + TV-news ambient content** (`radio_data`/`newscaster_*` → **6.8**), **impact FX**
@@ -1461,7 +1478,7 @@ rather than the centre. Full specification: `docs/vtmb/facial_animation.md`.
 finish — choreography, camera moves, audible subtitled lines, live faces — and hands the player
 to the tutorial chain, unassisted, from real input.
 
-## P13 — Tutorial mechanics: stealth, disciplines, firearms *(the PP6 rung; promoted out of 10.7)*
+## P13 — Tutorial mechanics: stealth, disciplines, firearms, computer hacking *(the PP6 rung; promoted out of 10.7)*
 
 - [ ] **13.1 Stealth** — `vdata/stealth` + `stealthkillrules` loaded; sneak mode (movement +
   posture + the stealth readout on 8.9's stack), NPC detection against it, `trigger_stealth_mod`
@@ -1476,9 +1493,25 @@ to the tutorial chain, unassisted, from real input.
   path through the dice resolver (9.6, `CalcFeat`), damage onto `FElysiumCombatCharacter`, the
   gun-range and melee lessons. Full combat AI stays 10.7. *Acceptance:* the tutorial's range +
   melee lessons complete as retail. *Deps:* 9.8, 9.6, 11.4.
+- [ ] **13.4 Computer terminals & tutorial hacking** — close RE39 TERM2/TERM4/TERM5 for the
+  tutorial path; parse patch-first `TerminalDefinition` content into a plain-C++ terminal state
+  machine; give `FElysiumTerminal` the exclusive explicit-use session and authoritative, non-bindable
+  `hackcmd` path; reproduce Function ordering on the one entity queue; export model-local screen
+  metadata from the `screen` material; and project a modern 36×24 CommonUI console over that physical
+  screen through a fixed `Focus` camera request. Keyboard line editing and the controller's
+  state-authorized semantic action palette reach the same command handler; VtMB's terminal font,
+  VGUI styling and 512×512 raster texture are not reused. TERM7 email completion and TERM8 inactive
+  screen-saver presentation remain in 10.7 after the tutorial slice. *Design:*
+  `docs/architecture/computer-terminal-architecture.md`; faithful behavior and research gates:
+  `docs/vtmb/computer-terminals.md`. *Acceptance:* from real input, both keyboard and gamepad focus
+  `tuthack`, execute Unlock, enqueue `OnTrigger0`, run `tutorial.tut_hack()`, reveal/unlock the safe,
+  quit, and restore the exact previous camera; the projected grid remains readable and inside the
+  bezel at 1920×1080, 2560×1440 and 3840×2160. *Deps:* RE39 TERM2/TERM4/TERM5, 4.11, 6.8, 9.4,
+  9.6, 11.4–11.8.
 
 **Slice acceptance** *(PP6 = P9's criterion, mechanised)*: `sp_tutorial_1` is completable as in
-retail end to end, and `uv run elysium test Play` proves it headlessly.
+retail end to end on keyboard/mouse and gamepad, and `uv run elysium test Play` proves both paths
+headlessly.
 
 ## Pipeline backlog (indexed; owned by phases above)
 
@@ -1548,7 +1581,7 @@ retail end to end, and `uv run elysium test Play` proves it headlessly.
 | RE36 | The **melee block verb and `+wpn_secondaryatk` semantics are recovered**. `+attack2` owns the ordinary attack2 button only. `+wpn_secondaryatk` is a held composite: its client handler asserts a dedicated button packed as `0x08000000`, then forwards into `+attack2`; release clears both. The server block predicate is the only direct `player+0x2088` test of that dedicated bit and additionally requires ground contact plus an active weapon capability in `0x18000`, then returns player compact code `13` and `ACT_PREBLOCK`. Remaining RE36 scope is the control/UI one-frame `vhotkey` deferral; the compiled Discipline index table and server dispatch moved to RE41. → `docs/vtmb/controls.md`, `research/cases/animation-pose/specs/input_actions.json`. | 10.6, 13.3 | [~] |
 | RE37 | **The player/NPC gameplay-action selection chain is recovered for the pinned binary and current 22-map corpus**, from realized state or AI task through base activity, player/NPC/form/weapon translation, weighted or exact-label sequence resolution, pose parameters, autolayers/combat layers, transitions and interruption. The closed evidence surface includes the 4,460-entry activity registry; 17 player compact codes (13 reachable and four dormant), all 15 genuine player `+0x704` producers and both discipline `Player_Anim` rows; all nine paired modes and their producer/continuation policies; 77 NPC descendants, 691 schedules, 4,139 task invocations, 29 StartTask and 24 RunTask bodies, and 49 custom handlers; 169 weapon subclasses with 9,214 ordered translation rows; 1,872 sequence events and their complete server/client dispatch surfaces; 685 model autolayer bindings plus combat-layer and transition order; and every authored producer in the 22 exported maps and their Python/dialogue surface. The two current-corpus content misses remain explicit data facts (`item_w_sw_m64` and `npc_BaseVampAI`), not unresolved resolver rules. One-shot completion is exact: unchanged activities reuse their sequence until `StudioFrameAdvance` marks it finished, after which the next request reselects and restarts it; sustained unarmed crouch therefore repeats sequence 8. Working specification: `research/cases/animation-pose/specs/gameplay_actions.json`; facts: `docs/vtmb/animation_and_movers.md` A.3; remake contract and detailed work: `docs/architecture/animation-architecture.md` §3, `docs/project/animation-roadmap.md` ANM4 for catalog export, and `docs/project/three-cs-roadmap.md` CCC4 for the resolver that reads it. | 8.5, 8.11b, 13.3 | [x] |
 | RE38 | **The inventory ownership and transfer model is recovered end to end.** Ordinary carried entries are full item entities in a 224-handle combat-character inventory; collected keys are logical records in one carried keyring entity; item data controls stack/drop/permanence/ammo policy; pickup, grant, destructive removal and drop have distinct lifetime effects; firearm `AmmoCount` returns loaded magazine while `GiveAmmo` adds reserve; containers reuse the combat-character inventory and server barter commands authoritatively take/give/buy/sell; `trigger_inventory_check` evaluates ordinary slots plus keyring on accepted player entry. Decoded tutorial saves corroborate entity ownership/slot state, and the complete patch-first `sp_tutorial_1` lockpick/key/safe/tire-iron/`.38` graph is joined. Price calculation remains 9.10, UI presentation remains 8.6, and runtime implementation remains 9.8. → `docs/vtmb/inventory.md`, `docs/vtmb/sp_tutorial_1-event-surface.md`. | 9.8, 9.10 | [x] |
-| RE39 | Recover the **computer-terminal interaction end to end**. The static datamaps, content grammar, save fields, sound vocabulary, current-map demand and `sp_tutorial_1` `tuthack` transaction are consolidated. The server session vtables now join enabled/current-user/screen-facing eligibility to entry, active input and exit; the client is a model-bound 36×24 character texture with local editing and `hackcmd` transport; input flag bits are decoded; and Function execution is confirmed as dependency → runtext → enqueue `OnTriggerN` → synchronously run `runscript` → prompt. Ordinary output target delivery follows the script in the queue pass and retains the active-user provenance. `CPropKeypad` is the separate `keypad_strings` consumer atop the shared terminal base. Still open: player-dispatch/icon selection, forced-cancel and player-mode details, complete built-in grammar, difficulty/skill attempts, surrounding sound order, screensaver state and email/local-global persistence. → `docs/vtmb/computer-terminals.md`, `research/cases/computer-terminals/`. | hacking minigame, 4.11, 6.8 | [~] |
+| RE39 | Recover the **computer-terminal interaction end to end**. The static datamaps, content grammar, save fields, sound vocabulary, current-map demand and `sp_tutorial_1` `tuthack` transaction are consolidated. The server session vtables now join enabled/current-user/screen-facing eligibility to entry, active input and exit; the client is a model-bound 36×24 character texture with local editing and `hackcmd` transport; input flag bits are decoded; and Function execution is confirmed as dependency → runtext → enqueue `OnTriggerN` → synchronously run `runscript` → prompt. Ordinary output target delivery follows the script in the queue pass and retains the active-user provenance. `CPropKeypad` is the separate `keypad_strings` consumer atop the shared terminal base. Still open: player-dispatch/icon selection, forced-cancel and player-mode details, complete built-in grammar, difficulty/skill attempts, surrounding sound order, screensaver state and email/local-global persistence. → `docs/vtmb/computer-terminals.md`, `research/cases/computer-terminals/`; Unreal design: `docs/architecture/computer-terminal-architecture.md`. | 13.4, 4.11, 6.8 | [~] |
 | RE40 | Recover the **core mechanics chain from player/script verb through runtime check, combat damage and health commit**. The shared seams are established: `CalcFeat` is a rating rather than a roll; dialogue, lockables, feeding, defense and soak own distinct check policies; item `Dmg` parses into the 17-word `CVDmg_t`; the common apply callback, mortal/Kindred soak selection, ranged lethality/defense/direct formula, blood shield, aggravated tracking and the retail unkillable cap are joined. The melee slice is joined from held primary/secondary weapon requests through ordinary/air/heavy activity, the base-Brawl/Melee-ranked automatic `2COMBO`, weighted sequence selection, opposed record, held/facing block, normal/heavy-block and attacker reactions, and final damage commit. The firearm slice is joined from primary/secondary intent through data-driven attack, zoom and mode-toggle behavior; press-edge or held `allow_autofire`; `Attack_Rate` scheduling; sequence-event shot commit; distinct `Ammo_Cost` and ray/pellet `Ammo_Fired`; view kick; dry fire; and bulk or `reload_single` reserve transactions. Feeding is joined statically from the `+feed`/`-feed` button transport through the first-press start and second-press release action, target/check policy, paired mode/activity selection, MDL bite/release events, accelerating server-timed blood/health pulses and idempotent victim teardown. Ranged capability cannot enter the melee block action, and no firearm-specific stagger band is established. The verb taxonomy keeps command, usercmd, gameplay action, effect and script/entity invocation distinct. Still open: wider player eligibility above the weapon controller, exact spread/crosshair math, `BurstMin`/`BurstMax` consumers, `SkillRequirement`, ranged multiplier decomposition, the complete generic firearm-flinch caller chain, post-soak filter consumption and special immunities, exceptional feed trait/outcome/output semantics, terminal skill attempts, and live feed/ranged/melee timing/formula captures. Discipline transactions are separated into RE41. The current Unreal damage entry is scalar-only and its unkillable one-HP floor diverges from retail's literal Health-damage cap of 75. → `docs/vtmb/skills-and-checks.md`, `docs/vtmb/combat-and-damage.md`, `docs/vtmb/gameplay-verbs.md`, `docs/vtmb/feeding.md`, `research/cases/core-mechanics/`. | 9.6–9.8, 13.3 | [~] |
 | RE41 | The **Discipline authority, data interpreter and power catalog are recovered as a separate behavior surface**. The client maps visible learned powers onto thirteen compiled slots; `vdiscipline_int` and `vdiscipline_last` converge on one server authority; non-instant Animalism/Dementation/Dominate/Thaumaturgy use ordered `DisciplineTgt` target/filter/hit graphs with adjusted blood cost, one-time payment, projectiles, nested helper casts and explicit interruption; instant/passive powers use `Active_Disciplines`, trait actions and shared timed events; `vdiscipline_endall` and `ClearActiveDisciplines` share owned-event/effect teardown. Potence and Blood Shield join the recovered combat path, and Discipline `Player_Anim` joins the animation resolver. Still open: Blood Healing, Celerity, Obfuscate and Protean native consumers; Presence pulse/radius reconciliation; overt-zone-witness Masquerade policy; upper-tier client handoff; exact cooldown restore/order; and controlled retail casts. → `docs/vtmb/disciplines.md`, `research/cases/disciplines/`. | 13.2 | [~] |
 | RE42 | Recover the **first-person viewmodel body**. The weapon camera class is closed and needs no further work: `camera_class` is authored per item, parsed by a case-sensitive `memcmp` ladder in the item-record vdata parser (`client.dll` `0x101a5394`, `vampire.dll` `0x1025aa65`) to `ranged` `0x02`, `thrown` `0x04`, `force_1st` `0x08`, `melee`/`force_3rd` `0x10`, everything else `0`; bit `0x01` is dead; and the bitmask is read off the **equipped item's** record via `0x1007b160` (`mov ax,[player+0x95e]` → `call 0x101a4770` → `mov esi,[rec+0x2440]`), not the player record. What remains open is the viewmodel itself: **(a)** how the per-clan hands model (42 bones rooted at `Camera01`, 154 sequences over 12 firearm families plus `v_lockpicks_*`) composes with the 17 packed per-weapon `v_` models — the asset layout reads as two complementary slots, arms from one and geometry from the other, matching `m_hViewModel[]` being an array beside `m_pViewWeapon`, but this is inference and is not traced; **(b)** whether the weapon is a bodygroup on the hands model or a separately attached model; **(c)** the `Camera01`-rooted rig's pose convention, which is a second skeleton and cannot inherit the character bake's "poses are baked native" result; **(d)** how `viewmodel_fov 54` composes with the camera's own FOV; **(e)** the sequence-event surface that drives the shot from a viewmodel clip rather than the world model's. → `docs/vtmb/camera-view-modes.md`, `docs/vtmb/animation_and_movers.md`. | 8.11a, PL14, `docs/project/three-cs-roadmap.md` CCC10.1 | [ ] |

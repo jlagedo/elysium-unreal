@@ -22,6 +22,7 @@
 // inputs/fields through one case-folded chain walk (R2).
 
 class UElysiumBrushComponent;
+class FElysiumLockableEntity;
 
 // The CBaseToggle constant-velocity mover. Not a registered class — a pure-C++ base the door/
 // button/rotating families derive from. Drives the entity's Body transform; a bodiless mover is
@@ -143,8 +144,9 @@ public:
 	void InputOpen(const FElysiumEntityHandle& Activator);
 	void InputClose(const FElysiumEntityHandle& Activator);
 	void InputToggle(const FElysiumEntityHandle& Activator);
-	void InputLock()   { bLocked = true; }
-	void InputUnlock() { bLocked = false; }
+	void InputLock();
+	void InputUnlock();
+	void RegisterDoorknob(FElysiumLockableEntity& Doorknob);
 	// The +use doorknob path (CBaseDoor::DoorknobUse): toggle this leaf and, if a `linked_door` is
 	// set, its partner too — the double-door swing. Reached by the +use look-cursor and `ent_fire Use`.
 	void DoorUse(const FElysiumEntityHandle& Activator);
@@ -188,6 +190,7 @@ protected:
 	// Resolve `LinkedDoorName` to the paired door leaf through the world name index (cached, no-RTTI
 	// downcast via AsDoorBase). Null when unset or the partner is missing/not a door.
 	FElysiumDoorBase* ResolveLinkedDoor();
+	void SyncDoorknobs();
 
 	// True when the door rests open with no autoclose: `wait -1` or the NO_AUTO_RETURN (0x20) flag.
 	bool StaysOpen() const;
@@ -204,6 +207,7 @@ protected:
 	// immediate think; the seat pass snaps the pose and hands the saved think back.
 	bool  bRestoreSeatPending = false;
 	float RestoreResumeThink = ELYSIUM_NEVER_THINK;
+	TArray<FElysiumEntityHandle> Doorknobs;
 };
 
 // Register the shared CBaseDoor input + field tables onto a descriptor (used by the CBaseDoor

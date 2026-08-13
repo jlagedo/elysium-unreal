@@ -157,6 +157,16 @@ Related screens, same stack: `CharEditPanel` (+ `CharEditCharPanel` / `EquipPane
 / `StatsPanel`), `QuestLogPanel`, `VBarterUI`, `VItemInfoUI`, `VMapScreenUI`, `VHotkeysUI`,
 `VCharWizardUI`, `CSignUI`.
 
+### Lockpick progress presentation
+
+The server registers user message `ProgBar`; `CProgBar` parses four bytes into flags, percentage,
+attempt count and a context value. For a live lockpick attempt the context value is the player's
+current Intrusion rating. The element lazily loads `hud/Lockpick_ProgressBar` and
+`hud/Lockpick_ProgressLiquid`, fills the liquid from the 0–100 byte, and renders localized
+`STRING_INTRUSION` with that rating. Completion flags select `STRING_SUCCESS`, `STRING_FAILED` when
+the attempt count is non-zero, or `STRING_NOT_ATTEMPTED`. This is the progress surface for the
+timed deterministic threshold in `docs/vtmb/entity_io.md`, not evidence of a dice roll.
+
 ### The character screen — one screen, three classes
 
 The chargen wizard and the in-game character screen **are the same panel in a different mode.**

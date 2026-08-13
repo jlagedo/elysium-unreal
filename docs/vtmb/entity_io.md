@@ -1067,12 +1067,12 @@ vftable `0x104858cc`:
 
 | externalName | internal | offset | notes |
 | --- | --- | --- | --- |
-| `difficulty` | `m_nSkillDifficulty` | `+0x77c` | read through `GetDifficulty` (vtable `+0x430`, `FUN_1020b1c0`); the dice target number |
+| `difficulty` | `m_nSkillDifficulty` | `+0x77c` | read through `GetDifficulty` (vtable `+0x430`, `FUN_1020b1c0`); the deterministic feat threshold |
 | `skilltype` | `m_vSkillType` | `+0x784` | selects the skill registry entry |
-| — | `m_LastRoll` | `+0x780` | `FIELD_EMBEDDED` (td `0x105a1668`); its first int is the live roll **and** the lock state |
+| — | `m_LastRoll` | `+0x780` | `FIELD_EMBEDDED` (td `0x105a1668`); its first int is the result tier **and** the lock state |
 | — | `m_flLastAttempt` | `+0x788` | `FIELD_TIME` |
-| — | `m_nSkillAttempts` | `+0x78c` | |
-| — | `m_nLastSkillLevel` | `+0x790` | |
+| — | `m_nSkillAttempts` | `+0x78c` | increments on every resolved outcome; the HUD uses zero/non-zero to distinguish not-attempted from failed |
+| — | `m_nLastSkillLevel` | `+0x790` | rating recorded at use exit; a later higher rating resets the attempt counter on approach |
 | `ResetDifficulty` | `InputResetDifficulty` | — | `0x1020abc0`, clamps the payload to 0..10 then calls the reset virtual `+0x440` |
 | `OnSkillSuccess` | `m_OnSkillSuccess` | `+0x794` | |
 | `OnSkillFail` | `m_OnSkillFail` | `+0x7ac` | |
@@ -1080,23 +1080,36 @@ vftable `0x104858cc`:
 | `OnSkillAttemptBegin` | `m_OnSkillAttemptBegin` | `+0x7dc` | |
 | `OnSkillAttemptCycle` | `m_OnSkillAttemptCycle` | `+0x7f4` | |
 
-The roll (`FUN_1020b090`) returns a **success count**, and the three outcomes are thresholds on it:
+Despite the field and helper names, the normal skill-entity path is **not a dice roll**.
+`FUN_1020b090` calls the shared Intrusion/Hacking check helper with its `doRoll` argument hard-coded
+to zero. That branch compares the current feat rating to the entity's authored `difficulty` and
+returns the generic result tier `3` for pass or `1` for fail:
 
 ```c
 m_flLastAttempt = curtime;
-if (m_vSkillType == 1)      m_LastRoll = DiceSystem::RollA(...);   // FUN_101e7ea0
-else if (m_vSkillType == 2) m_LastRoll = DiceSystem::RollB(...);   // FUN_101e8100
+if (m_vSkillType == 1)      rating = FeatValue(Intrusion); // registry id 0
+else if (m_vSkillType == 2) rating = FeatValue(Hacking);   // registry id 2
+if (m_vSkillType == 1 || m_vSkillType == 2)
+    m_LastRoll = (rating >= difficulty) ? 3 : 1;
+// another skilltype leaves m_LastRoll unchanged
 FireOutput(m_OnSkillAttemptCycle, player);
-if (m_LastRoll > 2)       vt[0x438](player);   // success -> m_nSkillAttempts++, m_OnSkillSuccess
-else if (m_LastRoll == 0) vt[0x434](player);   // botch   -> m_OnSkillBotch
-else                      vt[0x43c](player);   // fail    -> m_OnSkillFail
+if (m_LastRoll > 2)       vt[0x438](player); // m_nSkillAttempts++, OnSkillSuccess
+else if (m_LastRoll == 0) vt[0x434](player); // generic botch branch
+else                      vt[0x43c](player); // m_nSkillAttempts++, OnSkillFail
 ```
 
-`IsLocked()` (`FUN_10224100`) is literally `m_LastRoll < 3`; `Lock` writes `1` and `Unlock` writes
-`3`. `skilltype` `1` queries registry id `0` (lockpicking) and `2` queries id `2` (computers); **any
-other value skips the lookup and no roll is taken**. Attempt pacing is
-`(K1 − skillLevel·K2) / player[+0x1488]` seconds per cycle (`FUN_1020aea0`), and `FUN_1020acb0`
-re-reads the player's skill on approach so an improved character may retry.
+The retained generic thresholds explain the `OnSkillBotch` surface, but this caller can emit only
+`1` or `3`; botch is unreachable for a normal `skilltype` 1/2 attempt. No RNG table, botch table or
+authored `diceroll` value participates. `IsLocked()` (`FUN_10224100`) is literally
+`m_LastRoll < 3`; `Lock` writes `1` and `Unlock` writes `3`.
+
+The cycle duration is exact: `(5.0 - rating * 0.25) / player[+0x1488]` seconds
+(`FUN_1020aea0`). The think computes `remaining = max(duration + m_flLastAttempt - curtime, 0)` and
+publishes `clamp(100 - remaining / duration * 100, 0, 100)` as an integer progress byte. A use
+session resolves **one** attempt when remaining reaches zero. Failure ends the current use session;
+retry requires another accepted `+use` and another full timed cycle. `ResetDifficulty` resets
+`m_nSkillAttempts`, and approach also resets it when the current rating is greater than
+`m_nLastSkillLevel`; use exit records the current rating.
 
 `CBaseLockableEnt` — datamap `0x105b21e8`, records `0x105b222c`, 9, builder `FUN_102240d0`:
 
@@ -1119,12 +1132,39 @@ calls `CBaseDoor::AddDoorknob(this)`. A missing target produces
 most two (`"Door %s already has 2 doorknobs!"`). `item_container_lock` does the same against a
 container (`FUN_10226520`).
 
-Lockpick flow: `HasKey` `FUN_10224910` · `UnlockWithKey` `FUN_10224950` · `CanAttempt`
-`FUN_10224ae0` (requires the lock actually locked, refuses when `requires_key`, else checks the
-player carries the item named by vtable `+0x90`, `item_g_lockpick`) · `StartAttempt` `FUN_10225070`
-(fires `OnSkillAttemptBegin`, opens the `Intrusion` HUD entity) · per-tick `FUN_102252f0` · finish
-`FUN_10225140` / `FUN_10224fa0`. `GetUseIcon` (`FUN_10224d40`) returns icon 58 or 59 for special door
-states, else `key_icon` when the player has the key, else `locked_icon`, else `use_icon`.
+Lockpick admission and use order:
+
+1. `CanAttempt` (`FUN_10224ae0`) requires the lock to be locked, refuses a different current user,
+   observes the attached-door block, and accepts an authored key immediately. Without that key,
+   `requires_key` rejects the interaction; otherwise the player must carry `item_g_lockpick`.
+2. `UnlockWithKey` (`FUN_10224950`) writes result tier `3`, optionally consumes the key when
+   `delete_key` is set, and takes the unlocked/attachment path without entering the timed attempt.
+3. Lockpick placement (`FUN_10224440`) requires model attachments named `camera_position` and
+   `camera_target`. It derives a horizontal stance 31 units along the attachment direction, traces
+   1,024 units down, and rejects solid obstruction or missing ground before aligning the player and
+   beginning use.
+4. `StartAttempt` (`FUN_10225070`) initializes the timing state, creates the `Intrusion`
+   `camera_cinematic`, assigns it to the player, enters the player use mode, then fires
+   `OnSkillAttemptBegin`.
+5. Per-tick `FUN_102252f0` moves the player to the recovered stance and sends the four-byte
+   `ProgBar` message: flags, progress percentage, attempt count and current feat rating. The client
+   shows the lockpick bar with `Intrusion <rating>` while active. On exit `FUN_10225140` clears the
+   cinematic camera/use mode and sends a terminal success, failed or not-attempted state.
+6. At expiry `FUN_10224fa0` resolves the deterministic threshold, passes tier `1` or `3` to
+   `CWeaponLockpick`, and follows the locked/unlocked branch. Tier assignment precedes
+   `OnSkillAttemptCycle`; the selected result handler then increments `m_nSkillAttempts` before
+   firing `OnSkillSuccess` or `OnSkillFail`. Success continues to `OnUnlocked` and the attached
+   object's use path; failure ends the current use session immediately.
+
+`CWeaponLockpick` is usable only while its owner has a current-use entity RTTI-castable to
+`CBaseLockableEnt` (`FUN_103f4de0`). Starting the attempt plays weapon sequence `1` and gates both
+attack timers to its duration (`FUN_103f4f40`); result tiers select weapon-animation code `2` for
+failure, `7` for success and `13` for botch (`FUN_103f4fe0`). The normal deterministic path
+therefore never selects code `13`. Player body routing maps `ACT_TOOL_LOCKPICK` to the `LockPick`
+action.
+
+`GetUseIcon` (`FUN_10224d40`) returns icon 58 or 59 for special door states, else `key_icon` when
+the player has the key, else `locked_icon`, else `use_icon`.
 
 Ctor defaults, which is where the corpus's "typical" icon values come from:
 

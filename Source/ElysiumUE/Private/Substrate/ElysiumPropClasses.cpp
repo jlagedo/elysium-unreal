@@ -1328,8 +1328,8 @@ struct FElysiumPropRegistrar
 		// but invisible records.
 		static const TCHAR* const PropBodyClasses[] = {
 			TEXT("prop_switch"), TEXT("prop_sign"), TEXT("prop_hacking"),
-			TEXT("prop_doorknob"), TEXT("prop_doorknob_electronic"),
-			TEXT("item_container"), TEXT("item_container_animated"), TEXT("item_container_lock"),
+			TEXT("prop_doorknob_electronic"),
+			TEXT("item_container_lock"),
 		};
 		for (const TCHAR* Name : PropBodyClasses)
 		{

@@ -279,6 +279,13 @@ victim with the start callback and `FeedInterrupt` brackets it with the end call
 are what the tutorial blueblood's maker wiring consumes. The exact caller/activator identity and
 maker-child forwarding order still require the controlled tutorial trace.
 
+The recreation's narrow depleted-victim outcome collapses the native death lifecycle into an
+immediate `OnKilled` call. It must enqueue `OnFedUponEnd` before that collapsed call, so the single
+equal-time FIFO leaves the consequent `OnDeath` outputs later and terminal. This is an implementation
+ordering correction, not a map-specific exception: the tutorial blueblood authors distinct success
+and death assignments on those two callbacks, and the death assignment must not be overwritten by
+the success callback.
+
 Confirmed interruption producers include:
 
 - release event `4006` on the authored paired release sequence;

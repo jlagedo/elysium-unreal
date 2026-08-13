@@ -52,7 +52,14 @@ struct FElysiumDisposition
 {
 	FString Name;                  // the block name, e.g. "Neutral" — matches `default_disposition`
 	FString AnimName;              // "Animation Name" — the `Stance_<AnimName>_Idle_*` token
-	int32   Level = 0;             // "DispositionLevel"
+	int32   Level = 1;             // "DispositionLevel"
+
+	// The resting face selected beside the stance. `TalkingExpression` is the alternate row while
+	// a line is actually playing; an omitted value inherits through the table just like retail's
+	// record copy. Both name rows in `<model>_expressions.txt`.
+	FString DefaultExpression;
+	FString TalkingExpression;
+	float ExpressionIntensity = 1.f;
 
 	// Fidget/stance-change pacing, verbatim from the table. Chances are percentages, thresholds
 	// are seconds. The comments in the shipped file explain them: a character has
@@ -85,21 +92,25 @@ struct FElysiumDisposition
 // The parsed table. Load() is cheap (19 rows) and idempotent; the caller caches it.
 struct FElysiumDispositionTable
 {
-	// Keyed by the block name, case-insensitively — the maps spell it `Neutral`, `Anger`, `fear`,
-	// `Damaged`, and the table's own casing is not what the entity keyfield uses.
-	TMap<FString, FElysiumDisposition> Rows;
+	// File order is semantic. A name may repeat at several DispositionLevels (`Joy` has 1/2/3),
+	// and `CopyDataFrom` may only refer to an earlier row. Keeping the records as an array preserves
+	// both facts; Resolve folds the authored name and selects the requested level.
+	TArray<FElysiumDisposition> Rows;
 
 	bool IsValid() const { return !Rows.IsEmpty(); }
 	bool Load(FString& OutError);
+	// Content-free parser used by the substrate tests; Load is only the file seam around it.
+	bool ParseText(const FString& Text, const FString& Source, FString& OutError);
 
-	// The row for a `default_disposition` value, or the Neutral row when it names nothing known.
+	// The row for (name, level), decrementing toward level 1 when the requested level is absent,
+	// or Neutral level 1 when the name itself is unknown.
 	// The table's own comment makes Neutral the fallback: "The 'Neutral' disposition must be the
 	// first one in the list, it is what the others will get their starting values from."
-	const FElysiumDisposition* Resolve(const FString& Disposition) const;
+	const FElysiumDisposition* Resolve(const FString& Disposition, int32 Level = 1) const;
 
 	// The `Stance_<...>_` token for a disposition — its "Animation Name", falling back to the
 	// disposition's own name and finally to "Neutral", so a stance set always resolves.
-	FString AnimNameFor(const FString& Disposition) const;
+	FString AnimNameFor(const FString& Disposition, int32 Level = 1) const;
 
 	static const TCHAR* NeutralName;
 };

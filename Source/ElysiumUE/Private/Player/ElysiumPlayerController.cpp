@@ -9,6 +9,7 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerCameraManager.h"
 #include "Debug/ElysiumScreenshot.h"
+#include "Substrate/ElysiumItemClasses.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/GameInstance.h"
@@ -171,6 +172,16 @@ void AElysiumPlayerController::RegisterCommands()
 		if (FElysiumEntityWorld* World = CurrentEntityWorld())
 		{
 			ElysiumCommands::TeleportPlayer(*World, Call.Args);
+		}
+	}));
+
+	// The server-authoritative half of the loot panel. CommonUI is intentionally absent from this
+	// slice: +use opens a container session and this verb performs Take/Give against that session.
+	Bindings.Add(Registry.Bind(TEXT("vbarter"), [this](const FElysiumCommandCall& Call)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumItems::ExecuteBarter(*World, Call.Args);
 		}
 	}));
 

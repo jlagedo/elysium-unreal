@@ -192,7 +192,7 @@ in CurrentMoney"`), rather than returning a falsy value.
 
 | Name | Body | Args | Calls | Backing today |
 |---|---|---|---|---|
-| `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | stance only (9.9 owns reactions) |
+| `SetDisposition` | `10197e50` | `(char, name:str, level:int)` | **2,510** | real disposition presentation (level, stance transition, face, gaze/blink); independent of combat/reaction score |
 | `SetQuest` | `10199800` | `(char, quest:str, state:int)` | 732 | real (map + catalogue + awards + journal) |
 | `GetQuestState` | `101987b0` | `(char, quest:str)` | 377 | real (quest map) |
 | `HasItem` | `10198640` | `(char, item:str)` | 327 | real (ordinary slots, then keyring) |
@@ -352,8 +352,9 @@ shifted `fieldtype_t` appearing at the input-dispatch layer, not just in attribu
 
 ### `CAI_BaseNPC` — datamap `0x105c9814`, builder `FUN_1027a820`, 102 records
 
-One scripted input, `SetRelationship` (**STRING**, 334 calls, `LAB_100073d8`) — the
-third-largest single gap in the game. Its 16 outputs are the NPC event surface:
+One scripted input, `SetRelationship` (**STRING**, 334 calls, `LAB_100073d8`) — its saved
+entity/class table and writer are present; senses, enemy assignment and combat schedule consumers
+are not. Its 16 outputs are the NPC event surface:
 `OnDamaged`, `OnDeath`, `OnHalfHealth`, `OnFoundEnemy`, `OnLostEnemyLOS`, `OnLostEnemy`,
 `OnFoundPlayer`, `OnLostPlayerLOS`, `OnLostPlayer`, `OnHearWorld`, `OnHearPlayer`, `OnHearCombat`,
 `OnGrappleBegin`, `OnGrappleEnd`, **`OnFedUponBegin`**, **`OnFedUponEnd`** — the last pair being

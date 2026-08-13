@@ -9,6 +9,7 @@ class USkeletalMeshComponent;
 struct FElysiumStatTable;      // Private/Substrate/ElysiumRulebook.h — the data half of the sheet
 struct FElysiumClanTemplate;
 struct FElysiumSheetEffects;   // Private/Substrate/ElysiumSheetMath.h — the trait-effect layer
+struct FElysiumDisposition;
 
 // 11.4 (S3) — the player is an entity; the pawn is its body.
 //
@@ -392,11 +393,15 @@ struct FElysiumInventory
 	// No clamp of its own: `GiveAmmo`'s wrapper has none either (`inventory.md` §6).
 	void AddReserve(const FString& AmmoType, int32 Amount);
 
-	// --- Declared, not built: slice (b) ---------------------------------------------------------
-	// Player drop (`inven_drop`, world entity PRESERVED — never a shortcut through ScriptRemove),
-	// container transfer (`SpawnItemInContainer`/`AddEntityToContainer`/`DeleteItems`) and the
-	// barter verbs (`vbarter Take|Give|Buy|Sell`) are distinct operations with distinct
-	// entity-lifetime effects (`inventory.md` §5.3, §7). They are absent rather than half-built.
+	// Atomically transfer the item at `Position` into `To`. A multi-count stack transfers one unit;
+	// the last unit/non-stackable moves its entity. Destination admission is checked before mutation,
+	// so a full inventory or merge target leaves both inventories untouched.
+	bool TransferSlot(FElysiumCombatCharacter& From, FElysiumCombatCharacter& To, int32 Position,
+		FString* OutClassname = nullptr, int32* OutQuantity = nullptr);
+
+	// Still distinct and unbuilt: player drop (`inven_drop`, world entity PRESERVED — never a
+	// shortcut through ScriptRemove) and priced `Buy`/`Sell` barter. Take/Give use TransferSlot;
+	// pricing belongs to 9.10 (`inventory.md` §5.3, §7).
 };
 
 // ============================================================================================
@@ -417,6 +422,9 @@ public:
 	// `vdata/system/dispositiontable.txt` (8.5). Runtime state, not a spawn-time constant: 9.9's
 	// `SetDisposition` (2,510 calls, 2,467 of them a `.dlg` line's action) writes it mid-conversation.
 	FString Disposition;
+	// SetDisposition's second argument. `default_disposition` starts at level 1; the resolved level
+	// persists separately because several names author distinct expression/stance rows.
+	int32 DispositionLevel = 1;
 
 	// The standing skeletal body, or null (a bodiless entity, `elysium.NpcBodies 0`, or a missing
 	// glb). Owned by the map actor; the world tears it down. This class only gates and moves it.
@@ -441,6 +449,13 @@ public:
 	virtual bool GetPhonemeFilter(float& OutMin, float& OutMax) const override;
 	virtual bool ResetAnimToIdle() override;
 	virtual bool SetDispositionName(const FString& NewDisposition) override;
+	virtual bool SetDisposition(const FString& NewDisposition, int32 NewLevel);
+
+	// Dialogue owns the talking/default face switch. The current baseline is also exposed for the
+	// dialogue lipsync compositor, which layers phonemes over it instead of erasing it.
+	void SetDispositionTalking(bool bTalking);
+	bool IsDispositionTalking() const { return bDispositionTalking; }
+	void AccumulateDispositionFacialPose(TMap<FString, float>& InOutPose) const;
 
 	// Body follow: SetOrigin/SetAngles move and re-face the component; SetModel rebuilds it.
 	virtual void OnRuntimeTransformChanged() override;
@@ -464,7 +479,14 @@ protected:
 	// `CAI_BaseNPCTroika`'s constructor, so the player has none. The base answer spreads the pick by
 	// entity index, which keeps a crowd from posing identically and survives a reload.
 	virtual int32 IdleVariant() const { return FMath::Max(0, Handle.Index); }
+	bool CommitDisposition(const FString& NewDisposition, int32 NewLevel, bool& bOutChanged,
+		FElysiumDisposition* OutOld = nullptr, FElysiumDisposition* OutNew = nullptr);
+	void RefreshDispositionExpression();
 	void GateVisual();
+
+private:
+	bool bDispositionTalking = false;
+	TMap<FString, float> DispositionFacialPose;
 };
 
 // ============================================================================================

@@ -186,6 +186,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 {
 	bActive = false;
 	bSnapshotApplied = false;
+	SnapshotEntityIndices.Reset();
 	// The item catalogue registers one entity class per `vdata/items` definition, and the registry
 	// resolves a classname once, at Create. So the catalogue has to be loaded before this map's
 	// item entities are built — otherwise they spawn as inert records and stay that way.
@@ -360,16 +361,17 @@ void FElysiumEntityWorld::Activate(double Now)
 			CallEntityActivate(*Ent);
 		}
 	}
-	// A fresh rebuild's omission baseline includes Source Activate. A restored map keeps the
-	// construction baseline so restored activation-derived state remains explicit in its snapshot.
-	if (!bSnapshotApplied)
+	// A fresh rebuild's omission baseline includes Source Activate. On restore, entities absent from
+	// the sparse snapshot are also fresh rebuilds and take that same baseline. Only indices whose
+	// state was actually restored retain the construction baseline, keeping their activation-derived
+	// differences explicit without making every untouched map entity appear changed.
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
 	{
-		for (int32 Index = 0; Index < EntityList.Num(); ++Index)
+		if (EntityList[Index]
+			&& !EntityList[Index]->ActivationStateMustPersist()
+			&& (!bSnapshotApplied || !SnapshotEntityIndices.Contains(Index)))
 		{
-			if (EntityList[Index] && !EntityList[Index]->ActivationStateMustPersist())
-			{
-				CaptureBaseline(Index);
-			}
+			CaptureBaseline(Index);
 		}
 	}
 	bActive = true;
@@ -641,6 +643,7 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
 	Controller->Model = Source->Model;
 	Controller->Skin = Source->Skin;
 	Controller->Disposition = Source->Disposition;
+	Controller->DispositionLevel = Source->DispositionLevel;
 	Controller->Sheet = Source->Sheet;
 	Controller->Effects = Source->Effects;
 	Controller->Health = Source->Health;
@@ -708,6 +711,7 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 	S.bDead = E.bDead;
 	S.bHidden = E.bHidden;
 	S.bSpawnCalled = E.bSpawnCalled;
+	S.bActivateCalled = E.bActivateCalled;
 	S.NextThink = E.NextThink;
 	S.SavedNextThink = E.GetSavedNextThink();
 	S.OutputTimesRemaining = E.OutputTimesRemaining;
@@ -813,6 +817,7 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 				|| S.bDead != Base->bDead
 				|| S.bHidden != Base->bHidden
 				|| S.bSpawnCalled != Base->bSpawnCalled
+				|| S.bActivateCalled != Base->bActivateCalled
 				|| S.NextThink != Base->NextThink
 				|| S.SavedNextThink != Base->SavedNextThink
 				|| S.OutputTimesRemaining != Base->OutputTimesRemaining
@@ -882,6 +887,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		return 0;
 	}
 	bSnapshotApplied = true;
+	SnapshotEntityIndices.Reset();
 	if (Snapshot.DefCount != Defs.Defs.Num())
 	{
 		// The map's `.ents` changed under the save. Every record is matched by index and guarded by
@@ -980,6 +986,14 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		}
 
 		E->bSpawnCalled = S.bSpawnCalled;
+		// Activate is part of entity lifecycle, not presentation reconstruction. Replaying it after
+		// restoring a live record re-arms NPC admission and replaces the saved schedule/leaf state.
+		// Records which omit this field came from an older active-map payload and default to true.
+		// point_teleport is the one class whose activation-derived cache must persist; before that
+		// cache was serialized, an empty leaf meant Activate had to rebuild it from the restored
+		// live transform. Preserve that legacy migration instead of letting the new latch skip it.
+		E->bActivateCalled = S.bActivateCalled
+			&& !(E->ActivationStateMustPersist() && S.LeafState.IsEmpty());
 		E->NextThink = S.NextThink;
 		E->SetSavedNextThink(S.SavedNextThink);
 		if (S.OutputTimesRemaining.Num() == E->OutputTimesRemaining.Num())
@@ -1008,6 +1022,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		E->NextThink = S.NextThink;
 		E->SetSavedNextThink(S.SavedNextThink);
 		NotifyVisualChanged(*E);
+		SnapshotEntityIndices.Add(S.Index);
 		++Applied;
 	}
 
@@ -1016,6 +1031,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	// for the same index cannot resurrect one — the absent set is the later statement about it.
 	for (int32 Absent : Snapshot.AbsentEntities)
 	{
+		SnapshotEntityIndices.Add(Absent);
 		if (FElysiumEntity* E = Resolve(FElysiumEntityHandle(Absent, Epoch)))
 		{
 			E->Kill();
@@ -1149,11 +1165,34 @@ void FElysiumEntityWorld::RegisterUseAnchor(UPrimitiveComponent* Component,
 	}
 }
 
+void FElysiumEntityWorld::RegisterTouchAnchor(UPrimitiveComponent* Component,
+	const FElysiumEntityHandle& OwnerHandle)
+{
+	if (!Component || !OwnerHandle.IsSet())
+	{
+		return;
+	}
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->RegisterTouchAnchor(Component, OwnerHandle);
+		const FElysiumEntity* Entity = Resolve(OwnerHandle);
+		Bodily->SetTouchAnchorEnabled(OwnerHandle, Entity && !Entity->IsInert());
+	}
+}
+
 void FElysiumEntityWorld::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)
 {
 	if (IElysiumEmbodiment* Bodily = Embodiment())
 	{
 		Bodily->SetUseAnchorEnabled(OwnerHandle, bEnabled);
+	}
+}
+
+void FElysiumEntityWorld::SetTouchAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)
+{
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->SetTouchAnchorEnabled(OwnerHandle, bEnabled);
 	}
 }
 
@@ -1175,7 +1214,7 @@ void FElysiumEntityWorld::AddSink(TUniquePtr<IElysiumIOSink> InSink)
 	}
 }
 
-void FElysiumEntityWorld::RouteBrushTouch(const FElysiumEntityHandle& Brush,
+void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
 {
 	const uint64 TouchKey = (static_cast<uint64>(static_cast<uint32>(Brush.Index)) << 32)
@@ -1382,6 +1421,9 @@ void FElysiumEntityWorld::UpdatePlayerFeed()
 		FElysiumCombatCharacter* Victim = TargetEnt ? TargetEnt->AsCombatCharacter() : nullptr;
 		if (!Victim)
 		{
+			UE_LOG(LogElysiumWorld, Log,
+				TEXT("%s feed request missed: candidate #%d is not a live combat character"),
+				*PlayerEnt->DebugString(), Candidate.IsSet() ? Candidate.Index : INDEX_NONE);
 			continue;   // nothing in the hull, or what is there is not a character
 		}
 		PlayerEnt->AttemptFeed(*Victim);
@@ -2395,11 +2437,16 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 {
 	DialogueLipsync.Reset();
 	DialogueLineStart = -1.0;
+	DialogueFaceOwner = GetOpenDialogOwner();
+	FElysiumEntity* Speaker = Resolve(GetOpenDialogOwner());
+	if (FElysiumCombatCharacter* Character = Speaker ? Speaker->AsCombatCharacter() : nullptr)
+	{
+		Character->SetDispositionTalking(true);
+	}
 	if (CVarDialogueLipsync.GetValueOnGameThread() == 0)
 	{
 		return;
 	}
-	FElysiumEntity* Speaker = Resolve(GetOpenDialogOwner());
 	if (Speaker == nullptr)
 	{
 		return;
@@ -2425,19 +2472,25 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 	{
 		return;
 	}
-	DialogueFaceOwner = GetOpenDialogOwner();
 	DialogueLineStart = NowSeconds();
 	DialogueLipsync = MakeShared<FElysiumLipSyncBinding>(MoveTemp(Binding));
 }
 
 void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 {
-	if (!DialogueLipsync.IsValid() && DialogueFacialPose.IsEmpty())
+	if (!DialogueSession && !DialogueLipsync.IsValid() && DialogueFacialPose.IsEmpty())
 	{
 		return;
 	}
 
 	TMap<FString, float> Next;
+	FElysiumEntity* Speaker = Resolve(DialogueFaceOwner.IsSet()
+		? DialogueFaceOwner : GetOpenDialogOwner());
+	FElysiumCombatCharacter* Character = Speaker ? Speaker->AsCombatCharacter() : nullptr;
+	if (Character)
+	{
+		Character->AccumulateDispositionFacialPose(Next);
+	}
 	if (DialogueLipsync.IsValid() && DialogueLineStart >= 0.0
 		&& CVarDialogueLipsync.GetValueOnGameThread() != 0)
 	{
@@ -2446,9 +2499,14 @@ void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 		{
 			DialogueLipsync->Accumulate(LineSeconds, Next, nullptr);
 		}
+		else if (LineSeconds > DialogueLipsync->Track->LatestTime && Character)
+		{
+			Character->SetDispositionTalking(false);
+			Next.Reset();
+			Character->AccumulateDispositionFacialPose(Next);
+		}
 	}
 
-	FElysiumEntity* Speaker = Resolve(DialogueFaceOwner);
 	if (Speaker == nullptr)
 	{
 		// The face went away mid-line. Drop the bookkeeping rather than holding a pose for an entity
@@ -2480,8 +2538,11 @@ void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 		Speaker->SetFlexControllers(Writes, nullptr);
 	}
 	DialogueFacialPose = MoveTemp(Next);
-	if (DialogueFacialPose.IsEmpty() && !DialogueLipsync.IsValid())
+	if (!DialogueSession && !DialogueLipsync.IsValid())
 	{
+		// The default disposition pose now lives on the character. Forget only this compositor's
+		// previous-pose bookkeeping; clearing its keys would erase the baseline we just restored.
+		DialogueFacialPose.Reset();
 		DialogueFaceOwner = FElysiumEntityHandle();
 	}
 }
@@ -2503,6 +2564,13 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	// here instead would leave the last phoneme latched on the face for the rest of the map.
 	DialogueLipsync.Reset();
 	DialogueLineStart = -1.0;
+	if (FElysiumEntity* Speaker = Resolve(Closing))
+	{
+		if (FElysiumCombatCharacter* Character = Speaker->AsCombatCharacter())
+		{
+			Character->SetDispositionTalking(false);
+		}
+	}
 
 	if (DialogueSession && Camera())
 	{
@@ -3308,6 +3376,7 @@ void FElysiumEntityWorld::Teardown()
 	if (IElysiumEmbodiment* Bodily = Embodiment())
 	{
 		Bodily->ClearUseAnchors();
+		Bodily->ClearTouchAnchors();
 	}
 
 	bActive = false;

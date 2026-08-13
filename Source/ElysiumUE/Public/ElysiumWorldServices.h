@@ -148,7 +148,11 @@ public:
 	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) {}
 	// Re-run the default-idle policy on a live body and crossfade to the result (a disposition change).
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Disposition, int32 IdleVariant) = 0;
+		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant) = 0;
+	// Update presentation state retained beside the body (currently the blink cadence) without
+	// rebuilding it. The logical disposition remains on the plain-C++ character.
+	virtual void UpdateNpcDisposition(USkeletalMeshComponent* Body, const FString& Disposition,
+		int32 DispositionLevel) {}
 	// Crossfade a live body to a named clip; OutSeconds (optional) receives its authored length,
 	// which is what a scripted_sequence schedules its OnEndSequence off.
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
@@ -197,7 +201,8 @@ public:
 	// Handing the row down by value is what keeps the selector a pure rule: the table is engine-side
 	// and its Load() needs the export root, so a substrate test that reached for it could not run
 	// content-free. The same shape as the gaze layer's `FElysiumEyeTargetTuning`.
-	virtual bool ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow)
+	virtual bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
+		FElysiumDisposition& OutRow)
 	{
 		return false;
 	}
@@ -351,6 +356,12 @@ public:
 		const FElysiumEntityHandle& Owner) = 0;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) = 0;
 	virtual void ClearUseAnchors() = 0;
+	// Loose-item DefaultTouch embodiment. The component remains presentation only: overlap produces
+	// an entity touch edge, and the item/inventory transaction decides whether acquisition succeeds.
+	virtual void RegisterTouchAnchor(UPrimitiveComponent* Source,
+		const FElysiumEntityHandle& Owner) {}
+	virtual void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) {}
+	virtual void ClearTouchAnchors() {}
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const = 0;
 

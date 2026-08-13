@@ -185,6 +185,7 @@ struct FElysiumRecordingServices final
 	// substrate tests remain pure and exercise focus/session policy over these records.
 	FElysiumUseQueryResult UseQuery;
 	TMap<FElysiumEntityHandle, bool> UseAnchorEnabled;
+	TMap<FElysiumEntityHandle, bool> TouchAnchorEnabled;
 	// Damage accumulated by DamagePlayer, so a trigger_hurt cadence is assertable as a number.
 	float DamageTaken = 0.f;
 	// Opt-in because most tests intentionally exercise the supported headless/no-motor path.
@@ -236,9 +237,10 @@ struct FElysiumRecordingServices final
 		Record(TEXT("DestroyNpcMotor"));
 	}
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Disposition, int32 IdleVariant) override
+		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant) override
 	{
-		Record(FString::Printf(TEXT("RefreshNpcIdle %s disp=%s var=%d"), *Stem, *Disposition, IdleVariant));
+		Record(FString::Printf(TEXT("RefreshNpcIdle %s disp=%s level=%d var=%d"),
+			*Stem, *Disposition, DispositionLevel, IdleVariant));
 		return Body != nullptr;
 	}
 	// The stance set a test hands the machine. Empty by default, which is the "this model carries no
@@ -256,9 +258,10 @@ struct FElysiumRecordingServices final
 	// which `IsValid()` rejects — a test that wants the machine to run seeds this the same way it
 	// seeds `StanceClips`, so the literals it asserts against are visible in the test body.
 	FElysiumDisposition DispositionRow;
-	virtual bool ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow) override
+	virtual bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
+		FElysiumDisposition& OutRow) override
 	{
-		Record(FString::Printf(TEXT("ResolveDisposition %s"), *Disposition));
+		Record(FString::Printf(TEXT("ResolveDisposition %s %d"), *Disposition, DispositionLevel));
 		OutRow = DispositionRow;
 		return OutRow.IsValid();
 	}
@@ -678,6 +681,22 @@ struct FElysiumRecordingServices final
 	{
 		UseAnchorEnabled.Reset();
 		Record(TEXT("ClearUseAnchors"));
+	}
+	virtual void RegisterTouchAnchor(UPrimitiveComponent*, const FElysiumEntityHandle& Owner) override
+	{
+		TouchAnchorEnabled.Add(Owner, true);
+		Record(FString::Printf(TEXT("RegisterTouchAnchor %s"), *Owner.ToString()));
+	}
+	virtual void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override
+	{
+		TouchAnchorEnabled.Add(Owner, bEnabled);
+		Record(FString::Printf(TEXT("SetTouchAnchorEnabled %s %d"),
+			*Owner.ToString(), bEnabled ? 1 : 0));
+	}
+	virtual void ClearTouchAnchors() override
+	{
+		TouchAnchorEnabled.Reset();
+		Record(TEXT("ClearTouchAnchors"));
 	}
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const override

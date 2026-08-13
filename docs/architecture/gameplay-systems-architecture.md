@@ -626,9 +626,11 @@ in the command registry. Roadmap 13.2 / P13.
 
 - `FElysiumSkillEntity : FElysiumEntity` — the `CBaseVampireSkillEntity` mirror: skilltype →
   feat (1 = Intrusion, 2 = Hacking, preserved verbatim including the four authored anomalies),
-  attempt cadence `(K1 − rating·K2) / player_scale` on the think, the roll through §5.1, the
-  shared result field that *is* the lock state (`<3` locked; `Lock` writes 1, `Unlock` 3), and
-  the five outputs `OnSkillAttemptBegin/Cycle/Success/Fail/Botch`.
+  exact attempt cadence `(5.0 − rating·0.25) / player_scale` on the think, the deterministic
+  `rating >= difficulty` verdict (tier 3 pass, tier 1 fail; no §5.1 dice roll), the shared result
+  field that *is* the lock state (`<3` locked; `Lock` writes 1, `Unlock` 3), and the five outputs
+  `OnSkillAttemptBegin/Cycle/Success/Fail/Botch`. The generic botch output remains declared but is
+  unreachable from the normal `skilltype` 1/2 path because that caller hard-codes `doRoll=false`.
 - Lock leaves: `item_container_lock` (with `delete_key` policy against §5.2's keyring),
   `prop_padlock`, and the doorknob families' lock halves — today body-only rows in
   `BuildPropBodyClass`, re-registered onto this base with their use/lock icon state.
@@ -642,16 +644,17 @@ in the command registry. Roadmap 13.2 / P13.
   → runscript → prompt; K11's seam rule), dependency evaluation through the script host, and
   the email state (per-terminal flags via leaf `Serialize`; `global_email` promotes to the
   player record's existing `EmailFlags`).
-- **Presentation divergence, owner-called:** the character-cell screen renders as a modern UI
-  surface on the presentation seam (S8) instead of a rasterized 512×512 model texture — a
-  Presentation-layer change under the remaster charter; the 36×24 grid semantics, content,
-  command vocabulary and server authority reproduce.
+- **Presentation divergence, owner-called:** the character-cell screen renders as a modern
+  CommonUI surface projected over recovered model-screen geometry instead of a rasterized 512×512
+  model texture. The 36×24 grid semantics, content, command vocabulary and server authority
+  reproduce. The view contract, camera/surface projection, keyboard path and semantic controller
+  action palette are owned by `docs/architecture/computer-terminal-architecture.md`.
 
 **Refactor:** new `Substrate/ElysiumSkillClasses.{h,cpp}`; the `prop_hacking` /
 `item_container_lock` / `prop_padlock` rows leave `BuildPropBodyClass` and
-`ElysiumStubClasses.cpp`. The tutorial's `tuthack` chain (typed `Unlock` → `OnTrigger0` → safe
-lock/visibility/trigger state) is the acceptance transaction. Owned by the tutorial-mechanics
-lane beside 13.1–13.3.
+`ElysiumStubClasses.cpp`. The tutorial's `tuthack` chain (typed or controller-selected `Unlock` →
+`OnTrigger0` → safe lock/visibility/trigger state) is the acceptance transaction. Owned by the
+tutorial-mechanics lane at 13.4.
 
 ### 5.8 Economy and barter
 

@@ -22,6 +22,7 @@ struct FElysiumItemDef;
 struct FElysiumItemTable;
 class UPrimitiveComponent;
 class UStaticMeshComponent;
+class FElysiumEntityWorld;
 
 // The one classname the item family does NOT share a leaf with: collected keys are stored as
 // logical records inside a single carried keyring entity rather than one entity each, so retail
@@ -79,15 +80,16 @@ public:
 	// body, adds through the inventory's equip/add route, and fires `OnPlayerPickup` when the taker
 	// is the player. Returns whether the item was accepted.
 	//
-	// What CALLS it is the pickup ingress, which is retail's `CBaseCombatWeaponDefaultTouch` — a
-	// touch on the loose item's own body. That ingress is slice (b)'s; the script/`GiveItem` route
-	// reaches this same door.
+	// Loose world bodies register a player-overlap anchor which reaches this same terminus through
+	// OnTouchStart, reproducing CBaseCombatWeaponDefaultTouch without giving the component identity.
 	bool AcquireBy(FElysiumCombatCharacter& Taker);
 
 	virtual void Spawn() override;
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void OnRuntimeTransformChanged() override;
 	virtual void OnDormancyChanged() override;
+	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override;
+	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	virtual UPrimitiveComponent* GetAttachBody() const override;
 
@@ -135,6 +137,50 @@ public:
 };
 
 // ============================================================================================
+// FElysiumItemContainer — CItemContainer over CBaseCombatCharacter
+// ============================================================================================
+
+class FElysiumItemContainer final : public FElysiumCombatCharacter
+{
+public:
+	FString EquipSeeds[12];
+	FElysiumEntityHandle CurrentUser;
+	FString DamageModel;
+
+	virtual void Spawn() override;
+	virtual void Activate() override;
+	virtual void Think() override;
+	virtual void Serialize(FElysiumSaveArchive& Ar) override;
+	virtual void Use(const FElysiumEntityHandle& Activator) override;
+	virtual bool IsUsable() const override { return true; }
+	virtual void OnRuntimeTransformChanged() override;
+	virtual void OnRuntimeModelChanged() override;
+	virtual void OnDormancyChanged() override;
+	virtual UPrimitiveComponent* GetAttachBody() const override;
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
+	virtual FElysiumItemContainer* AsItemContainer() override { return this; }
+
+	void InputSpawnItemInContainer(const FElysiumInputArgs& Args);
+	void InputAddEntityToContainer(const FElysiumInputArgs& Args);
+	void InputDeleteItems(const FElysiumInputArgs& Args);
+	bool TakeToPlayer(FElysiumPlayer& Player, int32 Slot);
+	bool GiveFromPlayer(FElysiumPlayer& Player, int32 Slot);
+	void SetSkin(int32 Family);
+
+private:
+	bool SpawnNamedItem(const FString& Classname);
+	void DeleteAllItems();
+	void BuildWorldBody();
+	void DestroyWorldBody();
+	void ApplySkin();
+	void GateWorldBody();
+
+	UStaticMeshComponent* WorldBody = nullptr;
+	FString VisualStem;
+	bool bSeedsMaterialized = false;
+};
+
+// ============================================================================================
 // The catalogue -> class-registry install
 // ============================================================================================
 
@@ -154,4 +200,9 @@ namespace ElysiumItems
 	// The installed catalogue, or null. Policy comes from here and nowhere else.
 	const FElysiumItemTable* Table();
 	const FElysiumItemDef* Find(const FString& Classname);
+
+	// Headless loot/barter surface used until the CommonUI panel lands. The player must have opened
+	// one container through +use; only `Take <slot>` and `Give <slot>` mutate state. Buy/Sell remain
+	// the economy slice and fail closed.
+	bool ExecuteBarter(FElysiumEntityWorld& World, const FString& Args);
 }

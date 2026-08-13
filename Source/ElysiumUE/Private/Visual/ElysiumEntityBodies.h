@@ -67,7 +67,9 @@ public:
 	// disposition change reaches animation through: 9.9's `SetDisposition` is 2,510 calls, 2,467
 	// of them a .dlg line's action, so an NPC's stance follows the conversation.
 	bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Disposition, int32 IdleVariant);
+		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant);
+	void UpdateNpcDisposition(USkeletalMeshComponent* Body, const FString& Disposition,
+		int32 DispositionLevel);
 
 	// One model's disposition stance set for `AnimName`, with the precache fallbacks applied. The
 	// substrate's stance machine reads the resolved table; this is the only place that touches the
@@ -77,7 +79,8 @@ public:
 
 	// The disposition table row behind a `default_disposition` name — the stance token and the
 	// pacing the selector rolls against, resolved together because they are one row.
-	bool ResolveDisposition(const FString& Disposition, struct FElysiumDisposition& OutRow);
+	bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
+		struct FElysiumDisposition& OutRow);
 
 	// Whether this body was drawn recently enough to count as visible. `TASK_WAIT_PVS`'s oracle.
 	bool IsNpcBodyVisible(USkeletalMeshComponent* Body) const;
@@ -334,6 +337,7 @@ private:
 		// The body's disposition, resolved against the table for this character's blink cadence.
 		// Latched at build: a disposition change rebuilds the body.
 		FString Disposition;
+		int32 DispositionLevel = 1;
 
 		// Blink is two halves in retail: the server picks *when* (a random interval from the
 		// disposition table) and the client runs the 300 ms envelope. Both sit here until 12.4's

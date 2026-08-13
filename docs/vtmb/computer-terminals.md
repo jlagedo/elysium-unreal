@@ -8,6 +8,9 @@ in `docs/vtmb/game_runtime.md`; sound resolution remains in `docs/vtmb/audio_pip
 serialized player record remains in `docs/vtmb/savegame_format.md`; and the map-specific tutorial
 graph remains in `docs/vtmb/sp_tutorial_1-event-surface.md`.
 
+The Unreal implementation and presentation counterpart is
+`docs/architecture/computer-terminal-architecture.md`.
+
 This is a VtMB behavior specification. Implementation priority and status live only in
 `docs/project/roadmap.md`.
 
@@ -257,6 +260,11 @@ screen texture.
 - `m_bInUse`, columns, rows, color scheme, `m_HackFlags`, `m_nMaxInput`, keystroke sound and
   direction-key permission are replicated by `DT_BaseTerminal`.
 
+The current 22-map export uses five distinct computer models across its twenty `prop_hacking`
+instances. Every exported model assigns its display triangles to a separate material named
+`screen`. This is a content fact about the present corpus; it does not establish how retail finds
+or binds that surface beyond the native screen-facing and dynamic-texture paths above.
+
 Client vtable `0x102334ac` slot 25 is the key-input body `0x100c7090`. It edits the command line and
 cursor immediately in the local cell buffer, then sends a small authoritative command surface:
 
@@ -288,10 +296,13 @@ exit. These are research questions, not implementation choices.
 - `OnSkillFail`;
 - `OnSkillBotch`.
 
-The shared roll stores its result in the same field used by `IsLocked()`. A result greater than 2
-is success, zero is a botch, and 1–2 are ordinary failure. `Lock` writes 1; `Unlock` writes 3.
-`skilltype 2` queries the Hacking feat, whose rating is Wits + Computer. Attempt pacing is
-`(K1 - skillLevel*K2) / playerScale` and the player skill is reread on approach.
+The shared attempt body calls its Intrusion/Hacking helper with `doRoll=false`: it compares the
+current feat rating to the selected difficulty and stores result tier 3 for pass or 1 for fail in
+the same field used by `IsLocked()`. The retained generic result dispatch has a tier-0 botch branch,
+but the normal `skilltype` 1/2 path cannot produce it. `Lock` writes 1; `Unlock` writes 3.
+`skilltype 2` queries the Hacking feat, whose rating is Wits + Computer. Attempt pacing is exactly
+`(5.0 - rating*0.25) / playerScale`; the player skill is reread on approach. The terminal-specific
+caller and difficulty-selection join remain open below.
 
 Terminal files can author both a `password` and a `difficulty` on each `SubDir`; some files also
 carry a root-level difficulty. The native terminal path that selects entity difficulty versus

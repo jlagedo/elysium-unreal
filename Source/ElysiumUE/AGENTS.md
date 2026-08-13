@@ -63,8 +63,13 @@ behavioral change.
 
 ## Gameplay integration contract
 
-Read `docs/architecture/gameplay-systems-architecture.md` before changing map entities, entity
-I/O, the script bridge, interactive props, or a gameplay domain. It composes the entity rules
+For every gameplay implementation or change in this runtime, first read and use
+`docs/architecture/gameplay-systems-architecture.md` as the governing design guidance. This
+includes map entities, entity I/O, the script bridge, interactive props, and every gameplay
+domain. When working in existing gameplay code, assess the touched code against that architecture
+and propose concrete changes for every divergence needed to bring it into conformance. Implement
+those corrections when they are within the requested scope; otherwise report them explicitly
+rather than expanding the task without authorization. The architecture composes the entity rules
 **R1–R8** in `docs/architecture/engine-core.md`, the runtime rules **S1–S10** in
 `docs/architecture/runtime-architecture.md`, and its own compatibility rules **K1–K12**. Exact
 VtMB behavior remains in the owning `docs/vtmb/` document; this file carries only the coding

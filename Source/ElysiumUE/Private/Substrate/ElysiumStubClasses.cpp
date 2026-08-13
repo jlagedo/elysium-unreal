@@ -117,8 +117,6 @@ namespace
 		  TEXT("physics brushes") },
 		{ TEXT("game_text"),                     TEXT("DisplayWindow"),
 		  TEXT("8.9 — the HUD") },
-		{ TEXT("npc_VAsianVampire"),             TEXT("SetRelationship"),
-		  TEXT("the NPC relationship model") },
 		{ TEXT("phys_ballsocket"),               TEXT("Break"),
 		  TEXT("physics constraints") },
 		{ TEXT("phys_constraint"),               TEXT("Break"),

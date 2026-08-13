@@ -424,14 +424,15 @@ namespace ElysiumScriptNatives
 			return FElysiumVariant::Void();
 		}
 		// SetDisposition(char, name, level) — 2,510 calls, 2,467 of them a `.dlg` line's action.
-		// Only the animation half is answered here: the NPC re-picks its standing stance from the
-		// disposition table. The emotional-state model and `level` are 9.9's, so this still records
-		// as a stub — the coverage report must not claim more than it does.
-		if (Method == FName(TEXT("SetDisposition")) && World && Args.Num() >= 1)
+		// One transaction updates the resolved row, stance transition, expression, gaze/blink policy
+		// and saved level. It does not touch combat relationships or the RPG reaction score (K4).
+		if (Method == FName(TEXT("SetDisposition")) && World && Args.Num() >= 2)
 		{
 			FElysiumEntity* E = World->Resolve(Self);
-			if (E) { E->SetDispositionName(Args[0].ToString()); }
-			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ true);
+			FElysiumCombatCharacter* Character = E ? E->AsCombatCharacter() : nullptr;
+			const bool bApplied = Character
+				&& Character->SetDisposition(Args[0].ToString(), Args[1].ToInt());
+			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ !bApplied);
 			return FElysiumVariant::Void();
 		}
 

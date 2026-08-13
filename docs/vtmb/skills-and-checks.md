@@ -34,7 +34,8 @@ timing, presentation and any branch still called out as open require a targeted 
 | Consumer verdict | gate, success/fail/botch, margin or damage | dialogue/entity/combat/feed code | Thresholds and opposed logic are consumer-owned. |
 
 That separation is load-bearing. A dialogue line asking for `Persuasion 7` and a lock asking
-for `Intrusion` may read the same feat system, but only the lock invokes the dice resolver.
+for `Intrusion` both read the feat system and perform deterministic thresholds; neither invokes
+the dice resolver.
 
 ## The 23 shipped feats
 
@@ -83,8 +84,8 @@ real: a modified `DiceRolls.txt` may replace the uniform table without changing 
 |---|---|---|---|
 | `Character.CalcFeat` | feat name | evaluate rating only | returns integer; no RNG |
 | dialogue simple dependency | feat or raw trait + authored threshold | rating/current-trait comparison | boolean; `M_`/`F_` is a sex gate |
-| lockable entity, `skilltype=1` | `Intrusion`, authored difficulty | repeated dice roll | `>2` success, `0` botch, `1..2` fail |
-| lockable entity, `skilltype=2` | `Hacking`, authored difficulty | repeated dice roll | same thresholds |
+| skill entity, `skilltype=1` | `Intrusion`, authored difficulty | timed rating comparison | `rating >= difficulty` emits tier 3; otherwise tier 1 |
+| skill entity, `skilltype=2` | `Hacking`, authored difficulty | timed rating comparison | same threshold |
 | resisted feeding | attacker Brawl rating; victim Hacking roll at difficulty 6 | hybrid opposed check | attacker rating must be strictly greater than defender net successes |
 | ranged defense against a Kindred victim | victim `Defensive_Maneuvers`; PC/NPC defense difficulty | dice roll | net successes subtract from lethality, floored at zero |
 | melee defense | victim `Defensive_Maneuvers`; PC/NPC defense difficulty | dice roll | net successes stored with the attack record |
@@ -97,22 +98,26 @@ the authored integer. `Persuasion 7` therefore means `CalcFeat("Persuasion") >= 
 rolled and no botch is possible. `M_` and `F_` prefixes first reject the wrong player sex, then
 evaluate the underlying check name.
 
-### Lock and hacking props perform repeated rolls
+### Lock and hacking skill entities perform timed threshold attempts
 
 `CBaseVampireSkillEntity` maps `skilltype=1` to feat id 0 (`Intrusion`) and `skilltype=2` to
-feat id 2 (`Hacking`). Other values do not select a roll. Each attempt records its roll and
-fires one of three outputs:
+feat id 2 (`Hacking`). Other values do not select a check. Its shared attempt body calls the
+Intrusion/Hacking helper with `doRoll=false`, so the verdict is deterministic:
 
 ```text
-roll > 2  -> OnSkillSuccess
-roll == 0 -> OnSkillBotch
-otherwise -> OnSkillFail
+rating >= authored difficulty -> result tier 3 -> OnSkillSuccess
+rating <  authored difficulty -> result tier 1 -> OnSkillFail
 ```
 
-The same stored value is the lock state: `<3` is locked; `Lock` writes 1 and `Unlock` writes
-3. Attempt cadence is `(K1 - rating*K2) / player_scale`, so rating influences both the roll
-pool and the presentation pace. Full entity fields and outputs are in
-`docs/vtmb/entity_io.md`.
+The generic result dispatch still contains a tier-0 `OnSkillBotch` branch, but the normal
+`skilltype` 1/2 caller cannot produce zero. The same stored tier is the lock state: `<3` is locked;
+`Lock` writes 1 and `Unlock` writes 3. `diceroll` is a proven-dead Hammer key and does not switch
+this path into RNG.
+
+One accepted use runs one cycle of `(5.0 - rating*0.25) / player_scale`, with a 0–100 progress
+message. A failed lock attempt ends use; retry requires another use and another full cycle. Rating
+therefore controls both the threshold verdict and presentation speed, not a dice pool. Full entity
+ordering, placement, attempt state and outputs are in `docs/vtmb/entity_io.md`.
 
 ### Feeding is deliberately asymmetric
 

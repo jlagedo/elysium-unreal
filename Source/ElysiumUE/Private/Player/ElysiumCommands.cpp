@@ -161,6 +161,7 @@ namespace
 		{ TEXT("toggleinven"),  EK::Once,       EG::Combat,   EB::None,         TEXT("toggle the selection UI -- 9.8") },
 		{ TEXT("toggleuiside"), EK::Once,       EG::Combat,   EB::None,         TEXT("swap the selection UI side -- 9.8") },
 		{ TEXT("showinventory"), EK::Once,      EG::Combat,   EB::None,         TEXT("show inventory page N -- 9.8") },
+		{ TEXT("vbarter"),       EK::Once,       EG::Interface, EB::None,        TEXT("authoritative loot Take/Give; Buy/Sell remain 9.10") },
 		{ TEXT("vhotkey"),      EK::Once,       EG::Combat,   EB::None,         TEXT("fire hotkey slot #N -- 9.7") },
 		{ TEXT("vhotkey_int"),  EK::Once,       EG::Combat,   EB::None,         TEXT("fire hotkey slot N (integer form) -- 9.7") },
 		{ TEXT("showhotkeys"),  EK::Once,       EG::Combat,   EB::None,         TEXT("open the hotkey window -- 9.7") },

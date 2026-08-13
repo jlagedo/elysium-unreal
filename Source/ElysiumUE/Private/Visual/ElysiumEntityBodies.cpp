@@ -773,7 +773,7 @@ bool UElysiumEntityBodies::GetHeadFrame(USkeletalMeshComponent* Body, FVector& O
 }
 
 bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Disposition, int32 IdleVariant)
+	const FString& Disposition, int32 DispositionLevel, int32 IdleVariant)
 {
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
@@ -783,7 +783,8 @@ bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FS
 		return false;
 	}
 	EElysiumIdleTier Tier = EElysiumIdleTier::None;
-	const FString Clip = Anims->PickIdleClip(Stem, Disposition, Tier, IdleVariant);
+	const FString Clip = Anims->PickIdleClip(
+		Stem, Disposition, Tier, IdleVariant, DispositionLevel);
 	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
 }
 
@@ -798,7 +799,7 @@ bool UElysiumEntityBodies::ResolveStanceClips(const FString& Stem, const FString
 }
 
 bool UElysiumEntityBodies::ResolveDisposition(const FString& Disposition,
-	FElysiumDisposition& OutRow)
+	int32 DispositionLevel, FElysiumDisposition& OutRow)
 {
 	OutRow = FElysiumDisposition();
 	const AActor* Owner = GetOwner();
@@ -811,13 +812,25 @@ bool UElysiumEntityBodies::ResolveDisposition(const FString& Disposition,
 	// `Resolve` already falls back to Neutral for a name the table does not carry, which is the
 	// table's own documented rule rather than a repair -- so a null here means the table failed to
 	// load at all, not that the disposition was unknown.
-	const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Disposition);
+	const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Disposition, DispositionLevel);
 	if (Row == nullptr)
 	{
 		return false;
 	}
 	OutRow = *Row;
 	return true;
+}
+
+void UElysiumEntityBodies::UpdateNpcDisposition(USkeletalMeshComponent* Body,
+	const FString& Disposition, int32 DispositionLevel)
+{
+	if (FElysiumEyeBinding* Binding = EyeBindings.FindByPredicate(
+		[Body](const FElysiumEyeBinding& Row) { return Row.Comp.Get() == Body; }))
+	{
+		Binding->Disposition = Disposition;
+		Binding->DispositionLevel = FMath::Max(1, DispositionLevel);
+		Binding->NextBlinkTime = 0.f;
+	}
 }
 
 bool UElysiumEntityBodies::IsNpcBodyVisible(USkeletalMeshComponent* Body) const
@@ -1059,7 +1072,8 @@ void UElysiumEntityBodies::TickEyes(float)
 		float BlinkMax = 6.f;
 		if (Rules != nullptr)
 		{
-			if (const FElysiumDisposition* Row = Rules->Dispositions().Resolve(Binding.Disposition))
+			if (const FElysiumDisposition* Row = Rules->Dispositions().Resolve(
+				Binding.Disposition, Binding.DispositionLevel))
 			{
 				BlinkMin = Row->MinBlinkInterval;
 				BlinkMax = Row->MaxBlinkInterval;

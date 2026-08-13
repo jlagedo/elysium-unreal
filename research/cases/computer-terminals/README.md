@@ -59,6 +59,7 @@ not enter Git.
 ## Consumers
 
 - Canonical behavior: `docs/vtmb/computer-terminals.md`
+- Unreal implementation design: `docs/architecture/computer-terminal-architecture.md`
 - Generic output queue: `docs/vtmb/entity_io.md`
 - Tutorial closure: `docs/vtmb/sp_tutorial_1-event-surface.md`
 - Completion and implementation status: `docs/project/roadmap.md`

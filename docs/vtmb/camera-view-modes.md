@@ -506,6 +506,14 @@ while (elapsed >= 0) {
   every call; nothing accumulates.
 - The root's `OnReachedKeyframe` fires on the frame the `PlayAsCamera*` input lands: `0x100cc250`
   stamps `startTime = curtime`, `hKey = root`, `bPaused = true`.
+- When a selected stream reaches the tail with `HoldAtEnd == 0`, the scheduler verifies that the
+  player's matching position/target handle still names this track and then restores player camera
+  control. That restore releases the complete position/target camera session, not only the stream
+  whose clock completed. A superseded stream still completes and fires outputs but fails the handle
+  guard, so it cannot tear down the newer camera.
+- `RestoreCameraToPlayerControl` is the explicit form of the same player-level operation. Its retail
+  input handler accepts the restore only when this entity is still the player's current position
+  track; the float parameter is the return blend. It does not stop the entity's authored clocks.
 
 ### Interpolation
 
@@ -656,10 +664,12 @@ The substrate reaches the raw value channel through
 which is where `GetPlayerViewPoint` already lives. `SetCamera` owns one replaceable named-shot slot.
 Worldcraft tracks instead own independent **position** and **target** streams in the map epoch;
 `FElysiumEntityWorld` composes whichever streams are live into one raw shot. Restoring one owner does
-not cancel the other, and the raw shot is popped only when neither stream remains. The composed track
-shot sets `MaxTurnRate` to zero: the authored position/target samples already define the complete view,
-so the generic moving-subject tracker must not add a second yaw/pitch scroll between them. Map teardown
-clears all owners.
+not cancel the other for an internal role-local replacement or stop. Returning **player control** is
+different: a current non-held completion or `RestoreCameraToPlayerControl` clears both selected roles
+and pops the composed shot, while its stale-owner guard prevents an older clock from tearing down a
+newer camera. The composed track shot sets `MaxTurnRate` to zero: the authored position/target samples
+already define the complete view, so the generic moving-subject tracker must not add a second
+yaw/pitch scroll between them. Map teardown clears all owners.
 
 ### `camera_track` / `camera_keyframe`
 
@@ -669,10 +679,11 @@ the scheduler reads key fields off the track entity itself). `NextKey` walks thr
 require the shipped opening chains to be complete and acyclic. `PlayAsCameraPosition` and
 `PlayAsCameraTarget` select independently owned streams. Each role has one current track: a newer
 selection supersedes the previous one, while the superseded track may continue its authored clock
-and outputs without driving the view. `RestoreCameraToPlayerControl` (with `Restore` as a compact
-compatibility alias) releases that entity's live roles; `HoldAtEnd` retains the final sample until
-restore. `FromPlayerTime` is the push blend, `ToPlayerTime` the default pop blend, and an explicit
-restore parameter overrides the latter. `OnReachedKeyframe`,
+and outputs without driving the view. `HoldAtEnd` retains a selected stream's final sample; otherwise
+its completion returns the complete paired camera to player control. `RestoreCameraToPlayerControl`
+(with `Restore` as a compact compatibility alias) performs the same session-level return when the
+receiver is still the current position track. `FromPlayerTime` is the push blend, `ToPlayerTime` the
+default completion blend, and an explicit restore parameter overrides the latter. `OnReachedKeyframe`,
 `OnLeavingKeyframe`, and exactly-once `OnAnimationCompleted` fire from crossed authored times,
 including zero-duration chains.
 

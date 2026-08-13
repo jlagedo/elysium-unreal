@@ -226,6 +226,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumEntityState& S)
 {
 	Ar << S.Index << S.ClassName << S.TargetName << S.Origin;
 	Ar << S.bDead << S.bHidden << S.bSpawnCalled;
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Activation)
+	{
+		Ar << S.bActivateCalled;
+	}
 	Ar << S.NextThink << S.SavedNextThink;
 	Ar << S.OutputTimesRemaining;
 	Ar << S.Fields;

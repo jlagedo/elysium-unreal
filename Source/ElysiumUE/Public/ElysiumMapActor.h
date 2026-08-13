@@ -290,10 +290,13 @@ public:
 		float YawDegrees, const FString& Stem, int32 Variant) override;
 	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) override;
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Disposition, int32 IdleVariant) override;
+		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant) override;
+	virtual void UpdateNpcDisposition(USkeletalMeshComponent* Body, const FString& Disposition,
+		int32 DispositionLevel) override;
 	virtual bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
 		FElysiumStanceClips& OutClips) override;
-	virtual bool ResolveDisposition(const FString& Disposition, FElysiumDisposition& OutRow) override;
+	virtual bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
+		FElysiumDisposition& OutRow) override;
 	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
@@ -364,6 +367,10 @@ public:
 		const FElysiumEntityHandle& Owner) override;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
 	virtual void ClearUseAnchors() override;
+	virtual void RegisterTouchAnchor(UPrimitiveComponent* Source,
+		const FElysiumEntityHandle& Owner) override;
+	virtual void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
+	virtual void ClearTouchAnchors() override;
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const override;
 	virtual FElysiumEntityHandle QueryFeedTarget() const override;
@@ -467,6 +474,19 @@ private:
 		bool bEnabled = true;
 	};
 	TArray<FUseAnchorRecord> UseAnchors;
+	UPROPERTY(Transient) TArray<TObjectPtr<UPrimitiveComponent>> OwnedTouchAnchorComponents;
+	struct FTouchAnchorRecord
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		FElysiumEntityHandle Owner;
+		bool bEnabled = true;
+	};
+	TArray<FTouchAnchorRecord> TouchAnchors;
+
+	UFUNCTION()
+	void HandleTouchAnchorBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep,
+		const FHitResult& SweepResult);
 
 	/** Bind one emitter's component to its parent entity's bone, or to the map root when it has none. */
 	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);

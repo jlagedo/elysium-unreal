@@ -124,16 +124,17 @@ game-agnostic, so they live in `Content/` under the same rule as the master mate
 Enhanced Input contexts are gameplay contexts, not UI navigation modes. With no modal scope,
 `IMC_Player_KBM` and `IMC_Player_Gamepad` are applied together so device switching is immediate and
 the remapping screen's Keyboard and Gamepad columns remain independent. A UI-only screen scope
-contains no gameplay contexts, so opening a menu, character screen, dialogue, chargen prompt or
-sign removes both. CommonUI/CommonInput then owns arrows/WASD, D-pad/left stick, Accept and Back;
+contains no gameplay contexts, so opening a menu, character screen, dialogue, computer terminal,
+chargen prompt or sign removes both. CommonUI/CommonInput then owns arrows/WASD, D-pad/left stick,
+Accept and Back;
 there are no duplicate `IMC_Menu` or `IMC_Dialogue` bindings.
 
 `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` and the router's held-button clear make a
 key held across a scope transition inert until release. This is the definitive answer to
 `docs/vtmb/controls.md` § "Open: what conversation does to held input" on our side of the port.
 
-Screen policy is centralized: sign 10, chargen 30, dialogue 40, character 45 and menu 50. Every
-interactive screen is UI-only with `Auto` cursor policy. Loading creates no interactive scope;
+Screen policy is centralized: sign 10, chargen 30, dialogue 40, terminal 42, character 45 and menu
+50. Every interactive screen is UI-only with `Auto` cursor policy. Loading creates no interactive scope;
 cinematic and debug claims remain separate owners. Scope priority controls input arbitration only:
 simulation pause/hold remains with the existing time-control owners.
 
@@ -150,6 +151,13 @@ not a mapping-context swap. Full ownership and restoration rules:
 `UCommonInputSubsystem::OnInputMethodChangedNative` re-resolves the active scope when the player
 switches device without changing the screen. What a pad drives is **focus**, not the cursor, and
 every navigable screen names its selected action button as the desired focus target.
+
+A computer terminal is a UI-only modal, not a gameplay mapping context. Its D-pad/left-stick
+navigation and Accept/Back routing come from CommonUI; the screen presents semantic actions already
+authorized by the terminal state and sends their canonical `hackcmd` strings through the same
+world command path as typed input. Free text opens controller text entry only for values such as a
+password. The complete no-secret-leak and device-hot-switch contract lives in
+`docs/architecture/computer-terminal-architecture.md`.
 
 ## Gamepad
 
@@ -504,7 +512,8 @@ removes the mapping.
 - **Automation** (Substrate tier): user-command analog/digital composition and stick-axis swizzle;
   gameplay-context arbitration; UI-only context removal; device-resolved cursor policy; CommonUI
   default focus, stable-id restoration, list wrap, dynamic-list repair, duplicate suppression and
-  modal restoration; the reserved-key assertion; `+`/`-` pairing (two keys on one
+  modal restoration; terminal typed/selected command equivalence; the reserved-key assertion;
+  `+`/`-` pairing (two keys on one
   action stay Triggered while either is held and fire Completed only on the last release, matching
   VtMB's one-key-owns-the-press rule); the `config.cfg` writer round-trip; rebind → save → load →
   rebuild.

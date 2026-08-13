@@ -396,12 +396,14 @@ Priority decides, and push order is the tie-break, so two screens at the same pr
 ordinary modal stack.
 
 One table answers "what happens when X opens over Y":
-`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Character 45 < Menu 50 < Debug 100`.
-Sign, chargen, dialogue, character and menu are UI-only and remove gameplay mapping contexts;
+`Game 0 < Sign 10 < Cinematic 20 < Chargen 30 < Dialogue 40 < Terminal 42 < Character 45 < Menu 50
+< Debug 100`. Sign, chargen, dialogue, terminal, character and menu are UI-only and remove gameplay mapping contexts;
 CommonUI owns their focus, navigation, Accept and Back. The sign presents one Continue action which
 requests dismissal through presentation, while the entity world revalidates dwell and click-close
 policy. The legacy `+attack` command reaches the same world request without owning physical sign
-input. **Debug is the top of the table**, because F1
+input. The terminal's semantic actions route through the same authoritative command bus as typed
+input (`docs/architecture/computer-terminal-architecture.md`). **Debug is the top of the table**,
+because F1
 over a screen is a developer asking for the debug UI and the front end has a menu up permanently.
 What keeps it from eating that screen's clicks is the other half of the rule: **a UI-only push
 revokes an inherited ImGui capture** (`ElysiumInput::RevokesDebugCapture`), at push time only, so the

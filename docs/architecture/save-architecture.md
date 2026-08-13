@@ -253,10 +253,12 @@ restore path and it is the one travel already uses.
 **A save is refused, loudly, rather than written wrong.** `CanSave` returns the reason as text, and
 `elysium.save.cansave` prints it. The refusals: no session running, a map load in flight, the menu
 backdrop is the world, no entity world or no player, an open sign panel, an open conversation, a
-choreographed scene, a scripted sequence, a paired/feed action, or an authored legacy/Sequencer
-camera track. Dialogue and scripted sessions may own branch cursors, body-owner tokens, transient
-animation state, and camera handles that the payload deliberately does not model. Ordinary idle,
-locomotion, combat, and reaction clips remain saveable. A broken slot is worse than a missing one.
+computer-terminal session, a choreographed scene, a scripted sequence, a paired/feed action, or an
+authored legacy/Sequencer camera track. Dialogue, terminal and scripted sessions may own branch
+cursors, local input, body-owner tokens, transient animation state, and camera handles that the
+payload deliberately does not model. Ordinary idle, locomotion, combat, and reaction clips remain
+saveable. A broken slot is worse than a missing one. The terminal's durable state serializes after
+its transient session ends (`docs/architecture/computer-terminal-architecture.md`).
 
 Loading checks the target map is exported **before** it touches the session, so a payload naming a
 map this install cannot build fails with the session intact rather than half-torn-down.

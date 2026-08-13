@@ -1,11 +1,9 @@
-// 9.8 (a) — the item entity, the keyring, and the combat character's inventory container.
+// 9.8 — item entities, the keyring, combat-character inventories, and loot containers.
 //
 // The contract is `docs/vtmb/inventory.md` §§2-6 and the design is
-// `docs/architecture/gameplay-systems-architecture.md` §5.2. Three things this file will not do,
-// because they are distinct operations with distinct entity-lifetime effects and belong to slice
-// (b): player drop (which PRESERVES a world entity), container transfer, and barter. They are
-// absent rather than approximated — `ScriptRemove` must never become the shared "delete item"
-// shortcut a drop path reuses.
+// `docs/architecture/gameplay-systems-architecture.md` §5.2. Player drop (which PRESERVES a world
+// entity) and priced Buy/Sell remain separate operations: `ScriptRemove` must never become the
+// shared "delete item" shortcut a drop or transfer path reuses.
 
 #include "Substrate/ElysiumItemClasses.h"
 
@@ -152,6 +150,7 @@ void FElysiumItem::BuildWorldBody()
 	if (WorldBody)
 	{
 		World->RegisterPropBody(WorldBody);
+		World->RegisterTouchAnchor(WorldBody, Handle);
 		if (IsInert())
 		{
 			WorldBody->SetVisibility(false);
@@ -161,10 +160,30 @@ void FElysiumItem::BuildWorldBody()
 
 void FElysiumItem::DestroyWorldBody()
 {
+	if (World)
+	{
+		World->EndBrushTouches(Handle);
+		World->SetTouchAnchorEnabled(Handle, false);
+	}
 	if (WorldBody)
 	{
 		WorldBody->DestroyComponent();
 		WorldBody = nullptr;
+	}
+}
+
+bool FElysiumItem::CanBeginTouch(const FElysiumEntityHandle& Activator) const
+{
+	return !IsInert() && !IsOwned() && World && Activator == World->PlayerHandle();
+}
+
+void FElysiumItem::OnTouchStart(const FElysiumEntityHandle& Activator)
+{
+	FElysiumEntity* TakerEntity = World ? World->Resolve(Activator) : nullptr;
+	FElysiumCombatCharacter* Taker = TakerEntity ? TakerEntity->AsCombatCharacter() : nullptr;
+	if (Taker)
+	{
+		AcquireBy(*Taker);
 	}
 }
 
@@ -211,6 +230,10 @@ void FElysiumItem::OnDormancyChanged()
 	if (WorldBody)
 	{
 		WorldBody->SetVisibility(!IsInert());
+	}
+	if (World)
+	{
+		World->SetTouchAnchorEnabled(Handle, !IsInert() && !IsOwned());
 	}
 }
 
@@ -390,6 +413,7 @@ bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 	{
 		return false;
 	}
+	const int32 ReceivedQuantity = FMath::Max(1, Item.ItemCount);
 
 	// Stacking is the item data's call, never the classname's. A stackable classname already
 	// carried merges into that stack; the incoming entity is left unowned for the caller to
@@ -404,6 +428,12 @@ bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 				return false;
 			}
 			Existing->ItemCount = Merged;
+			if (Char.World && Char.World->PlayerHandle().IsSet()
+				&& Char.Handle.Index == Char.World->PlayerHandle().Index)
+			{
+				UE_LOG(LogElysiumItem, Display, TEXT("INFO - Item received: %s x%d"),
+					*Item.ClassName(), ReceivedQuantity);
+			}
 			return true;
 		}
 	}
@@ -420,6 +450,12 @@ bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 	Item.InvenPos = Slots.Num();
 	Item.ItemCount = FMath::Max(1, Item.ItemCount);
 	Slots.Add(Item.Handle);
+	if (Char.World && Char.World->PlayerHandle().IsSet()
+		&& Char.Handle.Index == Char.World->PlayerHandle().Index)
+	{
+		UE_LOG(LogElysiumItem, Display, TEXT("INFO - Item received: %s x%d"),
+			*Item.ClassName(), ReceivedQuantity);
+	}
 	return true;
 }
 
@@ -586,6 +622,328 @@ void FElysiumInventory::AddReserve(const FString& InAmmoType, int32 Amount)
 	Held += Amount;
 }
 
+bool FElysiumInventory::TransferSlot(FElysiumCombatCharacter& From, FElysiumCombatCharacter& To,
+	int32 Position, FString* OutClassname, int32* OutQuantity)
+{
+	FElysiumItem* Item = From.Inventory.At(From, Position);
+	if (!Item || Item->IsDead() || Item->Owner != From.Handle)
+	{
+		return false;
+	}
+
+	const FString Classname = Item->ClassName();
+	const int32 SourceQuantity = FMath::Max(1, Item->ItemCount);
+	const int32 TransferQuantity = Item->IsStackable() ? 1 : SourceQuantity;
+	if (Item->IsStackable())
+	{
+		if (FElysiumItem* Existing = To.Inventory.FindOrdinary(To, Classname))
+		{
+			if (!Existing->StackHasRoomFor(Existing->ItemCount + TransferQuantity))
+			{
+				return false;
+			}
+		}
+		else if (To.Inventory.IsFull())
+		{
+			return false;
+		}
+	}
+	else if (To.Inventory.IsFull())
+	{
+		return false;
+	}
+
+	// Barter moves one unit at a time out of a multi-count stack. GiveNamedItem creates the real
+	// destination entity or merges into its carried stack through the ordinary add/equip door; only
+	// after that succeeds does the source count commit.
+	if (Item->IsStackable() && SourceQuantity > 1)
+	{
+		if (!To.Inventory.GiveNamedItem(To, Classname).IsSet())
+		{
+			return false;
+		}
+		--Item->ItemCount;
+		if (OutClassname) { *OutClassname = Classname; }
+		if (OutQuantity) { *OutQuantity = TransferQuantity; }
+		return true;
+	}
+
+	// Admission is now guaranteed on this single-threaded substrate. Detach first so Add sees the
+	// item as unowned; it either carries this entity or merges its count into the existing stack.
+	if (!From.Inventory.Detach(From, *Item) || !To.Inventory.Equip(To, *Item))
+	{
+		// This is an invariant failure after the preflight, not an ordinary refusal. Restore ownership
+		// through the same add door so the item cannot disappear from both inventories.
+		if (!Item->IsOwned())
+		{
+			From.Inventory.Equip(From, *Item);
+		}
+		UE_LOG(LogElysiumItem, Error, TEXT("inventory transfer invariant failed for %s"),
+			*Item->DebugString());
+		return false;
+	}
+	if (!Item->IsOwned())
+	{
+		Item->DestroyWorldBody();
+		Item->Kill();
+	}
+	if (OutClassname) { *OutClassname = Classname; }
+	if (OutQuantity) { *OutQuantity = TransferQuantity; }
+	return true;
+}
+
+// ============================================================================================
+// FElysiumItemContainer
+// ============================================================================================
+
+void FElysiumItemContainer::Spawn()
+{
+	BuildWorldBody();
+}
+
+void FElysiumItemContainer::Activate()
+{
+	// Runtime creation during the world's range-based Spawn/Activate passes would invalidate the
+	// entity array. Retail also services thinks before the event queue, so a due one-shot think
+	// materializes the seeds before logic_auto's OnMapLoad Python can call DeleteItems.
+	if (!bSeedsMaterialized && World)
+	{
+		NextThink = static_cast<float>(World->NowSeconds());
+	}
+}
+
+void FElysiumItemContainer::Think()
+{
+	if (bSeedsMaterialized)
+	{
+		return;
+	}
+	bSeedsMaterialized = true;
+	for (const FString& Seed : EquipSeeds)
+	{
+		if (!Seed.IsEmpty())
+		{
+			SpawnNamedItem(Seed);
+		}
+	}
+}
+
+void FElysiumItemContainer::Serialize(FElysiumSaveArchive& Ar)
+{
+	Ar << bSeedsMaterialized;
+}
+
+void FElysiumItemContainer::Use(const FElysiumEntityHandle& Activator)
+{
+	if (!World || !Activator.IsSet() || World->PlayerHandle().Index != Activator.Index)
+	{
+		return;
+	}
+	if (CurrentUser == Activator)
+	{
+		CurrentUser = FElysiumEntityHandle::Invalid();
+		UE_LOG(LogElysiumItem, Display, TEXT("loot closed: %s"), *DebugString());
+		return;
+	}
+	if (CurrentUser.IsSet() && World->Resolve(CurrentUser) != nullptr)
+	{
+		UE_LOG(LogElysiumItem, Display, TEXT("loot busy: %s is already in use"), *DebugString());
+		return;
+	}
+	CurrentUser = Activator;
+	UE_LOG(LogElysiumItem, Display,
+		TEXT("loot opened: %s (%d item%s); use 'vbarter Take <slot>' or 'vbarter Give <slot>'"),
+		*DebugString(), Inventory.Num(), Inventory.Num() == 1 ? TEXT("") : TEXT("s"));
+}
+
+bool FElysiumItemContainer::SpawnNamedItem(const FString& Classname)
+{
+	if (Classname.IsEmpty())
+	{
+		return false;
+	}
+	const bool bSpawned = Inventory.GiveNamedItem(*this, Classname).IsSet();
+	if (!bSpawned)
+	{
+		UE_LOG(LogElysiumItem, Warning, TEXT("%s could not spawn item '%s'"),
+			*DebugString(), *Classname);
+	}
+	return bSpawned;
+}
+
+void FElysiumItemContainer::InputSpawnItemInContainer(const FElysiumInputArgs& Args)
+{
+	SpawnNamedItem(Args.Param.ToString());
+}
+
+void FElysiumItemContainer::InputAddEntityToContainer(const FElysiumInputArgs& Args)
+{
+	if (!World)
+	{
+		return;
+	}
+	TArray<FElysiumEntityHandle> Matches;
+	World->ForEachNamed(Args.Param.ToString(), [&Matches](FElysiumEntity& Candidate)
+	{
+		if (FElysiumItem* Item = Candidate.AsItem(); Item && !Item->IsOwned() && !Item->IsDead())
+		{
+			Matches.Add(Item->Handle);
+		}
+	});
+	for (const FElysiumEntityHandle& MatchHandle : Matches)
+	{
+		FElysiumEntity* Candidate = World->Resolve(MatchHandle);
+		FElysiumItem* Item = Candidate ? Candidate->AsItem() : nullptr;
+		if (Item && !Inventory.Equip(*this, *Item))
+		{
+			UE_LOG(LogElysiumItem, Warning, TEXT("%s refused %s"),
+				*DebugString(), *Item->DebugString());
+		}
+	}
+}
+
+void FElysiumItemContainer::DeleteAllItems()
+{
+	while (Inventory.Num() > 0)
+	{
+		FElysiumItem* Item = Inventory.At(*this, Inventory.Num() - 1);
+		if (!Item)
+		{
+			Inventory.Slots.Pop();
+			continue;
+		}
+		Inventory.Detach(*this, *Item);
+		Item->Kill();
+	}
+	Inventory.ActiveWeapon = FElysiumEntityHandle::Invalid();
+}
+
+void FElysiumItemContainer::InputDeleteItems(const FElysiumInputArgs&)
+{
+	DeleteAllItems();
+}
+
+bool FElysiumItemContainer::TakeToPlayer(FElysiumPlayer& Player, int32 Slot)
+{
+	FString Classname;
+	int32 Quantity = 0;
+	if (!Inventory.TransferSlot(*this, Player, Slot, &Classname, &Quantity))
+	{
+		return false;
+	}
+	static const FName OnItemRemove(TEXT("OnItemRemove"));
+	FireOutput(OnItemRemove, Player.Handle);
+	UE_LOG(LogElysiumItem, Display, TEXT("loot take: %s x%d from %s"),
+		*Classname, Quantity, *DebugString());
+	return true;
+}
+
+bool FElysiumItemContainer::GiveFromPlayer(FElysiumPlayer& Player, int32 Slot)
+{
+	FString Classname;
+	int32 Quantity = 0;
+	if (!Player.Inventory.TransferSlot(Player, *this, Slot, &Classname, &Quantity))
+	{
+		return false;
+	}
+	static const FName OnItemInsert(TEXT("OnItemInsert"));
+	FireOutput(OnItemInsert, Player.Handle);
+	UE_LOG(LogElysiumItem, Display, TEXT("loot give: %s x%d to %s"),
+		*Classname, Quantity, *DebugString());
+	return true;
+}
+
+void FElysiumItemContainer::BuildWorldBody()
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (WorldBody || !Embodiment || !Def || Model.IsEmpty())
+	{
+		return;
+	}
+	VisualStem = Def->ModelMesh.IsEmpty()
+		? FElysiumContentPaths::PropModelStem(Model) : Def->ModelMesh;
+	if (VisualStem.IsEmpty())
+	{
+		return;
+	}
+	const FQuat Rotation = Def->ModelMesh.IsEmpty()
+		? FQuat(FRotator(0.0f, -Angles.Y, 0.0f)) : Def->ModelQuat;
+	WorldBody = Embodiment->BuildPropVisual(
+		VisualStem, Origin, Rotation, Embodiment->BodyScaleFor(*Def));
+	if (WorldBody)
+	{
+		World->RegisterPropBody(WorldBody, Handle);
+		ApplySkin();
+		GateWorldBody();
+	}
+}
+
+void FElysiumItemContainer::DestroyWorldBody()
+{
+	if (WorldBody)
+	{
+		WorldBody->DestroyComponent();
+		WorldBody = nullptr;
+	}
+	VisualStem.Reset();
+}
+
+void FElysiumItemContainer::ApplySkin()
+{
+	if (WorldBody && World && World->Embodiment() && !VisualStem.IsEmpty())
+	{
+		World->Embodiment()->ApplyPropSkin(WorldBody, VisualStem, Skin);
+	}
+}
+
+void FElysiumItemContainer::SetSkin(int32 Family)
+{
+	Skin = Family;
+	ApplySkin();
+}
+
+void FElysiumItemContainer::GateWorldBody()
+{
+	const bool bVisible = !IsInert();
+	if (WorldBody) { WorldBody->SetVisibility(bVisible); }
+	if (World) { World->SetUseAnchorEnabled(Handle, bVisible); }
+}
+
+void FElysiumItemContainer::OnRuntimeTransformChanged()
+{
+	FElysiumCombatCharacter::OnRuntimeTransformChanged();
+	if (WorldBody)
+	{
+		WorldBody->SetWorldLocationAndRotation(Origin, FQuat(FRotator(0.0f, -Angles.Y, 0.0f)));
+	}
+}
+
+void FElysiumItemContainer::OnRuntimeModelChanged()
+{
+	DestroyWorldBody();
+	BuildWorldBody();
+}
+
+void FElysiumItemContainer::OnDormancyChanged()
+{
+	FElysiumCombatCharacter::OnDormancyChanged();
+	GateWorldBody();
+}
+
+UPrimitiveComponent* FElysiumItemContainer::GetAttachBody() const
+{
+	return WorldBody;
+}
+
+void FElysiumItemContainer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
+{
+	FElysiumCombatCharacter::GetDebugState(Out);
+	Out.Emplace(TEXT("Contents"), FString::Printf(TEXT("%d / %d"), Inventory.Num(), FElysiumInventory::MaxSlots));
+	Out.Emplace(TEXT("Current user"), CurrentUser.IsSet()
+		? (World ? World->DescribeHandle(CurrentUser) : CurrentUser.ToString()) : TEXT("(none)"));
+	Out.Emplace(TEXT("Seeds"), bSeedsMaterialized ? TEXT("materialized") : TEXT("pending"));
+}
+
 // ============================================================================================
 // Registration
 // ============================================================================================
@@ -594,6 +952,7 @@ namespace
 {
 	TUniquePtr<FElysiumEntity> MakeItem() { return MakeUnique<FElysiumItem>(); }
 	TUniquePtr<FElysiumEntity> MakeKeyring() { return MakeUnique<FElysiumKeyring>(); }
+	TUniquePtr<FElysiumEntity> MakeItemContainer() { return MakeUnique<FElysiumItemContainer>(); }
 
 	// Register a field backed by an FElysiumItem member (FElysiumClassDesc::Field only reaches
 	// FElysiumEntity members). Mirrors AddCharField / AddPropField — file-unique name so all of
@@ -651,6 +1010,95 @@ namespace
 	};
 
 	const FElysiumItemChainRegistrar GItemChainRegistrar;
+
+	void AddContainerSeedField(FElysiumClassDesc& D, int32 Index)
+	{
+		FElysiumFieldAccessor Acc;
+		Acc.ApplyFlags(ElysiumFieldDefault);
+		Acc.Type = EElysiumVariantType::String;
+		Acc.Get = [Index](const FElysiumEntity& E)
+		{
+			return FElysiumVariant::String(static_cast<const FElysiumItemContainer&>(E).EquipSeeds[Index]);
+		};
+		Acc.Set = [Index](FElysiumEntity& E, const FElysiumVariant& V)
+		{
+			static_cast<FElysiumItemContainer&>(E).EquipSeeds[Index] = V.ToString();
+		};
+		D.Fields.Add(FName(*FString::Printf(TEXT("equip%d"), Index)), MoveTemp(Acc));
+	}
+
+	void BuildItemContainerClass(FElysiumClassDesc& D)
+	{
+		D.Input(TEXT("Use"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ static_cast<FElysiumItemContainer&>(E).Use(A.Activator); });
+		D.Input(TEXT("SpawnItemInContainer"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ static_cast<FElysiumItemContainer&>(E).InputSpawnItemInContainer(A); });
+		D.Input(TEXT("AddEntityToContainer"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ static_cast<FElysiumItemContainer&>(E).InputAddEntityToContainer(A); });
+		D.Input(TEXT("DeleteItems"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ static_cast<FElysiumItemContainer&>(E).InputDeleteItems(A); });
+
+		for (int32 Index = 0; Index < 12; ++Index)
+		{
+			AddContainerSeedField(D, Index);
+		}
+
+		FElysiumFieldAccessor DamageModel;
+		DamageModel.ApplyFlags(ElysiumFieldDefault);
+		DamageModel.Type = EElysiumVariantType::String;
+		DamageModel.Get = [](const FElysiumEntity& E)
+		{
+			return FElysiumVariant::String(static_cast<const FElysiumItemContainer&>(E).DamageModel);
+		};
+		DamageModel.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{
+			static_cast<FElysiumItemContainer&>(E).DamageModel = V.ToString();
+		};
+		D.Fields.Add(FName(TEXT("dmgmodel")), MoveTemp(DamageModel));
+
+		// Shadow CBaseAnimating.skin so a key/script write repaints the container's prop body.
+		FElysiumFieldAccessor Skin;
+		Skin.ApplyFlags(ElysiumFieldDefault);
+		Skin.Type = EElysiumVariantType::Int;
+		Skin.Get = [](const FElysiumEntity& E)
+		{
+			return FElysiumVariant::Int(static_cast<const FElysiumItemContainer&>(E).Skin);
+		};
+		Skin.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{
+			static_cast<FElysiumItemContainer&>(E).SetSkin(V.ToInt());
+		};
+		D.Fields.Add(FName(TEXT("skin")), MoveTemp(Skin));
+
+		FElysiumFieldAccessor User;
+		User.ApplyFlags(EElysiumField::Save);
+		User.Type = EElysiumVariantType::Handle;
+		User.Get = [](const FElysiumEntity& E)
+		{
+			return FElysiumVariant::Handle(static_cast<const FElysiumItemContainer&>(E).CurrentUser);
+		};
+		User.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
+		{
+			static_cast<FElysiumItemContainer&>(E).CurrentUser = V.ToHandle();
+		};
+		D.Fields.Add(FName(TEXT("m_BCCUser")), MoveTemp(User));
+	}
+
+	struct FElysiumItemContainerRegistrar
+	{
+		FElysiumItemContainerRegistrar()
+		{
+			FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+			BuildItemContainerClass(Reg.Register(FName(TEXT("item_container")),
+				ElysiumCombatCharacterClassName(), &MakeItemContainer));
+			Reg.Register(FName(TEXT("item_container_animated")),
+				FName(TEXT("item_container")), &MakeItemContainer);
+			Reg.Register(FName(TEXT("item_container_one_item_filtered")),
+				FName(TEXT("item_container")), &MakeItemContainer);
+		}
+	};
+
+	const FElysiumItemContainerRegistrar GItemContainerRegistrar;
 }
 
 namespace ElysiumItems
@@ -694,5 +1142,72 @@ namespace ElysiumItems
 		{
 			GItemTable = nullptr;
 		}
+	}
+
+	bool ExecuteBarter(FElysiumEntityWorld& World, const FString& Args)
+	{
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (!Player)
+		{
+			UE_LOG(LogElysiumItem, Warning, TEXT("vbarter: no player entity"));
+			return false;
+		}
+
+		FElysiumItemContainer* Open = nullptr;
+		for (const TUniquePtr<FElysiumEntity>& Candidate : World.Entities())
+		{
+			FElysiumItemContainer* Container = Candidate ? Candidate->AsItemContainer() : nullptr;
+			if (Container && !Container->IsDead() && Container->CurrentUser == Player->Handle)
+			{
+				Open = Container;
+				break;
+			}
+		}
+		if (!Open)
+		{
+			UE_LOG(LogElysiumItem, Display, TEXT("vbarter: no open loot container"));
+			return false;
+		}
+
+		TArray<FString> Tokens;
+		Args.ParseIntoArrayWS(Tokens);
+		if (Tokens.Num() != 2)
+		{
+			UE_LOG(LogElysiumItem, Display, TEXT("usage: vbarter <Take|Give> <slot>"));
+			return false;
+		}
+		int32 Slot = INDEX_NONE;
+		if (!LexTryParseString(Slot, *Tokens[1]) || Slot < 0)
+		{
+			UE_LOG(LogElysiumItem, Display, TEXT("usage: vbarter <Take|Give> <slot>"));
+			return false;
+		}
+		bool bDone = false;
+		if (Tokens[0].Equals(TEXT("Take"), ESearchCase::IgnoreCase))
+		{
+			bDone = Open->TakeToPlayer(*Player, Slot);
+		}
+		else if (Tokens[0].Equals(TEXT("Give"), ESearchCase::IgnoreCase))
+		{
+			bDone = Open->GiveFromPlayer(*Player, Slot);
+		}
+		else if (Tokens[0].Equals(TEXT("Buy"), ESearchCase::IgnoreCase)
+			|| Tokens[0].Equals(TEXT("Sell"), ESearchCase::IgnoreCase))
+		{
+			UE_LOG(LogElysiumItem, Display,
+				TEXT("vbarter %s: priced vendor transactions remain 9.10"), *Tokens[0]);
+			return false;
+		}
+		else
+		{
+			UE_LOG(LogElysiumItem, Display, TEXT("usage: vbarter <Take|Give> <slot>"));
+			return false;
+		}
+
+		if (!bDone)
+		{
+			UE_LOG(LogElysiumItem, Display, TEXT("vbarter %s %d refused"), *Tokens[0], Slot);
+		}
+		return bDone;
 	}
 }
