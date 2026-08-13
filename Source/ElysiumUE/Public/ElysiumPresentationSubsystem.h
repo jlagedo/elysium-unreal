@@ -114,6 +114,9 @@ public:
 	// uses, so the UI never holds an FElysiumEntityWorld to talk back through.
 	void DialogueChoose(int32 VisibleIndex);
 	void DialogueAdvance();
+	bool LootTake(int32 Slot);
+	bool LootGive(int32 Slot);
+	bool CloseLoot();
 	// True means the request closed the panel without synchronously opening a replacement, so the
 	// local-player owner may remove its modal immediately instead of waiting for the next publish.
 	bool DismissSign();

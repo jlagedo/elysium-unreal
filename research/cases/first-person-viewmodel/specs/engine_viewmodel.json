@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "topic": "first-person-viewmodel-projection",
+  "consuming_document": "docs/vtmb/camera-view-modes.md",
+  "research_id": "RE42",
+  "program": "engine.dll",
+  "binary": {
+    "size": 1986620,
+    "sha256": "9d00b2c1e5edbad052fb0b514634ba54574666e12d1b408c46ce141d51ed2313",
+    "md5": "4c60ce9bc98fcf4c5253106b7d8468e1",
+    "image_base": "0x20000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "How does VEngineRenderView008 construct the separate viewmodel projection from FOV, aspect policy and clip planes?"
+  ],
+  "functions": [
+    {"address": "2010f280", "label": "engine_render_view_set_viewmodel_projection", "confidence": "VEngineRenderView008 vtable slot 33", "role": "forward viewmodel FOV and clip planes to the renderer projection builder", "depth": 3, "cap": 240},
+    {"address": "2007a3e0", "label": "render_set_projection", "confidence": "render vtable and call-chain evidence", "role": "select aspect policy and build the perspective matrix", "depth": 4, "cap": 360, "asm_count": 2600},
+    {"address": "20078ea0", "label": "render_view_setup_3d", "confidence": "normal CViewSetup path", "role": "build the world projection from the ordinary CViewSetup fields", "depth": 3, "cap": 320, "asm_count": 2200}
+  ],
+  "relationships": [
+    {"from": "2010f280", "to": "2007a3e0", "confidence": "verified", "evidence": "VEngineRenderView008 slot +0x84 forwards fov, zNear and zFar with the normal perspective flag"},
+    {"from": "20078ea0", "to": "2007a3e0", "confidence": "verified", "evidence": "the world pass uses the same builder with the ordinary FOV and clip fields"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The viewmodel pass builds a perspective projection independently of the player/world projection; its FOV is not offset by or algebraically coupled to player FOV.",
+      "evidence": "client DrawViewModels forwards CViewSetup fovViewmodel, zNearViewmodel and zFarViewmodel through VEngineRenderView008 slot +0x84; 0x2010f280 forwards those values to renderer 0x2007a3e0, while 0x20078ea0 separately forwards world fov, zNear and zFar.",
+      "consequence": "Unreal uses a second projection with the authored viewmodel FOV, never a player-FOV delta formula."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The pinned renderer uses aspect 4:3 normally, 16:9 when r_anamorphic is enabled, and 1:1 only for the alternate projection flag; the viewmodel caller supplies the normal flag.",
+      "evidence": "0x2007a3e0 selects 1.3333334 or 1.7777778 when its flag is false and 1.0 when true; 0x2010f280 supplies false for the viewmodel call.",
+      "consequence": "Aspect correction belongs in the bake-independent camera projection contract and must be verified against the exact retail binary or active patch hook."
+    }
+  ]
+}

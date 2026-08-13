@@ -19,7 +19,9 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
+#include "ElysiumViewState.h"
 #include "Player/ElysiumCameraShots.h"
+#include "Substrate/ElysiumItemClasses.h"
 
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -240,6 +242,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		{
 			Ent->bSpawnCalled = true;
 			Ent->Spawn();
+			Ent->EnsurePlacedModelBody();
 			if (bBuildBodies)
 			{
 				BuildBrushBody(*Ent);
@@ -495,6 +498,7 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	// Spawn() is the leaf's own wiring (the FElysiumNpc leaf stands its body/visual here); then attach a
 	// brush body if this runtime entity is a brush (point NPCs/props/items early-out of BuildBrushBody).
 	Ent.Spawn();
+	Ent.EnsurePlacedModelBody();
 	if (CVarBrushBodies.GetValueOnGameThread() != 0)
 	{
 		BuildBrushBody(Ent);
@@ -1137,7 +1141,7 @@ void FElysiumEntityWorld::RegisterNpcBody(USkeletalMeshComponent* Component)
 	}
 }
 
-void FElysiumEntityWorld::RegisterPropBody(UStaticMeshComponent* Component,
+void FElysiumEntityWorld::RegisterPropBody(UPrimitiveComponent* Component,
 	const FElysiumEntityHandle& UseOwner)
 {
 	if (Component)
@@ -1405,9 +1409,10 @@ void FElysiumEntityWorld::UpdatePlayerFeed()
 		// state. A victim-role player is not part of the ordinary slice and cannot cancel its attacker.
 		if (PlayerEnt->IsFeedPaired())
 		{
-			if (!PlayerEnt->FeedState.bVictim)
+			if (!PlayerEnt->FeedState.bVictim && PlayerEnt->FeedState.bContinuation)
 			{
 				PlayerEnt->SetFeedContinuation(false);
+				UE_LOG(LogElysiumWorld, Display, TEXT("INFO - Feed stop requested"));
 			}
 			continue;
 		}
@@ -1421,7 +1426,8 @@ void FElysiumEntityWorld::UpdatePlayerFeed()
 		FElysiumCombatCharacter* Victim = TargetEnt ? TargetEnt->AsCombatCharacter() : nullptr;
 		if (!Victim)
 		{
-			UE_LOG(LogElysiumWorld, Log,
+			UE_LOG(LogElysiumWorld, Display, TEXT("INFO - Feed missed: no live target"));
+			UE_LOG(LogElysiumWorld, Verbose,
 				TEXT("%s feed request missed: candidate #%d is not a live combat character"),
 				*PlayerEnt->DebugString(), Candidate.IsSet() ? Candidate.Index : INDEX_NONE);
 			continue;   // nothing in the hull, or what is there is not a character
@@ -1452,7 +1458,7 @@ void FElysiumEntityWorld::TransitionUseFocus(const FElysiumUseCandidate* Candida
 	{
 		if (FElysiumEntity* Current = Resolve(FocusedUsable))
 		{
-			InteractionPrompt.Icon = Current->GetUseIcon();
+			InteractionPrompt.Icon = Current->ResolveUseIcon(Player);
 			InteractionPrompt.bLocked = Current->IsUseLocked();
 		}
 		if (Candidate)
@@ -1484,7 +1490,7 @@ void FElysiumEntityWorld::TransitionUseFocus(const FElysiumUseCandidate* Candida
 	{
 		New->OnUseCursorEnter();
 		InteractionPrompt.DisplayOwner = New->Handle;
-		InteractionPrompt.Icon = New->GetUseIcon();
+		InteractionPrompt.Icon = New->ResolveUseIcon(Player);
 		InteractionPrompt.bLocked = New->IsUseLocked();
 		InteractionPrompt.bFadingIn = true;
 		InteractionPrompt.StartAlpha = CurrentAlpha;
@@ -1529,6 +1535,60 @@ bool FElysiumEntityWorld::EndPlayerUseSession(const FElysiumEntityHandle& OwnerH
 	return true;
 }
 
+FElysiumUseBeginResult FElysiumEntityWorld::BeginPlayerUseSession(
+	const FElysiumEntityHandle& OwnerHandle, const FElysiumEntityHandle& Activator)
+{
+	if (ActiveUse.IsSet() || DialogueSession || OpenSignOwner.IsSet())
+	{
+		LastUseOutcome = EElysiumUseOutcome::Busy;
+		return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Busy);
+	}
+	FElysiumEntity* Entity = Resolve(OwnerHandle);
+	FElysiumUseContext Context;
+	Context.Activator = Activator;
+	Context.Owner = OwnerHandle;
+	Context.TimeSeconds = NowSeconds();
+	if (!Entity)
+	{
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("programmatic +use session failed: owner %s does not resolve"),
+			*OwnerHandle.ToString());
+		LastUseOutcome = EElysiumUseOutcome::Unavailable;
+		return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+	}
+	if (!Entity->CanPlayerFocus(Context))
+	{
+		LastUseOutcome = EElysiumUseOutcome::Unavailable;
+		return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+	}
+	if (!Entity->UseFilterName.IsEmpty())
+	{
+		FElysiumEntity* Filter = FindByName(Entity->UseFilterName);
+		if (!Filter)
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("%s use_filter_name '%s' did not resolve; allowing use"),
+				*Entity->DebugString(), *Entity->UseFilterName);
+		}
+		if (Filter && !Filter->PassesFilter(Activator))
+		{
+			LastUseOutcome = EElysiumUseOutcome::Unavailable;
+			return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+		}
+	}
+	const FElysiumUseBeginResult Result = Entity->BeginPlayerUse(Context);
+	if (Result.Outcome == EElysiumUseOutcome::SessionStarted
+		&& Result.SessionKind != EElysiumUseSessionKind::None)
+	{
+		FActiveUse Session;
+		Session.Context = Context;
+		Session.Kind = Result.SessionKind;
+		ActiveUse = Session;
+	}
+	LastUseOutcome = Result.Outcome;
+	return Result;
+}
+
 void FElysiumEntityWorld::UpdatePlayerInteraction()
 {
 	if (!bActive || !IsTriggerResolutionEnabled())
@@ -1541,7 +1601,8 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 	if (ActiveUse.IsSet())
 	{
 		FElysiumEntity* ActiveEntity = Resolve(ActiveUse->Context.Owner);
-		if (!ActiveEntity || ActiveEntity->IsInert())
+		FElysiumEntity* ActiveUser = Resolve(ActiveUse->Context.Activator);
+		if (!ActiveEntity || ActiveEntity->IsInert() || !ActiveUser || ActiveUser->IsInert())
 		{
 			EndActiveUse(EElysiumUseEndReason::TargetInvalid);
 		}
@@ -1591,7 +1652,7 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 			continue;
 		}
 
-		if (ActiveUse.IsSet())
+		if (ActiveUse.IsSet() || DialogueSession || OpenSignOwner.IsSet())
 		{
 			LastUseOutcome = EElysiumUseOutcome::Busy;
 			continue;
@@ -1605,10 +1666,20 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 
 		if (!Entity->UseFilterName.IsEmpty())
 		{
-			ElysiumStub::Fired(TEXT("field"), TEXT("CBaseEntity.use_filter_name"), Entity->DebugString(),
-				FString::Printf(TEXT("filter=%s activator=%s"),
-					*Entity->UseFilterName, *Player.ToString()),
-				TEXT("PassesUseFilter is unbuilt — the +use gate always opens"));
+			FElysiumEntity* Filter = FindByName(Entity->UseFilterName);
+			// Retail treats an unresolved filter target as no filter. A resolved filter is the
+			// authoritative gate and sees the player as its activator, exactly like trigger filters.
+			if (!Filter)
+			{
+				UE_LOG(LogElysiumWorld, Warning,
+					TEXT("%s use_filter_name '%s' did not resolve; allowing use"),
+					*Entity->DebugString(), *Entity->UseFilterName);
+			}
+			if (Filter && !Filter->PassesFilter(Player))
+			{
+				LastUseOutcome = EElysiumUseOutcome::Unavailable;
+				continue;
+			}
 		}
 		FocusContext.TimeSeconds = NowSeconds();
 		const bool bWasLocked = Entity->IsUseLocked();
@@ -1639,6 +1710,80 @@ FElysiumInteractionView FElysiumEntityWorld::GetInteractionView() const
 	View.Icon = InteractionPrompt.Icon;
 	View.bLocked = InteractionPrompt.bLocked;
 	return View;
+}
+
+namespace
+{
+	FElysiumItemContainer* FindOpenLootContainer(FElysiumEntityWorld& World)
+	{
+		const FElysiumEntityHandle Player = World.PlayerHandle();
+		for (const TUniquePtr<FElysiumEntity>& Candidate : World.Entities())
+		{
+			FElysiumItemContainer* Container = Candidate ? Candidate->AsItemContainer() : nullptr;
+			if (Container && !Container->IsDead() && Container->CurrentUser == Player)
+			{
+				return Container;
+			}
+		}
+		return nullptr;
+	}
+}
+
+bool FElysiumEntityWorld::BuildLootView(FElysiumLootView& Out) const
+{
+	Out = FElysiumLootView();
+	FElysiumEntityWorld& Mutable = const_cast<FElysiumEntityWorld&>(*this);
+	FElysiumItemContainer* Container = FindOpenLootContainer(Mutable);
+	const FElysiumPlayer* PlayerEntity = FindPlayer();
+	if (!Container || !PlayerEntity)
+	{
+		return false;
+	}
+	Container->BuildLootView(Out, *PlayerEntity);
+	return true;
+}
+
+bool FElysiumEntityWorld::PlayerLootTake(int32 Slot)
+{
+	FElysiumItemContainer* Container = FindOpenLootContainer(*this);
+	FElysiumPlayer* PlayerEntity = FindPlayer();
+	if (!Container || !PlayerEntity)
+	{
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("loot take failed: no open container/player for slot %d"), Slot);
+		return false;
+	}
+	return Container->TakeToPlayer(*PlayerEntity, Slot);
+}
+
+bool FElysiumEntityWorld::PlayerLootGive(int32 Slot)
+{
+	FElysiumItemContainer* Container = FindOpenLootContainer(*this);
+	FElysiumPlayer* PlayerEntity = FindPlayer();
+	if (!Container || !PlayerEntity)
+	{
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("loot give failed: no open container/player for slot %d"), Slot);
+		return false;
+	}
+	return Container->GiveFromPlayer(*PlayerEntity, Slot);
+}
+
+bool FElysiumEntityWorld::PlayerCloseLoot()
+{
+	FElysiumItemContainer* Container = FindOpenLootContainer(*this);
+	if (!Container)
+	{
+		UE_LOG(LogElysiumWorld, Warning, TEXT("loot close failed: no open container session"));
+		return false;
+	}
+	if (!EndPlayerUseSession(Container->Handle, EElysiumUseEndReason::Completed))
+	{
+		UE_LOG(LogElysiumWorld, Warning, TEXT("loot close failed: %s did not own active +use"),
+			*Container->DebugString());
+		return false;
+	}
+	return true;
 }
 
 // --- Screen fade (P4.5 env_fade) --------------------------------------------------------
@@ -1717,11 +1862,22 @@ bool FElysiumEntityWorld::GetScreenFade(FLinearColor& OutColor) const
 void FElysiumEntityWorld::OpenSign(const FElysiumEntityHandle& NewOwner,
 	TSharedPtr<const FElysiumSignData> Data, float FadeInSeconds)
 {
+	if (ActiveUse.IsSet() && ActiveUse->Context.Owner != NewOwner)
+	{
+		EndActiveUse(EElysiumUseEndReason::Cancelled);
+	}
 	// A second OpenWindow replaces the first (CSignUI keeps one panel). The outgoing sign closes
 	// silently: retail does not fire OnUseEnd for a panel the player never dismissed.
 	if (OpenSignOwner.IsSet() && OpenSignOwner != NewOwner)
 	{
-		CloseSign(/*bSilent*/ true);
+		if (ActiveUse.IsSet() && ActiveUse->Context.Owner == OpenSignOwner)
+		{
+			EndActiveUse(EElysiumUseEndReason::Cancelled);
+		}
+		else
+		{
+			CloseSign(/*bSilent*/ true);
+		}
 	}
 	OpenSignOwner = NewOwner;
 	OpenSignData = MoveTemp(Data);
@@ -1738,6 +1894,13 @@ void FElysiumEntityWorld::CloseSign(bool bSilent)
 {
 	if (!OpenSignOwner.IsSet())
 	{
+		return;
+	}
+	// A prop_sign is an explicit substrate session. Route a user/script close through its owner so
+	// OnUseEnd and OnReadEnd fire together and the active-use latch cannot outlive the panel.
+	if (!bSilent && ActiveUse.IsSet() && ActiveUse->Context.Owner == OpenSignOwner)
+	{
+		EndActiveUse(EElysiumUseEndReason::Completed);
 		return;
 	}
 	const FElysiumEntityHandle Closing = OpenSignOwner;
@@ -1816,6 +1979,10 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	TSharedRef<FElysiumDlgConversation> Conversation, EElysiumDialogOpenerKind Opener,
 	int32 RawFlags, const FString& DefaultCamera, const FElysiumBodyOwnerToken& SuppliedBodyOwner)
 {
+	if (ActiveUse.IsSet())
+	{
+		EndActiveUse(EElysiumUseEndReason::Cancelled);
+	}
 	FElysiumEntity* OwnerEntity = Resolve(NewOwner);
 	FElysiumBodyOwnerToken BodyOwner = SuppliedBodyOwner;
 	// A different NPC can acquire before the old session is displaced, making replacement atomic:
@@ -3439,9 +3606,9 @@ void FElysiumEntityWorld::Teardown()
 
 	// Dynamic-prop bodies (8.3): same reason as NpcBodies — components of the map actor, destroyed
 	// here so a world rebuild on a surviving actor (reload) does not leak them.
-	for (const TWeakObjectPtr<UStaticMeshComponent>& Comp : PropBodies)
+	for (const TWeakObjectPtr<UPrimitiveComponent>& Comp : PropBodies)
 	{
-		if (UStaticMeshComponent* C = Comp.Get())
+		if (UPrimitiveComponent* C = Comp.Get())
 		{
 			C->DestroyComponent();
 		}

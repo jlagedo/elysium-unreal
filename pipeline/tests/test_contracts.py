@@ -535,6 +535,7 @@ class UnrealBakeDriverContractTests(unittest.TestCase):
         config = SimpleNamespace(
             repo_root=REPO,
             project=REPO / "ElysiumUE.uproject",
+            unreal_shader_work_root=Path("D:/UnrealCache/ShaderWorking"),
         )
         with mock.patch.object(
                 unreal_driver, "editor_executable", return_value=Path("UnrealEditor-Cmd.exe")):
@@ -542,6 +543,10 @@ class UnrealBakeDriverContractTests(unittest.TestCase):
 
         self.assertEqual(len(submitted), 1)
         self.assertIn("-AllowCommandletRendering", submitted[0][0])
+        self.assertIn(
+            "-shaderworkingdir=D:\\UnrealCache\\ShaderWorking",
+            submitted[0][0],
+        )
 
 
 class LightingBakeContractTests(unittest.TestCase):

@@ -5,6 +5,8 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumLineService.h"
+#include "ElysiumSkeletalBasis.h"
+#include "ElysiumWorldServices.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -174,7 +176,34 @@ void FElysiumEntity::SetFakeSilence(bool bEnabled)
 
 UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
 {
-	return Body;   // a brush entity's body; null for point/logic ents (a physics prop overrides this)
+	return Body ? static_cast<UPrimitiveComponent*>(Body)
+		: static_cast<UPrimitiveComponent*>(GenericModelBody);
+}
+
+void FElysiumEntity::EnsurePlacedModelBody()
+{
+	if (GetAttachBody() || !World || !Def || Model.IsEmpty() || Def->ModelMesh.IsEmpty())
+	{
+		return;
+	}
+	IElysiumEmbodiment* Embodiment = World->Embodiment();
+	if (!Embodiment || !Embodiment->HasPlacedModelCatalogue())
+	{
+		return;
+	}
+	FElysiumPlacedModelRequest Request;
+	Request.ModelPath = Model;
+	Request.StaticStem = Def->ModelMesh;
+	Request.Location = Origin;
+	Request.Rotation = Def->ModelQuat;
+	Request.UniformScale = Embodiment->BodyScaleFor(*Def);
+	Request.PlacementToken = Handle.Index;
+	GenericModelBody = Embodiment->BuildPlacedModelBody(Request).Visual;
+	if (GenericModelBody)
+	{
+		World->RegisterNpcBody(GenericModelBody);
+		GenericModelBody->SetVisibility(!IsInert(), true);
+	}
 }
 
 void FElysiumEntity::PostSpawn()
@@ -209,6 +238,10 @@ void FElysiumEntity::OnDormancyChanged()
 	// R6 — one reversible switch. Inert (hidden or dead) drops the body's collision so it cannot
 	// be touched or traced; active restores its built solidity. Idempotent (SetDormant re-applies).
 	RefreshBrushBodyState();
+	if (GenericModelBody)
+	{
+		GenericModelBody->SetVisibility(!IsInert(), true);
+	}
 	if (World)
 	{
 		World->SetUseAnchorEnabled(Handle, !IsInert());
@@ -265,10 +298,25 @@ void FElysiumEntity::OnRuntimeTransformChanged()
 	// SetOrigin/SetAngles point entities (props/items/NPCs) in practice — so the base does not move the
 	// body. The authoritative Origin/Angles fields are already updated; a leaf with a movable body
 	// overrides this to follow. Tell a retained visualizer the transform changed either way.
+	if (GenericModelBody)
+	{
+		GenericModelBody->SetWorldLocationAndRotation(
+			Origin, FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)));
+	}
 	if (World)
 	{
 		World->NotifyVisualChanged(*this);
 	}
+}
+
+void FElysiumEntity::OnRuntimeModelChanged()
+{
+	if (GenericModelBody)
+	{
+		GenericModelBody->DestroyComponent();
+		GenericModelBody = nullptr;
+	}
+	EnsurePlacedModelBody();
 }
 
 void FElysiumEntity::FireOutput(FName Output, const FElysiumEntityHandle& Activator)

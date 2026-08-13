@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
+#include "ElysiumWorldServices.h" // placed-model request/body value types
 // By value: the grid a review body is standing on is a member, so the resolver's own header.
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumEyeRig.h"
@@ -178,8 +179,10 @@ public:
 	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
 	// clip resolution stay separate so ordinary props never load glTF or animation data.
 	FString AnimatedPropStemForModel(const FString& ModelPath) const;
+	FElysiumPlacedModelBody BuildPlacedModelBody(const FElysiumPlacedModelRequest& Request);
+	bool HasPlacedModelCatalogue() const;
 	USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem, const FVector& Location,
-		const FQuat& Rotation, float UniformScale);
+		const FQuat& Rotation, float UniformScale, int32 PlacementToken = 0);
 	bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds);
 	int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body, const FString& Stem);
@@ -187,7 +190,7 @@ public:
 	void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp, const FString& Stem, int32 Family);
 	// The model's resting clip, and whether a named clip loops. Both read the manifest only — no
 	// glb, no mesh — so a prop can ask before deciding which representation to stand.
-	FString AnimatedPropRestClip(const FString& Stem) const;
+	FString AnimatedPropRestClip(const FString& Stem, int32 PlacementToken = 0) const;
 	bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName, bool& bOutLoops) const;
 
 	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).

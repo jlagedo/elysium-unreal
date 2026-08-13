@@ -248,6 +248,9 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 		return false;
 	}
 	Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
+	Body->TickAnimation(0.0f, false);
+	Body->RefreshBoneTransforms();
+	Body->SetVisibility(true, true);
 	return true;
 }
 
@@ -592,6 +595,9 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	{
 		Body->PlayAnimation(Anim, bLoop);
 	}
+	Body->TickAnimation(0.0f, false);
+	Body->RefreshBoneTransforms();
+	Body->SetVisibility(true, true);
 	return true;
 }
 
@@ -1225,6 +1231,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
+	Comp->SetVisibility(false, true);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocation(Location);
 	Comp->SetRelativeRotation(Rotation);
@@ -1266,12 +1273,15 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// The eyes (12.4). Independent of the facial rig above: a player body binds eyes here and no
 	// flex rig at all, which is the shipped state for 57 of the 59 of them.
 	InstallEyes(Comp, EyeSet, Disposition);
-	// The body leaves the factory with no pose producer of its own. A direct clip REPLACES the
-	// compiled graph for as long as it is set (`FElysiumBipedAnimProxy::Evaluate`), so a clip
-	// installed here would own the body for its whole life and discard everything the animation
-	// driver publishes. Whoever owns this body's pose states it: `RefreshNpcIdle` for a standing
-	// cast member, a scene through `PlayCinematicClip`, the graph for a body whose driver
-	// publishes a selection.
+	// Visibility is a pose-commit boundary for characters as well as placed models. This is the
+	// existing disposition/variant intent, installed before the component can draw; later scene and
+	// locomotion writes still replace it through the same animation host.
+	if (RefreshNpcIdle(Comp, Stem, Disposition, /*DispositionLevel=*/1, IdleVariant))
+	{
+		Comp->TickAnimation(0.0f, false);
+		Comp->RefreshBoneTransforms();
+		Comp->SetVisibility(true, true);
+	}
 	return Comp;
 }
 
@@ -1308,8 +1318,78 @@ FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath)
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FElysiumAnimatedPropEntry* Entry = Anims
-		? Anims->GetIndex().FindAnimatedProp(ModelPath) : nullptr;
+		? (Anims->GetIndex().ManifestVersion >= 7
+			? Anims->GetIndex().FindPlacedModel(ModelPath)
+			: Anims->GetIndex().FindAnimatedProp(ModelPath)) : nullptr;
 	return Entry ? Entry->Stem : FString();
+}
+
+bool UElysiumEntityBodies::HasPlacedModelCatalogue() const
+{
+	const AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	return Anims && Anims->GetIndex().ManifestVersion >= 7;
+}
+
+FElysiumPlacedModelBody UElysiumEntityBodies::BuildPlacedModelBody(
+	const FElysiumPlacedModelRequest& Request)
+{
+	FElysiumPlacedModelBody Result;
+	if (IConsoleVariable* Gate = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.PropBodies"));
+		Gate && Gate->GetInt() == 0)
+	{
+		return Result;
+	}
+	Result.Stem = AnimatedPropStemForModel(Request.ModelPath);
+	if (Result.Stem.IsEmpty())
+	{
+		UE_LOG(LogElysiumBodies, Error,
+			TEXT("placed model '%s' is absent from npc_index v7"), *Request.ModelPath);
+		return Result;
+	}
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Result.Stem);
+	const FString StaticStem = !Request.StaticStem.IsEmpty()
+		? Request.StaticStem : (Entry ? Entry->StaticStem : FString());
+	if (StaticStem.IsEmpty())
+	{
+		UE_LOG(LogElysiumBodies, Error,
+			TEXT("placed model '%s' has no static material/collision stem"), *Request.ModelPath);
+		return Result;
+	}
+
+	Result.Visual = BuildAnimatedPropVisual(Result.Stem, Request.Location, Request.Rotation,
+		Request.UniformScale, Request.PlacementToken);
+	if (!Result.Visual)
+	{
+		return Result;
+	}
+	ApplyAnimatedPropSkin(Result.Visual, StaticStem, Request.Skin);
+
+	if (Request.Physics != EElysiumPlacedModelPhysics::None)
+	{
+		Result.PhysicsProxy = BuildPhysPropVisual(StaticStem, Request.Location,
+			Request.Rotation, Request.UniformScale);
+		if (!Result.PhysicsProxy)
+		{
+			Result.Visual->DestroyComponent();
+			Result.Visual = nullptr;
+			return Result;
+		}
+		Result.PhysicsProxy->SetVisibility(false, true);
+		if (Request.Physics == EElysiumPlacedModelPhysics::CollisionProxy)
+		{
+			Result.PhysicsProxy->SetSimulatePhysics(false);
+		}
+		Result.Visual->AttachToComponent(Result.PhysicsProxy,
+			FAttachmentTransformRules::KeepWorldTransform);
+		Result.Attach = Result.PhysicsProxy;
+	}
+	else
+	{
+		Result.Attach = Result.Visual;
+	}
+	return Result;
 }
 
 const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(const FString& Stem) const
@@ -1317,13 +1397,21 @@ const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(con
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	return Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
+	if (!Anims)
+	{
+		return nullptr;
+	}
+	if (const FElysiumAnimatedPropEntry* Placed = Anims->GetIndex().PlacedModels.Find(Stem))
+	{
+		return Placed;
+	}
+	return Anims->GetIndex().AnimatedProps.Find(Stem);
 }
 
-FString UElysiumEntityBodies::AnimatedPropRestClip(const FString& Stem) const
+FString UElysiumEntityBodies::AnimatedPropRestClip(const FString& Stem, int32 PlacementToken) const
 {
 	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	return Entry ? Entry->RestSequence() : FString();
+	return Entry ? Entry->RestSequence(PlacementToken) : FString();
 }
 
 bool UElysiumEntityBodies::FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
@@ -1336,13 +1424,13 @@ bool UElysiumEntityBodies::FindAnimatedPropClip(const FString& Stem, const FStri
 }
 
 USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FString& Stem,
-	const FVector& Location, const FQuat& Rotation, float UniformScale)
+	const FVector& Location, const FQuat& Rotation, float UniformScale, int32 PlacementToken)
 {
 	AActor* Owner = GetOwner();
 	USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	const FElysiumAnimatedPropEntry* Entry = Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
 	if (!Root || !Entry)
 	{
 		return nullptr;
@@ -1395,6 +1483,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Comp->SetVisibility(false, true);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
 	if (UniformScale != 1.0f)
@@ -1414,6 +1503,43 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	{
 		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model));
 	}
+
+	// Reuse the map-baked surface materials by slot name. The global placed-model bake deliberately
+	// carries only neutral material instances so it does not import the complete prop texture corpus
+	// a second time.
+	UStaticMesh* StaticMesh = ResolvePropMesh(Entry->StaticStem.IsEmpty() ? Stem : Entry->StaticStem);
+	if (StaticMesh)
+	{
+		for (const FStaticMaterial& StaticMaterial : StaticMesh->GetStaticMaterials())
+		{
+			const int32 Slot = Comp->GetMaterialIndex(StaticMaterial.MaterialSlotName);
+			if (Slot != INDEX_NONE && StaticMaterial.MaterialInterface)
+			{
+				Comp->SetMaterial(Slot, StaticMaterial.MaterialInterface);
+			}
+		}
+	}
+	else if (!Entry->StaticStem.IsEmpty())
+	{
+		UE_LOG(LogElysiumBodies, Error,
+			TEXT("placed model '%s' has no map static mesh for its material slots"), *Stem);
+		Comp->DestroyComponent();
+		return nullptr;
+	}
+
+	const FString Rest = Entry->RestSequence(PlacementToken);
+	if (Rest.IsEmpty() || !PlayAnimatedPropClip(Comp, Stem, Rest, false, nullptr)
+		|| !SeekCinematicClip(Comp, 0.0f))
+	{
+		UE_LOG(LogElysiumBodies, Error,
+			TEXT("placed model '%s' cannot install authored rest pose before visibility"), *Stem);
+		Comp->DestroyComponent();
+		return nullptr;
+	}
+	Comp->TickAnimation(0.0f, false);
+	Comp->RefreshBoneTransforms();
+	Comp->SetComponentTickEnabled(false);
+	Comp->SetVisibility(true, true);
 	return Comp;
 }
 
@@ -1427,7 +1553,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	const FElysiumAnimatedPropEntry* Entry = Anims ? Anims->GetIndex().AnimatedProps.Find(Stem) : nullptr;
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
 	if (!Entry || !Entry->HasClip(ClipName))
 	{
 		return nullptr;
@@ -1468,6 +1594,7 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 	{
 		return false;
 	}
+	Body->SetComponentTickEnabled(true);
 	if (OutSeconds)
 	{
 		*OutSeconds = Anim->GetPlayLength();

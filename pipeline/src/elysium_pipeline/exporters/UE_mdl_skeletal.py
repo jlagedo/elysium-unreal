@@ -831,7 +831,7 @@ def _grid_animations(d, seq, names):
     return out or [seq]
 
 
-def _anim_section(d, bones, clips, bone_map, emitted, masks):
+def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=()):
     """The clips that actually baked, in declaration order. A sequence whose tracks came out
     empty is absent rather than present-and-silent, which is the same rule the manifest's
     clip list already follows.
@@ -876,8 +876,12 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks):
         for index, (translation, rotation) in enumerate(_owned_channels(d, bones, layer)):
             union[index] = (union[index][0] or translation, union[index][1] or rotation)
 
-    payloads = [p for p in (_clip_payload(d, bones, c, bone_map, emitted, masks,
-                                          forced_channels=forced.get(c.label.lower()))
+    ensured = {str(label).lower() for label in ensure_labels}
+    payloads = [p for p in (_clip_payload(
+                                d, bones, c, bone_map, emitted, masks,
+                                forced_channels=([(True, True)] * len(bones)
+                                                 if c.label.lower() in ensured
+                                                 else forced.get(c.label.lower())))
                             for c in clips if c.label.lower() not in unresolvable)
                 if p is not None]
     for layer, host, owned in bindings:
@@ -916,7 +920,8 @@ def _assemble(sections):
     return header + bytes(directory) + b"".join(payload for _tag, payload in present)
 
 
-def write_model(idx, model_path, out_dir, stem=None, anorms=None):
+def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=None,
+                ensure_labels=None):
     """Write `<out_dir>/<stem>.eskm` and return a summary dict.
 
     `anorms` is the unit-vector table read out of the user's own `StudioRender.dll`; without
@@ -946,9 +951,13 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None):
                                   if anorms and S.flex_descs(d) else (b"", []))
 
     own = S.local_sequences(d)
+    if clip_labels is not None:
+        wanted = {str(label).lower() for label in clip_labels}
+        own = [clip for clip in own if clip.label.lower() in wanted]
     extra, _blends = S.blend_clip_plan(d, own)
     masks = {}
-    anim_payload, clip_count = _anim_section(d, bones, own + extra, bone_map, len(rows), masks)
+    anim_payload, clip_count = _anim_section(
+        d, bones, own + extra, bone_map, len(rows), masks, ensure_labels or ())
 
     blob = _assemble([
         (b"SKEL", _skel_section(rows)),

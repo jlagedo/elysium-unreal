@@ -98,6 +98,8 @@ int wmain() {
         targetRva,
         ExpectedBytes,
         sizeof(ExpectedBytes),
+        0,
+        0,
         objectRva,
         vtableRva,
         vtableSlot,

@@ -226,15 +226,15 @@ EElysiumFeedVerdict FElysiumCombatCharacter::AttemptFeed(FElysiumCombatCharacter
 		// Retail plays the registered `ACT_FEEDING_ENGAGE_FAILURE` path rather than creating a
 		// partial transaction. The clip exists in the bake as `feeding_failure`; playing it is
 		// presentation, so only the refusal is recorded here.
-		UE_LOG(LogElysiumFeed, Log, TEXT("%s feed on %s %s"), *DebugString(),
+		UE_LOG(LogElysiumFeed, Display, TEXT("INFO - Feed refused: %s (%s)"),
 			*Victim.DebugString(), LexToString(Verdict));
 		return Verdict;
 	}
 
 	const double Now = World ? World->NowSeconds() : 0.0;
 	StartFeedPair(Victim, Now);
-	UE_LOG(LogElysiumFeed, Log, TEXT("%s feed on %s %s"), *DebugString(), *Victim.DebugString(),
-		LexToString(Verdict));
+	UE_LOG(LogElysiumFeed, Display, TEXT("INFO - Feed engaged: %s (%s)"),
+		*Victim.DebugString(), LexToString(Verdict));
 	return Verdict;
 }
 
@@ -248,9 +248,10 @@ FElysiumCombatCharacter* FElysiumCombatCharacter::ResolveFeedPeer() const
 
 void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, double Now)
 {
-	// One owner aligns the two actors. The attacker faces the victim; the victim's motor is frozen
-	// through the existing `SetBodyFrozen` seam — the same switch a `scripted_sequence` beat borrows,
-	// and deliberately not `SetEnabled`, which would also take the body off screen.
+	// One owner aligns the two actors. Both halves face into the ordinary front/short pair before the
+	// victim's motor is frozen through the existing `SetBodyFrozen` seam — the same switch a
+	// `scripted_sequence` beat borrows, and deliberately not `SetEnabled`, which would also take the
+	// body off screen. Their origins stay untouched: no unrecovered grapple placement rule is added.
 	const FVector ToVictim = Victim.Origin - Origin;
 	if (!ToVictim.IsNearlyZero())
 	{
@@ -259,6 +260,10 @@ void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, dou
 		FVector Facing = Angles;
 		Facing.Y = -static_cast<float>(ToVictim.Rotation().Yaw);
 		SetRuntimeAngles(Facing);
+
+		FVector VictimFacing = Victim.Angles;
+		VictimFacing.Y = -static_cast<float>((-ToVictim).Rotation().Yaw);
+		Victim.SetRuntimeAngles(VictimFacing);
 	}
 
 	FeedState = FElysiumFeedState();
@@ -405,9 +410,9 @@ bool FElysiumCombatCharacter::FeedBegin(FElysiumCombatCharacter& Victim)
 	// `OnDeath` fires from the entity that died, with the killer as activator.
 	Victim.FireOutput(GOnFedUponBegin, Handle);
 
-	UE_LOG(LogElysiumFeed, Log,
-		TEXT("%s FeedBegin on %s: blood %d, first pulse in %.2fs"),
-		*DebugString(), *Victim.DebugString(), B, FeedState.Interval);
+	UE_LOG(LogElysiumFeed, Display,
+		TEXT("INFO - Feed started: %s (blood=%d, next=%.2fs)"),
+		*Victim.DebugString(), B, FeedState.Interval);
 	return true;
 }
 
@@ -453,10 +458,11 @@ bool FElysiumCombatCharacter::Feed(double Now)
 
 	// The baseline unit transaction, in retail's order.
 	// 1. Try IncBloodPool() on the feeder.
-	const int32 Before = BloodPoolValue();
+	const int32 PlayerBefore = BloodPoolValue();
+	const int32 VictimBefore = Victim->BloodPoolValue();
 	AddBlood(+1);
 	const ElysiumFeed::FPulseEffects Pulse =
-		ElysiumFeed::PulseEffects(/*bBloodPoolIncremented*/ BloodPoolValue() > Before);
+		ElysiumFeed::PulseEffects(/*bBloodPoolIncremented*/ BloodPoolValue() > PlayerBefore);
 	// 2. m_iBloodStolen counts ONLY when that increment succeeded.
 	if (Pulse.bCountStolen)
 	{
@@ -475,6 +481,9 @@ bool FElysiumCombatCharacter::Feed(double Now)
 	{
 		Victim->AddBlood(-1);
 	}
+	const FString PulseLog = ElysiumFeed::PulseLogLine(
+		PlayerBefore, BloodPoolValue(), VictimBefore, Victim->BloodPoolValue(), FeedState.BloodStolen);
+	UE_LOG(LogElysiumFeed, Display, TEXT("%s"), *PulseLog);
 
 	// The accelerating cadence, and AT MOST ONE pulse per update — never a catch-up loop.
 	FeedState.Interval = ElysiumFeed::NextInterval(FeedState.Interval);
@@ -493,6 +502,8 @@ void FElysiumCombatCharacter::FeedInterrupt()
 		return;   // idempotent: a second teardown performs nothing and fires nothing
 	}
 	FeedState.bInterrupting = true;
+	const bool bManualStopRequested = !FeedState.bContinuation;
+	FElysiumCombatCharacter* PairedVictim = FeedState.bVictim ? this : ResolveFeedPeer();
 
 	// Clear the continuation latch. The cant-break and frenzy-grapple latches retail also clears
 	// here belong to systems B6 does not build (the grapple router and frenzy); they are named
@@ -529,8 +540,26 @@ void FElysiumCombatCharacter::FeedInterrupt()
 			// door the damage path uses, so `OnDeath` fires exactly once either way.
 			Victim->OnKilled();
 		}
-		UE_LOG(LogElysiumFeed, Log, TEXT("%s FeedInterrupt on %s: %d stolen, %d left"),
-			*DebugString(), *Victim->DebugString(), FeedState.BloodStolen, Remaining);
+		if (bDepleted)
+		{
+			UE_LOG(LogElysiumFeed, Display,
+				TEXT("INFO - Feed ended: %s depleted and killed"), *Victim->DebugString());
+		}
+		else if (bManualStopRequested)
+		{
+			UE_LOG(LogElysiumFeed, Display, TEXT("INFO - Feed stopped: %s (blood=%d)"),
+				*Victim->DebugString(), Remaining);
+		}
+		else
+		{
+			UE_LOG(LogElysiumFeed, Display, TEXT("INFO - Feed interrupted: %s"),
+				*Victim->DebugString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogElysiumFeed, Display, TEXT("INFO - Feed interrupted: %s"),
+			PairedVictim ? *PairedVictim->DebugString() : TEXT("target unavailable"));
 	}
 
 	// 6. clear the target handle and the current interval.

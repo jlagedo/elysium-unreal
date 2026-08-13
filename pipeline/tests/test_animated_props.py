@@ -6,12 +6,18 @@ Every buffer here is synthesised in-code, so nothing depends on the user's game 
 from __future__ import annotations
 
 import struct
+import json
+import tempfile
+from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
 from elysium_pipeline.exporters import npc_export
 from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel
+from elysium_pipeline import placed_models
+from elysium_pipeline import export_manager
 
 
 def _run(valid_keys, total, stored=None):
@@ -82,6 +88,154 @@ class HasAnimationTests(unittest.TestCase):
         with mock.patch.object(mdl_skel, "local_sequences", side_effect=struct.error("truncated")):
             self.assertFalse(npc_export.has_animation(b""))
 
+
+class PlacedModelPolicyTests(unittest.TestCase):
+    MODEL = "models/scenery/structural/doorknoba/drknobantique.mdl"
+
+    @staticmethod
+    def seq(label, activity="", weight=0, index=0):
+        return SimpleNamespace(label=label, activity=activity, actweight=weight, index=index)
+
+    def test_fnv_seed_has_cross_language_golden_vectors(self) -> None:
+        self.assertEqual(placed_models.fnv1a_32(self.MODEL, 0), 2282856472)
+        self.assertEqual(placed_models.fnv1a_32(self.MODEL, 42), 2895120338)
+
+    def test_act_idle_candidates_preserve_declaration_order_and_weight(self) -> None:
+        clips = [self.seq("open"), self.seq("idle_a", "ACT_IDLE", 1),
+                 self.seq("idle_b", "ACT_IDLE", 9)]
+        self.assertEqual([c.label for c in placed_models.rest_candidates(clips)],
+                         ["idle_a", "idle_b"])
+        picks = [placed_models.select_rest_sequence(self.MODEL, clips, token).label
+                 for token in range(64)]
+        self.assertIn("idle_a", picks)
+        self.assertGreater(picks.count("idle_b"), picks.count("idle_a"))
+
+    def test_sequence_zero_is_the_fallback(self) -> None:
+        clips = [self.seq("declared_first"), self.seq("alphabetically_first")]
+        self.assertEqual(placed_models.select_rest_sequence(self.MODEL, clips, 12).label,
+                         "declared_first")
+
+    def test_serialized_selection_matches_the_sequence_policy(self) -> None:
+        clips = [self.seq("idle_a", "ACT_IDLE", 2), self.seq("idle_b", "ACT_IDLE", 7)]
+        row = {"rest_candidates": ["idle_a", "idle_b"],
+               "clips": [{"name": "idle_a", "weight": 2},
+                         {"name": "idle_b", "weight": 7}]}
+        for token in range(20):
+            self.assertEqual(placed_models.select_rest_label(self.MODEL, row, token),
+                             placed_models.select_rest_sequence(self.MODEL, clips, token).label)
+
+    def test_discovery_covers_entities_and_new_game_lump_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            map_dir = root / "sp_test"
+            map_dir.mkdir()
+            (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
+                "classname": "prop_switch", "targetname": "switch",
+                "model_mesh": "scenery_switch", "keys": {"model": self.MODEL},
+                "outputs": [{"target": "switch", "input": "SetAnimation"}],
+            }]}), encoding="utf-8")
+            second = "models/scenery/props/palm.mdl"
+            (map_dir / "sp_test.props").write_text(
+                "scenery_props_palm 0 0 0 0 0 0 1 0 0 0 %s\n" % second,
+                encoding="utf-8")
+            uses = placed_models.discover(str(root))
+        self.assertEqual({use.model for use in uses}, {self.MODEL, second})
+        self.assertTrue(next(use for use in uses if use.model == self.MODEL).full_clips)
+
+    def test_legacy_game_lump_stem_joins_with_its_models_prefix(self) -> None:
+        model = "models/scenery/street/payphone/payphone_pair.mdl"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            map_dir = root / "sp_test"
+            map_dir.mkdir()
+            (map_dir / "sp_test.props").write_text(
+                "models_scenery_street_payphone_payphone_pair 0 0 0 0 0 0 1 0 0 0\n",
+                encoding="utf-8")
+            uses = placed_models.discover(str(root), {model: object()})
+        self.assertEqual([use.model for use in uses], [model])
+
+    def test_static_equivalence_accepts_identity_and_rejects_quarter_turn(self) -> None:
+        bone = mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,
+                             pos=(0.0, 0.0, 0.0), quat=(0.0, 0.0, 0.0, 1.0),
+                             pose_to_bone=(1.0, 0.0, 0.0, 0.0,
+                                           0.0, 1.0, 0.0, 0.0,
+                                           0.0, 0.0, 1.0, 0.0))
+        surface = {"pos": [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.0)],
+                   "nrm": [(0.0, 0.0, 1.0)] * 3,
+                   "joints": [[0, 0, 0, 0]] * 3,
+                   "weights": [[1.0, 0.0, 0.0, 0.0]] * 3,
+                   "tris": [(0, 1, 2)]}
+        sequence = SimpleNamespace(base=0, frames=1)
+        identity = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]]
+        quarter = [[((0.0, 0.0, 0.0), (0.0, 0.0, 2**-0.5, 2**-0.5))]]
+        with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
+              mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
+              mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
+              mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
+            self.assertTrue(placed_models.rest_pose_static_equivalent(b"", b"", [sequence]))
+        with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
+              mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
+              mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
+              mock.patch.object(mdl_skel, "read_anim", return_value=quarter)):
+            self.assertFalse(placed_models.rest_pose_static_equivalent(b"", b"", [sequence]))
+
+
+class PlacedModelClipEmissionTests(unittest.TestCase):
+    def _write(self, labels, ensure=()):
+        clips = [SimpleNamespace(label="idle"), SimpleNamespace(label="open")]
+        seen = []
+        ensured = []
+
+        def anim(_data, _bones, emitted, _bone_map, _count, _masks, ensure_labels=()):
+            seen.extend(clip.label for clip in emitted)
+            ensured.extend(ensure_labels)
+            return b"", len(emitted)
+
+        with (tempfile.TemporaryDirectory() as temporary,
+                mock.patch.object(UEK.mdl, "load", return_value=(b"mdl", b"vtx")),
+                mock.patch.object(mdl_skel, "read_bones", return_value=[]),
+                mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
+                mock.patch.object(UEK.mdl, "search_paths", return_value=[]),
+                mock.patch.object(UEK, "unreal_bones", return_value=([], {})),
+                mock.patch.object(UEK, "_mesh_section", return_value=(b"", {})),
+                mock.patch.object(mdl_skel, "local_sequences", return_value=clips),
+                mock.patch.object(mdl_skel, "blend_clip_plan", return_value=([], {})),
+                mock.patch.object(UEK, "_anim_section", side_effect=anim)):
+            UEK.write_model({}, "models/test/prop.mdl", temporary, clip_labels=labels,
+                            ensure_labels=ensure)
+        return seen, ensured
+
+    def test_rest_only_container_emits_only_selected_candidates(self) -> None:
+        self.assertEqual(self._write(("idle",), ("idle",)), (["idle"], ["idle"]))
+
+    def test_full_container_emits_the_complete_sequence_inventory(self) -> None:
+        self.assertEqual(self._write(None), (["idle", "open"], []))
+
+    def test_clip_policy_and_inventory_invalidate_the_container_fingerprint(self) -> None:
+        rest = {"clip_mode": "rest", "clips": {"idle": {}},
+                "rest_candidates": ["idle"]}
+        full = {"clip_mode": "full", "clips": {"idle": {}, "open": {}}}
+        first = export_manager.placed_model_source_fingerprint(
+            "prop", rest, "code", "source")
+        self.assertNotEqual(first, export_manager.placed_model_source_fingerprint(
+            "prop", full, "code", "source"))
+
+    def test_ensured_rest_forces_complete_bind_local_tracks(self) -> None:
+        clip = mdl_skel.Seq(label="idle", base=0, frames=1, fps=30.0,
+                            activity="", actweight=0, flags=0)
+        forced = []
+
+        def payload(*_args, **kwargs):
+            forced.append(kwargs.get("forced_channels"))
+            return b"clip"
+
+        with (mock.patch.object(UEK, "_derived_bindings", return_value=[]),
+              mock.patch.object(UEK, "_cell_names", return_value={}),
+              mock.patch.object(UEK, "_clip_payload", side_effect=payload)):
+            _blob, count = UEK._anim_section(
+                b"", [SimpleNamespace()], [clip], [0], 1, {}, ensure_labels=("idle",))
+        self.assertEqual(count, 1)
+        self.assertEqual(forced, [[(True, True)]])
 
 class CompactRigidSkinTests(unittest.TestCase):
     def test_a_compact_one_bone_model_binds_every_vertex_to_its_bone(self) -> None:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntityHandle.h"
 #include "ElysiumHUDTypes.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 
@@ -11,6 +12,7 @@ class APlayerController;
 class UCommonActivatableWidget;
 class UElysiumDialogueScreen;
 class UElysiumHUDModel;
+class UElysiumLootScreen;
 class UElysiumUIRoot;
 class UElysiumPresentationSubsystem;
 class UElysiumSignScreen;
@@ -78,6 +80,11 @@ private:
 	void ShowDialogue(const FElysiumDialogueView& Dialogue);
 	void HideDialogue();
 	void OnDialogueChoice(int32 VisibleIndex);
+	void ReconcileLoot(const struct FElysiumLootView& Loot);
+	void ShowLoot(const struct FElysiumLootView& Loot);
+	void HideLoot();
+	void OnLootTransfer(bool bTake, int32 Slot);
+	void OnLootClose();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;
@@ -91,11 +98,16 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumSignScreen> SignScreen;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UElysiumLootScreen> LootScreen;
+
 	TWeakObjectPtr<UElysiumPresentationSubsystem> BoundPresentation;
 	// Identity only: never dereferenced after publication, because the conversation is map-owned.
 	const FElysiumDlgConversation* ShownDialogue = nullptr;
 	const struct FElysiumSignData* ShownSign = nullptr;
 	uint32 ShownDialogueRevision = 0;
+	FElysiumEntityHandle ShownLootOwner;
+	uint32 ShownLootRevision = 0;
 	FDelegateHandle ViewPublishedHandle;
 	FDelegateHandle PostLoadMapHandle;
 	EElysiumHUDPreview PreviewMode = EElysiumHUDPreview::Off;

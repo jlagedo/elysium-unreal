@@ -27,6 +27,10 @@ void UElysiumActivatableScreen::ConfigureScreenPolicy(EElysiumUIScreenKind Kind)
 		InputScope.Name = TEXT("Dialogue");
 		InputScope.Priority = ElysiumInput::Priority::Dialogue;
 		break;
+	case EElysiumUIScreenKind::Loot:
+		InputScope.Name = TEXT("Loot");
+		InputScope.Priority = ElysiumInput::Priority::Loot;
+		break;
 	case EElysiumUIScreenKind::Chargen:
 		InputScope.Name = TEXT("Chargen");
 		InputScope.Priority = ElysiumInput::Priority::Chargen;

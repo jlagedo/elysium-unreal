@@ -19,6 +19,38 @@ struct FElysiumSignData;
 struct FElysiumStanceClips;
 struct FElysiumDisposition;
 
+enum class EElysiumPlacedModelPhysics : uint8
+{
+	None,
+	CollisionProxy,
+	SimulatedProxy,
+};
+
+// One engine-neutral request for a non-character MDL embodiment. The returned body separates the
+// posed visual from the component gameplay attaches/collides against; those are the same only for
+// a collision-free placement.
+struct FElysiumPlacedModelRequest
+{
+	FString ModelPath;
+	FString StaticStem;
+	FVector Location = FVector::ZeroVector;
+	FQuat Rotation = FQuat::Identity;
+	float UniformScale = 1.0f;
+	int32 PlacementToken = 0;
+	int32 Skin = 0;
+	EElysiumPlacedModelPhysics Physics = EElysiumPlacedModelPhysics::None;
+};
+
+struct FElysiumPlacedModelBody
+{
+	USkeletalMeshComponent* Visual = nullptr;
+	UPrimitiveComponent* Attach = nullptr;
+	UStaticMeshComponent* PhysicsProxy = nullptr;
+	FString Stem;
+
+	bool IsValid() const { return Visual != nullptr && Attach != nullptr; }
+};
+
 // Every authored runtime placement is expressed in Source feet space. The one exception is the
 // existing save/stage payload, which predates the player entity and stores Unreal's capsule centre.
 // Carry the space with the value and convert exactly once, when the real body's half-height is known.
@@ -122,6 +154,11 @@ class IElysiumEmbodiment
 {
 public:
 	virtual ~IElysiumEmbodiment() = default;
+	// True only when v7 owns complete `.ents` + GAME_LUMP model coverage. Callers use this to
+	// distinguish a fail-closed catalogue miss from the supported stale-index developer fallback.
+	virtual bool HasPlacedModelCatalogue() const { return false; }
+	virtual FElysiumPlacedModelBody BuildPlacedModelBody(
+		const FElysiumPlacedModelRequest& Request) { return {}; }
 
 	// The uniform scale a body built for this def takes (the 3D-skybox miniature's scale for a
 	// sky-scope entity, 1 for everything else).
@@ -283,7 +320,8 @@ public:
 	// the existing static representation. The skeletal surface remains non-solid.
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const = 0;
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
-		const FVector& Location, const FQuat& Rotation, float UniformScale) = 0;
+		const FVector& Location, const FQuat& Rotation, float UniformScale,
+		int32 PlacementToken = 0) = 0;
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds) = 0;
 	// Animated props are a small, map-scoped catalog. Warm every clip on each model represented in
@@ -301,7 +339,8 @@ public:
 	// The clip this model rests on — `SelectWeightedSequence(ACT_IDLE)` with retail's sequence-0
 	// fallback. **Empty exactly when the model bakes no clip**, which is also the test a prop uses
 	// to keep its baked static mesh instead of standing a bind-pose skeleton.
-	virtual FString AnimatedPropRestClip(const FString& Stem) const { return FString(); }
+	virtual FString AnimatedPropRestClip(const FString& Stem,
+		int32 PlacementToken = 0) const { return FString(); }
 	// Does this model bake a clip by this name, and does that clip's own STUDIO_LOOPING bit ask for
 	// looping playback? One lookup answering both, because the two callers need different halves:
 	// `SetAnimation` plays on the loop bit instead of forcing one shot, and `Activate` only needs

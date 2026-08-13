@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "topic": "first-person-viewmodel-client",
+  "consuming_documents": [
+    "docs/vtmb/animation_and_movers.md",
+    "docs/vtmb/camera-view-modes.md"
+  ],
+  "research_id": "RE42",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "How are the two client C_BaseViewModel instances associated with models, weapons, sequence state and the player camera?",
+    "Which gates control submission and which client animation events are visual only?"
+  ],
+  "functions": [
+    {"address": "1007f600", "label": "base_viewmodel_construct", "confidence": "RTTI vtable writer", "role": "construct C_BaseViewModel client state", "depth": 3, "cap": 260},
+    {"address": "1007f830", "label": "base_viewmodel_set_weapon", "confidence": "handle writer", "role": "store the associated client weapon EHANDLE", "depth": 2, "cap": 120},
+    {"address": "1007f6a0", "label": "base_viewmodel_get_weapon", "confidence": "handle reader and vtable slot", "role": "resolve the associated client weapon", "depth": 2, "cap": 120},
+    {"address": "1007f890", "label": "base_viewmodel_apply_model", "confidence": "C_BaseViewModel vtable slot", "role": "apply received model state and reset interpolation parity", "depth": 3, "cap": 220},
+    {"address": "100ab530", "label": "base_viewmodel_fire_event", "confidence": "C_BaseViewModel vtable slot 127", "role": "offer a client animation event to the associated weapon then run visual fallback effects", "depth": 3, "cap": 360, "asm_count": 2600},
+    {"address": "10190ba0", "label": "calc_viewmodel_view", "confidence": "two-slot caller", "role": "seed a viewmodel root from the player view origin and angles", "depth": 3, "cap": 320},
+    {"address": "10191200", "label": "calc_view", "confidence": "CViewRender call graph", "role": "update both viewmodel slots each frame", "depth": 3, "cap": 320},
+    {"address": "10191710", "label": "setup_view", "confidence": "CViewSetup field writes", "role": "write world and viewmodel FOV and clip planes", "depth": 3, "cap": 420, "asm_count": 2800},
+    {"address": "10198e70", "label": "viewmodel_internal_draw_gate", "confidence": "ShouldDrawViewModel callee", "role": "apply internal viewmodel draw policy", "depth": 2, "cap": 160},
+    {"address": "10198ea0", "label": "should_draw_viewmodel", "confidence": "single DrawViewModels caller", "role": "apply model, camera, entity, cvar and player-visibility gates", "depth": 3, "cap": 280},
+    {"address": "10198fa0", "label": "draw_viewmodels", "confidence": "CViewRender scope and body", "role": "install the dedicated projection and submit slots 0 and 1", "depth": 4, "cap": 520, "asm_count": 3400},
+    {"address": "100919c0", "label": "base_animating_setup_bones", "confidence": "hash-pinned animation specification", "role": "build each submitted viewmodel model's independent bone palette", "depth": 2, "cap": 260}
+  ],
+  "field_probes": [
+    {"displacement": "7d4", "label": "client_viewmodel_index", "role": "received viewmodel slot index"},
+    {"displacement": "7d8", "label": "client_viewmodel_weapon", "role": "associated client weapon EHANDLE"},
+    {"displacement": "63c", "label": "client_viewmodel_sequence", "role": "received sequence"},
+    {"displacement": "640", "label": "client_viewmodel_playback_rate", "role": "received playback rate"},
+    {"displacement": "4c", "label": "player_viewmodel_fov", "role": "received local-player viewmodel FOV"},
+    {"displacement": "d8", "label": "player_draw_viewmodel", "role": "received DrawViewmodel policy"}
+  ],
+  "vtable_probes": [
+    {"address": "1022c6a4", "label": "base_viewmodel", "slots": 146, "cap": 260}
+  ],
+  "relationships": [
+    {"from": "10191200", "to": "10190ba0", "confidence": "verified", "evidence": "CalcView iterates both viewmodel slots"},
+    {"from": "10198fa0", "to": "10198ea0", "confidence": "verified", "evidence": "the draw loop gates each slot before submission"},
+    {"from": "100ab530", "to": "1007f6a0", "confidence": "verified", "evidence": "FireEvent resolves the associated client weapon before offering the event hook"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "Each C_BaseViewModel owns its received model, sequence, cycle and bone evaluation; both are rooted from the same player view and independently submitted in the same dedicated pass.",
+      "evidence": "CalcView 0x10191200 updates slots 0 and 1 through CalcViewModelView 0x10190ba0; DrawViewModels 0x10198fa0 loops the same two slots, applies ShouldDrawViewModel and submits each renderable, which reaches its own SetupBones.",
+      "consequence": "The models align by the common camera root and compatible baked skeleton space, not by attaching a weapon component to a hand mesh at runtime."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "C_BaseViewModel::FireEvent is a client visual-event consumer and has no authoritative ammunition or damage path.",
+      "evidence": "0x100ab530 first offers the event to the associated client weapon hook and otherwise handles attachment effects before the generic client animation-event fallback; the server shot body is in vampire.dll.",
+      "consequence": "Muzzle flash and magazine events may drive presentation, but never commit a shot or reload transaction."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Viewmodel visibility is gated by the caller flag, model presence, first/third-person and observer state, entity drawing, r_drawviewmodel, engine broadcast state, internal draw policy, player-body visibility state and current view entity.",
+      "evidence": "ShouldDrawViewModel 0x10198ea0 contains the complete ordered predicate chain and has one caller in DrawViewModels.",
+      "consequence": "DrawViewmodel has scoped lifetime as a per-view decision; it does not destroy either viewmodel entity or clear its animation state."
+    }
+  ]
+}

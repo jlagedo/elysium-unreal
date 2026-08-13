@@ -10,8 +10,8 @@
 // parse + coordinate model live in ElysiumSignData.h/.cpp. Retail's `Sign { dependency }`
 // redirect is evaluated with Py_eval_input (error-to-false), which our EvalCondition matches.
 //
-// Deliberately not modelled here (roadmap 4.10 / 8.8): prop_sign and its +use path, the
-// NewspaperData multi-column layout, and executing the Rules block's ClientCommand.
+// `prop_sign` shares the parser but lives beside the model-bearing prop family. NewspaperData
+// multi-column layout and executing the Rules block's ClientCommand remain outside this leaf.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"

@@ -232,6 +232,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 	Banks.Reset();
 	Cinematics.Reset();
 	AnimatedProps.Reset();
+	PlacedModels.Reset();
 
 	TSharedPtr<FJsonObject> Root;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
@@ -241,9 +242,9 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 		return false;
 	}
 	Root->TryGetNumberField(TEXT("manifest_version"), ManifestVersion);
-	if (ManifestVersion < 3 || ManifestVersion > 6)
+	if (ManifestVersion < 3 || ManifestVersion > 7)
 	{
-		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 6)"),
+		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 7)"),
 			ManifestVersion);
 		return false;
 	}
@@ -286,9 +287,14 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 
 	if (ManifestVersion >= 4)
 	{
-		const TSharedPtr<FJsonObject>* PropObj = nullptr;
-		if (Root->TryGetObjectField(TEXT("animated_props"), PropObj) && PropObj != nullptr)
+		auto ReadPropGroup = [&Root](const TCHAR* Field,
+			TMap<FString, FElysiumAnimatedPropEntry>& Out)
 		{
+			const TSharedPtr<FJsonObject>* PropObj = nullptr;
+			if (!Root->TryGetObjectField(Field, PropObj) || PropObj == nullptr)
+			{
+				return;
+			}
 			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*PropObj)->Values)
 			{
 				const TSharedPtr<FJsonObject>* Obj = nullptr;
@@ -301,6 +307,10 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				(*Obj)->TryGetStringField(TEXT("glb"), Entry.Glb);
 				(*Obj)->TryGetStringField(TEXT("eskm"), Entry.Eskm);
 				(*Obj)->TryGetStringField(TEXT("model"), Entry.Model);
+				(*Obj)->TryGetStringField(TEXT("static_stem"), Entry.StaticStem);
+				(*Obj)->TryGetStringField(TEXT("clip_mode"), Entry.ClipMode);
+				(*Obj)->TryGetBoolField(TEXT("static_equivalent"), Entry.bStaticEquivalent);
+				ReadStringArray(*Obj, TEXT("rest_candidates"), Entry.RestCandidates);
 				(*Obj)->TryGetNumberField(TEXT("bones"), Entry.Bones);
 				ReadStringArray(*Obj, TEXT("split_bones"), Entry.SplitRotationBones);
 				(*Obj)->TryGetStringField(TEXT("procedural"), Entry.Procedural);
@@ -346,11 +356,16 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 						}
 					}
 				}
-				if (!Entry.Glb.IsEmpty() && !Entry.Model.IsEmpty())
+				if (!Entry.Model.IsEmpty() && (!Entry.Eskm.IsEmpty() || !Entry.Glb.IsEmpty()))
 				{
-					AnimatedProps.Add(Entry.Stem, MoveTemp(Entry));
+					Out.Add(Entry.Stem, MoveTemp(Entry));
 				}
 			}
+		};
+		ReadPropGroup(TEXT("animated_props"), AnimatedProps);
+		if (ManifestVersion >= 7)
+		{
+			ReadPropGroup(TEXT("placed_models"), PlacedModels);
 		}
 	}
 
@@ -415,36 +430,56 @@ const FElysiumPropClip* FElysiumAnimatedPropEntry::FindClip(const FString& Label
 	return nullptr;
 }
 
-FString FElysiumAnimatedPropEntry::RestSequence() const
+FString FElysiumAnimatedPropEntry::RestSequence(int32 PlacementToken) const
 {
 	if (Clips.IsEmpty())
 	{
 		return FString();
 	}
-	// CBaseProp::Spawn (FUN_1018df70): SelectWeightedSequence(ACT_IDLE, -1), then sequence 0.
-	// Highest weight wins and the declared ordinal breaks a tie, so the pick is identical on
-	// every load — a rest pose that moved across a save would be a visible pop.
-	//
-	// Not UElysiumAnimSubsystem::PickActivityClip: that keys its walk on a (stem, variant)
-	// seed to spread a crowd of NPCs across alternates, and a prop has no variant. The branch is
-	// defensive anyway — no exported prop model carries more than one ACT_IDLE clip.
+	// CBaseProp::Spawn: SelectWeightedSequence(ACT_IDLE), then sequence 0. The retail draw is
+	// represented deterministically by a cross-language FNV-1a seed over model + placement token,
+	// so save/load and rebuilds retain the same authored alternative.
 	static const FString ActIdle(TEXT("ACT_IDLE"));
-	const FElysiumPropClip* Best = nullptr;
+	TArray<const FElysiumPropClip*> Candidates;
 	for (const FElysiumPropClip& Clip : Clips)
 	{
-		if (!Clip.Activity.Equals(ActIdle, ESearchCase::IgnoreCase))
+		if (Clip.Activity.Equals(ActIdle, ESearchCase::IgnoreCase))
 		{
-			continue;
-		}
-		if (!Best || Clip.Weight > Best->Weight
-			|| (Clip.Weight == Best->Weight && Clip.Index < Best->Index))
-		{
-			Best = &Clip;
+			Candidates.Add(&Clip);
 		}
 	}
-	if (Best)
+	Candidates.Sort([](const FElysiumPropClip& A, const FElysiumPropClip& B)
 	{
-		return Best->Name;
+		return A.Index < B.Index;
+	});
+	if (!Candidates.IsEmpty())
+	{
+		uint32 Hash = 2166136261u;
+		FTCHARToUTF8 Utf8(*Model.ToLower());
+		for (int32 Index = 0; Index < Utf8.Length(); ++Index)
+		{
+			Hash = (Hash ^ static_cast<uint8>(Utf8.Get()[Index])) * 16777619u;
+		}
+		const uint32 Token = static_cast<uint32>(FMath::Max(0, PlacementToken));
+		for (int32 Shift = 0; Shift < 32; Shift += 8)
+		{
+			Hash = (Hash ^ static_cast<uint8>((Token >> Shift) & 0xffu)) * 16777619u;
+		}
+		int32 Total = 0;
+		for (const FElysiumPropClip* Clip : Candidates)
+		{
+			Total += FMath::Max(1, Clip->Weight);
+		}
+		int32 Pick = static_cast<int32>(Hash % static_cast<uint32>(Total));
+		for (const FElysiumPropClip* Clip : Candidates)
+		{
+			const int32 Weight = FMath::Max(1, Clip->Weight);
+			if (Pick < Weight)
+			{
+				return Clip->Name;
+			}
+			Pick -= Weight;
+		}
 	}
 
 	// The fallback, and the branch that actually fires: 16 of the 19 exported prop models tag no
@@ -463,6 +498,10 @@ FString FElysiumAnimatedPropEntry::RestSequence() const
 
 const FElysiumAnimatedPropEntry* FElysiumNpcIndex::FindAnimatedProp(const FString& ModelPath) const
 {
+	if (const FElysiumAnimatedPropEntry* Placed = FindPlacedModel(ModelPath))
+	{
+		return Placed;
+	}
 	FString Key = ModelPath;
 	Key.ReplaceInline(TEXT("\\"), TEXT("/"));
 	Key.ToLowerInline();
@@ -471,6 +510,25 @@ const FElysiumAnimatedPropEntry* FElysiumNpcIndex::FindAnimatedProp(const FStrin
 		Key = TEXT("models/") + Key;
 	}
 	for (const TPair<FString, FElysiumAnimatedPropEntry>& Pair : AnimatedProps)
+	{
+		if (Pair.Value.Model == Key)
+		{
+			return &Pair.Value;
+		}
+	}
+	return nullptr;
+}
+
+const FElysiumAnimatedPropEntry* FElysiumNpcIndex::FindPlacedModel(const FString& ModelPath) const
+{
+	FString Key = ModelPath;
+	Key.ReplaceInline(TEXT("\\"), TEXT("/"));
+	Key.ToLowerInline();
+	if (!Key.StartsWith(TEXT("models/")))
+	{
+		Key = TEXT("models/") + Key;
+	}
+	for (const TPair<FString, FElysiumAnimatedPropEntry>& Pair : PlacedModels)
 	{
 		if (Pair.Value.Model == Key)
 		{

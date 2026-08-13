@@ -172,6 +172,10 @@ struct FElysiumAnimatedPropEntry
 	FString Glb;       // relative to out/npc — an inspection product; nothing the game loads
 	FString Eskm;      // relative to out/npc, normally animated_props/<stem>.eskm
 	FString Model;     // normalized source .mdl path
+	FString StaticStem; // the map-baked SM_ stem whose materials/collision this body reuses
+	FString ClipMode;   // "rest" (candidate clips only) or "full"
+	bool bStaticEquivalent = false; // every possible rest pose equals storage geometry
+	TArray<FString> RestCandidates;
 	int32 Bones = 0;
 	TArray<FString> SplitRotationBones;
 	FString Procedural;
@@ -190,7 +194,7 @@ struct FElysiumAnimatedPropEntry
 	// The clip retail stands this model on at rest: `SelectWeightedSequence(ACT_IDLE)` falling
 	// back to sequence index 0 (`CBaseProp::Spawn`, FUN_1018df70). Empty only when the model
 	// bakes no clip at all, which is also the test a prop uses to keep its static mesh.
-	FString RestSequence() const;
+	FString RestSequence(int32 PlacementToken = 0) const;
 };
 
 struct FElysiumNpcIndex
@@ -202,6 +206,8 @@ struct FElysiumNpcIndex
 	TMap<FString, FElysiumCinematicSet> Cinematics;
 	// v4 only. Version 3 is accepted and leaves this empty.
 	TMap<FString, FElysiumAnimatedPropEntry> AnimatedProps;
+	// v7: every non-character model placed by .ents or GAME_LUMP.
+	TMap<FString, FElysiumAnimatedPropEntry> PlacedModels;
 
 	bool IsValid() const { return !Npcs.IsEmpty(); }
 	bool Load(FString& OutError);
@@ -221,4 +227,5 @@ struct FElysiumNpcIndex
 	// The v4 animated-prop record selected by a normalized source model path, or null. Version 3
 	// indexes answer null for every model.
 	const FElysiumAnimatedPropEntry* FindAnimatedProp(const FString& ModelPath) const;
+	const FElysiumAnimatedPropEntry* FindPlacedModel(const FString& ModelPath) const;
 };

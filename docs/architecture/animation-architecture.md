@@ -52,9 +52,9 @@ Every rotation that reaches a baked asset or an actor has one named source:
    Unreal's pre-multiplied form.
 
 There is no fourth category. In particular, the pipeline and runtime carry no fixed quarter-turn,
-model-family facing correction, reference-pose flattening, asset-name exception, or rest-pose bake.
-The mesh reference skeleton and the `USkeleton` both preserve the converted MDL bind transforms,
-and entity placement is the converted entity placement alone.
+model-family facing correction, reference-pose flattening, asset-name exception, or corrective
+rest-pose transform. The mesh reference skeleton and the `USkeleton` both preserve the converted
+MDL bind transforms, and entity placement is the converted entity placement alone.
 
 This makes a visible quarter-turn a useful failure. A raw bind-pose inspection may be sideways
 because the bind frame is storage, not necessarily the pose retail displays. A placed runtime model
@@ -62,10 +62,43 @@ that remains sideways after its selected sequence has been evaluated is missing 
 stage; it is not repaired by adding another rotation. The diagnostic records, in order, the entity
 placement, selected sequence and frame, decoded local pose, and final component transform.
 
-Any MDL retail evaluates through `CBaseAnimating` remains skeletal at runtime, including animated
-props and rigid one-bone models. At rest it evaluates the same held sequence and frame retail chose;
-converting that result into a static mesh would erase the distinction between authored bind and
-authored rest.
+Every placed MDL is classified from its fully evaluated authored rest candidates. A model remains
+skeletal whenever any candidate differs from the stored mesh, including animated props and rigid
+one-bone models. A static placement is permitted only when all candidates are proven equivalent;
+that proof preserves rather than erases the distinction between authored bind and authored rest.
+
+### 1.2 A placed model is posed before it is visible
+
+The v7 character index owns a `placed_models` catalogue for every non-character MDL referenced by
+an exported `.ents` or GAME_LUMP `.props` placement. Records are keyed by normalized full-path
+model stem and state the source model, ESKM, static-mesh stem, clip policy, ordered sequence
+metadata, resting candidates, and static-equivalence result. A missing record, skeletal asset, or
+selected clip makes a v7 map incomplete; it never licenses a visible storage pose. Older indices
+remain a developer-only stale-export fallback and do not satisfy content readiness.
+
+Rest selection is deterministic. Every `ACT_IDLE` sequence participates in declaration order with
+weight `max(1, activity_weight)`; sequence 0 is the sole fallback when the activity has no member.
+The weighted choice is the 32-bit FNV-1a hash of normalized model path plus the placement token,
+modulo total weight. Live entities use their stable handle index and GAME_LUMP placements use their
+`.props` ordinal, so reload and save restore choose the same pose without coupling this resolver to
+NPC disposition or player activity policy.
+
+Runtime construction is a visibility transaction: create hidden, assign skeletal mesh and map
+materials by slot name, install the selected clip, seek frame 0, force pose evaluation, disable
+ticking for a held rest-only body, then reveal. Characters use the same hidden-until-first-pose
+boundary while retaining their disposition, activity and cinematic intent. `SetModel` rebuilds
+through the same transaction and preserves the entity token, skin, attachment, collision mode and
+any later `LoopSequence` intent. Generic model-backed entities inherit this body before
+`PostSpawn()` only when their leaf class did not provide one; this inheritance adds no use anchor.
+
+Static equivalence is evaluated from fully skinned positions and normals for every possible rest
+candidate. Topology must match, position delta must not exceed 0.01 cm, and normal delta must not
+exceed 0.1 degrees; missing or undecidable data means non-equivalent. An equivalent GAME_LUMP model
+uses the existing map static actor. A non-equivalent one uses `AElysiumPlacedModelActor`: its paused
+skeletal visual is attached at identity to an invisible static collision proxy. Dynamic physics and
+hinge authority likewise remain on the invisible static or Chaos proxy, never on the skeletal
+visual. This composition reuses the map's material instances and does not duplicate the placed-model
+texture corpus in the character package.
 
 ## 2. The asset set is baked, not built at runtime
 

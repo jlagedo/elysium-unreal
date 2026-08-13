@@ -37,7 +37,7 @@ from elysium_pipeline.tasking import (
 )
 
 #: Bump to invalidate every character receipt — a change in what a stage MEANS, not in its inputs.
-CACHE_REVISION = "elysium-character-stage-v2-shared-banks"
+CACHE_REVISION = "elysium-character-stage-v3-placed-models"
 
 STAGES = ("textures", "bank_skeletons", "banks", "family_skeletons", "meshes", "clips", "props")
 
@@ -83,8 +83,8 @@ def stage_inputs(npc_dir: Path, manifest: dict, partition: dict,
 
     kind, _, family = scope.partition(".")
     if kind == "prop":
-        container = npc_dir / "animated_props" / f"{family}.eskm"
-        relative = manifest.get("animated_props", {}).get(family, {}).get("blends", "")
+        container = npc_dir / "placed_models" / f"{family}.eskm"
+        relative = manifest.get("placed_models", {}).get(family, {}).get("blends", "")
         return ([container, npc_dir / "textures.json"]
                 + ([npc_dir / relative] if relative else []))
 
@@ -150,7 +150,7 @@ def plan_stages(config, manifest_store: Manifest, npc_dir: Path, manifest: dict,
         )
 
     stale: dict[str, list[str]] = {}
-    for scope in scopes_for(partition, stems, manifest.get("animated_props", {})):
+    for scope in scopes_for(partition, stems, manifest.get("placed_models", {})):
         kind = scope.split(".")[0]
         wanted = {
             GLOBAL_SCOPE: ("textures",),

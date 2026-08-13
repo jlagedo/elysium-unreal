@@ -35,6 +35,76 @@
       },
       "targets": [
         {
+          "semantic_label": "vampire.viewmodel_update",
+          "source_function_label": "weapon_update_viewmodels",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x002532a0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "5356578bd9"
+        },
+        {
+          "semantic_label": "vampire.viewmodel_ranged_anim_event",
+          "source_function_label": "ranged_operator_handle_anim_event",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00238160",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18b4c2408"
+        },
+        {
+          "semantic_label": "vampire.viewmodel_ranged_shot",
+          "source_function_label": "ranged_shot_commit",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x002387b0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "81ec24020000"
+        },
+        {
+          "semantic_label": "vampire.viewmodel_dry_fire",
+          "source_function_label": "ranged_fire_on_empty",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00238230",
+          "calling_convention": "thiscall",
+          "expected_bytes": "566a008bf1"
+        },
+        {
+          "semantic_label": "vampire.viewmodel_reload_request",
+          "source_function_label": "ranged_reload_request",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00239570",
+          "calling_convention": "thiscall",
+          "expected_bytes": "8a8198080000"
+        },
+        {
+          "semantic_label": "vampire.viewmodel_reload_frame",
+          "source_function_label": "weapon_reload_frame",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00255050",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf1578a86c8080000"
+        },
+        {
+          "semantic_label": "vampire.viewmodel_reload_finish",
+          "source_function_label": "weapon_reload_finish",
+          "source_spec": "research/cases/first-person-viewmodel/specs/vampire_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x002552c0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec085355"
+        },
+        {
           "semantic_label": "vampire.classify_player_animation_action",
           "source_function_label": "classify_player_animation_action",
           "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
@@ -157,6 +227,30 @@
         "characteristics": "0x210e"
       },
       "targets": [
+        {
+          "semantic_label": "client.viewmodel_draw_pass",
+          "source_function_label": "draw_viewmodels",
+          "source_spec": "research/cases/first-person-viewmodel/specs/client_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00198fa0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "a128311e10",
+          "relocated_operand": {
+            "offset": 1,
+            "size": 4
+          }
+        },
+        {
+          "semantic_label": "client.viewmodel_fire_event",
+          "source_function_label": "base_viewmodel_fire_event",
+          "source_spec": "research/cases/first-person-viewmodel/specs/client_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000ab530",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec185355"
+        },
         {
           "semantic_label": "client.resolve_virtual_model_pose",
           "source_function_label": "resolve_virtual_model_pose",
@@ -288,6 +382,16 @@
         "characteristics": "0x210e"
       },
       "targets": [
+        {
+          "semantic_label": "engine.viewmodel_projection",
+          "source_function_label": "render_set_projection",
+          "source_spec": "research/cases/first-person-viewmodel/specs/engine_viewmodel.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0007a3e0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "8b4424088b54240c"
+        },
         {
           "semantic_label": "engine.model_render_draw_model",
           "source_function_label": "c_modelrender_drawmodel",

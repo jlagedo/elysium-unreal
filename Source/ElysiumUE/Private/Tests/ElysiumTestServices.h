@@ -26,6 +26,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Misc/Paths.h"
 #include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -528,7 +529,8 @@ struct FElysiumRecordingServices final
 	TMap<FString, USkeletalMeshComponent*> AnimatedPropBodies;
 
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
-		const FVector& Location, const FQuat& Rotation, float UniformScale) override
+		const FVector& Location, const FQuat& Rotation, float UniformScale,
+		int32 PlacementToken = 0) override
 	{
 		// The rotation is recorded last so the existing prefix assertions keep matching.
 		Record(FString::Printf(TEXT("BuildAnimatedPropVisual %s %s scale=%.2f rot=%s"),
@@ -557,8 +559,10 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StaticStem, Family));
 	}
-	virtual FString AnimatedPropRestClip(const FString& Stem) const override
+	virtual FString AnimatedPropRestClip(const FString& Stem,
+		int32 PlacementToken = 0) const override
 	{
+		(void)PlacementToken;
 		const FString* Found = AnimatedPropRestClips.Find(Stem);
 		// Unregistered stems answer a rest clip so a test that only cares about SetAnimation does
 		// not have to declare one; an explicit empty entry is the "bakes no clip" case.
@@ -591,6 +595,34 @@ struct FElysiumRecordingServices final
 	// Whether a cinematic anim set resolves. Default false, which is the state of the world until
 	// PL16's banks are exported — a scene must run its timeline and outputs either way.
 	bool bCinematicClipsResolve = false;
+	// Opt-in so existing body-path tests continue to exercise the legacy-index fallback. The v7
+	// closure tests enable this and receive a real composite with distinct visual/proxy components.
+	bool bPlacedModelsResolve = false;
+	virtual bool HasPlacedModelCatalogue() const override { return bPlacedModelsResolve; }
+	virtual FElysiumPlacedModelBody BuildPlacedModelBody(
+		const FElysiumPlacedModelRequest& Request) override
+	{
+		Record(FString::Printf(TEXT("BuildPlacedModelBody %s token=%d skin=%d physics=%d"),
+			*Request.ModelPath, Request.PlacementToken, Request.Skin,
+			static_cast<int32>(Request.Physics)));
+		FElysiumPlacedModelBody Result;
+		if (!bPlacedModelsResolve)
+		{
+			return Result;
+		}
+		Result.Stem = FPaths::GetBaseFilename(Request.ModelPath).ToLower();
+		Result.Visual = NewComponent<USkeletalMeshComponent>();
+		if (Request.Physics == EElysiumPlacedModelPhysics::None)
+		{
+			Result.Attach = Result.Visual;
+		}
+		else
+		{
+			Result.PhysicsProxy = NewComponent<UStaticMeshComponent>();
+			Result.Attach = Result.PhysicsProxy;
+		}
+		return Result;
+	}
 
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override

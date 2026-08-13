@@ -13,6 +13,7 @@
 #include "ElysiumWorldServices.h"
 
 struct FElysiumSignData;
+struct FElysiumLootView;
 
 class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
@@ -189,7 +190,7 @@ public:
 
 	// 8.3 — register a dynamic-prop body (built by AElysiumMapActor::BuildPropVisual) so the world
 	// tears it down with the map, exactly like NPC bodies. The FElysiumProp leaf calls this from Spawn().
-	void RegisterPropBody(UStaticMeshComponent* Component,
+	void RegisterPropBody(UPrimitiveComponent* Component,
 		const FElysiumEntityHandle& UseOwner = FElysiumEntityHandle::Invalid());
 	void RegisterUseAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
 	void RegisterTouchAnchor(UPrimitiveComponent* Component, const FElysiumEntityHandle& Owner);
@@ -251,9 +252,17 @@ public:
 	// The explicit leaf/UI completion seam. Supplying the captured owner prevents a stale panel
 	// from ending a newer entity's session; Invalid intentionally means cancel whatever is active.
 	bool EndPlayerUseSession(const FElysiumEntityHandle& OwnerHandle, EElysiumUseEndReason Reason);
+	// Start a captured use on a named logical owner without re-running spatial selection. Attached
+	// lockables use this after their own accepted key/skill transaction forwards into a container.
+	FElysiumUseBeginResult BeginPlayerUseSession(const FElysiumEntityHandle& OwnerHandle,
+		const FElysiumEntityHandle& Activator);
 	FElysiumEntityHandle GetFocusedUsable() const { return FocusedUsable; }
 	FElysiumEntityHandle GetAimedUsable() const { return FocusedUsable; } // debug compatibility
 	FElysiumInteractionView GetInteractionView() const;
+	bool BuildLootView(FElysiumLootView& Out) const;
+	bool PlayerLootTake(int32 Slot);
+	bool PlayerLootGive(int32 Slot);
+	bool PlayerCloseLoot();
 	EElysiumUseOutcome GetLastUseOutcome() const { return LastUseOutcome; }
 
 	// --- Screen fade (P4.5 env_fade) ---------------------------------------------------
@@ -539,7 +548,7 @@ private:
 	TArray<TWeakObjectPtr<USkeletalMeshComponent>> NpcBodies;
 	// 8.3 dynamic-prop bodies (built on the map actor, gated/moved by their FElysiumProp leaf): weak
 	// refs held so a world rebuild on a surviving actor destroys them, like NpcBodies.
-	TArray<TWeakObjectPtr<UStaticMeshComponent>> PropBodies;
+	TArray<TWeakObjectPtr<UPrimitiveComponent>> PropBodies;
 	// 8.4 phys_hinge constraints (built on the map actor by the leaf's PostSpawn): weak refs held so
 	// a world rebuild on a surviving actor destroys them, like PropBodies.
 	TArray<TWeakObjectPtr<UPhysicsConstraintComponent>> Constraints;

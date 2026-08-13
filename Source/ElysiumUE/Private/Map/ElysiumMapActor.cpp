@@ -990,10 +990,22 @@ FString AElysiumMapActor::AnimatedPropStemForModel(const FString& ModelPath) con
 	return Bodies ? Bodies->AnimatedPropStemForModel(ModelPath) : FString();
 }
 
-USkeletalMeshComponent* AElysiumMapActor::BuildAnimatedPropVisual(const FString& Stem,
-	const FVector& Location, const FQuat& Rotation, float UniformScale)
+FElysiumPlacedModelBody AElysiumMapActor::BuildPlacedModelBody(
+	const FElysiumPlacedModelRequest& Request)
 {
-	return Bodies ? Bodies->BuildAnimatedPropVisual(Stem, Location, Rotation, UniformScale) : nullptr;
+	return Bodies ? Bodies->BuildPlacedModelBody(Request) : FElysiumPlacedModelBody{};
+}
+
+bool AElysiumMapActor::HasPlacedModelCatalogue() const
+{
+	return Bodies && Bodies->HasPlacedModelCatalogue();
+}
+
+USkeletalMeshComponent* AElysiumMapActor::BuildAnimatedPropVisual(const FString& Stem,
+	const FVector& Location, const FQuat& Rotation, float UniformScale, int32 PlacementToken)
+{
+	return Bodies ? Bodies->BuildAnimatedPropVisual(
+		Stem, Location, Rotation, UniformScale, PlacementToken) : nullptr;
 }
 
 bool AElysiumMapActor::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -1013,9 +1025,9 @@ int32 AElysiumMapActor::FinishAnimationPreload()
 	return Bodies ? Bodies->FinishAnimationPreload() : 0;
 }
 
-FString AElysiumMapActor::AnimatedPropRestClip(const FString& Stem) const
+FString AElysiumMapActor::AnimatedPropRestClip(const FString& Stem, int32 PlacementToken) const
 {
-	return Bodies ? Bodies->AnimatedPropRestClip(Stem) : FString();
+	return Bodies ? Bodies->AnimatedPropRestClip(Stem, PlacementToken) : FString();
 }
 
 bool AElysiumMapActor::FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
@@ -1732,8 +1744,8 @@ FElysiumUseQueryResult AElysiumMapActor::QueryPlayerUse(
 FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 {
 	// `CBasePlayer::Replenish`'s direct victim search, reproduced in shape
-	// (`docs/vtmb/feeding.md` § "Target acquisition and acceptance"): a hull trace from the view
-	// position toward the local offset (32 forward, 0 right, -32 vertical) with extents
+	// (`docs/vtmb/feeding.md` § "Target acquisition and acceptance"): a hull trace from the body-eye
+	// use origin toward the control-relative offset (32 forward, 0 right, -32 vertical) with extents
 	// (-8,-8,-8)..(8,8,8). The retail figures are Source units and are converted once, here, by the
 	// same `ElysiumMove::U` every other recovered distance in this runtime goes through.
 	//
@@ -1742,26 +1754,22 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 	// characters (the mask's player/NPC bits), and occlusion is tested on `ELYSIUM_USE_CHANNEL`
 	// (its solid-world bits) — the same channel `+use` reaches the world through, and the one the
 	// map's brush bodies and the walkable surface already answer on.
-	constexpr float ForwardUnits  = 32.0f;
-	constexpr float VerticalUnits = -32.0f;
-	constexpr float HullHalfUnits = 8.0f;
 	// The standing hull a bodiless candidate is measured by: VtMB's own 32x32x72-unit character box.
 	// Only reachable with `elysium.NpcBodies 0` or a failed model, where a rendered bound does not
 	// exist; a standing body is measured by its own rendered bounds like every `+use` candidate is.
 	constexpr float StandHalfWidthUnits = 16.0f;
 	constexpr float StandHeightUnits = 72.0f;
 
-	FVector ViewLocation;
-	FRotator ViewRotation;
-	if (!EntityWorld || !GetPlayerViewPoint(ViewLocation, ViewRotation))
+	FVector UseOrigin;
+	FVector IgnoredCapsuleCenter;
+	FRotator ControlRotation;
+	if (!EntityWorld || !GetPlayerUseOrigin(UseOrigin)
+		|| !GetPlayerCapsuleTransform(IgnoredCapsuleCenter, ControlRotation))
 	{
 		return FElysiumEntityHandle::Invalid();
 	}
-	const FVector Forward = ViewRotation.Vector().GetSafeNormal();
-	const FVector ProbeEnd = ViewLocation
-		+ Forward * (ForwardUnits * ElysiumMove::U)
-		+ FVector::UpVector * (VerticalUnits * ElysiumMove::U);
-	const FVector HullExtent(HullHalfUnits * ElysiumMove::U);
+	const ElysiumFeedTargeting::FProbe Probe =
+		ElysiumFeedTargeting::MakeProbe(UseOrigin, ControlRotation);
 
 	UWorld* World = GetWorld();
 	FCollisionQueryParams Params(FName(TEXT("ElysiumFeedTarget")), /*bTraceComplex*/ false);
@@ -1793,8 +1801,8 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 		}
 		// Sweeping a box along a segment against an AABB is exactly a segment test against the AABB
 		// grown by the hull's extents, so the recovered 16-cube is applied without a physics query.
-		const FBox Swept = Candidate.ExpandBy(HullExtent);
-		if (!FMath::LineBoxIntersection(Swept, ViewLocation, ProbeEnd, ProbeEnd - ViewLocation))
+		const FBox Swept = Candidate.ExpandBy(Probe.HullExtent);
+		if (!FMath::LineBoxIntersection(Swept, Probe.Start, Probe.End, Probe.End - Probe.Start))
 		{
 			continue;
 		}
@@ -1802,7 +1810,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 		if (World)
 		{
 			FHitResult Blocked;
-			if (World->LineTraceSingleByChannel(Blocked, ViewLocation, Chest,
+			if (World->LineTraceSingleByChannel(Blocked, Probe.Start, Chest,
 				ELYSIUM_USE_CHANNEL, Params)
 				&& !ElysiumFeedTargeting::HitBelongsToCandidate(
 					Blocked.GetComponent(), CandidateBody))
@@ -1810,7 +1818,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 				continue;   // a wall between the mouth and the neck
 			}
 		}
-		const double DistanceSq = FVector::DistSquared(ViewLocation, Chest);
+		const double DistanceSq = FVector::DistSquared(Probe.Start, Chest);
 		if (DistanceSq < BestDistanceSq)
 		{
 			BestDistanceSq = DistanceSq;

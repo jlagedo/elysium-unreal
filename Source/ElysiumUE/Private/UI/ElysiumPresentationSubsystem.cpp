@@ -197,6 +197,27 @@ void UElysiumPresentationSubsystem::DialogueAdvance()
 	}
 }
 
+bool UElysiumPresentationSubsystem::LootTake(int32 Slot)
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	return World && World->PlayerLootTake(Slot);
+}
+
+bool UElysiumPresentationSubsystem::LootGive(int32 Slot)
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	return World && World->PlayerLootGive(Slot);
+}
+
+bool UElysiumPresentationSubsystem::CloseLoot()
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	return World && World->PlayerCloseLoot();
+}
+
 bool UElysiumPresentationSubsystem::DismissSign()
 {
 	const AElysiumMapActor* Map = ResolveMapActor();
@@ -290,7 +311,10 @@ void UElysiumPresentationSubsystem::Publish()
 			D.bTerminal = Conv->IsTerminalLine();
 		}
 
-		if (Next.bCinematic || Next.bSignHidesHUD || bModalScreen || Next.Dialogue.IsOpen())
+		World->BuildLootView(Next.Loot);
+
+		if (Next.bCinematic || Next.bSignHidesHUD || bModalScreen || Next.Dialogue.IsOpen()
+			|| Next.Loot.IsOpen())
 		{
 			Next.Interaction = FElysiumInteractionView();
 		}

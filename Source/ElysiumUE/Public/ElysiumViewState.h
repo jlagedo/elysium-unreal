@@ -71,6 +71,27 @@ struct FElysiumDialogueView
 	bool IsOpen() const { return Conversation != nullptr; }
 };
 
+// One immutable loot projection. Slot is the authoritative compact inventory position submitted
+// back by the UI; labels are resolved here so widgets never read item data or entity state.
+struct FElysiumLootEntryView
+{
+	int32 Slot = INDEX_NONE;
+	FString Classname;
+	FString Label;
+	int32 Quantity = 1;
+};
+
+struct FElysiumLootView
+{
+	FElysiumEntityHandle Owner;
+	uint32 Revision = 0;
+	FString Title;
+	TArray<FElysiumLootEntryView> ContainerItems;
+	TArray<FElysiumLootEntryView> PlayerItems;
+
+	bool IsOpen() const { return Owner.IsSet(); }
+};
+
 // ============================================================================================
 // FElysiumViewState — everything on screen, rebuilt each frame in TG_PostUpdateWork.
 // ============================================================================================
@@ -111,6 +132,11 @@ struct FElysiumViewState
 
 	// --- Conversation (9.1 / B4) ------------------------------------------------------------
 	FElysiumDialogueView Dialogue;
+
+	// --- Loot container (9.8) --------------------------------------------------------------
+	// An explicit +use session. The CommonUI screen submits Take/Give/Close intents only; slot
+	// validation and entity transfer remain on the substrate.
+	FElysiumLootView Loot;
 
 	// --- Meters (8.9 draws them) ------------------------------------------------------------
 	FElysiumVitals Vitals;

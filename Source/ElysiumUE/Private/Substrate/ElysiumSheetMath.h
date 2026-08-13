@@ -66,7 +66,8 @@ struct FElysiumSheetEffects
 	// (`Inspection`, `Seduction`, the three combat feats, `Intrusion`, `Hacking`); with no table
 	// those rows are recorded as unresolved rather than mistaken for a stat.
 	void Build(const FElysiumTraitEffects& Table, TArrayView<const FString> GroupNames,
-		const FElysiumFeatTable* Feats);
+		const FElysiumFeatTable* Feats, const FElysiumStatTable* Stats = nullptr,
+		const FElysiumStrings* Strings = nullptr);
 	void Reset();
 	bool IsEmpty() const { return TraitRows.IsEmpty() && FeatRows.IsEmpty() && Flags.IsEmpty(); }
 

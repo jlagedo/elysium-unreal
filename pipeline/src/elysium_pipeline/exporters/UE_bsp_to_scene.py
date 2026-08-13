@@ -842,7 +842,9 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
     """Parse GAME_LUMP sprp (VtMB v4, 56B DStaticPropV4): a model-name dict + per-
     prop origin/angles/solid/skin. Decode each unique model once (shared texture cache)
     into out_dir/props/<safename>.obj (Unreal space), and write <base>.props (one prop
-    per line: `safename ox oy oz qx qy qz qw solid skin sky`). `solid` (0 = non-solid) gates
+    per line: `safename ox oy oz qx qy qz qw solid skin sky model_path`). The source path
+    remains present even when static decode fails, so v7 placed-model coverage is decidable.
+    `solid` (0 = non-solid) gates
     collision; `skin` names an alternate skin family from the model's own skin table
     (props/<stem>.skins), which the bake applies as material overrides on the placed actor;
     `sky` marks a prop that belongs to the 3D-skybox miniature, which the bake places under
@@ -890,16 +892,23 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
     with open(os.path.join(out_dir, base + ".props"), "w") as f:
         for model_path, (ox, oy, oz), (pitch, yaw, roll), solid, skin in props:
             safe = resolved.get(model_path)
-            if safe is None:                 # an .obj left over from an earlier export
-                continue                     # must not stand in for a failed decode
+            # Keep a failed model in the placement inventory. The v7 character export/bake then
+            # fails closed by its source model name instead of silently erasing authored world
+            # content or accepting an OBJ left over from an earlier run.
+            if safe is None:
+                safe = MDL.sanitize(model_path[:-4] if model_path.endswith(".mdl") else model_path)
             solid_n += solid != 0
             skin_n += skin != 0
             in_sky = int(sky is not None and sky.is_sky((ox, oy, oz)))
             sky_n += in_sky
             ux, uy, uz = source_to_unreal(ox, oy, oz)
             qx, qy, qz, qw = source_angles_to_unreal_quat(pitch, yaw, roll)
+            # The final field makes the GAME_LUMP placement joinable to the same complete
+            # placed-model catalogue as entity models. Paths contain no whitespace in this
+            # corpus; older eleven-field rows remain readable by the bake.
             f.write(f"{safe} {ux:.4f} {uy:.4f} {uz:.4f} "
-                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid} {skin} {in_sky}\n")
+                    f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid} {skin} {in_sky} "
+                    f"{model_path}\n")
     placed = sum(1 for pr in props if pr[0] in resolved)
     print(f"props: {placed} placed ({solid_n} solid, {skin_n} skinned, {sky_n} sky) / "
           f"{len(model_paths)} models ({ok} decoded, {missing} missing) -> {base}.props")

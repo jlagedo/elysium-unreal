@@ -4,6 +4,7 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "UI/ElysiumDialogueScreen.h"
+#include "UI/ElysiumLootScreen.h"
 #include "UI/ElysiumSignScreen.h"
 #include "UI/ElysiumUIRoot.h"
 
@@ -146,15 +147,31 @@ UCommonActivatableWidget* UElysiumPlayerUISubsystem::PushWidget(
 	TFunction<void(UCommonActivatableWidget&)> Init)
 {
 	EnsureRoot();
-	if (!Root || !WidgetClass)
+	if (!Root)
 	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("UI push failed: no local-player UI root for layer %d, widget %s"),
+			static_cast<int32>(Layer), *GetNameSafe(WidgetClass.Get()));
+		return nullptr;
+	}
+	if (!WidgetClass)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("UI push failed: null widget class for layer %d"), static_cast<int32>(Layer));
 		return nullptr;
 	}
 	if (!Init)
 	{
 		Init = [](UCommonActivatableWidget&) {};
 	}
-	return Root->PushWidget(Layer, WidgetClass, Init);
+	UCommonActivatableWidget* Result = Root->PushWidget(Layer, WidgetClass, Init);
+	if (!Result)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("UI push failed: %s was not created on layer %d"),
+			*GetNameSafe(WidgetClass.Get()), static_cast<int32>(Layer));
+	}
+	return Result;
 }
 
 void UElysiumPlayerUISubsystem::RemoveWidget(EElysiumUILayer Layer, UCommonActivatableWidget* Widget)
@@ -206,9 +223,12 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 	}
 	DialogueScreen = nullptr;
 	SignScreen = nullptr;
+	LootScreen = nullptr;
 	ShownDialogue = nullptr;
 	ShownSign = nullptr;
 	ShownDialogueRevision = 0;
+	ShownLootOwner = FElysiumEntityHandle::Invalid();
+	ShownLootRevision = 0;
 }
 
 void UElysiumPlayerUISubsystem::UnbindPresentation()
@@ -233,6 +253,7 @@ void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 	EnsureRoot();
 	ReconcileSign(View);
 	ReconcileDialogue(View.Dialogue);
+	ReconcileLoot(View.Loot);
 }
 
 void UElysiumPlayerUISubsystem::ReconcileSign(const FElysiumViewState& View)
@@ -372,4 +393,93 @@ void UElysiumPlayerUISubsystem::OnDialogueChoice(int32 VisibleIndex)
 			Presentation->DialogueChoose(VisibleIndex);
 		}
 	}
+}
+
+void UElysiumPlayerUISubsystem::ReconcileLoot(const FElysiumLootView& Loot)
+{
+	if (!Loot.IsOpen())
+	{
+		HideLoot();
+		return;
+	}
+	if (!LootScreen || ShownLootOwner != Loot.Owner)
+	{
+		HideLoot();
+		ShowLoot(Loot);
+		return;
+	}
+	if (ShownLootRevision != Loot.Revision)
+	{
+		LootScreen->ApplyLoot(Loot);
+		ShownLootRevision = Loot.Revision;
+	}
+}
+
+void UElysiumPlayerUISubsystem::ShowLoot(const FElysiumLootView& Loot)
+{
+	LootScreen = Cast<UElysiumLootScreen>(PushWidget(
+		EElysiumUILayer::GameModal,
+		UElysiumLootScreen::StaticClass(),
+		[this, Loot](UCommonActivatableWidget& Widget)
+		{
+			UElysiumLootScreen* Screen = CastChecked<UElysiumLootScreen>(&Widget);
+			Screen->ApplyLoot(Loot);
+			Screen->OnTransfer.BindUObject(this, &UElysiumPlayerUISubsystem::OnLootTransfer);
+			Screen->OnClose.BindUObject(this, &UElysiumPlayerUISubsystem::OnLootClose);
+			Screen->ConfigureScreenPolicy(EElysiumUIScreenKind::Loot);
+		}));
+	if (!LootScreen)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("loot UI failed to open for owner %s revision %u"),
+			*Loot.Owner.ToString(), Loot.Revision);
+	}
+	ShownLootOwner = LootScreen ? Loot.Owner : FElysiumEntityHandle::Invalid();
+	ShownLootRevision = LootScreen ? Loot.Revision : 0;
+}
+
+void UElysiumPlayerUISubsystem::HideLoot()
+{
+	if (LootScreen)
+	{
+		RemoveWidget(EElysiumUILayer::GameModal, LootScreen);
+		LootScreen = nullptr;
+	}
+	ShownLootOwner = FElysiumEntityHandle::Invalid();
+	ShownLootRevision = 0;
+}
+
+void UElysiumPlayerUISubsystem::OnLootTransfer(bool bTake, int32 Slot)
+{
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		const bool bSucceeded = bTake
+			? Presentation->LootTake(Slot)
+			: Presentation->LootGive(Slot);
+		if (!bSucceeded)
+		{
+			UE_LOG(LogElysiumPlayerUI, Warning,
+				TEXT("loot UI action failed: %s slot %d"), bTake ? TEXT("take") : TEXT("store"), Slot);
+		}
+		return;
+	}
+	UE_LOG(LogElysiumPlayerUI, Warning,
+		TEXT("loot UI action failed: presentation subsystem is unavailable (%s slot %d)"),
+		bTake ? TEXT("take") : TEXT("store"), Slot);
+}
+
+void UElysiumPlayerUISubsystem::OnLootClose()
+{
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		if (Presentation->CloseLoot())
+		{
+			HideLoot();
+			return;
+		}
+		UE_LOG(LogElysiumPlayerUI, Warning, TEXT("loot UI close failed in the substrate"));
+		return;
+	}
+	UE_LOG(LogElysiumPlayerUI, Warning,
+		TEXT("loot UI close failed: presentation subsystem is unavailable"));
 }

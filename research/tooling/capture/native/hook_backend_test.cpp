@@ -270,6 +270,8 @@ int wmain() {
         vtableTargetRva,
         helperCode,
         static_cast<std::uint32_t>(sizeof(helperCode)),
+        0,
+        0,
         objectRva,
         vtableRva,
         vtableSlot,

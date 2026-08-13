@@ -77,6 +77,13 @@ namespace ElysiumFeed
 		Out.bCountStolen = bBloodPoolIncremented;
 		return Out;
 	}
+	inline FString PulseLogLine(int32 PlayerBefore, int32 PlayerAfter,
+		int32 VictimBefore, int32 VictimAfter, int32 BloodStolen)
+	{
+		return FString::Printf(
+			TEXT("INFO - Feed pulse: player=%d->%d, victim=%d->%d, stolen=%d"),
+			PlayerBefore, PlayerAfter, VictimBefore, VictimAfter, BloodStolen);
+	}
 
 	// The feat names, spelled once. `Hacking` is literal retail behaviour on the victim side and is
 	// not a rename candidate.

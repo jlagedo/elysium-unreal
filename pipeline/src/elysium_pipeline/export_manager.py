@@ -825,13 +825,24 @@ def character_source_plan(
             if bank is not None:
                 banks[root["bank"]] = bank["model"]
 
-    # An animated prop is a skeletal model like any other, so it takes the same container. It is
+    # A placed model is a skeletal model like any other, so it takes the same container. It is
     # NOT a cast member: it carries its own skeleton rather than joining a rig family, because a
     # crane and a wolf share no tree with each other or with a biped.
     props = {stem: record["model"]
-             for stem, record in manifest.get("animated_props", {}).items()
+             for stem, record in manifest.get("placed_models", {}).items()
              if record.get("model")}
     return models, banks, cinematics, props
+
+
+def placed_model_source_fingerprint(stem: str, record: dict, code_fingerprint: str,
+                                    source_detail: str) -> str:
+    """Fingerprint one placed-model container, including its rest/full clip policy."""
+    clip_labels = "\n".join(record.get("clips", {}).keys())
+    ensure_labels = "\n".join(record.get("rest_candidates", ()))
+    return fingerprint_content(
+        (), extra=("eskm-placed-model-v1", stem, record.get("clip_mode", "rest"),
+                   clip_labels, ensure_labels, code_fingerprint, source_detail)
+    )
 
 
 def write_character_sources(
@@ -852,6 +863,8 @@ def write_character_sources(
     from elysium_pipeline.formats import install, mdl_gltf, mdl_skel
 
     models, banks, cinematics, props = character_source_plan(npc_dir)
+    with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
+        source_manifest = json.load(handle)
     # Every per-root container of a cinematic model is produced by one `write_cinematic` call, so
     # its stems are not their own tasks -- they would each rewrite the whole performance.
     cinematic_stems = {stem for stem in banks if any(
@@ -930,19 +943,23 @@ def write_character_sources(
             outputs=tuple(npc_dir / "banks" / f"{root}.eskm" for root in roots),
         ))
 
-    prop_dir = npc_dir / "animated_props"
+    prop_dir = npc_dir / "placed_models"
     for stem, model_rel in sorted(props.items()):
         # The same container a body takes, geometry and all -- an animated prop IS a skeletal
         # model, and the only thing that made it a separate path was the loader it used to go
         # through. Morph targets are not read: no shipped prop authors a flex rig.
-        def prop_action(stem=stem, model_rel=model_rel) -> None:
-            UE_mdl_skeletal.write_model(index, model_rel, str(prop_dir), stem=stem, anorms=None)
+        record = source_manifest.get("placed_models", {}).get(stem, {})
+        clip_labels = tuple(record.get("clips", {}).keys())
+        ensure_labels = tuple(record.get("rest_candidates", ()))
 
-        def prop_fingerprint(model_rel=model_rel, stem=stem) -> str:
-            return fingerprint_content(
-                (), extra=("eskm-prop-v1", stem, code_fingerprint,
-                           _character_source_detail(index, model_rel))
-            )
+        def prop_action(stem=stem, model_rel=model_rel, clip_labels=clip_labels,
+                        ensure_labels=ensure_labels) -> None:
+            UE_mdl_skeletal.write_model(index, model_rel, str(prop_dir), stem=stem, anorms=None,
+                                        clip_labels=clip_labels, ensure_labels=ensure_labels)
+
+        def prop_fingerprint(model_rel=model_rel, stem=stem, record=record) -> str:
+            return placed_model_source_fingerprint(
+                stem, record, code_fingerprint, _character_source_detail(index, model_rel))
 
         tasks.append(Task(
             name=f"eskm:prop:{stem}",
@@ -983,7 +1000,7 @@ def write_character_partition(npc_dir: Path) -> dict:
     models, banks, _cinematics, props = character_source_plan(npc_dir)
     model_paths = {stem: npc_dir / f"{stem}.eskm" for stem in models}
     bank_paths = {stem: npc_dir / "banks" / f"{stem}.eskm" for stem in banks}
-    prop_paths = {stem: npc_dir / "animated_props" / f"{stem}.eskm" for stem in props}
+    prop_paths = {stem: npc_dir / "placed_models" / f"{stem}.eskm" for stem in props}
 
     model_trees: dict[str, dict[str, str]] = {}
     bank_trees: dict[str, dict[str, str]] = {}
@@ -1013,23 +1030,14 @@ def write_character_partition(npc_dir: Path) -> dict:
                     entry["used_by"].append(stem)
                 bindings.setdefault(stem, {})[material] = name
 
-    # Props contribute textures but not the corpus fingerprint: that fingerprint is what every rig
-    # family's receipt is keyed on, and a prop shares no bone tree with any of them.
+    # Placed-model materials are supplied by each map's already-baked static mesh at runtime.
+    # Importing this complete corpus here would duplicate the same game-derived textures globally.
     for stem, path in sorted(prop_paths.items()):
         if not path.is_file():
             raise OfflineExportFailure(
                 f"{path} is missing; the character sources did not complete"
             )
-        for material, uri in sorted(eskm.materials(eskm.read(path)).items()):
-            if not uri:
-                continue
-            name = asset_names.texture_asset_name(uri)
-            # A prop's uri is relative to its own container; the table states npc-relative paths.
-            entry = textures.setdefault(name, {"uri": f"animated_props/{uri}", "used_by": []})
-            key = f"prop:{stem}"
-            if key not in entry["used_by"]:
-                entry["used_by"].append(key)
-            bindings.setdefault(key, {})[material] = name
+        eskm.read(path)  # validate the container while walking the declared corpus
 
     partition = character_partition.build_partition(
         model_trees, bank_trees, corpus_fingerprint=corpus.hexdigest()

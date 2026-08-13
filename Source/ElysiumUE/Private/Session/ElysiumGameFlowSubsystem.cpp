@@ -131,13 +131,13 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.newgame"),
 		TEXT("elysium.newgame [clan] [m|f] [entry] — seed a new story context and enter it. Defaults "
-			"to Tremere male at sp_tutorial_1's tutorial landmark; clan = a name (brujah..ventrue) or "
-			"the 2..8 script encoding; entry = story|tutorial|<map>[@<landmark>]"),
+			"to a female Malkavian with a complete starting sheet at sp_tutorial_1's tutorial landmark; "
+			"clan = a name (brujah..ventrue) or the 2..8 script encoding; "
+			"entry = story|tutorial|<map>[@<landmark>]"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
-			FElysiumNewGameRequest Request;
-			Request.Clan = FElysiumSheet::ClanFromName(TEXT("Tremere"));
-			Request.EntryPoint = TEXT("tutorial");
+			FElysiumNewGameRequest Request =
+				ElysiumStory::MakeMockCharacterRequest(TEXT("tutorial"));
 			if (Args.Num() > 0)
 			{
 				const int32 Parsed = FElysiumSheet::ClanFromName(Args[0]);
@@ -148,9 +148,19 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 							"toreador|tremere|ventrue, or 2..8) — using Brujah"), *Args[0]);
 				}
 				Request.Clan = (Parsed == 0) ? 2 : Parsed;
+				// The complete allocation is authored for the Malkavian History-adjusted order and
+				// clan disciplines. An explicit different clan asks for identity only, preserving
+				// the command's existing override without pretending those dots are portable.
+				if (Request.Clan != FElysiumSheet::ClanFromName(TEXT("Malkavian")))
+				{
+					Request.HistoryId = INDEX_NONE;
+					Request.Spends.Reset();
+				}
 			}
-			// Anything but an explicit f/female stays male, matching the sheet default.
-			Request.bMale = !(Args.Num() > 1 && Args[1].StartsWith(TEXT("f"), ESearchCase::IgnoreCase));
+			if (Args.Num() > 1)
+			{
+				Request.bMale = !Args[1].StartsWith(TEXT("f"), ESearchCase::IgnoreCase);
+			}
 			if (Args.Num() > 2)
 			{
 				Request.EntryPoint = Args[2];
@@ -475,14 +485,13 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 		break;
 
 	case EBootKind::DevMap:
-		// Chargen is not built yet (9.4), so seed a mock character the way New Game seeds its
-		// initial game data — clan Tremere, male. This binds the player sheet the dialogue gates
-		// read (`IsClan(pc,…)`, `pc.base_*`), sets Story_State=-4/Tut_Jack=0/Tut_Patch=0, and seeds
-		// Linux_Wine=1 (which also keeps the tutorial's `linux_check` popup down). BeginNewGame only
-		// seeds state — it does not travel — so the bare load below still runs.
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		// A bare dev map still needs the same complete mock sheet that the named New Game entries
+		// carry so dialogue, clan variants, disciplines and skill gates see one consistent player.
+		// SeedNewGameState does not travel, so the bare load below remains bare.
+		if (!SeedNewGameState(ElysiumStory::MakeMockCharacterRequest(FString())))
 		{
-			GameState->BeginNewGame(FElysiumSheet::ClanFromName(TEXT("Tremere")), /*bMale*/ true);
+			UE_LOG(LogElysiumFlow, Error, TEXT("dev-map boot could not seed the mock character"));
+			break;
 		}
 		if (Maps->Travel(BootMap))
 		{
@@ -558,16 +567,39 @@ void UElysiumGameFlowSubsystem::SetSkipIntro(bool bSkip)
 
 namespace ElysiumStory
 {
-	FElysiumNewGameRequest MakeNewGameRequest(const FElysiumNewGameEntry& Entry)
+	FElysiumNewGameRequest MakeMockCharacterRequest(
+		const FString& EntryPoint, bool bReplayEntryMap)
 	{
 		FElysiumNewGameRequest Request;
-		// A row naming no clan asks, which is what NewGame reads 0 as. A row naming one the sheet does
-		// not know is a table bug and reads the same way rather than substituting a different vampire.
-		Request.Clan = (Entry.Clan != nullptr) ? FElysiumSheet::ClanFromName(Entry.Clan) : 0;
-		Request.bMale = Entry.bMale;
-		Request.EntryPoint = (Entry.EntryPoint != nullptr) ? Entry.EntryPoint : FString();
-		Request.bReplayEntryMap = Entry.bReplayEntryMap;
+		Request.Clan = FElysiumSheet::ClanFromName(TEXT("Malkavian"));
+		Request.bMale = false;
+		// histories000.txt row 9, female-only: swaps Malkavian's attribute order to
+		// Physical / Mental / Social so all three authored attribute dots have enabled rows to buy.
+		Request.HistoryId = 9;   // Gymnast-turned-Stripper (displayed as Ex-Gymnast-Stripper)
+		Request.EntryPoint = EntryPoint;
+		Request.bReplayEntryMap = bReplayEntryMap;
+
+		// The History-adjusted order is Physical / Mental / Social; Malkavian's ability order remains
+		// Knowledges / Skills / Talents. Spend the resulting 2/1/0 attribute, 3/2/1 ability and one
+		// discipline dots on a useful agile, cerebral, stealth-capable spread. Values are dots above
+		// the authored Malkavian_CharGen baseline, and NewGame applies them through ElysiumChargen::Buy.
+		Request.Spends.Add(TEXT("Dexterity"), 1);
+		Request.Spends.Add(TEXT("Stamina"), 1);
+		Request.Spends.Add(TEXT("Perception"), 1);
+		Request.Spends.Add(TEXT("Computer"), 2);
+		Request.Spends.Add(TEXT("Investigation"), 1);
+		Request.Spends.Add(TEXT("Stealth"), 1);
+		Request.Spends.Add(TEXT("Firearms"), 1);
+		Request.Spends.Add(TEXT("Dodge"), 1);
+		Request.Spends.Add(TEXT("Dementation"), 1);
 		return Request;
+	}
+
+	FElysiumNewGameRequest MakeNewGameRequest(const FElysiumNewGameEntry& Entry)
+	{
+		return MakeMockCharacterRequest(
+			(Entry.EntryPoint != nullptr) ? FString(Entry.EntryPoint) : FString(),
+			Entry.bReplayEntryMap);
 	}
 
 	bool ResolveIntroSkip(bool bSkip, FString& Map, FString& Landmark,
@@ -601,38 +633,27 @@ namespace ElysiumStory
 	}
 }
 
-bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
+bool UElysiumGameFlowSubsystem::SeedNewGameState(const FElysiumNewGameRequest& Request)
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
 	UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
-	if (!Maps || !GameState)
+	if (!GameState)
 	{
+		UE_LOG(LogElysiumFlow, Error, TEXT("New Game: no game-state subsystem; session was not seeded"));
 		return false;
 	}
 
-	FString Map;
-	FString Landmark;
-	if (!ResolveEntryPoint(Request.EntryPoint, Map, Landmark))
+	int32 Clan = Request.Clan;
+	if (Clan == 0)
 	{
-		UE_LOG(LogElysiumFlow, Warning, TEXT("New Game: cannot resolve entry point '%s'"), *Request.EntryPoint);
-		return false;
+		Clan = FElysiumSheet::ClanFromName(TEXT("Brujah"));
 	}
-
-	// Check the destination before touching the session. BeginNewGame is destructive — it clears
-	// `G`, the quests, the snapshots, the sheet and the clock, and disclaims the running world — so a
-	// New Game that cannot travel must not have thrown the current run away on the way to failing.
-	// This is Travel's own precondition (an export beside a baked level), asked in advance.
-	if (!Maps->ExportedMaps().Contains(Map))
+	else if (!FElysiumSheet::IsValidClan(Clan))
 	{
 		UE_LOG(LogElysiumFlow, Warning,
-			TEXT("New Game: entry map '%s' is not exported+baked — session left untouched"), *Map);
-		return false;
+			TEXT("New Game: invalid clan %d — using Brujah"), Clan);
+		Clan = FElysiumSheet::ClanFromName(TEXT("Brujah"));
 	}
-
-	// Clan 0 means "ask". Seed a valid pre-chargen Brujah player; the genesis wizard edits that
-	// existing player and overwrites the clan/sex when it commits.
-	const int32 Clan = (Request.Clan == 0) ? 2 : Request.Clan;
 
 	// BeginNewGame clears `G`, the quest map, the snapshots, the sheet and the clock, then writes the
 	// flags that survive retail's intro chain. It does not travel.
@@ -674,19 +695,69 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 			int32 Slot = INDEX_NONE;
 			if (!ElysiumFindSheetSlot(*Spend.Key.ToString(), Container, Slot))
 			{
+				UE_LOG(LogElysiumFlow, Warning,
+					TEXT("New Game: chargen spend '%s' does not name a character-sheet trait"),
+					*Spend.Key.ToString());
 				++Refused;
 				continue;
 			}
 			for (int32 i = 0; i < Spend.Value; ++i)
 			{
-				if (ElysiumChargen::Buy(Chargen, Rules, Container, Slot)) { ++Applied; }
-				else { ++Refused; break; }
+				if (ElysiumChargen::Buy(Chargen, Rules, Container, Slot))
+				{
+					++Applied;
+				}
+				else
+				{
+					UE_LOG(LogElysiumFlow, Warning,
+						TEXT("New Game: chargen refused dot %d of %d for '%s'"),
+						i + 1, Spend.Value, *Spend.Key.ToString());
+					++Refused;
+					break;
+				}
 			}
 		}
 		GameState->CommitChargen(Chargen);
 		UE_LOG(LogElysiumFlow, Log,
 			TEXT("New Game: history %d applied, %d chargen dot(s) bought, %d refused"),
 			Request.HistoryId, Applied, Refused);
+	}
+	return true;
+}
+
+bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
+{
+	UGameInstance* GI = GetGameInstance();
+	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
+	if (!Maps || !GI || !GI->GetSubsystem<UElysiumGameStateSubsystem>())
+	{
+		UE_LOG(LogElysiumFlow, Error,
+			TEXT("New Game: required map/game-state subsystem is unavailable"));
+		return false;
+	}
+
+	FString Map;
+	FString Landmark;
+	if (!ResolveEntryPoint(Request.EntryPoint, Map, Landmark))
+	{
+		UE_LOG(LogElysiumFlow, Warning, TEXT("New Game: cannot resolve entry point '%s'"), *Request.EntryPoint);
+		return false;
+	}
+
+	// Check the destination before touching the session. Seeding is destructive — it clears `G`,
+	// the quests, the snapshots, the sheet and the clock, and disclaims the running world — so a New
+	// Game that cannot travel must not throw the current run away on the way to failing. This is
+	// Travel's own precondition (an export beside a baked level), asked in advance.
+	if (!Maps->ExportedMaps().Contains(Map))
+	{
+		UE_LOG(LogElysiumFlow, Warning,
+			TEXT("New Game: entry map '%s' is not exported+baked — session left untouched"), *Map);
+		return false;
+	}
+
+	if (!SeedNewGameState(Request))
+	{
+		return false;
 	}
 
 	// A replay entry forgets the destination's stored snapshot so its opening chain fires again. It is

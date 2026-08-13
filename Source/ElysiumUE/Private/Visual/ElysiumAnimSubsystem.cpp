@@ -268,7 +268,9 @@ TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const 
 	FString RelPath = Entry != nullptr ? Entry->Blends : FString();
 	if (RelPath.IsEmpty())
 	{
-		for (const TPair<FString, FElysiumAnimatedPropEntry>& Prop : Loaded.AnimatedProps)
+		const TMap<FString, FElysiumAnimatedPropEntry>& Props =
+			Loaded.PlacedModels.IsEmpty() ? Loaded.AnimatedProps : Loaded.PlacedModels;
+		for (const TPair<FString, FElysiumAnimatedPropEntry>& Prop : Props)
 		{
 			if (Prop.Value.Stem.Equals(Stem, ESearchCase::IgnoreCase))
 			{
@@ -521,7 +523,11 @@ FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem
 {
 	FElysiumAnimationCatalog Catalog;
 	Catalog.Clips = GetClipSet(Stem);
-	Catalog.PropClips = Stem.IsEmpty() ? nullptr : GetIndex().AnimatedProps.Find(Stem);
+	Catalog.PropClips = Stem.IsEmpty() ? nullptr : GetIndex().PlacedModels.Find(Stem);
+	if (Catalog.PropClips == nullptr && !Stem.IsEmpty())
+	{
+		Catalog.PropClips = GetIndex().AnimatedProps.Find(Stem);
+	}
 	// The owning bank is not known until the weighted pick has run, so the table arrives as a lookup
 	// rather than as a preloaded map. The shared pointer lives in this subsystem's session-lifetime
 	// cache, so the raw pointer outlives every resolve that reads it.

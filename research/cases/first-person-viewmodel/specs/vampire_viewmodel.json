@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "topic": "first-person-viewmodel-server",
+  "consuming_documents": [
+    "docs/vtmb/animation_and_movers.md",
+    "docs/vtmb/combat-and-damage.md"
+  ],
+  "research_id": "RE42",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Who creates and owns the two m_hViewModel handles, their models, sequences and active-weapon association?",
+    "Which server boundary commits a ranged shot and reload transaction, and what role does the model event play?"
+  ],
+  "functions": [
+    {"address": "1015d6d0", "label": "player_create_viewmodel", "confidence": "string and body evidence", "role": "create one viewmodel entity per requested slot and store its handle", "depth": 3, "cap": 260},
+    {"address": "1015d680", "label": "player_get_viewmodel", "confidence": "field body evidence", "role": "resolve m_hViewModel slot 0 or 1", "depth": 2, "cap": 120},
+    {"address": "10253280", "label": "weapon_set_viewmodel_index", "confidence": "field body evidence", "role": "write the weapon m_nViewModelIndex slot", "depth": 1, "cap": 80},
+    {"address": "102532a0", "label": "weapon_update_viewmodels", "confidence": "owner and slot call-chain evidence", "role": "apply model, matching sequence and playback rate to the weapon slot and companion slot", "depth": 4, "cap": 420, "asm_count": 2600},
+    {"address": "10238160", "label": "ranged_operator_handle_anim_event", "confidence": "weapon vtable and event range", "role": "route server ranged model events into mode dispatch", "depth": 3, "cap": 320},
+    {"address": "102383b0", "label": "ranged_mode_dispatch", "confidence": "verified input and event callers", "role": "separate attack-start mode from event-mode shot dispatch", "depth": 3, "cap": 380},
+    {"address": "102387b0", "label": "ranged_shot_commit", "confidence": "ranged weapon vtable and ammo/fire-packet body", "role": "commit scheduled ammunition and construct the authoritative fire packet", "depth": 4, "cap": 480, "asm_count": 3200},
+    {"address": "10238230", "label": "ranged_fire_on_empty", "confidence": "ranged weapon vtable", "role": "own dry-fire activity and timer changes", "depth": 3, "cap": 280},
+    {"address": "10239570", "label": "ranged_reload_request", "confidence": "ranged weapon vtable", "role": "select reload activity and enter common reload", "depth": 3, "cap": 300},
+    {"address": "10255050", "label": "weapon_reload_frame", "confidence": "base weapon vtable", "role": "advance bulk or reload_single state", "depth": 3, "cap": 420},
+    {"address": "102552c0", "label": "weapon_reload_finish", "confidence": "reload-frame caller", "role": "commit reserve-to-magazine transaction and repeat reload_single when required", "depth": 3, "cap": 420}
+  ],
+  "field_probes": [
+    {"displacement": "2308", "label": "player_viewmodel_handles", "role": "two-entry m_hViewModel array"},
+    {"displacement": "890", "label": "weapon_viewmodel_index", "role": "slot selecting the weapon viewmodel"},
+    {"displacement": "6f0", "label": "server_viewmodel_sequence", "role": "networked matching sequence"},
+    {"displacement": "6f4", "label": "server_viewmodel_playback_rate", "role": "viewmodel playback-rate state"},
+    {"displacement": "74c", "label": "weapon_loaded_ammo", "role": "loaded ammunition snapshot at shot and reload boundaries"}
+  ],
+  "relationships": [
+    {"from": "102532a0", "to": "1015d680", "confidence": "verified", "evidence": "weapon update resolves its selected slot and companion slot 1"},
+    {"from": "10238160", "to": "102383b0", "confidence": "verified", "evidence": "events 3030 through 3044 enter event-mode dispatch"},
+    {"from": "102383b0", "to": "102387b0", "confidence": "verified", "evidence": "event mode invokes the ranged shot virtual"},
+    {"from": "10255050", "to": "102552c0", "confidence": "verified", "evidence": "reload completion invokes the ammunition transaction"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The player owns two independent server viewmodel entities in m_hViewModel[2], while the active weapon selects which slot receives its model and drives matching sequence and playback-rate writes on both slots.",
+      "evidence": "player_create_viewmodel 0x1015d6d0 creates class viewmodel and stores its EHANDLE at player+0x2308+slot*4; weapon_update_viewmodels 0x102532a0 resolves the selected slot and slot 1 separately and writes model, sequence and playback rate on each.",
+      "consequence": "Hands and weapon are not one combined model or one mesh component; a reproduction needs two visual instances synchronized by one semantic intent."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A server animation event is a routing trigger, not the gameplay shot transaction; ranged weapon logic commits the shot after the event re-enters mode dispatch.",
+      "evidence": "ranged_operator_handle_anim_event 0x10238160 routes 3030..3044 to ranged_mode_dispatch 0x102383b0, whose event arm invokes ranged_shot_commit 0x102387b0; that body clamps due shots, spends Ammo_Cost and constructs the fire packet.",
+      "consequence": "A client viewmodel event and muzzle flash cannot own ammunition or damage authority."
+    }
+  ]
+}

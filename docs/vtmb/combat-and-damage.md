@@ -181,7 +181,7 @@ mode. `BurstMin` and `BurstMax` are loaded and the loader forces `BurstMin <= Bu
 player-side combo/burst queue was found in this shared input-to-shot path. Their exact player/NPC
 consumer boundary remains open.
 
-### Animation owns the shot moment
+### Animation schedules the shot moment; weapon logic commits it
 
 An accepted attack does not trace directly from the input function. `CWeaponRanged::Attack`
 (`0x10238580`) first rejects or reloads an empty magazine, selects the current firing activity,
@@ -194,18 +194,26 @@ then supplies the exact weighted sequence.
 
 The attack start also advances the weapon's next-shot schedule by authored `Attack_Rate` (scaled
 by the owner's attack-speed value) and counts every shot interval due by the current frame. The
-actual ballistic/projectile consumer is `CWeaponRanged::Shot` (`0x102387B0`), reached when
-`CWeaponRanged::HandleAnimEvent` (`0x10238160`) receives one of its ranged-attack event ids and
-re-enters mode dispatch in event mode. Thus the faithful order is:
+actual ballistic/projectile consumer is `CWeaponRanged::Shot` (`0x102387B0`).
+`CWeaponRanged::HandleAnimEvent` (`0x10238160`) accepts ranged event ids 3030–3044 and re-enters
+`ModeDispatch` `0x102383B0` in event mode; that arm calls the weapon's shot virtual. The server
+sequence event therefore chooses the authored instant but does not itself spend ammunition or
+apply damage. `Shot` is the authoritative boundary: it clamps due shots to the loaded magazine,
+spends `Ammo_Cost` and constructs the fire packet. Client `C_BaseViewModel::FireEvent`
+`0x100AB530` runs independently on the presentation copy, offering the event to the client weapon
+before its attachment-effect fallback; it has no ammunition, ray or damage path. Thus the faithful
+order is:
 
 ```text
 attack / attack2 intent
     -> authored mode dispatch and next-attack eligibility
     -> PLAYER_ATTACK1 / ACT_RANGE_ATTACK1_LAYER
     -> weapon activity translation and weighted sequence
-    -> sequence attack event
-    -> CWeaponRanged::Shot
+    -> server sequence attack event -> event-mode dispatch
+    -> CWeaponRanged::Shot (ammunition/fire-packet commit)
     -> rays or projectile, impact grouping and damage
+
+networked client sequence -> client viewmodel event -> attachment effects only
 ```
 
 The hash-closed male and female `move_and_ranged.mdl` banks independently contain aim, ordinary
@@ -259,6 +267,11 @@ path. With `reload_single`, the frame handler instead adds one round, removes on
 and re-enters reload until interrupted, full or out of reserve. The patch-first M37 declares
 `reload_single 1`. Fire intent while a single-round reload is live sets an interruption latch;
 the reload frame finishes the transaction before normal firing resumes.
+
+The corresponding viewmodel reload events are visual carriers only. The server order is reload
+request/activity selection → common reload frame → `0x102552C0` reserve-to-magazine commit; for
+`reload_single`, the frame returns to the per-round reload state after each commit. A magazine or
+shell event on either client viewmodel cannot advance that transaction.
 
 ### Damage and reaction boundary
 

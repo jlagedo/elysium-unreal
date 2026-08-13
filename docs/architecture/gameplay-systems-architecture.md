@@ -673,8 +673,8 @@ in the command registry. Roadmap 13.2 / P13.
   `OnSkillAttemptBegin/Cycle/Success/Fail/Botch`. The generic botch output remains declared but is
   unreachable from the normal `skilltype` 1/2 path because that caller hard-codes `doRoll=false`.
 - Lock leaves: `item_container_lock` (with `delete_key` policy against §5.2's keyring),
-  `prop_padlock`, and the doorknob families' lock halves — today body-only rows in
-  `BuildPropBodyClass`, re-registered onto this base with their use/lock icon state.
+  `prop_padlock`, and the doorknob families share this base, own their use/lock/key icons and
+  forward an accepted transaction to one attached door or container owner.
 - `FElysiumTerminal : FElysiumSkillEntity` — the exclusive session (one current user,
   `m_bInUse` separate from `start_enabled` separate from `StartHidden`), entry/exit through
   the ordinary `+use` focus path, and the authoritative `hackcmd` command surface.
@@ -691,9 +691,8 @@ in the command registry. Roadmap 13.2 / P13.
   reproduce. The view contract, camera/surface projection, keyboard path and semantic controller
   action palette are owned by `docs/architecture/computer-terminal-architecture.md`.
 
-**Refactor:** new `Substrate/ElysiumSkillClasses.{h,cpp}`; the `prop_hacking` /
-`item_container_lock` / `prop_padlock` rows leave `BuildPropBodyClass` and
-`ElysiumStubClasses.cpp`. The tutorial's `tuthack` chain (typed or controller-selected `Unlock` →
+**Refactor:** `prop_hacking` leaves the model-only prop table for `FElysiumTerminal` /
+`FElysiumPropHacking`. The tutorial's `tuthack` chain (typed or controller-selected `Unlock` →
 `OnTrigger0` → safe lock/visibility/trigger state) is the acceptance transaction. Owned by the
 tutorial-mechanics lane at 13.4.
 
@@ -728,7 +727,7 @@ roadmap task:
 | 8 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 10.7 |
 | 9 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence/feed states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 10.7 |
 | 10 | Discipline runtime (active events on the one queue + `DisciplineTgt` interpreter); `FElysiumSheetEffects::FRow` payload operators; retire `ClearActiveDisciplines`/frenzy pending inputs as each lands | new `Substrate/ElysiumDisciplines.{h,cpp}`, `Substrate/ElysiumSheetMath.{h,cpp}` | 13.2 |
-| 11 | `FElysiumSkillEntity`/`FElysiumTerminal`/`FElysiumPropHacking`; locks and terminals leave the body-only table | new `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
+| 11 | `FElysiumTerminal`/`FElysiumPropHacking`; terminals leave the model-only prop table | `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
 | 12 | Stealth scalars + `trigger_stealth_mod` into the senses service; sneak posture into the view state | rulebook, `ElysiumNpcMind`, movement | 13.1 |
 | 13 | A runtime prop `SetModel` derives its stem with `PropModelStem`, not the basename (the same defect the item side fixed) | `Substrate/ElysiumPropClasses.cpp` | props lane |
 | 14 | Carry authored MDL animation events through the character bake so `OnFeedAnimEvent` (and future combat events) bind real notifies instead of the scheduler | pipeline character export/bake, `UElysiumAnimSubsystem` | animation lane |

@@ -87,7 +87,7 @@ def source_path(stem, bank=False):
 
 
 def prop_source_path(stem):
-    return os.path.join(NPC_DIR, "animated_props", stem + ".eskm")
+    return os.path.join(NPC_DIR, "placed_models", stem + ".eskm")
 
 
 def prop_package(stem):
@@ -96,7 +96,7 @@ def prop_package(stem):
 
 
 def bake_props(manifest, library, failed, plan, textures):
-    """One skeleton, one mesh and one clip set per animated prop.
+    """One skeleton, one mesh and one selected clip set per placed model.
 
     A prop takes the same container and the same builders a body does -- it IS a skeletal model,
     and the only thing that ever made it a separate path was the loader it went through. What
@@ -104,7 +104,7 @@ def bake_props(manifest, library, failed, plan, textures):
     instead of a rig family's, and nothing declares compatibility with it.
 
     Returns the number of props baked."""
-    props = manifest.get("animated_props", {})
+    props = manifest.get("placed_models", {})
     if not props:
         return 0
     bl.ensure_dir(PROPS)
@@ -114,7 +114,7 @@ def bake_props(manifest, library, failed, plan, textures):
             continue
         path = prop_source_path(stem)
         if not os.path.isfile(path):
-            fail("no .eskm for animated prop %s (run: uv run elysium export characters)" % stem)
+            fail("no .eskm for placed model %s (run: uv run elysium export characters)" % stem)
             failed.append(stem)
             continue
         package = prop_package(stem)
@@ -127,17 +127,13 @@ def bake_props(manifest, library, failed, plan, textures):
             continue
 
         blob = eskm.read(path)
-        bindings = material_bindings(blob, textures)
-        # A slot that names an albedo but resolves to nothing binds no texture and the prop draws
-        # white, which reads as a material authoring choice rather than as a missing import.
-        unbound = [m for m, uri in eskm.materials(blob).items() if uri and m not in bindings]
-        if unbound:
-            fail("prop %s: no imported texture for %s" % (stem, ", ".join(sorted(unbound))))
-            failed.append(stem)
-            continue
+        # The skeletal asset preserves slot names but uses the neutral body master. A live or
+        # GAME_LUMP placement copies the already-baked map material into those slots, avoiding a
+        # second global import of the complete prop texture corpus.
+        bindings = {}
         error = library.build_skeletal_mesh_from_source(
             path, "%s/SK_%s" % (package, stem), skeleton_package,
-            BODY_MASTER, MATERIALS, bindings, {})
+            BODY_MASTER, "", bindings, {})
         if error:
             fail("prop SK_%s: %s" % (stem, error))
             failed.append(stem)
@@ -511,10 +507,8 @@ def main():
     # Props draw from the same texture corpus as the cast -- `gallerynoir` and `zodiac` are wall
     # art, `palmtree` is scenery -- so their containers seed the import beside the bodies rather
     # than importing a second set under different names.
-    prop_stems = sorted(manifest.get("animated_props", {}))
+    prop_stems = sorted(manifest.get("placed_models", {}))
     texture_sources = [source_path(stem) for stem in stems]
-    texture_sources += [prop_source_path(stem) for stem in prop_stems
-                        if os.path.isfile(prop_source_path(stem))]
     textures = (import_textures_for(texture_sources)
                 if wants(plan, "_global", "textures") else existing_textures())
 

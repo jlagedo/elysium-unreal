@@ -51,6 +51,7 @@ from elysium_pipeline.formats import install, kv, mdl, mdl_gltf
 from elysium_pipeline.exporters import UE_mdl_cloth, UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel as S
 from elysium_pipeline.paths import export_root
+from elysium_pipeline import placed_models as PM
 from elysium_pipeline.exporters.source_warnings import (
     animated_prop_warning,
     missing_npc_warning,
@@ -68,7 +69,8 @@ PROCEDURAL_DIR = os.path.join(NPC_DIR, "procedural")
 BLENDS_DIR = os.path.join(NPC_DIR, "blends")
 GARMENT_DIR = os.path.join(NPC_DIR, "garment")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
-MANIFEST_VERSION = 6
+PLACED_MODEL_DIR = os.path.join(NPC_DIR, "placed_models")
+MANIFEST_VERSION = 7
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -427,7 +429,7 @@ def write_blends(stem, model, table, prefix=""):
 
 
 def animated_prop_index_row(rec):
-    """One animated-prop manifest record projected into the runtime index (v6).
+    """One placed-model manifest record projected into the v6-compatible runtime row.
 
     `clips` becomes the model's own sequence table in DECLARATION ORDER with the selection keys
     beside each label, and each row carries its ordinal explicitly. Order is semantic: retail's
@@ -459,6 +461,18 @@ def animated_prop_index_row(rec):
     }
 
 
+def placed_model_index_row(rec):
+    """The v7 complete placed-model row, retaining declaration order and bake policy."""
+    row = animated_prop_index_row(rec)
+    row.update({
+        "static_stem": rec.get("static_stem", rec.get("stem", "")),
+        "clip_mode": rec.get("clip_mode", "rest"),
+        "rest_candidates": list(rec.get("rest_candidates", [])),
+        "static_equivalent": bool(rec.get("static_equivalent", False)),
+    })
+    return row
+
+
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
@@ -482,8 +496,8 @@ def write_sidecars(manifest):
                 "clips/<stem>.json, a flex rig in facial/<stem>.json, an eyeball pair in "
                 "eyes/<stem>.json, a procedural bone rule table in procedural/<stem>.json and "
                 "a blend-grid table in blends/<stem>.json. Those paths, like the bank glb "
-                "paths, are relative to this file's directory. animated_props carry their "
-                "whole clip vocabulary inline, in the model's own sequence-declaration order.",
+                "paths, are relative to this file's directory. placed_models carry their "
+                "baked clip vocabulary inline, in the model's own sequence-declaration order.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
@@ -511,7 +525,7 @@ def write_sidecars(manifest):
         # v4 — skeletal prop models selected by prop_dynamic. Version 3 readers see no field;
         # version 4 readers get the GLB plus the exact baked clip inventory.
         #
-        # v6 — `clips` carries the model's own sequence table in DECLARATION ORDER, with the
+        # `clips` carries the emitted sequence table in DECLARATION ORDER, with the
         # selection keys beside each label. Order is semantic, not presentation: retail's
         # CBaseProp::Spawn stands a prop on SelectWeightedSequence(ACT_IDLE) and falls back to
         # sequence **index 0**, so the first entry is the rest pose for the 16 of 19 models that
@@ -522,6 +536,10 @@ def write_sidecars(manifest):
         # the stem namespace props already share with NPCs, where a collision aliases a rig.
         "animated_props": {stem: animated_prop_index_row(rec)
                            for stem, rec in manifest.get("animated_props", {}).items()},
+        # v7 — every non-character MDL placed by .ents or GAME_LUMP. A row either carries all
+        # clips because gameplay names them, or only the possible authored resting clips.
+        "placed_models": {stem: placed_model_index_row(rec)
+                          for stem, rec in manifest.get("placed_models", {}).items()},
         "warnings": manifest.get("warnings", []),
     }
     with open(INDEX, "w", encoding="utf-8") as f:
@@ -581,6 +599,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         pc_models = set(pc_models_from_clandoc())
         cinematics = cinematic_models_from_ents()
         animated_props = animated_prop_models_from_ents()
+        placed_uses = PM.discover(OUT, idx)
         # A model with no sequence has no authored pose for the animation layer to select. A
         # single-frame sequence does and stays skeletal: frame count is not a bind-pose licence.
         still = [m for m in animated_props
@@ -592,10 +611,11 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
               f"{len(pc_models)} player body model(s) from {CLANDOC} + "
               f"{len(cinematics)} cinematic anim-set(s) + "
-              f"{len(animated_props)} animated prop model(s)")
+              f"{len(placed_uses)} placed model(s) "
+              f"({sum(use.full_clips for use in placed_uses)} full-clip)")
         seed = sorted(set(from_ents) | pc_models)
     else:
-        seed, pc_models, cinematics, animated_props = only, set(), [], []
+        seed, pc_models, cinematics, animated_props, placed_uses = only, set(), [], [], []
 
     npcs = [m for m in seed if load_mdl(m) is not None]
     missing = [m for m in seed if load_mdl(m) is None]
@@ -607,7 +627,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         else:
             print(f"  ! {m}: no .mdl in install - skipped")
             failures.append(f"missing model: {m}")
-    if not npcs and not cinematics and not animated_props:
+    if not npcs and not cinematics and not placed_uses:
         message = "[npc] no character, cinematic, or animated-prop models to export"
         print(message)
         if strict:
@@ -725,26 +745,51 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         procedural_faults.extend((info["stem"], f) for f in info["procedural_faults"])
         eye_faults.extend((info["stem"], f) for f in info["eye_faults"])
 
-    # Skeletal prop GLBs are intentionally separate from NPCs: prop_dynamic selects them only when
-    # this index promises an animated representation, while ordinary props retain their baked
-    # Nanite/static path. Props own their clips directly; no NPC include-bank vocabulary is needed.
-    animated_prop_index = {}
+    # Every placed non-character MDL is a native skeletal model. Models reached by an authored
+    # animation request retain their complete vocabulary; ordinary dressing carries only the
+    # possible resting clips. GAME_LUMP may keep a static actor only when every such pose was
+    # proven equivalent to storage geometry.
+    placed_model_index = {}
     static_fallbacks = static_model_fallbacks_from_ents()
-    if animated_props:
-        os.makedirs(ANIMATED_PROP_DIR, exist_ok=True)
-        print(f"[npc] exporting {len(animated_props)} animated prop model(s) -> "
-              f"{ANIMATED_PROP_DIR}/ ...", flush=True)
-    prop_counts = Counter(_basename_stem(m) for m in animated_props)
-    for model in animated_props:
+    if placed_uses:
+        os.makedirs(PLACED_MODEL_DIR, exist_ok=True)
+        print(f"[npc] indexing {len(placed_uses)} placed model(s) -> "
+              f"{PLACED_MODEL_DIR}/ ...", flush=True)
+    for use in placed_uses:
+        model, stem = use.model, use.stem
         if load_mdl(model) is None:
-            print(f"  ! animated prop {model}: no .mdl in install - skipped")
-            failures.append(f"missing animated prop model: {model}")
+            print(f"  ! placed model {model}: no .mdl in install - skipped")
+            failures.append(f"missing placed model: {model}")
             continue
-        stem = (_basename_stem(model) if prop_counts[_basename_stem(model)] == 1
-                else bank_stem(model))
         try:
-            info = mdl_gltf.export_npc(idx, model, ANIMATED_PROP_DIR, stem, anorms=None,
-                                       measure_extents=True)
+            d, v = mdl.load(idx, model)
+            bones = S.read_bones(d)
+            sequences = S.local_sequences(d)
+            candidates = PM.rest_candidates(sequences)
+            if not candidates:
+                raise ValueError("model declares no sequence 0 resting pose")
+            selected = sequences if use.full_clips else candidates
+
+            # Keep the legacy inspection GLB only for the compact set gameplay can animate. The
+            # runtime never reads it; rest-only models go straight from MDL to ESKM.
+            if use.full_clips:
+                info = mdl_gltf.export_npc(idx, model, PLACED_MODEL_DIR, stem, anorms=None,
+                                           measure_extents=True)
+                baked_by_name = {clip.label: clip for clip in info["clips"]}
+                candidate_names = {clip.label for clip in candidates}
+                selected = [baked_by_name.get(clip.label, clip) for clip in selected
+                            if clip.label in baked_by_name or clip.label in candidate_names]
+                rules = info["procedural"]
+                rule_faults = info["procedural_faults"]
+                blends = info["blends"]
+                glb = "placed_models/" + info["glb"]
+                extents = info["clip_extents"]
+            else:
+                rules, rule_faults = S.axis_interp_records(d, bones)
+                blends = {}
+                glb = ""
+                extents = {clip.label: S.clip_extent(d, bones, clip.base, clip.frames)
+                           for clip in selected}
         except (Exception, SystemExit) as e:
             warning = animated_prop_warning(
                 model,
@@ -758,31 +803,47 @@ def main(only=None, *, index=None, integrate=False, strict=False):
                     f"{warning['fallback']} ({warning['detail']})"
                 )
             else:
-                print(f"  !! animated prop {stem} FAILED: {e}")
-                failures.append(f"animated prop {stem}: {e}")
+                print(f"  !! placed model {stem} FAILED: {e}")
+                failures.append(f"placed model {stem}: {e}")
             continue
-        # A cinematic prop is animated in place: nothing moves its component, so its render
-        # bound has to come from the clip rather than from the reference pose the mesh carries.
+
         prop_clips = {}
-        for c in info["clips"]:
-            measured = info["clip_extents"].get(c.label, 0.0)
+        for c in selected:
+            measured = extents.get(c.label, 0.0)
             if authored_radius_m(c) < measured - 1e-4:
                 print(f"  ! {stem}: clip '{c.label}' declares r={authored_radius_m(c):.3f} m "
                       f"but bakes out to {measured:.3f} m - using the baked extent")
             prop_clips[c.label] = _clip_meta(c, clip_bounds_radius_m(c, measured))
-        animated_prop_index[stem] = {
-            "glb": "animated_props/" + info["glb"],
-            # The container the bake reads. The `.glb` beside it stays an inspection product;
-            # nothing the game loads comes off it.
-            "eskm": "animated_props/%s.eskm" % stem,
-            "model": info["model"],
-            "bones": info["bones"],
-            "split_bones": info["split_bones"],
+        placed_model_index[stem] = {
+            "stem": stem,
+            "glb": glb,
+            "eskm": "placed_models/%s.eskm" % stem,
+            "model": model,
+            "static_stem": stem,
+            "clip_mode": "full" if use.full_clips else "rest",
+            "rest_candidates": [clip.label for clip in candidates],
+            "static_equivalent": PM.rest_pose_static_equivalent(d, v, candidates),
+            "bones": len(bones),
+            "split_bones": [bone.name for bone in bones if bone.flags & 0x2],
             "clips": prop_clips,
-            **write_procedural(stem, info["model"], info["procedural"], "animated_props"),
-            **write_blends(stem, info["model"], info["blends"], "animated_props"),
+            **write_procedural(stem, model, rules, "placed_models"),
+            **write_blends(stem, model, blends, "placed_models"),
         }
-        procedural_faults.extend((stem, f) for f in info["procedural_faults"])
+        procedural_faults.extend((stem, f) for f in rule_faults)
+
+    # v4-v6 readers see the complete-clip subset under the old field. A v7 reader uses
+    # placed_models for every body and never infers static representation from this projection.
+    animated_prop_index = {
+        stem: record for stem, record in placed_model_index.items()
+        if record["clip_mode"] == "full"
+    }
+    covered_models = {record["model"] for record in placed_model_index.values()}
+    missing_placed = sorted(use.model for use in placed_uses if use.model not in covered_models)
+    if missing_placed:
+        raise RuntimeError(
+            "placed-model catalogue incomplete (%d missing): %s" %
+            (len(missing_placed), ", ".join(missing_placed[:8]))
+        )
 
     # Reconcile: a sequence the include tree advertises but whose owner failed to bake (empty
     # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
@@ -834,6 +895,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         "banks": bank_index,
         "cinematics": cinematic_index,
         "animated_props": animated_prop_index,
+        "placed_models": placed_model_index,
         "warnings": warnings,
     }
 
@@ -848,7 +910,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             raise RuntimeError(
                 f"cannot integrate into NPC manifest v{version}; expected v{MANIFEST_VERSION}"
             )
-        for key in ("npcs", "banks", "cinematics", "animated_props"):
+        for key in ("npcs", "banks", "cinematics", "animated_props", "placed_models"):
             merged = dict(previous.get(key, {}))
             merged.update(manifest.get(key, {}))
             manifest[key] = merged

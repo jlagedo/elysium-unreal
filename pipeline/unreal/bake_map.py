@@ -28,7 +28,7 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
-from elysium_pipeline import bake_cache  # noqa: E402
+from elysium_pipeline import bake_cache, placed_models as PM  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.tasking import ContentDigestCache  # noqa: E402
 
@@ -1481,14 +1481,22 @@ class Bake(object):
 
     def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0),
                      world_fog=None, sky_fog=None):
-        """One StaticMeshActor per .props line: `stem x y z qx qy qz qw solid [skin [sky]]`."""
+        """Place GAME_LUMP props in storage-equivalent static or authored-rest form."""
         path = os.path.join(self.dir, "%s.props" % self.map)
         if not os.path.isfile(path):
             return 0, 0
-        placed = skinned = sky_placed = 0
+        placed = skinned = sky_placed = skeletal_placed = 0
         cache = {}
+        index_path = os.path.join(OUT_ROOT, "npc", "npc_index.json")
+        placed_index = {}
+        index_version = 0
+        if os.path.isfile(index_path):
+            with open(index_path, "r", encoding="utf-8") as index_handle:
+                index_doc = json.load(index_handle)
+            index_version = int(index_doc.get("manifest_version", 0))
+            placed_index = index_doc.get("placed_models", {})
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
-            for line in handle:
+            for placement_token, line in enumerate(handle):
                 tok = line.split()
                 if len(tok) < 9:
                     continue
@@ -1499,6 +1507,8 @@ class Bake(object):
                         "%s/SM_%s" % (self.prop_pkg, bl.safe_name(stem)))
                     cache[stem] = mesh
                 if not mesh:
+                    if index_version >= 7:
+                        raise RuntimeError("GAME_LUMP model %s has no baked static material/collision mesh" % stem)
                     continue
                 # Field 11 marks a prop inside the 3D-skybox miniature: it is placed under the
                 # same transform the sky world meshes take, `world(v) = scale * (v - origin)`,
@@ -1510,16 +1520,49 @@ class Bake(object):
                 location = unreal.Vector(*pos)
                 rotation = unreal.Quat(float(tok[4]), float(tok[5]),
                                        float(tok[6]), float(tok[7])).rotator()
-                actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, location, rotation)
+                # Field 0 is the map export's legacy OBJ/static-mesh stem.  The v7 catalogue is
+                # intentionally keyed by the normalized full model-path stem, which field 11
+                # carries without loss.  Keep the two identities separate: the legacy stem owns
+                # this map's material/collision mesh; the path stem owns the shared skeletal body.
+                model_path = tok[11] if len(tok) >= 12 else ""
+                catalogue_stem = PM.model_stem(model_path) if model_path else stem
+                record = placed_index.get(catalogue_stem) if index_version >= 7 else None
+                if index_version >= 7 and record is None:
+                    raise RuntimeError("GAME_LUMP model %s (%s) is absent from npc_index v7" %
+                                       (stem, catalogue_stem))
+                use_skeletal = bool(record and not record.get("static_equivalent", False))
+                actor_class = unreal.ElysiumPlacedModelActor if use_skeletal else unreal.StaticMeshActor
+                actor = actors.spawn_actor_from_class(actor_class, location, rotation)
                 if not actor:
                     continue
-                component = actor.static_mesh_component
-                component.set_static_mesh(mesh)
+                if use_skeletal:
+                    model_path = record.get("model", model_path)
+                    rest = PM.select_rest_label(model_path, record, placement_token)
+                    skel = unreal.EditorAssetLibrary.load_asset(
+                        "/ElysiumBaked/Props/%s/SK_%s" %
+                        (catalogue_stem, catalogue_stem))
+                    anim = unreal.EditorAssetLibrary.load_asset(
+                        "/ElysiumBaked/Props/%s/A_%s" %
+                        (catalogue_stem, bl.safe_name(rest)))
+                    if not skel or not anim or not rest:
+                        raise RuntimeError("GAME_LUMP model %s has no baked rest asset '%s'" %
+                                           (stem, rest))
+                    solid = int(tok[8]) != 0 and not is_sky
+                    if not actor.configure_rest(skel, anim, mesh, solid):
+                        raise RuntimeError("GAME_LUMP model %s refused rest configuration" % stem)
+                    component = actor.skeletal_visual
+                    proxy = actor.collision_proxy
+                    proxy.set_collision_profile_name(PROFILE_PROP_SOLID if solid else PROFILE_PICK_ONLY)
+                    skeletal_placed += 1
+                else:
+                    component = actor.static_mesh_component
+                    component.set_static_mesh(mesh)
                 # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
                 # A miniature prop is never solid whatever it says -- it is scenery the player can
                 # never reach, and at 16x it would wall off the map.
-                component.set_collision_profile_name(
-                    PROFILE_PROP_SOLID if (int(tok[8]) != 0 and not is_sky) else PROFILE_PICK_ONLY)
+                if not use_skeletal:
+                    component.set_collision_profile_name(
+                        PROFILE_PROP_SOLID if (int(tok[8]) != 0 and not is_sky) else PROFILE_PICK_ONLY)
                 # Field 10 (DStaticPropV4.skin) names an alternate skin family. A GAME_LUMP prop is
                 # not an entity and never changes skin, so the remap is baked into the placement as
                 # material overrides rather than costing anything at runtime. Older 9-field exports
@@ -1542,6 +1585,8 @@ class Bake(object):
                 placed += 1
         if skinned:
             log("level: %d static props on an alternate skin" % skinned)
+        if skeletal_placed:
+            log("level: %d GAME_LUMP props held on authored skeletal rest poses" % skeletal_placed)
         return placed, sky_placed
 
     def _apply_prop_skin(self, component, mesh, stem, family):

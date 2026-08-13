@@ -73,6 +73,13 @@ struct FElysiumUseBeginResult
 		Result.SessionKind = Kind;
 		return Result;
 	}
+
+	static FElysiumUseBeginResult Refused(EElysiumUseOutcome InOutcome)
+	{
+		FElysiumUseBeginResult Result;
+		Result.Outcome = InOutcome;
+		return Result;
+	}
 };
 
 // One geometrically valid embodiment candidate. Entity eligibility remains the substrate's call.

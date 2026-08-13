@@ -147,6 +147,7 @@ public:
 	void InputLock();
 	void InputUnlock();
 	void RegisterDoorknob(FElysiumLockableEntity& Doorknob);
+	void UnregisterDoorknob(const FElysiumEntityHandle& Doorknob);
 	// The +use doorknob path (CBaseDoor::DoorknobUse): toggle this leaf and, if a `linked_door` is
 	// set, its partner too — the double-door swing. Reached by the +use look-cursor and `ent_fire Use`.
 	void DoorUse(const FElysiumEntityHandle& Activator);
@@ -191,6 +192,7 @@ protected:
 	// downcast via AsDoorBase). Null when unset or the partner is missing/not a door.
 	FElysiumDoorBase* ResolveLinkedDoor();
 	void SyncDoorknobs();
+	void RefreshUseOwner();
 
 	// True when the door rests open with no autoclose: `wait -1` or the NO_AUTO_RETURN (0x20) flag.
 	bool StaysOpen() const;

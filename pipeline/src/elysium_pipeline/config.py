@@ -113,6 +113,10 @@ class ProjectConfig:
     work_root: Path | None
     export_root: Path | None
     ue_root: Path | None
+    unreal_zen_data_path: Path | None
+    unreal_local_data_cache_path: Path | None
+    unreal_shader_work_root: Path | None
+    temp_root: Path | None
 
     @classmethod
     def resolve(
@@ -140,10 +144,27 @@ class ProjectConfig:
         ue_root = _configured_path(ue, "ELYSIUM_UE_ROOT", environment, local)
         if ue_root is None:
             ue_root = _detect_unreal(environment)
+        unreal_zen_data_path = _configured_path(
+            None, "UE-ZenDataPath", environment, local
+        )
+        unreal_local_data_cache_path = _configured_path(
+            None, "UE-LocalDataCachePath", environment, local
+        )
+        unreal_shader_work_root = _configured_path(
+            None, "ELYSIUM_UNREAL_SHADER_WORK_ROOT", environment, local
+        )
+        temp_root = _configured_path(None, "ELYSIUM_TEMP_ROOT", environment, local)
 
         _require_directory(game_root, "ELYSIUM_VTMB_ROOT", require_game)
         _require_directory(work_root, "ELYSIUM_WORK_ROOT", require_work)
         _require_directory(ue_root, "ELYSIUM_UE_ROOT", require_ue)
+        for path, name in (
+            (unreal_zen_data_path, "UE-ZenDataPath"),
+            (unreal_local_data_cache_path, "UE-LocalDataCachePath"),
+            (unreal_shader_work_root, "ELYSIUM_UNREAL_SHADER_WORK_ROOT"),
+            (temp_root, "ELYSIUM_TEMP_ROOT"),
+        ):
+            _require_directory(path, name, path is not None)
         return cls(
             repo_root=repo,
             project=repo / "ElysiumUE.uproject",
@@ -151,6 +172,10 @@ class ProjectConfig:
             work_root=work_root,
             export_root=export_root,
             ue_root=ue_root,
+            unreal_zen_data_path=unreal_zen_data_path,
+            unreal_local_data_cache_path=unreal_local_data_cache_path,
+            unreal_shader_work_root=unreal_shader_work_root,
+            temp_root=temp_root,
         )
 
     @property
@@ -169,11 +194,17 @@ class ProjectConfig:
             "ELYSIUM_VTMB_ROOT": self.game_root,
             "ELYSIUM_WORK_ROOT": self.work_root,
             "ELYSIUM_EXPORT_ROOT": self.export_root,
+            "UE-ZenDataPath": self.unreal_zen_data_path,
+            "UE-LocalDataCachePath": self.unreal_local_data_cache_path,
+            "ELYSIUM_UNREAL_SHADER_WORK_ROOT": self.unreal_shader_work_root,
+            "ELYSIUM_TEMP_ROOT": self.temp_root,
         }
         for name, value in values.items():
             if value is not None:
                 os.environ[name] = os.fspath(value)
+        if self.temp_root is not None:
+            os.environ["TEMP"] = os.fspath(self.temp_root)
+            os.environ["TMP"] = os.fspath(self.temp_root)
         python_roots = [self.repo_root, self.repo_root / "pipeline" / "src"]
         _prepend_environment_path("PYTHONPATH", python_roots)
         _prepend_environment_path("UE_PYTHONPATH", python_roots)
-

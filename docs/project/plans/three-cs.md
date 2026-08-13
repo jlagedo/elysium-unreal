@@ -46,41 +46,56 @@ our runtime. *Deps:* CCC7 (landed), CCC3's co-tune.
 
 ### CCC10.1 The first-person rung — the viewmodel body
 
-A separate body, not a camera mode: nothing in CCC10's node set carries over, because the
-viewmodel has its own skeleton and clip vocabulary. The 21 clan hands models
-(`v_<clan>_<gender>_hands.mdl`; PL14 exports them) compose with 17 packed `v_` weapon models
-over a 42-bone `Camera01`-rooted rig — a second skeleton the character bake's "poses are baked
-native" result does not cover.
+A separate body, not a camera mode. The 21 hands models and 17 packed `v_` weapon models exported
+by PL14 render as **two skeletal components**: clan hands and weapon geometry. They are not merged
+and the weapon is not attached to a socket on the hands component. Both consume one semantic
+animation intent, resolve the matching family sequence and evaluate independently in the same
+camera-root space; each owns its mesh, sequence/cycle and bone palette.
+
+Both assets preserve authored `Camera01` as bone 0. Their bind frames and compatible arm/hand names
+are the alignment contract, while packed weapon rigs retain only the subset their geometry needs.
+The bake writes complete Unreal-native, parent-relative local poses in centimetres, Z-up and
+left-handed space after resolving every VtMB flag, mask and additive base. Runtime seeds each
+component root from the same first-person camera transform and uses stock Unreal skeletal
+evaluation. No VtMB frame, storage or pose rule is permitted in the runtime evaluation path.
+
+The viewmodel projection is independent of player FOV: `t = tan(viewmodel_fov * pi / 360)`, with
+projection scales `1/t` and `aspect/t`, clip range 1..28400 in the recovered VtMB space, and normal
+aspect policy 4:3 or 16:9 under the widescreen/anamorphic setting. The 11.13d view projection owns
+the local-body/viewmodel visibility decision. A hidden view suppresses both component submissions
+without destroying components or resetting their visual sequence state.
+
+Server sequence events are timing carriers into weapon mode dispatch; weapon logic, not either
+visual component, commits a shot or reload transaction. Client viewmodel events own muzzle flash,
+magazine/shell and other presentation only. CCC10.1 therefore consumes the semantic
+animation-intent seam and presents its result; it does not introduce a viewmodel-specific clip call
+or a second gameplay event path. Tremere shield scripts swap the hands-role model to the baked male
+or female `_shield` variant without changing any other part of the contract.
 
 **Melee has no first-person model, measured:** the hands bank carries 154 sequences over
 exactly 12 firearm families (each with `idle`/`idleempty`/`fidget`/`draw`/`lower`/`fire`/
 `fireempty`/`reload`/`dryfire`, the `m37` with a three-part reload answering `reload_single`)
-plus seven `v_lockpicks_*` sequences and nothing else. The **owner-called divergence stands**:
-the equipped weapon does not move the player's camera (retail's `camera_class` arbitration —
-melee/`force_3rd` yanks to third, `force_1st` into first, `togglecamera` on a forced weapon
-holsters — stays implementable behind a toggle per the Feel layer's A/B rule). The accepted
-consequence: a melee weapon in first person has nothing to draw; what that view shows is
-deliberately open — the ✳ placeholder marks the question so nobody mistakes it for a design.
+plus seven `v_lockpicks_*` sequences and nothing else. **Owner call:** when retained first person
+suppresses retail's melee/`force_3rd` camera move, the presenter renders **no hands and no weapon**.
+It does not synthesize a melee viewmodel or reuse a third-person body clip.
 
 **Scope — owner call, made: ranged only.** Acceptance is the 12 firearm families. `thrown` is
 dropped: the throwing star has zero models anywhere, and the patch-restored frag grenade has a
 complete model set but no `grenade_*` hands family. The lockpick and Discipline viewmodels ride
 the same machinery, deferred rather than designed out.
 
-*Open RE (tracked as RE42), in dependency order — the first question gates the rung's shape:*
-how the two viewmodels compose (arms from the clan hands model, geometry from the weapon's —
-`m_hViewModel[]` beside `m_pViewWeapon` — asset-layout inference, not traced); the
-`Camera01`-rooted rig's pose convention; how `viewmodel_fov 54` composes with the camera's FOV;
-whether the first-person shot is driven by the same sequence event on the viewmodel clip or the
-world model keeps driving it unseen.
+*Acceptance is presentation-only.* Test intents drive draw, idle, fire, dry-fire, ordinary reload
+and the M37 begin/per-shell/complete visual phases on both components and every accepted firearm
+family. The test proves clan/shield selection, matching sequence/cycle, `Camera01`/right-hand
+alignment, both FOV/aspect policies, visibility suppression/resume and the empty melee view. It
+does not spend ammunition, create a ray/projectile, advance reserve-to-magazine state or originate
+a VtMB event. Firearms and melee basics (13.3) retain ammo/shot/reload authority; CCC11 retains the
+sequence-event carrier, with ANM4b supplying its catalog/event data.
 
-*Acceptance:* a firearm draws, idles, fires, dry-fires and reloads in first person on the
-clan's own hands model, driven through the same intent seam rather than a viewmodel-specific
-clip call; the m37's three-part reload matches its `reload_single` transaction; equipping a
-melee weapon does not move the camera, and whatever the empty first-person view shows is a
-stated choice; the owner judges it live in the green room, which needs a first-person stage the
-layer lab does not have. *Deps:* RE42, PL14, CCC10's shared weapon-family translation. The
-camera-class facts are `docs/vtmb/camera-view-modes.md`'s.
+*Deps:* PL14's complete two-role corpus; 11.13d's `FElysiumViewState` body/viewmodel visibility
+projection; the semantic animation-intent seam and CCC10's shared weapon-family translation;
+ANM4b/CCC11 for real event-carrying actions. The recovered retail contracts are owned by
+`docs/vtmb/animation_and_movers.md` and `docs/vtmb/camera-view-modes.md`.
 
 ### CCC11 The action families beyond locomotion
 

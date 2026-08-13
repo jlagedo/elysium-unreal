@@ -51,6 +51,23 @@ target_include_directories(retail_live_pose_hook PRIVATE .)
 target_link_libraries(retail_live_pose_hook PRIVATE retail_hook_backends)
 elysium_native_target(retail_live_pose_hook)
 
+add_library(
+    retail_first_person_viewmodel_hook
+    SHARED
+    ../first_person_viewmodel_hook.cpp
+)
+set_target_properties(
+    retail_first_person_viewmodel_hook
+    PROPERTIES OUTPUT_NAME first_person_viewmodel_hook
+)
+target_include_directories(retail_first_person_viewmodel_hook PRIVATE ..)
+target_include_directories(retail_first_person_viewmodel_hook PRIVATE .)
+target_link_libraries(
+    retail_first_person_viewmodel_hook
+    PRIVATE retail_hook_backends
+)
+elysium_native_target(retail_first_person_viewmodel_hook)
+
 add_executable(retail_live_pose_injector ../live_pose_injector.cpp)
 set_target_properties(
     retail_live_pose_injector
@@ -156,6 +173,13 @@ add_executable(hook_backend_test hook_backend_test.cpp)
 target_link_libraries(hook_backend_test PRIVATE retail_hook_backends)
 elysium_native_target(hook_backend_test)
 
+add_executable(
+    viewmodel_capture_format_test
+    viewmodel_capture_format_test.cpp
+)
+target_include_directories(viewmodel_capture_format_test PRIVATE .)
+elysium_native_target(viewmodel_capture_format_test)
+
 enable_testing()
 add_test(
     NAME binary_profile_generation_check
@@ -185,6 +209,18 @@ add_test(
 add_test(
     NAME hook_backends_instruction_aware
     COMMAND $<TARGET_FILE:hook_backend_test>
+)
+
+add_test(
+    NAME viewmodel_capture_format_roundtrip
+    COMMAND $<TARGET_FILE:viewmodel_capture_format_test>
+)
+set_tests_properties(
+    viewmodel_capture_format_roundtrip
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "viewmodel-capture-format-test-v1 state=complete.*malformed_rejected=2"
+        TIMEOUT 15
 )
 set_tests_properties(
     hook_backends_instruction_aware

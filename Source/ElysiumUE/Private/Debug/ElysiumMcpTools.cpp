@@ -665,10 +665,10 @@ namespace ElysiumMcpImpl
 
 		{
 			FSchema Schema;
-			Schema.Add(TEXT("clan"), TEXT("integer"), TEXT("Clan in the level-script 2..8 encoding (2 Brujah .. 8 Ventrue). Default 2."))
-				.Add(TEXT("male"), TEXT("boolean"), TEXT("Player sex. Default true."));
+			Schema.Add(TEXT("clan"), TEXT("integer"), TEXT("Clan in the level-script 2..8 encoding (2 Brujah .. 8 Ventrue). Default 4 (Malkavian)."))
+				.Add(TEXT("male"), TEXT("boolean"), TEXT("Player sex. Default false (female)."));
 			Out.Add(MakeTool(TEXT("elysium_new_game"),
-				TEXT("Seed a fresh story context (G flags, quest map, player sheet) and travel to the story entry: sp_tutorial_1 at its `tutorial` info_landmark. This is the boot path uv run elysium run play takes with no map argument — use it when a test needs the seeded flags the tutorial's own scripts read. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
+				TEXT("Seed a fresh story context (G flags, quest map, complete mock player sheet) and travel to sp_tutorial_1 at its `tutorial` info_landmark. Defaults to the shared female Malkavian developer preset. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
@@ -678,12 +678,19 @@ namespace ElysiumMcpImpl
 					{
 						return MakeErrorResult(TEXT("no game running"));
 					}
-					const int32 Clan = ParamInt(Params, TEXT("clan"), 2);
-					const bool bMale = ParamBool(Params, TEXT("male"), true);
+					const int32 Clan = ParamInt(Params, TEXT("clan"),
+						FElysiumSheet::ClanFromName(TEXT("Malkavian")));
+					const bool bMale = ParamBool(Params, TEXT("male"), false);
 
-					FElysiumNewGameRequest Request;
+					FElysiumNewGameRequest Request =
+						ElysiumStory::MakeMockCharacterRequest(TEXT("tutorial"));
 					Request.Clan = Clan;
 					Request.bMale = bMale;
+					if (Clan != FElysiumSheet::ClanFromName(TEXT("Malkavian")))
+					{
+						Request.HistoryId = INDEX_NONE;
+						Request.Spends.Reset();
+					}
 
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetBoolField(TEXT("ok"), Flow->NewGame(Request));

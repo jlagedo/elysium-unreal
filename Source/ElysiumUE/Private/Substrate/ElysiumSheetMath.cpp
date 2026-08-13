@@ -33,7 +33,8 @@ void FElysiumSheetEffects::Reset()
 }
 
 void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
-	TArrayView<const FString> GroupNames, const FElysiumFeatTable* Feats)
+	TArrayView<const FString> GroupNames, const FElysiumFeatTable* Feats,
+	const FElysiumStatTable* Stats, const FElysiumStrings* Strings)
 {
 	Reset();
 
@@ -82,12 +83,29 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 				continue;
 			}
 			// A `Value` with a NAMED payload (`"Value Clawed_Form"`, `"Value Physical_Mental_Social"`)
-			// resolves through an enum the chargen/discipline layers own; the engine stores the
-			// resolved index in the same slot the numeric form uses. Until those enums are read, a
-			// named payload is recorded as unresolved rather than applied as its atoi'd 0.
+			// resolves through an enum the owning layer supplies; the engine stores the resolved index
+			// in the same slot the numeric form uses. Chargen supplies stats + strings for its order
+			// enums. Other owners can omit them, in which case the name remains explicitly unresolved.
 			if (Effect.Op == EElysiumTraitOp::Value && !Effect.ValueName.IsEmpty())
 			{
-				Unresolved.Add(FString::Printf(TEXT("%s.%s=%s"), *Name, *Effect.Trait, *Effect.ValueName));
+				EElysiumTraitContainer NamedContainer;
+				int32 NamedSlot = INDEX_NONE;
+				const bool bHasSlot = ElysiumFindSheetSlot(
+					*Effect.Trait, NamedContainer, NamedSlot);
+				const FElysiumStat* Stat = bHasSlot && Stats
+					? Stats->Container(NamedContainer).At(NamedSlot) : nullptr;
+				const int32 NamedValue = Stat && Strings && !Stat->NameMapping.IsEmpty()
+					? Strings->IndexOf(Stat->NameMapping, Effect.ValueName) : INDEX_NONE;
+				if (NamedValue != INDEX_NONE)
+				{
+					FRow Row;
+					Row.Op = EElysiumTraitOp::Value;
+					Row.Amount = NamedValue;
+					TraitRows.FindOrAdd(TraitKey(NamedContainer, NamedSlot)).Add(Row);
+					continue;
+				}
+				Unresolved.Add(FString::Printf(
+					TEXT("%s.%s=%s"), *Name, *Effect.Trait, *Effect.ValueName));
 				continue;
 			}
 

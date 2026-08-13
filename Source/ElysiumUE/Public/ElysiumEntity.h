@@ -105,6 +105,9 @@ public:
 	// The brush body (P1.5), or null for point/logic entities (R1: logic ents never get a body).
 	// Owned by the map actor; the entity only gates its collision on dormancy (R6). Non-owning.
 	UElysiumBrushComponent* Body = nullptr;
+	// Generic skeletal embodiment for a model-backed point entity whose leaf supplied no body.
+	// It carries no inferred interaction semantics; the world creates it between Spawn/PostSpawn.
+	USkeletalMeshComponent* GenericModelBody = nullptr;
 
 	// --- Base keyfields — the CBaseEntity contract (python_bridge.md) -------------------
 	// Registered once on the base class field table; every subclass inherits them through
@@ -219,7 +222,7 @@ public:
 	// A leaf with a movable body (FElysiumNpc) overrides OnRuntimeTransformChanged to move/re-face
 	// its skeletal component and OnRuntimeModelChanged to rebuild it with the new model.
 	virtual void OnRuntimeTransformChanged();
-	virtual void OnRuntimeModelChanged() {}
+	virtual void OnRuntimeModelChanged();
 
 	// Overlap terminus (P1.5 routing): a brush body's begin/end overlap lands here. Base no-op;
 	// P1.6 trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).
@@ -256,6 +259,11 @@ public:
 	// use_icon; IsUseLocked() is the leaf's locked flag (doors/buttons). 0 = draw no icon.
 	virtual bool IsUseLocked() const { return false; }
 	int32 GetUseIcon() const { return (IsUseLocked() && LockedIcon != 0) ? LockedIcon : UseIcon; }
+	// The HUD query normally needs only the entity's lock state. Lockables are the exception: while
+	// locked they can publish a distinct key icon when this activator actually carries the authored
+	// key. Keep that inventory-dependent rule on the entity rather than teaching presentation about
+	// item ownership.
+	virtual int32 ResolveUseIcon(const FElysiumEntityHandle& Activator) const { return GetUseIcon(); }
 
 	// --- Debug introspection (P4.3) ----------------------------------------------------
 	// Runtime, non-keyfield state a leaf class wants surfaced in the Cog inspector's "Live state"
@@ -270,6 +278,7 @@ public:
 	// point props return their standing component and physics props return their simulating body.
 	// Null = nothing physical to attach.
 	virtual class UPrimitiveComponent* GetAttachBody() const;
+	void EnsurePlacedModelBody();
 
 	// The skeletal body a camera shot's `Bone:` / `Attachment:` attach point resolves against (11.7),
 	// and the bone lookup a look-at rig will want (P12). Base returns null; `FElysiumAnimating`
@@ -387,6 +396,10 @@ public:
 	// be recognised as a door without reflection.
 	virtual FElysiumDoorBase* AsDoorBase() { return nullptr; }
 	virtual FElysiumLockableEntity* AsLockableEntity() { return nullptr; }
+	const FElysiumLockableEntity* AsLockableEntity() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsLockableEntity();
+	}
 
 	// No-RTTI downcast to the combat character (11.4), for the callers that need the sheet or the
 	// damage receiver off a base pointer — the same reason AsDoorBase exists.

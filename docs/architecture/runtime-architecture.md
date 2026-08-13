@@ -618,8 +618,8 @@ in `FrontEnd`), and a single `Flow->NotifyWorldReady(this)` in `BeginPlay`.
 
 Retail's New Game is a four-map chain — `sp_genesisdevice_1` (chargen) → `sp_theatre` (embrace +
 trial) → `sp_tutorial_1` → `sm_pawnshop_1` (Santa Monica, the real start) — driven entirely by
-entities and landmarks (`docs/vtmb/game_runtime.md` §4, `docs/vtmb/level_transitions.md`). Today `NewGame()` seeds a
-mock Tremere and jumps to the tutorial.
+entities and landmarks (`docs/vtmb/game_runtime.md` §4, `docs/vtmb/level_transitions.md`). An empty
+player-facing request enters that chain at genesis and lets chargen replace its provisional player.
 
 The design keeps the chain as **data, not code**:
 
@@ -640,6 +640,12 @@ struct FElysiumNewGameRequest
   chargen screen and writes the result onto the player entity. That is VtMB's own wiring,
   unchanged; only the screen behind the verb is new.
 - `EntryPoint = tutorial` is the dev shortcut that exists today, kept as `elysium.SkipIntro`.
+- Developer entries construct one canonical request through `MakeMockCharacterRequest`: female
+  Malkavian, the female `Gymnast-turned-Stripper` History (which moves the attribute priority off
+  disabled Social rows), the rulebook's `Malkavian_CharGen` baseline, and all ten initial pool dots
+  spent (3 attributes, 6 abilities, 1 discipline). `elysium.newgame`, the theatre replay, direct
+  dev-map boot and the MCP New Game tool differ only in destination or an explicit identity
+  override; no entry writes a second ad hoc sheet.
 - The theatre act needs `logic_choreographed_scene` + scene playback, owned by roadmap **P12** —
   the playable path's PP2, which it blocks **in full** (eyes and lipsync included; owner call). The chain is authored now; `elysium.SkipIntro` stays the
   dev shortcut until P12 lands, so the flow never has to be re-plumbed.

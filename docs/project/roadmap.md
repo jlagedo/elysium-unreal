@@ -159,10 +159,11 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
 - [ ] **[4.8 Rotating/linear/elevator family](plans/gameplay.md)** — elevator landed;
   rotating/linear movers and the mover-push observable open.
 - [x] **4.9 Event-bus classes** — `events_player`/`events_world` full faithful surfaces.
-- [~] **[4.10 `game_sign` / `prop_sign`](plans/gameplay.md)** — `game_sign` landed; the
-  `prop_sign` `+use` leaf open.
-- [~] **[4.11 Trigger and `+use`-prop I/O gaps](plans/gameplay.md)** — hurt cadence,
-  `filtername`, `prop_switch`/lockables, doorknob sequences.
+- [~] **[4.10 `game_sign` / `prop_sign`](plans/gameplay.md)** — both sign leaves landed;
+  `NewspaperData`, `ClientCommand`, fade/pause details open.
+- [~] **[4.11 Trigger and `+use`-prop I/O gaps](plans/gameplay.md)** — filters,
+  `prop_switch` interaction, lockables and doorknob sequences landed; hurt cadence plus switch
+  sound/reset details remain open.
 
 *Slice acceptance (met):* the tutorial elevator chain works; walking out loads `sm_pawnshop_1`.
 
@@ -199,6 +200,9 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
   **8.3 Dynamic props** · **8.4 Physics props** — Chaos over `.phy`.
 - [~] **[8.4a `prop_dynamic` divergences](plans/characters-ui.md)** — animation half done;
   `solid` and `disableshadows` unread.
+- [x] **8.4b Placed-model rest-pose closure** — every `.ents` and GAME_LUMP MDL resolves and
+  installs an authored rest pose before visibility; proven-equivalent placements remain static →
+  `docs/architecture/animation-architecture.md`.
 - [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — the animation
   half is the ANM programme's.
 - [x] **8.6a New Game context + story entry.**
@@ -239,7 +243,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [x] **9.5 Save/load** *(= 11.9)*.
 - [x] **9.6 Dice resolver** → `docs/recovered/dice-system.md`.
 - [x] **9.7 The script→engine action surface** → `docs/vtmb/script_api.md`.
-- [~] **[9.8 Inventory & items](plans/gameplay.md)** — core landed; drop/barter/UI open.
+- [~] **[9.8 Inventory & items](plans/gameplay.md)** — loose pickup and explicit CommonUI loot
+  sessions landed; plain-container lid/sound, drop, barter, inventory-check and travel policy open.
 - [~] **[9.9 NPC disposition & reactions](plans/gameplay.md)** — talk/feed slice landed;
   senses and reaction score open.
 - [ ] **[9.10 Economy](plans/gameplay.md)**
@@ -283,7 +288,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
   **CCC6 The green room drives it** · **CCC7 `move_yaw` + the speed authority** ·
   **CCC9 Scaffolding retired** · **CCC10 The weapon rung (third person)**.
 - [ ] **[CCC8 Played acceptance](plans/three-cs.md)** — the slice's finish line, owner-played.
-- [ ] **[CCC10.1 The first-person viewmodel body](plans/three-cs.md)** — waits on RE42 + PL14.
+- [ ] **[CCC10.1 The first-person viewmodel body](plans/three-cs.md)** — waits on RE42's live
+  verifier, PL14, 11.13d and the semantic animation-intent seam.
 - [ ] **[CCC11 Action families beyond locomotion](plans/three-cs.md)** — reactions, weapon
   actions, the sequence-event carrier.
 
@@ -324,7 +330,7 @@ by `uv run elysium test Play`.
 - [ ] **[PL6 Texlight merge in exporter](plans/pipeline.md)** ·
   **[PL11 Remove the dead card path](plans/pipeline.md)** ·
   **[PL12 Particle mirror + weather height maps](plans/pipeline.md)** ·
-  **[PL14 Export the hand viewmodels](plans/pipeline.md)** ·
+  **[PL14 Export the complete first-person model corpus](plans/pipeline.md)** ·
   **[PL17 Patch-first audio catalog](plans/pipeline.md)**
 - [x] **PL7–PL10, PL13, PL15, PL16, PL18, PL19** — space audit, scenes/`.lip`, facial data, UI
   export, player bodies, Masquerade meter, cinematic banks, animated-prop closure, bake caching.
@@ -354,7 +360,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE39 | computer terminals; open: TERM2/4/5, email/screensaver | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; open: native consumers, Masquerade policy | `docs/vtmb/disciplines.md`; 13.2 | [~] |
-| RE42 | the first-person viewmodel body; camera class closed, composition open | `docs/vtmb/camera-view-modes.md`; CCC10.1, PL14 | [ ] |
+| RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; CCC10.1, PL14 | [~] |
 | RE43 | the tutorial event-resolution transaction; open: engine contact order, autosave txn | `docs/vtmb/sp_tutorial_1-event-surface.md` | [~] |
 | RE44 | the exported-map event surface beyond the tutorial | `docs/vtmb/exported-map-event-surface.md` | [~] |
 | RE45 | trigger touch dispatch + the script recursion bound | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |

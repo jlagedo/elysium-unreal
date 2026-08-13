@@ -83,19 +83,14 @@ namespace ElysiumStory
 		const TCHAR* Verb = nullptr;
 		const TCHAR* Alias = nullptr;    // null when the entry has one spelling
 		const TCHAR* Help = nullptr;
-		// Resolved through FElysiumSheet::ClanFromName, the same door `elysium.newgame`'s argument
-		// takes, so the name -> 2..8 encoding has one owner. Null = ask (NewGame seeds Brujah for
-		// chargen to edit).
-		const TCHAR* Clan = nullptr;
-		bool bMale = true;
 		const TCHAR* EntryPoint = nullptr;
 		bool bReplayEntryMap = false;
 	};
 
 	// The theatre replay: `sp_theatre`'s opening is a single trigger_once the player spawns straight
 	// onto at the `newgame` landmark, so once fired, re-entering correctly finds it spent. This is the
-	// dev way back in. The mock player is female Tremere because the chain reads `pc.clan`/`pc.IsMale`
-	// in `chooseSire`/`castUnderstudy` and expects `Story_State = -4`.
+	// dev way back in. Character identity and sheet allocation come from MakeMockCharacterRequest,
+	// so every developer entry exercises the same player while this row owns only its destination.
 	inline constexpr FElysiumNewGameEntry NewGameEntries[] =
 	{
 		{
@@ -103,8 +98,6 @@ namespace ElysiumStory
 			TEXT("newgame_ttd"),
 			TEXT("elysium.newgame_ttd — theatre debug: new run entered at sp_theatre's `newgame` "
 				"landmark with the map's state forgotten, so its opening chain fires again"),
-			TEXT("Tremere"),
-			/*bMale*/ false,
 			TEXT("sp_theatre@newgame"),
 			/*bReplayEntryMap*/ true,
 		},
@@ -115,8 +108,16 @@ namespace ElysiumStory
 		return MakeArrayView(NewGameEntries, UE_ARRAY_COUNT(NewGameEntries));
 	}
 
+	// The one developer character preset. It is a complete chargen request rather than a raw
+	// clan/sex seed: ApplyBaseline supplies Malkavian's authored starting template, the female-only
+	// Gymnast-turned-Stripper history moves the otherwise-unspendable Social pool onto Physical, and
+	// Spends consumes the full 3 attribute + 6 ability + 1 discipline dot budget. Developer entry
+	// points choose only where this character enters the story.
+	FElysiumNewGameRequest MakeMockCharacterRequest(
+		const FString& EntryPoint, bool bReplayEntryMap = false);
+
 	// The row as a request. Kept out of the table itself because the clan name resolves through the
-	// sheet's own encoding rather than being re-typed here.
+	// sheet's own encoding in MakeMockCharacterRequest rather than being re-typed here.
 	FElysiumNewGameRequest MakeNewGameRequest(const FElysiumNewGameEntry& Entry);
 
 	// The intro skip, as a decision over a requested destination. Returns true when it rewrote one.
@@ -245,6 +246,10 @@ private:
 
 	// Resolve FElysiumNewGameRequest::EntryPoint to a map + landmark. False when nothing resolves.
 	bool ResolveEntryPoint(const FString& EntryPoint, FString& OutMap, FString& OutLandmark) const;
+
+	// Clear and seed the session half of NewGame without travelling. NewGame and bare dev-map boot
+	// both use this, so every mocked entry applies the same full character sheet.
+	bool SeedNewGameState(const FElysiumNewGameRequest& Request);
 
 	// --- Loading screen ------------------------------------------------------------------------
 	// The engine's own movie player, over the OpenLevel flush. The hook is

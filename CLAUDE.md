@@ -70,6 +70,18 @@ Source's *rules* (formulas, call order, thresholds) is faithful work; porting So
 `docs/project/remaster-direction.md`; the closed register of deliberate reproductions is in
 `docs/project/rebuild-strategy.md`. A port outside the register is a bug, not a tolerance.
 
+### Runtime failures are never silent
+
+When writing code or implementing logic, every unexpected runtime failure must be observable. A
+path may recover or return failure, but it must emit at least a warning to the appropriate console
+or named log category, with enough context to identify the failed operation and affected object or
+input; use an error, assertion or fatal failure when the severity warrants it. Never swallow an
+exception, ignore a failed return value, or turn a missing prerequisite or unsupported case into a
+quiet no-op or plausible default. Log once where the failure is owned or handled, then propagate a
+structured failure when callers need it, rather than producing duplicate warning spam. An ordinary
+negative query result or an explicitly optional absence is not a failure and does not require a
+warning.
+
 ### Bring-your-own-game
 
 **Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their

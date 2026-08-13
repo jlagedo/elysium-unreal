@@ -343,6 +343,43 @@ ApplyScriptedBlend(&view->origin, &view->angles, &view->fov);
 **What it does not affect**: movement (the character still steers by view yaw — the camera is a
 view-space offset, nothing is reparented), the aim/attack origin, FOV, or input sensitivity.
 
+### The viewmodel has its own projection and draw lifetime
+
+The first-person hands/weapon pass does not reuse the world projection [static-verified]. Client
+`SetupView` `0x10191710` writes independent world and viewmodel fields into `CViewSetup`:
+`fov`/`fovViewmodel`, `zNear`/`zNearViewmodel`, and `zFar`/`zFarViewmodel`. `DrawViewModels`
+`0x10198fa0` forwards only the viewmodel triplet through `VEngineRenderView008` slot `+0x84`;
+the pinned engine wrapper `0x2010f280` passes it to projection builder `0x2007a3e0` with the normal
+perspective flag. The world setup reaches the same builder separately. There is no addition,
+subtraction or ratio involving the player FOV:
+
+```text
+t = tan(viewmodel_fov * pi / 360)
+xScale = 1 / t
+yScale = aspect / t
+```
+
+Thus `viewmodel_fov 54` remains 54° when the player's FOV changes. The viewmodel clipping range in
+the pinned build is **1..28400** Source units; the ordinary world range is seeded separately (near
+plane 8). The dedicated near plane is what lets the camera-space weapon survive close to the eye.
+
+The builder's normal aspect policy is **4:3**. It selects **16:9** when `r_anamorphic` is enabled;
+an alternate projection flag selects 1:1, but the viewmodel caller passes false and never takes that
+branch. This is a projection rule, not an asset transform: both viewmodel palettes remain in their
+shared `Camera01` space while the second projection maps them to the viewport.
+
+Visibility is evaluated per slot on every draw. In order, `ShouldDrawViewModel` `0x10198ea0`
+applies the caller's draw flag, model presence, local-player/observer state, global entity drawing,
+`r_drawviewmodel`, engine broadcast state, the internal viewmodel policy, player-body visibility
+state and the current view entity. A false result suppresses submission only. It does not destroy
+either `C_BaseViewModel`, clear its model, reset its sequence/cycle, or transfer animation
+ownership. A `DrawViewmodel 0` → `1` transition therefore resumes the existing two-entity visual
+state rather than recreating it.
+
+*Elysium divergence, owner-called.* Retail's melee `camera_class` forces third person. When the
+retained-first-person option prevents that camera move, melee renders **neither hands nor weapon**;
+the authored hands bank has no melee family and the project does not invent one.
+
 ### The strafe bank is first-person only
 
 Strafing banks the camera around the view axis, and it is a **view** effect — no character

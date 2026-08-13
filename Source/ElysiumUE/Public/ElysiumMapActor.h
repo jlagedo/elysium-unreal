@@ -328,8 +328,12 @@ public:
 	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
 		FVector& OutForward) const override;
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const override;
+	virtual FElysiumPlacedModelBody BuildPlacedModelBody(
+		const FElysiumPlacedModelRequest& Request) override;
+	virtual bool HasPlacedModelCatalogue() const override;
 	virtual USkeletalMeshComponent* BuildAnimatedPropVisual(const FString& Stem,
-		const FVector& Location, const FQuat& Rotation, float UniformScale) override;
+		const FVector& Location, const FQuat& Rotation, float UniformScale,
+		int32 PlacementToken = 0) override;
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds) override;
 	virtual int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
@@ -337,7 +341,8 @@ public:
 	virtual int32 FinishAnimationPreload() override;
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		const FString& StaticStem, int32 Family) override;
-	virtual FString AnimatedPropRestClip(const FString& Stem) const override;
+	virtual FString AnimatedPropRestClip(const FString& Stem,
+		int32 PlacementToken = 0) const override;
 	virtual bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
 		bool& bOutLoops) const override;
 	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,

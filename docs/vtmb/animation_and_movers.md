@@ -1560,8 +1560,40 @@ Beside them sit **17 packed per-weapon viewmodels**, one per firearm family plus
 `v_lockpicks_ref`, and the Disciplines `v_thaumaturgy`, `v_holylight` and `v_dragonbreath`. These are
 small rigs carrying the weapon geometry itself — `v_pistol_glock` is 12 bones: a right arm plus
 `Dummy_Mag` and `body`. Every firearm family therefore appears twice, as animation in the hands bank
-and as geometry in its own model; how the two compose at runtime is unrecovered and is
-`docs/project/roadmap.md` RE42.
+and as geometry in its own model.
+
+**The pair is two viewmodel entities, not one assembled model** [static-verified]. The server player
+owns `m_hViewModel[2]` at `+0x2308`; `0x1015d6d0` creates one `viewmodel` entity for each requested
+slot. The active weapon's `m_nViewModelIndex` at `+0x890` selects its slot, and
+`0x102532a0` resolves that slot and companion slot 1 independently, applying the model and matching
+sequence/playback-rate state to both. On the client, `CalcView` `0x10191200` updates both
+`C_BaseViewModel` instances from the same player view through `0x10190ba0`. Each instance owns its
+received model, sequence, cycle and bone palette; `DrawViewModels` `0x10198fa0` gates and submits
+both independently, and each reaches its own `SetupBones`. The packed weapon is therefore not a
+component attached to the hand mesh. The two visual instances stay together because weapon logic
+drives the same semantic sequence on two compatible rigs in the same camera-root space.
+
+`Camera01` is bone 0 and the authored root of both roles. The hand and packed-weapon models repeat
+the same `Camera01` bind frame and compatible named arm/hand chains; the weapon rig retains only the
+subset its geometry and events need. The root transform is seeded from the player view once per
+client viewmodel before either palette is evaluated. The complete reproduction contract is a
+**bake-time** one: decode the VtMB bind and every sequence track, resolve flags, masks, additive
+bases and parent accumulation there, convert position and rotation once to centimetres, Z-up,
+left-handed Unreal space, and write complete parent-relative local transforms with `Camera01`
+preserved as the root. Both baked assets then evaluate through ordinary Unreal skeletal nodes. No
+VtMB frame conversion, storage-frame fixup or model-specific pose rule survives into runtime.
+
+The Tremere shields do not introduce another composition mode. Script-authored `SetModel` calls
+select `v_tremere_male_hands_shield.mdl` or `v_tremere_fem_hands_shield.mdl` on the hands role; the
+weapon role and the two-entity sequence ownership remain unchanged.
+
+**Events divide at the server/client boundary** [static-verified]. Server ranged events 3030–3044
+enter `0x10238160`, which routes event mode through `0x102383b0`; weapon logic then invokes the
+shot body at `0x102387b0`, where ammunition is spent and the fire packet is constructed. The event
+is a timing/routing trigger, not the transaction. Client `C_BaseViewModel::FireEvent`
+`0x100ab530` first offers the event to its associated client weapon and otherwise emits attachment
+effects before the generic fallback. It owns muzzle flash, magazine and related presentation only;
+it cannot commit ammunition, traces or damage.
 
 **Two cautions when judging a layer by eye.** A delta over a host that does *not* declare it is
 arithmetically exact and anatomically nonsense — `twohanded_crouch_attack_delta` over a standing idle

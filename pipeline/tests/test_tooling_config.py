@@ -14,8 +14,13 @@ _PATH_KEYS = {
     "ELYSIUM_VTMB_ROOT",
     "ELYSIUM_WORK_ROOT",
     "ELYSIUM_EXPORT_ROOT",
+    "ELYSIUM_UNREAL_SHADER_WORK_ROOT",
+    "ELYSIUM_TEMP_ROOT",
+    "UE-ZenDataPath",
+    "UE-LocalDataCachePath",
     "ProgramData",
 }
+_PATH_KEYS_CASEFOLDED = {key.casefold() for key in _PATH_KEYS}
 
 
 class ProjectConfigPrecedenceTests(unittest.TestCase):
@@ -29,7 +34,9 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
         ue: Path | None = None,
     ) -> config.ProjectConfig:
         clean_environment = {
-            key: value for key, value in os.environ.items() if key not in _PATH_KEYS
+            key: value
+            for key, value in os.environ.items()
+            if key.casefold() not in _PATH_KEYS_CASEFOLDED
         }
         clean_environment.update(environment)
         with (
@@ -143,7 +150,11 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
             game = root / "game"
             work = root / "work"
             ue = root / "ue"
-            for path in (game, work, ue):
+            zen = root / "zen"
+            local_ddc = root / "local-ddc"
+            shader_work = root / "shader-work"
+            process_temp = root / "temp"
+            for path in (game, work, ue, zen, local_ddc, shader_work, process_temp):
                 path.mkdir()
             (repo / ".elysium.local.env").write_text(
                 "\n".join(
@@ -151,6 +162,10 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
                         f'ELYSIUM_VTMB_ROOT="{game}"',
                         f"ELYSIUM_WORK_ROOT={work}",
                         f"ELYSIUM_UE_ROOT={ue}",
+                        f"UE-ZenDataPath={zen}",
+                        f"UE-LocalDataCachePath={local_ddc}",
+                        f"ELYSIUM_UNREAL_SHADER_WORK_ROOT={shader_work}",
+                        f"ELYSIUM_TEMP_ROOT={process_temp}",
                     )
                 ),
                 encoding="utf-8",
@@ -161,6 +176,23 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
             self.assertEqual(resolved.game_root, game.resolve())
             self.assertEqual(resolved.work_root, work.resolve())
             self.assertEqual(resolved.ue_root, ue.resolve())
+            self.assertEqual(resolved.unreal_zen_data_path, zen.resolve())
+            self.assertEqual(
+                resolved.unreal_local_data_cache_path, local_ddc.resolve()
+            )
+            self.assertEqual(
+                resolved.unreal_shader_work_root, shader_work.resolve()
+            )
+            self.assertEqual(resolved.temp_root, process_temp.resolve())
+
+            with mock.patch.dict(os.environ, {}, clear=True):
+                resolved.apply_environment()
+                self.assertEqual(os.environ["UE-ZenDataPath"], str(zen.resolve()))
+                self.assertEqual(
+                    os.environ["UE-LocalDataCachePath"], str(local_ddc.resolve())
+                )
+                self.assertEqual(os.environ["TEMP"], str(process_temp.resolve()))
+                self.assertEqual(os.environ["TMP"], str(process_temp.resolve()))
 
 
 if __name__ == "__main__":

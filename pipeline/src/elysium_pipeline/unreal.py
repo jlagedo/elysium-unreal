@@ -29,7 +29,19 @@ class UnrealFailure(RuntimeError):
 
 
 def _run(config, runner, executable: Path | str, args: Sequence[str]) -> None:
-    result = runner.run([str(executable), *map(str, args)], cwd=config.repo_root)
+    arguments = list(map(str, args))
+    executable_name = Path(executable).name.casefold()
+    shader_work_root = getattr(config, "unreal_shader_work_root", None)
+    if (
+        executable_name in {"unrealeditor.exe", "unrealeditor-cmd.exe"}
+        and shader_work_root is not None
+        and not any(
+            argument.casefold().startswith("-shaderworkingdir=")
+            for argument in arguments
+        )
+    ):
+        arguments.append(f"-shaderworkingdir={shader_work_root}")
+    result = runner.run([str(executable), *arguments], cwd=config.repo_root)
     if result.returncode:
         raise UnrealFailure(f"{executable} exited with {result.returncode}")
 

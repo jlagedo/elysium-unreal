@@ -27,6 +27,7 @@
 #include "ElysiumContentPaths.h"
 #include "Debug/ElysiumChannelRecorder.h"
 #include "Debug/ElysiumConsole.h"
+#include "Debug/ElysiumLogTap.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumDecals.h"
 #include "Visual/ElysiumEntityBodies.h"
@@ -4126,6 +4127,33 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNewGameEntriesTest,
 	"Elysium.Substrate.NewGameEntries", GElysiumTestFlags)
 bool FElysiumNewGameEntriesTest::RunTest(const FString&)
 {
+	const FElysiumNewGameRequest Mock =
+		ElysiumStory::MakeMockCharacterRequest(TEXT("tutorial"));
+	TestEqual(TEXT("the shared mock is Malkavian"), Mock.Clan,
+		FElysiumSheet::ClanFromName(TEXT("Malkavian")));
+	TestFalse(TEXT("the shared mock is female"), Mock.bMale);
+	TestEqual(TEXT("the shared mock takes the female Malkavian priority History row"),
+		Mock.HistoryId, 9);
+	TestEqual(TEXT("the shared mock enters the tutorial by request"),
+		Mock.EntryPoint, FString(TEXT("tutorial")));
+
+	int32 MockDots = 0;
+	for (const TPair<FName, int32>& Spend : Mock.Spends)
+	{
+		MockDots += Spend.Value;
+	}
+	TestEqual(TEXT("the shared mock allocates all ten initial dots"), MockDots, 10);
+	for (const TCHAR* Trait :
+		{ TEXT("Dexterity"), TEXT("Stamina"), TEXT("Perception"),
+		  TEXT("Investigation"), TEXT("Stealth"), TEXT("Firearms"),
+		  TEXT("Dodge"), TEXT("Dementation") })
+	{
+		TestEqual(*FString::Printf(TEXT("the shared mock buys one dot of %s"), Trait),
+			Mock.Spends.FindRef(FName(Trait)), 1);
+	}
+	TestEqual(TEXT("the shared mock buys two Computer dots"),
+		Mock.Spends.FindRef(FName(TEXT("Computer"))), 2);
+
 	TSet<FString> Verbs;
 	for (const ElysiumStory::FElysiumNewGameEntry& Entry : ElysiumStory::NewGameEntryTable())
 	{
@@ -4152,12 +4180,18 @@ bool FElysiumNewGameEntriesTest::RunTest(const FString&)
 			Request.EntryPoint, FString(Entry.EntryPoint ? Entry.EntryPoint : TEXT("")));
 		TestEqual(*FString::Printf(TEXT("'%s' carries its replay intent"), *Verb),
 			Request.bReplayEntryMap, Entry.bReplayEntryMap);
-		// A named clan must resolve: an unknown spelling reads as 0 ("ask"), which would silently
-		// route a preset through chargen instead of the character its opening chain reads.
-		if (Entry.Clan != nullptr)
+		TestEqual(*FString::Printf(TEXT("'%s' uses the shared mock clan"), *Verb),
+			Request.Clan, Mock.Clan);
+		TestEqual(*FString::Printf(TEXT("'%s' uses the shared mock sex"), *Verb),
+			Request.bMale, Mock.bMale);
+		TestEqual(*FString::Printf(TEXT("'%s' uses the shared mock history"), *Verb),
+			Request.HistoryId, Mock.HistoryId);
+		TestEqual(*FString::Printf(TEXT("'%s' uses the complete shared allocation"), *Verb),
+			Request.Spends.Num(), Mock.Spends.Num());
+		for (const TPair<FName, int32>& Spend : Mock.Spends)
 		{
-			TestTrue(*FString::Printf(TEXT("'%s' names a clan the sheet knows"), *Verb),
-				FElysiumSheet::IsValidClan(Request.Clan));
+			TestEqual(*FString::Printf(TEXT("'%s' shares the %s allocation"),
+				*Verb, *Spend.Key.ToString()), Request.Spends.FindRef(Spend.Key), Spend.Value);
 		}
 	}
 
@@ -9552,11 +9586,34 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 		TestEqual(TEXT("a v4 row declares no clip reach"), Glass->Clips[0].BoundsRadiusMeters, 0.f);
 	}
 
+	FElysiumNpcIndex V7;
+	Error.Reset();
+	const FString Json7 = FString::Printf(TEXT("{\"manifest_version\":7,%s,\"banks\":{},"
+		"\"cinematics\":{},\"placed_models\":{\"models_test\":{"
+		"\"eskm\":\"placed_models/models_test.eskm\",\"model\":\"models/test.mdl\","
+		"\"static_stem\":\"models_test\",\"clip_mode\":\"rest\","
+		"\"static_equivalent\":false,\"rest_candidates\":[\"idle_a\",\"idle_b\"],\"clips\":["
+		"{\"name\":\"idle_a\",\"index\":0,\"activity\":\"ACT_IDLE\",\"weight\":5},"
+		"{\"name\":\"idle_b\",\"index\":1,\"activity\":\"ACT_IDLE\",\"weight\":5}]}}}"),
+		*MinimalNpc);
+	TestTrue(FString::Printf(TEXT("v7 manifest parses: %s"), *Error), V7.LoadJsonText(Json7, Error));
+	const FElysiumAnimatedPropEntry* Placed = V7.FindPlacedModel(TEXT("test.mdl"));
+	if (TestNotNull(TEXT("v7 resolves a complete placed model"), Placed))
+	{
+		TestEqual(TEXT("v7 retains its static material/collision stem"), Placed->StaticStem,
+			FString(TEXT("models_test")));
+		TestFalse(TEXT("the row is conservatively skeletal"), Placed->bStaticEquivalent);
+		TestEqual(TEXT("placement token 0 selects the second weighted half"),
+			Placed->RestSequence(0), FString(TEXT("idle_b")));
+		TestEqual(TEXT("placement token 7 selects the first weighted half"),
+			Placed->RestSequence(7), FString(TEXT("idle_a")));
+	}
+
 	FElysiumNpcIndex Future;
 	Error.Reset();
-	const FString Json7 = FString::Printf(TEXT("{\"manifest_version\":7,%s}"), *MinimalNpc);
-	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json7, Error));
-	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 6")));
+	const FString Json8 = FString::Printf(TEXT("{\"manifest_version\":8,%s}"), *MinimalNpc);
+	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json8, Error));
+	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 7")));
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropBoundsTest,
@@ -10273,6 +10330,41 @@ bool FElysiumFeedTargetingOcclusionTest::RunTest(const FString&)
 		return false;
 	}
 
+	// The gameplay probe starts at the pawn's eye/use pivot even when the final third-person POV is
+	// one boom-length behind it. Starting at that rendered camera is the exact reversal regression:
+	// the short recovered probe cannot reach the victim in front and instead reaches one behind.
+	const FVector UseOrigin(0.0f, 0.0f, ElysiumMove::StandViewZ);
+	const FRotator ControlRotation = FRotator::ZeroRotator;
+	const ElysiumFeedTargeting::FProbe BodyProbe =
+		ElysiumFeedTargeting::MakeProbe(UseOrigin, ControlRotation);
+	TestTrue(TEXT("feed probe starts at the body-relative use origin"),
+		BodyProbe.Start.Equals(UseOrigin));
+	TestTrue(TEXT("feed probe keeps the recovered local endpoint"),
+		BodyProbe.End.Equals(UseOrigin + FVector(32.0f, 0.0f, -32.0f) * ElysiumMove::U));
+	TestTrue(TEXT("feed probe keeps the recovered eight-unit hull"),
+		BodyProbe.HullExtent.Equals(FVector(8.0f * ElysiumMove::U)));
+
+	const FVector BodyMidpoint = FMath::Lerp(BodyProbe.Start, BodyProbe.End, 0.5f);
+	const FVector RenderedCamera = UseOrigin - FVector(220.0f, 0.0f, 0.0f);
+	const ElysiumFeedTargeting::FProbe RenderedProbe =
+		ElysiumFeedTargeting::MakeProbe(RenderedCamera, ControlRotation);
+	const FVector RenderedMidpoint = FMath::Lerp(RenderedProbe.Start, RenderedProbe.End, 0.5f);
+	const FVector TargetExtent(10.0f);
+	const FBox FrontTarget(BodyMidpoint - TargetExtent, BodyMidpoint + TargetExtent);
+	const FBox RearTarget(RenderedMidpoint - TargetExtent, RenderedMidpoint + TargetExtent);
+	TestTrue(TEXT("body-origin probe reaches the victim in front"),
+		FMath::LineBoxIntersection(FrontTarget, BodyProbe.Start, BodyProbe.End,
+			BodyProbe.End - BodyProbe.Start));
+	TestFalse(TEXT("body-origin probe rejects the victim behind"),
+		FMath::LineBoxIntersection(RearTarget, BodyProbe.Start, BodyProbe.End,
+			BodyProbe.End - BodyProbe.Start));
+	TestFalse(TEXT("the old rendered-camera origin misses the forward victim"),
+		FMath::LineBoxIntersection(FrontTarget, RenderedProbe.Start, RenderedProbe.End,
+			RenderedProbe.End - RenderedProbe.Start));
+	TestTrue(TEXT("the old rendered-camera origin produces the reversed rear hit"),
+		FMath::LineBoxIntersection(RearTarget, RenderedProbe.Start, RenderedProbe.End,
+			RenderedProbe.End - RenderedProbe.Start));
+
 	// Reproduce the production ownership shape: a separately owned skeletal visual is attached
 	// below the native NPC body's blocking capsule.
 	AActor* MotorOwner = World->SpawnActor<AActor>();
@@ -10745,6 +10837,7 @@ bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(SessionDefs());
+	World.SpawnPlayer();
 	World.Activate(0.0);
 	auto* Hold = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("hold")));
 	auto* Explicit = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("explicit")));
@@ -10852,6 +10945,7 @@ bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
 		FElysiumRecordingServices TeardownServices;
 		FElysiumEntityWorld TeardownWorld(nullptr, nullptr, TeardownServices.Bundle());
 		TeardownWorld.Load(SessionDefs());
+		TeardownWorld.SpawnPlayer();
 		TeardownWorld.Activate(0.0);
 		FElysiumEntity* TeardownHold = TeardownWorld.FindByName(TEXT("hold"));
 		FElysiumUseCandidate Hit = Candidate(
@@ -10866,6 +10960,178 @@ bool FElysiumInteractionLifecycleTest::RunTest(const FString&)
 		FElysiumTestUseSessionEntity::TeardownEndCount, TeardownsBefore + 1);
 
 	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUseFilterTest,
+	"Elysium.Substrate.UseFilter", GElysiumTestFlags)
+bool FElysiumUseFilterTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__use_filter__");
+	auto AddFilter = [&Defs](const TCHAR* Name, const TCHAR* Pattern)
+	{
+		FElysiumEntityDef Filter;
+		Filter.Classname = TEXT("filter_activator_name");
+		Filter.TargetName = Name;
+		Filter.Keys.Add(TEXT("filtername"), Pattern);
+		Defs.Defs.Add(MoveTemp(Filter));
+	};
+	AddFilter(TEXT("accept_player"), TEXT("!pla*"));
+	AddFilter(TEXT("reject_player"), TEXT("somebody_else"));
+
+	auto AddUsable = [&Defs](const TCHAR* Name, const TCHAR* Filter)
+	{
+		FElysiumEntityDef Use;
+		Use.Classname = TEXT("test_use_session");
+		Use.TargetName = Name;
+		Use.Keys.Add(TEXT("use_filter_name"), Filter);
+		Defs.Defs.Add(MoveTemp(Use));
+	};
+	AddUsable(TEXT("allowed"), TEXT("accept_player"));
+	AddUsable(TEXT("rejected"), TEXT("reject_player"));
+	AddUsable(TEXT("missing"), TEXT("filter_that_does_not_exist"));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+
+	auto Press = [&World, &Services](FElysiumEntity& Entity)
+	{
+		FElysiumUseCandidate Hit;
+		Hit.Owner = Entity.Handle;
+		Hit.Selection = EElysiumUseSelection::Exact;
+		Services.UseQuery.Candidates = { Hit };
+		World.UpdatePlayerInteraction();
+		World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+		World.UpdatePlayerInteraction();
+	};
+
+	auto* Allowed = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("allowed")));
+	auto* Rejected = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("rejected")));
+	auto* Missing = static_cast<FElysiumTestUseSessionEntity*>(World.FindByName(TEXT("missing")));
+	if (!TestNotNull(TEXT("allowed use target"), Allowed)
+		|| !TestNotNull(TEXT("rejected use target"), Rejected)
+		|| !TestNotNull(TEXT("missing-filter use target"), Missing))
+	{
+		return false;
+	}
+
+	Press(*Allowed);
+	TestEqual(TEXT("a passing use filter begins the target"), Allowed->BeginCount, 1);
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Released);
+	World.UpdatePlayerInteraction();
+
+	Press(*Rejected);
+	TestEqual(TEXT("a failed use filter blocks before BeginPlayerUse"), Rejected->BeginCount, 0);
+	TestEqual(TEXT("a failed use filter reports unavailable"), World.GetLastUseOutcome(),
+		EElysiumUseOutcome::Unavailable);
+
+	AddExpectedError(TEXT("use_filter_name 'filter_that_does_not_exist' did not resolve; allowing use"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	Press(*Missing);
+	TestEqual(TEXT("an unresolved use filter remains non-blocking"), Missing->BeginCount, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSwitchUseTest,
+	"Elysium.Substrate.PropSwitchUse", GElysiumTestFlags)
+bool FElysiumPropSwitchUseTest::RunTest(const FString&)
+{
+	auto Counter = [](const TCHAR* Name)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("math_counter");
+		Def.TargetName = Name;
+		return Def;
+	};
+	auto Wire = [](FElysiumEntityDef& Def, const TCHAR* Output, const TCHAR* Target)
+	{
+		FElysiumOutputDef Row;
+		Row.Name = Output;
+		Row.Target = Target;
+		Row.Input = TEXT("Add");
+		Row.Param = TEXT("1");
+		Def.Outputs.Add(MoveTemp(Row));
+	};
+	auto ReadCounter = [](const FElysiumEntity* Entity)
+	{
+		TArray<TPair<FString, FString>> State;
+		if (Entity) { Entity->GetDebugState(State); }
+		const TPair<FString, FString>* Value = State.FindByPredicate(
+			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Value"); });
+		return Value ? FCString::Atof(*Value->Value) : -1.0f;
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_switch_use__");
+	FElysiumEntityDef Switch;
+	Switch.Classname = TEXT("prop_switch");
+	Switch.TargetName = TEXT("switch");
+	Switch.ModelMesh = TEXT("switch_static");
+	Switch.Keys.Add(TEXT("model"), TEXT("models/test/switch.mdl"));
+	Switch.Keys.Add(TEXT("spawnflags"), TEXT("8192")); // starts activated
+	Switch.Keys.Add(TEXT("use_icon"), TEXT("7"));
+	Switch.Keys.Add(TEXT("locked_icon"), TEXT("8"));
+	Wire(Switch, TEXT("OnUse"), TEXT("used"));
+	Wire(Switch, TEXT("OnLockedUse"), TEXT("locked"));
+	Wire(Switch, TEXT("OnActivate"), TEXT("activated"));
+	Wire(Switch, TEXT("OnDeactivate"), TEXT("deactivated"));
+	Defs.Defs.Add(MoveTemp(Switch));
+	for (const TCHAR* Name : { TEXT("used"), TEXT("locked"), TEXT("activated"), TEXT("deactivated") })
+	{
+		Defs.Defs.Add(Counter(Name));
+	}
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.ClipSeconds = 1.0f;
+	Services.AnimatedPropModels.Add(TEXT("models/test/switch.mdl"), TEXT("switch_anim"));
+	Services.AnimatedPropRestClips.Add(TEXT("switch_anim"), TEXT("idle_off"));
+	Services.AnimatedPropClipLoops.Add(TEXT("switch_anim|idle_on"), true);
+	Services.AnimatedPropClipLoops.Add(TEXT("switch_anim|idle_off"), true);
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Live = World.FindByName(TEXT("switch"));
+	if (!TestNotNull(TEXT("prop_switch resolves"), Live))
+	{
+		return false;
+	}
+	TestEqual(TEXT("unlocked switch publishes its use icon"), Live->GetUseIcon(), 7);
+
+	Live->Use(Player);
+	World.Tick(0.0);
+	TestEqual(TEXT("unlocked use fires OnUse immediately"),
+		ReadCounter(World.FindByName(TEXT("used"))), 1.0f);
+	TestEqual(TEXT("deactivation output waits for its clip"),
+		ReadCounter(World.FindByName(TEXT("deactivated"))), 0.0f);
+	World.Tick(0.99);
+	TestEqual(TEXT("transition remains pending before authored duration"),
+		ReadCounter(World.FindByName(TEXT("deactivated"))), 0.0f);
+	World.Tick(1.0);
+	TestEqual(TEXT("deactivation output fires when the clip finishes"),
+		ReadCounter(World.FindByName(TEXT("deactivated"))), 1.0f);
+
+	World.AcceptInput(TEXT("switch"), FName(TEXT("Lock")), FElysiumVariant::Void(), Player, Player);
+	TestTrue(TEXT("Lock changes switch interaction state"), Live->IsUseLocked());
+	TestEqual(TEXT("locked switch publishes its locked icon"), Live->GetUseIcon(), 8);
+	Live->Use(Player);
+	World.Tick(1.0);
+	TestEqual(TEXT("locked use fires only OnLockedUse"),
+		ReadCounter(World.FindByName(TEXT("locked"))), 1.0f);
+	TestEqual(TEXT("locked use does not refire OnUse"),
+		ReadCounter(World.FindByName(TEXT("used"))), 1.0f);
+
+	World.AcceptInput(TEXT("switch"), FName(TEXT("Unlock")), FElysiumVariant::Void(), Player, Player);
+	World.AcceptInput(TEXT("switch"), FName(TEXT("Activate")), FElysiumVariant::Void(), Player, Player);
+	World.Tick(2.0);
+	TestEqual(TEXT("Activate input shares the transition/output path"),
+		ReadCounter(World.FindByName(TEXT("activated"))), 1.0f);
+	return true;
 }
 
 // =====================================================================================
@@ -16904,6 +17170,8 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	TestTrue(TEXT("world overlap makes HasItem see the lockpick"),
 		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
 	TestTrue(TEXT("the doorknob starts locked from its attached door"), LiveKnob->IsUseLocked());
+	TestFalse(TEXT("a knobbed door disables its brush as a competing +use owner"),
+		Services.UseAnchorEnabled.FindRef(LiveDoor->Handle));
 
 	FElysiumUseCandidate Candidate;
 	Candidate.Owner = LiveKnob->Handle;
@@ -17035,19 +17303,35 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 	Container.Keys.Add(TEXT("equip0"), TEXT("item_g_lockpick"));
 	Wire(Container, TEXT("OnItemRemove"), TEXT("removed"));
 	Wire(Container, TEXT("OnItemInsert"), TEXT("inserted"));
+	Wire(Container, TEXT("OnUseBegin"), TEXT("use_began"));
+	Wire(Container, TEXT("OnUseEnd"), TEXT("use_ended"));
 	Defs.Defs.Add(MoveTemp(Container));
+
+	FElysiumEntityDef ContainerLock;
+	ContainerLock.Classname = TEXT("item_container_lock");
+	ContainerLock.TargetName = TEXT("crate_lock");
+	ContainerLock.Keys.Add(TEXT("parentname"), TEXT("crate"));
+	ContainerLock.Keys.Add(TEXT("difficulty"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(ContainerLock));
 
 	FElysiumEntityDef Loose;
 	Loose.Classname = TEXT("item_w_thirtyeight");
 	Loose.TargetName = TEXT("loose_gun");
 	Defs.Defs.Add(MoveTemp(Loose));
-	Defs.Defs.Add(Counter(TEXT("removed")));
-	Defs.Defs.Add(Counter(TEXT("inserted")));
+	for (const TCHAR* Name : { TEXT("removed"), TEXT("inserted"), TEXT("use_began"), TEXT("use_ended") })
+	{
+		Defs.Defs.Add(Counter(Name));
+	}
 	FElysiumEntityDefs RestoreDefs = Defs;
 
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+	// The headless fixture has no primitive bodies to physically parent the lock to the crate.
+	// The warning is required and the lock's separate logical attachment is asserted below, both
+	// on the initial world and after save restore.
+	AddExpectedError(TEXT("cannot attach to parent 'crate'"),
+		EAutomationExpectedErrorFlags::Contains, 2);
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
 	World.Activate(0.0);
@@ -17055,8 +17339,11 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 
 	FElysiumItemContainer* Live = World.FindByName(TEXT("crate"))
 		? World.FindByName(TEXT("crate"))->AsItemContainer() : nullptr;
+	FElysiumLockableEntity* LiveLock = World.FindByName(TEXT("crate_lock"))
+		? World.FindByName(TEXT("crate_lock"))->AsLockableEntity() : nullptr;
 	FElysiumPlayer* Player = World.FindPlayer();
 	if (!TestNotNull(TEXT("container leaf constructed"), Live)
+		|| !TestNotNull(TEXT("container lock leaf constructed"), LiveLock)
 		|| !TestNotNull(TEXT("player constructed"), Player))
 	{
 		return false;
@@ -17066,12 +17353,41 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 	TestTrue(TEXT("seed item is owned by the container"), Seed && Seed->Owner == Live->Handle);
 	TestEqual(TEXT("container body requests its existing prop representation"),
 		Services.Count(TEXT("BuildPropVisual test_crate")), 1);
+	TestTrue(TEXT("attached container lock starts locked"), LiveLock->IsUseLocked());
+	TestFalse(TEXT("locked attachment suppresses the container's direct +use anchor"),
+		Services.UseAnchorEnabled.FindRef(Live->Handle));
+	World.AcceptInput(TEXT("crate_lock"), FName(TEXT("Unlock")), FElysiumVariant::Void(),
+		Player->Handle, Player->Handle);
+	TestFalse(TEXT("Unlock releases the attached container lock"), LiveLock->IsUseLocked());
+	TestTrue(TEXT("unlock restores the container +use anchor"),
+		Services.UseAnchorEnabled.FindRef(Live->Handle));
 
-	// The UI-less session: +use owns the container, then the authoritative command moves a slot.
-	Live->Use(Player->Handle);
+	// The world-owned explicit session is entered through the ordinary +use query, then the same
+	// narrow intents used by CommonUI move one authoritative slot at a time.
+	FElysiumUseCandidate ContainerHit;
+	ContainerHit.Owner = Live->Handle;
+	ContainerHit.Selection = EElysiumUseSelection::Exact;
+	Services.UseQuery.Candidates = { ContainerHit };
+	World.UpdatePlayerInteraction();
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerInteraction();
 	TestEqual(TEXT("container records its exclusive user"), Live->CurrentUser, Player->Handle);
+	TestEqual(TEXT("container +use owns an explicit session"), World.GetLastUseOutcome(),
+		EElysiumUseOutcome::SessionStarted);
+	World.Tick(0.0);
+	TestEqual(TEXT("container queues OnUseBegin once"),
+		ReadCounter(World.FindByName(TEXT("use_began"))), 1.0f);
+	TestTrue(TEXT("an open loot container blocks saving"),
+		World.ScriptedSessionSaveBlockReason().Contains(TEXT("loot container")));
+	FElysiumLootView Loot;
+	TestTrue(TEXT("open container publishes a loot view"), World.BuildLootView(Loot));
+	TestEqual(TEXT("loot view owner is the captured container"), Loot.Owner, Live->Handle);
+	TestEqual(TEXT("loot view exposes the seeded container item"), Loot.ContainerItems.Num(), 1);
+	AddExpectedError(TEXT("inventory transfer refused: source="),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	TestFalse(TEXT("a stale loot slot is refused and reported"), World.PlayerLootTake(99));
 	TestTrue(TEXT("Take commits through the server transaction"),
-		ElysiumItems::ExecuteBarter(World, TEXT("Take 0")));
+		World.PlayerLootTake(0));
 	TestEqual(TEXT("Take empties the source"), Live->Inventory.Num(), 0);
 	TestTrue(TEXT("Take gives the same item classname to the player"),
 		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
@@ -17080,7 +17396,7 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 		ReadCounter(World.FindByName(TEXT("removed"))), 1.f);
 
 	TestTrue(TEXT("Give commits through the same transaction"),
-		ElysiumItems::ExecuteBarter(World, TEXT("Give 0")));
+		World.PlayerLootGive(0));
 	TestEqual(TEXT("Give returns one item to the container"), Live->Inventory.Num(), 1);
 	TestEqual(TEXT("Give removes it from the player"), Player->Inventory.Num(), 0);
 	World.Tick(0.0);
@@ -17109,16 +17425,24 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 	{
 		Stack->ItemCount = 3;
 		TestTrue(TEXT("Take splits one unit from a multi-count stack"),
-			ElysiumItems::ExecuteBarter(World, TEXT("Take 0")));
+			World.PlayerLootTake(0));
 		TestEqual(TEXT("split leaves the source entity with two units"), Stack->ItemCount, 2);
 		FElysiumItem* PlayerStack = Player->Inventory.FindOrdinary(*Player, TEXT("item_w_tire_iron"));
 		TestTrue(TEXT("split creates one destination stack unit"),
 			PlayerStack && PlayerStack->ItemCount == 1);
 		TestTrue(TEXT("Give splits one unit back through the inverse path"),
-			ElysiumItems::ExecuteBarter(World, TEXT("Give 0")));
+			World.PlayerLootGive(0));
 		TestEqual(TEXT("inverse split restores the container stack"), Stack->ItemCount, 3);
 		TestEqual(TEXT("inverse split consumes the last destination entity"), Player->Inventory.Num(), 0);
 	}
+
+	TestTrue(TEXT("loot close completes the captured session"), World.PlayerCloseLoot());
+	World.Tick(World.NowSeconds());
+	TestFalse(TEXT("loot close releases exclusive ownership"), Live->CurrentUser.IsSet());
+	TestEqual(TEXT("loot close queues OnUseEnd once"),
+		ReadCounter(World.FindByName(TEXT("use_ended"))), 1.0f);
+	TestTrue(TEXT("closed loot session no longer blocks saving"),
+		World.ScriptedSessionSaveBlockReason().IsEmpty());
 
 	// The seed latch and runtime item definitions make a save restore idempotent.
 	FElysiumMapSnapshot Snapshot;
@@ -17142,6 +17466,14 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 			*RestoredContainer, TEXT("item_w_tire_iron"));
 		TestTrue(TEXT("restored contents are the saved runtime stack"),
 			RestoredStack && RestoredStack->ItemCount == 3);
+		FElysiumEntity* RestoredLock = Restored.FindByName(TEXT("crate_lock"));
+		TestTrue(TEXT("restored lock keeps its unlocked result"),
+			RestoredLock && RestoredLock->AsLockableEntity()
+			&& !RestoredLock->AsLockableEntity()->IsUseLocked());
+		TestEqual(TEXT("restored container keeps its logical lock attachment"),
+			RestoredContainer->AttachedLock, RestoredLock ? RestoredLock->Handle : FElysiumEntityHandle());
+		TestTrue(TEXT("restored unlocked state re-enables the container anchor"),
+			RestoreServices.UseAnchorEnabled.FindRef(RestoredContainer->Handle));
 	}
 
 	return true;
@@ -17213,6 +17545,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedingTest, "Elysium.Substrate.Feeding
 bool FElysiumFeedingTest::RunTest(const FString&)
 {
 	using EC = EElysiumTraitContainer;
+	FElysiumLogTap FeedLogs(512);
+	FeedLogs.Install();
+	ON_SCOPE_EXIT { FeedLogs.Remove(); };
+	const uint64 FeedLogCursor = FeedLogs.Cursor();
 
 	// --- The cadence, pure ---------------------------------------------------------------------
 	// `initial interval = 0.30 + (B + 1) * 0.15`, so a fuller victim starts slower.
@@ -17241,6 +17577,9 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		TestFalse(TEXT("a full feeder's pool does NOT count as stolen"), Full.bCountStolen);
 		TestTrue(TEXT("...but the feed-heal is still evaluated"), Full.bHeal);
 		TestTrue(TEXT("...and the victim is still drained"), Full.bDrainVictim);
+		TestEqual(TEXT("the full-pool pulse remains explicit in the console contract"),
+			ElysiumFeed::PulseLogLine(15, 15, 1, 0, 0),
+			FString(TEXT("INFO - Feed pulse: player=15->15, victim=1->0, stolen=0")));
 	}
 
 	// --- The opposed comparison, pure ----------------------------------------------------------
@@ -17339,6 +17678,11 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 0);
 		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
 		Victim->Disposition = TEXT("cower");
+
+		World.QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
+		World.UpdatePlayerFeed();
+		TestFalse(TEXT("a target miss leaves the player unpaired"), Player->IsFeedPaired());
+
 		Services.FeedTarget = Victim->Handle;
 
 		World.QueuePlayerFeedEdge(EElysiumUseEdge::Pressed);
@@ -17390,8 +17734,12 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	// --- FeedBegin's field seeding, and one pulse per update ------------------------------------
 	{
 		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.bProvideNpcMotor = true;
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
-		World.Load(MakeFeedTestDefs());
+		FElysiumEntityDefs Defs = MakeFeedTestDefs();
+		Defs.Defs[0].Keys.Add(TEXT("model"), TEXT("models/test/feed_victim.mdl"));
+		World.Load(MoveTemp(Defs));
 		World.SpawnPlayer();
 		World.Activate(0.0);
 		World.Tick(0.0);
@@ -17405,6 +17753,8 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 45);
 		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
 		Victim->Disposition = TEXT("cower");
+		const FVector PlayerOriginBefore = Player->Origin;
+		const FVector VictimOriginBefore = Victim->Origin;
 
 		TestTrue(TEXT("the feed is accepted"),
 			ElysiumFeedAccepted(Player->AttemptFeed(*Victim)));
@@ -17414,6 +17764,17 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 			Player->FeedState.IsTransacting());
 		TestTrue(TEXT("the victim's body is held for the duration"),
 			Victim->FeedState.bFrozenByFeed);
+		TestTrue(TEXT("pair alignment does not move the player"),
+			Player->Origin.Equals(PlayerOriginBefore));
+		TestTrue(TEXT("pair alignment does not move the victim"),
+			Victim->Origin.Equals(VictimOriginBefore));
+		TestEqual(TEXT("the player faces the victim"), Services.PlayerRotation.Yaw, 0.0, 1e-3);
+		FElysiumRecordingNpcMotor* VictimMotor = Services.LastNpcMotor();
+		if (TestNotNull(TEXT("the paired victim has a recording motor"), VictimMotor))
+		{
+			TestEqual(TEXT("the victim faces back toward the player"),
+				FMath::Abs(VictimMotor->Yaw), 180.0f, 1e-3f);
+		}
 
 		auto Advance = [&World](double To)
 		{
@@ -17640,6 +18001,35 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 			FeederB->FeedState.BloodStolen, StolenBefore + 1);
 	}
 
+	TArray<FElysiumLogTap::FLine> Lines;
+	FeedLogs.CollectSince(FeedLogCursor, Lines);
+	auto SawDisplay = [&Lines](const TCHAR* Prefix)
+	{
+		return Lines.ContainsByPredicate([Prefix](const FElysiumLogTap::FLine& Line)
+		{
+			return Line.Verbosity.Equals(TEXT("Display"), ESearchCase::IgnoreCase)
+				&& Line.Text.StartsWith(Prefix);
+		});
+	};
+	TestTrue(TEXT("a miss is visible in the console"),
+		SawDisplay(TEXT("INFO - Feed missed: no live target")));
+	TestTrue(TEXT("a refusal is visible in the console"),
+		SawDisplay(TEXT("INFO - Feed refused:")));
+	TestTrue(TEXT("an accepted grapple is visible in the console"),
+		SawDisplay(TEXT("INFO - Feed engaged:")));
+	TestTrue(TEXT("transaction start is visible in the console"),
+		SawDisplay(TEXT("INFO - Feed started:")));
+	TestTrue(TEXT("a normal pulse reports both blood transitions"),
+		SawDisplay(TEXT("INFO - Feed pulse: player=0->1, victim=3->2, stolen=1")));
+	TestTrue(TEXT("the second press reports its stop request"),
+		SawDisplay(TEXT("INFO - Feed stop requested")));
+	TestTrue(TEXT("manual completion reports the surviving victim"),
+		SawDisplay(TEXT("INFO - Feed stopped:")));
+	TestTrue(TEXT("depletion reports the terminal outcome"),
+		SawDisplay(TEXT("INFO - Feed ended:")));
+	TestTrue(TEXT("damage teardown reports interruption"),
+		SawDisplay(TEXT("INFO - Feed interrupted:")));
+
 	return true;
 }
 
@@ -17740,6 +18130,62 @@ bool FElysiumFeedMakerOutputsTest::RunTest(const FString&)
 		SaveTestCounterValue(World.FindByName(TEXT("deathcount"))), 1.0f);
 	TestFalse(TEXT("the maker itself is not left paired"), Player->IsFeedPaired());
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedModelBodyClosureTest,
+	"Elysium.Substrate.PlacedModelBodyClosure", GElysiumTestFlags)
+bool FElysiumPlacedModelBodyClosureTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__placed_model_body_closure__");
+
+	FElysiumEntityDef Generic;
+	Generic.Classname = TEXT("info_target");
+	Generic.TargetName = TEXT("ornament");
+	Generic.ModelMesh = TEXT("ornament_static");
+	Generic.Keys.Add(TEXT("model"), TEXT("models/test/ornament.mdl"));
+	Defs.Defs.Add(MoveTemp(Generic));
+
+	FElysiumEntityDef Physics;
+	Physics.Classname = TEXT("prop_physics");
+	Physics.TargetName = TEXT("bottle");
+	Physics.ModelMesh = TEXT("bottle_static");
+	Physics.Keys.Add(TEXT("model"), TEXT("models/test/bottle.mdl"));
+	Defs.Defs.Add(MoveTemp(Physics));
+
+	FElysiumRecordingServices Services;
+	Services.bPlacedModelsResolve = true;
+	FElysiumEntityWorld World(/*Owner=*/nullptr, /*GameState=*/nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+
+	TestEqual(TEXT("the generic leaf inherits one body before activation"),
+		Services.Count(TEXT("BuildPlacedModelBody models/test/ornament.mdl")), 1);
+	TestTrue(TEXT("the inherited body carries its stable handle token"),
+		Services.Saw(TEXT("BuildPlacedModelBody models/test/ornament.mdl token=0")));
+	TestEqual(TEXT("a generic fallback adds no interaction anchor"),
+		Services.Count(TEXT("RegisterUseAnchor ")), 0);
+	TestTrue(TEXT("physics props explicitly request a simulated proxy"),
+		Services.Saw(TEXT("BuildPlacedModelBody models/test/bottle.mdl token=1 skin=0 physics=2")));
+	if (FElysiumEntity* Bottle = World.FindByName(TEXT("bottle")))
+	{
+		TestTrue(TEXT("physics attachment authority is the static proxy"),
+			Bottle->GetAttachBody() && Bottle->GetAttachBody()->IsA<UStaticMeshComponent>());
+	}
+	else
+	{
+		AddError(TEXT("physics prop did not spawn"));
+	}
+
+	Services.Calls.Reset();
+	if (FElysiumEntity* Ornament = World.FindByName(TEXT("ornament")))
+	{
+		Ornament->SetRuntimeModel(TEXT("models/test/replacement.mdl"));
+	}
+	TestEqual(TEXT("SetModel rebuilds through the same composite factory"),
+		Services.Count(TEXT("BuildPlacedModelBody models/test/replacement.mdl")), 1);
+	TestEqual(TEXT("a generic model swap still creates no interaction semantics"),
+		Services.Count(TEXT("RegisterUseAnchor ")), 0);
 	return true;
 }
 

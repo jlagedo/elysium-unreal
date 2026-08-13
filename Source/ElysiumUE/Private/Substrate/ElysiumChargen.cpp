@@ -403,7 +403,8 @@ void ApplyBaseline(FElysiumChargenState& State, const FElysiumChargenRules& Rule
 		{
 			if (!History->Effect.IsEmpty()) { GroupNames.Add(History->Effect); }
 		}
-		State.Effects.Build(*Rules.TraitEffects, GroupNames, Rules.Feats);
+		State.Effects.Build(
+			*Rules.TraitEffects, GroupNames, Rules.Feats, Rules.Stats, Rules.Strings);
 	}
 
 	if (!bHasClan)
@@ -422,6 +423,9 @@ void ApplyBaseline(FElysiumChargenState& State, const FElysiumChargenRules& Rule
 	const int32 AbilityOrder = ResolveOrder(Rules, Template, EElysiumTraitContainer::Abilities, 0);
 	State.Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::AttribOrder, AttribOrder);
 	State.Sheet.SetBase(EElysiumTraitContainer::Abilities, 0, AbilityOrder);
+	// SetBase keeps BASE and CURRENT locally consistent, but the two symbolic order effects have to
+	// replace those new base values before the auto-level dependency selects its one matching branch.
+	State.Sheet.RecomputeCurrent(Rules.Stats, &State.Effects);
 
 	// 5. The baseline dots, BOUGHT: VtMB grants 9000 XP and runs `<Clan>_CharGen`, so the starting
 	//    sheet is the template's own spend order rather than a written block. The XP grant is
@@ -430,9 +434,15 @@ void ApplyBaseline(FElysiumChargenState& State, const FElysiumChargenRules& Rule
 
 	State.Sheet.RecomputeCurrent(Rules.Stats, &State.Effects);
 
-	// 6. What was granted is the floor, and the pools are what the player spends on top of it.
+	// 6. What was granted is the floor, and the pools are what the player spends on top of it. A
+	//    History can replace either symbolic order through the effect layer, so read the final
+	//    CURRENT values rather than the clan template's pre-History values used to seed the base.
 	State.Baseline = State.Sheet;
-	State.Pools = BuildPools(Rules, State.Clan, AttribOrder, AbilityOrder,
+	const int32 EffectiveAttribOrder = State.Sheet.GetCurrent(
+		EElysiumTraitContainer::Attributes, ElysiumSlot::AttribOrder);
+	const int32 EffectiveAbilityOrder = State.Sheet.GetCurrent(
+		EElysiumTraitContainer::Abilities, 0);
+	State.Pools = BuildPools(Rules, State.Clan, EffectiveAttribOrder, EffectiveAbilityOrder,
 		Template.GeneralInt(TEXT("Kindred"), 1) != 0);
 }
 

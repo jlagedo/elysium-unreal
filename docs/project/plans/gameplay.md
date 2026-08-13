@@ -20,10 +20,10 @@ in the owning doc. *Deps:* 4.1.
 
 ### 4.10 `game_sign` / `prop_sign` — remaining
 
-`game_sign` + the sign pipeline landed; RE43/RE44 closed the retail leaf. Still open: the
-`prop_sign` `+use` path (one exclusive player session, `OnReadBegin`, `definition_file`,
-first-true dependency redirect, `OnReadEnd`), `NewspaperData`/multi-column, `ClientCommand`,
-`fade_out` linger, `pause` semantics + `spawnflags 5` undecoded; real `.fnt`-role type is 8.8.
+The sign leaves and shared parser cover the exclusive `prop_sign` session, `OnReadBegin`,
+`definition_file`, first-true dependency redirect and `OnReadEnd`. Still open:
+`NewspaperData`/multi-column, `ClientCommand`, `fade_out` linger, `pause` semantics +
+`spawnflags 5` undecoded; real `.fnt`-role type is 8.8.
 *Acceptance:* `+use` on `sign_chopshop_upstairs` reads "password: chopshop"; a dispatch-wrapper
 sign picks its variant from `G`. *Deps:* 4.4, 5.2 for the redirect.
 
@@ -33,14 +33,11 @@ Four separable pieces. (a) **`trigger_hurt` cadence**: retail deals `damage × 0
 then `damage × 3.0` every 3.0 s; the runtime deals `damage` on entry then `damage` every 0.5 s.
 Register `HurtNow`, `SetDamage`, `OnHurt`, `OnHurtPlayer` while there. (b) **Trigger
 `filtername`**: late activation resolves the retained handle; `filter_activator_name` and
-AND/OR `filter_multi` reject before touch-pair deduplication. (c) **`prop_switch` and the
-lockable family have no inputs** — 49 shipped wires land nowhere, invisible to `elysium.stubs`
-because the classnames are claimed; `CPropSwitch` is a sequence player whose `OnActivate` (117
-wires) fires on clip end; the four lockable classes share one
-`CBaseLockableEnt`/`CBaseVampireSkillEntity` implementation. (d) **The doorknob handle
-sequence** is a virtual the door calls — an animated doorknob stands in bind pose. Knobs,
-switches, signs, terminals and containers expose no player-focus anchor until these leaf
-behaviors own the interaction; they plug into 4.4 without a selection-system redesign.
+AND/OR `filter_multi` reject before touch-pair deduplication. The same verdict gates
+`use_filter_name`. `prop_switch`, the four lockable leaves and the doorknob handle sequence use
+the shared 4.4 focus/session path; `CPropSwitch` remains a sequence player whose `OnActivate`
+fires on clip end. Still open here: its `soundgroup` on/off events and a runtime reset hook that can
+apply `reset_state`. Terminal interaction is owned separately by 13.4.
 → `docs/vtmb/entity_io.md`. *Deps:* 4.1, 8.3.
 
 ### 9.1 `.dlg` parser + dlgexpr — remaining
@@ -66,10 +63,11 @@ inventory follow-up.
 
 ### 9.8 Inventory & items — remaining
 
-The ownership, loose-pickup and loot-container core landed. **Remaining:** player drop,
-`StartBarter` plus the loot/barter UI (8.6), `trigger_inventory_check`, and the
-`TravelsWithPlayer()` absent-set half; buy/sell pricing is 9.10's. The tutorial lockpick's
-attempt HUD remains a logged stub; the real CommonUI loot panel remains stubbed.
+The ownership, loose-pickup, explicit loot-container session and CommonUI transfer panel form the
+loot core. **Remaining:** player drop, `StartBarter` plus the buy/sell barter UI (8.6),
+`trigger_inventory_check`, and the `TravelsWithPlayer()` absent-set half; buy/sell pricing is
+9.10's. The plain `item_container` lid mover and the animated-container `soundgroup` path remain;
+the tutorial lockpick's attempt HUD remains a logged stub.
 → `docs/vtmb/inventory.md`, `docs/architecture/gameplay-systems-architecture.md`. *Deps:* 9.4.
 
 ### 9.9 NPC disposition & reactions — remaining

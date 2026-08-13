@@ -21,6 +21,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumInputAssets.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumPlayer.h"
@@ -47,6 +48,8 @@
 #include "ElysiumSaveTypes.h"
 #include "ElysiumTestServices.h"
 #include "Tests/ElysiumNpcTestHooks.h"
+#include "Animation/AnimSequence.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
@@ -376,11 +379,18 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	// 8.3/8.4 skin families — the `+use` static-mesh family stands a body and takes a skin, the
 	// exporter emits a `props/<stem>.skins` sidecar for every model carrying alternate families,
 	// and `.props` carries DStaticPropV4.skin as a tenth field.
-	for (const TCHAR* Name : { TEXT("prop_button"), TEXT("prop_sign"), TEXT("prop_doorknob"),
-							   TEXT("item_container_animated") })
+	for (const TCHAR* Name : { TEXT("prop_button"), TEXT("prop_switch"), TEXT("prop_sign"),
+							   TEXT("prop_doorknob"), TEXT("prop_doorknob_electronic"),
+							   TEXT("item_container_lock"), TEXT("item_container_animated") })
 	{
 		TestNotNull(*FString::Printf(TEXT("%s registered"), Name), Reg.Find(FName(Name)));
 	}
+	const FElysiumClassDesc* SwitchClass = Reg.Find(FName(TEXT("prop_switch")));
+	const FElysiumClassDesc* SignClass = Reg.Find(FName(TEXT("prop_sign")));
+	TestTrue(TEXT("prop_switch is a specialized implementation"), SwitchClass && !SwitchClass->bStub
+		&& Reg.FindInput(*SwitchClass, FName(TEXT("Toggle"))) != nullptr);
+	TestTrue(TEXT("prop_sign owns definition_file"), SignClass && !SignClass->bStub
+		&& Reg.FindField(*SignClass, FName(TEXT("definition_file"))) != nullptr);
 
 	const FString PropsDir = FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1"));
 	TArray<FString> SkinFiles;
@@ -2128,13 +2138,15 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 			TestEqual(TEXT("declaration order beats alphabetical for the rest pose"),
 				Knob->RestSequence(), FString(TEXT("idle")));
 		}
-		// A model whose only sequence is a single static frame is not an animated prop at all, so
-		// the exporter must leave it out and the prop keeps its baked static mesh.
+		// v7 indexes even a single-frame pose: frame count does not license displaying storage bind.
 		for (const TCHAR* Motionless : { TEXT("models/scenery/furniture/lampfloor/lampfloor.mdl"),
 			TEXT("models/scenery/theater/stage_light.mdl") })
 		{
-			TestNull(FString::Printf(TEXT("%s is not indexed as animated"), Motionless),
-				Index.FindAnimatedProp(Motionless));
+			if (Index.ManifestVersion >= 7)
+			{
+				TestNotNull(FString::Printf(TEXT("%s carries its held authored pose"), Motionless),
+					Index.FindPlacedModel(Motionless));
+			}
 		}
 	}
 
@@ -2204,6 +2216,50 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 		++Resolved;
 	}
 	TestEqual(TEXT("all seven opening animated props resolve"), Resolved, static_cast<int32>(UE_ARRAY_COUNT(Expected)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedModelCoverageContentTest,
+	"Elysium.Content.PlacedModelCoverage", GElysiumContentTestFlags)
+bool FElysiumPlacedModelCoverageContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("maps"), TEXT("characters") })) return true;
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(FString::Printf(TEXT("npc_index loads: %s"), *Error), Index.Load(Error)))
+	{
+		return true;
+	}
+	if (!TestEqual(TEXT("the complete placed-model schema is v7"), Index.ManifestVersion, 7))
+	{
+		return true;
+	}
+	TestTrue(TEXT("the exported corpus has placed models"), !Index.PlacedModels.IsEmpty());
+
+	for (const TPair<FString, FElysiumAnimatedPropEntry>& Pair : Index.PlacedModels)
+	{
+		const FElysiumAnimatedPropEntry& Entry = Pair.Value;
+		const FString Context = FString::Printf(TEXT("placed model %s"), *Entry.Model);
+		TestTrue(Context + TEXT(" has a static material/collision stem"), !Entry.StaticStem.IsEmpty());
+		TestTrue(Context + TEXT(" declares at least one rest candidate"), !Entry.RestCandidates.IsEmpty());
+		TestTrue(Context + TEXT(" names its ESKM"), !Entry.Eskm.IsEmpty());
+		TestNotNull(Context + TEXT(" has a baked skeletal mesh"),
+			LoadObject<USkeletalMesh>(nullptr,
+				*FElysiumContentPaths::BakedPropSkeletalMesh(Entry.Stem)));
+		for (const FString& Candidate : Entry.RestCandidates)
+		{
+			TestNotNull(Context + FString::Printf(TEXT(" has rest clip %s"), *Candidate),
+				Entry.FindClip(Candidate));
+			TestNotNull(Context + FString::Printf(TEXT(" baked rest clip %s"), *Candidate),
+				LoadObject<UAnimSequence>(nullptr,
+					*FElysiumContentPaths::BakedPropAnim(Entry.Stem, Candidate)));
+		}
+		if (Entry.ClipMode.Equals(TEXT("rest"), ESearchCase::IgnoreCase))
+		{
+			TestEqual(Context + TEXT(" bakes no unused clips"), Entry.Clips.Num(),
+				Entry.RestCandidates.Num());
+		}
+	}
 	return true;
 }
 
@@ -2448,6 +2504,103 @@ bool FElysiumTutorialLockpickDoorContentTest::RunTest(const FString&)
 		FName(TEXT("prop_doorknob")));
 	TestTrue(TEXT("the authored doorknob resolves to a live lockable class"),
 		KnobClass && KnobClass->BaseName == FName(TEXT("CBaseLockableEnt")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialPropSignInteractionTest,
+	"Elysium.Content.TutorialPropSignInteraction", GElysiumContentTestFlags)
+bool FElysiumTutorialPropSignInteractionTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1"));
+	const FString SignPath = FElysiumContentPaths::SignFile(TEXT("tutorial_note.txt"));
+	if (!IFileManager::Get().FileExists(*EntsPath) || !IFileManager::Get().FileExists(*SignPath))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: tutorial entities/sign data are not exported"));
+		return true;
+	}
+	FElysiumEntityDefs Corpus;
+	if (!TestTrue(TEXT("sp_tutorial_1 entities parse"), FElysiumEntityDefs::Parse(EntsPath, Corpus)))
+	{
+		return false;
+	}
+	const FElysiumEntityDef* Authored = Corpus.Defs.FindByPredicate([](const FElysiumEntityDef& Def)
+	{
+		return Def.Classname.Equals(TEXT("prop_sign"), ESearchCase::IgnoreCase)
+			&& Def.TargetName.Equals(TEXT("sign_chopshop_upstairs"), ESearchCase::IgnoreCase);
+	});
+	if (!TestNotNull(TEXT("tutorial note prop_sign is authored"), Authored))
+	{
+		return false;
+	}
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__tutorial_prop_sign__");
+	FElysiumEntityDef Sign = *Authored;
+	auto Wire = [&Sign](const TCHAR* Output, const TCHAR* Target)
+	{
+		FElysiumOutputDef Row;
+		Row.Name = Output;
+		Row.Target = Target;
+		Row.Input = TEXT("Add");
+		Row.Param = TEXT("1");
+		Sign.Outputs.Add(MoveTemp(Row));
+	};
+	Wire(TEXT("OnUseBegin"), TEXT("use_began"));
+	Wire(TEXT("OnReadBegin"), TEXT("read_began"));
+	Wire(TEXT("OnUseEnd"), TEXT("use_ended"));
+	Wire(TEXT("OnReadEnd"), TEXT("read_ended"));
+	Defs.Defs.Add(MoveTemp(Sign));
+	for (const TCHAR* Name : { TEXT("use_began"), TEXT("read_began"), TEXT("use_ended"), TEXT("read_ended") })
+	{
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = Name;
+		Defs.Defs.Add(MoveTemp(Counter));
+	}
+
+	auto ReadCounter = [](const FElysiumEntity* Entity)
+	{
+		TArray<TPair<FString, FString>> State;
+		if (Entity) { Entity->GetDebugState(State); }
+		const TPair<FString, FString>* Value = State.FindByPredicate(
+			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Value"); });
+		return Value ? FCString::Atof(*Value->Value) : -1.0f;
+	};
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Live = World.FindByName(TEXT("sign_chopshop_upstairs"));
+	if (!TestNotNull(TEXT("prop_sign constructs as a live use owner"), Live))
+	{
+		return false;
+	}
+	FElysiumUseCandidate Hit;
+	Hit.Owner = Live->Handle;
+	Hit.Selection = EElysiumUseSelection::Exact;
+	Services.UseQuery.Candidates = { Hit };
+	World.UpdatePlayerInteraction();
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("prop_sign opens the authored panel"), World.GetOpenSign(), Live->Handle);
+	TestEqual(TEXT("prop_sign captures an explicit +use session"), World.GetLastUseOutcome(),
+		EElysiumUseOutcome::SessionStarted);
+	World.Tick(0.0);
+	TestEqual(TEXT("accepted sign use fires inherited begin"),
+		ReadCounter(World.FindByName(TEXT("use_began"))), 1.0f);
+	TestEqual(TEXT("accepted sign use fires OnReadBegin"),
+		ReadCounter(World.FindByName(TEXT("read_began"))), 1.0f);
+	TestTrue(TEXT("the authored sign is dismissible"), World.CanPlayerDismissSign());
+	TestTrue(TEXT("dismissal closes through the captured sign owner"), World.PlayerDismissSign());
+	World.Tick(0.0);
+	TestFalse(TEXT("dismissal releases the sign panel"), World.GetOpenSign().IsSet());
+	TestEqual(TEXT("dismissal fires inherited end"),
+		ReadCounter(World.FindByName(TEXT("use_ended"))), 1.0f);
+	TestEqual(TEXT("dismissal fires OnReadEnd"),
+		ReadCounter(World.FindByName(TEXT("read_ended"))), 1.0f);
 	return true;
 }
 
@@ -4152,6 +4305,76 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 		// says so — and it ships 1 for every clan.
 		TestEqual(*FString::Printf(TEXT("%s gets 1 discipline point"), Name),
 			P[EElysiumChargenPool::Disciplines], 1);
+	}
+
+	// --- the developer preset consumes those real pools into one complete Malkavian sheet --------
+	{
+		const FElysiumNewGameRequest Request =
+			ElysiumStory::MakeMockCharacterRequest(TEXT("tutorial"));
+		FElysiumChargenState State;
+		State.Clan = Request.Clan;
+		State.bMale = Request.bMale;
+		State.HistoryId = Request.HistoryId;
+		const FElysiumHistory* History = Histories.At(Request.HistoryId);
+		if (TestNotNull(TEXT("the mock history row exists"), History))
+		{
+			TestEqual(TEXT("the mock uses the female Malkavian priority history"),
+				History->InternalName, FString(TEXT("Gymnast-turned-Stripper")));
+		}
+		ElysiumChargen::ApplyBaseline(State, Rules);
+		TestEqual(TEXT("the History replaces the attribute order before auto-level"),
+			State.Sheet.GetCurrent(EElysiumTraitContainer::Attributes,
+				ElysiumSlot::AttribOrder), 1);
+
+		int32 Applied = 0;
+		for (const TPair<FName, int32>& Spend : Request.Spends)
+		{
+			EElysiumTraitContainer Container = EElysiumTraitContainer::Attributes;
+			int32 Slot = INDEX_NONE;
+			if (!TestTrue(*FString::Printf(TEXT("mock trait '%s' resolves"), *Spend.Key.ToString()),
+				ElysiumFindSheetSlot(*Spend.Key.ToString(), Container, Slot)))
+			{
+				continue;
+			}
+			for (int32 Dot = 0; Dot < Spend.Value; ++Dot)
+			{
+				if (TestTrue(*FString::Printf(TEXT("mock buys dot %d of %s"),
+					Dot + 1, *Spend.Key.ToString()),
+					ElysiumChargen::Buy(State, Rules, Container, Slot)))
+				{
+					++Applied;
+				}
+			}
+		}
+
+		TestEqual(TEXT("the mock buys all ten initial dots"), Applied, 10);
+		TestTrue(TEXT("the mock leaves every initial pool spent out"), State.IsSpentOut());
+		TestEqual(TEXT("the complete mock remains Malkavian"), State.Sheet.Clan(),
+			FElysiumSheet::ClanFromName(TEXT("Malkavian")));
+		TestFalse(TEXT("the complete mock remains female"), State.Sheet.IsMale());
+
+		auto Base = [&State](EElysiumTraitContainer Container, int32 Slot)
+		{
+			return State.Sheet.GetBase(Container, Slot);
+		};
+		TestEqual(TEXT("mock Dexterity reaches 3"),
+			Base(EElysiumTraitContainer::Attributes, ElysiumSlot::Dexterity), 3);
+		TestEqual(TEXT("mock Stamina reaches 3"),
+			Base(EElysiumTraitContainer::Attributes, ElysiumSlot::Stamina), 3);
+		TestEqual(TEXT("mock Perception reaches 2"),
+			Base(EElysiumTraitContainer::Attributes, 7), 2);
+		TestEqual(TEXT("mock Computer reaches 3"),
+			Base(EElysiumTraitContainer::Abilities, 9), 3);
+		TestEqual(TEXT("mock Investigation reaches 2"),
+			Base(EElysiumTraitContainer::Abilities, 11), 2);
+		TestEqual(TEXT("mock Stealth reaches 2"),
+			Base(EElysiumTraitContainer::Abilities, 8), 2);
+		TestEqual(TEXT("mock Firearms reaches 1"),
+			Base(EElysiumTraitContainer::Abilities, 5), 1);
+		TestEqual(TEXT("mock Dodge reaches 1"),
+			Base(EElysiumTraitContainer::Abilities, 2), 1);
+		TestEqual(TEXT("mock Dementation reaches 3"),
+			Base(EElysiumTraitContainer::Disciplines, 5), 3);
 	}
 
 	// --- the baseline: seeded, templated, then bought through the CharGen template ----------------

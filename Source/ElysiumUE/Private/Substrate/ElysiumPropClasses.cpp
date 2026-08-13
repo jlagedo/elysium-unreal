@@ -8,9 +8,8 @@
 // set; `SetAnimation` plays a named clip on the skeletal representation and arms the animate think
 // that returns the prop to its `LoopSequence`.
 //
-// Deliberately out of scope: prop_physics Chaos bodies + constraints (8.4), the interactive
-// prop_button/prop_sign/prop_switch/… `+use` family (4.10/8.8), and collision — a prop stands non-solid
-// here (visual parity first; entity_visuals R2 "collision optional for visuals").
+// This file also owns the physical prop/constraint leaves and the model-bearing button, switch and
+// sign interactions. `prop_hacking` still stands only its body until the terminal contract lands.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
@@ -19,6 +18,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumSignData.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -544,7 +544,7 @@ private:
 		{
 			return false;
 		}
-		const FString Clip = Embodiment->AnimatedPropRestClip(AnimatedStem);
+		const FString Clip = Embodiment->AnimatedPropRestClip(AnimatedStem, Handle.Index);
 		bool bLoops = false;
 		Embodiment->FindAnimatedPropClip(AnimatedStem, Clip, bLoops);
 		return PlayAnimation(Clip, bLoops);
@@ -666,11 +666,14 @@ private:
 		// (Sequence == Playing && bLoop && bPlayingLoop) *without* restoring the play rate, so a
 		// hold created as a loop would latch a later request out of ever un-freezing — and
 		// `palmtree`'s rest clip and its `LoopSequence` are the same clip, so that path is live.
-		if (!PlayAnimation(Embodiment->AnimatedPropRestClip(AnimatedStem), /*bLoop*/ false))
+		if (!PlayAnimation(Embodiment->AnimatedPropRestClip(AnimatedStem, Handle.Index), /*bLoop*/ false))
 		{
 			return false;
 		}
 		Embodiment->SeekCinematicClip(AnimatedVisual, 0.0f);   // start position 0, play rate 0
+		AnimatedVisual->TickAnimation(0.0f, false);
+		AnimatedVisual->RefreshBoneTransforms();
+		AnimatedVisual->SetComponentTickEnabled(false);
 		AnimationEndTime = 0.0;   // a held pose never finishes, so it must not fire OnAnimationDone
 		bRestPoseHeld = true;
 		return true;
@@ -731,17 +734,41 @@ private:
 		// An indexed model that bakes no playable clip is not an animated representation — it is a
 		// bind-pose skeleton standing where the baked static mesh should be. RestClip is empty
 		// exactly when the entry carries no clips, so it is the same test.
-		if (!AnimatedStem.IsEmpty() && Embodiment->AnimatedPropRestClip(AnimatedStem).IsEmpty())
+		if (!AnimatedStem.IsEmpty()
+			&& Embodiment->AnimatedPropRestClip(AnimatedStem, Handle.Index).IsEmpty())
 		{
 			UE_LOG(LogElysiumProp, Verbose,
 				TEXT("%s: '%s' is indexed as animated but bakes no clip; standing the static mesh"),
 				*DebugString(), *AnimatedStem);
 			AnimatedStem.Reset();
 		}
-		if (!AnimatedStem.IsEmpty())
+		if (Embodiment->HasPlacedModelCatalogue())
 		{
+			FElysiumPlacedModelRequest Request;
+			Request.ModelPath = Model;
+			Request.StaticStem = VisualStem;
+			Request.Location = Loc;
+			Request.Rotation = SkeletalRot;
+			Request.UniformScale = Embodiment->BodyScaleFor(*Def);
+			Request.PlacementToken = Handle.Index;
+			Request.Skin = Skin;
+			const FElysiumPlacedModelBody PlacedBody = Embodiment->BuildPlacedModelBody(Request);
+			AnimatedVisual = PlacedBody.Visual;
+			if (AnimatedVisual)
+			{
+				World->RegisterNpcBody(AnimatedVisual);
+				if (IsUsable() && Def && !Def->bSky)
+				{
+					World->RegisterUseAnchor(AnimatedVisual, Handle);
+				}
+			}
+		}
+		else if (!AnimatedStem.IsEmpty())
+		{
+			// v3-v6 developer exports predate complete placed-model coverage. Preserve their former
+			// animated-prop path; v7 never reaches this branch and therefore cannot display a fallback.
 			AnimatedVisual = Embodiment->BuildAnimatedPropVisual(AnimatedStem, Loc, SkeletalRot,
-				Embodiment->BodyScaleFor(*Def));
+				Embodiment->BodyScaleFor(*Def), Handle.Index);
 			if (AnimatedVisual)
 			{
 				World->RegisterNpcBody(AnimatedVisual);
@@ -783,7 +810,7 @@ private:
 		{
 			const bool bWasTicking = AnimatedVisual->IsComponentTickEnabled();
 			AnimatedVisual->SetVisibility(bShown);
-			AnimatedVisual->SetComponentTickEnabled(bShown);
+			AnimatedVisual->SetComponentTickEnabled(bShown && !bRestPoseHeld);
 			// A hidden body does not tick, so its clip stops advancing while the game clock does
 			// not. On the way back the 10 Hz think would correct it within 0.1 s; doing it on the
 			// edge makes the prop right on its FIRST visible frame instead of a tenth of a second
@@ -862,6 +889,255 @@ private:
 		SetSkin(CurrentState);
 	}
 };
+
+// VtMB CPropSwitch. The state changes immediately, while its authored transition clip owns the
+// delayed OnActivate/OnDeactivate edge. Static or incomplete bodies complete synchronously so the
+// gameplay wire never depends on whether presentation content was available.
+class FElysiumPropSwitch final : public FElysiumProp
+{
+public:
+	FString LinkedSwitchName;
+	int32 ResetState = 0;
+	bool bLocked = false;
+	bool bActivated = false;
+	bool bTransitioning = false;
+	FElysiumEntityHandle TransitionActivator;
+
+	virtual void Spawn() override
+	{
+		FElysiumProp::Spawn();
+		bActivated = (SpawnFlags & 0x2000) != 0;
+		bLocked = (SpawnFlags & 0x4000) != 0;
+		SetSkin(bActivated ? 1 : 0);
+		PlayIdle();
+	}
+
+	virtual bool IsUsable() const override { return true; }
+	virtual bool IsUseLocked() const override { return bLocked; }
+	virtual void Use(const FElysiumEntityHandle& Activator) override
+	{
+		if (IsInert())
+		{
+			return;
+		}
+		if (bLocked)
+		{
+			static const FName OnLockedUse(TEXT("OnLockedUse"));
+			FireOutput(OnLockedUse, Activator);
+			return;
+		}
+		static const FName OnUse(TEXT("OnUse"));
+		FireOutput(OnUse, Activator);
+		SetSwitchState(!bActivated, Activator, /*bMirrorLinked=*/true);
+	}
+
+	void InputLock() { bLocked = true; }
+	void InputUnlock() { bLocked = false; }
+	void InputToggle(const FElysiumEntityHandle& Activator) { Use(Activator); }
+	void InputActivate(const FElysiumEntityHandle& Activator)
+	{
+		SetSwitchState(true, Activator, /*bMirrorLinked=*/true);
+	}
+	void InputDeactivate(const FElysiumEntityHandle& Activator)
+	{
+		SetSwitchState(false, Activator, /*bMirrorLinked=*/true);
+	}
+
+	virtual void Think() override
+	{
+		if (!bTransitioning)
+		{
+			FElysiumProp::Think();
+			return;
+		}
+		const double Now = World ? World->NowSeconds() : 0.0;
+		if (AnimationEndTime > Now)
+		{
+			NextThink = static_cast<float>(FMath::Min(AnimationEndTime, Now + 0.1));
+			return;
+		}
+		FinishTransition();
+	}
+
+	virtual void Serialize(FElysiumSaveArchive& Ar) override
+	{
+		FElysiumProp::Serialize(Ar);
+		Ar << bLocked << bActivated << bTransitioning << TransitionActivator;
+		if (Ar.IsLoading())
+		{
+			SetSkin(bActivated ? 1 : 0);
+			if (bTransitioning && World)
+			{
+				NextThink = static_cast<float>(World->NowSeconds() + 0.1);
+			}
+			else
+			{
+				PlayIdle();
+			}
+		}
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		FElysiumProp::GetDebugState(Out);
+		Out.Emplace(TEXT("Switch"), bActivated ? TEXT("activated") : TEXT("deactivated"));
+		Out.Emplace(TEXT("Locked"), bLocked ? TEXT("yes") : TEXT("no"));
+		Out.Emplace(TEXT("Linked switch"), LinkedSwitchName.IsEmpty() ? TEXT("(none)") : LinkedSwitchName);
+		Out.Emplace(TEXT("Transition"), bTransitioning ? TEXT("playing") : TEXT("idle"));
+	}
+
+private:
+	void SetSwitchState(bool bNewActivated, const FElysiumEntityHandle& Activator, bool bMirrorLinked)
+	{
+		if (bNewActivated == bActivated)
+		{
+			return;
+		}
+		bActivated = bNewActivated;
+		TransitionActivator = Activator;
+		bTransitioning = true;
+		AnimationEndTime = 0.0;
+		FElysiumInputArgs Args;
+		Args.Activator = Activator;
+		Args.Param = FElysiumVariant::String(bActivated ? TEXT("activate") : TEXT("deactivate"));
+		InputSetAnimation(Args);
+
+		if (bMirrorLinked && World && !LinkedSwitchName.IsEmpty())
+		{
+			FElysiumEntity* Linked = World->FindByName(LinkedSwitchName);
+			if (Linked && Linked != this && Linked->Def
+				&& Linked->Def->Classname.Equals(TEXT("prop_switch"), ESearchCase::IgnoreCase))
+			{
+				static_cast<FElysiumPropSwitch*>(Linked)->SetSwitchState(
+					bActivated, Activator, /*bMirrorLinked=*/false);
+			}
+			else
+			{
+				UE_LOG(LogElysiumProp, Warning,
+					TEXT("%s linkedswitch '%s' did not resolve to another prop_switch"),
+					*DebugString(), *LinkedSwitchName);
+			}
+		}
+
+		const double Now = World ? World->NowSeconds() : 0.0;
+		if (AnimationEndTime <= Now)
+		{
+			FinishTransition();
+		}
+		else
+		{
+			NextThink = static_cast<float>(FMath::Min(AnimationEndTime, Now + 0.1));
+		}
+	}
+
+	void FinishTransition()
+	{
+		if (!bTransitioning)
+		{
+			return;
+		}
+		bTransitioning = false;
+		SetSkin(bActivated ? 1 : 0);
+		FireOutput(bActivated ? FName(TEXT("OnActivate")) : FName(TEXT("OnDeactivate")),
+			TransitionActivator);
+		PlayIdle();
+	}
+
+	void PlayIdle()
+	{
+		FElysiumInputArgs Args;
+		Args.Activator = Handle;
+		Args.Param = FElysiumVariant::String(bActivated ? TEXT("idle_on") : TEXT("idle_off"));
+		InputSetAnimation(Args);
+	}
+};
+
+// CPropSign is a world prop and an explicit one-player session. The view is presentation only;
+// this entity owns admission and produces both inherited use and sign-specific read edges.
+class FElysiumPropSign final : public FElysiumProp
+{
+public:
+	FString DefinitionFile;
+	TSharedPtr<const FElysiumSignData> Panel;
+
+	virtual bool IsUsable() const override { return true; }
+
+	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override
+	{
+		if (!World || Context.Activator != World->PlayerHandle() || IsInert())
+		{
+			return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+		}
+		const FElysiumEntityHandle Existing = World->GetOpenSign();
+		if (Existing.IsSet() && Existing != Handle)
+		{
+			return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Busy);
+		}
+		if (!EnsurePanel())
+		{
+			return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+		}
+		World->OpenSign(Handle, Panel, 0.0f);
+		static const FName OnUseBegin(TEXT("OnUseBegin"));
+		static const FName OnReadBegin(TEXT("OnReadBegin"));
+		FireOutput(OnUseBegin, Context.Activator);
+		FireOutput(OnReadBegin, Context.Activator);
+		return FElysiumUseBeginResult::Started(EElysiumUseSessionKind::Explicit);
+	}
+
+	virtual void EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason) override
+	{
+		if (World && World->GetOpenSign() == Handle)
+		{
+			World->CloseSign(/*bSilent=*/true);
+		}
+		static const FName OnUseEnd(TEXT("OnUseEnd"));
+		static const FName OnReadEnd(TEXT("OnReadEnd"));
+		FireOutput(OnUseEnd, Context.Activator);
+		FireOutput(OnReadEnd, Context.Activator);
+	}
+
+	virtual void OnDormancyChanged() override
+	{
+		FElysiumProp::OnDormancyChanged();
+		if (IsInert() && World && World->GetOpenSign() == Handle)
+		{
+			World->EndPlayerUseSession(Handle, EElysiumUseEndReason::TargetInvalid);
+		}
+	}
+
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		FElysiumProp::GetDebugState(Out);
+		Out.Emplace(TEXT("Definition"), DefinitionFile.IsEmpty() ? TEXT("(none)") : DefinitionFile);
+		Out.Emplace(TEXT("On screen"), World && World->GetOpenSign() == Handle ? TEXT("YES") : TEXT("no"));
+	}
+
+private:
+	bool EnsurePanel()
+	{
+		if (Panel.IsValid())
+		{
+			return true;
+		}
+		if (!World || DefinitionFile.IsEmpty())
+		{
+			UE_LOG(LogElysiumProp, Warning,
+				TEXT("%s cannot open prop_sign: %s"), *DebugString(),
+				!World ? TEXT("entity world is unavailable") : TEXT("definition_file is empty"));
+			return false;
+		}
+		TSharedPtr<FElysiumSignData> Parsed = MakeShared<FElysiumSignData>();
+		if (!FElysiumSignData::Load(DefinitionFile, *Parsed, World))
+		{
+			UE_LOG(LogElysiumProp, Warning, TEXT("%s: could not load prop_sign data '%s'"),
+				*DebugString(), *DefinitionFile);
+			return false;
+		}
+		Panel = Parsed;
+		return true;
+	}
+};
 // ============================================================================================
 // FElysiumPhysProp — the `prop_physics` leaf: a Chaos rigid body. Stands the same decoded mesh as
 // a dynamic prop but cooked with convex collision (the 8.4 `.hulls` decomposition) and simulating.
@@ -875,6 +1151,7 @@ class FElysiumPhysProp final : public FElysiumEntity
 {
 public:
 	UStaticMeshComponent* Visual = nullptr;   // the simulating body, or null (gated off / decode failed)
+	USkeletalMeshComponent* PosedVisual = nullptr; // collision-free authored resting pose
 	bool  bBroken = false;
 	int32 Skin = 0;
 	float SkinFadeTime = 0.0f;                // m_flSkinCrossfadeTime — stored, unread (skins snap)
@@ -911,6 +1188,11 @@ public:
 		{
 			Visual->DestroyComponent();
 			Visual = nullptr;
+		}
+		if (PosedVisual)
+		{
+			PosedVisual->DestroyComponent();
+			PosedVisual = nullptr;
 		}
 		BuildBody();
 	}
@@ -954,13 +1236,20 @@ public:
 
 	void ApplySkin()
 	{
-		if (!Visual || !World || !Def)
+		if (!World || !Def)
 		{
 			return;
 		}
 		if (IElysiumEmbodiment* Embodiment = World->Embodiment())
 		{
-			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+			if (PosedVisual)
+			{
+				Embodiment->ApplyAnimatedPropSkin(PosedVisual, Def->ModelMesh, Skin);
+			}
+			else if (Visual)
+			{
+				Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+			}
 		}
 	}
 
@@ -1006,13 +1295,35 @@ private:
 		{
 			return;
 		}
-		Visual = Embodiment->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat,
-			Embodiment->BodyScaleFor(*Def));
+		FElysiumPlacedModelRequest Request;
+		Request.ModelPath = Model;
+		Request.StaticStem = Def->ModelMesh;
+		Request.Location = Def->Origin;
+		Request.Rotation = Def->ModelQuat;
+		Request.UniformScale = Embodiment->BodyScaleFor(*Def);
+		Request.PlacementToken = Handle.Index;
+		Request.Skin = Skin;
+		Request.Physics = EElysiumPlacedModelPhysics::SimulatedProxy;
+		if (Embodiment->HasPlacedModelCatalogue())
+		{
+			const FElysiumPlacedModelBody PlacedBody = Embodiment->BuildPlacedModelBody(Request);
+			Visual = PlacedBody.PhysicsProxy;
+			PosedVisual = PlacedBody.Visual;
+		}
+		else
+		{
+			Visual = Embodiment->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat,
+				Embodiment->BodyScaleFor(*Def));
+		}
 		if (!Visual)
 		{
 			return;
 		}
 		World->RegisterPropBody(Visual);
+		if (PosedVisual)
+		{
+			World->RegisterNpcBody(PosedVisual);
+		}
 		if (Skin != 0)
 		{
 			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);   // authored on an alternate family
@@ -1072,7 +1383,13 @@ private:
 			return;
 		}
 		const bool bDown = IsInert() || bBroken;
-		Visual->SetVisibility(!bDown);
+		// A composite physics prop draws only the authored skeletal pose. The static body remains an
+		// invisible Chaos/collision proxy even when the entity wakes again.
+		Visual->SetVisibility(PosedVisual == nullptr && !bDown);
+		if (PosedVisual)
+		{
+			PosedVisual->SetVisibility(!bDown);
+		}
 		if (bDown)
 		{
 			Visual->SetSimulatePhysics(false);
@@ -1226,6 +1543,8 @@ private:
 
 static TUniquePtr<FElysiumEntity> MakeProp() { return MakeUnique<FElysiumProp>(); }
 static TUniquePtr<FElysiumEntity> MakePropButton() { return MakeUnique<FElysiumPropButton>(); }
+static TUniquePtr<FElysiumEntity> MakePropSwitch() { return MakeUnique<FElysiumPropSwitch>(); }
+static TUniquePtr<FElysiumEntity> MakePropSign() { return MakeUnique<FElysiumPropSign>(); }
 static TUniquePtr<FElysiumEntity> MakePhysProp() { return MakeUnique<FElysiumPhysProp>(); }
 static TUniquePtr<FElysiumEntity> MakePhysHinge() { return MakeUnique<FElysiumPhysHinge>(); }
 
@@ -1250,11 +1569,8 @@ static void BuildPropClass(FElysiumClassDesc& D)
 	AddPropField(D, TEXT("MaxAnimTime"), &FElysiumProp::MaxAnimTime);
 }
 
-// The static-mesh prop classes that carry a model and a skin but whose interaction surface is not
-// built yet (the `+use` family, roadmap 4.10/8.8). They stand the same body and honour the same
-// `skin` keyfield -- 25 of the tutorial's 39 multi-family prop placements are these, and without a
-// body they were inert records with nothing to draw. Deliberately no inputs: their real datamap I/O
-// is not RE'd, and asserting prop_dynamic's here would advertise inputs they may not have.
+// Model-bearing leaves that only need the common body/skin surface use this descriptor helper.
+// Specialized leaves add their own I/O without inheriting prop_dynamic inputs they do not own.
 static void BuildPropBodyClass(FElysiumClassDesc& D)
 {
 	AddPropSkinField<FElysiumProp>(D);
@@ -1276,6 +1592,31 @@ static void BuildPropButtonClass(FElysiumClassDesc& D)
 	AddPropField(D, TEXT("locked"), &FElysiumPropButton::bLocked);
 	AddPropField(D, TEXT("current_state"), &FElysiumPropButton::CurrentState);
 	AddPropField(D, TEXT("max_states"), &FElysiumPropButton::MaxStates);
+}
+
+static void BuildPropSwitchClass(FElysiumClassDesc& D)
+{
+	BuildPropBodyClass(D);
+	D.Input(TEXT("Use"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+		{ static_cast<FElysiumPropSwitch&>(E).Use(A.Activator); });
+	D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+		{ static_cast<FElysiumPropSwitch&>(E).InputToggle(A.Activator); });
+	D.Input(TEXT("Lock"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{ static_cast<FElysiumPropSwitch&>(E).InputLock(); });
+	D.Input(TEXT("Unlock"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+		{ static_cast<FElysiumPropSwitch&>(E).InputUnlock(); });
+	D.Input(TEXT("Activate"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+		{ static_cast<FElysiumPropSwitch&>(E).InputActivate(A.Activator); });
+	D.Input(TEXT("Deactivate"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+		{ static_cast<FElysiumPropSwitch&>(E).InputDeactivate(A.Activator); });
+	AddPropField(D, TEXT("linkedswitch"), &FElysiumPropSwitch::LinkedSwitchName);
+	AddPropField(D, TEXT("reset_state"), &FElysiumPropSwitch::ResetState);
+}
+
+static void BuildPropSignClass(FElysiumClassDesc& D)
+{
+	BuildPropBodyClass(D);
+	AddPropField(D, TEXT("definition_file"), &FElysiumPropSign::DefinitionFile);
 }
 
 // prop_physics (8.4): the RE'd CPhysicsProp/CBreakableProp input surface. Wake + Break are real;
@@ -1323,20 +1664,19 @@ struct FElysiumPropRegistrar
 		{
 			BuildPropClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
 		}
-		// The `+use` static-mesh family: a body and its skin, no interaction surface (4.10/8.8).
-		// The exporter already decodes their models (8.1), so without this they were logic-valid
-		// but invisible records.
-		static const TCHAR* const PropBodyClasses[] = {
-			TEXT("prop_switch"), TEXT("prop_sign"), TEXT("prop_hacking"),
-			TEXT("prop_doorknob_electronic"),
-			TEXT("item_container_lock"),
-		};
+		// A terminal stands its computer body while its gated gameplay/session implementation remains
+		// separate. Do not infer prop_dynamic inputs from the shared representation.
+		static const TCHAR* const PropBodyClasses[] = { TEXT("prop_hacking") };
 		for (const TCHAR* Name : PropBodyClasses)
 		{
 			BuildPropBodyClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
 		}
 		BuildPropButtonClass(Reg.Register(
 			FName(TEXT("prop_button")), ElysiumBaseClassName(), &MakePropButton));
+		BuildPropSwitchClass(Reg.Register(
+			FName(TEXT("prop_switch")), ElysiumBaseClassName(), &MakePropSwitch));
+		BuildPropSignClass(Reg.Register(
+			FName(TEXT("prop_sign")), ElysiumBaseClassName(), &MakePropSign));
 		BuildPhysPropClass(Reg.Register(FName(TEXT("prop_physics")), ElysiumBaseClassName(), &MakePhysProp));
 		BuildPhysHingeClass(Reg.Register(FName(TEXT("phys_hinge")), ElysiumBaseClassName(), &MakePhysHinge));
 	}

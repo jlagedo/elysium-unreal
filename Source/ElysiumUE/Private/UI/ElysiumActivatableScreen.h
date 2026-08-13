@@ -11,6 +11,7 @@ enum class EElysiumUIScreenKind : uint8
 	Menu,
 	Character,
 	Dialogue,
+	Loot,
 	Chargen,
 	Sign,
 };

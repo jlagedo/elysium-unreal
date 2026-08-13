@@ -539,6 +539,13 @@ void FElysiumDoorBase::RegisterDoorknob(FElysiumLockableEntity& Doorknob)
 	}
 	Doorknobs.Add(Doorknob.Handle);
 	Doorknob.ApplyDoorLockState(bLocked);
+	RefreshUseOwner();
+}
+
+void FElysiumDoorBase::UnregisterDoorknob(const FElysiumEntityHandle& Doorknob)
+{
+	Doorknobs.Remove(Doorknob);
+	RefreshUseOwner();
 }
 
 void FElysiumDoorBase::SyncDoorknobs()
@@ -553,6 +560,18 @@ void FElysiumDoorBase::SyncDoorknobs()
 			continue;
 		}
 		Doorknob->ApplyDoorLockState(bLocked);
+	}
+	RefreshUseOwner();
+}
+
+void FElysiumDoorBase::RefreshUseOwner()
+{
+	if (World)
+	{
+		// A knobbed door has one physical interaction point and one logical owner: the knob. Leaving
+		// the brush anchor live would let an exact hit on the slab bypass key, lockpick and
+		// OnUseBegin/OnUseEnd handling on the attachment.
+		World->SetUseAnchorEnabled(Handle, IsUsable() && Doorknobs.IsEmpty() && !IsInert());
 	}
 }
 
