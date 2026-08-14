@@ -572,6 +572,57 @@ def _parse_ent_blocks(text):
             for b in re.findall(r"\{([^{}]*)\}", text, re.S)]
 
 
+def source_visibility_backing_models(text):
+    """Return brush-model indexes used only as Source visibility backings.
+
+    ``func_areaportalwindow.target`` names the black brush Source fades over its
+    background model while opening and closing a PVS portal. Unreal owns visibility
+    and culling, so the target entity and collision remain live but that render-only
+    backing does not become a brush mesh. Target-name matching follows the engine's
+    case-insensitive, first-entity rule. The warnings make malformed authored links
+    observable instead of silently leaving an opaque helper in the exported scene.
+    """
+    blocks = [
+        {key.casefold(): value for key, value in pairs}
+        for pairs in _parse_ent_blocks(text)
+    ]
+    by_name = {}
+    for keys in blocks:
+        name = keys.get("targetname", "").strip().casefold()
+        if name and name not in by_name:
+            by_name[name] = keys
+
+    models = set()
+    warnings = []
+    for index, keys in enumerate(blocks):
+        if keys.get("classname", "").casefold() != "func_areaportalwindow":
+            continue
+        target = keys.get("target", "").strip()
+        label = keys.get("targetname", "").strip() or "#%d" % index
+        if not target:
+            warnings.append(
+                "func_areaportalwindow %s has no target; no Source visibility backing "
+                "was suppressed" % label
+            )
+            continue
+        backing = by_name.get(target.casefold())
+        if backing is None:
+            warnings.append(
+                "func_areaportalwindow %s target '%s' does not resolve; no Source "
+                "visibility backing was suppressed" % (label, target)
+            )
+            continue
+        match = re.fullmatch(r"\*(\d+)", backing.get("model", "").strip())
+        if match is None:
+            warnings.append(
+                "func_areaportalwindow %s target '%s' has no brush model; no Source "
+                "visibility backing was suppressed" % (label, target)
+            )
+            continue
+        models.add(int(match.group(1)))
+    return models, warnings
+
+
 def _split_output(value):
     """target,input,param,delay,times[,python[,extra]] -> dict, or None.
 
@@ -983,6 +1034,12 @@ def main(bsp_path, out_dir, *, index=None):
     # the static world. The runtime attaches that mesh to the entity's collision body, whose
     # origin is the door hinge / mover pivot. Model 0 remains the static world.
     # The decal projector pass below still needs each face's authored world offset.
+    visibility_backing_models, visibility_warnings = source_visibility_backing_models(ents)
+    for warning in visibility_warnings:
+        print("  warning: %s" % warning)
+    if visibility_backing_models:
+        print("Source visibility: %d backing brush model(s) left to Unreal" %
+              len(visibility_backing_models))
     model_origin = {}
     for m in re.finditer(r"\{[^{}]*\}", ents):
         blk = m.group(0)
@@ -1012,6 +1069,7 @@ def main(bsp_path, out_dir, *, index=None):
     brush_scenes = {}
 
     skipped_tools = 0
+    skipped_visibility_backing = 0
     disp_collision = []   # world-space (Unreal cm) disp triangles for concave collision
     # Env-patched materials split into one OBJ group per cubemap: the same base
     # material near two env_cubemaps samples two baked cubemaps, so each becomes its
@@ -1026,6 +1084,10 @@ def main(bsp_path, out_dir, *, index=None):
         ti = struct.unpack_from("<h", faces_l, base + TI_OFS)[0]
         disp = struct.unpack_from("<h", faces_l, base + DISP_OFS)[0]   # -1 = flat
         if numedges < 3 or ti < 0:
+            continue
+        mi = face_model.get(fi, 0)
+        if mi in visibility_backing_models:
+            skipped_visibility_backing += 1
             continue
         raw_name, s, t, tw, th = material_of(ti)
         mat = base_material(raw_name)
@@ -1044,7 +1106,6 @@ def main(bsp_path, out_dir, *, index=None):
             se = surfedges[firstedge + k]
             v = edges[se][0] if se >= 0 else edges[-se][1]
             src.append(vertexes[v])
-        mi = face_model.get(fi, 0)
         is_brush = mi > 0
         is_sky = not is_brush and fi in sky_faces
         if is_brush:
@@ -1081,6 +1142,7 @@ def main(bsp_path, out_dir, *, index=None):
     for scene in brush_scenes.values():
         all_mats.update(scene[2])
     print(f"faces: {n_faces}  materials: {len(all_mats)}  skipped TOOLS: {skipped_tools}"
+          f"  skipped Source visibility backing: {skipped_visibility_backing}"
           f"  brush models: {len(brush_scenes)}")
     print(f"  world groups: {len(scenes['world'][2])}   sky groups: {len(scenes['sky'][2])}")
     # sorted -> deterministic material order in the .mtl/.obj (was set-iteration order)
@@ -1430,6 +1492,8 @@ def main(bsp_path, out_dir, *, index=None):
         ne = struct.unpack_from("<h", faces_l, fb + NE_OFS)[0]
         ti = struct.unpack_from("<h", faces_l, fb + TI_OFS)[0]
         if ne < 3 or ti < 0:
+            continue
+        if face_model.get(fi, 0) in visibility_backing_models:
             continue
         raw_name, sax, tax, _tw, _th = material_of(ti)
         dmat = base_material(raw_name)

@@ -302,6 +302,22 @@ gates both through the same dormancy switch. Thus the hidden geometry exists for
 - `func_brush` `chopwndwbroken` (131 faces), the *broken* state of a window revealed by
   script when it breaks — no longer drawn on top of the intact one.
 
+## `func_areaportalwindow`: Source visibility backing
+
+An authored `func_areaportalwindow` uses `target` to name a black backing brush. Where
+`BackgroundBModel` is present, it names the ordinary foreground window. VtMB hides the target as
+an independent entity, adopts its model onto the controller, and changes that model's blend from
+`TranslucencyLimit` at `FadeStartDist` to fully opaque at `FadeDist`. A named foreground model
+remains fully drawn. The controller also opens or closes its area portal from viewer distance,
+coupling the visual cover to Source's PVS mechanism.
+
+**Deliberate divergence (owner-called):** Elysium does not reproduce this distance-faded PVS
+cover. Unreal owns visibility and occlusion, while Lumen owns the associated lighting and
+reflection response. The exporter therefore keeps the controller and target entity records and
+their collision hulls, but omits the brush mesh of the entity named by
+`func_areaportalwindow.target`. `BackgroundBModel` remains an ordinary renderable brush, so its
+authored glass material is the visible window. `tools/black` remains renderable everywhere else.
+
 ## The `<map>.ents` sidecar
 
 The complete JSON contract is `docs/project/rebuild-strategy.md` → "Sidecar contracts." Entity I/O relies
