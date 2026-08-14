@@ -1280,6 +1280,40 @@ bool FElysiumInputScopesTest::RunTest(const FString&)
 		EMode::GameOnly, EElysiumCursorPolicy::Always);
 	ElysiumInput::AddPlayerContexts(Debug.Contexts);
 
+	// --- command publication follows the resolved contexts, including retained body state ---
+	{
+		FElysiumUserCmd Walking;
+		Walking.Seq = 17;
+		Walking.DeltaSeconds = 1.0f / 60.0f;
+		Walking.Move = FVector2D(1.0, -0.5);
+		Walking.Up = 0.25f;
+		Walking.LookDelta = FVector2D(4.0, -2.0);
+		Walking.Buttons = static_cast<uint64>(EElysiumButton::Jump)
+			| static_cast<uint64>(EElysiumButton::Use);
+
+		FElysiumInputScopeStack GameStack;
+		const FElysiumUserCmd Gameplay =
+			ElysiumInput::GateGameplayCommand(GameStack.Resolve(), Walking);
+		TestTrue(TEXT("game contexts preserve the complete command"), Gameplay.SameIntent(Walking));
+
+		FElysiumInputScopeStack DialogueStack;
+		DialogueStack.Push(Dialogue);
+		const FElysiumUserCmd Gated =
+			ElysiumInput::GateGameplayCommand(DialogueStack.Resolve(), Walking);
+		TestTrue(TEXT("dialogue clears movement"), Gated.Move.IsNearlyZero());
+		TestTrue(TEXT("dialogue clears vertical movement"), FMath::IsNearlyZero(Gated.Up));
+		TestTrue(TEXT("dialogue clears look"), Gated.LookDelta.IsNearlyZero());
+		TestEqual(TEXT("dialogue clears buttons"), Gated.Buttons, uint64(0));
+		TestEqual(TEXT("gating preserves sequence identity"), Gated.Seq, Walking.Seq);
+		TestEqual(TEXT("gating preserves frame timing"), Gated.DeltaSeconds, Walking.DeltaSeconds);
+
+		FElysiumInputScopeStack DebugStack;
+		DebugStack.Push(Debug);
+		const FElysiumUserCmd DebugCommand =
+			ElysiumInput::GateGameplayCommand(DebugStack.Resolve(), Walking);
+		TestTrue(TEXT("debug contexts retain gameplay commands"), DebugCommand.SameIntent(Walking));
+	}
+
 	// --- the empty stack is the game holding the mouse ---
 	{
 		FElysiumInputScopeStack Stack;

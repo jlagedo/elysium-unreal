@@ -1,5 +1,29 @@
 #include "ElysiumInputScope.h"
 
+#include "ElysiumUserCmd.h"
+
+bool ElysiumInput::AllowsGameplayCommands(const FElysiumInputState& State)
+{
+	return State.Contexts.Contains(PlayerKeyboardMouseContext())
+		|| State.Contexts.Contains(PlayerGamepadContext());
+}
+
+FElysiumUserCmd ElysiumInput::GateGameplayCommand(
+	const FElysiumInputState& State, const FElysiumUserCmd& Command)
+{
+	if (AllowsGameplayCommands(State))
+	{
+		return Command;
+	}
+
+	FElysiumUserCmd Gated = Command;
+	Gated.Move = FVector2D::ZeroVector;
+	Gated.Up = 0.0f;
+	Gated.LookDelta = FVector2D::ZeroVector;
+	Gated.Buttons = 0;
+	return Gated;
+}
+
 FString FElysiumInputState::Describe() const
 {
 	FString Out = FString::Printf(TEXT("%s mode=%s cursor=%s"),

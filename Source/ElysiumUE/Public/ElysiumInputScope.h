@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class SWidget;
+struct FElysiumUserCmd;
 
 // S6 — the input scope stack (roadmap 11.5, `docs/architecture/runtime-architecture.md` §8.1). Plain C++, no UObject
 // reflection: the stack and its arbitration are the whole rule set, so they are asserted with no
@@ -174,6 +175,16 @@ struct FElysiumInputState
 
 	FString Describe() const;
 };
+
+namespace ElysiumInput
+{
+	// Gameplay intent is authorized by the player mapping contexts, not by input mode alone: debug
+	// may retain gameplay under a UI overlay while dialogue and cinematics deliberately remove it.
+	bool AllowsGameplayCommands(const FElysiumInputState& State);
+
+	// Preserve stream identity and timing while removing every intent a pawn or camera could consume.
+	FElysiumUserCmd GateGameplayCommand(const FElysiumInputState& State, const FElysiumUserCmd& Command);
+}
 
 // The priority stack itself. Push/pop is handle-based rather than strictly last-in-first-out,
 // because screens genuinely close out of order: a conversation ends behind an open pause menu, and

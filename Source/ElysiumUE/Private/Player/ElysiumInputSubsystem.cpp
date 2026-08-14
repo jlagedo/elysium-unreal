@@ -211,14 +211,13 @@ void UElysiumInputSubsystem::ApplyToController(APlayerController* PC, const FEly
 	PC->SetShowMouseCursor(ResolveCursorVisible(NewState.CursorPolicy));
 
 	// A key held across a scope change must not bleed into what comes next: walking into a
-	// conversation with W down has to stop walking (11.6, S5). The engine's own answer at 10.6 is
-	// `FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease`; while the binds are legacy, the
-	// arbiter drops the latches directly, which is the same rule one layer down.
+	// conversation with W down has to stop walking. UI-only mode may prevent another controller
+	// sample, so the router both clears its latches and replaces the body's retained command.
 	if (const AElysiumPlayerController* Elysium = Cast<AElysiumPlayerController>(PC))
 	{
 		if (UElysiumInputRouter* Router = Elysium->GetInputRouter())
 		{
-			Router->ClearHeldButtons();
+			Router->ApplyScopeState(NewState);
 		}
 	}
 }

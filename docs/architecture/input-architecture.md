@@ -129,9 +129,14 @@ chargen prompt or sign removes both. CommonUI/CommonInput then owns arrows/WASD,
 Accept and Back;
 there are no duplicate `IMC_Menu` or `IMC_Dialogue` bindings.
 
-`FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` and the router's held-button clear make a
-key held across a scope transition inert until release. This is the definitive answer to
-`docs/vtmb/controls.md` § "Open: what conversation does to held input" on our side of the port.
+`FModifyContextOptions::bIgnoreAllPressedKeysUntilRelease` and the router's held-input clear make a
+key held across a scope transition inert until release. Context removal is only the front door:
+UI-only capture may stop controller sampling while the movement component still retains the last
+published command. On every scope transition the router therefore clears its builder and, when the
+resolved state has no player context, immediately replaces the body's retained command with neutral
+intent. It also gates every sampled or replayed command before recording and publication. Sequence
+identity and frame timing survive the gate; movement, look and buttons do not. This is the definitive
+answer to `docs/vtmb/controls.md` § "Open: what conversation does to held input" on our side of the port.
 
 Screen policy is centralized: sign 10, chargen 30, dialogue 40, terminal 42, character 45 and menu
 50. Every interactive screen is UI-only with `Auto` cursor policy. Loading creates no interactive scope;

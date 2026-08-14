@@ -11,6 +11,7 @@ class APlayerController;
 class UInputComponent;
 class UElysiumInputActionSet;
 struct FInputActionValue;
+struct FElysiumInputState;
 
 // The one thing that turns keys into verbs and verbs into intent (roadmap 11.6,
 // `docs/architecture/runtime-architecture.md` §8.2–8.3). It sits on `AElysiumPlayerController` and does three jobs,
@@ -48,9 +49,10 @@ public:
 	const FElysiumUserCmd& CurrentCmd() const { return Current; }
 	FElysiumUserCmdBuilder& Builder() { return CmdBuilder; }
 
-	// Drop every held button without producing a command — what an input-scope change means for
-	// intent (a screen opening must not leave the player walking).
-	void ClearHeldButtons();
+	// Apply a resolved scope to the command seam. Every transition clears held input; a scope without
+	// player contexts also replaces the body's retained command immediately, because UI-only mode may
+	// stop controller sampling before another frame can publish a neutral command.
+	void ApplyScopeState(const FElysiumInputState& State);
 
 	// --- Record / replay -------------------------------------------------------------------
 	// The acceptance for S5: a recorded stream replays identically. Recording captures the command
@@ -94,6 +96,7 @@ private:
 	// Re-read the mouse scale and the response curve from the console store, and hand them to the
 	// builder. Once per frame, at the head of `SampleFrame`.
 	void RefreshLookTuning();
+	void PublishCurrentToBody();
 
 	TWeakObjectPtr<APlayerController> PC;
 	TWeakObjectPtr<UInputComponent> BoundInput;

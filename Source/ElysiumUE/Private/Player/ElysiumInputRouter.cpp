@@ -2,6 +2,8 @@
 
 #include "ElysiumBinds.h"
 #include "ElysiumInputAssets.h"
+#include "ElysiumInputScope.h"
+#include "ElysiumInputSubsystem.h"
 #include "Player/ElysiumCommandBus.h"
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
@@ -313,9 +315,14 @@ void UElysiumInputRouter::RefreshLookTuning()
 	}
 }
 
-void UElysiumInputRouter::ClearHeldButtons()
+void UElysiumInputRouter::ApplyScopeState(const FElysiumInputState& State)
 {
 	CmdBuilder.ClearButtons();
+	Current = ElysiumInput::GateGameplayCommand(State, Current);
+	if (!ElysiumInput::AllowsGameplayCommands(State))
+	{
+		PublishCurrentToBody();
+	}
 }
 
 void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
@@ -340,7 +347,6 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 			// The replayed frame keeps its recorded intent but runs on this frame's delta, so a
 			// replay at a different frame rate is still the same input.
 			Current.DeltaSeconds = DeltaSeconds;
-			ReplayLog.Record(Current);
 		}
 		else
 		{
@@ -351,10 +357,23 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 	else
 	{
 		Current = CmdBuilder.Build(DeltaSeconds);
-		if (bRecording)
+	}
+
+	if (const APlayerController* Controller = PC.Get())
+	{
+		if (const UElysiumInputSubsystem* InputSubsystem =
+			UElysiumInputSubsystem::Get(Controller->GetGameInstance()))
 		{
-			Record.Record(Current);
+			Current = ElysiumInput::GateGameplayCommand(InputSubsystem->State(), Current);
 		}
+	}
+	if (bReplaying)
+	{
+		ReplayLog.Record(Current);
+	}
+	else if (bRecording)
+	{
+		Record.Record(Current);
 	}
 
 	if (const int32 ProbeFrames = CVarLookProbe.GetValueOnGameThread(); ProbeFrames > 0)
@@ -381,7 +400,12 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 	// to `AddYawInput`/`AddPitchInput`, and the engine's own `UpdateRotation` — which runs later in
 	// the same `PlayerTick` — integrates it, runs the camera manager's pitch limits over it, writes
 	// the control rotation and faces the pawn. One writer, one frame.
-	APlayerController* Controller = PC.Get();
+	PublishCurrentToBody();
+}
+
+void UElysiumInputRouter::PublishCurrentToBody()
+{
+	const APlayerController* Controller = PC.Get();
 	APawn* Pawn = Controller ? Controller->GetPawn() : nullptr;
 	if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn))
 	{
