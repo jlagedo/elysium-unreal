@@ -459,14 +459,16 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 		Move->PrimaryComponentTick.AddPrerequisite(this, PreMoveTickFunction);
 		PrimaryActorTick.AddPrerequisite(Move, Move->PrimaryComponentTick);
 		PrereqMovement = Move;
+	}
 
-		// 11.4 — tell the body which entity it embodies. Done here rather than at SpawnPlayer
-		// because a fresh world has no pawn yet when the map builds, and this already runs each
-		// gameplay tick until the pawn appears (and again if it is replaced).
-		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(PC->GetPawn()))
-		{
-			Body->SetPlayerEntity(EntityWorld ? EntityWorld->PlayerHandle() : FElysiumEntityHandle::Invalid());
-		}
+	// 11.4 — tell the body which entity it embodies. Resynced every tick (cheap: one handle
+	// assignment) rather than gated on the movement-prerequisite wiring above: a fresh world has no
+	// pawn yet when the map builds, and SpawnPlayer can land on a later tick than the one where this
+	// pawn's movement component first appears, so a one-shot assignment here can permanently capture
+	// an Invalid() handle and starve every RouteBrushTouch of an activator.
+	if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(PC->GetPawn()))
+	{
+		Body->SetPlayerEntity(EntityWorld ? EntityWorld->PlayerHandle() : FElysiumEntityHandle::Invalid());
 	}
 }
 
