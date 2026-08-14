@@ -18,6 +18,7 @@ from elysium_pipeline.clean import (
     validate_clean_targets,
 )
 from elysium_pipeline.tasking import (
+    ContentDigestCache,
     Manifest,
     Task,
     TaskGraph,
@@ -25,7 +26,7 @@ from elysium_pipeline.tasking import (
     fingerprint_content,
     fingerprint_paths,
 )
-from elysium_pipeline import bake_cache, unreal
+from elysium_pipeline import bake_cache, shared_corpus, unreal
 
 
 class OfflineExportFailure(RuntimeError):
@@ -249,6 +250,10 @@ def run_offline_profile(
     maps = export_all.maps_for_profile(profile)
     bundles = export_all.bundles_for_profile(profile)
     index = install.build_index()
+    # The shared corpus is a prerequisite of the graph rather than a node in it: every map export
+    # resolves its materials and textures against it, while every ordinary bundle runs after the
+    # maps. It is decoded once, here, before anything reads it.
+    ensure_corpus_export(config, force=force or clean, index=index)
     source_fingerprint = fingerprint_paths(
         [
             config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats",
@@ -482,40 +487,165 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
         force=force, manifest=manifest)["unreal:policy"]
 
 
-ITEMS_SCOPE = "items"
+def _corpus_code_inputs(config) -> tuple[Path, ...]:
+    root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+    return (
+        root / "exporters" / "UE_extract_corpus.py",
+        root / "exporters" / "UE_bsp_to_scene.py",
+        root / "shared_corpus.py",
+        root / "formats" / "mdl.py",
+        root / "formats" / "vmt.py",
+        root / "formats" / "phy.py",
+        root / "enhancement" / "retex_dds.py",
+    )
 
 
-def _baked_items_dir(config) -> Path:
-    return config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / ITEMS_SCOPE / "Props"
+def ensure_corpus_export(config, *, force: bool = False, index: dict | None = None) -> TaskResult:
+    """Decode the shared static corpus, once, before anything that reads it.
+
+    Every map export and every bake resolves its textures, materials and static models through
+    `shared/manifest.json`, so this runs first and only once. Its fingerprint is the install's own
+    map inventory plus the decoder code: a changed BSP can add a source identity the corpus does
+    not yet hold, and a changed decoder changes what every identity decodes to.
+    """
+    from elysium_pipeline.exporters import UE_extract_corpus
+    from elysium_pipeline.formats import install
+
+    _require_export_config(config)
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    maps = [Path(install.map_path(name)) for name in install.all_map_names()]
+    task = Task(
+        "export:corpus",
+        lambda: UE_extract_corpus.main(index=index, force=force),
+        fingerprint=lambda: fingerprint_paths(
+            maps + list(_corpus_code_inputs(config)), extra=("corpus-v1",)),
+        outputs=(
+            shared_corpus.manifest_path(config.export_root),
+            shared_corpus.materials_path(config.export_root),
+        ),
+    )
+    return TaskGraph([task]).run(force=force, manifest=manifest)["export:corpus"]
 
 
-def ensure_item_bake(config, runner, *, force: bool = False) -> TaskResult:
-    """Bake the decoded item ground models onto /ElysiumBaked/items.
+#: The export bundle name. Distinct from `shared_corpus.SCOPE`, which is the BAKE scope: the
+#: bundle is what a user asks for, the scope is what the bake receipts are keyed on.
+CORPUS_BUNDLE = "corpus"
 
-    A separate scope from the per-map bake because its product is: an item entity can be spawned
-    into any map, so its world mesh belongs to no map's package. Everything the scope consumes is
-    under `$ELYSIUM_EXPORT_ROOT/items/props`, so that directory plus the bake code is the whole
-    fingerprint.
+
+def _baked_corpus_dir(config) -> Path:
+    return config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Shared" / "Meshes"
+
+
+def export_corpus_unit(
+    config,
+    runner,
+    *,
+    models: Sequence[str] | None = None,
+    materials: Sequence[str] | None = None,
+    textures: Sequence[str] | None = None,
+    force: bool = False,
+) -> dict:
+    """Re-decode and re-bake exactly one corpus unit -- a model, a material, or a texture.
+
+    This is what one asset per source buys. The unit is decoded again from the install, and the
+    corpus bake rebuilds only the assets whose recipe changed, because every other asset's receipt
+    still matches. **No map is exported and no `.umap` is touched**: every map that draws the unit
+    already points at the one package, so they all pick the change up with nothing to re-bake.
+
+    A texture is addressed through the materials that draw it, because a texture is decoded as a
+    material's channel rather than on its own.
+    """
+    from elysium_pipeline.exporters import UE_extract_corpus
+    from elysium_pipeline.formats import install
+
+    _require_export_config(config)
+    adopt_export_root(config.export_root, config.work_root)
+    index = install.build_index()
+
+    selected = [shared_corpus.material_key(key) for key in (materials or ())]
+    if textures:
+        manifest_file = shared_corpus.manifest_path(config.export_root)
+        if not manifest_file.is_file():
+            raise ValueError(
+                f"no shared corpus at {manifest_file}; run: uv run elysium export bundle corpus")
+        with manifest_file.open(encoding="utf-8") as handle:
+            manifest = shared_corpus.check_manifest(json.load(handle))
+        wanted = {shared_corpus.texture_key(key) for key in textures}
+        unknown = wanted - set(manifest["textures"])
+        if unknown:
+            raise ValueError("texture(s) are not in the shared corpus: " + ", ".join(sorted(unknown)))
+        # Every material that draws one of these textures has to be resolved again: the decode is
+        # a channel of a material, and which channel it is decides how it is written. A texture is
+        # matched by every file it can decode to, not by its albedo alone -- the same install
+        # texture reaches a material as a normal map, an env mask or a second blend layer.
+        files = {shared_corpus.texture_rel(key, suffix)
+                 for key in wanted for suffix in shared_corpus.ROLES}
+        drawn = []
+        for key, record in _corpus_materials(config).items():
+            if record.get("albedo_key", "") in wanted:
+                drawn.append(key)
+                continue
+            if any(record.get(channel) in files for channel in shared_corpus.CHANNEL_FIELDS):
+                drawn.append(key)
+        selected.extend(drawn)
+        if not drawn:
+            raise ValueError(
+                "no corpus material draws " + ", ".join(sorted(wanted)) + "; nothing to re-decode")
+
+    # A unit run decodes only its unit. `None` means "everything", so a material-only run states
+    # an empty model list rather than leaving it open and re-decoding the whole corpus.
+    UE_extract_corpus.main(
+        index=index,
+        models=list(models) if models is not None else ([] if selected else None),
+        materials=sorted(dict.fromkeys(selected)) if selected else ([] if models else None),
+    )
+    ensure_corpus_bake(config, runner, force=force)
+    return {"models": list(models or ()), "materials": sorted(dict.fromkeys(selected))}
+
+
+def _corpus_materials(config) -> dict:
+    path = shared_corpus.materials_path(config.export_root)
+    if not path.is_file():
+        raise ValueError(f"no shared corpus at {path}; run: uv run elysium export bundle corpus")
+    with path.open(encoding="utf-8") as handle:
+        return shared_corpus.check_materials(json.load(handle))["materials"]
+
+
+def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
+    """Bake the shared corpus onto /ElysiumBaked/Shared.
+
+    A separate scope from the per-map bake because its product is: a texture, a material and a
+    static model belong to the install, not to a map, so each is baked once and every map that
+    draws it references the one asset. Everything the scope consumes is under
+    `$ELYSIUM_EXPORT_ROOT/shared`, so that directory plus the bake code is the whole fingerprint.
     """
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     unreal_root = config.repo_root / "pipeline" / "unreal"
+    # The corpus is the whole install's textures and models -- gigabytes of intermediates. Hashing
+    # them through the persistent digest cache is what keeps a single-unit re-bake a short path:
+    # only the files the unit rewrote are read again, the rest answer from their stored identity.
+    digests = ContentDigestCache(config.export_root / bake_cache.DIGEST_CACHE_FILE)
     fingerprint = fingerprint_content(
         [
-            config.export_root / ITEMS_SCOPE / "ground_models.json",
-            config.export_root / ITEMS_SCOPE / "props",
+            shared_corpus.manifest_path(config.export_root),
+            shared_corpus.materials_path(config.export_root),
+            shared_corpus.props_dir(config.export_root),
+            shared_corpus.tex_dir(config.export_root),
             unreal_root / "bake_map.py",
             unreal_root / "bake_lib.py",
         ],
-        extra=("bake-items-v1",),
+        extra=("bake-corpus-v1",),
+        cache=digests,
     )
-    baked = _baked_items_dir(config)
+    digests.write()
+    baked = _baked_corpus_dir(config)
     task = Task(
-        "unreal:items",
-        lambda: unreal.bake_items(config, runner),
+        "unreal:corpus",
+        lambda: unreal.bake_corpus(config, runner),
         fingerprint=lambda value=fingerprint: value,
         outputs=tuple(sorted(baked.glob("SM_*.uasset"))) if baked.is_dir() else (),
     )
-    return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:items"]
+    return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:corpus"]
 
 
 def _baked_package(config, map_name: str) -> Path:
@@ -667,8 +797,7 @@ def export_profile(
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
     bake_and_verify(config, runner, maps, force=force or clean)
-    if ITEMS_SCOPE in bundles_for_profile(profile):
-        ensure_item_bake(config, runner, force=force or clean)
+    ensure_corpus_bake(config, runner, force=force or clean)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
     mark_complete(config.export_root, ("maps", "policy", *bundles_for_profile(profile)))
@@ -762,11 +891,11 @@ def export_bundle(config, runner, bundle: str, *, force: bool = False) -> None:
             continue_on_error=False,
         )
     )
-    if bundle == ITEMS_SCOPE:
-        # The decoded meshes are only half of it: a body resolves against the baked package, so
+    if bundle == CORPUS_BUNDLE:
+        # The decoded assets are only half of it: a map resolves against the baked packages, so
         # the focused command carries the scope's bake the way a focused map export does.
         try:
-            ensure_item_bake(config, runner, force=force)
+            ensure_corpus_bake(config, runner, force=force)
         except Exception as exc:
             raise ExportBakeFailure(str(exc)) from exc
     # This bundle's domain is now whole, whatever the rest of the corpus looks like.

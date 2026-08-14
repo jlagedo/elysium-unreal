@@ -69,29 +69,41 @@ struct FElysiumContentPaths
 	static FString BakedMapDir(const FString& Map) { return BakedMount() / Map; }
 	// The .umap UElysiumMapSubsystem::Travel opens for this map.
 	static FString BakedLevel(const FString& Map) { return BakedMapDir(Map) / Map; }
-	// One baked prop model, by the same OBJ stem the .props sidecar and `model_mesh` name. The
+	// --- The shared corpus (pipeline/unreal/bake_map.py -> CorpusBake) -----------------------
+	// A texture, a material and a static model belong to the user's install, not to a map:
+	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob
+	// model is one doorknob however many maps hang it on a door. So each is decoded once and baked
+	// once here, and every map references the single asset rather than carrying a copy.
+	//
+	// Its Python twin is `elysium_pipeline.shared_corpus`, which owns the key rules and the
+	// shared/per-map predicate; these paths must agree with it exactly.
+	static FString BakedSharedDir() { return BakedMount() / TEXT("Shared"); }
+	static FString BakedSharedTextures() { return BakedSharedDir() / TEXT("Textures"); }
+	static FString BakedSharedMaterials() { return BakedSharedDir() / TEXT("Materials"); }
+	static FString BakedSharedMeshes() { return BakedSharedDir() / TEXT("Meshes"); }
+	// One baked static model, by the same OBJ stem the .props sidecar and `model_mesh` name. The
 	// exporter already emits safe stems, so the bake's own safe_name() is a no-op on them and the
 	// stem maps to the asset name verbatim. Package path is <dir>/SM_<stem>.SM_<stem>.
-	static FString BakedPropMesh(const FString& Map, const FString& Stem)
+	static FString BakedPropMesh(const FString& Stem)
 	{
 		const FString Asset = TEXT("SM_") + Stem;
-		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
+		return BakedSharedMeshes() / Asset + TEXT(".") + Asset;
+	}
+	// An item's ground model is a static model like any other and sits in the same corpus. The
+	// separate name is kept because the caller's intent differs, not because the asset does.
+	static FString BakedItemMesh(const FString& Stem) { return BakedPropMesh(Stem); }
+	// The prop skin table: every alternate skin family of every model, resolved to the shared
+	// material instances at bake time. One table, because a model's skin families and the
+	// materials they repaint are both properties of the install rather than of a map.
+	static FString BakedPropSkins()
+	{
+		const FString Asset = TEXT("DA_ElysiumPropSkins");
+		return BakedSharedMeshes() / Asset + TEXT(".") + Asset;
 	}
 	static FString BakedBrushMesh(const FString& Map, const FString& Stem)
 	{
 		const FString Asset = TEXT("SM_") + Stem;
 		return BakedMapDir(Map) / TEXT("Brushes") / Asset + TEXT(".") + Asset;
-	}
-	// --- The shared item corpus (pipeline/unreal/bake_map.py -> ItemBake) --------------------
-	// An item's ground model belongs to no map: a placed `item_*` states no `model` key, and a
-	// scripted grant or a drop can put any `vdata/items` definition in any map. So the meshes
-	// UE_extract_items.py decodes bake once onto this scope instead of into every map's Props.
-	// Same asset shape as a map prop, addressed by the same stem.
-	static FString BakedItemsDir() { return BakedMount() / TEXT("items"); }
-	static FString BakedItemMesh(const FString& Stem)
-	{
-		const FString Asset = TEXT("SM_") + Stem;
-		return BakedItemsDir() / TEXT("Props") / Asset + TEXT(".") + Asset;
 	}
 	// The decoded-model stem for a VtMB `models/...mdl` path, which is the whole path folded --
 	// NOT its base filename. `models/items/Rings/Ground/Ring03.mdl` is
@@ -115,14 +127,6 @@ struct FElysiumContentPaths
 			Out.AppendChar(bLegal ? Ch : TEXT('_'));
 		}
 		return Out;
-	}
-	// The map's prop skin table (UElysiumPropSkinSet) -- every alternate skin family of every
-	// prop model it places, as material instances resolved at bake time. Absent for a map whose
-	// models all carry a single family.
-	static FString BakedPropSkins(const FString& Map)
-	{
-		const FString Asset = TEXT("DA_") + Map + TEXT("_PropSkins");
-		return BakedMapDir(Map) / TEXT("Props") / Asset + TEXT(".") + Asset;
 	}
 	// One Niagara system per VtMB emitter definition the map places, authored at bake time from
 	// the compiled particle closure. `Definition` is the bare definition name (`impact_flesh_emitter`).
@@ -271,20 +275,39 @@ struct FElysiumContentPaths
 		return Out;
 	}
 
-	// The shared item corpus on disk: `items/props/` holds the decoded ground models in a map's
-	// own props layout, and `items/ground_models.json` names what UE_extract_items.py landed there
-	// — the stem per `playermodel`, its triangle count, and every model the install did not carry.
+	// The shared corpus on disk (pipeline/src/elysium_pipeline/exporters/UE_extract_corpus.py):
+	// every decoded texture, every static model, and the two documents that describe them. One
+	// decode per source identity, so nothing here is addressed by a map.
+	static FString SharedDir() { return Root() / TEXT("shared"); }
+	static FString SharedTexDir() { return SharedDir() / TEXT("tex"); }
+	// The offline enhancement track's parallel set (docs/architecture/asset-enhancement.md): the
+	// super-resolved siblings of `tex/`, same keys and same file names, written by
+	// pipeline/src/elysium_pipeline/enhancement/sky_upscale.py and its successors. Optional;
+	// `elysium.EnhancedTextures` selects between the two, faithful by default, and every reader
+	// tests before preferring it.
+	static FString SharedTexHiDir() { return SharedDir() / TEXT("tex_hi"); }
+	static FString SharedPropsDir() { return SharedDir() / TEXT("props"); }
+	static FString SharedManifest() { return SharedDir() / TEXT("manifest.json"); }
+	static FString SharedMaterials() { return SharedDir() / TEXT("materials.json"); }
+	// A sky's six faces are ordinary corpus textures under `materials/skybox/<skyname><face>`, so
+	// two maps that share a sky share one set. `ElysiumEnvironment::BuildSkyCubeFrom` appends its
+	// own face suffixes to this prefix, exactly as it does for the labelled probe set.
+	// Its Python twin is `shared_corpus.sky_face_prefix`.
+	static FString SkyFacePrefix(const FString& SkyName)
+	{
+		return TEXT("skybox_") + SkyName.ToLower();
+	}
+
+	// `items/ground_models.json` names which `vdata/items` definition stands on which corpus mesh
+	// stem, its triangle count, and every model the install did not carry. The meshes themselves
+	// are the corpus's, addressed by `BakedItemMesh`.
 	static FString ItemsDir() { return Root() / TEXT("items"); }
-	static FString ItemsPropsDir() { return ItemsDir() / TEXT("props"); }
 	static FString ItemGroundModels() { return ItemsDir() / TEXT("ground_models.json"); }
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
+	// A map's own texture directory. It holds only `tex/cube/` now -- the env cubemaps VBSP baked
+	// per map and per position. Every surface texture is the corpus's.
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
-	// The offline enhancement track's parallel texture set (docs/architecture/asset-enhancement.md): the
-	// super-resolved siblings of `tex/`, written by pipeline/src/elysium_pipeline/enhancement/sky_upscale.py and its successors.
-	// Optional and per-map; `elysium.EnhancedTextures` selects between the two, faithful by
-	// default. Absent for most maps, which is why every reader tests before preferring it.
-	static FString MapTexHiDir(const FString& Map) { return MapDir(Map) / TEXT("tex_hi"); }
 	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
 	static FString MapSkyObj(const FString& Map) { return MapDir(Map) / (Map + TEXT("_sky.obj")); }
 	static FString MapSpawn(const FString& Map) { return MapDir(Map) / (Map + TEXT(".spawn")); }
@@ -292,7 +315,6 @@ struct FElysiumContentPaths
 	static FString MapEnv(const FString& Map) { return MapDir(Map) / (Map + TEXT(".env")); }
 	static FString MapLights(const FString& Map) { return MapDir(Map) / (Map + TEXT(".lights")); }
 	static FString MapProps(const FString& Map) { return MapDir(Map) / (Map + TEXT(".props")); }
-	static FString MapPropsDir(const FString& Map) { return MapDir(Map) / TEXT("props"); }
 	static FString MapEnts(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ents")); }
 	static FString MapHulls(const FString& Map) { return MapDir(Map) / (Map + TEXT(".hulls")); }
 	static FString MapDispCol(const FString& Map) { return MapDir(Map) / (Map + TEXT(".dispcol")); }

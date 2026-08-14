@@ -235,7 +235,7 @@ def sanitize(name):
 # --- reusable Unreal OBJ-scene writer (shared texture pipeline, world-compatible) ---
 
 
-def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
+def _envmask_png(info, bt, img, read_bytes, tex_out, tex_cache):
     """The $envmap reflectivity mask under tex/ as ``(filename, L image)``.
 
     Both forms are retained because semantic glass uses the same authored mask to keep
@@ -262,7 +262,7 @@ def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
                 try:
                     fn = sanitize(src) + "_envmask.png"
                     mask = decode_texture(tth, ttz).convert("L")
-                    mask.save(os.path.join(out_dir, "tex", fn))
+                    mask.save(os.path.join(tex_out, fn))
                     tex_cache[key] = (fn, mask)
                 except Exception:
                     pass
@@ -276,7 +276,7 @@ def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
                 fn = sanitize(bt) + "_envmask.png"
                 alpha = img.convert("RGBA").getchannel("A")
                 mask = ImageChops.invert(alpha)
-                mask.save(os.path.join(out_dir, "tex", fn))
+                mask.save(os.path.join(tex_out, fn))
                 tex_cache[key] = (fn, mask)
             except Exception:
                 pass
@@ -284,7 +284,122 @@ def _envmask_png(info, bt, img, read_bytes, out_dir, tex_cache):
     return (None, None)
 
 
-def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
+#: What `_resolve_material` answers for a material the install does not carry, or one whose VMT
+#: names neither a base texture nor a refraction layer.
+NO_MATERIAL = {"vmt": "", "albedo": None, "emis": None, "additive": False,
+               "translucent": False, "alphatest": False,
+               "envmap": None, "envmask": None, "envtint": None,
+               "globalwetness": None,
+               "glass": False, "bump": None,
+               "refract": False, "refract_amount": 0.0, "refract_map": None,
+               "iris": None, "vampire": False}
+
+
+def resolve_vmt(mat, search, read_bytes):
+    """``(install path, parsed VMT)`` for a material name, or ``(None, None)``.
+
+    The model's own header search paths are tried in order, then a flat ``materials/<mat>.vmt`` --
+    the engine's own resolution, and the reason a material name alone does not identify a material:
+    two models can name ``spike`` and mean different files.
+    """
+    from elysium_pipeline.formats import vmt
+
+    for sp in list(search) + [""]:
+        candidate = _norm(f"{sp}/{mat}").strip("/") if sp else mat
+        raw = read_bytes(_norm(f"materials/{candidate}.vmt"))
+        if raw:
+            return candidate, vmt.parse(
+                raw.decode("ascii", "replace"),
+                resolve_include=lambda p: (
+                    lambda bb: bb.decode("ascii", "replace") if bb else None)(
+                    read_bytes(_norm(p if p.lower().endswith(".vmt") else p + ".vmt"))))
+    return None, None
+
+
+def material_channels(mat, search, read_bytes):
+    """A material's render semantics and the **source keys** of every texture it draws.
+
+    Pure resolution: it reads VMTs and nothing else, decodes nothing, and writes nothing. That is
+    what lets a corpus decide, over every material at once, which base textures have to keep their
+    alpha channel -- a question that has one answer per texture, not one per decode order.
+
+    Returns ``None`` when no VMT resolves, or when the VMT names neither a base texture nor a
+    refraction layer. Keys are install-relative and normalized (`shared_corpus.texture_key`'s
+    form); ``needs_alpha`` is this material's own demand, to be unioned by the caller.
+    """
+    from elysium_pipeline.formats.glass import is_glass
+
+    vmt_path, info = resolve_vmt(mat, search, read_bytes)
+    if info is None:
+        return None
+    bt = info.get("basetexture")
+    refract = bool(info.get("refract"))
+    # A material with none of these three draws nothing. Water belongs in the test: the `Water`
+    # shader carries no `$basetexture` at all -- what it draws is its own normal map plus the fog
+    # and reflection tint the surface looks through -- so testing only the first two drops every
+    # canal, sewer and pool in the game.
+    if not bt and not refract and not info.get("water"):
+        return None
+
+    def key(value):
+        return _norm(str(value).replace("\\", "/").lstrip("/")) if value else ""
+
+    additive = bool(info.get("additive"))
+    translucent = bool(info.get("translucent"))
+    alphatest = bool(info.get("alphatest"))
+    refract_src = (info.get("normalmap") or info.get("dudvmap")) if refract else None
+    return {
+        "material": mat,
+        "vmt": vmt_path,
+        "albedo": key(bt),
+        # An additive, blended or masked surface reads its own alpha, so the base texture cannot
+        # be flattened to RGB. One material asking is enough for the whole corpus.
+        "needs_alpha": additive or translucent or alphatest,
+        "selfillum": bool(info.get("selfillum")),
+        "additive": additive,
+        "translucent": translucent,
+        "alphatest": alphatest,
+        "glass": is_glass(info, vmt_path),
+        "envmap": sanitize(info["envmap"]) if info.get("envmap") else "",
+        "envmap_path": key(info.get("envmap")),
+        "envmask": key(info.get("envmapmask")),
+        # The base texture's own alpha, inverted, standing in for a mask texture.
+        "envmask_from_alpha": bool(
+            info.get("basealphaenvmapmask") and not info.get("envmapmask")),
+        "envtint": info.get("envmaptint"),
+        "globalwetness": info.get("globalwetness"),
+        "bump": key(info.get("bumpmap")),
+        # WorldVertexTransition's second base texture, mixed against the first by the
+        # displacement's own DISPVERT alpha (the map's `.blend` sidecar carries the weights).
+        "base_tex2": key(info.get("basetexture2")),
+        "refract": refract,
+        "refract_amount": float(info.get("refractamount") or 0.0),
+        "refract_map": key(refract_src),
+        # A DUDV source is signed UVWQ8888 and must be biased into a conventional tangent normal;
+        # an authored $normalmap is already one.
+        "refract_is_dudv": bool(refract_src and not info.get("normalmap")),
+        "iris": key(info.get("iris")),
+        "vampire": bool(info.get("vampire")),
+        # `$decalscale` and an `unlit*` shader are what an `infodecal` projector needs to size and
+        # light itself. Both are VMT facts, so they belong to the material rather than to the map
+        # that happens to stick the decal on a wall.
+        "decal_scale": float(info.get("decalscale") or 0.0),
+        "unlit": str(info.get("shader") or "").lower().startswith("unlit"),
+        # The "Water" shader carries no base texture: what it draws is its own normal map plus
+        # the fog and reflection tint the surface looks through. The plane it sits at is the one
+        # thing a map owns, because it is the median height of that material's own world faces.
+        "water": bool(info.get("water")),
+        "water_normal": key(info.get("normalmap")) if info.get("water") else "",
+        "water_fog_color": info.get("fogcolor"),
+        "water_fog_start": info.get("fogstart"),
+        "water_fog_end": info.get("fogend"),
+        "water_reflect_tint": info.get("reflecttint"),
+        "info": info,
+    }
+
+
+def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
+                      keep_alpha=None, tex_out=None):
     """material name -> decoded channels plus the VMT's render semantics.
 
     The albedo PNG (and the self-illum emission mask derived from its alpha) is
@@ -292,46 +407,30 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
     are per-material (per-VMT), so two materials that share a basetexture but differ in those
     flags do not inherit each other's. Source ``Refract`` is deliberately independent of
     albedo: its authored DUDV/normal map distorts the framebuffer and many such VMTs declare no
-    ``$basetexture`` at all."""
-    from elysium_pipeline.formats import vmt
-    from elysium_pipeline.formats.glass import derive_normal, is_glass
+    ``$basetexture`` at all.
+
+    ``keep_alpha`` is the set of base-texture keys that must keep their alpha channel. Whether a
+    texture keeps alpha is a property of the whole set of materials drawing it, not of this one,
+    so a caller that knows the whole set states it here and the answer stops depending on which
+    material happened to resolve first. Left ``None``, the cache promotes RGB to RGBA on demand,
+    which is correct only within a single run that resolves every sharer.
+
+    ``tex_out`` is where decoded textures land, defaulting to ``<out_dir>/tex``.
+    """
+    from elysium_pipeline.formats.glass import derive_normal
     from elysium_pipeline.formats.tex_to_png import decode as decode_texture, dudv_to_normal
-    none = {"albedo": None, "emis": None, "additive": False,
-            "translucent": False, "alphatest": False,
-            "envmap": None, "envmask": None, "envtint": None,
-            "globalwetness": None,
-            "glass": False, "bump": None,
-            "refract": False, "refract_amount": 0.0, "refract_map": None,
-            "iris": None, "vampire": False}
-    vmt_txt = vmt_path = None
-    for sp in search:
-        candidate = _norm(f"{sp}/{mat}").strip("/")
-        b = read_bytes(_norm(f"materials/{candidate}.vmt"))
-        if b:
-            vmt_txt = b.decode("ascii", "replace")
-            vmt_path = candidate
-            break
-    if vmt_txt is None:                       # last resort: flat materials/<mat>.vmt
-        b = read_bytes(f"materials/{mat}.vmt")
-        if b:
-            vmt_txt = b.decode("ascii", "replace")
-            vmt_path = mat
-    if not vmt_txt:
-        return dict(none)
-    info = vmt.parse(vmt_txt, resolve_include=lambda p: (
-        lambda bb: bb.decode("ascii", "replace") if bb else None)(
-        read_bytes(_norm(p if p.lower().endswith(".vmt") else p + ".vmt"))))
-    bt = info.get("basetexture")
-    refract = bool(info.get("refract"))
-    if not bt and not refract:
-        return dict(none)
-    if bt:
-        bt = _norm(bt.replace("\\", "/").lstrip("/"))  # prop VMTs carry leading/doubled slashes
-    additive = bool(info.get("additive"))
-    translucent = bool(info.get("translucent"))
-    alphatest = bool(info.get("alphatest"))
-    glass = is_glass(info, vmt_path)
-    needs_alpha = additive or translucent or alphatest
+    tex_out = tex_out or os.path.join(out_dir, "tex")
+    channels = material_channels(mat, search, read_bytes)
+    if channels is None:
+        return dict(NO_MATERIAL)
+    info = channels["info"]
+    bt = channels["albedo"] or None
+    refract = channels["refract"]
+    additive = channels["additive"]
+    translucent = channels["translucent"]
+    alphatest = channels["alphatest"]
+    glass = channels["glass"]
+    needs_alpha = (bt in keep_alpha) if keep_alpha is not None else channels["needs_alpha"]
 
     # Cache per basetexture:
     # [albedo_png, emis_png_or_None, decoded_rgba_or_None, alpha_preserved].
@@ -349,7 +448,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
                     img = decode_texture(tth, ttz).convert("RGBA")
                     fn = sanitize(bt) + ".png"
                     (img if needs_alpha else img.convert("RGB")).save(
-                        os.path.join(out_dir, "tex", fn))
+                        os.path.join(tex_out, fn))
                     albedo = fn
                 except Exception as e:
                     print(f"    texture decode failed for {mat} ({bt}): {e}")
@@ -358,7 +457,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
 
         albedo, emis, img, alpha_preserved = ent
         if needs_alpha and albedo and img is not None and not alpha_preserved:
-            img.save(os.path.join(out_dir, "tex", albedo))
+            img.save(os.path.join(tex_out, albedo))
             ent[3] = True
     if info.get("selfillum") and albedo and emis is None and img is not None:
         import numpy as np
@@ -367,7 +466,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         a = arr[:, :, 3:4] / 255.0
         masked = (arr[:, :, :3] * a).clip(0, 255).astype("uint8")
         efn = sanitize(bt) + "_ke.png"
-        Image.fromarray(masked, "RGB").save(os.path.join(out_dir, "tex", efn))
+        Image.fromarray(masked, "RGB").save(os.path.join(tex_out, efn))
         ent[1] = emis = efn
 
     # $envmap. VtMB's models are the LARGER half of the reflective set (1,419 of 2,610
@@ -382,7 +481,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         envmap = sanitize(info["envmap"])
         if bt:
             envmask, envmask_img = _envmask_png(
-                info, bt, img, read_bytes, out_dir, tex_cache)
+                info, bt, img, read_bytes, tex_out, tex_cache)
         envtint = info.get("envmaptint")
 
     # Source Refract is an explicit framebuffer-distortion layer. Prefer the authored tangent
@@ -404,7 +503,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
                         decoded = decode_texture(tth, ttz)
                         normal = dudv_to_normal(decoded) if is_dudv else decoded.convert("RGB")
                         refract_png = sanitize(refract_src) + "_refract_n.png"
-                        normal.save(os.path.join(out_dir, "tex", refract_png))
+                        normal.save(os.path.join(tex_out, refract_png))
                         tex_cache[key] = refract_png
                     except Exception as e:
                         print(f"    refract decode failed for {mat} ({refract_src}): {e}")
@@ -425,7 +524,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
                 try:
                     bump_png = sanitize(bump) + "_n.png"
                     decode_texture(tth, ttz).convert("RGB").save(
-                        os.path.join(out_dir, "tex", bump_png))
+                        os.path.join(tex_out, bump_png))
                     tex_cache[key] = bump_png
                 except Exception:
                     pass
@@ -435,7 +534,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
         key = "#glassnormal:%s|%s" % (bt, mask_id)
         if key not in tex_cache:
             bump_png = sanitize(bt) + "_glass_n.png"
-            derive_normal(img, envmask_img).save(os.path.join(out_dir, "tex", bump_png))
+            derive_normal(img, envmask_img).save(os.path.join(tex_out, bump_png))
             tex_cache[key] = bump_png
         bump_png = tex_cache[key]
 
@@ -453,13 +552,14 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache):
                 try:
                     fn = sanitize(iris) + "_iris.png"
                     decode_texture(tth, ttz).convert("RGBA").save(
-                        os.path.join(out_dir, "tex", fn))
+                        os.path.join(tex_out, fn))
                     tex_cache[key] = fn
                 except Exception as e:
                     print(f"    iris decode failed for {mat} ({iris}): {e}")
         iris_png = tex_cache[key]
 
     return {
+        "vmt": channels["vmt"] or "",
         "albedo": albedo,
         "emis": emis if info.get("selfillum") else None,
         "additive": additive,
@@ -530,7 +630,8 @@ def _write_skins(meshes, skins, name, out_dir):
             f.write(f"{fam} {pairs}\n")
 
 
-def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, skins=None):
+def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, skins=None,
+                    keep_alpha=None, tex_out=None):
     """Write out_dir/<name>.obj + .mtl, decoding textures into out_dir/tex/
     (shared across models via tex_cache). Vertices are Unreal cm/Z-up/left-handed via
     bsp.source_to_unreal and triangle winding is reversed because the Y negation is a
@@ -539,8 +640,13 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
     skins: `skin_families(d)` -- when the model has alternate families, every material any of
     them names is resolved into the .mtl too (so the bake authors a material instance for it),
     and out_dir/<name>.skins records the remap. A single-family model writes exactly what it
-    always did, byte for byte."""
-    os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
+    always did, byte for byte.
+
+    ``keep_alpha`` is passed through to `_resolve_material`, and ``tex_out`` is where textures
+    land -- separate from ``out_dir`` so a corpus can put one texture set beside many models'
+    OBJs instead of under each one."""
+    tex_out = tex_out or os.path.join(out_dir, "tex")
+    os.makedirs(tex_out, exist_ok=True)
 
     # The .mtl carries the authored set first, in the order the meshes name it (so a model with
     # no alternate families is unchanged), then any material only an alternate family draws.
@@ -548,46 +654,18 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
     extra = _skin_materials(meshes, skins) - set(names)
     names += sorted(extra)
 
-    mat_png = {n: _resolve_material(n, search, read_bytes, out_dir, tex_cache) for n in names}
+    mat_png = {n: _resolve_material(n, search, read_bytes, out_dir, tex_cache,
+                                    keep_alpha=keep_alpha, tex_out=tex_out) for n in names}
     _write_skins(meshes, skins, name, out_dir)
+    # The `.mtl` names each mesh slot and the corpus material it draws. Every channel and flag
+    # lives once in `shared/materials.json`, so a model and a world surface that share a material
+    # cannot state different things about it.
     with open(os.path.join(out_dir, name + ".mtl"), "w") as f:
         for mat, m in mat_png.items():
             f.write(f"newmtl {sanitize(mat)}\n")
-            if m["albedo"]:
-                f.write(f"map_Kd tex/{m['albedo']}\n")
-            else:
-                f.write("Kd 0.6 0.6 0.62\n")
-            if m["emis"]:
-                f.write(f"map_Ke tex/{m['emis']}\n")
-            if m["additive"]:
-                f.write("additive 1\n")             # our flag: additive glow overlay (unlit)
-            elif m["translucent"]:
-                f.write("blend 1\n")                # our flag: alpha-blended
-            elif m["alphatest"]:
-                f.write("illum 4\n")                # our flag: alpha-tested (scissor)
-            # Same envmap lines UE_bsp_to_scene writes for a reflective world surface, so one
-            # MTL contract covers world and props. $envmapcontrast/$envmapsaturation are not
-            # emitted: VtMB's shipped shaders carry no term for either (docs/vtmb/reflections.md).
-            if m["envmap"]:
-                f.write(f"envmap {m['envmap']}\n")
-                if m["envmask"]:
-                    f.write(f"envmapmask tex/{m['envmask']}\n")
-                t = m["envtint"] or [1.0, 1.0, 1.0]
-                f.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
-            if m["globalwetness"] is not None:
-                if not m["envmap"]:
-                    raise ValueError(f"{mat}: GlobalWetness proxy has no $envmap")
-                f.write(f"globalwetness {m['globalwetness']:.6f}\n")
-            if m["glass"]:
-                f.write("glass 1\n")                # our semantic: UE thin refractive glass
-            if m["bump"]:
-                f.write(f"bumpmap tex/{m['bump']}\n")
-            if m["refract"]:
-                # Source Refract is a separate transparent framebuffer-distortion card, not
-                # the underlying glass albedo. Preserve its authored amount and vector field.
-                f.write(f"refract {m['refract_amount']:.6f}\n")
-                if m["refract_map"]:
-                    f.write(f"refractmap tex/{m['refract_map']}\n")
+            if m["vmt"]:
+                f.write(f"mat {m['vmt']}\n")
+            f.write("\n")
     with open(os.path.join(out_dir, name + ".obj"), "w") as f:
         f.write(f"mtllib {name}.mtl\n")
         vbase = 1

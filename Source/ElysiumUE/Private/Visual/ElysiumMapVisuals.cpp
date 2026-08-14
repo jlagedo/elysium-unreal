@@ -676,19 +676,26 @@ void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
 	}
 
 	// Faces come from one of three sets: the labelled probe (B1), the enhanced set (B5), or the
-	// faithful decode. The enhanced set is opt-in and per-map, so a map without one silently
-	// keeps the faithful faces rather than losing its sky.
+	// faithful decode. The enhanced set is opt-in, so a sky without one silently keeps the
+	// faithful faces rather than losing its sky.
+	//
+	// All three are addressed by the sky's OWN name, because the faces belong to the sky rather
+	// than to the map showing it: the game's maps share six distinct skies between them, and a
+	// map-local `sky_<face>` alias would give one name several sets of bytes.
 	const bool bProbe = CVarSkyProbe.GetValueOnGameThread() != 0 && !Env.SkyName.IsEmpty();
-	const FString TexHi = FElysiumContentPaths::MapTexHiDir(MapName);
+	const FString Prefix = bProbe
+		? Env.SkyName
+		: FElysiumContentPaths::SkyFacePrefix(Env.SkyName);
+	const FString TexHi = FElysiumContentPaths::SharedTexHiDir();
 	const bool bEnhanced = !bProbe && CVarEnhancedTextures.GetValueOnGameThread() != 0
-		&& ElysiumEnvironment::HasSkyFaces(TexHi, TEXT("sky_"));
+		&& ElysiumEnvironment::HasSkyFaces(TexHi, Prefix);
 
 	float CubeUpperMean = 0.f;
 	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(
 		bProbe    ? FElysiumContentPaths::SkyProbeDir() :
 		bEnhanced ? TexHi
-		          : FElysiumContentPaths::MapTexDir(MapName),
-		bProbe ? Env.SkyName : FString(TEXT("sky_")), &CubeUpperMean);
+		          : FElysiumContentPaths::SharedTexDir(),
+		Prefix, &CubeUpperMean);
 	if (Cube == nullptr)
 	{
 		if (bProbe)

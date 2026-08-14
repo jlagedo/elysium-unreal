@@ -919,6 +919,65 @@ def export_model(
     )
 
 
+def _corpus_unit(ctx: typer.Context, label: str, **selectors) -> None:
+    """Re-decode and re-bake one shared-corpus unit. No map is exported and no `.umap` changes."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        done = export_manager.export_corpus_unit(config, runner, **selectors)
+        console.print(
+            f"{label} complete: "
+            + ", ".join(filter(None, [
+                ", ".join(done["models"]),
+                ", ".join(done["materials"]),
+            ]))
+            + " (no map re-baked)"
+        )
+
+    _execute(
+        _state(ctx),
+        label,
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        require_ue=True,
+        activity=True,
+        require_built_lane=True,
+        primary_only=True,
+    )
+
+
+@export_app.command("prop")
+def export_prop(
+    ctx: typer.Context,
+    model: str = typer.Argument(..., help="Install model path, for example models/scenery/x.mdl."),
+    force: bool = typer.Option(False, "--force", help="Rebake even when the recipe is unchanged."),
+) -> None:
+    """Re-decode one static model and rebake its mesh, materials and textures."""
+    _corpus_unit(ctx, "export prop", models=[model], force=force)
+
+
+@export_app.command("material")
+def export_material(
+    ctx: typer.Context,
+    material: str = typer.Argument(..., help="Install material path, without materials/ or .vmt."),
+    force: bool = typer.Option(False, "--force", help="Rebake even when the recipe is unchanged."),
+) -> None:
+    """Re-resolve one material and rebake its instance and every texture it draws."""
+    _corpus_unit(ctx, "export material", materials=[material], force=force)
+
+
+@export_app.command("texture")
+def export_texture(
+    ctx: typer.Context,
+    texture: str = typer.Argument(..., help="Install texture path, without materials/ or .tth."),
+    force: bool = typer.Option(False, "--force", help="Rebake even when the recipe is unchanged."),
+) -> None:
+    """Re-decode one texture, through every corpus material that draws it."""
+    _corpus_unit(ctx, "export texture", textures=[texture], force=force)
+
+
 @export_app.command("placed-model")
 def export_placed_model(
     ctx: typer.Context,
@@ -953,14 +1012,14 @@ def export_bundle(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     allowed = {
-        "audio", "particles", "scripts", "signs", "vdata", "items", "cfg", "scenes",
+        "audio", "corpus", "particles", "scripts", "signs", "vdata", "items", "cfg", "scenes",
         "ui", "use-icons", "npc", "policy",
     }
     if bundle not in allowed:
         raise typer.BadParameter("bundle must be one of: " + ", ".join(sorted(allowed)))
-    # `items` decodes offline AND bakes the shared /ElysiumBaked/items package, so it needs both
-    # the install and an editor; `policy` needs only the editor.
-    needs_editor = bundle in {"policy", "items"}
+    # `corpus` decodes offline AND bakes the shared /ElysiumBaked/Shared packages, so it needs
+    # both the install and an editor; `policy` needs only the editor.
+    needs_editor = bundle in {"policy", "corpus"}
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager

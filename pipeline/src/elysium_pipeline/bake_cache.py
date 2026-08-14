@@ -10,6 +10,7 @@ import tempfile
 from typing import Iterable, Sequence
 import uuid
 
+from elysium_pipeline import shared_corpus
 from elysium_pipeline.tasking import (
     ContentDigestCache,
     Manifest,
@@ -19,7 +20,9 @@ from elysium_pipeline.tasking import (
 )
 
 
-STAGES = ("textures", "materials", "world", "sky", "props", "particles", "level")
+#: A map's stages. Prop meshes and every surface texture and material belong to the shared
+#: corpus scope, whose own stages are `shared_corpus.STAGES`.
+STAGES = ("textures", "materials", "world", "sky", "particles", "level")
 CACHE_REVISION = "elysium-bake-stage-v2"
 DIGEST_CACHE_FILE = ".elysium-content-digests.json"
 ASSET_RECEIPT_DIR = ".elysium-bake-assets"
@@ -34,7 +37,6 @@ _STAGE_METHODS = {
     "materials": ("stage_materials", "resolve_textures", "resolve_materials"),
     "world": ("stage_world", "resolve_materials"),
     "sky": ("stage_sky", "resolve_materials"),
-    "props": ("stage_props", "resolve_materials"),
     "particles": (),
     "level": ("stage_level", "resolve_materials"),
 }
@@ -415,42 +417,49 @@ def stage_input_paths(
     map_name: str,
     stage: str,
 ) -> tuple[Path, ...]:
+    """What one map stage reads.
+
+    Textures, materials and prop meshes are the shared corpus's, so a map's stages depend on the
+    corpus documents rather than on a texture tree of their own: a re-decoded material changes
+    every map that draws it, and the two `shared/*.json` files are where that shows.
+    """
     if stage not in STAGES:
         raise ValueError(f"unknown bake stage: {stage}")
     root = export_root / map_name
     world_mtl = root / f"{map_name}.mtl"
-    prop_mtls = _matching_files(root, ("props/*.mtl",))
+    corpus = [
+        shared_corpus.manifest_path(export_root),
+        shared_corpus.materials_path(export_root),
+    ]
+    local_materials = root / f"{map_name}.materials.json"
 
     if stage == "textures":
+        # A map imports only its own baked env cubemaps and its rain height field.
         paths = [
             world_mtl,
-            root / "tex",
-            root / "props" / "tex",
+            root / "tex" / "cube",
             root / f"{map_name}.weather.json",
             root / "weather",
-            *prop_mtls,
         ]
     elif stage == "materials":
         paths = [
             world_mtl,
+            local_materials,
             root / f"{map_name}.env",
             root / f"{map_name}.weather.json",
-            *prop_mtls,
+            *corpus,
         ]
     elif stage == "world":
         paths = [
             root / f"{map_name}.obj",
             root / f"{map_name}.blend",
             world_mtl,
+            local_materials,
+            *corpus,
             *_matching_files(root, ("brushes/*.obj", "brushes/*.blend")),
         ]
     elif stage == "sky":
-        paths = [root / f"{map_name}_sky.obj", world_mtl]
-    elif stage == "props":
-        paths = _matching_files(
-            root,
-            ("props/*.obj", "props/*.mtl", "props/*.skins", "props/*.phys"),
-        )
+        paths = [root / f"{map_name}_sky.obj", world_mtl, local_materials, *corpus]
     elif stage == "particles":
         paths = _particle_inputs(export_root, root, map_name)
     else:
@@ -461,8 +470,10 @@ def stage_input_paths(
             root / f"{map_name}.env",
             root / f"{map_name}.sky",
             root / f"{map_name}.spawn",
+            root / f"{map_name}.ents",
             world_mtl,
-            *_matching_files(root, ("props/*.mtl", "props/*.skins")),
+            local_materials,
+            *corpus,
         ]
     return tuple(dict.fromkeys(Path(path) for path in paths))
 
@@ -482,7 +493,7 @@ def _stage_code_paths(config, stage: str) -> tuple[Path, ...]:
                 source_root / "Private" / "Editor" / "ElysiumRainAssetBuilder.cpp",
             )
         )
-    elif stage == "props":
+    elif stage == "level":
         paths.extend(
             (
                 source_root / "Public" / "ElysiumPropSkins.h",
@@ -528,15 +539,15 @@ def stage_output_paths(config, map_name: str, stage: str) -> tuple[Path, ...]:
         / map_name
     )
     if stage == "textures":
+        # A map's own textures: the baked env cubemaps and the rain height field. Surface
+        # textures are the corpus's package.
         paths = [
             *_files(root, "Textures/**/*.uasset"),
-            *_files(root, "Props/Textures/**/*.uasset"),
             *_files(root, "Weather/T_RainHeight.uasset"),
         ]
     elif stage == "materials":
         paths = [
             *_files(root, "Materials/**/*.uasset"),
-            *_files(root, "Props/Materials/**/*.uasset"),
             *_files(root, "Weather/MI_ElysiumRain.uasset"),
         ]
     elif stage == "world":
@@ -546,8 +557,6 @@ def stage_output_paths(config, map_name: str, stage: str) -> tuple[Path, ...]:
         ]
     elif stage == "sky":
         paths = _files(root, "Meshes/SM_Sky_*.uasset")
-    elif stage == "props":
-        paths = _files(root, "Props/*.uasset")
     elif stage == "particles":
         paths = _files(root, "Particles/**/*.uasset")
     elif stage == "level":
@@ -598,9 +607,9 @@ def plan_stages(
                 ):
                     stale.add(stage)
             # Mesh package membership is discovered when the level is authored.  Rebuilding the
-            # level whenever a mesh family changes safely handles new/pruned chunks and props while
+            # level whenever a mesh family changes safely handles new and pruned chunks while
             # still leaving texture- and particle-only work isolated.
-            if stale.intersection({"world", "sky", "props"}):
+            if stale.intersection({"world", "sky"}):
                 stale.add("level")
             if stale:
                 plan[map_name] = tuple(stage for stage in STAGES if stage in stale)

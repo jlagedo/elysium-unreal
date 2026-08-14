@@ -25,6 +25,9 @@ DOMAINS = (
     "maps",
     "audio",
     "cfg",
+    # The shared static corpus: every texture, material and static model in the install, decoded
+    # once. Every map export and every bake resolves against it, so it is its own domain.
+    "corpus",
     "items",
     "npc",
     "particles",

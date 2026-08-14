@@ -283,7 +283,7 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 		if (!Survey.AnyPropStem.IsEmpty())
 		{
 			const FString Obj =
-				FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1")) / (Survey.AnyPropStem + TEXT(".obj"));
+				FElysiumContentPaths::SharedPropsDir() / (Survey.AnyPropStem + TEXT(".obj"));
 			TestTrue(TEXT("a prop_dynamic model_mesh resolves to an OBJ on disk"),
 				IFileManager::Get().FileExists(*Obj));
 		}
@@ -336,7 +336,7 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 		TestTrue(TEXT("prop_physics records carry a model_mesh"), Survey.PropPhysicsWithMesh > 0);
 		if (!Survey.AnyPhysStem.IsEmpty())
 		{
-			const FString Dir = FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1"));
+			const FString Dir = FElysiumContentPaths::SharedPropsDir();
 			TestTrue(TEXT("a prop_physics model_mesh resolves to an OBJ on disk"),
 				IFileManager::Get().FileExists(*(Dir / (Survey.AnyPhysStem + TEXT(".obj")))));
 			TestTrue(TEXT("a prop_physics model carries a .phys collision sidecar"),
@@ -347,12 +347,12 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 			// cooks it alongside the per-poly shape the debug pick traces. Self-skips when the map
 			// has not been baked, the same way the tier self-skips an unexported map.
 			UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr,
-				*FElysiumContentPaths::BakedPropMesh(TEXT("sp_tutorial_1"), Survey.AnyPhysStem));
+				*FElysiumContentPaths::BakedPropMesh(Survey.AnyPhysStem));
 			if (Mesh == nullptr)
 			{
 				AddInfo(FString::Printf(
 					TEXT("skipping the baked-collision assertions: no baked mesh for '%s' ")
-					TEXT("(run: uv run elysium export map sp_tutorial_1 --force)"), *Survey.AnyPhysStem));
+					TEXT("(run: uv run elysium export bundle corpus)"), *Survey.AnyPhysStem));
 			}
 			else if (UBodySetup* Body = Mesh->GetBodySetup())
 			{
@@ -392,7 +392,7 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	TestTrue(TEXT("prop_sign owns definition_file"), SignClass && !SignClass->bStub
 		&& Reg.FindField(*SignClass, FName(TEXT("definition_file"))) != nullptr);
 
-	const FString PropsDir = FElysiumContentPaths::MapPropsDir(TEXT("sp_tutorial_1"));
+	const FString PropsDir = FElysiumContentPaths::SharedPropsDir();
 	TArray<FString> SkinFiles;
 	IFileManager::Get().FindFiles(SkinFiles, *(PropsDir / TEXT("*.skins")), true, false);
 	AddInfo(FString::Printf(TEXT("sp_tutorial_1 models with alternate skin families: %d"), SkinFiles.Num()));
@@ -2448,7 +2448,7 @@ bool FElysiumPlacedModelCoverageContentTest::RunTest(const FString&)
 				Entry->StaticStem, Def.ModelMesh);
 			TestNotNull(*FString::Printf(TEXT("%s map static mesh loads"), *Def.ModelMesh),
 				LoadObject<UStaticMesh>(nullptr,
-					*FElysiumContentPaths::BakedPropMesh(TEXT("sp_tutorial_1"), Def.ModelMesh)));
+					*FElysiumContentPaths::BakedPropMesh(Def.ModelMesh)));
 			++Joined;
 		}
 		TestTrue(TEXT("the tutorial joins placed entities to the generated catalogue"), Joined > 0);
@@ -6009,11 +6009,11 @@ bool FElysiumItemsContentTest::RunTest(const FString&)
 // =====================================================================================
 // Item ground models — the shared corpus a loose item's body resolves against.
 //
-// A placed `item_*` states no `model` key, so the map prop pass never saw these meshes;
-// UE_extract_items.py decodes them from the same `vdata/items` table the runtime loads, and the
-// item bake scope stands them on /ElysiumBaked/items. This asserts the two halves agree: that the
-// stem the runtime derives from a `playermodel` is the stem the offline decode wrote, and that
-// every model carrying geometry has a baked mesh to load.
+// A placed `item_*` states no `model` key, so no map's prop pass names these meshes. The corpus
+// reads the same `vdata/items` table the runtime loads and decodes them beside every other static
+// model, onto /ElysiumBaked/Shared/Meshes; `items/ground_models.json` is the join. This asserts the
+// two halves agree: that the stem the runtime derives from a `playermodel` is the stem the offline
+// decode wrote, and that every model carrying geometry has a baked mesh to load.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumItemGroundModelsContentTest,

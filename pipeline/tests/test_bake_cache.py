@@ -65,8 +65,14 @@ class BakeCacheTests(unittest.TestCase):
         map_name = "test_map"
         map_root = export / map_name
         (map_root / "brushes").mkdir(parents=True)
-        (map_root / "props" / "tex").mkdir(parents=True)
-        (map_root / "tex").mkdir(parents=True)
+        (map_root / "tex" / "cube").mkdir(parents=True)
+        corpus = export / "shared"
+        (corpus / "tex").mkdir(parents=True)
+        (corpus / "props").mkdir(parents=True)
+        (corpus / "manifest.json").write_text("{}", encoding="utf-8")
+        (corpus / "materials.json").write_text("{}", encoding="utf-8")
+        (corpus / "tex" / "wall.png").write_bytes(b"texture")
+        (corpus / "props" / "prop.obj").write_text("prop", encoding="utf-8")
         for suffix, contents in {
             ".obj": "world",
             ".blend": "0\n",
@@ -83,9 +89,7 @@ class BakeCacheTests(unittest.TestCase):
         }.items():
             (map_root / f"{map_name}{suffix}").write_text(contents, encoding="utf-8")
         (map_root / "brushes" / "brush_1.obj").write_text("brush", encoding="utf-8")
-        (map_root / "props" / "prop.obj").write_text("prop", encoding="utf-8")
-        (map_root / "props" / "prop.mtl").write_text("newmtl prop", encoding="utf-8")
-        (map_root / "tex" / "wall.png").write_bytes(b"texture")
+        (map_root / "tex" / "cube" / "cubemapdefault.dds").write_bytes(b"cube")
 
         baked = repo / "Plugins" / "ElysiumBaked" / "Content" / map_name
         outputs = {
@@ -93,7 +97,6 @@ class BakeCacheTests(unittest.TestCase):
             "Materials/MI_wall.uasset": b"material",
             "Meshes/SM_World_0_0_0.uasset": b"world",
             "Meshes/SM_Sky_0_0_0.uasset": b"sky",
-            "Props/SM_prop.uasset": b"prop",
             "Particles/NS_test.uasset": b"particles",
             f"{map_name}.umap": b"level",
         }
@@ -133,13 +136,22 @@ class BakeCacheTests(unittest.TestCase):
     def test_runtime_only_sidecar_does_not_invalidate_bake(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config, manifest, name, root, _ = self._workspace(temporary)
-            (root / f"{name}.ents").write_text("changed runtime data", encoding="utf-8")
+            (root / f"{name}.hulls").write_text("changed runtime data", encoding="utf-8")
             self.assertEqual(bake_cache.plan_stages(manifest, config, [name]), {})
+
+    def test_entity_placement_reaches_the_level_stage(self) -> None:
+        # `.ents` stopped being runtime-only when prop meshes moved to the corpus: the level
+        # stage reads each entity's `model_mesh` stem to join it to the shared mesh.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, manifest, name, root, _ = self._workspace(temporary)
+            (root / f"{name}.ents").write_text("changed placement", encoding="utf-8")
+            self.assertEqual(
+                bake_cache.plan_stages(manifest, config, [name]), {name: ("level",)})
 
     def test_texture_pixel_change_only_invalidates_texture_stage(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config, manifest, name, root, _ = self._workspace(temporary)
-            (root / "tex" / "wall.png").write_bytes(b"changed pixels")
+            (root / "tex" / "cube" / "cubemapdefault.dds").write_bytes(b"changed cube")
             self.assertEqual(
                 bake_cache.plan_stages(manifest, config, [name]),
                 {name: ("textures",)},
@@ -175,28 +187,21 @@ class BakeCacheTests(unittest.TestCase):
                 {name: ("particles",)},
             )
 
-    def test_prop_change_invalidates_props_and_level(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config, manifest, name, root, _ = self._workspace(temporary)
-            (root / "props" / "prop.obj").write_text("changed prop", encoding="utf-8")
-            self.assertEqual(
-                bake_cache.plan_stages(manifest, config, [name]),
-                {name: ("props", "level")},
-            )
-
-    def test_prop_stage_code_change_does_not_invalidate_other_asset_stages(self) -> None:
+    def test_a_redecoded_corpus_material_reaches_every_stage_that_binds_it(self) -> None:
+        # One definition, so one change: a map's materials, geometry and level all resolve
+        # against `shared/materials.json` and go stale together when it does.
         with tempfile.TemporaryDirectory() as temporary:
             config, manifest, name, _, _ = self._workspace(temporary)
-            bake_map = config.repo_root / "pipeline" / "unreal" / "bake_map.py"
-            source = bake_map.read_text(encoding="utf-8").replace(
-                "def stage_props(self): self.resolve_materials()",
-                "def stage_props(self): self.resolve_materials(); helper()",
-            )
-            bake_map.write_text(source, encoding="utf-8")
+            (config.export_root / "shared" / "materials.json").write_text(
+                '{"materials": {}}', encoding="utf-8")
             self.assertEqual(
                 bake_cache.plan_stages(manifest, config, [name]),
-                {name: ("props", "level")},
+                {name: ("materials", "world", "sky", "level")},
             )
+
+    def test_a_map_no_longer_owns_a_props_stage(self) -> None:
+        # Prop meshes belong to the shared corpus scope, so no map plans one.
+        self.assertNotIn("props", bake_cache.STAGES)
 
     def test_deleted_generated_asset_invalidates_its_stage(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

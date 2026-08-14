@@ -128,12 +128,12 @@ def generate_policy_content(config, runner, generators: Sequence[str] | None = N
         raise UnrealFailure("font generation did not produce: " + ", ".join(missing))
 
 
-def bake_items(config, runner) -> None:
-    """Bake the shared item ground-model corpus onto /ElysiumBaked/items.
+def bake_corpus(config, runner) -> None:
+    """Bake the shared asset corpus onto /ElysiumBaked/Shared.
 
-    One scope, no map: an item's world model is spawnable in any map, so it is baked once rather
-    than per map. Only textures, materials and props apply -- the corpus has no world, sky,
-    particle or level input.
+    One scope, no map: a texture, a material and a static model belong to the install, so each is
+    baked once rather than once per map that draws it. Only textures, materials and props apply --
+    the corpus has no world, sky, particle or level input.
     """
     _run(
         config,
@@ -143,7 +143,7 @@ def bake_items(config, runner) -> None:
             str(config.project),
             "-run=pythonscript",
             f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
-            "-BakeItems=1",
+            "-BakeCorpus=1",
             "-AllowCommandletRendering",
             "-unattended",
             "-nosplash",

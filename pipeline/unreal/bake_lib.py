@@ -12,7 +12,7 @@ import struct
 
 import unreal
 
-from elysium_pipeline import asset_names
+from elysium_pipeline import asset_names, shared_corpus
 
 _tools = unreal.AssetToolsHelpers.get_asset_tools()
 _mel = unreal.MaterialEditingLibrary
@@ -128,7 +128,7 @@ class MatDef(object):
     """One OBJ material, mirroring FElysiumMaterialDef so the bake selects the same master
     and binds the same named parameters the runtime factory does."""
 
-    __slots__ = ("name", "albedo", "emissive", "bump", "refract_map", "env_mask",
+    __slots__ = ("name", "material_key", "albedo", "emissive", "bump", "refract_map", "env_mask",
                  "base_tex2", "scissor", "blend", "additive", "glass", "refract",
                  "refract_amount", "env_cube", "env_tint", "wetness_driven",
                  "wetness_scale", "decal", "water", "color")
@@ -141,6 +141,10 @@ class MatDef(object):
 
     def __init__(self, name):
         self.name = name
+        # The corpus key this surface's definition came from. It is the material's identity, and
+        # what the shared material instance is named after; `name` is the surface's own key, which
+        # additionally carries the map's cubemap tag.
+        self.material_key = name
         self.albedo = ""
         self.emissive = ""
         self.bump = ""
@@ -170,6 +174,16 @@ class MatDef(object):
         return not (self.blend or self.additive or self.refract or self.water)
 
     @property
+    def wet(self):
+        """True when this surface actually runs the wetness path.
+
+        `wetness_driven` is the material's authored fact -- its VMT carries GlobalWetness
+        proxies. A projected decal bakes onto M_Decal, which carries albedo, self-illum and the
+        world fog and nothing else; the wall underneath owns the wetness. So a decal's proxies
+        are inert here, and the surface is not counted, fingerprinted or bound as wet."""
+        return self.wetness_driven and not self.decal
+
+    @property
     def chromatic(self):
         """True when $envmaptint names a metal: VtMB's own hand-authored metal mask.
 
@@ -188,12 +202,55 @@ class MatDef(object):
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
-def read_mtl(path):
-    """Parse an exported .mtl into {name: MatDef}. Mirrors FElysiumObjModel::ParseMtlLines."""
+def mat_from_record(name, record, key=""):
+    """A `MatDef` from one `shared/materials.json` row.
+
+    Texture fields stay exactly as the record states them -- corpus-relative (`tex/<file>`) -- so
+    a caller joins them against the corpus directory, not against a map.
+    """
+    mat = MatDef(name)
+    mat.material_key = key or name
+    mat.albedo = record.get("albedo", "")
+    mat.emissive = record.get("emissive", "")
+    mat.bump = record.get("bump", "")
+    mat.refract_map = record.get("refract_map", "")
+    mat.env_mask = record.get("env_mask", "")
+    mat.base_tex2 = record.get("base_tex2", "")
+    mat.scissor = bool(record.get("scissor"))
+    mat.blend = bool(record.get("blend"))
+    mat.additive = bool(record.get("additive"))
+    mat.glass = bool(record.get("glass"))
+    mat.refract = bool(record.get("refract"))
+    mat.refract_amount = float(record.get("refract_amount") or 0.0)
+    mat.env_cube = record.get("env_cube", "")
+    tint = record.get("env_tint") or [1.0, 1.0, 1.0]
+    mat.env_tint = (float(tint[0]), float(tint[1]), float(tint[2]))
+    wetness = record.get("wetness")
+    mat.wetness_driven = wetness is not None
+    mat.wetness_scale = float(wetness or 0.0)
+    mat.decal = bool(record.get("decal"))
+    mat.water = bool(record.get("water"))
+    return mat
+
+
+def read_mtl(path, corpus=None, local=None):
+    """Parse an exported `.mtl` into `{surface key: MatDef}`.
+
+    The `.mtl` names each surface's material and the two facts only its map holds -- the baked
+    cubemap VBSP patched in, and whether the surface is water or a projected decal here. Every
+    channel and flag comes from `corpus`, the one definition per material, so two maps cannot
+    state different things about one authored material. `local` carries the definitions of
+    materials that exist only inside this map's own PAKFILE.
+
+    A surface whose material neither document names is skipped and reported by the caller: a
+    silently missing definition would bake as the master's own placeholder.
+    """
+    corpus = corpus or {}
+    local = local or {}
     mats = {}
-    cur = None
     if not os.path.isfile(path):
         return mats
+    cur = None
     with open(path, "r", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             tok = line.split()
@@ -201,46 +258,20 @@ def read_mtl(path):
                 continue
             key = tok[0]
             if key == "newmtl" and len(tok) >= 2:
-                cur = MatDef(tok[1])
-                mats[tok[1]] = cur
+                cur = tok[1]
             elif cur is None:
                 continue
-            elif key == "map_Kd" and len(tok) >= 2:
-                cur.albedo = tok[1]
-            elif key == "map_Ke" and len(tok) >= 2:
-                cur.emissive = tok[1]
-            elif key == "illum" and len(tok) >= 2 and tok[1] == "4":
-                cur.scissor = True
-            elif key == "blend" and len(tok) >= 2 and tok[1] == "1":
-                cur.blend = True
-            elif key == "additive" and len(tok) >= 2 and tok[1] == "1":
-                cur.additive = True
-            elif key == "glass" and len(tok) >= 2 and tok[1] == "1":
-                cur.glass = True
-            elif key == "refract" and len(tok) >= 2:
-                cur.refract = True
-                cur.refract_amount = float(tok[1])
-            elif key == "refractmap" and len(tok) >= 2:
-                cur.refract_map = tok[1]
-            elif key == "decal" and len(tok) >= 2 and tok[1] == "1":
-                cur.decal = True
-            elif key == "water" and len(tok) >= 2 and tok[1] == "1":
-                cur.water = True
-            elif key == "bumpmap" and len(tok) >= 2:
-                cur.bump = tok[1]
-            elif key == "envmapmask" and len(tok) >= 2:
-                cur.env_mask = tok[1]
-            elif key == "envmap" and len(tok) >= 2:
-                cur.env_cube = tok[1]
-            elif key == "envtint" and len(tok) >= 4:
-                cur.env_tint = (float(tok[1]), float(tok[2]), float(tok[3]))
-            elif key == "globalwetness" and len(tok) >= 2:
-                cur.wetness_driven = True
-                cur.wetness_scale = float(tok[1])
-            elif key == "basetex2" and len(tok) >= 2:
-                cur.base_tex2 = tok[1]
-            elif key == "Kd" and len(tok) >= 4:
-                cur.color = (float(tok[1]), float(tok[2]), float(tok[3]))
+            elif key == "mat" and len(tok) >= 2:
+                record = local.get(tok[1]) or corpus.get(tok[1])
+                if record is not None:
+                    mats[cur] = mat_from_record(cur, record, tok[1])
+            elif cur in mats and key == "cube" and len(tok) >= 2:
+                # The cube this surface samples is the map's, not the material's.
+                mats[cur].env_cube = tok[1]
+            elif cur in mats and key == "water" and len(tok) >= 2 and tok[1] == "1":
+                mats[cur].water = True
+            elif cur in mats and key == "decal" and len(tok) >= 2 and tok[1] == "1":
+                mats[cur].decal = True
     return mats
 
 
@@ -608,9 +639,23 @@ def make_skin_set(name, package, models):
     return asset
 
 
-def prune_package(package, keep):
+def _assert_prunable(package, scope):
+    """Refuse to prune the shared corpus from a scope that does not author all of it.
+
+    Every map references the corpus packages, and a map -- or a single-unit run -- knows only the
+    handful of assets it wanted. Pruning one of those packages against that wanted set would
+    delete the install's textures, materials and meshes for every other map. Only the whole-corpus
+    pass, which authors the complete wanted set from `manifest.json`, may state this scope.
+    """
+    if package.startswith(shared_corpus.BAKED_ROOT) and scope != shared_corpus.SCOPE:
+        raise RuntimeError(
+            "refusing to prune the shared corpus package %s from scope %r" % (package, scope))
+
+
+def prune_package(package, keep, scope=""):
     """Delete every asset directly in `package` whose object name is not in `keep`. Only safe
     for a package one stage owns outright and re-authors in full. Returns the number deleted."""
+    _assert_prunable(package, scope)
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return 0
     gone = 0
@@ -624,9 +669,10 @@ def prune_package(package, keep):
     return gone
 
 
-def prune_package_prefix(package, prefix, keep):
+def prune_package_prefix(package, prefix, keep, scope=""):
     """Delete directly-owned assets whose object names start with `prefix` and are not in
     `keep`. Use this when several stages share one package but own disjoint name families."""
+    _assert_prunable(package, scope)
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return 0
     gone = 0

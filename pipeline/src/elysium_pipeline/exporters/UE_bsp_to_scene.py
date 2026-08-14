@@ -18,16 +18,11 @@ exception list: a handful of that namespace are ordinary drawn surfaces.
 import struct, os, re, json
 from pathlib import Path
 import numpy as np
-from elysium_pipeline.formats import install, particles, vmt, weather
+from elysium_pipeline.formats import install, particles, weather
 from elysium_pipeline.formats import bsp as B
 from elysium_pipeline.formats import mdl as MDL
-from elysium_pipeline.formats import phy
-from elysium_pipeline.formats.glass import derive_normal as derive_glass_normal, is_glass
-from elysium_pipeline.enhancement import retex_dds
-from elysium_pipeline.formats.tex_to_png import (
-    cubemap_dds, decode as decode_texture, decode_cubemap, dudv_to_normal,
-    reflectivity as tth_reflectivity,
-)
+from elysium_pipeline import shared_corpus
+from elysium_pipeline.formats.tex_to_png import cubemap_dds, decode_cubemap
 from elysium_pipeline.formats.bsp import (read_lump, source_to_unreal, source_dir_to_unreal, source_angles_to_unreal_quat,
                  strings_from_blob,
                  read_pakfile, read_game_lump, INCH_TO_CM, FACE_SIZE, FE_OFS, NE_OFS,
@@ -183,6 +178,85 @@ def _brush_hull(planes, sides, brushes, bi):
                     pts.append(x)
     return cont, (np.array(pts) if len(pts) >= 4 else None)
 
+class _Corpus(object):
+    """The shared corpus's two documents, loaded once per export.
+
+    Every texture and every material definition the map references lives here; the map export
+    resolves against it and decodes nothing of its own.
+    """
+
+    __slots__ = ("materials", "textures", "models")
+
+    def __init__(self, materials, textures, models):
+        self.materials = materials
+        self.textures = textures
+        self.models = models
+
+
+_CORPUS_CACHE = {}
+
+
+def _drop_superseded(out_dir):
+    """Remove what a map directory no longer owns.
+
+    Prop models and textures moved to the shared corpus, so a map exported before that still holds
+    `props/` and a `tex/` full of albedos. Left in place they are dead weight the bake could still
+    read, which is exactly the duplication the corpus removes. Only `tex/cube/` survives: a baked
+    env cubemap really is this map's.
+    """
+    import shutil
+
+    props = os.path.join(out_dir, "props")
+    if os.path.isdir(props):
+        shutil.rmtree(props, ignore_errors=True)
+    tex = os.path.join(out_dir, "tex")
+    if os.path.isdir(tex):
+        for entry in os.listdir(tex):
+            if entry == "cube":
+                continue
+            path = os.path.join(tex, entry)
+            if os.path.isfile(path):
+                os.remove(path)
+            else:
+                shutil.rmtree(path, ignore_errors=True)
+
+
+def _corpus(out_dir):
+    """Load `shared/manifest.json` + `shared/materials.json` for the export root `out_dir` sits in."""
+    root = os.path.dirname(os.path.normpath(out_dir))
+    if root in _CORPUS_CACHE:
+        return _CORPUS_CACHE[root]
+    materials_file = shared_corpus.materials_path(root)
+    manifest_file = shared_corpus.manifest_path(root)
+    for path in (materials_file, manifest_file):
+        if not os.path.isfile(path):
+            raise SystemExit(
+                f"export aborted: no shared corpus at {path}\n"
+                "  run: uv run elysium export bundle corpus")
+    with open(materials_file, encoding="utf-8") as handle:
+        materials = shared_corpus.check_materials(json.load(handle))["materials"]
+    with open(manifest_file, encoding="utf-8") as handle:
+        manifest = shared_corpus.check_manifest(json.load(handle))
+    _CORPUS_CACHE[root] = _Corpus(materials, manifest["textures"], manifest["models"])
+    return _CORPUS_CACHE[root]
+
+
+def _report_missing_models(out_dir, stems, what):
+    """Name every mesh stem this map places that the corpus does not hold.
+
+    A map writes the stem its model folds to whether or not the corpus decoded that model, so a
+    model the corpus is missing reaches the bake as a stem that resolves to nothing and the level
+    gets a prop with no mesh. Reported here, against the manifest, it is a named failure instead.
+    """
+    corpus = _corpus(out_dir)
+    missing = shared_corpus.missing_models(corpus.models, stems)
+    if missing:
+        print(f"WARNING: {len(missing)} {what} model(s) are not in the shared corpus "
+              f"(they will place no mesh): {', '.join(missing[:8])}"
+              + (" ..." if len(missing) > 8 else ""))
+    return missing
+
+
 def write_collision(data, out_dir, base, sky=None):
     """Emit `<base>.hulls`: one world brush per line as flat Unreal-space verts (cm).
 
@@ -282,22 +356,23 @@ def write_sprites(data, out_dir, base, idx, sky=None):
         b = read_bytes(key)
         return b.decode("ascii", "replace") if b is not None else None
 
-    tex_cache = {}   # basetexture -> (png filename, width, height) | (None, 0, 0)
+    corpus = _corpus(out_dir)
+    _sprite_seen = set()
 
-    def decode_sprite(bt):
-        if bt not in tex_cache:
-            tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
-            out = (None, 0, 0)
-            if tth and ttz:
-                try:
-                    img = decode_texture(tth, ttz).convert("RGBA")
-                    fn = "spr_" + sanitize(bt) + ".png"
-                    img.save(os.path.join(out_dir, "tex", fn))
-                    out = (fn, img.width, img.height)
-                except Exception:
-                    pass
-            tex_cache[bt] = out
-        return tex_cache[bt]
+    def sprite_texture(material):
+        """(corpus file name, width, height) for one `env_sprite` material, or (None, 0, 0).
+
+        The corona's texture is an ordinary install texture the corpus already decoded with its
+        alpha kept; its dimensions come off the manifest rather than a second decode here.
+        """
+        record = corpus.materials.get(material)
+        if not record or not record["albedo"]:
+            return (None, 0, 0)
+        size = corpus.textures.get(record["albedo_key"], {}).get("size")
+        if not size:
+            return (None, 0, 0)
+        _sprite_seen.add(record["albedo_key"])
+        return (os.path.basename(record["albedo"]), size[0], size[1])
 
     lines, n_sky = [], 0
     for b in blocks:
@@ -308,12 +383,7 @@ def write_sprites(data, out_dir, base, idx, sky=None):
         vmt_txt = read_text(model if model.lower().endswith(".vmt") else model + ".vmt")
         if not vmt_txt:
             continue
-        info = vmt.parse(vmt_txt, resolve_include=lambda p: read_text(
-            p if p.lower().endswith(".vmt") else p + ".vmt"))
-        bt = info.get("basetexture")
-        if not bt:
-            continue
-        png, w, h = decode_sprite(bt)
+        png, w, h = sprite_texture(shared_corpus.material_key(model))
         if not png:
             continue
         o = d.get("origin", "0 0 0").split()
@@ -333,14 +403,14 @@ def write_sprites(data, out_dir, base, idx, sky=None):
         # (54 of sm_hub_1's sprites), so they carry the same sky flag everything else does.
         in_sky = int(sky is not None and sky.is_sky((float(o[0]), float(o[1]), float(o[2]))))
         n_sky += in_sky
-        lines.append(f"tex/{png} {ux:.4f} {uy:.4f} {uz:.4f} "
+        lines.append(f"{shared_corpus.map_relative(png)} {ux:.4f} {uy:.4f} {uz:.4f} "
                      f"{scale*w*INCH_TO_CM:.4f} {scale*h*INCH_TO_CM:.4f} "
                      f"{r} {g} {bb} {amt} {orient} {in_sky}")
 
     if lines:
         with open(os.path.join(out_dir, base + ".sprites"), "w") as f:
             f.write("\n".join(lines) + "\n")
-    print(f"sprites: {len(lines)} env_sprite coronas ({n_sky} sky, {len(tex_cache)} textures) "
+    print(f"sprites: {len(lines)} env_sprite coronas ({n_sky} sky, {len(_sprite_seen)} textures) "
           f"-> {base}.sprites")
 
 def write_ropes(data, out_dir, base, idx):
@@ -413,7 +483,7 @@ def write_ropes(data, out_dir, base, idx):
         b = read_bytes(key)
         return b.decode("ascii", "replace") if b is not None else None
 
-    tex_cache = {}   # rope material name -> png filename | None
+    # (rope materials resolve through the shared corpus; nothing is decoded here)
 
     # RopeShader index -> material, from CRopeKeyframe::KeyValue (0x1019f2b0).
     ROPE_SHADER = {0: "cable/cable", 1: "cable/rope", 2: "cable/chain"}
@@ -427,18 +497,8 @@ def write_ropes(data, out_dir, base, idx):
     # `matflags` bits — the rope VMT's shader mode, mirroring the .mtl's illum 4 / blend / envmap.
     MAT_MASKED, MAT_TRANSLUCENT, MAT_ENVMAP = 1, 2, 4
 
-    def decode_rope_png(stem, key):
-        """Decode one TTH/TTZ pair to `tex/<stem>.png`, RGBA. Returns the filename or None."""
-        tth, ttz = read_bytes(f"materials/{key}.tth"), read_bytes(f"materials/{key}.ttz")
-        if not (tth and ttz):
-            return None
-        try:
-            img = decode_texture(tth, ttz).convert("RGBA")
-        except Exception:
-            return None
-        fn = stem + ".png"
-        img.save(os.path.join(out_dir, "tex", fn))
-        return fn
+    corpus = _corpus(out_dir)
+    rope_cache = {}   # rope material -> (albedo file, bump file, matflags)
 
     def decode_rope_mat(mat):
         """Rope material -> (albedo_png, bump_png, matflags). Both PNGs may be None.
@@ -448,26 +508,21 @@ def write_ropes(data, out_dir, base, idx):
         carries a `$bumpmap`. Dropping those renders a chain as a solid tube with a chain painted
         on it, so the shader flags travel with the segment.
         """
-        if mat not in tex_cache:
+        if mat not in rope_cache:
             albedo = bump = None
             flags = 0
-            vmt_txt = read_text(f"materials/{mat}.vmt")
-            if vmt_txt:
-                info = vmt.parse(vmt_txt, resolve_include=lambda p: read_text(
-                    p if p.lower().endswith(".vmt") else p + ".vmt"))
-                stem = "rope_" + sanitize(mat)
-                if info.get("basetexture"):
-                    albedo = decode_rope_png(stem, info["basetexture"])
-                if info.get("bumpmap"):
-                    bump = decode_rope_png(stem + "_n", info["bumpmap"])
-                flags = ((MAT_MASKED if info.get("alphatest") else 0)
-                         | (MAT_TRANSLUCENT if info.get("translucent") else 0)
+            record = corpus.materials.get(shared_corpus.material_key(mat))
+            if record:
+                albedo = os.path.basename(record["albedo"]) or None
+                bump = os.path.basename(record["bump"]) or None
+                flags = ((MAT_MASKED if record["scissor"] else 0)
+                         | (MAT_TRANSLUCENT if record["blend"] else 0)
                          # $envmap on a rope is always `env_cubemap` and the mask is the normal
                          # map's alpha ($normalmapalphaenvmapmask), so there is no separate mask
                          # texture to emit — the runtime's uniform-envmap path covers it.
-                         | (MAT_ENVMAP if info.get("envmap") else 0))
-            tex_cache[mat] = (albedo, bump, flags)
-        return tex_cache[mat]
+                         | (MAT_ENVMAP if record["env_cube"] else 0))
+            rope_cache[mat] = (albedo, bump, flags)
+        return rope_cache[mat]
 
     # Collect every rope node, and index by targetname for NextKey lookup. A node may itself lack a
     # targetname (it can only be a chain *start* then, never a NextKey target) — so iterate all nodes
@@ -549,16 +604,17 @@ def write_ropes(data, out_dir, base, idx):
                  | (2 if fnum(a, "collide", "0") else 0)
                  | (4 if fnum(a, "barbed", "0") else 0)
                  | (8 if fnum(a, "breakable", "0") else 0))
-        lines.append(f"{('tex/' + png) if png else '-'} "
+        lines.append(f"{shared_corpus.map_relative(png) if png else '-'} "
                      f"{pa[0]:.4f} {pa[1]:.4f} {pa[2]:.4f} {pb[0]:.4f} {pb[1]:.4f} {pb[2]:.4f} "
                      f"{width_cm:.4f} {rest_cm:.4f} {nodes} {texscale:.4f} {flags} "
-                     f"{('tex/' + bump_png) if bump_png else '-'} {matflags}")
+                     f"{shared_corpus.map_relative(bump_png) if bump_png else '-'} "
+                     f"{matflags}")
 
     if lines:
         with open(os.path.join(out_dir, base + ".ropes"), "w") as f:
             f.write("\n".join(lines) + "\n")
     print(f"ropes: {len(lines)} cable segments ({len(rope_nodes)} nodes, "
-          f"{sum(1 for v in tex_cache.values() if v)} textures) -> {base}.ropes")
+          f"{sum(1 for v in rope_cache.values() if v[0])} textures) -> {base}.ropes")
     if dangling:
         print(f"  ! {len(dangling)} NextKey name(s) match no rope node (map data): "
               f"{', '.join(dangling[:6])}{' ...' if len(dangling) > 6 else ''}")
@@ -641,14 +697,19 @@ def _split_output(value):
             "python": f[5].strip() if len(f) > 5 else ""}
 
 
-def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
+def decode_prop_models(idx, model_paths, propdir, tex_cache, valid, *,
+                       keep_alpha=None, tex_out=None):
     """Decode each unique `.mdl` in `model_paths` into `propdir/<safe>.obj` (Unreal
     space, winding reversed) sharing `tex_cache`, and return `{model_path: safe}` for
     the models that decoded. A model whose stem is already in `valid` (decoded earlier
     this run, e.g. by the other prop path) is reused, not re-decoded; each new decode
     adds its stem to `valid`. Prints one line per failure. Shared by the GAME_LUMP
     static-prop path (`write_props`) and the `.ents`-referenced prop path
-    (`write_entities`) so a model referenced by both decodes once into one `props/` dir."""
+    (`write_entities`) so a model referenced by both decodes once into one `props/` dir.
+
+    `keep_alpha` and `tex_out` pass through to `mdl.write_obj_scene`, so a caller holding the
+    whole corpus can state the alpha decision and land every model's textures in one shared
+    directory instead of one per prop tree."""
     os.makedirs(propdir, exist_ok=True)
     read_bytes = lambda key: install.read(idx, key)
     resolved, ok, missing = {}, 0, 0
@@ -663,15 +724,15 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid):
         try:
             meshes = MDL.decode(*dv)
             MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
-                                tex_cache, skins=MDL.skin_families(dv[0]))
+                                tex_cache, skins=MDL.skin_families(dv[0]),
+                                keep_alpha=keep_alpha, tex_out=tex_out)
             valid.add(safe); resolved[model_path] = safe; ok += 1
         except Exception as e:
             print(f"  prop decode failed {model_path}: {e}"); missing += 1
     return resolved, ok, missing
 
 
-def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None,
-                   brush_meshes=None):
+def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
     """Emit `<base>.ents` (JSON): every entity's keyvalues + outputs, and for brush
     entities ("model" "*N") their brush volumes as convex hulls.
 
@@ -796,15 +857,11 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None
         mk = e["keys"].get("model", "").replace("\\", "/").lower()
         if mk.endswith(".mdl"):
             model_paths.add(mk); ent_model_of[i] = mk
-    resolved, pok, pmiss = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
     n_prop = 0
-    phys_models = {}                            # 8.4: stem -> .mdl key, for the .phy sidecar
     for i, mk in ent_model_of.items():
-        safe = resolved.get(mk)
+        safe = shared_corpus.static_stem(mk)
         if safe:
             out[i]["model_mesh"] = safe; n_prop += 1
-            if out[i]["classname"].lower() == "prop_physics":
-                phys_models[safe] = mk
             # Pre-convert the entity's Source QAngle to an Unreal rotation quaternion here (the
             # same source_angles_to_unreal_quat the .props path uses), so the runtime reads it 1:1
             # with no coordinate math — origin is already Unreal-space, this makes orientation so
@@ -813,17 +870,14 @@ def write_entities(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None
             pyr = [float(x) for x in ang] if len(ang) == 3 else [0.0, 0.0, 0.0]
             out[i]["model_quat"] = [round(float(c), 6) for c in source_angles_to_unreal_quat(*pyr)]
 
-    # 8.4: emit each prop_physics model's own VPhysics collision -- the convex hulls VtMB
-    # simulates against, straight out of the model's sibling `.phy` -- as `<stem>.phys`.
-    phy.write_physics_phys(idx, propdir, phys_models)
-
     path = os.path.join(out_dir, base + ".ents")
     with open(path, "w") as f:
         json.dump({"map": base, "entities": out}, f, separators=(",", ":"))
     print(f"entities: {len(out)} ({n_brush} brush, {n_hull} hulls, {n_out} outputs, "
           f"{n_sky} sky) -> {base}.ents")
-    print(f"entity props: {n_prop} placed / {len(model_paths)} models "
-          f"({pok} decoded, {pmiss} missing)")
+    print(f"entity props: {n_prop} placed / {len(model_paths)} model(s) in the shared corpus")
+    _report_missing_models(out_dir, [shared_corpus.static_stem(p) for p in model_paths],
+                           "entity prop")
 
 
 def base_material(name):
@@ -889,7 +943,7 @@ def disp_grid(src, dinfo, dispverts, emit):
 
 
 # --- static props: GAME_LUMP sprp -> .props sidecar + props/ model OBJs -----
-def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
+def write_props(data, out_dir, base, idx, sky=None):
     """Parse GAME_LUMP sprp (VtMB v4, 56B DStaticPropV4): a model-name dict + per-
     prop origin/angles/solid/skin. Decode each unique model once (shared texture cache)
     into out_dir/props/<safename>.obj (Unreal space), and write <base>.props (one prop
@@ -938,16 +992,13 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
         model_paths.add(model_path)
         props.append((model_path, origin, angles, solid, skin))
 
-    resolved, ok, missing = decode_prop_models(idx, model_paths, propdir, tex_cache, valid)
     solid_n = skin_n = sky_n = 0
     with open(os.path.join(out_dir, base + ".props"), "w") as f:
         for model_path, (ox, oy, oz), (pitch, yaw, roll), solid, skin in props:
-            safe = resolved.get(model_path)
-            # Keep a failed model in the placement inventory. The v7 character export/bake then
-            # fails closed by its source model name instead of silently erasing authored world
-            # content or accepting an OBJ left over from an earlier run.
-            if safe is None:
-                safe = MDL.sanitize(model_path[:-4] if model_path.endswith(".mdl") else model_path)
+            # The stem addresses the shared corpus mesh. It is written whether or not the corpus
+            # holds that model, so a gap fails closed by name at bake time instead of silently
+            # erasing authored world content.
+            safe = shared_corpus.static_stem(model_path)
             solid_n += solid != 0
             skin_n += skin != 0
             in_sky = int(sky is not None and sky.is_sky((ox, oy, oz)))
@@ -960,9 +1011,10 @@ def write_props(data, out_dir, base, idx, propdir, tex_cache, valid, sky=None):
             f.write(f"{safe} {ux:.4f} {uy:.4f} {uz:.4f} "
                     f"{qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f} {solid} {skin} {in_sky} "
                     f"{model_path}\n")
-    placed = sum(1 for pr in props if pr[0] in resolved)
-    print(f"props: {placed} placed ({solid_n} solid, {skin_n} skinned, {sky_n} sky) / "
-          f"{len(model_paths)} models ({ok} decoded, {missing} missing) -> {base}.props")
+    print(f"props: {len(props)} placed ({solid_n} solid, {skin_n} skinned, {sky_n} sky) / "
+          f"{len(model_paths)} model(s) in the shared corpus -> {base}.props")
+    _report_missing_models(out_dir, [shared_corpus.static_stem(p) for p in model_paths],
+                           "static prop")
 
 
 def main(bsp_path, out_dir, *, index=None):
@@ -1153,164 +1205,70 @@ def main(bsp_path, out_dir, *, index=None):
             indices += scene[2].get(mat, [])
         groups[mat] = indices
 
-    # --- resolve + decode each material's texture ---
-    # (read_material_bytes/read_material_text + the install index and PAKFILE are
-    # defined at the top of main, since the bump-lightmap pre-pass needs them too.)
-    from PIL import Image, ImageChops
+    # --- resolve each material against the shared corpus ---
+    # Every texture, and every material's render semantics, is decoded once install-wide by
+    # UE_extract_corpus. What is left for a map is what only a map knows: which baked cubemap
+    # VBSP patched each face group to, and which of its surfaces actually carry water.
+    #
+    # A material the corpus does not name is genuinely map-local. VBSP writes its per-water-volume
+    # depth-blend instances into the map's own PAKFILE and nowhere else (46 game-wide), so those
+    # are resolved here -- `read_material_bytes` searches the pakfile ahead of the install -- and
+    # written to `<base>.materials.json` beside the map in the corpus's own record shape.
+    _drop_superseded(out_dir)
+    corpus = _corpus(out_dir)
+    corpus_materials, corpus_textures = corpus.materials, corpus.textures
+
     os.makedirs(os.path.join(out_dir, "tex"), exist_ok=True)
-    img_cache = {}       # basetexture -> decoded RGBA PIL image (or None)
-    refl_cache = {}      # basetexture -> vtex's average albedo (r,g,b) 0..1, or None
-    albedo_cache = {}    # basetexture -> albedo png filename
-    emis_cache = {}      # basetexture -> emission png filename
-    normal_cache = {}    # normalmap -> normal png filename
-    cube_cache = {}      # cube id -> bool (six face PNGs + importable DDS written under tex/cube/)
-    mask_cache = {}      # envmapmask source key -> mask png filename (or None)
-    mat_info = {}        # gkey -> (albedo_png, emission_png, alphatest, translucent)
-    refl_info = {}       # gkey -> vtex's average albedo (r,g,b), for the bounce term
-    env_info = {}        # gkey -> dict(cube, mask, tint, contrast, saturation)
-    wetness_info = {}    # gkey -> validated scalar GlobalWetness proxy response
-    blend_info = {}      # gkey -> second albedo png (WorldVertexTransition tex2)
-    bump_info = {}       # gkey -> normal-map png ($bumpmap; perturbs the reflection)
-    glass_info = set()   # gkeys routed to UE's dedicated thin-glass master
-    refract_info = {}    # gkey -> dict(normalmap, amount), explicit Source Refract cards
-    water_info = {}      # water material -> dict(normalmap_png, fogcolor, fog, reflecttint)
-    decoded = failed = 0
-    # A rendered, non-water material that yields no albedo renders as a flat grey
-    # fallback - which silently hides VMT parse/resolution bugs. Collect any such
-    # material and fail the export, so a future regression surfaces here instead of
-    # as an untextured wall in the viewer. `warnings` are the softer cases (a VMT
-    # that genuinely declares no $basetexture, e.g. a colour-only shader).
+    cube_cache = {}       # cube id -> bool (six face PNGs + an importable DDS under tex/cube/)
+    records = {}          # gkey -> the material definition this surface draws
+    mat_keys = {}         # gkey -> the corpus (or map-local) material key that definition is under
+    env_cube = {}         # gkey -> the cubemap id this surface samples, or None
+    local_records = {}    # material key -> a definition the corpus does not carry
     problems = []
     warnings = []
 
-    def get_img(bt):
-        if bt not in img_cache:
-            tth, ttz = read_material_bytes(f"materials/{bt}.tth"), read_material_bytes(f"materials/{bt}.ttz")
-            img = None
-            if tth and ttz:
-                try:
-                    img = decode_texture(tth, ttz)
-                except Exception:
-                    img = None
-            img_cache[bt] = img
-            # `vtex`'s average albedo, straight off the embedded VTF header. VtMB's light cache
-            # multiplies every bounce ray by the reflectivity of the material it hit when it
-            # builds a model's ambient cube, so it is the missing input for any reproduction of
-            # the bounce term (RE-A3). Free here -- the header is already in hand.
-            refl_cache[bt] = tth_reflectivity(tth) if tth else None
-        return img_cache[bt]
+    def resolve_record(gkey):
+        """(material key, definition) for one face group, corpus first then this map's PAKFILE."""
+        mat = gkey_base.get(gkey, gkey)
+        raw = gkey_raw.get(gkey)
+        for key in (mat, raw):
+            if key and key in corpus_materials:
+                return key, corpus_materials[key]
+        for key in (mat, raw):
+            if not key:
+                continue
+            if key in local_records:
+                return key, local_records[key]
+            channels = MDL.material_channels(key, [], read_material_bytes)
+            if channels is not None:
+                local_records[key] = shared_corpus.material_record(channels)
+                return key, local_records[key]
+        return mat, None
 
     for gkey in groups:
-        mat = gkey_base.get(gkey, gkey)     # base material for VMT/texture lookup
-        material_path = mat
-        cube = gkey_cube.get(gkey)          # baked cubemap stem, or None
-        vmt_txt = read_material_text(f"materials/{mat}.vmt")
-        if vmt_txt is None:
-            # Not every 'maps/<mapname>/<mat>' name is a cubemap patch of a generically-named
-            # base material -- some (e.g. VBSP's per-water-volume depth-blend instances) are
-            # genuinely map-local materials that exist ONLY under their full path in this map's
-            # own PAKFILE, with no base-name equivalent anywhere in the install. Retry under the
-            # untouched raw name before giving up.
-            raw = gkey_raw.get(gkey)
-            if raw and raw != mat:
-                vmt_txt = read_material_text(f"materials/{raw}.vmt")
-                if vmt_txt is not None:
-                    material_path = raw
-        info = {"basetexture": None, "selfillum": False, "translucent": False, "alphatest": False,
-                "water": False, "normalmap": None, "fogcolor": None, "fogstart": None,
-                "fogend": None, "reflecttint": None, "refract": False,
-                "dudvmap": None, "refractamount": None, "globalwetness": None}
-        if vmt_txt:
-            info = vmt.parse(vmt_txt, resolve_include=lambda p: read_material_text(
-                p if p.lower().endswith(".vmt") else p + ".vmt"))
-        glass = is_glass(info, material_path)
-        if glass:
-            glass_info.add(gkey)
-        if info.get("globalwetness") is not None:
-            if not info.get("envmap"):
-                raise SystemExit(
-                    f"export aborted: {mat} has GlobalWetness proxies but no $envmap reflection"
-                )
-            wetness_info[gkey] = float(info["globalwetness"])
-        bt = info["basetexture"]
-        alphatest = info["alphatest"]
-        translucent = info["translucent"]
-        additive = info.get("additive", False)
-        keep_alpha = alphatest or translucent or additive   # each blend mode reads the alpha channel
-        albedo_png = emis_png = None
-        if bt:
-            img = get_img(bt)
-            if img is None:
-                failed += 1
-            else:
-                if bt not in albedo_cache:
-                    fn = sanitize(bt) + ".png"
-                    # keep alpha only for alpha-tested/translucent; else opaque RGB
-                    (img if keep_alpha else img.convert("RGB")).save(os.path.join(out_dir, "tex", fn))
-                    albedo_cache[bt] = fn
-                    decoded += 1
-                albedo_png = albedo_cache[bt]
-                # $selfillum: emission masked by the texture's alpha channel
-                if info["selfillum"]:
-                    if bt not in emis_cache:
-                        arr = np.asarray(img.convert("RGBA"), dtype=np.float32)
-                        a = arr[:, :, 3:4] / 255.0
-                        masked = (arr[:, :, :3] * a).clip(0, 255).astype("uint8")
-                        efn = sanitize(bt) + "_ke.png"
-                        Image.fromarray(masked, "RGB").save(os.path.join(out_dir, "tex", efn))
-                        emis_cache[bt] = efn
-                    emis_png = emis_cache[bt]
-        # Water (the "Water" shader): no basetexture; decode its normal map for the
-        # runtime water shader and stash fog/plane params for the .water sidecar.
-        if info["water"]:
-            npng = None
-            nm = info["normalmap"]
-            if nm:
-                nimg = get_img(nm)
-                if nimg is not None:
-                    if nm not in normal_cache:
-                        nfn = sanitize(nm) + "_n.png"
-                        nimg.convert("RGB").save(os.path.join(out_dir, "tex", nfn))
-                        normal_cache[nm] = nfn
-                    npng = normal_cache[nm]
-            water_info[gkey] = {
-                "normalmap": npng,
-                "fogcolor": info["fogcolor"] or [0.10, 0.10, 0.13],
-                "fogstart": info["fogstart"] or 0.0,
-                "fogend": info["fogend"] or 128.0,
-                "reflecttint": info["reflecttint"] or [1.0, 1.0, 1.0],
-            }
-        # Refract is a separate framebuffer-distortion surface. It frequently has no
-        # $basetexture at all: the rain-window cards in sp_theatre carry only a signed
-        # UVWQ8888 $dudvmap and $refractamount. Prefer a tangent $normalmap when both old/new
-        # hardware paths are authored; otherwise bias the signed DUDV vectors into a UE normal.
-        if info.get("refract"):
-            npng = None
-            nm = info.get("normalmap") or info.get("dudvmap")
-            if nm:
-                nimg = get_img(nm)
-                if nimg is not None:
-                    cache_key = ("refract", nm, bool(info.get("normalmap")))
-                    if cache_key not in normal_cache:
-                        nfn = sanitize(nm) + "_refract_n.png"
-                        normal = (nimg.convert("RGB") if info.get("normalmap")
-                                  else dudv_to_normal(nimg))
-                        normal.save(os.path.join(out_dir, "tex", nfn))
-                        normal_cache[cache_key] = nfn
-                    npng = normal_cache[cache_key]
-            refract_info[gkey] = {
-                "normalmap": npng,
-                "amount": float(info.get("refractamount") or 0.0),
-            }
-        # $envmap. General reflective materials retain the current PBR path. The sm_hub_1
-        # GlobalWetness closure is stricter: its patch-authored cubemap is an input to the wet
-        # endpoint, so the six decoded faces and their DDS container are required below.
-        env_ref = info.get("envmap")
-        mask_img = None
-        if bt and env_ref:
-            cube_id = cube or (sanitize(env_ref) if env_ref != "env_cubemap" else "env_cubemap")
-            if cube or env_ref != "env_cubemap":
-                cube_key = f"materials/maps/{lm_base}/{cube}" if cube else f"materials/{env_ref}"
+        mat = gkey_base.get(gkey, gkey)
+        key, record = resolve_record(gkey)
+        if record is None:
+            problems.append(f"{mat}: no VMT found (materials/{mat}.vmt)")
+            continue
+        records[gkey] = record
+        mat_keys[gkey] = key
+
+        if record["wetness"] is not None and not record["env_cube"]:
+            raise SystemExit(
+                f"export aborted: {mat} has GlobalWetness proxies but no $envmap reflection")
+
+        # $envmap. The cube a surface samples is a map fact: VBSP patches each reflective face to
+        # the nearest env_cubemap, baked into this map's own PAKFILE. Only the id and the six
+        # decoded faces are per-map; the mask and the tint are the material's, from the corpus.
+        cube = gkey_cube.get(gkey)
+        if record["env_cube"]:
+            cube_id = cube or record["env_cube"]
+            env_cube[gkey] = cube_id
+            named = record["env_cube"] != "env_cubemap"
+            if cube or named:
+                cube_key = (f"materials/maps/{lm_base}/{cube}" if cube
+                            else f"materials/{record['env_cube_path']}")
                 if cube_id not in cube_cache:
                     ctth = read_material_bytes(cube_key + ".tth")
                     cttz = read_material_bytes(cube_key + ".ttz")   # None for uncompressed cubes
@@ -1328,105 +1286,31 @@ def main(bsp_path, out_dir, *, index=None):
                         except Exception:
                             ok = False
                     cube_cache[cube_id] = ok
-            mask_png = None
-            em = info.get("envmapmask")
-            if em:
-                source_mask = get_img(em)
-                mask_img = source_mask.convert("L") if source_mask is not None else None
-                if em not in mask_cache:
-                    mask_cache[em] = None
-                    if mask_img is not None:
-                        mfn = sanitize(em) + "_envmask.png"
-                        mask_img.save(os.path.join(out_dir, "tex", mfn))
-                        mask_cache[em] = mfn
-                mask_png = mask_cache[em]
-            elif info.get("basealphaenvmapmask"):
-                # INVERTED: lightmappedgeneric_basealphamaskedenvmap masks the cube with
-                # `1-t3.a`, not the alpha itself (docs/vtmb/reflections.md).
-                mk = bt + "#a"
-                if mk not in mask_cache:
-                    aimg = get_img(bt)
-                    mask_cache[mk] = None
-                    if aimg is not None:
-                        mfn = sanitize(bt) + "_envmask.png"
-                        alpha = aimg.convert("RGBA").getchannel("A")
-                        mask_img = ImageChops.invert(alpha)
-                        mask_img.save(os.path.join(out_dir, "tex", mfn))
-                        mask_cache[mk] = mfn
-                elif get_img(bt) is not None:
-                    mask_img = ImageChops.invert(get_img(bt).convert("RGBA").getchannel("A"))
-                mask_png = mask_cache[mk]
-            # $envmapcontrast/$envmapsaturation are parsed but NOT emitted: VtMB's shipped
-            # DX8 shaders carry no term for either (docs/vtmb/reflections.md), and the whole
-            # game authors saturation zero times and contrast 18 times out of 2,610.
-            env_info[gkey] = {
-                "cube": cube_id,
-                "mask": mask_png,
-                "tint": info.get("envmaptint") or [1.0, 1.0, 1.0],
-            }
-        # WorldVertexTransition: second base texture, blended per-vertex against the
-        # first by the displacement's DISPVERT alpha (the .blend sidecar).
-        bt2 = info.get("basetexture2")
-        if bt2:
-            img2 = get_img(bt2)
-            if img2 is not None:
-                if bt2 not in albedo_cache:
-                    fn2 = sanitize(bt2) + ".png"
-                    img2.convert("RGB").save(os.path.join(out_dir, "tex", fn2))
-                    albedo_cache[bt2] = fn2
-                blend_info[gkey] = albedo_cache[bt2]
 
-        # $bumpmap: tangent-space normal map. Perturbs the shading normal, which drives
-        # both the real-time lighting and the $envmap reflection. Decoded for every
-        # bumpmap material.
-        bump = info.get("bumpmap")
-        if bump:
-            nimg = get_img(bump)
-            if nimg is not None:
-                if bump not in normal_cache:
-                    nfn = sanitize(bump) + "_n.png"
-                    nimg.convert("RGB").save(os.path.join(out_dir, "tex", nfn))
-                    normal_cache[bump] = nfn
-                bump_info[gkey] = normal_cache[bump]
-        elif glass and bt and get_img(bt) is not None:
-            # VtMB's window albedos already paint the uneven/rippled glass. Convert that
-            # authored signal into a mild tangent normal for UE's Pixel Normal Offset path;
-            # the env mask keeps frame bars geometrically flat. An authored $bumpmap above
-            # always takes precedence.
-            mask_id = info.get("envmapmask") or (
-                "#basealpha" if info.get("basealphaenvmapmask") else "#alpha")
-            glass_key = ("glass", bt, mask_id)
-            if glass_key not in normal_cache:
-                nfn = sanitize(bt) + "_glass_n.png"
-                derive_glass_normal(get_img(bt), mask_img).save(
-                    os.path.join(out_dir, "tex", nfn))
-                normal_cache[glass_key] = nfn
-            bump_info[gkey] = normal_cache[glass_key]
+        # A rendered, non-water, non-refract material that resolves to no albedo would draw the
+        # flat-grey fallback, which silently hides a corpus gap. Fail the export instead.
+        if not record["water"] and not record["refract"] and not record["albedo"]:
+            if record["albedo_key"]:
+                problems.append(
+                    f"{mat}: $basetexture '{record['albedo_key']}' is not in the shared corpus")
+            else:
+                warnings.append(f"{mat}: VMT has no $basetexture")
 
-        mat_info[gkey] = (albedo_png, emis_png, alphatest, translucent, additive)
-        if bt and refl_cache.get(bt):
-            refl_info[gkey] = refl_cache[bt]
-
-        # validate: a rendered non-water material must resolve to an albedo.
-        if not info["water"] and not info.get("refract"):
-            if vmt_txt is None:
-                problems.append(f"{mat}: no VMT found (materials/{mat}.vmt)")
-            elif bt is None:
-                if re.search(r"\$basetexture", vmt_txt, re.I):
-                    problems.append(f"{mat}: VMT declares $basetexture but parser returned None")
-                else:
-                    warnings.append(f"{mat}: VMT has no $basetexture")
-            elif albedo_png is None:
-                problems.append(f"{mat}: $basetexture '{bt}' texture missing/undecodable")
+    # Water surfaces, with the one thing the corpus cannot state: the plane this map floats them
+    # at. Restricted below to materials that actually have world faces here.
+    water_info = {gkey: records[gkey] for gkey in records if records[gkey]["water"]}
+    wetness_info = {gkey: records[gkey]["wetness"]
+                    for gkey in records if records[gkey]["wetness"] is not None}
+    refract_info = {gkey for gkey in records if records[gkey]["refract"]}
+    glass_info = {gkey for gkey in records if records[gkey]["glass"]}
 
     if lm_base == "sm_hub_1":
         for wet_material in sorted(wetness_info):
-            wet_env = env_info.get(wet_material)
-            if wet_env is None:
+            cube_id = env_cube.get(wet_material)
+            if cube_id is None:
                 raise SystemExit(
                     f"export aborted: {wet_material} is GlobalWetness-driven but has no resolved envmap"
                 )
-            cube_id = wet_env["cube"]
             if cube_id != "cubemapdefault":
                 raise SystemExit(
                     f"export aborted: {wet_material} requires cubemapdefault, resolved {cube_id!r}"
@@ -1437,12 +1321,12 @@ def main(bsp_path, out_dir, *, index=None):
                     f"export aborted: {wet_material} requires six valid {cube_id} faces"
                 )
 
-    print(f"textures decoded: {decoded}  emission masks: {len(emis_cache)}  failed/missing: {failed}")
-    _tinted = sum(1 for e in env_info.values() if max(e["tint"]) - min(e["tint"]) >= 0.02)
-    print(f"envmap: {len(env_info)} reflective surfaces ({len(mask_cache)} masks, "
-          f"{_tinted} chromatic tint); {sum(cube_cache.values())} cubemaps decoded")
-    print(f"glass: {len(glass_info)} thin-refraction material(s)")
-    print(f"refract: {len(refract_info)} framebuffer-distortion material(s)")
+    _tinted = sum(1 for gkey in env_cube
+                  if max(records[gkey]["env_tint"]) - min(records[gkey]["env_tint"]) >= 0.02)
+    print(f"materials: {len(records)} resolved ({len(local_records)} map-local), "
+          f"{sum(cube_cache.values())} cubemaps decoded")
+    print(f"envmap: {len(env_cube)} reflective surfaces ({_tinted} chromatic tint); "
+          f"glass: {len(glass_info)}; refract: {len(refract_info)}; water: {len(water_info)}")
     for w in warnings:
         print(f"  warning: {w}")
     if problems:
@@ -1528,35 +1412,25 @@ def main(bsp_path, out_dir, *, index=None):
         proj = poly2 + e * t[:, None]
         return float(np.min(np.hypot(*(q - proj).T)))
 
-    decal_cache = {}   # texture -> (albedo_png, emis_png, w, h, scale, unlit) or None
+    decal_cache = {}   # texture -> (w, h, scale, unlit) or None
     def _decal_material(tex):
+        """A decal's projector inputs, out of the shared corpus.
+
+        Sizing needs the texture's pixel dimensions (R_DecalSize multiplies them by
+        `$decalscale`), which the corpus states rather than making this pass decode the image.
+        A decal material with no albedo in the corpus is skipped and counted, never guessed at.
+        """
         if tex in decal_cache:
             return decal_cache[tex]
-        vtxt = read_material_text(f"materials/{tex}.vmt")
-        info = vmt.parse(vtxt, resolve_include=lambda p: read_material_text(
-            p if p.lower().endswith(".vmt") else p + ".vmt")) if vtxt else None
-        img = get_img(info["basetexture"]) if info and info["basetexture"] else None
-        if img is None:
+        record = corpus_materials.get(tex)
+        size = corpus_textures.get(record["albedo_key"], {}).get("size") if record else None
+        if record is None or not record["albedo"] or not size:
             decal_cache[tex] = None
             return None
-        bt = info["basetexture"]
-        if bt not in albedo_cache:
-            fn = sanitize(bt) + ".png"
-            img.save(os.path.join(out_dir, "tex", fn))       # keep alpha (decals blend)
-            albedo_cache[bt] = fn
-        emis_png = None
-        if info["selfillum"]:
-            if bt not in emis_cache:
-                arr = np.asarray(img.convert("RGBA"), dtype=np.float32)
-                masked = (arr[:, :, :3] * (arr[:, :, 3:4] / 255.0)).clip(0, 255).astype("uint8")
-                efn = sanitize(bt) + "_ke.png"
-                Image.fromarray(masked, "RGB").save(os.path.join(out_dir, "tex", efn))
-                emis_cache[bt] = efn
-            emis_png = emis_cache[bt]
-        unlit = (info["shader"] or "").startswith("unlit")
-        res = (albedo_cache[bt], emis_png, img.size[0], img.size[1], info["decalscale"], unlit)
+        res = (size[0], size[1], record["decal_scale"], record["unlit"])
         decal_cache[tex] = res
-        mat_info[tex] = (albedo_cache[bt], emis_png, False, True, False)   # alpha-blended, not additive
+        records[tex] = record
+        mat_keys[tex] = tex
         decal_mats.add(tex)
         return res
 
@@ -1573,7 +1447,7 @@ def main(bsp_path, out_dir, *, index=None):
         if mat is None or len(fN) == 0:
             n_decal_miss += 1
             continue
-        _albedo, _emis, tw, th, scale, unlit = mat
+        tw, th, scale, unlit = mat
         p = np.array([float(x) for x in om.groups()])
         pd_all = np.abs(fN @ p - fD)
         best = None
@@ -1653,23 +1527,18 @@ def main(bsp_path, out_dir, *, index=None):
     # (BuildSkyCube) can refuse a sidecar written under a convention it does not know.
     SKY_CONVENTION = 1
 
+    # The faces themselves belong to the sky, not to this map: several maps share one, and naming
+    # them `sky_<face>` here gave one alias two sets of bytes. The corpus decodes them under the
+    # sky's own name and `<base>.env` carries `skyname`, which is what a reader addresses them by.
     sky_m = re.search(r'"skyname"\s+"([^"]+)"', ents, re.I)
     skyname = sky_m.group(1).lower() if sky_m else None
     sky_ok = False
     if skyname:
-        got = 0
-        for face in ("up", "dn", "lf", "rt", "ft", "bk"):
-            tth = read_material_bytes(f"materials/skybox/{skyname}{face}.tth")
-            ttz = read_material_bytes(f"materials/skybox/{skyname}{face}.ttz")
-            if tth and ttz:
-                try:
-                    decode_texture(tth, ttz).convert("RGB").save(
-                        os.path.join(out_dir, "tex", f"sky_{face}.png"))
-                    got += 1
-                except Exception:
-                    pass
+        got = sum(1 for face in shared_corpus.SKY_FACES
+                  if shared_corpus.sky_texture_key(skyname, face) in corpus_textures)
         sky_ok = got == 6
-        print(f"sky '{skyname}': {got}/6 faces decoded")
+        if not sky_ok:
+            print(f"  warning: sky '{skyname}': {got}/6 faces in the shared corpus")
 
     # Fog is TWO different things, and they belong to two different renders (RE-A8/RE-A9):
     #
@@ -1801,15 +1670,11 @@ def main(bsp_path, out_dir, *, index=None):
                     f.write(f"yaw {-yaw}\n")
             break
 
-    # Shared prop-model decode state: one props/ dir + texture cache + decoded-stem set
-    # feed both the GAME_LUMP static-prop path (write_props) and the .ents-referenced
-    # prop path (write_entities), so a model referenced by both decodes once.
-    propdir = os.path.join(out_dir, "props")
-    prop_tex_cache, prop_valid = {}, set()
-
+    # Prop models belong to the corpus, not to this map: one decode per model, install-wide. What
+    # a map still owns is where each one stands, so both prop paths write placement rows plus the
+    # stem that addresses the shared mesh, and neither decodes anything.
     write_collision(data, out_dir, base, sky)
-    write_entities(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid, sky,
-                   brush_meshes)
+    write_entities(data, out_dir, base, idx, sky, brush_meshes)
     write_lights(data, out_dir, base, sky)
     write_sprites(data, out_dir, base, idx, sky)
     write_ropes(data, out_dir, base, idx)
@@ -1837,88 +1702,55 @@ def main(bsp_path, out_dir, *, index=None):
             for mat, w in water_info.items():
                 f.write(f"mat {mat}\n")
                 f.write(f"plane {plane_z(mat):.4f}\n")
-                if w["normalmap"]:
-                    f.write(f"normalmap tex/{w['normalmap']}\n")
-                fc = w["fogcolor"]
+                if w["water_normal"]:
+                    f.write(f"normalmap ../{w['water_normal']}\n")
+                fc = w["water_fog_color"]
                 f.write(f"fogcolor {fc[0]:.4f} {fc[1]:.4f} {fc[2]:.4f}\n")
-                f.write(f"fogdist {w['fogstart']*INCH_TO_CM:.4f} {w['fogend']*INCH_TO_CM:.4f}\n")
-                rt = w["reflecttint"]
+                f.write(f"fogdist {w['water_fog_start']*INCH_TO_CM:.4f} "
+                        f"{w['water_fog_end']*INCH_TO_CM:.4f}\n")
+                rt = w["water_reflect_tint"]
                 f.write(f"reflecttint {rt[0]:.4f} {rt[1]:.4f} {rt[2]:.4f}\n")
         print(f"water: {len(water_info)} surfaces -> {base}.water")
 
     # --- static props (GAME_LUMP sprp) -> props/ OBJs + <base>.props ----------
     # Per-prop ambient comes from WORLDLIGHTS (lump 15), the way the engine's lightcache
     # lights props (write_props → tint_at); the baked world lightmap is for surfaces.
-    write_props(data, out_dir, base, idx, propdir, prop_tex_cache, prop_valid, sky)
+    write_props(data, out_dir, base, idx, sky)
 
     obj_path = os.path.join(out_dir, base + ".obj")
+    # The `.mtl` names each surface's material and the two things only this map knows about it:
+    # the baked cubemap VBSP patched in, and whether it is a projected decal here. Every channel
+    # and flag lives once in the corpus, under the `mat` key -- so two maps can no longer state
+    # different things about one authored material.
     with open(mtl_path, "w") as m:
-        for mat, (albedo_png, emis_png, alphatest, translucent, additive) in mat_info.items():
-            m.write(f"newmtl {mat}\n")
-            if albedo_png:
-                m.write(f"map_Kd tex/{albedo_png}\n")
-            elif mat in water_info or "water" in mat:
-                m.write("Kd 0.05 0.10 0.13\n")   # dark water placeholder (behind the shader)
-            else:
-                m.write("Kd 0.35 0.35 0.38\n")   # generic missing-tex fallback
-            if emis_png:
-                m.write(f"map_Ke tex/{emis_png}\n")   # alpha-masked self-illum
-            if mat in refract_info:
-                r = refract_info[mat]
-                m.write(f"refract {r['amount']:.6f}\n")  # Source framebuffer distortion
-                if r["normalmap"]:
-                    m.write(f"refractmap tex/{r['normalmap']}\n")
-            elif mat in water_info:
-                m.write("water 1\n")                   # our flag: water shader surface
-            elif additive:
-                m.write("additive 1\n")                # our flag: additive glow overlay (unlit)
-            elif translucent:
-                m.write("blend 1\n")                   # our flag: alpha-blended
-            elif alphatest:
-                m.write("illum 4\n")                   # our flag: alpha-tested (scissor)
-            if mat in decal_mats:
-                m.write("decal 1\n")                   # our flag: projected decal (render above wall)
-            if mat in env_info:
-                e = env_info[mat]
-                # $envmap: the surface reflects. 'envmap <id>' names the cube VtMB itself
-                # sampled ('env_cubemap' where VBSP patched none, and the six faces are
-                # under tex/cube/<id>_{0..5}.png where one decoded); the Lumen path uses the
-                # mask and the tint and resolves the reflection against the live scene.
-                m.write(f"envmap {e['cube']}\n")
-                if e["mask"]:
-                    m.write(f"envmapmask tex/{e['mask']}\n")
-                t = e["tint"]
-                m.write(f"envtint {t[0]:.4f} {t[1]:.4f} {t[2]:.4f}\n")
-            if mat in wetness_info:
-                m.write(f"globalwetness {wetness_info[mat]:.6f}\n")
-            if mat in glass_info:
-                m.write("glass 1\n")                 # our semantic: UE thin refractive glass
-            if mat in blend_info:
-                # WorldVertexTransition second texture; mixed by vertex COLOR.r.
-                m.write(f"basetex2 tex/{blend_info[mat]}\n")
-            if mat in bump_info:
-                # normal map: perturbs the reflection normal (needs mesh tangents).
-                m.write(f"bumpmap tex/{bump_info[mat]}\n")
-            if mat in refl_info:
-                # `vtex`'s own average albedo for this surface, off the `.tth`'s embedded VTF
-                # header. VtMB's light cache multiplies every bounce ray by the reflectivity of
-                # the material it hit when it builds a model's ambient cube (RE-A3), so this is
-                # the input any reproduction of the bounce term needs. Nothing in the render
-                # path reads it — it is data for the calibration, carried because it is free.
-                r_, g_, b_ = refl_info[mat]
-                m.write(f"reflectivity {r_:.4f} {g_:.4f} {b_:.4f}\n")
+        for gkey in sorted(records):
+            m.write(f"newmtl {gkey}\n")
+            m.write(f"mat {mat_keys[gkey]}\n")
+            if gkey in env_cube:
+                # 'cube <id>' names the cube VtMB itself sampled ('env_cubemap' where VBSP
+                # patched none); the six faces are under tex/cube/<id>_{0..5}.png where one
+                # decoded. The Lumen path resolves the reflection against the live scene.
+                m.write(f"cube {env_cube[gkey]}\n")
+            if gkey in water_info:
+                m.write("water 1\n")                   # a water surface in THIS map's world
+            if gkey in decal_mats:
+                m.write("decal 1\n")                   # projected decal (renders above its wall)
             m.write("\n")
+
+    # A material this map resolved out of its own PAKFILE exists nowhere else, so its definition
+    # travels beside the map rather than in the corpus. The bake reads the corpus first and these
+    # second. Absent when the map has none, which is every map but a handful.
+    local_path = os.path.join(out_dir, base + ".materials.json")
+    if local_records:
+        with open(local_path, "w", encoding="utf-8") as handle:
+            json.dump(shared_corpus.build_materials(local_records), handle,
+                      separators=(",", ":"), sort_keys=True)
+        print(f"map-local materials: {len(local_records)} -> {base}.materials.json")
+    elif os.path.exists(local_path):
+        os.remove(local_path)
 
     print(f"wrote {obj_path}")
     print(f"      {mtl_path}")
-    print(f"      {os.path.join(out_dir,'tex')}/  ({decoded} PNGs)")
-
-    # DDS siblings (original DXT blocks + mips) for every albedo the runtime prefers
-    # over its PNG - world tex/ and props/tex/. Reuses the install index already built
-    # above. PNG stays the fallback: a texture with no DXT source (generated _ke maps,
-    # BGR888) gets none and the runtime's "failed to read .dds" log flags it unoptimized.
-    flat, dropped = retex_dds.flat_index(idx)
-    retex_dds.emit_dir(idx, flat, dropped, out_dir, base)
 
     # Outdoor-rain contract: maximum cover height from the visible static world.
     # Sky, decals, ropes and water are separate sidecars and therefore absent;
@@ -1930,8 +1762,8 @@ def main(bsp_path, out_dir, *, index=None):
         for gkey, material_triangles in wgroups.items():
             if gkey in water_info or gkey in refract_info:
                 continue
-            material = mat_info.get(gkey)
-            if material and material[4]:  # additive cards are non-cover effects
+            material = records.get(gkey)
+            if material and material["additive"]:  # additive cards are non-cover effects
                 continue
             cover_triangles.extend(
                 (wpositions[a], wpositions[b], wpositions[c])

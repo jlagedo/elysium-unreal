@@ -7,35 +7,31 @@ absent from every map's `props/` -- 46 placed items game-wide stand bodiless, an
 `GiveItem`/drop can name any of the 244 definitions in any map.
 
 So they are not a map's props. They are decoded once, from the same `vdata/items` table the runtime
-loads, into `$ELYSIUM_EXPORT_ROOT/items/props/` -- the same layout a map's `props/` directory has, so
-the map bake's own prop stage reads them with no new geometry code -- and baked once onto
-`/ElysiumBaked/items`.
+loads, into the shared corpus, and baked once onto `/ElysiumBaked/Shared/Meshes` like every other
+static model.
 
-Unreal-native by construction: every mesh goes through `UE_bsp_to_scene.decode_prop_models`, the
-same MDL -> OBJ writer the two map prop paths share (cm, Z-up, left-handed, winding reversed). This
-module states no coordinate rule of its own.
+The meshes are the shared corpus's -- `UE_extract_corpus` decodes an item's ground model
+alongside every other static model, once. This module states no coordinate rule of its own and
+decodes nothing; it writes the join, and reports every definition whose model the install lacks.
 
 A model the install does not contain is skipped and recorded, never fatal: `vdata/items` names a
 couple of models no shipped VPK carries, and one absent mesh must not cost the other 123.
 
 Usage:
-  uv run elysium export bundle items            # decode item ground models, then bake them
-  uv run elysium export bundle items --force    # clear the corpus directory first
+  uv run elysium export bundle items            # write the ground-model manifest
 """
 import json
 import os
 import sys
 
-from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
-from elysium_pipeline.formats import install, kv, phy
+from elysium_pipeline import shared_corpus as SC
+from elysium_pipeline.formats import install, kv
 from elysium_pipeline.paths import export_root
 
 OUT = os.fspath(export_root())
 
-# The corpus subtree, and the manifest naming what landed in it. `props/` rather than `models/`
-# because that is the directory name the bake's prop stage reads.
+# The manifest naming which item definition stands on which shared-corpus mesh.
 ROOT = "items"
-PROPS = "props"
 MANIFEST = "ground_models.json"
 SCHEMA = "elysium.item-ground-models"
 VERSION = 1
@@ -104,31 +100,25 @@ def _face_count(path):
 
 
 def main(index=None, force=False):
+    """Write the ground-model manifest. The meshes themselves are the shared corpus's.
+
+    An item's world model is a static model like any other, so `UE_extract_corpus` decodes it once
+    into `shared/props` alongside every prop. What stays here is the join the runtime needs -- which
+    `vdata/items` definition stands on which mesh stem, and which models the install does not carry.
+    """
     idx = index if index is not None else install.build_index()
     wanted = ground_models(idx)
+    props_dir = os.fspath(SC.props_dir(OUT))
 
-    props_dir = os.path.join(OUT, ROOT, PROPS)
-    os.makedirs(props_dir, exist_ok=True)
-    if force:
-        for entry in os.listdir(props_dir):
-            path = os.path.join(props_dir, entry)
-            if os.path.isfile(path):
-                os.remove(path)
+    resolved, skipped = {}, []
+    for model in sorted(wanted):
+        stem = SC.static_stem(model)
+        if os.path.isfile(os.path.join(props_dir, stem + ".obj")):
+            resolved[model] = stem
+        else:
+            skipped.append({"model": model, "reason": _reason(idx, model),
+                            "classes": wanted[model]})
 
-    # Decoded through the map exporter's own prop path: shared texture cache, shared skin-family
-    # sidecars, one OBJ per distinct model under the stem MDL.sanitize gives it.
-    tex_cache = {}
-    resolved, ok, missing = decode_prop_models(idx, wanted.keys(), props_dir, tex_cache, set())
-
-    # VtMB's own convex collision where the model ships a `.phy`. A ground item is not a
-    # `prop_physics` today, so nothing simulates against it yet; the sidecar is what the bake needs
-    # the moment a dropped item does.
-    phy.write_physics_phys(idx, props_dir, {stem: model for model, stem in resolved.items()})
-
-    skipped = [
-        {"model": model, "reason": _reason(idx, model), "classes": wanted[model]}
-        for model in sorted(set(wanted) - set(resolved))
-    ]
     manifest = {
         "schema": SCHEMA,
         "version": VERSION,
@@ -143,12 +133,14 @@ def main(index=None, force=False):
         "skipped": skipped,
     }
     manifest_path = os.path.join(OUT, ROOT, MANIFEST)
+    os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
     with open(manifest_path, "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=1, sort_keys=True)
         handle.write("\n")
 
-    print(f"[items] {len(wanted)} distinct ground models ({ok} decoded, {missing} skipped), "
-          f"{sum(1 for v in tex_cache.values() if v)} textures -> {ROOT}/{PROPS}/", flush=True)
+    print(f"[items] {len(wanted)} distinct ground models "
+          f"({len(resolved)} in the shared corpus, {len(skipped)} absent) -> {ROOT}/{MANIFEST}",
+          flush=True)
     for entry in skipped:
         print(f"  ! {entry['model']}: {entry['reason']} "
               f"({', '.join(entry['classes'][:3])}"

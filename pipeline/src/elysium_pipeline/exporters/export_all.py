@@ -199,6 +199,10 @@ def _run_bundle(
         from elysium_pipeline.exporters import UE_extract_vdata
 
         UE_extract_vdata.main(force=force)
+    elif name == "corpus":
+        from elysium_pipeline.exporters import UE_extract_corpus
+
+        UE_extract_corpus.main(index=index, force=force)
     elif name == "items":
         from elysium_pipeline.exporters import UE_extract_items
 

@@ -11,11 +11,98 @@ import os
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.validation.png_alpha import alpha_range  # noqa: E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 
 MOUNT = "/ElysiumBaked"
+
+
+_CORPUS_MATERIALS = None
+
+
+def _corpus_materials():
+    """The one material definition per key, which every `.mtl` joins against. Read once: the
+    document covers the whole install, and a caller in a per-model loop would otherwise re-read
+    several megabytes of JSON per model."""
+    global _CORPUS_MATERIALS
+    if _CORPUS_MATERIALS is None:
+        path = os.fspath(SC.materials_path(export_root()))
+        if not os.path.isfile(path):
+            _CORPUS_MATERIALS = {}
+        else:
+            with open(path, "r", encoding="utf-8") as handle:
+                _CORPUS_MATERIALS = SC.check_materials(json.load(handle))["materials"]
+    return _CORPUS_MATERIALS
+
+
+def _map_prop_mtls(map_name):
+    """The corpus `.mtl` files for the models THIS map places, as ``[(file name, path)]``.
+
+    The corpus holds every model in the install. A map is answerable for the ones it places, so
+    the scan joins its own `.props` and `.ents` stems against the corpus rather than walking all
+    of it -- which would re-read three thousand models for every map verified and still say
+    nothing about this one.
+    """
+    root = os.fspath(export_root())
+    prop_dir = os.fspath(SC.props_dir(root))
+    stems = set()
+    props = os.path.join(root, map_name, map_name + ".props")
+    if os.path.isfile(props):
+        with open(props, "r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                token = line.split()
+                if token:
+                    stems.add(token[0])
+    ents = os.path.join(root, map_name, map_name + ".ents")
+    if os.path.isfile(ents):
+        with open(ents, "r", encoding="utf-8", errors="replace") as handle:
+            for entity in json.load(handle).get("entities", []):
+                if entity.get("model_mesh"):
+                    stems.add(entity["model_mesh"])
+    out = []
+    for stem in sorted(stems):
+        entry = stem + ".mtl"
+        path = os.path.join(prop_dir, entry)
+        if os.path.isfile(path):
+            out.append((entry, path))
+    return out
+
+
+def _local_materials(map_name):
+    """The definitions of materials that exist only inside this map's own PAKFILE."""
+    path = os.path.join(os.fspath(export_root()), map_name, "%s.materials.json" % map_name)
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as handle:
+        return SC.check_materials(json.load(handle))["materials"]
+
+
+def _world_materials(map_name):
+    """The map's surfaces, joined to their definitions the same way the bake joins them.
+
+    A `.mtl` states slot names and material keys; every channel and flag lives in the corpus, or
+    in the map's own `materials.json` for a material only its PAKFILE carries. Reading the `.mtl`
+    without both documents yields nothing at all, which would pass every check by verifying an
+    empty set.
+    """
+    world_dir = os.path.join(os.fspath(export_root()), map_name)
+    return bl.read_mtl(os.path.join(world_dir, map_name + ".mtl"),
+                       corpus=_corpus_materials(), local=_local_materials(map_name))
+
+
+def _material_slot(package, mat):
+    """(package, MIC name) for one surface, on the same split the material stage authored.
+
+    A surface that stamps this map's cubemap, fog or weather is the map's own instance; every
+    other surface is the corpus's one instance, under its material key rather than its slot.
+    """
+    if SC.is_map_scoped_material(mat.material_key, decal=mat.decal,
+                                 wetness_driven=mat.wetness_driven):
+        return ("%s/Materials/Decals" % package if mat.decal else "%s/Materials" % package,
+                "MI_" + bl.safe_name(mat.name))
+    return (SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))
 
 
 def arg(key, default=""):
@@ -124,16 +211,14 @@ def verify_sm_hub_1_weather(package, world_dir):
             fail(str(validation))
 
     wetness_values = []
-    for mat in bl.read_mtl(os.path.join(world_dir, "sm_hub_1.mtl")).values():
-        if mat.wetness_driven:
+    corpus = _corpus_materials()
+    for mat in _world_materials("sm_hub_1").values():
+        if mat.wet:
             wetness_values.append(float(mat.wetness_scale))
-    prop_dir = os.path.join(world_dir, "props")
-    if os.path.isdir(prop_dir):
-        for entry in os.listdir(prop_dir):
-            if entry.lower().endswith(".mtl"):
-                for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
-                    if mat.wetness_driven:
-                        wetness_values.append(float(mat.wetness_scale))
+    for _entry, path in _map_prop_mtls("sm_hub_1"):
+        for mat in bl.read_mtl(path, corpus=corpus).values():
+            if mat.wet:
+                wetness_values.append(float(mat.wetness_scale))
     expected_wetness = [0.56] + [0.60] * 6 + [1.0] * 7
     if sorted(wetness_values) != sorted(expected_wetness):
         fail("expected the exact 14-material GlobalWetness scalar corpus, found %r"
@@ -257,16 +342,14 @@ def verify_map(map_name):
         by_class[name] = by_class.get(name, 0) + 1
         if name == "StaticMesh":
             meshes.append(data)
+    # Every surface texture is the shared corpus's, so there is one index rather than a prop set
+    # and a world set per map.
     textures = {
         str(data.asset_name): data
-        for data in registry.get_assets_by_path(package + "/Props/Textures", recursive=False)
+        for data in registry.get_assets_by_path(SC.BAKED_TEXTURES, recursive=False)
         if str(data.asset_class_path.asset_name) == "Texture2D"
     }
-    world_textures = {
-        str(data.asset_name): data
-        for data in registry.get_assets_by_path(package + "/Textures", recursive=False)
-        if str(data.asset_class_path.asset_name) == "Texture2D"
-    }
+    world_textures = textures
 
     unreal.log("[verify] %s" % package)
     for name in sorted(by_class):
@@ -323,40 +406,38 @@ def verify_map(map_name):
     # correctly selected a translucent/masked master, but Albedo.A arrived as implicit 1. Check
     # the exported payload and the independently loaded Texture2D so a stale pre-fix asset cannot
     # pass merely because the mesh has a bound material slot.
-    prop_dir = os.path.join(os.fspath(export_root()), map_name, "props")
+    corpus_dir = os.fspath(SC.corpus_dir(export_root()))
+    prop_mtls = _map_prop_mtls(map_name)
     flagged = 0
     nonopaque = {}
-    if os.path.isdir(prop_dir):
-        for entry in sorted(os.listdir(prop_dir)):
-            if not entry.lower().endswith(".mtl"):
+    for entry, mtl_path in prop_mtls:
+        for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
+            if mat.refract:
                 continue
-            for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
-                if mat.refract:
-                    continue
-                if not (mat.blend or mat.scissor or mat.additive):
-                    continue
-                flagged += 1
-                if not mat.albedo:
-                    message = "%s/%s: alpha material has no albedo" % (entry, mat.name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                    continue
-                source = os.path.join(prop_dir, mat.albedo.replace("/", os.sep))
-                try:
-                    source_alpha = alpha_range(source)
-                except (OSError, ValueError) as exc:
-                    message = "%s/%s: alpha source invalid: %s" % (entry, mat.name, exc)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                    continue
-                if source_alpha is None:
-                    message = "%s/%s: alpha material exported an RGB albedo" % (entry, mat.name)
-                    unreal.log_error("[verify] " + message)
-                    errors.append(message)
-                    continue
-                if source_alpha[0] < 255:
-                    asset_name = "T_" + bl.safe_name(os.path.splitext(mat.albedo)[0])
-                    nonopaque[asset_name] = "%s/%s" % (entry, mat.name)
+            if not (mat.blend or mat.scissor or mat.additive):
+                continue
+            flagged += 1
+            if not mat.albedo:
+                message = "%s/%s: alpha material has no albedo" % (entry, mat.name)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+                continue
+            source = os.path.join(corpus_dir, mat.albedo.replace("/", os.sep))
+            try:
+                source_alpha = alpha_range(source)
+            except (OSError, ValueError) as exc:
+                message = "%s/%s: alpha source invalid: %s" % (entry, mat.name, exc)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+                continue
+            if source_alpha is None:
+                message = "%s/%s: alpha material exported an RGB albedo" % (entry, mat.name)
+                unreal.log_error("[verify] " + message)
+                errors.append(message)
+                continue
+            if source_alpha[0] < 255:
+                asset_name = SC.texture_asset(mat.albedo)
+                nonopaque[asset_name] = "%s/%s" % (entry, mat.name)
 
     alpha_capable = 0
     for asset_name, owner in sorted(nonopaque.items()):
@@ -381,27 +462,19 @@ def verify_map(map_name):
     # assets, so stale material parents or texture settings cannot pass on MTL intent alone.
     glass_records = {}
     world_dir = os.path.join(os.fspath(export_root()), map_name)
-    world_mtl = os.path.join(world_dir, map_name + ".mtl")
-    for mat in bl.read_mtl(world_mtl).values():
+    world_materials = _world_materials(map_name)
+    for mat in world_materials.values():
         if not mat.glass:
             continue
-        mic_name = "MI_" + bl.safe_name(mat.name)
-        glass_records[(package + "/Materials", mic_name)] = (
-            "%s/%s" % (map_name + ".mtl", mat.name), mat, world_dir,
+        glass_records[_material_slot(package, mat)] = (
+            "%s/%s" % (map_name + ".mtl", mat.name), mat, corpus_dir,
             world_textures)
-    if os.path.isdir(prop_dir):
-        for entry in sorted(os.listdir(prop_dir)):
-            if not entry.lower().endswith(".mtl"):
+    for entry, mtl_path in prop_mtls:
+        for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
+            if not mat.glass:
                 continue
-            for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
-                if not mat.glass:
-                    continue
-                key = "%s__%s" % (
-                    bl.safe_name(mat.name),
-                    bl.safe_name(os.path.splitext(mat.albedo)[0]))
-                mic_name = "MI_" + bl.safe_name(key)
-                glass_records[(package + "/Props/Materials", mic_name)] = (
-                    "%s/%s" % (entry, mat.name), mat, prop_dir, textures)
+            glass_records[(SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))] = (
+                "%s/%s" % (entry, mat.name), mat, corpus_dir, textures)
 
     glass_alpha = 0
     glass_normals = 0
@@ -432,7 +505,7 @@ def verify_map(map_name):
                 unreal.log_error("[verify] " + message)
                 errors.append(message)
             else:
-                albedo_name = "T_" + bl.safe_name(os.path.splitext(mat.albedo)[0])
+                albedo_name = SC.texture_asset(mat.albedo)
                 albedo_data = tex_index.get(albedo_name)
                 if albedo_data is None or asset_tag(
                         albedo_data, "HasAlphaChannel").lower() != "true":
@@ -449,7 +522,7 @@ def verify_map(map_name):
             unreal.log_error("[verify] " + message)
             errors.append(message)
         else:
-            normal_name = "T_" + bl.safe_name(os.path.splitext(mat.bump)[0])
+            normal_name = SC.texture_asset(mat.bump)
             normal_data = tex_index.get(normal_name)
             normal_asset = normal_data.get_asset() if normal_data is not None else None
             if normal_asset is None:
@@ -499,26 +572,18 @@ def verify_map(map_name):
     # master along with the original $refractamount. This is the path the pawnshop rain-window
     # cards use; treating their UVWQ texture as colour is the opaque "bubble" failure.
     refract_records = {}
-    for mat in bl.read_mtl(world_mtl).values():
+    for mat in world_materials.values():
         if not mat.refract:
             continue
-        mic_name = "MI_" + bl.safe_name(mat.name)
-        refract_records[(package + "/Materials", mic_name)] = (
-            "%s/%s" % (map_name + ".mtl", mat.name), mat, world_dir,
+        refract_records[_material_slot(package, mat)] = (
+            "%s/%s" % (map_name + ".mtl", mat.name), mat, corpus_dir,
             world_textures)
-    if os.path.isdir(prop_dir):
-        for entry in sorted(os.listdir(prop_dir)):
-            if not entry.lower().endswith(".mtl"):
+    for entry, mtl_path in prop_mtls:
+        for mat in bl.read_mtl(mtl_path, corpus=_corpus_materials()).values():
+            if not mat.refract:
                 continue
-            for mat in bl.read_mtl(os.path.join(prop_dir, entry)).values():
-                if not mat.refract:
-                    continue
-                key = "%s__%s" % (
-                    bl.safe_name(mat.name),
-                    bl.safe_name(os.path.splitext(mat.albedo)[0]))
-                mic_name = "MI_" + bl.safe_name(key)
-                refract_records[(package + "/Props/Materials", mic_name)] = (
-                    "%s/%s" % (entry, mat.name), mat, prop_dir, textures)
+            refract_records[(SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))] = (
+                "%s/%s" % (entry, mat.name), mat, corpus_dir, textures)
 
     refract_normals = 0
     refract_parented = 0
@@ -536,7 +601,7 @@ def verify_map(map_name):
                 message = "%s: Source Refract PNG missing: %s" % (owner, source)
                 unreal.log_error("[verify] " + message)
                 errors.append(message)
-            normal_name = "T_" + bl.safe_name(os.path.splitext(mat.refract_map)[0])
+            normal_name = SC.texture_asset(mat.refract_map)
             normal_data = tex_index.get(normal_name)
             normal_asset = normal_data.get_asset() if normal_data is not None else None
             if normal_asset is None:

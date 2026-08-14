@@ -14,7 +14,7 @@ from PIL import Image
 
 from elysium_pipeline.formats import bsp, mdl, tex_to_png, vmt
 from elysium_pipeline.formats.glass import derive_normal, is_glass
-from elysium_pipeline import paths, unreal as unreal_driver
+from elysium_pipeline import paths, shared_corpus, unreal as unreal_driver
 from elysium_pipeline.validation.png_alpha import alpha_range
 
 
@@ -91,7 +91,18 @@ class PropMaterialContractTests(unittest.TestCase):
         mesh.tris = [(0, 1, 2)]
         return mesh
 
+    @staticmethod
+    def _record_for_vmt(vmt_body: str, read_bytes=None) -> dict:
+        """One material's corpus definition. The `.mtl` names the material and the map's own
+        facts; every channel and flag is stated once here."""
+        def default_read(path):
+            return vmt_body.encode("ascii") if path == "materials/glasswin.vmt" else None
+
+        channels = mdl.material_channels("glasswin", [], read_bytes or default_read)
+        return shared_corpus.material_record(channels) if channels else {}
+
     def _mtl_for_vmt(self, vmt_body: str) -> str:
+        """The `.mtl` a model writes: its slot names and the material key each draws."""
         mesh = self._triangle("glasswin")
 
         def read_bytes(path):
@@ -102,16 +113,15 @@ class PropMaterialContractTests(unittest.TestCase):
             return (Path(out) / "test.mtl").read_text(encoding="utf-8")
 
     def test_translucent_prop_material_carries_blend_flag(self) -> None:
-        mtl = self._mtl_for_vmt(
-            '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
-        )
-        self.assertIn("blend 1", mtl)
+        body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
+        self.assertTrue(self._record_for_vmt(body)["blend"])
+        self.assertIn("mat glasswin", self._mtl_for_vmt(body))
 
     def test_alphatest_prop_material_carries_illum_flag(self) -> None:
-        mtl = self._mtl_for_vmt(
-            '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
-        )
-        self.assertIn("illum 4", mtl)
+        body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
+        record = self._record_for_vmt(body)
+        self.assertTrue(record["scissor"])
+        self.assertFalse(record["blend"])
 
     def test_semantic_glass_prop_carries_glass_and_derived_normal(self) -> None:
         vmt_body = (
@@ -136,9 +146,11 @@ class PropMaterialContractTests(unittest.TestCase):
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             normal = Path(out) / "tex" / "props_glasswin_glass_n.png"
             self.assertTrue(normal.is_file())
-        self.assertIn("blend 1", mtl)
-        self.assertIn("glass 1", mtl)
-        self.assertIn("bumpmap tex/props_glasswin_glass_n.png", mtl)
+        self.assertIn("mat glasswin", mtl)
+        record = self._record_for_vmt(vmt_body, read_bytes)
+        self.assertTrue(record["blend"])
+        self.assertTrue(record["glass"])
+        self.assertEqual(record["bump"], "tex/props_glasswin_glass_n.png")
 
     def test_authored_glass_bumpmap_takes_precedence(self) -> None:
         vmt_body = (
@@ -165,7 +177,37 @@ class PropMaterialContractTests(unittest.TestCase):
                 [self._triangle("glasswin")], "test", out, [], read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             self.assertFalse((Path(out) / "tex" / "props_glasswin_glass_n.png").exists())
-        self.assertIn("bumpmap tex/props_authored_n.png", mtl)
+        record = self._record_for_vmt(vmt_body, read_bytes)
+        self.assertEqual(record["bump"], "tex/props_authored_n.png")
+
+    def test_one_fold_names_the_mtl_slot_the_skins_slot_and_the_manifest_slot(self) -> None:
+        """A model's material slot has one spelling in three places, and it is `mdl.sanitize`.
+
+        `bl.safe_name` is the other fold in this repo: it collapses runs and drops `.` and `-`.
+        The two agree on ordinary names and disagree on exactly the names that carry those
+        characters, so a slot folded the wrong way joins on most models and silently misses the
+        rest -- which shows up as a prop that ignores its alternate skin.
+        """
+        awkward = "Panel-A.2 x"
+        mesh = self._triangle(awkward)
+        mesh.skinref = 0
+
+        def read_bytes(path):
+            return None
+
+        with tempfile.TemporaryDirectory() as out:
+            mdl.write_obj_scene(
+                [mesh], "test", out, [], read_bytes, {},
+                skins=[[awkward], ["Panel-B.2 x"]])
+            mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+            skins = (Path(out) / "test.skins").read_text(encoding="utf-8")
+
+        folded = mdl.sanitize(awkward)
+        self.assertEqual(folded, "panel-a.2_x")
+        self.assertIn(f"newmtl {folded}", mtl)
+        self.assertIn(folded, skins)
+        # The other fold would have produced a different name in each place.
+        self.assertNotEqual(folded, shared_corpus.material_asset(awkward)[len("MI_"):])
 
     def test_source_refract_prop_exports_dudv_as_distortion_not_albedo(self) -> None:
         vmt_body = (
@@ -193,11 +235,13 @@ class PropMaterialContractTests(unittest.TestCase):
                 self.assertEqual(list(normal.get_flattened_data()), [
                     (128, 128, 255), (127, 129, 255)])
 
-        self.assertIn("refract 0.010000", mtl)
-        self.assertIn("refractmap tex/props_rain_dudv_refract_n.png", mtl)
-        self.assertNotIn("blend 1", mtl)
-        self.assertNotIn("glass 1", mtl)
-        self.assertNotIn("map_Kd", mtl)
+        record = self._record_for_vmt(vmt_body, read_bytes)
+        self.assertTrue(record["refract"])
+        self.assertEqual(record["refract_amount"], 0.01)
+        self.assertEqual(record["refract_map"], "tex/props_rain_dudv_refract_n.png")
+        self.assertFalse(record["blend"])
+        self.assertFalse(record["glass"])
+        self.assertEqual(record["albedo"], "")
 
     def test_source_refract_prefers_authored_normal_over_dudv_fallback(self) -> None:
         vmt_body = (
@@ -228,8 +272,9 @@ class PropMaterialContractTests(unittest.TestCase):
 
         self.assertEqual(len(decoded), 1)
         self.assertIn(b"authored_normal", decoded[0])
-        self.assertIn("refractmap tex/props_authored_normal_refract_n.png", mtl)
-        self.assertNotIn("old_dudv_refract_n", mtl)
+        self.assertIn("mat glasswin", mtl)
+        record = self._record_for_vmt(vmt_body, read_bytes)
+        self.assertEqual(record["refract_map"], "tex/props_authored_normal_refract_n.png")
 
     def _export_texture(self, flag: str) -> Image.Image:
         vmt_body = (
@@ -452,11 +497,10 @@ class BakeTextureImportContractTests(unittest.TestCase):
         module = self._load_bake_lib(fake_unreal)
         with tempfile.TemporaryDirectory() as out:
             path = Path(out) / "glass.mtl"
-            path.write_text(
-                "newmtl pane\nmap_Kd tex/pane.png\nblend 1\nglass 1\n"
-                "bumpmap tex/pane_glass_n.png\n",
-                encoding="utf-8")
-            mat = module.read_mtl(path)["pane"]
+            path.write_text("newmtl pane\nmat glass/pane\n", encoding="utf-8")
+            mat = module.read_mtl(path, corpus={"glass/pane": {
+                "albedo": "tex/pane.png", "blend": True, "glass": True,
+                "bump": "tex/pane_glass_n.png"}})["pane"]
         self.assertTrue(mat.blend)
         self.assertTrue(mat.glass)
         self.assertEqual(mat.bump, "tex/pane_glass_n.png")
@@ -470,11 +514,10 @@ class BakeTextureImportContractTests(unittest.TestCase):
         module = self._load_bake_lib(fake_unreal)
         with tempfile.TemporaryDirectory() as out:
             path = Path(out) / "refract.mtl"
-            path.write_text(
-                "newmtl rain\nrefract 0.010000\n"
-                "refractmap tex/rain_refract_n.png\n",
-                encoding="utf-8")
-            mat = module.read_mtl(path)["rain"]
+            path.write_text("newmtl rain\nmat effects/rain\n", encoding="utf-8")
+            mat = module.read_mtl(path, corpus={"effects/rain": {
+                "refract": True, "refract_amount": 0.01,
+                "refract_map": "tex/rain_refract_n.png"}})["rain"]
         self.assertTrue(mat.refract)
         self.assertFalse(mat.opaque)
         self.assertEqual(mat.refract_amount, 0.01)
@@ -489,12 +532,83 @@ class BakeTextureImportContractTests(unittest.TestCase):
         module = self._load_bake_lib(fake_unreal)
         with tempfile.TemporaryDirectory() as out:
             path = Path(out) / "wet.mtl"
-            path.write_text(
-                "newmtl wet\nenvmap cubemapdefault\nglobalwetness 0.600000\n",
-                encoding="utf-8")
-            mat = module.read_mtl(path)["wet"]
+            path.write_text("newmtl wet\nmat concrete/wet\ncube cubemapdefault\n",
+                            encoding="utf-8")
+            mat = module.read_mtl(path, corpus={"concrete/wet": {
+                "env_cube": "env_cubemap", "wetness": 0.6}})["wet"]
+        # The material names `env_cubemap`; the map's own `cube` line says which baked cube that
+        # resolved to here, and that is the one the bake must bind.
         self.assertEqual(mat.env_cube, "cubemapdefault")
         self.assertTrue(mat.wetness_driven)
+        self.assertEqual(mat.wetness_scale, 0.6)
+
+    def test_two_maps_naming_one_material_read_one_definition(self) -> None:
+        """The regression the corpus exists for.
+
+        Each map's `.mtl` carries only its own facts -- which baked cubemap VBSP patched in, and
+        whether the surface is water or a decal here. Both join the same definition, so they cannot
+        disagree about the material however far apart the two exports were run.
+        """
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+        )
+        module = self._load_bake_lib(fake_unreal)
+        corpus = {"brick/brickwall001a": {
+            "albedo": "tex/brick_brickwall001a.png", "scissor": True,
+            "env_cube": "env_cubemap"}}
+        with tempfile.TemporaryDirectory() as out:
+            first = Path(out) / "a.mtl"
+            second = Path(out) / "b.mtl"
+            first.write_text(
+                "newmtl brick/brickwall001a@cubemapdefault\nmat brick/brickwall001a\n"
+                "cube cubemapdefault\n", encoding="utf-8")
+            second.write_text(
+                "newmtl brick/brickwall001a@c12_34_56\nmat brick/brickwall001a\n"
+                "cube c12_34_56\n", encoding="utf-8")
+            a = module.read_mtl(first, corpus=corpus)["brick/brickwall001a@cubemapdefault"]
+            b = module.read_mtl(second, corpus=corpus)["brick/brickwall001a@c12_34_56"]
+
+        self.assertEqual(a.albedo, b.albedo)
+        self.assertEqual(a.scissor, b.scissor)
+        self.assertEqual(a.material_key, b.material_key)
+        # ...and differ in exactly the one thing their maps own.
+        self.assertEqual(a.env_cube, "cubemapdefault")
+        self.assertEqual(b.env_cube, "c12_34_56")
+
+    def test_a_surface_whose_material_no_document_names_is_dropped(self) -> None:
+        # Silently binding the master's placeholder would render a grey wall with nothing logged;
+        # the caller reports the gap instead.
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+        )
+        module = self._load_bake_lib(fake_unreal)
+        with tempfile.TemporaryDirectory() as out:
+            path = Path(out) / "gap.mtl"
+            path.write_text("newmtl wall\nmat brick/absent\n", encoding="utf-8")
+            self.assertEqual(module.read_mtl(path, corpus={}), {})
+
+    def test_a_map_local_definition_outranks_the_corpus(self) -> None:
+        # VBSP writes per-water-volume depth-blend instances into a map's own PAKFILE and nowhere
+        # else, so a map's local document wins for the keys it carries.
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+        )
+        module = self._load_bake_lib(fake_unreal)
+        with tempfile.TemporaryDirectory() as out:
+            path = Path(out) / "local.mtl"
+            path.write_text("newmtl pool\nmat dev/pool_water\nwater 1\n", encoding="utf-8")
+            mat = module.read_mtl(
+                path,
+                corpus={"dev/pool_water": {"albedo": "tex/shared.png"}},
+                local={"dev/pool_water": {"albedo": "tex/local.png"}})["pool"]
+        self.assertEqual(mat.albedo, "tex/local.png")
+        self.assertTrue(mat.water)
 
 
 class UnrealPlayDriverContractTests(unittest.TestCase):

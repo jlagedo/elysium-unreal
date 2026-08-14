@@ -143,23 +143,18 @@ class LandingPathTests(unittest.TestCase):
 
 class ExportRunTests(unittest.TestCase):
     def _run(self, install: _Install, out: Path, decoded: dict[str, str], faces: int = 3):
-        """Run main() over a stubbed decoder, returning the manifest it wrote."""
+        """Run main() against a corpus holding `decoded`, returning the manifest it wrote.
 
-        def fake_decode(idx, model_paths, propdir, tex_cache, valid):
-            resolved = {}
-            for model in sorted(set(model_paths)):
-                stem = decoded.get(model)
-                if stem is None:
-                    continue
-                Path(propdir, stem + ".obj").write_text(
-                    "v 0 0 0\n" + "f 1 1 1\n" * faces, encoding="ascii"
-                )
-                resolved[model] = stem
-            return resolved, len(resolved), len(set(model_paths)) - len(resolved)
+        The exporter decodes nothing now -- `UE_extract_corpus` does -- so the fixture stands the
+        corpus meshes up on disk and this asserts the join it writes over them.
+        """
+        props = out / "shared" / "props"
+        props.mkdir(parents=True, exist_ok=True)
+        for stem in decoded.values():
+            (props / f"{stem}.obj").write_text(
+                "v 0 0 0\n" + "f 1 1 1\n" * faces, encoding="ascii")
 
-        with mock.patch.object(items, "OUT", str(out)), mock.patch.object(
-            items, "decode_prop_models", fake_decode
-        ), mock.patch.object(items.phy, "write_physics_phys", lambda *a, **k: None):
+        with mock.patch.object(items, "OUT", str(out)):
             items.main(index=install.index)
         return json.loads((out / "items" / "ground_models.json").read_text(encoding="utf-8"))
 
@@ -234,14 +229,17 @@ class ExportRunTests(unittest.TestCase):
             self.assertTrue(
                 (
                     Path(out)
-                    / "items"
+                    / "shared"
                     / "props"
                     / "models_items_stake_ground_stake.obj"
                 ).is_file()
             )
+            # An item's mesh is not a scope of its own any more: it is a static model like any
+            # other, so the corpus scope decodes and bakes it beside every prop.
             bake = (REPO / "pipeline/unreal/bake_map.py").read_text(encoding="utf-8")
-            self.assertIn('ITEMS_SCOPE = "items"', bake)
-            self.assertIn('os.path.join(self.dir, "props")', bake)
+            self.assertIn("class CorpusBake(Bake):", bake)
+            self.assertIn('os.path.join(self.corpus_dir, SC.PROPS)', bake)
+            self.assertNotIn('ITEMS_SCOPE', bake)
 
 
 if __name__ == "__main__":

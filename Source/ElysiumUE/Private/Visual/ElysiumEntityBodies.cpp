@@ -1775,13 +1775,13 @@ void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	{
 		return;
 	}
-	// The skin set is baked per map, so a stage world (no map, hence no name) has none to read and
-	// the prop draws its own authored material set.
-	if (!bPropSkinsLoaded && !MapName.IsEmpty())
+	// One skin table for the whole corpus: a model's alternate families and the materials they
+	// repaint are both properties of the install, so a stage world reads the same one a map does.
+	if (!bPropSkinsLoaded)
 	{
 		bPropSkinsLoaded = true;
 		PropSkins = LoadObject<UElysiumPropSkinSet>(
-			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
+			nullptr, *FElysiumContentPaths::BakedPropSkins());
 	}
 	Comp->EmptyOverrideMaterials();
 	const FElysiumSkinFamily* Row = PropSkins ? PropSkins->Find(FName(*Stem), Family) : nullptr;
@@ -1863,19 +1863,13 @@ UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Stem)
 	{
 		return Mesh;
 	}
-	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(MapName, Stem));
+	// One mesh per model, wherever it stands: a prop, an item's ground body and a piece of map
+	// dressing are all the same static model, so they are all this one asset.
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(Stem));
 	if (Mesh == nullptr)
 	{
-		// An item's ground model is spawnable in any map, so it bakes onto the shared item scope
-		// rather than into this map's Props. Same asset shape, same stem — only the package
-		// differs, which makes this a lookup fallback and not a second build path. The map's own
-		// package wins where both carry the stem: they are the same model either way.
-		Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedItemMesh(Stem));
-	}
-	if (Mesh == nullptr)
-	{
-		UE_LOG(LogElysiumBodies, Warning, TEXT("prop '%s': no baked mesh (run: uv run elysium export map %s --force)"),
-			*Stem, *MapName);
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("prop '%s': no baked mesh (run: uv run elysium export bundle corpus)"), *Stem);
 		return nullptr;
 	}
 	PropMeshCache.Add(Stem, Mesh);
@@ -1936,7 +1930,7 @@ void UElysiumEntityBodies::ApplyPropSkin(UStaticMeshComponent* Comp, const FStri
 	{
 		bPropSkinsLoaded = true;
 		PropSkins = LoadObject<UElysiumPropSkinSet>(
-			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
+			nullptr, *FElysiumContentPaths::BakedPropSkins());
 	}
 
 	// Restore first, so a swap back to skin 0 -- or to a family this model does not carry, which

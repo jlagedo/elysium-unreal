@@ -21,8 +21,11 @@ sky's brightness one-for-one, and one that reshapes the histogram changes its co
 resolution change may not smuggle in a grade.
 
 Internal enhancement experiment; not a public project-tooling entrypoint. It writes
-`$ELYSIUM_EXPORT_ROOT/<map>/tex_hi/sky_*.png` and
-`$ELYSIUM_EXPORT_ROOT/<map>_sky_compare.png`.
+`$ELYSIUM_EXPORT_ROOT/shared/tex_hi/<sky><face>.png` -- the set the runtime reads when
+`elysium.EnhancedTextures` is on -- and `$ELYSIUM_EXPORT_ROOT/<sky>_sky_compare.png`.
+
+A sky belongs to the corpus, not to a map: the same six faces serve every map whose `.sky`
+names them, so they are upscaled once under their own name.
 """
 import argparse
 from pathlib import Path
@@ -30,14 +33,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from elysium_pipeline import shared_corpus as SC
 from elysium_pipeline.enhancement.upscale_bench import Model  # reuse the spandrel runner
 
 RING = ["bk", "rt", "ft", "lf"]           # the canonical angular order (K1)
 MARGIN = 32                               # bleed context in source px
 
 
-def load_face(texdir: Path, name: str) -> np.ndarray:
-    return np.asarray(Image.open(texdir / f"sky_{name}.png").convert("RGB"))
+def load_face(texdir: Path, sky: str, name: str) -> np.ndarray:
+    return np.asarray(Image.open(texdir / SC.sky_face_file(sky, name)).convert("RGB"))
 
 
 def seam_err(a_right: np.ndarray, b_left: np.ndarray) -> float:
@@ -99,11 +103,12 @@ def texel_fidelity(src: np.ndarray, hi: np.ndarray) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--map", required=True)
+    ap.add_argument("--sky", required=True,
+                    help="sky name as the map's .sky sidecar states it, for example sky_day01")
     ap.add_argument("--model", default="models/RealESRGAN_x4plus.pth")
     ap.add_argument("--out-root", default="out")
-    ap.add_argument("--out-sub", default="tex_hi",
-                    help="subdir under $ELYSIUM_EXPORT_ROOT/<map>/ for the upscaled faces")
+    ap.add_argument("--out-sub", default=SC.TEX_HI,
+                    help="subdir under $ELYSIUM_EXPORT_ROOT/shared/ for the upscaled faces")
     ap.add_argument("--cpu", action="store_true")
     ap.add_argument("--max-mean-shift", type=float, default=1.0,
                     help="reject a face whose per-channel mean drifts more than this many "
@@ -114,17 +119,17 @@ def main():
                     help="write the faces even when the fidelity check fails (still reported)")
     args = ap.parse_args()
 
-    root = Path(args.out_root) / args.map
-    texdir = root / "tex"
-    hidir = root / args.out_sub
-    hidir.mkdir(exist_ok=True)
+    root = Path(args.out_root)
+    texdir = SC.tex_dir(root)
+    hidir = SC.corpus_dir(root) / args.out_sub
+    hidir.mkdir(parents=True, exist_ok=True)
 
     device = "cpu" if args.cpu else _pick_device()
     print(f"device : {device}")
     model = Model(Path(args.model), device, fp16=True)
     print(f"model  : {model.name} (x{model.scale}, fp16={model.fp16})")
 
-    faces = {n: load_face(texdir, n) for n in RING}
+    faces = {n: load_face(texdir, args.sky, n) for n in RING}
     print(f"ring   : {'-'.join(RING)} (canonical)  seam-err={ring_seam_err(faces):.2f}")
 
     # Build the continuous strip and record each face's slot for re-slicing.
@@ -137,7 +142,7 @@ def main():
     hi = {n: big[:, i * w * s:(i + 1) * w * s] for i, n in enumerate(RING)}
 
     for n in ("up", "dn"):
-        faces[n] = load_face(texdir, n)
+        faces[n] = load_face(texdir, args.sky, n)
         hi[n] = upscale_face(model, faces[n])
 
     # Absolute-texel acceptance (RE-A9): the sky's displayed brightness IS its texel value, so a
@@ -161,10 +166,10 @@ def main():
             raise SystemExit(1)
 
     for n, arr in hi.items():
-        Image.fromarray(arr).save(hidir / f"sky_{n}.png")
-    print(f"wrote  : {hidir}/sky_*.png  ({hi['bk'].shape[1]}x{hi['bk'].shape[0]})")
+        Image.fromarray(arr).save(hidir / SC.sky_face_file(args.sky, n))
+    print(f"wrote  : {hidir}/{args.sky}*.png  ({hi['bk'].shape[1]}x{hi['bk'].shape[0]})")
 
-    _compare_sheet(faces, hi, root / f"{args.map}_sky_compare.png")
+    _compare_sheet(faces, hi, root / f"{args.sky}_sky_compare.png")
 
 
 def _compare_sheet(faces, hi, path):
