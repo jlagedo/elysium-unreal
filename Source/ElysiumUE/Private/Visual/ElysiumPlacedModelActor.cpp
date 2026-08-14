@@ -12,6 +12,9 @@ AElysiumPlacedModelActor::AElysiumPlacedModelActor()
 	PrimaryActorTick.bCanEverTick = false;
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	SetRootComponent(SceneRoot);
+	// The root carries its children's mobility: a Static component under a Movable parent never
+	// takes the parent's transform, which strands the whole placement at the world origin.
+	SceneRoot->SetMobility(EComponentMobility::Static);
 
 	CollisionProxy = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CollisionProxy"));
 	CollisionProxy->SetupAttachment(SceneRoot);

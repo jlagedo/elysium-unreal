@@ -774,6 +774,14 @@ def export_map(
     maps: list[str] = typer.Argument(...),
     force: bool = typer.Option(False, "--force"),
     intermediate_only: bool = typer.Option(False, "--intermediate-only"),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help=(
+            "Run the deep bake verification commandlet after the bake (acceptance check; "
+            "iteration trusts a clean bake exit)."
+        ),
+    ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
@@ -784,6 +792,7 @@ def export_map(
             maps,
             force=force,
             intermediate_only=intermediate_only,
+            verify=verify,
         )
         console.print("map export complete: " + ", ".join(names))
 

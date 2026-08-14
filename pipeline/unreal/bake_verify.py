@@ -98,8 +98,10 @@ def _material_slot(package, mat):
     A surface that stamps this map's cubemap, fog or weather is the map's own instance; every
     other surface is the corpus's one instance, under its material key rather than its slot.
     """
-    if SC.is_map_scoped_material(mat.material_key, decal=mat.decal,
-                                 wetness_driven=mat.wetness_driven):
+    # The surface's own key, not the material's: the cubemap tag the predicate reads is what the
+    # map added to the slot, and the material key is the untagged definition underneath it.
+    if SC.is_map_scoped_material(mat.name, decal=mat.decal,
+                                 wetness_driven=mat.wetness_driven, local=mat.local):
         return ("%s/Materials/Decals" % package if mat.decal else "%s/Materials" % package,
                 "MI_" + bl.safe_name(mat.name))
     return (SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))

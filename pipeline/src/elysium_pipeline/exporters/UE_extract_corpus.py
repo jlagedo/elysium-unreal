@@ -337,9 +337,6 @@ def _decode_plain(idx, jobs, tex_out, *, label):
     for key, suffix in sorted(set(jobs)):
         name = SC.texture_file(key, suffix)
         target = os.path.join(tex_out, name)
-        if os.path.isfile(target):
-            written.setdefault(key, {})[name] = SC.ROLES[suffix]
-            continue
         tth = install.read(idx, f"materials/{key}.tth")
         ttz = install.read(idx, f"materials/{key}.ttz")
         if not (tth and ttz):
@@ -604,9 +601,18 @@ def build(idx, *, map_names=None, verbose=True):
 
 
 def _write(path, document):
+    text = json.dumps(document, separators=(",", ":"), sort_keys=True)
+    # Skip a byte-identical rewrite: an unchanged document keeps its mtime, so the downstream
+    # stat-keyed digest cache and fingerprint stay warm instead of forcing a gigabyte-scale rehash.
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            if handle.read() == text:
+                return
+    except OSError:
+        pass
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
-        json.dump(document, handle, separators=(",", ":"), sort_keys=True)
+        handle.write(text)
 
 
 def main(index=None, *, map_names=None, models=None, materials=None, force=False):

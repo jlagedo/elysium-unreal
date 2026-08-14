@@ -1224,6 +1224,7 @@ def main(bsp_path, out_dir, *, index=None):
     mat_keys = {}         # gkey -> the corpus (or map-local) material key that definition is under
     env_cube = {}         # gkey -> the cubemap id this surface samples, or None
     local_records = {}    # material key -> a definition the corpus does not carry
+    corpus_files = set(shared_corpus.texture_files({"textures": corpus_textures}))
     problems = []
     warnings = []
 
@@ -1241,7 +1242,12 @@ def main(bsp_path, out_dir, *, index=None):
                 return key, local_records[key]
             channels = MDL.material_channels(key, [], read_material_bytes)
             if channels is not None:
-                local_records[key] = shared_corpus.material_record(channels)
+                # Stated against the files the corpus actually decoded. A map-local material can
+                # name a texture no map's material closure ever reached -- VBSP's invisible water
+                # instances name `tools/toolsinvisible` -- and a channel pointing at a file that
+                # does not exist would fail the bake's texture import on a surface that draws
+                # nothing anyway.
+                local_records[key] = shared_corpus.material_record(channels, corpus_files)
                 return key, local_records[key]
         return mat, None
 
@@ -1703,7 +1709,10 @@ def main(bsp_path, out_dir, *, index=None):
                 f.write(f"mat {mat}\n")
                 f.write(f"plane {plane_z(mat):.4f}\n")
                 if w["water_normal"]:
-                    f.write(f"normalmap ../{w['water_normal']}\n")
+                    # The record states the corpus's own path; the sidecar states it relative to
+                    # this map, which is the hop out to the corpus and not one level up.
+                    f.write("normalmap %s\n"
+                            % shared_corpus.map_relative(os.path.basename(w["water_normal"])))
                 fc = w["water_fog_color"]
                 f.write(f"fogcolor {fc[0]:.4f} {fc[1]:.4f} {fc[2]:.4f}\n")
                 f.write(f"fogdist {w['water_fog_start']*INCH_TO_CM:.4f} "

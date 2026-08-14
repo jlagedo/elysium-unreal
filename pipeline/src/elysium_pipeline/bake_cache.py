@@ -393,6 +393,196 @@ def _python_symbols_fingerprint(
     return _hash_parts(_node_source(lines, node) for node in ordered)
 
 
+_CORPUS_DOCUMENT_CACHE: dict[Path, tuple[tuple[int, int], dict]] = {}
+
+#: The map stages whose products depend on shared-corpus entries.
+CORPUS_SLICE_STAGES = ("materials", "world", "sky", "level")
+
+
+def _corpus_document(path: Path) -> dict | None:
+    """Parse one shared-corpus document, memoized on the file's stat identity."""
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    identity = (stat.st_size, stat.st_mtime_ns)
+    cached = _CORPUS_DOCUMENT_CACHE.get(path)
+    if cached is not None and cached[0] == identity:
+        return cached[1]
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    _CORPUS_DOCUMENT_CACHE[path] = (identity, document)
+    return document
+
+
+def _map_material_keys(map_root: Path, map_name: str) -> set[str]:
+    """The corpus material keys the map's `.mtl` binds to its surfaces."""
+    keys: set[str] = set()
+    path = map_root / f"{map_name}.mtl"
+    if not path.is_file():
+        return keys
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        tokens = line.split()
+        if len(tokens) >= 2 and tokens[0] == "mat":
+            keys.add(tokens[1])
+    return keys
+
+
+def _map_placed_stems(map_root: Path, map_name: str) -> set[str]:
+    """The corpus model stems the map places, from its `.props` and `.ents` sidecars."""
+    stems: set[str] = set()
+    props = map_root / f"{map_name}.props"
+    if props.is_file():
+        for line in props.read_text(encoding="utf-8", errors="replace").splitlines():
+            tokens = line.split()
+            if tokens:
+                stems.add(tokens[0])
+    ents = map_root / f"{map_name}.ents"
+    if ents.is_file():
+        try:
+            entities = json.loads(ents.read_text(encoding="utf-8")).get("entities", [])
+        except (OSError, ValueError):
+            entities = []
+        for entity in entities:
+            stem = entity.get("model_mesh", "") if isinstance(entity, dict) else ""
+            if stem:
+                stems.add(stem)
+    return stems
+
+
+def _map_corpus_slice(
+    export_root: Path, map_name: str
+) -> tuple[dict, dict, set[str], dict[str, dict | None]] | None:
+    """(manifest, materials document, drawn material keys, drawn model rows), or `None`.
+
+    A map's own sidecars name exactly what it draws -- the `.mtl`'s `mat` keys plus the model rows
+    (and their material keys) for its placed stems.
+    """
+    manifest = _corpus_document(shared_corpus.manifest_path(export_root))
+    materials = _corpus_document(shared_corpus.materials_path(export_root))
+    if manifest is None or materials is None:
+        return None
+    model_rows = manifest.get("models", {})
+    map_root = export_root / map_name
+    keys = _map_material_keys(map_root, map_name)
+    models: dict[str, dict | None] = {}
+    for stem in sorted(_map_placed_stems(map_root, map_name)):
+        row = model_rows.get(stem)
+        models[stem] = row
+        if isinstance(row, dict):
+            keys.update(row.get("materials", {}).values())
+    return manifest, materials, keys, models
+
+
+def _digest_json(payload) -> str:
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8", errors="surrogateescape")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def corpus_slice_fingerprint(export_root: Path, map_name: str) -> str:
+    """Digest only the shared-corpus entries this map draws.
+
+    The corpus documents describe the whole install, so taking them as stage inputs marks every
+    map stale whenever any one entry changes. The slice a map draws is the fingerprint instead, so
+    an entry no map draws invalidates no map.
+    """
+    sliced = _map_corpus_slice(export_root, map_name)
+    if sliced is None:
+        return "corpus-missing"
+    manifest, materials, keys, models = sliced
+    material_records = materials.get("materials", {})
+    return _digest_json({
+        "revision": manifest.get("revision"),
+        "materials": {key: material_records.get(key) for key in sorted(keys)},
+        "models": models,
+    })
+
+
+def _slice_env_mask_paths(export_root: Path, map_name: str) -> list[Path]:
+    """The env-mask PNGs the map's drawn materials name, as material-stage file inputs.
+
+    A reflective material instance stamps `EnvMaskCoarseMip` from the mask PNG's own header, so
+    the mask's bytes decide a material parameter and not only the texture asset it binds.
+    """
+    sliced = _map_corpus_slice(export_root, map_name)
+    if sliced is None:
+        return []
+    _manifest, materials, keys, _models = sliced
+    records = materials.get("materials", {})
+    corpus = shared_corpus.corpus_dir(export_root)
+    paths = set()
+    for key in keys:
+        record = records.get(key)
+        if not isinstance(record, dict):
+            continue
+        relative = str(record.get("env_mask") or "")
+        if not relative:
+            continue
+        path = corpus / relative
+        if path.is_file():
+            paths.add(path)
+    return sorted(paths, key=lambda path: str(path).lower())
+
+
+def _map_catalogue_stems(map_root: Path, map_name: str) -> set[str]:
+    """The placed-model catalogue keys the map's `.props` rows join to.
+
+    A `.props` row carries two identities: field 0 is the corpus static-mesh stem, and field 11 is
+    the normalized model path whose `placed_models.model_stem` keys `npc/npc_index.json`. A row
+    without field 11 predates the catalogue and joins on its static stem.
+    """
+    from elysium_pipeline import placed_models
+
+    stems: set[str] = set()
+    path = map_root / f"{map_name}.props"
+    if not path.is_file():
+        return stems
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        tokens = line.split()
+        if len(tokens) < 9:
+            continue
+        stems.add(placed_models.model_stem(tokens[11]) if len(tokens) >= 12 else tokens[0])
+    return stems
+
+
+def _placed_index_slice_fingerprint(export_root: Path, map_name: str) -> str:
+    """Digest only the `npc/npc_index.json` rows this map's placed props join to.
+
+    The level stage reads each row to decide static or skeletal placement and, for a skeletal one,
+    which rest clip the placement poses in. The document covers the whole catalogue, so the slice
+    is the rows the map's own `.props` stems reach; the manifest version joins them because it is
+    what gates the join at all.
+    """
+    document = _corpus_document(export_root / "npc" / "npc_index.json")
+    if not isinstance(document, dict):
+        return "npc-index-missing"
+    rows = document.get("placed_models", {})
+    if not isinstance(rows, dict):
+        return "npc-index-missing"
+    return _digest_json({
+        "manifest_version": document.get("manifest_version"),
+        "placed_models": {
+            stem: rows.get(stem)
+            for stem in sorted(_map_catalogue_stems(export_root / map_name, map_name))
+        },
+    })
+
+
+def _placed_skins_paths(export_root: Path, map_name: str) -> list[Path]:
+    """The `.skins` sidecars of the map's placed models: the level stage bakes their alternate
+    skins in as material overrides, so they are that stage's inputs."""
+    props_dir = shared_corpus.props_dir(export_root)
+    return [
+        path
+        for stem in sorted(_map_placed_stems(export_root / map_name, map_name))
+        if (path := props_dir / f"{stem}.skins").is_file()
+    ]
+
+
 def _matching_files(root: Path, patterns: Iterable[str]) -> list[Path]:
     return sorted(
         {path for pattern in patterns for path in root.glob(pattern) if path.is_file()},
@@ -419,18 +609,15 @@ def stage_input_paths(
 ) -> tuple[Path, ...]:
     """What one map stage reads.
 
-    Textures, materials and prop meshes are the shared corpus's, so a map's stages depend on the
-    corpus documents rather than on a texture tree of their own: a re-decoded material changes
-    every map that draws it, and the two `shared/*.json` files are where that shows.
+    Textures, materials and prop meshes are the shared corpus's, but a map depends only on the
+    corpus entries it draws -- `corpus_slice_fingerprint` states that slice inside
+    `stage_fingerprint`, so the whole-install documents are not file inputs here and a re-decoded
+    material invalidates only the maps that draw it.
     """
     if stage not in STAGES:
         raise ValueError(f"unknown bake stage: {stage}")
     root = export_root / map_name
     world_mtl = root / f"{map_name}.mtl"
-    corpus = [
-        shared_corpus.manifest_path(export_root),
-        shared_corpus.materials_path(export_root),
-    ]
     local_materials = root / f"{map_name}.materials.json"
 
     if stage == "textures":
@@ -447,7 +634,7 @@ def stage_input_paths(
             local_materials,
             root / f"{map_name}.env",
             root / f"{map_name}.weather.json",
-            *corpus,
+            *_slice_env_mask_paths(export_root, map_name),
         ]
     elif stage == "world":
         paths = [
@@ -455,11 +642,10 @@ def stage_input_paths(
             root / f"{map_name}.blend",
             world_mtl,
             local_materials,
-            *corpus,
             *_matching_files(root, ("brushes/*.obj", "brushes/*.blend")),
         ]
     elif stage == "sky":
-        paths = [root / f"{map_name}_sky.obj", world_mtl, local_materials, *corpus]
+        paths = [root / f"{map_name}_sky.obj", world_mtl, local_materials]
     elif stage == "particles":
         paths = _particle_inputs(export_root, root, map_name)
     else:
@@ -473,7 +659,7 @@ def stage_input_paths(
             root / f"{map_name}.ents",
             world_mtl,
             local_materials,
-            *corpus,
+            *_placed_skins_paths(export_root, map_name),
         ]
     return tuple(dict.fromkeys(Path(path) for path in paths))
 
@@ -481,7 +667,13 @@ def stage_input_paths(
 def _stage_code_paths(config, stage: str) -> tuple[Path, ...]:
     unreal_root = config.repo_root / "pipeline" / "unreal"
     source_root = config.repo_root / "Source" / "ElysiumUE"
-    paths = [unreal_root / "bake_lib.py"]
+    package_root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+    # Every stage reads the corpus keys, record shape and baked asset names through these two.
+    paths = [
+        unreal_root / "bake_lib.py",
+        package_root / "shared_corpus.py",
+        package_root / "asset_names.py",
+    ]
     if stage == "materials":
         paths.extend(
             (
@@ -498,6 +690,9 @@ def _stage_code_paths(config, stage: str) -> tuple[Path, ...]:
             (
                 source_root / "Public" / "ElysiumPropSkins.h",
                 source_root / "Private" / "Visual" / "ElysiumPropSkins.cpp",
+                # The stage joins each placed prop to the catalogue through `model_stem` and poses
+                # it with the clip `select_rest_label` picks.
+                package_root / "placed_models.py",
             )
         )
     elif stage == "particles":
@@ -519,9 +714,14 @@ def stage_fingerprint(
     cache: ContentDigestCache | None = None,
 ) -> str:
     code_fingerprint = stage_code_fingerprint(config, stage, cache=cache)
+    extra = [CACHE_REVISION, map_name, stage, code_fingerprint]
+    if stage in CORPUS_SLICE_STAGES:
+        extra.append(corpus_slice_fingerprint(config.export_root, map_name))
+    if stage == "level":
+        extra.append(_placed_index_slice_fingerprint(config.export_root, map_name))
     return fingerprint_content(
         stage_input_paths(config.export_root, map_name, stage),
-        extra=(CACHE_REVISION, map_name, stage, code_fingerprint),
+        extra=tuple(extra),
         cache=cache,
     )
 
@@ -674,6 +874,106 @@ def create_asset_run_plan(
                     for stage in stages
                 },
             }
+    finally:
+        cache.write()
+    document = {
+        "schema": ASSET_RUN_SCHEMA,
+        "version": ASSET_SCHEMA_VERSION,
+        "run_id": run_id,
+        "force": bool(force),
+        "maps": maps,
+    }
+    path = config.export_root / ASSET_RUN_DIR / run_id / "plan.json"
+    _atomic_json(path, document)
+    return path, document
+
+
+def corpus_stage_policy(
+    config,
+    stage: str,
+    *,
+    cache: ContentDigestCache | None = None,
+) -> str:
+    """The authoring-code identity of one shared-corpus stage.
+
+    The corpus bake's methods are not AST-split per stage the way a map's are, so the policy is
+    the whole bake entrypoint plus the material libraries the stage authors through.
+    """
+
+    unreal_root = config.repo_root / "pipeline" / "unreal"
+    package_root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+    paths = [
+        unreal_root / "bake_map.py",
+        unreal_root / "bake_lib.py",
+        # The corpus keys, record shape and baked asset names every stage authors through.
+        package_root / "shared_corpus.py",
+        package_root / "asset_names.py",
+    ]
+    if stage == "materials":
+        paths.extend(
+            (
+                unreal_root / "make_world_materials.py",
+                unreal_root / "make_decal_material.py",
+                unreal_root / "mat_fog.py",
+            )
+        )
+    return fingerprint_content(paths, extra=("corpus-policy", stage), cache=cache)
+
+
+def corpus_stage_input_fingerprint(
+    config,
+    stage: str,
+    *,
+    cache: ContentDigestCache | None = None,
+) -> str:
+    """What one shared-corpus stage reads, together with the code that authors it."""
+
+    export_root = config.export_root
+    manifest = shared_corpus.manifest_path(export_root)
+    if stage == "textures":
+        paths = [manifest, shared_corpus.tex_dir(export_root)]
+    elif stage == "materials":
+        paths = [manifest, shared_corpus.materials_path(export_root)]
+    elif stage == "props":
+        paths = [manifest, shared_corpus.props_dir(export_root)]
+    else:
+        raise ValueError(f"unknown shared corpus bake stage: {stage}")
+    return fingerprint_content(
+        paths,
+        extra=(
+            CACHE_REVISION,
+            shared_corpus.SCOPE,
+            stage,
+            corpus_stage_policy(config, stage, cache=cache),
+        ),
+        cache=cache,
+    )
+
+
+def create_corpus_run_plan(config, *, force: bool) -> tuple[Path, dict]:
+    """Freeze the shared-corpus stage inputs and authoring policies for one Unreal invocation.
+
+    The same document a map group's plan uses, holding the one scope the corpus has, so the
+    commandlet's per-asset receipts are decided and promoted exactly as a map's are.
+    """
+
+    run_id = uuid.uuid4().hex
+    stages = list(shared_corpus.STAGES)
+    cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
+    try:
+        maps = {
+            shared_corpus.SCOPE: {
+                "stages": stages,
+                "fingerprints": {
+                    stage: corpus_stage_input_fingerprint(config, stage, cache=cache)
+                    for stage in stages
+                },
+                "policies": {
+                    stage: corpus_stage_policy(config, stage, cache=cache)
+                    for stage in stages
+                },
+            }
+        }
     finally:
         cache.write()
     document = {

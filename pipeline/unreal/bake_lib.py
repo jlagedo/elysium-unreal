@@ -131,7 +131,7 @@ class MatDef(object):
     __slots__ = ("name", "material_key", "albedo", "emissive", "bump", "refract_map", "env_mask",
                  "base_tex2", "scissor", "blend", "additive", "glass", "refract",
                  "refract_amount", "env_cube", "env_tint", "wetness_driven",
-                 "wetness_scale", "decal", "water", "color")
+                 "wetness_scale", "decal", "water", "color", "local")
 
     # Channel spread above which an $envmaptint counts as CHROMATIC rather than a grey
     # dim-down. The population is bimodal -- 361 of the game's 362 grey tints sit at exactly
@@ -145,6 +145,9 @@ class MatDef(object):
         # what the shared material instance is named after; `name` is the surface's own key, which
         # additionally carries the map's cubemap tag.
         self.material_key = name
+        # True when the definition came from the map's own PAKFILE rather than the corpus. The
+        # corpus reads the install, so it holds no such material and the map has to author it.
+        self.local = False
         self.albedo = ""
         self.emissive = ""
         self.bump = ""
@@ -262,9 +265,15 @@ def read_mtl(path, corpus=None, local=None):
             elif cur is None:
                 continue
             elif key == "mat" and len(tok) >= 2:
-                record = local.get(tok[1]) or corpus.get(tok[1])
+                record = local.get(tok[1])
+                if record is None:
+                    record = corpus.get(tok[1])
+                    from_local = False
+                else:
+                    from_local = True
                 if record is not None:
                     mats[cur] = mat_from_record(cur, record, tok[1])
+                    mats[cur].local = from_local
             elif cur in mats and key == "cube" and len(tok) >= 2:
                 # The cube this surface samples is the map's, not the material's.
                 mats[cur].env_cube = tok[1]

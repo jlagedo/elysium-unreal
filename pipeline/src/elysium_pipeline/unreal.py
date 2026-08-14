@@ -20,7 +20,8 @@ FONT_ASSETS = (
     "FF_Inter_Regular.uasset",
     "FF_Inter_SemiBold.uasset",
 )
-DEFAULT_BAKE_STAGES = "textures,materials,world,sky,props,particles,level"
+#: A map's stages. Prop meshes belong to the shared corpus scope, whose stages are its own.
+DEFAULT_BAKE_STAGES = "textures,materials,world,sky,particles,level"
 TEST_ABSTENTION_TOKEN = "ELYSIUM_TEST_ABSTAIN"
 
 
@@ -128,12 +129,16 @@ def generate_policy_content(config, runner, generators: Sequence[str] | None = N
         raise UnrealFailure("font generation did not produce: " + ", ".join(missing))
 
 
-def bake_corpus(config, runner) -> None:
+def bake_corpus(config, runner, *, asset_plan: Path | None = None) -> None:
     """Bake the shared asset corpus onto /ElysiumBaked/Shared.
 
     One scope, no map: a texture, a material and a static model belong to the install, so each is
     baked once rather than once per map that draws it. Only textures, materials and props apply --
     the corpus has no world, sky, particle or level input.
+
+    `asset_plan` names the frozen per-asset inputs and policies, so the run rebuilds only the
+    assets whose recipe changed. Without one the commandlet rebuilds the whole scope, which is the
+    recovery surface for a hand-run bake.
     """
     _run(
         config,
@@ -144,6 +149,7 @@ def bake_corpus(config, runner) -> None:
             "-run=pythonscript",
             f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
             "-BakeCorpus=1",
+            *([f"-BakeAssetPlan={asset_plan}"] if asset_plan is not None else []),
             "-AllowCommandletRendering",
             "-unattended",
             "-nosplash",

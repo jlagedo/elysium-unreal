@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from elysium_pipeline import shared_corpus
 from elysium_pipeline.formats import particles, tex_to_png, vmt, weather
 
 
@@ -313,15 +314,18 @@ class MapParticleDocumentTests(unittest.TestCase):
 class HeightTextureTests(unittest.TestCase):
     def test_only_solid_non_sky_props_become_placed_cover(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "props").mkdir()
-            (root / "props" / "awning.obj").write_text(
+            # The map directory holds placements; the mesh they name is the shared corpus's.
+            root = Path(directory) / "map"
+            root.mkdir()
+            props = shared_corpus.props_dir(root.parent)
+            props.mkdir(parents=True)
+            (props / "awning.obj").write_text(
                 "v 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\n", encoding="utf-8"
             )
             (root / "map.props").write_text(
-                "awning 100 200 300 0 0 0 1 1 0 0\n"
-                "awning 400 500 600 0 0 0 1 0 0 0\n"
-                "awning 700 800 900 0 0 0 1 1 0 1\n",
+                "awning 100 200 300 0 0 0 1 1 0 0 models/awning.mdl\n"
+                "awning 400 500 600 0 0 0 1 0 0 0 models/awning.mdl\n"
+                "awning 700 800 900 0 0 0 1 1 0 1 models/awning.mdl\n",
                 encoding="utf-8",
             )
             triangles = weather.static_prop_cover_triangles(root, "map")

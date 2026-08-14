@@ -310,20 +310,25 @@ def baked_mesh(stem):
 
 # --------------------------------------------------------------------- the predicate
 
-def is_map_scoped_material(key, *, decal=False, wetness_driven=False):
+def is_map_scoped_material(key, *, decal=False, wetness_driven=False, local=False):
     """True when a material carries an input only its map can supply, so it cannot be shared.
 
-    Exactly three do, and each is a value stamped into the instance rather than read at draw time:
+    Three stamp a value into the instance rather than reading it at draw time:
 
     - a baked env cubemap (the `CUBEMAP_TAG` in the key), which is per map and per position;
     - a deferred decal's fog, because a ``UDecalComponent`` is a ``USceneComponent`` and carries
       no custom primitive data for the world's fog term to ride on;
     - a wetness-driven surface, which stamps its map's weather bounds and source cube.
 
+    The fourth is scope rather than content: a material VBSP wrote into one map's own PAKFILE and
+    nowhere else. The corpus reads the install, so it never sees that definition -- if the map did
+    not author it, no package would hold it and the surface would bind nothing.
+
     Everything else -- every prop material, and every world material VBSP did not patch -- is a
     property of the install and belongs to the corpus.
     """
-    return bool(decal) or bool(wetness_driven) or CUBEMAP_TAG in str(key or "")
+    return (bool(decal) or bool(wetness_driven) or bool(local)
+            or CUBEMAP_TAG in str(key or ""))
 
 
 # ------------------------------------------------------------------------- documents

@@ -76,6 +76,15 @@ class PredicateTests(unittest.TestCase):
     def test_a_wetness_driven_surface_stays_with_its_map(self):
         self.assertTrue(SC.is_map_scoped_material("concrete/wet", wetness_driven=True))
 
+    def test_a_material_only_this_maps_pakfile_carries_stays_with_its_map(self):
+        """The corpus reads the install, so it never holds a VBSP-written map-local material.
+
+        Called shared, no package would author it and the surface would bind the master's own
+        placeholder rather than failing.
+        """
+        self.assertTrue(SC.is_map_scoped_material(
+            "maps/sm_pier_1/water/invisible_water_depth_33", local=True))
+
 
 class FileNameTests(unittest.TestCase):
     def test_every_product_of_one_key_is_a_distinct_file(self):
@@ -266,6 +275,29 @@ class BakeScopeContractTests(unittest.TestCase):
         self.assertIn("if mat.wet:\n            bl.set_scalar_param(mic, \"WetnessDriven\"", source)
         self.assertIn("if not mat.wet or mat.env_cube in self.cubemaps:", source)
 
+    @staticmethod
+    def _exporter() -> str:
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[2]
+        return (repo / "pipeline" / "src" / "elysium_pipeline" / "exporters"
+                / "UE_bsp_to_scene.py").read_text(encoding="utf-8")
+
+    def test_a_sidecar_states_the_hop_out_to_the_corpus(self):
+        """A map sidecar's texture path is joined onto the MAP directory at load.
+
+        `../tex/...` resolves beside the map directory, where nothing lives; the corpus is
+        `../shared/tex/...`, which is what `map_relative` writes. Hand-built hops are how the
+        water normal came to point at a file that does not exist.
+        """
+        source = self._exporter()
+        self.assertNotIn('f"normalmap ../', source)
+        self.assertIn("shared_corpus.map_relative(os.path.basename(w[\"water_normal\"]))", source)
+
+    def test_the_pakfile_local_fallback_checks_the_decoded_set(self):
+        source = self._exporter()
+        self.assertIn("shared_corpus.material_record(channels, corpus_files)", source)
+
     def test_a_map_bakes_no_prop_stage(self):
         source = self._bake_map()
         self.assertIn('ALL_STAGES = ("textures", "materials", "world", "sky", "particles", "level")',
@@ -300,9 +332,10 @@ class MaterialRecordTests(unittest.TestCase):
             self._channels(), files={"models_scenery_spike.png"})
         self.assertEqual(record["albedo"], "tex/models_scenery_spike.png")
 
-    def test_a_map_local_material_states_every_channel_it_names(self):
-        # No `files` set: a material that exists only inside one map's PAKFILE never went through
-        # the corpus decode, so presence cannot be checked against it.
+    def test_without_a_file_set_every_named_channel_is_stated(self):
+        # `files=None` is "state what the VMT names": the caller has no decoded set to check
+        # against. Every caller that does have one passes it, including the map exporter's
+        # PAKFILE-local fallback -- a local material can name a texture the corpus never decoded.
         record = SC.material_record(self._channels())
         self.assertEqual(record["albedo"], "tex/models_scenery_spike.png")
 

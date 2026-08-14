@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import tempfile
 import unittest
 
-from elysium_pipeline import bake_cache
+from elysium_pipeline import bake_cache, shared_corpus
 from elysium_pipeline.tasking import Manifest
 
 
@@ -44,6 +44,74 @@ def unrelated_runtime_driver(): pass
 
 
 class BakeCacheTests(unittest.TestCase):
+    #: The corpus rows the fixture map reaches: one material its `.mtl` binds, one reached only
+    #: through the slot table of the stem it places, and one entry no map draws.
+    MAP_MATERIAL = "world/wall"
+    PROP_MATERIAL = "models/scenery/prop"
+    UNDRAWN_MATERIAL = "world/unused"
+
+    #: The catalogue key the fixture map's one `.props` row joins to, and one the map never places.
+    PLACED_STEM = "scenery_prop"
+    UNPLACED_STEM = "scenery_other"
+
+    def _corpus_rows(self) -> tuple[dict, dict]:
+        materials = {
+            self.MAP_MATERIAL: {
+                "albedo": "tex/wall.png",
+                "env_mask": "tex/wall_envmask.png",
+                "scissor": False,
+            },
+            self.PROP_MATERIAL: {"albedo": "tex/prop.png", "scissor": False},
+            self.UNDRAWN_MATERIAL: {
+                "albedo": "tex/unused.png",
+                "env_mask": "tex/unused_envmask.png",
+                "scissor": False,
+            },
+        }
+        models = {
+            "prop": {
+                "model": "models/scenery/prop.mdl",
+                "materials": {"prop": self.PROP_MATERIAL},
+                "physics": False,
+            },
+            "unplaced": {
+                "model": "models/scenery/unplaced.mdl",
+                "materials": {"unplaced": self.UNDRAWN_MATERIAL},
+                "physics": False,
+            },
+        }
+        return materials, models
+
+    def _write_corpus(self, export: Path, materials: dict, models: dict) -> None:
+        corpus = export / "shared"
+        corpus.mkdir(parents=True, exist_ok=True)
+        (corpus / "manifest.json").write_text(
+            json.dumps(shared_corpus.build_manifest(
+                textures={},
+                materials={key: {"map_scoped": False} for key in materials},
+                models=models,
+            )),
+            encoding="utf-8",
+        )
+        (corpus / "materials.json").write_text(
+            json.dumps(shared_corpus.build_materials(materials)), encoding="utf-8")
+        # The parsed documents are memoized on the file's stat identity, which a rewrite inside
+        # one test can repeat.
+        bake_cache._CORPUS_DOCUMENT_CACHE.clear()
+
+    def _placed_index_rows(self) -> dict:
+        return {
+            self.PLACED_STEM: {"model": "models/scenery/prop.mdl", "static_equivalent": True},
+            self.UNPLACED_STEM: {"model": "models/scenery/other.mdl", "static_equivalent": True},
+        }
+
+    def _write_placed_index(self, export: Path, rows: dict) -> None:
+        npc = export / "npc"
+        npc.mkdir(parents=True, exist_ok=True)
+        (npc / "npc_index.json").write_text(
+            json.dumps({"manifest_version": 7, "placed_models": rows}), encoding="utf-8")
+        bake_cache._CORPUS_DOCUMENT_CACHE.clear()
+
     def _workspace(self, temporary: str):
         repo = Path(temporary) / "repo"
         export = Path(temporary) / "exports"
@@ -53,7 +121,13 @@ class BakeCacheTests(unittest.TestCase):
         package_root.mkdir(parents=True)
         (unreal_root / "bake_map.py").write_text(BAKE_MAP_SOURCE, encoding="utf-8")
         (unreal_root / "bake_lib.py").write_text("VALUE = 1\n", encoding="utf-8")
-        (unreal_root / "make_particle_systems.py").write_text("VALUE = 1\n", encoding="utf-8")
+        for generator in (
+            "make_particle_systems.py",
+            "make_world_materials.py",
+            "make_decal_material.py",
+            "mat_fog.py",
+        ):
+            (unreal_root / generator).write_text("VALUE = 1\n", encoding="utf-8")
         (package_root / "unreal.py").write_text(DRIVER_SOURCE, encoding="utf-8")
         (package_root / "bake_cache.py").write_text(
             "def _canonical(value): return value\n"
@@ -69,16 +143,18 @@ class BakeCacheTests(unittest.TestCase):
         corpus = export / "shared"
         (corpus / "tex").mkdir(parents=True)
         (corpus / "props").mkdir(parents=True)
-        (corpus / "manifest.json").write_text("{}", encoding="utf-8")
-        (corpus / "materials.json").write_text("{}", encoding="utf-8")
+        self._write_corpus(export, *self._corpus_rows())
+        self._write_placed_index(export, self._placed_index_rows())
         (corpus / "tex" / "wall.png").write_bytes(b"texture")
+        (corpus / "tex" / "wall_envmask.png").write_bytes(b"mask")
+        (corpus / "tex" / "unused_envmask.png").write_bytes(b"unused mask")
         (corpus / "props" / "prop.obj").write_text("prop", encoding="utf-8")
         for suffix, contents in {
             ".obj": "world",
             ".blend": "0\n",
-            ".mtl": "newmtl wall\n",
+            ".mtl": f"newmtl wall\nmat {self.MAP_MATERIAL}\n",
             "_sky.obj": "sky",
-            ".props": "prop placement",
+            ".props": "prop 0 0 0 0 0 0 1 1 0 0 models/scenery/prop.mdl\n",
             ".decals": "decal",
             ".lights": "light",
             ".env": "fog 0",
@@ -187,17 +263,90 @@ class BakeCacheTests(unittest.TestCase):
                 {name: ("particles",)},
             )
 
-    def test_a_redecoded_corpus_material_reaches_every_stage_that_binds_it(self) -> None:
-        # One definition, so one change: a map's materials, geometry and level all resolve
-        # against `shared/materials.json` and go stale together when it does.
+    def test_a_corpus_entry_the_map_never_draws_leaves_every_stage_current(self) -> None:
+        # The corpus documents describe the whole install. A map depends on the slice it draws,
+        # so re-decoding somebody else's material is not this map's business.
         with tempfile.TemporaryDirectory() as temporary:
             config, manifest, name, _, _ = self._workspace(temporary)
-            (config.export_root / "shared" / "materials.json").write_text(
-                '{"materials": {}}', encoding="utf-8")
+            materials, models = self._corpus_rows()
+            materials[self.UNDRAWN_MATERIAL] = {"albedo": "tex/unused.png", "scissor": True}
+            self._write_corpus(config.export_root, materials, models)
+            self.assertEqual(bake_cache.plan_stages(manifest, config, [name]), {})
+
+    def test_a_material_the_mtl_names_reaches_every_stage_that_binds_it(self) -> None:
+        # One definition, so one change: the map's materials, geometry and level all resolve
+        # against `shared/materials.json` and go stale together when the record they bind does.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, manifest, name, _, _ = self._workspace(temporary)
+            materials, models = self._corpus_rows()
+            materials[self.MAP_MATERIAL] = {"albedo": "tex/wall.png", "scissor": True}
+            self._write_corpus(config.export_root, materials, models)
             self.assertEqual(
                 bake_cache.plan_stages(manifest, config, [name]),
                 {name: ("materials", "world", "sky", "level")},
             )
+
+    def test_a_material_reached_through_a_placed_slot_reaches_the_same_stages(self) -> None:
+        # A placed stem's slot table is the second way a map names a corpus material.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, manifest, name, _, _ = self._workspace(temporary)
+            materials, models = self._corpus_rows()
+            materials[self.PROP_MATERIAL] = {"albedo": "tex/prop.png", "blend": True}
+            self._write_corpus(config.export_root, materials, models)
+            self.assertEqual(
+                bake_cache.plan_stages(manifest, config, [name]),
+                {name: ("materials", "world", "sky", "level")},
+            )
+
+    def test_a_placed_stems_manifest_row_reaches_the_same_stages(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config, manifest, name, _, _ = self._workspace(temporary)
+            materials, models = self._corpus_rows()
+            models["prop"] = {**models["prop"], "physics": True}
+            self._write_corpus(config.export_root, materials, models)
+            self.assertEqual(
+                bake_cache.plan_stages(manifest, config, [name]),
+                {name: ("materials", "world", "sky", "level")},
+            )
+
+    def test_a_placed_models_catalogue_row_reaches_only_the_level_stage(self) -> None:
+        # The level stage joins each `.props` row to `npc/npc_index.json` to decide its actor and
+        # its rest clip, so the rows the map places are level inputs -- and only those rows.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, manifest, name, _, _ = self._workspace(temporary)
+            rows = self._placed_index_rows()
+            rows[self.UNPLACED_STEM] = {**rows[self.UNPLACED_STEM], "static_equivalent": False}
+            self._write_placed_index(config.export_root, rows)
+            self.assertEqual(bake_cache.plan_stages(manifest, config, [name]), {})
+
+            rows[self.PLACED_STEM] = {**rows[self.PLACED_STEM], "static_equivalent": False}
+            self._write_placed_index(config.export_root, rows)
+            self.assertEqual(
+                bake_cache.plan_stages(manifest, config, [name]), {name: ("level",)})
+
+    def test_env_mask_inputs_are_the_drawn_materials_existing_masks(self) -> None:
+        # The material stage stamps `EnvMaskCoarseMip` out of the mask PNG's own header, so the
+        # masks the map's materials name are its inputs; another material's mask is not.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, _, name, _, _ = self._workspace(temporary)
+            corpus = config.export_root / "shared"
+            self.assertEqual(
+                bake_cache._slice_env_mask_paths(config.export_root, name),
+                [corpus / "tex" / "wall_envmask.png"],
+            )
+            # A record naming a mask the corpus never decoded contributes no input.
+            materials, models = self._corpus_rows()
+            materials[self.MAP_MATERIAL] = {
+                **materials[self.MAP_MATERIAL], "env_mask": "tex/absent_envmask.png"}
+            self._write_corpus(config.export_root, materials, models)
+            self.assertEqual(bake_cache._slice_env_mask_paths(config.export_root, name), [])
+
+    def test_a_byte_identical_corpus_rewrite_leaves_every_stage_current(self) -> None:
+        # A re-decode that lands the same bytes is not a change, whatever the mtime says.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, manifest, name, _, _ = self._workspace(temporary)
+            self._write_corpus(config.export_root, *self._corpus_rows())
+            self.assertEqual(bake_cache.plan_stages(manifest, config, [name]), {})
 
     def test_a_map_no_longer_owns_a_props_stage(self) -> None:
         # Prop meshes belong to the shared corpus scope, so no map plans one.
@@ -290,6 +439,61 @@ class BakeCacheTests(unittest.TestCase):
             (root / f"{name}.props").write_text(
                 "prop 2 2 3 0 0 0 1 6 0 0\n", encoding="utf-8")
             self.assertNotEqual(bake_cache.level_sidecar_recipe(root, name), first)
+
+    def test_a_corpus_run_plan_states_the_one_shared_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config, _, _, _, _ = self._workspace(temporary)
+            path, document = bake_cache.create_corpus_run_plan(config, force=False)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), document)
+            self.assertEqual(document["schema"], bake_cache.ASSET_RUN_SCHEMA)
+            self.assertEqual(document["version"], bake_cache.ASSET_SCHEMA_VERSION)
+            self.assertFalse(document["force"])
+            self.assertEqual(set(document["maps"]), {shared_corpus.SCOPE})
+            scope = document["maps"][shared_corpus.SCOPE]
+            self.assertEqual(scope["stages"], list(shared_corpus.STAGES))
+            self.assertEqual(set(scope["fingerprints"]), set(shared_corpus.STAGES))
+            self.assertEqual(set(scope["policies"]), set(shared_corpus.STAGES))
+
+    def test_a_corpus_policy_moves_only_when_its_bake_code_does(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config, _, _, _, _ = self._workspace(temporary)
+            first = bake_cache.create_corpus_run_plan(config, force=False)[1]
+            second = bake_cache.create_corpus_run_plan(config, force=True)[1]
+            self.assertNotEqual(first["run_id"], second["run_id"])
+            self.assertTrue(second["force"])
+            self.assertEqual(
+                first["maps"][shared_corpus.SCOPE]["policies"],
+                second["maps"][shared_corpus.SCOPE]["policies"],
+            )
+            self.assertEqual(
+                first["maps"][shared_corpus.SCOPE]["fingerprints"],
+                second["maps"][shared_corpus.SCOPE]["fingerprints"],
+            )
+            (config.repo_root / "pipeline" / "unreal" / "bake_lib.py").write_text(
+                "VALUE = 222\n", encoding="utf-8")
+            third = bake_cache.create_corpus_run_plan(config, force=False)[1]
+            for stage in shared_corpus.STAGES:
+                self.assertNotEqual(
+                    third["maps"][shared_corpus.SCOPE]["policies"][stage],
+                    first["maps"][shared_corpus.SCOPE]["policies"][stage],
+                )
+
+    def test_a_corpus_stage_reads_only_its_own_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config, _, _, _, _ = self._workspace(temporary)
+            before = {
+                stage: bake_cache.corpus_stage_input_fingerprint(config, stage)
+                for stage in shared_corpus.STAGES
+            }
+            (config.export_root / "shared" / "props" / "prop.obj").write_text(
+                "changed prop", encoding="utf-8")
+            after = {
+                stage: bake_cache.corpus_stage_input_fingerprint(config, stage)
+                for stage in shared_corpus.STAGES
+            }
+            self.assertEqual(before["textures"], after["textures"])
+            self.assertEqual(before["materials"], after["materials"])
+            self.assertNotEqual(before["props"], after["props"])
 
     def test_asset_run_report_rejects_inconsistent_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

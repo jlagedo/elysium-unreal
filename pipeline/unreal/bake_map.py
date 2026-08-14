@@ -15,7 +15,7 @@
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 #
 # Optional -BakeStages=<csv> restricts the run to a subset of:
-#   textures, materials, world, sky, props, particles, level
+#   textures, materials, world, sky, particles, level
 import math
 import json
 import os
@@ -520,21 +520,11 @@ class Bake(object):
         wanted = set()
         dirty = []
         result = {}
-        md5_missing = 0
-        md5_mismatch = 0
         for name, source, role in jobs:
             if not os.path.isfile(source):
                 raise SystemExit("[bake] referenced texture source is missing: %s" % source)
             object_path = "%s/%s" % (package, name)
             wanted.add(name)
-            source_md5 = bl.file_md5(source)
-            exists = unreal.EditorAssetLibrary.does_asset_exist(object_path)
-            if exists:
-                unreal_md5 = bl.texture_source_md5(object_path)
-                if not unreal_md5:
-                    md5_missing += 1
-                elif unreal_md5 != source_md5:
-                    md5_mismatch += 1
             recipe = {
                 "source": os.path.relpath(source, self.dir).replace(os.sep, "/"),
                 "sha256": self._file_sha256(source),
@@ -551,10 +541,6 @@ class Bake(object):
                 if not asset:
                     raise SystemExit("[bake] cached texture could not be loaded: %s" % object_path)
                 result[name] = asset
-
-        if md5_missing or md5_mismatch:
-            log("textures: Unreal SourceFile MD5 diagnostic: %d missing / %d mismatch" % (
-                md5_missing, md5_mismatch))
 
         imported = bl.import_textures(
             [(source, name) for source, name, _, _ in dirty], package)
@@ -667,7 +653,7 @@ class Bake(object):
         world, decals = {}, {}
         for key, mat in self.world_mats.items():
             if not SC.is_map_scoped_material(
-                    key, decal=mat.decal, wetness_driven=mat.wetness_driven):
+                    key, decal=mat.decal, wetness_driven=mat.wetness_driven, local=mat.local):
                 continue
             (decals if mat.decal else world)[key] = mat
         return ((world, self.mat_pkg, self.shared_tex_pkg),
@@ -685,7 +671,8 @@ class Bake(object):
         mat = self.world_mats.get(key)
         if mat is None:
             return None
-        if SC.is_map_scoped_material(key, decal=mat.decal, wetness_driven=mat.wetness_driven):
+        if SC.is_map_scoped_material(key, decal=mat.decal, wetness_driven=mat.wetness_driven,
+                                     local=mat.local):
             package = self.decal_mat_pkg if mat.decal else self.mat_pkg
             return self.materials.get((package, key))
         return self.materials.get((self.shared_mat_pkg, mat.material_key))
@@ -695,7 +682,7 @@ class Bake(object):
         keys = {}
         for key, mat in self.world_mats.items():
             if not SC.is_map_scoped_material(
-                    key, decal=mat.decal, wetness_driven=mat.wetness_driven):
+                    key, decal=mat.decal, wetness_driven=mat.wetness_driven, local=mat.local):
                 keys[mat.material_key] = mat
         return keys
 
@@ -748,6 +735,15 @@ class Bake(object):
                 "spec_reflect": SPEC_REFLECT,
             },
         })
+        if mat.env_mask:
+            # `_bind` stamps EnvMaskCoarseMip out of this file's own PNG header, so the mask's
+            # bytes are part of the instance rather than only of the texture asset it binds.
+            source = os.path.join(self.corpus_dir, mat.env_mask.replace("/", os.sep))
+            if os.path.isfile(source):
+                values["env_mask_sha256"] = self._file_sha256(source)
+            else:
+                fail("material %s names a missing env mask: %s" % (mat.name, source))
+                values["env_mask_sha256"] = "missing"
         if mat.decal:
             values["fog"] = fog_data(self.env)
         if mat.wet:
@@ -991,8 +987,11 @@ class Bake(object):
             else:
                 self.materials[(self.shared_mat_pkg, key)] = asset
         if missing:
+            # Continuing would author meshes and a level whose slots bind nothing, and the
+            # per-asset receipts would then freeze that unbound state as current.
             fail("%d shared material(s) are not baked (run: uv run elysium export bundle corpus): %s"
                  % (len(missing), ", ".join(missing[:8])))
+            raise SystemExit(1)
 
     def _emit(self, stage, asset_path, sections, names, materials, nanite, phys=None,
               collision=True):
@@ -1996,13 +1995,38 @@ def _manual_plan(scopes, stages):
     }
 
 
+def _load_asset_plan(path):
+    """Read one frozen asset run plan off disk, or exit when it is not one this bake can read."""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            plan = json.load(handle)
+    except (OSError, ValueError) as exc:
+        fail("invalid asset run plan: %s" % exc)
+        raise SystemExit(1)
+    if (plan.get("schema") != bake_cache.ASSET_RUN_SCHEMA
+            or plan.get("version") != bake_cache.ASSET_SCHEMA_VERSION):
+        fail("unsupported asset run plan schema")
+        raise SystemExit(1)
+    return plan
+
+
 def _run_corpus():
     """-BakeCorpus=1: the shared corpus, gated upstream by its own manifest task."""
+    asset_plan_path = cmdline_arg("BakeAssetPlan", "")
+    if asset_plan_path:
+        asset_plan = _load_asset_plan(asset_plan_path)
+        planned = asset_plan.get("maps", {}).get(SC.SCOPE)
+        if not planned or set(planned.get("stages", [])) != set(SC.STAGES):
+            fail("asset run plan does not match %s stages" % SC.SCOPE)
+            raise SystemExit(1)
+    else:
+        # Direct developer invocation remains a recovery surface.
+        asset_plan = _manual_plan([SC.SCOPE], SC.STAGES)
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
         [MOUNT], force_rescan=True)
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / bake_cache.DIGEST_CACHE_FILE)
     try:
-        ok = bake_corpus(SC.STAGES, _manual_plan([SC.SCOPE], SC.STAGES), digest_cache)
+        ok = bake_corpus(SC.STAGES, asset_plan, digest_cache)
     finally:
         digest_cache.write()
         _collect_garbage()
@@ -2027,16 +2051,7 @@ def main():
         raise SystemExit(1)
     asset_plan_path = cmdline_arg("BakeAssetPlan", "")
     if asset_plan_path:
-        try:
-            with open(asset_plan_path, "r", encoding="utf-8") as handle:
-                asset_plan = json.load(handle)
-        except (OSError, ValueError) as exc:
-            fail("invalid asset run plan: %s" % exc)
-            raise SystemExit(1)
-        if (asset_plan.get("schema") != bake_cache.ASSET_RUN_SCHEMA
-                or asset_plan.get("version") != bake_cache.ASSET_SCHEMA_VERSION):
-            fail("unsupported asset run plan schema")
-            raise SystemExit(1)
+        asset_plan = _load_asset_plan(asset_plan_path)
     else:
         # Direct developer invocation remains a recovery surface.
         asset_plan = _manual_plan(map_names, stages)

@@ -73,6 +73,41 @@ def _source_index_fingerprint(index: dict) -> str:
     return digest.hexdigest()
 
 
+def _decoder_code_paths(config) -> list[Path]:
+    """Every offline module whose bytes decide what an export writes."""
+
+    root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+    return [
+        root / "formats",
+        root / "exporters",
+        # The package-root modules the exporters import: the corpus keys and record shape, the
+        # placed-model catalogue's stems and rest policy, and the baked asset-name fold.
+        root / "shared_corpus.py",
+        root / "placed_models.py",
+        root / "asset_names.py",
+    ]
+
+
+def _decoder_source_fingerprint(config, index: dict | None = None) -> str:
+    """The decoders' identity: every format parser, exporter and package-root module they import,
+    hashed by content, plus the install inventory when one is given.
+
+    Every map and bundle task carries this, so it is hashed by bytes through the persistent digest
+    cache rather than by mtime: a checkout, a touch, or a byte-identical rewrite leaves it
+    unchanged and re-decodes nothing.
+    """
+
+    cache = ContentDigestCache(config.export_root / bake_cache.DIGEST_CACHE_FILE)
+    try:
+        return fingerprint_content(
+            _decoder_code_paths(config),
+            extra=("decoder-v1",) if index is None else (_source_index_fingerprint(index),),
+            cache=cache,
+        )
+    finally:
+        cache.write()
+
+
 def _raise_results(results) -> None:
     failures = [result for result in results if not result.ok]
     if failures:
@@ -85,17 +120,6 @@ def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint
     from elysium_pipeline.exporters import export_all
     from elysium_pipeline.formats import install
 
-    code_inputs = (
-        config.repo_root
-        / "pipeline"
-        / "src"
-        / "elysium_pipeline"
-        / "exporters"
-        / "UE_bsp_to_scene.py",
-        config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "bsp.py",
-        config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "weather.py",
-        config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats" / "particles.py",
-    )
     tasks: list[Task] = []
     for map_name in map_names:
         bsp_path = Path(install.map_path(map_name))
@@ -111,11 +135,11 @@ def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint
                 )
             )
 
+        # The BSP is the only file input. Every format, exporter and package-root module a map
+        # export reads -- `shared_corpus`, `placed_models`, `asset_names` included -- is already
+        # hashed by content into `source_fingerprint`.
         def fingerprint(path=bsp_path, name=map_name) -> str:
-            return fingerprint_paths(
-                [path, *code_inputs],
-                extra=("map", name, source_fingerprint),
-            )
+            return fingerprint_paths([path], extra=("map", name, source_fingerprint))
 
         tasks.append(
             Task(
@@ -182,35 +206,16 @@ def _bundle_tasks(
                 )
             )
 
-        package = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
-        code = [
-            package
-            / "exporters"
-            / (
-                "npc_export.py"
-                if bundle == "npc"
-                else "UE_use_icons.py"
-                if bundle == "use-icons"
-                else "UE_extract_particles.py"
-                if bundle == "particles"
-                else "UE_extract_items.py"
-                if bundle == "items"
-                else "export_all.py"
-            )
-        ]
-        if bundle == "npc":
-            # The eye and procedural sidecars are parsed by `mdl_skel` and stated in the body's
-            # own frame by `UE_mdl_skeletal`, so a change to either changes what this bundle
-            # writes without touching `npc_export.py` itself.
-            code += [package / "exporters" / "UE_mdl_skeletal.py",
-                     package / "formats" / "mdl_skel.py"]
         tasks.append(
             Task(
                 name=name,
                 action=action,
                 dependencies=dependencies,
-                fingerprint=lambda b=bundle, p=tuple(code): fingerprint_paths(
-                    list(p), extra=("bundle", b, source_fingerprint, *maps)
+                # No file input of its own: every format, exporter and package-root module a
+                # bundle reads -- `shared_corpus`, `placed_models`, `asset_names` included -- is
+                # already hashed by content into `source_fingerprint`.
+                fingerprint=lambda b=bundle: fingerprint_paths(
+                    [], extra=("bundle", b, source_fingerprint, *maps)
                 ),
                 outputs=_bundle_outputs(config.export_root, bundle),
             )
@@ -254,13 +259,7 @@ def run_offline_profile(
     # resolves its materials and textures against it, while every ordinary bundle runs after the
     # maps. It is decoded once, here, before anything reads it.
     ensure_corpus_export(config, force=force or clean, index=index)
-    source_fingerprint = fingerprint_paths(
-        [
-            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats",
-            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "exporters",
-        ],
-        extra=(_source_index_fingerprint(index),),
-    )
+    source_fingerprint = _decoder_source_fingerprint(config, index)
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     dependency_fingerprint = fingerprint_paths(
         [config.repo_root / "dev" / "dependencies.lock.json"]
@@ -487,26 +486,15 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
         force=force, manifest=manifest)["unreal:policy"]
 
 
-def _corpus_code_inputs(config) -> tuple[Path, ...]:
-    root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
-    return (
-        root / "exporters" / "UE_extract_corpus.py",
-        root / "exporters" / "UE_bsp_to_scene.py",
-        root / "shared_corpus.py",
-        root / "formats" / "mdl.py",
-        root / "formats" / "vmt.py",
-        root / "formats" / "phy.py",
-        root / "enhancement" / "retex_dds.py",
-    )
-
-
 def ensure_corpus_export(config, *, force: bool = False, index: dict | None = None) -> TaskResult:
     """Decode the shared static corpus, once, before anything that reads it.
 
     Every map export and every bake resolves its textures, materials and static models through
     `shared/manifest.json`, so this runs first and only once. Its fingerprint is the install's own
     map inventory plus the decoder code: a changed BSP can add a source identity the corpus does
-    not yet hold, and a changed decoder changes what every identity decodes to.
+    not yet hold, and a changed decoder changes what every identity decodes to. The decoder half
+    is the same content fingerprint every map and bundle task carries, so a module the decode
+    reaches cannot be left out of it by omission from a hand-kept list.
     """
     from elysium_pipeline.exporters import UE_extract_corpus
     from elysium_pipeline.formats import install
@@ -514,11 +502,20 @@ def ensure_corpus_export(config, *, force: bool = False, index: dict | None = No
     _require_export_config(config)
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     maps = [Path(install.map_path(name)) for name in install.all_map_names()]
+    # The corpus decode also writes the offline enhancement track's reference set, which is the
+    # one input outside `_decoder_code_paths` that no other export product reads.
+    enhancement = config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "enhancement"
     task = Task(
         "export:corpus",
         lambda: UE_extract_corpus.main(index=index, force=force),
         fingerprint=lambda: fingerprint_paths(
-            maps + list(_corpus_code_inputs(config)), extra=("corpus-v1",)),
+            maps,
+            extra=(
+                "corpus-v1",
+                _decoder_source_fingerprint(config),
+                fingerprint_paths([enhancement]),
+            ),
+        ),
         outputs=(
             shared_corpus.manifest_path(config.export_root),
             shared_corpus.materials_path(config.export_root),
@@ -618,6 +615,10 @@ def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
     static model belong to the install, not to a map, so each is baked once and every map that
     draws it references the one asset. Everything the scope consumes is under
     `$ELYSIUM_EXPORT_ROOT/shared`, so that directory plus the bake code is the whole fingerprint.
+
+    That fingerprint decides only whether the commandlet launches. What the run then authors is
+    decided per asset against the frozen run plan, so a corpus one texture wide re-imports one
+    texture and every other receipt is reused.
     """
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     unreal_root = config.repo_root / "pipeline" / "unreal"
@@ -625,6 +626,13 @@ def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
     # them through the persistent digest cache is what keeps a single-unit re-bake a short path:
     # only the files the unit rewrote are read again, the rest answer from their stored identity.
     digests = ContentDigestCache(config.export_root / bake_cache.DIGEST_CACHE_FILE)
+    # Each stage's authoring policy joins the gate, so an edit to a material library dirties the
+    # per-asset receipts AND launches the commandlet that would otherwise never be asked to
+    # rebuild them.
+    policies = tuple(
+        bake_cache.corpus_stage_policy(config, stage, cache=digests)
+        for stage in shared_corpus.STAGES
+    )
     fingerprint = fingerprint_content(
         [
             shared_corpus.manifest_path(config.export_root),
@@ -634,14 +642,22 @@ def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
             unreal_root / "bake_map.py",
             unreal_root / "bake_lib.py",
         ],
-        extra=("bake-corpus-v1",),
+        extra=("bake-corpus-v1", *policies),
         cache=digests,
     )
     digests.write()
+
+    def bake() -> None:
+        # Planned inside the action: a skipped task launches nothing and so writes no plan.
+        plan_path, plan_document = bake_cache.create_corpus_run_plan(config, force=force)
+        unreal.bake_corpus(config, runner, asset_plan=plan_path)
+        reports = bake_cache.load_asset_run_reports(config, plan_document)
+        bake_cache.promote_asset_run(config, plan_document, reports)
+
     baked = _baked_corpus_dir(config)
     task = Task(
         "unreal:corpus",
-        lambda: unreal.bake_corpus(config, runner),
+        bake,
         fingerprint=lambda value=fingerprint: value,
         outputs=tuple(sorted(baked.glob("SM_*.uasset"))) if baked.is_dir() else (),
     )
@@ -684,12 +700,75 @@ def _verification_task(config, map_name: str) -> Task:
     )
 
 
+def _salvage_asset_receipts(
+    manifest: Manifest, config, plan: dict, asset_plan: dict | None
+) -> None:
+    """Advance the receipts of every planned map whose own bake report still validates.
+
+    A per-map report is written only once that map's stages completed and its packages were saved,
+    so one map's failure says nothing about the maps that finished before it.  Each map is
+    promoted against a single-map slice of the run plan; a map without a valid report keeps the
+    receipts it already had.
+    """
+
+    if asset_plan is None or not plan:
+        return
+    planned = asset_plan.get("maps", {})
+    salvaged: list[str] = []
+    for name in plan:
+        map_plan = planned.get(name)
+        if map_plan is None:
+            continue
+        single = {**asset_plan, "maps": {name: map_plan}}
+        try:
+            reports = bake_cache.load_asset_run_reports(config, single)
+            bake_cache.promote_asset_run(config, single, reports)
+            bake_cache.record_stages(
+                manifest,
+                config,
+                {name: plan[name]},
+                frozen_fingerprints={name: map_plan.get("fingerprints", {})},
+            )
+        except Exception:
+            continue
+        salvaged.append(name)
+    print(
+        f"[bake] bake failed; salvaged receipts for {len(salvaged)} of {len(plan)} planned map(s)"
+    )
+
+
+def _discard_verified_receipts(config, names: Sequence[str]) -> None:
+    """Drop the per-asset receipts of the maps verification rejected.
+
+    A receipt records what the bake authored, not whether it is right. Verification failing says
+    one of those packages is wrong, so leaving its receipt in place would let every later run
+    reuse the wrong asset. Only the maps that were actually verified are discarded.
+    """
+
+    discarded = 0
+    for name in dict.fromkeys(names):
+        path = bake_cache.AssetReceiptStore(config.export_root, name).path
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            print(f"[bake] could not discard {name} asset receipts at {path}: {error}")
+            continue
+        discarded += 1
+    print(
+        f"[bake] verification failed; discarded the asset receipts of {discarded} "
+        f"of {len(names)} verified map(s) so the next run re-bakes them"
+    )
+
+
 def bake_and_verify(
     config,
     runner,
     maps: Sequence[str],
     *,
     force: bool = False,
+    verify: bool = True,
 ) -> None:
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     names = list(dict.fromkeys(maps))
@@ -728,39 +807,61 @@ def bake_and_verify(
             if asset_plan is not None
             else {}
         )
+    except ExportBakeFailure:
+        _salvage_asset_receipts(manifest, config, plan, asset_plan)
+        raise
+    except Exception as exc:
+        _salvage_asset_receipts(manifest, config, plan, asset_plan)
+        raise ExportBakeFailure(str(exc)) from exc
+
+    try:
         if asset_plan is not None:
             bake_cache.assert_asset_run_inputs_current(config, asset_plan)
-        changed = bake_cache.mutated_maps(reports)
-        verification = []
-        for name in names:
-            task = _verification_task(config, name)
-            fingerprint = task.fingerprint() if task.fingerprint else None
-            if name in changed or force or not manifest.can_skip(task, fingerprint):
-                verification.append(name)
-        if not plan and not verification:
-            return
-        if verification:
-            unreal.verify_bakes(config, runner, verification)
+
+        # A validated per-map report proves that map's bake completed and its outputs exist, so
+        # its receipts advance whatever later maps or verification go on to do.  The verification
+        # receipt below is the one that stays gated on `verify_bakes` passing.
         if asset_plan is not None:
-            bake_cache.assert_asset_run_inputs_current(config, asset_plan)
+            bake_cache.promote_asset_run(config, asset_plan, reports)
+        bake_cache.record_stages(
+            manifest,
+            config,
+            plan,
+            frozen_fingerprints={
+                name: value["fingerprints"]
+                for name, value in (asset_plan or {}).get("maps", {}).items()
+            },
+        )
+
+        verification: list[str] = []
+        if verify:
+            changed = bake_cache.mutated_maps(reports)
+            for name in names:
+                task = _verification_task(config, name)
+                fingerprint = task.fingerprint() if task.fingerprint else None
+                if name in changed or force or not manifest.can_skip(task, fingerprint):
+                    verification.append(name)
+            if not plan and not verification:
+                return
+            if verification:
+                try:
+                    unreal.verify_bakes(config, runner, verification)
+                except Exception:
+                    _discard_verified_receipts(config, verification)
+                    raise
+            if asset_plan is not None:
+                bake_cache.assert_asset_run_inputs_current(config, asset_plan)
+        else:
+            print("[bake] deep verification skipped by flag; iteration trusts the bake exit")
+            if not plan:
+                return
     except ExportBakeFailure:
         raise
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
 
-    # A commandlet can save partial packages before failing.  Advance neither the stage receipts
-    # nor the verification receipt until every selected map has passed independent verification.
-    if asset_plan is not None:
-        bake_cache.promote_asset_run(config, asset_plan, reports)
-    bake_cache.record_stages(
-        manifest,
-        config,
-        plan,
-        frozen_fingerprints={
-            name: value["fingerprints"]
-            for name, value in (asset_plan or {}).get("maps", {}).items()
-        },
-    )
+    # Verification receipts advance only when `unreal.verify_bakes` actually ran, so a later
+    # profile run still verifies maps that an unverified targeted run baked and promoted.
     for name in verification:
         task = _verification_task(config, name)
         manifest.record(
@@ -793,11 +894,14 @@ def export_profile(
         jobs=jobs or default_jobs(),
     )
     try:
+        # The masters the corpus and every map instance from, then the shared assets a map bake
+        # resolves. A map baked before the corpus binds nothing for every texture, material and
+        # prop mesh the corpus owns, and its receipts would freeze that.
         ensure_policy_content(config, runner, force=force or clean)
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
-    bake_and_verify(config, runner, maps, force=force or clean)
     ensure_corpus_bake(config, runner, force=force or clean)
+    bake_and_verify(config, runner, maps, force=force or clean)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
     mark_complete(config.export_root, ("maps", "policy", *bundles_for_profile(profile)))
@@ -811,6 +915,7 @@ def export_targeted_maps(
     *,
     force: bool = False,
     intermediate_only: bool = False,
+    verify: bool = False,
 ) -> list[str]:
     _require_export_config(config)
     adopt_export_root(config.export_root, config.work_root)
@@ -819,13 +924,8 @@ def export_targeted_maps(
 
     names = list(dict.fromkeys(maps))
     index = install.build_index()
-    source_fingerprint = fingerprint_paths(
-        [
-            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "formats",
-            config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "exporters",
-        ],
-        extra=(_source_index_fingerprint(index),),
-    )
+    config.export_root.mkdir(parents=True, exist_ok=True)
+    source_fingerprint = _decoder_source_fingerprint(config, index)
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     manifest.set_context(
         profile="targeted-map",
@@ -868,7 +968,7 @@ def export_targeted_maps(
         # catalogue rows, native containers and independently baked prop scopes current before the
         # level is accepted. This path never invokes the global NPC exporter.
         export_placed_models(config, runner, names, force=force, index=index)
-        bake_and_verify(config, runner, names, force=force)
+        bake_and_verify(config, runner, names, force=force, verify=verify)
     return names
 
 

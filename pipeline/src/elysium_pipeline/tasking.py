@@ -312,6 +312,19 @@ class TaskGraph:
         return results
 
 
+def _fingerprint_directory_files(root: Path) -> list[Path]:
+    """A directory's files as fingerprint entries. Bytecode caches are interpreter
+    by-products, not task inputs, so they never participate in a fingerprint."""
+    return sorted(
+        (
+            entry
+            for entry in root.rglob("*")
+            if entry.is_file() and "__pycache__" not in entry.parts
+        ),
+        key=lambda item: str(item).lower(),
+    )
+
+
 def fingerprint_paths(paths: Iterable[Path], *, extra: Iterable[str] = ()) -> str:
     digest = hashlib.sha256()
     for value in extra:
@@ -324,10 +337,7 @@ def fingerprint_paths(paths: Iterable[Path], *, extra: Iterable[str] = ()) -> st
             stat = path.stat()
             digest.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode("ascii"))
         elif path.is_dir():
-            for child in sorted(
-                (entry for entry in path.rglob("*") if entry.is_file()),
-                key=lambda item: str(item).lower(),
-            ):
+            for child in _fingerprint_directory_files(path):
                 stat = child.stat()
                 digest.update(str(child.relative_to(path)).encode("utf-8"))
                 digest.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode("ascii"))
@@ -368,10 +378,7 @@ def fingerprint_content(
         elif root.is_dir():
             entries = tuple(
                 (child, child.relative_to(root))
-                for child in sorted(
-                    (entry for entry in root.rglob("*") if entry.is_file()),
-                    key=lambda item: str(item).lower(),
-                )
+                for child in _fingerprint_directory_files(root)
             )
         else:
             digest.update(b"missing\0")

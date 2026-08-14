@@ -10,6 +10,7 @@ from typing import Iterable
 import numpy as np
 from PIL import Image
 
+from elysium_pipeline import shared_corpus
 from elysium_pipeline.formats.particles import compile_closure
 
 
@@ -68,7 +69,8 @@ def static_prop_cover_triangles(
         fields = raw.split()
         if not fields:
             continue
-        if len(fields) != 11:
+        # Eleven placement fields, plus the install model path the corpus join added.
+        if len(fields) not in (11, 12):
             raise ValueError(f"{placements}:{line_number}: expected 11 static-prop fields")
         stem = fields[0]
         origin = np.asarray([float(value) for value in fields[1:4]], dtype=np.float64)
@@ -77,7 +79,8 @@ def static_prop_cover_triangles(
         if not solid or sky:
             continue
         if stem not in models:
-            model_path = out_dir / "props" / f"{stem}.obj"
+            # The mesh is the shared corpus's -- a map holds no props directory of its own.
+            model_path = shared_corpus.props_dir(out_dir.parent) / f"{stem}.obj"
             if not model_path.is_file():
                 raise ValueError(f"rain-blocking static prop is missing {model_path}")
             models[stem] = _obj_triangles(model_path)
