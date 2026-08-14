@@ -366,7 +366,7 @@ FElysiumUseBeginResult FElysiumLockableEntity::BeginPlayerUse(const FElysiumUseC
 	bUseOutputsOpen = true;
 	if (StartAttempt(*User))
 	{
-		return FElysiumUseBeginResult::Started(EElysiumUseSessionKind::WhileHeld);
+		return FElysiumUseBeginResult::Started(EElysiumUseSessionKind::Explicit);
 	}
 	FinishUseOutputs(Context.Activator);
 	return FElysiumUseBeginResult::Completed();

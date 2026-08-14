@@ -614,9 +614,13 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	World.UpdatePlayerInteraction();
 	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
 	World.UpdatePlayerInteraction();
-	TestEqual(TEXT("carried lockpick starts a held attempt"), World.GetLastUseOutcome(),
+	TestEqual(TEXT("carried lockpick starts an attempt-owned session"), World.GetLastUseOutcome(),
 		EElysiumUseOutcome::Locked); // focus was locked at press; the session is still captured
-	TestTrue(TEXT("skill session blocks save while held"),
+	TestTrue(TEXT("skill session blocks save while active"),
+		World.ScriptedSessionSaveBlockReason().Contains(TEXT("skill attempt")));
+	World.QueuePlayerUseEdge(EElysiumUseEdge::Released);
+	World.UpdatePlayerInteraction();
+	TestTrue(TEXT("releasing +use does not cancel the timed attempt"),
 		World.ScriptedSessionSaveBlockReason().Contains(TEXT("skill attempt")));
 	World.Tick(5.0);
 	TestEqual(TEXT("attempt begin is a real queued output"),
@@ -628,7 +632,7 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	TestEqual(TEXT("failure increments the resolved-attempt count"), LiveKnob->SkillAttempts, 1);
 	TestTrue(TEXT("failure leaves both authorities locked"),
 		LiveKnob->IsUseLocked() && LiveDoor->IsUseLocked());
-	TestTrue(TEXT("failure ends the held session"),
+	TestTrue(TEXT("failure ends the attempt-owned session"),
 		World.ScriptedSessionSaveBlockReason().IsEmpty());
 	TestEqual(TEXT("failure closes the doorknob use boundary"),
 		ReadCounter(World.FindByName(TEXT("use_ended"))), 1.0f);
@@ -636,8 +640,6 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 		Sink->AppearsInOrder(TEXT("queue"),
 			{ TEXT("cycled.Add"), TEXT("failed.Add"), TEXT("use_ended.Add") }));
 	Sink->Reset();
-	World.QueuePlayerUseEdge(EElysiumUseEdge::Released);
-	World.UpdatePlayerInteraction();
 
 	// Headless CalcFeat is zero. Lowering the threshold to zero makes the next real timed use pass,
 	// proving the success callback rather than injecting Unlock.
