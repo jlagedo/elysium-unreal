@@ -60,22 +60,25 @@ float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 {
 	// 0 below `cam_fadeend`, 1 at/above min(`cam_idealdist`, `cam_fadestart`), SimpleSpline
 	// between. The third-person weight scales the solved boom before the band is evaluated.
+	//
+	// **The band is the whole answer, and first person is the bottom of it.** VtMB never draws the
+	// player's own body from the player's own eye, and no other channel may reopen that: a scripted
+	// shot composes over this view rather than replacing the view mode, so ramping the body in with
+	// the shot's weight would stand the player up inside a first-person run the moment a camera_track
+	// began. A cutscene that wants a visible player uses the `npc_VPlayerController` stand-in, which
+	// is a real entity with a real body — that is what the authored scenes create it for.
 	const float Distance = SolvedOffset.Size() * Weights.ThirdBlend();
 	const float Full = FMath::Min(Cvars.IdealDist, Cvars.FadeStart);
-	float DistanceAlpha = 0.0f;
 	if (Distance >= Full)
 	{
-		DistanceAlpha = 1.0f;
+		return 1.0f;
 	}
-	else if (Distance > Cvars.FadeEnd)
+	if (Distance > Cvars.FadeEnd)
 	{
 		const float Span = FMath::Max(KINDA_SMALL_NUMBER, Full - Cvars.FadeEnd);
-		DistanceAlpha = SimpleSpline((Distance - Cvars.FadeEnd) / Span);
+		return SimpleSpline((Distance - Cvars.FadeEnd) / Span);
 	}
-
-	// A scripted shot has no boom distance. Its own eased weight is the visibility ramp, which
-	// reveals the body under a cutscene even when the user's ordinary view is true first person.
-	return FMath::Max(DistanceAlpha, SimpleSpline(Weights.Scripted));
+	return 0.0f;
 }
 
 // =====================================================================================

@@ -277,7 +277,7 @@ bool FElysiumCameraTest::RunTest(const FString&)
 			|| W.Secondary == 0.0f);
 	}
 
-	// --- the body is hidden only at true first-person zero, and a scripted shot reveals it ---
+	// --- first person draws no player body, and nothing composed over the view may reopen it ---
 	{
 		FElysiumCameraCvars Cvars;
 		Cvars.IdealDist = 100.0f;
@@ -287,15 +287,20 @@ bool FElysiumCameraTest::RunTest(const FString&)
 		TestEqual(TEXT("true first person hides the player body"),
 			ElysiumCam::SolveModelAlpha(FVector(100.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
 		W.Scripted = 0.5f;
-		TestEqual(TEXT("a half-weight scripted camera reveals the body through the same ramp"),
-			ElysiumCam::SolveModelAlpha(FVector::ZeroVector, W, Cvars), 0.5f);
+		TestEqual(TEXT("a scripted shot over a first-person view still draws no body"),
+			ElysiumCam::SolveModelAlpha(FVector(100.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
 		W.Scripted = 1.0f;
-		TestEqual(TEXT("a full scripted camera makes the body fully visible"),
-			ElysiumCam::SolveModelAlpha(FVector::ZeroVector, W, Cvars), 1.0f);
+		TestEqual(TEXT("not even at full shot weight — a visible cutscene player is the stand-in"),
+			ElysiumCam::SolveModelAlpha(FVector(100.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
 		W.Scripted = 0.0f;
 		W.Third = 1.0f;
 		TestEqual(TEXT("ordinary third person still uses the recovered distance band"),
 			ElysiumCam::SolveModelAlpha(FVector(80.0f, 0.0f, 0.0f), W, Cvars), 1.0f);
+		TestEqual(TEXT("and still fades out as the boom closes on the eye"),
+			ElysiumCam::SolveModelAlpha(FVector(20.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
+		W.Scripted = 1.0f;
+		TestEqual(TEXT("a shot over a third-person view reads the boom, not the shot weight"),
+			ElysiumCam::SolveModelAlpha(FVector(20.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
 	}
 
 	// --- the easing is at the point of use, not in the ramp ---
