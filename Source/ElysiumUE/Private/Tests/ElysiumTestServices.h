@@ -218,7 +218,7 @@ struct FElysiumRecordingServices final
 		return NewComponent<USkeletalMeshComponent>();
 	}
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+		const FElysiumEntityHandle& EntityOwner, const FVector& FeetOrigin, float YawDegrees,
 		const FString& Stem, int32 Variant) override
 	{
 		if (!bProvideNpcMotor || !Body)
@@ -227,7 +227,7 @@ struct FElysiumRecordingServices final
 		}
 		TUniquePtr<FElysiumRecordingNpcMotor> Motor = MakeUnique<FElysiumRecordingNpcMotor>();
 		Motor->Calls = &Calls;
-		Motor->Owner = Owner;
+		Motor->Owner = EntityOwner;
 		Motor->Feet = FeetOrigin;
 		Motor->Yaw = YawDegrees;
 		FElysiumRecordingNpcMotor* Result = Motor.Get();

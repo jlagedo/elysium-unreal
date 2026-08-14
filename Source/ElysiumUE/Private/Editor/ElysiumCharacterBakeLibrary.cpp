@@ -6,7 +6,7 @@
 #include "Animation/Skeleton.h"
 #include "Engine/Texture.h"
 #include "Materials/MaterialInstance.h"
-#include "MaterialTypes.h"
+#include "Materials/MaterialParameters.h"
 #include "UObject/Package.h"
 
 namespace

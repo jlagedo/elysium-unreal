@@ -186,7 +186,7 @@ public:
 	// caller is the one place that knows both, so they travel with the body rather than being looked
 	// back up from it.
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+		const FElysiumEntityHandle& EntityOwner, const FVector& FeetOrigin, float YawDegrees,
 		const FString& Stem, int32 Variant)
 	{
 		return nullptr;

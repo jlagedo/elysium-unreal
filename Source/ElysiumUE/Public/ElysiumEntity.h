@@ -323,7 +323,7 @@ public:
 	// its ScriptOwner before acquiring the dialogue token; only the owning sequence accepts the
 	// matching body handle. Base false also covers choreographed-scene claims, which have their own
 	// cast lifetime rather than CCineNPC's CancelSequence transition.
-	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& Body) { return false; }
+	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& NpcHandle) { return false; }
 
 	// --- Dialogue body ownership (K7) --------------------------------------------------
 	// The open world session holds this token beside its camera handle. Only the NPC leaf backs

@@ -652,8 +652,8 @@ void FElysiumCombatCharacter::OnFeedAnimEvent(int32 EventId)
 		// occurrence: no blood, health or transaction timing, and no handle for teardown to stop.
 		if (!FeedState.bVictim)
 		{
-			USkeletalMeshComponent* Body = GetSkeletalBody();
-			if (!Body)
+			USkeletalMeshComponent* SkeletalBody = GetSkeletalBody();
+			if (!SkeletalBody)
 			{
 				break;   // supported headless path
 			}
@@ -666,7 +666,7 @@ void FElysiumCombatCharacter::OnFeedAnimEvent(int32 EventId)
 				break;
 			}
 			if (!Embodiment->PlayAttachedEffect(
-				Body, TEXT("force_feeding_emitter"), FName(TEXT("mouth"))))
+				SkeletalBody, TEXT("force_feeding_emitter"), FName(TEXT("mouth"))))
 			{
 				// The embodiment owns and diagnoses the concrete missing socket, generated asset or
 				// spawn failure. The effect is presentation-only, so the transaction keeps running.

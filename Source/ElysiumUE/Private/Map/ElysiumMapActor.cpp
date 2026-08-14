@@ -776,14 +776,14 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 }
 
 IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
-	const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+	const FElysiumEntityHandle& EntityOwner, const FVector& FeetOrigin, float YawDegrees,
 	const FString& Stem, int32 Variant)
 {
 	if (!Body || bMenuBackdrop || !GetWorld())
 	{
 		return nullptr;
 	}
-	if (!Owner.IsSet())
+	if (!EntityOwner.IsSet())
 	{
 		UE_LOG(LogElysium, Warning, TEXT("failed to build native NPC body at %s: invalid entity owner"),
 			*FeetOrigin.ToString());
@@ -802,7 +802,7 @@ IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
 		return nullptr;
 	}
 
-	Motor->SetOwningEntity(Owner);
+	Motor->SetOwningEntity(EntityOwner);
 	Motor->InitializeAtFeet(FeetOrigin, YawDegrees);
 	Motor->SetRuntimeReady(RuntimePhase == EElysiumMapRuntimePhase::Active);
 	Motor->SetModelStem(Stem, Body, Variant);

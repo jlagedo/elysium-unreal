@@ -71,7 +71,7 @@ UFont* FElysiumSignFontLibrary::LoadRuntimeFont(const TCHAR* FileName)
 
 	UFont* Font = NewObject<UFont>(GetTransientPackage());
 	Font->FontCacheType = EFontCacheType::Runtime;
-	FTypefaceEntry& Entry = Font->CompositeFont.DefaultTypeface.Fonts.AddDefaulted_GetRef();
+	FTypefaceEntry& Entry = Font->GetMutableInternalCompositeFont().DefaultTypeface.Fonts.AddDefaulted_GetRef();
 	Entry.Name = TEXT("Regular");
 	Entry.Font = FFontData(Face);   // the composite's UPROPERTY graph keeps the face alive with the font
 

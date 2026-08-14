@@ -454,9 +454,9 @@ public:
 		CancelSequence();
 	}
 
-	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& Body) override
+	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& NpcHandle) override
 	{
-		if (!(OwnedNpc == Body))
+		if (!(OwnedNpc == NpcHandle))
 		{
 			return false;
 		}
