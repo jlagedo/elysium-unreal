@@ -7,6 +7,7 @@
 #include "UI/ElysiumLootScreen.h"
 #include "UI/ElysiumNotificationScreen.h"
 #include "UI/ElysiumSignScreen.h"
+#include "UI/ElysiumTerminalScreen.h"
 #include "UI/ElysiumUIRoot.h"
 
 #include "CommonActivatableWidget.h"
@@ -263,6 +264,10 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 {
 	if (Root)
 	{
+		if (TerminalScreen)
+		{
+			TerminalScreen->EnterScreensaver();
+		}
 		// CommonUI deactivation is what releases each screen's Elysium input scope. Do it before
 		// detaching a root during travel/controller replacement so an old world's UI cannot leave
 		// UI-only input latched into the next one.
@@ -273,12 +278,16 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 	DialogueScreen = nullptr;
 	SignScreen = nullptr;
 	LootScreen = nullptr;
+	TerminalScreen = nullptr;
 	NotificationScreens.Reset();
 	ShownDialogue = nullptr;
 	ShownSign = nullptr;
 	ShownDialogueRevision = 0;
 	ShownLootOwner = FElysiumEntityHandle::Invalid();
 	ShownLootRevision = 0;
+	ShownTerminalOwner = FElysiumEntityHandle::Invalid();
+	ShownTerminalSerial = 0;
+	ShownTerminalRevision = 0;
 }
 
 void UElysiumPlayerUISubsystem::UnbindPresentation()
@@ -310,10 +319,12 @@ void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 	}
 	EnsureRoot();
 	SetNotificationSurfaceAvailable(View.bPlayerSurface && !View.bCinematic
-		&& !View.Sign && !View.Dialogue.IsOpen() && !View.Loot.IsOpen());
+		&& !View.Sign && !View.Dialogue.IsOpen() && !View.Loot.IsOpen()
+		&& !View.Terminal.IsOpen());
 	ReconcileSign(View);
 	ReconcileDialogue(View.Dialogue);
 	ReconcileLoot(View.Loot);
+	ReconcileTerminal(View.Terminal);
 }
 
 void UElysiumPlayerUISubsystem::OnNotification(const FElysiumNotification& Notification)
@@ -644,4 +655,111 @@ void UElysiumPlayerUISubsystem::OnLootClose()
 	}
 	UE_LOG(LogElysiumPlayerUI, Warning,
 		TEXT("loot UI close failed: presentation subsystem is unavailable"));
+}
+
+void UElysiumPlayerUISubsystem::ReconcileTerminal(const FElysiumTerminalView& Terminal)
+{
+	if (!Terminal.IsOpen())
+	{
+		HideTerminal();
+		return;
+	}
+	if (!TerminalScreen || ShownTerminalOwner != Terminal.Owner
+		|| ShownTerminalSerial != Terminal.SessionSerial)
+	{
+		HideTerminal();
+		ShowTerminal(Terminal);
+		return;
+	}
+	TerminalScreen->ApplyTerminal(Terminal);
+	ShownTerminalRevision = Terminal.Revision;
+}
+
+void UElysiumPlayerUISubsystem::ShowTerminal(const FElysiumTerminalView& Terminal)
+{
+	TerminalScreen = Cast<UElysiumTerminalScreen>(PushWidget(
+		EElysiumUILayer::GameModal,
+		UElysiumTerminalScreen::StaticClass(),
+		[this, Terminal](UCommonActivatableWidget& Widget)
+		{
+			UElysiumTerminalScreen* Screen = CastChecked<UElysiumTerminalScreen>(&Widget);
+			Screen->ApplyTerminal(Terminal);
+			Screen->OnCommand.BindUObject(this, &UElysiumPlayerUISubsystem::OnTerminalCommand);
+			Screen->ConfigureScreenPolicy(EElysiumUIScreenKind::Terminal);
+		}));
+	if (!TerminalScreen)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI failed to open for owner %s serial %u revision %u"),
+			*Terminal.Owner.ToString(), Terminal.SessionSerial, Terminal.Revision);
+		ShownTerminalOwner = FElysiumEntityHandle::Invalid();
+		ShownTerminalSerial = 0;
+		ShownTerminalRevision = 0;
+		return;
+	}
+
+	UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get();
+	UPrimitiveComponent* Target = Presentation
+		? Presentation->ResolveTerminalDisplayTarget(Terminal.Owner)
+		: nullptr;
+	if (!TerminalScreen->SetProjectionTarget(Target))
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI refused a blind session for owner %s serial %u revision %u"),
+			*Terminal.Owner.ToString(), Terminal.SessionSerial, Terminal.Revision);
+		const bool bClosed = Presentation && Presentation->SubmitTerminalCommand(
+			Terminal.Owner, Terminal.SessionSerial, TEXT("quit"));
+		if (!bClosed)
+		{
+			UE_LOG(LogElysiumPlayerUI, Warning,
+				TEXT("terminal projection failure could not close owner %s serial %u"),
+				*Terminal.Owner.ToString(), Terminal.SessionSerial);
+		}
+		HideTerminal();
+		return;
+	}
+	ShownTerminalOwner = Terminal.Owner;
+	ShownTerminalSerial = Terminal.SessionSerial;
+	ShownTerminalRevision = Terminal.Revision;
+}
+
+void UElysiumPlayerUISubsystem::HideTerminal()
+{
+	if (TerminalScreen)
+	{
+		TerminalScreen->EnterScreensaver();
+		RemoveWidget(EElysiumUILayer::GameModal, TerminalScreen);
+		TerminalScreen = nullptr;
+	}
+	ShownTerminalOwner = FElysiumEntityHandle::Invalid();
+	ShownTerminalSerial = 0;
+	ShownTerminalRevision = 0;
+}
+
+bool UElysiumPlayerUISubsystem::OnTerminalCommand(
+	const FElysiumEntityHandle& Owner, uint32 SessionSerial, const FString& Command)
+{
+	UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get();
+	if (!Presentation)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI command failed: presentation subsystem is unavailable "
+				"(owner %s serial %u command '%s')"),
+			*Owner.ToString(), SessionSerial, *Command);
+		return false;
+	}
+	if (!Presentation->SubmitTerminalCommand(Owner, SessionSerial, Command))
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI command was rejected (owner %s serial %u command '%s')"),
+			*Owner.ToString(), SessionSerial, *Command);
+		return false;
+	}
+	if (Command.Equals(TEXT("quit"), ESearchCase::IgnoreCase))
+	{
+		// The substrate closes synchronously. Release UI-only input immediately; publication remains
+		// the repair path for scripted closure and replacement.
+		HideTerminal();
+	}
+	return true;
 }

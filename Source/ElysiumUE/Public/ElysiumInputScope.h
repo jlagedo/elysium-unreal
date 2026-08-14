@@ -98,6 +98,7 @@ namespace ElysiumInput
 		inline constexpr int32 Chargen   = 30;   // the genesis screens (9.4)
 		inline constexpr int32 Dialogue  = 40;   // the .dlg conversation box
 		inline constexpr int32 Loot      = 42;   // explicit loot-container session
+		inline constexpr int32 Terminal  = 42;   // explicit physical-computer session
 		inline constexpr int32 Character = 45;   // the character screen — sheet / info / quest log
 		inline constexpr int32 Menu      = 50;   // main / pause / game-over screens
 		inline constexpr int32 Debug     = 100;  // Cog's ImGui capture

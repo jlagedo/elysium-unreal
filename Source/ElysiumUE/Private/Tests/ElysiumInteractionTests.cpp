@@ -1385,6 +1385,226 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// Computer-terminal first slice: ordered KeyValues, exclusive serial-checked authority,
+// password and deterministic skill paths, and Function output delivery on the one queue.
+// The fixture is project-authored and content-independent; no retail strings are embedded.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDefinitionTest,
+	"Elysium.Substrate.TerminalDefinition", GElysiumTestFlags)
+bool FElysiumTerminalDefinitionTest::RunTest(const FString&)
+{
+	const FString Text = TEXT(R"KV(
+TerminalDefinition
+{
+	"screen saver" "Synthetic monitor"
+	"brackets" "[]"
+	LogonScreen { "line0" "Test console" "line1" "Authorized users only" }
+	SubDir
+	{
+		"name" "Vault"
+		"password" "needle"
+		"description" "Door controls"
+		"difficulty" "0"
+		Function { "name" "Open" "description" "Open door" "runtext" "Opened." "trigger" "0" }
+		Function { "name" "Close" "description" "Close door" "dependency" "G.AllowClose" }
+	}
+	SubDir { "name" "Logs" "description" "Audit log" }
+	Email { "subject" "Status" "sender" "ops" "body" "Nominal" "autodelete" "1" }
+}
+)KV");
+
+	FElysiumTerminalDefinition Definition;
+	FString Error;
+	if (!TestTrue(TEXT("synthetic TerminalDefinition parses"),
+		FElysiumTerminalDefinition::ParseText(Text, Definition, Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	TestEqual(TEXT("authored logon line order is preserved"),
+		FString::Join(Definition.LogonLines, TEXT("|")), TEXT("Test console|Authorized users only"));
+	TestEqual(TEXT("authored screensaver label is preserved"), Definition.ScreenSaver,
+		TEXT("Synthetic monitor"));
+	TestEqual(TEXT("authored directory order is preserved"), Definition.Directories.Num(), 2);
+	TestEqual(TEXT("first directory stays first"), Definition.Directories[0].Name, TEXT("Vault"));
+	TestEqual(TEXT("repeated Function blocks preserve order"),
+		Definition.Directories[0].Functions.Num(), 2);
+	TestEqual(TEXT("the numbered output is typed"),
+		Definition.Directories[0].Functions[0].Trigger, 0);
+	TestEqual(TEXT("email fields are typed without activating TERM7 behavior"),
+		Definition.Emails.Num(), 1);
+	TestTrue(TEXT("email autodelete is retained"), Definition.Emails[0].bAutoDelete);
+
+	FElysiumTerminalDefinition Invalid;
+	TestFalse(TEXT("an out-of-range trigger fails closed"),
+		FElysiumTerminalDefinition::ParseText(
+			TEXT("TerminalDefinition { SubDir { Function { name bad trigger 8 } } }"),
+			Invalid, Error));
+	TestTrue(TEXT("the parse failure identifies the trigger"), Error.Contains(TEXT("trigger 8")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalSessionTest,
+	"Elysium.Substrate.TerminalSession", GElysiumTestFlags)
+bool FElysiumTerminalSessionTest::RunTest(const FString&)
+{
+	const FElysiumClassRegistry& Registry = FElysiumClassRegistry::Get();
+	const FElysiumClassDesc* HackingClass = Registry.Find(FName(TEXT("prop_hacking")));
+	if (!TestNotNull(TEXT("prop_hacking is registered"), HackingClass))
+	{
+		return false;
+	}
+	TestEqual(TEXT("prop_hacking leaves the model-only prop chain"), HackingClass->BaseName,
+		ElysiumTerminalClassName());
+	for (const TCHAR* Field : { TEXT("start_enabled"), TEXT("textcolumns"), TEXT("hack_file"),
+		TEXT("difficulty"), TEXT("skilltype") })
+	{
+		TestNotNull(*FString::Printf(TEXT("terminal field %s resolves through the chain"), Field),
+			reinterpret_cast<const void*>(Registry.FindField(*HackingClass, FName(Field))));
+	}
+
+	FElysiumTerminalDefinition Definition;
+	FString ParseError;
+	if (!FElysiumTerminalDefinition::ParseText(TEXT(R"KV(
+TerminalDefinition
+{
+	"screen saver" "Synthetic session"
+	LogonScreen { "line0" "Test console" }
+	SubDir
+	{
+		"name" "Vault"
+		"password" "needle"
+		"description" "Door controls"
+		"difficulty" "0"
+		Function { "name" "Open" "runtext" "Opened." "trigger" "0" }
+	}
+}
+)KV"), Definition, ParseError))
+	{
+		AddError(ParseError);
+		return false;
+	}
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__terminal_session__");
+	FElysiumEntityDef TerminalDef;
+	TerminalDef.Classname = TEXT("prop_hacking");
+	TerminalDef.TargetName = TEXT("terminal");
+	TerminalDef.Keys.Add(TEXT("start_enabled"), TEXT("1"));
+	TerminalDef.Keys.Add(TEXT("difficulty"), TEXT("1"));
+	TerminalDef.Keys.Add(TEXT("skilltype"), TEXT("2"));
+	FElysiumOutputDef Trigger;
+	Trigger.Name = TEXT("OnTrigger0");
+	Trigger.Target = TEXT("triggered");
+	Trigger.Input = TEXT("Add");
+	Trigger.Param = TEXT("1");
+	TerminalDef.Outputs.Add(MoveTemp(Trigger));
+	Defs.Defs.Add(MoveTemp(TerminalDef));
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("triggered");
+	Counter.Keys.Add(TEXT("min"), TEXT("0"));
+	Counter.Keys.Add(TEXT("max"), TEXT("10"));
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumTerminal* BaseTerminal = World.FindByName(TEXT("terminal"))
+		? World.FindByName(TEXT("terminal"))->AsTerminal() : nullptr;
+	if (!TestNotNull(TEXT("terminal entity resolves"), BaseTerminal))
+	{
+		return false;
+	}
+	FElysiumPropHacking* Terminal = static_cast<FElysiumPropHacking*>(BaseTerminal);
+	Terminal->InstallDefinition(MoveTemp(Definition));
+	Terminal->InputEnable();
+
+	const FElysiumUseBeginResult Opened = World.BeginPlayerUseSession(Terminal->Handle, Player);
+	TestEqual(TEXT("+use starts one explicit terminal session"), Opened.Outcome,
+		EElysiumUseOutcome::SessionStarted);
+	const uint32 FirstSerial = Terminal->SessionSerial;
+	FElysiumTerminalView View;
+	TestTrue(TEXT("the active terminal publishes a view"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the view carries the captured serial"), View.SessionSerial, FirstSerial);
+	TestEqual(TEXT("the view carries the authored screensaver label"), View.ScreenSaverLabel,
+		TEXT("Synthetic session"));
+	TestTrue(TEXT("an active terminal blocks saving"),
+		World.ScriptedSessionSaveBlockReason().Contains(TEXT("terminal")));
+	TestEqual(TEXT("a second use is exclusive"),
+		World.BeginPlayerUseSession(Terminal->Handle, Player).Outcome, EElysiumUseOutcome::Busy);
+	TestFalse(TEXT("a stale serial cannot submit"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial - 1, TEXT("Vault")));
+
+	TestTrue(TEXT("directory command reaches the authority"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("Vault")));
+	TestEqual(TEXT("a locked directory enters password mode"), Terminal->InputMode,
+		EElysiumTerminalInputMode::Password);
+	TestTrue(TEXT("a wrong password is handled"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("wrong")));
+	TestEqual(TEXT("wrong password increments that directory only"),
+		Terminal->DirectoryAttempts[0], 1);
+	TestTrue(TEXT("password comparison is case-insensitive"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("NEEDLE")));
+	TestEqual(TEXT("accepted password enters the directory"), Terminal->CurrentDirectory, 0);
+	TestTrue(TEXT("the authored Function executes"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("Open")));
+	World.Tick(0.0);
+	TArray<TPair<FString, FString>> CounterState;
+	World.FindByName(TEXT("triggered"))->GetDebugState(CounterState);
+	const TPair<FString, FString>* CounterValue = CounterState.FindByPredicate(
+		[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Value"); });
+	TestTrue(TEXT("OnTrigger0 delivers through the ordinary queue"),
+		CounterValue && FMath::IsNearlyEqual(FCString::Atof(*CounterValue->Value), 1.0f));
+
+	TestTrue(TEXT("quit closes through the captured session"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("quit")));
+	TestFalse(TEXT("the closed terminal no longer publishes"), World.BuildTerminalView(View));
+	TestTrue(TEXT("closing clears the save block"), World.ScriptedSessionSaveBlockReason().IsEmpty());
+	TestFalse(TEXT("a closed session rejects its old serial"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("list")));
+
+	TestEqual(TEXT("the terminal can be opened again"),
+		World.BeginPlayerUseSession(Terminal->Handle, Player).Outcome,
+		EElysiumUseOutcome::SessionStarted);
+	const uint32 SecondSerial = Terminal->SessionSerial;
+	TestTrue(TEXT("a reopened terminal has a new serial"), SecondSerial != FirstSerial);
+	// The preceding password success intentionally persists. Relock only this synthetic fixture so
+	// the same terminal can exercise the independent skill-bypass route in the reopened session.
+	Terminal->DirectoryUnlocked[0] = 0;
+	World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("Vault"));
+	TestTrue(TEXT("break in password mode starts the recovered skill bypass"),
+		World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("break")));
+	TestTrue(TEXT("the timed bypass adds its own save block"), Terminal->AttemptUser.IsSet());
+	World.Tick(5.0);
+	TestEqual(TEXT("rating zero fails entity difficulty one deterministically"),
+		Terminal->LastRoll, 1);
+	TestEqual(TEXT("failed bypass returns to root without closing the terminal"),
+		Terminal->CurrentDirectory, INDEX_NONE);
+	TestEqual(TEXT("failed bypass increments the directory attempt counter"),
+		Terminal->DirectoryAttempts[0], 2);
+	TestTrue(TEXT("the terminal session remains active after bypass failure"),
+		World.BuildTerminalView(View));
+
+	Terminal->Difficulty = 0;
+	World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("Vault"));
+	World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("break"));
+	World.Tick(10.0);
+	TestEqual(TEXT("directory difficulty zero falls back to entity difficulty zero"),
+		Terminal->LastRoll, 3);
+	TestEqual(TEXT("successful bypass enters the same directory transition as a password"),
+		Terminal->CurrentDirectory, 0);
+	World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("quit"));
+	return true;
+}
+
 } // namespace ElysiumInteractionTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

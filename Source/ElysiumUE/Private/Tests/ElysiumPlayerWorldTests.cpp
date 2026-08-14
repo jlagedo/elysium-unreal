@@ -1305,8 +1305,10 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	const FVector Aim = CameraRotation.Vector().GetSafeNormal();
 	const FVector Side = FRotationMatrix(CameraRotation).GetScaledAxis(EAxis::Y).GetSafeNormal();
 	const FElysiumEntityHandle ExactHandle(10, 1);
-	AddTarget(TEXT("ExactSource"), CameraLocation + Aim * 150.0f,
+	UBoxComponent* ExactSource = AddTarget(TEXT("ExactSource"), CameraLocation + Aim * 150.0f,
 		FVector(3.0f), ExactHandle);
+	TestEqual(TEXT("presentation resolves the physical use visual rather than its query proxy"),
+		Map->FindUseVisual(ExactHandle), static_cast<UPrimitiveComponent*>(ExactSource));
 	FElysiumUseQueryResult Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("exact ray produces one target"), Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
@@ -1319,6 +1321,8 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	}
 
 	Map->SetUseAnchorEnabled(ExactHandle, false);
+	TestNull(TEXT("a disabled use visual is not a terminal projection target"),
+		Map->FindUseVisual(ExactHandle));
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestTrue(TEXT("disabled anchor is removed from exact targeting"), Query.Candidates.IsEmpty());
 

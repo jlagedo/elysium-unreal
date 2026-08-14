@@ -9,7 +9,7 @@
 // that returns the prop to its `LoopSequence`.
 //
 // This file also owns the physical prop/constraint leaves and the model-bearing button, switch and
-// sign interactions. `prop_hacking` still stands only its body until the terminal contract lands.
+// sign interactions. The terminal leaf lives with the shared skill-attempt substrate instead.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
@@ -1663,13 +1663,6 @@ struct FElysiumPropRegistrar
 		for (const TCHAR* Name : PropClasses)
 		{
 			BuildPropClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
-		}
-		// A terminal stands its computer body while its gated gameplay/session implementation remains
-		// separate. Do not infer prop_dynamic inputs from the shared representation.
-		static const TCHAR* const PropBodyClasses[] = { TEXT("prop_hacking") };
-		for (const TCHAR* Name : PropBodyClasses)
-		{
-			BuildPropBodyClass(Reg.Register(FName(Name), ElysiumBaseClassName(), &MakeProp));
 		}
 		BuildPropButtonClass(Reg.Register(
 			FName(TEXT("prop_button")), ElysiumBaseClassName(), &MakePropButton));

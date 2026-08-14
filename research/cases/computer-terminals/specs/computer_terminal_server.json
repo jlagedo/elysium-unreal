@@ -49,12 +49,17 @@
     {"address": "1021a830", "label": "PropHackingAcceptCmd", "confidence": "scope string", "role": "command dispatcher", "depth": 2, "cap": 220},
     {"address": "1021aaa0", "label": "PropHackingBuiltInCommand", "confidence": "AcceptCmd callee", "role": "built-in command grammar", "depth": 2, "cap": 180},
     {"address": "1021aca0", "label": "PropHackingRenderDirectory", "confidence": "working alias", "role": "directory and logon presentation", "depth": 2, "cap": 220},
-    {"address": "1021b5e0", "label": "PropHackingSetEmailState", "confidence": "working alias", "role": "email state mutation", "depth": 2, "cap": 160},
+    {"address": "1021b5e0", "label": "PropHackingPresentPasswordAttempt", "confidence": "body evidence", "role": "render the pending directory or root-email password attempt state", "depth": 2, "cap": 160},
     {"address": "1021b750", "label": "PropHackingRouteContentCommand", "confidence": "AcceptCmd callee", "role": "route a command to a subdirectory or authored Function after dependency evaluation", "depth": 2, "cap": 220},
     {"address": "1021b9c0", "label": "PropHackingTryLogon", "confidence": "AcceptCmd callee", "role": "logon/password branch", "depth": 2, "cap": 220},
     {"address": "1021c3c0", "label": "PropHackingRejectCommand", "confidence": "AcceptCmd callee", "role": "error presentation", "depth": 2, "cap": 140},
     {"address": "1021bec0", "label": "PropHackingTestDependency", "confidence": "diagnostic strings and body evidence", "role": "empty-pass or Python dependency evaluation", "depth": 2, "cap": 160},
     {"address": "1021c560", "label": "PropHackingAttemptThink", "confidence": "vtable and attempt-state body evidence", "role": "increment attempt state and resolve the pending password/skill path", "depth": 3, "cap": 220},
+    {"address": "1021cae0", "label": "PropHackingAttemptProgress", "confidence": "CPropHacking vtable slot 268", "role": "terminal override of the shared skill-attempt progress query", "depth": 2, "cap": 160},
+    {"address": "1021c4d0", "label": "PropHackingPasswordAccepted", "confidence": "CPropHacking vtable slot 275", "role": "password acceptance transition for the pending directory or root email", "depth": 2, "cap": 140},
+    {"address": "1021c6a0", "label": "PropHackingPasswordEmpty", "confidence": "CPropHacking vtable slot 277", "role": "empty-password transition for the pending directory or root email", "depth": 2, "cap": 140},
+    {"address": "1021cb60", "label": "PropHackingPendingPassword", "confidence": "CPropHacking vtable slot 274", "role": "select the pending directory or root-email password", "depth": 2, "cap": 100},
+    {"address": "1021d610", "label": "PropHackingPasswordProgress", "confidence": "CPropHacking vtable slot 278", "role": "publish skill-mediated password input progress", "depth": 2, "cap": 140},
     {"address": "1021c6d0", "label": "PropHackingExecuteFunction", "confidence": "content-structure and body evidence", "role": "print runtext fire OnTrigger execute runscript and restore prompt", "depth": 2, "cap": 220},
     {"address": "1021c890", "label": "PropHackingChangeDirectory", "confidence": "working alias", "role": "directory navigation", "depth": 2, "cap": 180},
     {"address": "1021cba0", "label": "PropHackingLoadFromFile", "confidence": "scope string", "role": "hackterm grammar loader", "depth": 2, "cap": 240},
@@ -125,6 +130,18 @@
       "fact": "keypad_strings belongs to CPropKeypad, which shares CBaseTerminal interaction/presentation but not CPropHacking TerminalDefinition content.",
       "evidence": "CPropKeypad loader 0x1021da40 opens vdata/HackTerminals/prop_keypad.txt, selects a keypad record by TextID and copies TitleText. Constructor 0x1021d890 installs the CBaseTerminal vtable 0x1048ab34 before the CPropKeypad vtable 0x1048b074.",
       "consequence": "The keypad table and hacking-terminal grammar need separate content loaders atop a shared terminal screen/session substrate."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "CPropHacking normal command mode recognizes five localized built-ins before authored directories and Functions: QUIT, HELP, LIST, EMAIL and HOME_DIR; empty input redraws the directory, while password-state break starts the skill-mediated input path.",
+      "evidence": "AcceptCmd 0x1021a830 dispatches normal state to 0x1021aaa0 before 0x1021b750. The built-in body compares Hacking Strings indices 33, 34, 35, 36 and 17, then performs exit, help, list, email and root-directory transitions. Non-normal state compares literal break and calls BaseTerminalBeginInput 0x10217b30; other text reaches BaseTerminalAcceptPassword 0x10217f50.",
+      "consequence": "TERM4 is closed for the tutorial grammar. One authoritative state machine can implement normal built-ins, authored routing and the separate password/bypass state without guessing a second command path."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A pending terminal directory uses its positive authored difficulty and otherwise falls back to the entity difficulty; root email uses the entity difficulty. Password and deterministic skill bypass converge on the same password acceptance, and only failures increment the selected directory or email attempt counter.",
+      "evidence": "CPropHacking vtable slot 268 is 0x1021cae0: pending -2 calls the base difficulty getter, a valid directory reads +0x40 in its 0xd4-byte record and falls back when below 1, and an invalid index diagnoses and returns 0. Slot 274 0x1021cb60 selects directory password +0x30 or root email +0x944. BeginInput 0x10217b30 and SubmitInput 0x10217d60 generate a real or randomized password from the shared deterministic result and rejoin AcceptPassword. Failure callback 0x1021c560 increments m_SubDirAttempts or m_nEmailAttempts; success slot 275 0x1021c4d0 enters the pending directory.",
+      "consequence": "TERM5 is closed for the tutorial path. The runtime must preserve typed-password and skill-bypass transitions separately, use directory difficulty only when positive, and keep failed-attempt accounting on the selected content node."
     }
   ]
 }

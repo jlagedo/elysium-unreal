@@ -201,6 +201,14 @@ void AElysiumPlayerController::RegisterCommands()
 		}
 	}));
 
+	Bindings.Add(Registry.Bind(TEXT("hackcmd"), [this](const FElysiumCommandCall& Call)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			World->SubmitActiveTerminalCommand(Call.Args);
+		}
+	}));
+
 	Bindings.Add(Registry.Bind(TEXT("snapshot"), [](const FElysiumCommandCall&)
 	{
 		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") /

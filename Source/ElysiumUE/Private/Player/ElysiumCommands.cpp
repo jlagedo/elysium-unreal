@@ -198,6 +198,9 @@ namespace
 		// NOT in `docs/vtmb/controls.md`'s bindable inventory, so it gets no default bind: it is a verb the
 		// content calls, not one the player presses.
 		{ TEXT("createplayer"), EK::Once,       EG::Interface, EB::None,        TEXT("open character creation") },
+		// Client terminal input sends this content-facing verb. It has no default bind; the active
+		// terminal session is the only authority allowed to interpret its argument.
+		{ TEXT("hackcmd"),      EK::Once,       EG::Interface, EB::None,        TEXT("submit a command to the active computer terminal") },
 		{ TEXT("dlghist"),      EK::Once,       EG::Interface, EB::None,        TEXT("dialogue history -- 9.2") },
 		{ TEXT("dlgscrlup"),    EK::Once,       EG::Interface, EB::None,        TEXT("scroll dialogue history up -- 9.2") },
 		{ TEXT("dlgscrldn"),    EK::Once,       EG::Interface, EB::None,        TEXT("scroll dialogue history down -- 9.2") },

@@ -24,6 +24,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumScenePlayer.h"
+#include "Substrate/ElysiumSkillClasses.h"
 
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -2008,6 +2009,60 @@ bool FElysiumEntityWorld::BuildLootView(FElysiumLootView& Out) const
 	}
 	Container->BuildLootView(Out, *PlayerEntity);
 	return true;
+}
+
+bool FElysiumEntityWorld::BuildTerminalView(FElysiumTerminalView& Out) const
+{
+	Out = FElysiumTerminalView();
+	if (!ActiveUse.IsSet() || ActiveUse->Kind != EElysiumUseSessionKind::Explicit)
+	{
+		return false;
+	}
+	const FElysiumEntity* Entity = Resolve(ActiveUse->Context.Owner);
+	const FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
+	if (!Terminal || Terminal->CurrentUser != ActiveUse->Context.Activator)
+	{
+		return false;
+	}
+	Terminal->BuildView(Out);
+	return Out.IsOpen();
+}
+
+bool FElysiumEntityWorld::SubmitTerminalCommand(const FElysiumEntityHandle& Owner,
+	uint32 SessionSerial, const FString& Command)
+{
+	if (!ActiveUse.IsSet() || ActiveUse->Context.Owner != Owner
+		|| ActiveUse->Context.Activator != Player)
+	{
+		return false;
+	}
+	FElysiumEntity* Entity = Resolve(Owner);
+	FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
+	return Terminal && Terminal->CurrentUser == Player && Terminal->Submit(SessionSerial, Command);
+}
+
+bool FElysiumEntityWorld::SubmitActiveTerminalCommand(const FString& Command)
+{
+	if (!ActiveUse.IsSet())
+	{
+		return false;
+	}
+	FElysiumEntity* Entity = Resolve(ActiveUse->Context.Owner);
+	FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
+	return Terminal && SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, Command);
+}
+
+bool FElysiumEntityWorld::PlayerBeginTerminalHack(const FElysiumEntityHandle& Owner,
+	uint32 SessionSerial)
+{
+	if (!ActiveUse.IsSet() || ActiveUse->Context.Owner != Owner
+		|| ActiveUse->Context.Activator != Player)
+	{
+		return false;
+	}
+	FElysiumEntity* Entity = Resolve(Owner);
+	FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
+	return Terminal && Terminal->CurrentUser == Player && Terminal->BeginHack(SessionSerial);
 }
 
 bool FElysiumEntityWorld::PlayerLootTake(int32 Slot)

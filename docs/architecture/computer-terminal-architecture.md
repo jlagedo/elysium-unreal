@@ -5,7 +5,7 @@ Unreal. Recovered VtMB behavior and the still-open retail questions live in
 `docs/vtmb/computer-terminals.md`; implementation status lives only in
 `docs/project/roadmap.md` 13.4.
 
-The terminal reproduces the original gameplay contract — content, 36×24 character grid, command
+The terminal reproduces the original gameplay contract — content, authored character grid, command
 meaning, passwords, skill checks, scripts, outputs, email state and one-user authority — through a
 modern presentation. It does not reuse VtMB's terminal font, VGUI styling or 512×512 character
 texture. This is the explicit Presentation-layer divergence allowed by
@@ -26,11 +26,12 @@ an output or decides whether a password is valid. Keyboard text and a controller
 both become the same canonical `hackcmd` request, so controller support is another input method, not
 a second terminal implementation.
 
-The active presentation is a crisp Slate/CommonUI overlay aligned to the computer model's recovered
-screen rectangle. It is not a full-screen fake terminal and not a `UWidgetComponent`: the camera
-faces the actual monitor, the bezel remains world geometry, and only the screen area receives UI.
-A material/render-target projection may later drive an inactive screen or recovered screen saver,
-but it never owns interaction.
+The active presentation is Slate drawn into a render target bound to the computer model's exact
+`screen` material slot. It is not a full-screen fake terminal and not a `UWidgetComponent`: the
+model's own UVs put the pixels on the glass, so the screen participates in world depth, occlusion,
+lighting and the physical bezel. A transparent CommonUI screen still owns focus, typing and
+semantic actions, but it paints no second terminal into viewport space. Closing input ownership
+leaves the material installed and replaces the live surface with the authored terminal screensaver.
 
 ## 2. Evidence and fidelity boundary
 
@@ -38,7 +39,8 @@ The implementation consumes the contract in `docs/vtmb/computer-terminals.md` ra
 behavior from presentation. In particular:
 
 - only one player owns a terminal at a time;
-- the logical screen is 36 columns by 24 rows for every current `prop_hacking` instance;
+- the default logical screen is 36 columns by 24 rows, with the authored `textcolumns`/`textrows`
+  values remaining authoritative for an instance;
 - normal Enter sends `hackcmd <line>`, Escape sends `hackcmd quit`, Ctrl+C sends
   `hackcmd break`, raw-character mode sends `hackcmd %c`, and acknowledgement sends an empty command;
 - input flags, maximum input and directory-key rules constrain the local editor;
@@ -46,10 +48,12 @@ behavior from presentation. In particular:
   prompt, with ordinary target delivery following through the shared event queue;
 - email state remains terminal-local unless `global_email` promotes it to player state.
 
-Open retail questions stay open rather than acquiring guessed behavior. TERM2 gates exact generic
-use-output ordering and forced cancellation, TERM4 gates a claim of complete command-grammar
-fidelity, and TERM5 gates the terminal-specific difficulty/skill-attempt join. TERM7 and TERM8 add
-email and screen-saver detail without changing this architecture.
+Open retail questions stay open rather than acquiring guessed behavior. TERM4 now supplies the
+server built-ins and state dispatch, and TERM5 supplies the terminal-specific difficulty,
+password, attempt-counter and deterministic bypass join needed by the tutorial slice. TERM2 still
+gates exact generic use-output ordering and any forced cancellation outside the confirmed active
+alignment body. TERM7 and TERM8 add email and screen-saver detail without changing this
+architecture.
 
 ## 3. Gameplay authority and session lifetime
 
@@ -126,13 +130,13 @@ FElysiumTerminalView
     Owner
     SessionSerial
     Revision
+    ScreenSaverLabel
     Rows[24]                 // each clipped/padded to 36 logical cells
     CursorRow / CursorColumn
     InputMode                // Line, RawCharacter, Acknowledge
     MaxInput
     bAcceptsDirectoryKeys
     Actions[]                // semantic controller choices, already authorized
-    ScreenSurface            // resolved world corners for this body
 ```
 
 `FElysiumTerminalAction` contains a stable semantic id, display label, canonical command string,
@@ -178,10 +182,11 @@ non-planar or degenerate fit instead of inventing axes. Generated metadata remai
 terminal may provide the same fields from an authored socket/sidecar in the authored-content
 namespace.
 
-Content validation requires exactly one usable screen surface for every model referenced by a
-current `prop_hacking`. A missing surface fails the content test and, in a development build only,
-may expose a clearly labelled diagnostic fallback panel. It does not silently place shipping UI
-over the whole monitor.
+Content validation requires exactly one usable screen surface and one exact material slot named
+`screen` for every model referenced by a current `prop_hacking`. The material slot is the active
+pixel projection seam; the recovered surface basis is camera-framing metadata. A missing seam fails
+the content test. Runtime emits a warning and closes the attempted session instead of exposing a
+blind input mode or silently placing UI over the whole monitor.
 
 ### 6.2 Camera framing
 
@@ -196,40 +201,44 @@ camera cannot establish the required view, the terminal session closes through t
 path. Releasing the handle restores the exact prior player view even when another modal request was
 released out of order.
 
-The surface remains visibility-tested while active. If world geometry obscures the screen, the
-overlay is withheld and the session ends rather than drawing UI over the occluder. This keeps the
-screen-space renderer consistent with world depth without adding a second world-widget input path.
+The surface remains visibility-tested while active. The console is already part of the model's
+material pass, so ordinary world depth naturally occludes it. If the framing visibility test fails,
+the session ends through the ordinary path instead of allowing input to a screen the player cannot
+see.
 
-The request hides the passive HUD but leaves the terminal game-modal layer visible. Fades, loading
-and system-modal screens continue to outrank it.
+The request leaves the passive HUD visible around the physical monitor, preserving the in-world
+composition of the VtMB interaction. The terminal game-modal layer is transparent and contains
+only the focusable input shell. Fades, loading and system-modal screens continue to outrank it.
 
-### 6.3 Screen-space projection
+### 6.3 World-screen render target
 
-At camera evaluation tail, the presentation bridge transforms the four local screen corners to
-world space and projects them into the owning local player's viewport. Because the camera is
-orthogonal to the planar screen and aligned to its up vector, the corners form an axis-aligned
-rectangle with the recovered surface's aspect ratio. The bridge converts physical viewport pixels
-through the current DPI scale and supplies that local rectangle to an `SConstraintCanvas` slot.
+`AElysiumMapActor` retains the rendered component that supplied each entity's use anchor, separately
+from any query-only box created for use tracing. The presentation seam resolves that physical
+component by terminal owner. `UElysiumTerminalScreen` requires its exact `screen` material slot,
+allocates a 1024×768 render target, and binds it through a dynamic instance of Unreal's opaque
+Slate pass-through material. It never selects a slot by substring or guesses a new plane.
 
-`UElysiumTerminalScreen` is a transparent full-viewport CommonUI screen whose terminal panel is
-clipped to that rectangle. Only its opaque background fills the recovered screen surface; the
-monitor bezel and surrounding room remain the real scene. Layout is resolved after camera update,
-so camera motion and dynamic resolution cannot leave a one-frame offset.
+The live terminal surface and local draft are retained Slate and are redrawn into that target when
+the authoritative view revision, local text or semantic selection changes. The model's existing UVs
+map the target to the glass. Camera motion, dynamic resolution and DPI scaling therefore cannot
+separate the pixels from the monitor, and no viewport-space depth approximation is required.
 
 The terminal panel uses a project-licensed vector monospace face, the shared type library and new
-terminal-specific color/spacing tokens. It preserves the 36×24 cell grid and authored strings, but
+terminal-specific color/spacing tokens. It preserves the authored cell grid (36×24 for the
+tutorial) and strings, but
 does not reproduce VtMB's bitmap glyphs, phosphor palette, VGUI chrome or cursor style. Cell metrics
-come from the projected rectangle, and the panel is accepted at 1920×1080, 2560×1440 and
+come from the fixed render surface, and camera framing is accepted at 1920×1080, 2560×1440 and
 3840×2160 with whole-grid clipping, readable text and no bezel overlap.
 
-An off-state glow or recovered screen saver may use a material instance fed by a render target on
-the model's `screen` slot. That cosmetic path is throttled and has no focus, command or state-machine
-authority. The active session always uses the crisp CommonUI projection.
+On close the same target is redrawn with `TerminalDefinition`'s authored `"screen saver"` label.
+The physical component retains the material instance and target after CommonUI releases its input
+scope, so the monitor does not snap back to a stock texture. A later session replaces that inactive
+surface with a fresh live target. The screensaver has no focus, command or state-machine authority.
 
 ## 7. Keyboard and mouse
 
 Line mode uses one focused `SEditableText`-backed editor whose visible text is mirrored into the
-36×24 panel. Editing is local and immediate; Enter submits once and waits for the authoritative
+authored panel grid. Editing is local and immediate; Enter submits once and waits for the authoritative
 revision. Maximum input is enforced both locally and by the terminal entity. The editor handles
 selection, repeat, Backspace/Delete/Home/End and paste without turning arbitrary UI keys into
 gameplay commands.
@@ -299,7 +308,7 @@ the player use session.
 ## 10. Diagnostics and acceptance
 
 One terminal diagnostic reports owner, user, serial, parsed file, current node, view revision,
-input mode/flags/limit, selected action id, screen-surface fit, projected rectangle, camera handle,
+input mode/flags/limit, selected action id, screen-surface fit, material slot/render target, camera handle,
 pending skill attempt, and the last accepted/rejected command. It reports content and presentation
 state read-only; it never provides a second execution path.
 
@@ -312,30 +321,32 @@ Automated contracts cover:
 - password and skill-attempt policy recovered by TERM5;
 - per-terminal/global email serialization when TERM7 closes;
 - keyboard, click and controller-action equivalence at the authoritative state/queue boundary;
-- screen-metadata planarity, all current terminal models, projection/DPI and bezel clipping;
+- screen-metadata planarity, exact `screen` slots, render-target projection and bezel clipping;
 - CommonUI focus, device hot-switch, nested text entry, menu cover/restore and held-key suppression;
 - camera target loss, failed framing, out-of-order modal release and exact previous-view restoration.
 
 Played acceptance uses the real `sp_tutorial_1` `tuthack` entity and queue. On keyboard, the player
-focuses the physical monitor, enters the terminal and types the recovered Unlock command. On a
-gamepad, the player reaches the same Unlock function through semantic selection without typing the
-command. Both paths must enqueue `OnTrigger0`, run `tutorial.tut_hack()`, unlock/reveal the safe and
-return control to the exact previous camera. This is tested from real input in the Play tier; a
-console-injected state is diagnostic evidence only.
+focuses the physical monitor, enters `Safe`, supplies `chopshop` or uses the Hacking bypass, then
+types `Unlock`. On a gamepad, the player reaches those same authoritative transitions and the same
+Unlock function through semantic selection without typing the commands. Both paths must enqueue
+`OnTrigger0`, unlock/reveal the safe through the authored map wires, and return control to the exact
+previous camera. This is tested from real input in the Play tier; a console-injected state is
+diagnostic evidence only.
 
 ## 11. Delivery order and research gates
 
 The implementation lands in slices without splitting authority:
 
-1. close TERM4 and TERM5 sufficiently for the tutorial command/password/skill path, and close the
-   TERM2 entry/forced-cancel cases required by the use session;
+1. apply the recovered TERM4/TERM5 tutorial command/password/skill contract, and close the TERM2
+   entry/forced-cancel cases required by the presented use session;
 2. add the headless `TerminalDefinition` parser, terminal state machine, `hackcmd` adapter and
    revisioned view with Substrate tests;
 3. prove the `tuthack` Function transaction on the real entity queue;
-4. export screen-surface metadata, add fixed camera framing and the keyboard CommonUI projection;
+4. project the keyboard CommonUI surface through the model's `screen` material, then export
+   screen-surface metadata and add fixed camera framing;
 5. add the semantic action palette, controller navigation and virtual text entry;
 6. run the keyboard and gamepad tutorial acceptance at all three target resolutions.
 
-TERM7 email completion and TERM8 inactive/screen-saver presentation extend the same state/view
-contracts after the tutorial slice. Neither introduces another widget-owned parser, command path,
-camera owner or persistence model.
+TERM7 email completion and the remaining TERM8 moving-screensaver behavior extend the same
+state/view contracts after the tutorial slice. Neither introduces another widget-owned parser,
+command path, camera owner or persistence model.

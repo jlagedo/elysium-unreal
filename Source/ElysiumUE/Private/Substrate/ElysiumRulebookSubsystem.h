@@ -5,6 +5,7 @@
 
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSkillClasses.h"
 
 #include "ElysiumRulebookSubsystem.generated.h"
 
@@ -47,6 +48,11 @@ public:
 	// (`ElysiumItems::Install`), so it has to happen before a map's item entities are created —
 	// `FElysiumEntityWorld::Load` touches it for exactly that reason.
 	const FElysiumItemTable&          Items();
+	// Patch-first `vdata/hackterminals/*`, keyed by normalized virtual path. Unlike the fixed
+	// tables above this catalogue is demand-driven by map entities, but each named definition is
+	// still parsed once for the session and shared by every placement that references it.
+	const FElysiumTerminalDefinition* TerminalDefinition(const FString& VirtualPath,
+		FString& OutError);
 
 	// Force every table. Returns the number that loaded clean.
 	int32 LoadAll();
@@ -87,6 +93,8 @@ private:
 	FElysiumDiceTables        DiceTables;
 	FElysiumItemTable         ItemTable;
 	FElysiumDispositionTable  DispositionTable;
+	TMap<FString, TSharedPtr<FElysiumTerminalDefinition>> TerminalDefinitions;
+	TMap<FString, FString> TerminalDefinitionErrors;
 
 	bool bStatsLoaded = false;
 	bool bFeatsLoaded = false;

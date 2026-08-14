@@ -27,6 +27,8 @@ void UElysiumRulebookSubsystem::Deinitialize()
 	// The item catalogue is this subsystem's memory, and the class registry outlives it — so the
 	// installed table has to go before the memory does.
 	ElysiumItems::Uninstall(ItemTable);
+	TerminalDefinitions.Reset();
+	TerminalDefinitionErrors.Reset();
 	Super::Deinitialize();
 }
 
@@ -124,6 +126,33 @@ const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
 		ElysiumItems::Install(Table);
 	}
 	return Table;
+}
+
+const FElysiumTerminalDefinition* UElysiumRulebookSubsystem::TerminalDefinition(
+	const FString& VirtualPath, FString& OutError)
+{
+	FString Key = VirtualPath.ToLower();
+	Key.ReplaceInline(TEXT("\\"), TEXT("/"));
+	if (const TSharedPtr<FElysiumTerminalDefinition>* Found = TerminalDefinitions.Find(Key))
+	{
+		OutError.Reset();
+		return Found->Get();
+	}
+	if (const FString* Failed = TerminalDefinitionErrors.Find(Key))
+	{
+		OutError = *Failed;
+		return nullptr;
+	}
+
+	TSharedPtr<FElysiumTerminalDefinition> Parsed = MakeShared<FElysiumTerminalDefinition>();
+	if (!FElysiumTerminalDefinition::Load(VirtualPath, *Parsed, OutError))
+	{
+		TerminalDefinitionErrors.Add(Key, OutError);
+		return nullptr;
+	}
+	const FElysiumTerminalDefinition* Result = Parsed.Get();
+	TerminalDefinitions.Add(Key, MoveTemp(Parsed));
+	return Result;
 }
 
 int32 UElysiumRulebookSubsystem::LoadAll()

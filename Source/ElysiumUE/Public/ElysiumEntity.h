@@ -406,6 +406,11 @@ public:
 	{
 		return const_cast<FElysiumEntity*>(this)->AsLockableEntity();
 	}
+	virtual class FElysiumTerminal* AsTerminal() { return nullptr; }
+	const class FElysiumTerminal* AsTerminal() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsTerminal();
+	}
 
 	// No-RTTI downcast to the combat character (11.4), for the callers that need the sheet or the
 	// damage receiver off a base pointer — the same reason AsDoorBase exists.

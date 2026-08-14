@@ -12,6 +12,7 @@
 #include "UI/ElysiumMainMenu.h"
 #include "UI/ElysiumNotificationScreen.h"
 #include "UI/ElysiumSignScreen.h"
+#include "UI/ElysiumTerminalScreen.h"
 #include "UI/ElysiumUIRoot.h"
 #include "UI/ElysiumUIStyle.h"
 
@@ -563,6 +564,98 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 	(void)CharacterSlate;
 	(void)SignSlate;
 
+	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenTest,
+	"Elysium.Substrate.Terminal.Screen",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumTerminalScreenTest::RunTest(const FString&)
+{
+	FElysiumTerminalView View;
+	View.Owner = FElysiumEntityHandle(7, 1);
+	View.SessionSerial = 19;
+	View.Revision = 3;
+	View.ScreenSaverLabel = TEXT("TEST TERMINAL");
+	View.Columns = 36;
+	View.Rows = 24;
+	View.MaxInput = 16;
+	View.ScreenRows.SetNum(View.Rows);
+	View.ScreenRows[0] = TEXT("TEST TERMINAL").RightPad(View.Columns);
+	View.ScreenRows[2] = TEXT("Available menus:").RightPad(View.Columns);
+	View.ScreenRows[3] = TEXT("    Safe").RightPad(View.Columns);
+	FElysiumTerminalActionView Safe;
+	Safe.Id = TEXT("dir:0");
+	Safe.Label = TEXT("Safe");
+	Safe.Command = TEXT("Safe");
+	View.Actions.Add(Safe);
+	FElysiumTerminalActionView Quit;
+	Quit.Id = TEXT("quit");
+	Quit.Label = TEXT("Quit");
+	Quit.Command = TEXT("quit");
+	View.Actions.Add(Quit);
+
+	UElysiumTerminalScreen* Screen = NewObject<UElysiumTerminalScreen>();
+	Screen->ApplyTerminal(View);
+	FElysiumEntityHandle ReceivedOwner;
+	uint32 ReceivedSerial = 0;
+	FString ReceivedCommand;
+	int32 SubmissionCount = 0;
+	Screen->OnCommand.BindLambda(
+		[&](const FElysiumEntityHandle& Owner, uint32 Serial, const FString& Command)
+		{
+			ReceivedOwner = Owner;
+			ReceivedSerial = Serial;
+			ReceivedCommand = Command;
+			++SubmissionCount;
+			return true;
+		});
+
+	const TSharedRef<SWidget> Slate = Screen->TakeWidget();
+	TestFalse(TEXT("the input shell does not claim a physical projection"),
+		Screen->HasProjection());
+	TestEqual(TEXT("the terminal owns one real editable command line"),
+		CountSlateWidgetsOfType(Slate, FName(TEXT("SEditableText"))), 1);
+	TestEqual(TEXT("no terminal copy is painted into viewport Slate"),
+		CountSlateWidgetsOfType(Slate, FName(TEXT("STextBlock"))), 0);
+	TestEqual(TEXT("the exact authored screen slot resolves"),
+		UElysiumTerminalScreen::FindScreenMaterialSlot(
+			{ FName(TEXT("body")), FName(TEXT("screen")), FName(TEXT("keys")) }), 1);
+	TestEqual(TEXT("a similar screensaver slot is not accepted"),
+		UElysiumTerminalScreen::FindScreenMaterialSlot(
+			{ FName(TEXT("body")), FName(TEXT("screensaver")) }), INDEX_NONE);
+	TestNotNull(TEXT("the authoritative directory is also a semantic action"),
+		Screen->FindAction(TEXT("dir:0")));
+	TestNotNull(TEXT("quit is a semantic action"), Screen->FindAction(TEXT("quit")));
+
+	Screen->SetDraftText(TEXT("1234567890abcdefghijklmnop"));
+	TestEqual(TEXT("the local editor enforces the authoritative maximum"),
+		Screen->GetDraftText(), FString(TEXT("1234567890abcdef")));
+	TestTrue(TEXT("Enter submits the captured owner, serial and local line"), Screen->SubmitDraft());
+	TestEqual(TEXT("one line produces one intent"), SubmissionCount, 1);
+	TestEqual(TEXT("the terminal owner is retained"), ReceivedOwner, View.Owner);
+	TestEqual(TEXT("the captured session serial is retained"), ReceivedSerial, View.SessionSerial);
+	TestEqual(TEXT("the clamped line is submitted"), ReceivedCommand,
+		FString(TEXT("1234567890abcdef")));
+	TestTrue(TEXT("accepted submission clears only the local editor"),
+		Screen->GetDraftText().IsEmpty());
+
+	View.Revision = 4;
+	View.InputMode = 1;
+	View.Actions.Reset();
+	FElysiumTerminalActionView Break;
+	Break.Id = TEXT("hack");
+	Break.Label = TEXT("Bypass password");
+	Break.Command = TEXT("break");
+	View.Actions.Add(Break);
+	Screen->ApplyTerminal(View);
+	TestTrue(TEXT("controller activation uses the same command delegate"),
+		Screen->ExecuteAction(TEXT("hack")));
+	TestEqual(TEXT("semantic password bypass submits literal break"),
+		ReceivedCommand, FString(TEXT("break")));
+	TestEqual(TEXT("the action is the second accepted intent"), SubmissionCount, 2);
+	(void)Slate;
 	return !HasAnyErrors();
 }
 

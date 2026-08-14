@@ -106,6 +106,38 @@ struct FElysiumLootView
 	bool IsOpen() const { return Owner.IsSet(); }
 };
 
+struct FElysiumTerminalActionView
+{
+	FString Id;
+	FString Label;
+	FString Command;
+	bool bEnabled = true;
+	FString Explanation;
+};
+
+// Immutable projection of one authoritative terminal session. The editable line remains local UI
+// state; these rows and actions are only what gameplay has already authorized. World presentation
+// resolves the owning entity's physical screen mesh separately, so gameplay never carries viewport
+// geometry or a material/render-target handle.
+struct FElysiumTerminalView
+{
+	FElysiumEntityHandle Owner;
+	uint32 SessionSerial = 0;
+	uint32 Revision = 0;
+	FString ScreenSaverLabel;
+	int32 Columns = 36;
+	int32 Rows = 24;
+	TArray<FString> ScreenRows;
+	int32 CursorRow = 0;
+	int32 CursorColumn = 0;
+	uint8 InputMode = 0;
+	int32 MaxInput = 16;
+	bool bAcceptsDirectoryKeys = true;
+	TArray<FElysiumTerminalActionView> Actions;
+
+	bool IsOpen() const { return Owner.IsSet(); }
+};
+
 // ============================================================================================
 // FElysiumViewState — everything on screen, rebuilt each frame in TG_PostUpdateWork.
 // ============================================================================================
@@ -151,6 +183,9 @@ struct FElysiumViewState
 	// An explicit +use session. The CommonUI screen submits Take/Give/Close intents only; slot
 	// validation and entity transfer remain on the substrate.
 	FElysiumLootView Loot;
+
+	// --- Computer terminal (13.4) ---------------------------------------------------------
+	FElysiumTerminalView Terminal;
 
 	// --- Meters (8.9 draws them) ------------------------------------------------------------
 	FElysiumVitals Vitals;

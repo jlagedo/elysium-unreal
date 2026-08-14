@@ -246,6 +246,21 @@ bool UElysiumPresentationSubsystem::CloseLoot()
 	return World && World->PlayerCloseLoot();
 }
 
+bool UElysiumPresentationSubsystem::SubmitTerminalCommand(
+	const FElysiumEntityHandle& Owner, uint32 SessionSerial, const FString& Command)
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	return World && World->SubmitTerminalCommand(Owner, SessionSerial, Command);
+}
+
+UPrimitiveComponent* UElysiumPresentationSubsystem::ResolveTerminalDisplayTarget(
+	const FElysiumEntityHandle& Owner) const
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	return Map ? Map->FindUseVisual(Owner) : nullptr;
+}
+
 bool UElysiumPresentationSubsystem::DismissSign()
 {
 	const AElysiumMapActor* Map = ResolveMapActor();
@@ -341,6 +356,7 @@ void UElysiumPresentationSubsystem::Publish()
 		}
 
 		World->BuildLootView(Next.Loot);
+		World->BuildTerminalView(Next.Terminal);
 
 		const FElysiumPlayer* PlayerEnt = World->FindPlayer();
 		if (PlayerEnt)

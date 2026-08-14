@@ -17,6 +17,7 @@ class UElysiumNotificationScreen;
 class UElysiumUIRoot;
 class UElysiumPresentationSubsystem;
 class UElysiumSignScreen;
+class UElysiumTerminalScreen;
 class UWorld;
 struct FElysiumDialogueView;
 struct FElysiumNotification;
@@ -91,6 +92,11 @@ private:
 	void HideLoot();
 	void OnLootTransfer(bool bTake, int32 Slot);
 	void OnLootClose();
+	void ReconcileTerminal(const struct FElysiumTerminalView& Terminal);
+	void ShowTerminal(const struct FElysiumTerminalView& Terminal);
+	void HideTerminal();
+	bool OnTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
+		const FString& Command);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;
@@ -108,6 +114,9 @@ private:
 	TObjectPtr<UElysiumLootScreen> LootScreen;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UElysiumTerminalScreen> TerminalScreen;
+
+	UPROPERTY(Transient)
 	TArray<TObjectPtr<UElysiumNotificationScreen>> NotificationScreens;
 
 	TWeakObjectPtr<UElysiumPresentationSubsystem> BoundPresentation;
@@ -117,6 +126,9 @@ private:
 	uint32 ShownDialogueRevision = 0;
 	FElysiumEntityHandle ShownLootOwner;
 	uint32 ShownLootRevision = 0;
+	FElysiumEntityHandle ShownTerminalOwner;
+	uint32 ShownTerminalSerial = 0;
+	uint32 ShownTerminalRevision = 0;
 	FDelegateHandle ViewPublishedHandle;
 	FDelegateHandle NotificationHandle;
 	FDelegateHandle PostLoadMapHandle;

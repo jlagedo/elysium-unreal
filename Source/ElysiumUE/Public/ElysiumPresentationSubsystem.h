@@ -9,6 +9,7 @@
 
 class AElysiumMapActor;
 class UElysiumPresentationSubsystem;
+class UPrimitiveComponent;
 
 // Step 9 of the frame: rebuild the view state after everything that could change it has run
 // (`AElysiumMapActor` has two tick functions for the same reason). Declared as a real tick function
@@ -128,6 +129,11 @@ public:
 	bool LootTake(int32 Slot);
 	bool LootGive(int32 Slot);
 	bool CloseLoot();
+	bool SubmitTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
+		const FString& Command);
+	// Engine-side presentation seam for the physical monitor. The terminal view itself remains
+	// engine-neutral and carries no component or render-target state.
+	UPrimitiveComponent* ResolveTerminalDisplayTarget(const FElysiumEntityHandle& Owner) const;
 	// True means the request closed the panel without synchronously opening a replacement, so the
 	// local-player owner may remove its modal immediately instead of waiting for the next publish.
 	bool DismissSign();

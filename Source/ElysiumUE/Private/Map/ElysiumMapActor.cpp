@@ -1526,7 +1526,20 @@ void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
 
 	FUseAnchorRecord& Record = UseAnchors.AddDefaulted_GetRef();
 	Record.Component = Anchor;
+	Record.Visual = Source;
 	Record.Owner = OwnerHandle;
+}
+
+UPrimitiveComponent* AElysiumMapActor::FindUseVisual(
+	const FElysiumEntityHandle& OwnerHandle) const
+{
+	const FUseAnchorRecord* Record = UseAnchors.FindByPredicate(
+		[OwnerHandle](const FUseAnchorRecord& Candidate)
+		{
+			return Candidate.Owner == OwnerHandle && Candidate.bEnabled
+				&& Candidate.Visual.IsValid();
+		});
+	return Record ? Record->Visual.Get() : nullptr;
 }
 
 void AElysiumMapActor::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)

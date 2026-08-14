@@ -128,7 +128,8 @@ as retail. *Deps:* 9.8, 9.6, 11.4.
 
 ### 13.4 Computer terminals & tutorial hacking
 
-Close RE39 TERM2/TERM4/TERM5 for the tutorial path; parse patch-first `TerminalDefinition` into
+Apply the recovered RE39 TERM4/TERM5 tutorial contract and close the required TERM2 cases; parse
+patch-first `TerminalDefinition` into
 a plain-C++ terminal state machine; give `FElysiumTerminal` the exclusive explicit-use session
 and authoritative non-bindable `hackcmd` path; reproduce Function ordering on the one queue;
 export model-local screen metadata; project a modern 36×24 CommonUI console over the physical
@@ -136,7 +137,8 @@ screen through a fixed `Focus` camera request. Keyboard line editing and the con
 semantic action palette reach the same handler; VtMB's terminal font/VGUI/512×512 raster are
 not reused. TERM7 email and TERM8 screensaver stay in 10.7. *Design:*
 `docs/architecture/computer-terminal-architecture.md`; behavior: `docs/vtmb/computer-terminals.md`.
-*Acceptance:* from real input, keyboard and gamepad focus `tuthack`, execute Unlock, enqueue
-`OnTrigger0`, run `tutorial.tut_hack()`, reveal/unlock the safe, quit, restore the exact
+*Acceptance:* from real input, keyboard and gamepad focus `tuthack`, enter `Safe` by password or
+Hacking bypass, execute Unlock, enqueue `OnTrigger0`, reveal/unlock the safe through the authored
+map wires, quit, restore the exact
 previous camera; the grid stays readable inside the bezel at 1080p/1440p/4K. *Deps:* RE39
-TERM2/4/5, 4.11, 6.8, 9.6, 11.4–11.8.
+TERM2, 4.11, 6.8, 9.6, 11.4–11.8.

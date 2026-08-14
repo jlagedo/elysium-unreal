@@ -283,6 +283,7 @@ Several real commands are content/UI machinery rather than player binds:
 | `v_setpause`, `v_unpause` | client | take/release the character-panel modal hold |
 | `vskip_intro` | vampire | skip the current intro scene; not the `vchar_skip_intro` chargen-footer ConVar |
 | `createplayer` | client | show `CharEditPanel` in character-creation mode |
+| `hackcmd <line>` | client/server | submit the edited line to the one active `CBaseTerminal`; the terminal remains authoritative for built-ins, passwords, directories and Functions |
 
 **`vphysicshand` is a dead bind.** Both `default.cfg` files and the patch's `kb_def.lst` bind
 `p` to it, but the literal appears in no shipped binary and in no level script — the physics-hand item

@@ -377,6 +377,9 @@ public:
 		const FElysiumEntityHandle& Owner) override;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
 	virtual void ClearUseAnchors() override;
+	// Presentation-only lookup for the rendered component that supplied an entity's use anchor.
+	// Query proxies remain private; callers receive the physical mesh/brush, never the proxy box.
+	UPrimitiveComponent* FindUseVisual(const FElysiumEntityHandle& Owner) const;
 	virtual void RegisterTouchAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) override;
 	virtual void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
@@ -480,6 +483,7 @@ private:
 	struct FUseAnchorRecord
 	{
 		TWeakObjectPtr<UPrimitiveComponent> Component;
+		TWeakObjectPtr<UPrimitiveComponent> Visual;
 		FElysiumEntityHandle Owner;
 		bool bEnabled = true;
 	};

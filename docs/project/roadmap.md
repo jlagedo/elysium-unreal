@@ -358,7 +358,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE36 | melee block / `+wpn_secondaryatk`; open: the `vhotkey` deferral | `docs/vtmb/controls.md`; 10.6, 13.3 | [~] |
 | RE37 | the gameplay-action selection chain | `docs/vtmb/animation_and_movers.md` A.3 | [x] |
 | RE38 | inventory ownership and transfer | `docs/vtmb/inventory.md` | [x] |
-| RE39 | computer terminals; open: TERM2/4/5, email/screensaver | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
+| RE39 | computer terminals; open: TERM2/3/6–8 | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; open: native consumers, Masquerade policy | `docs/vtmb/disciplines.md`; 13.2 | [~] |
 | RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; CCC10.1, PL14 | [~] |

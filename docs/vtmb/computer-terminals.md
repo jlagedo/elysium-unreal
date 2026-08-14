@@ -234,7 +234,11 @@ The stricter availability predicate rejects any already-owned terminal. These tw
 why `m_bInUse` and the current-user handle are separate pieces of exclusive-session state.
 
 Base entry `0x102181a0` attaches the user, plays the `access` event, invokes two player-side mode
-transitions, writes `m_bInUse = 1`, and clears the 16-byte terminal input buffer. The
+transitions, writes `m_bInUse = 1`, and clears the 16-byte terminal input buffer. One transition
+sets the player byte at `+0x19f7`; the other sets player flag `0x1`. While the session is active,
+`0x10218320` repeatedly derives the terminal/player bounds, places and relinks the player at the
+terminal's aligned use position, then submits a non-empty input buffer. That body contains no
+distance- or damage-cancellation branch. The
 `CPropHacking` override initializes its content state, enters through that base body, loads global
 email state when applicable, cancels idle screen-saver work, draws the initial screen and attaches
 the player's Hacking interaction component. Base exit `0x10218220` clears client screen state,
@@ -244,7 +248,16 @@ re-arms the screen saver and clears the player's Hacking component.
 
 Active input remains owned by the same server entity. `CPropHacking::AcceptCmd` at `0x1021a830`
 caps the received command to sixteen bytes and routes it by the current logon/directory/password
-state. The complete built-in command vocabulary and forced-exit causes remain under investigation.
+state. In normal directory mode it tries the five built-ins first, then authored directories or
+Functions in file order, then the invalid-command presentation. The built-ins are localized
+`Hacking Strings` entries, not C++ literals: `QUIT` (index 33), `HELP` (34), `LIST` (35), `EMAIL`
+(36), and `HOME_DIR` (17). Empty input redraws the directory. `HOME_DIR` returns to the root;
+`LIST` redraws the current directory; `HELP` prints the help rows; `QUIT` exits through the player
+terminal path; and `EMAIL` either enters email or starts its own password path. The client itself
+still sends literal `quit` for Escape and `break` for Ctrl-C. In password mode `break` calls
+`BeginInput`, starting or restarting the skill-mediated bypass, while any other input goes through
+the case-insensitive password comparison. Email navigation is a separate state with the recovered
+NEXT/PREV/DEL/MENU/QUIT commands; its mutation and persistence details remain TERM7.
 
 ### 6.1 Client character screen
 
@@ -302,13 +315,29 @@ the same field used by `IsLocked()`. The retained generic result dispatch has a 
 but the normal `skilltype` 1/2 path cannot produce it. `Lock` writes 1; `Unlock` writes 3.
 `skilltype 2` queries the Hacking feat, whose rating is Wits + Computer. Attempt pacing is exactly
 `(5.0 - rating*0.25) / playerScale`; the player skill is reread on approach. The terminal-specific
-caller and difficulty-selection join remain open below.
+caller and difficulty-selection join is the pending-target rule below.
 
-Terminal files can author both a `password` and a `difficulty` on each `SubDir`; some files also
-carry a root-level difficulty. The native terminal path that selects entity difficulty versus
-directory difficulty, begins/cycles an attempt, reveals or fills a password, and records
-`m_SubDirAttempts` is not yet recovered. Password correctness, skill success and the typed command
-parser must therefore remain separate concepts until their native join is proven.
+Terminal files can author both a `password` and a `difficulty` on each `SubDir`; the entity also
+carries its ordinary skill-entity `difficulty`. The selected pending target is explicit: `-2` is
+root email and a non-negative value is a directory index. Root email always uses the entity
+difficulty. A valid directory uses its own difficulty when that value is at least 1 and otherwise
+falls back to the entity difficulty. An invalid pending index emits the retail diagnostic and
+returns difficulty 0 rather than reading an unrelated row.
+
+The password and skill paths are separate inputs that converge on one comparison. Ordinary text is
+compared case-insensitively with the pending directory password (or the root email password).
+Ctrl-C's `break` starts `CBaseTerminal::BeginInput`, which fires the skill-attempt begin path and
+uses the shared deterministic Hacking attempt. While its timed progress is non-zero the visible
+buffer retains the known prefix and randomizes the rest. A passing tier fills the real password;
+a failing tier fills random characters. Completion sends that buffer through the same
+`AcceptPassword` body as typed input.
+
+Password acceptance enters and unlocks the pending directory. Failure increments exactly that
+directory's `m_SubDirAttempts` entry (or the root-email counter), displays the failure state, and a
+failed skill bypass returns to the root without exiting the terminal. No attempt-count lockout is
+present in these bodies; another directory selection can retry. Thus password correctness, skill
+resolution and function selection remain distinct transitions even though both unlock routes share
+the final password-accept callback.
 
 ## 8. Function execution and numbered outputs
 
@@ -453,10 +482,8 @@ cannot require every useful computer command to own an `OnTriggerN` wire.
 | ID | Question | Evidence that closes it |
 |---|---|---|
 | TERM1 | What is the class chain above `CBaseTerminal`, and how does the player use dispatcher reach terminal vtable slot 32? | parent ctor/vtable joins and the call path from the player use dispatcher |
-| TERM2 | Which exact player flags and generic `OnUseBegin`/`OnUseEnd` ordering surround confirmed terminal entry/exit, and what forces cancellation? | player-mode callees, generic-use output sites and distance/damage/teardown paths |
+| TERM2 | Which generic `OnUseBegin`/`OnUseEnd` ordering surrounds the confirmed terminal entry/exit, and what outside the active alignment body forces cancellation? | generic-use output sites and player-dispatch/damage/teardown paths |
 | TERM3 | How does client selection feedback work when no `use_icon` is authored? | server use-capability/icon virtuals plus the client context-icon selection path |
-| TERM4 | What is the complete server built-in vocabulary and state transition table after the confirmed client `hackcmd` transport? | `AcceptCmd` comparisons for directory, function, email, password, break and quit commands |
-| TERM5 | How are entity, directory and root difficulties combined with `skilltype`? | callers of the shared skill-attempt methods and reads/writes of `m_SubDirAttempts`/password state |
 | TERM6 | Which terminal sounds surround the confirmed dependency → runtext → `OnTriggerN` → `runscript` → prompt order? | sound-event calls on the command and function execution paths |
 | TERM7 | How do local and global email flags reconcile, and when do scripts/autodelete fire? | email-open/read/delete bodies and save/load reconciliation call sites |
 | TERM8 | What does the screensaver think encode beyond the now-decoded input flags and maximum length? | the complete `CPropHackingSS_Think` body and screen-buffer updates |
