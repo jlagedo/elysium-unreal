@@ -25,6 +25,8 @@ bytes, unterminated.
 
     "SKEL"  u32 boneCount
             boneCount x { string name, i32 parent, f32 t[3], f32 q[4] }
+    "ATCH"  u32 attachmentCount
+            attachmentCount x { string name, u32 bone, f32 t[3], f32 q[4] }
     "DYNM"  u32 chainCount
             chainCount x { string firstBone, string chainEnd,
                            f32 gravityScale, f32 damping,
@@ -333,6 +335,20 @@ def _skel_section(rows):
         out += struct.pack("<i", parent)
         out += struct.pack("<3f", *_conv_pos(pos))
         out += struct.pack("<4f", *_conv_quat(quat))
+    return bytes(out)
+
+
+def _attachment_section(d, bone_map):
+    """Model-authored bone-local attachments, resolved into the emitted skeleton indices."""
+    records = S.attachments(d)
+    if not records:
+        return b""
+    out = bytearray(struct.pack("<I", len(records)))
+    for record in records:
+        out += _string(record.name)
+        out += struct.pack("<I", bone_map[record.bone])
+        out += struct.pack("<3f", *_conv_pos(record.pos))
+        out += struct.pack("<4f", *_conv_quat(record.quat))
     return bytes(out)
 
 
@@ -981,6 +997,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
 
     blob = _assemble([
         (b"SKEL", _skel_section(rows)),
+        (b"ATCH", _attachment_section(d, bone_map)),
         (b"DYNM", dynamics_payload),
         (b"MATL", _matl_section(matnames, matinfo)),
         (b"MESH", mesh_payload),

@@ -304,6 +304,12 @@ public:
 	// body carries no rig or no mouth record.
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) { return false; }
 
+	// Start one non-looping generated effect on a named mesh attachment. The caller names VtMB's
+	// semantic attachment (`mouth`); the baked mesh owns the attachment transform and Niagara owns
+	// the particle simulation. False means the body, socket, asset or spawn could not be resolved.
+	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
+		FName Attachment) { return false; }
+
 	// 12.5 — this body's own phoneme filter (`studiohdr` +232/+236), the bounds a `.lip` phoneme's
 	// span is clamped to for the viseme envelope's blend width. A read rather than a write, and the
 	// only one on this interface: the pair is a property of the model, so the substrate's lipsync

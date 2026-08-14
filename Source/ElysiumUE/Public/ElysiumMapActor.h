@@ -323,6 +323,8 @@ public:
 	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,
 		TArrayView<const FElysiumFlexWrite> Writes, TArray<FString>* OutMissing) override;
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;
+	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
+		FName Attachment) override;
 	virtual bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
 		float& OutMax) const override;
 	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) override;

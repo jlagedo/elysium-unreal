@@ -103,6 +103,29 @@ namespace
 		}
 	}
 
+	void ReadAttachments(FCursor& Cursor, FElysiumSkeletalSource& Out)
+	{
+		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
+		Out.Attachments.Reserve(FMath::Max(Count, 0));
+		for (int32 Index = 0; Index < Count && Cursor.IsValid(); ++Index)
+		{
+			FElysiumSourceAttachment& Attachment = Out.Attachments.AddDefaulted_GetRef();
+			Attachment.Name = FName(*Cursor.ReadString());
+			Attachment.Bone = static_cast<int32>(Cursor.Read<uint32>());
+			FVector3f Translation;
+			Translation.X = Cursor.Read<float>();
+			Translation.Y = Cursor.Read<float>();
+			Translation.Z = Cursor.Read<float>();
+			FQuat4f Rotation;
+			Rotation.X = Cursor.Read<float>();
+			Rotation.Y = Cursor.Read<float>();
+			Rotation.Z = Cursor.Read<float>();
+			Rotation.W = Cursor.Read<float>();
+			Rotation.Normalize();
+			Attachment.Local = FTransform(FQuat(Rotation), FVector(Translation));
+		}
+	}
+
 	void ReadMaterials(FCursor& Cursor, FElysiumSkeletalSource& Out)
 	{
 		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
@@ -315,6 +338,7 @@ namespace
 	}
 
 	constexpr uint32 TagSkel = 'L' << 24 | 'E' << 16 | 'K' << 8 | 'S';
+	constexpr uint32 TagAtch = 'H' << 24 | 'C' << 16 | 'T' << 8 | 'A';
 	constexpr uint32 TagMatl = 'L' << 24 | 'T' << 16 | 'A' << 8 | 'M';
 	constexpr uint32 TagMesh = 'H' << 24 | 'S' << 16 | 'E' << 8 | 'M';
 	constexpr uint32 TagMorf = 'F' << 24 | 'R' << 16 | 'O' << 8 | 'M';
@@ -338,6 +362,7 @@ namespace
 		switch (Entry.Tag)
 		{
 		case TagSkel: ReadSkeleton(Section, Out); break;
+		case TagAtch: ReadAttachments(Section, Out); break;
 		case TagMatl: ReadMaterials(Section, Out); break;
 		case TagMesh: ReadMesh(Section, Out); break;
 		case TagMorf: ReadMorphs(Section, Out); break;
@@ -366,6 +391,17 @@ namespace
 		{
 			OutError = FString::Printf(TEXT("%s: bone %s parents forward to %d"),
 				*Path, *Out.Bones[Index].Name.ToString(), Out.Bones[Index].Parent);
+			return false;
+		}
+	}
+	for (int32 Index = 0; Index < Out.Attachments.Num(); ++Index)
+	{
+		const FElysiumSourceAttachment& Attachment = Out.Attachments[Index];
+		if (Attachment.Name.IsNone() || !Out.Bones.IsValidIndex(Attachment.Bone)
+			|| !Attachment.Local.IsValid())
+		{
+			OutError = FString::Printf(TEXT("%s: attachment %d ('%s') has invalid bone %d or transform"),
+				*Path, Index, *Attachment.Name.ToString(), Attachment.Bone);
 			return false;
 		}
 	}

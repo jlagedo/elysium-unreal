@@ -12,6 +12,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "BoneWeights.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/SkeletalMeshSocket.h"
 #include "Engine/SkinnedAssetCommon.h"
 #include "MeshDescription.h"
 #include "Misc/PackageName.h"
@@ -432,6 +433,31 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		}
 	}
 	Mesh->SetRefSkeleton(RefSkeleton);
+
+	// Attachments are model-authored data resolved offline into ordinary Unreal mesh sockets.
+	// Their transform is already bone-local and Unreal-native, so the generated mesh carries the
+	// answer and event consumers never evaluate a VtMB frame rule at runtime.
+	for (const FElysiumSourceAttachment& SourceAttachment : Source.Attachments)
+	{
+		if (!Source.Bones.IsValidIndex(SourceAttachment.Bone)
+			|| RefSkeleton.FindBoneIndex(Source.Bones[SourceAttachment.Bone].Name) == INDEX_NONE)
+		{
+			return FString::Printf(TEXT("%s: attachment %s names unavailable bone %d"),
+				*SourcePath, *SourceAttachment.Name.ToString(), SourceAttachment.Bone);
+		}
+		USkeletalMeshSocket* Socket = NewObject<USkeletalMeshSocket>(Mesh);
+		if (Socket == nullptr)
+		{
+			return FString::Printf(TEXT("%s: could not create attachment socket %s"),
+				*SourcePath, *SourceAttachment.Name.ToString());
+		}
+		Socket->SocketName = SourceAttachment.Name;
+		Socket->BoneName = Source.Bones[SourceAttachment.Bone].Name;
+		Socket->RelativeLocation = SourceAttachment.Local.GetLocation();
+		Socket->RelativeRotation = SourceAttachment.Local.GetRotation().Rotator();
+		Socket->RelativeScale = SourceAttachment.Local.GetScale3D();
+		Mesh->AddSocket(Socket, /*bAddToSkeleton=*/false);
+	}
 
 	// The optional hair proof recipe is generated content on the mesh, not a runtime VtMB table.
 	// Validate the named route before serialising it: a typo must fail the bake instead of turning

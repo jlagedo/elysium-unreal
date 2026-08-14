@@ -12,9 +12,9 @@
 // Scope: ordinary player-on-humanoid feeding, paired mode 0. Seductive (mode 2), rat (mode 6) and
 // zombie (mode 8) feeding, prayer, the trait-effect branches (`FX_Increased_Rat_Feed`,
 // `Fx_Feed_Bonus_Opp_Gender`, `Fx_Feed_Bonus_Tramps`, `Fx_Cannot_Rat_Feed`), the signed
-// first-pulse blood-gain modifier at +0x14a4, heartbeat, particles and audio remain absent rather
-// than approximated. The capture-backed ordinary presentation slice (paired height variants,
-// camera lease, victim meter and release tail) uses these same pure rules.
+// first-pulse blood-gain modifier at +0x14a4 remain absent rather than approximated. The
+// capture-backed ordinary presentation slice (paired height variants, camera lease, victim meter,
+// recovered sound state, mouth bursts and release tail) uses these same pure rules.
 
 struct FElysiumRollResult;
 struct FElysiumUserCmd;
@@ -156,5 +156,5 @@ namespace ElysiumFeed
 	// The three event ids `CBaseCombatCharacter::HandleAnimEvent` gives distinct jobs.
 	inline constexpr int32 EventFeedBegin      = 4007;
 	inline constexpr int32 EventFeedTeardown   = 4006;
-	inline constexpr int32 EventFeedEmitter    = 5116;   // presentation only
+	inline constexpr int32 EventFeedEmitter    = 5116;   // repeating presentation-only mouth burst
 }

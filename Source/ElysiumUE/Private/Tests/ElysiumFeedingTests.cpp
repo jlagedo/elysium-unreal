@@ -534,6 +534,10 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		SeedFeedSheet(*Player, /*Blood*/ 0, /*MaxHealth*/ 100, /*Damage*/ 45);
 		SeedFeedSheet(*Victim, /*Blood*/ 3, /*MaxHealth*/ 100, /*Damage*/ 0);
 		Victim->Disposition = TEXT("cower");
+		Victim->OnFeedAnimEvent(ElysiumFeed::EventFeedEmitter);
+		Victim->OnFeedAnimEvent(ElysiumFeed::EventFeedEmitter);
+		TestEqual(TEXT("each event 5116 occurrence asks for a fresh mouth burst"),
+			Services.Count(TEXT("PlayAttachedEffect force_feeding_emitter mouth")), 2);
 		const FVector PlayerOriginBefore = Player->Origin;
 		const FVector VictimOriginBefore = Victim->Origin;
 

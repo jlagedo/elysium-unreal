@@ -25,6 +25,14 @@ struct FElysiumSourceBone
 	FTransform Local;
 };
 
+/** One model-authored socket transform, local to `Bones[Bone]`. */
+struct FElysiumSourceAttachment
+{
+	FName Name;
+	int32 Bone = INDEX_NONE;
+	FTransform Local;
+};
+
 struct FElysiumSourceMaterial
 {
 	FString Name;
@@ -124,6 +132,8 @@ struct FElysiumSourceHairDynamicsChain
 struct FElysiumSkeletalSource
 {
 	TArray<FElysiumSourceBone> Bones;
+	/** Optional in a version-7 container; regenerated character bodies carry the MDL attachments. */
+	TArray<FElysiumSourceAttachment> Attachments;
 	TArray<FElysiumSourceMaterial> Materials;
 	TArray<FElysiumSourceSection> Sections;
 	TArray<FElysiumSourceVertex> Vertices;

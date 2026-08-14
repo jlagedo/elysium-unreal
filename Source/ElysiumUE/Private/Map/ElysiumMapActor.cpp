@@ -53,6 +53,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraDataSetAccessor.h"
 #include "NiagaraEmitterInstance.h"
+#include "NiagaraFunctionLibrary.h"
 #include "NiagaraRendererProperties.h"
 #include "NiagaraSpriteRendererProperties.h"
 #include "NiagaraSystem.h"
@@ -974,6 +975,55 @@ int32 AElysiumMapActor::SetFlexControllers(USkeletalMeshComponent* Body,
 bool AElysiumMapActor::SetMouthOpen(USkeletalMeshComponent* Body, float Open)
 {
 	return Bodies ? Bodies->SetMouthOpen(Body, Open) : false;
+}
+
+bool AElysiumMapActor::PlayAttachedEffect(USkeletalMeshComponent* Body,
+	const FString& Definition, FName Attachment)
+{
+	auto WarnOnce = [this, &Definition](const FString& Key, const FString& Message)
+	{
+		const FString Failure = TEXT("oneshot|") + Key;
+		if (!ReportedEmitterFailures.Contains(Failure))
+		{
+			ReportedEmitterFailures.Add(Failure);
+			UE_LOG(LogElysium, Warning, TEXT("%s"), *Message);
+		}
+	};
+	if (!Body || Definition.IsEmpty() || Attachment.IsNone())
+	{
+		WarnOnce(TEXT("invalid|") + Definition,
+			FString::Printf(TEXT("cannot play attached effect '%s' on map '%s': invalid body or attachment"),
+				*Definition, *MapName));
+		return false;
+	}
+	if (!Body->DoesSocketExist(Attachment))
+	{
+		WarnOnce(TEXT("socket|") + Definition + TEXT("|") + Attachment.ToString(),
+			FString::Printf(TEXT("cannot play attached effect '%s' on %s: baked socket '%s' is absent"),
+				*Definition, *Body->GetName(), *Attachment.ToString()));
+		return false;
+	}
+	const FString Path = FElysiumContentPaths::BakedParticleSystem(MapName, Definition);
+	UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *Path);
+	if (!System)
+	{
+		WarnOnce(TEXT("system|") + Definition,
+			FString::Printf(TEXT("cannot play attached effect '%s' on map '%s': Niagara system '%s' is absent"),
+				*Definition, *MapName, *Path));
+		return false;
+	}
+	UNiagaraComponent* Spawned = UNiagaraFunctionLibrary::SpawnSystemAttached(
+		System, Body, Attachment, FVector::ZeroVector, FRotator::ZeroRotator,
+		EAttachLocation::SnapToTarget, /*bAutoDestroy*/ true, /*bAutoActivate*/ true,
+		ENCPoolMethod::None, /*bPreCullCheck*/ false);
+	if (!Spawned)
+	{
+		WarnOnce(TEXT("spawn|") + Definition,
+			FString::Printf(TEXT("cannot spawn attached effect '%s' on %s.%s"),
+				*Definition, *Body->GetName(), *Attachment.ToString()));
+		return false;
+	}
+	return true;
 }
 
 bool AElysiumMapActor::GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,

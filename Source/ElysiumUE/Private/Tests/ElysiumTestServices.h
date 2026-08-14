@@ -450,6 +450,13 @@ struct FElysiumRecordingServices final
 		MouthOpenByBody.Add(Body, Open);
 		return true;
 	}
+	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
+		FName Attachment) override
+	{
+		Record(FString::Printf(TEXT("PlayAttachedEffect %s %s"),
+			*Definition, *Attachment.ToString()));
+		return Body != nullptr && !Definition.IsEmpty() && !Attachment.IsNone();
+	}
 
 	// 12.5 — the per-model phoneme filter this fake cast answers with. Per body, because the point of
 	// the read is that two speakers in one scene can carry different pairs. A body with no entry falls

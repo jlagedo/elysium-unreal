@@ -4,8 +4,8 @@
 //
 // `docs/vtmb/feeding.md` is the specification and owns every fact below; this file is the
 // implementation of its "Recreation contract" items 1-9 plus the capture-backed ordinary camera,
-// meter and release-tail presentation contract. Seductive/rat/zombie modes, prayer, audio and
-// particles remain explicitly out of scope.
+// meter, audio, heartbeat, event-5116 particle and release-tail presentation contract.
+// Seductive/rat/zombie modes and prayer remain explicitly out of scope.
 //
 // THE ANIMATION-EVENT BRIDGE IS A SCHEDULER, NOT A NOTIFY LISTENER.
 // VtMB marks the transaction's boundaries with model-authored animation events (4007 at the bite,
@@ -648,8 +648,30 @@ void FElysiumCombatCharacter::OnFeedAnimEvent(int32 EventId)
 		CompleteFeedTransaction(/*bKeepReleaseTail*/ true);
 		break;
 	case ElysiumFeed::EventFeedEmitter:
-		// 5116 starts the mouth-attached `force_feeding_emitter` effect. Presentation only: no
-		// blood, no health, no timing. Left as a named no-op so the id is accounted for.
+		// Only the attacker clips author 5116. It starts an independent one-shot on every loop
+		// occurrence: no blood, health or transaction timing, and no handle for teardown to stop.
+		if (!FeedState.bVictim)
+		{
+			USkeletalMeshComponent* Body = GetSkeletalBody();
+			if (!Body)
+			{
+				break;   // supported headless path
+			}
+			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+			if (!Embodiment)
+			{
+				UE_LOG(LogElysiumFeed, Warning,
+					TEXT("%s cannot emit force_feeding_emitter: no embodiment service"),
+					*DebugString());
+				break;
+			}
+			if (!Embodiment->PlayAttachedEffect(
+				Body, TEXT("force_feeding_emitter"), FName(TEXT("mouth"))))
+			{
+				// The embodiment owns and diagnoses the concrete missing socket, generated asset or
+				// spawn failure. The effect is presentation-only, so the transaction keeps running.
+			}
+		}
 		break;
 	default:
 		break;
@@ -805,7 +827,7 @@ void FElysiumCombatCharacter::CompleteFeedTransaction(bool bKeepReleaseTail)
 	bool bSurvivingReleaseTail = false;
 	if (Victim)
 	{
-		// 1. stop feeder/victim loop and heartbeat presentation — presentation, not built.
+		// 1. feeder/victim loops and the victim heartbeat were stopped above.
 		// 2. read the victim's remaining BloodPool.
 		const int32 Remaining = Victim->BloodPoolValue();
 		const bool bDepleted = Remaining < 1;
@@ -1002,6 +1024,7 @@ void FElysiumCombatCharacter::AdvanceFeedPhase(double Now)
 		{
 			Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
 		}
+		OnFeedAnimEvent(ElysiumFeed::EventFeedEmitter);
 		break;
 
 	case EElysiumFeedPhase::Release:

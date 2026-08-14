@@ -2709,7 +2709,7 @@ weights sum to one, and no `.mdl`/`.dx80.vtx` skin decode fails.
 
 ## A.6 Attachments & hitboxes [data-verified]
 
-**`StudioAttachment` (60B):** `NameIndex`@0, `type/flags`@4, `bone`@8,
+**`StudioAttachment` (60B):** record-relative `NameIndex`@0, `type/flags`@4, `bone`@8,
 `matrix3x4 local`@12 — where to parent weapons/props/muzzle effects. jeanette:
 `mouth`@bone12, `eyes`@bone12, weapon-mount@bone47 (paired with the `tire iron`
 bone). **Hitboxes:** set (12B: `NameIndex`, `NumHitBoxes`, `HitBoxIndex`) →

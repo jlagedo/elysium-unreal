@@ -1,4 +1,4 @@
-"""VtMB `.mdl` v2531 skeletal decode — bones, skin, animation tracks, and the face.
+"""VtMB `.mdl` v2531 skeletal decode — bones, attachments, skin, animation tracks, and the face.
 
 Companion to `mdl.py` (static geometry). Decodes the animated half documented in
 `docs/vtmb/animation_and_movers.md` Part A: the `StudioBone` skeleton, per-vertex skin
@@ -61,6 +61,12 @@ MESH_STRIDE = 60
 #: `model_base + *(int*)(model_base + 0xC4) + materialparam * 0x8C`.
 EYEBALL_STRIDE = 140
 
+#: VtMB's trimmed `StudioAttachment`: record-relative name offset, flags, bone and a bone-local 3x4
+#: transform. Modern Source's record is wider; the v2531 layout is pinned in
+#: `docs/vtmb/animation_and_movers.md` A.6.
+ATTACHMENT_STRIDE = 60
+_MAX_ATTACHMENTS = 4096
+
 
 def _cstr(b, o):
     e = b.index(b"\0", o)
@@ -108,6 +114,72 @@ def read_bones(d):
             flags=_i32(d, b + 136),
         ))
     return bones
+
+
+Attachment = namedtuple("Attachment", "name flags bone pos quat")
+
+
+def _matrix_quat(matrix):
+    """Unit (x,y,z,w) quaternion for a row-major 3x3 rotation matrix."""
+    m00, m01, m02, m10, m11, m12, m20, m21, m22 = matrix
+    trace = m00 + m11 + m22
+    if trace > 0.0:
+        s = 2.0 * math.sqrt(trace + 1.0)
+        q = ((m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25 * s)
+    elif m00 > m11 and m00 > m22:
+        s = 2.0 * math.sqrt(1.0 + m00 - m11 - m22)
+        q = (0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s)
+    elif m11 > m22:
+        s = 2.0 * math.sqrt(1.0 + m11 - m00 - m22)
+        q = ((m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s)
+    else:
+        s = 2.0 * math.sqrt(1.0 + m22 - m00 - m11)
+        q = ((m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s)
+    length = math.sqrt(sum(value * value for value in q))
+    if not math.isfinite(length) or length <= 1e-6:
+        raise ValueError("attachment carries an invalid rotation matrix")
+    return tuple(value / length for value in q)
+
+
+def attachments(d):
+    """`StudioAttachment[NumLocalAttachments]` -> bone-local Source transforms.
+
+    The name index is relative to its attachment record. The 3x4 matrix is row-major: its last
+    column is the Source-inch translation and its 3x3 block is an ordinary proper rotation.
+    """
+    count = _i32(d, 328)
+    base = _i32(d, 332)
+    if count < 0 or count > _MAX_ATTACHMENTS:
+        raise ValueError(f"invalid attachment count {count}")
+    if count == 0:
+        return []
+    if base < 0 or base + count * ATTACHMENT_STRIDE > len(d):
+        raise ValueError("attachment array runs past the model image")
+
+    bone_count = _i32(d, 240)
+    result = []
+    for index in range(count):
+        at = base + index * ATTACHMENT_STRIDE
+        name_at = at + _i32(d, at)
+        if name_at <= 0 or name_at >= len(d):
+            raise ValueError(f"attachment {index} has invalid name offset {name_at}")
+        bone = _i32(d, at + 8)
+        if bone < 0 or bone >= bone_count:
+            raise ValueError(f"attachment {index} names bone {bone} of {bone_count}")
+        values = struct.unpack_from("<12f", d, at + 12)
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError(f"attachment {index} carries a non-finite transform")
+        rotation = (values[0], values[1], values[2],
+                    values[4], values[5], values[6],
+                    values[8], values[9], values[10])
+        result.append(Attachment(
+            name=_cstr(d, name_at),
+            flags=_i32(d, at + 4),
+            bone=bone,
+            pos=(values[3], values[7], values[11]),
+            quat=_matrix_quat(rotation),
+        ))
+    return result
 
 
 def find_anim(d, name):

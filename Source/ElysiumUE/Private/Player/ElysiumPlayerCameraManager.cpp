@@ -66,7 +66,7 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 	if (Camera)
 	{
 		// Advance semantic requests before the base rig. A winning Feed request drives the recovered
-		// feed/forced-third weight rather than inventing a second camera rig or an unverified orbit.
+		// one-second weight; the camera component applies the pinned ordinary orbit after third-person.
 		if (ScopedCamera)
 		{
 			const FElysiumResolvedCameraState& Resolved = ScopedCamera->ResolvedCamera();

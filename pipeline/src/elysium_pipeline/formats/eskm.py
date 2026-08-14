@@ -1,10 +1,10 @@
 """Read the header sections of Elysium's `.eskm` skeletal container.
 
 The container is written by `exporters/UE_mdl_skeletal.py` and consumed in full by
-`FElysiumSkeletalSource` on the C++ side. This module reads only the two sections the offline
-bake orchestration needs before it hands a file to the editor -- the bone tree, to partition
-models into rig families, and the material table, to know which textures to import. Geometry,
-morph targets and clips are never decoded here; they are the editor's business.
+`FElysiumSkeletalSource` on the C++ side. This module reads only the small sections the offline
+bake orchestration and focused contract tests need before a file reaches the editor -- the bone
+tree, authored attachments and material table. Geometry, morph targets and clips are never
+decoded here; they are the editor's business.
 
 Layout is documented once, at the top of `UE_mdl_skeletal.py`.
 """
@@ -97,6 +97,27 @@ def bone_parents(blob):
     rows = bones(blob)
     return {name: (rows[parent][0] if 0 <= parent < len(rows) else "")
             for name, parent in rows}
+
+
+def attachments(blob):
+    """[(name, bone index, translation, rotation)] in Unreal-native bone-local space."""
+    where = directory(blob).get(b"ATCH")
+    if where is None:
+        return []
+    offset = where[0]
+    count = struct.unpack_from("<I", blob, offset)[0]
+    offset += 4
+    out = []
+    for _ in range(count):
+        name, offset = _string(blob, offset)
+        bone = struct.unpack_from("<I", blob, offset)[0]
+        offset += 4
+        translation = struct.unpack_from("<3f", blob, offset)
+        offset += 12
+        rotation = struct.unpack_from("<4f", blob, offset)
+        offset += 16
+        out.append((name, bone, translation, rotation))
+    return out
 
 
 def materials(blob):
