@@ -2028,15 +2028,15 @@ bool FElysiumEntityWorld::BuildTerminalView(FElysiumTerminalView& Out) const
 	return Out.IsOpen();
 }
 
-bool FElysiumEntityWorld::SubmitTerminalCommand(const FElysiumEntityHandle& Owner,
+bool FElysiumEntityWorld::SubmitTerminalCommand(const FElysiumEntityHandle& OwnerHandle,
 	uint32 SessionSerial, const FString& Command)
 {
-	if (!ActiveUse.IsSet() || ActiveUse->Context.Owner != Owner
+	if (!ActiveUse.IsSet() || ActiveUse->Context.Owner != OwnerHandle
 		|| ActiveUse->Context.Activator != Player)
 	{
 		return false;
 	}
-	FElysiumEntity* Entity = Resolve(Owner);
+	FElysiumEntity* Entity = Resolve(OwnerHandle);
 	FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
 	return Terminal && Terminal->CurrentUser == Player && Terminal->Submit(SessionSerial, Command);
 }
@@ -2052,15 +2052,15 @@ bool FElysiumEntityWorld::SubmitActiveTerminalCommand(const FString& Command)
 	return Terminal && SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, Command);
 }
 
-bool FElysiumEntityWorld::PlayerBeginTerminalHack(const FElysiumEntityHandle& Owner,
+bool FElysiumEntityWorld::PlayerBeginTerminalHack(const FElysiumEntityHandle& OwnerHandle,
 	uint32 SessionSerial)
 {
-	if (!ActiveUse.IsSet() || ActiveUse->Context.Owner != Owner
+	if (!ActiveUse.IsSet() || ActiveUse->Context.Owner != OwnerHandle
 		|| ActiveUse->Context.Activator != Player)
 	{
 		return false;
 	}
-	FElysiumEntity* Entity = Resolve(Owner);
+	FElysiumEntity* Entity = Resolve(OwnerHandle);
 	FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
 	return Terminal && Terminal->CurrentUser == Player && Terminal->BeginHack(SessionSerial);
 }

@@ -265,10 +265,10 @@ public:
 	bool PlayerLootGive(int32 Slot);
 	bool PlayerCloseLoot();
 	bool BuildTerminalView(FElysiumTerminalView& Out) const;
-	bool SubmitTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
+	bool SubmitTerminalCommand(const FElysiumEntityHandle& OwnerHandle, uint32 SessionSerial,
 		const FString& Command);
 	bool SubmitActiveTerminalCommand(const FString& Command);
-	bool PlayerBeginTerminalHack(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+	bool PlayerBeginTerminalHack(const FElysiumEntityHandle& OwnerHandle, uint32 SessionSerial);
 	EElysiumUseOutcome GetLastUseOutcome() const { return LastUseOutcome; }
 
 	// --- Screen fade (P4.5 env_fade) ---------------------------------------------------

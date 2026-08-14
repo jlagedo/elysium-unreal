@@ -573,6 +573,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenTest,
 
 bool FElysiumTerminalScreenTest::RunTest(const FString&)
 {
+	ICommonInputModule::GetSettings().LoadData();
 	FElysiumTerminalView View;
 	View.Owner = FElysiumEntityHandle(7, 1);
 	View.SessionSerial = 19;
@@ -582,9 +583,9 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 	View.Rows = 24;
 	View.MaxInput = 16;
 	View.ScreenRows.SetNum(View.Rows);
-	View.ScreenRows[0] = TEXT("TEST TERMINAL").RightPad(View.Columns);
-	View.ScreenRows[2] = TEXT("Available menus:").RightPad(View.Columns);
-	View.ScreenRows[3] = TEXT("    Safe").RightPad(View.Columns);
+	View.ScreenRows[0] = FString(TEXT("TEST TERMINAL")).RightPad(View.Columns);
+	View.ScreenRows[2] = FString(TEXT("Available menus:")).RightPad(View.Columns);
+	View.ScreenRows[3] = FString(TEXT("    Safe")).RightPad(View.Columns);
 	FElysiumTerminalActionView Safe;
 	Safe.Id = TEXT("dir:0");
 	Safe.Label = TEXT("Safe");

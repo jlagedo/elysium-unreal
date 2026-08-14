@@ -91,7 +91,7 @@ bool UElysiumTerminalScreen::SetProjectionTarget(UPrimitiveComponent* InTarget)
 	if (ListedIndex == INDEX_NONE || MaterialIndex == INDEX_NONE)
 	{
 		const FString Available = FString::JoinBy(SlotNames, TEXT(", "),
-			[](const FName& Slot) { return Slot.ToString(); });
+			[](const FName& MaterialSlot) { return MaterialSlot.ToString(); });
 		UE_LOG(LogElysiumTerminalUI, Warning,
 			TEXT("terminal projection failed for %s serial %u: component '%s' has no exact "
 				"'screen' material slot (available: %s)"),
@@ -321,7 +321,7 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildActionVisual(
 
 TSharedRef<SWidget> UElysiumTerminalScreen::BuildTerminalSurface()
 {
-	TSharedRef<SWrapBox> Actions = SNew(SWrapBox).UseAllottedSize(true);
+	TSharedRef<SWrapBox> ActionWrap = SNew(SWrapBox).UseAllottedSize(true);
 	for (const FElysiumTerminalActionView& ActionView : Terminal.Actions)
 	{
 		const FName ActionId(*ActionView.Id);
@@ -349,7 +349,7 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildTerminalSurface()
 			DefaultActionId = ActionId;
 		}
 		Action->SetSlateContent(BuildActionVisual(*Action, Label));
-		Actions->AddSlot().Padding(FMargin(0.0f, 0.0f, 7.0f, 7.0f))
+		ActionWrap->AddSlot().Padding(FMargin(0.0f, 0.0f, 7.0f, 7.0f))
 		[
 			Action->TakeWidget()
 		];
@@ -373,7 +373,7 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildTerminalSurface()
 					+ SVerticalBox::Slot().FillHeight(1.0f)
 					[
 						SNew(STextBlock)
-						.Text(this, &UElysiumTerminalScreen::ScreenText)
+						.Text_Lambda([this]() { return ScreenText(); })
 						.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
 						.ColorAndOpacity(FSlateColor(Phosphor))
 						.Clipping(EWidgetClipping::ClipToBoundsAlways)
@@ -386,14 +386,14 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildTerminalSurface()
 						.Padding(FMargin(10.0f, 7.0f))
 						[
 							SNew(STextBlock)
-							.Text(this, &UElysiumTerminalScreen::DraftDisplayText)
+							.Text_Lambda([this]() { return DraftDisplayText(); })
 							.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
 							.ColorAndOpacity(FSlateColor(Phosphor))
 						]
 					]
 					+ SVerticalBox::Slot().AutoHeight()
 					[
-						Actions
+						ActionWrap
 					]
 				]
 			]
