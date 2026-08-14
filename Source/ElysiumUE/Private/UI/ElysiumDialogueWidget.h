@@ -35,8 +35,10 @@ namespace ElysiumDialogueUI
 	inline constexpr float ResponsePanelBottomInset = 24.0f;
 
 	// Pure input policy shared by the CommonUI wrapper and retained Slate body. An engaged optional
-	// carries the visible choice index; -1 advances a terminal line.
-	TOptional<int32> ChoiceForKey(const FKey& Key, int32 NumChoices, bool bTerminal);
+	// carries the visible choice index; -1 advances a terminal line. A normal automatic wait owns
+	// the keys but resolves only from voice completion, so it produces no action.
+	TOptional<int32> ChoiceForKey(const FKey& Key, int32 NumChoices, bool bTerminal,
+		bool bAwaitingAutomatic = false);
 }
 
 class SElysiumDialogueBox : public SCompoundWidget
@@ -47,12 +49,13 @@ public:
 		SLATE_ARGUMENT(FString, Line)                    // the NPC subtitle for this turn
 		SLATE_ARGUMENT(TArray<FString>, Choices)         // PC choice labels, in author order
 		SLATE_ARGUMENT(bool, bTerminal)                  // no choices — show a single "continue"
+		SLATE_ARGUMENT(bool, bAwaitingAutomatic)         // voice owns advancement; show no response row
 		SLATE_EVENT(FElysiumBuildDlgChoice, OnBuildChoice)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
 	void SetDialogue(const FString& Speaker, const FString& Line,
-		const TArray<FString>& Choices, bool bInTerminal);
+		const TArray<FString>& Choices, bool bInTerminal, bool bInAwaitingAutomatic);
 
 private:
 	void RebuildDialogue(const FString& Speaker, const FString& Line,
@@ -60,4 +63,5 @@ private:
 	FElysiumBuildDlgChoice BuildChoiceEvent;
 	int32 NumChoices = 0;
 	bool bTerminal = false;
+	bool bAwaitingAutomatic = false;
 };

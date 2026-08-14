@@ -54,6 +54,25 @@ struct FElysiumDlgLine
 
 	bool IsNpcLine() const { return Role == EElysiumDlgRole::NpcLine; }
 	bool IsPcChoice() const { return Role == EElysiumDlgRole::PcChoice; }
+	// Troika's editor emits these PC-role rows as control-flow markers. They are never player
+	// responses: after the preceding NPC turn has finished, Auto-Link follows its numeric link and
+	// Auto-End follows link 0. Classification is exact apart from surrounding whitespace/case so a
+	// real authored sentence containing either phrase is not swallowed.
+	bool IsAutoLink() const
+	{
+		FString Marker = TextMale;
+		Marker.TrimStartAndEndInline();
+		return Role == EElysiumDlgRole::PcChoice
+			&& Marker.Equals(TEXT("(Auto-Link)"), ESearchCase::IgnoreCase);
+	}
+	bool IsAutoEnd() const
+	{
+		FString Marker = TextMale;
+		Marker.TrimStartAndEndInline();
+		return Role == EElysiumDlgRole::PcChoice
+			&& Marker.Equals(TEXT("(Auto-End)"), ESearchCase::IgnoreCase);
+	}
+	bool IsAutomatic() const { return IsAutoLink() || IsAutoEnd(); }
 	// Retail recognizes a starting-condition sentinel by a case-insensitive substring in raw col-1.
 	// All three spellings occur in the engine classifier; this is independent of the row's link role.
 	bool IsStartingCondition() const
@@ -150,13 +169,25 @@ public:
 	// Convenience: resolve the Nth visible choice to its line, or null if out of range.
 	const FElysiumDlgLine* VisibleChoice(int32 VisibleIndex) const;
 
-	// The current NPC line has no passing choices — it is the last thing said; the next advance ends it.
-	bool IsTerminalLine() const { return CurrentIndex != INDEX_NONE && VisibleChoiceIndices.Num() == 0 && !bOver; }
+	// A passing editor-generated automatic row belongs to the current NPC turn but is not displayed.
+	// The world resolves it only after that turn's voice finishes.
+	bool IsAwaitingAutomatic() const { return PendingAutomaticIndex != INDEX_NONE && !bOver; }
+	const FElysiumDlgLine* PendingAutomatic() const;
+	// The current NPC line has neither passing choices nor an automatic continuation — it is the last
+	// thing said; the next explicit advance ends it.
+	bool IsTerminalLine() const
+	{
+		return CurrentIndex != INDEX_NONE && VisibleChoiceIndices.Num() == 0
+			&& PendingAutomaticIndex == INDEX_NONE && !bOver;
+	}
 	// The conversation has ended (a link-0 pick, an unresolved link, or a closed terminal line).
 	bool IsOver() const { return bOver; }
 
 	// Player picks the Nth visible choice: run its col-5 action, then follow its link (0 -> end).
 	void Choose(int32 VisibleIndex);
+	// Run the pending Auto-Link/Auto-End row's action once and follow its link. No-op unless the
+	// current NPC turn selected an automatic row.
+	void ResolveAutomatic();
 	// Advance past a terminal NPC line (the "continue" affordance) — ends the conversation.
 	void AdvanceTerminal();
 	// End the conversation immediately (e.g. the owner NPC dies). Idempotent.
@@ -174,6 +205,7 @@ public:
 private:
 	int32 SelectStartingLineIndex() const;
 	void EnterNpcLine(int32 LineIndex);   // exec its actions, gather passing choices, mark terminal if none
+	void FollowPcLine(const FElysiumDlgLine& Line); // exec action, follow numeric link (0 -> close)
 	bool PassesGate(const FString& RawCondition) const;  // empty -> true; else CondFn
 
 	TSharedRef<const FElysiumDlgFile> DlgFile;
@@ -185,6 +217,7 @@ private:
 
 	int32 CurrentIndex = INDEX_NONE;      // index into Lines of the current NPC line
 	TArray<int32> VisibleChoiceIndices;
+	int32 PendingAutomaticIndex = INDEX_NONE;
 	bool bOver = false;
 	uint32 Rev = 0;
 };

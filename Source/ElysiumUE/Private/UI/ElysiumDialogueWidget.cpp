@@ -20,8 +20,12 @@ namespace
 }
 
 TOptional<int32> ElysiumDialogueUI::ChoiceForKey(
-	const FKey& Key, int32 NumChoices, bool bTerminal)
+	const FKey& Key, int32 NumChoices, bool bTerminal, bool bAwaitingAutomatic)
 {
+	if (bAwaitingAutomatic && !bTerminal)
+	{
+		return TOptional<int32>();
+	}
 	if (bTerminal || NumChoices == 0)
 	{
 		return Key == EKeys::SpaceBar || Key == EKeys::Enter || Key == EKeys::One
@@ -46,14 +50,16 @@ TOptional<int32> ElysiumDialogueUI::ChoiceForKey(
 void SElysiumDialogueBox::Construct(const FArguments& InArgs)
 {
 	BuildChoiceEvent = InArgs._OnBuildChoice;
-	SetDialogue(InArgs._Speaker, InArgs._Line, InArgs._Choices, InArgs._bTerminal);
+	SetDialogue(InArgs._Speaker, InArgs._Line, InArgs._Choices, InArgs._bTerminal,
+		InArgs._bAwaitingAutomatic);
 }
 
 void SElysiumDialogueBox::SetDialogue(const FString& Speaker, const FString& Line,
-	const TArray<FString>& Choices, bool bInTerminal)
+	const TArray<FString>& Choices, bool bInTerminal, bool bInAwaitingAutomatic)
 {
 	NumChoices = Choices.Num();
 	bTerminal = bInTerminal;
+	bAwaitingAutomatic = bInAwaitingAutomatic;
 	RebuildDialogue(Speaker, Line, Choices);
 }
 
@@ -94,7 +100,12 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 		]
 	];
 
-	if (bTerminal || NumChoices == 0)
+	if (bAwaitingAutomatic && !bTerminal)
+	{
+		// The preceding NPC turn remains readable while its voice owns the transition. The editor's
+		// `(Auto-Link)`/`(Auto-End)` marker is deliberately absent from the response band.
+	}
+	else if (bTerminal || NumChoices == 0)
 	{
 		// Terminal line — a single continue affordance ends the conversation.
 		Inner->AddSlot().AutoHeight().Padding(0, 2)

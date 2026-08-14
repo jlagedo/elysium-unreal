@@ -128,11 +128,39 @@ class CharacterCacheTests(unittest.TestCase):
         self.assertEqual(sorted(s for s in scopes if s.startswith("bank.")),
                          sorted(f"bank.{f}" for f in self.partition["banks"]))
 
+    def test_a_focused_plan_names_only_bank_families_the_body_reaches(self):
+        scopes = cc.scopes_for(self.partition, ["amy"], manifest=MANIFEST)
+        reached = [scope for scope in scopes if scope.startswith("bank.")]
+        self.assertEqual(reached, [f"bank.{cp.bank_family(self.partition, 'bank_a')}"])
+
     def test_stage_inputs_name_real_files(self):
         for scope in cc.scopes_for(self.partition, self.stems):
             for stage in cc.STAGES:
                 for path in cc.stage_inputs(self.npc, MANIFEST, self.partition, scope, stage):
                     self.assertTrue(path.is_file(), f"{scope}/{stage} -> {path}")
+
+    def test_prop_only_slice_reaches_no_cast_or_texture_scope(self):
+        manifest = {
+            **MANIFEST,
+            "placed_models": {"switch": {"clips": {"idle": {}}}},
+        }
+        (self.npc / "placed_models").mkdir()
+        (self.npc / "placed_models" / "switch.eskm").write_bytes(b"prop-switch")
+        scopes = cc.scopes_for(self.partition, (), ("switch",))
+        self.assertEqual(scopes, ["prop.switch"])
+        self.assertEqual(
+            cc.stage_inputs(self.npc, manifest, self.partition, "prop.switch", "props"),
+            [self.npc / "placed_models" / "switch.eskm"],
+        )
+
+        stale = cc.plan_stages(
+            self.config, self.store, self.npc, manifest, self.partition, (), props=("switch",))
+        self.assertEqual(stale, {"prop.switch": ["props"]})
+        cc.record(self.store, self.config, self.npc, manifest, self.partition, stale)
+        (self.npc / "textures.json").write_text('{"changed":true}', encoding="utf-8")
+        current = cc.plan_stages(
+            self.config, self.store, self.npc, manifest, self.partition, (), props=("switch",))
+        self.assertEqual(current, {"prop.switch": []})
 
 
 if __name__ == "__main__":

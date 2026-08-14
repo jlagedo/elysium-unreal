@@ -450,6 +450,13 @@ The build command is `uv run elysium build`.
 The test command is `uv run elysium test <tier>` — `Substrate` for anything under the substrate,
 scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`.
 
+These commands describe the available surfaces, not automatic permission to run them. Start with
+the narrowest owning automation filter or pure-rules test. If validation needs a newly compiled
+binary, state the build scope and expected cost and wait for explicit owner acceptance before
+invoking `uv run elysium build`. Never start `--clean`, `--rebuild`, an entire `Substrate` or
+`Content` tier, or another complete build/test pass as routine validation; each is a separately
+planned and accepted operation.
+
 **A live run is proposed, never assumed — ask the owner first, with a recommendation.**
 
 **No feature flag and no A/B toggle without approval — ask the owner first.** Work lands as a

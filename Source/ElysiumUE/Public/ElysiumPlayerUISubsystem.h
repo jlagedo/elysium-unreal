@@ -13,11 +13,13 @@ class UCommonActivatableWidget;
 class UElysiumDialogueScreen;
 class UElysiumHUDModel;
 class UElysiumLootScreen;
+class UElysiumNotificationScreen;
 class UElysiumUIRoot;
 class UElysiumPresentationSubsystem;
 class UElysiumSignScreen;
 class UWorld;
 struct FElysiumDialogueView;
+struct FElysiumNotification;
 class FElysiumDlgConversation;
 
 // The fixed composition order for one local player's screen. HUD content is passive; every
@@ -71,6 +73,10 @@ private:
 	void RemoveRoot();
 	void UnbindPresentation();
 	void OnViewPublished(const struct FElysiumViewState& View);
+	void OnNotification(const FElysiumNotification& Notification);
+	void OnNotificationFinished(UElysiumNotificationScreen* Screen);
+	void SetNotificationSurfaceAvailable(bool bAvailable);
+	void ExecuteNotificationPreview(const TArray<FString>& Args);
 	void OnPostLoadMap(UWorld* LoadedWorld);
 	void ReconcileDialogue(const FElysiumDialogueView& Dialogue);
 	void ReconcileSign(const struct FElysiumViewState& View);
@@ -101,6 +107,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumLootScreen> LootScreen;
 
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UElysiumNotificationScreen>> NotificationScreens;
+
 	TWeakObjectPtr<UElysiumPresentationSubsystem> BoundPresentation;
 	// Identity only: never dereferenced after publication, because the conversation is map-owned.
 	const FElysiumDlgConversation* ShownDialogue = nullptr;
@@ -109,8 +118,10 @@ private:
 	FElysiumEntityHandle ShownLootOwner;
 	uint32 ShownLootRevision = 0;
 	FDelegateHandle ViewPublishedHandle;
+	FDelegateHandle NotificationHandle;
 	FDelegateHandle PostLoadMapHandle;
 	EElysiumHUDPreview PreviewMode = EElysiumHUDPreview::Off;
 	bool bHUDSurfaceVisible = true;
+	bool bNotificationSurfaceAvailable = false;
 	TArray<IConsoleObject*> ConsoleObjects;
 };

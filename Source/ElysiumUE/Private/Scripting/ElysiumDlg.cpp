@@ -459,6 +459,7 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 {
 	CurrentIndex = LineIndex;
 	VisibleChoiceIndices.Reset();
+	PendingAutomaticIndex = INDEX_NONE;
 
 	const FElysiumDlgLine& Npc = DlgFile->Lines[LineIndex];
 	// NPC col-4 and col-5 are both actions run when the line is spoken (col-4 is exec, not a gate —
@@ -469,8 +470,10 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 		if (!Npc.Action.IsEmpty()) { ActFn(Npc.Action); }
 	}
 
-	// Gather the contiguous run of rows after this NPC line, up to the next NPC line. A PC choice whose
-	// col-4 gate passes is visible; padding rows and failing choices are skipped.
+	// Gather the contiguous run of rows after this NPC line, up to the next NPC line. A passing
+	// Auto-Link/Auto-End row is authored control flow, not a response: it suppresses the response band
+	// and remains pending until the spoken NPC turn completes. Physical row order decides between
+	// overlapping automatic gates, just as it does for starting sentinels.
 	for (int32 j = LineIndex + 1; j < DlgFile->Lines.Num(); ++j)
 	{
 		const FElysiumDlgLine& L = DlgFile->Lines[j];
@@ -480,12 +483,18 @@ void FElysiumDlgConversation::EnterNpcLine(int32 LineIndex)
 		}
 		if (L.IsPcChoice() && !L.IsStartingCondition() && PassesGate(L.Condition))
 		{
+			if (L.IsAutomatic())
+			{
+				VisibleChoiceIndices.Reset();
+				PendingAutomaticIndex = j;
+				break;
+			}
 			VisibleChoiceIndices.Add(j);
 		}
 	}
 
 	++Rev;
-	// No passing choices -> terminal line (IsTerminalLine()); the UI shows it and offers a close.
+	// No passing choices and no pending automatic -> terminal line; the UI offers a close.
 }
 
 const FElysiumDlgLine* FElysiumDlgConversation::CurrentNpcLine() const
@@ -502,21 +511,42 @@ const FElysiumDlgLine* FElysiumDlgConversation::VisibleChoice(int32 VisibleIndex
 	return &DlgFile->Lines[VisibleChoiceIndices[VisibleIndex]];
 }
 
+const FElysiumDlgLine* FElysiumDlgConversation::PendingAutomatic() const
+{
+	return (PendingAutomaticIndex != INDEX_NONE && !bOver)
+		? &DlgFile->Lines[PendingAutomaticIndex] : nullptr;
+}
+
 void FElysiumDlgConversation::Choose(int32 VisibleIndex)
 {
-	if (bOver || !VisibleChoiceIndices.IsValidIndex(VisibleIndex))
+	if (bOver || PendingAutomaticIndex != INDEX_NONE
+		|| !VisibleChoiceIndices.IsValidIndex(VisibleIndex))
 	{
 		return;
 	}
-	const FElysiumDlgLine& Choice = DlgFile->Lines[VisibleChoiceIndices[VisibleIndex]];
+	FollowPcLine(DlgFile->Lines[VisibleChoiceIndices[VisibleIndex]]);
+}
 
-	// Run the picked choice's action (col-5), then follow its link.
-	if (ActFn && !Choice.Action.IsEmpty())
+void FElysiumDlgConversation::ResolveAutomatic()
+{
+	if (bOver || PendingAutomaticIndex == INDEX_NONE)
 	{
-		ActFn(Choice.Action);
+		return;
+	}
+	const int32 AutomaticIndex = PendingAutomaticIndex;
+	PendingAutomaticIndex = INDEX_NONE;
+	FollowPcLine(DlgFile->Lines[AutomaticIndex]);
+}
+
+void FElysiumDlgConversation::FollowPcLine(const FElysiumDlgLine& Line)
+{
+	// A visible pick and an automatic transition share the same action-before-link contract.
+	if (ActFn && !Line.Action.IsEmpty())
+	{
+		ActFn(Line.Action);
 	}
 
-	const int32 Target = Choice.LinkTarget();
+	const int32 Target = Line.LinkTarget();
 	if (Target == 0)
 	{
 		Close();
@@ -526,8 +556,8 @@ void FElysiumDlgConversation::Choose(int32 VisibleIndex)
 	if (NextIndex == INDEX_NONE || !DlgFile->Lines[NextIndex].IsNpcLine())
 	{
 		// Dangling / non-NPC link — end rather than jump somewhere undefined.
-		UE_LOG(LogElysiumDlg, Warning, TEXT("%s: choice %d links to missing/invalid NPC line %d"),
-			*DlgFile->SourcePath, Choice.Id, Target);
+		UE_LOG(LogElysiumDlg, Warning, TEXT("%s: PC row %d links to missing/invalid NPC line %d"),
+			*DlgFile->SourcePath, Line.Id, Target);
 		Close();
 		return;
 	}
@@ -536,7 +566,7 @@ void FElysiumDlgConversation::Choose(int32 VisibleIndex)
 
 void FElysiumDlgConversation::AdvanceTerminal()
 {
-	if (bOver)
+	if (bOver || PendingAutomaticIndex != INDEX_NONE)
 	{
 		return;
 	}
@@ -551,5 +581,6 @@ void FElysiumDlgConversation::Close()
 	}
 	bOver = true;
 	VisibleChoiceIndices.Reset();
+	PendingAutomaticIndex = INDEX_NONE;
 	++Rev;
 }

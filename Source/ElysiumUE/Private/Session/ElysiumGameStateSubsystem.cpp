@@ -17,6 +17,20 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumState, Log, All);
 
+EElysiumNotificationKind ElysiumQuestNotifications::KindForStateType(const FString& Type)
+{
+	switch (ElysiumQuestLog::ParseType(Type))
+	{
+	case ElysiumQuestLog::EType::Success:
+		return EElysiumNotificationKind::QuestCompleted;
+	case ElysiumQuestLog::EType::Failure:
+	case ElysiumQuestLog::EType::Botch:
+		return EElysiumNotificationKind::QuestFailed;
+	default:
+		return EElysiumNotificationKind::QuestUpdated;
+	}
+}
+
 // --- The player: live entity first, record second (11.4) -------------------------------------
 
 FElysiumPlayer* UElysiumGameStateSubsystem::PlayerEntity() const
@@ -666,6 +680,26 @@ void UElysiumGameStateSubsystem::SetQuestState(const FString& Quest, int32 State
 		{
 			UE_LOG(LogElysiumState, Warning, TEXT("quest \"%s\" Event failed: %s"),
 				*Outcome.Title, *Error);
+		}
+	}
+
+	// Presentation follows the complete quest transaction. Repeats, unresolved rows, botch-leave
+	// refusals and restores returned above, so only an admitted journal transition reaches the HUD.
+	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	{
+		if (IElysiumPresenter* Presenter = World->Presenter())
+		{
+			FElysiumNotification Notification;
+			Notification.Kind = ElysiumQuestNotifications::KindForStateType(Outcome.Type);
+			Notification.Subject = Outcome.DisplayName.TrimStartAndEnd();
+			if (Notification.Subject.IsEmpty())
+			{
+				Notification.Subject = Outcome.Title;
+				UE_LOG(LogElysiumState, Warning,
+					TEXT("quest '%s' has no display name; notification uses the title"),
+					*Outcome.Title);
+			}
+			Presenter->PostNotification(Notification);
 		}
 	}
 }

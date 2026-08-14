@@ -24,7 +24,8 @@ the opening sequence:
 Evidence is tagged where it matters: **[VtMB]** = read from the user's own DLLs
 (strings/symbols/addresses); **[SDK]** = Source SDK 2013 reference; **[data]** =
 plain-text game data; **[script]** = a level `.py`; **[inferred]** = reasoned, not yet
-decompiled. Retail image bases: `engine.dll` `0x20000000`, `vampire.dll` `0x10000000`,
+decompiled; **[live]** = observed in an interactive retail run/capture. Retail image bases:
+`engine.dll` `0x20000000`, `vampire.dll` `0x10000000`,
 `client.dll` `0x10000000`, `vampire_python21.dll` `0x1e100000`.
 
 ## 1. Three layers and the main loop
@@ -1223,11 +1224,22 @@ Animation/camera/gesture are **not** in the `.dlg` (cols 6–11 empty) — they 
    scan and is not gameplay state.
 4. The selected NPC line's col-4 is an **action**, run with col-5 when the line is spoken — not
    a gate. After NPC line **N** is spoken, gather the contiguous
-   run of PC rows after it (N+1, N+2, … up to the next `#`). Show each PC row whose col-4
+   run of PC rows after it (N+1, N+2, … up to the next `#`). Show each ordinary PC row whose col-4
    condition is true as a menu entry (text = the Malkavian col 12 when the PC is Malkavian, else col 1/2).
+   A passing `(Auto-Link)` or `(Auto-End)` row is control flow, never a visible response.
 5. Player picks → its col-5 action runs → jump to the NPC line in its col-3 link → repeat.
 6. **Link `0` ends** the conversation. `(Auto-End)`/`(Auto-Link)` are editor-generated
-   silent-transition placeholders.
+   silent-transition placeholders. They resolve only after the preceding NPC turn has been
+   presented; their col-5 action then runs under the same action-before-link rule as a real pick.
+
+Jack's opening tutorial pins the observable automatic ordering **[data, live]**: Malkavian response
+23 (`I shall undertake your dark tutelage.`) links to NPC row 81 (`[like the Fonz]Alright.`); row
+81 is displayed and spoken, with no response marker on screen; hidden `(Auto-Link)` row 82 then
+links to NPC row 83 (`Uhh... why don't we, uh, step out back here.`). Therefore an implementation
+must retain row 81 as the active presented turn and may not resolve row 82 synchronously while
+entering it. The exact retail completion signal has not yet been isolated in the binary
+**[inferred]**; voice-turn completion is the reproduced observable boundary, with an explicit
+manual Continue fallback when no voice can start so the displayed line is never skipped.
 
 The file order is authored control flow, not an incidental parser detail. In
 `jack_tutorial.dlg`, `G.Tut_Jack == 1 and G.Tut_Patch == 1` links to line 85 before the

@@ -66,6 +66,9 @@ struct FElysiumDialogueSession
 	FString CandidateRejections;
 	FString FallbackReason;
 	int32 CurrentLineId = INDEX_NONE;
+	uint32 TurnRevision = 0;
+	FElysiumVoiceHandle CurrentVoice;
+	bool bAutomaticFallback = false;
 	double SelectedAt = 0.0;
 	float MinimumHoldSeconds = 0.0f;
 	float ScreenSide = 1.0f;
@@ -364,6 +367,15 @@ void FElysiumEntityWorld::Activate(double Now)
 			CallEntityActivate(*Ent);
 		}
 	}
+	// Maker-owned NPCs and their bodies can be admitted by Activate. Resolve physical parenting only
+	// after that complete barrier, while retaining logical parents for deliberately bodiless nodes.
+	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	{
+		if (Ent && !Ent->IsDead())
+		{
+			Ent->ResolveParentAttachment(true);
+		}
+	}
 	// A fresh rebuild's omission baseline includes Source Activate. On restore, entities absent from
 	// the sparse snapshot are also fresh rebuilds and take that same baseline. Only indices whose
 	// state was actually restored retain the construction baseline, keeping their activation-derived
@@ -509,6 +521,20 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 	if (bActive)
 	{
 		CallEntityActivate(Ent);
+		Ent.ResolveParentAttachment(true);
+		// A runtime entity may be the late parent of map-authored children (the common maker-owned
+		// NPC case). Rebind just that named cohort; no frame polling or unrelated PostSpawn reruns.
+		if (!Ent.TargetName.IsEmpty())
+		{
+			for (const TUniquePtr<FElysiumEntity>& Candidate : EntityList)
+			{
+				if (Candidate && Candidate.Get() != &Ent && !Candidate->IsDead()
+					&& Candidate->ParentName.Equals(Ent.TargetName, ESearchCase::IgnoreCase))
+				{
+					Candidate->ResolveParentAttachment(true);
+				}
+			}
+		}
 	}
 	// 11.9 — a runtime entity's rebuild is this same create+spawn replayed from its saved def, so
 	// its baseline is taken at the same point in its life as a def entity's.
@@ -1975,6 +2001,114 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenDialogOwner() const
 	return DialogueSession ? DialogueSession->Owner : FElysiumEntityHandle::Invalid();
 }
 
+bool FElysiumEntityWorld::CanPlayerAdvanceAutomatic() const
+{
+	return DialogueSession && DialogueSession->bAutomaticFallback
+		&& DialogueSession->Conversation.IsValid()
+		&& DialogueSession->Conversation->IsAwaitingAutomatic();
+}
+
+void FElysiumEntityWorld::BeginDialogueTurn()
+{
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
+	{
+		return;
+	}
+	FElysiumDlgConversation& Conversation = *DialogueSession->Conversation;
+	const FElysiumDlgLine* Line = Conversation.CurrentNpcLine();
+	if (!Line)
+	{
+		if (!Conversation.IsOver())
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("dialogue %s has no current NPC line for revision %u"),
+				*DescribeHandle(DialogueSession->Owner), Conversation.Revision());
+		}
+		return;
+	}
+
+	DialogueSession->CurrentLineId = Line->Id;
+	DialogueSession->TurnRevision = Conversation.Revision();
+	DialogueSession->CurrentVoice = FElysiumVoiceHandle::Invalid();
+	DialogueSession->bAutomaticFallback = false;
+
+	// The spoken line is the presented turn. Any pending Auto-Link/Auto-End remains attached to it
+	// until this exact voice handle completes; it is never submitted as a subtitle or response.
+	SelectDialogueCamera(/*bLineBoundary*/ true);
+	if (LineService)
+	{
+		FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
+		DialogueSession->CurrentVoice = LineService->PlayDialogueTurn(DialogueSession->Owner,
+			Conversation.File().SourcePath, Line->Id,
+			Speaker ? Speaker->Origin : FVector::ZeroVector,
+			Speaker ? Speaker->GetSkeletalBody() : nullptr);
+		if (DialogueSession->CurrentVoice.IsValid())
+		{
+			BeginDialogueLipsync(Conversation.File().SourcePath, Line->Id);
+		}
+	}
+
+	if (Conversation.IsAwaitingAutomatic() && !DialogueSession->CurrentVoice.IsValid())
+	{
+		// A null audio service is a supported headless configuration. In a playable world, an invalid
+		// submission is an unexpected failure and must be diagnosable. Either way the line stays on
+		// screen and presentation exposes Continue, so "Alright." cannot disappear in a zero-time hop.
+		DialogueSession->bAutomaticFallback = true;
+		if (Audio())
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("dialogue %s line %d could not start voice for pending automatic row %d; awaiting manual advance"),
+				*DescribeHandle(DialogueSession->Owner), Line->Id,
+				Conversation.PendingAutomatic() ? Conversation.PendingAutomatic()->Id : INDEX_NONE);
+		}
+	}
+}
+
+void FElysiumEntityWorld::UpdateDialogueAutomatic()
+{
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid()
+		|| !DialogueSession->Conversation->IsAwaitingAutomatic()
+		|| DialogueSession->bAutomaticFallback)
+	{
+		return;
+	}
+	TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+	const FElysiumDlgLine* Line = Conversation->CurrentNpcLine();
+	if (!Line || Line->Id != DialogueSession->CurrentLineId
+		|| Conversation->Revision() != DialogueSession->TurnRevision)
+	{
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("dialogue %s automatic join lost its turn identity (line=%d revision=%u)"),
+			*DescribeHandle(DialogueSession->Owner), DialogueSession->CurrentLineId,
+			DialogueSession->TurnRevision);
+		DialogueSession->bAutomaticFallback = true;
+		return;
+	}
+	if (!DialogueSession->CurrentVoice.IsValid() || !Audio())
+	{
+		DialogueSession->bAutomaticFallback = true;
+		return;
+	}
+	if (Audio()->IsVoicePlaying(DialogueSession->CurrentVoice))
+	{
+		return;
+	}
+
+	Conversation->ResolveAutomatic();
+	if (!DialogueSession || DialogueSession->Conversation != Conversation)
+	{
+		// The automatic row's action may synchronously close or replace dialogue. Its old voice
+		// completion owns no state in the resulting session.
+		return;
+	}
+	if (Conversation->IsOver())
+	{
+		EndDialogSession(/*bSilent*/ false);
+		return;
+	}
+	BeginDialogueTurn();
+}
+
 void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	TSharedRef<FElysiumDlgConversation> Conversation, EElysiumDialogOpenerKind Opener,
 	int32 RawFlags, const FString& DefaultCamera, const FElysiumBodyOwnerToken& SuppliedBodyOwner)
@@ -2029,25 +2163,10 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	DialogueSession->BodyOwner = BodyOwner;
 	DialogueSession->NormalizedCamera = ElysiumCameraShots::NormalizeKey(DefaultCamera);
 	DialogueSession->ScreenSide = (NewOwner.Index & 1) == 0 ? 1.0f : -1.0f;
-	if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
-	{
-		DialogueSession->CurrentLineId = Line->Id;
-	}
 
 	// Camera acquisition precedes the presentation announcement. A headless/null-camera world still
 	// runs exactly the same dialogue and event order.
-	SelectDialogueCamera(/*bLineBoundary*/ true);
-	if (LineService)
-	{
-		if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
-		{
-			FElysiumEntity* Speaker = Resolve(NewOwner);
-			LineService->PlayDialogueTurn(NewOwner, Conversation->File().SourcePath,
-				Line->Id, Speaker ? Speaker->Origin : FVector::ZeroVector,
-				Speaker ? Speaker->GetSkeletalBody() : nullptr);
-			BeginDialogueLipsync(Conversation->File().SourcePath, Line->Id);
-		}
-	}
+	BeginDialogueTurn();
 
 	if (IElysiumPresenter* P = Presenter())
 	{
@@ -2069,24 +2188,21 @@ void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
 		return;
 	}
 	TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+	const uint32 BeforeRevision = Conversation->Revision();
 	Conversation->Choose(VisibleIndex);
+	if (Conversation->Revision() == BeforeRevision)
+	{
+		// Invalid/stale input, including a response submitted after an automatic wait became active,
+		// must not restart the current voice and postpone its completion edge.
+		return;
+	}
+	if (!DialogueSession || DialogueSession->Conversation != Conversation)
+	{
+		return; // the chosen row's action synchronously closed/replaced the session
+	}
 	if (!Conversation->IsOver())
 	{
-		if (const FElysiumDlgLine* Line = Conversation->CurrentNpcLine())
-		{
-			DialogueSession->CurrentLineId = Line->Id;
-			SelectDialogueCamera(/*bLineBoundary*/ true);
-			if (LineService)
-			{
-				FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
-				LineService->PlayDialogueTurn(DialogueSession->Owner,
-					Conversation->File().SourcePath, Line->Id,
-					Speaker ? Speaker->Origin : FVector::ZeroVector,
-					Speaker ? Speaker->GetSkeletalBody() : nullptr);
-				// Each answer starts a new line, so the previous turn's track is replaced.
-				BeginDialogueLipsync(Conversation->File().SourcePath, Line->Id);
-			}
-		}
+		BeginDialogueTurn();
 	}
 	if (Conversation->IsOver())
 	{
@@ -2098,6 +2214,28 @@ void FElysiumEntityWorld::PlayerDialogAdvance()
 {
 	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
 	{
+		return;
+	}
+	if (DialogueSession->Conversation->IsAwaitingAutomatic())
+	{
+		if (!DialogueSession->bAutomaticFallback)
+		{
+			return;
+		}
+		TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+		Conversation->ResolveAutomatic();
+		if (!DialogueSession || DialogueSession->Conversation != Conversation)
+		{
+			return;
+		}
+		if (Conversation->IsOver())
+		{
+			EndDialogSession(/*bSilent*/ false);
+		}
+		else
+		{
+			BeginDialogueTurn();
+		}
 		return;
 	}
 	DialogueSession->Conversation->AdvanceTerminal();
@@ -2819,6 +2957,9 @@ void FElysiumEntityWorld::Tick(double Now)
 	}
 	RunThinks(Now);
 	ServiceEvents(Now);
+	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
+	// chance to replace or close the session. A stale completion therefore cannot advance a newer turn.
+	UpdateDialogueAutomatic();
 	// After the thinks, so a turn opened this frame already has its track bound — the same ordering
 	// FElysiumChoreoScene::Think uses for RefreshFacialPose.
 	RefreshDialogueLipsync(Now);

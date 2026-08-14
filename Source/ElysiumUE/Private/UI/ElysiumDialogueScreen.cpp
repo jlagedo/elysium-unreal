@@ -33,7 +33,8 @@ void UElysiumDialogueScreen::ApplyDialogue(const FElysiumDialogueView& InDialogu
 	{
 		BeginNavigationBuild();
 		SetNavigationGroup(TEXT("Dialogue"), false, true);
-		DialogueBox->SetDialogue(Dialogue.Speaker, Dialogue.Line, Dialogue.Choices, Dialogue.bTerminal);
+		DialogueBox->SetDialogue(Dialogue.Speaker, Dialogue.Line, Dialogue.Choices,
+			Dialogue.bTerminal, Dialogue.bAwaitingAutomatic);
 		const int32 FallbackChoice = Dialogue.Choices.IsEmpty()
 			? -1 : FMath::Clamp(PreviousChoice, 0, Dialogue.Choices.Num() - 1);
 		FinalizeNavigationBuild(ActionIdForChoice(FallbackChoice));
@@ -51,6 +52,7 @@ TSharedRef<SWidget> UElysiumDialogueScreen::RebuildWidget()
 		.Line(Dialogue.Line)
 		.Choices(Dialogue.Choices)
 		.bTerminal(Dialogue.bTerminal)
+		.bAwaitingAutomatic(Dialogue.bAwaitingAutomatic)
 		.OnBuildChoice(FElysiumBuildDlgChoice::CreateUObject(
 			this, &UElysiumDialogueScreen::BuildChoiceAction));
 	TSharedRef<SWidget> Result = SNew(SDPIScaler)
@@ -76,7 +78,8 @@ FReply UElysiumDialogueScreen::NativeOnKeyDown(
 	const FGeometry& Geometry, const FKeyEvent& KeyEvent)
 {
 	if (const TOptional<int32> Choice = ElysiumDialogueUI::ChoiceForKey(
-		KeyEvent.GetKey(), Dialogue.Choices.Num(), Dialogue.bTerminal))
+		KeyEvent.GetKey(), Dialogue.Choices.Num(), Dialogue.bTerminal,
+		Dialogue.bAwaitingAutomatic))
 	{
 		// A held key picks one line, not a run of them. The OS repeats key-down at ~30/s and the
 		// turn advances on the next tick, so without this the repeats select choice 0 of each

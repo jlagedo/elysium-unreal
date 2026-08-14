@@ -157,6 +157,30 @@ Related screens, same stack: `CharEditPanel` (+ `CharEditCharPanel` / `EquipPane
 / `StatsPanel`), `QuestLogPanel`, `VBarterUI`, `VItemInfoUI`, `VMapScreenUI`, `VHotkeysUI`,
 `VCharWizardUI`, `CSignUI`.
 
+### `CHudInfoBar` messages
+
+The item/quest/reward notices are `CHudInfoBar`, not `CCenterPrint`. The client admits them into a
+FIFO, resolves the type's icon and sound, and draws one centred near the top of the 1024×768 canvas.
+The recovered target Y is 210, movement is 420 canvas units per second, and the shipped icons are
+32×32. The exact dwell duration remains unresolved.
+
+`InfoBarCtrl` carries the semantic message type. The player-visible types recovered from the
+client/server pair include:
+
+| Value | Type |
+|---:|---|
+| 7 | Quest Complete |
+| 8 | Quest Log Updated |
+| 9 | Experience Rewarded |
+| 10 / 11 | Money Gained / Money Lost |
+| 29 | Item Gained |
+| 82 | Inventory Full |
+
+An ordinary item admission formats `Item Gained: <PrintName>` before sending type 29. A changed
+quest writes its journal row and sends type 8; a successful state sends type 7 after its rewards,
+event and journal work. Scripted `GiveNamedItem` can suppress item feedback: the New Game bootstrap
+grants use that path, so retail does not require one card per starting item.
+
 ### Lockpick progress presentation
 
 The server registers user message `ProgBar`; `CProgBar` parses four bytes into flags, percentage,

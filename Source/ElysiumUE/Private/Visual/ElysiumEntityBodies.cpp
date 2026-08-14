@@ -26,8 +26,107 @@
 #include "Kismet/GameplayStatics.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/App.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBodies, Log, All);
+
+void UElysiumEntityBodies::LoadItemGroundModelCatalogue()
+{
+	if (bItemGroundModelsLoaded)
+	{
+		return;
+	}
+	bItemGroundModelsLoaded = true;
+
+	FString Text;
+	const FString Path = FElysiumContentPaths::ItemGroundModels();
+	if (!FFileHelper::LoadFileToString(Text, *Path))
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("item ground-model catalogue is missing: %s (run: uv run elysium export bundle items)"),
+			*Path);
+		return;
+	}
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
+	FString Schema;
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()
+		|| !Root->TryGetStringField(TEXT("schema"), Schema)
+		|| Schema != TEXT("elysium.item-ground-models"))
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("item ground-model catalogue is invalid: %s"), *Path);
+		return;
+	}
+
+	const TSharedPtr<FJsonObject>* Models = nullptr;
+	if (!Root->TryGetObjectField(TEXT("models"), Models) || Models == nullptr)
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("item ground-model catalogue has no models table: %s"), *Path);
+		return;
+	}
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Models)->Values)
+	{
+		const TSharedPtr<FJsonObject>* Row = nullptr;
+		double Faces = 0.0;
+		if (!Pair.Value.IsValid() || !Pair.Value->TryGetObject(Row) || Row == nullptr
+			|| !(*Row)->TryGetNumberField(TEXT("faces"), Faces))
+		{
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("item ground-model catalogue row '%s' has no face count"), *Pair.Key);
+			ItemGroundModels.Add(Pair.Key, EElysiumItemGroundModelState::Unavailable);
+			continue;
+		}
+		ItemGroundModels.Add(Pair.Key, Faces > 0.0
+			? EElysiumItemGroundModelState::Geometry
+			: EElysiumItemGroundModelState::Geometryless);
+	}
+
+	const TArray<TSharedPtr<FJsonValue>>* Skipped = nullptr;
+	if (Root->TryGetArrayField(TEXT("skipped"), Skipped) && Skipped != nullptr)
+	{
+		for (const TSharedPtr<FJsonValue>& Value : *Skipped)
+		{
+			const TSharedPtr<FJsonObject>* Row = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(Row) || Row == nullptr)
+			{
+				continue;
+			}
+			FString Model, Reason;
+			if ((*Row)->TryGetStringField(TEXT("model"), Model))
+			{
+				(*Row)->TryGetStringField(TEXT("reason"), Reason);
+				ItemGroundModels.Add(Model, EElysiumItemGroundModelState::Unavailable);
+				UE_LOG(LogElysiumBodies, Warning,
+					TEXT("item ground model '%s' is unavailable: %s"), *Model, *Reason);
+			}
+		}
+	}
+}
+
+EElysiumItemGroundModelState UElysiumEntityBodies::ItemGroundModelState(const FString& ModelPath)
+{
+	LoadItemGroundModelCatalogue();
+	FString Key = ModelPath.TrimStartAndEnd().ToLower().Replace(TEXT("\\"), TEXT("/"));
+	if (!Key.EndsWith(TEXT(".mdl")))
+	{
+		Key += TEXT(".mdl");
+	}
+	if (const EElysiumItemGroundModelState* State = ItemGroundModels.Find(Key))
+	{
+		return *State;
+	}
+	if (!ReportedMissingItemGroundModels.Contains(Key))
+	{
+		ReportedMissingItemGroundModels.Add(Key);
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("item ground model '%s' is absent from the generated catalogue"), *Key);
+	}
+	return EElysiumItemGroundModelState::Unavailable;
+}
 
 namespace ElysiumPropBounds
 {
@@ -1358,8 +1457,8 @@ FElysiumPlacedModelBody UElysiumEntityBodies::BuildPlacedModelBody(
 		return Result;
 	}
 
-	Result.Visual = BuildAnimatedPropVisual(Result.Stem, Request.Location, Request.Rotation,
-		Request.UniformScale, Request.PlacementToken);
+	Result.Visual = BuildAnimatedPropVisualWithStaticStem(Result.Stem, StaticStem,
+		Request.Location, Request.Rotation, Request.UniformScale, Request.PlacementToken);
 	if (!Result.Visual)
 	{
 		return Result;
@@ -1425,6 +1524,15 @@ bool UElysiumEntityBodies::FindAnimatedPropClip(const FString& Stem, const FStri
 
 USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FString& Stem,
 	const FVector& Location, const FQuat& Rotation, float UniformScale, int32 PlacementToken)
+{
+	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
+	return BuildAnimatedPropVisualWithStaticStem(Stem,
+		Entry ? Entry->StaticStem : FString(), Location, Rotation, UniformScale, PlacementToken);
+}
+
+USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticStem(
+	const FString& Stem, const FString& StaticStem, const FVector& Location,
+	const FQuat& Rotation, float UniformScale, int32 PlacementToken)
 {
 	AActor* Owner = GetOwner();
 	USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
@@ -1507,7 +1615,8 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 	// Reuse the map-baked surface materials by slot name. The global placed-model bake deliberately
 	// carries only neutral material instances so it does not import the complete prop texture corpus
 	// a second time.
-	UStaticMesh* StaticMesh = ResolvePropMesh(Entry->StaticStem.IsEmpty() ? Stem : Entry->StaticStem);
+	const FString MaterialStem = StaticStem.IsEmpty() ? Stem : StaticStem;
+	UStaticMesh* StaticMesh = ResolvePropMesh(MaterialStem);
 	if (StaticMesh)
 	{
 		for (const FStaticMaterial& StaticMaterial : StaticMesh->GetStaticMaterials())
@@ -1519,7 +1628,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FStr
 			}
 		}
 	}
-	else if (!Entry->StaticStem.IsEmpty())
+	else if (!StaticStem.IsEmpty())
 	{
 		UE_LOG(LogElysiumBodies, Error,
 			TEXT("placed model '%s' has no map static mesh for its material slots"), *Stem);

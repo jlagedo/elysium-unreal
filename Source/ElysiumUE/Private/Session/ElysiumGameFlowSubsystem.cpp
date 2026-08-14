@@ -573,25 +573,12 @@ namespace ElysiumStory
 		FElysiumNewGameRequest Request;
 		Request.Clan = FElysiumSheet::ClanFromName(TEXT("Malkavian"));
 		Request.bMale = false;
-		// histories000.txt row 9, female-only: swaps Malkavian's attribute order to
-		// Physical / Mental / Social so all three authored attribute dots have enabled rows to buy.
-		Request.HistoryId = 9;   // Gymnast-turned-Stripper (displayed as Ex-Gymnast-Stripper)
+		// The retail tutorial reference character: histories000.txt row 63, "Completely Batshit".
+		// ApplyBaseline supplies the untouched female Malkavian sheet; no chargen dots are added here,
+		// so Jack's authored modified-character guards admit the normal tutorial opener.
+		Request.HistoryId = 63;
 		Request.EntryPoint = EntryPoint;
 		Request.bReplayEntryMap = bReplayEntryMap;
-
-		// The History-adjusted order is Physical / Mental / Social; Malkavian's ability order remains
-		// Knowledges / Skills / Talents. Spend the resulting 2/1/0 attribute, 3/2/1 ability and one
-		// discipline dots on a useful agile, cerebral, stealth-capable spread. Values are dots above
-		// the authored Malkavian_CharGen baseline, and NewGame applies them through ElysiumChargen::Buy.
-		Request.Spends.Add(TEXT("Dexterity"), 1);
-		Request.Spends.Add(TEXT("Stamina"), 1);
-		Request.Spends.Add(TEXT("Perception"), 1);
-		Request.Spends.Add(TEXT("Computer"), 2);
-		Request.Spends.Add(TEXT("Investigation"), 1);
-		Request.Spends.Add(TEXT("Stealth"), 1);
-		Request.Spends.Add(TEXT("Firearms"), 1);
-		Request.Spends.Add(TEXT("Dodge"), 1);
-		Request.Spends.Add(TEXT("Dementation"), 1);
 		return Request;
 	}
 

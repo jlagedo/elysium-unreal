@@ -108,11 +108,9 @@ namespace ElysiumStory
 		return MakeArrayView(NewGameEntries, UE_ARRAY_COUNT(NewGameEntries));
 	}
 
-	// The one developer character preset. It is a complete chargen request rather than a raw
-	// clan/sex seed: ApplyBaseline supplies Malkavian's authored starting template, the female-only
-	// Gymnast-turned-Stripper history moves the otherwise-unspendable Social pool onto Physical, and
-	// Spends consumes the full 3 attribute + 6 ability + 1 discipline dot budget. Developer entry
-	// points choose only where this character enters the story.
+	// The one developer character preset reproduces the retail tutorial reference sheet: female
+	// Malkavian, Completely Batshit, and the untouched authored Malkavian_CharGen baseline. Developer
+	// entry points choose only where this character enters the story.
 	FElysiumNewGameRequest MakeMockCharacterRequest(
 		const FString& EntryPoint, bool bReplayEntryMap = false);
 

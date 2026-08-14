@@ -50,8 +50,10 @@ Jack's overlapping and shadowed conditions plus line-action → `OnDialogEnd` or
 
 ### 9.2 Conversation UI + audio-by-path — remaining
 
-The UI slice landed. Remaining: line audio through 6.5/6.6's shared line service, presentation
-completion (speaker/emotion cues, the 8.10 subtitle path), and live physical-device acceptance.
+The UI slice landed. Remaining: presentation completion (speaker/emotion cues, the 8.10 subtitle
+path), and live physical-device acceptance. Acceptance includes `(Auto-Link)`/`(Auto-End)` as
+hidden control rows: retain the preceding NPC subtitle through its voice turn, run the automatic
+row action before following its link, and never publish the marker as a player response.
 Content is reproduced verbatim; presentation modernizes. *Deps:* 9.1, 6.5, 6.6, 8.6.
 
 ### 9.3 Level-script execution — remaining

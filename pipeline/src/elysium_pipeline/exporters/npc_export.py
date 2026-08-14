@@ -54,6 +54,7 @@ from elysium_pipeline.paths import export_root
 from elysium_pipeline import placed_models as PM
 from elysium_pipeline.exporters.source_warnings import (
     animated_prop_warning,
+    missing_intrinsic_prop_clips_warning,
     missing_npc_warning,
 )
 
@@ -574,14 +575,15 @@ def write_sidecars(manifest):
           f"({total/1e6:.1f} MB total, {total/max(1, len(manifest['npcs']))/1024:.0f} KB each)")
 
 
-def main(only=None, *, index=None, integrate=False, strict=False):
+def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=False):
     """Export the runtime skeletal corpus.
 
-    ``only`` selects model keys.  With ``integrate=True`` those records and any
-    newly required banks are merged into the current complete manifest before
-    its runtime projections are regenerated.  Without integration, targeted
-    calls intentionally produce a standalone manifest and should therefore use
-    an isolated output root configured by the caller.
+    ``only`` selects character model keys; ``placed_uses`` selects already-discovered
+    non-character placements with their exact clip policy.  With ``integrate=True`` those
+    records and any newly required banks are merged into the current complete manifest before
+    its runtime projections are regenerated.  Without integration, targeted calls intentionally
+    produce a standalone manifest and should therefore use an isolated output root configured by
+    the caller.
 
     ``strict`` keeps best-effort decoding inside individual format operations
     but refuses to publish a new manifest if a requested model/bank failed.
@@ -594,7 +596,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
 
     # The default seed is two lists, because the two halves are referenced differently: NPCs by
     # the maps' own entities, the player bodies only by the rulebook (PL13).
-    if only is None:
+    if only is None and placed_uses is None:
         from_ents = npc_models_from_ents()
         pc_models = set(pc_models_from_clandoc())
         cinematics = cinematic_models_from_ents()
@@ -615,7 +617,9 @@ def main(only=None, *, index=None, integrate=False, strict=False):
               f"({sum(use.full_clips for use in placed_uses)} full-clip)")
         seed = sorted(set(from_ents) | pc_models)
     else:
-        seed, pc_models, cinematics, animated_props, placed_uses = only, set(), [], [], []
+        seed = list(only or ())
+        pc_models, cinematics, animated_props = set(), [], []
+        placed_uses = list(placed_uses or ())
 
     npcs = [m for m in seed if load_mdl(m) is not None]
     missing = [m for m in seed if load_mdl(m) is None]
@@ -635,11 +639,32 @@ def main(only=None, *, index=None, integrate=False, strict=False):
         return
 
     # NPC stems are basenames (the console/`elysium.npc.load` ergonomic); fall back to a
-    # path-safe stem for any basename two different models share.
+    # path-safe stem for any basename two different models share. Integration preserves the
+    # complete catalogue's existing stem: a one-model slice must not rename a collision merely
+    # because the other model is outside this invocation.
     from collections import Counter
     counts = Counter(_basename_stem(m) for m in npcs)
-    npc_stem = {m: (_basename_stem(m) if counts[_basename_stem(m)] == 1 else bank_stem(m))
-                for m in npcs}
+    previous_by_model = {}
+    occupied = {}
+    if integrate and os.path.isfile(MANIFEST):
+        with open(MANIFEST, encoding="utf-8") as handle:
+            previous_manifest = json.load(handle)
+        for previous_stem, record in previous_manifest.get("npcs", {}).items():
+            previous_model = str(record.get("model", "")).lower().replace("\\", "/")
+            if previous_model:
+                previous_by_model[previous_model] = previous_stem
+                occupied[previous_stem] = previous_model
+
+    npc_stem = {}
+    for model in npcs:
+        key = model.lower().replace("\\", "/")
+        if key in previous_by_model:
+            npc_stem[model] = previous_by_model[key]
+            continue
+        basename = _basename_stem(model)
+        owner = occupied.get(basename)
+        npc_stem[model] = (basename if counts[basename] == 1 and owner in (None, key)
+                           else bank_stem(model))
 
     # Resolve every NPC's include tree once: its own clips, plus which bank owns each shared
     # clip (first model in tree order to define a label owns it).
@@ -719,7 +744,7 @@ def main(only=None, *, index=None, integrate=False, strict=False):
     # unit-vector table the compressed vertex-animation records index is read once, from the
     # user's own StudioRender.dll -- without it the morph magnitudes are unknowable, so the
     # export ships the meshes and skips the faces rather than baking wrong deltas.
-    anorms = S.load_anorms()
+    anorms = S.load_anorms() if npcs else None
     print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
     npc_index = {}
     procedural_faults = []
@@ -768,7 +793,21 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             candidates = PM.rest_candidates(sequences)
             if not candidates:
                 raise ValueError("model declares no sequence 0 resting pose")
-            selected = sequences if use.full_clips else candidates
+            required_labels = {label.lower() for label in use.required_clips}
+            available_labels = {sequence.label.lower() for sequence in sequences}
+            missing_required = sorted(required_labels - available_labels)
+            if missing_required:
+                warning = missing_intrinsic_prop_clips_warning(model, missing_required)
+                if warning is None:
+                    raise ValueError(
+                        "runtime-required clip(s) absent: " + ", ".join(missing_required)
+                    )
+                warnings.append(warning)
+                print(f"  ! warning {warning['code']}: {stem} uses "
+                      f"{warning['fallback']} ({warning['detail']})")
+            selected = (sequences if use.full_clips else
+                        [sequence for sequence in sequences
+                         if sequence in candidates or sequence.label.lower() in required_labels])
 
             # Keep the legacy inspection GLB only for the compact set gameplay can animate. The
             # runtime never reads it; rest-only models go straight from MDL to ESKM.
@@ -819,8 +858,9 @@ def main(only=None, *, index=None, integrate=False, strict=False):
             "glb": glb,
             "eskm": "placed_models/%s.eskm" % stem,
             "model": model,
-            "static_stem": stem,
-            "clip_mode": "full" if use.full_clips else "rest",
+            "static_stem": use.static_stem,
+            "clip_mode": ("full" if use.full_clips else
+                          "required" if use.required_clips else "rest"),
             "rest_candidates": [clip.label for clip in candidates],
             "static_equivalent": PM.rest_pose_static_equivalent(d, v, candidates),
             "bones": len(bones),

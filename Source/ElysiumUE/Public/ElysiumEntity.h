@@ -157,8 +157,9 @@ public:
 	// reached its final frozen placement and the complete entity graph is available.
 	bool  bActivateCalled = false;
 	float NextThink = ELYSIUM_NEVER_THINK;
-	// The successfully resolved runtime move parent. ParentName remains the authored key; this handle
-	// answers whether attachment actually succeeded, which point_teleport must re-check.
+	// The resolved logical move parent. ParentName remains the authored key; the handle exists even
+	// when either entity is deliberately bodiless, because gameplay parenting (for example the
+	// point_teleport refusal) is independent of whether Unreal has components to attach.
 	FElysiumEntityHandle MoveParent;
 
 	// CBaseEntity ownership reduced to the lifecycle seam gameplay needs. The owner is assigned only
@@ -466,6 +467,10 @@ public:
 	// parentname and attaches this entity's body while preserving its
 	// exported world pose; constraints and other leaves extend this after every body exists.
 	virtual void PostSpawn();
+	// Re-resolve logical parenting and attach bodies when both are available. The initial PostSpawn
+	// pass is quiet because maker-owned parents can appear during Activate; the world calls this
+	// again at that lifecycle barrier with diagnostics enabled.
+	bool ResolveParentAttachment(bool bWarnIfPending);
 
 	// Source's late Activate pass. The entity world calls this exactly once after the player has been
 	// placed and synchronized but before gameplay ingress opens. Runtime spawns in an active world

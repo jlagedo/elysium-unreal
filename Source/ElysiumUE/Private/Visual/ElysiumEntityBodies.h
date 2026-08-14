@@ -215,6 +215,7 @@ public:
 	// read verbatim.
 	UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale);
+	EElysiumItemGroundModelState ItemGroundModelState(const FString& ModelPath);
 
 	// 8.4 — build one physics-prop body: the same baked mesh BuildPropVisual stands, which for a
 	// physics model carries VtMB's own convex collision (one shape per `.phy` ledge, from the
@@ -292,11 +293,15 @@ public:
 	bool DescribeEyes(const USkeletalMeshComponent* Comp, FElysiumEyeReadout& Out) const;
 
 private:
+	void LoadItemGroundModelCatalogue();
 	USkeletalMesh* ResolveNpcMesh(const FString& Stem, bool bPlayerMaterial);
 	UAnimSequence* ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
 		const FString& BankStem, const FString& ClipName);
 	UAnimSequence* ResolveAnimatedPropClip(USkeletalMesh* Mesh, const FString& Stem,
 		const FString& ClipName);
+	USkeletalMeshComponent* BuildAnimatedPropVisualWithStaticStem(const FString& Stem,
+		const FString& StaticStem, const FVector& Location, const FQuat& Rotation,
+		float UniformScale, int32 PlacementToken);
 	// The manifest record for a prop stem, or null. Shared by the two query members above.
 	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
 
@@ -312,6 +317,9 @@ private:
 	uint32 StandingGridGeneration = 0;
 
 	FString MapName;
+	bool bItemGroundModelsLoaded = false;
+	TMap<FString, EElysiumItemGroundModelState> ItemGroundModels;
+	TSet<FString> ReportedMissingItemGroundModels;
 
 	// One eye section on one body: which slot draws it, which record it draws, the head bone it
 	// rides, and the material instance whose parameters carry the basis.

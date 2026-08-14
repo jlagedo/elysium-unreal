@@ -95,7 +95,7 @@ def prop_package(stem):
     return "%s/%s" % (PROPS, stem)
 
 
-def bake_props(manifest, library, failed, plan, textures):
+def bake_props(manifest, library, failed, plan, selected=()):
     """One skeleton, one mesh and one selected clip set per placed model.
 
     A prop takes the same container and the same builders a body does -- it IS a skeletal model,
@@ -107,9 +107,12 @@ def bake_props(manifest, library, failed, plan, textures):
     props = manifest.get("placed_models", {})
     if not props:
         return 0
+    selected = set(selected or props)
     bl.ensure_dir(PROPS)
     baked = 0
     for stem in sorted(props):
+        if stem not in selected:
+            continue
         if not wants(plan, "prop.%s" % stem, "props"):
             continue
         path = prop_source_path(stem)
@@ -473,8 +476,9 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
 
 def main():
     stems = [s for s in cmdline_arg("BakeCharacters").split(",") if s]
-    if not stems:
-        raise SystemExit("[chars] no -BakeCharacters=<csv> given")
+    prop_stems = [s for s in cmdline_arg("BakeProps").split(",") if s]
+    if not stems and not prop_stems:
+        raise SystemExit("[chars] no -BakeCharacters=<csv> or -BakeProps=<csv> given")
 
     with open(os.path.join(NPC_DIR, "npc_manifest.json"), "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
@@ -483,6 +487,14 @@ def main():
     if missing:
         raise SystemExit("[chars] no .eskm for: %s (run: uv run elysium export characters)"
                          % ", ".join(sorted(missing)))
+    unknown_props = [s for s in prop_stems if s not in manifest.get("placed_models", {})]
+    if unknown_props:
+        raise SystemExit("[chars] placed model(s) absent from manifest: %s"
+                         % ", ".join(sorted(unknown_props)))
+    missing_props = [s for s in prop_stems if not os.path.isfile(prop_source_path(s))]
+    if missing_props:
+        raise SystemExit("[chars] no placed-model .eskm for: %s"
+                         % ", ".join(sorted(missing_props)))
 
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for assets
     # that are already there and a re-bake would rewrite what it could have reused.
@@ -507,13 +519,12 @@ def main():
     # Props draw from the same texture corpus as the cast -- `gallerynoir` and `zodiac` are wall
     # art, `palmtree` is scenery -- so their containers seed the import beside the bodies rather
     # than importing a second set under different names.
-    prop_stems = sorted(manifest.get("placed_models", {}))
     texture_sources = [source_path(stem) for stem in stems]
     textures = (import_textures_for(texture_sources)
                 if wants(plan, "_global", "textures") else existing_textures())
 
     bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan)
-    props_baked = bake_props(manifest, library, failed, plan, textures)
+    props_baked = bake_props(manifest, library, failed, plan, prop_stems)
     if props_baked:
         log("%d animated prop(s) baked to %s" % (props_baked, PROPS))
 

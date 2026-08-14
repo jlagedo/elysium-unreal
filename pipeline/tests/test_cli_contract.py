@@ -58,6 +58,13 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 2, result.output)
         self.assertIn("No such option", result.output)
 
+    def test_placed_model_export_is_explicitly_map_scoped(self) -> None:
+        result = self.runner.invoke(app, ["export", "placed-model", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("map_name", result.output)
+        self.assertIn("model", result.output)
+        self.assertIn("--force", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@
 #include "ElysiumScriptHost.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWorldServices.h"
 #include "ElysiumGameStateSubsystem.generated.h"
 
 // `G` and the quest map mirror Python dicts, which are case-sensitive — Unreal's default
@@ -26,6 +27,12 @@ using FElysiumGlobalMap = TMap<FString, FElysiumVariant, FDefaultSetAllocator, T
 using FElysiumQuestMap = TMap<FString, int32, FDefaultSetAllocator, TElysiumCaseSensitiveStringKeyFuncs<int32>>;
 
 class FElysiumEntityWorld;
+
+namespace ElysiumQuestNotifications
+{
+	// Presentation classification of a quest catalogue state's recovered type string.
+	EElysiumNotificationKind KindForStateType(const FString& Type);
+}
 
 // One recorded expression evaluation (field-6 payload or a hand-run elysium.eval/exec) for the
 // debug layer's recent-eval log (P5 5.2). Debug-only history; not saved.

@@ -66,7 +66,8 @@ struct FElysiumDialogueView
 	FString Line;                    // the NPC subtitle for this turn (DisplayText, directions stripped)
 	TArray<FString> Choices;         // the visible PC choices, in author order
 	TArray<int32> ChoiceIds;          // stable .dlg row ids, parallel to Choices
-	bool bTerminal = false;          // no choices — the box offers a single "continue"
+	bool bTerminal = false;          // authored terminal, or automatic voice-failure Continue fallback
+	bool bAwaitingAutomatic = false; // spoken line is up; the synthetic control row remains hidden
 
 	bool IsOpen() const { return Conversation != nullptr; }
 };

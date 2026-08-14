@@ -668,7 +668,7 @@ namespace ElysiumMcpImpl
 			Schema.Add(TEXT("clan"), TEXT("integer"), TEXT("Clan in the level-script 2..8 encoding (2 Brujah .. 8 Ventrue). Default 4 (Malkavian)."))
 				.Add(TEXT("male"), TEXT("boolean"), TEXT("Player sex. Default false (female)."));
 			Out.Add(MakeTool(TEXT("elysium_new_game"),
-				TEXT("Seed a fresh story context (G flags, quest map, complete mock player sheet) and travel to sp_tutorial_1 at its `tutorial` info_landmark. Defaults to the shared female Malkavian developer preset. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
+				TEXT("Seed a fresh story context (G flags, quest map, retail-reference player sheet) and travel to sp_tutorial_1 at its `tutorial` info_landmark. Defaults to the shared female Malkavian Completely Batshit developer preset. The story state is seeded synchronously (clan/clan_name are valid immediately), but the map travel is deferred when a map is already loaded — returns pending=true; poll elysium_maps_list until pending_travel clears and spawn_done is true."),
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{

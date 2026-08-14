@@ -641,9 +641,9 @@ struct FElysiumNewGameRequest
   unchanged; only the screen behind the verb is new.
 - `EntryPoint = tutorial` is the dev shortcut that exists today, kept as `elysium.SkipIntro`.
 - Developer entries construct one canonical request through `MakeMockCharacterRequest`: female
-  Malkavian, the female `Gymnast-turned-Stripper` History (which moves the attribute priority off
-  disabled Social rows), the rulebook's `Malkavian_CharGen` baseline, and all ten initial pool dots
-  spent (3 attributes, 6 abilities, 1 discipline). `elysium.newgame`, the theatre replay, direct
+  Malkavian, the `Completely Batshit` History, and the untouched rulebook
+  `Malkavian_CharGen` baseline. This reproduces the retail tutorial reference sheet and remains below
+  Jack's authored modified-character thresholds. `elysium.newgame`, the theatre replay, direct
   dev-map boot and the MCP New Game tool differ only in destination or an explicit identity
   override; no entry writes a second ad hoc sheet.
 - The theatre act needs `logic_choreographed_scene` + scene playback, owned by roadmap **P12** —

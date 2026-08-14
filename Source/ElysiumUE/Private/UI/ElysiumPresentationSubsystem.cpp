@@ -19,6 +19,11 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumView, Log, All);
 
+namespace
+{
+	constexpr int32 MaxPendingNotifications = 64;
+}
+
 // --- The tick function ------------------------------------------------------------------------
 
 void FElysiumPublishTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
@@ -85,9 +90,10 @@ void UElysiumPresentationSubsystem::Initialize(FSubsystemCollectionBase& Collect
 				V.Fade.R, V.Fade.G, V.Fade.B, V.Fade.A);
 			UE_LOG(LogElysiumView, Display, TEXT("sign=%s alpha=%.2f hideHUD=%d"),
 				V.Sign ? *V.Sign->SourceFile : TEXT("<none>"), V.SignAlpha, V.bSignHidesHUD ? 1 : 0);
-			UE_LOG(LogElysiumView, Display, TEXT("dialogue=%s rev=%u speaker='%s' choices=%d terminal=%d"),
+			UE_LOG(LogElysiumView, Display, TEXT("dialogue=%s rev=%u speaker='%s' choices=%d terminal=%d automatic=%d"),
 				V.Dialogue.IsOpen() ? TEXT("open") : TEXT("<none>"), V.Dialogue.Revision,
-				*V.Dialogue.Speaker, V.Dialogue.Choices.Num(), V.Dialogue.bTerminal ? 1 : 0);
+				*V.Dialogue.Speaker, V.Dialogue.Choices.Num(), V.Dialogue.bTerminal ? 1 : 0,
+				V.Dialogue.bAwaitingAutomatic ? 1 : 0);
 			UE_LOG(LogElysiumView, Display, TEXT("vitals valid=%d health=%d/%d blood=%d/%d humanity=%d masq=%d"),
 				V.Vitals.bValid ? 1 : 0, V.Vitals.Health, V.Vitals.MaxHealth,
 				V.Vitals.BloodPool, V.Vitals.MaxBloodPool, V.Vitals.Humanity, V.Vitals.Masquerade);
@@ -125,6 +131,7 @@ void UElysiumPresentationSubsystem::Deinitialize()
 
 	// The pointer fields die with the map epoch; nothing may read them after this.
 	ViewState = FElysiumViewState();
+	PendingNotifications.Reset();
 
 	Super::Deinitialize();
 }
@@ -175,6 +182,27 @@ void UElysiumPresentationSubsystem::CloseDialog()
 {
 	bPendingDialogueClosed = true;
 	bPendingDialogueOpened = false;
+}
+
+void UElysiumPresentationSubsystem::PostNotification(const FElysiumNotification& Notification)
+{
+	FElysiumNotification Stored = Notification;
+	Stored.Subject = Stored.Subject.TrimStartAndEnd();
+	Stored.Quantity = FMath::Max(1, Stored.Quantity);
+	if (Stored.Subject.IsEmpty())
+	{
+		UE_LOG(LogElysiumView, Warning, TEXT("notification refused: empty subject for kind %s"),
+			ElysiumNotificationKindName(Stored.Kind));
+		return;
+	}
+	if (PendingNotifications.Num() >= MaxPendingNotifications)
+	{
+		UE_LOG(LogElysiumView, Warning,
+			TEXT("notification queue full (%d): dropping newest %s '%s'"),
+			MaxPendingNotifications, ElysiumNotificationKindName(Stored.Kind), *Stored.Subject);
+		return;
+	}
+	PendingNotifications.Add(MoveTemp(Stored));
 }
 
 // --- The publish pass --------------------------------------------------------------------------
@@ -308,7 +336,8 @@ void UElysiumPresentationSubsystem::Publish()
 					D.ChoiceIds.Add(Choice->Id);
 				}
 			}
-			D.bTerminal = Conv->IsTerminalLine();
+			D.bAwaitingAutomatic = Conv->IsAwaitingAutomatic();
+			D.bTerminal = Conv->IsTerminalLine() || World->CanPlayerAdvanceAutomatic();
 		}
 
 		World->BuildLootView(Next.Loot);
@@ -383,6 +412,18 @@ void UElysiumPresentationSubsystem::Publish()
 	if (ViewState.Vitals != Previous.Vitals)
 	{
 		VitalsChangedEvent.Broadcast(ViewState.Vitals);
+	}
+	// Notifications are the one announcement family retained while the player surface is
+	// suppressed or before a local-player listener binds. A grant during New Game loading is still
+	// new information when play begins; it has no retained world state that could reconstruct it.
+	if (!bSuppressed && NotificationEvent.IsBound() && !PendingNotifications.IsEmpty())
+	{
+		TArray<FElysiumNotification> Delivering = MoveTemp(PendingNotifications);
+		PendingNotifications.Reset();
+		for (const FElysiumNotification& Notification : Delivering)
+		{
+			NotificationEvent.Broadcast(Notification);
+		}
 	}
 
 	bPendingFade = false;

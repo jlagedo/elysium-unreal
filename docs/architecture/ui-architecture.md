@@ -29,12 +29,13 @@ UI requires a Widget Blueprint or data-table asset; the generated typefaces rema
 | Type | Role |
 |---|---|
 | `UElysiumUISubsystem` | GI-scoped flow facade. It owns menu/character/chargen policy and scratch state, but delegates screen lifetime and composition to the local-player owner. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
-| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles retained dialogue and sign screens, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation or sign is one modal lifetime whose published state updates in place. Non-shipping verb: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical` |
+| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles retained dialogue/sign/loot screens and queued notifications, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation or sign is one modal lifetime whose published state updates in place. Non-shipping verbs: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical`, `elysium.hud.notify item\|quest\|complete\|failure\|generic <text> [quantity]` |
 | `UElysiumUIRoot` | The single local-player root. Paint order is structural rather than numeric: passive HUD, transient stack, notification queue, game-modal stack, system-modal stack, runtime-loading stack. Every root slot explicitly fills the player viewport and every layer is instant until it owns an authored transition. Hiding the HUD collapses only its passive surface, never the root or a menu/loading screen above it. |
 | `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one centrally defined Elysium screen policy on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. The scope owns mode, cursor policy and gameplay contexts; CommonUI owns focus and restores the screen's desired target. |
 | `UElysiumActionButton` | The programmatic `UCommonButtonBase` used for every action. It carries a stable action id, executable state, label/caption and accessible text; mouse, CommonUI activation and shortcuts all reach the same semantic callback. A non-executable explanatory row remains focusable. |
 | `UElysiumNavigableScreen` | The focus/selection owner for interactive screens. It restores selection by action id, wraps linear lists, supports explicit neighbours and horizontal/vertical groups, synchronizes hover with focus, repairs dynamic lists, and suppresses duplicate activation until the action set transitions. |
 | `UElysiumHUDWidget` | The resolution-independent in-world surface: life, discrete vitae droplets, Masquerade readout, equipment/discipline regions, selector preview, reticle and full-viewport fade. Unowned regions collapse instead of displaying fabricated runtime data. |
+| `UElysiumNotificationScreen` | One passive item/quest/notice card in the root's CommonUI FIFO. It is top-centred, safe-zone aware, non-focusable and timed in real UI seconds; it never installs an input scope. |
 | `UElysiumMainMenu` | the main / pause / game-over menu (`UElysiumNavigableScreen`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
 | `UElysiumDialogueScreen` / `UElysiumChargenPopup` / `UElysiumSignScreen` | Dynamic game-modal screens. Responses/answers retain authored shortcuts; a sign presents one Continue action while the entity world remains the final dwell and close-policy authority. |
@@ -73,6 +74,27 @@ The heads-up layer is also withheld while the entity world has a `camera_track` 
 camera shot. Those owners already span the authored `PlayAsCamera*`/`SetCamera` through
 `RestoreCameraToPlayerControl`/`RemoveCamera` lifetime, so ambient choreography without a camera
 does not accidentally suppress the HUD; fades, dialogue and future cutscene subtitles remain up.
+
+### Notification delivery
+
+Item and quest owners emit `FElysiumNotification` through `IElysiumPresenter`; they never call UI.
+`UElysiumPresentationSubsystem` retains the semantic FIFO until the player surface and a listener
+exist, preserving same-frame order through loading and early New Game setup. Both the publisher and
+local-player intake are bounded at 64; overflow drops the newest entry and warns with its kind and
+subject. Notifications are transient world-epoch presentation and are cleared on travel/controller
+replacement rather than serialized.
+
+The root's notification queue shows one card at a time. The active card pauses and hides under
+loading, pause/system UI, cinematics, signs, dialogue and loot; it resumes with its remaining
+lifetime when the player surface returns. It enters for 0.20 seconds, holds for 2.40, exits for 0.25,
+and advances the FIFO on removal. The layout is a 520-unit ink card 48 units below the top safe zone,
+with a blood rule, gold Spectral SC category and bone Spectral subject.
+
+This is an explicit presentation divergence from `CHudInfoBar`: the card uses no retail icon or
+sound asset, and every successful player item admission—including scripted New Game bootstrap and
+otherwise HUD-hidden items—posts a card. Inventory reconstruction during restore remains silent.
+Quest notifications follow the recovered transaction boundary: only a resolved changed row posts,
+after awards/event handling; incomplete is Updated, success Completed, and failure/botch Failed.
 
 ## 2. The virtual canvas
 

@@ -76,19 +76,25 @@ def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
     _run(config, runner, config.ue_root / "Engine" / "Build" / "BatchFiles" / script, arguments)
 
 
-def generate_policy_content(config, runner) -> None:
+def generate_policy_content(config, runner, generators: Sequence[str] | None = None, *,
+                            include_auxiliary: bool = True) -> None:
     common = ["-unattended", "-nosplash", "-nopause", "-stdout"]
+    content_arguments = [
+        str(config.project),
+        "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/build_content.py'}",
+    ]
+    if generators is not None:
+        content_arguments.append("-PolicyGenerators=" + ",".join(dict.fromkeys(generators)))
+    content_arguments.extend(common)
     _run(
         config,
         runner,
         editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/build_content.py'}",
-            *common,
-        ],
+        content_arguments,
     )
+    if not include_auxiliary:
+        return
     _run(
         config,
         runner,
@@ -197,7 +203,8 @@ def bake_maps(
             )
 
 
-def bake_characters(config, runner, stems: Sequence[str], *, plan: Path | None = None) -> None:
+def bake_characters(config, runner, stems: Sequence[str], *, props: Sequence[str] = (),
+                    plan: Path | None = None) -> None:
     """Bake the named models onto /ElysiumBaked/Characters.
 
     The whole cast goes through one editor process, and `plan` names which scopes and stages of it
@@ -208,17 +215,23 @@ def bake_characters(config, runner, stems: Sequence[str], *, plan: Path | None =
     compilation throttler, which cannot see this work: only a task reporting -1 draws against that
     budget and animation compression reports 0.
     """
+    stems = list(dict.fromkeys(stems))
+    props = list(dict.fromkeys(props))
+    if not stems and not props:
+        raise ValueError("character bake needs at least one body or placed model")
     arguments = [
         str(config.project),
         "-run=pythonscript",
         f"-script={config.repo_root / 'pipeline/unreal/bake_characters.py'}",
-        f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
+        f"-BakeCharacters={','.join(stems)}",
         "-unattended",
         "-nosplash",
         "-nopause",
         "-stdout",
         "-FullStdOutLogOutput",
     ]
+    if props:
+        arguments.insert(4, f"-BakeProps={','.join(props)}")
     if plan is not None:
         arguments.insert(4, f"-BakeCharacterPlan={plan}")
     _run(config, runner, editor_executable(config, commandlet=True), arguments)
@@ -249,22 +262,29 @@ def make_cloth_assets(config, runner, stems: Sequence[str]) -> None:
     )
 
 
-def verify_characters(config, runner, stems: Sequence[str]) -> None:
+def verify_characters(config, runner, stems: Sequence[str], *, props: Sequence[str] = ()) -> None:
+    stems = list(dict.fromkeys(stems))
+    props = list(dict.fromkeys(props))
+    if not stems and not props:
+        raise ValueError("character verification needs at least one body or placed model")
+    arguments = [
+        str(config.project),
+        "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/bake_verify_characters.py'}",
+        f"-BakeCharacters={','.join(stems)}",
+        "-unattended",
+        "-nosplash",
+        "-nopause",
+        "-stdout",
+        "-FullStdOutLogOutput",
+    ]
+    if props:
+        arguments.insert(4, f"-BakeProps={','.join(props)}")
     _run(
         config,
         runner,
         editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/bake_verify_characters.py'}",
-            f"-BakeCharacters={','.join(dict.fromkeys(stems))}",
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
+        arguments,
     )
 
 

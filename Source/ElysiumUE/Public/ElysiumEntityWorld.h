@@ -321,8 +321,12 @@ public:
 	// Player picked the Nth visible PC choice: advance the branch machine; end the session (firing the
 	// owner's OnDialogEnd) if the pick closed it. No-op when no conversation is open.
 	void PlayerDialogChoose(int32 VisibleIndex);
-	// Player advanced past a terminal NPC line (the "continue" affordance) — ends the session.
+	// Player advanced past a terminal NPC line. Also resolves a pending automatic row only when its
+	// voice could not be started and presentation exposed the explicit Continue fallback.
 	void PlayerDialogAdvance();
+	// True only for that automatic-transition failure fallback; normal Auto-Link/Auto-End turns do
+	// not accept input and advance from the current voice handle's completion.
+	bool CanPlayerAdvanceAutomatic() const;
 	// Force-close the open conversation. bSilent suppresses OnDialogEnd (a Kill/teardown must not
 	// resurrect the beat machine); a normal close fires it.
 	void CloseDialog(bool bSilent = false);
@@ -643,6 +647,8 @@ private:
 	// End the open session: clear the slot and (unless bSilent) enqueue the owner's EndDialog input so
 	// OnDialogEnd fires through the real chokepoint (the B3 seam the runner reuses).
 	void EndDialogSession(bool bSilent);
+	void BeginDialogueTurn();
+	void UpdateDialogueAutomatic();
 	void SelectDialogueCamera(bool bLineBoundary);
 	void UpdateSelectedDialogueCamera();
 

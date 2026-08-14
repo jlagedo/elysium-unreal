@@ -286,8 +286,10 @@ command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProf
 registry, driven by `uv run elysium debug move`, compared by
 `pipeline/src/elysium_pipeline/validation/channel_diff.py`).
 
-Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
-and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EXPORT_ROOT` is empty).
+Automation tests live in `Private/Tests/`: content-free `Elysium.Substrate.*` suites are split by
+domain across the focused `Elysium*Tests.cpp` files and run under `-nullrhi`; `ElysiumContentTests.cpp`
+parses real exports and self-skips when `$ELYSIUM_EXPORT_ROOT` is empty. Shared substrate recordings
+and engine-service doubles live in `ElysiumTestServices.h`.
 
 ## Engine gotchas
 
@@ -449,6 +451,13 @@ The build command is `uv run elysium build`.
 
 The test command is `uv run elysium test <tier>` — `Substrate` for anything under the substrate,
 scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`.
+
+These commands describe the available surfaces, not automatic permission to run them. Start with
+the narrowest owning automation filter or pure-rules test. If validation needs a newly compiled
+binary, state the build scope and expected cost and wait for explicit owner acceptance before
+invoking `uv run elysium build`. Never start `--clean`, `--rebuild`, an entire `Substrate` or
+`Content` tier, or another complete build/test pass as routine validation; each is a separately
+planned and accepted operation.
 
 **A live run is proposed, never assumed — ask the owner first, with a recommendation.**
 

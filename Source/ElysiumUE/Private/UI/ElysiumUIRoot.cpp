@@ -77,6 +77,8 @@ TSharedRef<SWidget> UElysiumUIRoot::RebuildWidget()
 	HUDWidget->SetModel(Model);
 	HUDWidget->SetVisibility(bHUDSurfaceVisible
 		? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	NotificationQueue->SetVisibility(bNotificationSurfaceVisible
+		? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
 	return Super::RebuildWidget();
 }
 
@@ -86,6 +88,16 @@ void UElysiumUIRoot::SetHUDSurfaceVisible(bool bVisible)
 	if (HUDWidget)
 	{
 		HUDWidget->SetVisibility(bVisible
+			? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+}
+
+void UElysiumUIRoot::SetNotificationSurfaceVisible(bool bVisible)
+{
+	bNotificationSurfaceVisible = bVisible;
+	if (NotificationQueue)
+	{
+		NotificationQueue->SetVisibility(bVisible
 			? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
 	}
 }

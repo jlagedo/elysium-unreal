@@ -63,6 +63,16 @@ static FAutoConsoleCommandWithWorld GElysiumDlgDump(
 			UE_LOG(LogElysiumDlgConsole, Display, TEXT("  (terminal — elysium.dlg.advance to continue)"));
 			return;
 		}
+		if (Conv->IsAwaitingAutomatic())
+		{
+			const FElysiumDlgLine* Automatic = Conv->PendingAutomatic();
+			UE_LOG(LogElysiumDlgConsole, Display, TEXT("  (automatic row %d — %s)"),
+				Automatic ? Automatic->Id : INDEX_NONE,
+				W->CanPlayerAdvanceAutomatic()
+					? TEXT("voice unavailable; elysium.dlg.advance to continue")
+					: TEXT("waiting for current voice"));
+			return;
+		}
 		for (int32 v = 0; v < Conv->VisibleChoices().Num(); ++v)
 		{
 			const FElysiumDlgLine* C = Conv->VisibleChoice(v);
@@ -93,7 +103,7 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumDlgChoose(
 
 static FAutoConsoleCommandWithWorld GElysiumDlgAdvance(
 	TEXT("elysium.dlg.advance"),
-	TEXT("elysium.dlg.advance -- advance past a terminal NPC line (the box's 'continue')."),
+	TEXT("elysium.dlg.advance -- advance a terminal line or an automatic voice-failure fallback."),
 	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 	{
 		if (FElysiumEntityWorld* W = DlgWorld(World))

@@ -868,11 +868,13 @@ protected:
 		// Rotate `Distance` degrees about the hinge. The hinge is the def origin, which is the body's
 		// own pivot (BuildBrushBody seats entity-local hulls there), so a relative rotation swings the
 		// leaf about it — no location change. Default axis is yaw/Z (B.2: `angles` default yaw/Z; every
-		// tutorial door is `angles 0 0 0`). REVERSE (0x2) negates the swing. Non-default swing axes
-		// from `angles` are a later refinement (no exported rotating door uses one).
-		const float Sign = (SpawnFlags & SF_DOOR_REVERSE) ? -1.0f : 1.0f;
+		// tutorial door is `angles 0 0 0`). Retail adds the signed distance to Source yaw; the
+		// Source->Unreal Y reflection reverses that turn, just as it does for func_rotating below.
+		// REVERSE (0x2) negates the Source swing before that reflection. Non-default swing axes from
+		// `angles` are a later refinement (no exported rotating door uses one).
+		const float SourceSign = (SpawnFlags & SF_DOOR_REVERSE) ? -1.0f : 1.0f;
 		OutOpenLoc = ClosedLoc;
-		OutOpenRot = ClosedRot + FRotator(0.0f, Sign * Distance, 0.0f);   // (Pitch, Yaw, Roll)
+		OutOpenRot = ClosedRot + FRotator(0.0f, -SourceSign * Distance, 0.0f);   // (Pitch, Yaw, Roll)
 	}
 
 	virtual void IssueMoveToOpen() override   { AngularMove(OpenRot,   Speed); }   // Speed = deg/s

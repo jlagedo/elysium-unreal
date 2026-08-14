@@ -88,10 +88,22 @@ def select_rest_label(model_path: str, record: dict, placement_token: int) -> st
 class PlacedModelUse:
     model: str
     stem: str
+    static_stem: str
     full_clips: bool = False
+    required_clips: tuple[str, ...] = ()
 
 
-def discover(out_root: str, install_index=None) -> list[PlacedModelUse]:
+# Clip names consumed intrinsically by a substrate class.  These are not discoverable from map
+# output wiring: an un-targeted prop_switch still selects its idle and transition clips itself.
+# Keep this table engine-neutral and closed over authored class behaviour; arbitrary SetAnimation
+# inputs continue to request the complete model vocabulary below.
+INTRINSIC_CLIPS = {
+    "prop_switch": ("idle_off", "idle_on", "activate", "deactivate"),
+}
+
+
+def discover(out_root: str, install_index=None,
+             map_names: tuple[str, ...] | list[str] | None = None) -> list[PlacedModelUse]:
     """Return every non-NPC MDL referenced by exported ``.ents`` or ``.props`` files.
 
     Current ``.props`` rows append the normalized source model.  For an older export, the
@@ -101,10 +113,36 @@ def discover(out_root: str, install_index=None) -> list[PlacedModelUse]:
     """
     from elysium_pipeline.formats import mdl
 
-    models: dict[str, bool] = {}
+    selected_maps = tuple(dict.fromkeys(str(name).strip() for name in (map_names or ())
+                                        if str(name).strip()))
+
+    def sidecars(suffix: str) -> list[str]:
+        if selected_maps:
+            return [os.path.join(out_root, name, f"{name}.{suffix}")
+                    for name in selected_maps]
+        return glob.glob(os.path.join(out_root, "*", f"*.{suffix}"))
+
+    models: dict[str, str] = {}
+    required: dict[str, set[str]] = {}
     full = set()
     docs = []
-    for path in glob.glob(os.path.join(out_root, "*", "*.ents")):
+
+    def register(model_value: str, static_stem_value: str, source: str) -> str:
+        model = normalize_model_path(model_value)
+        if not model.endswith(".mdl"):
+            return ""
+        static_stem = str(static_stem_value or "").strip()
+        if not static_stem:
+            raise ValueError(f"placed model {model} has no static stem in {source}")
+        previous = models.setdefault(model, static_stem)
+        if previous != static_stem:
+            raise ValueError(
+                f"placed model {model} maps to conflicting static stems "
+                f"{previous} and {static_stem} ({source})"
+            )
+        return model
+
+    for path in sidecars("ents"):
         try:
             with open(path, encoding="utf-8") as handle:
                 doc = json.load(handle)
@@ -114,9 +152,12 @@ def discover(out_root: str, install_index=None) -> list[PlacedModelUse]:
         for ent in doc.get("entities", []):
             if str(ent.get("classname", "")).lower().startswith("npc_"):
                 continue
-            model = normalize_model_path(ent.get("keys", {}).get("model", ""))
-            if model.endswith(".mdl"):
-                models[model] = True
+            model_value = ent.get("keys", {}).get("model", "")
+            if normalize_model_path(model_value).endswith(".mdl"):
+                model = register(model_value, ent.get("model_mesh", ""), path)
+                required.setdefault(model, set()).update(
+                    INTRINSIC_CLIPS.get(str(ent.get("classname", "")).lower(), ())
+                )
 
     animation_targets = set()
     for doc in docs:
@@ -153,7 +194,7 @@ def discover(out_root: str, install_index=None) -> list[PlacedModelUse]:
                 for stem in {model_stem(key), mdl.sanitize(key[:-4])}:
                     by_stem.setdefault(stem, []).append(key)
 
-    for path in glob.glob(os.path.join(out_root, "*", "*.props")):
+    for path in sidecars("props"):
         try:
             lines = open(path, encoding="utf-8")
         except OSError:
@@ -169,9 +210,11 @@ def discover(out_root: str, install_index=None) -> list[PlacedModelUse]:
                     choices = by_stem.get(fields[0], [])
                     model = normalize_model_path(choices[0]) if len(choices) == 1 else ""
                 if model.endswith(".mdl"):
-                    models[model] = True
+                    register(model, fields[0], path)
 
-    uses = [PlacedModelUse(model, model_stem(model), model in full) for model in models]
+    uses = [PlacedModelUse(model, model_stem(model), static_stem, model in full,
+                           tuple(sorted(required.get(model, ()))))
+            for model, static_stem in models.items()]
     stems: dict[str, str] = {}
     for use in uses:
         previous = stems.setdefault(use.stem, use.model)

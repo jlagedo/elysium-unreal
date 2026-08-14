@@ -5,6 +5,7 @@
 #include "ElysiumPresentationSubsystem.h"
 #include "UI/ElysiumDialogueScreen.h"
 #include "UI/ElysiumLootScreen.h"
+#include "UI/ElysiumNotificationScreen.h"
 #include "UI/ElysiumSignScreen.h"
 #include "UI/ElysiumUIRoot.h"
 
@@ -20,6 +21,8 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumPlayerUI, Log, All);
 
 namespace
 {
+	constexpr int32 MaxQueuedNotifications = 64;
+
 	EElysiumHUDPreview PreviewFromName(const FString& Name)
 	{
 		if (Name.Equals(TEXT("passive"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Passive;
@@ -29,6 +32,40 @@ namespace
 		if (Name.Equals(TEXT("inventory"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Inventory;
 		if (Name.Equals(TEXT("critical"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Critical;
 		return EElysiumHUDPreview::Off;
+	}
+
+	bool NotificationKindFromName(const FString& Name, EElysiumNotificationKind& OutKind)
+	{
+		if (Name.Equals(TEXT("item"), ESearchCase::IgnoreCase))
+		{
+			OutKind = EElysiumNotificationKind::ItemAcquired;
+			return true;
+		}
+		if (Name.Equals(TEXT("quest"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("updated"), ESearchCase::IgnoreCase))
+		{
+			OutKind = EElysiumNotificationKind::QuestUpdated;
+			return true;
+		}
+		if (Name.Equals(TEXT("complete"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("completed"), ESearchCase::IgnoreCase))
+		{
+			OutKind = EElysiumNotificationKind::QuestCompleted;
+			return true;
+		}
+		if (Name.Equals(TEXT("failure"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("failed"), ESearchCase::IgnoreCase))
+		{
+			OutKind = EElysiumNotificationKind::QuestFailed;
+			return true;
+		}
+		if (Name.Equals(TEXT("generic"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("notice"), ESearchCase::IgnoreCase))
+		{
+			OutKind = EElysiumNotificationKind::Generic;
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -60,6 +97,15 @@ void UElysiumPlayerUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			SetPreviewMode(Args.IsEmpty() ? EElysiumHUDPreview::Off : PreviewFromName(Args[0]));
 		}), ECVF_Cheat);
 	ConsoleObjects.Add(PreviewCommand);
+
+	IConsoleObject* NotificationCommand = IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.hud.notify"),
+		TEXT("elysium.hud.notify item|quest|complete|failure|generic <text> [quantity]"),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			ExecuteNotificationPreview(Args);
+		}), ECVF_Cheat);
+	ConsoleObjects.Add(NotificationCommand);
 #endif
 
 	if (ULocalPlayer* LP = GetLocalPlayer())
@@ -110,6 +156,8 @@ void UElysiumPlayerUISubsystem::RebindToWorld(UWorld* World)
 	if (Presentation)
 	{
 		BoundPresentation = Presentation;
+		NotificationHandle = Presentation->OnNotification().AddUObject(
+			this, &UElysiumPlayerUISubsystem::OnNotification);
 		ViewPublishedHandle = Presentation->OnViewPublished().AddUObject(
 			this, &UElysiumPlayerUISubsystem::OnViewPublished);
 		OnViewPublished(Presentation->View());
@@ -204,6 +252,7 @@ void UElysiumPlayerUISubsystem::EnsureRoot()
 	{
 		Root->SetModel(Model);
 		Root->SetHUDSurfaceVisible(bHUDSurfaceVisible);
+		Root->SetNotificationSurfaceVisible(bNotificationSurfaceAvailable);
 		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		Root->AddToPlayerScreen(10);
 		UE_LOG(LogElysiumPlayerUI, Log, TEXT("Created local-player UI root"));
@@ -224,6 +273,7 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 	DialogueScreen = nullptr;
 	SignScreen = nullptr;
 	LootScreen = nullptr;
+	NotificationScreens.Reset();
 	ShownDialogue = nullptr;
 	ShownSign = nullptr;
 	ShownDialogueRevision = 0;
@@ -233,6 +283,14 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 
 void UElysiumPlayerUISubsystem::UnbindPresentation()
 {
+	if (NotificationHandle.IsValid())
+	{
+		if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+		{
+			Presentation->OnNotification().Remove(NotificationHandle);
+		}
+		NotificationHandle.Reset();
+	}
 	if (ViewPublishedHandle.IsValid())
 	{
 		if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
@@ -251,9 +309,113 @@ void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 		Model->Apply(View, PreviewMode);
 	}
 	EnsureRoot();
+	SetNotificationSurfaceAvailable(View.bPlayerSurface && !View.bCinematic
+		&& !View.Sign && !View.Dialogue.IsOpen() && !View.Loot.IsOpen());
 	ReconcileSign(View);
 	ReconcileDialogue(View.Dialogue);
 	ReconcileLoot(View.Loot);
+}
+
+void UElysiumPlayerUISubsystem::OnNotification(const FElysiumNotification& Notification)
+{
+	if (NotificationScreens.Num() >= MaxQueuedNotifications)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("notification UI queue full (%d): dropping newest %s '%s'"),
+			MaxQueuedNotifications, ElysiumNotificationKindName(Notification.Kind),
+			*Notification.Subject);
+		return;
+	}
+
+	UElysiumNotificationScreen* Screen = Cast<UElysiumNotificationScreen>(PushWidget(
+		EElysiumUILayer::Notification,
+		UElysiumNotificationScreen::StaticClass(),
+		[this, Notification](UCommonActivatableWidget& Widget)
+		{
+			UElysiumNotificationScreen* NotificationScreen =
+				CastChecked<UElysiumNotificationScreen>(&Widget);
+			NotificationScreen->ApplyNotification(Notification);
+			NotificationScreen->SetSuspended(!bNotificationSurfaceAvailable);
+			NotificationScreen->OnFinished = FOnElysiumNotificationFinished::CreateUObject(
+				this, &UElysiumPlayerUISubsystem::OnNotificationFinished);
+		}));
+	if (Screen)
+	{
+		NotificationScreens.Add(Screen);
+	}
+}
+
+void UElysiumPlayerUISubsystem::OnNotificationFinished(UElysiumNotificationScreen* Screen)
+{
+	if (!Screen)
+	{
+		return;
+	}
+	RemoveWidget(EElysiumUILayer::Notification, Screen);
+	NotificationScreens.Remove(Screen);
+}
+
+void UElysiumPlayerUISubsystem::SetNotificationSurfaceAvailable(bool bAvailable)
+{
+	bNotificationSurfaceAvailable = bAvailable;
+	if (Root)
+	{
+		Root->SetNotificationSurfaceVisible(bAvailable);
+	}
+	for (UElysiumNotificationScreen* Screen : NotificationScreens)
+	{
+		if (Screen)
+		{
+			Screen->SetSuspended(!bAvailable);
+		}
+	}
+}
+
+void UElysiumPlayerUISubsystem::ExecuteNotificationPreview(const TArray<FString>& Args)
+{
+	if (Args.Num() < 2)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("elysium.hud.notify item|quest|complete|failure|generic <text> [quantity]"));
+		return;
+	}
+
+	FElysiumNotification Notification;
+	if (!NotificationKindFromName(Args[0], Notification.Kind))
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("elysium.hud.notify: unknown kind '%s'"), *Args[0]);
+		return;
+	}
+
+	int32 SubjectEnd = Args.Num();
+	if (Notification.Kind == EElysiumNotificationKind::ItemAcquired && Args.Num() > 2)
+	{
+		int32 ParsedQuantity = 0;
+		if (LexTryParseString(ParsedQuantity, *Args.Last()) && ParsedQuantity > 0)
+		{
+			Notification.Quantity = ParsedQuantity;
+			--SubjectEnd;
+		}
+	}
+	for (int32 Index = 1; Index < SubjectEnd; ++Index)
+	{
+		Notification.Subject += (Index > 1 ? TEXT(" ") : TEXT("")) + Args[Index];
+	}
+	Notification.Subject = Notification.Subject.TrimQuotes().TrimStartAndEnd();
+	if (Notification.Subject.IsEmpty())
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning, TEXT("elysium.hud.notify: message text is empty"));
+		return;
+	}
+
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		Presentation->PostNotification(Notification);
+		return;
+	}
+	UE_LOG(LogElysiumPlayerUI, Warning,
+		TEXT("elysium.hud.notify: no presentation publisher is bound"));
 }
 
 void UElysiumPlayerUISubsystem::ReconcileSign(const FElysiumViewState& View)

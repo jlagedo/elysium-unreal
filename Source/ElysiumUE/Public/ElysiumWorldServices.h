@@ -26,6 +26,15 @@ enum class EElysiumPlacedModelPhysics : uint8
 	SimulatedProxy,
 };
 
+// Generated availability of an item definition's shared ground model. Geometryless is an
+// authored empty body (w_null and definitions with the same shape), not a failed asset load.
+enum class EElysiumItemGroundModelState : uint8
+{
+	Geometry,
+	Geometryless,
+	Unavailable,
+};
+
 // One engine-neutral request for a non-character MDL embodiment. The returned body separates the
 // posed visual from the component gameplay attaches/collides against; those are the same only for
 // a collision-free placement.
@@ -357,6 +366,10 @@ public:
 	// and authored mass, ready for the leaf to drive SetSimulatePhysics. Null on an unbaked model.
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) = 0;
+	virtual EElysiumItemGroundModelState ItemGroundModelState(const FString& ModelPath)
+	{
+		return EElysiumItemGroundModelState::Geometry;
+	}
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) = 0;
 	// Repaint a prop body to one of its model's alternate skin families (VtMB's `skin`).
@@ -521,6 +534,44 @@ public:
 // editor preview world. A test stub implements it to assert "the chain faded the screen and opened
 // this panel" with no HUD to look at.
 // --------------------------------------------------------------------------------------------
+
+// One transient HUD announcement. Gameplay chooses the semantic kind and source-derived subject;
+// the player UI owns fixed labels, typography, animation and placement. It is deliberately not
+// save state: an event retained here belongs only to the current world epoch.
+enum class EElysiumNotificationKind : uint8
+{
+	ItemAcquired,
+	QuestUpdated,
+	QuestCompleted,
+	QuestFailed,
+	Generic,
+};
+
+inline const TCHAR* ElysiumNotificationKindName(EElysiumNotificationKind Kind)
+{
+	switch (Kind)
+	{
+	case EElysiumNotificationKind::ItemAcquired:   return TEXT("ItemAcquired");
+	case EElysiumNotificationKind::QuestUpdated:   return TEXT("QuestUpdated");
+	case EElysiumNotificationKind::QuestCompleted: return TEXT("QuestCompleted");
+	case EElysiumNotificationKind::QuestFailed:    return TEXT("QuestFailed");
+	case EElysiumNotificationKind::Generic:        return TEXT("Generic");
+	}
+	return TEXT("Unknown");
+}
+
+struct FElysiumNotification
+{
+	EElysiumNotificationKind Kind = EElysiumNotificationKind::Generic;
+	FString Subject;
+	int32 Quantity = 1;
+
+	bool operator==(const FElysiumNotification& Other) const
+	{
+		return Kind == Other.Kind && Subject == Other.Subject && Quantity == Other.Quantity;
+	}
+};
+
 class IElysiumPresenter
 {
 public:
@@ -539,6 +590,10 @@ public:
 	// 9.1/B4 — the one conversation on screen.
 	virtual void OpenDialog(const FElysiumEntityHandle& Owner, FElysiumDlgConversation& Conversation) = 0;
 	virtual void CloseDialog() = 0;
+
+	// 8.9 — a FIFO HUD notification. Unlike the replaceable retained surfaces above, every admitted
+	// event matters: same-frame grants stay distinct and are presented in arrival order.
+	virtual void PostNotification(const FElysiumNotification& Notification) = 0;
 };
 
 struct FElysiumWeatherTransition

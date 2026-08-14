@@ -231,6 +231,11 @@ def _fresh(name):
     # editor no new permutation can be compiled, so a master without this flag renders the whole
     # map in default grey. The editor hides it by compiling on demand.
     mat.set_editor_property("used_with_nanite", True)
+    # GAME_LUMP props whose authored rest sequence changes their stored geometry are baked as
+    # skeletal meshes but deliberately reuse these exact map material instances. Every master
+    # `_master_for` can select for a prop therefore needs a cooked skeletal permutation; otherwise
+    # the editor compiles one on demand while a packaged build substitutes Default Material.
+    mat.set_editor_property("used_with_skeletal_mesh", True)
     return mat, asset
 
 

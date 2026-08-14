@@ -926,6 +926,13 @@ void UElysiumAudioSubsystem::CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletio
 	{
 		TerminalState = EElysiumVoiceState::Failed;
 	}
+	if (TerminalState == EElysiumVoiceState::Failed)
+	{
+		UE_LOG(LogElysiumAudio, Warning,
+			TEXT("voice failed completion=%d source='%s' owner='%s' epoch=%llu"),
+			static_cast<int32>(Completion), *Voice.Event.ResolvedPath,
+			*Voice.Request.Owner.StableId, Voice.Request.Owner.MapEpoch);
+	}
 	Transition(Voice, TerminalState, Completion);
 	if (Comp)
 	{

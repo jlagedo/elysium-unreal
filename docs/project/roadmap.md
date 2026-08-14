@@ -211,8 +211,8 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
   `docs/architecture/ui-architecture.md`.
 - [x] **8.7 Ropes** — `UCableComponent` over the RE'd rest-length arithmetic.
 - [~] **[8.8 Sign / popup panels](plans/characters-ui.md)** — screen landed; format features open.
-- [~] **[8.9 HUD on the UI foundation](plans/characters-ui.md)** — vitals landed; selectors and
-  subtitles open.
+- [~] **[8.9 HUD on the UI foundation](plans/characters-ui.md)** — vitals and queued item/quest
+  notifications landed; selectors and subtitles open.
 - [ ] **[8.10 Accessibility & options backing](plans/characters-ui.md)**
 - [x] **8.11a The player body** — clan/sex/slot resolution, dithered fade, choreography-ready.
 - [ ] **8.11b Locomotion** — the CCC slice's; assets are the ANM programme's.

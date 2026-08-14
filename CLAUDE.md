@@ -82,6 +82,26 @@ structured failure when callers need it, rather than producing duplicate warning
 negative query result or an explicitly optional absence is not a failure and does not require a
 warning.
 
+### Fast QA is a scope contract
+
+Iteration uses the **smallest independently testable unit** that can prove the requested change.
+A fix and its first validation stay in the same narrow unit: one parser fixture, test method,
+runtime test filter, model, NPC, placed model, map stage, or package generator. Widen only when
+focused evidence demonstrates a dependency outside that unit.
+
+**Agents never start a complete build, rebuild, reconstruction, export corpus, bake corpus, or
+full test sweep on their own.** Project-wide work is planned work: state the exact command, scope,
+reason, and expected cost, then wait for the owner's explicit acceptance. This applies to
+`reconstruct`, `export grid|all`, an unscoped `export characters`, full-map or full-policy forced
+bakes, `build --clean|--rebuild`, unfiltered automation tiers, and any equivalent command. A broad
+request such as "fix", "verify", or "go" does not authorize a complete operation.
+
+When a request would change an export or bake input and the owning unit is not explicit, stop
+before exporting and ask the owner to name the scope: map, model, placed model, NPC/body stem,
+bundle, generator, or another concrete unit. Prefer exact selectors and focused test filters;
+never add `--force`, `--clean`, or a wider profile merely to obtain confidence. Report the
+remaining broader acceptance separately instead of silently running it.
+
 ### Bring-your-own-game
 
 **Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their
@@ -235,7 +255,7 @@ then use `uv run elysium` as the only public command surface.
 - `doctor` checks repository policy, local paths, dependency ownership and generated prerequisites.
 - `lane create|dispatch|status|mark` owns detached, generated-state-isolated QA worktrees.
 - `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
-- `export grid|all` runs a complete profile; `export map|model|bundle` handles focused work.
+- `export grid|all` runs a complete profile; `export map|model|placed-model|bundle` handles focused work.
 - Export generates the required `/Game/Elysium`, `/Game/VtMB/**`, and
   `/ElysiumBaked/<map>/**` packages unless an explicit intermediate-only mode is selected.
 - `test [filter]` runs the `Substrate`, `Content`, or fully qualified automation tier.

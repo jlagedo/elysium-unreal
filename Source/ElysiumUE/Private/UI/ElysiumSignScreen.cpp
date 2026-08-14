@@ -23,7 +23,7 @@ namespace
 	const FName SignActionId(TEXT("Sign.Dismiss"));
 	const FName SignGroup(TEXT("Sign"));
 
-	constexpr float PanelWidth = 620.0f;
+	constexpr float SignPanelWidth = 620.0f;
 	constexpr float ContinueWidth = 190.0f;
 	constexpr float ContinueHeight = 48.0f;
 }
@@ -133,7 +133,7 @@ TSharedRef<SWidget> UElysiumSignScreen::BuildPanelVisual()
 			.Padding(FMargin(32.0f, 28.0f))
 			[
 				SNew(SBox)
-				.WidthOverride(PanelWidth)
+				.WidthOverride(SignPanelWidth)
 				[
 					SNew(SVerticalBox)
 					+ SVerticalBox::Slot()
@@ -144,7 +144,7 @@ TSharedRef<SWidget> UElysiumSignScreen::BuildPanelVisual()
 						.Font(FCoreStyle::GetDefaultFontStyle("Regular", 18))
 						.ColorAndOpacity(FSlateColor(FLinearColor::White))
 						.AutoWrapText(true)
-						.WrapTextAt(PanelWidth)
+						.WrapTextAt(SignPanelWidth)
 						.LineHeightPercentage(1.12f)
 					]
 					+ SVerticalBox::Slot()

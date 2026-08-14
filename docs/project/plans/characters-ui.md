@@ -34,9 +34,10 @@ type; per-resolution `Font_640`…`Font_1600` overrides are dropped. *Deps:* 8.6
 ### 8.9 HUD on the UI foundation — remaining
 
 The stable HUD model, reticle/use icons, health, vitae droplets, Humanity/Masquerade, fade,
-cutscene suppression and contrast treatments are landed. **Remaining:** equipment, disciplines
-and inventory selectors need authoritative gameplay data and command wiring; subtitles remain
-open. The HUD reads `FElysiumViewState` only. *Deps:* 8.6, 4.4, 11.8.
+cutscene suppression, contrast treatments, and queued item/quest notifications are landed.
+**Remaining:** equipment, disciplines and inventory selectors need authoritative gameplay data and
+command wiring; subtitles remain open. The HUD reads `FElysiumViewState` and discrete notifications
+from the same publisher only. *Deps:* 8.6, 4.4, 11.8.
 
 ### 8.10 Accessibility & options backing
 

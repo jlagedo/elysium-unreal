@@ -17,6 +17,7 @@ from elysium_pipeline.exporters import npc_export
 from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline import placed_models
+from elysium_pipeline.exporters import source_warnings
 from elysium_pipeline import export_manager
 
 
@@ -131,16 +132,76 @@ class PlacedModelPolicyTests(unittest.TestCase):
             map_dir.mkdir()
             (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
                 "classname": "prop_switch", "targetname": "switch",
-                "model_mesh": "scenery_switch", "keys": {"model": self.MODEL},
+                "model_mesh": "models_scenery_structural_doorknoba_drknobantique",
+                "keys": {"model": self.MODEL},
                 "outputs": [{"target": "switch", "input": "SetAnimation"}],
             }]}), encoding="utf-8")
             second = "models/scenery/props/palm.mdl"
             (map_dir / "sp_test.props").write_text(
-                "scenery_props_palm 0 0 0 0 0 0 1 0 0 0 %s\n" % second,
+                "models_scenery_props_palm 0 0 0 0 0 0 1 0 0 0 %s\n" % second,
                 encoding="utf-8")
             uses = placed_models.discover(str(root))
         self.assertEqual({use.model for use in uses}, {self.MODEL, second})
-        self.assertTrue(next(use for use in uses if use.model == self.MODEL).full_clips)
+        switch = next(use for use in uses if use.model == self.MODEL)
+        self.assertTrue(switch.full_clips)
+        self.assertEqual(switch.static_stem,
+                         "models_scenery_structural_doorknoba_drknobantique")
+        self.assertEqual(switch.required_clips,
+                         ("activate", "deactivate", "idle_off", "idle_on"))
+        self.assertEqual(next(use for use in uses if use.model == second).static_stem,
+                         "models_scenery_props_palm")
+
+    def test_an_untargeted_switch_still_declares_its_intrinsic_clip_vocabulary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            map_dir = root / "sp_test"
+            map_dir.mkdir()
+            (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
+                "classname": "prop_switch",
+                "model_mesh": "models_scenery_switch",
+                "keys": {"model": "models/scenery/switch.mdl"},
+            }]}), encoding="utf-8")
+            use = placed_models.discover(str(root))[0]
+        self.assertFalse(use.full_clips)
+        self.assertEqual(use.required_clips,
+                         ("activate", "deactivate", "idle_off", "idle_on"))
+
+    def test_conflicting_static_stems_fail_the_export_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, stem in (("a", "models_switch_a"), ("b", "models_switch_b")):
+                map_dir = root / name
+                map_dir.mkdir()
+                (map_dir / f"{name}.ents").write_text(json.dumps({"entities": [{
+                    "classname": "prop_dynamic", "model_mesh": stem,
+                    "keys": {"model": "models/switch.mdl"},
+                }]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "conflicting static stems"):
+                placed_models.discover(str(root))
+
+    def test_map_slice_reads_only_the_selected_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, model in (("a", "models/a.mdl"), ("b", "models/b.mdl")):
+                map_dir = root / name
+                map_dir.mkdir()
+                (map_dir / f"{name}.ents").write_text(json.dumps({"entities": [{
+                    "classname": "prop_dynamic",
+                    "model_mesh": f"models_{name}",
+                    "keys": {"model": model},
+                }]}), encoding="utf-8")
+                (map_dir / f"{name}.props").write_text("", encoding="utf-8")
+            uses = placed_models.discover(str(root), map_names=["a"])
+        self.assertEqual([use.model for use in uses], ["models/a.mdl"])
+        self.assertEqual(uses[0].static_stem, "models_a")
+
+    def test_only_the_authored_warrens_hatch_may_lack_switch_clips(self) -> None:
+        missing = ["activate", "deactivate", "idle_off", "idle_on"]
+        warning = source_warnings.missing_intrinsic_prop_clips_warning(
+            "models/scenery/structural/warrens/warr_02_container_door.mdl", missing)
+        self.assertEqual(warning["fallback"], "authored static rest pose")
+        self.assertIsNone(source_warnings.missing_intrinsic_prop_clips_warning(
+            "models/scenery/structural/switches/switch.mdl", missing))
 
     def test_legacy_game_lump_stem_joins_with_its_models_prefix(self) -> None:
         model = "models/scenery/street/payphone/payphone_pair.mdl"
@@ -153,6 +214,8 @@ class PlacedModelPolicyTests(unittest.TestCase):
                 encoding="utf-8")
             uses = placed_models.discover(str(root), {model: object()})
         self.assertEqual([use.model for use in uses], [model])
+        self.assertEqual(uses[0].static_stem,
+                         "models_scenery_street_payphone_payphone_pair")
 
     def test_static_equivalence_accepts_identity_and_rejects_quarter_turn(self) -> None:
         bone = mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,

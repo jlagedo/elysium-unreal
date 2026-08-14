@@ -1064,6 +1064,12 @@ UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, con
 	return Bodies->BuildPropVisual(Stem, Location, Rotation, UniformScale);
 }
 
+EElysiumItemGroundModelState AElysiumMapActor::ItemGroundModelState(const FString& ModelPath)
+{
+	return Bodies ? Bodies->ItemGroundModelState(ModelPath)
+		: EElysiumItemGroundModelState::Unavailable;
+}
+
 UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 	const FQuat& Rotation, float UniformScale)
 {
@@ -2788,12 +2794,14 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	Extent.Y += 500.0f;
 	Extent.Z += 300.0f;
 
+	const FTransform BoundsTransform(FRotator::ZeroRotator, Center);
 	FActorSpawnParameters Params;
 	Params.Owner = this;
 	Params.OverrideLevel = GetLevel();
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.bDeferConstruction = true;
 	NavigationBounds = World->SpawnActor<ANavMeshBoundsVolume>(
-		ANavMeshBoundsVolume::StaticClass(), FTransform(FRotator::ZeroRotator, Center), Params);
+		ANavMeshBoundsVolume::StaticClass(), BoundsTransform, Params);
 	if (!NavigationBounds)
 	{
 		bNavigationBuildFailed = true;
@@ -2808,7 +2816,11 @@ void AElysiumMapActor::EnsureRuntimeNavigation()
 	BoundsBox->SetCanEverAffectNavigation(false);
 	BoundsBox->SetupAttachment(NavigationBounds->GetRootComponent());
 	NavigationBounds->AddInstanceComponent(BoundsBox);
-	BoundsBox->RegisterComponent();
+	NavigationBounds->FinishSpawning(BoundsTransform);
+	if (!BoundsBox->IsRegistered())
+	{
+		BoundsBox->RegisterComponent();
+	}
 
 	// Both colliders cook asynchronously after their components register. Refresh their octree data
 	// now that the activation barrier has observed completed BodySetups, then build exactly once.

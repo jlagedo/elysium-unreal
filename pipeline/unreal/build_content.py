@@ -55,8 +55,24 @@ def run_one(script):
         return (script, "FAIL: %s" % e)
 
 
+def cmdline_arg(key, default=""):
+    needle = "-%s=" % key
+    for token in unreal.SystemLibrary.get_command_line().split():
+        if token.lower().startswith(needle.lower()):
+            return token[len(needle):].strip('"')
+    return default
+
+
 def main():
-    results = [run_one(s) for s in GENERATORS]
+    requested = [name for name in cmdline_arg("PolicyGenerators").split(",") if name]
+    unknown = sorted(set(requested) - set(GENERATORS))
+    if unknown:
+        unreal.log_error("[build_content] unknown generator(s): %s" % ", ".join(unknown))
+        raise SystemExit(1)
+    selected = list(dict.fromkeys(requested)) if requested else GENERATORS
+    unreal.log("[build_content] selected %d of %d generator(s)" %
+               (len(selected), len(GENERATORS)))
+    results = [run_one(s) for s in selected]
 
     unreal.log("[build_content] ==== summary ====")
     failed = 0

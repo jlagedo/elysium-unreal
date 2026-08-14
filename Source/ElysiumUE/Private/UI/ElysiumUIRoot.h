@@ -23,6 +23,7 @@ class UElysiumUIRoot final : public UCommonUserWidget
 public:
 	void SetModel(UElysiumHUDModel* InModel) { Model = InModel; }
 	void SetHUDSurfaceVisible(bool bVisible);
+	void SetNotificationSurfaceVisible(bool bVisible);
 	void DeactivateAllScreens();
 
 	UCommonActivatableWidget* PushWidget(
@@ -61,4 +62,5 @@ private:
 	TObjectPtr<UCommonActivatableWidgetStack> RuntimeLoadingStack;
 
 	bool bHUDSurfaceVisible = true;
+	bool bNotificationSurfaceVisible = false;
 };

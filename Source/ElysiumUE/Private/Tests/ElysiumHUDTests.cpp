@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumHUDModel.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumCharacterScreen.h"
@@ -9,6 +10,7 @@
 #include "UI/ElysiumDialogueWidget.h"
 #include "UI/ElysiumCommonUIInputData.h"
 #include "UI/ElysiumMainMenu.h"
+#include "UI/ElysiumNotificationScreen.h"
 #include "UI/ElysiumSignScreen.h"
 #include "UI/ElysiumUIRoot.h"
 #include "UI/ElysiumUIStyle.h"
@@ -37,6 +39,71 @@ namespace
 		}
 		return Count;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNotificationPresentationRulesTest,
+	"Elysium.Substrate.UI.NotificationPresentationRules",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumNotificationPresentationRulesTest::RunTest(const FString& Parameters)
+{
+	FElysiumNotification Item;
+	Item.Kind = EElysiumNotificationKind::ItemAcquired;
+	Item.Subject = TEXT("Tire Iron");
+	Item.Quantity = 4;
+	TestEqual(TEXT("item category is the modern fixed label"),
+		ElysiumNotificationUI::CategoryLabel(Item.Kind).ToString(), FString(TEXT("ITEM ACQUIRED")));
+	TestEqual(TEXT("stack quantities append a multiplication count"),
+		ElysiumNotificationUI::SubjectLabel(Item).ToString(), FString(TEXT("Tire Iron \u00d74")));
+
+	FElysiumNotification Quest;
+	Quest.Kind = EElysiumNotificationKind::QuestCompleted;
+	Quest.Subject = TEXT("The Tutorial");
+	TestEqual(TEXT("quest completion has its own semantic label"),
+		ElysiumNotificationUI::CategoryLabel(Quest.Kind).ToString(),
+		FString(TEXT("QUEST COMPLETED")));
+	TestEqual(TEXT("quest subjects are unchanged"),
+		ElysiumNotificationUI::SubjectLabel(Quest).ToString(), FString(TEXT("The Tutorial")));
+
+	TestEqual(TEXT("the card begins transparent"),
+		ElysiumNotificationUI::OpacityAt(0.0f), 0.0f);
+	TestEqual(TEXT("the card finishes its entrance opaque"),
+		ElysiumNotificationUI::OpacityAt(ElysiumNotificationUI::EnterSeconds), 1.0f);
+	TestEqual(TEXT("the hold remains opaque"),
+		ElysiumNotificationUI::OpacityAt(ElysiumNotificationUI::EnterSeconds + 1.0f), 1.0f);
+	TestEqual(TEXT("the card ends transparent"),
+		ElysiumNotificationUI::OpacityAt(ElysiumNotificationUI::TotalSeconds), 0.0f);
+	TestEqual(TEXT("the entrance begins twelve virtual pixels high"),
+		ElysiumNotificationUI::OffsetYAt(0.0f), -12.0f);
+	TestEqual(TEXT("the hold reaches its authored position"),
+		ElysiumNotificationUI::OffsetYAt(ElysiumNotificationUI::EnterSeconds), 0.0f);
+
+	UElysiumNotificationScreen* Screen = NewObject<UElysiumNotificationScreen>();
+	TestFalse(TEXT("notification cards never take keyboard focus"), Screen->IsFocusable());
+	Screen->ApplyNotification(Item);
+	Screen->SetSuspended(true);
+	TestTrue(TEXT("the owner can suspend card timing"), Screen->IsSuspended());
+	TestEqual(TEXT("the payload remains immutable through suspension"),
+		Screen->GetNotification(), Item);
+
+	UElysiumPresentationSubsystem* Publisher = NewObject<UElysiumPresentationSubsystem>();
+	for (int32 Index = 0; Index < 65; ++Index)
+	{
+		FElysiumNotification Pending;
+		Pending.Subject = FString::Printf(TEXT("Notice %02d"), Index);
+		Publisher->PostNotification(Pending);
+	}
+	TestEqual(TEXT("the publisher bounds retained notifications"),
+		Publisher->NumPendingNotifications(), 64);
+	const TArray<FElysiumNotification>& Pending = Publisher->PendingNotificationQueue();
+	TestEqual(TEXT("FIFO retains the oldest event first"),
+		Pending[0].Subject, FString(TEXT("Notice 00")));
+	TestEqual(TEXT("overflow drops the newest event"),
+		Pending.Last().Subject, FString(TEXT("Notice 63")));
+	Publisher->Publish(); // no game world means the player surface is suppressed
+	TestEqual(TEXT("suppression retains every pending notification"),
+		Publisher->NumPendingNotifications(), 64);
+	return !HasAnyErrors();
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDModelProjectionTest,
@@ -186,6 +253,38 @@ bool FElysiumUIRootPushTest::RunTest(const FString& Parameters)
 	Root->RemoveWidget(EElysiumUILayer::SystemModal, Over);
 	TestTrue(TEXT("closing the top modal restores the underlying leaf"),
 		SystemModalLayer && SystemModalLayer->GetActiveWidget() == Screen);
+
+	Root->SetNotificationSurfaceVisible(true);
+	UCommonActivatableWidgetContainerBase* NotificationLayer = Overlay
+		? Cast<UCommonActivatableWidgetContainerBase>(Root->GetWidgetFromName(TEXT("NotificationQueue")))
+		: nullptr;
+	TestNotNull(TEXT("the notification queue exists"), NotificationLayer);
+	UCommonActivatableWidget* NoticeA = Root->PushWidget(
+		EElysiumUILayer::Notification, UElysiumNotificationScreen::StaticClass(),
+		[](UCommonActivatableWidget& Widget)
+		{
+			FElysiumNotification N;
+			N.Subject = TEXT("First");
+			CastChecked<UElysiumNotificationScreen>(&Widget)->ApplyNotification(N);
+		});
+	UCommonActivatableWidget* NoticeB = Root->PushWidget(
+		EElysiumUILayer::Notification, UElysiumNotificationScreen::StaticClass(),
+		[](UCommonActivatableWidget& Widget)
+		{
+			FElysiumNotification N;
+			N.Subject = TEXT("Second");
+			CastChecked<UElysiumNotificationScreen>(&Widget)->ApplyNotification(N);
+		});
+	TestTrue(TEXT("the FIFO activates its first notification only"),
+		NotificationLayer && NotificationLayer->GetActiveWidget() == NoticeA);
+	TestTrue(TEXT("the second notification is retained in arrival order"),
+		NotificationLayer && NotificationLayer->GetWidgetList().Contains(NoticeB));
+	Root->RemoveWidget(EElysiumUILayer::Notification, NoticeA);
+	TestTrue(TEXT("removing the first notification advances the FIFO"),
+		NotificationLayer && NotificationLayer->GetActiveWidget() == NoticeB);
+	Root->DeactivateAllScreens();
+	TestEqual(TEXT("root teardown clears transient notifications"),
+		NotificationLayer ? NotificationLayer->GetWidgetList().Num() : -1, 0);
 	(void)RootSlate;
 	return !HasAnyErrors();
 }
@@ -315,6 +414,17 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 	Turn.bTerminal = true;
 	Dialogue->ApplyDialogue(Turn);
 	TestEqual(TEXT("terminal dialogue exposes one Continue action"),
+		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Continue")));
+	Turn.Revision = 5;
+	Turn.bTerminal = false;
+	Turn.bAwaitingAutomatic = true;
+	Dialogue->ApplyDialogue(Turn);
+	TestTrue(TEXT("a normal automatic wait exposes no semantic response action"),
+		Dialogue->GetSelectedActionId().IsNone());
+	Turn.Revision = 6;
+	Turn.bTerminal = true; // invalid voice submission: explicit fallback
+	Dialogue->ApplyDialogue(Turn);
+	TestEqual(TEXT("an automatic failure fallback exposes Continue"),
 		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Continue")));
 
 	// Chargen uses the same stable-selection and contraction rules, with a vertical wrap.
@@ -506,6 +616,12 @@ bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
 	{
 		TestEqual(TEXT("terminal dialogue reports advance"), Continue.GetValue(), -1);
 	}
+	TestFalse(TEXT("a live automatic turn rejects manual advance"),
+		ElysiumDialogueUI::ChoiceForKey(EKeys::Enter, 0, false, true).IsSet());
+	const TOptional<int32> AutomaticFallback =
+		ElysiumDialogueUI::ChoiceForKey(EKeys::Enter, 0, true, true);
+	TestTrue(TEXT("an automatic voice failure accepts explicit fallback advance"),
+		AutomaticFallback.IsSet() && AutomaticFallback.GetValue() == -1);
 	return !HasAnyErrors();
 }
 

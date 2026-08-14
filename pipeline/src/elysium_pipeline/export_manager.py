@@ -287,13 +287,11 @@ def run_offline_profile(
     return maps, results
 
 
-def _policy_script_paths(config) -> list[Path]:
+def _policy_generator_names(config) -> list[str]:
     unreal_root = config.repo_root / "pipeline" / "unreal"
     build_content = unreal_root / "build_content.py"
-    scripts = [build_content, unreal_root / "make_ui_fonts.py"]
     try:
         tree = ast.parse(build_content.read_text(encoding="utf-8"))
-        generator_names: list[str] = []
         for node in tree.body:
             if not isinstance(node, (ast.Assign, ast.AnnAssign)):
                 continue
@@ -304,13 +302,26 @@ def _policy_script_paths(config) -> list[Path]:
             ):
                 continue
             value = ast.literal_eval(node.value)
-            generator_names = [str(item) for item in value]
-            break
-        scripts.extend(unreal_root / name for name in generator_names)
+            return [str(item) for item in value]
     except (OSError, SyntaxError, ValueError, TypeError):
-        # The umbrella itself still invalidates the policy task.  A malformed file will then fail
-        # in Unreal with its real diagnostic instead of being hidden by fingerprint discovery.
-        pass
+        return []
+    return []
+
+
+def _policy_script_paths(config, *, only_generators: Sequence[str] | None = None,
+                         exclude_generators: Sequence[str] = (),
+                         include_fonts: bool = True) -> list[Path]:
+    unreal_root = config.repo_root / "pipeline" / "unreal"
+    build_content = unreal_root / "build_content.py"
+    generator_names = _policy_generator_names(config)
+    if only_generators is not None:
+        selected = set(only_generators)
+        generator_names = [name for name in generator_names if name in selected]
+    excluded = set(exclude_generators)
+    generator_names = [name for name in generator_names if name not in excluded]
+    scripts = [build_content, *(unreal_root / name for name in generator_names)]
+    if include_fonts:
+        scripts.append(unreal_root / "make_ui_fonts.py")
 
     # Follow local helper imports without importing the modules (they import ``unreal`` and are
     # only executable inside an editor process).
@@ -333,9 +344,9 @@ def _policy_script_paths(config) -> list[Path]:
     return sorted(seen, key=lambda path: str(path).lower())
 
 
-def _policy_fingerprint(config) -> str:
+def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = ()) -> str:
     scripts = [
-        *_policy_script_paths(config),
+        *_policy_script_paths(config, exclude_generators=exclude_generators),
         config.repo_root / "Content" / "Fonts",
         # `make_input_assets.py` reads this CSV, and script discovery above only walks imports --
         # so without naming it here, editing the committed input table alone leaves the task
@@ -380,6 +391,64 @@ def _policy_fingerprint(config) -> str:
     return fingerprint_content(scripts, extra=("policy-v2",))
 
 
+WORLD_MATERIAL_GENERATOR = "make_world_materials.py"
+CHARACTER_MATERIAL_GENERATORS = (
+    "make_player_body_material.py",
+    "make_eye_material.py",
+)
+
+
+def _world_material_fingerprint(config) -> str:
+    scripts = _policy_script_paths(
+        config, only_generators=(WORLD_MATERIAL_GENERATOR,), include_fonts=False)
+    return fingerprint_content(scripts, extra=("policy-world-materials-v1",))
+
+
+def _character_material_fingerprint(config) -> str:
+    scripts = _policy_script_paths(
+        config, only_generators=CHARACTER_MATERIAL_GENERATORS, include_fonts=False)
+    return fingerprint_content(scripts, extra=("policy-character-materials-v1",))
+
+
+def _world_material_task(config, runner) -> Task:
+    material_root = config.repo_root / "Content" / "VtMB" / "Materials"
+    outputs = tuple(material_root / f"{name}.uasset" for name in (
+        "M_World_Opaque", "M_World_Masked", "M_World_Translucent", "M_World_Glass",
+        "M_Refract", "M_Additive"))
+    return Task(
+        "unreal:policy:world-materials",
+        lambda: unreal.generate_policy_content(
+            config, runner, (WORLD_MATERIAL_GENERATOR,), include_auxiliary=False),
+        fingerprint=lambda: _world_material_fingerprint(config),
+        outputs=outputs,
+    )
+
+
+def _character_material_task(config, runner) -> Task:
+    material_root = config.repo_root / "Content" / "VtMB" / "Materials"
+    return Task(
+        "unreal:policy:character-materials",
+        lambda: unreal.generate_policy_content(
+            config, runner, CHARACTER_MATERIAL_GENERATORS, include_auxiliary=False),
+        fingerprint=lambda: _character_material_fingerprint(config),
+        outputs=(material_root / "M_PlayerBody.uasset", material_root / "M_Eyes.uasset"),
+    )
+
+
+def ensure_world_material_content(config, runner, *, force: bool = False) -> TaskResult:
+    """Keep the material masters consumed by map packages current, without global policy work."""
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    task = _world_material_task(config, runner)
+    return TaskGraph([task]).run(force=force, manifest=manifest)[task.name]
+
+
+def ensure_character_material_content(config, runner, *, force: bool = False) -> TaskResult:
+    """Keep the two material masters consumed by character/prop bakes current in isolation."""
+    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    task = _character_material_task(config, runner)
+    return TaskGraph([task]).run(force=force, manifest=manifest)[task.name]
+
+
 def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
     # The generated rain material imports normalized derivatives of the exact patch-first source
     # sprites. Keep the raw full mirror and its four-item closure current even for a focused
@@ -390,20 +459,27 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
     UE_extract_particles.main(index=install.build_index(dirs=("particles",)))
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
+    generator_names = _policy_generator_names(config)
+    focused_generators = {WORLD_MATERIAL_GENERATOR, *CHARACTER_MATERIAL_GENERATORS}
+    other_generators = [name for name in generator_names if name not in focused_generators]
+    world_task = _world_material_task(config, runner)
+    character_task = _character_material_task(config, runner)
     outputs = (
         config.repo_root / "Content" / "Elysium.umap",
-        config.repo_root / "Content" / "VtMB" / "Materials" / "M_World_Opaque.uasset",
         *(font_root / name for name in unreal.FONT_ASSETS),
         config.repo_root / "Content" / "VtMB" / "Particles" / "M_ElysiumRain.uasset",
         config.repo_root / "Content" / "VtMB" / "Particles" / "NS_ElysiumRain.uasset",
     )
     task = Task(
         "unreal:policy",
-        lambda: unreal.generate_policy_content(config, runner),
-        fingerprint=lambda: _policy_fingerprint(config),
+        lambda: unreal.generate_policy_content(config, runner, other_generators),
+        dependencies=(world_task.name, character_task.name),
+        fingerprint=lambda: _policy_fingerprint(
+            config, exclude_generators=tuple(focused_generators)),
         outputs=outputs,
     )
-    return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:policy"]
+    return TaskGraph([world_task, character_task, task]).run(
+        force=force, manifest=manifest)["unreal:policy"]
 
 
 ITEMS_SCOPE = "items"
@@ -652,9 +728,17 @@ def export_targeted_maps(
     )
     if not intermediate_only:
         try:
-            ensure_policy_content(config, runner, force=force)
+            # A targeted map owns only the world-material masters its map package consumes.
+            # Rain, fonts, UI and other global policy content remain explicit bundle/profile work;
+            # waking them here turns every map iteration into an unrelated whole-project rebuild.
+            ensure_world_material_content(config, runner, force=force)
         except Exception as exc:
             raise ExportBakeFailure(str(exc)) from exc
+        export_map_npcs(config, runner, names, force=force, index=index)
+        # A focused map is a complete development unit: its non-character MDLs must have their
+        # catalogue rows, native containers and independently baked prop scopes current before the
+        # level is accepted. This path never invokes the global NPC exporter.
+        export_placed_models(config, runner, names, force=force, index=index)
         bake_and_verify(config, runner, names, force=force)
     return names
 
@@ -714,24 +798,200 @@ def export_model(
     from elysium_pipeline.exporters import npc_export
 
     npc_export.main(only=[normalized], index=index, integrate=True, strict=True)
-    dependent_maps: list[str] = []
-    needle = normalized.lower().removesuffix(".mdl")
-    for ents in config.export_root.glob("*/*.ents"):
-        try:
-            text = ents.read_text(encoding="utf-8").lower()
-        except OSError:
-            continue
-        if needle in text:
-            dependent_maps.append(ents.parent.name)
-    if dependent_maps:
-        ensure_policy_content(config, runner)
-        bake_and_verify(
-            config,
-            runner,
-            dependent_maps,
-            force=True,
+    with (config.export_root / "npc" / "npc_manifest.json").open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    normalized_key = normalized.lower().replace("\\", "/")
+    stems = [stem for stem, row in manifest.get("npcs", {}).items()
+             if str(row.get("model", "")).lower().replace("\\", "/") == normalized_key]
+    if len(stems) != 1:
+        raise OfflineExportFailure(
+            f"integrated model {normalized} resolved {len(stems)} NPC catalogue rows"
         )
+    # Character assets are global packages; changing one body does not dirty any map package.
+    # Keep placed props out of this slice as well -- they own independent containers and scopes.
+    export_characters(config, runner, stems, sweep=False, include_props=False)
     return config.export_root / "npc"
+
+
+def _placed_row_satisfies(row: dict, use) -> bool:
+    """Whether an integrated catalogue row already covers one map-authored use."""
+    if not row or row.get("model", "").lower().replace("\\", "/") != use.model:
+        return False
+    if row.get("static_stem") != use.static_stem or not row.get("eskm"):
+        return False
+    clips = {str(label).lower() for label in row.get("clips", {})}
+    rest = {str(label).lower() for label in row.get("rest_candidates", ())}
+    if not rest or not rest.issubset(clips):
+        return False
+    mode = str(row.get("clip_mode", "rest")).lower()
+    if use.full_clips:
+        return mode == "full"
+    required = {label.lower() for label in use.required_clips}
+    if required and (mode not in ("required", "full") or not required.issubset(clips)):
+        return False
+    return True
+
+
+def export_map_npcs(config, runner, maps: Sequence[str], *, force: bool = False,
+                    index: dict | None = None) -> list[str]:
+    """Integrate and bake only NPC models newly required by the selected maps."""
+    _require_export_config(config)
+    from elysium_pipeline.exporters import npc_export
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.placed_models import normalize_model_path
+
+    models = set()
+    for name in dict.fromkeys(maps):
+        path = config.export_root / name / f"{name}.ents"
+        if not path.is_file():
+            raise ValueError(f"map entities are not exported: {path}")
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise OfflineExportFailure(f"cannot read NPC dependencies from {path}: {exc}") from exc
+        for entity in document.get("entities", []):
+            if not str(entity.get("classname", "")).lower().startswith("npc_"):
+                continue
+            model = normalize_model_path(entity.get("keys", {}).get("model", ""))
+            if model.endswith(".mdl"):
+                models.add(model)
+    if not models:
+        return []
+
+    npc_dir = config.export_root / "npc"
+    manifest_path = npc_dir / "npc_manifest.json"
+    if not manifest_path.is_file():
+        raise ValueError(
+            f"{manifest_path} is missing; run: uv run elysium export bundle npc")
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    existing = {str(row.get("model", "")).lower().replace("\\", "/")
+                for row in manifest.get("npcs", {}).values()}
+    warned = {str(row.get("model", "")).lower().replace("\\", "/")
+              for row in manifest.get("warnings", ())}
+    dirty = sorted(models - warned if force else models - existing - warned)
+    if not dirty:
+        print(f"map NPCs: {len(models)} model reference(s) already catalogued")
+        return []
+
+    shared_index = index if index is not None else install.build_index()
+    print("map NPCs: updating " + ", ".join(dirty))
+    npc_export.main(only=dirty, index=shared_index, integrate=True, strict=True)
+    with manifest_path.open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    dirty_set = set(dirty)
+    stems = sorted(stem for stem, row in manifest.get("npcs", {}).items()
+                   if str(row.get("model", "")).lower().replace("\\", "/") in dirty_set)
+    if stems:
+        export_characters(
+            config, runner, stems, sweep=False, include_props=False)
+    return stems
+
+
+def _preserve_placed_row_policy(use, row: dict):
+    """Never let a focused map downgrade vocabulary another map already required."""
+    from elysium_pipeline.placed_models import PlacedModelUse
+
+    mode = str(row.get("clip_mode", "")).lower()
+    if mode == "full":
+        return PlacedModelUse(use.model, use.stem, use.static_stem, True, ())
+    required = set(use.required_clips)
+    if mode == "required":
+        required.update(str(label) for label in row.get("clips", {}))
+    return PlacedModelUse(
+        use.model, use.stem, use.static_stem, use.full_clips, tuple(sorted(required)))
+
+
+def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[str] | None = None,
+                         *, force: bool = False, index: dict | None = None) -> list[str]:
+    """Integrate and bake only placed models used by ``maps``.
+
+    The global NPC manifest remains the release/reconstruct inventory. This workflow projects the
+    selected maps against that inventory, upgrades only insufficient rows, writes only the named
+    `.eskm` containers, and launches Unreal only for stale prop scopes.
+    """
+    _require_export_config(config)
+    adopt_export_root(config.export_root, config.work_root)
+    from elysium_pipeline import character_cache, placed_models
+    from elysium_pipeline.exporters import npc_export
+    from elysium_pipeline.formats import install
+
+    names = list(dict.fromkeys(str(name).strip() for name in maps if str(name).strip()))
+    if not names:
+        raise ValueError("placed-model export needs at least one map")
+    missing_maps = [name for name in names
+                    if not (config.export_root / name / f"{name}.ents").is_file()]
+    if missing_maps:
+        raise ValueError("map entities are not exported: " + ", ".join(missing_maps))
+
+    npc_dir = config.export_root / "npc"
+    manifest_path = npc_dir / "npc_manifest.json"
+    if not manifest_path.is_file() or not (npc_dir / "npc_index.json").is_file():
+        raise ValueError(
+            f"{npc_dir} has no complete NPC catalogue; run: uv run elysium export bundle npc"
+        )
+    shared_index = index if index is not None else install.build_index()
+    uses = placed_models.discover(str(config.export_root), shared_index, map_names=names)
+    requested_models = {
+        placed_models.normalize_model_path(model)
+        for model in (models or ()) if str(model).strip()
+    }
+    if requested_models:
+        by_model = {use.model: use for use in uses}
+        unknown = sorted(requested_models - by_model.keys())
+        if unknown:
+            raise ValueError(
+                "placed model(s) are not used by " + ", ".join(names) + ": " + ", ".join(unknown)
+            )
+        uses = [by_model[model] for model in sorted(requested_models)]
+    if not uses:
+        print("placed models: selected map scope is empty")
+        return []
+
+    with manifest_path.open(encoding="utf-8") as handle:
+        source_manifest = json.load(handle)
+    rows = source_manifest.get("placed_models", {})
+    dirty_uses = []
+    for use in uses:
+        row = rows.get(use.stem, {})
+        if force or not _placed_row_satisfies(row, use):
+            dirty_uses.append(_preserve_placed_row_policy(use, row))
+    if dirty_uses:
+        print("placed models: updating " + ", ".join(use.stem for use in dirty_uses))
+        npc_export.main(placed_uses=dirty_uses, index=shared_index, integrate=True, strict=True)
+
+    stems = [use.stem for use in uses]
+    receipt_store = Manifest(config.export_root / MANIFEST_FILE)
+    write_placed_model_sources(
+        config, npc_dir, stems, manifest=receipt_store, force=force)
+    partition = read_character_partition(npc_dir)
+    with manifest_path.open(encoding="utf-8") as handle:
+        source_manifest = json.load(handle)
+    stale = character_cache.plan_stages(
+        config, receipt_store, npc_dir, source_manifest, partition, (),
+        props=stems, force=force)
+    todo = {scope: stages for scope, stages in stale.items() if stages}
+    if not todo:
+        print(f"placed models: {len(stems)} model(s) already current")
+        return stems
+
+    plan_path = npc_dir / ".elysium-character-plan.json"
+    _write_json(plan_path, {"schema": "elysium.character-bake-plan", "version": 1,
+                            "force": bool(force), "scopes": todo})
+    print("placed models: " + ", ".join(
+        f"{scope}[{'+'.join(stages)}]" for scope, stages in sorted(todo.items())))
+
+    # The prop mesh stores only a neutral material reference. The owning map supplies its exact
+    # material instances at runtime, so policy changes do not invalidate this scope; only absence
+    # of the neutral master is a prerequisite failure.
+    body_master = config.repo_root / "Content" / "VtMB" / "Materials" / "M_PlayerBody.uasset"
+    if not body_master.is_file():
+        ensure_character_material_content(config, runner)
+    unreal.bake_characters(config, runner, (), props=stems, plan=plan_path)
+    unreal.verify_characters(config, runner, (), props=stems)
+    character_cache.record(
+        receipt_store, config, npc_dir, source_manifest, partition, todo)
+    return stems
 
 
 FAMILIES_FILE = "families.json"
@@ -845,19 +1105,84 @@ def placed_model_source_fingerprint(stem: str, record: dict, code_fingerprint: s
     )
 
 
+def _placed_model_source_tasks(npc_dir: Path, source_manifest: dict,
+                               props: dict[str, str], index: dict,
+                               code_fingerprint: str) -> list[Task]:
+    """Build the independently cacheable `.eskm` tasks for exactly ``props``.
+
+    Placed models own no shared rig family or animation bank, so there is no correctness reason
+    for a one-prop edit to enumerate the cast.  The whole-corpus character path calls this with
+    every declared prop; the focused map path calls it with only the selected stems.
+    """
+    from elysium_pipeline.exporters import UE_mdl_skeletal
+
+    prop_dir = npc_dir / "placed_models"
+    tasks: list[Task] = []
+    for stem, model_rel in sorted(props.items()):
+        record = source_manifest.get("placed_models", {}).get(stem, {})
+        clip_labels = tuple(record.get("clips", {}).keys())
+        ensure_labels = tuple(record.get("rest_candidates", ()))
+
+        def prop_action(stem=stem, model_rel=model_rel, clip_labels=clip_labels,
+                        ensure_labels=ensure_labels) -> None:
+            UE_mdl_skeletal.write_model(index, model_rel, str(prop_dir), stem=stem, anorms=None,
+                                        clip_labels=clip_labels, ensure_labels=ensure_labels)
+
+        def prop_fingerprint(model_rel=model_rel, stem=stem, record=record) -> str:
+            return placed_model_source_fingerprint(
+                stem, record, code_fingerprint, _character_source_detail(index, model_rel))
+
+        tasks.append(Task(
+            name=f"eskm:prop:{stem}",
+            action=prop_action,
+            fingerprint=prop_fingerprint,
+            outputs=(prop_dir / f"{stem}.eskm",),
+        ))
+    return tasks
+
+
+def write_placed_model_sources(config, npc_dir: Path, stems: Sequence[str], *,
+                               manifest: Manifest, force: bool = False) -> list[str]:
+    """Write only the named placed-model containers, preserving the global cast untouched."""
+    from elysium_pipeline.formats import install
+
+    with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
+        source_manifest = json.load(handle)
+    declared = source_manifest.get("placed_models", {})
+    requested = list(dict.fromkeys(str(stem).strip().lower() for stem in stems if str(stem).strip()))
+    unknown = [stem for stem in requested if not declared.get(stem, {}).get("model")]
+    if unknown:
+        raise OfflineExportFailure(
+            "placed model(s) absent from npc_manifest: " + ", ".join(sorted(unknown))
+        )
+    props = {stem: declared[stem]["model"] for stem in requested}
+    index = install.build_index(verbose=False)
+    code_fingerprint = fingerprint_paths(_character_code_inputs(config))
+    tasks = _placed_model_source_tasks(npc_dir, source_manifest, props, index, code_fingerprint)
+    results = TaskGraph(tasks).run(force=force, manifest=manifest) if tasks else {}
+    failures = [name for name, result in results.items() if result.status not in ("ok", "skipped")]
+    if failures:
+        raise OfflineExportFailure(
+            "placed-model sources failed: " + ", ".join(sorted(failures))
+        )
+    return requested
+
+
 def write_character_sources(
-    config, npc_dir: Path, *, manifest: Manifest, force: bool = False
+    config, npc_dir: Path, *, manifest: Manifest, force: bool = False,
+    include_props: bool = True, body_stems: Sequence[str] | None = None
 ) -> tuple[list[str], list[str]]:
-    """Write every `.eskm` container the cast needs, skipping the ones already current.
+    """Write the requested `.eskm` closure, or the whole cast when no slice is named.
 
     This is the offline half of the character bake: the Python side decodes VtMB's own formats
     and writes one Unreal-native container per model and per bank, and the editor side reads
     nothing else. Returns (bodies, banks) as declared, whether or not each was rewritten.
 
     Each container is its own task, fingerprinted on that model's own files in the install plus
-    the exporter code that turns them into a container. Rewriting all 233 costs ~90 s; confirming
-    all 233 are current costs a few seconds, which is what makes writing the whole corpus the
-    default rather than an expensive completeness gesture.
+    the exporter code that turns them into a container. The default remains the complete corpus;
+    a focused body slice writes only those bodies, body-owned clip donors they name, and the bank
+    containers their clip maps reach. Existing containers for every other family remain the
+    authoritative inputs when the global rig partition is recomputed.
     """
     from elysium_pipeline.exporters import UE_mdl_skeletal
     from elysium_pipeline.formats import install, mdl_gltf, mdl_skel
@@ -869,6 +1194,31 @@ def write_character_sources(
     # its stems are not their own tasks -- they would each rewrite the whole performance.
     cinematic_stems = {stem for stem in banks if any(
         stem == prefix or stem.startswith(prefix + "__") for prefix in cinematics)}
+    if body_stems is not None:
+        requested = set(dict.fromkeys(
+            str(stem).strip().lower() for stem in body_stems if str(stem).strip()))
+        unknown = sorted(requested - models.keys())
+        if unknown:
+            raise OfflineExportFailure(
+                "character source model(s) absent from npc_manifest: " + ", ".join(unknown))
+        model_sources = set(requested)
+        bank_sources = set()
+        for stem in requested:
+            for owner in source_manifest["npcs"][stem].get("clips", {}).values():
+                if owner in models:
+                    # Some dialogue/performance clips live in another body's own container.
+                    model_sources.add(owner)
+                elif owner in banks:
+                    bank_sources.add(owner)
+        models = {stem: models[stem] for stem in sorted(model_sources)}
+        banks = {stem: banks[stem] for stem in sorted(bank_sources)}
+        selected_cinematics = {
+            prefix for prefix in cinematics
+            if any(root == prefix or root.startswith(prefix + "__")
+                   for root in bank_sources)
+        }
+        cinematics = {stem: cinematics[stem] for stem in sorted(selected_cinematics)}
+        cinematic_stems &= bank_sources
     index = install.build_index(verbose=False)
     code_fingerprint = fingerprint_paths(_character_code_inputs(config))
     # Read once, lazily: without the unit-vector table a compressed vertex-animation record has
@@ -943,30 +1293,11 @@ def write_character_sources(
             outputs=tuple(npc_dir / "banks" / f"{root}.eskm" for root in roots),
         ))
 
-    prop_dir = npc_dir / "placed_models"
-    for stem, model_rel in sorted(props.items()):
-        # The same container a body takes, geometry and all -- an animated prop IS a skeletal
-        # model, and the only thing that made it a separate path was the loader it used to go
-        # through. Morph targets are not read: no shipped prop authors a flex rig.
-        record = source_manifest.get("placed_models", {}).get(stem, {})
-        clip_labels = tuple(record.get("clips", {}).keys())
-        ensure_labels = tuple(record.get("rest_candidates", ()))
-
-        def prop_action(stem=stem, model_rel=model_rel, clip_labels=clip_labels,
-                        ensure_labels=ensure_labels) -> None:
-            UE_mdl_skeletal.write_model(index, model_rel, str(prop_dir), stem=stem, anorms=None,
-                                        clip_labels=clip_labels, ensure_labels=ensure_labels)
-
-        def prop_fingerprint(model_rel=model_rel, stem=stem, record=record) -> str:
-            return placed_model_source_fingerprint(
-                stem, record, code_fingerprint, _character_source_detail(index, model_rel))
-
-        tasks.append(Task(
-            name=f"eskm:prop:{stem}",
-            action=prop_action,
-            fingerprint=prop_fingerprint,
-            outputs=(prop_dir / f"{stem}.eskm",),
-        ))
+    # The same container a body takes, geometry and all -- an animated prop IS a skeletal model,
+    # but owns no shared cast state. The focused path reuses this exact task factory for a slice.
+    if include_props:
+        tasks.extend(_placed_model_source_tasks(
+            npc_dir, source_manifest, props, index, code_fingerprint))
 
     results = TaskGraph(tasks).run(force=force, manifest=manifest)
     failures = [name for name, result in results.items() if result.status not in ("ok", "skipped")]
@@ -977,7 +1308,7 @@ def write_character_sources(
     return sorted(models), sorted(banks)
 
 
-def write_character_partition(npc_dir: Path) -> dict:
+def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> dict:
     """Write `npc/families.json` and `npc/textures.json` over the whole corpus.
 
     The rig partition is greedy and order-dependent, so it is a property of the set it is given
@@ -1032,12 +1363,13 @@ def write_character_partition(npc_dir: Path) -> dict:
 
     # Placed-model materials are supplied by each map's already-baked static mesh at runtime.
     # Importing this complete corpus here would duplicate the same game-derived textures globally.
-    for stem, path in sorted(prop_paths.items()):
-        if not path.is_file():
-            raise OfflineExportFailure(
-                f"{path} is missing; the character sources did not complete"
-            )
-        eskm.read(path)  # validate the container while walking the declared corpus
+    if validate_props:
+        for stem, path in sorted(prop_paths.items()):
+            if not path.is_file():
+                raise OfflineExportFailure(
+                    f"{path} is missing; the character sources did not complete"
+                )
+            eskm.read(path)  # validate the container while walking the declared corpus
 
     partition = character_partition.build_partition(
         model_trees, bank_trees, corpus_fingerprint=corpus.hexdigest()
@@ -1173,7 +1505,7 @@ def _stale_garments(config, stems: Sequence[str]) -> list[str]:
 
 def export_characters(
     config, runner, models: Sequence[str] | None = None, *, force: bool = False,
-    sweep: bool = True, force_sweep: bool = False
+    sweep: bool = True, force_sweep: bool = False, include_props: bool = True
 ) -> list[str]:
     """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
@@ -1184,10 +1516,10 @@ def export_characters(
     complete profile writes. The policy content is a prerequisite too, because a body is built
     against the same master materials the runtime names.
 
-    **The containers and the partition always cover the whole cast; only the BAKE is sliced.**
-    Naming models bakes those models against the partition every other body already shares, so a
-    slice can no longer rename a family out from under the meshes that point at it. Each container
-    is individually skippable, so covering the cast costs seconds once it is current.
+    **The partition always covers the whole cast; a named slice writes only its source closure and
+    bakes only those bodies.** The existing containers for every other body and bank remain inputs
+    to the partition, so a slice cannot rename a family out from under meshes that already point at
+    it. A complete export still writes and validates the entire corpus.
 
     **The cast is the bake's default because the mount is the only build of a character.** A stem
     the bake has not covered cannot stand at all -- there is no loader to fall back to -- so a
@@ -1201,9 +1533,34 @@ def export_characters(
             f"{index} is missing; run: uv run elysium export bundle npc"
         )
 
+    source_stems: list[str] | None = None
+    if models:
+        declared_models, _banks, _cinematics, _props = character_source_plan(npc_dir)
+        exact = []
+        exact_only = True
+        for selector in models:
+            text = str(selector).replace("\\", "/").strip()
+            if ":" in text:
+                exact_only = False
+                break
+            stem = Path(text).stem.lower()
+            if stem not in declared_models:
+                exact_only = False
+                break
+            exact.append(stem)
+        if exact_only:
+            source_stems = sorted(dict.fromkeys(exact))
+        else:
+            # Family and bank selectors are resolved through the last complete partition. The
+            # selected sources are then written before that partition is recomputed.
+            source_stems = resolve_character_slice(
+                read_character_partition(npc_dir), models, npc_dir)
+
     manifest = Manifest(config.export_root / MANIFEST_FILE)
-    write_character_sources(config, npc_dir, manifest=manifest, force=force)
-    partition = write_character_partition(npc_dir)
+    write_character_sources(
+        config, npc_dir, manifest=manifest, force=force, include_props=include_props,
+        body_stems=source_stems)
+    partition = write_character_partition(npc_dir, validate_props=include_props)
 
     stems = resolve_character_slice(partition, models, npc_dir)
     if not stems:
@@ -1218,7 +1575,8 @@ def export_characters(
     from elysium_pipeline import character_sweep
     character_sweep.assert_shared_bank_layout(partition, npc_manifest)
     stale = character_cache.plan_stages(
-        config, manifest, npc_dir, npc_manifest, partition, stems, force=force
+        config, manifest, npc_dir, npc_manifest, partition, stems,
+        props=None if include_props else (), force=force
     )
     todo = {scope: stages for scope, stages in stale.items() if stages}
     if not todo:
@@ -1239,7 +1597,7 @@ def export_characters(
     print("characters: " + ", ".join(
         f"{scope}[{'+'.join(stages)}]" for scope, stages in sorted(todo.items())))
 
-    ensure_policy_content(config, runner)
+    ensure_character_material_content(config, runner)
 
     # One process for the whole cast. Banks are built once on their declared skeleton families and
     # reused by compatible body skeletons; package count must not scale with the number of bodies.

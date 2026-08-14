@@ -208,29 +208,66 @@ void FElysiumEntity::EnsurePlacedModelBody()
 
 void FElysiumEntity::PostSpawn()
 {
+	ResolveParentAttachment(false);
+}
+
+bool FElysiumEntity::ResolveParentAttachment(bool bWarnIfPending)
+{
 	MoveParent = FElysiumEntityHandle::Invalid();
 	if (ParentName.IsEmpty() || !World)
 	{
-		return;
+		return true;
 	}
 	FElysiumEntity* Parent = World->FindByName(ParentName);
-	UPrimitiveComponent* ChildBody = GetAttachBody();
-	UPrimitiveComponent* ParentBody = Parent ? Parent->GetAttachBody() : nullptr;
-	if (!Parent || Parent == this || !ChildBody || !ParentBody)
+	if (!Parent)
 	{
-		UE_LOG(LogElysiumEntityBase, Warning, TEXT("%s cannot attach to parent '%s'"),
-			*DebugString(), *ParentName);
-		return;
+		if (bWarnIfPending)
+		{
+			UE_LOG(LogElysiumEntityBase, Warning,
+				TEXT("%s cannot resolve parent entity '%s'"), *DebugString(), *ParentName);
+		}
+		return false;
+	}
+	if (Parent == this)
+	{
+		UE_LOG(LogElysiumEntityBase, Warning,
+			TEXT("%s cannot parent itself through '%s'"), *DebugString(), *ParentName);
+		return false;
+	}
+	MoveParent = Parent->Handle;
+
+	UPrimitiveComponent* ChildBody = GetAttachBody();
+	if (!ChildBody)
+	{
+		return true; // valid logical parenting between entities that need no scene component
+	}
+	UPrimitiveComponent* ParentBody = Parent->GetAttachBody();
+	if (!ParentBody)
+	{
+		if (bWarnIfPending)
+		{
+			UE_LOG(LogElysiumEntityBase, Warning,
+				TEXT("%s resolved parent '%s', but its attachment body is unavailable"),
+				*DebugString(), *ParentName);
+		}
+		return false;
+	}
+	if (ChildBody->GetAttachParent() == ParentBody)
+	{
+		return true;
 	}
 	const FTransform ParentWorld = ParentBody->GetComponentTransform();
 	if (!ChildBody->AttachToComponent(ParentBody, FAttachmentTransformRules::KeepWorldTransform))
 	{
-		UE_LOG(LogElysiumEntityBase, Warning, TEXT("%s failed to attach to parent '%s'"),
-			*DebugString(), *ParentName);
-		return;
+		if (bWarnIfPending)
+		{
+			UE_LOG(LogElysiumEntityBase, Warning, TEXT("%s failed to attach to parent '%s'"),
+				*DebugString(), *ParentName);
+		}
+		return false;
 	}
-	MoveParent = Parent->Handle;
 	OnParentAttached(ParentWorld);
+	return true;
 }
 
 void FElysiumEntity::OnDormancyChanged()

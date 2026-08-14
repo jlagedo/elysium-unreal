@@ -1116,6 +1116,58 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 		TestNotEqual(TEXT("23 col-12 differs from col-1"), Malk->TextMalkavian, Malk->Text(true));
 	}
 
+	// Pin the reported retail sequence against the actual exported rows, not a transcription. The
+	// Malkavian answer at 23 enters Jack's visible "Alright." turn at 81; hidden row 82 then advances
+	// to 83. This is the key acceptance point: 81 must remain the current display before 82 resolves.
+	{
+		TSharedRef<FElysiumDlgFile> Slice = MakeShared<FElysiumDlgFile>();
+		Slice->SourcePath = File->SourcePath;
+		for (const int32 Id : { 21, 23, 81, 82, 83, 84 })
+		{
+			const FElysiumDlgLine* Source = File->FindById(Id);
+			if (!TestNotNull(*FString::Printf(TEXT("Jack sequence row %d exists"), Id), Source))
+			{
+				continue;
+			}
+			Slice->IndexById.Add(Id, Slice->Lines.Num());
+			Slice->Lines.Add(*Source);
+		}
+		if (Slice->Lines.Num() == 6)
+		{
+			TArray<FString> SequenceActions;
+			FElysiumDlgConversation Sequence(Slice, /*bMale*/ false, /*bMalk*/ true,
+				[](const FString&) { return true; },
+				[&SequenceActions](const FString& Action) { SequenceActions.Add(Action); });
+			Sequence.Start();
+			TestEqual(TEXT("sequence starts on Jack's offer"), Sequence.CurrentNpcLine()->Id, 21);
+			TestEqual(TEXT("Malkavian dark-tutelage response is visible"),
+				Sequence.VisibleChoice(0)->Id, 23);
+			Sequence.Choose(0);
+			if (TestNotNull(TEXT("Alright remains the presented NPC turn"), Sequence.CurrentNpcLine()))
+			{
+				TestEqual(TEXT("the presented row is 81"), Sequence.CurrentNpcLine()->Id, 81);
+				TestEqual(TEXT("retail displays Alright before continuing"),
+					Sequence.CurrentNpcLine()->DisplayText(false, true), FString(TEXT("Alright.")));
+			}
+			TestTrue(TEXT("row 81 awaits hidden Auto-Link 82"), Sequence.IsAwaitingAutomatic());
+			TestEqual(TEXT("the automatic marker is row 82"), Sequence.PendingAutomatic()->Id, 82);
+			TestTrue(TEXT("row 82 classifies as Auto-Link"), Sequence.PendingAutomatic()->IsAutoLink());
+			TestEqual(TEXT("the automatic marker is never a response"), Sequence.VisibleChoices().Num(), 0);
+			Sequence.ResolveAutomatic();
+			if (TestNotNull(TEXT("Auto-Link reaches Jack's next spoken turn"), Sequence.CurrentNpcLine()))
+			{
+				TestEqual(TEXT("the next presented row is 83"), Sequence.CurrentNpcLine()->Id, 83);
+				TestTrue(TEXT("the next subtitle begins with Uhh"),
+					Sequence.CurrentNpcLine()->DisplayText(false, true).StartsWith(TEXT("Uhh...")));
+			}
+			TestEqual(TEXT("row 84 is the next real response"), Sequence.VisibleChoice(0)->Id, 84);
+			Sequence.Choose(0);
+			TestTrue(TEXT("the tutorial handoff action runs"), SequenceActions.ContainsByPredicate(
+				[](const FString& Action) { return Action.Contains(TEXT("G.Tut_Jack = 1")); }));
+			TestTrue(TEXT("the sliced sequence terminates normally"), Sequence.IsOver());
+		}
+	}
+
 	// The retail opener is first passing valid link in physical file order. Pin Jack's three collisions
 	// against the real exported file rather than copying the row order into a synthetic fixture.
 	auto NoAct = [](const FString&) {};
@@ -1193,6 +1245,11 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 	bool bSawTutJack1 = false;
 	for (int32 Guard = 0; Guard < 64 && !Conv.IsOver(); ++Guard)
 	{
+		if (Conv.IsAwaitingAutomatic())
+		{
+			Conv.ResolveAutomatic();
+			continue;
+		}
 		if (Conv.IsTerminalLine())
 		{
 			Conv.AdvanceTerminal();
@@ -1346,6 +1403,11 @@ bool FElysiumDlgCorpusTest::RunTest(const FString&)
 			if (const FElysiumDlgLine* Cur = Conv.CurrentNpcLine())
 			{
 				Visited.Add(Cur->Id);
+			}
+			if (Conv.IsAwaitingAutomatic())
+			{
+				Conv.ResolveAutomatic();
+				continue;
 			}
 			if (Conv.IsTerminalLine())
 			{
@@ -2260,6 +2322,39 @@ bool FElysiumPlacedModelCoverageContentTest::RunTest(const FString&)
 				Entry.RestCandidates.Num());
 		}
 	}
+
+	// The tutorial is the live regression that exposed catalogue stems (`scenery_...`) being
+	// confused with map static stems (`models_scenery_...`). Join the two generated products by
+	// source model and require the exact map-authored stem and package to agree.
+	FElysiumEntityDefs Tutorial;
+	const FString TutorialPath = FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1"));
+	if (TestTrue(TEXT("sp_tutorial_1 entities parse for placed-model joins"),
+		FElysiumEntityDefs::Parse(TutorialPath, Tutorial)))
+	{
+		int32 Joined = 0;
+		for (const FElysiumEntityDef& Def : Tutorial.Defs)
+		{
+			const FString Model = Def.Keys.FindRef(TEXT("model"));
+			if (Def.ModelMesh.IsEmpty() || !Model.EndsWith(TEXT(".mdl"), ESearchCase::IgnoreCase)
+				|| Def.Classname.StartsWith(TEXT("npc_"), ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			const FElysiumAnimatedPropEntry* Entry = Index.FindPlacedModel(Model);
+			if (!TestNotNull(*FString::Printf(TEXT("tutorial placed model resolves: %s"), *Model),
+				Entry))
+			{
+				continue;
+			}
+			TestEqual(*FString::Printf(TEXT("%s retains its map static stem"), *Model),
+				Entry->StaticStem, Def.ModelMesh);
+			TestNotNull(*FString::Printf(TEXT("%s map static mesh loads"), *Def.ModelMesh),
+				LoadObject<UStaticMesh>(nullptr,
+					*FElysiumContentPaths::BakedPropMesh(TEXT("sp_tutorial_1"), Def.ModelMesh)));
+			++Joined;
+		}
+		TestTrue(TEXT("the tutorial joins placed entities to the generated catalogue"), Joined > 0);
+	}
 	return true;
 }
 
@@ -2304,6 +2399,33 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 		{
 			return Info.Name == FName(TEXT("ModelAlpha"));
 		}));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedPropMaterialUsageTest,
+	"Elysium.Content.PlacedPropMaterialUsage", GElysiumContentTestFlags)
+bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
+{
+	// Every branch bake_map._master_for can select for a prop is also applied to the skeletal
+	// representation of an authored non-static rest pose. A missing cooked permutation renders
+	// Default Material in a packaged build even though the editor compiles it on demand.
+	static const TCHAR* Masters[] = {
+		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
+		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
+		TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent"),
+		TEXT("/Game/VtMB/Materials/M_World_Glass.M_World_Glass"),
+		TEXT("/Game/VtMB/Materials/M_Refract.M_Refract"),
+		TEXT("/Game/VtMB/Materials/M_Additive.M_Additive"),
+	};
+	for (const TCHAR* Path : Masters)
+	{
+		UMaterial* Material = LoadObject<UMaterial>(nullptr, Path);
+		if (TestNotNull(*FString::Printf(TEXT("placed-prop master loads: %s"), Path), Material))
+		{
+			TestTrue(*FString::Printf(TEXT("%s has its skeletal permutation authored"), Path),
+				Material->GetUsageByFlag(MATUSAGE_SkeletalMesh));
+		}
+	}
 	return true;
 }
 
@@ -4307,7 +4429,7 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 			P[EElysiumChargenPool::Disciplines], 1);
 	}
 
-	// --- the developer preset consumes those real pools into one complete Malkavian sheet --------
+	// --- the developer preset reproduces the retail tutorial reference sheet ----------------------
 	{
 		const FElysiumNewGameRequest Request =
 			ElysiumStory::MakeMockCharacterRequest(TEXT("tutorial"));
@@ -4318,63 +4440,69 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 		const FElysiumHistory* History = Histories.At(Request.HistoryId);
 		if (TestNotNull(TEXT("the mock history row exists"), History))
 		{
-			TestEqual(TEXT("the mock uses the female Malkavian priority history"),
-				History->InternalName, FString(TEXT("Gymnast-turned-Stripper")));
+			TestEqual(TEXT("the mock uses the retail Completely Batshit history"),
+				History->InternalName, FString(TEXT("Completely Batshit")));
 		}
 		ElysiumChargen::ApplyBaseline(State, Rules);
-		TestEqual(TEXT("the History replaces the attribute order before auto-level"),
-			State.Sheet.GetCurrent(EElysiumTraitContainer::Attributes,
-				ElysiumSlot::AttribOrder), 1);
+		TestTrue(TEXT("the mock adds no chargen dots to the authored baseline"), Request.Spends.IsEmpty());
+		TestEqual(TEXT("the retail-reference mock remains Malkavian"), State.Sheet.Clan(),
+			FElysiumSheet::ClanFromName(TEXT("Malkavian")));
+		TestFalse(TEXT("the retail-reference mock remains female"), State.Sheet.IsMale());
 
-		int32 Applied = 0;
-		for (const TPair<FName, int32>& Spend : Request.Spends)
+		auto Base = [&State](const TCHAR* Trait)
 		{
 			EElysiumTraitContainer Container = EElysiumTraitContainer::Attributes;
 			int32 Slot = INDEX_NONE;
-			if (!TestTrue(*FString::Printf(TEXT("mock trait '%s' resolves"), *Spend.Key.ToString()),
-				ElysiumFindSheetSlot(*Spend.Key.ToString(), Container, Slot)))
+			if (!ElysiumFindSheetSlot(Trait, Container, Slot))
 			{
-				continue;
+				return MIN_int32;
 			}
-			for (int32 Dot = 0; Dot < Spend.Value; ++Dot)
-			{
-				if (TestTrue(*FString::Printf(TEXT("mock buys dot %d of %s"),
-					Dot + 1, *Spend.Key.ToString()),
-					ElysiumChargen::Buy(State, Rules, Container, Slot)))
-				{
-					++Applied;
-				}
-			}
-		}
-
-		TestEqual(TEXT("the mock buys all ten initial dots"), Applied, 10);
-		TestTrue(TEXT("the mock leaves every initial pool spent out"), State.IsSpentOut());
-		TestEqual(TEXT("the complete mock remains Malkavian"), State.Sheet.Clan(),
-			FElysiumSheet::ClanFromName(TEXT("Malkavian")));
-		TestFalse(TEXT("the complete mock remains female"), State.Sheet.IsMale());
-
-		auto Base = [&State](EElysiumTraitContainer Container, int32 Slot)
-		{
 			return State.Sheet.GetBase(Container, Slot);
 		};
-		TestEqual(TEXT("mock Dexterity reaches 3"),
-			Base(EElysiumTraitContainer::Attributes, ElysiumSlot::Dexterity), 3);
-		TestEqual(TEXT("mock Stamina reaches 3"),
-			Base(EElysiumTraitContainer::Attributes, ElysiumSlot::Stamina), 3);
-		TestEqual(TEXT("mock Perception reaches 2"),
-			Base(EElysiumTraitContainer::Attributes, 7), 2);
-		TestEqual(TEXT("mock Computer reaches 3"),
-			Base(EElysiumTraitContainer::Abilities, 9), 3);
-		TestEqual(TEXT("mock Investigation reaches 2"),
-			Base(EElysiumTraitContainer::Abilities, 11), 2);
-		TestEqual(TEXT("mock Stealth reaches 2"),
-			Base(EElysiumTraitContainer::Abilities, 8), 2);
-		TestEqual(TEXT("mock Firearms reaches 1"),
-			Base(EElysiumTraitContainer::Abilities, 5), 1);
-		TestEqual(TEXT("mock Dodge reaches 1"),
-			Base(EElysiumTraitContainer::Abilities, 2), 1);
-		TestEqual(TEXT("mock Dementation reaches 3"),
-			Base(EElysiumTraitContainer::Disciplines, 5), 3);
+
+		struct FExpectedTrait { const TCHAR* Name; int32 Value; };
+		const FExpectedTrait Attributes[] = {
+			{ TEXT("Strength"), 1 }, { TEXT("Dexterity"), 1 }, { TEXT("Stamina"), 1 },
+			{ TEXT("Charisma"), 1 }, { TEXT("Manipulation"), 2 }, { TEXT("Appearance"), 1 },
+			{ TEXT("Perception"), 2 }, { TEXT("Intelligence"), 1 }, { TEXT("Wits"), 2 },
+		};
+		const FExpectedTrait Abilities[] = {
+			{ TEXT("Brawl"), 1 }, { TEXT("Dodge"), 0 }, { TEXT("Intimidation"), 0 },
+			{ TEXT("Subterfuge"), 0 }, { TEXT("Firearms"), 0 }, { TEXT("Melee"), 1 },
+			{ TEXT("Security"), 0 }, { TEXT("Stealth"), 1 }, { TEXT("Computer"), 1 },
+			{ TEXT("Finance"), 0 }, { TEXT("Investigation"), 1 }, { TEXT("Academics"), 1 },
+		};
+		const FExpectedTrait Disciplines[] = {
+			{ TEXT("Animalism"), -1 }, { TEXT("Auspex"), 1 }, { TEXT("Celerity"), -1 },
+			{ TEXT("Dementation"), 2 }, { TEXT("Dominate"), -1 }, { TEXT("Fortitude"), -1 },
+			{ TEXT("Obfuscate"), 1 }, { TEXT("Potence"), -1 }, { TEXT("Presence"), -1 },
+			{ TEXT("Protean"), -1 }, { TEXT("Thaumaturgy"), -1 },
+		};
+
+		auto CheckTraits = [this, &Base](const TCHAR* Group, const FExpectedTrait* Traits, int32 Num,
+			int32& Total)
+		{
+			for (int32 i = 0; i < Num; ++i)
+			{
+				const int32 Actual = Base(Traits[i].Name);
+				TestEqual(*FString::Printf(TEXT("retail %s %s"), Group, Traits[i].Name),
+					Actual, Traits[i].Value);
+				Total += Actual;
+			}
+		};
+
+		int32 AttributeTotal = 0, AbilityTotal = 0, DisciplineTotal = 0;
+		CheckTraits(TEXT("attribute"), Attributes, UE_ARRAY_COUNT(Attributes), AttributeTotal);
+		CheckTraits(TEXT("ability"), Abilities, UE_ARRAY_COUNT(Abilities), AbilityTotal);
+		CheckTraits(TEXT("discipline"), Disciplines, UE_ARRAY_COUNT(Disciplines), DisciplineTotal);
+		TestEqual(TEXT("Jack attribute guard receives the retail total"), AttributeTotal, 12);
+		TestEqual(TEXT("Jack ability guard receives the retail total"), AbilityTotal, 6);
+		TestEqual(TEXT("Jack discipline guards receive the retail total"), DisciplineTotal, -4);
+		TestFalse(TEXT("the retail preset does not trip Jack's attribute guard"), AttributeTotal > 15);
+		TestFalse(TEXT("the retail preset does not trip Jack's ability guard"), AbilityTotal > 10);
+		TestFalse(TEXT("the retail preset does not trip Jack's discipline guard"), DisciplineTotal > 0);
+		TestFalse(TEXT("the retail preset does not trip Jack's base-discipline guard"),
+			DisciplineTotal > -4);
 	}
 
 	// --- the baseline: seeded, templated, then bought through the CharGen template ----------------

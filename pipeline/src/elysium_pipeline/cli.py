@@ -755,6 +755,32 @@ def export_model(
     )
 
 
+@export_app.command("placed-model")
+def export_placed_model(
+    ctx: typer.Context,
+    map_name: str = typer.Argument(..., help="Owning exported map, for example sp_tutorial_1."),
+    model: str = typer.Argument(..., help="Placed MDL path used by that map."),
+    force: bool = typer.Option(False, "--force", help="Rewrite and rebake this selected model."),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        stems = export_manager.export_placed_models(
+            config, runner, [map_name], [model], force=force)
+        console.print("placed-model export complete: " + ", ".join(stems))
+
+    _execute(
+        _state(ctx),
+        "export placed-model",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        require_ue=True,
+        activity=True,
+        require_built_lane=True,
+    )
+
+
 @export_app.command("bundle")
 def export_bundle(
     ctx: typer.Context,

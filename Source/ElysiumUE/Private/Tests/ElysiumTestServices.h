@@ -631,6 +631,16 @@ struct FElysiumRecordingServices final
 		LastPropRotation = Rotation;
 		return NewComponent<UStaticMeshComponent>();
 	}
+	TMap<FString, EElysiumItemGroundModelState> ItemGroundModelStates;
+	virtual EElysiumItemGroundModelState ItemGroundModelState(
+		const FString& ModelPath) override
+	{
+		if (const EElysiumItemGroundModelState* State = ItemGroundModelStates.Find(ModelPath))
+		{
+			return *State;
+		}
+		return EElysiumItemGroundModelState::Geometry;
+	}
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override
 	{
@@ -883,6 +893,15 @@ struct FElysiumRecordingServices final
 		}
 	}
 	virtual FString ActiveSchemeRel() const override { return ActiveScheme; }
+	// Test-only completion edge: remove the currently live handles without issuing a cancellation.
+	// The entity world then observes exactly the same IsVoicePlaying true -> false transition as a
+	// naturally completed device voice.
+	void CompleteAllVoices()
+	{
+		LiveVoices.Reset();
+		Requests.Reset();
+	}
+	int32 NumLiveVoices() const { return LiveVoices.Num(); }
 	// What the recorded output path claims its lead is. A test sets it to stand in for a measured
 	// device; left alone it is the same no-device fallback a headless world answers with.
 	float OutputLead = ElysiumAudioLatency::FallbackLeadSeconds;
@@ -928,6 +947,13 @@ struct FElysiumRecordingServices final
 		Record(TEXT("CloseDialog"));
 		OpenDialogOwner = FElysiumEntityHandle::Invalid();
 	}
+	virtual void PostNotification(const FElysiumNotification& Notification) override
+	{
+		Notifications.Add(Notification);
+		Record(FString::Printf(TEXT("PostNotification %s '%s' x%d"),
+			ElysiumNotificationKindName(Notification.Kind), *Notification.Subject,
+			Notification.Quantity));
+	}
 
 	// --- IElysiumWeather -------------------------------------------------------------------
 	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) override
@@ -950,6 +976,7 @@ struct FElysiumRecordingServices final
 
 	FElysiumEntityHandle OpenSignOwner;
 	FElysiumEntityHandle OpenDialogOwner;
+	TArray<FElysiumNotification> Notifications;
 	FString ActiveScheme;
 	FElysiumWeatherTransition LastWetness;
 	TMap<int32, FElysiumWeatherEmitterState> Emitters;

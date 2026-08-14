@@ -148,6 +148,13 @@ void FElysiumItem::BuildWorldBody()
 	{
 		return;
 	}
+	if (Def->ModelMesh.IsEmpty()
+		&& Embodiment->ItemGroundModelState(Model) != EElysiumItemGroundModelState::Geometry)
+	{
+		// Geometryless is an authored no-body result. Unavailable has already produced one owned,
+		// catalogue-level warning, so neither state should fall through to repeated package loads.
+		return;
+	}
 	const FQuat Rot = Def->ModelMesh.IsEmpty()
 		? FQuat(FRotator(0.0f, -Angles.Y, 0.0f))
 		: Def->ModelQuat;
@@ -412,6 +419,45 @@ bool FElysiumInventory::Has(const FElysiumCombatCharacter& Char, const FString& 
 	return Ring != nullptr && Ring->HasKey(Classname);
 }
 
+namespace
+{
+	void NotifyPlayerItemReceived(FElysiumCombatCharacter& Char, FElysiumItem& Item,
+		int32 ReceivedQuantity)
+	{
+		FElysiumEntityWorld* World = Char.World;
+		if (!World || !World->PlayerHandle().IsSet()
+			|| Char.Handle.Index != World->PlayerHandle().Index)
+		{
+			return;
+		}
+
+		UE_LOG(LogElysiumItem, Display, TEXT("INFO - Item received: %s x%d"),
+			*Item.ClassName(), ReceivedQuantity);
+
+		IElysiumPresenter* Presenter = World->Presenter();
+		if (!Presenter)
+		{
+			return; // a headless substrate world: the stable gameplay log remains the observable surface
+		}
+
+		const FElysiumItemDef* Record = Item.Data();
+		FString Subject = Record ? Record->PrintName.TrimStartAndEnd() : FString();
+		if (Subject.IsEmpty())
+		{
+			Subject = Item.ClassName();
+			UE_LOG(LogElysiumItem, Warning,
+				TEXT("player item '%s' has no printname; notification uses the classname"),
+				*Item.ClassName());
+		}
+
+		FElysiumNotification Notification;
+		Notification.Kind = EElysiumNotificationKind::ItemAcquired;
+		Notification.Subject = MoveTemp(Subject);
+		Notification.Quantity = FMath::Max(1, ReceivedQuantity);
+		Presenter->PostNotification(Notification);
+	}
+}
+
 bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 {
 	if (Item.IsOwned())
@@ -433,12 +479,7 @@ bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 				return false;
 			}
 			Existing->ItemCount = Merged;
-			if (Char.World && Char.World->PlayerHandle().IsSet()
-				&& Char.Handle.Index == Char.World->PlayerHandle().Index)
-			{
-				UE_LOG(LogElysiumItem, Display, TEXT("INFO - Item received: %s x%d"),
-					*Item.ClassName(), ReceivedQuantity);
-			}
+			NotifyPlayerItemReceived(Char, Item, ReceivedQuantity);
 			return true;
 		}
 	}
@@ -455,12 +496,7 @@ bool FElysiumInventory::Add(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 	Item.InvenPos = Slots.Num();
 	Item.ItemCount = FMath::Max(1, Item.ItemCount);
 	Slots.Add(Item.Handle);
-	if (Char.World && Char.World->PlayerHandle().IsSet()
-		&& Char.Handle.Index == Char.World->PlayerHandle().Index)
-	{
-		UE_LOG(LogElysiumItem, Display, TEXT("INFO - Item received: %s x%d"),
-			*Item.ClassName(), ReceivedQuantity);
-	}
+	NotifyPlayerItemReceived(Char, Item, ReceivedQuantity);
 	return true;
 }
 

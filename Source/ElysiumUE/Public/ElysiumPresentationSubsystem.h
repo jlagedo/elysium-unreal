@@ -38,6 +38,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumDialogueEvent, const FElysiumDialo
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumSignOpened, const FElysiumSignData& /*Sign*/);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumFadeStarted, const FLinearColor& /*Color*/, float /*Duration*/);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumVitalsChanged, const FElysiumVitals& /*Vitals*/);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumNotification, const FElysiumNotification& /*Notification*/);
 DECLARE_MULTICAST_DELEGATE(FOnElysiumViewEvent);
 
 // The presentation seam (roadmap 11.8, runtime-architecture.md section 11).
@@ -86,8 +87,9 @@ public:
 	void Publish();
 
 	// --- The events ---------------------------------------------------------------------------
-	// Broadcast from the publish pass in this order: app state, fade, sign, dialogue, vitals, then
-	// OnViewPublished last — so the general per-frame reconcile runs after every specific reaction.
+	// Broadcast from the publish pass in this order: app state, fade, sign, dialogue, vitals,
+	// notifications, then OnViewPublished last — so the general per-frame reconcile runs after every
+	// specific reaction.
 	FOnElysiumViewEvent&      OnAppStateChanged() { return AppStateChangedEvent; }
 	FOnElysiumFadeStarted&    OnFadeStarted()     { return FadeStartedEvent; }
 	FOnElysiumSignOpened&     OnSignOpened()      { return SignOpenedEvent; }
@@ -96,6 +98,7 @@ public:
 	FOnElysiumDialogueEvent&  OnDialogueTurn()    { return DialogueTurnEvent; }
 	FOnElysiumViewEvent&      OnDialogueClosed()  { return DialogueClosedEvent; }
 	FOnElysiumVitalsChanged&  OnVitalsChanged()   { return VitalsChangedEvent; }
+	FOnElysiumNotification&   OnNotification()    { return NotificationEvent; }
 	FOnElysiumViewPublished&  OnViewPublished()   { return ViewPublishedEvent; }
 
 	// --- IElysiumPresenter --------------------------------------------------------------------
@@ -107,6 +110,14 @@ public:
 	virtual void CloseSign() override;
 	virtual void OpenDialog(const FElysiumEntityHandle& Owner, FElysiumDlgConversation& Conversation) override;
 	virtual void CloseDialog() override;
+	virtual void PostNotification(const FElysiumNotification& Notification) override;
+
+	// Diagnostic visibility for focused tests and `elysium.viewstate`; no consumer mutates the FIFO.
+	int32 NumPendingNotifications() const { return PendingNotifications.Num(); }
+	const TArray<FElysiumNotification>& PendingNotificationQueue() const
+	{
+		return PendingNotifications;
+	}
 
 	// --- The return path ----------------------------------------------------------------------
 	// The player's pick on the open conversation. The box reports an index; this resolves the world
@@ -141,6 +152,7 @@ private:
 	bool bPendingSignClosed = false;
 	bool bPendingDialogueOpened = false;
 	bool bPendingDialogueClosed = false;
+	TArray<FElysiumNotification> PendingNotifications;
 
 	FOnElysiumViewEvent      AppStateChangedEvent;
 	FOnElysiumFadeStarted    FadeStartedEvent;
@@ -150,6 +162,7 @@ private:
 	FOnElysiumDialogueEvent  DialogueTurnEvent;
 	FOnElysiumViewEvent      DialogueClosedEvent;
 	FOnElysiumVitalsChanged  VitalsChangedEvent;
+	FOnElysiumNotification   NotificationEvent;
 	FOnElysiumViewPublished  ViewPublishedEvent;
 
 	TArray<IConsoleObject*> ConsoleObjects;

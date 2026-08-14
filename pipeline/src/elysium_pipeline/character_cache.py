@@ -85,8 +85,10 @@ def stage_inputs(npc_dir: Path, manifest: dict, partition: dict,
     if kind == "prop":
         container = npc_dir / "placed_models" / f"{family}.eskm"
         relative = manifest.get("placed_models", {}).get(family, {}).get("blends", "")
-        return ([container, npc_dir / "textures.json"]
-                + ([npc_dir / relative] if relative else []))
+        # Props retain slot names but bake against the neutral body master; runtime replaces those
+        # slots with the owning map's material instances. The cast texture catalogue is therefore
+        # not an input and must not invalidate all placed models when a body texture changes.
+        return [container] + ([npc_dir / relative] if relative else [])
 
     is_bank = kind == "bank"
     members = character_partition.members_for(
@@ -122,21 +124,43 @@ def _own_clip_owners(manifest: dict, members) -> list[str]:
     return sorted(owners)
 
 
-def scopes_for(partition: dict, stems, props=()) -> list[str]:
+def scopes_for(partition: dict, stems, props=(), *, manifest: dict | None = None) -> list[str]:
     """Every scope a bake of `stems` touches, banks first — they gate the compatibility call.
 
     A prop is its own scope. It joins no rig family, so there is nothing to slice it by and no
     cascade to reach it: one stage builds its skeleton, its mesh and its clips together.
+
+    A complete-cast bake covers every declared bank family, including cinematic-only banks. A
+    focused bake covers only bank families its named bodies reach; existing skeleton packages for
+    all other families remain available for the editor compatibility declaration and untouched.
     """
-    banks = [f"bank.{family}" for family in sorted(partition["banks"])]
+    stems = tuple(stems)
+    selected = set(stems)
+    all_models = set(partition["model_family_of"])
+    if not stems:
+        bank_families = set()
+    elif manifest is None or selected == all_models:
+        bank_families = set(partition["banks"])
+    else:
+        owners = {
+            owner
+            for stem in stems
+            for owner in manifest.get("npcs", {}).get(stem, {}).get("clips", {}).values()
+        }
+        bank_families = {
+            partition["bank_family_of"][owner]
+            for owner in owners if owner in partition["bank_family_of"]
+        }
+    banks = [f"bank.{family}" for family in sorted(bank_families)]
     families = sorted({partition["model_family_of"][stem] for stem in stems
                        if stem in partition["model_family_of"]})
-    return [GLOBAL_SCOPE, *banks, *[f"model.{family}" for family in families],
+    global_scopes = [GLOBAL_SCOPE] if stems else []
+    return [*global_scopes, *banks, *[f"model.{family}" for family in families],
             *[f"prop.{stem}" for stem in sorted(props)]]
 
 
 def plan_stages(config, manifest_store: Manifest, npc_dir: Path, manifest: dict,
-                partition: dict, stems, *, force: bool = False,
+                partition: dict, stems, *, props=None, force: bool = False,
                 cache=None) -> dict[str, list[str]]:
     """{scope: stale stages}, with the cascades applied. A scope with none is fully reusable."""
     code = fingerprint_paths(_code_paths(config))
@@ -150,7 +174,8 @@ def plan_stages(config, manifest_store: Manifest, npc_dir: Path, manifest: dict,
         )
 
     stale: dict[str, list[str]] = {}
-    for scope in scopes_for(partition, stems, manifest.get("placed_models", {})):
+    selected_props = manifest.get("placed_models", {}) if props is None else props
+    for scope in scopes_for(partition, stems, selected_props, manifest=manifest):
         kind = scope.split(".")[0]
         wanted = {
             GLOBAL_SCOPE: ("textures",),

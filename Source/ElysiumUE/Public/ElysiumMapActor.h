@@ -349,6 +349,8 @@ public:
 		USceneComponent* ParentBody, float UniformScale, bool bSky) override;
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override;
+	virtual EElysiumItemGroundModelState ItemGroundModelState(
+		const FString& ModelPath) override;
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override;
 	virtual void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family) override;

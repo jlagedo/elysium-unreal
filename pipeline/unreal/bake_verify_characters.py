@@ -24,6 +24,7 @@ SKELETON_PREFIX = "SKEL_Elysium_"
 BANK_SKELETON_PREFIX = "SKEL_ElysiumBank_"
 MESHES = CHARACTERS + "/Meshes"
 ANIMS = CHARACTERS + "/Anims"
+PROPS = MOUNT + "/Props"
 #: Stands where a rig family goes in an anim path, for the banks every family shares.
 BANKS_FOLDER = "_banks"
 
@@ -158,6 +159,51 @@ def verify_mesh(stem, manifest, albedo, errors):
             errors.append("%s: %d morph target(s) carry no curve metadata (%s)"
                           % (asset, len(missing), ", ".join(sorted(missing)[:4])))
     return family
+
+
+def verify_prop(stem, manifest, errors):
+    """Verify one independently baked placed model without traversing the cast."""
+    record = manifest.get("placed_models", {}).get(stem)
+    if record is None:
+        errors.append("prop %s: not in the manifest" % stem)
+        return
+    package = "%s/%s" % (PROPS, stem)
+    skeleton_name = "SKEL_%s" % stem
+    mesh_name = "SK_%s" % stem
+    skeleton = unreal.EditorAssetLibrary.load_asset(
+        "%s/%s.%s" % (package, skeleton_name, skeleton_name))
+    mesh = unreal.EditorAssetLibrary.load_asset("%s/%s.%s" % (package, mesh_name, mesh_name))
+    if skeleton is None:
+        errors.append("prop %s: skeleton is missing" % stem)
+    if mesh is None:
+        errors.append("prop %s: skeletal mesh is missing" % stem)
+    elif mesh.get_editor_property("skeleton") != skeleton:
+        errors.append("prop %s: mesh does not use its declared skeleton" % stem)
+    elif any(slot.material_interface is None for slot in mesh.get_editor_property("materials")):
+        errors.append("prop %s: one or more material slots are unbound" % stem)
+
+    baked = {str(data.asset_name) for data in assets_under(package)
+             if str(data.asset_name).startswith("A_")}
+    declared = {"A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
+                for label in record.get("clips", {})}
+
+    def has_derived(name):
+        prefix = name + "_"
+        return any(other.startswith(prefix) and other not in declared
+                   and "A_" + other[len(prefix):] in declared for other in baked)
+
+    missing = []
+    for label, meta in record.get("clips", {}).items():
+        name = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
+        flags = int(meta.get("flags", 0))
+        if name not in baked and not has_derived(name) and not flags & 0x4:
+            missing.append(label)
+    if missing:
+        errors.append("prop %s: %d clip(s) missing (%s)"
+                      % (stem, len(missing), ", ".join(sorted(missing)[:4])))
+    else:
+        log("prop '%s': mesh, skeleton and %d declared clip(s) verified"
+            % (stem, len(record.get("clips", {}))))
 
 
 def verify_clips(family, owner, clips, errors):
@@ -299,8 +345,10 @@ def verify_blend_spaces(family, owner, blends, errors):
 
 def main():
     stems = [s for s in cmdline_arg("BakeCharacters").split(",") if s]
-    if not stems:
-        raise SystemExit("[chars-verify] no -BakeCharacters=<csv> given")
+    prop_stems = [s for s in cmdline_arg("BakeProps").split(",") if s]
+    if not stems and not prop_stems:
+        raise SystemExit(
+            "[chars-verify] no -BakeCharacters=<csv> or -BakeProps=<csv> given")
 
     with open(os.path.join(NPC_DIR, "npc_manifest.json"), "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
@@ -310,6 +358,8 @@ def main():
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT],
                                                                            force_rescan=True)
     errors = []
+    for stem in prop_stems:
+        verify_prop(stem, manifest, errors)
     # {family: {owner: {clip label: flags}}}. Built off the family each baked BODY reports, so a
     # model whose mesh landed on one skeleton while its clips were written under another name shows
     # up as missing sequences rather than passing quietly.
