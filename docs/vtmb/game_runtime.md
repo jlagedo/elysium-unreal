@@ -426,9 +426,17 @@ and `HealthBuffer` (25, Max 32000) the over-cap pool. `CBaseCombatCharacter::Hea
 with `CBaseEntity::m_iMaxHealth` at `+0x208` and `m_iHealth` at `+0x210`.
 
 **An NPC's health track is authored, not derived.** Each `npctemplate*.txt` `ClanData.Attributes`
-block sets `Max_Health` literally, in the same flat container as `Strength`…`Wits` (`"20"` for
-`TutorialThug`, `"819"` for a boss); a template that omits the key inherits the `stats.txt`
-`Default` 100.
+block can set `Max_Health` literally, in the same flat container as `Strength`…`Wits`; an absent
+key follows `ParentTemplateName` and ultimately the `stats.txt` default 100. Across the 150
+patch-first declarations, 114 are explicit, 23 inherit a literal and 13 default. Effective pools
+span 1 (`Scurrying`, inherited by `Rat`) through 1400 (`MingXiao`); ordinary examples include
+`NPCGeneric` 22, `WarehouseThug` 60 and `OfficerGeneric` 100, while `Bach` is 440,
+`SheriffMan` 570, `Gargoyle` 800, `Tutorial_Jack` 819, `ManBat` 880 and `Hengeyokai` 968.
+`research npc_health_census` reproduces the complete resolution without committing game data.
+
+`BloodPool` is a different Attributes resource. Feeding, vampire healing and Disciplines may
+consume or change it, but the ordinary lethal comparison does not substitute it for health:
+death is selected when accumulated `Health >= Max_Health` after the alive damage transaction.
 
 ### Feats — the derived-roll layer (`feats.txt`)
 
@@ -503,6 +511,9 @@ So the "pool" is the **sum of the base list, each entry read as the current (eff
 min/max-clamped) trait value through its own `/`-or-`*` modifier** — and the sum is itself run
 through a second, feat-level trait-effect pass before clamping. The nine attributes floor at 1;
 abilities and the derived stats do not.
+
+The Sneaking-only modifier is the balanced `trigger_stealth_mod` aggregate; its clamp and detection
+consumer are documented in [stealth.md](stealth.md).
 
 The `PCWeighting` / `NPCWeighting` keys are resolved **at load** into an index into the global
 DiceRolls table array (`101D9780`, stride `0x19C`, name at `+4`, **0 on miss**), stored at feat

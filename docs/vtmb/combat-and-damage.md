@@ -21,7 +21,8 @@ policies are in `docs/vtmb/skills-and-checks.md`; the die algorithm is in
 - `input_action_survey`, `weapon_activity_survey` and the cap12 player-animation inventory join
   the hash-pinned command bits, melee/ranged class vtables and activity tables, and model sequence
   descriptors; their generated ledgers remain below `ELYSIUM_WORK_ROOT`.
-- `research/cases/core-mechanics/` preserves the address set and open joins.
+- `research/cases/core-mechanics/` preserves the weapon/resolver address set;
+  `research/cases/npc-combat-lifecycle/` preserves the enemy, NPC response, health and death joins.
 - Valve's public Source SDK supplies only the inherited frame of reference:
   [`CTakeDamageInfo`](https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/game/shared/takedamageinfo.h)
   carries the inflictor, attacker, weapon, scalar damage and damage type, and
@@ -29,9 +30,9 @@ policies are in `docs/vtmb/skills-and-checks.md`; the die algorithm is in
   consumes it. VtMB's `CVDmg_t`, feat rolls and health counters are fork-specific findings,
   not behavior inferred from the SDK.
 
-These are offline binary/data findings. The shared, ranged and melee paths are closed far
-enough to implement statically; several special filters and a live timing/formula capture remain
-explicitly open.
+These are offline binary/data findings. The shared, ranged, melee, NPC-response and death paths
+are closed far enough to implement statically; several special filters and live
+timing/presentation captures remain explicitly open.
 
 ## Authored weapon inputs
 
@@ -349,23 +350,85 @@ sequence variants, not commands.
 
 The weapon table then translates the generic activity to a weapon activity such as
 `ACT_MELEE_ATTACK_FISTS`, `ACT_MELEE_ATTACK_2COMBO_KNIFE` or
-`ACT_MELEE_ATTACK_HEAVY_BASEBALLBAT`. The ordinary player apply order remains:
+`ACT_MELEE_ATTACK_HEAVY_BASEBALLBAT`. The ordinary player apply order is:
 
 ```text
 logical activity
   -> weapon ActivityOverride
   -> player NPC_TranslateActivity
-  -> SetActivity
-  -> SelectWeightedSequence by model actweight
+  -> enumerate matching model sequences
+  -> select by sequence state mask and activity weighting
+  -> commit activity, sequence, cycle and playback rate
 ```
 
 The hash-closed player-model inventory contains separate ordinary, `2COMBO`, heavy, air,
 preblock, block, heavy-block and left/right blocked-reaction sequences for fists and the sampled
 melee weapons. Multiple sequences can answer one activity and their `actweight` controls the
-choice; weight-zero variants are not selected by the ordinary weighted resolver. The dedicated
-`2COMBO` activity and clip family are therefore real, but the name alone does not establish how
-many damage commits a clip produces. A live attack capture is still required to count impact
-windows and interruption timing.
+candidate order. The player selector at `0x10160F90` then reads the custom sequence word at
+`+0x2D4` and compares it with player state `+0x2088 & 0x79A`; it prefers an exact state-mask
+match, then two partial-match classes, then a zero-mask fallback. The target argument is not read
+by this player selector. Labels such as `med`, `low`, `far` and `jump` therefore are not direct
+input commands or distance tests, but the concrete clip can still depend on the current player
+state mask.
+
+### Target acquisition, sequence commit and recovery
+
+`CWeaponMelee::RequestActivity` performs target acquisition before it commits the selected
+sequence. It reads the custom reach float at `+0x2D0` from every sequence returned for the
+translated activity and uses the maximum as the query distance. `CBaseCombatCharacter::FindEntityFOV`
+(`0x10341C30`) then:
+
+1. traces straight forward with mask `0x46004003` to that maximum reach;
+2. accepts a valid obstruction hit first;
+3. otherwise scans the reach volume and chooses the visible candidate with the highest forward
+   dot product inside a 30-degree half-angle (a 60-degree full cone).
+
+The melee predicate at `0x103EA4D0` rejects self, a missing entity and any entity whose
+`m_lifeState` is not `LIFE_ALIVE`. The shared query also rejects non-targetable and
+`ScriptHidden` entities. This is aim assistance and opponent reservation, not a damage verdict:
+an ordinary swing may still animate when no candidate is found.
+
+For a player attacker, an accepted target is stored in the replicated
+`m_nMeleeOpponentIndex`/paired target-handle state and the target receives an incoming-melee
+notice. `m_bNeverMeleeOpponent` clears the melee-opponent index and suppresses that notification.
+The NPC notice path accepts the warning in its eligible states when the attacker is within 150
+Source units or satisfies its visibility route, remembers the attacker for five seconds and lets
+the concrete combatant schedule its response. No health or damage is changed by this reservation.
+
+After a concrete sequence is selected, the player path stores the requested and translated
+activities, sets the sequence, resets cycle to zero and resets sequence information. Its playback
+rate is the character's base attack-rate scalar multiplied by:
+
+```text
+0.70 + 0.03 * evaluated attack-feat rank
+```
+
+The next player attack, primary weapon attack and secondary weapon attack are all held until at
+least:
+
+```text
+now + selected sequence duration / playback rate
+```
+
+The writes are maximum operations, so a pre-existing later deadline is not shortened. NPC use can
+also clamp the duration to a weapon-provided minimum. Melee recovery is therefore selected-clip
+timing, not the ranged mode's authored `Attack_Rate` and not one global fist or weapon cooldown.
+
+### Contact, opposed-roll and impact boundary
+
+The ordinary player fist and katana attack sequences in the hash-closed female and male shared
+banks have `event_count == 0`. Their normal damage commit is consequently **not** a firearm-style
+server animation event and must not be made an authoritative Unreal montage notify merely because
+that is convenient. VtMB does have special creature/event attacks that construct a trace from a
+staged opponent, but that is a separate path and is not evidence for ordinary fists or weapons.
+
+The downstream ordinary boundary is a real trace. `MeleeRollAndSendNoticeCallback`
+(`0x10346830`) calculates and stores the opposed result for a contacted combat character;
+`CWeapon`'s shared traced-impact virtual at `0x102579F0` reads the entity from that trace, consumes
+the defender-side record, resolves block/reactions and commits damage. Static recovery has not yet
+identified the normal swing caller that owns the contact sweep/window between those two entries.
+The dedicated `2COMBO` clip family is real, but its exact number of contact windows, sweep shape,
+refire/interruption behavior and miss timing still require that caller join or a live capture.
 
 ### Opposed record and reaction margin
 
@@ -424,7 +487,10 @@ stagger is the heavy-block reaction band, with hit/knockback as a separate outco
 
 ### Melee damage commit
 
-`CWeaponMelee::MeleeImpact` (`0x102579F0`) is the downstream consumer that was previously open.
+The shared weapon traced-impact body at `0x102579F0` is the downstream melee consumer that was
+previously open. It occupies the same base-weapon virtual in melee and ranged weapon vtables, so
+`CWeaponMelee::MeleeImpact` is a useful semantic label for the melee branch, not a recovered class
+or symbol name.
 It copies the active mode's `CVDmg_t`, resolves the stored attack record and block reactions,
 marks the descriptor's direct-damage route, and carries it through the common descriptor/soak
 path. The remaining `DamageInflicted` is floored up to the active Potence rank when Potence is
@@ -458,8 +524,81 @@ callback or from the scalar fallback. It commits in this order:
 5. `HealthToPercent` projects `(Max_Health - Health) / Max_Health` back into Source
    `m_iHealth`, then downstream death/frenzy/reaction logic observes the result.
 
+After the alive virtual returns, `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`) reads the RPG
+stats directly. `Health < Max_Health` survives; `Health >= Max_Health` calls the character's
+`Event_Killed` virtual. Source `m_iHealth` is a projection for engine consumers, not the authority
+that selects death. A target with `takedamage == 0` is rejected before the transaction, and a
+team/friendly-damage gate rejects disallowed non-self damage. Life state selects distinct alive,
+dying and dead virtuals; the dying consumer accepts without repeating the alive transaction.
+
+The successful alive path also reports damage severity back to an eligible attacker's combat
+feedback path: positive damage through 1, over 1 through 5, and over 5 form three nonlethal tiers;
+lethal damage uses the death tier. This feedback is downstream of the target's authoritative
+commit.
+
 The exact identity and mutation rights of the alive-path prefilter, and some float-to-integer
 rounding points around scalar damage, remain open.
+
+## NPC damage response and stagger boundaries
+
+`CAI_BaseNPC::OnTakeDamageAlive` (`0x10265ed0`) consumes the committed result in this order:
+
+1. Call the shared combat-character alive commit.
+2. Fire `OnDamaged` on success; when projected Source health is no greater than half its Source
+   max, also offer `OnHalfHealth`.
+3. Record attack position/attacker and update enemy memory.
+4. Ask the class light/heavy predicates to set `LIGHT_DAMAGE` (`0x4c`) and `HEAVY_DAMAGE`
+   (`0x4d`).
+5. Accumulate damage for one second; a sum over 15 percent of Source max health sets
+   `REPEATED_DAMAGE` (`0x4e`), otherwise an expired window is reset.
+6. Emit the NPC damage sound/event path.
+
+The Troika NPC override at `0x102beda0` first saves the complete incoming damage packet at
+`+0x660c`, then composes the base transaction. A surviving positive hit remembers the attacker for
+five seconds and notifies the active schedule. A special NPC flag can force `Event_Killed`; its
+authored semantic name is not yet proven and must remain an explicit flag rather than an invented
+general rule.
+
+Five reaction concepts are independent:
+
+| Reaction | Authority |
+|---|---|
+| melee block stagger | the opposed margin's heavy-block band; selects `ACT_BLOCK_HEAVY` |
+| melee hit/knockback | the stronger unblocked outcome; reaction sequence plus impulse/timing |
+| light/heavy/repeated damage | AI conditions that can interrupt a schedule and select a flinch/cover response |
+| generic damage flinch | `DamageFlinch` (`0x103229d0`), random head/torso activity plus directional `hit_yaw` |
+| death | `Health >= Max_Health`, life-state transition and `Event_Killed` |
+
+`DamageFlinch` derives hit yaw from actor yaw minus the incoming-vector angle, adds a random
+`[-30,+30]` degrees, and requests the chosen layer/gesture with 0.1/0.3 fade values. The AI's
+`SMALL_FLINCH` schedule is another owner: it remembers flinched state, stops movement and runs
+`TASK_SMALL_FLINCH`; alert AI can instead take cover from the attack origin. A remake must not
+invent one universal stagger meter or make every positive hit cancel the current action.
+
+## NPC and player death transaction
+
+The shared `CBaseCombatCharacter::Event_Killed` body (`0x1032b9b0`) sets life state 1 (dying),
+cleans weapon, effect and ownership state, constructs the ragdoll-force envelope, and notifies the
+killer and game rules. The NPC override at `0x10265ad0` is schedule-aware:
+
+- an NPC already in the death schedule ignores a duplicate kill;
+- a non-interruptible scripted sequence defers the kill packet, while an interruptible owner is
+  cancelled;
+- `OnDeath` fires once through the native guard at `+0x5bd4`;
+- current and ideal NPC state become 7 (dead), strategy and squad claims are vacated, and death
+  sound/solid-body policy leads to the death schedule.
+
+The Troika NPC override (`0x102bf340`) additionally releases hints and feed/claim ownership,
+notifies owner/maker systems, invokes Python `MarkAsDead('<targetname>')`, and updates its special
+partner/owner memory. These are consequences of the one death commit; a maker child count must not
+be decremented from a hit or flinch path.
+
+The player damage wrapper (`0x10163020`) adds player-specific refusal/protection gates and tears
+down conversation, use, grapple and special-control state before/around the shared commit. The
+player death override (`0x10163af0`) stops active weapon/controllers, notifies game rules, selects
+the death action/screen from `vdata/Signs/death.txt`, and composes the shared combat-character
+cleanup. NPCs and the player share the authoritative damage counter and lethal comparison; their
+outer AI, I/O and presentation lifecycles are deliberately different.
 
 ## Faithful implementation seams
 
@@ -467,6 +606,10 @@ The baseline requires distinct types and stages:
 
 - an authored weapon-mode record (`BaseLethality`, `SkillRequirement`, `Dmg`);
 - a parsed `CVDmg_t`-equivalent value object;
+- an accepted-swing transaction carrying logical activity, concrete sequence, aimed opponent,
+  playback rate and recovery deadline;
+- a later trace/contact transaction that can miss, stage one opposed record and commit at most the
+  contact windows authored by the move;
 - attack-specific ranged/melee hit and defense policy;
 - one shared dice/soak/filter resolver;
 - a typed health commit that knows bashing/lethal/aggravated, blood shield and unkillable;
@@ -482,8 +625,9 @@ fact document.
   Presence modifier and Shaky Hands penalty.
 - Find the player/NPC consumers of `BurstMin`/`BurstMax` and the complete caller chain from firearm
   damage into generic `DamageFlinch`.
-- Capture ordinary, `2COMBO`, heavy, blocked, heavy-block and knockback attacks to validate
-  impact-window counts, interruption and timing against the static activity/damage chain.
+- Recover the normal swing caller that joins contact enumeration to the shared weapon traced-impact
+  virtual, or capture ordinary, `2COMBO`, heavy, blocked, heavy-block and knockback attacks to close
+  sweep shape, impact-window counts, interruption, refire and miss timing.
 - Identify the complete `SkillRequirement` consumer and its relation, if any, to the attacker
   adjustment.
 - Decompose the ranged multiplier into volley share, hitgroup and other trace modifiers.

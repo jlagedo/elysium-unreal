@@ -29,6 +29,7 @@
     "Where does CVDmg_t word 15 become a numerical post-soak modifier, including item DmgModifier and NPC DamageFilter fields?",
     "What are the remaining special immunity, relationship and secondary-effect predicates in CVDmg_t::Apply?",
     "What parser behavior handles the authored DMG_FIST token when it is absent from the recovered flag table?",
+    "Which normal swing-time caller owns contact enumeration, invokes MeleeRollAndSendNoticeCallback and forwards the resulting trace to the shared weapon impact virtual?",
     "Which OnTakeDamage_Alive prefilter owns its mutable verdict and where are all float-to-integer boundaries?",
     "What exact activity codes and predicates control resisted feeding, stealth override, interruption and completion?",
     "How do FeedBegin, the server pulse, FeedEnd and paired animation coordinate target blood loss, player blood gain, pulse acceleration and release?",
@@ -93,12 +94,13 @@
     {"address": "10268900", "label": "RangedVolley", "confidence": "verified caller", "role": "group ray hits by victim and pass volley share", "depth": 3, "cap": 260},
     {"address": "101eec30", "label": "RangedStoredImpact", "confidence": "verified caller", "role": "alternate projectile or stored-impact path into ranged damage", "depth": 3, "cap": 240},
     {"address": "10346380", "label": "MeleeCalcAndStore", "confidence": "scope string and body evidence", "role": "store attacker lethality defender defense and soak in melee result record", "depth": 3, "cap": 260},
+    {"address": "10346830", "label": "MeleeRollAndSendNoticeCallback", "confidence": "scope string and body evidence", "role": "enumeration callback that rolls and notifies each valid combat character", "depth": 2, "cap": 160},
     {"address": "10346910", "label": "MeleeRollA", "confidence": "scope string and body evidence", "role": "invoke melee result calculation and defender reaction virtual", "depth": 3, "cap": 200},
     {"address": "10349710", "label": "MeleeAddBonusSoakRolls", "confidence": "scope string", "role": "add bonus soak results to melee record", "depth": 3, "cap": 200},
     {"address": "10345980", "label": "MeleeResultLookup", "confidence": "scope string and body evidence", "role": "find the defender-side melee result record keyed by attacker", "depth": 2, "cap": 140},
     {"address": "10345de0", "label": "MeleeAttackSuccessAccessor", "confidence": "scope string and body evidence", "role": "return stored melee record word 1 for an attacker", "depth": 2, "cap": 140},
     {"address": "103498b0", "label": "MeleeReactionClassifier", "confidence": "body evidence and custom NPC callers", "role": "classify a rounded melee margin against four reaction thresholds", "depth": 2, "cap": 100},
-    {"address": "102579f0", "label": "MeleeImpact", "confidence": "CWeaponMelee hit path and diagnostic strings", "role": "resolve a traced melee impact through block reactions, direct damage, effects and knockback", "depth": 3, "cap": 360},
+    {"address": "102579f0", "label": "WeaponDoImpactEffect", "confidence": "shared combat-weapon vtable +0x438 and melee diagnostic strings", "role": "resolve a traced melee impact through block reactions, direct damage, effects and knockback", "depth": 3, "cap": 360},
     {"address": "10345ab0", "label": "WasMeleeBlocked", "confidence": "scope string and impact caller", "role": "test facing, defender state and melee-result predicates for an incoming attack", "depth": 3, "cap": 260},
     {"address": "10345f10", "label": "GetBlockReaction", "confidence": "scope string and body evidence", "role": "read the current sequence block-reaction activity or use the right-reaction fallback", "depth": 2, "cap": 120},
     {"address": "103e9bf0", "label": "WeaponMeleeImpactPrelude", "confidence": "CWeaponMelee vtable +0x54c", "role": "weapon-specific prelude invoked at the start of every melee impact", "depth": 3, "cap": 260},
@@ -110,6 +112,14 @@
     {"address": "103eac30", "label": "WeaponMeleeModeA", "confidence": "CWeaponMelee vtable +0x5bc", "role": "melee mode-policy accessor", "depth": 2, "cap": 100},
     {"address": "103eac60", "label": "WeaponMeleeModeB", "confidence": "CWeaponMelee vtable +0x5c0", "role": "melee mode-policy accessor", "depth": 2, "cap": 100},
     {"address": "103e9e00", "label": "WeaponMeleeRequestActivity", "confidence": "CWeaponMelee vtable +0x5d0", "role": "validate and stage a requested melee activity, including any weapon-specific variant policy", "depth": 3, "cap": 320},
+    {"address": "103ea4d0", "label": "WeaponMeleeTargetPredicate", "confidence": "function pointer passed by WeaponMeleeRequestActivity", "role": "filter the combat character selected by the melee forward-cone query", "depth": 2, "cap": 160},
+    {"address": "10341c30", "label": "CombatCharacterFindEntityFOV", "confidence": "scope string and WeaponMeleeRequestActivity caller", "role": "prefer the forward obstruction hit, then select the best aligned visible entity inside the supplied reach and FOV", "depth": 3, "cap": 320},
+    {"address": "103e9d80", "label": "WeaponMeleeStageOpponent", "confidence": "accepted-target caller in WeaponMeleeRequestActivity", "role": "store the selected opponent handles on a player attacker and notify the selected defender", "depth": 2, "cap": 180},
+    {"address": "10160f90", "label": "PlayerSelectMeleeSequence", "confidence": "CBasePlayer vtable +0x52c and WeaponMeleeRequestActivity caller", "role": "choose the concrete player melee sequence using the translated activity and current player state mask", "depth": 3, "cap": 320},
+    {"address": "103250d0", "label": "PlayerForcePreTranslatedActivity", "confidence": "CBasePlayer vtable +0x4dc and WeaponMeleeRequestActivity caller", "role": "commit the selected player activity and sequence, reset its cycle and seed its playback rate", "depth": 3, "cap": 320},
+    {"address": "10272400", "label": "NpcForcePreTranslatedActivity", "confidence": "CAI_BaseNPC vtable +0x4dc and WeaponMeleeRequestActivity caller", "role": "commit the selected NPC activity and sequence and reset its animation state", "depth": 2, "cap": 180},
+    {"address": "102bf5d0", "label": "NpcIncomingMeleeNotice", "confidence": "NPC incoming-melee virtual caller", "role": "stage the NPC response to the attacker selected by an accepted melee activity", "depth": 3, "cap": 260},
+    {"address": "10385c30", "label": "HumanCombatantIncomingMeleeResponse", "confidence": "VHumanCombatant vtable +0x960", "role": "respond to a staged incoming melee attack after the common NPC notice path", "depth": 3, "cap": 260},
     {"address": "103e4430", "label": "WeaponMeleeComboAbility", "confidence": "CWeaponMelee vtable +0x5d4", "role": "return the Abilities-list slot used to look up the ordinary melee combo chance", "depth": 2, "cap": 100},
     {"address": "103e5890", "label": "WeaponFistsComboAbility", "confidence": "CWeaponMelee_Fists vtable +0x5d4 override", "role": "return Abilities slot 1, Brawl, for the fists combo chance", "depth": 2, "cap": 100},
     {"address": "10200ca0", "label": "StatListBaseValue", "confidence": "CVStatList_t::GetBase scope string and body evidence", "role": "read the saved base value of one slot in a CVStatList_t", "depth": 2, "cap": 140},
@@ -197,6 +207,11 @@
     {"from": "103eaec0", "to": "103eaca0", "confidence": "verified", "evidence": "melee post-frame invokes the primary-attack virtual while the held attack bit and weapon timer permit"},
     {"from": "103eaca0", "to": "103e9e00", "confidence": "verified", "evidence": "primary attack requests ordinary, air or kick activity through the shared melee activity body"},
     {"from": "103e9e00", "to": "10200ca0", "confidence": "verified", "evidence": "ordinary-attack combo substitution reads the selected Abilities slot through CVStatList_t::GetBase"},
+    {"from": "103e9e00", "to": "10341c30", "confidence": "verified", "evidence": "melee activity acceptance supplies the maximum candidate-sequence reach and cos(30 degrees) to FindEntityFOV"},
+    {"from": "103e9e00", "to": "10160f90", "confidence": "verified", "evidence": "the player path selects a concrete candidate using sequence +0x2d4 and player state +0x2088"},
+    {"from": "103e9e00", "to": "103250d0", "confidence": "verified", "evidence": "accepted player activity commits the sequence, resets cycle and seeds playback rate through vtable +0x4dc"},
+    {"from": "103e9e00", "to": "103e9d80", "confidence": "verified", "evidence": "an accepted player attack stores and notifies the aimed opponent after sequence timing is committed"},
+    {"from": "10346830", "to": "10346910", "confidence": "verified", "evidence": "the contact enumeration callback rolls and notifies each valid contacted combat character"},
     {"from": "102579f0", "to": "10345ab0", "confidence": "verified", "evidence": "melee impact tests block eligibility before damage commit"},
     {"from": "102579f0", "to": "10160bc0", "confidence": "verified", "evidence": "blocked impact invokes the defender normal or heavy-block reaction"},
     {"from": "102579f0", "to": "10160d00", "confidence": "verified", "evidence": "blocked impact invokes the attacker's sequence-authored blocked reaction"},
@@ -255,6 +270,18 @@
     },
     {
       "confidence": "confirmed",
+      "fact": "Melee activity acceptance reserves an aimed opponent and derives attack recovery from the selected sequence, but does not itself commit damage.",
+      "evidence": "WeaponMeleeRequestActivity 0x103e9e00 takes the maximum candidate sequence +0x2d0 reach, calls FindEntityFOV 0x10341c30 with a 30-degree half-angle, selects through PlayerSelectMeleeSequence 0x10160f90, commits through PlayerForcePreTranslatedActivity 0x103250d0, stores an allowed opponent and writes now plus sequence duration divided by playback rate to the character and both weapon attack deadlines.",
+      "consequence": "Target reservation, concrete clip, recovery and later contact must be separate authoritative state; neither button press nor opponent selection is a hit."
+    },
+    {
+      "confidence": "confirmed with open caller join",
+      "fact": "Ordinary shared-bank fist and katana attacks carry no server animation events; the later opposed-roll callback and traced weapon impact are recovered, but their normal swing-time caller is not.",
+      "evidence": "Every ordinary, 2COMBO, heavy and air attack sequence in the hash-closed shared female and male fists and katana banks has event_count zero; MeleeRollAndSendNoticeCallback 0x10346830 stages the defender record and WeaponDoImpactEffect 0x102579f0 consumes a real trace.",
+      "consequence": "Do not make an invented montage notify authoritative. Recover the contact caller or capture live sweep/window timing before claiming faithful impact timing."
+    },
+    {
+      "confidence": "confirmed",
       "fact": "Melee block is a real held action with distinct preblock, normal-block, heavy-block and attacker blocked-reaction activities; block contact does not guarantee zero damage.",
       "evidence": "The dedicated command route produces ACT_PREBLOCK; WasMeleeBlocked 0x10345ab0 checks weapon/facing/state; PlayerDefenderBlockReaction 0x10160bc0 chooses ACT_BLOCK or ACT_BLOCK_HEAVY from the updated margin; PlayerAttackerBlockedReaction 0x10160d00 reads sequence metadata +0x2e0 with right-reaction fallback; MeleeImpact continues when positive damage remains.",
       "consequence": "Block must preserve input eligibility, facing, opposed margin, both actors' reactions and damage-through-block as separate decisions."
@@ -262,7 +289,7 @@
     {
       "confidence": "confirmed",
       "fact": "The melee impact consumer computes final direct damage as DamageInflicted times (BaseDamage plus DamageModifier) times the trace multiplier, with Potence able to floor remaining lethality up to its active rank.",
-      "evidence": "MeleeImpact 0x102579f0 joins the defender record, block callbacks, direct descriptor route, Potence diagnostic branches and the retail format string 'DamageInflicted * (BaseDamage + DamageModifier) * Multiplier'.",
+      "evidence": "WeaponDoImpactEffect 0x102579f0 joins the defender record, block callbacks, direct descriptor route, Potence diagnostic branches and the retail format string 'DamageInflicted * (BaseDamage + DamageModifier) * Multiplier'.",
       "consequence": "The prior melee result-to-damage join is closed statically; live capture is validation of impact windows and timing rather than discovery of the scalar formula."
     },
     {

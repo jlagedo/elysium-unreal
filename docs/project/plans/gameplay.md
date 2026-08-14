@@ -74,8 +74,8 @@ the tutorial lockpick's attempt HUD remains a logged stub.
 
 ### 9.9 NPC disposition & reactions — remaining
 
-The tutorial talk/feed presentation slice landed. **Not finished:** senses, enemy assignment,
-alert/combat/flee schedule consumers, retail priority arbitration; the RPG reaction-score
+The tutorial talk/feed presentation slice landed. **Not finished:** senses, consumption of the
+recovered enemy-selection transaction, alert/combat/flee schedule consumers; the RPG reaction-score
 calculator (`reaction.txt`/`reactions000.txt`); `React`, loud-expression policy and broader
 expression/gesture semantics. The three social domains stay independent (K4). *Deps:* B4.
 
@@ -96,8 +96,8 @@ body→`FElysiumEntity` lookup, reusable well beyond doors), `COND_HIT_BY_DOOR` 
 producer, and a hint-node reader over `info_node_cover_*` (342/81/36 across the exports) with
 `FElysiumInterestingPlace`'s claim-release shape. Unreachable on the tutorial path. Blocked on
 recovery, not effort: the follower controller (unrecovered `follower_type` radii) and
-return-to-initial (no producer). Facts: `docs/vtmb/npc-ai-reverse-engineering.md`; the enemy
-half is RE48. Also parked here: ragdoll/IK; an `.ents` cook-cache if parse time bites; the
+return-to-initial (no producer). Facts: `docs/vtmb/npc-ai-reverse-engineering.md`. Also parked here:
+ragdoll/IK; an `.ents` cook-cache if parse time bites; the
 lump-8 bake contingency (Lumen Lite noted as the cheaper alternative); retail `.sav` import
 (RE7, non-goal). **vdata-driven systems** promote from here as reached: wider
 hacking/email/screensaver completion, vendors, impact FX, per-category sound schemes, minor UI
@@ -108,9 +108,16 @@ failure is a fixture gap (unticked baseline NPCs carry no `nextthink`), fixed in
 
 ### 13.1 Stealth
 
-`vdata/stealth` + `stealthkillrules` loaded; sneak mode (movement + posture + the stealth
-readout on 8.9's stack), NPC detection against it, `trigger_stealth_mod` becomes real.
-*Acceptance:* the tutorial's stealth lesson completes as retail. *Deps:* 4.7, 11.4.
+Load selected `vdata/stealth`; sneak mode supplies movement/posture and the three-point
+light/Sneaking target surface; NPC vision, cone, LOS hysteresis, hearing, memory, enemy selection
+and found/lost outputs consume it; `trigger_stealth_mod` owns balanced overlap contributions; 8.9
+renders only the committed observer snapshot. Faithful observer transaction:
+`docs/vtmb/stealth.md`. **Still needs recovery:** the separate stealth-kill victim/deaf-zone
+transaction consuming `stealthkillrules`. *Acceptance:* from real input, the tutorial's ordinary
+stealth and stealth-kill lessons complete as retail; focused cases cover threshold edges, the
+three-sample light cadence, 512-unit LOS crossover, transient/sustained occlusion, sound-only
+discovery, overlapping modifier volumes, stale HUD handles, and save/load inside a volume.
+*Deps:* 4.7, 8.9, 10.7, 11.4, 11.8, 11.9.
 
 ### 13.2 Disciplines
 

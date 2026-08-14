@@ -48,9 +48,9 @@ tutorial.** Everything on the path lands first. Three standing rules:
 | **PP1 — New Game & genesis [x]** | chargen for real, `sp_genesisdevice_1` played | 9.4 [x] |
 | **PP2 — the theatre cinematic** | the intro plays start to finish — eyes and lipsync block | 12.1–12.5, 8.11a [x] |
 | **PP3 — land the tutorial** | Jack's first conversation with sound and reactions | 9.2, 9.9 |
-| **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD | CCC0–CCC9, B6 [x], 9.8, 9.6 [x], 8.9 |
+| **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD foundation + observer presentation seam | CCC0–CCC9, B6 [x], 9.8, 9.6 [x], 8.9 |
 | **PP5 — persistence [x]** | save / quick / autosave + load mid-run | 11.9 [x] |
-| **PP6 — complete the tutorial** | stealth, disciplines, firearms, hacking — every retail beat | 13.1–13.4 → `uv run elysium test Play` |
+| **PP6 — complete the tutorial** | stealth authority, disciplines, firearms, hacking — every retail beat | 13.1–13.4 → `uv run elysium test Play` |
 
 **PP4's feel stack runs ahead of PP2/PP3 — owner call**, recovered rather than preferential:
 the animation is the movement's speed authority, so the mover cannot close behind it (the CCC
@@ -367,7 +367,9 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE45 | trigger touch dispatch + the script recursion bound | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |
 | RE46 | the dialogue opener and camera boundary | `docs/vtmb/camera-view-modes.md`; 11.13f | [~] |
 | RE47 | the tutorial character bootstrap | `docs/vtmb/npc-ai-reverse-engineering.md` | [~] |
-| RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 10.7, 13.3 | [ ] |
+| RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 10.7, 13.3 | [x] |
+| RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 10.7, 13.1 | [x] |
+| RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [ ] |
 
 ## Options — evaluated, not planned
 

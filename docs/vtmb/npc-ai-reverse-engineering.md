@@ -16,11 +16,13 @@ Generated exports, binaries, decompilation, and survey artifacts remain external
 not repository content.
 
 Confidence is high for class names, authored keyvalues and outputs, script calls, native datamap
-fields, relationship token decoding, the AI update loop, the state-switch cases, schedule/task
-registrations, and the `aiscripted_schedule` execution modes. Confidence is lower for the exact
-meaning of several numeric map keyfields, the human-readable distinction between the two move and
-two follow modes of `aiscripted_schedule`, and the frame-exact ordering of reactions during a live
-aggression incident. Those open points need controlled retail capture rather than further naming
+fields, relationship token and priority decoding, the AI update loop, enemy eligibility and
+ranking, schedule-gated enemy replacement, the state-switch cases, ordinary humanoid melee/ranged
+selection, damage-condition generation, death admission, schedule/task registrations, and the
+`aiscripted_schedule` execution modes. Confidence is lower for the exact meaning of several
+numeric map keyfields, the human-readable distinction between the two move and two follow modes of
+`aiscripted_schedule`, class-specific incapacitation policy, and frame-exact presentation during a
+live aggression incident. Those open points need controlled retail capture rather than naming
 inference.
 
 This report owns the cross-system NPC-AI reconstruction. Detailed animation selection and task
@@ -114,10 +116,10 @@ document.
 ### Evidence limitations
 
 This is a static and corpus-correlated reconstruction. No new live retail aggression capture was
-performed for this survey. Native code proves the control structures and the authored data proves
-what maps request, but static recovery alone does not prove the precise frame on which two outputs
-observed during the same incident are delivered. Numeric fields whose names are suggestive but
-whose consumers have not yet been decoded are reported as fields and distributions, not assigned
+performed for this survey. Native code proves the control structures, ordering and thresholds,
+and authored data proves what maps request, but static recovery alone does not prove the rendered
+pose, blend, impulse or precise frame on which two externally observed outputs appear. Numeric
+fields whose consumers have not been decoded are reported as fields and distributions, not given
 invented semantics.
 
 ## The authored NPC population
@@ -411,16 +413,19 @@ The base selector at `0x1028a380` switches on the high-level state. Recovered ca
 |---:|---|
 | 0 | none/uninitialized; warns rather than behaving normally |
 | 1 | idle |
-| 2 | alert |
-| 3 | combat |
+| 2 | combat |
+| 3 | alert |
 | 4 | scripted |
 | 6 | prone |
 | 7 | dead |
 | 12 | class-specific/fallback idle-like branch; exact semantic label unresolved |
 
-The combat branch further tests enemy state, damage, attack capability, range/occlusion, and other
-conditions before choosing a schedule. Derived VtMB NPC classes override or extend the selection
-and task machinery, which is why the native class is a load-bearing part of authored NPC identity.
+The numbering is directly constrained twice: `CAI_BaseNPC::SelectIdealState` (`0x1026f660`) emits
+`Combat state with no enemy` from case 2 and falls back to state 3, while the concrete human
+selectors enter their weapon/combat policy only for state 2. The combat branch further tests enemy
+state, damage, attack capability, range/occlusion, and other conditions before choosing a
+schedule. Derived VtMB NPC classes override or extend the selection and task machinery, which is
+why the native class is a load-bearing part of authored NPC identity.
 
 ### The idle branch, decided
 
@@ -557,8 +562,9 @@ authored value is copied through and `npc_perception` is then inert for that NPC
 
 ### Visual and auditory input
 
-Map fields provide per-actor sensory tuning. `stealth.txt` supplies light-to-visual-stealth
-scalars and view-cone scalars. `sound_volume_table.txt` classifies sound levels and occlusion:
+Map fields provide per-actor sensory tuning. The exact player-light target surface, visual-range
+and cone scaling, closest-player LOS cache, sound-radius reduction, and found/lost transition are
+owned by [stealth.md](stealth.md). `sound_volume_table.txt` classifies sound levels and occlusion:
 
 | Level/example | Radius/value | Occlusion behavior |
 |---|---:|---|
@@ -604,8 +610,10 @@ classname and install a class relationship.
 existing row or grow their storage in groups of five. The rows retain target handle or class,
 disposition, and numeric priority. The tables are save-backed. The diagnostic text describes a
 priority range of 1-10, but the parser uses raw integer conversion without clamping; the installed
-corpus includes zero and 99. The exact arbitration rule between competing rows of equal/different
-priority remains to be decoded and should not be guessed from the diagnostic alone.
+corpus includes zero and 99. `IRelationPriority` at `0x10333700` uses the exact entity row before
+the class row, returns the row's raw integer, and otherwise returns 5 for a non-null actor or 0 for
+null. Higher priority wins enemy arbitration; out-of-diagnostic-range values therefore remain
+ordered rather than being clamped.
 
 `IRelationType` at `0x10333340` resolves an entity override before a class override and otherwise
 returns neutral, with additional special-flag/oblivious branches. Self and null relations resolve
@@ -617,10 +625,69 @@ exact entity relationship
   -> neutral default
 ```
 
-The exact placement and meaning of the additional special branches remain open.
+The exact placement and meaning of the additional special branches remain open, but the ordinary
+relation-type and priority precedence is closed.
 
 The map's `player_reaction` is an initial authored input to this combat relationship domain. A
 later `SetRelationship` call can deliberately alter it.
+
+### Enemy acquisition and replacement
+
+The ordinary target-selection transaction is recovered from the pinned retail DLL. In
+`CAI_BaseNPC::GatherConditions` (`0x1026ec30`), senses and hostile-category conditions are gathered,
+the enemy-memory component refreshes its records, `ChooseEnemy` (`0x10279dd0`) runs, the
+new-enemy-condition repair at `0x1026fb40` runs, and only then are conditions for the committed
+current enemy gathered. Candidate discovery, memory, enemy choice and attack capability are
+separate stages.
+
+`BestEnemy` (`0x102743c0`) considers only a handle that resolves to a living actor other than self,
+passes the ordinary owner/flag and virtual `IsValidEnemy` gates, has relation `D_HT` or `D_FR`, and
+does not carry the eluded marker in enemy memory. It then arbitrates as follows:
+
+1. A reachable candidate beats an unreachable candidate.
+2. At the same reachability class, larger `IRelationPriority` wins.
+3. At equal priority, smaller integer enemy distance normally wins.
+4. Visibility modifies that last comparison: a visible candidate can displace a farther unseen
+   incumbent, while a closer unseen candidate displaces only an unseen incumbent. Selection is
+   therefore not simply nearest hostile actor.
+
+The current enemy is sticky. `ShouldChooseNewEnemy` (`0x10279d00`) declines a search when an
+unnamed internal bit at `+0x14bc` (`0x10000`) is set. Otherwise it searches immediately when there
+is no current enemy, when that actor is dead, when its enemy-memory record is marked eluded, or
+when `SEE_HATE` (`0x43`), `SEE_DISLIKE` (`0x45`), `SEE_NEMESIS` (`0x5b`) or `ENEMY_DEAD` (`0x58`)
+is present. A living, non-eluded current enemy with none of those conditions remains selected.
+Notably, this retail body does not test `SEE_FEAR`, although a remembered `D_FR` candidate is
+eligible in `BestEnemy`.
+
+Even a better candidate does not automatically pre-empt the behavior in progress. The active
+schedule's interrupt mask is consulted first: ordinary replacement needs `NEW_ENEMY` (`0x54`), an
+eluded/went-null path needs `LOST_ENEMY` (`0x47`), and a dead target needs `ENEMY_DEAD` (`0x58`). A
+schedule uninterested in the relevant condition keeps ownership and enemy choice is skipped; a
+null enemy under such a schedule produces a retail warning rather than a plausible fallback.
+This schedule gate is the starvation rule a one-frame global target scorer would miss.
+
+When the choice changes, `SetEnemy` (`0x10279a50`) first transfers the old handle through the
+last-enemy path and notifies the prior-enemy hook, then writes `m_hEnemy` at `+0x5ce0`; a non-null
+enemy is also registered with the response system. `ChooseEnemy` clears stale had-enemy/player
+memory, sets `ENEMY_DEAD` for a dead old target, sets or clears `NEW_ENEMY`, vacates an occupied
+strategy slot and forgets the previous LOS claim. An eluded target that resolves to null adds
+`LOST_ENEMY`, emits the lost-enemy sound hook, and fires `OnLostPlayer` or `OnLostEnemy` according
+to the remembered target kind. A non-null replacement records whether it is the player or another
+enemy. `OnFoundPlayer`/`OnFoundEnemy` belong to the sensory observation path; they are not aliases
+for the `m_hEnemy` write.
+
+This yields the implementation order:
+
+```text
+sense / hear / take damage / script relation
+  -> update category conditions and enemy-memory records
+  -> schedule interrupt-interest gate
+  -> ShouldChooseNewEnemy
+  -> BestEnemy eligibility and arbitration
+  -> SetEnemy plus last-enemy, condition, slot and lost-output effects
+  -> gather range, LOS, facing and attack conditions for that committed enemy
+  -> state and class schedule selection
+```
 
 ### Emotional disposition and social reaction are different domains
 
@@ -744,6 +811,77 @@ condition—decides whether a new stimulus may pre-empt the current behavior imm
 why a faithful AI cannot be implemented as a single global priority list with no current-task
 context.
 
+### Ordinary humanoid combat selection
+
+State 2 is the concrete combat branch. `CNPC_VHuman::SelectSchedule` (`0x10384ee0`) and the
+`CNPC_VHumanCombatant` override (`0x103872d0`) query the active weapon's capability bits. A weapon
+with `0x18000` enters virtual `+0x970`, the melee selector at `0x10385e40`; other weapons enter
+virtual `+0x974`, the ranged selector at `0x10386560`. A selector returning zero falls through to
+`CAI_BaseNPCTroika::SelectSchedule`, so the weapon policy composes with damage, door, fear and base
+state reactions rather than replacing them.
+
+The combat-facing condition identities needed by those bodies are fixed by the retail registry:
+
+| ID | Condition | ID | Condition |
+|---:|---|---:|---|
+| `0x0c` | `SHOULD_DODGE` | `0x0d` | `SHOULD_BLOCK` |
+| `0x0e` | `SHOULD_STEPBACK` | `0x0f` | `SHOULD_KICK` |
+| `0x28` | `KNOCKBACK` | `0x2f` | `WAITING_ATTACK_TIME` |
+| `0x3c` | `WEAPON_THROUGH_WALL` | `0x40` | `NO_PRIMARY_AMMO` |
+| `0x48` | `ENEMY_OCCLUDED` | `0x4a` | `HAVE_ENEMY_LOS` |
+| `0x4c` | `LIGHT_DAMAGE` | `0x4d` | `HEAVY_DAMAGE` |
+| `0x4e` | `REPEATED_DAMAGE` | `0x4f` | `CAN_RANGE_ATTACK1` |
+| `0x50` | `CAN_RANGE_ATTACK2` | `0x51` | `CAN_MELEE_ATTACK1` |
+| `0x52` | `CAN_MELEE_ATTACK2` | `0x59` | `ENEMY_UNREACHABLE` |
+| `0x5f` | `TOO_CLOSE_TO_ATTACK` | `0x60` | `TOO_FAR_TO_ATTACK` |
+| `0x63` | `WEAPON_BLOCKED_BY_FRIEND` | `0x66` | `WEAPON_SIGHT_OCCLUDED` |
+
+The melee selector is ordered policy, not a random attack picker. Scripted combat-mode and weapon
+switch gates run first, followed by door/class helpers. `SHOULD_DODGE` returns
+`SCHED_TROIKA_MELEE_DODGE` (`0xd5`); `SHOULD_BLOCK` returns
+`SCHED_TROIKA_MELEE_PREBLOCK` (`0xd6`). When kick and step-back are both requested, a binary random
+choice selects `SCHED_TROIKA_MELEE_KICK` (`0xdb`) or `SCHED_TROIKA_MELEE_STEPBACK` (`0xd3`);
+either condition outranks an ordinary attack. A usable
+`CAN_MELEE_ATTACK1` then chooses `SCHED_TROIKA_MELEE_ATTACK1` (`0xdc`) or its no-turn variant
+(`0xdd`). Remaining branches can switch to ranged (`0xe9`), take cover on unreachable enemy
+(`0x17`), idle in melee (`0xc7`), circle (`0xe0`/`0xe1`), use class helpers, advance
+(`0xca`/`0xcb`), or slow-advance (`0xd1`/`0xd2`) according to facing, distance, reachability and
+per-NPC timers. The selector retains timer state, so repeated ticks do not independently reroll
+every action.
+
+The ranged selector first honors a pending switch to melee (`0xe3`) and weapon/timing setup. A
+weapon protruding through a wall selects back-away (`0xb8`). Its class helpers then own dodge,
+door, cover and chase decisions. Attack-ready branches choose the registered range-attack shoot,
+range-attack, step-back and forced-range schedules (`0xec`–`0xf0`); no ammo, blocked line of fire,
+occlusion, excessive distance or an obstructing friend instead route through reload/hide,
+move-for-clear-shot (`0xbb`/`0xbd`), wait-for-clear-shot (`0xbc`), cover, chase (`0xb1`) or
+run-away (`0xb9`) policy. Exact fire and ammunition commit remains in the weapon controller: a
+schedule only establishes the task/activity that reaches its animation event.
+
+The selected schedules preserve the multi-update action contract:
+
+- `SCHED_TROIKA_CHASE_ENEMY` sets fail schedule `CHASE_ENEMY_FAILED`, tolerance 24, gets a path to
+  the enemy, forces relaxed locomotion, runs it and waits for movement. It interrupts on a new,
+  dead, unreachable, occluded or lost enemy; any newly available melee/ranged attack; too-close,
+  task-failed or better-weapon conditions. Pathing cannot monopolize an attack-ready NPC.
+- `SCHED_TROIKA_MELEE_ATTACK1`/`_NR` set melee-idle as failure, face, stop, then transfer to
+  `SCHED_TROIKA_MELEE_ATTACK1_SWING`. The ordinary form can still abort on too-far-for-melee;
+  both admit enemy death/loss, damage, being attacked, dodge and block before transfer. The swing
+  schedule has exactly `TASK_ANNOUNCE_ATTACK 1 -> TASK_MELEE_ATTACK1 0` and no interrupts, so once
+  that terminal attack task owns the NPC it is not reevaluated as a fresh attack choice each tick.
+- `SCHED_TROIKA_RANGE_ATTACK1` sets ignore-failure, stops, resolves a prior botch, faces, announces,
+  runs `TASK_RANGE_ATTACK1`, applies a zero base plus up-to-one-second finish wait, resolves botch,
+  then waits for attack time. It can be interrupted by new/dead enemy, light/heavy damage,
+  occlusion, no primary ammo or too-close-to-attack.
+- `SCHED_TROIKA_MELEE_PREBLOCK` stops then runs `TASK_MELEE_PREBLOCK`; melee dodge stops, runs
+  `TASK_MELEE_DODGE`, stops again and runs `TASK_MELEE_DODGE_ATTACK`. Both use melee-idle as their
+  failure schedule and interrupt only on lost enemy.
+
+These selectors define the minimum ordinary fight loop: acquire one committed enemy, derive
+attack/spacing/obstruction conditions, choose a schedule with current-schedule context, run its
+movement and attack tasks, let the weapon commit the hit, then feed the committed damage back into
+memory and conditions on the next decision pass.
+
 ## What fires when aggression begins
 
 ### Native incident chain
@@ -789,7 +927,8 @@ The base NPC exposes separate outputs for losing line of sight and losing the ac
 `OnLostEnemyLOS`, `OnLostEnemy`, `OnLostPlayerLOS`, and `OnLostPlayer`. The native object also
 retains last enemy and last-seen/heard state. Search, investigate, chase, and occlusion schedules
 can therefore continue after direct visibility ends. A rebuild must not collapse "not currently
-visible" into "forgotten and neutral."
+visible" into "forgotten and neutral." The player-specific debounce, including its ten failed
+committed-enemy LOS checks, is in [stealth.md](stealth.md).
 
 ## Authored NPC outputs
 
@@ -992,8 +1131,8 @@ authored-to-native mapping:
 |---:|---|
 | 0 | no forced state |
 | 1 | idle (1) |
-| 2 | combat (3) |
-| 3 | alert (2) |
+| 2 | alert (3) |
+| 3 | combat (2) |
 
 The non-identical numbering is load-bearing. Treating the keyvalue as the native enum would swap
 combat and alert.
@@ -1063,6 +1202,63 @@ feeding begin/end, and death. These are lifecycle states with different gameplay
 effects. Damage arithmetic and the health commit boundary are documented in
 [combat-and-damage.md](combat-and-damage.md); AI must consume the committed outcome and select the
 appropriate state/schedule/output without reimplementing the damage resolver.
+
+The ordinary NPC damage-to-AI transaction is now recovered. `CAI_BaseNPC::OnTakeDamageAlive`
+(`0x10265ed0`) first calls the shared combat-character health commit. On success it fires
+`OnDamaged`; when projected Source `m_iHealth` (`+0x210`) is no greater than half
+`m_iMaxHealth` (`+0x208`), it also offers `OnHalfHealth`. It records the attack position and
+attacker, updates enemy memory, and asks the class's light/heavy classifiers to set
+`LIGHT_DAMAGE` (`0x4c`) and `HEAVY_DAMAGE` (`0x4d`). Damage at `+0x5d94` is accumulated for a
+one-second window rooted at `+0x5d98`; exceeding 15 percent of Source max health sets
+`REPEATED_DAMAGE` (`0x4e`). The Troika alive override (`0x102beda0`) preserves the full incoming
+damage packet at `+0x660c`, gives a surviving attacker-memory record a five-second lifetime, and
+notifies the active schedule. A special NPC flag can force the death path; its authored semantic
+name remains unresolved.
+
+`OnDamaged` and `OnHalfHealth` are normal entity outputs: `FireOutput` enqueues their actions in
+`CEventQueue`. They do not recursively run a map-authored `SetRelationship` or Python payload in
+the middle of the damage body. Zero-delay actions are serviced in the queue pass after entity
+thinks, FIFO behind the equal-time cohort already queued; the native damage memory/conditions are
+therefore committed before an authored hostility consequence is observed by a later AI pass.
+
+Damage condition is not animation. The base idle/combat selectors may choose `SMALL_FLINCH`
+(`0x14`): remember the flinched state, stop, and execute `TASK_SMALL_FLINCH`. The alert selector
+chooses `TAKE_COVER_FROM_ORIGIN` (`0x19`) when the attack origin lies within its recovered facing
+test, otherwise `ALERT_SMALL_FLINCH` (`0x07`) when a usable flinch sequence exists, or merely
+`ALERT_FACE`. Separately, `CBaseCombatCharacter::DamageFlinch` (`0x103229d0`) randomly selects the
+head or torso hit activity, derives `hit_yaw` from the incoming vector relative to actor yaw, adds
+a random `[-30,+30]` degrees, and starts the gesture/layer with 0.1/0.3 fade values. Its complete
+firearm caller chain remains open.
+
+These reactions must not be collapsed:
+
+- melee **block stagger** is the opposed-roll heavy-block band and selects `ACT_BLOCK_HEAVY`;
+- a normal **hit/knockback** is the stronger unblocked melee outcome and can add impulse;
+- **light/heavy/repeated damage** are AI conditions that may interrupt and select a schedule;
+- **generic damage flinch** is a head/torso gesture/activity with hit direction; and
+- **incapacitation** is a derived-class lifecycle with its own outputs, not the half-health test or
+  a synonym for dying.
+
+After the alive commit and NPC response, `CBaseCombatCharacter::OnTakeDamage` (`0x1032ef60`)
+compares RPG `Health` damage against `Max_Health`. `Health < Max_Health` survives; at or above the
+pool it calls `Event_Killed`. The shared death body (`0x1032b9b0`) enters life state 1 (dying),
+cleans weapon/effect/ownership state, constructs the ragdoll-force envelope, and notifies killer
+and game rules. `CAI_BaseNPC::Event_Killed` (`0x10265ad0`) then:
+
+1. ignores a repeated call already in the death schedule;
+2. defers death when a non-interruptible scripted sequence owns the NPC, otherwise cancels script
+   ownership;
+3. cleans navigation, marks current/ideal NPC state 7 (dead), vacates strategy and squad state;
+4. fires `OnDeath` once through its `+0x5bd4` guard and notifies the AI death path; and
+5. emits death sound/solid-body policy and selects the death schedule.
+
+The Troika override (`0x102bf340`) composes game-specific cleanup around that base transaction:
+release the hint/claims and feed-related ownership, notify owning/maker systems, run Python
+`MarkAsDead('<targetname>')`, and update special partner/owner memory. The player uses a different
+outer path (`0x10163af0`): it ends conversations/controllers/grapples and active weapon state,
+notifies game rules, enters the player death action/screen (`vdata/Signs/death.txt`), and then uses
+the same combat-character death cleanup. NPC and player can therefore kill each other through one
+health threshold while retaining different AI, I/O and presentation consequences.
 
 ## What a complete game-side NPC AI requires
 
@@ -1211,9 +1407,9 @@ disposition, angles, interesting-place enablement, and groups. That is narrower 
 maker/NPC surface catalogued above. Full equipment, perception, squad, child I/O, and other maker
 inheritance remain part of the gap.
 
-The general native senses/memory, relationship priority arbitration, relationship consumers,
-high-level state/condition loop, combat schedule/task graph, class-specific combat policy, full
-follower policy, and RPG reaction-score model are not yet reconstructed.
+The general native senses/memory producers, recovered relationship-priority/enemy-selection
+consumers, high-level state/condition loop, combat schedule/task graph, class-specific combat
+policy, full follower policy, and RPG reaction-score model are not yet implemented in the rebuild.
 `aiscripted_schedule.StartSchedule` is presently a stub. Existing
 patrol, dialogue, sequence, animation, damage, and entity-I/O foundations should be extended at
 their existing ownership seams rather than replaced by a parallel NPC runtime.
@@ -1225,8 +1421,6 @@ in the declared roadmaps; source remains the as-built record.
 
 ### Native questions still requiring recovery
 
-- What is the exact priority arbitration when multiple relationship rows are applicable, including
-  equal priority and the corpus's out-of-diagnostic-range values?
 - What do all numeric values of `npc_perception`, investigation modes, and player conduct
   thresholds mean at their native consumers?
 - Which special flags and oblivious branches alter `IRelationType` before ordinary table lookup?
@@ -1236,6 +1430,8 @@ in the declared roadmaps; source remains the as-built record.
 - What is the precise movement/gait distinction between `aiscripted_schedule` modes 1/2 and 4/5?
 - What memory expiry and search rules govern lost LOS, lost enemy, and return to idle?
 - How do squad relation knowledge and `SQUAD_SEE_ENEMY` propagate and expire?
+- Which concrete ranged-impact paths call generic `DamageFlinch`, and which derived classes replace
+  the ordinary light/heavy/flinch policy?
 
 ### Controlled retail captures
 

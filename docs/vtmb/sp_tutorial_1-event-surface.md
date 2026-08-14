@@ -287,7 +287,7 @@ current step-3 Python handler; any output it fires rejoins the equal-time tail o
 | `trigger_autosave` | 1 | 0 | Establish a recovery point without player UI. | Must join the save architecture and avoid repeated saves while continuously occupied. |
 | `trigger_inventory_check` | 1 | 3 | Emit `OnPlayerHasItem` for an inventory-gated beat. | Recovered `StartTouch` accepts only a base-filtered player entry, then searches ordinary slots and keyring case-insensitively. It does not poll, test quantity, or disable itself; this map authors the one-shot outputs. |
 | `trigger_environmental_audio` | 16 | 0 | Change acoustic room/reverb state while crossing tutorial spaces. | All begin disabled and author room types `123` (8), `12` (1), `5` (3), `104` (2), `108` (1), and `11` (1). Plans must preserve trigger, SoundScheme `RoomDSP`, interior/exterior, and scripted-override precedence until RE30/RE31 close it. |
-| `trigger_stealth_mod` | 3 | 0 | Modify stealth detection/scoring inside authored regions. | Needs the faithful stealth observer and score contract; it is not equivalent to simply hiding the player. |
+| `trigger_stealth_mod` | 3 | 0 | Add a balanced Sneaking modifier while a combat character overlaps the region. | All three author `stealth_modifier=2`; enter adds, leave removes, overlapping raw contributions stack, and only the effective read clamps to `[-10,+10]`. Full observer contract: `stealth.md`. |
 
 ### 4.1 Trigger fidelity risks to keep explicit
 

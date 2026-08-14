@@ -36,8 +36,11 @@ type; per-resolution `Font_640`…`Font_1600` overrides are dropped. *Deps:* 8.6
 The stable HUD model, reticle/use icons, health, vitae droplets, Humanity/Masquerade, fade,
 cutscene suppression, contrast treatments, and queued item/quest notifications are landed.
 **Remaining:** equipment, disciplines and inventory selectors need authoritative gameplay data and
-command wiring; subtitles remain open. The HUD reads `FElysiumViewState` and discrete notifications
-from the same publisher only. *Deps:* 8.6, 4.4, 11.8.
+command wiring; the PP4 stealth readout slot needs a generation-checked observer handle, distance
+and committed detection state without running perception in presentation; subtitles remain open.
+The HUD reads `FElysiumViewState` and discrete notifications from the same publisher only. PP4 owns
+the snapshot consumer and cleared/absent state; 13.1 supplies the authoritative gameplay snapshot.
+Faithful observability: `docs/vtmb/stealth.md`. *Deps:* 8.6, 4.4, 11.8.
 
 ### 8.10 Accessibility & options backing
 

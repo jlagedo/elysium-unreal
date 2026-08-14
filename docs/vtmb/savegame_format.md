@@ -401,7 +401,9 @@ cooldowns), `m_iDisciplineCastCounter`, `m_bitsObfuscateRules`, `m_hProteanTrans
 
 **Stealth and light** — the lighting-driven visibility model, persisted per-limb:
 `m_flLightOnFeet`, `m_flLightOnCenter`, `m_flLightOnHead`, `m_flLightOnMe`,
-`m_flStealthVisionScalar`, `m_flStealthVisionCone`, `m_nNextLightPositionTest`.
+`m_flNextStealthUpdate`, `m_flStealthVisionScalar`, `m_flStealthVisionCone`,
+`m_flStealthHearingDist`, `m_nNextLightPositionTest`. Their update and observer semantics are in
+[stealth.md](stealth.md); restoring a sample triplet without its derived generation is invalid.
 
 **Movement calibration:** six 8-float tables — `m_flRunForwardSpeeds`, `m_flRunSideSpeeds`,
 `m_flWalkForwardSpeeds`, `m_flWalkSideSpeeds`, `m_flSneakForwardSpeeds`, `m_flSneakSideSpeeds` —

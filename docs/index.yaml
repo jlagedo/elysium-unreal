@@ -50,6 +50,7 @@ documents:
   - {path: vtmb/entity_io.md, kind: vtmb-fact, owner: entity I/O, subject: Source entity I/O}
   - {path: vtmb/computer-terminals.md, kind: vtmb-fact, owner: computer terminals, subject: computer terminal interaction hacking commands email and outputs}
   - {path: vtmb/inventory.md, kind: vtmb-fact, owner: inventory, subject: items inventory containers and barter}
+  - {path: vtmb/stealth.md, kind: vtmb-fact, owner: stealth, subject: player light target surface NPC visual and auditory detection modifier volumes and found or lost transitions}
   - {path: vtmb/sp_tutorial_1-event-surface.md, kind: research-brief, owner: game runtime, subject: sp_tutorial_1 authored event and script surface}
   - {path: vtmb/exported-map-event-surface.md, kind: research-brief, owner: game runtime, subject: current exported-map event surface beyond sp_tutorial_1}
   - {path: vtmb/entity_visuals.md, kind: vtmb-fact, owner: entity visuals, subject: placed visual entities and the render/shadow keyfields}

@@ -58,7 +58,7 @@ catalogue and the prose schemas in `docs/vtmb/game_runtime.md`.
 | Root key | File(s) | What |
 |---|---|---|
 | `ClanDataTables` | `clandoc000.txt` | clan definitions — disciplines, bonuses, banes, and the per-clan body models (`M_Body0..5`/`F_Body0..5`, the source the PC-body export draws from; `M_Hands`/`F_Hands` are separate hand models) |
-| `ClanDataTables` | `npctemplate000.txt`…`025` + 10 named (`_tutorial`, `_malkmansion`, …) — **36 files, 150 templates** | per-clan / per-map NPC stat templates. The `Attributes` block is the flat Attributes container, so **`Max_Health` is authored here as a literal** (`"20"` … `"819"`); a template omitting it inherits `stats.txt`'s `Default` 100 — this is the whole of an NPC's health track. **`ParentTemplateName` is single-parent inheritance** resolving across files (64 non-empty), so an absent trait key means *inherit*, not zero — `npctemplate_cdc.txt` is the minimal case, one `General` key over an empty `Attributes`. `npctemplate019/021.txt` are empty `ClanDataTables` |
+| `ClanDataTables` | `npctemplate000.txt`…`025` + 10 named (`_tutorial`, `_malkmansion`, …) — **36 files, 150 declarations / 149 distinct names** | per-clan / per-map NPC stat templates. The `Attributes` block is the flat Attributes container, so **`Max_Health` is the NPC's authored life capacity**. The patch-first census resolves 114 literal declarations, 23 through a parent, and 13 through `stats.txt`'s `Default` 100, with an effective range **1…1400**: `Scurrying`/`Rat` 1, `NPCGeneric`/`CivilianGeneric` 22, ordinary officers 100, `Bach` 440, `SheriffMan` 570, `Gargoyle` 800, `Tutorial_Jack` 819, `ManBat` 880, `Hengeyokai` 968, `MingXiao` 1400. **`ParentTemplateName` is single-parent inheritance** resolving across files (64 non-empty), so an absent trait key means *inherit*, not zero — `npctemplate_cdc.txt` is the minimal case, one `General` key over an empty `Attributes`. The duplicate declaration is identical-health `Test_Mle5_Def1_Sok5`; `npctemplate019/021.txt` are empty `ClanDataTables`. Reproduce with `uv run elysium research npc_health_census <export>/vdata/system` |
 | `HistoryDataTables` / `HistoryData` | `histories000.txt`, `history.txt` | the History background-trait system |
 | `CharCreateWizard` | `charcreatewizard.txt` (78 KB) | chargen personality-quiz → clan scoring (`Traits`/`TraitCombinations`/`TraitOrderings`, **85** `Popup`s in 10 groups, `Clan_Tables.ClanNode` + the 3×3 `ConnectionScores` matrix) — **RE25 done**, read by `client.dll`. 78 popups author a bare `Popup` line and 7 carry a trailing `// restored by wesp` / `// added by wesp`, so a count by line shape undercounts exactly the patch's restorations. A group's `Defaults` block is popup-shaped and every member inherits from it field by field, **including the positional `Action` list**. Parsed by `FElysiumWizard` |
 | `CharEditor` | `chareditor.txt` | char-editor config — two keys, `Music "music/Vampire_Theme.mp3"` + `Music_Volume "1.0"`; nothing else |
@@ -126,8 +126,8 @@ places start disabled, so enable state is behavioral data rather than an editor-
 
 | Root key | File(s) | What |
 |---|---|---|
-| `StealthData` | `stealth.txt` | detection model |
-| `StealthKillRules` | `stealthkillrules.txt` | insta-kill eligibility |
+| `StealthData` | `stealth.txt` | selected 11×11 light/Sneaking visual-range and cone matrices plus hearing-distance and light-threshold vectors; runtime transaction: `stealth.md` |
+| `StealthKillRules` | `stealthkillrules.txt` | stealth-kill victim/deaf-zone eligibility; native consumer recovery remains open |
 
 ### Audio / FX
 

@@ -511,8 +511,9 @@ save-backed through the leaf `Serialize` (K8). K4 holds: this table is combat ta
 
 **5.5.3 Senses, stimulus, memory.** Two inputs and one memory:
 
-- **Sight** — a per-think cone/range/LOS test using the spec's `vision`/`npc_perception`
-  tuning; the lighting/stealth contribution joins from §5.9's scalars.
+- **Sight** — range/cone admission using the spec's `vision`/`npc_perception` tuning and
+  §5.9's target scalars, followed by the recovered closest-player LOS cache and committed-enemy
+  debounce.
 - **Hearing** — the substrate **sound-event bus**: any domain emits
   `EmitGameSound(pos, category, radius, source)` (categories and radii from
   `sound_volume_table.txt`: quiet 180 / normal 240 / loud 1200 non-occluded, plus the named
@@ -521,12 +522,12 @@ save-backed through the leaf `Serialize` (K8). K4 holds: this table is combat ta
   occlusion state, with **lost-LOS distinct from lost-target** (the four
   `OnLost*` outputs need both).
 
-Only sight crosses the seam, and it crosses as a query (K13): the service answers whether a
-line of sight exists between two points, and the cone, the range, the `vision`/`npc_perception`
-scalars and §5.9's lighting contribution are all applied in the substrate on that answer.
-Hearing needs no service at all — the bus, its radii and the intersection test are substrate
-throughout — and memory is leaf state (K8). A service that answered *this NPC can see the
-player* would have taken the decision instead of supplying its one missing term.
+Sight and player-light sampling cross the seam only as queries (K13): the service answers light at
+a point and whether line of sight exists between two points; cone, range, cadence, grace,
+`vision`/`npc_perception`, and §5.9's target scalars remain substrate rules. Hearing needs no
+service at all — the bus, its stealth-adjusted radii and the intersection test are substrate
+throughout — and memory is leaf state (K8). A service that answered *this NPC can see the player*
+would have taken the decision instead of supplying its missing world term.
 
 **5.5.4 Conditions, states, schedules.** A plain-C++ kernel in
 `Substrate/ElysiumNpcMind.{h,cpp}`, owned by `FElysiumNpc`, run from its think:
@@ -585,7 +586,7 @@ Dialogue }`. The existing patrol, interesting-place, and scripted-sequence parti
 parallel states; transfer, failure and restoration are arbiter transitions, and the owner
 serializes. `aiscripted_schedule` lands here with the recovered mode table (move-to-goal /
 assign-enemy-with-condition / follow-path) and the **non-identical** `forcestate` mapping
-(authored 2 = combat, 3 = alert).
+(authored 2 = native alert state 3, authored 3 = native combat state 2).
 
 The arbiter issues generation-checked transient tokens. Patrol is resumable, ambient owns only a
 successfully claimed place, sequence explicitly parks an autonomous owner, and dialogue releases
@@ -709,10 +710,13 @@ carries a marked placeholder behind the same seam.
 
 ### 5.9 Stealth
 
-`stealth.txt`'s light-to-visibility and view-cone scalars load into the rulebook and join
-§5.5.3's sight test; sneak posture is a movement/gait state publishing into the vitals view
-(S8); `trigger_stealth_mod` writes zone modifiers consumed by the same sight test. No second
-detection system exists — stealth is a parameter set on the one senses service. Roadmap 13.1.
+`stealth.txt`'s four tables load into the rulebook. One player-owned target surface retains the
+three-point light sample cycle and publishes sight-range scalar, cone scalar, and hearing-distance
+reduction. Sneak posture is movement/gait state; `trigger_stealth_mod` owns balanced overlap
+contributions to the Sneaking feat. §5.5.3 consumes the resulting target surface in its one senses,
+memory and enemy transaction. The HUD receives only a generation-checked observer snapshot after
+gameplay commits; it never runs perception. Exact retail cadence, thresholds, grace and outputs:
+[stealth.md](../vtmb/stealth.md). Roadmap 13.1.
 
 ## 6. The refactor ledger
 
