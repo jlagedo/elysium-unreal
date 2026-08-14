@@ -53,11 +53,13 @@ assertion it was making.
 VtMB and work roots have no repository-relative fallback. Resolution and user-facing
 configuration are owned by `uv run elysium` and `.elysium.local.env`.
 
-`elysium_pipeline.lanes` owns detached QA worktrees and their metadata;
-`elysium_pipeline.workspace_lock` owns the cross-process generated-state lease. A lane's
-ignored local environment points at `$ELYSIUM_WORK_ROOT/lanes/<lane>` so exports, logs,
+`elysium_pipeline.task_worktrees` owns mutable detached agent-task worktrees and their
+primary-checkout command boundary. `elysium_pipeline.lanes` owns immutable detached QA
+worktrees and their evidence metadata; `elysium_pipeline.workspace_lock` owns the
+cross-process generated-state lease. Their ignored local environments point at dedicated
+children of `$ELYSIUM_WORK_ROOT/worktrees/` or `$ELYSIUM_WORK_ROOT/lanes/`, so exports, logs,
 reports, build output, generated packages, and dependency trees are never shared with the
-development checkout. The UE and VtMB roots remain shared inputs.
+primary checkout. The UE and VtMB roots remain shared inputs.
 
 ## Coordinate contract
 

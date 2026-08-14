@@ -140,6 +140,11 @@ pickup passes that entity into the combat-character add/equip route: it acquires
 compact inventory position rather than being replaced by a classname token. Item-data policy and
 class behavior decide whether it can be accepted or merged.
 
+**Remaster divergence — explicit owner call:** loose items retain that retail touch ingress and
+also expose the same acquisition transaction through the camera-targeted `+use` seam. The open-hand
+context icon advertises the action, making tabletop items reachable and giving keyboard, mouse and
+controller input one semantic pickup action; this does not replace or duplicate item ownership.
+
 Player `GiveNamedItem` creates and spawns the named entity, then invokes the same item/weapon equip
 path. `Weapon_Equip` calls `Inventory_Add`, performs the active-weapon switch for wieldable items,
 and invokes the item's equip callback. Python `GiveItem` reaches this player-only service through

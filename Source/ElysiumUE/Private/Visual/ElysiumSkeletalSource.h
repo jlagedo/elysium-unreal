@@ -110,6 +110,17 @@ struct FElysiumSourceClip
 	TArray<FElysiumSourceTrack> Tracks;
 };
 
+/** One baked-native recipe for the stock AnimDynamics hair proof. */
+struct FElysiumSourceHairDynamicsChain
+{
+	FName BoundBone;
+	FName ChainEnd;
+	float GravityScale = 1.0f;
+	float Damping = 0.9f;
+	float AngularSpring = 0.0f;
+	float ConeAngleDegrees = 0.0f;
+};
+
 struct FElysiumSkeletalSource
 {
 	TArray<FElysiumSourceBone> Bones;
@@ -122,6 +133,8 @@ struct FElysiumSkeletalSource
 	/** De-duplicated across the file; a clip references one by index. */
 	TArray<FElysiumSourceMask> Masks;
 	TArray<FElysiumSourceClip> Clips;
+	/** Optional, exact-model allow-listed hair recipes; absent on every body outside the proof. */
+	TArray<FElysiumSourceHairDynamicsChain> HairDynamics;
 
 	/**
 	 * Read a whole `.eskm` off disk. Returns false with a reason in OutError; a truncated or

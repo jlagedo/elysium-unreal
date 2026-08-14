@@ -276,6 +276,44 @@ look-at, **roll** (`0x194`) and **FOV** (`0x198`) all lerp by that weight, and i
 `+0x118`), optionally reversed — i.e. cutscene cameras get an explicit start time and duration,
 unlike the toggle's fixed-rate blend.
 
+### The ordinary feed camera is automatic
+
+The feed-family weight at `+0x138` is a separate layer over the ordinary third-person result. In
+the ordinary feed state, `0x100fc900` increases it by `dt` and clamps it to `[0, 1]`; after the
+state clears, it decreases by the same `dt`. Entry and exit therefore each take one second under
+the player's time scale. The same updater forces the third-person weight upward at `2*dt`. When
+feed weight first leaves zero it stores the engine time at `+0x13c` and the current view yaw at
+`+0x140`; on exit it captures the outgoing camera state so a reversal continues from that state
+rather than cutting. The feed layer is consumed through `SimpleSpline(weight)`. `[VtMB]`
+
+The ordinary branch of the dedicated solver `0x100fe7f0` uses
+
+```text
+t       = max(0, (engine_time - entry_time) * player_time_scale)
+yaw     = entry_yaw + camfeed_yaw * t
+pitch   = min(camfeed_pitch_max,
+              camfeed_pitch - camfeed_pitch * pow(camfeed_pitch_pow1,
+                                                    camfeed_pitch_pow2 * t))
+roll    = camfeed_roll
+offset  = camfeed_forward_base * pow(t, camfeed_forward_pow)
+```
+
+The retail defaults are `camfeed_yaw=50`, `camfeed_pitch=80`,
+`camfeed_pitch_max=60`, `camfeed_pitch_pow1=2`, `camfeed_pitch_pow2=-0.35`,
+`camfeed_roll=0`, `camfeed_forward_base=-50` and `camfeed_forward_pow=0.5`. Thus the view makes a
+full yaw revolution in 7.2 seconds, pitch starts at zero and reaches its 60-degree clamp after
+about 5.714 seconds, and the camera recedes by `50*sqrt(t)` along the computed view direction. The
+resulting angles and offset are eased over the previously solved view by the spline-weighted helper
+at `0x100fe600`. Registered `camfeed_yaw_end=2.0` and `camfeed_pitch_min=0` have no reads in this
+ordinary solver. `[VtMB]`
+
+No current mouse/look angle participates after `entry_yaw` is captured. The rendered feed camera is
+therefore **look-locked and automatically orbiting**, even if lower-level input state continues to
+update. The solver performs no trace or collision query: ordinary third-person collision solves
+first, then the feed layer overwrites/blends the view. The exact suppression of non-look gameplay
+buttons remains a separate input question. The desaturated circular feeding-view renderer driven by
+the same weight is specified in `docs/vtmb/feeding.md`.
+
 ---
 
 ## 4. The third-person solve
@@ -294,8 +332,8 @@ unlike the toggle's fixed-rate blend.
 5. If the third weight is > 0, run the solver `0x100fd350`; otherwise mark the camera as needing
    a re-seed on the next entry (a flag at `+0x4`, which makes the spring damper snap rather than
    ease when third person is re-entered).
-6. If the feed weight (`0x138`) or the second weight (`0x108`) is > 0, run those solvers
-   (`0x100fdfa0`, `0x100fe7f0`).
+6. If the second weight (`0x108`) is > 0, run `0x100fdfa0`; if the feed-family weight (`0x138`)
+   is > 0, run `0x100fe7f0`.
 7. Compute the player-model alpha (below).
 
 The solver `0x100fd350`:
@@ -841,8 +879,9 @@ arriving is the *weight ramp*; the shot itself starts where it was authored.
 - The player-class gate `vtable +0x250` (`0x1009b210`) — what makes third person unavailable.
 - The weapon-class bit meanings at player record `+0x2440` (`1`, `2`, `4`, `8`, `0x10`) and the
   record fields `+0x24d0` (holster gate) and `+0x4fe84` (sniper state).
-- The feed / seduction / death camera solvers `0x100fdfa0` and `0x100fe7f0`, and the
-  `camfeed_*` / `camseduct_*` / `camdead_*` cvar families that drive them.
+- The semantic identities and exact formulas of the non-ordinary branches within feed-family
+  solver `0x100fe7f0`: player state `0x20` selects `camseduct_*`, while `0x400` selects
+  `camdead_*`; their presence and routing are recovered, but their complete solves are not.
 - The player-state flag at `+0x16f0` and predicate `0x10192850` that quantise the model alpha.
 
 Server-side, in the camera-track system (§6, `vampire.dll`):

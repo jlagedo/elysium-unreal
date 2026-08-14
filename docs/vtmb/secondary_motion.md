@@ -143,6 +143,20 @@ source-to-generated comparisons show:
 | `Damsel` / `damselupperhair` + `damsaellowerhair` | 304 | head/neck plus `Bone01`…`Bone19` chain weights | 7 records; five 15° hair chains and two 30° roots |
 | `VV` / `vv_hair` + `vv_hair_t` | 599 | head/neck plus the same numbered hair-chain family | 11 ten-degree hair records plus two 25° body records |
 
+The two bodies selected for the bounded Unreal hair proof carry these exact head-parented records:
+
+| Body | First-child route | gravity | damping | spring exponent | maximum |
+|---|---|---:|---:|---:|---:|
+| `malkavian_female_armor_0` | `Bone05` → `Bone06` → `Bone07` → `Bone08` → `Bone09` | 0.9 | 0.9 | 0.3 | 60° |
+| `jeanette` | `Bone01` → `Bone03` → `Bone05` → `Bone06` → `Bone07` | 1.1 | 0.9 | 0.0 | 30° |
+| `jeanette` | `Bone09` → `Bone10` → `Bone11` → `Bone12` → `Bone13` | 1.1 | 0.9 | 0.0 | 30° |
+
+Every first moving bone above is parented to `Bip01 Head`. The same two model files also carry
+breast records, which are independent records and are not hair. Jeanette's skirt is independent
+again: it uses the renderer-cloth carrier, not either bone route. The other three Malkavian female
+armour bodies are different model inputs and are not implied by the armour-0 record. **Standing:
+Verified** from the installed v2531 records and bone trees.
+
 The animation clips leave the affected chain locals at bind in the captured cases. The
 table-driven stage supplies the dynamic orientation; StudioRender then applies it only to vertices
 whose skin weights reference those bones. A head-rigid hair cap and a dynamic strand can therefore

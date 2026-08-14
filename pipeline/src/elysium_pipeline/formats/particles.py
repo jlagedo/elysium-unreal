@@ -24,7 +24,7 @@ class ParticleContractError(ValueError):
 
 _PARTICLE_KEYS = {
     "loop", "precipitation", "spawn", "sprite", "frames", "min_frames", "max_frames",
-    "fps", "movealign", "flat",
+    "fps", "movealign", "flat", "sortfront",
     "x_speed", "y_speed", "z_speed", "size", "height", "width", "rotation", "color",
     "mask", "collide", "red", "green", "blue", "burst",
     "parent_speed", "radius_speed", "elevation_speed", "theta_speed", "phi_speed",
@@ -32,7 +32,7 @@ _PARTICLE_KEYS = {
 }
 _SPAWN_KEYS = {
     "particle", "rate", "burst", "loop", "radius", "theta", "phi", "friction", "bounce",
-    "x", "y", "z",
+    "x", "y", "z", "depth_offset",
 }
 _COLLIDE_KEYS = {"spawn", "decal"}
 _DECAL_KEYS = {"particle"}
@@ -119,6 +119,11 @@ def _compile_spawn(block: dict[str, Any], where: str) -> dict[str, Any]:
     for key in ("theta", "phi"):
         if key in block:
             result[key + "_degrees"] = _curve(block[key], where + "." + key)
+    if "depth_offset" in block:
+        # The renderer-specific unit is still unresolved, exactly as it is on a drawing particle.
+        # Preserve the authored scalar on the spawn edge; the current Niagara flattening does not
+        # pretend it is a world-space length.
+        result["depth_offset"] = _curve(block["depth_offset"], where + ".depth_offset")
     # Cartesian spawn offset, in the same Source frame as the velocities — so `y` takes the same
     # reflection `y_speed` does.
     offset = {}
@@ -151,11 +156,15 @@ def compile_definition(name: str, text: str) -> tuple[dict[str, Any], set[str], 
         result["sprite"] = sprite
         sprite_refs.add(sprite)
     # A fixed lifetime, or a min/max pair drawn per particle. Both are counts of frames, paced by
-    # `fps` where one is given.
+    # `fps` where one is given. Spawn-only wrapper definitions use `frames 0`: they do not render a
+    # sprite of their own, so zero states that the wrapper itself has no lifetime-bearing frame.
     for key in ("frames", "min_frames", "max_frames"):
         if key in body:
             value = int(_finite(body[key], name + "." + key))
             if value <= 0:
+                if key == "frames" and value == 0 and "sprite" not in body:
+                    result[key] = 0
+                    continue
                 raise ParticleContractError(f"{name}.{key}: must be positive")
             result[key] = value
     if "fps" in body:
@@ -166,6 +175,13 @@ def compile_definition(name: str, text: str) -> tuple[dict[str, Any], set[str], 
     for key in ("movealign", "flat"):
         if key in body:
             result[key] = _bool(body[key], name + "." + key)
+    if "sortfront" in body:
+        # Disabled `sortfront` is inert and occurs throughout the authored Sheriff/wolf closure.
+        # Enabled sorting changes translucent draw order and needs a separately recovered Niagara
+        # representation; accepting it without one would silently change the effect.
+        result["sortfront"] = _bool(body["sortfront"], name + ".sortfront")
+        if result["sortfront"]:
+            raise ParticleContractError(f"{name}.sortfront: enabled sorting is unsupported")
 
     velocity = {}
     for source_key, target_key, negate in (
@@ -287,6 +303,11 @@ def compile_closure(
 MAP_PARTICLE_SCHEMA = "elysium.map-particles"
 MAP_PARTICLE_VERSION = 1
 
+# Named animation events can create these in any map even when no env_particle entity places them.
+# Keeping the roots in the map closure makes their game-derived definitions and sprites follow the
+# same generated Niagara path as authored map emitters.
+GAMEPLAY_PARTICLE_ROOTS = ("force_feeding_emitter",)
+
 
 def _int_key(keys: dict[str, Any], name: str, default: int = 0) -> int:
     raw = str(keys.get(name, "")).strip()
@@ -320,10 +341,7 @@ def build_particle_document(
     """
 
     entities = _env_particles(entity_document)
-    if not entities:
-        return None
-
-    roots = sorted({
+    roots = sorted(set(GAMEPLAY_PARTICLE_ROOTS) | {
         _name(entity["keys"]["particle_definition"], "env_particle.particle_definition")
         for entity in entities
     })
@@ -384,7 +402,7 @@ def build_particle_document(
 
 
 def write_particles(map_name: str, out_dir, entity_document: dict, idx):
-    """Write ``<map>.particles.json``, or nothing when the map places no ``env_particle``."""
+    """Write ``<map>.particles.json`` for placed emitters and global gameplay-event roots."""
 
     import json
     from pathlib import Path

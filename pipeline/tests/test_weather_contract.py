@@ -226,6 +226,9 @@ class MapParticleDocumentTests(unittest.TestCase):
     DEFINITIONS = {
         "good_emitter": 'Particle { loop 1 spawn { particle good_fx burst 4 } }',
         "good_fx": 'Particle { frames 10 sprite spark size 1 }',
+        "force_feeding_emitter":
+            'Particle { frames 10 spawn { particle force_feeding_fx1 burst 20 } }',
+        "force_feeding_fx1": 'Particle { frames 10 sprite spark size 4 }',
         # Uses a key the contract has not established.
         "broken_emitter": 'Particle { frames 10 sprite spark sortfront 1 }',
     }
@@ -273,9 +276,38 @@ class MapParticleDocumentTests(unittest.TestCase):
         # The emitter is still listed, so the map records what it wanted to play.
         self.assertEqual(document["emitters"][2]["particle_definition"], "broken_emitter")
 
-    def test_a_map_with_no_emitters_writes_nothing(self):
-        self.assertIsNone(particles.build_particle_document(
-            "empty", {"entities": []}, self.DEFINITIONS.get, {"spark"}.__contains__))
+    def test_a_map_with_no_entities_still_bakes_gameplay_event_roots(self):
+        document = particles.build_particle_document(
+            "empty", {"entities": []}, self.DEFINITIONS.get, {"spark"}.__contains__)
+        self.assertEqual(document["emitters"], [])
+        self.assertEqual(document["particles"]["roots"], ["force_feeding_emitter"])
+        self.assertIn("force_feeding_fx1", document["particles"]["definitions"])
+
+    def test_spawn_wrapper_accepts_zero_frames_and_inert_sortfront(self):
+        wrapper, refs, sprites = particles.compile_definition(
+            "muzzleflash_emitter_up",
+            'Particle { frames 0 spawn { particle W_thirtyeight_flash-1 burst 1 '
+            'z 12 depth_offset 1 } }',
+        )
+        child, child_refs, child_sprites = particles.compile_definition(
+            "W_thirtyeight_flash-1",
+            'Particle { frames 2 sprite flash sortfront 0 }',
+        )
+        self.assertEqual(wrapper["frames"], 0)
+        self.assertEqual(refs, {"w_thirtyeight_flash-1"})
+        self.assertEqual(sprites, set())
+        self.assertEqual(wrapper["spawns"][0]["depth_offset"]["values"], [1.0])
+        self.assertAlmostEqual(wrapper["spawns"][0]["offset_cm"]["z"]["values"][0], 30.48)
+        self.assertFalse(child["sortfront"])
+        self.assertEqual(child_refs, set())
+        self.assertEqual(child_sprites, {"flash"})
+
+        with self.assertRaisesRegex(particles.ParticleContractError, "sortfront"):
+            particles.compile_definition(
+                "sorted_fx", 'Particle { frames 2 sprite flash sortfront 1 }'
+            )
+        with self.assertRaisesRegex(particles.ParticleContractError, "frames"):
+            particles.compile_definition("zero_sprite", 'Particle { frames 0 sprite flash }')
 
 
 class HeightTextureTests(unittest.TestCase):

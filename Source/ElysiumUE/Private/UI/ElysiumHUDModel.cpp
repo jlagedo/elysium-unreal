@@ -21,6 +21,9 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	BloodCapacity = View.Vitals.MaxBloodPool;
 	Humanity = View.Vitals.Humanity;
 	Masquerade = View.Vitals.Masquerade;
+	bFeedVictimVisible = View.Feed.bVisible;
+	FeedVictimBlood = View.Feed.BloodPool;
+	FeedVictimBloodCapacity = View.Feed.MaxBloodPool;
 	UseIcon = View.Interaction.Icon;
 	UsePromptAlpha = View.Interaction.bVisible ? View.Interaction.PromptAlpha : 0.0f;
 	bUseActionable = View.Interaction.bActionable;

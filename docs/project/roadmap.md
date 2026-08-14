@@ -100,7 +100,8 @@ P3/P7 look lanes, 10.1–10.5 and asset enhancement — re-sequenced then.
 - [x] **CAP5.3 Missing-data ranges closed at the exporter** — blend grids exported and baked
   → `docs/vtmb/animation_and_movers.md` A.3.
 - [ ] **[CAP5.4 Adjudicate the persistent partial update](plans/capture.md)**
-- [~] **[CAP5.5 Secondary motion](plans/capture.md)** — solves located; numeric replays open
+- [~] **[CAP5.5 Secondary motion](plans/capture.md)** — two-body AnimDynamics proof wired;
+  numeric replays and calibration open
   → `docs/vtmb/secondary_motion.md`.
 - [ ] **[CAP5.6 Theatre-corpus closure](plans/capture.md)**
 - [x] **CAP5.7 The shipped multi-biped path modelled** — 180,812 agreeing / 0 disagreeing.

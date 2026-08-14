@@ -134,6 +134,57 @@ using ElysiumSaveTestHelpers::SaveTestCounterValue;
 
 namespace
 {
+	struct FFeedCameraRecordingService final : IElysiumCameraService
+	{
+		int32 AcquireCount = 0;
+		int32 ReleaseCount = 0;
+		FElysiumCameraRequest LastRequest;
+		FElysiumCameraHandle LiveHandle;
+		FElysiumResolvedCameraState Resolved;
+
+		virtual FElysiumCameraHandle AcquireCamera(const FElysiumCameraRequest& Request) override
+		{
+			++AcquireCount;
+			LastRequest = Request;
+			LiveHandle.Reset();
+			LiveHandle.Slot = 1;
+			LiveHandle.Generation = static_cast<uint32>(AcquireCount);
+			LiveHandle.Epoch = 1;
+			Resolved.bActive = true;
+			Resolved.Handle = LiveHandle;
+			Resolved.Request = Request;
+			return LiveHandle;
+		}
+		virtual bool UpdateCamera(FElysiumCameraHandle Handle,
+			const FElysiumCameraRequest& Request) override
+		{
+			if (Handle != LiveHandle) return false;
+			LastRequest = Request;
+			Resolved.Request = Request;
+			return true;
+		}
+		virtual bool ReleaseCamera(FElysiumCameraHandle Handle) override
+		{
+			if (Handle != LiveHandle) return false;
+			++ReleaseCount;
+			LiveHandle.Reset();
+			Resolved.bActive = false;
+			Resolved.Handle.Reset();
+			return true;
+		}
+		virtual bool IsCameraLive(FElysiumCameraHandle Handle) const override
+		{
+			return Handle.IsSet() && Handle == LiveHandle;
+		}
+		virtual bool EvaluateDialogueCandidate(const FElysiumCameraRequest&, FString&) const override
+		{
+			return true;
+		}
+		virtual bool DialogueCamerasEnabled() const override { return false; }
+		virtual void GetDialogueProfiles(TArray<FElysiumDialogueCameraProfile>&) const override {}
+		virtual const FElysiumResolvedCameraState& ResolvedCamera() const override { return Resolved; }
+	};
+
 	// A victim and three counters wired off its feed/death outputs. The player is spawned by each
 	// test that wants the ordinary retail attacker.
 	FElysiumEntityDefs MakeFeedTestDefs()
@@ -211,6 +262,61 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		TestEqual(*FString::Printf(TEXT("interval after %d steps"), Step + 1), Interval,
 			Expected[Step], 1e-4f);
 	}
+
+	// --- The complementary ordinary pair, pure -----------------------------------------------
+	{
+		using Height = ElysiumFeed::EPartnerHeight;
+		using Side = ElysiumFeed::ESide;
+		const ElysiumFeed::FClipPair Tutorial = ElysiumFeed::ResolveClipPair(
+			EElysiumFeedPhase::Release, Height::Taller, Side::Front);
+		TestEqual(TEXT("a shorter attacker selects the captured tall-victim release"),
+			Tutorial.Attacker, FString(TEXT("feeding_attacker_tallvictim_front_feed_release")));
+		TestEqual(TEXT("the victim receives the complementary short-attacker release"),
+			Tutorial.Victim, FString(TEXT("feeding_victim_shortattacker_front_feed_release")));
+		TestEqual(TEXT("the captured release lasts 68 frames at 30 fps"),
+			ElysiumFeed::PhaseSeconds(EElysiumFeedPhase::Release, Height::Taller),
+			68.0f / 30.0f, 1e-5f);
+		TestEqual(TEXT("the captured release event is at its authored cycle"),
+			ElysiumFeed::EventCycle(EElysiumFeedPhase::Release, Height::Taller),
+			0.328358f, 1e-6f);
+
+		const ElysiumFeed::FClipPair Reverse = ElysiumFeed::ResolveClipPair(
+			EElysiumFeedPhase::Loop, Height::Shorter, Side::Back);
+		TestEqual(TEXT("the reverse height/side cell resolves on the attacker"), Reverse.Attacker,
+			FString(TEXT("feeding_attacker_shortvictim_back_feed_loop")));
+		TestEqual(TEXT("...and stays complementary on the victim"), Reverse.Victim,
+			FString(TEXT("feeding_victim_tallattacker_back_feed_loop")));
+		TestEqual(TEXT("an equal-height tie has one deterministic attacker cell"),
+			static_cast<int32>(ElysiumFeed::VictimHeightFor(180.0f, 180.0f)),
+			static_cast<int32>(Height::Shorter));
+	}
+
+	// --- Paired input keeps look and the toggle, not body/combat intent -----------------------
+	{
+		FElysiumUserCmd Cmd;
+		Cmd.Seq = 7;
+		Cmd.DeltaSeconds = 0.016f;
+		Cmd.Move = FVector2D(1.0, -0.5);
+		Cmd.Up = 1.0f;
+		Cmd.LookDelta = FVector2D(4.0, -2.0);
+		Cmd.Buttons = EElysiumButton::Forward | EElysiumButton::Attack;
+		Cmd.Buttons |= static_cast<uint64>(EElysiumButton::Use);
+		Cmd.Buttons |= static_cast<uint64>(EElysiumButton::Feed);
+		const FElysiumUserCmd Gated = ElysiumFeed::GatePairedUserCmd(Cmd);
+		TestTrue(TEXT("paired input removes analog movement"), Gated.Move.IsNearlyZero());
+		TestEqual(TEXT("paired input removes vertical movement"), Gated.Up, 0.0f);
+		TestTrue(TEXT("paired input locks look"), Gated.LookDelta.IsNearlyZero());
+		TestTrue(TEXT("paired input preserves the second Feed press"),
+			Gated.IsDown(EElysiumButton::Feed));
+		TestFalse(TEXT("paired input suppresses attack"), Gated.IsDown(EElysiumButton::Attack));
+		TestFalse(TEXT("paired input suppresses use"), Gated.IsDown(EElysiumButton::Use));
+	}
+	TestEqual(TEXT("female attacker feed start resolves through the character sound mirror"),
+		ElysiumFeed::AudioPath(false, false, TEXT("start")),
+		FString(TEXT("Character/Female/feed_on_start.wav")));
+	TestEqual(TEXT("male victim feed loop resolves its complementary activity"),
+		ElysiumFeed::AudioPath(true, true, TEXT("loop")),
+		FString(TEXT("Character/Male/fed_upon_loop.wav")));
 
 	// --- The unit transaction's two independent decisions, pure --------------------------------
 	// Healing is still evaluated when the feeder's pool is full; the successful-blood counter is
@@ -309,7 +415,10 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	// --- Toggle-style command routing ----------------------------------------------------------
 	{
 		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FFeedCameraRecordingService Camera;
+		FElysiumWorldServices Bundle = Services.Bundle();
+		Bundle.Camera = &Camera;
+		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
 		World.Load(MakeFeedTestDefs());
 		World.SpawnPlayer();
 		World.Activate(0.0);
@@ -336,6 +445,15 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		World.UpdatePlayerFeed();
 		TestTrue(TEXT("the first feed press starts the pair"), Player->IsFeedPaired());
 		TestTrue(TEXT("the new pair owns its continuation latch"), Player->FeedState.bContinuation);
+		TestEqual(TEXT("accepted feeding acquires one semantic camera request"), Camera.AcquireCount, 1);
+		TestEqual(TEXT("the request is the existing Feed camera kind"),
+			static_cast<int32>(Camera.LastRequest.Kind),
+			static_cast<int32>(EElysiumCameraRequestKind::Feed));
+		TestTrue(TEXT("the feed request keeps the HUD visible"), Camera.LastRequest.bShowHud);
+		TestFalse(TEXT("the feed request hides the first-person viewmodel"),
+			Camera.LastRequest.bDrawViewmodel);
+		TestTrue(TEXT("the feed request shows the paired player body"),
+			Camera.LastRequest.bShowPlayerBody);
 
 		// The patch's vm_feed producer emits this edge 0.1 seconds after the press. It releases the
 		// command button only; the paired action must keep running.
@@ -370,10 +488,26 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		World.QueuePlayerFeedEdge(EElysiumUseEdge::Released);
 		World.UpdatePlayerFeed();
 		TestTrue(TEXT("the second button release is inert"), Player->IsFeedPaired());
+		const float ReleaseEventDeadline = Player->FeedState.PhaseDeadline;
 		Advance(static_cast<double>(Player->FeedState.PhaseDeadline) + 0.01);
-		TestFalse(TEXT("the release event tears the pair down"), Player->IsFeedPaired());
+		TestTrue(TEXT("event 4006 leaves the release pose paired"), Player->IsFeedPaired());
+		TestFalse(TEXT("event 4006 closes the blood transaction"), Player->FeedState.IsTransacting());
+		TestEqual(TEXT("event 4006 enters the presentation-only release tail"),
+			static_cast<int32>(Player->FeedState.Phase),
+			static_cast<int32>(EElysiumFeedPhase::ReleaseTail));
 		TestEqual(TEXT("toggle teardown fires OnFedUponEnd once"),
 			SaveTestCounterValue(World.FindByName(TEXT("endcount"))), 1.0f);
+		TestEqual(TEXT("event 4006 releases the camera before the pose tail"),
+			Camera.ReleaseCount, 1);
+		TestEqual(TEXT("the release tail stays anchored to the authored event time"),
+			Player->FeedState.PhaseDeadline,
+			ReleaseEventDeadline + ElysiumFeed::ShortVictimReleaseSeconds
+				* (1.0f - ElysiumFeed::ShortVictimReleaseEventCycle), 1e-4f);
+		Advance(static_cast<double>(Player->FeedState.PhaseDeadline) + 0.01);
+		TestFalse(TEXT("the authored release tail finally hands both bodies back"),
+			Player->IsFeedPaired());
+		TestEqual(TEXT("body-tail completion does not release the camera twice"),
+			Camera.ReleaseCount, 1);
 		TestTrue(TEXT("a surviving victim is re-armed for its ordinary NPC think"),
 			Victim->NextThink != ELYSIUM_NEVER_THINK);
 	}
@@ -433,7 +567,8 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		Advance(0.4);
 		TestFalse(TEXT("no transaction part-way through the engage"),
 			Player->FeedState.IsTransacting());
-		Advance(ElysiumFeed::EngageSeconds + 0.01);
+		const double BiteStart = static_cast<double>(Player->FeedState.PhaseDeadline) + 0.01;
+		Advance(BiteStart);
 		if (!TestTrue(TEXT("the bite opens the transaction (event 4007 -> FeedBegin)"),
 			Player->FeedState.IsTransacting()))
 		{
@@ -443,7 +578,7 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 			Player->FeedState.Interval, ElysiumFeed::InitialInterval(3), 1e-4f);
 		TestEqual(TEXT("the first deadline is now + that interval"),
 			Player->FeedState.NextPulse,
-			static_cast<float>(ElysiumFeed::EngageSeconds + 0.01) + ElysiumFeed::InitialInterval(3),
+			static_cast<float>(BiteStart) + ElysiumFeed::InitialInterval(3),
 			1e-3f);
 		TestEqual(TEXT("OnFedUponBegin fired exactly once"),
 			SaveTestCounterValue(World.FindByName(TEXT("begincount"))), 1.0f);

@@ -5,10 +5,25 @@
 #include "BoneContainer.h"
 #include "BonePose.h"
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
+#include "BoneControllers/AnimNode_AnimDynamics.h"
+#include "Visual/ElysiumHairDynamicsData.h"
 
 #include "ElysiumAnimNodes.generated.h"
 
 struct FElysiumCompositionRig;
+
+// Stock Unreal AnimDynamics, configured from the baked-native recipe carried by the mesh. This
+// wrapper only exposes the graph node's protected evaluate seam to the native body tail; it does
+// not implement or interpret VtMB's secondary-motion solve.
+USTRUCT()
+struct FAnimNode_ElysiumHairDynamics : public FAnimNode_AnimDynamics
+{
+	GENERATED_BODY()
+
+	void Configure(const FElysiumHairDynamicsChainConfig& Config,
+		const FReferenceSkeleton& ReferenceSkeleton);
+	void Apply(FComponentSpacePoseContext& Output);
+};
 
 // VtMB's one composition stage as an Unreal skeletal control (roadmap CAP7.2).
 //

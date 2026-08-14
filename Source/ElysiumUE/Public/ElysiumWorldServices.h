@@ -177,15 +177,17 @@ public:
 	// Null on a missing/failed glb or an empty stem.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) = 0;
-	// Promote an ordinary NPC's visual to a native movement body. Null is the supported headless,
-	// backdrop, disabled-navigation, or failed-spawn path; the NPC remains a standing entity.
+	// Promote an ordinary NPC's visual to a native movement body. Owner preserves the logical entity
+	// identity through collision ingress. Null is the supported headless, backdrop,
+	// disabled-navigation, or failed-spawn path; the NPC remains a standing entity.
 	//
 	// `Stem` and `Variant` are what the body's own animation selection is keyed on (CCC4): the model
 	// names its clip vocabulary, and the variant is the repeatable token weighted choice rides on. The
 	// caller is the one place that knows both, so they travel with the body rather than being looked
 	// back up from it.
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FVector& FeetOrigin, float YawDegrees, const FString& Stem, int32 Variant)
+		const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+		const FString& Stem, int32 Variant)
 	{
 		return nullptr;
 	}

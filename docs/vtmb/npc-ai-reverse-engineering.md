@@ -325,6 +325,31 @@ sequence/activity/weapon activity, and the last state-change time. This separati
 enemy handle, an alert/combat state, a schedule, a movement goal, and a playing animation are
 related but not interchangeable pieces of state.
 
+### `TeleportToEntity` and the next AI admission
+
+`TeleportToEntity` is a `FIELD_EHANDLE` input on `CAI_BaseNPCTroika`, not on the base
+`CAI_BaseNPC` map. Its full name conversion and transform contract is owned by
+`docs/vtmb/entity_io.md`. The AI-specific tail is virtual slot `+0x998`. All three concrete
+receiver families in the current corpus resolve that slot through thunk `0x10010f0f` to
+`FUN_102c23f0`: Jack's `CNPC_VVampire`, `CNPC_VHumanCombatant` (vtable `0x104b7ff4`, slot 614),
+and `CNPC_VHunter` (vtable `0x104b9784`, slot 614). The function assigns the current game time to
+exactly five deadlines:
+
+| Offset | Recovered field | Write |
+|---:|---|---|
+| `0x17c` | `m_flNextThink` | `curtime` |
+| `0x6244` | `m_flNextUpdateThink` | `curtime` |
+| `0x6248` | `m_flNextNormalThink` | `curtime` |
+| `0x624c` | `m_flNextMoveThink` | `curtime` |
+| `0x6250` | `m_flNextAIThink` | `curtime` |
+
+These are scheduling writes, not an AI reset. The handler does not touch the navigator at `+0x5d34`,
+the active or ideal schedule, movement goal, enemy/target handles, NPC state, conditions, activity,
+sequence, velocity, or the authored `teleport_move_timer` field at `+0x65dc`. For an ordinary queued
+map output, `GameFrame` has already completed its think phase before the teleport input is serviced,
+so the newly due work begins on the next server frame. The input also forces network transmission for
+one second, which makes the discontinuous placement observable without changing decision state.
+
 ### Map creation, spawn, activation, and first AI admission
 
 RE47 pins the general bootstrap to the retail DLL instead of borrowing the similar Source SDK

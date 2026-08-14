@@ -318,6 +318,8 @@ public:
 	FElysiumDlgConversation* GetOpenDialog() const;
 	// The NPC the open conversation belongs to (Invalid when none is open).
 	FElysiumEntityHandle GetOpenDialogOwner() const;
+	// True while the open line's authored VCD owns this speaker's body through a live clip event.
+	bool HasActiveDialogueBodyClip(const FElysiumEntityHandle& Speaker) const;
 	// Player picked the Nth visible PC choice: advance the branch machine; end the session (firing the
 	// owner's OnDialogEnd) if the pick closed it. No-op when no conversation is open.
 	void PlayerDialogChoose(int32 VisibleIndex);

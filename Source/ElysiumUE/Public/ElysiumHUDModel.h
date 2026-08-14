@@ -47,6 +47,15 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	int32 Masquerade = 0;
 
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Feed")
+	bool bFeedVictimVisible = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Feed")
+	int32 FeedVictimBlood = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Feed")
+	int32 FeedVictimBloodCapacity = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	EElysiumHUDReticle Reticle = EElysiumHUDReticle::None;
 

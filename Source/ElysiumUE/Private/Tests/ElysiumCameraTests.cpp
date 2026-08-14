@@ -232,6 +232,36 @@ bool FElysiumCameraTest::RunTest(const FString&)
 		Run(W, 0.5f, 1.0f / 60.0f);
 		TestEqual(TEXT("the feed camera drives the third weight up"), W.Third, 1.0f);
 		TestEqual(TEXT("and is the deciding driver"), FString(W.Driver()), FString(TEXT("feed")));
+		TestTrue(TEXT("the feed channel itself takes one second"),
+			FMath::IsNearlyEqual(W.Feed, 0.5f, 0.02f));
+		Run(W, 0.5f, 1.0f / 60.0f);
+		TestEqual(TEXT("and clamps at full weight after that second"), W.Feed, 1.0f);
+	}
+
+	// --- the ordinary feed solver: entry yaw, exponential pitch and square-root dolly ---------
+	{
+		FElysiumCameraCvars Cvars;
+		const FElysiumFeedCameraPose Start =
+			ElysiumCam::SolveOrdinaryFeedCamera(0.0f, 15.0f, Cvars);
+		TestTrue(TEXT("feed starts on the captured yaw"),
+			FMath::IsNearlyEqual(Start.Rotation.Yaw, 15.0f));
+		TestTrue(TEXT("feed starts at zero pitch and offset"),
+			Start.Rotation.Pitch == 0.0f && Start.Offset.IsNearlyZero());
+
+		const FElysiumFeedCameraPose One =
+			ElysiumCam::SolveOrdinaryFeedCamera(1.0f, 15.0f, Cvars);
+		TestTrue(TEXT("one second advances the automatic orbit by camfeed_yaw"),
+			FMath::IsNearlyEqual(One.Rotation.Yaw, 65.0f, 0.001f));
+		const float ExpectedPitch = -(80.0f - 80.0f * FMath::Pow(2.0f, -0.35f));
+		TestTrue(TEXT("pitch follows the recovered exponential"),
+			FMath::IsNearlyEqual(One.Rotation.Pitch, ExpectedPitch, 0.001f));
+		TestTrue(TEXT("one second places the eye fifty Source units behind its solved forward"),
+			FMath::IsNearlyEqual(One.Offset.Size(), 50.0f * ElysiumCam::U, 0.01f));
+
+		const FElysiumFeedCameraPose Clamped =
+			ElysiumCam::SolveOrdinaryFeedCamera(6.0f, 15.0f, Cvars);
+		TestTrue(TEXT("the feed pitch reaches its sixty-degree clamp"),
+			FMath::IsNearlyEqual(Clamped.Rotation.Pitch, -60.0f, 0.001f));
 	}
 
 	// --- a scripted camera counts as third person, which is what draws the player model under it ---
@@ -308,6 +338,9 @@ bool FElysiumCameraTest::RunTest(const FString&)
 		TestEqual(TEXT("cam_targetangle is degrees and needs no conversion"), Cvars.TargetAngle, 15.0f);
 		TestTrue(TEXT("the damper is on with two constants"),
 			Cvars.bDampOn && Cvars.HookesConstant == 4.0f && Cvars.HookesConstantWall == 15.0f);
+		TestTrue(TEXT("the recovered feed cvars retain their Source defaults"),
+			Cvars.FeedYaw == 50.0f && Cvars.FeedPitch == 80.0f
+				&& FMath::IsNearlyEqual(Cvars.FeedForwardBase, -50.0f * ElysiumCam::U));
 
 		Store.Add(TEXT("cam_idealdist"), TEXT("50"));
 		Store.Add(TEXT("cdamp_on"), TEXT("0"));
@@ -1223,6 +1256,11 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 	V.Interaction.Icon = 7;
 	TestEqual(TEXT("a usable under the cursor swaps in the context icon"),
 		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::UseIcon);
+
+	V.Feed.bPaired = true;
+	TestEqual(TEXT("a paired feed suppresses the reticle but not the player surface"),
+		ElysiumView::ResolveReticle(V), ElysiumView::EReticle::None);
+	V.Feed.bPaired = false;
 
 	// A panel with HideHUD owns the screen (P4.10) — no crosshair under it, icon or not.
 	V.bSignHidesHUD = true;

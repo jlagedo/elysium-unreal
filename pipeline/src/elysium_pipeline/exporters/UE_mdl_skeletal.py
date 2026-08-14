@@ -25,6 +25,10 @@ bytes, unterminated.
 
     "SKEL"  u32 boneCount
             boneCount x { string name, i32 parent, f32 t[3], f32 q[4] }
+    "DYNM"  u32 chainCount
+            chainCount x { string firstBone, string chainEnd,
+                           f32 gravityScale, f32 damping,
+                           f32 angularSpring, f32 coneAngleDegrees }
     "MATL"  u32 materialCount
             materialCount x { string name, string albedo }             albedo relative to the
                                                                        export root, "" if none
@@ -54,7 +58,7 @@ which has no geometry, is the same file shape as a body rather than a special ca
 import os
 import struct
 
-from elysium_pipeline.formats import bsp, mdl, mdl_skel as S
+from elysium_pipeline.formats import bsp, mdl, mdl_secondary_motion as SM, mdl_skel as S
 
 #: Bumped whenever a section's payload changes meaning. `FElysiumSkeletalSource` refuses a
 #: file it does not recognise rather than reading a stale layout as if it were current.
@@ -920,6 +924,21 @@ def _assemble(sections):
     return header + bytes(directory) + b"".join(payload for _tag, payload in present)
 
 
+def _dynamics_section(model_path, blob, bones):
+    """The deliberately narrow, baked-native AnimDynamics POC recipe for this body."""
+    chains = SM.anim_dynamics_poc_chains(model_path, blob, bones)
+    if not chains:
+        return b"", 0
+    out = bytearray(struct.pack("<I", len(chains)))
+    for chain in chains:
+        out += _string(chain.first_bone)
+        out += _string(chain.chain_end)
+        out += struct.pack(
+            "<4f", chain.gravity_scale, chain.damping,
+            chain.angular_spring, chain.cone_angle_degrees)
+    return bytes(out), len(chains)
+
+
 def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=None,
                 ensure_labels=None):
     """Write `<out_dir>/<stem>.eskm` and return a summary dict.
@@ -946,6 +965,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
                                            out_dir, tex_cache) for name in matnames}
 
     rows, bone_map = unreal_bones(bones)
+    dynamics_payload, dynamics_count = _dynamics_section(model_path, d, bones)
     mesh_payload, offsets = _mesh_section(surfaces, matnames, bone_map)
     morph_payload, morph_names = (_morph_section(d, mesh_map, matnames, offsets, anorms)
                                   if anorms and S.flex_descs(d) else (b"", []))
@@ -961,6 +981,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
 
     blob = _assemble([
         (b"SKEL", _skel_section(rows)),
+        (b"DYNM", dynamics_payload),
         (b"MATL", _matl_section(matnames, matinfo)),
         (b"MESH", mesh_payload),
         (b"MORF", morph_payload),
@@ -974,11 +995,12 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     triangles = sum(len(s["tris"]) for s in surfaces.values())
     vertices = sum(len(s["pos"]) for s in surfaces.values())
     print(f"  eskm {stem}: {len(bones)} bones, {vertices} verts, {triangles} tris, "
-          f"{len(morph_names)} morphs, {clip_count} clips "
+          f"{len(morph_names)} morphs, {clip_count} clips, {dynamics_count} hair POC chain(s) "
           f"-> {path} ({os.path.getsize(path) // 1024} KB)")
     return dict(stem=stem, eskm=os.path.basename(path), model=model_path,
                 bones=len(bones), vertices=vertices, triangles=triangles,
-                morphs=morph_names, materials=matnames, clips=clip_count)
+                morphs=morph_names, materials=matnames, clips=clip_count,
+                hair_dynamics=dynamics_count)
 
 
 def write_bank(idx, model_path, out_dir, stem):

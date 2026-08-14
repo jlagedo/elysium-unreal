@@ -251,6 +251,8 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("a geometry-bearing loose item builds its shared ground mesh"),
 		Services.Count(TEXT("BuildPropVisual models_items_test_ground")), 1);
+	TestEqual(TEXT("a loose item's body is a camera +use target"),
+		Services.Count(TEXT("RegisterUseAnchor")), 1);
 	TestEqual(TEXT("an authored geometryless item never asks for a missing mesh"),
 		Services.Count(TEXT("BuildPropVisual models_weapons_w_null")), 0);
 
@@ -259,9 +261,16 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 	TestEqual(TEXT("...and is unslotted (255)"), Lockpick->InvenPos, FElysiumItem::Unslotted);
 	TestFalse(TEXT("HasItem does not see it yet"),
 		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
+	TestTrue(TEXT("a loose item is camera-usable"), Lockpick->IsUsable());
+	TestEqual(TEXT("...and publishes the open-hand context icon"), Lockpick->GetUseIcon(), 9);
 
-	World.RouteEntityTouch(Lockpick->Handle, PlayerHandle, /*bBegin*/ true);
-	TestTrue(TEXT("DefaultTouch hands the SAME entity to the player"), Lockpick->IsOwned());
+	const FElysiumUseBeginResult Pickup = World.BeginPlayerUseSession(Lockpick->Handle, PlayerHandle);
+	TestEqual(TEXT("camera +use completes the loose pickup"), Pickup.Outcome,
+		EElysiumUseOutcome::Completed);
+	TestTrue(TEXT("camera +use hands the SAME entity to the player"), Lockpick->IsOwned());
+	TestFalse(TEXT("a carried item is no longer camera-usable"), Lockpick->IsUsable());
+	TestFalse(TEXT("...and disables its camera target"),
+		Services.UseAnchorEnabled.FindRef(Lockpick->Handle));
 	TestEqual(TEXT("a successful loose pickup posts one HUD notification"),
 		Services.Notifications.Num(), 1);
 	if (Services.Notifications.IsValidIndex(0))
@@ -278,8 +287,11 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 	TestEqual(TEXT("...held as a handle, not a name"), Player->Inventory.Num(), 1);
 	TestTrue(TEXT("HasItem sees it"), Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
 	TestTrue(TEXT("...case-insensitively"), Player->Inventory.Has(*Player, TEXT("ITEM_G_LockPick")));
-	World.RouteEntityTouch(Lockpick->Handle, PlayerHandle, /*bBegin*/ true);
-	TestEqual(TEXT("a duplicate overlap cannot add a second slot"), Player->Inventory.Num(), 1);
+	const FElysiumUseBeginResult DuplicatePickup =
+		World.BeginPlayerUseSession(Lockpick->Handle, PlayerHandle);
+	TestEqual(TEXT("a carried item refuses a second camera pickup"), DuplicatePickup.Outcome,
+		EElysiumUseOutcome::Unavailable);
+	TestEqual(TEXT("a duplicate camera use cannot add a second slot"), Player->Inventory.Num(), 1);
 
 	TestTrue(TEXT("RemoveItem matches the owned classname"),
 		Player->Inventory.ScriptRemove(*Player, TEXT("item_g_lockpick")));

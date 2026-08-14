@@ -27,6 +27,7 @@
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumBlendGrids.h"
+#include "Visual/ElysiumHairDynamicsData.h"
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
@@ -431,6 +432,51 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		}
 	}
 	Mesh->SetRefSkeleton(RefSkeleton);
+
+	// The optional hair proof recipe is generated content on the mesh, not a runtime VtMB table.
+	// Validate the named route before serialising it: a typo must fail the bake instead of turning
+	// into a plausible still hairstyle at runtime.
+	if (!Source.HairDynamics.IsEmpty())
+	{
+		UElysiumHairDynamicsAssetUserData* Hair =
+			NewObject<UElysiumHairDynamicsAssetUserData>(Mesh);
+		Hair->Chains.Reserve(Source.HairDynamics.Num());
+		for (const FElysiumSourceHairDynamicsChain& SourceChain : Source.HairDynamics)
+		{
+			const int32 Bound = RefSkeleton.FindBoneIndex(SourceChain.BoundBone);
+			const int32 End = RefSkeleton.FindBoneIndex(SourceChain.ChainEnd);
+			bool bDescends = Bound != INDEX_NONE && End != INDEX_NONE;
+			for (int32 Bone = End; bDescends && Bone != Bound;)
+			{
+				Bone = RefSkeleton.GetParentIndex(Bone);
+				bDescends = Bone != INDEX_NONE;
+			}
+			const bool bFinite = FMath::IsFinite(SourceChain.GravityScale)
+				&& FMath::IsFinite(SourceChain.Damping)
+				&& FMath::IsFinite(SourceChain.AngularSpring)
+				&& FMath::IsFinite(SourceChain.ConeAngleDegrees);
+			if (!bDescends || Bound == End || !bFinite
+				|| SourceChain.GravityScale < 0.0f
+				|| SourceChain.Damping < 0.7f || SourceChain.Damping > 1.0f
+				|| SourceChain.AngularSpring < 0.0f
+				|| SourceChain.ConeAngleDegrees < 0.0f
+				|| SourceChain.ConeAngleDegrees > 90.0f)
+			{
+				return FString::Printf(
+					TEXT("%s: invalid AnimDynamics hair recipe %s -> %s"),
+					*SourcePath, *SourceChain.BoundBone.ToString(), *SourceChain.ChainEnd.ToString());
+			}
+
+			FElysiumHairDynamicsChainConfig& Chain = Hair->Chains.AddDefaulted_GetRef();
+			Chain.BoundBone = SourceChain.BoundBone;
+			Chain.ChainEnd = SourceChain.ChainEnd;
+			Chain.GravityScale = SourceChain.GravityScale;
+			Chain.Damping = SourceChain.Damping;
+			Chain.AngularSpring = SourceChain.AngularSpring;
+			Chain.ConeAngleDegrees = SourceChain.ConeAngleDegrees;
+		}
+		Mesh->AddAssetUserData(Hair);
+	}
 
 	Mesh->GetImportedModel()->LODModels.Add(new FSkeletalMeshLODModel());
 	FSkeletalMeshLODInfo& LodInfo = Mesh->AddLODInfo();

@@ -25,6 +25,89 @@ namespace
 	}
 }
 
+// --- stock AnimDynamics hair proof -------------------------------------------------------------
+
+void FAnimNode_ElysiumHairDynamics::Configure(
+	const FElysiumHairDynamicsChainConfig& Config, const FReferenceSkeleton& ReferenceSkeleton)
+{
+	BoundBone.BoneName = Config.BoundBone;
+	ChainEnd.BoneName = Config.ChainEnd;
+	bChain = true;
+	SimulationSpace = AnimPhysSimSpaceType::Component;
+	GravityScale = Config.GravityScale;
+	bOverrideLinearDamping = true;
+	bOverrideAngularDamping = true;
+	LinearDampingOverride = Config.Damping;
+	AngularDampingOverride = Config.Damping;
+	bAngularSpring = Config.AngularSpring > 0.0f;
+	AngularSpringConstant = Config.AngularSpring;
+	NumSolverIterationsPreUpdate = 8;
+	NumSolverIterationsPostUpdate = 2;
+	ComponentLinearAccScale = FVector::OneVector;
+	ComponentLinearVelScale = FVector::ZeroVector;
+	ComponentAppliedLinearAccClamp = FVector(2500.0);
+	SimSpaceSettings.SimSpaceAngularAlpha = 1.0f;
+	SimSpaceSettings.MaxAngularVelocity = 10.0f;
+	SimSpaceSettings.MaxAngularAcceleration = 100.0f;
+	bUsePlanarLimit = false;
+	bUseSphericalLimits = false;
+	bEnableWind = false;
+	LODThreshold = 2;
+
+	// Start with one prototype, let the stock node resolve the inclusive chain, then size each
+	// rigid body from the actual native reference segment instead of a character-wide constant.
+	PhysicsBodyDefinitions.Reset();
+	PhysicsBodyDefinitions.AddDefaulted();
+	UpdateChainPhysicsBodyDefinitions(ReferenceSkeleton);
+	for (int32 Index = 0; Index < PhysicsBodyDefinitions.Num(); ++Index)
+	{
+		FAnimPhysBodyDefinition& Body = PhysicsBodyDefinitions[Index];
+		const int32 BoneIndex = ReferenceSkeleton.FindBoneIndex(Body.BoundBone.BoneName);
+		FVector Segment = FVector::ZeroVector;
+		if (PhysicsBodyDefinitions.IsValidIndex(Index + 1))
+		{
+			const int32 ChildIndex = ReferenceSkeleton.FindBoneIndex(
+				PhysicsBodyDefinitions[Index + 1].BoundBone.BoneName);
+			if (ChildIndex != INDEX_NONE)
+			{
+				Segment = ReferenceSkeleton.GetRefBonePose()[ChildIndex].GetTranslation();
+			}
+		}
+		if (Segment.IsNearlyZero() && BoneIndex != INDEX_NONE)
+		{
+			Segment = ReferenceSkeleton.GetRefBonePose()[BoneIndex].GetTranslation();
+		}
+		const float Length = FMath::Max(static_cast<float>(Segment.Size()), 2.0f);
+		Body.BoxExtents = FVector(Length * 0.5f, 1.5f, 1.5f);
+		Body.LocalJointOffset = FVector(Length * 0.5f, 0.0f, 0.0f);
+		Body.ConstraintSetup.bLinearFullyLocked = true;
+		Body.ConstraintSetup.LinearAxesMin = FVector::ZeroVector;
+		Body.ConstraintSetup.LinearAxesMax = FVector::ZeroVector;
+		Body.ConstraintSetup.AngularConstraintType = AnimPhysAngularConstraintType::Cone;
+		Body.ConstraintSetup.TwistAxis = AnimPhysTwistAxis::AxisX;
+		Body.ConstraintSetup.AngularTargetAxis = AnimPhysTwistAxis::AxisX;
+		Body.ConstraintSetup.AngularTarget = FVector::XAxisVector;
+		Body.ConstraintSetup.ConeAngle = Config.ConeAngleDegrees;
+	}
+	RequestInitialise(ETeleportType::ResetPhysics);
+}
+
+void FAnimNode_ElysiumHairDynamics::Apply(FComponentSpacePoseContext& Output)
+{
+	const FBoneContainer& RequiredBones = Output.Pose.GetPose().GetBoneContainer();
+	if (!FAnimWeight::IsRelevant(ActualAlpha)
+		|| !IsValidToEvaluate(nullptr, RequiredBones))
+	{
+		return;
+	}
+	TArray<FBoneTransform> Transforms;
+	EvaluateSkeletalControl_AnyThread(Output, Transforms);
+	if (!Transforms.IsEmpty())
+	{
+		Output.Pose.LocalBlendCSBoneTransforms(Transforms, ActualAlpha);
+	}
+}
+
 // --- axis interpolation ------------------------------------------------------------------------
 
 void FAnimNode_ElysiumAxisInterp::SetRig(TSharedPtr<const FElysiumCompositionRig> InRig)

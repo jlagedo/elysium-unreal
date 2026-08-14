@@ -541,6 +541,7 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 	{
 		Component->PlayAnimation(Anim, /*bLooping=*/true);
 	}
+	ElysiumNpcVisual::InstallHairDynamics(Component, Stem);
 
 	const double LoadMs = (FPlatformTime::Seconds() - StartSeconds) * 1000.0;
 

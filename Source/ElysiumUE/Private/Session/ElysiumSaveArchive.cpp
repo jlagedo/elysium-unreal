@@ -210,7 +210,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		if (Ar.IsLoading())
 		{
 			R.Feed.Phase = static_cast<EElysiumFeedPhase>(
-				FMath::Min<uint8>(Phase, static_cast<uint8>(EElysiumFeedPhase::Release)));
+				FMath::Min<uint8>(Phase, static_cast<uint8>(EElysiumFeedPhase::ReleaseTail)));
 			R.Feed.bInterrupting = false;   // a teardown never survives a save
 		}
 	}

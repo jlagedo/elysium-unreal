@@ -379,6 +379,10 @@ struct FElysiumContentPaths
 	static FString UiStrings() { return UiDir() / TEXT("strings.json"); }
 	static FString UiMenuDir() { return UiDir() / TEXT("menu"); }
 	static FString UiTitle() { return UiMenuDir() / TEXT("title.png"); }
+	// `effects/spotlight`, the exact 128x128 radial mask `DrawFeedingView` uses to isolate the
+	// desaturated world. Exported with the other global presentation art; loaded as a transient
+	// renderer texture so no game-derived bytes enter the tracked project.
+	static FString UiFeedVisionMask() { return UiDir() / TEXT("effects/feed_spotlight.png"); }
 	// Local Elysium key art used by the empty front-end shell. It is deliberately below the
 	// gitignored export root: the plate incorporates the user's decoded clan art and must never be
 	// tracked. The menu remains usable over black when the optional local plate is absent.

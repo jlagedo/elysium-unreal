@@ -1366,6 +1366,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
 		}
 	}
+	ElysiumNpcVisual::InstallHairDynamics(Comp, Stem);
 	// The authored garment, if this model has one. After the anim instance is installed, because
 	// the cloth component follows this body as its leader pose and needs it already posed.
 	ElysiumNpcVisual::InstallGarment(Comp, Stem);

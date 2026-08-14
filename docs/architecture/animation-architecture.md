@@ -21,14 +21,16 @@ This is the load-bearing observation, because it is what makes a bespoke evaluat
 | decode locals | `UAnimSequence` evaluation |
 | blend sequences, layers, transitions | blend spaces, layered blends, state machines, montages |
 | compose hierarchy, including split inheritance | ordinary FK over locals re-expressed at bake |
-| apply the procedural rule | post-process Anim Blueprint, component space |
+| apply the procedural rule and engine-native secondary controls | post-compose tail, component space |
 | skin | skinning |
 
 A post-process Anim Blueprint runs once per component after the anim graph and before skinning,
 which is retail's slot exactly. Both engines blend **locals** and then compose, so the ordering VtMB
 requires falls out of Unreal's existing pipeline rather than having to be recreated inside it.
 
-Only the *procedural* row survives into that slot. Everything above it is resolved at bake, under
+Only the *procedural* row survives into that slot as a VtMB evaluator. Engine-native secondary
+controls may also run there from a complete baked recipe; they do not interpret a VtMB rule.
+Everything above it is resolved at bake, under
 the root `CLAUDE.md` rule **"Poses are baked native"**: a clip on the mount is a complete,
 self-describing Unreal-native local pose, and the frame path applies no VtMB rule. Where a clip's
 meaning depends on state stored outside it, the bake resolves that state rather than forwarding the
@@ -598,8 +600,8 @@ The implementation grows the path already serving both actor kinds:
   continuous locomotion parameters every animation frame. Asset lookup and weighted choice do not
   repeat every tick.
 - The Animation Blueprint consumes only the resolved selection and continuous parameters. Its
-  graph owns state machines, blend spaces, layer nodes and montages; the post-process graph remains
-  the only custom pose stage.
+  graph owns state machines, blend spaces, layer nodes and montages; the native post-compose tail
+  owns the one custom evaluator and any stock Unreal secondary controls configured by the mesh.
 
 Both movement implementations and both actor kinds must produce the same trace schema. That is the
 architectural test that this is one gameplay-animation layer rather than four paths that happen to
@@ -633,7 +635,8 @@ hand-written instance:
 - **Montage slots** for one-shots: scripted-sequence clips, scene gestures, disciplines, and the
   cinematic playback path. A slot is also what keeps a gesture layered over a sequence instead of
   replacing it.
-- **A post-process graph** carrying the one custom stage below.
+- **A post-compose tail** carrying the one custom evaluator below and the stock secondary-control
+  proof described in §8.
 
 Two properties the graph must preserve. A **masked sequence is never selectable as a base clip** —
 retail composes those as layers and never selects one, so a base-clip path that can reach one is a
@@ -647,7 +650,7 @@ The moment something writes `move_yaw`, that construction is what moves — so a
 is never written and one whose parameter is written correctly look identical at rest and diverge
 only in motion.
 
-## 5. One custom stage, and only one
+## 5. One custom evaluator, and only one
 
 **Axis interpolation.** For each bone the model declares as procedurally driven, read the control
 bone's local rotation, evaluate the six-entry three-way blend, and replace the driven bone's local
@@ -670,6 +673,12 @@ how each of the two cases is written.
 
 This stage is **correctness, not feel** — the irreducible delta between reading VtMB's rigs and not
 reading them.
+
+Stock Unreal skeletal controls do not count as another VtMB evaluator. They may consume a
+baked-native rig recipe, just as an IK node consumes targets, provided the frame path needs no
+knowledge of the source format or retail arithmetic. The AnimDynamics hair proof in §8 satisfies
+that boundary: the exporter spends the record selection and provisional parameter mapping, and the
+runtime receives only bone names plus native node settings.
 
 **There is one build of a character, and it is the baked one.** No runtime path constructs a
 character from `.glb` or `.eskm`, so no unresolved VtMB storage rule reaches the graph and there is
@@ -762,7 +771,35 @@ and breast chains from an authored table in the model header, with gravity, damp
 coefficient and a maximum angle. It corrects bone-to-world matrices before skinning; renderer cloth
 instead consumes the finished palette only for its anchors and writes particle-derived vertices
 afterward. Both retail solves are decoded; game-independent numeric replays and a post-skin cloth
-capture still gate faithful implementations.
+capture still gate faithful reproductions.
+
+The bounded hair proof uses Unreal's stock
+[`AnimDynamics`](https://dev.epicgames.com/documentation/unreal-engine/animation-blueprint-animdynamics-in-unreal-engine)
+control, not a port of retail's point/segment solver. It runs in the body proxy's component-space
+tail after axis interpolation and before skinning, the same ordering Epic documents for a
+[`PostProcessAnimBlueprint`](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/Engine/USkeletalMesh/PostProcessAnimBlueprint):
+
+1. the offline exporter admits only `malkavian_female_armor_0`'s `Bone05` → `Bone09` hair route and
+   Jeanette's `Bone01` → `Bone07` and `Bone09` → `Bone13` hair routes;
+2. it writes a complete native recipe into the generated skeletal mesh. Breast records, the other
+   Malkavian armours, and Jeanette's renderer-cloth skirt produce no recipe;
+3. one chain node takes the first and last bone, allowing AnimDynamics to generate the intermediate
+   bodies. It uses component simulation space so a teleport cannot inject the unbounded world-space
+   motion Epic warns about;
+4. constraints use the authored maximum as a cone limit, the reference segment to size each narrow
+   body, locked linear motion, an X-axis angular target, 8 pre-update and 2 post-update iterations,
+   no wind, and LOD threshold 2. The 4:1 iteration ratio follows Epic's solver guidance;
+5. a validated recipe runs unconditionally when either scoped body poses. There is no feature flag
+   or A/B toggle. The node has no planar ground or spherical collision: AnimDynamics supplies
+   constraints rather than actual collision geometry, so head/shoulder intersection remains a
+   known proof limitation.
+
+The numeric mapping is deliberately provisional: native gravity scale starts at the authored
+magnitude, native damping at the authored value (clamped to AnimDynamics' effective 0.7–1 range),
+native spring at `4 × 10^(-exponent)`, and the cone at the authored maximum. Those are calibration
+hypotheses, not an equivalence statement. CAP5.5's controlled retail series decides whether the
+result is useful as remastered presentation and supplies fitted settings; it cannot promote
+AnimDynamics into a faithful solver without the game-independent retail replay.
 
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are

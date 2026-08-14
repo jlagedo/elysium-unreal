@@ -250,6 +250,30 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		]
 	];
 
+	// The focused victim's blood pool. Retail places this as a single horizontal bar at the top and
+	// keeps the side HUD visible; the remaster preserves that screen structure with vector/SafeZone
+	// composition. Its value is a projection only — the substrate pulse clock remains authoritative.
+	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0, 38, 0, 0)
+	[
+		SNew(SBox).WidthOverride(500).HeightOverride(14)
+		.Visibility_Lambda([M]() { return M && M->bFeedVictimVisible
+			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+		[
+			SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(2)
+			[
+				SNew(SProgressBar)
+				.Percent_Lambda([M]() -> TOptional<float>
+				{
+					return M && M->FeedVictimBloodCapacity > 0
+						? FMath::Clamp(float(M->FeedVictimBlood)
+							/ float(M->FeedVictimBloodCapacity), 0.0f, 1.0f)
+						: 0.0f;
+				})
+				.FillColorAndOpacity(ElysiumUI::Palette::BloodLit)
+			]
+		]
+	];
+
 	// Masquerade is deliberately a neutral numeric contract until the faithful mask-state mapping
 	// is wired. It avoids inventing whether the published value means breaches or remaining marks.
 	Content->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0, 34, 38, 0)

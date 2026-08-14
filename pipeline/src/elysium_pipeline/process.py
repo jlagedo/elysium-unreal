@@ -107,18 +107,51 @@ def run_process(
         bufsize=1,
     )
     assert process.stdout is not None
-    for line in process.stdout:
-        lines.append(line)
-        if log is not None:
-            log.write(line)
-            log.flush()
-        if output_sink is not None:
-            output_sink(line.rstrip("\r\n"))
-        elif log is None:
-            sys.stdout.write(line)
-            sys.stdout.flush()
-    process.stdout.close()
-    returncode = process.wait()
+    active_log = log
+    active_sink = output_sink
+    stdout_available = True
+
+    def record_mirror_failure(destination: str, exc: OSError) -> None:
+        warning = (
+            f"WARNING - child output mirror to {destination} failed: "
+            f"{type(exc).__name__}: {exc}; continuing without that mirror\n"
+        )
+        lines.append(warning)
+        if active_log is not None and destination != "log":
+            try:
+                active_log.write(warning)
+                active_log.flush()
+            except OSError:
+                pass
+
+    try:
+        for line in process.stdout:
+            lines.append(line)
+            if active_log is not None:
+                try:
+                    active_log.write(line)
+                    active_log.flush()
+                except OSError as exc:
+                    active_log = None
+                    record_mirror_failure("log", exc)
+            if active_sink is not None:
+                try:
+                    active_sink(line.rstrip("\r\n"))
+                except OSError as exc:
+                    active_sink = None
+                    record_mirror_failure("output sink", exc)
+            elif active_log is None and stdout_available:
+                try:
+                    sys.stdout.write(line)
+                    sys.stdout.flush()
+                except OSError as exc:
+                    record_mirror_failure("stdout", exc)
+                    stdout_available = False
+    finally:
+        try:
+            process.stdout.close()
+        finally:
+            returncode = process.wait()
     result = ProcessResult(
         argv=command,
         cwd=resolved_cwd,

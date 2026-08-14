@@ -10,6 +10,7 @@
 #include "ElysiumPlayerCameraManager.h"
 #include "Debug/ElysiumScreenshot.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumFeed.h"
 
 #include "Components/InputComponent.h"
 #include "Engine/GameInstance.h"
@@ -82,7 +83,20 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	}
 
 	Router->SampleFrame(DeltaTime);
-	const FElysiumUserCmd& Current = Router->CurrentCmd();
+	const FElysiumUserCmd Sampled = Router->CurrentCmd();
+	FElysiumUserCmd Current = Sampled;
+	FElysiumEntityWorld* EntityWorld = CurrentEntityWorld();
+	if (const FElysiumPlayer* FeedPlayer = EntityWorld ? EntityWorld->FindPlayer() : nullptr;
+		FeedPlayer && FeedPlayer->IsFeedPaired())
+	{
+		Current = ElysiumFeed::GatePairedUserCmd(Current);
+		// SampleFrame already published the unfiltered player intent to the body. Replace that pending
+		// snapshot before movement runs; look remains unchanged and is still integrated once below.
+		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(GetPawn()))
+		{
+			Body->ApplyUserCmd(Current);
+		}
+	}
 
 	// Degrees, straight into the engine's own rotation input. `bEnableLegacyInputScales` is off, so
 	// `AddYawInput`/`AddPitchInput` accumulate without a scale and the degrees in the command are
@@ -93,7 +107,7 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		AddPitchInput(Current.LookDelta.Y);
 	}
 
-	if (FElysiumEntityWorld* World = CurrentEntityWorld())
+	if (FElysiumEntityWorld* World = EntityWorld)
 	{
 		if (Current.JustPressed(EElysiumButton::Use, PreviousCmd))
 		{
@@ -116,7 +130,9 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 			World->QueuePlayerFeedEdge(EElysiumUseEdge::Released);
 		}
 	}
-	PreviousCmd = Current;
+	// Edge history remains the raw physical sample. Otherwise an attack/use held through the paired
+	// gate would look freshly pressed on the first free frame after release.
+	PreviousCmd = Sampled;
 }
 
 

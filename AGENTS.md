@@ -102,6 +102,33 @@ bundle, generator, or another concrete unit. Prefer exact selectors and focused 
 never add `--force`, `--clean`, or a wider profile merely to obtain confidence. Report the
 remaining broader acceptance separately instead of silently running it.
 
+### One task, one worktree
+
+The primary `main` checkout is the integration and live-authoring workspace. Before delegating an
+implementation task, the coordinating agent runs `uv run elysium worktree create <task>` from
+`main`, then assigns the returned checkout path to exactly one Claude or Codex agent. Task agents
+edit only their assigned worktree; parallel implementation agents never share a checkout.
+
+A task worktree is a detached checkout with its own `$ELYSIUM_WORK_ROOT`, export corpus,
+`Binaries`, `Intermediate`, `Saved`, generated `Content/`, baked packages, `.venv`, and external
+plugins. The task agent may synchronize dependencies, run an ordinary incremental
+`uv run elysium build`, and run the smallest relevant Python or Unreal tests. The Fast QA limits
+still apply: clean/rebuild builds, full suites, and other broad validation need explicit owner
+acceptance. Unreal may serialize builds that share one engine installation; wait for that owner
+instead of bypassing the mutex or starting repeated build attempts.
+
+Task worktrees never run `reconstruct`, `export`, `run editor|play`, `debug`, `gr`, or `mcp`; the
+public command rejects those operations there. Asset generation, editor and Live Coding work,
+interactive play, visual acceptance, and final integration run from the primary `main` checkout.
+When the task is ready, its agent leaves a clean detached-HEAD commit and reports its hash plus
+focused validation. The coordinator reviews and cherry-picks that commit onto `main`, performs the
+required integration/live acceptance there, then runs `uv run elysium worktree close <task>`;
+cleanup refuses dirty worktrees or commits whose patches are not present on `main`.
+
+`uv run elysium lane` remains the separate coordinator-owned surface for immutable candidate QA.
+Never turn a mutable task worktree into a QA lane or share generated trees between either kind of
+workspace. Full procedure: `docs/operations/repository.md`.
+
 ### Bring-your-own-game
 
 **Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their
@@ -253,6 +280,7 @@ then use `uv run elysium` as the only public command surface.
 - `reconstruct [--clean] [--rebuild]` restores the complete project from its declared inputs.
 - `deps sync|check` restores or verifies pinned external plugins and fetched SDKs.
 - `doctor` checks repository policy, local paths, dependency ownership and generated prerequisites.
+- `worktree create|status|close` owns mutable, generated-state-isolated agent task worktrees.
 - `lane create|dispatch|status|mark` owns detached, generated-state-isolated QA worktrees.
 - `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
 - `export grid|all` runs a complete profile; `export map|model|placed-model|bundle` handles focused work.

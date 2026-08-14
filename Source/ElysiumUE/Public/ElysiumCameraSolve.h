@@ -23,6 +23,8 @@ namespace ElysiumCam
 	// The transition rate, per second (`FADD st,st` on the frame delta at `client.dll` 0x100fc900):
 	// a full first<->third traversal takes 0.5 s.
 	inline constexpr float BlendRate = 2.0f;
+	// The feed channel advances independently: one complete traversal per scaled second.
+	inline constexpr float FeedBlendRate = 1.0f;
 
 	// The secondary scripted weight (`CInput+0x108`) decays at 0.5/s and has no riser in any recovered
 	// path — it is set by whatever raises it and bleeds off on its own.
@@ -62,6 +64,13 @@ namespace ElysiumCam
 		float RollAngleDeg, float RollSpeedCm);
 }
 
+// The full-strength ordinary feed camera, relative to the player's eye.
+struct FElysiumFeedCameraPose
+{
+	FVector Offset = FVector::ZeroVector;
+	FRotator Rotation = FRotator::ZeroRotator;
+};
+
 // --------------------------------------------------------------------------------------------
 // The four weights
 // --------------------------------------------------------------------------------------------
@@ -78,9 +87,8 @@ struct FElysiumCameraWeights
 	bool bForcedThird = false;
 	// Weapon-class arbitration forced first person (class 0x08).
 	bool bForcedFirst = false;
-	// The feed / seduction / death camera's request latch. The weight it drives is recovered; the
-	// **rate** is not (its solver `0x100fdfa0` is in `docs/vtmb/camera-view-modes.md` § Not yet recovered), so
-	// it is run at the same 2.0/s the toggle uses until that lands.
+	// The feed / seduction / death camera's request latch. Ordinary feed uses the recovered solver
+	// below; the other two producers still share only this weight channel.
 	bool bFeed = false;
 
 	// --- The weights (CInput +0xfc / +0x100 / +0x108 / +0x138) ------------------------------
@@ -110,6 +118,7 @@ struct FElysiumCameraWeights
 
 	// The eased weight the consumers actually use.
 	float ThirdBlend() const { return ElysiumCam::SimpleSpline(Third); }
+	float FeedBlend() const { return ElysiumCam::SimpleSpline(Feed); }
 
 	// Which latch is deciding, for the debug read-out: forced-third and the feed camera win, then
 	// forced-first, then the user toggle.
@@ -273,6 +282,19 @@ struct FElysiumCameraCvars
 	// The extra pull-in on wall contact (`docs/vtmb/camera-view-modes.md` §4).
 	float WallPullIn = 7.0f * ElysiumCam::U;
 
+	// Ordinary feed (`client.dll` 0x100fe7f0). Distances are converted to centimetres here; angles
+	// retain Source's down-positive convention until the solve emits an Unreal rotator.
+	float FeedYaw = 50.0f;
+	float FeedYawEnd = 2.0f;                       // registered, unused by the recovered solve
+	float FeedPitch = 80.0f;
+	float FeedPitchMin = 0.0f;                     // registered, unused by the recovered solve
+	float FeedPitchMax = 60.0f;
+	float FeedPitchPow1 = 2.0f;
+	float FeedPitchPow2 = -0.35f;
+	float FeedRoll = 0.0f;
+	float FeedForwardBase = -50.0f * ElysiumCam::U;
+	float FeedForwardPow = 0.5f;
+
 	// Re-read the whole surface. `Lookup` returns a cvar's value string or empty for one the store
 	// does not carry, which is how the console itself answers; an empty read keeps the default, so a
 	// run with no `out/cfg` on disk behaves exactly like a stock install. Taking the reader as a
@@ -285,6 +307,11 @@ namespace ElysiumCam
 	// The player-body visibility consumer shared by both movement pawns. True first person is zero;
 	// the near-camera third-person band and a scripted shot each provide a dithered visibility ramp.
 	float SolveModelAlpha(const FVector& SolvedOffset, const FElysiumCameraWeights& Weights,
+		const FElysiumCameraCvars& Cvars);
+
+	// `T` is scaled seconds since the first feed frame and EntryYaw is the rendered yaw captured on
+	// that frame. There is deliberately no collision query and no live look input in this solve.
+	FElysiumFeedCameraPose SolveOrdinaryFeedCamera(float T, float EntryYaw,
 		const FElysiumCameraCvars& Cvars);
 
 	// `ApplyScriptedBlend`, the tail of `CAM_ApplyToView` (`0x100ffb00`): the scripted channel is

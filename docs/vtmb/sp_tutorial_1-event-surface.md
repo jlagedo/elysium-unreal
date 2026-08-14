@@ -295,6 +295,10 @@ current step-3 Python handler; any output it fires rejoins the equal-time tail o
   fields and contains **zero** `filter_*` entities. It cannot explain a tutorial-specific rejection.
 - Spawnflag bits are class-specific. `trigger_changelevel` bit `2` means `NOTOUCH`; it must not be
   interpreted as the generic trigger `ALLOW_NPCS` bit.
+- `trig_dialog_outside_chopshop` carries only `ALLOW_CLIENTS`, while Jack's `wall_lean` interesting
+  place `ip_0b2` lies inside its brush. Enabling the brush may therefore present Jack as an existing
+  overlap, but his NPC identity fails the client gate. The later player approach supplies the first
+  accepted touch and opens dialogue; an Unreal `APawn` base class is not evidence of client identity.
 - `ScriptHide` turns collision, drawing, and thinking off. A hidden trigger is not an enabled
   invisible volume.
 - `StartDisabled`, `Enable`, `Disable`, and self-disable are physical brush state. Enabling while
@@ -492,6 +496,52 @@ Counts are authored calls in this map, not global popularity. Base inputs such a
 | Inventory | Container mutation and inventory predicates | Turn item ownership into progression state and dialogue availability. |
 | World/player policy | Controller NPC, killability, disciplines, no-frenzy area | Change global rules for a bounded tutorial beat. |
 | Travel | Teleport and changelevel | Move actors within the map, then leave for the real game. |
+
+### 7.2 Jack's eight `TeleportToEntity` placements
+
+All eight wires resolve the one live `npc_VVampire` named `Jack`; each parameter resolves to exactly
+one `info_teleport_destination` entity. The destination string is not handled by Jack directly:
+`AcceptInput` converts it to the first matching entity handle, then the Troika-NPC handler copies
+that entity's absolute origin and all angles onto Jack.
+
+| Producer and output | Destination | Delay |
+|---|---|---:|
+| `tutchopdoorc.OnOpen` | `teleport_2` | `0.2` |
+| unnamed `trigger_once.OnTrigger` | `teleport_7` | `0` |
+| `logic_jack_teleport_3.OnTrigger` | `teleport_3` | `0` |
+| `trigger_6.OnStartTouch` | `teleport_3` | `0` |
+| `tutwareportal05.OnOpen` | `teleport_jack_after_physics` | `0` |
+| `logic_jack_from_elevator.OnTrigger` | `teleport_6` | `0` |
+| `logic_jack_melee_room.OnTrigger` | `teleport_5` | `0` |
+| `logic_jackflash_chopshop_door.OnTrigger` | `teleport_1` | `0` |
+
+The chopshop log therefore represents a valid, progression-visible operation: queue service has
+already resolved receiver `Jack`; `AcceptInput` resolves `teleport_1`; the handler snaps Jack's
+absolute transform, makes his five think lanes due, and forces network transmission for one second.
+Since the event queue runs after the frame's think phase, Jack resumes due AI work on the next server
+frame. The input performs no safe-placement trace, velocity reset, schedule clear, or immediate touch
+dispatch. The complete native contract and collision boundary are in `docs/vtmb/entity_io.md`; the
+five AI deadlines are in `docs/vtmb/npc-ai-reverse-engineering.md`.
+
+### 7.3 Missing-target diagnostics from the chopshop graph
+
+The two other diagnostics in the observed batch are name-resolution outcomes, not unrecovered
+receiver inputs:
+
+- UP entity 485, `script_1b`, sends `OnBeginSequence -> trig_port_chopshop_door.Enable` at delay
+  zero with unlimited refire, but the UP BSP contains no entity with that targetname. The original
+  retail BSP has the corresponding sequence at entity 488 with a three-second delay and a disabled
+  `trigger_multiple` named `trig_port_chopshop_door` at entity 1126; that trigger's `OnTrigger`
+  executes `jackflashChopshopDoor()`. UP removed the receiver and changed the delay but retained the
+  sender. The patch-first result is therefore a stale, non-fatal wire; the rebuild must not invent a
+  trigger merely to silence it.
+- `tutchopdoora.OnOpen` has one unlimited zero-delay row targeting `point_door.Kill`. Six
+  `point_target` entities initially share that name. The first accepted open resolves and kills all
+  six; each later `OnOpen` finds none and produces one non-fatal missing-target diagnostic. Repeated
+  log lines are repeated deliveries after the cleanup, not evidence for a missing `Kill` handler.
+
+Neither case needs more receiver-side RE. They are acceptance cases for distinguishing a missing
+target from a resolved target whose input is pending or unknown.
 
 ## 8. Python execution surface
 
@@ -854,6 +904,48 @@ accidental recursion, but the underlying retail queue still has no starvation bu
 `trigger_environmental_audio` retains the same physical `StartDisabled` and client-admission gate
 as the rest of the trigger family even while environmental room presentation is absent. Spawning
 the blueblood inside disabled room brushes must not manufacture begin/end pairs.
+
+### 11.8 Lockpick-to-Sheriff encounter transaction
+
+The captured Unofficial Patch/Plus run after acquiring `tut_lockpicks` exposes the full transaction,
+but the pickup entity does not directly start the Sheriff scene. The acquired item remains ordinary
+inventory state; tutorial dialogue and `trigger_4` advance the authored graph. `trigger_4` enqueues
+`sJack_waveover.BeginSequence`, calls `OnJackFloat()`, and removes disciplines at the touch time,
+creates `!playercontroller` at +0.05 seconds, then starts `script_2a` at +0.2 seconds. Both
+`script_2a` and the later `sPlayer_13` author `m_fMoveTo=1`, so the stand-in walks through the same
+scripted-sequence motor seam as an NPC and its final transform transfers back to the real player on
+`RemoveControllerNPC`; snapping is only the established no-body/no-path fallback.
+
+Jack dialogue progresses through rows 261, 271, 281 and 291. Row 291 writes `G.Tut_Jack=3`; the
+following `DialogPostProcess()` branch triggers `logic_scene_1`. That relay opens `frontgate`, runs
+`logic_sabbat_setup`, and at +0.25 seconds starts `trackb00` as camera position and `focusb00` as
+camera target. The paired authored tracks last 38.05 seconds and coordinate the Sheriff reveal,
+gunfire, hand cast, wolves, mauling, the third Sabbat victim, the player-look window, controller
+exit move, and cleanup. Track completion removes the controller at +1.5 seconds, starts Jack's next
+dialogue at +1.0, and restores ordinary control through `logic_shot_end`.
+
+Particle placement in this encounter uses three distinct recovered contracts:
+
+- `attach_type=0` renders at the emitter's own authored origin.
+- `attach_type=1` (`tree`) follows the named parent root while preserving the exported offset from
+  that parent's initial placement. `pestilence` uses this on `sabbat_redshirt_3`; it is not a bone
+  snap.
+- `attach_type=2` (`point`) follows the named bone, falling back visibly and with a warning to the
+  body root if that bone is absent. `plus_sheriff_hand_w` uses `Bip01 R Hand`, and muzzle effects use
+  weapon `flash` points.
+
+The UP muzzle closure also establishes two inert source spellings the strict particle compiler must
+retain: spawn-only wrappers may author `frames 0`, and children may author `sortfront 0`. Enabled
+`sortfront 1` remains unsupported rather than being accepted without a draw-order implementation.
+Their nested spawn edge also retains `depth_offset` as an unresolved-unit scalar while the authored
+`x`/`y`/`z` offset continues through the Unreal-native coordinate conversion.
+`d_animalism_pestilence_cast_emitter` is referenced by the map but absent from the joined installed
+particle corpus; runtime therefore emits one diagnosable missing-system warning and does not invent
+a replacement. `d_animalism_pestilence_emitter` is a separate present definition and still plays.
+
+The captured death/ragdoll response after `TakeDamage` is not implemented by this transaction.
+`TakeDamage` input typing, death selection and ragdoll presentation remain the general combat/NPC
+contract; map-special-casing the third Sabbat would turn a missing shared rule into tutorial script.
 
 ## 12. Implementation inspection anchors
 

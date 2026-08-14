@@ -57,6 +57,33 @@ namespace
 				TEXT("[composition] %d posed body(ies)"), Bodies);
 		}));
 
+	FAutoConsoleCommand GHairDynamicsReport(
+		TEXT("elysium.HairDynamicsReport"),
+		TEXT("Report installed stock AnimDynamics hair chains per body."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			int32 Bodies = 0;
+			for (TObjectIterator<UElysiumBodyAnimInstance> It; It; ++It)
+			{
+				UElysiumBodyAnimInstance* Instance = *It;
+				if (Instance == nullptr || Instance->HasAnyFlags(RF_ClassDefaultObject)
+					|| Instance->GetWorld() == nullptr)
+				{
+					continue;
+				}
+				const USkeletalMeshComponent* Owner = Instance->GetSkelMeshComponent();
+				const USkeletalMesh* Mesh = Owner != nullptr ? Owner->GetSkeletalMeshAsset() : nullptr;
+				++Bodies;
+				UE_LOG(LogElysiumComposition, Display,
+					TEXT("[hair-dynamics] instance=%s mesh=%s chains=%d"),
+					*Instance->GetClass()->GetName(),
+					Mesh != nullptr ? *Mesh->GetName() : TEXT("<none>"),
+					Instance->GetHairDynamicsChainCount());
+			}
+			UE_LOG(LogElysiumComposition, Display,
+				TEXT("[hair-dynamics] %d posed body(ies)"), Bodies);
+		}));
+
 	// Where the bones actually ARE, in centimetres relative to `Bip01 Pelvis`, for every bone whose
 	// name contains the argument. A screenshot cannot separate "the arm is posed wrongly" from "the
 	// arm is posed correctly and the skinning is torn", and both look like the same broken picture.
@@ -136,6 +163,41 @@ namespace
 // FElysiumBodyAnimProxy
 // ================================================================================================
 
+void FElysiumBodyAnimProxy::Initialize(UAnimInstance* InAnimInstance)
+{
+	FAnimInstanceProxy::Initialize(InAnimInstance);
+	bHairNeedsInitialize = !HairDynamics.IsEmpty();
+}
+
+void FElysiumBodyAnimProxy::PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds)
+{
+	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		Node.PreUpdate(InAnimInstance);
+	}
+}
+
+void FElysiumBodyAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
+{
+	if (bHairNeedsInitialize)
+	{
+		bHairNeedsInitialize = false;
+		FAnimationInitializeContext InitContext(this);
+		FAnimationCacheBonesContext BoneContext(this);
+		for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+		{
+			Node.Initialize_AnyThread(InitContext);
+			Node.CacheBones_AnyThread(BoneContext);
+		}
+	}
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		Node.Update_AnyThread(InContext);
+	}
+	FAnimInstanceProxy::UpdateAnimationNode(InContext);
+}
+
 void FElysiumBodyAnimProxy::CacheBones()
 {
 	// A compiled graph's own nodes first. Guarded on `RootNode` inside, so this is a no-op on the
@@ -146,11 +208,16 @@ void FElysiumBodyAnimProxy::CacheBones()
 	// change arrives on — so both composition stages resolve their indices here, once, and never
 	// by name per evaluation.
 	AxisInterp.ResolveBones(GetRequiredBones());
+	FAnimationCacheBonesContext Context(this);
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		Node.CacheBones_AnyThread(Context);
+	}
 }
 
 void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 {
-	if (!AxisInterp.HasWork())
+	if (!AxisInterp.HasWork() && HairDynamics.IsEmpty())
 	{
 		return;
 	}
@@ -170,6 +237,10 @@ void FElysiumBodyAnimProxy::EvaluateComposition(FPoseContext& Output)
 	Composed.Pose.InitPose(Output.Pose);
 
 	AxisInterp.Apply(Composed);
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		Node.Apply(Composed);
+	}
 	// Safe, not the plain form: both stages leave a bone in local space whose parent may never have
 	// been asked for in component space, and the plain conversion ensures against exactly that.
 	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPosesSafe(Composed.Pose, Output.Pose);
@@ -220,6 +291,23 @@ void FElysiumBodyAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositi
 	}
 }
 
+void FElysiumBodyAnimProxy::SetHairDynamics(
+	const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+	const FReferenceSkeleton& ReferenceSkeleton)
+{
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		Node.TermPhysics();
+	}
+	HairDynamics.Reset(InChains.Num());
+	for (const FElysiumHairDynamicsChainConfig& Config : InChains)
+	{
+		FAnimNode_ElysiumHairDynamics& Node = HairDynamics.AddDefaulted_GetRef();
+		Node.Configure(Config, ReferenceSkeleton);
+	}
+	bHairNeedsInitialize = !HairDynamics.IsEmpty();
+}
+
 // ================================================================================================
 // UElysiumBodyAnimInstance
 // ================================================================================================
@@ -262,6 +350,19 @@ int32 UElysiumBodyAnimInstance::GetResolvedAxisInterpRules() const
 {
 	return const_cast<UElysiumBodyAnimInstance*>(this)
 		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().NumAxisInterpRules();
+}
+
+void UElysiumBodyAnimInstance::SetHairDynamics(
+	const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+	const FReferenceSkeleton& ReferenceSkeleton)
+{
+	GetProxyOnGameThread<FElysiumBodyAnimProxy>().SetHairDynamics(InChains, ReferenceSkeleton);
+}
+
+int32 UElysiumBodyAnimInstance::GetHairDynamicsChainCount() const
+{
+	return const_cast<UElysiumBodyAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().NumHairDynamicsChains();
 }
 
 bool UElysiumBodyAnimInstance::SetFlexController(const FString& Name, float Value)

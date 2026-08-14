@@ -67,6 +67,7 @@ RES_FILES = [
 
 STRINGS = "resource/gameui_english.txt"
 TITLE = "interface/mainmenu/vtm_title"
+FEED_VISION_MASK = "effects/spotlight"
 SCENE = "resource/mainmenuparticles.txt"
 SKYBOX_FACES = ("ft", "bk", "up", "dn", "lf", "rt")
 
@@ -226,6 +227,20 @@ def main(inventory=False, force=False):
         print(f"[ui] title lockup {img.width}x{img.height}")
     else:
         manifest["missing"].append(TITLE)
+
+    # --- renderer presentation art ---------------------------------------------------
+    # CViewRender::DrawFeedingView samples this exact radial mask. It stays in the generated UI
+    # mirror because it is global 2D presentation art, not a map texture and not a runtime layout.
+    img = decode_material(idx, "materials/" + FEED_VISION_MASK, resolve_inc)
+    if img:
+        relative = "effects/feed_spotlight.png"
+        destination = os.path.join(OUT, *relative.split("/"))
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        img.save(destination)
+        manifest["feed_vision"] = {"png": relative, "w": img.width, "h": img.height}
+        print(f"[ui] feed-vision mask {img.width}x{img.height}")
+    else:
+        manifest["missing"].append(FEED_VISION_MASK)
 
     # --- the menu particle scene, followed transitively -------------------------------
     scene = read(idx, SCENE)

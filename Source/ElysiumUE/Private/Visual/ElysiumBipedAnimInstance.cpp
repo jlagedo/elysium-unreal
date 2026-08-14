@@ -31,7 +31,7 @@ namespace
 
 void FElysiumBipedAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 {
-	FAnimInstanceProxy::Initialize(InAnimInstance);
+	FElysiumBodyAnimProxy::Initialize(InAnimInstance);
 
 	// Every player this proxy owns itself loops by default and is driven explicitly; no sync group,
 	// because two clips of different lengths must not be forced onto a shared normalized time — and a
@@ -103,7 +103,7 @@ void FElysiumBipedAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& 
 
 	// The graph advances whether or not its pose is consumed. A scene that ends hands the body back
 	// to a machine that has kept up with the world rather than to one frozen where the scene began.
-	FAnimInstanceProxy::UpdateAnimationNode(InContext);
+	FElysiumBodyAnimProxy::UpdateAnimationNode(InContext);
 }
 
 // ================================================================================================

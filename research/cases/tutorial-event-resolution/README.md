@@ -16,6 +16,8 @@ not recover animation blending, audio playback, or presentation internals.
   swallow work rather than defer it?
 - What transform and safety checks does `point_teleport` perform, and where does touch
   reconciliation occur?
+- How does `CAI_BaseNPCTroika::TeleportToEntity` convert its destination, write the NPC transform,
+  schedule AI work, and expose the discontinuity to clients?
 - Do maker-authored NPC lifecycle rows fire on the maker or on each child?
 - Which quota, enable, obstruction, visibility, distance, and hull guards admit explicit and timed
   maker spawns, and how do finite/infinite totals differ from the live-child ceiling?
@@ -74,3 +76,13 @@ CPython 2.1.2 (`Bin/vampire_python21.dll`, SHA-256
 `recursion_limit` global at `0x1e1808d8` initializes to 1000 and `vampire.dll` imports neither
 `Py_SetRecursionLimit` nor `Py_GetRecursionLimit`. Whether 1000 nested levels fit in
 `Vampire.exe`'s 1 MB main-thread stack reserve is not decidable from the images and stays open.
+
+The NPC-teleport boundary is closed for every concrete receiver family in the current corpus.
+`TeleportToEntity` is a
+`CAI_BaseNPCTroika` `FIELD_EHANDLE` input; `AcceptInput` converts the authored string through the
+global first-match entity-name lookup, and the native body copies absolute origin and all angles.
+Jack's `CNPC_VVampire`, `CNPC_VHumanCombatant` vtable `0x104b7ff4`, and `CNPC_VHunter` vtable
+`0x104b9784` all resolve virtual slot `+0x998` through thunk `0x10010f0f` to `FUN_102c23f0`, which
+schedules the general plus four Troika think lanes for `curtime` before the handler forces one
+second of transmission. It performs no safe-placement, velocity, navigation, schedule or touch
+reset.

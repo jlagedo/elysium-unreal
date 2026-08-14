@@ -48,6 +48,10 @@ public:
 
 	void InitializeAtFeet(const FVector& FeetOrigin, float YawDegrees);
 	void SetRuntimeReady(bool bReady);
+	// The plain-C++ NPC this engine body embodies. Collision ingress uses this identity so an
+	// ACharacter overlap remains an NPC toucher instead of being collapsed to !player.
+	void SetOwningEntity(const FElysiumEntityHandle& InOwner) { OwningEntity = InOwner; }
+	FElysiumEntityHandle GetOwningEntity() const { return OwningEntity; }
 	// The model this body wears and the repeatable token its weighted picks ride on. Set once when
 	// the motor is built, because that is the one place that knows both.
 	void SetModelStem(const FString& InStem, USkeletalMeshComponent* InVisual, int32 InVariant);
@@ -93,6 +97,7 @@ private:
 	// screen; an ignoring body still collides with the world, just not with other characters.
 	bool bFrozen = false;
 	bool bIgnoreCharacterCollision = false;
+	FElysiumEntityHandle OwningEntity;
 
 	// CCC4 — the same driver the player body runs, on the same contract. Held by value: it is plain
 	// C++ with no UObject in it, and it dies with the body.

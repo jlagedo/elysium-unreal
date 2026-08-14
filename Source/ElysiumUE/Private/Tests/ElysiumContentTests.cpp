@@ -1441,13 +1441,111 @@ bool FElysiumDlgCorpusTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The captured Sheriff transaction depends on a small authored join spanning touch, controller
+// locomotion, camera tracks, and three particle attachment shapes. Pin that join against the user's
+// exported map so a patch/corpus drift cannot silently turn the focused runtime tests into fiction.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialSheriffEncounterShapeTest,
+	"Elysium.Content.TutorialSheriffEncounterShape", GElysiumContentTestFlags)
+bool FElysiumTutorialSheriffEncounterShapeTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
+	const FString Path = FElysiumContentPaths::MapEnts(TEXT("sp_tutorial_1"));
+	if (!IFileManager::Get().FileExists(*Path))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported sp_tutorial_1.ents"));
+		return true;
+	}
+
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sp_tutorial_1 parses"), FElysiumEntityDefs::Parse(Path, Defs)))
+	{
+		return false;
+	}
+	auto Find = [&Defs](const TCHAR* Name) -> const FElysiumEntityDef*
+	{
+		for (const FElysiumEntityDef& Def : Defs.Defs)
+		{
+			if (Def.TargetName.Equals(Name, ESearchCase::IgnoreCase))
+			{
+				return &Def;
+			}
+		}
+		return nullptr;
+	};
+	auto HasWire = [](const FElysiumEntityDef& Def, const TCHAR* Output, const TCHAR* Target,
+		const TCHAR* Input, double Delay) -> bool
+	{
+		for (const FElysiumOutputDef& Wire : Def.Outputs)
+		{
+			if (Wire.Name.Equals(Output, ESearchCase::IgnoreCase)
+				&& Wire.Target.Equals(Target, ESearchCase::IgnoreCase)
+				&& Wire.Input.Equals(Input, ESearchCase::IgnoreCase)
+				&& FMath::IsNearlyEqual(Wire.Delay, static_cast<float>(Delay)))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	const FElysiumEntityDef* Trigger = Find(TEXT("trigger_4"));
+	const FElysiumEntityDef* EntryMove = Find(TEXT("script_2a"));
+	const FElysiumEntityDef* ExitMove = Find(TEXT("sPlayer_13"));
+	const FElysiumEntityDef* Scene = Find(TEXT("logic_scene_1"));
+	const FElysiumEntityDef* SheriffCast = Find(TEXT("plus_sheriff_hand_w"));
+	const FElysiumEntityDef* Pestilence = Find(TEXT("pestilence"));
+	const FElysiumEntityDef* Muzzle = Find(TEXT("muzzle_flash"));
+	if (!TestNotNull(TEXT("trigger_4 exists"), Trigger)
+		|| !TestNotNull(TEXT("script_2a exists"), EntryMove)
+		|| !TestNotNull(TEXT("sPlayer_13 exists"), ExitMove)
+		|| !TestNotNull(TEXT("logic_scene_1 exists"), Scene)
+		|| !TestNotNull(TEXT("Sheriff cast emitter exists"), SheriffCast)
+		|| !TestNotNull(TEXT("pestilence emitter exists"), Pestilence)
+		|| !TestNotNull(TEXT("muzzle emitter exists"), Muzzle))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("trigger creates the controller before the entry walk"),
+		HasWire(*Trigger, TEXT("OnStartTouch"), TEXT("pc_0"), TEXT("CreateControllerNPC"), 0.05));
+	TestTrue(TEXT("trigger starts script_2a at the authored delay"),
+		HasWire(*Trigger, TEXT("OnStartTouch"), TEXT("script_2a"), TEXT("BeginSequence"), 0.2));
+	TestEqual(TEXT("script_2a targets the controller"),
+		EntryMove->Keys.FindRef(TEXT("m_iszEntity")), FString(TEXT("!playercontroller")));
+	TestEqual(TEXT("script_2a walks"), EntryMove->Keys.FindRef(TEXT("m_fMoveTo")), FString(TEXT("1")));
+	TestEqual(TEXT("sPlayer_13 targets the controller"),
+		ExitMove->Keys.FindRef(TEXT("m_iszEntity")), FString(TEXT("!playercontroller")));
+	TestEqual(TEXT("sPlayer_13 walks"), ExitMove->Keys.FindRef(TEXT("m_fMoveTo")), FString(TEXT("1")));
+	TestTrue(TEXT("scene starts the camera position track"),
+		HasWire(*Scene, TEXT("OnTrigger"), TEXT("trackb00"), TEXT("PlayAsCameraPosition"), 0.25));
+	TestTrue(TEXT("scene starts the camera focus track"),
+		HasWire(*Scene, TEXT("OnTrigger"), TEXT("focusb00"), TEXT("PlayAsCameraTarget"), 0.25));
+
+	TestEqual(TEXT("Sheriff cast snaps to a point/bone"),
+		SheriffCast->Keys.FindRef(TEXT("attach_type")), FString(TEXT("2")));
+	TestEqual(TEXT("Sheriff cast uses the right hand"),
+		SheriffCast->Keys.FindRef(TEXT("bone")), FString(TEXT("Bip01 R Hand")));
+	TestEqual(TEXT("pestilence follows the victim tree"),
+		Pestilence->Keys.FindRef(TEXT("attach_type")), FString(TEXT("1")));
+	TestEqual(TEXT("pestilence follows the third Sabbat"),
+		Pestilence->Keys.FindRef(TEXT("parentname")), FString(TEXT("sabbat_redshirt_3")));
+	TestTrue(TEXT("UP muzzle wrapper remains in the exported closure"),
+		Muzzle->Keys.FindRef(TEXT("particle_definition")).Contains(TEXT("MuzzleFlash_emitter_up"),
+			ESearchCase::IgnoreCase));
+	return true;
+}
+
+// =====================================================================================
 // scripted_sequence × the NPC clip manifest (8.5) — every animation a cutscene beat names must
 // resolve in the vocabulary the offline export gives that NPC. This is the seam that breaks
 // silently: a clip lives in a shared animation bank pulled through the studiohdr include DAG, so
 // an exporter change that drops a bank turns a beat into a no-op with only a runtime warning.
 //
 // Measured over the 10 exported maps: 94 animation references across 108 sequences, 90 resolving.
-// The 4 that do not all name `!playercontroller`, which has no NPC body and is excluded here.
+// The 4 that do not all name the embodied `!playercontroller`; its PC clip vocabulary is separate
+// from the NPC manifest this test audits and is excluded here.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceClipsTest,
@@ -1527,7 +1625,7 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 			const FString Target = Def.Keys.FindRef(TEXT("m_iszEntity"));
 			if (Target.IsEmpty() || Target.StartsWith(TEXT("!")))
 			{
-				NoBody += Wanted.Num();   // `!playercontroller` — no NPC skeleton to resolve against
+				NoBody += Wanted.Num();   // `!playercontroller` — PC vocabulary is outside this manifest
 				continue;
 			}
 			const FElysiumEntityDef* const* Npc = ByName.Find(Target.ToLower());
@@ -5518,15 +5616,14 @@ namespace
 		{ TEXT("player"), TEXT("MoneyAdd"),             TEXT("INTEGER") },
 		{ TEXT("player"), TEXT("FrenzyTrigger"),        TEXT("VOID") },
 
-		// CAI_BaseNPC — datamap 0x105c9814. `SetRelationship` is the recovered scripted input; the
-		// other three are map-fired at `npc_*` receivers across the exported maps
-		// (`docs/vtmb/sp_tutorial_1-event-surface.md` §7) with no datamap record recovered yet.
+		// NPC-chain inputs. `TeleportToEntity` is FIELD_EHANDLE on CAI_BaseNPCTroika; the two
+		// remaining map-fired names have no recovered datamap record yet.
 		{ TEXT("npc_VVampire"),        TEXT("SetRelationship"),        TEXT("STRING") },
-		{ TEXT("npc_VVampire"),        TEXT("TeleportToEntity"),       TEXT("(unrecovered)") },
+		{ TEXT("npc_VVampire"),        TEXT("TeleportToEntity"),       TEXT("EHANDLE") },
 		{ TEXT("npc_VVampire"),        TEXT("SetScriptedDiscipline"),  TEXT("(unrecovered)") },
 		{ TEXT("npc_VVampire"),        TEXT("TakeDamage"),             TEXT("(unrecovered)") },
 		{ TEXT("npc_VHumanCombatant"), TEXT("SetRelationship"),        TEXT("STRING") },
-		{ TEXT("npc_VHumanCombatant"), TEXT("TeleportToEntity"),       TEXT("(unrecovered)") },
+		{ TEXT("npc_VHumanCombatant"), TEXT("TeleportToEntity"),       TEXT("EHANDLE") },
 		// And the chain again, from the other leaf of it.
 		{ TEXT("npc_VVampire"),        TEXT("WillTalk"),               TEXT("INTEGER") },
 		{ TEXT("npc_VVampire"),        TEXT("SetBodyAsCameraTarget"),  TEXT("VOID") },

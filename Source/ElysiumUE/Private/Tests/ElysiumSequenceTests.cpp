@@ -595,6 +595,106 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 	return true;
 }
 
+// The Sheriff scene temporarily replaces the player with `npc_VPlayerController`; its two MoveTo1
+// beats must traverse under the same motor contract as an NPC and transfer the final mark back to
+// the real player when the stand-in is removed.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerControllerSequenceLocomotionTest,
+	"Elysium.Substrate.PlayerControllerSequenceLocomotion", GElysiumTestFlags)
+bool FElysiumPlayerControllerSequenceLocomotionTest::RunTest(const FString&)
+{
+	const FVector Mark(750.f, 125.f, 20.f);
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__player_controller_sequence__");
+
+	FElysiumEntityDef Seq;
+	Seq.Classname = TEXT("scripted_sequence");
+	Seq.TargetName = TEXT("player_move");
+	Seq.Origin = Mark;
+	Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("!playercontroller"));
+	Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("1"));
+	Seq.Keys.Add(TEXT("angles"), TEXT("0 210 0"));
+	FElysiumOutputDef End;
+	End.Name = TEXT("OnEndSequence");
+	End.Target = TEXT("counter1");
+	End.Input = TEXT("Add");
+	End.Param = TEXT("1");
+	Seq.Outputs.Add(MoveTemp(End));
+	Defs.Defs.Add(MoveTemp(Seq));
+
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.bProvideNpcMotor = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("player exists"), Player))
+	{
+		return false;
+	}
+	Player->SetRuntimeModel(TEXT("models/character/pc/male/tremere_armor_0.mdl"));
+	World.CreatePlayerControllerEntity();
+
+	FElysiumEntity* Controller = World.FindPlayerController();
+	FElysiumEntity* Sequence = World.FindByName(TEXT("player_move"));
+	FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+	FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+	if (!TestNotNull(TEXT("controller exists"), Controller)
+		|| !TestNotNull(TEXT("player sequence exists"), Sequence)
+		|| !TestNotNull(TEXT("counter exists"), Count)
+		|| !TestNotNull(TEXT("controller owns a motor"), Motor))
+	{
+		return false;
+	}
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value"))
+			{
+				return FCString::Atof(*Row.Value);
+			}
+		}
+		return -1.f;
+	};
+
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Sequence->Handle);
+	double Now = 0.0;
+	for (int32 Tick = 0; Tick < 5; ++Tick) { World.Tick(Now); Now += 0.1; }
+	TestTrue(TEXT("MoveTo1 sends the controller motor to the authored mark"),
+		Motor->RequestedFeet.Equals(Mark, 0.01));
+	TestTrue(TEXT("the controller motor ignores other character capsules"),
+		Motor->bIgnoreCharacterCollision);
+	TestFalse(TEXT("the controller is not snapped to the mark while its motor is travelling"),
+		Controller->Origin.Equals(Mark, 0.01));
+	TestEqual(TEXT("OnEndSequence waits for controller travel"), CounterValue(Count), 0.f);
+
+	Motor->Feet = Mark;
+	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
+	for (int32 Tick = 0; Tick < 5; ++Tick) { World.Tick(Now); Now += 0.1; }
+	TestEqual(TEXT("OnEndSequence fires after controller arrival and facing"),
+		CounterValue(Count), 1.f);
+	TestTrue(TEXT("controller samples the motor's final mark"),
+		Controller->Origin.Equals(Mark, 0.01));
+
+	TestTrue(TEXT("controller removal succeeds"), World.RemovePlayerControllerEntity());
+	TestTrue(TEXT("the final scene mark transfers back to the player"),
+		Player->Origin.Equals(Mark, 0.01));
+	TestTrue(TEXT("controller teardown destroys its motor before its visual"),
+		Services.Saw(TEXT("DestroyNpcMotor")));
+	return true;
+}
+
 // =====================================================================================
 // The three VtMB spawnflag additions on CCineNPC (`docs/vtmb/entity_io.md`): 256 holds the
 // post-idle so the beat never completes, 512 makes the beat's claim on its NPC unbreakable,

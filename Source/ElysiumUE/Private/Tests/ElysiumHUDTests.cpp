@@ -155,6 +155,20 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("gamepad use binding text"),
 		ElysiumInteraction::UseBindingText(true).ToString(), FString(TEXT("RB")));
 
+	View.Feed.bVisible = true;
+	View.Feed.bPaired = true;
+	View.Feed.BloodPool = 5;
+	View.Feed.MaxBloodPool = 9;
+	Model->Apply(View);
+	TestTrue(TEXT("a focused feed victim publishes the top blood meter"),
+		Model->bFeedVictimVisible);
+	TestEqual(TEXT("victim blood projects exactly"), Model->FeedVictimBlood, 5);
+	TestEqual(TEXT("victim blood capacity projects exactly"), Model->FeedVictimBloodCapacity, 9);
+	TestEqual(TEXT("a paired feed suppresses only the center reticle"),
+		Model->Reticle, EElysiumHUDReticle::None);
+	TestTrue(TEXT("the paired feed retains the ordinary side HUD"), Model->bVisible);
+	View.Feed.bPaired = false;
+
 	View.bSignHidesHUD = true;
 	Model->Apply(View);
 	TestFalse(TEXT("HideHUD suppresses the complete heads-up model"), Model->bVisible);

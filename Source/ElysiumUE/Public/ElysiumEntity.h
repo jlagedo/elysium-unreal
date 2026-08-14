@@ -319,6 +319,11 @@ public:
 	// Release the script's ownership: stop the motor and hand the body back to its own behaviour
 	// (a parked patrol route or interesting-place search resumes). Leaves the pose alone.
 	virtual void EndScriptMove() {}
+	// Dialogue supersedes a `scripted_sequence` that still owns this body. The NPC calls this on
+	// its ScriptOwner before acquiring the dialogue token; only the owning sequence accepts the
+	// matching body handle. Base false also covers choreographed-scene claims, which have their own
+	// cast lifetime rather than CCineNPC's CancelSequence transition.
+	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& Body) { return false; }
 
 	// --- Dialogue body ownership (K7) --------------------------------------------------
 	// The open world session holds this token beside its camera handle. Only the NPC leaf backs

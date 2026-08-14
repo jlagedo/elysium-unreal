@@ -342,8 +342,51 @@ void UElysiumPresentationSubsystem::Publish()
 
 		World->BuildLootView(Next.Loot);
 
+		const FElysiumPlayer* PlayerEnt = World->FindPlayer();
+		if (PlayerEnt)
+		{
+			FElysiumEntityHandle FeedTarget;
+			bool bPaired = false;
+			if (PlayerEnt->IsFeedPaired() && !PlayerEnt->FeedState.bVictim)
+			{
+				// Peer exists from accepted engage through the release tail. Target is intentionally
+				// absent before 4007 and cleared at 4006, so it cannot own the visible lifetime.
+				FeedTarget = PlayerEnt->FeedState.Peer;
+				bPaired = true;
+			}
+			else if (Previous.Feed.bVisible
+				&& World->GetFocusedUsable() == Previous.Feed.Target)
+			{
+				// Retail keeps the partially drained bar while the released victim remains focused.
+				// Focus loss, invalidation or travel clears it without a second gameplay owner.
+				FeedTarget = Previous.Feed.Target;
+			}
+
+			const FElysiumEntity* TargetEnt = World->Resolve(FeedTarget);
+			const FElysiumCombatCharacter* Victim = TargetEnt ? TargetEnt->AsCombatCharacter() : nullptr;
+			if (Victim && !Victim->IsInert())
+			{
+				FElysiumFeedView& Feed = Next.Feed;
+				Feed.bVisible = true;
+				Feed.bPaired = bPaired;
+				Feed.Target = FeedTarget;
+				Feed.BloodPool = FMath::Max(0, Victim->BloodPoolValue());
+				const int32 AuthoredMax = Victim->Sheet.GetCurrent(
+					EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPoolMax);
+				// Presentation needs a positive denominator even in a content-free fixture. Never write
+				// the clamp back: authored sheet state remains the sole gameplay value. Retain the first
+				// observed capacity when an NPC has no authored maximum, or the denominator would shrink
+				// with every pulse and the visible bar would incorrectly remain full.
+				const int32 ObservedMax = Previous.Feed.Target == FeedTarget
+					? Previous.Feed.MaxBloodPool : 0;
+				Feed.MaxBloodPool = FMath::Max(1,
+					FMath::Max(Feed.BloodPool, FMath::Max(AuthoredMax, ObservedMax)));
+				Feed.Phase = static_cast<uint8>(PlayerEnt->FeedState.Phase);
+			}
+		}
+
 		if (Next.bCinematic || Next.bSignHidesHUD || bModalScreen || Next.Dialogue.IsOpen()
-			|| Next.Loot.IsOpen())
+			|| Next.Loot.IsOpen() || Next.Feed.bPaired)
 		{
 			Next.Interaction = FElysiumInteractionView();
 		}
@@ -351,7 +394,7 @@ void UElysiumPresentationSubsystem::Publish()
 		// The meters come off the player entity's own fields (11.4), live — the session record is
 		// the durable copy, and reading it here would report the value the entity is about to
 		// overwrite. No player entity (a backdrop, a headless logic world) leaves bValid false.
-		if (const FElysiumPlayer* PlayerEnt = World->FindPlayer())
+		if (PlayerEnt)
 		{
 			FElysiumVitals& Vit = Next.Vitals;
 			Vit.bValid = true;

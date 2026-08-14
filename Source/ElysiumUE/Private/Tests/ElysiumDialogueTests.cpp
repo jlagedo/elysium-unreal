@@ -508,6 +508,159 @@ bool FElysiumDlgAutomaticTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueBodySceneTest,
+	"Elysium.Substrate.Dialogue.BodyScene", GElysiumTestFlags)
+bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
+{
+	ElysiumScene::ClearCache();
+	ON_SCOPE_EXIT { ElysiumScene::ClearCache(); };
+
+	TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+	if (!TestTrue(TEXT("Jack dialogue fixture parses"), FElysiumDlgFile::ParseBytes(ElysiumDlgBytes({
+		ElysiumDlgRow(11, TEXT("Opening line."), TEXT("#"), TEXT(""), TEXT("")),
+		ElysiumDlgRow(12, TEXT("Continue."), TEXT("21"), TEXT(""), TEXT("")),
+		ElysiumDlgRow(21, TEXT("Follow-up line."), TEXT("#"), TEXT(""), TEXT("")),
+		ElysiumDlgRow(22, TEXT("Done."), TEXT("0"), TEXT(""), TEXT("")),
+	}), File.Get())))
+	{
+		return false;
+	}
+	File->SourcePath = TEXT("dlg/main characters/jack_tutorial.dlg");
+
+	auto RegisterLineScene = [&File](int32 LineId, const FString& Clip)
+	{
+		const FString Key = FPaths::SetExtension(
+			FElysiumLineService::DialogueLineSource(File->SourcePath, LineId), TEXT("vcd"));
+		const FString Text = FString::Printf(
+			TEXT("actor \"Jack\"\n{\n")
+			TEXT(" channel \"Speech\"\n {\n  event speak \"NPC Line\"\n  {\n")
+			TEXT("   time 0.0 1.5\n   param \"character/dlg/test/line%d_col_e.wav\"\n")
+			TEXT("  }\n }\n channel \"Gestures\"\n {\n  event gesture \"body\"\n  {\n")
+			TEXT("   time 0.0 2.0\n   param \"%s\"\n  }\n }\n}\n"),
+			LineId, *Clip);
+		ElysiumScene::RegisterInline(Key, Text);
+	};
+	RegisterLineScene(11, TEXT("Smiling_Jack_line11_col_E"));
+	RegisterLineScene(21, TEXT("Smiling_Jack_line21_col_E"));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	Services.ClipSeconds = 2.533333f; // Jack's authored shared-male waveover01 duration
+	Services.StanceClips.Idle[0] = TEXT("Stance_Neutral_Idle_1");
+	Services.StanceClips.Idle[1] = TEXT("Stance_Neutral_Idle_2");
+	Services.StanceClips.Idle[2] = TEXT("Stance_Neutral_Idle_3");
+	ElysiumStance::ApplyPrecacheFallbacks(Services.StanceClips);
+	FElysiumDisposition Neutral;
+	Neutral.Name = TEXT("Neutral");
+	Neutral.AnimName = TEXT("Neutral");
+	FElysiumDisposition Joy;
+	Joy.Name = TEXT("Joy");
+	Joy.AnimName = TEXT("Joy");
+	Services.DispositionRows.Add(TEXT("neutral|1"), Neutral);
+	Services.DispositionRows.Add(TEXT("joy|1"), Joy);
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__dialogue_body_scene_test__");
+	FElysiumEntityDef Jack;
+	Jack.Classname = TEXT("npc_VVampire");
+	Jack.TargetName = TEXT("Jack");
+	Jack.Keys.Add(TEXT("model"),
+		TEXT("models/character/npc/unique/smiling_jack/smiling_jack.mdl"));
+	Defs.Defs.Add(MoveTemp(Jack));
+	FElysiumEntityDef Waveover;
+	Waveover.Classname = TEXT("scripted_sequence");
+	Waveover.TargetName = TEXT("sJack_waveover");
+	Waveover.Keys.Add(TEXT("m_iszEntity"), TEXT("Jack"));
+	Waveover.Keys.Add(TEXT("m_iszPlay"), TEXT("waveover01"));
+	Waveover.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
+	Defs.Defs.Add(MoveTemp(Waveover));
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0); // admit the NPC mind before dialogue acquires the body
+	FElysiumEntity* JackEntity = World.FindByName(TEXT("Jack"));
+	FElysiumEntity* WaveoverEntity = World.FindByName(TEXT("sJack_waveover"));
+	if (!TestNotNull(TEXT("world fixture has Jack"), JackEntity)
+		|| !TestNotNull(TEXT("world fixture has Jack's waveover beat"), WaveoverEntity))
+	{
+		return false;
+	}
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), WaveoverEntity->Handle);
+	World.Tick(0.0);
+	TestEqual(TEXT("beat two starts Jack's authored waveover"),
+		Services.Count(TEXT("PlayNpcClip smiling_jack waveover01 loop=0")), 1);
+	TestTrue(TEXT("the waveover beat claims Jack until dialogue interrupts it"),
+		JackEntity->ScriptOwner == WaveoverEntity->Handle);
+
+	TSharedRef<FElysiumDlgConversation> Conversation = MakeShared<FElysiumDlgConversation>(
+		File, true, false, [](const FString&) { return true; }, [](const FString&) {});
+	Conversation->Start();
+	Services.Calls.Reset();
+	World.OpenDialog(JackEntity->Handle, Conversation);
+	TestFalse(TEXT("dialogue cancels the older waveover body claim"), JackEntity->ScriptOwner.IsSet());
+	TestTrue(TEXT("the cancelled waveover has no delayed action deadline"),
+		WaveoverEntity->SaveBlockReason() == nullptr);
+	TestTrue(TEXT("line 11 owns Jack's body immediately"),
+		World.HasActiveDialogueBodyClip(JackEntity->Handle));
+	TestEqual(TEXT("line 11 submits its authored body clip exactly once"),
+		Services.Count(TEXT("PlayNpcClip smiling_jack Smiling_Jack_line11_col_E loop=0")), 1);
+	const int32 IdleRefreshesAfterHandoff = Services.Count(TEXT("RefreshNpcIdle smiling_jack"));
+	World.Tick(3.0); // beyond waveover01's old deadline, while the dialogue gesture remains live
+	TestEqual(TEXT("the cancelled beat cannot reset the newer dialogue clip at its old deadline"),
+		Services.Count(TEXT("RefreshNpcIdle smiling_jack")), IdleRefreshesAfterHandoff);
+	TestTrue(TEXT("the dialogue body scene survives the old waveover deadline"),
+		World.HasActiveDialogueBodyClip(JackEntity->Handle));
+
+	World.Tick(3.1);
+	TestEqual(TEXT("the dialogue stance think cannot overwrite a live line clip"),
+		Services.Count(TEXT("PlayNpcClip smiling_jack Stance_Neutral_Idle_1")), 0);
+	TestTrue(TEXT("the instanced scene seeks the body on its own clock"),
+		Services.Saw(TEXT("SeekCinematicClip 0.100")));
+
+	World.PlayerDialogChoose(0);
+	TestEqual(TEXT("advancing replaces line 11 with line 21's body clip"),
+		Services.Count(TEXT("PlayNpcClip smiling_jack Smiling_Jack_line21_col_E loop=0")), 1);
+	TestTrue(TEXT("line replacement releases the outgoing pose to the stance path"),
+		Services.Saw(TEXT("RefreshNpcIdle smiling_jack")));
+
+	World.CloseDialog(/*bSilent=*/true);
+	TestFalse(TEXT("dialogue close releases the active body scene"),
+		World.HasActiveDialogueBodyClip(JackEntity->Handle));
+	const int32 SeeksAtClose = Services.Count(TEXT("SeekCinematicClip"));
+	World.Tick(3.2);
+	TestEqual(TEXT("a closed line scene receives no stale body tick"),
+		Services.Count(TEXT("SeekCinematicClip")), SeeksAtClose);
+
+	// The dialogue owner is intentionally accepted by SetDisposition. IsFeedBusy() also includes
+	// bInDialog for feed refusal, so the transition gate must ask the combat-character feed state
+	// directly rather than rejecting every open conversation.
+	TSharedRef<FElysiumDlgFile> DispositionFile = MakeShared<FElysiumDlgFile>();
+	TestTrue(TEXT("disposition dialogue fixture parses"), FElysiumDlgFile::ParseBytes(ElysiumDlgBytes({
+		ElysiumDlgRow(101, TEXT("No body event."), TEXT("#"), TEXT(""), TEXT("")),
+		ElysiumDlgRow(102, TEXT("Done."), TEXT("0"), TEXT(""), TEXT("")),
+	}), DispositionFile.Get()));
+	DispositionFile->SourcePath = TEXT("dlg/main characters/disposition_dialog.dlg");
+	const FString DispositionSceneKey = FPaths::SetExtension(
+		FElysiumLineService::DialogueLineSource(DispositionFile->SourcePath, 101), TEXT("vcd"));
+	ElysiumScene::RegisterInline(DispositionSceneKey,
+		TEXT("actor \"Jack\"\n{\n channel \"Speech\"\n {\n  event speak \"line\"\n  {\n")
+		TEXT("   time 0.0 1.0\n   param \"character/dlg/test/line101_col_e.wav\"\n  }\n }\n}\n"));
+	TSharedRef<FElysiumDlgConversation> DispositionConversation = MakeShared<FElysiumDlgConversation>(
+		DispositionFile, true, false, [](const FString&) { return true; }, [](const FString&) {});
+	DispositionConversation->Start();
+	World.OpenDialog(JackEntity->Handle, DispositionConversation);
+	Services.Calls.Reset();
+	TestTrue(TEXT("SetDisposition succeeds while dialogue owns the body"),
+		static_cast<FElysiumAnimating*>(JackEntity)->SetDisposition(TEXT("Joy"), 1));
+	TestEqual(TEXT("dialogue no longer makes the authored disposition transition unreachable"),
+		Services.Count(TEXT("PlayNpcClip smiling_jack Stance_Trans_Neutral_1_Joy_1 loop=0")), 1);
+	World.CloseDialog(/*bSilent=*/true);
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgStartingLineTest,
 	"Elysium.Substrate.DlgStartingLine", GElysiumTestFlags)
 bool FElysiumDlgStartingLineTest::RunTest(const FString&)

@@ -62,4 +62,8 @@ namespace ElysiumNpcVisual
 	// one was attached, null otherwise.
 	UChaosClothComponent* InstallGarment(USkeletalMeshComponent* Body, const FString& Stem);
 
+	// Install the generated stock-AnimDynamics hair recipe, if this is one of the two proof bodies.
+	// False is the ordinary answer everywhere else. A carried-but-invalid recipe warns and refuses.
+	bool InstallHairDynamics(USkeletalMeshComponent* Body, const FString& Stem);
+
 }

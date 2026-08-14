@@ -32,6 +32,10 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 	FElysiumBodyAnimProxy() = default;
 	explicit FElysiumBodyAnimProxy(UAnimInstance* Instance) : FAnimInstanceProxy(Instance) {}
 
+	virtual void Initialize(UAnimInstance* InAnimInstance) override;
+	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
+	virtual void UpdateAnimationNode(const FAnimationUpdateContext& InContext) override;
+
 	// Walks a compiled graph's nodes if there is one, then resolves the tail's bone references —
 	// both stages resolve their indices here, once, and never by name per evaluation. The base call
 	// is free on the native path: it is guarded on `RootNode`, which is null when there is no graph.
@@ -41,6 +45,9 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 	// VtMB's one composition stage (CAP7.2); null clears it.
 	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
+	void SetHairDynamics(const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+		const FReferenceSkeleton& ReferenceSkeleton);
+	int32 NumHairDynamicsChains() const { return HairDynamics.Num(); }
 
 	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
 	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
@@ -65,6 +72,9 @@ private:
 	// Plain members rather than graph nodes: the post-process slot is the tail of Evaluate, so both
 	// are driven through `ResolveBones`/`CacheBones` + `Apply` rather than through pose links.
 	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
+	UPROPERTY(Transient) TArray<FAnimNode_ElysiumHairDynamics> HairDynamics;
+	bool bHairNeedsInitialize = false;
+
 };
 
 UCLASS(Transient, Abstract)
@@ -148,6 +158,12 @@ public:
 	// How many rules resolved against this body's actual skeleton — the number the debug surface
 	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
 	int32 GetResolvedAxisInterpRules() const;
+
+	// Install the generated mesh's stock-AnimDynamics recipes. Empty is the ordinary answer for
+	// every body outside the deliberately narrow two-character proof.
+	void SetHairDynamics(const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+		const FReferenceSkeleton& ReferenceSkeleton);
+	int32 GetHairDynamicsChainCount() const;
 
 	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
 	// rules produced from them, and the ramped weight each morph target is driven at.

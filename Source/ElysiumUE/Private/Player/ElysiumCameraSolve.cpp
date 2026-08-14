@@ -110,7 +110,8 @@ void FElysiumCameraWeights::Advance(float DeltaSeconds, float TimeScale)
 
 	// The feed and secondary weights advance FIRST, because the third-person driver below reads the
 	// feed weight in its own priority test.
-	Feed = FMath::Clamp(Feed + (bFeed ? ElysiumCam::BlendRate : -ElysiumCam::BlendRate) * Dt, 0.0f, 1.0f);
+	Feed = FMath::Clamp(Feed + (bFeed ? ElysiumCam::FeedBlendRate
+		: -ElysiumCam::FeedBlendRate) * Dt, 0.0f, 1.0f);
 	Secondary = FMath::Clamp(Secondary - ElysiumCam::SecondaryDecayRate * Dt, 0.0f, 1.0f);
 
 	// Priority: forced-third and the feed camera win, then forced-first, then the user toggle. The
@@ -138,6 +139,21 @@ const TCHAR* FElysiumCameraWeights::Driver() const
 	if (bForcedFirst)   { return TEXT("forced-first"); }
 	if (bUserThird)     { return TEXT("user"); }
 	return TEXT("first");
+}
+
+FElysiumFeedCameraPose ElysiumCam::SolveOrdinaryFeedCamera(float T, float EntryYaw,
+	const FElysiumCameraCvars& Cvars)
+{
+	const float Seconds = FMath::Max(0.0f, T);
+	const float SourcePitch = FMath::Min(Cvars.FeedPitchMax,
+		Cvars.FeedPitch - Cvars.FeedPitch
+			* FMath::Pow(Cvars.FeedPitchPow1, Cvars.FeedPitchPow2 * Seconds));
+	const FRotator Rotation(-SourcePitch, EntryYaw + Cvars.FeedYaw * Seconds, Cvars.FeedRoll);
+	FElysiumFeedCameraPose Out;
+	Out.Rotation = Rotation;
+	Out.Offset = Rotation.Vector()
+		* (Cvars.FeedForwardBase * FMath::Pow(Seconds, Cvars.FeedForwardPow));
+	return Out;
 }
 
 // =====================================================================================
@@ -254,6 +270,16 @@ TArrayView<const ElysiumCam::FCvarDef> ElysiumCam::CvarDefs()
 		{ TEXT("cam_idealdist"),          TEXT("85"),  TEXT("desired boom length, Source units") },
 		{ TEXT("cam_targetangle"),        TEXT("15"),  TEXT("camera pitch offset above the eye line") },
 		{ TEXT("cam_yaw"),                TEXT("0"),   TEXT("yaw offset from the view direction") },
+		{ TEXT("camfeed_yaw"),            TEXT("50"),  TEXT("ordinary feed orbit yaw, degrees per second") },
+		{ TEXT("camfeed_yaw_end"),        TEXT("2"),   TEXT("registered; unused by the ordinary feed solve") },
+		{ TEXT("camfeed_pitch"),          TEXT("80"),  TEXT("ordinary feed pitch curve amplitude") },
+		{ TEXT("camfeed_pitch_min"),      TEXT("0"),   TEXT("registered; unused by the ordinary feed solve") },
+		{ TEXT("camfeed_pitch_max"),      TEXT("60"),  TEXT("ordinary feed pitch clamp") },
+		{ TEXT("camfeed_pitch_pow1"),     TEXT("2"),   TEXT("ordinary feed pitch exponential base") },
+		{ TEXT("camfeed_pitch_pow2"),     TEXT("-0.35"), TEXT("ordinary feed pitch exponential time coefficient") },
+		{ TEXT("camfeed_roll"),           TEXT("0"),   TEXT("ordinary feed view roll") },
+		{ TEXT("camfeed_forward_base"),   TEXT("-50"), TEXT("ordinary feed dolly base, Source units") },
+		{ TEXT("camfeed_forward_pow"),    TEXT("0.5"), TEXT("ordinary feed dolly time exponent") },
 		{ TEXT("cam_idealyaw"),           TEXT("0"),   TEXT("registered; read in no recovered path") },
 		{ TEXT("cam_idealpitch"),         TEXT("0"),   TEXT("registered; read in no recovered path") },
 		{ TEXT("cam_snapto"),             TEXT("0"),   TEXT("registered; role unverified") },
@@ -319,6 +345,17 @@ void FElysiumCameraCvars::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 	HookesConstantWall = Num(TEXT("cdamp_hookesconstantwall"), 15.0f);
 	SpringLength       = Num(TEXT("cdamp_springlength"), 0.1f) * ElysiumCam::U;
 	DampMaxDist        = Num(TEXT("cdamp_maxdist"), 50.0f) * ElysiumCam::U;
+
+	FeedYaw         = Num(TEXT("camfeed_yaw"), 50.0f);
+	FeedYawEnd      = Num(TEXT("camfeed_yaw_end"), 2.0f);
+	FeedPitch       = Num(TEXT("camfeed_pitch"), 80.0f);
+	FeedPitchMin    = Num(TEXT("camfeed_pitch_min"), 0.0f);
+	FeedPitchMax    = Num(TEXT("camfeed_pitch_max"), 60.0f);
+	FeedPitchPow1   = FMath::Max(UE_SMALL_NUMBER, Num(TEXT("camfeed_pitch_pow1"), 2.0f));
+	FeedPitchPow2   = Num(TEXT("camfeed_pitch_pow2"), -0.35f);
+	FeedRoll        = Num(TEXT("camfeed_roll"), 0.0f);
+	FeedForwardBase = Num(TEXT("camfeed_forward_base"), -50.0f) * ElysiumCam::U;
+	FeedForwardPow  = Num(TEXT("camfeed_forward_pow"), 0.5f);
 
 	// The boom length clamp is the authored one; an ideal outside it is the clamp's business, not a
 	// silent correction of the user's cvar.

@@ -1,13 +1,16 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraService.h"
+#include "ElysiumContentPaths.h"
 
 #include "Player/ElysiumCommandBus.h"
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumPlayerBody.h"
+#include "UI/ElysiumUITexture.h"
 
 #include "Camera/PlayerCameraManager.h"
 #include "CollisionQueryParams.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -89,6 +92,18 @@ void UElysiumCameraComponent::UpdateCamera(float DeltaSeconds)
 	Cvars.LoadFrom([](const TCHAR* Name) { return ElysiumCommandBus::Console().GetCvar(Name); });
 
 	ConsumeCamCommand();
+	const bool bJustEnteredFeed = Weights.bFeed && !bFeedPoseLive;
+	if (bJustEnteredFeed)
+	{
+		bFeedPoseLive = true;
+		FeedElapsedSeconds = 0.0f;
+		FeedEntryYaw = ViewRotation().Yaw;
+		EnsureFeedVisionMask();
+	}
+	else if (bFeedPoseLive)
+	{
+		FeedElapsedSeconds += Dt;
+	}
 
 	// The scripted channel's weight is written before the third-person driver advances, because
 	// `CAM_IsThirdPerson` reads it — a dialogue camera counts as third person, which is what gets the
@@ -96,6 +111,11 @@ void UElysiumCameraComponent::UpdateCamera(float DeltaSeconds)
 	Shots.Advance(Dt);
 	Weights.Scripted = Shots.GetWeight();
 	Weights.Advance(Dt, /*TimeScale*/ 1.0f);
+	if (!Weights.bFeed && Weights.Feed <= 0.0f)
+	{
+		bFeedPoseLive = false;
+		FeedElapsedSeconds = 0.0f;
+	}
 
 	// First person: the offset is the zero vector and the result is exactly the eye view. The rig is
 	// asked to re-seed so re-entering third person snaps rather than swinging in from wherever the
@@ -178,6 +198,23 @@ void UElysiumCameraComponent::SolveModelAlpha()
 {
 	PlayerModelAlpha = ElysiumCam::SolveModelAlpha(SolvedOffset, Weights, Cvars);
 }
+
+void UElysiumCameraComponent::EnsureFeedVisionMask()
+{
+	if (bFeedVisionMaskAttempted)
+	{
+		return;
+	}
+	bFeedVisionMaskAttempted = true;
+	const FString Path = FElysiumContentPaths::UiFeedVisionMask();
+	FeedVisionMask = ElysiumUI::LoadPngTexture(Path);
+	if (!FeedVisionMask)
+	{
+		UE_LOG(LogElysiumCamera, Warning,
+			TEXT("ordinary feed vision cannot load the exported spotlight mask '%s'; using the renderer's oval fallback"),
+			*Path);
+	}
+}
 // =====================================================================================
 // The apply point (`CAM_ApplyToView`, 0x100ffb00)
 // =====================================================================================
@@ -206,6 +243,39 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 	{
 		View.Location += SolvedOffset * E;
 		View.Rotation = FMath::Lerp(View.Rotation, SolvedAngles, E);
+	}
+
+	// `DrawFeedingView` runs after the ordinary base camera. Its full-strength pose ignores the boom
+	// and applies no collision trace; the linear feed weight is eased only here, at point of use.
+	const float FeedE = Weights.FeedBlend();
+	if (FeedE > 0.0f && bFeedPoseLive)
+	{
+		const FElysiumFeedCameraPose Feed = ElysiumCam::SolveOrdinaryFeedCamera(
+			FeedElapsedSeconds, FeedEntryYaw, Cvars);
+		View.Location = FMath::Lerp(View.Location, EyeLocation() + Feed.Offset, FeedE);
+		View.Rotation = FMath::Lerp(View.Rotation, Feed.Rotation, FeedE);
+
+		// Renderer-owned isolation: grayscale inside the recovered spotlight mask, pure black outside
+		// at weight one. This is camera post-process state, not a HUD panel, so it covers the world and
+		// every rendered body consistently at any viewport resolution.
+		FPostProcessSettings& PP = View.PostProcessSettings;
+		PP.bOverride_ColorSaturation = true;
+		PP.ColorSaturation = FMath::Lerp(PP.ColorSaturation,
+			FVector4(0.0, 0.0, 0.0, 1.0), FeedE);
+		PP.bOverride_VignetteIntensity = true;
+		PP.VignetteIntensity = FeedE;
+		PP.bOverride_VignetteType = true;
+		PP.VignetteType = FeedVisionMask ? EVignetteType::Texture : EVignetteType::Oval;
+		PP.bOverride_VignetteCenter = true;
+		PP.VignetteCenter = FVector2f(0.5f, 0.5f);
+		PP.bOverride_VignetteColor = true;
+		PP.VignetteColor = FLinearColor::Black;
+		PP.bOverride_VignetteSize = true;
+		PP.VignetteSize = FVector2f(1.0f, 1.0f);
+		PP.bOverride_VignetteSoftness = true;
+		PP.VignetteSoftness = 1.0f;
+		PP.bOverride_VignetteTexture = FeedVisionMask != nullptr;
+		PP.VignetteTexture = FeedVisionMask;
 	}
 }
 

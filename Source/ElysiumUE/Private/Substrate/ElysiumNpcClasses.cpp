@@ -240,11 +240,284 @@ private:
 };
 
 // ============================================================================================
+// FElysiumScriptedCharacter — the one movement-only owner shared by ordinary NPCs and the
+// scene-owned player duplicate. Unreal owns path following through IElysiumNpcMotor; this class
+// owns the authored scripted_sequence gait, arrival/facing order and failure bounds.
+// ============================================================================================
+
+class FElysiumScriptedCharacter : public FElysiumCombatCharacter
+{
+public:
+	virtual ~FElysiumScriptedCharacter() override
+	{
+		DestroyMotor();
+	}
+
+	virtual bool BeginScriptMove(const FVector& Mark, const FVector& MarkAngles,
+		EElysiumScriptGait Gait, const FString& CustomClip) override
+	{
+		if (!Motor || IsInert())
+		{
+			return false;
+		}
+		if (!ClaimScriptMove())
+		{
+			return false;
+		}
+		bScriptMoveClaimed = true;
+
+		Motor->Stop();
+		const double Now = World ? World->NowSeconds() : 0.0;
+		ScriptMark = Mark;
+		ScriptMarkAngles = MarkAngles;
+		ScriptProgressAt = Now;
+		ScriptWatchdogAt = Now + ElysiumNpcGait::ScriptWatchdogSeconds;
+
+		if (Gait == EElysiumScriptGait::Face)
+		{
+			ScriptBestDistance = 0.0f;
+			ScriptDeadline = Now + ElysiumNpcGait::ScriptFaceSeconds;
+			ScriptPhase = EScriptPhase::Facing;
+			Motor->Face(-MarkAngles.Y);
+			NextThink = static_cast<float>(ScriptWatchdogAt);
+			return true;
+		}
+
+		float Speed = Gait == EElysiumScriptGait::Run
+			? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed;
+		FString ScriptWalkLabel;
+		FString ScriptWalkAnim;
+		if (Gait == EElysiumScriptGait::Walk)
+		{
+			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+			float AuthoredSpeed = 0.f;
+			if (Embodiment && Embodiment->ResolveNpcActivityClip(ModelStem(), TEXT("ACT_WALK"),
+				FMath::Max(0, Handle.Index), ScriptWalkLabel, ScriptWalkAnim, AuthoredSpeed)
+				&& FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
+			{
+				Speed = AuthoredSpeed;
+				UE_LOG(LogElysiumNpcEnt, Verbose,
+					TEXT("%s scripted walk uses '%s' -> '%s' authored ground speed %.1fcm/s"),
+					*DebugString(), *ScriptWalkLabel, *ScriptWalkAnim, Speed);
+			}
+		}
+		if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
+			/*bAllowPartialPath=*/true))
+		{
+			ScriptPhase = EScriptPhase::None;
+			ReleaseScriptMove(TEXT("script path unavailable"));
+			bScriptMoveClaimed = false;
+			return false;
+		}
+
+		ScriptPhase = EScriptPhase::Travel;
+		ScriptBestDistance = static_cast<float>(FVector::Dist2D(Origin, Mark));
+		bool bTravelCycleStarted = false;
+		if (Gait == EElysiumScriptGait::Custom)
+		{
+			bTravelCycleStarted = PlayAnimClip(CustomClip, /*bLoop=*/true);
+		}
+		else if (Gait == EElysiumScriptGait::Walk && !ScriptWalkLabel.IsEmpty())
+		{
+			bTravelCycleStarted = PlayAnimClip(ScriptWalkLabel, /*bLoop=*/true);
+		}
+		if (!bTravelCycleStarted)
+		{
+			StartScriptWalkingAnimation(Gait == EElysiumScriptGait::Run);
+		}
+		ScriptDeadline = Now + ElysiumNpcGait::TravelCapSeconds(ScriptBestDistance, Speed);
+		NextThink = static_cast<float>(ScriptWatchdogAt);
+		return true;
+	}
+
+	virtual EElysiumScriptMove AdvanceScriptMove() override
+	{
+		if (ScriptPhase == EScriptPhase::None)
+		{
+			return EElysiumScriptMove::Unsupported;
+		}
+		if (!Motor || IsInert())
+		{
+			ScriptPhase = EScriptPhase::None;
+			return EElysiumScriptMove::Failed;
+		}
+
+		const double Now = World ? World->NowSeconds() : 0.0;
+		ScriptWatchdogAt = Now + ElysiumNpcGait::ScriptWatchdogSeconds;
+		FVector Feet = Origin;
+		float Yaw = -Angles.Y;
+		const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
+		Origin = Feet;
+		Angles.Y = -Yaw;
+		if (World)
+		{
+			World->NotifyVisualChanged(*this);
+		}
+
+		if (ScriptPhase == EScriptPhase::Facing)
+		{
+			if (Status == EElysiumNpcMoveStatus::Moving && Now < ScriptDeadline)
+			{
+				return EElysiumScriptMove::Moving;
+			}
+			ScriptPhase = EScriptPhase::None;
+			return EElysiumScriptMove::Arrived;
+		}
+
+		const float Remaining = static_cast<float>(FVector::Dist2D(Origin, ScriptMark));
+		if (Remaining + ElysiumNpcGait::ScriptProgressCm < ScriptBestDistance)
+		{
+			ScriptBestDistance = Remaining;
+			ScriptProgressAt = Now;
+		}
+		if (Status == EElysiumNpcMoveStatus::Reached)
+		{
+			return BeginScriptFacing(Now);
+		}
+
+		const double Stalled = Now - ScriptProgressAt;
+		const bool bNearMark = Remaining <= ElysiumNpcGait::ScriptCrowdedCm;
+		if (bNearMark && Stalled >= ElysiumNpcGait::ScriptCrowdSettleSeconds)
+		{
+			UE_LOG(LogElysiumNpcEnt, Log,
+				TEXT("%s settled %.0fcm short of %s (stopped closing for %.1fs)"),
+				*DebugString(), Remaining, *ScriptMark.ToString(), Stalled);
+			return BeginScriptFacing(Now);
+		}
+		if (Status == EElysiumNpcMoveStatus::Moving
+			&& Stalled < ElysiumNpcGait::ScriptStallSeconds && Now < ScriptDeadline)
+		{
+			return EElysiumScriptMove::Moving;
+		}
+		if (bNearMark)
+		{
+			return BeginScriptFacing(Now);
+		}
+
+		ScriptPhase = EScriptPhase::None;
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s scripted move to %s gave up %.0fcm short (status %d)"),
+			*DebugString(), *ScriptMark.ToString(), Remaining, static_cast<int32>(Status));
+		return EElysiumScriptMove::Failed;
+	}
+
+	virtual void EndScriptMove() override
+	{
+		if (ScriptPhase == EScriptPhase::None && !bScriptMoveClaimed)
+		{
+			return;
+		}
+		ScriptPhase = EScriptPhase::None;
+		if (Motor)
+		{
+			Motor->Stop();
+		}
+		ReleaseScriptMove(TEXT("EndScriptMove"));
+		bScriptMoveClaimed = false;
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+	}
+
+	virtual void SetBodyFrozen(bool bFrozen) override
+	{
+		if (Motor)
+		{
+			Motor->SetFrozen(bFrozen);
+		}
+	}
+
+	virtual void SetIgnoreCharacterCollision(bool bIgnore) override
+	{
+		if (Motor)
+		{
+			Motor->SetIgnoreCharacterCollision(bIgnore);
+		}
+	}
+
+	virtual void OnRuntimeTransformChanged() override
+	{
+		FElysiumEntity::OnRuntimeTransformChanged();
+		if (Motor)
+		{
+			Motor->Teleport(Origin, -Angles.Y);
+		}
+		else
+		{
+			FElysiumAnimating::OnRuntimeTransformChanged();
+		}
+	}
+
+protected:
+	enum class EScriptPhase : uint8 { None, Travel, Facing };
+
+	void BuildMotor()
+	{
+		if (Motor || !Visual)
+		{
+			return;
+		}
+		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		{
+			Motor = Embodiment->BuildNpcMotor(Visual, Handle, Origin, -Angles.Y, ModelStem(),
+				FMath::Max(0, Handle.Index));
+			if (Motor)
+			{
+				Motor->SetEnabled(!IsInert());
+			}
+		}
+	}
+
+	void DestroyMotor()
+	{
+		if (Motor && World && World->Embodiment())
+		{
+			World->Embodiment()->DestroyNpcMotor(Motor);
+		}
+		Motor = nullptr;
+	}
+
+	virtual bool ClaimScriptMove() { return true; }
+	virtual void ReleaseScriptMove(const TCHAR*) {}
+
+	bool StartScriptWalkingAnimation(bool bRunning)
+	{
+		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment && Visual && Embodiment->PlayNpcActivity(Visual, ModelStem(),
+			bRunning ? TEXT("ACT_RUN") : TEXT("ACT_WALK"), FMath::Max(0, Handle.Index),
+			/*bLoop=*/true, nullptr))
+		{
+			return true;
+		}
+		return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
+	}
+
+	EElysiumScriptMove BeginScriptFacing(double Now)
+	{
+		ScriptPhase = EScriptPhase::Facing;
+		ScriptDeadline = Now + ElysiumNpcGait::ScriptFaceSeconds;
+		if (Motor)
+		{
+			Motor->Face(-ScriptMarkAngles.Y);
+		}
+		return EElysiumScriptMove::Moving;
+	}
+
+	IElysiumNpcMotor* Motor = nullptr;
+	EScriptPhase ScriptPhase = EScriptPhase::None;
+	FVector ScriptMark = FVector::ZeroVector;
+	FVector ScriptMarkAngles = FVector::ZeroVector;
+	float ScriptBestDistance = 0.0f;
+	double ScriptProgressAt = 0.0;
+	double ScriptDeadline = 0.0;
+	double ScriptWatchdogAt = 0.0;
+	bool bScriptMoveClaimed = false;
+};
+
+// ============================================================================================
 // FElysiumNpc — the character leaf shared by every living `npc_*` classname. It stands a skeletal
 // model at its origin, follows named patrols or interesting-place routes, and owns dialogue gates.
 // ============================================================================================
 
-class FElysiumNpc final : public FElysiumCombatCharacter, public IElysiumScheduleRunner
+class FElysiumNpc final : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
 {
 public:
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
@@ -300,24 +573,6 @@ public:
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names
 	int32 PatrolIndex = 0;            // next point in the looping authored sequence
 	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
-	// Whether a `scripted_sequence` beat currently owns this body, and which half of the move it
-	// is in — travel to the mark, then the turn onto the mark's own angles.
-	enum class EScriptPhase : uint8 { None, Travel, Facing };
-
-	virtual ~FElysiumNpc() override
-	{
-		DestroyMotor();
-	}
-
-	void DestroyMotor()
-	{
-		if (Motor && World && World->Embodiment())
-		{
-			World->Embodiment()->DestroyNpcMotor(Motor);
-		}
-		Motor = nullptr;
-	}
-
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
@@ -347,6 +602,35 @@ public:
 		{
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 		}
+	}
+
+	void InputTeleportToEntity(const FElysiumInputArgs& Args)
+	{
+		// CAI_BaseNPCTroika's FIELD_EHANDLE input performs its string-to-handle conversion when
+		// the input is delivered: first live name match in entity-list order, including the retail
+		// trailing-'*' prefix rule. It does not cache or retry a destination.
+		if (!World)
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("%s cannot resolve TeleportToEntity without an entity world"), *DebugString());
+			return;
+		}
+		const FElysiumEntity* Destination = Args.Param.Type == EElysiumVariantType::Handle
+			? World->Resolve(Args.Param.AsHandle)
+			: World->FindByName(Args.Param.ToString());
+		if (!Destination)
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("%s TeleportToEntity destination '%s' resolved to no live entity"),
+				*DebugString(), *Args.Param.ToString());
+			return; // retail consumes the input as a no-op; there is no retry
+		}
+
+		// SetAbsOrigin, then SetAbsAngles, followed by the concrete NPC's due-think hook. The
+		// authoritative writer crosses the existing embodiment seam without adding placement,
+		// velocity, route, schedule, enemy, animation, or safe-location policy.
+		SetRuntimeTransform(Destination->Origin, Destination->Angles);
+		NextThink = static_cast<float>(World->NowSeconds());
 	}
 
 	void SeedPlayerRelationship()
@@ -573,257 +857,41 @@ public:
 		return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
 	}
 
-	// --- The scripted-move seam (8.5) -------------------------------------------------------
-	// A `scripted_sequence` beat with `m_fMoveTo` 1/2/3/5 owns this body for its travel phase: the
-	// beat issues the move and advances it, this class owns the motor, the gait's speed and cycle,
-	// and the sample back into the entity's own origin/angles. While the script owns the body its
-	// autonomous behaviour is parked, not forgotten — the route data survives and `EndScriptMove`
-	// re-arms it.
-
-	virtual bool BeginScriptMove(const FVector& Mark, const FVector& MarkAngles,
-		EElysiumScriptGait Gait, const FString& CustomClip) override
+	// The ordinary NPC adds body arbitration around the shared scripted motor. The scene-owned
+	// player duplicate deliberately takes the default no-mind claim on the same movement rules.
+	virtual bool ClaimScriptMove() override
 	{
-		if (!Motor || IsInert())
-		{
-			return false;   // no body to walk: the beat places the NPC on the mark instead
-		}
-
-		// The ambient claim is released the same way dialogue releases it — one exit, so an
-		// `intersting_place` cannot stay reserved by an NPC a cutscene has taken away.
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
 		if (!Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
 			SequenceOwner, TEXT("BeginScriptMove")))
 		{
 			return false;
 		}
-		Motor->Stop();
 		bMoveIssued = false;
 		bWalkingAnimation = false;
-
-		const double Now = World ? World->NowSeconds() : 0.0;
-		ScriptMark = Mark;
-		ScriptMarkAngles = MarkAngles;
-		ScriptProgressAt = Now;
-		ScriptWatchdogAt = Now + ElysiumNpcGait::ScriptWatchdogSeconds;
-
-		if (Gait == EElysiumScriptGait::Face)
-		{
-			ScriptBestDistance = 0.0f;
-			ScriptDeadline = Now + ElysiumNpcGait::ScriptFaceSeconds;
-			ScriptPhase = EScriptPhase::Facing;
-			Motor->Face(-MarkAngles.Y);
-			NextThink = static_cast<float>(ScriptWatchdogAt);
-			return true;
-		}
-
-		float Speed = (Gait == EElysiumScriptGait::Run)
-			? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed;
-		FString ScriptWalkLabel;
-		FString ScriptWalkAnim;
-		// The theatre walk-out is ordinary scripted Walk travel. Its visible cycle is in place, but
-		// the selected forward grid cell carries the displacement the original motor used as ground
-		// speed. Resolve before MoveTo so the body and its ACT_WALK cycle share one authored stride.
-		// Other scripted gaits and autonomous patrols retain their established tuning.
-		if (Gait == EElysiumScriptGait::Walk)
-		{
-			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-			float AuthoredSpeed = 0.f;
-			if (Embodiment && Embodiment->ResolveNpcActivityClip(ModelStem(), TEXT("ACT_WALK"),
-				FMath::Max(0, Handle.Index), ScriptWalkLabel, ScriptWalkAnim, AuthoredSpeed))
-			{
-				if (FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
-				{
-					Speed = AuthoredSpeed;
-					UE_LOG(LogElysiumNpcEnt, Verbose,
-						TEXT("%s scripted walk uses '%s' -> '%s' authored ground speed %.1fcm/s"),
-						*DebugString(), *ScriptWalkLabel, *ScriptWalkAnim, Speed);
-				}
-			}
-		}
-		if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
-			/*bAllowPartialPath=*/true))
-		{
-			ScriptPhase = EScriptPhase::None;
-			Mind.Release(SequenceOwner, TEXT("script path unavailable"));
-			SequenceOwner.Reset();
-			if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-			{
-				PatrolOwner = Mind.CurrentToken();
-			}
-			return false;   // no path to the mark: the beat falls back to placing the NPC there
-		}
-		ScriptPhase = EScriptPhase::Travel;
-		ScriptBestDistance = static_cast<float>(FVector::Dist2D(Origin, Mark));
-		// The travel cycle. `m_fMoveTo 3` names its own (`doom_walk`, `claws_aggressive_run`,
-		// `wolf_form_run`); Walk plays the exact cell resolved for its speed, while Run takes ACT_RUN.
-		bool bTravelCycleStarted = false;
-		if (Gait == EElysiumScriptGait::Custom)
-		{
-			bTravelCycleStarted = PlayAnimClip(CustomClip, /*bLoop=*/true);
-		}
-		else if (Gait == EElysiumScriptGait::Walk && !ScriptWalkLabel.IsEmpty())
-		{
-			// The global clip resolver needs the vocabulary label (`walk`) to recover the shared-bank
-			// owner; it then resolves the same neutral grid cell (`walk_0`) used for Speed above.
-			bTravelCycleStarted = PlayAnimClip(ScriptWalkLabel, /*bLoop=*/true);
-		}
-		if (!bTravelCycleStarted)
-		{
-			StartWalkingAnimation(Gait == EElysiumScriptGait::Run);
-		}
-		// The backstop for a body that is still "moving" but no longer arriving. Retail has no
-		// equivalent because retail's mover cannot fail; here a beat that never ends stalls the
-		// map, so travel is bounded by both a stall window and an absolute cap off the gait.
-		ScriptDeadline = Now + ElysiumNpcGait::TravelCapSeconds(ScriptBestDistance, Speed);
-		NextThink = static_cast<float>(ScriptWatchdogAt);
 		return true;
 	}
 
-	virtual EElysiumScriptMove AdvanceScriptMove() override
+	virtual void ReleaseScriptMove(const TCHAR* Reason) override
 	{
-		if (ScriptPhase == EScriptPhase::None)
-		{
-			return EElysiumScriptMove::Unsupported;
-		}
-		if (!Motor || IsInert())
-		{
-			ScriptPhase = EScriptPhase::None;
-			return EElysiumScriptMove::Failed;
-		}
-
-		const double Now = World ? World->NowSeconds() : 0.0;
-		ScriptWatchdogAt = Now + ElysiumNpcGait::ScriptWatchdogSeconds;
-
-		// CharacterMovement is the physical authority for the whole travel phase. Write its
-		// feet/yaw straight into the entity — SetRuntimeOrigin would teleport it back every tick.
-		FVector Feet = Origin;
-		float Yaw = -Angles.Y;
-		const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-		Origin = Feet;
-		Angles.Y = -Yaw;
-		if (World)
-		{
-			World->NotifyVisualChanged(*this);
-		}
-
-		if (ScriptPhase == EScriptPhase::Facing)
-		{
-			if (Status == EElysiumNpcMoveStatus::Moving && Now < ScriptDeadline)
-			{
-				return EElysiumScriptMove::Moving;
-			}
-			ScriptPhase = EScriptPhase::None;
-			return EElysiumScriptMove::Arrived;
-		}
-
-		const float Remaining = static_cast<float>(FVector::Dist2D(Origin, ScriptMark));
-		if (Remaining + ElysiumNpcGait::ScriptProgressCm < ScriptBestDistance)
-		{
-			ScriptBestDistance = Remaining;
-			ScriptProgressAt = Now;
-		}
-		if (Status == EElysiumNpcMoveStatus::Reached)
-		{
-			return BeginScriptFacing(Now);
-		}
-
-		// A body that has stopped closing this near the mark is where it is going to end up, so take
-		// it now rather than letting it grind. A body walking straight in never trips this — it
-		// improves every tick until path following reports Reached on the tight acceptance radius —
-		// and with spawnflag 4096 turning character collision off for the beat, neither does a
-		// walker whose mark is shared with four others. Reaching here therefore means something
-		// actually blocked the body, which is worth saying out loud.
-		const double Stalled = Now - ScriptProgressAt;
-		const bool bNearMark = Remaining <= ElysiumNpcGait::ScriptCrowdedCm;
-		if (bNearMark && Stalled >= ElysiumNpcGait::ScriptCrowdSettleSeconds)
-		{
-			UE_LOG(LogElysiumNpcEnt, Log,
-				TEXT("%s settled %.0fcm short of %s (stopped closing for %.1fs)"),
-				*DebugString(), Remaining, *ScriptMark.ToString(), Stalled);
-			return BeginScriptFacing(Now);
-		}
-		if (Status == EElysiumNpcMoveStatus::Moving
-			&& Stalled < ElysiumNpcGait::ScriptStallSeconds && Now < ScriptDeadline)
-		{
-			return EElysiumScriptMove::Moving;
-		}
-		if (bNearMark)
-		{
-			return BeginScriptFacing(Now);   // out of budget, but standing where the beat wanted it
-		}
-		ScriptPhase = EScriptPhase::None;
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("%s scripted move to %s gave up %.0fcm short (status %d)"),
-			*DebugString(), *ScriptMark.ToString(), Remaining, static_cast<int32>(Status));
-		return EElysiumScriptMove::Failed;
-	}
-
-	virtual void EndScriptMove() override
-	{
-		if (ScriptPhase == EScriptPhase::None && !SequenceOwner.IsSet())
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+		if (!SequenceOwner.IsSet())
 		{
 			return;
 		}
-		ScriptPhase = EScriptPhase::None;
-		if (Motor)
+		Mind.Release(SequenceOwner, Reason);
+		SequenceOwner.Reset();
+		if (Mind.Owner() == EElysiumBodyOwner::Patrol)
 		{
-			Motor->Stop();
+			PatrolOwner = Mind.CurrentToken();
 		}
-		bMoveIssued = false;
-		bWalkingAnimation = false;
-		if (SequenceOwner.IsSet())
-		{
-			Mind.Release(SequenceOwner, TEXT("EndScriptMove"));
-			SequenceOwner.Reset();
-			if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-			{
-				PatrolOwner = Mind.CurrentToken();
-			}
-		}
-		// The pose belongs to the beat (`m_iszPlay` / `m_iszPostIdle` / back to the stance idle),
-		// so nothing is played here. Hand the body back to its own behaviour -- which for a standing
-		// character is its stance machine, so this wakes every NPC and not only the routed ones.
-		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 	}
-
-	// --- Body state a cutscene borrows ------------------------------------------------------
-	// Both are the motor's business and both are idempotent there, so this is a plain forward. A
-	// bodiless NPC (`elysium.NpcBodies 0`, a headless test, a failed spawn) silently does neither,
-	// which is correct: there is nothing to immobilise and nothing to collide with.
 
 	// An open conversation owns this body as surely as a beat does, so it refuses a feed (B6).
 	virtual bool IsFeedBusy() const override
 	{
 		return bInDialog || FElysiumCombatCharacter::IsFeedBusy();
-	}
-
-	virtual void SetBodyFrozen(bool bFrozen) override
-	{
-		if (Motor)
-		{
-			Motor->SetFrozen(bFrozen);
-		}
-	}
-
-	virtual void SetIgnoreCharacterCollision(bool bIgnore) override
-	{
-		if (Motor)
-		{
-			Motor->SetIgnoreCharacterCollision(bIgnore);
-		}
-	}
-
-	// Reaching the mark is not the end of the move: HL1's CCineMonster turns the NPC to the
-	// marker's own angles before the action animation starts.
-	EElysiumScriptMove BeginScriptFacing(double Now)
-	{
-		ScriptPhase = EScriptPhase::Facing;
-		ScriptDeadline = Now + ElysiumNpcGait::ScriptFaceSeconds;
-		if (Motor)
-		{
-			Motor->Face(-ScriptMarkAngles.Y);
-		}
-		return EElysiumScriptMove::Moving;
 	}
 
 	virtual void Think() override
@@ -865,6 +933,13 @@ public:
 		}
 		if (bInDialog)
 		{
+			// A per-line VCD owns the body while its sequence/gesture event is live. The ordinary
+			// dialogue stance think must not replace that one-shot with a disposition idle.
+			if (World && World->HasActiveDialogueBodyClip(Handle))
+			{
+				NextThink = static_cast<float>(World->NowSeconds() + 0.1);
+				return;
+			}
 			// A character in conversation still runs its stance machine -- retail's Talking
 			// threshold/chance pair exists precisely for this case. The selector settles it onto its
 			// current idle rather than fidgeting through a line, so the reschedule is what keeps it
@@ -1188,7 +1263,7 @@ public:
 		StanceResolvedFor.Reset();
 		bool bPlayedTransition = false;
 		const EElysiumBodyOwner Owner = Mind.Owner();
-		if (Visual && !IsFeedBusy()
+		if (Visual && !FElysiumCombatCharacter::IsFeedBusy()
 			&& (Owner == EElysiumBodyOwner::None || Owner == EElysiumBodyOwner::Dialogue))
 		{
 			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
@@ -1599,6 +1674,33 @@ public:
 		{
 			return DialogueBodyOwner;
 		}
+		// Dialogue is the authored interruption of CCineNPC ownership. Cancel through the sequence
+		// itself before asking the mind for Dialogue so travel, action, collision flags and the
+		// sequence's delayed completion all leave through the one CancelSequence teardown. This is
+		// what prevents an older action deadline from resetting a newer dialogue line to idle.
+		if (ScriptOwner.IsSet() && World)
+		{
+			const FElysiumEntityHandle PreviousOwner = ScriptOwner;
+			if (FElysiumEntity* Owner = World->Resolve(PreviousOwner))
+			{
+				if (Owner->CancelScriptedSequenceForDialogue(Handle) && ScriptOwner.IsSet())
+				{
+					UE_LOG(LogElysiumNpcEnt, Warning,
+						TEXT("%s dialogue cancelled scripted owner %s but the body claim remained"),
+						*DebugString(), *PreviousOwner.ToString());
+					return FElysiumBodyOwnerToken();
+				}
+			}
+			else
+			{
+				UE_LOG(LogElysiumNpcEnt, Warning,
+					TEXT("%s cleared stale scripted owner %s while opening dialogue"),
+					*DebugString(), *PreviousOwner.ToString());
+				EndScriptMove();
+				ScriptOwner = FElysiumEntityHandle::Invalid();
+				bScriptOwnerLocked = false;
+			}
+		}
 		if (!Mind.Acquire(EElysiumBodyOwner::Dialogue, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
 			DialogueBodyOwner, TEXT("dialogue open")))
 		{
@@ -1643,10 +1745,8 @@ public:
 		{
 			return;
 		}
-		// A conversation opening on an NPC a beat is walking releases the beat's hold rather than
-		// silently stranding it: the beat then finishes on the placement fallback and its outputs
-		// still fire, which is what the map's flow depends on.
-		EndScriptMove();
+		// BeginDialogueBodySession performs the scripted-sequence cancellation and body transfer.
+		// Keep that ownership transition in one place so direct World::OpenDialog uses the same path.
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
 		if (Motor && bPatrolActive)
 		{
@@ -1859,18 +1959,7 @@ public:
 			return;   // gated off: a bodiless record whose I/O still resolves
 		}
 		BuildBody();
-		if (Visual)
-		{
-			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
-			{
-				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y, ModelStem(),
-					FMath::Max(0, Handle.Index));
-				if (Motor)
-				{
-					Motor->SetEnabled(!IsInert());
-				}
-			}
-		}
+		BuildMotor();
 		// Spawn constructs presentation only. Activate arms the first deterministic admission think;
 		// no autonomous decision, controller wake or activity write occurs in this phase.
 	}
@@ -1880,19 +1969,6 @@ public:
 		SeedPlayerRelationship();
 		Mind.ArmAdmission();
 		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
-	}
-
-	virtual void OnRuntimeTransformChanged() override
-	{
-		FElysiumEntity::OnRuntimeTransformChanged();
-		if (Motor)
-		{
-			Motor->Teleport(Origin, -Angles.Y);
-		}
-		else
-		{
-			FElysiumAnimating::OnRuntimeTransformChanged();
-		}
 	}
 
 	// SetModel: swap the NPC's appearance (bradbury Heather goth/normal, cemetery prostitute,
@@ -1908,18 +1984,7 @@ public:
 		EndScriptMove();
 		DestroyMotor();
 		FElysiumAnimating::OnRuntimeModelChanged();
-		if (Visual)
-		{
-			if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
-			{
-				Motor = Embodiment->BuildNpcMotor(Visual, Origin, -Angles.Y, ModelStem(),
-					FMath::Max(0, Handle.Index));
-				if (Motor)
-				{
-					Motor->SetEnabled(!IsInert());
-				}
-			}
-		}
+		BuildMotor();
 	}
 
 	virtual void OnDormancyChanged() override
@@ -2165,7 +2230,6 @@ public:
 
 private:
 	FElysiumNpcMind Mind;
-	IElysiumNpcMotor* Motor = nullptr; // engine-owned; destroyed through the embodiment seam
 	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
@@ -2184,21 +2248,14 @@ private:
 	TSet<int32> FailedSpotIndices;
 	TSet<int32> AmbientGroups;
 	bool bAmbientGroupsParsed = false;
-	EScriptPhase ScriptPhase = EScriptPhase::None;
-	FVector ScriptMark = FVector::ZeroVector;
-	FVector ScriptMarkAngles = FVector::ZeroVector;
-	float ScriptBestDistance = 0.0f;
-	double ScriptProgressAt = 0.0;
-	double ScriptDeadline = 0.0;
-	double ScriptWatchdogAt = 0.0;
 };
 
 // ============================================================================================
-// npc_VPlayerController — the scene-owned duplicate of the player. It deliberately stops at the
-// animating/combat-character layer: no dialogue, AI, use body, collision, or autonomous think.
+// npc_VPlayerController — the scene-owned duplicate of the player. It shares only the authored
+// scripted-sequence motor with ordinary NPCs: no dialogue, AI, use body, or autonomous think.
 // ============================================================================================
 
-class FElysiumPlayerControllerNpc final : public FElysiumCombatCharacter
+class FElysiumPlayerControllerNpc final : public FElysiumScriptedCharacter
 {
 public:
 	virtual void Spawn() override
@@ -2206,6 +2263,7 @@ public:
 		if (CVarNpcBodies.GetValueOnGameThread() != 0)
 		{
 			BuildBody();
+			BuildControllerMotor();
 		}
 	}
 
@@ -2213,7 +2271,36 @@ public:
 	{
 		if (CVarNpcBodies.GetValueOnGameThread() != 0)
 		{
+			EndScriptMove();
+			DestroyMotor();
 			FElysiumAnimating::OnRuntimeModelChanged();
+			BuildControllerMotor();
+		}
+	}
+
+	virtual void SetIgnoreCharacterCollision(bool) override
+	{
+		// The duplicate navigates against the world but never becomes a second solid character.
+		if (Motor)
+		{
+			Motor->SetIgnoreCharacterCollision(true);
+		}
+	}
+
+	virtual void OnDormancyChanged() override
+	{
+		FElysiumCombatCharacter::OnDormancyChanged();
+		if (IsInert())
+		{
+			EndScriptMove();
+		}
+		if (bDead)
+		{
+			DestroyMotor();
+		}
+		else if (Motor)
+		{
+			Motor->SetEnabled(!IsInert());
 		}
 	}
 
@@ -2223,6 +2310,14 @@ public:
 		Out.Emplace(TEXT("Role"), TEXT("player controller (non-AI, non-solid)"));
 		Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 		Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal") : TEXT("(none)"));
+		Out.Emplace(TEXT("Motor"), Motor ? TEXT("Unreal character + Detour crowd") : TEXT("(none)"));
+	}
+
+private:
+	void BuildControllerMotor()
+	{
+		BuildMotor();
+		SetIgnoreCharacterCollision(true);
 	}
 };
 
@@ -2545,21 +2640,21 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	D.Input(TEXT("SetRelationship"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputSetRelationship(Args); });
 
-	// CAI_BaseNPC's own inputs, registered so the name resolves through the chain walk and reports
-	// itself instead of dropping as an unknown input. Nothing is performed: the name, the argument
-	// type and the retail handler are recovered, the semantics are not. The declaring class is named
-	// as CAI_BaseNPC — the level VtMB puts them at — so one work-list row covers every `npc_*` leaf,
-	// even though this runtime folds that node into each registered classname.
+	// The runtime folds the retail CAI_BaseNPC / CAI_BaseNPCTroika nodes into every registered
+	// `npc_*` leaf; the registry's class walk still exposes their shared input surface.
 	using FN = FElysiumNpc;
 	// SetRelationship's store/writer is live above. Enemy assignment, senses and combat schedules
 	// are intentionally absent from this talk/feed slice and remain visible in NPC diagnostics.
-	// Map-fired NPC inputs the shipped content wires (`docs/vtmb/sp_tutorial_1-event-surface.md` §7):
-	// 30 `TeleportToEntity`, 8 `SetScriptedDiscipline` and 4 `TakeDamage` wires across the exported
-	// maps, all of them aimed at an `npc_*` receiver. `TakeDamage` is a *method* on this chain
+	// `TeleportToEntity` is CAI_BaseNPCTroika's recovered FIELD_EHANDLE input. The current corpus
+	// carries 40 wires across three NPC families; all use the same shared leaf implementation here.
+	D.Input(TEXT("TeleportToEntity"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputTeleportToEntity(Args); });
+
+	// The remaining map-fired gaps are 8 `SetScriptedDiscipline` and 4 `TakeDamage` wires across the
+	// exported maps, all of them aimed at an `npc_*` receiver. `TakeDamage` is a *method* on this chain
 	// (`FElysiumCombatCharacter::TakeDamage`) and a native the script surface dispatches, but the
 	// wire's own datamap record — and so its argument's field type — is unrecovered, which is why the
 	// input stays pending rather than forwarding a guessed number into the health track.
-	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, TeleportToEntity,      "10.7 — AI placement");
 	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, SetScriptedDiscipline, "P13 — disciplines");
 	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, TakeDamage,            "B5 — combat damage");
 

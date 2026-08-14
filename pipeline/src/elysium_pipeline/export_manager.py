@@ -1004,6 +1004,7 @@ def _character_code_inputs(config) -> tuple[Path, ...]:
     return (
         root / "exporters" / "UE_mdl_skeletal.py",
         root / "formats" / "mdl_skel.py",
+        root / "formats" / "mdl_secondary_motion.py",
         root / "formats" / "mdl.py",
         root / "formats" / "mdl_gltf.py",
     )

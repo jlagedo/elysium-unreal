@@ -700,7 +700,7 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	}
 	for (const TCHAR* In : { TEXT("WillTalk"), TEXT("UseInteresting"), TEXT("StartPlayerDialogRemote"),
 		TEXT("EndDialog"), TEXT("SetupPatrolType"), TEXT("FollowPatrolPath"),
-		TEXT("ClearPatrolPath"), TEXT("SetRelationship"), TEXT("Kill") })
+		TEXT("ClearPatrolPath"), TEXT("SetRelationship"), TEXT("TeleportToEntity"), TEXT("Kill") })
 	{
 		TestNotNull(FString::Printf(TEXT("npc_VVampire.%s resolves"), In),
 			reinterpret_cast<const void*>(Reg.FindInput(*Vamp, FName(In))));
@@ -935,6 +935,8 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		? nullptr : Services.NpcMotors[0].Get();
 	if (TestNotNull(TEXT("Jack owns the recording motor"), JackMotor))
 	{
+		TestTrue(TEXT("the NPC motor retains Jack rather than player identity"),
+			JackMotor->Owner == JackHandle);
 		TestTrue(TEXT("an active patrol issues a native movement request"), JackMotor->bMoving);
 		TestTrue(TEXT("the native request carries the first authored point"),
 			JackMotor->RequestedFeet.Equals(FVector(100.0f, 25.0f, 0.0f)));
@@ -957,6 +959,101 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		TestTrue(TEXT("clearing a patrol crosses the explicit motor Stop seam"),
 			Services.Saw(TEXT("NpcMotor Stop")));
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTeleportToEntityTest,
+	"Elysium.Substrate.Npc.TeleportToEntity", GElysiumTestFlags)
+bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
+{
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__npc_teleport_to_entity__");
+	FElysiumEntityDef Jack;
+	Jack.Classname = TEXT("npc_VVampire");
+	Jack.TargetName = TEXT("Jack");
+	Jack.Origin = FVector(-10.0f, -20.0f, -30.0f);
+	Jack.Keys.Add(TEXT("angles"), TEXT("1 2 3"));
+	Jack.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+	Defs.Defs.Add(MoveTemp(Jack));
+
+	FElysiumEntityDef FirstDestination;
+	FirstDestination.Classname = TEXT("point_target");
+	FirstDestination.TargetName = TEXT("teleport_1");
+	FirstDestination.Origin = FVector(100.0f, 200.0f, 300.0f);
+	FirstDestination.Keys.Add(TEXT("angles"), TEXT("10 20 30"));
+	Defs.Defs.Add(MoveTemp(FirstDestination));
+
+	// FindEntityByName starts from null, so a duplicate name selects the earlier live entity.
+	FElysiumEntityDef LaterDuplicate;
+	LaterDuplicate.Classname = TEXT("point_target");
+	LaterDuplicate.TargetName = TEXT("teleport_1");
+	LaterDuplicate.Origin = FVector(900.0f, 900.0f, 900.0f);
+	LaterDuplicate.Keys.Add(TEXT("angles"), TEXT("90 90 90"));
+	Defs.Defs.Add(MoveTemp(LaterDuplicate));
+
+	FElysiumRecordingServices Services;
+	Services.bProvideNpcMotor = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+	FElysiumEntity* JackEnt = World.FindByName(TEXT("Jack"));
+	if (!TestNotNull(TEXT("Jack resolves"), JackEnt))
+	{
+		return false;
+	}
+
+	// Hold the ordinary admission think in the future. The queued input is delivered after this
+	// frame's think pass and must leave the NPC due, not recursively think it in the same frame.
+	JackEnt->NextThink = 10.0f;
+	World.EnqueueInput(TEXT("!self"), FName(TEXT("TeleportToEntity")),
+		FElysiumVariant::String(TEXT("teleport_1")), 0.0,
+		FElysiumEntityHandle::Invalid(), JackEnt->Handle);
+	World.Tick(1.0);
+
+	TestTrue(TEXT("the first duplicate destination supplies the absolute origin"),
+		JackEnt->Origin.Equals(FVector(100.0f, 200.0f, 300.0f)));
+	TestTrue(TEXT("all three absolute angles are copied"),
+		JackEnt->Angles.Equals(FVector(10.0f, 20.0f, 30.0f)));
+	TestEqual(TEXT("queued delivery makes the NPC due after the completed think pass"),
+		JackEnt->NextThink, 1.0f);
+
+	FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+	if (TestNotNull(TEXT("Jack owns the embodiment motor"), Motor))
+	{
+		TestTrue(TEXT("the discontinuity reaches the NPC body"),
+			Motor->Feet.Equals(FVector(100.0f, 200.0f, 300.0f)));
+		TestEqual(TEXT("Source yaw crosses the existing handedness seam"), Motor->Yaw, -20.0f);
+	}
+
+	World.Tick(1.01);
+	TestTrue(TEXT("the next server frame consumes the due AI think"), JackEnt->NextThink > 1.01f);
+
+	// Retail consumes an invalid EHANDLE as a no-op. The project warning is expected, and neither
+	// the transform nor the pre-existing think deadline is replaced.
+	JackEnt->NextThink = 7.0f;
+	const FVector BeforeOrigin = JackEnt->Origin;
+	const FVector BeforeAngles = JackEnt->Angles;
+	AddExpectedError(TEXT("TeleportToEntity destination 'missing_spot' resolved to no live entity"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.AcceptInput(JackEnt->Handle, FName(TEXT("TeleportToEntity")),
+		FElysiumVariant::String(TEXT("missing_spot")),
+		FElysiumEntityHandle::Invalid(), JackEnt->Handle);
+	TestTrue(TEXT("a missing destination preserves origin"), JackEnt->Origin.Equals(BeforeOrigin));
+	TestTrue(TEXT("a missing destination preserves angles"), JackEnt->Angles.Equals(BeforeAngles));
+	TestEqual(TEXT("a missing destination preserves the existing think deadline"),
+		JackEnt->NextThink, 7.0f);
+
+	TArray<ElysiumStub::FTally> Rows;
+	ElysiumStub::CollectTally(Rows);
+	TestFalse(TEXT("the backed input never enters the stub work list"),
+		Rows.ContainsByPredicate([](const ElysiumStub::FTally& Row)
+		{
+			return Row.Surface.Contains(TEXT("TeleportToEntity"));
+		}));
 
 	return true;
 }

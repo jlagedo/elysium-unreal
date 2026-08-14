@@ -693,6 +693,61 @@ bool FElysiumLateBindingAndDropsTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMissingTargetClassificationTest,
+	"Elysium.Substrate.MissingTargetClassification", GElysiumTestFlags)
+bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__missing_target_classification__");
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		FElysiumEntityDef Target;
+		Target.Classname = TEXT("point_target");
+		Target.TargetName = TEXT("point_door");
+		Defs.Defs.Add(MoveTemp(Target));
+	}
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	FElysiumOrderedIOSink* Sink = Record(World);
+	World.Activate(0.0);
+
+	// The first unlimited-output delivery fans out and kills every same-name marker.
+	World.AcceptInput(TEXT("point_door"), FName(TEXT("Kill")), FElysiumVariant::Void(),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("the live fan-out is not a missing target"), World.UnknownTargets(), 0);
+	TestEqual(TEXT("Kill reaches every same-name marker"),
+		Sink->CountOf(TEXT("deliver"), TEXT("point_door.Kill")), 2);
+
+	// A later refire is an expected post-cleanup miss, still visible in the I/O diagnostics.
+	World.AcceptInput(TEXT("point_door"), FName(TEXT("Kill")), FElysiumVariant::Void(),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("the post-cleanup refire remains a counted I/O drop"), World.UnknownTargets(), 1);
+	TestTrue(TEXT("the I/O sink retains the missing-target diagnostic"),
+		Sink->Saw(TEXT("no-target"), TEXT("point_door.Kill")));
+
+	TArray<ElysiumStub::FTally> Rows;
+	ElysiumStub::CollectTally(Rows);
+	TestFalse(TEXT("a missing receiver is not an implementation stub"),
+		Rows.ContainsByPredicate([](const ElysiumStub::FTally& Row)
+		{
+			return Row.Kind == TEXT("target") || Row.Surface.Contains(TEXT("point_door.Kill"));
+		}));
+
+	// Named misses are log-once diagnostics, but every delivery attempt remains accounted.
+	World.AcceptInput(TEXT("point_door"), FName(TEXT("Kill")), FElysiumVariant::Void(),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("a repeat is still counted"), World.UnknownTargets(), 2);
+	TestEqual(TEXT("the repeated named miss is reported once"),
+		Sink->CountOf(TEXT("no-target"), TEXT("point_door.Kill")), 1);
+
+	return true;
+}
+
 // =====================================================================================
 // The other half of the same contract: which TRANSPORT a caller is entitled to, and what a
 // trigger's own latched state is worth across a save.
@@ -708,7 +763,7 @@ bool FElysiumLateBindingAndDropsTest::RunTest(const FString&)
 //      the partner receives `Toggle` and never `Use`, it cannot mirror back.
 //                                                                     DoorPartnerChokepoint
 //   8. The by-handle chokepoint accounts a dead receiver exactly as the by-name one does:
-//      a counted `target` miss, on the sinks and on the stub work list.   StaleDirectHandle
+//      a counted target miss on the sinks, outside the stub work list.    StaleDirectHandle
 //   9. A trigger's latched gate state — the `wait` window, a dwell in progress, a pending
 //      self-removal — survives freeze/restore, because none of it is derivable from the
 //      def.                                                                TriggerStateSave
@@ -954,16 +1009,11 @@ bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 	using namespace ElysiumEventTransportTests;
 
 	// The by-handle overload of chokepoint 1 has the same K3 obligation as the by-name one: a
-	// receiver this map cannot deliver to is a counted `target` miss on the sinks AND a row on the
-	// `elysium.stubs` work list, because a scene that silently does not happen looks identical from
-	// the outside either way.
-	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
-	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
-	if (Warn) { Warn->Set(0); }
+	// receiver this map cannot deliver to is a counted target miss on the sinks, but it is not an
+	// implementation stub. Retail data can legitimately kill a target before a later delivery.
 	ElysiumStub::ClearTally();
 	ON_SCOPE_EXIT
 	{
-		if (Warn) { Warn->Set(PrevWarn); }
 		ElysiumStub::ClearTally();
 	};
 
@@ -1004,10 +1054,8 @@ bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 	TestEqual(TEXT("...and nothing was delivered"),
 		Sink->CountOf(TEXT("deliver"), TEXT("doomed.Add")), 0);
 
-	// The work-list row. The surface key is INSTANCE-shaped here — `#<index> <stale>.Add` — rather
-	// than the `<classname>.<Input>` shape the by-name path uses, because a dead handle no longer
-	// has a class to name. That makes each dead handle its own row instead of collapsing onto one
-	// per classname; the deviation is deliberate and is the price of reporting it at all.
+	// A stale receiver remains outside the implementation work list: no handler or runtime class is
+	// missing merely because the intended entity has already died.
 	auto TargetRowsMatching = [](const TCHAR* Fragment)
 	{
 		int32 N = 0;
@@ -1022,15 +1070,16 @@ bool FElysiumStaleDirectHandleTest::RunTest(const FString&)
 		}
 		return N;
 	};
-	TestEqual(TEXT("the stub work list gains the stale-handle row"),
-		TargetRowsMatching(TEXT("<stale>.Add")), 1);
+	TestEqual(TEXT("the stub work list does not gain a stale-handle row"),
+		TargetRowsMatching(TEXT("<stale>.Add")), 0);
 
 	// The by-handle path does not log-once the way the by-name path does, so a repeat is counted
 	// and reported again rather than silently swallowed.
 	World.AcceptInput(Handle, FName(TEXT("Add")), FElysiumVariant::Int(1),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	TestEqual(TEXT("a second attempt counts again"), World.UnknownTargets(), UnknownBefore + 2);
-	TestEqual(TEXT("and tallies again"), TargetRowsMatching(TEXT("<stale>.Add")), 2);
+	TestEqual(TEXT("and still creates no implementation stub"),
+		TargetRowsMatching(TEXT("<stale>.Add")), 0);
 	TestEqual(TEXT("both attempts reached the sinks"),
 		Sink->CountOf(TEXT("no-target"), TEXT("<stale>.Add")), 2);
 
@@ -1384,8 +1433,7 @@ bool FElysiumWireTallyTest::RunTest(const FString&)
 	// one at a time: a fan-out wire has Delivered > Fired, a dead wire has neither, and a spent row
 	// is a different finding from one nothing ever reached.
 	//
-	// The dead-target and unknown-input rows also drive the stub tally; silence it the way
-	// Elysium.Substrate.StaleDirectHandle does, so the deliberate misses do not warn.
+	// The unknown-input row drives the stub tally; silence it so the deliberate gap does not warn.
 	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
 	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
 	if (Warn) { Warn->Set(0); }

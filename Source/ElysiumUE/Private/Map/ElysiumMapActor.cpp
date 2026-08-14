@@ -773,10 +773,17 @@ USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, co
 }
 
 IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
-	const FVector& FeetOrigin, float YawDegrees, const FString& Stem, int32 Variant)
+	const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+	const FString& Stem, int32 Variant)
 {
 	if (!Body || bMenuBackdrop || !GetWorld())
 	{
+		return nullptr;
+	}
+	if (!Owner.IsSet())
+	{
+		UE_LOG(LogElysium, Warning, TEXT("failed to build native NPC body at %s: invalid entity owner"),
+			*FeetOrigin.ToString());
 		return nullptr;
 	}
 
@@ -792,6 +799,7 @@ IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
 		return nullptr;
 	}
 
+	Motor->SetOwningEntity(Owner);
 	Motor->InitializeAtFeet(FeetOrigin, YawDegrees);
 	Motor->SetRuntimeReady(RuntimePhase == EElysiumMapRuntimePhase::Active);
 	Motor->SetModelStem(Stem, Body, Variant);
@@ -2428,11 +2436,30 @@ void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 		UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *Path);
 		if (!System)
 		{
-			// A definition the offline contract could not compile has no system; the map records it
-			// under `unresolved` and the emitter simply draws nothing.
+			const FString Failure = FString::Printf(TEXT("system|%d|%s"),
+				Emitter.Entity.Index, *Emitter.ParticleDefinition.ToLower());
+			if (!ReportedEmitterFailures.Contains(Failure))
+			{
+				ReportedEmitterFailures.Add(Failure);
+				UE_LOG(LogElysium, Warning,
+					TEXT("particle emitter %d on map '%s' cannot load definition '%s' from '%s'"),
+					Emitter.Entity.Index, *MapName, *Emitter.ParticleDefinition, *Path);
+			}
 			return;
 		}
 		Component = NewObject<UNiagaraComponent>(this);
+		if (!Component)
+		{
+			const FString Failure = FString::Printf(TEXT("component|%d"), Emitter.Entity.Index);
+			if (!ReportedEmitterFailures.Contains(Failure))
+			{
+				ReportedEmitterFailures.Add(Failure);
+				UE_LOG(LogElysium, Warning,
+					TEXT("particle emitter %d ('%s') could not create a Niagara component on map '%s'"),
+					Emitter.Entity.Index, *Emitter.ParticleDefinition, *MapName);
+			}
+			return;
+		}
 		Component->SetAsset(System);
 		Component->SetAutoActivate(false);
 		Component->SetupAttachment(GetRootComponent());
@@ -2447,8 +2474,10 @@ void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 	RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
 }
 
-// `attach_type` 2 is `point`: ride a named point on another entity's body. The parent is resolved
-// here rather than at PostSpawn because none of the cinematic emitters' parents exist at map load.
+// `attach_type` 1 is `tree`: preserve the authored parent offset while following the named root.
+// `attach_type` 2 is `point`: snap to a named bone (or the body root when the bone is absent).
+// Parents resolve here rather than at PostSpawn because cinematic receivers may be made after map
+// activation.
 void AElysiumMapActor::AttachEmitter(
 	const FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component)
 {
@@ -2456,19 +2485,67 @@ void AElysiumMapActor::AttachEmitter(
 	{
 		return;
 	}
-	USceneComponent* ParentBody = nullptr;
-	if (Emitter.AttachType == 2 && !Emitter.ParentName.IsEmpty() && EntityWorld)
+	auto WarnAttachmentOnce = [this, &Emitter](const TCHAR* Kind, const FString& Message)
 	{
-		if (FElysiumEntity* Parent = EntityWorld->FindByName(Emitter.ParentName))
+		const FString Failure = FString::Printf(TEXT("attach|%s|%d"), Kind, Emitter.Entity.Index);
+		if (!ReportedEmitterFailures.Contains(Failure))
 		{
-			ParentBody = Parent->GetAttachBody();
+			ReportedEmitterFailures.Add(Failure);
+			UE_LOG(LogElysium, Warning, TEXT("%s"), *Message);
+		}
+	};
+	USceneComponent* ParentBody = nullptr;
+	FElysiumEntity* ParentEntity = nullptr;
+	const bool bWantsParent = Emitter.AttachType == 1 || Emitter.AttachType == 2;
+	if (bWantsParent && !Emitter.ParentName.IsEmpty() && EntityWorld)
+	{
+		ParentEntity = EntityWorld->FindByName(Emitter.ParentName);
+		if (ParentEntity)
+		{
+			ParentBody = ParentEntity->GetAttachBody();
+		}
+		if (!ParentBody)
+		{
+			const FString Failure = FString::Printf(TEXT("parent|%d|%s"),
+				Emitter.Entity.Index, *Emitter.ParentName.ToLower());
+			if (!ReportedEmitterFailures.Contains(Failure))
+			{
+				ReportedEmitterFailures.Add(Failure);
+				UE_LOG(LogElysium, Warning,
+					TEXT("particle emitter %d ('%s') cannot attach to parent '%s' on map '%s'; using map root"),
+					Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName, *MapName);
+			}
 		}
 	}
 	if (!ParentBody)
 	{
-		Component->AttachToComponent(GetRootComponent(),
-			FAttachmentTransformRules::KeepRelativeTransform);
+		if (!Component->AttachToComponent(GetRootComponent(),
+			FAttachmentTransformRules::KeepRelativeTransform))
+		{
+			WarnAttachmentOnce(TEXT("root"), FString::Printf(
+				TEXT("particle emitter %d ('%s') could not attach to the map root"),
+				Emitter.Entity.Index, *Emitter.ParticleDefinition));
+		}
 		Component->SetRelativeLocation(Emitter.LocationCm);
+		return;
+	}
+	if (Emitter.AttachType == 1)
+	{
+		// Retail parents these at map setup, before the cinematic moves its actor. Components are
+		// created lazily here, so reconstruct that same authored offset against the parent's live
+		// position before establishing the persistent component attachment.
+		FVector WorldLocation = Emitter.LocationCm;
+		if (ParentEntity && ParentEntity->Def)
+		{
+			WorldLocation += ParentEntity->Origin - ParentEntity->Def->Origin;
+		}
+		if (!Component->AttachToComponent(ParentBody, FAttachmentTransformRules::KeepWorldTransform))
+		{
+			WarnAttachmentOnce(TEXT("tree"), FString::Printf(
+				TEXT("particle emitter %d ('%s') could not tree-attach to parent '%s'"),
+				Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName));
+		}
+		Component->SetWorldLocation(WorldLocation);
 		return;
 	}
 	// VtMB bone names carry spaces (`Bip01 Neck`) and survive the glTF export unchanged, so the
@@ -2476,13 +2553,26 @@ void AElysiumMapActor::AttachEmitter(
 	const FName Bone(*Emitter.AttachBone);
 	const bool bHasBone = !Emitter.AttachBone.IsEmpty()
 		&& ParentBody->DoesSocketExist(Bone);
-	Component->AttachToComponent(ParentBody,
-		FAttachmentTransformRules::SnapToTargetNotIncludingScale, bHasBone ? Bone : NAME_None);
+	if (!Component->AttachToComponent(ParentBody,
+		FAttachmentTransformRules::SnapToTargetNotIncludingScale, bHasBone ? Bone : NAME_None))
+	{
+		WarnAttachmentOnce(TEXT("point"), FString::Printf(
+			TEXT("particle emitter %d ('%s') could not point-attach to parent '%s'"),
+			Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName));
+	}
 	Component->SetRelativeLocation(FVector::ZeroVector);
 	if (!bHasBone && !Emitter.AttachBone.IsEmpty())
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("[particles] '%s' has no bone '%s'"),
-			*Emitter.ParentName, *Emitter.AttachBone);
+		const FString Failure = FString::Printf(TEXT("bone|%d|%s|%s"), Emitter.Entity.Index,
+			*Emitter.ParentName.ToLower(), *Emitter.AttachBone.ToLower());
+		if (!ReportedEmitterFailures.Contains(Failure))
+		{
+			ReportedEmitterFailures.Add(Failure);
+			UE_LOG(LogElysium, Warning,
+				TEXT("particle emitter %d ('%s') cannot find bone '%s' on parent '%s'; using body root"),
+				Emitter.Entity.Index, *Emitter.ParticleDefinition,
+				*Emitter.AttachBone, *Emitter.ParentName);
+		}
 	}
 }
 

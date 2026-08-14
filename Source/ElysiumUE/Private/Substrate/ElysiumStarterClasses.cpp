@@ -204,10 +204,10 @@ public:
 	bool   bTouchSuppressed = false;
 
 	// CBaseTrigger::PassesTriggerFilters (RE1, entity_io.md) reads the ALLOW_* spawnflag bits
-	// against the toucher's flags. The only toucher is still the player (a client), so the test
-	// reduces to the ALLOW_CLIENTS bit: a client-allowing trigger fires, a physics-only (0x8, no
-	// 0x1) trigger correctly ignores the player. The activator IS resolved now (11.4), so the
-	// remaining bits (NPCs, physics objects) grow the test when those touchers exist.
+	// against the toucher's flags. This leaf currently implements the ALLOW_CLIENTS consumer: the
+	// player fires a client trigger, while a native NPC body retains its own entity handle and is
+	// rejected instead of masquerading as !player. ALLOW_NPCS and physics grow this test when those
+	// trigger consumers are implemented.
 	bool PlayerPasses(const FElysiumEntityHandle& Activator) const
 	{
 		return World && Activator == World->PlayerHandle() && (SpawnFlags & 0x1) != 0;

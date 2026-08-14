@@ -22,6 +22,8 @@
 #include "ElysiumViewState.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumSceneData.h"
+#include "Substrate/ElysiumScenePlayer.h"
 
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
@@ -35,8 +37,243 @@
 #include "GameFramework/Actor.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/Paths.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWorld, Log, All);
+
+// One runtime-instanced choreo scene for the current NPC line. Retail's CInstancedSceneEntity is
+// not a map entity: the dialogue owner constructs it from the line's sidecar VCD, advances it on
+// the conversation clock and destroys it on line replacement/close. Audio, subtitles and facial
+// composition already have dialogue-owned presentation paths, so this callback consumes only the
+// authored body events and leaves the other event kinds on those existing owners.
+struct FElysiumDialogueLineScene final : IElysiumChoreoCallback
+{
+	void Begin(FElysiumEntityWorld& InWorld, const FElysiumEntityHandle& InSpeaker,
+		const FString& DlgSourcePath, int32 LineId, double Now)
+	{
+		Stop();
+		World = &InWorld;
+		Speaker = InSpeaker;
+		SourceRel = FPaths::SetExtension(
+			FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId), TEXT("vcd"));
+		Scene = ElysiumScene::Load(SourceRel);
+		if (!Scene.IsValid())
+		{
+			// A bodiless/headless conversation has no body performance to lose. On a live body this is a
+			// missing authored input, and it must not collapse silently to a plausible idle.
+			const FElysiumEntity* Entity = World->Resolve(Speaker);
+			if (Entity != nullptr && Entity->GetSkeletalBody() != nullptr)
+			{
+				UE_LOG(LogElysiumWorld, Warning,
+					TEXT("dialogue %s line %d body scene '%s' did not resolve"),
+					*Speaker.ToString(), LineId, *SourceRel);
+			}
+			Clear();
+			return;
+		}
+
+		SpeechStart = 0.f;
+		bHasSpeechStart = false;
+		for (const FElysiumSceneEvent& Event : Scene->Events)
+		{
+			if (Event.bActive && Event.Type == EElysiumChoreoEvent::Speak)
+			{
+				SpeechStart = Event.StartTime;
+				bHasSpeechStart = true;
+				break;
+			}
+		}
+
+		Player.Begin(Scene, /*InLatency=*/0.f, /*InMaxDuration=*/0.f);
+		LastThink = Now;
+		SceneTime = 0.f;
+		Player.AdvanceTo(SceneTime, *this); // time-zero body events start with the voice submission
+	}
+
+	void Advance(double Now)
+	{
+		if (!Player.IsBound())
+		{
+			return;
+		}
+		// CInstancedSceneEntity advances by curtime - lastthink and permanently discards anything over
+		// 100 ms. This is deliberately different from a map scene's absolute wall-time clock.
+		const float Delta = static_cast<float>(FMath::Clamp(Now - LastThink, 0.0, 0.1));
+		LastThink = Now;
+		SceneTime += Delta;
+		Player.AdvanceTo(SceneTime, *this);
+		if (Player.IsFinished())
+		{
+			Stop();
+		}
+	}
+
+	void Stop()
+	{
+		if (Player.IsBound())
+		{
+			Player.StopActiveEvents(*this);
+		}
+		Clear();
+	}
+
+	bool HasActiveBodyClip() const { return !ActiveClipEvents.IsEmpty(); }
+
+	bool GetSpeechSeconds(float& OutSeconds) const
+	{
+		if (!Player.IsBound() || !bHasSpeechStart)
+		{
+			return false;
+		}
+		OutSeconds = SceneTime - SpeechStart;
+		return true;
+	}
+
+	virtual void StartEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event,
+		float InSceneTime) override
+	{
+		if (Event.Type != EElysiumChoreoEvent::Sequence
+			&& Event.Type != EElysiumChoreoEvent::Gesture)
+		{
+			return;
+		}
+		if (Event.Param.IsEmpty())
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("dialogue %s body scene '%s' has an empty %s clip"),
+				*Speaker.ToString(), *SourceRel, ElysiumScene::EventTypeName(Event.Type));
+			return;
+		}
+		FElysiumEntity* Entity = ResolveSpeaker();
+		if (Entity == nullptr)
+		{
+			LogMissingSpeaker();
+			return;
+		}
+		if (!Entity->PlayAnimClip(Event.Param, /*bLoop=*/false))
+		{
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("dialogue %s body scene '%s' clip '%s' did not resolve"),
+				*Speaker.ToString(), *SourceRel, *Event.Param);
+			return;
+		}
+		const int32 Index = EventIndex(Event);
+		if (Index != INDEX_NONE)
+		{
+			ActiveClipEvents.Add(Index);
+		}
+		SeekClip(Event, InSceneTime);
+	}
+
+	virtual void ProcessEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event,
+		float InSceneTime) override
+	{
+		if (Event.Type == EElysiumChoreoEvent::Sequence
+			|| Event.Type == EElysiumChoreoEvent::Gesture)
+		{
+			SeekClip(Event, InSceneTime);
+		}
+	}
+
+	virtual void EndEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float) override
+	{
+		if (Event.Type != EElysiumChoreoEvent::Sequence
+			&& Event.Type != EElysiumChoreoEvent::Gesture)
+		{
+			return;
+		}
+		if (!ActiveClipEvents.Remove(EventIndex(Event)))
+		{
+			return;
+		}
+		if (ActiveClipEvents.IsEmpty())
+		{
+			if (FElysiumEntity* Entity = ResolveSpeaker())
+			{
+				Entity->StopCinematicClip();
+			}
+		}
+	}
+
+private:
+	void Clear()
+	{
+		Player = FElysiumScenePlayer();
+		Scene.Reset();
+		ActiveClipEvents.Reset();
+		World = nullptr;
+		Speaker = FElysiumEntityHandle::Invalid();
+		SourceRel.Reset();
+		LastThink = 0.0;
+		SceneTime = 0.f;
+		SpeechStart = 0.f;
+		bHasSpeechStart = false;
+		bLoggedMissingSpeaker = false;
+		bLoggedSeekFailure = false;
+	}
+
+	FElysiumEntity* ResolveSpeaker() const
+	{
+		return World != nullptr ? World->Resolve(Speaker) : nullptr;
+	}
+
+	int32 EventIndex(const FElysiumSceneEvent& Event) const
+	{
+		if (!Scene.IsValid() || Scene->Events.IsEmpty())
+		{
+			return INDEX_NONE;
+		}
+		const FElysiumSceneEvent* First = Scene->Events.GetData();
+		const ptrdiff_t Delta = &Event - First;
+		return Delta >= 0 && Delta < Scene->Events.Num() ? static_cast<int32>(Delta) : INDEX_NONE;
+	}
+
+	void SeekClip(const FElysiumSceneEvent& Event, float InSceneTime)
+	{
+		if (!ActiveClipEvents.Contains(EventIndex(Event)))
+		{
+			return;
+		}
+		FElysiumEntity* Entity = ResolveSpeaker();
+		if (Entity == nullptr)
+		{
+			LogMissingSpeaker();
+			return;
+		}
+		if (!Entity->SeekCinematicClip(FMath::Max(0.f, InSceneTime - Event.StartTime))
+			&& !bLoggedSeekFailure)
+		{
+			bLoggedSeekFailure = true;
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("dialogue %s body scene '%s' could not seek clip '%s'"),
+				*Speaker.ToString(), *SourceRel, *Event.Param);
+		}
+	}
+
+	void LogMissingSpeaker()
+	{
+		if (!bLoggedMissingSpeaker)
+		{
+			bLoggedMissingSpeaker = true;
+			UE_LOG(LogElysiumWorld, Warning,
+				TEXT("dialogue %s body scene '%s' lost its speaker"),
+				*Speaker.ToString(), *SourceRel);
+		}
+	}
+
+	FElysiumEntityWorld* World = nullptr;
+	FElysiumEntityHandle Speaker;
+	TSharedPtr<const FElysiumSceneData> Scene;
+	FElysiumScenePlayer Player;
+	TSet<int32> ActiveClipEvents;
+	FString SourceRel;
+	double LastThink = 0.0;
+	float SceneTime = 0.f;
+	float SpeechStart = 0.f;
+	bool bHasSpeechStart = false;
+	bool bLoggedMissingSpeaker = false;
+	bool bLoggedSeekFailure = false;
+};
 
 enum class EElysiumDialogueDirectorSource : uint8
 {
@@ -73,6 +310,7 @@ struct FElysiumDialogueSession
 	float MinimumHoldSeconds = 0.0f;
 	float ScreenSide = 1.0f;
 	FElysiumBodyOwnerToken BodyOwner;
+	FElysiumDialogueLineScene LineScene;
 };
 
 // A/B toggle for the P1.5 brush bodies (per-entity convex collision + trigger overlaps). Read at
@@ -712,12 +950,15 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 		Dest->Disposition = Controller->Disposition;
 	}
 
+	// Kill first: npc_VPlayerController releases its scripted motor while the skeletal component is
+	// still a valid child of that motor. The visual can then be destroyed without leaving the
+	// engine-side path follower holding a dead attachment.
+	Controller->Kill();
 	if (Controller->Visual)
 	{
 		Controller->Visual->DestroyComponent();
 		Controller->Visual = nullptr;
 	}
-	Controller->Kill();
 	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
 	if (IElysiumEmbodiment* E = Embodiment())
 	{
@@ -2001,6 +2242,12 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenDialogOwner() const
 	return DialogueSession ? DialogueSession->Owner : FElysiumEntityHandle::Invalid();
 }
 
+bool FElysiumEntityWorld::HasActiveDialogueBodyClip(const FElysiumEntityHandle& Speaker) const
+{
+	return DialogueSession && DialogueSession->Owner == Speaker
+		&& DialogueSession->LineScene.HasActiveBodyClip();
+}
+
 bool FElysiumEntityWorld::CanPlayerAdvanceAutomatic() const
 {
 	return DialogueSession && DialogueSession->bAutomaticFallback
@@ -2035,6 +2282,8 @@ void FElysiumEntityWorld::BeginDialogueTurn()
 	// The spoken line is the presented turn. Any pending Auto-Link/Auto-End remains attached to it
 	// until this exact voice handle completes; it is never submitted as a subtitle or response.
 	SelectDialogueCamera(/*bLineBoundary*/ true);
+	DialogueSession->LineScene.Begin(*this, DialogueSession->Owner,
+		Conversation.File().SourcePath, Line->Id, NowSeconds());
 	if (LineService)
 	{
 		FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
@@ -2726,12 +2975,11 @@ void FElysiumEntityWorld::ClearTrackCamera(float BlendOutSeconds)
 
 // --- 12.5, the dialogue half of lipsync ----------------------------------------------------------
 //
-// The same join as a choreo scene's — the line's `.lip`, the speaker's `expressions/<stem>_phonemes`
-// table, and the model's phoneme filter — but on a different clock. A `speak` event is authored on a
-// scene timeline and its lipsync rides the AUTHORED start, so the phoneme track stays in lockstep
-// with the gestures and camera moves beside it. A conversation turn has no authored timeline at all;
-// the line begins when the turn opens, and the only reference it has is its own audio. So this one
-// measures from the moment the turn was submitted.
+// The same join as a map scene's — the line's `.lip`, the speaker's
+// `expressions/<stem>_phonemes` table, and the model's phoneme filter. A dialogue line now owns its
+// instanced VCD timeline too, so the face reads that scene's authored speak offset and remains in
+// lockstep with its body events. The submission timestamp remains the diagnostic fallback for a
+// line whose VCD is absent.
 static TAutoConsoleVariable<int32> CVarDialogueLipsync(
 	TEXT("elysium.DialogueLipsync"),
 	1,
@@ -2799,7 +3047,11 @@ void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 	if (DialogueLipsync.IsValid() && DialogueLineStart >= 0.0
 		&& CVarDialogueLipsync.GetValueOnGameThread() != 0)
 	{
-		const float LineSeconds = static_cast<float>(Now - DialogueLineStart);
+		float LineSeconds = static_cast<float>(Now - DialogueLineStart);
+		if (DialogueSession)
+		{
+			DialogueSession->LineScene.GetSpeechSeconds(LineSeconds);
+		}
 		if (LineSeconds >= 0.f && LineSeconds <= DialogueLipsync->Track->LatestTime)
 		{
 			DialogueLipsync->Accumulate(LineSeconds, Next, nullptr);
@@ -2859,6 +3111,7 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 	if (DialogueSession)
 	{
 		ClosingBodyOwner = DialogueSession->BodyOwner;
+		DialogueSession->LineScene.Stop();
 	}
 	if (LineService)
 	{
@@ -2960,6 +3213,13 @@ void FElysiumEntityWorld::Tick(double Now)
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
 	// chance to replace or close the session. A stale completion therefore cannot advance a newer turn.
 	UpdateDialogueAutomatic();
+	// Dialogue's CInstancedSceneEntity equivalent is session-owned rather than an entity think. Run it
+	// after automatic advancement so a completed voice tears down its old body clip before the new
+	// turn's time-zero event is submitted, with no stale scene receiving another tick.
+	if (DialogueSession)
+	{
+		DialogueSession->LineScene.Advance(Now);
+	}
 	// After the thinks, so a turn opened this frame already has its track bound — the same ordering
 	// FElysiumChoreoScene::Think uses for RefreshFacialPose.
 	RefreshDialogueLipsync(Now);
@@ -3226,14 +3486,10 @@ void FElysiumEntityWorld::AcceptInputFromWire(const FString& Target, FName Input
 			++Row->UnknownTarget;
 		}
 		const FString Key = FString::Printf(TEXT("%s.%s"), *Target, *Input.ToString());
-		// Reported as its own kind rather than as `input`: the wire names an entity the map does
-		// not contain, so nothing is missing from the runtime here and no amount of implementing
-		// will make it fire. It stays on the work list because the two are indistinguishable from
-		// the outside — a scene that does not happen looks the same either way.
-		ElysiumStub::Fired(TEXT("target"), Key, FString(),
-			FString::Printf(TEXT("param=%s activator=%s caller=%s"),
-				*Param.Describe(), *Activator.ToString(), *Caller.ToString()),
-			FString::Printf(TEXT("no entity named '%s' in this map"), *Target));
+		// A missing receiver is an authored/runtime-state outcome, not an unimplemented surface:
+		// retail data contains stale wires, and a valid target can also have been killed before a
+		// later unlimited output fires. Keep the drop visible in the I/O sink and per-wire tally,
+		// but do not put it on the implementation work list.
 		if (!UnknownLogged.Contains(Key))
 		{
 			UnknownLogged.Add(Key);
@@ -3273,15 +3529,8 @@ void FElysiumEntityWorld::AcceptInput(const FElysiumEntityHandle& Target, FName 
 		return;
 	}
 	++UnknownTargetCount;
-	// Same K3 accounting as the by-name overload: a handle whose entity is gone names a receiver
-	// this map cannot deliver to, so it reports as a `target` stub — not an unknown input — and
-	// stays on the `elysium.stubs` work list, where a scene that silently does not happen is
-	// visible.
-	ElysiumStub::Fired(TEXT("target"), FString::Printf(TEXT("%s.%s"), *Ev.Target, *Input.ToString()),
-		FString(),
-		FString::Printf(TEXT("param=%s activator=%s caller=%s"),
-			*Param.Describe(), *Activator.ToString(), *Caller.ToString()),
-		FString::Printf(TEXT("no live entity behind handle %s"), *Ev.Target));
+	// The same ordinary missing-receiver accounting as the by-name overload. A stale handle is
+	// still counted and reported to sinks on every attempt, but is not an implementation stub.
 	for (const TUniquePtr<IElysiumIOSink>& Sink : Sinks)
 	{
 		Sink->OnUnknownTarget(Now, Ev);

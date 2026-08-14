@@ -1623,6 +1623,58 @@ not a recovered claim about the opaque retail engine callback order. Initial map
 place and freeze the pawn, synchronize and activate entities, open the entity world, reconcile
 containment immediately, then run the frozen think/event pass.
 
+## NPC `TeleportToEntity` (`CAI_BaseNPCTroika`)
+
+This is a different input from `point_teleport.Teleport`. It is declared by
+`CAI_BaseNPCTroika`, not `CAI_BaseNPC`: datamap `0x105ce470`, record array `0x105ce4b4`, record
+`0x105d0a2c`. The record is `FIELD_EHANDLE` (VtMB field type 12), external name
+`TeleportToEntity`, internal name `InputTeleportToEntity`, with handler thunk `0x100028dd` jumping
+to `FUN_102c24a0`. The base `CAI_BaseNPC` map at `0x105c9814` has no such record.
+
+Hammer outputs author the destination as a string. `CBaseEntity::AcceptInput` first converts that
+string to the record's `FIELD_EHANDLE`: `variant_t::Convert` (`FUN_100d05d0`) calls the global
+entity list's `FindEntityByName` (`FUN_100f7770`) with a null starting entity. Lookup walks entity-list
+order and returns the first case-insensitive exact match; a final `*` changes the comparison to a
+case-insensitive prefix match. A missing or empty name becomes `INVALID_EHANDLE`, but conversion
+still reports success, the handler consumes the input and returns without moving the NPC. There is
+no retry if a destination with that name appears later.
+
+For a valid handle the native handler performs, in order:
+
+1. read the destination's absolute origin and call `SetAbsOrigin` on the NPC;
+2. resolve the same handle again, read the destination's absolute angles and call `SetAbsAngles`
+   on the NPC — all three angles, not yaw alone;
+3. call the empty `CBaseEntity::Relink` profiler hook;
+4. invoke virtual slot `+0x998` on the NPC;
+5. call `CBaseEntity::ForceTransmit`, setting the receiver's transmit deadline to
+   `curtime + 1.0` seconds.
+
+For all three concrete receiver families in the current corpus, slot `+0x998` resolves through
+thunk `0x10010f0f` to `FUN_102c23f0`. It writes `curtime` to the general `m_flNextThink` (`+0x17c`)
+and to the four Troika deadlines
+`m_flNextUpdateThink`, `m_flNextNormalThink`, `m_flNextMoveThink`, and `m_flNextAIThink`
+(`+0x6244` through `+0x6250`). It does not clear an active schedule, route, movement goal, enemy,
+NPC state, animation, or condition memory. The separately authored `teleport_move_timer` field at
+`+0x65dc` is not read by this input.
+
+There is also no parent rejection, destination trace, hull-clearance test, ground or nearest-safe
+search, velocity or angular-velocity reset, or direct touch dispatch. The transform is authoritative;
+spatial relinking follows `SetAbsOrigin`, and touch consequences cross the same later engine-owned
+collision boundary as `point_teleport`. Because retail `GameFrame` runs entity thinks before it
+services the event queue, an authored output delivered through that queue makes the five deadlines
+due only after the think pass has ended; Jack consumes them on the next server frame, not recursively
+inside `TeleportToEntity`.
+
+The current 23-map export corpus authors 40 such wires: eight to Jack in `sp_tutorial_1`, two to
+static `npc_VHumanCombatant` guards in `sm_warehouse_1`, and thirty to `npc_VHunter` children named
+by makers in `la_hub_1` and `sm_hub_1`. Every destination name exists. `la_hub_1` deliberately has
+two `point_target` rows named `hunter_2_spot_1`; first-match lookup selects the earlier live
+entity-list entry rather than rejecting the ambiguity or choosing the nearest point. This pass pins
+the shared transform/lookup handler and all three concrete post-teleport hooks used by these wires.
+Jack's `CNPC_VVampire`, `CNPC_VHumanCombatant` vtable `0x104b7ff4`, and `CNPC_VHunter` vtable
+`0x104b9784` all resolve slot `+0x998` (index 614) through thunk `0x10010f0f` to
+`FUN_102c23f0`, so the same five due-think writes apply to every current corpus receiver family.
+
 ## Skin families (`skin` / `SetSkin` / `FadeToSkin`)
 
 The datamap records in `vampire.dll` that drive a model's alternate skin family (record layout per

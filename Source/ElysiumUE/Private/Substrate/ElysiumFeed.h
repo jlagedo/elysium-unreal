@@ -12,10 +12,12 @@
 // Scope: ordinary player-on-humanoid feeding, paired mode 0. Seductive (mode 2), rat (mode 6) and
 // zombie (mode 8) feeding, prayer, the trait-effect branches (`FX_Increased_Rat_Feed`,
 // `Fx_Feed_Bonus_Opp_Gender`, `Fx_Feed_Bonus_Tramps`, `Fx_Cannot_Rat_Feed`), the signed
-// first-pulse blood-gain modifier at +0x14a4, and every presentation layer (camera, feed bar,
-// heartbeat, particles, audio) are deliberately absent rather than approximated.
+// first-pulse blood-gain modifier at +0x14a4, heartbeat, particles and audio remain absent rather
+// than approximated. The capture-backed ordinary presentation slice (paired height variants,
+// camera lease, victim meter and release tail) uses these same pure rules.
 
 struct FElysiumRollResult;
+struct FElysiumUserCmd;
 enum class EElysiumFeedPhase : uint8;   // Public/ElysiumPlayer.h
 
 namespace ElysiumFeed
@@ -85,37 +87,74 @@ namespace ElysiumFeed
 			PlayerBefore, PlayerAfter, VictimBefore, VictimAfter, BloodStolen);
 	}
 
+	// While the paired action owns the player body, keep the second Feed press but remove look,
+	// movement, combat, use and panel intent. This filters the one command snapshot rather than
+	// polling keys or creating a feed-specific input owner.
+	FElysiumUserCmd GatePairedUserCmd(const FElysiumUserCmd& Cmd);
+
 	// The feat names, spelled once. `Hacking` is literal retail behaviour on the victim side and is
 	// not a rename candidate.
 	inline const TCHAR* AttackerFeat() { return TEXT("Close_Combat_Brawl"); }
 	inline const TCHAR* VictimFeat()   { return TEXT("Hacking"); }
 
+	// --- The ordinary paired-action catalog ---------------------------------------------------
+	enum class EPartnerHeight : uint8
+	{
+		Shorter,
+		Taller,
+	};
+
+	enum class ESide : uint8
+	{
+		Front,
+		Back,
+	};
+
+	struct FClipPair
+	{
+		FString Attacker;
+		FString Victim;
+
+		bool IsComplete() const { return !Attacker.IsEmpty() && !Victim.IsEmpty(); }
+	};
+
+	// The source pair has no equal-height cell. A tie takes the historical short-victim cell on the
+	// attacker and therefore the complementary tall-attacker cell on the victim. The important rule
+	// is that the two roles are always opposites; the old implementation selected short for both.
+	inline EPartnerHeight VictimHeightFor(float AttackerHeightCm, float VictimHeightCm)
+	{
+		return VictimHeightCm > AttackerHeightCm ? EPartnerHeight::Taller : EPartnerHeight::Shorter;
+	}
+
+	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight,
+		ESide Side = ESide::Front);
+
+	// Character SoundScheme activities resolve to these patch-first audio mirror paths. Kept pure so
+	// sex/role selection can be asserted without an audio device.
+	FString AudioPath(bool bVictim, bool bMale, const TCHAR* Phase);
+
 	// --- The animation-event bridge, driven from decoded clip metadata ------------------------
 	// The bake carries no MDL animation events (see the header comment in `ElysiumFeed.cpp`), so
 	// the state machine raises 4007/4006 itself at the authored cycles `feeding.md` § "Representative
-	// clip timing" decoded for the ordinary attacker/short-victim/front variant. Seconds, at the
-	// authored 30 fps. A body that resolves its own clip length overrides these; a headless world
-	// uses them as-is, which is what keeps the transaction independent of a rendered body.
+	// clip timing" decoded for the ordinary front variants. Seconds, at the authored 30 fps. A body
+	// that resolves its own clip length overrides these; a headless world uses them as-is, which is
+	// what keeps the transaction independent of a rendered body.
 	inline constexpr float EngageSeconds  = 16.0f / 30.0f;   // 0.533
 	inline constexpr float BiteSeconds    = 19.0f / 30.0f;   // 0.633
 	inline constexpr float LoopSeconds    = 61.0f / 30.0f;   // 2.033
-	inline constexpr float ReleaseSeconds = 73.0f / 30.0f;   // 2.433
+	inline constexpr float ShortVictimReleaseSeconds = 73.0f / 30.0f;   // 2.433
+	inline constexpr float TallVictimReleaseSeconds  = 68.0f / 30.0f;   // 2.267
 
 	// Where each boundary event sits inside its own clip, as a 0..1 cycle.
 	inline constexpr float BiteEventCycle    = 0.0f;        // 4007 on the bite clip
-	inline constexpr float ReleaseEventCycle = 0.305556f;   // 4006 on the feed-release clip
+	inline constexpr float ShortVictimReleaseEventCycle = 0.305556f;
+	inline constexpr float TallVictimReleaseEventCycle  = 0.328358f;
+
+	float PhaseSeconds(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight);
+	float EventCycle(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight);
 
 	// The three event ids `CBaseCombatCharacter::HandleAnimEvent` gives distinct jobs.
 	inline constexpr int32 EventFeedBegin      = 4007;
 	inline constexpr int32 EventFeedTeardown   = 4006;
 	inline constexpr int32 EventFeedEmitter    = 5116;   // presentation only
-
-	// The clip label each half plays for a phase, in the NPC clip vocabulary the export already
-	// carries (`feeding_attacker_shortvictim_front_*` / `feeding_victim_shortattacker_front_*`).
-	//
-	// The short-victim/front variant is pinned. Retail's paired translator expands the base
-	// activity into attacker/victim x short/tall-partner x front/back; resolving that is the
-	// grapple router's job and is out of B6's scope, so the pair always performs the front,
-	// short-partner cell. A missing clip is logged and the transaction continues.
-	const TCHAR* PhaseClipLabel(EElysiumFeedPhase Phase, bool bAttacker);
 }

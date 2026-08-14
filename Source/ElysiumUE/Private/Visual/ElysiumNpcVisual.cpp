@@ -1,6 +1,8 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumBodyAnimInstance.h"
+#include "Visual/ElysiumHairDynamicsData.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
@@ -20,6 +22,8 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpcVisual, Log, All);
+
 // The legacy simulated-garment spike (docs/architecture/asset-enhancement.md). Retail garment
 // motion is a StudioRender particle solve carried by the model, independently from its hair/body
 // bone-chain solver. The approximation artifacts are built by
@@ -30,6 +34,92 @@
 
 namespace ElysiumNpcVisual
 {
+	bool InstallHairDynamics(USkeletalMeshComponent* Body, const FString& Stem)
+	{
+		static const TSet<FString> ProofStems = {
+			TEXT("malkavian_female_armor_0"), TEXT("jeanette")
+		};
+		USkeletalMesh* const Mesh = Body != nullptr ? Body->GetSkeletalMeshAsset() : nullptr;
+		if (Mesh == nullptr)
+		{
+			return false;
+		}
+		const UElysiumHairDynamicsAssetUserData* Hair = Cast<UElysiumHairDynamicsAssetUserData>(
+			Mesh->GetAssetUserDataOfClass(UElysiumHairDynamicsAssetUserData::StaticClass()));
+		if (Hair == nullptr)
+		{
+			return false;
+		}
+		if (!ProofStems.Contains(Stem.ToLower()))
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("Hair AnimDynamics metadata on out-of-scope body '%s' (%s); refusing it"),
+				*Stem, *Mesh->GetPathName());
+			return false;
+		}
+		if (Hair->Chains.IsEmpty())
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("Hair AnimDynamics metadata on '%s' carries no chains"), *Mesh->GetPathName());
+			return false;
+		}
+		const bool bExactSelection = Stem.Equals(TEXT("malkavian_female_armor_0"),
+			ESearchCase::IgnoreCase)
+			? Hair->Chains.Num() == 1
+				&& Hair->Chains[0].BoundBone == FName(TEXT("Bone05"))
+				&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone09"))
+			: Hair->Chains.Num() == 2
+				&& Hair->Chains[0].BoundBone == FName(TEXT("Bone01"))
+				&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone07"))
+				&& Hair->Chains[1].BoundBone == FName(TEXT("Bone09"))
+				&& Hair->Chains[1].ChainEnd == FName(TEXT("Bone13"));
+		if (!bExactSelection)
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("Hair AnimDynamics metadata on '%s' is outside the exact proof selection"),
+				*Mesh->GetPathName());
+			return false;
+		}
+
+		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+		for (const FElysiumHairDynamicsChainConfig& Chain : Hair->Chains)
+		{
+			const int32 Bound = Ref.FindBoneIndex(Chain.BoundBone);
+			const int32 End = Ref.FindBoneIndex(Chain.ChainEnd);
+			bool bDescends = Bound != INDEX_NONE && End != INDEX_NONE && Bound != End;
+			for (int32 Bone = End; bDescends && Bone != Bound;)
+			{
+				Bone = Ref.GetParentIndex(Bone);
+				bDescends = Bone != INDEX_NONE;
+			}
+			const bool bFinite = FMath::IsFinite(Chain.GravityScale)
+				&& FMath::IsFinite(Chain.Damping)
+				&& FMath::IsFinite(Chain.AngularSpring)
+				&& FMath::IsFinite(Chain.ConeAngleDegrees);
+			if (!bDescends || !bFinite || Chain.GravityScale < 0.0f
+				|| Chain.Damping < 0.7f || Chain.Damping > 1.0f
+				|| Chain.AngularSpring < 0.0f
+				|| Chain.ConeAngleDegrees < 0.0f || Chain.ConeAngleDegrees > 90.0f)
+			{
+				UE_LOG(LogElysiumNpcVisual, Warning,
+					TEXT("Hair AnimDynamics chain %s -> %s is invalid on '%s'"),
+					*Chain.BoundBone.ToString(), *Chain.ChainEnd.ToString(), *Mesh->GetPathName());
+				return false;
+			}
+		}
+
+		UElysiumBodyAnimInstance* const Instance =
+			Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
+		if (Instance == nullptr)
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("Hair AnimDynamics body '%s' has no UElysiumBodyAnimInstance"), *Mesh->GetPathName());
+			return false;
+		}
+		Instance->SetHairDynamics(Hair->Chains, Ref);
+		return true;
+	}
+
 	// Declare every morph target the mesh came back with as a morph-target *curve* on its skeleton
 	// (12.3). An anim curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone
 	// container flags it, and the bone container takes those flags from this metadata — so without

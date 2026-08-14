@@ -223,8 +223,8 @@ the rulebook's first `Items()` load; `FElysiumInventory` lives on the combat cha
 `ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
 `ElysiumChoreoScene.cpp`
 (`logic_choreographed_scene`, over the `.vcd` reader `ElysiumSceneData.{h,cpp}` and the event
-timeline `ElysiumScenePlayer.{h,cpp}` — both free of the world so 12.2's per-line dialogue path can
-reuse them). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
+timeline `ElysiumScenePlayer.{h,cpp}` — both world-free and shared by map-authored scenes and
+per-line dialogue playback). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
 input with no system behind it yet; `elysium.stubs` reads the fired set back, and
 `Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 

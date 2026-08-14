@@ -286,8 +286,9 @@ public:
 	// engine seam (ElysiumWorldServices.h) — the substrate never learns that a body factory exists.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override;
-	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body, const FVector& FeetOrigin,
-		float YawDegrees, const FString& Stem, int32 Variant) override;
+	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
+		const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+		const FString& Stem, int32 Variant) override;
 	virtual void DestroyNpcMotor(IElysiumNpcMotor* Motor) override;
 	virtual bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant) override;
@@ -495,9 +496,11 @@ private:
 		UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	/** Bind one emitter's component to its parent entity's bone, or to the map root when it has none. */
+	/** Apply the recovered origin/tree/point attachment rule to one emitter component. */
 	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);
 	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;
+	/** Failure identities already reported by the presentation adapter; avoids per-tick warning spam. */
+	TSet<FString> ReportedEmitterFailures;
 	FElysiumWeatherTransition WetnessTransition;
 	float PresentedWetness = 0.0f;
 	float PresentedWetnessScale = 1.0f;

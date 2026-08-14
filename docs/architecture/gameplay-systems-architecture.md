@@ -68,7 +68,7 @@ makes it authorable). The interim standard for a registered-but-unbacked input i
 `ELYSIUM_PENDING_INPUT` macro (`Substrate/ElysiumPendingInput.h`, with a declaring-class form
 so a chain-level input reports one work-list row) — the frenzy family,
 `ClearActiveDisciplines`, `BarterBegin`/`End`, the camera-target quartet, and the recovered
-`CAI_BaseNPC` inputs (`SetRelationship`, `TeleportToEntity`, `SetScriptedDiscipline`). Each
+NPC-chain `SetScriptedDiscipline` input. Each
 row is retired by the domain that owns it, never by a generic sweep, and
 `Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
@@ -631,7 +631,11 @@ stale intent falls back to `None` diagnostically.
 table, senses, and mind members stage by stage; the `SetRelationship` and
 `aiscripted_schedule` stub rows in `ElysiumStubClasses.cpp` retire; the sound bus lands in
 `FElysiumEntityWorld`; `TeleportToEntity` joins the NPC input table (it is wired 8× in the
-tutorial). Roadmap: B6, 9.9, then 10.7's promoted stages.
+tutorial). That input performs the recovered late first-match destination lookup, copies absolute
+origin and angles without a safe-placement or velocity reset, schedules the NPC's due think work,
+and exposes the discontinuity through the embodiment/network seam. A missing destination preserves
+retail's consumed no-op while emitting the project-required diagnostic warning. Roadmap: B6, 9.9,
+then 10.7's promoted stages.
 
 ### 5.6 Disciplines
 

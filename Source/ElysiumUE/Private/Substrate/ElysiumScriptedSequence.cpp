@@ -26,9 +26,9 @@
 // beside 9 instantaneous placements — the walk-out of sp_theatre's courtroom is five of the walks,
 // carrying Isaac, Therese, Nines, Skelter and VV ~19 metres with no `m_iszPlay` to time it.
 //
-// Travel needs a body with a motor. Without one — the `!playercontroller` stand-in (10 sequences),
-// a bodiless record, `elysium.NpcBodies 0`, a menu backdrop, an unbuilt navigation graph, a mark
-// with no path, or any headless test — the NPC is **placed on the marker** instead: the authored
+// Travel needs a body with a motor. The embodied `!playercontroller` stand-in uses the same motor
+// seam as an NPC; a bodiless record, `elysium.NpcBodies 0`, a menu backdrop, an unbuilt navigation
+// graph, a mark with no path, or any headless test is **placed on the marker** instead: the authored
 // end state without the transit, and the beat runs on unchanged. That is also what
 // `elysium.SeqLocomotion 0` selects.
 //
@@ -424,7 +424,7 @@ public:
 	// next one (`logic_shot_5` cancels sSabbat1_4 and begins sSabbat1_5). VtMB fires OnCancelSequence
 	// here; no exported map wires it, so nothing is fired. `OnEndSequence` deliberately does NOT fire
 	// — a cancelled beat must not unlock the door its completion would have.
-	void InputCancelSequence(const FElysiumInputArgs&)
+	void CancelSequence()
 	{
 		if (Phase == EPhase::Idle && !bPostIdleHeld)
 		{
@@ -447,6 +447,21 @@ public:
 		}
 		bTravelled = false;
 		UE_LOG(LogElysiumSeq, Verbose, TEXT("%s CancelSequence"), *DebugString());
+	}
+
+	void InputCancelSequence(const FElysiumInputArgs&)
+	{
+		CancelSequence();
+	}
+
+	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& Body) override
+	{
+		if (!(OwnedNpc == Body))
+		{
+			return false;
+		}
+		CancelSequence();
+		return !OwnedNpc.IsSet();
 	}
 
 	// The action animation ran out (or there was none): hold the post-idle, fire OnEndSequence, and

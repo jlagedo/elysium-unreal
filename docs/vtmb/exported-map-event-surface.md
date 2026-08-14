@@ -100,6 +100,13 @@ The dominant unresolved rows demonstrate both cases:
 - the remaining rows need producer-time lifetime analysis before being called either valid or
   dangling.
 
+The current corpus carries 40 `TeleportToEntity` wires: 30 to those maker-created hunters, eight to
+the static Jack in `sp_tutorial_1`, and two to static warehouse guards. The input's destination
+parameter undergoes a second late lookup inside `AcceptInput`, after the receiver has resolved. All
+40 destination names exist; `la_hub_1` has two `point_target` rows named `hunter_2_spot_1`, and
+retail selects the first live entity-list match. The exact `FIELD_EHANDLE` conversion and native
+placement order are recorded in `docs/vtmb/entity_io.md`.
+
 A remake must not prebind every output to the load-time entity set. It preserves the authored name
 and performs case-insensitive exact/final-`*` lookup at service time. Missing-at-service remains a
 non-fatal drop and is not retried if a matching entity appears later.

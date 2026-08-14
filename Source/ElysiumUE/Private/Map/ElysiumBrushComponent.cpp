@@ -3,10 +3,14 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumPlayerBody.h"
+#include "Visual/ElysiumNpcBody.h"
 
 #include "GameFramework/Pawn.h"
 #include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/BodySetup.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumBrush, Log, All);
 
 EElysiumBrushSolidity ElysiumBrushSolidityForClass(const FString& Classname)
 {
@@ -161,8 +165,8 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 	// every such pair at once, and the tutorial answers by running scripted beats nobody walked into:
 	// `elysium.newgame` from a loaded map tripped `trig_feed_fix.OnStartTouch -> fix_fade.Fade ->
 	// teleport_player.Teleport` and warped the player off the porch into the downtown alley.
-	// Only movers touch. The player pawn is the only one today; NPC pawns pass the same test (8.5),
-	// and physics props widen it when they exist (8.4).
+	// Only movers touch. Player and NPC bodies retain distinct substrate identities; physics props
+	// widen this dispatch when they exist (8.4).
 	if (!Toucher || !Toucher->IsA<APawn>())
 	{
 		return;
@@ -178,13 +182,28 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 	}
 	if (FElysiumEntityWorld* World = Map->GetEntityWorld())
 	{
-		// 11.4 — the toucher resolves to the entity it embodies, so `!activator` on the wires a
-		// trigger fires is a real handle. The player pawn is the only toucher today; when NPC
-		// bodies move (8.5 locomotion) this becomes a lookup from the body to its owning entity.
-		const FElysiumEntityHandle Activator = World->PlayerHandle();
+		// The trigger filter consumes the logical toucher's client/NPC identity, not Unreal's shared
+		// APawn base. In particular, Jack idles inside sp_tutorial_1's disabled post-feed trigger;
+		// waking that brush must route Jack so ALLOW_CLIENTS rejects him, not masquerade him as player.
+		FElysiumEntityHandle Activator;
+		if (const IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Toucher))
+		{
+			Activator = PlayerBody->GetPlayerEntity();
+		}
+		else if (const AElysiumNpcBody* NpcBody = Cast<AElysiumNpcBody>(Toucher))
+		{
+			Activator = NpcBody->GetOwningEntity();
+		}
+		else
+		{
+			UE_LOG(LogElysiumBrush, Warning,
+				TEXT("%s overlap ignored unsupported pawn body '%s'"),
+				*GetNameSafe(this), *GetNameSafe(Toucher));
+			return;
+		}
 		// Brush bodies are built before the runtime !player record. If UE reports an overlap while a
-		// body is registering, defer it to the map actor's post-placement reconciliation rather than
-		// firing an authored output with a null activator and then suppressing the real player edge.
+		// pawn is registering, defer it rather than firing an authored output with a null activator and
+		// then suppressing the real edge. Both body factories install their owner before activation.
 		if (!Activator.IsSet())
 		{
 			return;

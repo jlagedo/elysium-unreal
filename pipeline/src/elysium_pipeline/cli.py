@@ -17,7 +17,7 @@ from typing import Any, Callable
 import typer
 from rich.console import Console
 
-from elysium_pipeline import lanes
+from elysium_pipeline import lanes, task_worktrees
 from elysium_pipeline.config import ConfigError, ProjectConfig
 from elysium_pipeline.dependencies import (
     DependencyError,
@@ -45,6 +45,7 @@ run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
 ide_app = typer.Typer(help="Configure supported development environments.")
 lane_app = typer.Typer(help="Manage detached, generated-state-isolated QA worktrees.")
+worktree_app = typer.Typer(help="Manage mutable, isolated development-task worktrees.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
 app.add_typer(verify_app, name="verify")
@@ -52,6 +53,7 @@ app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
 app.add_typer(ide_app, name="ide")
 app.add_typer(lane_app, name="lane")
+app.add_typer(worktree_app, name="worktree")
 
 
 @dataclass(slots=True)
@@ -114,12 +116,14 @@ def _execute(
     activity: bool = False,
     require_built_lane: bool = False,
     record_lane_run: bool = True,
+    primary_only: bool = False,
 ) -> Any:
     report = RunReport(command=name, arguments=sys.argv[1:])
     config: ProjectConfig | None = None
     log_handle = None
     report_path: Path | None = None
     lane: lanes.LaneRecord | None = None
+    task: task_worktrees.TaskWorktreeRecord | None = None
     started = datetime.now(timezone.utc).isoformat()
     before = time.monotonic()
     try:
@@ -148,6 +152,24 @@ def _execute(
             ),
         )
         lane = lanes.current_lane(config.work_root, config.repo_root)
+        task = task_worktrees.current_task_worktree(
+            config.repo_root, config.work_root
+        )
+        if task is not None:
+            head = task_worktrees.assert_task_worktree_runnable(task, runner)
+            report.metadata.update(
+                {
+                    "task_worktree": task.name,
+                    "task_base_commit": task.base_commit,
+                    "task_head": head,
+                    "worktree": str(task.worktree),
+                    "export_root": str(task.export_root),
+                }
+            )
+        if primary_only:
+            task_worktrees.assert_primary_operation(
+                config.repo_root, config.work_root, name
+            )
         lease = nullcontext()
         if lane is not None and record_lane_run:
             report.metadata.update(
@@ -168,11 +190,16 @@ def _execute(
                         f"{candidate[:12]} before {name}"
                     )
             if config.export_root is not None:
+                lease_metadata: dict[str, Any] = {}
+                if lane is not None:
+                    lease_metadata["lane"] = lane.name
+                if task is not None:
+                    lease_metadata["task_worktree"] = task.name
                 lease = WorkspaceLease(
                     config.export_root,
                     name,
                     config.repo_root,
-                    metadata={"lane": lane.name} if lane is not None else None,
+                    metadata=lease_metadata or None,
                 )
         with lease:
             if lane is not None and activity:
@@ -244,6 +271,138 @@ def _execute(
     raise typer.Exit(code)
 
 
+@worktree_app.command("create")
+def worktree_create(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Task name, such as inventory-fix."),
+    at: str = typer.Option("HEAD", "--at", help="Commit or ref to detach at."),
+    path: Path | None = typer.Option(
+        None,
+        "--path",
+        help="Worktree path; defaults to a sibling named <repo>-task-<name>.",
+    ),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.game_root is None or config.work_root is None or config.ue_root is None:
+            raise RuntimeError("worktree creation needs the game, work, and UE roots")
+        creation = task_worktrees.create_task_worktree(
+            source_repo=config.repo_root,
+            source_work_root=config.work_root,
+            game_root=config.game_root,
+            ue_root=config.ue_root,
+            runner=runner,
+            name=name,
+            ref=at,
+            worktree_path=path,
+        )
+        record = creation.record
+        console.print(
+            f"task worktree {record.name} created at {record.worktree} "
+            f"({record.base_commit[:12]})"
+        )
+        console.print(f"task work root: {record.work_root}")
+        if creation.source_dirty:
+            console.print(
+                "[yellow]warning:[/yellow] main has uncommitted changes; "
+                "the task worktree contains only the named commit"
+            )
+        console.print(f"assign the task agent to: {record.worktree}")
+        console.print("task agent setup: uv run elysium deps sync")
+        console.print("allowed: incremental build and focused tests")
+        console.print("main only: export, bake, editor, play, debug, gr, and mcp")
+
+    _execute(
+        _state(ctx),
+        "worktree create",
+        ExitCode.VALIDATION,
+        action,
+        require_game=True,
+        require_ue=True,
+    )
+
+
+def _print_task_worktree_status(value: dict[str, Any]) -> None:
+    active = value["active"]
+    activity = "idle" if active is None else (
+        f"{active.get('command', 'busy')} (pid {active.get('pid', '?')})"
+    )
+    console.print(f"{value['name']}: {value['worktree']}")
+    if value["missing"]:
+        console.print("  [red]checkout missing[/red]")
+        return
+    cleanliness = "clean" if not value["dirty"] else f"dirty ({len(value['dirty'])})"
+    unlanded = value["unlanded_commits"]
+    landing = "landed" if not unlanded else f"{len(unlanded)} commit(s) to land"
+    console.print(
+        f"  source {value['head'][:12]} from {value['base_commit'][:12]} "
+        f"({cleanliness}, {landing})"
+    )
+    console.print(f"  activity {activity}; work root {value['work_root']}")
+
+
+@worktree_app.command("status")
+def worktree_status_command(
+    ctx: typer.Context,
+    name: str | None = typer.Argument(None, help="One task; omit to list every task."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.work_root is None:
+            raise RuntimeError("worktree status needs ELYSIUM_WORK_ROOT")
+        records = task_worktrees.task_worktree_records(
+            config.repo_root, config.work_root, name
+        )
+        values = [
+            task_worktrees.task_worktree_status(record, runner)
+            for record in records
+        ]
+        if json_output:
+            typer.echo(json.dumps(values, indent=2, sort_keys=True))
+            return
+        if not values:
+            console.print("no task worktrees")
+            return
+        for index, value in enumerate(values):
+            if index:
+                console.print()
+            _print_task_worktree_status(value)
+
+    _execute(
+        _state(ctx),
+        "worktree status",
+        ExitCode.VALIDATION,
+        action,
+        quiet_report=True,
+        record_lane_run=False,
+    )
+
+
+@worktree_app.command("close")
+def worktree_close(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Landed task worktree to remove."),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if config.work_root is None:
+            raise RuntimeError("worktree close needs ELYSIUM_WORK_ROOT")
+        if task_worktrees.current_task_worktree(config.repo_root, config.work_root):
+            raise task_worktrees.TaskWorktreeError(
+                "close task worktrees from the primary main checkout"
+            )
+        records = task_worktrees.task_worktree_records(
+            config.repo_root, config.work_root, name
+        )
+        task_worktrees.close_task_worktree(records[0], runner)
+        console.print(f"task worktree {name} closed")
+
+    _execute(
+        _state(ctx),
+        "worktree close",
+        ExitCode.VALIDATION,
+        action,
+    )
+
+
 @lane_app.command("create")
 def lane_create(
     ctx: typer.Context,
@@ -288,6 +447,7 @@ def lane_create(
         action,
         require_game=True,
         require_ue=True,
+        primary_only=True,
     )
 
 
@@ -584,6 +744,7 @@ def _export_profile_command(
         require_ue=True,
         activity=True,
         require_built_lane=True,
+        primary_only=True,
     )
 
 
@@ -635,6 +796,7 @@ def export_map(
         require_ue=not intermediate_only,
         activity=True,
         require_built_lane=not intermediate_only,
+        primary_only=True,
     )
 
 
@@ -672,6 +834,7 @@ def export_characters(
         require_ue=True,
         activity=True,
         require_built_lane=True,
+        primary_only=True,
     )
 
 
@@ -752,6 +915,7 @@ def export_model(
         require_ue=integrate,
         activity=True,
         require_built_lane=integrate,
+        primary_only=True,
     )
 
 
@@ -778,6 +942,7 @@ def export_placed_model(
         require_ue=True,
         activity=True,
         require_built_lane=True,
+        primary_only=True,
     )
 
 
@@ -812,6 +977,7 @@ def export_bundle(
         require_ue=needs_editor,
         activity=True,
         require_built_lane=needs_editor,
+        primary_only=True,
     )
 
 
@@ -846,6 +1012,7 @@ def reconstruct(
         require_game=True,
         require_ue=True,
         activity=True,
+        primary_only=True,
     )
 
 
@@ -903,6 +1070,7 @@ def run_editor(ctx: typer.Context, extra: list[str] = typer.Argument(None)) -> N
         require_ue=True,
         activity=True,
         require_built_lane=True,
+        primary_only=True,
     )
 
 
@@ -934,6 +1102,7 @@ def run_play(
         require_ue=True,
         activity=True,
         require_built_lane=True,
+        primary_only=True,
     )
 
 
@@ -1017,6 +1186,7 @@ def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
         require_ue=True,
         activity=True,
         require_built_lane=True,
+        primary_only=True,
     )
 
 
@@ -1106,6 +1276,14 @@ def ide_vscode(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
 )
 def mcp(ctx: typer.Context) -> None:
     config = _state(ctx).resolve(require_work=False)
+    try:
+        task_worktrees.assert_primary_operation(
+            config.repo_root, config.work_root, "mcp"
+        )
+    except task_worktrees.TaskWorktreeError as exc:
+        console.print("[red]error:[/red] ", end="")
+        console.print(str(exc), markup=False)
+        raise typer.Exit(int(ExitCode.USAGE_OR_CONFIG)) from exc
     result = subprocess.run(
         [sys.executable, "-m", "elysium_pipeline.devtools.mcp_proxy", *ctx.args],
         cwd=config.repo_root,

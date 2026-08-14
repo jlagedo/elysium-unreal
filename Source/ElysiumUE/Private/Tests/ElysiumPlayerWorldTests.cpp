@@ -135,8 +135,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Substrate.Pl
 bool FElysiumPlayerEntityTest::RunTest(const FString&)
 {
 	AddExpectedError(TEXT("base_NotAStat"), EAutomationExpectedErrorFlags::Contains, 1);
-	AddExpectedError(TEXT("no entity named '!player' in this map"),
-		EAutomationExpectedErrorFlags::Contains, 1);
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
 	// --- The chain is VtMB's ------------------------------------------------------------
@@ -1112,6 +1110,10 @@ bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 		return false;
 	}
 
+	const FElysiumEntityHandle NpcOwner(37, 4);
+	Body->SetOwningEntity(NpcOwner);
+	TestTrue(TEXT("native NPC motor retains its logical toucher identity"),
+		Body->GetOwningEntity() == NpcOwner);
 	Body->InitializeAtFeet(FVector::ZeroVector, 0.0f);
 	UCharacterMovementComponent* Movement = Body->GetCharacterMovement();
 	if (!TestNotNull(TEXT("native NPC motor owns CharacterMovement"), Movement))

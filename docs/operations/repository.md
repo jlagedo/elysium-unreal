@@ -18,6 +18,49 @@ override the export location. Command parameters override process environment; p
 environment overrides the local env file; Unreal may then be safely auto-detected. VtMB
 and work roots are never guessed from the repository.
 
+## Parallel task worktrees
+
+`uv run elysium worktree` owns mutable detached worktrees for implementation tasks delegated to
+Claude or Codex. The primary checkout remains on `main`; each parallel agent receives one task
+worktree and works only below that returned path. Task worktrees do not introduce feature branches
+or pull requests. Their clean detached-HEAD commits are reviewed and cherry-picked directly onto
+`main` by the coordinating agent.
+
+`worktree create <name> [--at <ref>]` runs only from the primary `main` checkout. It creates:
+
+- a sibling checkout, defaulting to `<primary-checkout>-task-<name>`;
+- `$ELYSIUM_WORK_ROOT/worktrees/<name>`, containing that task's export root, logs, caches, and
+  ownership record;
+- an ignored `.elysium.local.env` and `.elysium-task-worktree.json` marker that bind the checkout
+  to those exact roots.
+
+The starting ref is a committed snapshot. Uncommitted changes in `main` are reported but are never
+copied into the task checkout. Creation rejects refs that predate the task-worktree runtime. In the
+new checkout, run `uv run elysium deps sync` before the first build. The agent may run ordinary
+incremental `uv run elysium build`, focused Python tests, and focused `uv run elysium test <filter>`
+within the Fast QA contract. Builds sharing one Unreal installation may serialize behind Unreal's
+own build mutex; a waiting build is not permission to bypass that mutex or launch retries.
+
+Task worktrees are code-and-test environments. `reconstruct`, every `export` command, `run
+editor|play`, every `debug` harness, `gr`, and `mcp` are primary-checkout-only and fail before
+launch when invoked from a registered task worktree. This keeps authoritative generated assets,
+editor and Live Coding state, interactive play, and visual acceptance on `main`. Verification and
+focused automation may read the task's isolated products, but no ignored package or export product
+is transferred back to `main`.
+
+`worktree status [<name>] [--json]` reports the base and current commits, dirtiness, generated-state
+owner, and commits whose patches are not yet present on `main`. The task agent finishes by making a
+clean detached-HEAD commit and returning its hash and validation evidence. After the coordinator
+cherry-picks and validates it on `main`, `worktree close <name>` removes the checkout and its
+regenerable work root. Close refuses an active Unreal process, a busy or dirty checkout, merge
+commits, a changed ancestry, or any commit whose patch Git cannot find on `main`.
+
+Task worktrees and QA lanes share Git objects, Git LFS storage, the UE installation, and the
+read-only VtMB installation. They never share `$ELYSIUM_EXPORT_ROOT`, `Binaries`, `Intermediate`,
+`Saved`, generated or baked `Content`, `.venv`, `Plugins/External`, or a mutable checkout. A task
+worktree is mutable development state; a QA lane is an immutable candidate and the two lifecycles
+are not interchangeable.
+
 ## Parallel QA lanes
 
 `uv run elysium lane` owns persistent detached Git worktrees used for export, bake,
@@ -103,7 +146,7 @@ ownership marker. Never place project source in `Plugins/External/`.
 `uv run elysium` is the sole development entrypoint. It owns dependency synchronization,
 repository diagnostics, UE compilation, export and bake orchestration, tests, play,
 profiling, probes, screenshots, movement, greenroom, modelroom, QA lanes, research, IDE
-setup, and MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
+setup, task worktrees, and MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
 that restores dependencies, compiles the editor, exports and bakes the corpus, verifies
 the products, and runs the required tests. No compatibility wrappers exist.
 

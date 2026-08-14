@@ -26,6 +26,7 @@ class CliContractTests(unittest.TestCase):
             "research",
             "ide",
             "lane",
+            "worktree",
             "mcp",
         ):
             self.assertIn(command, result.output)
@@ -49,6 +50,12 @@ class CliContractTests(unittest.TestCase):
         result = self.runner.invoke(app, ["lane", "--help"])
         self.assertEqual(result.exit_code, 0, result.output)
         for command in ("create", "dispatch", "status", "mark"):
+            self.assertIn(command, result.output)
+
+    def test_worktree_help_exposes_task_lifecycle(self) -> None:
+        result = self.runner.invoke(app, ["worktree", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        for command in ("create", "status", "close"):
             self.assertIn(command, result.output)
 
     def test_targeted_model_export_rejects_clean(self) -> None:

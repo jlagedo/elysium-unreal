@@ -48,6 +48,19 @@ struct FElysiumVitals
 	bool operator!=(const FElysiumVitals& Other) const { return !(*this == Other); }
 };
 
+// The currently fed-on target, or the just-released target while ordinary +use focus still owns it.
+// Gameplay remains on FElysiumFeedState; this is the immutable screen projection sampled by the
+// publisher. bPaired suppresses only the reticle — the capture keeps the rest of the HUD visible.
+struct FElysiumFeedView
+{
+	bool bVisible = false;
+	bool bPaired = false;
+	FElysiumEntityHandle Target;
+	int32 BloodPool = 0;
+	int32 MaxBloodPool = 0;
+	uint8 Phase = 0;
+};
+
 // ============================================================================================
 // FElysiumDialogueView — one conversation turn, snapshotted.
 //
@@ -141,6 +154,7 @@ struct FElysiumViewState
 
 	// --- Meters (8.9 draws them) ------------------------------------------------------------
 	FElysiumVitals Vitals;
+	FElysiumFeedView Feed;
 };
 
 namespace ElysiumView
@@ -170,7 +184,7 @@ namespace ElysiumView
 
 	inline EReticle ResolveReticle(const FElysiumViewState& V)
 	{
-		if (!V.bPlayerSurface || V.bCinematic || V.bSignHidesHUD)
+		if (!V.bPlayerSurface || V.bCinematic || V.bSignHidesHUD || V.Feed.bPaired)
 		{
 			return EReticle::None;
 		}

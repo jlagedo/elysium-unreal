@@ -484,6 +484,46 @@ bool FElysiumActivationLifecycleTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTriggerPawnIdentityTest,
+	"Elysium.Substrate.TriggerPawnIdentity", GElysiumTestFlags)
+bool FElysiumTriggerPawnIdentityTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__trigger_pawn_identity__");
+	FElysiumEntityDef TriggerDef;
+	TriggerDef.Classname = TEXT("trigger_once");
+	TriggerDef.TargetName = TEXT("trig_dialog_outside_chopshop");
+	TriggerDef.Keys.Add(TEXT("spawnflags"), TEXT("1")); // ALLOW_CLIENTS only
+	TriggerDef.Keys.Add(TEXT("StartDisabled"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(TriggerDef));
+	FElysiumEntityDef JackDef;
+	JackDef.Classname = TEXT("npc_VVampire");
+	JackDef.TargetName = TEXT("Jack");
+	Defs.Defs.Add(MoveTemp(JackDef));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntity* Trigger = World.FindByName(TEXT("trig_dialog_outside_chopshop"));
+	FElysiumEntity* Jack = World.FindByName(TEXT("Jack"));
+	if (!TestNotNull(TEXT("post-feed trigger resolved"), Trigger)
+		|| !TestNotNull(TEXT("Jack resolved"), Jack))
+	{
+		return false;
+	}
+
+	World.EnqueueInput(TEXT("trig_dialog_outside_chopshop"), FName(TEXT("Enable")),
+		FElysiumVariant::Void(), 0.0, Jack->Handle, Jack->Handle);
+	World.Tick(0.0);
+	World.RouteBrushTouch(Trigger->Handle, Jack->Handle, /*bBegin*/ true);
+	TestEqual(TEXT("Jack's refreshed overlap fails the client-only gate"), World.TouchBegins(), 0);
+	World.RouteBrushTouch(Trigger->Handle, Player, /*bBegin*/ true);
+	TestEqual(TEXT("the real player's later approach supplies the first accepted touch"),
+		World.TouchBegins(), 1);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisabledTouchAdmissionTest,
 	"Elysium.Substrate.DisabledTouchAdmission", GElysiumTestFlags)
 bool FElysiumDisabledTouchAdmissionTest::RunTest(const FString&)

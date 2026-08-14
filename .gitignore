@@ -34,6 +34,7 @@ compile_commands.json
 
 # Local path configuration and Python environments
 .elysium.local.env
+.elysium-task-worktree.json
 .venv/
 *.egg-info/
 **/__pycache__/

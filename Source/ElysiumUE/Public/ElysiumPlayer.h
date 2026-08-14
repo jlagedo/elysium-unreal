@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumAudioSubsystem.h"
+#include "ElysiumCameraService.h"
 #include "ElysiumEntity.h"
 #include "ElysiumSheetSlots.h"
 
@@ -167,6 +169,7 @@ enum class EElysiumFeedPhase : uint8
 	Bite,      // the bite clip; its authored event 4007 sits at cycle 0.0, so FeedBegin runs here
 	Loop,      // FeedBegin has run; Feed() pulses against the substrate clock
 	Release,   // the release clip; its authored event 4006 requests teardown part-way through
+	ReleaseTail, // 4006 ended gameplay/camera ownership; the authored release pose is still finishing
 };
 
 // `FeedBegin`'s recovered field block (`feeding.md` § "Authoritative transaction state"), plus the
@@ -642,7 +645,8 @@ public:
 	virtual bool IsFeedBusy() const;
 
 	// The animation-event bridge (`feeding.md` recreation contract item 5). 4007 opens FeedBegin,
-	// 4006 requests teardown, 5116 is presentation only. The bake carries no MDL animation events
+	// 4006 completes the transaction/camera lease and leaves the remaining release pose to finish;
+	// 5116 is presentation only. The bake carries no MDL animation events
 	// (see `ElysiumFeed.cpp`), so the feed state machine raises these itself off the decoded clip
 	// cycles; a real notify path replaces the caller, never this handler.
 	void OnFeedAnimEvent(int32 EventId);
@@ -768,15 +772,37 @@ protected:
 	// Whether the loop should hand over to the release family. OPEN — see `ElysiumFeed.cpp`.
 	bool ShouldReleaseFeed() const;
 	void EnterFeedRelease(double Now);
-	// Play this phase's clip on both bodies, best effort. A body that cannot answer is logged and
-	// the transaction continues (K10: headless correctness never depends on a rendered body).
-	void PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now);
+	// Resolve the complementary height/side pair and play it atomically. Returns the authoritative
+	// attacker duration; a missing rendered half warns and falls back to decoded metadata so the
+	// transaction continues headlessly without a mismatched one-sided pose.
+	float PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now);
+	// The current partner-height cell, measured from live body bounds when both halves exist and
+	// deterministically short-victim/tall-attacker in a headless tie.
+	uint8 FeedVictimHeightCell() const;
+	void EnsureFeedCamera();
+	void ReleaseFeedCamera();
+	void PlayFeedStartAudio(FElysiumCombatCharacter& Victim);
+	void PlayFeedLoopAudio(FElysiumCombatCharacter& Victim);
+	void PlayFeedEndAudio(FElysiumCombatCharacter* Victim);
+	void StopFeedLoopAudio();
+	FElysiumVoiceHandle SubmitFeedCue(const TCHAR* Cue, bool bLooping, bool bHeartbeat = false);
+	// Shared transaction/output teardown. Event 4006 asks to keep the release pose; damage, death and
+	// invalidation do not.
+	void CompleteFeedTransaction(bool bKeepReleaseTail);
 	// The next think the pair needs: the earlier of the phase boundary and the next pulse.
 	void ScheduleFeedThink(double Now);
 	// The damage one pulse heals on the feeder. OPEN — see `ElysiumFeed.cpp`.
 	int32 FeedHealAmount() const;
 	// The victim half's teardown: unfreeze, forget the attacker, hand the body back.
 	void EndFeedVictimRole();
+
+	// Engine-service capability, never save state. A restored logical pair reacquires it from
+	// TickFeed; stale map-epoch handles are discarded by the service.
+	FElysiumCameraHandle FeedCameraHandle;
+	bool bFeedCameraAcquireFailed = false;
+	FElysiumVoiceHandle FeedLoopVoice;
+	FElysiumVoiceHandle FeedHeartbeatVoice;
+	bool bFeedAudioAcquireFailed = false;
 
 	bool bUnkillable = false;
 	bool bDeathReported = false;   // OnKilled fires once, however much damage arrives after

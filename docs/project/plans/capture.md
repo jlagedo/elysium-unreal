@@ -97,6 +97,15 @@ boundary, then compare Sheriff and Jeanette series including delta, wind and col
 Bounded follow-ups: the nonnegative bone-record +4 branch, `bc_ground`, the single-body `money`
 special case, `r_cloth`'s exact runtime gating.
 
+The AnimDynamics calibration slice is deliberately smaller than that reproduction work: female
+Malkavian armour 0 (`Bone05` → `Bone09`) and Jeanette (`Bone01` → `Bone07`, `Bone09` → `Bone13`)
+only. Breast records, female Malkavian armours 1–3, and Jeanette's renderer-cloth skirt are outside
+the slice. *Acceptance:* green-room and live walk/turn/stop/teleport series against the controlled
+retail captures; no reset explosion or overlapping-chain flail; record intersections and LOD cost; fit the native
+gravity, damping, spring, cone and motion clamps against the controlled retail series; keep the
+result labelled as an Unreal presentation approximation unless the retail numeric replay itself
+matches. Expansion to another body is an explicit owner call after those measurements.
+
 ### CAP5.9 The `Prince_Escort_Male` cluster
 
 1,061 records the include transform does not explain, 65% on one two-actor cinematic bank (351

@@ -42,6 +42,8 @@ inline FName ElysiumItemClassName() { return FName(TEXT("CBaseCombatWeapon")); }
 class FElysiumItem : public FElysiumAnimating
 {
 public:
+	FElysiumItem();
+
 	// `m_iInvenPos` (+0x73c). 255 means "not assigned to a carried slot" — a loose world item, or
 	// one that `Inventory_Remove` has just detached.
 	static constexpr int32 Unslotted = 255;
@@ -91,6 +93,9 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void OnRuntimeTransformChanged() override;
 	virtual void OnDormancyChanged() override;
+	virtual bool IsUsable() const override { return !IsOwned(); }
+	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const override;
+	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override;
 	virtual bool CanBeginTouch(const FElysiumEntityHandle& Activator) const override;
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;

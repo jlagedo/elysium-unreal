@@ -43,6 +43,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	bool bFacing = false;
 	bool bFrozen = false;
 	bool bIgnoreCharacterCollision = false;
+	FElysiumEntityHandle Owner;
 	// A test drives arrival by flipping these: SampleStatus is what an in-flight move reports, and
 	// clearing bAcceptMoves is how "this mark has no path" is expressed.
 	bool bAcceptMoves = true;
@@ -217,7 +218,8 @@ struct FElysiumRecordingServices final
 		return NewComponent<USkeletalMeshComponent>();
 	}
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
-		const FVector& FeetOrigin, float YawDegrees, const FString& Stem, int32 Variant) override
+		const FElysiumEntityHandle& Owner, const FVector& FeetOrigin, float YawDegrees,
+		const FString& Stem, int32 Variant) override
 	{
 		if (!bProvideNpcMotor || !Body)
 		{
@@ -225,6 +227,7 @@ struct FElysiumRecordingServices final
 		}
 		TUniquePtr<FElysiumRecordingNpcMotor> Motor = MakeUnique<FElysiumRecordingNpcMotor>();
 		Motor->Calls = &Calls;
+		Motor->Owner = Owner;
 		Motor->Feet = FeetOrigin;
 		Motor->Yaw = YawDegrees;
 		FElysiumRecordingNpcMotor* Result = Motor.Get();
@@ -259,11 +262,16 @@ struct FElysiumRecordingServices final
 	// which `IsValid()` rejects — a test that wants the machine to run seeds this the same way it
 	// seeds `StanceClips`, so the literals it asserts against are visible in the test body.
 	FElysiumDisposition DispositionRow;
+	// Optional name+level rows for a test that needs to resolve a transition between two different
+	// dispositions. The single-row fixture above remains the common-case fallback.
+	TMap<FString, FElysiumDisposition> DispositionRows;
 	virtual bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
 		FElysiumDisposition& OutRow) override
 	{
 		Record(FString::Printf(TEXT("ResolveDisposition %s %d"), *Disposition, DispositionLevel));
-		OutRow = DispositionRow;
+		const FString Key = FString::Printf(TEXT("%s|%d"), *Disposition.ToLower(), DispositionLevel);
+		const FElysiumDisposition* Named = DispositionRows.Find(Key);
+		OutRow = Named != nullptr ? *Named : DispositionRow;
 		return OutRow.IsValid();
 	}
 	// `TASK_WAIT_PVS`'s answer, settable so a test drives both branches. True by default because

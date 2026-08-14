@@ -54,6 +54,30 @@ UElysiumCameraComponent* AElysiumPlayerCameraManager::ResolveRig(AActor* Target)
 void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, float DeltaTime)
 {
 	UElysiumCameraComponent* Camera = ResolveRig(OutVT.Target);
+	UElysiumCameraService* ScopedCamera = nullptr;
+	if (ULocalPlayer* LocalPlayer = PCOwner ? PCOwner->GetLocalPlayer() : nullptr)
+	{
+		ScopedCamera = LocalPlayer->GetSubsystem<UElysiumCameraService>();
+	}
+	if (ScopedCamera)
+	{
+		ScopedCamera->Advance(DeltaTime);
+	}
+	if (Camera)
+	{
+		// Advance semantic requests before the base rig. A winning Feed request drives the recovered
+		// feed/forced-third weight rather than inventing a second camera rig or an unverified orbit.
+		if (ScopedCamera)
+		{
+			const FElysiumResolvedCameraState& Resolved = ScopedCamera->ResolvedCamera();
+			Camera->SetFeedCamera(Resolved.bActive
+				&& Resolved.Request.Kind == EElysiumCameraRequestKind::Feed);
+		}
+		else
+		{
+			Camera->SetFeedCamera(false);
+		}
+	}
 
 	// `SolveFrameFor` answers false without touching the view when there is no active rig, so the
 	// stock dispatch below still gets an untouched POV — which is what keeps a spectator, a scene
@@ -75,15 +99,9 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 
 	// Scoped base requests compose between the selected player rig and the legacy post layers. The
 	// service publishes policy only; this manager remains the single writer of the final POV.
-	UElysiumCameraService* ScopedCamera = nullptr;
-	if (ULocalPlayer* LocalPlayer = PCOwner ? PCOwner->GetLocalPlayer() : nullptr)
+	if (ScopedCamera)
 	{
-		ScopedCamera = LocalPlayer->GetSubsystem<UElysiumCameraService>();
-		if (ScopedCamera)
-		{
-			ScopedCamera->Advance(DeltaTime);
-			ScopedCamera->ApplyToView(OutVT.POV);
-		}
+		ScopedCamera->ApplyToView(OutVT.POV);
 	}
 
 	// The body-visibility ramp travels with the view. It used to ride on the pawn's own

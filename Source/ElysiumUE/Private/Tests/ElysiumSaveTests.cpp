@@ -209,8 +209,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLogicRelayLifetimeTest,
 	"Elysium.Substrate.LogicRelayLifetime", GElysiumTestFlags)
 bool FElysiumLogicRelayLifetimeTest::RunTest(const FString&)
 {
-	AddExpectedError(TEXT("no entity named '!self' in this map"),
-		EAutomationExpectedErrorFlags::Contains, 1);
 	auto AddRelay = [](FElysiumEntityDefs& Defs, const TCHAR* Name, const TCHAR* Spawnflags)
 	{
 		FElysiumEntityDef Relay;

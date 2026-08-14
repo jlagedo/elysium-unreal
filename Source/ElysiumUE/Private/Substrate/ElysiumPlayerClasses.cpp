@@ -252,7 +252,7 @@ namespace
 			{
 				static_cast<FC&>(E).FeedState.Phase =
 					static_cast<EElysiumFeedPhase>(FMath::Clamp(V.ToInt(), 0,
-						static_cast<int32>(EElysiumFeedPhase::Release)));
+						static_cast<int32>(EElysiumFeedPhase::ReleaseTail)));
 			};
 			D.Fields.Add(FName(TEXT("m_iFeedPhase")), MoveTemp(Acc));
 		}

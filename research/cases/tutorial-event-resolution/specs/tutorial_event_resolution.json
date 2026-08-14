@@ -21,6 +21,7 @@
     "Where do CSceneEntity firetrigger, completion, start and cancel outputs cross the think-to-queue boundary?",
     "Which save transaction does CTriggerAutosave invoke, and where is its continuous-occupancy guard?",
     "What invokes CBaseTrigger::StartTouch, and is that path independent of the m_pfnTouch member SetTouch(NULL) clears?",
+    "What exact destination lookup, transform, velocity, navigation and AI-state writes does CAI_BaseNPCTroika::InputTeleportToEntity perform?",
     "Does the touch dispatch path test EFL_KILLME or any equivalent flag, and when is EFL_KILLME actually set relative to the wait==-1 window?",
     "Do a trigger's solidity, touch links or stamps change between ActivateMultiTrigger's wait==-1 branch and the SUB_Remove think?",
     "Which link state pairs an EndTouch to its begin, and does a self-removing entity receive its own EndTouch?",
@@ -37,6 +38,7 @@
     {"address": "100ce8a0", "label": "ExecuteQueuedPythonSource", "confidence": "body evidence", "role": "ScheduleTask and source string execution in main", "depth": 2, "cap": 160},
     {"address": "100ce990", "label": "ExecuteOutputPython", "confidence": "body evidence", "role": "field 5 main attribute call and error continuation", "depth": 2, "cap": 160},
     {"address": "100cebb0", "label": "EventQueueServiceEvents", "confidence": "GameFrame call target", "role": "due drain named Python and direct handle order", "depth": 3, "cap": 300},
+    {"address": "100028dd", "label": "NpcInputTeleportToEntityThunk", "confidence": "TeleportToEntity typedescription handler pointer at 105d0a48", "role": "member-input thunk leading to the NPC teleport handler", "depth": 2, "cap": 180, "asm_count": 120},
     {"address": "1011abc0", "label": "ServerGameDLLGameFrame", "confidence": "verified frame body", "role": "think first then event queue service", "depth": 2, "cap": 180},
     {"address": "10135290", "label": "LogicPythonCheckEvaluate", "confidence": "body evidence", "role": "synchronous expression truth and error false", "depth": 2, "cap": 160},
     {"address": "101364e0", "label": "LogicRelayInputTrigger", "confidence": "body evidence", "role": "disabled refire remove and max delay guards", "depth": 2, "cap": 180},
@@ -54,7 +56,14 @@
     {"address": "10211e70", "label": "PropSignUseEnd", "confidence": "body evidence", "role": "OnReadEnd close and owner release", "depth": 2, "cap": 160},
     {"address": "10215a30", "label": "PropButtonUse", "confidence": "body evidence", "role": "locked pressed state and OnSetState order", "depth": 2, "cap": 180},
     {"address": "1021c6d0", "label": "PropHackingExecuteFunction", "confidence": "body evidence", "role": "enqueue numbered output then synchronous runscript", "depth": 2, "cap": 200},
-    {"address": "1034abb0", "label": "NPCMakerDatamapBuilder", "confidence": "body evidence", "role": "maker datamap outputs and think registration", "depth": 1, "cap": 120},
+    {"address": "1027a820", "label": "BaseNpcDatamapBuilder", "confidence": "CAI_BaseNPC datamap root 105c9814", "role": "recover TeleportToEntity input record and handler pointer", "depth": 0, "cap": 180},
+    {"address": "100f7770", "label": "EntityListFindEntityByName", "confidence": "string-to-EHANDLE conversion call target in variant conversion", "role": "recover first-match destination lookup and missing-name behavior", "depth": 3, "cap": 260, "asm_count": 240},
+    {"address": "1028cd70", "label": "TroikaNpcDatamapBuilder", "confidence": "sole code pointer to typedescription array 105ce4b4", "role": "identify the declaring datamap for TeleportToEntity", "depth": 0, "cap": 220, "asm_count": 220},
+	{"address": "102c23f0", "label": "TroikaNpcPostTeleport", "confidence": "all current corpus receiver vtables resolve slot +0x998 here", "role": "post-transform NPC due-think scheduling", "depth": 4, "cap": 300, "asm_count": 260},
+	{"address": "102c24a0", "label": "NpcInputTeleportToEntity", "confidence": "jump target of typedescription thunk 100028dd", "role": "resolve destination and apply NPC teleport state", "depth": 4, "cap": 320, "asm_count": 300},
+	{"address": "10386aa0", "label": "VHumanCombatantConstructor", "confidence": "npc_VHumanCombatant factory 10386a30", "role": "identify the concrete vtable and TeleportToEntity post-hook", "depth": 1, "cap": 120, "asm_count": 120},
+	{"address": "10388010", "label": "VHunterConstructor", "confidence": "npc_VHunter factory 10387f60", "role": "identify the concrete vtable and TeleportToEntity post-hook", "depth": 1, "cap": 120, "asm_count": 120},
+	{"address": "1034abb0", "label": "NPCMakerDatamapBuilder", "confidence": "body evidence", "role": "maker datamap outputs and think registration", "depth": 1, "cap": 120},
     {"address": "1034ad80", "label": "NPCMakerConstructor", "confidence": "constructor and base chain", "role": "NPC datamap inheritance and initial runtime state", "depth": 2, "cap": 180},
     {"address": "1034afe0", "label": "NPCMakerSpawn", "confidence": "body evidence", "role": "initial count timer and start-disabled setup", "depth": 2, "cap": 180},
     {"address": "1034b3c0", "label": "NPCMakerKeyValue", "confidence": "body evidence", "role": "raw maker keyvalue template preservation", "depth": 2, "cap": 160},
@@ -93,16 +102,26 @@
     {"address": "101c6860", "label": "TriggerMultipleSpawn", "confidence": "call target of TriggerOnceSpawn", "role": "installs MultiTouch in m_pfnTouch and defaults wait", "depth": 1, "cap": 40},
     {"address": "101c66e0", "label": "TriggerMultipleFactory", "confidence": "classname string 1059f7e0", "role": "leaf vftable 1047da24 over base 1047d08c", "depth": 1, "cap": 60},
     {"address": "101c6a30", "label": "TriggerOnceFactory", "confidence": "classname string 1059f814", "role": "leaf vftable 1047dee4 over base 1047d08c", "depth": 1, "cap": 60},
-    {"address": "100abc90", "label": "BaseEntityAcceptInput", "confidence": "trace string 1055714c", "role": "absence of any depth counter or reentrancy guard", "depth": 1, "cap": 60},
+    {"address": "1000e859", "label": "BaseEntityForceTransmitThunk", "confidence": "post-teleport call target", "role": "recover the post-teleport forced-transmit deadline", "depth": 2, "cap": 120, "asm_count": 100},
+    {"address": "100abc90", "label": "BaseEntityAcceptInput", "confidence": "trace string 1055714c", "role": "datamap walk, input variant conversion and absence of any depth counter or reentrancy guard", "depth": 1, "cap": 80},
+    {"address": "100d05d0", "label": "VariantConvert", "confidence": "conversion body called by BaseEntityAcceptInput thunk 1000252c", "role": "recover string-to-EHANDLE conversion and failed-conversion behavior", "depth": 2, "cap": 220, "asm_count": 220},
     {"address": "100b5190", "label": "BaseEntityIsHidden", "confidence": "AcceptInput entry gate", "role": "the only entry gate, byte +0xf4", "depth": 0, "cap": 20},
     {"address": "101962a0", "label": "PythonEntityInputFunction", "confidence": "PyMethodDef 1058f658 thunk 10006429", "role": "synchronous marshal and single AcceptInput call", "depth": 1, "cap": 140}
   ],
   "vtable_probes": [
-    {"address": "1047d08c", "label": "BaseTrigger", "slots": 252, "cap": 320},
-    {"address": "1047da24", "label": "TriggerMultiple", "slots": 252, "cap": 320},
-    {"address": "1047dee4", "label": "TriggerOnce", "slots": 252, "cap": 320}
+	{"address": "1047d08c", "label": "BaseTrigger", "slots": 252, "cap": 320},
+	{"address": "1047da24", "label": "TriggerMultiple", "slots": 252, "cap": 320},
+	{"address": "1047dee4", "label": "TriggerOnce", "slots": 252, "cap": 320},
+	{"address": "104b7ff4", "label": "VHumanCombatant", "slots": 620, "cap": 640},
+	{"address": "104b9784", "label": "VHunter", "slots": 620, "cap": 640}
   ],
   "field_probes": [
+    {"displacement": "17c", "label": "entity_next_think"},
+    {"displacement": "6244", "label": "troika_next_update_think"},
+    {"displacement": "6248", "label": "troika_next_normal_think"},
+    {"displacement": "624c", "label": "troika_next_move_think"},
+    {"displacement": "6250", "label": "troika_next_ai_think"},
+    {"displacement": "65dc", "label": "troika_teleport_move_timer"},
     {"displacement": "6660", "label": "maker_remaining_total"},
     {"displacement": "6664", "label": "maker_spawn_frequency"},
     {"displacement": "66b0", "label": "maker_live_children"},
@@ -119,9 +138,12 @@
     {"displacement": "76cc", "label": "maker_raw_child_template"}
   ],
   "datamap_probes": [
+    {"map": "105c9814", "recs": "105c9874", "count": 102, "depth": 2, "label": "CAI_BaseNPC"},
+    {"map": "105ce470", "recs": "105ce4b4", "count": 250, "depth": 2, "label": "CAI_BaseNPCTroika"},
     {"map": "10624718", "recs": "1062475c", "count": 23, "depth": 2, "label": "CNPCMaker"}
   ],
   "const_probes": [
+    {"address": "104454c0", "label": "force_transmit_duration"},
     {"address": "104454c4", "label": "zero_float"},
     {"address": "1046bacc", "label": "maker_ground_trace_depth"},
     {"address": "1049ffac", "label": "maker_occupancy_half_extent"}
@@ -131,7 +153,12 @@
     {"from": "1034bbf0", "to": "1034b7b0", "confidence": "verified", "evidence": "MakerThink calls the same ordinary virtual spawn slot with bypass argument zero"},
     {"from": "1034b7b0", "to": "1034b580", "confidence": "verified", "evidence": "child construction calls the CanMakeNPC virtual after caching ground and before allocation"},
     {"from": "1034b7b0", "to": "1034b430", "confidence": "verified", "evidence": "finite successful spawn decrements remaining total and tests depletion"},
-    {"from": "1034bc90", "to": "1034b430", "confidence": "verified", "evidence": "child death or removal tests finite depletion before decrementing the live count"}
+    {"from": "1034bc90", "to": "1034b430", "confidence": "verified", "evidence": "child death or removal tests finite depletion before decrementing the live count"},
+    {"from": "100abc90", "to": "100d05d0", "confidence": "verified", "evidence": "AcceptInput converts a mismatched input variant to the typedescription field type before dispatch"},
+    {"from": "100d05d0", "to": "100f7770", "confidence": "verified", "evidence": "string-to-EHANDLE conversion starts a global FindEntityByName search from null"},
+    {"from": "100028dd", "to": "102c24a0", "confidence": "verified", "evidence": "TeleportToEntity typedescription handler thunk is a single jump to the native body"},
+	{"from": "102c24a0", "to": "102c23f0", "confidence": "verified for CNPC_VVampire, CNPC_VHumanCombatant and CNPC_VHunter", "evidence": "all three current receiver vtables resolve slot +0x998 through thunk 10010f0f to the post-teleport think-deadline writer"},
+    {"from": "102c24a0", "to": "1000e859", "confidence": "verified", "evidence": "the final direct call forces the receiver to transmit for one second"}
   ],
   "findings": [
     {
@@ -169,13 +196,39 @@
       "fact": "The tutorial blueblood_maker can accept either porch route's explicit Spawn, but MaxLiveChildren=1 rejects every later attempt while its first child remains live.",
       "evidence": "The hash-pinned sp_tutorial_1 entity record authors StartDisabled=1, InfChild=1, MaxNPCCount=1, MaxLiveChildren=1 and SpawnFrequency=5; both porch output transactions target the same maker.",
       "consequence": "Two simultaneous Bluebloods from this maker are a runtime divergence even if trigger-route cross-talk also occurs."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "TeleportToEntity is a FIELD_EHANDLE input declared by CAI_BaseNPCTroika, not CAI_BaseNPC. A string argument is converted by the global entity list's first case-insensitive exact match; a final asterisk is a prefix wildcard.",
+      "evidence": "CAI_BaseNPCTroika record 0x105d0a2c names InputTeleportToEntity/TeleportToEntity, type 12 and handler thunk 0x100028dd. VariantConvert 0x100d05d0 calls FindEntityByName 0x100f7770 with a null start and stores INVALID_EHANDLE on a miss while returning success.",
+      "consequence": "The handler receives one late-converted entity handle, never a raw destination string and never every duplicate-name destination; a miss is a consumed no-op in retail."
+    },
+    {
+	  "confidence": "confirmed for all current corpus receiver families",
+	  "fact": "TeleportToEntity copies the destination's absolute origin and all absolute angles, performs the empty Relink hook, schedules the general and four Troika NPC think deadlines for curtime, and forces transmission for one second.",
+	  "evidence": "Handler 0x102c24a0 calls destination/receiver vtable pairs +0x364/+0x360 and +0x36c/+0x368, Relink thunk 0x1001514a, virtual +0x998 and ForceTransmit 0x1000e859. Jack, CNPC_VHumanCombatant vtable 0x104b7ff4 and CNPC_VHunter vtable 0x104b9784 all resolve slot 614 through thunk 0x10010f0f to 0x102c23f0, which writes curtime at +0x17c and +0x6244..+0x6250; constant 0x104454c0 is 1.0f.",
+      "consequence": "There is no parent guard, trace, hull or ground search, velocity reset, navigation reset, schedule clear, enemy/state change or immediate touch dispatch. For an authored queued output, the due-now think work runs on the next server frame because GameFrame services thinks before the event queue."
+    },
+    {
+      "confidence": "confirmed static join",
+      "fact": "The current 23-map export corpus authors 40 TeleportToEntity wires: eight to Jack, two to warehouse guards and thirty to maker-created hunters. Every destination name exists; la_hub_1 has two point_target rows named hunter_2_spot_1.",
+      "evidence": "A parsed .ents join resolves all 40 output parameters. The duplicate la_hub_1 destinations are entity indices 1114 and 1115, so first-match lookup selects the earlier live entity-list entry.",
+      "consequence": "The tutorial's teleport_1 is an unambiguous live input, while the la_hub_1 duplicate must preserve first-match behavior rather than reject ambiguity or choose the nearest point."
+    },
+    {
+      "confidence": "confirmed static join",
+      "fact": "The patch-first script_1b Enable wire is stale: UP retains the sender but removes trig_port_chopshop_door. The point_door Kill wire is live once and missing only after it destroys all six same-name targets.",
+      "evidence": "Original retail BSP entity 1126 is the disabled trigger_multiple and runs jackflashChopshopDoor(); UP has no matching target while entity 485 retains the zero-delay unlimited sender. UP entity 225 sends unlimited point_door.Kill and entities 1065 through 1070 initially share that targetname.",
+      "consequence": "These diagnostics require no receiver-handler RE or invented entities: the first is a patch-authored dangling wire and the second is expected post-cleanup refire state."
     }
   ],
   "grep_probes": [
-    {"label": "queue_python", "str": "EventQueue~RUNNING~Invalid", "cap": 200},
-    {"label": "guards_and_outputs", "str": "EnableRefire~OnReadEnd~OnSpawnNPC~OnLastNPCDied", "cap": 200},
-    {"label": "teleport", "str": "teleport~parent~target", "cap": 200},
-    {"label": "touch_dispatch", "str": "PhysicsTouchTriggers~PhysicsStartTouch~PhysicsMarkEntitiesAsTouching~PhysicsMarkEntityAsTouched~PhysicsCheckForEntityUntouch~PhysicsRemoveToucher~PhysicsRemoveTouchedList~PhysicsNotifyOtherOfUntouch", "cap": 200},
-    {"label": "accept_input", "str": "AcceptInput~SUB_Remove~UTIL_Remove", "cap": 200}
+	{"label": "queue_python", "str": "EventQueue~RUNNING~Invalid", "cap": 200},
+	{"label": "guards_and_outputs", "str": "EnableRefire~OnReadEnd~OnSpawnNPC~OnLastNPCDied", "cap": 200},
+	{"label": "npc_teleport_to_entity", "str": "TeleportToEntity~InputTeleportToEntity", "cap": 120},
+	{"label": "npc_teleport_concrete_classes", "str": "npc_VHunter~npc_VHumanCombatant", "cap": 160},
+	{"label": "teleport", "str": "teleport~parent~target", "cap": 200},
+	{"label": "touch_dispatch", "str": "PhysicsTouchTriggers~PhysicsStartTouch~PhysicsMarkEntitiesAsTouching~PhysicsMarkEntityAsTouched~PhysicsCheckForEntityUntouch~PhysicsRemoveToucher~PhysicsRemoveTouchedList~PhysicsNotifyOtherOfUntouch", "cap": 200},
+	{"label": "accept_input", "str": "AcceptInput~SUB_Remove~UTIL_Remove", "cap": 200}
   ]
 }

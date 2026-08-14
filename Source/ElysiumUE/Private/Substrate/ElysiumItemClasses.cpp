@@ -35,6 +35,9 @@ namespace
 	// The item data in force, owned by whoever installed it (the rulebook subsystem for a session,
 	// a test for the length of one case). Game-thread only, like the rest of the substrate.
 	const FElysiumItemTable* GItemTable = nullptr;
+	// The recovered context-icon table's open hand. Loose items add this modern +use surface while
+	// retaining retail DefaultTouch; both ingress paths terminate at AcquireBy.
+	constexpr int32 GLooseItemUseIcon = 9;
 }
 
 namespace ElysiumItems
@@ -50,6 +53,11 @@ namespace ElysiumItems
 // ============================================================================================
 // FElysiumItem
 // ============================================================================================
+
+FElysiumItem::FElysiumItem()
+{
+	UseIcon = GLooseItemUseIcon;
+}
 
 const FString& FElysiumItem::ClassName() const
 {
@@ -161,7 +169,7 @@ void FElysiumItem::BuildWorldBody()
 	WorldBody = Embodiment->BuildPropVisual(Stem, Origin, Rot, Embodiment->BodyScaleFor(*Def));
 	if (WorldBody)
 	{
-		World->RegisterPropBody(WorldBody);
+		World->RegisterPropBody(WorldBody, Handle);
 		World->RegisterTouchAnchor(WorldBody, Handle);
 		if (IsInert())
 		{
@@ -175,6 +183,7 @@ void FElysiumItem::DestroyWorldBody()
 	if (World)
 	{
 		World->EndBrushTouches(Handle);
+		World->SetUseAnchorEnabled(Handle, false);
 		World->SetTouchAnchorEnabled(Handle, false);
 	}
 	if (WorldBody)
@@ -182,6 +191,27 @@ void FElysiumItem::DestroyWorldBody()
 		WorldBody->DestroyComponent();
 		WorldBody = nullptr;
 	}
+}
+
+bool FElysiumItem::CanPlayerFocus(const FElysiumUseContext& Context) const
+{
+	return FElysiumAnimating::CanPlayerFocus(Context) && World
+		&& Context.Activator == World->PlayerHandle();
+}
+
+FElysiumUseBeginResult FElysiumItem::BeginPlayerUse(const FElysiumUseContext& Context)
+{
+	FElysiumEntity* TakerEntity = World ? World->Resolve(Context.Activator) : nullptr;
+	FElysiumCombatCharacter* Taker = TakerEntity ? TakerEntity->AsCombatCharacter() : nullptr;
+	if (!Taker)
+	{
+		UE_LOG(LogElysiumItem, Warning, TEXT("%s +use pickup has no combat-character activator %s"),
+			*DebugString(), *Context.Activator.ToString());
+		return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+	}
+	return AcquireBy(*Taker)
+		? FElysiumUseBeginResult::Completed()
+		: FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
 }
 
 bool FElysiumItem::CanBeginTouch(const FElysiumEntityHandle& Activator) const
@@ -245,6 +275,7 @@ void FElysiumItem::OnDormancyChanged()
 	}
 	if (World)
 	{
+		World->SetUseAnchorEnabled(Handle, !IsInert() && !IsOwned());
 		World->SetTouchAnchorEnabled(Handle, !IsInert() && !IsOwned());
 	}
 }

@@ -8,6 +8,8 @@
 
 #include "ElysiumCameraComponent.generated.h"
 
+class UTexture2D;
+
 // The player camera (roadmap 11.7). Design + the recovered solve: `docs/vtmb/camera-view-modes.md`;
 // where it sits in the spine: `docs/architecture/runtime-architecture.md` §9.
 //
@@ -128,8 +130,8 @@ public:
 	// Forced-third / forced-first, the latches weapon-class arbitration writes (`+0xf8` / `+0xf9`).
 	void SetForcedThird(bool bForced) { Weights.bForcedThird = bForced; }
 	void SetForcedFirst(bool bForced) { Weights.bForcedFirst = bForced; }
-	// The feed / seduction / death camera's hold. Its own solver is not recovered, so this raises the
-	// weight (and with it `CAM_IsThirdPerson`) and nothing more.
+	// The feed / seduction / death camera's hold. Ordinary feeding has a recovered pose solver;
+	// seduction and death currently use only the shared weight/third-person channel.
 	void SetFeedCamera(bool bActive) { Weights.bFeed = bActive; }
 
 	// Drop the smoothing so the next solve snaps rather than eases — VtMB's re-seed flag (`+0x4`),
@@ -185,6 +187,7 @@ private:
 
 	// The player-model fade ramp (`CAM_Think` tail).
 	void SolveModelAlpha();
+	void EnsureFeedVisionMask();
 
 	// The eye the boom hangs off: this component's world location, which is where the first-person
 	// view already is.
@@ -217,6 +220,15 @@ private:
 	bool bTemporalCameraCutPending = false;
 
 	float PlayerModelAlpha = 0.0f;
+
+	// Ordinary-feed entry state. The yaw is captured exactly once on the first requested frame and
+	// the elapsed clock continues through the one-second blend-out, matching the native solver.
+	float FeedElapsedSeconds = 0.0f;
+	float FeedEntryYaw = 0.0f;
+	bool bFeedPoseLive = false;
+	bool bFeedVisionMaskAttempted = false;
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> FeedVisionMask = nullptr;
 
 	// The frame this was last solved on, so `CalcCamera` can be called more than once without
 	// double-advancing the blend. Seeded to a frame that cannot be the current one, so the very first

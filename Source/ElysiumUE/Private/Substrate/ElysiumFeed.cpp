@@ -3,8 +3,9 @@
 // `OnFedUponEnd` outputs that reach authored map wires.
 //
 // `docs/vtmb/feeding.md` is the specification and owns every fact below; this file is the
-// implementation of its "Recreation contract" items 1-9 minus the ones stated as out of scope
-// there (seductive/rat/zombie modes, prayer, and all presentation).
+// implementation of its "Recreation contract" items 1-9 plus the capture-backed ordinary camera,
+// meter and release-tail presentation contract. Seductive/rat/zombie modes, prayer, audio and
+// particles remain explicitly out of scope.
 //
 // THE ANIMATION-EVENT BRIDGE IS A SCHEDULER, NOT A NOTIFY LISTENER.
 // VtMB marks the transaction's boundaries with model-authored animation events (4007 at the bite,
@@ -22,15 +23,20 @@
 
 #include "Substrate/ElysiumFeed.h"
 
+#include "ElysiumCameraSolve.h"
+#include "ElysiumCameraService.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumUserCmd.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+
+#include "Components/SkeletalMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumFeed, Log, All);
 
@@ -45,26 +51,83 @@ namespace ElysiumFeed
 		return AttackerBrawlRating > FMath::Max(VictimHackingRoll.Net, 0);
 	}
 
-	const TCHAR* PhaseClipLabel(EElysiumFeedPhase Phase, bool bAttacker)
+	namespace
+	{
+		const TCHAR* PhaseSuffix(EElysiumFeedPhase Phase)
+		{
+			switch (Phase)
+			{
+			case EElysiumFeedPhase::Engage:  return TEXT("engage");
+			case EElysiumFeedPhase::Bite:    return TEXT("bite");
+			case EElysiumFeedPhase::Loop:    return TEXT("feed_loop");
+			case EElysiumFeedPhase::Release: return TEXT("feed_release");
+			default:                         return TEXT("");
+			}
+		}
+	}
+
+	FElysiumUserCmd GatePairedUserCmd(const FElysiumUserCmd& Cmd)
+	{
+		FElysiumUserCmd Out = Cmd;
+		Out.Move = FVector2D::ZeroVector;
+		Out.Up = 0.0f;
+		Out.LookDelta = FVector2D::ZeroVector;
+		Out.Buttons &= static_cast<uint64>(EElysiumButton::Feed);
+		return Out;
+	}
+
+	FClipPair ResolveClipPair(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight, ESide Side)
+	{
+		FClipPair Out;
+		const TCHAR* Suffix = PhaseSuffix(Phase);
+		if (!Suffix[0])
+		{
+			return Out;
+		}
+		const TCHAR* SideName = Side == ESide::Front ? TEXT("front") : TEXT("back");
+		const bool bVictimTaller = VictimHeight == EPartnerHeight::Taller;
+		Out.Attacker = FString::Printf(TEXT("feeding_attacker_%s_%s_%s"),
+			bVictimTaller ? TEXT("tallvictim") : TEXT("shortvictim"), SideName, Suffix);
+		Out.Victim = FString::Printf(TEXT("feeding_victim_%s_%s_%s"),
+			bVictimTaller ? TEXT("shortattacker") : TEXT("tallattacker"), SideName, Suffix);
+		return Out;
+	}
+
+	FString AudioPath(bool bVictim, bool bMale, const TCHAR* Phase)
+	{
+		return FString::Printf(TEXT("Character/%s/%s_%s.wav"),
+			bMale ? TEXT("Male") : TEXT("Female"),
+			bVictim ? TEXT("fed_upon") : TEXT("feed_on"), Phase);
+	}
+
+	float PhaseSeconds(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight)
 	{
 		switch (Phase)
 		{
-		case EElysiumFeedPhase::Engage:
-			return bAttacker ? TEXT("feeding_attacker_shortvictim_front_engage")
-			                 : TEXT("feeding_victim_shortattacker_front_engage");
-		case EElysiumFeedPhase::Bite:
-			return bAttacker ? TEXT("feeding_attacker_shortvictim_front_bite")
-			                 : TEXT("feeding_victim_shortattacker_front_bite");
-		case EElysiumFeedPhase::Loop:
-			return bAttacker ? TEXT("feeding_attacker_shortvictim_front_feed_loop")
-			                 : TEXT("feeding_victim_shortattacker_front_feed_loop");
+		case EElysiumFeedPhase::Engage:  return EngageSeconds;
+		case EElysiumFeedPhase::Bite:    return BiteSeconds;
+		case EElysiumFeedPhase::Loop:    return LoopSeconds;
 		case EElysiumFeedPhase::Release:
-			return bAttacker ? TEXT("feeding_attacker_shortvictim_front_feed_release")
-			                 : TEXT("feeding_victim_shortattacker_front_feed_release");
-		default:
-			return TEXT("");
+			return VictimHeight == EPartnerHeight::Taller
+				? TallVictimReleaseSeconds : ShortVictimReleaseSeconds;
+		default:                         return 0.0f;
 		}
 	}
+
+	float EventCycle(EElysiumFeedPhase Phase, EPartnerHeight VictimHeight)
+	{
+		if (Phase == EElysiumFeedPhase::Bite)
+		{
+			return BiteEventCycle;
+		}
+		if (Phase == EElysiumFeedPhase::Release)
+		{
+			return VictimHeight == EPartnerHeight::Taller
+				? TallVictimReleaseEventCycle : ShortVictimReleaseEventCycle;
+		}
+		return 0.0f;
+	}
+
 }
 
 const TCHAR* LexToString(EElysiumFeedVerdict Verdict)
@@ -114,6 +177,16 @@ namespace
 
 	const FName GOnFedUponBegin(TEXT("OnFedUponBegin"));
 	const FName GOnFedUponEnd(TEXT("OnFedUponEnd"));
+
+	float RenderedFeedHeightCm(const FElysiumCombatCharacter& Character)
+	{
+		const USkeletalMeshComponent* Body = Character.GetSkeletalBody();
+		if (!Body || !FMath::IsFinite(Body->Bounds.BoxExtent.Z))
+		{
+			return 0.0f;
+		}
+		return FMath::Max(0.0f, Body->Bounds.BoxExtent.Z * 2.0f);
+	}
 }
 
 int32 FElysiumCombatCharacter::BloodPoolValue() const
@@ -271,7 +344,7 @@ void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, dou
 	FeedState.bVictim = false;
 	FeedState.bContinuation = true;   // +0x14a8, set on acceptance
 	FeedState.Phase = EElysiumFeedPhase::Engage;
-	FeedState.PhaseDeadline = static_cast<float>(Now) + ElysiumFeed::EngageSeconds;
+	bFeedCameraAcquireFailed = false;
 
 	Victim.FeedState = FElysiumFeedState();
 	Victim.FeedState.Peer = Handle;
@@ -279,13 +352,18 @@ void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, dou
 	Victim.FeedState.Phase = EElysiumFeedPhase::Engage;
 	Victim.SetBodyFrozen(true);
 	Victim.FeedState.bFrozenByFeed = true;
+	PlayFeedStartAudio(Victim);
 
-	PlayFeedPhaseClips(EElysiumFeedPhase::Engage, Now);
+	const float EngageDuration = PlayFeedPhaseClips(EElysiumFeedPhase::Engage, Now);
+	FeedState.PhaseDeadline = static_cast<float>(Now) + EngageDuration;
+	Victim.FeedState.PhaseDeadline = FeedState.PhaseDeadline;
+	EnsureFeedCamera();
 	ScheduleFeedThink(Now);
 }
 
 void FElysiumCombatCharacter::EndFeedGrapple()
 {
+	ReleaseFeedCamera();
 	if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
 	{
 		Peer->EndFeedVictimRole();
@@ -319,36 +397,238 @@ void FElysiumCombatCharacter::EndFeedVictimRole()
 	}
 }
 
-void FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now)
+uint8 FElysiumCombatCharacter::FeedVictimHeightCell() const
 {
-	const bool bLoop = (Phase == EElysiumFeedPhase::Loop);
-	auto Play = [this, Phase, bLoop](FElysiumCombatCharacter& Who, bool bAttacker)
+	const FElysiumCombatCharacter* Victim = ResolveFeedPeer();
+	const float AttackerHeight = RenderedFeedHeightCm(*this);
+	const float VictimHeight = Victim ? RenderedFeedHeightCm(*Victim) : 0.0f;
+	if (AttackerHeight <= KINDA_SMALL_NUMBER || VictimHeight <= KINDA_SMALL_NUMBER)
 	{
-		const FString Label = ElysiumFeed::PhaseClipLabel(Phase, bAttacker);
-		if (Label.IsEmpty() || !Who.GetSkeletalBody())
-		{
-			return;   // no body: the transaction runs anyway (K10)
-		}
-		if (!Who.PlayAnimClip(Label, bLoop))
-		{
-			// Best effort by contract: a model whose bank does not answer this cell must not break
-			// the transaction. Retail would end the pair here; that would make headless correctness
-			// depend on the export, which K10 forbids.
-			UE_LOG(LogElysiumFeed, Log, TEXT("%s has no feed clip '%s'"), *Who.DebugString(), *Label);
-		}
-	};
-	Play(*this, /*bAttacker*/ true);
-	if (FElysiumCombatCharacter* Victim = ResolveFeedPeer())
+		return static_cast<uint8>(ElysiumFeed::EPartnerHeight::Shorter);
+	}
+	return static_cast<uint8>(ElysiumFeed::VictimHeightFor(AttackerHeight, VictimHeight));
+}
+
+float FElysiumCombatCharacter::PlayFeedPhaseClips(EElysiumFeedPhase Phase, double Now)
+{
+	(void)Now;
+	const ElysiumFeed::EPartnerHeight Height =
+		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
+	const float MetadataSeconds = ElysiumFeed::PhaseSeconds(Phase, Height);
+	const ElysiumFeed::FClipPair Pair = ElysiumFeed::ResolveClipPair(
+		Phase, Height, ElysiumFeed::ESide::Front);
+	FElysiumCombatCharacter* Victim = ResolveFeedPeer();
+	if (!Pair.IsComplete() || !Victim)
 	{
-		Play(*Victim, /*bAttacker*/ false);
-		// Re-assert the hold. Bodies are disposable presentation and are rebuilt from the def, so a
-		// restore mid-feed comes back with a live, unfrozen motor under a victim whose logical state
-		// says it is held; the motor's switch is idempotent, so the cheapest correct place to close
-		// that is wherever the pair next touches both bodies.
-		if (Victim->FeedState.bFrozenByFeed)
+		UE_LOG(LogElysiumFeed, Warning,
+			TEXT("%s cannot resolve feed phase %d: paired victim or activity cell unavailable"),
+			*DebugString(), static_cast<int32>(Phase));
+		return MetadataSeconds;
+	}
+
+	USkeletalMeshComponent* AttackerBody = GetSkeletalBody();
+	USkeletalMeshComponent* VictimBody = Victim->GetSkeletalBody();
+	if (!AttackerBody && !VictimBody)
+	{
+		return MetadataSeconds;   // supported headless path (K10)
+	}
+	if (!AttackerBody || !VictimBody)
+	{
+		UE_LOG(LogElysiumFeed, Warning,
+			TEXT("feed pair %s -> %s has only one rendered body; refusing one-sided phase '%s'/'%s'"),
+			*DebugString(), *Victim->DebugString(), *Pair.Attacker, *Pair.Victim);
+		return MetadataSeconds;
+	}
+
+	// Resolve both halves before changing either body. This is the visible-action equivalent of
+	// retail's initial paired-answer guard: a missing cell falls back to the deterministic headless
+	// transaction and never leaves one actor performing against an idle partner.
+	const bool bAttackerReady = PreloadAnimClip(Pair.Attacker);
+	const bool bVictimReady = Victim->PreloadAnimClip(Pair.Victim);
+	if (!bAttackerReady || !bVictimReady)
+	{
+		UE_LOG(LogElysiumFeed, Warning,
+			TEXT("feed pair %s -> %s missing complementary clips '%s'/'%s' (attacker=%d victim=%d)"),
+			*DebugString(), *Victim->DebugString(), *Pair.Attacker, *Pair.Victim,
+			bAttackerReady ? 1 : 0, bVictimReady ? 1 : 0);
+		return MetadataSeconds;
+	}
+
+	const bool bLoop = Phase == EElysiumFeedPhase::Loop;
+	float AttackerSeconds = MetadataSeconds;
+	float VictimSeconds = MetadataSeconds;
+	const bool bAttackerPlayed = PlayAnimClip(Pair.Attacker, bLoop, &AttackerSeconds);
+	const bool bVictimPlayed = Victim->PlayAnimClip(Pair.Victim, bLoop, &VictimSeconds);
+	if (!bAttackerPlayed || !bVictimPlayed)
+	{
+		UE_LOG(LogElysiumFeed, Warning,
+			TEXT("feed pair %s -> %s failed to play preloaded clips '%s'/'%s' (attacker=%d victim=%d)"),
+			*DebugString(), *Victim->DebugString(), *Pair.Attacker, *Pair.Victim,
+			bAttackerPlayed ? 1 : 0, bVictimPlayed ? 1 : 0);
+		return MetadataSeconds;
+	}
+	if (FMath::Abs(AttackerSeconds - VictimSeconds) > (1.0f / 30.0f))
+	{
+		UE_LOG(LogElysiumFeed, Warning,
+			TEXT("feed pair %s -> %s clip duration mismatch '%s'=%.3fs '%s'=%.3fs; attacker timing wins"),
+			*DebugString(), *Victim->DebugString(), *Pair.Attacker, AttackerSeconds,
+			*Pair.Victim, VictimSeconds);
+	}
+
+	// Re-assert the hold after a restore rebuilt a live motor under saved paired state.
+	if (Victim->FeedState.bFrozenByFeed)
+	{
+		Victim->SetBodyFrozen(true);
+	}
+	return AttackerSeconds > KINDA_SMALL_NUMBER ? AttackerSeconds : MetadataSeconds;
+}
+
+void FElysiumCombatCharacter::EnsureFeedCamera()
+{
+	if (FeedState.bVictim || !FeedState.IsPaired() || FeedState.Phase == EElysiumFeedPhase::ReleaseTail)
+	{
+		return;
+	}
+	if (bFeedCameraAcquireFailed)
+	{
+		return;   // one failed capability acquisition, one warning for this feed
+	}
+	IElysiumCameraService* Service = World ? World->Camera() : nullptr;
+	if (!Service)
+	{
+		return;   // supported headless path
+	}
+	if (FeedCameraHandle.IsSet() && Service->IsCameraLive(FeedCameraHandle))
+	{
+		return;
+	}
+	FeedCameraHandle.Reset();
+
+	FElysiumCameraRequest Request;
+	Request.Kind = EElysiumCameraRequestKind::Feed;
+	Request.Owner = FString::Printf(TEXT("Feed:%s"), *Handle.ToString());
+	Request.DebugName = FString::Printf(TEXT("Feed:%s"), *DebugString());
+	Request.Priority = 450;
+	Request.bOverridePose = false; // the recovered feed weight owns the faithful baseline
+	Request.BlendInSeconds = 1.0f;
+	Request.BlendOutSeconds = 1.0f;
+	Request.Control = EElysiumCameraControlPolicy::Locked;
+	Request.bShowHud = true;
+	Request.bDrawViewmodel = false;
+	Request.bShowPlayerBody = true;
+	Request.Fallback = EElysiumCameraFallback::PlayerView;
+	Request.SelectedProfile = TEXT("OrdinaryFeedWeight");
+	FeedCameraHandle = Service->AcquireCamera(Request);
+	if (!FeedCameraHandle.IsSet())
+	{
+		bFeedCameraAcquireFailed = true;
+		UE_LOG(LogElysiumFeed, Warning, TEXT("%s failed to acquire feed camera request"),
+			*DebugString());
+	}
+}
+
+void FElysiumCombatCharacter::ReleaseFeedCamera()
+{
+	if (!FeedCameraHandle.IsSet())
+	{
+		return;
+	}
+	IElysiumCameraService* Service = World ? World->Camera() : nullptr;
+	if (Service && Service->IsCameraLive(FeedCameraHandle)
+		&& !Service->ReleaseCamera(FeedCameraHandle))
+	{
+		UE_LOG(LogElysiumFeed, Warning, TEXT("%s failed to release feed camera slot %d"),
+			*DebugString(), FeedCameraHandle.Slot);
+	}
+	FeedCameraHandle.Reset();
+}
+
+FElysiumVoiceHandle FElysiumCombatCharacter::SubmitFeedCue(
+	const TCHAR* Cue, bool bLooping, bool bHeartbeat)
+{
+	IElysiumAudio* Audio = World ? World->Audio() : nullptr;
+	if (!Audio)
+	{
+		return FElysiumVoiceHandle::Invalid();   // supported headless path
+	}
+	FElysiumAudioRequest Request;
+	Request.Source = FElysiumAudioSource::Path(bHeartbeat
+		? FString(TEXT("Interface/heartbeat_loop.wav"))
+		: ElysiumFeed::AudioPath(/*bVictim*/ FeedState.bVictim, Sheet.IsMale(), Cue));
+	Request.Owner.Kind = EElysiumAudioOwnerKind::GameplaySystem;
+	Request.Owner.StableId = FString::Printf(TEXT("feed.%s.%d"),
+		FeedState.bVictim ? TEXT("victim") : TEXT("attacker"), Handle.Index);
+	Request.Category = EElysiumAudioCategory::Sfx;
+	Request.Placement.bSpatialized = true;
+	Request.Placement.AttachTo = GetAttachBody();
+	Request.Placement.Location = Origin;
+	Request.Gain = 1.0f;
+	Request.Pitch = 1.0f;
+	Request.bLooping = bLooping;
+	// GrappleSound's legacy attenuation 0.8 reaches zero at 1000/0.8 Source units. Unreal owns the
+	// falloff mechanism; this is the recovered audible radius stated in its native centimetres.
+	Request.AttenuationRadiusCm = (1000.0f / 0.8f) * ElysiumCam::U;
+	const FElysiumVoiceHandle Voice = Audio->Submit(MoveTemp(Request));
+	if (!Voice.IsValid() && !bFeedAudioAcquireFailed)
+	{
+		bFeedAudioAcquireFailed = true;
+		UE_LOG(LogElysiumFeed, Warning, TEXT("%s failed to submit feed audio cue '%s'"),
+			*DebugString(), bHeartbeat ? TEXT("Interface/heartbeat_loop.wav") : Cue);
+	}
+	return Voice;
+}
+
+void FElysiumCombatCharacter::PlayFeedStartAudio(FElysiumCombatCharacter& Victim)
+{
+	bFeedAudioAcquireFailed = false;
+	Victim.bFeedAudioAcquireFailed = false;
+	SubmitFeedCue(TEXT("start"), /*bLooping*/ false);
+	Victim.SubmitFeedCue(TEXT("start"), /*bLooping*/ false);
+}
+
+void FElysiumCombatCharacter::PlayFeedLoopAudio(FElysiumCombatCharacter& Victim)
+{
+	if (bFeedAudioAcquireFailed || Victim.bFeedAudioAcquireFailed)
+	{
+		return;
+	}
+	StopFeedLoopAudio();
+	Victim.StopFeedLoopAudio();
+	FeedLoopVoice = SubmitFeedCue(TEXT("loop"), /*bLooping*/ true);
+	Victim.FeedLoopVoice = Victim.SubmitFeedCue(TEXT("loop"), /*bLooping*/ true);
+	Victim.FeedHeartbeatVoice = Victim.SubmitFeedCue(
+		TEXT("heartbeat"), /*bLooping*/ true, /*bHeartbeat*/ true);
+}
+
+void FElysiumCombatCharacter::StopFeedLoopAudio()
+{
+	IElysiumAudio* Audio = World ? World->Audio() : nullptr;
+	if (Audio)
+	{
+		if (FeedLoopVoice.IsValid())
 		{
-			Victim->SetBodyFrozen(true);
+			Audio->StopVoice(FeedLoopVoice, 0.0f);
 		}
+		if (FeedHeartbeatVoice.IsValid())
+		{
+			Audio->StopVoice(FeedHeartbeatVoice, 0.0f);
+		}
+	}
+	FeedLoopVoice = FElysiumVoiceHandle::Invalid();
+	FeedHeartbeatVoice = FElysiumVoiceHandle::Invalid();
+}
+
+void FElysiumCombatCharacter::PlayFeedEndAudio(FElysiumCombatCharacter* Victim)
+{
+	StopFeedLoopAudio();
+	if (Victim)
+	{
+		Victim->StopFeedLoopAudio();
+	}
+	SubmitFeedCue(TEXT("end"), /*bLooping*/ false);
+	if (Victim)
+	{
+		Victim->SubmitFeedCue(TEXT("end"), /*bLooping*/ false);
 	}
 }
 
@@ -365,7 +645,7 @@ void FElysiumCombatCharacter::OnFeedAnimEvent(int32 EventId)
 		}
 		break;
 	case ElysiumFeed::EventFeedTeardown:
-		FeedInterrupt();
+		CompleteFeedTransaction(/*bKeepReleaseTail*/ true);
 		break;
 	case ElysiumFeed::EventFeedEmitter:
 		// 5116 starts the mouth-attached `force_feeding_emitter` effect. Presentation only: no
@@ -409,6 +689,7 @@ bool FElysiumCombatCharacter::FeedBegin(FElysiumCombatCharacter& Victim)
 	// gaps"). Chosen this way because it matches every other kind-2 producer on the chain —
 	// `OnDeath` fires from the entity that died, with the killer as activator.
 	Victim.FireOutput(GOnFedUponBegin, Handle);
+	PlayFeedLoopAudio(Victim);
 
 	UE_LOG(LogElysiumFeed, Display,
 		TEXT("INFO - Feed started: %s (blood=%d, next=%.2fs)"),
@@ -493,6 +774,11 @@ bool FElysiumCombatCharacter::Feed(double Now)
 
 void FElysiumCombatCharacter::FeedInterrupt()
 {
+	CompleteFeedTransaction(/*bKeepReleaseTail*/ false);
+}
+
+void FElysiumCombatCharacter::CompleteFeedTransaction(bool bKeepReleaseTail)
+{
 	if (FeedState.bInterrupting)
 	{
 		return;   // +0x14a9, the re-entry guard
@@ -504,25 +790,29 @@ void FElysiumCombatCharacter::FeedInterrupt()
 	FeedState.bInterrupting = true;
 	const bool bManualStopRequested = !FeedState.bContinuation;
 	FElysiumCombatCharacter* PairedVictim = FeedState.bVictim ? this : ResolveFeedPeer();
+	PlayFeedEndAudio(PairedVictim);
+	const float ReleaseEventDeadline = FeedState.PhaseDeadline;
+	const ElysiumFeed::EPartnerHeight Height =
+		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
 
 	// Clear the continuation latch. The cant-break and frenzy-grapple latches retail also clears
 	// here belong to systems B6 does not build (the grapple router and frenzy); they are named
-	// rather than faked. Feed sound and the feed camera are presentation and stop nowhere yet.
+	// rather than faked.
 	FeedState.bContinuation = false;
 
 	FElysiumEntity* TargetEnt = World ? World->Resolve(FeedState.Target) : nullptr;
 	FElysiumCombatCharacter* Victim = TargetEnt ? TargetEnt->AsCombatCharacter() : nullptr;
+	bool bSurvivingReleaseTail = false;
 	if (Victim)
 	{
 		// 1. stop feeder/victim loop and heartbeat presentation — presentation, not built.
 		// 2. read the victim's remaining BloodPool.
 		const int32 Remaining = Victim->BloodPoolValue();
 		const bool bDepleted = Remaining < 1;
-		if (!bDepleted)
-		{
-			// 3. a surviving victim returns to its non-depleted post-feed path.
-			Victim->EndFeedVictimRole();
-		}
+		// A normal event-4006 exit keeps both bodies claimed until the authored release clip finishes.
+		// Damage, invalidation and depleted-victim outcomes still tear down immediately.
+		bSurvivingReleaseTail = bKeepReleaseTail
+			&& FeedState.Phase == EElysiumFeedPhase::Release && !bDepleted;
 		// 4. the victim feed-end callback. Same activator/caller identity as FeedBegin: the feeder
 		//    activates, the victim is the firing entity.
 		//
@@ -566,6 +856,27 @@ void FElysiumCombatCharacter::FeedInterrupt()
 	FeedState.Target = FElysiumEntityHandle::Invalid();
 	FeedState.Interval = 0.0f;
 	FeedState.NextPulse = 0.0f;
+	ReleaseFeedCamera();
+
+	if (bSurvivingReleaseTail)
+	{
+		const double Now = World ? World->NowSeconds() : 0.0;
+		const float ReleaseSeconds = ElysiumFeed::PhaseSeconds(EElysiumFeedPhase::Release, Height);
+		const float EventCycle = ElysiumFeed::EventCycle(EElysiumFeedPhase::Release, Height);
+		FeedState.Phase = EElysiumFeedPhase::ReleaseTail;
+		// Anchor the tail to the authored event deadline, not to the possibly late update that observed
+		// it. A hitch after 4006 must consume pose time rather than extending the release animation.
+		FeedState.PhaseDeadline = ReleaseEventDeadline
+			+ ReleaseSeconds * FMath::Clamp(1.0f - EventCycle, 0.0f, 1.0f);
+		if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
+		{
+			Peer->FeedState.Phase = EElysiumFeedPhase::ReleaseTail;
+			Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
+		}
+		FeedState.bInterrupting = false;
+		ScheduleFeedThink(Now);
+		return;
+	}
 
 	EndFeedGrapple();
 	FeedState.bInterrupting = false;
@@ -628,9 +939,16 @@ bool FElysiumCombatCharacter::ShouldReleaseFeed() const
 void FElysiumCombatCharacter::EnterFeedRelease(double Now)
 {
 	FeedState.Phase = EElysiumFeedPhase::Release;
-	PlayFeedPhaseClips(EElysiumFeedPhase::Release, Now);
+	const ElysiumFeed::EPartnerHeight Height =
+		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
+	const float ReleaseDuration = PlayFeedPhaseClips(EElysiumFeedPhase::Release, Now);
 	FeedState.PhaseDeadline = static_cast<float>(Now)
-		+ ElysiumFeed::ReleaseSeconds * ElysiumFeed::ReleaseEventCycle;
+		+ ReleaseDuration * ElysiumFeed::EventCycle(EElysiumFeedPhase::Release, Height);
+	if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
+	{
+		Peer->FeedState.Phase = EElysiumFeedPhase::Release;
+		Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
+	}
 	ScheduleFeedThink(Now);
 }
 
@@ -642,9 +960,18 @@ void FElysiumCombatCharacter::AdvanceFeedPhase(double Now)
 		// The bite clip carries event 4007 at cycle 0.0, so the transaction opens the moment the
 		// clip starts.
 		FeedState.Phase = EElysiumFeedPhase::Bite;
-		PlayFeedPhaseClips(EElysiumFeedPhase::Bite, Now);
-		FeedState.PhaseDeadline = static_cast<float>(Now)
-			+ ElysiumFeed::BiteSeconds * (1.0f - ElysiumFeed::BiteEventCycle);
+		{
+			const ElysiumFeed::EPartnerHeight Height =
+				static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
+			const float BiteDuration = PlayFeedPhaseClips(EElysiumFeedPhase::Bite, Now);
+			FeedState.PhaseDeadline = static_cast<float>(Now)
+				+ BiteDuration * (1.0f - ElysiumFeed::EventCycle(EElysiumFeedPhase::Bite, Height));
+			if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
+			{
+				Peer->FeedState.Phase = EElysiumFeedPhase::Bite;
+				Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
+			}
+		}
 		OnFeedAnimEvent(ElysiumFeed::EventFeedBegin);
 		if (!FeedState.IsTransacting())
 		{
@@ -655,20 +982,36 @@ void FElysiumCombatCharacter::AdvanceFeedPhase(double Now)
 
 	case EElysiumFeedPhase::Bite:
 		FeedState.Phase = EElysiumFeedPhase::Loop;
-		PlayFeedPhaseClips(EElysiumFeedPhase::Loop, Now);
-		FeedState.PhaseDeadline = static_cast<float>(Now) + ElysiumFeed::LoopSeconds;
+		FeedState.PhaseDeadline = static_cast<float>(Now)
+			+ PlayFeedPhaseClips(EElysiumFeedPhase::Loop, Now);
+		if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
+		{
+			Peer->FeedState.Phase = EElysiumFeedPhase::Loop;
+			Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
+		}
+		OnFeedAnimEvent(ElysiumFeed::EventFeedEmitter);
 		break;
 
 	case EElysiumFeedPhase::Loop:
 		// The loop repeats for as long as the release predicate stays false; `ShouldReleaseFeed`
 		// owns that decision and `TickFeed` asks it every update, not only here.
-		FeedState.PhaseDeadline = static_cast<float>(Now) + ElysiumFeed::LoopSeconds;
+		FeedState.PhaseDeadline = static_cast<float>(Now)
+			+ ElysiumFeed::PhaseSeconds(EElysiumFeedPhase::Loop,
+				static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell()));
+		if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
+		{
+			Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
+		}
 		break;
 
 	case EElysiumFeedPhase::Release:
-		// Event 4006 lands part-way through the release clip; the rest of that clip is presentation
-		// and nothing waits on it.
+		// Event 4006 lands part-way through the release clip. It ends gameplay and camera ownership;
+		// CompleteFeedTransaction retains the body pair for the remaining authored pose.
 		OnFeedAnimEvent(ElysiumFeed::EventFeedTeardown);
+		break;
+
+	case EElysiumFeedPhase::ReleaseTail:
+		EndFeedGrapple();
 		break;
 
 	default:
@@ -690,6 +1033,15 @@ bool FElysiumCombatCharacter::TickFeed(double Now)
 			BreakFeed();
 		}
 		return FeedState.Phase != EElysiumFeedPhase::None;
+	}
+	EnsureFeedCamera();
+	if (FeedState.Phase == EElysiumFeedPhase::Loop && !FeedLoopVoice.IsValid()
+		&& !bFeedAudioAcquireFailed)
+	{
+		if (FElysiumCombatCharacter* Victim = ResolveFeedPeer())
+		{
+			PlayFeedLoopAudio(*Victim);
+		}
 	}
 	// The pulse comes first and independently of the clip cycle: a loop may repeat without a pulse
 	// on its boundary, and a pulse may land part-way through a loop.
