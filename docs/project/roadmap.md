@@ -57,6 +57,10 @@ the animation is the movement's speed authority, so the mover cannot close behin
 ladder, [plans/three-cs.md](plans/three-cs.md)). **After PP6 (the thaw):** 9.10, 8.8, 8.10, the
 P3/P7 look lanes, 10.1–10.5 and asset enhancement — re-sequenced then.
 
+**Map priority — owner call:** `sp_theatre` → `sp_tutorial_1` → `sm_pawnshop_1` → `sm_hub_1`.
+Focused export, bake, and acceptance work targets maps in this order; a broader scope needs its
+own owner call.
+
 ## Now — the unblocked front
 
 1. **0.10 / RE32 / RE33 / 12.1** — the retail capture loop: join observed identities to the
@@ -370,6 +374,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 10.7, 13.3 | [x] |
 | RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 10.7, 13.1 | [x] |
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [ ] |
+| RE51 | the player entity, lifecycle and world relationship; PreThink/PostThink ordered; open: 277-field ledger, construction/Think/teardown, law/camera/travel joins | `docs/vtmb/player-entity.md`; 9.8, CCC10.1, 13.1–13.4 | [~] |
 
 ## Options — evaluated, not planned
 
