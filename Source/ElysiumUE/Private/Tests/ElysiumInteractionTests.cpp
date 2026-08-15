@@ -827,7 +827,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorElevatorTest,
 	"Elysium.Substrate.DoorElevator", GElysiumTestFlags)
 bool FElysiumDoorElevatorTest::RunTest(const FString&)
 {
-	AddExpectedError(TEXT("does_not_exist.Use"), EAutomationExpectedErrorFlags::Contains, 1);
+	// The `use_override` that names nothing is asserted below by what it does — the door stays shut
+	// and `invalid_open` never counts. Its `"does_not_exist".Use [no target]` row is I/O accounting
+	// emitted at Display, not a warning, so there is deliberately no expected error to declare here.
 	FTestWorldWrapper TestWorld;
 	if (!TestWorld.CreateTestWorld(EWorldType::Game)
 		|| !TestWorld.BeginPlayInTestWorld())
