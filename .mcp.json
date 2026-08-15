@@ -5,7 +5,10 @@
 			"command": "uv",
 			"args": [
 				"run",
-				"elysium",
+				"--no-sync",
+				"python",
+				"-m",
+				"elysium_pipeline",
 				"mcp"
 			],
 			"env": {
