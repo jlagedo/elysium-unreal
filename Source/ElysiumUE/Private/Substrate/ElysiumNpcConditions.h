@@ -205,7 +205,6 @@ struct FElysiumNpcCognition
 
 	// One report each, per NPC.
 	bool bWarnedCombatWithoutEnemy = false;
-	bool bWarnedCombatSchedulePending = false;
 	bool bReportedAlertRefusal = false;
 	// The retail-shaped starvation warning is latched per NPC *per schedule*: a different schedule
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
@@ -274,6 +273,98 @@ namespace ElysiumNpcCond
 
 	// `HAVE_ENEMY_LOS` / `ENEMY_OCCLUDED` / `ENEMY_DEAD` / `SEE_ENEMY` for the committed enemy.
 	void GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcConditions& Out);
+
+	// --- Weapon capability ------------------------------------------------------------------------
+	/**
+	 * The two capability bits combat selection reads, and nothing else.
+	 *
+	 * `CNPC_VHuman::SelectSchedule` (`0x10384ee0`) queries the active weapon's capability word: a
+	 * weapon reporting `0x18000` enters the melee selector, and every other weapon enters the ranged
+	 * one (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Ordinary humanoid combat selection"; the
+	 * melee class's full result is `0x40018000` and its `0x18000` portion is also the player's block
+	 * gate, `docs/vtmb/combat-and-damage.md`).
+	 *
+	 * SCOPE, DELIBERATE: this is NOT retail's capability word. The word carries bits for squad
+	 * behaviour, doors, jumping and more, none of which is decoded and none of which this selection
+	 * reads. Reproducing two named bits as a three-value answer is the whole of what the recovered
+	 * split needs; growing this into a bitfield would be inventing a register.
+	 */
+	enum class ECapability : uint8
+	{
+		// No active weapon, or one whose record is not a controllable weapon family. It takes the
+		// MELEE selector with bare-hands defaults — the reach and cone constants below — and its
+		// attack tasks fail by name, because there is no controller to press.
+		Unarmed,
+		Melee,
+		Ranged,
+	};
+	const TCHAR* CapabilityName(ECapability Capability);
+	// Retail's own two values, carried so a trace row and the binary agree.
+	int32 CapabilityBits(ECapability Capability);
+	inline constexpr int32 MeleeCapabilityBits = 0x18000;
+	inline constexpr int32 RangedCapabilityBits = 0x2000;
+
+	// The active weapon's family, resolved through its parsed `vdata/items` record. Never from a
+	// classname prefix (`ElysiumItemClasses.h`).
+	//
+	// CHOSEN, NOT RECOVERED: `WeaponThrown` takes the ranged branch. The survey names only the
+	// `0x18000` melee test and "other weapons" for everything else, so a thrown weapon is "other" by
+	// the recovered rule — but no decoded body states a thrown weapon's own capability value.
+	ECapability WeaponCapability(const FElysiumNpc& Npc);
+
+	// --- Attack conditions ------------------------------------------------------------------------
+	// CHOSEN, NOT RECOVERED: the melee reach and cone are cycle 2's, reused rather than restated —
+	// `ElysiumWeapons::MeleeReachSourceUnits` (retail's own maximum custom sequence reach stands in
+	// at 64 Source units) and `MeleeConeHalfAngleDegrees` (`FindEntityFOV`'s recovered 30-degree
+	// half-angle). Using the swing's own numbers is what keeps `CAN_MELEE_ATTACK1` from promising a
+	// hit the weapon's acquisition would then refuse.
+
+	/**
+	 * The committed enemy's range/facing/readiness conditions, gathered as step 5's tail.
+	 *
+	 * Melee capability produces `CAN_MELEE_ATTACK1` (0x51), `TOO_FAR_TO_ATTACK` (0x60) and
+	 * `WAITING_ATTACK_TIME` (0x2f); ranged capability produces `CAN_RANGE_ATTACK1` (0x4f),
+	 * `TOO_CLOSE_TO_ATTACK` (0x5f), `TOO_FAR_TO_ATTACK`, `NO_PRIMARY_AMMO` (0x40),
+	 * `WAITING_ATTACK_TIME` and `WEAPON_SIGHT_OCCLUDED` (0x66).
+	 *
+	 * SEAM (comment only, never set): `WEAPON_THROUGH_WALL` (0x3c) and `WEAPON_BLOCKED_BY_FRIEND`
+	 * (0x63). Both are line-of-FIRE terms about the muzzle rather than the eye — one asks whether
+	 * the barrel is inside geometry, the other whether a friendly body is on the ray — and this
+	 * runtime has neither a muzzle transform nor a squad. Deriving either from the eye's occlusion
+	 * latch would raise a condition whose whole point is that it disagrees with that latch.
+	 *
+	 * SEAM (comment only, never set): `CAN_MELEE_ATTACK2` / `CAN_RANGE_ATTACK2` (0x52 / 0x50). The
+	 * secondary attack's own eligibility rule is not decoded, and a mode's authored `Secondary`
+	 * record does not by itself say when an NPC should use it.
+	 */
+	void GatherAttackConditions(const FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
+
+	// --- The incoming-attack notice ---------------------------------------------------------------
+	// Recovered (`docs/vtmb/combat-and-damage.md` -> "Target acquisition, sequence commit and
+	// recovery"): an accepted melee target receives an incoming-melee notice, and "the NPC notice
+	// path accepts the warning in its eligible states when the attacker is within 150 Source units
+	// or satisfies its visibility route, remembers the attacker for five seconds and lets the
+	// concrete combatant schedule its response". No health or damage changes.
+	inline constexpr float MeleeNoticeAcceptanceUnits = 150.0f;
+	inline constexpr double DetectedAttackRetentionSeconds = 5.0;
+
+	/**
+	 * Deliver one notice to `Victim`. Returns whether it was accepted.
+	 *
+	 * SCOPE, DELIBERATE: the visibility route is the senses' own player-LOS cache, so an NPC
+	 * attacker outside the 150-unit radius is not noticed — the same single-observer scope
+	 * `NpcCondBuildSeenSet` carries, and the same place admitting other observers would be one
+	 * addition rather than several.
+	 *
+	 * SEAM (parsed, unread): `ignore_detected_attack` (41 authored occurrences) is the keyfield that
+	 * suppresses this in retail. It is not read here because the NPC leaf does not carry it yet and
+	 * a suppression with no keyfield behind it would be invented, not authored.
+	 */
+	bool NoticeMeleeAttack(FElysiumNpc& Victim, const FElysiumEntityHandle& Attacker,
+		const FVector& AttackerOrigin, double Now);
+
+	// Is a detected-attack record still inside its five-second retention at `Now`?
+	bool HasDetectedAttack(const FElysiumNpc& Npc, double Now);
 
 	// --- Alert lookaround ---------------------------------------------------------------------------
 	// `min(30, (m_iEnemySightings + 2) * 5)`, recovered verbatim from step 5 of the idle selector:

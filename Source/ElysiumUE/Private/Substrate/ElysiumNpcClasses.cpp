@@ -203,6 +203,16 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	AddNpcField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception, EElysiumField::Save);
 	AddNpcField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
 	AddNpcField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);
+
+	// --- Cycle 6 (combat): the three authored loadout keyfields ---------------------------------
+	// `additionalequipment` (267 authored rows), `alternateequipment` (184) and `cantdropweapons`
+	// (78). Save-flagged like the rest of the authored NPC tuning: a map may not rewrite them, but a
+	// payload has to carry what the entity was authored with, because the resolved loadout is
+	// derived from them on the first think. The resolution is `Substrate/ElysiumNpcLoadout.h`; what
+	// each is read for (and which of the three is deliberately unread) is stated on the members.
+	AddNpcField(D, TEXT("additionalequipment"), &FElysiumNpc::AdditionalEquipment, EElysiumField::Save);
+	AddNpcField(D, TEXT("alternateequipment"),  &FElysiumNpc::AlternateEquipment,  EElysiumField::Save);
+	AddNpcField(D, TEXT("cantdropweapons"),     &FElysiumNpc::bCantDropWeapons,    EElysiumField::Save);
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)

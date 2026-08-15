@@ -6,6 +6,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlace.h"
+#include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -52,6 +53,28 @@ public:
 	// The running schedule and the variant token its activity picks ride on.
 	FElysiumScheduleState Schedule;
 	int32 ScheduleActivityCycle = 0;
+
+	// --- Cycle 6: the combat loadout ------------------------------------------------------------
+	// `additionalequipment` (267 authored rows) and `alternateequipment` (184). The corpus authors
+	// ONE classname per row, with the literal `0` as the "none" sentinel on 78 of them; the
+	// resolution is `Substrate/ElysiumNpcLoadout.h`.
+	FString AdditionalEquipment;
+	FString AlternateEquipment;
+	// `cantdropweapons` (78 authored rows; 71 write 0 and 7 write 1).
+	//
+	// SEAM (parsed, unread): the drop it suppresses is the death-time weapon drop, and this runtime
+	// has no such path — `Event_Killed`'s weapon cleanup does not spawn a loose item yet. The
+	// keyfield is carried so an authored NPC round-trips through a save with the policy it was
+	// authored with, and so the drop path has a value to read the day it lands.
+	bool bCantDropWeapons = false;
+	// Whether the loadout has already run. It saves for the reason `FElysiumItemContainer`'s equip
+	// seeds do: the weapon it granted is a runtime entity the snapshot restores, so a restored NPC
+	// must not be handed a second one.
+	bool bLoadoutResolved = false;
+
+	// The melee selector's retained binary draw (`ElysiumNpcCombatSchedules.h`). Session state: it
+	// is a decision in flight, not memory, and a load re-draws on the next pass.
+	FElysiumNpcCombatSelector CombatSelector;
 
 	// `m_bAllowAlertLookaround` (+0x6434), authored per NPC.
 	bool bAllowAlertLookaround = false;
@@ -207,8 +230,14 @@ public:
 	// is the lookaround program, which alert state is what makes reachable.
 	EElysiumScheduleId SelectAlertSchedule();
 
-	// Case 2. SEAM: the melee and ranged schedule families are the next cycle's work, so combat
-	// holds on the disposition idle and says so once.
+	/**
+	 * Case 2 — the concrete combat branch.
+	 *
+	 * `CNPC_VHuman::SelectSchedule` (`0x10384ee0`) queries the active weapon's capability bits and
+	 * routes to one of two selectors; either may return zero, and a zero falls through to
+	 * `CAI_BaseNPCTroika::SelectSchedule` so the weapon policy COMPOSES with the door, damage and
+	 * idle reactions rather than replacing them. That composition is the tail of this function.
+	 */
 	EElysiumScheduleId SelectCombatSchedule();
 
 	// `SelectIdealState` run for real: the two-layer rule over this pass's conditions, committed
@@ -264,6 +293,38 @@ public:
 	virtual bool FaceSavePosition() override;
 
 	virtual bool StepAwayFromSavePosition(float DistanceCm) override;
+
+	// --- The combat task bodies -----------------------------------------------------------------
+	// Every one that drives the body claims `EElysiumBodyOwner::Schedule` through the arbiter first
+	// and answers false when the claim is refused, which fails its task by name. The token is given
+	// back once, where the program ends (`ReleaseScheduleBody`).
+
+	virtual void StopMoving() override;
+
+	virtual bool GetPathToEnemy(float ToleranceUnits) override;
+
+	virtual void RunPath() override;
+
+	virtual EElysiumMoveWatch WaitForMovement() override;
+
+	virtual bool FaceEnemy() override;
+
+	virtual bool AnnounceAttack(float Param) override;
+
+	virtual bool MeleeAttack1() override;
+
+	virtual bool RangeAttack1() override;
+
+	virtual void RememberFact(float What) override;
+
+	// The combat schedules' movement claim. Idempotent for a token already held, and refused while
+	// another owner has the body — which is what a task turns into its own named failure.
+	bool AcquireScheduleBody(const TCHAR* Reason);
+
+	// Hand it back and stop whatever the program had the body doing. Called wherever a schedule
+	// stops running: the end of a tick that ended the program, a state change that discarded it,
+	// dormancy, and a restore.
+	void ReleaseScheduleBody(const TCHAR* Reason);
 
 	/**
 	 * `CAI_BaseNPCTroika::SelectDoorObstructionSchedule` (`0x102b7370`), transcribed.
@@ -335,10 +396,13 @@ public:
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
+	virtual FElysiumNpc* AsNpc() override { return this; }
+
 private:
 	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
+	FElysiumBodyOwnerToken ScheduleOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;
 	TArray<FString> PatrolNames;

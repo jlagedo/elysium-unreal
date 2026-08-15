@@ -446,6 +446,16 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsItemContainer();
 	}
 
+	// The same, for the living-NPC leaf. The AI's own producers hand each other base pointers — an
+	// attack notice reaches its victim as an entity handle — and only `FElysiumNpc` carries the
+	// senses, memory and cognition those producers write. It is deliberately NOT a classname test:
+	// `npc_VPlayerController` shares the `npc_` prefix and is a different leaf entirely.
+	virtual class FElysiumNpc* AsNpc() { return nullptr; }
+	const class FElysiumNpc* AsNpc() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsNpc();
+	}
+
 	// --- Open-ended attribute names (11.4) ----------------------------------------------
 	// The registry's field table is a static list of names, which is exactly right for a datamap
 	// and wrong for the part of the character sheet that is `vdata`-driven (`base_<discipline>`,

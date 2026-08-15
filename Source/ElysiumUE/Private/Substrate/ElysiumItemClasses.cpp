@@ -586,20 +586,30 @@ bool FElysiumInventory::Equip(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 		// switch has to name.
 		if (FElysiumItem* Carried = Item.IsOwned() ? &Item : FindOrdinary(Char, Classname))
 		{
-			if (Carried->Handle != ActiveWeapon)
-			{
-				// The outgoing item's equip effects end before the incoming one's begin, so a swing
-				// or a reload in flight on the holstered weapon cannot commit against the new one.
-				if (FElysiumItem* Previous = Active(Char))
-				{
-					Previous->OnHolstered(Char);
-				}
-				ActiveWeapon = Carried->Handle;
-				Carried->OnEquipped(Char);
-			}
-			Char.PublishEquippedCameraClass();
+			SetActiveWeapon(Char, *Carried);
 		}
 	}
+	return true;
+}
+
+bool FElysiumInventory::SetActiveWeapon(FElysiumCombatCharacter& Char, FElysiumItem& Item)
+{
+	if (!Item.IsOwned() || Item.Owner != Char.Handle)
+	{
+		return false;
+	}
+	if (Item.Handle != ActiveWeapon)
+	{
+		// The outgoing item's equip effects end before the incoming one's begin, so a swing or a
+		// reload in flight on the holstered weapon cannot commit against the new one.
+		if (FElysiumItem* Previous = Active(Char))
+		{
+			Previous->OnHolstered(Char);
+		}
+		ActiveWeapon = Item.Handle;
+		Item.OnEquipped(Char);
+	}
+	Char.PublishEquippedCameraClass();
 	return true;
 }
 

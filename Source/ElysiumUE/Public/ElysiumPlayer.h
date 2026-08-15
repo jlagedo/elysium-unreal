@@ -363,6 +363,13 @@ struct FElysiumInventory
 	// `Weapon_Equip` — `Inventory_Add` plus the active-weapon switch for a wieldable item.
 	bool Equip(FElysiumCombatCharacter& Char, FElysiumItem& Item);
 
+	// The active-weapon switch on its own: holster what was held, name the new active weapon, run
+	// its equip callback and republish the camera class. `Equip`'s wieldable branch is its one
+	// ordinary caller; the NPC loadout is the other, because `is_wieldable` is authored by 100 of
+	// the 226 shipped records and by none of the `item_w_*` weapons an NPC is spawned holding.
+	// Returns false when `Item` is not carried by `Char`.
+	bool SetActiveWeapon(FElysiumCombatCharacter& Char, FElysiumItem& Item);
+
 	// `GiveNamedItem(classname, 0)` — create and spawn the named item entity, then run it through
 	// the same equip/add route. Returns the new item's handle, or Invalid when the classname has no
 	// `vdata/items` definition, there is no world to create in, or the add was refused.

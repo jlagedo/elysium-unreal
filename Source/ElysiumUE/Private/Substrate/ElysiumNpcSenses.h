@@ -120,6 +120,19 @@ struct FElysiumNpcMemory
 	double LastDamageTime = -1.0;
 	int32 LastDamageAmount = 0;
 
+	// --- The incoming-attack notice ------------------------------------------------------------
+	// Retail's melee acquisition sends the aimed target an incoming-melee notice, and the NPC notice
+	// path "remembers the attacker for five seconds and lets the concrete combatant schedule its
+	// response" (`docs/vtmb/combat-and-damage.md`). This is that record. It is memory, not a
+	// condition, which is why it saves and the `DETECTED_ATTACK` bit derived from it would not.
+	//
+	// The writer is `ElysiumNpcCond::NoticeMeleeAttack`, reached from `TASK_ANNOUNCE_ATTACK`. Its
+	// four consumers — the `SHOULD_*` responses — are a policy the survey does not decode, so the
+	// record is written and read by the diagnostics only (that seam is stated at the four
+	// conditions in `ElysiumNpcConditions.h`).
+	FElysiumEntityHandle DetectedAttackAttacker;
+	double DetectedAttackTime = -1.0;
+
 	// The repeated-damage window (`+0x5d94` accumulated, `+0x5d98` window root). Damage sums for one
 	// second; a sum over 15 percent of Source max health raises `REPEATED_DAMAGE`, and an expired
 	// window is RESET rather than decayed. The rule lives on `ElysiumNpcCond::AccumulateDamage`;

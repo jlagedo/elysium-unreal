@@ -395,8 +395,12 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	}
 
 	// 5. The committed enemy's own conditions, gathered LAST so they describe the enemy this pass
-	//    chose rather than the one it replaced.
+	//    chose rather than the one it replaced. The recovered order names the two halves together —
+	//    "gather range, LOS, facing and attack conditions for that committed enemy" — and they are
+	//    kept two functions because the LOS half reads only the debounce latch while the attack half
+	//    reads the weapon, and a headless case wants to drive either alone.
 	ElysiumNpcCond::GatherCommittedEnemy(Npc, Cond);
+	ElysiumNpcCond::GatherAttackConditions(Npc, Now, Cond);
 
 	Npc.Cognition.GatheredAt = Now;
 }

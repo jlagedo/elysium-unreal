@@ -22,11 +22,15 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumFeed.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcEnemy.h"
+#include "Substrate/ElysiumNpcLoadout.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 
 #include "HAL/IConsoleManager.h"
 
@@ -473,6 +477,17 @@ void FElysiumNpc::Think()
 		NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + 0.1);
 		return;
 	}
+	// --- Cycle 6: the combat loadout -------------------------------------------------------------
+	// The first ordinary think after admission, not `Spawn`: creating an item entity inside the
+	// world's range-based spawn pass would invalidate the array being iterated, which is why
+	// `FElysiumItemContainer` materialises its equip seeds from a think too.
+	if (!bLoadoutResolved)
+	{
+		bLoadoutResolved = true;
+		const ElysiumNpcLoadout::EResult Result = ElysiumNpcLoadout::Resolve(*this);
+		Mind.RecordExternal(FString::Printf(TEXT("loadout: %s"),
+			ElysiumNpcLoadout::ResultName(Result)));
+	}
 	// --- Cycle 4: condition gathering ------------------------------------------------------------
 	// Senses run before any executor picks work, which is where the recovered pass puts them, and
 	// are suppressed exactly where retail suppresses condition gathering: a scripted owner or an
@@ -650,13 +665,16 @@ EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
 	if (!Cognition.bReportedAlertRefusal)
 	{
 		Cognition.bReportedAlertRefusal = true;
-		// The recovered alert branch's damage reactions, refused BY NAME rather than approximated:
-		// `TAKE_COVER_FROM_ORIGIN` (0x19) needs the attack origin inside its facing test,
-		// `ALERT_SMALL_FLINCH` (0x07) needs a usable flinch sequence, and `ALERT_FACE` needs a
-		// facing target (`docs/vtmb/combat-and-damage.md` -> "Incapacitation, feeding, grapple, and
-		// death"). None of the three is registered here and none is inventable from what we carry.
-		RecordScheduleEvent(TEXT("alert: TAKE_COVER_FROM_ORIGIN / ALERT_SMALL_FLINCH / ALERT_FACE "
-			"not registered — holding on the lookaround"));
+		// The recovered alert branch's damage reactions, refused BY NAME rather than approximated.
+		// Two of the three programs are now registered (`TAKE_COVER_FROM_ORIGIN` 0x19 and
+		// `ALERT_SMALL_FLINCH` 0x07, both minimal and marked in
+		// `Substrate/ElysiumNpcCombatSchedules.cpp`) and `ALERT_FACE` is not — but what is missing
+		// here is the SELECTION, not the programs: the branch turns on "when the attack origin lies
+		// within its recovered facing test", and the survey names that test without stating its
+		// threshold (`docs/vtmb/combat-and-damage.md` -> "Incapacitation, feeding, grapple, and
+		// death"). Choosing between cover and a flinch on an invented angle would be a behaviour.
+		RecordScheduleEvent(TEXT("alert: the damage branch's recovered facing test has no decoded "
+			"threshold — holding on the lookaround"));
 	}
 	// CHOSEN, NOT RECOVERED: the alert state's ordinary (undamaged) selection. Retail's case 3 body
 	// is not decoded past the three damage reactions above, so the alert idle is taken to be the
@@ -668,19 +686,44 @@ EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
 
 EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
 {
-	// SEAM (warned once, per NPC): combat state is reachable and the enemy transaction that
-	// produces it is complete, but the schedules a fight is made of — the melee and ranged families
-	// behind `CNPC_VHuman::SelectSchedule`'s weapon-capability split — are not registered. Holding
-	// on the disposition stance is the honest answer: the NPC stands where it is with a committed
-	// enemy and an observable state rather than performing invented combat.
-	if (!Cognition.bWarnedCombatSchedulePending)
+	// GAP (stated, not a refusal): an NPC running the patrol or interesting-place executor never
+	// reaches this function at all — `Think` routes to the executor instead of to schedule
+	// selection, so a patrolling guard that acquires an enemy keeps walking its route. Pre-empting
+	// an autonomous executor on acquisition is an arbiter transition this cycle does not make; the
+	// combat families are what it builds, and the executor hand-over is a change to `Think`'s
+	// routing rather than to any of them.
+	const double Now = World ? World->NowSeconds() : 0.0;
+
+	// The recovered split: a weapon reporting `0x18000` enters the melee selector at `0x10385e40`,
+	// every other weapon the ranged one at `0x10386560`. An NPC the item catalogue could not arm
+	// takes the melee branch with bare-hands defaults, and its attack tasks then fail by name — the
+	// marked unarmed path, which is a visible refusal rather than an NPC that mimes a fight.
+	const ElysiumNpcCond::ECapability Capability = ElysiumNpcCond::WeaponCapability(*this);
+	const EElysiumScheduleId Chosen = Capability == ElysiumNpcCond::ECapability::Ranged
+		? ElysiumNpcCombat::SelectRangedSchedule(*this, Now)
+		: ElysiumNpcCombat::SelectMeleeSchedule(*this, Now);
+	if (Chosen != EElysiumScheduleId::None)
 	{
-		Cognition.bWarnedCombatSchedulePending = true;
-		UE_LOG(LogElysiumNpcEnt, Warning,
-			TEXT("%s combat schedule families pending — holding on disposition idle"),
-			*DebugString());
-		RecordScheduleEvent(TEXT("combat schedule families pending — holding on disposition idle"));
+		return Chosen;
 	}
+
+	// --- The composition rule -------------------------------------------------------------------
+	// "A selector returning zero falls through to `CAI_BaseNPCTroika::SelectSchedule`, so the weapon
+	// policy composes with damage, door, fear and base state reactions rather than replacing them."
+	// What follows is that base branch, in the same order the idle selector runs it.
+	if (const EElysiumScheduleId Door = SelectDoorObstructionSchedule();
+		Door != EElysiumScheduleId::None)
+	{
+		return Door;
+	}
+	// "The base idle/combat selectors may choose `SMALL_FLINCH` (0x14)."
+	if (Cognition.Conditions.Has(EElysiumNpcCond::HeavyDamage)
+		|| Cognition.Conditions.Has(EElysiumNpcCond::LightDamage))
+	{
+		return EElysiumScheduleId::SmallFlinch;
+	}
+	// SEAM (comment only): the base branch's fear reaction. The `COWER`/`FLEE` families are 24
+	// schedules whose contents the survey does not decode, and `SEE_FEAR` alone does not say which.
 	return EElysiumScheduleId::IdleDisposition;
 }
 
@@ -722,6 +765,10 @@ void FElysiumNpc::UpdateIdealState(double Now)
 	// — an idle stance under an NPC that just acquired an enemy — so it ends here rather than
 	// finishing on behalf of a state that no longer holds.
 	Schedule.Clear();
+	// The discarded program's movement claim goes with it. Releasing after `RequestState` is
+	// deliberate: the arbiter's own state refresh runs on the release, and it must see the state
+	// this pass decided rather than the one the program was chosen under.
+	ReleaseScheduleBody(TEXT("ideal state changed"));
 	(void)Now;
 }
 
@@ -734,6 +781,11 @@ void FElysiumNpc::ThinkStanceOrIdle(double Now)
 		NextThink = static_cast<float>(Now + Delay);
 		return;
 	}
+
+	// The program ended — completed, failed through to nothing, or was interrupted. Whatever
+	// movement it claimed goes back BEFORE the next selection runs: an idle program picked while
+	// this NPC still held the body would decline its own first task against itself.
+	ReleaseScheduleBody(TEXT("schedule ended"));
 
 	const EElysiumScheduleId Next = SelectSchedule();
 	if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(Schedule, Next, *this))
@@ -1104,6 +1156,15 @@ bool FElysiumNpc::FaceSavePosition()
 
 bool FElysiumNpc::StepAwayFromSavePosition(float DistanceCm)
 {
+	// A retreat is body movement, so it claims the body first. The near-door family reaches this
+	// from the idle branch and the combat family from the fight; both are schedules moving an NPC,
+	// which is exactly what the `Schedule` owner names.
+	if (Motor != nullptr && !AcquireScheduleBody(TEXT("TASK_MOVE_AWAY_PATH")))
+	{
+		Mind.RecordExternal(FString::Printf(TEXT("TASK_MOVE_AWAY_PATH refused: %s owns the body"),
+			LexToString(Mind.Owner())));
+		return false;
+	}
 	// The rule itself is `ElysiumSchedule::StepAwayFromSavePosition` — extrapolate, project
 	// through the motor, re-test the projection against the retreat rule. This leaf supplies the
 	// two positions and turns the outcome into the task's pass/fail, so a refusal reaches the
@@ -1117,7 +1178,258 @@ bool FElysiumNpc::StepAwayFromSavePosition(float DistanceCm)
 			ElysiumSchedule::RetreatResultName(Result)));
 		return false;
 	}
+	bMoveIssued = true;
 	return true;
+}
+
+// ================================================================================================
+// The combat task bodies (cycle 6)
+// ================================================================================================
+
+bool FElysiumNpc::AcquireScheduleBody(const TCHAR* Reason)
+{
+	if (ScheduleOwner.IsSet() && Mind.Owner() == EElysiumBodyOwner::Schedule
+		&& Mind.Generation() == ScheduleOwner.Generation)
+	{
+		return true;
+	}
+	// A token from a claim that was displaced (a scripted beat took the body mid-chase) is retired
+	// here rather than carried: the arbiter would refuse a release against it anyway.
+	ScheduleOwner.Reset();
+	return Mind.Acquire(EElysiumBodyOwner::Schedule, /*bSuspendCurrent=*/false, ScheduleOwner, Reason);
+}
+
+void FElysiumNpc::ReleaseScheduleBody(const TCHAR* Reason)
+{
+	if (!ScheduleOwner.IsSet())
+	{
+		return;
+	}
+	const bool bLive = Mind.Owner() == EElysiumBodyOwner::Schedule
+		&& Mind.Generation() == ScheduleOwner.Generation;
+	if (bLive)
+	{
+		// Whatever the program had the body doing stops with the claim. A schedule that ended
+		// mid-path must not leave an outstanding move running under whatever selects next.
+		if (Motor != nullptr)
+		{
+			Motor->Stop();
+		}
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+		Mind.Release(ScheduleOwner, Reason);
+	}
+	ScheduleOwner.Reset();
+}
+
+void FElysiumNpc::StopMoving()
+{
+	if (Motor != nullptr)
+	{
+		Motor->Stop();
+	}
+	bMoveIssued = false;
+	bWalkingAnimation = false;
+}
+
+bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
+{
+	const FElysiumEntity* Enemy = World
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr;
+	if (Enemy == nullptr || Enemy->IsInert())
+	{
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: no live committed enemy"));
+		return false;
+	}
+	if (Motor == nullptr)
+	{
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: this NPC has no motor"));
+		return false;
+	}
+	if (!AcquireScheduleBody(TEXT("TASK_GET_PATH_TO_ENEMY")))
+	{
+		Mind.RecordExternal(FString::Printf(
+			TEXT("TASK_GET_PATH_TO_ENEMY refused: %s owns the body"), LexToString(Mind.Owner())));
+		return false;
+	}
+	// The operand is the schedule's own tolerance, in Source units. A program that never ran
+	// `TASK_SET_TOLERANCE_DISTANCE` leaves it negative, and the motor's own arrival radius decides.
+	const float ToleranceCm = ToleranceUnits > 0.f
+		? static_cast<float>(ToleranceUnits * ElysiumMove::U)
+		: ElysiumNpcGait::ScriptAcceptanceCm;
+	// The enemy's FEET: an entity's origin is its feet in this runtime, which is what the patrol
+	// executor already hands the same verb.
+	bMoveIssued = Motor->MoveTo(Enemy->Origin, ToleranceCm, ElysiumNpcGait::RunSpeed);
+	if (!bMoveIssued)
+	{
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: the body would not take the path"));
+	}
+	return bMoveIssued;
+}
+
+void FElysiumNpc::RunPath()
+{
+	// Locomotion, not permission: a bank with no run clip still travels. The miss is recorded so a
+	// body walking a chase in its idle pose is diagnosable rather than invisible.
+	bWalkingAnimation = StartWalkingAnimation(/*bRunning=*/true);
+	if (!bWalkingAnimation)
+	{
+		Mind.RecordExternal(TEXT("TASK_RUN_PATH: no run locomotion resolved for this body"));
+	}
+}
+
+EElysiumMoveWatch FElysiumNpc::WaitForMovement()
+{
+	if (Motor == nullptr)
+	{
+		return EElysiumMoveWatch::Failed;
+	}
+	FVector Feet = Origin;
+	float Yaw = -Angles.Y;
+	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
+	// The motor is the physical authority while it holds a request, exactly as in the patrol
+	// executor: its feet/yaw are written straight into the entity rather than through
+	// SetRuntimeOrigin, which would teleport the body back.
+	Origin = Feet;
+	Angles.Y = -Yaw;
+	if (World)
+	{
+		World->NotifyVisualChanged(*this);
+	}
+	switch (Status)
+	{
+	case EElysiumNpcMoveStatus::Reached:
+		bMoveIssued = false;
+		return EElysiumMoveWatch::Arrived;
+	case EElysiumNpcMoveStatus::Failed:
+	case EElysiumNpcMoveStatus::Unavailable:
+		bMoveIssued = false;
+		Mind.RecordExternal(TEXT("TASK_WAIT_FOR_MOVEMENT: the body gave up its path"));
+		return EElysiumMoveWatch::Failed;
+	case EElysiumNpcMoveStatus::Idle:
+		// No outstanding request. The step that should have issued one already failed its own task,
+		// so arriving here means the body is standing where it was told to be.
+		return EElysiumMoveWatch::Arrived;
+	default:
+		return EElysiumMoveWatch::Moving;
+	}
+}
+
+bool FElysiumNpc::FaceEnemy()
+{
+	const FElysiumEntity* Enemy = World
+		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr;
+	if (Enemy == nullptr || Enemy->IsInert())
+	{
+		Mind.RecordExternal(TEXT("TASK_FACE_ENEMY refused: no live committed enemy"));
+		return false;
+	}
+	if (Motor == nullptr)
+	{
+		// A bodiless NPC turns by writing its own yaw. The task is about where the character is
+		// pointed, and the character exists whether or not a capsule was built for it.
+		const FVector ToEnemy = Enemy->Origin - Origin;
+		if (ToEnemy.IsNearlyZero())
+		{
+			return false;
+		}
+		Angles.Y = -static_cast<float>(
+			FMath::RadiansToDegrees(FMath::Atan2(ToEnemy.Y, ToEnemy.X)));
+		if (World)
+		{
+			World->NotifyVisualChanged(*this);
+		}
+		return true;
+	}
+	if (!AcquireScheduleBody(TEXT("TASK_FACE_ENEMY")))
+	{
+		Mind.RecordExternal(FString::Printf(TEXT("TASK_FACE_ENEMY refused: %s owns the body"),
+			LexToString(Mind.Owner())));
+		return false;
+	}
+	const FVector ToEnemy = Enemy->Origin - Origin;
+	if (ToEnemy.IsNearlyZero())
+	{
+		return false;
+	}
+	Motor->Face(static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(ToEnemy.Y, ToEnemy.X))));
+	return true;
+}
+
+bool FElysiumNpc::AnnounceAttack(float Param)
+{
+	FElysiumEntity* Enemy = World ? World->Resolve(Senses.Memory.Enemy) : nullptr;
+	if (Enemy == nullptr)
+	{
+		Mind.RecordExternal(TEXT("TASK_ANNOUNCE_ATTACK refused: no live committed enemy"));
+		return false;
+	}
+	const double Now = World->NowSeconds();
+	// The notice is an NPC-side record. A player victim has no such memory — its reaction is the
+	// player's own input — so announcing at the player is an ordinary negative, not a failure.
+	if (FElysiumNpc* Victim = Enemy->AsNpc())
+	{
+		const bool bAccepted = ElysiumNpcCond::NoticeMeleeAttack(*Victim, Handle, Origin, Now);
+		Mind.RecordExternal(FString::Printf(TEXT("TASK_ANNOUNCE_ATTACK %g -> %s %s"),
+			Param, *World->DescribeHandle(Victim->Handle),
+			bAccepted ? TEXT("accepted") : TEXT("out of notice range")));
+	}
+	return true;
+}
+
+namespace
+{
+	// The active weapon controller, or null. Shared by the two attack tasks so a missing weapon
+	// fails both the same way.
+	FElysiumWeapon* ElysiumNpcActiveWeapon(FElysiumNpc& Npc)
+	{
+		FElysiumItem* Item = Npc.Inventory.Active(Npc);
+		return Item != nullptr ? Item->AsWeapon() : nullptr;
+	}
+}
+
+bool FElysiumNpc::MeleeAttack1()
+{
+	FElysiumWeapon* Weapon = ElysiumNpcActiveWeapon(*this);
+	if (Weapon == nullptr)
+	{
+		// The marked unarmed path: an NPC the catalogue could not arm fails its terminal attack task
+		// by name rather than dealing damage out of nothing.
+		Mind.RecordExternal(TEXT("TASK_MELEE_ATTACK1 failed: no active weapon"));
+		return false;
+	}
+	// The transaction is the weapon's (`docs/vtmb/combat-and-damage.md`): the task presses, and the
+	// controller acquires its own opponent, stages the swing and schedules the commit.
+	const FElysiumWeapon::EVerdict Verdict =
+		Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary);
+	Mind.RecordExternal(FString::Printf(TEXT("TASK_MELEE_ATTACK1 -> %s"),
+		FElysiumWeapon::VerdictName(Verdict)));
+	return Verdict == FElysiumWeapon::EVerdict::Accepted;
+}
+
+bool FElysiumNpc::RangeAttack1()
+{
+	FElysiumWeapon* Weapon = ElysiumNpcActiveWeapon(*this);
+	if (Weapon == nullptr)
+	{
+		Mind.RecordExternal(TEXT("TASK_RANGE_ATTACK1 failed: no active weapon"));
+		return false;
+	}
+	// The ranged transaction takes an explicit victim rather than tracing for one: the shot's world
+	// trace and spread cone are a producer that joins with the perception cycle, and the committed
+	// enemy IS this NPC's answer to it.
+	const FElysiumWeapon::EVerdict Verdict =
+		Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary, Senses.Memory.Enemy);
+	Mind.RecordExternal(FString::Printf(TEXT("TASK_RANGE_ATTACK1 -> %s"),
+		FElysiumWeapon::VerdictName(Verdict)));
+	return Verdict == FElysiumWeapon::EVerdict::Accepted;
+}
+
+void FElysiumNpc::RememberFact(float What)
+{
+	// Traced and otherwise inert — the memory-bit table the operand indexes is not decoded
+	// (`EElysiumTask::Remember`).
+	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER %g (no consumer)"), What));
 }
 
 EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()
@@ -1700,10 +2012,14 @@ void FElysiumNpc::OnDormancyChanged()
 		}
 		EndScriptMove();
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		ReleaseScheduleBody(bDead ? TEXT("death") : TEXT("dormancy"));
+		Schedule.Clear();
+		CombatSelector.Reset();
 		Mind.Invalidate(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
 		PatrolOwner.Reset();
 		AmbientOwner.Reset();
 		SequenceOwner.Reset();
+		ScheduleOwner.Reset();
 		DialogueBodyOwner.Reset();
 		// The beat's own ReleaseNpc still runs; it must find nothing left to give back rather
 		// than releasing a token this invalidation already retired.
@@ -1828,6 +2144,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 				? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 			AmbientOwner = Owner == EElysiumBodyOwner::Ambient
 				? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+			// A restore never resumes `Schedule` ownership either: the program restarts from its
+			// first task below, and its first movement task takes the claim again.
+			ScheduleOwner.Reset();
+			CombatSelector.Reset();
 			// A restore never resumes `Sequence` ownership, so any token from before the load is
 			// retired with it. The request survives: whichever order the two entities restore in,
 			// a beat that re-stamps its queue lock has its claim taken again on the next think.
@@ -1874,6 +2194,25 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	if (Ar.Version() >= FElysiumSaveVersion::NpcSenses)
 	{
 		Senses.Serialize(Ar, *this);
+	}
+
+	// Cycle 6. The loadout latch, and only the latch: the weapon it granted is a real runtime entity
+	// the snapshot already carries with its own owner field, so re-running the resolution on a
+	// restore would hand a restored NPC a second gun. A payload that predates this restores the
+	// latch CLEAR, which is correct for it — an older payload was written by a build that granted
+	// nothing, so the loadout has genuinely not run for that NPC.
+	if (Ar.Version() >= FElysiumSaveVersion::NpcCombat)
+	{
+		uint8 LoadoutResolved = bLoadoutResolved ? 1 : 0;
+		Ar << LoadoutResolved;
+		if (Ar.IsLoading())
+		{
+			bLoadoutResolved = LoadoutResolved != 0;
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		bLoadoutResolved = false;
 	}
 
 	if (Ar.IsLoading())
@@ -1988,6 +2327,24 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		? FString::Printf(TEXT("%s (0x%x) task %d"), ElysiumScheduleName(Schedule.Current),
 			ElysiumScheduleNumber(Schedule.Current), Schedule.TaskIndex)
 		: TEXT("(none)"));
+
+	// Cycle 6 — the loadout and the combat policy it selects.
+	const FElysiumItem* Active = Inventory.Active(*this);
+	const ElysiumNpcCond::ECapability Capability = ElysiumNpcCond::WeaponCapability(*this);
+	Out.Emplace(TEXT("Weapon"), FString::Printf(TEXT("%s — capability %s (0x%x)"),
+		Active != nullptr ? *Active->ClassName() : TEXT("(none)"),
+		ElysiumNpcCond::CapabilityName(Capability),
+		ElysiumNpcCond::CapabilityBits(Capability)));
+	Out.Emplace(TEXT("Loadout"), FString::Printf(TEXT("%s authored '%s'%s%s"),
+		bLoadoutResolved ? TEXT("resolved,") : TEXT("PENDING,"),
+		AdditionalEquipment.IsEmpty() ? TEXT("(none)") : *AdditionalEquipment,
+		AlternateEquipment.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", alternate '%s' (unread)"),
+			*AlternateEquipment),
+		bCantDropWeapons ? TEXT(", cantdropweapons") : TEXT("")));
+	Out.Emplace(TEXT("Detected attack"), Mem.DetectedAttackTime < 0.0
+		? TEXT("(none)")
+		: FString::Printf(TEXT("%s at t=%.2f"), *Mem.DetectedAttackAttacker.ToString(),
+			Mem.DetectedAttackTime));
 }
 
 // ============================================================================================

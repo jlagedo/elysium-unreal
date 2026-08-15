@@ -197,8 +197,20 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		Ar << RepeatedDamageAccumulated;
 		Ar << Eluded;
 	}
+	// Version 20 appends the detected-attack record after those, in the same additive shape: a
+	// payload that predates it restores an NPC that has not been swung at, which is the default.
+	if (Ar.Version() >= FElysiumSaveVersion::NpcCombat)
+	{
+		Ar << DetectedAttackAttacker;
+		Ar << DetectedAttackTime;
+	}
 	if (Ar.IsLoading())
 	{
+		if (Ar.Version() < FElysiumSaveVersion::NpcCombat)
+		{
+			DetectedAttackAttacker = FElysiumEntityHandle::Invalid();
+			DetectedAttackTime = -1.0;
+		}
 		bEnemyEluded = Ar.Version() >= FElysiumSaveVersion::NpcCognition && Eluded != 0;
 		if (Ar.Version() < FElysiumSaveVersion::NpcCognition)
 		{
@@ -239,6 +251,13 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 	LastHeardSource = World.RebaseSavedHandle(LastHeardSource);
 	LastDamageAttacker = World.RebaseSavedHandle(LastDamageAttacker);
 	ClosestPlayer = World.RebaseSavedHandle(ClosestPlayer);
+	DetectedAttackAttacker = World.RebaseSavedHandle(DetectedAttackAttacker);
+	if (!DetectedAttackAttacker.IsSet())
+	{
+		// The record names one attacker; with no attacker there is nothing the five-second window
+		// could still be counting down for.
+		DetectedAttackTime = -1.0;
+	}
 	if (!Enemy.IsSet())
 	{
 		EnemyLosFailures = 0;

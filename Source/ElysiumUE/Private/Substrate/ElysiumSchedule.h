@@ -39,6 +39,46 @@ enum class EElysiumTask : uint8
 	FaceSavePosition,
 	// Step back from the saved position (`TASK_MOVE_AWAY_PATH` and its follow-ups).
 	MoveAwayFromSavePosition,
+
+	// --- The combat vocabulary ------------------------------------------------------------------
+	// The 12 additional task identities the registered combat families use, under their recovered
+	// names (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Schedules and tasks"). Everything else in
+	// the 441-identity library stays absent: an unknown task is a schedule this runtime cannot
+	// honestly run, and the runner fails it by name.
+
+	// Redirect this program's failure route (`TASK_SET_FAIL_SCHEDULE`, 328 invocations). Reads
+	// `FElysiumTaskStep::Target`.
+	SetFailSchedule,
+	// Cancel the outstanding movement request (`TASK_STOP_MOVING`, 275). A body that was not moving
+	// is not a failure, so this always completes.
+	StopMoving,
+	// How close to the goal counts as arrived, in SOURCE UNITS (`TASK_SET_TOLERANCE_DISTANCE`, 175).
+	// The one conversion to centimetres happens at the motor call, like every other recovered
+	// distance in this runtime.
+	SetToleranceDistance,
+	// Path to the committed enemy at the tolerance in force (`TASK_GET_PATH_TO_ENEMY`, 37).
+	GetPathToEnemy,
+	// Take the path at running locomotion (`TASK_RUN_PATH`, 133).
+	RunPath,
+	// Hold until the outstanding request arrives or fails (`TASK_WAIT_FOR_MOVEMENT`, 230).
+	WaitForMovement,
+	// Turn in place toward the committed enemy (`TASK_FACE_ENEMY`, 69).
+	FaceEnemy,
+	// The incoming-attack notice the aimed opponent receives (`TASK_ANNOUNCE_ATTACK`). No health or
+	// damage changes: it is opponent reservation (`docs/vtmb/combat-and-damage.md`).
+	AnnounceAttack,
+	// Drive the active weapon's primary attack (`TASK_MELEE_ATTACK1` / `TASK_RANGE_ATTACK1`). The
+	// weapon controller owns the transaction; the task only presses.
+	MeleeAttack1,
+	RangeAttack1,
+	// Transfer to another program (`TASK_SET_SCHEDULE`, 145). Reads `FElysiumTaskStep::Target`.
+	SetSchedule,
+	// Record a fact for later selection (`TASK_REMEMBER`, 41).
+	//
+	// SEAM (traced, no consumer): the operand names one of retail's memory bits and the bit table is
+	// not decoded, so what is remembered is carried as a number and read by nobody. The task is here
+	// because `SCHED_SMALL_FLINCH` opens with it and dropping a step would misreport the program.
+	Remember,
 };
 
 enum class EElysiumScheduleId : uint8
@@ -49,6 +89,25 @@ enum class EElysiumScheduleId : uint8
 	BackAwayFromDoorNe,       // 0x91 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE
 	BackAwayFromDoorWaitNe,   // 0x96 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE
 	TakeCoverHintDoor,        // 0x9c SCHED_TROIKA_TAKE_COVER_HINT_DOOR
+
+	// --- The combat families (`Substrate/ElysiumNpcCombatSchedules.cpp` registers every one) -----
+	MeleeAttack1,             // 0xdc SCHED_TROIKA_MELEE_ATTACK1
+	MeleeAttack1Nr,           // 0xdd SCHED_TROIKA_MELEE_ATTACK1_NR
+	MeleeAttack1Swing,        //      SCHED_TROIKA_MELEE_ATTACK1_SWING (number not decoded)
+	MeleeDodge,               // 0xd5 SCHED_TROIKA_MELEE_DODGE
+	MeleePreblock,            // 0xd6 SCHED_TROIKA_MELEE_PREBLOCK
+	MeleeKick,                // 0xdb SCHED_TROIKA_MELEE_KICK
+	MeleeStepback,            // 0xd3 SCHED_TROIKA_MELEE_STEPBACK
+	MeleeIdle,                // 0xc7 SCHED_TROIKA_MELEE_IDLE
+	MeleeAdvance,             // 0xca SCHED_TROIKA_MELEE_ADVANCE
+	MeleeCircle,              // 0xe0 SCHED_TROIKA_MELEE_CIRCLE
+	ChaseEnemy,               // 0xb1 SCHED_TROIKA_CHASE_ENEMY
+	ChaseEnemyFailed,         //      SCHED_TROIKA_CHASE_ENEMY_FAILED (number not decoded)
+	RangeAttack1,             // 0xec SCHED_TROIKA_RANGE_ATTACK1
+	RunAway,                  // 0xb9 SCHED_TROIKA_RUN_AWAY
+	SmallFlinch,              // 0x14 SCHED_SMALL_FLINCH
+	AlertSmallFlinch,         // 0x07 SCHED_ALERT_SMALL_FLINCH
+	TakeCoverFromOrigin,      // 0x19 SCHED_TAKE_COVER_FROM_ORIGIN
 };
 
 // Retail's registered number for a schedule, so a trace row and the binary agree.
@@ -63,6 +122,10 @@ struct FElysiumTaskStep
 	float Param = 0.f;
 	// The activity name for `SetActivity`; empty for every other task.
 	FString Activity;
+	// The program `SetFailSchedule` / `SetSchedule` names. Retail spells a schedule operand as a
+	// registered number in the same float column; it is kept as the identity here so a program reads
+	// as the schedule it transfers to rather than as a magic constant.
+	EElysiumScheduleId Target = EElysiumScheduleId::None;
 };
 
 struct FElysiumSchedule
@@ -82,9 +145,10 @@ struct FElysiumSchedule
 	 * tick". The schedule — not the mere existence of a condition — decides whether a new stimulus
 	 * pre-empts behaviour, which is why a faithful AI cannot be one global priority list.
 	 *
-	 * A mask is filled in only where the recovered material states one. Nothing in the survey names
-	 * the masks of the two idle programs or the door-obstruction family, so those stay empty with
-	 * the note beside them at the registry.
+	 * A mask is filled in from a decoded registration site wherever there is one, and is otherwise
+	 * either left empty or filled from the interrupt census with a CHOSEN mark beside the program —
+	 * the distinction between those two, and why the idle pair could not stay empty, is stated at
+	 * the registry and at `MinimalCombatMask` in `Substrate/ElysiumNpcCombatSchedules.cpp`.
 	 *
 	 * An interrupt is NOT a task failure: a failed task goes to `FailSchedule`, while an interrupt
 	 * ends the program and returns the NPC to selection ("until it completes, fails, or an interrupt
@@ -106,6 +170,22 @@ struct FElysiumSchedule
 // The registry. Schedules are data, so they are stated once here rather than built per NPC
 // (`gameplay-systems-architecture.md` K9).
 const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id);
+
+namespace ElysiumSchedule
+{
+	/**
+	 * The registry's one growth point.
+	 *
+	 * A domain file states its own programs and installs them here at static init — the combat
+	 * families live in `Substrate/ElysiumNpcCombatSchedules.cpp` beside the selectors that choose
+	 * them, because a program and the policy that picks it are one decision. This kernel carries the
+	 * task vocabulary and the two idle/door programs it was written around, and nothing else.
+	 *
+	 * Registering an id twice replaces the earlier program and says so: a duplicate is a build
+	 * mistake, not a merge.
+	 */
+	void Register(FElysiumSchedule&& Program);
+}
 
 #if WITH_DEV_AUTOMATION_TESTS
 namespace ElysiumSchedule
@@ -141,6 +221,16 @@ enum class EElysiumTaskResult : uint8
 	Failed,      // end the schedule through its fail schedule
 };
 
+// What `TASK_WAIT_FOR_MOVEMENT` sees when it samples the outstanding request. Three answers rather
+// than a bool, because "still travelling" and "the body gave up" take different routes out of the
+// schedule: one holds the task, the other fails it into the fail schedule.
+enum class EElysiumMoveWatch : uint8
+{
+	Moving,
+	Arrived,
+	Failed,
+};
+
 // What a task body needs from whoever owns the body. Implemented by the NPC; the recording double
 // in the tests implements it too, which is what makes a whole task program assertable with no
 // engine.
@@ -164,6 +254,32 @@ public:
 	virtual float RandomSeconds(float Max) = 0;
 	// One trace row, so a decision is readable without a rebuild.
 	virtual void RecordScheduleEvent(const FString& Row) {}
+
+	// --- The combat verbs -----------------------------------------------------------------------
+	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs
+	// default to refusing, which fails their task by name; `StopMoving` and `RememberFact` cannot
+	// fail, because neither asserts anything about the world.
+
+	virtual void StopMoving() {}
+	// Issue the path to the committed enemy. `ToleranceUnits` is the schedule's own operand, in
+	// Source units. False means no enemy, no body, or a body that would not take the request — all
+	// three fail the task, and the runner names which.
+	virtual bool GetPathToEnemy(float ToleranceUnits) { return false; }
+	// Put running locomotion on the body. It cannot fail the schedule: a model whose bank carries no
+	// run clip still travels, and refusing the chase over a missing animation would be a
+	// presentation defect deciding a behaviour. The runner records the miss.
+	virtual void RunPath() {}
+	virtual EElysiumMoveWatch WaitForMovement() { return EElysiumMoveWatch::Failed; }
+	virtual bool FaceEnemy() { return false; }
+	// `TASK_ANNOUNCE_ATTACK` — the incoming-attack notice the aimed enemy receives. False only when
+	// there is no enemy to announce to.
+	virtual bool AnnounceAttack(float Param) { return false; }
+	// Press the active weapon's primary attack at the committed enemy. False for a missing or
+	// ineligible weapon, which is what fails the swing into its melee-idle fail schedule.
+	virtual bool MeleeAttack1() { return false; }
+	virtual bool RangeAttack1() { return false; }
+	// `TASK_REMEMBER`, traced and otherwise inert (see `EElysiumTask::Remember`).
+	virtual void RememberFact(float What) {}
 };
 
 // The per-NPC runner state. Saved as part of the NPC, so a schedule survives a save.
@@ -175,6 +291,14 @@ struct FElysiumScheduleState
 	double TaskEndsAt = 0.0;
 	bool bTaskStarted = false;
 
+	// What `TASK_SET_FAIL_SCHEDULE` and `TASK_SET_TOLERANCE_DISTANCE` wrote for THIS run of the
+	// program. Both are per-run rather than per-program: the same schedule reached from two
+	// selectors carries whatever its own tasks set, and `Start` resets them so a previous program's
+	// tolerance can never leak into the next one's path request.
+	EElysiumScheduleId FailScheduleOverride = EElysiumScheduleId::None;
+	// Source units, and negative means "the task never ran, so the motor's own acceptance decides".
+	float ToleranceUnits = -1.f;
+
 	bool IsRunning() const { return Current != EElysiumScheduleId::None; }
 	void Clear()
 	{
@@ -182,6 +306,8 @@ struct FElysiumScheduleState
 		TaskIndex = 0;
 		TaskEndsAt = 0.0;
 		bTaskStarted = false;
+		FailScheduleOverride = EElysiumScheduleId::None;
+		ToleranceUnits = -1.f;
 	}
 };
 

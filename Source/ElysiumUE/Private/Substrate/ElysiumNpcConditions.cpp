@@ -2,10 +2,14 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"                  // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumItemClasses.h"      // FElysiumItem — the active weapon's record
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
+#include "Substrate/ElysiumRulebook.h"         // FElysiumItemDef / FElysiumWeaponMode
+#include "Substrate/ElysiumWeaponClasses.h"    // FElysiumWeapon — the reach, cone and deadlines
 
 namespace
 {
@@ -312,6 +316,246 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 	// obstruction selector's step 2 and the melee selector's take-cover branch both gate on it, and
 	// both currently decline for exactly this reason. Never set a plausible default here: an
 	// unreachable enemy the NPC can in fact reach re-routes the whole combat branch.
+}
+
+// ================================================================================================
+// Weapon capability
+// ================================================================================================
+
+const TCHAR* ElysiumNpcCond::CapabilityName(ECapability Capability)
+{
+	switch (Capability)
+	{
+	case ECapability::Melee:  return TEXT("melee");
+	case ECapability::Ranged: return TEXT("ranged");
+	default:                  return TEXT("unarmed");
+	}
+}
+
+int32 ElysiumNpcCond::CapabilityBits(ECapability Capability)
+{
+	switch (Capability)
+	{
+	case ECapability::Melee:  return MeleeCapabilityBits;
+	case ECapability::Ranged: return RangedCapabilityBits;
+	default:                  return 0;
+	}
+}
+
+namespace
+{
+	// The active weapon controller, or null. One resolution, shared by the capability answer and
+	// every attack condition derived from it.
+	FElysiumWeapon* NpcCondActiveWeapon(const FElysiumNpc& Npc)
+	{
+		// `Active` is a const read that answers a mutable item, which is what the controller is.
+		FElysiumItem* Item = Npc.Inventory.Active(Npc);
+		return Item != nullptr ? Item->AsWeapon() : nullptr;
+	}
+}
+
+ElysiumNpcCond::ECapability ElysiumNpcCond::WeaponCapability(const FElysiumNpc& Npc)
+{
+	const FElysiumWeapon* Weapon = NpcCondActiveWeapon(Npc);
+	const FElysiumItemDef* Record = Weapon != nullptr ? Weapon->Data() : nullptr;
+	if (Record == nullptr || !Record->IsControllableWeapon())
+	{
+		// No weapon at all, or an active item whose record is not one of the three wielded families.
+		// Retail's fists are a real `weapon_melee` record, so this is the state of an NPC the item
+		// catalogue could not arm — a headless world, or a `vdata` set with no `item_w_fists`.
+		return ECapability::Unarmed;
+	}
+	return Record->Type == EElysiumItemType::WeaponMelee ? ECapability::Melee : ECapability::Ranged;
+}
+
+// ================================================================================================
+// Attack conditions
+// ================================================================================================
+
+namespace
+{
+	// The attack cone, as a dot product against the NPC's facing. This is the SWING's cone
+	// (`FindEntityFOV`'s 30-degree half-angle), deliberately not the observer's much wider
+	// perception cone — an NPC can see an enemy it is in no position to hit.
+	//
+	// The entity's `Angles.Y` is the NEGATED Unreal yaw the motor is driven with, the same frame
+	// `FElysiumNpcSenses::IsInViewCone` reads it in.
+	bool NpcCondFacesTarget(const FElysiumNpc& Npc, const FVector& TargetCm)
+	{
+		FVector To = TargetCm - Npc.Origin;
+		To.Z = 0.0;
+		if (To.IsNearlyZero())
+		{
+			// Standing on the target: there is no direction to be facing, and every cone contains it.
+			return true;
+		}
+		To.Normalize();
+		const double YawRadians = FMath::DegreesToRadians(-Npc.Angles.Y);
+		const FVector Forward(FMath::Cos(YawRadians), FMath::Sin(YawRadians), 0.0);
+		const double ConeDot =
+			FMath::Cos(FMath::DegreesToRadians(
+				static_cast<double>(ElysiumWeapons::MeleeConeHalfAngleDegrees)));
+		return FVector::DotProduct(Forward, To) >= ConeDot;
+	}
+
+	// Does the mode this press would use still have a round to spend, counting the reserve?
+	// `NO_PRIMARY_AMMO` is EMPTY MAGAZINE AND EMPTY RESERVE: a magazine that can be refilled is a
+	// reload, not an ammunition failure, and the two select different schedules.
+	bool NpcCondOutOfAmmo(const FElysiumNpc& Npc, const FElysiumWeapon& Weapon,
+		const FElysiumWeaponMode& Mode)
+	{
+		if (Mode.AmmoCost <= 0)
+		{
+			return false;   // a mode that spends nothing can never be out
+		}
+		if (Weapon.MagazineCount >= Mode.AmmoCost)
+		{
+			return false;
+		}
+		const FElysiumItemDef* Record = Weapon.Data();
+		const FString& AmmoType = Record != nullptr ? Record->AmmoType : Mode.AmmoType;
+		return Npc.Inventory.Reserve(AmmoType) < Mode.AmmoCost;
+	}
+}
+
+void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
+	FElysiumNpcConditions& Out)
+{
+	const FElysiumEntityWorld* World = Npc.World;
+	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+	if (World == nullptr || !Memory.Enemy.IsSet())
+	{
+		return;
+	}
+	const FElysiumEntity* Enemy = ResolveEnemyHandle(*World, Memory.Enemy);
+	if (Enemy == nullptr || Enemy->IsInert())
+	{
+		// `ENEMY_DEAD` / `LOST_ENEMY` already describe this; range against a corpse is not a fact.
+		return;
+	}
+
+	// SEAM (plumbed, never set): `SHOULD_DODGE` (0x0c), `SHOULD_BLOCK` (0x0d), `SHOULD_STEPBACK`
+	// (0x0e) and `SHOULD_KICK` (0x0f). The NOTICE that would feed them is real and lands below
+	// (`NoticeMeleeAttack` writes the attacker into memory with the recovered five-second life), but
+	// the policy turning a noticed incoming attack into ONE of these four is not decoded — nothing in
+	// the survey names the ratings, timers or randomisation that choose between dodging, blocking,
+	// kicking and stepping back. Raising any of them from the notice alone would make every NPC
+	// dodge, which is a behaviour, not a gap. The melee selector's four branches exist and are
+	// driven by injection in `Elysium.Substrate.NpcCombat.MeleeSelectorOrder`.
+
+	const FElysiumWeapon* Weapon = NpcCondActiveWeapon(Npc);
+	const FElysiumWeaponMode* Mode = Weapon != nullptr
+		? Weapon->ModeFor(FElysiumWeapon::EIntent::Primary) : nullptr;
+
+	// `WAITING_ATTACK_TIME` (0x2f) — the recovery deadline the weapon controller owns. An unarmed
+	// NPC has no deadline to wait on, which is the honest answer rather than a permanent hold.
+	const bool bReady = Weapon == nullptr || Now >= Weapon->NextPrimaryAttackTime;
+	if (!bReady)
+	{
+		Out.Set(EElysiumNpcCond::WaitingAttackTime);
+	}
+
+	const double DistanceCm = FVector::Dist(Npc.EyePosition(), Enemy->EyePosition());
+	const double MeleeReachCm =
+		static_cast<double>(ElysiumWeapons::MeleeReachSourceUnits) * ElysiumMove::U;
+	const bool bFacing = NpcCondFacesTarget(Npc, Enemy->Origin);
+
+	const ECapability Capability = WeaponCapability(Npc);
+	if (Capability != ECapability::Ranged)
+	{
+		// --- The melee band -----------------------------------------------------------------------
+		if (DistanceCm > MeleeReachCm)
+		{
+			// CHOSEN, NOT RECOVERED: melee's own `TOO_FAR_TO_ATTACK` edge is the swing's reach. No
+			// decoded body states a separate melee band, and any other number would let the selector
+			// choose an attack the weapon's acquisition then refuses (or hold an NPC out of a swing
+			// it could land). Replace the constant, not the shape.
+			Out.Set(EElysiumNpcCond::TooFarToAttack);
+		}
+		else if (bFacing && bReady)
+		{
+			Out.Set(EElysiumNpcCond::CanMeleeAttack1);
+		}
+		return;
+	}
+
+	// --- The ranged bands -------------------------------------------------------------------------
+	if (Weapon != nullptr && Mode != nullptr && NpcCondOutOfAmmo(Npc, *Weapon, *Mode))
+	{
+		Out.Set(EElysiumNpcCond::NoPrimaryAmmo);
+	}
+
+	// The far edge is the mode's own authored `Range`. A mode that authors none cannot answer, so
+	// the NPC is never too far for it — inventing a default range would silently make every
+	// unranged mode a chase trigger.
+	const double RangeCm = Mode != nullptr
+		? static_cast<double>(Mode->Range) * ElysiumMove::U : 0.0;
+	if (RangeCm > 0.0 && DistanceCm > RangeCm)
+	{
+		Out.Set(EElysiumNpcCond::TooFarToAttack);
+	}
+	// CHOSEN, NOT RECOVERED: the NEAR edge. `TOO_CLOSE_TO_ATTACK` (0x5f) is a decoded condition with
+	// no decoded threshold — the ranged selector tests it and no recovered body says what makes a
+	// shot too close. The melee reach is taken as that edge, because an enemy already inside this
+	// NPC's own swing distance is the case the condition's consumers (back off, run away) describe.
+	const bool bTooClose = DistanceCm < MeleeReachCm;
+	if (bTooClose)
+	{
+		Out.Set(EElysiumNpcCond::TooCloseToAttack);
+	}
+
+	// The line-of-FIRE occlusion arm, taken from the eye's own debounce latch — the same term
+	// `GatherCommittedEnemy` reports as `ENEMY_OCCLUDED`. CHOSEN, NOT RECOVERED: retail traces from
+	// the weapon, and this runtime has one visibility query and one latch, so the two conditions
+	// agree here where retail's could disagree. What is NOT done is the converse — see the
+	// `WEAPON_THROUGH_WALL` seam in this function's declaration.
+	if (Memory.bEnemyOccluded)
+	{
+		Out.Set(EElysiumNpcCond::WeaponSightOccluded);
+	}
+
+	const bool bHasAmmo = Weapon != nullptr && Mode != nullptr
+		&& (Mode->AmmoCost <= 0 || Weapon->MagazineCount >= Mode->AmmoCost);
+	if (bReady && bHasAmmo && !bTooClose && !Memory.bEnemyOccluded
+		&& !Out.Has(EElysiumNpcCond::TooFarToAttack))
+	{
+		Out.Set(EElysiumNpcCond::CanRangeAttack1);
+	}
+}
+
+// ================================================================================================
+// The incoming-attack notice
+// ================================================================================================
+
+bool ElysiumNpcCond::NoticeMeleeAttack(FElysiumNpc& Victim, const FElysiumEntityHandle& Attacker,
+	const FVector& AttackerOrigin, double Now)
+{
+	if (!Attacker.IsSet() || Attacker == Victim.Handle || Victim.IsInert())
+	{
+		return false;
+	}
+	FElysiumNpcMemory& Memory = Victim.Senses.Memory;
+	const double AcceptanceCm =
+		static_cast<double>(MeleeNoticeAcceptanceUnits) * ElysiumMove::U;
+	const bool bNear = FVector::Dist(Victim.Origin, AttackerOrigin) <= AcceptanceCm;
+	// The visibility route, at cycle 4's single-observer scope: the only actor this NPC tracks sight
+	// of is the player.
+	const bool bVisible = Memory.bPlayerLos && Memory.ClosestPlayer.IsSet()
+		&& Memory.ClosestPlayer == Attacker;
+	if (!bNear && !bVisible)
+	{
+		return false;
+	}
+	Memory.DetectedAttackAttacker = Attacker;
+	Memory.DetectedAttackTime = Now;
+	return true;
+}
+
+bool ElysiumNpcCond::HasDetectedAttack(const FElysiumNpc& Npc, double Now)
+{
+	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+	return Memory.DetectedAttackAttacker.IsSet() && Memory.DetectedAttackTime >= 0.0
+		&& (Now - Memory.DetectedAttackTime) <= DetectedAttackRetentionSeconds;
 }
 
 // ================================================================================================

@@ -84,13 +84,21 @@ bool FElysiumNpcMind::IsAcquisitionAllowed(EElysiumBodyOwner Requested) const
 	case EElysiumBodyOwner::Patrol:
 	case EElysiumBodyOwner::Ambient:
 		return CurrentOwner == EElysiumBodyOwner::None;
+	// The combat schedule families' movement claim. It takes an unowned body only: patrol and the
+	// interesting-place visit are this NPC's own executors and `FElysiumNpc::Think` routes to them
+	// instead of to schedule selection, so a schedule that displaced one would be competing with the
+	// routing rather than with another owner.
+	case EElysiumBodyOwner::Schedule:
+		return CurrentOwner == EElysiumBodyOwner::None;
 	case EElysiumBodyOwner::Sequence:
 		return CurrentOwner == EElysiumBodyOwner::None
 			|| CurrentOwner == EElysiumBodyOwner::Patrol
-			|| CurrentOwner == EElysiumBodyOwner::Ambient;
+			|| CurrentOwner == EElysiumBodyOwner::Ambient
+			|| CurrentOwner == EElysiumBodyOwner::Schedule;
 	case EElysiumBodyOwner::Dialogue:
 		return CurrentOwner == EElysiumBodyOwner::None
-			|| CurrentOwner == EElysiumBodyOwner::Patrol;
+			|| CurrentOwner == EElysiumBodyOwner::Patrol
+			|| CurrentOwner == EElysiumBodyOwner::Schedule;
 	default:
 		return false;
 	}

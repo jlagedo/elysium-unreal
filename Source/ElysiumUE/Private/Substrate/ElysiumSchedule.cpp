@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumSchedule.h"
 
-#include "ElysiumWorldServices.h"   // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
+#include "ElysiumWorldServices.h"          // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
+#include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
 
 namespace
 {
@@ -22,6 +23,28 @@ namespace
 			TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE") };
 		static const FScheduleMeta TakeCover{ 0x9c, TEXT("SCHED_TROIKA_TAKE_COVER_HINT_DOOR") };
 
+		// The combat families. Two of them carry number 0: the survey names
+		// `SCHED_TROIKA_MELEE_ATTACK1_SWING` and `CHASE_ENEMY_FAILED` and decodes their contents and
+		// their callers, but not their registration sites — so the NAME is the identity for those
+		// two and a trace row says `(0x0)`. Replace the number, not the row, when one is decoded.
+		static const FScheduleMeta MeleeAttack1{ 0xdc, TEXT("SCHED_TROIKA_MELEE_ATTACK1") };
+		static const FScheduleMeta MeleeAttack1Nr{ 0xdd, TEXT("SCHED_TROIKA_MELEE_ATTACK1_NR") };
+		static const FScheduleMeta MeleeSwing{ 0, TEXT("SCHED_TROIKA_MELEE_ATTACK1_SWING") };
+		static const FScheduleMeta MeleeDodge{ 0xd5, TEXT("SCHED_TROIKA_MELEE_DODGE") };
+		static const FScheduleMeta MeleePreblock{ 0xd6, TEXT("SCHED_TROIKA_MELEE_PREBLOCK") };
+		static const FScheduleMeta MeleeKick{ 0xdb, TEXT("SCHED_TROIKA_MELEE_KICK") };
+		static const FScheduleMeta MeleeStepback{ 0xd3, TEXT("SCHED_TROIKA_MELEE_STEPBACK") };
+		static const FScheduleMeta MeleeIdle{ 0xc7, TEXT("SCHED_TROIKA_MELEE_IDLE") };
+		static const FScheduleMeta MeleeAdvance{ 0xca, TEXT("SCHED_TROIKA_MELEE_ADVANCE") };
+		static const FScheduleMeta MeleeCircle{ 0xe0, TEXT("SCHED_TROIKA_MELEE_CIRCLE") };
+		static const FScheduleMeta Chase{ 0xb1, TEXT("SCHED_TROIKA_CHASE_ENEMY") };
+		static const FScheduleMeta ChaseFailed{ 0, TEXT("SCHED_TROIKA_CHASE_ENEMY_FAILED") };
+		static const FScheduleMeta RangeAttack1{ 0xec, TEXT("SCHED_TROIKA_RANGE_ATTACK1") };
+		static const FScheduleMeta RunAway{ 0xb9, TEXT("SCHED_TROIKA_RUN_AWAY") };
+		static const FScheduleMeta SmallFlinch{ 0x14, TEXT("SCHED_SMALL_FLINCH") };
+		static const FScheduleMeta AlertSmallFlinch{ 0x07, TEXT("SCHED_ALERT_SMALL_FLINCH") };
+		static const FScheduleMeta TakeCoverOrigin{ 0x19, TEXT("SCHED_TAKE_COVER_FROM_ORIGIN") };
+
 		switch (Id)
 		{
 		case EElysiumScheduleId::IdleDisposition:        return IdleDisposition;
@@ -29,6 +52,23 @@ namespace
 		case EElysiumScheduleId::BackAwayFromDoorNe:     return BackAway;
 		case EElysiumScheduleId::BackAwayFromDoorWaitNe: return BackAwayWait;
 		case EElysiumScheduleId::TakeCoverHintDoor:      return TakeCover;
+		case EElysiumScheduleId::MeleeAttack1:           return MeleeAttack1;
+		case EElysiumScheduleId::MeleeAttack1Nr:         return MeleeAttack1Nr;
+		case EElysiumScheduleId::MeleeAttack1Swing:      return MeleeSwing;
+		case EElysiumScheduleId::MeleeDodge:             return MeleeDodge;
+		case EElysiumScheduleId::MeleePreblock:          return MeleePreblock;
+		case EElysiumScheduleId::MeleeKick:              return MeleeKick;
+		case EElysiumScheduleId::MeleeStepback:          return MeleeStepback;
+		case EElysiumScheduleId::MeleeIdle:              return MeleeIdle;
+		case EElysiumScheduleId::MeleeAdvance:           return MeleeAdvance;
+		case EElysiumScheduleId::MeleeCircle:            return MeleeCircle;
+		case EElysiumScheduleId::ChaseEnemy:             return Chase;
+		case EElysiumScheduleId::ChaseEnemyFailed:       return ChaseFailed;
+		case EElysiumScheduleId::RangeAttack1:           return RangeAttack1;
+		case EElysiumScheduleId::RunAway:                return RunAway;
+		case EElysiumScheduleId::SmallFlinch:            return SmallFlinch;
+		case EElysiumScheduleId::AlertSmallFlinch:       return AlertSmallFlinch;
+		case EElysiumScheduleId::TakeCoverFromOrigin:    return TakeCoverOrigin;
 		default:                                        return None;
 		}
 	}
@@ -68,6 +108,18 @@ const TCHAR* ElysiumTaskName(EElysiumTask Task)
 	case EElysiumTask::WaitRandom:               return TEXT("TASK_WAIT_RANDOM");
 	case EElysiumTask::FaceSavePosition:         return TEXT("TASK_FACE_SAVEPOSITION");
 	case EElysiumTask::MoveAwayFromSavePosition: return TEXT("TASK_MOVE_AWAY_PATH");
+	case EElysiumTask::SetFailSchedule:          return TEXT("TASK_SET_FAIL_SCHEDULE");
+	case EElysiumTask::StopMoving:               return TEXT("TASK_STOP_MOVING");
+	case EElysiumTask::SetToleranceDistance:     return TEXT("TASK_SET_TOLERANCE_DISTANCE");
+	case EElysiumTask::GetPathToEnemy:           return TEXT("TASK_GET_PATH_TO_ENEMY");
+	case EElysiumTask::RunPath:                  return TEXT("TASK_RUN_PATH");
+	case EElysiumTask::WaitForMovement:          return TEXT("TASK_WAIT_FOR_MOVEMENT");
+	case EElysiumTask::FaceEnemy:                return TEXT("TASK_FACE_ENEMY");
+	case EElysiumTask::AnnounceAttack:           return TEXT("TASK_ANNOUNCE_ATTACK");
+	case EElysiumTask::MeleeAttack1:             return TEXT("TASK_MELEE_ATTACK1");
+	case EElysiumTask::RangeAttack1:             return TEXT("TASK_RANGE_ATTACK1");
+	case EElysiumTask::SetSchedule:              return TEXT("TASK_SET_SCHEDULE");
+	case EElysiumTask::Remember:                 return TEXT("TASK_REMEMBER");
 	}
 	return TEXT("TASK_?");
 }
@@ -104,15 +156,33 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 		// passes and the stance machine ignores -- it selects from the disposition table, not from
 		// an activity -- so it is carried for fidelity rather than read.
 		//
-		// Every `Interrupts` mask below is left EMPTY on purpose. The interrupt-condition census
-		// counts masks across the whole 691-schedule corpus but names none of these five programs'
-		// own masks, and an invented mask is a behavioural change wearing a compiled schedule's
-		// name. Empty is also a real recovered posture (`FElysiumSchedule::Interrupts`), so the
-		// wrong answer here is silent rather than loud: fill one in only from a decoded
-		// registration site.
+		// The three door-obstruction masks below are left EMPTY on purpose. The interrupt-condition
+		// census counts masks across the whole 691-schedule corpus but names none of those three
+		// programs' own masks, and an invented mask is a behavioural change wearing a compiled
+		// schedule's name. Empty is also a real recovered posture
+		// (`FElysiumSchedule::Interrupts`), so the wrong answer there is silent rather than loud:
+		// fill one in only from a decoded registration site.
+		//
+		// CHOSEN, NOT RECOVERED -- the two idle programs' masks, and only those two. Retail's own
+		// registration sites for `0x6b` and `0x4f` are not decoded either, but an empty mask on
+		// them is not a neutral default: it is the mask under which the enemy transaction's
+		// starvation gate refuses every acquisition, so a standing NPC could not enter combat until
+		// its idle happened to finish. The census is the evidence for the shape of the answer --
+		// `NEW_ENEMY` is declared by 332 of the 691 schedules, `HEAVY_DAMAGE` by 279,
+		// `LIGHT_DAMAGE` by 224, `ENEMY_DEAD` by 182 and `HEAR_DANGER`/`HEAR_COMBAT` by 54/29 --
+		// so the four commonest stimuli plus the hear family are what an ordinary idle admits.
+		// Nothing narrower would let live acquisition happen at all, and nothing wider is
+		// defensible from a census. Replace this with the decoded mask, not with an empty one.
+		const FElysiumNpcConditions IdleInterrupts = FElysiumNpcConditions::Of({
+			EElysiumNpcCond::NewEnemy, EElysiumNpcCond::EnemyDead,
+			EElysiumNpcCond::LightDamage, EElysiumNpcCond::HeavyDamage,
+			EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearDanger,
+			EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearWorld });
+
 		FElysiumSchedule& Idle = Out.AddDefaulted_GetRef();
 		Idle.Id = EElysiumScheduleId::IdleDisposition;
 		Idle.Tasks = { Step(EElysiumTask::SpecialIdleActivity, 5.f), Step(EElysiumTask::WaitPvs) };
+		Idle.Interrupts = IdleInterrupts;
 
 		// `SET_ACTIVITY ACT_ALERT_FIDGET_LOOKAROUND; WAIT 3; WAIT_RANDOM 3; SET_ACTIVITY ACT_IDLE;
 		//  WAIT_RANDOM 2`.
@@ -125,6 +195,7 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 			ActivityStep(TEXT("ACT_IDLE")),
 			Step(EElysiumTask::WaitRandom, 2.f),
 		};
+		Alert.Interrupts = IdleInterrupts;
 
 		// The near-door reaction: face what blocked you, then step back repeatedly. `_NE` is the
 		// no-enemy variant; its two enemy-carrying siblings (0x90 / 0x94) are not registered, and
@@ -166,6 +237,29 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 	return Registry;
 }
 }   // namespace
+
+void ElysiumSchedule::Register(FElysiumSchedule&& Program)
+{
+	if (!Program.IsValid())
+	{
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("Elysium: refused a schedule registration with no id or no tasks"));
+		return;
+	}
+	TArray<FElysiumSchedule>& Registry = ElysiumScheduleRegistryStorage();
+	for (FElysiumSchedule& Existing : Registry)
+	{
+		if (Existing.Id == Program.Id)
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("Elysium: schedule %s (0x%x) was registered twice; the later program wins"),
+				ElysiumScheduleName(Program.Id), ElysiumScheduleNumber(Program.Id));
+			Existing = MoveTemp(Program);
+			return;
+		}
+	}
+	Registry.Add(MoveTemp(Program));
+}
 
 #if WITH_DEV_AUTOMATION_TESTS
 ElysiumSchedule::FInterruptMaskScope::FInterruptMaskScope(EElysiumScheduleId Id,
@@ -253,17 +347,82 @@ namespace
 		case EElysiumTask::MoveAwayFromSavePosition:
 			return Runner.StepAwayFromSavePosition(Step.Param)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		// --- The combat vocabulary --------------------------------------------------------------
+		case EElysiumTask::SetFailSchedule:
+			// Bookkeeping, not work: it redirects this run's failure route and completes.
+			State.FailScheduleOverride = Step.Target;
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::SetToleranceDistance:
+			State.ToleranceUnits = Step.Param;
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::StopMoving:
+			Runner.StopMoving();
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::Remember:
+			Runner.RememberFact(Step.Param);
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::GetPathToEnemy:
+			return Runner.GetPathToEnemy(State.ToleranceUnits)
+				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTask::RunPath:
+			Runner.RunPath();
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::WaitForMovement:
+		{
+			// Sampled on the first ask too: a body already standing on its goal must not cost the
+			// schedule a whole think before the attack task that follows it can run.
+			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
+			return Watch == EElysiumMoveWatch::Arrived ? EElysiumTaskResult::Complete
+				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
+					: EElysiumTaskResult::Running);
+		}
+		case EElysiumTask::FaceEnemy:
+			// A turn-in-place completes the task rather than holding it. Retail's own melee approach
+			// puts `TASK_STOP_MOVING` after the face and transfers straight to the swing, so the
+			// program does not wait on alignment -- and the swing's own opponent acquisition is what
+			// decides whether the NPC was pointed at anything.
+			return Runner.FaceEnemy() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTask::AnnounceAttack:
+			return Runner.AnnounceAttack(Step.Param)
+				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTask::MeleeAttack1:
+			return Runner.MeleeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTask::RangeAttack1:
+			return Runner.RangeAttack1() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTask::SetSchedule:
+			// Handled by the caller: a transfer replaces the running program, which is a change to
+			// the state this function only advances.
+			return EElysiumTaskResult::Complete;
 		}
 		return EElysiumTaskResult::Failed;
 	}
 
-	// Re-ask a task that reported Running. Only the timed tasks and the PVS hold get here.
+	// Re-ask a task that reported Running. Only the timed tasks, the PVS hold and the movement watch
+	// get here.
 	EElysiumTaskResult ContinueTask(const FElysiumTaskStep& Step, FElysiumScheduleState& State,
 		IElysiumScheduleRunner& Runner, double Now)
 	{
 		if (Step.Task == EElysiumTask::WaitPvs)
 		{
 			return Runner.IsBodyVisible() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+		}
+		if (Step.Task == EElysiumTask::WaitForMovement)
+		{
+			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
+			return Watch == EElysiumMoveWatch::Arrived ? EElysiumTaskResult::Complete
+				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
+					: EElysiumTaskResult::Running);
 		}
 		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 	}
@@ -276,6 +435,13 @@ namespace
 			// Visibility is not on a clock, so it is polled -- slowly, because an NPC nobody can
 			// see is exactly the one whose think budget this task exists to protect.
 			return 0.5;
+		}
+		if (Step.Task == EElysiumTask::WaitForMovement)
+		{
+			// A travelling body is sampled on the patrol executor's own cadence: the entity's origin
+			// is written from the motor at every sample, so a slower poll would leave the logical
+			// position visibly behind the body it is chasing an enemy with.
+			return 0.05;
 		}
 		return FMath::Max(0.05, State.TaskEndsAt - Now);
 	}
@@ -361,6 +527,20 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		}
 		if (Result == EElysiumTaskResult::Complete)
 		{
+			if (Step.Task == EElysiumTask::SetSchedule)
+			{
+				// `TASK_SET_SCHEDULE` is the transfer the melee approach uses to hand the NPC to the
+				// terminal swing. It is NOT a failure and NOT a return to selection: the program is
+				// replaced in place and keeps running this same think, which is what makes
+				// "face, stop, then swing" one uninterruptible decision rather than three.
+				const EElysiumScheduleId Next = Step.Target;
+				if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(State, Next, Runner))
+				{
+					State.Clear();
+					return false;
+				}
+				continue;
+			}
 			++State.TaskIndex;
 			State.bTaskStarted = false;
 			continue;
@@ -369,7 +549,10 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		// Failed.
 		Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
 			ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
-		const EElysiumScheduleId Fail = Schedule->FailSchedule;
+		// `TASK_SET_FAIL_SCHEDULE` wins over the program's declared route when it ran: retail's own
+		// chase sets `CHASE_ENEMY_FAILED` from inside the program rather than at its registration.
+		const EElysiumScheduleId Fail = State.FailScheduleOverride != EElysiumScheduleId::None
+			? State.FailScheduleOverride : Schedule->FailSchedule;
 		if (Fail == EElysiumScheduleId::None || !ElysiumSchedule::Start(State, Fail, Runner))
 		{
 			State.Clear();
