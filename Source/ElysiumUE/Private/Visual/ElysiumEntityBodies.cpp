@@ -1412,6 +1412,30 @@ bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FSt
 		OutGroundSpeedCmPerSecond);
 }
 
+bool UElysiumEntityBodies::ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
+	FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+{
+	AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	if (Anims == nullptr)
+	{
+		OutAnimName.Reset();
+		OutGroundSpeedCmPerSecond = 0.f;
+		return false;
+	}
+	return Anims->ResolveSequenceClip(Stem, ClipName, OutAnimName, OutGroundSpeedCmPerSecond);
+}
+
+bool UElysiumEntityBodies::HasNpcClip(const FString& Stem, const FString& ClipName)
+{
+	AActor* Owner = GetOwner();
+	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+	return Set != nullptr && Set->Find(ClipName) != nullptr;
+}
+
 FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath) const
 {
 	const AActor* Owner = GetOwner();

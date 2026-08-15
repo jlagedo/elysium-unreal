@@ -696,6 +696,36 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FString& Stem, const FStri
 	return true;
 }
 
+bool UElysiumAnimSubsystem::ResolveSequenceClip(const FString& Stem, const FString& ClipName,
+	FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+{
+	OutAnimName.Reset();
+	OutGroundSpeedCmPerSecond = 0.f;
+
+	// Same one resolver as ResolveActivityClip, over the exact-label route instead of activity
+	// choice: ClipName already names one clip, so there is nothing to weigh-pick and no translation
+	// table to run it through.
+	FElysiumAnimationIntent Intent;
+	Intent.Stem = Stem;
+	Intent.SequenceLabel = ClipName;
+	Intent.Route = EElysiumAnimRoute::ExactLabel;
+	Intent.Source = EElysiumAnimSource::Npc;
+	// Same reason as ResolveActivityClip: this adapter's caller reads the miss and keeps its own
+	// speed, so the fallback ladder does not run underneath it.
+	Intent.bAllowFallbackLadder = false;
+
+	FElysiumAnimationSelection Selection;
+	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Stem), Selection);
+	if (Selection.SequenceLabel.IsEmpty() || Selection.AnimationName.IsEmpty())
+	{
+		return false;
+	}
+
+	OutAnimName = Selection.AnimationName;
+	OutGroundSpeedCmPerSecond = Selection.GroundSpeedCmPerSecond;
+	return true;
+}
+
 UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
 	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError)
 {

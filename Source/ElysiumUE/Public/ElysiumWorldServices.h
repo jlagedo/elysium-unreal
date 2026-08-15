@@ -230,6 +230,23 @@ public:
 		OutGroundSpeedCmPerSecond = 0.f;
 		return false;
 	}
+	// The label-route sibling of ResolveNpcActivityClip, for a caller that already names an exact
+	// clip -- `m_iszCustomMove` and the like -- rather than an ACT_* to weigh-pick. OutAnimName is
+	// the concrete cell ClipName resolves to (itself, unless ClipName names a blend grid); the speed
+	// is zero when that cell carries no authored movement metadata, which is the ordinary case for a
+	// single-cell clip today.
+	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
+		FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+	{
+		OutAnimName.Reset();
+		OutGroundSpeedCmPerSecond = 0.f;
+		return false;
+	}
+	// A quiet vocabulary probe: does Stem's clip vocabulary name ClipName, with no play attempted and
+	// no warning logged either way. The one caller today is an unauthored cross-disposition stance
+	// transition, which is a normal absence rather than a failure -- so it probes here before ever
+	// calling PlayNpcClip, whose miss IS a logged warning for every other caller.
+	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) { return false; }
 	// One model's disposition stance set: three idles, three fidgets and the 3x3 transition matrix
 	// for `AnimName`, with the precache fallbacks already applied. Resolved once per (stem,
 	// disposition) and cached by the caller, because that is when retail resolves it — a body that

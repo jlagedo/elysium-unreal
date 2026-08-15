@@ -592,6 +592,96 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 		TestEqual(TEXT("and the beat still fires OnEndSequence"), CounterValue(Count), 5.f);
 	}
 
+	// --- `m_fMoveTo 3` (Custom) resolves ITS named clip's own authored ground speed -----------
+	// B3: `m_iszCustomMove` already names an exact clip, one lookup away from the same authored
+	// number the Walk branch above resolves through ACT_WALK -- it must not fall back to the
+	// hardcoded gait constant while that lookup is answerable.
+	auto BuildCustomDefs = [&Mark](FElysiumEntityDefs& Defs, const TCHAR* CustomMove)
+	{
+		Defs.MapName = TEXT("__walkout_custom__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Isaac");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/isaac/isaac.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("walk_out");
+		Seq.Origin = Mark;
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("Isaac"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("3"));
+		Seq.Keys.Add(TEXT("m_iszCustomMove"), CustomMove);
+		Seq.Keys.Add(TEXT("angles"), TEXT("0 270 0"));
+		Defs.Defs.Add(MoveTemp(Seq));
+	};
+
+	// The stub reports an authored speed for the named clip: the beat commands it, not the
+	// hardcoded ElysiumNpcGait::WalkSpeed.
+	{
+		FElysiumEntityDefs Defs;
+		BuildCustomDefs(Defs, TEXT("sneak_0"));
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		Services.bNpcSequenceClipsResolve = true;
+		Services.ResolvedNpcSequenceAnimName = TEXT("sneak_0");
+		Services.ResolvedNpcSequenceGroundSpeedCmPerSecond = 72.2f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("walk_out resolved"), Seq)
+			|| !TestNotNull(TEXT("Isaac stands on a motor"), Motor))
+		{
+			return false;
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		for (int32 i = 0; i < 4; ++i) { World.Tick(0.0); }
+
+		TestTrue(TEXT("the custom gait commands the named clip's authored ground speed"),
+			FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, 72.2f, 0.01f));
+		TestTrue(TEXT("the speed came from the named clip, not a weighted activity"),
+			Services.Saw(TEXT("ResolveNpcSequenceClip isaac sneak_0")));
+		TestFalse(TEXT("the custom gait never asks the activity resolver"),
+			Services.Saw(TEXT("ResolveNpcActivityClip")));
+	}
+
+	// The stub reports no motion record for the named clip (a single-cell export, the common
+	// case today): the beat falls back to ElysiumNpcGait::WalkSpeed exactly as an unresolved
+	// Walk does, rather than commanding a zero or negative speed.
+	{
+		FElysiumEntityDefs Defs;
+		BuildCustomDefs(Defs, TEXT("claws_run_0"));
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		Services.bNpcSequenceClipsResolve = false;   // the stub carries no motion for this clip
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("walk_out"));
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("walk_out resolved"), Seq)
+			|| !TestNotNull(TEXT("Isaac stands on a motor"), Motor))
+		{
+			return false;
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		for (int32 i = 0; i < 4; ++i) { World.Tick(0.0); }
+
+		TestTrue(TEXT("an unresolved custom clip falls back to the scripted-gait constant"),
+			FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, 254.f, 0.01f));
+	}
+
 	return true;
 }
 

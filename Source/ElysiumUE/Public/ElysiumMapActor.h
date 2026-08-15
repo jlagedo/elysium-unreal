@@ -309,6 +309,9 @@ public:
 		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override;
 	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
+	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
+		FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
+	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) override;
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;

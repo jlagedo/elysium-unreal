@@ -209,6 +209,13 @@ public:
 	bool ResolveActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 
+	// The label-route sibling: ClipName is already exact (a scripted m_iszCustomMove and the like),
+	// so no weighted choice and no translation run over it. OutAnimName is the concrete cell ClipName
+	// resolves to -- itself, unless ClipName names a blend grid -- and the speed is zero when that
+	// cell carries no authored movement metadata.
+	bool ResolveSequenceClip(const FString& Stem, const FString& ClipName,
+		FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+
 	// The standing idle for a stem at a disposition, by VtMB's own chain:
 	//   default_disposition -> dispositiontable "Animation Name" -> Stance_<Name>_Idle_* (by weight)
 	//   -> ACT_IDLE (by weight) -> a loose idle-named clip -> nothing.

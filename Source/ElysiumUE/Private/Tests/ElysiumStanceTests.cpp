@@ -19,6 +19,7 @@
 #include "ElysiumStanceTypes.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"   // FElysiumAnimating::SetDisposition
 #include "Tests/ElysiumTestServices.h"
 
 static constexpr EAutomationTestFlags GElysiumStanceTestFlags =
@@ -364,6 +365,65 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 				return C.StartsWith(TEXT("ResolveStanceClips"));
 			}).Num() >= 1);
 	}
+	return true;
+}
+
+// ============================================================================================
+// B4 — the cross-disposition transition (`Stance_Trans_<OldAnim>_<N>_<NewAnim>_<N>`) is authored
+// per model, and most bodies carry none. An absent one is a normal absence, not a runtime
+// failure: `SetDisposition` must probe the vocabulary quietly (HasNpcClip) rather than attempt
+// PlayNpcClip and take its logged miss, and the body must still land on its idle pose through
+// ResetAnimToIdle rather than being left stalled mid-change.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceCrossDispositionTransitionTest,
+	"Elysium.Substrate.Stance.CrossDispositionTransition", GElysiumStanceTestFlags)
+bool FElysiumStanceCrossDispositionTransitionTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__stance_cross_disposition__");
+	FElysiumEntityDef Npc;
+	Npc.Classname = TEXT("npc_VVampire");
+	Npc.TargetName = TEXT("Jack");
+	Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/smiling_jack.mdl"));
+	Npc.Keys.Add(TEXT("default_disposition"), TEXT("Neutral"));
+	Defs.Defs.Add(MoveTemp(Npc));
+
+	FElysiumRecordingServices Services;
+	Services.StanceClips = JackShapedClips();
+	FElysiumDisposition Neutral = NeutralTuning();
+	FElysiumDisposition Joy = NeutralTuning();
+	Joy.Name = TEXT("Joy");
+	Joy.AnimName = TEXT("Joy");
+	Services.DispositionRows.Add(TEXT("neutral|1"), Neutral);
+	Services.DispositionRows.Add(TEXT("joy|1"), Joy);
+	// KnownNpcClips is deliberately left empty: this fixture authors no Neutral<->Joy transition,
+	// which is the ordinary case B4 exists for.
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+	double Now = 0.0;
+	for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
+
+	FElysiumEntity* JackEntity = World.FindByName(TEXT("Jack"));
+	if (!TestNotNull(TEXT("world fixture has Jack"), JackEntity))
+	{
+		return false;
+	}
+
+	Services.Calls.Reset();
+	TestTrue(TEXT("SetDisposition succeeds even though the model authors no transition"),
+		static_cast<FElysiumAnimating*>(JackEntity)->SetDisposition(TEXT("Joy"), 1));
+
+	TestTrue(TEXT("the absent transition is a quiet vocabulary probe"),
+		Services.Saw(TEXT("HasNpcClip smiling_jack Stance_Trans_Neutral_1_Joy_1")));
+	TestFalse(TEXT("no play attempt reaches the absent clip"),
+		Services.Calls.ContainsByPredicate([](const FString& C)
+		{
+			return C.StartsWith(TEXT("PlayNpcClip smiling_jack Stance_Trans_"));
+		}));
+	TestTrue(TEXT("the body still lands on its idle pose through ResetAnimToIdle"),
+		Services.Saw(TEXT("RefreshNpcIdle smiling_jack")));
+
 	return true;
 }
 

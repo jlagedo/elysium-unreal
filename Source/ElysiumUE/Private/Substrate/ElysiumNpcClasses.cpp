@@ -301,6 +301,23 @@ public:
 					*DebugString(), *ScriptWalkLabel, *ScriptWalkAnim, Speed);
 			}
 		}
+		else if (Gait == EElysiumScriptGait::Custom)
+		{
+			// `CustomClip` already names the exact clip (`m_iszCustomMove`), so it is one lookup away
+			// from the same authored ground speed the Walk branch above resolves through its activity
+			// -- the label-route sibling of ResolveNpcActivityClip, not a second seam.
+			IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+			float AuthoredSpeed = 0.f;
+			FString CustomAnim;
+			if (Embodiment && Embodiment->ResolveNpcSequenceClip(ModelStem(), CustomClip, CustomAnim,
+				AuthoredSpeed) && FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
+			{
+				Speed = AuthoredSpeed;
+				UE_LOG(LogElysiumNpcEnt, Verbose,
+					TEXT("%s scripted custom move uses '%s' -> '%s' authored ground speed %.1fcm/s"),
+					*DebugString(), *CustomClip, *CustomAnim, Speed);
+			}
+		}
 		if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
 			/*bAllowPartialPath=*/true))
 		{
@@ -1375,12 +1392,24 @@ public:
 					}
 					const FString Clip = FString::Printf(TEXT("Stance_Trans_%s_%d_%s_%d"),
 						*OldAnim, Number, *NewAnim, Number);
+					// This cross-disposition transition is authored per model, and most bodies carry
+					// none: probe the vocabulary first, so an absent clip is a quiet negative query
+					// result rather than PlayNpcClip's logged miss.
+					if (!Embodiment->HasNpcClip(ModelStem(), Clip))
+					{
+						UE_LOG(LogElysiumNpcEnt, Verbose,
+							TEXT("%s disposition transition '%s' not authored; not taken"),
+							*DebugString(), *Clip);
+						return false;
+					}
 					float Seconds = 0.f;
 					if (!Embodiment->PlayNpcClip(Visual, ModelStem(), Clip,
 						/*bLoop=*/false, &Seconds))
 					{
 						return false;
 					}
+					UE_LOG(LogElysiumNpcEnt, Verbose,
+						TEXT("%s disposition transition '%s' taken"), *DebugString(), *Clip);
 					Mind.RecordExternal(FString::Printf(TEXT("disposition %s L%d -> %s L%d via %s"),
 						*OldRow.Name, OldRow.Level, *NewRow.Name, NewRow.Level, *Clip));
 					if (World)

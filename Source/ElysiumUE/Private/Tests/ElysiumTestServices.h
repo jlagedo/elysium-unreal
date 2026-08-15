@@ -326,6 +326,30 @@ struct FElysiumRecordingServices final
 			? ResolvedNpcGroundSpeedCmPerSecond : 0.f;
 		return bNpcActivitiesResolve;
 	}
+	// The label-route sibling's fixture, mirroring bNpcActivitiesResolve above: opt-in so most
+	// Substrate tests keep exercising the supported "no motion for this exact clip" fallback.
+	bool bNpcSequenceClipsResolve = false;
+	FString ResolvedNpcSequenceAnimName = TEXT("walk_0");
+	float ResolvedNpcSequenceGroundSpeedCmPerSecond = 0.f;
+	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
+		FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override
+	{
+		Record(FString::Printf(TEXT("ResolveNpcSequenceClip %s %s"), *Stem, *ClipName));
+		OutAnimName = bNpcSequenceClipsResolve ? ResolvedNpcSequenceAnimName : FString();
+		OutGroundSpeedCmPerSecond = bNpcSequenceClipsResolve
+			? ResolvedNpcSequenceGroundSpeedCmPerSecond : 0.f;
+		return bNpcSequenceClipsResolve;
+	}
+	// The clip vocabulary a test seeds for HasNpcClip, keyed by lower-cased stem. Empty by default,
+	// so an unseeded probe answers "not authored" -- the ordinary case for a cross-disposition
+	// stance transition, which is the one caller this exists for.
+	TMap<FString, TSet<FString>> KnownNpcClips;
+	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) override
+	{
+		Record(FString::Printf(TEXT("HasNpcClip %s %s"), *Stem, *ClipName));
+		const TSet<FString>* Known = KnownNpcClips.Find(Stem.ToLower());
+		return Known != nullptr && Known->Contains(ClipName);
+	}
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override

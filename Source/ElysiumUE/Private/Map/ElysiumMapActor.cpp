@@ -888,6 +888,17 @@ bool AElysiumMapActor::ResolveNpcActivityClip(const FString& Stem, const FString
 		OutGroundSpeedCmPerSecond);
 }
 
+bool AElysiumMapActor::ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
+	FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+{
+	return Bodies->ResolveNpcSequenceClip(Stem, ClipName, OutAnimName, OutGroundSpeedCmPerSecond);
+}
+
+bool AElysiumMapActor::HasNpcClip(const FString& Stem, const FString& ClipName)
+{
+	return Bodies->HasNpcClip(Stem, ClipName);
+}
+
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {

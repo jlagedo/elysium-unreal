@@ -175,6 +175,9 @@ public:
 		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
 	bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+	bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
+		FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+	bool HasNpcClip(const FString& Stem, const FString& ClipName);
 
 	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
 	// clip resolution stay separate so ordinary props never load glTF or animation data.

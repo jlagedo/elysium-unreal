@@ -558,6 +558,9 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Joy.AnimName = TEXT("Joy");
 	Services.DispositionRows.Add(TEXT("neutral|1"), Neutral);
 	Services.DispositionRows.Add(TEXT("joy|1"), Joy);
+	// This model authors the Neutral<->Joy cross-disposition transition; HasNpcClip gates
+	// SetDisposition's PlayNpcClip attempt on it (B4).
+	Services.KnownNpcClips.Add(TEXT("smiling_jack"), { TEXT("Stance_Trans_Neutral_1_Joy_1") });
 
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	FElysiumEntityDefs Defs;
@@ -567,6 +570,10 @@ bool FElysiumDialogueBodySceneTest::RunTest(const FString&)
 	Jack.TargetName = TEXT("Jack");
 	Jack.Keys.Add(TEXT("model"),
 		TEXT("models/character/npc/unique/smiling_jack/smiling_jack.mdl"));
+	// Jack starts Neutral so the disposition assertion below exercises a real Neutral -> Joy
+	// transition: with no key here `Disposition` is empty, its row does not resolve, and the
+	// transition bails on an empty old stance before it names a clip.
+	Jack.Keys.Add(TEXT("default_disposition"), TEXT("Neutral"));
 	Defs.Defs.Add(MoveTemp(Jack));
 	FElysiumEntityDef Waveover;
 	Waveover.Classname = TEXT("scripted_sequence");
