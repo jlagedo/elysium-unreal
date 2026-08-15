@@ -88,9 +88,9 @@ bool FElysiumNpc::GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 
 void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 {
-	LastDamageAttacker = Dmg.Source;
-	LastDamageTime = World ? World->NowSeconds() : 0.0;
-	LastDamageAmount = Dmg.CommittedDamage();
+	Senses.Memory.LastDamageAttacker = Dmg.Source;
+	Senses.Memory.LastDamageTime = World ? World->NowSeconds() : 0.0;
+	Senses.Memory.LastDamageAmount = Dmg.CommittedDamage();
 }
 
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
@@ -466,6 +466,15 @@ void FElysiumNpc::Think()
 		// character's stance machine is an executor too, and without this it would never run.
 		NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + 0.1);
 		return;
+	}
+	// --- Cycle 4: condition gathering ------------------------------------------------------------
+	// Senses run before any executor picks work, which is where the recovered pass puts them, and
+	// are suppressed exactly where retail suppresses condition gathering: a scripted owner or an
+	// in-flight scripted move is driving this body (`docs/vtmb/npc-ai-reverse-engineering.md`).
+	// The inert/dead gate is the early return above.
+	if (!ScriptOwner.IsSet() && ScriptPhase == EScriptPhase::None)
+	{
+		Senses.Tick(*this, World ? World->NowSeconds() : 0.0);
 	}
 	// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
 	// the feeder's think and nothing else moves either actor while it runs.
@@ -1527,6 +1536,10 @@ void FElysiumNpc::Spawn()
 void FElysiumNpc::Activate()
 {
 	SeedPlayerRelationship();
+	// Cycle 4: `InitPerceptionDistances` runs once, on authored data that is already applied, and
+	// the hearing cursor starts at the live head so an NPC never hears the map's own load.
+	Senses.ResolveTuning(*this);
+	Senses.StartSoundCursorAtHead(*this);
 	Mind.ArmAdmission();
 	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 }
@@ -1730,6 +1743,14 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			Relationships.Rebase(*World);
 		}
 	}
+
+	// Cycle 4. The memory is what survives losing sight, so it is what a save has to carry; the
+	// resolved perception pair is not saved because it is derived from the keyfields the field
+	// walk already restored.
+	if (Ar.Version() >= FElysiumSaveVersion::NpcSenses)
+	{
+		Senses.Serialize(Ar, *this);
+	}
 }
 
 const TCHAR* FElysiumNpc::SaveBlockReason() const
@@ -1793,6 +1814,31 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		: FString::Printf(TEXT("%s to %s, %.0fcm out"),
 			ScriptPhase == EScriptPhase::Travel ? TEXT("travelling") : TEXT("facing"),
 			*ScriptMark.ToString(), FVector::Dist2D(Origin, ScriptMark)));
+
+	// Cycle 4 — the sensory transaction.
+	Out.Emplace(TEXT("Perception"), FString::Printf(
+		TEXT("npc_perception %d, vision %.0fcm, hearing %.2fx%s"), AuthoredPerception,
+		Senses.Perception.VisionDistanceCm, Senses.Perception.HearingScalar,
+		Senses.Perception.bUsedFallback ? TEXT(" (table fallback)") : TEXT("")));
+	const FElysiumNpcMemory& Mem = Senses.Memory;
+	Out.Emplace(TEXT("Closest player"), Mem.ClosestPlayer.IsSet()
+		? FString::Printf(TEXT("%.0fcm, %s%s%s"), Mem.ClosestPlayerDistanceCm,
+			Mem.bPlayerLos ? TEXT("SEEN") : TEXT("unseen"),
+			Mem.bPlayerInCone ? TEXT(", in cone") : TEXT(", out of cone"),
+			Mem.bPlayerInOuterBand ? TEXT(", outer band") : TEXT(""))
+		: TEXT("(none)"));
+	Out.Emplace(TEXT("Enemy"), Mem.Enemy.IsSet()
+		? FString::Printf(TEXT("%s (%s, %d failed LOS checks)"), *Mem.Enemy.ToString(),
+			Mem.bEnemyOccluded ? TEXT("OCCLUDED") : TEXT("has LOS"), Mem.EnemyLosFailures)
+		: TEXT("(none — enemy selection is not implemented)"));
+	Out.Emplace(TEXT("Last heard"), Mem.LastHeardTime < 0.0
+		? TEXT("(nothing)")
+		: FString::Printf(TEXT("%s at %s, t=%.2f"), *Mem.LastHeardCategory,
+			*Mem.LastHeardPosition.ToString(), Mem.LastHeardTime));
+	Out.Emplace(TEXT("Last damage"), Mem.LastDamageTime < 0.0
+		? TEXT("(none)")
+		: FString::Printf(TEXT("%d from %s at t=%.2f"), Mem.LastDamageAmount,
+			*Mem.LastDamageAttacker.ToString(), Mem.LastDamageTime));
 }
 
 // ============================================================================================

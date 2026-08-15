@@ -7,6 +7,7 @@
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcMind.h"
+#include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScriptedCharacter.h"
@@ -81,12 +82,22 @@ public:
 	float DamageFilters[4] = { 0.f, 0.f, 0.f, 0.f };
 	bool  bHasDamageFilter[4] = { false, false, false, false };
 
-	// The last damaging hit this NPC took: who, when and how much. Plain members rather than
-	// registered fields — the senses/memory consumers that read them arrive with the schedule
-	// kernel, and retail keeps the incoming packet as live state, not as a saved field.
-	FElysiumEntityHandle LastDamageAttacker;
-	double LastDamageTime = -1.0;
-	int32  LastDamageAmount = 0;
+	// --- Cycle 4: senses, perception tuning and memory ------------------------------------------
+	// The three authored perception keyfields `InitPerceptionDistances` (`0x1028fb70`) reads, kept
+	// exactly as authored; the RESOLVED pair lives on `Senses.Perception`.
+	//
+	// The defaults are retail's own zero-init for `npc_perception` and the recovered `-1.0`
+	// sentinel for the two float channels. An NPC that authors none of the three is therefore
+	// derived from perception 0, which is the faithful answer at that state — the FGD's authored
+	// defaults are unrecovered, and 424 of the corpus's NPCs write all three.
+	int32 AuthoredPerception = 0;
+	float AuthoredVision = ElysiumNpcSense::DerivedSentinel;
+	float AuthoredHearing = ElysiumNpcSense::DerivedSentinel;
+
+	// The sensory transaction and everything it remembers, including the last damaging hit this
+	// NPC took (`Senses.Memory.LastDamage*`, written by the typed commit below).
+	FElysiumNpcSenses Senses;
+
 	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names

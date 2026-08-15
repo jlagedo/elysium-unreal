@@ -40,6 +40,7 @@ struct FElysiumSaveVersion
 		NpcSchedule   = 15,  // the running idle schedule; its task position is deliberately not saved
 		NpcSocial     = 16,  // disposition level and the independent combat-relationship table
 		Activation    = 17,  // whether Source Activate already ran for this entity
+		NpcSenses     = 18,  // the NPC sensory memory: enemy, last-seen/heard/damage, LOS caches
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

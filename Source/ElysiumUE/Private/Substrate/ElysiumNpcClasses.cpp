@@ -186,6 +186,14 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpc&>(E).Stance.LastChangeTime = V.ToFloat(); };
 		D.Fields.Add(FName(TEXT("m_flStanceTime")), MoveTemp(Acc));
 	}
+
+	// --- Cycle 4 (senses): the three authored perception keyfields ------------------------------
+	// `InitPerceptionDistances` reads all three at spawn. They are Save-flagged like the rest of
+	// the authored NPC tuning: a map may not rewrite them, but a payload has to carry what the
+	// entity was authored with, because the resolved pair is derived from them at Activate.
+	AddNpcField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception, EElysiumField::Save);
+	AddNpcField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
+	AddNpcField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)
