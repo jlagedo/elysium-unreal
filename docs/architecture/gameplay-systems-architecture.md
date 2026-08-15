@@ -636,7 +636,7 @@ tutorial). That input performs the recovered late first-match destination lookup
 origin and angles without a safe-placement or velocity reset, schedules the NPC's due think work,
 and exposes the discontinuity through the embodiment/network seam. A missing destination preserves
 retail's consumed no-op while emitting the project-required diagnostic warning. Roadmap: B6, 9.9,
-then 10.7's promoted stages.
+then 13.5.
 
 ### 5.6 Disciplines
 
@@ -730,10 +730,10 @@ roadmap task:
 | 3 | `FElysiumDmg` + shared apply + typed `CommitDamage`; scalar `TakeDamage` becomes the fallback entry | new `Substrate/ElysiumDamage.{h,cpp}`, `ElysiumPlayerClasses.cpp` | 13.3 |
 | 4 | Fire `OnDamaged`/`OnHalfHealth` from the commit; adopt `trigger_hurt`'s retail cadence + `OnHurt*` outputs | `ElysiumPlayerClasses.cpp`, `Substrate/ElysiumStarterClasses.cpp` | 13.3 |
 | 5 | Weapon controller over item modes; equip/holster on the active-weapon handle | new `Substrate/ElysiumWeaponClasses.{h,cpp}` | 13.3 |
-| 6 | `FElysiumRelationships` + a real `SetRelationship` body; `TeleportToEntity` body | `ElysiumNpcClasses.cpp` | 9.9/10.7 |
+| 6 | `FElysiumRelationships` + a real `SetRelationship` body; `TeleportToEntity` body | `ElysiumNpcClasses.cpp` | 9.9/13.5 |
 | 7 | Disposition model behind `SetDisposition` (drop the stub mark); reaction-score calculator | `ElysiumScriptNatives.cpp`, rulebook loaders | 9.9 |
-| 8 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 10.7 |
-| 9 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence/feed states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 10.7 |
+| 8 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 13.5 |
+| 9 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence/feed states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 13.5 |
 | 10 | Discipline runtime (active events on the one queue + `DisciplineTgt` interpreter); `FElysiumSheetEffects::FRow` payload operators; retire `ClearActiveDisciplines`/frenzy pending inputs as each lands | new `Substrate/ElysiumDisciplines.{h,cpp}`, `Substrate/ElysiumSheetMath.{h,cpp}` | 13.2 |
 | 11 | `FElysiumTerminal`/`FElysiumPropHacking`; terminals leave the model-only prop table | `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
 | 12 | Stealth scalars + `trigger_stealth_mod` into the senses service; sneak posture into the view state | rulebook, `ElysiumNpcMind`, movement | 13.1 |

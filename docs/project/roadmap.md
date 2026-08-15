@@ -50,7 +50,7 @@ tutorial.** Everything on the path lands first. Three standing rules:
 | **PP3 — land the tutorial** | Jack's first conversation with sound and reactions | 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD foundation + observer presentation seam | CCC0–CCC9, B6 [x], 9.8, 9.6 [x], 8.9 |
 | **PP5 — persistence [x]** | save / quick / autosave + load mid-run | 11.9 [x] |
-| **PP6 — complete the tutorial** | stealth authority, disciplines, firearms, hacking — every retail beat | 13.1–13.4 → `uv run elysium test Play` |
+| **PP6 — complete the tutorial** | stealth authority, disciplines, firearms, combat AI, hacking — every retail beat | 13.1–13.5 → `uv run elysium test Play` |
 
 **PP4's feel stack runs ahead of PP2/PP3 — owner call**, recovered rather than preferential:
 the animation is the movement's speed authority, so the mover cannot close behind it (the CCC
@@ -63,14 +63,24 @@ own owner call.
 
 ## Now — the unblocked front
 
-1. **0.10 / RE32 / RE33 / 12.1** — the retail capture loop: join observed identities to the
-   patch-first stack, use the first mismatching stage to choose the next skeletal, scene,
-   facial/lip or secondary-motion work → [plans/capture.md](plans/capture.md).
-2. **The 3 C's slice** — the co-tune, then CCC8's played acceptance →
-   [plans/three-cs.md](plans/three-cs.md).
-3. **11.10** — finish PP0 with the played-input harness → [plans/spine.md](plans/spine.md).
-4. **9.8 / 9.9 / 9.10** — inventory, NPC reactions, economy →
+**Owner call: the entity-gameplay ladder is the current priority.** Combat, damage and NPC AI
+land as one sequenced slice over the existing substrate seams — descriptor-typed damage first,
+weapons on it, the NPC mind's senses/enemy/combat stages next, then their consumers:
+
+1. **13.3** — the damage spine (`FElysiumDmg`, the typed commit, the hurt cadence) and the
+   weapon controller → [plans/gameplay.md](plans/gameplay.md).
+2. **13.5** — combat AI: the sound-event bus, senses/memory, the enemy transaction, the
+   alert/combat schedule families → [plans/gameplay.md](plans/gameplay.md); its 11.14/11.15
+   engine queries → [plans/spine.md](plans/spine.md).
+3. **9.8 / 9.9** — the inventory remainder; the reaction score and social presentation →
    [plans/gameplay.md](plans/gameplay.md).
+4. **13.1 / 13.2** — stealth and disciplines, behind the two rungs above →
+   [plans/gameplay.md](plans/gameplay.md).
+
+Continuing fronts behind the ladder: **0.10 / RE32 / RE33 / 12.1** — the retail capture loop →
+[plans/capture.md](plans/capture.md); **the 3 C's slice** — the co-tune, then CCC8's played
+acceptance → [plans/three-cs.md](plans/three-cs.md); **11.10** — finish PP0 with the
+played-input harness → [plans/spine.md](plans/spine.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -251,7 +261,7 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [~] **[9.8 Inventory & items](plans/gameplay.md)** — loose pickup and explicit CommonUI loot
   sessions landed; plain-container lid/sound, drop, barter, inventory-check and travel policy open.
 - [~] **[9.9 NPC disposition & reactions](plans/gameplay.md)** — talk/feed slice landed;
-  senses and reaction score open.
+  reaction score and expression policy open; senses are 13.5's.
 - [ ] **[9.10 Economy](plans/gameplay.md)**
 
 *Slice acceptance:* `sp_tutorial_1` completable as retail — dialogue, quests, save/load.
@@ -264,8 +274,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [ ] **[10.5 Packaged-build content path](plans/spine.md)**
 - [~] **[10.6 Input path — Enhanced Input, remapping, gamepad](plans/input.md)** — partial
   slice live; keyboard migration, pad layout, projection open.
-- [P] **[10.7 Long tail](plans/gameplay.md)** — combat AI, door-obstruction producers,
-  vdata-driven systems; promote per item when reached.
+- [P] **[10.7 Long tail](plans/gameplay.md)** — door-obstruction producers,
+  follower/return-to-initial, vdata-driven systems; promote per item when reached.
 - [x] **10.8 OpenLevel map lifecycle** → `docs/architecture/map-architecture.md`.
 - [ ] **[10.9 Asset enhancement](plans/world.md)** — post-thaw.
 
@@ -280,6 +290,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [~] **[11.13 Remaster camera director](plans/spine.md)** — a–c landed via CCC2; d–h open.
 - [ ] **[11.14 The reachability query](plans/spine.md)** *(S11, S12)* — `ProjectToNavigable`
   behind the door-obstruction retreat.
+- [ ] **[11.15 The perception queries](plans/spine.md)** *(S11, S12)* — line-of-sight and
+  light-at-point behind the senses and the stealth surface.
 
 ## The 3 C's slice (CCC) — detail: [plans/three-cs.md](plans/three-cs.md)
 
@@ -318,7 +330,8 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
 
 - [ ] **[13.1 Stealth](plans/gameplay.md)** · **[13.2 Disciplines](plans/gameplay.md)** ·
   **[13.3 Firearms & melee basics](plans/gameplay.md)** ·
-  **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)**
+  **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)** ·
+  **[13.5 Combat AI](plans/gameplay.md)**
 
 *Slice acceptance:* `sp_tutorial_1` completable as retail on keyboard/mouse and gamepad, proven
 by `uv run elysium test Play`.
@@ -373,8 +386,8 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE45 | trigger touch dispatch + the script recursion bound | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |
 | RE46 | the dialogue opener and camera boundary | `docs/vtmb/camera-view-modes.md`; 11.13f | [~] |
 | RE47 | the tutorial character bootstrap | `docs/vtmb/npc-ai-reverse-engineering.md` | [~] |
-| RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 10.7, 13.3 | [x] |
-| RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 10.7, 13.1 | [x] |
+| RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 13.3, 13.5 | [x] |
+| RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 13.1, 13.5 | [x] |
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [ ] |
 | RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, CCC10.1, 13.1–13.4 | [~] |
 

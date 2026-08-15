@@ -75,7 +75,7 @@ answer them (the rows below are selected demand slices, not a partition of the t
 | Sheet: XP / humanity / masquerade | **290** | `AwardExperience` 77, `HumanityAdd` 69, `CalcFeat` 53 | 9.4 |
 | Economy | **250** | `CurrentMoney` 86, `MoneyAdd` 83, `MoneyRemove` 80 | 9.10 |
 | Sequences & conversation camera | **224** | `SetCamera` 115, `BeginSequence` 72 | 8.5, 11.7 |
-| AI schedules | 76 | `FleeAndDie`, `SetupPatrolType`, `FollowPatrolPath` | named patrol slice: 8.5; remainder: 10.7 |
+| AI schedules | 76 | `FleeAndDie`, `SetupPatrolType`, `FollowPatrolPath` | named patrol slice: 8.5; remainder: 13.5 |
 | Scripted line / whisper audio | 48 | `PlayDialogFile` 39, receiver-qualified `Whisper` 9 | 6.8, 9.2 |
 
 By binding kind: 21 Character methods (4,982 calls), 9 module globals (3,712), 62 registered

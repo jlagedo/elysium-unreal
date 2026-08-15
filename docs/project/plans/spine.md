@@ -69,3 +69,15 @@ missing-query case. Project the destination through the motor, re-test the proje
 the retreat rule in the substrate, and fail into the schedule's fail path when the projected
 point is no longer a retreat. *Acceptance:* the retreat resolves through the query with the
 re-test asserted in the Substrate tier against the recording stub.
+
+### 11.15 The perception queries *(S11, S12)*
+
+`IElysiumEmbodiment` gains the two queries
+`docs/architecture/gameplay-systems-architecture.md` §5.5.3 already designs: line-of-sight
+between two points and light at a point. Each is geometry, never a verdict — cone, range,
+cadence, grace, debounce and tuning stay substrate (K13) — and each states its headless answer
+(LOS true, full light) so a `-nullrhi` run neither blinds every NPC nor stalls the stealth
+surface. The `logic_visibility_test` stub class is the authored evidence for the LOS query;
+13.1's three-point light triplet consumes the light query on its own cadence. *Acceptance:*
+13.5's senses and 13.1's light sampling resolve through the queries, asserted in the Substrate
+tier against the recording stub. *Deps:* 11.2.
