@@ -80,6 +80,10 @@ class CoordinateContractTests(unittest.TestCase):
 
 
 class PropMaterialContractTests(unittest.TestCase):
+    #: A realistic model header search path. The engine composes one candidate per search
+    #: path and has no flat last resort, so a fixture VMT lives under one of them.
+    SEARCH = ["models/props/"]
+
     @staticmethod
     def _triangle(material: str) -> mdl.Mesh:
         mesh = mdl.Mesh(material)
@@ -91,14 +95,13 @@ class PropMaterialContractTests(unittest.TestCase):
         mesh.tris = [(0, 1, 2)]
         return mesh
 
-    @staticmethod
-    def _record_for_vmt(vmt_body: str, read_bytes=None) -> dict:
+    def _record_for_vmt(self, vmt_body: str, read_bytes=None) -> dict:
         """One material's corpus definition. The `.mtl` names the material and the map's own
         facts; every channel and flag is stated once here."""
         def default_read(path):
-            return vmt_body.encode("ascii") if path == "materials/glasswin.vmt" else None
+            return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
 
-        channels = mdl.material_channels("glasswin", [], read_bytes or default_read)
+        channels = mdl.material_channels("glasswin", self.SEARCH, read_bytes or default_read)
         return shared_corpus.material_record(channels) if channels else {}
 
     def _mtl_for_vmt(self, vmt_body: str) -> str:
@@ -106,16 +109,16 @@ class PropMaterialContractTests(unittest.TestCase):
         mesh = self._triangle("glasswin")
 
         def read_bytes(path):
-            return vmt_body.encode("ascii") if path == "materials/glasswin.vmt" else None
+            return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
 
         with tempfile.TemporaryDirectory() as out:
-            mdl.write_obj_scene([mesh], "test", out, [], read_bytes, {})
+            mdl.write_obj_scene([mesh], "test", out, self.SEARCH, read_bytes, {})
             return (Path(out) / "test.mtl").read_text(encoding="utf-8")
 
     def test_translucent_prop_material_carries_blend_flag(self) -> None:
         body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
         self.assertTrue(self._record_for_vmt(body)["blend"])
-        self.assertIn("mat glasswin", self._mtl_for_vmt(body))
+        self.assertIn("mat models/props/glasswin", self._mtl_for_vmt(body))
 
     def test_alphatest_prop_material_carries_illum_flag(self) -> None:
         body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
@@ -130,7 +133,7 @@ class PropMaterialContractTests(unittest.TestCase):
         )
 
         def read_bytes(path):
-            if path == "materials/glasswin.vmt":
+            if path == "materials/models/props/glasswin.vmt":
                 return vmt_body.encode("ascii")
             if path in ("materials/props/glasswin.tth", "materials/props/glasswin.ttz"):
                 return b"synthetic"
@@ -142,11 +145,11 @@ class PropMaterialContractTests(unittest.TestCase):
             "elysium_pipeline.formats.tex_to_png.decode", return_value=source
         ):
             mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, [], read_bytes, {})
+                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             normal = Path(out) / "tex" / "props_glasswin_glass_n.png"
             self.assertTrue(normal.is_file())
-        self.assertIn("mat glasswin", mtl)
+        self.assertIn("mat models/props/glasswin", mtl)
         record = self._record_for_vmt(vmt_body, read_bytes)
         self.assertTrue(record["blend"])
         self.assertTrue(record["glass"])
@@ -160,7 +163,7 @@ class PropMaterialContractTests(unittest.TestCase):
         )
 
         def read_bytes(path):
-            if path == "materials/glasswin.vmt":
+            if path == "materials/models/props/glasswin.vmt":
                 return vmt_body.encode("ascii")
             if path.endswith((".tth", ".ttz")):
                 return path.encode("ascii")
@@ -174,7 +177,7 @@ class PropMaterialContractTests(unittest.TestCase):
             "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
         ):
             mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, [], read_bytes, {})
+                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             self.assertFalse((Path(out) / "tex" / "props_glasswin_glass_n.png").exists())
         record = self._record_for_vmt(vmt_body, read_bytes)
@@ -197,7 +200,7 @@ class PropMaterialContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as out:
             mdl.write_obj_scene(
-                [mesh], "test", out, [], read_bytes, {},
+                [mesh], "test", out, self.SEARCH, read_bytes, {},
                 skins=[[awkward], ["Panel-B.2 x"]])
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             skins = (Path(out) / "test.skins").read_text(encoding="utf-8")
@@ -216,7 +219,7 @@ class PropMaterialContractTests(unittest.TestCase):
         )
 
         def read_bytes(path):
-            if path == "materials/glasswin.vmt":
+            if path == "materials/models/props/glasswin.vmt":
                 return vmt_body.encode("ascii")
             if path in ("materials/props/rain_dudv.tth", "materials/props/rain_dudv.ttz"):
                 return b"synthetic"
@@ -228,7 +231,7 @@ class PropMaterialContractTests(unittest.TestCase):
             "elysium_pipeline.formats.tex_to_png.decode", return_value=signed
         ):
             mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, [], read_bytes, {})
+                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             normal_path = Path(out) / "tex" / "props_rain_dudv_refract_n.png"
             with Image.open(normal_path) as normal:
@@ -251,7 +254,7 @@ class PropMaterialContractTests(unittest.TestCase):
         decoded = []
 
         def read_bytes(path):
-            if path == "materials/glasswin.vmt":
+            if path == "materials/models/props/glasswin.vmt":
                 return vmt_body.encode("ascii")
             if path in (
                     "materials/props/authored_normal.tth",
@@ -267,12 +270,12 @@ class PropMaterialContractTests(unittest.TestCase):
             "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
         ):
             mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, [], read_bytes, {})
+                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
 
         self.assertEqual(len(decoded), 1)
         self.assertIn(b"authored_normal", decoded[0])
-        self.assertIn("mat glasswin", mtl)
+        self.assertIn("mat models/props/glasswin", mtl)
         record = self._record_for_vmt(vmt_body, read_bytes)
         self.assertEqual(record["refract_map"], "tex/props_authored_normal_refract_n.png")
 
@@ -284,7 +287,7 @@ class PropMaterialContractTests(unittest.TestCase):
         )
 
         def read_bytes(path):
-            if path == "materials/glasswin.vmt":
+            if path == "materials/models/props/glasswin.vmt":
                 return vmt_body.encode("ascii")
             if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
                 return b"synthetic"
@@ -296,7 +299,7 @@ class PropMaterialContractTests(unittest.TestCase):
             "elysium_pipeline.formats.tex_to_png.decode", return_value=source
         ):
             mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, [], read_bytes, {})
+                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
                 return exported.copy()
 
@@ -315,10 +318,10 @@ class PropMaterialContractTests(unittest.TestCase):
 
     def test_shared_basetexture_promotes_cached_rgb_to_rgba(self) -> None:
         vmts = {
-            "materials/opaque.vmt": (
+            "materials/models/props/opaque.vmt": (
                 '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
             ),
-            "materials/glass.vmt": (
+            "materials/models/props/glass.vmt": (
                 '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n'
                 '"$translucent" "1"\n}\n'
             ),
@@ -337,7 +340,7 @@ class PropMaterialContractTests(unittest.TestCase):
         ):
             mdl.write_obj_scene(
                 [self._triangle("opaque"), self._triangle("glass")],
-                "test", out, [], read_bytes, {})
+                "test", out, self.SEARCH, read_bytes, {})
             with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
                 self.assertEqual(exported.mode, "RGBA")
                 self.assertEqual(exported.getchannel("A").getpixel((0, 0)), 73)
@@ -578,18 +581,70 @@ class BakeTextureImportContractTests(unittest.TestCase):
         self.assertEqual(b.env_cube, "c12_34_56")
 
     def test_a_surface_whose_material_no_document_names_is_dropped(self) -> None:
-        # Silently binding the master's placeholder would render a grey wall with nothing logged;
-        # the caller reports the gap instead.
+        # Silently binding the master's placeholder would render a grey wall with nothing logged.
+        # Every caller passes the whole document set its `.mtl` can draw from, so the key resolving
+        # in none of them is a defect in the export that wrote it, named where it is noticed.
+        warnings: list[str] = []
         fake_unreal = SimpleNamespace(
             AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
             MaterialEditingLibrary=object(),
             GeometryScript_Collision=object(),
+            log_warning=warnings.append,
         )
         module = self._load_bake_lib(fake_unreal)
         with tempfile.TemporaryDirectory() as out:
             path = Path(out) / "gap.mtl"
             path.write_text("newmtl wall\nmat brick/absent\n", encoding="utf-8")
             self.assertEqual(module.read_mtl(path, corpus={}), {})
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("brick/absent", warnings[0])
+        self.assertIn("wall", warnings[0])
+
+    def test_a_slot_with_no_mat_line_is_absent_and_unnamed(self) -> None:
+        """The exporter writes `newmtl` with no `mat` line when the slot's material name resolved
+        no `.vmt`. That absence is the bake's signal to bind the error material, not a defect in
+        the export, so the warning for an unknown key must not fire for it."""
+        warnings: list[str] = []
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+            log_warning=warnings.append,
+        )
+        module = self._load_bake_lib(fake_unreal)
+        with tempfile.TemporaryDirectory() as out:
+            path = Path(out) / "miss.mtl"
+            path.write_text("newmtl gone\n\nnewmtl lid\nmat props/lid\n", encoding="utf-8")
+            mats = module.read_mtl(path, corpus={"props/lid": {"albedo": "tex/lid.png"}})
+        self.assertEqual(sorted(mats), ["lid"])
+        self.assertEqual(warnings, [])
+
+    def test_a_material_key_is_matched_exactly_and_a_case_mismatch_is_named(self) -> None:
+        """The corpus is keyed by `shared_corpus.material_key`, which is lower case, and this
+        lookup is a plain dict hit. A `.mtl` naming the model header's own mixed-case spelling
+        therefore resolves nothing -- which must be said, not appended as None."""
+        warnings: list[str] = []
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+            log_warning=warnings.append,
+        )
+        module = self._load_bake_lib(fake_unreal)
+        corpus = {"models/scenery/furniture/milkcrate/milkcrate": {"albedo": "tex/crate.png"}}
+        with tempfile.TemporaryDirectory() as out:
+            path = Path(out) / "crate.mtl"
+            path.write_text(
+                "newmtl milkcrate\nmat models/scenery/furniture/MilkCrate/MilkCrate\n",
+                encoding="utf-8")
+            self.assertEqual(module.read_mtl(path, corpus=corpus), {})
+            path.write_text(
+                "newmtl milkcrate\nmat models/scenery/furniture/milkcrate/milkcrate\n",
+                encoding="utf-8")
+            self.assertEqual(
+                module.read_mtl(path, corpus=corpus)["milkcrate"].albedo, "tex/crate.png")
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("MilkCrate", warnings[0])
 
     def test_a_map_local_definition_outranks_the_corpus(self) -> None:
         # VBSP writes per-water-volume depth-blend instances into a map's own PAKFILE and nowhere
@@ -609,6 +664,226 @@ class BakeTextureImportContractTests(unittest.TestCase):
                 local={"dev/pool_water": {"albedo": "tex/local.png"}})["pool"]
         self.assertEqual(mat.albedo, "tex/local.png")
         self.assertTrue(mat.water)
+
+
+class BakeErrorMaterialContractTests(unittest.TestCase):
+    """A material name that resolves no `.vmt` binds a reproduction of the engine's own error
+    material rather than failing the surface.
+
+    VtMB substitutes a synthetic `___error` checkerboard for exactly this case and reports it only
+    through a developer-level warning deduped per name, so the shipped install misses 1,152 model
+    slots in silence (research case `material-resolution`). The bake substitutes too, and says so
+    once per distinct missing name.
+    """
+
+    ERROR_PATH = "/ElysiumBaked/Shared/Error/M_ElysiumError"
+    LID_PATH = "/ElysiumBaked/Shared/Materials/MI_props_lid"
+
+    class _Tracker:
+        """The recipe sink `_emit` registers against."""
+
+        def __init__(self) -> None:
+            self.recipes: dict = {}
+            self.build_count = 0
+
+        def register(self, stage, object_path, recipe, expected_class="", fresh=True):
+            self.recipes[object_path] = recipe
+            return True
+
+        def built(self, stage, count=1):
+            self.build_count += count
+
+        def pruned(self, stage, count):
+            pass
+
+        def summary(self, stage):
+            return ""
+
+    @staticmethod
+    def _fake_unreal(logs, warnings):
+        editor = SimpleNamespace(
+            does_directory_exist=lambda target: True,
+            make_directory=lambda target: True,
+            does_asset_exist=lambda target: False,
+            load_asset=lambda target: None,
+            list_assets=lambda package, recursive=True, include_folder=True: [],
+        )
+        return SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+            EditorAssetLibrary=editor,
+            Paths=SimpleNamespace(project_dir=lambda: str(REPO)),
+            SystemLibrary=SimpleNamespace(get_command_line=lambda: "-BakeStages=none"),
+            LinearColor=lambda *values: values,
+            log=logs.append,
+            log_warning=warnings.append,
+            log_error=logs.append,
+        )
+
+    @staticmethod
+    def _load_bake_map(fake_unreal, export_root):
+        spec = importlib.util.spec_from_file_location(
+            "elysium_test_bake_map", REPO / "pipeline/unreal/bake_map.py")
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, {"unreal": fake_unreal}), \
+                mock.patch.dict(os.environ, {"ELYSIUM_EXPORT_ROOT": export_root}):
+            # A copy loaded against the fake editor, so the real one cannot leak in from an
+            # earlier import; patch.dict restores whatever was there.
+            sys.modules.pop("pipeline.unreal.bake_lib", None)
+            try:
+                # bake_map is an editor entry point, so importing it runs main(). The unknown
+                # stage on the faked command line exits it at once, with every definition made.
+                spec.loader.exec_module(module)
+            except SystemExit:
+                pass
+        return module
+
+    def _prop_bake(self, module, tracker, stems):
+        """A corpus-shaped prop bake over `stems`, each carrying one resolved slot (`lid`) and one
+        whose material name resolved nothing (`gone`)."""
+        error_asset = SimpleNamespace(
+            get_path_name=lambda: self.ERROR_PATH + ".M_ElysiumError")
+        lid_asset = SimpleNamespace(get_path_name=lambda: self.LID_PATH + ".MI_props_lid")
+        module.bl.ensure_error_material = lambda: error_asset
+        module.bl.build_dynamic_mesh = lambda sections: SimpleNamespace(sections=sections)
+        module.bl.mesh_triangle_count = lambda mesh: sum(
+            len(section[4]) for section in mesh.sections) // 3
+        module.bl.create_static_mesh = lambda *args, **kwargs: SimpleNamespace()
+        module.bl.set_complex_collision = lambda mesh: None
+        module.bl.prune_package_prefix = lambda *args, **kwargs: 0
+
+        bake = module.Bake("sp_test", tracker, None)
+        for stem in stems:
+            model = module.bl.ObjModel()
+            model.positions = [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 10.0, 0.0),
+                               (0.0, 0.0, 10.0), (10.0, 0.0, 10.0), (0.0, 10.0, 10.0)]
+            model.uvs = [(0.0, 0.0)] * 6
+            model.groups = {"lid": [0, 1, 2], "gone": [3, 4, 5]}
+            bake.prop_models[stem] = model
+            lid = module.bl.MatDef("lid")
+            lid.material_key = "props/lid"
+            bake.prop_mats[stem] = {"lid": lid}
+        bake.materials[(bake.shared_mat_pkg, "props/lid")] = lid_asset
+        return bake
+
+    def test_a_missed_slot_is_error_bound_receipted_and_named_once(self) -> None:
+        logs: list[str] = []
+        warnings: list[str] = []
+        with tempfile.TemporaryDirectory() as out:
+            module = self._load_bake_map(self._fake_unreal(logs, warnings), out)
+            tracker = self._Tracker()
+            bake = self._prop_bake(module, tracker, ["crate", "barrel"])
+            bake.stage_props()
+
+        # Built and receipted, with the error material on exactly the slot that missed. Slots are
+        # the mesh's own sorted material groups, so `gone` precedes `lid`.
+        recipe = tracker.recipes["%s/%s" % (bake.shared_mesh_pkg, shared_corpus.mesh_asset("crate"))]
+        self.assertEqual(recipe["slot_names"], ["gone", "lid"])
+        self.assertEqual(recipe["materials"], [self.ERROR_PATH, self.LID_PATH])
+        self.assertEqual(tracker.build_count, 2)
+        # One warning for the one distinct missing name, naming the key and the first stem that
+        # hit it -- not one per slot instance.
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("'gone'", warnings[0])
+        self.assertIn("barrel", warnings[0])
+        # ...and both slot instances counted in the stage summary.
+        self.assertEqual(bake.error_keys, {"gone": 2})
+        self.assertTrue(any("2 slots error-bound across 2 props" in line for line in logs))
+
+    def test_two_runs_over_the_same_inputs_produce_the_same_recipes(self) -> None:
+        recipes = []
+        for _ in range(2):
+            logs: list[str] = []
+            warnings: list[str] = []
+            with tempfile.TemporaryDirectory() as out:
+                module = self._load_bake_map(self._fake_unreal(logs, warnings), out)
+                tracker = self._Tracker()
+                self._prop_bake(module, tracker, ["crate"]).stage_props()
+            recipes.append(tracker.recipes)
+        self.assertEqual(recipes[0], recipes[1])
+        self.assertIn(self.ERROR_PATH, str(recipes[0]))
+
+    def test_a_world_surface_with_no_definition_binds_the_error_material(self) -> None:
+        logs: list[str] = []
+        warnings: list[str] = []
+        with tempfile.TemporaryDirectory() as out:
+            module = self._load_bake_map(self._fake_unreal(logs, warnings), out)
+            error_asset = SimpleNamespace(get_path_name=lambda: self.ERROR_PATH)
+            module.bl.ensure_error_material = lambda: error_asset
+            bake = module.Bake("sp_test", self._Tracker(), None)
+            self.assertIs(bake.material_for("brick/absent"), error_asset)
+            self.assertIs(bake.material_for("brick/absent"), error_asset)
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(bake.error_keys, {"brick/absent": 2})
+
+    def test_the_error_material_is_reused_and_authored_unlit(self) -> None:
+        """Authored once from constants, so every run leaves the same asset and a recipe naming it
+        stays stable. Unlit and emissive-driven, so the checker reads flat like the original."""
+        created: list[str] = []
+        expressions: list[str] = []
+        connected: list[str] = []
+        existing = object()
+
+        class _Expression:
+            def set_editor_property(self, name, value):
+                pass
+
+        mel = SimpleNamespace(
+            create_material_expression=lambda material, kind, x, y: (
+                expressions.append(kind.__name__), _Expression())[1],
+            connect_material_expressions=lambda a, ao, b, bi: connected.append(bi),
+            connect_material_property=lambda a, ao, prop: connected.append(str(prop)),
+            recompile_material=lambda material: None,
+        )
+        properties: dict = {}
+        material = SimpleNamespace(
+            set_editor_property=lambda name, value: properties.__setitem__(name, value))
+
+        def create_asset(name, package, cls, factory):
+            created.append("%s/%s" % (package, name))
+            return material
+
+        assets = [existing, None]
+        editor = SimpleNamespace(
+            does_directory_exist=lambda target: True,
+            make_directory=lambda target: True,
+            save_asset=lambda target, only_if_is_dirty=True: True,
+        )
+
+        def named(name):
+            return type(name, (object,), {})
+
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(
+                get_asset_tools=lambda: SimpleNamespace(create_asset=create_asset)),
+            MaterialEditingLibrary=mel,
+            GeometryScript_Collision=object(),
+            EditorAssetLibrary=editor,
+            LinearColor=lambda *values: values,
+            Material=object,
+            MaterialFactoryNew=lambda: object(),
+            MaterialShadingModel=SimpleNamespace(MSM_UNLIT="unlit"),
+            MaterialProperty=SimpleNamespace(MP_EMISSIVE_COLOR="emissive"),
+            load_asset=lambda target: assets.pop(0),
+            log_error=lambda message: None,
+        )
+        for name in ("MaterialExpressionTextureCoordinate", "MaterialExpressionFloor",
+                     "MaterialExpressionComponentMask", "MaterialExpressionAdd",
+                     "MaterialExpressionMultiply", "MaterialExpressionFrac",
+                     "MaterialExpressionCeil", "MaterialExpressionConstant3Vector",
+                     "MaterialExpressionLinearInterpolate"):
+            setattr(fake_unreal, name, named(name))
+        module = BakeTextureImportContractTests._load_bake_lib(fake_unreal)
+
+        self.assertIs(module.ensure_error_material(), existing)
+        self.assertEqual(created, [])
+        self.assertIs(module.ensure_error_material(), material)
+        self.assertEqual(created, [module.ERROR_MATERIAL_PATH])
+        self.assertEqual(properties["shading_model"], "unlit")
+        self.assertIn("MaterialExpressionCeil", expressions)
+        self.assertIn("emissive", connected)
 
 
 class UnrealPlayDriverContractTests(unittest.TestCase):

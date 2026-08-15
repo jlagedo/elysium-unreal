@@ -1228,19 +1228,16 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     partition = read_character_partition(npc_dir)
     with manifest_path.open(encoding="utf-8") as handle:
         source_manifest = json.load(handle)
-    stale = character_cache.plan_stages(
-        config, receipt_store, npc_dir, source_manifest, partition, (),
-        props=stems, force=force)
-    todo = {scope: stages for scope, stages in stale.items() if stages}
-    if not todo:
+    planned = character_cache.plan(
+        config, npc_dir, source_manifest, partition, (), props=stems, force=force)
+    if not planned.stale:
         print(f"placed models: {len(stems)} model(s) already current")
         return stems
 
-    plan_path = npc_dir / ".elysium-character-plan.json"
-    _write_json(plan_path, {"schema": "elysium.character-bake-plan", "version": 1,
-                            "force": bool(force), "scopes": todo})
+    plan_path, plan_document = character_cache.write_run_plan(npc_dir, planned, force=force)
     print("placed models: " + ", ".join(
-        f"{scope}[{'+'.join(stages)}]" for scope, stages in sorted(todo.items())))
+        f"{scope}[{'+'.join(stages)}]"
+        for scope, stages in sorted(planned.scopes.items()) if stages))
 
     # The prop mesh stores only a neutral material reference. The owning map supplies its exact
     # material instances at runtime, so policy changes do not invalidate this scope; only absence
@@ -1248,15 +1245,52 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     body_master = config.repo_root / "Content" / "VtMB" / "Materials" / "M_PlayerBody.uasset"
     if not body_master.is_file():
         ensure_character_material_content(config, runner)
-    unreal.bake_characters(config, runner, (), props=stems, plan=plan_path)
-    unreal.verify_characters(config, runner, (), props=stems)
-    character_cache.record(
-        receipt_store, config, npc_dir, source_manifest, partition, todo)
+    _run_character_bake(config, runner, plan_document, plan_path, (), props=stems)
     return stems
 
 
 FAMILIES_FILE = "families.json"
 CHARACTER_TEXTURES_FILE = "textures.json"
+
+
+def _run_character_bake(config, runner, plan_document: dict, plan_path: Path,
+                        stems: Sequence[str], *, props: Sequence[str] = (),
+                        after_bake=None) -> None:
+    """Author the planned character units, then promote their receipts once the verifier agrees.
+
+    Exactly two outcomes leave a receipt standing, and the editor's own batch checkpoints are why
+    the distinction matters: they write into the live store while the bake runs, so a run that ends
+    any other way would leave its planned units looking current and never verify them again.
+
+    An editor that DIES mid-run keeps what it checkpointed. Those are packages the C++ builders
+    already saved, so the interim report is salvaged and the next run resumes instead of rebuilding
+    them. A run that PROMOTES has been read back off the mount by the verifier.
+
+    Everything else revokes. Once the editor has returned, any failure in the report validation, the
+    orphan sweep or the verify -- whatever its type -- means the units this run planned are not
+    known good, whatever the checkpoints recorded. Revoking drops exactly those units so they are
+    re-authored and re-verified next run; every unit the run did not plan keeps its receipt.
+    """
+    from elysium_pipeline import character_cache
+
+    try:
+        unreal.bake_characters(config, runner, stems, props=props, plan=plan_path)
+    except unreal.UnrealFailure:
+        character_cache.salvage(config, plan_document)
+        raise
+
+    promoted = False
+    try:
+        report = character_cache.load_run_report(config, plan_document)
+        if after_bake is not None:
+            after_bake()
+        unreal.verify_characters(config, runner, stems, props=props)
+        character_cache.promote_run(config, report)
+        promoted = True
+    finally:
+        if not promoted:
+            revoked = character_cache.revoke(config, plan_document)
+            print(f"[bake] character bake did not verify; revoked {revoked} receipt(s)")
 
 
 def _character_code_inputs(config) -> tuple[Path, ...]:
@@ -1269,6 +1303,12 @@ def _character_code_inputs(config) -> tuple[Path, ...]:
         root / "formats" / "mdl.py",
         root / "formats" / "mdl_gltf.py",
     )
+
+
+def _character_code_fingerprint(config) -> str:
+    """The exporter's identity, by content. A rebuilt or re-checked-out file whose bytes did not
+    move must not rewrite 166 containers and re-bake the cast behind them."""
+    return fingerprint_content(_character_code_inputs(config), extra=("eskm-exporter-v1",))
 
 
 def _character_source_detail(index: dict, model_rel: str) -> str:
@@ -1419,7 +1459,7 @@ def write_placed_model_sources(config, npc_dir: Path, stems: Sequence[str], *,
         )
     props = {stem: declared[stem]["model"] for stem in requested}
     index = install.build_index(verbose=False)
-    code_fingerprint = fingerprint_paths(_character_code_inputs(config))
+    code_fingerprint = _character_code_fingerprint(config)
     tasks = _placed_model_source_tasks(npc_dir, source_manifest, props, index, code_fingerprint)
     results = TaskGraph(tasks).run(force=force, manifest=manifest) if tasks else {}
     failures = [name for name, result in results.items() if result.status not in ("ok", "skipped")]
@@ -1482,7 +1522,7 @@ def write_character_sources(
         cinematics = {stem: cinematics[stem] for stem in sorted(selected_cinematics)}
         cinematic_stems &= bank_sources
     index = install.build_index(verbose=False)
-    code_fingerprint = fingerprint_paths(_character_code_inputs(config))
+    code_fingerprint = _character_code_fingerprint(config)
     # Read once, lazily: without the unit-vector table a compressed vertex-animation record has
     # directions but no magnitudes, so a body is written with no morph section rather than a
     # wrong one. A fully-current run never needs it.
@@ -1649,12 +1689,21 @@ def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> 
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    """Write `payload` atomically, sorted and newline-terminated so a re-run diffs cleanly."""
+    """Write `payload` atomically, sorted and newline-terminated so a re-run diffs cleanly.
+
+    A byte-identical rewrite is skipped, so an unchanged document keeps its mtime and every
+    stat-keyed digest cache downstream of it stays warm instead of rehashing the corpus it
+    describes.
+    """
+    text = json.dumps(payload, indent=1, sort_keys=True) + "\n"
+    try:
+        if path.read_text(encoding="utf-8") == text:
+            return
+    except (OSError, UnicodeError):
+        pass
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(payload, indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    temporary.write_text(text, encoding="utf-8")
     temporary.replace(path)
 
 
@@ -1836,12 +1885,11 @@ def export_characters(
     # previous cross-product generated 95 GB before it was diagnosed.
     from elysium_pipeline import character_sweep
     character_sweep.assert_shared_bank_layout(partition, npc_manifest)
-    stale = character_cache.plan_stages(
-        config, manifest, npc_dir, npc_manifest, partition, stems,
+    planned = character_cache.plan(
+        config, npc_dir, npc_manifest, partition, stems,
         props=None if include_props else (), force=force
     )
-    todo = {scope: stages for scope, stages in stale.items() if stages}
-    if not todo:
+    if not planned.stale:
         # Nothing to author, so nothing to launch. This is the case the receipts exist for: the
         # editor costs 20-40s of process lifetime before it does any work at all.
         print(f"characters: {len(stems)} model(s) already current")
@@ -1853,33 +1901,32 @@ def export_characters(
             unreal.make_cloth_assets(config, runner, stale_garments)
         return stems
 
-    plan_path = npc_dir / ".elysium-character-plan.json"
-    _write_json(plan_path, {"schema": "elysium.character-bake-plan", "version": 1,
-                            "force": bool(force), "scopes": todo})
+    plan_path, plan_document = character_cache.write_run_plan(npc_dir, planned, force=force)
     print("characters: " + ", ".join(
-        f"{scope}[{'+'.join(stages)}]" for scope, stages in sorted(todo.items())))
+        f"{scope}[{'+'.join(stages)}]"
+        for scope, stages in sorted(planned.scopes.items()) if stages))
 
     ensure_character_material_content(config, runner)
 
-    # One process for the whole cast. Banks are built once on their declared skeleton families and
-    # reused by compatible body skeletons; package count must not scale with the number of bodies.
-    unreal.bake_characters(config, runner, stems, plan=plan_path)
-    # After the bake, before the verify: the verifier walks the mount, and an orphan from a
-    # partition that has since moved is exactly the thing it should not find.
-    if sweep:
+    def sweep_before_verify() -> None:
+        # After the bake, before the verify: the verifier walks the mount, and an orphan from a
+        # partition that has since moved is exactly the thing it should not find.
+        if not sweep:
+            return
         result = sweep_characters(config, partition, force=force_sweep)
         if result["refused"]:
             raise ExportBakeFailure("character sweep refused: " + result["refused"])
         if result["removed"]:
             print(f"swept {result['removed']} orphaned character asset(s)")
-    unreal.verify_characters(config, runner, stems)
+
+    # One process for the whole cast. Banks are built once on their declared skeleton families and
+    # reused by compatible body skeletons; package count must not scale with the number of bodies.
+    _run_character_bake(config, runner, plan_document, plan_path, stems,
+                        after_bake=sweep_before_verify)
     # The garments those bodies wear. After the verify, because a cloth asset resolves its bone
     # names against the mesh's reference skeleton -- the mesh has to be on the mount and sound
     # before a garment can bind to it. Most models author none and cost nothing here.
     unreal.make_cloth_assets(config, runner, stems)
-    # Promoted only now: a commandlet can save part of a scope and then fail, and a receipt
-    # written before the verifier agreed would make that partial scope look current forever.
-    character_cache.record(manifest, config, npc_dir, npc_manifest, partition, todo)
     return stems
 
 

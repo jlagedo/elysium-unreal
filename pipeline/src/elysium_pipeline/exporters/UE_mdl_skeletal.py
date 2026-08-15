@@ -955,6 +955,23 @@ def _dynamics_section(model_path, blob, bones):
     return bytes(out), len(chains)
 
 
+def _write_container(path, blob):
+    """Write one `.eskm`, skipping a byte-identical rewrite.
+
+    A container is content-addressed downstream: the bake plan asks whether a body's bytes moved,
+    through a stat-keyed digest cache. Rewriting an unchanged container would answer yes on mtime
+    alone and re-bake a body, its clips and the digest of every container the family declares.
+    """
+    try:
+        with open(path, "rb") as handle:
+            if handle.read() == blob:
+                return
+    except OSError:
+        pass
+    with open(path, "wb") as handle:
+        handle.write(blob)
+
+
 def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=None,
                 ensure_labels=None):
     """Write `<out_dir>/<stem>.eskm` and return a summary dict.
@@ -1007,8 +1024,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     ])
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, stem + ".eskm")
-    with open(path, "wb") as fh:
-        fh.write(blob)
+    _write_container(path, blob)
     triangles = sum(len(s["tris"]) for s in surfaces.values())
     vertices = sum(len(s["pos"]) for s in surfaces.values())
     print(f"  eskm {stem}: {len(bones)} bones, {vertices} verts, {triangles} tris, "
@@ -1043,10 +1059,9 @@ def write_bank(idx, model_path, out_dir, stem):
     banks_dir = os.path.join(out_dir, "banks")
     os.makedirs(banks_dir, exist_ok=True)
     path = os.path.join(banks_dir, stem + ".eskm")
-    with open(path, "wb") as fh:
-        fh.write(_assemble([(b"SKEL", _skel_section(rows)),
-                            (b"MASK", _mask_section(masks, len(rows))),
-                            (b"ANIM", anim_payload)]))
+    _write_container(path, _assemble([(b"SKEL", _skel_section(rows)),
+                                      (b"MASK", _mask_section(masks, len(rows))),
+                                      (b"ANIM", anim_payload)]))
     print(f"  eskm bank {stem}: {len(bones)} bones, {count} clips, {len(masks)} bone mask(s) "
           f"-> {path} ({os.path.getsize(path) // 1024} KB)")
     return dict(stem=stem, eskm="banks/" + os.path.basename(path), model=model_path,
@@ -1132,10 +1147,9 @@ def write_cinematic(idx, model_path, out_dir, stem):
             continue
         name = f"{stem}__{low}"
         path = os.path.join(banks_dir, name + ".eskm")
-        with open(path, "wb") as fh:
-            fh.write(_assemble([(b"SKEL", _skel_section(rows)),
-                                (b"MASK", _mask_section(masks, len(rows))),
-                                (b"ANIM", anim_payload)]))
+        _write_container(path, _assemble([(b"SKEL", _skel_section(rows)),
+                                          (b"MASK", _mask_section(masks, len(rows))),
+                                          (b"ANIM", anim_payload)]))
         print(f"  eskm cinematic {name}: {len(sub)} bones, {count} clips, {len(masks)} bone "
               f"mask(s) -> {path} ({os.path.getsize(path) // 1024} KB)")
         out.append(dict(stem=name, eskm="banks/" + os.path.basename(path), model=model_path,

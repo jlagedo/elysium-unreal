@@ -8,6 +8,7 @@ decoded here; they are the editor's business.
 
 Layout is documented once, at the top of `UE_mdl_skeletal.py`.
 """
+import hashlib
 import struct
 
 MAGIC = b"ESKM"
@@ -41,6 +42,54 @@ def directory(blob):
 def read(path):
     with open(path, "rb") as handle:
         return handle.read()
+
+
+def section_digest(path, tags):
+    """SHA-256 of the named sections of one container, read without loading the whole file.
+
+    A container is 0.4-30 MB and most of it is clip data, so an invalidation question about the
+    bone tree alone reads a few kilobytes rather than the file. The digest states the tags it
+    covers and marks an absent one, so `(b"SKEL",)` on a container with no skeleton is a stable
+    answer rather than the same digest as an empty one.
+
+    A container that cannot be opened or parsed digests as `missing:<reason>`: the caller is
+    deciding staleness, and an unreadable input is a changed input.
+    """
+    digest = hashlib.sha256()
+    for tag in tags:
+        digest.update(tag)
+        digest.update(b"\0")
+    try:
+        with open(path, "rb") as handle:
+            header = handle.read(16)
+            if len(header) < 16:
+                return "missing:truncated"
+            magic, version, count, _reserved = struct.unpack_from("<4sIII", header, 0)
+            if magic != MAGIC:
+                return "missing:magic"
+            if version != VERSION:
+                return f"missing:version-{version}"
+            table = handle.read(count * 20)
+            if len(table) < count * 20:
+                return "missing:truncated-directory"
+            entries = {}
+            for index in range(count):
+                entry_tag, at, size = struct.unpack_from("<4sQQ", table, index * 20)
+                entries[entry_tag] = (at, size)
+            for tag in tags:
+                where = entries.get(tag)
+                if where is None:
+                    digest.update(b"absent\0")
+                    continue
+                handle.seek(where[0])
+                payload = handle.read(where[1])
+                if len(payload) != where[1]:
+                    return "missing:truncated-section"
+                digest.update(payload)
+                digest.update(b"\0")
+    except (OSError, struct.error) as error:
+        return f"missing:{type(error).__name__}"
+    return digest.hexdigest()
 
 
 def bones(blob):

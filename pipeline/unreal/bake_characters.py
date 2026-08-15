@@ -19,12 +19,14 @@
 #       -BakeCharacters=smiling_jack,tremere_male_armor_0 -unattended -nosplash -nopause
 import json
 import os
+from pathlib import Path
 
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
-from elysium_pipeline import asset_names, character_partition  # noqa: E402
+from elysium_pipeline import (  # noqa: E402
+    asset_names, bake_cache, character_cache, character_partition)
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
@@ -62,7 +64,8 @@ BODY_MASTER = "/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"
 #: defeats both at once and no eye is ever installed.
 EYE_MASTER = "/Game/VtMB/Materials/M_Eyes.M_Eyes"
 
-NPC_DIR = os.path.join(os.fspath(export_root()), "npc")
+OUT_ROOT = os.fspath(export_root())
+NPC_DIR = os.path.join(OUT_ROOT, "npc")
 
 
 def log(msg):
@@ -95,7 +98,7 @@ def prop_package(stem):
     return "%s/%s" % (PROPS, stem)
 
 
-def bake_props(manifest, library, failed, plan, selected=()):
+def bake_props(manifest, library, failed, plan, tracker, selected=()):
     """One skeleton, one mesh and one selected clip set per placed model.
 
     A prop takes the same container and the same builders a body does -- it IS a skeletal model,
@@ -113,7 +116,8 @@ def bake_props(manifest, library, failed, plan, selected=()):
     for stem in sorted(props):
         if stem not in selected:
             continue
-        if not wants(plan, "prop.%s" % stem, "props"):
+        unit = character_cache.prop_object_path(stem)
+        if not (wants(plan, "prop.%s" % stem, "props") and tracker.wants_unit("props", unit)):
             continue
         path = prop_source_path(stem)
         if not os.path.isfile(path):
@@ -129,7 +133,6 @@ def bake_props(manifest, library, failed, plan, selected=()):
             failed.append(stem)
             continue
 
-        blob = eskm.read(path)
         # The skeletal asset preserves slot names but uses the neutral body master. A live or
         # GAME_LUMP placement copies the already-baked map material into those slots, avoiding a
         # second global import of the complete prop texture corpus.
@@ -150,6 +153,7 @@ def bake_props(manifest, library, failed, plan, selected=()):
             continue
 
         spaces = 0
+        blend_failed = False
         blends = props[stem].get("blends", "")
         if blends:
             error, spaces, skipped_grids, skipped_cells = library.build_blend_spaces_from_grids(
@@ -157,6 +161,7 @@ def bake_props(manifest, library, failed, plan, selected=()):
             if error:
                 fail("prop %s blends: %s" % (stem, error))
                 failed.append(stem)
+                blend_failed = True
             elif skipped_cells:
                 log("prop %s: %d grid cell(s) had no baked clip" % (stem, skipped_cells))
         log("prop '%s': %d bones, %d clip(s)%s%s"
@@ -164,7 +169,10 @@ def bake_props(manifest, library, failed, plan, selected=()):
                ", %d blend space(s)" % spaces if spaces else "",
                ", %d track(s) dropped" % dropped if dropped else ""))
         baked += 1
+        if not blend_failed:
+            tracker.record("props", unit)
         release_packages()
+        tracker.maybe_checkpoint("props through %s" % stem)
     return baked
 
 
@@ -184,26 +192,120 @@ def read_partition():
 
 
 def read_plan():
-    """{scope: set(stages)} the orchestrator still wants authored, or None for "everything".
+    """The frozen run plan, or None for "author everything".
 
-    A scope absent from the plan is current on the mount and must be left untouched -- not
-    rebuilt, because rebuilding a family skeleton renames its blend-mask profiles out from under
-    sequences that are not being rebuilt with it. No plan means a hand-run bake, which does the
-    lot; that is the recovery surface and it is deliberately not receipted.
+    The plan names the scopes and stages this run still has to author AND, inside them, the exact
+    units -- one body's mesh, one clip owner's sequences, one rig family's skeleton -- whose recipe
+    changed. A scope or a unit absent from it is current on the mount and must be left untouched:
+    rebuilding a family skeleton renames its blend-mask profiles out from under sequences that are
+    not being rebuilt with it.
+
+    No plan means a hand-run bake, which does the lot; that is the recovery surface and it is
+    deliberately not receipted.
     """
     path = cmdline_arg("BakeCharacterPlan")
     if not path:
         return None
     with open(path, "r", encoding="utf-8-sig") as handle:
         document = json.load(handle)
-    if document.get("schema") != "elysium.character-bake-plan":
+    if document.get("schema") != character_cache.PLAN_SCHEMA:
         raise SystemExit("[chars] %s is not a character bake plan" % path)
-    return {scope: set(stages) for scope, stages in document.get("scopes", {}).items()}
+    if document.get("version") != character_cache.PLAN_VERSION:
+        raise SystemExit(
+            "[chars] %s is plan version %s, this build reads %d"
+            % (path, document.get("version"), character_cache.PLAN_VERSION))
+    return document
+
+
+class CharacterTracker(object):
+    """Decide and report per-unit work for one character bake.
+
+    Every unit's recipe was decided offline, so this side records rather than re-derives: a unit
+    the plan does not name is not authored, and a unit that built is written into the receipt store
+    at the next checkpoint. The store's other units are seeded in unchanged, because a stage's
+    receipts are replaced wholesale and a slice must not erase the cast it did not touch.
+    """
+
+    def __init__(self, plan):
+        self.plan = plan
+        self.run_id = str((plan or {}).get("run_id", ""))
+        self.policies = (plan or {}).get("policies", {})
+        self.units = (plan or {}).get("units", {})
+        self.batch = int((plan or {}).get("batch", character_cache.BODY_BATCH))
+        self.pending = 0
+        self.stages = {}
+        if plan is None:
+            return
+        receipts = bake_cache.AssetReceiptStore(Path(OUT_ROOT), character_cache.SCOPE)
+        for stage in sorted(self.units):
+            policy = self.policies.get(stage, "")
+            carried = (dict(receipts.stage_assets(stage))
+                       if receipts.has_stage(stage, policy) else {})
+            self.stages[stage] = {"policy": policy, "assets": carried,
+                                  "built": 0, "reused": len(carried), "pruned": 0}
+
+    def wants_unit(self, stage, object_path):
+        """Whether this run authors one named unit."""
+        if self.plan is None:
+            return True
+        return object_path in self.units.get(stage, {})
+
+    def record(self, stage, object_path):
+        """Note that one unit's packages are on disk. Recorded only after the builders succeeded."""
+        if self.plan is None:
+            return
+        planned = self.units.get(stage, {}).get(object_path)
+        if planned is None:
+            raise SystemExit(
+                "[chars] a unit the plan does not name was authored: %s %s"
+                % (stage, object_path))
+        self.stages[stage]["assets"][object_path] = {
+            "object_path": object_path,
+            "fingerprint": planned["fingerprint"],
+            "output": planned.get("output", ""),
+        }
+        self.stages[stage]["built"] += 1
+        self.pending += 1
+
+    def summary(self):
+        return "; ".join("%s %d built / %d carried" % (stage, data["built"], data["reused"])
+                         for stage, data in sorted(self.stages.items()))
+
+    def write_report(self):
+        bake_cache.write_asset_run_report(Path(OUT_ROOT), {
+            "schema": bake_cache.ASSET_RUN_SCHEMA,
+            "version": bake_cache.ASSET_SCHEMA_VERSION,
+            "run_id": self.run_id,
+            "map": character_cache.SCOPE,
+            "stages": self.stages,
+        })
+
+    def checkpoint(self, label):
+        """Publish the run report and the receipts of everything already on disk, then release.
+
+        The C++ builders save each package as they finish it, so a unit this has recorded is
+        written -- which is what makes both documents safe to publish here. A run killed with its
+        whole process tree still leaves the next one everything that landed.
+        """
+        self.pending = 0
+        if self.plan is None:
+            release_packages()
+            return
+        self.write_report()
+        bake_cache.checkpoint_receipts(Path(OUT_ROOT), character_cache.SCOPE, self.stages)
+        release_packages()
+        log("checkpoint: %s -- report and receipts written, %s" % (label, self.summary()))
+
+    def maybe_checkpoint(self, label):
+        """Checkpoint once a batch of units has landed. Bodies are heavy -- a skeletal mesh plus
+        every sequence it owns -- so the batch is small and the editor releases them often."""
+        if self.pending >= self.batch:
+            self.checkpoint(label)
 
 
 def wants(plan, scope, stage):
     """Whether this run authors `stage` for `scope`."""
-    return plan is None or stage in plan.get(scope, ())
+    return plan is None or stage in plan.get("scopes", {}).get(scope, ())
 
 
 def release_packages():
@@ -221,32 +323,62 @@ def release_packages():
 texture_asset_name = asset_names.texture_asset_name
 
 
-def import_textures_for(paths):
-    """Import every albedo the named models reference, once. The npc/tex/ tree is shared across the
-    cast -- 514 files for 166 models -- so the textures are one package for all of them rather than
-    a per-model copy, which is also what keeps a re-bake of one body from re-importing them all.
+def read_texture_table():
+    """{asset name: albedo path relative to `npc/`} for the whole cast, or None when it is absent.
 
-    Takes PATHS and reads one container at a time: the cast's containers are 400 MB together, and
-    this pass needs nothing from one after its material table has been read.
+    The offline half writes `npc/textures.json` from every body container's material table while it
+    partitions the corpus, so the document is both the complete inventory and the one input the
+    textures unit's recipe is a function of. Only bodies contribute a `MATL` section, so every uri
+    in it resolves against `npc/`.
+    """
+    path = os.path.join(NPC_DIR, "textures.json")
+    if not os.path.isfile(path):
+        fail("%s is missing (run: uv run elysium export characters)" % path)
+        return None
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        document = json.load(handle)
+    return {name: entry.get("uri", "")
+            for name, entry in document.get("textures", {}).items()}
 
-    A material uri is relative to its OWN container, not to the export root: the cast writes
-    `npc/tex/`, the animated props write `npc/animated_props/tex/`. Both land in one texture
-    package because the asset name is the file's, so a texture a prop shares with a body -- the
-    wolf's fur, the sheriff's sword -- is imported once whichever container is read first."""
-    wanted = {}
-    for path in paths:
-        blob = eskm.read(path)
-        base = os.path.dirname(path)
-        for uri in eskm.materials(blob).values():
-            if not uri:
-                continue
-            source = os.path.join(base, uri.replace("/", os.sep))
-            if os.path.isfile(source):
-                wanted[texture_asset_name(uri)] = source
-            else:
-                fail("texture source missing: %s" % source)
-    if not wanted:
+
+def import_texture_corpus(failed, force=False):
+    """Import every albedo `npc/textures.json` names that is not already on the mount, once.
+
+    The npc/tex/ tree is shared across the cast -- 514 files for 166 models -- so the textures are
+    one package for all of them rather than a per-model copy, which is also what keeps a re-bake of
+    one body from re-importing them all.
+
+    The WHOLE table is covered whichever bodies this run bakes, because the textures unit is a
+    single receipt over the whole document: a run that imported only its own slice would record
+    that receipt with another body's albedo still absent, and every later run would then skip the
+    import and build that body untextured. Everything already on the mount is skipped, so a sliced
+    run pays only for what its slice added; `force` is the recovery surface and re-imports the lot.
+
+    Returns {asset name: Texture2D} over everything the mount now carries, which is what a mesh's
+    material bindings resolve through.
+    """
+    table = read_texture_table()
+    if table is None:
+        failed.append("textures.json")
         return {}
+    out = existing_textures()
+    wanted = {}
+    for name, uri in sorted(table.items()):
+        if not uri:
+            fail("texture table names %s with no source uri" % name)
+            failed.append(name)
+            continue
+        if name in out and not force:
+            continue
+        source = os.path.join(NPC_DIR, uri.replace("/", os.sep))
+        if os.path.isfile(source):
+            wanted[name] = source
+        else:
+            fail("texture source missing: %s" % source)
+            failed.append(os.path.basename(source))
+    if not wanted:
+        log("textures: %d on the mount, none to import" % len(out))
+        return out
     imported = bl.import_textures([(src, name) for name, src in sorted(wanted.items())], TEXTURES)
     saved = 0
     for name, texture in sorted(imported.items()):
@@ -256,11 +388,16 @@ def import_textures_for(paths):
         # failure here: the material instance still serialises its reference, so the bake reports
         # success and the body draws untextured on the next run.
         if bl.save("%s/%s" % (TEXTURES, name)):
+            out[name] = texture
             saved += 1
         else:
             fail("could not save texture %s" % name)
-    log("textures: %d imported, %d saved" % (len(imported), saved))
-    return imported
+            failed.append(name)
+    for name in sorted(set(wanted) - set(imported)):
+        fail("texture did not import: %s" % wanted[name])
+        failed.append(name)
+    log("textures: %d imported, %d saved, %d on the mount" % (len(imported), saved, len(out)))
+    return out
 
 
 def eye_slot_masters(manifest, stem, blob):
@@ -293,10 +430,11 @@ def eye_slot_masters(manifest, stem, blob):
 
 
 def existing_textures():
-    """{asset name: Texture2D} already on the mount, for a run whose texture stage is current.
+    """{asset name: Texture2D} already on the mount.
 
     The bindings a mesh is built with resolve through this, so skipping the import must not mean
-    skipping the lookup -- a mesh built against an empty table binds no albedo and draws white.
+    skipping the lookup -- a mesh built against an empty table binds no albedo and draws white. It
+    is also what an import consults to know which rows of the table it still owes.
     """
     out = {}
     for path in unreal.EditorAssetLibrary.list_assets(TEXTURES, recursive=False,
@@ -304,20 +442,29 @@ def existing_textures():
         asset = unreal.EditorAssetLibrary.load_asset(path)
         if asset is not None:
             out[asset.get_name()] = asset
-    log("textures: %d already current" % len(out))
+    log("textures: %d already on the mount" % len(out))
     return out
 
 
 def material_bindings(blob, textures):
-    """{material slot name: Texture2D asset path} for one model."""
+    """({material slot: Texture2D asset path}, [albedo the table holds no asset for]) for one model.
+
+    An unresolved slot is reported rather than dropped. A mesh built without it still serialises a
+    material instance, one that binds no albedo and draws untextured, and its recipe names the same
+    bindings either way -- so nothing would ever rebuild it.
+    """
     out = {}
+    unbound = set()
     for material, uri in eskm.materials(blob).items():
         if not uri:
             continue
-        asset = textures.get(texture_asset_name(uri))
-        if asset is not None:
-            out[material] = asset.get_path_name()
-    return out
+        name = texture_asset_name(uri)
+        asset = textures.get(name)
+        if asset is None:
+            unbound.add(name)
+            continue
+        out[material] = asset.get_path_name()
+    return out, sorted(unbound)
 
 
 def owner_clips(manifest, stems):
@@ -370,7 +517,7 @@ def blend_source(manifest, owner, is_bank):
     return section.get(owner, {}).get("blends", "")
 
 
-def bake_banks(manifest, partition, stems, library, failed, plan):
+def bake_banks(manifest, partition, stems, library, failed, plan, tracker):
     """Bake every bank the named bodies reach ONCE, and return the skeletons they play them from.
 
     A `UAnimSequence` is bound to exactly one `USkeleton`, so a bank recorded once was rebuilt for
@@ -419,7 +566,8 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
                  % (name, len(family["members"]) - len(members), len(family["members"])))
             failed.append(name)
             continue
-        if wants(plan, scope, "bank_skeletons"):
+        if (wants(plan, scope, "bank_skeletons")
+                and tracker.wants_unit("bank_skeletons", skeleton_package)):
             # Rebuilt from every declared member, in declared order, rather than merged into
             # whatever a previous run left behind: a skeleton that only grows keeps the bones of
             # banks a later partition moved elsewhere, and an untracked bone falls back to exactly
@@ -434,6 +582,10 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
                 fail("bank skeleton %s: built %d bones, the partition declares %d"
                      % (name, bones, family["bones"]))
                 failed.append(name)
+                # The sequences below bind to this skeleton, so a tree the partition disagrees with
+                # takes the family's banks with it rather than receipting them against it.
+                continue
+            tracker.record("bank_skeletons", skeleton_package)
         else:
             bones = family["bones"]
 
@@ -444,34 +596,209 @@ def bake_banks(manifest, partition, stems, library, failed, plan):
         spaces_total = 0
         dropped_total = 0
         grids_skipped = 0
+        baked_banks = 0
         for bank in [b for b in family["members"] if b in needed]:
+            unit = character_cache.bank_clips_object_path(bank)
+            if not tracker.wants_unit("banks", unit):
+                continue
+            baked_banks += 1
+            broken = False
             package = "%s/%s" % (BANKS, bank)
             error, count, dropped = library.build_anim_sequences_from_source(
                 source_path(bank, bank=True), package, skeleton_package)
             if error:
                 fail("%s: %s" % (bank, error))
                 failed.append(bank)
+                broken = True
             total += count
             dropped_total += dropped
 
             blends = blend_source(manifest, bank, True)
-            if not blends:
-                continue
-            error, spaces, skipped_grids, skipped_cells = library.build_blend_spaces_from_grids(
-                blends, package, skeleton_package)
-            if error:
-                fail("%s blends: %s" % (bank, error))
-                failed.append(bank)
-            spaces_total += spaces
-            grids_skipped += skipped_grids
-            if skipped_cells:
-                log("%s: %d grid cell(s) had no baked clip" % (bank, skipped_cells))
-        log("bank family '%s': %d bank(s) (%d bones), %d sequence(s), %d blend space(s), "
-            "%d track(s) unbound%s"
-            % (name, len(members), bones, total, spaces_total, dropped_total,
+            if blends:
+                error, spaces, skipped_grids, skipped_cells = (
+                    library.build_blend_spaces_from_grids(blends, package, skeleton_package))
+                if error:
+                    fail("%s blends: %s" % (bank, error))
+                    failed.append(bank)
+                    broken = True
+                spaces_total += spaces
+                grids_skipped += skipped_grids
+                if skipped_cells:
+                    log("%s: %d grid cell(s) had no baked clip" % (bank, skipped_cells))
+            if not broken:
+                tracker.record("banks", unit)
+            tracker.maybe_checkpoint("banks through %s" % bank)
+        log("bank family '%s': %d bank(s) of %d member(s) (%d bones), %d sequence(s), "
+            "%d blend space(s), %d track(s) unbound%s"
+            % (name, baked_banks, len(members), bones, total, spaces_total, dropped_total,
                ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
         release_packages()
     return skeletons
+
+
+def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
+                textures, bank_skeletons, baking):
+    """One skeleton, the named meshes and their own clips, per model rig family.
+
+    Each body and each clip owner is a unit of its own: the family's skeleton is a function of its
+    declared members' bone trees, so a body whose geometry changed rebuilds that body and leaves
+    every other mesh and every sequence in the family alone.
+    """
+    for name in baking:
+        family = partition["models"][name]
+        skeleton_package = family["skeleton"]
+        scope = "model.%s" % name
+        members = family["members"]
+        if not any(wants(plan, scope, stage)
+                   for stage in ("family_skeletons", "meshes", "clips")):
+            continue
+        # Every declared member seeds the skeleton, not just the ones this run bakes. The tree and
+        # the reference pose are therefore a function of the partition rather than of the slice --
+        # which is what an untracked bone falls back to, and what a blend mask is content-addressed
+        # against. A slice that seeded from its own members alone would hash the same authored mask
+        # to a different profile name and fail the next grid that spans two slices.
+        missing = [s for s in members if not os.path.isfile(source_path(s))]
+        if missing:
+            fail("family %s: %d declared member container(s) missing: %s"
+                 % (name, len(missing), ", ".join(missing[:4])))
+            failed.append(name)
+            continue
+        authoring_skeleton = (wants(plan, scope, "family_skeletons")
+                              and tracker.wants_unit("family_skeletons", skeleton_package))
+        if authoring_skeleton:
+            error, bones = library.build_family_skeleton(
+                [source_path(s) for s in members], skeleton_package, True)
+            if error:
+                fail("family skeleton %s: %s" % (name, error))
+                failed.append(name)
+                continue
+            if bones != family["bones"]:
+                fail("family skeleton %s: built %d bones, the partition declares %d"
+                     % (name, bones, family["bones"]))
+                failed.append(name)
+                # Every mesh and every sequence below binds to this skeleton, so a tree the
+                # partition disagrees with takes the whole family with it rather than leaving
+                # receipts against a skeleton this run just declared wrong.
+                continue
+        else:
+            bones = family["bones"]
+
+        # The meshes merge into a tree that already carries every bone the family declares, so the
+        # merge can only be a no-op -- and a refusal means the declared partition disagrees with
+        # `MergeAllBonesToBoneTree`, which is the authority. That is a fatal disagreement rather
+        # than something to route around: a slice that invented a family here would write a second
+        # answer for every clip label under a name nothing else points at.
+        mesh_failed = False
+        built = []
+        if wants(plan, scope, "meshes"):
+            built = [s for s in members
+                     if s in stems
+                     and tracker.wants_unit("meshes", character_cache.mesh_object_path(s))]
+        for stem in built:
+            blob = eskm.read(source_path(stem))
+            bindings, unbound = material_bindings(blob, textures)
+            if unbound:
+                fail("SK_%s: %d albedo(s) absent from %s: %s"
+                     % (stem, len(unbound), TEXTURES, ", ".join(unbound)))
+                failed.append(stem)
+                mesh_failed = True
+                continue
+            error = library.build_skeletal_mesh_from_source(
+                source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
+                BODY_MASTER, MATERIALS, bindings,
+                eye_slot_masters(manifest, stem, blob))
+            if error:
+                fail("SK_%s: %s" % (stem, error))
+                failed.append(stem)
+                mesh_failed = True
+            else:
+                tracker.record("meshes", character_cache.mesh_object_path(stem))
+                tracker.maybe_checkpoint("meshes through %s" % stem)
+        log("family '%s': %d mesh(es) of %d declared model(s), %d bones"
+            % (name, len(built), len(members), bones))
+
+        # A family whose skeleton is short of a body's bones cannot bake that body's clips, and the
+        # clip builder would report every owner in turn against a skeleton that was never finished.
+        # The mesh error above is the one worth reading, so stop here rather than bury it.
+        if mesh_failed:
+            fail("family '%s': skipping clips, a model in it did not build" % name)
+            continue
+
+        # What makes the editor offer this family's bodies and the banks' clips together. The
+        # runtime needs no declaration -- `DecompressPose` builds the name-keyed remapping for any
+        # skeleton pair -- but every editor-side validator consults it.
+        if authoring_skeleton:
+            error = library.declare_compatible_skeletons(skeleton_package, bank_skeletons)
+            if error:
+                fail("family '%s': %s" % (name, error))
+                failed.append(name)
+                # The clips below play through that declaration, so an unfinished skeleton stops
+                # them being authored against it.
+                continue
+            tracker.record("family_skeletons", skeleton_package)
+
+        if not wants(plan, scope, "clips"):
+            release_packages()
+            continue
+
+        owners = owner_clips(manifest, [s for s in members if s in stems])
+        total = 0
+        spaces_total = 0
+        # Grids the bake declined. A grid the exporter left with fewer than two live cells is not a
+        # blend space and is dropped by the runtime reader too, so it is reported rather than fatal.
+        grids_skipped = 0
+        # Stays zero here: a body's OWN clips are the only ones this loop builds, and the builder
+        # fails outright rather than drop one of those. A bank track with nowhere to bind is the
+        # bank pass's business now.
+        dropped_total = 0
+        authored_owners = 0
+        for owner, is_bank in sorted(owners.items()):
+            if is_bank:
+                # Already baked, once, onto a bank skeleton this family is compatible with.
+                continue
+            unit = character_cache.clips_object_path(name, owner)
+            if not tracker.wants_unit("clips", unit):
+                continue
+            authored_owners += 1
+            broken = False
+            path = source_path(owner, bank=is_bank)
+            if not os.path.isfile(path):
+                fail("no .eskm for clip owner %s" % owner)
+                failed.append(owner)
+                continue
+            error, count, dropped = library.build_anim_sequences_from_source(
+                path, "%s/%s/%s" % (ANIMS, name, owner), skeleton_package)
+            if error:
+                fail("%s: %s" % (owner, error))
+                failed.append(owner)
+                broken = True
+            total += count
+            dropped_total += dropped
+
+            # The blend spaces AFTER this owner's sequences, because a sample is one of them. Most
+            # owners declare no grid at all and so ship no sidecar -- 913 of the 1,166 sequences on
+            # either `move_and_ranged` are a single cell, which is a clip and needs no table.
+            blends = blend_source(manifest, owner, is_bank)
+            if blends:
+                error, spaces, skipped_grids, skipped_cells = (
+                    library.build_blend_spaces_from_grids(
+                        blends, "%s/%s/%s" % (ANIMS, name, owner), skeleton_package))
+                if error:
+                    fail("%s blends: %s" % (owner, error))
+                    failed.append(owner)
+                    broken = True
+                spaces_total += spaces
+                grids_skipped += skipped_grids
+                if skipped_cells:
+                    log("%s: %d grid cell(s) had no baked clip" % (owner, skipped_cells))
+            if not broken:
+                tracker.record("clips", unit)
+            tracker.maybe_checkpoint("clips through %s" % owner)
+        log("family '%s': %d own clip owner(s), %d sequence(s), %d blend space(s)%s"
+            % (name, authored_owners, total, spaces_total,
+               ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
+
+        release_packages()
 
 
 def main():
@@ -506,149 +833,48 @@ def main():
     library = unreal.ElysiumSkeletalBuildLibrary
     partition = read_partition()
     plan = read_plan()
+    tracker = CharacterTracker(plan)
     if plan is not None:
-        log("plan: %d scope(s) -- %s" % (
-            len(plan), ", ".join("%s[%s]" % (s, "+".join(sorted(v)))
-                                 for s, v in sorted(plan.items()))))
+        scopes = plan.get("scopes", {})
+        log("plan: %d scope(s), %d unit(s) -- %s" % (
+            len(scopes),
+            sum(len(units) for units in plan.get("units", {}).values()),
+            ", ".join("%s[%s]" % (s, "+".join(sorted(v)))
+                      for s, v in sorted(scopes.items()) if v)))
     baking = sorted({partition["model_family_of"][stem] for stem in stems})
     log("%d model(s) in %d of %d declared rig famil%s"
         % (len(stems), len(baking), len(partition["models"]),
            "y" if len(partition["models"]) == 1 else "ies"))
 
     failed = []
-    # Props draw from the same texture corpus as the cast -- `gallerynoir` and `zodiac` are wall
-    # art, `palmtree` is scenery -- so their containers seed the import beside the bodies rather
-    # than importing a second set under different names.
-    texture_sources = [source_path(stem) for stem in stems]
-    textures = (import_textures_for(texture_sources)
-                if wants(plan, "_global", "textures") else existing_textures())
+    # A prop-only run authors no body, so it reaches no binding and imports nothing: the placed
+    # models take the neutral body master and their owning map's already-baked materials.
+    authoring_textures = (bool(stems)
+                          and wants(plan, "_global", "textures")
+                          and tracker.wants_unit("textures", character_cache.TEXTURES))
+    if authoring_textures:
+        before = len(failed)
+        # A hand-run bake carries no plan and is the recovery surface, so it re-imports like a
+        # forced one.
+        textures = import_texture_corpus(
+            failed, force=bool((plan or {}).get("force", plan is None)))
+        # A texture that did not import or did not save leaves a body drawing untextured, so the
+        # stage is not receipted and the next run imports it again.
+        if len(failed) == before:
+            tracker.record("textures", character_cache.TEXTURES)
+    else:
+        textures = existing_textures()
 
-    bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan)
-    props_baked = bake_props(manifest, library, failed, plan, prop_stems)
+    bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan, tracker)
+    props_baked = bake_props(manifest, library, failed, plan, tracker, prop_stems)
     if props_baked:
         log("%d animated prop(s) baked to %s" % (props_baked, PROPS))
 
-    for name in baking:
-        family = partition["models"][name]
-        skeleton_package = family["skeleton"]
-        scope = "model.%s" % name
-        members = family["members"]
-        if not any(wants(plan, scope, stage)
-                   for stage in ("family_skeletons", "meshes", "clips")):
-            continue
-        # Every declared member seeds the skeleton, not just the ones this run bakes. The tree and
-        # the reference pose are therefore a function of the partition rather than of the slice --
-        # which is what an untracked bone falls back to, and what a blend mask is content-addressed
-        # against. A slice that seeded from its own members alone would hash the same authored mask
-        # to a different profile name and fail the next grid that spans two slices.
-        missing = [s for s in members if not os.path.isfile(source_path(s))]
-        if missing:
-            fail("family %s: %d declared member container(s) missing: %s"
-                 % (name, len(missing), ", ".join(missing[:4])))
-            failed.append(name)
-            continue
-        if wants(plan, scope, "family_skeletons"):
-            error, bones = library.build_family_skeleton(
-                [source_path(s) for s in members], skeleton_package, True)
-            if error:
-                fail("family skeleton %s: %s" % (name, error))
-                failed.append(name)
-                continue
-            if bones != family["bones"]:
-                fail("family skeleton %s: built %d bones, the partition declares %d"
-                     % (name, bones, family["bones"]))
-                failed.append(name)
-        else:
-            bones = family["bones"]
+    bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
+                textures, bank_skeletons, baking)
 
-        # The meshes merge into a tree that already carries every bone the family declares, so the
-        # merge can only be a no-op -- and a refusal means the declared partition disagrees with
-        # `MergeAllBonesToBoneTree`, which is the authority. That is a fatal disagreement rather
-        # than something to route around: a slice that invented a family here would write a second
-        # answer for every clip label under a name nothing else points at.
-        mesh_failed = False
-        built = [s for s in members if s in stems] if wants(plan, scope, "meshes") else []
-        for stem in built:
-            blob = eskm.read(source_path(stem))
-            error = library.build_skeletal_mesh_from_source(
-                source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
-                BODY_MASTER, MATERIALS,
-                material_bindings(blob, textures),
-                eye_slot_masters(manifest, stem, blob))
-            if error:
-                fail("SK_%s: %s" % (stem, error))
-                failed.append(stem)
-                mesh_failed = True
-        log("family '%s': %d mesh(es) of %d declared model(s), %d bones"
-            % (name, len(built), len(members), bones))
-
-        # A family whose skeleton is short of a body's bones cannot bake that body's clips, and the
-        # clip builder would report every owner in turn against a skeleton that was never finished.
-        # The mesh error above is the one worth reading, so stop here rather than bury it.
-        if mesh_failed:
-            fail("family '%s': skipping clips, a model in it did not build" % name)
-            continue
-
-        # What makes the editor offer this family's bodies and the banks' clips together. The
-        # runtime needs no declaration -- `DecompressPose` builds the name-keyed remapping for any
-        # skeleton pair -- but every editor-side validator consults it.
-        if wants(plan, scope, "family_skeletons"):
-            error = library.declare_compatible_skeletons(skeleton_package, bank_skeletons)
-            if error:
-                fail("family '%s': %s" % (name, error))
-                failed.append(name)
-
-        if not wants(plan, scope, "clips"):
-            release_packages()
-            continue
-
-        owners = owner_clips(manifest, [s for s in members if s in stems])
-        total = 0
-        spaces_total = 0
-        # Grids the bake declined. A grid the exporter left with fewer than two live cells is not a
-        # blend space and is dropped by the runtime reader too, so it is reported rather than fatal.
-        grids_skipped = 0
-        # Stays zero here: a body's OWN clips are the only ones this loop builds, and the builder
-        # fails outright rather than drop one of those. A bank track with nowhere to bind is the
-        # bank pass's business now.
-        dropped_total = 0
-        for owner, is_bank in sorted(owners.items()):
-            if is_bank:
-                # Already baked, once, onto a bank skeleton this family is compatible with.
-                continue
-            path = source_path(owner, bank=is_bank)
-            if not os.path.isfile(path):
-                fail("no .eskm for clip owner %s" % owner)
-                failed.append(owner)
-                continue
-            error, count, dropped = library.build_anim_sequences_from_source(
-                path, "%s/%s/%s" % (ANIMS, name, owner), skeleton_package)
-            if error:
-                fail("%s: %s" % (owner, error))
-                failed.append(owner)
-            total += count
-            dropped_total += dropped
-
-            # The blend spaces AFTER this owner's sequences, because a sample is one of them. Most
-            # owners declare no grid at all and so ship no sidecar -- 913 of the 1,166 sequences on
-            # either `move_and_ranged` are a single cell, which is a clip and needs no table.
-            blends = blend_source(manifest, owner, is_bank)
-            if not blends:
-                continue
-            error, spaces, skipped_grids, skipped_cells = library.build_blend_spaces_from_grids(
-                blends, "%s/%s/%s" % (ANIMS, name, owner), skeleton_package)
-            if error:
-                fail("%s blends: %s" % (owner, error))
-                failed.append(owner)
-            spaces_total += spaces
-            grids_skipped += skipped_grids
-            if skipped_cells:
-                log("%s: %d grid cell(s) had no baked clip" % (owner, skipped_cells))
-        log("family '%s': %d own clip owner(s), %d sequence(s), %d blend space(s)%s"
-            % (name, sum(1 for is_bank in owners.values() if not is_bank), total, spaces_total,
-               ", %d grid(s) skipped" % grids_skipped if grids_skipped else ""))
-
-        release_packages()
+    # The last batch, and the report the orchestrator promotes once the verifier agrees.
+    tracker.checkpoint("final")
 
     if failed:
         raise SystemExit("[chars] failed: %s" % ", ".join(sorted(set(failed))))

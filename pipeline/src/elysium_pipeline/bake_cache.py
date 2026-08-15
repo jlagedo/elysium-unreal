@@ -76,6 +76,10 @@ def _atomic_json(path: Path, payload: dict) -> None:
     temporary.replace(path)
 
 
+#: The character bake writes its run plan through the same atomic writer.
+atomic_json = _atomic_json
+
+
 def _canonical(value):
     """Return a JSON-safe, deterministic representation of an asset recipe."""
 
@@ -438,6 +442,67 @@ def _corpus_bake_source_fingerprint(
         "corpus-bake",
         cache,
     )
+
+
+def module_closure_fingerprint(
+    path: Path,
+    key: str,
+    roots: Iterable[str],
+    *,
+    shared_names: Iterable[str] = (),
+    cache: ContentDigestCache | None = None,
+) -> str:
+    """Hash a module's shared nodes plus the call closure of the named top-level functions.
+
+    The function-level twin of `_bake_source_closure_fingerprint`, for an Unreal entrypoint whose
+    stages are module-level functions rather than methods of a bake class. Imports, constants and
+    every node that is not a top-level function are shared and always hashed, as are the functions
+    named in `shared_names` -- a driver that calls every stage is hashed verbatim rather than
+    expanded, because expanding it would make every stage reach every other one.
+    """
+
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (OSError, SyntaxError, UnicodeError):
+        return fingerprint_content([path], extra=(f"{key}-fallback",), cache=cache)
+
+    lines = source.splitlines(keepends=True)
+    functions: dict[str, ast.AST] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            functions[node.name] = node
+
+    shared_set = set(shared_names)
+    missing = (set(roots) | shared_set) - functions.keys()
+    if missing:
+        return fingerprint_content(
+            [path], extra=(f"{key}-missing", *sorted(missing)), cache=cache
+        )
+
+    selected = set(roots)
+    pending = list(selected)
+    while pending:
+        node = functions[pending.pop()]
+        for child in ast.walk(node):
+            if (
+                isinstance(child, ast.Name)
+                and child.id in functions
+                and child.id not in selected
+                and child.id not in shared_set
+            ):
+                selected.add(child.id)
+                pending.append(child.id)
+
+    shared = [
+        node
+        for node in tree.body
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        or node.name in shared_set
+    ]
+    stage_nodes = [functions[name] for name in selected]
+    ordered = sorted([*shared, *stage_nodes], key=lambda node: getattr(node, "lineno", 0))
+    return _hash_parts([key, *(_node_source(lines, node) for node in ordered)])
 
 
 def _python_symbols_fingerprint(

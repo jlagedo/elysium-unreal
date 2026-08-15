@@ -348,6 +348,8 @@ class Bake(object):
         self.prop_skins = {}             # stem -> {family: {authored material: family material}}
         self.prop_phys = {}              # stem -> {"mass": kg, "hulls": [(verts, tris)]}
         self.masters = {}
+        self.error_material_asset = None  # the shared checkerboard, authored on the first miss
+        self.error_keys = {}             # material name that resolved no VMT -> slots bound to it
         self.env = {}                    # <map>.env, key -> [tokens]
         self.weather = None              # <map>.weather.json
         self.rain_height = None
@@ -673,6 +675,35 @@ class Bake(object):
         return ((world, self.mat_pkg, self.shared_tex_pkg),
                 (decals, self.decal_mat_pkg, self.shared_tex_pkg))
 
+    def error_material(self):
+        """The material a slot binds when its own name resolved no `.vmt`. Authored on first use,
+        so a run without a miss adds nothing to the mount."""
+        if self.error_material_asset is None:
+            self.error_material_asset = bl.ensure_error_material()
+            if self.error_material_asset is None:
+                raise SystemExit("[bake] the error material could not be authored: %s"
+                                 % bl.ERROR_MATERIAL_PATH)
+        return self.error_material_asset
+
+    def error_bind(self, key, where):
+        """Bind the error material for one slot whose material name resolves no `.vmt`, warning
+        once per distinct name.
+
+        VtMB substitutes its own `___error` material for exactly this case and says nothing about
+        it at the shipped developer level, deduping its dev-only message per name; 1,152 model
+        slots across 100 names miss install-wide (research case `material-resolution`). So a
+        missed slot is a surface to reproduce, not a failure: the model is built and receipted
+        with this material bound, and because the recipe names it, a `.vmt` appearing for the key
+        later rewrites the `.mtl`, the recipe and the mesh.
+        """
+        if key not in self.error_keys:
+            unreal.log_warning(
+                "[bake] material %r resolves no VMT -- binding %s (first seen on %s)"
+                % (key, bl.ERROR_MATERIAL_PATH, where))
+            self.error_keys[key] = 0
+        self.error_keys[key] += 1
+        return self.error_material()
+
     def material_for(self, key):
         """The material instance one world surface binds.
 
@@ -684,7 +715,9 @@ class Bake(object):
         """
         mat = self.world_mats.get(key)
         if mat is None:
-            return None
+            # The `.mtl` carries this surface's `newmtl` with no `mat` line, so its material name
+            # resolved no `.vmt` -- the engine's own miss, answered the engine's own way.
+            return self.error_bind(key, self.map)
         if SC.is_map_scoped_material(key, decal=mat.decal, wetness_driven=mat.wetness_driven,
                                      local=mat.local):
             package = self.decal_mat_pkg if mat.decal else self.mat_pkg
@@ -1197,6 +1230,9 @@ class Bake(object):
         built = 0
         tris = 0
         dropped = 0
+        unbound = 0
+        error_slots = 0
+        error_props = 0
         phys_meshes = 0
         phys_shapes = 0
         wanted = set()
@@ -1213,10 +1249,37 @@ class Bake(object):
                     model, normals, [], model.groups, (0.0, 0.0, 0.0))
                 asset_path = "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem))
                 materials = []
+                missed = 0
                 for name in names:
                     mat = mats.get(name)
-                    key = mat.material_key if mat else name
-                    materials.append(self.materials.get((self.shared_mat_pkg, key)))
+                    if mat is None:
+                        # No `mat` line for this slot: the exporter resolved no `.vmt` for its
+                        # material name, which is the engine's own routine miss.
+                        materials.append(self.error_bind(name, stem))
+                        missed += 1
+                        continue
+                    material = self.materials.get((self.shared_mat_pkg, mat.material_key))
+                    if material is None:
+                        # The material is defined but its instance is not on the mount, so the
+                        # corpus is unbaked or stale. A null slot saves a mesh that renders
+                        # Unreal's own default, and its receipt would then freeze that unbound
+                        # state as current. The prop is left unbuilt and unreceipted so the next
+                        # run retries it.
+                        fail("%s: slot %r resolves no loaded material for key %r"
+                             % (stem, name, mat.material_key))
+                        materials = None
+                        break
+                    materials.append(material)
+                if materials is None:
+                    unbound += 1
+                    # Keep the prop's already-baked package on the mount even though this run
+                    # will not receipt it -- the prune below deletes every SM_ name not in
+                    # `wanted`, and an unresolved slot must retry next run, not go missing now.
+                    wanted.add(asset_path.rsplit("/", 1)[-1])
+                    continue
+                if missed:
+                    error_slots += missed
+                    error_props += 1
                 # A prop model whose materials are all opaque/masked can be Nanite; a mixed model
                 # cannot (Nanite is a whole-mesh setting), so it falls back wholesale. The test
                 # spans the alternate skin families too: a skin swaps whole material instances, so
@@ -1251,8 +1314,12 @@ class Bake(object):
         pruned = bl.prune_package_prefix(self.shared_mesh_pkg, "SM_", wanted, self.prune_scope)
         self.tracker.pruned("props", pruned)
         log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) / "
-            "%d stale pruned (%.1fs)"
-            % (built, tris, dropped, phys_meshes, phys_shapes, pruned, time.time() - start))
+            "%d stale pruned%s%s (%.1fs)"
+            % (built, tris, dropped, phys_meshes, phys_shapes, pruned,
+               " / %d slots error-bound across %d props" % (error_slots, error_props)
+               if error_slots else "",
+               " / %d unbuilt for an unbound material" % unbound if unbound else "",
+               time.time() - start))
         self._author_skin_set()
         log("prop assets: %s" % self.tracker.summary("props"))
 
@@ -1275,8 +1342,11 @@ class Bake(object):
             for family, remap in families.items():
                 for slot, rep in remap.items():
                     mat = mats.get(rep)
-                    mic = self.materials.get(
-                        (self.shared_mat_pkg, mat.material_key)) if mat else None
+                    # A family repaint resolves like any other slot: no `.vmt` for the name is the
+                    # engine's miss and takes the error material; a defined material with no
+                    # instance on the mount is a stale corpus and is named instead.
+                    mic = (self.materials.get((self.shared_mat_pkg, mat.material_key)) if mat
+                           else self.error_bind(rep, stem))
                     if mic is None:
                         unresolved += 1
                         log("  ! %s skin %d: no material instance for %r" % (stem, family, rep))
@@ -1772,8 +1842,8 @@ class Bake(object):
             if name not in slots:
                 continue
             mat = self.prop_mats.get(stem, {}).get(rep)
-            mic = self.materials.get(
-                (self.shared_mat_pkg, mat.material_key)) if mat else None
+            mic = (self.materials.get((self.shared_mat_pkg, mat.material_key)) if mat
+                   else self.error_bind(rep, stem))
             if mic is not None:
                 component.set_material(slots.index(name), mic)
                 applied += 1
@@ -1818,6 +1888,10 @@ class Bake(object):
             actor.set_folder_path("Decals")
             placed += 1
         for name in sorted(missing):
+            # The one bind that does not fall back to the error material: a UDecalComponent only
+            # accepts a Deferred Decal domain material, and the shared error material is a surface
+            # one, so binding it here would draw nothing and complain. A decal is a whole actor
+            # rather than a slot, so the wall it projected onto still renders correctly without it.
             fail("decal material has no baked instance: %s" % name)
         return placed
 

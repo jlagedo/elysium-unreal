@@ -245,8 +245,11 @@ def read_mtl(path, corpus=None, local=None):
     state different things about one authored material. `local` carries the definitions of
     materials that exist only inside this map's own PAKFILE.
 
-    A surface whose material neither document names is skipped and reported by the caller: a
-    silently missing definition would bake as the master's own placeholder.
+    A surface whose material neither document names is skipped and named in the log: a silently
+    missing definition would bake as the master's own placeholder. Every caller passes the whole
+    set of documents its `.mtl` can draw from -- the corpus alone for a prop, the corpus plus the
+    map's own `materials.json` for a world surface -- so a key that resolves in neither is a defect
+    in the export that wrote the key, not an optional absence.
     """
     corpus = corpus or {}
     local = local or {}
@@ -271,9 +274,13 @@ def read_mtl(path, corpus=None, local=None):
                     from_local = False
                 else:
                     from_local = True
-                if record is not None:
-                    mats[cur] = mat_from_record(cur, record, tok[1])
-                    mats[cur].local = from_local
+                if record is None:
+                    unreal.log_warning(
+                        "[bake] %s: slot %r names material key %r, which neither the corpus nor "
+                        "this map's own document carries" % (path, cur, tok[1]))
+                    continue
+                mats[cur] = mat_from_record(cur, record, tok[1])
+                mats[cur].local = from_local
             elif cur in mats and key == "cube" and len(tok) >= 2:
                 # The cube this surface samples is the map's, not the material's.
                 mats[cur].env_cube = tok[1]
@@ -579,6 +586,89 @@ def configure_texture(texture, role):
         texture.set_editor_property("srgb", True)
         texture.set_editor_property("compression_settings",
                                     unreal.TextureCompressionSettings.TC_DEFAULT)
+
+
+# The engine's own miss substitute, reproduced. VtMB's material system binds a synthetic
+# `___error` material -- UnlitGeneric, MATERIAL_VAR_MODEL, a procedural checkerboard for a base
+# texture -- for every material name that resolves no `.vmt`, and reports it only through a
+# developer-level warning nobody ships (research case `material-resolution`). Misses are routine in
+# the shipped install, so the bake substitutes too rather than failing the surface.
+ERROR_MATERIAL_PACKAGE = shared_corpus.BAKED_ROOT + "/Error"
+ERROR_MATERIAL_NAME = "M_ElysiumError"
+ERROR_MATERIAL_PATH = "%s/%s" % (ERROR_MATERIAL_PACKAGE, ERROR_MATERIAL_NAME)
+
+#: Checker squares per UV tile and the two emissive colours of a square: Source's error texture is
+#: a black-and-purple checkerboard, and the material is unlit, so both read flat.
+ERROR_CHECKER_TILES = 8.0
+ERROR_CHECKER_DARK = (0.0, 0.0, 0.0)
+ERROR_CHECKER_PURPLE = (0.35, 0.0, 0.42)
+
+
+def ensure_error_material():
+    """The checkerboard error material on the shared mount, authored once.
+
+    Its own package, not `BAKED_MATERIALS`: the corpus scope prunes that package to exactly the
+    material instances it authored, and this asset is in none of their wanted-sets.
+
+    Every value in the graph is a constant of this module, so the asset is the same every run and
+    a recipe naming it stays stable. An existing asset is reused -- the graph has no input that
+    could invalidate it -- and a fresh one is saved here, before any level referencing it is."""
+    asset = unreal.load_asset(ERROR_MATERIAL_PATH)
+    if asset is not None:
+        return asset
+    ensure_dir(ERROR_MATERIAL_PACKAGE)
+    material = _tools.create_asset(ERROR_MATERIAL_NAME, ERROR_MATERIAL_PACKAGE,
+                                   unreal.Material, unreal.MaterialFactoryNew())
+    if material is None:
+        unreal.log_error("[bake] the error material could not be created: %s"
+                         % ERROR_MATERIAL_PATH)
+        return None
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+
+    def node(kind, x, y):
+        return _mel.create_material_expression(material, kind, x, y)
+
+    # floor(uv * tiles) numbers the square a pixel sits in, so the parity of the two components
+    # is the checker: ceil(frac((u + v) / 2)) is 0 on one square and 1 on each of its neighbours.
+    coords = node(unreal.MaterialExpressionTextureCoordinate, -900, 0)
+    coords.set_editor_property("u_tiling", ERROR_CHECKER_TILES)
+    coords.set_editor_property("v_tiling", ERROR_CHECKER_TILES)
+    square = node(unreal.MaterialExpressionFloor, -740, 0)
+    _mel.connect_material_expressions(coords, "", square, "")
+    parts = []
+    for index, channel in enumerate("rg"):
+        component = node(unreal.MaterialExpressionComponentMask, -600, -60 + index * 120)
+        for name in "rgba":
+            component.set_editor_property(name, name == channel)
+        _mel.connect_material_expressions(square, "", component, "")
+        parts.append(component)
+    total = node(unreal.MaterialExpressionAdd, -440, 0)
+    _mel.connect_material_expressions(parts[0], "", total, "A")
+    _mel.connect_material_expressions(parts[1], "", total, "B")
+    half = node(unreal.MaterialExpressionMultiply, -320, 0)
+    _mel.connect_material_expressions(total, "", half, "A")
+    half.set_editor_property("const_b", 0.5)
+    parity = node(unreal.MaterialExpressionFrac, -200, 0)
+    _mel.connect_material_expressions(half, "", parity, "")
+    checker = node(unreal.MaterialExpressionCeil, -80, 0)
+    _mel.connect_material_expressions(parity, "", checker, "")
+
+    colors = []
+    for index, rgb in enumerate((ERROR_CHECKER_DARK, ERROR_CHECKER_PURPLE)):
+        constant = node(unreal.MaterialExpressionConstant3Vector, -320, -240 + index * 80)
+        constant.set_editor_property(
+            "constant", unreal.LinearColor(rgb[0], rgb[1], rgb[2], 1.0))
+        colors.append(constant)
+    blend = node(unreal.MaterialExpressionLinearInterpolate, 60, 0)
+    _mel.connect_material_expressions(colors[0], "", blend, "A")
+    _mel.connect_material_expressions(colors[1], "", blend, "B")
+    _mel.connect_material_expressions(checker, "", blend, "Alpha")
+    # Unlit takes its whole colour from emissive, so the checker never picks up the room's light.
+    _mel.connect_material_property(blend, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    _mel.recompile_material(material)
+    if not unreal.EditorAssetLibrary.save_asset(ERROR_MATERIAL_PATH, only_if_is_dirty=False):
+        unreal.log_error("[bake] the error material could not be saved: %s" % ERROR_MATERIAL_PATH)
+    return material
 
 
 def make_material_instance(name, package, parent):
