@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "topic": "stealth-kill-server",
+  "consuming_document": "docs/vtmb/stealth.md",
+  "research_id": "RE50",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "How does the rulebook compute deaf arc and minimum approach depth?",
+    "Which guards select and cache a victim?",
+    "Which HUD and input paths consume eligibility?",
+    "How does grapple mode three commit resolve and release a stealth kill?"
+  ],
+  "functions": [
+    {"address": "101be020", "label": "StealthKillRulesInit", "confidence": "scope trace CStealthKillRules::InitTable", "role": "load the rulebook and precompute angle dots", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "101be1d0", "label": "StealthKillMaxDistance", "confidence": "FindVictim distance accessor", "role": "recover the authored maximum acquisition distance", "depth": 2, "cap": 320, "asm_count": 2200},
+    {"address": "101be1f0", "label": "StealthKillFindVictim", "confidence": "scope trace CStealthKillRules::FindVictim", "role": "recover per-frame victim scan cache and candidate guards", "depth": 6, "cap": 920, "asm_count": 8200},
+    {"address": "101be500", "label": "StealthKillInDeafArc", "confidence": "scope trace CStealthKillRules::InDeafArc", "role": "recover the rear-angle predicate", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101be710", "label": "StealthKillInDeafZone", "confidence": "scope trace CStealthKillRules::InDeafZone", "role": "recover combined angle and minimum-depth predicate", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101be930", "label": "StealthKillGetDeafArcDot", "confidence": "scope trace CStealthKillRules::GetDeafZoneArcDot", "role": "recover Sneaking index and dot lookup", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101bea90", "label": "StealthKillGetDeafArcDegrees", "confidence": "scope trace CStealthKillRules::GetDeafZoneArc", "role": "recover authored degree lookup", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101bebf0", "label": "StealthKillRulesLoadFile", "confidence": "scope trace CStealthKillRules::LoadFile", "role": "recover schema defaults and selected corpus values", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101bedb0", "label": "StealthKillRulesLoadKey", "confidence": "scope trace CStealthKillRules::LoadKey", "role": "recover table extension behavior", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "101bef50", "label": "StealthKillComputeMinDepth", "confidence": "scope trace CStealthKillRules::ComputeMinDepth", "role": "recover normalized Sneaking versus hearing formula", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "101bf060", "label": "StealthKillGetMinDepth", "confidence": "scope trace CStealthKillRules::GetDeafZoneMinDepth", "role": "resolve attacker Sneaking and victim hearing inputs", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "10167320", "label": "PlayerStealthKillEligibility", "confidence": "FindVictim precondition and player weapon-action caller", "role": "recover player and active-weapon eligibility", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "10167370", "label": "PlayerTryStealthKill", "confidence": "FindVictim consumer storing victim handles and entering grapple mode 3", "role": "recover authoritative input commit", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "100154a1", "label": "PlayerTryStealthKillThunk", "confidence": "sole thunk to PlayerTryStealthKill", "role": "enumerate input callers", "depth": 2, "cap": 320, "asm_count": 2200},
+    {"address": "101755d0", "label": "PlayerUpdateClientActionState", "confidence": "CBasePlayer UpdateClientData slot and FindVictim consumer", "role": "recover HUD icon precedence and published fields", "depth": 6, "cap": 920, "asm_count": 8200},
+    {"address": "103eaca0", "label": "WeaponMeleeSecondaryAttack", "confidence": "existing core mechanics recovery", "role": "recover Attack input precedence over ordinary heavy attack", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "10341850", "label": "CombatCharacterValidStealthKillTarget", "confidence": "scope trace CBaseCombatCharacter::IsValidStealthKillTarget", "role": "recover base victim eligibility", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "1037bbc0", "label": "GhoulValidStealthKillTarget", "confidence": "scope trace CNPC_VGhoulCroucher::IsValidStealthKillTarget", "role": "recover subclass divergence", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "103285a0", "label": "CombatCharacterCanStartGrapple", "confidence": "FindVictim and StartGrappleAttack mode-3 gate", "role": "recover paired-action admission", "depth": 6, "cap": 920, "asm_count": 8200},
+    {"address": "10328df0", "label": "CombatCharacterStartGrapple", "confidence": "scope trace CBaseCombatCharacter::StartGrappleAttack", "role": "recover mode-3 paired commit ordering", "depth": 6, "cap": 920, "asm_count": 8200}
+  ],
+  "field_probes": [
+    {"displacement": "1c58", "label": "player_stealth_kill_target_primary"},
+    {"displacement": "1c60", "label": "player_stealth_kill_target_secondary"},
+    {"displacement": "1e8c", "label": "player_action_surface_enabled"},
+    {"displacement": "1e90", "label": "player_action_surface_target_index"},
+    {"displacement": "1ea4", "label": "player_action_surface_type"}
+  ],
+  "const_probes": [
+    {"address": "10449270", "label": "degrees_to_radians"},
+    {"address": "104454c0", "label": "one_float"},
+    {"address": "104454c4", "label": "zero_float"}
+  ],
+  "grep_probes": [
+    {"label": "stealth_kill_rules", "str": "CStealthKillRules~StealthKillRules~DeafZoneArc~StealthFeatMin~StealthFeatMax~HearingScalarMin~HearingScalarMax~StealthKillDistMax", "fn": "Stealth~Victim~Deaf~Grapple", "cap": 920},
+    {"label": "stealth_kill_commit", "str": "Stealth_Kill~StealthKill~stealth_kill_success~stealth_kill_failure~Target_is_Stealth_Killable", "cls": "Player~CombatCharacter~Weapon~NPC", "fn": "Stealth~Kill~Grapple~Attack~Use", "cap": 920},
+    {"label": "stealth_kill_actions", "str": "ACT_STEALTH~PLAYER_STEALTH~Stealth_Killed~stealth_kill", "cls": "Player~CombatCharacter~Weapon~NPC", "fn": "Activity~Animation~Event~Killed~Death", "cap": 920}
+  ],
+  "relationships": [],
+  "findings": []
+}
