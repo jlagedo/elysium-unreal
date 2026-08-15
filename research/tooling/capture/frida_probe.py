@@ -611,6 +611,15 @@ def launch(args: argparse.Namespace) -> int:
     output = _session_root("launch", args.recipe)
     finalization = output / "supervision.txt"
     launcher = ROOT / "retail_capture_launch.py"
+    collector_arguments = [
+        os.fspath(Path(__file__).resolve()),
+        "collect",
+        "--recipe",
+        args.recipe,
+        "--output",
+        os.fspath(output),
+        "--validate-retail",
+    ]
     command = [
         sys.executable,
         os.fspath(launcher),
@@ -625,23 +634,12 @@ def launch(args: argparse.Namespace) -> int:
         str(args.timeout_seconds),
         "--collector",
         sys.executable,
-        "--collector-argument",
-        os.fspath(Path(__file__).resolve()),
-        "--collector-argument",
-        "collect",
-        "--collector-argument",
-        "--recipe",
-        "--collector-argument",
-        args.recipe,
-        "--collector-argument",
-        "--output",
-        "--collector-argument",
-        os.fspath(output),
-        "--collector-argument",
-        "--validate-retail",
         "--finalization",
         os.fspath(finalization),
     ]
+    command.extend(
+        f"--collector-argument={value}" for value in collector_arguments
+    )
     for value in args.target_argument:
         command.extend(("--target-argument", value))
     print(f"Frida retail session: {output}", flush=True)
