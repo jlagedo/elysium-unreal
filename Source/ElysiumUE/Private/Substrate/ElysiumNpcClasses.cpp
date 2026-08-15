@@ -1596,22 +1596,20 @@ public:
 
 	virtual bool StepAwayFromSavePosition(float DistanceCm) override
 	{
-		if (Motor == nullptr)
+		// The rule itself is `ElysiumSchedule::StepAwayFromSavePosition` — extrapolate, project
+		// through the motor, re-test the projection against the retreat rule. This leaf supplies the
+		// two positions and turns the outcome into the task's pass/fail, so a refusal reaches the
+		// schedule's fail path already named rather than as a bare false.
+		FVector Destination = FVector::ZeroVector;
+		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
+			Motor, Origin, SavePosition, DistanceCm, Destination);
+		if (Result != ElysiumSchedule::ERetreat::Moving)
 		{
+			Mind.RecordExternal(FString::Printf(TEXT("TASK_MOVE_AWAY_PATH refused: %s"),
+				ElysiumSchedule::RetreatResultName(Result)));
 			return false;
 		}
-		// A step back, not a path to a goal: retail's near-door schedules repeat a short retreat
-		// rather than choosing a destination, which is what keeps the NPC out of the swing without
-		// it walking off somewhere.
-		FVector Away = Origin - SavePosition;
-		Away.Z = 0.0;
-		if (Away.IsNearlyZero())
-		{
-			return false;
-		}
-		Away.Normalize();
-		return Motor->MoveTo(Origin + Away * static_cast<double>(DistanceCm),
-			/*AcceptanceRadiusCm=*/16.f, /*SpeedCmPerSecond=*/0.f);
+		return true;
 	}
 
 	/**

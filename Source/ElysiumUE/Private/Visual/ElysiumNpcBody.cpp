@@ -5,6 +5,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DetourCrowdAIController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "NavigationSystem.h"
 #include "Navigation/CrowdFollowingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
@@ -405,4 +406,24 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 	}
 	Stop();
 	return EElysiumNpcMoveStatus::Failed;
+}
+
+bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const
+{
+	// The same Recast graph `MoveTo` paths over, asked the narrower question. Extent and nav data
+	// are left at the navigation system's own defaults — which is exactly what
+	// `MoveToLocation`'s `bProjectDestinationToNavigation` uses — so a point this refuses is a point
+	// the move request would have refused too.
+	const UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(GetWorld());
+	if (Nav == nullptr)
+	{
+		return false;   // no navigation behind this body: unprojectable, and the caller must fail
+	}
+	FNavLocation Projected;
+	if (!Nav->ProjectPointToNavigation(PointCm, Projected))
+	{
+		return false;
+	}
+	OutProjectedCm = Projected.Location;
+	return true;
 }

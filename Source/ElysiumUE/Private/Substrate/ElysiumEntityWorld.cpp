@@ -15,7 +15,9 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLipTrack.h"
+#include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumUseIcons.h"
@@ -382,6 +384,7 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsy
 	, WorldServices(InServices)
 	, Epoch(GElysiumNextWorldEpoch++)
 {
+	GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
 	LineService = MakeUnique<FElysiumLineService>(WorldServices.Audio);
 	// R5 — the chokepoints are never uninstrumented: the ring buffer (always-on history) and
 	// the log/VLOG stream are installed before any entity spawns. Phase 2 UI adds more sinks.
@@ -3277,6 +3280,45 @@ void FElysiumEntityWorld::Tick(double Now)
 	// After the thinks, so a turn opened this frame already has its track bound — the same ordering
 	// FElysiumChoreoScene::Think uses for RefreshFacialPose.
 	RefreshDialogueLipsync(Now);
+}
+
+const FElysiumGameSoundBus& FElysiumEntityWorld::GameSounds() const
+{
+	return *GameSoundBus;
+}
+
+FElysiumGameSoundBus& FElysiumEntityWorld::GameSounds()
+{
+	return *GameSoundBus;
+}
+
+void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
+	const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
+{
+	// Bind the authored table on the first emission rather than at construction: the rulebook loads
+	// lazily, and a world that never makes a noise should never force the file open. An invalid
+	// table stays unbound so the bus takes its silent normal-level fallback — the rulebook has
+	// already logged why the load failed, and re-reporting it per category would bury it.
+	if (!bSoundVolumesBound && GameState != nullptr)
+	{
+		bSoundVolumesBound = true;
+		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+		{
+			const FElysiumSoundVolumeTable& Table = Rules->SoundVolumes();
+			if (Table.IsValid())
+			{
+				GameSoundBus->SetVolumeTable(&Table);
+			}
+		}
+	}
+
+	FElysiumGameSoundRequest Request;
+	Request.Position = PositionCm;
+	Request.Category = Category;
+	Request.RadiusCm = RadiusCm;
+	Request.Source = Source;
+	Request.StealthHearingReductionCm = StealthHearingReductionCm;
+	GameSoundBus->Emit(Request, NowSeconds());
 }
 
 void FElysiumEntityWorld::FadeGlobalWetness(float Target)

@@ -410,6 +410,64 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// 11.15 — the two perception queries on the same seam. Nothing in the substrate consumes
+// them yet (13.1's light sampling and 13.5's senses are their callers), so what is under
+// test here is the CONTRACT every one of those callers will be written against: the
+// headless answers, and that a scripted answer actually comes back through the seam.
+//
+// Both defaults are load-bearing rather than placeholders. A `-nullrhi` Substrate run has
+// no collision world and no light rig; an implementation that answered "blocked" and
+// "dark" there would blind every NPC and hand the stealth surface a free pass in exactly
+// the runs meant to prove neither happens.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPerceptionQueryTest,
+	"Elysium.Substrate.PerceptionQueries", GElysiumTestFlags)
+bool FElysiumPerceptionQueryTest::RunTest(const FString&)
+{
+	const FVector Eye(0.0, 0.0, 160.0);
+	const FVector Target(500.0, 0.0, 160.0);
+
+	// --- A fully headless world has no seam to ask at all, which every caller must survive -----
+	{
+		const FElysiumWorldServices None;
+		TestNull(TEXT("a default-constructed bundle carries no embodiment"), None.Embodiment);
+	}
+
+	// --- The recording stub answers the headless values until a test says otherwise ------------
+	{
+		FElysiumRecordingServices Services;
+		IElysiumEmbodiment& Seam = Services;
+
+		TestTrue(TEXT("an unscripted line of sight is clear"), Seam.QueryLineOfSight(Eye, Target));
+		TestEqual(TEXT("an unscripted point is fully lit"), Seam.QueryLightAtPoint(Target), 1.0f);
+		TestTrue(TEXT("both crossings are recorded, so a caller's cadence is assertable"),
+			Services.Saw(TEXT("QueryLineOfSight")) && Services.Saw(TEXT("QueryLightAtPoint")));
+	}
+
+	// --- ...and the scripted values come back through the seam ---------------------------------
+	{
+		FElysiumRecordingServices Services;
+		Services.bLineOfSightClear = false;
+		Services.LightAtPoint = 0.25f;
+		IElysiumEmbodiment& Seam = Services;
+
+		TestFalse(TEXT("a blocked segment reports blocked"), Seam.QueryLineOfSight(Eye, Target));
+		TestEqual(TEXT("a dim point reports its level"), Seam.QueryLightAtPoint(Target), 0.25f);
+		TestTrue(TEXT("the recorded line carries the verdict, not just the call"),
+			Services.Saw(TEXT("QueryLineOfSight")) && Services.Log().Contains(TEXT("blocked")));
+		TestTrue(TEXT("...and the light level it answered"),
+			Services.Log().Contains(TEXT("= 0.25")));
+
+		// The queries are geometry, never a verdict (K13): asking twice with the same arguments
+		// answers the same thing, because nothing about cadence, debounce or grace lives here.
+		TestEqual(TEXT("the query holds no state of its own"),
+			Seam.QueryLightAtPoint(Target), Seam.QueryLightAtPoint(Target));
+	}
+	return true;
+}
+
+// =====================================================================================
 // Modern +use — deterministic selection order and the world-owned focus/session lifecycle.
 // =====================================================================================
 

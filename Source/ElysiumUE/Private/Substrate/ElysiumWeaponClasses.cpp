@@ -20,6 +20,7 @@
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -924,6 +925,15 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 			return;
 		}
 		MagazineCount -= Mode->AmmoCost;
+	}
+
+	// The gunshot stimulus, from its real producer: the shot has been paid for, so it is heard
+	// whether or not it hits. Emitted before the victim is resolved for exactly that reason — a
+	// miss is the loudest thing in the room too.
+	if (!bMelee && World != nullptr)
+	{
+		World->EmitGameSound(Attacker->Origin, ElysiumGameSounds::Gunshot(),
+			/*RadiusCm, table-resolved*/ -1.f, Attacker->Handle);
 	}
 
 	FElysiumEntity* VictimEnt = OpponentHandle.IsSet() && World ? World->Resolve(OpponentHandle) : nullptr;

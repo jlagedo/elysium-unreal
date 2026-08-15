@@ -17,6 +17,7 @@
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
 #include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
+#include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's entity parameter
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
@@ -1361,6 +1362,15 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 		RecomputeSheet();
 	}
 
+	// `NPC_TAKE_DAMAGE`, from its real producer: the noise a body makes when it is hit, emitted only
+	// once damage has actually landed on this character. The two early returns above — nothing to
+	// commit, and no health track — make no sound, which is right: neither is a hit.
+	if (World != nullptr)
+	{
+		World->EmitGameSound(Origin, ElysiumGameSounds::NpcTakeDamage(),
+			/*RadiusCm, table-resolved*/ -1.f, Handle);
+	}
+
 	// The senses/memory record the schedule kernel reads. A no-op on the base.
 	OnDamageCommitted(Dmg);
 
@@ -1531,6 +1541,14 @@ void FElysiumPlayer::Think()
 	// a timer because the pulse deadline is simulation state (R4/S8): the same think that advances
 	// it is the one the save's clock restores, so a load cannot duplicate or skip a pulse.
 	TickFeed(World ? World->NowSeconds() : 0.0);
+
+	// SEAM: the footstep hearing stimulus belongs here, and there is nothing to hang it on yet.
+	// `sound_volume_table.txt` names `PLAYER_FOOTSTEP_SNEAK`/`_WALK`/`_RUN` plus `PLAYER_JUMP` and
+	// the two landings, and separates walking from running by its own `PLAYER_RUN_SPEED` (128
+	// units/s) — but this runtime raises no step EVENT at all: no animation notify, no movement
+	// callback, nothing on the locomotion sample that says "a foot just landed". Inventing a cadence
+	// here would be substrate arithmetic standing in for a producer, so the step stays unemitted
+	// until the locomotion/stealth work supplies one. Not warned: nothing failed.
 }
 
 void FElysiumPlayer::RefreshClanEffects()

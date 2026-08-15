@@ -32,6 +32,7 @@
 #include "ElysiumUserCmd.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -788,6 +789,15 @@ bool FElysiumCombatCharacter::Feed(double Now)
 	const FString PulseLog = ElysiumFeed::PulseLogLine(
 		PlayerBefore, BloodPoolValue(), VictimBefore, Victim->BloodPoolValue(), FeedState.BloodStolen);
 	UE_LOG(LogElysiumFeed, Display, TEXT("%s"), *PulseLog);
+
+	// `PLAYER_AGGRESSIVE_FEED`, from its real producer. The pulse is the transaction's own beat, so
+	// the stimulus rides it rather than the grapple's beginning: a feed that is interrupted after
+	// one pulse made one noise, and a long drain keeps making them.
+	if (World != nullptr)
+	{
+		World->EmitGameSound(Origin, ElysiumGameSounds::Feed(),
+			/*RadiusCm, table-resolved*/ -1.f, Handle);
+	}
 
 	// The accelerating cadence, and AT MOST ONE pulse per update — never a catch-up loop.
 	FeedState.Interval = ElysiumFeed::NextInterval(FeedState.Interval);

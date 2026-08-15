@@ -16,6 +16,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumMoverSounds.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
@@ -654,6 +655,19 @@ void FElysiumDoorBase::InputToggle(const FElysiumEntityHandle& Activator)
 	}
 }
 
+void FElysiumDoorBase::EmitDoorGameSound()
+{
+	// A door that plays no audio makes no stimulus either: `SF_DOOR_SILENT` is the authored
+	// statement that this mover is quiet, and it has to mean the same thing to an NPC's ears as it
+	// does to the mixer.
+	if (bMoverSilent || World == nullptr)
+	{
+		return;
+	}
+	World->EmitGameSound(Body ? Body->GetComponentLocation() : Origin, ElysiumGameSounds::Door(),
+		/*RadiusCm, table-resolved*/ -1.f, Handle);
+}
+
 void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator)
 {
 	LastActivator = Activator;
@@ -663,6 +677,7 @@ void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator)
 	static const FName Open(TEXT("open")), Swing(TEXT("swing"));
 	PlayMoverSound(Open);
 	StartMoverLoop(Swing);
+	EmitDoorGameSound();
 	static const FName OnOpen(TEXT("OnOpen"));
 	FireOutput(OnOpen, Activator);
 	IssueMoveToOpen();
@@ -675,6 +690,7 @@ void FElysiumDoorBase::DoorGoDown(const FElysiumEntityHandle& Activator)
 	static const FName Close(TEXT("close")), Swing(TEXT("swing"));
 	PlayMoverSound(Close);
 	StartMoverLoop(Swing);
+	EmitDoorGameSound();
 	static const FName OnClose(TEXT("OnClose"));
 	FireOutput(OnClose, Activator);
 	IssueMoveToClosed();

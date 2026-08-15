@@ -18,6 +18,7 @@ struct FElysiumTerminalView;
 
 class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
+class FElysiumGameSoundBus;
 class FElysiumLineService;
 class AActor;
 class UElysiumBrushComponent;
@@ -388,6 +389,23 @@ public:
 	IElysiumPresenter*  Presenter() const  { return WorldServices.Presenter; }
 	IElysiumWeather*    Weather() const    { return WorldServices.Weather; }
 	IElysiumCameraService* Camera() const  { return WorldServices.Camera; }
+	// --- Game-sound stimulus (the third event kind) ------------------------------------
+	// `docs/architecture/gameplay-systems-architecture.md` §2.5.3. A domain that makes a noise the
+	// world can react to calls this from its real producer site; nothing is delivered, and there is
+	// no fifth transport. Consumers poll `GameSounds()` during their own think.
+	//
+	// `RadiusCm <= 0` asks `sound_volume_table.txt` for the category's own reach, which is the
+	// ordinary call. `StealthHearingReductionCm` is `AdjustSoundDistForStealth`'s subtrahend and is
+	// 0 at every producer today (see `Substrate/ElysiumGameSound.h`).
+	void EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
+		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f);
+	// The retained window. Const for consumers and the debug surface; the mutable overload exists
+	// for the two callers that own the bus's configuration — this world, and a Substrate-tier test
+	// binding a fabricated table — the same shape `Queue()` already has. Defined in the .cpp
+	// because the bus type is only forward-declared here.
+	const FElysiumGameSoundBus& GameSounds() const;
+	FElysiumGameSoundBus& GameSounds();
+
 	const FElysiumWeatherState& GetWeatherState() const { return WeatherState; }
 	void FadeGlobalWetness(float Target);
 	FElysiumLineService* Lines() const { return LineService.Get(); }
@@ -530,6 +548,13 @@ private:
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam (11.2); members may be null
 	FElysiumWeatherState WeatherState;
+	// The game-sound stimulus window. Held by pointer so the substrate's own header stays out of
+	// this public one, the way LineService below already does.
+	TUniquePtr<FElysiumGameSoundBus> GameSoundBus;
+	// Set once the rulebook has been asked for the sound-volume table. Latched rather than retried,
+	// so a world with no game state (or with no exported `vdata`) costs one lookup and then runs on
+	// the bus's own normal-level fallback.
+	bool bSoundVolumesBound = false;
 	TUniquePtr<FElysiumLineService> LineService;
 	uint32 Epoch = 0;
 	bool bActive = false;

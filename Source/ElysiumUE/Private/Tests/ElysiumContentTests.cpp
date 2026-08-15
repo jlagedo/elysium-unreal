@@ -40,6 +40,7 @@
 #include "Substrate/ElysiumQuestView.h"
 
 #include "Algo/AnyOf.h"
+#include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -3917,6 +3918,106 @@ bool FElysiumDiceContentTest::RunTest(const FString&)
 		TestTrue(TEXT("every ten counted as a success"), Result.Tens <= Result.Successes);
 	}
 
+	return true;
+}
+
+// =================================================================================================
+// `sound_volume_table.txt` against the real file — the authored half of NPC hearing.
+//
+// Two claims: the four documented levels still carry the radii and occlusion policy
+// `docs/vtmb/npc-ai-reverse-engineering.md` records, and every category this runtime's producers
+// name is actually in the file. The second is the one that matters: a category the table does not
+// name resolves to the normal level and warns, so a re-export that renamed a row would quietly
+// change how far a gunshot carries.
+//
+// The bus's own resolution rules are pinned content-free in `Elysium.Substrate.GameSound.Resolve`.
+// =================================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSoundVolumeContentTest,
+	"Elysium.Content.SoundVolumes", GElysiumContentTestFlags)
+bool FElysiumSoundVolumeContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
+	if (!IFileManager::Get().FileExists(
+		*FElysiumContentPaths::VdataFile(TEXT("system/sound_volume_table.txt"))))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		return true;
+	}
+
+	FString Error;
+	FElysiumSoundVolumeTable Volumes;
+	if (!TestTrue(TEXT("sound_volume_table.txt loads"), Volumes.Load(Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// Sixteen authored levels, 0..15, of which 9..15 are the file's own `FUTURE USE` rows.
+	TestEqual(TEXT("sixteen volume levels"), Volumes.NumLevels(), 16);
+
+	struct FExpected
+	{
+		int32 Level;
+		float RadiusUnits;
+		bool bOccludable;
+		const TCHAR* What;
+	};
+	const FExpected Documented[] = {
+		{ FElysiumSoundVolumeTable::QuietLevel,         180.f, true,  TEXT("quiet") },
+		{ FElysiumSoundVolumeTable::NormalLevel,        240.f, true,  TEXT("normal") },
+		{ FElysiumSoundVolumeTable::LoudLevel,         1200.f, false, TEXT("loud") },
+		{ FElysiumSoundVolumeTable::PlayerStealthLevel, 120.f, true,  TEXT("player stealth") },
+		{ FElysiumSoundVolumeTable::FeedingLevel,       240.f, true,  TEXT("feeding") },
+	};
+	for (const FExpected& Row : Documented)
+	{
+		const FElysiumSoundLevel* Level = Volumes.Level(Row.Level);
+		if (TestNotNull(*FString::Printf(TEXT("the %s level is authored"), Row.What), Level))
+		{
+			TestEqual(*FString::Printf(TEXT("  %s radius"), Row.What), Level->RadiusUnits,
+				Row.RadiusUnits);
+			TestEqual(*FString::Printf(TEXT("  %s occlusion policy"), Row.What), Level->bOccludable,
+				Row.bOccludable);
+		}
+	}
+
+	// The fallback this runtime falls open to when the file is absent has to be the file's own
+	// normal row, or the two disagree about what "normal" is.
+	if (const FElysiumSoundLevel* Normal = Volumes.Level(FElysiumSoundVolumeTable::NormalLevel))
+	{
+		TestEqual(TEXT("the absent-file fallback matches the authored normal level"),
+			FElysiumSoundVolumeTable::NormalFallback().RadiusUnits, Normal->RadiusUnits);
+		TestEqual(TEXT("...including its occlusion policy"),
+			FElysiumSoundVolumeTable::NormalFallback().bOccludable, Normal->bOccludable);
+	}
+
+	// Every category a producer in this runtime names.
+	const TArray<FName> Emitted = {
+		ElysiumGameSounds::Gunshot(),
+		ElysiumGameSounds::NpcTakeDamage(),
+		ElysiumGameSounds::Feed(),
+		ElysiumGameSounds::Door(),
+	};
+	for (const FName& Category : Emitted)
+	{
+		TestNotNull(*FString::Printf(TEXT("the table names '%s'"), *Category.ToString()),
+			Volumes.FindCategory(Category.ToString()));
+	}
+	// The footstep rows the SEAM in `FElysiumPlayer::Think` is waiting on. Asserted so the seam's
+	// premise stays true: the data is there, only the producer is missing.
+	for (const TCHAR* Category : { TEXT("PLAYER_FOOTSTEP_SNEAK"), TEXT("PLAYER_FOOTSTEP_WALK"),
+		TEXT("PLAYER_FOOTSTEP_RUN") })
+	{
+		TestNotNull(*FString::Printf(TEXT("the footstep row '%s' is authored"), Category),
+			Volumes.FindCategory(Category));
+	}
+	// `MiscData` — the walk/run threshold the footstep producer will read.
+	TestEqual(TEXT("PLAYER_RUN_SPEED is authored"),
+		Volumes.MiscFloat(TEXT("PLAYER_RUN_SPEED"), -1.f), 128.f);
+
+	AddInfo(FString::Printf(TEXT("sound_volume_table: %d levels, %d categories"),
+		Volumes.NumLevels(), Volumes.NumCategories()));
 	return true;
 }
 

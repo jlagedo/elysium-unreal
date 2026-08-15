@@ -109,6 +109,14 @@ const FElysiumDiceTables& UElysiumRulebookSubsystem::Dice()
 	return Get(DiceTables, bDiceLoaded, TEXT("dicerolls"), DiceError);
 }
 
+// A failed load leaves the table empty, and the sound bus reads `IsValid()` before binding it — so
+// a missing export costs one warning here and leaves every emission on the normal-level fallback
+// rather than warning again per category.
+const FElysiumSoundVolumeTable& UElysiumRulebookSubsystem::SoundVolumes()
+{
+	return Get(SoundVolumeTable, bSoundVolumesLoaded, TEXT("soundvolumes"), SoundVolumesError);
+}
+
 const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
 {
 	return Get(DispositionTable, bDispositionsLoaded, TEXT("dispositiontable"), DispositionsError);
@@ -216,6 +224,11 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 
 	Out.Add({ TEXT("dicerolls"),    TEXT("system/dicerolls.txt"),
 		Dice().Num(), Dice().IsValid(), DiceError });
+
+	// Counted in categories rather than levels: a producer names a category, so a parse regression
+	// that lost the `SoundTypes` block is the one that silences the whole hearing surface.
+	Out.Add({ TEXT("soundvolumes"), TEXT("system/sound_volume_table.txt"),
+		SoundVolumes().NumCategories(), SoundVolumes().IsValid(), SoundVolumesError });
 
 	Out.Add({ TEXT("items"),        TEXT("items/*.txt"),
 		Items().Num(), Items().IsValid(), ItemsError });

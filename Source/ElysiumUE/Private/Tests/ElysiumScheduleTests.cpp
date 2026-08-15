@@ -18,6 +18,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumTestServices.h"   // the recording motor TASK_MOVE_AWAY_PATH projects through
 
 static constexpr EAutomationTestFlags GElysiumScheduleTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -27,6 +28,8 @@ namespace
 	// One line per task body call, so a program's shape is asserted rather than its side effects.
 	struct FRecordingRunner final : IElysiumScheduleRunner
 	{
+		FRecordingRunner() { Motor.Calls = &Calls; }
+
 		TArray<FString> Calls;
 
 		// Knobs a test turns to drive each branch.
@@ -39,6 +42,15 @@ namespace
 		// `WAIT_RANDOM` draws through the NPC schedule stream in the real runner; here it is fixed
 		// so a duration is a literal in the test rather than a seed to reverse-engineer.
 		float RandomFraction = 1.f;
+
+		// `TASK_MOVE_AWAY_PATH` runs the REAL rule (11.14) rather than a double of it: the runner
+		// supplies the two positions and a recording motor, and
+		// `ElysiumSchedule::StepAwayFromSavePosition` does the extrapolating, the projecting and the
+		// re-testing. The NPC stands 200 cm out from what obstructed it, so a retreat is +X.
+		FElysiumRecordingNpcMotor Motor;
+		FVector Origin = FVector(200.0, 0.0, 0.0);
+		FVector SavePosition = FVector::ZeroVector;
+		ElysiumSchedule::ERetreat LastRetreat = ElysiumSchedule::ERetreat::Moving;
 
 		virtual float RunSpecialIdleActivity(double Now) override
 		{
@@ -58,8 +70,12 @@ namespace
 		}
 		virtual bool StepAwayFromSavePosition(float DistanceCm) override
 		{
-			Calls.Add(FString::Printf(TEXT("StepAway %.0f"), DistanceCm));
-			return bMotor;
+			FVector Destination = FVector::ZeroVector;
+			LastRetreat = ElysiumSchedule::StepAwayFromSavePosition(bMotor ? &Motor : nullptr,
+				Origin, SavePosition, DistanceCm, Destination);
+			Calls.Add(FString::Printf(TEXT("StepAway %.0f -> %s"), DistanceCm,
+				ElysiumSchedule::RetreatResultName(LastRetreat)));
+			return LastRetreat == ElysiumSchedule::ERetreat::Moving;
 		}
 		virtual float RandomSeconds(float Max) override { return Max * RandomFraction; }
 		virtual void RecordScheduleEvent(const FString& Row) override
@@ -271,6 +287,117 @@ bool FElysiumScheduleDoorTest::RunTest(const FString&)
 			ElysiumSchedule::Tick(State, Runner, Now, Delay));
 		TestTrue(TEXT("the trace names the motor task that failed"),
 			Runner.Saw(TEXT("TASK_FACE_SAVEPOSITION failed")));
+	}
+	return true;
+}
+
+// ============================================================================================
+// 11.14 — `TASK_MOVE_AWAY_PATH` asks the world where the step back actually lands, then re-tests
+// what came back. The re-test is the whole point: projection answers "where can someone stand",
+// not "is this still away from the door", so a navigable point that is no longer a retreat has to
+// fail the schedule rather than walk the NPC into the swing it was told to leave.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleRetreatProjectionTest,
+	"Elysium.Substrate.Schedule.RetreatProjection", GElysiumScheduleTestFlags)
+bool FElysiumScheduleRetreatProjectionTest::RunTest(const FString&)
+{
+	// --- Open floor: the projection returns the point, the re-test passes, the body moves --------
+	{
+		FElysiumRecordingNpcMotor Motor;
+		FVector Destination = FVector::ZeroVector;
+		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
+			&Motor, /*Origin*/ FVector(200.0, 0.0, 0.0), /*SavePosition*/ FVector::ZeroVector,
+			/*DistanceCm*/ 100.f, Destination);
+		TestEqual(TEXT("a projectable retreat moves"), Result, ElysiumSchedule::ERetreat::Moving);
+		TestTrue(TEXT("and it steps directly away from what obstructed it"),
+			Destination.Equals(FVector(300.0, 0.0, 0.0)));
+		TestTrue(TEXT("the destination handed to the motor is the PROJECTED point"),
+			Motor.RequestedFeet.Equals(Destination));
+	}
+
+	// --- The projection pulls the point back through the doorway: no longer a retreat ------------
+	{
+		FElysiumRecordingNpcMotor Motor;
+		// The only navigable ground near the extrapolated point is BEHIND the NPC, closer to the
+		// obstruction than it already stands.
+		Motor.ProjectedOverride = FVector(150.0, 0.0, 0.0);
+		FVector Destination = FVector::ZeroVector;
+		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
+			&Motor, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
+		TestEqual(TEXT("a projection that gained no ground is refused"), Result,
+			ElysiumSchedule::ERetreat::NotARetreat);
+		TestFalse(TEXT("and no movement request is issued at all"), Motor.bMoving);
+	}
+
+	// --- A sideways slide is not a step back either ----------------------------------------------
+	{
+		FElysiumRecordingNpcMotor Motor;
+		// Projected along the wall: navigable, and exactly as far from the obstruction as before.
+		Motor.ProjectedOverride = FVector(200.0, 100.0, 0.0);
+		FVector Destination = FVector::ZeroVector;
+		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
+			&Motor, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
+		// 223.6 cm out against 200 standing: it gained ground, so it IS a retreat. The margin only
+		// rejects a projection that gained less than `RetreatMarginCm`.
+		TestEqual(TEXT("a slide that still gains ground remains a retreat"), Result,
+			ElysiumSchedule::ERetreat::Moving);
+
+		FElysiumRecordingNpcMotor Flat;
+		Flat.ProjectedOverride = FVector(200.0, 10.0, 0.0);   // 200.25 cm out — inside the margin
+		const ElysiumSchedule::ERetreat Refused = ElysiumSchedule::StepAwayFromSavePosition(
+			&Flat, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
+		TestEqual(TEXT("...but one inside the margin has gained nothing"), Refused,
+			ElysiumSchedule::ERetreat::NotARetreat);
+	}
+
+	// --- Nothing navigable there, and nothing to ask at all ---------------------------------------
+	{
+		FElysiumRecordingNpcMotor Motor;
+		Motor.bProjectsToNavigable = false;
+		FVector Destination = FVector(-1.0, -1.0, -1.0);
+		const ElysiumSchedule::ERetreat Result = ElysiumSchedule::StepAwayFromSavePosition(
+			&Motor, FVector(200.0, 0.0, 0.0), FVector::ZeroVector, 100.f, Destination);
+		TestEqual(TEXT("an unprojectable retreat fails rather than pathing to a guess"), Result,
+			ElysiumSchedule::ERetreat::Unprojectable);
+		TestTrue(TEXT("and the out-parameter is left untouched"),
+			Destination.Equals(FVector(-1.0, -1.0, -1.0)));
+
+		TestEqual(TEXT("no motor is its own answer, distinct from an unprojectable point"),
+			ElysiumSchedule::StepAwayFromSavePosition(nullptr, FVector(200.0, 0.0, 0.0),
+				FVector::ZeroVector, 100.f, Destination),
+			ElysiumSchedule::ERetreat::NoMotor);
+
+		// Standing exactly on what obstructed it: there is no direction to leave in, and inventing
+		// one would be arithmetic standing in for a decision.
+		FElysiumRecordingNpcMotor Coincident;
+		TestEqual(TEXT("a coincident save position is refused before the world is asked"),
+			ElysiumSchedule::StepAwayFromSavePosition(&Coincident, FVector::ZeroVector,
+				FVector::ZeroVector, 100.f, Destination),
+			ElysiumSchedule::ERetreat::Degenerate);
+	}
+
+	// --- The refusal reaches the schedule's fail path ---------------------------------------------
+	{
+		FRecordingRunner Runner;
+		Runner.Motor.ProjectedOverride = FVector(150.0, 0.0, 0.0);   // no longer a retreat
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
+		int32 Thinks = 0;
+		while (Thinks < 8 && ElysiumSchedule::Tick(State, Runner, Now, Delay))
+		{
+			++Thinks;
+			Now += FMath::Max(0.01, Delay);
+		}
+		TestFalse(TEXT("the schedule ends rather than repeating a retreat that is not one"),
+			State.IsRunning());
+		TestTrue(TEXT("the trace names the failed move task"),
+			Runner.Saw(TEXT("TASK_MOVE_AWAY_PATH failed")));
+		TestTrue(TEXT("...and the runner recorded why the world refused it"),
+			Runner.Saw(TEXT("no longer a retreat")));
+		TestFalse(TEXT("the body was never asked to move"), Runner.Motor.bMoving);
 	}
 	return true;
 }

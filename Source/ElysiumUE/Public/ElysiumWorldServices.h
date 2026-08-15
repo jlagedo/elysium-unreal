@@ -120,6 +120,20 @@ public:
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
 
+	// 11.14 — the reachability query: where on the navigable surface does this arbitrary point
+	// land? Geometry only. The caller keeps the decision — whether the projected point is still the
+	// point it wanted — which is what stops this from becoming "give me somewhere good to stand"
+	// (S11/K13).
+	//
+	// **False means unprojectable**, and that is also the default: a motor implementation with no
+	// navigation behind it (a headless world, a recording double that has not opted in) genuinely
+	// cannot answer, and a caller must fail rather than walk to a guess. `OutProjectedCm` is
+	// untouched on false.
+	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const
+	{
+		return false;
+	}
+
 	// The body's realized locomotion (CCC1) — **the same record the player's mover publishes**, so
 	// the cast's locomotion and the player's cannot become two systems that happen to play the same
 	// files (`docs/architecture/animation-architecture.md` §3.2). Distinct from `Sample` above, which
@@ -456,6 +470,42 @@ public:
 	// radius survey that supplies the small-animal route (`rat_feed_arc`, `rat_feed_radius`) is
 	// deliberately absent: rat feeding is out of B6's scope.
 	virtual FElysiumEntityHandle QueryFeedTarget() const { return FElysiumEntityHandle::Invalid(); }
+
+	// 11.15 — the two perception queries (`docs/architecture/gameplay-systems-architecture.md`
+	// §5.5.3). Each supplies a missing WORLD TERM and never a verdict: cone, range, cadence, grace,
+	// debounce, the `vision`/`hearing`/`npc_perception` tuning and every threshold stay substrate
+	// rules (K13). A service that answered "this NPC can see the player" would have taken the
+	// decision instead of supplying the term.
+
+	// Is the straight segment between two world points clear of solid world geometry?
+	//
+	// The headless/null answer is **true**, and it is load-bearing rather than a placeholder: a
+	// `-nullrhi` Substrate run and an editor commandlet have no collision world, and an
+	// implementation that reported "blocked" there would blind every NPC in exactly the runs meant
+	// to prove they can see.
+	//
+	// Divergence, named: retail traces with content mask `0x4091` (solid world + opaque). Source
+	// content masks are not portable to Unreal's channel set, so the semantics are adapted rather
+	// than the number — the implementation traces `ELYSIUM_USE_CHANNEL`, which is the project's
+	// solid-world channel and the one the map's brush bodies and the material-less `.hulls` walkable
+	// surface already answer on. Characters are deliberately NOT occluders here: retail's mask
+	// carries no NPC/player bits, so a body standing between two points does not break the line.
+	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
+
+	// How lit is this point, normalized 0 (dark) to 1 (fully lit)?
+	//
+	// The headless/null answer is **1.0** — full light — for the mirror of the reason above: a run
+	// with no light rig must not read as pitch dark and hand the stealth surface a free pass it
+	// never earned.
+	//
+	// Divergence, named: retail samples the BAKED LIGHTMAP at the point. This runtime has no
+	// lightmap — the world is fully dynamic — so the estimate is computed from the authored runtime
+	// light set instead (`UElysiumLightRig`, the same `.lights` rows re-derived at load), as the sum
+	// of the attenuated contributions of the sources whose authored radius covers the point. Two
+	// consequences follow and both are accepted for this landing: the estimate ignores OCCLUSION, so
+	// a point in a lit room's shadow reads as lit; and it ignores the sky/sun terms, which are
+	// unoccluded whole-map values that would otherwise read every interior as fully lit.
+	virtual float QueryLightAtPoint(const FVector& PointCm) const { return 1.0f; }
 
 	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
 	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the

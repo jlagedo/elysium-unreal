@@ -13,6 +13,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumCameraSolve.h"   // FElysiumCameraShot (full type; ElysiumWorldServices.h only forward-declares it)
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -48,6 +49,13 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// clearing bAcceptMoves is how "this mark has no path" is expressed.
 	bool bAcceptMoves = true;
 	EElysiumNpcMoveStatus SampleStatus = EElysiumNpcMoveStatus::Moving;
+	// 11.14 — the reachability query. The stub projects to the point it was handed, which is the
+	// "open floor, nothing to correct" world every existing case already assumes; clearing
+	// bProjectsToNavigable is how "there is no navmesh under that" is expressed, and setting
+	// ProjectedOverride is how a projection that MOVED the point is expressed. Both branches matter:
+	// the consumer's re-test only fires on the second.
+	bool bProjectsToNavigable = true;
+	TOptional<FVector> ProjectedOverride;
 
 	void Record(const FString& Call) const
 	{
@@ -132,6 +140,18 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 			return SampleStatus;
 		}
 		return bFacing ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
+	}
+	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override
+	{
+		const FVector Result = ProjectedOverride.Get(PointCm);
+		Record(FString::Printf(TEXT("NpcMotor ProjectToNavigable %s -> %s"), *PointCm.ToString(),
+			bProjectsToNavigable ? *Result.ToString() : TEXT("unprojectable")));
+		if (!bProjectsToNavigable)
+		{
+			return false;   // OutProjectedCm stays untouched, as the interface promises
+		}
+		OutProjectedCm = Result;
+		return true;
 	}
 };
 
@@ -806,6 +826,23 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("QueryFeedTarget -> %s"), *FeedTarget.ToString()));
 		return FeedTarget;
+	}
+	// 11.15 — the two perception queries. Both default to the interface's stated headless answers,
+	// so a case that does not care about perception keeps running exactly as it did: every segment
+	// is clear and every point is fully lit.
+	bool bLineOfSightClear = true;
+	float LightAtPoint = 1.0f;
+	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override
+	{
+		Record(FString::Printf(TEXT("QueryLineOfSight %s -> %s = %s"), *FromCm.ToString(),
+			*ToCm.ToString(), bLineOfSightClear ? TEXT("clear") : TEXT("blocked")));
+		return bLineOfSightClear;
+	}
+	virtual float QueryLightAtPoint(const FVector& PointCm) const override
+	{
+		Record(FString::Printf(TEXT("QueryLightAtPoint %s = %.2f"), *PointCm.ToString(),
+			LightAtPoint));
+		return LightAtPoint;
 	}
 	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
 	{

@@ -28,9 +28,11 @@
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning — the gaze layer's content
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Visual/ElysiumNpcBody.h"
+#include "Visual/ElysiumLightRig.h"        // the authored light set the light query estimates from
 #include "Visual/ElysiumMapVisuals.h"
 
 #include "Components/BoxComponent.h"
+#include "Components/LightComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
@@ -1919,6 +1921,90 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 		}
 	}
 	return Best;
+}
+
+bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		// No collision world to ask. The interface's stated headless answer is "clear", and this is
+		// the same case reached through a live-but-unbuilt actor.
+		return true;
+	}
+	// Degenerate segments are trivially clear, and a zero-length trace is not a query worth paying
+	// for during a per-NPC sense pass.
+	if (FromCm.Equals(ToCm))
+	{
+		return true;
+	}
+	// `ELYSIUM_USE_CHANNEL` is this project's solid-world channel: the walkable `.hulls` collider is
+	// material-less and would be reported instead of the wall on the visibility channel, which is
+	// exactly why `+use` has its own. Complex tracing is off — the brush bodies are convex hulls and
+	// the query runs per NPC per sense pass.
+	FCollisionQueryParams Params(FName(TEXT("ElysiumLineOfSight")), /*bTraceComplex*/ false);
+	FHitResult Hit;
+	return !World->LineTraceSingleByChannel(Hit, FromCm, ToCm, ELYSIUM_USE_CHANNEL, Params);
+}
+
+float AElysiumMapActor::QueryLightAtPoint(const FVector& PointCm) const
+{
+	// How many contributing sources are folded in before the answer is called good enough. A point
+	// standing in more than this many overlapping authored radii is already saturated, so the cap
+	// bounds the cost without changing the verdict. Nothing here allocates.
+	constexpr int32 MaxContributors = 24;
+	// The single-source intensity that reads as fully lit. `UElysiumLightRig::MaxBrightness` is the
+	// calibrated ceiling one source is clipped to, so a point sitting at the centre of one
+	// full-strength light is 1.0 and everything dimmer is a fraction of it.
+	constexpr float MinReferenceIntensity = 0.01f;
+	// `UElysiumLightRig`'s own source-type numbering: 3 is the sun/skylight directional.
+	constexpr int32 SunSourceType = 3;
+
+	const UElysiumMapVisuals* MapVisuals = GetVisuals();
+	const UElysiumLightRig* Rig = MapVisuals ? MapVisuals->GetLightRig() : nullptr;
+	if (Rig == nullptr)
+	{
+		return 1.0f;   // the stated headless answer: no rig, no darkness to claim
+	}
+
+	const float Reference = FMath::Max(Rig->MaxBrightness, MinReferenceIntensity);
+	const TArray<UElysiumLightRig::FLightSource>& Sources = Rig->Sources();
+	float Total = 0.0f;
+	int32 Contributors = 0;
+	for (int32 Index = 0; Index < Sources.Num() && Contributors < MaxContributors; ++Index)
+	{
+		const UElysiumLightRig::FLightSource& Source = Sources[Index];
+		// A sky source lights the 3D-skybox miniature and never the playable world; the sun (type 3)
+		// is a directional term with no position, and folding it in untraced would read every
+		// interior as fully lit — the occlusion half of this query's stated divergence.
+		//
+		// A source switched off by hand in the Lights window is genuinely dark and is skipped. The
+		// MASTER visibility toggle deliberately is not consulted: `elysium.lights 0` is a debug view
+		// and must not change what an NPC perceives.
+		if (Source.bSky || Source.Type == SunSourceType || Rig->IsSourceDisabled(Index))
+		{
+			continue;
+		}
+		const ULightComponent* Light = Source.Light.Get();
+		if (Light == nullptr)
+		{
+			continue;
+		}
+		const float Reach = Source.RadiusCm > 1.0f ? Source.RadiusCm : Rig->FallbackRadiusCm;
+		const float Distance = static_cast<float>(
+			FVector::Dist(Light->GetComponentLocation(), PointCm));
+		if (Reach <= 0.0f || Distance >= Reach)
+		{
+			continue;
+		}
+		// The rig's own falloff shape, not inverse-square: VtMB's authored light is nearly flat
+		// inside its radius and stops at it, which is what `FalloffExponent` (1.0 today) encodes.
+		const float Attenuation = FMath::Pow(1.0f - (Distance / Reach),
+			FMath::Max(Rig->FalloffExponent, UE_KINDA_SMALL_NUMBER));
+		Total += Source.BaseIntensity * Attenuation;
+		++Contributors;
+	}
+	return FMath::Clamp(Total / Reference, 0.0f, 1.0f);
 }
 
 float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,

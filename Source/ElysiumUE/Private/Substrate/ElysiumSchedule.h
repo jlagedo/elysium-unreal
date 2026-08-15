@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+class IElysiumNpcMotor;   // the reachability query `TASK_MOVE_AWAY_PATH` asks the world
+
 // VtMB's schedule/task machinery, as much of it as we have recovered producers for.
 //
 // A schedule is an ordered task program. The NPC runs one task at a time across thinks; a task
@@ -142,4 +144,39 @@ namespace ElysiumSchedule
 	 */
 	bool Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
 		double& OutNextThinkDelay);
+
+	// --- `TASK_MOVE_AWAY_PATH`, whole (11.14) --------------------------------------------------
+	// Where the step back wants to land, whether the world will have it, and whether what the world
+	// handed back is still a retreat. It lives here rather than inside the NPC leaf for the reason
+	// the rest of this file does: the leaf class is file-local, so a rule spelled out there is a
+	// rule no Substrate test can drive. Every branch below is one this kernel's fail path depends
+	// on being distinguishable.
+	enum class ERetreat : uint8
+	{
+		Moving,         // navigable, still a retreat, and the body took the request
+		NoMotor,        // no body to ask -- the supported headless/backdrop case
+		Degenerate,     // the NPC is standing ON the save position; there is no direction to leave in
+		Unprojectable,  // the world carries no navigable surface at the extrapolated point
+		NotARetreat,    // navigable, but the projection put it no further from what it was leaving
+		MotorRefused,   // a good destination the body would not path to
+	};
+	const TCHAR* RetreatResultName(ERetreat Result);
+
+	// A retreat that has gained less than this much ground has gained none: the margin is what a
+	// projection sliding the point along a wall costs, and a step that only slid sideways is not a
+	// step back.
+	inline constexpr double RetreatMarginCm = 8.0;
+
+	/**
+	 * Extrapolate `DistanceCm` directly away from `SavePosition` in the horizontal plane, project
+	 * that point onto the navigable surface through the motor, RE-TEST the projection against the
+	 * retreat rule, and issue the move.
+	 *
+	 * The re-test is the point of the task: projection answers "where can someone stand", not "is
+	 * this still away from the door", so a point pulled back through the doorway is a navigable
+	 * point that must fail the schedule rather than walk the NPC into the swing it was told to
+	 * leave. `OutDestination` receives the projected point on every result that got that far.
+	 */
+	ERetreat StepAwayFromSavePosition(IElysiumNpcMotor* Motor, const FVector& Origin,
+		const FVector& SavePosition, float DistanceCm, FVector& OutDestination);
 }

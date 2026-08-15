@@ -78,6 +78,7 @@ public:
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) override;
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
+	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
 
 private:
 	FVector FeetLocation() const;

@@ -1,5 +1,7 @@
 #include "Substrate/ElysiumSchedule.h"
 
+#include "ElysiumWorldServices.h"   // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
+
 namespace
 {
 	// The registered numbers, decoded from their registration sites
@@ -305,4 +307,62 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	Runner.RecordScheduleEvent(TEXT("schedule exceeded its per-think task budget"));
 	State.Clear();
 	return false;
+}
+
+// ================================================================================================
+// `TASK_MOVE_AWAY_PATH` (11.14)
+// ================================================================================================
+
+const TCHAR* ElysiumSchedule::RetreatResultName(ERetreat Result)
+{
+	switch (Result)
+	{
+	case ERetreat::Moving:        return TEXT("moving");
+	case ERetreat::NoMotor:       return TEXT("no motor");
+	case ERetreat::Degenerate:    return TEXT("no direction to retreat in");
+	case ERetreat::Unprojectable: return TEXT("off the navmesh");
+	case ERetreat::NotARetreat:   return TEXT("projected point is no longer a retreat");
+	case ERetreat::MotorRefused:  return TEXT("the body refused the path");
+	}
+	return TEXT("unknown");
+}
+
+ElysiumSchedule::ERetreat ElysiumSchedule::StepAwayFromSavePosition(IElysiumNpcMotor* Motor,
+	const FVector& Origin, const FVector& SavePosition, float DistanceCm, FVector& OutDestination)
+{
+	if (Motor == nullptr)
+	{
+		return ERetreat::NoMotor;
+	}
+	// A step back, not a path to a goal: retail's near-door schedules repeat a short retreat rather
+	// than choosing a destination, which is what keeps the NPC out of the swing without it walking
+	// off somewhere.
+	FVector Away = Origin - SavePosition;
+	Away.Z = 0.0;
+	if (Away.IsNearlyZero())
+	{
+		return ERetreat::Degenerate;
+	}
+	Away.Normalize();
+	const FVector Desired = Origin + Away * static_cast<double>(DistanceCm);
+
+	// The extrapolated point is a guess about the world, so the world is asked (S11) instead of the
+	// guess being handed straight to MoveTo.
+	FVector Destination = Desired;
+	if (!Motor->ProjectToNavigable(Desired, Destination))
+	{
+		return ERetreat::Unprojectable;
+	}
+	OutDestination = Destination;
+
+	// The re-test, in the horizontal plane the retreat was computed in.
+	const double StandingDistance = FVector::Dist2D(Origin, SavePosition);
+	const double ProjectedDistance = FVector::Dist2D(Destination, SavePosition);
+	if (ProjectedDistance <= StandingDistance + RetreatMarginCm)
+	{
+		return ERetreat::NotARetreat;
+	}
+
+	return Motor->MoveTo(Destination, /*AcceptanceRadiusCm=*/16.f, /*SpeedCmPerSecond=*/0.f)
+		? ERetreat::Moving : ERetreat::MotorRefused;
 }

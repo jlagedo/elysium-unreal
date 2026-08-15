@@ -40,6 +40,9 @@ public:
 	const FElysiumWizard&             Wizard();
 	const FElysiumStrings&            Strings();
 	const FElysiumDiceTables&         Dice();
+	// `vdata/system/sound_volume_table.txt` — the radius and occlusion policy of every named game
+	// sound. Read by the substrate sound-event bus when a producer emits without an explicit radius.
+	const FElysiumSoundVolumeTable&   SoundVolumes();
 	// `vdata/system/dispositiontable.txt`. Both halves of a row are read from here: the
 	// `Animation Name` column the standing-idle vocabulary is keyed on, and the fidget/stance-change
 	// pacing the disposition stance machine rolls against.
@@ -91,6 +94,7 @@ private:
 	FElysiumWizard            WizardData;
 	FElysiumStrings           StringData;
 	FElysiumDiceTables        DiceTables;
+	FElysiumSoundVolumeTable  SoundVolumeTable;
 	FElysiumItemTable         ItemTable;
 	FElysiumDispositionTable  DispositionTable;
 	TMap<FString, TSharedPtr<FElysiumTerminalDefinition>> TerminalDefinitions;
@@ -108,6 +112,7 @@ private:
 	bool bWizardLoaded = false;
 	bool bStringsLoaded = false;
 	bool bDiceLoaded = false;
+	bool bSoundVolumesLoaded = false;
 	bool bItemsLoaded = false;
 	bool bDispositionsLoaded = false;
 
@@ -123,6 +128,7 @@ private:
 	FString WizardError;
 	FString StringsError;
 	FString DiceError;
+	FString SoundVolumesError;
 	FString ItemsError;
 	FString DispositionsError;
 

@@ -188,6 +188,10 @@ protected:
 	void DoorGoUp(const FElysiumEntityHandle& Activator);
 	void DoorGoDown(const FElysiumEntityHandle& Activator);
 
+	// The `DOOR_NORMAL` hearing stimulus, raised beside the audio one-shot at both motion starts.
+	// One helper rather than two call sites so the silence rule cannot drift between open and close.
+	void EmitDoorGameSound();
+
 	// Resolve `LinkedDoorName` to the paired door leaf through the world name index (cached, no-RTTI
 	// downcast via AsDoorBase). Null when unset or the partner is missing/not a door.
 	FElysiumDoorBase* ResolveLinkedDoor();
