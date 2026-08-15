@@ -17,6 +17,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumDamage.h"
 #include "ElysiumWorldServices.h"
 
 #include "Engine/GameInstance.h"
@@ -443,16 +444,19 @@ public:
 };
 
 // ============================================================================================
-// trigger_hurt (P4.5) — CTriggerHurt (2 on the tutorial). Deals `damage` to the player every
-// 0.5 s while it stands in the volume, on the substrate clock (R4). Enable/Disable + StartDisabled
-// come from CBaseTrigger; the overlap hooks track the player and drive the damage think.
+// trigger_hurt (P4.5) — CTriggerHurt (2 on the tutorial), on the substrate clock (R4).
+//
+// The cadence is retail's own (`docs/vtmb/entity_io.md` -> "Damage cadence"): entry deals
+// `damage x 0.5` and the think deals `damage x 3.0` every 3.0 s, so the sustained rate is
+// `damage` per second. A think that hurt nobody does not re-arm; the next StartTouch does.
+// Enable/Disable + StartDisabled come from CBaseTrigger.
 // ============================================================================================
 
 class FElysiumTriggerHurt final : public FElysiumTriggerBase
 {
 public:
-	float Damage = 0.0f;      // damage — points per tick
-	int32 DamageType = 0;     // damagetype — bitfield (logged; the WoD damage model lands later)
+	float Damage = 0.0f;      // damage / SetDamage — m_flDamage, scaled by the tick's own factor
+	int32 DamageType = 0;     // damagetype — m_bitsDamageInflict, the Source DMG_* mask
 
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) override
 	{
@@ -462,33 +466,84 @@ public:
 		}
 		bPlayerInside = true;
 		LastActivator = Activator;
-		HurtNow();
-		NextThink = (World ? World->NowSeconds() : 0.0) + DamageIntervalSeconds;
+		HurtAllTouchers(EntryScale);
+		// A HurtNow one-shot is the earlier deadline and keeps it: the late StartTouch a borrowed
+		// enable produces must not push the single pass out to the ordinary 3 s think.
+		if (!bOneShotArmed)
+		{
+			NextThink = static_cast<float>(NowSeconds() + ThinkIntervalSeconds);
+		}
 	}
 
 	virtual void OnTouchEnd(const FElysiumEntityHandle& /*Activator*/) override
 	{
 		bPlayerInside = false;
-		NextThink = ELYSIUM_NEVER_THINK;
+		if (!bOneShotArmed)
+		{
+			NextThink = ELYSIUM_NEVER_THINK;
+		}
 	}
 
 	virtual void Think() override
 	{
+		if (bOneShotArmed)
+		{
+			// HurtOnceThink: one pass at the ordinary think scale, then the volume returns to
+			// whatever enabled state it had before HurtNow borrowed it.
+			HurtAllTouchers(ThinkScale);
+			bOneShotArmed = false;
+			if (bTemporarilyEnabled)
+			{
+				bTemporarilyEnabled = false;
+				SetDisabled(true);
+			}
+			NextThink = ELYSIUM_NEVER_THINK;
+			return;
+		}
 		if (!bPlayerInside || bDisabled || IsInert())
 		{
 			NextThink = ELYSIUM_NEVER_THINK;
 			return;
 		}
-		HurtNow();
-		NextThink = (World ? World->NowSeconds() : 0.0) + DamageIntervalSeconds;
+		// A think that hurt nobody does not re-arm — re-entry is what schedules the next one.
+		const int32 Hurt = HurtAllTouchers(ThinkScale);
+		NextThink = Hurt > 0
+			? static_cast<float>(NowSeconds() + ThinkIntervalSeconds)
+			: ELYSIUM_NEVER_THINK;
+	}
+
+	// `InputHurtNow` — hurt every toucher immediately when the volume is enabled. Against a
+	// DISABLED volume it temporarily enables, arms a one-shot hurt think 0.1 s out and disarms
+	// after that single pass.
+	void InputHurtNow()
+	{
+		if (IsInert())
+		{
+			UE_LOG(LogElysiumTrigger, Warning, TEXT("%s HurtNow on a hidden/dead volume — ignored"),
+				*DebugString());
+			return;
+		}
+		if (!bDisabled)
+		{
+			HurtAllTouchers(ThinkScale);
+			return;
+		}
+		bTemporarilyEnabled = true;
+		SetDisabled(false);   // may produce the late StartTouch that arms the ordinary think
+		bOneShotArmed = true;
+		// Written after SetDisabled on purpose: a late StartTouch schedules the ordinary 3 s think,
+		// and the one-shot deadline has to win.
+		NextThink = static_cast<float>(NowSeconds() + HurtNowDelaySeconds);
 	}
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
-		Out.Emplace(TEXT("Damage"), FString::Printf(TEXT("%.0f / %.2fs"), Damage, DamageIntervalSeconds));
+		Out.Emplace(TEXT("Damage"), FString::Printf(TEXT("%.0f (entry x%.1f, think x%.1f / %.1fs)"),
+			Damage, EntryScale, ThinkScale, ThinkIntervalSeconds));
 		Out.Emplace(TEXT("Damage type"), FString::Printf(TEXT("0x%x"), DamageType));
 		Out.Emplace(TEXT("Player inside"), bPlayerInside ? TEXT("yes") : TEXT("no"));
 		Out.Emplace(TEXT("Enabled"), bDisabled ? TEXT("no") : TEXT("yes"));
+		Out.Emplace(TEXT("One-shot armed"), bOneShotArmed ? TEXT("yes") : TEXT("no"));
 	}
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
@@ -498,29 +553,93 @@ public:
 		// generically) still fires Think() on schedule — which then reads bPlayerInside false and
 		// permanently cancels the damage tick even though the player never left the volume.
 		Ar << bPlayerInside;
+		// The HurtNow one-shot is a live deadline like any other: restoring NextThink without the
+		// latch it belongs to would run the ordinary think early and leave a borrowed enable stuck.
+		Ar << bOneShotArmed;
+		Ar << bTemporarilyEnabled;
 	}
 
 private:
 	using Super = FElysiumTriggerBase;
-	static constexpr double DamageIntervalSeconds = 0.5;   // Source trigger_hurt damage cadence
+	// CTriggerHurt::StartTouch multiplies by 0.5; HurtThink calls HurtAllTouchers(3.0) and
+	// re-arms at curtime + 3.0; HurtOnceThink runs at curtime + 0.1 and also scales by 3.0.
+	static constexpr float  EntryScale = 0.5f;
+	static constexpr float  ThinkScale = 3.0f;
+	static constexpr double ThinkIntervalSeconds = 3.0;
+	static constexpr double HurtNowDelaySeconds = 0.1;
 
-	void HurtNow()
+	double NowSeconds() const { return World ? World->NowSeconds() : 0.0; }
+
+	// `HurtAllTouchers(t)` deals `m_flDamage * t` to every entity in the volume. Returns how many
+	// victims were actually hurt, which is what decides whether the think re-arms.
+	int32 HurtAllTouchers(float Scale)
 	{
+		const float Points = Damage * Scale;
+		if (Points <= 0.0f)
+		{
+			return 0;
+		}
+		int32 Hurt = 0;
 		// 11.4 — the damage receiver is the player *entity*: `health` is a CBaseEntity keyfield and
 		// the combat character owns what running out of it means. The body still gets the hit (the
-		// engine damage event a flinch/hit reaction will hang off, 4.9), but it is no longer where
-		// the number lives.
-		if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
+		// engine damage event a flinch/hit reaction will hang off), but it is no longer where the
+		// number lives.
+		if (bPlayerInside)
 		{
-			Player->TakeDamage(Damage);
+			if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
+			{
+				HurtEntity(*Player, Points, /*bPlayerVictim=*/true);
+				++Hurt;
+			}
+			if (IElysiumEmbodiment* PlayerBody = World ? World->Embodiment() : nullptr)
+			{
+				PlayerBody->DamagePlayer(Points);
+			}
 		}
-		if (IElysiumEmbodiment* PlayerBody = World ? World->Embodiment() : nullptr)
+		// Non-player touchers are the other half of `HurtAllTouchers`, and of `OnHurt`. Brush
+		// triggers admit only the player today (CBaseTrigger::PassesTriggerFilters implements
+		// ALLOW_CLIENTS alone), so there is no NPC occupancy to iterate and OnHurt has no victim to
+		// fire for. Reported once per volume rather than once per tick.
+		if (!bReportedNpcGap)
 		{
-			PlayerBody->DamagePlayer(Damage);
+			bReportedNpcGap = true;
+			UE_LOG(LogElysiumTrigger, Warning,
+				TEXT("%s hurts the player only — NPC occupancy producer pending, so OnHurt has no "
+					"deliverable victim"),
+				*DebugString());
 		}
+		return Hurt;
+	}
+
+	void HurtEntity(FElysiumCombatCharacter& Victim, float Points, bool bPlayerVictim)
+	{
+		// The authored `damagetype` is the descriptor's Source mask, which is what makes a burn or
+		// sunlight volume accumulate aggravated damage on a Kindred victim. The mask's `& 0x8` bit
+		// additionally selects a separate impact path in retail whose semantics are unrecovered;
+		// until it is, the hurt is delivered as ordinary lethal-family damage carrying the authored
+		// mask, and the bit changes only what the shared commit already reads from it.
+		FElysiumDmg Dmg;
+		Dmg.Family = EElysiumDmgFamily::Lethal;
+		Dmg.DmgMask = static_cast<uint32>(DamageType);
+		Dmg.Flags = ElysiumDamage::FlagDirectInput;
+		Dmg.ExtraInput = FMath::Max(1, FMath::RoundToInt(Points));
+		// Retail's trigger_hurt reaches the scalar fallback rather than the descriptor resolver, so
+		// the authored number is what lands: a forced soak of zero keeps that observable while the
+		// typed route carries the mask.
+		Dmg.ForcedSoak = 0;
+		Dmg.Source = Handle;
+		Victim.TakeDamage(Dmg, /*Attacker=*/nullptr);
+
+		// `HurtEntity` selects between the two outputs on the victim's player-controller pointer.
+		static const FName OnHurt(TEXT("OnHurt"));
+		static const FName OnHurtPlayer(TEXT("OnHurtPlayer"));
+		FireOutput(bPlayerVictim ? OnHurtPlayer : OnHurt, Victim.Handle);
 	}
 
 	bool bPlayerInside = false;
+	bool bOneShotArmed = false;
+	bool bTemporarilyEnabled = false;
+	bool bReportedNpcGap = false;
 	FElysiumEntityHandle LastActivator;
 };
 
@@ -982,6 +1101,13 @@ static FElysiumClassRegistrar GRegTriggerHurt(
 	{
 		AddSubclassField(D, TEXT("damage"),     &FElysiumTriggerHurt::Damage);
 		AddSubclassField(D, TEXT("damagetype"), &FElysiumTriggerHurt::DamageType);
+
+		// `SetDamage` is KEY + INPUT with a null inputFunc on the recovered datamap — the keyvalue
+		// and the wire are the same direct write onto `m_flDamage`, like `skin` on CBaseAnimating.
+		D.Input(TEXT("SetDamage"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ static_cast<FElysiumTriggerHurt&>(E).Damage = A.Param.ToFloat(); });
+		D.Input(TEXT("HurtNow"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{ static_cast<FElysiumTriggerHurt&>(E).InputHurtNow(); });
 	});
 
 static FElysiumClassRegistrar GRegTriggerLook(

@@ -12,6 +12,8 @@ struct FElysiumStatTable;      // Private/Substrate/ElysiumRulebook.h — the da
 struct FElysiumClanTemplate;
 struct FElysiumSheetEffects;   // Private/Substrate/ElysiumSheetMath.h — the trait-effect layer
 struct FElysiumDisposition;
+struct FElysiumDmg;            // Private/Substrate/ElysiumDamage.h — the typed damage descriptor
+enum class EElysiumDmgFamily : int32;
 
 // 11.4 (S3) — the player is an entity; the pawn is its body.
 //
@@ -556,13 +558,44 @@ public:
 	void InputInventoryRemove(const FElysiumInputArgs& Args);
 
 	// --- Damage and death -------------------------------------------------------------------
-	// The receiver `trigger_hurt`, a door closing, and (later) combat all reach.
+	// Two entries, one commit (K6). Typed damage — weapons, disciplines, `trigger_hurt` — carries a
+	// descriptor through the shared resolver; the scalar overload is the compatibility fallback and
+	// never grows semantics. Both spend what they resolved through `CommitDamage`.
 	//
 	// The number lands on the sheet: VtMB's `Health` stat (Attributes 15) counts damage TAKEN, with
 	// `Max_Health` (17) the ceiling, and `CBaseEntity::m_iHealth` — our `health` keyfield — is the
-	// engine-space projection of the pair. So this adds to the damage slot and re-derives the
-	// keyfield, which is what the save walk and the body read. Unkillable characters stop at 1 hp.
+	// engine-space projection of the pair.
+	//
+	// `Attacker` may be null (an environmental volume, a script call). It is the roll's source, not
+	// the descriptor's activator: the descriptor carries its own `Source` handle for the outputs.
+	void TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker);
+
+	// The scalar fallback. Retail's alive path takes its positive damage either from the descriptor
+	// apply callback or from here — the scalar route does NOT pass through the resolver, so this
+	// builds a direct-input descriptor whose result is the rounded amount and commits it.
 	void TakeDamage(float Amount);
+
+	// The one typed health commit (`docs/vtmb/combat-and-damage.md` § "Health commit"):
+	// `HealthBuffer` absorbs first, then the unkillable cap, then the damage counter, then Kindred
+	// aggravated tracking, then the outputs and the death test. Nothing else writes the health
+	// slots from a damage path.
+	void CommitDamage(const FElysiumDmg& Dmg);
+
+	// Whether this character soaks as a vampire — the mortal/Kindred half of the soak table. The
+	// base answer is the sheet's own clan slot; the NPC leaf overrides it with the authored
+	// `Kindred` key off its resolved `npctemplate*.txt` block, which is where retail keeps the
+	// classification.
+	virtual bool IsKindred() const;
+
+	// The victim's authored template damage filters (`DamageFilterBashing` / `_Lethal` /
+	// `_Aggravated`, and `DamageFilterFlame` when `bFlame`). Returns false when this character
+	// authors none. Read by the damage resolver to populate the descriptor's filter accumulator,
+	// which is not yet applied — see `ElysiumDamage::Apply` step 9.
+	virtual bool GetTemplateDamageFilter(EElysiumDmgFamily /*Family*/, bool /*bFlame*/,
+		float& /*OutFilter*/) const
+	{
+		return false;
+	}
 
 	// Re-derive the entity's `health`/`max_health` keyfields from the sheet's damage and ceiling
 	// slots. Called after anything writes either one.
@@ -768,6 +801,14 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 protected:
+	// Called by `CommitDamage` once the health commit has landed, before the outputs fire. The NPC
+	// leaf records the attacker/time/amount its senses and memory read; the base does nothing,
+	// because the player has no memory of who hit it.
+	virtual void OnDamageCommitted(const FElysiumDmg& /*Dmg*/) {}
+
+	// Drop the Bloodshield effect an exhausted `HealthBuffer` ends, and rebuild the effect layer.
+	void EndBloodshield();
+
 	// --- Feeding internals ---------------------------------------------------------------------
 	// The pair's other half as a combat character, or null.
 	FElysiumCombatCharacter* ResolveFeedPeer() const;

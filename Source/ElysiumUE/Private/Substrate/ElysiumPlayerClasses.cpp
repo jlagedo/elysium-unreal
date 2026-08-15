@@ -15,6 +15,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
+#include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's entity parameter
 #include "ElysiumGameStateSubsystem.h"
@@ -1249,36 +1250,159 @@ void FElysiumCombatCharacter::SyncHealthFromSheet()
 	Health = FMath::Max(0, MaxHealth - Damage);
 }
 
-void FElysiumCombatCharacter::TakeDamage(float Amount)
+bool FElysiumCombatCharacter::IsKindred() const
 {
-	if (Amount <= 0.f || IsInert())
+	// The base answer is the sheet's own clan slot: a character carrying one of the seven playable
+	// clans is Kindred, and everything else is mortal. This is the player's real classification —
+	// `clandoc000.txt` gives every player template a clan — and the fallback for an NPC with no
+	// `stattemplate`, whose authored `Kindred` key the NPC leaf reads instead.
+	return FElysiumSheet::IsValidClan(Sheet.Clan());
+}
+
+void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker)
+{
+	if (IsInert())
 	{
 		return;
 	}
 	// B6 — incoming damage while paired tears the feed down BEFORE the damage commits, whichever
 	// half of the pair is hit (`docs/vtmb/feeding.md` § "Interruption, completion and outputs").
 	BreakFeed();
+
+	FElysiumDmg Resolved = Dmg;
+	if (!ElysiumDamage::Apply(Resolved, Attacker, *this, FElysiumDamageContext::FromCharacter(*this)))
+	{
+		return;   // Apply reported why
+	}
+	CommitDamage(Resolved);
+}
+
+void FElysiumCombatCharacter::TakeDamage(float Amount)
+{
+	if (Amount <= 0.f || IsInert())
+	{
+		return;
+	}
+	BreakFeed();
+
+	// The scalar fallback: retail's alive path takes its positive damage EITHER from the descriptor
+	// apply callback or from here, so this route does not enter the resolver at all. The descriptor
+	// exists so the commit has one shape to spend: direct input, no mask (hence no aggravated
+	// tracking and no soak bypass), and a forced soak of zero, which is what "the number as given"
+	// means in descriptor terms.
+	FElysiumDmg Dmg;
+	Dmg.Family = EElysiumDmgFamily::Bashing;
+	Dmg.Flags = ElysiumDamage::FlagDirectInput;
+	Dmg.ExtraInput = FMath::Max(1, FMath::RoundToInt(Amount));
+	Dmg.ForcedSoak = 0;
+	Dmg.RolledSuccesses = Dmg.ExtraInput;
+	Dmg.Remainder = Dmg.ExtraInput;
+	Dmg.AppliedDamage = Dmg.ExtraInput;
+	Dmg.bResolved = true;
+	CommitDamage(Dmg);
+}
+
+void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
+{
+	using EC = EElysiumTraitContainer;
+
+	int32 Remaining = Dmg.CommittedDamage();
+	if (Remaining <= 0)
+	{
+		return;
+	}
 	if (MaxHealth <= 0)
 	{
 		// No health track: the rulebook did not load, or the character was built without a sheet.
 		// Damage is recorded rather than applied — a character with no health model must not die of
 		// arithmetic.
-		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s took %.1f damage with no health track"),
-			*DebugString(), Amount);
+		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s took %d damage with no health track"),
+			*DebugString(), Remaining);
 		return;
 	}
-	const int32 Points = FMath::Max(1, FMath::RoundToInt(Amount));
-	// Unkillable is the damage system's gate (`events_player`'s MakePlayerUnkillable), so it takes
-	// the hit down to 1 hp rather than refusing it — retail keeps the flinch, only not the death.
-	const int32 MaxDamage = bUnkillable ? MaxHealth - 1 : MaxHealth;
-	const int32 Damage = FMath::Clamp(
-		Sheet.GetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health) + Points, 0, MaxDamage);
-	Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Health, Damage);
-	RecomputeSheet();
 
-	if (Health <= 0 && !bUnkillable)
+	// 1. HealthBuffer absorbs first. Exhausting it clears the counter and ends Bloodshield, which
+	//    is the discipline that filled it; a partial absorption only reduces it.
+	const int32 Buffer = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::HealthBuffer);
+	if (Buffer > 0)
+	{
+		const int32 Absorbed = FMath::Min(Buffer, Remaining);
+		Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthBuffer, Buffer - Absorbed);
+		Remaining -= Absorbed;
+		if (Buffer - Absorbed <= 0)
+		{
+			EndBloodshield();
+		}
+		RecomputeSheet();
+	}
+
+	if (Remaining > 0)
+	{
+		const int32 Taken = Sheet.GetBase(EC::Attributes, ElysiumSlot::Health);
+		// 2. Unkillable caps the damage-TAKEN counter at the retail literal. It is not a one-hit-
+		//    point floor and not a percentage: with the default Max_Health of 100 it leaves 25.
+		const int32 Cap = bUnkillable ? ElysiumDamage::UnkillableDamageCap : MaxHealth;
+		// 3. The remainder lands on the damage counter. The authored ceiling is `Max_Health`, which
+		//    the sheet's own clamp applies whenever the rules table is loaded; the clamp here keeps
+		//    a bare (rulebook-less) world reading the same numbers.
+		const int32 Committed = FMath::Clamp(Taken + Remaining, 0, FMath::Max(Cap, 0));
+		Sheet.SetBase(EC::Attributes, ElysiumSlot::Health, Committed);
+
+		// 4. A Kindred victim also accumulates aggravated damage for the mask that takes no soak.
+		if (IsKindred() && Dmg.TakesNoSoak())
+		{
+			const int32 Aggravated = Sheet.GetBase(EC::Attributes, ElysiumSlot::HealthAggDmg);
+			Sheet.SetBase(EC::Attributes, ElysiumSlot::HealthAggDmg,
+				Aggravated + (Committed - Taken));
+		}
+		// 5. `HealthToPercent` — the sheet pair projected back onto the engine-space keyfields.
+		RecomputeSheet();
+	}
+
+	// The senses/memory record the schedule kernel reads. A no-op on the base.
+	OnDamageCommitted(Dmg);
+
+	// 6. The outputs, from their real producer. Retail fires them from the NPC alive commit and the
+	//    player wires neither, but FireOutput is inert for an output an entity did not wire, so the
+	//    shared commit is where they belong. OnHalfHealth is OFFERED on every damaging hit while the
+	//    projected health sits at or below half, not only on the crossing edge.
+	static const FName OnDamaged(TEXT("OnDamaged"));
+	static const FName OnHalfHealth(TEXT("OnHalfHealth"));
+	FireOutput(OnDamaged, Dmg.Source);
+	if (MaxHealth > 0 && Health * 2 <= MaxHealth)
+	{
+		FireOutput(OnHalfHealth, Dmg.Source);
+	}
+
+	// 7. Death is the RPG comparison, not the engine-space projection: the damage counter reaching
+	//    the ceiling is what selects it.
+	const int32 Taken = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);
+	const int32 Ceiling = Sheet.GetCurrent(EC::Attributes, ElysiumSlot::MaxHealth);
+	if (!bUnkillable && Ceiling > 0 && Taken >= Ceiling)
 	{
 		OnKilled();
+	}
+}
+
+void FElysiumCombatCharacter::EndBloodshield()
+{
+	// The exhausted buffer ends the power that filled it. Two spellings name the same power in the
+	// shipped data — the discipline's own InternalName and the trait-effect group the discipline
+	// installs — and the effect list can legitimately carry either, so both are removed.
+	static const TCHAR* const Names[] =
+	{
+		TEXT("Thaumaturgy_Bloodshield"),
+		TEXT("Discipline (Thaumaturgy-Bloodshield)"),
+	};
+	int32 Removed = 0;
+	for (const TCHAR* Name : Names)
+	{
+		Removed += Effects.RemoveAll([Name](const FString& Entry)
+			{ return Entry.Equals(Name, ESearchCase::IgnoreCase); });
+	}
+	if (Removed > 0)
+	{
+		RebuildEffects();
 	}
 }
 

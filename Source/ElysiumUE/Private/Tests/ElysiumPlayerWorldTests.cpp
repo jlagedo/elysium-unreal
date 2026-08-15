@@ -291,9 +291,11 @@ bool FElysiumPlayerEntityTest::RunTest(const FString&)
 	TestEqual(TEXT("...and the health keyfield follows it down"), Player->Health, 60);
 	Player->SetUnkillable(true);
 	Player->TakeDamage(1000.f);
-	TestEqual(TEXT("an unkillable player floors at 1"), Player->Health, 1);
+	// The unkillable ceiling is retail's literal cap on the damage-TAKEN counter (75), not a
+	// one-hit-point floor: with the default Max_Health of 100 it leaves 25.
+	TestEqual(TEXT("an unkillable player stops at the literal damage cap"), Player->Health, 25);
 	Player->SetUnkillable(false);
-	Player->TakeDamage(1.f);
+	Player->TakeDamage(25.f);
 	TestEqual(TEXT("health runs out"), Player->Health, 0);
 
 	// --- Hydrate / dehydrate is the map boundary ------------------------------------------

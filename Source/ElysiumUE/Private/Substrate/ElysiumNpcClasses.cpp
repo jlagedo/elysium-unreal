@@ -38,6 +38,7 @@
 #include "ElysiumStub.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumPendingInput.h"
@@ -585,6 +586,21 @@ public:
 	virtual int32 IdleVariant() const override { return FMath::Clamp(Stance.Current, 0, ElysiumStance::Count - 1); }
 	FString StatTemplate;             // stattemplate — the `npctemplate*.txt` stat block this NPC wears
 	bool bFastFood = false;            // inherited General.FastFood — authored non-resistance to feeding
+	// Inherited General.Kindred — the authored creature classification the soak table selects on.
+	// An NPC with no resolved template falls back to the chain's clan-slot answer.
+	bool bKindredTemplate = false;
+	bool bHasKindredTemplate = false;
+	// Inherited General.DamageFilter{Bashing,Lethal,Aggravated,Flame}. Authored as float
+	// multipliers; absent means the template authors no filter for that family.
+	float DamageFilters[4] = { 0.f, 0.f, 0.f, 0.f };
+	bool  bHasDamageFilter[4] = { false, false, false, false };
+
+	// The last damaging hit this NPC took: who, when and how much. Plain members rather than
+	// registered fields — the senses/memory consumers that read them arrive with the schedule
+	// kernel, and retail keeps the incoming packet as live state, not as a saved field.
+	FElysiumEntityHandle LastDamageAttacker;
+	double LastDamageTime = -1.0;
+	int32  LastDamageAmount = 0;
 	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names
@@ -605,7 +621,54 @@ public:
 		const FElysiumStatTable* Table)
 	{
 		bFastFood = Resolved.GeneralInt(TEXT("FastFood")) != 0;
+		bHasKindredTemplate = true;
+		bKindredTemplate = Resolved.GeneralInt(TEXT("Kindred")) != 0;
+
+		// The authored damage filters, kept as the template states them. Nothing multiplies them
+		// yet — the resolver only accumulates them onto the descriptor (`ElysiumDamage::Apply`
+		// step 9 is an open join) — so an absent key stays absent rather than defaulting to 1.
+		static const TCHAR* const FilterKeys[] =
+		{
+			TEXT("DamageFilterBashing"), TEXT("DamageFilterLethal"),
+			TEXT("DamageFilterAggravated"), TEXT("DamageFilterFlame"),
+		};
+		for (int32 i = 0; i < UE_ARRAY_COUNT(FilterKeys); ++i)
+		{
+			const FString Authored = Resolved.GeneralStr(FilterKeys[i]);
+			bHasDamageFilter[i] = !Authored.IsEmpty();
+			DamageFilters[i] = bHasDamageFilter[i] ? FCString::Atof(*Authored) : 0.f;
+		}
 		Sheet.ApplyTemplate(Resolved, Table);
+	}
+
+	// The authored creature classification wins over the clan slot: an `npctemplate` human carries
+	// `Clan None` but a Sabbat vampire template carries `Clan Brujah` AND `Kindred 1`, and only the
+	// key distinguishes a ghoul or a Sabbat thug from the clan it is descended from.
+	virtual bool IsKindred() const override
+	{
+		return bHasKindredTemplate ? bKindredTemplate : FElysiumCombatCharacter::IsKindred();
+	}
+
+	virtual bool GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
+		float& OutFilter) const override
+	{
+		const int32 Index = bFlame ? 3 : static_cast<int32>(Family);
+		if (Index < 0 || Index >= UE_ARRAY_COUNT(bHasDamageFilter) || !bHasDamageFilter[Index])
+		{
+			return false;
+		}
+		OutFilter = DamageFilters[Index];
+		return true;
+	}
+
+	// Retail's NPC override saves the complete incoming damage packet before composing the base
+	// transaction, and a surviving positive hit remembers its attacker. This is that record; the
+	// schedule/senses consumers that read it arrive with the combat AI.
+	virtual void OnDamageCommitted(const FElysiumDmg& Dmg) override
+	{
+		LastDamageAttacker = Dmg.Source;
+		LastDamageTime = World ? World->NowSeconds() : 0.0;
+		LastDamageAmount = Dmg.CommittedDamage();
 	}
 
 	void InputUseInteresting(const FElysiumInputArgs& Args)
@@ -2056,6 +2119,9 @@ public:
 		const bool bResolvedTemplate = !StatTemplate.IsEmpty()
 			&& Rules && Rules->Clans().Resolve(StatTemplate, Resolved);
 		bFastFood = false;
+		bHasKindredTemplate = false;
+		bKindredTemplate = false;
+		for (bool& bHas : bHasDamageFilter) { bHas = false; }
 		if (!Table)
 		{
 			return;   // no rulebook: the sheet stays zeroed and the damage path stays fail-closed
@@ -2803,13 +2869,30 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	D.Input(TEXT("TeleportToEntity"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputTeleportToEntity(Args); });
 
-	// The remaining map-fired gaps are 8 `SetScriptedDiscipline` and 4 `TakeDamage` wires across the
-	// exported maps, all of them aimed at an `npc_*` receiver. `TakeDamage` is a *method* on this chain
-	// (`FElysiumCombatCharacter::TakeDamage`) and a native the script surface dispatches, but the
-	// wire's own datamap record — and so its argument's field type — is unrecovered, which is why the
-	// input stays pending rather than forwarding a guessed number into the health track.
+	// The remaining map-fired gap is 8 `SetScriptedDiscipline` wires across the exported maps, all
+	// of them aimed at an `npc_*` receiver.
 	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, SetScriptedDiscipline, "P13 — disciplines");
-	ELYSIUM_PENDING_INPUT_ON("CAI_BaseNPC", FN, TakeDamage,            "B5 — combat damage");
+
+	// `TakeDamage` — 4 map wires, plus the same name as a Character method the script surface
+	// dispatches (K1: two bindings, one implementation). The wire's own datamap record is
+	// unrecovered, so its argument's FIELD TYPE is a genuine unknown; what the corpus passes is a
+	// number, and a number routes to the scalar fallback exactly as the script call does. A
+	// parameter that is not numeric is refused and reported rather than turned into a plausible
+	// default, because the marshalling contract is what is missing, not the receiver.
+	D.Input(TEXT("TakeDamage"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{
+			FElysiumNpc& Npc = static_cast<FElysiumNpc&>(E);
+			const float Amount = Args.Param.ToFloat();
+			if (Amount <= 0.f)
+			{
+				UE_LOG(LogElysiumNpcEnt, Warning,
+					TEXT("%s TakeDamage '%s' is not a positive number — refused (the recovered "
+						"datamap record does not name this input's field type)"),
+					*Npc.DebugString(), *Args.Param.Describe());
+				return;
+			}
+			Npc.TakeDamage(Amount);
+		});
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("allow_alert_lookaround"), &FElysiumNpc::bAllowAlertLookaround);
