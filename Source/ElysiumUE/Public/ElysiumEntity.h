@@ -319,6 +319,16 @@ public:
 	// Release the script's ownership: stop the motor and hand the body back to its own behaviour
 	// (a parked patrol route or interesting-place search resumes). Leaves the pose alone.
 	virtual void EndScriptMove() {}
+
+	// The beat's claim on the body arbiter, held for the whole beat — from a successful
+	// BeginSequence through travel, `m_iszPlay` and a held post-idle, to EndSequence, CancelSequence
+	// or teardown. `BeginScriptMove`'s own claim nests inside this one and shares its token, so the
+	// arrival that ends the travel does not hand the body back mid-beat. Base answers true: an entity
+	// with no arbiter — the `!playercontroller` stand-in, a bodiless record — has nothing to take,
+	// which is a claim that succeeded. A refused claim never refuses the beat; the caller logs it and
+	// runs on.
+	virtual bool ClaimScriptBody(const TCHAR* Reason) { return true; }
+	virtual void ReleaseScriptBody(const TCHAR* Reason) {}
 	// Dialogue supersedes a `scripted_sequence` that still owns this body. The NPC calls this on
 	// its ScriptOwner before acquiring the dialogue token; only the owning sequence accepts the
 	// matching body handle. Base false also covers choreographed-scene claims, which have their own

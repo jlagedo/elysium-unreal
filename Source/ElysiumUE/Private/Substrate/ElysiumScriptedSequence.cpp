@@ -238,9 +238,15 @@ public:
 		Npc->SetRuntimeAngles(Angles);
 	}
 
-	// Take the NPC for this beat: stamp the ownership VtMB keeps as m_pCine, and apply the body
-	// state the flags ask for. `bScriptOwnerLocked` folds the two refusal reasons into one bit the
-	// challenger can read off the base class without knowing what a sequence is.
+	// Take the NPC for this beat: stamp the ownership VtMB keeps as m_pCine, take the body arbiter
+	// for the whole beat, and apply the body state the flags ask for. `bScriptOwnerLocked` folds the
+	// two refusal reasons into one bit the challenger can read off the base class without knowing
+	// what a sequence is.
+	//
+	// The two locks are one claim: the queue lock says which beat owns the NPC, and the arbiter claim
+	// stops the NPC's own idle selection from playing over `m_iszPlay`. The claim spans travel,
+	// action and a held post-idle — the movement motor's own claim nests inside it — so no arrival
+	// hands the body back while the beat is still animating it.
 	void ClaimNpc(FElysiumEntity* Npc)
 	{
 		if (Npc == nullptr)
@@ -250,6 +256,11 @@ public:
 		OwnedNpc = Npc->Handle;
 		Npc->ScriptOwner = Handle;
 		Npc->bScriptOwnerLocked = (SpawnFlags & SF_SCRIPT_PRIORITY) != 0 || !NextScript.IsEmpty();
+		// A refused claim is handled here rather than propagated, and reported by the leaf that owns
+		// the arbiter — only it knows which owner refused and whether admission had run. The beat
+		// runs either way: `OnEndSequence` unlocks doors and starts conversations, and the queue lock
+		// stamped above is what keeps the NPC's own idle selection off the body until the claim lands.
+		Npc->ClaimScriptBody(TEXT("scripted sequence beat"));
 		if ((SpawnFlags & SF_SCRIPT_IGNORE_CHARACTER_COLLISION) != 0)
 		{
 			Npc->SetIgnoreCharacterCollision(true);
@@ -257,7 +268,8 @@ public:
 	}
 
 	// Give it back. Every exit runs through here — completion, cancellation, and the refusal paths —
-	// so a beat can never leave an NPC permanently non-colliding or permanently claimed.
+	// so a beat can never leave an NPC permanently non-colliding, permanently claimed, or holding a
+	// body arbiter nobody will release.
 	void ReleaseNpc()
 	{
 		if (!OwnedNpc.IsSet())
@@ -272,6 +284,9 @@ public:
 			}
 			if (Npc->ScriptOwner == Handle)
 			{
+				// Both locks leave together. An NPC a later beat has already taken keeps that beat's
+				// claim: releasing here would strand it holding a body the arbiter says is free.
+				Npc->ReleaseScriptBody(TEXT("scripted sequence beat ended"));
 				Npc->ScriptOwner = FElysiumEntityHandle::Invalid();
 				Npc->bScriptOwnerLocked = false;
 			}

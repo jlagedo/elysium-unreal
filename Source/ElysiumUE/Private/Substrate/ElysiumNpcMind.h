@@ -17,6 +17,9 @@ public:
 
 	bool Acquire(EElysiumBodyOwner Requested, bool bSuspendCurrent,
 		FElysiumBodyOwnerToken& OutToken, const TCHAR* Reason);
+	// Would `Requested` be granted right now? A caller that retries a refused claim asks first, so a
+	// claim the arbitration cannot grant yet does not record a refusal on every think.
+	bool CanAcquire(EElysiumBodyOwner Requested) const { return IsAcquisitionAllowed(Requested); }
 	bool Release(const FElysiumBodyOwnerToken& Token, const TCHAR* Reason);
 	void ForgetSuspended(EElysiumBodyOwner Owner, const TCHAR* Reason);
 	void Invalidate(const TCHAR* Reason, bool bDead);

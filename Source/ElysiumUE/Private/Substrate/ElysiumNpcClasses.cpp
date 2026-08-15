@@ -859,11 +859,35 @@ public:
 
 	// The ordinary NPC adds body arbitration around the shared scripted motor. The scene-owned
 	// player duplicate deliberately takes the default no-mind claim on the same movement rules.
+	//
+	// This is the one door to `EElysiumBodyOwner::Sequence`. The owning beat and its movement motor
+	// both come through it, and the mind is idempotent for the owner it already holds, so the two
+	// share the one token in `SequenceOwner` rather than competing for it.
+	bool AcquireSequenceBody(const TCHAR* Reason)
+	{
+		return Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
+			SequenceOwner, Reason);
+	}
+
+	// Give the token back. Only called once neither the beat nor the motor is still holding it.
+	void ReleaseSequenceBody(const TCHAR* Reason)
+	{
+		if (!SequenceOwner.IsSet())
+		{
+			return;
+		}
+		Mind.Release(SequenceOwner, Reason);
+		SequenceOwner.Reset();
+		if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+		{
+			PatrolOwner = Mind.CurrentToken();
+		}
+	}
+
 	virtual bool ClaimScriptMove() override
 	{
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-		if (!Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
-			SequenceOwner, TEXT("BeginScriptMove")))
+		if (!AcquireSequenceBody(TEXT("BeginScriptMove")))
 		{
 			return false;
 		}
@@ -876,16 +900,63 @@ public:
 	{
 		bMoveIssued = false;
 		bWalkingAnimation = false;
-		if (!SequenceOwner.IsSet())
+		if (bScriptBodyHeld)
+		{
+			// The beat outlives its travel: `m_iszPlay` and the post-idle still play on this body,
+			// so arrival hands the motor back without giving up the claim under them.
+			return;
+		}
+		ReleaseSequenceBody(Reason);
+	}
+
+	virtual bool ClaimScriptBody(const TCHAR* Reason) override
+	{
+		bScriptBodyRequested = true;
+		if (bScriptBodyHeld)
+		{
+			return true;
+		}
+		if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
+		{
+			// An interesting-place visit is this NPC's own executor; the beat takes the body off it.
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		}
+		bScriptBodyHeld = AcquireSequenceBody(Reason);
+		// This leaf owns the arbiter, so it owns the one report of a claim it could not grant. The
+		// two outcomes are not the same event: an unadmitted mind is an ordinary race this NPC
+		// resolves itself on its next think, while an admitted mind that still refuses means another
+		// owner holds a body a beat is entitled to.
+		if (!bScriptBodyHeld && !Mind.IsAdmitted())
+		{
+			UE_LOG(LogElysiumNpcEnt, Log,
+				TEXT("%s defers a scripted beat's body claim until admission has run"),
+				*DebugString());
+		}
+		else if (!bScriptBodyHeld)
+		{
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("%s refused a scripted beat the body: %s owns it. The beat runs on its queue "
+					 "lock and the claim is retried when the arbitration allows it"),
+				*DebugString(), LexToString(Mind.Owner()));
+		}
+		return bScriptBodyHeld;
+	}
+
+	virtual void ReleaseScriptBody(const TCHAR* Reason) override
+	{
+		bScriptBodyRequested = false;
+		if (!bScriptBodyHeld)
 		{
 			return;
 		}
-		Mind.Release(SequenceOwner, Reason);
-		SequenceOwner.Reset();
-		if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+		bScriptBodyHeld = false;
+		if (bScriptMoveClaimed)
 		{
-			PatrolOwner = Mind.CurrentToken();
+			// Cancelled mid-travel: the motor is still on the same token and EndScriptMove, which
+			// the beat runs next, is what gives it back.
+			return;
 		}
+		ReleaseSequenceBody(Reason);
 	}
 
 	// An open conversation owns this body as surely as a beat does, so it refuses a feed (B6).
@@ -927,7 +998,13 @@ public:
 			}
 			UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s released an abandoned scripted move"),
 				*DebugString());
+			// Everything the beat holds leaves together, the queue lock included: a beat that stopped
+			// advancing its own move will not run its teardown either, and half a claim would leave
+			// this body suppressed and unowned for the rest of the map.
+			ReleaseScriptBody(TEXT("abandoned scripted move"));
 			EndScriptMove();
+			ScriptOwner = FElysiumEntityHandle::Invalid();
+			bScriptOwnerLocked = false;
 			ResetAnimToIdle();
 			return;
 		}
@@ -945,6 +1022,23 @@ public:
 			// current idle rather than fidgeting through a line, so the reschedule is what keeps it
 			// posed rather than what makes it move.
 			ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
+			return;
+		}
+		if (ScriptOwner.IsSet())
+		{
+			// A scripted owner — a `scripted_sequence` beat or a choreographed scene's cast — is
+			// driving this body's pose. Script ownership suppresses the ordinary condition-gathering
+			// path (`docs/vtmb/npc-ai-reverse-engineering.md`), so nothing below may select a
+			// schedule whose idle would replace the clip the owner put on the body.
+			const double Now = World ? World->NowSeconds() : 0.0;
+			if (bScriptBodyRequested && !bScriptBodyHeld
+				&& Mind.CanAcquire(EElysiumBodyOwner::Sequence))
+			{
+				// The beat asked before this NPC's admission think had run. Admission has happened
+				// by now, so the claim it is entitled to lands here.
+				bScriptBodyHeld = AcquireSequenceBody(TEXT("scripted beat claim after admission"));
+			}
+			NextThink = static_cast<float>(Now + 0.25);
 			return;
 		}
 		if (bPatrolActive && !PatrolOwner.IsSet())
@@ -1317,6 +1411,19 @@ public:
 	// `ACT_DISPOSITION` only once the current sequence has finished, so nothing re-enters mid-clip.
 	virtual float RunSpecialIdleActivity(double Now) override
 	{
+		// The task writes a clip onto the body, so it runs only while this NPC's own idle owns it.
+		// `SCHED_TROIKA_IDLE_DISPOSITION` is still the faithful selection for a choreo-scene NPC --
+		// the guard belongs here, at the one step that would overwrite what the owner is playing.
+		// The admitted set matches the disposition-stance transition's: nobody, or a conversation.
+		const EElysiumBodyOwner BodyOwner = Mind.Owner();
+		if (BodyOwner != EElysiumBodyOwner::None && BodyOwner != EElysiumBodyOwner::Dialogue)
+		{
+			// Failing the task is how a runner declines: the schedule ends through its (absent) fail
+			// schedule and the caller re-asks on the slow cadence rather than spinning at zero delay.
+			Mind.RecordExternal(FString::Printf(
+				TEXT("TASK_SPECIAL_IDLE_ACTIVITY declined: %s owns the body"), LexToString(BodyOwner)));
+			return -1.f;
+		}
 		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 		if (Embodiment == nullptr || Visual == nullptr || !EnsureStanceResolved())
 		{
@@ -1696,6 +1803,9 @@ public:
 				UE_LOG(LogElysiumNpcEnt, Warning,
 					TEXT("%s cleared stale scripted owner %s while opening dialogue"),
 					*DebugString(), *PreviousOwner.ToString());
+				// Nothing is left to run the beat's own teardown, so its body claim is dropped here
+				// too -- otherwise the arbiter would still read Sequence and refuse the dialogue.
+				ReleaseScriptBody(TEXT("stale scripted owner cleared for dialogue"));
 				EndScriptMove();
 				ScriptOwner = FElysiumEntityHandle::Invalid();
 				bScriptOwnerLocked = false;
@@ -2010,6 +2120,10 @@ public:
 			AmbientOwner.Reset();
 			SequenceOwner.Reset();
 			DialogueBodyOwner.Reset();
+			// The beat's own ReleaseNpc still runs; it must find nothing left to give back rather
+			// than releasing a token this invalidation already retired.
+			bScriptBodyRequested = false;
+			bScriptBodyHeld = false;
 		}
 		else
 		{
@@ -2129,6 +2243,11 @@ public:
 					? Mind.CurrentToken() : FElysiumBodyOwnerToken();
 				AmbientOwner = Owner == EElysiumBodyOwner::Ambient
 					? Mind.CurrentToken() : FElysiumBodyOwnerToken();
+				// A restore never resumes `Sequence` ownership, so any token from before the load is
+				// retired with it. The request survives: whichever order the two entities restore in,
+				// a beat that re-stamps its queue lock has its claim taken again on the next think.
+				SequenceOwner.Reset();
+				bScriptBodyHeld = false;
 			}
 		}
 
@@ -2237,6 +2356,11 @@ private:
 	TArray<FString> PatrolNames;
 	TArray<FVector> PatrolPoints;
 	bool bPatrolActive = false;
+	// A scripted beat has taken this NPC and has not given it back, and whether the arbiter claim
+	// behind that request is in hand. The two differ only while a claim is deferred: the beat-queue
+	// lock is stamped synchronously, the arbiter claim can arrive a think later.
+	bool bScriptBodyRequested = false;
+	bool bScriptBodyHeld = false;
 	bool bMoveIssued = false;
 	bool bWalkingAnimation = false;
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;

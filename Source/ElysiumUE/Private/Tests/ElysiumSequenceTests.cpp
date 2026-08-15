@@ -889,6 +889,288 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// The beat's claim on its NPC's body (K7). A beat drives the pose from BeginSequence to
+// OnEndSequence, so the NPC's own disposition-stance schedule must not select an idle over
+// `m_iszPlay` while it runs — an idle is an infinite loop on the same slot, so the NPC would hold a
+// standing pose for the whole shot and the action animation would never be seen.
+//
+// The exposed shape is the beat that never travels (`m_fMoveTo` 0 / 4 / 5 — 24 of sp_tutorial_1's
+// 51), because only the travel phase ever reached the arbiter. The travelling beat's ACTION phase
+// is the same exposure: its arrival hands the motor back, and the claim must outlive that.
+// =====================================================================================
+
+namespace
+{
+	// The shipped Neutral disposition row, as `Elysium.Substrate.Stance.*` states it.
+	FElysiumDisposition SeqNeutralTuning()
+	{
+		FElysiumDisposition Row;
+		Row.Name = TEXT("Neutral");
+		Row.AnimName = TEXT("Neutral");
+		Row.TalkingStanceChangeThreshold = 0.15f;
+		Row.TalkingStanceChangeChance = 65;
+		Row.StandingFidgetChance = 50;
+		Row.StandingStanceChangeThreshold = 3.0f;
+		Row.StandingStanceChangeChance = 80;
+		return Row;
+	}
+
+	// A body that authored the three stance idles, so the stance machine has something to play and
+	// the stomp is observable as a `Stance_*` clip on the recording embodiment.
+	FElysiumStanceClips SeqStanceClips()
+	{
+		FElysiumStanceClips Clips;
+		Clips.Idle[0] = TEXT("Stance_Neutral_Idle_1");
+		Clips.Idle[1] = TEXT("Stance_Neutral_Idle_2");
+		Clips.Idle[2] = TEXT("Stance_Neutral_Idle_3");
+		ElysiumStance::ApplyPrecacheFallbacks(Clips);
+		return Clips;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceBodyClaimTest,
+	"Elysium.Substrate.ScriptedSequenceBodyClaim", GElysiumTestFlags)
+bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
+{
+	// One NPC with a stance set, and one beat aimed at it carrying an action animation.
+	auto BuildDefs = [](FElysiumEntityDefs& Defs, const TCHAR* MoveTo)
+	{
+		Defs.MapName = TEXT("__body_claim__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Damsel");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/downtown/damsel/damsel.mdl"));
+		Npc.Keys.Add(TEXT("default_disposition"), TEXT("Neutral"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("beat");
+		Seq.Origin = FVector(1000.f, 0.f, 0.f);
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("Damsel"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), MoveTo);
+		Seq.Keys.Add(TEXT("m_iszPlay"), TEXT("Sheriff_Talk_A"));
+		FElysiumOutputDef W;
+		W.Name = TEXT("OnEndSequence");
+		W.Target = TEXT("counter1");
+		W.Input = TEXT("Add");
+		W.Param = TEXT("5");
+		Seq.Outputs.Add(MoveTemp(W));
+		Defs.Defs.Add(MoveTemp(Seq));
+
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+	};
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.f;
+	};
+
+	// The arbiter, read off the NPC's own debug state ("Sequence gen=1 parked=None").
+	auto OwnsBody = [](const FElysiumEntity* Entity) -> bool
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Body owner")) { return Row.Value.StartsWith(TEXT("Sequence")); }
+		}
+		return false;
+	};
+
+	const FString StancePrefix(TEXT("PlayNpcClip damsel Stance_"));
+
+	// --- A beat that never travels still owns the body for its whole duration ----------------
+	// No motor is provided, so `m_fMoveTo` 5 takes the placement path with 0 and 4: all three reach
+	// the action phase without ever entering BeginScriptMove.
+	for (const TCHAR* MoveTo : { TEXT("0"), TEXT("4"), TEXT("5") })
+	{
+		const FString Case = FString::Printf(TEXT("m_fMoveTo %s"), MoveTo);
+
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, MoveTo);
+
+		FElysiumRecordingServices Services;
+		Services.StanceClips = SeqStanceClips();
+		Services.DispositionRow = SeqNeutralTuning();
+		Services.ClipSeconds = 2.0f;   // every clip, the beat's `m_iszPlay` included
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
+		FElysiumEntity* Npc = World.FindByName(TEXT("Damsel"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("beat resolved"), Seq) || !TestNotNull(TEXT("Damsel resolved"), Npc)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+		{
+			return false;
+		}
+
+		// The NPC settles onto its own stance idle first: that is the schedule the beat displaces,
+		// and it is what used to come back and overwrite `m_iszPlay` mid-beat.
+		double Now = 0.0;
+		for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
+		const int32 StanceBefore = Services.Count(StancePrefix);
+		TestTrue(*(Case + TEXT(": the NPC's own stance machine is running before the beat")),
+			StanceBefore > 0);
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+
+		int32 StanceDuringBeat = 0;
+		bool bHeldBody = false;
+		for (int32 i = 0; i < 60 && CounterValue(Count) == 0.f; ++i)
+		{
+			World.Tick(Now);
+			Now += 0.1;
+			if (CounterValue(Count) == 0.f)
+			{
+				StanceDuringBeat = FMath::Max(StanceDuringBeat,
+					Services.Count(StancePrefix) - StanceBefore);
+				bHeldBody = bHeldBody || OwnsBody(Npc);
+			}
+		}
+
+		TestTrue(*(Case + TEXT(": the beat played its action animation")),
+			Services.Saw(TEXT("PlayNpcClip damsel Sheriff_Talk_A loop=0")));
+		TestTrue(*(Case + TEXT(": the beat holds the body arbiter while it runs")), bHeldBody);
+		TestEqual(*(Case + TEXT(": no disposition stance is played over m_iszPlay")),
+			StanceDuringBeat, 0);
+		TestEqual(*(Case + TEXT(": the beat still reaches OnEndSequence")), CounterValue(Count), 5.f);
+		TestFalse(*(Case + TEXT(": and the claim leaves with the beat")), OwnsBody(Npc));
+
+		// Released, not abandoned: the NPC's own idle selection runs again once the beat is done.
+		const int32 StanceAtEnd = Services.Count(StancePrefix);
+		for (int32 i = 0; i < 40; ++i) { World.Tick(Now); Now += 0.1; }
+		TestTrue(*(Case + TEXT(": the stance machine resumes once the beat lets go")),
+			Services.Count(StancePrefix) > StanceAtEnd);
+	}
+
+	// --- A travelling beat keeps the claim across its arrival -------------------------------
+	// `EndScriptMove` gives the motor back at the mark; the action phase that follows is animating
+	// the same body, so the arbiter claim must not go back with the motor.
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, TEXT("1"));
+
+		FElysiumRecordingServices Services;
+		Services.bProvideNpcMotor = true;
+		Services.StanceClips = SeqStanceClips();
+		Services.DispositionRow = SeqNeutralTuning();
+		Services.ClipSeconds = 2.0f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
+		FElysiumEntity* Npc = World.FindByName(TEXT("Damsel"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("beat resolved"), Seq) || !TestNotNull(TEXT("Damsel resolved"), Npc)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count)
+			|| !TestNotNull(TEXT("Damsel stands on a motor"), Motor))
+		{
+			return false;
+		}
+
+		double Now = 0.0;
+		for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
+		const int32 StanceBefore = Services.Count(StancePrefix);
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		for (int32 i = 0; i < 5; ++i) { World.Tick(Now); Now += 0.1; }
+		TestTrue(TEXT("the travelling beat holds the body"), OwnsBody(Npc));
+
+		// Arrive: the beat turns onto the mark, then plays `m_iszPlay`.
+		Motor->Feet = FVector(1000.f, 0.f, 0.f);
+		Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
+
+		int32 StanceDuringBeat = 0;
+		bool bHeldThroughAction = false;
+		for (int32 i = 0; i < 80 && CounterValue(Count) == 0.f; ++i)
+		{
+			World.Tick(Now);
+			Now += 0.1;
+			if (CounterValue(Count) == 0.f)
+			{
+				StanceDuringBeat = FMath::Max(StanceDuringBeat,
+					Services.Count(StancePrefix) - StanceBefore);
+				bHeldThroughAction = bHeldThroughAction
+					|| (OwnsBody(Npc) && Services.Saw(TEXT("PlayNpcClip damsel Sheriff_Talk_A loop=0")));
+			}
+		}
+
+		TestTrue(TEXT("the claim survives the arrival that hands the motor back"), bHeldThroughAction);
+		TestEqual(TEXT("no disposition stance is played over the action phase"), StanceDuringBeat, 0);
+		TestEqual(TEXT("the travelling beat still reaches OnEndSequence"), CounterValue(Count), 5.f);
+		TestFalse(TEXT("and the claim leaves with it"), OwnsBody(Npc));
+	}
+
+	// --- A beat triggered in the same pass as its NPC's admission ---------------------------
+	// `FElysiumNpcMind::Acquire` answers false until admission has run, so a beat that arrives that
+	// early may be refused the arbiter. The beat-queue lock is stamped either way, and that is what
+	// keeps the ordinary idle path off the body until the claim lands.
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, TEXT("0"));
+
+		FElysiumRecordingServices Services;
+		Services.StanceClips = SeqStanceClips();
+		Services.DispositionRow = SeqNeutralTuning();
+		Services.ClipSeconds = 2.0f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
+		FElysiumEntity* Npc = World.FindByName(TEXT("Damsel"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("beat resolved"), Seq) || !TestNotNull(TEXT("Damsel resolved"), Npc)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+		{
+			return false;
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+
+		double Now = 0.0;
+		int32 StanceDuringBeat = 0;
+		bool bHeldBody = false;
+		for (int32 i = 0; i < 60 && CounterValue(Count) == 0.f; ++i)
+		{
+			World.Tick(Now);
+			Now += 0.1;
+			if (CounterValue(Count) == 0.f)
+			{
+				StanceDuringBeat = FMath::Max(StanceDuringBeat, Services.Count(StancePrefix));
+				bHeldBody = bHeldBody || OwnsBody(Npc);
+			}
+		}
+
+		TestEqual(TEXT("a beat that races admission still keeps the idle off the body"),
+			StanceDuringBeat, 0);
+		TestTrue(TEXT("and the claim lands"), bHeldBody);
+		TestEqual(TEXT("and the beat runs to OnEndSequence"), CounterValue(Count), 5.f);
+		TestFalse(TEXT("and releases afterwards"), OwnsBody(Npc));
+	}
+
+	return true;
+}
+
 } // namespace ElysiumSequenceTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS
