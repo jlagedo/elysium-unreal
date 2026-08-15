@@ -55,6 +55,13 @@ behavioral change.
   header first. Prefer forward declarations and fine-grained includes, never `Engine.h` or
   `UnrealEd.h`, and do not put `using` declarations in global scope. Dependencies belong in the
   narrowest correct `Build.cs` list.
+- **File granularity:** one primary class — or one small, tightly coupled cluster (a class plus
+  its private helpers) — per `.h`/`.cpp`, under the owning layer folder. A new class never lands
+  inside an existing multi-class file. When a change substantially touches a class that lives in
+  an oversized multi-class file, first move that class verbatim into its own file (includes by
+  layer path, a thin registration site may remain behind), then make the behavioral edit — and
+  keep the verbatim move and the behavioral change reviewable as separate diffs (separate
+  commits when both land together). Pure moves change no behavior and no names.
 - **APIs and diagnostics:** avoid boolean flag lists and long parameter lists; use an enum or a
   parameter struct. Use `TEXT()` for Unreal string literals, sized integers for serialized or
   replicated formats, named log categories, and the appropriate `check`/`verify`/`ensure` family.
