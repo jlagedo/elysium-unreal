@@ -1240,7 +1240,9 @@ def main(bsp_path, out_dir, *, index=None):
                 continue
             if key in local_records:
                 return key, local_records[key]
-            channels = MDL.material_channels(key, [], read_material_bytes)
+            # A world material's authored name is already its path, so its one candidate is the
+            # materials root -- not a model header's search-path walk.
+            channels = MDL.material_channels(key, MDL.WORLD_SEARCH, read_material_bytes)
             if channels is not None:
                 # Stated against the files the corpus actually decoded. A map-local material can
                 # name a texture no map's material closure ever reached -- VBSP's invisible water

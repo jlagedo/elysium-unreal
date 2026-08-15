@@ -1,6 +1,9 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from elysium_pipeline import shared_corpus as SC
+from elysium_pipeline.formats import mdl
 
 
 class KeyRuleTests(unittest.TestCase):
@@ -33,6 +36,113 @@ class KeyRuleTests(unittest.TestCase):
             SC.static_stem("models/scenery/a-b/c.d e.mdl"),
             "models_scenery_a-b_c.d_e",
         )
+
+
+class PropMaterialKeyNormalizationTests(unittest.TestCase):
+    """One material key, one fold, on both sides of the join.
+
+    A model header states its texture search paths and its material names in the install's own
+    mixed case; `shared/materials.json` is keyed by `material_key`, which is lower case. Every
+    lookup against that document -- `bake_lib.read_mtl`'s above all -- is case-sensitive, so a
+    `.mtl` naming the header's spelling joins nothing and the mesh bakes with a null material.
+    """
+
+    SEARCH = ["models/scenery/furniture/MilkCrate/"]
+    KEY = "models/scenery/furniture/milkcrate/milkcrate"
+    VMT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/scenery/milkcrate"\n}\n'
+
+    def _read(self, key):
+        # The install index is case-folded (`install.read` lowers), so a mixed-case candidate
+        # reads the same file a lower-case one would.
+        return self.VMT if key.lower() == "materials/%s.vmt" % self.KEY else None
+
+    def test_resolution_keeps_the_installs_own_spelling(self):
+        path, info = mdl.resolve_vmt("MilkCrate", self.SEARCH, self._read)
+        self.assertIsNotNone(info)
+        self.assertEqual(path, "models/scenery/furniture/MilkCrate/MilkCrate")
+
+    def test_the_recorded_key_is_the_one_the_corpus_document_carries(self):
+        channels = mdl.material_channels("MilkCrate", self.SEARCH, self._read)
+        self.assertEqual(channels["vmt"], self.KEY)
+        self.assertEqual(channels["vmt"], SC.material_key(channels["vmt"]))
+
+    def test_a_prop_mtl_names_that_key(self):
+        mesh = mdl.Mesh("MilkCrate")
+        mesh.verts = [(1.0, 2.0, 3.0, 0.0, 0.0),
+                      (2.0, 2.0, 3.0, 1.0, 0.0),
+                      (1.0, 3.0, 3.0, 0.0, 1.0)]
+        mesh.tris = [(0, 1, 2)]
+        with tempfile.TemporaryDirectory() as out:
+            mdl.write_obj_scene([mesh], "crate", out, self.SEARCH, self._read, {})
+            mtl = (Path(out) / "crate.mtl").read_text(encoding="utf-8")
+        self.assertIn("mat %s\n" % self.KEY, mtl)
+
+
+class MaterialResolutionTests(unittest.TestCase):
+    """`resolve_vmt` is the engine's own walk and only that walk (research case
+    `material-resolution`): the model header's search paths, in header order, each composed into
+    `materials/<path><name>.vmt`, with nothing after the last one."""
+
+    HIT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/spike"\n}\n'
+
+    def test_the_header_search_paths_are_tried_in_header_order(self):
+        tried = []
+
+        def read(key):
+            tried.append(key)
+            return self.HIT if key == "materials/models/props/second/spike.vmt" else None
+
+        path, info = mdl.resolve_vmt(
+            "spike", ["models/props/first/", "models/props/second/"], read)
+        self.assertIsNotNone(info)
+        self.assertEqual(path, "models/props/second/spike")
+        self.assertEqual(tried, ["materials/models/props/first/spike.vmt",
+                                 "materials/models/props/second/spike.vmt"])
+
+    def test_a_flat_material_is_not_a_last_resort(self):
+        # The engine composes one path per search path and stops; there is no global
+        # `materials/<name>.vmt` step, so a name that only exists flat misses.
+        tried = []
+
+        def read(key):
+            tried.append(key)
+            return self.HIT if key == "materials/spike.vmt" else None
+
+        self.assertEqual(mdl.resolve_vmt("spike", ["models/props/"], read), (None, None))
+        self.assertEqual(tried, ["materials/models/props/spike.vmt"])
+
+    def test_a_model_with_no_search_path_resolves_nothing(self):
+        self.assertEqual(mdl.resolve_vmt("spike", [], lambda key: self.HIT), (None, None))
+
+    def test_a_world_name_resolves_against_the_materials_root(self):
+        # A world or decal material's authored name is already its path, and the engine's brush
+        # path composes exactly `materials/<name>.vmt` for it.
+        tried = []
+
+        def read(key):
+            tried.append(key)
+            return self.HIT if key == "materials/brick/brickwall001a.vmt" else None
+
+        path, info = mdl.resolve_vmt("brick/brickwall001a", mdl.WORLD_SEARCH, read)
+        self.assertEqual(path, "brick/brickwall001a")
+        self.assertEqual(tried, ["materials/brick/brickwall001a.vmt"])
+
+    def test_a_total_miss_answers_no_material(self):
+        self.assertIsNone(mdl.material_channels("spike", ["models/props/"], lambda key: None))
+
+    def test_a_missed_slot_writes_newmtl_with_no_mat_line(self):
+        """The bake's signal for a miss is the absence of the `mat` line, which is what lets it
+        bind the error material on exactly that slot."""
+        mesh = mdl.Mesh("spike")
+        mesh.verts = [(1.0, 2.0, 3.0, 0.0, 0.0),
+                      (2.0, 2.0, 3.0, 1.0, 0.0),
+                      (1.0, 3.0, 3.0, 0.0, 1.0)]
+        mesh.tris = [(0, 1, 2)]
+        with tempfile.TemporaryDirectory() as out:
+            mdl.write_obj_scene([mesh], "spike", out, ["models/props/"], lambda key: None, {})
+            mtl = (Path(out) / "spike.mtl").read_text(encoding="utf-8")
+        self.assertIn("newmtl spike\n", mtl)
+        self.assertNotIn("mat ", mtl)
 
 
 class WorldMaterialKeyTests(unittest.TestCase):
@@ -236,6 +346,27 @@ class BakeScopeContractTests(unittest.TestCase):
 
     def test_the_resolver_asks_the_shared_predicate(self):
         self.assertIn("SC.is_map_scoped_material(key, decal=mat.decal", self._bake_map())
+
+    def test_a_prop_slot_that_binds_nothing_is_a_named_failure(self):
+        """Appending an unresolved lookup builds a mesh with a null material slot, which renders
+        the engine's default checker; the receipt then reports that mesh as current."""
+        source = self._bake_map()
+        self.assertNotIn("materials.append(self.materials.get((self.shared_mat_pkg, key)))",
+                         source)
+        self.assertIn('fail("%s: slot %r resolves no loaded material for key %r"', source)
+
+    def test_an_unbound_prop_keeps_its_existing_package_off_the_prune_list(self):
+        """The unresolved-material `continue` leaves the prop unreceipted so the next run
+        retries it, but the trailing `prune_package_prefix` deletes every SM_ name not in
+        `wanted` -- so the same branch must still add the prop's name to `wanted`, or an
+        abandoned prop's still-good package is deleted from the mount instead of just retried.
+        """
+        source = self._bake_map()
+        marker = "if materials is None:\n                    unbound += 1\n"
+        self.assertIn(marker, source)
+        skip = source.split(marker, 1)[1]
+        guard, _, _rest = skip.partition("continue")
+        self.assertIn('wanted.add(asset_path.rsplit("/", 1)[-1])', guard)
 
     @staticmethod
     def _bake_lib() -> str:

@@ -689,7 +689,6 @@ def decode_skinned(d, v, mesh_map=None):
     bake needs — a `StudioVertAnim` addresses a mesh-local vertex, and the surface
     dedupes across meshes, so nothing else can line the two up."""
     from elysium_pipeline.formats import mdl
-    hmin, hmax = _vec3(d, 180), _vec3(d, 192)
     materials = []
     ntex = _i32(d, 292); tex_index = _i32(d, 296)
     for i in range(ntex):
@@ -712,6 +711,8 @@ def decode_skinned(d, v, mesh_map=None):
             vertex_index = _i32(d, model_base + 148)
             vlist = _i32(d, model_base + 156)
             vstride = mdl.VSTRIDE.get(vlist, 44)
+            # The packed formats' de-quantization basis is per model, not the header hull.
+            qoff, qscale = _vec3(d, model_base + 160), _vec3(d, model_base + 172)
             skin = read_skin(d, model_base, vertex_index, num_verts, vlist)
             vmodel = vbp + vtx_model_off + m * 8
             vlod = vmodel + _i32(v, vmodel + 4)
@@ -719,7 +720,6 @@ def decode_skinned(d, v, mesh_map=None):
             for mi in range(num_meshes):
                 mesh_base = model_base + mesh_index + mi * MESH_STRIDE
                 material = _i32(d, mesh_base + 0)
-                mesh_numverts = _i32(d, mesh_base + 8)
                 vertex_offset = _i32(d, mesh_base + 12)
                 vmesh = vlod + vtx_mesh_off + mi * 8
                 num_sg = _u16(v, vmesh + 0)
@@ -730,13 +730,11 @@ def decode_skinned(d, v, mesh_map=None):
                 remap = {}
                 for sg in range(num_sg):
                     sgb = vmesh + sg_off + sg * mdl.STRIPGROUP_STRIDE
-                    sg_numverts = _u16(v, sgb + 0)
                     numstrips = _u16(v, sgb + 4)
                     vtable = sgb + _i32(v, sgb + 8)
                     itable = sgb + _i32(v, sgb + 12)
                     strip_off = _i32(v, sgb + 16)
-                    form = mdl._vtable_form(v, vtable, sg_numverts, mesh_numverts)
-                    vt_stride, vt_off = form
+                    vt_stride, vt_off = mdl._vtable_form(v, sgb)
                     for s in range(numstrips):
                         sh = sgb + strip_off + s * 16
                         num_indices = _u16(v, sh + 0)
@@ -750,7 +748,7 @@ def decode_skinned(d, v, mesh_map=None):
                                     remap[gvid] = len(surf["pos"])
                                     sv = model_base + vertex_index + gvid * vstride
                                     px, py, pz, u, vv = mdl._read_vertex(
-                                        d, sv, vlist, hmin, hmax)
+                                        d, sv, vlist, qoff, qscale)
                                     bs, ws = skin[gvid]
                                     j4 = (bs + [0, 0, 0, 0])[:4]
                                     w4 = (ws + [0.0, 0.0, 0.0, 0.0])[:4]
@@ -779,9 +777,17 @@ def decode_skinned(d, v, mesh_map=None):
 def read_skin(d, model_base, vertex_index, num_vertices, vlist=0):
     """Per-vertex skin from the SKINNED StudioVertex BoneWeight (44B verts).
 
-    BoneWeight @ vert+0: byte Weight[3], short Bone[3]@4, byte NumBones@10 (unused on
-    VtMB — derive from nonzero weights). Returns [(bones3, weights3), ...] with
-    weights normalized to sum 1.
+    BoneWeight @ vert+0: `byte Weight[3]`, `byte InfluenceSelector`@3, `short Bone[4]`@4.
+    **Four bones, and only three weights are stored** — the fourth is the shortfall,
+    `255 - sum`, which is how a vertex spends the full 255 across four influences. The
+    influence count is the selector byte reduced modulo 5, exactly as StudioRender resolves
+    it through its own 256-byte table; the engine then blends that many bones and reads the
+    fourth weight from the shortfall. A count of 0 or 1 binds wholly to bone 0, which is the
+    branch the engine takes before it touches a weight at all.
+
+    Returns [(bones, weights), ...], weights summing to 1. Shipped content spends exactly
+    255 across the stored three for counts 0-3, so only a four-influence vertex has a
+    shortfall to recover — 1,012 of them, across 46 character models.
 
     Compact vertex formats carry no weights. They occur on rigid one-bone studio models, so their
     only faithful skin is weight 1 on bone 0; a compact model with any other bone count is refused
@@ -796,8 +802,10 @@ def read_skin(d, model_base, vertex_index, num_vertices, vlist=0):
     for i in range(num_vertices):
         sv = model_base + vertex_index + i * 44
         w = struct.unpack_from("<3B", d, sv + 0)
-        bn = struct.unpack_from("<3h", d, sv + 4)
-        infl = [(bn[k], w[k]) for k in range(3) if w[k] > 0]
+        bn = struct.unpack_from("<4h", d, sv + 4)
+        count = max(1, d[sv + 3] % 5)
+        quantized = (w[0], w[1], w[2], 255 - sum(w))
+        infl = [(bn[k], quantized[k]) for k in range(count) if quantized[k] > 0]
         if not infl:
             infl = [(bn[0], 255)]
         s = sum(x[1] for x in infl) or 1

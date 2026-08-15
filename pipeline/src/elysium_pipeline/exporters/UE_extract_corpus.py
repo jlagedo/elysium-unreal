@@ -225,13 +225,14 @@ def _read(idx):
 def resolve_world(idx, keys):
     """`{material key: channels}` for materials named by a full install path.
 
-    A world or decal material's authored name *is* its path, so it resolves against no search
-    path. A key the install does not carry resolves to nothing and is reported by the caller.
+    A world or decal material's authored name *is* its path, so its one candidate is the
+    materials root (`MDL.WORLD_SEARCH`) rather than a model header's search-path walk. A key the
+    install does not carry resolves to nothing and is reported by the caller.
     """
     read_bytes = _read(idx)
     out = {}
     for key in sorted(keys):
-        channels = MDL.material_channels(key, [], read_bytes)
+        channels = MDL.material_channels(key, MDL.WORLD_SEARCH, read_bytes)
         if channels is not None:
             out[SC.material_key(channels["vmt"] or key)] = channels
     return out

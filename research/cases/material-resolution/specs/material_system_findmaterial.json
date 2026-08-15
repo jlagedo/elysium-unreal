@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "topic": "material-resolution-materialsystem",
+  "consuming_document": "docs/vtmb/texture_format.md",
+  "research_id": "RE-MATRES",
+  "program": "MaterialSystem.dll",
+  "binary": {
+    "size": 356426,
+    "sha256": "e7e694c75843c1cc2af360b3606ef55cd0558ae445c9fc087e56fdf3816cdc9b",
+    "md5": "a69e28801e11e032be1207eb611d3d59",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which single path does FindMaterial derive from a material name?",
+    "Which material does a failed lookup return, and is the caller told the lookup failed?",
+    "Does the lookup fold case or normalize separators before hitting the filesystem?",
+    "Which placeholder materials exist and how are they constructed?"
+  ],
+  "functions": [
+    {"address": "100047f0", "label": "MaterialSystemFindMaterial", "confidence": "IMaterialSystem vftable 0x10049708 slot +0x64, the offset StudioRender calls", "role": "recover the public three-argument arity and the pFound contract", "depth": 2, "cap": 220, "asm_count": 600},
+    {"address": "10006f4a", "label": "MaterialSystemFindMaterialEx", "confidence": "sole site of \"Couldn't open material file %s in CMaterialSystem::FindMaterial\", vftable slot +0x68", "role": "recover the name-to-path derivation, the cache probe and the miss return", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "10004420", "label": "MaterialCreateDebugMaterials", "confidence": "\"___error.vmt\" and \"___flat.vmt\" construction site", "role": "recover the error and flat placeholder materials and the globals that hold them", "depth": 3, "cap": 320, "asm_count": 2400},
+    {"address": "10003f10", "label": "MaterialExpandPatchFile", "confidence": "\"materials/.vmt\" and \"materials/%s.vmt\" pair beside the patch include/insert/replace keys", "role": "recover the second, different resolution order used by a Patch material's $include", "depth": 3, "cap": 320, "asm_count": 3200},
+    {"address": "100041ad", "label": "MaterialLoadVMTFile", "confidence": "\"materials/%s.vmt\" plus \"CMaterial::LoadVMTFile: can't open\" pair", "role": "recover the composed path used once the material object exists", "depth": 3, "cap": 320, "asm_count": 2800},
+    {"address": "10002c03", "label": "MaterialPrecacheVars", "confidence": "second \"materials/%s.vmt\" site paired with the same open-failure string", "role": "recover the precache-time lookup", "depth": 3, "cap": 320, "asm_count": 2800},
+    {"address": "100093e2", "label": "MaterialErrorMaterialQuery", "confidence": "second \"___error.vmt\" site", "role": "recover the IsErrorMaterial predicate a caller uses to detect a miss", "depth": 3, "cap": 320, "asm_count": 2400}
+  ],
+  "field_probes": [],
+  "const_probes": [
+    {"address": "1004f93c", "label": "g_pErrorMaterial"},
+    {"address": "1004f944", "label": "g_pFlatMaterial"},
+    {"address": "1005aab4", "label": "g_pFileSystem"}
+  ],
+  "grep_probes": [
+    {"label": "material_lookup_strings", "str": "materials~vmt~error~flat~not~found~shader", "fn": "FindMaterial~CreateMaterial~LoadVMT~Precache", "cap": 320},
+    {"label": "material_name_fold", "str": "tolower~strlwr~FixSlashes~stristr~stricmp", "fn": "Material~Find~Create~Name", "cap": 220}
+  ],
+  "relationships": [
+    {"from": "100047f0", "to": "10006f4a", "confidence": "vftable dispatch", "evidence": "CALL [EAX+0x68] at 0x10004805, forwarding pTextureGroupName=\"Unaccounted textures\" and pComplainPrefix=NULL"},
+    {"from": "10004420", "to": "1004f93c", "confidence": "sole initializer", "evidence": "store at 0x10004448 of the CMaterial constructed from \"___error.vmt\""}
+  ],
+  "findings": [
+    {"confidence": "high", "fact": "FindMaterial derives exactly one disk path: `materials/` + lowercased, slash-normalized material name + `.vmt`, the suffix appended only when the caller's name does not already contain \".vmt\" case-insensitively", "evidence": "0x10006e7c composes \"materials/\", 0x10006e8d appends the name, 0x10006e9c Q_stristr(name, \".vmt\") guards the 0x10006eb2 append, 0x10006ebc Q_strlower and 0x10006ec4 Q_FixSlashes('/') follow", "consequence": "no per-model or global search path exists inside the material system; the model's own list is the whole search"},
+    {"confidence": "high", "fact": "The material name is lowercased in place before both the material-cache probe and the path composition, and backslashes become forward slashes", "evidence": "Q_strlower at 0x10006d8d and Q_FixSlashes at 0x10006d95 run on the copy used for the cache symbol at 0x10006da8; the same pair runs again on the composed path", "consequence": "resolution is case-insensitive end to end, and the cache is keyed by the folded name"},
+    {"confidence": "high", "fact": "A path whose file does not exist returns the global error material and never creates a CMaterial", "evidence": "the filesystem query at 0x10006ed6 (g_pFileSystem vftable +0x1c) branching to 0x10006fdc, which returns [0x1004f93c] at 0x1000718a", "consequence": "the miss is a substitution, not a failure; nothing upstream can distinguish it except IsErrorMaterial"},
+    {"confidence": "high", "fact": "The three-argument FindMaterial sets *pFound = false exactly when the result is NULL or IsErrorMaterial(result)", "evidence": "0x1000481a CALL [EAX+0xb0] then 0x10004824 stores 1, versus 0x10004832 XOR EAX,EAX / MOV [EDI],AL", "consequence": "the caller's miss signal is derived from the returned material, not from the lookup"},
+    {"confidence": "high", "fact": "A miss reports `material \"%s\" not found` through tier0 DevWarning, once per distinct folded name, and only when complain is set", "evidence": "the complain test at 0x10006fdf, the reported-name set probe returning early at 0x100070d7, and the DevWarning at 0x10007180 through import ?DevWarning@@YAXPBDZZ", "consequence": "the message is invisible at the shipped developer level, so a missing material is silent in normal play"},
+    {"confidence": "high", "fact": "The error material is a synthetic CMaterial named \"___error.vmt\", shader UnlitGeneric, MATERIAL_VAR_MODEL (0x800), $decalscale 0.05, whose base texture is the material system's own procedural error texture rather than a file", "evidence": "0x10004420 constructs it, 0x1000445d sets the shader, 0x1000446f sets flag 0x800, 0x10004485 sets $decalscale to 0x3d4ccccd, 0x100044bd binds the texture-manager error texture", "consequence": "a missed slot renders as the checkerboard, and no `.vmt` on disk is ever consulted for it"},
+    {"confidence": "high", "fact": "A Patch material's $include uses a different, two-step order: the value verbatim, then `materials/<value>.vmt`", "evidence": "0x10003f10 calls the loader with the raw value and, on failure, re-formats through \"materials/%s.vmt\" before retrying", "consequence": "$include is the only place in the material system where a second candidate path exists"}
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "topic": "material-resolution-studio",
+  "consuming_document": "docs/vtmb/texture_format.md",
+  "research_id": "RE-MATRES",
+  "program": "StudioRender.dll",
+  "binary": {
+    "size": 561222,
+    "sha256": "13d56ce90de2c5faedc0df26d36b24e90f30eded5055625f616cd97e301e124b",
+    "md5": "d9f4c7f9c19499976ae6c0324bdab4cc",
+    "image_base": "0x2c000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which candidate paths does the search-path walk compose, and in what order?",
+    "Does the walk append a fallback after the model's own search paths?",
+    "What does the walk store for a material that no candidate resolved?",
+    "Does the walk fold case or rewrite separators before calling the material system?"
+  ],
+  "functions": [
+    {"address": "2c0136f0", "label": "StudioRenderLoadMaterials", "confidence": "sole function reading studiohdr NumTextureSearchPaths (+0x12c) and TextureSearchPathIndex (+0x130)", "role": "recover the candidate-path composition, its order and the miss branch", "depth": 3, "cap": 420, "asm_count": 6200},
+    {"address": "2c005360", "label": "StudioRenderLoadModelLod", "confidence": "sole caller of the search-path walk", "role": "recover the per-LOD call context and confirm no post-walk retry", "depth": 1, "cap": 220, "asm_count": 2400},
+    {"address": "2c014677", "label": "StudioRenderLoadMeshes", "confidence": "'Error! Model %s has unreadable .vtx file' site", "role": "eliminate the mesh builder as a material resolver", "depth": 3, "cap": 420, "asm_count": 6200},
+    {"address": "2c0512ce", "label": "StudioRenderGlintTextureGroup", "confidence": "sole site pushing the TEXTURE_GROUP_MODEL literal 'Model textures'", "role": "eliminate the procedural glint texture as the model-material resolver", "depth": 3, "cap": 420, "asm_count": 3200},
+    {"address": "2c01697f", "label": "StudioRenderDecalModelMaterial", "confidence": "'$modelmaterial' lookup for decals", "role": "eliminate the decal path as the model-texture resolver", "depth": 2, "cap": 220, "asm_count": 1800},
+    {"address": "2c003fc2", "label": "StudioRenderConnectMaterialSystem", "confidence": "'VMaterialSystem074' interface acquisition", "role": "identify the material-system interface pointer the walk calls through", "depth": 2, "cap": 220, "asm_count": 1200}
+  ],
+  "field_probes": [],
+  "const_probes": [],
+  "grep_probes": [
+    {"label": "studio_material_functions", "fn": "Material~LoadModel~UnloadModel~Texture", "cap": 320},
+    {"label": "studio_render_classes", "cls": "Studio~Material", "cap": 220}
+  ],
+  "relationships": [
+    {"from": "2c005360", "to": "2c0136f0", "confidence": "sole call reference", "evidence": "CALL at 0x2c005446, once per LOD"}
+  ],
+  "findings": [
+    {"confidence": "high", "fact": "The candidate set for one mesh material is exactly `<searchPath[j]><name>` for j = 0..NumTextureSearchPaths-1, in header order, with no other candidate", "evidence": "0x2c0138b0 reads TextureSearchPathIndex, 0x2c0138c2 copies the path, 0x2c013958 appends the name, 0x2c01396f calls the material system; the loop bound is NumTextureSearchPaths at 0x2c013972", "consequence": "a flat lookup and a `models/` last resort are both absent from the engine"},
+    {"confidence": "high", "fact": "The walk runs twice: pass one with complain=false capturing pFound, pass two with pFound=NULL and complain=true purely to emit the message", "evidence": "0x2c013865 PUSH 0 / 0x2c01386b &bFound versus 0x2c013966 PUSH 1 / 0x2c013968 PUSH 0", "consequence": "a missing material is probed 2*NumTextureSearchPaths times per LOD"},
+    {"confidence": "high", "fact": "The material stored for a total miss is the last first-pass return value, which is the material system's error material; the second pass discards its result", "evidence": "result saved to [ESP+0x14] at 0x2c01387b and restored at 0x2c013988, stored into the LOD material array at 0x2c013995", "consequence": "a missed slot renders with the error material rather than being dropped"},
+    {"confidence": "high", "fact": "The name appended is the .vtx per-LOD material replacement when the LOD's replacement list names this texture index, otherwise StudioTexture.name", "evidence": "the record scan at 0x2c0138f2 over 6-byte {short materialID; int nameOffset} records reached through vtxHeader+0x18 indexed by the LOD index", "consequence": "LOD > 0 can resolve a different material name than LOD 0"},
+    {"confidence": "high", "fact": "StudioRender performs no case folding and no separator rewriting; it emits the header spelling verbatim", "evidence": "0x2c0138c2 is a plain byte copy loop and 0x2c013958 a REP MOVSD append", "consequence": "the fold happens entirely inside CMaterialSystem::FindMaterial"}
+  ]
+}

@@ -26,13 +26,14 @@ VSTRIDE = {0: 44, 1: 12, 2: 8}
 # skinned meshes do.
 STRIPGROUP_STRIDE = 20
 
-# .vtx vertex-table forms, as (stride, offset of the u16 mesh-vertex id).
-# VtMB writes two and no header flag distinguishes them: a flat u16 id, or a
-# 12-byte record carrying the id at +10 (the leading bytes are bone data).
-# Retail's static props are flat; every non-static model and the Unofficial
-# Patch's 22 recompiled static models use the 12-byte record - so
-# STUDIOHDR_FLAGS_STATIC_PROP does not predict the form.
-VTABLE_FORMS = ((2, 0), (12, 10))
+# .vtx vertex-table forms, as (stride, offset of the u16 mesh-vertex id). VtMB writes
+# two - a flat u16 id, or a 12-byte record carrying the id at +10 (the leading bytes are
+# bone data) - and the StripGroupHeader's own flags byte says which. Retail's static props
+# are flat; every non-static model and the Unofficial Patch's 22 recompiled static models
+# use the 12-byte record, so STUDIOHDR_FLAGS_STATIC_PROP does not predict the form.
+SG_FLAGS = 6                # StripGroupHeader_t.flags, a byte
+SG_VERTS_ARE_BONED = 0x08   # 12-byte record, mesh-vertex id at +10
+SG_VERTS_ARE_PLAIN = 0x10   # bare u16 array
 
 
 def _norm(key):
@@ -60,50 +61,53 @@ class Mesh:
         self.tris = []
 
 
-def _read_vertex(d, sv, vlist, hmin, hmax):
-    """(x,y,z,u,v) in Source coords. Skinned exact; compressed hull-interpolate.
+def _read_vertex(d, sv, vlist, offset, scale):
+    """(x,y,z,u,v) in Source coords. Skinned exact; the packed formats de-quantize.
 
-    UNSKINNED and COMPRESSED share one layout: quantized position, one packed
-    normal (unused; regenerated from geometry), then u16 u, u16 v. Reading the
-    normal slot as U leaves U constant across every flat face and smears the
-    texture into vertical streaks -- see the degeneracy/anisotropy sweep in
-    docs/vtmb/mdl_v2531.md."""
+    `offset`/`scale` are the owning `StudioModel`'s `PositionOffset`@160 and
+    `PositionScale`@172 -- the basis StudioRender's own vertex accessor uses, and the only
+    correct one. UNSKINNED multiplies the raw u16 by the scale; COMPRESSED normalizes its
+    byte through the same 0..1 table the skin weights use, so the two differ by more than
+    their stride. The header hull is a separate authored box that is not the quantization
+    fit: on 326 models it is wider than the mesh, and reading positions off it stretches
+    them by up to 900 units.
+
+    UNSKINNED and COMPRESSED share one layout: quantized position, one packed normal
+    (unused here; regenerated from geometry), then u16 u, u16 v. Reading the normal slot
+    as U leaves U constant across every flat face and smears the texture into vertical
+    streaks -- see the degeneracy/anisotropy sweep in docs/vtmb/mdl_v2531.md."""
     if vlist == 0:                                  # StudioVertex 44B
         x, y, z = _vec3(d, sv + 12)
         u, v = struct.unpack_from("<2f", d, sv + 36)
     elif vlist == 1:                                # StudioVertex2 12B
         r = [_u16(d, sv + 2 * i) for i in range(6)]
-        x, y, z = (hmin[c] + (r[c] / 65535.0) * (hmax[c] - hmin[c]) for c in range(3))
+        x, y, z = (offset[c] + r[c] * scale[c] for c in range(3))
         u, v = r[4] / 65535.0, r[5] / 65535.0
     else:                                           # StudioVertex3 8B
         b = d[sv:sv + 8]
-        x, y, z = (hmin[c] + (b[c] / 255.0) * (hmax[c] - hmin[c]) for c in range(3))
+        x, y, z = (offset[c] + (b[c] / 255.0) * scale[c] for c in range(3))
         u, v = _u16(d, sv + 4) / 65535.0, _u16(d, sv + 6) / 65535.0
     return (x, y, z, u, v)
 
 
-def _vtable_form(v, vtable, numverts, mesh_numverts):
-    """Pick the vertex-table form: the one whose ids all index the mesh.
+def _vtable_form(v, sgb):
+    """The stripgroup's vertex-table form as (stride, offset of the u16 mesh-vertex id).
 
-    A stripgroup's table maps each of its `numverts` entries to a mesh vertex, so
-    the wrong form reads bone bytes as ids and overshoots the mesh's vertex range.
-    The right form is the one whose every id lands in `[0, mesh_numverts)`; a
-    reading of bone/strip bytes runs out to `0xffff` or collides. Skinned meshes
-    reuse a vertex across strips, so ids are **not** all distinct (a stripgroup can
-    hold more entries than the mesh has vertices) — coverage, not distinctness, is
-    the discriminator, so on the rare tie the widest-covering form wins. Returns
-    (stride, offset), or None if no form indexes the mesh."""
-    best, best_cover = None, -1
-    for stride, off in VTABLE_FORMS:
-        try:
-            ids = [_u16(v, vtable + k * stride + off) for k in range(numverts)]
-        except struct.error:
-            continue
-        if ids and min(ids) >= 0 and max(ids) < mesh_numverts:
-            cover = len(set(ids))
-            if cover > best_cover:
-                best, best_cover = (stride, off), cover
-    return best
+    The flags byte at `StripGroupHeader_t`+6 states it: bit 0x08 selects the 12-byte bone
+    record whose id sits at +10, and bit 0x10 the bare u16 array. This is the engine's own
+    branch -- StudioRender's stripgroup walk tests that bit to choose between stepping a
+    record pointer and indexing at stride 2 -- so the form is read, never inferred.
+
+    A stripgroup setting neither bit names no format and is refused rather than guessed
+    around: the wrong form reads bone bytes as vertex ids and yields plausible garbage."""
+    flags = v[sgb + SG_FLAGS]
+    if flags & SG_VERTS_ARE_BONED:
+        return (12, 10)
+    if flags & SG_VERTS_ARE_PLAIN:
+        return (2, 0)
+    raise ValueError(
+        f"StripGroupHeader flags 0x{flags:02x} at +{sgb} names no vertex-table form "
+        f"(neither 0x{SG_VERTS_ARE_BONED:02x} nor 0x{SG_VERTS_ARE_PLAIN:02x})")
 
 
 def materials(d):
@@ -150,7 +154,6 @@ def decode(d, v):
     """Decode mdl bytes `d` + vtx bytes `v` → list[Mesh] (LOD0, Source coords)."""
     assert d[0:4] == b"IDST", f"bad ident {d[0:4]!r}"
     assert v is not None, "missing .dx80.vtx"
-    hmin, hmax = _vec3(d, 180), _vec3(d, 192)
     mats = materials(d)
     # A mesh names a skinref; family 0 maps it to the texture it draws with (identity on every
     # readable model, so this is a no-op there -- but it is the correct lookup, not a coincidence).
@@ -173,6 +176,8 @@ def decode(d, v):
             vertex_index = _i32(d, model_base + 148)  # rel to model
             vlist = _i32(d, model_base + 156)
             vstride = VSTRIDE.get(vlist, 44)
+            # The packed formats' de-quantization basis is per model, not the header hull.
+            qoff, qscale = _vec3(d, model_base + 160), _vec3(d, model_base + 172)
             vmodel = vbp + vtx_model_off + m * 8
             vtx_lod_off = _i32(v, vmodel + 4)       # rel to vtx model -> LOD0
             vlod = vmodel + vtx_lod_off
@@ -180,7 +185,6 @@ def decode(d, v):
             for mi in range(num_meshes):
                 mesh_base = model_base + mesh_index + mi * 60
                 material = _i32(d, mesh_base + 0)
-                mesh_numverts = _i32(d, mesh_base + 8)
                 vertex_offset = _i32(d, mesh_base + 12)
                 vmesh = vlod + vtx_mesh_off + mi * 8
                 num_sg = _u16(v, vmesh + 0)
@@ -191,17 +195,11 @@ def decode(d, v):
                 remap = {}                          # global vert id -> local index
                 for sg in range(num_sg):
                     sgb = vmesh + sg_off + sg * STRIPGROUP_STRIDE
-                    sg_numverts = _u16(v, sgb + 0)
                     numstrips = _u16(v, sgb + 4)
                     vtable = sgb + _i32(v, sgb + 8)
                     itable = sgb + _i32(v, sgb + 12)
                     strip_off = _i32(v, sgb + 16)
-                    form = _vtable_form(v, vtable, sg_numverts, mesh_numverts)
-                    if form is None:
-                        raise ValueError(
-                            f"unrecognized .vtx vertex-table form "
-                            f"(mesh {mi}, stripgroup {sg}, {sg_numverts} verts)")
-                    vt_stride, vt_off = form
+                    vt_stride, vt_off = _vtable_form(v, sgb)
                     for s in range(numstrips):
                         sh = sgb + strip_off + s * 16
                         num_indices = _u16(v, sh + 0)
@@ -214,7 +212,8 @@ def decode(d, v):
                                 if gvid not in remap:
                                     remap[gvid] = len(out.verts)
                                     sv = model_base + vertex_index + gvid * vstride
-                                    out.verts.append(_read_vertex(d, sv, vlist, hmin, hmax))
+                                    out.verts.append(
+                                        _read_vertex(d, sv, vlist, qoff, qscale))
                                 tri.append(remap[gvid])
                             out.tris.append(tuple(tri))
                 if out.tris:
@@ -295,17 +294,36 @@ NO_MATERIAL = {"vmt": "", "albedo": None, "emis": None, "additive": False,
                "iris": None, "vampire": False}
 
 
+#: The search-path list for a name that is already a full materials-relative path. A world or
+#: decal material is resolved by the engine's brush path, which composes `materials/<name>.vmt`
+#: and nothing else; only a *model* material goes through the header walk below. Stating the
+#: materials root as the one search path is that same single candidate.
+WORLD_SEARCH = ("",)
+
+
 def resolve_vmt(mat, search, read_bytes):
     """``(install path, parsed VMT)`` for a material name, or ``(None, None)``.
 
-    The model's own header search paths are tried in order, then a flat ``materials/<mat>.vmt`` --
-    the engine's own resolution, and the reason a material name alone does not identify a material:
-    two models can name ``spike`` and mean different files.
+    The model's own header search paths, in header order, and nothing after them. That is the
+    whole of the engine's resolution: the material system composes exactly
+    ``materials/<search path><name>.vmt`` and carries no flat, ``models/``-prefixed or otherwise
+    global last resort (research case `material-resolution`). It is also the reason a material
+    name alone does not identify a material: two models can name ``spike`` and mean different
+    files.
+
+    A total miss is routine rather than a defect -- the engine substitutes its own ``___error``
+    checkerboard for the slot and reports it only at a developer level nobody ships -- so the
+    caller answers `NO_MATERIAL` and the bake binds a reproduction of that material.
+
+    The returned path carries the install's own spelling, which is what the read used. A model
+    header states its search paths and material names in mixed case, so the *corpus key* for the
+    resolved material is `shared_corpus.material_key` of this path, not the path itself --
+    `material_channels` applies that fold.
     """
     from elysium_pipeline.formats import vmt
 
-    for sp in list(search) + [""]:
-        candidate = _norm(f"{sp}/{mat}").strip("/") if sp else mat
+    for sp in search:
+        candidate = _norm(f"{sp}/{mat}").strip("/")
         raw = read_bytes(_norm(f"materials/{candidate}.vmt"))
         if raw:
             return candidate, vmt.parse(
@@ -326,7 +344,14 @@ def material_channels(mat, search, read_bytes):
     Returns ``None`` when no VMT resolves, or when the VMT names neither a base texture nor a
     refraction layer. Keys are install-relative and normalized (`shared_corpus.texture_key`'s
     form); ``needs_alpha`` is this material's own demand, to be unioned by the caller.
+
+    ``vmt`` is the resolved material's **corpus key**, folded by `shared_corpus.material_key` --
+    the one form ``shared/materials.json`` is keyed by and the one form a `.mtl`'s ``mat`` line
+    names. The fold matters because a model header spells its search paths and material names in
+    mixed case while the corpus document is lower case, and every lookup against that document is
+    case-sensitive.
     """
+    from elysium_pipeline import shared_corpus
     from elysium_pipeline.formats.glass import is_glass
 
     vmt_path, info = resolve_vmt(mat, search, read_bytes)
@@ -350,7 +375,7 @@ def material_channels(mat, search, read_bytes):
     refract_src = (info.get("normalmap") or info.get("dudvmap")) if refract else None
     return {
         "material": mat,
-        "vmt": vmt_path,
+        "vmt": shared_corpus.material_key(vmt_path),
         "albedo": key(bt),
         # An additive, blended or masked surface reads its own alpha, so the base texture cannot
         # be flattened to RGB. One material asking is enough for the whole corpus.
