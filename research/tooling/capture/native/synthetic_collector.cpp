@@ -15,6 +15,7 @@ namespace {
 
 struct Options {
     const wchar_t* StopEvent = nullptr;
+    const wchar_t* ReadyEvent = nullptr;
     DWORD TargetPid = 0;
     DWORD ExitAfterMs = 0;
     DWORD ExitCode = 0;
@@ -48,6 +49,8 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         }
         if (std::wcscmp(argv[index], L"--stop-event") == 0) {
             options->StopEvent = argv[index + 1];
+        } else if (std::wcscmp(argv[index], L"--ready-event") == 0) {
+            options->ReadyEvent = argv[index + 1];
         } else if (std::wcscmp(argv[index], L"--target-pid") == 0) {
             if (!ParseUnsigned(
                     argv[index + 1],
@@ -91,6 +94,7 @@ bool ParseOptions(int argc, wchar_t** argv, Options* options) {
         }
     }
     return options->StopEvent != nullptr &&
+        options->ReadyEvent != nullptr &&
         options->TargetPid != 0 &&
         (!options->RequestTargetStop || options->TracePath != nullptr);
 }
@@ -182,16 +186,30 @@ int wmain(int argc, wchar_t** argv) {
         return 2;
     }
     HANDLE stop = OpenEventW(SYNCHRONIZE, FALSE, options.StopEvent);
+    HANDLE ready = OpenEventW(
+        EVENT_MODIFY_STATE,
+        FALSE,
+        options.ReadyEvent);
     HANDLE target = OpenProcess(SYNCHRONIZE, FALSE, options.TargetPid);
-    if (stop == nullptr || target == nullptr) {
+    if (stop == nullptr || ready == nullptr || target == nullptr) {
         if (stop != nullptr) {
             CloseHandle(stop);
         }
         if (target != nullptr) {
             CloseHandle(target);
         }
+        if (ready != nullptr) {
+            CloseHandle(ready);
+        }
         return 3;
     }
+    if (!SetEvent(ready)) {
+        CloseHandle(ready);
+        CloseHandle(target);
+        CloseHandle(stop);
+        return 4;
+    }
+    CloseHandle(ready);
 
     HANDLE mapping = nullptr;
     const elysium::capture::BootstrapHandshake* handshake = nullptr;

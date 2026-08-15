@@ -1,0 +1,33 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "smoke",
+  "description": "Observe the controlled synthetic IA-32 module lifecycle and exported hook calls.",
+  "targets": [],
+  "expected_modules": [
+    "client.dll",
+    "engine.dll",
+    "StudioRender.dll"
+  ],
+  "export_hooks": [
+    {
+      "module": "client.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.client_hook"
+    },
+    {
+      "module": "engine.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.engine_hook"
+    },
+    {
+      "module": "StudioRender.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.studiorender_hook"
+    }
+  ],
+  "expected_callers": [
+    "synthetic.client_hook",
+    "synthetic.engine_hook",
+    "synthetic.studiorender_hook"
+  ]
+}

@@ -75,9 +75,12 @@ struct Finalization {
     std::size_t ProbeDiagnosticCount = 0;
     bool ProcessResumed = false;
     bool CollectorStarted = false;
+    bool CollectorReady = false;
     bool CaptureStopRequested = false;
     bool CaptureDone = false;
 };
+
+constexpr DWORD CollectorReadyTimeoutMs = 10000;
 
 HANDLE ConsoleShutdownEvent = nullptr;
 volatile LONG ConsoleControl = 0;
@@ -127,18 +130,25 @@ std::wstring QuoteArgument(const std::wstring& argument) {
 
 std::wstring BuildCollectorCommand(
     const SupervisionRequest& request,
-    const std::wstring& stopEventName) {
-    std::vector<std::wstring> arguments{
-        request.Collector,
-        L"--stop-event",
-        stopEventName,
-        L"--target-pid",
-        std::to_wstring(request.ProcessId),
-    };
+    const std::wstring& stopEventName,
+    const std::wstring& readyEventName) {
+    std::vector<std::wstring> arguments{request.Collector};
     arguments.insert(
         arguments.end(),
         request.CollectorArguments.begin(),
         request.CollectorArguments.end());
+    const std::vector<std::wstring> supervisionArguments{
+        L"--stop-event",
+        stopEventName,
+        L"--target-pid",
+        std::to_wstring(request.ProcessId),
+        L"--ready-event",
+        readyEventName,
+    };
+    arguments.insert(
+        arguments.end(),
+        supervisionArguments.begin(),
+        supervisionArguments.end());
     std::wstring command;
     for (const std::wstring& argument : arguments) {
         if (!command.empty()) {
@@ -239,6 +249,7 @@ bool WriteFinalization(
         "collector_id=%lu\n"
         "process_resumed=%d\n"
         "collector_started=%d\n"
+        "collector_ready=%d\n"
         "capture_stop_requested=%d\n"
         "capture_done=%d\n"
         "process_exit_code=%lu\n"
@@ -266,6 +277,7 @@ bool WriteFinalization(
         result.CollectorId,
         result.ProcessResumed ? 1 : 0,
         result.CollectorStarted ? 1 : 0,
+        result.CollectorReady ? 1 : 0,
         result.CaptureStopRequested ? 1 : 0,
         result.CaptureDone ? 1 : 0,
         result.ProcessExitCode,
@@ -373,6 +385,9 @@ int RunSupervision(const SupervisionRequest& request) {
     const std::wstring stopEventName =
         L"Local\\ElysiumRetailCollectorStop.v1." +
         std::to_wstring(request.ProcessId);
+    const std::wstring readyEventName =
+        L"Local\\ElysiumRetailCollectorReady.v1." +
+        std::to_wstring(request.ProcessId);
     UniqueHandle collectorStop(CreateEventW(
         nullptr,
         TRUE,
@@ -387,9 +402,24 @@ int RunSupervision(const SupervisionRequest& request) {
 
     UniqueHandle collector;
     UniqueHandle collectorThread;
+    UniqueHandle collectorReady;
     if (!request.Collector.empty()) {
+        collectorReady = UniqueHandle(CreateEventW(
+            nullptr,
+            TRUE,
+            FALSE,
+            readyEventName.c_str()));
+        if (collectorReady.Get() == nullptr) {
+            result.Reason = "collector-ready-event-error";
+            TerminateAndWait(request.Process, 0xE4U);
+            WriteFinalization(request.FinalizationPath, result);
+            return 22;
+        }
         const std::wstring collectorCommand =
-            BuildCollectorCommand(request, stopEventName);
+            BuildCollectorCommand(
+                request,
+                stopEventName,
+                readyEventName);
         std::vector<wchar_t> mutableCommand(
             collectorCommand.begin(),
             collectorCommand.end());
@@ -426,6 +456,34 @@ int RunSupervision(const SupervisionRequest& request) {
             WriteFinalization(request.FinalizationPath, result);
             return 23;
         }
+        HANDLE readyWaits[3]{
+            collectorReady.Get(),
+            collector.Get(),
+            request.Process,
+        };
+        const DWORD readyWait = WaitForMultipleObjects(
+            3,
+            readyWaits,
+            FALSE,
+            CollectorReadyTimeoutMs);
+        if (readyWait != WAIT_OBJECT_0) {
+            if (readyWait == WAIT_OBJECT_0 + 1) {
+                result.Reason = "collector-exit-before-ready";
+                result.CollectorExitCode = ExitCode(collector.Get());
+            } else if (readyWait == WAIT_OBJECT_0 + 2) {
+                result.Reason = "process-exit-before-collector-ready";
+                result.ProcessExitCode = ExitCode(request.Process);
+            } else if (readyWait == WAIT_TIMEOUT) {
+                result.Reason = "collector-ready-timeout";
+            } else {
+                result.Reason = "collector-ready-wait-error";
+            }
+            TerminateAndWait(collector.Get(), 0xE5U);
+            TerminateAndWait(request.Process, 0xE5U);
+            WriteFinalization(request.FinalizationPath, result);
+            return 23;
+        }
+        result.CollectorReady = true;
     }
 
     UniqueHandle consoleEvent(CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -456,9 +514,10 @@ int RunSupervision(const SupervisionRequest& request) {
     result.ProcessResumed = true;
     std::wprintf(
         L"retail-launch-v1 event=supervision_started mode=launched pid=%lu "
-        L"collector=%d timeout_ms=%lu\n",
+        L"collector=%d collector_ready=%d timeout_ms=%lu\n",
         request.ProcessId,
         result.CollectorStarted ? 1 : 0,
+        result.CollectorReady ? 1 : 0,
         request.TimeoutMs);
     std::fflush(stdout);
 

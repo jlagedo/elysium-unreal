@@ -23,6 +23,9 @@ enhancement = [
     "torch",
     "torchvision",
 ]
+research-frida = [
+    "frida==17.16.4",
+]
 
 [project.scripts]
 elysium = "elysium_pipeline.cli:app"

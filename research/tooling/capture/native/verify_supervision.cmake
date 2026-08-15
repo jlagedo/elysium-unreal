@@ -107,6 +107,7 @@ file(READ "${REPORT}" REPORT_TEXT)
 foreach(REQUIRED
     "state=${EXPECTED_STATE}"
     "reason=${EXPECTED_REASON}"
+    "collector_ready=1"
     "probe_hook_installs=0"
     "reason:unknown-hash"
     "reason:missing-module"

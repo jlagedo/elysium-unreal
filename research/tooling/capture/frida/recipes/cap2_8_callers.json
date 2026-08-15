@@ -1,0 +1,13 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "cap2_8_callers",
+  "description": "Retain each distinct live caller stack reaching resolve_virtual_model_pose.",
+  "targets": [
+    "client.resolve_virtual_model_pose"
+  ],
+  "expected_modules": [
+    "client.dll"
+  ],
+  "max_unique_callers": 256,
+  "stack_words": 8
+}
