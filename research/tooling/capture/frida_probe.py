@@ -1,8 +1,8 @@
 """Run opt-in Frida discovery probes against controlled IA-32 targets.
 
-The retained native capture remains the acceptance instrument. This tool is a
-read-only discovery collector that reuses the same binary profiles and retail
-launcher, and writes all evidence below ELYSIUM_WORK_ROOT/research.
+The retained native capture remains the acceptance instrument. This tool is an
+observational discovery collector that reuses the same binary profiles and
+retail launcher, and writes all evidence below ELYSIUM_WORK_ROOT/research.
 
 Usage:
     uv run elysium research frida_probe smoke

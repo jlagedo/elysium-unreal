@@ -1,7 +1,9 @@
 # Frida discovery probes
 
 Frida is an opt-in, development-only discovery backend for the retail capture
-toolchain. It does not replace the hash-pinned native capture or supply runtime
+toolchain. Its hooks do not intentionally alter arguments, returns, or game
+state, but dynamic instrumentation is invasive and may affect process memory or
+timing. It does not replace the hash-pinned native capture or supply runtime
 acceptance evidence on its own. A useful discovery graduates into the retained
 native instrument before it closes a behaviour question.
 
