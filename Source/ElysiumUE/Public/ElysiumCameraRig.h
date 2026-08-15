@@ -104,7 +104,9 @@ namespace ElysiumRig
 		float PositionHalfLifeWall = 0.0462f;
 		// Below this the pivot is considered arrived, owned by `cdamp_springlength` (0.1 u).
 		float DamperDeadBand = 0.254f;
-		// Beyond this the pivot snaps rather than lagging further, owned by `cdamp_maxdist` (50 u).
+		// The furthest the pivot may trail the body, owned by `cdamp_maxdist` (50 u). It bounds the
+		// lag rather than ending the damping: at the bound the pivot keeps pace and still eases in
+		// once the body slows.
 		float DamperMaxLag = 127.0f;
 
 		// The pitch the boom is allowed to reach, in Unreal's sign convention. Project-owned: this is
@@ -198,8 +200,9 @@ namespace ElysiumRig
 		const FElysiumOrbitState& Orbit);
 
 	// The pivot damper, with the recovered spring's two extra terms around it: inside `DeadBand` the
-	// pivot has arrived and snaps, beyond `MaxLag` it is too far behind to be worth chasing and snaps
-	// as well. `bClipped` selects the wall half-life over the free one — stiff in, soft out.
+	// pivot has arrived and snaps, and it may never trail further than `MaxLag` — which bounds the
+	// lag without interrupting the ease, so a body faster than the spring rides the bound instead of
+	// being caught up to. `bClipped` selects the wall half-life over the free one — stiff in, soft out.
 	FVector DampPivot(const FVector& Current, const FVector& Target, bool bClipped,
 		const FElysiumCameraRigTuning& Tuning, float Dt);
 

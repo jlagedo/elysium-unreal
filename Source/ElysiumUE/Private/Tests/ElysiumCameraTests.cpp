@@ -887,11 +887,49 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 
 		TestEqual(TEXT("inside the dead band the pivot has arrived"),
 			DampPivot(FVector(99.5f, 0.0f, 0.0f), Goal, false, T, 0.2f), Goal);
-		TestEqual(TEXT("beyond the lag clamp it snaps rather than sliding"),
-			DampPivot(FVector(-1000.0f, 0.0f, 0.0f), Goal, false, T, 0.2f), Goal);
+
+		// The clamp bounds the trail and then damps from the bound: 1100 behind is pulled onto the
+		// 500 bound, and half of *that* gap closes over one half-life. Releasing the pivot onto the
+		// body instead would answer `Goal`.
+		TestTrue(TEXT("beyond the lag clamp the pivot eases in from the bound"),
+			DampPivot(FVector(-1000.0f, 0.0f, 0.0f), Goal, false, T, 0.2f)
+				.Equals(FVector(-150.0f, 0.0f, 0.0f), KINDA_SMALL_NUMBER));
 
 		T.bDampOn = false;
 		TestEqual(TEXT("cdamp_on 0 makes the pivot rigid"), DampPivot(At, Goal, false, T, 0.2f), Goal);
+	}
+
+	// --- a body faster than the spring rides the bound instead of sawtoothing ---
+	{
+		// The shipped free half-life settles at `Speed * PositionHalfLifeFree / ln 2`, which at run
+		// speed is past `DamperMaxLag` by construction — so this is the ordinary case of running
+		// forward, not an edge one. If the clamp released the pivot onto the body the lag would
+		// reset to zero every time it crossed the bound, which is what reads as the camera
+		// repeatedly catching up rather than trailing.
+		const FElysiumCameraRigTuning Ship;
+		const float Dt = 1.0f / 60.0f;
+		const float Speed = 600.0f;   // cm/s, a little above `ElysiumMove::RunSpeed`
+
+		FVector Body = FVector::ZeroVector;
+		FVector Pivot = FVector::ZeroVector;
+		float Lag = 0.0f;
+		bool bReset = false;
+		bool bOverran = false;
+		for (int32 Step = 0; Step < 240; ++Step)
+		{
+			Body.X += Speed * Dt;
+			Pivot = DampPivot(Pivot, Body, /*bClipped=*/false, Ship, Dt);
+
+			const float Next = static_cast<float>(FVector::Dist(Pivot, Body));
+			bReset |= Next < Lag - KINDA_SMALL_NUMBER;
+			bOverran |= Next > Ship.DamperMaxLag + KINDA_SMALL_NUMBER;
+			Lag = Next;
+		}
+
+		TestFalse(TEXT("the lag never falls back while the body holds its speed"), bReset);
+		TestFalse(TEXT("and never trails further than cdamp_maxdist"), bOverran);
+		TestTrue(TEXT("a body faster than the spring settles against the bound"),
+			Lag > Ship.DamperMaxLag * 0.9f);
 	}
 
 	// --- the damper is exact at any step ---

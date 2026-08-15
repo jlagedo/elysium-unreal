@@ -36,19 +36,30 @@ FVector ElysiumRig::DampPivot(const FVector& Current, const FVector& Target, boo
 		return Target;   // `cdamp_on 0`, retail's own bypass
 	}
 
-	const float Lag = static_cast<float>(FVector::Dist(Current, Target));
 	// `cdamp_springlength`: inside it the spring is at rest, so chasing further only produces a
-	// permanent sub-millimetre crawl. `cdamp_maxdist`: past it the camera has been left behind by a
-	// teleport or a fast mover and easing back would read as a long slide rather than as weight.
-	if (Lag <= Tuning.DamperDeadBand || Lag >= Tuning.DamperMaxLag)
+	// permanent sub-millimetre crawl.
+	const FVector Trail = Current - Target;
+	const float Lag = static_cast<float>(Trail.Size());
+	if (Lag <= Tuning.DamperDeadBand)
 	{
 		return Target;
 	}
 
+	// **`cdamp_maxdist` bounds how far the pivot may trail; it does not end the damping.** The
+	// distinction is the whole feel of a run: a mover fast enough to outpace the spring rides the
+	// bound and eases in from it the moment it slows, where releasing the pivot onto the body would
+	// reset the lag to zero every time the bound was crossed — a sawtooth, since the spring's own
+	// settling lag at any speed above `DamperMaxLag * ln2 / PositionHalfLifeFree` is past the bound
+	// by construction. A body that jumped rather than moved is `bModernNeedsReseed`'s to snap, and
+	// it bypasses this function entirely.
+	const FVector From = (Lag > Tuning.DamperMaxLag)
+		? Target + Trail * (Tuning.DamperMaxLag / Lag)
+		: Current;
+
 	// **Stiff against a wall, soft in open space.** The two recovered Hooke constants differ by
 	// nearly four times, and that asymmetry — snap in, ease out — is what the VtMB camera feels like.
 	const float HalfLife = bClipped ? Tuning.PositionHalfLifeWall : Tuning.PositionHalfLifeFree;
-	return DampToward(Current, Target, HalfLife, Dt);
+	return DampToward(From, Target, HalfLife, Dt);
 }
 
 float ElysiumRig::DampToward(float Current, float Target, float HalfLifeSeconds, float Dt)
