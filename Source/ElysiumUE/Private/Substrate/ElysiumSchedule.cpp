@@ -72,16 +72,44 @@ const TCHAR* ElysiumTaskName(EElysiumTask Task)
 	return TEXT("TASK_?");
 }
 
+namespace
+{
+	// The one storage. Non-const only so the test-only interrupt-mask scope below can borrow a
+	// program for the length of a case; nothing in the runtime writes it.
+	TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage();
+}
+
 const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id)
 {
+	for (const FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
+	{
+		if (Schedule.Id == Id)
+		{
+			return &Schedule;
+		}
+	}
+	return nullptr;
+}
+
+namespace
+{
+TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
+{
 	// Built once. These are the recovered task lists verbatim; the operands are retail's own.
-	static const TArray<FElysiumSchedule> Registry = []
+	static TArray<FElysiumSchedule> Registry = []
 	{
 		TArray<FElysiumSchedule> Out;
 
 		// `TASK_SPECIAL_IDLE_ACTIVITY 5; TASK_WAIT_PVS 0`. The 5 is the activity operand retail
 		// passes and the stance machine ignores -- it selects from the disposition table, not from
 		// an activity -- so it is carried for fidelity rather than read.
+		//
+		// Every `Interrupts` mask below is left EMPTY on purpose. The interrupt-condition census
+		// counts masks across the whole 691-schedule corpus but names none of these five programs'
+		// own masks, and an invented mask is a behavioural change wearing a compiled schedule's
+		// name. Empty is also a real recovered posture (`FElysiumSchedule::Interrupts`), so the
+		// wrong answer here is silent rather than loud: fill one in only from a decoded
+		// registration site.
 		FElysiumSchedule& Idle = Out.AddDefaulted_GetRef();
 		Idle.Id = EElysiumScheduleId::IdleDisposition;
 		Idle.Tasks = { Step(EElysiumTask::SpecialIdleActivity, 5.f), Step(EElysiumTask::WaitPvs) };
@@ -99,9 +127,8 @@ const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id)
 		};
 
 		// The near-door reaction: face what blocked you, then step back repeatedly. `_NE` is the
-		// no-enemy variant, which is the one this runtime always takes -- nothing assigns an enemy
-		// (roadmap RE48), so `GetEnemy` is unconditionally null and this is the faithful branch
-		// rather than a fallback.
+		// no-enemy variant; its two enemy-carrying siblings (0x90 / 0x94) are not registered, and
+		// the selector records that by name when an NPC with an enemy reaches this policy.
 		FElysiumSchedule& BackAway = Out.AddDefaulted_GetRef();
 		BackAway.Id = EElysiumScheduleId::BackAwayFromDoorNe;
 		BackAway.Tasks = {
@@ -136,15 +163,43 @@ const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id)
 		return Out;
 	}();
 
-	for (const FElysiumSchedule& Schedule : Registry)
+	return Registry;
+}
+}   // namespace
+
+#if WITH_DEV_AUTOMATION_TESTS
+ElysiumSchedule::FInterruptMaskScope::FInterruptMaskScope(EElysiumScheduleId Id,
+	const FElysiumNpcConditions& Mask)
+	: Target(Id)
+{
+	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
 	{
 		if (Schedule.Id == Id)
 		{
-			return &Schedule;
+			Previous = Schedule.Interrupts;
+			Schedule.Interrupts = Mask;
+			bInstalled = true;
+			return;
 		}
 	}
-	return nullptr;
 }
+
+ElysiumSchedule::FInterruptMaskScope::~FInterruptMaskScope()
+{
+	if (!bInstalled)
+	{
+		return;
+	}
+	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
+	{
+		if (Schedule.Id == Target)
+		{
+			Schedule.Interrupts = Previous;
+			return;
+		}
+	}
+}
+#endif
 
 namespace
 {
@@ -246,12 +301,32 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 }
 
 bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
-	double& OutNextThinkDelay)
+	double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions)
 {
 	OutNextThinkDelay = 0.25;
 	if (!State.IsRunning())
 	{
 		return false;
+	}
+
+	// The interrupt check runs at the TOP of the tick, before any task work: a schedule aborted by
+	// a new condition must not first advance the task that the condition invalidated. An interrupt
+	// ends the program and hands the NPC back to selection -- it deliberately does NOT go through
+	// `FailSchedule`, which is task failure's route (see `FElysiumSchedule::Interrupts`).
+	if (Conditions != nullptr)
+	{
+		if (const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current))
+		{
+			const FElysiumNpcConditions Firing = Active->Interrupts.Intersection(*Conditions);
+			if (!Firing.IsEmpty())
+			{
+				Runner.RecordScheduleEvent(FString::Printf(
+					TEXT("schedule %s (0x%x) interrupted by %s"), ElysiumScheduleName(State.Current),
+					ElysiumScheduleNumber(State.Current), *Firing.Describe()));
+				State.Clear();
+				return false;
+			}
+		}
 	}
 
 	// Bounded rather than looping to completion: a schedule whose every task completes instantly

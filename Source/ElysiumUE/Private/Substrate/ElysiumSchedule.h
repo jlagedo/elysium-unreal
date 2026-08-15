@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+#include "Substrate/ElysiumNpcConditions.h"   // the interrupt mask a schedule declares
+
 class IElysiumNpcMotor;   // the reachability query `TASK_MOVE_AWAY_PATH` asks the world
 
 // VtMB's schedule/task machinery, as much of it as we have recovered producers for.
@@ -70,12 +72,67 @@ struct FElysiumSchedule
 	// Where a failed task goes. `None` ends the schedule and returns the NPC to selection.
 	EElysiumScheduleId FailSchedule = EElysiumScheduleId::None;
 
+	/**
+	 * Which newly gathered conditions may abort this task program
+	 * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Interrupt conditions").
+	 *
+	 * **Empty means interruptible by nothing**, and that is a real recovered posture rather than an
+	 * unfilled default: `SCHED_TROIKA_MELEE_ATTACK1_SWING` declares no interrupts at all, "so once
+	 * that terminal attack task owns the NPC it is not reevaluated as a fresh attack choice each
+	 * tick". The schedule — not the mere existence of a condition — decides whether a new stimulus
+	 * pre-empts behaviour, which is why a faithful AI cannot be one global priority list.
+	 *
+	 * A mask is filled in only where the recovered material states one. Nothing in the survey names
+	 * the masks of the two idle programs or the door-obstruction family, so those stay empty with
+	 * the note beside them at the registry.
+	 *
+	 * An interrupt is NOT a task failure: a failed task goes to `FailSchedule`, while an interrupt
+	 * ends the program and returns the NPC to selection ("until it completes, fails, or an interrupt
+	 * condition forces reselection"). Routing an interrupt through the fail schedule would send an
+	 * NPC that just acquired an enemy into a cover or flinch program instead of re-selecting.
+	 */
+	FElysiumNpcConditions Interrupts;
+
+	// SEAM (named, unimplemented): 42 schedules carry a `DELAY_INTERRUPTS` flag. What "delayed"
+	// means — a deferral window, a task boundary, a one-shot suppression — is not recovered, and
+	// none of the schedules this runtime registers is among the 42. The flag is named here so a
+	// recovered schedule that carries it has somewhere to land; nothing reads it, and nothing
+	// should until the semantics are decoded.
+	bool bDelayInterrupts = false;
+
 	bool IsValid() const { return Id != EElysiumScheduleId::None && !Tasks.IsEmpty(); }
 };
 
 // The registry. Schedules are data, so they are stated once here rather than built per NPC
 // (`gameplay-systems-architecture.md` K9).
 const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id);
+
+#if WITH_DEV_AUTOMATION_TESTS
+namespace ElysiumSchedule
+{
+	// Test-only: install an interrupt mask on a registered program for the lifetime of the scope,
+	// restoring the previous one on destruction.
+	//
+	// It exists because every registered program's recovered mask is empty (nothing in the survey
+	// names one), so the kernel's interrupt path would otherwise have no content-free driver at
+	// all — and "the code is unreachable" is not the same claim as "the code is right". Nothing
+	// outside a test may install a mask: a mask is authored data, and inventing one at runtime is
+	// the behavioural change the empty defaults exist to refuse.
+	struct FInterruptMaskScope
+	{
+		FInterruptMaskScope(EElysiumScheduleId Id, const FElysiumNpcConditions& Mask);
+		~FInterruptMaskScope();
+
+		FInterruptMaskScope(const FInterruptMaskScope&) = delete;
+		FInterruptMaskScope& operator=(const FInterruptMaskScope&) = delete;
+
+	private:
+		EElysiumScheduleId Target;
+		FElysiumNpcConditions Previous;
+		bool bInstalled = false;
+	};
+}
+#endif
 
 enum class EElysiumTaskResult : uint8
 {
@@ -139,11 +196,16 @@ namespace ElysiumSchedule
 	 *
 	 * `OutNextThinkDelay` receives how long the caller should wait before asking again -- a timed
 	 * task hands back its own remainder, so a five-second wait costs one think rather than fifty.
-	 * Returns false once the schedule has ended (completed or failed through to nothing), which is
-	 * the caller's signal to select again.
+	 * Returns false once the schedule has ended (completed, failed through to nothing, or been
+	 * interrupted), which is the caller's signal to select again.
+	 *
+	 * `Conditions` is this decision pass's gathered set, checked against the active schedule's
+	 * interrupt mask at the top of the tick and before any task work. Null means "no conditions
+	 * were gathered for this pass" -- a headless kernel test, or a think that ran with condition
+	 * gathering suppressed -- and skips the check entirely rather than testing an empty set.
 	 */
 	bool Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
-		double& OutNextThinkDelay);
+		double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions = nullptr);
 
 	// --- `TASK_MOVE_AWAY_PATH`, whole (11.14) --------------------------------------------------
 	// Where the step back wants to land, whether the world will have it, and whether what the world

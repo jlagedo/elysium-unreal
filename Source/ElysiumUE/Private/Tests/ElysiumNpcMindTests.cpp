@@ -23,9 +23,29 @@ bool FElysiumNpcMindAdmissionTest::RunTest(const FString&)
 	TestFalse(TEXT("admission is idempotent"), Mind.Admit());
 	TestEqual(TEXT("admission establishes idle"), Mind.State(), EElysiumNpcState::Idle);
 	TestEqual(TEXT("admission owns no body"), Mind.Owner(), EElysiumBodyOwner::None);
-	TestFalse(TEXT("unimplemented combat transition is diagnostic failure"),
+	// Alert and Combat are live transitions now that `SelectIdealState` produces them.
+	TestTrue(TEXT("alert is a live transition"),
+		Mind.RequestState(EElysiumNpcState::Alert, TEXT("test")));
+	TestEqual(TEXT("...and takes effect"), Mind.State(), EElysiumNpcState::Alert);
+	TestTrue(TEXT("combat is a live transition"),
 		Mind.RequestState(EElysiumNpcState::Combat, TEXT("test")));
-	TestEqual(TEXT("failed transition preserves current state"), Mind.State(), EElysiumNpcState::Idle);
+	TestEqual(TEXT("...and takes effect"), Mind.State(), EElysiumNpcState::Combat);
+	// Prone still has no producer, so it stays a named refusal that leaves the state alone.
+	TestFalse(TEXT("unimplemented prone transition is diagnostic failure"),
+		Mind.RequestState(EElysiumNpcState::Prone, TEXT("test")));
+	TestEqual(TEXT("failed transition preserves current state"), Mind.State(),
+		EElysiumNpcState::Combat);
+	TestTrue(TEXT("the mind returns to idle on request"),
+		Mind.RequestState(EElysiumNpcState::Idle, TEXT("test")));
+
+	// An ordinary body owner is not a cognitive transition: an alert NPC that takes a patrol token
+	// stays alert, or the ideal-state pass and the arbiter would fight for the state every think.
+	Mind.RequestState(EElysiumNpcState::Alert, TEXT("test"));
+	FElysiumBodyOwnerToken Patrol;
+	TestTrue(TEXT("patrol acquires the free body"),
+		Mind.Acquire(EElysiumBodyOwner::Patrol, false, Patrol, TEXT("patrol")));
+	TestEqual(TEXT("...without resetting the cognitive state"), Mind.State(),
+		EElysiumNpcState::Alert);
 	return true;
 }
 

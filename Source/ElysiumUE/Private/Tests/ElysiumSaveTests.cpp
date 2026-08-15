@@ -571,22 +571,26 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `NpcMaker` appends owner/notification state to the NPC leaf behind its own version, `NpcMind`
 	// the resumable state/body intent after it, `NpcSchedule` the running idle schedule,
 	// `NpcSocial` the independent relationship table, `Activation` the entity lifecycle latch, and
-	// `NpcSenses` the sensory memory at the very end of the NPC leaf. Each is additive and reads
-	// behind its own version, so the supported floor stays at v9 and a legacy entity restores
-	// without invented state.
+	// `NpcSenses` the sensory memory at the very end of the NPC leaf, and `NpcCognition` the
+	// repeated-damage window plus the eluded marker at the end of that memory record. Each is
+	// additive and reads behind its own version, so the supported floor stays at v9 and a legacy
+	// entity restores without invented state. The gathered condition set is deliberately NOT in
+	// this list: conditions are rebuilt from memory on the first think after a load, which is what
+	// the recovered pass does on every think anyway.
 	//
 	// The equality below is a tripwire, not a fact about npc_maker: it fails the moment a version is
 	// appended without this block being extended, which is exactly when someone should be made to
 	// think about whether the new field is additive and what an old payload does without it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcSenses);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcCognition);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
 		TPair<const TCHAR*, int32>(TEXT("npc schedule"), (int32)FElysiumSaveVersion::NpcSchedule),
 		TPair<const TCHAR*, int32>(TEXT("npc social state"), (int32)FElysiumSaveVersion::NpcSocial),
 		TPair<const TCHAR*, int32>(TEXT("activation lifecycle"), (int32)FElysiumSaveVersion::Activation),
-		TPair<const TCHAR*, int32>(TEXT("npc sensory memory"), (int32)FElysiumSaveVersion::NpcSenses) })
+		TPair<const TCHAR*, int32>(TEXT("npc sensory memory"), (int32)FElysiumSaveVersion::NpcSenses),
+		TPair<const TCHAR*, int32>(TEXT("npc cognition memory"), (int32)FElysiumSaveVersion::NpcCognition) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);

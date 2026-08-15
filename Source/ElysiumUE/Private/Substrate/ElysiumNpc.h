@@ -6,6 +6,7 @@
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlace.h"
+#include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -54,9 +55,19 @@ public:
 
 	// `m_bAllowAlertLookaround` (+0x6434), authored per NPC.
 	bool bAllowAlertLookaround = false;
-	// `m_iEnemySightings` (+0x60a8). Nothing increments it: an enemy is never assigned in this
-	// runtime (roadmap RE48), so it holds 0 and the lookaround gate reads a flat 10%.
+	// `m_bNoAlertState` (+0x65f6), authored per NPC. It skips the TROIKA layer's own damage and
+	// sense promotions and nothing else — the base layer's tail call promotes anyway, which is why
+	// this is not a suppression (`ElysiumNpcCond::SelectIdealState`).
+	bool bNoAlertState = false;
+	// `m_iEnemySightings` (+0x60a8). Incremented once per committed-enemy acquisition episode in
+	// which the enemy is the player (`FElysiumNpcSenses::GatherEnemyLos`); it drives the recovered
+	// alert-lookaround chance `min(30, (sightings+2)*5)`.
 	int32 EnemySightings = 0;
+
+	// The decision pass's gathered conditions and its once-latch diagnostics. Conditions are
+	// session state by design (`ElysiumNpcConditions.h`); the memory they are derived from is what
+	// a save carries.
+	FElysiumNpcCognition Cognition;
 
 	// The door-obstruction selector's own state. `m_hBlockedDoor` (+0x5d28) and `m_hCondHitByDoor`
 	// (+0x5d2c) are the two obstruction sources this runtime can carry; `m_vSavePosition` (+0x5dd0)
@@ -187,6 +198,23 @@ public:
 	 */
 	EElysiumScheduleId SelectIdleSchedule();
 
+	// The state switch of the base selector (`0x1028a380`): case 1 idle, case 3 alert, case 2
+	// combat. Everything else keeps the idle branch, which is where a state with no selector of its
+	// own belongs.
+	EElysiumScheduleId SelectSchedule();
+
+	// Case 3. The recovered alert branch's own damage reactions are refused by name; what remains
+	// is the lookaround program, which alert state is what makes reachable.
+	EElysiumScheduleId SelectAlertSchedule();
+
+	// Case 2. SEAM: the melee and ranged schedule families are the next cycle's work, so combat
+	// holds on the disposition idle and says so once.
+	EElysiumScheduleId SelectCombatSchedule();
+
+	// `SelectIdealState` run for real: the two-layer rule over this pass's conditions, committed
+	// through the mind's ordinary transition path.
+	void UpdateIdealState(double Now);
+
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
 	void ThinkStanceOrIdle(double Now);
 
@@ -244,7 +272,7 @@ public:
 	 * obstruction source has a producer yet: nothing sets `m_hBlockedDoor` (a door blocking this
 	 * NPC's path) and nothing sets `COND_HIT_BY_DOOR`. The decision itself is complete and is what
 	 * those producers will feed; the third recovered source is gated on `COND_ENEMY_UNREACHABLE`,
-	 * which presupposes an enemy and so is never set (roadmap RE48).
+	 * which needs a reachability query this runtime's motor seam does not carry.
 	 */
 	EElysiumScheduleId SelectDoorObstructionSchedule();
 

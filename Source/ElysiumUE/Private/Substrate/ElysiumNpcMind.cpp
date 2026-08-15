@@ -34,7 +34,13 @@ bool FElysiumNpcMind::Admit()
 
 bool FElysiumNpcMind::IsSupportedState(EElysiumNpcState State)
 {
+	// `Alert` and `Combat` are admitted now that their recovered producer has landed: the two-layer
+	// `SelectIdealState` promotes into them from gathered conditions and a committed enemy, and the
+	// state selects its own schedule. `Prone` stays a named refusal — nothing recovered produces it,
+	// and a state with no producer is a diagnostic, not a transition.
 	return State == EElysiumNpcState::Idle
+		|| State == EElysiumNpcState::Alert
+		|| State == EElysiumNpcState::Combat
 		|| State == EElysiumNpcState::Scripted
 		|| State == EElysiumNpcState::Dead;
 }
@@ -96,7 +102,19 @@ void FElysiumNpcMind::RefreshStateFromOwner()
 		|| CurrentOwner == EElysiumBodyOwner::Dialogue
 		|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule
 		|| CurrentOwner == EElysiumBodyOwner::Follower;
-	CurrentState = bScripted ? EElysiumNpcState::Scripted : EElysiumNpcState::Idle;
+	if (bScripted)
+	{
+		CurrentState = EElysiumNpcState::Scripted;
+	}
+	else if (CurrentState == EElysiumNpcState::Scripted)
+	{
+		// Handing the body back leaves the ordinary states, and idle is where an unowned body
+		// starts; the next decision pass re-derives alert or combat from its conditions.
+		CurrentState = EElysiumNpcState::Idle;
+	}
+	// An ordinary owner change is NOT a cognitive transition (K7 separates the two): a patrol token
+	// taken by an alert NPC must not reset it to idle, or the ideal-state pass and the body arbiter
+	// would fight for the state every think.
 	DesiredState = CurrentState;
 }
 

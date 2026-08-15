@@ -22,6 +22,8 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumFeed.h"
+#include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -88,9 +90,13 @@ bool FElysiumNpc::GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 
 void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 {
+	const double Now = World ? World->NowSeconds() : 0.0;
 	Senses.Memory.LastDamageAttacker = Dmg.Source;
-	Senses.Memory.LastDamageTime = World ? World->NowSeconds() : 0.0;
+	Senses.Memory.LastDamageTime = Now;
 	Senses.Memory.LastDamageAmount = Dmg.CommittedDamage();
+	// Step 5 of the recovered damage-to-AI transaction: the one-second accumulation window
+	// `REPEATED_DAMAGE` is derived from. The window arithmetic is the conditions layer's rule.
+	ElysiumNpcCond::AccumulateDamage(Senses.Memory, Dmg.CommittedDamage(), Now);
 }
 
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
@@ -474,7 +480,20 @@ void FElysiumNpc::Think()
 	// The inert/dead gate is the early return above.
 	if (!ScriptOwner.IsSet() && ScriptPhase == EScriptPhase::None)
 	{
-		Senses.Tick(*this, World ? World->NowSeconds() : 0.0);
+		const double SenseNow = World ? World->NowSeconds() : 0.0;
+		Senses.Tick(*this, SenseNow);
+		// Cycle 5: the rest of the recovered decision pass, in `RunAI`'s own order — condition
+		// gathering (which contains the enemy transaction), then ideal-state selection, then the
+		// schedule work every executor below performs.
+		ElysiumNpcEnemy::GatherConditions(*this, SenseNow);
+		UpdateIdealState(SenseNow);
+	}
+	else
+	{
+		// Gathering is suppressed, so the previous pass's conditions are stale. Retail clears
+		// transient conditions when a pass ends; a pass that never runs must not leave a schedule
+		// interruptible by a stimulus nobody re-observed.
+		Cognition.Conditions.Reset();
 	}
 	// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
 	// the feeder's think and nothing else moves either actor while it runs.
@@ -584,13 +603,13 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 		return EElysiumScheduleId::None;
 	}
 
-	// 5. Alert lookaround. `m_iEnemySightings` has no producer (roadmap RE48), so it sits at 0
-	//    and the gate is a flat 10% -- which is the faithful value at that state, not a
-	//    stand-in. `no_alert_state` does NOT suppress this route: the recovered base
-	//    `SelectIdealState` carries no such test.
+	// 5. Alert lookaround. `m_iEnemySightings` counts committed-enemy acquisition episodes against
+	//    the player, so an NPC that has never had one reads the flat 10% floor and a veteran of
+	//    four or more reads the 30% cap. `no_alert_state` does NOT suppress this route: the
+	//    recovered base `SelectIdealState` carries no such test.
 	if (bAllowAlertLookaround)
 	{
-		const int32 Chance = FMath::Min(30, (EnemySightings + 2) * 5);
+		const int32 Chance = ElysiumNpcCond::AlertLookaroundChance(EnemySightings);
 		if (ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99) < Chance)
 		{
 			return EElysiumScheduleId::AlertLookAroundNi;
@@ -609,16 +628,114 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 	return EElysiumScheduleId::IdleDisposition;
 }
 
+EElysiumScheduleId FElysiumNpc::SelectSchedule()
+{
+	switch (Mind.State())
+	{
+	case EElysiumNpcState::Combat:  return SelectCombatSchedule();
+	case EElysiumNpcState::Alert:   return SelectAlertSchedule();
+	default:                        return SelectIdleSchedule();
+	}
+}
+
+EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
+{
+	// The executors keep their bodies in alert exactly as they do in idle: a patrol or an ambient
+	// place is owned through the mind's token, and re-expressing it as a task program here would
+	// duplicate the arbitration.
+	if (bPatrolActive || bUseInteresting)
+	{
+		return EElysiumScheduleId::None;
+	}
+	if (!Cognition.bReportedAlertRefusal)
+	{
+		Cognition.bReportedAlertRefusal = true;
+		// The recovered alert branch's damage reactions, refused BY NAME rather than approximated:
+		// `TAKE_COVER_FROM_ORIGIN` (0x19) needs the attack origin inside its facing test,
+		// `ALERT_SMALL_FLINCH` (0x07) needs a usable flinch sequence, and `ALERT_FACE` needs a
+		// facing target (`docs/vtmb/combat-and-damage.md` -> "Incapacitation, feeding, grapple, and
+		// death"). None of the three is registered here and none is inventable from what we carry.
+		RecordScheduleEvent(TEXT("alert: TAKE_COVER_FROM_ORIGIN / ALERT_SMALL_FLINCH / ALERT_FACE "
+			"not registered — holding on the lookaround"));
+	}
+	// CHOSEN, NOT RECOVERED: the alert state's ordinary (undamaged) selection. Retail's case 3 body
+	// is not decoded past the three damage reactions above, so the alert idle is taken to be the
+	// lookaround — the one alert-named program the survey does decode, and the one the idle branch
+	// already reaches on a chance roll. `m_bAllowAlertLookaround` deliberately does NOT gate it: the
+	// recovered keyfield gates step 5 of the IDLE selector, not the alert state itself.
+	return EElysiumScheduleId::AlertLookAroundNi;
+}
+
+EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
+{
+	// SEAM (warned once, per NPC): combat state is reachable and the enemy transaction that
+	// produces it is complete, but the schedules a fight is made of — the melee and ranged families
+	// behind `CNPC_VHuman::SelectSchedule`'s weapon-capability split — are not registered. Holding
+	// on the disposition stance is the honest answer: the NPC stands where it is with a committed
+	// enemy and an observable state rather than performing invented combat.
+	if (!Cognition.bWarnedCombatSchedulePending)
+	{
+		Cognition.bWarnedCombatSchedulePending = true;
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s combat schedule families pending — holding on disposition idle"),
+			*DebugString());
+		RecordScheduleEvent(TEXT("combat schedule families pending — holding on disposition idle"));
+	}
+	return EElysiumScheduleId::IdleDisposition;
+}
+
+void FElysiumNpc::UpdateIdealState(double Now)
+{
+	if (!Mind.IsAdmitted())
+	{
+		return;
+	}
+	const EElysiumNpcState Current = Mind.State();
+	if (Current == EElysiumNpcState::Scripted || Current == EElysiumNpcState::Dead)
+	{
+		// A scripted owner or a dead body owns the state outright; the ideal-state pass does not
+		// compete with either.
+		return;
+	}
+
+	ElysiumNpcCond::FIdealStateInput In;
+	In.Current = Current;
+	In.bNoAlertState = bNoAlertState;
+	In.bHasEnemy = Senses.Memory.Enemy.IsSet();
+	bool bCombatWithoutEnemy = false;
+	const EElysiumNpcState Ideal =
+		ElysiumNpcCond::SelectIdealState(In, Cognition.Conditions, bCombatWithoutEnemy);
+
+	if (bCombatWithoutEnemy && !Cognition.bWarnedCombatWithoutEnemy)
+	{
+		// The recovered emission, verbatim, and once: it is a state-machine invariant failing, not
+		// a per-think event.
+		Cognition.bWarnedCombatWithoutEnemy = true;
+		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s Combat state with no enemy"), *DebugString());
+	}
+	if (Ideal == Current)
+	{
+		return;
+	}
+	Mind.RequestState(Ideal, TEXT("SelectIdealState"));
+	// A state change reselects. The running program was chosen by the state that has just been left
+	// — an idle stance under an NPC that just acquired an enemy — so it ends here rather than
+	// finishing on behalf of a state that no longer holds.
+	Schedule.Clear();
+	(void)Now;
+}
+
 void FElysiumNpc::ThinkStanceOrIdle(double Now)
 {
 	double Delay = 0.25;
-	if (Schedule.IsRunning() && ElysiumSchedule::Tick(Schedule, *this, Now, Delay))
+	if (Schedule.IsRunning()
+		&& ElysiumSchedule::Tick(Schedule, *this, Now, Delay, &Cognition.Conditions))
 	{
 		NextThink = static_cast<float>(Now + Delay);
 		return;
 	}
 
-	const EElysiumScheduleId Next = SelectIdleSchedule();
+	const EElysiumScheduleId Next = SelectSchedule();
 	if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(Schedule, Next, *this))
 	{
 		// No idle schedule applies -- an executor owns this body, or this model carries no
@@ -1040,8 +1157,15 @@ EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()
 	// reads verbatim.
 	constexpr double ThresholdCm = 256.0 * 2.54;
 	const bool bNear = FVector::DistSquared(Origin, SavePosition) <= ThresholdCm * ThresholdCm;
-	// `GetEnemy` is unconditionally null here, so both rows resolve to their `_NE` variant --
-	// the faithful answer for an NPC with no enemy, not a fallback (roadmap RE48).
+	// The recovered table branches on `GetEnemy`: the enemy rows are `SCHED_TROIKA_BACK_AWAY_FROM_DOOR`
+	// (0x90) and `_WAIT` (0x94), the no-enemy rows their `_NE` variants (0x91 / 0x96). Only the two
+	// `_NE` programs are registered here, so an NPC that HAS an enemy is a divergence rather than a
+	// branch -- and it is recorded by name instead of taken quietly.
+	if (Senses.Memory.Enemy.IsSet())
+	{
+		RecordScheduleEvent(TEXT("door obstruction with an enemy: SCHED_TROIKA_BACK_AWAY_FROM_DOOR "
+			"(0x90) / _WAIT (0x94) are not registered — taking the _NE variant"));
+	}
 	return bNear ? EElysiumScheduleId::BackAwayFromDoorNe
 		: EElysiumScheduleId::BackAwayFromDoorWaitNe;
 }
@@ -1751,6 +1875,16 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	{
 		Senses.Serialize(Ar, *this);
 	}
+
+	if (Ar.IsLoading())
+	{
+		// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory
+		// above on the first think after the load. What has to be stamped is the pass CLOCK — the
+		// edge every stimulus producer measures against. Leaving it at -1 would make an hour-old
+		// remembered gunshot look new and promote a restored NPC to alert on the strength of it.
+		Cognition.Conditions.Reset();
+		Cognition.GatheredAt = World ? World->NowSeconds() : 0.0;
+	}
 }
 
 const TCHAR* FElysiumNpc::SaveBlockReason() const
@@ -1782,8 +1916,9 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Disposition"), FString::Printf(TEXT("%s L%d%s"), *Disposition,
 		DispositionLevel, IsDispositionTalking() ? TEXT(" talking") : TEXT("")));
 	Out.Emplace(TEXT("Relationship to player"), FString::Printf(
-		TEXT("%s (table %d entity / %d class; combat consumer NOT IMPLEMENTED)"),
+		TEXT("%s priority %d (table %d entity / %d class)"),
 		ElysiumRelationships::LexToString(Relationships.Resolve(Player, TEXT("player"))),
+		Relationships.ResolvePriority(Player, TEXT("player")),
 		Relationships.NumEntityRules(), Relationships.NumClassRules()));
 	if (!StatTemplate.IsEmpty())
 	{
@@ -1828,17 +1963,31 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			Mem.bPlayerInOuterBand ? TEXT(", outer band") : TEXT(""))
 		: TEXT("(none)"));
 	Out.Emplace(TEXT("Enemy"), Mem.Enemy.IsSet()
-		? FString::Printf(TEXT("%s (%s, %d failed LOS checks)"), *Mem.Enemy.ToString(),
-			Mem.bEnemyOccluded ? TEXT("OCCLUDED") : TEXT("has LOS"), Mem.EnemyLosFailures)
-		: TEXT("(none — enemy selection is not implemented)"));
+		? FString::Printf(TEXT("%s (%s, %d failed LOS checks%s)"), *Mem.Enemy.ToString(),
+			Mem.bEnemyOccluded ? TEXT("OCCLUDED") : TEXT("has LOS"), Mem.EnemyLosFailures,
+			Mem.bEnemyEluded ? TEXT(", ELUDED") : TEXT(""))
+		: TEXT("(none)"));
+	Out.Emplace(TEXT("Last enemy"), Mem.LastEnemy.IsSet()
+		? Mem.LastEnemy.ToString() : FString(TEXT("(none)")));
+	Out.Emplace(TEXT("Enemy sightings"), FString::FromInt(EnemySightings));
 	Out.Emplace(TEXT("Last heard"), Mem.LastHeardTime < 0.0
 		? TEXT("(nothing)")
 		: FString::Printf(TEXT("%s at %s, t=%.2f"), *Mem.LastHeardCategory,
 			*Mem.LastHeardPosition.ToString(), Mem.LastHeardTime));
 	Out.Emplace(TEXT("Last damage"), Mem.LastDamageTime < 0.0
 		? TEXT("(none)")
-		: FString::Printf(TEXT("%d from %s at t=%.2f"), Mem.LastDamageAmount,
-			*Mem.LastDamageAttacker.ToString(), Mem.LastDamageTime));
+		: FString::Printf(TEXT("%d from %s at t=%.2f (window sum %d)"), Mem.LastDamageAmount,
+			*Mem.LastDamageAttacker.ToString(), Mem.LastDamageTime,
+			Mem.RepeatedDamageAccumulated));
+
+	// Cycle 5 — the decision pass.
+	Out.Emplace(TEXT("Conditions"), FString::Printf(TEXT("%s (gathered t=%.2f)"),
+		*Cognition.Conditions.Describe(), Cognition.GatheredAt));
+	Out.Emplace(TEXT("no_alert_state"), bNoAlertState ? TEXT("yes") : TEXT("no"));
+	Out.Emplace(TEXT("Schedule"), Schedule.IsRunning()
+		? FString::Printf(TEXT("%s (0x%x) task %d"), ElysiumScheduleName(Schedule.Current),
+			ElysiumScheduleNumber(Schedule.Current), Schedule.TaskIndex)
+		: TEXT("(none)"));
 }
 
 // ============================================================================================

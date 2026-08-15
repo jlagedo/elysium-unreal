@@ -904,13 +904,21 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("player_reaction seeds the independent relationship table"),
 		DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).StartsWith(TEXT("D_LI")));
+	// A `D_FR` row is now a real enemy-selection input: the combat consumer landed with the enemy
+	// transaction, and a hostile or feared row can commit this NPC to an enemy on a later think.
+	// The combat schedule families have not, so an NPC that does reach combat state says so once.
+	// Tolerated at any count here because whether Jack's own think order reaches that selection is
+	// this test's incidental timing rather than its subject
+	// (`Elysium.Substrate.NpcEnemy.StateMachine` owns the assertion).
+	AddExpectedError(TEXT("combat schedule families pending"),
+		EAutomationExpectedErrorFlags::Contains, 0);
 	World.AcceptInput(TEXT("!self"), FName(TEXT("SetRelationship")),
 		FElysiumVariant::String(TEXT("player D_FR 5")), JackHandle, JackHandle);
-	TestTrue(TEXT("SetRelationship changes the saved table without entering combat"),
+	TestTrue(TEXT("SetRelationship rewrites the independent combat-relationship table"),
+		DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).Contains(TEXT("D_FR")));
+	TestTrue(TEXT("...carrying the authored IRelationPriority with it"),
 		DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).Contains(
-			TEXT("D_FR"))
-		&& DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).Contains(
-			TEXT("combat consumer NOT IMPLEMENTED")));
+			TEXT("priority 5")));
 
 	TestEqual(TEXT("WillTalk latched"), DebugRow(World.Resolve(JackHandle), TEXT("WillTalk")), FString(TEXT("yes")));
 	TestEqual(TEXT("OnDialogBegin fired once (counter=1)"),

@@ -147,6 +147,9 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 
 	AddNpcField(D, TEXT("use_interesting"), &FElysiumNpc::bUseInteresting);
 	AddNpcField(D, TEXT("allow_alert_lookaround"), &FElysiumNpc::bAllowAlertLookaround);
+	// `m_bNoAlertState` (0x65f6). 39 authored occurrences in the corpus. It is a keyfield like its
+	// two neighbours, and the save walk carries it for the same reason they are carried.
+	AddNpcField(D, TEXT("no_alert_state"), &FElysiumNpc::bNoAlertState);
 	AddNpcField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera, EElysiumField::Key);
 	AddNpcField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction, EElysiumField::Key);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);
@@ -191,6 +194,12 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// `InitPerceptionDistances` reads all three at spawn. They are Save-flagged like the rest of
 	// the authored NPC tuning: a map may not rewrite them, but a payload has to carry what the
 	// entity was authored with, because the resolved pair is derived from them at Activate.
+	// --- Cycle 5 (cognition): the acquisition counter behind the lookaround chance --------------
+	// `m_iEnemySightings` (+0x60a8) is engine-written, never authored — the same Save-only posture
+	// the two stance members take. It is saved because the chance it feeds is a per-character
+	// history: a guard who has fought the player before looks around more often.
+	AddNpcField(D, TEXT("m_iEnemySightings"), &FElysiumNpc::EnemySightings, EElysiumField::Save);
+
 	AddNpcField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception, EElysiumField::Save);
 	AddNpcField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
 	AddNpcField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);

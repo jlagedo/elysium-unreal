@@ -46,6 +46,22 @@ public:
 
 	EElysiumRelationship Resolve(const FElysiumEntityHandle& Target,
 		const FString& Classname) const;
+
+	/**
+	 * `IRelationPriority` (`0x10333700`) — the arbitration weight beside the relation.
+	 *
+	 * The exact entity row is consulted before the class row and its RAW integer is returned:
+	 * the diagnostic text describes a 1-10 range but the parser never clamps, and the installed
+	 * corpus writes zero and 99, so out-of-range values stay ordered rather than folded. A target
+	 * with no row at all answers 5 for a live actor; a null target answers 0.
+	 */
+	int32 ResolvePriority(const FElysiumEntityHandle& Target, const FString& Classname) const;
+
+	// Both halves of one lookup, so an enemy arbitration pass does not walk the rows twice.
+	// Returns false when neither table carries the target (the neutral / priority-5 default).
+	bool ResolveRow(const FElysiumEntityHandle& Target, const FString& Classname,
+		EElysiumRelationship& OutValue, int32& OutPriority) const;
+
 	bool HasEntity(const FElysiumEntityHandle& Target) const;
 
 	int32 NumEntityRules() const { return EntityRules.Num(); }

@@ -120,6 +120,13 @@ struct FElysiumNpcMemory
 	double LastDamageTime = -1.0;
 	int32 LastDamageAmount = 0;
 
+	// The repeated-damage window (`+0x5d94` accumulated, `+0x5d98` window root). Damage sums for one
+	// second; a sum over 15 percent of Source max health raises `REPEATED_DAMAGE`, and an expired
+	// window is RESET rather than decayed. The rule lives on `ElysiumNpcCond::AccumulateDamage`;
+	// these are the two bytes it keeps. Negative start means "no window open".
+	double RepeatedDamageWindowStart = -1.0;
+	int32 RepeatedDamageAccumulated = 0;
+
 	// --- Committed-enemy LOS (`GatherEnemyConditions`) -----------------------------------------
 	int32 EnemyLosFailures = 0;                // consecutive failed checks, capped at the limit
 	double EnemyLastLosTime = -1.0;
@@ -127,6 +134,16 @@ struct FElysiumNpcMemory
 	// The retained memory bit that makes the found/lost outputs edge-triggered rather than
 	// per-think. One acquisition episode fires `OnFoundEnemy` once and `OnLostEnemyLOS` once.
 	bool bEnemyLosLatched = false;
+
+	// The eluded marker on the committed enemy's enemy-memory record. `ShouldChooseNewEnemy` and
+	// `BestEnemy` both read it, and `ChooseEnemy`'s went-null/eluded arm is what fires
+	// `OnLostPlayer`/`OnLostEnemy`.
+	//
+	// SEAM: nothing WRITES it. Retail's enemy-memory component marks a record eluded from its own
+	// timeout over an unrecovered interval, and inferring it from the LOS debounce would be wrong by
+	// construction — losing sight of an enemy is explicitly not losing the enemy. The consumers are
+	// complete and a test drives the bit directly; the producer arrives with the memory component.
+	bool bEnemyEluded = false;
 
 	// --- Closest player + its LOS cache (`SetClosestPlayer` / `SetPlayerLOS`) -------------------
 	// The nearest-player cache is NOT hostility admission and fires no output on its own.

@@ -9,6 +9,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -32,20 +33,11 @@ namespace
 	// posture `FElysiumGameSoundRequest::StealthHearingReductionCm` takes with its zero.
 	float TargetVisionScalar(const FElysiumEntity&) { return 1.0f; }
 
-	// CHOSEN, NOT RECOVERED: the hear-category to output mapping. The recovered material names the
-	// three outputs (`OnHearWorld`/`OnHearPlayer`/`OnHearCombat`) and states that combat noise is
-	// what drives `HEAR_COMBAT` and `OnHearCombat` — gunshots, `NPC_TAKE_DAMAGE`, explosions and
-	// weapon impacts — but no per-category table survives. Two consequences are ours and marked:
-	// the combat set is matched by name here rather than read from a table, and exactly ONE output
-	// fires per accepted stimulus (combat outranks player, which outranks world) rather than the
-	// found/lost pair's both-fire shape.
-	bool IsCombatCategory(const FString& FoldedCategory)
-	{
-		return FoldedCategory.Contains(TEXT("gunshot"))
-			|| FoldedCategory.Contains(TEXT("explosion"))
-			|| FoldedCategory.Contains(TEXT("impact"))
-			|| FoldedCategory == TEXT("npc_take_damage");
-	}
+	// The hear-category to output mapping is `ElysiumNpcCond::IsCombatSoundCategory`, which the
+	// `HEAR_*` condition producer reads too — one rule, one owner, and its CHOSEN, NOT RECOVERED
+	// mark travels with it. What stays this file's own choice is the OUTPUT arbitration below:
+	// exactly one output fires per accepted stimulus (combat outranks player, which outranks world)
+	// rather than the found/lost pair's both-fire shape.
 
 	const FElysiumRuleTable* FindInspectionTable(UElysiumRulebookSubsystem* Rules,
 		const TCHAR* InternalName)
@@ -195,8 +187,26 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << PlayerLos;
 	Ar << PlayerLosLastClearTime;
 	Ar << PlayerLosNextUpdateTime;
+	// Version 19 appends the repeated-damage window and the eluded marker at the END of the memory
+	// record, which is itself the end of the NPC leaf. Additive: an `NpcSenses` payload restores an
+	// NPC with no open damage window and an un-eluded enemy, which is the default state anyway.
+	uint8 Eluded = bEnemyEluded ? 1 : 0;
+	if (Ar.Version() >= FElysiumSaveVersion::NpcCognition)
+	{
+		Ar << RepeatedDamageWindowStart;
+		Ar << RepeatedDamageAccumulated;
+		Ar << Eluded;
+	}
 	if (Ar.IsLoading())
 	{
+		bEnemyEluded = Ar.Version() >= FElysiumSaveVersion::NpcCognition && Eluded != 0;
+		if (Ar.Version() < FElysiumSaveVersion::NpcCognition)
+		{
+			// A payload that predates the block restores the default rather than whatever this live
+			// object happened to be carrying before the load.
+			RepeatedDamageWindowStart = -1.0;
+			RepeatedDamageAccumulated = 0;
+		}
 		bEnemyOccluded = Occluded != 0;
 		bEnemyLosLatched = Latched != 0;
 		bPlayerInRange = InRange != 0;
@@ -205,6 +215,9 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		bPlayerLos = PlayerLos != 0;
 		EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0,
 			ElysiumNpcSense::EnemyLosFailureLimit);
+		// A negative accumulator would make the 15% test unfalsifiable rather than merely wrong, so
+		// a payload from another build is floored rather than trusted.
+		RepeatedDamageAccumulated = FMath::Max(0, RepeatedDamageAccumulated);
 	}
 }
 
@@ -231,6 +244,8 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 		EnemyLosFailures = 0;
 		bEnemyOccluded = false;
 		bEnemyLosLatched = false;
+		// The eluded marker names one committed enemy's record; with no enemy there is no record.
+		bEnemyEluded = false;
 	}
 }
 
@@ -414,6 +429,11 @@ void FElysiumNpcSenses::GatherEnemyLos(FElysiumNpc& Npc, double Now)
 			Npc.FireOutput(OnFoundEnemy, Memory.Enemy);
 			if (bIsPlayer)
 			{
+				// `m_iEnemySightings` (+0x60a8) — the alert-lookaround chance's own producer, and
+				// the one place it has: retail counts acquisition EPISODES, and the latch above is
+				// exactly what makes this branch one episode. `SelectIdleSchedule` reads the count
+				// through `min(30, (sightings+2)*5)`.
+				++Npc.EnemySightings;
 				Npc.FireOutput(OnFoundPlayer, Memory.Enemy);
 			}
 			Npc.RecordScheduleEvent(FString::Printf(TEXT("OnFoundEnemy%s: %s"),
@@ -509,7 +529,7 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 		const bool bFromPlayer = Event.Source.IsSet() && PlayerHandle.IsSet()
 			&& Event.Source == PlayerHandle;
 		FName Output = OnHearWorld;
-		if (IsCombatCategory(Folded))
+		if (ElysiumNpcCond::IsCombatSoundCategory(Folded))
 		{
 			Output = OnHearCombat;
 		}

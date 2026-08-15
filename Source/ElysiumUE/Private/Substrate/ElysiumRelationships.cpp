@@ -93,6 +93,43 @@ EElysiumRelationship FElysiumRelationships::Resolve(const FElysiumEntityHandle& 
 	return EElysiumRelationship::Neutral;
 }
 
+bool FElysiumRelationships::ResolveRow(const FElysiumEntityHandle& Target, const FString& Classname,
+	EElysiumRelationship& OutValue, int32& OutPriority) const
+{
+	if (const FElysiumEntityRelationship* Exact = EntityRules.FindByPredicate(
+		[&Target](const FElysiumEntityRelationship& Row) { return Row.Target == Target; }))
+	{
+		OutValue = Exact->Value;
+		OutPriority = Exact->Priority;
+		return true;
+	}
+	if (const FElysiumClassRelationship* Class = ClassRules.FindByPredicate(
+		[&Classname](const FElysiumClassRelationship& Row)
+		{
+			return Row.Classname.Equals(Classname, ESearchCase::IgnoreCase);
+		}))
+	{
+		OutValue = Class->Value;
+		OutPriority = Class->Priority;
+		return true;
+	}
+	OutValue = EElysiumRelationship::Neutral;
+	OutPriority = 0;
+	return false;
+}
+
+int32 FElysiumRelationships::ResolvePriority(const FElysiumEntityHandle& Target,
+	const FString& Classname) const
+{
+	EElysiumRelationship Value = EElysiumRelationship::Neutral;
+	int32 Priority = 0;
+	if (ResolveRow(Target, Classname, Value, Priority))
+	{
+		return Priority;   // raw, unclamped — the corpus writes 0 and 99
+	}
+	return Target.IsSet() ? 5 : 0;
+}
+
 bool FElysiumRelationships::HasEntity(const FElysiumEntityHandle& Target) const
 {
 	return EntityRules.ContainsByPredicate(
