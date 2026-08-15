@@ -23,7 +23,7 @@ enum class EElysiumDmgFamily : int32;
 //     FElysiumEntity              CBaseEntity           keyfields, dormancy, I/O, think
 //      +- FElysiumAnimating       CBaseAnimating        a body to follow, clips, skin, disposition
 //          +- FElysiumCombatCharacter  CBaseCombatCharacter  the SHEET + its 25 inputs
-//              +- FElysiumNpc          CAI_BaseNPC       (ElysiumNpcClasses.cpp)
+//              +- FElysiumNpc          CAI_BaseNPC       (Substrate/ElysiumNpc.h)
 //              +- FElysiumPlayer       CBasePlayer       the 10 recovered player inputs
 //
 // The chain mirrors VtMB's because VtMB's *data* is authored against it: a `.dlg` action calls
