@@ -92,7 +92,8 @@ AcceptInput name.
 - Witnessed criminal incidents feed delayed police response. Witnessed supernatural incidents feed
   a `debug_masquerade_timer`-limited `ChangeMasqueradeLevel(+1)` and may independently feed police
   response. Upstream admission is distributed across player activity producers, per-NPC visual
-  witness thresholds and NPC schedule translation rather than one zone-aware predicate.
+  witness thresholds and NPC schedule translation; the sole terminal incident thunks then require
+  non-combat world area state before police or Masquerade policy.
 - Police response retains the highest queued severity and original randomized deadline, requires
   its witness handle to survive, applies response-grace delta spawning through the global NPC
   maker or a wait area, then tracks cop pursuit, hunter pursuit and heightened alert separately.
@@ -110,7 +111,7 @@ AcceptInput name.
   handles.
 - The complete 277-field ledger, camera/body joins, carried-item transition and live world-side
   teardown still remain open. Law admission still needs controlled retail acceptance across
-  thresholds, occlusion, ignore windows and zone policy.
+  thresholds, occlusion, ignore windows and refusal presentation; static zone policy is closed.
 
 No new decompilation finding is claimed until the generated context is inspected and written into
 `docs/vtmb/player-entity.md`.

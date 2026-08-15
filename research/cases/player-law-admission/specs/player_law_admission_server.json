@@ -77,8 +77,8 @@
     {"displacement": "63b8", "label": "npc_seek_distance_inspection"}
   ],
   "relationships": [
-    {"from": "100123a5", "to": "1017f2a0", "confidence": "verified", "evidence": "the thunk has five callers and is the only static entry to the criminal incident consumer"},
-    {"from": "10008652", "to": "1017f4a0", "confidence": "verified", "evidence": "the thunk has three callers and is the only static entry to the supernatural incident consumer"},
+    {"from": "100123a5", "to": "1017f2a0", "confidence": "verified", "evidence": "the thunk has five callers, is the only static entry to the criminal incident consumer and admits it only when world m_nAreaType is nonzero"},
+    {"from": "10008652", "to": "1017f4a0", "confidence": "verified", "evidence": "the thunk has three callers, is the only static entry to the supernatural incident consumer and admits it only when world m_nAreaType is nonzero"},
     {"from": "10169960", "to": "1017f4a0", "confidence": "verified", "evidence": "the player rule pass selects a retained supernatural-scare record and submits it before removing records"},
     {"from": "102ae920", "to": "1017f2a0", "confidence": "verified", "evidence": "NPC schedule translation has two criminal incident call sites"},
     {"from": "102af660", "to": "1017f2a0", "confidence": "verified", "evidence": "NPC schedule selection submits retained criminal severity offender and location state"},
@@ -95,15 +95,15 @@
   "findings": [
     {
       "confidence": "confirmed",
-      "fact": "All terminal criminal and supernatural incident calls are schedule-mediated except the player-owned supernatural scare queue consumer.",
-      "evidence": "The sole criminal thunk has five calls in three NPC schedule bodies. The sole supernatural thunk has two NPC schedule calls plus PlayerRuleUpdate. No Physics Hand or Discipline body calls either terminal thunk.",
-      "consequence": "Player actions must first become activity or world-law records; an overt cast or physics action must not call Masquerade or police response directly."
+      "fact": "All terminal criminal and supernatural incident calls are schedule-mediated except the player-owned supernatural scare queue consumer, and both terminal thunks apply the combat-zone guard.",
+      "evidence": "The sole criminal thunk has five calls in three NPC schedule bodies. The sole supernatural thunk has two NPC schedule calls plus PlayerRuleUpdate. Each thunk requires world m_nAreaType != 0 before entering its consumer. No Physics Hand or Discipline body calls either terminal thunk.",
+      "consequence": "Player actions must first become activity or world-law records; an overt cast or physics action must not call Masquerade or police response directly, and a witnessed incident in combat area is discarded at terminal admission."
     },
     {
       "confidence": "confirmed",
       "fact": "A successful targeted Discipline commit maps SupernaturalLvl to supernatural activity and Overt to criminal activity level 3 without a zone query.",
       "evidence": "0x101e2f50 calls PlayerSetSupernaturalLevel with target-record offset 0x28, then conditionally calls PlayerSetCriminalLevel(3) from target-record byte offset 0x24. The parser stores SupernaturalLvl and Overt at those offsets.",
-      "consequence": "Zone verb blocking remains upstream; witness consequences are activity plus NPC policy rather than one zone-aware cast violation callback."
+      "consequence": "Elysium verb blocking remains upstream of cast commit; the separate combat-zone guard joins only after activity and NPC witness policy at terminal incident admission."
     },
     {
       "confidence": "confirmed",

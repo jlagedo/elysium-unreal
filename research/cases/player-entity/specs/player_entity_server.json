@@ -252,9 +252,9 @@
     },
     {
       "confidence": "confirmed",
-      "fact": "Player law admission is an activity-counter to per-NPC condition and schedule transaction, not a central zone-aware violation callback.",
-      "evidence": "Targeted Discipline commit 0x101e2f50 maps SupernaturalLvl to player supernatural activity and Overt to criminal activity 3. NPC update 0x1028efc0 deduplicates the two player counts, applies authored flee/attack thresholds and retains offender/origin before schedule bodies submit the incident. World-law records additionally require view cone, inspection distance and an unobstructed trace in 0x1028ebc0.",
-      "consequence": "The player owns severity and act identity; each NPC owns witness qualification and reaction, while Elysium verb blocking and HUD zone presentation remain upstream systems."
+      "fact": "Player law admission is an activity-counter to per-NPC condition and schedule transaction followed by one terminal combat-zone guard.",
+      "evidence": "Targeted Discipline commit 0x101e2f50 maps SupernaturalLvl to player supernatural activity and Overt to criminal activity 3. NPC update 0x1028efc0 deduplicates the two player counts, applies authored flee/attack thresholds and retains offender/origin before schedule bodies submit the incident. World-law records additionally require view cone, inspection distance and an unobstructed trace in 0x1028ebc0. The sole criminal and supernatural incident thunks require world m_nAreaType != 0 before their consumers.",
+      "consequence": "The player owns severity and act identity; each NPC owns witness qualification and reaction; world area authority separately blocks Elysium verbs before commit and suppresses witnessed incident consequences in combat area."
     },
     {
       "confidence": "confirmed",

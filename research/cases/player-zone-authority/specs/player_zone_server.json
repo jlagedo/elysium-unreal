@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "topic": "player-zone-authority-server",
+  "consuming_document": "docs/vtmb/game_runtime.md",
+  "research_id": "RE41",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "What state does CWorldEvents SetSafeArea retain and publish?",
+    "Which player verbs read safe-area state before commit?",
+    "Where is the Bloodbuff lockpick exception implemented?",
+    "How does the state initialize restore and change across maps?"
+  ],
+  "functions": [
+    {"address": "1023ddd0", "label": "WorldEventsInputSetSafeArea", "confidence": "CWorldEvents datamap InputSetSafeArea thunk 0x100154ce target", "role": "recover safe-area mutation and publication", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "10170750", "label": "PlayerApplyWorldSafeArea", "confidence": "called for every connected player after SetSafeArea changes", "role": "recover immediate per-player transition policy", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "10182550", "label": "PlayerDisciplineZoneException", "confidence": "CBasePlayer vtable slot 334 called before the Elysium rejection in shared Discipline authority", "role": "recover the Bloodbuff lockpick exception predicate", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101681a0", "label": "PlayerActionBlocked", "confidence": "shared player-state predicate whose terminal branch tests Elysium and no-frenzy world state", "role": "enumerate verb gates sharing the zone restriction", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "1000c603", "label": "PlayerActionBlockedThunk", "confidence": "JMP thunk to PlayerActionBlocked", "role": "enumerate every native caller of the shared predicate", "depth": 2, "cap": 320, "asm_count": 2200},
+    {"address": "10167320", "label": "PlayerWeaponActionBlocked", "confidence": "shared action-blocked predicate plus active-weapon capability test", "role": "recover the player attack gate", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "10182780", "label": "PlayerTargetedDisciplineClientState", "confidence": "shared action-blocked caller in the targeted-Discipline client-state sampler", "role": "separate targeted selection state from client-side zone authority", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "100d5f10", "label": "PlayerUnarmedToggleCommand", "confidence": "unarmed inventory command caller of shared action-blocked predicate", "role": "recover Elysium interaction with manual weapon holstering", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "10147a30", "label": "CombatCharacterEndOneDiscipline", "confidence": "safe-area transition calls this with indices 3 and 11", "role": "identify powers forcibly ended on entering safe area", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "100d8830", "label": "DisciplineUseAuthority", "confidence": "vdiscipline_int and vdiscipline_last shared authority", "role": "recover pre-commit zone eligibility", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "101e2da0", "label": "TargetedDisciplineBegin", "confidence": "shared DisciplineTgt begin path", "role": "verify the targeted branch cannot bypass zone eligibility", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "101728f0", "label": "PlayerFeedEligibility", "confidence": "player feed command consumer candidate with direct world safe-area read", "role": "recover Elysium feeding refusal", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "1032db60", "label": "CombatCharacterWeaponCanSwitchTo", "confidence": "scope trace names CBaseCombatCharacter::Weapon_CanSwitchTo and the body has a direct Elysium comparison", "role": "recover weapon restriction on entering Elysium", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "10181be0", "label": "PlayerWorldStateUpdate", "confidence": "called from PlayerRuleUpdate and compares world safe-area state", "role": "recover recurring transition behavior and retained player mirror", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "1023b840", "label": "WorldConstructor", "confidence": "worldspawn factory constructor target", "role": "recover initial safe-area value", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "1023b0b0", "label": "WorldSendTableBuilder", "confidence": "registers DT_WORLD m_nAreaType at displacement 0x49c as a two-bit send property", "role": "recover replication declaration", "depth": 2, "cap": 420, "asm_count": 3200},
+    {"address": "1023b3a0", "label": "WorldSafeAreaCvarMutation", "confidence": "safearea callback clamps and writes the same m_nAreaType field", "role": "recover the non-input mutation route", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "1023bc20", "label": "WorldActivate", "confidence": "CWorld-region virtual calls inherited Activate then clamps m_nAreaType", "role": "recover activation-time normalization", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "100123a5", "label": "PlayerCriminalIncidentAdmission", "confidence": "sole thunk reaching PlayerCriminalIncident", "role": "recover combat-zone incident suppression", "depth": 3, "cap": 420, "asm_count": 3200},
+    {"address": "10008652", "label": "PlayerSupernaturalIncidentAdmission", "confidence": "sole thunk reaching PlayerSupernaturalIncident", "role": "recover combat-zone incident suppression", "depth": 3, "cap": 420, "asm_count": 3200}
+  ],
+  "field_probes": [
+    {"displacement": "49c", "label": "world_safe_area"}
+  ],
+  "datamap_probes": [
+    {"map": "105c2a50", "depth": 1, "label": "CWorldEvents"}
+  ],
+  "grep_probes": [
+    {"label": "safe_area_surface", "str": "SetSafeArea~InputSetSafeArea~SafeArea~Elysium~CombatZone", "cls": "World~Player~CombatCharacter", "fn": "SafeArea~Elysium~Combat~Attack~Discipline", "cap": 920},
+    {"label": "zone_verb_surface", "str": "Bloodbuff~Corpus_Vampirus~LockPick~Lockpick~vdiscipline~attack~Elysium", "cls": "Player~CombatCharacter~Weapon~Discipline", "fn": "Attack~Feed~Discipline~LockPick~Use", "cap": 920}
+  ],
+  "relationships": [
+    {"from": "1023ddd0", "to": "10170750", "confidence": "verified", "evidence": "a changed SetSafeArea value iterates connected players and applies the world-area transition policy before marking the world state dirty"},
+    {"from": "100d8830", "to": "10182550", "confidence": "verified", "evidence": "the shared Discipline authority calls the player eligibility virtual before either native or targeted commit"},
+    {"from": "10182550", "to": "101681a0", "confidence": "verified", "evidence": "ordinary Discipline eligibility composes the shared player-action blocker after the Bloodbuff LockPick exception branch"},
+    {"from": "1032db60", "to": "101681a0", "confidence": "verified", "evidence": "Weapon_CanSwitchTo uses the shared blocker and refuses every Elysium candidate except item_w_unarmed"},
+    {"from": "101728f0", "to": "101681a0", "confidence": "verified", "evidence": "feed eligibility uses the shared blocker before the grapple/feed transaction"},
+    {"from": "100123a5", "to": "1017f2a0", "confidence": "verified", "evidence": "the sole criminal incident thunk calls its consumer only when world m_nAreaType is nonzero"},
+    {"from": "10008652", "to": "1017f4a0", "confidence": "verified", "evidence": "the sole supernatural incident thunk admits Masquerade and optional police policy only when world m_nAreaType is nonzero"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The world singleton owns one clamped three-state area type: 0 combat, 1 safe or Masquerade, and 2 Elysium.",
+      "evidence": "CWorldEvents SetSafeArea, the safearea callback and World Activate all normalize the field at world +0x49c. DT_WORLD sends it as a two-bit m_nAreaType property; map worldspawn safearea keys and Python world.SetSafeArea calls author it.",
+      "consequence": "Zone legality is world authority shared by every player, not a volume flag or durable property stored on each player."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A changed area type applies immediate player policy before publication.",
+      "evidence": "SetSafeArea iterates connected players. State 2 equips item_w_unarmed and removes all owned active and targeted Discipline effects; state 1 ends compiled Discipline indices 3 and 11, Celerity and Protean; state 0 has no immediate teardown.",
+      "consequence": "Entering Elysium and entering a safe area are transitions with teardown effects, not only future-request predicates or HUD changes."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Elysium pre-commit legality is composed through the shared player-action blocker and the Discipline eligibility virtual.",
+      "evidence": "The shared blocker terminally tests area type 2 or nofrenzyarea and is called by weapon, feed and Discipline decisions. DisciplineUseAuthority invokes eligibility before either execution family; Weapon_CanSwitchTo permits only item_w_unarmed in Elysium.",
+      "consequence": "Forbidden verbs must fail before blood, target effects, feed state or attack state commits; client presentation cannot be authoritative."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Bloodbuff while lockpicking is the exact native Elysium exception.",
+      "evidence": "Player eligibility returns true before the ordinary blockers only for compiled Discipline index 4 when the retained action target resolves and reports compact player action 300 LockPick.",
+      "consequence": "The exception is neither a general Bloodbuff allowance nor a UI special case; it depends on retained lockpick action state."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Combat area suppresses terminal criminal and supernatural incident admission even though activity production and NPC witnessing are zone-independent.",
+      "evidence": "The sole criminal and supernatural incident thunks test world m_nAreaType != 0 before entering police or Masquerade policy. The upstream activity setters, Discipline commit and NPC witness transaction do not receive the zone.",
+      "consequence": "The faithful law path needs both distributed witnessing and one late combat-zone guard; neither alone reproduces the transaction."
+    },
+    {
+      "confidence": "partial",
+      "fact": "Replication and map re-authoring are proved, but same-map save and restore persistence is not.",
+      "evidence": "m_nAreaType is present in DT_WORLD and each map can author worldspawn safearea; dynamic scripts call world.SetSafeArea. The current static pass did not establish a save-datamap record for the field.",
+      "consequence": "Map travel must take the destination world baseline; save-load retention remains a controlled retail acceptance question."
+    }
+  ]
+}

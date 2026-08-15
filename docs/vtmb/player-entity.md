@@ -165,6 +165,24 @@ into the top-level `PreThink` and `PostThink` order. Law and world-response bran
 below; the remaining address-labelled status, camera and transition subcalls stay open rather than
 being assigned guessed semantics.
 
+### World-owned area authority
+
+The player does not retain its own safe/combat/Elysium enum. The singleton world owns clamped
+`m_nAreaType` at `+0x49c`, publishes it through `DT_WORLD`, and derives its map baseline from the
+`worldspawn` key `safearea`. Dynamic `world.SetSafeArea(...)` calls mutate that same world field.
+
+A changed value is a world-to-player transaction. `CWorldEvents::SetSafeArea` iterates connected
+players and applies policy before marking the world state dirty: Elysium equips
+`item_w_unarmed` and tears down all active and targeted Discipline effects; safe/Masquerade entry
+ends Celerity and Protean; combat entry has no immediate player teardown. Future weapon, feed and
+Discipline requests consult world state again through server-side player predicates. Thus the
+player relates to zone authority as a policy subject and verb actor, not as the owner of a copied
+area property.
+
+Map travel obtains a new world's authored baseline. The field's network replication is closed,
+but this static pass did not establish a save-datamap record for it; same-map save/load retention
+remains open.
+
 ### Recovered `PreThink` body
 
 `CHL2_Player::PreThink` is vtable slot 436 (`0x10350830`). It has two top-level paths rather than
@@ -241,7 +259,7 @@ refresh a finite deadline rather than establish an indefinite level. A lower non
 not lower an already higher level, but it still refreshes that deadline and increments the channel's
 incident count.
 
-The upstream admission transaction is distributed rather than one zone-aware player callback:
+The upstream witness transaction is distributed, followed by a late world-area guard:
 
 ```text
 accepted player verb
@@ -256,6 +274,8 @@ NPC condition gathering
 NPC schedule selection/translation
   -> require the retained offender still be the player
   -> submit the retained incident, then copy the player count into the processed count
+terminal incident thunk
+  -> require world m_nAreaType != 0
 player incident consumer
   -> Masquerade and/or delayed police-response policy
 ```
@@ -307,10 +327,11 @@ consumers in an active game:
 
 This closes both sides of the player transaction. `Overt` raises criminal activity; authored
 `SupernaturalLvl` raises supernatural activity; NPC perception and thresholds decide whether an
-incident is witnessed; only the admitted supernatural incident can mutate Masquerade. There is no
-single native `zone -> incident` gate in this path. Elysium verb blocking and the HUD zone icon are
-separate upstream authorities, while map activity triggers and NPC threshold authoring provide
-context without becoming a second incident consumer.
+incident is witnessed; only the admitted supernatural incident can mutate Masquerade. The sole
+criminal and supernatural incident thunks then require world `m_nAreaType != 0`, suppressing both
+consequence paths in combat area. Elysium instead blocks weapon, feed and Discipline verbs before
+their commit, while the HUD icon is a client projection of the replicated enum. Zone therefore
+joins twice, not through one `zone + verb + witness` callback.
 
 `ChangeMasqueradeLevel` mutates sheet stat index `0x1c`, republishes player client state and fires
 the game-rules output for the resulting level plus the generic level-changed output. An increment
@@ -472,12 +493,14 @@ The player-wide investigation keeps these questions open:
    address-labelled subcalls still need field and content joins.
 3. Live-capture feeding, Physics Hand and overt/covert Discipline incidents across occlusion,
    threshold and ignore-window boundaries; the activity producer, spatial witness,
-   condition/schedule admission, Masquerade, police-response, pursuit and alert transactions are
-   statically closed.
+   condition/schedule admission, combat-zone guard, Masquerade, police-response, pursuit and alert
+   transactions are statically closed.
 4. Classify origin, hull centre, eye/view offset, control angles, body facing, view entity, camera
    target, local-body visibility and first-person viewmodel ownership.
 5. Recover the map-transition transaction for the player and carried moveable entities, including
-   active/last weapon, armour, reserve ammunition and stale-handle policy.
+   active/last weapon, armour, reserve ammunition and stale-handle policy; separately live-test
+   same-map save/load retention of world `m_nAreaType`, whose replication but not save record is
+   established.
 6. Resolve the `0x1016b440` post-damage hook, the slot-406 `+0x19f6` latch, the
    `0x10338900`/`0x10338920` status reaction, the `+0x1db0` PostThink relationship and the
    Animalism early-return consequences; the remaining top-level `PreThink`/`PostThink` consumers

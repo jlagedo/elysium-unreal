@@ -151,6 +151,19 @@ selected feat is rolled at player difficulty 3 or NPC difficulty 7 and returns
 `max(successes - botches, 0)`. Automatic soak is added by the apply callback, outside this
 resolver.
 
+## World-area weapon admission
+
+Elysium policy joins before the attack and damage transactions below. When world
+`m_nAreaType` changes to 2, the server equips every connected player with `item_w_unarmed` and
+clears all active Discipline effects. `CBaseCombatCharacter::Weapon_CanSwitchTo` composes the
+shared player-action blocker and, while Elysium is active, refuses every candidate whose classname
+is not `item_w_unarmed`. The same blocker reaches the player weapon-action decision, so state 2 is
+not only a holster animation or client HUD convention.
+
+Static evidence closes forced unarmed state, non-unarmed switch refusal and the shared pre-action
+predicate. The exact primary-versus-secondary refusal call order and player feedback remain live
+acceptance; no Elysium condition belongs inside `CVDmg_t::Apply` or the health commit.
+
 ## Firearms and ranged combat
 
 ### Input and firing modes

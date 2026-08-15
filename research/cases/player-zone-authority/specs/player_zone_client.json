@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "topic": "player-zone-authority-client",
+  "consuming_document": "docs/vtmb/game_runtime.md",
+  "research_id": "RE41",
+  "program": "client.dll",
+  "binary": {
+    "size": 3428425,
+    "sha256": "e88beae0dd03af06493c71c5e8d87a6993b54e590cb6ad37cd3513c588582870",
+    "md5": "96f8ef8f93411e9cb9805a54dcad747e",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "How does client.dll receive and retain safe-area state?",
+    "Which HUD control chooses combat Masquerade and Elysium presentation?",
+    "Does the client disable actions or only present server authority?"
+  ],
+  "functions": [
+    {"address": "100a8de0", "label": "ClientQuickbarDisciplineDispatch", "confidence": "vdiscipline_int formatting and quickbar item-type branch", "role": "test whether client zone state blocks or only presents Discipline dispatch", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "10051da0", "label": "ClientAreaIconPath", "confidence": "only code reference to area_icon_elysium and area_icon_combat strings", "role": "recover exact state to HUD icon mapping", "depth": 4, "cap": 520, "asm_count": 4200},
+    {"address": "10051df0", "label": "ClientAreaIconUpdate", "confidence": "adjacent HUD consumer that directly reads client world safe-area state", "role": "recover icon update and presentation behavior", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "100ca9c0", "label": "ClientWorldGetter", "confidence": "ClientAreaIconPath source object getter", "role": "identify the replicated world-state owner", "depth": 3, "cap": 420, "asm_count": 3200},
+    {"address": "100ca330", "label": "ClientWorldReceiveTable", "confidence": "registers client DT_World m_nAreaType at displacement 0x430", "role": "recover the replicated client field declaration", "depth": 2, "cap": 420, "asm_count": 3200}
+  ],
+  "field_probes": [
+    {"displacement": "430", "label": "client_world_safe_area"}
+  ],
+  "grep_probes": [
+    {"label": "client_safe_area_surface", "str": "SetSafeArea~SafeArea~Elysium~CombatZone~Masquerade", "cls": "HUD~Status~Quick~Discipline~Player", "fn": "SafeArea~Elysium~Combat~Masquerade~Update~Paint", "cap": 920},
+    {"label": "client_zone_icons", "str": "hud~safearea~elysium~combat~masquerade~discipline~bloodbuff", "cls": "HUD~Status~Quick~Discipline", "fn": "Icon~Update~Paint~Think~Command", "cap": 920}
+  ],
+  "relationships": [
+    {"from": "100ca330", "to": "10051da0", "confidence": "verified", "evidence": "DT_World receives m_nAreaType at +0x430 and the icon selector reads that field through ClientWorldGetter"},
+    {"from": "10051da0", "to": "10051df0", "confidence": "verified", "evidence": "the HUD updater recreates the area sprite when the replicated area type differs from its retained last value"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "The client receives the server world area type and maps it directly to three HUD sprites.",
+      "evidence": "Client DT_World stores m_nAreaType at +0x430. ClientAreaIconPath maps 0 to area_icon_combat, 1 to area_icon_safearea and 2 to area_icon_elysium; the server clamps the transmitted value.",
+      "consequence": "The area icon is a projection of server world authority, not a client-side zone-volume test."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The HUD area icon is recreated when the replicated value changes.",
+      "evidence": "ClientAreaIconUpdate compares the world value with its retained HUD value, destroys and recreates the sprite through ClientAreaIconPath, stores the new value and drives its timing or fade state.",
+      "consequence": "Presentation may animate independently, but it must follow the replicated enum transition."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "The focused quickbar Discipline dispatcher does not own the zone refusal.",
+      "evidence": "ClientQuickbarDisciplineDispatch resolves the selected compiled index and sends vdiscipline_int without reading client m_nAreaType; the server shared authority performs eligibility before commit.",
+      "consequence": "Quickbar disabling remains presentation work unless another client consumer is recovered; the server must reject forged or stale requests."
+    }
+  ]
+}

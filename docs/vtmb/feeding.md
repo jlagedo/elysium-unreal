@@ -74,6 +74,11 @@ predicate is false, it invokes player virtual `+0x6a0`, `CBasePlayer::Replenish`
 `CantBreakGrapple` argument. `Replenish` refuses to start another request while the player already
 has a paired peer. `[VtMB]`
 
+That general predicate is also the world-policy boundary. Its terminal branch rejects Elysium
+(`m_nAreaType == 2`) or a world with `nofrenzyarea` set, so the request never reaches victim
+selection, `StartGrappleAttack` or `FeedBegin`. The server owns this refusal; the HUD icon is only a
+replicated presentation of the world state. `[VtMB]`
+
 The released-button bit is also published by the server's general input-edge event surface at
 `0x10118db0`. That body does **not** call `FeedInterrupt` directly. The accepted action has its own
 continuation latch and exits through paired state, animation-event and interruption policy; the

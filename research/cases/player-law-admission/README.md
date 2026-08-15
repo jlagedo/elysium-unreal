@@ -48,13 +48,16 @@ Use `--dry-run` to validate the specification. Generated evidence is written bel
   schedule paths.
 - The remaining direct criminal sites are NPC subclass schedule paths. Physics drag/lift and throw
   producers raise the player activity channels but do not call either terminal incident thunk.
+- Both terminal incident thunks require world `m_nAreaType != 0`; combat area therefore discards
+  an otherwise witnessed incident before police or Masquerade policy.
 - Incident submission, Masquerade throttling and police response are distinct stages.
 
 ## Recovered joins
 
 - A successful targeted Discipline commit maps target-record `SupernaturalLvl` to the player's
   supernatural activity channel and maps `Overt` to criminal activity level 3. The commit has no
-  zone query and `TriggerAISound` remains independent.
+  zone query and `TriggerAISound` remains independent. Zone joins later at the sole terminal
+  incident thunks rather than inside the activity or NPC witness stages.
 - Each NPC compares the player's criminal and supernatural act counts with its own processed
   counts, applies four authored `pl_*` thresholds, and retains severity, origin and offender before
   setting conditions 31 through 34.
@@ -69,5 +72,5 @@ Use `--dry-run` to validate the specification. Generated evidence is written bel
 - `m_flCriminalWitnessedTimer` and `m_flSupernaturalWitnessedTimer` drive debug markers in
   `NPCThinkDebug`; they are not the observation-memory lifetime.
 
-The static transaction is closed through incident admission. Controlled retail work remains for
-frame-exact threshold, occlusion, ignore-window and zone-authority acceptance.
+The static transaction is closed through combat-zone incident admission. Controlled retail work
+remains for frame-exact threshold, occlusion, ignore-window and refusal-feedback acceptance.

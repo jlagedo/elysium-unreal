@@ -364,7 +364,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE38 | inventory ownership and transfer | `docs/vtmb/inventory.md` | [x] |
 | RE39 | computer terminals; open: TERM2/3/6–8 | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
-| RE41 | discipline authority/interpreter; `SupernaturalLvl`/`Overt` activity production and NPC visual witness-to-incident admission closed; open: native consumers, Elysium/HUD zone authority and live cast matrix | `docs/vtmb/disciplines.md`; 13.2 | [~] |
+| RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers, client disable presentation and live cast matrix | `docs/vtmb/disciplines.md`; 13.2 | [~] |
 | RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; CCC10.1, PL14 | [~] |
 | RE43 | the tutorial event-resolution transaction; open: engine contact order, autosave txn | `docs/vtmb/sp_tutorial_1-event-surface.md` | [~] |
 | RE44 | the exported-map event surface beyond the tutorial | `docs/vtmb/exported-map-event-surface.md` | [~] |
@@ -374,7 +374,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 10.7, 13.3 | [x] |
 | RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 10.7, 13.1 | [x] |
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [ ] |
-| RE51 | the player entity and world relationship; lifecycle plus activity/witness/law/Masquerade/police-response/pursuit transactions closed; open: 277-field ledger, camera/travel and live world teardown | `docs/vtmb/player-entity.md`; 9.8, CCC10.1, 13.1–13.4 | [~] |
+| RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, CCC10.1, 13.1–13.4 | [~] |
 
 ## Options — evaluated, not planned
 

@@ -126,6 +126,31 @@ The shared authority reads the Discipline's compiled `stats.txt` flags **[DLL]**
 4. Failed blood, rank, predependency or target checks issue player feedback and do not commit the
    cast.
 
+### World-area eligibility and transition teardown
+
+Before either execution family, the shared authority calls a player eligibility virtual **[DLL]**.
+Its ordinary path composes the common action blocker and explicitly refuses world area type 2,
+Elysium. Consequently a targeted power cannot bypass the restriction by deferring target
+selection, and a forged or stale client command cannot bypass it either.
+
+One branch precedes those ordinary blockers. A request for compiled index 4, Corpus Vampirus /
+Bloodbuff, is admitted when the player's retained action-target handle resolves to an entity whose
+compact player action is 300, `LockPick`. This is the exact Bloodbuff-while-lockpicking exception:
+it is not a general Elysium allowance, a property of the lock item, or a client quickbar rule.
+
+World-area changes also tear down existing powers **[DLL]**:
+
+- entering Elysium equips `item_w_unarmed` and invokes the same all-Discipline teardown used by
+  `vdiscipline_endall` and `ClearActiveDisciplines`, removing owned timed events and targeted
+  effects through their normal callbacks;
+- entering safe/Masquerade area ends compiled indices 3 and 11, Celerity and Protean, while leaving
+  other active powers to their ordinary lifetimes;
+- entering combat area performs no immediate Discipline teardown.
+
+The client quickbar dispatcher still sends `vdiscipline_int` without reading the replicated area
+type in the focused body. Any client disabling is presentation only; the recovered refusal owner is
+the server.
+
 The misleading name `Is_Instant` should not be turned into a remake design rule. Auspex,
 Celerity, Fortitude, Obfuscate, Potence, Presence and Protean all set it while producing timed
 states. In this binary it is principally the native-path discriminator.
@@ -375,11 +400,13 @@ police response when `debug_supernatural_cop_spawn` is enabled. Therefore:
 - an admitted supernatural incident is a confirmed rate-limited Masquerade consumer;
 - an overt use does not immediately subtract a Masquerade point.
 
-The familiar zone categories are distributed policy rather than an argument to this transaction.
-Elysium can forbid the cast before commit; map activity triggers can author player context; and an
-NPC threshold of 6 makes the clamped `0..5` activity channel non-reactive. The HUD zone authority
-and exact upstream Elysium exception checks remain separate work, but there is no missing central
-`zone + overt -> Masquerade` call in the recovered witness path.
+The familiar zone categories are distributed policy rather than an argument to the successful
+effect commit. Elysium refuses the cast in the shared authority before commit; map activity
+triggers can author player context; and an NPC threshold of 6 makes the clamped `0..5` activity
+channel non-reactive. After NPC witnessing, the sole terminal supernatural-incident thunk admits
+Masquerade policy only when world area type is nonzero, so combat area suppresses the consequence.
+There is no central `zone + overt -> Masquerade` call, but there are separate pre-commit Elysium and
+terminal combat guards.
 
 ## Faithful remake contract
 
@@ -395,7 +422,8 @@ A faithful implementation needs these separations:
    HitInfo channels;
 8. interruption reasons remain explicit;
 9. `ClearActiveDisciplines` removes owned effects and events, including their gameplay modifiers;
-10. no player-facing Discipline combo layer is added unless later retail evidence proves one.
+10. world-area transition teardown and request eligibility remain separate ordered operations;
+11. no player-facing Discipline combo layer is added unless later retail evidence proves one.
 
 ## Open verification work
 
@@ -405,7 +433,8 @@ A faithful implementation needs these separations:
 - recover Protean's transform start/finish, equipment and teardown lifecycle;
 - identify Presence's native pulse caller and reconcile its two radius tables;
 - close recovery/cooldown save/restore and interruption ordering for targeted effects;
-- live-capture overt/covert casts across occlusion, NPC threshold and zone-authority boundaries;
+- live-capture overt/covert casts across occlusion, NPC threshold and combat-zone admission
+  boundaries, including refusal feedback;
 - confirm upper-tier UI selection and `vhotkey` frame deferral;
 - run controlled retail casts for all thirteen powers, including failure, renewal, interruption,
   save/load and `ClearActiveDisciplines` cases.
@@ -415,9 +444,11 @@ A faithful implementation needs these separations:
 | Function | Role |
 |---|---|
 | `vampire.dll 0x100D8490` | `vdiscipline_int` selection/dispatch |
+| `vampire.dll 0x100D8830` | shared Discipline use authority and pre-commit eligibility call |
+| `vampire.dll 0x10182550` | player eligibility and Bloodbuff/`LockPick` exception |
+| `vampire.dll 0x10170750` | world-area transition policy applied to a player |
 | `vampire.dll 0x100D9750` | `vdiscipline_last` dispatch |
 | `vampire.dll 0x100DB250` | `vdiscipline_endall` |
-| `vampire.dll 0x100D8830` | shared Discipline-use authority |
 | `vampire.dll 0x100D9220` | native duration/event scheduling |
 | `vampire.dll 0x101E2DA0` | targeted record, blood and learned-rank gate |
 | `vampire.dll 0x101E2F50` | target-set commit and one-time blood payment |

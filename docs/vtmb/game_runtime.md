@@ -943,14 +943,38 @@ The die itself (pool → tier, 10-again, botch table) is `docs/recovered/dice-sy
 
 ### Zone legality — where a verb is allowed
 
-Which player verbs are legal is a property of **where the player is standing**, surfaced by one
-icon above the health meter:
+Zone is one world-owned enum, not a property sampled independently from the player's current
+volume. The singleton world retains `m_nAreaType` at server offset `+0x49c`, clamps it to `0..2`
+and replicates it as the two-bit `DT_WORLD` property of the same name. The client receives the
+field at `+0x430` and projects it into the icon above the health meter:
 
-| Icon | Zone | Forbidden |
-|---|---|---|
-| mask | Masquerade | visible disciplines, feeding on the unwilling — a breach costs a `Masquerade` point |
-| `E` | Elysium | attacking and disciplines outright; Bloodbuff while picking a lock is the sole exception |
-| gun | combat zone | nothing — attacking and disciplines carry no Masquerade or Humanity cost |
+| Value | Client sprite | Area | Native policy |
+|---:|---|---|---|
+| 0 | `area_icon_combat` | combat | area type adds no Elysium verb block; terminal criminal and supernatural incidents are suppressed |
+| 1 | `area_icon_safearea` | safe / Masquerade | witnessed incidents may reach police or Masquerade policy; entering ends Celerity and Protean |
+| 2 | `area_icon_elysium` | Elysium | weapon/attack, feeding and Discipline admission is blocked; Bloodbuff during retained `LockPick` is the sole Discipline exception |
+
+The authored `worldspawn` key `safearea` establishes a map baseline. `CWorldEvents::SetSafeArea`,
+Python `world.SetSafeArea(0|1|2)` and the native `safearea` callback mutate the same retained field;
+scripts use those calls to change policy inside a loaded map. A changed value is not merely
+published. The server first applies it to every connected player: value 2 equips
+`item_w_unarmed` and runs the ordinary all-Discipline teardown, including owned timed events and
+targeted effects; value 1 ends only compiled Discipline indices 3 and 11, Celerity and Protean;
+value 0 has no immediate teardown. It then marks the world state dirty for replication.
+
+The server remains authoritative after that transition. The shared player-action predicate reports
+Elysium or `nofrenzyarea` state and is consumed by weapon, feed and Discipline decisions.
+`CBaseCombatCharacter::Weapon_CanSwitchTo` allows only `item_w_unarmed` while Elysium is active,
+and the transition itself forces that item. Feed eligibility rejects before the paired feed
+transaction. The shared Discipline authority calls the player eligibility virtual before either
+the native-active or targeted path. That virtual admits compiled index 4, Corpus Vampirus /
+Bloodbuff, before its ordinary blockers only when the player's retained action target reports
+compact action 300, `LockPick`; this is the exact Elysium exception.
+
+On the client, a changed replicated value recreates the corresponding HUD sprite and drives its
+presentation timing. The focused quickbar Discipline dispatcher maps the visible selection to a
+compiled index and sends `vdiscipline_int` without reading `m_nAreaType`. Client-side greying or
+suppression is therefore not established by this pass and cannot replace server rejection.
 
 Breaking *human* law does not touch the Masquerade counter; an admitted criminal incident enters
 the delayed police-response transaction. An admitted supernatural incident is the separate native
@@ -959,21 +983,19 @@ may independently enter the same police response. Killing innocents costs Humani
 inside a combat zone. The player-side ordering and pursuit/alert state machine are
 `player-entity.md`.
 
-The same button therefore means a legal or an illegal act depending on the zone, which is why the
-gamepad quickbar greys what the current zone forbids (`docs/architecture/input-architecture.md`).
-*Community-sourced;* the icon set and the Bloodbuff-in-Elysium exception are documented by the
-GameFAQs walkthrough under `$ELYSIUM_WORK_ROOT/research/reference-source/`.
+Zone joins the law transaction at two different boundaries. Activity producers and NPC witnessing
+do not receive it: an accepted targeted Discipline raises authored `SupernaturalLvl` and, when
+`Overt`, criminal activity 3; each NPC applies its own `pl_*` thresholds and visual witness test.
+But the sole criminal- and supernatural-incident thunks then require `m_nAreaType != 0` before
+entering police or Masquerade policy. Combat therefore suppresses an otherwise witnessed incident
+at terminal admission, while Elysium prevents the forbidden verb before activity or effect commit.
+There is no monolithic `zone + attempted verb + witness` predicate, but zone is not absent from the
+transaction.
 
-Static native evidence shows that zone is not a parameter of the law-admission transaction. An
-accepted targeted Discipline raises supernatural activity to authored `SupernaturalLvl` and, when
-`Overt`, criminal activity to level 3. Each NPC then applies its own `pl_*` thresholds and visual
-witness test before its schedule submits an incident. A map `trigger_player_activity_level` can
-write supernatural, criminal and investigate context directly, while a threshold of 6 disables a
-reaction because player activity is clamped to `0..5`. Elysium must therefore reject forbidden
-verbs before the Discipline commit; combat/Masquerade context is also expressed through map and
-NPC authoring rather than a second player incident consumer. The exact HUD-icon authority,
-Elysium verb gate and Bloodbuff exception check remain open, but the previously assumed monolithic
-`zone + attempted verb + witness` predicate does not exist in the recovered incident path.
+Map travel obtains the destination world's authored baseline rather than carrying an area value on
+the player. Replication is statically closed; this pass did not establish a save-datamap record for
+`m_nAreaType`, so same-map save/load retention, exact refusal feedback and frame-exact icon fades
+remain controlled retail acceptance.
 
 ## 4. The opening flow — New Game → chargen → trial → tutorial
 
