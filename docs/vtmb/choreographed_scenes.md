@@ -455,6 +455,27 @@ early-out that leaves each actor's entity wherever `position_start` put it:
 Values 1 and 2 then raise the actor's effect bit `0x10` and re-activate it for normal simulation;
 value 3 deliberately branches past both.
 
+### Player pawn versus cinematic double
+
+Camera ownership, actor ownership and player control are three independent authored operations.
+`logic_choreographed_scene` never selects a camera; maps start a `camera_track` position/target pair
+separately. If a scene binds `Player` / `!player`, `position_start == 1` applies the save, teleport,
+`MOVETYPE_NONE` and non-solid state above to the real player pawn. If it binds
+`!playercontroller`, those operations apply only to the non-AI, non-solid controller double created
+by `events_player.CreateControllerNPC` (`docs/vtmb/entity_io.md`); the actual player remains the
+gameplay-authoritative entity. Removing that double copies its final model, transform, skin and
+applicable character state back to the player before destroying it.
+
+Neither starting a camera track nor creating the controller double calls the distinct player
+mobility lock. Content that needs that lock sends `events_player.ImmobilizePlayer` and later
+`MobilizePlayer` (or the equivalent `player_immobilize` / `player_mobilize` server commands). The
+opening `sp_theatre` map does not send either input: its Embrace scenes stage a cast
+`player_understudy`, its courtroom/player-escort scenes bind `!playercontroller`, and later camera
+keyframes explicitly teleport `!player`. Its authored `controls.Deactivate` / `Activate` pair has
+no receiver (§ `!playercontroller` in `docs/vtmb/entity_io.md`). Therefore the mere presence of a
+scripted camera or a body double is not evidence that the real pawn is immobilised; that state must
+be recovered from the particular scene, map wiring or script.
+
 ### The effect bit a scripted jump raises
 
 `position_start`'s placement and `position_end` 1 and 2 all raise bit `0x10`, and so does

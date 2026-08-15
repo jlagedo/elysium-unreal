@@ -381,6 +381,34 @@ ApplyScriptedBlend(&view->origin, &view->angles, &view->fov);
 **What it does not affect**: movement (the character still steers by view yaw — the camera is a
 view-space offset, nothing is reparented), the aim/attack origin, FOV, or input sensitivity.
 
+### The render hand-off is a cut around a blended camera
+
+Draw policy reads `CAM_IsThirdPerson`, not the smoothed third-person weight. The viewmodel gate in
+`ShouldDrawViewModel` (`0x10198ea0`) calls the predicate through `CInput` slot `+0x74` and rejects
+both first-person viewmodel slots whenever it is true. The body and carried-world-model gates call
+the same predicate with the opposite sense. Consequently the first rendered frame after a mode
+request behaves as follows [static-verified]:
+
+| Surface | First → third | Third → first |
+|---|---|---|
+| Camera origin / angles | begin the 0.5 s weight ramp away from the eye | begin the 0.5 s weight ramp back to the eye |
+| First-person hands + weapon | stop submitting immediately | stay suppressed throughout the return; resume only when the weight reaches exactly `0` |
+| Full local-player model | becomes draw-eligible immediately, but starts at alpha `0` while the solved camera remains within `cam_fadeend` | remains draw-eligible throughout the return and fades with solved camera distance; stops submitting when the weight reaches `0` |
+| Carried world weapon / owned attachments | become draw-eligible immediately | remain draw-eligible until the weight reaches `0` |
+| Crosshair path | switches immediately to the plain third-person reticle | remains the third-person reticle until the weight reaches `0`, then returns to the first-person use-icon/arrow path |
+
+The body fade is the only recovered soft render hand-off: solved eye-to-camera distance at or below
+`cam_fadeend` (18 Source units) gives alpha `0`, distance at or above
+`min(cam_idealdist, cam_fadestart)` (normally 32 units) gives alpha `1`, and the band between uses
+`SimpleSpline`. The carried-world-model gates above are boolean; no matching attachment-alpha
+consumer is recovered. Thus "third person" may already be true while the body is still fully
+transparent, particularly on entry or while collision holds the boom against a wall.
+
+Suppressing a first-person viewmodel is submission-only. Both viewmodel entities retain their
+models, sequences, cycles and independent bone palettes while hidden, so the final third → first
+frame resumes the existing visual state rather than spawning or resetting hands and weapon. The
+ordinary mode toggle does not hide the rest of the HUD; it selects the other crosshair path.
+
 ### The viewmodel has its own projection and draw lifetime
 
 The first-person hands/weapon pass does not reuse the world projection [static-verified]. Client
@@ -454,7 +482,11 @@ addresses read out of the PE.*
 Maps drive their authored shots from a second, **server-side** system: a chain of keyframe
 entities laid out in Worldcraft, sampled by the map's own think. It is independent of the client
 weights of §2–§3 and meets them only where the client adopts the resulting view (`0x1017d280` /
-`0x1017d460`).
+`0x1017d460`). Starting it transfers the view, not the player: it does not teleport or immobilise
+the pawn, start a choreography, or create a cinematic body double. Maps and scripts author those
+operations separately (`docs/vtmb/choreographed_scenes.md`). Once the client adopts the scripted
+view, `CAM_IsThirdPerson` is true: the first-person hands/weapon pass is suppressed, while the
+local full body and carried world model become draw-eligible subject to their ordinary gates (§5).
 
 *Provenance: `Vampire/dlls/vampire.dll`, imagebase `0x10000000`, static decompilation. Member
 names are reconstructed, but the datamap records carry the external key names verbatim, so the
@@ -842,6 +874,13 @@ CameraShotTable { <ShotName> { Start {…} End {…} Target { Point1 {…} Point
   follows), `FieldOfView`, `DialogPOV` (NPCs look at the camera rather than the player's eye),
   `AutoPositionFromTarget`, `SyncRotateOnMove`, `SnapOnShotChange`, `ShowHud`, `DrawViewmodel`.
 
+`ShowHud` and `DrawViewmodel` both parse with a default of `0`; an absent field therefore asks the
+shot to hide that surface. The corpus uses explicit opt-ins for interaction shots rather than story
+cinematics: `special-case.txt` sets `ShowHud 1` for Hacking and sets both fields to `1` for Intrusion.
+This is the named `SetCamera` shot policy, not a key on Worldcraft `camera_track`. Independently,
+any adopted scripted camera satisfies `CAM_IsThirdPerson`, whose client draw gate suppresses the
+ordinary first-person viewmodels even if another policy would otherwise permit them.
+
 **`OffsetOrigin`'s Y is positive-right, not Source's positive-left.** The how-to spells the axes as
 `[Forward/Backward, Right/Left, Up/Down]` and reads its own `[40, -10, 25]` example as "10 to our
 left", so this designer-facing offset is already Unreal's local frame and is the one Source-authored
@@ -877,12 +916,18 @@ arriving is the *weight ramp*; the shot itself starts where it was authored.
   `270.0` (`0x10234c80`) is observed but its role is not pinned.
 - `cam_idealyaw`, `cam_idealpitch`, `cam_snapto` — registered, never read in the recovered paths.
 - The player-class gate `vtable +0x250` (`0x1009b210`) — what makes third person unavailable.
-- The weapon-class bit meanings at player record `+0x2440` (`1`, `2`, `4`, `8`, `0x10`) and the
-  record fields `+0x24d0` (holster gate) and `+0x4fe84` (sniper state).
+- The semantic identities of equipped-item record fields `+0x24d0` (the forced-third holster gate)
+  and `+0x4fe84` (the sniper-related state). The `camera_class` bit meanings at `+0x2440` are
+  recovered in §2.
 - The semantic identities and exact formulas of the non-ordinary branches within feed-family
   solver `0x100fe7f0`: player state `0x20` selects `camseduct_*`, while `0x400` selects
   `camdead_*`; their presence and routing are recovered, but their complete solves are not.
 - The player-state flag at `+0x16f0` and predicate `0x10192850` that quantise the model alpha.
+- Whether the local player's projected-shadow submission follows the model draw gate during a mode
+  switch. Model visibility alone does not establish shadow policy.
+- The consumer and lifetime policy for the parsed `Particle_FirstPerson` / `Particle_ThirdPerson`
+  records: their mode tags are recovered, but not whether a live emitter is stopped, restarted or
+  merely culled when the camera predicate changes.
 
 Server-side, in the camera-track system (§6, `vampire.dll`):
 
