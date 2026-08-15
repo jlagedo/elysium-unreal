@@ -923,8 +923,12 @@ twice.
 
 ### Masquerade / Humanity / Blood / Frenzy (`rules.txt`, `stats.txt`)
 
-- **Masquerade** — the `Masquerade` stat is a 0–5 violation counter (5 = loss);
-  `ChangeMasqueradeLevel(delta)` / `GetMasqueradeLevel()`.
+- **Masquerade** — the `Masquerade` stat is a 0–5 violation counter. An admitted supernatural
+  incident calls `ChangeMasqueradeLevel(+1)` only after the player's
+  `m_flMasqueradeTimerNext` deadline, then schedules `debug_masquerade_timer`. Mutation fires the
+  output for the resulting level and `OnMasqueradeLevelChanged`; an increment above 4 loads
+  `sp_masquerade_1`, making level 5 the native loss transaction. Criminal incidents do not mutate
+  this stat. `ChangeMasqueradeLevel(delta)` / `GetMasqueradeLevel()`.
 - **Humanity** — 0–10 (Def 7); frenzy checks roll against it; `HumanityAdd(delta)`.
   Toreador doubles gains / others double losses via clan trait-effects.
 - **Blood** — `BloodPool` 0–15; `VampHeal_Info` heals `1%` Max Health per `2.0s`,
@@ -948,15 +952,28 @@ icon above the health meter:
 | `E` | Elysium | attacking and disciplines outright; Bloodbuff while picking a lock is the sole exception |
 | gun | combat zone | nothing — attacking and disciplines carry no Masquerade or Humanity cost |
 
-Breaking *human* law does not touch the Masquerade counter; it draws police. Killing innocents
-costs Humanity, including inside a combat zone.
+Breaking *human* law does not touch the Masquerade counter; an admitted criminal incident enters
+the delayed police-response transaction. An admitted supernatural incident is the separate native
+route to a rate-limited Masquerade increase and, when `debug_supernatural_cop_spawn` is enabled,
+may independently enter the same police response. Killing innocents costs Humanity, including
+inside a combat zone. The player-side ordering and pursuit/alert state machine are
+`player-entity.md`.
 
 The same button therefore means a legal or an illegal act depending on the zone, which is why the
 gamepad quickbar greys what the current zone forbids (`docs/architecture/input-architecture.md`).
 *Community-sourced;* the icon set and the Bloodbuff-in-Elysium exception are documented by the
-GameFAQs walkthrough under `$ELYSIUM_WORK_ROOT/research/reference-source/`. The zone entity and
-the check that reads it are not yet identified — locating the consumer of the `Masquerade` sheet
-field would confirm both.
+GameFAQs walkthrough under `$ELYSIUM_WORK_ROOT/research/reference-source/`.
+
+Static native evidence shows that zone is not a parameter of the law-admission transaction. An
+accepted targeted Discipline raises supernatural activity to authored `SupernaturalLvl` and, when
+`Overt`, criminal activity to level 3. Each NPC then applies its own `pl_*` thresholds and visual
+witness test before its schedule submits an incident. A map `trigger_player_activity_level` can
+write supernatural, criminal and investigate context directly, while a threshold of 6 disables a
+reaction because player activity is clamped to `0..5`. Elysium must therefore reject forbidden
+verbs before the Discipline commit; combat/Masquerade context is also expressed through map and
+NPC authoring rather than a second player incident consumer. The exact HUD-icon authority,
+Elysium verb gate and Bloodbuff exception check remain open, but the previously assumed monolithic
+`zone + attempted verb + witness` predicate does not exist in the recovered incident path.
 
 ## 4. The opening flow — New Game → chargen → trial → tutorial
 

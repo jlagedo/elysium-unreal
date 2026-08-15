@@ -248,6 +248,50 @@ subjects. They do not by themselves decode every numeric value.
 | `pl_supernatural_flee` | 6: 214; 1: 46; -1: 45; 3: 41; 2: 40; 4: 28; 5: 10 |
 | `pl_supernatural_attack` | 6: 260; 1: 101; -1: 48; other values: 15 |
 
+### Player-law observation transaction
+
+The four `pl_*` fields are executable thresholds, not descriptive disposition. The native
+condition-gathering pass clears and recomputes `COND_INVESTIGATE_LEVEL` plus four law conditions:
+
+| Condition | ID | Authored threshold |
+|---|---:|---|
+| `COND_CRIMINAL_FLEE_LEVEL` | 31 | `pl_criminal_flee` |
+| `COND_CRIMINAL_ATTACK_LEVEL` | 32 | `pl_criminal_attack` |
+| `COND_SUPERNATURAL_FLEE_LEVEL` | 33 | `pl_supernatural_flee` |
+| `COND_SUPERNATURAL_ATTACK_LEVEL` | 34 | `pl_supernatural_attack` |
+
+The player clamps activity to `0..5`; an authored threshold of 6 is therefore an effective disable.
+This explains the dominant 6 rows above without treating 6 as another attainable crime tier.
+
+One NPC retains independent criminal and supernatural processed counts, witnessed levels,
+locations and offender handles, plus `m_bPLSupernaturalActFleeOnly`. For the direct-player lane it
+requires a valid `m_hClosestPlayer` and `COND_SEE_PLAYER`, compares the player's monotonically
+increasing act count with its own processed count, then tests the current player level against each
+threshold. Passing a threshold records the player as offender and raises the corresponding AI
+condition. If that channel's observation window is closed, the NPC advances its processed count
+without producing the condition, so the same act is not replayed when observation resumes.
+
+A parallel global-event lane carries expiring criminal or supernatural records with severity,
+origin and offender. `CAI_BaseNPCTroika` accepts a record only when the origin is inside its view
+cone, no farther than `m_flSeekDistInspection`, and reached by an unobstructed trace. Among accepted
+records it retains the strongest criminal and supernatural entries independently, then tests both
+flee and attack thresholds. This is a visual witness transaction; `TriggerAISound`, hearing and
+ordinary enemy acquisition remain separate stimuli.
+
+The pass is suppressed while the NPC has frenzy flag `0x10` or is busy with a dynamic interaction.
+NPC spawn zeros the criminal, supernatural and Nosferatu ignore deadlines. Feeding opens both law
+windows on the victim for three seconds; entering NPC state 14 opens the criminal window for two
+seconds; the closest-player special case opens the Nosferatu window for five seconds. Those are
+the complete static callers of the three deadline setters in the pinned DLL.
+
+Condition gathering never mutates Masquerade or spawns police. Schedule selection/translation
+requires the retained offender still be the player, submits the retained severity/origin to the
+player's incident consumer, and copies the player's current act count into the NPC processed count.
+The supernatural flee-only schedule path instead queues a player-owned scare record. Seeing a
+nearby `Player_Nosferatu` can create that severity-2 flee-only record independently of a new
+supernatural activity count. The downstream player ordering is in
+[player-entity.md](player-entity.md).
+
 `player_reaction` combines a relation token and a numeric priority-like value:
 
 | Authored value | Rows |

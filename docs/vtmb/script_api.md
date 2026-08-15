@@ -360,7 +360,7 @@ are not. Its 16 outputs are the NPC event surface:
 `OnGrappleBegin`, `OnGrappleEnd`, **`OnFedUponBegin`**, **`OnFedUponEnd`** — the last pair being
 what roadmap B6's feed interaction fires. Keyfields include `squadname` and `hintgroup`.
 
-### The player class — datamap `0x10580edc`, builder `FUN_1015af10`, 157 records, 11 inputs
+### The player class — datamap `0x10580edc`, builder `FUN_1015af10`, 157 records, 10 inputs
 
 | Input | Type | Calls | Handler |
 |---|---|---|---|
@@ -375,9 +375,12 @@ what roadmap B6's feed interaction fires. Keyfields include `squadname` and `hin
 | `SetSupernaturalLevel` | INTEGER | 0 | `LAB_10007fb3` |
 | `Holster` | VOID | 0 | `LAB_100138ef` |
 
-The datamap header states **11** inputs; this table enumerates **10** — one input was not
-recovered from the builder dump and is still unidentified (re-run
-`parse_datamap_builder.py` over `FUN_1015af10` to close it).
+The dynamic record array begins at `0x10580f24`. Reconstructing all 157 records from
+`FUN_1015af10` yields these **10 externally named input records** plus one superficially similar
+`VOID` record: `CBasePlayerPlayerDeathThink`, no external name, flag `0x20`, callback
+`FUN_101668b0`. That record registers a think function; it is not reachable through AcceptInput.
+The earlier count of 11 inputs conflated the think callback with the ten records carrying input
+flag `0x8`.
 
 Two consequences for the port:
 

@@ -350,13 +350,36 @@ files use them coherently — Dementation and Dominate are covert; most Animalis
 Thaumaturgy effects are overt; some overt casts also emit an AI sound. Help text says overt powers
 risk a Masquerade violation in Safe Areas.
 
-This pass does **not** yet close the native predicate that combines overt use, zone state,
-witnesses and Masquerade mutation. Therefore:
+The successful targeted-effect commit is the upstream player-law producer **[DLL]**. After target
+resolution and effect activation, when the caster has a player owner, it raises the player's
+supernatural activity to the record's `SupernaturalLvl`. If that same record's independent `Overt`
+byte is set, it also raises criminal activity to level 3. Both calls pass the ordinary finite
+duration sentinel, so they refresh the player activity deadlines and increment the two independent
+act counters. The commit contains no zone query. Bloodshield's active update separately refreshes
+its authored supernatural level while the effect remains active; it does not make the parallel
+criminal call.
+
+NPC condition gathering is the witness boundary **[DLL]**. A direct player act requires
+`COND_SEE_PLAYER`, a retained closest-player handle, a new act count and an activity severity that
+meets the NPC's authored supernatural flee or attack threshold. Expiring world-law records have an
+additional visual predicate: origin in view cone, within inspection distance and unobstructed by a
+trace. The NPC schedule then submits the retained incident. An admitted supernatural incident
+increases Masquerade at most once per `debug_masquerade_timer` window and can independently request
+police response when `debug_supernatural_cop_spawn` is enabled. Therefore:
 
 - `Overt == 1` is a confirmed authored classification;
 - AI sound generation is a separate confirmed switch;
-- “every overt use immediately subtracts one Masquerade point” is **not** established and must not
-  be implemented from the help text alone.
+- `SupernaturalLvl` and `Overt` become supernatural and criminal player activity respectively;
+- NPC visibility and authored thresholds, not the cast commit, decide whether an incident is
+  witnessed;
+- an admitted supernatural incident is a confirmed rate-limited Masquerade consumer;
+- an overt use does not immediately subtract a Masquerade point.
+
+The familiar zone categories are distributed policy rather than an argument to this transaction.
+Elysium can forbid the cast before commit; map activity triggers can author player context; and an
+NPC threshold of 6 makes the clamped `0..5` activity channel non-reactive. The HUD zone authority
+and exact upstream Elysium exception checks remain separate work, but there is no missing central
+`zone + overt -> Masquerade` call in the recovered witness path.
 
 ## Faithful remake contract
 
@@ -382,7 +405,7 @@ A faithful implementation needs these separations:
 - recover Protean's transform start/finish, equipment and teardown lifecycle;
 - identify Presence's native pulse caller and reconcile its two radius tables;
 - close recovery/cooldown save/restore and interruption ordering for targeted effects;
-- close overt + witness + zone → Masquerade policy;
+- live-capture overt/covert casts across occlusion, NPC threshold and zone-authority boundaries;
 - confirm upper-tier UI selection and `vhotkey` frame deferral;
 - run controlled retail casts for all thirteen powers, including failure, renewal, interruption,
   save/load and `ClearActiveDisciplines` cases.

@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "topic": "player-law-admission",
+  "consuming_document": "docs/vtmb/player-entity.md",
+  "research_id": "RE41/RE51",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "lock_delay_seconds": 9,
+  "questions": [
+    "Which native functions submit criminal and supernatural incidents to the player?",
+    "What exact NPC fields and guards qualify deduplicate escalate or suppress one witnessed act?",
+    "How do player supernatural scare records enter and leave the command-timed queue?",
+    "Where do Discipline overt metadata zone legality and NPC perception join the incident transaction?",
+    "Which physics use feeding weapon and Discipline actions bypass or share NPC witness admission?"
+  ],
+  "functions": [
+    {"address": "1017f2a0", "label": "PlayerCriminalIncident", "confidence": "literal Criminal act witnessed route", "role": "terminal criminal-incident consumer", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "1017f4a0", "label": "PlayerSupernaturalIncident", "confidence": "literal Supernatural act witnessed route", "role": "terminal supernatural-incident consumer", "depth": 4, "cap": 620, "asm_count": 5200},
+    {"address": "100123a5", "label": "PlayerCriminalIncidentThunk", "confidence": "sole jump thunk to 0x1017f2a0", "role": "enumerate criminal producers", "depth": 2, "cap": 220, "asm_count": 1400},
+    {"address": "10008652", "label": "PlayerSupernaturalIncidentThunk", "confidence": "sole jump thunk to 0x1017f4a0", "role": "enumerate supernatural producers", "depth": 2, "cap": 220, "asm_count": 1400},
+    {"address": "10169960", "label": "PlayerRuleUpdate", "confidence": "command-timed player supernatural-scare queue consumer", "role": "recover queued supernatural incident selection expiry and removal", "depth": 5, "cap": 720, "asm_count": 6200},
+    {"address": "102ae920", "label": "NpcTranslateScheduleLaw", "confidence": "two criminal-incident and one supernatural-incident call sites", "role": "recover NPC condition-to-incident transitions during schedule translation", "depth": 5, "cap": 920, "asm_count": 8200},
+    {"address": "102af660", "label": "NpcSelectScheduleLaw", "confidence": "one criminal-incident and one supernatural-incident call site", "role": "recover NPC witness processing during schedule selection", "depth": 5, "cap": 920, "asm_count": 8200},
+    {"address": "103a2e30", "label": "NpcLawCombatSchedule", "confidence": "two direct criminal-incident call sites inside an NPC schedule body", "role": "recover subclass-specific criminal witness scheduling", "depth": 5, "cap": 920, "asm_count": 8200},
+    {"address": "1017e720", "label": "PlayerCriminalActCountGetter", "confidence": "direct getter for player offset 0x1ce8", "role": "recover the criminal act counter used for per-NPC deduplication", "depth": 3, "cap": 320, "asm_count": 2200},
+    {"address": "1017e740", "label": "PlayerSupernaturalActCountGetter", "confidence": "direct getter for player offset 0x1cec", "role": "recover the supernatural act counter used for per-NPC deduplication", "depth": 3, "cap": 320, "asm_count": 2200},
+    {"address": "1017fd60", "label": "PlayerSupernaturalScareAdmission", "confidence": "alternate NPC supernatural branch before player incident submission", "role": "recover flee-only and queued supernatural-scare admission", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "1028ea60", "label": "NpcRecordCriminalAct", "confidence": "sole common writer for witnessed criminal level location and offender", "role": "recover criminal observation admission before AI conditions", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "1028eb30", "label": "NpcRecordSupernaturalAct", "confidence": "sole common writer for witnessed supernatural level location offender and flee-only byte", "role": "recover supernatural observation admission before AI conditions", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "1028efc0", "label": "NpcUpdatePlayerActWitnessing", "confidence": "sole common reader of both ignore timers and both processed counters", "role": "recover the exact count timer visibility and AI-condition transaction", "depth": 5, "cap": 920, "asm_count": 8200}
+    ,{"address": "10292500", "label": "NpcThinkDebugLawMarkers", "confidence": "NPCThinkDebug reads both witnessed timers only to draw debug markers", "role": "separate diagnostic witnessed timers from gameplay admission state", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "10293d90", "label": "NpcSetCriminalIgnoreTimer", "confidence": "sole non-reset writer for m_flCriminalIgnoreTimer", "role": "recover the criminal observation window and callers", "depth": 3, "cap": 420, "asm_count": 3200}
+    ,{"address": "10293dc0", "label": "NpcSetSupernaturalIgnoreTimer", "confidence": "sole non-reset writer for m_flSupernaturalIgnoreTimer", "role": "recover the supernatural observation window and callers", "depth": 3, "cap": 420, "asm_count": 3200}
+    ,{"address": "10004fac", "label": "NpcSetCriminalIgnoreTimerThunk", "confidence": "sole jump thunk to 0x10293d90", "role": "enumerate criminal ignore-timer callers", "depth": 2, "cap": 220, "asm_count": 1400}
+    ,{"address": "1000dfe9", "label": "NpcSetSupernaturalIgnoreTimerThunk", "confidence": "sole jump thunk to 0x10293dc0", "role": "enumerate supernatural ignore-timer callers", "depth": 2, "cap": 220, "asm_count": 1400}
+    ,{"address": "10013377", "label": "NpcRecordCriminalActThunk", "confidence": "sole jump thunk to 0x1028ea60", "role": "enumerate retained criminal-observation producers", "depth": 2, "cap": 220, "asm_count": 1400}
+    ,{"address": "100085f3", "label": "NpcRecordSupernaturalActThunk", "confidence": "sole jump thunk to 0x1028eb30", "role": "enumerate retained supernatural-observation producers", "depth": 2, "cap": 220, "asm_count": 1400}
+    ,{"address": "1000fa33", "label": "PlayerSetCriminalLevelThunk", "confidence": "sole jump thunk to the player criminal activity setter at 0x1017e150", "role": "enumerate criminal activity producers before NPC witness admission", "depth": 2, "cap": 320, "asm_count": 2200}
+    ,{"address": "10004237", "label": "PlayerSetSupernaturalLevelThunk", "confidence": "sole jump thunk to the player supernatural activity setter at 0x1017df50", "role": "enumerate supernatural activity producers before NPC witness admission", "depth": 2, "cap": 320, "asm_count": 2200}
+    ,{"address": "1028ebc0", "label": "NpcQualifyLawEvent", "confidence": "per-record predicate used by the global law-event selection pass", "role": "recover spatial perception offender and NPC-state admission guards", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "10293e20", "label": "NpcSetLawIgnoreTimers", "confidence": "only common caller of both per-NPC ignore-timer setters", "role": "recover shared suppression semantics and duration", "depth": 4, "cap": 520, "asm_count": 4200}
+    ,{"address": "102ae140", "label": "NpcCriminalIgnoreScheduleTask", "confidence": "only additional caller of the criminal ignore-timer setter", "role": "recover schedule-specific criminal suppression", "depth": 4, "cap": 520, "asm_count": 4200}
+    ,{"address": "101e2f50", "label": "TargetedDisciplineCommitLawProducer", "confidence": "successful target-effect commit calls both player activity setters", "role": "join authored SupernaturalLvl and Overt to player activity admission", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "101e4220", "label": "DisciplineLawProducerCandidate", "confidence": "additional direct caller of the supernatural activity setter", "role": "classify non-targeted Discipline activity admission", "depth": 5, "cap": 720, "asm_count": 6200}
+    ,{"address": "10003003", "label": "NpcSetLawIgnoreTimersThunk", "confidence": "sole jump thunk to 0x10293e20", "role": "enumerate callers that open or close both NPC law-processing windows", "depth": 2, "cap": 320, "asm_count": 2200}
+  ],
+  "field_probes": [
+    {"displacement": "1d90", "label": "player_supernatural_scare_records"},
+    {"displacement": "1d94", "label": "player_supernatural_scare_capacity"},
+    {"displacement": "1d98", "label": "player_supernatural_scare_allocator"},
+    {"displacement": "1d9c", "label": "player_supernatural_scare_count"},
+    {"displacement": "628c", "label": "npc_closest_player_handle"},
+    {"displacement": "6348", "label": "npc_player_investigate_threshold"},
+    {"displacement": "634c", "label": "npc_player_criminal_flee_threshold"},
+    {"displacement": "6350", "label": "npc_player_criminal_attack_threshold"},
+    {"displacement": "6354", "label": "npc_player_supernatural_flee_threshold"},
+    {"displacement": "6358", "label": "npc_player_supernatural_attack_threshold"},
+    {"displacement": "6364", "label": "npc_player_criminal_level_witnessed"},
+    {"displacement": "6368", "label": "npc_player_supernatural_level_witnessed"},
+    {"displacement": "636c", "label": "npc_player_criminal_act_processed"},
+    {"displacement": "6370", "label": "npc_player_supernatural_act_processed"},
+    {"displacement": "6374", "label": "npc_player_supernatural_location"},
+    {"displacement": "6380", "label": "npc_player_criminal_location"},
+    {"displacement": "638c", "label": "npc_criminal_offender"},
+    {"displacement": "6390", "label": "npc_supernatural_offender"},
+    {"displacement": "6394", "label": "npc_supernatural_flee_only"},
+    {"displacement": "6398", "label": "npc_criminal_ignore_timer"},
+    {"displacement": "639c", "label": "npc_supernatural_ignore_timer"},
+    {"displacement": "63a0", "label": "npc_nosferatu_ignore_timer"},
+    {"displacement": "63a4", "label": "npc_criminal_witnessed_timer"},
+    {"displacement": "63a8", "label": "npc_supernatural_witnessed_timer"},
+    {"displacement": "63b8", "label": "npc_seek_distance_inspection"}
+  ],
+  "relationships": [
+    {"from": "100123a5", "to": "1017f2a0", "confidence": "verified", "evidence": "the thunk has five callers and is the only static entry to the criminal incident consumer"},
+    {"from": "10008652", "to": "1017f4a0", "confidence": "verified", "evidence": "the thunk has three callers and is the only static entry to the supernatural incident consumer"},
+    {"from": "10169960", "to": "1017f4a0", "confidence": "verified", "evidence": "the player rule pass selects a retained supernatural-scare record and submits it before removing records"},
+    {"from": "102ae920", "to": "1017f2a0", "confidence": "verified", "evidence": "NPC schedule translation has two criminal incident call sites"},
+    {"from": "102af660", "to": "1017f2a0", "confidence": "verified", "evidence": "NPC schedule selection submits retained criminal severity offender and location state"},
+    {"from": "102ae920", "to": "1017f4a0", "confidence": "verified", "evidence": "NPC schedule translation has one supernatural incident call site"},
+    {"from": "102af660", "to": "1017f4a0", "confidence": "verified", "evidence": "NPC schedule selection submits retained supernatural severity offender and location state"},
+    {"from": "103a2e30", "to": "1017f2a0", "confidence": "verified", "evidence": "the NPC subclass schedule route has two direct criminal incident call sites"},
+    {"from": "101e2f50", "to": "10004237", "confidence": "verified", "evidence": "successful targeted Discipline commit passes target-record offset 0x28 SupernaturalLvl to the player supernatural activity setter"},
+    {"from": "101e2f50", "to": "1000fa33", "confidence": "verified", "evidence": "the same commit raises criminal activity to 3 only when target-record offset 0x24 Overt is nonzero"},
+    {"from": "1028efc0", "to": "1028ea60", "confidence": "verified", "evidence": "a new player criminal act at or above an NPC threshold retains severity origin and player offender before setting conditions 31 and 32"},
+    {"from": "1028efc0", "to": "1028eb30", "confidence": "verified", "evidence": "a new player supernatural act at or above an NPC threshold retains severity origin offender and flee-only policy before setting conditions 33 and 34"},
+    {"from": "1028ebc0", "to": "1028efc0", "confidence": "verified", "evidence": "the global law-event selection pass accepts only records in view cone within inspection distance and with a clear trace"},
+    {"from": "102af660", "to": "1017fd60", "confidence": "verified", "evidence": "the supernatural flee-only schedule branch queues a player scare record instead of directly submitting the incident"}
+  ],
+  "findings": [
+    {
+      "confidence": "confirmed",
+      "fact": "All terminal criminal and supernatural incident calls are schedule-mediated except the player-owned supernatural scare queue consumer.",
+      "evidence": "The sole criminal thunk has five calls in three NPC schedule bodies. The sole supernatural thunk has two NPC schedule calls plus PlayerRuleUpdate. No Physics Hand or Discipline body calls either terminal thunk.",
+      "consequence": "Player actions must first become activity or world-law records; an overt cast or physics action must not call Masquerade or police response directly."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "A successful targeted Discipline commit maps SupernaturalLvl to supernatural activity and Overt to criminal activity level 3 without a zone query.",
+      "evidence": "0x101e2f50 calls PlayerSetSupernaturalLevel with target-record offset 0x28, then conditionally calls PlayerSetCriminalLevel(3) from target-record byte offset 0x24. The parser stores SupernaturalLvl and Overt at those offsets.",
+      "consequence": "Zone verb blocking remains upstream; witness consequences are activity plus NPC policy rather than one zone-aware cast violation callback."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Each NPC deduplicates player acts and converts severity into four authored flee or attack conditions.",
+      "evidence": "0x1028efc0 compares player counts at 0x1ce8 and 0x1cec with NPC processed fields 0x636c and 0x6370, tests levels against pl_criminal_flee attack and pl_supernatural_flee attack, and sets conditions 0x1f through 0x22.",
+      "consequence": "One shared wanted level cannot reproduce witness-specific thresholds, suppression or condition scheduling."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "World-law event witnessing is visual and spatial, while AI sound is independent.",
+      "evidence": "0x1028ebc0 requires FInViewCone, distance within m_flSeekDistInspection and a trace fraction of 1.0 before 0x102ca780 selects the strongest criminal and supernatural records. Discipline TriggerAISound is a separate parsed byte.",
+      "consequence": "Hearing an AI sound must not substitute for the recovered law-event line-of-sight transaction."
+    },
+    {
+      "confidence": "confirmed",
+      "fact": "Supernatural flee-only observations are aggregated in a player-owned queue keyed by NPC identity.",
+      "evidence": "0x1017fd60 scans 16-byte records below player offset 0x1d90, keeps max severity and refreshes timestamp for a repeated NPC; 0x10169960 consumes the queue into PlayerSupernaturalIncident. A Player_Nosferatu visibility branch inserts severity 2.",
+      "consequence": "Crowd fear and Masquerade admission need stable witness identity and queue timing rather than one immediate boolean."
+    }
+  ],
+  "grep_probes": [
+    {"label": "incident_strings", "str": "Criminal~Supernatural~witnessed~triggering~Player_Nosferatu", "fn": "Criminal~Supernatural~Witness~Physics~Player", "cap": 920},
+    {"label": "npc_witness_fields", "str": "m_iPLCriminalLevelWitnessed~m_iPLSupernaturalLevelWitnessed~m_iPLCriminalActProcessed~m_iPLSupernaturalActProcessed~m_hCriminalOffender~m_hSupernaturalOffender~m_bPLSupernaturalActFleeOnly", "fn": "Schedule~Condition~Criminal~Supernatural~Player", "cap": 920},
+    {"label": "npc_witness_timers", "str": "m_flCriminalIgnoreTimer~m_flSupernaturalIgnoreTimer~m_flCriminalWitnessedTimer~m_flSupernaturalWitnessedTimer", "fn": "Schedule~Condition~Criminal~Supernatural~Player", "cap": 720},
+    {"label": "law_conditions", "str": "COND_CRIMINAL_ATTACK_LEVEL~COND_SUPERNATURAL_ATTACK_LEVEL~COND_CRIMINAL_FLEE_LEVEL~COND_SUPERNATURAL_FLEE_LEVEL~CRIMINAL_SUSPICION~TASK_SUPERNATURAL_ACT", "fn": "Condition~Schedule~Task~Criminal~Supernatural", "cap": 920},
+    {"label": "zone_and_overt", "str": "Overt~no_supernatural~supernatural~criminal_level~supernatural_level~Masquerade", "fn": "Discipline~Zone~Context~Criminal~Supernatural~Player", "cap": 920}
+  ]
+}

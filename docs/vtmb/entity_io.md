@@ -708,8 +708,11 @@ impulse and removes the trigger.
 The leaf's `supernatural_level`, `criminal_level` and `investigate_level` fields are `+0x598`,
 `+0x59c`, `+0x5a0`, all default `-1`. `Touch` (`FUN_102108e0`) checks enabled state and a
 player/controller-bearing toucher, but does **not** call `PassesTriggerFilters`. Every collision
-touch refreshes each authored non-negative level; supernatural and criminal use indefinite-duration
-setters, while investigate uses its direct setter.
+touch refreshes each authored non-negative level. Supernatural and criminal pass duration `-1`;
+their player setters derive a finite duration as `max(previous retained level, pl_min_act_timer)`,
+raise but do not lower an existing non-zero level, and increment the channel's incident count.
+Investigate uses its direct replacement setter. The detailed player-side timing belongs to
+`player-entity.md`.
 
 `EndTouch` (`FUN_102109b0`) uses exact-match release so it does not clear a value replaced by
 another source. With spawnflag `0x20`, matching supernatural/criminal values return to zero;

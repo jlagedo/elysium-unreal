@@ -19,6 +19,7 @@ boots, a game is played, and it saves". This doc owns that spine.
 | the first↔third-person camera solve | `docs/vtmb/camera-view-modes.md` |
 | **persistence** | `docs/architecture/save-architecture.md` |
 | VtMB's own loop, state model, RPG data, opening flow | `docs/vtmb/game_runtime.md` |
+| VtMB's player properties, lifecycle and world relationships | `docs/vtmb/player-entity.md` |
 | **lifetimes, the object graph, the frame, the player object, the session, the seams** | **this doc** |
 
 Nothing here re-derives a VtMB fact; every one is cited to the doc that owns it.
@@ -200,7 +201,7 @@ VtMB's own architecture says so three times over:
   fields *are* the character sheet — attributes, disciplines, quests, XP ledger, masquerade counters,
   inventory handles (`docs/vtmb/savegame_format.md` → "What the player entity holds").
 - The **script surface** treats it as one: `FindPlayer()` is documented *"Find the first player
-  entity"*, the player class carries **11 datamap inputs** (`GiveItem`, `AwardExperience`, `Whisper`,
+  entity"*, the player class carries **10 datamap inputs** (`GiveItem`, `AwardExperience`, `Whisper`,
   `SetCriminalLevel`, …) and `CBaseCombatCharacter` carries **25 more** (`MoneyAdd`, `HumanityAdd`,
   `Bloodloss`, `FrenzyTrigger`, …) that scripts reach through the ordinary `__getattr__` datamap walk
   (`docs/vtmb/script_api.md`).
@@ -220,31 +221,20 @@ FElysiumEntity                    CBaseEntity      — keyfields, dormancy, I/O,
 ```
 
 The player leaf's classname is `player` and its targetname is **`!player`** — the name the maps
-themselves write (48 of the 49 `point_teleport.target` keys), so it resolves through the ordinary
-name index rather than a magic-target branch.
+themselves write (48 of the 49 `point_teleport.target` keys). Retail resolves `!player` and
+`!pvsplayer` through the special leading-`!` single-result path; the literal targetname also keeps
+the entity legible to ordinary inspection and save state. The player-wide lookup facts belong to
+`docs/vtmb/player-entity.md`.
 
 `FElysiumPlayerRecord` (session lifetime) is the durable half:
 
-```cpp
-struct FElysiumPlayerRecord
-{
-    FElysiumSheet     Sheet;        // attributes / abilities / disciplines, base + current
-    int32             Money = 0;
-    int32             Humanity = 7, BloodPool = 10, Masquerade = 0;
-    int32             Health = 0, MaxHealth = 0;  // NOT a second home: m_iHealth is a Save-flagged
-                                   // entity field on the chain (/docs/architecture/save-architecture.md §4, VtMB's own
-                                   // placement). This copy exists only to carry the value across a
-                                   // map boundary, because our entity dies with its map.
-    TArray<FElysiumXpEntry>    ExperienceLog;  // EXPERIENCE_ENTRY — itemised, not a total
-    TArray<FString>            Effects;        // m_tEffectList
-    TArray<FString>            EmailFlags;     // the Player block, save-architecture.md §3
-    FElysiumLawState  Law;         // criminal / supernatural / investigate counters
-    bool              bUnkillable; // events_player's MakePlayerUnkillable, which must cross a warp
-    // 9.8 adds the inventory and the equipped handles (items are entities; these are their frozen
-    // form). `G` and the quest map stay the game-state subsystem's own stores; the save gathers
-    // them into the Session block beside this record (11.9).
-};
-```
+It carries the player name and appearance identity, sheet, money, health projection, XP ledger and
+accumulators, passive effects, terminal email flags, law counters, journal, selected quest-log area,
+History, unkillable latch and an in-progress feed transaction. Humanity, blood, Masquerade, clan and
+sex remain slots on the sheet rather than parallel members. Inventory travel preserves complete
+moveable item entities and their equipped relationships; it is not a list of class names folded into
+the record. `docs/vtmb/player-entity.md` owns the recovered retail object boundary and the remaining
+transition questions.
 
 `Hydrate(const FElysiumPlayerRecord&)` at map build, `Dehydrate()` when the world is torn down and
 again into the save's `Player` block (11.9). The entity is the *live* view; the record is the truth

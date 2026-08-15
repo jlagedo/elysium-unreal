@@ -345,6 +345,14 @@ next_deadline = server_now + current_interval
 This is an accelerating server-timer cadence, not a fixed two-second loop cadence and not a
 catch-up loop based on elapsed animation cycles.
 
+The same accepted ordinary feed pulse is also a player-law producer. For a player feeder it raises
+supernatural activity to 2 and criminal activity to 3, each for an explicit two seconds. It opens
+the victim NPC's criminal and supernatural observation windows for three seconds, allowing that
+NPC's ordinary condition-gathering pass to compare the new player act counts with its authored
+`pl_*` thresholds. A qualifying schedule later submits the witnessed incident; `Feed()` itself does
+not mutate Masquerade or spawn police. The interrupted-feed path opens the same victim windows and
+raises only criminal activity 1 for two seconds. `[VtMB]`
+
 The baseline unit transaction is:
 
 1. Try `IncBloodPool()` on the feeder.

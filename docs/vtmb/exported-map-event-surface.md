@@ -190,8 +190,9 @@ only the physics touch callback while an admitted body overlaps; there is no eve
 The leaf stores `supernatural_level`, `criminal_level` and `investigate_level` at `+0x598`,
 `+0x59c` and `+0x5a0`; each defaults to `-1` (unset). `Touch` (`0x102108e0`) checks disabled state
 and requires a toucher with the player/controller subobject. For every authored value at least zero,
-it refreshes that level: supernatural and criminal use the player level setters with an indefinite
-duration; investigate uses its direct setter. This specialized body does **not** call
+it refreshes that level: supernatural and criminal pass duration `-1` to the player setters, which
+convert it to a finite `max(previous retained level, pl_min_act_timer)` deadline; investigate uses
+its direct setter. This specialized body does **not** call
 `PassesTriggerFilters` and is collision-tick work while occupied, not an enter-only transaction.
 
 `EndTouch` (`0x102109b0`) avoids clearing another source's replacement state. With spawnflag
