@@ -122,6 +122,25 @@ const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
 	return Get(DispositionTable, bDispositionsLoaded, TEXT("dispositiontable"), DispositionsError);
 }
 
+// A failed load leaves the catalogue empty; `ElysiumReaction::Compute` reports a structured
+// unresolved result against an empty band table rather than warning again per call, so a missing
+// export costs one warning here and nowhere else.
+const FElysiumReactionCatalogue& UElysiumRulebookSubsystem::Reactions()
+{
+	const bool bWasLoaded = bReactionsLoaded;
+	const FElysiumReactionCatalogue& Catalogue = Get(ReactionCatalogue, bReactionsLoaded,
+		TEXT("reactions"), ReactionsError);
+	if (!bWasLoaded && !Catalogue.Modifiers.InertModifiers.IsEmpty())
+	{
+		// Carried-but-inert modifier rows: logged once here, not per `ElysiumReaction::Compute` call.
+		UE_LOG(LogElysiumRulebook, Warning,
+			TEXT("reactions000.txt: %d modifier(s) carried but inert: %s"),
+			Catalogue.Modifiers.InertModifiers.Num(),
+			*FString::Join(Catalogue.Modifiers.InertModifiers, TEXT(", ")));
+	}
+	return Catalogue;
+}
+
 const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
 {
 	const bool bWasLoaded = bItemsLoaded;
@@ -235,6 +254,11 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 
 	Out.Add({ TEXT("dispositiontable"), TEXT("system/dispositiontable.txt"),
 		Dispositions().Rows.Num(), Dispositions().IsValid(), DispositionsError });
+
+	// Counted in bands rather than modifiers: the band table is load-bearing (`FElysiumReactionCatalogue::
+	// IsValid`), the modifier set is supplementary.
+	Out.Add({ TEXT("reactions"), TEXT("system/reaction.txt + reactions000.txt"),
+		Reactions().Bands.Bands.Num(), Reactions().IsValid(), ReactionsError });
 }
 
 // ================================================================================================

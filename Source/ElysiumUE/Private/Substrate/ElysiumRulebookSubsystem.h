@@ -47,6 +47,10 @@ public:
 	// `Animation Name` column the standing-idle vocabulary is keyed on, and the fidget/stance-change
 	// pacing the disposition stance machine rolls against.
 	const FElysiumDispositionTable&   Dispositions();
+	// `vdata/system/reaction.txt` + `reactions000.txt`. The RPG/social reaction score band table
+	// and its modifier catalogue — the third social domain (K4), read by the pure calculator in
+	// `Substrate/ElysiumReaction.h`, never by combat targeting.
+	const FElysiumReactionCatalogue&  Reactions();
 	// `vdata/items/*.txt`. Its first load also registers one entity class per definition
 	// (`ElysiumItems::Install`), so it has to happen before a map's item entities are created —
 	// `FElysiumEntityWorld::Load` touches it for exactly that reason.
@@ -97,6 +101,7 @@ private:
 	FElysiumSoundVolumeTable  SoundVolumeTable;
 	FElysiumItemTable         ItemTable;
 	FElysiumDispositionTable  DispositionTable;
+	FElysiumReactionCatalogue ReactionCatalogue;
 	TMap<FString, TSharedPtr<FElysiumTerminalDefinition>> TerminalDefinitions;
 	TMap<FString, FString> TerminalDefinitionErrors;
 
@@ -115,6 +120,7 @@ private:
 	bool bSoundVolumesLoaded = false;
 	bool bItemsLoaded = false;
 	bool bDispositionsLoaded = false;
+	bool bReactionsLoaded = false;
 
 	FString StatsError;
 	FString FeatsError;
@@ -131,6 +137,7 @@ private:
 	FString SoundVolumesError;
 	FString ItemsError;
 	FString DispositionsError;
+	FString ReactionsError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };
