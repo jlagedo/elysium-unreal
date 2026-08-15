@@ -147,9 +147,19 @@ void AElysiumPlayerController::RegisterCommands()
 {
 	FElysiumCommands& Registry = FElysiumCommands::Get();
 
-	// `+attack` — until weapons exist (4.9) the primary click's only job is dismissing an open sign
-	// panel, which is what every VtMB popup instructs ("left-click to continue"). The world no-ops
-	// when none is up, and MinShowTime holds the panel so a click already in flight cannot skip it.
+	// SEAM — the player's own attack producer. `+attack`/`+attack2`/`+wpn_secondaryatk` are already
+	// declared button-pair verbs and their bits already reach the user command, but turning a press
+	// into a weapon transaction needs the ranged half's crosshair/spread producer, which joins with
+	// the perception cycle: the transaction takes an explicit victim handle and nothing on this side
+	// can supply one yet. So the verb keeps its sign-panel job and the AI cycles and the Substrate
+	// tests are the first real producers of `FElysiumWeapon::AttackIntent`.
+	UE_LOG(LogElysiumPC, Warning,
+		TEXT("player attack producer pending — AI and tests drive the weapon transaction"));
+
+	// `+attack` — until the producer above lands, the primary click's only job is dismissing an open
+	// sign panel, which is what every VtMB popup instructs ("left-click to continue"). The world
+	// no-ops when none is up, and MinShowTime holds the panel so a click already in flight cannot
+	// skip it.
 	Bindings.Add(Registry.Bind(TEXT("attack"), [this](const FElysiumCommandCall& Call)
 	{
 		if (!Call.bPressed)

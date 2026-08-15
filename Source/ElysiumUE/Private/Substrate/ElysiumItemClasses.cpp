@@ -17,6 +17,7 @@
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSkillClasses.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -585,7 +586,17 @@ bool FElysiumInventory::Equip(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 		// switch has to name.
 		if (FElysiumItem* Carried = Item.IsOwned() ? &Item : FindOrdinary(Char, Classname))
 		{
-			ActiveWeapon = Carried->Handle;
+			if (Carried->Handle != ActiveWeapon)
+			{
+				// The outgoing item's equip effects end before the incoming one's begin, so a swing
+				// or a reload in flight on the holstered weapon cannot commit against the new one.
+				if (FElysiumItem* Previous = Active(Char))
+				{
+					Previous->OnHolstered(Char);
+				}
+				ActiveWeapon = Carried->Handle;
+				Carried->OnEquipped(Char);
+			}
 			Char.PublishEquippedCameraClass();
 		}
 	}
@@ -1476,8 +1487,22 @@ namespace ElysiumItems
 				continue;
 			}
 			// No own inputs or fields: everything an item answers to is on the chain node above.
-			Reg.Register(ClassName, ElysiumItemClassName(),
-				ClassName == Keyring ? &MakeKeyring : &MakeItem);
+			// WHICH chain node is decided by the parsed record's item type and by nothing else — a
+			// weapon-family definition registers under `CWeapon`, where the controller's scheduling
+			// inputs live, and everything else stays on `CBaseCombatWeapon` (K-rule: policy from the
+			// record, never from the classname prefix).
+			if (ClassName == Keyring)
+			{
+				Reg.Register(ClassName, ElysiumItemClassName(), &MakeKeyring);
+			}
+			else if (Item.IsControllableWeapon())
+			{
+				Reg.Register(ClassName, ElysiumWeaponClassName(), &ElysiumWeapons::MakeWeapon);
+			}
+			else
+			{
+				Reg.Register(ClassName, ElysiumItemClassName(), &MakeItem);
+			}
 			++Registered;
 		}
 		UE_LOG(LogElysiumItem, Log, TEXT("item catalogue installed: %d definitions, %d classes registered"),

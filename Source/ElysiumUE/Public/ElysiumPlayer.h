@@ -410,6 +410,29 @@ struct FElysiumInventory
 };
 
 // ============================================================================================
+// FElysiumMeleeRoll — the opposed record a melee contact stages ON THE DEFENDER
+// (`docs/vtmb/combat-and-damage.md` § "Opposed record and reaction margin").
+//
+// Retail appends a 16-byte record to the defender's result array at +0xA88 and keys it by
+// attacker; `GetMeleeDiceRolls` searches that array and `GetNumAttackSuccesses` returns word 1.
+// The signed reaction margin is `lethality - defense - soak`, and both the player block path and
+// the NPC `RunTask` handlers classify it against `rules.txt`'s `Melee_Reactions` block.
+//
+// It is live combat state, not persistence: the record exists between one contact and the
+// reaction it selects, so it rides no save block.
+// ============================================================================================
+
+struct FElysiumMeleeRoll
+{
+	FElysiumEntityHandle Attacker;   // word 0
+	int32 Lethality = 0;             // word 1 — the attacking weapon's total lethality
+	int32 Defense = 0;               // word 2 — defender `Defensive_Maneuvers` net + defense bonus
+	int32 Soak = 0;                  // word 3 — defender soak selected from the mode's descriptor
+
+	int32 Margin() const { return Lethality - Defense - Soak; }
+};
+
+// ============================================================================================
 // FElysiumAnimating — CBaseAnimating. Everything that owns a skeletal body: standing it, moving
 // it with the entity, gating it on dormancy, and playing clips on it. NPCs and the player share
 // this because in VtMB they share the class.
@@ -568,7 +591,12 @@ public:
 	//
 	// `Attacker` may be null (an environmental volume, a script call). It is the roll's source, not
 	// the descriptor's activator: the descriptor carries its own `Source` handle for the outputs.
-	void TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker);
+	//
+	// `bDisallowFirearmsToBashing` is the attacker's active weapon record's key, which gates the
+	// Kindred lethal->bashing conversion in the resolver's step 2. Only the weapon controller can
+	// answer it; every other producer (a volume, a script, a discipline) leaves the authored default.
+	void TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker,
+		bool bDisallowFirearmsToBashing = false);
 
 	// The scalar fallback. Retail's alive path takes its positive damage either from the descriptor
 	// apply callback or from here — the scalar route does NOT pass through the resolver, so this
@@ -580,6 +608,45 @@ public:
 	// aggravated tracking, then the outputs and the death test. Nothing else writes the health
 	// slots from a damage path.
 	void CommitDamage(const FElysiumDmg& Dmg);
+
+	// --- The melee opposed records (`combat-and-damage.md` § "Opposed record and reaction margin")
+	// The defender's own array, keyed by attacker. A second contact from the same attacker REPLACES
+	// its row rather than appending a duplicate, because every reader searches by attacker and would
+	// otherwise read a stale margin.
+	TArray<FElysiumMeleeRoll> MeleeRolls;
+
+	void StageMeleeRoll(const FElysiumMeleeRoll& Roll)
+	{
+		for (FElysiumMeleeRoll& Existing : MeleeRolls)
+		{
+			if (Existing.Attacker == Roll.Attacker)
+			{
+				Existing = Roll;
+				return;
+			}
+		}
+		MeleeRolls.Add(Roll);
+	}
+
+	// `GetMeleeDiceRolls` — the record this attacker staged, or null.
+	const FElysiumMeleeRoll* FindMeleeRoll(const FElysiumEntityHandle& Attacker) const
+	{
+		for (const FElysiumMeleeRoll& Roll : MeleeRolls)
+		{
+			if (Roll.Attacker == Attacker)
+			{
+				return &Roll;
+			}
+		}
+		return nullptr;
+	}
+
+	// `GetNumAttackSuccesses` — word 1 of the matching record, or 0.
+	int32 GetNumAttackSuccesses(const FElysiumEntityHandle& Attacker) const
+	{
+		const FElysiumMeleeRoll* Roll = FindMeleeRoll(Attacker);
+		return Roll ? Roll->Lethality : 0;
+	}
 
 	// Whether this character soaks as a vampire — the mortal/Kindred half of the soak table. The
 	// base answer is the sheet's own clan slot; the NPC leaf overrides it with the authored

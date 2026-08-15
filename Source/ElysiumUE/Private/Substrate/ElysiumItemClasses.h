@@ -101,9 +101,16 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	virtual UPrimitiveComponent* GetAttachBody() const override;
 
+	// `Weapon_Equip`'s equip callback and its inverse. Ordinary items have no equip effects; the
+	// weapon leaf resets its fire mode and its in-flight transactions here. Called by
+	// `FElysiumInventory::Equip` on the item that becomes active, and on the one it replaces.
+	virtual void OnEquipped(FElysiumCombatCharacter& /*Owner*/) {}
+	virtual void OnHolstered(FElysiumCombatCharacter& /*Owner*/) {}
+
 	// No-RTTI downcast, the reason `AsCombatCharacter`/`AsDoorBase` exist.
 	virtual FElysiumItem* AsItem() { return this; }
 	virtual FElysiumKeyring* AsKeyring() { return nullptr; }
+	virtual class FElysiumWeapon* AsWeapon() { return nullptr; }
 
 	// Stand / tear down the loose world body. Ownership is what decides: an owned item is carried,
 	// so it has no presence in the world.

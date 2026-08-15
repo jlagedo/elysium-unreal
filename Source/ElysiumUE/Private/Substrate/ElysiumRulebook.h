@@ -946,6 +946,69 @@ const TCHAR* ElysiumItemTypeName(EElysiumItemType Type);
 // beyond that one sets OutHidden. Returns false when no token named a type.
 bool ElysiumParseItemType(const FString& Raw, EElysiumItemType& OutType, bool& OutHidden);
 
+// The authored `Type` of one weapon mode — the value `CWeaponRanged::ModeDispatch` branches on
+// (`docs/vtmb/combat-and-damage.md` § "Input and firing modes"). This is a FIRE-MODE state machine,
+// not a combo system: the record decides what a press does, and nothing derives it from a classname.
+// An authored spelling outside this set stays readable as `TypeName` and resolves to `Other`.
+enum class EElysiumWeaponModeType : uint8
+{
+	None = 0,
+	Attack,              // `Attack` — the ordinary attack modes
+	SecondaryAttack,     // `Secondary_Attack`
+	TogglePrimaryMode,   // `Toggle_Primary_Mode` — swap primary modes 0/1
+	ZoomLoop,            // `Zoom_Out_Loop` — cycle the scope range/state
+	Other,               // a consumable/throw-style or otherwise unrecovered mode
+};
+
+const TCHAR* ElysiumWeaponModeTypeName(EElysiumWeaponModeType Type);
+
+// One `Activation` block — a weapon MODE. A weapon record carries one per authored block, in file
+// order, and the `Tag` (`Primary`, `PrimaryMode2`, `Secondary`) is how retail names them.
+//
+// `Dmg` is kept as the authored string here: the rulebook is the data layer, and turning the
+// grammar into a descriptor is `ElysiumDamage::ParseDmg`'s job, which the weapon controller does
+// once when the entity spawns.
+struct FElysiumWeaponMode
+{
+	FString Tag;                        // `Tag`
+	FString TypeName;                   // `Type`, verbatim
+	EElysiumWeaponModeType Type = EElysiumWeaponModeType::None;
+
+	FString Dmg;                        // `Dmg` — the authored damage grammar
+	// `BaseLethality` and `SkillRequirement` are the two adjacent integers
+	// (`combat-and-damage.md` § "Authored weapon inputs"). The second is loaded beside the first and
+	// its runtime consumer is not recovered, so it is stored and inert.
+	int32 BaseLethality = 0;
+	int32 SkillRequirement = 0;
+
+	// `Attack_Rate` — the ranged next-shot interval, in seconds. Melee recovery does NOT use it
+	// (it is the selected clip's duration over its playback rate), but a melee record authors it and
+	// the dry-fire path advances by it, so it is loaded for every mode.
+	float AttackRate = 0.0f;
+
+	FString AmmoType;                   // `Ammo_Type`
+	// The two counts retail keeps DISTINCT: rounds spent per scheduled shot, and rays/pellets placed
+	// in the fire packet for each of those shots. The M37 spends one shell and emits eight rays.
+	int32 AmmoCost = 0;                 // `Ammo_Cost`
+	int32 AmmoFired = 1;                // `Ammo_Fired`; unauthored means one ray
+
+	// `allow_autofire` — clear means held attack intent is lost after the press edge.
+	bool bAllowAutofire = false;
+
+	// `BurstMin`/`BurstMax`, loaded with the loader's own `BurstMin <= BurstMax` clamp. No player or
+	// NPC consumer is recovered, so they are stored and inert.
+	int32 BurstMin = 0;
+	int32 BurstMax = 0;
+
+	float Range = 0.0f;                 // `Range`
+	FString BotchTable;                 // `Botch_Table`
+
+	bool IsAttack() const
+	{
+		return Type == EElysiumWeaponModeType::Attack || Type == EElysiumWeaponModeType::SecondaryAttack;
+	}
+};
+
 // One `vdata/items/<classname>.txt` — the `WeaponData` block every one of them hangs off, reduced
 // to what the inventory runtime and the economy read. The file carries far more (crosshair bloom,
 // muzzle particles, botch tables, sprite atlases); those belong to the systems that own them and
@@ -989,12 +1052,36 @@ struct FElysiumItemDef
 	int32 DroppedAmmo = 0;              // `Dropped_Ammo`
 	float ReloadTime = 0.0f;            // `ReloadTime`
 
+	// `reload_single` — a WeaponData-level key (the patch-first M37, .38 and flaming crossbow author
+	// it). One round per reload cycle, re-entering until interrupted, full or out of reserve.
+	bool bReloadSingle = false;
+
+	// `Disallow_FirearmsToBashing` — the record read by the Kindred lethal->bashing conversion in
+	// `ElysiumDamage::Apply` step 2. No shipped `vdata/items` record authors it; the one shipped
+	// author is an NPC template, so this join is the one `combat-and-damage.md` states (the
+	// attacker's active weapon record) and the observed authoring disagrees with it. Reading the
+	// key here keeps the documented join and changes no shipped behaviour.
+	bool bDisallowFirearmsToBashing = false;
+
+	// --- The `Activation` blocks — the weapon modes ---------------------------------------------
+	TArray<FElysiumWeaponMode> Modes;
+
 	// --- Models --------------------------------------------------------------------------------
 	FString PlayerModel;                // `playermodel` — the loose world (ground) model
 	FString ViewModel;
 	FString InfoModel;
 
 	bool IsValid() const { return !Classname.IsEmpty(); }
+	// The three wielded weapon families — the ones `FElysiumWeapon` controls. Policy from the parsed
+	// record, never from the classname prefix.
+	bool IsControllableWeapon() const
+	{
+		return Type == EElysiumItemType::WeaponMelee
+			|| Type == EElysiumItemType::WeaponFirearm
+			|| Type == EElysiumItemType::WeaponThrown;
+	}
+	// The first mode carrying `Tag`, case-insensitively, or null.
+	const FElysiumWeaponMode* FindMode(const TCHAR* Tag) const;
 	// The `system/items.txt` `IsWeapon` column, mirrored: the wielded families plus Bloodpack.
 	bool IsWeaponType() const;
 	// Whether an ordinary stack may still take one more. A `StackLimit` of 0 is unauthored, which

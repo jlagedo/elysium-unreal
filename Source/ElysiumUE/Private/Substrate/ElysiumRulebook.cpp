@@ -2246,6 +2246,75 @@ bool FElysiumItemDef::IsWeaponType() const
 	}
 }
 
+const TCHAR* ElysiumWeaponModeTypeName(EElysiumWeaponModeType Type)
+{
+	switch (Type)
+	{
+	case EElysiumWeaponModeType::Attack:            return TEXT("Attack");
+	case EElysiumWeaponModeType::SecondaryAttack:   return TEXT("Secondary_Attack");
+	case EElysiumWeaponModeType::TogglePrimaryMode: return TEXT("Toggle_Primary_Mode");
+	case EElysiumWeaponModeType::ZoomLoop:          return TEXT("Zoom_Out_Loop");
+	case EElysiumWeaponModeType::Other:             return TEXT("Other");
+	default:                                        return TEXT("None");
+	}
+}
+
+const FElysiumWeaponMode* FElysiumItemDef::FindMode(const TCHAR* Tag) const
+{
+	for (const FElysiumWeaponMode& Mode : Modes)
+	{
+		if (Mode.Tag.Equals(Tag, ESearchCase::IgnoreCase))
+		{
+			return &Mode;
+		}
+	}
+	return nullptr;
+}
+
+namespace
+{
+	EElysiumWeaponModeType ParseWeaponModeType(const FString& Raw)
+	{
+		if (Raw.IsEmpty())                                              { return EElysiumWeaponModeType::None; }
+		if (Raw.Equals(TEXT("Attack"), ESearchCase::IgnoreCase))         { return EElysiumWeaponModeType::Attack; }
+		if (Raw.Equals(TEXT("Secondary_Attack"), ESearchCase::IgnoreCase)) { return EElysiumWeaponModeType::SecondaryAttack; }
+		if (Raw.Equals(TEXT("Toggle_Primary_Mode"), ESearchCase::IgnoreCase)) { return EElysiumWeaponModeType::TogglePrimaryMode; }
+		if (Raw.Equals(TEXT("Zoom_Out_Loop"), ESearchCase::IgnoreCase))  { return EElysiumWeaponModeType::ZoomLoop; }
+		// A consumable/throw-style mode names its own projectile record (`FragGrenade`,
+		// `CrossbowBolt`). It is authored data, not a parse failure.
+		return EElysiumWeaponModeType::Other;
+	}
+
+	void ParseWeaponMode(const ElysiumKeyValues::FKvNode& Block, FElysiumWeaponMode& Out)
+	{
+		Out.Tag = Block.Str(TEXT("Tag"), FString());
+		Out.TypeName = Block.Str(TEXT("Type"), FString());
+		Out.Type = ParseWeaponModeType(Out.TypeName);
+
+		Out.Dmg = Block.Str(TEXT("Dmg"), FString());
+		Out.BaseLethality = Block.Int(TEXT("BaseLethality"), 0);
+		Out.SkillRequirement = Block.Int(TEXT("SkillRequirement"), 0);
+
+		Out.AttackRate = Block.Flt(TEXT("Attack_Rate"), 0.0f);
+
+		Out.AmmoType = Block.Str(TEXT("Ammo_Type"), FString());
+		Out.AmmoCost = Block.Int(TEXT("Ammo_Cost"), 0);
+		// An unauthored `Ammo_Fired` is one ray, not zero: every attack mode that omits it fires a
+		// single trace, and the M37's eight is why the key exists at all.
+		Out.AmmoFired = Block.Int(TEXT("Ammo_Fired"), 1);
+
+		Out.bAllowAutofire = Block.Bool(TEXT("allow_autofire"), false);
+
+		Out.BurstMin = Block.Int(TEXT("BurstMin"), 0);
+		Out.BurstMax = Block.Int(TEXT("BurstMax"), 0);
+		// The loader's own clamp — retail forces `BurstMin <= BurstMax`.
+		Out.BurstMax = FMath::Max(Out.BurstMin, Out.BurstMax);
+
+		Out.Range = Block.Flt(TEXT("Range"), 0.0f);
+		Out.BotchTable = Block.Str(TEXT("Botch_Table"), FString());
+	}
+}
+
 bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 	FElysiumItemDef& Out, FString& OutError)
 {
@@ -2283,6 +2352,22 @@ bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 	Out.InfoModel = Data->Str(TEXT("infomodel"), FString());
 
 	Out.CameraClass = ElysiumCam::ParseCameraClass(Data->Str(TEXT("camera_class"), FString()));
+
+	Out.bReloadSingle = Data->Bool(TEXT("reload_single"), false);
+	Out.bDisallowFirearmsToBashing = Data->Bool(TEXT("Disallow_FirearmsToBashing"), false);
+
+	// The `Activation` blocks, in file order — a record may author several and the order is what
+	// `PrimaryMode2`'s toggle cycles through.
+	for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Data->Kids)
+	{
+		if (Kid.Key != TEXT("activation") || !Kid.Value.IsValid())
+		{
+			continue;
+		}
+		FElysiumWeaponMode Mode;
+		ParseWeaponMode(*Kid.Value, Mode);
+		Out.Modes.Add(MoveTemp(Mode));
+	}
 
 	if (const FKvNode* Magazine = Data->Child(TEXT("Magazine")))
 	{

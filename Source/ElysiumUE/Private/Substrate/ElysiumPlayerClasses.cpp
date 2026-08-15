@@ -1259,7 +1259,8 @@ bool FElysiumCombatCharacter::IsKindred() const
 	return FElysiumSheet::IsValidClan(Sheet.Clan());
 }
 
-void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker)
+void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker,
+	bool bDisallowFirearmsToBashing)
 {
 	if (IsInert())
 	{
@@ -1270,7 +1271,8 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 	BreakFeed();
 
 	FElysiumDmg Resolved = Dmg;
-	if (!ElysiumDamage::Apply(Resolved, Attacker, *this, FElysiumDamageContext::FromCharacter(*this)))
+	if (!ElysiumDamage::Apply(Resolved, Attacker, *this, FElysiumDamageContext::FromCharacter(*this),
+		bDisallowFirearmsToBashing))
 	{
 		return;   // Apply reported why
 	}
@@ -2013,8 +2015,36 @@ static FElysiumClassRegistrar GRegPlayer(
 			{ static_cast<FP&>(E).PendingInput(TEXT("PlayHUDParticle"), TEXT("8.9 — the HUD"), A); });
 		D.Input(TEXT("StopHUDParticle"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ static_cast<FP&>(E).PendingInput(TEXT("StopHUDParticle"), TEXT("8.9 — the HUD"), A); });
-		D.Input(TEXT("Holster"),         [](FElysiumEntity& E, const FElysiumInputArgs& A)
-			{ static_cast<FP&>(E).PendingInput(TEXT("Holster"), TEXT("9.8 — equipped weapons"), A); });
+		// Holster — put the drawn weapon away. Retail's own semantics are UNRECOVERED: the world's
+		// forced-unarmed policy (`combat-and-damage.md` § "World-area weapon admission") equips
+		// `item_w_unarmed` and refuses every other candidate, and that is the only observed behaviour
+		// that reads as holstering. So this does exactly that much — switch the active weapon to a
+		// carried `item_w_unarmed` — and refuses audibly when the character carries none, rather
+		// than inventing an empty-handed state the inventory has no representation for.
+		D.Input(TEXT("Holster"),         [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{
+				FP& Player = static_cast<FP&>(E);
+				FElysiumItem* Unarmed =
+					Player.Inventory.FindOrdinary(Player, TEXT("item_w_unarmed"));
+				if (!Unarmed)
+				{
+					UE_LOG(LogElysiumPlayer, Warning,
+						TEXT("%s Holster: no carried item_w_unarmed to fall back to — the active "
+							"weapon is unchanged"), *Player.DebugString());
+					return;
+				}
+				if (Player.Inventory.ActiveWeapon == Unarmed->Handle)
+				{
+					return;
+				}
+				if (FElysiumItem* Previous = Player.Inventory.Active(Player))
+				{
+					Previous->OnHolstered(Player);
+				}
+				Player.Inventory.ActiveWeapon = Unarmed->Handle;
+				Unarmed->OnEquipped(Player);
+				Player.PublishEquippedCameraClass();
+			});
 
 		// The three law counters as read-only fields, so `pc.criminal_level` reads a number. They
 		// are engine-written (the inputs above are the only writers), which is what !bKeyable says.
