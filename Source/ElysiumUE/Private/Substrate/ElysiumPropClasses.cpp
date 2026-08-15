@@ -20,12 +20,14 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumSignData.h"
 
+#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "HAL/IConsoleManager.h"
+#include "Math/BoxSphereBounds.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
@@ -154,6 +156,18 @@ public:
 	USkeletalMeshComponent* AnimatedVisual = nullptr;
 	FString AnimatedStem;
 	FString VisualStem;          // baked/static skin-table stem for either representation
+
+	// 8.4a — `solid`'s static collision body. `CollisionProxy` is the catalogue path's invisible
+	// `.phy`-hulled proxy (`AnimatedVisual` is attached to it, mirrors FElysiumPhysProp's Visual/
+	// PosedVisual pair but inverted: here the proxy, not the drawn mesh, is the parent); a plain
+	// `solid`-driven collision profile on `Visual` itself covers the fallback (non-catalogue) path.
+	// `BoxCollisionProxy` backs `solid 2` (SOLID_BBOX) on either path, since neither builder bakes a
+	// box shape onto the mesh asset the way `.phy` hulls are baked for the other solid values.
+	UStaticMeshComponent* CollisionProxy = nullptr;
+	UBoxComponent* BoxCollisionProxy = nullptr;
+	// The resolved `solid` keyfield, kept so GateVisual can tell whether the fallback-path `Visual`'s
+	// collision is solid-driven (and must be regated with it) or was always NoCollision (solid 0).
+	int32 SolidValue = 0;
 	FString CurrentAnimation;
 	bool bAnimationLoop = false;
 	bool bBroken = false;
@@ -554,6 +568,12 @@ private:
 	{
 		if (Visual) { Visual->DestroyComponent(); Visual = nullptr; }
 		if (AnimatedVisual) { AnimatedVisual->DestroyComponent(); AnimatedVisual = nullptr; }
+		// CollisionProxy is AnimatedVisual's parent on the catalogue path (BuildPlacedModelBody
+		// attaches the drawn mesh to it), so it survives the child's destruction and must be torn
+		// down explicitly rather than assumed gone.
+		if (CollisionProxy) { CollisionProxy->DestroyComponent(); CollisionProxy = nullptr; }
+		if (BoxCollisionProxy) { BoxCollisionProxy->DestroyComponent(); BoxCollisionProxy = nullptr; }
+		SolidValue = 0;
 		AnimatedStem.Reset();
 		VisualStem.Reset();
 		CurrentAnimation.Reset();
@@ -703,6 +723,15 @@ private:
 			return;
 		}
 
+		// 8.4a — solid (SolidType_t) and disableshadows are CDynamicProp-scoped CBaseEntity
+		// keyfields, read once here rather than through the class-field table: neither is mutated by
+		// a runtime input, so there is nothing for a live field to back. "" -> Atoi -> 0 matches
+		// SOLID_NONE's already-correct no-collision default when the key is absent
+		// (docs/vtmb/phy_vphysics.md).
+		const int32 Solid = FCString::Atoi(*Def->Keys.FindRef(TEXT("solid")));
+		const bool bDisableShadows = FCString::Atoi(*Def->Keys.FindRef(TEXT("disableshadows"))) != 0;
+		SolidValue = Solid;
+
 		// Both representations share one rotation. A prop's skeletal body is baked from its `.eskm`
 		// in the repo's canonical Source->Unreal frame, exactly like its static mesh, so
 		// `model_quat` — the placement of the exporter's Unreal-native OBJ — is the whole answer for
@@ -752,14 +781,27 @@ private:
 			Request.UniformScale = Embodiment->BodyScaleFor(*Def);
 			Request.PlacementToken = Handle.Index;
 			Request.Skin = Skin;
+			// VPhysicsInitStatic: solid 0 -> no collision, solid 2 -> a box (built separately below,
+			// no existing builder bakes one), any other nonzero value -> the model's `.phy` hulls,
+			// which CollisionProxy already builds (the same PhysicsActor-profile, non-simulating body
+			// prop_physics's own static case uses).
+			Request.Physics = (Solid != 0 && Solid != 2)
+				? EElysiumPlacedModelPhysics::CollisionProxy
+				: EElysiumPlacedModelPhysics::None;
 			const FElysiumPlacedModelBody PlacedBody = Embodiment->BuildPlacedModelBody(Request);
 			AnimatedVisual = PlacedBody.Visual;
+			CollisionProxy = PlacedBody.PhysicsProxy;
 			if (AnimatedVisual)
 			{
 				World->RegisterNpcBody(AnimatedVisual);
 				if (IsUsable() && Def && !Def->bSky)
 				{
 					World->RegisterUseAnchor(AnimatedVisual, Handle);
+				}
+				AnimatedVisual->SetCastShadow(!bDisableShadows);
+				if (Solid == 2)
+				{
+					BuildBoxCollisionProxy(AnimatedVisual);
 				}
 			}
 		}
@@ -785,6 +827,23 @@ private:
 			{
 				World->RegisterPropBody(Visual,
 					IsUsable() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
+				Visual->SetCastShadow(!bDisableShadows);
+				// Set explicitly rather than trusting BuildPropVisual's own NoCollision default: solid
+				// is this leaf's rule, not the builder's, and a self-determined result is what the
+				// solid 0/absent case (and BoxCollisionProxy's solid 2 case, which leaves Visual itself
+				// non-colliding) both need.
+				if (Solid != 0 && Solid != 2)
+				{
+					Visual->SetCollisionProfileName(TEXT("PhysicsActor"));
+				}
+				else
+				{
+					Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					if (Solid == 2)
+					{
+						BuildBoxCollisionProxy(Visual);
+					}
+				}
 			}
 		}
 
@@ -793,6 +852,29 @@ private:
 			if (Skin != 0) { ApplySkin(); }
 			if (IsInert() || bBroken) { GateVisual(); }
 		}
+	}
+
+	// solid 2 (SOLID_BBOX): retail derives a static box straight from the model's mins/maxs
+	// (PhysModelCreateBox) rather than parsing a `.phy`. Neither builder bakes a box shape onto the
+	// mesh asset, so this is the one solid value with no existing collision to switch on — attach a
+	// sibling box sized to the mesh's own local bounds instead, the same AABB-in-model-space retail
+	// derives.
+	void BuildBoxCollisionProxy(UPrimitiveComponent* Mesh)
+	{
+		AActor* Owner = Mesh ? Mesh->GetOwner() : nullptr;
+		if (!Owner)
+		{
+			return;
+		}
+		const FBoxSphereBounds LocalBounds = Mesh->CalcBounds(FTransform::Identity);
+		UBoxComponent* Box = NewObject<UBoxComponent>(Owner);
+		Box->SetBoxExtent(LocalBounds.BoxExtent);
+		Box->SetCollisionProfileName(TEXT("PhysicsActor"));
+		Box->SetupAttachment(Mesh);
+		Box->SetRelativeLocation(LocalBounds.Origin);
+		Box->RegisterComponent();
+		Owner->AddInstanceComponent(Box);
+		BoxCollisionProxy = Box;
 	}
 
 	void GateVisual()
@@ -805,6 +887,13 @@ private:
 		if (Visual)
 		{
 			Visual->SetVisibility(bShown);
+			// Only the fallback path's solid-driven Visual owns collision worth regating; solid 0
+			// left it NoCollision at BuildBody and must stay that way rather than being turned solid
+			// here.
+			if (SolidValue != 0 && SolidValue != 2)
+			{
+				Visual->SetCollisionProfileName(bShown ? TEXT("PhysicsActor") : TEXT("NoCollision"));
+			}
 		}
 		if (AnimatedVisual)
 		{
@@ -820,6 +909,20 @@ private:
 			{
 				ResyncAnimation(World->NowSeconds());
 			}
+		}
+		// The catalogue path's static solid body and the solid==2 box proxy (either path) gate the
+		// same way FElysiumPhysProp::GateBody gates its own static case: NoCollision when down,
+		// restored PhysicsActor collision when live again. Neither ever simulates, so there is no
+		// SetSimulatePhysics call to mirror.
+		if (CollisionProxy)
+		{
+			CollisionProxy->SetCollisionEnabled(bShown ? ECollisionEnabled::QueryAndPhysics
+				: ECollisionEnabled::NoCollision);
+		}
+		if (BoxCollisionProxy)
+		{
+			BoxCollisionProxy->SetCollisionEnabled(bShown ? ECollisionEnabled::QueryAndPhysics
+				: ECollisionEnabled::NoCollision);
 		}
 	}
 };

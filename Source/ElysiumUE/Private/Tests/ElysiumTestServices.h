@@ -663,12 +663,19 @@ struct FElysiumRecordingServices final
 		return Result;
 	}
 
+	// The body each static prop stem was built onto — mirrors AnimatedPropBodies, so a solid/
+	// disableshadows test can inspect the live component the ordinary Record() string can't carry
+	// (collision-enabled state, cast-shadow flag, an attached box collision proxy).
+	TMap<FString, UStaticMeshComponent*> PropBodies;
+
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override
 	{
 		Record(FString::Printf(TEXT("BuildPropVisual %s %s scale=%.2f"), *Stem, *Location.ToString(), UniformScale));
 		LastPropRotation = Rotation;
-		return NewComponent<UStaticMeshComponent>();
+		UStaticMeshComponent* Body = NewComponent<UStaticMeshComponent>();
+		PropBodies.Add(Stem, Body);
+		return Body;
 	}
 	TMap<FString, EElysiumItemGroundModelState> ItemGroundModelStates;
 	virtual EElysiumItemGroundModelState ItemGroundModelState(

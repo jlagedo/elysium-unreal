@@ -478,6 +478,168 @@ bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
 	return true;
 }
 
+// ============================================================================================
+// 8.4a — the fallback (non-catalogue) path's `solid` keyfield. `VPhysicsInitStatic` builds static
+// collision from the model's `.phy` for any nonzero, non-2 value; solid 0 (or the key absent)
+// stays the prior no-collision default.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCollisionTest,
+	"Elysium.Substrate.PropSolidCollision", GElysiumTestFlags)
+bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_solid__");
+	FElysiumEntityDef Solid;
+	Solid.Classname = TEXT("prop_dynamic");
+	Solid.TargetName = TEXT("solid_crate");
+	Solid.ModelMesh = TEXT("crate_static");
+	Solid.Keys.Add(TEXT("model"), TEXT("models/props/crate.mdl"));
+	Solid.Keys.Add(TEXT("solid"), TEXT("6"));   // SOLID_VPHYSICS
+	Defs.Defs.Add(MoveTemp(Solid));
+	FElysiumEntityDef Unsolid;
+	Unsolid.Classname = TEXT("prop_dynamic");
+	Unsolid.TargetName = TEXT("plain_crate");
+	Unsolid.ModelMesh = TEXT("crate2_static");
+	Unsolid.Keys.Add(TEXT("model"), TEXT("models/props/crate2.mdl"));
+	Defs.Defs.Add(MoveTemp(Unsolid));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	UStaticMeshComponent* SolidBody = Services.PropBodies.FindRef(TEXT("crate_static"));
+	UStaticMeshComponent* UnsolidBody = Services.PropBodies.FindRef(TEXT("crate2_static"));
+	TestNotNull(TEXT("the solid prop stands a body"), SolidBody);
+	TestNotNull(TEXT("the plain prop stands a body"), UnsolidBody);
+	if (SolidBody)
+	{
+		TestTrue(TEXT("solid 6 switches on the model's .phy collision"),
+			SolidBody->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+	}
+	if (UnsolidBody)
+	{
+		TestTrue(TEXT("an absent solid key stays the prior no-collision default"),
+			UnsolidBody->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+	}
+	return true;
+}
+
+// ============================================================================================
+// 8.4a — the catalogue (v7, production) path. `solid` decides `FElysiumPlacedModelRequest::Physics`
+// before `BuildPlacedModelBody` runs, so the request itself is the observable surface here.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCatalogueTest,
+	"Elysium.Substrate.PropSolidCatalogue", GElysiumTestFlags)
+bool FElysiumPropSolidCatalogueTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.bPlacedModelsResolve = true;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_solid_catalogue__");
+	FElysiumEntityDef Solid;
+	Solid.Classname = TEXT("prop_dynamic");
+	Solid.TargetName = TEXT("solid_crate");
+	Solid.Keys.Add(TEXT("model"), TEXT("models/props/crate.mdl"));
+	Solid.Keys.Add(TEXT("solid"), TEXT("3"));   // SOLID_OBB, same static dispatch as 6
+	Defs.Defs.Add(MoveTemp(Solid));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	TestTrue(TEXT("solid 3 requests a static collision proxy from the catalogue"),
+		Services.Log().Contains(TEXT("physics=1")));   // EElysiumPlacedModelPhysics::CollisionProxy
+	return true;
+}
+
+// ============================================================================================
+// 8.4a — `disableshadows`, a CBaseEntity keyfield `CBaseEntity::KeyValue` folds into `m_fEffects`
+// (docs/vtmb/entity_visuals.md); here it is read once and applied to the cast-shadow flag.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropDisableShadowsTest,
+	"Elysium.Substrate.PropDisableShadows", GElysiumTestFlags)
+bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_shadows__");
+	FElysiumEntityDef Dark;
+	Dark.Classname = TEXT("prop_dynamic");
+	Dark.TargetName = TEXT("dark_lamp");
+	Dark.ModelMesh = TEXT("lamp_static");
+	Dark.Keys.Add(TEXT("model"), TEXT("models/scenery/lamp.mdl"));
+	Dark.Keys.Add(TEXT("disableshadows"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(Dark));
+	FElysiumEntityDef Lit;
+	Lit.Classname = TEXT("prop_dynamic");
+	Lit.TargetName = TEXT("lit_lamp");
+	Lit.ModelMesh = TEXT("lamp2_static");
+	Lit.Keys.Add(TEXT("model"), TEXT("models/scenery/lamp2.mdl"));
+	Defs.Defs.Add(MoveTemp(Lit));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	UStaticMeshComponent* DarkBody = Services.PropBodies.FindRef(TEXT("lamp_static"));
+	UStaticMeshComponent* LitBody = Services.PropBodies.FindRef(TEXT("lamp2_static"));
+	TestNotNull(TEXT("the dark lamp stands a body"), DarkBody);
+	TestNotNull(TEXT("the lit lamp stands a body"), LitBody);
+	if (DarkBody)
+	{
+		TestFalse(TEXT("disableshadows 1 suppresses the cast"), DarkBody->CastShadow);
+	}
+	if (LitBody)
+	{
+		TestTrue(TEXT("an absent disableshadows key casts normally"), LitBody->CastShadow);
+	}
+	return true;
+}
+
+// ============================================================================================
+// 8.4a — a hidden/broken solid prop stops blocking, mirroring FElysiumPhysProp::GateBody's own
+// static case: it is undrawn and non-colliding while down, and both restore together.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidGatingTest,
+	"Elysium.Substrate.PropSolidGating", GElysiumTestFlags)
+bool FElysiumPropSolidGatingTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__prop_solid_gating__");
+	FElysiumEntityDef Solid;
+	Solid.Classname = TEXT("prop_dynamic");
+	Solid.TargetName = TEXT("solid_crate");
+	Solid.ModelMesh = TEXT("crate_static");
+	Solid.Keys.Add(TEXT("model"), TEXT("models/props/crate.mdl"));
+	Solid.Keys.Add(TEXT("solid"), TEXT("6"));
+	Defs.Defs.Add(MoveTemp(Solid));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	UStaticMeshComponent* Body = Services.PropBodies.FindRef(TEXT("crate_static"));
+	TestNotNull(TEXT("the prop stands a body"), Body);
+	if (!Body)
+	{
+		return true;
+	}
+	TestTrue(TEXT("solid before Break"), Body->GetCollisionEnabled() != ECollisionEnabled::NoCollision);
+
+	World.AcceptInput(TEXT("solid_crate"), FName(TEXT("Break")), FElysiumVariant::Void(),
+		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+
+	TestTrue(TEXT("Break gates collision off along with visibility"),
+		Body->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+	return true;
+}
+
 } // namespace ElysiumPropTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS
