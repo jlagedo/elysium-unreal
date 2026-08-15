@@ -33,6 +33,27 @@ gate is open: the forward gaits are 53.8 / 188.5 / 65.3 u/s. It touches
 `ElysiumRig::FElysiumCameraRigTuning`, never the `cam_*` console store the faithful evaluator
 reads, and is performed once against the camera channels the gym records.
 
+### CCC7 The speed authority — the NPC producer
+
+`docs/architecture/animation-architecture.md` § 3.2 gives the gait speed tables to the driver for
+**both** producers: they key on the body rather than the frame, are re-resolved only when that key
+moves, and are pushed to the mover on change. Only the player's mover receives that push. An NPC's
+`UCharacterMovementComponent` takes whatever speed its caller passes, and its driver's
+`FElysiumGaitReference` is never seeded from `GaitFrom(GaitSpeeds)` — so the cast's walk/run split
+is judged against the player's own constants rather than against each body's authored forward cell.
+
+What remains is the second push and the classifier seed. The producer already resolves the tables:
+`FElysiumAnimationDriver::Tick` fills `GaitSpeeds`/`GaitGeneration` for every body, cast included.
+A caller that names its own travel speed — a scripted beat's `Custom` gait, a patrol leg — reads
+the selected cell's authored ground speed instead of a constant, which is what the scripted `Walk`
+gait already does through `ResolveNpcActivityClip`. `ElysiumNpcGait::WalkSpeed`/`RunSpeed` remain
+the fallback for a body whose export resolves no fan.
+
+*Acceptance:* a walking or running cast member travels at its own selected cell's authored speed,
+so the stride does not slide; the walk/run threshold is the body's own forward walk cell plus one
+unit rather than `ElysiumMove::WalkSpeed`; and both producers still fill one
+`FElysiumLocomotionSample`, so the player's speed authority and the cast's are one system.
+
 ### CCC8 Played acceptance
 
 The slice's finish line, **played by the owner** — owner call: no beat script, no Play-tier

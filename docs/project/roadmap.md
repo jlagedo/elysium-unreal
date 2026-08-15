@@ -290,8 +290,10 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [~] **[CCC3 Controls response](plans/three-cs.md)** — curves and leniency landed; the
   co-tune open.
 - [x] **CCC4 Intent, resolver, selection record** · **CCC5 The player animation graph** ·
-  **CCC6 The green room drives it** · **CCC7 `move_yaw` + the speed authority** ·
-  **CCC9 Scaffolding retired** · **CCC10 The weapon rung (third person)**.
+  **CCC6 The green room drives it** · **CCC9 Scaffolding retired** ·
+  **CCC10 The weapon rung (third person)**.
+- [~] **[CCC7 `move_yaw` + the speed authority](plans/three-cs.md)** — the player producer
+  landed; the NPC producer never took the push, so the cast travels on constants.
 - [ ] **[CCC8 Played acceptance](plans/three-cs.md)** — the slice's finish line, owner-played.
 - [ ] **[CCC10.1 The first-person viewmodel body](plans/three-cs.md)** — waits on RE42's live
   verifier, PL14, 11.13d and the semantic animation-intent seam.
