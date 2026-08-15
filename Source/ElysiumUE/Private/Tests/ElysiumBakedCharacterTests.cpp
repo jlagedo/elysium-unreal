@@ -48,6 +48,7 @@
 #include "Animation/Skeleton.h"
 #include "BoneIndices.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/SkeletalMeshSocket.h"
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -1687,6 +1688,89 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 	AddInfo(FString::Printf(
 		TEXT("%d body/bodies, %d layer(s) armable: %d grid(s), %d masked clip(s), %d additive(s)"),
 		Bodies, Armable + Additives, Grids, MaskedClips, Additives));
+	return true;
+}
+
+// A model may name the same attachment twice -- studiomdl kept every `$attachment` its QC declared
+// -- and five of the cast's containers do. VtMB resolves an attachment BY NAME through
+// `Studio_FindAttachment`, which scans the array and answers with the FIRST match, so a later
+// record of the same name was already dead data in retail. Which record the socket carries is not
+// cosmetic: `kilpatrick` repeats `mouth` on `Bip01 Head` with the two records 4.7 cm apart, and
+// that socket anchors the feed and dialogue effects placed on the face.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBakedAttachmentSocketTest,
+	"Elysium.Content.BakedAttachmentSockets", GElysiumBakedCharacterFlags)
+bool FElysiumBakedAttachmentSocketTest::RunTest(const FString&)
+{
+	// The bodies whose containers repeat a name, listed rather than swept: the question is about
+	// five models and a sweep would decode the whole ~600 MB cast to ask it.
+	const TCHAR* const Stems[] = {
+		TEXT("asianvampire"), TEXT("beckett"), TEXT("kilpatrick"), TEXT("nines"),
+		TEXT("security_guard"),
+	};
+
+	int32 Checked = 0;
+	int32 Repeats = 0;
+	for (const TCHAR* Stem : Stems)
+	{
+		USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr,
+			*FElysiumContentPaths::BakedCharacterMesh(Stem), nullptr, LOAD_NoWarn | LOAD_Quiet);
+		FElysiumSkeletalSource Source;
+		FString Error;
+		if (Mesh == nullptr
+			|| !FElysiumSkeletalSource::Load(FElysiumContentPaths::NpcSource(Stem), Source, Error))
+		{
+			continue;
+		}
+		++Checked;
+
+		// {trimmed socket name -> the first record naming it}, which is the set the mesh must hold.
+		// `USkeletalMesh::AddSocket` trims before testing uniqueness, so the key does too.
+		TMap<FName, const FElysiumSourceAttachment*> Expected;
+		for (const FElysiumSourceAttachment& Attachment : Source.Attachments)
+		{
+			const FName SocketName(*Attachment.Name.ToString().TrimStartAndEnd());
+			if (Expected.Contains(SocketName))
+			{
+				++Repeats;
+				continue;
+			}
+			Expected.Add(SocketName, &Attachment);
+		}
+
+		// `NumSockets` counts the skeleton's sockets too, so this also states that the bake put
+		// every one of them on the mesh and none on the shared family `USkeleton`.
+		TestEqual(*FString::Printf(TEXT("%s bakes one socket per distinct attachment name"), Stem),
+			Mesh->NumSockets(), Expected.Num());
+		for (const TPair<FName, const FElysiumSourceAttachment*>& Entry : Expected)
+		{
+			const USkeletalMeshSocket* Socket = Mesh->FindSocket(Entry.Key);
+			if (!TestNotNull(*FString::Printf(TEXT("%s carries socket '%s'"),
+				Stem, *Entry.Key.ToString()), Socket))
+			{
+				continue;
+			}
+			TestEqual(*FString::Printf(TEXT("%s socket '%s' binds the first record's bone"),
+				Stem, *Entry.Key.ToString()),
+				Socket->BoneName, Source.Bones[Entry.Value->Bone].Name);
+			const FTransform Baked(Socket->RelativeRotation, Socket->RelativeLocation,
+				Socket->RelativeScale);
+			TestTrue(*FString::Printf(
+				TEXT("%s socket '%s' carries the first record's transform (%s against %s)"),
+				Stem, *Entry.Key.ToString(), *Baked.ToString(), *Entry.Value->Local.ToString()),
+				Baked.Equals(Entry.Value->Local));
+		}
+	}
+
+	if (Checked == 0)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no repeat-attachment body is baked; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	TestTrue(TEXT("the containers still repeat an attachment name"), Repeats > 0);
+	AddInfo(FString::Printf(
+		TEXT("%d body/bodies checked, %d repeated attachment record(s) resolved to the first"),
+		Checked, Repeats));
 	return true;
 }
 

@@ -437,13 +437,47 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	// Attachments are model-authored data resolved offline into ordinary Unreal mesh sockets.
 	// Their transform is already bone-local and Unreal-native, so the generated mesh carries the
 	// answer and event consumers never evaluate a VtMB frame rule at runtime.
-	for (const FElysiumSourceAttachment& SourceAttachment : Source.Attachments)
+	//
+	// A container may name the same attachment twice -- studiomdl kept every `$attachment` the QC
+	// declared, and six of the corpus's models repeat one. VtMB resolves an attachment BY NAME
+	// through `Studio_FindAttachment`, which scans the array and answers with the FIRST match, so
+	// a later record of the same name was already dead data in retail. The socket set reproduces
+	// that lookup: first record wins, a later one that agrees is a no-op, and one that disagrees
+	// is a defect in the model reported once. `USkeletalMesh::AddSocket` trims the name before
+	// testing uniqueness, so the key placed here is trimmed too and the two agree on what collides.
+	TMap<FName, int32> PlacedAttachments;
+	for (int32 AttachmentIndex = 0; AttachmentIndex < Source.Attachments.Num(); ++AttachmentIndex)
 	{
+		const FElysiumSourceAttachment& SourceAttachment = Source.Attachments[AttachmentIndex];
 		if (!Source.Bones.IsValidIndex(SourceAttachment.Bone)
 			|| RefSkeleton.FindBoneIndex(Source.Bones[SourceAttachment.Bone].Name) == INDEX_NONE)
 		{
 			return FString::Printf(TEXT("%s: attachment %s names unavailable bone %d"),
 				*SourcePath, *SourceAttachment.Name.ToString(), SourceAttachment.Bone);
+		}
+		const FName SocketName(*SourceAttachment.Name.ToString().TrimStartAndEnd());
+		if (const int32* Kept = PlacedAttachments.Find(SocketName))
+		{
+			const FElysiumSourceAttachment& First = Source.Attachments[*Kept];
+			if (First.Bone != SourceAttachment.Bone || !First.Local.Equals(SourceAttachment.Local))
+			{
+				UE_LOG(LogElysiumSkeletalBuild, Warning,
+					TEXT("%s: socket %s on %s is declared twice and disagrees -- keeping ")
+					TEXT("attachment %d (bone %s, %s) over attachment %d (bone %s, %s), ")
+					TEXT("which is the record VtMB's own name lookup answers with"),
+					*SourcePath, *SocketName.ToString(), *AssetName,
+					*Kept, *Source.Bones[First.Bone].Name.ToString(),
+					*First.Local.ToString(),
+					AttachmentIndex, *Source.Bones[SourceAttachment.Bone].Name.ToString(),
+					*SourceAttachment.Local.ToString());
+			}
+			else
+			{
+				UE_LOG(LogElysiumSkeletalBuild, Verbose,
+					TEXT("%s: socket %s is declared twice with the same bone and transform"),
+					*SourcePath, *SocketName.ToString());
+			}
+			continue;
 		}
 		USkeletalMeshSocket* Socket = NewObject<USkeletalMeshSocket>(Mesh);
 		if (Socket == nullptr)
@@ -451,12 +485,13 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 			return FString::Printf(TEXT("%s: could not create attachment socket %s"),
 				*SourcePath, *SourceAttachment.Name.ToString());
 		}
-		Socket->SocketName = SourceAttachment.Name;
+		Socket->SocketName = SocketName;
 		Socket->BoneName = Source.Bones[SourceAttachment.Bone].Name;
 		Socket->RelativeLocation = SourceAttachment.Local.GetLocation();
 		Socket->RelativeRotation = SourceAttachment.Local.GetRotation().Rotator();
 		Socket->RelativeScale = SourceAttachment.Local.GetScale3D();
 		Mesh->AddSocket(Socket, /*bAddToSkeleton=*/false);
+		PlacedAttachments.Add(SocketName, AttachmentIndex);
 	}
 
 	// The optional hair proof recipe is generated content on the mesh, not a runtime VtMB table.
