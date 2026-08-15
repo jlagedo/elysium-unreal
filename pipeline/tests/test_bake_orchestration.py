@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
-from elysium_pipeline import export_manager
+from elysium_pipeline import export_manager, shared_corpus
 from elysium_pipeline.placed_models import PlacedModelUse
-from elysium_pipeline.tasking import Manifest, TaskResult
+from elysium_pipeline.tasking import Manifest, TaskFailure, TaskResult
 
 
 class BakeOrchestrationTests(unittest.TestCase):
@@ -245,6 +245,65 @@ class BakeOrchestrationTests(unittest.TestCase):
             self.assertEqual(promote.call_args.args[2], reports)
             record.assert_called_once()
             self.assertEqual(record.call_args.args[2], {"map_a": ("particles",)})
+
+    def test_a_failed_corpus_bake_salvages_its_checkpointed_receipts(self) -> None:
+        # The corpus commandlet checkpoints: it saves its packages, then publishes an interim run
+        # report. Every asset such a report names is already on disk, so a run that dies later
+        # still hands the next one its work -- which then reports `reused` and builds the rest.
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            scope = shared_corpus.SCOPE
+            object_path = f"/ElysiumBaked/{scope}/Textures/T_wall"
+            output = export_manager.bake_cache.unreal_output_path(
+                config.repo_root, object_path, "textures")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(b"texture")
+            plan_document = {
+                "schema": export_manager.bake_cache.ASSET_RUN_SCHEMA,
+                "version": export_manager.bake_cache.ASSET_SCHEMA_VERSION,
+                "run_id": "test-run",
+                "force": False,
+                "maps": {scope: {
+                    "stages": ["textures"],
+                    "fingerprints": {"textures": "frozen"},
+                    "policies": {"textures": "policy"},
+                }},
+            }
+            export_manager.bake_cache.write_asset_run_report(config.export_root, {
+                "schema": export_manager.bake_cache.ASSET_RUN_SCHEMA,
+                "version": export_manager.bake_cache.ASSET_SCHEMA_VERSION,
+                "run_id": "test-run",
+                "map": scope,
+                "stages": {"textures": {
+                    "policy": "policy",
+                    "assets": {object_path: {
+                        "object_path": object_path,
+                        "fingerprint": "a" * 64,
+                        "output": str(output),
+                    }},
+                    "built": 1,
+                    "reused": 0,
+                    "pruned": 0,
+                }},
+            })
+
+            with (
+                mock.patch.object(
+                    export_manager.bake_cache, "create_corpus_run_plan",
+                    return_value=(Path(temporary) / "plan.json", plan_document)),
+                mock.patch.object(
+                    export_manager.unreal, "bake_corpus",
+                    side_effect=export_manager.unreal.UnrealFailure("editor died")),
+            ):
+                with self.assertRaises(TaskFailure):
+                    export_manager.ensure_corpus_bake(config, object())
+
+            store = export_manager.bake_cache.AssetReceiptStore(config.export_root, scope)
+            self.assertEqual(set(store.stage_assets("textures")), {object_path})
+            # The coarse task stays failed, so the next run launches the commandlet again.
+            manifest = Manifest(config.export_root / ".elysium-manifest.json")
+            self.assertEqual(
+                manifest.data["tasks"]["unreal:corpus"]["status"], "failed")
 
     def test_frozen_input_drift_rejects_before_verification_or_promotion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

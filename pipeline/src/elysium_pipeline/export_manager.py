@@ -608,6 +608,33 @@ def _corpus_materials(config) -> dict:
         return shared_corpus.check_materials(json.load(handle))["materials"]
 
 
+def _salvage_corpus_receipts(config, plan_document: dict) -> None:
+    """Promote the per-asset receipts of a corpus bake that died mid-run.
+
+    The commandlet checkpoints every stage and every batch of prop meshes: it saves the queued
+    packages, then publishes an interim run report. Every asset such a report names is therefore
+    already on disk, which is exactly what `load_asset_run_reports` verifies, so a report left by a
+    run that died later is promotable as it stands.
+
+    The coarse `unreal:corpus` task stays failed, so the next run launches the commandlet again --
+    but the promoted receipts make that run a resume: everything salvaged reports `reused` and only
+    the remainder is built.
+    """
+
+    try:
+        reports = bake_cache.load_asset_run_reports(config, plan_document)
+        bake_cache.promote_asset_run(config, plan_document, reports)
+    except Exception as error:
+        print(f"[bake] corpus bake failed with no promotable interim report: {error}")
+        return
+    salvaged = sum(
+        int(stage.get("built", 0)) + int(stage.get("reused", 0))
+        for report in reports.values()
+        for stage in report.get("stages", {}).values()
+    )
+    print(f"[bake] corpus bake failed; salvaged the receipts of {salvaged} asset(s)")
+
+
 def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
     """Bake the shared corpus onto /ElysiumBaked/Shared.
 
@@ -633,13 +660,14 @@ def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
         bake_cache.corpus_stage_policy(config, stage, cache=digests)
         for stage in shared_corpus.STAGES
     )
+    # `bake_map.py` is not a file input here: each stage policy already states the closure of it
+    # that stage runs, so an edit to a method the corpus never calls launches nothing.
     fingerprint = fingerprint_content(
         [
             shared_corpus.manifest_path(config.export_root),
             shared_corpus.materials_path(config.export_root),
             shared_corpus.props_dir(config.export_root),
             shared_corpus.tex_dir(config.export_root),
-            unreal_root / "bake_map.py",
             unreal_root / "bake_lib.py",
         ],
         extra=("bake-corpus-v1", *policies),
@@ -650,7 +678,11 @@ def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
     def bake() -> None:
         # Planned inside the action: a skipped task launches nothing and so writes no plan.
         plan_path, plan_document = bake_cache.create_corpus_run_plan(config, force=force)
-        unreal.bake_corpus(config, runner, asset_plan=plan_path)
+        try:
+            unreal.bake_corpus(config, runner, asset_plan=plan_path)
+        except unreal.UnrealFailure:
+            _salvage_corpus_receipts(config, plan_document)
+            raise
         reports = bake_cache.load_asset_run_reports(config, plan_document)
         bake_cache.promote_asset_run(config, plan_document, reports)
 

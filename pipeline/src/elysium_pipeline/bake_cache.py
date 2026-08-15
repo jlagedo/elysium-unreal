@@ -41,6 +41,21 @@ _STAGE_METHODS = {
     "level": ("stage_level", "resolve_materials"),
 }
 
+#: `bake_corpus` drives `CorpusBake`, which overrides part of `Bake`, so a corpus stage's closure
+#: is rooted across both classes. `checkpoint` joins the base set because every corpus stage ends
+#: in one.
+_CORPUS_CLASSES = ("Bake", "CorpusBake")
+_CORPUS_BASE_METHODS = (
+    "__init__", "load_masters", "load_sources", "flush", "checkpoint",
+)
+_CORPUS_STAGE_METHODS = {
+    "textures": ("stage_textures", "resolve_textures", "_import_texture_jobs"),
+    "materials": ("stage_materials", "resolve_textures", "resolve_materials", "_material_sets"),
+    # A prop mesh's recipe names the material instances its slots bind, so what resolves those
+    # instances decides the mesh as much as the geometry does.
+    "props": ("stage_props", "_load_prop_sources", "_emit", "resolve_materials"),
+}
+
 
 def _hash_parts(parts: Iterable[str]) -> str:
     digest = hashlib.sha256()
@@ -270,6 +285,30 @@ class AssetReceiptStore:
         _atomic_json(self.path, self.data)
 
 
+def checkpoint_receipts(export_root: Path, map_name: str, stages: dict) -> Path:
+    """Persist, from inside the bake, the receipts of the stages it has already flushed.
+
+    `promote_asset_run` writes this same document once the orchestrator has validated a run report,
+    and that stays the checked path. This is the floor beneath it: a bake that saved its packages
+    and then died with its whole process tree still leaves the next run everything that landed.
+
+    Only flushed work belongs here, so the caller checkpoints after saving. A stage that has
+    registered no asset has not started, and states nothing rather than erasing what an earlier run
+    left; a stage still in progress states the assets it has registered so far, and an asset the
+    document does not name is simply rebuilt.
+    """
+
+    payload = {
+        stage: {"policy": str(data["policy"]), "assets": dict(data["assets"])}
+        for stage, data in stages.items()
+        if data.get("assets")
+    }
+    store = AssetReceiptStore(export_root, map_name)
+    if payload:
+        store.replace_stages(payload)
+    return store.path
+
+
 def stage_code_fingerprint(
     config,
     stage: str,
@@ -301,16 +340,21 @@ def _node_source(lines: list[str], node: ast.AST) -> str:
     return "".join(lines[start:end])
 
 
-def _bake_map_source_fingerprint(
+def _bake_source_closure_fingerprint(
     path: Path,
     stage: str,
+    class_names: Sequence[str],
+    roots: Iterable[str],
+    label: str,
     cache: ContentDigestCache | None = None,
 ) -> str:
-    """Hash shared driver code plus the selected Bake method dependency closure.
+    """Hash shared driver code plus the bake-class method closure one stage reaches.
 
     ``bake_map.py`` deliberately remains one Unreal entrypoint.  Treating the whole file as one
     input would make a particle-stage edit invalidate world and prop meshes, so its class methods
-    are fingerprinted by the ``self.method()`` closure rooted at each stage instead.
+    are fingerprinted by the ``self.method()`` closure rooted at each stage instead.  Where a
+    subclass overrides a method, both bodies join the closure and both are hashed, because either
+    may be the one that runs.
     """
 
     try:
@@ -318,52 +362,82 @@ def _bake_map_source_fingerprint(
         tree = ast.parse(source)
     except (OSError, SyntaxError, UnicodeError):
         return fingerprint_content(
-            [path], extra=("bake-map-fallback", stage), cache=cache
+            [path], extra=(f"{label}-fallback", stage), cache=cache
         )
 
     lines = source.splitlines(keepends=True)
-    bake_class = next(
-        (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Bake"),
-        None,
-    )
-    if bake_class is None:
+    wanted_classes = set(class_names)
+    classes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name in wanted_classes
+    ]
+    if {node.name for node in classes} != wanted_classes:
         return fingerprint_content(
-            [path], extra=("bake-map-no-class", stage), cache=cache
+            [path], extra=(f"{label}-no-class", stage), cache=cache
         )
 
-    methods = {
-        node.name: node
-        for node in bake_class.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    selected = set(_BASE_METHODS) | set(_STAGE_METHODS[stage])
+    methods: dict[str, list[ast.AST]] = {}
+    for bake_class in classes:
+        for node in bake_class.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                methods.setdefault(node.name, []).append(node)
+
+    selected = set(roots)
     pending = list(selected)
     while pending:
-        name = pending.pop()
-        node = methods.get(name)
-        if node is None:
-            continue
-        for child in ast.walk(node):
-            if (
-                isinstance(child, ast.Attribute)
-                and isinstance(child.value, ast.Name)
-                and child.value.id == "self"
-                and child.attr in methods
-                and child.attr not in selected
-            ):
-                selected.add(child.attr)
-                pending.append(child.attr)
+        for node in methods.get(pending.pop(), ()):
+            for child in ast.walk(node):
+                if (
+                    isinstance(child, ast.Attribute)
+                    and isinstance(child.value, ast.Name)
+                    and child.value.id == "self"
+                    and child.attr in methods
+                    and child.attr not in selected
+                ):
+                    selected.add(child.attr)
+                    pending.append(child.attr)
 
     # Imports, constants, top-level helpers, argument parsing, and the driver are shared.  Class
     # method bodies are the only portion split by stage.
     shared = [
         node
         for node in tree.body
-        if not (isinstance(node, ast.ClassDef) and node.name == "Bake")
+        if not (isinstance(node, ast.ClassDef) and node.name in wanted_classes)
     ]
-    stage_nodes = [methods[name] for name in selected if name in methods]
+    stage_nodes = [node for name in selected for node in methods.get(name, ())]
     ordered = sorted([*shared, *stage_nodes], key=lambda node: getattr(node, "lineno", 0))
     return _hash_parts([stage, *(_node_source(lines, node) for node in ordered)])
+
+
+def _bake_map_source_fingerprint(
+    path: Path,
+    stage: str,
+    cache: ContentDigestCache | None = None,
+) -> str:
+    return _bake_source_closure_fingerprint(
+        path,
+        stage,
+        ("Bake",),
+        set(_BASE_METHODS) | set(_STAGE_METHODS[stage]),
+        "bake-map",
+        cache,
+    )
+
+
+def _corpus_bake_source_fingerprint(
+    path: Path,
+    stage: str,
+    cache: ContentDigestCache | None = None,
+) -> str:
+    return _bake_source_closure_fingerprint(
+        path,
+        stage,
+        _CORPUS_CLASSES,
+        set(_CORPUS_BASE_METHODS) | set(_CORPUS_STAGE_METHODS[stage]),
+        "corpus-bake",
+        cache,
+    )
 
 
 def _python_symbols_fingerprint(
@@ -896,14 +970,15 @@ def corpus_stage_policy(
 ) -> str:
     """The authoring-code identity of one shared-corpus stage.
 
-    The corpus bake's methods are not AST-split per stage the way a map's are, so the policy is
-    the whole bake entrypoint plus the material libraries the stage authors through.
+    Split by the `self.method()` closure `bake_corpus` reaches for that stage across `Bake` and
+    `CorpusBake`, exactly as a map stage is: the corpus is one commandlet that authors every
+    texture, material and model in the install, so taking the whole entrypoint as the policy would
+    make an edit to a method no corpus stage calls invalidate every receipt it holds.
     """
 
     unreal_root = config.repo_root / "pipeline" / "unreal"
     package_root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
     paths = [
-        unreal_root / "bake_map.py",
         unreal_root / "bake_lib.py",
         # The corpus keys, record shape and baked asset names every stage authors through.
         package_root / "shared_corpus.py",
@@ -917,7 +992,15 @@ def corpus_stage_policy(
                 unreal_root / "mat_fog.py",
             )
         )
-    return fingerprint_content(paths, extra=("corpus-policy", stage), cache=cache)
+    return fingerprint_content(
+        paths,
+        extra=(
+            "corpus-policy",
+            stage,
+            _corpus_bake_source_fingerprint(unreal_root / "bake_map.py", stage, cache),
+        ),
+        cache=cache,
+    )
 
 
 def corpus_stage_input_fingerprint(

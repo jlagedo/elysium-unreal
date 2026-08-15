@@ -109,6 +109,11 @@ FOG_CPD_FLOATS = 6
 # material belong to the corpus scope, which runs `shared_corpus.STAGES` instead.
 ALL_STAGES = ("textures", "materials", "world", "sky", "particles", "level")
 
+# Static models per prop-stage checkpoint. The corpus builds thousands of meshes in one editor
+# process, so the stage saves, reports and releases each batch instead of holding the whole set
+# until the end -- a run that dies keeps every batch that landed.
+PROP_BATCH = 250
+
 # The shared, map-independent scope: every texture, material and static model in the install.
 # It is a scope name rather than a map name -- `$ELYSIUM_EXPORT_ROOT/shared` in,
 # `/ElysiumBaked/Shared` out -- and only the three stages a bodiless corpus has inputs for apply
@@ -286,6 +291,15 @@ class AssetTracker(object):
             "stages": self.stages,
         }
         bake_cache.write_asset_run_report(Path(OUT_ROOT), report)
+
+    def write_receipts(self):
+        """Persist the per-asset receipts of every stage that has flushed work.
+
+        `write_report` publishes what the orchestrator validates and promotes once the commandlet
+        exits. This writes that promoted document directly, so the work survives a kill of the
+        whole process tree -- the orchestrator no longer has to be alive for it to be kept.
+        """
+        return bake_cache.checkpoint_receipts(Path(OUT_ROOT), self.map, self.stages)
 
 
 class Bake(object):
@@ -1186,41 +1200,54 @@ class Bake(object):
         phys_meshes = 0
         phys_shapes = 0
         wanted = set()
-        for stem in sorted(self.prop_models.keys()):
-            model = self.prop_models[stem]
-            mats = self.prop_mats.get(stem, {})
-            if not model.groups:
-                continue
-            normals = bl.vertex_normals(model.positions, model.groups.values())
-            sections, names = self._sections(model, normals, [], model.groups, (0.0, 0.0, 0.0))
-            asset_path = "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem))
-            materials = []
-            for name in names:
-                mat = mats.get(name)
-                key = mat.material_key if mat else name
-                materials.append(self.materials.get((self.shared_mat_pkg, key)))
-            # A prop model whose materials are all opaque/masked can be Nanite; a mixed model
-            # cannot (Nanite is a whole-mesh setting), so it falls back wholesale. The test spans
-            # the alternate skin families too: a skin swaps whole material instances, so a family
-            # that brings in a translucent/additive surface would leave one on a Nanite mesh --
-            # and outside the editor no permutation can be compiled, which renders default grey.
-            skinned = set(names) | {rep for remap in self.prop_skins.get(stem, {}).values()
-                                    for rep in remap.values()}
-            nanite = all((mats[n].opaque if n in mats else True) for n in skinned)
-            phys = self.prop_phys.get(stem)
-            kept, lost, shapes = self._emit("props", asset_path, sections, names, materials,
-                                            nanite=nanite, phys=phys)
-            tris += kept
-            dropped += lost
-            built += 1 if kept else 0
-            if kept:
-                wanted.add(asset_path.rsplit("/", 1)[-1])
-            if phys:
-                phys_meshes += 1
-                phys_shapes += shapes
-                if shapes != len(phys["hulls"]):
-                    fail("%s: %d hulls in the sidecar but %d collision shapes"
-                         % (stem, len(phys["hulls"]), shapes))
+        stems = sorted(self.prop_models.keys())
+        for offset in range(0, len(stems), PROP_BATCH):
+            batch = stems[offset:offset + PROP_BATCH]
+            for stem in batch:
+                model = self.prop_models[stem]
+                mats = self.prop_mats.get(stem, {})
+                if not model.groups:
+                    continue
+                normals = bl.vertex_normals(model.positions, model.groups.values())
+                sections, names = self._sections(
+                    model, normals, [], model.groups, (0.0, 0.0, 0.0))
+                asset_path = "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem))
+                materials = []
+                for name in names:
+                    mat = mats.get(name)
+                    key = mat.material_key if mat else name
+                    materials.append(self.materials.get((self.shared_mat_pkg, key)))
+                # A prop model whose materials are all opaque/masked can be Nanite; a mixed model
+                # cannot (Nanite is a whole-mesh setting), so it falls back wholesale. The test
+                # spans the alternate skin families too: a skin swaps whole material instances, so
+                # a family that brings in a translucent/additive surface would leave one on a
+                # Nanite mesh -- and outside the editor no permutation can be compiled, which
+                # renders default grey.
+                skinned = set(names) | {rep for remap in self.prop_skins.get(stem, {}).values()
+                                        for rep in remap.values()}
+                nanite = all((mats[n].opaque if n in mats else True) for n in skinned)
+                phys = self.prop_phys.get(stem)
+                kept, lost, shapes = self._emit("props", asset_path, sections, names, materials,
+                                                nanite=nanite, phys=phys)
+                tris += kept
+                dropped += lost
+                built += 1 if kept else 0
+                if kept:
+                    wanted.add(asset_path.rsplit("/", 1)[-1])
+                if phys:
+                    phys_meshes += 1
+                    phys_shapes += shapes
+                    if shapes != len(phys["hulls"]):
+                        fail("%s: %d hulls in the sidecar but %d collision shapes"
+                             % (stem, len(phys["hulls"]), shapes))
+            # The batch's source geometry is spent once its meshes are built, so the collector can
+            # reclaim it. Textures and material instances stay resident: every later model binds
+            # them, and so do the skin set and the level stage.
+            for stem in batch:
+                del self.prop_models[stem]
+            if offset + PROP_BATCH < len(stems):
+                if self.checkpoint("props %d/%d" % (offset + len(batch), len(stems))):
+                    raise SystemExit("[bake] prop checkpoint could not save every mesh")
         pruned = bl.prune_package_prefix(self.shared_mesh_pkg, "SM_", wanted, self.prune_scope)
         self.tracker.pruned("props", pruned)
         log("props: %d meshes / %d tris / %d dropped / %d physics (%d convex shapes) / "
@@ -1823,7 +1850,30 @@ class Bake(object):
                 failed += 1
         log("saved %d assets, %d failed (%.1fs)" % (
             len(self.saved) - failed, failed, time.time() - start))
+        # The queue is what is still unwritten. Emptying it keeps a later flush from re-saving
+        # everything an earlier checkpoint already wrote.
+        self.saved = []
         return failed
+
+    def checkpoint(self, label):
+        """Save the queued packages, publish the run report and the receipts, reclaim memory.
+
+        Both documents are written AFTER the save, so every asset either one lists exists on disk.
+        That is what makes the report promotable -- `load_asset_run_reports` validates each
+        receipt's output file -- and what makes the receipts themselves a safe crash floor.
+        Returns the number of packages that could not be saved.
+        """
+        failed = self.flush()
+        if failed:
+            fail("checkpoint %s: %d asset(s) could not be saved, nothing recorded"
+                 % (label, failed))
+            return failed
+        self.tracker.write_report()
+        self.tracker.write_receipts()
+        _collect_garbage()
+        log("corpus checkpoint: %s -- report and receipts written, %s" % (label, "; ".join(
+            "%s %s" % (stage, self.tracker.summary(stage)) for stage in self.tracker.stages)))
+        return 0
 
 
 class CorpusBake(Bake):
@@ -1920,16 +1970,27 @@ class CorpusBake(Bake):
 
 
 def bake_corpus(stages, asset_plan, digest_cache):
-    """Bake the shared corpus in the current editor process."""
+    """Bake the shared corpus in the current editor process.
+
+    The corpus is thousands of packages in one process, so each stage -- and each batch of prop
+    meshes inside the props stage -- checkpoints when it completes: the queued packages are saved,
+    an interim run report is published, and the editor collects what the batch no longer holds. A
+    run that dies later still leaves a report the orchestrator can promote, so the next run reuses
+    the work that landed instead of building it a second time.
+    """
     tracker = AssetTracker(SC.SCOPE, asset_plan, digest_cache)
     bake = CorpusBake(tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
         return False
     if "textures" in stages:
         bake.stage_textures()
+        if bake.checkpoint("textures"):
+            return False
     bake.resolve_textures()
     if "materials" in stages:
         bake.stage_materials()
+        if bake.checkpoint("materials"):
+            return False
     bake.resolve_materials()
     if "props" in stages:
         bake.stage_props()

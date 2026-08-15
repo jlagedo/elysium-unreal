@@ -21,17 +21,32 @@ class Bake:
     def load_masters(self): return True
     def load_sources(self): return True
     def flush(self): return False
+    def checkpoint(self, label): return self.flush()
     def _texture_jobs(self): return []
-    def stage_textures(self): self._texture_jobs()
+    def _import_texture_jobs(self, jobs): return {}
+    def _material_sets(self): return ()
+    def _load_prop_sources(self): return {}
+    def _emit(self, stage): return 0
+    def stage_textures(self): self._import_texture_jobs(self._texture_jobs())
     def resolve_textures(self): self._texture_jobs()
     def stage_materials(self): self.resolve_textures()
-    def resolve_materials(self): pass
+    def resolve_materials(self): self._material_sets()
     def stage_world(self): self.resolve_materials()
     def stage_sky(self): self.resolve_materials()
-    def stage_props(self): self.resolve_materials()
+    def stage_props(self): self._emit("props")
     def stage_level(self): self.resolve_materials()
 
+class CorpusBake(Bake):
+    def load_sources(self): return self._load_prop_sources()
+    def _material_sets(self): return ()
+    def stage_textures(self): self._import_texture_jobs([])
+    def resolve_textures(self): pass
+    def resolve_materials(self): pass
+
 def bake_one():
+    return helper()
+
+def bake_corpus():
     return helper()
 """
 
@@ -477,6 +492,84 @@ class BakeCacheTests(unittest.TestCase):
                     third["maps"][shared_corpus.SCOPE]["policies"][stage],
                     first["maps"][shared_corpus.SCOPE]["policies"][stage],
                 )
+
+    def test_a_corpus_policy_ignores_a_method_no_corpus_stage_runs(self) -> None:
+        # `bake_map.py` is one entrypoint for every scope. A corpus stage's policy is the closure
+        # `bake_corpus` reaches for it, so an edit elsewhere in the file leaves its receipts
+        # current instead of forcing the whole install to bake again.
+        with tempfile.TemporaryDirectory() as temporary:
+            config, _, _, _, _ = self._workspace(temporary)
+            bake_map = config.repo_root / "pipeline" / "unreal" / "bake_map.py"
+
+            def policies() -> dict[str, str]:
+                return {
+                    stage: bake_cache.corpus_stage_policy(config, stage)
+                    for stage in shared_corpus.STAGES
+                }
+
+            initial = policies()
+            bake_map.write_text(
+                BAKE_MAP_SOURCE.replace(
+                    "def stage_world(self): self.resolve_materials()",
+                    "def stage_world(self): self.resolve_materials(); helper()"),
+                encoding="utf-8")
+            self.assertEqual(policies(), initial)
+
+            bake_map.write_text(
+                BAKE_MAP_SOURCE.replace(
+                    'def stage_props(self): self._emit("props")',
+                    'def stage_props(self): self._emit("props"); helper()'),
+                encoding="utf-8")
+            props_edit = policies()
+            self.assertEqual(props_edit["textures"], initial["textures"])
+            self.assertEqual(props_edit["materials"], initial["materials"])
+            self.assertNotEqual(props_edit["props"], initial["props"])
+
+            # A `CorpusBake` override is the body that actually runs, so editing one moves the
+            # stage that calls it and no other.
+            bake_map.write_text(
+                BAKE_MAP_SOURCE.replace(
+                    "def stage_textures(self): self._import_texture_jobs([])",
+                    "def stage_textures(self): self._import_texture_jobs([]); helper()"),
+                encoding="utf-8")
+            override_edit = policies()
+            self.assertNotEqual(override_edit["textures"], initial["textures"])
+            self.assertEqual(override_edit["materials"], initial["materials"])
+            self.assertEqual(override_edit["props"], initial["props"])
+
+    def test_checkpoint_receipts_state_only_the_stages_that_flushed_work(self) -> None:
+        # The bake writes these itself at every checkpoint, so saved packages survive a kill of
+        # the whole process tree rather than waiting on the orchestrator to promote a report.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scope = shared_corpus.SCOPE
+            bake_cache.AssetReceiptStore(root, scope).replace_stages({
+                "props": {"policy": "earlier", "assets": {"/P": {"fingerprint": "p"}}},
+            })
+            stages = {
+                "textures": {
+                    "policy": "tex", "assets": {"/T": {"fingerprint": "t"}},
+                    "built": 1, "reused": 0, "pruned": 0,
+                },
+                "materials": {
+                    "policy": "mat", "assets": {}, "built": 0, "reused": 0, "pruned": 0,
+                },
+                "props": {
+                    "policy": "prop", "assets": {}, "built": 0, "reused": 0, "pruned": 0,
+                },
+            }
+            bake_cache.checkpoint_receipts(root, scope, stages)
+            loaded = bake_cache.AssetReceiptStore(root, scope)
+            self.assertEqual(set(loaded.stage_assets("textures")), {"/T"})
+            # A stage that has registered nothing has not started: it states nothing rather than
+            # erasing what an earlier run left.
+            self.assertEqual(set(loaded.stage_assets("props")), {"/P"})
+
+            stages["props"]["assets"]["/P2"] = {"fingerprint": "p2"}
+            bake_cache.checkpoint_receipts(root, scope, stages)
+            reloaded = bake_cache.AssetReceiptStore(root, scope)
+            self.assertEqual(set(reloaded.stage_assets("props")), {"/P2"})
+            self.assertEqual(set(reloaded.stage_assets("textures")), {"/T"})
 
     def test_a_corpus_stage_reads_only_its_own_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
