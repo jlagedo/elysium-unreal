@@ -3068,6 +3068,15 @@ void AElysiumMapActor::ActivateRuntime()
 	PrimaryActorTick.bTickEvenWhenPaused = false;
 	GameplayTickFunction.bTickEvenWhenPaused = false;
 
+	// Everything this map places is standing by now — the adopted baked actors and the NPC bodies
+	// the entity world built — so this is the one point where the level's material bindings can be
+	// read whole. A body spawned after activation is not covered; the audit is a load-time listing,
+	// not a live watch.
+	if (Visuals)
+	{
+		Visuals->AuditMaterials(MapName);
+	}
+
 	UE_LOG(LogElysium, Log, TEXT("map runtime %s: Active after %.3fs at game time %.3f"),
 		*MapName, GetRuntimeWaitSeconds(), Now);
 	RuntimeReady.Broadcast(this);

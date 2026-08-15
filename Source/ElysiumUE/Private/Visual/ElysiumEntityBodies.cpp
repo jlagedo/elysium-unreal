@@ -1613,23 +1613,8 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticS
 		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model));
 	}
 
-	// Reuse the map-baked surface materials by slot name. The global placed-model bake deliberately
-	// carries only neutral material instances so it does not import the complete prop texture corpus
-	// a second time.
 	const FString MaterialStem = StaticStem.IsEmpty() ? Stem : StaticStem;
-	UStaticMesh* StaticMesh = ResolvePropMesh(MaterialStem);
-	if (StaticMesh)
-	{
-		for (const FStaticMaterial& StaticMaterial : StaticMesh->GetStaticMaterials())
-		{
-			const int32 Slot = Comp->GetMaterialIndex(StaticMaterial.MaterialSlotName);
-			if (Slot != INDEX_NONE && StaticMaterial.MaterialInterface)
-			{
-				Comp->SetMaterial(Slot, StaticMaterial.MaterialInterface);
-			}
-		}
-	}
-	else if (!StaticStem.IsEmpty())
+	if (!BindMapMaterials(Comp, MaterialStem) && !StaticStem.IsEmpty())
 	{
 		UE_LOG(LogElysiumBodies, Error,
 			TEXT("placed model '%s' has no map static mesh for its material slots"), *Stem);
@@ -1768,6 +1753,42 @@ int32 UElysiumEntityBodies::FinishAnimationPreload()
 	return Sequences.Num();
 }
 
+bool UElysiumEntityBodies::BindMapMaterials(USkeletalMeshComponent* Comp, const FString& StaticStem)
+{
+	if (!Comp || StaticStem.IsEmpty())
+	{
+		return false;
+	}
+	UStaticMesh* StaticMesh = ResolvePropMesh(StaticStem);
+	if (!StaticMesh)
+	{
+		return false;
+	}
+
+	TArray<FString> Unbound;
+	for (const FStaticMaterial& StaticMaterial : StaticMesh->GetStaticMaterials())
+	{
+		const int32 Slot = Comp->GetMaterialIndex(StaticMaterial.MaterialSlotName);
+		if (Slot == INDEX_NONE || StaticMaterial.MaterialInterface == nullptr)
+		{
+			Unbound.Add(StaticMaterial.MaterialSlotName.ToString());
+			continue;
+		}
+		Comp->SetMaterial(Slot, StaticMaterial.MaterialInterface);
+	}
+	// A slot the skeletal body does not carry, or a static twin slot the bake left empty, draws the
+	// engine default — reported once per stem rather than once per body and per skin change.
+	if (!Unbound.IsEmpty() && !ReportedUnboundMaterialStems.Contains(StaticStem))
+	{
+		ReportedUnboundMaterialStems.Add(StaticStem);
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("placed model '%s': %d of %d static material slot(s) bind nothing on the skeletal body [%s]"),
+			*StaticStem, Unbound.Num(), StaticMesh->GetStaticMaterials().Num(),
+			*FString::Join(Unbound, TEXT(", ")));
+	}
+	return true;
+}
+
 void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	const FString& Stem, int32 Family)
 {
@@ -1783,7 +1804,12 @@ void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 		PropSkins = LoadObject<UElysiumPropSkinSet>(
 			nullptr, *FElysiumContentPaths::BakedPropSkins());
 	}
+	// A skeletal prop's authored surfaces are overrides copied off its static twin, so clearing them
+	// drops the body onto the skeletal asset's own neutral materials. Re-bind that base first and let
+	// the family's repaints layer over it, which is also what restores skin 0 and any family this
+	// model does not carry.
 	Comp->EmptyOverrideMaterials();
+	BindMapMaterials(Comp, Stem);
 	const FElysiumSkinFamily* Row = PropSkins ? PropSkins->Find(FName(*Stem), Family) : nullptr;
 	if (!Row)
 	{

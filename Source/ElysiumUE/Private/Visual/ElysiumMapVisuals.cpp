@@ -14,19 +14,24 @@
 
 #include "CableComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
+#include "Components/MeshComponent.h"
+#include "Components/SkinnedMeshComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Light.h"
 #include "Engine/PostProcessVolume.h"
+#include "Engine/SkinnedAsset.h"
 #include "Engine/SkyLight.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/TextureCube.h"
 #include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "ProceduralMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumVisuals, Log, All);
@@ -535,6 +540,121 @@ void UElysiumMapVisuals::ApplyMaterialOverrides()
 			Mid->SetScalarParameterValue(ElysiumReflections::Params::EnvStrength,
 				BakedEnvStrength * EnvReflect);
 		}
+	}
+}
+
+void UElysiumMapVisuals::AuditMaterials(const FString& MapName) const
+{
+	const UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+
+	// The engine's own stand-in for "no material". A null slot is swapped for it at draw time with
+	// nothing logged, so the two spellings of the same bake defect have to be reported together —
+	// and an instance whose root material is the fallback is the same defect one level down.
+	const UMaterial* const Fallback = UMaterial::GetDefaultMaterial(MD_Surface);
+
+	// Keyed by the drawn asset: an unbound slot belongs to the mesh the bake wrote, not to the
+	// hundred components that place it. Slots are unioned across instances because a runtime
+	// SetMaterial override is per component, so two placements of one mesh can disagree.
+	struct FMeshAudit
+	{
+		int32 Instances = 0;
+		TMap<int32, FString> BadSlots;
+	};
+	TMap<FString, FMeshAudit> Meshes;
+	int32 ComponentsWalked = 0;
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		TInlineComponentArray<UMeshComponent*> Components(*It);
+		for (const UMeshComponent* Component : Components)
+		{
+			// A hidden component draws nothing, so its bindings are not a look defect: the walkable
+			// surface's displacement collider and a physics prop's invisible proxy both stand on
+			// material-less or neutral geometry by design.
+			if (Component == nullptr || !Component->IsVisible())
+			{
+				continue;
+			}
+
+			// A component drawing an asset is reported by that asset's path; one that builds its
+			// geometry at runtime (a brush, a rope) has no asset to name, so it stands for itself.
+			const UObject* Asset = nullptr;
+			if (const UStaticMeshComponent* StaticMesh = Cast<UStaticMeshComponent>(Component))
+			{
+				Asset = StaticMesh->GetStaticMesh();
+			}
+			else if (const USkinnedMeshComponent* Skinned = Cast<USkinnedMeshComponent>(Component))
+			{
+				Asset = Skinned->GetSkinnedAsset();
+			}
+			const FString Key = Asset ? Asset->GetPathName() : Component->GetPathName();
+
+			++ComponentsWalked;
+			FMeshAudit& Audit = Meshes.FindOrAdd(Key);
+			++Audit.Instances;
+
+			const TArray<FName> SlotNames = Component->GetMaterialSlotNames();
+			const int32 SlotCount = Component->GetNumMaterials();
+			for (int32 Slot = 0; Slot < SlotCount; ++Slot)
+			{
+				const UMaterialInterface* Bound = Component->GetMaterial(Slot);
+				const bool bDefaultBound = Bound != nullptr
+					&& (Bound == Fallback || Bound->GetMaterial_Concurrent() == Fallback);
+				if (Bound != nullptr && !bDefaultBound)
+				{
+					continue;
+				}
+				const FName SlotName = SlotNames.IsValidIndex(Slot) ? SlotNames[Slot] : NAME_None;
+				Audit.BadSlots.Add(Slot, FString::Printf(TEXT("%d:%s=%s"), Slot,
+					SlotName.IsNone() ? TEXT("<unnamed>") : *SlotName.ToString(),
+					bDefaultBound ? TEXT("default") : TEXT("null")));
+			}
+		}
+	}
+
+	// Sorted so two runs over the same map produce the same list to diff.
+	TArray<FString> Offenders;
+	for (const TPair<FString, FMeshAudit>& Pair : Meshes)
+	{
+		if (Pair.Value.BadSlots.Num() > 0)
+		{
+			Offenders.Add(Pair.Key);
+		}
+	}
+	Offenders.Sort();
+
+	for (const FString& Key : Offenders)
+	{
+		const FMeshAudit& Audit = Meshes[Key];
+		TArray<int32> Slots;
+		Audit.BadSlots.GetKeys(Slots);
+		Slots.Sort();
+		TArray<FString> Labels;
+		Labels.Reserve(Slots.Num());
+		for (const int32 Slot : Slots)
+		{
+			Labels.Add(Audit.BadSlots[Slot]);
+		}
+		UE_LOG(LogElysiumVisuals, Warning,
+			TEXT("material audit %s: '%s' has %d unbound slot(s) [%s] across %d placed instance(s)"),
+			*MapName, *Key, Labels.Num(), *FString::Join(Labels, TEXT(", ")), Audit.Instances);
+	}
+
+	// Always stated, so a clean map says the audit ran rather than saying nothing at all.
+	const FString Summary = FString::Printf(
+		TEXT("material audit %s: %d mesh assets audited over %d components, %d with unbound or default-bound slots"),
+		*MapName, Meshes.Num(), ComponentsWalked, Offenders.Num());
+	if (Offenders.Num() > 0)
+	{
+		UE_LOG(LogElysiumVisuals, Warning, TEXT("%s"), *Summary);
+	}
+	else
+	{
+		UE_LOG(LogElysiumVisuals, Log, TEXT("%s"), *Summary);
 	}
 }
 

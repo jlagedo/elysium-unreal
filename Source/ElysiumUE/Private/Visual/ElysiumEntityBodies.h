@@ -302,6 +302,12 @@ private:
 	USkeletalMeshComponent* BuildAnimatedPropVisualWithStaticStem(const FString& Stem,
 		const FString& StaticStem, const FVector& Location, const FQuat& Rotation,
 		float UniformScale, int32 PlacementToken);
+	// Bind a skeletal prop body's slots to the surfaces baked onto its static twin SM_<StaticStem>,
+	// matched by slot name. The placed-model bake carries neutral materials on the skeletal asset so
+	// it does not import the prop texture corpus a second time, so this is where a skeletal prop's
+	// look comes from — at build and again whenever the override array is cleared. False when the
+	// static twin does not resolve; the caller owns what an absent twin means.
+	bool BindMapMaterials(USkeletalMeshComponent* Comp, const FString& StaticStem);
 	// The manifest record for a prop stem, or null. Shared by the two query members above.
 	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
 
@@ -423,6 +429,10 @@ private:
 	// re-hit LoadObject per prop).
 	UPROPERTY() TObjectPtr<UElysiumPropSkinSet> PropSkins;
 	bool bPropSkinsLoaded = false;
+	// Stems whose slot-name bind has already been reported incomplete. A skin change rebinds the
+	// base materials every time it lands, so without this a doorknob toggling its lock state would
+	// restate one bake defect on every toggle.
+	TSet<FString> ReportedUnboundMaterialStems;
 };
 
 // Skeleton-bound animation cache keys. Kept outside the UObject so the invariant is testable

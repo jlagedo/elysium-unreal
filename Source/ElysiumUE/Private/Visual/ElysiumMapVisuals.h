@@ -63,6 +63,13 @@ public:
 	// they cannot see the sky, instead of receiving a constant fill through solid walls.
 	void ApplyEnvironment(const FString& MapName);
 
+	// Run at map activation, once everything the map places is standing: walk every mesh component
+	// in the level and report the mesh assets carrying a slot bound to nothing or to the engine's
+	// WorldGridMaterial fallback. Unreal substitutes that fallback without a word, so a bake that
+	// wrote no material renders as grey checker with nothing in the log to say so. Diagnostic
+	// only — the offenders are warnings and the map goes on loading.
+	void AuditMaterials(const FString& MapName) const;
+
 	// --- The live knobs (each is also a cvar callback, so each is idempotent) ----------------
 	// Stand a UMaterialInstanceDynamic in front of every unique baked material on the world, sky
 	// and prop components, so the look-tuning cvars can reach them (a baked MaterialInstanceConstant
