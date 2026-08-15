@@ -128,6 +128,61 @@ struct FElysiumCameraWeights
 };
 
 // --------------------------------------------------------------------------------------------
+// The draw policy
+// --------------------------------------------------------------------------------------------
+
+// Which crosshair path the frame is on (`docs/vtmb/camera-view-modes.md` §5, `0x1009b9e0`). The mode
+// toggle does not hide the HUD; it selects the other path.
+enum class EElysiumReticlePath : uint8
+{
+	FirstPerson,   // the full use-icon / arrow cursor path
+	ThirdPerson,   // the plain reticle at the crosshair rect
+};
+
+// A **named** `SetCamera` shot's presentation keys. `ShowHud` and `DrawViewmodel` are keys on
+// `vdata/camerashots/` files and on nothing else: a value shot — a Worldcraft `camera_track`, a VCD
+// edit, a dialogue-grammar shot — authors no such key and leaves `bNamed` false. That single flag is
+// why a track cannot hide the HUD (`docs/vtmb/camera-view-modes.md` §5, "the ordinary mode toggle
+// does not hide the rest of the HUD").
+struct FElysiumShotPresentation
+{
+	bool bNamed = false;
+	bool bShowHud = false;         // parses default 0, but only on a named shot
+	bool bDrawViewmodel = false;   // same
+};
+
+// One resolve of the switch-frame table (`docs/vtmb/camera-view-modes.md` §5, the render hand-off).
+//
+// **Eligibility and opacity are two numbers.** Retail's draw policy reads `CAM_IsThirdPerson`, a hard
+// boolean, while the `CInput+0x104` alpha ramp is a separate near-camera *third-person* fade. Deriving
+// the hide from the alpha cannot express the entry frame, where the body is draw-eligible **and**
+// fully transparent because the boom has not left the eye yet.
+struct FElysiumCameraDrawPolicy
+{
+	// `CAM_IsThirdPerson`, the six-term disjunction. Every gate below is this or its inverse.
+	bool bThirdPerson = false;
+
+	// The full local player model. Submitted whenever the predicate holds; `BodyAlpha` decides how
+	// much of it is seen, and 0 is a legal eligible value.
+	bool bBodyEligible = false;
+	float BodyAlpha = 0.0f;
+
+	// The carried world weapon and owned attachments. **Boolean in both directions** — no attachment
+	// alpha consumer is recovered, so this never fades.
+	bool bWorldWeaponEligible = false;
+
+	// The first-person hands and weapon viewmodels. Suppression is **submission-only**: the consumer
+	// never destroys a component, clears a model, or resets a sequence or cycle, so the frame the
+	// weight reaches exactly 0 resumes the existing visual state rather than rebuilding it.
+	bool bViewmodelEligible = false;
+
+	EElysiumReticlePath Reticle = EElysiumReticlePath::FirstPerson;
+
+	// Named-shot policy only. An ordinary mode toggle and a `camera_track` both leave this true.
+	bool bShowHud = true;
+};
+
+// --------------------------------------------------------------------------------------------
 // The scripted-shot channel
 // --------------------------------------------------------------------------------------------
 
@@ -165,6 +220,10 @@ struct FElysiumCameraShot
 	// the value; it is never persistent shot state. Zero-time camera_track edits set this so Unreal
 	// does not smear the previous view across an authored hard cut.
 	bool bCameraCut = false;
+
+	// The shot's own HUD/viewmodel keys, and whether it is a named `vdata/camerashots/` shot at all.
+	// Only the named channel authors these; every value producer leaves the default.
+	FElysiumShotPresentation Presentation;
 
 	// The name it was pushed under, for the debug read-out.
 	FString DebugName;
@@ -267,20 +326,11 @@ struct FElysiumCameraCvars
 	float SpringLength = 0.1f * ElysiumCam::U;    // cdamp_springlength
 	float DampMaxDist = 50.0f * ElysiumCam::U;    // cdamp_maxdist
 
-	// How fast the orbit/dolly button pairs move their targets. No ConVar holds these — `CAM_Think`
-	// polls the `kbutton_t`s and steps the values directly (`0x100fc170`), and the step is not
-	// recovered; the patch's own aliases move `cam_yaw` in 15 degree bites, which is what these match.
-	float OrbitSpeed = 90.0f;                     // deg/s
-	float DollySpeed = 100.0f * ElysiumCam::U;    // cm/s
-
-	// How fast the solved distance/yaw/pitch chase their targets (`0x100fc000`'s speed argument, not
-	// recovered as a ConVar). Fast enough to read as immediate, slow enough that the damper has
-	// something to do.
-	float ApproachDistSpeed = 400.0f * ElysiumCam::U;
-	float ApproachAngleSpeed = 360.0f;
-
-	// The extra pull-in on wall contact (`docs/vtmb/camera-view-modes.md` §4).
-	float WallPullIn = 7.0f * ElysiumCam::U;
+	// The orbit/dolly step rates and the wall pull-in are **not here**. No ConVar holds any of them —
+	// `CAM_Think` polls the `kbutton_t`s and steps the values directly (`0x100fc170`), and retail
+	// keeps the pull-in as a code constant — so they are the project's and live on
+	// `ElysiumRig::FElysiumCameraRigTuning`. Carrying them in a struct named for the retail cvar
+	// surface would imply a name a user could type, and there is none.
 
 	// Ordinary feed (`client.dll` 0x100fe7f0). Distances are converted to centimetres here; angles
 	// retain Source's down-positive convention until the solve emits an Unreal rotator.
@@ -304,10 +354,53 @@ struct FElysiumCameraCvars
 
 namespace ElysiumCam
 {
-	// The player-body visibility consumer shared by both movement pawns. True first person is zero;
-	// the near-camera third-person band and a scripted shot each provide a dithered visibility ramp.
+	// The player-body fade band alone (`CInput+0x104`). True first person is zero, because the band
+	// reads the third-person boom and that boom is scaled to nothing while the weight is zero.
 	float SolveModelAlpha(const FVector& SolvedOffset, const FElysiumCameraWeights& Weights,
 		const FElysiumCameraCvars& Cvars);
+
+	// --- Weapon-class arbitration (`docs/vtmb/camera-view-modes.md` §2) -------------------------
+	// The authored `camera_class` bits, from the inlined case-**sensitive** `memcmp` ladder in the
+	// item-record vdata parser (`client.dll` 0x101a5394-0x101a5438, byte-identical in `vampire.dll`).
+	namespace CameraClass
+	{
+		inline constexpr int32 None = 0;
+		inline constexpr int32 Ranged = 0x02;      // 18 shipped items; settable under `camera_prefs`
+		inline constexpr int32 Thrown = 0x04;      // 4 shipped items; settable
+		inline constexpr int32 ForceFirst = 0x08;  // `force_1st` — the lockpick and 3 dev items
+		inline constexpr int32 ForceThird = 0x10;  // `melee`, and `force_3rd` under a second spelling
+	}
+
+	// Parse one authored literal. **`noswitch` is not a recognized literal**: it reaches 0 through the
+	// same fall-through as a typo or a missing key, so a mis-cased `Ranged` silently reads 0. That is
+	// authored-vocabulary convention rather than a checked enum, and it is reproduced, not repaired.
+	// Bit `0x01` is dead — no ladder arm produces it and no item carries it, which is why the shipped
+	// `camera_prefs 7` and the default `6` differ only in a bit nothing can match.
+	int32 ParseCameraClass(const FString& Literal);
+
+	// What equipping a weapon of this class asks the camera to do.
+	enum class EWeaponCameraAction : uint8
+	{
+		None,            // class 0, or `camera_weaponswitch 0` — the early-out
+		ToFirstPerson,
+		ToThirdPerson,
+		ForceThirdOn,    // `melee`: not a preference, a hold the player cannot toggle out of
+	};
+
+	// `ApplyWeaponCameraPref` (`0x1009c250`), verbatim.
+	EWeaponCameraAction ApplyWeaponCameraPref(int32 Class, int32 Prefs, bool bWeaponSwitch);
+
+	// `SaveWeaponCameraPref` (`0x1009c2e0`), verbatim. **A set bit means first person.** Classes
+	// `0x08`, `0x10` and 0 are not user-settable and return `Prefs` unchanged, which is what makes
+	// the preference sticky per class rather than global.
+	int32 SaveWeaponCameraPref(int32 Class, int32 Prefs, bool bThirdPerson);
+
+	// **The one resolve of the switch-frame table.** Every draw decision in the frame comes from here
+	// and from nowhere else, so the body, the world weapon, the viewmodel seam and the reticle cannot
+	// drift apart. Pure: no pawn, no world, no RHI, asserted in `Elysium.Substrate.CameraDraw`.
+	FElysiumCameraDrawPolicy SolveDrawPolicy(const FElysiumCameraWeights& Weights,
+		const FVector& SolvedOffset, const FElysiumCameraCvars& Cvars,
+		const FElysiumShotPresentation& Shot);
 
 	// `T` is scaled seconds since the first feed frame and EntryYaw is the rendered yaw captured on
 	// that frame. There is deliberately no collision query and no live look input in this solve.

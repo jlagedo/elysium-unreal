@@ -8,6 +8,7 @@
 
 #include "ElysiumCameraComponent.generated.h"
 
+class UElysiumUserSettings;
 class UTexture2D;
 
 // The player camera (roadmap 11.7). Design + the recovered solve: `docs/vtmb/camera-view-modes.md`;
@@ -23,9 +24,10 @@ class UTexture2D;
 //
 // Three things it deliberately does not do:
 //
-//   * **it does not tick.** `UpdateCamera` runs from `CalcCamera`, once per frame (guarded on the
-//     frame counter), which is where VtMB runs `CAM_Think` too. A component tick would solve the
-//     boom before the pawn has moved and leave the camera a frame behind;
+//   * **it does not tick.** `AdvanceFrame` and `FinalizeFrame` run from the camera update, once per
+//     frame each (guarded on the frame counter), which is where VtMB runs `CAM_Think` too. A
+//     component tick would solve the boom before the pawn has moved and leave the camera a frame
+//     behind;
 //   * **it does not poll a key.** The orbit and dolly pairs arrive as latches in the frame's
 //     `FElysiumUserCmd` (S5), like everything else;
 //   * **it does not know what an entity is.** A scripted shot is pushed as *values* and whoever
@@ -58,11 +60,28 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
-	// --- The apply point --------------------------------------------------------------------
-	// Advance the weights and re-solve the boom for this frame. Idempotent within a frame, so a
-	// second `CalcCamera` (a spectator, a scene capture) reads the same view rather than blending
-	// twice as fast.
-	void UpdateCamera(float DeltaSeconds);
+	// --- The frame, in two phases -------------------------------------------------------------
+	// The frame splits where the boom lands, because the two halves have opposite dependencies: the
+	// weights decide *whether* there is a boom, and the fade band reads *how long* it turned out to
+	// be. Running them as one call is what made the body's alpha trail the boom by a frame.
+	//
+	// Phase one — everything that depends only on time and intent: the cvar read, `cam_command`, the
+	// feed entry latch, the shot stack, the four weights, the shot chase. It runs BEFORE the rig
+	// solves, because the rig reads the weights it advances.
+	void AdvanceFrame(float DeltaSeconds);
+
+	// Phase two — everything that depends on THIS frame's boom: the fade band. It runs AFTER
+	// `SetSolvedBoom`, which is the whole point of the split.
+	//
+	// Guarded to once per frame, and **the guard belongs to the camera manager**: it is the only
+	// caller that runs the rig first, so it is the only one entitled to declare the frame finalized.
+	void FinalizeFrame();
+
+	// The same phase, without taking the once-per-frame guard. For a door that may be reached before
+	// the manager has solved the boom — a scene capture, a spectator, a bare `CalcCamera` — where
+	// consuming the guard would silence the manager's own call and leave the draw policy a frame
+	// behind the boom recorded beside it.
+	void FinalizeFrameUnguarded();
 
 	// `CAM_ApplyToView` (`0x100ffb00`): the boom offset and the angle lerp, then the scripted shot on
 	// top. The composed whole, for the fallback path — the production path applies the two halves at
@@ -81,19 +100,18 @@ public:
 	// What the scripted layer reads, as values.
 	FElysiumScriptedShotView ScriptedShotView() const;
 
-	// What the pawn's `CalcCamera` override calls: `GetCameraView` first, then `UpdateCamera` +
-	// `ApplyToView` + the cut. The manager does not go through this — it needs the halves apart —
-	// so this is the fallback a spectator, a scene capture and `UGameplayStatics` reach.
+	// What the pawn's `CalcCamera` override calls: the whole frame end to end, for a caller with no
+	// rig of its own to run between the phases. The manager does not go through this — it has to put
+	// the boom solve between `SolveFrameFor` and `FinalizeFrame` — so this is the fallback a
+	// spectator, a scene capture and `UGameplayStatics` reach, and it composes the last solved boom.
 	static bool CalcCameraFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
 
-	// The same, stopping at the base: `SolveFrameFor` then `ApplyBaseToView`. The scripted layer and
-	// the temporal cut are the modifier's, because both have to happen after the base request has
-	// been chosen and applied.
-	static bool CalcCameraBaseFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
-
-	// `GetCameraView` and the faithful solve, applying nothing. The manager needs the solve and the
-	// apply apart, because both rigs evaluate every frame and only one of them supplies the base.
+	// `GetCameraView` and phase one, applying nothing. The manager needs the two phases apart,
+	// because the rig it runs between them is what phase two reads.
 	static bool SolveFrameFor(UElysiumCameraComponent* Camera, float DeltaSeconds, FMinimalViewInfo& Out);
+
+	// Phase two, as a null-safe door matching `SolveFrameFor`.
+	static void FinalizeFrameFor(UElysiumCameraComponent* Camera);
 
 	// The frame's user command, for whoever solves the boom.
 	const FElysiumUserCmd& GetUserCmd() const { return PendingCmd; }
@@ -122,7 +140,15 @@ public:
 	// the latch, clear `cam_command`. Neither runs the weapon arbitration or the holster check; only
 	// `togglecamera` does (4.9 owns that half, since it needs weapons).
 	void SetThirdPerson(bool bThird);
+	// `CAM_ToggleCamera` (`0x100ff800`) in full: the latch flip, the per-class preference write, the
+	// weapon arbitration and the forced-third holster branch.
 	void ToggleCamera();
+
+	// The equipped item's `camera_class` bits, pushed whenever the active weapon changes. Arbitration
+	// re-runs on the change, which is how drawing a melee weapon forces third person and drawing the
+	// lockpick forces first.
+	void SetEquippedCameraClass(int32 CameraClass);
+	int32 GetEquippedCameraClass() const { return EquippedCameraClass; }
 	bool IsThirdPerson() const { return Weights.IsThirdPerson(); }
 	float ThirdPersonWeight() const { return Weights.Third; }
 	const FElysiumCameraWeights& GetWeights() const { return Weights; }
@@ -145,6 +171,17 @@ public:
 		return bWas;
 	}
 
+	// `snapto` / `cam_restore`: hand every hand-orbited axis back to its cvar. Latched here and
+	// consumed by whoever owns the orbit state, for the same reason the re-seed is — the verbs live
+	// on this component and the rig state lives on the manager.
+	void RequestOrbitRestore() { bOrbitRestoreRequested = true; }
+	bool ConsumeOrbitRestoreRequest()
+	{
+		const bool bWas = bOrbitRestoreRequested;
+		bOrbitRestoreRequested = false;
+		return bWas;
+	}
+
 	// --- The scripted-shot channel ----------------------------------------------------------
 	// `SetCamera`, `camera_keyframe`, the conversation camera and the feed camera all arrive here.
 	// Returns the shot's id (never reused, 0 on failure); `PopShot` gives control back.
@@ -164,9 +201,16 @@ public:
 	const FVector& SolvedBoomOffset() const { return SolvedOffset; }
 	const FRotator& SolvedBoomAngles() const { return SolvedAngles; }
 	bool IsBoomClipped() const { return bClipped; }
-	// The player-model alpha the fade band produces (`CInput+0x104`). Nothing reads it until a player
-	// mesh exists (8.11); it is solved now so the band is one number rather than a later guess.
-	float ModelAlpha() const { return PlayerModelAlpha; }
+	// **The frame's resolved draw policy** — the one answer every draw decision reads. Solved in
+	// `FinalizeFrame`, so it describes this frame's boom.
+	const FElysiumCameraDrawPolicy& GetDrawPolicy() const { return DrawPolicy; }
+
+	// The deciding shot's HUD/viewmodel keys, or the default when nothing is on the stack. Only a
+	// named `vdata/camerashots/` shot carries them.
+	FElysiumShotPresentation ShotPresentation() const;
+
+	// The player-model alpha the fade band produces (`CInput+0x104`), for the read-outs.
+	float ModelAlpha() const { return DrawPolicy.BodyAlpha; }
 	const FElysiumCameraCvars& GetCvars() const { return Cvars; }
 	FString Describe() const;
 
@@ -185,8 +229,18 @@ private:
 	// file's `MoveSpeed` / `MaxTurnRate` once it is tracking.
 	void SolveShot(float Dt);
 
-	// The player-model fade ramp (`CAM_Think` tail).
-	void SolveModelAlpha();
+	// The switch-frame table and the player-model fade ramp (`CAM_Think` tail), resolved together.
+	void SolveDrawPolicy();
+
+	// Run `ApplyWeaponCameraPref` against the equipped class and the live `camera_prefs`.
+	void ApplyEquippedCameraPref();
+	// Write `camera_prefs` to the console store and mirror it into the durable user settings.
+	void WriteCameraPrefs(int32 Prefs);
+	// The other half: push the archived `camera_prefs` / `camera_weaponswitch` back into the console
+	// store at BeginPlay, once the player has toggled at least once in this build.
+	void RestoreCameraPrefs();
+	// The settings object both halves go through, or null with a warning — never a silent skip.
+	static UElysiumUserSettings* CameraSettings();
 	void EnsureFeedVisionMask();
 
 	// The eye the boom hangs off: this component's world location, which is where the first-person
@@ -208,6 +262,7 @@ private:
 	FRotator SolvedAngles = FRotator::ZeroRotator;
 	bool bClipped = false;
 	bool bReseedRequested = true;
+	bool bOrbitRestoreRequested = false;
 
 	// Where the scripted channel's view has reached, so `MoveSpeed` / `MaxTurnRate` rate-limit the
 	// shot's own chase of its target rather than teleporting to it each frame.
@@ -219,7 +274,11 @@ private:
 	// Set by the shot mutation phase; cleared only when CalcCamera publishes the cut to Unreal.
 	bool bTemporalCameraCutPending = false;
 
-	float PlayerModelAlpha = 0.0f;
+	FElysiumCameraDrawPolicy DrawPolicy;
+
+	// The equipped item's authored `camera_class`. 0 covers `noswitch`, an unrecognized literal, an
+	// absent key and an empty hand alike — retail's early-out is the same for all four.
+	int32 EquippedCameraClass = 0;
 
 	// Ordinary-feed entry state. The yaw is captured exactly once on the first requested frame and
 	// the elapsed clock continues through the one-second blend-out, matching the native solver.
@@ -230,10 +289,17 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> FeedVisionMask = nullptr;
 
-	// The frame this was last solved on, so `CalcCamera` can be called more than once without
-	// double-advancing the blend. Seeded to a frame that cannot be the current one, so the very first
-	// solve is not the one the guard eats.
-	uint64 LastSolvedFrame = TNumericLimits<uint64>::Max();
+	// The frames the two phases last ran on, so each can be called more than once without
+	// double-advancing the blend or re-evaluating the band. They are separate counters because the
+	// phases are separate calls and a caller may legitimately reach one without the other — the
+	// fallback door runs both, the manager runs them around its rig solve.
+	//
+	// Both are seeded to a frame that cannot be the current one, so the very first call is not the
+	// one the guard eats. `ApplyCameraModifiers` runs once per *view target* rather than once per
+	// frame, so a view-target blend re-enters this whole path twice at the same delta; these two
+	// guards are what make that second pass read the frame's answer instead of computing a new one.
+	uint64 LastAdvancedFrame = TNumericLimits<uint64>::Max();
+	uint64 LastFinalizedFrame = TNumericLimits<uint64>::Max();
 
 	TArray<FElysiumCommandBinding> Bindings;
 };

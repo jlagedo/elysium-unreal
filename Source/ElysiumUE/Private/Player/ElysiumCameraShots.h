@@ -84,8 +84,12 @@ struct FElysiumShotConstraints
 	bool bAutoPositionFromTarget = false;              // frame the target points top-to-bottom
 	bool bSyncRotateOnMove = false;
 	bool bSnapOnShotChange = false;
-	bool bShowHud = true;
-	bool bDrawViewmodel = true;
+	// Both parse with a default of **0** (`docs/vtmb/camera-view-modes.md` §5): an absent field asks
+	// the shot to hide that surface. The corpus opts back in explicitly for interaction shots —
+	// `special-case.txt` sets `ShowHud 1` for Hacking and both fields for Intrusion — while story
+	// cinematics leave them out and are hidden.
+	bool bShowHud = false;
+	bool bDrawViewmodel = false;
 };
 
 // One parsed shot.

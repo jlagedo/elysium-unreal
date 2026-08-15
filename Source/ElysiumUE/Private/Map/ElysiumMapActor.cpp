@@ -1179,9 +1179,13 @@ USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
 		Visual->AddTickPrerequisiteComponent(Move);
 	}
 
+	// Built hidden, and shown by the first draw policy the camera publishes. The alternative — show
+	// it here and let the camera put it away a frame later — is a one-frame flash of the bind pose
+	// every time a body is built or a model swapped.
+	Visual->SetVisibility(true);
+	Visual->SetComponentTickEnabled(true);
+	Visual->SetHiddenInGame(true);
 	Body->SetPlayerVisual(Visual);
-	Visual->SetVisibility(!bPlayerVisualSuppressed);
-	Visual->SetComponentTickEnabled(!bPlayerVisualSuppressed);
 	// The stem the animation driver resolves its catalog from. Kept here rather than re-derived from
 	// the entity record each frame, because this is the one place that knows which model was built.
 	PlayerVisualStem = Stem;
@@ -1309,15 +1313,14 @@ void AElysiumMapActor::ClearPlayerVisual()
 	}
 }
 
-void AElysiumMapActor::SetPlayerVisualSuppressed(bool bSuppressed)
+void AElysiumMapActor::SetPlayerBodyEntityHidden(bool bInHidden)
 {
-	bPlayerVisualSuppressed = bSuppressed;
 	APawn* Pawn = ResolvePlayerPawn();
-	IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
-	if (USkeletalMeshComponent* Visual = Body ? Body->GetPlayerVisual() : nullptr)
+	if (IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr)
 	{
-		Visual->SetVisibility(!bSuppressed);
-		Visual->SetComponentTickEnabled(!bSuppressed);
+		// Forwarded, not applied. The pawn holds both gates and is the only writer of the flags, so a
+		// dormancy change and a mode switch cannot land on the component in either order and disagree.
+		Body->SetBodyEntityHidden(bInHidden);
 	}
 }
 
@@ -2066,6 +2069,14 @@ bool AElysiumMapActor::UpdateCameraShotValue(int32 ShotId, const FElysiumCameraS
 bool AElysiumMapActor::PopCameraShot(int32 ShotId, float BlendOutSeconds)
 {
 	return CameraDirector ? CameraDirector->Pop(PlayerCamera(), ShotId, BlendOutSeconds) : false;
+}
+
+void AElysiumMapActor::SetEquippedCameraClass(int32 CameraClass)
+{
+	if (UElysiumCameraComponent* Camera = PlayerCamera())
+	{
+		Camera->SetEquippedCameraClass(CameraClass);
+	}
 }
 
 FElysiumVoiceHandle AElysiumMapActor::Submit(FElysiumAudioRequest Request)

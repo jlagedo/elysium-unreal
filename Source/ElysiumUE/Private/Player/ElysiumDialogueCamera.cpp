@@ -95,7 +95,6 @@ FElysiumCameraRequest ElysiumDialogueCamera::BuildRequest(
 	Request.Control = EElysiumCameraControlPolicy::Preserve;
 	Request.bShowHud = true;
 	Request.bDrawViewmodel = false;
-	Request.bShowPlayerBody = true;
 	Request.bRequireSubtitleSafe = true;
 	Request.bAllowCloseUp = Profile.bAllowCloseUp;
 	Request.SpeakerAnchor = { Context.SpeakerEye, TEXT("speaker-eye"), NAME_None, true };

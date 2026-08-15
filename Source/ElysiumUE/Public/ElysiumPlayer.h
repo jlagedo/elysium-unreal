@@ -485,7 +485,10 @@ protected:
 	bool CommitDisposition(const FString& NewDisposition, int32 NewLevel, bool& bOutChanged,
 		FElysiumDisposition* OutOld = nullptr, FElysiumDisposition* OutNew = nullptr);
 	void RefreshDispositionExpression();
-	void GateVisual();
+	// Apply this entity's own draw gate to its body. Virtual because the player's surface is owned by
+	// the pawn, not by this entity: the player override publishes the gate through the embodiment and
+	// lets the pawn AND it with the camera's eligibility, so the two never race on one flag.
+	virtual void GateVisual();
 
 private:
 	bool bDispositionTalking = false;
@@ -514,6 +517,12 @@ public:
 	// The 224 item-entity handles, the active weapon and the reserve ammo pools (9.8). On this node
 	// because VtMB puts them here: the player, every NPC and every `item_container` own one.
 	FElysiumInventory Inventory;
+
+	// Push the equipped item's authored `camera_class` at the camera, so drawing a weapon re-runs the
+	// arbitration that can force the view mode. **Every writer of `Inventory.ActiveWeapon` calls
+	// this**, including the save reconcile — miss that one and a loaded game arbitrates against the
+	// class of whatever the last run was holding. A no-op for anything that is not the player.
+	void PublishEquippedCameraClass() const;
 
 	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
 
@@ -870,6 +879,10 @@ public:
 	// SetModel swaps the skeletal surface attached to the movement pawn. The pawn/hull itself stays
 	// put; the same component remains the FElysiumAnimating visual used by choreo clip playback.
 	virtual void OnRuntimeModelChanged() override;
+
+	// The player's surface has exactly one writer — the pawn, from the camera's draw policy. This
+	// entity contributes only its own hide state and never touches the component's flags directly.
+	virtual void GateVisual() override;
 
 	// The run ends: fire OnDeath, then tell the session (which raises the game-over screen).
 	virtual void OnKilled() override;

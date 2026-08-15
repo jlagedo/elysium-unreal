@@ -344,6 +344,21 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 					? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 			})
 		]
+		// The third-person path: the plain white reticle at the crosshair rect. Retail switches to it
+		// on the first frame of the mode change and runs no use-icon or arrow cursor there
+		// (`docs/vtmb/camera-view-modes.md` §5, `0x1009b9e0`), so this slot carries no ring, no atlas
+		// cell and no prompt — it is deliberately the whole of the third-person crosshair.
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			SNew(STextBlock).Text(FText::FromString(TEXT("+")))
+			.Font(HUDFont(EElysiumFontRole::Data, EElysiumFontWeight::Regular, 18, 2))
+			.ColorAndOpacity(FLinearColor::White)
+			.Visibility_Lambda([M]()
+			{
+				return M && M->Reticle == EElysiumHUDReticle::ThirdPerson
+					? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+		]
 		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
 		[
 			SNew(SBox).WidthOverride(48).HeightOverride(48)

@@ -70,6 +70,44 @@ const FElysiumItemDef* FElysiumItem::Data() const
 	return ElysiumItems::Find(ClassName());
 }
 
+void FElysiumCombatCharacter::PublishEquippedCameraClass() const
+{
+	// **Player only.** An NPC drawing a katana does not force the player's camera to third person;
+	// the arbitration is a property of the local player's equipped item and of nothing else.
+	if (!World || !(World->PlayerHandle() == Handle))
+	{
+		return;
+	}
+	IElysiumEmbodiment* Embodiment = World->Embodiment();
+	if (!Embodiment)
+	{
+		return;   // a headless logic world has no camera to arbitrate
+	}
+
+	// An empty hand, an item whose record the rulebook has not loaded, and an authored `noswitch` all
+	// resolve to 0, which is retail's own early-out in `ApplyWeaponCameraPref`.
+	int32 CameraClass = ElysiumCam::CameraClass::None;
+	if (FElysiumEntity* Ent = const_cast<FElysiumEntityWorld*>(World)->Resolve(Inventory.ActiveWeapon))
+	{
+		// `m_hActiveWeapon` is a script-writable handle, so what it names is not guaranteed to be an
+		// item. Checked, not assumed: a blind downcast would read a `camera_class` off whatever object
+		// a level script assigned and arbitrate the player's camera from it.
+		const FElysiumItem* Item = Ent->AsItem();
+		if (!Item)
+		{
+			UE_LOG(LogElysiumItem, Warning,
+				TEXT("m_hActiveWeapon on %s names %s, which is not an item; the equipped camera class "
+				     "resolves to none"),
+				*World->DescribeHandle(Handle), *World->DescribeHandle(Inventory.ActiveWeapon));
+		}
+		else if (const FElysiumItemDef* Record = Item->Data())
+		{
+			CameraClass = Record->CameraClass;
+		}
+	}
+	Embodiment->SetEquippedCameraClass(CameraClass);
+}
+
 bool FElysiumItem::IsStackable() const
 {
 	const FElysiumItemDef* Record = Data();
@@ -548,6 +586,7 @@ bool FElysiumInventory::Equip(FElysiumCombatCharacter& Char, FElysiumItem& Item)
 		if (FElysiumItem* Carried = Item.IsOwned() ? &Item : FindOrdinary(Char, Classname))
 		{
 			ActiveWeapon = Carried->Handle;
+			Char.PublishEquippedCameraClass();
 		}
 	}
 	return true;
@@ -614,6 +653,7 @@ bool FElysiumInventory::Detach(FElysiumCombatCharacter& Char, FElysiumItem& Item
 	if (ActiveWeapon == Item.Handle)
 	{
 		ActiveWeapon = FElysiumEntityHandle::Invalid();
+		Char.PublishEquippedCameraClass();
 	}
 	Item.Owner = FElysiumEntityHandle::Invalid();
 	Item.InvenPos = FElysiumItem::Unslotted;
@@ -675,6 +715,9 @@ void FElysiumInventory::RebuildFrom(FElysiumCombatCharacter& Char)
 	{
 		ActiveWeapon = FElysiumEntityHandle::Invalid();
 	}
+	// **The restore publishes too.** A loaded game that skipped this would arbitrate the camera
+	// against whatever class the previous run's weapon carried.
+	Char.PublishEquippedCameraClass();
 }
 
 int32 FElysiumInventory::Reserve(const FString& InAmmoType) const
@@ -1036,6 +1079,7 @@ void FElysiumItemContainer::DeleteAllItems()
 		Item->Kill();
 	}
 	Inventory.ActiveWeapon = FElysiumEntityHandle::Invalid();
+	PublishEquippedCameraClass();
 }
 
 void FElysiumItemContainer::InputDeleteItems(const FElysiumInputArgs&)

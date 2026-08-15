@@ -14,6 +14,7 @@ enum class EElysiumHUDReticle : uint8
 	None,
 	Cross,
 	UseIcon,
+	ThirdPerson,
 };
 
 UENUM(BlueprintType)

@@ -26,6 +26,16 @@ namespace ElysiumNpcVisual
 	// on the family skeleton so the metadata is serialised rather than rebuilt per load.
 	void RegisterMorphTargetCurves(USkeletalMesh* Mesh);
 
+	// Show or hide the generated garments led by this body, and suspend or resume their simulation.
+	//
+	// A garment is a separate full-surface renderer — for Sheriff it redraws both `sheriffbody2` and
+	// `sheriffhead` while substituting only the simulated vertices — and component visibility does not
+	// inherit from an attach parent, so hiding only the body leaves a complete character on screen.
+	// Only cloth **led by this body** is gated: propagating to every child would turn independently
+	// controlled particles back on. Both the entity's dormancy gate and the camera's draw policy go
+	// through here, so the two cannot disagree about a garment.
+	void GateLeaderCloth(USkeletalMeshComponent* Body, bool bShown);
+
 	// The master an eye section is drawn with, or null when the policy content has not been
 	// generated. Callers compare a built slot's base material against this to find the eye slots.
 	UMaterialInterface* EyeMaster();

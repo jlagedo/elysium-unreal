@@ -150,6 +150,38 @@ namespace ElysiumNpcVisual
 		}
 	}
 
+	void GateLeaderCloth(USkeletalMeshComponent* Body, bool bShown)
+	{
+		if (!Body)
+		{
+			return;
+		}
+
+		TArray<USceneComponent*> Children;
+		Body->GetChildrenComponents(/*bIncludeAllDescendants=*/false, Children);
+		for (USceneComponent* Child : Children)
+		{
+			UChaosClothComponent* Garment = Cast<UChaosClothComponent>(Child);
+			if (!Garment || Garment->LeaderPoseComponent.Get() != Body)
+			{
+				continue;
+			}
+
+			// HiddenInGame is distinct from bVisible: UChaosClothComponent::UpdateVisibility may
+			// restore bVisible after an asset update, but it does not override this gameplay gate.
+			Garment->SetHiddenInGame(!bShown);
+			if (bShown)
+			{
+				Garment->ForceNextUpdateTeleportAndReset();
+				Garment->ResumeSimulation();
+			}
+			else
+			{
+				Garment->SuspendSimulation();
+			}
+		}
+	}
+
 	UMaterialInterface* EyeMaster()
 	{
 		return LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VtMB/Materials/M_Eyes.M_Eyes"));

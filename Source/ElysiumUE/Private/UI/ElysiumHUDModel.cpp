@@ -13,7 +13,9 @@ namespace
 
 void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview Preview)
 {
-	bVisible = View.bPlayerSurface && !View.bCinematic && !View.bSignHidesHUD;
+	// The heads-up layer is up unless a named shot asked for it down or a sign panel covers the game.
+	// Owning the view is not by itself a reason to hide it.
+	bVisible = View.bPlayerSurface && View.Camera.bShowHud && !View.bSignHidesHUD;
 	bVitalsValid = View.Vitals.bValid;
 	Health = View.Vitals.Health;
 	MaxHealth = View.Vitals.MaxHealth;
@@ -32,9 +34,10 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 
 	switch (ElysiumView::ResolveReticle(View))
 	{
-	case ElysiumView::EReticle::Cross:   Reticle = EElysiumHUDReticle::Cross; break;
-	case ElysiumView::EReticle::UseIcon: Reticle = EElysiumHUDReticle::UseIcon; break;
-	default:                              Reticle = EElysiumHUDReticle::None; break;
+	case ElysiumView::EReticle::Cross:       Reticle = EElysiumHUDReticle::Cross; break;
+	case ElysiumView::EReticle::UseIcon:     Reticle = EElysiumHUDReticle::UseIcon; break;
+	case ElysiumView::EReticle::ThirdPerson: Reticle = EElysiumHUDReticle::ThirdPerson; break;
+	default:                                 Reticle = EElysiumHUDReticle::None; break;
 	}
 	Fade = View.Fade;
 

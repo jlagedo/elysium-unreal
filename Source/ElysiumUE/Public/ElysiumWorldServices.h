@@ -389,9 +389,11 @@ public:
 	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) = 0;
 	virtual void ClearPlayerVisual() = 0;
-	// A scene-owned player-controller body is a stand-in, not a second visible subject. The authored
-	// controller lifecycle owns this presentation gate; dialogue camera code never calls it.
-	virtual void SetPlayerVisualSuppressed(bool bSuppressed) {}
+	// The player entity's **own** draw gate — `ScriptHide`, dormancy, a `Spawn()`-time `Kill` — pushed
+	// at the pawn, which ANDs it with the camera's eligibility. It is not a cutscene gate: creating an
+	// `npc_VPlayerController` double does not hide the real body, because retail does not hide it
+	// either (`docs/vtmb/camera-view-modes.md` §6).
+	virtual void SetPlayerBodyEntityHidden(bool bHidden) {}
 
 	// --- The player's body ------------------------------------------------------------------
 	// The eye: where the player is looking from and along. False when there is no player (the menu
@@ -462,6 +464,12 @@ public:
 	// resulting world-space value without teaching the camera component about entities.
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) = 0;
 	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) = 0;
+
+	// The equipped item's authored `camera_class` bits. Pushed whenever the **player's** active weapon
+	// changes, because drawing a weapon re-runs the arbitration that can force the view mode
+	// (`docs/vtmb/camera-view-modes.md` §2). The camera takes the bits and never learns what an item
+	// is; an NPC's weapon does not arbitrate the player's view, so only the player publishes.
+	virtual void SetEquippedCameraClass(int32 CameraClass) {}
 	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) = 0;
 };
 

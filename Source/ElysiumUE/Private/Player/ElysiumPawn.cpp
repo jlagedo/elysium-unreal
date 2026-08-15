@@ -6,6 +6,7 @@
 #include "ElysiumMovementComponent.h"
 #include "ElysiumUserCmd.h"
 #include "GameFramework/PlayerController.h"
+#include "Visual/ElysiumNpcVisual.h"
 
 AElysiumPawn::AElysiumPawn()
 {
@@ -173,26 +174,79 @@ FElysiumLocomotionSample AElysiumPawn::GetLocomotionSample() const
 void AElysiumPawn::SetPlayerVisual(USkeletalMeshComponent* InVisual)
 {
 	PlayerVisual = InVisual;
-	ApplyPlayerModelAlpha(PlayerVisualAlpha);
+	// A fresh surface adopts the gates already in force rather than appearing for a frame and being
+	// put away on the next one. Its garment has never been gated, so the edge latch is cleared and the
+	// refresh below pushes the current state onto the new components.
+	LastClothDrawn.Reset();
+	RefreshBodyVisibility();
 }
 
-void AElysiumPawn::ApplyPlayerModelAlpha(float Alpha)
+void AElysiumPawn::ApplyDrawPolicy(const FElysiumCameraDrawPolicy& Policy)
 {
-	PlayerVisualAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
-	if (PlayerVisual)
+	DrawPolicy = Policy;
+	RefreshBodyVisibility();
+}
+
+void AElysiumPawn::SetBodyEntityHidden(bool bInHidden)
+{
+	bEntityHidden = bInHidden;
+	RefreshBodyVisibility();
+}
+
+void AElysiumPawn::RefreshBodyVisibility()
+{
+	if (!PlayerVisual)
 	{
-		PlayerVisual->SetScalarParameterValueOnMaterials(TEXT("ModelAlpha"), PlayerVisualAlpha);
-		PlayerVisual->SetHiddenInGame(PlayerVisualAlpha <= KINDA_SMALL_NUMBER);
+		return;
+	}
+
+	// Two gates, ANDed: the camera decides whether this frame draws a body at all, the entity decides
+	// whether it is allowed to. Neither is expressed through the other.
+	const bool bDrawn = DrawPolicy.bBodyEligible && !bEntityHidden;
+
+	// **The two owners write two different flags, and that is deliberate.** `bVisible` belongs to the
+	// body factory, where it means "this surface has a committed pose" — it is raised once the first
+	// clip is applied so a bind-pose frame never reaches the screen. `bHiddenInGame` belongs here and
+	// means "the frame's gates say draw it". Collapsing them onto one flag is what let a clip played
+	// on the player entity silently undo the camera's decision.
+	//
+	// The tick follows the **entity** gate alone. A `ScriptHide`n character stops ticking its clip
+	// (R6), but a first-person frame must keep animating: the pose has to be right the instant the
+	// player toggles to third, and the gaze pass reads live bone transforms either way.
+	PlayerVisual->SetComponentTickEnabled(!bEntityHidden);
+
+	// **Eligibility is the hidden flag; the band is the scalar.** Submitting an eligible body at alpha
+	// 0 is what the recovered entry frame does, and it costs nothing: `M_PlayerBody` is `BLEND_MASKED`
+	// with `dither_opacity_mask` over `opacity = baseTex.A * ModelAlpha`
+	// (`pipeline/unreal/make_player_body_material.py`), so alpha 0 clips every pixel without entering
+	// the translucent path. Deriving the hide from the alpha instead is what made the two
+	// indistinguishable and left the switch-frame table unrepresentable.
+	PlayerVisual->SetScalarParameterValueOnMaterials(TEXT("ModelAlpha"),
+		FMath::Clamp(DrawPolicy.BodyAlpha, 0.0f, 1.0f));
+	PlayerVisual->SetHiddenInGame(!bDrawn);
+
+	// **The cloth gate is an edge, not a level.** `GateLeaderCloth` teleports and resets the garment on
+	// the way in and suspends it on the way out; this function runs every frame off `ApplyDrawPolicy`,
+	// so pushing the same answer again would reset the solver before it ever integrated a step and the
+	// player's garment would never simulate. Hiding is idempotent for the same reason and does not need
+	// repeating either.
+	if (!LastClothDrawn.IsSet() || LastClothDrawn.GetValue() != bDrawn)
+	{
+		LastClothDrawn = bDrawn;
+		ElysiumNpcVisual::GateLeaderCloth(PlayerVisual, bDrawn);
 	}
 }
 
 void AElysiumPawn::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 {
+	// **A view producer does not write body visibility.** This path is the fallback a scene capture,
+	// a spectator and `UGameplayStatics` reach, and each of those is a second view of a frame the
+	// player's own camera already resolved — repainting the body from here would let an off-screen
+	// capture decide whether the player can see their own model. `AElysiumPlayerCameraManager` is
+	// the single writer, once per frame, from the view that is actually rendered.
 	if (UElysiumCameraComponent::CalcCameraFor(Camera, DeltaTime, OutResult))
 	{
-		ApplyPlayerModelAlpha(Camera->ModelAlpha());
 		return;
 	}
 	Super::CalcCamera(DeltaTime, OutResult);
-	ApplyPlayerModelAlpha(Camera ? Camera->ModelAlpha() : 0.0f);
 }

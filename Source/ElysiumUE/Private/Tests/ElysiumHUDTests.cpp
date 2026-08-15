@@ -177,13 +177,32 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 		Model->Reticle, EElysiumHUDReticle::None);
 
 	View.bSignHidesHUD = false;
-	View.bCinematic = true;
+
+	// **Owning the view is not a reason to hide the HUD.** A Worldcraft `camera_track` authors no
+	// `ShowHud` key, so a cutscene that runs on one keeps the heads-up layer up, exactly as retail
+	// does (`docs/vtmb/camera-view-modes.md` §5).
+	View.Camera.bScriptedCameraOwnsView = true;
 	Model->Apply(View);
-	TestFalse(TEXT("scripted camera suppresses the heads-up layer"), Model->bVisible);
-	TestEqual(TEXT("scripted camera suppresses the cursor through the shared rule"),
+	TestTrue(TEXT("a camera_track owning the view leaves the heads-up layer up"), Model->bVisible);
+
+	// A named `SetCamera` shot does hide it, because both its keys parse with a default of 0.
+	View.Camera.bShowHud = false;
+	Model->Apply(View);
+	TestFalse(TEXT("a named shot's ShowHud 0 suppresses the heads-up layer"), Model->bVisible);
+	TestEqual(TEXT("and suppresses the cursor through the shared rule"),
 		Model->Reticle, EElysiumHUDReticle::None);
-	TestEqual(TEXT("cinematic suppression retains live health for an immediate return"),
+	TestEqual(TEXT("suppression retains live health for an immediate return"),
 		Model->Health, 73);
+	View.Camera.bShowHud = true;
+	View.Camera.bScriptedCameraOwnsView = false;
+
+	// The mode toggle selects the other crosshair path rather than taking the HUD down.
+	View.Camera.ReticlePath = EElysiumReticlePath::ThirdPerson;
+	Model->Apply(View);
+	TestTrue(TEXT("third person keeps the heads-up layer"), Model->bVisible);
+	TestEqual(TEXT("and draws the plain third-person reticle"),
+		Model->Reticle, EElysiumHUDReticle::ThirdPerson);
+	View.Camera.ReticlePath = EElysiumReticlePath::FirstPerson;
 
 	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Weapon);
 	TestTrue(TEXT("preview can exercise the HUD without gameplay owners"), Model->bVisible);

@@ -98,8 +98,8 @@ namespace ElysiumCameraShotsImpl
 		Out.bAutoPositionFromTarget = Node->Bool(TEXT("AutoPositionFromTarget"), false);
 		Out.bSyncRotateOnMove = Node->Bool(TEXT("SyncRotateOnMove"), false);
 		Out.bSnapOnShotChange = Node->Bool(TEXT("SnapOnShotChange"), false);
-		Out.bShowHud = Node->Bool(TEXT("ShowHud"), true);
-		Out.bDrawViewmodel = Node->Bool(TEXT("DrawViewmodel"), true);
+		Out.bShowHud = Node->Bool(TEXT("ShowHud"), false);
+		Out.bDrawViewmodel = Node->Bool(TEXT("DrawViewmodel"), false);
 
 		FVector V;
 		if (ParseBracketVector(Node->Str(TEXT("MaxTurnRate"), FString()), V))      { Out.MaxTurnRate = V; }
@@ -371,6 +371,14 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	Out.MaxTurnRate = Def.Constraints.MaxTurnRate;
 	// `SnapOnShotChange` is the file's own "cut, do not blend" flag.
 	Out.BlendSeconds = Def.Constraints.bSnapOnShotChange ? 0.0f : 0.5f;
+
+	// **This is the one place a shot becomes "named".** `ShowHud` and `DrawViewmodel` are keys on a
+	// `vdata/camerashots/` file and on nothing else, so only a shot that came through this converter
+	// carries them. Every value producer — `camera_track`, a VCD edit, the green room — pushes a bare
+	// `FElysiumCameraShot` and therefore cannot take the HUD down.
+	Out.Presentation.bNamed = true;
+	Out.Presentation.bShowHud = Def.Constraints.bShowHud;
+	Out.Presentation.bDrawViewmodel = Def.Constraints.bDrawViewmodel;
 	return true;
 }
 

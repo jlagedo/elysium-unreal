@@ -11,14 +11,9 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
-// The modern boom's translation damper, as a live override on `FElysiumCameraRigTuning`. Negative
-// takes the tuning's own value, which keeps the shipped number in one place; zero makes the rig
-// fully rigid, which is the direct read on how much of a given motion the damper owns.
-static TAutoConsoleVariable<float> CVarModernPositionHalfLife(
-	TEXT("elysium.cam.PositionHalfLife"), -1.0f,
-	TEXT("Half-life in seconds of the modern boom's pivot damper. Negative uses the rig tuning's ")
-	TEXT("own value; 0 snaps."),
-	ECVF_Default);
+// The boom's damper has no `elysium.*` control: `cdamp_on`, `cdamp_hookesconstant` and
+// `cdamp_hookesconstantwall` own it, live, through the VtMB console store. A second name for the
+// same value is exactly the two-owner problem the tuning partition exists to prevent.
 
 AElysiumPlayerCameraManager::AElysiumPlayerCameraManager()
 {
@@ -91,6 +86,12 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 	// The rig solves first and hands its boom to the component, so the apply below reads one boom.
 	SolveModernRig(*Camera, DeltaTime);
 
+	// Phase two, now that the boom exists. The fade band is a function of how far the camera ended
+	// up from the eye, so it has to run after the sweep and the damper rather than before them —
+	// evaluating it inside phase one is what made the body's alpha describe the previous frame, and
+	// what made `Sample.ModelAlpha` and `Sample.BoomLength` disagree in the same record.
+	Camera->FinalizeFrame();
+
 	// The **base** only — the strafe bank and the boom, at the third-person weight. The scripted
 	// channel and the temporal cut are the legacy post layer's, because both have to happen after
 	// the base request has been chosen: a shot composes over the rig, and a history reset must
@@ -104,21 +105,12 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 		ScopedCamera->ApplyToView(OutVT.POV);
 	}
 
-	// The body-visibility ramp travels with the view. It used to ride on the pawn's own
-	// `CalcCamera`, which the manager no longer goes through on the production path, and a player
-	// mesh that never fades reports nothing — no log line, no failed check.
+	// **The single write of the frame's draw policy**, from the view that is actually rendered and
+	// after every layer that could change the predicate has been applied. The body applies it and
+	// decides nothing; nothing else in the frame writes the surface's flags.
 	if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(OutVT.Target))
 	{
-		float ModelAlpha = Camera->ModelAlpha();
-		if (ScopedCamera)
-		{
-			const FElysiumResolvedCameraState& Resolved = ScopedCamera->ResolvedCamera();
-			if (Resolved.Weight > 0.0f && !Resolved.Request.bShowPlayerBody)
-			{
-				ModelAlpha *= 1.0f - FMath::Clamp(Resolved.Weight, 0.0f, 1.0f);
-			}
-		}
-		Body->ApplyPlayerModelAlpha(ModelAlpha);
+		Body->ApplyDrawPolicy(Camera->GetDrawPolicy());
 	}
 
 	PublishSample(*Camera);
@@ -148,11 +140,34 @@ void AElysiumPlayerCameraManager::SolveModernRig(UElysiumCameraComponent& Camera
 	// A held world holds the camera.
 	const float Dt = (World && World->IsPaused()) ? 0.0f : FMath::Max(0.0f, DeltaSeconds);
 
-	// The eye the boom hangs off, and the view it derives from.
+	// **The frame's tuning: the project's, with every axis the VtMB store names taken from it.** The
+	// store is re-read each frame by the camera component, so `elysium.cmd cam_idealdist 50` moves the
+	// boom on the next frame exactly as it does in retail.
+	const ElysiumRig::FElysiumCameraRigTuning Base =
+		ElysiumRig::ResolveTuning(RigTuning, Camera.GetCvars());
+
+	// The player's own orbit, stepped from the frame's command. `snapto` / `cam_restore` hand every
+	// axis back to its cvar, which is why an axis the player has not touched follows a live retune.
+	if (Camera.ConsumeOrbitRestoreRequest())
+	{
+		ElysiumRig::RestoreOrbit(ModernOrbit);
+	}
+	const FElysiumUserCmd& Cmd = Camera.GetUserCmd();
+	ElysiumRig::StepOrbit(ModernOrbit, Cmd.Buttons, Cmd.LookDelta, Dt, Base);
+
+	// The orbit composes onto the cvar-owned tuning rather than replacing it, so `cam_yaw` and a
+	// hand-orbited yaw add — but only until the player takes that axis over, after which it composes
+	// onto the value the cvar was worth at that moment and a live retune no longer drags it. That
+	// per-axis decision is the rig's, not this function's.
+	const ElysiumRig::FElysiumCameraRigTuning Tuning = ElysiumRig::ComposeOrbit(Base, ModernOrbit);
+
+	// The eye the boom hangs off, and the view it derives from. **The orbit never reaches the control
+	// rotation**: the camera swings around the player, the player does not turn
+	// (`docs/vtmb/camera-view-modes.md` §5 — the mode changes no movement steering).
 	const FVector BodyPivot = Camera.GetComponentLocation();
 	const FRotator ViewRot = PCOwner ? PCOwner->GetControlRotation() : Camera.GetComponentRotation();
 
-	ModernAngles = ElysiumRig::BoomRotation(ViewRot, RigTuning);
+	ModernAngles = ElysiumRig::BoomRotation(ViewRot, Tuning);
 
 	// **The damper's domain is translation, never rotation.** A camera position damped in world
 	// space conflates two motions that want opposite treatment: the pivot moving — stairs, crouch,
@@ -165,30 +180,32 @@ void AElysiumPlayerCameraManager::SolveModernRig(UElysiumCameraComponent& Camera
 	//
 	// So the damper runs on the **pivot** and on the boom **length**, and the camera hangs off both
 	// rigidly. Everything that should feel weighted still does; nothing that should be instant lags.
-	const float HalfLife = CVarModernPositionHalfLife.GetValueOnGameThread() >= 0.0f
-		? CVarModernPositionHalfLife.GetValueOnGameThread()
-		: RigTuning.PositionHalfLife;
+	//
+	// Which of the two recovered stiffnesses applies is decided by last frame's clip state, because
+	// this frame's sweep has not run yet — it needs the damped pivot to trace from. That is retail's
+	// own ordering: `0x100fd0b0` selects on the flag the previous solve left behind.
 	ModernPivot = bModernNeedsReseed
 		? BodyPivot
-		: ElysiumRig::DampToward(ModernPivot, BodyPivot, HalfLife, Dt);
+		: ElysiumRig::DampPivot(ModernPivot, BodyPivot, bModernClipped, Tuning, Dt);
 
 	// Everything downstream — the collision sweep included — hangs off the damped pivot, so the
 	// probe traces from where the camera actually is rather than from where the body got to.
 	const FVector Pivot = ModernPivot;
 
-	// The sweep. A sphere against the camera channel.
-	const float Desired = RigTuning.BoomLength;
-	const FVector Reach = ElysiumRig::BoomTarget(Pivot, ModernAngles, Desired, RigTuning);
+	// The sweep. A sphere against the camera channel, at the authored `cam_trace_radius`.
+	// `cam_collide 0` skips it entirely, which is retail's own switch and not a debug shortcut.
+	const float Desired = FMath::Clamp(Tuning.BoomLength, Tuning.DollyMin, Tuning.DollyMax);
+	const FVector Reach = ElysiumRig::BoomTarget(Pivot, ModernAngles, Desired, Tuning);
 	bModernClipped = false;
 	float HitDistance = Desired;
-	if (World)
+	if (World && Tuning.bCollide)
 	{
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumModernBoom), /*bTraceComplex*/ false,
 			Camera.GetOwner());
 		Params.AddIgnoredActor(Camera.GetOwner());
 		FHitResult Hit;
 		if (World->SweepSingleByChannel(Hit, Pivot, Reach, FQuat::Identity, ECC_Camera,
-				FCollisionShape::MakeSphere(RigTuning.ProbeRadius), Params))
+				FCollisionShape::MakeSphere(Tuning.ProbeRadius), Params))
 		{
 			bModernClipped = true;
 			HitDistance = static_cast<float>(FVector::Dist(Pivot, Hit.Location));
@@ -196,14 +213,14 @@ void AElysiumPlayerCameraManager::SolveModernRig(UElysiumCameraComponent& Camera
 	}
 
 	ModernDistance = bModernNeedsReseed
-		? (bModernClipped ? FMath::Max(RigTuning.MinBoomLength, HitDistance - RigTuning.WallPullIn)
+		? (bModernClipped ? FMath::Max(Tuning.MinBoomLength, HitDistance - Tuning.WallPullIn)
 						  : Desired)
 		: ElysiumRig::SolveBoomDistance(ModernDistance, Desired, bModernClipped, HitDistance,
-			RigTuning, Dt);
+			Tuning, Dt);
 
 	// Rigid: the pivot and the length are already damped, so a second damper here would be the one
 	// that puts rotation back into the lag.
-	ModernPosition = ElysiumRig::BoomTarget(Pivot, ModernAngles, ModernDistance, RigTuning);
+	ModernPosition = ElysiumRig::BoomTarget(Pivot, ModernAngles, ModernDistance, Tuning);
 
 	// The boom the rest of the frame reads: the fade band, the readouts and the base apply all take
 	// it from here, so there is exactly one boom in the frame.
@@ -226,7 +243,7 @@ void AElysiumPlayerCameraManager::PublishSample(const UElysiumCameraComponent& C
 	Sample.bClipped = Camera.IsBoomClipped();
 	Sample.ThirdWeight = Weights.Third;
 	Sample.ScriptedWeight = Weights.Scripted;
-	Sample.ModelAlpha = Camera.ModelAlpha();
+	Sample.Draw = Camera.GetDrawPolicy();
 
 	// The damper's own reach, reported off the rig rather than off `ModernPosition - eye`: the pivot
 	// is damped too, so that difference would carry the pivot's lag as well as the boom.

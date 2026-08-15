@@ -250,12 +250,12 @@ record, clock, snapshots, script host), `UElysiumMapSubsystem` (travel), `UElysi
 faithful body) over `ElysiumMoveSolve.h` (`docs/vtmb/source_movement.md`: `namespace ElysiumMove`'s
 constants + the `CGameMovement` math as free functions, plus `FElysiumMoveTuning`'s `sv_*` cvar
 surface — the same pure-rules/engine-half split as `ElysiumCameraSolve.h`),
-`AElysiumCapsulePawn` (the `elysium.SourceMovement 0` A/B baseline),
-`FElysiumCameraWeights`/`FElysiumCameraShotStack`/`UElysiumCameraComponent` (the faithful
-evaluator), `AElysiumPlayerCameraManager` + `FElysiumCameraSample` (the one final view, the
-post-layer stack and the modern rig's state), `UElysiumCameraModifier` /
+`FElysiumCameraWeights`/`FElysiumCameraShotStack`/`UElysiumCameraComponent` (the mode weights, the
+scripted-shot stack, the fade band and the VtMB cvar surface), `AElysiumPlayerCameraManager` +
+`FElysiumCameraSample` (the one final view, the post-layer stack and the boom's state),
+`UElysiumCameraModifier` /
 `UElysiumCameraModifier_LegacyShot` (`ElysiumCameraModifiers.h`), `ElysiumCameraRig.h`
-(`namespace ElysiumRig` — the modern rig's pure rules and its own tuning struct, the same
+(`namespace ElysiumRig` — the boom's pure rules and its tuning struct, the same
 pure-rules/engine-half split as `ElysiumCameraSolve.h`), `FElysiumViewState`. Actors:
 `AElysiumGameMode`, `AElysiumPlayerController` (hosts `UElysiumCheatManager`, the router and
 `PlayerCameraManagerClass`), `AElysiumPawn`, `AElysiumHUD` (Canvas, does not tick).

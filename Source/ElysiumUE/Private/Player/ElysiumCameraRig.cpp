@@ -1,5 +1,7 @@
 #include "ElysiumCameraRig.h"
 
+#include "ElysiumUserCmd.h"
+
 // =====================================================================================
 // The damper
 // =====================================================================================
@@ -26,6 +28,29 @@ FVector ElysiumRig::DampToward(const FVector& Current, const FVector& Target, fl
 	return Target + (Current - Target) * Retained;
 }
 
+FVector ElysiumRig::DampPivot(const FVector& Current, const FVector& Target, bool bClipped,
+	const FElysiumCameraRigTuning& Tuning, float Dt)
+{
+	if (!Tuning.bDampOn)
+	{
+		return Target;   // `cdamp_on 0`, retail's own bypass
+	}
+
+	const float Lag = static_cast<float>(FVector::Dist(Current, Target));
+	// `cdamp_springlength`: inside it the spring is at rest, so chasing further only produces a
+	// permanent sub-millimetre crawl. `cdamp_maxdist`: past it the camera has been left behind by a
+	// teleport or a fast mover and easing back would read as a long slide rather than as weight.
+	if (Lag <= Tuning.DamperDeadBand || Lag >= Tuning.DamperMaxLag)
+	{
+		return Target;
+	}
+
+	// **Stiff against a wall, soft in open space.** The two recovered Hooke constants differ by
+	// nearly four times, and that asymmetry — snap in, ease out — is what the VtMB camera feels like.
+	const float HalfLife = bClipped ? Tuning.PositionHalfLifeWall : Tuning.PositionHalfLifeFree;
+	return DampToward(Current, Target, HalfLife, Dt);
+}
+
 float ElysiumRig::DampToward(float Current, float Target, float HalfLifeSeconds, float Dt)
 {
 	const float Retained = DecayFactor(HalfLifeSeconds, Dt);
@@ -50,7 +75,9 @@ FRotator ElysiumRig::BoomRotation(const FRotator& ViewRot, const FElysiumCameraR
 	FRotator BoomRot;
 	BoomRot.Pitch = FMath::Clamp(FRotator::NormalizeAxis(ViewRot.Pitch) - Tuning.PitchOffset,
 		Tuning.PitchMin, Tuning.PitchMax);
-	BoomRot.Yaw = FRotator::NormalizeAxis(ViewRot.Yaw);
+	// `cam_yaw` swings the whole boom around the pivot without touching where the player is looking,
+	// which is what the patch's `cam_rotateleft` / `cam_rotateright` aliases drive.
+	BoomRot.Yaw = FRotator::NormalizeAxis(ViewRot.Yaw + Tuning.YawOffset);
 	// A banked view must not roll the boom: the strafe bank is a view effect and rotating the arm
 	// by it would swing the character across the frame.
 	BoomRot.Roll = 0.0f;
@@ -94,4 +121,125 @@ float ElysiumRig::SolveBoomDistance(float Current, float Desired, bool bHit, flo
 		return Desired;
 	}
 	return FMath::Clamp(Current + Tuning.ReturnSpeed * Dt, Floor, Desired);
+}
+
+bool ElysiumRig::OrbitInterceptsMouse(uint64 Buttons)
+{
+	constexpr uint64 MouseBits = static_cast<uint64>(EElysiumButton::CamMouseMove)
+		| static_cast<uint64>(EElysiumButton::CamDistance);
+	return (Buttons & MouseBits) != 0;
+}
+
+void ElysiumRig::StepOrbit(FElysiumOrbitState& InOut, uint64 Buttons, const FVector2D& LookDelta,
+	float Dt, const FElysiumCameraRigTuning& Tuning)
+{
+	const auto Held = [Buttons](EElysiumButton Bit)
+	{
+		return (Buttons & static_cast<uint64>(Bit)) != 0;
+	};
+
+	const float AngleStep = Tuning.OrbitSpeed * FMath::Max(0.0f, Dt);
+	const float DollyStep = Tuning.DollySpeed * FMath::Max(0.0f, Dt);
+
+	// The moment an axis first becomes the player's, the cvar it was following is frozen at its
+	// current value. Everything after that composes onto the frozen one, so a live retune no longer
+	// drags an axis the player has taken over; `RestoreOrbit` is what hands it back.
+	const auto Engage = [](bool& bHeld, float& Frozen, float Live)
+	{
+		if (!bHeld)
+		{
+			bHeld = true;
+			Frozen = Live;
+		}
+	};
+
+	// Yaw. `cam_rotateleft` / `cam_rotateright` are cfg aliases that step the cvar instead; these are
+	// the held button pair, which is a different input and moves the player's own offset.
+	float Yaw = InOut.YawOffset;
+	if (Held(EElysiumButton::CamYawLeft))  { Yaw -= AngleStep; Engage(InOut.bYawHeld, InOut.HeldYawBase, Tuning.YawOffset); }
+	if (Held(EElysiumButton::CamYawRight)) { Yaw += AngleStep; Engage(InOut.bYawHeld, InOut.HeldYawBase, Tuning.YawOffset); }
+
+	float Pitch = InOut.PitchOffset;
+	if (Held(EElysiumButton::CamPitchUp))   { Pitch -= AngleStep; Engage(InOut.bPitchHeld, InOut.HeldPitchBase, Tuning.PitchOffset); }
+	if (Held(EElysiumButton::CamPitchDown)) { Pitch += AngleStep; Engage(InOut.bPitchHeld, InOut.HeldPitchBase, Tuning.PitchOffset); }
+
+	float Dolly = InOut.DollyOffset;
+	if (Held(EElysiumButton::CamIn))  { Dolly -= DollyStep; Engage(InOut.bDollyHeld, InOut.HeldBoomBase, Tuning.BoomLength); }
+	if (Held(EElysiumButton::CamOut)) { Dolly += DollyStep; Engage(InOut.bDollyHeld, InOut.HeldBoomBase, Tuning.BoomLength); }
+
+	// The two mouse-driven camera bits fold the frame's look delta into the orbit rather than into
+	// the view, which is what `+campitchup`-style held orbit and `+camdistance` do in retail.
+	if (Held(EElysiumButton::CamMouseMove))
+	{
+		Yaw += static_cast<float>(LookDelta.X);
+		Pitch += static_cast<float>(LookDelta.Y);
+		Engage(InOut.bYawHeld, InOut.HeldYawBase, Tuning.YawOffset);
+		Engage(InOut.bPitchHeld, InOut.HeldPitchBase, Tuning.PitchOffset);
+	}
+	if (Held(EElysiumButton::CamDistance))
+	{
+		Dolly += static_cast<float>(LookDelta.Y);
+		Engage(InOut.bDollyHeld, InOut.HeldBoomBase, Tuning.BoomLength);
+	}
+
+	// Clamped against the recovered orbit limits. The dolly clamp is expressed on the composed rest
+	// length rather than on the offset, because `c_mindistance` bounds the distance, not the delta —
+	// and it composes against the same base the frame's tuning will, so a held dolly is bounded by the
+	// length it was frozen at rather than by one the cvar has since moved.
+	const float DollyBase = InOut.bDollyHeld ? InOut.HeldBoomBase : Tuning.BoomLength;
+	InOut.YawOffset = FMath::Clamp(Yaw, Tuning.OrbitYawMin, Tuning.OrbitYawMax);
+	InOut.PitchOffset = FMath::Clamp(Pitch, Tuning.OrbitPitchMin, Tuning.OrbitPitchMax);
+	InOut.DollyOffset = FMath::Clamp(DollyBase + Dolly, Tuning.DollyMin, Tuning.DollyMax) - DollyBase;
+}
+
+void ElysiumRig::RestoreOrbit(FElysiumOrbitState& InOut)
+{
+	InOut = FElysiumOrbitState();
+}
+
+ElysiumRig::FElysiumCameraRigTuning ElysiumRig::ComposeOrbit(const FElysiumCameraRigTuning& Base,
+	const FElysiumOrbitState& Orbit)
+{
+	FElysiumCameraRigTuning Out = Base;
+	Out.YawOffset = (Orbit.bYawHeld ? Orbit.HeldYawBase : Base.YawOffset) + Orbit.YawOffset;
+	Out.PitchOffset = (Orbit.bPitchHeld ? Orbit.HeldPitchBase : Base.PitchOffset) - Orbit.PitchOffset;
+	Out.BoomLength = (Orbit.bDollyHeld ? Orbit.HeldBoomBase : Base.BoomLength) + Orbit.DollyOffset;
+	return Out;
+}
+
+ElysiumRig::FElysiumCameraRigTuning ElysiumRig::ResolveTuning(
+	const FElysiumCameraRigTuning& Project, const FElysiumCameraCvars& Cvars)
+{
+	// `FElysiumCameraCvars` is already in centimetres — `LoadFrom` is the single conversion point, and
+	// `ElysiumCam::U` deliberately does not appear anywhere in this file so a second multiply cannot
+	// be written by accident.
+	FElysiumCameraRigTuning Out = Project;
+
+	Out.BoomLength = Cvars.IdealDist;
+	Out.DollyMin = Cvars.MinDistance;
+	Out.DollyMax = Cvars.MaxDistance;
+	Out.PitchOffset = Cvars.TargetAngle;
+	Out.YawOffset = Cvars.Yaw;
+	Out.OrbitPitchMin = Cvars.MinPitch;
+	Out.OrbitPitchMax = Cvars.MaxPitch;
+	Out.OrbitYawMin = Cvars.MinYaw;
+	Out.OrbitYawMax = Cvars.MaxYaw;
+	Out.bCollide = Cvars.bCollide;
+	Out.ProbeRadius = Cvars.TraceRadius;
+	Out.bDampOn = Cvars.bDampOn;
+	Out.DamperDeadBand = Cvars.SpringLength;
+	Out.DamperMaxLag = Cvars.DampMaxDist;
+
+	// A Hooke rate expressed as the half-life that decays at the same speed. `x' = -Kx` halves in
+	// `ln 2 / K` seconds, so the recovered stiffness survives while the integrator becomes exact at
+	// any subdivision of a step — which is the one part of the damper that is deliberately not
+	// retail's (`docs/architecture/camera-architecture.md` → the divergence table).
+	auto HalfLifeFor = [](float HookeConstant, float Fallback)
+	{
+		return HookeConstant > 0.0f ? (UE_LN2 / HookeConstant) : Fallback;
+	};
+	Out.PositionHalfLifeFree = HalfLifeFor(Cvars.HookesConstant, Project.PositionHalfLifeFree);
+	Out.PositionHalfLifeWall = HalfLifeFor(Cvars.HookesConstantWall, Project.PositionHalfLifeWall);
+
+	return Out;
 }

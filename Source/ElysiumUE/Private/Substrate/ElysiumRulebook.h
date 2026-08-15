@@ -976,6 +976,12 @@ struct FElysiumItemDef
 	int32 Weight = 0;                   // `weight`
 	int32 ItemFlags = 0;                // `item_flags`
 
+	// `camera_class`, parsed to its bits. The equipped item's value is what decides whether drawing
+	// this weapon changes the view, and it lives on the item record rather than on the player
+	// (`docs/vtmb/camera-view-modes.md` §2). 0 for `noswitch`, an unrecognized literal and an absent
+	// key alike — all three reach the same early-out.
+	int32 CameraClass = 0;
+
 	// --- The `Magazine` child block — a firearm's ammunition -----------------------------------
 	FString AmmoType;                   // `Type`, e.g. `ThirtyeightRound`; empty = carries no magazine
 	int32 MagazineSize = 0;             // `Size` — the loaded-magazine capacity

@@ -24,8 +24,10 @@ The shipped target is a modern camera with two complete, persistent player choic
   cinematics are scoped overrides; they never overwrite the saved choice.
 - When a scoped override ends, the camera restores the exact prior player mode, control rotation,
   shoulder, and zoom state unless the override explicitly returns a new state.
-- VtMB's recovered camera stays executable as a development A/B reference and as the compatibility
-  evaluator for original scripts and map camera tracks. It is not the shipped feel target.
+- The recovered *rules* — the mode weights and their latches, the switch-frame draw policy, the
+  fade band, weapon-class arbitration, the scripted-shot channel and the camera-track evaluator —
+  are reproduced and remain the compatibility surface for original scripts and map camera tracks.
+  The recovered *boom solve* is not the shipped feel target; one rig supplies the view.
 
 This is a deliberate feel divergence. It removes forced perspective churn, character-coupled
 third-person orbit, and reliance on one 2004 boom solve for gameplay, dialogue, feeding, and
@@ -275,37 +277,31 @@ The modern rig is **manager-side state over pure rules**, not a component and no
 the half-life damper as free functions; `AElysiumPlayerCameraManager` owns the integrator state and
 performs the one sweep.
 
-Both parts of that are decisions rather than defaults. It is not a component because
-`elysium.SourceMovement` swaps the pawn class at spawn: a component would have to be added to both
-bodies and kept in step, where manager-side state is resolved once from whatever is being viewed.
-And it is not `USpringArmComponent`, for the same reason the faithful evaluator is not — the spring
-arm's single-rate lag cannot express either rig's damper, and its retract/recover is symmetric where
-the modern rig's is deliberately not.
+Both parts of that are decisions rather than defaults. It is not a component because manager-side
+state is resolved once from whatever is being viewed, which is what a view target that changes for
+character generation, a cutscene or a spectator needs. And it is not `USpringArmComponent` — the
+spring arm's single-rate lag cannot express the two-constant damper, and its retract/recover is
+symmetric where this rig's is deliberately not.
 
-One `UCameraComponent` — the faithful evaluator, which survives unmodified — still carries
-projection and post-process settings and is the eye both rigs hang their boom off. `GetCameraView`
-runs first regardless of which rig supplies the base, because it is the only thing that advances
-that component's world rotation and fills the first-person rendering fields.
+One `UCameraComponent` carries projection and post-process settings and is the eye the boom hangs
+off. `GetCameraView` runs first, because it is the only thing that advances that component's world
+rotation and fills the first-person rendering fields.
 
-The recovered Hooke-spring evaluator remains in the legacy/A-B path. It is not reimplemented inside
-the modern boom merely to preserve a disliked result.
+**There is one rig.** `UElysiumCameraComponent` owns the mode weights, the latches, the scripted-shot
+stack, the fade band, the draw policy and the VtMB cvar surface; `AElysiumPlayerCameraManager` owns
+the boom over `ElysiumRig::`. The channel recorder carries that one boom as
+`cam_boom`/`cam_damp`/`cam_pitch`/`cam_yaw`/`cam_clip`, so a rig regression is the same kind of diff
+as a movement one (`docs/project/roadmap.md` `CCC3`).
 
-### The A/B, and what it measures
+Its rules are pure and asserted with no world in `Elysium.Substrate.CameraRig`. Tuning is partitioned
+by name rather than ranked: **the VtMB console store owns every axis it names** — `cam_idealdist`,
+`cam_targetangle`, `cam_yaw`, `cam_collide`, `cam_trace_radius`, the `c_min*`/`c_max*` clamps and the
+`cdamp_*` group — composed onto the rig once per frame by `ElysiumRig::ResolveTuning`, so a user's
+`config.cfg` and the Unofficial Patch's aliases keep governing. `FElysiumCameraRigTuning` owns only
+the axes the store does not name: the collision-retract floor, the recovery rate and the shoulder
+offset. User settings own the player's own preferences above both.
 
-`elysium.ModernCamera` picks which rig supplies the base request — the faithful evaluator (`0`, the
-default) or the modern boom (`1`). **Both rigs solve every frame and record their channels every
-frame regardless of the setting**, so the switch changes only which one reaches the view. That is
-what makes the comparison an instrument rather than a recollection: one deterministic `uv run
-elysium debug move` run carries `cam_boom`/`cam_damp`/`cam_pitch`/`cam_yaw`/`cam_clip` beside
-`mcam_*`, so the two booms diff directly, and a rig regression is the same kind of diff as a
-movement one. It is also the co-tune's own instrument (`docs/project/roadmap.md` `CCC3`).
-
-The default stays `0` until the co-tune resolves the modern rig's deltas one owner call at a time.
-The modern rig's tuning lives in `ElysiumRig::FElysiumCameraRigTuning`; its rules are pure and
-asserted with no world in `Elysium.Substrate.CameraRig`.
-
-Three deliberate feel divergences distinguish the modern rig from the recovered one, each marked as
-a divergence beside the faithful behaviour:
+Three deliberate feel divergences remain, each marked as a divergence beside the faithful behaviour:
 
 - **The damper is frame-rate independent.** VtMB's is an Euler step scaled by `K * Dt` and clamped,
   so the same motion settles differently at different rates; measured against the gym's `pop_*`
@@ -320,8 +316,8 @@ a divergence beside the faithful behaviour:
   side. The recovered rig has no such term, and the offset is why the modern boom clips on geometry
   a centred boom misses.
 
-The sphere probe substituted for VtMB's box hull is recorded as a feel delta in
-`docs/vtmb/camera-view-modes.md` and is shared by both rigs, so it is not a difference between them.
+The sphere probe substituted for VtMB's box hull is a fourth divergence, recorded beside the
+recovered `UTIL_TraceHull` sweep in `docs/vtmb/camera-view-modes.md` § 4.
 
 ### Player modes
 
@@ -537,11 +533,11 @@ state rather than maintaining separate camera truth. Debug drawing can show the 
 desired pose, collision probe, final pose, safe framing bounds, and dialogue candidates.
 
 Per the F1-first rule (`docs/architecture/debug-tooling.md`), the Cog window is the primary surface:
-`Elysium.Characters.Camera` shows the weights and their latches, both rigs' booms side by side with
-the delta between them, the scripted-shot stack, and the post layers with their priorities and
-alphas. `showdebug camera` lists the same layers through the engine's own path, and
-`elysium_player_get` reports both rigs' boom lengths and clip state so an agent can read the A/B
-delta without flipping the cvar and aligning two samples by hand. The one value all three read is
+`Elysium.Characters.Camera` shows the weights and their latches, the boom and its clip state, the
+resolved draw policy, the equipped weapon class and its arbitration, the scripted-shot stack, and the
+post layers with their priorities and alphas. `showdebug camera` lists the same layers through the
+engine's own path, and `elysium_player_get` reports the same draw policy frame by frame, so an agent
+can read a mode switch against the recovered table without a screenshot. The one value all three read is
 the sample the camera manager publishes at its view-update tail, which is also what the channel
 recorder reads — so a Cog readout and a channel diff cannot disagree.
 
@@ -592,9 +588,8 @@ experience around it:
    conversation before scaling across the corpus.
 7. Add the Sequencer bridge and one small project-authored acceptance sequence. Preserve VCD and
    Worldcraft timing in their existing evaluator.
-8. Migrate feed/death and remaining direct producers, then decide `elysium.ModernCamera`'s default
-   in the co-tune, one delta at a time, while retaining the faithful player evaluator as the
-   permanent A/B reference.
+8. Migrate feed/death and remaining direct producers, then resolve the rig's remaining feel deltas
+   in the co-tune, one owner call at a time, against the recovered rules the console surface tunes.
 
 ## References
 

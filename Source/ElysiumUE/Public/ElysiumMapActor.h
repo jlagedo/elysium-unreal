@@ -360,7 +360,7 @@ public:
 	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override;
 	virtual void ClearPlayerVisual() override;
-	virtual void SetPlayerVisualSuppressed(bool bSuppressed) override;
+	virtual void SetPlayerBodyEntityHidden(bool bInHidden) override;
 
 	// --- IElysiumEmbodiment: the player's body ----------------------------------------------
 	// All five resolve the pawn through this world's first player controller and report false /
@@ -399,6 +399,7 @@ public:
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override;
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override;
 	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) override;
+	virtual void SetEquippedCameraClass(int32 CameraClass) override;
 	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) override;
 
 	// --- IElysiumAudio ----------------------------------------------------------------------
@@ -615,7 +616,6 @@ private:
 	bool bRuntimeConstructionComplete = false;
 	bool bAnimationPreloadReady = false;
 	bool bMenuBackdrop = false;
-	bool bPlayerVisualSuppressed = false;
 	bool bNavigationBuildRequested = false;
 	bool bNavigationBuildFailed = false;
 	// Set in EndPlay. After it, a DestroyNpcMotor call is the entity world's own teardown running

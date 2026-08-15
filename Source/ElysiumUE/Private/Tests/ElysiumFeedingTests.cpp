@@ -452,8 +452,8 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 		TestTrue(TEXT("the feed request keeps the HUD visible"), Camera.LastRequest.bShowHud);
 		TestFalse(TEXT("the feed request hides the first-person viewmodel"),
 			Camera.LastRequest.bDrawViewmodel);
-		TestTrue(TEXT("the feed request shows the paired player body"),
-			Camera.LastRequest.bShowPlayerBody);
+		// The body is not requested. The feed weight is a term in `CAM_IsThirdPerson`, so the paired
+		// body becomes draw-eligible on its own and fades in with the boom.
 
 		// The patch's vm_feed producer emits this edge 0.1 seconds after the press. It releases the
 		// command button only; the paired action must keep running.

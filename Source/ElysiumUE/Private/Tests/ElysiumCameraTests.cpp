@@ -303,6 +303,49 @@ bool FElysiumCameraTest::RunTest(const FString&)
 			ElysiumCam::SolveModelAlpha(FVector(20.0f, 0.0f, 0.0f), W, Cvars), 0.0f);
 	}
 
+	// --- the fade band reads THIS frame's boom, not the one before it ---
+	// The band is a function of how far the camera ended up from the eye, so it can only be solved
+	// after the rig has swept and damped. Evaluating it in phase one made every alpha describe the
+	// previous frame and made `Sample.ModelAlpha` disagree with `Sample.BoomLength` in one record.
+	{
+		UElysiumCameraComponent* Phased = NewObject<UElysiumCameraComponent>();
+		TestNotNull(TEXT("the phase-order case has a camera component"), Phased);
+		if (Phased)
+		{
+			Phased->SetThirdPerson(true);
+			// 2.0/s for half a second is the full traversal, so the weight is at 1 and the band is live.
+			Phased->AdvanceFrame(0.5f);
+			TestEqual(TEXT("phase one advances the third-person weight"),
+				Phased->ThirdPersonWeight(), 1.0f);
+			TestEqual(TEXT("and leaves the band alone, because no rig has solved a boom yet"),
+				Phased->ModelAlpha(), 0.0f);
+
+			// The rig lands between the phases, well past `min(cam_idealdist, cam_fadestart)`.
+			Phased->SetSolvedBoom(FVector(200.0f, 0.0f, 0.0f), FRotator::ZeroRotator, false);
+			Phased->FinalizeFrame();
+			TestEqual(TEXT("phase two reads the boom the rig solved in the same frame"),
+				Phased->ModelAlpha(), 1.0f);
+
+			// `ApplyCameraModifiers` runs once per view target, so a view-target blend reaches this
+			// path twice at the same delta. The second pass must read the frame's answer.
+			Phased->SetSolvedBoom(FVector::ZeroVector, FRotator::ZeroRotator, false);
+			Phased->FinalizeFrame();
+			TestEqual(TEXT("phase two is idempotent within a frame"),
+				Phased->ModelAlpha(), 1.0f);
+
+			// **The unguarded door does not eat the frame.** A scene capture or a spectator can reach
+			// the fallback before the camera manager runs, and it must not leave the manager's own
+			// post-rig call a no-op — that is what made the alpha describe the previous frame's boom.
+			Phased->FinalizeFrameUnguarded();
+			TestEqual(TEXT("the unguarded door re-solves from the boom in force"),
+				Phased->ModelAlpha(), 0.0f);
+			Phased->SetSolvedBoom(FVector(200.0f, 0.0f, 0.0f), FRotator::ZeroRotator, false);
+			Phased->FinalizeFrameUnguarded();
+			TestEqual(TEXT("and a later rig solve still reaches the band through it"),
+				Phased->ModelAlpha(), 1.0f);
+		}
+	}
+
 	// --- the easing is at the point of use, not in the ramp ---
 	{
 		TestEqual(TEXT("SimpleSpline(0)"), ElysiumCam::SimpleSpline(0.0f), 0.0f);
@@ -499,7 +542,154 @@ bool FElysiumCameraTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The modern rig (CCC2) — the remaster half of the camera A/B.
+// The switch-frame table (`docs/vtmb/camera-view-modes.md` §5, the render hand-off).
+//
+// This is a direct transcription of the recovered table and the acceptance for the whole draw
+// policy: every surface that switches, the exact frame it switches on in each direction, and which
+// gates are boolean against the one that fades. It is a pure function of weights, boom and shot
+// keys, so it asserts with no pawn, no world and no RHI.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawTest, "Elysium.Substrate.CameraDraw",
+	GElysiumTestFlags)
+bool FElysiumCameraDrawTest::RunTest(const FString&)
+{
+	FElysiumCameraCvars Cvars;
+	Cvars.IdealDist = 100.0f;
+	Cvars.FadeStart = 80.0f;
+	Cvars.FadeEnd = 20.0f;
+
+	const FElysiumShotPresentation NoShot;
+	const FVector NearEye(5.0f, 0.0f, 0.0f);
+	const FVector FarBoom(200.0f, 0.0f, 0.0f);
+
+	// --- first -> third: everything switches on the FIRST frame, the body starts transparent ---
+	{
+		FElysiumCameraWeights W;
+		W.bUserThird = true;
+		W.Third = 0.0001f;   // the first frame the ramp has left zero
+		const FElysiumCameraDrawPolicy P = ElysiumCam::SolveDrawPolicy(W, NearEye, Cvars, NoShot);
+		TestTrue(TEXT("the predicate is true on the first frame of first->third"), P.bThirdPerson);
+		TestTrue(TEXT("the body is draw-eligible immediately"), P.bBodyEligible);
+		TestEqual(TEXT("but starts at alpha 0, because the boom is still inside cam_fadeend"),
+			P.BodyAlpha, 0.0f);
+		TestTrue(TEXT("the world weapon becomes eligible immediately, with no fade"),
+			P.bWorldWeaponEligible);
+		TestFalse(TEXT("the first-person hands stop submitting immediately"), P.bViewmodelEligible);
+		TestEqual(TEXT("and the crosshair is already the plain third-person reticle"),
+			P.Reticle, EElysiumReticlePath::ThirdPerson);
+		TestTrue(TEXT("an ordinary mode toggle never hides the HUD"), P.bShowHud);
+	}
+
+	// --- mid-blend, past the band's ceiling: the one soft hand-off has completed ---
+	{
+		FElysiumCameraWeights W;
+		W.bUserThird = true;
+		W.Third = 1.0f;
+		const FElysiumCameraDrawPolicy P = ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, NoShot);
+		TestEqual(TEXT("the body is opaque past min(cam_idealdist, cam_fadestart)"), P.BodyAlpha, 1.0f);
+	}
+
+	// --- third -> first: the switch is the LAST frame, at exactly zero ---
+	{
+		FElysiumCameraWeights W;
+		W.Third = 0.001f;
+		const FElysiumCameraDrawPolicy Almost = ElysiumCam::SolveDrawPolicy(W, NearEye, Cvars, NoShot);
+		TestTrue(TEXT("a hair above zero is still third person"), Almost.bThirdPerson);
+		TestTrue(TEXT("the body is still eligible through the whole return"), Almost.bBodyEligible);
+		TestTrue(TEXT("the world weapon stays eligible until the weight reaches zero"),
+			Almost.bWorldWeaponEligible);
+		TestFalse(TEXT("and the hands stay suppressed for the whole return"), Almost.bViewmodelEligible);
+
+		W.Third = 0.0f;
+		const FElysiumCameraDrawPolicy Zero = ElysiumCam::SolveDrawPolicy(W, NearEye, Cvars, NoShot);
+		TestFalse(TEXT("exactly zero ends third person"), Zero.bThirdPerson);
+		TestFalse(TEXT("the body stops submitting on that frame"), Zero.bBodyEligible);
+		TestFalse(TEXT("so does the world weapon"), Zero.bWorldWeaponEligible);
+		TestTrue(TEXT("and the hands resume on exactly that frame"), Zero.bViewmodelEligible);
+		TestEqual(TEXT("the crosshair returns to the use-icon path"),
+			Zero.Reticle, EElysiumReticlePath::FirstPerson);
+	}
+
+	// --- a scripted camera over a first-person run: eligible, and fully transparent ---
+	// This is why retail needs no player-body suppression and why creating an `npc_VPlayerController`
+	// double does not put two bodies on screen (`docs/vtmb/camera-view-modes.md` §6).
+	{
+		FElysiumCameraWeights W;
+		W.Scripted = 1.0f;
+		const FElysiumCameraDrawPolicy P = ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, NoShot);
+		TestTrue(TEXT("a scripted camera satisfies the predicate"), P.bThirdPerson);
+		TestTrue(TEXT("so the body is draw-eligible under a cutscene"), P.bBodyEligible);
+		TestEqual(TEXT("and invisible, because the third-person boom is still zero-weighted"),
+			P.BodyAlpha, 0.0f);
+		TestFalse(TEXT("the first-person hands are suppressed under any scripted camera"),
+			P.bViewmodelEligible);
+	}
+
+	// --- the latches the predicate does and does not count ---
+	{
+		FElysiumCameraWeights W;
+		W.bForcedFirst = true;
+		TestFalse(TEXT("forced-first is not a term in the disjunction"),
+			ElysiumCam::SolveDrawPolicy(W, NearEye, Cvars, NoShot).bThirdPerson);
+
+		FElysiumCameraWeights Feed;
+		Feed.Feed = 0.25f;
+		TestTrue(TEXT("the feed weight is"),
+			ElysiumCam::SolveDrawPolicy(Feed, NearEye, Cvars, NoShot).bThirdPerson);
+
+		FElysiumCameraWeights Secondary;
+		Secondary.Secondary = 0.25f;
+		TestTrue(TEXT("and so is the secondary scripted weight"),
+			ElysiumCam::SolveDrawPolicy(Secondary, NearEye, Cvars, NoShot).bThirdPerson);
+
+		FElysiumCameraWeights Forced;
+		Forced.bForcedThird = true;
+		TestTrue(TEXT("forced-third is, with no weight at all"),
+			ElysiumCam::SolveDrawPolicy(Forced, NearEye, Cvars, NoShot).bThirdPerson);
+	}
+
+	// --- HUD policy belongs to the NAMED shot channel and to nothing else ---
+	{
+		FElysiumCameraWeights W;
+		W.Scripted = 1.0f;
+
+		// A Worldcraft `camera_track` publishes a value shot. It carries no `ShowHud` key, so it
+		// cannot take the HUD down no matter how long it owns the view.
+		FElysiumShotPresentation Track;
+		Track.bNamed = false;
+		Track.bShowHud = false;
+		TestTrue(TEXT("a camera_track cannot hide the HUD"),
+			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Track).bShowHud);
+
+		// A named story shot authoring neither key hides both surfaces: both parse default 0.
+		FElysiumShotPresentation Story;
+		Story.bNamed = true;
+		const FElysiumCameraDrawPolicy StoryPolicy =
+			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Story);
+		TestFalse(TEXT("a named shot with no keys hides the HUD"), StoryPolicy.bShowHud);
+		TestFalse(TEXT("and the viewmodel with it"), StoryPolicy.bViewmodelEligible);
+
+		// An interaction shot opts back in — `special-case.txt`'s Hacking and Intrusion entries.
+		FElysiumShotPresentation Interaction;
+		Interaction.bNamed = true;
+		Interaction.bShowHud = true;
+		TestTrue(TEXT("an interaction shot opts the HUD back in"),
+			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Interaction).bShowHud);
+
+		// `DrawViewmodel` can only ever suppress. With the predicate true it cannot force hands on.
+		FElysiumShotPresentation Draws;
+		Draws.bNamed = true;
+		Draws.bDrawViewmodel = true;
+		TestFalse(TEXT("DrawViewmodel never forces the hands on under a scripted camera"),
+			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Draws).bViewmodelEligible);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The third-person rig.
 //
 // Nothing here reproduces a decompiled function; it is the project's own third-person rig, and the
 // assertions are about the three properties that make it *different* from the recovered one: the
@@ -510,6 +700,199 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraRigTest, "Elysium.Substrate.Camer
 bool FElysiumCameraRigTest::RunTest(const FString&)
 {
 	using namespace ElysiumRig;
+
+	// --- the store owns every axis it names, and the conversion happens exactly once ---
+	{
+		FElysiumCameraRigTuning Project;
+		FElysiumCameraCvars Cvars;   // constructed at retail's defaults, already in centimetres
+		const FElysiumCameraRigTuning T = ResolveTuning(Project, Cvars);
+
+		TestEqual(TEXT("cam_idealdist 85 owns the rest length"), T.BoomLength, 85.0f * ElysiumCam::U);
+		TestEqual(TEXT("cam_trace_radius 9 owns the probe"), T.ProbeRadius, 9.0f * ElysiumCam::U);
+		TestEqual(TEXT("cam_targetangle 15 owns the pitch offset"), T.PitchOffset, 15.0f);
+		TestEqual(TEXT("c_mindistance owns the dolly floor"), T.DollyMin, 30.0f * ElysiumCam::U);
+		TestEqual(TEXT("c_maxdistance owns the dolly ceiling"), T.DollyMax, 200.0f * ElysiumCam::U);
+		TestEqual(TEXT("cdamp_springlength owns the dead band"), T.DamperDeadBand, 0.1f * ElysiumCam::U);
+		TestEqual(TEXT("cdamp_maxdist owns the lag clamp"), T.DamperMaxLag, 50.0f * ElysiumCam::U);
+
+		// The collision floor is a different quantity from the dolly floor and stays the project's.
+		TestEqual(TEXT("the collision retract floor is not c_mindistance"),
+			T.MinBoomLength, Project.MinBoomLength);
+		TestEqual(TEXT("and neither is the recovery rate"), T.ReturnSpeed, Project.ReturnSpeed);
+		TestEqual(TEXT("nor the shoulder offset"), T.ShoulderOffset, Project.ShoulderOffset);
+
+		// A Hooke rate becomes the half-life that decays at the same speed, and the wall constant is
+		// the stiffer of the two — retail snaps in and eases out.
+		TestTrue(TEXT("cdamp_hookesconstant 4 becomes ln2/4"),
+			FMath::IsNearlyEqual(T.PositionHalfLifeFree, UE_LN2 / 4.0f, 1e-4f));
+		TestTrue(TEXT("cdamp_hookesconstantwall 15 becomes ln2/15"),
+			FMath::IsNearlyEqual(T.PositionHalfLifeWall, UE_LN2 / 15.0f, 1e-4f));
+		TestTrue(TEXT("the wall damper is the stiffer of the two"),
+			T.PositionHalfLifeWall < T.PositionHalfLifeFree);
+
+		// **One conversion, at LoadFrom.** A store value of 50 must reach the rig as 127 cm, not as
+		// 50 and not as 322.
+		Cvars.IdealDist = 50.0f * ElysiumCam::U;
+		TestEqual(TEXT("a retuned cam_idealdist reaches the rig converted exactly once"),
+			ResolveTuning(Project, Cvars).BoomLength, 127.0f);
+
+		// Retail's own two bypasses survive as bypasses.
+		Cvars.bCollide = false;
+		Cvars.bDampOn = false;
+		const FElysiumCameraRigTuning Off = ResolveTuning(Project, Cvars);
+		TestFalse(TEXT("cam_collide 0 turns the sweep off"), Off.bCollide);
+		TestFalse(TEXT("cdamp_on 0 turns the damper off"), Off.bDampOn);
+	}
+
+	// --- the hand-orbit: clamped, and an untouched axis follows its cvar ---
+	{
+		FElysiumCameraRigTuning T;
+		T.OrbitSpeed = 90.0f;
+		T.DollySpeed = 100.0f;
+		T.OrbitYawMin = -135.0f;
+		T.OrbitYawMax = 135.0f;
+		T.OrbitPitchMin = 0.0f;
+		T.OrbitPitchMax = 90.0f;
+		T.BoomLength = 200.0f;
+		T.DollyMin = 100.0f;
+		T.DollyMax = 300.0f;
+
+		FElysiumOrbitState O;
+		TestFalse(TEXT("an untouched axis is not held, so it follows its cvar"), O.bYawHeld);
+
+		// Two seconds of held left orbit is 180 degrees of step, clamped to the recovered limit.
+		StepOrbit(O, static_cast<uint64>(EElysiumButton::CamYawLeft), FVector2D::ZeroVector, 2.0f, T);
+		TestEqual(TEXT("c_minyaw clamps the orbit"), O.YawOffset, -135.0f);
+		TestTrue(TEXT("and the axis is now held, so it stops following the cvar"), O.bYawHeld);
+
+		StepOrbit(O, static_cast<uint64>(EElysiumButton::CamYawRight), FVector2D::ZeroVector, 10.0f, T);
+		TestEqual(TEXT("c_maxyaw clamps the other way"), O.YawOffset, 135.0f);
+
+		FElysiumOrbitState P;
+		StepOrbit(P, static_cast<uint64>(EElysiumButton::CamPitchUp), FVector2D::ZeroVector, 5.0f, T);
+		TestEqual(TEXT("c_minpitch clamps an upward orbit"), P.PitchOffset, 0.0f);
+		StepOrbit(P, static_cast<uint64>(EElysiumButton::CamPitchDown), FVector2D::ZeroVector, 5.0f, T);
+		TestEqual(TEXT("c_maxpitch clamps a downward one"), P.PitchOffset, 90.0f);
+
+		// The dolly clamp bounds the composed distance, not the offset — `c_mindistance` is a
+		// distance limit, so 200 + offset must stay inside [100, 300].
+		FElysiumOrbitState D;
+		StepOrbit(D, static_cast<uint64>(EElysiumButton::CamOut), FVector2D::ZeroVector, 10.0f, T);
+		TestEqual(TEXT("c_maxdistance bounds the composed rest length"), D.DollyOffset, 100.0f);
+		StepOrbit(D, static_cast<uint64>(EElysiumButton::CamIn), FVector2D::ZeroVector, 10.0f, T);
+		TestEqual(TEXT("and c_mindistance bounds it the other way"), D.DollyOffset, -100.0f);
+
+		// `snapto` / `cam_restore` release every hold, which is what hands the axes back to the cvars.
+		RestoreOrbit(D);
+		TestEqual(TEXT("cam_restore returns the dolly to its cvar"), D.DollyOffset, 0.0f);
+		TestFalse(TEXT("and releases the hold"), D.bDollyHeld);
+
+		// **The orbit is not the view.** Nothing here writes a control rotation; the camera swings
+		// around the player and the player does not turn.
+		FElysiumOrbitState M;
+		StepOrbit(M, static_cast<uint64>(EElysiumButton::CamMouseMove), FVector2D(10.0f, 5.0f), 0.0f, T);
+		TestEqual(TEXT("a mouse-driven orbit folds the look delta into yaw"), M.YawOffset, 10.0f);
+		TestEqual(TEXT("and into pitch"), M.PitchOffset, 5.0f);
+
+		// ...and it folds it there INSTEAD of into the view, so the same delta must not also reach the
+		// control rotation. Both mouse-driven bits intercept, including the axis `+camdistance` does
+		// not itself consume.
+		TestFalse(TEXT("an idle frame leaves the mouse to the view"),
+			OrbitInterceptsMouse(0));
+		TestTrue(TEXT("+cammousemove takes the frame's mouse for the camera"),
+			OrbitInterceptsMouse(static_cast<uint64>(EElysiumButton::CamMouseMove)));
+		TestTrue(TEXT("and so does +camdistance"),
+			OrbitInterceptsMouse(static_cast<uint64>(EElysiumButton::CamDistance)));
+		TestFalse(TEXT("a held button-orbit is not a mouse interception"),
+			OrbitInterceptsMouse(static_cast<uint64>(EElysiumButton::CamYawLeft)));
+	}
+
+	// --- the held flags are what an axis stops following its cvar WITH ---
+	{
+		FElysiumCameraRigTuning Base;
+		Base.YawOffset = 10.0f;        // `cam_yaw`
+		Base.PitchOffset = 15.0f;      // `cam_targetangle`
+		Base.BoomLength = 200.0f;      // `cam_idealdist`
+		Base.DollyMin = 50.0f;
+		Base.DollyMax = 400.0f;
+		Base.OrbitYawMin = -135.0f;
+		Base.OrbitYawMax = 135.0f;
+		Base.OrbitPitchMin = 0.0f;
+		Base.OrbitPitchMax = 90.0f;
+		Base.OrbitSpeed = 20.0f;
+		Base.DollySpeed = 20.0f;
+
+		// Nothing touched: every axis is the cvar's, verbatim.
+		FElysiumOrbitState O;
+		const FElysiumCameraRigTuning Untouched = ComposeOrbit(Base, O);
+		TestEqual(TEXT("an untouched yaw is exactly cam_yaw"), Untouched.YawOffset, 10.0f);
+		TestEqual(TEXT("an untouched pitch is exactly cam_targetangle"), Untouched.PitchOffset, 15.0f);
+		TestEqual(TEXT("an untouched boom is exactly cam_idealdist"), Untouched.BoomLength, 200.0f);
+
+		// A live retune moves an untouched axis at once — the property that makes `elysium.cmd
+		// cam_idealdist 50` land on the next frame.
+		FElysiumCameraRigTuning Retuned = Base;
+		Retuned.YawOffset = 40.0f;
+		Retuned.BoomLength = 300.0f;
+		TestEqual(TEXT("and it follows a retune live"), ComposeOrbit(Retuned, O).YawOffset, 40.0f);
+		TestEqual(TEXT("boom included"), ComposeOrbit(Retuned, O).BoomLength, 300.0f);
+
+		// One second of held right orbit against the ORIGINAL tuning: +20 degrees, and the axis is now
+		// the player's, frozen against `cam_yaw` = 10.
+		StepOrbit(O, static_cast<uint64>(EElysiumButton::CamYawRight), FVector2D::ZeroVector, 1.0f, Base);
+		TestTrue(TEXT("the orbited axis is held"), O.bYawHeld);
+		TestEqual(TEXT("and composes onto the cvar it was following"),
+			ComposeOrbit(Base, O).YawOffset, 30.0f);
+
+		// **The point of the flag.** Retuning `cam_yaw` from 10 to 40 must not drag a boom the player
+		// has already placed by hand; the axes they have not touched still follow.
+		TestEqual(TEXT("a held yaw stops following cam_yaw"), ComposeOrbit(Retuned, O).YawOffset, 30.0f);
+		TestEqual(TEXT("while an untouched boom on the same frame still follows cam_idealdist"),
+			ComposeOrbit(Retuned, O).BoomLength, 300.0f);
+
+		// `snapto` / `cam_restore` hands it back, which is the recovered way out.
+		RestoreOrbit(O);
+		TestFalse(TEXT("cam_restore releases the yaw hold"), O.bYawHeld);
+		TestEqual(TEXT("and the axis follows its cvar again"),
+			ComposeOrbit(Retuned, O).YawOffset, 40.0f);
+
+		// The pitch axis composes the other way round — the orbit is Source's down-positive and
+		// `PitchOffset` is degrees above the eye line.
+		FElysiumOrbitState P;
+		StepOrbit(P, static_cast<uint64>(EElysiumButton::CamPitchDown), FVector2D::ZeroVector, 1.0f, Base);
+		TestEqual(TEXT("a downward orbit lowers the boom's lift"),
+			ComposeOrbit(Base, P).PitchOffset, -5.0f);
+		FElysiumCameraRigTuning PitchRetuned = Base;
+		PitchRetuned.PitchOffset = 45.0f;
+		TestEqual(TEXT("and a held pitch stops following cam_targetangle"),
+			ComposeOrbit(PitchRetuned, P).PitchOffset, -5.0f);
+	}
+
+	// --- the pivot damper: two constants, a dead band and a lag clamp ---
+	{
+		FElysiumCameraRigTuning T;
+		T.PositionHalfLifeFree = 0.2f;
+		T.PositionHalfLifeWall = 0.05f;
+		T.DamperDeadBand = 1.0f;
+		T.DamperMaxLag = 500.0f;
+
+		const FVector At(0.0f, 0.0f, 0.0f);
+		const FVector Goal(100.0f, 0.0f, 0.0f);
+
+		const FVector Free = DampPivot(At, Goal, /*bClipped=*/false, T, 0.2f);
+		const FVector Wall = DampPivot(At, Goal, /*bClipped=*/true, T, 0.2f);
+		TestTrue(TEXT("the free damper closes half the gap in its own half-life"),
+			FMath::IsNearlyEqual(static_cast<float>(Free.X), 50.0f, 0.01f));
+		TestTrue(TEXT("the wall damper is stiffer over the same step"), Wall.X > Free.X);
+
+		TestEqual(TEXT("inside the dead band the pivot has arrived"),
+			DampPivot(FVector(99.5f, 0.0f, 0.0f), Goal, false, T, 0.2f), Goal);
+		TestEqual(TEXT("beyond the lag clamp it snaps rather than sliding"),
+			DampPivot(FVector(-1000.0f, 0.0f, 0.0f), Goal, false, T, 0.2f), Goal);
+
+		T.bDampOn = false;
+		TestEqual(TEXT("cdamp_on 0 makes the pivot rigid"), DampPivot(At, Goal, false, T, 0.2f), Goal);
+	}
 
 	// --- the damper is exact at any step ---
 	{
@@ -789,7 +1172,9 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 		TemporalShot.FieldOfView = FocalLengthToHorizontalFov(35.0f);
 		TestTrue(TEXT("a moving track value reaches the live camera shot"),
 			TemporalCamera->UpdateShot(TemporalShotId, TemporalShot));
-		TemporalCamera->UpdateCamera(1.0f / 60.0f);
+		// Phase one is all this case needs: the shot chase and the stack's weight. The fade band is
+		// phase two's and reads a boom no rig has solved here.
+		TemporalCamera->AdvanceFrame(1.0f / 60.0f);
 		FMinimalViewInfo ScriptedView;
 		ScriptedView.PostProcessSettings.MotionBlurAmount = 0.5f;
 		TemporalCamera->ApplyToView(ScriptedView);
@@ -1199,7 +1584,10 @@ CameraShotTable
 		FMath::IsNearlyEqual(Def.Constraints.DistanceTolerance, 5.0f * 2.54f, 0.01f));
 	// Nothing in the file says otherwise, so the defaults the how-to implies hold.
 	TestFalse(TEXT("AutoPositionFromTarget defaults off"), Def.Constraints.bAutoPositionFromTarget);
-	TestTrue(TEXT("ShowHud defaults on"), Def.Constraints.bShowHud);
+	// Both presentation keys parse with a default of **0** — an absent field asks the shot to hide
+	// that surface, and the corpus opts back in explicitly for interaction shots only.
+	TestFalse(TEXT("ShowHud defaults off"), Def.Constraints.bShowHud);
+	TestFalse(TEXT("DrawViewmodel defaults off"), Def.Constraints.bDrawViewmodel);
 
 	// A file with no shot block is a miss, not a half-built shot.
 	FElysiumCameraShotDef Empty;

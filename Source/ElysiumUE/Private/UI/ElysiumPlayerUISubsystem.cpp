@@ -318,7 +318,7 @@ void UElysiumPlayerUISubsystem::OnViewPublished(const FElysiumViewState& View)
 		Model->Apply(View, PreviewMode);
 	}
 	EnsureRoot();
-	SetNotificationSurfaceAvailable(View.bPlayerSurface && !View.bCinematic
+	SetNotificationSurfaceAvailable(View.bPlayerSurface && !View.Camera.bScriptedCameraOwnsView
 		&& !View.Sign && !View.Dialogue.IsOpen() && !View.Loot.IsOpen()
 		&& !View.Terminal.IsOpen());
 	ReconcileSign(View);

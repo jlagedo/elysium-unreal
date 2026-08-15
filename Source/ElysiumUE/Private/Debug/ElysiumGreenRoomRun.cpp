@@ -1220,7 +1220,17 @@ void FElysiumGreenRoomRun::PinCameraAndPlayerSurface()
 	{
 		if (IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
 		{
-			PlayerBody->ApplyPlayerModelAlpha(1.0f);
+			// The capture wants the surface drawn regardless of which mode the rig happens to be in,
+			// so it publishes a pinned policy in place of the camera's. Re-applied every frame,
+			// because the manager republishes the real one at its own view-update tail.
+			FElysiumCameraDrawPolicy Pinned;
+			Pinned.bThirdPerson = true;
+			Pinned.bBodyEligible = true;
+			Pinned.BodyAlpha = 1.0f;
+			Pinned.bWorldWeaponEligible = true;
+			Pinned.bViewmodelEligible = false;
+			Pinned.Reticle = EElysiumReticlePath::ThirdPerson;
+			PlayerBody->ApplyDrawPolicy(Pinned);
 		}
 	}
 	if (PC)

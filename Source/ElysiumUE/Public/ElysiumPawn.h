@@ -54,7 +54,8 @@ public:
 	virtual UElysiumCameraComponent* GetCameraComponent() const override { return Camera; }
 	virtual USkeletalMeshComponent* GetPlayerVisual() const override { return PlayerVisual; }
 	virtual void SetPlayerVisual(USkeletalMeshComponent* InVisual) override;
-	virtual void ApplyPlayerModelAlpha(float Alpha) override;
+	virtual void ApplyDrawPolicy(const FElysiumCameraDrawPolicy& Policy) override;
+	virtual void SetBodyEntityHidden(bool bInHidden) override;
 
 	// Swap the hull between the standing and ducked sizes (`docs/vtmb/source_movement.md` → "The hulls
 	// and the view offsets"). The mover owns *when*; the pawn owns *how*, because the box extent
@@ -72,6 +73,18 @@ private:
 	UPROPERTY() TObjectPtr<UElysiumMovementComponent> Movement;
 	UPROPERTY() TObjectPtr<USkeletalMeshComponent> PlayerVisual;
 
+	// The two independent gates on the surface, and the one place that resolves them. Kept apart
+	// because they have different owners and different lifetimes: the policy is republished every
+	// frame by the camera, the entity gate changes only when the entity's dormancy does.
+	void RefreshBodyVisibility();
+
 	FElysiumEntityHandle PlayerEntity;
-	float PlayerVisualAlpha = 0.0f;
+	FElysiumCameraDrawPolicy DrawPolicy;
+	bool bEntityHidden = false;
+
+	// The last resolved draw gate, so the cloth hand-off runs on the **edge**. `ApplyDrawPolicy` is
+	// called every frame by the camera manager, and resuming a garment re-teleports and resets it —
+	// done per frame that is a solver that never integrates. Unset until the first refresh, so the
+	// initial state is always pushed.
+	TOptional<bool> LastClothDrawn;
 };

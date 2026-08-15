@@ -8,6 +8,7 @@
 #include "ElysiumPresentationSubsystem.generated.h"
 
 class AElysiumMapActor;
+class AElysiumPlayerCameraManager;
 class UElysiumPresentationSubsystem;
 class UPrimitiveComponent;
 
@@ -147,7 +148,16 @@ private:
 	// current-map pointer mid-travel).
 	AElysiumMapActor* ResolveMapActor() const;
 
+	// This world's player camera manager, or null where no player rig runs (character generation, a
+	// backdrop). The frame's draw policy is read off its stamped sample rather than re-derived here.
+	const AElysiumPlayerCameraManager* ResolveLocalCameraManager() const;
+
 	FElysiumViewState ViewState;
+
+	// Whether the stale-sample warning has already been issued for the run of frames currently in
+	// progress. The manager can legitimately publish nothing for many consecutive frames, and the
+	// interesting event is the transition into that state, not each frame of it.
+	bool bReportedStaleCameraSample = false;
 
 	// Drained by the publish pass. A second announcement of the same kind in one frame overwrites
 	// the first, which is the same replace-the-running-one rule the world itself applies.

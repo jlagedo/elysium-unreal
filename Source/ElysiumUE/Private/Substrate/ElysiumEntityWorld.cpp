@@ -918,10 +918,13 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
 	Controller->Health = Source->Health;
 	Controller->MaxHealth = Source->MaxHealth;
 	CallEntitySpawn(*Controller);
-	if (IElysiumEmbodiment* E = Embodiment())
-	{
-		E->SetPlayerVisualSuppressed(true);
-	}
+	// **The real player's body is not hidden here, and retail does not hide it either.** Camera
+	// ownership, actor ownership and player control are three independent authored operations
+	// (`docs/vtmb/choreographed_scenes.md` § "Player pawn versus cinematic double"). A first-person
+	// run already draws an eligible but fully transparent body, because the fade band reads the
+	// third-person boom and that boom is zero-weighted; a third-person run draws the real body beside
+	// the double, exactly as retail does. Content that wants the player elsewhere teleports `!player`,
+	// which is how `sp_theatre` stages its courtroom.
 	UE_LOG(LogElysiumWorld, Log, TEXT("player controller entity live: %s"), *Controller->DebugString());
 	return PlayerControllerEntity;
 }
@@ -961,10 +964,7 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 		Controller->Visual = nullptr;
 	}
 	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
-	if (IElysiumEmbodiment* E = Embodiment())
-	{
-		E->SetPlayerVisualSuppressed(false);
-	}
+	// Nothing to restore: the double never hid the real body, so removing it un-hides nothing.
 	return true;
 }
 
@@ -2621,7 +2621,6 @@ void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
 			Request.Control = EElysiumCameraControlPolicy::Preserve;
 			Request.bShowHud = Def->Constraints.bShowHud;
 			Request.bDrawViewmodel = Def->Constraints.bDrawViewmodel;
-			Request.bShowPlayerBody = !Def->Constraints.bDrawViewmodel;
 			Request.bDialogPOV = Def->Constraints.bDialogPOV;
 			Request.bRequireSubtitleSafe = false; // source shot authors its own subject framing
 			Request.Fallback = EElysiumCameraFallback::SourceShot;

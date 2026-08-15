@@ -1,5 +1,6 @@
 #include "ElysiumPlayerController.h"
 
+#include "ElysiumCameraRig.h"
 #include "ElysiumCheatManager.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumInputRouter.h"
@@ -101,7 +102,13 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	// Degrees, straight into the engine's own rotation input. `bEnableLegacyInputScales` is off, so
 	// `AddYawInput`/`AddPitchInput` accumulate without a scale and the degrees in the command are
 	// the degrees applied — the property the user command exists to hold.
-	if (!Current.LookDelta.IsNearlyZero())
+	//
+	// **Unless the camera has intercepted the mouse.** `+cammousemove` / `+camdistance` fold this same
+	// delta into the boom's orbit (`ElysiumRig::StepOrbit`), so applying it here as well would move the
+	// camera twice as far as the mouse asked and turn the player during what is a camera-only orbit.
+	// The command still carries the raw delta — the rig is the consumer, and the edge history below
+	// stays the physical sample.
+	if (!Current.LookDelta.IsNearlyZero() && !ElysiumRig::OrbitInterceptsMouse(Current.Buttons))
 	{
 		AddYawInput(Current.LookDelta.X);
 		AddPitchInput(Current.LookDelta.Y);

@@ -515,7 +515,8 @@ void FElysiumCombatCharacter::EnsureFeedCamera()
 	Request.Control = EElysiumCameraControlPolicy::Locked;
 	Request.bShowHud = true;
 	Request.bDrawViewmodel = false;
-	Request.bShowPlayerBody = true;
+	// The feed weight is a term in `CAM_IsThirdPerson`, so the body becomes draw-eligible on its own
+	// as the weight rises and fades in with the boom. Nothing here has to ask for it.
 	Request.Fallback = EElysiumCameraFallback::PlayerView;
 	Request.SelectedProfile = TEXT("OrdinaryFeedWeight");
 	FeedCameraHandle = Service->AcquireCamera(Request);

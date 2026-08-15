@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumCameraSolve.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumLocomotionSample.h"
 #include "UObject/Interface.h"
@@ -63,10 +64,29 @@ public:
 	// Never null on a spawned body.
 	virtual UElysiumCameraComponent* GetCameraComponent() const = 0;
 
-	// The skeletal surface shared by both movement implementations. It is animation-only and
-	// non-solid; the pawn's hull remains the authoritative body. Camera alpha is applied as a
-	// masked-dither scalar, with a hard hidden fast path only at true zero.
+	// The skeletal surface. It is animation-only and non-solid; the pawn's hull remains the
+	// authoritative body.
 	virtual USkeletalMeshComponent* GetPlayerVisual() const = 0;
 	virtual void SetPlayerVisual(USkeletalMeshComponent* InVisual) = 0;
-	virtual void ApplyPlayerModelAlpha(float Alpha) = 0;
+
+	// **The frame's resolved draw policy — the body applies it and decides nothing.** Eligibility is
+	// the hidden flag; the band is the `ModelAlpha` material scalar, which the masked/dithered player
+	// material turns into a screen-door fade. There is exactly one caller,
+	// `AElysiumPlayerCameraManager`, once per frame, from the view that is actually rendered.
+	//
+	// Suppression of the viewmodel and the world weapon is **submission-only**: a consumer never
+	// destroys a component, clears a model, or resets a sequence or cycle, so the frame the weight
+	// reaches exactly zero resumes the existing visual state instead of rebuilding it.
+	virtual void ApplyDrawPolicy(const FElysiumCameraDrawPolicy& Policy) = 0;
+
+	// The **entity's** own draw gate — `ScriptHide`, dormancy, a `Spawn()`-time `Kill`. It is ANDed
+	// with the camera's eligibility: the body draws only when the entity permits it *and* the mode
+	// predicate makes it eligible.
+	//
+	// This is not the old cutscene suppression under a new name. Its producer is the player entity's
+	// own dormancy, which is a recovered gate; the `npc_VPlayerController` double has no say in
+	// whether the real body draws, because retail gives it none — a first-person cutscene already
+	// yields an eligible but fully transparent body through the fade band
+	// (`docs/vtmb/camera-view-modes.md` §6).
+	virtual void SetBodyEntityHidden(bool bHidden) = 0;
 };

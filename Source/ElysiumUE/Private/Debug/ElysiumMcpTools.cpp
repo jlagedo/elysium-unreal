@@ -795,7 +795,6 @@ namespace ElysiumMcpImpl
 							Director->SetStringField(TEXT("control"), CameraControlName(Request.Control));
 							Director->SetBoolField(TEXT("show_hud"), Request.bShowHud);
 							Director->SetBoolField(TEXT("draw_viewmodel"), Request.bDrawViewmodel);
-							Director->SetBoolField(TEXT("show_player_body"), Request.bShowPlayerBody);
 							Director->SetBoolField(TEXT("dialog_pov"), Request.bDialogPOV);
 							Director->SetStringField(TEXT("source_shot"), Request.SourceShot);
 							Director->SetStringField(TEXT("profile"), Request.SelectedProfile);

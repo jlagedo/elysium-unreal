@@ -44,7 +44,7 @@ protected:
 
 private:
 	// Seeded to a frame that cannot be the current one, so the first pass is not the one the guard
-	// eats — the same shape `UElysiumCameraComponent::UpdateCamera` uses.
+	// eats — the same shape `UElysiumCameraComponent`'s two frame phases use.
 	uint64 LastAppliedFrame = TNumericLimits<uint64>::Max();
 };
 

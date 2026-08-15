@@ -250,8 +250,7 @@ the entity it embodies. No `+use` routing, no sign dismissal, no `IsInputKeyDown
 `FElysiumPlayer::SetRuntimeOrigin` moves the body, exactly as `FElysiumNpc` moves a skeletal one, so
 `point_teleport`, landmark placement and a scripted `pc.SetOrigin(...)` are one path. The reverse
 direction is a sample: the world reads the pawn into the entity once a frame, before thinks and the
-queue. `UElysiumMovementComponent` arrived with 11.6 and `UElysiumCameraComponent` with 11.7; both bodies
-carry the same camera, so the `elysium.SourceMovement` A/B compares the movers alone.
+queue. `UElysiumMovementComponent` arrived with 11.6 and `UElysiumCameraComponent` with 11.7.
 
 ### What it collapsed
 
@@ -543,12 +542,11 @@ own `StepUp` — is precisely the code being replaced. NPCs are unaffected: they
 not Source step semantics, and can keep capsules. Open RE: the **ducked** hull's dimensions are
 unrecorded (**RE22**) — `IN_DUCK` is in the user command with nothing sizing it.
 
-The capsule pawn survives as `AElysiumCapsulePawn` behind `elysium.SourceMovement 0`, the A/B
-baseline while 4.7 lands. Because the two cannot share a base — one is an `APawn`, the other an
-`ACharacter` — what everything outside them talks to is **`IElysiumPlayerBody`**: noclip, the
-embodied entity handle, the body half-height the teleport seam lifts a Source feet-origin by, the
-spawn-hold freeze, and `ApplyUserCmd`. Nothing outside the two bodies names a concrete pawn class,
-which is also what keeps the A/B honest: it compares the movers, not two input paths.
+`AElysiumPawn` is the only player body. What everything outside it talks to is
+**`IElysiumPlayerBody`**: noclip, the embodied entity handle, the body half-height the teleport seam
+lifts a Source feet-origin by, the spawn-hold freeze, `ApplyUserCmd`, and the camera's resolved draw
+policy. The interface remains an interface rather than collapsing into the pawn because the bodies a
+view can retarget to are not all pawns; nothing outside it names a concrete pawn class.
 
 ## 9. The camera
 

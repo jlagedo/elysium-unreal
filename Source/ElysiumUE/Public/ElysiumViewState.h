@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "ElysiumAppState.h"
+#include "ElysiumCameraSolve.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
 
@@ -139,6 +140,45 @@ struct FElysiumTerminalView
 };
 
 // ============================================================================================
+// The camera's contribution to the frame — its resolved draw policy, projected once.
+// ============================================================================================
+struct FElysiumCameraView
+{
+	// A camera manager published a sample for this frame. False on a backdrop or during character
+	// generation, where the view target is an `ACameraActor` and no player rig runs.
+	bool bValid = false;
+
+	bool bThirdPerson = false;
+
+	// A scripted shot or a map camera track owns the view. This is **presentation context, not a HUD
+	// gate**: it suppresses toasts and the interaction prompt, because those describe an interaction
+	// the player is not currently having. Retail's ordinary mode toggle and a Worldcraft
+	// `camera_track` both leave the HUD up (`docs/vtmb/camera-view-modes.md` §5).
+	bool bScriptedCameraOwnsView = false;
+
+	// Named-`SetCamera`-shot policy, ANDed from exactly two contributors: the deciding shot on the
+	// legacy stack (through the draw policy's `bShowHud`) and the dialogue session's own selected
+	// source shot (through `FElysiumEntityWorld::DialogueCameraHidesHud`). A `camera_track` authors no
+	// `ShowHud` key and contributes to neither. The camera **service** is not a third contributor —
+	// only the dialogue session's stored request is read, and only through that predicate.
+	bool bShowHud = true;
+
+	// **The first-person hands/weapon submission gate** (CCC10.1's seam). Its consumer suppresses
+	// submission only: never destroy either component, never clear a model, never reset a sequence or
+	// cycle. The frame the third-person weight reaches exactly zero resumes the existing visual state
+	// rather than rebuilding it.
+	bool bDrawViewmodel = false;
+
+	// The local player's own body and the world weapon it carries. The body's band is the only soft
+	// hand-off recovered; the world weapon is boolean in both directions.
+	bool bDrawPlayerBody = false;
+	float PlayerBodyAlpha = 0.0f;
+	bool bDrawWorldWeapon = false;
+
+	EElysiumReticlePath ReticlePath = EElysiumReticlePath::FirstPerson;
+};
+
+// ============================================================================================
 // FElysiumViewState — everything on screen, rebuilt each frame in TG_PostUpdateWork.
 // ============================================================================================
 struct FElysiumViewState
@@ -150,11 +190,10 @@ struct FElysiumViewState
 	// cannot draw one by forgetting to check.
 	bool bPlayerSurface = false;
 
-	// A scripted camera currently owns the player's view. This suppresses the heads-up layer only:
-	// fades, dialogue and future cutscene subtitles remain part of the published player surface.
-	// Derived from actual camera ownership, not from logic_choreographed_scene activity — ambient
-	// NPC choreography is allowed to run during ordinary play.
-	bool bCinematic = false;
+	// --- The camera's resolved draw policy, projected once ------------------------------------
+	// The only camera facts on this state. Widgets read these and never query the pawn or the camera
+	// manager (`docs/architecture/camera-architecture.md` → Input, settings and presentation).
+	FElysiumCameraView Camera;
 
 	// --- Interaction (P4.4) -----------------------------------------------------------------
 	// The complete +use presentation projection. A retained fade-out remains visible but is never
@@ -212,16 +251,24 @@ namespace ElysiumView
 	// What the crosshair is this frame.
 	enum class EReticle : uint8
 	{
-		None,      // no surface at all, or a panel with HideHUD covering the game
-		Cross,     // the plain aim cross
-		UseIcon,   // the +use context cursor: the ring frame around Interaction.Icon's atlas cell
+		None,        // no surface at all, or a panel with HideHUD covering the game
+		Cross,       // the plain aim cross
+		UseIcon,     // the +use context cursor: the ring frame around Interaction.Icon's atlas cell
+		ThirdPerson, // the plain white reticle drawn at the crosshair rect in third person
 	};
 
+	// **The mode toggle selects a crosshair path; it does not hide the HUD** (`0x1009b9e0`,
+	// `docs/vtmb/camera-view-modes.md` §5). Third person draws the plain reticle; first person runs
+	// the full use-icon / arrow cursor path.
 	inline EReticle ResolveReticle(const FElysiumViewState& V)
 	{
-		if (!V.bPlayerSurface || V.bCinematic || V.bSignHidesHUD || V.Feed.bPaired)
+		if (!V.bPlayerSurface || !V.Camera.bShowHud || V.bSignHidesHUD || V.Feed.bPaired)
 		{
 			return EReticle::None;
+		}
+		if (V.Camera.ReticlePath == EElysiumReticlePath::ThirdPerson)
+		{
+			return EReticle::ThirdPerson;
 		}
 		return V.Interaction.bVisible && V.Interaction.Icon > 0
 			? EReticle::UseIcon : EReticle::Cross;

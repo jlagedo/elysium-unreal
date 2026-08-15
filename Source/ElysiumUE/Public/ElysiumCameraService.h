@@ -101,10 +101,22 @@ struct FElysiumCameraRequest
 	// Control and presentation policy. The input and presentation owners consume these values; this
 	// service never applies input mode or widget state itself.
 	UPROPERTY(EditAnywhere) EElysiumCameraControlPolicy Control = EElysiumCameraControlPolicy::Preserve;
+	// Read by `FElysiumEntityWorld::DialogueCameraHidesHud` off the dialogue session's own stored
+	// request — the one request whose presentation policy reaches the frame. A request that merely
+	// *wins* arbitration does not gate the HUD; there is no such override.
 	UPROPERTY(EditAnywhere) bool bShowHud = true;
+	// **Diagnostic and MCP surface only.** Nothing gates the viewmodel on it, and nothing needs to:
+	// any adopted scripted camera satisfies `CAM_IsThirdPerson`, and `ElysiumCam::SolveDrawPolicy`
+	// already refuses the first-person viewmodel outright in third person
+	// (`docs/vtmb/camera-view-modes.md` §5). The named shot's own `DrawViewmodel` key still reaches
+	// the draw policy through `FElysiumShotPresentation`; this field is that key carried alongside the
+	// request so `elysium.camera` and the MCP dump can report what the shot asked for.
 	UPROPERTY(EditAnywhere) bool bDrawViewmodel = true;
-	UPROPERTY(EditAnywhere) bool bShowPlayerBody = true;
 	UPROPERTY(EditAnywhere) bool bDialogPOV = false;
+	// There is deliberately no player-body field here. Whether the local body draws is the camera's
+	// own draw policy (`ElysiumCam::SolveDrawPolicy`), resolved from the mode predicate and the fade
+	// band; a request that could override it would be a second owner of the one answer, and retail has
+	// no such override (`docs/vtmb/camera-view-modes.md` §6).
 
 	// Candidate policy and diagnostics.
 	UPROPERTY(EditAnywhere) bool bCheckCollision = true;

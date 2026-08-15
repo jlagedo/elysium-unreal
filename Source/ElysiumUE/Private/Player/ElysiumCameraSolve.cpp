@@ -61,12 +61,13 @@ float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 	// 0 below `cam_fadeend`, 1 at/above min(`cam_idealdist`, `cam_fadestart`), SimpleSpline
 	// between. The third-person weight scales the solved boom before the band is evaluated.
 	//
-	// **The band is the whole answer, and first person is the bottom of it.** VtMB never draws the
-	// player's own body from the player's own eye, and no other channel may reopen that: a scripted
-	// shot composes over this view rather than replacing the view mode, so ramping the body in with
-	// the shot's weight would stand the player up inside a first-person run the moment a camera_track
-	// began. A cutscene that wants a visible player uses the `npc_VPlayerController` stand-in, which
-	// is a real entity with a real body — that is what the authored scenes create it for.
+	// **This is opacity, not eligibility** — `SolveDrawPolicy` owns the draw gate. The band reads the
+	// *third-person boom*, so it answers 0 for the whole of first person no matter what else is
+	// composed over the view: a scripted shot adds weight to the predicate, not length to the boom.
+	// That is what makes a first-person cutscene draw an eligible but fully transparent body, which
+	// is why retail needs no player-body suppression and neither do we
+	// (`docs/vtmb/camera-view-modes.md` §6). In third person the real body is drawn beside any
+	// `npc_VPlayerController` stand-in, exactly as retail does it.
 	const float Distance = SolvedOffset.Size() * Weights.ThirdBlend();
 	const float Full = FMath::Min(Cvars.IdealDist, Cvars.FadeStart);
 	if (Distance >= Full)
@@ -79,6 +80,99 @@ float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 		return SimpleSpline((Distance - Cvars.FadeEnd) / Span);
 	}
 	return 0.0f;
+}
+
+// =====================================================================================
+// Weapon-class arbitration (`docs/vtmb/camera-view-modes.md` §2)
+// =====================================================================================
+
+int32 ElysiumCam::ParseCameraClass(const FString& Literal)
+{
+	// Case-sensitive, exactly as the retail ladder is. `Ranged` is not `ranged` and falls through to
+	// zero, which is a real authored hazard rather than a defect to fix here.
+	if (Literal.Equals(TEXT("ranged"), ESearchCase::CaseSensitive))    { return CameraClass::Ranged; }
+	if (Literal.Equals(TEXT("thrown"), ESearchCase::CaseSensitive))    { return CameraClass::Thrown; }
+	if (Literal.Equals(TEXT("force_1st"), ESearchCase::CaseSensitive)) { return CameraClass::ForceFirst; }
+	if (Literal.Equals(TEXT("melee"), ESearchCase::CaseSensitive))     { return CameraClass::ForceThird; }
+	if (Literal.Equals(TEXT("force_3rd"), ESearchCase::CaseSensitive)) { return CameraClass::ForceThird; }
+	// `noswitch`, a typo, a mis-cased literal and an absent key all land here.
+	return CameraClass::None;
+}
+
+ElysiumCam::EWeaponCameraAction ElysiumCam::ApplyWeaponCameraPref(int32 Class, int32 Prefs,
+	bool bWeaponSwitch)
+{
+	if (Class == CameraClass::None || !bWeaponSwitch)
+	{
+		return EWeaponCameraAction::None;
+	}
+	// The two forced classes short-circuit **before** the preference bitmask is consulted, which is
+	// why a melee weapon cannot be brought to first person at all and why neither writes a
+	// preference back.
+	if (Class == CameraClass::ForceFirst)
+	{
+		return EWeaponCameraAction::ToFirstPerson;
+	}
+	if (Class == CameraClass::ForceThird)
+	{
+		return EWeaponCameraAction::ForceThirdOn;
+	}
+	// A set bit means first person. Default `camera_prefs 6` sets `ranged` and `thrown`, so a stock
+	// install draws both in first person.
+	return (Class & Prefs) != 0
+		? EWeaponCameraAction::ToFirstPerson : EWeaponCameraAction::ToThirdPerson;
+}
+
+int32 ElysiumCam::SaveWeaponCameraPref(int32 Class, int32 Prefs, bool bThirdPerson)
+{
+	if (Class == CameraClass::ForceFirst || Class == CameraClass::ForceThird
+		|| Class == CameraClass::None)
+	{
+		return Prefs;   // not user-settable
+	}
+	return bThirdPerson ? (Prefs & ~Class) : (Prefs | Class);
+}
+
+FElysiumCameraDrawPolicy ElysiumCam::SolveDrawPolicy(const FElysiumCameraWeights& Weights,
+	const FVector& SolvedOffset, const FElysiumCameraCvars& Cvars,
+	const FElysiumShotPresentation& Shot)
+{
+	FElysiumCameraDrawPolicy Out;
+
+	// `ShouldDrawLocalPlayer` (`0x100a5910`) and the viewmodel gate in `ShouldDrawViewModel`
+	// (`0x10198ea0`) both reach this same predicate through `CInput` slot `+0x74`, with opposite
+	// senses. Reading the *smoothed weight* here instead would move both switches into the middle of
+	// the blend, where retail has already switched them.
+	Out.bThirdPerson = Weights.IsThirdPerson();
+
+	// The body submits whenever the predicate holds, and the band decides how much of it is seen. On
+	// the first frame of a first->third transition those disagree — eligible at alpha 0 — and that
+	// disagreement is the recovered behaviour rather than a state to collapse.
+	Out.bBodyEligible = Out.bThirdPerson;
+	Out.BodyAlpha = SolveModelAlpha(SolvedOffset, Weights, Cvars);
+
+	// Boolean, both directions. No attachment-alpha consumer is recovered, so a world weapon pops
+	// rather than fading; inventing a fade here would be inventing cinematography.
+	Out.bWorldWeaponEligible = Out.bThirdPerson;
+
+	// **Resuming at exactly weight 0 falls out of the strict comparison inside the predicate.** The
+	// last frame of a third->first return is the first frame every term is false, which is the frame
+	// retail resumes the hands on. An epsilon here would resume them early and break the table.
+	//
+	// The second term is redundant while a named shot is live — such a shot always carries scripted
+	// weight, so the predicate has already suppressed the viewmodel — and it is kept because the RE
+	// records both gates. `DrawViewmodel` can only ever suppress; it never forces the hands on.
+	Out.bViewmodelEligible = !Out.bThirdPerson && (!Shot.bNamed || Shot.bDrawViewmodel);
+
+	Out.Reticle = Out.bThirdPerson
+		? EElysiumReticlePath::ThirdPerson : EElysiumReticlePath::FirstPerson;
+
+	// Named shots only. Both keys parse with a default of 0, so an authored story shot with no keys
+	// hides the HUD while an interaction shot opts back in. A value shot — a `camera_track`, a VCD
+	// edit — carries no such key and therefore cannot take the HUD down.
+	Out.bShowHud = !Shot.bNamed || Shot.bShowHud;
+
+	return Out;
 }
 
 // =====================================================================================

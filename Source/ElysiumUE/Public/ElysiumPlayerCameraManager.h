@@ -3,6 +3,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "CoreMinimal.h"
 #include "ElysiumCameraRig.h"
+#include "ElysiumCameraSolve.h"
 
 #include "ElysiumPlayerCameraManager.generated.h"
 
@@ -21,7 +22,7 @@ struct FElysiumCameraSample
 	// `GFrameCounter` when this was published. Zero means the camera has never solved.
 	uint64 Frame = 0;
 
-	// --- the faithful evaluator ---------------------------------------------------------------
+	// --- the boom -------------------------------------------------------------------------------
 	// The boom, in cm, with the third-person weight already applied — zero in true first person.
 	float BoomLength = 0.0f;
 	// The damper's result before the weight, so a recording separates "the boom is short" from
@@ -33,10 +34,13 @@ struct FElysiumCameraSample
 	// Whether the collision sweep hit this frame. A state flip, never a rounding difference.
 	bool bClipped = false;
 
-	// The weights the whole rig is a function of, and the body-visibility ramp they produce.
+	// The weights the whole rig is a function of.
 	float ThirdWeight = 0.0f;
 	float ScriptedWeight = 0.0f;
-	float ModelAlpha = 0.0f;
+
+	// The frame's resolved switch-frame table. Published here so a Cog readout, `elysium_player_get`
+	// and a channel recording all read the same one answer and cannot disagree about a mode switch.
+	FElysiumCameraDrawPolicy Draw;
 };
 
 // The one final view per local player (`docs/architecture/camera-architecture.md` -> rule 1).
@@ -102,6 +106,9 @@ private:
 	bool bModernClipped = false;
 	// Snap rather than ease on the next solve — the same re-seed the faithful damper takes, so a
 	// teleport does not record the spring flying in from where the body used to be.
+	// The player's hand-orbit. Rig state like the pivot and the length, so it lives here rather than
+	// on the component; the verbs latch a restore request on the component and this consumes it.
+	ElysiumRig::FElysiumOrbitState ModernOrbit;
 	bool bModernNeedsReseed = true;
 	uint64 ModernSolvedFrame = TNumericLimits<uint64>::Max();
 };

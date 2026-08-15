@@ -677,6 +677,14 @@ struct FElysiumRecordingServices final
 	{
 		Record(TEXT("ClearPlayerVisual"));
 	}
+	virtual void SetPlayerBodyEntityHidden(bool bHidden) override
+	{
+		bPlayerBodyEntityHidden = bHidden;
+		Record(FString::Printf(TEXT("SetPlayerBodyEntityHidden %d"), bHidden ? 1 : 0));
+	}
+	// The last entity-side gate the player pushed. The camera's half is not modelled here — it is a
+	// pure function asserted in `Elysium.Substrate.CameraDraw` with no world at all.
+	bool bPlayerBodyEntityHidden = false;
 
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override
 	{

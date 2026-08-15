@@ -58,18 +58,11 @@ stay planted and the head drops; airborne the centre stays fixed, so the feet ri
 reachable ledge goes from the 25-unit jump-boost pop to 43. Both live on the pawn rather than on
 `IElysiumPlayerBody`, because a body that is not a hull has no eye to re-base.
 
-**The camera decides whether the body is drawn.** `CalcCamera` delegates to the camera component and
-feeds its `ModelAlpha()` into `ApplyPlayerModelAlpha`, which writes the scalar on the visual's
-material and toggles visibility. The fade band is the camera's; the body only obeys it.
-
-## The A/B
-
-`elysium.SourceMovement 0` stands the player on `AElysiumCapsulePawn` — an ordinary `ACharacter` with
-Unreal's own `UCharacterMovementComponent` — instead of the faithful body. Both implement
-`IElysiumPlayerBody`, both accept the same command, and both build the same skeletal visual, so the
-switch isolates "is this the mover's fault?" in one cvar. It is the pattern any later feel divergence
-copies: **the faithful path stays executable, and the A/B is a body swap rather than a branch inside
-the solve.**
+**The camera decides whether the body is drawn.** `AElysiumPlayerCameraManager` resolves the frame's
+draw policy and hands it to the body through `IElysiumPlayerBody::ApplyDrawPolicy`; the pawn applies
+eligibility and the fade band and decides nothing. The pawn's own `CalcCamera` produces a view and
+never writes visibility — a scene capture is a second view of the frame, not a second opinion about
+the body. Details: `docs/vtmb/camera-view-modes.md` § 5.
 
 ## Divergences
 

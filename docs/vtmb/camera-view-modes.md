@@ -353,6 +353,14 @@ The solver `0x100fd350`:
   against walls than in open space — it snaps in and eases out.
 - Finally the weight scaling and angle lerp from §3.
 
+*Elysium divergence, owner-called.* The recovered sweep is a `UTIL_TraceHull` **box** of half-extents
+`±cam_trace_radius`; Elysium sweeps a **sphere** of that radius on its own camera channel. Geometry
+queries belong to the engine (`docs/project/remaster-direction.md` → the Ownership test), so the
+recovered *rule* — probe from the eye toward the desired point at the authored radius, allow
+`dist * fraction`, skip entirely under `cam_collide 0` — is reproduced while the query itself is
+Unreal's. A sphere rounds the corners a box would catch, so the camera clears a doorway jamb slightly
+earlier than retail's.
+
 `CAM_ApplyToView` (slot `+0x7c`, `0x100ffb00`) is the single point where the view is modified:
 
 ```c
@@ -654,15 +662,14 @@ architecture is `docs/architecture/camera-architecture.md`.
 
 ### Integration boundary
 
-- The recovered weight ramp, priority latches, Hooke damper, collision solve, fade band, cvar
-  surface, named shot grammar, and map-track scheduler remain executable as the compatibility and
-  development A/B path.
-- `UElysiumCameraComponent` is the faithful evaluator. Its output enters the remaster camera service
-  as a `LegacyShot` or `LegacyTrack` request; it is not the final camera authority and does not
-  arbitrate dialogue, focus, Sequencer, or modern player modes itself.
+- The recovered weight ramp, priority latches, draw policy, fade band, cvar surface, named shot
+  grammar, and map-track scheduler are reproduced and are the compatibility surface.
+- `UElysiumCameraComponent` owns those recovered rules — the four weights and three latches, the
+  scripted-shot stack, the fade band and the draw policy. It is not the final camera authority and
+  does not arbitrate dialogue, focus, Sequencer, or player modes itself; the manager does.
 - The console/cvar bridge reproduces VtMB's camera names so `config.cfg`, patch aliases, and original
-  scripts continue to resolve. Those settings tune the faithful evaluator, not the remaster's user
-  preference or project-authored profiles.
+  scripts continue to resolve. Those settings tune the recovered rules and the one boom, not the
+  remaster's user preference or project-authored profiles.
 - Game-derived `vdata/camerashots/`, map entities, and VCDs stay external runtime inputs. Original
   project camera profiles and Level Sequences may be authored under `/Game/ElysiumAuthored/**` but
   do not replace source data silently.

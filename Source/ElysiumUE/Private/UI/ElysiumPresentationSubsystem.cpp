@@ -8,6 +8,8 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumPlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 #include "Substrate/ElysiumSignData.h"
 #include "UI/ElysiumUISubsystem.h"
 
@@ -84,8 +86,9 @@ void UElysiumPresentationSubsystem::Initialize(FSubsystemCollectionBase& Collect
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
 		{
 			const FElysiumViewState& V = ViewState;
-			UE_LOG(LogElysiumView, Display, TEXT("app=%s surface=%d cinematic=%d use=%d alpha=%.2f actionable=%d fade=(%.2f,%.2f,%.2f,%.2f)"),
-				ElysiumAppState::Name(V.App), V.bPlayerSurface ? 1 : 0, V.bCinematic ? 1 : 0,
+			UE_LOG(LogElysiumView, Display, TEXT("app=%s surface=%d scriptedcam=%d use=%d alpha=%.2f actionable=%d fade=(%.2f,%.2f,%.2f,%.2f)"),
+				ElysiumAppState::Name(V.App), V.bPlayerSurface ? 1 : 0,
+				V.Camera.bScriptedCameraOwnsView ? 1 : 0,
 				V.Interaction.Icon, V.Interaction.PromptAlpha, V.Interaction.bActionable ? 1 : 0,
 				V.Fade.R, V.Fade.G, V.Fade.B, V.Fade.A);
 			UE_LOG(LogElysiumView, Display, TEXT("sign=%s alpha=%.2f hideHUD=%d"),
@@ -146,6 +149,15 @@ AElysiumMapActor* UElysiumPresentationSubsystem::ResolveMapActor() const
 	// for as long as a travel is in flight. This publisher is this world's, so it only ever reports
 	// this world's map.
 	return (Map && Map->GetWorld() == W) ? Map : nullptr;
+}
+
+const AElysiumPlayerCameraManager* UElysiumPresentationSubsystem::ResolveLocalCameraManager() const
+{
+	const UWorld* W = GetWorld();
+	const APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+	// Null during character generation and on a backdrop, where the view target is an `ACameraActor`
+	// and no player rig runs. Both leave `bPlayerSurface` false, so no reader sees the gap.
+	return PC ? Cast<AElysiumPlayerCameraManager>(PC->PlayerCameraManager) : nullptr;
 }
 
 // --- IElysiumPresenter — the substrate's announcements -----------------------------------------
@@ -298,10 +310,10 @@ void UElysiumPresentationSubsystem::Publish()
 	if (World)
 	{
 		// Authored cutscenes take the view through camera_track or SetCamera and return it through
-		// RestoreCameraToPlayerControl / RemoveCamera. Camera ownership is the exact suppression
-		// lifetime; scene playback alone would also catch ambient NPC choreography.
-		Next.bCinematic = World->HasTrackCamera() || World->HasScriptedCamera()
-			|| World->DialogueCameraHidesHud();
+		// RestoreCameraToPlayerControl / RemoveCamera. Camera ownership is the exact lifetime; scene
+		// playback alone would also catch ambient NPC choreography. This is **context, not a HUD
+		// gate** — it suppresses the interaction prompt and toasts, nothing else.
+		Next.Camera.bScriptedCameraOwnsView = World->HasTrackCamera() || World->HasScriptedCamera();
 		Next.Interaction = World->GetInteractionView();
 
 		FLinearColor FadeColor;
@@ -401,10 +413,54 @@ void UElysiumPresentationSubsystem::Publish()
 			}
 		}
 
-		if (Next.bCinematic || Next.bSignHidesHUD || bModalScreen || Next.Dialogue.IsOpen()
-			|| Next.Loot.IsOpen() || Next.Feed.bPaired)
+		if (Next.Camera.bScriptedCameraOwnsView || Next.bSignHidesHUD || bModalScreen
+			|| Next.Dialogue.IsOpen() || Next.Loot.IsOpen() || Next.Feed.bPaired)
 		{
 			Next.Interaction = FElysiumInteractionView();
+		}
+
+		// **The camera's draw policy, taken from the stamped sample rather than re-derived.**
+		// `TG_PostUpdateWork` runs after the local player controller's tick, which is where the camera
+		// manager produces the frame's view, so the sample is this frame's. A stale one is a real
+		// failure: hold the previous projection and say so, rather than publishing a default that
+		// would silently stand the body or the reticle in the wrong state.
+		if (const AElysiumPlayerCameraManager* Manager = ResolveLocalCameraManager())
+		{
+			const FElysiumCameraSample& S = Manager->GetCameraSample();
+			if (S.Frame == GFrameCounter)
+			{
+				bReportedStaleCameraSample = false;
+				Next.Camera.bValid = true;
+				Next.Camera.bThirdPerson = S.Draw.bThirdPerson;
+				Next.Camera.bDrawViewmodel = S.Draw.bViewmodelEligible;
+				Next.Camera.bDrawPlayerBody = S.Draw.bBodyEligible;
+				Next.Camera.PlayerBodyAlpha = S.Draw.BodyAlpha;
+				Next.Camera.bDrawWorldWeapon = S.Draw.bWorldWeaponEligible;
+				Next.Camera.ReticlePath = S.Draw.Reticle;
+
+				// Three named contributors and only three, each derived from a **named** `SetCamera`
+				// shot. A Worldcraft `camera_track` authors no `ShowHud` key and so contributes to
+				// none of them (`docs/vtmb/camera-view-modes.md` §5).
+				Next.Camera.bShowHud = S.Draw.bShowHud && !World->DialogueCameraHidesHud();
+			}
+			else
+			{
+				Next.Camera = Previous.Camera;
+				// Reported on the **edge**, not per frame. The manager legitimately publishes nothing
+				// for a run of frames — the view target is not a player body, or its rig has not
+				// solved yet — and a warning per frame for the length of that run buries the one
+				// transition that carries the information. The latch clears the moment a fresh sample
+				// arrives, so a second stall reports again.
+				if (!bReportedStaleCameraSample)
+				{
+					bReportedStaleCameraSample = true;
+					UE_LOG(LogElysiumView, Warning,
+						TEXT("camera sample is stale (frame %llu, now %llu) - holding the previous draw ")
+						TEXT("policy; the reticle and player body describe the last resolved frame ")
+						TEXT("until a sample is published again"),
+						S.Frame, GFrameCounter);
+				}
+			}
 		}
 
 		// The meters come off the player entity's own fields (11.4), live — the session record is
