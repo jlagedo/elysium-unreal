@@ -14,7 +14,9 @@ returns only as an escalation oracle on a named divergence
 (`docs/vtmb/vtmb-animation-reverse-engineering.md` → "Programme method").
 
 The CCC slice (camera, controls, the played movement feel) remains its own surface in
-`plans/three-cs.md`; this programme owns everything a body plays.
+`plans/three-cs.md`; this programme owns everything a body plays. How to drive an agent
+session per task — session shape, kickoff prompts, scope traps:
+`docs/operations/life-agent-playbook.md`.
 
 ### LIFE0 The composition seam holds, loudly
 
