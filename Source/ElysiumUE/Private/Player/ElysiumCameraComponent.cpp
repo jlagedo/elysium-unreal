@@ -492,9 +492,35 @@ void UElysiumCameraComponent::ToggleCamera()
 		// land, and the registry counts the call and reports it through `elysium.commands` rather than
 		// failing silently. Going through the verb rather than the inventory directly is what keeps the
 		// key bind and this branch the same operation.
+		const int32 ClassBeforeHolster = EquippedCameraClass;
 		Console.Execute(TEXT("holster"));
-		Weights.bUserThird = false;
-		Weights.bForcedThird = false;
+
+		// **The camera may not commit the consequences of a holster that did not happen.** Retail's
+		// body drops to first person here because `inven_holster` has put the weapon away, which
+		// clears the forced class. Ours has not: `holster` is declared with no implementation, so the
+		// call counts and returns and the weapon stays in hand. Committing anyway produces a state
+		// the game cannot be in — first person while holding a melee weapon, the exact thing the
+		// `0x10` force exists to prevent — and it is self-perpetuating, because the class is still
+		// ForceThird on the next toggle, so this branch fires again and the camera can never leave
+		// first person at all.
+		//
+		// `FElysiumCombatCharacter::PublishEquippedCameraClass` is the only writer of
+		// `EquippedCameraClass`, so an unchanged value here IS "the weapon is still equipped".
+		if (EquippedCameraClass == ClassBeforeHolster)
+		{
+			// The hold stands, which is the documented behaviour for a melee weapon. `bForcedThird`
+			// is deliberately left set.
+			Weights.bUserThird = true;
+			ElysiumStub::Fired(TEXT("camera"), TEXT("inven_holster"), FString(), FString(),
+				TEXT("the forced-third holster branch asked for a holster and the weapon stayed ")
+				TEXT("equipped; the camera keeps third person rather than entering a first-person ")
+				TEXT("state a melee class forbids. Lands with the 9.8 holster implementation."));
+		}
+		else
+		{
+			Weights.bUserThird = false;
+			Weights.bForcedThird = false;
+		}
 	}
 
 	UE_LOG(LogElysiumCamera, Verbose, TEXT("togglecamera -> %s (class 0x%02x)"),
