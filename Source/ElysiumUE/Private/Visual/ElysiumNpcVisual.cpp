@@ -1,6 +1,7 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumWieldTable.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
 #include "Visual/ElysiumHairDynamicsData.h"
 
@@ -313,6 +314,116 @@ namespace ElysiumNpcVisual
 		Cloth->SetLeaderPoseComponent(Body);
 		HideGarmentSectionsOnBody(Body, *Asset);
 		return Cloth;
+	}
+
+	FName WieldComponentTag()
+	{
+		static const FName Tag(TEXT("ElysiumWieldModel"));
+		return Tag;
+	}
+
+	USkeletalMeshComponent* FindWieldModel(const USkeletalMeshComponent* Body)
+	{
+		const AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner == nullptr)
+		{
+			return nullptr;
+		}
+		TArray<USkeletalMeshComponent*> Components;
+		Owner->GetComponents(Components);
+		for (USkeletalMeshComponent* Component : Components)
+		{
+			if (Component->ComponentHasTag(WieldComponentTag())
+				&& Component->LeaderPoseComponent.Get() == Body)
+			{
+				return Component;
+			}
+		}
+		return nullptr;
+	}
+
+	/**
+	 * Take away the wield models this body is holding, and the ones whose body is already gone.
+	 *
+	 * The same ownership trap `SweepStaleGarments` documents: a wield model belongs to the OWNING
+	 * ACTOR, and the map actor owns every character standing on the map — so rebuilding one body
+	 * leaves its weapon behind, parented to an actor that is still alive. The leader pose is a weak
+	 * reference, so the leftover keeps drawing at the identity transform rather than erroring.
+	 *
+	 * The tag is what keeps this from reaching the bodies themselves, which are skeletal components
+	 * on the same owner.
+	 */
+	void SweepWieldModels(AActor* Owner, const USkeletalMeshComponent* Body)
+	{
+		TArray<USkeletalMeshComponent*> Components;
+		Owner->GetComponents(Components);
+		for (USkeletalMeshComponent* Component : Components)
+		{
+			if (!Component->ComponentHasTag(WieldComponentTag()))
+			{
+				continue;
+			}
+			// Two ways to be stale, and both happen on a restand: the body this weapon followed was
+			// destroyed, or the body is about to be handed a different weapon.
+			if (!Component->LeaderPoseComponent.IsValid()
+				|| Component->LeaderPoseComponent.Get() == Body)
+			{
+				Component->DestroyComponent();
+			}
+		}
+	}
+
+	void ClearWieldModel(USkeletalMeshComponent* Body)
+	{
+		AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner != nullptr)
+		{
+			SweepWieldModels(Owner, Body);
+		}
+	}
+
+	USkeletalMeshComponent* InstallWieldModel(USkeletalMeshComponent* Body,
+		const FElysiumWieldModelRef& Ref, const FString& Context)
+	{
+		AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner == nullptr)
+		{
+			return nullptr;
+		}
+		// FIRST, and unconditionally, for the reason InstallGarment states: every reason this
+		// function has for declining is also a reason the previous weapon still needs taking away.
+		SweepWieldModels(Owner, Body);
+
+		// A row that reaches here carries geometry — the authored no-geometry answers are resolved
+		// and reported by UElysiumWieldTable::FindRow, so a load miss here is a bake that did not
+		// produce a package its own table references.
+		USkeletalMesh* const Mesh = Ref.Mesh.LoadSynchronous();
+		if (Mesh == nullptr)
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("wield model '%s' for '%s' is referenced by the wield table but is not on the "
+				     "mount -- nothing is drawn. Run `uv run elysium export wield`."),
+				*Ref.Mesh.ToString(), *Context);
+			return nullptr;
+		}
+
+		USkeletalMeshComponent* const Wield = NewObject<USkeletalMeshComponent>(Owner);
+		Wield->ComponentTags.Add(WieldComponentTag());
+		Wield->SetSkeletalMeshAsset(Mesh);
+		// The weapon is posed by the body it hangs on, so it follows rather than animates: no graph,
+		// no clip player, nothing for its own skeleton to evaluate. Its clips are baked and a later
+		// rung may play one (`w_m_lockpick`'s pick wiggle is the corpus's only visible own-motion),
+		// which is a graph added here rather than a different attachment.
+		Wield->SetAnimationMode(EAnimationMode::AnimationCustomMode);
+		Wield->SetCanEverAffectNavigation(false);
+		// Attaching before registering keeps the component from ticking against an unset leader for a
+		// frame, the same ordering InstallGarment depends on.
+		Wield->SetupAttachment(Body);
+		Wield->RegisterComponent();
+		Wield->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		Wield->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Wield->SetLeaderPoseComponent(Body);
+		return Wield;
 	}
 
 	USkeletalMesh* LoadBakedMesh(const FString& Stem, bool bPlayerMaterial)

@@ -91,6 +91,20 @@ private:
 	UElysiumEntityBodies* GetBodies() const;
 	// The autolayer binding the standing clip declares, beside what the lab actually has riding.
 	void RenderAutoLayers(FElysiumGreenRoomRun& Lab);
+	// The wielded weapon (CCC10.2): pick an item, pick the wielder's sex, and read back the row the
+	// table answered with — the baked mesh, the mount bone and the hand it descends from. The
+	// picker lists only the rows that carry geometry, because the corpus's ordinary answer is that
+	// an item holds none, and 244 mostly-empty rows would hide the 40 that do.
+	//
+	// The placement is judged here and nowhere else: there is no correction factor to reach for, so
+	// a weapon in the wrong place is a bake defect and this tab is where it is caught.
+	void RenderWield(FElysiumGreenRoomRun& Lab);
+	// The classnames the picker draws, rebuilt when the sex toggle moves or a bake lands. Resolving
+	// the whole table is a map walk, so it is not done per frame.
+	TArray<FString> WieldRows;
+	FString WieldFilter;
+	bool bWieldRowsDirty = true;
+	bool bWieldRowsFemale = false;
 
 	void Stand(FElysiumGreenRoomRun& Lab, const FString& Stem, const FString& Clip);
 	// What a clip row does when it is picked. An additive row lays a layer over the standing body

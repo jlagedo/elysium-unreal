@@ -630,6 +630,9 @@ void FElysiumGreenRoomRun::DestroyBodies()
 		}
 		if (USkeletalMeshComponent* Body = Entry.Body.Get())
 		{
+			// Before the body goes: a wield model outlives the component it follows, and an orphan
+			// keeps drawing at the identity transform rather than erroring.
+			ElysiumNpcVisual::ClearWieldModel(Body);
 			Body->DestroyComponent();
 		}
 	}
@@ -1633,6 +1636,9 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	ReviewLayers.Reset();
 	ReviewGrid = FElysiumResolvedGrid();
 	LabClipTime = 0.0f;
+	// The weapon is not a layer: it belongs to the character rather than to the pose, so it goes
+	// back on the body that has just replaced the one holding it.
+	ReapplyWield();
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s clip %s (%.3fs)"), *Stem, *ResolvedClip, Duration);
 	return true;
 }
@@ -1886,6 +1892,9 @@ bool FElysiumGreenRoomRun::LabSetDriveBody(const FString& Stem, FString& OutErro
 	// is what makes the ordinary teardown clear it.
 	bPlayerSurfaceActive = true;
 	ReviewStem = Stem;
+	// The held weapon follows the body across a mode change too — a weapon put in the hand while
+	// reviewing is the one thing worth carrying into drive mode, where it can be walked with.
+	ReapplyWield();
 	UE_LOG(LogElysiumGreenRoom, Log, TEXT("drive: %s standing on the pawn"), *Stem);
 	return true;
 }
@@ -2217,6 +2226,178 @@ void FElysiumGreenRoomRun::DrawArenaOverlays() const
 	const FVector Start = Origin + Arena.PlayerFeet;
 	DrawDebugCircle(World, Start + FVector(0.0f, 0.0f, 2.0f), 46.0f, 24, FColor(230, 120, 120),
 		false, -1.0f, 0, 2.5f, FVector(1, 0, 0), FVector(0, 1, 0), /*bDrawAxis=*/false);
+}
+
+// --- the wielded weapon (CCC10.2) ----------------------------------------------------------------
+
+EElysiumWieldResult FElysiumGreenRoomRun::LabSetWield(const FString& Classname, bool bFemale,
+	FString& OutDetail)
+{
+	USkeletalMeshComponent* Body = LabBody();
+	if (!IsLabReady() || Body == nullptr)
+	{
+		OutDetail = TEXT("nothing is standing on the stage");
+		return EElysiumWieldResult::NoWearer;
+	}
+
+	bReviewWieldFemale = bFemale;
+	const TCHAR* const Sex = bFemale ? TEXT("female") : TEXT("male");
+
+	const FElysiumWieldModelRef* Ref = nullptr;
+	const EElysiumWieldResult Lookup =
+		UElysiumWieldTable::FindRow(FName(*Classname), bFemale, Ref);
+
+	switch (Lookup)
+	{
+	case EElysiumWieldResult::Found:
+	{
+		if (ElysiumNpcVisual::InstallWieldModel(Body, *Ref, Classname) == nullptr)
+		{
+			// InstallWieldModel has already named the package it could not load.
+			ReviewWield.Reset();
+			OutDetail = FString::Printf(
+				TEXT("%s resolves a row whose package the bake did not produce — see the log"),
+				*Classname);
+			return EElysiumWieldResult::MeshMissing;
+		}
+		ReviewWield = Classname;
+		OutDetail = FString::Printf(TEXT("%s (%s): %s on %s, hand %s"),
+			*Classname, Sex, *Ref->Mesh.GetAssetName(),
+			*Ref->MountBone.ToString(), *Ref->HandBone.ToString());
+		UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab wield: %s"), *OutDetail);
+		break;
+	}
+	case EElysiumWieldResult::NoGeometry:
+		// The corpus's ordinary answer, not a missing asset: 296 of its 488 rows name `w_null.mdl`
+		// or nothing at all. The hands are emptied because that is what the row says to show.
+		LabClearWield();
+		OutDetail = FString::Printf(
+			TEXT("%s holds no wield model for a %s wielder — an authored answer, not a missing asset"),
+			*Classname, Sex);
+		break;
+	case EElysiumWieldResult::WorldModel:
+		LabClearWield();
+		OutDetail = FString::Printf(
+			TEXT("%s clears shows_view_model — its world model supplies the geometry, not a wield model"),
+			*Classname);
+		break;
+	case EElysiumWieldResult::UnknownItem:
+		OutDetail = FString::Printf(
+			TEXT("'%s' is not an item definition the wield table carries"), *Classname);
+		break;
+	case EElysiumWieldResult::NoTable:
+		OutDetail = TEXT("the wield table is not on the mount — run `uv run elysium export wield`");
+		break;
+	case EElysiumWieldResult::MeshMissing:
+	case EElysiumWieldResult::NoWearer:
+		// Not FindRow's vocabulary: both are this function's own outcomes and are returned directly
+		// above, so reaching them here would mean the lookup answered something it cannot.
+		OutDetail = FString::Printf(
+			TEXT("the wield table answered an install-side result for '%s'"), *Classname);
+		break;
+	}
+	return Lookup;
+}
+
+void FElysiumGreenRoomRun::LabClearWield()
+{
+	if (USkeletalMeshComponent* Body = LabBody())
+	{
+		ElysiumNpcVisual::ClearWieldModel(Body);
+	}
+	ReviewWield.Reset();
+}
+
+bool FElysiumGreenRoomRun::LabWieldCheck(FString& OutReport) const
+{
+	const USkeletalMeshComponent* const Body = LabBody();
+	USkeletalMeshComponent* const Wield = ElysiumNpcVisual::FindWieldModel(Body);
+	if (Body == nullptr || Wield == nullptr)
+	{
+		OutReport = TEXT("nothing is held");
+		return false;
+	}
+
+	const FElysiumWieldModelRef* Ref = nullptr;
+	if (UElysiumWieldTable::FindRow(FName(*ReviewWield), bReviewWieldFemale, Ref)
+		!= EElysiumWieldResult::Found)
+	{
+		OutReport = FString::Printf(TEXT("'%s' no longer resolves"), *ReviewWield);
+		return false;
+	}
+
+	const FName Mount = Ref->MountBone;
+	// Whether the WEARER declares the mount decides which of the two compositions is under test, and
+	// it is read off the wearer rather than assumed from the binding: the manifest's classification
+	// is metadata, and the body standing here is what actually answers.
+	const bool bWearerDeclares = Body->GetBoneIndex(Mount) != INDEX_NONE;
+	const FTransform WieldAt = Wield->GetSocketTransform(Mount, RTS_World);
+	const FTransform HandAt = Body->GetSocketTransform(Ref->HandBone, RTS_World);
+
+	if (bWearerDeclares)
+	{
+		const FTransform WearerAt = Body->GetSocketTransform(Mount, RTS_World);
+		const float PosCm = FVector::Dist(WieldAt.GetLocation(), WearerAt.GetLocation());
+		const float RotDeg = FMath::RadiansToDegrees(
+			WieldAt.GetRotation().AngularDistance(WearerAt.GetRotation()));
+		OutReport = FString::Printf(
+			TEXT("%s: mount '%s' is name-matched — weapon vs wearer %.4f cm / %.4f deg (want ~0); "
+			     "%.1f cm from %s"),
+			*ReviewWield, *Mount.ToString(), PosCm, RotDeg,
+			FVector::Dist(WieldAt.GetLocation(), HandAt.GetLocation()), *Ref->HandBone.ToString());
+		return true;
+	}
+
+	OutReport = FString::Printf(
+		TEXT("%s: mount '%s' is NOT declared by this body — it rides %s off its reference pose, "
+		     "%.1f cm out (a difference here is the expected composition, not an error)"),
+		*ReviewWield, *Mount.ToString(), *Ref->HandBone.ToString(),
+		FVector::Dist(WieldAt.GetLocation(), HandAt.GetLocation()));
+	return true;
+}
+
+void FElysiumGreenRoomRun::ReapplyWield()
+{
+	if (ReviewWield.IsEmpty())
+	{
+		return;
+	}
+	USkeletalMeshComponent* Body = LabBody();
+	const FElysiumWieldModelRef* Ref = nullptr;
+	if (Body == nullptr
+		|| UElysiumWieldTable::FindRow(FName(*ReviewWield), bReviewWieldFemale, Ref)
+			!= EElysiumWieldResult::Found)
+	{
+		// The row resolved once to get here, so losing it now means the table changed underneath a
+		// live session. Say so rather than leaving a body silently empty-handed.
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("lab wield: '%s' no longer resolves — the standing body holds nothing"),
+			*ReviewWield);
+		ReviewWield.Reset();
+		return;
+	}
+	ElysiumNpcVisual::InstallWieldModel(Body, *Ref, ReviewWield);
+}
+
+TArray<FString> FElysiumGreenRoomRun::LabWieldClassnames(bool bFemale)
+{
+	TArray<FString> Names;
+	const UElysiumWieldTable* const Table = UElysiumWieldTable::Load();
+	if (Table == nullptr)
+	{
+		return Names;
+	}
+	for (const TPair<FName, FElysiumWieldRow>& Pair : Table->Rows)
+	{
+		const FElysiumWieldModelRef& Ref = bFemale ? Pair.Value.Female : Pair.Value.Male;
+		if (Pair.Value.bShowsWieldModel && Ref.Binding != EElysiumWieldBinding::None
+			&& !Ref.Mesh.IsNull())
+		{
+			Names.Add(Pair.Key.ToString());
+		}
+	}
+	Names.Sort();
+	return Names;
 }
 
 bool FElysiumGreenRoomRun::LabRestand(FString& OutError)

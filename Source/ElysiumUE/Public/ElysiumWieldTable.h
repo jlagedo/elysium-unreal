@@ -97,6 +97,59 @@ struct FElysiumWieldRow
 };
 
 /**
+ * What asking for a character's held geometry answered. Three of these are answers the corpus
+ * authors deliberately and three are failures, which is the whole reason this is an enum: most of
+ * the corpus holds nothing, so a caller that treated every empty hand as a missing asset would warn
+ * constantly and say nothing.
+ *
+ * The first five are `UElysiumWieldTable::FindRow`'s vocabulary. The last two belong to a caller
+ * that goes on to install what the row named, and `FindRow` never answers them.
+ */
+UENUM()
+enum class EElysiumWieldResult : uint8
+{
+	/** A row carrying geometry. The out-reference is set. */
+	Found,
+
+	/**
+	 * The authored no-geometry answer: a `w_null.mdl` wield model, an empty model string, or an
+	 * item definition naming no wield model. 296 of the corpus's 488 rows answer this way, so it is
+	 * the common case and never a warning.
+	 */
+	NoGeometry,
+
+	/**
+	 * The definition clears `shows_view_model`, so equip skips the sex branch and the world model
+	 * supplies the geometry instead. Not a wield-model answer at all.
+	 */
+	WorldModel,
+
+	/** No row for this classname -- it is not one of the shipped item definitions. */
+	UnknownItem,
+
+	/** The wield bake has not run, so there is no table to resolve through. */
+	NoTable,
+
+	/**
+	 * The row resolved, but its package is not on the mount -- a bake that did not produce something
+	 * its own table references. A failure, not an authored answer.
+	 */
+	MeshMissing,
+
+	/** There is no body to put the geometry on. */
+	NoWearer,
+};
+
+/** Whether this answer means something is wrong, as opposed to the corpus saying "nothing". */
+inline bool ElysiumWieldFailed(EElysiumWieldResult Result)
+{
+	return Result == EElysiumWieldResult::UnknownItem
+		|| Result == EElysiumWieldResult::NoTable
+		|| Result == EElysiumWieldResult::MeshMissing
+		|| Result == EElysiumWieldResult::NoWearer;
+}
+
+/**
  * `/ElysiumBaked/Items/DA_WieldModels` -- the table the runtime resolves `(classname, sex)` through
  * to a held weapon's baked mesh and its binding.
  *
@@ -115,4 +168,20 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Wield")
 	TMap<FName, FElysiumWieldRow> Rows;
+
+	/**
+	 * The baked table, loaded on first use and rooted for the process. Null -- with one warning
+	 * naming the command that produces it -- when the wield bake has not run. There is no second
+	 * build of the corpus, so a miss is a missing bake rather than a choice between two sets.
+	 */
+	static const UElysiumWieldTable* Load();
+
+	/**
+	 * The model a wielder of this sex holds for `Classname`. `OutRef` is set only for `Found`.
+	 *
+	 * Classnames are compared case-insensitively, as VtMB's own comparison is; the caller passes the
+	 * classname as authored and this folds it.
+	 */
+	static EElysiumWieldResult FindRow(FName Classname, bool bFemale,
+		const FElysiumWieldModelRef*& OutRef);
 };

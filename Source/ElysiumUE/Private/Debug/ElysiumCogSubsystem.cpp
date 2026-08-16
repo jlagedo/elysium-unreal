@@ -2,6 +2,7 @@
 
 #include "CogCommon.h"
 #include "Containers/Ticker.h"
+#include "Logging/LogMacros.h"
 
 #if ENABLE_COG
 #include "CogImguiHelper.h"
@@ -46,11 +47,13 @@
 #endif
 
 #if ENABLE_COG
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumCog, Log, All);
+
 namespace
 {
 	// The armed green room, or null. Null in every ordinary session — the lab only exists under
 	// `-ElysiumGreenRoom` or after `elysium.gr` has stood one up.
-	const FElysiumGreenRoomRun* ResolveGreenRoomLab(const UWorldSubsystem* Owner)
+	FElysiumGreenRoomRun* ResolveGreenRoomLab(const UWorldSubsystem* Owner)
 	{
 		const UWorld* World = Owner ? Owner->GetWorld() : nullptr;
 		const UGameInstance* GI = World ? World->GetGameInstance() : nullptr;

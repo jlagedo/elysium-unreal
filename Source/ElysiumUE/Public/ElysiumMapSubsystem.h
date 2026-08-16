@@ -8,6 +8,7 @@
 
 class AElysiumMapActor;
 class FElysiumProfileRun;
+class FElysiumGreenRoomConsole;
 class FElysiumGreenRoomRun;
 class FElysiumProbeRun;
 class FElysiumShotRun;
@@ -221,6 +222,9 @@ private:
 
 	// Rendered skeletal body/clip validation, created only under -ElysiumGreenRoom.
 	TPimplPtr<FElysiumGreenRoomRun> GreenRoomRun;
+	// The lab's `elysium.gr_*` verbs. Registered for the session rather than with the lab, because
+	// they have to be callable before one is armed in order to say so; they resolve the lab per call.
+	TPimplPtr<FElysiumGreenRoomConsole> GreenRoomConsole;
 	TPimplPtr<FElysiumProbeRun> ProbeRun;
 
 	// Headless movement-regression harness (4.7), created only under -ElysiumMove.

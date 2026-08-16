@@ -8,6 +8,7 @@ class UMaterialInterface;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 class USkeleton;
+struct FElysiumWieldModelRef;
 
 // The runtime's character-body surface. A body, its clips and its blend grids all come off the
 // `/ElysiumBaked` mount, built offline from the `.eskm` containers `UE_mdl_skeletal.py` writes in
@@ -75,5 +76,34 @@ namespace ElysiumNpcVisual
 	// Install the generated stock-AnimDynamics hair recipe, if this is one of the two proof bodies.
 	// False is the ordinary answer everywhere else. A carried-but-invalid recipe warns and refuses.
 	bool InstallHairDynamics(USkeletalMeshComponent* Body, const FString& Stem);
+
+	// The component tag every installed wield model carries. A body's owner holds other skeletal
+	// components — the body itself, and on the map actor every other character standing — so the tag
+	// is what tells a sweep which ones are weapons.
+	FName WieldComponentTag();
+
+	// The wield model this body is holding, or null. Found by walking the owner's components rather
+	// than cached: the body can be rebuilt under a caller that still holds a stale pointer.
+	USkeletalMeshComponent* FindWieldModel(const USkeletalMeshComponent* Body);
+
+	// Put a drawn weapon's geometry in this body's hand, replacing whatever it was already holding.
+	//
+	// VtMB evaluates the weapon's own pose and then overwrites every bone whose NAME matches the
+	// wearer with the wearer's world matrix (`docs/vtmb/wielded_weapons.md`). `SetLeaderPoseComponent`
+	// is that rule: it matches follower bones to the wearer by name with no shared-`USkeleton`
+	// requirement, and gives a bone the wearer lacks a rigid offset from its nearest matched
+	// ancestor — which, against the frame-0 reference pose the wield bake stores, is retail's own
+	// composition. So a melee weapon rides the wearer's prop bone and a firearm rides the hand
+	// through one mechanism, with no socket, no offset and no per-binding branch.
+	//
+	// Returns the component when one was attached, null when the mesh could not be loaded — which it
+	// reports. `Context` names the caller's subject (an item classname, or a stem in the lab) and
+	// appears in that report.
+	USkeletalMeshComponent* InstallWieldModel(USkeletalMeshComponent* Body,
+		const FElysiumWieldModelRef& Ref, const FString& Context);
+
+	// Take away whatever this body is holding. Safe on a body holding nothing, which is why every
+	// path that changes what a character wields calls it rather than testing first.
+	void ClearWieldModel(USkeletalMeshComponent* Body);
 
 }

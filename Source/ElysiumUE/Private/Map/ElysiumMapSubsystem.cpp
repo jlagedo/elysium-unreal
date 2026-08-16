@@ -4,6 +4,7 @@
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
+#include "Debug/ElysiumGreenRoomConsole.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
@@ -29,6 +30,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumMap, Log, All);
 void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+
+#if !UE_BUILD_SHIPPING
+	// The green room's own verb set. Registered for the whole session rather than with the lab: they
+	// must be callable before one is armed in order to report that none is.
+	GreenRoomConsole = MakePimpl<FElysiumGreenRoomConsole>(this);
+#endif
 
 	// Engine-console mirrors of the dev-console commands, handy for -ExecCmds automation.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
@@ -255,6 +262,8 @@ void UElysiumMapSubsystem::Deinitialize()
 {
 	ProfileRun.Reset();
 	ShotRun.Reset();
+	// Before the lab: a verb that resolves it must not outlive it.
+	GreenRoomConsole.Reset();
 	GreenRoomRun.Reset();
 	ProbeRun.Reset();
 	MoveRun.Reset();

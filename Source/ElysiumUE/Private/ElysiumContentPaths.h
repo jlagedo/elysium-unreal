@@ -184,6 +184,28 @@ struct FElysiumContentPaths
 		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
 	}
 
+	// --- The baked wield corpus (pipeline/unreal/bake_wield.py) ----------------------------------
+	// The geometry a drawn weapon puts in a character's hand. Shaped like an animated prop and for
+	// the same reason — a weapon owns a private skeleton rather than joining a rig family, so its
+	// stem is the whole address — but kept apart because the corpus and its lifetime are the item
+	// definitions', not the cast's.
+	static FString BakedItemsDir() { return BakedMount() / TEXT("Items"); }
+	static FString BakedWieldDir() { return BakedItemsDir() / TEXT("Wield"); }
+	static FString BakedWieldPackage(const FString& Stem) { return BakedWieldDir() / Stem; }
+	static FString BakedWieldMesh(const FString& Stem)
+	{
+		const FString Asset = TEXT("SK_") + Stem;
+		return BakedWieldPackage(Stem) / Asset + TEXT(".") + Asset;
+	}
+	// The table `(classname, sex)` resolves through, typed by Public/ElysiumWieldTable.h. Its rows
+	// carry soft references to the packages above, so a resolved row is followed rather than
+	// rebuilt by name — BakedWieldMesh exists for the caller that has a stem and no row.
+	static FString BakedWieldTable()
+	{
+		const FString Asset = TEXT("DA_WieldModels");
+		return BakedItemsDir() / Asset + TEXT(".") + Asset;
+	}
+
 	static FString BakedCharacterDir() { return BakedMount() / TEXT("Characters"); }
 	static FString BakedCharacterSkeletonPrefix() { return TEXT("SKEL_Elysium_"); }
 	static FString BakedCharacterSkeleton(const FString& Family)

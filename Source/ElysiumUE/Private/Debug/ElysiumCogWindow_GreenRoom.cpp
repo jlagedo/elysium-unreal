@@ -1109,6 +1109,109 @@ void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
 	}
 }
 
+void FElysiumCogWindow_GreenRoom::RenderWield(FElysiumGreenRoomRun& Lab)
+{
+	// Sex selects the manifest row, and the two rows are different models: `w_m_katana` and
+	// `w_f_katana` each agree with the bodies of their own sex and disagree with the other's by a
+	// fixed per-family offset. So this is a property of the request, not of the stage.
+	bool bFemale = Lab.LabWieldFemale();
+	if (ImGui::RadioButton("Male wielder", !bFemale)) { bFemale = false; }
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Female wielder", bFemale)) { bFemale = true; }
+	if (bFemale != bWieldRowsFemale)
+	{
+		bWieldRowsFemale = bFemale;
+		bWieldRowsDirty = true;
+	}
+	if (bWieldRowsDirty)
+	{
+		WieldRows = FElysiumGreenRoomRun::LabWieldClassnames(bWieldRowsFemale);
+		bWieldRowsDirty = false;
+	}
+
+	ImGui::SameLine();
+	if (ImGui::SmallButton("Rescan##Wield"))
+	{
+		bWieldRowsDirty = true;
+	}
+
+	// What is in the hand right now, and what the table said to put there. The mount bone is the
+	// payload: a name the wearer declares means the weapon rides that bone and the wearer's own
+	// attack clips swing it; a name it does not means the weapon rides the hand off its frame-0
+	// reference pose. Both are one mechanism, and which one happened is only readable here.
+	const FString& Held = Lab.LabWield();
+	if (Held.IsEmpty())
+	{
+		ImGui::TextDisabled("Empty-handed.");
+	}
+	else
+	{
+		ImGui::TextColored(ElysiumCogStyle::ColName, "holding %s", COG_TCHAR_TO_CHAR(*Held));
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Holster"))
+		{
+			Lab.LabClearWield();
+			LastNotice.Reset();
+		}
+		// The composition, measured every frame rather than on a button: a weapon that drifts off its
+		// bone during a clip would be invisible in a one-shot reading taken at install time.
+		FString Check;
+		if (Lab.LabWieldCheck(Check))
+		{
+			ImGui::TextWrapped("%s", COG_TCHAR_TO_CHAR(*Check));
+		}
+	}
+	if (!LastNotice.IsEmpty())
+	{
+		ImGui::TextWrapped("%s", COG_TCHAR_TO_CHAR(*LastNotice));
+	}
+
+	ImGui::SeparatorText("Items that carry a wield model");
+	if (WieldRows.IsEmpty())
+	{
+		// The one outcome that is a failure rather than an authored answer, so it names its fix.
+		ImGui::TextDisabled(
+			"No wield rows. Is the corpus baked? uv run elysium export wield");
+		return;
+	}
+
+	ImGui::SetNextItemWidth(FMath::Max(GetDpiScale() * 120.0f,
+		ImGui::GetContentRegionAvail().x - GetDpiScale() * 80.0f));
+	FCogWidgets::InputTextWithHint("##WieldFilter", "(filter)", WieldFilter);
+
+	ImGui::BeginChild("##WieldRows", ImVec2(0, GetDpiScale() * 180.f), ImGuiChildFlags_Borders);
+	for (int32 Index = 0; Index < WieldRows.Num(); ++Index)
+	{
+		const FString& Classname = WieldRows[Index];
+		if (!WieldFilter.IsEmpty() && !Classname.Contains(WieldFilter))
+		{
+			continue;
+		}
+		ImGui::PushID(Index);
+		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Classname), Held == Classname))
+		{
+			FString Detail;
+			const EElysiumWieldResult Answer = Lab.LabSetWield(Classname, bFemale, Detail);
+			// Only an outcome that means something is wrong reaches the error line. The rest are
+			// notices — a weapon that legitimately carries no geometry must never read here as a
+			// missing asset, which is most of the corpus.
+			if (ElysiumWieldFailed(Answer))
+			{
+				LastError = Detail;
+				LastNotice.Reset();
+			}
+			else
+			{
+				LastNotice = Detail;
+				LastError.Reset();
+			}
+		}
+		ImGui::PopID();
+	}
+	ImGui::EndChild();
+	ImGui::TextDisabled("%d rows carry geometry for this sex.", WieldRows.Num());
+}
+
 void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
 {
 	// A garment is attached when the body is BUILT, so a regenerated asset reaches the stage only
@@ -1734,6 +1837,13 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 	if (ImGui::BeginTabItem("View"))
 	{
 		RenderView(*Lab);
+		ImGui::EndTabItem();
+	}
+	// Available while driving as well: a weapon that tracks the hand through a walk is exactly what
+	// drive mode is for, and the attachment is the same one either way.
+	if (ImGui::BeginTabItem("Weapon"))
+	{
+		RenderWield(*Lab);
 		ImGui::EndTabItem();
 	}
 	if (ImGui::BeginTabItem("Eyes"))

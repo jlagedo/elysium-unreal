@@ -8,6 +8,7 @@
 // ship; only their builders are debug-only.
 #include "Debug/ElysiumArenaSpec.h"
 #include "ElysiumGymSpec.h"
+#include "ElysiumWieldTable.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 
 class AActor;
@@ -192,6 +193,43 @@ public:
 	void LabSetAimFollowsLook(bool bFollow) { bLayerAimFollowsLook = bFollow; }
 	void LabClearLayers();
 
+	// --- the wielded weapon (CCC10.2) ----------------------------------------------------------
+	//
+	// Put an item's wield model in the standing body's hand. The stage carries no
+	// `FElysiumCombatCharacter`, so there is no inventory here to equip through and the lab installs
+	// directly — but *what* it installs and *how* is the shipping path: the row is resolved out of
+	// `/ElysiumBaked/Items/DA_WieldModels` and the attachment is
+	// `ElysiumNpcVisual::InstallWieldModel`. Nothing about the geometry on screen is lab-only, which
+	// is what makes this the place a placement is judged.
+	//
+	// Sex is a parameter rather than something read off the body: a mesh stem does not say which of
+	// `wieldmodel_m` / `wieldmodel_f` its wearer would take, and the two are different models whose
+	// binds agree with their own sex's bodies.
+	//
+	// The return value is the lookup's own answer, because four of its five outcomes are authored
+	// rather than broken and a caller has to be able to say which it got. `OutDetail` is the
+	// human-readable form of the same answer in every case.
+	EElysiumWieldResult LabSetWield(const FString& Classname, bool bFemale, FString& OutDetail);
+	// Empty the standing body's hands. Safe when they already are.
+	void LabClearWield();
+	// The acceptance, as a number rather than a look.
+	//
+	// Retail composes a held weapon by overwriting every bone whose NAME matches the wearer with the
+	// wearer's own world matrix, so for a mount bone the wearer declares the two transforms are not
+	// merely close — they are the SAME. Leader pose is that rule, so the distance between them is
+	// either ~0 or the mechanism is not doing what it is believed to do, and no screenshot angle can
+	// tell those apart. For a mount the wearer does NOT declare (every firearm), the weapon rides the
+	// hand off its reference pose and a difference there is expected, so the report says which case
+	// it measured rather than applying one threshold to both.
+	//
+	// False, with the reason in `OutReport`, when nothing is held.
+	bool LabWieldCheck(FString& OutReport) const;
+	const FString& LabWield() const { return ReviewWield; }
+	bool LabWieldFemale() const { return bReviewWieldFemale; }
+	// Every item classname whose row carries geometry for this sex, sorted. Empty when the wield bake
+	// has not run — a caller reports that rather than drawing an empty picker.
+	static TArray<FString> LabWieldClassnames(bool bFemale);
+
 	// --- CCC10's acceptance, as preset cases ---------------------------------------------------
 	//
 	// One click stands a whole case: a base to layer over, the right layer armed in the right slot,
@@ -351,6 +389,9 @@ private:
 	// the whole of "the stage body is the player body", and the one-shot capture path's
 	// detach-and-re-parent is exactly what it must not do.
 	bool LabSetDriveBody(const FString& Stem, FString& OutError);
+	// Put the held weapon back on whatever is standing now. Every clip change destroys and rebuilds
+	// the body, so without this a weapon would survive exactly one pose.
+	void ReapplyWield();
 	void DrawLabOverlays() const;
 	// The arena's pads and anchors, drawn in the room. Separate from DrawLabOverlays because that
 	// one is about a BODY — its lattice, its colliders, its skeleton — and these are about the
@@ -419,6 +460,11 @@ private:
 	float ReviewGridAt[2] = { 0.f, 0.f };
 	// The same for an armed aim grid's own two axes, which are the LAYER's rather than the base's.
 	float ReviewLayerAim[2] = { 0.f, 0.f };
+	// The item classname whose wield model the standing body is holding, and the sex whose row was
+	// taken. Unlike a layer or a grid, this survives a restand — a weapon belongs to the character
+	// rather than to the pose it is in, and watching one track the hand across clips is the point.
+	FString ReviewWield;
+	bool bReviewWieldFemale = false;
 	bool bLayerAimFollowsLook = true;
 	FString ReviewAnimSet;
 	FString ReviewBoneRoot;
