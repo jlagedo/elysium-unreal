@@ -1353,7 +1353,7 @@ The corpus actually uses these client IDs: 5001×48, 5003×101, 5005×1, 5101×2
 
 `mdl_skel.local_sequences()` now carries the decoded event list on each `Seq`. The public
 character clip/grid/index sidecars and Unreal bake still emit **no event timeline**, so reproducing
-these side effects is ANM4b implementation work, not further event-format or native-dispatch RE.
+these side effects is LIFE2 implementation work, not further event-format or native-dispatch RE.
 
 ### What one player body answers the selector with [data-verified, partial corpus]
 
@@ -1576,7 +1576,7 @@ not for the model-declared autolayer table. The two must not be conflated.
 **1.0** — a named stand-in, not a recovered value. At 1.0 the masked overlay fully replaces the
 bones it owns rather than leaning the base pose toward them, which is the upper bound of the
 plausible range and the reading most likely to look mechanical. Recovering the real scalar is
-tracked in `docs/project/roadmap.md` ANM2, whose oracle is an arithmetic recovery from the
+tracked in `docs/project/roadmap.md` LIFE7, whose oracle is an arithmetic recovery from the
 finalized captures — the combine is closed, so a host's decoded local, its layer's decoded local and
 the composed local determine the scalar per bone. The capture hook's per-contribution `blendWeight`
 is the blend-space *cell* weight and does not answer this.
@@ -1975,8 +1975,9 @@ rule**. Every required rotation varies with authored pose state.
 
 ## A.4b Retail pose pipeline — durable Ghidra proof path
 
-Capture status is tracked in `docs/project/roadmap.md`; the open capture tasks are specified
-in `docs/project/plans/capture.md`. Three tracked investigation specifications divide the
+The capture instrument is retired to closure — its corpus is banked under
+`$ELYSIUM_WORK_ROOT/research` and returns as an escalation oracle on a named divergence
+(`docs/project/roadmap.md`, the LIFE programme). Three tracked investigation specifications divide the
 retail path at its DLL boundaries: `animation_pose.json` (`client.dll`),
 `animation_skinning.json` (`engine.dll`), and `animation_studiorender.json`
 (`StudioRender.dll`) under `research/cases/animation-pose/specs/`. They preserve pinned binary

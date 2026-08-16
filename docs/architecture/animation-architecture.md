@@ -5,8 +5,8 @@ facts it consumes live in `docs/vtmb/animation_and_movers.md` (channel decode, t
 split inheritance, hierarchy composition, the root/entity transform, the autolayer binding),
 `docs/vtmb/procedural_bones.md` (the axis-interpolation rule and the persistent pose array) and
 `docs/vtmb/mdl_v2531.md` (the format those rules read). Status and implementation order live only in
-`docs/project/roadmap.md` — the ANM programme for the asset stack, the CCC slice for the
-resolver seam and the player graph.
+`docs/project/roadmap.md` — the LIFE programme, which owns the asset stack, the resolver seam
+and the player graph.
 
 The goal is not to reimplement Source's animation system inside Unreal. It is to let Unreal own
 decoding, blending, skinning and LOD, and to add only the composition stages Unreal has no
@@ -501,7 +501,7 @@ invent a parallel clip inventory. The disposable raw player inventory produced b
 `research/tooling/capture/inventory_player_animations.py` preserves the full 764-byte sequence and
 72-byte animation descriptors for research, while the public export carries only decoded fields
 the runtime uses. Sequence events are decoded in the model reader and across the complete native
-server/client handler surface; ANM4b must emit them into this existing path. Autolayers and the
+server/client handler surface; the catalog export (LIFE2) must emit them into this existing path. Autolayers and the
 sequence-transition graph likewise belong in the catalog rather than being recovered later from
 baked assets.
 
@@ -797,9 +797,10 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
 The numeric mapping is deliberately provisional: native gravity scale starts at the authored
 magnitude, native damping at the authored value (clamped to AnimDynamics' effective 0.7–1 range),
 native spring at `4 × 10^(-exponent)`, and the cone at the authored maximum. Those are calibration
-hypotheses, not an equivalence statement. CAP5.5's controlled retail series decides whether the
-result is useful as remastered presentation and supplies fitted settings; it cannot promote
-AnimDynamics into a faithful solver without the game-independent retail replay.
+hypotheses, not an equivalence statement. The parked calibration slice (LIFE9) decides with a
+controlled retail series whether the result is useful as remastered presentation and supplies
+fitted settings; it cannot promote AnimDynamics into a faithful solver without the
+game-independent retail replay.
 
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are
@@ -810,5 +811,5 @@ takes, and it is recorded as one in the owning topic.
 **Blend-space interpolation is a divergence.** The authored grid states its cells and the parameter
 range each axis spans; Unreal interpolates between samples by its own scheme rather than by retail's
 cell selection. The authored content is reproduced; the interpolation between authored values is
-Unreal's. Tracked with the rest of the ANM programme's divergences in
+Unreal's. Tracked with the rest of the LIFE programme's divergences in
 `docs/project/plans/animation.md`.

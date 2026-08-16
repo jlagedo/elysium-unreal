@@ -11,7 +11,7 @@ under the repository's explicit authored-content namespace.
 ## Read first
 
 - **`docs/project/roadmap.md`** — the sole status and sequencing surface: the playable-path
-  ladder (PP0–PP6), phases P0–P13 and the CAP/ANM/CCC programmes as one-line task rows, the
+  ladder (PP0–PP6), phases P0–P13 and the LIFE/CCC programmes as one-line task rows, the
   pipeline + RE backlogs, and the risk register. While a task is open, its row links to its
   specification in **`docs/project/plans/<area>.md`**; a plan file carries specs only, never a
   status mark, and landing a task deletes its entry.
@@ -226,7 +226,7 @@ declared subtrackers. Cite a doc by name, with no date or task number attached.
 
 ## What runs today
 
-**Project priority and all task status: `docs/project/roadmap.md`**, including the CAP, ANM and
+**Project priority and all task status: `docs/project/roadmap.md`**, including the LIFE and
 CCC programme sections. Runtime types and where they live:
 `Source/ElysiumUE/CLAUDE.md`.
 

@@ -7,8 +7,10 @@
 **Document role:** Exploration research brief; not a status tracker or fact owner  
 **Last reviewed:** 2026-07-30
 
-Work status is tracked in `docs/project/roadmap.md` (the CAP rows); the open capture tasks are
-specified in `docs/project/plans/capture.md`. Confirmed VtMB behavior belongs in
+The capture instrument is retired to closure; the banked corpus under
+`$ELYSIUM_WORK_ROOT/research` is the standing oracle, and a renewed capture is a scoped owner
+call on a named divergence (status: `docs/project/roadmap.md`, the LIFE programme). Confirmed
+VtMB behavior belongs in
 `docs/vtmb/animation_and_movers.md`, `docs/vtmb/facial_animation.md`, and
 `docs/vtmb/choreographed_scenes.md`. This document owns the programme's evidence
 model and method, including the working rules and evidence gate in
@@ -1994,8 +1996,8 @@ Next experiment:
 ## 13. Investigation order
 
 This document owns the evidence model and method, not task status. Status is
-`docs/project/roadmap.md`'s; the open-task specifications are
-`docs/project/plans/capture.md`'s.
+`docs/project/roadmap.md`'s. The sequence below remains the method for any renewed,
+owner-called capture scope.
 
 The durable investigation sequence is:
 
@@ -2024,9 +2026,8 @@ index, process-reuse, or compression machinery only for an observed limit.
 ## 14. Task ownership and programme method
 
 Completed capabilities, open research slices, priorities, and acceptance gates
-are not duplicated here. Status lives in `docs/project/roadmap.md` (the CAP
-rows and the parents `0.10`/`RE32`/`RE33`); open-task specifications live in
-`docs/project/plans/capture.md`.
+are not duplicated here. Status lives in `docs/project/roadmap.md` (the LIFE
+programme and the `RE32`/`RE33` rows).
 
 ### 14.1 Working rules
 
@@ -2109,9 +2110,10 @@ stay visible rather than inferred correct; validate pages, cap reads, catch faul
 closed; scoped generation identities rather than raw addresses; record every evaluator call
 under its pose-build generation; distinguish fired evaluation, completed pose build, and
 draw coverage; keep records self-bounded with disposable indexes; infrastructure grows only
-inside the two tracks (the evidence loop and the delivery) with one current task each; CAP7
-is authorized by the evidence gate, not phase completion; a closed-format system is never
-re-derived by capture; and closure is stated against the adjudicated baseline (CAP5.4)
+inside the two tracks (the evidence loop and the delivery) with one current task each;
+runtime carry-over is authorized by the evidence gate, not phase completion; a closed-format
+system is never re-derived by capture; and closure is stated against the adjudicated baseline —
+the recorded compute-every-bone divergence in `docs/architecture/animation-architecture.md` —
 rather than against retail unconditionally.
 
 ---

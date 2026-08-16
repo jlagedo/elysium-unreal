@@ -454,8 +454,9 @@ simulation, deformation, or render boundary. Unknown bytes remain available to o
 are hypotheses, not a durable capture contract. Writer and reader evolve
 together. Offline indexes are disposable and rebuildable. Only measured
 callback cost, memory pressure, writer backlog, trace volume, startup cost, or
-query time justifies capture/storage optimization. The detailed order is
-`docs/project/plans/capture.md`.
+query time justifies capture/storage optimization. The instrument is retired to closure; the
+banked corpus is the standing oracle, and a renewed capture is a scoped owner call
+(`docs/vtmb/vtmb-animation-reverse-engineering.md` → "Programme method").
 
 New sidecar formats and decoder fixes land in `pipeline/`. The pipeline backlog
 (entity-model export, script/`.dlg` copies, use-icon atlas, NPC batch export +

@@ -37,8 +37,8 @@ Built: `FElysiumFacialRig` evaluates controllers → RPN rules → flexdescs →
 weights; headless proof on the real `nines` mesh; 19 rigged bodies resolve end to end live.
 **Remaining: an unobstructed close-up visual** — every angle was blocked by scene geometry, and
 the green-room harness cannot isolate a body because it is passed empty `-GreenRoomAnimSet=`/
-`-GreenRoomBoneRoot=` (the CAP critical path's row 10). *Acceptance:* a flex authored in the
-model moves the face in-game, seen clean.
+`-GreenRoomBoneRoot=`. *Acceptance:* a flex authored in the model moves the face in-game, seen
+clean.
 
 ### 12.4 Eyes and eyelids — remaining
 

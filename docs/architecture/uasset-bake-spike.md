@@ -18,7 +18,7 @@ runtime-rendering path for the baked look.
 
 This table describes the **map** bake. Character skeletal assets — skeletons, meshes, animation
 sequences, blend profiles and blend spaces — are baked by their own commandlet onto the same mount
-rather than built at runtime; `docs/project/roadmap.md`'s ANM programme owns that work and
+rather than built at runtime; `docs/project/roadmap.md`'s LIFE programme owns that work and
 `docs/architecture/animation-architecture.md` its design.
 
 `UElysiumMapSubsystem::Travel` opens `/ElysiumBaked/<map>/<map>` directly — each map is its own

@@ -8,8 +8,7 @@ documents:
   - {path: project/plans/input.md, kind: plan, owner: input, subject: open-task specs for the input path}
   - {path: project/plans/spine.md, kind: plan, owner: runtime, subject: open-task specs for the runtime spine and camera director}
   - {path: project/plans/theatre.md, kind: plan, owner: choreographed scenes, subject: open-task specs for the theatre cinematic}
-  - {path: project/plans/capture.md, kind: plan, owner: retail capture, subject: open-task specs for the retail capture programme}
-  - {path: project/plans/animation.md, kind: plan, owner: animation, subject: open-task specs for the skeletal animation programme}
+  - {path: project/plans/animation.md, kind: plan, owner: animation, subject: open-task specs for the character life programme}
   - {path: project/plans/three-cs.md, kind: plan, owner: movement, subject: open-task specs for the character camera controls slice}
   - {path: project/plans/pipeline.md, kind: plan, owner: pipeline, subject: open-task specs for the pipeline backlog}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}

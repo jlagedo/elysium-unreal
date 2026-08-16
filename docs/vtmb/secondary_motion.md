@@ -423,8 +423,8 @@ VtMB's decoded procedural enum stops at AxisInterp rather than later Source's JI
   simulation `0x2c001e50`, integration `0x2c002a30`, distance/compression solves
   `0x2c002d90`/`0x2c0030a0`, collision projection `0x2c0031a0`, tangent-space regeneration
   `0x2c002500`, and representative mapped-vertex routines `0x2c023590`/`0x2c03a2e0`.
-- Runtime ceiling and transform evidence comes from the finalized `sp_theatre` capture
-  (`docs/project/plans/capture.md`); evidence grades and capture method are defined in
+- Runtime ceiling and transform evidence comes from the finalized `sp_theatre` capture, banked
+  under `$ELYSIUM_WORK_ROOT/research`; evidence grades and capture method are defined in
   `docs/vtmb/vtmb-animation-reverse-engineering.md`.
 - Corpus counts and cloth payloads use the engine-resolved patch-first install. The reproducible
   decoder is `research/tooling/probes/cloth_payload_audit.py`; generated reports remain below

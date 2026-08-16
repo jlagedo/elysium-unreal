@@ -9,7 +9,8 @@ Engine-neutral VtMB facts — `CGameMovement`'s formulas, the hulls and view off
 and command surface is `docs/architecture/input-architecture.md`; the camera the mover feeds is
 `docs/architecture/camera-architecture.md`; the pose the body plays is
 `docs/architecture/animation-architecture.md`. Status and task order live only in
-`docs/project/roadmap.md` (the CCC slice).
+`docs/project/roadmap.md` (the CCC slice; the speed-authority and gait work is the LIFE
+programme's).
 
 ## The split — pure rules, engine half
 
@@ -280,4 +281,5 @@ Running it, promoting a baseline and the cross-rate check are `docs/architecture
 
 ## Tracking
 
-Implementation sequence and status live only in `docs/project/roadmap.md` (the CCC slice).
+Implementation sequence and status live only in `docs/project/roadmap.md` (the CCC slice; the
+speed-authority and gait work is the LIFE programme's).

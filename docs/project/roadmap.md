@@ -48,13 +48,14 @@ tutorial.** Everything on the path lands first. Three standing rules:
 | **PP1 — New Game & genesis [x]** | chargen for real, `sp_genesisdevice_1` played | 9.4 [x] |
 | **PP2 — the theatre cinematic** | the intro plays start to finish — eyes and lipsync block | 12.1–12.5, 8.11a [x] |
 | **PP3 — land the tutorial** | Jack's first conversation with sound and reactions | 9.2, 9.9 |
-| **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD foundation + observer presentation seam | CCC0–CCC9, B6 [x], 9.8, 9.6 [x], 8.9 |
+| **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD foundation + observer presentation seam | CCC0–CCC9, LIFE0–LIFE3, B6 [x], 9.8, 9.6 [x], 8.9 |
 | **PP5 — persistence [x]** | save / quick / autosave + load mid-run | 11.9 [x] |
 | **PP6 — complete the tutorial** | stealth authority, disciplines, firearms, combat AI, hacking — every retail beat | 13.1–13.5 → `uv run elysium test Play` |
 
 **PP4's feel stack runs ahead of PP2/PP3 — owner call**, recovered rather than preferential:
 the animation is the movement's speed authority, so the mover cannot close behind it (the CCC
-ladder, [plans/three-cs.md](plans/three-cs.md)). **After PP6 (the thaw):** 9.10, 8.8, 8.10, the
+ladder, [plans/three-cs.md](plans/three-cs.md), and the LIFE programme,
+[plans/animation.md](plans/animation.md)). **After PP6 (the thaw):** 9.10, 8.8, 8.10, the
 P3/P7 look lanes, 10.1–10.5 and asset enhancement — re-sequenced then.
 
 **Map priority — owner call:** `sp_theatre` → `sp_tutorial_1` → `sm_pawnshop_1` → `sm_hub_1`.
@@ -73,13 +74,13 @@ rule 3 governs what happens next:
    through; PP0's finish → [plans/spine.md](plans/spine.md).
 2. **The 3 C's slice** — the controls/camera co-tune, then CCC8's owner-played acceptance →
    [plans/three-cs.md](plans/three-cs.md).
-3. **0.10 / RE32 / RE33 / 12.1** — the retail capture loop →
-   [plans/capture.md](plans/capture.md).
+3. **12.1 remainder** — the theatre's residual RE32 material/remap work and final live
+   acceptance → [plans/theatre.md](plans/theatre.md).
 4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
-5. **CCC10.2** — a drawn weapon visible in the hand, the last missing half of a played melee
-   swing; the baked corpus is on the mount → [plans/three-cs.md](plans/three-cs.md).
+5. **LIFE0 → LIFE4** — the composition-seam repair, then a drawn weapon visible in the hand
+   through a swing → [plans/animation.md](plans/animation.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -92,39 +93,10 @@ rule 3 governs what happens next:
 - [x] **0.7 Repo hygiene** — Ghidra/reference-source under `$ELYSIUM_WORK_ROOT`, untracked.
 - [x] **0.8 `docs/vtmb/entity_io.md` re-based on the patch map set** — 108 maps / 71,096 entities.
 - [x] **0.9 The uasset-bake architecture** → `docs/architecture/uasset-bake-spike.md`.
-- [~] **[0.10 Retail animation RE instrument](plans/capture.md)** — the exact-build probe and
-  its capture → index → inspect → close loop; parent row of the CAP programme.
-
-## The retail capture programme (CAP) — detail: [plans/capture.md](plans/capture.md)
-
-- [x] **CAP0 Baseline** — exact-build access, hash-gated hooks, the one-run database boundary.
-- [x] **CAP1 First theatre runs + calibration** — three reproducible captures, zero drops.
-- [x] **CAP2.1–2.7 Complete the capture** — generations, censuses, attribution, byte spans,
-  scene events, second acquisition.
-- [ ] **[CAP2.8 The fourth pose-build frame](plans/capture.md)** — melee's unbracketed caller.
-- [ ] **[CAP2.9 Complete the `sp_tutorial_1` corpus](plans/capture.md)** — deferred; blocks nothing.
-- [x] **CAP3 Decode and index** — deduplicated, joinable, self-reporting database.
-- [x] **CAP4.1–4.3 Inspect** — byte-coverage missing list **0**; the shipped decoder is clean;
-  shipped-path residual 2,452.
-- [ ] **[CAP4.4 Missing-work report](plans/capture.md)** — the cross-pass ranking; consolidates,
-  no longer gates.
-- [ ] **[CAP5.1 One mismatch at a time](plans/capture.md)** ·
-  **[CAP5.2 Deeper stage capture on demand](plans/capture.md)**
-- [x] **CAP5.3 Missing-data ranges closed at the exporter** — blend grids exported and baked
-  → `docs/vtmb/animation_and_movers.md` A.3.
-- [ ] **[CAP5.4 Adjudicate the persistent partial update](plans/capture.md)**
-- [~] **[CAP5.5 Secondary motion](plans/capture.md)** — two-body AnimDynamics proof wired;
-  numeric replays and calibration open
-  → `docs/vtmb/secondary_motion.md`.
-- [ ] **[CAP5.6 Theatre-corpus closure](plans/capture.md)**
-- [x] **CAP5.7 The shipped multi-biped path modelled** — 180,812 agreeing / 0 disagreeing.
-- [x] **CAP5.8 The include-remap route** — 6,927 → 2,452 → `docs/vtmb/animation_and_movers.md` A.4b.
-- [ ] **[CAP5.9 The `Prince_Escort_Male` cluster](plans/capture.md)** — undiagnosed, named.
-- [ ] **[CAP5.10 Frame interpolation](plans/capture.md)** — is the host's LINEAR retail's.
-- [ ] **[CAP6 Face and lips](plans/capture.md)** — fires only on a named divergence.
-- [x] **CAP7.1 / CAP7.2 The two composition rules in Unreal** — byte-exact rule table; both
-  stages in retail's slot; visual isolation owed to the green-room row.
-- [ ] **[CAP8.1 Final trim](plans/capture.md)**
+- [x] **0.10 Retail animation RE instrument** — built and run to closure; the capture corpus is
+  banked under `$ELYSIUM_WORK_ROOT/research` and returns as an escalation oracle on a named
+  divergence → `docs/vtmb/vtmb-animation-reverse-engineering.md`. The CAP programme is retired;
+  its landed rows live under the LIFE programme.
 
 ## P1 — Entity substrate *(design: `docs/architecture/engine-core.md`)*
 
@@ -218,7 +190,7 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
   installs an authored rest pose before visibility; proven-equivalent placements remain static →
   `docs/architecture/animation-architecture.md`.
 - [x] **8.5 NPC presence + native locomotion + `scripted_sequence` minimal** — the animation
-  half is the ANM programme's.
+  half is the LIFE programme's.
 - [x] **8.6a New Game context + story entry.**
 - [~] **[8.6 UI foundation — design system + shell](plans/characters-ui.md)** — landed; device
   navigation acceptance and the New Game click path open →
@@ -229,22 +201,55 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
   notifications landed; selectors and subtitles open.
 - [ ] **[8.10 Accessibility & options backing](plans/characters-ui.md)**
 - [x] **8.11a The player body** — clan/sex/slot resolution, dithered fade, choreography-ready.
-- [ ] **8.11b Locomotion** — the CCC slice's; assets are the ANM programme's.
 
-## The skeletal animation programme (ANM) — detail: [plans/animation.md](plans/animation.md)
+## The character life programme (LIFE) — detail: [plans/animation.md](plans/animation.md)
 
-Governing decision — bake native, let Unreal run it: `docs/architecture/animation-architecture.md`.
+Every character alive — the cast and the player through one resolver, weapons in hands that
+swing them, bodies that react and die. Governing decision — bake native, let Unreal run it:
+`docs/architecture/animation-architecture.md`. One cumulative ladder; absorbs the retired ANM
+and CAP programmes and the CCC animation rungs (landed rows keep their historical IDs).
 
-- [ ] **[ANM1 Bake the character assets](plans/animation.md)** — shared banks packaged once across
-  compatible rig families; no bank/body cross-product and no runtime glTF.
-- [~] **[ANM2 The two discarded MDL fields](plans/animation.md)** — masks and bindings
-  delivered; orphan census + the dispatcher weight open.
+Landed foundation:
+
+- [x] **CAP0–CAP4 The retail capture instrument** — exact-build hooks, three reproducible
+  theatre captures, decode/index/inspect closed (byte-coverage missing **0**; the shipped
+  decoder is clean); the corpus is banked under `$ELYSIUM_WORK_ROOT/research`.
+- [x] **CAP5.3 / CAP5.7 / CAP5.8** — blend grids exported and baked; the shipped multi-biped
+  path modelled (180,812 agreeing / 0 disagreeing); the include-remap route (6,927 → 2,452)
+  → `docs/vtmb/animation_and_movers.md`.
+- [x] **CAP7.1 / CAP7.2 The two composition rules in Unreal** — byte-exact rule table; both
+  stages in retail's slot.
 - [x] **ANM3 Bake the blend spaces** — parity-asserted `UBlendSpace` per declared grid.
 - [x] **ANM4a Gameplay action selection extracted** *(= RE37)* →
   `docs/vtmb/animation_and_movers.md` A.3.
-- [ ] **[ANM4b Export and bake the action catalog](plans/animation.md)**
-- [ ] **[ANM6 Migrate the cinematic path](plans/animation.md)** — deliberately last; owns the
-  gesture un-collapse.
+- [x] **CCC4 Intent, resolver, selection record** · **CCC5 The player animation graph** ·
+  **CCC6 The green room drives it** · **CCC10 The weapon rung (third person)**.
+
+The ladder:
+
+- [ ] **[LIFE0 The composition seam holds, loudly](plans/animation.md)** — the four validated
+  silent defects: the zero-length looping montage, grids routed into sequence-only states,
+  table-driven layer hosts with named misses, the aim-grid neutral; mount/sidecar verification.
+- [ ] **[LIFE1 The bake closes](plans/animation.md)** — the cardinality invariant, prop-bone
+  channels retained, the orphan census, frame-interpolation adjudication, the `A_dance01` seam.
+- [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule
+  artifacts, events and the transition graph exported, joined and baked; deletes the 5-row stub.
+- [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
+  authority is landed; the NPC gait push, real translation tables and activity→state coverage
+  open.
+- [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
+  `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
+  and weapon-state animation open.
+- [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — flinch/knockback/death,
+  blocked/paired rules, transition traversal, the sequence-event carrier.
+- [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
+  the two-component body; ranged only.
+- [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the montage migration,
+  the gesture un-collapse, the measured layer weight, the `Prince_Escort_Male` cluster.
+- [ ] **[LIFE8 Alive — played acceptance](plans/animation.md)** — the programme's owner-played
+  finish line; owns the capture-tooling trim.
+- [P] **[LIFE9 Secondary-motion calibration](plans/animation.md)** — hair/cloth fitting and
+  numeric replays; presentation polish behind the graphics freeze, revisit at the thaw.
 
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
 
@@ -292,25 +297,16 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 
 ## The 3 C's slice (CCC) — detail: [plans/three-cs.md](plans/three-cs.md)
 
+Camera, controls and the played movement feel; the animation rungs are the LIFE programme's.
+
 - [~] **[CCC0 The instrument](plans/three-cs.md)** — gym + channels landed; three sited
   feature courses open.
 - [x] **CCC1 The body sample** — one contract, two producers.
 - [x] **CCC2 Camera service foundation + modern rig.**
 - [~] **[CCC3 Controls response](plans/three-cs.md)** — curves and leniency landed; the
   co-tune open.
-- [x] **CCC4 Intent, resolver, selection record** · **CCC5 The player animation graph** ·
-  **CCC6 The green room drives it** · **CCC9 Scaffolding retired** ·
-  **CCC10 The weapon rung (third person)**.
-- [~] **[CCC7 `move_yaw` + the speed authority](plans/three-cs.md)** — the player producer
-  landed; the NPC producer never took the push, so the cast travels on constants.
+- [x] **CCC9 Scaffolding retired.**
 - [ ] **[CCC8 Played acceptance](plans/three-cs.md)** — the slice's finish line, owner-played.
-- [ ] **[CCC10.1 The first-person viewmodel body](plans/three-cs.md)** — waits on RE42's live
-  verifier, PL14, 11.13d and the semantic animation-intent seam.
-- [ ] **[CCC10.2 The third-person wielded weapon body](plans/three-cs.md)** — the geometry a drawn
-  weapon puts in the hand; the corpus, masters and `DA_WieldModels` bake via `export wield`, the
-  runtime attachment remains.
-- [ ] **[CCC11 Action families beyond locomotion](plans/three-cs.md)** — reactions, weapon
-  actions, the sequence-event carrier.
 
 ## P12 — The theatre *(the PP2 rung; detail: [plans/theatre.md](plans/theatre.md))*
 
@@ -357,8 +353,10 @@ by `uv run elysium test Play`.
 - [ ] **[PL6 Texlight merge in exporter](plans/pipeline.md)** ·
   **[PL11 Remove the dead card path](plans/pipeline.md)** ·
   **[PL12 Particle mirror + weather height maps](plans/pipeline.md)** ·
-  **[PL14 Export the complete first-person model corpus](plans/pipeline.md)** ·
   **[PL17 Patch-first audio catalog](plans/pipeline.md)**
+
+The first-person model corpus (old PL14) is LIFE6's first half →
+[plans/animation.md](plans/animation.md).
 - [x] **PL7–PL10, PL13, PL15, PL16, PL18–PL20** — space audit, scenes/`.lip`, facial data, UI
   export, player bodies, Masquerade meter, cinematic banks, animated-prop closure, bake caching,
   the wield-model corpus and its bake.
@@ -378,8 +376,8 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE23 | particle format + wetness — retail evidence for units/semantics | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
 | RE24–RE29 | sheet; chargen; traits; quests; genesis exit; name matching | `docs/vtmb/game_runtime.md`, `entity_io.md` | [x] |
 | RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md`; 6.7 | [ ] |
-| RE32 | source-attributed `sp_theatre` run joined to bytes/export | [plans/capture.md](plans/capture.md) | [~] |
-| RE33 | facial/lip runtime equivalence — verifies 12.3–12.5, never gates | [plans/capture.md](plans/capture.md) | [~] |
+| RE32 | source-attributed `sp_theatre` run joined to bytes/export | `docs/vtmb/vtmb-animation-reverse-engineering.md`; 12.1 | [~] |
+| RE33 | facial/lip runtime equivalence — verifies 12.3–12.5, never gates | `docs/vtmb/facial_animation.md`; 12.3–12.5 | [~] |
 | RE34 | the eye system end to end | `docs/vtmb/facial_animation.md` | [x] |
 | RE35 | the prop/trigger entity surface | `docs/vtmb/entity_io.md` + siblings | [x] |
 | RE36 | melee block / `+wpn_secondaryatk`; open: the `vhotkey` deferral | `docs/vtmb/controls.md`; 10.6, 13.3 | [~] |
@@ -388,7 +386,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE39 | computer terminals; open: TERM2/3/6–8 | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers, client disable presentation and live cast matrix | `docs/vtmb/disciplines.md`; 13.2 | [~] |
-| RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; CCC10.1, PL14 | [~] |
+| RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; LIFE6 | [~] |
 | RE43 | the tutorial event-resolution transaction; open: engine contact order, autosave txn | `docs/vtmb/sp_tutorial_1-event-surface.md` | [~] |
 | RE44 | the exported-map event surface beyond the tutorial | `docs/vtmb/exported-map-event-surface.md` | [~] |
 | RE45 | trigger touch dispatch + the script recursion bound | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |
@@ -397,7 +395,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 13.3, 13.5 | [x] |
 | RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 13.1, 13.5 | [x] |
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [x] |
-| RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, CCC10.1, 13.1–13.4 | [~] |
+| RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, LIFE6, 13.1–13.4 | [~] |
 
 ## Options — evaluated, not planned
 

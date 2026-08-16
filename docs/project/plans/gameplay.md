@@ -155,7 +155,7 @@ enemy transaction, the alert/combat schedule families, the loadout and `aiscript
 built over the schedule kernel and the body-owner arbiter. Open: the **footstep hearing
 producer** (the one bus category with nothing raising it — the seam is marked in
 `Substrate/ElysiumPlayerEntity.cpp`); the **flinch and reaction action families** on the
-animation side, which are CCC11's; `COND_HIT_BY_DOOR`'s producer and the door-obstruction
+animation side, which are LIFE5's; `COND_HIT_BY_DOOR`'s producer and the door-obstruction
 retreat's consumers, which stay in 10.7; and the `Prone` state, a named refusal until a
 producer is recovered. Facts: `docs/vtmb/npc-ai-reverse-engineering.md`.
 *Acceptance:* the tutorial's hostile beats run from real producers — authored
