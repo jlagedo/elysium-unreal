@@ -220,11 +220,12 @@ sheet slot taking the bare name would silently repoint `trigger_hurt`. `Elysium.
 guards it.
 
 Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, triggers,
-`logic_pythoncheck`), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
+`logic_pythoncheck`) over the shared `ElysiumTriggerBase.h` (`FElysiumTriggerBase`, the base every
+trigger leaf derives from), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
 func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase`,
 `FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
-`ElysiumEventClasses.cpp`, `ElysiumNpcClasses.cpp`, `ElysiumPlayerClasses.cpp`,
-`ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`, `ElysiumItemClasses.{h,cpp}`
+`ElysiumEventClasses.cpp`, `ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`,
+`ElysiumItemClasses.{h,cpp}`
 (`FElysiumItem`/`FElysiumKeyring` — one registered class per `vdata/items` definition, installed at
 the rulebook's first `Items()` load; `FElysiumInventory` lives on the combat character),
 `ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
@@ -235,9 +236,46 @@ per-line dialogue playback). `Substrate/ElysiumPendingInput.h` is the registrati
 input with no system behind it yet; `elysium.stubs` reads the fired set back, and
 `Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
+The character chain's leaves are one class per file, with a registration site beside them.
+`ElysiumNpcClasses.cpp` registers the `npc_*` family, `intersting_place` and the two `npc_maker`
+classnames; the classes are `ElysiumInterestingPlace.{h,cpp}`, `ElysiumScriptedCharacter.{h,cpp}`,
+`ElysiumNpc.{h,cpp}` (`FElysiumNpc` plus the scene-owned `FElysiumPlayerControllerNpc` duplicate)
+and `ElysiumNpcMaker.{h,cpp}`, logging through `ElysiumNpcLog.h`. `ElysiumPlayerClasses.cpp`
+declares the player chain's fields, inputs and outputs; the three implementations are
+`ElysiumAnimatingImpl.cpp`, `ElysiumCombatCharacter.cpp` and `ElysiumPlayerEntity.cpp`, logging
+through `ElysiumPlayerLog.h`.
+
+**Gameplay domain services**, plain C++ under `Substrate/` — the design is
+`docs/architecture/gameplay-systems-architecture.md` §5 and the behaviour is the `docs/vtmb/` doc
+each file names in its header:
+`ElysiumDamage.{h,cpp}` (`FElysiumDmg` + `ElysiumDamage::Apply`; the one typed health commit is
+`FElysiumCombatCharacter::CommitDamage` in `ElysiumCombatCharacter.cpp`),
+`ElysiumWeaponClasses.{h,cpp}` (`FElysiumWeapon` on the `CWeapon` chain node — mode dispatch, the
+two-half attack transaction, reload),
+`ElysiumGameSound.{h,cpp}` (`FElysiumGameSoundBus` behind `FElysiumEntityWorld::EmitGameSound`),
+`ElysiumNpcSenses.{h,cpp}` (`FElysiumNpcPerception`, `FElysiumNpcMemory`),
+`ElysiumNpcConditions.{h,cpp}` (`EElysiumNpcCond`, `FElysiumNpcConditions`, the ideal-state pass),
+`ElysiumNpcEnemy.{h,cpp}` (the enemy-selection transaction),
+`ElysiumSchedule.{h,cpp}` (`FElysiumSchedule`, the task vocabulary and its executor),
+`ElysiumNpcCombatSchedules.{h,cpp}` (the recovered combat families and their selector),
+`ElysiumNpcLoadout.{h,cpp}` (the weapon-capability join),
+`ElysiumNpcWitness.{h,cpp}` (the two per-NPC player-law observation lanes),
+`ElysiumAiScriptedSchedule.{h,cpp}` (`aiscripted_schedule`'s mode table and `forcestate` mapping),
+`ElysiumDisciplines.{h,cpp}` (active states and the targeted cast transaction),
+`ElysiumStealth.{h,cpp}` + `ElysiumStealthTrigger.{h,cpp}` (the player target surface and
+`trigger_stealth_mod`),
+`ElysiumLaw.{h,cpp}` + `ElysiumActivityTrigger.{h,cpp}` (the player's activity/Masquerade/pursuit
+channels and `trigger_player_activity_level`),
+`ElysiumReaction.{h,cpp}` (the RPG reaction score),
+`ElysiumRelationships.{h,cpp}` and `ElysiumDisposition.{h,cpp}` (two of K4's three separate
+social stores). The `FElysiumNpcMind` state machine and body-owner arbiter stay in
+`ElysiumNpcMind.{h,cpp}`.
+
 **The outbound seam** (`docs/architecture/runtime-architecture.md`): everything the substrate needs from the
 engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
-teleport/damage/`+use`/camera, implemented by `AElysiumMapActor`), `IElysiumAudio` (voice,
+teleport/damage/`+use`/camera, plus the geometry queries `QueryLineOfSight`/`QueryLightAtPoint`,
+implemented by `AElysiumMapActor`; the per-body `IElysiumNpcMotor` beside it carries
+`ProjectToNavigable`), `IElysiumAudio` (voice,
 `AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
 dialog moments, `UElysiumPresentationSubsystem`), `IElysiumWeather` (wetness and particle state,
 `AElysiumMapActor`). Any member may be null; every call site handles it.
@@ -429,6 +467,13 @@ Hard-won, non-obvious, and easy to undo:
   compiles (the effect argument defaults to null) and silently drops every clan bane and gift. On a
   character, go through `FElysiumCombatCharacter::RecomputeSheet()`, which passes both and re-derives
   the `health` keyfields after.
+- **A restored NPC's sheet is not its health.** An NPC sheet is re-seeded from the stat template at
+  spawn and is not save state, so after a load its damage slot reads zero while the field walk has
+  already restored the real `health` keyfield — and `RecomputeSheet()` (which `RebuildEffects()`
+  ends in) re-derives the pair off that sheet, handing a wounded NPC its whole track back with
+  nothing logged. `FElysiumNpc::Serialize` (`Substrate/ElysiumNpc.cpp`) holds the restored
+  `Health`/`MaxHealth` across its own `RebuildEffects()` and puts them back; any new restore path
+  that recomputes a sheet needs the same guard.
 - **`SetQuestState` pays out; a save load must not go through it** — it resolves the completion
   state and fires `AwardMoney`/`AwardXP`/`Event`, so restoring a payload key-by-key through it would
   replay the whole run's awards. `RestoreQuests` is the silent bulk door, and it is the only one.

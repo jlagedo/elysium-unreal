@@ -63,24 +63,21 @@ own owner call.
 
 ## Now — the unblocked front
 
-**Owner call: the entity-gameplay ladder is the current priority.** Combat, damage and NPC AI
-land as one sequenced slice over the existing substrate seams — descriptor-typed damage first,
-weapons on it, the NPC mind's senses/enemy/combat stages next, then their consumers:
+**Owner call: played acceptance is the current priority.** The entity-gameplay ladder — typed
+damage, weapons, the sound-event bus, senses, conditions, the enemy transaction, combat
+schedules, `aiscripted_schedule`, disciplines, stealth, the player law channels and NPC
+witnessing — carries headless Substrate/Content coverage and no played evidence. Playable-path
+rule 3 governs what happens next:
 
-1. **13.3** — the damage spine (`FElysiumDmg`, the typed commit, the hurt cadence) and the
-   weapon controller → [plans/gameplay.md](plans/gameplay.md).
-2. **13.5** — combat AI: the sound-event bus, senses/memory, the enemy transaction, the
-   alert/combat schedule families → [plans/gameplay.md](plans/gameplay.md); its 11.14/11.15
-   engine queries → [plans/spine.md](plans/spine.md).
-3. **9.8 / 9.9** — the inventory remainder; the reaction score and social presentation →
+1. **11.10** — the Play test tier, the beat-script harness the whole landed stack is accepted
+   through; PP0's finish → [plans/spine.md](plans/spine.md).
+2. **The 3 C's slice** — the controls/camera co-tune, then CCC8's owner-played acceptance →
+   [plans/three-cs.md](plans/three-cs.md).
+3. **0.10 / RE32 / RE33 / 12.1** — the retail capture loop →
+   [plans/capture.md](plans/capture.md).
+4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
+   per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
-4. **13.1 / 13.2** — stealth and disciplines, behind the two rungs above →
-   [plans/gameplay.md](plans/gameplay.md).
-
-Continuing fronts behind the ladder: **0.10 / RE32 / RE33 / 12.1** — the retail capture loop →
-[plans/capture.md](plans/capture.md); **the 3 C's slice** — the co-tune, then CCC8's played
-acceptance → [plans/three-cs.md](plans/three-cs.md); **11.10** — finish PP0 with the
-played-input harness → [plans/spine.md](plans/spine.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -177,8 +174,8 @@ Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Cont
 - [~] **[4.10 `game_sign` / `prop_sign`](plans/gameplay.md)** — both sign leaves landed;
   `NewspaperData`, `ClientCommand`, fade/pause details open.
 - [~] **[4.11 Trigger and `+use`-prop I/O gaps](plans/gameplay.md)** — filters,
-  `prop_switch` interaction, lockables and doorknob sequences landed; hurt cadence plus switch
-  sound/reset details remain open.
+  `prop_switch` interaction, lockables, doorknob sequences and the `trigger_hurt` cadence landed;
+  the switch `soundgroup` and `reset_state` details remain open.
 
 *Slice acceptance (met):* the tutorial elevator chain works; walking out loads `sm_pawnshop_1`.
 
@@ -260,8 +257,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [x] **9.7 The script→engine action surface** → `docs/vtmb/script_api.md`.
 - [~] **[9.8 Inventory & items](plans/gameplay.md)** — loose pickup and explicit CommonUI loot
   sessions landed; plain-container lid/sound, drop, barter, inventory-check and travel policy open.
-- [~] **[9.9 NPC disposition & reactions](plans/gameplay.md)** — talk/feed slice landed;
-  reaction score and expression policy open; senses are 13.5's.
+- [~] **[9.9 NPC disposition & reactions](plans/gameplay.md)** — talk/feed slice and the
+  reaction-score calculator landed; `React`, expression policy and the dialogue consumer open.
 - [ ] **[9.10 Economy](plans/gameplay.md)**
 
 *Slice acceptance:* `sp_tutorial_1` completable as retail — dialogue, quests, save/load.
@@ -288,10 +285,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
   **11.12 Map activation barrier**.
 - [ ] **[11.10 Play test tier](plans/spine.md)** — the beat-script driver; PP0's finish.
 - [~] **[11.13 Remaster camera director](plans/spine.md)** — a–c landed via CCC2; d–h open.
-- [ ] **[11.14 The reachability query](plans/spine.md)** *(S11, S12)* — `ProjectToNavigable`
-  behind the door-obstruction retreat.
-- [ ] **[11.15 The perception queries](plans/spine.md)** *(S11, S12)* — line-of-sight and
-  light-at-point behind the senses and the stealth surface.
+- [x] **11.14 The reachability query** → `docs/architecture/gameplay-systems-architecture.md` §5.5.4.
+- [x] **11.15 The perception queries** → `docs/architecture/gameplay-systems-architecture.md` §5.5.3.
 
 ## The 3 C's slice (CCC) — detail: [plans/three-cs.md](plans/three-cs.md)
 
@@ -328,10 +323,17 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
 
 ## P13 — Tutorial mechanics *(the PP6 rung; detail: [plans/gameplay.md](plans/gameplay.md))*
 
-- [ ] **[13.1 Stealth](plans/gameplay.md)** · **[13.2 Disciplines](plans/gameplay.md)** ·
-  **[13.3 Firearms & melee basics](plans/gameplay.md)** ·
-  **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)** ·
-  **[13.5 Combat AI](plans/gameplay.md)**
+- [~] **[13.1 Stealth](plans/gameplay.md)** — target surface, modifier volumes and the senses
+  consumer landed headless; the played lessons and the stealth-kill transaction open.
+- [~] **[13.2 Disciplines](plans/gameplay.md)** — activation, expiry, the targeted transaction
+  and the teardown landed headless; the played lesson, frenzy and the per-rank native power
+  consumers open.
+- [~] **[13.3 Firearms & melee basics](plans/gameplay.md)** — the damage spine and the weapon
+  controller landed headless; the played lessons and the numeric RE joins open.
+- [ ] **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)**
+- [~] **[13.5 Combat AI](plans/gameplay.md)** — bus, senses, conditions, the enemy transaction,
+  the schedule families and `aiscripted_schedule` landed headless; the played beats, the footstep
+  producer and the flinch action family open.
 
 *Slice acceptance:* `sp_tutorial_1` completable as retail on keyboard/mouse and gamepad, proven
 by `uv run elysium test Play`.

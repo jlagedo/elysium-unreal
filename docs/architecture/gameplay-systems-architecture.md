@@ -66,9 +66,10 @@ Every domain in §5 lands on this chain as registered fields (which makes it sav
 registered inputs (which makes it wire- and script-reachable), and registered outputs (which
 makes it authorable). The interim standard for a registered-but-unbacked input is the shared
 `ELYSIUM_PENDING_INPUT` macro (`Substrate/ElysiumPendingInput.h`, with a declaring-class form
-so a chain-level input reports one work-list row) — the frenzy family,
-`ClearActiveDisciplines`, `BarterBegin`/`End`, the camera-target quartet, and the recovered
-NPC-chain `SetScriptedDiscipline` input. Each
+so a chain-level input reports one work-list row) — the frenzy family
+(`FrenzyTrigger`/`FrenzyCheck`/`FrenzyUpdate`/`HungerCheck`), `BarterBegin`/`End`, `PlayFloat`,
+`PlayHUDParticle`/`StopHUDParticle`, the camera-target quartet, and the recovered NPC-chain
+`SetScriptedDiscipline` input. Each
 row is retired by the domain that owns it, never by a generic sweep, and
 `Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
@@ -90,11 +91,10 @@ rows: 12 module globals + 24 Character methods) that both script hosts dispatch 
 - **A stub returns the retail-shaped default** (`CharMethodStubResult`: false/0/None), never a
   guessed success.
 
-Domain services in §5 give real bodies to the stub rows: 9.8 takes `HasItem`/`GiveItem`/
-`RemoveItem`/`AmmoCount`/`GiveAmmo`/`HasWeaponEquipped`/`StartBarter`; 9.9 completes
-`SetDisposition` and takes `React`/`SetExpression`; 13.2 takes `DialogDiscipline` and
-`SeductiveFeed`'s power half; the terminal work takes nothing here (terminals are Tier 1
-entities). The table itself never grows a second dispatch path.
+Domain services in §5 give real bodies to the stub rows: 9.8's barter half takes `StartBarter`;
+9.9 takes `React`/`SetExpression`; 13.2 takes `DialogDiscipline` and `SeductiveFeed`'s power
+half; the terminal work takes nothing here (terminals are Tier 1 entities). The table itself
+never grows a second dispatch path.
 
 ### 2.3 Tier 3 — the console bridge
 
@@ -183,7 +183,7 @@ Every domain in §5 classifies its events into these and adds no fifth transport
 |---|---|---|
 | Entity I/O output | the def's parsed `outputs[]` rows through `FElysiumEventQueue` | `OnTrigger`, `OnDeath`, `OnSkillSuccess`, `OnTrigger0..7`, `OnFedUponEnd` |
 | Domain transition that *fires* an output | the domain service calls `FireOutput` on its owning entity at the real producer site | damage commit → `OnDamaged`; feed end → `OnFedUponEnd`; sense contact → `OnFoundPlayer` |
-| Game-sound stimulus | **new**: the substrate sound-event bus (§5.5) — `FElysiumEntityWorld::EmitGameSound(pos, category, radius, source)` | gunshots, `NPC_TAKE_DAMAGE`, footsteps, `NPC_DISCIPLINE_ALERT` |
+| Game-sound stimulus | the substrate sound-event bus (§5.5) — `FElysiumEntityWorld::EmitGameSound(pos, category, radius, source)` | gunshots, `NPC_TAKE_DAMAGE`, footsteps, `NPC_DISCIPLINE_ALERT` |
 | Presentation announcement | `IElysiumPresenter` / `FElysiumViewState` (S8) | fade started, dialog opened, vitals changed |
 
 The second kind is the load-bearing one: acceptance fires outputs **from their real
@@ -441,7 +441,7 @@ boundaries.
 
 Both entries commit through it: `TakeDamage(const FElysiumDmg&)` (weapons, disciplines) and
 the existing `TakeDamage(float)` scalar fallback (`trigger_hurt`, mover crush, script) — K6.
-The commit is also where the missing NPC outputs finally fire from their real producer:
+The commit is also where the NPC outputs fire from their real producer:
 `OnDamaged`, `OnHalfHealth`, and the damage stimulus into §5.5's memory.
 
 **Events:** `OnDamaged`/`OnHalfHealth`/`OnDeath` (kind 2); `NPC_TAKE_DAMAGE` onto the sound
@@ -449,10 +449,10 @@ bus (kind 3).
 
 **Save:** all inputs and counters are sheet slots / registered fields already.
 
-**Refactor:** `FElysiumCombatCharacter::TakeDamage` (`Substrate/ElysiumPlayerClasses.cpp`)
-splits into the two entries over one commit; `FElysiumTriggerHurt::HurtNow` also adopts the
-recovered retail cadence (entry half-tick, then `damage × 3` every 3 s) in place of the
-current 0.5 s loop, and fires `OnHurt`/`OnHurtPlayer`. Roadmap 13.3 / RE40.
+**Where it lives:** the descriptor and the resolver are `Substrate/ElysiumDamage.{h,cpp}`; the
+two `TakeDamage` entries and `CommitDamage` are `Substrate/ElysiumCombatCharacter.cpp`;
+`FElysiumTriggerHurt` (`Substrate/ElysiumStarterClasses.cpp`) rides the scalar entry on the
+recovered retail cadence and fires `OnHurt`/`OnHurtPlayer`. Roadmap 13.3 / RE40.
 
 ### 5.4 Weapons
 
@@ -474,9 +474,11 @@ AI is §5.5's later half.
 **Events:** compact player actions ride the command/user-cmd path (S5); gunshots and impacts
 emit on the sound bus (kind 3).
 
-**Refactor:** new `Substrate/ElysiumWeaponClasses.{h,cpp}` over 5.2 and 5.3; the `Holster`
-pending input retires; equip/holster joins `FElysiumInventory`'s active-weapon handle.
-Roadmap 13.3.
+**Where it lives:** `Substrate/ElysiumWeaponClasses.{h,cpp}` over 5.2 and 5.3, with equip/holster
+on `FElysiumInventory`'s active-weapon handle. The two deferral inputs the controller queues to
+itself (`WeaponAttackCommit`, `WeaponReloadCommit`) are registered on the `CWeapon` chain node so
+the deferral rides the one queue (K11) and serializes with it; they are this runtime's own work,
+not recovered datamap names. Roadmap 13.3.
 
 ### 5.5 The NPC mind
 
@@ -542,12 +544,21 @@ would have taken the decision instead of supplying its missing world term.
   `WAIT_FOR_MOVEMENT`, `FACE_ENEMY`, `SET_SCHEDULE`, …) implemented against the motor and
   activity seams.
 
-The first kernel stage is intentionally narrower than that final vocabulary. Spawn builds the
-sheet, presentation and motor; Activate arms admission; the first frozen-time think admits one
-`Idle` state without selecting an activity, schedule, controller or movement goal. `Idle`,
-`Scripted` and `Dead` are live state transitions. `Alert`, `Combat` and `Prone` remain named,
-diagnostic refusals until their recovered producers land. This preserves the complete state surface
-without filling the unknown first schedule or first-render activity with an invented choice.
+Admission stages the kernel rather than the state surface: spawn builds the sheet, presentation
+and motor, Activate arms admission, and the first frozen-time think admits the NPC at `Idle`
+without selecting an activity, schedule, controller or movement goal. From there the two-layer
+`SelectIdealState` promotes out of gathered conditions and a committed enemy, so `Idle`, `Alert`,
+`Combat`, `Scripted` and `Dead` are live transitions and each state selects its own schedule.
+`Prone` remains a named, diagnostic refusal: nothing recovered produces it, and a state with no
+producer is a diagnostic rather than a transition.
+
+The kernel is split by concern across `Substrate/`: `ElysiumNpcMind.{h,cpp}` holds the state
+machine and the body-owner arbiter, `ElysiumNpcConditions.{h,cpp}` the condition set and the
+ideal-state pass, `ElysiumNpcSenses.{h,cpp}` the stimulus inputs and memory,
+`ElysiumNpcEnemy.{h,cpp}` the selection transaction, `ElysiumSchedule.{h,cpp}` the task program
+and its executor, `ElysiumNpcCombatSchedules.{h,cpp}` the recovered combat families and their
+selector, `ElysiumNpcLoadout.{h,cpp}` the weapon-capability join, and
+`ElysiumAiScriptedSchedule.{h,cpp}` the authored director's mode table.
 
 **Owner call — the kernel is substrate C++, not Behavior Trees/StateTree.** Schedule identity
 is script-visible API (`ChangeSchedule`/`StartSchedule` name native schedules;
@@ -593,8 +604,14 @@ successfully claimed place, sequence explicitly parks an autonomous owner, and d
 ambient, cancels sequence, parks patrol and stops its current request without freezing, turning or
 placing either participant. Normal dialogue close releases the token before queued `EndDialog`;
 silent replacement additionally clears the displaced NPC latch without firing `OnDialogEnd`.
-`Schedule`, `ScriptedSchedule` and `Follower` remain rejected diagnostics until their domain
-implementations arrive.
+`Schedule` displaces the autonomous executors (patrol suspends and resumes; an interesting-place
+visit is finished at the claim site, because ambient owns a claimed place rather than a resumable
+route) but never an authored director; `ScriptedSchedule` outranks both the executors and an
+ordinary combat `Schedule`, and is itself displaced by `Sequence` and `Dialogue`.
+`ScriptedSchedule` is also the one owner that is a body claim without being a cognitive state —
+`aiscripted_schedule` pushes a policy whose `forcestate` already resolves to idle, alert or
+combat, so the arbiter must not overwrite it with `Scripted`. `Follower` remains a rejected
+diagnostic until the follower controller's unrecovered radii close.
 
 **5.5.6 Reactions, feeding, and the authored consequences.** The state machine's transitions
 fire the 16 base NPC outputs from their real producers (kind 2): sense contact →
@@ -616,11 +633,12 @@ and the open retail questions are marked seams in that file. Fear/flee/cower arr
 schedule families, not as a hardcoded "run away".
 
 **5.5.7 Disposition and the reaction score (9.9).** On the presentation side of K4:
-`DispositionTable.txt` loads into the rulebook; `SetDisposition(name, level)` becomes real on
-`FElysiumAnimating` — selecting stance/fidget/expression/gaze policy (the gaze machinery
-already exists) — and the native row drops its stub mark. The RPG reaction score
-(`reaction.txt` bands, `reactions000.txt` modifiers) is a separate pure calculator consumed by
-dialogue, never by combat targeting.
+`DispositionTable.txt` loads into the rulebook (`Substrate/ElysiumDisposition.{h,cpp}`) and
+`SetDisposition(name, level)` is real on `FElysiumAnimating`, selecting stance/fidget/expression/
+gaze policy. The RPG reaction score (`reaction.txt` bands, `reactions000.txt` modifiers) is a
+separate pure calculator, `Substrate/ElysiumReaction.{h,cpp}` over the rulebook's two tables. Its
+consumer is dialogue and only dialogue: the `React` Character method and the loud-expression
+policy that read the score are the remaining 9.9 half, and no combat-targeting path may take it.
 
 **Save:** spec is def-derived (not saved); relationships, memory, state, current
 schedule/task/timers, and resumable body intent serialize on the leaf. Capability generations,
@@ -628,10 +646,12 @@ dialogue cursors and other session tokens never serialize because their sessions
 `None`, `Patrol` and `Ambient` restore by revalidating their authored route or place; unsupported or
 stale intent falls back to `None` diagnostically.
 
-**Refactor:** `FElysiumNpc` (`Substrate/ElysiumNpcClasses.cpp`) grows the spec, relationship
-table, senses, and mind members stage by stage; the `SetRelationship` and
-`aiscripted_schedule` stub rows in `ElysiumStubClasses.cpp` retire; the sound bus lands in
-`FElysiumEntityWorld`; `TeleportToEntity` joins the NPC input table (it is wired 8× in the
+**Where it lives:** `FElysiumNpc` is `Substrate/ElysiumNpc.{h,cpp}` and
+`Substrate/ElysiumNpcClasses.cpp` is its registration site only — the factories, the chain's
+input/field tables and the one static registrar; `FElysiumInterestingPlace`,
+`FElysiumScriptedCharacter` and `FElysiumNpcMaker` sit one to a file beside them. The sound bus
+is `FElysiumEntityWorld::EmitGameSound` over `Substrate/ElysiumGameSound.{h,cpp}`, and
+`TeleportToEntity` is an NPC input (it is wired 8× in the
 tutorial). That input performs the recovered late first-match destination lookup, copies absolute
 origin and angles without a safe-placement or velocity reset, schedules the NPC's due think work,
 and exposes the discontinuity through the embodiment/network seam. A missing destination preserves
@@ -646,25 +666,31 @@ then 13.5.
   is a transaction (predependency gates → blood payment through the sheet → apply the
   authored trait-effect group via `FElysiumSheetEffects` → schedule the expiry as an **owned
   timed event on the one queue** (R4), keyed by character + discipline so renewal extends the
-  owned event rather than stacking). Celerity's time consumer is
-  `FElysiumTimeControl::SetScale`; Fortitude feeds automatic soak; Potence's floor is already
-  a step in §5.3's melee commit; Obfuscate/Protean carry their extra native gates.
+  owned event rather than stacking). Fortitude feeds automatic soak, Potence's floor is a step in
+  §5.3's melee commit, and Bloodshield fills `HealthBuffer`. Celerity's time consumer
+  (`FElysiumTimeControl::SetScale` and its movement half), Obfuscate's visibility/break/
+  damage-bonus matrix and Protean's extra native gates are unbuilt, and each activation says so
+  by name rather than approximating the power.
 - **Targeted records**: `disciplinetgt_*.txt` parses into the rulebook; the cast transaction
   (record lookup → adjusted blood check → AoE target-set build with ordered filters → single
   payment → hit-mapping application) executes `HitInfo` as independent channels — health/blood
   deltas (§5.3 for damage), trait-effect groups, AI schedule assignment (§5.5 kernel),
   gestures, flinch/knockback, projectiles (deferred payload), nested `Trigger_Casting`.
   Interruption flags subscribe to the damage commit, the sound bus, and bump events. Active
-  targeted effects are tracked on the affected character so `ClearActiveDisciplines` (and
-  `vdiscipline_endall`) is a real teardown: remove owned queue events through their normal
-  removal callbacks, clear tracked effects — the pending input retires.
-- Overt/AI-sound classification emits on the sound bus; the overt→Masquerade predicate stays
-  **unimplemented until recovered** (the doc explicitly refuses the help-text guess).
+  targeted effects are tracked on the affected character (and on an NPC survive its own think) so
+  `ClearActiveDisciplines` and `vdiscipline_endall` are a real teardown: remove owned queue events
+  through their normal removal callbacks and clear tracked effects.
+- Overt/AI-sound classification emits on the sound bus. A committed targeted cast by the player
+  raises the caster's supernatural activity to the record's `SupernaturalLvl` and, when the
+  record's independent `Overt` byte is set, criminal activity to 3 — the player law channels
+  `docs/vtmb/player-entity.md` § "Law, Masquerade and world response" owns. Whether an NPC
+  witnesses it, and therefore whether the Masquerade moves, is §5.5's witness lanes and never
+  this commit's question.
 
-**Refactor:** `Substrate/ElysiumDisciplines.{h,cpp}` + the rulebook loader;
-`FElysiumSheetEffects::FRow` extends to carry the payload operators it currently skips
-(`Cost`/`BloodCost`/`Duration`); selection verbs (`vdiscipline_int`/`_last`/`_endall`) declare
-in the command registry. Roadmap 13.2 / P13.
+**Where it lives:** `Substrate/ElysiumDisciplines.{h,cpp}` over the rulebook loader, with
+`FElysiumSheetEffects::FRow` carrying the `Cost`/`BloodCost`/`Duration` payload operators and the
+selection verbs (`vdiscipline_int`/`_last`/`_endall`) declared in the command registry.
+Roadmap 13.2 / P13.
 
 ### 5.7 Skill entities and terminals
 
@@ -727,18 +753,10 @@ roadmap task:
 |---|---|---|---|
 | 1 | `item_container*` rows move from body-only props to combat-character containers; touch-pickup ingress and player drop; `trigger_inventory_check`; `TravelsWithPlayer()` absent set | `Substrate/ElysiumPropClasses.cpp`, `Substrate/ElysiumItemClasses.{h,cpp}` | 9.8 |
 | 2 | Barter/loot transfer service; retire the `StartBarter` native stub and the `BarterBegin`/`End` pending inputs | `Scripting/ElysiumScriptNatives.cpp`, new barter service | 9.8/9.10 |
-| 3 | `FElysiumDmg` + shared apply + typed `CommitDamage`; scalar `TakeDamage` becomes the fallback entry | new `Substrate/ElysiumDamage.{h,cpp}`, `ElysiumPlayerClasses.cpp` | 13.3 |
-| 4 | Fire `OnDamaged`/`OnHalfHealth` from the commit; adopt `trigger_hurt`'s retail cadence + `OnHurt*` outputs | `ElysiumPlayerClasses.cpp`, `Substrate/ElysiumStarterClasses.cpp` | 13.3 |
-| 5 | Weapon controller over item modes; equip/holster on the active-weapon handle | new `Substrate/ElysiumWeaponClasses.{h,cpp}` | 13.3 |
-| 6 | `FElysiumRelationships` + a real `SetRelationship` body; `TeleportToEntity` body | `ElysiumNpcClasses.cpp` | 9.9/13.5 |
-| 7 | Disposition model behind `SetDisposition` (drop the stub mark); reaction-score calculator | `ElysiumScriptNatives.cpp`, rulebook loaders | 9.9 |
-| 8 | Sound-event bus (`EmitGameSound`) + NPC hearing consumer | `Substrate/ElysiumEntityWorld.{h,cpp}` | 13.5 |
-| 9 | Senses/memory/conditions/state + the schedule kernel; body-owner arbiter absorbing patrol/ambient/sequence/feed states; `aiscripted_schedule` | new `Substrate/ElysiumNpcMind.{h,cpp}`, `ElysiumNpcClasses.cpp` | 13.5 |
-| 10 | Discipline runtime (active events on the one queue + `DisciplineTgt` interpreter); `FElysiumSheetEffects::FRow` payload operators; retire `ClearActiveDisciplines`/frenzy pending inputs as each lands | new `Substrate/ElysiumDisciplines.{h,cpp}`, `Substrate/ElysiumSheetMath.{h,cpp}` | 13.2 |
-| 11 | `FElysiumTerminal`/`FElysiumPropHacking`; terminals leave the model-only prop table | `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.x lane |
-| 12 | Stealth scalars + `trigger_stealth_mod` into the senses service; sneak posture into the view state | rulebook, `ElysiumNpcMind`, movement | 13.1 |
-| 13 | A runtime prop `SetModel` derives its stem with `PropModelStem`, not the basename (the same defect the item side fixed) | `Substrate/ElysiumPropClasses.cpp` | props lane |
-| 14 | Carry authored MDL animation events through the character bake so `OnFeedAnimEvent` (and future combat events) bind real notifies instead of the scheduler | pipeline character export/bake, `UElysiumAnimSubsystem` | animation lane |
+| 3 | Real `React`/`SetExpression` bodies over the reaction score, and the dialogue consumer that reads it | `Scripting/ElysiumScriptNatives.cpp`, `Scripting/ElysiumDlg.{h,cpp}` | 9.9 |
+| 4 | `FElysiumTerminal`/`FElysiumPropHacking`; terminals leave the model-only prop table | `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.4 |
+| 5 | A runtime prop `SetModel` derives its stem with `PropModelStem`, not the basename (the same defect the item side fixed) | `Substrate/ElysiumPropClasses.cpp` | props lane |
+| 6 | Carry authored MDL animation events through the character bake so `OnFeedAnimEvent` and the weapon controller's contact commit bind real notifies instead of the scheduler | pipeline character export/bake, `UElysiumAnimSubsystem` | animation lane |
 
 Nothing in the ledger adds a dispatcher, a clock, an input owner, or a save path — each row is
 fields, inputs, outputs, one service, and (where player-facing) declared verbs, which is the
