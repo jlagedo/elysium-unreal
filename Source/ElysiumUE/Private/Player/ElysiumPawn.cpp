@@ -234,6 +234,10 @@ void AElysiumPawn::RefreshBodyVisibility()
 	{
 		LastClothDrawn = bDrawn;
 		ElysiumNpcVisual::GateLeaderCloth(PlayerVisual, bDrawn);
+		if (bDrawn)
+		{
+			PlayerVisual->bResetAfterTeleport = true;
+		}
 	}
 }
 

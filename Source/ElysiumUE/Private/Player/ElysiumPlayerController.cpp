@@ -88,10 +88,22 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	const FElysiumUserCmd Sampled = Router->CurrentCmd();
 	FElysiumUserCmd Current = Sampled;
 	FElysiumEntityWorld* EntityWorld = CurrentEntityWorld();
-	if (const FElysiumPlayer* FeedPlayer = EntityWorld ? EntityWorld->FindPlayer() : nullptr;
-		FeedPlayer && FeedPlayer->IsFeedPaired())
+	const FElysiumPlayer* FeedPlayer = EntityWorld ? EntityWorld->FindPlayer() : nullptr;
+	bool bCmdChanged = false;
+
+	if (FeedPlayer && FeedPlayer->IsFeedPaired())
 	{
 		Current = ElysiumFeed::GatePairedUserCmd(Current);
+		bCmdChanged = true;
+	}
+	if (FeedPlayer && !FeedPlayer->IsMobile())
+	{
+		Current.ClearMovement();
+		bCmdChanged = true;
+	}
+
+	if (bCmdChanged)
+	{
 		// SampleFrame already published the unfiltered player intent to the body. Replace that pending
 		// snapshot before movement runs; look remains unchanged and is still integrated once below.
 		if (IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(GetPawn()))
