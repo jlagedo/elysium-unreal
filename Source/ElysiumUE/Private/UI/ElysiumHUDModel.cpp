@@ -2,11 +2,14 @@
 
 namespace
 {
-	FElysiumHUDSelectorEntry Entry(const TCHAR* Label, const TCHAR* Detail = TEXT(""))
+	FElysiumHUDSelectorEntry Entry(const TCHAR* Label, const TCHAR* Detail = TEXT(""),
+		FName Icon = NAME_None, int32 Quantity = 0)
 	{
 		FElysiumHUDSelectorEntry Out;
 		Out.Label = FText::FromString(Label);
 		Out.Detail = FText::FromString(Detail);
+		Out.Icon = Icon;
+		Out.Quantity = Quantity;
 		return Out;
 	}
 }
@@ -23,6 +26,7 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	BloodCapacity = View.Vitals.MaxBloodPool;
 	Humanity = View.Vitals.Humanity;
 	Masquerade = View.Vitals.Masquerade;
+	ZoneState = EElysiumZoneState::None;
 	bFeedVictimVisible = View.Feed.bVisible;
 	FeedVictimBlood = View.Feed.BloodPool;
 	FeedVictimBloodCapacity = View.Feed.MaxBloodPool;
@@ -60,23 +64,43 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 		Masquerade = 1;
 		Reticle = EElysiumHUDReticle::Cross;
 
+		// Zone-state stub: mocked as Combat in combat/weapon/radial previews, Masquerade otherwise.
+		// Stays None in Passive and Off to exercise the collapsed state.
+		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Weapon
+			|| Preview == EElysiumHUDPreview::Radial)
+		{
+			ZoneState = EElysiumZoneState::Combat;
+		}
+		else if (Preview != EElysiumHUDPreview::Passive)
+		{
+			ZoneState = EElysiumZoneState::Masquerade;
+		}
+
 		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Weapon)
 		{
 			Equipment.bValid = true;
 			Equipment.Name = FText::FromString(TEXT(".38 Revolver"));
+			Equipment.WeaponClass = EElysiumWeaponClass::Ranged;
+			Equipment.Icon = FName(TEXT("weapons_ranged/38"));
 			Equipment.AmmoCurrent = 6;
 			Equipment.AmmoReserve = 24;
 		}
-		if (Preview == EElysiumHUDPreview::Discipline)
+		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Discipline
+			|| Preview == EElysiumHUDPreview::Radial)
 		{
 			Discipline.bValid = true;
 			Discipline.Name = FText::FromString(TEXT("Bloodheal"));
 			Discipline.BloodCost = 1;
+		}
+		if (Preview == EElysiumHUDPreview::Discipline)
+		{
 			Selector.Type = EElysiumHUDSelector::Disciplines;
 			Selector.Entries = {
 				Entry(TEXT("Bloodheal"), TEXT("1 blood")),
 				Entry(TEXT("Bloodbuff"), TEXT("1 blood")),
 				Entry(TEXT("Celerity"), TEXT("1 blood")),
+				Entry(TEXT("Potence"), TEXT("2 blood")),
+				Entry(TEXT("Presence"), TEXT("2 blood")),
 			};
 			Selector.SelectedIndex = 0;
 		}
@@ -92,13 +116,36 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 		}
 		else if (Preview == EElysiumHUDPreview::Inventory)
 		{
+			Equipment.bValid = true;
+			Equipment.Name = FText::FromString(TEXT("Tire Iron"));
+			Equipment.WeaponClass = EElysiumWeaponClass::Melee;
+			Equipment.Icon = FName(TEXT("weapons_melee/tire_iron"));
 			Selector.Type = EElysiumHUDSelector::Inventory;
 			Selector.Entries = {
-				Entry(TEXT("Blood Pack"), TEXT("Restores 3 blood")),
-				Entry(TEXT("Key Ring")),
-				Entry(TEXT("Wallet")),
+				Entry(TEXT("Blood Pack"), TEXT("Restores 3 blood"), FName(TEXT("general_items/bloodpack")), 4),
+				Entry(TEXT("Lockpick"), TEXT(""), FName(TEXT("general_items/lockpick")), 2),
+				Entry(TEXT("Key Ring"), TEXT(""), FName(TEXT("key"))),
 			};
 			Selector.SelectedIndex = 0;
+		}
+		else if (Preview == EElysiumHUDPreview::Radial)
+		{
+			Equipment.bValid = true;
+			Equipment.Name = FText::FromString(TEXT(".38 Revolver"));
+			Equipment.WeaponClass = EElysiumWeaponClass::Ranged;
+			Equipment.Icon = FName(TEXT("weapons_ranged/38"));
+			Equipment.AmmoCurrent = 6;
+			Equipment.AmmoReserve = 24;
+			Selector.Type = EElysiumHUDSelector::Disciplines;
+			Selector.bBriefMode = true;
+			Selector.Entries = {
+				Entry(TEXT("Bloodheal"), TEXT("1 blood"), FName(TEXT("disciplines/bloodheal"))),
+				Entry(TEXT("Bloodbuff"), TEXT("1 blood"), FName(TEXT("disciplines/bloodbuff"))),
+				Entry(TEXT("Celerity"), TEXT("1 blood"), FName(TEXT("disciplines/celerity"))),
+				Entry(TEXT("Potence"), TEXT("2 blood"), FName(TEXT("disciplines/potence"))),
+				Entry(TEXT("Presence"), TEXT("2 blood"), FName(TEXT("disciplines/presence"))),
+			};
+			Selector.SelectedIndex = 2;
 		}
 	}
 

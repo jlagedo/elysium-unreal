@@ -47,6 +47,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	int32 Masquerade = 0;
 
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	EElysiumZoneState ZoneState = EElysiumZoneState::None;
+
 	UPROPERTY(BlueprintReadOnly, Category = "HUD|Feed")
 	bool bFeedVictimVisible = false;
 

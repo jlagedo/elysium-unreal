@@ -20,6 +20,7 @@
 #include "Widgets/Layout/SDPIScaler.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SSafeZone.h"
+#include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Notifications/SProgressBar.h"
@@ -30,6 +31,17 @@
 namespace
 {
 	const FLinearColor HUDOutline(0.004f, 0.003f, 0.002f, 0.96f);
+
+	const TCHAR* WeaponClassGlyph(EElysiumWeaponClass Class)
+	{
+		switch (Class)
+		{
+			case EElysiumWeaponClass::Unarmed: return TEXT("A");
+			case EElysiumWeaponClass::Melee: return TEXT("B");
+			case EElysiumWeaponClass::Ranged: return TEXT("C");
+			default: return TEXT("");
+		}
+	}
 
 	FSlateFontInfo HUDFont(EElysiumFontRole Role, EElysiumFontWeight Weight,
 		float VirtualSize, int32 OutlineSize = 1)
@@ -114,6 +126,45 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		BloodRow->AddSlot().AutoWidth().Padding(1, 0)[BloodDroplet(M, Index)];
 	}
 
+	TSharedRef<SHorizontalBox> BriefModeRow = SNew(SHorizontalBox);
+	for (int32 Offset = -1; Offset <= 1; ++Offset)
+	{
+		BriefModeRow->AddSlot().AutoWidth().Padding(4, 0)
+		[
+			SNew(SBorder)
+			.BorderImage(White)
+			.BorderBackgroundColor_Lambda([M, Offset]()
+			{
+				return M && Offset == 0
+					? FLinearColor(ElysiumUI::Palette::Blood.R, ElysiumUI::Palette::Blood.G, ElysiumUI::Palette::Blood.B, 0.72f)
+					: FLinearColor::Transparent;
+			})
+			.Visibility_Lambda([M, Offset]()
+			{
+				if (!M || !M->Selector.bBriefMode) return EVisibility::Collapsed;
+				int32 TargetIndex = M->Selector.SelectedIndex + Offset;
+				return M->Selector.Entries.IsValidIndex(TargetIndex) ? EVisibility::HitTestInvisible : EVisibility::Hidden;
+			})
+			.Padding(4)
+			[
+				SNew(SBox).WidthOverride(64.0f).HeightOverride(64.0f)
+				[
+					SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
+					[
+						SNew(SImage)
+						.Image_Lambda([this, M, Offset]() -> const FSlateBrush*
+						{
+							if (!M) return nullptr;
+							int32 TargetIndex = M->Selector.SelectedIndex + Offset;
+							return M->Selector.Entries.IsValidIndex(TargetIndex)
+								? InventoryIconBrush(M->Selector.Entries[TargetIndex].Icon) : nullptr;
+						})
+					]
+				]
+			]
+		];
+	}
+
 	TSharedRef<SVerticalBox> SelectorRows = SNew(SVerticalBox);
 	for (int32 Index = 0; Index < 6; ++Index)
 	{
@@ -130,13 +181,28 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 			})
 			.Visibility_Lambda([M, Index]()
 			{
-				return M && M->Selector.Entries.IsValidIndex(Index)
+				return M && !M->Selector.bBriefMode && M->Selector.Entries.IsValidIndex(Index)
 					? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 			})
 			.Padding(FMargin(10, 6))
 			[
 				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().FillWidth(1.0f)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 12, 0))
+				[
+					SNew(SBox).HeightOverride(32.0f)
+					[
+						SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
+						[
+							SNew(SImage)
+							.Image_Lambda([this, M, Index]() -> const FSlateBrush*
+							{
+								return M && M->Selector.Entries.IsValidIndex(Index)
+									? InventoryIconBrush(M->Selector.Entries[Index].Icon) : nullptr;
+							})
+						]
+					]
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.0f).VAlign(VAlign_Center)
 				[
 					SNew(STextBlock)
 					.Font(Label)
@@ -147,15 +213,19 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 							? M->Selector.Entries[Index].Label : FText::GetEmpty();
 					})
 				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 0, 0)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 0, 0).VAlign(VAlign_Center)
 				[
 					SNew(STextBlock)
 					.Font(Caption)
 					.ColorAndOpacity(ElysiumUI::Palette::BoneDim)
 					.Text_Lambda([M, Index]()
 					{
-						return M && M->Selector.Entries.IsValidIndex(Index)
-							? M->Selector.Entries[Index].Detail : FText::GetEmpty();
+						if (!M || !M->Selector.Entries.IsValidIndex(Index)) return FText::GetEmpty();
+						if (M->Selector.Entries[Index].Quantity > 0)
+						{
+							return FText::FromString(FString::Printf(TEXT("%d"), M->Selector.Entries[Index].Quantity));
+						}
+						return M->Selector.Entries[Index].Detail;
 					})
 				]
 			]
@@ -184,9 +254,23 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 	];
 
 	// Life: compact and continuous. Exact values remain visible for accessibility and testing.
-	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(38, 0, 0, 38)
+	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(FMargin(38, 0, 0, 38))
 	[
 		SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)
+		[
+			SNew(SBox).HeightOverride(48.0f)
+			.Visibility_Lambda([M]() { return M && M->ZoneState != EElysiumZoneState::None
+				? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+			[
+				SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
+				.HAlign(HAlign_Left)
+				[
+					SNew(SImage)
+					.Image_Lambda([this, M]() -> const FSlateBrush* { return M ? AreaIconBrush(M->ZoneState) : nullptr; })
+				]
+			]
+		]
 		+ SVerticalBox::Slot().AutoHeight()
 		[
 			SNew(SHorizontalBox)
@@ -285,19 +369,49 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 	];
 
 	// Equipment and discipline regions collapse until their real gameplay owners publish data.
-	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(38, 0, 0, 92)
-	[
-		SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::Bone)
+	TSharedRef<SBox> IconBox = SNew(SBox).HeightOverride(48.0f)
+		[
+			SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
+			[
+				SNew(SImage)
+				.Image_Lambda([this, M]() -> const FSlateBrush* { return M ? InventoryIconBrush(M->Equipment.Icon) : nullptr; })
+			]
+		];
+
+	TSharedRef<SHorizontalBox> EquipBox = SNew(SHorizontalBox)
 		.Visibility_Lambda([M]() { return M && M->Equipment.bValid
 			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
-		.Text_Lambda([M]()
-		{
-			return M ? FText::FromString(FString::Printf(TEXT("%s    %d / %d"),
-				*M->Equipment.Name.ToString(), M->Equipment.AmmoCurrent, M->Equipment.AmmoReserve))
-				: FText::GetEmpty();
-		})
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 12, 0))
+		[
+			IconBox
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[
+			SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::Bone)
+			.Text_Lambda([M]()
+			{
+				if (!M) return FText::GetEmpty();
+				if (M->Equipment.WeaponClass == EElysiumWeaponClass::Ranged)
+				{
+					return FText::FromString(FString::Printf(TEXT("%s %s    %d / %d"),
+						WeaponClassGlyph(M->Equipment.WeaponClass),
+						*M->Equipment.Name.ToString(), M->Equipment.AmmoCurrent, M->Equipment.AmmoReserve));
+				}
+				else
+				{
+					return FText::FromString(FString::Printf(TEXT("%s %s"),
+						WeaponClassGlyph(M->Equipment.WeaponClass),
+						*M->Equipment.Name.ToString()));
+				}
+			})
+		];
+
+	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(FMargin(38, 0, 0, 102))
+	[
+		EquipBox
 	];
-	Content->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0, 0, 38, 91)
+
+	Content->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(FMargin(0, 0, 38, 101))
 	[
 		SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::Bone)
 		.Visibility_Lambda([M]() { return M && M->Discipline.bValid
@@ -305,24 +419,32 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		.Text_Lambda([M]() { return M ? M->Discipline.Name : FText::GetEmpty(); })
 	];
 
-	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(0, 0, 0, 120)
+	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Center).Padding(38, 0, 0, 0)
 	[
 		SNew(SBox).WidthOverride(380)
 		.Visibility_Lambda([M]() { return M && M->Selector.IsOpen()
 			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
 		[
-			SNew(SBorder).BorderImage(White)
-			.BorderBackgroundColor(FLinearColor(ElysiumUI::Palette::Ink.R,
-				ElysiumUI::Palette::Ink.G, ElysiumUI::Palette::Ink.B, 0.92f))
-			.Padding(12)
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
 			[
-				SNew(SVerticalBox)
-				+ SVerticalBox::Slot().AutoHeight().Padding(8, 4, 8, 8)
+				SNew(SBorder).BorderImage(White)
+				.BorderBackgroundColor(FLinearColor(ElysiumUI::Palette::Ink.R, ElysiumUI::Palette::Ink.G, ElysiumUI::Palette::Ink.B, 0.92f))
+				.Visibility_Lambda([M]() { return M && M->Selector.bBriefMode ? EVisibility::Collapsed : EVisibility::HitTestInvisible; })
+				.Padding(12)
 				[
-					SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::GoldLit)
-					.Text_Lambda([M]() { return M ? SelectorHeading(M->Selector.Type) : FText::GetEmpty(); })
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight().Padding(8, 4, 8, 8)
+					[
+						SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::GoldLit)
+						.Text_Lambda([M]() { return M ? SelectorHeading(M->Selector.Type) : FText::GetEmpty(); })
+					]
+					+ SVerticalBox::Slot().AutoHeight()[SelectorRows]
 				]
-				+ SVerticalBox::Slot().AutoHeight()[SelectorRows]
+			]
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				BriefModeRow
 			]
 		]
 	];
@@ -610,4 +732,68 @@ void UElysiumHUDWidget::EnsureContrastVeils()
 	};
 	Configure(LeftContrastBrush, LeftContrastVeil);
 	Configure(RightContrastBrush, RightContrastVeil);
+}
+
+const FSlateBrush* UElysiumHUDWidget::InventoryIconBrush(FName IconPath)
+{
+	if (IconPath.IsNone())
+	{
+		return nullptr;
+	}
+	if (const FSlateBrush* Found = InventoryBrushes.Find(IconPath))
+	{
+		return Found->GetResourceObject() ? Found : nullptr;
+	}
+
+	FString PngName = IconPath.ToString() + TEXT(".png");
+	UTexture2D* Texture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiArt(TEXT("hud/inventory_images")) / PngName);
+	if (!Texture)
+	{
+		InventoryTextures.Add(IconPath, nullptr);
+		InventoryBrushes.Add(IconPath, FSlateBrush());
+		return nullptr;
+	}
+
+	InventoryTextures.Add(IconPath, Texture);
+	FSlateBrush& Brush = InventoryBrushes.Add(IconPath);
+	Brush.SetResourceObject(Texture);
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+	return &Brush;
+}
+
+const FSlateBrush* UElysiumHUDWidget::AreaIconBrush(EElysiumZoneState ZoneState)
+{
+	if (ZoneState == EElysiumZoneState::None)
+	{
+		return nullptr;
+	}
+	if (const FSlateBrush* Found = AreaBrushes.Find(ZoneState))
+	{
+		return Found->GetResourceObject() ? Found : nullptr;
+	}
+
+	FString PngName;
+	switch (ZoneState)
+	{
+		case EElysiumZoneState::Combat: PngName = TEXT("area_combat.png"); break;
+		case EElysiumZoneState::Masquerade: PngName = TEXT("area_masquerade.png"); break;
+		case EElysiumZoneState::Elysium: PngName = TEXT("area_elysium.png"); break;
+		default: return nullptr;
+	}
+
+	UTexture2D* Texture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiArt(TEXT("hud/inventory_images")) / PngName);
+	if (!Texture)
+	{
+		AreaTextures.Add(ZoneState, nullptr);
+		AreaBrushes.Add(ZoneState, FSlateBrush());
+		return nullptr;
+	}
+
+	AreaTextures.Add(ZoneState, Texture);
+	FSlateBrush& Brush = AreaBrushes.Add(ZoneState);
+	Brush.SetResourceObject(Texture);
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+	return &Brush;
 }
