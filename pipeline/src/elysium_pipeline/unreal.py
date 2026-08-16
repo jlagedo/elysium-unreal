@@ -243,6 +243,28 @@ def bake_characters(config, runner, stems: Sequence[str], *, props: Sequence[str
     _run(config, runner, editor_executable(config, commandlet=True), arguments)
 
 
+def bake_wield(config, runner, stems: Sequence[str] = ()) -> None:
+    """Bake the named wield models onto /ElysiumBaked/Items/Wield.
+
+    One editor process, `-BakeWield=<csv>` naming the stems to build. Empty `stems` bakes the
+    whole corpus -- `bake_wield.py` itself treats an empty selector as every real model the
+    manifest declares, so this function does not have to resolve that list itself.
+    """
+    stems = list(dict.fromkeys(stems))
+    arguments = [
+        str(config.project),
+        "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/bake_wield.py'}",
+        f"-BakeWield={','.join(stems)}",
+        "-unattended",
+        "-nosplash",
+        "-nopause",
+        "-stdout",
+        "-FullStdOutLogOutput",
+    ]
+    _run(config, runner, editor_executable(config, commandlet=True), arguments)
+
+
 def make_cloth_assets(config, runner, stems: Sequence[str]) -> None:
     """Generate a Chaos cloth asset per authored garment among `stems`.
 

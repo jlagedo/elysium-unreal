@@ -4,7 +4,9 @@
 #include "ElysiumContentPaths.h"
 
 #include "Animation/Skeleton.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/Texture.h"
+#include "ReferenceSkeleton.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialParameters.h"
 #include "UObject/Package.h"
@@ -81,6 +83,33 @@ bool UElysiumCharacterBakeLibrary::MaterialHasTexture(const UMaterialInterface* 
 		}
 	}
 	return false;
+#else
+	return false;
+#endif
+}
+
+bool UElysiumCharacterBakeLibrary::RefPoseBoneTransform(const USkeletalMesh* Mesh, FName BoneName,
+	FTransform& OutLocal)
+{
+	OutLocal = FTransform::Identity;
+#if WITH_EDITOR
+	if (Mesh == nullptr)
+	{
+		return false;
+	}
+	const FReferenceSkeleton& Reference = Mesh->GetRefSkeleton();
+	const int32 BoneIndex = Reference.FindBoneIndex(BoneName);
+	if (BoneIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	const TArray<FTransform>& Pose = Reference.GetRefBonePose();
+	if (!Pose.IsValidIndex(BoneIndex))
+	{
+		return false;
+	}
+	OutLocal = Pose[BoneIndex];
+	return true;
 #else
 	return false;
 #endif

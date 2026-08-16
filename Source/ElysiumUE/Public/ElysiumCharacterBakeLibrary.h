@@ -6,10 +6,11 @@
 #include "ElysiumCharacterBakeLibrary.generated.h"
 
 class UMaterialInterface;
+class USkeletalMesh;
 class USkeleton;
 
 /**
- * The four editor-only questions `pipeline/unreal/bake_characters.py` and its verifier ask that
+ * The editor-only questions `pipeline/unreal/bake_characters.py` and its verifier ask that
  * have no Python scripting surface of their own.
  *
  * Building a character is not one of them: a body, its clips and its blend grids are constructed
@@ -52,4 +53,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static bool MaterialHasTexture(const UMaterialInterface* Material);
+
+	/**
+	 * A bone's reference-pose local transform on a built skeletal mesh, for verifying that a bake
+	 * landed the pose it was asked to. Translation is in centimetres, parent-relative. False when
+	 * the mesh or bone is absent, leaving OutLocal identity -- an ordinary negative query, so the
+	 * caller decides whether its own absence is a failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static bool RefPoseBoneTransform(const USkeletalMesh* Mesh, FName BoneName, FTransform& OutLocal);
 };

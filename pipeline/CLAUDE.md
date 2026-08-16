@@ -87,14 +87,21 @@ difference from, leaving the runtime no VtMB rule to apply. The root `CLAUDE.md`
 the `grid` and `all` profiles, focused map or model exports, and the global mirrors.
 Integrated NPC export adds skeletal meshes, animation banks, indexes, and facial sidecars.
 `UE_extract_items.py` decodes every `vdata/items` ground model into the shared `items/props/`
-corpus with a `ground_models.json` manifest; the `items` bundle covers its decode and bake.
-These outputs are game-derived and never tracked.
+corpus with a `ground_models.json` manifest; `UE_extract_wield.py` writes the wield-model corpus —
+`items/wield_models.json`, one `.eskm` per real wield model with its reference pose at the model's
+own clip frame 0, and the corpus's role-typed texture closure — with `wield_corpus.py` owning the
+decisions both halves share. The `items` bundle covers all of it. These outputs are game-derived
+and never tracked.
 
 `pipeline/unreal/` consumes pre-exported files in an editor process:
 
 - `build_content.py` and `make_*.py` generate local `/Game/Elysium` and
   `/Game/VtMB/**` packages.
 - `bake_map.py` generates local `/ElysiumBaked/<map>/**` packages.
+- `bake_wield.py` (`uv run elysium export wield`) generates local `/ElysiumBaked/Items/Wield/**`
+  and `/ElysiumBaked/Items/DA_WieldModels` from the wield manifest, instancing from the
+  `M_Wield*` masters `make_wield_materials.py` generates, and verifies each mesh's reference
+  pose against its `.eskm` in the same run.
 
 The virtual package names are immutable contracts. The generated `.uasset` and `.umap`
 files are ignored.

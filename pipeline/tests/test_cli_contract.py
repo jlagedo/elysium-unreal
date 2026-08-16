@@ -72,6 +72,17 @@ class CliContractTests(unittest.TestCase):
         self.assertIn("model", result.output)
         self.assertIn("--force", result.output)
 
+    def test_export_help_exposes_wield(self) -> None:
+        result = self.runner.invoke(app, ["export", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("wield", result.output)
+
+    def test_wield_export_stems_are_optional_positional_arguments(self) -> None:
+        result = self.runner.invoke(app, ["export", "wield", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("stems", result.output)
+        self.assertIn("whole corpus", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

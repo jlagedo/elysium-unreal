@@ -180,7 +180,10 @@ as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Its runtime pha
 current actor's one-shot ready/failed delegates. Visual readers:
 `FElysiumObjModel`, `FElysiumTextureCache`, `FElysiumMaterialFactory`, `ElysiumReflections.h`,
 `FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`,
-`ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`.
+`ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`. `UElysiumWieldTable`
+(`Public/ElysiumWieldTable.h`) is the `/ElysiumBaked/Items/DA_WieldModels` row table the wield bake
+writes and `(classname, sex)` resolves through; design:
+`docs/architecture/wielded-weapon-integration.md`.
 
 **Entity substrate / Track B** (`docs/architecture/engine-core.md`), plain C++, no UObject reflection:
 `FElysiumVariant`, `FElysiumEntityHandle`, `FElysiumEntityDef`/`FElysiumEntityDefs`,

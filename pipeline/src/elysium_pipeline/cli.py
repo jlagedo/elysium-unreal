@@ -847,6 +847,37 @@ def export_characters(
     )
 
 
+@export_app.command("wield")
+def export_wield(
+    ctx: typer.Context,
+    stems: list[str] = typer.Argument(
+        None,
+        help="Wield model stems to bake, e.g. w_m_katana. Omit for the whole corpus.",
+    ),
+) -> None:
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        # No export_manager wrapper exists for this bake yet -- `unreal.bake_wield` is called
+        # directly, same shape as `unreal.bake_characters`, whose offline pre-decode and partition
+        # steps a wield bake has no equivalent of: its manifest is written by `export bundle items`.
+        from elysium_pipeline import unreal
+
+        unreal.bake_wield(config, runner, stems or ())
+        console.print(
+            "wield bake complete: " + (", ".join(stems) if stems else "whole corpus"))
+
+    _execute(
+        _state(ctx),
+        "export wield",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        require_ue=True,
+        activity=True,
+        require_built_lane=True,
+        primary_only=True,
+    )
+
+
 @verify_app.command("characters")
 def verify_characters(
     ctx: typer.Context,
