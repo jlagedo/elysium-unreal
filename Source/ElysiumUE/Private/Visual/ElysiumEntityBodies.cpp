@@ -344,9 +344,23 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
 	if (Inst == nullptr)
 	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("npc '%s' clip '%s': this body carries no Elysium animation host, so nothing can "
+			     "play it"), *Stem, *ClipName);
 		return false;
 	}
-	Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName));
+	// The one-shot's answer is the difference between a clip that is playing and a body standing in
+	// the reference pose: on a graph-backed body the slot's source is the state machine, so a refused
+	// montage poses whatever that machine holds -- which for a body handed no selection is the bind
+	// pose, advancing nothing. Discarding the answer made that a silent T-pose.
+	if (!Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName)))
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
+			     "body keeps posing whatever it already held"),
+			*Stem, *ClipName, bLoop ? 1 : 0, Anim->GetPlayLength());
+		return false;
+	}
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
 	Body->SetVisibility(true, true);
