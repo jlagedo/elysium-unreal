@@ -13,11 +13,15 @@
 // An accepted swing is a transaction — logical activity, concrete clip, aimed opponent, playback
 // rate, recovery deadline and the commit instant. The commit is a SEPARATE later event that can
 // miss: it re-validates the owner, the weapon and the target, and only then stages the opposed
-// record and spends damage. Retail enters that second half from a server animation event; nothing
-// in this runtime raises one yet (the character bake places no `AnimNotify` and the clip manifest
-// carries no `mstudioevent_t` rows), so the commit is scheduled on the one event queue at the
-// clip's resolved event instant — the same scheduler-not-listener shape `Substrate/ElysiumFeed.cpp`
-// uses, and the seam a real notify path replaces by delivering the same input instead.
+// record and spends damage. Retail enters that second half from a server animation event on both
+// sides — ranged event ids 3030-3044 re-enter mode dispatch, and the melee swing's event reaches
+// `EventDispatch` and the melee hit applicator, which runs its own contact loop rather than the
+// shared traced-impact virtual (`combat-and-damage.md` § RE40 -> Melee Swing Pipeline). Nothing in
+// this runtime raises such an event yet (the character bake places no `AnimNotify` and the clip
+// manifest carries no `mstudioevent_t` rows), so the commit is scheduled on the one event queue at
+// the clip's resolved event instant — the same scheduler-not-listener shape
+// `Substrate/ElysiumFeed.cpp` uses, and the seam a real notify path replaces by delivering the same
+// input instead.
 
 #include "CoreMinimal.h"
 
@@ -149,6 +153,37 @@ namespace ElysiumWeapons
 	// no defence at all — that asymmetry is the recovered behaviour, not an optimisation.
 	int32 RangedRemainingLethality(int32 InTotalLethality, bool bKindredVictim, int32 DefenseNet);
 
+	// --- The two post-soak damage formulas (`combat-and-damage.md` § RE40 -> Ranged and Melee
+	// Damage Post-Soak Operations) ---------------------------------------------------------------
+	// Both truncate toward zero, which is retail's own `__ftol` conversion at the point a float
+	// damage value is turned into the integer the health commit spends.
+
+	// `Total = DamageInflicted * (BaseDamage + DamageModifier) * Multiplier`. `DamageModifier` is the
+	// attacker's rating for the descriptor's own close-combat attack feat (Brawl or Melee); the
+	// Potence floor is applied to `DamageInflicted` before this is called.
+	int32 MeleeDamageTotal(int32 DamageInflicted, int32 BaseDamage, int32 DamageModifier,
+		float Multiplier);
+
+	// `Total = RemainingLethality * BaseDamage * Multiplier`, the ranged multiplier being
+	// `Volley_Fraction * Hitgroup_Scale`. The firearm attack feat scales ACCURACY, not this product,
+	// which is why no rating enters here.
+	int32 RangedDamageTotal(int32 RemainingLethality, int32 BaseDamage, float Multiplier);
+
+	// The volley hit share: the fraction of a scheduled shot's rays that reached one victim. The
+	// volley path groups traces by victim and passes that share into `CTakeDamageInfo`; a shot that
+	// placed no rays contributes nothing.
+	float VolleyFraction(int32 RaysOnVictim, int32 RaysFired);
+
+	// SEAM — the hitgroup scale is the other half of the ranged multiplier, and the hitgroup comes
+	// from the trace the engine owns (K13). With no trace to report one, a hit is scored at the
+	// unmodified body scale.
+	inline constexpr float DefaultHitgroupScale = 1.0f;
+
+	// SEAM — the melee multiplier is the `CTakeDamageInfo`/trace envelope's, and RE40 decomposes only
+	// the ranged one. Melee therefore carries the envelope's identity until its own decomposition is
+	// recovered.
+	inline constexpr float DefaultMeleeMultiplier = 1.0f;
+
 	// The two halves of the `rules.txt` classifier over a signed margin. Both return `Unclassified`
 	// for an invalid table — the caller warns and skips the reaction rather than guessing a band.
 	EElysiumMeleeAttackerReaction ClassifyAttacker(const FElysiumMeleeMargins& Margins, int32 Margin);
@@ -165,9 +200,11 @@ namespace ElysiumWeapons
 	// scattered, so the RE that closes one lands as a single replacement.
 
 	// The clip cycle the contact/shot commit enters at. Retail takes the instant from a server
-	// animation event (ranged ids 3030-3044); ordinary melee attack sequences carry
-	// `event_count == 0` and their contact window is explicitly unrecovered. Mid-clip is this
-	// runtime's stated stand-in until decoded `mstudioevent_t` rows reach the clip manifest.
+	// animation event on both sides — ranged ids 3030-3044, and the melee swing's event through
+	// `EventDispatch` into the hit applicator's own contact loop. What that recovery does NOT name is
+	// the instant: no event time, window count or sweep shape, and the shipped fist/katana sequence
+	// descriptors carry no exported event rows. Mid-clip is therefore this runtime's stated stand-in
+	// until decoded `mstudioevent_t` rows reach the clip manifest.
 	inline constexpr float ContactEventCycle = 0.5f;
 
 	// The swing duration used when no embodiment can resolve a clip — a headless run, a bodiless

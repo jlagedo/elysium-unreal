@@ -36,8 +36,9 @@ const TCHAR* ElysiumDmgFamilyName(EElysiumDmgFamily Family);
 namespace ElysiumDamage
 {
 	// --- Word 4: the Source `DMG_*` bits the authored `Dmg` grammar names --------------------
-	// The recovered string-to-bit table. `DMG_FIST` is authored by the fists item record and is
-	// NOT in that table, so it parses to no bit at all (see ParseDmg).
+	// The recovered string-to-bit table. `DMG_FIST` is authored by the fists item record and is not
+	// an engine damage bit of its own: the parser aliases it to `DMG_CLUB`, so an unarmed hit carries
+	// the club bit (`combat-and-damage.md` § "Reverse-engineered mechanics (RE40)" -> DMG_FIST Alias).
 	inline constexpr uint32 DmgBullet        = 0x00000002u;
 	inline constexpr uint32 DmgSlash         = 0x00000004u;
 	inline constexpr uint32 DmgBurn          = 0x00000008u;
@@ -97,8 +98,11 @@ struct FElysiumDmg
 	int32 ForcedSoak = -1;
 	// Word 15 — the accumulated template damage filter. Populated where the victim's data allows
 	// and deliberately NOT multiplied into the result: the point at which retail turns it into
-	// committed health damage is an open join (`combat-and-damage.md` step 9). Authored inputs are
-	// float multipliers, so the accumulator is a float here; 0 means "nothing accumulated".
+	// committed health damage is an open join (`combat-and-damage.md` step 9). RE40 places the
+	// special-modifier/immunity half of that step in `ApplySpecialDamageModifier`, whose 224-entry
+	// weapon/damage-id table raises condition flags and reactive audio rather than scaling the
+	// number, so the accumulator's own commit point stays unrecovered. Authored inputs are float
+	// multipliers, so the accumulator is a float here; 0 means "nothing accumulated".
 	float FilterAccumulator = 0.0f;
 	uint32 Flags = 0;                                     // word 16 — the resolver flags
 
@@ -157,8 +161,9 @@ namespace ElysiumDamage
 	//     [optional source trait] <base damage integer> <damage family> [DMG_* flags] [attack feat]
 	//
 	// e.g. `2 Bashing Close_Combat_Brawl DMG_FIST`, `Strength 2 Lethal Close_Combat_Melee DMG_FAITH`.
-	// Family words are case-insensitive. A `DMG_*` token the recovered table does not own carries no
-	// bit; it is authored data rather than a failure, so it reports at Verbose.
+	// Family words are case-insensitive. `DMG_FIST` aliases to `DMG_CLUB`; a `DMG_*` token that is
+	// neither a recovered bit nor that alias carries no bit — authored data rather than a failure, so
+	// it reports at Verbose.
 	FElysiumDmg ParseDmg(const FString& Authored);
 
 	// The soak feat's `feats.txt` InternalName for a family/creature/falling combination — the

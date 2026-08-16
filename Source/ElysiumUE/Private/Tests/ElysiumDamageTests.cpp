@@ -140,7 +140,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageParseTest, "Elysium.Substrate.Dam
 	GElysiumTestFlags)
 bool FElysiumDamageParseTest::RunTest(const FString&)
 {
-	// The fists record: no source trait, and `DMG_FIST` is authored but names no recovered bit.
+	// The fists record: no source trait, and `DMG_FIST` is an alias rather than a bit of its own.
 	{
 		const FElysiumDmg Dmg = ElysiumDamage::ParseDmg(TEXT("2 Bashing Close_Combat_Brawl DMG_FIST"));
 		TestEqual(TEXT("fists parse the bashing family"), static_cast<int32>(Dmg.Family),
@@ -149,8 +149,21 @@ bool FElysiumDamageParseTest::RunTest(const FString&)
 		TestEqual(TEXT("...the trailing reference is the attack feat"), Dmg.AttackFeat,
 			FString(TEXT("Close_Combat_Brawl")));
 		TestTrue(TEXT("...and no source trait was authored"), Dmg.SourceTrait.IsEmpty());
-		TestEqual(TEXT("DMG_FIST contributes no bit rather than failing the parse"),
-			static_cast<int32>(Dmg.DmgMask), 0);
+		// RE40: `DMG_FIST` is not an engine damage flag — an unarmed attack aliases straight to
+		// `DMG_CLUB`, the same bit a baton carries.
+		TestTrue(TEXT("DMG_FIST aliases to DMG_CLUB"), Dmg.DmgMask == ElysiumDamage::DmgClub);
+		TestFalse(TEXT("...which is not firearm damage"), Dmg.IsFirearm());
+		TestFalse(TEXT("...and takes ordinary soak"), Dmg.TakesNoSoak());
+		const FElysiumDmg Baton = ElysiumDamage::ParseDmg(TEXT("2 Bashing Close_Combat_Melee DMG_CLUB"));
+		TestTrue(TEXT("...so a fist and a baton carry the same mask"), Dmg.DmgMask == Baton.DmgMask);
+	}
+
+	// A `DMG_` spelling that is neither a recovered bit nor the one recovered alias stays authored
+	// data: no bit, and no parse failure.
+	{
+		const FElysiumDmg Dmg = ElysiumDamage::ParseDmg(TEXT("2 Lethal Ranged_Combat DMG_NOTATHING"));
+		TestEqual(TEXT("an unrecovered DMG_ token carries no bit"), static_cast<int32>(Dmg.DmgMask), 0);
+		TestEqual(TEXT("...and the rest of the grammar still parses"), Dmg.BaseDamage, 2);
 	}
 
 	// Holy light: the optional leading `CVStatRef`, and a real flag.

@@ -105,6 +105,12 @@ namespace
 		Pistol.ReloadTime = 99.0f;   // authored, and deliberately NOT the reload clock
 		Pistol.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
 			TEXT("2 Lethal Ranged_Combat DMG_BULLET"), 9, 0.4f, /*Ammo_Cost*/ 1, /*Ammo_Fired*/ 1));
+		// The two recovered dead fields, authored on the record that fires: a burst range no runtime
+		// path reads, and a skill gate no runtime path checks. Both are set high enough that any
+		// consumer would change the shot's observable outcome.
+		Pistol.Modes[0].BurstMin = 3;
+		Pistol.Modes[0].BurstMax = 5;
+		Pistol.Modes[0].SkillRequirement = 9;
 		Pistol.Modes.Add(MakeMode(TEXT("PrimaryMode2"), TEXT("Attack"),
 			TEXT("2 Lethal Ranged_Combat DMG_BULLET"), 9, 0.2f, 1, 1));
 		Pistol.Modes.Add(MakeMode(TEXT("Secondary"), TEXT("Toggle_Primary_Mode"), TEXT(""), 0, 0.3f));
@@ -294,14 +300,18 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 			TestEqual(TEXT("...and their authored type"), Def.Modes[0].Type,
 				EElysiumWeaponModeType::Attack);
 			TestEqual(TEXT("BaseLethality is loaded"), Def.Modes[0].BaseLethality, 9);
-			TestEqual(TEXT("...and SkillRequirement beside it, stored and inert"),
+			// RE40: both `SkillRequirement` and the burst pair are parsed and never read back — dead
+			// fields, stored for audit. The loader's clamp is retail's own, so it still applies.
+			TestEqual(TEXT("...and SkillRequirement beside it, parsed as a dead field"),
 				Def.Modes[0].SkillRequirement, 5);
 			TestTrue(TEXT("Attack_Rate is loaded"),
 				FMath::IsNearlyEqual(Def.Modes[0].AttackRate, 0.4f));
 			TestEqual(TEXT("Ammo_Cost is the rounds spent"), Def.Modes[0].AmmoCost, 1);
 			TestEqual(TEXT("an unauthored Ammo_Fired is ONE ray, not zero"),
 				Def.Modes[0].AmmoFired, 1);
-			TestEqual(TEXT("the loader forces BurstMin <= BurstMax"), Def.Modes[0].BurstMax, 5);
+			TestEqual(TEXT("the loader forces BurstMin <= BurstMax on the dead burst pair"),
+				Def.Modes[0].BurstMax, 5);
+			TestEqual(TEXT("...keeping the authored minimum as written"), Def.Modes[0].BurstMin, 5);
 			TestFalse(TEXT("allow_autofire defaults clear"), Def.Modes[0].bAllowAutofire);
 
 			TestTrue(TEXT("a second primary record sets allow_autofire"),
@@ -409,6 +419,46 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 			ElysiumWeapons::RangedRemainingLethality(0, false, 0), 1);
 	}
 
+	// --- The two post-soak damage formulas ----------------------------------------------------
+	{
+		// Melee: `DamageInflicted * (BaseDamage + DamageModifier) * Multiplier`, the modifier being
+		// the attacker's close-combat feat rating.
+		TestEqual(TEXT("a zero modifier leaves lethality x base"),
+			ElysiumWeapons::MeleeDamageTotal(/*Inflicted*/ 8, /*Base*/ 2, /*Modifier*/ 0, 1.0f), 16);
+		TestEqual(TEXT("the attacker's feat rating adds to the base, inside the product"),
+			ElysiumWeapons::MeleeDamageTotal(8, 2, 3, 1.0f), 40);
+		TestEqual(TEXT("...and the envelope multiplier scales the whole product"),
+			ElysiumWeapons::MeleeDamageTotal(8, 2, 3, 0.5f), 20);
+		// `__ftol` truncates toward zero rather than rounding: 5 x (3 + 0) x 0.5 is 7.5, and the
+		// commit spends 7.
+		TestEqual(TEXT("a fractional melee product truncates toward zero"),
+			ElysiumWeapons::MeleeDamageTotal(5, 3, 0, 0.5f), 7);
+
+		// Ranged: `RemainingLethality * BaseDamage * (Volley_Fraction * Hitgroup_Scale)`.
+		TestEqual(TEXT("a whole volley on one victim is lethality x base"),
+			ElysiumWeapons::RangedDamageTotal(9, 2, 1.0f), 18);
+		TestEqual(TEXT("half a volley is worth half the shot"),
+			ElysiumWeapons::RangedDamageTotal(10, 2, 0.5f), 10);
+		TestEqual(TEXT("...and a fractional ranged product truncates toward zero too"),
+			ElysiumWeapons::RangedDamageTotal(3, 3, 0.5f), 4);
+
+		// The volley hit share: the victim's rays over the shot's rays.
+		TestTrue(TEXT("every ray on one victim is the whole share"),
+			FMath::IsNearlyEqual(ElysiumWeapons::VolleyFraction(8, 8), 1.0f));
+		TestTrue(TEXT("two of eight rays is a quarter share"),
+			FMath::IsNearlyEqual(ElysiumWeapons::VolleyFraction(2, 8), 0.25f));
+		TestTrue(TEXT("no rays on a victim is no share"),
+			FMath::IsNearlyEqual(ElysiumWeapons::VolleyFraction(0, 8), 0.0f));
+		TestTrue(TEXT("a share cannot exceed the volley"),
+			FMath::IsNearlyEqual(ElysiumWeapons::VolleyFraction(99, 8), 1.0f));
+		TestTrue(TEXT("a volley of no rays shares out nothing"),
+			FMath::IsNearlyEqual(ElysiumWeapons::VolleyFraction(1, 0), 0.0f));
+
+		// The hitgroup scale is the multiplier's other half and has no trace to report one yet.
+		TestTrue(TEXT("an unreported hitgroup scores at the body scale"),
+			FMath::IsNearlyEqual(ElysiumWeapons::DefaultHitgroupScale, 1.0f));
+	}
+
 	// --- The seams that are inert until their domain lands ------------------------------------
 	{
 		FElysiumRecordingServices Services;
@@ -502,7 +552,8 @@ bool FElysiumWeaponInstallTest::RunTest(const FString&)
 	TestEqual(TEXT("the mode descriptor carries its family"), Dmg.Family, EElysiumDmgFamily::Bashing);
 	TestEqual(TEXT("...its base damage"), Dmg.BaseDamage, 2);
 	TestEqual(TEXT("...and its attack feat"), Dmg.AttackFeat, FString(TEXT("Close_Combat_Brawl")));
-	TestEqual(TEXT("DMG_FIST names no recovered bit"), (int32)Dmg.DmgMask, 0);
+	TestTrue(TEXT("the authored DMG_FIST aliases to the club bit"),
+		Dmg.DmgMask == ElysiumDamage::DmgClub);
 	TestEqual(TEXT("the primary mode is the first tagged Primary record"),
 		Weapon->PrimaryModeIndex, 0);
 
@@ -575,7 +626,9 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestEqual(TEXT("...nor before the commit instant"), DamageTaken(*Victim), 0);
 
 		World.Tick(0.4);
-		// lethality 8 - defense 0 - soak 0 = 8; total = 8 x (BaseDamage 2 + 0) x 1 = 16.
+		// lethality 8 - defense 0 - soak 0 = 8; total = 8 x (BaseDamage 2 + DamageModifier) x 1.
+		// `DamageModifier` is the attacker's `Close_Combat_Brawl` rating, which reads 0 with no
+		// rulebook loaded — the formula itself is asserted over its whole domain in the Rules suite.
 		TestEqual(TEXT("the contact commits the melee total through the typed health commit"),
 			DamageTaken(*Victim), 16);
 		TestFalse(TEXT("the transaction is consumed"), Fists->Swing.bActive);
@@ -783,12 +836,27 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 		TestEqual(TEXT("the magazine is not spent at accept time"), Pistol->MagazineCount, 6);
 
 		World.Tick(0.3);
-		// lethality max(9 + 0, 1) = 9; value = 9 x BaseDamage 2 x 1 = 18.
+		// lethality max(9 + 0, 1) = 9; multiplier = volley share 1/1 x hitgroup 1.0; value = 9 x
+		// BaseDamage 2 x 1.0 = 18.
 		TestEqual(TEXT("the shot commit spends Ammo_Cost rounds"), Pistol->MagazineCount, 5);
-		TestEqual(TEXT("...and commits remaining lethality x BaseDamage"), DamageTaken(*Victim), 18);
+		TestEqual(TEXT("...and commits remaining lethality x BaseDamage x multiplier"),
+			DamageTaken(*Victim), 18);
+		// The two dead fields, proven inert at the only place a consumer could show: this mode
+		// authors BurstMin 3 / BurstMax 5 and SkillRequirement 9 against a character with no skill
+		// at all, and the press still spends exactly one round and commits exactly one shot's worth.
+		if (const FElysiumWeaponMode* Mode = Pistol->ModeAt(0))
+		{
+			TestEqual(TEXT("the mode really authors a burst range"), Mode->BurstMax, 5);
+			TestEqual(TEXT("...and a skill requirement"), Mode->SkillRequirement, 9);
+		}
+		TestFalse(TEXT("a burst range queues no further shot"), Pistol->Swing.bActive);
+		World.Tick(0.35);
+		TestEqual(TEXT("...so no second round is spent"), Pistol->MagazineCount, 5);
+		TestEqual(TEXT("...and no second commit lands"), DamageTaken(*Victim), 18);
 
-		// The shotgun: one shell, eight rays, and the ray count does NOT multiply the damage — the
-		// volley share is part of the unrecovered multiplier.
+		// The shotgun: one shell, eight rays, and the ray count does NOT multiply the damage. The
+		// rays enter only as the volley share's denominator, and one explicit victim takes the whole
+		// volley — 8/8, which is one.
 		FElysiumWeapon* Shotgun = GiveWeapon(*Player, GShotgun);
 		if (!TestNotNull(TEXT("the shotgun is granted"), Shotgun))
 		{
@@ -797,7 +865,8 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 		Shotgun->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle);
 		World.Tick(0.9);
 		TestEqual(TEXT("Ammo_Cost spends one shell"), Shotgun->MagazineCount, 3);
-		// lethality max(10, 1) = 10; value = 10 x 2 = 20, on top of the pistol's 18.
+		// lethality max(10, 1) = 10; multiplier = 8/8 x 1.0; value = 10 x 2 x 1.0 = 20, on top of
+		// the pistol's 18.
 		TestEqual(TEXT("Ammo_Fired is a ray count, not a damage multiplier"),
 			DamageTaken(*Victim), 18 + 20);
 	}

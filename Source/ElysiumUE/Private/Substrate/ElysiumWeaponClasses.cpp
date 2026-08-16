@@ -76,7 +76,9 @@ namespace
 
 	// A live opponent for combat purposes. Death is the RPG comparison, not entity destruction: a
 	// killed character stays a real entity until the world reaps it, so `HasReportedDeath` is what
-	// separates it from a valid target.
+	// separates it from a valid target. It is the weapon-side half of the alive-path prefilter —
+	// retail's own commit refuses a victim whose life state is no longer alive (`combat-and-damage.md`
+	// § RE40 -> Alive-Path Filtering and Rounding).
 	bool IsAliveForCombat(const FElysiumCombatCharacter& Char)
 	{
 		return !Char.IsInert() && !Char.HasReportedDeath();
@@ -228,6 +230,36 @@ namespace ElysiumWeapons
 	{
 		const int32 Clamped = FMath::Max(InTotalLethality, 1);
 		return bKindredVictim ? FMath::Max(Clamped - FMath::Max(DefenseNet, 0), 0) : Clamped;
+	}
+
+	int32 MeleeDamageTotal(int32 DamageInflicted, int32 BaseDamage, int32 DamageModifier,
+		float Multiplier)
+	{
+		// Retail's own diagnostic string and the body agree on the shape; RE40 names `DmgModifier` as
+		// the attacker's close-combat feat rating. The product is float before it is spent, and the
+		// conversion is `__ftol` — truncation toward zero, never a round.
+		const float Total = static_cast<float>(DamageInflicted)
+			* static_cast<float>(BaseDamage + DamageModifier) * Multiplier;
+		return FMath::TruncToInt(Total);
+	}
+
+	int32 RangedDamageTotal(int32 RemainingLethality, int32 BaseDamage, float Multiplier)
+	{
+		const float Total =
+			static_cast<float>(RemainingLethality) * static_cast<float>(BaseDamage) * Multiplier;
+		return FMath::TruncToInt(Total);
+	}
+
+	float VolleyFraction(int32 RaysOnVictim, int32 RaysFired)
+	{
+		if (RaysFired <= 0)
+		{
+			// A mode that places no rays produces no volley to share out. This is arithmetic safety,
+			// not a recovered case: `Ammo_Fired` defaults to one ray at load.
+			return 0.0f;
+		}
+		return static_cast<float>(FMath::Clamp(RaysOnVictim, 0, RaysFired))
+			/ static_cast<float>(RaysFired);
 	}
 
 	EElysiumMeleeAttackerReaction ClassifyAttacker(const FElysiumMeleeMargins& Margins, int32 Margin)
@@ -832,10 +864,13 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	Swing.Activity = GActRangeAttackLayer;
 	Swing.ClipLabel = ClipLabel;
 	// SEAM — the shot's world trace and its spread cone are a producer that joins with the
-	// perception and player-crosshair cycles; `SpreadAngle`, `Accuracy`, `WeaponRanges` and the
-	// Presence/Shaky Hands modifiers are live data whose final formula is not closed. The
-	// transaction therefore takes an explicit victim handle: tests and the AI cycles supply it, and
-	// the crosshair producer joins here.
+	// perception and player-crosshair cycles. RE40 settled what does NOT enter the cone: the Presence
+	// bonus and the Shaky Hands penalty only print diagnostics in the shot body and leave the
+	// physical dispersion alone, and the crosshair is a HUD mirror of `CrosshairMinSize` /
+	// `CrosshairWalkSizeMax` rather than an input. The cone itself is the authored `SpreadAngle` /
+	// `SpreadAngleMax` pair selected by the live ranged-accuracy value, whose interpolation input is
+	// still unrecovered — so the transaction takes an explicit victim handle: tests and the AI cycles
+	// supply it, and the trace producer joins here.
 	Swing.Opponent = Victim;
 	Swing.PlaybackRate = Scale;
 	Swing.ClipSeconds = Seconds;
@@ -1035,17 +1070,18 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 
 	// --- The damage commit --------------------------------------------------------------------
 	int32 DamageInflicted = Margin;
-	// SEAM — floored up to the active Potence rank when Potence is higher (13.2).
+	// Potence guarantees a minimum on what the formula multiplies: the remaining lethality is floored
+	// up to the active rank when Potence is higher.
 	DamageInflicted = FMath::Max(DamageInflicted, ElysiumWeapons::ActivePotenceRank(Attacker));
 
-	// `Total = DamageInflicted * (BaseDamage + DamageModifier) * Multiplier`, retail's own
-	// diagnostic string. OPEN JOIN: `DamageModifier` is the descriptor's evaluated modifier
-	// reference and `Multiplier` comes from the `CTakeDamageInfo`/trace envelope; neither is
-	// decomposed, so both are the identity here and the multiply is written out rather than folded
-	// away, so closing the RE is one substitution.
-	const int32 DamageModifier = 0;
-	const int32 Multiplier = 1;
-	const int32 Total = DamageInflicted * (ModeDmg.BaseDamage + DamageModifier) * Multiplier;
+	// `Total = DamageInflicted * (BaseDamage + DamageModifier) * Multiplier`, retail's own diagnostic
+	// string. `DamageModifier` is the ATTACKER's rating for the descriptor's close-combat attack feat
+	// — `Close_Combat_Brawl` for fists, `Close_Combat_Melee` for an armed weapon — which is the same
+	// rating the swing's playback rate reads, and a rating rather than a roll (K5). The multiplier is
+	// the trace envelope's and is the one half RE40 does not decompose for melee.
+	const int32 DamageModifier = FeatRating(Attacker, ModeDmg.AttackFeat, Context);
+	const int32 Total = ElysiumWeapons::MeleeDamageTotal(DamageInflicted, ModeDmg.BaseDamage,
+		DamageModifier, ElysiumWeapons::DefaultMeleeMultiplier);
 
 	FElysiumDmg Dmg = ModeDmg;
 	Dmg.Source = Attacker.Handle;
@@ -1053,6 +1089,11 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	// roll is bypassed. Its soak test still runs.
 	Dmg.Flags |= ElysiumDamage::FlagDirectInput;
 	Dmg.ExtraInput = Total;
+
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s -> %s melee inflicted %d x (base %d + modifier %d) x multiplier %.3f = %d"),
+		*Attacker.DebugString(), *Victim.DebugString(), DamageInflicted, ModeDmg.BaseDamage,
+		DamageModifier, ElysiumWeapons::DefaultMeleeMultiplier, Total);
 
 	const FElysiumItemDef* Record = Data();
 	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
@@ -1089,12 +1130,17 @@ void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	const int32 Lethality = ElysiumWeapons::RangedRemainingLethality(
 		TotalLethality(ModeIndex, Attacker, Context), bKindredVictim, DefenseNet);
 
-	// 5/6. Mark the direct-damage route and compute `remaining lethality * BaseDamage * Multiplier`.
-	//      OPEN JOIN: the multiplier is accumulated by the trace path (volley hit share, hitgroup
-	//      and impact policy) and its decomposition is unrecovered, so it is the identity here.
-	//      `Ammo_Fired` is the ray count and deliberately does NOT enter this product.
-	const int32 Multiplier = 1;
-	const int32 Value = Lethality * ModeDmg.BaseDamage * Multiplier;
+	// 5/6. Mark the direct-damage route and compute `remaining lethality * BaseDamage * Multiplier`,
+	//      the multiplier being `Volley_Fraction * Hitgroup_Scale`. `Ammo_Fired` is the volley's ray
+	//      count and enters only through that fraction — it is never a damage multiplier.
+	//      SEAM — the trace path is what counts how many of a shot's rays reached THIS victim and
+	//      which hitgroup each one struck; both are engine queries (K13). The transaction names one
+	//      explicit victim and casts no rays, so the whole volley is attributed to it and the
+	//      hitgroup is the unmodified body scale.
+	const int32 RaysFired = Mode ? FMath::Max(Mode->AmmoFired, 1) : 1;
+	const float Fraction = ElysiumWeapons::VolleyFraction(/*RaysOnVictim*/ RaysFired, RaysFired);
+	const float Multiplier = Fraction * ElysiumWeapons::DefaultHitgroupScale;
+	const int32 Value = ElysiumWeapons::RangedDamageTotal(Lethality, ModeDmg.BaseDamage, Multiplier);
 
 	FElysiumDmg Dmg = ModeDmg;
 	Dmg.Source = Attacker.Handle;
@@ -1102,11 +1148,15 @@ void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	Dmg.ExtraInput = Value;
 
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s -> %s ranged lethality %d x base %d (%d rays) = %d"), *Attacker.DebugString(),
-		*Victim.DebugString(), Lethality, ModeDmg.BaseDamage, Mode ? Mode->AmmoFired : 1, Value);
+		TEXT("%s -> %s ranged lethality %d x base %d x multiplier %.3f (%d rays) = %d"),
+		*Attacker.DebugString(), *Victim.DebugString(), Lethality, ModeDmg.BaseDamage, Multiplier,
+		RaysFired, Value);
 
-	// There is no firearm analogue of the melee block bands, and no firearm stagger threshold was
-	// recovered. Nothing is invented here.
+	// There is no firearm analogue of the melee block bands and no firearm stagger threshold. The
+	// recovered firearm chain is `RangedDamagePerVictim -> DispatchTraceAttack -> TraceAttack ->
+	// DispatchTakeDamage -> OnTakeDamage_Alive -> DamageFlinch`: the weapon side ends at the typed
+	// damage entry below, and the flinch is the shared alive commit's own reaction, not a second
+	// weapon-side call (`combat-and-damage.md` § RE40 -> Burst Fields and DamageFlinch Pipeline).
 	const FElysiumItemDef* Record = Data();
 	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
 }

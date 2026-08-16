@@ -1028,8 +1028,9 @@ struct FElysiumWeaponMode
 
 	FString Dmg;                        // `Dmg` — the authored damage grammar
 	// `BaseLethality` and `SkillRequirement` are the two adjacent integers
-	// (`combat-and-damage.md` § "Authored weapon inputs"). The second is loaded beside the first and
-	// its runtime consumer is not recovered, so it is stored and inert.
+	// (`combat-and-damage.md` § "Authored weapon inputs"). The first is read by the lethality stage;
+	// the second is a DEAD FIELD — the mode loader parses it and no engine path ever reads it back
+	// (§ RE40 -> SkillRequirement), so it is stored for audit and gates nothing.
 	int32 BaseLethality = 0;
 	int32 SkillRequirement = 0;
 
@@ -1047,8 +1048,10 @@ struct FElysiumWeaponMode
 	// `allow_autofire` — clear means held attack intent is lost after the press edge.
 	bool bAllowAutofire = false;
 
-	// `BurstMin`/`BurstMax`, loaded with the loader's own `BurstMin <= BurstMax` clamp. No player or
-	// NPC consumer is recovered, so they are stored and inert.
+	// `BurstMin`/`BurstMax`, loaded with the loader's own `BurstMin <= BurstMax` clamp. Both are DEAD
+	// FIELDS — parsed by the mode loader and unreferenced by runtime combat logic on either the
+	// player or the NPC side (§ RE40 -> Burst Fields) — so they are stored for audit and no burst
+	// queue exists to build from them.
 	int32 BurstMin = 0;
 	int32 BurstMax = 0;
 

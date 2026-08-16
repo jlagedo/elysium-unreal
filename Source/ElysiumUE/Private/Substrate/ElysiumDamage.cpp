@@ -132,8 +132,9 @@ namespace ElysiumDamage
 {
 	namespace
 	{
-		// The recovered string-to-bit table, in the file's own order. A token that starts with
-		// `DMG_` and is absent from this table is authored data (`DMG_FIST`), not a parse failure.
+		// The recovered string-to-bit table, in the file's own order, plus the one authored spelling
+		// that is an alias rather than a bit of its own. A `DMG_` token absent from both is authored
+		// data, not a parse failure.
 		struct FDmgToken { const TCHAR* Token; uint32 Bit; };
 		const FDmgToken GDmgTokens[] =
 		{
@@ -147,6 +148,10 @@ namespace ElysiumDamage
 			{ TEXT("DMG_CLAWBITE"),       DmgClawBite },
 			{ TEXT("DMG_SUNLIGHT"),       DmgSunlight },
 			{ TEXT("DMG_FAITH"),          DmgFaith },
+			// `DMG_FIST` is not an engine damage flag. An unarmed attack parses it straight to
+			// `DMG_CLUB` — the same bit a baton carries — which is why the fists record authors a
+			// spelling the bit table never held (`combat-and-damage.md` § RE40 -> DMG_FIST Alias).
+			{ TEXT("DMG_FIST"),           DmgClub },
 		};
 
 		bool ParseFamilyWord(const FString& Token, EElysiumDmgFamily& OutFamily)
@@ -220,9 +225,9 @@ namespace ElysiumDamage
 				}
 				if (!bKnown)
 				{
-					// `DMG_FIST` is the shipped example: authored by the fists record and absent
-					// from the recovered table, so it contributes no bit. Its fallback/alias
-					// behaviour is an open research question, not a data defect to repair.
+					// Every spelling the shipped records author is a recovered bit or the one
+					// recovered alias, so a token reaching here is authored data outside both. It
+					// carries no bit rather than being repaired.
 					UE_LOG(LogElysiumDamage, Verbose,
 						TEXT("Dmg '%s': '%s' names no recovered damage bit — carried as no bit"),
 						*Authored, *Token);
@@ -418,10 +423,13 @@ namespace ElysiumDamage
 
 		// 9. OPEN JOIN — the template damage filters and descriptor word 15.
 		//    The victim's authored `DamageFilter*` values are accumulated here because the data
-		//    supports it, and are deliberately NOT multiplied into the result: retail's point of
-		//    commit for word 15 is unrecovered (`combat-and-damage.md` § open research gaps), and a
-		//    guessed multiply would silently rescale every hit in the game. Closing the RE lands as
-		//    one operation on `Remainder` right here, not as a redesign.
+		//    supports it, and are deliberately NOT multiplied into the result. RE40 closed the other
+		//    half of step 9 — the special modifiers and immunities are `ApplySpecialDamageModifier`
+		//    matching weapon/damage ids against a 224-entry table to raise condition flags and
+		//    reactive audio, which is a reaction path rather than a scale on the number — and left
+		//    the accumulator's own commit point unrecovered. A guessed multiply would silently
+		//    rescale every hit in the game, so closing the RE lands as one operation on `Remainder`
+		//    right here, not as a redesign.
 		Dmg.FilterAccumulator = AccumulateTemplateFilters(Dmg, Victim);
 		if (Dmg.FilterAccumulator != 0.0f)
 		{
@@ -432,7 +440,7 @@ namespace ElysiumDamage
 				ReportedClasses.Add(Classname);
 				UE_LOG(LogElysiumDamage, Warning,
 					TEXT("'%s' authors damage filters (%s accumulator %.3f) that are populated but "
-						"not applied — the word-15 commit point is an open RE join"),
+						"not applied — the word-15 commit point is still an open RE join"),
 					*Classname, ElysiumDmgFamilyName(Dmg.Family), Dmg.FilterAccumulator);
 			}
 		}
