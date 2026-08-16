@@ -449,6 +449,12 @@ void FElysiumPlayer::OnRuntimeModelChanged()
 	}
 }
 
+void FElysiumPlayer::SetHiddenByController(bool bInHidden)
+{
+	bHiddenByController = bInHidden;
+	GateVisual();
+}
+
 void FElysiumPlayer::GateVisual()
 {
 	// The pawn owns the surface. Publishing the entity's hide state and letting the pawn combine it
@@ -456,7 +462,7 @@ void FElysiumPlayer::GateVisual()
 	// let a scene clip un-hide a body the camera had just put away.
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
-		Embodiment->SetPlayerBodyEntityHidden(IsInert());
+		Embodiment->SetPlayerBodyEntityHidden(IsInert() || bHiddenByController);
 	}
 }
 

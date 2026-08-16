@@ -139,6 +139,24 @@ struct FElysiumUserCmd
 			&& Buttons == Other.Buttons;
 	}
 
+	void ClearMovement()
+	{
+		Move = FVector2D::ZeroVector;
+		Up = 0.0f;
+		Buttons &= ~(
+			static_cast<uint64>(EElysiumButton::Forward) |
+			static_cast<uint64>(EElysiumButton::Back) |
+			static_cast<uint64>(EElysiumButton::MoveLeft) |
+			static_cast<uint64>(EElysiumButton::MoveRight) |
+			static_cast<uint64>(EElysiumButton::MoveUp) |
+			static_cast<uint64>(EElysiumButton::MoveDown) |
+			static_cast<uint64>(EElysiumButton::Jump) |
+			static_cast<uint64>(EElysiumButton::Duck) |
+			static_cast<uint64>(EElysiumButton::Speed) |
+			static_cast<uint64>(EElysiumButton::Strafe)
+		);
+	}
+
 	FString Describe() const;
 
 	// One line of a recorded stream: `seq dt fwd side up yaw pitch buttons`. Plain text so a stream

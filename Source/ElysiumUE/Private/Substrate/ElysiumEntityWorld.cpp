@@ -921,13 +921,11 @@ FElysiumEntityHandle FElysiumEntityWorld::CreatePlayerControllerEntity()
 	Controller->Health = Source->Health;
 	Controller->MaxHealth = Source->MaxHealth;
 	CallEntitySpawn(*Controller);
-	// **The real player's body is not hidden here, and retail does not hide it either.** Camera
-	// ownership, actor ownership and player control are three independent authored operations
-	// (`docs/vtmb/choreographed_scenes.md` § "Player pawn versus cinematic double"). A first-person
-	// run already draws an eligible but fully transparent body, because the fade band reads the
-	// third-person boom and that boom is zero-weighted; a third-person run draws the real body beside
-	// the double, exactly as retail does. Content that wants the player elsewhere teleports `!player`,
-	// which is how `sp_theatre` stages its courtroom.
+	// **Retail hides the real player's body and suppresses input.** `npc_VPlayerController` 
+	// is the cinematic double; the real pawn receives `EF_NODRAW` (+0x60) and movement is 
+	// blocked because the input layer respects the controller handle (`player + 0x1db0`).
+	Source->SetHiddenByController(true);
+
 	UE_LOG(LogElysiumWorld, Log, TEXT("player controller entity live: %s"), *Controller->DebugString());
 	return PlayerControllerEntity;
 }
@@ -967,7 +965,13 @@ bool FElysiumEntityWorld::RemovePlayerControllerEntity()
 		Controller->Visual = nullptr;
 	}
 	PlayerControllerEntity = FElysiumEntityHandle::Invalid();
-	// Nothing to restore: the double never hid the real body, so removing it un-hides nothing.
+
+	// Un-hide the real body in its new pose.
+	if (Dest)
+	{
+		Dest->SetHiddenByController(false);
+	}
+
 	return true;
 }
 

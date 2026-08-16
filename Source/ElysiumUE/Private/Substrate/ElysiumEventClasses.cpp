@@ -119,8 +119,17 @@ public:
 		}
 	}
 
-	void InputImmobilizePlayer() { bImmobilized = true;  Note(TEXT("ImmobilizePlayer")); }
-	void InputMobilizePlayer()   { bImmobilized = false; Note(TEXT("MobilizePlayer")); }
+	void SetPlayerImmobilized(bool bValue)
+	{
+		bImmobilized = bValue;
+		if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
+		{
+			Player->SetImmobilized(bValue);
+		}
+	}
+
+	void InputImmobilizePlayer() { SetPlayerImmobilized(true);  Note(TEXT("ImmobilizePlayer")); }
+	void InputMobilizePlayer()   { SetPlayerImmobilized(false); Note(TEXT("MobilizePlayer")); }
 
 	void InputCreateControllerNPC()
 	{

@@ -1232,6 +1232,13 @@ public:
 	// rebuilt from the observers' own caches within one sight cadence, so it is not saved.
 	FElysiumStealthObserver PendingObserver;
 
+	bool bImmobilized = false;
+	bool bHiddenByController = false;
+
+	void SetImmobilized(bool bInImmobilized) { bImmobilized = bInImmobilized; }
+	void SetHiddenByController(bool bInHidden);
+	bool IsMobile() const { return !bImmobilized && !bHiddenByController; }
+
 	// Offer this player an observer, from an NPC's own sight pass. Nearest wins; an offer for the
 	// incumbent refreshes it. Nothing is published here — `Think` commits, which is what keeps the
 	// HUD downstream of gameplay rather than beside it.
