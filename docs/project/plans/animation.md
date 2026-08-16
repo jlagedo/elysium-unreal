@@ -26,7 +26,6 @@ silently, and every one presents as the same reference-pose symptom. This rung r
 and makes any future miss a named failure, which "Runtime failures are never silent" already
 requires.
 
-- **The zero-length looping montage.** Done: commit[06f751c].
 - **A blend-space selection routed into a sequence-only state.** The generated
   `ABP_ElysiumBiped` gives only `Walk`/`Run`/`Sneak` the sequence-or-blend-space pair; `Idle`,
   `Crouch`, `Leap`, `Falling` and `Land` carry a lone `SequencePlayer`, so a resolver answer
