@@ -267,6 +267,49 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		R.SelectedTier = 0;
 		R.DisciplineCastCount = 0;
 	}
+	// 13.1 — the stealth block. Appended to the END of the player record and read behind its own
+	// version, so an older supported payload restores with a default surface rather than being
+	// refused.
+	//
+	// It is written and read as ONE group and there is no partial arm: `docs/vtmb/stealth.md` is
+	// explicit that a restored sample triplet must never be combined with newly defaulted derived
+	// values, so a payload either carries the samples, the rotation index, all four derived values
+	// AND the generation that ties them together, or it carries none of them and the surface
+	// re-derives from scratch on the first think.
+	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::Stealth)
+	{
+		Ar << R.StealthMap;
+		Ar << R.StealthModRaw;
+		Ar << R.Stealth.NextUpdateTime;
+		Ar << R.Stealth.VisionScalar << R.Stealth.ConeScalar << R.Stealth.HearingReductionCm;
+		Ar << R.Stealth.NextSampleIndex;
+		for (int32 i = 0; i < FElysiumStealthSurface::NumSamples; ++i)
+		{
+			Ar << R.Stealth.Samples[i];
+		}
+		Ar << R.Stealth.LightOnMe;
+		Ar << R.Stealth.LightRow << R.Stealth.StealthRow;
+		uint8 Eligible = R.Stealth.bEligible ? 1 : 0;
+		Ar << Eligible;
+		Ar << R.Stealth.Generation;
+		if (Ar.IsLoading())
+		{
+			R.Stealth.bEligible = Eligible != 0;
+			// A payload from another build must not be able to index off the end of a table or of
+			// the sample triplet; the values themselves are floats and clamp at their own reads.
+			R.Stealth.NextSampleIndex = FMath::Clamp(R.Stealth.NextSampleIndex, 0,
+				FElysiumStealthSurface::NumSamples - 1);
+			R.Stealth.LightRow = FMath::Clamp(R.Stealth.LightRow, 0, 10);
+			R.Stealth.StealthRow = FMath::Clamp(R.Stealth.StealthRow, 0, 10);
+			R.Stealth.Generation = FMath::Max(0, R.Stealth.Generation);
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		R.Stealth.Reset();
+		R.StealthModRaw = 0;
+		R.StealthMap.Reset();
+	}
 	return Ar;
 }
 
@@ -561,6 +604,15 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	OutLines.Add(FString::Printf(TEXT("player.law = %d/%d/%d"),
 		P.Law.Criminal, P.Law.Supernatural, P.Law.Investigate));
 	OutLines.Add(FString::Printf(TEXT("player.unkillable = %d"), P.bUnkillable ? 1 : 0));
+	// The stealth group, as one line plus its aggregate: a diff that shows a moved scalar without a
+	// moved generation is exactly the split-generation restore the block exists to prevent.
+	OutLines.Add(FString::Printf(
+		TEXT("player.stealth = light %.3f rows %d/%d sight %.2f cone %.2f hearing %.1fcm ")
+		TEXT("(gen %d, next sample %d, map %s)"),
+		P.Stealth.LightOnMe, P.Stealth.LightRow, P.Stealth.StealthRow, P.Stealth.VisionScalar,
+		P.Stealth.ConeScalar, P.Stealth.HearingReductionCm, P.Stealth.Generation,
+		P.Stealth.NextSampleIndex, P.StealthMap.IsEmpty() ? TEXT("(none)") : *P.StealthMap));
+	OutLines.Add(FString::Printf(TEXT("player.stealth.modifier.raw = %d"), P.StealthModRaw));
 	// The sheet, by slot. Only what is non-zero: VtMB's own writer omits the all-zero slots, and 148
 	// rows a dump would drown the diff this exists to be read as.
 	for (uint8 i = 0; i < (uint8)EElysiumTraitContainer::Count; ++i)

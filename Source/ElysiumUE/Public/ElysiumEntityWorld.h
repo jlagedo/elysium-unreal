@@ -395,8 +395,9 @@ public:
 	// no fifth transport. Consumers poll `GameSounds()` during their own think.
 	//
 	// `RadiusCm <= 0` asks `sound_volume_table.txt` for the category's own reach, which is the
-	// ordinary call. `StealthHearingReductionCm` is `AdjustSoundDistForStealth`'s subtrahend and is
-	// 0 at every producer today (see `Substrate/ElysiumGameSound.h`).
+	// ordinary call. `StealthHearingReductionCm` is `AdjustSoundDistForStealth`'s subtrahend: a
+	// producer whose source is a character reads it off that character's committed stealth surface
+	// through `ElysiumStealth::HearingReductionCmFor`, and a world-made noise (a door) passes 0.
 	void EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
 		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f);
 	// The retained window. Const for consumers and the debug surface; the mutable overload exists

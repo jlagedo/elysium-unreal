@@ -208,7 +208,12 @@ public:
 
 	// The observer's cone test, `FInViewCone` in this runtime's frame. Horizontal only: an NPC
 	// body carries a yaw, and retail's own observer test is a yaw-plane comparison.
-	static bool IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm);
+	//
+	// `TargetConeScalar` is the TARGET's own `m_flStealthVisionCone`, which retail applies inside
+	// this test alongside the observer's own threshold. 1.0 is a target carrying no stealth
+	// surface, which is every character except the player.
+	static bool IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
+		float TargetConeScalar = 1.0f);
 
 	void Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc);
 

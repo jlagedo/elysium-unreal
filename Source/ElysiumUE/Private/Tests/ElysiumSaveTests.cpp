@@ -582,7 +582,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// appended without this block being extended, which is exactly when someone should be made to
 	// think about whether the new field is additive and what an old payload does without it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Disciplines);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Stealth);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -594,7 +594,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("npc combat loadout and detected-attack memory"),
 			(int32)FElysiumSaveVersion::NpcCombat),
 		TPair<const TCHAR*, int32>(TEXT("the player's discipline block"),
-			(int32)FElysiumSaveVersion::Disciplines) })
+			(int32)FElysiumSaveVersion::Disciplines),
+		TPair<const TCHAR*, int32>(TEXT("the player's stealth surface and raw modifier aggregate"),
+			(int32)FElysiumSaveVersion::Stealth) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);

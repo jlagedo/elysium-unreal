@@ -844,6 +844,16 @@ struct FElysiumRecordingServices final
 			LightAtPoint));
 		return LightAtPoint;
 	}
+	// 13.1 — the stealth eligibility predicate's one world term. Default false is the interface's
+	// stated headless answer (the non-stealth fallback), so a case that does not care about stealth
+	// keeps reading exactly the surface it did before.
+	bool bPlayerSneaking = false;
+	virtual bool IsPlayerSneaking() const override
+	{
+		Record(FString::Printf(TEXT("IsPlayerSneaking -> %s"),
+			bPlayerSneaking ? TEXT("true") : TEXT("false")));
+		return bPlayerSneaking;
+	}
 	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
 	{
 		const float Result = bUseNpcMakerGroundZ ? NpcMakerGroundZ : Origin.Z;

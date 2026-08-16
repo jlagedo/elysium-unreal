@@ -25,6 +25,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumStealth.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 
@@ -103,7 +104,7 @@ namespace
 			}
 			return 0;
 		}
-		const int32 Pool = ElysiumFeats::FeatValue(*Feat, Roller.Sheet, Roller.SheetEffects());
+		const int32 Pool = ElysiumFeats::FeatValue(*Feat, Roller.Sheet, Roller.SheetEffects(), &Roller);
 		const FElysiumDiceTable& Weighting = Context.DiceTables
 			? Context.DiceTables->ForFeat(*Feat, !IsPlayerSide(Roller))
 			: FElysiumDiceTable::Uniform();
@@ -120,7 +121,7 @@ namespace
 			return 0;
 		}
 		const FElysiumFeat* Feat = Context.Feats->Find(FeatName);
-		return Feat ? ElysiumFeats::FeatValue(*Feat, Char.Sheet, Char.SheetEffects()) : 0;
+		return Feat ? ElysiumFeats::FeatValue(*Feat, Char.Sheet, Char.SheetEffects(), &Char) : 0;
 	}
 }
 
@@ -933,8 +934,12 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	// miss is the loudest thing in the room too.
 	if (!bMelee && World != nullptr)
 	{
+		// `AdjustSoundDistForStealth`: the SOURCE's own hearing reduction, subtracted at insertion.
+		// The weapon knows its owner, so the reduction is read off that character's committed
+		// surface here rather than inside the bus — the parameter is producer-side by design.
 		World->EmitGameSound(Attacker->Origin, ElysiumGameSounds::Gunshot(),
-			/*RadiusCm, table-resolved*/ -1.f, Attacker->Handle);
+			/*RadiusCm, table-resolved*/ -1.f, Attacker->Handle,
+			ElysiumStealth::HearingReductionCmFor(Attacker));
 	}
 
 	FElysiumEntity* VictimEnt = OpponentHandle.IsSet() && World ? World->Resolve(OpponentHandle) : nullptr;

@@ -507,6 +507,22 @@ public:
 	// unoccluded whole-map values that would otherwise read every interior as fully lit.
 	virtual float QueryLightAtPoint(const FVector& PointCm) const { return 1.0f; }
 
+	// Is the player's body in the sneak posture? (13.1, `docs/vtmb/stealth.md` -> "Player
+	// target-surface update", step 3.)
+	//
+	// The headless/null answer is **false** — the non-stealth fallback — because a run with no body
+	// has no posture, and the fallback is what a player who is not sneaking gets.
+	//
+	// CHOSEN, NOT RECOVERED: the recovered eligibility predicate is "a player-state flag bit plus a
+	// second state helper", and neither has a recovered human-readable name. What IS recovered is
+	// that the stealth-kill transaction's own player gate reads "sneak posture, ducking, or active
+	// Obfuscate" — so the duck is a named term of the same family, and it is the one player-state
+	// term this runtime's body can answer. The Obfuscate arm is deliberately NOT folded in here:
+	// that is the stealth-kill gate's, and inventing a second consumer for it would be a rule we
+	// do not have. Replace the implementation when the predicate is recovered; the substrate's own
+	// decision stays on its side of this call either way (K13).
+	virtual bool IsPlayerSneaking() const { return false; }
+
 	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
 	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the
 	// supported headless/fail-open posture.

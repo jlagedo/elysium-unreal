@@ -44,6 +44,7 @@ struct FElysiumSaveVersion
 		NpcCognition  = 19,  // the repeated-damage window and the committed enemy's eluded marker
 		NpcCombat     = 20,  // the resolved NPC loadout latch and the detected-attack memory record
 		Disciplines   = 21,  // the player's discipline block: selection, cast counter, active states
+		Stealth       = 22,  // the player's stealth surface, as one generation, and its raw aggregate
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

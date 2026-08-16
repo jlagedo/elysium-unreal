@@ -16,6 +16,7 @@
 // operator rules and its finalize arithmetic — not a reconstruction.
 
 struct FElysiumSheet;
+class FElysiumCombatCharacter;
 
 // ================================================================================================
 // The resolved effect layer — one character's `m_tEffectList`
@@ -133,18 +134,31 @@ private:
 
 namespace ElysiumFeats
 {
+	// `feats.txt`'s second `Feat` block, and therefore feat id 1. The recovered CharacterData
+	// category-1 walk special-cases exactly this id: it adds `CBaseCombatCharacter::
+	// GetStealthModifier()` to the summed rating (`docs/vtmb/stealth.md` -> "Player target-surface
+	// update", step 2). The index is asserted against the real table by
+	// `Elysium.Content.Stealth`, so a patched `feats.txt` that reordered the list is caught rather
+	// than silently moving the bonus onto Lockpicking.
+	inline constexpr int32 SneakingFeatIndex = 1;
+
 	// `Feats::FeatValue` — the sum of the feat's variable-length `Base%d` list, each entry the
 	// CURRENT trait value through its own `/`-or-`*` modifier, the nine attributes floored at 1,
-	// then a feat-level trait-effect pass, then clamped to `[0, MaxValue]`.
+	// then the per-feat code term, then a feat-level trait-effect pass, then clamped to
+	// `[0, MaxValue]`.
+	//
+	// `Owner` is the character the sheet belongs to, or null. It exists for the code term above and
+	// nothing else: with no owner the Sneaking feat reads its authored bases alone, which is what a
+	// character carrying no `trigger_stealth_mod` contribution would read anyway.
 	int32 FeatValue(const FElysiumFeat& Feat, const FElysiumSheet& Sheet,
-		const FElysiumSheetEffects* Effects);
+		const FElysiumSheetEffects* Effects, const FElysiumCombatCharacter* Owner = nullptr);
 
 	// What `CalcFeat("<name>")` resolves: a feat first, then — our own extension — a trait, whose
 	// current value is returned. `bOutIsFeat` says which path answered; the return is 0 with
 	// `bOutResolved` false when neither owns the name.
 	int32 Calc(const FElysiumFeatTable& Feats, const FElysiumSheet& Sheet,
 		const FElysiumSheetEffects* Effects, const FString& Name,
-		bool& bOutResolved, bool& bOutIsFeat);
+		bool& bOutResolved, bool& bOutIsFeat, const FElysiumCombatCharacter* Owner = nullptr);
 }
 
 // ================================================================================================
@@ -195,6 +209,7 @@ namespace ElysiumSheetRules
 		const FElysiumFeatTable*         Feats = nullptr;
 		const FElysiumClanTable*         Clans = nullptr;
 		const FElysiumDisciplineTargets* DisciplineTargets = nullptr;
+		const FElysiumStealthTables*     Stealth = nullptr;
 	};
 
 	// Bind (or, with a default-constructed value, unbind) the fallback tables. Process-wide,

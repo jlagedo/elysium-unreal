@@ -300,6 +300,79 @@ struct FElysiumDisciplineState
 	void Reset() { *this = FElysiumDisciplineState(); }
 };
 
+// ============================================================================================
+// 13.1 — the player's stealth target surface (`docs/vtmb/stealth.md` -> "Player target-surface
+// update"). ONE player-owned surface: the retained three-point light cycle and the three values
+// an observer reads off the TARGET — sight-range scalar, cone scalar, hearing-distance reduction.
+//
+// It lives on the player leaf because retail's fields do: `+0x1c6c..+0x1c8c` are `CBasePlayer`'s.
+// The `trigger_stealth_mod` aggregate is the one piece that is NOT here — it sits on
+// `FElysiumCombatCharacter` at retail's `+0x1084`, so any character can carry a contribution.
+//
+// The rules over it — the cadence, the sample rotation, the normalization and the row selection —
+// are `Private/Substrate/ElysiumStealth.h`. This struct is storage and nothing else.
+// ============================================================================================
+
+struct FElysiumStealthSurface
+{
+	// feet / centre / head, refreshed ONE per pass. The full cycle therefore takes ~0.3 s and the
+	// other two retained samples participate unchanged — that lag is part of the transaction, not
+	// an approximation of it.
+	static constexpr int32 NumSamples = 3;
+
+	double NextUpdateTime = -1.0;      // m_flNextStealthUpdate  (+0x1c6c); negative = due now
+	float VisionScalar = 1.f;          // m_flStealthVisionScalar (+0x1c70)
+	float ConeScalar = 1.f;            // m_flStealthVisionCone   (+0x1c74)
+	// m_flStealthHearingDist (+0x1c78), converted ONCE out of the table's Source game units so no
+	// producer downstream carries a unit question.
+	float HearingReductionCm = 0.f;
+	int32 NextSampleIndex = 0;         // m_nNextLightPositionTest (+0x1c7c)
+	float Samples[NumSamples] = { 1.f, 1.f, 1.f };   // m_flLightOnFeet/Center/Head (+0x1c80..0x1c88)
+	// m_flLightOnMe (+0x1c8c): the normalized aggregate, or the `-4.0` inactive sentinel the
+	// non-stealth fallback writes.
+	float LightOnMe = -4.f;
+
+	// The two resolved table indices. Retail keeps them as debug feat/light indices; they are kept
+	// here for the same reason — a wrong scalar is traceable to a row rather than to arithmetic.
+	int32 LightRow = 0;
+	int32 StealthRow = 0;
+	// Whether the last committed pass took the eligible arm. Diagnostic, and what the observer
+	// meter reads to distinguish "not sneaking" from "sneaking in full light".
+	bool bEligible = false;
+
+	// Bumped by every COMMITTED recompute. A restored sample triplet without the derived values it
+	// produced is invalid (`docs/vtmb/stealth.md`), so this is what makes the group one generation:
+	// a reader that saw generation N knows every field it read came out of the same pass.
+	int32 Generation = 0;
+
+	void Reset() { *this = FElysiumStealthSurface(); }
+};
+
+// The HUD observability surface (`docs/vtmb/stealth.md` -> "HUD observability is not authority").
+// Retail keeps the nearest eligible hostile observer's handle, distance and meter/status at
+// `+0x1cc0..+0x1cc8`. Gameplay owns the transaction; this is the snapshot it publishes AFTER the
+// transaction commits, and nothing that reads it may run range, cone, trace, memory or enemy work.
+struct FElysiumStealthObserver
+{
+	FElysiumEntityHandle Observer;   // +0x1cc0 — the nearest eligible observer, or invalid
+	float DistanceCm = 0.f;          // +0x1cc4
+	// +0x1cc8 — 0 unobserved .. 1 on top of the observer, derived from the observer's own effective
+	// radius (which already carries this player's sight scalar), never recomputed by a reader.
+	float Meter = 0.f;
+	// Whether that observer has committed detection of this player, as opposed to merely being the
+	// nearest one. The senses pass supplies it; the HUD never derives it.
+	bool bDetected = false;
+	// When the offer that produced this snapshot was made. Substrate clock seconds; negative means
+	// "nothing has been offered".
+	double Time = -1.0;
+	// Bumped only when the committed snapshot CHANGES. A reader that has seen this generation is
+	// looking at current state; one that has not must re-read the whole struct rather than a field.
+	int32 Generation = 0;
+
+	bool IsSet() const { return Observer.IsSet(); }
+	void Reset() { *this = FElysiumStealthObserver(); }
+};
+
 // The durable half of the player: session lifetime, so it crosses a map boundary. The entity is the
 // *live* view; this is the truth that survives the world it lived in. Hydrated into the player
 // entity at map build, dehydrated back out when the world is torn down (travel, quit, reload) and,
@@ -395,6 +468,20 @@ struct FElysiumPlayerRecord
 	int32 SelectedTier = 0;
 	// The player's Discipline cast counter, incremented by a committed targeted cast (step 6).
 	int32 DisciplineCastCount = 0;
+
+	// 13.1 — the stealth block, carried as ONE group. `docs/vtmb/stealth.md`: a restored sample
+	// triplet must never be combined with newly defaulted derived values, so the surface travels
+	// whole (samples, rotation index, derived scalars and the generation that ties them together)
+	// or not at all.
+	//
+	// `StealthMap` scopes it the way `FeedMap` and `DisciplineMap` scope theirs, and for a stronger
+	// reason than either: the three samples are measurements of THIS map's light at THIS position,
+	// and the raw aggregate is the sum of the `trigger_stealth_mod` volumes of this map that the
+	// player is standing inside. Both are meaningless one map later, so hydrating anywhere else
+	// resets the group instead of carrying a stale generation across the boundary.
+	FElysiumStealthSurface Stealth;
+	int32 StealthModRaw = 0;
+	FString StealthMap;
 
 	void Reset() { *this = FElysiumPlayerRecord(); }
 };
@@ -648,6 +735,20 @@ public:
 	void PublishEquippedCameraClass() const;
 
 	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
+
+	// 13.1 — `trigger_stealth_mod`'s raw aggregate (retail `+0x1084`, which is a
+	// CBaseCombatCharacter offset: the trigger's own body is guarded by combat-character
+	// embodiment, not by player-ness, so every character can carry one).
+	//
+	// **Stored unclamped.** Overlapping volumes add here and leaving one subtracts its own
+	// contribution back, which only works while the sum is raw — clamping at storage would lose the
+	// remainder of a stack the player is still standing in.
+	int32 StealthModRaw = 0;
+
+	// `CBaseCombatCharacter::GetStealthModifier` — the ONE clamp, applied at the read. It is added
+	// while resolving the category-1 CharacterData walk, which is how a volume moves the Sneaking
+	// rating the stealth tables are indexed by (`ElysiumFeats::FeatValue`).
+	int32 GetStealthModifier() const { return FMath::Clamp(StealthModRaw, -10, 10); }
 
 	bool bWillTalk = false;       // WillTalk (79 calls) — this character will start a conversation
 
@@ -1055,6 +1156,22 @@ public:
 	// `AddExperience`'s accumulators — the record's, mirrored here for the map's lifetime.
 	float ExperienceRemainder = 0.f;
 	float LifetimeExperience = 0.f;
+
+	// 13.1 — the stealth target surface and the observer snapshot it publishes. Both live on the
+	// player leaf because retail's fields do (`+0x1c6c..` and `+0x1cc0..`). The rules are
+	// `Private/Substrate/ElysiumStealth.h`; the recompute hangs off `Think` below, which is reached
+	// only through `FElysiumEntityWorld::RunPlayerThink`.
+	FElysiumStealthSurface Stealth;
+	FElysiumStealthObserver Observer;
+	// The candidate the senses passes have offered since the last commit. Session state: it is
+	// rebuilt from the observers' own caches within one sight cadence, so it is not saved.
+	FElysiumStealthObserver PendingObserver;
+
+	// Offer this player an observer, from an NPC's own sight pass. Nearest wins; an offer for the
+	// incumbent refreshes it. Nothing is published here — `Think` commits, which is what keeps the
+	// HUD downstream of gameplay rather than beside it.
+	void OfferStealthObserver(const FElysiumEntityHandle& Who, float DistanceCm, float RadiusCm,
+		bool bDetected, double Now);
 
 	virtual void Spawn() override;
 

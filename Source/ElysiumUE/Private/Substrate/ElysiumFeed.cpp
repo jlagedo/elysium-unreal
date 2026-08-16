@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumStealth.h"
 
 #include "Components/SkeletalMeshComponent.h"
 
@@ -796,7 +797,8 @@ bool FElysiumCombatCharacter::Feed(double Now)
 	if (World != nullptr)
 	{
 		World->EmitGameSound(Origin, ElysiumGameSounds::Feed(),
-			/*RadiusCm, table-resolved*/ -1.f, Handle);
+			/*RadiusCm, table-resolved*/ -1.f, Handle,
+			ElysiumStealth::HearingReductionCmFor(this));
 	}
 
 	// The accelerating cadence, and AT MOST ONE pulse per update — never a catch-up loop.

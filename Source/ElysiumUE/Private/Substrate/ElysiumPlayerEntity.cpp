@@ -18,6 +18,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumStealth.h"      // Cycle 8 — 13.1
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Misc/Paths.h"
@@ -60,6 +61,11 @@ void FElysiumPlayer::Spawn()
 			}
 		}
 	}
+
+	// Cycle 8 — arm the think for the first stealth recompute. The surface's deadline is negative
+	// ("due now") on a fresh entity, and `Think` re-arms itself from it after every pass; without
+	// this first arm the deadline-driven think would never start.
+	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 }
 
 void FElysiumPlayer::Think()
@@ -75,6 +81,19 @@ void FElysiumPlayer::Think()
 	// consumers poll it during their own think; this is the discipline domain's poll.
 	ElysiumDisciplines::PollHeardCombat(*this, Now);
 
+	// ------------------------------------------------------------------------------------------
+	// Cycle 8 (13.1) — the stealth target surface (`docs/vtmb/stealth.md` -> "Player target-surface
+	// update"). It hangs off THIS think and nowhere else: retail's own recompute is a player-think
+	// virtual gated on `m_flNextStealthUpdate`, and this think is reached only through
+	// `FElysiumEntityWorld::RunPlayerThink` — never `Tick` — so the 0.1 s cadence is measured on
+	// the substrate clock the save restores. One body point is sampled per due pass.
+	//
+	// The observer snapshot is committed straight after, in the same pass, so the HUD's view is
+	// always downstream of the gameplay state it describes (§5.9).
+	// ------------------------------------------------------------------------------------------
+	ElysiumStealth::TickPlayerSurface(*this, Now);
+	ElysiumStealth::CommitObserverSnapshot(*this, Now);
+
 	// SEAM: the footstep hearing stimulus belongs here, and there is nothing to hang it on yet.
 	// `sound_volume_table.txt` names `PLAYER_FOOTSTEP_SNEAK`/`_WALK`/`_RUN` plus `PLAYER_JUMP` and
 	// the two landings, and separates walking from running by its own `PLAYER_RUN_SPEED` (128
@@ -82,6 +101,12 @@ void FElysiumPlayer::Think()
 	// callback, nothing on the locomotion sample that says "a foot just landed". Inventing a cadence
 	// here would be substrate arithmetic standing in for a producer, so the step stays unemitted
 	// until the locomotion/stealth work supplies one. Not warned: nothing failed.
+
+	// Cycle 8 — the re-arm. `RunPlayerThink` clears `NextThink` before entering here, so a think
+	// that schedules nothing never runs again. Retail's player think runs every frame and gates the
+	// recompute internally; ours is deadline-driven, so the surface's own 0.1 s deadline IS the
+	// heartbeat. `Min` keeps whatever the feed transaction scheduled ahead of it.
+	NextThink = FMath::Min(NextThink, static_cast<float>(Stealth.NextUpdateTime));
 }
 
 void FElysiumPlayer::RefreshClanEffects()
@@ -258,6 +283,22 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 		}
 	}
 
+	// Cycle 8 — the stealth block. It is ONE generation (`docs/vtmb/stealth.md`): the three light
+	// samples, the rotation index and the derived scalars either all cross or none do, and a
+	// restored triplet is never combined with newly defaulted derived values. It resumes only into
+	// the map it was taken in, and for a stronger reason than the two blocks above — the samples
+	// measure THAT map's light at THAT position, and the raw aggregate is the sum of the
+	// `trigger_stealth_mod` volumes of that map the player was standing inside.
+	Stealth.Reset();
+	StealthModRaw = 0;
+	Observer.Reset();
+	PendingObserver.Reset();
+	if (World && !Record.StealthMap.IsEmpty() && Record.StealthMap == World->MapName())
+	{
+		Stealth = Record.Stealth;
+		StealthModRaw = Record.StealthModRaw;
+	}
+
 	// The names crossed the boundary; their resolution did not — the rulebook is re-read at load,
 	// which is what lets a patched rulebook re-apply to a run that started before it. Going through
 	// RefreshClanEffects rather than RebuildEffects reconciles the clan group with the clan slot
@@ -294,6 +335,12 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.SelectedDiscipline = SelectedDiscipline;
 	Record.SelectedTier = SelectedTier;
 	Record.DisciplineCastCount = DisciplineCastCount;
+	// Cycle 8 — the stealth group, whole and map-scoped. The observer snapshot is deliberately not
+	// carried: it is published presentation state that the observers' own sight passes rebuild
+	// within one cadence, and a restored one would name an entity of the previous world.
+	Record.Stealth = Stealth;
+	Record.StealthModRaw = StealthModRaw;
+	Record.StealthMap = World ? World->MapName() : FString();
 }
 
 void FElysiumPlayer::SyncFromBody()

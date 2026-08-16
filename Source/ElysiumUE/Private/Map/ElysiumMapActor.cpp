@@ -2007,6 +2007,22 @@ float AElysiumMapActor::QueryLightAtPoint(const FVector& PointCm) const
 	return FMath::Clamp(Total / Reference, 0.0f, 1.0f);
 }
 
+bool AElysiumMapActor::IsPlayerSneaking() const
+{
+	// The body's own settled posture, read off the same locomotion record the animation graph is
+	// steered by — so "sneaking" is one fact with one producer rather than a second definition
+	// living in the substrate. `Lowering` counts with `Ducked`: the duck is engaged the moment the
+	// ramp starts, which is what the movement solve's own gait tables already branch on.
+	const APawn* Pawn = ResolvePlayerPawn();
+	const IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	if (Body == nullptr)
+	{
+		return false;   // no body, no posture — the stated non-stealth answer
+	}
+	const EElysiumStance Stance = Body->GetLocomotionSample().Stance;
+	return Stance == EElysiumStance::Ducked || Stance == EElysiumStance::Lowering;
+}
+
 float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 	float TraceDepthCm) const
 {

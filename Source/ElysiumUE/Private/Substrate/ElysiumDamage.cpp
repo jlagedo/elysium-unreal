@@ -331,7 +331,7 @@ namespace ElysiumDamage
 		}
 		const bool bPlayer = IsPlayerSide(Victim);
 		const int32 Difficulty = bPlayer ? Context.SoakDifficultyPc : Context.SoakDifficultyNpc;
-		const int32 Pool = ElysiumFeats::FeatValue(*Feat, Victim.Sheet, Victim.SheetEffects());
+		const int32 Pool = ElysiumFeats::FeatValue(*Feat, Victim.Sheet, Victim.SheetEffects(), &Victim);
 		const FElysiumDiceTable& Weighting = Context.DiceTables
 			? Context.DiceTables->ForFeat(*Feat, !bPlayer)
 			: FElysiumDiceTable::Uniform();

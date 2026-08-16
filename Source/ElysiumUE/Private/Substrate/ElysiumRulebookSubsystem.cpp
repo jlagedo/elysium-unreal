@@ -117,6 +117,14 @@ const FElysiumSoundVolumeTable& UElysiumRulebookSubsystem::SoundVolumes()
 	return Get(SoundVolumeTable, bSoundVolumesLoaded, TEXT("soundvolumes"), SoundVolumesError);
 }
 
+// A failed load leaves the neutral table — every scalar 1.0, every reduction 0 — so a missing
+// export costs one warning here and a player whose stealth changes nothing, rather than a recompute
+// that has to test for an absent table on every pass.
+const FElysiumStealthTables& UElysiumRulebookSubsystem::Stealth()
+{
+	return Get(StealthTableSet, bStealthLoaded, TEXT("stealth"), StealthError);
+}
+
 const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
 {
 	return Get(DispositionTable, bDispositionsLoaded, TEXT("dispositiontable"), DispositionsError);
@@ -254,6 +262,11 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 	// that lost the `SoundTypes` block is the one that silences the whole hearing surface.
 	Out.Add({ TEXT("soundvolumes"), TEXT("system/sound_volume_table.txt"),
 		SoundVolumes().NumCategories(), SoundVolumes().IsValid(), SoundVolumesError });
+
+	// Counted in authored values rather than sections: a section that silently lost its tail is the
+	// regression that matters, and four is not a number a status row can regress on.
+	Out.Add({ TEXT("stealth"),      TEXT("system/stealth.txt"),
+		Stealth().NumAuthoredValues(), Stealth().IsValid(), StealthError });
 
 	Out.Add({ TEXT("items"),        TEXT("items/*.txt"),
 		Items().Num(), Items().IsValid(), ItemsError });

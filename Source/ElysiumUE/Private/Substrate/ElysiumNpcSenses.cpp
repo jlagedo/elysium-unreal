@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
@@ -26,12 +27,16 @@ namespace
 		return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
 	}
 
-	// SEAM (cycle 8, §5.9 -> `docs/vtmb/stealth.md` "Visual observer transaction"): the TARGET's own
-	// `m_flStealthVisionScalar` and `m_flStealthVisionCone`, which the player-stealth surface owns
-	// and which has not landed. Comment-only and deliberately not warned: 1.0 is the correct scalar
-	// for a character carrying no stealth modifier, which is every character today — the same
-	// posture `FElysiumGameSoundRequest::StealthHearingReductionCm` takes with its zero.
-	float TargetVisionScalar(const FElysiumEntity&) { return 1.0f; }
+	// The TARGET's own committed stealth surface (§5.9 -> `docs/vtmb/stealth.md` "Visual observer
+	// transaction"). Only the player carries one — retail's `m_flStealthVisionScalar` and
+	// `m_flStealthVisionCone` are CBasePlayer fields — which is why these take the player and
+	// nothing else: a target that is not the player never reaches them, and the neutral 1.0 it
+	// reads instead is `IsInViewCone`'s own parameter default.
+	//
+	// The senses never recompute the surface and never read the tables: they consume whatever the
+	// player think last committed, which is what keeps one producer for the whole transaction.
+	float TargetVisionScalar(const FElysiumPlayer& Target) { return Target.Stealth.VisionScalar; }
+	float TargetConeScalar(const FElysiumPlayer& Target) { return Target.Stealth.ConeScalar; }
 
 	// The hear-category to output mapping is `ElysiumNpcCond::IsCombatSoundCategory`, which the
 	// `HEAR_*` condition producer reads too — one rule, one owner, and its CHOSEN, NOT RECOVERED
@@ -292,7 +297,8 @@ void FElysiumNpcSenses::StartSoundCursorAtHead(const FElysiumNpc& Npc)
 	Cursor = Npc.World ? Npc.World->GameSounds().LastSerial() : 0;
 }
 
-bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm)
+bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
+	float TargetConeScalar)
 {
 	// The entity's `Angles.Y` is the negated Unreal yaw the motor is driven with, which is the one
 	// place this frame conversion lives on a character.
@@ -305,10 +311,15 @@ bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FVector& Targ
 		return true;   // standing on the observer: the angle is undefined, not "behind"
 	}
 	ToTarget.Normalize();
-	// SEAM (cycle 8): the target's `m_flStealthVisionCone` multiplies the observer threshold. The
-	// neutral scalar is 1.0 today, so the multiply is written out rather than implied.
-	const float Threshold = ElysiumNpcSense::DefaultViewConeDot * 1.0f;
-	return static_cast<float>(FVector::DotProduct(Forward, ToTarget)) >= Threshold;
+	// The target's `m_flStealthVisionCone` multiplies the observer's own threshold, inside this
+	// test, exactly where `FInViewCone` applies it. A scalar below 1 LOWERS the dot the target has
+	// to clear, which widens the cone — the table's own direction, and the reason it is a multiply
+	// on the threshold rather than on the angle.
+	const float Threshold = ElysiumNpcSense::DefaultViewConeDot * TargetConeScalar;
+	// KINDA_SMALL_NUMBER tolerance: a boundary target's dot and the threshold are each built from
+	// FMath::Cos(FMath::DegreesToRadians(...)) in float, so an angle that is exactly on the cone
+	// edge mathematically can land a few ULPs under the threshold rather than on it.
+	return static_cast<float>(FVector::DotProduct(Forward, ToTarget)) >= Threshold - UE_KINDA_SMALL_NUMBER;
 }
 
 void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
@@ -344,7 +355,7 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 
 	// `SetClosestPlayer` (`0x10293a80`): the nearest present player by Euclidean distance. This
 	// runtime has exactly one. The cache is not hostility admission and fires no output.
-	const FElysiumPlayer* Player = World->FindPlayer();
+	FElysiumPlayer* Player = World->FindPlayer();
 	if (Player == nullptr || Player->IsInert())
 	{
 		// The retail no-player branch initialises its cached bytes true with current timestamps.
@@ -370,7 +381,7 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 	Memory.bPlayerInRange = DistanceCm <= RadiusCm;
 	Memory.bPlayerInOuterBand = Memory.bPlayerInRange
 		&& DistanceCm > ElysiumNpcSense::OuterBandFraction * RadiusCm;
-	Memory.bPlayerInCone = IsInViewCone(Npc, Player->Origin);
+	Memory.bPlayerInCone = IsInViewCone(Npc, Player->Origin, TargetConeScalar(*Player));
 
 	if (!Memory.bPlayerInRange || !Memory.bPlayerInCone)
 	{
@@ -394,6 +405,23 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		// the last clear far trace, and only then drops.
 		Memory.bPlayerLos = Memory.PlayerLosLastClearTime >= 0.0
 			&& (Now - Memory.PlayerLosLastClearTime) <= ElysiumNpcSense::BlockedInConeGraceSeconds;
+	}
+
+	// The HUD observability offer (`docs/vtmb/stealth.md` -> "HUD observability is not authority").
+	// `SetClosestPlayer` feeds this surface, and the player-side update is what filters and ranks:
+	// this call only OFFERS, and the player think commits. Nothing here reads it back, so no
+	// gameplay decision can come to depend on presentation state.
+	//
+	// The relationship filter is the recovered "nearest ELIGIBLE HOSTILE observer": an NPC that
+	// hates the player, or one that has already committed to it as its enemy. A neutral bystander
+	// standing closer must not take the readout off a guard that is actually hunting.
+	const bool bHostile =
+		Npc.Relationships.Resolve(Player->Handle, TEXT("player")) == EElysiumRelationship::Hate
+		|| Memory.Enemy == Player->Handle;
+	if (bHostile)
+	{
+		Player->OfferStealthObserver(Npc.Handle, DistanceCm, RadiusCm,
+			/*bDetected*/ Memory.bPlayerLos && Memory.bPlayerInRange, Now);
 	}
 
 	if (Memory.bPlayerLos != bWasVisible)

@@ -43,6 +43,10 @@ public:
 	// `vdata/system/sound_volume_table.txt` — the radius and occlusion policy of every named game
 	// sound. Read by the substrate sound-event bus when a producer emits without an explicit radius.
 	const FElysiumSoundVolumeTable&   SoundVolumes();
+	// `vdata/system/stealth.txt` — the four `StealthData` tables the player's target surface reads:
+	// the sight-range and cone scalar matrices, the hearing-distance reduction and the descending
+	// light-row thresholds. Read by `Substrate/ElysiumStealth.h`'s recompute, never by the senses.
+	const FElysiumStealthTables&      Stealth();
 	// `vdata/system/dispositiontable.txt`. Both halves of a row are read from here: the
 	// `Animation Name` column the standing-idle vocabulary is keyed on, and the fidget/stance-change
 	// pacing the disposition stance machine rolls against.
@@ -102,6 +106,7 @@ private:
 	FElysiumStrings           StringData;
 	FElysiumDiceTables        DiceTables;
 	FElysiumSoundVolumeTable  SoundVolumeTable;
+	FElysiumStealthTables     StealthTableSet;
 	FElysiumItemTable         ItemTable;
 	FElysiumDispositionTable  DispositionTable;
 	FElysiumReactionCatalogue ReactionCatalogue;
@@ -122,6 +127,7 @@ private:
 	bool bStringsLoaded = false;
 	bool bDiceLoaded = false;
 	bool bSoundVolumesLoaded = false;
+	bool bStealthLoaded = false;
 	bool bItemsLoaded = false;
 	bool bDispositionsLoaded = false;
 	bool bReactionsLoaded = false;
@@ -140,6 +146,7 @@ private:
 	FString StringsError;
 	FString DiceError;
 	FString SoundVolumesError;
+	FString StealthError;
 	FString ItemsError;
 	FString DispositionsError;
 	FString ReactionsError;

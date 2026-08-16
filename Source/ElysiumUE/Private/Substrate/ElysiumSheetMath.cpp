@@ -306,7 +306,7 @@ int32 FElysiumSheetEffects::Flag(const TCHAR* FxName) const
 namespace ElysiumFeats
 {
 	int32 FeatValue(const FElysiumFeat& Feat, const FElysiumSheet& Sheet,
-		const FElysiumSheetEffects* Effects)
+		const FElysiumSheetEffects* Effects, const FElysiumCombatCharacter* Owner)
 	{
 		using EC = EElysiumTraitContainer;
 
@@ -338,11 +338,17 @@ namespace ElysiumFeats
 			}
 		}
 
-		// The per-feat code terms — `Sneaking`'s stealth contribution (13.1) and the three combat
-		// feats' presence-minus-shaky-hands (13.3) — belong to systems that have not landed. They
-		// are additive, so their absence is a rating short by exactly their term, never a wrong
-		// shape. `Automatic%d` is deliberately not summed: those are automatic successes, and the
-		// dice resolver reads them separately.
+		// The per-feat code terms. 13.1's is here: the recovered category-1 walk adds
+		// `GetStealthModifier()` — the CLAMPED read of the raw `trigger_stealth_mod` aggregate — to
+		// feat id 1 and to no other feat, before the effect pass and before the `MaxValue` clamp.
+		// The three combat feats' presence-minus-shaky-hands term (13.3) belongs to a system that
+		// has not landed; it is additive, so its absence is a rating short by exactly that term,
+		// never a wrong shape. `Automatic%d` is deliberately not summed: those are automatic
+		// successes, and the dice resolver reads them separately.
+		if (Owner != nullptr && Feat.Index == SneakingFeatIndex)
+		{
+			Rating += Owner->GetStealthModifier();
+		}
 
 		if (Effects)
 		{
@@ -353,7 +359,7 @@ namespace ElysiumFeats
 
 	int32 Calc(const FElysiumFeatTable& Feats, const FElysiumSheet& Sheet,
 		const FElysiumSheetEffects* Effects, const FString& Name,
-		bool& bOutResolved, bool& bOutIsFeat)
+		bool& bOutResolved, bool& bOutIsFeat, const FElysiumCombatCharacter* Owner)
 	{
 		bOutResolved = false;
 		bOutIsFeat = false;
@@ -365,7 +371,7 @@ namespace ElysiumFeats
 		{
 			bOutResolved = true;
 			bOutIsFeat = true;
-			return FeatValue(*Feat, Sheet, Effects);
+			return FeatValue(*Feat, Sheet, Effects, Owner);
 		}
 		// **A divergence, marked** (`docs/vtmb/script_api.md`): VtMB's `CalcFeat` raises on a non-feat name,
 		// because its `.dlg` layer resolves a stat check without going through it. Our dlgexpr

@@ -54,9 +54,10 @@ namespace ElysiumGameSounds
 	}
 	// `DOOR_NORMAL` — a door moved audibly.
 	//
-	// SEAM: the table also carries `DOOR_STEALTH`, and which of the two a door emits is a stealth
-	// decision that has no producer yet. The normal row is what an ordinary open/close is, so it is
-	// what every door emits until the stealth surface lands.
+	// SEAM: the table also carries `DOOR_STEALTH`, and which of the two a door emits is a decision
+	// with no recovered rule — the player's stealth surface answers how far a sound the PLAYER made
+	// carries, not which category a door picks. The normal row is what an ordinary open/close is, so
+	// it is what every door emits until that selection rule is recovered.
 	inline const FName& Door()
 	{
 		static const FName Name(TEXT("DOOR_NORMAL"));
@@ -82,10 +83,10 @@ struct FElysiumGameSoundRequest
 	// emitter's `m_flStealthHearingDist`, subtracted from the radius at INSERTION and floored at
 	// zero, so the adjusted stimulus enters the ordinary sound system.
 	//
-	// SEAM: no producer sources this yet — the player-stealth surface that owns
-	// `m_flStealthHearingDist` has not landed, so every caller passes 0. That is not a failure and
-	// is not warned: zero reduction is the correct answer for a character carrying no stealth
-	// modifier, which is every character today.
+	// Producer-side by design: the emitter knows who made the noise, so it reads the reduction off
+	// that character's committed surface (`ElysiumStealth::HearingReductionCmFor`) rather than the
+	// bus reaching back for it. Only the player carries a surface — retail's field is CBasePlayer's
+	// — so every other source passes 0, which is not a failure and is not warned.
 	float StealthHearingReductionCm = 0.f;
 };
 

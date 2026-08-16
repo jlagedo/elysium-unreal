@@ -26,6 +26,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumStealth.h"
 
 // ============================================================================================
 // FElysiumCombatCharacter — CBaseCombatCharacter
@@ -133,8 +134,10 @@ int32 FElysiumCombatCharacter::CalcFeat(const FString& Name) const
 	}
 	bool bResolved = false;
 	bool bIsFeat = false;
+	// `this` carries the per-feat code term: the Sneaking feat's clamped `trigger_stealth_mod`
+	// aggregate is added inside `FeatValue`, which is where the recovered walk puts it.
 	const int32 Value = ElysiumFeats::Calc(*FeatTable, Sheet, SheetEffects(), Name,
-		bResolved, bIsFeat);
+		bResolved, bIsFeat, this);
 	if (!bResolved)
 	{
 		// VtMB raises `AttributeError("invalid feat name -- %s")`. A raise here would abort the
@@ -758,7 +761,8 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	if (World != nullptr)
 	{
 		World->EmitGameSound(Origin, ElysiumGameSounds::NpcTakeDamage(),
-			/*RadiusCm, table-resolved*/ -1.f, Handle);
+			/*RadiusCm, table-resolved*/ -1.f, Handle,
+			ElysiumStealth::HearingReductionCmFor(this));
 	}
 
 	// The senses/memory record the schedule kernel reads. A no-op on the base.

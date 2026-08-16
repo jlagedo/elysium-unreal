@@ -381,6 +381,14 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
 		AddCharField(D, TEXT("money"), &FC::Money);
 
+		// 13.1 — `trigger_stealth_mod`'s raw aggregate (`+0x1084`). Registered on THIS chain node
+		// rather than on the player, because the trigger's own increment is guarded by
+		// combat-character embodiment and every character can therefore carry a contribution. Saved
+		// through the ordinary field walk, which is what carries an NPC's across a map snapshot;
+		// the player entity is excluded from that snapshot, so its copy rides the player record
+		// beside the surface it feeds.
+		AddCharField(D, TEXT("m_nRawStealthModifier"), &FC::StealthModRaw);
+
 		// The runtime's authoritative once-only death latch. Saving it is required by npc_maker's
 		// owner notification: a dead child restored and later Kill'd must not refund a live slot.
 		{

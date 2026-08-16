@@ -393,6 +393,7 @@ public:
 	// 11.15 — the two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
+	virtual bool IsPlayerSneaking() const override;
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 		float TraceDepthCm) const override;
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;
