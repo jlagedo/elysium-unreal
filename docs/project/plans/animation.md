@@ -26,14 +26,7 @@ silently, and every one presents as the same reference-pose symptom. This rung r
 and makes any future miss a named failure, which "Runtime failures are never silent" already
 requires.
 
-- **The zero-length looping montage.** `UElysiumBipedAnimInstance::PlayOneShot` passes
-  `LoopCount = 0` to `PlaySlotAnimationAsDynamicMontage` on a looping clip; the engine's dynamic
-  montage length is `LoopingCount × segment length`, so the montage is zero-length,
-  `Montage_Play` refuses it without logging, and every plain-sequence base on a graph-backed body
-  evaluates the reference pose while the lab clock advances. The corrected loop count is in the
-  working tree, validated live in the green room; land it with a focused regression that plays a
-  looping clip through the graph host and asserts a non-reference pose. `PlayNpcClip` must also
-  stop discarding `PlayOneShot`'s return — a refused montage is a warned, propagated failure.
+- **The zero-length looping montage.** Done: commit[06f751c].
 - **A blend-space selection routed into a sequence-only state.** The generated
   `ABP_ElysiumBiped` gives only `Walk`/`Run`/`Sneak` the sequence-or-blend-space pair; `Idle`,
   `Crouch`, `Leap`, `Falling` and `Land` carry a lone `SequencePlayer`, so a resolver answer
