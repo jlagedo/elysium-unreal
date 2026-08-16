@@ -68,6 +68,8 @@ private:
 	// glTFRuntime load -- and which one actually did, since only part of the cast is baked.
 	void RenderSource(FElysiumGreenRoomRun& Lab);
 	void RenderModel(FElysiumGreenRoomRun& Lab);
+	void RenderClips(FElysiumGreenRoomRun& Lab);
+	void RenderLayers(FElysiumGreenRoomRun& Lab);
 	void RenderPlayback(FElysiumGreenRoomRun& Lab);
 	// Drive mode's readout (CCC6): what the mover published, what the resolver chose, what the graph
 	// is playing, and how far off the bind pose the body actually is. The last one is the only

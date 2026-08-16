@@ -441,9 +441,14 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("~ = the cloth spike built a simulated garment.  Double-click to stand.");
 	}
 
+}
+
+void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
+{
 	// --- clips --------------------------------------------------------------------------------
 	if (PendingStem.IsEmpty())
 	{
+		ImGui::TextDisabled("Select a model first on the Model tab.");
 		return;
 	}
 	if (ClipsStem != PendingStem)
@@ -497,6 +502,11 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 
 	ImGui::SeparatorText(COG_TCHAR_TO_CHAR(
 		*FString::Printf(TEXT("Clips in %s (%d)"), *PendingStem, Clips.Num())));
+	const float ButtonWidth = ImGui::CalcTextSize("Rescan").x
+		+ ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x;
+	const float FieldWidth = FMath::Max(GetDpiScale() * 120.0f,
+		ImGui::GetContentRegionAvail().x - ButtonWidth);
+
 	ImGui::SetNextItemWidth(FieldWidth);
 	FCogWidgets::InputTextWithHint("##ClipFilter", "(filter - try 'walk' or 'Stance')", ClipFilter);
 	if (Clips.IsEmpty())
@@ -711,6 +721,16 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("0 deg is straight ahead: the fan runs -180..180 and its END CELLS SHARE");
 		ImGui::TextDisabled("one clip, which is how VtMB authors a wrapping axis. So `walk` itself is");
 		ImGui::TextDisabled("the BACKWARD walk, and the middle of this slider is the forward one.");
+	}
+
+}
+
+void FElysiumCogWindow_GreenRoom::RenderLayers(FElysiumGreenRoomRun& Lab)
+{
+	if (PendingStem.IsEmpty())
+	{
+		ImGui::TextDisabled("Select a model first on the Model tab.");
+		return;
 	}
 
 	// CCC10's acceptance, one click per claim. Ahead of the hand controls because this is the door
@@ -1688,6 +1708,16 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 	if (ImGui::BeginTabItem("Model"))
 	{
 		RenderModel(*Lab);
+		ImGui::EndTabItem();
+	}
+	if (!bDriving && ImGui::BeginTabItem("Clips"))
+	{
+		RenderClips(*Lab);
+		ImGui::EndTabItem();
+	}
+	if (!bDriving && ImGui::BeginTabItem("Layers"))
+	{
+		RenderLayers(*Lab);
 		ImGui::EndTabItem();
 	}
 	if (bDriving && ImGui::BeginTabItem("Drive"))

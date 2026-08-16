@@ -2058,7 +2058,7 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 			if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
 			{
 				const ElysiumArenaCast::FArmResult Armed =
-					ElysiumArenaCast::ArmPlayerWithEverything(*EntityWorld, GameState);
+					ElysiumArenaCast::ArmPlayerWithArsenal(*EntityWorld, GameState);
 				UE_LOG(LogElysiumGreenRoom, Log,
 					TEXT("arena: armed the player — %d melee, %d firearm(s), %d thrown, %d ammo type(s)"),
 					Armed.Melee, Armed.Firearms, Armed.Thrown, Armed.AmmoTypes);

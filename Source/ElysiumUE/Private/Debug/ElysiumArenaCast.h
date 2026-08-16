@@ -173,8 +173,8 @@ namespace ElysiumArenaCast
 	// magazine's reserve and its loaded rounds are two different homes (`FElysiumInventory` —
 	// `AmmoCount` reports the loaded magazine, `GiveAmmo` adds to the reserve), and a test that
 	// wants to press reload wants the reserve.
-	FArmResult ArmPlayerWithEverything(FElysiumEntityWorld& World,
-		UElysiumGameStateSubsystem* GameState, int32 ReservePerType = 200);
+	FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
+		UElysiumGameStateSubsystem* GameState, int32 ReservePerType = 100);
 
 	// One named item onto the player, through the same route. Returns false with `OutError` for a
 	// classname the item catalog does not carry.

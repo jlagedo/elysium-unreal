@@ -350,7 +350,7 @@ bool GivePlayerItem(FElysiumEntityWorld& World, const FString& Classname, FStrin
 	return true;
 }
 
-FArmResult ArmPlayerWithEverything(FElysiumEntityWorld& World,
+FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 	UElysiumGameStateSubsystem* GameState, int32 ReservePerType)
 {
 	FArmResult Result;
@@ -375,18 +375,23 @@ FArmResult ArmPlayerWithEverything(FElysiumEntityWorld& World,
 	// it. Handing someone an armoury must leave them holding whatever they were holding.
 	const FElysiumEntityHandle ActiveBefore = Player->Inventory.ActiveWeapon;
 
-	// Collected first, applied second. The give loop creates entities in the same world it is
-	// iterating a table of, and reading the catalog to completion up front keeps the two apart.
+	// The reduced arsenal: 3 common melee, 3 common firearms.
+	const FString Arsenal[] = {
+		TEXT("item_w_tire_iron"), TEXT("item_w_knife"), TEXT("item_w_katana"),
+		TEXT("item_w_thirtyeight"), TEXT("item_w_glock_17c"), TEXT("item_w_ithaca_m_37")
+	};
+
 	TSet<FString> AmmoTypes;
 	const FElysiumItemTable& Items = Rules->Items();
-	for (const FElysiumItemDef& Def : Items.Items)
+	for (const FString& Classname : Arsenal)
 	{
-		if (!Def.IsControllableWeapon())
+		const FElysiumItemDef* Def = Items.Find(Classname);
+		if (!Def || !Def->IsControllableWeapon())
 		{
 			continue;
 		}
 		FString Error;
-		if (!GivePlayerItem(World, Def.Classname, Error))
+		if (!GivePlayerItem(World, Classname, Error))
 		{
 			++Result.Refused;
 			if (Result.FirstError.IsEmpty())
@@ -395,16 +400,12 @@ FArmResult ArmPlayerWithEverything(FElysiumEntityWorld& World,
 			}
 			continue;
 		}
-		switch (Def.Type)
+		switch (Def->Type)
 		{
 		case EElysiumItemType::WeaponMelee:   ++Result.Melee; break;
-		case EElysiumItemType::WeaponFirearm: ++Result.Firearms; break;
+		case EElysiumItemType::WeaponFirearm: ++Result.Firearms; AmmoTypes.Add(Def->AmmoType); break;
 		case EElysiumItemType::WeaponThrown:  ++Result.Thrown; break;
 		default: break;
-		}
-		if (!Def.AmmoType.IsEmpty())
-		{
-			AmmoTypes.Add(Def.AmmoType.ToLower());
 		}
 	}
 

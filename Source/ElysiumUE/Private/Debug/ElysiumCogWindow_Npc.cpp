@@ -583,15 +583,9 @@ void FElysiumCogWindow_Npc::RenderPlayerLoadout(FElysiumEntityWorld& World)
 
 	ImGui::SetNextItemWidth(GetDpiScale() * 90.0f);
 	ImGui::DragInt("reserve per ammo type", &ReservePerAmmoType, 5.0f, 0, 999);
-	if (ImGui::Button("Arm with everything"))
+	if (ImGui::SmallButton("Arm player with arsenal"))
 	{
-		const ElysiumArenaCast::FArmResult Result =
-			ElysiumArenaCast::ArmPlayerWithEverything(World, GetGameState(), ReservePerAmmoType);
-		LastError = Result.FirstError;
-		LastNotice = FString::Printf(
-			TEXT("%d melee, %d firearm(s), %d thrown, %d ammo type(s) at %d — %d refused"),
-			Result.Melee, Result.Firearms, Result.Thrown, Result.AmmoTypes, ReservePerAmmoType,
-			Result.Refused);
+		ElysiumArenaCast::ArmPlayerWithArsenal(World, GetGameState(), ReservePerAmmoType);
 	}
 	ImGui::SameLine();
 	ImGui::TextDisabled("slot1..slot8 select · +attack · +reload · discipline");

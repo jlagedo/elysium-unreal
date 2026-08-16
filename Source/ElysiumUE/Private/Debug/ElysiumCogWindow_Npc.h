@@ -115,7 +115,7 @@ private:
 	TArray<FString> Stems;
 	TArray<FString> Templates;
 	// Classname + printname, flattened for the picker. Weapons only — ammunition is stocked as a
-	// reserve rather than handed over as items (`ElysiumArenaCast::ArmPlayerWithEverything`).
+	// reserve rather than handed over as items (`ElysiumArenaCast::ArmPlayerWithArsenal`).
 	TArray<FString> Weapons;
 	TArray<FString> WeaponLabels;
 	// The seven playable clans and the body stem each resolves. Gathered once on first use rather
