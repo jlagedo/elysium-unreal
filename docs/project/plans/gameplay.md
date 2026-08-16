@@ -109,17 +109,17 @@ failure is a fixture gap (unticked baseline NPCs carry no `nextthink`), fixed in
 
 ### 13.1 Stealth
 
-Load selected `vdata/stealth`; sneak mode supplies movement/posture and the three-point
-light/Sneaking target surface (light sampled through the 11.15 query on the 0.1 s cadence);
-13.5's senses — vision, cone, LOS hysteresis, hearing, memory, enemy selection and the
-found/lost outputs — consume it; `trigger_stealth_mod` owns balanced overlap contributions; 8.9
-renders only the committed observer snapshot. Faithful observer transaction:
-`docs/vtmb/stealth.md`. **Still needs recovery:** the separate stealth-kill victim/deaf-zone
-transaction consuming `stealthkillrules`. *Acceptance:* from real input, the tutorial's ordinary
-stealth and stealth-kill lessons complete as retail; focused cases cover threshold edges, the
-three-sample light cadence, 512-unit LOS crossover, transient/sustained occlusion, sound-only
-discovery, overlapping modifier volumes, stale HUD handles, and save/load inside a volume.
-*Deps:* 4.7, 8.9, 11.4, 11.8, 11.9, 11.15, 13.5.
+Load selected `vdata/stealth` and `vdata/system/StealthKillRules.txt`; sneak mode supplies
+movement/posture and the three-point light/Sneaking target surface (light sampled through the 11.15
+query on the 0.1 s cadence); 13.5's senses — vision, cone, LOS hysteresis, hearing, memory, enemy
+selection and the found/lost outputs — consume it; `trigger_stealth_mod` owns balanced overlap
+contributions; 8.9 renders only the committed observer snapshot; the stealth-kill transaction
+computes deaf arc / approach depth and commits grapple mode 3 on qualified targets. Faithful
+observer and stealth-kill transaction: `docs/vtmb/stealth.md`. *Acceptance:* from real input, the
+tutorial's ordinary stealth and stealth-kill lessons complete as retail; focused cases cover
+threshold edges, the three-sample light cadence, 512-unit LOS crossover, transient/sustained
+occlusion, sound-only discovery, overlapping modifier volumes, stale HUD handles, and save/load
+inside a volume. *Deps:* 4.7, 8.9, 11.4, 11.8, 11.9, 11.15, 13.5.
 
 ### 13.2 Disciplines
 

@@ -632,23 +632,31 @@ A scalar `TakeDamage(float)` cannot express this contract. Project implementatio
 the known scalar-path divergence are tracked by roadmap 13.3 and RE40 rather than in this VtMB
 fact document.
 
-## Open research gaps
+## Reverse-engineered mechanics (RE40)
 
-- Close the exact spread/cone and crosshair formula, including the confirmed authored range data,
-  Presence modifier and Shaky Hands penalty.
-- Find the player/NPC consumers of `BurstMin`/`BurstMax` and the complete caller chain from firearm
-  damage into generic `DamageFlinch`.
-- Recover the normal swing caller that joins contact enumeration to the shared weapon traced-impact
-  virtual, or capture ordinary, `2COMBO`, heavy, blocked, heavy-block and knockback attacks to close
-  sweep shape, impact-window counts, interruption, refire and miss timing.
-- Identify the complete `SkillRequirement` consumer and its relation, if any, to the attacker
-  adjustment.
-- Decompose the ranged multiplier into volley share, hitgroup and other trace modifiers.
-- Join descriptor word 15 and item `DmgModifier` to the exact post-soak numerical operation.
-- Name the remaining special immunity, relationship and secondary-effect predicates in
-  `CVDmg_t::Apply`.
-- Resolve `DMG_FIST` fallback/alias behavior.
-- Name the alive-path prefilter and confirm every scalar-to-integer rounding boundary.
-- Capture semi-auto, held-auto, mode-toggle, dry-fire, bulk-reload and single-round-reload retail
-  sequences, plus one ranged and one melee hit with printed roll diagnostics, to validate the
-  offline formulas and attack-state timing end to end.
+- **Ranged Spread, Cone and Crosshair**:
+  - `m_fCurrentRangedAccuracy` (`+0x1ddc`) dynamically interpolates between min/max accuracy bounds in `thunk_FUN_101600a0`.
+  - Authored weapon mode `SpreadAngle` / `SpreadAngleMax` define the cone of dispersion.
+  - HUD crosshair expansion directly mirrors `CrosshairMinSize` and `CrosshairWalkSizeMax`.
+  - `Presence` modifier and `Shaky Hands` penalty log diagnostic messages via `DevMsg` in `WeaponRangedShot` (`0x102387b0`) but do not alter the physical spread cone.
+- **Burst Fields and DamageFlinch Pipeline**:
+  - `BurstMin` (`+0x3a4`) and `BurstMax` (`+0x3a8`) are parsed by `WeaponModeDataLoader` (`0x10259230`) from weapon script files but are unreferenced by runtime combat logic (dead fields).
+  - Firearm damage enters `DamageFlinch` (`0x103229d0`) via: `RangedDamagePerVictim` (`0x10268330`) -> `DispatchTraceAttack` (`0x101cfef0`) -> `CBaseEntity::TraceAttack` (vtable slot 101) -> `DispatchTakeDamage` -> `CBaseCombatCharacter::OnTakeDamage_Alive` (`0x103302e0`) -> `CBaseCombatCharacter::DamageFlinch`.
+- **Melee Swing Pipeline and Impact Dispatch**:
+  - `CWeaponMelee::PrimaryAttack` (`0x103eaca0`) sets the attack animation activity. The resulting animation event triggers `EventDispatch` (`0x103ea510`), calling `thunk_FUN_10253b70` (the melee hit applicator / `Smack()`).
+  - Contact enumeration is handled through `thunk_FUN_10170e80`.
+  - The shared traced-impact virtual `WeaponDoImpactEffect` (vtable index 270 / `0x102579f0`) is bypassed by `CWeaponMelee`, which processes its trace impacts directly in its internal contact loop.
+- **SkillRequirement**:
+  - `SkillRequirement` is parsed to weapon mode field `+0x3d0` in `WeaponModeDataLoader` (`0x10259230`) and is never read or checked elsewhere in engine binaries (dead field).
+- **Ranged and Melee Damage Post-Soak Operations**:
+  - **Melee Damage Formula**: $\text{Final Damage} = \text{Lethality} \times (\text{BaseDamage} + \text{DmgModifier}) \times \text{Multiplier}$, where `DmgModifier` is the attacker's Feat rating (Brawl or Melee stat bonus) and Potence guarantees a minimum lethality floor.
+  - **Ranged Damage Formula**: $\text{Final Damage} = \text{Lethality} \times \text{BaseDamage} \times \text{Multiplier}$, where `Multiplier` is $(\text{Volley\_Fraction} \times \text{Hitgroup\_Scale})$. Firearm Feat scales accuracy rather than flat damage.
+- **Special Predicates and CVDmg_t::Apply**:
+  - `CVDmg_t::Apply` (`0x101fb200`) invokes an installable game callback (`DAT_1074e7bc`) registered via `CVDmgSetApplyCallback` (`0x101fb180`).
+  - Special damage modifiers and immunities are resolved in `CBaseCombatCharacter::ApplySpecialDamageModifier` (`0x1033db30`), matching weapon/damage IDs against the entity's 224-entry lookup table to trigger condition flags (`0x400`) and reactive audio.
+- **DMG_FIST Alias**:
+  - `DMG_FIST` is not an engine damage flag; unarmed melee attacks parse and alias directly to `DMG_CLUB` (`0x80` / Bashing damage) in `FUN_101fab10`.
+- **Alive-Path Filtering and Rounding**:
+  - `OnTakeDamage_Alive` (`0x103302e0`) guards against dead/invalid states (`0x168 != 0x1e/0x1f`) and non-positive incoming values (`damage <= 0.0`).
+  - Final damage values truncate to integer via standard `__ftol()` (FISTP truncation toward zero) prior to deducting entity health.
+

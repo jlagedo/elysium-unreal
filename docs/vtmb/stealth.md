@@ -269,9 +269,107 @@ changes across all three sample points, the 512-unit trace crossover, transient 
 occlusion, overlapping modifier volumes, sound-only discovery, save/load inside a volume, and the
 tutorial's actual stealth success/failure branches from real input.
 
-## Separate stealth-kill work
+## Stealth-kill transaction (RE50)
 
-`stealthkillrules.txt` is not part of the ordinary observer. Its victim selection, feat bands,
-distance, hearing-scalar/deaf-zone admission, and transition into the stealth-kill action remain a
-separate native recovery and implementation transaction. Completing the observer does not close
-that work, and loading the file without its consumer is not stealth-kill support.
+VtMB's stealth-kill system is a separate consumer of `vdata/system/StealthKillRules.txt` and the
+combat character grapple pipeline (grapple mode 3). Unlike ordinary detection, stealth-kill
+eligibility requires an active rear-approach deaf arc, valid melee weapon capability, strict victim
+state/condition filters, and a paired synchronized grapple action.
+
+### Rulebook and table initialization
+
+`CStealthKillRules` is initialized at startup via `CStealthKillRules::InitTable` (`0x101be020`) on the
+global singleton instance (`0x1072c540`).
+
+`CStealthKillRules::LoadFile` (`0x101bebf0`) parses `vdata/system/StealthKillRules.txt`:
+
+1. **`DeafZoneArc` section** (`CStealthKillRules::LoadKey` @ `0x101bedb0`):
+   - Reads 20 degree entries (`0..19` corresponding to Sneaking ratings 1..20).
+   - If keys are missing, entries default to the value of the immediately preceding index.
+   - Stores into degree array `m_fDeafZoneArcDegrees[0..19]` at offset `+0x00`.
+2. **`StatInfo` section**:
+   - `StealthFeatMin`: integer minimum Sneaking feat clamp (default `1`, stored at `+0xa0`).
+   - `StealthFeatMax`: integer maximum Sneaking feat clamp (default `10`, stored at `+0xa4`).
+   - `HearingScalarMin`: float minimum hearing scalar clamp (default `0.0`, stored at `+0xa8`).
+   - `HearingScalarMax`: float maximum hearing scalar clamp (default `3.0`, stored at `+0xac`).
+   - `StealthKillDistMax`: float maximum acquisition distance (default `70.0`, stored at `+0xb0`).
+3. **Precomputed cosine dot table**:
+   - `InitTable` computes half-angle cosine dot thresholds for all 20 entries:
+     $$\text{Dot}_i = \cos\left(\text{Degrees}_i \times \frac{\pi}{180} \times 0.5\right)$$
+   - Stored into `m_fDeafZoneArcDots[0..19]` at offset `+0x50` (`+0x14` words).
+
+### Deaf arc and minimum approach depth
+
+#### Deaf Arc Angle Test (`InDeafArc` @ `0x101be500`)
+
+To test if the attacker is behind the victim:
+
+1. Obtain attacker origin $\mathbf{P}_{\text{atk}}$ and victim origin $\mathbf{P}_{\text{vic}}$ via `GetAbsOrigin()`.
+2. Obtain victim forward direction $\mathbf{F}_{\text{vic}}$ and invert to get rear vector $\mathbf{B}_{\text{vic}} = -\mathbf{F}_{\text{vic}}$.
+3. Compute normalized direction from victim to attacker:
+   $$\mathbf{D} = \frac{\mathbf{P}_{\text{atk}} - \mathbf{P}_{\text{vic}}}{\|\mathbf{P}_{\text{atk}} - \mathbf{P}_{\text{vic}}\|}$$
+4. Compute rear dot product $\text{Dot} = \mathbf{D} \cdot \mathbf{B}_{\text{vic}}$.
+5. Attacker Sneaking feat rating ($1..10$, 0-indexed as $\text{feat} - 1$) retrieves the precomputed threshold $\text{Dot}_{\text{req}}$ via `GetDeafZoneArcDot` (`0x101be930`).
+6. Attacker is in the deaf arc if and only if $\text{Dot} > \text{Dot}_{\text{req}}$.
+
+#### Minimum Approach Depth Formula (`ComputeMinDepth` @ `0x101bef50`)
+
+Approach depth scales the required rear proximity based on attacker Sneaking versus victim Hearing:
+
+1. Attacker Sneaking feat is clamped and normalized over $[\text{StealthFeatMin}, \text{StealthFeatMax}]$:
+   $$\text{NormSneak} = \text{clamp}\left(\frac{\text{Sneak} - \text{StealthFeatMin}}{\text{StealthFeatMax} - \text{StealthFeatMin}}, 0.0, 1.0\right)$$
+2. Victim hearing scalar (obtained via `victim->GetHearingScalar()` or by mapping victim Perception through `Inspection_Hearing_Scalars`) is clamped and normalized over $[\text{HearingScalarMin}, \text{HearingScalarMax}]$:
+   $$\text{NormHear} = \text{clamp}\left(\frac{\text{Hear} - \text{HearingScalarMin}}{\text{HearingScalarMax} - \text{HearingScalarMin}}, 0.0, 1.0\right)$$
+3. Minimum approach depth is:
+   $$\text{MinDepth} = \max\left(0.0, \text{StealthKillDistMax} \times (1.0 - \text{NormSneak} + \text{NormHear})\right)$$
+
+High Sneaking against deaf/unaware targets reduces $\text{MinDepth}$ toward zero, while low Sneaking against sharp targets expands $\text{MinDepth}$ out to the full acquisition envelope.
+
+### Victim selection and per-frame cache (`FindVictim` @ `0x101be1f0`)
+
+`CStealthKillRules::FindVictim` maintains a per-player-slot cache (`m_hCachedVictim` at `+0xb4`, `m_nCachedFrame` at `+0x134`) updated once per engine frame:
+
+1. **Player eligibility (`PlayerStealthKillEligibility` @ `0x10167320`)**:
+   - Player must not be busy in dialog, cinematics, death, menus or camera lock (`0x101681a0`).
+   - Player must be in sneak posture, ducking, or active Obfuscate (`0x101671a0`).
+   - Active weapon (`GetActiveWeapon()`) must author stealth-kill capability (`m_bCanStealthKill` at `weapon + 0x872 != 0`).
+2. **Forward acquisition trace**:
+   - Traces forward from player eye position along eye view direction by `StealthKillDistMax` (70 units) with mask `0x201400b` (`MASK_SHOT`), filtering out the player.
+3. **Victim admission (`IsValidStealthKillTarget` @ `0x10341850` / `0x102c2300` / `0x1037bbc0`)**:
+   - Base `CBaseCombatCharacter::IsValidStealthKillTarget` returns `false`.
+   - `CVHuman::IsValidStealthKillTarget` enforces:
+     - Target must be alive (`!IsDead()`);
+     - Target must not already be in a grapple/paired action (`m_hGrapplePartner == NULL`);
+     - Target must not have boss/immunity flag (`m_bNoStealthKill == 0` at `+0x18f6`);
+     - Target state (`GetNPCState()`) must be `NPC_STATE_IDLE` (1) or `NPC_STATE_ALERT` (0xd); target cannot be `NPC_STATE_DEAD` (7) or in active combat (`NPC_STATE_COMBAT`);
+     - Target must NOT have conditions `COND_SEE_PLAYER` (`0x6f`) or `COND_IN_COMBAT` (`0x5a`);
+     - Target must be human/biped (`IsHuman()`).
+   - `CNPC_VGhoulCroucher::IsValidStealthKillTarget` override allows croucher ghouls when undisturbed (`!IsDisturbed()` at `+0x6666 == 0`).
+4. **Arc test or state override**:
+   - Requires `InDeafArc(player, victim)` **OR** victim mesmerized/blinded/trance override (`victim->NPCData + 0x5bb4 > 0`).
+5. **Grapple admission**:
+   - Verifies `CombatCharacterCanStartGrapple(player, victim, 3)`.
+
+If all pass, `victim` is cached in `m_hCachedVictim[player_index]`.
+
+### HUD publication and input commitment
+
+1. **HUD prompt**:
+   `CBasePlayer::UpdateClientActionState` (`0x101755d0`) / `FUN_10174580` queries `FindVictim`. When non-null, it publishes the stealth-kill interaction icon/prompt (`player + 0x1ea4`).
+2. **Input precedence**:
+   - **Secondary attack (`+attack2` / `+wpn_secondaryatk`)**: `CWeaponMelee::SecondaryAttack` (`0x103eaca0`) calls `PlayerTryStealthKill` (`0x10167370`) before regular heavy attack or blocking. If a victim is qualified, the stealth kill commits immediately.
+   - **Primary attack / Use**: Handled via `PlayerTryStealthKillThunk` (`0x100154a1`).
+3. **Grapple Mode 3 execution (`StartGrappleAttack` @ `0x10328df0`)**:
+   - Stores victim handle into `player->m_hStealthKillTarget` at `+0x1c58` and `+0x1c60`.
+   - Resolves paired activity pair via `CheckAndTranslateBaseActivity` (`0x10328af0`) and `TranslateBaseActivity` (`0x10328380`) based on attacker/victim gender, skeleton, and orientation.
+   - Locks both combatants into grapple mode 3 via `SetGrappleState` (`0x1032a100`), freezing standard movement and AI.
+   - Invokes `WeaponStealthKill` (vtable index `+0x534`) on the active weapon.
+   - Snaps attacker relative to victim `Bip01` bone offset.
+   - Paired death animation plays, committing fatal damage (`Event_Killed` / `TakeDamage`) on the victim upon completion.
+
+### Tutorial lesson completion
+
+The tutorial stealth-kill sequence in `sp_tutorial_1` completes when:
+- The qualified tutorial guard is dispatched via grapple mode 3;
+- The guard's `OnDeath` output triggers the tutorial progression relay;
+- Jack advances the lesson script.
