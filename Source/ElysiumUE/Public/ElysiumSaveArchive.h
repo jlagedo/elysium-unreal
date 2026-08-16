@@ -46,6 +46,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSheet& S);
 FArchive& operator<<(FArchive& Ar, FElysiumXpEntry& E);
 FArchive& operator<<(FArchive& Ar, FElysiumAssignedQuest& Q);
 FArchive& operator<<(FArchive& Ar, FElysiumLawState& L);
+FArchive& operator<<(FArchive& Ar, FElysiumPoliceState& P);
 FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R);
 FArchive& operator<<(FArchive& Ar, FElysiumEntityState& S);
 FArchive& operator<<(FArchive& Ar, FElysiumSavedFade& F);

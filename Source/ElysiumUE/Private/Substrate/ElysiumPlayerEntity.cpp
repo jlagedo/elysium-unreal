@@ -6,6 +6,13 @@
 // declaration stays the chain header `Public/ElysiumPlayer.h`, and the class registration stays at
 // the one registration site, `ElysiumPlayerClasses.cpp`.
 
+// Cycle 10b (the player law channels) touches this file in five places, all banner-marked:
+//   1. `Think` — the law expiry pass, beside cycle 8's stealth block on the same 0.1 s heartbeat;
+//   2. `Hydrate` — the unscoped law/police block, with the response witness rebased-or-dropped;
+//   3. `GetDebugState` — the deadlines, act counts, response/pursuit state and the world area;
+//   4. the three activity-level inputs, with their whole recovered variant/clamp/raise semantics;
+//   5. `Dehydrate` — the police block out to the record (one line, marked inline).
+
 #include "ElysiumPlayer.h"
 
 #include "ElysiumEntityDefs.h"
@@ -14,6 +21,7 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDisciplines.h"   // Cycle 9
+#include "Substrate/ElysiumLaw.h"          // Cycle 10b
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -93,6 +101,19 @@ void FElysiumPlayer::Think()
 	// ------------------------------------------------------------------------------------------
 	ElysiumStealth::TickPlayerSurface(*this, Now);
 	ElysiumStealth::CommitObserverSnapshot(*this, Now);
+
+	// ------------------------------------------------------------------------------------------
+	// Cycle 10b hunk 1/5 — the law expiry pass (`docs/vtmb/player-entity.md` § "Law, Masquerade and
+	// world response"). It rides the same 0.1 s heartbeat cycle 8 established above, for the same
+	// reason: retail's `PlayerRuleUpdate` is the first call of `CHL2_Player::PreThink`, this think
+	// is reached only through `FElysiumEntityWorld::RunPlayerThink`, and every deadline it reads is
+	// therefore measured on the substrate clock the save restores rather than on a timer.
+	//
+	// Its four steps are retail's own order: supernatural expiry, the delayed response-cop
+	// deadline, heightened-alert expiry — and the criminal expiry, which retail reaches from
+	// `SetAnimation`'s law helper instead. `ElysiumLaw.cpp` states that divergence beside the code.
+	// ------------------------------------------------------------------------------------------
+	ElysiumLaw::TickPlayerLaw(*this, Now);
 
 	// SEAM: the footstep hearing stimulus belongs here, and there is nothing to hang it on yet.
 	// `sound_volume_table.txt` names `PLAYER_FOOTSTEP_SNEAK`/`_WALK`/`_RUN` plus `PLAYER_JUMP` and
@@ -221,6 +242,35 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	Health     = Record.Health;
 	MaxHealth  = Record.MaxHealth;
 	Law        = Record.Law;
+	// ------------------------------------------------------------------------------------------
+	// Cycle 10b hunk 2/5 — the law/police block crosses UNSCOPED, unlike the feed, discipline and
+	// stealth blocks below. Every deadline in it is on the session clock
+	// (`UElysiumGameStateSubsystem`'s, which outlives the map), and a wanted level with four
+	// seconds left, a Masquerade window, a pursuit count and a heightened alert all mean exactly
+	// what they meant in the previous map — none of them describes THIS map's geometry, light or
+	// cast. The single exception is the pending response's witness, which is a map entity: that one
+	// handle is rebased, and a response whose witness does not survive the boundary is dropped
+	// rather than left pointing at whatever now holds its index.
+	// ------------------------------------------------------------------------------------------
+	Police     = Record.Police;
+	if (Police.bResponsePending)
+	{
+		Police.ResponseWitness = (World && Police.ResponseWitness.IsSet())
+			? World->RebaseSavedHandle(Police.ResponseWitness)
+			: FElysiumEntityHandle::Invalid();
+		if (!Police.ResponseWitness.IsSet())
+		{
+			UE_LOG(LogElysiumPlayer, Log,
+				TEXT("%s pending police response (severity %d) dropped: its witness did not survive "
+					"the map boundary"), *DebugString(), Police.ResponseSeverity);
+			Police.bResponsePending = false;
+			Police.ResponseSeverity = 0;
+		}
+	}
+	else
+	{
+		Police.ResponseWitness = FElysiumEntityHandle::Invalid();
+	}
 	ExperienceLog = Record.ExperienceLog;
 	Effects    = Record.Effects;
 	EmailFlags = Record.EmailFlags;
@@ -320,6 +370,7 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.Health     = Health;
 	Record.MaxHealth  = MaxHealth;
 	Record.Law        = Law;
+	Record.Police     = Police;   // Cycle 10b — unscoped; see Hydrate for why
 	Record.ExperienceLog = ExperienceLog;
 	Record.Effects    = Effects;
 	Record.EmailFlags = EmailFlags;
@@ -442,19 +493,31 @@ void FElysiumPlayer::InputAwardExperience(const FElysiumInputArgs& Args)
 	AwardExperience(Args.Param.ToString());
 }
 
+// ================================================================================================
+// Cycle 10b hunk 4/5 — the three activity-level inputs, with their whole recovered semantics
+// (`docs/vtmb/player-entity.md` § "Law, Masquerade and world response").
+//
+// Each takes an integer entity-input variant, clamps it to 0..5 and treats a wrong type or a
+// negative value as zero. No authored wire in the corpus carries a second parameter and the one
+// script call is `pc.SetCriminalLevel(1)`, so the input form never names a duration: it always
+// passes `DeriveDuration`, and the finite `max(previously retained level, pl_min_act_timer)`
+// deadline falls out of the rule. A native producer that DOES know its own duration (the feed
+// pulse's two seconds) calls `ElysiumLaw::Set*Level` directly with it.
+// ================================================================================================
+
 void FElysiumPlayer::InputSetCriminalLevel(const FElysiumInputArgs& Args)
 {
-	Law.Criminal = Args.Param.ToInt();
+	ElysiumLaw::SetCriminalLevel(*this, ElysiumLaw::SanitizeLevel(Args.Param));
 }
 
 void FElysiumPlayer::InputSetInvestigateLevel(const FElysiumInputArgs& Args)
 {
-	Law.Investigate = Args.Param.ToInt();
+	ElysiumLaw::SetInvestigateLevel(*this, ElysiumLaw::SanitizeLevel(Args.Param));
 }
 
 void FElysiumPlayer::InputSetSupernaturalLevel(const FElysiumInputArgs& Args)
 {
-	Law.Supernatural = Args.Param.ToInt();
+	ElysiumLaw::SetSupernaturalLevel(*this, ElysiumLaw::SanitizeLevel(Args.Param));
 }
 
 void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
@@ -464,6 +527,24 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Facing"), FString::Printf(TEXT("yaw %.0f"), -Angles.Y));
 	Out.Emplace(TEXT("Law"), FString::Printf(TEXT("criminal %d / supernatural %d / investigate %d"),
 		Law.Criminal, Law.Supernatural, Law.Investigate));
+	// Cycle 10b hunk 3/5 — the deadlines, the act counts and the response/pursuit state beside them.
+	Out.Emplace(TEXT("Law deadlines"), FString::Printf(
+		TEXT("criminal %.2f / supernatural %.2f (act counts %d / %d)"),
+		Law.CriminalExpiry, Law.SupernaturalExpiry, Law.CriminalCount, Law.SupernaturalCount));
+	Out.Emplace(TEXT("Police"), FString::Printf(
+		TEXT("%s, cops %d, hunters %d, %s, masquerade window %.2f"),
+		Police.bResponsePending
+			? *FString::Printf(TEXT("response severity %d due %.2f"),
+				Police.ResponseSeverity, Police.ResponseDeadline)
+			: TEXT("no pending response"),
+		Police.CopsInPursuit, Police.HuntersInPursuit,
+		Police.bHeightenedAlert
+			? *FString::Printf(TEXT("heightened alert until %.2f"), Police.HeightenedAlertExpiry)
+			: TEXT("no alert"),
+		Police.MasqueradeTimerNext));
+	Out.Emplace(TEXT("World area"), World
+		? FString::FromInt(ElysiumLaw::WorldAreaType(*World))
+		: FString(TEXT("(no world)")));
 	Out.Emplace(TEXT("XP"), FString::Printf(TEXT("%d spent-able, %d awards, %.0f raw (%.0f pending)"),
 		Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Experience),
 		ExperienceLog.Num(), LifetimeExperience, ExperienceRemainder));

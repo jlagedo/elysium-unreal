@@ -86,8 +86,6 @@ namespace
 		  TEXT("visibility portals — the renderer has no equivalent to drive") },
 		{ TEXT("npc_VProneDialog"),              TEXT("StartPlayerDialogRemote StartPlayerDialog"),
 		  TEXT("the prone-dialogue NPC leaf") },
-		{ TEXT("trigger_player_activity_level"), TEXT("Enable Disable"),
-		  TEXT("the player activity-level trigger") },
 		{ TEXT("trigger_inventory_check"),       TEXT("Disable Enable"),
 		  TEXT("9.8 — inventory") },
 		{ TEXT("phys_convert"),                  TEXT("ConvertTarget"),

@@ -148,13 +148,66 @@ struct FElysiumAssignedQuest
 	bool bUnread = false;
 };
 
-// The criminal / supernatural / investigate counters `SetCriminalLevel`, `SetSupernaturalLevel` and
-// `SetInvestigateLevel` write. Their decay timers are the police-response system's (10.7).
+// ============================================================================================
+// Law, Masquerade and world response (cycle 10b) — `docs/vtmb/player-entity.md` § "Law,
+// Masquerade and world response". The rules over these two structs are
+// `Private/Substrate/ElysiumLaw.h`; this is only their storage, which lives on the player leaf
+// because retail's fields do (`+0x1ccc..+0x1cec` and `+0x1d10..+0x1d1c` on CBasePlayer).
+// ============================================================================================
+
+// The three activity channels `SetCriminalLevel`, `SetSupernaturalLevel` and `SetInvestigateLevel`
+// write. They are NOT one generic "wanted" value: criminal and supernatural each carry a deadline
+// and a monotonic incident count, while investigate is a direct replacement with neither.
 struct FElysiumLawState
 {
-	int32 Criminal = 0;
-	int32 Supernatural = 0;
-	int32 Investigate = 0;
+	// The retained levels, clamped 0..5. `Criminal` is retail's *protected* level at `+0x1cd8`.
+	int32 Criminal = 0;        // +0x1cd8
+	int32 Supernatural = 0;    // +0x1ccc
+	int32 Investigate = 0;     // +0x1cdc — no companion timer or count in the player setter
+
+	// Absolute substrate-clock deadlines. `-1` is the recovered sentinel an explicit zero write
+	// installs: no deadline in force, so the expiry pass has nothing to age out.
+	double CriminalExpiry = -1.0;      // +0x1ce0
+	double SupernaturalExpiry = -1.0;  // +0x1ce4
+
+	// The player act counts. Monotonic — nothing decrements them, because an NPC's own processed
+	// count is what makes an incident new to that NPC (the conditions 31-34 lane). Public through
+	// `FElysiumPlayer::CriminalActCount()` / `SupernaturalActCount()` for that reader.
+	int32 CriminalCount = 0;       // +0x1ce8
+	int32 SupernaturalCount = 0;   // +0x1cec
+};
+
+// The delayed police response, the Masquerade rate limiter and the pursuit/alert state machine.
+// Separate from `FElysiumLawState` on purpose: retail keeps them in a different field block, they
+// are *consequences* rather than activity, and the discipline test's `Player->Law = {}` reset must
+// not silently zero a pursuit count it never touched.
+struct FElysiumPoliceState
+{
+	// `m_flMasqueradeTimerNext` — an admitted supernatural incident may increment Masquerade only
+	// at or after this absolute time, and then reschedules by `debug_masquerade_timer`.
+	double MasqueradeTimerNext = 0.0;
+
+	// --- The retained, delayed response record ------------------------------------------------
+	// One record, not a queue: a second incident before the deadline replaces it only when it is
+	// strictly more severe, and never reschedules.
+	bool  bResponsePending = false;
+	int32 ResponseSeverity = 0;
+	// The witness the incident was admitted through. The update refuses to spawn when it no longer
+	// resolves, which is the one member of this block that names a map entity.
+	FElysiumEntityHandle ResponseWitness;
+	FVector ResponsePosition = FVector::ZeroVector;
+	double ResponseDeadline = 0.0;
+
+	// `debug_cop_grace_time`: what the last consumed response actually put on the street, and how
+	// long that stays the baseline a duplicate/higher-severity response subtracts from.
+	double GraceUntil = -1.0;
+	int32  GraceSpawned = 0;
+
+	// --- Pursuit and alert ---------------------------------------------------------------------
+	int32 CopsInPursuit = 0;      // +0x1d10
+	int32 HuntersInPursuit = 0;   // +0x1d14 — suppresses new response admission while non-zero
+	bool  bHeightenedAlert = false;       // +0x1d18
+	double HeightenedAlertExpiry = 0.0;   // +0x1d1c
 };
 
 // ============================================================================================
@@ -409,6 +462,15 @@ struct FElysiumPlayerRecord
 	TArray<FString>         Effects;         // m_tEffectList
 	TArray<FString>         EmailFlags;      // the Player block, save-architecture.md section 3
 	FElysiumLawState        Law;
+
+	// Cycle 10b — the police-response / Masquerade-timer / pursuit block beside the activity
+	// channels. Deliberately NOT map-scoped the way `FeedMap`, `DisciplineMap` and `StealthMap`
+	// are: every deadline in both structs is on the session clock, which
+	// `UElysiumGameStateSubsystem` owns and which persists across map travel, and a wanted level
+	// with four seconds left means exactly the same thing in the next map. The one member that
+	// names a map entity is `ResponseWitness`, so `FElysiumPlayer::Hydrate` rebases-or-drops that
+	// single handle rather than scoping the whole block to a map name.
+	FElysiumPoliceState     Police;
 
 	// m_QuestList — the journal. It lives on the record ONLY and is not mirrored onto the live
 	// player entity the way Money and ExperienceLog are: the quest map it reflects is session-scoped
@@ -1143,6 +1205,9 @@ class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
 	FElysiumLawState Law;
+	// Cycle 10b — the response/Masquerade-timer/pursuit half of the same domain. Mirrored from the
+	// record for the map's lifetime exactly as `Law` is.
+	FElysiumPoliceState Police;
 	TArray<FElysiumXpEntry> ExperienceLog;
 	TArray<FString> EmailFlags;
 
@@ -1225,6 +1290,12 @@ public:
 	void InputSetCriminalLevel(const FElysiumInputArgs& Args);
 	void InputSetInvestigateLevel(const FElysiumInputArgs& Args);
 	void InputSetSupernaturalLevel(const FElysiumInputArgs& Args);
+
+	// Cycle 10b — the monotonic act counts, read by the NPC condition lane (conditions 31-34) that
+	// compares them against its own processed counts. Read-only here: only a channel write through
+	// `ElysiumLaw` increments them.
+	int32 CriminalActCount() const { return Law.CriminalCount; }
+	int32 SupernaturalActCount() const { return Law.SupernaturalCount; }
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 };

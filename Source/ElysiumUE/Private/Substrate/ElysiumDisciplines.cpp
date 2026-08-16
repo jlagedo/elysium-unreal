@@ -7,6 +7,13 @@
 // trait-effect layer, the typed damage path, and one owned timed event per (character, discipline)
 // on the one queue. Nothing here adds a clock, a scheduler or a dispatcher.
 
+// Cycle 10b (the player law channels) touches this file in two places, both banner-marked, and both
+// of them retire a warned SEAM this file used to report:
+//   1. the world-area eligibility read — the gate now reads `ElysiumLaw::WorldAreaType` instead of
+//      hunting for an unregistered `events_world` member and giving up;
+//   2. the targeted-commit law production — both writes go through the player setters, so they
+//      refresh the activity deadlines and increment the act counts the expiry pass ages out.
+
 #include "Substrate/ElysiumDisciplines.h"
 
 #include "ElysiumClassRegistry.h"
@@ -18,6 +25,7 @@
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumLaw.h"      // Cycle 10b — the law channels the commit writes through
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -114,33 +122,10 @@ namespace
 	}
 
 	// --- The world-area eligibility read --------------------------------------------------------
-	// `events_world` holds the `SetSafeArea` value the level scripts write, but its leaf does not
-	// register it as a class-chain field, so the ordinary R2 walk cannot read it. This asks for the
-	// field by name and reports once when it is absent rather than inventing an area type.
-	//
-	// **SEAM** — closing it is one registered field on `events_world` (`Substrate/ElysiumEventClasses.cpp`,
-	// `FElysiumWorldEvents::SafeArea`); everything on this side of the gate is built.
-	bool TryReadWorldArea(FElysiumEntityWorld& World, int32& OutArea)
-	{
-		FElysiumEntity* WorldEnt = World.FindByName(TEXT("world"));
-		if (WorldEnt == nullptr || WorldEnt->Class == nullptr)
-		{
-			return false;   // no `events_world` in this map: an ordinary absence, not a failure
-		}
-		static const FName SafeArea(TEXT("safearea"));
-		const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
-		const FElysiumFieldAccessor* Acc = Reg.FindField(*WorldEnt->Class, SafeArea);
-		if (Acc == nullptr || !Acc->Get)
-		{
-			ReportOnce(TEXT("worldarea.field"),
-				TEXT("the world-area gate cannot read `events_world.safearea` — that leaf holds the "
-					"SetSafeArea value as an unregistered member, so the Elysium (area type 2) "
-					"refusal and the Bloodbuff/LockPick exception are inert"));
-			return false;
-		}
-		OutArea = Acc->Get(*WorldEnt).ToInt();
-		return true;
-	}
+	// Cycle 10b — the gate reads the world area type through the one owner,
+	// `ElysiumLaw::WorldAreaType`: the registered `events_world.safearea` field, falling back to the
+	// authored `worldspawn` baseline the entity is seeded from. The seam that stood here (an
+	// unregistered member the R2 walk could not reach) is closed.
 
 	// The player eligibility virtual (`docs/vtmb/disciplines.md` § "World-area eligibility and
 	// transition teardown"): the ordinary path refuses world area type 2, Elysium, and one branch
@@ -152,12 +137,7 @@ namespace
 		{
 			return true;   // a bare substrate world has no area policy to refuse against
 		}
-		int32 Area = 0;
-		if (!TryReadWorldArea(*Char.World, Area))
-		{
-			return true;   // reported once above; an unreadable gate refuses nothing
-		}
-		if (Area != 2)
+		if (ElysiumLaw::WorldAreaType(*Char.World) != static_cast<int32>(ElysiumLaw::EArea::Elysium))
 		{
 			return true;
 		}
@@ -1293,18 +1273,17 @@ namespace
 		// `Overt` byte is set. Whether an NPC witnesses it is not this commit's question.
 		if (Committed > 0 && bPlayerCaster)
 		{
-			Player->Law.Supernatural = FMath::Max(Player->Law.Supernatural, Record->SupernaturalLvl);
+			// Cycle 10b — both writes go through the player setters, which is what makes them
+			// raise-never-lower, refresh the deadline, and increment the channel's act count. Both
+			// pass `DeriveDuration` (-1), the finite-duration sentinel every recovered non-native
+			// caller passes: the deadline becomes `max(previously retained level, pl_min_act_timer)`
+			// rather than indefinite. The expiry pass in the player think ages them out; the seam
+			// that stood here is closed.
+			ElysiumLaw::SetSupernaturalLevel(*Player, Record->SupernaturalLvl);
 			if (Record->bOvert)
 			{
-				Player->Law.Criminal = FMath::Max(Player->Law.Criminal, 3);
+				ElysiumLaw::SetCriminalLevel(*Player, 3);
 			}
-			// **SEAM** — both calls also pass the finite-duration sentinel that refreshes the
-			// activity deadlines and increments the two act counters. Those counters and their decay
-			// belong to the police-response system, which has no store yet.
-			ReportOnce(TEXT("law.deadlines"),
-				TEXT("player-activity deadlines and the two act counters are unbuilt — a committed "
-					"overt/supernatural cast raises the levels but nothing ages them out "
-					"(the police-response system owns the decay)"));
 		}
 
 		// 8. The recovery state.

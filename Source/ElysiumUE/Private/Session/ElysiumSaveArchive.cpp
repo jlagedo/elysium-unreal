@@ -155,6 +155,47 @@ FArchive& operator<<(FArchive& Ar, FElysiumAssignedQuest& Q)
 FArchive& operator<<(FArchive& Ar, FElysiumLawState& L)
 {
 	Ar << L.Criminal << L.Supernatural << L.Investigate;
+	// Cycle 10b — the two timed channels' deadlines and act counts. This operator is called
+	// MID-RECORD (between the XP accumulators and `bUnkillable`), so the block is gated on its own
+	// version rather than appended blindly: a `Stealth` payload skips these bytes entirely and
+	// restores three bare levels with no deadline, which is exactly what it was written with.
+	//
+	// A restored level with no deadline would never age out, so the load installs the sentinel and
+	// the first think leaves it alone — the levels then behave as the pre-law build's did until
+	// something writes them, rather than being silently expired on the first frame after a load.
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Law)
+	{
+		Ar << L.CriminalExpiry << L.SupernaturalExpiry;
+		Ar << L.CriminalCount << L.SupernaturalCount;
+	}
+	else if (Ar.IsLoading())
+	{
+		L.CriminalExpiry = -1.0;
+		L.SupernaturalExpiry = -1.0;
+		L.CriminalCount = 0;
+		L.SupernaturalCount = 0;
+	}
+	return Ar;
+}
+
+FArchive& operator<<(FArchive& Ar, FElysiumPoliceState& P)
+{
+	Ar << P.MasqueradeTimerNext;
+	Ar << P.bResponsePending << P.ResponseSeverity;
+	Ar << P.ResponseWitness << P.ResponsePosition << P.ResponseDeadline;
+	Ar << P.GraceUntil << P.GraceSpawned;
+	Ar << P.CopsInPursuit << P.HuntersInPursuit;
+	Ar << P.bHeightenedAlert << P.HeightenedAlertExpiry;
+	if (Ar.IsLoading())
+	{
+		// A payload from another build must not be able to hand the response arithmetic a negative
+		// severity or a negative pursuit count; the deadlines are absolute times and mean whatever
+		// the restored clock says they mean.
+		P.ResponseSeverity = FMath::Max(0, P.ResponseSeverity);
+		P.GraceSpawned = FMath::Max(0, P.GraceSpawned);
+		P.CopsInPursuit = FMath::Max(0, P.CopsInPursuit);
+		P.HuntersInPursuit = FMath::Max(0, P.HuntersInPursuit);
+	}
 	return Ar;
 }
 
@@ -309,6 +350,22 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		R.Stealth.Reset();
 		R.StealthModRaw = 0;
 		R.StealthMap.Reset();
+	}
+	// Cycle 10b — the police-response / Masquerade-timer / pursuit block. Appended to the END of the
+	// player record and read behind its own version, so an older supported payload restores with a
+	// clean street rather than being refused.
+	//
+	// Deliberately NOT scoped by a map name the way `FeedMap`, `DisciplineMap` and `StealthMap` are:
+	// every deadline in it is on the session clock, which persists across map travel. The one member
+	// that names a map entity is `ResponseWitness`, and `FElysiumPlayer::Hydrate` rebases-or-drops
+	// that single handle exactly as the feed's target handle is.
+	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::Law)
+	{
+		Ar << R.Police;
+	}
+	else if (Ar.IsLoading())
+	{
+		R.Police = FElysiumPoliceState();
 	}
 	return Ar;
 }
@@ -603,6 +660,17 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	OutLines.Add(FString::Printf(TEXT("player.money = %d"), P.Money));
 	OutLines.Add(FString::Printf(TEXT("player.law = %d/%d/%d"),
 		P.Law.Criminal, P.Law.Supernatural, P.Law.Investigate));
+	// Cycle 10b — the deadlines and act counts beside the levels, then the response/pursuit block.
+	OutLines.Add(FString::Printf(TEXT("player.law.expiry = %.3f/%.3f acts %d/%d"),
+		P.Law.CriminalExpiry, P.Law.SupernaturalExpiry, P.Law.CriminalCount, P.Law.SupernaturalCount));
+	OutLines.Add(FString::Printf(
+		TEXT("player.police = response %d sev %d due %.3f, grace %d until %.3f, cops %d, hunters %d, "
+			"alert %d until %.3f, masquerade window %.3f"),
+		P.Police.bResponsePending ? 1 : 0, P.Police.ResponseSeverity, P.Police.ResponseDeadline,
+		P.Police.GraceSpawned, P.Police.GraceUntil,
+		P.Police.CopsInPursuit, P.Police.HuntersInPursuit,
+		P.Police.bHeightenedAlert ? 1 : 0, P.Police.HeightenedAlertExpiry,
+		P.Police.MasqueradeTimerNext));
 	OutLines.Add(FString::Printf(TEXT("player.unkillable = %d"), P.bUnkillable ? 1 : 0));
 	// The stealth group, as one line plus its aggregate: a diff that shows a moved scalar without a
 	// moved generation is exactly the split-generation restore the block exists to prevent.

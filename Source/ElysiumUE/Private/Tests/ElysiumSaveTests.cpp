@@ -581,8 +581,15 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// The equality below is a tripwire, not a fact about npc_maker: it fails the moment a version is
 	// appended without this block being extended, which is exactly when someone should be made to
 	// think about whether the new field is additive and what an old payload does without it.
+	//
+	// `Law` is the one entry in this list that is NOT purely appended: the activity-channel
+	// deadlines and act counts sit mid-record, inside `operator<<(FElysiumLawState&)` between the XP
+	// accumulators and `bUnkillable`. They are still additive because that operator gates them on
+	// this version and a `Stealth` payload skips those bytes entirely, restoring three bare levels
+	// with the "no deadline" sentinel — which is exactly what the pre-law build wrote. The
+	// police-response block that came with it is an ordinary append to the end of the record.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Stealth);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Law);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -596,7 +603,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the player's discipline block"),
 			(int32)FElysiumSaveVersion::Disciplines),
 		TPair<const TCHAR*, int32>(TEXT("the player's stealth surface and raw modifier aggregate"),
-			(int32)FElysiumSaveVersion::Stealth) })
+			(int32)FElysiumSaveVersion::Stealth),
+		TPair<const TCHAR*, int32>(TEXT("the law deadlines/act counts and the police-response block"),
+			(int32)FElysiumSaveVersion::Law) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);
@@ -615,7 +624,12 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 			Ar << Legacy.Health << Legacy.MaxHealth;
 			Ar << Legacy.ExperienceLog << Legacy.Effects << Legacy.EmailFlags;
 			Ar << Legacy.ExperienceRemainder << Legacy.LifetimeExperience;
-			Ar << Legacy.Law << Legacy.bUnkillable << Legacy.Journal << Legacy.QuestLogArea
+			// `FElysiumLawState`'s own operator writes its cycle-10b deadline/count fields whenever
+			// the archive is saving, regardless of the declared version (correct for a real save,
+			// which is always written at `Latest`) — so reproducing v6's byte-for-byte shape means
+			// writing only its three bare levels directly rather than delegating to that operator.
+			Ar << Legacy.Law.Criminal << Legacy.Law.Supernatural << Legacy.Law.Investigate;
+			Ar << Legacy.bUnkillable << Legacy.Journal << Legacy.QuestLogArea
 				<< Legacy.HistoryId;
 		}
 		FElysiumPlayerRecord Migrated;

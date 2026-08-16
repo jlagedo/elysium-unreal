@@ -21,6 +21,10 @@
 // That also satisfies K10: with no body at all the state machine alone carries engage -> bite ->
 // loop -> release, so headless correctness never depends on something being rendered.
 
+// Cycle 10b (the player law channels) touches this file in two places, both banner-marked:
+//   1. `Feed` — the accepted pulse's law production (supernatural 2 + criminal 3, two seconds);
+//   2. `FeedInterrupt` — the interrupted path's criminal 1, two seconds.
+
 #include "Substrate/ElysiumFeed.h"
 
 #include "ElysiumCameraSolve.h"
@@ -33,6 +37,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumLaw.h"        // Cycle 10b — the pulse / interrupt law producers
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -801,6 +806,25 @@ bool FElysiumCombatCharacter::Feed(double Now)
 			ElysiumStealth::HearingReductionCmFor(this));
 	}
 
+	// ------------------------------------------------------------------------------------------
+	// Cycle 10b hunk 1/2 — the feed pulse is also a player-law PRODUCER
+	// (`docs/vtmb/feeding.md`: "The same accepted ordinary feed pulse is also a player-law
+	// producer"). For a player feeder it raises supernatural activity to 2 and criminal activity to
+	// 3, each for an EXPLICIT two seconds — the one recovered case where a caller names its own
+	// duration instead of passing the derive sentinel, which is why the pulse's wanted level dies
+	// two seconds after the fangs come off rather than lasting a level's worth of seconds.
+	//
+	// It does not mutate Masquerade and does not spawn police: whether an NPC witnesses the feed is
+	// the condition lane's question, and only the admitted incident reaches those consumers. The
+	// victim's own three-second observation windows belong to that same next cycle.
+	// ------------------------------------------------------------------------------------------
+	if (FElysiumPlayer* PlayerFeeder = (World && World->FindPlayer() == this)
+		? World->FindPlayer() : nullptr)
+	{
+		ElysiumLaw::SetSupernaturalLevel(*PlayerFeeder, 2, ElysiumLaw::FeedActivitySeconds);
+		ElysiumLaw::SetCriminalLevel(*PlayerFeeder, 3, ElysiumLaw::FeedActivitySeconds);
+	}
+
 	// The accelerating cadence, and AT MOST ONE pulse per update — never a catch-up loop.
 	FeedState.Interval = ElysiumFeed::NextInterval(FeedState.Interval);
 	FeedState.NextPulse = static_cast<float>(Now) + FeedState.Interval;
@@ -809,6 +833,23 @@ bool FElysiumCombatCharacter::Feed(double Now)
 
 void FElysiumCombatCharacter::FeedInterrupt()
 {
+	// ------------------------------------------------------------------------------------------
+	// Cycle 10b hunk 2/2 — the interrupted-feed law write. `docs/vtmb/feeding.md`: the interrupted
+	// path "opens the same victim windows and raises only criminal activity 1 for two seconds" —
+	// one criminal level, no supernatural at all, and the same explicit two seconds the pulse uses.
+	//
+	// Guarded on a LIVE transaction and on the feeder half: `CompleteFeedTransaction` is idempotent
+	// and is also reached on the victim, so without this guard a repeated teardown would count a
+	// second incident for an interruption that already happened.
+	// ------------------------------------------------------------------------------------------
+	if (FeedState.IsPaired() && !FeedState.bVictim && !FeedState.bInterrupting)
+	{
+		if (FElysiumPlayer* PlayerFeeder = (World && World->FindPlayer() == this)
+			? World->FindPlayer() : nullptr)
+		{
+			ElysiumLaw::SetCriminalLevel(*PlayerFeeder, 1, ElysiumLaw::FeedActivitySeconds);
+		}
+	}
 	CompleteFeedTransaction(/*bKeepReleaseTail*/ false);
 }
 

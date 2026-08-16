@@ -22,11 +22,17 @@
 // inspectable, and every output wire resolves — not the systems that will drive it. Each input
 // that fronts an unbuilt system records its state and logs; none of them silently no-op.
 
+// Cycle 10b (the player law channels) touches this file in three places, all banner-marked:
+//   1. `FElysiumWorldEvents::Spawn` — the authored `worldspawn` policy baseline;
+//   2. `InputSetSafeArea` — the world-to-player transaction the value change performs;
+//   3. the registrar — the five world-policy fields, so the R2 walk and the save walk reach them.
+
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumLaw.h"   // Cycle 10b — the SetSafeArea world-to-player transaction
 
 #include <type_traits>
 
@@ -197,7 +203,64 @@ public:
 	bool  bAIEnabled        = true;   // AIEnable (bool)
 	bool  bCutsceneHidden   = false;  // Hide/UnhideCutsceneInterferingEntities
 
-	void InputSetSafeArea(const FElysiumInputArgs& A)           { SafeArea = A.Param.ToInt(); }
+	// ------------------------------------------------------------------------------------------
+	// Cycle 10b hunk 1/3 — the authored `worldspawn` baseline.
+	//
+	// The world's area type and its three companion policies are AUTHORED ON `worldspawn`, not on
+	// this entity: sixteen of the exported maps carry `safearea`, fourteen `copwaitarea`, six
+	// `nosferatu_tolerrant` and three `nofrenzyarea`, while no exported `events_world` carries a
+	// policy key at all. Retail's world singleton derives its `m_nAreaType` from that key and
+	// `CWorldEvents` mutates the same field, so seeding here is what makes this leaf the same
+	// store rather than a second one that starts at zero in a map authored `safearea 1`.
+	// ------------------------------------------------------------------------------------------
+	virtual void Spawn() override
+	{
+		const FElysiumEntityDef* WorldSpawn = FindWorldSpawnDef();
+		if (WorldSpawn == nullptr)
+		{
+			return;
+		}
+		// An `events_world` that authored the key itself keeps its own value: Construct already
+		// applied it, and the worldspawn baseline must not overwrite a more specific statement.
+		auto Own = [this](const TCHAR* Key) { return Def != nullptr && Def->Keys.Contains(Key); };
+		auto SeedInt = [WorldSpawn, &Own](const TCHAR* Key, int32& Out)
+		{
+			const FString* Value = Own(Key) ? nullptr : WorldSpawn->Keys.Find(Key);
+			if (Value) { Out = FCString::Atoi(**Value); }
+		};
+		auto SeedBool = [WorldSpawn, &Own](const TCHAR* Key, bool& Out)
+		{
+			const FString* Value = Own(Key) ? nullptr : WorldSpawn->Keys.Find(Key);
+			if (Value) { Out = FCString::Atoi(**Value) != 0; }
+		};
+		SeedInt(TEXT("safearea"), SafeArea);
+		SafeArea = FMath::Clamp(SafeArea, 0, 2);
+		SeedBool(TEXT("copwaitarea"), bCopWaitArea);
+		SeedBool(TEXT("nosferatu_tolerrant"), bNosferatuTolerant);
+		SeedBool(TEXT("nofrenzyarea"), bNoFrenzyArea);
+	}
+
+	// ------------------------------------------------------------------------------------------
+	// Cycle 10b hunk 2/3 — `CWorldEvents::SetSafeArea` is a world-to-player TRANSACTION, not a
+	// field write. The server applies the new area's policy to every connected player before it
+	// marks the world state dirty: Elysium runs the ordinary all-Discipline teardown, safe /
+	// Masquerade ends only Celerity and Protean, and combat has no immediate teardown. The policy
+	// itself is `ElysiumLaw::ApplyWorldAreaTransition`; the value stays here, where retail's
+	// world keeps it, and the transition runs only when it actually changed.
+	// ------------------------------------------------------------------------------------------
+	void InputSetSafeArea(const FElysiumInputArgs& A)
+	{
+		const int32 NewArea = FMath::Clamp(A.Param.ToInt(), 0, 2);
+		if (NewArea == SafeArea)
+		{
+			return;
+		}
+		SafeArea = NewArea;
+		if (World)
+		{
+			ElysiumLaw::ApplyWorldAreaTransition(*World, SafeArea);
+		}
+	}
 	void InputSetCopWaitArea(const FElysiumInputArgs& A)        { bCopWaitArea = A.Param.ToInt() != 0; }
 	void InputSetCopGrace(const FElysiumInputArgs& A)           { CopGrace = A.Param.ToFloat(); }
 	void InputSetNosferatuTolerant(const FElysiumInputArgs& A)  { bNosferatuTolerant = A.Param.ToInt() != 0; }
@@ -241,6 +304,26 @@ public:
 			: TEXT("(no world)"));
 		Out.Emplace(TEXT("Cutscene hide"),     OnOff(bCutsceneHidden));
 	}
+
+private:
+	// The map's `worldspawn` def, or null. It is a record-only entity, so this reads the def rather
+	// than a live leaf.
+	const FElysiumEntityDef* FindWorldSpawnDef() const
+	{
+		if (World == nullptr)
+		{
+			return nullptr;
+		}
+		static const FString WorldSpawnClass(TEXT("worldspawn"));
+		for (const TUniquePtr<FElysiumEntity>& Ent : World->Entities())
+		{
+			if (Ent && Ent->Def && Ent->Def->Classname.Equals(WorldSpawnClass, ESearchCase::IgnoreCase))
+			{
+				return Ent->Def;
+			}
+		}
+		return nullptr;
+	}
 };
 
 // ============================================================================================
@@ -283,4 +366,20 @@ static FElysiumClassRegistrar GRegWorldEvents(
 		D.Input(TEXT("HideCutsceneInterferingEntities"),  [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumWorldEvents&>(E).InputHideCutsceneInterferingEntities(); });
 		D.Input(TEXT("UnhideCutsceneInterferingEntities"),[](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumWorldEvents&>(E).InputUnhideCutsceneInterferingEntities(); });
 		D.Input(TEXT("PlayEndCredits"),                   [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumWorldEvents&>(E).InputPlayEndCredits(A); });
+
+		// ----------------------------------------------------------------------------------------
+		// Cycle 10b hunk 3/3 — the world-policy field surface. These were plain members with no
+		// class-chain accessor, so the ordinary R2 walk could not read them: the Discipline
+		// world-area gate had to give up, and the save walk carried none of them. Registered at the
+		// default Key|Save, so the area type a level script sets mid-map survives a save and the
+		// substrate reads the value through one door.
+		//
+		// `safearea` is the one this cycle consumes on both sides (the Elysium refusal and the
+		// terminal incident guards); `copwaitarea` selects the police response's wait-area path.
+		// ----------------------------------------------------------------------------------------
+		AddEventField(D, TEXT("safearea"),            &FElysiumWorldEvents::SafeArea);
+		AddEventField(D, TEXT("copwaitarea"),         &FElysiumWorldEvents::bCopWaitArea);
+		AddEventField(D, TEXT("copgrace"),            &FElysiumWorldEvents::CopGrace);
+		AddEventField(D, TEXT("nosferatu_tolerrant"), &FElysiumWorldEvents::bNosferatuTolerant);
+		AddEventField(D, TEXT("nofrenzyarea"),        &FElysiumWorldEvents::bNoFrenzyArea);
 	});
