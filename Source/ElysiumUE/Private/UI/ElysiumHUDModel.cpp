@@ -3,14 +3,33 @@
 namespace
 {
 	FElysiumHUDSelectorEntry Entry(const TCHAR* Label, const TCHAR* Detail = TEXT(""),
-		FName Icon = NAME_None, int32 Quantity = 0)
+		FName Icon = NAME_None, int32 Quantity = 0, bool bEnabled = true)
 	{
 		FElysiumHUDSelectorEntry Out;
 		Out.Label = FText::FromString(Label);
 		Out.Detail = FText::FromString(Detail);
 		Out.Icon = Icon;
 		Out.Quantity = Quantity;
+		Out.bEnabled = bEnabled;
 		return Out;
+	}
+
+	void FillRangedRevolver(FElysiumHUDEquipmentView& Equipment)
+	{
+		Equipment.bValid = true;
+		Equipment.Name = FText::FromString(TEXT(".38 Revolver"));
+		Equipment.WeaponClass = EElysiumWeaponClass::Ranged;
+		Equipment.Icon = ElysiumHUDArt::Inventory(TEXT("weapons_ranged/thirtyeight"));
+		Equipment.AmmoCurrent = 6;
+		Equipment.AmmoReserve = 24;
+	}
+
+	void FillActiveBloodheal(FElysiumHUDDisciplineView& Discipline)
+	{
+		Discipline.bValid = true;
+		Discipline.Name = FText::FromString(TEXT("Bloodheal"));
+		Discipline.Icon = ElysiumHUDArt::Discipline(TEXT("bloodheal"));
+		Discipline.BloodCost = 1;
 	}
 }
 
@@ -64,53 +83,56 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 		Masquerade = 1;
 		Reticle = EElysiumHUDReticle::Cross;
 
-		// Zone-state stub: mocked as Combat in combat/weapon/radial previews, Masquerade otherwise.
-		// Stays None in Passive and Off to exercise the collapsed state.
+		// Zone-state stub: Combat for weapon-bearing previews, Elysium for its dedicated preview,
+		// Masquerade otherwise. Stays None in Passive and Off to exercise the collapsed state.
 		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Weapon
-			|| Preview == EElysiumHUDPreview::Radial)
+			|| Preview == EElysiumHUDPreview::Radial || Preview == EElysiumHUDPreview::Brief)
 		{
 			ZoneState = EElysiumZoneState::Combat;
+		}
+		else if (Preview == EElysiumHUDPreview::Elysium)
+		{
+			ZoneState = EElysiumZoneState::Elysium;
 		}
 		else if (Preview != EElysiumHUDPreview::Passive)
 		{
 			ZoneState = EElysiumZoneState::Masquerade;
 		}
 
-		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Weapon)
+		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Weapon
+			|| Preview == EElysiumHUDPreview::Radial || Preview == EElysiumHUDPreview::Brief)
 		{
-			Equipment.bValid = true;
-			Equipment.Name = FText::FromString(TEXT(".38 Revolver"));
-			Equipment.WeaponClass = EElysiumWeaponClass::Ranged;
-			Equipment.Icon = FName(TEXT("weapons_ranged/38"));
-			Equipment.AmmoCurrent = 6;
-			Equipment.AmmoReserve = 24;
+			FillRangedRevolver(Equipment);
 		}
 		if (Preview == EElysiumHUDPreview::Combat || Preview == EElysiumHUDPreview::Discipline
 			|| Preview == EElysiumHUDPreview::Radial)
 		{
-			Discipline.bValid = true;
-			Discipline.Name = FText::FromString(TEXT("Bloodheal"));
-			Discipline.BloodCost = 1;
+			FillActiveBloodheal(Discipline);
 		}
 		if (Preview == EElysiumHUDPreview::Discipline)
 		{
 			Selector.Type = EElysiumHUDSelector::Disciplines;
 			Selector.Entries = {
-				Entry(TEXT("Bloodheal"), TEXT("1 blood")),
-				Entry(TEXT("Bloodbuff"), TEXT("1 blood")),
-				Entry(TEXT("Celerity"), TEXT("1 blood")),
-				Entry(TEXT("Potence"), TEXT("2 blood")),
-				Entry(TEXT("Presence"), TEXT("2 blood")),
+				Entry(TEXT("Bloodheal"), TEXT("1 blood"), ElysiumHUDArt::Discipline(TEXT("bloodheal"))),
+				Entry(TEXT("Fortitude"), TEXT("1 blood"), ElysiumHUDArt::Discipline(TEXT("fortitude"))),
+				Entry(TEXT("Celerity"), TEXT("1 blood"), ElysiumHUDArt::Discipline(TEXT("celerity"))),
+				Entry(TEXT("Potence"), TEXT("2 blood"), ElysiumHUDArt::Discipline(TEXT("potence"))),
+				Entry(TEXT("Presence"), TEXT("2 blood"), ElysiumHUDArt::Discipline(TEXT("presence")), 0, false),
 			};
 			Selector.SelectedIndex = 0;
 		}
-		else if (Preview == EElysiumHUDPreview::Weapon)
+		else if (Preview == EElysiumHUDPreview::Weapon || Preview == EElysiumHUDPreview::Brief)
 		{
 			Selector.Type = EElysiumHUDSelector::Weapons;
+			Selector.bBriefMode = Preview == EElysiumHUDPreview::Brief;
 			Selector.Entries = {
-				Entry(TEXT("Unarmed")),
-				Entry(TEXT(".38 Revolver"), TEXT("6 / 24")),
-				Entry(TEXT("Tire Iron")),
+				Entry(TEXT("Unarmed"), TEXT(""), ElysiumHUDArt::Inventory(TEXT("weapons_melee/fists"))),
+				Entry(TEXT(".38 Revolver"), TEXT("6 / 24"),
+					ElysiumHUDArt::Inventory(TEXT("weapons_ranged/thirtyeight"))),
+				Entry(TEXT("Tire Iron"), TEXT(""),
+					ElysiumHUDArt::Inventory(TEXT("weapons_melee/tire_iron"))),
+				Entry(TEXT("Frag Grenade"), TEXT("2 / 2"),
+					ElysiumHUDArt::Inventory(TEXT("weapons_ranged/grenade_frag"))),
 			};
 			Selector.SelectedIndex = 1;
 		}
@@ -119,31 +141,26 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 			Equipment.bValid = true;
 			Equipment.Name = FText::FromString(TEXT("Tire Iron"));
 			Equipment.WeaponClass = EElysiumWeaponClass::Melee;
-			Equipment.Icon = FName(TEXT("weapons_melee/tire_iron"));
+			Equipment.Icon = ElysiumHUDArt::Inventory(TEXT("weapons_melee/tire_iron"));
 			Selector.Type = EElysiumHUDSelector::Inventory;
 			Selector.Entries = {
-				Entry(TEXT("Blood Pack"), TEXT("Restores 3 blood"), FName(TEXT("general_items/bloodpack")), 4),
-				Entry(TEXT("Lockpick"), TEXT(""), FName(TEXT("general_items/lockpick")), 2),
-				Entry(TEXT("Key Ring"), TEXT(""), FName(TEXT("key"))),
+				Entry(TEXT("Blood Pack"), TEXT("Restores 3 blood"),
+					ElysiumHUDArt::Inventory(TEXT("general_items/bloodpack")), 4),
+				Entry(TEXT("Lockpicks"), TEXT(""),
+					ElysiumHUDArt::Inventory(TEXT("general_items/lockpicks")), 2),
+				Entry(TEXT("Key Ring"), TEXT(""), ElysiumHUDArt::Inventory(TEXT("key"))),
 			};
 			Selector.SelectedIndex = 0;
 		}
 		else if (Preview == EElysiumHUDPreview::Radial)
 		{
-			Equipment.bValid = true;
-			Equipment.Name = FText::FromString(TEXT(".38 Revolver"));
-			Equipment.WeaponClass = EElysiumWeaponClass::Ranged;
-			Equipment.Icon = FName(TEXT("weapons_ranged/38"));
-			Equipment.AmmoCurrent = 6;
-			Equipment.AmmoReserve = 24;
 			Selector.Type = EElysiumHUDSelector::Radial;
-			Selector.bBriefMode = true;
 			Selector.Entries = {
-				Entry(TEXT("Bloodheal"), TEXT("1 blood"), FName(TEXT("disciplines/bloodheal"))),
-				Entry(TEXT("Bloodbuff"), TEXT("1 blood"), FName(TEXT("disciplines/bloodbuff"))),
-				Entry(TEXT("Celerity"), TEXT("1 blood"), FName(TEXT("disciplines/celerity"))),
-				Entry(TEXT("Potence"), TEXT("2 blood"), FName(TEXT("disciplines/potence"))),
-				Entry(TEXT("Presence"), TEXT("2 blood"), FName(TEXT("disciplines/presence"))),
+				Entry(TEXT("Bloodheal"), TEXT("1 blood"), ElysiumHUDArt::Discipline(TEXT("bloodheal"))),
+				Entry(TEXT("Fortitude"), TEXT("1 blood"), ElysiumHUDArt::Discipline(TEXT("fortitude"))),
+				Entry(TEXT("Celerity"), TEXT("1 blood"), ElysiumHUDArt::Discipline(TEXT("celerity"))),
+				Entry(TEXT("Potence"), TEXT("2 blood"), ElysiumHUDArt::Discipline(TEXT("potence"))),
+				Entry(TEXT("Presence"), TEXT("2 blood"), ElysiumHUDArt::Discipline(TEXT("presence")), 0, false),
 			};
 			Selector.SelectedIndex = 2;
 		}

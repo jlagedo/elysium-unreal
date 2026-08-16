@@ -33,7 +33,23 @@ namespace
 		if (Name.Equals(TEXT("inventory"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Inventory;
 		if (Name.Equals(TEXT("critical"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Critical;
 		if (Name.Equals(TEXT("radial"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Radial;
+		if (Name.Equals(TEXT("brief"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Brief;
+		if (Name.Equals(TEXT("elysium"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Elysium;
 		return EElysiumHUDPreview::Off;
+	}
+
+	bool IsKnownPreviewName(const FString& Name)
+	{
+		return Name.Equals(TEXT("off"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("passive"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("combat"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("weapon"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("discipline"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("inventory"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("critical"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("radial"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("brief"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("elysium"), ESearchCase::IgnoreCase);
 	}
 
 	bool NotificationKindFromName(const FString& Name, EElysiumNotificationKind& OutKind)
@@ -93,9 +109,14 @@ void UElysiumPlayerUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 #if !UE_BUILD_SHIPPING
 	IConsoleObject* PreviewCommand = IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.hud.preview"),
-		TEXT("elysium.hud.preview off|passive|combat|weapon|discipline|inventory|critical|radial"),
+		TEXT("elysium.hud.preview off|passive|combat|weapon|discipline|inventory|critical|radial|brief|elysium"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
+			if (!Args.IsEmpty() && !IsKnownPreviewName(Args[0]))
+			{
+				UE_LOG(LogElysiumPlayerUI, Warning,
+					TEXT("elysium.hud.preview: unknown mode '%s'"), *Args[0]);
+			}
 			SetPreviewMode(Args.IsEmpty() ? EElysiumHUDPreview::Off : PreviewFromName(Args[0]));
 		}), ECVF_Cheat);
 	ConsoleObjects.Add(PreviewCommand);

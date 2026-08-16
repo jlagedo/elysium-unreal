@@ -32,8 +32,7 @@ private:
 	const FSlateBrush* UseIconBrush() const;
 	const FSlateBrush* UseBindingBrush() const;
 	FText UseBindingText() const;
-	const FSlateBrush* InventoryIconBrush(FName IconPath);
-	const FSlateBrush* AreaIconBrush(EElysiumZoneState Zone);
+	const FSlateBrush* HudArtBrush(FName ArtPath);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;
@@ -42,10 +41,7 @@ private:
 	TObjectPtr<UTexture2D> UseAtlas;
 
 	UPROPERTY(Transient)
-	TMap<FName, TObjectPtr<UTexture2D>> InventoryTextures;
-
-	UPROPERTY(Transient)
-	TMap<EElysiumZoneState, TObjectPtr<UTexture2D>> AreaTextures;
+	TMap<FName, TObjectPtr<UTexture2D>> HudArtTextures;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> LeftContrastVeil;
@@ -56,8 +52,7 @@ private:
 	FSlateBrush UseRingBrush;
 	mutable FSlateBrush CurrentUseBindingBrush;
 	TMap<int32, FSlateBrush> UseIconBrushes;
-	TMap<FName, FSlateBrush> InventoryBrushes;
-	TMap<EElysiumZoneState, FSlateBrush> AreaBrushes;
+	TMap<FName, FSlateBrush> HudArtBrushes;
 	FSlateBrush LeftContrastBrush;
 	FSlateBrush RightContrastBrush;
 	bool bUseAtlasLoadAttempted = false;

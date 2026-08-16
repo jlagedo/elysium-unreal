@@ -27,7 +27,7 @@ enum class EElysiumHUDSelector : uint8
 	Radial,
 };
 
-// The weapon class determines the glyph prefix in the equipment readout and whether ammo is shown.
+// The weapon class selects the category glyph and whether the equipment readout shows ammo.
 UENUM(BlueprintType)
 enum class EElysiumWeaponClass : uint8
 {
@@ -35,6 +35,7 @@ enum class EElysiumWeaponClass : uint8
 	Unarmed,
 	Melee,
 	Ranged,
+	Thrown,
 };
 
 // Zone-state indicator above the Life bar: combat (free attack), Masquerade (uphold the Masquerade),
@@ -59,6 +60,8 @@ enum class EElysiumHUDPreview : uint8
 	Inventory,
 	Critical,
 	Radial,
+	Brief,
+	Elysium,
 };
 
 USTRUCT(BlueprintType)
@@ -75,7 +78,7 @@ struct FElysiumHUDEquipmentView
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	EElysiumWeaponClass WeaponClass = EElysiumWeaponClass::None;
 
-	// Stem name of the inventory image (e.g. "weapons_ranged/38"). None = no icon.
+	// Path under `$ELYSIUM_EXPORT_ROOT/ui/art` without extension (e.g. hud/inventory_images/weapons_ranged/thirtyeight).
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FName Icon;
 
@@ -97,6 +100,10 @@ struct FElysiumHUDDisciplineView
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FText Name;
 
+	// Path under `$ELYSIUM_EXPORT_ROOT/ui/art` without extension (e.g. hud/disciplines/bloodheal).
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	FName Icon;
+
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	int32 BloodCost = 0;
 };
@@ -112,7 +119,7 @@ struct FElysiumHUDSelectorEntry
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FText Detail;
 
-	// Stem name of the inventory image. None = no icon.
+	// Path under `$ELYSIUM_EXPORT_ROOT/ui/art` without extension.
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FName Icon;
 
@@ -145,3 +152,46 @@ struct FElysiumHUDSelectorView
 
 	bool IsOpen() const { return Type != EElysiumHUDSelector::None; }
 };
+
+// Decoded HUD art paths under `$ELYSIUM_EXPORT_ROOT/ui/art`. The widget loads `<path>.png`; the
+// publisher (preview today, the view-state owner later) is the only writer of these names.
+namespace ElysiumHUDArt
+{
+	inline FName Inventory(const TCHAR* RelStem)
+	{
+		return FName(*FString::Printf(TEXT("hud/inventory_images/%s"), RelStem));
+	}
+
+	inline FName Discipline(const TCHAR* Stem)
+	{
+		return FName(*FString::Printf(TEXT("hud/disciplines/%s"), Stem));
+	}
+
+	inline FName Category(EElysiumWeaponClass Class)
+	{
+		switch (Class)
+		{
+		case EElysiumWeaponClass::Unarmed: return Inventory(TEXT("weapons_melee/fists"));
+		case EElysiumWeaponClass::Melee:   return FName(TEXT("hud/catagory_icons/meleeweapons"));
+		case EElysiumWeaponClass::Ranged:  return FName(TEXT("hud/catagory_icons/rangedweapons"));
+		case EElysiumWeaponClass::Thrown:  return FName(TEXT("hud/catagory_icons/thrownweapons"));
+		default:                           return NAME_None;
+		}
+	}
+
+	inline FName Area(EElysiumZoneState Zone)
+	{
+		switch (Zone)
+		{
+		case EElysiumZoneState::Combat:     return FName(TEXT("hud/area_icons/area_icon_combat"));
+		case EElysiumZoneState::Masquerade: return FName(TEXT("hud/area_icons/area_icon_safearea"));
+		case EElysiumZoneState::Elysium:    return FName(TEXT("hud/area_icons/area_icon_elysium"));
+		default:                            return NAME_None;
+		}
+	}
+
+	inline bool ShowsAmmo(EElysiumWeaponClass Class)
+	{
+		return Class == EElysiumWeaponClass::Ranged || Class == EElysiumWeaponClass::Thrown;
+	}
+}

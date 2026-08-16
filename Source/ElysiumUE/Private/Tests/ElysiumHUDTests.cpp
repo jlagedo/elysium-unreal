@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumHUDModel.h"
+#include "ElysiumHUDTypes.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "UI/ElysiumActionButton.h"
@@ -120,6 +121,7 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("default vitals are invalid"), Model->bVitalsValid);
 	TestFalse(TEXT("unwired equipment remains invalid"), Model->Equipment.bValid);
 	TestFalse(TEXT("unwired selector remains closed"), Model->Selector.IsOpen());
+	TestEqual(TEXT("unwired zone stays collapsed"), Model->ZoneState, EElysiumZoneState::None);
 
 	View.bPlayerSurface = true;
 	View.Vitals.bValid = true;
@@ -211,6 +213,70 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 		Model->Selector.Type, EElysiumHUDSelector::Weapons);
 	TestTrue(TEXT("weapon preview has a selected entry"),
 		Model->Selector.Entries.IsValidIndex(Model->Selector.SelectedIndex));
+	TestFalse(TEXT("weapon preview is the full list, not the brief peek"),
+		Model->Selector.bBriefMode);
+	TestEqual(TEXT("weapon preview uses the exported .38 stem"),
+		Model->Equipment.Icon, ElysiumHUDArt::Inventory(TEXT("weapons_ranged/thirtyeight")));
+	TestEqual(TEXT("weapon preview names the ranged class"),
+		Model->Equipment.WeaponClass, EElysiumWeaponClass::Ranged);
+	TestTrue(TEXT("ranged equipment publishes ammo"),
+		ElysiumHUDArt::ShowsAmmo(Model->Equipment.WeaponClass));
+	TestEqual(TEXT("weapon preview is a combat zone"),
+		Model->ZoneState, EElysiumZoneState::Combat);
+	TestTrue(TEXT("weapon rows carry inventory art paths"),
+		Model->Selector.Entries.Num() >= 4
+			&& Model->Selector.Entries[3].Icon
+				== ElysiumHUDArt::Inventory(TEXT("weapons_ranged/grenade_frag")));
+
+	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Brief);
+	TestTrue(TEXT("brief preview is the three-item peek"), Model->Selector.bBriefMode);
+	TestEqual(TEXT("brief preview keeps the weapons selector"),
+		Model->Selector.Type, EElysiumHUDSelector::Weapons);
+	TestEqual(TEXT("brief preview stays a combat zone"),
+		Model->ZoneState, EElysiumZoneState::Combat);
+
+	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Radial);
+	TestEqual(TEXT("radial preview is its own selector type"),
+		Model->Selector.Type, EElysiumHUDSelector::Radial);
+	TestFalse(TEXT("radial preview is not brief mode"), Model->Selector.bBriefMode);
+	TestEqual(TEXT("radial preview carries a discipline icon path"),
+		Model->Selector.Entries[0].Icon, ElysiumHUDArt::Discipline(TEXT("bloodheal")));
+	TestFalse(TEXT("radial preview includes a disabled row"),
+		Model->Selector.Entries.Last().bEnabled);
+	TestEqual(TEXT("active discipline publishes its icon"),
+		Model->Discipline.Icon, ElysiumHUDArt::Discipline(TEXT("bloodheal")));
+	TestEqual(TEXT("active discipline publishes its blood cost"),
+		Model->Discipline.BloodCost, 1);
+
+	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Inventory);
+	TestEqual(TEXT("inventory preview opens the inventory selector"),
+		Model->Selector.Type, EElysiumHUDSelector::Inventory);
+	TestEqual(TEXT("inventory preview uses the exported lockpicks stem"),
+		Model->Selector.Entries[1].Icon,
+		ElysiumHUDArt::Inventory(TEXT("general_items/lockpicks")));
+	TestEqual(TEXT("inventory preview keeps the blood-pack detail"),
+		Model->Selector.Entries[0].Detail.ToString(), FString(TEXT("Restores 3 blood")));
+	TestEqual(TEXT("inventory preview keeps the blood-pack quantity"),
+		Model->Selector.Entries[0].Quantity, 4);
+	TestEqual(TEXT("inventory preview is a masquerade zone"),
+		Model->ZoneState, EElysiumZoneState::Masquerade);
+	TestFalse(TEXT("melee equipment does not publish ammo"),
+		ElysiumHUDArt::ShowsAmmo(Model->Equipment.WeaponClass));
+
+	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Elysium);
+	TestEqual(TEXT("elysium preview shows the Elysium zone"),
+		Model->ZoneState, EElysiumZoneState::Elysium);
+	TestFalse(TEXT("elysium preview does not invent a selector"), Model->Selector.IsOpen());
+	TestEqual(TEXT("area art for Elysium is the exported safe-area sibling"),
+		ElysiumHUDArt::Area(EElysiumZoneState::Elysium),
+		FName(TEXT("hud/area_icons/area_icon_elysium")));
+	TestEqual(TEXT("area art for Masquerade is the exported safe-area icon"),
+		ElysiumHUDArt::Area(EElysiumZoneState::Masquerade),
+		FName(TEXT("hud/area_icons/area_icon_safearea")));
+
+	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Passive);
+	TestEqual(TEXT("passive preview collapses the zone glyph"),
+		Model->ZoneState, EElysiumZoneState::None);
 
 	return true;
 }
