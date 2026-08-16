@@ -535,8 +535,13 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 	// selection is the REFERENCE pose — so the dip shows as a single frame of the authored bind
 	// pose. A clip that never ends has nothing to blend out to; only the one-shot does.
 	const float BlendOut = bLoop ? 0.0f : BlendSeconds;
+	// A loop count of 0 is NOT infinite here: the dynamic montage's length is
+	// `LoopingCount * segment length`, and `Montage_Play` refuses a zero-length montage without
+	// logging. A looping clip therefore asks for a segment long enough to outlast any lab or
+	// gameplay hold; the montage is replaced, not resumed, on every new selection.
+	constexpr int32 LoopingHoldCount = 1000000;
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
-		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? 0 : 1);
+		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? LoopingHoldCount : 1);
 	return ActiveSlotMontage != nullptr;
 }
 
