@@ -55,6 +55,31 @@ Missing authored references remain diagnostics rather than aliases. In particula
 `v_gangrel_female_hands.mdl`; PL14 does not silently repair the spelling. The outputs remain
 game-derived and gitignored. Needed by CCC10.1.
 
+### PL20 Export the wield-model corpus
+
+The third-person sibling of PL14. Export and bake one deterministic, patch-first manifest of every
+model an item's `wieldmodel_m` / `wieldmodel_f` names, keyed so the runtime resolves a row from
+(classname, sex) with no path arithmetic of its own.
+
+Each row carries: the item classname, the source key and normalized stem per sex, the item's
+`anim_prefix`, the model's bone table, and — the load-bearing field — the **terminal prop bone** the
+mesh is skinned to, read from the model rather than assumed from a table. Rows whose skin weight is
+not wholly on one terminal bone are reported, not silently accepted: the composition contract in
+`docs/vtmb/animation_and_movers.md` → "The wielded weapon is the same two-rig composition" depends
+on it, and a multi-bone wield model would be a different mechanism.
+
+`w_null.mdl` is a real authored value, not a missing model — a row naming it records the null and
+stays in the manifest, because it is how an item says it has no wielded geometry. A model the
+install lacks is skipped and recorded, never fatal, the same policy `UE_extract_items.py` uses.
+
+**The bake shape is CCC10.2's open design call**, so hold this row's output format until that call
+is made: a rigid single-bone mesh may be baked as a static mesh in prop-bone-local space, or as a
+skeletal asset preserving the 11-bone chain. The manifest itself is the same either way.
+
+Also covers the item-data keys the current exporters ignore — `wieldmodel_m`, `wieldmodel_f`,
+`anim_prefix` — which `docs/vtmb/inventory.md` §4 now names. Outputs remain game-derived and
+gitignored. Needed by CCC10.2.
+
 ### PL17 Patch-first audio catalog + typed sidecars
 
 Codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map +

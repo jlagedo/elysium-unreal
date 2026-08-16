@@ -1641,6 +1641,78 @@ suggest. And **the legs and torso are not a control group**: whole-body sway und
 authored data rather than a defect, since deltas stack down the chain to roughly 37° at the skull.
 A root that *translates* would be the defect.
 
+### The wielded weapon is the same two-rig composition, in world space [data-verified]
+
+A melee weapon is never drawn in first person, yet it is visible in the player's hand. It arrives
+through the same mechanism the viewmodel pair uses — two compatible rigs driven by one semantic
+sequence — applied to the third-person body instead of the camera root.
+
+**An item names four model roles, not two.** `vdata/items/*.txt` carries `viewmodel`, `playermodel`,
+`wieldmodel_m`/`wieldmodel_f` and `infomodel`, and the install's directory convention spells the
+roles apart: `view/v_`, `world/g_`, `wield/w_` and `info/i_`. For `item_w_katana` these are
+`weapons/w_null.mdl`, `weapons/katana/world/g_katana.mdl`,
+`weapons/katana/wield/w_{m,f}_katana.mdl` and `weapons/katana/info/i_katana.mdl`. Every melee
+weapon points `viewmodel` at the zero-bone `w_null.mdl` placeholder, which is consistent with
+`camera_class melee` being the force-third class (`docs/vtmb/camera-view-modes.md`). **`playermodel`
+is the loose ground model and is not what a character holds** — the held geometry is the wield
+model, selected by the wielder's sex.
+
+**A wield model is its own small rig, rigidly skinned to one prop bone.** Each is an 11-bone chain —
+`Bip01 → Pelvis → Spine → Spine1 → Spine2 → Neck → <side> Clavicle → UpperArm → Forearm → Hand →
+<prop bone>` — whose non-terminal bones repeat the shared Biped's bind pose exactly, and whose entire
+mesh carries skin weight on the terminal prop bone alone and nowhere else. The side matches the grip
+the A.4 mask table records: the one-handed families take the right-arm chain, the two-handed
+`bushhook` and `sledgehammer` the left.
+
+**The character body carries the same prop bones, unskinned.** A player body declares all seven
+(`Bat`, `bush hook`, `handle`, `gerber`, `Sledgehammer`, `Cylinder01`, `tire iron`) parented under
+`Bip01 L Hand` / `Bip01 R Hand`, with zero skin weight on any of them. They exist as animation
+channel targets, which is what the A.4 masks gate: the 24-bone one-handed mask keeps five props, the
+49-bone two-handed mask keeps all seven.
+
+So the weapon moves because the shared bank's clip animates a bone both rigs declare under the same
+name, and A.7's bind-by-bone-name rule carries it across. Nothing parents the mesh to a socket and
+nothing evaluates a per-frame rule — the two instances stay together for the same reason the
+viewmodel pair does.
+
+The item's `anim_prefix` is the join to the sequence family, and the wield model's terminal bone is
+the geometry target:
+
+| Item classname | `anim_prefix` | Prop bone | Grip |
+|---|---|---|---|
+| `item_w_baseball_bat` | `baseballbat` | `Bat` | one-handed |
+| `item_w_katana` | `katana` | `handle` | one-handed |
+| `item_w_knife` | `knife` | `gerber` | one-handed |
+| `item_w_tire_iron` | `tireiron` | `tire iron` | one-handed |
+| `item_w_bush_hook` | `bushhook` | `bush hook` | two-handed |
+| `item_w_sledgehammer` | `sledgehammer` | `Sledgehammer` | two-handed |
+| `item_g_stake` | — | `Cylinder01` [inferred] | one-handed |
+
+`item_g_stake` is the one unresolved row. It authors `item_type generic` with `is_wieldable 0` and
+nulls both wield models, so it has no ordinary wielded visual; `Cylinder01` is left by elimination
+against the A.4 mask table's five one-handed props, and the only geometry declaring that bone is
+`character/shared/{male,female}/stake.mdl`, a full 55-bone hand rig no item references. That model
+is most likely the staking execution's, which would make the stake a scripted-sequence visual rather
+than a carried one. **What would settle it:** the caller that selects `character/shared/<sex>/stake.mdl`.
+
+**`StudioAttachment` is not the weapon's parent.** A wield model may declare one — `w_m_bushhook` and
+`w_m_sledgehammer` each carry a single `slampoint` **on the prop bone itself** — and it serves the
+effect-origin role event `5120` names, not geometry parenting. The `weapon-mount` record A.6 reports
+on `jeanette` is the same pattern on an NPC skeleton.
+
+**Unrecovered:** the native call that applies or swaps the wield model on equip and holster — the
+third-person analogue of `0x102532a0`, which is pinned for the viewmodel slots. The universal
+`w_null.mdl` convention suggests the holstered state is a model swap rather than a hide or a detach,
+and no second stowed attachment point or stow bone occurs anywhere in the probed corpus, but neither
+is shown. Whether NPCs reach the wield model by the same `wieldmodel_m`/`_f` path is untested; only
+a player body was probed. **What would close the first:** cross-references to the `wieldmodel_m` /
+`wieldmodel_f` string constants, or the `CBaseCombatWeapon` equip path, in `vampire.dll` /
+`client.dll`.
+
+*Provenance: `vdata/items` read from the patch-first corpus; model claims decoded directly from the
+pinned install's VPK-resident `.mdl` bytes (bone tables, `StudioVertex` skin weights, attachment
+records). Generated decode scripts remain outside the checkout under `ELYSIUM_WORK_ROOT`.*
+
 ## A.4 Animation data — the 32B/bone record + `{valid,total}` RLE [data-verified]
 
 The core decode. At `animdesc_base + animindex` (@48): an array of **one 32-byte
@@ -2748,9 +2820,11 @@ weights sum to one, and no `.mdl`/`.dx80.vtx` skin decode fails.
 ## A.6 Attachments & hitboxes [data-verified]
 
 **`StudioAttachment` (60B):** record-relative `NameIndex`@0, `type/flags`@4, `bone`@8,
-`matrix3x4 local`@12 — where to parent weapons/props/muzzle effects. jeanette:
+`matrix3x4 local`@12 — an effect and prop origin riding a named bone. jeanette:
 `mouth`@bone12, `eyes`@bone12, weapon-mount@bone47 (paired with the `tire iron`
-bone). **Hitboxes:** set (12B: `NameIndex`, `NumHitBoxes`, `HitBoxIndex`) →
+bone). **It is not how a wielded weapon's geometry is parented** — that is the two-rig composition
+above ("The wielded weapon is the same two-rig composition"), and a weapon-side attachment such as
+`slampoint` marks an effect origin on the prop bone itself. **Hitboxes:** set (12B: `NameIndex`, `NumHitBoxes`, `HitBoxIndex`) →
 box (32B: `Bone`, `Group`, `bbmin`, `bbmax`) — combat damage zones (jeanette: 1
 "default" set, 19 boxes). Both are trimmed from modern Source's 92B/68B forms.
 

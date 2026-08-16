@@ -78,6 +78,8 @@ rule 3 governs what happens next:
 4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
+5. **PL20 → CCC10.2** — a drawn weapon visible in the hand, the last missing half of a played melee
+   swing → [plans/pipeline.md](plans/pipeline.md), [plans/three-cs.md](plans/three-cs.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -304,6 +306,8 @@ Governing decision — bake native, let Unreal run it: `docs/architecture/animat
 - [ ] **[CCC8 Played acceptance](plans/three-cs.md)** — the slice's finish line, owner-played.
 - [ ] **[CCC10.1 The first-person viewmodel body](plans/three-cs.md)** — waits on RE42's live
   verifier, PL14, 11.13d and the semantic animation-intent seam.
+- [ ] **[CCC10.2 The third-person wielded weapon body](plans/three-cs.md)** — the geometry a drawn
+  weapon puts in the hand; binding recovered, representation call open.
 - [ ] **[CCC11 Action families beyond locomotion](plans/three-cs.md)** — reactions, weapon
   actions, the sequence-event carrier.
 
@@ -353,7 +357,8 @@ by `uv run elysium test Play`.
   **[PL11 Remove the dead card path](plans/pipeline.md)** ·
   **[PL12 Particle mirror + weather height maps](plans/pipeline.md)** ·
   **[PL14 Export the complete first-person model corpus](plans/pipeline.md)** ·
-  **[PL17 Patch-first audio catalog](plans/pipeline.md)**
+  **[PL17 Patch-first audio catalog](plans/pipeline.md)** ·
+  **[PL20 Export the wield-model corpus](plans/pipeline.md)**
 - [x] **PL7–PL10, PL13, PL15, PL16, PL18, PL19** — space audit, scenes/`.lip`, facial data, UI
   export, player bodies, Masquerade meter, cinematic banks, animated-prop closure, bake caching.
 

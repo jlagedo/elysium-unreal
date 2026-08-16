@@ -160,7 +160,7 @@ places start disabled, so enable state is behavioral data rather than an editor-
 
 | Path | Count | Root key | What |
 |---|---|---|---|
-| `items/` | 244 | `WeaponData` | per-weapon/armor stats (view/world models, damage, `Magazine`, worth, `sound_group`) — "loaded by both Game and Client DLLs" |
+| `items/` | 244 | `WeaponData` | per-weapon/armor stats (the four model roles — `viewmodel`, `playermodel`, `wieldmodel_m`/`_f`, `infomodel` — plus `anim_prefix`, damage, `Magazine`, worth, `sound_group`) — "loaded by both Game and Client DLLs" |
 | `camerashots/` | 66 | `CameraShotTable` | per-scene conversation/cutscene camera framing (keyed by NPC/scene name) |
 | `hackterminals/` | 57 | `TerminalDefinition` (+ `keypad_strings`) | computer content; grammar and behavior: `docs/vtmb/computer-terminals.md` |
 | `precache/` | 1 | `PreCacheData` | `entities.txt` — entity precache list |

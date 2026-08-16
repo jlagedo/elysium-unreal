@@ -118,6 +118,68 @@ projection; the semantic animation-intent seam and CCC10's shared weapon-family 
 ANM4b/CCC11 for real event-carrying actions. The recovered retail contracts are owned by
 `docs/vtmb/animation_and_movers.md` and `docs/vtmb/camera-view-modes.md`.
 
+### CCC10.2 The third-person rung — the wielded weapon body
+
+What a character holds, so a drawn weapon is visible on the body that swings it. The recovered
+contract — the four item model roles, the 11-bone wield rig skinned wholly to one terminal prop
+bone, the seven unskinned prop bones on the character body, the `anim_prefix` join and the
+per-weapon prop-bone table — is `docs/vtmb/animation_and_movers.md` → "The wielded weapon is the
+same two-rig composition, in world space". Read it first; it is not restated here.
+
+**The open design call, and it is the first decision.** The mesh is rigid to a single bone, and the
+character body already declares that bone with the same bind pose, so two representations produce
+the same observable:
+
+- **(A) A second skeletal component**, playing the same family sequence — retail's own mechanism and
+  CCC10.1's shape.
+- **(B) A static mesh authored in prop-bone-local space**, attached to that bone on the one body.
+  One component, stock Unreal attachment, and the clip that already animates the bone carries it.
+
+**(B) is the recommendation.** Reproducing Source's *rules* is faithful and porting its *mechanisms*
+is a defect (repo `CLAUDE.md` → Ownership), and "change the representation until the rule is
+unnecessary" is the standing instruction where a frame rule would otherwise survive into runtime.
+A second skeletal component evaluating a second bone palette to place one rigid mesh is the
+mechanism, not the rule. Take (A) only if a prerequisite below fails.
+
+**Prerequisite to check before either path:** whether the character bake retains the seven
+zero-weight prop bones. Nothing skins to them, so a bake that drops unweighted bones removes the
+attachment target and the animation channel together — and the failure is silent, because the body
+still poses correctly. If they are dropped, retaining them is this task's first change.
+
+The runtime work:
+
+- parse `wieldmodel_m` / `wieldmodel_f` and `anim_prefix` onto `FElysiumItemDef`
+  (`Substrate/ElysiumRulebook.cpp` parses `playermodel` / `viewmodel` / `infomodel` and stops there);
+- resolve the row for the wielder's sex and attach on equip, detach on holster, through the existing
+  funnels — `FElysiumWeapon::OnEquipped` / `OnHolstered` and `FElysiumInventory::SetActiveWeapon`.
+  Do not add a second equip path;
+- consume `FElysiumCameraView::bDrawWorldWeapon`, which the presentation publisher already fills
+  (`UI/ElysiumPresentationSubsystem.cpp`) and which today has **no reader**. Suppress submission
+  only — never destroy the attachment or clear a model to hide it;
+- serve NPC bodies and the player body through one path. A drawn weapon on a cast member is the same
+  operation, and the NPC loadout already selects weapons.
+
+**Two things this rung must not do.** It must not reach for `playermodel` — that is the loose ground
+model and is a different mesh. And it must not invent a socket, an offset or a hand-authored
+transform: the bind poses agree by construction, so a placement that needs a correction factor means
+the prop bone or the local frame is wrong, and the fix is upstream in the bake.
+
+**Inherited unknowns, none of which gate the ordinary case.** The native call that swaps the wield
+model on equip/holster is unrecovered (the `w_null.mdl` convention suggests a model swap, and no stow
+bone occurs in the probed corpus); `item_g_stake` nulls both wield models and its visual is most
+likely the staking execution's, not a carried weapon's; and whether NPCs reach the wield model by the
+same keys is untested. Each is named in the owning doc with the evidence that would close it. A
+weapon whose row resolves to a null model is a legitimate no-geometry answer and reports as one — it
+is never a missing-asset warning.
+
+*Acceptance:* from real input in the arena, drawing each of the six wield-model melee weapons puts
+its geometry in the correct hand on both a male and a female body; the weapon tracks the hand through
+locomotion and through a swing with no separate drive call; holstering removes it; the first-person
+view suppresses it and returning to third restores it without a rebuild. The pose is correct in the
+Content Browser preview, not only in our runtime. *Deps:* PL20 for the corpus; CCC10's layer for the
+swing that moves it; ANM4b supplies the real per-weapon activity translation, which this rung does
+not need in order to be visible.
+
 ### CCC11 The action families beyond locomotion
 
 Directional hit, knockback and death reactions, then weapon and interaction actions; each rung
