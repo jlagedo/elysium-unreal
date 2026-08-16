@@ -52,6 +52,22 @@ namespace ElysiumGameSounds
 		static const FName Name(TEXT("PLAYER_AGGRESSIVE_FEED"));
 		return Name;
 	}
+	// ======================= Cycle 11b hunk 1/9 — the discipline alert row ======================
+	// `NPC_DISCIPLINE_ALERT` — "An NPC was hit by a discipline that should alert others", the
+	// authored `sound_volume_table.txt` row a `disciplinetgt` record with `TriggerAISound` emits at
+	// each committed target (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Overt/AI-sound
+	// classification emits on the sound bus"). It is a producer category like every other name here,
+	// so it lives in this catalogue rather than beside its one producer: the NPC hear path
+	// (§5.5.3) and the discipline domain's own `ShouldRemove_OnHearCombat` poll both switch on it,
+	// and two consumers reading a name spelled in a third file is exactly the drift this namespace
+	// exists to prevent.
+	inline const FName& DisciplineAlert()
+	{
+		static const FName Name(TEXT("NPC_DISCIPLINE_ALERT"));
+		return Name;
+	}
+	// ===========================================================================================
+
 	// `DOOR_NORMAL` — a door moved audibly.
 	//
 	// SEAM: the table also carries `DOOR_STEALTH`, and which of the two a door emits is a decision

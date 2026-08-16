@@ -47,6 +47,10 @@ struct FElysiumSaveVersion
 		Stealth       = 22,  // the player's stealth surface, as one generation, and its raw aggregate
 		Law           = 23,  // the activity-channel deadlines/counts and the police-response block
 		NpcWitness    = 24,  // the NPC's retained law witness block: processed counts, records, windows
+		// Cycle 11b hunk 9/9 — the NPC's own discipline state: the targeted effects a cast tracked
+		// on it, their expiry serials and the caster's per-record recovery deadlines. Appended to
+		// the END of the NPC leaf behind its own version, so it is additive.
+		NpcDisciplines = 25,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

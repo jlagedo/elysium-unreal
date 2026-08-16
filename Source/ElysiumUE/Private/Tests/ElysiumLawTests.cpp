@@ -213,6 +213,15 @@ namespace
 			{ TEXT("OnEndHunterPursuitMode"),   TEXT("MarkHunterEnd") },
 			{ TEXT("OnCopsComing"),             TEXT("MarkCopsComing") },
 			{ TEXT("OnCopsOutside"),            TEXT("MarkCopsOutside") },
+			// Cycle 11b — the six Masquerade rows. Corpus: all 140 of them are authored on
+			// `events_world` across the 23 exported maps (23 each for `OnMasqueradeLevel1..5`, 25
+			// for `OnMasqueradeLevelChanged`), which is why they are wired on this entity here.
+			{ TEXT("OnMasqueradeLevel1"),       TEXT("MarkMasquerade1") },
+			{ TEXT("OnMasqueradeLevel2"),       TEXT("MarkMasquerade2") },
+			{ TEXT("OnMasqueradeLevel3"),       TEXT("MarkMasquerade3") },
+			{ TEXT("OnMasqueradeLevel4"),       TEXT("MarkMasquerade4") },
+			{ TEXT("OnMasqueradeLevel5"),       TEXT("MarkMasquerade5") },
+			{ TEXT("OnMasqueradeLevelChanged"), TEXT("MarkMasqueradeChanged") },
 		};
 		for (const FRow& Row : Rows)
 		{
@@ -300,7 +309,95 @@ namespace
 			World.AcceptInput(TEXT("world"), FName(Input), Param,
 				World.PlayerHandle(), World.PlayerHandle());
 		}
+
+		// Cycle 11b — the activator the LAST record with this marker input carries. An output
+		// propagates its activator, so this is what a Python callback and the I/O history attribute
+		// the fire to. Invalid when nothing with that marker is pending.
+		FElysiumEntityHandle LastActivator(const TCHAR* Marker) const
+		{
+			const FName Input(Marker);
+			FElysiumEntityHandle Out = FElysiumEntityHandle::Invalid();
+			for (const FElysiumIOEvent& Event : World.Queue().Pending())
+			{
+				if (Event.Input == Input) { Out = Event.Activator; }
+			}
+			return Out;
+		}
 	};
+}
+
+// =====================================================================================
+// Cycle 11b — the Masquerade level outputs and the level-5 loss transaction
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawMasqueradeOutputsTest,
+	"Elysium.Substrate.Law.MasqueradeOutputs", GElysiumTestFlags)
+bool FElysiumLawMasqueradeOutputsTest::RunTest(const FString&)
+{
+	FLawFixture F;
+	if (!TestNotNull(TEXT("the player exists"), F.Player))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the counter starts clean"), F.Player->GetMasqueradeLevel(), 0);
+
+	// --- One committed change fires the resulting level PLUS the generic output -----------------
+	F.Player->ChangeMasqueradeLevel(+1);
+	TestEqual(TEXT("a +1 fires the output for the RESULTING level"),
+		F.Fired(TEXT("MarkMasquerade1")), 1);
+	TestEqual(TEXT("...and the generic level-changed output with it"),
+		F.Fired(TEXT("MarkMasqueradeChanged")), 1);
+	TestEqual(TEXT("...and no other level's output"), F.Fired(TEXT("MarkMasquerade2")), 0);
+	TestEqual(TEXT("the activator is the character whose counter moved"),
+		F.LastActivator(TEXT("MarkMasquerade1")).Index, F.Player->Handle.Index);
+	TestEqual(TEXT("...on the generic output too"),
+		F.LastActivator(TEXT("MarkMasqueradeChanged")).Index, F.Player->Handle.Index);
+
+	// --- The specificity is the RESULTING level, in both directions -----------------------------
+	F.Player->ChangeMasqueradeLevel(+1);
+	TestEqual(TEXT("the second violation fires level 2"), F.Fired(TEXT("MarkMasquerade2")), 1);
+	TestEqual(TEXT("...and does not re-fire level 1"), F.Fired(TEXT("MarkMasquerade1")), 1);
+	TestEqual(TEXT("...while the generic output counts every change"),
+		F.Fired(TEXT("MarkMasqueradeChanged")), 2);
+
+	F.Player->ChangeMasqueradeLevel(-1);
+	TestEqual(TEXT("a decrement fires the level it lands ON, not the one it left"),
+		F.Fired(TEXT("MarkMasquerade1")), 2);
+	TestEqual(TEXT("...and the generic output again"),
+		F.Fired(TEXT("MarkMasqueradeChanged")), 3);
+
+	// --- A resulting level of zero has no authored row, so only the generic output fires ---------
+	F.Player->ChangeMasqueradeLevel(-1);
+	TestEqual(TEXT("landing on zero still reports the change"),
+		F.Fired(TEXT("MarkMasqueradeChanged")), 4);
+	TestEqual(TEXT("...and fires no numbered output, because the corpus authors none for zero"),
+		F.Fired(TEXT("MarkMasquerade1")) + F.Fired(TEXT("MarkMasquerade2"))
+			+ F.Fired(TEXT("MarkMasquerade3")) + F.Fired(TEXT("MarkMasquerade4"))
+			+ F.Fired(TEXT("MarkMasquerade5")), 3);
+
+	// --- A delta the clamp absorbs is not a committed change ------------------------------------
+	F.Player->ChangeMasqueradeLevel(-1);
+	TestEqual(TEXT("a decrement at the floor moves nothing"), F.Player->GetMasqueradeLevel(), 0);
+	TestEqual(TEXT("...so it fires nothing"), F.Fired(TEXT("MarkMasqueradeChanged")), 4);
+
+	// --- The level-5 boundary: the recovered loss transaction ------------------------------------
+	// `+9` and `+1` at 4 both land on exactly 5, which is the authored ceiling.
+	TestFalse(TEXT("no map has been requested yet"), F.Services.Saw(TEXT("ChangeMap")));
+	F.Player->ChangeMasqueradeLevel(+9);
+	TestEqual(TEXT("the counter clamps at the authored ceiling"), F.Player->GetMasqueradeLevel(), 5);
+	TestEqual(TEXT("the ceiling fires level 5's own output"), F.Fired(TEXT("MarkMasquerade5")), 1);
+	TestEqual(TEXT("...and the generic one"), F.Fired(TEXT("MarkMasqueradeChanged")), 5);
+	TestEqual(TEXT("an increment past four loads the recovered loss map, once"),
+		F.Services.Count(FString::Printf(TEXT("ChangeMap %s"),
+			*FElysiumPlayer::MasqueradeLossMap())), 1);
+
+	// --- A further violation at the ceiling commits nothing, so nothing repeats -------------------
+	F.Player->ChangeMasqueradeLevel(+1);
+	TestEqual(TEXT("a violation at the ceiling fires no output at all"),
+		F.Fired(TEXT("MarkMasqueradeChanged")), 5);
+	TestEqual(TEXT("...and does not request the loss map a second time"),
+		F.Services.Count(TEXT("ChangeMap")), 1);
+	return true;
 }
 
 // =====================================================================================

@@ -593,8 +593,13 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// counts, witnessed records and ignore deadlines, plus the flee-only flag and the Nosferatu
 	// deadline — to the END of the NPC leaf behind its own version. Additive: a `Law` payload
 	// restores an NPC that has witnessed nothing with its three windows at the spawn-zero default.
+	//
+	// `NpcDisciplines` appends the NPC's own discipline state — the targeted effects a cast tracked
+	// on it, their groups and expiry serials, and the per-record recovery deadlines — to the END of
+	// the NPC leaf behind its own version. Additive: an `NpcWitness` payload restores an NPC
+	// carrying no discipline state, which is exactly what the build before it wrote.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcWitness);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcDisciplines);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -612,7 +617,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the law deadlines/act counts and the police-response block"),
 			(int32)FElysiumSaveVersion::Law),
 		TPair<const TCHAR*, int32>(TEXT("the NPC's retained law witness block"),
-			(int32)FElysiumSaveVersion::NpcWitness) })
+			(int32)FElysiumSaveVersion::NpcWitness),
+		TPair<const TCHAR*, int32>(TEXT("the NPC's tracked discipline effects"),
+			(int32)FElysiumSaveVersion::NpcDisciplines) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);

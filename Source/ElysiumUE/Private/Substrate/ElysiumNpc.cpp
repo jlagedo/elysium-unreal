@@ -1565,31 +1565,46 @@ void FElysiumNpc::InputNamedSchedule(const FElysiumInputArgs& Args)
 			TEXT("%s %s was fired with no schedule name — refused"), *DebugString(), *InputName);
 		return;
 	}
+	// Cycle 11b hunk 7/9 — the body below moved to `StartNamedSchedule`; the input keeps the
+	// arg-shaped half (the empty-name refusal and the surface key) that only an input has.
+	StartNamedSchedule(Requested,
+		FString::Printf(TEXT("CAI_BaseNPC.%s(%s)"), *InputName, *Requested),
+		ElysiumStub::DescribeInput(Args));
+}
+
+bool FElysiumNpc::StartNamedSchedule(const FString& Requested, const FString& Surface,
+	const FString& Detail)
+{
+	if (IsInert() || Requested.IsEmpty())
+	{
+		return false;
+	}
 	EElysiumScheduleId Id = EElysiumScheduleId::None;
 	if (!ElysiumScheduleIdFromName(Requested, Id))
 	{
-		// The gap is the NAMED program, not the input. The corpus's five `ChangeSchedule` sites ask
-		// for `SCHED_VDOG_SNARL`, `SCHED_VDOG_MADEFRIEND` and the literal `-`, and this runtime
-		// registers none of the three; the reported surface is keyed on the NAME, so `elysium.stubs`
-		// reads back exactly which native schedules the shipped scripts want, one row each.
-		ElysiumStub::Fired(TEXT("schedule"),
-			FString::Printf(TEXT("CAI_BaseNPC.%s(%s)"), *InputName, *Requested),
-			DebugString(), ElysiumStub::DescribeInput(Args),
+		// The gap is the NAMED program, not the producer. The corpus's five `ChangeSchedule` sites
+		// ask for `SCHED_VDOG_SNARL`, `SCHED_VDOG_MADEFRIEND` and the literal `-`, and the shipped
+		// `disciplinetgt` records name the Berserk/Possession families; this runtime registers none
+		// of them. The reported surface is keyed on the caller AND the name, so `elysium.stubs`
+		// reads back exactly which native schedules the shipped content wants, one row each.
+		ElysiumStub::Fired(TEXT("schedule"), Surface, DebugString(), Detail,
 			TEXT("no registered program carries that name"));
-		RecordScheduleEvent(FString::Printf(TEXT("%s refused: '%s' is not a registered program"),
-			*InputName, *Requested));
-		return;
+		RecordScheduleEvent(FString::Printf(TEXT("refused: '%s' is not a registered program"),
+			*Requested));
+		return false;
 	}
 	// A named schedule starts through the ordinary kernel: interrupts, fail schedules, motor work and
 	// activity translation are all whatever the named program declares. Nothing about being named by
-	// a script changes how it runs, which is the whole recovered point of these two commands.
+	// a script — or by a Discipline record — changes how it runs, which is the whole recovered point
+	// of these commands.
 	Schedule.Clear();
-	ReleaseScheduleBody(*InputName);
+	ReleaseScheduleBody(*Surface);
 	if (!ElysiumSchedule::Start(Schedule, Id, *this))
 	{
-		return;   // `Start` reports the refusal by name through the runner's own trace
+		return false;   // `Start` reports the refusal by name through the runner's own trace
 	}
 	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+	return true;
 }
 
 void FElysiumNpc::StopMoving()
@@ -2636,6 +2651,83 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	else if (Ar.IsLoading())
 	{
 		Witness.Reset();
+	}
+	// =============================================================================================
+
+	// ============ Cycle 11b hunk 9/9 — the NPC's own tracked discipline effects ==================
+	// A targeted `disciplinetgt` cast lands its trait-effect groups on whichever character it hit
+	// (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Active targeted effects are
+	// tracked on the affected character"), and the affected character is usually an NPC. The player
+	// half has ridden the player record since the domain landed; this is the other half, without
+	// which a Dominate group on a guard silently evaporated across a save while its owned expiry
+	// event rode the map snapshot's queue block and came back looking for it.
+	//
+	// Appended at the very END of the NPC leaf behind its own version, so it is additive: an
+	// `NpcWitness` payload restores an NPC carrying no discipline state, which is exactly what the
+	// build before this one wrote.
+	//
+	// The owned expiry events themselves are NOT written here — they are queue records and the map
+	// snapshot's queue block already carries them, serial and all. That is what makes the restore
+	// coherent: the event comes back pointing at the serial this block restores. An event whose
+	// serial no longer matches anything (a renewal minted a newer one before the save, or teardown
+	// ran) is dropped by `ElysiumDisciplines::CommitExpiry`'s own guard with a Verbose line, which
+	// is the guard working rather than a loss.
+	if (Ar.Version() >= FElysiumSaveVersion::NpcDisciplines)
+	{
+		Disciplines.Serialize(Ar);
+		if (Ar.IsLoading())
+		{
+			// Session state, never simulation state: a restored character starts from the live
+			// sound bus rather than replaying a retention window that no longer exists.
+			Disciplines.SoundCursor = 0;
+
+			// The tracked rows say which authored groups this NPC is carrying; `Effects` is the
+			// list they were installed into, and an NPC's `Effects` is rebuilt at spawn from its
+			// `stattemplate` alone (`SeedSheet`), so the discipline groups are missing from it
+			// after a restore. Re-append exactly one copy per tracked row — the same one-per-live-
+			// effect invariant `RemoveTargetEffect` removes against, which is why this adds rather
+			// than `AddUnique`s: two records may legitimately name the same group.
+			bool bAdded = false;
+			for (const FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
+			{
+				for (const FString& Group : Effect.Effects)
+				{
+					Effects.Add(Group);
+					bAdded = true;
+				}
+			}
+			if (bAdded)
+			{
+				// `RebuildEffects` re-derives the `health`/`max_health` pair off the sheet, and an
+				// NPC's SHEET is not save state — it is re-seeded from the stat template at spawn,
+				// so its damage slot reads zero here while the field walk has already restored the
+				// real `health` keyfield. Re-deriving would therefore hand a wounded NPC its whole
+				// track back, so the restored pair is put back over the derived one. (The sheet/
+				// keyfield split on a restored NPC is older than this block and is not changed by
+				// it; this only refuses to make it worse.)
+				const int32 RestoredHealth = Health;
+				const int32 RestoredMaxHealth = MaxHealth;
+				RebuildEffects();
+				Health = RestoredHealth;
+				MaxHealth = RestoredMaxHealth;
+			}
+			// A restored row keeps its `bRemoveOnHearCombat` listener, and the poll that services it
+			// runs from this character's own think, so the think is armed here — the same statement
+			// the patrol and ambient branches above make, and with the same caveat: the snapshot
+			// applier restamps the SAVED think after this returns and is the authoritative one
+			// there. This arms the direct-leaf path and can only ever move the deadline earlier.
+			if (Disciplines.TargetEffects.ContainsByPredicate(
+				[](const FElysiumActiveDisciplineEffect& Effect)
+				{ return Effect.bRemoveOnHearCombat; }))
+			{
+				NextThink = FMath::Min(NextThink,
+					static_cast<float>(World ? World->NowSeconds() : 0.0));
+			}
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		Disciplines.Reset();
 	}
 	// =============================================================================================
 

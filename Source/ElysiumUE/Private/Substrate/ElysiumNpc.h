@@ -212,6 +212,27 @@ public:
 	 */
 	void InputNamedSchedule(const FElysiumInputArgs& Args);
 
+	// ================ Cycle 11b hunk 7/9 — the named-schedule door, shared ======================
+	/**
+	 * Assign a NAMED native schedule to this NPC and run it through the ordinary kernel.
+	 *
+	 * The body `InputNamedSchedule` always had, lifted so it has more than one producer. The second
+	 * one is the Discipline runtime's `HitInfo.AI_Schedule` channel
+	 * (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "AI schedule assignment (§5.5
+	 * kernel)"): a `disciplinetgt` record names a schedule the victim is to run, which is the same
+	 * operation a script's `ChangeSchedule` performs and must not become a second one.
+	 *
+	 * Resolution is `ElysiumScheduleIdFromName` and nothing else, so only a REGISTERED program
+	 * starts; an unregistered name funnels to the stub surface keyed on the name and returns false.
+	 * That is the correct posture and not a gap to paper over — starting some other schedule under
+	 * an authored name would be behaviour invented out of a string.
+	 *
+	 * `Surface` is the stub key (`CAI_BaseNPC.ChangeSchedule`, `DisciplineTgt.<record>/<hit>`) and
+	 * `Detail` the marshalled context that key's report carries. Returns whether a program started.
+	 */
+	bool StartNamedSchedule(const FString& Requested, const FString& Surface, const FString& Detail);
+	// ===========================================================================================
+
 	/**
 	 * The one door an `aiscripted_schedule` pushes through.
 	 *

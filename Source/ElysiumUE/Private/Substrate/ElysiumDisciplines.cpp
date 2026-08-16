@@ -13,6 +13,11 @@
 //      hunting for an unregistered `events_world` member and giving up;
 //   2. the targeted-commit law production — both writes go through the player setters, so they
 //      refresh the activity deadlines and increment the act counts the expiry pass ages out.
+//
+// Cycle 11b retires two more of this file's marks, both banner-marked: the `HitInfo.AI_Schedule`
+// channel now executes through the NPC kernel's named-schedule door instead of being carried and
+// warned, and the `TriggerAISound` category moved into the shared `ElysiumGameSounds` catalogue.
+// `AI_NPCFlag` remains a carried, warned channel.
 
 #include "Substrate/ElysiumDisciplines.h"
 
@@ -22,10 +27,12 @@
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U — the one units conversion
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumSaveArchive.h"        // Cycle 11b — the block's one field list
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"      // Cycle 10b — the law channels the commit writes through
+#include "Substrate/ElysiumNpc.h"      // Cycle 11b — the `AI_Schedule` channel's one door
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -683,12 +690,6 @@ int32 ActiveRank(const FElysiumCombatCharacter& Char, int32 Index)
 	return Char.Sheet.GetCurrent(EC::ActiveDisciplines, Index);
 }
 
-const FName& AlertSound()
-{
-	static const FName Name(TEXT("NPC_DISCIPLINE_ALERT"));
-	return Name;
-}
-
 const FName& ExpiryInput()
 {
 	// A project-owned input rather than a recovered datamap name: the owned event has to be
@@ -915,8 +916,14 @@ namespace
 				FString::Printf(TEXT("`%s`/%s authors %s \"%s\" — parsed and carried, not executed (%s)"),
 					*Record.InternalName, *Hit.Name, Channel, *Value, Owner));
 		};
-		Carry(TEXT("AI_Schedule"), Hit.AiSchedule,
-			TEXT("the NPC schedule kernel owns schedule assignment; wiring it is the fenced follow-up"));
+		// Cycle 11b hunk 8/9 — `AI_Schedule` is no longer carried: it executes in `ApplyAiSchedule`
+		// below, through the same named-schedule door a script's `ChangeSchedule` takes. Only the
+		// flag half of this channel remains unexecuted.
+		//
+		// SEAM — `AI_NPCFlag` stays exactly as it was. The authored values are NPC condition/flag
+		// names whose table is not decoded, so there is nothing to set: unlike a schedule name,
+		// which resolves against a registry this runtime owns, a flag name has no registry to fail
+		// against. It closes when the condition/flag table is recovered.
 		Carry(TEXT("AI_NPCFlag"), Hit.AiNpcFlag, TEXT("the NPC condition/flag surface"));
 		Carry(TEXT("Expression"), Hit.Expression, TEXT("the disposition/expression layer"));
 		Carry(TEXT("Gesture_Anim"), Hit.GestureAnim, TEXT("the gesture layer has no producer"));
@@ -946,6 +953,41 @@ namespace
 					"flight time is not observed"), *Record.InternalName));
 		}
 	}
+
+	// ============ Cycle 11b hunk 8/9 — the `HitInfo` AI-schedule channel =========================
+	// `docs/architecture/gameplay-systems-architecture.md` §5.6: the cast "executes `HitInfo` as
+	// independent channels — ... AI schedule assignment (§5.5 kernel) ...". §5.5.4's kernel owns
+	// what a schedule IS; this channel only names one, so it goes through the one door that already
+	// turns a name into a running program (`FElysiumNpc::StartNamedSchedule`) rather than reaching
+	// into the schedule runner itself. Interrupts, the fail schedule and the motor work are then
+	// the named program's own — the recovered point of a policy-level schedule command.
+	//
+	// Returns whether a program started. A name no registered program carries FAILS BY NAME through
+	// the stub funnel inside that door; the Berserk/Possession families the shipped records name are
+	// the expected occupants of that work list, and starting something else under an authored name
+	// would be behaviour invented out of a string.
+	bool ApplyAiSchedule(FElysiumCombatCharacter& Target, const FElysiumDisciplineTgt& Record,
+		const FElysiumDiscHit& Hit)
+	{
+		FElysiumNpc* Npc = Target.AsNpc();
+		if (Npc == nullptr)
+		{
+			// The channel landed on something with no schedule kernel — the player, or a bare
+			// combat character. Reported once per (record, hit): an authored record aiming a
+			// schedule at the caster is an authoring fact worth reading back, not a per-cast log.
+			ReportOnce(FString::Printf(TEXT("hit.%s.%s.aisched.nonnpc"),
+					*Record.InternalName, *Hit.Name),
+				FString::Printf(TEXT("`%s`/%s assigns AI schedule \"%s\", but this target runs no "
+					"schedule kernel — only an NPC does"),
+					*Record.InternalName, *Hit.Name, *Hit.AiSchedule));
+			return false;
+		}
+		return Npc->StartNamedSchedule(Hit.AiSchedule,
+			FString::Printf(TEXT("DisciplineTgt.%s/%s.AI_Schedule(%s)"),
+				*Record.InternalName, *Hit.Name, *Hit.AiSchedule),
+			FString::Printf(TEXT("record=%s hit=%s"), *Record.InternalName, *Hit.Name));
+	}
+	// =============================================================================================
 
 	// Apply one resolved `HitInfo` to one target. Returns whether anything committed.
 	bool ApplyHit(FElysiumCombatCharacter& Caster, FElysiumCombatCharacter& Target,
@@ -1140,6 +1182,17 @@ namespace
 			bCommitted = true;
 		}
 
+		// --- The AI schedule channel (Cycle 11b hunk 8/9) ----------------------------------------
+		// Last of the independent channels, and deliberately after the sheet ones: the program the
+		// victim starts runs against the state this hit has already committed (a `Dmg_Health` that
+		// killed it leaves an inert NPC, which the door refuses), not against the state before it.
+		// It counts as a commit in its own right — a record whose whole payload is a schedule
+		// assignment did something to its target.
+		if (!Hit.AiSchedule.IsEmpty() && ApplyAiSchedule(Target, Record, Hit))
+		{
+			bCommitted = true;
+		}
+
 		RunTriggerCasting(Caster, Target, Record, Hit, Now, Depth);
 		return bCommitted;
 	}
@@ -1261,7 +1314,9 @@ namespace
 				// is not read here (`docs/vtmb/disciplines.md` — the parser stores the two apart).
 				if (Record->bTriggerAISound && Char.World)
 				{
-					Char.World->EmitGameSound(Candidate.Char->Origin, AlertSound(),
+					// Cycle 11b hunk 3/9 — the category is the shared catalogue's row.
+					Char.World->EmitGameSound(Candidate.Char->Origin,
+						ElysiumGameSounds::DisciplineAlert(),
 						/*RadiusCm, table-resolved*/ -1.f, Char.Handle);
 				}
 			}
@@ -1512,7 +1567,7 @@ void PollHeardCombat(FElysiumCombatCharacter& Char, double Now)
 		// the discipline alert this domain raises itself.
 		if (Event.Category != ElysiumGameSounds::Gunshot()
 			&& Event.Category != ElysiumGameSounds::NpcTakeDamage()
-			&& Event.Category != AlertSound())
+			&& Event.Category != ElysiumGameSounds::DisciplineAlert())
 		{
 			continue;
 		}
@@ -1595,3 +1650,36 @@ void ExecuteEndAll(FElysiumEntityWorld& World)
 }
 
 }   // namespace ElysiumDisciplines
+
+// ================== Cycle 11b hunk 9/9 — the block's one field list ==============================
+// `docs/architecture/save-architecture.md` — persistent state is a declared save block with one
+// owner. This domain's state has two HOMES (the player record, because the player entity is
+// excluded from the map snapshot; the NPC leaf, because a targeted effect lands on whichever
+// character the cast hit) and exactly one field list, which is this function. Both call sites gate
+// it on their own schema version and re-zero `SoundCursor`, which is session state.
+void FElysiumDisciplineState::Serialize(FArchive& Ar)
+{
+	for (int32 i = 0; i < SlotCount; ++i)
+	{
+		Ar << EndTime[i];
+		Ar << ExpirySerial[i];
+		Ar << Groups[i];
+	}
+	Ar << Recovery;
+	Ar << SerialCounter;
+
+	int32 NumEffects = TargetEffects.Num();
+	Ar << NumEffects;
+	if (Ar.IsLoading())
+	{
+		TargetEffects.SetNum(FMath::Max(NumEffects, 0));
+	}
+	for (FElysiumActiveDisciplineEffect& Effect : TargetEffects)
+	{
+		Ar << Effect.Record << Effect.HitTable << Effect.Effects;
+		Ar << Effect.EndTime << Effect.Serial;
+		Ar << Effect.bRemoveOnTakeDamage << Effect.bRemoveOnHearCombat << Effect.bRemoveOnWasBumped;
+		Ar << Effect.Source;
+	}
+}
+// ================================================================================================

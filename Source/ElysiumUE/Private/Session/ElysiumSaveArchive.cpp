@@ -272,27 +272,10 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	{
 		Ar << R.DisciplineMap;
 		Ar << R.SelectedDiscipline << R.SelectedTier << R.DisciplineCastCount;
-		for (int32 i = 0; i < FElysiumDisciplineState::SlotCount; ++i)
-		{
-			Ar << R.Disciplines.EndTime[i];
-			Ar << R.Disciplines.ExpirySerial[i];
-			Ar << R.Disciplines.Groups[i];
-		}
-		Ar << R.Disciplines.Recovery;
-		Ar << R.Disciplines.SerialCounter;
-		int32 NumEffects = R.Disciplines.TargetEffects.Num();
-		Ar << NumEffects;
-		if (Ar.IsLoading())
-		{
-			R.Disciplines.TargetEffects.SetNum(FMath::Max(NumEffects, 0));
-		}
-		for (FElysiumActiveDisciplineEffect& Effect : R.Disciplines.TargetEffects)
-		{
-			Ar << Effect.Record << Effect.HitTable << Effect.Effects;
-			Ar << Effect.EndTime << Effect.Serial;
-			Ar << Effect.bRemoveOnTakeDamage << Effect.bRemoveOnHearCombat << Effect.bRemoveOnWasBumped;
-			Ar << Effect.Source;
-		}
+		// Cycle 11b — the field list moved onto the state itself so the NPC leaf writes the
+		// identical bytes; the prologue above stays here because it is player-record state, not
+		// discipline state. The stream shape is byte-for-byte what this block already wrote.
+		R.Disciplines.Serialize(Ar);
 		if (Ar.IsLoading())
 		{
 			// The bus cursor is session state, not simulation state: a restored character starts

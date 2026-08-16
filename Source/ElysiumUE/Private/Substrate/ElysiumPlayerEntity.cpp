@@ -224,9 +224,52 @@ int32 FElysiumPlayer::AwardExperience(const FString& Key)
 	return Whole;
 }
 
+// ================ Cycle 11b hunk 5/9 — the level-5 loss transaction's map half ==================
+// `docs/vtmb/player-entity.md` § "Law, Masquerade and world response": "An increment whose
+// resulting value is greater than four loads `sp_masquerade_1`. The retail loss boundary is
+// therefore a native level-5 transaction, not only a UI convention." The increment-past-4 rule is
+// applied by `FElysiumCombatCharacter::ChangeMasqueradeLevel`, which is what calls this; the map
+// load is here because only the PLAYER's counter ends a run.
+//
+// SEAM — three things about the transition's exact form are not recovered and are not invented:
+//   * whether retail's load is a plain map change or a landmark transition. No landmark is named
+//     anywhere in the recovered record and `sp_masquerade_1` is an ending map with no return leg,
+//     so the plain `ChangeMap` door is taken;
+//   * whether it fades, holds the player, or runs any pre-travel presentation first. Nothing is
+//     played here — the request goes straight to the travel seam;
+//   * what the destination map's own script then does. `sp_masquerade_1` is not in the exported
+//     corpus (`vamputil.py` carries only its ordinary `sp_masquerade_1_patch` hook), so nothing is
+//     known about the ending it plays beyond the fact that loading it IS the loss.
+// This runtime additionally keeps its own session GameOver state, which retail has no equivalent
+// of — the map is retail's ending. It is a declared divergence rather than a reproduction, and it
+// stays until the ending map is exported and its script owns the transition.
+const FString& FElysiumPlayer::MasqueradeLossMap()
+{
+	static const FString Name(TEXT("sp_masquerade_1"));
+	return Name;
+}
+
 void FElysiumPlayer::OnMasqueradeBreached()
 {
 	FElysiumCombatCharacter::OnMasqueradeBreached();
+
+	if (IElysiumTravel* Maps = World ? World->Travel() : nullptr)
+	{
+		UE_LOG(LogElysiumPlayer, Log,
+			TEXT("%s broke the masquerade at %d — loading %s"),
+			*DebugString(), GetMasqueradeLevel(), *MasqueradeLossMap());
+		Maps->ChangeMap(MasqueradeLossMap());
+	}
+	else
+	{
+		// Not a failure: a headless substrate world and the menu backdrop both carry no travel
+		// seam, and the session half below still reports the loss. Stated rather than silent,
+		// because the recovered transaction did not happen.
+		UE_LOG(LogElysiumPlayer, Log,
+			TEXT("%s broke the masquerade at %d — no travel seam, so %s is not loaded"),
+			*DebugString(), GetMasqueradeLevel(), *MasqueradeLossMap());
+	}
+
 	// The second loss condition. Same shape as death: the substrate reports, and the session owns
 	// what it means to the application (11.3's GameOver state, with its own reason).
 	if (UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr)
@@ -234,6 +277,7 @@ void FElysiumPlayer::OnMasqueradeBreached()
 		State->NotifyMasqueradeBreach();
 	}
 }
+// ================================================================================================
 
 void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 {

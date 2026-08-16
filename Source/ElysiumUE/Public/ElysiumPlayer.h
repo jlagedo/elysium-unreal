@@ -373,6 +373,22 @@ struct FElysiumDisciplineState
 		return Index >= 0 && Index < SlotCount && EndTime[Index] != 0.0;
 	}
 	void Reset() { *this = FElysiumDisciplineState(); }
+
+	// ================= Cycle 11b hunk 9/9 — one field list, two owners ==========================
+	// The whole block, both directions (`Substrate/ElysiumDisciplines.cpp`). It has two save homes
+	// — the player record's own block, because the player entity is excluded from the map snapshot,
+	// and the NPC leaf, because a targeted effect lands on whichever character the cast hit — and
+	// two copies of a field list is exactly how one of them silently stops carrying a field.
+	//
+	// `SoundCursor` is deliberately NOT in it: the bus cursor is session state, so a restored
+	// character starts from the live bus rather than replaying a window that no longer exists. Each
+	// caller re-zeroes it on load.
+	//
+	// A bare `FArchive&` rather than the versioned proxy, because the block carries no internal
+	// version branch of its own: each of the two homes gates the whole call on ITS OWN schema
+	// version, which is what lets the same bytes be additive at two different version numbers.
+	void Serialize(FArchive& Ar);
+	// ============================================================================================
 };
 
 // ============================================================================================
@@ -1308,6 +1324,12 @@ public:
 	virtual void OnKilled() override;
 	// The other way a run ends — the masquerade counter at 5.
 	virtual void OnMasqueradeBreached() override;
+	// ============= Cycle 11b hunk 6/9 — the recovered level-5 destination =====================
+	// The map an increment past four loads (`docs/vtmb/player-entity.md` § "Law, Masquerade and
+	// world response"). Named rather than inlined at the one call site so the acceptance test
+	// asserts the recovered string instead of restating it.
+	static const FString& MasqueradeLossMap();
+	// ==========================================================================================
 
 	// --- The 10 recovered player inputs ------------------------------------------------------
 	void InputGiveItem(const FElysiumInputArgs& Args);            // STRING, 126 calls — 9.8

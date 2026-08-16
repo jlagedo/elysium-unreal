@@ -141,11 +141,12 @@ namespace ElysiumDisciplines
 	void ExecuteLast(FElysiumEntityWorld& World);
 	void ExecuteEndAll(FElysiumEntityWorld& World);
 
-	// The `sound_volume_table.txt` row a `TriggerAISound` record emits at each committed target —
-	// "An NPC was hit by a discipline that should alert others". It is named here rather than in
-	// `ElysiumGameSounds` only because that shared catalogue is outside this cycle's file fence;
-	// it belongs beside the other producer categories and should move there.
-	const FName& AlertSound();
+	// ======================= Cycle 11b hunk 2/9 — the alert row moved out ========================
+	// The `TriggerAISound` category this domain emits is `ElysiumGameSounds::DisciplineAlert()`.
+	// It was named locally here while the shared catalogue was outside the owning cycle's file
+	// fence; it is now one entry in `Substrate/ElysiumGameSound.h` beside every other producer
+	// category, which is where a name two domains switch on belongs.
+	// ============================================================================================
 
 	// --- Stated interim constants ---------------------------------------------------------------
 	// Each stands in for a value the recovered record does not carry. They are named, not

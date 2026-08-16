@@ -24,7 +24,11 @@ namespace
 	// The one world term the engine answers (K13), reached exactly as the senses reach it: a
 	// headless world has no embodiment and the service's own default is CLEAR, so a `-nullrhi`
 	// Substrate run can still prove the cone and distance halves of the acceptance.
-	bool SegmentClear(const FElysiumEntityWorld* World, const FVector& FromCm, const FVector& ToCm)
+	//
+	// Named distinctly from `ElysiumNpcSenses.cpp`'s identical anonymous-namespace helper: a unity
+	// build can place both files in the same translation unit, where two same-named anonymous
+	// namespaces collide as one true redefinition rather than two internally-linked ones.
+	bool WitnessSegmentClear(const FElysiumEntityWorld* World, const FVector& FromCm, const FVector& ToCm)
 	{
 		const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 		return Embodiment == nullptr || Embodiment->QueryLineOfSight(FromCm, ToCm);
@@ -445,7 +449,7 @@ namespace
 			{
 				continue;
 			}
-			if (!SegmentClear(World, Npc.EyePosition(), Record.Origin))
+			if (!WitnessSegmentClear(World, Npc.EyePosition(), Record.Origin))
 			{
 				continue;
 			}

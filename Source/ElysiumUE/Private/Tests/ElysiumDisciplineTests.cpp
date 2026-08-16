@@ -15,18 +15,24 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumSaveArchive.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumStub.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumNpc.h"        // Cycle 11b — the AI_Schedule channel's receiver
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Misc/ScopeExit.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 namespace ElysiumDisciplineTests
 {
@@ -249,6 +255,16 @@ namespace
 	const TCHAR* const GShieldRecord = TEXT("Test_Thaumaturgy_Shield");
 	const TCHAR* const GBoltRecord = TEXT("Test_Thaumaturgy_Bolt");
 	const TCHAR* const GHelperRecord = TEXT("Test_Helper_Return");
+	// Cycle 11b — the two `HitInfo.AI_Schedule` records. One names a program this runtime
+	// registers, one names a program it does not, which is the whole shape of the channel: a
+	// schedule name resolves against the kernel's registry or fails by name.
+	const TCHAR* const GCommandRecord = TEXT("Test_Dominate_Command");
+	const TCHAR* const GBerserkRecord = TEXT("Test_Thaumaturgy_Berserk");
+	// A registered program (`Substrate/ElysiumNpcCombatSchedules.cpp`), named exactly as
+	// `ElysiumScheduleIdFromName` spells it.
+	const TCHAR* const GRegisteredSchedule = TEXT("SCHED_TROIKA_MELEE_IDLE");
+	// The Berserk family the shipped records name, which this runtime registers no program for.
+	const TCHAR* const GUnregisteredSchedule = TEXT("SCHED_BERSERK");
 
 	FElysiumDisciplineTargets MakeTargets()
 	{
@@ -338,6 +354,35 @@ namespace
 			Record.AoE.Tables.Add(MakeCatchAll(TEXT("Hit_Human")));
 			FElysiumDiscHit Hit = MakeHit(TEXT("Hit_Human"));
 			Hit.HealBlood.Parse(TEXT("2"));
+			Record.Hits.Add(MoveTemp(Hit));
+			Table.Add(MoveTemp(Record));
+		}
+
+		// --- Cycle 11b: the two AI-schedule records ------------------------------------------
+		// Both are radius-shaped over the same three victims and cost nothing, so the only thing
+		// either one does to a target is name a schedule. That is deliberate: the assertion "the
+		// victim is running that program" then has exactly one possible producer.
+		struct FScheduleRow { const TCHAR* Record; const TCHAR* Discipline; int32 Level;
+			const TCHAR* Schedule; };
+		static const FScheduleRow ScheduleRows[] =
+		{
+			{ GCommandRecord, TEXT("Dominate"),    5, GRegisteredSchedule },
+			{ GBerserkRecord, TEXT("Thaumaturgy"), 5, GUnregisteredSchedule },
+		};
+		for (const FScheduleRow& Row : ScheduleRows)
+		{
+			FElysiumDisciplineTgt Record;
+			Record.Name = Row.Record;
+			Record.InternalName = Row.Record;
+			Record.Discipline = Row.Discipline;
+			Record.Level = Row.Level;
+			Record.BloodCost = 0;
+			Record.AoE.Shape = EElysiumDiscShape::Radius;
+			Record.AoE.Range = 600.f;
+			Record.AoE.Filters.Rows.Add(MakeFilter(EElysiumDiscFilter::NoSelf));
+			Record.AoE.Tables.Add(MakeCatchAll(TEXT("Hit_Human")));
+			FElysiumDiscHit Hit = MakeHit(TEXT("Hit_Human"));
+			Hit.AiSchedule = Row.Schedule;
 			Record.Hits.Add(MoveTemp(Hit));
 			Table.Add(MoveTemp(Record));
 		}
@@ -1384,6 +1429,336 @@ bool FElysiumDisciplineLawTest::RunTest(const FString&)
 	ED::Use(*Player, ED::Thaumaturgy, 3);
 	TestEqual(TEXT("a refused cast produces no law"),
 		Player->Law.Supernatural + Player->Law.Criminal, 0);
+	return true;
+}
+
+// =====================================================================================
+// Cycle 11b — the `HitInfo.AI_Schedule` channel into the NPC kernel
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineAiScheduleTest,
+	"Elysium.Substrate.Discipline.AiSchedule", GElysiumTestFlags)
+bool FElysiumDisciplineAiScheduleTest::RunTest(const FString&)
+{
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT { ElysiumStub::ClearTally(); };
+
+	FRulesFixture Rules;
+	ElysiumRng::SeedAll(9109);
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeDisciplineTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("the player exists"), Player))
+	{
+		return false;
+	}
+	SeedCharacter(*Player, Rules.Stats);
+	Player->Origin = FVector::ZeroVector;
+
+	TArray<FElysiumNpc*> Victims;
+	TArray<EElysiumScheduleId> Before;
+	for (int32 i = 0; i < 3; ++i)
+	{
+		FElysiumCombatCharacter* Victim =
+			FindCharacter(World, *FString::Printf(TEXT("victim%d"), i));
+		if (!TestNotNull(TEXT("a victim exists"), Victim))
+		{
+			return false;
+		}
+		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
+		FElysiumNpc* Npc = Victim->AsNpc();
+		if (!TestNotNull(TEXT("...and it is an NPC, so it has a schedule kernel"), Npc))
+		{
+			return false;
+		}
+		// Whatever ordinary selection has already given it — the baseline the refused cast below
+		// must not disturb. Captured rather than asserted to be `None`, because what the first
+		// admission think selects is the kernel's business and not this channel's.
+		Before.Add(Npc->Schedule.Current);
+		Victims.Add(Npc);
+	}
+
+	// --- An unregistered name fails BY NAME, and starts nothing --------------------------------
+	// This runs first, so "the victim is still running nothing" is a statement about this cast
+	// rather than about the order of the two.
+	// Occurrences 0: the stub funnel's volume is a runtime setting (`elysium.StubWarn`), so the
+	// exact number of warning lines is not what this case is asserting — the tally count below is.
+	AddExpectedError(GUnregisteredSchedule, EAutomationExpectedErrorFlags::Contains, 0);
+	Learn(*Player, ED::Thaumaturgy, 5);
+	TestEqual(TEXT("the record itself still commits nothing and is refused no targets"),
+		(int32)ED::Use(*Player, ED::Thaumaturgy, 5), (int32)ED::EResult::Accepted);
+	for (int32 i = 0; i < Victims.Num(); ++i)
+	{
+		TestEqual(TEXT("an unregistered schedule name starts no program"),
+			Victims[i]->Schedule.Current, Before[i]);
+	}
+	{
+		TArray<ElysiumStub::FTally> Tally;
+		ElysiumStub::CollectTally(Tally);
+		const ElysiumStub::FTally* Row = Tally.FindByPredicate(
+			[](const ElysiumStub::FTally& Entry)
+			{ return Entry.Surface.Contains(GUnregisteredSchedule); });
+		if (TestNotNull(TEXT("...and reports through the stub funnel instead"), Row))
+		{
+			TestEqual(TEXT("...on the schedule surface"), Row->Kind, FString(TEXT("schedule")));
+			TestTrue(TEXT("...keyed on the record that named it, not on the input surface"),
+				Row->Surface.Contains(TEXT("DisciplineTgt")));
+			TestEqual(TEXT("...once per target the cast reached"), Row->Count, 3);
+		}
+	}
+
+	// --- A registered name runs end-to-end through the ordinary kernel ---------------------------
+	Learn(*Player, ED::Dominate, 5);
+	TestEqual(TEXT("the cast commits"), (int32)ED::Use(*Player, ED::Dominate, 5),
+		(int32)ED::EResult::Accepted);
+	for (FElysiumNpc* Victim : Victims)
+	{
+		TestEqual(TEXT("every committed target is running the named program"),
+			Victim->Schedule.Current, EElysiumScheduleId::MeleeIdle);
+		TestTrue(TEXT("...through the ordinary kernel, from its first task"),
+			Victim->Schedule.IsRunning() && Victim->Schedule.TaskIndex == 0);
+		TestTrue(TEXT("...and is due a think, so the program advances"),
+			static_cast<double>(Victim->NextThink) <= World.NowSeconds() + 1e-3);
+	}
+	return true;
+}
+
+// =====================================================================================
+// Cycle 11b — the overt cast's AI sound, from the shared catalogue into an NPC's hearing
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineAlertSoundTest,
+	"Elysium.Substrate.Discipline.AlertSound", GElysiumTestFlags)
+bool FElysiumDisciplineAlertSoundTest::RunTest(const FString&)
+{
+	FRulesFixture Rules;
+	ElysiumRng::SeedAll(9109);
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeDisciplineTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("the player exists"), Player))
+	{
+		return false;
+	}
+	SeedCharacter(*Player, Rules.Stats);
+	Player->Origin = FVector::ZeroVector;
+
+	FElysiumCombatCharacter* Listener = FindCharacter(World, TEXT("victim0"));
+	FElysiumNpc* ListenerNpc = Listener ? Listener->AsNpc() : nullptr;
+	if (!TestNotNull(TEXT("a listening NPC exists"), ListenerNpc))
+	{
+		return false;
+	}
+	SeedCharacter(*Listener, Rules.Stats, /*ClanIndex*/ 0);
+
+	const uint64 SerialBefore = World.GameSounds().LastSerial();
+
+	// The Bloodshield record carries `TriggerAISound`. It is self-shaped, so the committed target
+	// is the caster, and the stimulus is emitted THERE — "an NPC was hit by a discipline that
+	// should alert others" places the sound at whoever took the hit.
+	Learn(*Player, ED::Thaumaturgy, 3);
+	TestEqual(TEXT("the overt cast commits"), (int32)ED::Use(*Player, ED::Thaumaturgy, 3),
+		(int32)ED::EResult::Accepted);
+
+	TArrayView<const FElysiumGameSoundEvent> Emitted = World.GameSounds().EventsSince(SerialBefore);
+	if (!TestEqual(TEXT("a TriggerAISound record emits exactly one stimulus per committed target"),
+		Emitted.Num(), 1))
+	{
+		return false;
+	}
+	TestEqual(TEXT("...under the shared catalogue's authored category name"),
+		Emitted[0].Category, ElysiumGameSounds::DisciplineAlert());
+	TestEqual(TEXT("...attributed to the caster"), Emitted[0].Source.Index, Player->Handle.Index);
+	TestTrue(TEXT("...with the table-resolved reach, not an invented one"),
+		Emitted[0].RadiusCm > 0.f);
+
+	// The senses' ordinary hear path then reacts for free: no discipline-specific listener exists,
+	// and none should — the category is one row on the same bus every other producer writes to.
+	ListenerNpc->Senses.TickHearing(*ListenerNpc, 1.0);
+	TestEqual(TEXT("the NPC hear path admits it like any other stimulus"),
+		ListenerNpc->Senses.Memory.LastHeardCategory,
+		ElysiumGameSounds::DisciplineAlert().ToString());
+	TestEqual(TEXT("...remembering the caster as its source"),
+		ListenerNpc->Senses.Memory.LastHeardSource.Index, Player->Handle.Index);
+
+	// A record without the flag emits nothing: the classification is authored, never inferred from
+	// the cast having happened.
+	const uint64 SerialAfterOvert = World.GameSounds().LastSerial();
+	Learn(*Player, ED::Dominate, 1);
+	ED::Use(*Player, ED::Dominate, 1);   // the Daze record: TriggerAISound is unset
+	TestEqual(TEXT("a record without TriggerAISound emits nothing"),
+		World.GameSounds().EventsSince(SerialAfterOvert).Num(), 0);
+	return true;
+}
+
+// =====================================================================================
+// Cycle 11b — the NPC leaf carries its own tracked targeted effects across a save
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineNpcPersistenceTest,
+	"Elysium.Substrate.Discipline.NpcPersistence", GElysiumTestFlags)
+bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
+{
+	FRulesFixture Rules;
+	const TCHAR* const DazeGroup = TEXT("Discipline (Test-Daze)");
+
+	// One built world with a cast already landed on victim0, plus the payload its NPC leaf writes.
+	auto CastAndFreeze = [&Rules](TArray<uint8>& OutPayload, int32 Version,
+		FElysiumActiveDisciplineEffect& OutExpected) -> bool
+	{
+		ElysiumRng::SeedAll(9109);
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeDisciplineTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim0"));
+		if (Player == nullptr || Victim == nullptr)
+		{
+			return false;
+		}
+		SeedCharacter(*Player, Rules.Stats);
+		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
+		Player->Origin = FVector::ZeroVector;
+		Learn(*Player, ED::Dominate, 1);
+		if (!ED::Accepted(ED::Use(*Player, ED::Dominate, 1)))
+		{
+			return false;
+		}
+		if (Victim->Disciplines.TargetEffects.Num() != 1)
+		{
+			return false;
+		}
+		OutExpected = Victim->Disciplines.TargetEffects[0];
+
+		FMemoryWriter Writer(OutPayload, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Writer, Version);
+		Victim->Serialize(Ar);
+		return true;
+	};
+
+	// --- The round trip -------------------------------------------------------------------------
+	TArray<uint8> Payload;
+	FElysiumActiveDisciplineEffect Expected;
+	if (!TestTrue(TEXT("a cast landed a tracked effect on the NPC"),
+		CastAndFreeze(Payload, FElysiumSaveVersion::Latest, Expected)))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the tracked row names the record that cast it"),
+		Expected.Record, FString(GDazeRecord));
+	TestTrue(TEXT("...and carries a live expiry serial"), Expected.Serial != 0);
+
+	{
+		ElysiumRng::SeedAll(9109);
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeDisciplineTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim0"));
+		if (!TestNotNull(TEXT("the restored victim exists"), Victim))
+		{
+			return false;
+		}
+		SeedCharacter(*Victim, Rules.Stats, /*ClanIndex*/ 0);
+		const int32 HealthBefore = Victim->Health;
+		TestEqual(TEXT("a freshly built NPC tracks nothing"),
+			Victim->Disciplines.TargetEffects.Num(), 0);
+		TestFalse(TEXT("...and carries none of the cast's groups"), HasEffect(*Victim, DazeGroup));
+
+		{
+			FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+			Victim->Serialize(Ar);
+		}
+
+		if (!TestEqual(TEXT("the tracked effect survives the leaf round trip"),
+			Victim->Disciplines.TargetEffects.Num(), 1))
+		{
+			return false;
+		}
+		const FElysiumActiveDisciplineEffect& R = Victim->Disciplines.TargetEffects[0];
+		TestEqual(TEXT("...with its record"), R.Record, Expected.Record);
+		TestEqual(TEXT("...its hit table"), R.HitTable, Expected.HitTable);
+		TestEqual(TEXT("...its group names"), R.Effects.Num(), Expected.Effects.Num());
+		TestTrue(TEXT("...its deadline"), NearlyEqual(R.EndTime, Expected.EndTime));
+		TestEqual(TEXT("...and the expiry serial the queued event is keyed on"),
+			R.Serial, Expected.Serial);
+		TestEqual(TEXT("the serial counter comes back with it, so a renewal cannot reuse a serial"),
+			Victim->Disciplines.SerialCounter, Expected.Serial);
+		TestTrue(TEXT("the authored group is re-installed into the effect list"),
+			HasEffect(*Victim, DazeGroup));
+		TestEqual(TEXT("...exactly once per tracked row, never twice"),
+			Victim->Effects.FilterByPredicate([DazeGroup](const FString& E)
+				{ return E.Equals(DazeGroup, ESearchCase::IgnoreCase); }).Num(), 1);
+		TestEqual(TEXT("...and the restored health keyfield is not re-derived over"),
+			Victim->Health, HealthBefore);
+
+		// --- The stale serial drops harmlessly ---------------------------------------------------
+		// The owned expiry events ride the map snapshot's queue block, not this leaf, so a restored
+		// NPC can be handed a serial that no longer matches anything — a renewal minted a newer one
+		// before the save, or teardown ran. The domain's own guard drops it.
+		ED::CommitExpiry(*Victim, Expected.Serial + 500);
+		TestEqual(TEXT("a serial matching nothing removes nothing"),
+			Victim->Disciplines.TargetEffects.Num(), 1);
+		TestTrue(TEXT("...and leaves the group installed"), HasEffect(*Victim, DazeGroup));
+
+		// The MATCHING serial is what ends it, which is what makes the restore coherent.
+		ED::CommitExpiry(*Victim, R.Serial);
+		TestEqual(TEXT("the restored serial is the one the expiry event answers to"),
+			Victim->Disciplines.TargetEffects.Num(), 0);
+		TestFalse(TEXT("...and the teardown takes the group back off"),
+			HasEffect(*Victim, DazeGroup));
+	}
+
+	// --- Additive against the previous schema ----------------------------------------------------
+	// The NPC leaf gates every appended block on the archive version in BOTH directions, so writing
+	// at `NpcWitness` genuinely omits this one — the same shape the senses, loadout and witness
+	// blocks use, and the reason this needs no hand-written legacy byte stream.
+	{
+		TArray<uint8> Legacy;
+		FElysiumActiveDisciplineEffect Ignored;
+		if (!TestTrue(TEXT("the legacy payload is written"),
+			CastAndFreeze(Legacy, FElysiumSaveVersion::NpcWitness, Ignored)))
+		{
+			return false;
+		}
+		ElysiumRng::SeedAll(9109);
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeDisciplineTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim0"));
+		if (!TestNotNull(TEXT("the legacy victim exists"), Victim))
+		{
+			return false;
+		}
+		FMemoryReader Reader(Legacy, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::NpcWitness);
+		Victim->Serialize(Ar);
+		TestEqual(TEXT("a pre-discipline payload restores an NPC carrying no tracked effects"),
+			Victim->Disciplines.TargetEffects.Num(), 0);
+		TestFalse(TEXT("...and none of the cast's groups"), HasEffect(*Victim, DazeGroup));
+	}
 	return true;
 }
 

@@ -22,6 +22,7 @@
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's entity parameter
+#include "Substrate/ElysiumLaw.h"           // Cycle 11b — FireWorldEvent, the `events_world` bus
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -207,24 +208,95 @@ void FElysiumCombatCharacter::AddHumanity(int32 Delta)
 	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity, Scaled);
 }
 
+// ==================== Cycle 11b hunk 4/9 — the Masquerade level outputs =========================
+// `docs/vtmb/player-entity.md` § "Law, Masquerade and world response": "`ChangeMasqueradeLevel`
+// mutates sheet stat index `0x1c`, republishes player client state and fires the game-rules output
+// for the resulting level plus the generic level-changed output."
+//
+// The retail split is reproduced as it is authored: the datamap INPUT is
+// `CBaseCombatCharacter.ChangeMasqueradeLevel` on the character, and the OUTPUTS belong to the
+// world's game-rules entity. Corpus evidence over the 23 exported maps: every one of the 140
+// `OnMasqueradeLevel*` rows sits on `events_world` (targetname `world`) — `OnMasqueradeLevel1..5`
+// 23 rows each, `OnMasqueradeLevelChanged` 25 (la_hub_1 authors three), and every row is a Python
+// callback (`OnMasqueradeLevelN()`, plus la_hub_1's `checkMasquerade()` / `fleeingHos()`) with no
+// entity target. So the mutation is the producer and `events_world` is the firing entity, which is
+// exactly the shape `ElysiumLaw::FireWorldEvent` already carries for the eight cop/hunter outputs.
+namespace
+{
+	// The six authored output names. They belong beside `ElysiumLaw::Outputs`, with the rest of the
+	// `events_world` surface; they are named here because this producer is the only caller and the
+	// law file is owned elsewhere this cycle.
+	const FName& MasqueradeLevelChangedOutput()
+	{
+		static const FName Name(TEXT("OnMasqueradeLevelChanged"));
+		return Name;
+	}
+
+	// `OnMasqueradeLevel<N>` for a resulting level of 1..5, or `NAME_None` outside that range.
+	//
+	// The corpus authors no `OnMasqueradeLevel0`: a change that lands the counter back on zero
+	// therefore fires only the generic output, which is what the authored surface can receive. That
+	// is a statement about the corpus, not a guess — every one of the 23 maps carries exactly the
+	// five numbered rows.
+	FName MasqueradeLevelOutput(int32 Level)
+	{
+		static const FName Names[5] =
+		{
+			FName(TEXT("OnMasqueradeLevel1")), FName(TEXT("OnMasqueradeLevel2")),
+			FName(TEXT("OnMasqueradeLevel3")), FName(TEXT("OnMasqueradeLevel4")),
+			FName(TEXT("OnMasqueradeLevel5")),
+		};
+		return (Level >= 1 && Level <= 5) ? Names[Level - 1] : FName();
+	}
+}
+
 void FElysiumCombatCharacter::ChangeMasqueradeLevel(int32 Delta)
 {
 	if (Delta == 0)
 	{
 		return;
 	}
+	const int32 Before = GetMasqueradeLevel();
 	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade, Delta);
+	const int32 After = GetMasqueradeLevel();
 
-	// The counter reaching its authored ceiling is the second loss condition. The check is on the
-	// clamped current value, so a `+9` and a `+1` at 4 both land on exactly 5.
-	int32 Min = 0, Max = 0;
-	Sheet.BoundsFor(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade,
-		SheetRules(), SheetEffects(), Min, Max);
-	if (Max >= Min && GetMasqueradeLevel() >= Max && Delta > 0)
+	// CHOSEN, and marked: retail's decompiled body is not recovered past "mutation fires the
+	// output", so whether it fires on a delta the clamp absorbed is not stated. This runtime fires
+	// once per COMMITTED change — a `+1` at the authored ceiling of 5 moves nothing, so nothing is
+	// republished and nothing is fired. The alternative would re-run `checkMasquerade()`'s hunter
+	// spawns on every subsequent violation at a level the player is already stuck at, which is a
+	// behaviour the authored consumer visibly does not expect.
+	if (After == Before)
+	{
+		return;
+	}
+	// The client republish is the presentation publisher's per-frame sample of this sheet slot
+	// (`FElysiumViewState`'s vitals), so there is no push call to make here — the value moved and
+	// the next publish carries it.
+	if (World != nullptr)
+	{
+		// The level-specific output first, then the generic one: the recovered order is "the output
+		// for the resulting level PLUS the generic level-changed output". The activator is the
+		// character whose counter moved, so a script callback and the I/O history both attribute
+		// the fire to it rather than to the world entity that carries the row.
+		const FName Levelled = MasqueradeLevelOutput(After);
+		if (!Levelled.IsNone())
+		{
+			ElysiumLaw::FireWorldEvent(*World, Levelled, Handle);
+		}
+		ElysiumLaw::FireWorldEvent(*World, MasqueradeLevelChangedOutput(), Handle);
+	}
+
+	// "An increment whose resulting value is greater than four loads `sp_masquerade_1`. The retail
+	// loss boundary is therefore a native level-5 transaction, not only a UI convention."
+	// The rule is the recovered literal — resulting value past four on an INCREMENT — not the
+	// stat's authored ceiling, which merely happens to be the same 5 in the shipped `stats.txt`.
+	if (Delta > 0 && After > 4)
 	{
 		OnMasqueradeBreached();
 	}
 }
+// ================================================================================================
 
 void FElysiumCombatCharacter::OnMasqueradeBreached()
 {
