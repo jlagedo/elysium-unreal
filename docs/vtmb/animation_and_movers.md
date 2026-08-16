@@ -917,6 +917,44 @@ sequence set that realizes it rather than the AI-visible state.
   referenced by `this+0x5d74` and uses `LookupSequence`. A missing label retries weighted
   `ACT_WALK`, then disposition and sequence zero by the same tail.
 
+### Scripted travel speed is the resolved clip's own ground speed
+
+`m_fMoveTo` picks the NPC's script state in `CCineNPC::StartSequence` (`0x101a9080`), and
+`TASK_PLAY_SCRIPT` (`0x102cc080`) reads that same raw value off the linked cine to pick a schedule:
+`1 → SCRIPTED_WALK (0x2f)`, `2 → SCRIPTED_RUN (0x30)`, `3 → SCRIPTED_CUSTOM_MOVE (0x31)`, registered
+by `0x102cb690`. Each carries its own travel task — `TASK_WALK_TO_TARGET`, `TASK_RUN_TO_TARGET`, and
+`TASK_SCRIPT_CUSTOM_MOVE_TO_TARGET` — but all three converge on the same speed pipeline. Only the
+selection method differs: Custom Move takes the exact-label `LookupSequence` branch above, Walk and
+Run take ordinary weighted-vocabulary selection.
+
+Whatever sequence wins becomes `m_nSequence`, and `ResetSequenceInfo` (`0x10090950`) recomputes
+`m_flGroundSpeed` (`+0x654`) from it as
+`GetSequenceMoveDist(seq) * m_flGroundSpeedScalar / SequenceDuration(seq)`, while unconditionally
+resetting `m_flPlaybackRate` (`+0x6f4`) to `1.0`. No NPC keyfield and no constant participates:
+`speed_walk` and `speed_runbase` exist only as **player** movement ConVars (`0x1034f050`,
+`0x1034f0e0`) and appear in neither the `CAI_BaseNPC` nor the `CAI_BaseNPCTroika` datamap.
+
+**The clip drives the motor; the motor never drives the clip.** `GetIdealSpeed` (`0x10091740`) is a
+plain read of `m_flGroundSpeed` with no other term — VtMB drops stock Source's
+`m_flGroundSpeed * m_flPlaybackRate`. Every class checked resolves vtable slot `+0x3e0` to this one
+body, with no override.
+
+`GetSequenceMoveDist` (`0x1008fbe0`) is the magnitude of `GetSequenceLinearMotion` (`0x1008fcd0`),
+which passes the entity's own live `m_flPoseParameter` array (`+0x690`) into the sequence mover
+(`0x100c5d10`). That resolves up to four corner animations and bilinear weights
+(`0x100c5400` over `0x100c1c60`), extracts each corner's own motion across cycle `0.0 → 1.0`, and
+accumulates `weight * motion`. **A blend-grid travel cycle therefore yields a genuine pose-weighted
+ground speed — sampled once**, at the instant `ResetSequenceInfo` runs, and never re-evaluated as
+the pose parameter is subsequently driven for the visual blend.
+
+`m_flGroundSpeedScalar` (`+0x564`) is `1.0` from the `CBaseAnimating` constructor (`0x1008b230`).
+Its only writer is `SetPlaybackAndSpeedScalar` (`0x1008d230`), which always sets the scalar and
+`m_flPlaybackRate` together and treats a negative argument as a reset to `1.0`. Its call sites are a
+debug motion-trail verb, a generic entity input any level script can fire (`0x102c3580`, clamped at
+`0.001`), a discipline-shaped multiplier gated on `+0x6674` (`0x103947b0`), and a ConVar-driven gait
+watchdog (`0x103a56f0`). The `ProxySpeedXMovement` and `MingXiaoSpeedXMovementBase`/`Delta` rulebook
+values are parsed into the rules singleton but reach neither field.
+
 The transition boundary is equally explicit. `SetIdealActivity` stores the target at `+0xff0`
 and pre-resolves its sequence. `MaintainActivity` does no work for ordinary script-controlled NPCs
 unless a transition is already active; otherwise, when current activity/sequence differs from the

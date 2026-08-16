@@ -73,6 +73,16 @@ Retail order is mechanical and differs from the visual/export order in a non-obv
    behind the equal-time cohort already pending: with due `A, B`, if `A` produces `C`, delivery is
    `A, B, C`, not depth-first `A, C, B`.
 
+**A negative authored delay is admitted and is not the same as zero.** No clamp, `abs()` or sign
+test exists anywhere between the keyvalue parser and the queue: the six-field parser (`FUN_100ccf90`)
+reads the delay with a bare string-to-float straight into the action record, `FireOutput` computes
+`fireTime = delay + curtime` unguarded, and `AddEvent` sorts on that value. `delay = -1.0` therefore
+produces a `fireTime` a full second in the past — already overdue when queued — and because the
+insert walk only advances past nodes with `fireTime <= new`, it splices in **ahead of** every
+`curtime + 0` event queued in the same pass rather than tying with them. It is drained on the very
+next service pass, with ordering priority over concurrent zero-delay outputs.
+`sp_tutorial_1`'s `logic_shot_7 → sound_maul_wolves.PlaySound` authors exactly this.
+
 One queued record may carry a name target, field-5 Python, and a direct `EHANDLE`. Service order
 inside that record is: deliver the input to **every** matching name target in global entity-list
 order; execute field-5 Python; then deliver to the direct handle if it is still valid. A missing name
@@ -133,6 +143,34 @@ without taking ownership of a scene-staged controller. This distinction is load-
 tutorial porch chain. `teleport_fade` moves the player while the controller exists, and the delayed
 `RemoveControllerNPC` must preserve that destination rather than restoring the controller's
 pre-fade porch transform.
+
+Both inputs are thin: `CreateControllerNPC` (`0x10227280`) resolves the player and calls a
+get-or-create keyed on `m_hControllerNPC` (player `+0x1db0`), which reuses a live controller of the
+matching classname and otherwise spawns one and copies model, skin, pose fields, origin and angles
+across. **Nothing in that chain touches the player pawn** — no hide, no freeze, no input suppression,
+no solidity change; a scene wanting any of those authors them separately.
+`RemoveControllerNPC` (`0x102272b0`) calls the destroy with both copy flags set, and the order inside
+is state first: angles, then origin read from the controller's **live** absolute-origin field, then
+the pose block, and only then is removal scheduled — via a think set to the next frame, not a
+synchronous delete. The alias clears after that scheduling.
+
+### `events_player.RemoveDisciplinesNow`
+
+Three steps (`0x10227440`), and only the first is about disciplines. It calls the same
+`DisciplineGlobalTeardown` (`0x10147a60`) that backs `ClearActiveDisciplines`/`vdiscipline_endall`
+(`0x1033d8a0`), which clears the player's pending discipline events out of the global event queue and
+then walks the active-discipline bitmask ending each effect ungracefully. Nothing is restored
+afterwards.
+
+It then force-destroys any live controller-NPC relationship **with** state hand-back — the same
+transaction `RemoveControllerNPC` performs — and forces the player's model back to its default when
+the current model differs, which is what undoes a form-changing discipline. A third step resets two
+player fields, applies the clan/template record, and destroys a second template-linked relationship
+without hand-back.
+
+So the name understates it: this input cancels active disciplines *and* tears down the player's
+controller and model state. `sp_tutorial_1` fires it at `trigger_4`, immediately before creating the
+scene's controller.
 
 The opening map also has one deliberately dangling authored wire:
 `walk_out_cam_k.OnReachedKeyframe → controls.Deactivate`, paired with a `trigger_once` sending
@@ -231,6 +269,26 @@ the direction is derived from the point `m_vecDamageVelPos`:
 
 The force is also applied to the victim's VPhysics object (`FUN_10344f80`, mode 2) when the
 pushable test in `PassesTriggerFilters` holds.
+
+## `Kill` removes; it never kills
+
+`CBaseEntity::InputKill` (`0x100acef0`) is a one-line forward to the virtual `Kill` at vtable slot
+119. `CBaseEntity::Kill` (`0x100acf90`) calls `UTIL_Remove` and nothing else, and
+`CBaseCombatCharacter::Kill` (`0x1033cb90`) is a same-body wrapper differing only in its profiler
+label — so an NPC, a `func_brush` and a `prop_dynamic` all answer the input identically. No class in
+the character chain declares a `Kill` datamap record, so the name lookup walks
+`CAI_BaseNPCTroika` → `CAI_BaseNPC` → `CBaseCombatCharacter` and lands on `CBaseEntity`'s own.
+
+Nothing on that path touches health, life state, a death sequence or a ragdoll, and nothing fires an
+output, drops inventory or plays a sound. Removal is **deferred**: `UTIL_Remove` sets a
+not-yet-queued guard bit, releases the networkable interface, and appends the entity to a growable
+global delete list (`FUN_100f6bb0`) drained later — the entity is not destroyed in the caller's
+frame.
+
+The practical consequence for authored scenes is that a cast removed with `Kill` **blinks out**. A
+map that wants bodies to fall has to damage them instead; `sp_tutorial_1`'s alley scene does both,
+killing the Sheriff, two Sabbat, a proxy and two wolves outright at the end while separately
+`TakeDamage`-ing the third Sabbat so it dies on camera.
 
 ## Hidden state: StartHidden / ScriptHide / ScriptUnhide
 
@@ -1423,6 +1481,57 @@ and appear in separate consumers: `FUN_100fbdc0` treats `10`–`13` as one famil
 compares against `5` and `7`, and `FUN_100fb3d0` range-checks `0`–`0x13`, so the enum runs to at least
 19. None occur in `sp_theatre`.
 
+### `TurnOn` restarts; `TurnOff` only stops feeding
+
+Both inputs forward to adjacent virtual slots (`vtable + 0x3c4` / `+0x3c8`) on `CEnvParticle`'s own
+vtable (`0x10455f1c`). `TurnOn` (`0x100fc570`) carries **no already-active guard**: every call
+re-issues the spawn/attach call and re-stamps the activation time (`m_bActive` `+0x484`, start time
+`+0x488`), so repeated `TurnOn` restarts the emitter rather than being swallowed. This is what lets a
+scene address two distinct emitters sharing one targetname with a single wire — each restarts its
+own. `TurnOff` (`0x100fb7d0`) is a bare `m_bActive = 0`: idempotent, and it does **not** kill live
+particles, which finish on their own timeline.
+
+`active` seeds spawn-time state through the plain field, and the constructor (`0x100fad50`) defaults
+it to `1`, so an emitter authoring no `active` key starts on. `ramp_scale` (`+0x48c`) and `ramp_time`
+(`+0x490`) are **not** consulted by `TurnOn` — they take effect only through the explicit
+`SetRateScale` / `SetRampTime` inputs, or through the ramp-down think that fades the rate to zero
+over `ramp_time` and then chains into a delayed `TurnOff`. A graceful fade is that sequence, never
+the plain input.
+
+## `logic_timer` (`CTimerEntity`)
+
+Factory `0x10131390` (vtable `0x10465fb4`), datamap `0x10575e50`, 14 records. Keyfields are
+`StartDisabled` (`m_iDisabled` `+0x498`), `RefireTime` (`+0x49c`), `UseRandomTime` (`+0x4a4`) and its
+`LowerRandomBound` / `UpperRandomBound` pair (`+0x4a8` / `+0x4ac`). Inputs are `Enable`, `Disable`,
+`Toggle`, `RefireTime` and `FireTimer`; `OnTimer` (`+0x450`) is the only live output.
+
+One "arm" routine (`0x101316e0`) governs the cadence:
+
+```c
+if (m_iDisabled == 0) {
+    if (m_iUseRandomTime) m_flRefireTime = RandomFloat(LowerRandomBound, UpperRandomBound);
+    NextThink = curtime + m_flRefireTime;      // always a full interval from now
+}
+```
+
+Four consequences follow, and all four are observable:
+
+- **`Enable` does not fire immediately.** The first `OnTimer` lands one full `RefireTime` after the
+  input, because arming only ever writes `curtime + RefireTime`.
+- **`Disable` cancels the pending think outright** (`NextThink = 0`); it is not an output gate.
+- **Re-`Enable` restarts the interval.** The arm never reads the old deadline, so no phase survives a
+  disable/enable pair.
+- **`UseRandomTime` re-rolls on every arm**, not once at spawn — each interval is independently drawn.
+
+`RefireTime` is clamped to a `0.01` floor. The `RefireTime` input (`0x101318e0`) applies the same
+clamp, no-ops when the value is unchanged, and otherwise re-arms — so a live change reschedules from
+now, and does nothing at all while the timer is disabled. `FireTimer` (`0x101317d0`) is the fire
+routine itself: it returns early when disabled, fires `OnTimer`, then re-arms.
+
+`StartDisabled` is applied at **Spawn** (`0x10131600`), not Activate, and the same pass forces the
+disabled state when `RefireTime` is invalid and no random range is authored — so a timer with a
+nonsensical interval never runs even if it was authored enabled.
+
 ## Scripted sequences (`scripted_sequence` / `aiscripted_sequence`)
 
 VtMB's cutscene beat: move a named NPC to a marker, play an animation on it, and fire an output on
@@ -1459,6 +1568,25 @@ The private half of the record set — `m_iDelay`, `m_startTime`, `m_saved_movet
 `m_saved_troika_flags`, `m_interruptable` (`0x5f90`), `m_sequenceStarted`, `m_hNextCine` (`0x5f94`) —
 records that a beat takes ownership of the NPC's movement and collision state for its duration and
 gives it back afterwards.
+
+**What claim and release actually move.** The claim captures, at `CCineNPC + 0x5f78` upward,
+the NPC's movetype, movecollide, solid, solidflags and effects, plus a flags word taken from the
+NPC's **active weapon**, not the NPC (`m_saved_troika_flags`, `+0x5f8c`). Release (`0x1027d170`,
+also reached from the `ScriptHide` cancel path) re-applies movetype+movecollide, solidflags, effects
+and the weapon word, detaches `m_hCine`, and sets the ideal state to `IDLE`. Two facts follow:
+`m_saved_solid` (`+0x5f80`) is captured and **never read back** — the only `SetSolid` call on this
+path is the no-valid-cine fallback, which hard-codes `SOLID_BBOX`; and **neither claim nor release
+touches a schedule, a goal entity, or any navigation field.** The physics hand-back and the schedule
+hand-back are separate mechanisms.
+
+**`FixScriptNPCSchedule`'s "default" is `ClearSchedule`, not a schedule.** Case `1` calls
+`0x10280de0`, which resolves the local ID through the class schedule table (vtable `+0x910`) and
+installs it directly — a real `SetSchedule(0x2a)`. Case `0` and the fall-through call a *different*
+function, `0x10280d30`, which zeroes six consecutive fields from `+0x5c38` (schedule ID, task index
+and timers), clears a bit on the task owner, and installs nothing. The NPC therefore falls through
+to ordinary schedule selection on its next maintain. Since every exported sequence writes
+`m_iFinishSchedule = 0`, this is the path that always runs, and where it lands is decided by the
+idle selector in `npc-ai-reverse-engineering.md`.
 
 **Inputs:** `BeginSequence`, `CancelSequence`, **`MoveToPosition`** (`inputFunc 0x1000d6c0`, whose
 body is `FUN_101a72b0` — reached only through the datamap, so the analyzers leave it

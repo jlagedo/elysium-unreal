@@ -632,6 +632,33 @@ A scalar `TakeDamage(float)` cannot express this contract. Project implementatio
 the known scalar-path divergence are tracked by roadmap 13.3 and RE40 rather than in this VtMB
 fact document.
 
+### What the scalar `TakeDamage` I/O input actually builds
+
+`CAI_BaseNPCTroika`'s datamap declares `TakeDamage` as `FIELD_INTEGER`, and its handler
+(`0x102c29a0`) accepts the variant **only** when the field type matches — any other type silently
+synthesizes **zero** damage. From the integer it builds a descriptor whose damage-type bits are
+explicitly zeroed (`DMG_GENERIC`, no slashing/bashing/aggravated/fire), whose attacker and inflictor
+are the I/O `pActivator`/`pCaller` rather than a weapon, and whose **force and damage position are
+both the same zero vector**. It then enters the ordinary pipeline unmodified — base
+`CBaseEntity::TakeDamage`, the `OnTakeDamage` virtual, the life-state dispatch, and the same health
+commit and `Event_Killed` a weapon kill reaches.
+
+The zero force is carried all the way to ragdoll creation, so a corpse killed by this input
+**collapses in place with no impulse** instead of being knocked back. That is the authored result,
+not a defect: a map that wants a body thrown has to move it itself.
+
+### `invincible` is a total refusal, tested first
+
+`CNPC_VVampire::OnTakeDamage` (`0x102bed30`) reads the authored `invincible` keyfield
+(`m_bInvincible`, `CAI_BaseNPCTroika + 0x63d8`) as its **first** act and returns immediately when it
+is set, before life state, the resolver, the soak or the health commit are reached. The only side
+effect on that branch is a cosmetic timestamp/notify pair (`+0x5d98` / `+0x5e0c`). An invincible
+character is therefore never damaged and never healed back — the transaction does not happen.
+
+This is what lets one scripted wire serve a mixed cast: in `sp_tutorial_1` the Sheriff authors
+`invincible 1` and no-sells the same `TakeDamage 100` that kills the Sabbat standing beside him,
+who author `invincible 0`.
+
 ## Reverse-engineered mechanics (RE40)
 
 - **Ranged Spread, Cone and Crosshair**:

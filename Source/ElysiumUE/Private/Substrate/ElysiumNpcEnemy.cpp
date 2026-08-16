@@ -54,6 +54,59 @@ namespace
 		return Npc.Senses.Memory.bPlayerLos;
 	}
 
+	// Candidate admission. Retail's source is the NPC's own AI memory, never the world:
+	// `CAI_BaseNPC::BestEnemy` (`0x102743c0`) fetches the memory component through vtable `+0x874`,
+	// walks the linked list at `+0xc`, reads each entry's remembered actor handle at `+0x24` and
+	// advances through `+0x38`. The entity list is never touched. An actor the NPC has not sensed is
+	// therefore not selectable at all, which is what stops a `vision 0` NPC acquiring an enemy it has
+	// no way to perceive — and what keeps a cutscene's cast standing still between scripted beats
+	// instead of entering combat.
+	//
+	// CHOSEN, NOT RECOVERED (the store and its reach, not the rule): this runtime has no per-actor
+	// memory list, so membership is answered from the recovered memory channels it does carry — the
+	// committed and previous enemy, the per-relation last-seen slots, the last heard source and the
+	// last damage attacker. Each is written only by a real sensing or damage producer.
+	//
+	// The gate is therefore applied only where a producer exists, which today is the player: the
+	// sight pass tracks the player alone (the same deliberate scope `NpcEnemyIsCandidateVisible`
+	// records), so no other actor can ever enter a memory channel by being seen. Admitting NPC
+	// candidates unconditionally keeps NPC-vs-NPC selection working rather than silently deleting it,
+	// exactly as unmeasured reachability collapses to "reachable" above. When a sight producer covers
+	// actors generally, this scope check goes away and the memory test applies to every candidate.
+	//
+	// Not yet reproduced either: retail's per-entry eluded bit at entry `+0x35`, read by
+	// `0x102e0210` — the same seam the eluded check in `BestEnemy` already records.
+	bool NpcEnemyIsRemembered(const FElysiumNpc& Npc, const FElysiumEntityHandle& Handle)
+	{
+		const FElysiumEntityWorld* World = Npc.World;
+		if (World == nullptr || !World->PlayerHandle().IsSet() || Handle != World->PlayerHandle())
+		{
+			return true;   // no sensing producer for this candidate: nothing to gate on
+		}
+		const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+		// Current sight counts as membership. `GatherConditions` (`0x1026ec30`) refreshes the memory
+		// component's records and only then runs `ChooseEnemy`, so an actor in view at the moment of
+		// the choice is in memory by construction — reading only the persisted last-seen slots would
+		// miss the actor the senses pass just refreshed.
+		if (Memory.bPlayerLos && Memory.ClosestPlayer == Handle)
+		{
+			return true;
+		}
+		if (Memory.Enemy == Handle || Memory.LastEnemy == Handle
+			|| Memory.LastHeardSource == Handle || Memory.LastDamageAttacker == Handle)
+		{
+			return true;
+		}
+		for (int32 Slot = 0; Slot < static_cast<int32>(FElysiumNpcMemory::ESeen::Count); ++Slot)
+		{
+			if (Memory.LastSeen[Slot] == Handle)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// The recovered arbitration, as a strict "does Candidate displace Incumbent".
 	bool NpcEnemyDisplaces(const FNpcEnemyCandidate& Candidate, const FNpcEnemyCandidate& Incumbent)
 	{
@@ -155,8 +208,10 @@ FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 	bool bHaveBest = false;
 	FNpcEnemyCandidate Best;
 
-	// Candidate discovery walks the entity list in world order, which is insertion order: the
-	// arbitration's ties therefore resolve to whichever eligible entity the map declared first.
+	// Candidate discovery walks the entity list in world order, which is insertion order, and admits
+	// only what `NpcEnemyIsRemembered` answers for. Retail walks its memory list instead, so ties
+	// resolve by memory order there and by map declaration order here — a difference that can only
+	// surface between two remembered actors that are equal at every step of the arbitration.
 	for (const TUniquePtr<FElysiumEntity>& Entry : World->Entities())
 	{
 		FElysiumEntity* Entity = Entry.Get();
@@ -169,6 +224,10 @@ FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 		if (Entity->AsCombatCharacter() == nullptr || Entity->IsInert())
 		{
 			continue;
+		}
+		if (!NpcEnemyIsRemembered(Npc, Entity->Handle))
+		{
+			continue;   // not in the NPC's memory: retail would never have enumerated it
 		}
 		EElysiumRelationship Relation = EElysiumRelationship::Neutral;
 		int32 Priority = 0;

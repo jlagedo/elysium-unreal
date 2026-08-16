@@ -168,6 +168,8 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// `m_bNoAlertState` (0x65f6). 39 authored occurrences in the corpus. It is a keyfield like its
 	// two neighbours, and the save walk carries it for the same reason they are carried.
 	AddNpcField(D, TEXT("no_alert_state"), &FElysiumNpc::bNoAlertState);
+	// `m_bInvincible` (0x63d8). A total damage refusal, not a soak — see FElysiumNpc::RejectsAllDamage.
+	AddNpcField(D, TEXT("invincible"), &FElysiumNpc::bInvincible, EElysiumField::Save);
 	AddNpcField(D, TEXT("default_camera"), &FElysiumNpc::DefaultCamera, EElysiumField::Key);
 	AddNpcField(D, TEXT("player_reaction"), &FElysiumNpc::PlayerReaction, EElysiumField::Key);
 	AddNpcField(D, TEXT("stattemplate"),    &FElysiumNpc::StatTemplate);

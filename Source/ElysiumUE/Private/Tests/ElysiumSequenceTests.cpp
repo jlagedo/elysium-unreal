@@ -652,9 +652,12 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 			Services.Saw(TEXT("ResolveNpcActivityClip")));
 	}
 
-	// The stub reports no motion record for the named clip (a single-cell export, the common
-	// case today): the beat falls back to ElysiumNpcGait::WalkSpeed exactly as an unresolved
-	// Walk does, rather than commanding a zero or negative speed.
+	// The stub reports no motion record for the named clip: the beat falls back to
+	// ElysiumNpcGait::WalkSpeed exactly as an unresolved Walk does, rather than commanding a zero or
+	// negative speed. This covers the fallback only — it is not the ordinary path. A travel cycle is
+	// normally a blend grid in its owning shared bank (`claws_aggressive_run` is a nine-cell
+	// `move_yaw` fan in `character_shared_male_move_and_ranged`), and retail resolves its speed from
+	// that grid, so a real export reaching this branch means the motion record went missing.
 	{
 		FElysiumEntityDefs Defs;
 		BuildCustomDefs(Defs, TEXT("claws_run_0"));

@@ -512,6 +512,37 @@ by comparing squared distance against the three radii at `+0x6484`/`+0x6488`/`+0
 What those idle tasks commit, and how a stance is chosen, is the disposition stance machine in
 `animation_and_movers.md`.
 
+`SCHED_TROIKA_IDLE_RETURN_TO_INITIAL` (`0x45`) is the selector's other terminal answer, and unlike
+`_IDLE_DISPOSITION` it navigates:
+
+```
+TASK_SET_LASTPOSITION_TO_INITIAL 0 ; TASK_SET_TOLERANCE_DISTANCE_ABS 5
+TASK_GET_PATH_TO_LASTPOSITION 0    ; TASK_WALK_PATH 0
+TASK_WAIT_FOR_MOVEMENT 0           ; TASK_FACE_LASTANGLE 0
+TASK_CLEAR_LASTPOSITION 0
+Interrupts  COND_NEW_ENEMY COND_SEE_ENEMY COND_SQUAD_SEE_ENEMY COND_SEE_FEAR
+            COND_LIGHT_DAMAGE COND_HEAVY_DAMAGE COND_GIVE_WAY COND_INVESTIGATE_SOUND
+            COND_INVESTIGATE_SIGHT COND_IGNORE_UNKNOWN COND_DETECTED_ATTACK COND_PLAYER_ON_HEAD
+```
+
+### `m_bReturnToInitialPos` is a one-shot armed only by alert or combat
+
+`CAI_BaseNPCTroika + 0x6494` decides between those two terminal answers, and it carries **no
+external name** in the datamap (`0x105ce470`), so no map, FGD property or entity input can set it.
+`CAI_BaseNPCTroika`'s spawn (`0x1029a0b0`) clears it, and the selector (`0x102af660`) consumes it:
+reading it true both returns `0x45` and writes it back to false in the same branch.
+
+The only writer is `OnStateChange` (`0x102ae140`, `CNPC_VVampire` vtable slot `[463]`), which sets it
+on transition **into ALERT (2) or COMBAT (3)** — plus custom states `8`, `0xb` and `0xe`. `DEAD` (7)
+and the `default` case do not, and **`SCRIPT` (4) falls into that default**, so entering or leaving a
+`scripted_sequence` never arms it.
+
+The consequence is load-bearing for authored scenes: an NPC that has only ever sat under script
+control has the flag clear, so when a beat releases it the selector returns
+`SCHED_TROIKA_IDLE_DISPOSITION` — which carries no navigation task at all. **A released, enemy-less
+NPC stands still.** It can only move in that gap by first entering alert or combat, which also arms
+the walk-home for its next idle reselection.
+
 ### Door-obstruction schedule selection
 
 `FUN_102b7370` at `0x102b7370` is the Troika NPC's door-obstruction selector; the working semantic
@@ -684,9 +715,18 @@ new-enemy-condition repair at `0x1026fb40` runs, and only then are conditions fo
 current enemy gathered. Candidate discovery, memory, enemy choice and attack capability are
 separate stages.
 
-`BestEnemy` (`0x102743c0`) considers only a handle that resolves to a living actor other than self,
-passes the ordinary owner/flag and virtual `IsValidEnemy` gates, has relation `D_HT` or `D_FR`, and
-does not carry the eluded marker in enemy memory. It then arbitrates as follows:
+**`BestEnemy` enumerates the NPC's own enemy memory, never the world entity list.** It fetches the
+memory component through vtable `+0x874` and walks the linked list at component `+0xc`: each entry
+holds the remembered actor's handle at `+0x24`, its eluded byte at `+0x35`, and the next entry at
+`+0x38`. `0x102e0210` walks the same list to answer the eluded test for one candidate. An actor the
+NPC has never sensed has no entry, so it is not a candidate at all — perception is the admission
+stage, and the arbitration below only ever ranks what memory already holds. This is why an NPC
+authored with `vision 0` and a near-zero `hearing` cannot acquire an enemy, and therefore cannot
+enter `COMBAT`, however hostile its `player_reaction` row.
+
+Within that list `BestEnemy` (`0x102743c0`) considers only a handle that resolves to a living actor
+other than self, passes the ordinary owner/flag and virtual `IsValidEnemy` gates, has relation
+`D_HT` or `D_FR`, and does not carry the eluded marker. It then arbitrates as follows:
 
 1. A reachable candidate beats an unreachable candidate.
 2. At the same reachability class, larger `IRelationPriority` wins.

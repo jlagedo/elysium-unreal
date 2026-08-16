@@ -89,6 +89,11 @@ public:
 	// sense promotions and nothing else — the base layer's tail call promotes anyway, which is why
 	// this is not a suppression (`ElysiumNpcCond::SelectIdealState`).
 	bool bNoAlertState = false;
+	// `m_bInvincible` (+0x63d8), authored per NPC. `CNPC_VVampire::OnTakeDamage` (`0x102bed30`)
+	// tests it first and returns immediately, so it is a total refusal rather than a soak: the
+	// Sheriff authors it in `sp_tutorial_1` and no-sells the same scalar `TakeDamage 100` that kills
+	// the Sabbat beside him.
+	bool bInvincible = false;
 	// `m_iEnemySightings` (+0x60a8). Incremented once per committed-enemy acquisition episode in
 	// which the enemy is the player (`FElysiumNpcSenses::GatherEnemyLos`); it drives the recovered
 	// alert-lookaround chance `min(30, (sightings+2)*5)`.
@@ -190,6 +195,9 @@ public:
 	// transaction, and a surviving positive hit remembers its attacker. This is that record; the
 	// schedule/senses consumers that read it arrive with the combat AI.
 	virtual void OnDamageCommitted(const FElysiumDmg& Dmg) override;
+
+	// The authored `invincible` refusal, tested before anything else damage-side.
+	virtual bool RejectsAllDamage() const override { return bInvincible; }
 
 	void InputUseInteresting(const FElysiumInputArgs& Args);
 

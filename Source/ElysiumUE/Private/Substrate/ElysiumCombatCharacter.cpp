@@ -723,9 +723,9 @@ bool FElysiumCombatCharacter::IsKindred() const
 void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker,
 	bool bDisallowFirearmsToBashing)
 {
-	if (IsInert() || HasReportedDeath())
+	if (IsInert() || HasReportedDeath() || RejectsAllDamage())
 	{
-		return;
+		return;   // invincible: retail refuses ahead of life state, the resolver and the commit
 	}
 	// B6 — incoming damage while paired tears the feed down BEFORE the damage commits, whichever
 	// half of the pair is hit (`docs/vtmb/feeding.md` § "Interruption, completion and outputs").
@@ -742,9 +742,9 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 
 void FElysiumCombatCharacter::TakeDamage(float Amount)
 {
-	if (Amount <= 0.f || IsInert())
+	if (Amount <= 0.f || IsInert() || RejectsAllDamage())
 	{
-		return;
+		return;   // invincible: the scalar input reaches the same virtual in retail
 	}
 	BreakFeed();
 

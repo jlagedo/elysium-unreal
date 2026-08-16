@@ -902,6 +902,13 @@ public:
 	// builds a direct-input descriptor whose result is the rounded amount and commits it.
 	void TakeDamage(float Amount);
 
+	// Total, pre-emptive damage refusal. `CNPC_VVampire::OnTakeDamage` (`0x102bed30`) tests the
+	// authored `invincible` keyfield as its very first act and returns without reaching life state,
+	// the resolver or the health commit, so an invincible character is not "healed back" — the damage
+	// never happens. Both `TakeDamage` overloads answer to this because retail's scalar `TakeDamage`
+	// input reaches the same virtual. The base character is never invincible; the NPC leaf overrides.
+	virtual bool RejectsAllDamage() const { return false; }
+
 	// The one typed health commit (`docs/vtmb/combat-and-damage.md` § "Health commit"):
 	// `HealthBuffer` absorbs first, then the unkillable cap, then the damage counter, then Kindred
 	// aggravated tracking, then the outputs and the death test. Nothing else writes the health

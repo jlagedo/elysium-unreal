@@ -242,6 +242,24 @@ Fired by presence (looping beds), by I/O, or from Python via the datamap-bound
 stock LFO/spin envelope block (`lfotype`/`lforate`/`spinup`…) is present but zeroed. Fade keys
 are not: five authored `fadeinsecs` and four `fadeoutsecs` values are non-zero in this snapshot.
 
+### `PlaySound` and `StopSound` are edge-only, and the wired parameter is inert
+
+Both inputs resolve to one shared dispatcher (`0x101ad470`), differing only in a mode literal, and
+that dispatcher refuses the redundant edge in both directions: **`PlaySound` on an entity that is
+already playing returns immediately** — no restart, no re-trigger — and `StopSound` on a stopped
+entity does the same. A map that wants a sound retriggered has to stop it first.
+
+The parameter carried on the wire is **never read**. The dispatcher takes the variant values as
+arguments and no path in its body references them; the sound played is always whatever `message`
+(`m_iszSound`, `+0x4c0`) already names, resolved at play time, with a leading `!` treated as a
+sentence lookup. `sp_tutorial_1` authors `PlaySound` with the parameter `"3"` on one wire and empty
+on every other — they behave identically.
+
+`radius`, `pitch` and `health`/volume are not consulted per call either: the dispatcher branches on
+`m_fLooping` (`+0x4bd`), and only the looping branch marks the entity active and runs the ramp and
+spin bookkeeping out of the packed `m_dpv` block (`+0x458`). Those keyfields are therefore resolved
+once at spawn into `m_dpv`, not re-read on each play.
+
 ### Current exported seam [data]
 
 `research/tooling/probes/audio_surface_survey.py` reads every current `.ents` plus the mirrored Python

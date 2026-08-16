@@ -136,7 +136,7 @@ public:
 	FString PreIdleAlt;     // m_iszPreIdle — the binary carries both names; no exported map uses this one
 	FString Play;           // m_iszPlay — the action animation; its length IS the beat's duration
 	FString PostIdle;       // m_iszPostIdle — held (looping) once the action ends
-	FString CustomMove;     // m_iszCustomMove — the travel animation for m_fMoveTo 3; nothing drives it
+	FString CustomMove;     // m_iszCustomMove — the travel cycle for m_fMoveTo 3, played and speed-resolved
 	FString NextScript;     // m_iszNextScript — the beat to begin when this one ends
 	int32   MoveTo = 0;     // m_fMoveTo — 0 No / 1 Walk / 2 Run / 3 Custom / 4 Instant / 5 Turn to face
 	float   Radius = 0.f;   // m_flRadius — parsed and inert: no site in CCineNPC reads it
