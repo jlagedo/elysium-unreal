@@ -71,8 +71,6 @@ namespace
 		  TEXT("the payphone dialogue prop") },
 		{ TEXT("security_camera"),               TEXT("Disable Enable"),
 		  TEXT("the security-camera leaf") },
-		{ TEXT("aiscripted_schedule"),           TEXT("StartSchedule"),
-		  TEXT("AI scheduling") },
 		{ TEXT("env_physexplosion"),             TEXT("Explode"),
 		  TEXT("scripted physics explosions") },
 		{ TEXT("npc_VCamera"),                   TEXT("TweakParam"),

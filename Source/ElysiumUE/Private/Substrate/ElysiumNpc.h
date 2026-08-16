@@ -4,6 +4,7 @@
 
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumStanceTypes.h"
+#include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
@@ -53,6 +54,11 @@ public:
 	// The running schedule and the variant token its activity picks ride on.
 	FElysiumScheduleState Schedule;
 	int32 ScheduleActivityCycle = 0;
+
+	// --- Cycle 7: the authored director's pushed order ------------------------------------------
+	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
+	// program it started. Session state, not save state — the reasoning is on the struct.
+	FElysiumScriptedScheduleOrder ScriptedScheduleOrder;
 
 	// --- Cycle 6: the combat loadout ------------------------------------------------------------
 	// `additionalequipment` (267 authored rows) and `alternateequipment` (184). The corpus authors
@@ -165,6 +171,34 @@ public:
 	void SeedPlayerRelationship();
 
 	void InputSetRelationship(const FElysiumInputArgs& Args);
+
+	/**
+	 * `ChangeSchedule` / `StartSchedule` — the two policy-level commands that name a native schedule
+	 * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes"). One handler serves
+	 * both: they are "policy-level commands: the named schedule still executes normal tasks,
+	 * failures, interrupts, motor work, and activity translation", and nothing recovered states a
+	 * difference between them.
+	 *
+	 * CHOSEN, NOT RECOVERED: that they are the same operation. The survey names both in one sentence
+	 * and decodes neither body. `Args.Input` distinguishes them in every diagnostic, so the day one
+	 * is decoded the split is a branch rather than a new door.
+	 */
+	void InputNamedSchedule(const FElysiumInputArgs& Args);
+
+	/**
+	 * The one door an `aiscripted_schedule` pushes through.
+	 *
+	 * Order of operations is the recovered entity's: the forced state is the policy and is applied
+	 * first, then the mode decides what else happens — mode 3 commits the goal as this NPC's enemy
+	 * through the ordinary `SetEnemy` transaction, and the four movement modes start their program
+	 * under the `ScriptedSchedule` body owner. Returns whether anything was pushed.
+	 */
+	bool BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Order, bool bHasForcedState,
+		EElysiumNpcState ForcedState);
+
+	// Drop a pushed order and give its body back. Reached from program completion, program failure,
+	// dormancy and death; idempotent, so every one of those may call it.
+	void EndScriptedSchedule(const TCHAR* Reason);
 
 	void InputSetupPatrolType(const FElysiumInputArgs& Args);
 
@@ -317,14 +351,23 @@ public:
 
 	virtual void RememberFact(float What) override;
 
+	virtual bool GetPathToScriptedGoal() override;
+
 	// The combat schedules' movement claim. Idempotent for a token already held, and refused while
-	// another owner has the body — which is what a task turns into its own named failure.
+	// another owner has the body — which is what a task turns into its own named failure. A patrol
+	// route in progress is SUSPENDED by the claim rather than lost, so the release below resumes it.
 	bool AcquireScheduleBody(const TCHAR* Reason);
 
 	// Hand it back and stop whatever the program had the body doing. Called wherever a schedule
 	// stops running: the end of a tick that ended the program, a state change that discarded it,
 	// dormancy, and a restore.
 	void ReleaseScheduleBody(const TCHAR* Reason);
+
+	// The scripted director's movement claim, and its release. Same shape as the pair above, one
+	// rank higher in the arbiter.
+	bool AcquireScriptedScheduleBody(const TCHAR* Reason);
+
+	void ReleaseScriptedScheduleBody(const TCHAR* Reason);
 
 	/**
 	 * `CAI_BaseNPCTroika::SelectDoorObstructionSchedule` (`0x102b7370`), transcribed.
@@ -403,6 +446,7 @@ private:
 	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
 	FElysiumBodyOwnerToken ScheduleOwner;
+	FElysiumBodyOwnerToken ScriptedScheduleOwner;
 	FElysiumBodyOwnerToken SequenceOwner;
 	FElysiumBodyOwnerToken DialogueBodyOwner;
 	TArray<FString> PatrolNames;

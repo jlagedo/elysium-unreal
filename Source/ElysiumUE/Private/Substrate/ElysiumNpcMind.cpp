@@ -84,21 +84,39 @@ bool FElysiumNpcMind::IsAcquisitionAllowed(EElysiumBodyOwner Requested) const
 	case EElysiumBodyOwner::Patrol:
 	case EElysiumBodyOwner::Ambient:
 		return CurrentOwner == EElysiumBodyOwner::None;
-	// The combat schedule families' movement claim. It takes an unowned body only: patrol and the
-	// interesting-place visit are this NPC's own executors and `FElysiumNpc::Think` routes to them
-	// instead of to schedule selection, so a schedule that displaced one would be competing with the
-	// routing rather than with another owner.
+	// The combat schedule families' movement claim. It displaces this NPC's own autonomous
+	// executors: `FElysiumNpc::Think` routes a committed enemy to schedule selection ahead of the
+	// patrol and interesting-place executors, and the arbiter has to be able to grant what that
+	// routing decided — otherwise a patrolling guard would select a chase and then refuse itself the
+	// body. Patrol is suspended by the claim and resumes on release; an interesting-place visit is
+	// finished at the claim site instead, because ambient owns a claimed place rather than a
+	// resumable route.
+	//
+	// It does NOT displace `ScriptedSchedule`: an authored director outranks instinct.
 	case EElysiumBodyOwner::Schedule:
-		return CurrentOwner == EElysiumBodyOwner::None;
-	case EElysiumBodyOwner::Sequence:
+		return CurrentOwner == EElysiumBodyOwner::None
+			|| CurrentOwner == EElysiumBodyOwner::Patrol
+			|| CurrentOwner == EElysiumBodyOwner::Ambient;
+	// `aiscripted_schedule`'s movement claim. It outranks both autonomous executors and an ordinary
+	// combat `Schedule`, because the map author asked for this movement by name and the combat
+	// program was this NPC's own idea. Sequence and dialogue still displace it — a cutscene and a
+	// conversation own the body outright, and a director pushing a goal does not.
+	case EElysiumBodyOwner::ScriptedSchedule:
 		return CurrentOwner == EElysiumBodyOwner::None
 			|| CurrentOwner == EElysiumBodyOwner::Patrol
 			|| CurrentOwner == EElysiumBodyOwner::Ambient
 			|| CurrentOwner == EElysiumBodyOwner::Schedule;
+	case EElysiumBodyOwner::Sequence:
+		return CurrentOwner == EElysiumBodyOwner::None
+			|| CurrentOwner == EElysiumBodyOwner::Patrol
+			|| CurrentOwner == EElysiumBodyOwner::Ambient
+			|| CurrentOwner == EElysiumBodyOwner::Schedule
+			|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule;
 	case EElysiumBodyOwner::Dialogue:
 		return CurrentOwner == EElysiumBodyOwner::None
 			|| CurrentOwner == EElysiumBodyOwner::Patrol
-			|| CurrentOwner == EElysiumBodyOwner::Schedule;
+			|| CurrentOwner == EElysiumBodyOwner::Schedule
+			|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule;
 	default:
 		return false;
 	}
@@ -106,9 +124,15 @@ bool FElysiumNpcMind::IsAcquisitionAllowed(EElysiumBodyOwner Requested) const
 
 void FElysiumNpcMind::RefreshStateFromOwner()
 {
+	// `ScriptedSchedule` is deliberately NOT in this set, and it is the one owner in the arbiter that
+	// is a body claim without being a cognitive state. `aiscripted_schedule` "pushes an AI policy and
+	// goal rather than claiming the body for one exact animation"
+	// (`docs/vtmb/npc-ai-reverse-engineering.md`), and the policy it pushes IS a state — its
+	// `forcestate` resolves to idle, alert or combat. Forcing `Scripted` on the claim would overwrite
+	// the push with the arbiter's opinion the instant the first movement task ran, which is exactly
+	// backwards: eleven of the thirteen corpus rows author a forced state, eight of them combat.
 	const bool bScripted = CurrentOwner == EElysiumBodyOwner::Sequence
 		|| CurrentOwner == EElysiumBodyOwner::Dialogue
-		|| CurrentOwner == EElysiumBodyOwner::ScriptedSchedule
 		|| CurrentOwner == EElysiumBodyOwner::Follower;
 	if (bScripted)
 	{

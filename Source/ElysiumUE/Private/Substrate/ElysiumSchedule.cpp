@@ -45,6 +45,16 @@ namespace
 		static const FScheduleMeta AlertSmallFlinch{ 0x07, TEXT("SCHED_ALERT_SMALL_FLINCH") };
 		static const FScheduleMeta TakeCoverOrigin{ 0x19, TEXT("SCHED_TAKE_COVER_FROM_ORIGIN") };
 
+		// The scripted-director family. CHOSEN, NOT RECOVERED — the NAMES, and only the names. The
+		// survey states that `aiscripted_schedule`'s "move/follow variants use internal schedule IDs
+		// 9 or 19, while a special NPC-type branch uses `0x22`" and never says which program takes
+		// which number, so neither number is claimed here — 0, the same posture the two combat
+		// programs with undecoded registration sites already take. The spellings are this runtime's
+		// own and are what `ChangeSchedule`/`StartSchedule` would have to name to reach them; no
+		// shipped script names either, which is the honest consequence of not having the real ones.
+		static const FScheduleMeta ScriptedMove{ 0, TEXT("SCHED_SCRIPTED_MOVE_TO_GOAL") };
+		static const FScheduleMeta ScriptedFollow{ 0, TEXT("SCHED_SCRIPTED_FOLLOW_PATH") };
+
 		switch (Id)
 		{
 		case EElysiumScheduleId::IdleDisposition:        return IdleDisposition;
@@ -69,6 +79,8 @@ namespace
 		case EElysiumScheduleId::SmallFlinch:            return SmallFlinch;
 		case EElysiumScheduleId::AlertSmallFlinch:       return AlertSmallFlinch;
 		case EElysiumScheduleId::TakeCoverFromOrigin:    return TakeCoverOrigin;
+		case EElysiumScheduleId::ScriptedMoveToGoal:     return ScriptedMove;
+		case EElysiumScheduleId::ScriptedFollowPath:     return ScriptedFollow;
 		default:                                        return None;
 		}
 	}
@@ -120,6 +132,7 @@ const TCHAR* ElysiumTaskName(EElysiumTask Task)
 	case EElysiumTask::RangeAttack1:             return TEXT("TASK_RANGE_ATTACK1");
 	case EElysiumTask::SetSchedule:              return TEXT("TASK_SET_SCHEDULE");
 	case EElysiumTask::Remember:                 return TEXT("TASK_REMEMBER");
+	case EElysiumTask::GetPathToGoal:            return TEXT("TASK_GET_PATH_TO_GOAL");
 	}
 	return TEXT("TASK_?");
 }
@@ -237,6 +250,24 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 	return Registry;
 }
 }   // namespace
+
+bool ElysiumScheduleIdFromName(const FString& Name, EElysiumScheduleId& OutId)
+{
+	OutId = EElysiumScheduleId::None;
+	if (Name.IsEmpty())
+	{
+		return false;
+	}
+	for (const FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
+	{
+		if (Name.Equals(ElysiumScheduleName(Schedule.Id), ESearchCase::IgnoreCase))
+		{
+			OutId = Schedule.Id;
+			return true;
+		}
+	}
+	return false;
+}
 
 void ElysiumSchedule::Register(FElysiumSchedule&& Program)
 {
@@ -368,6 +399,10 @@ namespace
 
 		case EElysiumTask::GetPathToEnemy:
 			return Runner.GetPathToEnemy(State.ToleranceUnits)
+				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
+
+		case EElysiumTask::GetPathToGoal:
+			return Runner.GetPathToScriptedGoal()
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
 
 		case EElysiumTask::RunPath:

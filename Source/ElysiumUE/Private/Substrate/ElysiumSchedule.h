@@ -79,6 +79,12 @@ enum class EElysiumTask : uint8
 	// not decoded, so what is remembered is carried as a number and read by nobody. The task is here
 	// because `SCHED_SMALL_FLINCH` opens with it and dropping a step would misreport the program.
 	Remember,
+
+	// --- The scripted-director vocabulary --------------------------------------------------------
+	// Path to the goal an `aiscripted_schedule` pushed (`TASK_GET_PATH_TO_GOAL`). It reads no
+	// operand: the goal, the route and the gait are the pushed order's, exactly as
+	// `TASK_GET_PATH_TO_ENEMY` reads the committed enemy off memory rather than off a task column.
+	GetPathToGoal,
 };
 
 enum class EElysiumScheduleId : uint8
@@ -108,12 +114,29 @@ enum class EElysiumScheduleId : uint8
 	SmallFlinch,              // 0x14 SCHED_SMALL_FLINCH
 	AlertSmallFlinch,         // 0x07 SCHED_ALERT_SMALL_FLINCH
 	TakeCoverFromOrigin,      // 0x19 SCHED_TAKE_COVER_FROM_ORIGIN
+
+	// --- The scripted-director family (`Substrate/ElysiumAiScriptedSchedule.cpp` registers both) --
+	ScriptedMoveToGoal,       // `aiscripted_schedule` modes 1 and 2
+	ScriptedFollowPath,       // `aiscripted_schedule` modes 4 and 5
 };
 
 // Retail's registered number for a schedule, so a trace row and the binary agree.
 int32 ElysiumScheduleNumber(EElysiumScheduleId Id);
 const TCHAR* ElysiumScheduleName(EElysiumScheduleId Id);
 const TCHAR* ElysiumTaskName(EElysiumTask Task);
+
+/**
+ * The name -> id direction, for the two script-facing schedule commands.
+ *
+ * `ChangeSchedule` and `StartSchedule` "name native schedules explicitly"
+ * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes"), so schedule identity is
+ * authored API and needs a lookup rather than a number. Only a REGISTERED program resolves: a name
+ * this runtime carries no program for has to fail by name, because starting some other schedule
+ * under an authored name would be a behaviour invented out of a string.
+ *
+ * Matching is case-insensitive over `ElysiumScheduleName`.
+ */
+bool ElysiumScheduleIdFromName(const FString& Name, EElysiumScheduleId& OutId);
 
 struct FElysiumTaskStep
 {
@@ -280,6 +303,11 @@ public:
 	virtual bool RangeAttack1() { return false; }
 	// `TASK_REMEMBER`, traced and otherwise inert (see `EElysiumTask::Remember`).
 	virtual void RememberFact(float What) {}
+
+	// `TASK_GET_PATH_TO_GOAL` — issue the next leg of the scripted order this NPC was pushed, at the
+	// order's own gait. False means no order, no body, an exhausted route or a body that would not
+	// take the request; all four fail the task, and the runner names which.
+	virtual bool GetPathToScriptedGoal() { return false; }
 };
 
 // The per-NPC runner state. Saved as part of the NPC, so a schedule survives a save.

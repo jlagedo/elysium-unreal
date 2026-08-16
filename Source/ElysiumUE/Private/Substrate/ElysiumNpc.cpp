@@ -20,6 +20,7 @@
 #include "ElysiumSaveTypes.h"
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumItemClasses.h"
@@ -364,6 +365,17 @@ bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
 
 bool FElysiumNpc::AcquireSequenceBody(const TCHAR* Reason)
 {
+	// A pushed scripted order is DROPPED rather than parked, for the same reason dialogue drops it:
+	// the arbiter's one parked slot belongs to the patrol route, and `aiscripted_schedule` is a
+	// one-shot push with no resume. A beat that takes this body ends whatever a director had asked
+	// for, which is also the recovered precedence — a sequence claims the body outright.
+	EndScriptedSchedule(Reason);
+	// The combat claim leaves the same way, and for a load-bearing reason rather than tidiness: the
+	// arbiter has ONE parked slot, and a schedule that took the body off a patrol route is already
+	// holding the route in it. Parking the schedule on top would discard the route and strand the
+	// mind owning a claim whose token this leaf has retired. Releasing first restores the route, and
+	// the claim below then parks the thing that is actually resumable.
+	ReleaseScheduleBody(Reason);
 	return Mind.Acquire(EElysiumBodyOwner::Sequence, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
 		SequenceOwner, Reason);
 }
@@ -488,6 +500,16 @@ void FElysiumNpc::Think()
 		Mind.RecordExternal(FString::Printf(TEXT("loadout: %s"),
 			ElysiumNpcLoadout::ResultName(Result)));
 	}
+	// --- Cycle 7: a director that fired before this NPC's first think -----------------------------
+	// The push was deferred whole (`BeginScriptedSchedule`), because admission establishes idle and
+	// would have wiped a forced state applied ahead of it. Replaying it here is the first thing an
+	// admitted NPC does, so the order is in force before any condition is gathered against it.
+	if (ScriptedScheduleOrder.bPending && Mind.IsAdmitted())
+	{
+		const FElysiumScriptedScheduleOrder Pending = ScriptedScheduleOrder;
+		ScriptedScheduleOrder.Reset();
+		BeginScriptedSchedule(Pending, Pending.bHasForcedState, Pending.ForcedState);
+	}
 	// --- Cycle 4: condition gathering ------------------------------------------------------------
 	// Senses run before any executor picks work, which is where the recovered pass puts them, and
 	// are suppressed exactly where retail suppresses condition gathering: a scripted owner or an
@@ -569,6 +591,37 @@ void FElysiumNpc::Think()
 			bScriptBodyHeld = AcquireSequenceBody(TEXT("scripted beat claim after admission"));
 		}
 		NextThink = static_cast<float>(Now + 0.25);
+		return;
+	}
+	// --- Cycle 7: schedule selection pre-empts an autonomous executor ---------------------------
+	// A committed enemy or an authored director outranks this NPC's own patrol route and
+	// interesting-place visit. Until this branch existed, `Think` reached the executor before
+	// schedule selection ran at all, so a patrolling guard that acquired an enemy kept walking its
+	// route and `SelectCombatSchedule` was never called for it.
+	//
+	// The change is deliberately in the ROUTING and not in either executor: the arbiter already
+	// carries both hand-over shapes (patrol suspends and resumes, ambient owns a claimed place that
+	// has to be given back), and the programs are the ones cycle 6 registered.
+	const bool bScriptedPolicy = ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
+	if (bScriptedPolicy || Mind.State() == EElysiumNpcState::Combat)
+	{
+		if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
+		{
+			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		}
+		if (bPatrolActive && bMoveIssued && !ScheduleOwner.IsSet() && !ScriptedScheduleOwner.IsSet())
+		{
+			// The route's outstanding request stops once, on the hand-over. The TOKEN is not released
+			// here: the claim that takes the body suspends it through the arbiter, which is what lets
+			// the route resume at the same point when the program is done.
+			if (Motor != nullptr)
+			{
+				Motor->Stop();
+			}
+			bMoveIssued = false;
+			bWalkingAnimation = false;
+		}
+		ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
 		return;
 	}
 	if (bPatrolActive && !PatrolOwner.IsSet())
@@ -686,12 +739,10 @@ EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
 
 EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
 {
-	// GAP (stated, not a refusal): an NPC running the patrol or interesting-place executor never
-	// reaches this function at all — `Think` routes to the executor instead of to schedule
-	// selection, so a patrolling guard that acquires an enemy keeps walking its route. Pre-empting
-	// an autonomous executor on acquisition is an arbiter transition this cycle does not make; the
-	// combat families are what it builds, and the executor hand-over is a change to `Think`'s
-	// routing rather than to any of them.
+	// An NPC running the patrol or interesting-place executor DOES reach this function: `Think`
+	// routes a Combat state to schedule selection ahead of either executor, the patrol route is
+	// suspended through the arbiter and resumes when the program ends, and an interesting-place visit
+	// gives its claimed place back. The hand-over lives in the routing, not here.
 	const double Now = World ? World->NowSeconds() : 0.0;
 
 	// The recovered split: a weapon reporting `0x18000` enters the melee selector at `0x10385e40`,
@@ -761,6 +812,15 @@ void FElysiumNpc::UpdateIdealState(double Now)
 		return;
 	}
 	Mind.RequestState(Ideal, TEXT("SelectIdealState"));
+	// An authored director outranks the state change it may itself have caused. `forcestate 3` puts
+	// an NPC in combat with no enemy, whose recovered fallback is a drop back to alert on the very
+	// next pass — and discarding the program here would cancel the walk the same director pushed
+	// half a think earlier. The pushed program ends where every other program ends: on its own
+	// completion or failure, in `ThinkStanceOrIdle`.
+	if (ScriptedScheduleOwner.IsSet() || ScriptedScheduleOrder.IsSet())
+	{
+		return;
+	}
 	// A state change reselects. The running program was chosen by the state that has just been left
 	// — an idle stance under an NPC that just acquired an enemy — so it ends here rather than
 	// finishing on behalf of a state that no longer holds.
@@ -786,6 +846,20 @@ void FElysiumNpc::ThinkStanceOrIdle(double Now)
 	// movement it claimed goes back BEFORE the next selection runs: an idle program picked while
 	// this NPC still held the body would decline its own first task against itself.
 	ReleaseScheduleBody(TEXT("schedule ended"));
+
+	// A pushed scripted order lives exactly as long as the program it started. Arrival, a refused
+	// route and a failed leg all land here, and this is what returns the NPC to ordinary selection
+	// and hands a suspended patrol route back. The forced state deliberately does NOT come back with
+	// it: `forcestate` was a state push, not a hold.
+	if (ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet())
+	{
+		EndScriptedSchedule(TEXT("scripted schedule ended"));
+		// Hand back to `Think`'s routing rather than selecting from inside the branch the director
+		// sent this NPC down: a suspended patrol route has just been restored, and resuming it is
+		// that executor's turn, not schedule selection's.
+		NextThink = static_cast<float>(Now + 0.05);
+		return;
+	}
 
 	const EElysiumScheduleId Next = SelectSchedule();
 	if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(Schedule, Next, *this))
@@ -1196,7 +1270,11 @@ bool FElysiumNpc::AcquireScheduleBody(const TCHAR* Reason)
 	// A token from a claim that was displaced (a scripted beat took the body mid-chase) is retired
 	// here rather than carried: the arbiter would refuse a release against it anyway.
 	ScheduleOwner.Reset();
-	return Mind.Acquire(EElysiumBodyOwner::Schedule, /*bSuspendCurrent=*/false, ScheduleOwner, Reason);
+	// A patrol route is SUSPENDED rather than taken: the arbiter parks it, the release below restores
+	// it, and the route continues from the point it reached. An interesting-place visit is not
+	// parkable in that sense — it owns a claimed place — so `Think`'s hand-over finishes it first.
+	const bool bParkPatrol = Mind.Owner() == EElysiumBodyOwner::Patrol;
+	return Mind.Acquire(EElysiumBodyOwner::Schedule, bParkPatrol, ScheduleOwner, Reason);
 }
 
 void FElysiumNpc::ReleaseScheduleBody(const TCHAR* Reason)
@@ -1220,6 +1298,271 @@ void FElysiumNpc::ReleaseScheduleBody(const TCHAR* Reason)
 		Mind.Release(ScheduleOwner, Reason);
 	}
 	ScheduleOwner.Reset();
+	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+	{
+		// A suspended route came back with a fresh generation. The leaf's own token has to be
+		// re-stamped or the patrol executor would hold one the arbiter no longer honours.
+		PatrolOwner = Mind.CurrentToken();
+	}
+}
+
+bool FElysiumNpc::AcquireScriptedScheduleBody(const TCHAR* Reason)
+{
+	if (ScriptedScheduleOwner.IsSet() && Mind.Owner() == EElysiumBodyOwner::ScriptedSchedule
+		&& Mind.Generation() == ScriptedScheduleOwner.Generation)
+	{
+		return true;
+	}
+	ScriptedScheduleOwner.Reset();
+	const bool bParkPatrol = Mind.Owner() == EElysiumBodyOwner::Patrol;
+	return Mind.Acquire(EElysiumBodyOwner::ScriptedSchedule, bParkPatrol, ScriptedScheduleOwner,
+		Reason);
+}
+
+void FElysiumNpc::ReleaseScriptedScheduleBody(const TCHAR* Reason)
+{
+	if (!ScriptedScheduleOwner.IsSet())
+	{
+		return;
+	}
+	const bool bLive = Mind.Owner() == EElysiumBodyOwner::ScriptedSchedule
+		&& Mind.Generation() == ScriptedScheduleOwner.Generation;
+	if (bLive)
+	{
+		if (Motor != nullptr)
+		{
+			Motor->Stop();
+		}
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+		Mind.Release(ScriptedScheduleOwner, Reason);
+	}
+	ScriptedScheduleOwner.Reset();
+	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+	{
+		PatrolOwner = Mind.CurrentToken();
+	}
+}
+
+// ================================================================================================
+// The authored director (cycle 7)
+// ================================================================================================
+
+bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Order,
+	bool bHasForcedState, EElysiumNpcState ForcedState)
+{
+	using EMode = ElysiumAiScriptedSchedule::EMode;
+
+	if (IsInert())
+	{
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s refused a scripted schedule: the NPC is dead or hidden"), *DebugString());
+		return false;
+	}
+	if (!Mind.IsAdmitted())
+	{
+		// DEFERRED, not refused, and the whole push waits rather than half of it. `sm_medical_1`
+		// wires `guard_to_nurse` off an `npc_maker`'s `OnSpawnNPC`, so a director genuinely reaches
+		// an NPC that has never thought — and admission establishes idle on that first think, so a
+		// forced state applied ahead of it would be wiped by the barrier it was racing. The order
+		// carries its own forced state for exactly this window and `Think` replays it once admission
+		// has run, the same shape a scripted beat's deferred body claim already takes.
+		ScriptedScheduleOrder = Order;
+		ScriptedScheduleOrder.bHasForcedState = bHasForcedState;
+		ScriptedScheduleOrder.ForcedState = ForcedState;
+		ScriptedScheduleOrder.bPending = true;
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		return true;
+	}
+
+	// The policy, first and unconditionally. It is a STATE push and not a hold: nothing here parks
+	// the state to restore later, because the recovered entity has no end and no release — it fires
+	// once and the NPC carries what it was given.
+	if (bHasForcedState)
+	{
+		Mind.RequestState(ForcedState, TEXT("aiscripted_schedule forcestate"));
+	}
+
+	if (static_cast<EMode>(Order.Mode) == EMode::AssignEnemy)
+	{
+		// Mode 3, recovered: "assigns the goal entity as enemy, copies its target position, and
+		// injects native condition 0x54". The assignment goes through the ordinary `SetEnemy`
+		// transaction rather than writing the handle, so the last-enemy transfer, the LOS-episode
+		// reset and everything else an acquisition means all happen exactly once and in one place.
+		const FElysiumEntity* Goal = World ? World->Resolve(Order.Goal) : nullptr;
+		ElysiumNpcEnemy::SetEnemy(*this, Order.Goal);
+		if (Goal != nullptr)
+		{
+			// "copies its target position". CHOSEN, NOT RECOVERED — WHICH slot. The recovered
+			// sentence names a target position and this chain carries exactly one recovered position
+			// member, `m_vSavePosition` (+0x5dd0), which is also what the retreat and cover tasks
+			// read and what the combat selector stamps with an enemy origin for the same purpose.
+			SavePosition = Goal->Origin;
+		}
+		// The injected condition, by its recovered number: `NEW_ENEMY` is 0x54.
+		Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+		// The running program was chosen by an NPC that did not have this enemy. It ends here rather
+		// than finishing on behalf of a decision the director has just overruled.
+		Schedule.Clear();
+		ReleaseScheduleBody(TEXT("aiscripted_schedule assigned an enemy"));
+		RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode 3: enemy := %s"),
+			World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		return true;
+	}
+
+	const EElysiumScheduleId Program = ElysiumAiScriptedSchedule::ProgramFor(Order.Mode);
+	if (Program == EElysiumScheduleId::None)
+	{
+		// A forced state with no movement mode is an ordinary authored row: two corpus rows push a
+		// state alone. The push above already happened, so there is nothing left to refuse.
+		RecordScheduleEvent(TEXT("aiscripted_schedule: forced state only, no movement mode"));
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		return bHasForcedState;
+	}
+
+	// An interesting-place visit gives its claimed place back before the director takes the body —
+	// ambient owns a place rather than a resumable route, so parking it would strand the claim.
+	if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
+	{
+		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	}
+	// An ordinary combat claim gives way to the director. Releasing before the new claim keeps the
+	// arbiter's parked-owner slot holding the PATROL route rather than the schedule that displaced it.
+	Schedule.Clear();
+	ReleaseScheduleBody(TEXT("aiscripted_schedule took the body"));
+
+	ScriptedScheduleOrder = Order;
+	ScriptedScheduleOrder.bPending = false;   // this IS the replay; nothing is waiting any more
+	if (!AcquireScriptedScheduleBody(TEXT("aiscripted_schedule")))
+	{
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s refused a scripted schedule the body: %s owns it"),
+			*DebugString(), LexToString(Mind.Owner()));
+		ScriptedScheduleOrder.Reset();
+		return false;
+	}
+	if (!ElysiumSchedule::Start(Schedule, Program, *this))
+	{
+		EndScriptedSchedule(TEXT("scripted program would not start"));
+		return false;
+	}
+	RecordScheduleEvent(FString::Printf(TEXT("aiscripted_schedule mode %d (%s, %s) goal %s"),
+		Order.Mode, ElysiumAiScriptedSchedule::ModeName(Order.Mode),
+		Order.bRun ? TEXT("run") : TEXT("walk"),
+		World ? *World->DescribeHandle(Order.Goal) : TEXT("(no world)")));
+	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+	return true;
+}
+
+void FElysiumNpc::EndScriptedSchedule(const TCHAR* Reason)
+{
+	// `bPending` is tested beside the other two because a state-only push carries mode 0, which is
+	// not `IsSet()` — a deferred one still has to be droppable by death, dormancy and a beat.
+	if (!ScriptedScheduleOrder.IsSet() && !ScriptedScheduleOrder.bPending
+		&& !ScriptedScheduleOwner.IsSet())
+	{
+		return;
+	}
+	ScriptedScheduleOrder.Reset();
+	if (ElysiumAiScriptedSchedule::IsScriptedProgram(Schedule.Current))
+	{
+		// The program and the order are one thing. A scripted program left running with no order
+		// behind it would fail its next leg by name for a reason no reader could act on.
+		Schedule.Clear();
+	}
+	ReleaseScriptedScheduleBody(Reason);
+}
+
+bool FElysiumNpc::GetPathToScriptedGoal()
+{
+	if (!ScriptedScheduleOrder.IsSet())
+	{
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL refused: no scripted order is in force"));
+		return false;
+	}
+	if (!ScriptedScheduleOrder.Route.IsValidIndex(ScriptedScheduleOrder.Leg))
+	{
+		// The route ran out, which is how a follow-path program ends: the transfer back to itself
+		// re-enters here, this fails, and the NPC returns to ordinary selection. It is not an error.
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL: the scripted route is complete"));
+		return false;
+	}
+	if (Motor == nullptr)
+	{
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL refused: this NPC has no motor"));
+		return false;
+	}
+	if (!AcquireScriptedScheduleBody(TEXT("TASK_GET_PATH_TO_GOAL")))
+	{
+		Mind.RecordExternal(FString::Printf(TEXT("TASK_GET_PATH_TO_GOAL refused: %s owns the body"),
+			LexToString(Mind.Owner())));
+		return false;
+	}
+	const FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
+	bMoveIssued = Motor->MoveTo(Destination, ElysiumNpcGait::ScriptAcceptanceCm,
+		ScriptedScheduleOrder.bRun ? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed);
+	if (!bMoveIssued)
+	{
+		// The recovered route-failure report, and the recovered switch that silences it: "spawn flag
+		// 0x800 suppresses the route-failure warning". Latched per pushed order either way — a body
+		// that could not take this leg will not take the next one.
+		if (!ScriptedScheduleOrder.bSuppressRouteWarning && !ScriptedScheduleOrder.bWarnedRoute)
+		{
+			ScriptedScheduleOrder.bWarnedRoute = true;
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("%s could not take the route an aiscripted_schedule pushed (goal %s): the "
+					 "program fails and the NPC returns to ordinary selection"),
+				*DebugString(),
+				World ? *World->DescribeHandle(ScriptedScheduleOrder.Goal) : TEXT("(no world)"));
+		}
+		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_GOAL refused: the body would not take the route"));
+		return false;
+	}
+	bWalkingAnimation = StartWalkingAnimation(ScriptedScheduleOrder.bRun);
+	return true;
+}
+
+void FElysiumNpc::InputNamedSchedule(const FElysiumInputArgs& Args)
+{
+	const FString Requested = Args.Param.ToString().TrimStartAndEnd();
+	const FString InputName = Args.Input.IsNone()
+		? FString(TEXT("ChangeSchedule")) : Args.Input.ToString();
+	if (IsInert())
+	{
+		return;
+	}
+	if (Requested.IsEmpty())
+	{
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s %s was fired with no schedule name — refused"), *DebugString(), *InputName);
+		return;
+	}
+	EElysiumScheduleId Id = EElysiumScheduleId::None;
+	if (!ElysiumScheduleIdFromName(Requested, Id))
+	{
+		// The gap is the NAMED program, not the input. The corpus's five `ChangeSchedule` sites ask
+		// for `SCHED_VDOG_SNARL`, `SCHED_VDOG_MADEFRIEND` and the literal `-`, and this runtime
+		// registers none of the three; the reported surface is keyed on the NAME, so `elysium.stubs`
+		// reads back exactly which native schedules the shipped scripts want, one row each.
+		ElysiumStub::Fired(TEXT("schedule"),
+			FString::Printf(TEXT("CAI_BaseNPC.%s(%s)"), *InputName, *Requested),
+			DebugString(), ElysiumStub::DescribeInput(Args),
+			TEXT("no registered program carries that name"));
+		RecordScheduleEvent(FString::Printf(TEXT("%s refused: '%s' is not a registered program"),
+			*InputName, *Requested));
+		return;
+	}
+	// A named schedule starts through the ordinary kernel: interrupts, fail schedules, motor work and
+	// activity translation are all whatever the named program declares. Nothing about being named by
+	// a script changes how it runs, which is the whole recovered point of these two commands.
+	Schedule.Clear();
+	ReleaseScheduleBody(*InputName);
+	if (!ElysiumSchedule::Start(Schedule, Id, *this))
+	{
+		return;   // `Start` reports the refusal by name through the runner's own trace
+	}
+	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 }
 
 void FElysiumNpc::StopMoving()
@@ -1716,6 +2059,12 @@ FElysiumBodyOwnerToken FElysiumNpc::BeginDialogueBodySession()
 			bScriptOwnerLocked = false;
 		}
 	}
+	// A pushed scripted order is DROPPED rather than parked. The arbiter's one parked slot is spoken
+	// for by the patrol route, and `aiscripted_schedule` has no resume: it is a one-shot push with no
+	// end and no release, so a conversation ends the order it interrupted. The combat claim leaves
+	// for the same one-slot reason it does at `AcquireSequenceBody`.
+	EndScriptedSchedule(TEXT("dialogue opened"));
+	ReleaseScheduleBody(TEXT("dialogue opened"));
 	if (!Mind.Acquire(EElysiumBodyOwner::Dialogue, /*bSuspendCurrent=*/PatrolOwner.IsSet(),
 		DialogueBodyOwner, TEXT("dialogue open")))
 	{
@@ -2012,6 +2361,7 @@ void FElysiumNpc::OnDormancyChanged()
 		}
 		EndScriptMove();
 		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+		EndScriptedSchedule(bDead ? TEXT("death") : TEXT("dormancy"));
 		ReleaseScheduleBody(bDead ? TEXT("death") : TEXT("dormancy"));
 		Schedule.Clear();
 		CombatSelector.Reset();
@@ -2020,6 +2370,8 @@ void FElysiumNpc::OnDormancyChanged()
 		AmbientOwner.Reset();
 		SequenceOwner.Reset();
 		ScheduleOwner.Reset();
+		ScriptedScheduleOwner.Reset();
+		ScriptedScheduleOrder.Reset();
 		DialogueBodyOwner.Reset();
 		// The beat's own ReleaseNpc still runs; it must find nothing left to give back rather
 		// than releasing a token this invalidation already retired.
@@ -2147,6 +2499,12 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			// A restore never resumes `Schedule` ownership either: the program restarts from its
 			// first task below, and its first movement task takes the claim again.
 			ScheduleOwner.Reset();
+			// Nor `ScriptedSchedule`. The order behind it is a live goal handle and a route resolved
+			// out of the previous map epoch, so it is session state (the reasoning is on
+			// `FElysiumScriptedScheduleOrder`); what the push durably changed is the mind state
+			// restored just above and, for mode 3, the committed enemy the senses block carries.
+			ScriptedScheduleOwner.Reset();
+			ScriptedScheduleOrder.Reset();
 			CombatSelector.Reset();
 			// A restore never resumes `Sequence` ownership, so any token from before the load is
 			// retired with it. The request survives: whichever order the two entities restore in,
@@ -2169,7 +2527,19 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 		{
 			Schedule.Clear();
 			const EElysiumScheduleId Restored = static_cast<EElysiumScheduleId>(SavedSchedule);
-			if (Restored != EElysiumScheduleId::None && ElysiumScheduleFor(Restored) != nullptr)
+			if (ElysiumAiScriptedSchedule::IsScriptedProgram(Restored))
+			{
+				// A scripted director's program is not restartable without the order that pushed it,
+				// and that order is not save state. `SaveBlockReason` refuses a save while the
+				// `ScriptedSchedule` owner holds the body, so a payload can only carry this program
+				// from the narrow window between the push and its first movement claim. Restarting it
+				// would fail its first task by name on the next think; refusing it here says so once,
+				// and the NPC selects normally instead.
+				RecordScheduleEvent(FString::Printf(
+					TEXT("restore refused %s: the pushed order it needs is not save state"),
+					ElysiumScheduleName(Restored)));
+			}
+			else if (Restored != EElysiumScheduleId::None && ElysiumScheduleFor(Restored) != nullptr)
 			{
 				ElysiumSchedule::Start(Schedule, Restored, *this);
 			}
@@ -2276,6 +2646,13 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		LexToString(Mind.Owner()), Mind.Generation(), LexToString(Mind.SuspendedOwner())));
 	Out.Emplace(TEXT("Mind transition"), Mind.LastTransition().IsEmpty()
 		? TEXT("(none)") : Mind.LastTransition());
+	Out.Emplace(TEXT("Scripted schedule"), ScriptedScheduleOrder.IsSet()
+		? FString::Printf(TEXT("mode %d (%s, %s) leg %d/%d goal %s"), ScriptedScheduleOrder.Mode,
+			ElysiumAiScriptedSchedule::ModeName(ScriptedScheduleOrder.Mode),
+			ScriptedScheduleOrder.bRun ? TEXT("run") : TEXT("walk"),
+			ScriptedScheduleOrder.Leg, ScriptedScheduleOrder.Route.Num(),
+			World ? *World->DescribeHandle(ScriptedScheduleOrder.Goal) : TEXT("(no world)"))
+		: TEXT("(none)"));
 	Out.Emplace(TEXT("Patrol"), bPatrolActive
 		? FString::Printf(TEXT("point %d/%d: %s"), PatrolIndex + 1, PatrolPoints.Num(), *PatrolPath)
 		: TEXT("inactive"));

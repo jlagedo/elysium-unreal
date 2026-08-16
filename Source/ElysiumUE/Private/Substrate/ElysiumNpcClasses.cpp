@@ -110,6 +110,24 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	D.Input(TEXT("SetRelationship"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputSetRelationship(Args); });
 
+	// The two policy-level schedule commands. Both take a native schedule NAME
+	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes") and both land on one
+	// handler, which distinguishes them by `Args.Input` in every diagnostic.
+	//
+	// Corpus provenance, because the two names are not evidenced the same way and the difference
+	// matters for what a coverage report should expect. `ChangeSchedule` has five immediate script
+	// sites, all of them on an NPC receiver (`vamputil` names `SCHED_VDOG_SNARL` and
+	// `SCHED_VDOG_MADEFRIEND`; `hollywood` twice names the literal `-`). `StartSchedule` has eight
+	// map wires and two script sites and EVERY one of them aims at an `aiscripted_schedule` entity,
+	// never at an NPC — that entity's own input is registered in
+	// `Substrate/ElysiumAiScriptedSchedule.cpp`. It is registered here as well because the recovered
+	// material names both as CAI_BaseNPC-level commands and a receiver may distinguish identical
+	// spellings (K1); nothing in the current corpus reaches this one.
+	D.Input(TEXT("ChangeSchedule"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputNamedSchedule(Args); });
+	D.Input(TEXT("StartSchedule"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputNamedSchedule(Args); });
+
 	// The runtime folds the retail CAI_BaseNPC / CAI_BaseNPCTroika nodes into every registered
 	// `npc_*` leaf; the registry's class walk still exposes their shared input surface.
 	using FN = FElysiumNpc;
