@@ -140,8 +140,8 @@ namespace ElysiumWeapons
 	// speed joins here rather than at each call site.
 	float AttackSpeedScale(const FElysiumCombatCharacter& Owner);
 
-	// SEAM — the active Potence rank the melee commit floors `DamageInflicted` up to. Disciplines
-	// (13.2) own the active-discipline read; until they land this is 0, which floors nothing.
+	// The active Potence rank the melee commit floors `DamageInflicted` up to — the
+	// `Active_Potence` sheet slot, read through the discipline runtime. 0 when the power is not up.
 	int32 ActivePotenceRank(const FElysiumCombatCharacter& Attacker);
 
 	// The ranged per-victim lethality after step 3's clamp and step 4's Kindred-only defence

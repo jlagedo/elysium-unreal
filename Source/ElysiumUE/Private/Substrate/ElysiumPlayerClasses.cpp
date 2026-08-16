@@ -22,6 +22,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumDisciplines.h"   // Cycle 9
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Holster's carried-weapon fallback
 #include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumPlayerLog.h"
@@ -349,7 +350,18 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		ELYSIUM_PENDING_INPUT(FC, HungerCheck,            "P13 — disciplines and frenzy");
 		ELYSIUM_PENDING_INPUT(FC, FrenzyUpdate,           "P13 — disciplines and frenzy");
 
-		ELYSIUM_PENDING_INPUT(FC, ClearActiveDisciplines, "P13 — disciplines");
+		// Cycle 9 (13.2) — the one real teardown. `vdiscipline_endall` and this input converge on it: remove
+		// the owned expiry events, drop every trait-effect group both families installed, zero the
+		// thirteen active slots and recompute. The pending row retires with it.
+		D.Input(TEXT("ClearActiveDisciplines"), [](FElysiumEntity& E, const FElysiumInputArgs&)
+			{ ElysiumDisciplines::ClearAll(static_cast<FC&>(E)); });
+
+		// The owned Discipline expiry, delivered to `!self` through the one queue (R4/K11). It is a
+		// project-owned input rather than a recovered datamap name — no recovered
+		// CBaseCombatCharacter input carries an expiry — and it is registered on the chain so the
+		// queue, the inspector and the save all see one shape, the way the weapon commit is.
+		D.Input(ElysiumDisciplines::ExpiryInput(), [](FElysiumEntity& E, const FElysiumInputArgs& A)
+			{ ElysiumDisciplines::CommitExpiry(static_cast<FC&>(E), A.Param.ToInt()); });
 		ELYSIUM_PENDING_INPUT(FC, BarterBegin,            "9.8 — barter");
 		ELYSIUM_PENDING_INPUT(FC, BarterEnd,              "9.8 — barter");
 		ELYSIUM_PENDING_INPUT(FC, PlayFloat,              "8.9 — the floating HUD readout");

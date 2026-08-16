@@ -78,6 +78,9 @@ namespace ElysiumSlot
 	constexpr int32 HealthAggDmg   = 16;
 	constexpr int32 MaxHealth      = 17;
 	constexpr int32 Generation     = 18;
+	// The defender's automatic soak successes — what the damage resolver adds to its soak roll and
+	// what Fortitude's trait-effect group writes.
+	constexpr int32 AutomaticSoakSuccesses = 23;
 	constexpr int32 HealthBuffer   = 25;
 	constexpr int32 Humanity       = 27;
 	constexpr int32 Masquerade     = 28;

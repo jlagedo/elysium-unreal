@@ -141,6 +141,12 @@ const FElysiumReactionCatalogue& UElysiumRulebookSubsystem::Reactions()
 	return Catalogue;
 }
 
+const FElysiumDisciplineTargets& UElysiumRulebookSubsystem::DisciplineTargets()
+{
+	return Get(DisciplineTargetTable, bDisciplineTargetsLoaded, TEXT("disciplinetgt"),
+		DisciplineTargetsError);
+}
+
 const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
 {
 	const bool bWasLoaded = bItemsLoaded;
@@ -259,6 +265,9 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 	// IsValid`), the modifier set is supplementary.
 	Out.Add({ TEXT("reactions"), TEXT("system/reaction.txt + reactions000.txt"),
 		Reactions().Bands.Bands.Num(), Reactions().IsValid(), ReactionsError });
+
+	Out.Add({ TEXT("disciplinetgt"), TEXT("system/disciplinetgt_*.txt (5 files)"),
+		DisciplineTargets().Num(), DisciplineTargets().IsValid(), DisciplineTargetsError });
 }
 
 // ================================================================================================

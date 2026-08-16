@@ -235,6 +235,71 @@ inline bool ElysiumFeedAccepted(EElysiumFeedVerdict Verdict)
 		|| Verdict == EElysiumFeedVerdict::AcceptedOpposedCheck;
 }
 
+// ============================================================================================
+// Disciplines (13.2) — the two execution families' live state.
+// `docs/vtmb/disciplines.md` owns the behaviour; `Substrate/ElysiumDisciplines.h` owns the rules
+// over these fields.
+// ============================================================================================
+
+// One targeted-Discipline effect running on the character it was applied to. Retail tracks active
+// targeted effects as bits on the affected character so that replacement and
+// `ClearActiveDisciplines` remove the actual effect owner rather than hiding its particle; this is
+// the same tracking with the owning record named, which is what lets teardown remove exactly the
+// trait-effect groups that hit installed and nothing else.
+struct FElysiumActiveDisciplineEffect
+{
+	FString Record;              // the `DisciplineTgt` InternalName that cast it
+	FString HitTable;            // the `HitInfo` this target resolved to
+	TArray<FString> Effects;     // the TraitEffectGroup names this hit installed here
+	// Absolute substrate seconds. A negative value is the authored infinite duration (`"-1"`),
+	// which only `ClearActiveDisciplines` and the interruption flags end.
+	double EndTime = 0.0;
+	int32 Serial = 0;            // the owned queue event's guard; 0 = no timed expiry
+	bool bRemoveOnTakeDamage = false;
+	bool bRemoveOnHearCombat = false;
+	bool bRemoveOnWasBumped = false;
+	FElysiumEntityHandle Source; // the caster
+
+	bool IsInfinite() const { return EndTime < 0.0; }
+};
+
+// The native active-state half plus the tracked targeted effects. It sits on
+// CBaseCombatCharacter because both halves do in VtMB: the thirteen `Active_*` slots are sheet
+// slots on this class, and a targeted effect lands on whichever character it hit.
+struct FElysiumDisciplineState
+{
+	// The compiled array is thirteen, not `stats.txt`'s seventeen (`Public/ElysiumSheetSlots.h`).
+	static constexpr int32 SlotCount = 13;
+
+	// Per compiled Discipline index: when the owned expiry event is due (absolute substrate
+	// seconds; 0 = the slot is not active), the serial that event carries, and the trait-effect
+	// groups this activation installed into `FElysiumCombatCharacter::Effects`.
+	double EndTime[SlotCount] = {};
+	int32  ExpirySerial[SlotCount] = {};
+	TArray<FString> Groups[SlotCount];
+
+	// The caster's per-record recovery deadlines, keyed by the record's InternalName — step 8 of
+	// the targeted transaction.
+	TMap<FString, double> Recovery;
+
+	TArray<FElysiumActiveDisciplineEffect> TargetEffects;
+
+	// One counter for both families: a serial identifies an owned expiry event uniquely on this
+	// character, which is what makes (character, discipline) the event's key. A renewal mints a new
+	// serial, so the event still pending under the old one is dropped as stale on delivery — the
+	// same guard the weapon commit/reload transactions use.
+	int32 SerialCounter = 0;
+
+	// The sound-bus cursor the `ShouldRemove_OnHearCombat` poll advances.
+	uint64 SoundCursor = 0;
+
+	bool IsActive(int32 Index) const
+	{
+		return Index >= 0 && Index < SlotCount && EndTime[Index] != 0.0;
+	}
+	void Reset() { *this = FElysiumDisciplineState(); }
+};
+
 // The durable half of the player: session lifetime, so it crosses a map boundary. The entity is the
 // *live* view; this is the truth that survives the world it lived in. Hydrated into the player
 // entity at map build, dehydrated back out when the world is torn down (travel, quit, reload) and,
@@ -309,6 +374,27 @@ struct FElysiumPlayerRecord
 	// chain field and travels in the map snapshot with the rest of that entity.
 	FElysiumFeedState Feed;
 	FString FeedMap;
+
+	// 13.2 — the discipline block. The player entity is excluded from the map snapshot by design,
+	// so its half of every domain rides this record; the sheet's own `Active_*` slots come across
+	// with `Sheet` above, and this carries what the sheet cannot say — when each owned expiry event
+	// is due, which trait-effect groups the activation installed, the tracked targeted effects and
+	// the per-record recovery deadlines.
+	//
+	// `DisciplineMap` scopes it the way `FeedMap` scopes the feed: the expiry events themselves ride
+	// that map's queue, and the tracked effects name entities in it, so hydrating into any other map
+	// tears the block down instead of leaving active slots with no event to end them. That teardown
+	// is the recovered world-area transition teardown (`docs/vtmb/disciplines.md` § "World-area
+	// eligibility and transition teardown") applied at the map boundary.
+	FElysiumDisciplineState Disciplines;
+	FString DisciplineMap;
+
+	// `vdiscipline_int`'s stored selection and the remembered tier beside it. INDEX_NONE is "nothing
+	// selected", which is what `vdiscipline_last` refuses on.
+	int32 SelectedDiscipline = INDEX_NONE;
+	int32 SelectedTier = 0;
+	// The player's Discipline cast counter, incremented by a committed targeted cast (step 6).
+	int32 DisciplineCastCount = 0;
 
 	void Reset() { *this = FElysiumPlayerRecord(); }
 };
@@ -549,6 +635,11 @@ public:
 	// The 224 item-entity handles, the active weapon and the reserve ammo pools (9.8). On this node
 	// because VtMB puts them here: the player, every NPC and every `item_container` own one.
 	FElysiumInventory Inventory;
+
+	// 13.2 — the native active states and the tracked targeted effects. On this node because the
+	// thirteen `Active_*` slots are, and because a targeted effect lands on whichever character the
+	// cast resolved onto. The rules over it are `Substrate/ElysiumDisciplines.h`.
+	FElysiumDisciplineState Disciplines;
 
 	// Push the equipped item's authored `camera_class` at the camera, so drawing a weapon re-runs the
 	// arbitration that can force the view mode. **Every writer of `Inventory.ActiveWeapon` calls
@@ -953,6 +1044,13 @@ public:
 	FElysiumLawState Law;
 	TArray<FElysiumXpEntry> ExperienceLog;
 	TArray<FString> EmailFlags;
+
+	// 13.2 — `vdiscipline_int`'s stored compiled index and the remembered tier beside it, plus the
+	// cast counter a committed targeted cast increments. Mirrored from the record for the map's
+	// lifetime, exactly as `ExperienceLog` and `Money` are.
+	int32 SelectedDiscipline = INDEX_NONE;
+	int32 SelectedTier = 0;
+	int32 DisciplineCastCount = 0;
 
 	// `AddExperience`'s accumulators — the record's, mirrored here for the map's lifetime.
 	float ExperienceRemainder = 0.f;

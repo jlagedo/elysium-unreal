@@ -10,6 +10,7 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerCameraManager.h"
 #include "Debug/ElysiumScreenshot.h"
+#include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumFeed.h"
 
@@ -215,6 +216,35 @@ void AElysiumPlayerController::RegisterCommands()
 		if (FElysiumEntityWorld* World = CurrentEntityWorld())
 		{
 			ElysiumItems::ExecuteBarter(*World, Call.Args);
+		}
+	}));
+
+	// The three recovered Discipline verbs (`docs/vtmb/disciplines.md` § "Selection and cast
+	// authority"). The client quickbar converts a visible ordinal to the compiled index and sends
+	// `vdiscipline_int <index>`; `vdiscipline_last` performs only the shared authority's last step
+	// with the remembered pair, and `vdiscipline_endall` is the one teardown `ClearActiveDisciplines`
+	// also reaches. Each routes straight to the domain service, which is where the authority lives.
+	Bindings.Add(Registry.Bind(TEXT("vdiscipline_int"), [this](const FElysiumCommandCall& Call)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumDisciplines::ExecuteSelect(*World, Call.Args);
+		}
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("vdiscipline_last"), [this](const FElysiumCommandCall&)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumDisciplines::ExecuteLast(*World);
+		}
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("vdiscipline_endall"), [this](const FElysiumCommandCall&)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumDisciplines::ExecuteEndAll(*World);
 		}
 	}));
 

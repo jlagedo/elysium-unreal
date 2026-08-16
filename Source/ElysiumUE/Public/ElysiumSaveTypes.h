@@ -43,6 +43,7 @@ struct FElysiumSaveVersion
 		NpcSenses     = 18,  // the NPC sensory memory: enemy, last-seen/heard/damage, LOS caches
 		NpcCognition  = 19,  // the repeated-damage window and the committed enemy's eluded marker
 		NpcCombat     = 20,  // the resolved NPC loadout latch and the detected-attack memory record
+		Disciplines   = 21,  // the player's discipline block: selection, cast counter, active states
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

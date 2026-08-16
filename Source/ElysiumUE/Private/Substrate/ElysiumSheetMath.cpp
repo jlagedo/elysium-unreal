@@ -12,6 +12,17 @@ namespace
 		return (int32)Container * 256 + Slot;
 	}
 
+	int32 PayloadKey(EElysiumTraitOp Op, EElysiumTraitContainer Container, int32 Slot)
+	{
+		return (int32)Op * 65536 + TraitKey(Container, Slot);
+	}
+
+	bool IsPayloadOp(EElysiumTraitOp Op)
+	{
+		return Op == EElysiumTraitOp::Cost || Op == EElysiumTraitOp::BloodCost
+			|| Op == EElysiumTraitOp::Damage || Op == EElysiumTraitOp::Duration;
+	}
+
 	bool IsFxFlag(const FString& Trait)
 	{
 		return Trait.StartsWith(TEXT("Fx_"), ESearchCase::IgnoreCase);
@@ -26,6 +37,7 @@ void FElysiumSheetEffects::Reset()
 {
 	TraitRows.Reset();
 	FeatRows.Reset();
+	PayloadRows.Reset();
 	Flags.Reset();
 	Groups.Reset();
 	Unresolved.Reset();
@@ -70,8 +82,9 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 
 			// The seven operators the accumulator switches on. `Cost` belongs to the buy path
 			// (9.4f), and `BloodCost`/`Damage`/`Duration` carry payloads the systems that own them
-			// read — the discipline layer, the heal timer — not the trait's value; the engine's own
-			// switch breaks on all four without touching the query.
+			// read — the discipline transactions, the heal timer — not the trait's value; the
+			// engine's own switch breaks on all four without touching the query. They are stored
+			// under the payload key so their owner can read them, and never enter `TraitRows`.
 			const bool bArithmetic =
 				Effect.Op == EElysiumTraitOp::Add || Effect.Op == EElysiumTraitOp::Mul
 				|| Effect.Op == EElysiumTraitOp::Div || Effect.Op == EElysiumTraitOp::Percent
@@ -79,7 +92,27 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 				|| Effect.Op == EElysiumTraitOp::Value;
 			if (!bArithmetic)
 			{
-				++SkippedRows;
+				if (!IsPayloadOp(Effect.Op))
+				{
+					++SkippedRows;
+					continue;
+				}
+				// A payload row targets a trait slot by name, exactly as an arithmetic one does —
+				// `"Duration 120%"` on `Fortitude`, `"BloodCost 2"` on `Thaumaturgy`. A name with
+				// no slot is recorded rather than dropped, the same as any other unresolved row.
+				EElysiumTraitContainer PayloadContainer;
+				int32 PayloadSlot = INDEX_NONE;
+				if (!ElysiumFindSheetSlot(*Effect.Trait, PayloadContainer, PayloadSlot))
+				{
+					Unresolved.Add(FString::Printf(TEXT("%s.%s"), *Name, *Effect.Trait));
+					continue;
+				}
+				FRow Payload;
+				Payload.Op = Effect.Op;
+				Payload.Amount = Effect.Amount;
+				Payload.bPercent = Effect.bPercent;
+				PayloadRows.FindOrAdd(PayloadKey(Effect.Op, PayloadContainer, PayloadSlot))
+					.Add(Payload);
 				continue;
 			}
 			// A `Value` with a NAMED payload (`"Value Clawed_Form"`, `"Value Physical_Mental_Social"`)
@@ -142,8 +175,9 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 int32 FElysiumSheetEffects::NumRows() const
 {
 	int32 N = Flags.Num();
-	for (const TPair<int32, TArray<FRow>>& Pair : TraitRows) { N += Pair.Value.Num(); }
-	for (const TPair<int32, TArray<FRow>>& Pair : FeatRows)  { N += Pair.Value.Num(); }
+	for (const TPair<int32, TArray<FRow>>& Pair : TraitRows)   { N += Pair.Value.Num(); }
+	for (const TPair<int32, TArray<FRow>>& Pair : FeatRows)    { N += Pair.Value.Num(); }
+	for (const TPair<int32, TArray<FRow>>& Pair : PayloadRows) { N += Pair.Value.Num(); }
 	return N;
 }
 
@@ -228,6 +262,35 @@ int32 FElysiumSheetEffects::ApplyToBound(EElysiumTraitContainer Container, int32
 	// The same walk, on the bound instead of the value — the engine reaches its effective max and
 	// min by resolving the authored `CVStatRef` and handing the number to this identical pass.
 	return ApplyToTrait(Container, Slot, Bound);
+}
+
+int32 FElysiumSheetEffects::ApplyPayload(EElysiumTraitOp Op, EElysiumTraitContainer Container,
+	int32 Slot, int32 Value) const
+{
+	const TArray<FRow>* Rows = PayloadRows.Find(PayloadKey(Op, Container, Slot));
+	if (Rows == nullptr)
+	{
+		return Value;
+	}
+	// The stated composition (see the header): every plain row adds, then every percentage row
+	// scales in authored order, truncating each time the way the engine's integer maths does.
+	int32 Result = Value;
+	for (const FRow& Row : *Rows)
+	{
+		if (!Row.bPercent) { Result += Row.Amount; }
+	}
+	for (const FRow& Row : *Rows)
+	{
+		if (Row.bPercent) { Result = (Result * Row.Amount) / 100; }
+	}
+	return Result;
+}
+
+bool FElysiumSheetEffects::HasPayload(EElysiumTraitOp Op, EElysiumTraitContainer Container,
+	int32 Slot) const
+{
+	const TArray<FRow>* Rows = PayloadRows.Find(PayloadKey(Op, Container, Slot));
+	return Rows != nullptr && !Rows->IsEmpty();
 }
 
 int32 FElysiumSheetEffects::Flag(const TCHAR* FxName) const
@@ -379,6 +442,23 @@ namespace ElysiumSheetRules
 			}
 			return false;
 		}
+	}
+
+	namespace
+	{
+		// Process-wide, and deliberately not a singleton object: the whole facility is one struct of
+		// borrowed pointers whose lifetime the binder owns.
+		FBoundTables GBound;
+	}
+
+	void BindTables(const FBoundTables& Tables)
+	{
+		GBound = Tables;
+	}
+
+	const FBoundTables& BoundTables()
+	{
+		return GBound;
 	}
 
 	bool EvalPredependency(const FString& Expr, const FElysiumSheet& Sheet)

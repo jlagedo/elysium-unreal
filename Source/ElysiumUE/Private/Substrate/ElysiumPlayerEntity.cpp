@@ -13,6 +13,7 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumDisciplines.h"   // Cycle 9
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -63,10 +64,16 @@ void FElysiumPlayer::Spawn()
 
 void FElysiumPlayer::Think()
 {
+	const double Now = World ? World->NowSeconds() : 0.0;
+
 	// The player's only autonomous work today is the feed transaction. It runs here rather than off
 	// a timer because the pulse deadline is simulation state (R4/S8): the same think that advances
 	// it is the one the save's clock restores, so a load cannot duplicate or skip a pulse.
-	TickFeed(World ? World->NowSeconds() : 0.0);
+	TickFeed(Now);
+
+	// Cycle 9 — `ShouldRemove_OnHearCombat`. The sound-event bus delivers nothing (§2.5.3), so its
+	// consumers poll it during their own think; this is the discipline domain's poll.
+	ElysiumDisciplines::PollHeardCombat(*this, Now);
 
 	// SEAM: the footstep hearing stimulus belongs here, and there is nothing to hang it on yet.
 	// `sound_volume_table.txt` names `PLAYER_FOOTSTEP_SNEAK`/`_WALK`/`_RUN` plus `PLAYER_JUMP` and
@@ -227,11 +234,42 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 			}
 		}
 	}
+	// Cycle 9 — the discipline block. Its owned expiry events ride the map's own queue and its
+	// tracked effects name entities in that map, so it resumes only into the map it was taken in.
+	// Any other map takes the recovered world-transition teardown instead: the sheet arrived with
+	// the `Active_*` slots set, and `ClearAll` is what zeroes them and removes the groups they
+	// installed. Selection and the cast counter are map-independent and always cross.
+	Disciplines = FElysiumDisciplineState();
+	SelectedDiscipline = Record.SelectedDiscipline;
+	SelectedTier = Record.SelectedTier;
+	DisciplineCastCount = Record.DisciplineCastCount;
+	const bool bSameDisciplineMap =
+		World && !Record.DisciplineMap.IsEmpty() && Record.DisciplineMap == World->MapName();
+	if (bSameDisciplineMap)
+	{
+		Disciplines = Record.Disciplines;
+		for (FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
+		{
+			// A saved handle carries a dead epoch, exactly as one in the map snapshot does.
+			Effect.Source = (Effect.Source.IsSet()
+				&& World->Resolve(FElysiumEntityHandle(Effect.Source.Index, World->GetEpoch())))
+				? FElysiumEntityHandle(Effect.Source.Index, World->GetEpoch())
+				: FElysiumEntityHandle::Invalid();
+		}
+	}
+
 	// The names crossed the boundary; their resolution did not — the rulebook is re-read at load,
 	// which is what lets a patched rulebook re-apply to a run that started before it. Going through
 	// RefreshClanEffects rather than RebuildEffects reconciles the clan group with the clan slot
 	// that just arrived, so a New Game into a different clan cannot keep the old one's bane.
 	RefreshClanEffects();
+
+	// The teardown runs AFTER the effect layer is rebuilt, so removing a group leaves a layer that
+	// still matches the names on the character.
+	if (!bSameDisciplineMap)
+	{
+		ElysiumDisciplines::ClearAll(*this);
+	}
 }
 
 void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
@@ -249,6 +287,13 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.bUnkillable = bUnkillable;
 	Record.Feed = FeedState;
 	Record.FeedMap = (World && FeedState.IsPaired()) ? World->MapName() : FString();
+	// Cycle 9 — the discipline block travels with the record, scoped to the map its owned expiry
+	// events and tracked effects belong to.
+	Record.Disciplines = Disciplines;
+	Record.DisciplineMap = World ? World->MapName() : FString();
+	Record.SelectedDiscipline = SelectedDiscipline;
+	Record.SelectedTier = SelectedTier;
+	Record.DisciplineCastCount = DisciplineCastCount;
 }
 
 void FElysiumPlayer::SyncFromBody()
@@ -375,5 +420,10 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("XP"), FString::Printf(TEXT("%d spent-able, %d awards, %.0f raw (%.0f pending)"),
 		Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Experience),
 		ExperienceLog.Num(), LifetimeExperience, ExperienceRemainder));
+	// Cycle 9 — the selection state the two cast verbs read.
+	Out.Emplace(TEXT("Discipline selection"), SelectedDiscipline == INDEX_NONE
+		? FString(TEXT("(none)"))
+		: FString::Printf(TEXT("%s tier %d, %d cast(s)"),
+			ElysiumDisciplines::InternalName(SelectedDiscipline), SelectedTier, DisciplineCastCount));
 	Out.Emplace(TEXT("Body"), (World && World->Embodiment()) ? TEXT("pawn") : TEXT("(none)"));
 }

@@ -219,6 +219,54 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		R.Feed = FElysiumFeedState();
 		R.FeedMap.Reset();
 	}
+	// 13.2 — the discipline block. The player entity is excluded from the map snapshot, so its
+	// half of the domain rides here: the selection, the cast counter, and what the sheet's own
+	// `Active_*` slots cannot say — each owned expiry event's deadline and serial, the trait-effect
+	// groups each activation installed, the tracked targeted effects and the recovery deadlines.
+	// The events themselves ride the map snapshot's queue, which is why `DisciplineMap` scopes the
+	// block: hydrating into any other map tears it down rather than leaving a slot with no event.
+	// Appended behind its own version, so an older supported payload restores with no disciplines
+	// rather than being refused.
+	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::Disciplines)
+	{
+		Ar << R.DisciplineMap;
+		Ar << R.SelectedDiscipline << R.SelectedTier << R.DisciplineCastCount;
+		for (int32 i = 0; i < FElysiumDisciplineState::SlotCount; ++i)
+		{
+			Ar << R.Disciplines.EndTime[i];
+			Ar << R.Disciplines.ExpirySerial[i];
+			Ar << R.Disciplines.Groups[i];
+		}
+		Ar << R.Disciplines.Recovery;
+		Ar << R.Disciplines.SerialCounter;
+		int32 NumEffects = R.Disciplines.TargetEffects.Num();
+		Ar << NumEffects;
+		if (Ar.IsLoading())
+		{
+			R.Disciplines.TargetEffects.SetNum(FMath::Max(NumEffects, 0));
+		}
+		for (FElysiumActiveDisciplineEffect& Effect : R.Disciplines.TargetEffects)
+		{
+			Ar << Effect.Record << Effect.HitTable << Effect.Effects;
+			Ar << Effect.EndTime << Effect.Serial;
+			Ar << Effect.bRemoveOnTakeDamage << Effect.bRemoveOnHearCombat << Effect.bRemoveOnWasBumped;
+			Ar << Effect.Source;
+		}
+		if (Ar.IsLoading())
+		{
+			// The bus cursor is session state, not simulation state: a restored character starts
+			// from the live bus rather than replaying a window that no longer exists.
+			R.Disciplines.SoundCursor = 0;
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		R.Disciplines.Reset();
+		R.DisciplineMap.Reset();
+		R.SelectedDiscipline = INDEX_NONE;
+		R.SelectedTier = 0;
+		R.DisciplineCastCount = 0;
+	}
 	return Ar;
 }
 

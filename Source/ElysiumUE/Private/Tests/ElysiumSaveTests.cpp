@@ -582,7 +582,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// appended without this block being extended, which is exactly when someone should be made to
 	// think about whether the new field is additive and what an old payload does without it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcCombat);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Disciplines);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -592,7 +592,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("npc sensory memory"), (int32)FElysiumSaveVersion::NpcSenses),
 		TPair<const TCHAR*, int32>(TEXT("npc cognition memory"), (int32)FElysiumSaveVersion::NpcCognition),
 		TPair<const TCHAR*, int32>(TEXT("npc combat loadout and detected-attack memory"),
-			(int32)FElysiumSaveVersion::NpcCombat) })
+			(int32)FElysiumSaveVersion::NpcCombat),
+		TPair<const TCHAR*, int32>(TEXT("the player's discipline block"),
+			(int32)FElysiumSaveVersion::Disciplines) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);
@@ -622,6 +624,64 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TestEqual(TEXT("a v6 player migrates to armor slot zero"), Migrated.ArmorSlot, 0);
 		TestEqual(TEXT("v6 fields after the inserted slot stay aligned"), Migrated.Health,
 			Payload.Player.Health);
+	}
+
+	// 13.2 — the discipline block round-trips on the player record. It is appended behind its own
+	// version at the END of the record, so it is additive: an older supported payload restores with
+	// no disciplines rather than being refused.
+	{
+		FElysiumPlayerRecord Cast = Payload.Player;
+		Cast.DisciplineMap = TEXT("__save_test__");
+		Cast.SelectedDiscipline = 7;
+		Cast.SelectedTier = 3;
+		Cast.DisciplineCastCount = 4;
+		Cast.Disciplines.EndTime[7] = 42.5;
+		Cast.Disciplines.ExpirySerial[7] = 9;
+		Cast.Disciplines.Groups[7].Add(TEXT("Discipline (Fortitude3)"));
+		Cast.Disciplines.SerialCounter = 9;
+		Cast.Disciplines.Recovery.Add(TEXT("Thaumaturgy_Bloodshield"), 60.0);
+		FElysiumActiveDisciplineEffect Effect;
+		Effect.Record = TEXT("Thaumaturgy_Bloodshield");
+		Effect.HitTable = TEXT("Hit_Player_Human");
+		Effect.Effects.Add(TEXT("Discipline (Thaumaturgy-Bloodshield)"));
+		Effect.EndTime = -1.0;
+		Effect.Serial = 8;
+		Effect.bRemoveOnTakeDamage = true;
+		Cast.Disciplines.TargetEffects.Add(MoveTemp(Effect));
+
+		TArray<uint8> RecordBytes;
+		{
+			FMemoryWriter Writer(RecordBytes, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+			Ar << Cast;
+		}
+		FElysiumPlayerRecord Restored;
+		FMemoryReader Reader(RecordBytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		Ar << Restored;
+
+		TestEqual(TEXT("the selection survives"), Restored.SelectedDiscipline, 7);
+		TestEqual(TEXT("...with its remembered tier"), Restored.SelectedTier, 3);
+		TestEqual(TEXT("...and the cast counter"), Restored.DisciplineCastCount, 4);
+		TestEqual(TEXT("the block is scoped to the map its owned events ride"),
+			Restored.DisciplineMap, FString(TEXT("__save_test__")));
+		TestEqual(TEXT("a native state's deadline survives"), Restored.Disciplines.EndTime[7], 42.5);
+		TestEqual(TEXT("...with the serial its owned queue event carries"),
+			Restored.Disciplines.ExpirySerial[7], 9);
+		TestEqual(TEXT("...and the groups that activation installed"),
+			Restored.Disciplines.Groups[7].Num(), 1);
+		TestEqual(TEXT("the serial counter survives, so a restore cannot reissue a live serial"),
+			Restored.Disciplines.SerialCounter, 9);
+		TestEqual(TEXT("the recovery deadline survives"), Restored.Disciplines.Recovery.Num(), 1);
+		if (TestEqual(TEXT("the tracked targeted effect survives"),
+			Restored.Disciplines.TargetEffects.Num(), 1))
+		{
+			const FElysiumActiveDisciplineEffect& RestoredEffect = Restored.Disciplines.TargetEffects[0];
+			TestEqual(TEXT("...naming its record"), RestoredEffect.Record,
+				FString(TEXT("Thaumaturgy_Bloodshield")));
+			TestTrue(TEXT("...its authored infinite duration"), RestoredEffect.IsInfinite());
+			TestTrue(TEXT("...and its interruption flag"), RestoredEffect.bRemoveOnTakeDamage);
+		}
 	}
 
 	// Corrupt/future body indices cannot escape the authored M_Body0..5 range.

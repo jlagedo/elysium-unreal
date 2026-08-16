@@ -51,6 +51,9 @@ public:
 	// and its modifier catalogue — the third social domain (K4), read by the pure calculator in
 	// `Substrate/ElysiumReaction.h`, never by combat targeting.
 	const FElysiumReactionCatalogue&  Reactions();
+	// `vdata/system/disciplinetgt_000..004.txt` — the targeted Discipline records the cast
+	// transaction interprets (`docs/vtmb/disciplines.md` § "Targeted `DisciplineTgt` path").
+	const FElysiumDisciplineTargets&  DisciplineTargets();
 	// `vdata/items/*.txt`. Its first load also registers one entity class per definition
 	// (`ElysiumItems::Install`), so it has to happen before a map's item entities are created —
 	// `FElysiumEntityWorld::Load` touches it for exactly that reason.
@@ -102,6 +105,7 @@ private:
 	FElysiumItemTable         ItemTable;
 	FElysiumDispositionTable  DispositionTable;
 	FElysiumReactionCatalogue ReactionCatalogue;
+	FElysiumDisciplineTargets DisciplineTargetTable;
 	TMap<FString, TSharedPtr<FElysiumTerminalDefinition>> TerminalDefinitions;
 	TMap<FString, FString> TerminalDefinitionErrors;
 
@@ -121,6 +125,7 @@ private:
 	bool bItemsLoaded = false;
 	bool bDispositionsLoaded = false;
 	bool bReactionsLoaded = false;
+	bool bDisciplineTargetsLoaded = false;
 
 	FString StatsError;
 	FString FeatsError;
@@ -138,6 +143,7 @@ private:
 	FString ItemsError;
 	FString DispositionsError;
 	FString ReactionsError;
+	FString DisciplineTargetsError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };

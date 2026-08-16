@@ -28,9 +28,11 @@ struct FElysiumSheet;
 // items and its frenzy state. `Build` resolves them once; every read is a map lookup.
 struct FElysiumSheetEffects
 {
-	// One applicable modifier. `Cost`/`BloodCost`/`Damage`/`Duration` carry payloads no sheet read
-	// consumes — the buy path and the discipline/heal systems read them where they live — so they
-	// are counted and skipped rather than stored as arithmetic.
+	// One applicable modifier. `Cost`/`BloodCost`/`Damage`/`Duration` are **payload** operators:
+	// the engine's own accumulator switch breaks on all four without touching the query, so they
+	// never move a trait's value. They are stored on the same row type and read by the system that
+	// owns them — the buy path takes `Cost`, the discipline transactions take `BloodCost` and
+	// `Duration`, the feed/heal payload takes `Damage`.
 	struct FRow
 	{
 		EElysiumTraitOp Op = EElysiumTraitOp::Add;
@@ -39,6 +41,9 @@ struct FElysiumSheetEffects
 		// effects competing for the same single-winner slot. No shipped group authors one, so every
 		// group is equal-priority and the tie-break — the smaller amount wins — is what decides.
 		int32 Priority = 0;
+		// The trailing `%` of `"Duration 200%"`. Only a payload row carries it: the arithmetic
+		// operators have their own `%` operator.
+		bool bPercent = false;
 	};
 
 	// `CVTraitEffectQuery` — the accumulator `ApplyEffects` fills, one per read. Its defaults are
@@ -86,6 +91,24 @@ struct FElysiumSheetEffects
 	// one 9.4c reads (Toreador's gift and bane are the same flag).
 	int32 Flag(const TCHAR* FxName) const;
 
+	// --- The payload operators ------------------------------------------------------------------
+	// `Value` through every payload row of `Op` that targets this trait slot. Rows without a `%`
+	// add; rows with one scale.
+	//
+	// **CHOSEN** — the payload operators never reach `CVTraitEffectQuery` (the engine's switch
+	// breaks on them before the accumulator), so how the engine composes two groups authoring the
+	// same payload on the same trait is not recovered. Stated here: additive rows sum first, then
+	// each percentage row scales in authored order with integer truncation. No shipped character
+	// can carry two payload rows of one operator on one trait — the Discipline `Duration` rows all
+	// come from Histories and a character has exactly one — so the composition is unobservable in
+	// the shipped corpus and is stated rather than left undefined.
+	int32 ApplyPayload(EElysiumTraitOp Op, EElysiumTraitContainer Container, int32 Slot,
+		int32 Value) const;
+
+	// Whether any payload row of `Op` targets this slot — what a caller checks before reporting a
+	// modified cost or duration as authored rather than defaulted.
+	bool HasPayload(EElysiumTraitOp Op, EElysiumTraitContainer Container, int32 Slot) const;
+
 	const TArray<FString>& ResolvedGroups() const { return Groups; }
 	const TArray<FString>& UnresolvedGroups() const { return Unresolved; }
 	int32 NumRows() const;
@@ -95,11 +118,13 @@ private:
 	// the empty case (most characters) free.
 	TMap<int32, TArray<FRow>> TraitRows;
 	TMap<int32, TArray<FRow>> FeatRows;
+	// The payload rows, keyed `op * 65536 + container * 256 + slot` so one map serves all four.
+	TMap<int32, TArray<FRow>> PayloadRows;
 	TMap<FString, int32> Flags;          // lowercased Fx_ name -> summed amount
 
 	TArray<FString> Groups;
 	TArray<FString> Unresolved;
-	int32 SkippedRows = 0;               // payload operators no sheet read consumes
+	int32 SkippedRows = 0;               // rows no operator family claims
 };
 
 // ================================================================================================
@@ -145,4 +170,36 @@ namespace ElysiumSheetRules
 	// a trait name (read as its current value) or a literal. An expression that does not parse
 	// reads TRUE: a gate we cannot read must not silently refuse a raise.
 	bool EvalPredependency(const FString& Expr, const FElysiumSheet& Sheet);
+
+	// ============================================================================================
+	// The headless table binding
+	// ============================================================================================
+	//
+	// Every sheet reader ordinarily reaches its tables through
+	// `UElysiumGameStateSubsystem::Rulebook()`, which is a GameInstance subsystem — so a bare
+	// substrate world (K10: "every domain runs headless") has no rulebook at all, and the clan
+	// banes, the feat evaluator and the Discipline blocks all read as absent.
+	//
+	// This is the one seam that closes that: a Substrate-tier test binds fabricated tables and every
+	// reader that finds no subsystem falls back to them. It is the same shape
+	// `FElysiumGameSoundBus::SetVolumeTable` already has ("the mutable overload exists for the two
+	// callers that own the bus's configuration — this world, and a Substrate-tier test binding a
+	// fabricated table") and `ElysiumItems::Install` has for the item catalogue.
+	//
+	// **The subsystem always wins.** A bound table is a fallback, never an override, so nothing
+	// bound here can change what a real run reads. A null member is "not bound".
+	struct FBoundTables
+	{
+		const FElysiumStatTable*         Stats = nullptr;
+		const FElysiumTraitEffects*      TraitEffects = nullptr;
+		const FElysiumFeatTable*         Feats = nullptr;
+		const FElysiumClanTable*         Clans = nullptr;
+		const FElysiumDisciplineTargets* DisciplineTargets = nullptr;
+	};
+
+	// Bind (or, with a default-constructed value, unbind) the fallback tables. Process-wide,
+	// because the readers are plain-C++ leaves that hold no session pointer — the same reason
+	// `ElysiumRng`'s streams are module-static.
+	void BindTables(const FBoundTables& Tables);
+	const FBoundTables& BoundTables();
 }

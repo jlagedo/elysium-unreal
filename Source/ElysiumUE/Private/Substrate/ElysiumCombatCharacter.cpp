@@ -18,6 +18,7 @@
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
+#include "Substrate/ElysiumDisciplines.h"    // Cycle 9 — the interruption + teardown entries
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's entity parameter
@@ -67,7 +68,14 @@ void FElysiumCombatCharacter::InputMoneyRemove(const FElysiumInputArgs& Args)
 const FElysiumStatTable* FElysiumCombatCharacter::SheetRules() const
 {
 	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
-	return GameState ? GameState->Stats() : nullptr;
+	if (GameState != nullptr)
+	{
+		return GameState->Stats();
+	}
+	// Cycle 9 — no GameInstance behind this world (a Substrate-tier run). The bound fallback is
+	// null in a real run and in an unbound test alike, so this changes nothing that had a subsystem
+	// (`Substrate/ElysiumSheetMath.h` → "The headless table binding").
+	return ElysiumSheetRules::BoundTables().Stats;
 }
 
 // The rulebook this character reads its rules out of, or null in a bare world.
@@ -80,7 +88,12 @@ static UElysiumRulebookSubsystem* CharRulebook(const FElysiumCombatCharacter& Ch
 void FElysiumCombatCharacter::RebuildEffects()
 {
 	UElysiumRulebookSubsystem* Rules = CharRulebook(*this);
-	if (Effects.IsEmpty() || !Rules)
+	// Cycle 9 — the headless fallback, so a Substrate-tier run resolves the same groups a live one
+	// does. The subsystem always wins; the bound tables are null in a real run.
+	const ElysiumSheetRules::FBoundTables& Bound = ElysiumSheetRules::BoundTables();
+	const FElysiumTraitEffects* EffectTable = Rules ? &Rules->TraitEffects() : Bound.TraitEffects;
+	const FElysiumFeatTable* FeatTable = Rules ? &Rules->Feats() : Bound.Feats;
+	if (Effects.IsEmpty() || EffectTable == nullptr)
 	{
 		EffectLayer.Reset();
 		RecomputeSheet();
@@ -90,7 +103,7 @@ void FElysiumCombatCharacter::RebuildEffects()
 	{
 		EffectLayer = MakeShared<FElysiumSheetEffects>();
 	}
-	EffectLayer->Build(Rules->TraitEffects(), Effects, &Rules->Feats());
+	EffectLayer->Build(*EffectTable, Effects, FeatTable);
 	RecomputeSheet();
 }
 
@@ -111,13 +124,16 @@ void FElysiumCombatCharacter::AddTrait(EElysiumTraitContainer Container, int32 S
 int32 FElysiumCombatCharacter::CalcFeat(const FString& Name) const
 {
 	UElysiumRulebookSubsystem* Rules = CharRulebook(*this);
-	if (!Rules)
+	// Cycle 9 — same headless fallback as the effect layer above.
+	const FElysiumFeatTable* FeatTable =
+		Rules ? &Rules->Feats() : ElysiumSheetRules::BoundTables().Feats;
+	if (FeatTable == nullptr)
 	{
 		return 0;   // no rulebook: every check fails closed, as an unresolved gate does
 	}
 	bool bResolved = false;
 	bool bIsFeat = false;
-	const int32 Value = ElysiumFeats::Calc(Rules->Feats(), Sheet, SheetEffects(), Name,
+	const int32 Value = ElysiumFeats::Calc(*FeatTable, Sheet, SheetEffects(), Name,
 		bResolved, bIsFeat);
 	if (!bResolved)
 	{
@@ -748,6 +764,11 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	// The senses/memory record the schedule kernel reads. A no-op on the base.
 	OnDamageCommitted(Dmg);
 
+	// Cycle 9 — `ShouldRemove_OnTakeDamage`, from the one typed health commit. It also reconciles
+	// the Bloodshield teardown above: `EndBloodshield` drops the power's trait group when the buffer
+	// exhausts, and this is where the tracked targeted effect that installed it is retired with it.
+	ElysiumDisciplines::NotifyDamaged(*this);
+
 	// 6. The outputs, from their real producer. Retail fires them from the NPC alive commit and the
 	//    player wires neither, but FireOutput is inert for an output an entity did not wire, so the
 	//    shared commit is where they belong. OnHalfHealth is OFFERED on every damaging hit while the
@@ -866,5 +887,21 @@ void FElysiumCombatCharacter::GetDebugState(TArray<TPair<FString, FString>>& Out
 			EffectLayer.IsValid() ? EffectLayer->NumRows() : 0));
 	Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Disposition"), Disposition.IsEmpty() ? TEXT("(none)") : Disposition);
+	// Cycle 9 — the discipline block: which of the thirteen are active, and how many targeted
+	// effects this character is currently carrying.
+	{
+		TArray<FString> Active;
+		for (int32 i = 0; i < FElysiumDisciplineState::SlotCount; ++i)
+		{
+			if (Disciplines.IsActive(i))
+			{
+				Active.Add(FString::Printf(TEXT("%s %d"), ElysiumDisciplines::InternalName(i),
+					Sheet.GetCurrent(EC::ActiveDisciplines, i)));
+			}
+		}
+		Out.Emplace(TEXT("Disciplines"), FString::Printf(TEXT("%s  (%d tracked effect(s))"),
+			Active.IsEmpty() ? TEXT("(none active)") : *FString::Join(Active, TEXT(", ")),
+			Disciplines.TargetEffects.Num()));
+	}
 	Out.Emplace(TEXT("Unnamed stats"), FString::FromInt(Sheet.Extra.Num()));
 }

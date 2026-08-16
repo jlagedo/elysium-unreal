@@ -20,6 +20,7 @@
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -214,12 +215,12 @@ namespace ElysiumWeapons
 		return 1.0f;
 	}
 
-	int32 ActivePotenceRank(const FElysiumCombatCharacter& /*Attacker*/)
+	int32 ActivePotenceRank(const FElysiumCombatCharacter& Attacker)
 	{
-		// SEAM — the melee commit floors `DamageInflicted` up to the ACTIVE Potence rank. The
-		// active-discipline layer is 13.2's; until it lands there is no rank to read and the floor
-		// is inert. Returning 0 changes no number.
-		return 0;
+		// The melee commit floors `DamageInflicted` up to the ACTIVE Potence rank. The rank is the
+		// `Active_Potence` sheet slot, which the discipline runtime writes and clears; a character
+		// with the power inactive reads 0 and the floor changes no number.
+		return ElysiumDisciplines::ActiveRank(Attacker, ElysiumDisciplines::Potence);
 	}
 
 	int32 RangedRemainingLethality(int32 InTotalLethality, bool bKindredVictim, int32 DefenseNet)
