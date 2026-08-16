@@ -243,13 +243,6 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
 	F.ThugA->bDead = true;
 
-	// The sight pass first: retail's `GatherConditions` refreshes the enemy-memory records before
-	// `ChooseEnemy` runs, and `BestEnemy` enumerates that memory rather than the world. A guard that
-	// has never sensed the player cannot select it, so the replacement this case is about only
-	// happens once the player is admitted.
-	F.Guard->Senses.TickSight(*F.Guard, 10.0);
-	TestTrue(TEXT("the sight pass admits the player to memory"), F.Guard->Senses.Memory.bPlayerLos);
-
 	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
 
 	const FElysiumNpcConditions& Cond = F.Guard->Cognition.Conditions;

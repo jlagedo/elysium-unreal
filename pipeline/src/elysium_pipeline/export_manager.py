@@ -26,7 +26,7 @@ from elysium_pipeline.tasking import (
     fingerprint_content,
     fingerprint_paths,
 )
-from elysium_pipeline import bake_cache, shared_corpus, unreal
+from elysium_pipeline import bake_cache, shared_corpus, unreal, wield_corpus
 
 
 class OfflineExportFailure(RuntimeError):
@@ -163,7 +163,10 @@ def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
         "scripts": (export_root / "scripts", export_root / "dlg"),
         "signs": (export_root / "signs" / "backgrounds.json",),
         "vdata": (export_root / "vdata",),
-        "items": (export_root / "items" / "ground_models.json",),
+        "items": (
+            export_root / "items" / "ground_models.json",
+            wield_corpus.manifest_path(export_root),
+        ),
         "cfg": (export_root / "cfg",),
         "scenes": (export_root / "scenes",),
         "ui": (export_root / "ui" / "strings.json",),

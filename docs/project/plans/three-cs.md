@@ -121,30 +121,33 @@ ANM4b/CCC11 for real event-carrying actions. The recovered retail contracts are 
 ### CCC10.2 The third-person rung — the wielded weapon body
 
 What a character holds, so a drawn weapon is visible on the body that swings it. The recovered
-contract — the four item model roles, the 11-bone wield rig skinned wholly to one terminal prop
-bone, the seven unskinned prop bones on the character body, the `anim_prefix` join and the
-per-weapon prop-bone table — is `docs/vtmb/animation_and_movers.md` → "The wielded weapon is the
-same two-rig composition, in world space". Read it first; it is not restated here.
+contract — the four item model roles, the equip transaction and its sex selection, the follow-attach
+bone copy, the seven unskinned prop bones on the character body, the `anim_prefix` key and the
+shipped corpus — is `docs/vtmb/wielded_weapons.md`. Read it first; it is not restated here.
 
-**The open design call, and it is the first decision.** The mesh is rigid to a single bone, and the
-character body already declares that bone with the same bind pose, so two representations produce
-the same observable:
+**The design call, settled.** Retail's mechanism is a per-bone name-matched **copy** of the
+wearer's world matrix, with unmatched bones running the weapon's own evaluated clip. The uniform
+bake lane, the frame-0 reference pose, the material contract and the binding metadata are owned by
+`docs/architecture/wielded-weapon-integration.md`; PL20 delivers the assets and
+`/ElysiumBaked/Items/DA_WieldModels`. This rung consumes them:
 
-- **(A) A second skeletal component**, playing the same family sequence — retail's own mechanism and
-  CCC10.1's shape.
-- **(B) A static mesh authored in prop-bone-local space**, attached to that bone on the one body.
-  One component, stock Unreal attachment, and the clip that already animates the bone carries it.
+- **Every held weapon** attaches as a `USkeletalMeshComponent` bound by `SetLeaderPoseComponent` —
+  the garment recipe `ElysiumNpcVisual::InstallGarment` already ships. Name matching hands a melee
+  weapon its prop bone (the wearer's own attack clips swing it — up to 179.99° on `gerber`, 21.4 in
+  on `bush hook`), a firearm rides the hand, and a bone the wearer lacks holds the frame-0 reference
+  pose — retail's own composition for a clip-constant sub-rig. No socket assets, no per-mode
+  branching, no correction factors: a placement that needs one means the bake is wrong upstream.
+- **`changball` and `gio_spirit`** (`item_w_chang_energy_ball` / `item_w_chang_ghost`) are thrown
+  projectiles — free-standing actors playing their own clips, never attached.
+- Two enhancements stay optional, keyed on manifest data the assets already carry: a static-mesh
+  swap for the clip-constant majority if profiling ever demands it (worst measured map:
+  `la_bradbury_2`, 70 armed NPCs), and a small blend graph to restore `w_m_lockpick`'s own 6.357°
+  pick wiggle, the corpus's only visible own-motion. Neither touches the pipeline.
 
-**(B) is the recommendation.** Reproducing Source's *rules* is faithful and porting its *mechanisms*
-is a defect (repo `CLAUDE.md` → Ownership), and "change the representation until the rule is
-unnecessary" is the standing instruction where a frame rule would otherwise survive into runtime.
-A second skeletal component evaluating a second bone palette to place one rigid mesh is the
-mechanism, not the rule. Take (A) only if a prerequisite below fails.
-
-**Prerequisite to check before either path:** whether the character bake retains the seven
-zero-weight prop bones. Nothing skins to them, so a bake that drops unweighted bones removes the
-attachment target and the animation channel together — and the failure is silent, because the body
-still poses correctly. If they are dropped, retaining them is this task's first change.
+**Prerequisite, load-bearing rather than a nicety:** the character bake must retain the seven
+zero-weight prop bones **and their animation channels**. Nothing skins to them, so a bake that drops
+unweighted bones removes the attachment target and the swing together — and the failure is silent at
+idle, appearing only once a melee attack plays.
 
 The runtime work:
 
@@ -164,13 +167,17 @@ model and is a different mesh. And it must not invent a socket, an offset or a h
 transform: the bind poses agree by construction, so a placement that needs a correction factor means
 the prop bone or the local frame is wrong, and the fix is upstream in the bake.
 
-**Inherited unknowns, none of which gate the ordinary case.** The native call that swaps the wield
-model on equip/holster is unrecovered (the `w_null.mdl` convention suggests a model swap, and no stow
-bone occurs in the probed corpus); `item_g_stake` nulls both wield models and its visual is most
-likely the staking execution's, not a carried weapon's; and whether NPCs reach the wield model by the
-same keys is untested. Each is named in the owning doc with the evidence that would close it. A
-weapon whose row resolves to a null model is a legitimate no-geometry answer and reports as one — it
-is never a missing-asset warning.
+**Inherited unknowns, none of which gate the ordinary case.** No separate holster path exists in the
+recovered equip/detach pair, so a holstered-but-carried state has no known retail mechanism;
+`item_g_stake` nulls both wield models and its visual is most likely the staking execution's, not a
+carried weapon's; and what drives `w_{m,f}_handleclaws`' locomotion clips to track its wearer is
+untraced, which reaches only the Chang encounter. Each is named in the owning doc with the evidence
+that would close it. `w_f_bushhook.mdl`'s degenerate bind is reproduced as authored. A weapon whose
+row resolves to a null
+model is a legitimate no-geometry answer and reports as one — it is never a missing-asset warning.
+
+NPCs and the player share one path, and the corpus says so: equip selects on the wielder through
+`IsMale` with no player-only branch, and the camera gate never applies to an NPC-owned weapon.
 
 *Acceptance:* from real input in the arena, drawing each of the six wield-model melee weapons puts
 its geometry in the correct hand on both a male and a female body; the weapon tracks the hand through

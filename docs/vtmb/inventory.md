@@ -120,9 +120,9 @@ The 244 current definitions break down as follows after preserving their hidden 
 An item record names **four** model roles, and they are not interchangeable: `viewmodel` (first
 person), `playermodel` (the loose ground model), `wieldmodel_m`/`wieldmodel_f` (the geometry a
 character of that sex holds) and `infomodel`. A melee weapon nulls its `viewmodel`, so the model a
-wielder carries is never the one that lies on the floor. The binding mechanism, the `anim_prefix`
-join and the per-weapon prop bones are owned by `docs/vtmb/animation_and_movers.md` → "The wielded
-weapon is the same two-rig composition".
+wielder carries is never the one that lies on the floor. The four roles, the equip transaction, the
+`anim_prefix` key, the per-weapon mount bones and the shipped wield-model corpus are owned by
+`docs/vtmb/wielded_weapons.md`.
 
 The filename prefix is only a convention; it is not a sufficient type system. Runtime policy
 comes from the parsed item record and class behavior. In the current patch-first files, 22 items

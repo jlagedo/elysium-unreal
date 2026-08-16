@@ -303,16 +303,26 @@ def main(inventory=False, force=False):
     # --- art trees ---------------------------------------------------------------------
     trees = ART_TREES + (INVENTORY_TREES if args.inventory else [])
     for tree in trees:
-        names = sorted(k for k in idx
-                       if k.endswith(".vmt") and os.path.dirname(k) == tree)
+        if tree in INVENTORY_TREES:
+            names = sorted(k for k in idx
+                           if k.endswith(".vmt") and k.startswith(tree + "/"))
+        else:
+            names = sorted(k for k in idx
+                           if k.endswith(".vmt") and os.path.dirname(k) == tree)
         if not names:
             continue
-        label = tree[len("materials/"):]
         got = {}
         for key in names:
             material = key[:-4]
-            stem = os.path.basename(material) + ".png"
-            path = os.path.join(OUT, "art", label, stem)
+            # Preserve subdirectory structure under the base tree for inventory items
+            if tree in INVENTORY_TREES:
+                rel_path = material[len(tree) + 1:]
+                label = tree[len("materials/"):]
+                path = os.path.join(OUT, "art", label, rel_path + ".png")
+            else:
+                label = tree[len("materials/"):]
+                stem = os.path.basename(material) + ".png"
+                path = os.path.join(OUT, "art", label, stem)
             if not args.force and os.path.exists(path):
                 from PIL import Image
                 with Image.open(path) as im:

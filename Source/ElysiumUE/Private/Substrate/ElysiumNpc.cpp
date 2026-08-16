@@ -691,8 +691,13 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 		return Door;
 	}
 
-	// 7. Return-to-initial, else the disposition stance. `m_bReturnToInitialPos` has no producer
-	//    here, so this resolves to the stance -- which is also retail's own default.
+	// 7. Return-to-initial, else the disposition stance. Retail's producer is `OnStateChange`
+	//    (`0x102ae140`), which arms `m_bReturnToInitialPos` (`+0x6494`) on entry to ALERT or COMBAT
+	//    only -- SCRIPT falls into the case that does not -- and the selector consumes it one-shot.
+	//    This runtime has no producer, so the flag is permanently clear and this always resolves to
+	//    the stance. That is the correct answer for an NPC that has only ever idled or been script-
+	//    driven; what is missing is the walk-home a real alert or combat episode should arm, which
+	//    needs `SCHED_TROIKA_IDLE_RETURN_TO_INITIAL` and a captured initial position to exist first.
 	return EElysiumScheduleId::IdleDisposition;
 }
 

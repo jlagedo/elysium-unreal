@@ -25,6 +25,7 @@
 #include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Notifications/SProgressBar.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SCanvas.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -422,7 +423,7 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Center).Padding(38, 0, 0, 0)
 	[
 		SNew(SBox).WidthOverride(380)
-		.Visibility_Lambda([M]() { return M && M->Selector.IsOpen()
+		.Visibility_Lambda([M]() { return M && M->Selector.IsOpen() && M->Selector.Type != EElysiumHUDSelector::Radial
 			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
 		[
 			SNew(SVerticalBox)
@@ -447,6 +448,74 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 				BriefModeRow
 			]
 		]
+	];
+
+	TSharedRef<SCanvas> RadialCanvas = SNew(SCanvas);
+	for (int32 Index = 0; Index < 8; ++Index)
+	{
+		RadialCanvas->AddSlot()
+		.Position_Lambda([Index]()
+		{
+			float Angle = (float(Index) / 8.0f) * 2.0f * UE_PI - UE_PI / 2.0f;
+			return FVector2D(FMath::Cos(Angle) * 160.0f, FMath::Sin(Angle) * 160.0f);
+		})
+		.Size(FVector2D(80, 80))
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBorder)
+			.BorderImage(White)
+			.BorderBackgroundColor_Lambda([M, Index]()
+			{
+				return M && M->Selector.SelectedIndex == Index
+					? FLinearColor(ElysiumUI::Palette::Blood.R, ElysiumUI::Palette::Blood.G, ElysiumUI::Palette::Blood.B, 0.9f)
+					: FLinearColor(0, 0, 0, 0.6f);
+			})
+			.Visibility_Lambda([M, Index]()
+			{
+				return M && M->Selector.Entries.IsValidIndex(Index) ? EVisibility::HitTestInvisible : EVisibility::Hidden;
+			})
+			.Padding(8)
+			[
+				SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
+				[
+					SNew(SImage)
+					.Image_Lambda([this, M, Index]() -> const FSlateBrush*
+					{
+						return M && M->Selector.Entries.IsValidIndex(Index)
+							? InventoryIconBrush(M->Selector.Entries[Index].Icon) : nullptr;
+					})
+				]
+			]
+		];
+	}
+
+	TSharedRef<SOverlay> RadialOverlay = SNew(SOverlay)
+		.Visibility_Lambda([M]() { return M && M->Selector.IsOpen() && M->Selector.Type == EElysiumHUDSelector::Radial
+			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			SNew(SBox).WidthOverride(500).HeightOverride(500)
+			[
+				RadialCanvas
+			]
+		]
+		+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+		[
+			SNew(SBox).WidthOverride(200)
+			[
+				SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::Bone).Justification(ETextJustify::Center)
+				.Text_Lambda([M]()
+				{
+					if (!M || !M->Selector.Entries.IsValidIndex(M->Selector.SelectedIndex)) return FText::GetEmpty();
+					return M->Selector.Entries[M->Selector.SelectedIndex].Label;
+				})
+			]
+		];
+
+	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+	[
+		RadialOverlay
 	];
 
 	// Aim cursor. Exported original use-icon cells remain the only game-authored icon dependency;

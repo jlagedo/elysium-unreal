@@ -204,9 +204,10 @@ def _run_bundle(
 
         UE_extract_corpus.main(index=index, force=force)
     elif name == "items":
-        from elysium_pipeline.exporters import UE_extract_items
+        from elysium_pipeline.exporters import UE_extract_items, UE_extract_wield
 
         UE_extract_items.main(index=index, force=force)
+        UE_extract_wield.main(index=index, force=force)
     elif name == "cfg":
         from elysium_pipeline.exporters import UE_extract_cfg
 

@@ -338,6 +338,36 @@ def _skel_section(rows):
     return bytes(out)
 
 
+def _ref_pose_rows(rows, bone_map, ref_pose, context):
+    """`rows` with each real bone's (pos, quat) replaced by `ref_pose`'s entry for it.
+
+    `ref_pose` is indexed by ORIGINAL StudioBone index -- `wield_corpus.bake_pose`'s shape, in
+    source-space conventions, before `unreal_bones` renumbers into emitted order -- so this
+    inverts `bone_map` (original -> emitted) to find, for each row, the original index it came
+    from. The synthetic root `unreal_bones` adds for a multi-rooted rig has no original index and
+    is never in `bone_map`'s image, so it keeps its identity transform untouched, same as when no
+    override is given at all. The substituted values pass through `_skel_section`'s own
+    `_conv_pos`/`_conv_quat` exactly like a bind value does -- this only changes which transform
+    reaches that conversion, never how.
+
+    A length that does not match `bone_map` -- one entry per StudioBone -- is a caller defect: a
+    silently truncated or padded override would bake a wrong reference pose with nothing in the
+    file to say so, so this fails loudly instead of guessing.
+    """
+    if ref_pose is None:
+        return rows
+    if len(ref_pose) != len(bone_map):
+        raise ValueError(
+            f"{context}: ref_pose has {len(ref_pose)} entries, expected {len(bone_map)} "
+            f"(one per StudioBone)")
+    origin = [None] * len(rows)
+    for original, emitted in enumerate(bone_map):
+        origin[emitted] = original
+    return [(name, parent, pos, quat) if origin[row] is None
+            else (name, parent) + tuple(ref_pose[origin[row]])
+            for row, (name, parent, pos, quat) in enumerate(rows)]
+
+
 def _attachment_section(d, bone_map):
     """Model-authored bone-local attachments, resolved into the emitted skeleton indices."""
     records = S.attachments(d)
@@ -973,12 +1003,19 @@ def _write_container(path, blob):
 
 
 def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=None,
-                ensure_labels=None):
+                ensure_labels=None, ref_pose=None):
     """Write `<out_dir>/<stem>.eskm` and return a summary dict.
 
     `anorms` is the unit-vector table read out of the user's own `StudioRender.dll`; without
     it a compressed vertex-animation record has directions but no magnitudes, so the morph
-    section is omitted rather than baked wrong."""
+    section is omitted rather than baked wrong.
+
+    `ref_pose`, when given, overrides the "SKEL" section's reference pose one bone at a time --
+    a sequence of `(pos, quat)` indexed by original StudioBone index, in the same source-space
+    conventions as `Bone.pos`/`Bone.quat` (`wield_corpus.bake_pose`'s shape). It exists for the
+    wielded-weapon models whose faithful reference pose is the model's own clip at frame 0 rather
+    than its container bind. Left `None`, the container's own bind pose is written exactly as
+    before -- byte-identical output for every caller that does not pass it."""
     loaded = mdl.load(idx, model_path)
     if not loaded:
         raise SystemExit(f"model not found: {model_path}")
@@ -1013,7 +1050,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
         d, bones, own + extra, bone_map, len(rows), masks, ensure_labels or ())
 
     blob = _assemble([
-        (b"SKEL", _skel_section(rows)),
+        (b"SKEL", _skel_section(_ref_pose_rows(rows, bone_map, ref_pose, model_path))),
         (b"ATCH", _attachment_section(d, bone_map)),
         (b"DYNM", dynamics_payload),
         (b"MATL", _matl_section(matnames, matinfo)),

@@ -136,7 +136,7 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 			Equipment.Icon = FName(TEXT("weapons_ranged/38"));
 			Equipment.AmmoCurrent = 6;
 			Equipment.AmmoReserve = 24;
-			Selector.Type = EElysiumHUDSelector::Disciplines;
+			Selector.Type = EElysiumHUDSelector::Radial;
 			Selector.bBriefMode = true;
 			Selector.Entries = {
 				Entry(TEXT("Bloodheal"), TEXT("1 blood"), FName(TEXT("disciplines/bloodheal"))),

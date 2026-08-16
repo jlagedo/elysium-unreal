@@ -32,6 +32,7 @@ namespace
 		if (Name.Equals(TEXT("discipline"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Discipline;
 		if (Name.Equals(TEXT("inventory"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Inventory;
 		if (Name.Equals(TEXT("critical"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Critical;
+		if (Name.Equals(TEXT("radial"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Radial;
 		return EElysiumHUDPreview::Off;
 	}
 
@@ -92,7 +93,7 @@ void UElysiumPlayerUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 #if !UE_BUILD_SHIPPING
 	IConsoleObject* PreviewCommand = IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.hud.preview"),
-		TEXT("elysium.hud.preview off|passive|combat|weapon|discipline|inventory|critical"),
+		TEXT("elysium.hud.preview off|passive|combat|weapon|discipline|inventory|critical|radial"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
 			SetPreviewMode(Args.IsEmpty() ? EElysiumHUDPreview::Off : PreviewFromName(Args[0]));

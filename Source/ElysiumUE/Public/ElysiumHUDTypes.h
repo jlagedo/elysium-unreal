@@ -24,6 +24,7 @@ enum class EElysiumHUDSelector : uint8
 	Weapons,
 	Disciplines,
 	Inventory,
+	Radial,
 };
 
 // The weapon class determines the glyph prefix in the equipment readout and whether ammo is shown.

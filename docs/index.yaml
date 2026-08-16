@@ -32,6 +32,7 @@ documents:
   - {path: architecture/debug-tooling.md, kind: architecture, owner: developer tooling, subject: debug tooling layers}
   - {path: architecture/asset-enhancement.md, kind: architecture, owner: surface enhancement, subject: offline asset enhancement}
   - {path: architecture/uasset-bake-spike.md, kind: architecture, owner: content bake, subject: Unreal package bake}
+  - {path: architecture/wielded-weapon-integration.md, kind: architecture, owner: wielded weapons, subject: third-person weapon binding modes assets and the wield bake contract}
 
   - {path: vtmb/bsp_format.md, kind: vtmb-fact, owner: BSP, subject: BSP v17 container}
   - {path: vtmb/vpk_format.md, kind: vtmb-fact, owner: VPK, subject: archive format and resolution}
@@ -40,6 +41,7 @@ documents:
   - {path: vtmb/phy_vphysics.md, kind: vtmb-fact, owner: physics, subject: PHY collision models}
   - {path: vtmb/surface_properties.md, kind: vtmb-fact, owner: surface properties, subject: physical material table for physics footsteps and impacts}
   - {path: vtmb/animation_and_movers.md, kind: vtmb-fact, owner: animation, subject: skeletal animation and brush movers}
+  - {path: vtmb/wielded_weapons.md, kind: vtmb-fact, owner: wielded weapons, subject: item model roles equip binding follow-attach composition and the wield-model corpus}
   - {path: vtmb/procedural_bones.md, kind: vtmb-fact, owner: animation, subject: procedural bones and the persistent pose array}
   - {path: vtmb/secondary_motion.md, kind: vtmb-fact, owner: animation, subject: bone-chain and renderer-cloth secondary motion}
   - {path: vtmb/mdl-coverage-and-gaps.md, kind: research-brief, owner: models, subject: MDL v2531 decode coverage gaps and Unreal opportunity}
