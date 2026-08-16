@@ -273,6 +273,41 @@ namespace ElysiumLaw
 	EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 		const FElysiumEntityHandle& Witness, const FVector& Position);
 
+	// ============================ Cycle 10c hunk 1/3 — the scare queue ===========================
+	// "A supernatural flee-only branch instead inserts a 16-byte player-owned scare record keyed by
+	// NPC identity: a repeat keeps the greater severity and refreshes its timestamp.
+	// `PlayerRuleUpdate` selects from that queue, submits the supernatural incident and removes
+	// consumed/expired records." (`docs/vtmb/player-entity.md`.)
+	//
+	// The record carries no position, which is why `FElysiumScareRecord` does not: 16 bytes hold the
+	// NPC handle, a severity and a timestamp with one 4-byte field unidentified, and a world
+	// position would not fit beside them. The submission therefore resolves the queued NPC's own
+	// origin at consumption time, which is also the only position that is still true by then.
+	//
+	// CHOSEN, NOT RECOVERED — the record lifetime and the selection order. Neither is stated. The
+	// lifetime is the Nosferatu window's own five seconds, the one duration the recovered material
+	// attaches to the same flee-only record; the selection is the strongest record, ties going to
+	// the oldest, because a queue whose whole purpose is "how bad was the worst thing seen" cannot
+	// sensibly submit the weakest and because oldest-first is what stops one NPC starving another.
+	inline constexpr double ScareRecordLifetimeSeconds = 5.0;
+
+	// Queue (or refresh) one NPC's scare record. Reached only from the NPC's flee-only schedule
+	// branch (`Substrate/ElysiumNpcWitness.h`).
+	void QueueScareRecord(FElysiumPlayer& Player, const FElysiumEntityHandle& Npc, int32 Severity);
+
+	// The queue's own pass, run from `TickPlayerLaw`: drop expired records, take the strongest
+	// remaining one and submit it as a supernatural incident. Returns whether one was consumed.
+	bool ConsumeScareQueue(FElysiumPlayer& Player, double Now);
+
+	// ============================ Cycle 10c hunk 2/3 — the witness record ========================
+	// The world-event lane's producer is the criminal/supernatural activity WRITE itself: an act
+	// that counted an incident publishes an expiring record (severity, origin, offender) into the
+	// world's law-record store, which is how an NPC that never saw the offender still witnesses the
+	// crime. The store and its per-NPC acceptance are `Substrate/ElysiumNpcWitness.h`; the choice of
+	// producer, and why the witnessed incident cannot be one, is marked at the publish site in
+	// `ApplyTimedWrite`.
+	// =============================================================================================
+
 	// ------------------------------------------------------------------------------------------
 	// The wiring half — the world area
 	// ------------------------------------------------------------------------------------------

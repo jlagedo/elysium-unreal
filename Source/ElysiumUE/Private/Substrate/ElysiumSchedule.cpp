@@ -186,11 +186,23 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 		// so the four commonest stimuli plus the hear family are what an ordinary idle admits.
 		// Nothing narrower would let live acquisition happen at all, and nothing wider is
 		// defensible from a census. Replace this with the decoded mask, not with an empty one.
+		//
+		// ================== Cycle 10c — the four law conditions join that mask ==================
+		// Same argument, same mark. A witnessed crime's whole consequence is a reselection —
+		// `FElysiumNpc::SelectSchedule`'s law branch is what submits the incident and picks the
+		// retreat — and selection runs only when the current program ends or is interrupted. An idle
+		// mask without these four would mean a standing bystander could not react to a crime until
+		// its stance clip happened to finish, which is the same starvation the paragraph above
+		// refuses for enemy acquisition. `COND_INVESTIGATE_LEVEL` is deliberately NOT added: it has
+		// no consumer yet, and an interrupt with nothing behind it would end programs for nothing.
+		// =======================================================================================
 		const FElysiumNpcConditions IdleInterrupts = FElysiumNpcConditions::Of({
 			EElysiumNpcCond::NewEnemy, EElysiumNpcCond::EnemyDead,
 			EElysiumNpcCond::LightDamage, EElysiumNpcCond::HeavyDamage,
 			EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearDanger,
-			EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearWorld });
+			EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearWorld,
+			EElysiumNpcCond::CriminalFleeLevel, EElysiumNpcCond::CriminalAttackLevel,
+			EElysiumNpcCond::SupernaturalFleeLevel, EElysiumNpcCond::SupernaturalAttackLevel });
 
 		FElysiumSchedule& Idle = Out.AddDefaulted_GetRef();
 		Idle.Id = EElysiumScheduleId::IdleDisposition;

@@ -37,6 +37,16 @@ enum class EElysiumNpcCond : uint8
 	None = 0x00,
 
 	// --- Recovered identities --------------------------------------------------------------------
+	// ============================ Cycle 10c — the four law conditions ============================
+	// The registry numbers the survey states in decimal (`docs/vtmb/npc-ai-reverse-engineering.md`
+	// -> "Player-law observation transaction"): 31, 32, 33, 34. Spelled in hex here so the whole
+	// enum reads in one base; the decimal is beside each one because that is how the table names it.
+	// Their producer is `Substrate/ElysiumNpcWitness.h`.
+	CriminalFleeLevel       = 0x1f,   // 31 — `pl_criminal_flee`
+	CriminalAttackLevel     = 0x20,   // 32 — `pl_criminal_attack`
+	SupernaturalFleeLevel   = 0x21,   // 33 — `pl_supernatural_flee`
+	SupernaturalAttackLevel = 0x22,   // 34 — `pl_supernatural_attack`
+	// =============================================================================================
 	ShouldDodge           = 0x0c,
 	ShouldBlock           = 0x0d,
 	ShouldStepback        = 0x0e,
@@ -78,6 +88,12 @@ enum class EElysiumNpcCond : uint8
 	HearPlayer = 0xe3,
 	HearWorld  = 0xe4,
 	HearDanger = 0xe5,
+	// ============================ Cycle 10c — the fifth law condition ============================
+	// `COND_INVESTIGATE_LEVEL` is named beside the four above ("clears and recomputes
+	// `COND_INVESTIGATE_LEVEL` plus four law conditions") and its registry number is NOT stated, so
+	// it lands in this band rather than being guessed at 30 or 35.
+	InvestigateLevel = 0xe6,
+	// =============================================================================================
 };
 
 const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond);

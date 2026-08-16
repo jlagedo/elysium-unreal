@@ -17,6 +17,7 @@
 #include "ElysiumStub.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLipTrack.h"
+#include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
@@ -385,6 +386,8 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsy
 	, Epoch(GElysiumNextWorldEpoch++)
 {
 	GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
+	// Cycle 10c — the law-record store, built beside the sound bus it is modelled on.
+	LawEventBus = MakeUnique<ElysiumNpcWitness::FElysiumLawEventBus>();
 	LineService = MakeUnique<FElysiumLineService>(WorldServices.Audio);
 	// R5 — the chokepoints are never uninstrumented: the ring buffer (always-on history) and
 	// the log/VLOG stream are installed before any entity spawns. Phase 2 UI adds more sinks.
@@ -3291,6 +3294,18 @@ FElysiumGameSoundBus& FElysiumEntityWorld::GameSounds()
 {
 	return *GameSoundBus;
 }
+
+// ================= Cycle 10c — the world-event law lane's record store =========================
+const ElysiumNpcWitness::FElysiumLawEventBus& FElysiumEntityWorld::LawEvents() const
+{
+	return *LawEventBus;
+}
+
+ElysiumNpcWitness::FElysiumLawEventBus& FElysiumEntityWorld::LawEvents()
+{
+	return *LawEventBus;
+}
+// ==============================================================================================
 
 void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
 	const FElysiumEntityHandle& Source, float StealthHearingReductionCm)

@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumScriptedCharacter.h"
@@ -137,6 +138,32 @@ public:
 	// The sensory transaction and everything it remembers, including the last damaging hit this
 	// NPC took (`Senses.Memory.LastDamage*`, written by the typed commit below).
 	FElysiumNpcSenses Senses;
+
+	// ================== Cycle 10c — player-law witnessing (`ElysiumNpcWitness.h`) ==================
+	// The four authored thresholds the two law lanes compare a player activity level against, and
+	// `pl_investigate` beside them. 424 of the corpus's 426 NPC rows author all five. The default is
+	// the authored-disable 6 and a negative authored value resolves to it; both are stated, with
+	// their reasoning, at `ElysiumNpcWitness::DefaultThreshold` / `ResolveThreshold`.
+	int32 PlCriminalFlee = ElysiumNpcWitness::DefaultThreshold;
+	int32 PlCriminalAttack = ElysiumNpcWitness::DefaultThreshold;
+	int32 PlSupernaturalFlee = ElysiumNpcWitness::DefaultThreshold;
+	int32 PlSupernaturalAttack = ElysiumNpcWitness::DefaultThreshold;
+	int32 PlInvestigate = ElysiumNpcWitness::DefaultThreshold;
+
+	// SEAM (parsed, carried, unread): the investigation POLICY keyfields. `investigate_mode` (4 on
+	// 378 rows) and `investigate_mode_combat` (4 on 375) are mode NUMBERS whose meanings are
+	// unrecovered, and `full_investigate` is an unrecovered policy beside them. The 32-schedule
+	// `INVESTIGAT` family they would select among is undecoded too, so there is nothing for a mode
+	// to choose. They are carried as authored integers so an NPC round-trips through a save with the
+	// policy it was authored with, and so the selector has values to read the day one is decoded.
+	int32 InvestigateMode = 0;
+	int32 InvestigateModeCombat = 0;
+	int32 FullInvestigate = 0;
+
+	// The retained witness block: independent criminal and supernatural processed counts, witnessed
+	// levels/locations/offenders, the flee-only policy and the three ignore deadlines.
+	FElysiumNpcWitness Witness;
+	// ==============================================================================================
 
 	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)

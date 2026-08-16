@@ -210,6 +210,28 @@ struct FElysiumPoliceState
 	double HeightenedAlertExpiry = 0.0;   // +0x1d1c
 };
 
+// ============================ Cycle 10c — the player-owned scare queue ==========================
+// "A supernatural flee-only branch instead inserts a 16-byte player-owned scare record keyed by NPC
+// identity: a repeat keeps the greater severity and refreshes its timestamp. `PlayerRuleUpdate`
+// selects from that queue, submits the supernatural incident and removes consumed/expired records."
+// (`docs/vtmb/player-entity.md`.) The rules are `Substrate/ElysiumLaw.h`.
+//
+// Three fields, not four: the recovered record is sixteen bytes holding an NPC handle, a severity
+// and a timestamp, with one 4-byte field unidentified. It carries no position, which is why the
+// consumer resolves the queued NPC's own origin instead of storing one.
+//
+// SESSION state (K8), and the reason is the record's own five-second lifetime: it is a deferred
+// submission in flight, keyed by a live NPC handle, and what it durably produces — the Masquerade
+// increment or a queued police response — is already on the saved police block. A payload written
+// mid-flight restores a player who was not scared rather than one who is scared of an entity handle
+// from another epoch.
+struct FElysiumScareRecord
+{
+	FElysiumEntityHandle Npc;
+	int32 Severity = 0;
+	double Time = 0.0;
+};
+
 // ============================================================================================
 // Feeding (B6) — the paired action's phase and the authoritative transaction's field set.
 // `docs/vtmb/feeding.md` owns the behaviour; `Substrate/ElysiumFeed.h` owns the rules over these.
@@ -1208,6 +1230,9 @@ public:
 	// Cycle 10b — the response/Masquerade-timer/pursuit half of the same domain. Mirrored from the
 	// record for the map's lifetime exactly as `Law` is.
 	FElysiumPoliceState Police;
+	// Cycle 10c — the flee-only scare records an NPC's supernatural schedule branch queues, drained
+	// by `ElysiumLaw::TickPlayerLaw`. Session state; the reasoning is on `FElysiumScareRecord`.
+	TArray<FElysiumScareRecord> ScareQueue;
 	TArray<FElysiumXpEntry> ExperienceLog;
 	TArray<FString> EmailFlags;
 

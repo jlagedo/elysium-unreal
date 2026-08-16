@@ -46,6 +46,7 @@ struct FElysiumSaveVersion
 		Disciplines   = 21,  // the player's discipline block: selection, cast counter, active states
 		Stealth       = 22,  // the player's stealth surface, as one generation, and its raw aggregate
 		Law           = 23,  // the activity-channel deadlines/counts and the police-response block
+		NpcWitness    = 24,  // the NPC's retained law witness block: processed counts, records, windows
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

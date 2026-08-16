@@ -6,6 +6,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 
@@ -366,6 +367,20 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	ElysiumNpcCond::GatherDamage(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherHearing(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherSight(Npc, Now, Cond);
+
+	// ===================== Cycle 10c — the player-law lanes join step 1 =========================
+	// The recovered pass "clears and recomputes `COND_INVESTIGATE_LEVEL` plus four law conditions"
+	// as part of condition gathering, and the direct-player lane consumes the player-LOS latch
+	// `GatherSight` has just run against — so it lands at the TAIL of step 1, after sight and before
+	// the enemy transaction.
+	//
+	// Before `ChooseEnemy` for a reason: the attack arm's consequence is a `D_HT` relationship row,
+	// and a row installed by a previous pass's schedule selection has to be arbitrated by the
+	// ordinary transaction below rather than a pass later. This call itself submits nothing, touches
+	// no player state, and never mutates Masquerade or spawns police — that is schedule selection's
+	// half, and keeping the two apart is the recovered split.
+	ElysiumNpcWitness::GatherLawConditions(Npc, Now, Cond);
+	// =============================================================================================
 
 	// 2. The enemy-memory refresh: the recovered pass updates its records BEFORE `ChooseEnemy` runs,
 	//    which is what lets the stickiness test see a death in the same pass that noticed it. The

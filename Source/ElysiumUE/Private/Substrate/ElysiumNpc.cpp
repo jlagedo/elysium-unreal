@@ -698,6 +698,24 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 
 EElysiumScheduleId FElysiumNpc::SelectSchedule()
 {
+	// =============== Cycle 10c — the law branch of schedule selection ============================
+	// "Schedule branches, not condition gathering, call the two player incident consumers." This is
+	// the only place in the runtime that reaches them from an NPC.
+	//
+	// CHOSEN, NOT RECOVERED — the POSITION. The recovered idle branch (`0x102af660` case 1) is
+	// decoded step by step and contains no law step, so the branch cannot be inserted into that
+	// order without contradicting a decoded body; the recovered material says only "schedule
+	// selection/translation". It therefore sits at the outermost selection entry, ahead of the state
+	// switch, which is the one point every state passes through and which displaces no decoded
+	// order. It declines by returning `None` on all but the flee arm, so an NPC that witnessed
+	// nothing takes exactly the selection it took before.
+	if (const EElysiumScheduleId Law =
+			ElysiumNpcWitness::SelectLawSchedule(*this, World ? World->NowSeconds() : 0.0);
+		Law != EElysiumScheduleId::None)
+	{
+		return Law;
+	}
+	// =============================================================================================
 	switch (Mind.State())
 	{
 	case EElysiumNpcState::Combat:  return SelectCombatSchedule();
@@ -812,6 +830,16 @@ void FElysiumNpc::UpdateIdealState(double Now)
 		return;
 	}
 	Mind.RequestState(Ideal, TEXT("SelectIdealState"));
+	// ============ Cycle 10c — "entering NPC state 14 opens the criminal window" =================
+	// The CHOSEN mapping of retail state 14 onto this runtime's Alert, and why Alert rather than
+	// Combat or Idle, is stated in full at `ElysiumNpcWitness::OnEnteredAlertState`. This is its one
+	// call site: the promotion edge, after the transition is committed and not on every pass spent in
+	// the state.
+	if (Ideal == EElysiumNpcState::Alert && Mind.State() == EElysiumNpcState::Alert)
+	{
+		ElysiumNpcWitness::OnEnteredAlertState(*this, Now);
+	}
+	// =============================================================================================
 	// An authored director outranks the state change it may itself have caused. `forcestate 3` puts
 	// an NPC in combat with no enemy, whose recovered fallback is a drop back to alert on the very
 	// next pass — and discarding the program here would cancel the walk the same director pushed
@@ -829,7 +857,6 @@ void FElysiumNpc::UpdateIdealState(double Now)
 	// deliberate: the arbiter's own state refresh runs on the release, and it must see the state
 	// this pass decided rather than the one the program was chosen under.
 	ReleaseScheduleBody(TEXT("ideal state changed"));
-	(void)Now;
 }
 
 void FElysiumNpc::ThinkStanceOrIdle(double Now)
@@ -2585,6 +2612,33 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 		bLoadoutResolved = false;
 	}
 
+	// ==================== Cycle 10c — the retained witness block =================================
+	// Appended at the very end of the NPC leaf behind its own version, so it is additive: an
+	// `NpcCombat` payload restores an NPC that has witnessed nothing and whose three windows are at
+	// the spawn-zero default, which is exactly what the pre-witness build wrote. The processed counts
+	// restore at zero there, which means a legacy NPC will observe the first act after the load —
+	// the conservative direction, since the alternative would silently forgive a crime.
+	if (Ar.Version() >= FElysiumSaveVersion::NpcWitness)
+	{
+		Witness.Serialize(Ar);
+		if (Ar.IsLoading())
+		{
+			if (World)
+			{
+				Witness.Rebase(*World);
+			}
+			else
+			{
+				Witness.Reset();
+			}
+		}
+	}
+	else if (Ar.IsLoading())
+	{
+		Witness.Reset();
+	}
+	// =============================================================================================
+
 	if (Ar.IsLoading())
 	{
 		// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory
@@ -2722,6 +2776,27 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		? TEXT("(none)")
 		: FString::Printf(TEXT("%s at t=%.2f"), *Mem.DetectedAttackAttacker.ToString(),
 			Mem.DetectedAttackTime));
+
+	// ==================== Cycle 10c — the witness block =========================================
+	const double LawNow = World ? World->NowSeconds() : 0.0;
+	Out.Emplace(TEXT("Law thresholds"), FString::Printf(
+		TEXT("crim flee %d / attack %d, super flee %d / attack %d, investigate %d"),
+		PlCriminalFlee, PlCriminalAttack, PlSupernaturalFlee, PlSupernaturalAttack, PlInvestigate));
+	for (int32 i = 0; i < 2; ++i)
+	{
+		const ElysiumNpcWitness::EChannel Channel = static_cast<ElysiumNpcWitness::EChannel>(i);
+		const FElysiumNpcWitnessChannel& Chan = Witness.Channel(Channel);
+		Out.Emplace(FString::Printf(TEXT("Law (%s)"), ElysiumNpcWitness::ChannelName(Channel)),
+			FString::Printf(TEXT("processed %d, window %s, witnessed %d from %s"),
+				Chan.Processed,
+				ElysiumNpcWitness::IsWindowOpen(Chan.IgnoreUntil, LawNow) ? TEXT("OPEN") : TEXT("closed"),
+				Chan.Level, Chan.Offender.IsSet() ? *Chan.Offender.ToString() : TEXT("(nobody)")));
+	}
+	Out.Emplace(TEXT("Law (nosferatu)"), FString::Printf(TEXT("window %s%s"),
+		ElysiumNpcWitness::IsWindowOpen(Witness.NosferatuIgnoreUntil, LawNow)
+			? TEXT("OPEN") : TEXT("closed"),
+		Witness.bSupernaturalFleeOnly ? TEXT(", flee only") : TEXT("")));
+	// =============================================================================================
 }
 
 // ============================================================================================

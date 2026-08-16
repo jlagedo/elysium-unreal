@@ -588,8 +588,13 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// this version and a `Stealth` payload skips those bytes entirely, restoring three bare levels
 	// with the "no deadline" sentinel — which is exactly what the pre-law build wrote. The
 	// police-response block that came with it is an ordinary append to the end of the record.
+	//
+	// `NpcWitness` appends the NPC's retained law witness block — the two channels' processed
+	// counts, witnessed records and ignore deadlines, plus the flee-only flag and the Nosferatu
+	// deadline — to the END of the NPC leaf behind its own version. Additive: a `Law` payload
+	// restores an NPC that has witnessed nothing with its three windows at the spawn-zero default.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::Law);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcWitness);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -605,7 +610,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the player's stealth surface and raw modifier aggregate"),
 			(int32)FElysiumSaveVersion::Stealth),
 		TPair<const TCHAR*, int32>(TEXT("the law deadlines/act counts and the police-response block"),
-			(int32)FElysiumSaveVersion::Law) })
+			(int32)FElysiumSaveVersion::Law),
+		TPair<const TCHAR*, int32>(TEXT("the NPC's retained law witness block"),
+			(int32)FElysiumSaveVersion::NpcWitness) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);

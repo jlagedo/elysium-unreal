@@ -20,6 +20,9 @@ class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
 class FElysiumGameSoundBus;
 class FElysiumLineService;
+// Cycle 10c — the law-record store's own type, forward-declared through its namespace so this
+// public header stays clear of the substrate's private ones (the sound bus's own posture).
+namespace ElysiumNpcWitness { class FElysiumLawEventBus; }
 class AActor;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
@@ -407,6 +410,16 @@ public:
 	const FElysiumGameSoundBus& GameSounds() const;
 	FElysiumGameSoundBus& GameSounds();
 
+	// ================= Cycle 10c — the world-event law lane's record store =====================
+	// The expiring criminal/supernatural records an NPC's global witness lane polls, in exactly the
+	// game-sound bus's shape and held by pointer for the same reason: a producer stamps a record, no
+	// receiver is bound, and every consumer scans the retained window during its own think. It is
+	// session state and is deliberately not saved — the reasoning is on
+	// `ElysiumNpcWitness::FElysiumLawEventBus`.
+	const ElysiumNpcWitness::FElysiumLawEventBus& LawEvents() const;
+	ElysiumNpcWitness::FElysiumLawEventBus& LawEvents();
+	// ==========================================================================================
+
 	const FElysiumWeatherState& GetWeatherState() const { return WeatherState; }
 	void FadeGlobalWetness(float Target);
 	FElysiumLineService* Lines() const { return LineService.Get(); }
@@ -552,6 +565,8 @@ private:
 	// The game-sound stimulus window. Held by pointer so the substrate's own header stays out of
 	// this public one, the way LineService below already does.
 	TUniquePtr<FElysiumGameSoundBus> GameSoundBus;
+	// Cycle 10c — the law-record store, held the same way and for the same reason.
+	TUniquePtr<ElysiumNpcWitness::FElysiumLawEventBus> LawEventBus;
 	// Set once the rulebook has been asked for the sound-volume table. Latched rather than retried,
 	// so a world with no game state (or with no exported `vdata`) costs one lookup and then runs on
 	// the bus's own normal-level fallback.

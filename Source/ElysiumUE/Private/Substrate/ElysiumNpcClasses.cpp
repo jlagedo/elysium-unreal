@@ -231,6 +231,26 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	AddNpcField(D, TEXT("additionalequipment"), &FElysiumNpc::AdditionalEquipment, EElysiumField::Save);
 	AddNpcField(D, TEXT("alternateequipment"),  &FElysiumNpc::AlternateEquipment,  EElysiumField::Save);
 	AddNpcField(D, TEXT("cantdropweapons"),     &FElysiumNpc::bCantDropWeapons,    EElysiumField::Save);
+
+	// ================ Cycle 10c — the authored player-law thresholds and policy ==================
+	// The four `pl_*` thresholds the law lanes compare against, `pl_investigate` beside them, and
+	// the three investigation-policy keys that are parsed and carried with their meanings
+	// unrecovered (the SEAM is on the members). All 424-row keyfields, Save-flagged for the same
+	// reason the perception and loadout tuning above is: a map may not rewrite them, but a payload
+	// has to carry what the entity was authored with.
+	//
+	// The member defaults are the authored-disable 6 rather than 0, so an NPC row that omits a key
+	// resolves to "this reaction is off" instead of "react to everything"; the reasoning is at
+	// `ElysiumNpcWitness::DefaultThreshold`.
+	AddNpcField(D, TEXT("pl_criminal_flee"),        &FElysiumNpc::PlCriminalFlee,        EElysiumField::Save);
+	AddNpcField(D, TEXT("pl_criminal_attack"),      &FElysiumNpc::PlCriminalAttack,      EElysiumField::Save);
+	AddNpcField(D, TEXT("pl_supernatural_flee"),    &FElysiumNpc::PlSupernaturalFlee,    EElysiumField::Save);
+	AddNpcField(D, TEXT("pl_supernatural_attack"),  &FElysiumNpc::PlSupernaturalAttack,  EElysiumField::Save);
+	AddNpcField(D, TEXT("pl_investigate"),          &FElysiumNpc::PlInvestigate,         EElysiumField::Save);
+	AddNpcField(D, TEXT("investigate_mode"),        &FElysiumNpc::InvestigateMode,        EElysiumField::Save);
+	AddNpcField(D, TEXT("investigate_mode_combat"), &FElysiumNpc::InvestigateModeCombat,  EElysiumField::Save);
+	AddNpcField(D, TEXT("full_investigate"),        &FElysiumNpc::FullInvestigate,        EElysiumField::Save);
+	// =============================================================================================
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)

@@ -8,6 +8,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDisciplines.h"
+#include "Substrate/ElysiumNpcWitness.h"   // Cycle 10c — the world-event lane's record store
 #include "Substrate/ElysiumPlayerLog.h"
 
 namespace
@@ -313,20 +314,21 @@ bool ExpireHeightenedAlert(FElysiumPoliceState& Police, double Now)
 
 namespace
 {
-	void ApplyTimedWrite(FElysiumPlayer& Player, const TCHAR* ChannelName, int32& Level,
-		double& Expiry, int32& Count, int32 Requested, float Duration)
+	void ApplyTimedWrite(FElysiumPlayer& Player, const TCHAR* ChannelName,
+		ElysiumNpcWitness::EChannel Channel, int32& Level, double& Expiry, int32& Count,
+		int32 Requested, float Duration)
 	{
-		FChannel Channel;
-		Channel.Level = Level;
-		Channel.Expiry = Expiry;
-		Channel.Count = Count;
+		FChannel ChannelState;
+		ChannelState.Level = Level;
+		ChannelState.Expiry = Expiry;
+		ChannelState.Count = Count;
 
 		const double Now = Player.World ? Player.World->NowSeconds() : 0.0;
-		const FWriteResult Result = WriteTimedChannel(Channel, Requested, Duration, Now);
+		const FWriteResult Result = WriteTimedChannel(ChannelState, Requested, Duration, Now);
 
-		Level = Channel.Level;
-		Expiry = Channel.Expiry;
-		Count = Channel.Count;
+		Level = ChannelState.Level;
+		Expiry = ChannelState.Expiry;
+		Count = ChannelState.Count;
 
 		if (Result.bCleared)
 		{
@@ -334,6 +336,27 @@ namespace
 				*Player.DebugString(), ChannelName);
 			return;
 		}
+		// ============ Cycle 10c hunk 2/3 — the world-event lane's one producer ==================
+		// An act that counted an incident is also published as an expiring world law record, which
+		// is what an NPC's global witness lane accepts on cone, `m_flSeekDistInspection` and a
+		// trace. The record's severity is the level written and its origin is where the player was
+		// when it happened, which is exactly the "severity, origin and offender" the recovered
+		// record carries.
+		//
+		// CHOSEN, NOT RECOVERED — that the ACT publishes rather than the witnessed incident. Two
+		// things settle it. The record describes a crime, not a police call: a witnessed incident
+		// already has a consumer of its own, and the whole point of the parallel lane is that an NPC
+		// which never saw the offender still saw the event. And publishing from the incident
+		// consumers is not merely different but unstable: an NPC's own submission would publish a
+		// record that the same NPC (and every other) then accepts, submits again and republishes,
+		// with nothing in the recovered material to stop it — the global lane has no processed count
+		// of its own. Publishing here gives the lane exactly one record per act.
+		if (Result.bCounted)
+		{
+			ElysiumNpcWitness::PublishLawEvent(Player.World, Channel, Level, Player.Origin,
+				Player.Handle);
+		}
+		// =======================================================================================
 		UE_LOG(LogElysiumPlayer, Verbose,
 			TEXT("%s %s activity %d for %.2fs (%s, act count %d)"),
 			*Player.DebugString(), ChannelName, Level, Result.Duration,
@@ -343,14 +366,15 @@ namespace
 
 void SetCriminalLevel(FElysiumPlayer& Player, int32 Level, float Duration)
 {
-	ApplyTimedWrite(Player, TEXT("criminal"), Player.Law.Criminal, Player.Law.CriminalExpiry,
-		Player.Law.CriminalCount, Level, Duration);
+	ApplyTimedWrite(Player, TEXT("criminal"), ElysiumNpcWitness::EChannel::Criminal,
+		Player.Law.Criminal, Player.Law.CriminalExpiry, Player.Law.CriminalCount, Level, Duration);
 }
 
 void SetSupernaturalLevel(FElysiumPlayer& Player, int32 Level, float Duration)
 {
-	ApplyTimedWrite(Player, TEXT("supernatural"), Player.Law.Supernatural,
-		Player.Law.SupernaturalExpiry, Player.Law.SupernaturalCount, Level, Duration);
+	ApplyTimedWrite(Player, TEXT("supernatural"), ElysiumNpcWitness::EChannel::Supernatural,
+		Player.Law.Supernatural, Player.Law.SupernaturalExpiry, Player.Law.SupernaturalCount,
+		Level, Duration);
 }
 
 void SetInvestigateLevel(FElysiumPlayer& Player, int32 Level)
@@ -480,15 +504,13 @@ void ApplyWorldAreaTransition(FElysiumEntityWorld& World, int32 NewArea)
 // The wiring half — the two witnessed-incident consumers
 // ================================================================================================
 
-// SEAM (comment, nothing failed): the two consumers below have no PRODUCER in this cycle. Retail
-// reaches them from an NPC's schedule branch after condition gathering set one of the four law
-// conditions (`COND_CRIMINAL_FLEE_LEVEL` 31, `COND_CRIMINAL_ATTACK_LEVEL` 32,
-// `COND_SUPERNATURAL_FLEE_LEVEL` 33, `COND_SUPERNATURAL_ATTACK_LEVEL` 34), which compares the
-// player's act counts against that NPC's own processed counts — the lane that owns
-// `ElysiumNpcConditions` and the per-NPC counters, and the next cycle's work. Everything the
-// producer needs on this side is built and public: the act counts are readable through
-// `FElysiumPlayer::CriminalActCount()` / `SupernaturalActCount()`, and the two entry points below
-// take exactly the severity, witness and position the retained incident record carries.
+// The two consumers below are reached from an NPC's schedule branch, after condition gathering set
+// one of the four law conditions (`COND_CRIMINAL_FLEE_LEVEL` 31, `COND_CRIMINAL_ATTACK_LEVEL` 32,
+// `COND_SUPERNATURAL_FLEE_LEVEL` 33, `COND_SUPERNATURAL_ATTACK_LEVEL` 34) by comparing the player's
+// act counts against that NPC's own processed counts. That producer is
+// `ElysiumNpcWitness::SelectLawSchedule`; the act counts it reads are public through
+// `FElysiumPlayer::CriminalActCount()` / `SupernaturalActCount()`, and the entry points below take
+// exactly the severity, witness and position the NPC's retained incident record carries.
 
 const TCHAR* AdmissionName(EAdmission Admission)
 {
@@ -605,6 +627,76 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 }
 
 // ================================================================================================
+// Cycle 10c hunk 1/3 — the player-owned scare queue
+// ================================================================================================
+
+void QueueScareRecord(FElysiumPlayer& Player, const FElysiumEntityHandle& Npc, int32 Severity)
+{
+	if (!Npc.IsSet())
+	{
+		UE_LOG(LogElysiumPlayer, Warning,
+			TEXT("law: a scare record was queued with no NPC identity — the queue is keyed by it, "
+				"so the record has nowhere to go"));
+		return;
+	}
+	const double Now = Player.World ? Player.World->NowSeconds() : 0.0;
+	for (FElysiumScareRecord& Record : Player.ScareQueue)
+	{
+		if (Record.Npc == Npc)
+		{
+			// "a repeat keeps the greater severity and refreshes its timestamp" — both halves, in
+			// that order, so a weaker repeat cannot lower what the queue already holds.
+			Record.Severity = FMath::Max(Record.Severity, Severity);
+			Record.Time = Now;
+			return;
+		}
+	}
+	FElysiumScareRecord Record;
+	Record.Npc = Npc;
+	Record.Severity = Severity;
+	Record.Time = Now;
+	Player.ScareQueue.Add(Record);
+}
+
+bool ConsumeScareQueue(FElysiumPlayer& Player, double Now)
+{
+	// "removes consumed/expired records". Expiry first, so a record that aged out this pass cannot
+	// be the one selected.
+	Player.ScareQueue.RemoveAll([Now](const FElysiumScareRecord& Record)
+		{ return Now - Record.Time >= ScareRecordLifetimeSeconds; });
+	if (Player.ScareQueue.IsEmpty())
+	{
+		return false;
+	}
+	int32 Best = 0;
+	for (int32 i = 1; i < Player.ScareQueue.Num(); ++i)
+	{
+		const FElysiumScareRecord& Candidate = Player.ScareQueue[i];
+		const FElysiumScareRecord& Incumbent = Player.ScareQueue[Best];
+		if (Candidate.Severity > Incumbent.Severity
+			|| (Candidate.Severity == Incumbent.Severity && Candidate.Time < Incumbent.Time))
+		{
+			Best = i;
+		}
+	}
+	const FElysiumScareRecord Selected = Player.ScareQueue[Best];
+	Player.ScareQueue.RemoveAt(Best);
+
+	// The record carries no position (16 bytes, stated in the header), so the scared NPC's own
+	// origin is resolved here. An NPC that no longer resolves takes the player's own position: the
+	// incident still happened, and the response's witness check is what handles a witness that has
+	// since gone.
+	const FElysiumEntity* Npc = Player.World ? Player.World->Resolve(Selected.Npc) : nullptr;
+	const FVector Position = Npc != nullptr ? Npc->Origin : Player.Origin;
+	const EAdmission Admission =
+		PlayerSupernaturalIncident(Player, Selected.Severity, Selected.Npc, Position);
+	UE_LOG(LogElysiumPlayer, Log, TEXT("%s scare record (severity %d, from %s): %s"),
+		*Player.DebugString(), Selected.Severity, *Selected.Npc.ToString(),
+		AdmissionName(Admission));
+	return true;
+}
+
+// ================================================================================================
 // The wiring half — the pursuit counters and the expiry pass
 // ================================================================================================
 
@@ -671,6 +763,14 @@ void TickPlayerLaw(FElysiumPlayer& Player, double Now)
 				*Player.DebugString());
 		}
 	}
+
+	// --- 1b. The scare queue ---------------------------------------------------------------------
+	// Cycle 10c hunk 3/3. `PlayerRuleUpdate` "selects from that queue, submits the supernatural
+	// incident and removes consumed/expired records", and `PlayerRuleUpdate` is the first call of
+	// `PreThink` — which is this pass. It runs ahead of the response consume below so a scare
+	// record's own incident can be the one that queues this pass's response, rather than always
+	// waiting a think.
+	ConsumeScareQueue(Player, Now);
 
 	// --- 2. The delayed response-cop deadline ----------------------------------------------------
 	{

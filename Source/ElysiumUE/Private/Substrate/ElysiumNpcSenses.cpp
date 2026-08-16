@@ -11,6 +11,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -406,6 +407,15 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		Memory.bPlayerLos = Memory.PlayerLosLastClearTime >= 0.0
 			&& (Now - Memory.PlayerLosLastClearTime) <= ElysiumNpcSense::BlockedInConeGraceSeconds;
 	}
+
+	// ================= Cycle 10c — the closest-player special case ==============================
+	// "the closest-player special case opens the Nosferatu window for five seconds." The setter is
+	// called from `SetClosestPlayer`'s own body, which is this function, so the CALLER stays where
+	// retail's is and the rule itself lives with the rest of the witness transaction
+	// (`Substrate/ElysiumNpcWitness.h`). It runs after the cache above is committed because the
+	// proximity term it reads is `bPlayerInRange`.
+	ElysiumNpcWitness::OnClosestPlayerUpdated(Npc, *Player, Now);
+	// =============================================================================================
 
 	// The HUD observability offer (`docs/vtmb/stealth.md` -> "HUD observability is not authority").
 	// `SetClosestPlayer` feeds this surface, and the player-side update is what filters and ranks:

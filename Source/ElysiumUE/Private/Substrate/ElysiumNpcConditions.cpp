@@ -87,6 +87,13 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::HearPlayer:            return TEXT("HEAR_PLAYER");
 	case EElysiumNpcCond::HearWorld:             return TEXT("HEAR_WORLD");
 	case EElysiumNpcCond::HearDanger:            return TEXT("HEAR_DANGER");
+	// ============================ Cycle 10c — the five law conditions ============================
+	case EElysiumNpcCond::CriminalFleeLevel:       return TEXT("CRIMINAL_FLEE_LEVEL");
+	case EElysiumNpcCond::CriminalAttackLevel:     return TEXT("CRIMINAL_ATTACK_LEVEL");
+	case EElysiumNpcCond::SupernaturalFleeLevel:   return TEXT("SUPERNATURAL_FLEE_LEVEL");
+	case EElysiumNpcCond::SupernaturalAttackLevel: return TEXT("SUPERNATURAL_ATTACK_LEVEL");
+	case EElysiumNpcCond::InvestigateLevel:        return TEXT("INVESTIGATE_LEVEL");
+	// =============================================================================================
 	}
 	return TEXT("COND_?");
 }

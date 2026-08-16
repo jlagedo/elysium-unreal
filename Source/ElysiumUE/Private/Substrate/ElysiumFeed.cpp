@@ -38,6 +38,8 @@
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"        // Cycle 10b — the pulse / interrupt law producers
+#include "Substrate/ElysiumNpc.h"        // Cycle 10c — the victim's law observation windows
+#include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -823,6 +825,20 @@ bool FElysiumCombatCharacter::Feed(double Now)
 	{
 		ElysiumLaw::SetSupernaturalLevel(*PlayerFeeder, 2, ElysiumLaw::FeedActivitySeconds);
 		ElysiumLaw::SetCriminalLevel(*PlayerFeeder, 3, ElysiumLaw::FeedActivitySeconds);
+		// --------------------------------------------------------------------------------------
+		// Cycle 10c hunk 1/2 — the other half of the same recovered producer, now that the lane it
+		// feeds exists. `docs/vtmb/feeding.md`: the pulse "opens the victim NPC's criminal and
+		// supernatural observation windows for three seconds, allowing that NPC's ordinary
+		// condition-gathering pass to compare the new player act counts with its authored `pl_*`
+		// thresholds."
+		//
+		// On the VICTIM, and only when the victim is an ordinary NPC: the windows are per-NPC state
+		// and the recovered caller names the fed-upon character.
+		// --------------------------------------------------------------------------------------
+		if (FElysiumNpc* VictimNpc = Victim->AsNpc())
+		{
+			ElysiumNpcWitness::OpenFeedWindows(*VictimNpc, Now);
+		}
 	}
 
 	// The accelerating cadence, and AT MOST ONE pulse per update — never a catch-up loop.
@@ -848,6 +864,19 @@ void FElysiumCombatCharacter::FeedInterrupt()
 			? World->FindPlayer() : nullptr)
 		{
 			ElysiumLaw::SetCriminalLevel(*PlayerFeeder, 1, ElysiumLaw::FeedActivitySeconds);
+			// ----------------------------------------------------------------------------------
+			// Cycle 10c hunk 2/2 — "The interrupted-feed path opens the same victim windows". Both
+			// channels again, not just the criminal one the activity write raises: the recovered
+			// sentence says "the same victim windows", and the windows are an observation grant
+			// rather than a mirror of what was raised.
+			// ----------------------------------------------------------------------------------
+			FElysiumCombatCharacter* Peer = ResolveFeedPeer();
+			FElysiumNpc* VictimNpc = Peer ? Peer->AsNpc() : nullptr;
+			if (VictimNpc != nullptr)
+			{
+				ElysiumNpcWitness::OpenFeedWindows(*VictimNpc,
+					World ? World->NowSeconds() : 0.0);
+			}
 		}
 	}
 	CompleteFeedTransaction(/*bKeepReleaseTail*/ false);
