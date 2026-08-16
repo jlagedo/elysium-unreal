@@ -1,5 +1,7 @@
 #include "Visual/ElysiumAnimationResolve.h"
 
+#include "Visual/ElysiumAnimGraph.h"
+
 namespace ElysiumAnimResolve
 {
 
@@ -92,6 +94,10 @@ namespace
 			Out.AxisValue[Axis] = Pose.Get(Out.AxisName[Axis]);
 		}
 		Out.Outcome = EElysiumAnimOutcome::Resolved;
+		// A grid whose activity routes to a sequence-only state would play a null sequence — full
+		// body reference pose — and the blend-space pointer would defeat `ShouldHoldPose`. Named
+		// here, before any asset is loaded.
+		ElysiumAnimGraph::RefuseUnplayableGrid(Out);
 	}
 
 	// Step 4's weighted choice for one activity, or empty.

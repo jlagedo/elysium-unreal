@@ -81,6 +81,73 @@ namespace ElysiumAnimGraph
 		}
 	}
 
+	bool TryParseState(const FString& Name, EElysiumGraphState& OutState)
+	{
+		for (int32 i = 0; i < NumGraphStates; ++i)
+		{
+			const EElysiumGraphState State = static_cast<EElysiumGraphState>(i);
+			if (Name.Equals(StateName(State), ESearchCase::IgnoreCase))
+			{
+				OutState = State;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	const TCHAR* ActivityForState(EElysiumGraphState State)
+	{
+		switch (State)
+		{
+		case EElysiumGraphState::Walk:    return TEXT("ACT_WALK");
+		case EElysiumGraphState::Run:     return TEXT("ACT_RUN");
+		case EElysiumGraphState::Sneak:   return TEXT("ACT_SNEAK");
+		case EElysiumGraphState::Crouch:  return TEXT("ACT_CROUCH");
+		case EElysiumGraphState::Leap:    return TEXT("ACT_LEAP");
+		case EElysiumGraphState::Falling: return TEXT("ACT_FALLING");
+		case EElysiumGraphState::Land:    return TEXT("ACT_LAND");
+		default:                          return TEXT("ACT_IDLE");
+		}
+	}
+
+	bool StateCanPlayBlendSpace(EElysiumGraphState State)
+	{
+		switch (State)
+		{
+		case EElysiumGraphState::Idle:
+		case EElysiumGraphState::Walk:
+		case EElysiumGraphState::Run:
+		case EElysiumGraphState::Sneak:
+		case EElysiumGraphState::Crouch:
+		case EElysiumGraphState::Leap:
+		case EElysiumGraphState::Falling:
+		case EElysiumGraphState::Land:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	bool RefuseUnplayableGrid(FElysiumAnimationSelection& Selection)
+	{
+		if (Selection.AssetKind != EElysiumAnimAssetKind::BlendSpace)
+		{
+			return false;
+		}
+		const EElysiumGraphState State = StateFor(Selection);
+		if (StateCanPlayBlendSpace(State))
+		{
+			return false;
+		}
+		Selection.AssetKind = EElysiumAnimAssetKind::None;
+		Selection.Outcome = EElysiumAnimOutcome::GridStateRefused;
+		Selection.Detail = FString::Printf(
+			TEXT("'%s' is a blend space; state %s cannot play a grid (owner '%s')"),
+			*Selection.SequenceLabel, StateName(State),
+			Selection.OwnerStem.IsEmpty() ? TEXT("?") : *Selection.OwnerStem);
+		return true;
+	}
+
 	bool IsOneShotState(EElysiumGraphState State)
 	{
 		// Read off the authored data rather than chosen: `leap` and `land` are non-looping clips in

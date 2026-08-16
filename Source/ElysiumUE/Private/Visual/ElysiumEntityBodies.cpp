@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumPropSkins.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -509,7 +510,7 @@ void UElysiumEntityBodies::SetNpcLayerAim(USkeletalMeshComponent* Body, float Ya
 }
 
 bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, FElysiumResolvedGrid& OutGrid)
+	const FString& ClipName, FElysiumResolvedGrid& OutGrid, EElysiumGraphState State)
 {
 	OutGrid = FElysiumResolvedGrid();
 	const AActor* Owner = GetOwner();
@@ -521,6 +522,13 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 	{
 		// A grid is stood by publishing a selection that names it, so it needs the graph's own
 		// blend-space player. A body with no compiled graph has nowhere to put one.
+		return false;
+	}
+	if (!Inst->CompiledStateCanPlayBlendSpace(State))
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("npc '%s' grid '%s': compiled state %s cannot play a blend space"),
+			*Stem, *ClipName, ElysiumAnimGraph::StateName(State));
 		return false;
 	}
 	if (!Anims->ResolveGrid(Stem, ClipName, Body->GetSkeletalMeshAsset(), OutGrid))
@@ -544,7 +552,15 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 		}
 	}
 
-	StandGridSelection(*Inst, OutGrid, /*Axis0=*/0.f, /*Axis1=*/0.f);
+	// LabSetBody (and every other clip stand) plays through the one-shot slot as a looping montage.
+	// That slot sits ON TOP of the state machine, so a grid published underneath it never reaches
+	// the pose — the body keeps playing the clip it was stood on. End both owners so the graph's
+	// blend-space player is what draws.
+	Inst->StopOneShot(0.f);
+	Inst->StopClip();
+	StandGridSelection(*Inst, OutGrid, /*Axis0=*/0.f, /*Axis1=*/0.f, State);
+	Body->TickAnimation(0.0f, false);
+	Body->RefreshBoneTransforms();
 	return true;
 }
 
@@ -560,22 +576,22 @@ void UElysiumEntityBodies::SetNpcGridPosition(USkeletalMeshComponent* Body, floa
 	// off the same record every other consumer reads, so a readout and a pose cannot disagree.
 	// Moving the point does not restart the animations underneath it, because the generation is
 	// unchanged and only a generation change asks the graph for a blend.
-	StandGridSelection(*Inst, StandingGrid, Axis0, Axis1);
+	StandGridSelection(*Inst, StandingGrid, Axis0, Axis1, StandingGridState);
 }
 
 void UElysiumEntityBodies::StandGridSelection(UElysiumBipedAnimInstance& Inst,
-	const FElysiumResolvedGrid& Grid, float Axis0, float Axis1)
+	const FElysiumResolvedGrid& Grid, float Axis0, float Axis1, EElysiumGraphState State)
 {
 	const bool bNewGrid = StandingGrid.Space != Grid.Space;
 	StandingGrid = Grid;
+	StandingGridState = State;
 
 	FElysiumAnimationSelection Selection;
 	Selection.Source = EElysiumAnimSource::Debug;
 	Selection.Route = EElysiumAnimRoute::ExactLabel;
-	// The gait the fan belongs to is not knowable from the label alone, and it does not need to be:
-	// every movement state in the graph plays whatever blend space it is handed. `ACT_WALK` is the
-	// one that does so without a one-shot's completion contract attached.
-	Selection.ResolvedActivity = TEXT("ACT_WALK");
+	// The state is explicit so a grid can be stood in any of the eight. Walk remains the default:
+	// no one-shot completion contract.
+	Selection.ResolvedActivity = ElysiumAnimGraph::ActivityForState(State);
 	Selection.RequestedActivity = Selection.ResolvedActivity;
 	Selection.SequenceLabel = Grid.Label;
 	Selection.AssetKind = EElysiumAnimAssetKind::BlendSpace;
@@ -600,6 +616,7 @@ void UElysiumEntityBodies::StandGridSelection(UElysiumBipedAnimInstance& Inst,
 void UElysiumEntityBodies::StopNpcGrid(USkeletalMeshComponent* Body)
 {
 	StandingGrid = FElysiumResolvedGrid();
+	StandingGridState = EElysiumGraphState::Walk;
 	UElysiumBipedAnimInstance* Inst = Body
 		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	if (Inst == nullptr)

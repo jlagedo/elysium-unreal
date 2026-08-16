@@ -640,16 +640,20 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			REN_DontCreateRedirectors | REN_NonTransactional);
 
 		// --- the eight states ----------------------------------------------------------------------
-		struct FStateSpec { const TCHAR* Name; const TCHAR* Wants; bool bGait; };
+		//
+		// Every state takes the sequence-or-blend-space pair. A grid-shaped selection whose activity
+		// routes here plays the fan; a plain label plays the sequence. The graph knows only which
+		// asset it was handed — Idle, Crouch, Leap, Falling and Land are not sequence-only.
+		struct FStateSpec { const TCHAR* Name; const TCHAR* Wants; };
 		const FStateSpec Specs[] = {
-			{ TEXT("Idle"),    TEXT("bWantsIdle"),    false },
-			{ TEXT("Walk"),    TEXT("bWantsWalk"),    true  },
-			{ TEXT("Run"),     TEXT("bWantsRun"),     true  },
-			{ TEXT("Sneak"),   TEXT("bWantsSneak"),   true  },
-			{ TEXT("Crouch"),  TEXT("bWantsCrouch"),  false },
-			{ TEXT("Leap"),    TEXT("bWantsLeap"),    false },
-			{ TEXT("Falling"), TEXT("bWantsFalling"), false },
-			{ TEXT("Land"),    TEXT("bWantsLand"),    false },
+			{ TEXT("Idle"),    TEXT("bWantsIdle") },
+			{ TEXT("Walk"),    TEXT("bWantsWalk") },
+			{ TEXT("Run"),     TEXT("bWantsRun") },
+			{ TEXT("Sneak"),   TEXT("bWantsSneak") },
+			{ TEXT("Crouch"),  TEXT("bWantsCrouch") },
+			{ TEXT("Leap"),    TEXT("bWantsLeap") },
+			{ TEXT("Falling"), TEXT("bWantsFalling") },
+			{ TEXT("Land"),    TEXT("bWantsLand") },
 		};
 		const int32 NumStates = UE_ARRAY_COUNT(Specs);
 		UEdGraphNode* StateNodes[UE_ARRAY_COUNT(Specs)] = {};
@@ -689,36 +693,30 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(DriveFromBool(*Inner, PinNamed(Sequence, TEXT("bLoopAnimation")),
 				TEXT("bRequestedLooping"), -720, 60), TEXT("state bLoopAnimation pin"));
 
-			if (!Specs[i].bGait)
-			{
-				Wire(Link(FirstPin(Sequence, EGPD_Output), ResultPin), TEXT("sequence -> result"));
-				continue;
-			}
-
-			// A gait stands on its baked fan, steered by `move_yaw`. The sequence player beside it is
+			// A grid stands on its baked fan, steered by `move_yaw`. The sequence player beside it is
 			// for a label with no baked fan: the resolver answers with the single selected cell and the
-			// same state plays it. The graph knows only which asset it was handed.
+			// same state plays it.
 			UEdGraphNode* Space = Place(*Inner,
 				TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpacePlayer"), -420, -220);
 			ExposePin(Space, TEXT("BlendSpace"));
 			Wire(DriveFromBool(*Inner, PinNamed(Space, TEXT("BlendSpace")),
-				TEXT("RequestedBlendSpace"), -720, -260), TEXT("gait BlendSpace pin"));
+				TEXT("RequestedBlendSpace"), -720, -260), TEXT("state BlendSpace pin"));
 			Wire(DriveFromBool(*Inner, PinNamed(Space, TEXT("X")), TEXT("GridAxis0"), -720, -180),
-				TEXT("gait X pin"));
+				TEXT("state X pin"));
 
 			UEdGraphNode* Pick = Place(*Inner,
 				TEXT("/Script/AnimGraph.AnimGraphNode_BlendListByBool"), -160, -100);
 			Wire(DriveFromBool(*Inner, PinNamed(Pick, TEXT("bActiveValue")),
-				TEXT("bHasBlendSpace"), -420, 180), TEXT("gait bActiveValue"));
+				TEXT("bHasBlendSpace"), -420, 180), TEXT("state bActiveValue"));
 			// `BlendPose` is an array property, so the pins are `BlendPose_<index>`; "True Pose" and
 			// "False Pose" are only friendly labels and match no pin. Index 0 is the TRUE branch —
 			// `UAnimGraphNode_BlendListByBool::CustomizePinData` flips the pair deliberately so that
 			// true reads topmost in the editor.
 			Wire(Link(FirstPin(Space, EGPD_Output), PinNamed(Pick, TEXT("BlendPose_0"))),
-				TEXT("gait blend space -> true pose"));
+				TEXT("state blend space -> true pose"));
 			Wire(Link(FirstPin(Sequence, EGPD_Output), PinNamed(Pick, TEXT("BlendPose_1"))),
-				TEXT("gait sequence -> false pose"));
-			Wire(Link(FirstPin(Pick, EGPD_Output), ResultPin), TEXT("gait pick -> result"));
+				TEXT("state sequence -> false pose"));
+			Wire(Link(FirstPin(Pick, EGPD_Output), ResultPin), TEXT("state pick -> result"));
 		}
 
 		// --- the hub -------------------------------------------------------------------------------

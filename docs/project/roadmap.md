@@ -228,9 +228,9 @@ Landed foundation:
 The ladder:
 
 - [~] **[LIFE0 The composition seam holds, loudly](plans/animation.md)** — the zero-length
-  looping montage is landed, refusal warned and propagated; grids routed into sequence-only
-  states, table-driven layer hosts with named misses, the aim-grid neutral and mount/sidecar
-  verification open.
+  looping montage and the sequence-or-blend-space pair on every locomotion state are landed,
+  refusal warned and propagated; table-driven layer hosts with named misses, the aim-grid
+  neutral and mount/sidecar verification open.
 - [ ] **[LIFE1 The bake closes](plans/animation.md)** — the cardinality invariant, prop-bone
   channels retained, the orphan census, frame-interpolation adjudication, the `A_dance01` seam.
 - [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule

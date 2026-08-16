@@ -751,6 +751,59 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("the crouch is a non-looping into-pose"), Crouch.bLooping, false);
 	}
 
+	// --- A grid is playable in every locomotion state ----------------------------------------------
+	{
+		FElysiumNpcClipSet IdleGridBody;
+		IdleGridBody.Stem = TEXT("pc_body");
+		IdleGridBody.Clips.Add(TEXT("idle"), MakeClip(MiscBank, TEXT("ACT_IDLE"), 30, 0x1));
+		IdleGridBody.Clips.Add(TEXT("land"), MakeClip(MiscBank, TEXT("ACT_LAND"), 30, 0x0));
+
+		FElysiumBlendTable MiscTable;
+		MiscTable.Stem = MiscBank;
+		MiscTable.PoseParams.Add(MoveYawParam());
+		MiscTable.Grids.Add(TEXT("idle"), MakeFan(TEXT("idle"), TEXT("idle"), 0.0f, 0.0f));
+		MiscTable.Grids.Add(TEXT("land"), MakeFan(TEXT("land"), TEXT("land"), 0.0f, 0.0f));
+
+		auto IdleTables = [&MiscTable](const FString& Owner) -> const FElysiumBlendTable*
+		{
+			return Owner.Equals(MiscBank, ESearchCase::IgnoreCase) ? &MiscTable : nullptr;
+		};
+		FElysiumAnimationCatalog IdleCatalog;
+		IdleCatalog.Clips = &IdleGridBody;
+		IdleCatalog.BlendTableFor = IdleTables;
+
+		FElysiumAnimationSelection IdleGrid;
+		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_IDLE")), IdleCatalog,
+			IdleGrid);
+		TestEqual(TEXT("a grid whose activity routes to Idle resolves"),
+			static_cast<int32>(IdleGrid.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::Resolved));
+		TestEqual(TEXT("as a blend space"), static_cast<int32>(IdleGrid.AssetKind),
+			static_cast<int32>(EElysiumAnimAssetKind::BlendSpace));
+
+		FElysiumAnimationSelection LandGrid;
+		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_LAND")), IdleCatalog,
+			LandGrid);
+		TestEqual(TEXT("a grid whose activity routes to Land resolves the same way"),
+			static_cast<int32>(LandGrid.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::Resolved));
+		TestEqual(TEXT("Land's grid is a blend space"), static_cast<int32>(LandGrid.AssetKind),
+			static_cast<int32>(EElysiumAnimAssetKind::BlendSpace));
+
+		// An exact-label grid carries no activity, so StateFor lands on Idle — which can play it.
+		FElysiumAnimationIntent ExactGrid;
+		ExactGrid.Stem = TEXT("pc_body");
+		ExactGrid.SequenceLabel = TEXT("idle");
+		ExactGrid.Route = EElysiumAnimRoute::ExactLabel;
+		FElysiumAnimationSelection Exact;
+		ElysiumAnimResolve::Resolve(ExactGrid, IdleCatalog, Exact);
+		TestEqual(TEXT("an exact-label grid routes to Idle and resolves"),
+			static_cast<int32>(Exact.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::Resolved));
+		TestEqual(TEXT("as a blend space"), static_cast<int32>(Exact.AssetKind),
+			static_cast<int32>(EElysiumAnimAssetKind::BlendSpace));
+	}
+
 	// --- The named missing-sequence fallback -----------------------------------------------------------
 	{
 		// The one ducked state-8 request the controlled corpus records returns -1 on a validated
@@ -1187,6 +1240,24 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 			TestFalse(TEXT("a resolved blend space is published"), ShouldHoldPose(true, false, true));
 			TestFalse(TEXT("and a body that has published nothing yet has no pose to hold"),
 				ShouldHoldPose(/*bHasAppliedOnce*/ false, false, false));
+
+			using ElysiumAnimGraph::StateCanPlayBlendSpace;
+			using ElysiumAnimGraph::TryParseState;
+			using ElysiumAnimGraph::ActivityForState;
+			for (int32 i = 0; i < NumGraphStates; ++i)
+			{
+				const EElysiumGraphState State = static_cast<EElysiumGraphState>(i);
+				TestTrue(FString::Printf(TEXT("%s plays a blend space"), StateName(State)),
+					StateCanPlayBlendSpace(State));
+			}
+			EElysiumGraphState Parsed = EElysiumGraphState::Walk;
+			TestTrue(TEXT("Idle parses"), TryParseState(TEXT("Idle"), Parsed)
+				&& Parsed == EElysiumGraphState::Idle);
+			TestTrue(TEXT("and it is case-insensitive"), TryParseState(TEXT("land"), Parsed)
+				&& Parsed == EElysiumGraphState::Land);
+			TestFalse(TEXT("an unknown name does not parse"), TryParseState(TEXT("Swim"), Parsed));
+			TestEqual(TEXT("Walk's stand activity is ACT_WALK"),
+				FString(ActivityForState(EElysiumGraphState::Walk)), FString(TEXT("ACT_WALK")));
 
 			// **No clip is a FINISHED one-shot, not an unanswerable one.** Treating the ducked
 			// landing's miss as unknown parked the body in its previous pose for the whole fallback

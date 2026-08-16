@@ -549,6 +549,11 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 	// layer resolution reads the same catalog the primary asset resolved against.
 	const FElysiumAnimationCatalog Catalog = BuildCatalog(Intent.Stem);
 	ElysiumAnimResolve::Resolve(Intent, Catalog, OutSelection);
+	if (OutSelection.Outcome == EElysiumAnimOutcome::GridStateRefused)
+	{
+		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] %s"), *OutSelection.Detail);
+		return;
+	}
 	if (!OutSelection.IsResolved() || OutSelection.AssetKind == EElysiumAnimAssetKind::None)
 	{
 		return;

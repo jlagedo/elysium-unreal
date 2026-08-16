@@ -224,6 +224,7 @@ const TCHAR* OutcomeName(EElysiumAnimOutcome Outcome)
 	case EElysiumAnimOutcome::GestureNoOp:             return TEXT("gesture no-op");
 	case EElysiumAnimOutcome::MissingSequence:         return TEXT("missing sequence");
 	case EElysiumAnimOutcome::MaskedRejected:          return TEXT("masked, refused");
+	case EElysiumAnimOutcome::GridStateRefused:        return TEXT("grid, sequence-only state");
 	case EElysiumAnimOutcome::NoAsset:                 return TEXT("no asset");
 	default:                                           return TEXT("no vocabulary");
 	}

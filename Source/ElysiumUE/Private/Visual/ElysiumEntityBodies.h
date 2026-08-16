@@ -5,6 +5,7 @@
 #include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
 #include "ElysiumWorldServices.h" // placed-model request/body value types
 // By value: the grid a review body is standing on is a member, so the resolver's own header.
+#include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumTextureCache.h"
@@ -146,13 +147,15 @@ public:
 	// Stand this body on a label's whole blend grid rather than on the single cell the pose
 	// parameters resolve to (ANM3). `OutGrid` comes back with the axes the caller steers through
 	// `SetNpcGridPosition` and can label a control with. False when the label names no grid — which
-	// is most labels — when the bake has not covered it, or when the grid is a layer's.
+	// is most labels — when the bake has not covered it, when the grid is a layer's, or when the
+	// compiled target state has no blend-space player.
 	//
 	// It is stood by **publishing a selection that names it**, over the graph's own blend-space
 	// player, so what a review body stands on is the path the game plays through rather than a
 	// second one that could drift from it.
 	bool PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		struct FElysiumResolvedGrid& OutGrid);
+		struct FElysiumResolvedGrid& OutGrid,
+		EElysiumGraphState State = EElysiumGraphState::Walk);
 	void SetNpcGridPosition(USkeletalMeshComponent* Body, float Axis0, float Axis1);
 	// Take the grid back off the body. The graph holds the pose it has, so the caller's next clip
 	// owns the body outright rather than riding over a fan that is still playing underneath it.
@@ -317,10 +320,12 @@ private:
 	// Publish the selection that stands `Grid` at a point on its axes. Shared by the two grid
 	// members so the record a review body poses from is built in exactly one place.
 	void StandGridSelection(class UElysiumBipedAnimInstance& Inst,
-		const struct FElysiumResolvedGrid& Grid, float Axis0, float Axis1);
+		const struct FElysiumResolvedGrid& Grid, float Axis0, float Axis1,
+		EElysiumGraphState State);
 	// The grid a body was last stood on, so steering it needs only the new axis values. One, because
 	// standing a grid is a review path and exactly one body is under review at a time.
 	struct FElysiumResolvedGrid StandingGrid;
+	EElysiumGraphState StandingGridState = EElysiumGraphState::Walk;
 	// Advanced only when the grid changes, never when it is steered: the graph asks for a blend on a
 	// generation change, and a slider drag must move the sample point rather than transition.
 	uint32 StandingGridGeneration = 0;

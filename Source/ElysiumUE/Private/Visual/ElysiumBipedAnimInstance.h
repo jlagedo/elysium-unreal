@@ -351,6 +351,12 @@ public:
 	// routes through the clip player instead.
 	bool HasCompiledGraph() const;
 
+	// Whether this compiled class's named state actually has a blend-space player. The authored
+	// helper `ElysiumAnimGraph::StateCanPlayBlendSpace` is the same question against the live
+	// pair list; this one reads the baked state so a stale generated class cannot silently
+	// evaluate a grid as a null sequence.
+	bool CompiledStateCanPlayBlendSpace(EElysiumGraphState State) const;
+
 protected:
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
@@ -417,5 +423,7 @@ private:
 
 	int32 MachineIndex = INDEX_NONE;
 	int32 StateIndex[ElysiumAnimGraph::NumGraphStates];
+	bool bStateHasBlendSpacePlayer[ElysiumAnimGraph::NumGraphStates] = {};
+	bool bRecordedAnyBlendSpacePlayer = false;
 	FElysiumOneShotReport OneShot;
 };

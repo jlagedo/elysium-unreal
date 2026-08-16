@@ -97,6 +97,10 @@ enum class EElysiumAnimOutcome : uint8
 	// The label resolved and the asset did not load, which is the ordinary answer before a body has a
 	// skeletal mesh to bind against.
 	NoAsset,
+	// A blend-space selection whose target graph state has no blend-space player. Named rather than
+	// projected: a sequence-only state with a null sequence pin evaluates to the reference pose, and
+	// the blend-space pointer would defeat the hold-pose guard.
+	GridStateRefused,
 };
 
 // The locomotion slice's activities as a small ordered code, so a per-frame channel can carry the

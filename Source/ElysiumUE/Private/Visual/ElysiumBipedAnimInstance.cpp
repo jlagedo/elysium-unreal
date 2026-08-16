@@ -207,6 +207,7 @@ void UElysiumBipedAnimInstance::NativeInitializeAnimation()
 void UElysiumBipedAnimInstance::CacheStateMachine()
 {
 	MachineIndex = INDEX_NONE;
+	bRecordedAnyBlendSpacePlayer = false;
 	for (int32& Index : StateIndex)
 	{
 		Index = INDEX_NONE;
@@ -216,22 +217,47 @@ void UElysiumBipedAnimInstance::CacheStateMachine()
 	GetStateMachineIndexAndDescription(GLocomotionMachine, MachineIndex, &Machine);
 	if (Machine == nullptr)
 	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[elysium] no baked state machine named '%s'; compiled blend-space checks fall ")
+			TEXT("back to the authored pair list"), *GLocomotionMachine.ToString());
 		return;
 	}
 	// By name rather than by declaration order: a state's index is whatever the compiler assigned,
 	// and the names are the contract `ElysiumAnimGraph::StateName` and the authored asset share.
 	for (int32 State = 0; State < ElysiumAnimGraph::NumGraphStates; ++State)
 	{
+		bStateHasBlendSpacePlayer[State] = false;
 		const FName Name(ElysiumAnimGraph::StateName(static_cast<EElysiumGraphState>(State)));
 		for (int32 i = 0; i < Machine->States.Num(); ++i)
 		{
 			if (Machine->States[i].StateName == Name)
 			{
 				StateIndex[State] = i;
+				// Two asset players is the sequence-or-blend-space pair; a lone player is
+				// sequence-only and a grid routed here plays a null sequence.
+				bStateHasBlendSpacePlayer[State] = Machine->States[i].PlayerNodeIndices.Num() >= 2;
+				bRecordedAnyBlendSpacePlayer = bRecordedAnyBlendSpacePlayer
+					|| bStateHasBlendSpacePlayer[State];
 				break;
 			}
 		}
 	}
+}
+
+bool UElysiumBipedAnimInstance::CompiledStateCanPlayBlendSpace(EElysiumGraphState State) const
+{
+	const uint8 Index = static_cast<uint8>(State);
+	if (Index >= ElysiumAnimGraph::NumGraphStates)
+	{
+		return false;
+	}
+	// A missing machine, or a bake that recorded no players on any state, cannot be used to
+	// refuse a grid — the authored pair list is the contract the generator writes.
+	if (MachineIndex == INDEX_NONE || !bRecordedAnyBlendSpacePlayer)
+	{
+		return ElysiumAnimGraph::StateCanPlayBlendSpace(State);
+	}
+	return bStateHasBlendSpacePlayer[Index];
 }
 
 void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelection& Selection,
@@ -408,6 +434,30 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// transition — and, for the same reason, a base pose that is being HELD must not freeze it. The
 	// two are independent requests that happen to arrive on one record.
 	ProjectUpperBodyLayer();
+
+	// A blend space whose compiled target state has no blend-space player is a null sequence pin
+	// — full-body reference pose — and the pointer would defeat `ShouldHoldPose`. Refuse first so
+	// the hold sees nothing to play. This is the compiled-class check: the pure resolver asks the
+	// same question of the authored pair list, but a stale generated class can disagree.
+	if (PendingBlendSpace != nullptr)
+	{
+		const EElysiumGraphState GridState = ElysiumAnimGraph::StateFor(Pending);
+		if (!CompiledStateCanPlayBlendSpace(GridState))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[elysium] '%s' is a blend space; compiled state %s cannot play a grid ")
+				TEXT("(owner '%s')"),
+				*Pending.SequenceLabel, ElysiumAnimGraph::StateName(GridState),
+				Pending.OwnerStem.IsEmpty() ? TEXT("?") : *Pending.OwnerStem);
+			Pending.AssetKind = EElysiumAnimAssetKind::None;
+			Pending.Outcome = EElysiumAnimOutcome::GridStateRefused;
+			Pending.Detail = FString::Printf(
+				TEXT("'%s' is a blend space; state %s cannot play a grid (owner '%s')"),
+				*Pending.SequenceLabel, ElysiumAnimGraph::StateName(GridState),
+				Pending.OwnerStem.IsEmpty() ? TEXT("?") : *Pending.OwnerStem);
+			PendingBlendSpace = nullptr;
+		}
+	}
 
 	bHoldingPose = ElysiumAnimGraph::ShouldHoldPose(bHasApplied, PendingSequence != nullptr,
 		PendingBlendSpace != nullptr);

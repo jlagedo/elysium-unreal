@@ -2731,7 +2731,8 @@ bool FElysiumGreenRoomRun::LabLoadLayerCase(int32 Index, FString& OutSummary, FS
 	return true;
 }
 
-bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
+bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError,
+	EElysiumGraphState State)
 {
 	AElysiumMapActor* Map = GetMap();
 	USkeletalMeshComponent* Body = LabBody();
@@ -2742,8 +2743,18 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
 	}
 	UElysiumEntityBodies* BodyFactory = Map->GetBodies();
 	FElysiumResolvedGrid Grid;
-	if (BodyFactory == nullptr || !BodyFactory->PlayNpcGrid(Body, ReviewStem, Label, Grid))
+	if (BodyFactory == nullptr || !BodyFactory->PlayNpcGrid(Body, ReviewStem, Label, Grid, State))
 	{
+		const UElysiumBipedAnimInstance* Inst =
+			Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance());
+		if (Inst != nullptr && Inst->HasCompiledGraph()
+			&& !Inst->CompiledStateCanPlayBlendSpace(State))
+		{
+			OutError = FString::Printf(
+				TEXT("'%s' is a blend space; compiled state %s cannot play a grid"),
+				*Label, ElysiumAnimGraph::StateName(State));
+			return false;
+		}
 		// Three refusals share this message because the operator's next move is the same for all
 		// three, and the fourth — an aim grid — is the one worth naming apart, so the clip list marks
 		// those rather than leaving them to fail here.
@@ -2756,6 +2767,10 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
 
 	ReviewGrid = Grid;
 	ReviewClip = Label;
+	if (!Bodies.IsEmpty() && Grid.Space != nullptr)
+	{
+		Bodies[0].Duration = Grid.Space->GetPlayLength();
+	}
 	// Mid-range on every axis, which is the resting value of every parameter VtMB declares: `move_yaw`
 	// 0 is straight ahead on a -180..180 fan, and `aim_yaw` 0 is level. So a grid stands at the pose
 	// a body nothing has steered would hold.
@@ -2765,8 +2780,9 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError)
 			? 0.5f * (Grid.AxisMin[Axis] + Grid.AxisMax[Axis]) : 0.f;
 	}
 	BodyFactory->SetNpcGridPosition(Body, ReviewGridAt[0], ReviewGridAt[1]);
-	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s grid %s (%d axis) at %.1f, %.1f"),
-		*ReviewStem, *Label, Grid.Axes, ReviewGridAt[0], ReviewGridAt[1]);
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s grid %s in %s (%d axis) at %.1f, %.1f"),
+		*ReviewStem, *Label, ElysiumAnimGraph::StateName(State), Grid.Axes,
+		ReviewGridAt[0], ReviewGridAt[1]);
 	return true;
 }
 
@@ -2848,7 +2864,12 @@ void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 		LabClipTime = FMath::Fmod(LabClipTime + DeltaSeconds * LabViewState.Speed + Duration, Duration);
 	}
 	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation(/*bAnimatedProp=*/false));
-	Map->SeekCinematicClip(Body, LabClipTime);
+	// A standing grid is posed by the graph. Seeking the cinematic clip player every tick would
+	// pin whatever clip LabSetBody last stood — usually the idle — over the fan.
+	if (ReviewGrid.Space == nullptr)
+	{
+		Map->SeekCinematicClip(Body, LabClipTime);
+	}
 
 	Body->UpdateBounds();
 	const FBox Bounds = Body->Bounds.GetBox();

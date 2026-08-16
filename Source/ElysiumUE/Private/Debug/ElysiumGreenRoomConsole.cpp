@@ -4,6 +4,7 @@
 
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "ElysiumMapSubsystem.h"
+#include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -168,7 +169,8 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 
 	Register(TEXT("elysium.gr_grid"),
 		TEXT("Stand the body on a label's whole blend grid: `elysium.gr_grid walk`. "
-		     "With no argument, clears it."),
+		     "Optional second argument is the graph state (`Idle`, `Crouch`, `Leap`, `Falling`, "
+		     "`Land`, `Walk`, `Run`, `Sneak`); default Walk. With no argument, clears it."),
 		[](FElysiumGreenRoomRun& Run, const TArray<FString>& Args)
 		{
 			if (Args.Num() == 0)
@@ -177,10 +179,19 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_grid: cleared."));
 				return;
 			}
-			FString Error;
-			if (Run.LabSetGrid(Args[0], Error))
+			EElysiumGraphState State = EElysiumGraphState::Walk;
+			if (Args.Num() >= 2 && !ElysiumAnimGraph::TryParseState(Args[1], State))
 			{
-				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_grid: %s"), *Args[0]);
+				UE_LOG(LogElysiumGreenRoomCmd, Warning,
+					TEXT("gr_grid: unknown state '%s' (Idle Walk Run Sneak Crouch Leap Falling Land)"),
+					*Args[1]);
+				return;
+			}
+			FString Error;
+			if (Run.LabSetGrid(Args[0], Error, State))
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_grid: %s in %s"),
+					*Args[0], ElysiumAnimGraph::StateName(State));
 			}
 			else
 			{

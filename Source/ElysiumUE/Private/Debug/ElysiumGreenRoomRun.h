@@ -9,6 +9,7 @@
 #include "Debug/ElysiumArenaSpec.h"
 #include "ElysiumGymSpec.h"
 #include "ElysiumWieldTable.h"
+#include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 
 class AActor;
@@ -265,7 +266,8 @@ public:
 	// Stand the body on a label's whole blend grid instead of the one cell the neutral pose
 	// parameters pick (ANM3). False, with a reason, for a label that names no grid, for an unbaked
 	// body, and for an aim grid — those are a layer's and have no base pose to be.
-	bool LabSetGrid(const FString& Label, FString& OutError);
+	bool LabSetGrid(const FString& Label, FString& OutError,
+		EElysiumGraphState State = EElysiumGraphState::Walk);
 	// Move the sample point, in the pose parameters' own degrees. Drives every frame from a slider;
 	// it steers the blend without restarting the animations under it.
 	void LabSetGridPosition(float Axis0, float Axis1);

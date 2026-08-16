@@ -42,6 +42,7 @@ namespace
 			return ElysiumCogStyle::ColOk;
 		case EElysiumAnimOutcome::MissingSequence:
 		case EElysiumAnimOutcome::MaskedRejected:
+		case EElysiumAnimOutcome::GridStateRefused:
 			return ElysiumCogStyle::ColError;
 		default:
 			return ElysiumCogStyle::ColWarn;

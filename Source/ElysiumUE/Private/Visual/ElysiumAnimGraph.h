@@ -97,6 +97,21 @@ namespace ElysiumAnimGraph
 	// a screenshot.
 	const TCHAR* StateName(EElysiumGraphState State);
 
+	// Inverse of `StateName`. False when the string is not one of the eight.
+	bool TryParseState(const FString& Name, EElysiumGraphState& OutState);
+
+	// The ACT_* the debug/grid stand path publishes so `StateFor` lands on this state. Walk is the
+	// default stand because it has no one-shot completion contract.
+	const TCHAR* ActivityForState(EElysiumGraphState State);
+
+	// Whether this state evaluates a blend space. Every locomotion state carries the
+	// sequence-or-blend-space pair, so a grid-shaped selection is playable in all eight.
+	bool StateCanPlayBlendSpace(EElysiumGraphState State);
+
+	// If the selection is a blend space whose target state cannot play one, refuse it in place and
+	// name the miss (label, state, asset form). Returns true when it refused.
+	bool RefuseUnplayableGrid(FElysiumAnimationSelection& Selection);
+
 	// Whether a state plays a one-shot that has to end somehow. `Leap`, `Land` and `Crouch` are
 	// non-looping in the authored data; the other five run until the request changes.
 	bool IsOneShotState(EElysiumGraphState State);
