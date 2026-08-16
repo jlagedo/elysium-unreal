@@ -489,6 +489,14 @@ public:
 
 	virtual FElysiumNpc* AsNpc() override { return this; }
 
+	// Read-only, for the debug layer. The mind is private because every WRITE to it has to go
+	// through `RequestState` / `Acquire` / `Release` so the admission and the body arbitration
+	// cannot be sidestepped; reading its state, its ideal state, its owner and its transition trace
+	// sidesteps nothing, and those four together are the only account of why a character is doing
+	// what it is doing. Const on purpose — a panel that could call `RequestState` would be a second
+	// producer of NPC state.
+	const FElysiumNpcMind& GetMind() const { return Mind; }
+
 private:
 	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken PatrolOwner;

@@ -3,8 +3,10 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "ElysiumEntityHandle.h"
-// By value: the gym spec and the resolved grid are members, so their own headers rather than
-// declarations. `ElysiumGymSpec.h` is the pure half and ships; only the builder is debug-only.
+// By value: the gym spec, the arena spec and the resolved grid are members, so their own headers
+// rather than declarations. `ElysiumGymSpec.h` and `ElysiumArenaSpec.h` are the pure halves and
+// ship; only their builders are debug-only.
+#include "Debug/ElysiumArenaSpec.h"
 #include "ElysiumGymSpec.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 
@@ -94,6 +96,12 @@ public:
 		// authored against a bone's *local* frame, so whether it sits on the limb or somewhere off
 		// beside it is a question only the two drawn together can answer.
 		bool bDrawSkeleton = false;
+
+		// The arena's spawn pads and `intersting_place` anchors, drawn in the room. On by default in
+		// arena mode: a pad is where a spawn lands and an anchor is a destination the ambient
+		// selector can claim, and neither has any other visible existence — an NPC standing at one
+		// looks identical to an NPC standing anywhere else.
+		bool bDrawArenaMarkers = true;
 	};
 
 	bool IsLab() const { return bLab; }
@@ -113,9 +121,38 @@ public:
 	// then gets out of the way — no camera shot, no control-rotation pin, no clip seek. What is under
 	// test is the shipping path, so anything the lab does *to* the body is something the acceptance
 	// would not have proven (CCC6).
-	enum class ELabMode : uint8 { Review, Drive };
+	//
+	// **Arena** is drive mode standing on a different floor, and the floor is the whole difference.
+	// The gym is a bracket instrument — ramps, risers, apertures, gaps at `<movement constant> +
+	// <offset>` — and it deliberately contributes no navigation, so a character on it cannot path.
+	// The arena is a clean square room with one cover solid, `intersting_place` anchors, and a built
+	// Recast graph over all of it (`Debug/ElysiumArenaSpec.h`). That graph is the reason it is a
+	// separate mode rather than a second gym spec: `AElysiumNpcBody` paths through
+	// `AAIController::MoveToLocation`, so without it a spawned cast stands still and reads as broken
+	// AI. Everything else — the pawn, the mover, the camera, the visual — is drive mode's, which is
+	// why `IsDriving` answers true for both.
+	enum class ELabMode : uint8 { Review, Drive, Arena };
 	ELabMode LabMode() const { return Mode; }
-	bool IsDriving() const { return Mode == ELabMode::Drive; }
+	// True in both body-driven modes: the shipping path owns the pose, the view and the position, so
+	// every "do not write over the body" rule holds identically.
+	bool IsDriving() const { return Mode == ELabMode::Drive || Mode == ELabMode::Arena; }
+	bool IsArena() const { return Mode == ELabMode::Arena; }
+
+	// --- the arena (the combat playtest room) ----------------------------------------------------
+
+	// The room standing under the driven body, for a panel that draws its pads and anchors. Empty
+	// outside arena mode.
+	const ElysiumArena::FSpec& ArenaSpec() const { return Arena; }
+	// Whether the Recast graph over the arena has finished building. Until it answers true a spawned
+	// character can stand but cannot path, so a spawn control gates on it rather than letting the
+	// failure show up as an NPC that does nothing.
+	bool IsArenaNavigationReady() const;
+	// Put the driven body back at the arena's own player start.
+	bool ArenaSeatPlayer(FString& OutError);
+	// Where a named pad is in world space, feet-anchored. False for a pad the spec does not carry.
+	bool ArenaPadOrigin(const FName& Pad, FVector& OutFeetWorld, float& OutYaw) const;
+	// Whether the arena's solids are drawn. They are collision either way.
+	bool ArenaVisible() const { return bGymMeshes; }
 	// The one door into and out of drive mode. The `--drive` flag, the boot path and the window's
 	// switch all come through here, so the teardown of whichever mode is leaving cannot be half-done
 	// by one caller and whole by another.
@@ -305,11 +342,20 @@ private:
 	// supplied one.
 	bool BuildDriveGym(FString& OutError);
 	void DestroyDriveGym();
+	// Stand the arena room up and request its Recast build. The counterpart of BuildDriveGym, and
+	// separate from it for the reason stated at `ELabMode::Arena`: the two floors differ in what
+	// they contribute to navigation, which is not a parameter of one builder.
+	bool BuildArena(FString& OutError);
+	void DestroyArena();
 	// Build the player visual and leave it attached where the builder put it — on the pawn. This is
 	// the whole of "the stage body is the player body", and the one-shot capture path's
 	// detach-and-re-parent is exactly what it must not do.
 	bool LabSetDriveBody(const FString& Stem, FString& OutError);
 	void DrawLabOverlays() const;
+	// The arena's pads and anchors, drawn in the room. Separate from DrawLabOverlays because that
+	// one is about a BODY — its lattice, its colliders, its skeleton — and these are about the
+	// place, which is there whether anything is standing in it or not.
+	void DrawArenaOverlays() const;
 	// Push FLabView::bShowHud at the local-player HUD. Called every lab frame rather than on the
 	// edge: the HUD subsystem rebuilds its root on travel and on a controller change, and a
 	// one-shot hide would lose to either.
@@ -394,13 +440,18 @@ private:
 	float LabClipTime = 0.0f;
 	int32 CameraShotId = 0;
 
-	// `-GreenRoomDrive`: enter drive mode as soon as the stage is ready, rather than standing a
-	// review body. Held as a request rather than acted on in the constructor, where there is no map,
-	// no pawn and no floor yet.
+	// `-GreenRoomDrive` / `-GreenRoomArena`: enter that mode as soon as the stage is ready, rather
+	// than standing a review body. Held as a request rather than acted on in the constructor, where
+	// there is no map, no pawn and no floor yet. Arena wins if both are given — it is the strictly
+	// larger request, and refusing the pair outright would fail a launch over a redundant switch.
 	bool bDriveRequested = false;
+	bool bArenaRequested = false;
 	ELabMode Mode = ELabMode::Review;
 	TWeakObjectPtr<AActor> GymActor;
 	ElysiumGym::FSpec GymSpec;
+	// The arena room and what standing it up produced. Both empty outside arena mode.
+	ElysiumArena::FSpec Arena;
+	ElysiumArena::FStanding ArenaStanding;
 	// The lane the body is seated on. `flat` is the only lane with room to build up to a run and
 	// nothing to trip over, which is what the acceptance walks first.
 	FName SeatLane = TEXT("flat");

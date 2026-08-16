@@ -36,6 +36,27 @@ class HarnessOptionTests(unittest.TestCase):
         self.assertTrue(options.drive)
         self.assertEqual(options.exec_cmds, ("elysium.Mute 0",))
 
+    def test_arena_is_taken_out_of_the_positional_list(self) -> None:
+        positional, options = _take_options(["tremere_male_armor_0", "--arena"])
+        self.assertEqual(positional, ["tremere_male_armor_0"])
+        self.assertTrue(options.arena)
+        self.assertFalse(options.drive)
+
+    def test_arena_is_off_by_default(self) -> None:
+        _, options = _take_options(["tremere_male_armor_0"])
+        self.assertFalse(options.arena)
+
+    def test_arena_and_drive_are_independent_flags(self) -> None:
+        """Both may be given. The launch branch, not the parser, resolves the pair.
+
+        Refusing the combination here would fail a launch over a redundant switch; the green room
+        takes the arena in that case, being the strictly larger request.
+        """
+        positional, options = _take_options(["--drive", "--arena", "tremere_male_armor_0"])
+        self.assertEqual(positional, ["tremere_male_armor_0"])
+        self.assertTrue(options.arena)
+        self.assertTrue(options.drive)
+
 
 if __name__ == "__main__":
     unittest.main()

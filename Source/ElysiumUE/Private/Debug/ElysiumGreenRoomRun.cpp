@@ -14,17 +14,22 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameStateSubsystem.h"   // the arena's boot-time player loadout reads the rulebook
 #include "ElysiumMovementComponent.h"
 #include "ElysiumPawn.h"
 #include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumPlayer.h"   // FElysiumSheet — the arena checks the record's clan before seeding one
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Debug/ElysiumScreenshot.h"
 #if !UE_BUILD_SHIPPING
-// The gym's engine half is debug-only, while its spec is not. Drive mode is the only thing here that
-// needs the spawner, so the guard is on the one call rather than on the harness.
+// The gym's and the arena's engine halves are debug-only, while their specs are not. Drive and
+// arena mode are the only things here that need a spawner, so the guard is on those calls rather
+// than on the harness.
+#include "Debug/ElysiumArenaBuilder.h"
+#include "Debug/ElysiumArenaCast.h"
 #include "Debug/ElysiumGymBuilder.h"
 #endif
 #include "ElysiumAnimationIntent.h"   // the grip table a layer case reports its mask from
@@ -111,10 +116,12 @@ FElysiumGreenRoomRun::FElysiumGreenRoomRun(UElysiumMapSubsystem* InSubsystem, bo
 	FParse::Value(FCommandLine::Get(), TEXT("GreenRoomBoneRoot="), ReviewBoneRoot);
 	bLive = FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLive"));
 	Selector = Selector.ToLower();
-	// A drive request implies the lab — there is nothing to drive in a capture run — but it cannot be
-	// acted on here: there is no map, no pawn and no floor yet.
+	// A drive or arena request implies the lab — there is nothing to drive in a capture run — but
+	// neither can be acted on here: there is no map, no pawn and no floor yet.
 	bDriveRequested = FParse::Param(FCommandLine::Get(), TEXT("GreenRoomDrive"));
-	bLab = bForceLab || bDriveRequested || FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab"))
+	bArenaRequested = FParse::Param(FCommandLine::Get(), TEXT("GreenRoomArena"));
+	bLab = bForceLab || bDriveRequested || bArenaRequested
+		|| FParse::Param(FCommandLine::Get(), TEXT("GreenRoomLab"))
 		|| Selector == TEXT("lab");
 	if (bLab)
 	{
@@ -144,6 +151,7 @@ FElysiumGreenRoomRun::~FElysiumGreenRoomRun()
 	{
 		ApplyLabHud(true);
 	}
+	DestroyArena();
 	DestroyDriveGym();
 	DestroyBodies();
 }
@@ -1696,6 +1704,120 @@ void FElysiumGreenRoomRun::DestroyDriveGym()
 	GymSpec = ElysiumGym::FSpec();
 }
 
+// --- the arena (the combat playtest room) --------------------------------------------------------
+
+bool FElysiumGreenRoomRun::BuildArena(FString& OutError)
+{
+	DestroyArena();
+	UWorld* World = GetWorld();
+	const FDriveRefs Refs = ResolveDriveBody(World);
+	if (!World || !Refs)
+	{
+		OutError = TEXT("no player body to build a room for");
+		return false;
+	}
+
+	Arena = ElysiumArena::Build();
+#if !UE_BUILD_SHIPPING
+	// The entity world is handed in so the anchors are created as real `intersting_place` entities
+	// rather than as markers only this harness understands. A stage world's entity world is empty
+	// but live and activated, which is exactly what a runtime spawn needs.
+	AElysiumMapActor* Map = GetMap();
+	FElysiumEntityWorld* EntityWorld = Map != nullptr ? Map->GetEntityWorld() : nullptr;
+	const bool bStood = ElysiumArena::Stand(World, EntityWorld, Arena,
+		ElysiumArena::DefaultOrigin(), bGymMeshes, ArenaStanding, OutError);
+#else
+	const bool bStood = false;
+	OutError = TEXT("the arena is not built in Shipping");
+#endif
+	if (!bStood)
+	{
+		Arena = ElysiumArena::FSpec();
+		return false;
+	}
+	UE_LOG(LogElysiumGreenRoom, Log,
+		TEXT("arena: room standing — %d solid(s), %d anchor(s), %d pad(s)%s"),
+		Arena.Solids.Num(), ArenaStanding.Anchors.Num(), Arena.Pads.Num(),
+		bGymMeshes ? TEXT("") : TEXT(" (hidden)"));
+	return true;
+}
+
+void FElysiumGreenRoomRun::DestroyArena()
+{
+#if !UE_BUILD_SHIPPING
+	AElysiumMapActor* Map = GetMap();
+	FElysiumEntityWorld* EntityWorld = Map != nullptr ? Map->GetEntityWorld() : nullptr;
+	// The cast goes with the room. A character left standing where a floor used to be falls out of
+	// the level and keeps thinking, which reads as an AI bug rather than as a torn-down arena.
+	if (EntityWorld != nullptr && ArenaStanding.IsValid())
+	{
+		const int32 Cleared = ElysiumArenaCast::ClearSpawned(*EntityWorld);
+		if (Cleared > 0)
+		{
+			UE_LOG(LogElysiumGreenRoom, Log,
+				TEXT("arena: cleared %d spawned character(s) with the room"), Cleared);
+		}
+	}
+	ElysiumArena::Teardown(EntityWorld, ArenaStanding);
+#endif
+	ArenaStanding = ElysiumArena::FStanding();
+	Arena = ElysiumArena::FSpec();
+}
+
+bool FElysiumGreenRoomRun::IsArenaNavigationReady() const
+{
+#if !UE_BUILD_SHIPPING
+	return IsArena() && ArenaStanding.IsValid() && ElysiumArena::IsNavigationReady(GetWorld());
+#else
+	return false;
+#endif
+}
+
+bool FElysiumGreenRoomRun::ArenaPadOrigin(const FName& Pad, FVector& OutFeetWorld,
+	float& OutYaw) const
+{
+	const ElysiumArena::FPad* Found = Arena.FindPad(Pad);
+	if (Found == nullptr)
+	{
+		return false;
+	}
+	OutFeetWorld = ElysiumArena::DefaultOrigin() + Found->FeetOrigin;
+	OutYaw = Found->Yaw;
+	return true;
+}
+
+bool FElysiumGreenRoomRun::ArenaSeatPlayer(FString& OutError)
+{
+	if (!IsArena())
+	{
+		OutError = TEXT("not in the arena");
+		return false;
+	}
+	const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+	if (!Refs)
+	{
+		OutError = TEXT("no player body to seat");
+		return false;
+	}
+
+	// The gym's own seating, minus the lane: `ResetState` first so the body inherits neither the
+	// position nor the *motion* of wherever it was, and `SeatOrigin` is the one conversion between
+	// the spec's feet and the pawn's centre.
+	Refs.Move->ResetState();
+	Refs.Pawn->SetActorLocation(
+		ElysiumGym::SeatOrigin(ElysiumArena::DefaultOrigin() + Arena.PlayerFeet,
+			Refs.Body->GetBodyHalfHeight()),
+		/*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
+	Refs.PC->SetControlRotation(FRotator(0.0f, Arena.PlayerYaw, 0.0f));
+	// The boom would otherwise ease across the whole teleport, which reads as the camera falling
+	// behind a body that did not move.
+	if (UElysiumCameraComponent* Camera = Refs.Body->GetCameraComponent())
+	{
+		Camera->RequestReseed();
+	}
+	return true;
+}
+
 bool FElysiumGreenRoomRun::LabSeatOnLane(const FName& Lane, FString& OutError)
 {
 	if (!IsDriving())
@@ -1776,7 +1898,18 @@ bool FElysiumGreenRoomRun::LabSetGymVisible(bool bVisible, FString& OutError)
 		return true;
 	}
 	// The solids are spawned with their meshes or without them, so this is a rebuild rather than a
-	// visibility write. Seating survives it: the lane is a coordinate, not a reference.
+	// visibility write. Seating survives it: a lane and a pad are coordinates, not references.
+	if (IsArena())
+	{
+		// A rebuilt room is a rebuilt navmesh, and the cast is torn down with it — the room the
+		// characters were pathing over no longer exists, so keeping them would leave every one of
+		// them holding a stale path.
+		if (!BuildArena(OutError))
+		{
+			return false;
+		}
+		return ArenaSeatPlayer(OutError);
+	}
 	if (!BuildDriveGym(OutError))
 	{
 		return false;
@@ -1805,19 +1938,26 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 		return false;
 	}
 	const UElysiumMapSubsystem* Sub = Subsystem.Get();
-	if (NewMode == ELabMode::Drive && Sub && !Sub->IsStageWorld())
+	const bool bWantsFloor = NewMode == ELabMode::Drive || NewMode == ELabMode::Arena;
+	if (bWantsFloor && Sub && !Sub->IsStageWorld())
 	{
-		// A real map already has a floor, a spawn point and its own player visual. Driving there is a
-		// reasonable thing to want and a different question from this one; refusing says so rather
-		// than standing a second floor through the middle of a level.
-		OutError = TEXT("drive mode is the stage world's — relaunch without -ElysiumMap");
+		// A real map already has a floor, a spawn point, a navmesh and its own player visual. Playing
+		// there is a reasonable thing to want and a different question from this one; refusing says so
+		// rather than standing a second floor through the middle of a level. The AI window's spawn and
+		// inspection controls are deliberately NOT gated this way — they read the entity world and
+		// work in any map, which is where a cast belongs when there already is a room.
+		OutError = TEXT("drive and arena modes are the stage world's — relaunch without -ElysiumMap");
 		return false;
 	}
 
-	// Whatever was standing belongs to the mode that is leaving.
+	// Whatever was standing belongs to the mode that is leaving, and so does whatever floor it was
+	// standing on. Both floors are torn down unconditionally: a mode change is the one place either
+	// can be left behind, and a gym under an arena is two overlapping collision sets.
 	DestroyBodies();
+	DestroyArena();
+	DestroyDriveGym();
 
-	if (NewMode == ELabMode::Drive)
+	if (bWantsFloor)
 	{
 		// The orbit is a camera shot on the player's own stack, so leaving it pushed would mean the
 		// "real camera" the rung is about is still being overridden. Popping it hands the view back
@@ -1835,8 +1975,10 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 			FloorComp->SetVisibility(false);
 		}
 
-		Mode = ELabMode::Drive;
-		if (!BuildDriveGym(OutError))
+		Mode = NewMode;
+		const bool bFloorStood = NewMode == ELabMode::Arena
+			? BuildArena(OutError) : BuildDriveGym(OutError);
+		if (!bFloorStood)
 		{
 			Mode = ELabMode::Review;
 			return false;
@@ -1844,7 +1986,9 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 		// The stage world froze this body on arrival because it had no floor. It has one now, and
 		// releasing the freeze belongs to whoever supplied it.
 		Refs.Body->SetMovementFrozen(false);
-		if (!LabSeatOnLane(SeatLane, OutError))
+		const bool bSeated = NewMode == ELabMode::Arena
+			? ArenaSeatPlayer(OutError) : LabSeatOnLane(SeatLane, OutError);
+		if (!bSeated)
 		{
 			return false;
 		}
@@ -1856,8 +2000,41 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 			Camera->SetThirdPerson(true);
 			Camera->RequestReseed();
 		}
-		// A stemless drive is a complete request: the mover, the gym and the camera are worth
-		// watching on their own, and inventing a default PC body would be inventing content.
+#if !UE_BUILD_SHIPPING
+		UGameInstance* GI = Subsystem.IsValid() ? Subsystem->GetGameInstance() : nullptr;
+		UElysiumGameStateSubsystem* GameState =
+			GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+
+		// **The arena needs a player character; drive mode does not.** A stemless drive is a complete
+		// request — the mover, the floor and the camera are worth watching on their own, and
+		// inventing a PC body there would be inventing content. A fight is the opposite: a stage
+		// world's player record is whatever the game instance was carrying, which for a cold launch
+		// is a zeroed sheet with no clan, no soak and no derived health, and the damage path is
+		// fail-closed against it. There is nothing to test.
+		//
+		// Brujah is not a choice made here: it is the default `UElysiumGameFlowSubsystem::BeginNewGame`
+		// already applies to a request that names no clan. The window's preset picker re-seeds any of
+		// the seven.
+		if (NewMode == ELabMode::Arena && GameState != nullptr
+			&& !FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
+		{
+			FString Stem;
+			FString SeedError;
+			if (ElysiumArenaCast::SeedPlayerCharacter(GameState,
+				FElysiumSheet::ClanFromName(TEXT("Brujah")), /*bMale=*/true, Stem, SeedError))
+			{
+				if (ReviewStem.IsEmpty())
+				{
+					ReviewStem = Stem;
+				}
+			}
+			else
+			{
+				UE_LOG(LogElysiumGreenRoom, Warning, TEXT("arena: %s"), *SeedError);
+			}
+		}
+#endif
+
 		if (!ReviewStem.IsEmpty())
 		{
 			FString BodyError;
@@ -1866,15 +2043,41 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 				UE_LOG(LogElysiumGreenRoom, Warning, TEXT("drive: %s"), *BodyError);
 			}
 		}
-		UE_LOG(LogElysiumGreenRoom, Log,
-			TEXT("drive: the shipping path has the body — F1 hands the keyboard to the window"));
+		if (NewMode == ELabMode::Arena)
+		{
+			// The HUD is off in the review lab because a reticle across a hem is noise. In the arena
+			// it is the opposite: vitals and the reticle are what a fight is read through, and a
+			// combat test run without them is not the game.
+			LabViewState.bShowHud = true;
+#if !UE_BUILD_SHIPPING
+			// Arm the player on the way in. Weapon SELECTION is a thing under test — which slot,
+			// which mode, what the resolver picks — and it cannot be tested from an empty
+			// inventory, so an arena that made you go and fetch a gun first would be an arena
+			// nobody uses for what it is for. It is the ordinary `GiveNamedItem` route over the
+			// whole parsed catalog; nothing is invented.
+			if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
+			{
+				const ElysiumArenaCast::FArmResult Armed =
+					ElysiumArenaCast::ArmPlayerWithEverything(*EntityWorld, GameState);
+				UE_LOG(LogElysiumGreenRoom, Log,
+					TEXT("arena: armed the player — %d melee, %d firearm(s), %d thrown, %d ammo type(s)"),
+					Armed.Melee, Armed.Firearms, Armed.Thrown, Armed.AmmoTypes);
+			}
+#endif
+			UE_LOG(LogElysiumGreenRoom, Log,
+				TEXT("arena: the room is up and Recast is building — the AI window spawns the cast"));
+		}
+		else
+		{
+			UE_LOG(LogElysiumGreenRoom, Log,
+				TEXT("drive: the shipping path has the body — F1 hands the keyboard to the window"));
+		}
 		return true;
 	}
 
 	// Back to review: put the stage back the way it frames a model, and put the body back where a
 	// stage world seats it.
 	Mode = ELabMode::Review;
-	DestroyDriveGym();
 	Refs.Body->SetMovementFrozen(true);
 	Refs.Move->ResetState();
 	Refs.Pawn->SetActorLocation(FVector(0.0f, 0.0f, 100.0f), /*bSweep=*/false, nullptr,
@@ -1894,8 +2097,33 @@ void FElysiumGreenRoomRun::TickDrive(float DeltaSeconds)
 	// The stage's key and fill travel with the body, which is the only reason the stage still exists
 	// in this mode: a gym is unlit geometry in an empty level, and a body walking out of two
 	// 18-metre lights would walk into the dark.
+	//
+	// **The arena inverts that.** A fight has two parties and they are rarely in the same place, so
+	// lights that follow the player put every opponent in shadow — which is not a lighting
+	// preference but a broken test, because whether a character is visible at all is half of what an
+	// arena run is watching. The room is lit as a room instead: the rig sits over its centre and
+	// stays there, and the attenuation is widened once to reach the far wall.
 	const FDriveRefs Refs = ResolveDriveBody(GetWorld());
-	if (Refs)
+	if (IsArena())
+	{
+		const FBox Room = Arena.Bounds().ShiftBy(ElysiumArena::DefaultOrigin());
+		if (Room.IsValid)
+		{
+			UpdateStage(Room);
+			// The default 1800 cm barely clears the room's half-diagonal, and a wall corner that
+			// falls off the end of an attenuation curve reads as geometry that is not there.
+			const float Reach = Room.GetExtent().Size2D() * 1.6f;
+			if (UPointLightComponent* Light = KeyLight.Get())
+			{
+				Light->SetAttenuationRadius(Reach);
+			}
+			if (UPointLightComponent* Light = FillLight.Get())
+			{
+				Light->SetAttenuationRadius(Reach);
+			}
+		}
+	}
+	else if (Refs)
 	{
 		FVector Origin = FVector::ZeroVector;
 		FVector Extent = FVector::ZeroVector;
@@ -1935,6 +2163,60 @@ void FElysiumGreenRoomRun::TickDrive(float DeltaSeconds)
 	// those is the shipping path's, and writing one here would be writing over the thing the
 	// acceptance is watching.
 	DrawLabOverlays();
+	if (IsArena())
+	{
+		DrawArenaOverlays();
+	}
+}
+
+void FElysiumGreenRoomRun::DrawArenaOverlays() const
+{
+	UWorld* World = GetWorld();
+	if (!World || !LabViewState.bDrawArenaMarkers)
+	{
+		return;
+	}
+	const FVector Origin = ElysiumArena::DefaultOrigin();
+
+	for (const ElysiumArena::FPad& Pad : Arena.Pads)
+	{
+		const FVector Feet = Origin + Pad.FeetOrigin;
+		DrawDebugCircle(World, Feet + FVector(0.0f, 0.0f, 2.0f), 40.0f, 24,
+			FColor(90, 170, 255), false, -1.0f, 0, 2.0f,
+			FVector(1, 0, 0), FVector(0, 1, 0), /*bDrawAxis=*/false);
+		// The facing matters as much as the position: a character spawned looking at a wall spends
+		// its first seconds turning, which reads as hesitation rather than as a placement choice.
+		DrawDebugDirectionalArrow(World, Feet + FVector(0.0f, 0.0f, 6.0f),
+			Feet + FRotator(0.0f, Pad.Yaw, 0.0f).RotateVector(FVector(70.0f, 0.0f, 0.0f))
+				+ FVector(0.0f, 0.0f, 6.0f),
+			18.0f, FColor(90, 170, 255), false, -1.0f, 0, 2.0f);
+		DrawDebugString(World, Feet + FVector(0.0f, 0.0f, 30.0f), Pad.Name.ToString(), nullptr,
+			FColor(90, 170, 255), 0.0f, /*bDrawShadow=*/true, 1.0f);
+	}
+
+	for (const ElysiumArena::FAnchor& Anchor : Arena.Anchors)
+	{
+		const FVector Feet = Origin + Anchor.FeetOrigin;
+		// Two colours, one distinction: an anchor in the cover block's shadow is somewhere a body is
+		// actually hidden, and one in a corner is only somewhere to stand. The entity carries no such
+		// field — VtMB's does not either — so it is the spec's claim about the geometry, drawn as one.
+		const FColor Colour = Anchor.bAgainstCover ? FColor(120, 230, 130) : FColor(200, 190, 110);
+		DrawDebugSphere(World, Feet + FVector(0.0f, 0.0f, 12.0f), 16.0f, 10, Colour,
+			false, -1.0f, 0, 2.0f);
+		DrawDebugDirectionalArrow(World, Feet + FVector(0.0f, 0.0f, 12.0f),
+			Feet + FRotator(0.0f, Anchor.Yaw, 0.0f).RotateVector(FVector(50.0f, 0.0f, 0.0f))
+				+ FVector(0.0f, 0.0f, 12.0f),
+			14.0f, Colour, false, -1.0f, 0, 2.0f);
+		DrawDebugString(World, Feet + FVector(0.0f, 0.0f, 44.0f),
+			FString::Printf(TEXT("%s (r%d)"), *Anchor.Name.ToString(), Anchor.Rating), nullptr,
+			Colour, 0.0f, /*bDrawShadow=*/true, 1.0f);
+	}
+
+	// Where the player is put back to. Drawn because `ArenaSeatPlayer` is a button and a button
+	// whose destination is invisible is a button nobody presses twice.
+	const FVector Start = Origin + Arena.PlayerFeet;
+	DrawDebugCircle(World, Start + FVector(0.0f, 0.0f, 2.0f), 46.0f, 24, FColor(230, 120, 120),
+		false, -1.0f, 0, 2.5f, FVector(1, 0, 0), FVector(0, 1, 0), /*bDrawAxis=*/false);
 }
 
 bool FElysiumGreenRoomRun::LabRestand(FString& OutError)
@@ -2463,7 +2745,7 @@ void FElysiumGreenRoomRun::DrawLabOverlays() const
 			if (bDrives)
 			{
 				DrawDebugString(World, Here + FVector(0, 0, 4.f), Name.ToString(), nullptr,
-					Colour, 0.f, /*bShadow*/ true, /*Scale*/ 0.9f);
+					Colour, 0.f, /*bAgainstCover*/ true, /*Scale*/ 0.9f);
 			}
 		}
 	}
@@ -2543,13 +2825,14 @@ bool FElysiumGreenRoomRun::Tick(float DeltaSeconds)
 			ElysiumClothDebug::SetDrawEnabled(true);
 			UE_LOG(LogElysiumGreenRoom, Log,
 				TEXT("lab: stage ready — F1, or `elysium.gr`, opens the window that drives it"));
-			// `gr <model> [clip]` names a body up front, and `--drive` says which mode stands it. A
-			// failure here is reported and nothing else: the stage is up, and the window can ask
-			// again.
-			if (bDriveRequested)
+			// `gr <model> [clip]` names a body up front, and `--drive`/`--arena` says which mode
+			// stands it. A failure here is reported and nothing else: the stage is up, and the
+			// window can ask again.
+			if (bArenaRequested || bDriveRequested)
 			{
 				FString Error;
-				if (!LabSetMode(ELabMode::Drive, Error))
+				const ELabMode Requested = bArenaRequested ? ELabMode::Arena : ELabMode::Drive;
+				if (!LabSetMode(Requested, Error))
 				{
 					UE_LOG(LogElysiumGreenRoom, Warning, TEXT("lab: %s"), *Error);
 				}

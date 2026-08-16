@@ -153,7 +153,7 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio.Playback");
 	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Audio.Soundscape");
 	Cog->AddWindow<FElysiumCogWindow_Camera>("Elysium.Characters.Camera");
-	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.Characters.NPCs");
+	Cog->AddWindow<FElysiumCogWindow_Npc>("Elysium.Characters.Cast & AI");
 	GreenRoomWindow = Cog->AddWindow<FElysiumCogWindow_GreenRoom>("Elysium.Characters.Green Room");
 	Cog->AddWindow<FElysiumCogWindow_Scripting>("Elysium.Gameplay.Scripting");
 

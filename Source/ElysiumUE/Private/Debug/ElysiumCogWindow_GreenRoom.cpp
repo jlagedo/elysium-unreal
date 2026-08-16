@@ -1532,6 +1532,26 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 	}
 
 	// --- where the body stands -------------------------------------------------------------------
+	// The arena has no lanes: it is one flat plate rather than a bracket ladder, so the only
+	// placement question it has is "put me back at the start", which the mode row above answers.
+	// Drawing an empty lane combo here would read as a gym that failed to build.
+	if (Lab.IsArena())
+	{
+		ImGui::SeparatorText("Arena");
+		const ElysiumArena::FSpec& Room = Lab.ArenaSpec();
+		bool bArenaVisible = Lab.ArenaVisible();
+		if (ImGui::Checkbox("Draw the room", &bArenaVisible))
+		{
+			FString Error;
+			if (!Lab.LabSetGymVisible(bArenaVisible, Error)) { LastError = Error; }
+			else { LastError.Reset(); }
+		}
+		ImGui::TextDisabled("%d solids, %d pads, %d anchors. The boxes collide either way,",
+			Room.Solids.Num(), Room.Pads.Num(), Room.Anchors.Num());
+		ImGui::TextDisabled("and they are the only thing in this runtime that breaks an eye line.");
+		return;
+	}
+
 	ImGui::SeparatorText("Gym");
 	const ElysiumGym::FSpec& Spec = Lab.DriveGym();
 	const FName Seated = Lab.DriveLane();
@@ -1607,9 +1627,11 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 	}
 
 	// The mode selector, above the tabs because it changes what they mean. Review is the animation
-	// programme's stage — one body, one clip, the orbit; Drive is the shipping path with a floor
-	// under it (CCC6).
+	// programme's stage — one body, one clip, the orbit; Drive is the shipping path with the
+	// movement gym under it (CCC6); Arena is the same shipping path on a navigable room, which is
+	// what a cast needs to path at all.
 	const bool bDriving = Lab->IsDriving();
+	const bool bArena = Lab->IsArena();
 	const auto ModeButton = [Lab, this](const char* Label, FElysiumGreenRoomRun::ELabMode Mode,
 		bool bActive)
 	{
@@ -1624,11 +1646,36 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 	};
 	ModeButton("Review", FElysiumGreenRoomRun::ELabMode::Review, !bDriving);
 	ImGui::SameLine();
-	ModeButton("Drive", FElysiumGreenRoomRun::ELabMode::Drive, bDriving);
+	ModeButton("Drive", FElysiumGreenRoomRun::ELabMode::Drive, bDriving && !bArena);
 	ImGui::SameLine();
-	ImGui::TextDisabled(bDriving
-		? "the pawn on the gym, posed by the shipping path"
-		: "one body on the stage, one clip, the orbit");
+	ModeButton("Arena", FElysiumGreenRoomRun::ELabMode::Arena, bArena);
+	ImGui::SameLine();
+	ImGui::TextDisabled(bArena
+		? "a navigable room — the Cast & AI window stands the opposition up"
+		: bDriving
+			? "the pawn on the gym, posed by the shipping path"
+			: "one body on the stage, one clip, the orbit");
+	if (bArena)
+	{
+		// Recast builds asynchronously and a room whose graph has not landed produces characters
+		// that acquire, select a chase, and fail every path request by name. Saying so here is the
+		// difference between a two-minute puzzle and a two-hour one.
+		const bool bNavReady = Lab->IsArenaNavigationReady();
+		ImGui::TextColored(bNavReady ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColWarn,
+			bNavReady ? "navigation ready" : "navigation building...");
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Reseat me"))
+		{
+			FString Error;
+			if (!Lab->ArenaSeatPlayer(Error)) { LastError = Error; }
+		}
+		ImGui::SameLine();
+		bool bMarkers = Lab->LabView().bDrawArenaMarkers;
+		if (ImGui::Checkbox("Pads & anchors", &bMarkers))
+		{
+			Lab->LabView().bDrawArenaMarkers = bMarkers;
+		}
+	}
 	if (!LastError.IsEmpty())
 	{
 		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));

@@ -41,6 +41,7 @@
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "Debug/ElysiumArenaSpec.h"
 #include "ElysiumGymSpec.h"
 #include "Visual/ElysiumPoseDeviation.h"
 #include "ElysiumHUD.h"
@@ -1325,6 +1326,203 @@ bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 	TestEqual(TEXT("a fresh sample commands nothing"), Fresh.WishScale, 0.0f);
 	TestEqual(TEXT("a fresh sample is standing"),
 		static_cast<int32>(Fresh.Stance), static_cast<int32>(EElysiumStance::Standing));
+	return true;
+}
+
+// ================================================================================================
+// The combat arena's spec (`Debug/ElysiumArenaSpec.h`)
+// ================================================================================================
+//
+// **Nothing below restates a dimension.** An expectation recomputed from the same constants as the
+// geometry moves with the geometry and can never turn red — the rule the gym spec states and the
+// reason its own test asserts structure rather than numbers. What is asserted here is the set of
+// geometric CLAIMS the room makes that a changed dimension could quietly falsify: that every place
+// a body is put is inside the walls and outside the solids, and that an anchor advertised as cover
+// is genuinely against the block.
+//
+// The last one is the load-bearing claim. `FAnchor::bAgainstCover` is what the panel colours green
+// and what makes an anchor mean "hidden" rather than "somewhere to stand". Note what it is NOT
+// tested as: "the block lies between this anchor and the room's middle" is true of every point in
+// the room, because the block IS the middle — a probe that reads as meaningful and measures
+// nothing. Adjacency is the property that actually produces cover, and it is what breaks if the
+// setback, the block or the room's size moves.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumArenaSpecTest, "Elysium.Substrate.ArenaSpec",
+	GElysiumTestFlags)
+bool FElysiumArenaSpecTest::RunTest(const FString&)
+{
+	const ElysiumArena::FSpec Spec = ElysiumArena::Build();
+
+	TestTrue(TEXT("the arena has solids"), Spec.Solids.Num() > 0);
+	TestTrue(TEXT("the arena has spawn pads"), Spec.Pads.Num() > 0);
+	TestTrue(TEXT("the arena has anchors"), Spec.Anchors.Num() > 0);
+
+	// --- Structural invariants the builder depends on ---------------------------------------------
+	{
+		TSet<FName> SolidTags;
+		for (const ElysiumArena::FSolid& Solid : Spec.Solids)
+		{
+			// The tag becomes the spawned component's name, so a duplicate is a component the engine
+			// silently renames and a trace hit that reads back as the wrong part of the room.
+			TestFalse(FString::Printf(TEXT("solid tag %s is unique"), *Solid.Tag.ToString()),
+				SolidTags.Contains(Solid.Tag));
+			SolidTags.Add(Solid.Tag);
+			TestTrue(FString::Printf(TEXT("solid %s has a positive extent"), *Solid.Tag.ToString()),
+				Solid.Extent.GetMin() > 0.0f);
+		}
+		TSet<FName> PadNames;
+		for (const ElysiumArena::FPad& Pad : Spec.Pads)
+		{
+			TestFalse(FString::Printf(TEXT("pad %s is unique"), *Pad.Name.ToString()),
+				PadNames.Contains(Pad.Name));
+			PadNames.Add(Pad.Name);
+			TestNotNull(FString::Printf(TEXT("pad %s is findable"), *Pad.Name.ToString()),
+				Spec.FindPad(Pad.Name));
+		}
+		TSet<FName> AnchorNames;
+		for (const ElysiumArena::FAnchor& Anchor : Spec.Anchors)
+		{
+			TestFalse(FString::Printf(TEXT("anchor %s is unique"), *Anchor.Name.ToString()),
+				AnchorNames.Contains(Anchor.Name));
+			AnchorNames.Add(Anchor.Name);
+			TestNotNull(FString::Printf(TEXT("anchor %s is findable"), *Anchor.Name.ToString()),
+				Spec.FindAnchor(Anchor.Name));
+		}
+	}
+
+	// The two solids every placement test below is stated against, found by the tags the builder
+	// spawns them under rather than rebuilt from the constants.
+	const ElysiumArena::FSolid* Cover = Spec.Solids.FindByPredicate(
+		[](const ElysiumArena::FSolid& S) { return S.Tag == FName(TEXT("cover")); });
+	const ElysiumArena::FSolid* Floor = Spec.Solids.FindByPredicate(
+		[](const ElysiumArena::FSolid& S) { return S.Tag == FName(TEXT("floor")); });
+	if (!TestNotNull(TEXT("the arena has a cover solid"), Cover)
+		|| !TestNotNull(TEXT("the arena has a floor plate"), Floor))
+	{
+		return false;
+	}
+
+	// The plate's TOP is the arena's Z origin, which is what makes every feet-anchored point in the
+	// room sit at zero. A plate that drifted off it would put every pad and anchor underground.
+	TestEqual(TEXT("the floor's top surface is the arena's Z origin"),
+		static_cast<float>(Floor->Center.Z + Floor->Extent.Z), 0.0f);
+
+	// --- Every placed point is on the floor, inside the walls, and outside the solids -------------
+	// Walls are excluded from the containment test and used as its bound instead: the interior is
+	// whatever the four walls leave, so asking whether a point is inside a wall and asking whether
+	// it is inside the room are the same question asked twice.
+	auto InsideXY = [](const ElysiumArena::FSolid& Solid, const FVector& Point, float Margin)
+	{
+		return FMath::Abs(Point.X - Solid.Center.X) < Solid.Extent.X + Margin
+			&& FMath::Abs(Point.Y - Solid.Center.Y) < Solid.Extent.Y + Margin;
+	};
+	// A capsule's own radius, near enough: a point that clears the block by less than this is a body
+	// spawned interpenetrating it.
+	constexpr float BodyRadiusCm = 40.0f;
+
+	TArray<TPair<FString, FVector>> Placed;
+	for (const ElysiumArena::FPad& Pad : Spec.Pads)
+	{
+		Placed.Emplace(FString::Printf(TEXT("pad %s"), *Pad.Name.ToString()), Pad.FeetOrigin);
+	}
+	for (const ElysiumArena::FAnchor& Anchor : Spec.Anchors)
+	{
+		Placed.Emplace(FString::Printf(TEXT("anchor %s"), *Anchor.Name.ToString()),
+			Anchor.FeetOrigin);
+	}
+	Placed.Emplace(TEXT("the player's start"), Spec.PlayerFeet);
+
+	for (const TPair<FString, FVector>& Entry : Placed)
+	{
+		TestEqual(FString::Printf(TEXT("%s stands on the floor"), *Entry.Key),
+			static_cast<float>(Entry.Value.Z), Spec.FloorZ());
+		TestTrue(FString::Printf(TEXT("%s is over the floor plate"), *Entry.Key),
+			InsideXY(*Floor, Entry.Value, -BodyRadiusCm));
+		TestFalse(FString::Printf(TEXT("%s is not inside the cover block"), *Entry.Key),
+			InsideXY(*Cover, Entry.Value, BodyRadiusCm));
+		for (const ElysiumArena::FSolid& Solid : Spec.Solids)
+		{
+			if (Solid.Tag == FName(TEXT("floor")) || Solid.Tag == FName(TEXT("cover")))
+			{
+				continue;
+			}
+			TestFalse(FString::Printf(TEXT("%s is not inside %s"), *Entry.Key, *Solid.Tag.ToString()),
+				InsideXY(Solid, Entry.Value, BodyRadiusCm));
+		}
+	}
+
+	// --- The cover claim --------------------------------------------------------------------------
+	// A shadow anchor's segment to the room's middle must pass through the block; a non-shadow
+	// anchor's must not. "Against" is the gap between the anchor and the nearest face of the block:
+	// a body's width or so is cover, and anything a stride away is not.
+	auto GapToCover = [&Cover](const FVector& Point)
+	{
+		// The Chebyshev-style gap to an axis-aligned box in the horizontal plane. Negative inside.
+		return FMath::Max(
+			FMath::Abs(Point.X - Cover->Center.X) - Cover->Extent.X,
+			FMath::Abs(Point.Y - Cover->Center.Y) - Cover->Extent.Y);
+	};
+	// One body's width off the face is against it; the corner set has to be well clear, so the two
+	// bands are separated rather than sharing one threshold that a nudge could cross.
+	constexpr double AgainstCm = 2.0 * BodyRadiusCm;
+	constexpr double ClearCm = 6.0 * BodyRadiusCm;
+
+	int32 CoverAnchors = 0;
+	for (const ElysiumArena::FAnchor& Anchor : Spec.Anchors)
+	{
+		const double Gap = GapToCover(Anchor.FeetOrigin);
+		if (Anchor.bAgainstCover)
+		{
+			++CoverAnchors;
+			TestTrue(FString::Printf(
+				TEXT("anchor %s claims cover and stands against the block (gap %.0f cm)"),
+				*Anchor.Name.ToString(), Gap), Gap > 0.0 && Gap < AgainstCm);
+			// A cover anchor also has to outrank a bare one, because that ordering is the whole of
+			// how `PickHighestRatedCandidate` is steered toward cover — the selector reads the
+			// rating and knows nothing about the block.
+			for (const ElysiumArena::FAnchor& Other : Spec.Anchors)
+			{
+				if (!Other.bAgainstCover)
+				{
+					TestTrue(TEXT("a cover anchor outranks a bare one"), Anchor.Rating > Other.Rating);
+				}
+			}
+		}
+		else
+		{
+			TestTrue(FString::Printf(
+				TEXT("anchor %s claims no cover and is clear of the block (gap %.0f cm)"),
+				*Anchor.Name.ToString(), Gap), Gap > ClearCm);
+		}
+	}
+	TestTrue(TEXT("the room offers at least one cover anchor"), CoverAnchors > 0);
+
+	// The player starts in the open. A fight that begins with the player already behind the only
+	// solid in the room is a fight whose acquisition never happens.
+	TestTrue(TEXT("the player starts clear of the block"), GapToCover(Spec.PlayerFeet) > ClearCm);
+
+	// --- One pad that is hidden from the player's start --------------------------------------------
+	// Named `behind_cover` and required to earn it. Unlike the adjacency band above this IS a sight
+	// line, and it is a meaningful one: the player's start is off to one side rather than at the
+	// block, so the segment between the two either passes through the solid or it does not.
+	// Spawning a character the player cannot yet see is the only way to watch an acquisition happen
+	// rather than start already acquired.
+	if (const ElysiumArena::FPad* Behind = Spec.FindPad(FName(TEXT("behind_cover"))))
+	{
+		constexpr int32 Samples = 128;
+		bool bBlocked = false;
+		for (int32 Index = 1; Index < Samples && !bBlocked; ++Index)
+		{
+			const FVector Point = FMath::Lerp(Spec.PlayerFeet, Behind->FeetOrigin,
+				static_cast<float>(Index) / Samples);
+			bBlocked = InsideXY(*Cover, Point, 0.0f);
+		}
+		TestTrue(TEXT("behind_cover is out of sight from the player's start"), bBlocked);
+	}
+	else
+	{
+		AddError(TEXT("the arena has no behind_cover pad"));
+	}
+
 	return true;
 }
 
