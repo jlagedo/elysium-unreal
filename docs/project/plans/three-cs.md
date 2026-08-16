@@ -128,8 +128,8 @@ shipped corpus — is `docs/vtmb/wielded_weapons.md`. Read it first; it is not r
 **The design call, settled.** Retail's mechanism is a per-bone name-matched **copy** of the
 wearer's world matrix, with unmatched bones running the weapon's own evaluated clip. The uniform
 bake lane, the frame-0 reference pose, the material contract and the binding metadata are owned by
-`docs/architecture/wielded-weapon-integration.md`; PL20 delivers the assets and
-`/ElysiumBaked/Items/DA_WieldModels`. This rung consumes them:
+`docs/architecture/wielded-weapon-integration.md`; `export bundle items` + `export wield` deliver
+the assets and `/ElysiumBaked/Items/DA_WieldModels`. This rung consumes them:
 
 - **Every held weapon** attaches as a `USkeletalMeshComponent` bound by `SetLeaderPoseComponent` —
   the garment recipe `ElysiumNpcVisual::InstallGarment` already ships. Name matching hands a melee
@@ -183,9 +183,9 @@ NPCs and the player share one path, and the corpus says so: equip selects on the
 its geometry in the correct hand on both a male and a female body; the weapon tracks the hand through
 locomotion and through a swing with no separate drive call; holstering removes it; the first-person
 view suppresses it and returning to third restores it without a rebuild. The pose is correct in the
-Content Browser preview, not only in our runtime. *Deps:* PL20 for the corpus; CCC10's layer for the
-swing that moves it; ANM4b supplies the real per-weapon activity translation, which this rung does
-not need in order to be visible.
+Content Browser preview, not only in our runtime. *Deps:* the baked wield corpus and
+`DA_WieldModels` (`export wield`); CCC10's layer for the swing that moves it; ANM4b supplies the
+real per-weapon activity translation, which this rung does not need in order to be visible.
 
 ### CCC11 The action families beyond locomotion
 
