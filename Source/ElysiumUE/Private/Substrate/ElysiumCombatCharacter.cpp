@@ -223,16 +223,9 @@ void FElysiumCombatCharacter::AddHumanity(int32 Delta)
 // exactly the shape `ElysiumLaw::FireWorldEvent` already carries for the eight cop/hunter outputs.
 namespace
 {
-	// The six authored output names. They belong beside `ElysiumLaw::Outputs`, with the rest of the
-	// `events_world` surface; they are named here because this producer is the only caller and the
-	// law file is owned elsewhere this cycle.
-	const FName& MasqueradeLevelChangedOutput()
-	{
-		static const FName Name(TEXT("OnMasqueradeLevelChanged"));
-		return Name;
-	}
-
-	// `OnMasqueradeLevel<N>` for a resulting level of 1..5, or `NAME_None` outside that range.
+	// `OnMasqueradeLevel<N>` for a resulting level of 1..5, or `NAME_None` outside that range. The
+	// six authored output names themselves live in `ElysiumLaw::Outputs`, beside the rest of the
+	// `events_world` surface; this is only the level-to-name selection.
 	//
 	// The corpus authors no `OnMasqueradeLevel0`: a change that lands the counter back on zero
 	// therefore fires only the generic output, which is what the authored surface can receive. That
@@ -240,13 +233,15 @@ namespace
 	// five numbered rows.
 	FName MasqueradeLevelOutput(int32 Level)
 	{
-		static const FName Names[5] =
+		switch (Level)
 		{
-			FName(TEXT("OnMasqueradeLevel1")), FName(TEXT("OnMasqueradeLevel2")),
-			FName(TEXT("OnMasqueradeLevel3")), FName(TEXT("OnMasqueradeLevel4")),
-			FName(TEXT("OnMasqueradeLevel5")),
-		};
-		return (Level >= 1 && Level <= 5) ? Names[Level - 1] : FName();
+		case 1: return ElysiumLaw::Outputs::MasqueradeLevel1();
+		case 2: return ElysiumLaw::Outputs::MasqueradeLevel2();
+		case 3: return ElysiumLaw::Outputs::MasqueradeLevel3();
+		case 4: return ElysiumLaw::Outputs::MasqueradeLevel4();
+		case 5: return ElysiumLaw::Outputs::MasqueradeLevel5();
+		default: return FName();
+		}
 	}
 }
 
@@ -284,7 +279,7 @@ void FElysiumCombatCharacter::ChangeMasqueradeLevel(int32 Delta)
 		{
 			ElysiumLaw::FireWorldEvent(*World, Levelled, Handle);
 		}
-		ElysiumLaw::FireWorldEvent(*World, MasqueradeLevelChangedOutput(), Handle);
+		ElysiumLaw::FireWorldEvent(*World, ElysiumLaw::Outputs::MasqueradeLevelChanged(), Handle);
 	}
 
 	// "An increment whose resulting value is greater than four loads `sp_masquerade_1`. The retail
@@ -728,7 +723,7 @@ bool FElysiumCombatCharacter::IsKindred() const
 void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatCharacter* Attacker,
 	bool bDisallowFirearmsToBashing)
 {
-	if (IsInert())
+	if (IsInert() || HasReportedDeath())
 	{
 		return;
 	}
@@ -761,7 +756,7 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 	FElysiumDmg Dmg;
 	Dmg.Family = EElysiumDmgFamily::Bashing;
 	Dmg.Flags = ElysiumDamage::FlagDirectInput;
-	Dmg.ExtraInput = FMath::Max(1, FMath::RoundToInt(Amount));
+	Dmg.ExtraInput = FMath::TruncToInt(Amount);
 	Dmg.ForcedSoak = 0;
 	Dmg.RolledSuccesses = Dmg.ExtraInput;
 	Dmg.Remainder = Dmg.ExtraInput;

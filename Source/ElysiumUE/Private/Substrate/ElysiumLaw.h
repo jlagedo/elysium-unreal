@@ -345,6 +345,12 @@ namespace ElysiumLaw
 		const FName& EndHunterPursuit();     // OnEndHunterPursuitMode     — 23 rows
 		const FName& CopsComing();           // OnCopsComing               — 23 rows
 		const FName& CopsOutside();          // OnCopsOutside              — 41 rows
+		const FName& MasqueradeLevel1();     // OnMasqueradeLevel1         — 23 rows
+		const FName& MasqueradeLevel2();     // OnMasqueradeLevel2         — 23 rows
+		const FName& MasqueradeLevel3();     // OnMasqueradeLevel3         — 23 rows
+		const FName& MasqueradeLevel4();     // OnMasqueradeLevel4         — 23 rows
+		const FName& MasqueradeLevel5();     // OnMasqueradeLevel5         — 23 rows
+		const FName& MasqueradeLevelChanged(); // OnMasqueradeLevelChanged — 25 rows (la_hub_1 x3)
 	}
 
 	// Fire one of the above at the map's `events_world`. A map with no `world` entity fires

@@ -463,9 +463,9 @@ bool FElysiumDamageCommitTest::RunTest(const FString&)
 		TestEqual(TEXT("...and the health keyfield follows it down"), Victim.Health, 60);
 		TestFalse(TEXT("...without dying"), Victim.HasReportedDeath());
 
-		Victim.TakeDamage(0.4f);   // rounds to zero, and the fallback floors a positive hit at one
-		TestEqual(TEXT("a sub-point hit still lands one point"),
-			Trait(Victim, ElysiumSlot::Health), 41);
+		Victim.TakeDamage(0.4f);   // truncates toward zero (RE40 `__ftol`) rather than flooring at one
+		TestEqual(TEXT("a sub-point hit lands nothing"),
+			Trait(Victim, ElysiumSlot::Health), 40);
 
 		Victim.TakeDamage(1000.f);
 		TestEqual(TEXT("the counter stops at the ceiling"), Trait(Victim, ElysiumSlot::Health), 100);

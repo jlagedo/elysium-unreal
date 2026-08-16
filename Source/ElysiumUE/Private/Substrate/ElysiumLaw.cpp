@@ -409,6 +409,12 @@ namespace Outputs
 	ELYSIUM_LAW_OUTPUT(EndHunterPursuit,   "OnEndHunterPursuitMode")
 	ELYSIUM_LAW_OUTPUT(CopsComing,         "OnCopsComing")
 	ELYSIUM_LAW_OUTPUT(CopsOutside,        "OnCopsOutside")
+	ELYSIUM_LAW_OUTPUT(MasqueradeLevel1,        "OnMasqueradeLevel1")
+	ELYSIUM_LAW_OUTPUT(MasqueradeLevel2,        "OnMasqueradeLevel2")
+	ELYSIUM_LAW_OUTPUT(MasqueradeLevel3,        "OnMasqueradeLevel3")
+	ELYSIUM_LAW_OUTPUT(MasqueradeLevel4,        "OnMasqueradeLevel4")
+	ELYSIUM_LAW_OUTPUT(MasqueradeLevel5,        "OnMasqueradeLevel5")
+	ELYSIUM_LAW_OUTPUT(MasqueradeLevelChanged,  "OnMasqueradeLevelChanged")
 
 	#undef ELYSIUM_LAW_OUTPUT
 }
@@ -603,14 +609,6 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 			TEXT("%s supernatural incident (severity %d): masquerade rate-limited until %.2f"),
 			*Player.DebugString(), Severity, Player.Police.MasqueradeTimerNext);
 	}
-
-	// SEAM (comment, nothing failed): retail's `ChangeMasqueradeLevel` itself fires the
-	// `events_world` output for the resulting level (`OnMasqueradeLevel1..5`, 23 authored rows
-	// each) plus the generic `OnMasqueradeLevelChanged` (25 rows). This runtime's
-	// `FElysiumCombatCharacter::ChangeMasqueradeLevel` mutates the sheet slot and reports the
-	// breach but fires neither, so those 140-odd authored rows have no producer. Closing it belongs
-	// beside the mutation, not here — firing from this call site would leave the datamap input
-	// `ChangeMasqueradeLevel` silent and put the rule in two places.
 
 	// 2. The independent police branch. Held in a local so the switch reads as the runtime policy it
 	//    is rather than as a folded literal.
