@@ -102,6 +102,29 @@ hinge authority likewise remain on the invisible static or Chaos proxy, never on
 visual. This composition reuses the map's material instances and does not duplicate the placed-model
 texture corpus in the character package.
 
+### 1.3 The between-key read is Unreal's own
+
+A baked clip carries one key per authored MDL frame at the authored rate, and the host reads between
+those keys. **Retail's between-key read and Unreal's LINEAR are the same rule** — measured against
+the banked capture corpus rather than assumed, and separated there from the spherical alternative
+(`docs/vtmb/animation_and_movers.md` A.4b owns retail's half and the numbers). The export therefore
+defers nothing when it leaves the read to the host, and there is no divergence to record here.
+
+Both halves land on the same pair of keys with the same alpha. Retail takes
+`floor((numframes − 1) · cycle)` and hands the remainder to its channel decoders; Unreal's
+`AnimEncoding::TimeToIndex` computes `KeyPos = RelativePos · (NumKeys − 1)`, takes its floor as the
+first key and `min(first + 1, NumKeys − 1)` as the second, and passes the remainder as alpha —
+including the same clamp at the last key, because the bake writes `NumberOfFrames` as one less than
+the key count at the authored rate. Between that pair Unreal mixes rotation with `FQuat::FastLerp` +
+`Normalize` — the second quaternion flipped to the nearer hemisphere, the four components mixed
+linearly, the result normalized — and position with `FMath::Lerp`, which is retail's mixer component
+for component. ACL's decompression applies `quat_lerp` and `vector_lerp` over the same uniform key
+grid, so the codec does not change the answer.
+
+The measurement covers one map's cast — 53 distinct clips over 34 owner identities — which samples
+the content rather than the rule: retail decodes every cell of every model through the one channel
+path A.4b names.
+
 ## 2. The asset set is baked, not built at runtime
 
 Characters are baked into native assets on the `/ElysiumBaked` mount by an editor commandlet beside

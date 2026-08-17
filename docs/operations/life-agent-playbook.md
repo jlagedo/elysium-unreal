@@ -56,10 +56,6 @@ in each prompt.
   is a separate, owner-accepted operation.
 - **Orphan census.** Exporter-side logic plus a preflight failure path; validated by running
   the planner against the existing corpus, no bake needed.
-- **Frame interpolation.** An analysis session, not a code session: it reads the banked
-  capture corpus under `$ELYSIUM_WORK_ROOT/research` and answers LINEAR-or-not with numbers.
-  Runs fine as a background/research agent while you work something else; its deliverable is a
-  finding plus the divergence text if one is needed.
 - **`A_dance01` seam.** Instrumented investigation via the existing
   `Instrument.Elysium.DancerDecodeProbe3`; give the session the four named bodies and the
   question as stated in the plan, nothing more.
@@ -116,8 +112,8 @@ LIFE5's). Waits on 11.13d; check that row before starting.
 Two design calls are explicitly this rung's to make **with you** (montage slot vs overlay
 treatment for gestures; whether scene clip changes regain a crossfade) — so plan mode, and
 expect the session to present options rather than pick. The **layer-weight measurement** is a
-separable analysis session over the banked captures (same shape as LIFE1's interpolation
-bullet — background-able, numeric deliverable, coverage argument as stated in the plan). The
+separable analysis session over the banked captures — background-able, numeric deliverable,
+coverage argument as stated in the plan, no code and no new capture. The
 `Prince_Escort_Male` diagnosis is likewise a self-contained investigation session; give it
 the actor-shaped starting point from the plan.
 

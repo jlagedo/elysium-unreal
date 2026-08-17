@@ -25,12 +25,8 @@ The asset stack becomes complete and self-guarding. The stack itself stands — 
 compatible-skeleton and `RetargetSource`/`OrientAndScale` metadata, a `USkeletalMesh` per model
 with its exact authored bind and morph targets, a compressed `UAnimSequence` per clip, masks as
 named `UBlendProfile`s, the autolayer binding in `blends/<stem>.json` — and what remains is its
-guards and its last gaps:
+last gap:
 
-- **Frame interpolation adjudicated.** Only 15,336 of 242,561 captured cells fire at a whole
-  frame; the export defers between-key behaviour to the host's LINEAR. Decide from the banked
-  corpus whether retail's between-key read is LINEAR; record agreement as a closed fact or the
-  difference as a divergence in `docs/architecture/animation-architecture.md`. No new capture.
 - **The `A_dance01` arm seam.** Edge stretch past 5× on `goth_female`/`tremere_female_armor_0`,
   3.59× on `female_dancer_2`, clean on the Joy idles.
   `Instrument.Elysium.DancerDecodeProbe3` reports per-bone remap state and per-edge deformation;
@@ -305,6 +301,5 @@ Each lands as a recorded divergence in its owning doc when made.
 Each lands beside the faithful behaviour in its owning doc: layer blend-in/out times (ours —
 the record carries no ramp) → `docs/vtmb/animation_and_movers.md`; blend-space interpolation
 replacing the authored cell selection, the bake-then-blend residual across a crossfade (bounded
-≤10° measured), an overlay/additive composed over a host that does not declare it, and the
-between-key interpolation answer if LIFE1 finds a difference →
+≤10° measured), and an overlay/additive composed over a host that does not declare it →
 `docs/architecture/animation-architecture.md`.

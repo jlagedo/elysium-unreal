@@ -2036,6 +2036,21 @@ interpolation fraction handed to both channel decoders. `FUN_10089b20` reads
 `numframes`@12 of the descriptor, decrements it, multiplies by the cycle argument and
 truncates. Clip duration therefore divides by `frames - 1`, not `frames`.
 
+**The between-key mix is a normalized component lerp, not a slerp.** `FUN_100889f0` decodes
+the bracketing frames' four rotation components and mixes them through `FUN_1010a0b0`, which
+flips the second quaternion to the nearer hemisphere, mixes the four components linearly and
+normalizes; `FUN_10088ba0`'s position is a plain component lerp on the same fraction. **Capture
+separates that from the spherical alternative rather than assuming it.** Over one `sp_theatre`
+run, **230,732 of 242,561** cells fire strictly between two keys — 11,829 land exactly on one —
+and the witnessed frame agrees with the cycle rule above on **242,561 of 242,561**. Decoding each
+cell offline and mixing by this rule returns retail's own captured locals to a maximum of
+**3.7e-4 degrees** over **15,702,422** bone observations, with none outside the excellent band of
+`docs/vtmb/vtmb-animation-reverse-engineering.md` §11.3 — float32 round-off rather than a
+residual. A slerp across the same two keys differs from the component mix by more than that band
+on **35,562** of the decoded bone observations, reaching 6.5 degrees, so a spherical read would
+have shown in the same corpus. Reading the floor key alone instead costs a median of 19.6 degrees
+and a maximum of 160.4.
+
 **A cell is addressed from the owner, not the target.** The captured descriptor pointers
 satisfy `pointer - studiohdr == LocalSeqIndex@276 + index * 764` and
 `LocalAnimIndex@268 + index * 72` on **961,518 of 961,518** contributions across the two

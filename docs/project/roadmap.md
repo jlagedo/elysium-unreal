@@ -240,7 +240,8 @@ The ladder:
   family; the orphan census runs in the same preflight, routing every bank clip and grid over the
   include DAG (3,522 of 3,755 clips across 55 body banks reachable, the 233 rest all shadowed
   duplicates) and refusing a declaring host no body reaches or a reached grid that stands as no
-  blend space; frame-interpolation adjudication and the `A_dance01` seam open.
+  blend space; retail's between-key read adjudicated LINEAR against the banked corpus and closed
+  as a fact, no divergence; the `A_dance01` seam open.
 - [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule
   artifacts, events and the transition graph exported, joined and baked; deletes the 5-row stub.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
