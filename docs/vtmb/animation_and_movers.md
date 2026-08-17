@@ -3128,7 +3128,9 @@ through the audio layer (`docs/vtmb/audio_pipeline.md`), plus explicit `locked_s
 `unlocked_sound` on buttons. **`movedir` does not exist** — direction is `angles`.
 `func_movelinear` uses `movedistance`/`startposition`, not Source's `movedir`.
 VtMB-added: `use_icon`/`locked_icon`, `StartHidden`, `soundgroup`, `linked_door`
-(485 uses), `use_override` (26 — routes `+use` to a separate button). `climbable`
+(485 uses), `use_override` (26 — routes `+use` to a separate button), `noopenwanted`
+(76 across 13 maps, including 28 of `sm_hub_1`'s 29 doors — refuses `+use` while the
+player is wanted by police; B.4). `climbable`
 (1090 uses) is authored but **dead** — the string occurs nowhere in `vampire.dll`
 (`docs/vtmb/entity_io.md` → "Proven-dead Hammer/FGD keys").
 
@@ -3169,7 +3171,25 @@ lineage (RTTI-confirmed: `CBaseDoor→CRotDoor`, `CBaseButton→CRotButton`,
   `OnBlockedClosing` (`CBaseDoor::Blocked` `FUN_100f14a0`).
   `CBaseDoor::Use` checks `use_override` first: a resolved override receives its normal
   `Use(activator)` with the door as caller exactly once, then the door returns without
-  toggling. A missing/unusable target therefore fails closed. PASSABLE (`0x8`) changes
+  toggling. A missing/unusable target therefore fails closed.
+  `noopenwanted` is a second `Use` gate, taken after the override relay and ahead of the
+  locked check. The key writes `m_bNoOpenWanted` (byte @`0x648`, `FTYPEDESC_KEY` in the
+  `CBaseDoor` datadesc builder `FUN_100ed780`), and predicate `FUN_100eef10` reports
+  blocked only when that byte is set **and** the player's police-response counter
+  (`player+0x1d10`, the field a debug overlay formats as `"%d cops"`) is above zero — the
+  door's own key is never sufficient on its own. A blocked `Use` notifies the player
+  (`FUN_101cebc0`) and returns before any state change, so none of
+  `OnOpen`/`OnClose`/`OnFullyOpen`/`OnFullyClosed` fire and a transition wired to
+  `OnFullyOpen` never runs: a hunted player cannot leave through a flagged exit. The same
+  predicate short-circuits the locked query (`FUN_100eec70`) to locked ahead of the real
+  lock byte, and makes the use-icon resolver (`FUN_100eedf0`) answer `0x3a` instead of the
+  authored `use_icon`/`locked_icon`. Troika's FGD names the key "Block if Wanted":
+  *"When player is wanted by cops, this door cannot be open."*
+  **Uncertain**: whether the `Open`/`Close`/`Toggle` inputs pass the same gate — only
+  `Use` is traced. Decompiling `LAB_1000ac4f`/`LAB_1000ecd7`/`LAB_100024f0` would settle
+  it, and decompiling `FUN_101cebc0` at this call site would recover what the blocked
+  attempt shows the player.
+  PASSABLE (`0x8`) changes
   solidity, not usability: player/physics collision is disabled while use/debug traces
   can still address the door.
 - **Button — `CBaseButton`**: press-in (`speed`, `lip`-adjusted) → `TriggerAndWait`
