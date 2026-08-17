@@ -748,7 +748,10 @@ conventional pose and only the storage frame disagreed. Under
 how each of the two cases is written.
 
 This stage is **correctness, not feel** — the irreducible delta between reading VtMB's rigs and not
-reading them.
+reading them. Its size is measurable on the cast: through `A_dance01` on `goth_female`, an arm
+swung 71 degrees from bind drives `Bip01 L Shoulder` 47 degrees and `Bip01 L Elbow` 46, and those
+same helpers are what a graph-less pose holds at bind — which is why they carry the skin weight of
+the deltoid seam whenever an evaluation skips this node.
 
 Stock Unreal skeletal controls do not count as another VtMB evaluator. They may consume a
 baked-native rig recipe, just as an IK node consumes targets, provided the frame path needs no

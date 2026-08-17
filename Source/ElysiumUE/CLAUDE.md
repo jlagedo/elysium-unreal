@@ -462,7 +462,12 @@ Hard-won, non-obvious, and easy to undo:
 - **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
   whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
   blended pose rather than being baked into the clip, so the preview is showing what the asset says
-  and not a bake defect.
+  and not a bake defect. The same blind spot belongs to **any** graph-less evaluation, including a
+  test that poses a `UPoseableMeshComponent` and skins it: every driven helper holds its bind while
+  its control swings, so deformation measured that way tears at the deltoid and elbow and blames
+  bones nothing drove. `Instrument.Elysium.DancerDecodeProbe3` measures both variants — the pose as
+  skinned, and the same pose with `FElysiumCompositionRig` applied — because the difference between
+  the two is the whole distance between a bake question and a measurement one.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.

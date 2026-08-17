@@ -18,24 +18,6 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
-### LIFE1 The bake closes
-
-The asset stack becomes complete and self-guarding. The stack itself stands — one body
-`USkeleton` per compatible named bone tree, shared banks baked once and reached through
-compatible-skeleton and `RetargetSource`/`OrientAndScale` metadata, a `USkeletalMesh` per model
-with its exact authored bind and morph targets, a compressed `UAnimSequence` per clip, masks as
-named `UBlendProfile`s, the autolayer binding in `blends/<stem>.json` — and what remains is its
-last gap:
-
-- **The `A_dance01` arm seam.** Edge stretch past 5× on `goth_female`/`tremere_female_armor_0`,
-  3.59× on `female_dancer_2`, clean on the Joy idles.
-  `Instrument.Elysium.DancerDecodeProbe3` reports per-bone remap state and per-edge deformation;
-  the open question is which bones carry the stretch, then whether their translations, rotations
-  or skin influences differ from Joy's.
-
-*Acceptance:* every character loads from the baked mount with no runtime glTF and a missed stem
-fails by name; the facial morph-target contract holds.
-
 ### LIFE2 The action catalog on the mount
 
 The extraction RE is closed (RE37); its output still lives only as research artifacts under
@@ -114,7 +96,7 @@ binding metadata are `docs/architecture/wielded-weapon-integration.md`; the corp
 working tree (leader-pose follower, `(classname, sex)` resolution, the green-room `gr_wield`
 lane); what remains is making it *true*:
 
-- **Tracking through the prop bone.** With LIFE1's prop-bone channels baked, verify the
+- **Tracking through the prop bone.** With the prop-bone channels baked, verify the
   follower actually rides the animated prop bone / hand through locomotion and a swing. The
   observed defect: the weapon renders at a fixed offset while the body animates, and the
   install check reads 0.0000 because it compares transforms through the leader array — the same
@@ -145,7 +127,7 @@ puts its geometry in the correct hand on a male and a female body; the weapon tr
 through locomotion and through a swing with no separate drive call; the honest check passes on
 an animated base and fails when the prop-bone channels are removed; holstering removes the
 model; first person suppresses it and third person restores it without a rebuild; the pose is
-correct in the Content Browser preview, not only in our runtime. *Deps:* LIFE0, LIFE1; LIFE2
+correct in the Content Browser preview, not only in our runtime. *Deps:* LIFE0; LIFE2
 for the per-weapon translation half.
 
 ### LIFE5 Reactions and combat actions

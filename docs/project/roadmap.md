@@ -79,7 +79,7 @@ rule 3 governs what happens next:
 4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
-5. **LIFE1 → LIFE4** — the bake's remaining guards and the action catalog, then a drawn weapon
+5. **LIFE2 → LIFE4** — the action catalog, one resolver for the whole cast, then a drawn weapon
    visible in the hand through a swing → [plans/animation.md](plans/animation.md).
 
 ## P0 — Ground truth & de-risk
@@ -234,14 +234,16 @@ The ladder:
   misses, a grid label that stands as a blend space or names its miss, the aim-grid neutral
   adjudicated correct at its owner and guarded at rest, and the standing corpus verified current
   (166 models, 527 blend spaces, 0 orphans).
-- [~] **[LIFE1 The bake closes](plans/animation.md)** — the cardinality invariant is proved
+- [x] **LIFE1 The bake closes** — the cardinality invariant is proved
   offline before the bake (7,142 bank packages over 136 banks, exactly what the mount carries);
   the seven wield mounts keep their channels on every body and bank clip, verifier-asserted per
   family; the orphan census runs in the same preflight, routing every bank clip and grid over the
   include DAG (3,522 of 3,755 clips across 55 body banks reachable, the 233 rest all shadowed
   duplicates) and refusing a declaring host no body reaches or a reached grid that stands as no
   blend space; retail's between-key read adjudicated LINEAR against the banked corpus and closed
-  as a fact, no divergence; the `A_dance01` seam open.
+  as a fact, no divergence; the `A_dance01` seam adjudicated at
+  `Instrument.Elysium.DancerDecodeProbe3` as a graph-less measurement rather than a bake defect,
+  the clip's blamed bones carrying Joy's own bind translations and skin weights.
 - [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule
   artifacts, events and the transition graph exported, joined and baked; deletes the 5-row stub.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed

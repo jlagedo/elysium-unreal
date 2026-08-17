@@ -45,21 +45,6 @@ engine gotchas in `Source/ElysiumUE/CLAUDE.md`.
 - **Mount/sidecar verification.** A single scoped run of the character bake verifier; cheap,
   read-only. Good first session of a working day.
 
-### LIFE1 — the bake closes (direct sessions; pipeline-side; scope discipline matters most here)
-
-No plan mode needed, but every bullet can tempt a session into a full re-bake — pin the scope
-in each prompt.
-
-- **Prop-bone channels.** Two-phase prompt: *"First verify by reading one baked biped base
-  clip's track list for the prop-bone chain; report before changing anything."* Then the bake
-  change, then re-export **one named stem** and prove the tracks exist. The full-cast re-bake
-  is a separate, owner-accepted operation.
-- **Orphan census.** Exporter-side logic plus a preflight failure path; validated by running
-  the planner against the existing corpus, no bake needed.
-- **`A_dance01` seam.** Instrumented investigation via the existing
-  `Instrument.Elysium.DancerDecodeProbe3`; give the session the four named bodies and the
-  question as stated in the plan, nothing more.
-
 ### LIFE2 — the action catalog (plan mode first, then one session per artifact)
 
 The one rung where design review pays. Session 1 in **plan mode**: read LIFE2, the artifact
@@ -81,7 +66,7 @@ new capture is proposing an owner call, not blocked.
   state+asset for every locomotion request. Have it use the selection record as its own
   evidence — that is what the record exists for.
 
-### LIFE4 — weapons in hands (plan-mode-light; green-room heavy; needs LIFE1's prop bones)
+### LIFE4 — weapons in hands (plan-mode-light; green-room heavy; needs the baked prop bones)
 
 One short plan-mode pass is worth it only for the check rewrite (what "rendered vs wearer
 hand over time" measures and where it runs); the rest is direct. Order inside the rung:

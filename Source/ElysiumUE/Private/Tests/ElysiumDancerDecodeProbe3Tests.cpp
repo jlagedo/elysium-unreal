@@ -30,6 +30,7 @@
 #include "UObject/Package.h"
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumSkeletalSource.h"
 
 static constexpr EAutomationTestFlags GElysiumDancerDecodeProbe3Flags =
@@ -74,12 +75,21 @@ namespace ElysiumProbe3
 			TEXT("correct_today") },
 	};
 
+	// The first five are the chain the retarget experiment reads; index 0 is `Bip01 L UpperArm`,
+	// which the baseline guard below names by position. The rest are the limb HELPERS -- every one
+	// of them a `ProcType == 1` driven bone on the two bodies that fold -- so the per-bone remap
+	// rows cover the bones the seam attribution actually blames rather than only their controls.
 	const FName GFocusedBones[] = {
 		TEXT("Bip01 L UpperArm"),
 		TEXT("Bip01 L Forearm"),
 		TEXT("Bip01 L Hand"),
 		TEXT("Bip01 R UpperArm"),
 		TEXT("Bip01 R Forearm"),
+		TEXT("Bip01 L Shoulder"),
+		TEXT("Bip01 R Shoulder"),
+		TEXT("Bip01 L Elbow"),
+		TEXT("Bip01 R Elbow"),
+		TEXT("Bip01 L Bicep"),
 	};
 
 	FString VectorText(const FVector& Value)
@@ -585,6 +595,86 @@ namespace ElysiumProbe3
 
 	// --- deformation ----------------------------------------------------------------------------
 
+	/** One influence slot of one render vertex, weight re-normalised over the slots it carries. */
+	struct FVertexInfluence
+	{
+		FName Bone;
+		float Weight = 0.f;
+	};
+
+	struct FStretchEdge
+	{
+		float Ratio = 0.f;
+		float RefDistance = 0.f;
+		uint32 A = 0;
+		uint32 B = 0;
+		TArray<FVertexInfluence> Influences;
+	};
+
+	/**
+	 * Which BONES the stretched edges belong to.
+	 *
+	 * An edge ratio names a pair of vertices, and a vertex is only ever moved by the bones weighted
+	 * into it -- so the bones carrying a seam are recoverable from the skin weights, exactly, with
+	 * no guess about which part of the arm the number came from.
+	 */
+	struct FStretchAttribution
+	{
+		TArray<FStretchEdge> Worst;
+		/** Summed influence weight over every edge above 2x, per bone. */
+		TMap<FName, float> WeightAbove2x;
+		int32 EdgesAbove2x = 0;
+	};
+
+	/** Render-vertex influences, resolved through the section bone map to mesh bone names. */
+	void InfluencesOf(const FSkeletalMeshLODRenderData& LODRenderData,
+		const FSkinWeightVertexBuffer& SkinWeights, const FReferenceSkeleton& MeshRef,
+		const uint32 Vertex, TArray<FVertexInfluence>& Out)
+	{
+		const FSkelMeshRenderSection* Section = nullptr;
+		for (const FSkelMeshRenderSection& Candidate : LODRenderData.RenderSections)
+		{
+			if (Vertex >= Candidate.BaseVertexIndex
+				&& Vertex < Candidate.BaseVertexIndex + Candidate.NumVertices)
+			{
+				Section = &Candidate;
+				break;
+			}
+		}
+		if (Section == nullptr)
+		{
+			return;
+		}
+		// The raw weights are fixed point and their scale differs by skin-weight buffer format, so
+		// they are normalised over the slots rather than divided by an assumed maximum.
+		TArray<FVertexInfluence> Slots;
+		float Total = 0.f;
+		const uint32 MaxInfluences = SkinWeights.GetMaxBoneInfluences();
+		for (uint32 Influence = 0; Influence < MaxInfluences; ++Influence)
+		{
+			const float Raw = static_cast<float>(SkinWeights.GetBoneWeight(Vertex, Influence));
+			if (Raw <= 0.f)
+			{
+				continue;
+			}
+			const int32 SectionBone = static_cast<int32>(SkinWeights.GetBoneIndex(Vertex, Influence));
+			if (!Section->BoneMap.IsValidIndex(SectionBone))
+			{
+				continue;
+			}
+			FVertexInfluence Slot;
+			Slot.Bone = MeshRef.GetBoneName(Section->BoneMap[SectionBone]);
+			Slot.Weight = Raw;
+			Total += Raw;
+			Slots.Add(MoveTemp(Slot));
+		}
+		for (FVertexInfluence& Slot : Slots)
+		{
+			Slot.Weight = Total > 0.f ? Slot.Weight / Total : 0.f;
+			Out.Add(MoveTemp(Slot));
+		}
+	}
+
 	struct FSkinMetrics
 	{
 		bool bValid = false;
@@ -593,14 +683,27 @@ namespace ElysiumProbe3
 		float ExactSkinDistance = 0.f;
 		float ExactRatio = 0.f;
 		float MaxRatio = 0.f;
+		/**
+		 * The same maximum over edges at least half a centimetre long.
+		 *
+		 * The ratio divides by the reference edge, and this cast's meshes carry edges under two
+		 * millimetres -- so the unrestricted maximum can be produced by a sub-millimetre edge moving
+		 * a centimetre, which is not a seam anybody can see. Reported beside the raw maximum rather
+		 * than in place of it, because which one moved is itself the diagnosis.
+		 */
+		float MaxRatioCoarse = 0.f;
 		float P99Ratio = 0.f;
 		int32 Above2x = 0;
 		int32 Above5x = 0;
 		int32 Edges = 0;
 	};
 
+	/** Edges shorter than this are excluded from `MaxRatioCoarse`, in centimetres. */
+	constexpr float CoarseEdgeCm = 0.5f;
+
 	FSkinMetrics SkinAndMeasure(UWorld* World, USkeletalMesh* Mesh,
-		const TArray<FTransform>& MeshLocals, bool bExactPair)
+		const TArray<FTransform>& MeshLocals, bool bExactPair,
+		FStretchAttribution* Attribution = nullptr)
 	{
 		FSkinMetrics Metrics;
 		FSkeletalMeshRenderData* RenderData = Mesh->GetResourceForRendering();
@@ -662,8 +765,52 @@ namespace ElysiumProbe3
 				const float Ratio = FVector3f::Distance(Skinned[A], Skinned[B]) / RefDistance;
 				Ratios.Add(Ratio);
 				Metrics.MaxRatio = FMath::Max(Metrics.MaxRatio, Ratio);
+				if (RefDistance >= CoarseEdgeCm)
+				{
+					Metrics.MaxRatioCoarse = FMath::Max(Metrics.MaxRatioCoarse, Ratio);
+				}
 				Metrics.Above2x += Ratio > 2.f ? 1 : 0;
 				Metrics.Above5x += Ratio > 5.f ? 1 : 0;
+				if (Attribution != nullptr && Ratio > 2.f)
+				{
+					FStretchEdge Hot;
+					Hot.Ratio = Ratio;
+					Hot.RefDistance = RefDistance;
+					Hot.A = A;
+					Hot.B = B;
+					Attribution->Worst.Add(MoveTemp(Hot));
+				}
+			}
+		}
+
+		if (Attribution != nullptr)
+		{
+			Attribution->EdgesAbove2x = Attribution->Worst.Num();
+			Attribution->Worst.Sort([](const FStretchEdge& A, const FStretchEdge& B)
+				{
+					return A.Ratio > B.Ratio;
+				});
+			// Every >2x edge is tallied; only the worst few keep their influence list, because the
+			// list is what a reader inspects and the tally is what a reader counts.
+			constexpr int32 WorstKept = 8;
+			for (int32 Index = 0; Index < Attribution->Worst.Num(); ++Index)
+			{
+				FStretchEdge& Hot = Attribution->Worst[Index];
+				TArray<FVertexInfluence> Both;
+				InfluencesOf(LODRenderData, *SkinWeights, Mesh->GetRefSkeleton(), Hot.A, Both);
+				InfluencesOf(LODRenderData, *SkinWeights, Mesh->GetRefSkeleton(), Hot.B, Both);
+				for (const FVertexInfluence& Slot : Both)
+				{
+					Attribution->WeightAbove2x.FindOrAdd(Slot.Bone) += Slot.Weight;
+				}
+				if (Index < WorstKept)
+				{
+					Hot.Influences = MoveTemp(Both);
+				}
+			}
+			if (Attribution->Worst.Num() > WorstKept)
+			{
+				Attribution->Worst.SetNum(WorstKept);
 			}
 		}
 		Ratios.Sort();
@@ -712,12 +859,114 @@ namespace ElysiumProbe3
 	{
 		Test.AddInfo(FString::Printf(
 			TEXT("PROBE3|stage=%s|variant=%s|mesh=%s|clip=%s|valid=%d|edges=%d|max_ratio=%.9f|")
+			TEXT("max_ratio_edges_over_%.1fcm=%.9f|")
 			TEXT("p99_ratio=%.9f|above_2x=%d|above_5x=%d|exact_valid=%d|exact_ref=%.9f|")
 			TEXT("exact_skin=%.9f|exact_ratio=%.9f|cpu_final=PROBED|gpu=NOT_PROBED"),
 			Stage, Variant, MeshLabel, ClipLabel, Metrics.bValid ? 1 : 0, Metrics.Edges,
-			Metrics.MaxRatio, Metrics.P99Ratio, Metrics.Above2x, Metrics.Above5x,
+			Metrics.MaxRatio, CoarseEdgeCm, Metrics.MaxRatioCoarse,
+			Metrics.P99Ratio, Metrics.Above2x, Metrics.Above5x,
 			Metrics.bExactValid ? 1 : 0, Metrics.ExactRefDistance, Metrics.ExactSkinDistance,
 			Metrics.ExactRatio));
+	}
+
+	// --- the seam, attributed to bones --------------------------------------------------------
+
+	/**
+	 * Replace every driven bone's local with the axis-interpolation rule's answer, exactly as
+	 * `FAnimNode_ElysiumAxisInterp` does when a body is posed by the graph.
+	 *
+	 * The node reads the control's local out of component space and writes the driven bone back into
+	 * it; here the pose already IS a local array, so the same rule reads and writes it directly.
+	 * Rules run in mesh bone order for the same reason the node sorts by compact pose index: a
+	 * driven bone may itself control another.
+	 */
+	int32 ApplyCompositionRig(const FElysiumCompositionRig& Rig, const FReferenceSkeleton& MeshRef,
+		TArray<FTransform>& MeshLocals, int32& OutUnresolved)
+	{
+		OutUnresolved = 0;
+		/** (driven mesh bone, control mesh bone, rule index), for the rules this mesh can run. */
+		TArray<TTuple<int32, int32, int32>> Ordered;
+		Ordered.Reserve(Rig.AxisRules.Num());
+		for (int32 RuleIndex = 0; RuleIndex < Rig.AxisRules.Num(); ++RuleIndex)
+		{
+			const FElysiumAxisInterpRule& Rule = Rig.AxisRules[RuleIndex];
+			const int32 Bone = MeshRef.FindBoneIndex(Rule.Bone);
+			const int32 Control = MeshRef.FindBoneIndex(Rule.Control);
+			if (Bone == INDEX_NONE || Control == INDEX_NONE || !MeshLocals.IsValidIndex(Bone)
+				|| !MeshLocals.IsValidIndex(Control))
+			{
+				++OutUnresolved;
+				continue;
+			}
+			Ordered.Add(MakeTuple(Bone, Control, RuleIndex));
+		}
+		Ordered.Sort([](const TTuple<int32, int32, int32>& A, const TTuple<int32, int32, int32>& B)
+			{
+				return A.Get<0>() < B.Get<0>();
+			});
+		for (const TTuple<int32, int32, int32>& Entry : Ordered)
+		{
+			MeshLocals[Entry.Get<0>()] = Rig.EvaluateRule(Rig.AxisRules[Entry.Get<2>()],
+				MeshLocals[Entry.Get<1>()].GetRotation());
+		}
+		return Ordered.Num();
+	}
+
+	FString InfluenceText(const TArray<FVertexInfluence>& Influences)
+	{
+		TArray<FString> Parts;
+		for (const FVertexInfluence& Slot : Influences)
+		{
+			Parts.Add(FString::Printf(TEXT("%s=%.2f"), *Slot.Bone.ToString(), Slot.Weight));
+		}
+		return Parts.IsEmpty() ? TEXT("NONE") : FString::Join(Parts, TEXT(","));
+	}
+
+	void LogAttribution(FAutomationTestBase& Test, const TCHAR* Stage, const TCHAR* Variant,
+		const TCHAR* MeshLabel, const TCHAR* ClipLabel, const FStretchAttribution& Attribution,
+		const TArray<FTransform>& Posed, const FReferenceSkeleton& MeshRef,
+		const FElysiumCompositionRig& Rig)
+	{
+		for (const FStretchEdge& Hot : Attribution.Worst)
+		{
+			Test.AddInfo(FString::Printf(
+				TEXT("PROBE3|stage=%s_EDGE|variant=%s|mesh=%s|clip=%s|ratio=%.6f|ref_cm=%.6f|")
+				TEXT("vertices=%u/%u|influences=%s"),
+				Stage, Variant, MeshLabel, ClipLabel, Hot.Ratio, Hot.RefDistance, Hot.A, Hot.B,
+				*InfluenceText(Hot.Influences)));
+		}
+
+		// Sorted by blamed weight, so the first rows are the bones the seam is made of.
+		TArray<TPair<FName, float>> Blame;
+		for (const TPair<FName, float>& Entry : Attribution.WeightAbove2x)
+		{
+			Blame.Add(Entry);
+		}
+		Blame.Sort([](const TPair<FName, float>& A, const TPair<FName, float>& B)
+			{
+				return A.Value > B.Value;
+			});
+		int32 Row = 0;
+		for (const TPair<FName, float>& Blamed : Blame)
+		{
+			if (Row++ >= 12)
+			{
+				break;
+			}
+			const int32 Bone = MeshRef.FindBoneIndex(Blamed.Key);
+			const bool bDriven = Rig.FindRule(Blamed.Key) != nullptr;
+			const FTransform& Bind = MeshRef.GetRefBonePose().IsValidIndex(Bone)
+				? MeshRef.GetRefBonePose()[Bone] : FTransform::Identity;
+			const FTransform& Local = Posed.IsValidIndex(Bone) ? Posed[Bone] : FTransform::Identity;
+			Test.AddInfo(FString::Printf(
+				TEXT("PROBE3|stage=%s_BONE|variant=%s|mesh=%s|clip=%s|bone=%s|blamed_weight=%.3f|")
+				TEXT("procedurally_driven=%d|rotation_vs_mesh_bind_deg=%.6f|")
+				TEXT("translation_vs_mesh_bind_cm=%.6f"),
+				Stage, Variant, MeshLabel, ClipLabel, *Blamed.Key.ToString(), Blamed.Value,
+				bDriven ? 1 : 0,
+				FMath::RadiansToDegrees(Local.GetRotation().AngularDistance(Bind.GetRotation())),
+				FVector::Distance(Local.GetTranslation(), Bind.GetTranslation())));
+		}
 	}
 }
 
@@ -926,6 +1175,197 @@ bool FElysiumDancerDecodeProbe3Test::RunTest(const FString&)
 	if (!bBaselineClean)
 	{
 		AddWarning(TEXT("PROBE3|stage=GUARD_VERDICT|status=BASELINE_DID_NOT_REPRODUCE"));
+	}
+
+	// =============================================================================================
+	// SEAM -- which bones carry the stretch, and what a posed body does about them
+	// =============================================================================================
+	//
+	// Two questions, both answered as numbers rather than as an argument.
+	//
+	// WHICH BONES: an edge ratio names two vertices, and a vertex moves only by the bones weighted
+	// into it, so the skin weights attribute every stretched edge exactly.
+	//
+	// AGAINST WHAT: everything above skins through a `UPoseableMeshComponent`, which runs no
+	// animation graph -- so it never applies the axis-interpolation stage a posed body runs
+	// (`FAnimNode_ElysiumAxisInterp`, `docs/architecture/animation-architecture.md` section 5), and
+	// every limb helper holds its BIND while its control swings. That is the same condition as the
+	// Content Browser preview, which `Source/ElysiumUE/CLAUDE.md` already records as not a bake
+	// defect. Measuring the same pose both ways is what separates the two readings.
+
+	for (int32 SubjectIndex = 0; SubjectIndex < Meshes.Num(); ++SubjectIndex)
+	{
+		USkeletalMesh* Mesh = Meshes[SubjectIndex];
+		const TCHAR* Label = GSubjects[SubjectIndex].Label;
+		const FReferenceSkeleton& MeshRef = Mesh->GetRefSkeleton();
+
+		FElysiumCompositionRig Rig;
+		Rig.Stem = Label;
+		FString RigError;
+		const bool bRigLoaded =
+			Rig.LoadAxisRules(FString::Printf(TEXT("procedural/%s.json"), Label), RigError);
+		AddInfo(FString::Printf(
+			TEXT("PROBE3|stage=SEAM_RIG|mesh=%s|loaded=%d|axis_rules=%d|error=%s"),
+			Label, bRigLoaded ? 1 : 0, Rig.AxisRules.Num(),
+			bRigLoaded ? TEXT("NONE") : *RigError));
+
+		struct FSeamClip
+		{
+			const TCHAR* Label;
+			const FEvalResult* Result;
+		};
+		const FSeamClip SeamClips[] = {
+			{ TEXT("Joy"), &BaselineJoy[SubjectIndex] },
+			{ TEXT("Dance"), &BaselineDance[SubjectIndex] },
+		};
+		for (const FSeamClip& Clip : SeamClips)
+		{
+			if (Clip.Result == nullptr || !Clip.Result->bValid)
+			{
+				AddWarning(FString::Printf(
+					TEXT("PROBE3|stage=SEAM|mesh=%s|clip=%s|status=NOT_PROBED|reason=no_pose"),
+					Label, Clip.Label));
+				continue;
+			}
+
+			FStretchAttribution Bare;
+			const FSkinMetrics BareMetrics = SkinAndMeasure(ProbeWorld, Mesh,
+				Clip.Result->MeshLocals, SubjectIndex == 0, &Bare);
+			LogMetrics(*this, TEXT("SEAM"), TEXT("no_composition"), Label, Clip.Label, BareMetrics);
+			LogAttribution(*this, TEXT("SEAM"), TEXT("no_composition"), Label, Clip.Label, Bare,
+				Clip.Result->MeshLocals, MeshRef, Rig);
+
+			if (Rig.AxisRules.IsEmpty())
+			{
+				continue;
+			}
+
+			TArray<FTransform> Driven = Clip.Result->MeshLocals;
+			int32 Unresolved = 0;
+			const int32 Applied = ApplyCompositionRig(Rig, MeshRef, Driven, Unresolved);
+			AddInfo(FString::Printf(
+				TEXT("PROBE3|stage=SEAM_APPLY|mesh=%s|clip=%s|rules_applied=%d|rules_unresolved=%d"),
+				Label, Clip.Label, Applied, Unresolved));
+
+			FStretchAttribution DrivenBlame;
+			const FSkinMetrics DrivenMetrics =
+				SkinAndMeasure(ProbeWorld, Mesh, Driven, SubjectIndex == 0, &DrivenBlame);
+			LogMetrics(*this, TEXT("SEAM"), TEXT("composition_applied"), Label, Clip.Label,
+				DrivenMetrics);
+			LogAttribution(*this, TEXT("SEAM"), TEXT("composition_applied"), Label, Clip.Label,
+				DrivenBlame, Driven, MeshRef, Rig);
+
+			// How far the rule moved each driven bone, beside how far its control travelled. A
+			// correction near zero on a control that swung is the helper holding its bind.
+			for (const FElysiumAxisInterpRule& Rule : Rig.AxisRules)
+			{
+				const int32 Bone = MeshRef.FindBoneIndex(Rule.Bone);
+				const int32 Control = MeshRef.FindBoneIndex(Rule.Control);
+				if (!Driven.IsValidIndex(Bone) || !Clip.Result->MeshLocals.IsValidIndex(Bone)
+					|| !Clip.Result->MeshLocals.IsValidIndex(Control))
+				{
+					continue;
+				}
+				const FQuat Undriven = Clip.Result->MeshLocals[Bone].GetRotation();
+				const FQuat Corrected = Driven[Bone].GetRotation();
+				const FQuat BoneBind = MeshRef.GetRefBonePose()[Bone].GetRotation();
+				const FQuat ControlBind = MeshRef.GetRefBonePose()[Control].GetRotation();
+				const FQuat ControlLocal = Clip.Result->MeshLocals[Control].GetRotation();
+				AddInfo(FString::Printf(
+					TEXT("PROBE3|stage=SEAM_DRIVEN|mesh=%s|clip=%s|bone=%s|control=%s|")
+					TEXT("undriven_vs_bind_deg=%.6f|driven_vs_bind_deg=%.6f|correction_deg=%.6f|")
+					TEXT("control_vs_bind_deg=%.6f"),
+					Label, Clip.Label, *Rule.Bone.ToString(), *Rule.Control.ToString(),
+					FMath::RadiansToDegrees(Undriven.AngularDistance(BoneBind)),
+					FMath::RadiansToDegrees(Corrected.AngularDistance(BoneBind)),
+					FMath::RadiansToDegrees(Corrected.AngularDistance(Undriven)),
+					FMath::RadiansToDegrees(ControlLocal.AngularDistance(ControlBind))));
+			}
+		}
+	}
+
+	// =============================================================================================
+	// SEAM_SURVEY -- does the 5x flag pick A_dance01 out of its own bank?
+	// =============================================================================================
+	//
+	// A threshold that fires on one clip is a finding; a threshold that fires on half the corpus is
+	// an instrument. The same measurement runs over a stride sample of the bank A_dance01 ships in,
+	// on one of the two bodies the seam was reported on, and reports where A_dance01 lands among
+	// them. Additives are skipped: a delta is not a pose, and skinning one measures nothing.
+	{
+		const int32 SurveySubject = 1;		// goth_female
+		USkeletalMesh* SurveyMesh = Meshes[SurveySubject];
+		IAssetRegistry& SurveyRegistry =
+			FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+		const FString BankPath = FString(GAnimPath) / TEXT("_banks") / GMiscStem;
+		SurveyRegistry.ScanPathsSynchronous({ BankPath }, /*bForceRescan=*/false);
+
+		FARFilter Filter;
+		Filter.PackagePaths.Add(FName(*BankPath));
+		Filter.bRecursivePaths = true;
+		Filter.ClassPaths.Add(UAnimSequence::StaticClass()->GetClassPathName());
+		TArray<FAssetData> Assets;
+		SurveyRegistry.GetAssets(Filter, Assets);
+		Assets.Sort([](const FAssetData& A, const FAssetData& B)
+			{
+				return A.GetObjectPathString() < B.GetObjectPathString();
+			});
+
+		const int32 Budget = 48;
+		const int32 Stride = FMath::Max(1, Assets.Num() / FMath::Max(1, Budget));
+		TArray<TPair<float, FString>> Measured;
+		float DanceRatio = 0.f;
+		for (int32 Index = 0; Index < Assets.Num(); ++Index)
+		{
+			const bool bIsDance = Assets[Index].AssetName == FName(TEXT("A_dance01"));
+			if (Index % Stride != 0 && !bIsDance)
+			{
+				continue;
+			}
+			UAnimSequence* Sequence = Cast<UAnimSequence>(Assets[Index].GetAsset());
+			if (Sequence == nullptr || Sequence->IsValidAdditive())
+			{
+				continue;
+			}
+			FEvalResult Result;
+			if (!EvaluateOn(SurveyMesh, Sequence, Result))
+			{
+				continue;
+			}
+			const FSkinMetrics Metrics =
+				SkinAndMeasure(ProbeWorld, SurveyMesh, Result.MeshLocals, false);
+			Measured.Add(TPair<float, FString>(Metrics.MaxRatio, Assets[Index].AssetName.ToString()));
+			if (bIsDance)
+			{
+				DanceRatio = Metrics.MaxRatio;
+			}
+			AddInfo(FString::Printf(
+				TEXT("PROBE3|stage=SEAM_SURVEY_CLIP|mesh=%s|clip=%s|max_ratio=%.6f|")
+				TEXT("max_ratio_edges_over_%.1fcm=%.6f|above_5x=%d"),
+				GSubjects[SurveySubject].Label, *Assets[Index].AssetName.ToString(),
+				Metrics.MaxRatio, CoarseEdgeCm, Metrics.MaxRatioCoarse, Metrics.Above5x));
+		}
+
+		TArray<float> Ratios;
+		for (const TPair<float, FString>& Row : Measured)
+		{
+			Ratios.Add(Row.Key);
+		}
+		Ratios.Sort();
+		int32 Above5x = 0;
+		int32 WorseThanDance = 0;
+		for (const float Ratio : Ratios)
+		{
+			Above5x += Ratio > 5.f ? 1 : 0;
+			WorseThanDance += Ratio > DanceRatio ? 1 : 0;
+		}
+		AddInfo(FString::Printf(
+			TEXT("PROBE3|stage=SEAM_SURVEY|mesh=%s|bank=%s|clips_in_bank=%d|sampled=%d|stride=%d|")
+			TEXT("median_max_ratio=%.6f|clips_above_5x=%d|dance01_max_ratio=%.6f|")
+			TEXT("clips_stretching_more_than_dance01=%d"),
+			GSubjects[SurveySubject].Label, GMiscStem, Assets.Num(), Ratios.Num(), Stride,
+			Ratios.IsEmpty() ? 0.f : Ratios[Ratios.Num() / 2], Above5x, DanceRatio,
+			WorseThanDance));
 	}
 
 	// =============================================================================================
