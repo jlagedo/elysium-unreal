@@ -1,0 +1,838 @@
+[font face="arial"]
+[font size="6"][b]The definitive guide to VtMB MDL v2531[/b][/font]
+
+[font size="5"][b]What Bloodlines stores, how the retail game evaluates it, how it differs from later Source, and what existing tools actually recover[/b][/font]
+
+Vampire: The Masquerade — Bloodlines does not use the ordinary Half-Life 2 model format that most Source documentation describes. Its [font face="courier new"]IDST[/font] models identify themselves as version [b]2531[/b] and preserve a mixture of early Source, HL2-beta-era animation storage, and Troika-specific extensions. The family resemblance is real, but copying modern Source structures produces parsers that can appear successful while reading important fields at the wrong offsets, skipping whole deformation systems, or exporting a pose that the retail game never actually draws.
+
+This guide consolidates the complete evidence-backed picture of that format: model and topology files, geometry, skeletons, compressed animation, sequence selection, shared animation libraries, layersQ, transitions, events, procedural bones, secondary motion, facial animation, eyes, lipsync, and first-person viewmodels. It also states exactly where Crowbar, VAMPTools, the Bloodlines SDK, MDL Formatter, SourceIO, generic Source tooling, and the recent experimental Blender animation writer fit.
+
+“Definitive” here means that settled facts, strong structural conclusions, tool approximations, and remaining unknowns are kept separate. It does not mean that an unexplained field is assigned a convenient modern-Source name or that one successful exported animation is treated as proof of a complete compiler.
+
+No game-derived files are needed to use this document as a specification, and none are redistributed here.
+
+[hr]
+
+[font size="5"][b]1. The four questions that must be kept separate[/b][/font]
+
+Most disagreement about Bloodlines models comes from treating four different accomplishments as if they were the same.
+
+[ol type="1"][li][b]Parsing the container[/b] means finding the correct structures, strides, counts, offsets, and sibling files.[/li][li][b]Extracting authored content[/b] means recovering geometry, skeletons, bind data, materials, sequences, compressed bone channels, flexes, and metadata.[/li][li][b]Reproducing the retail result[/b] means evaluating the same selection, blending, hierarchy, procedural, secondary-motion, facial, and render stages in the same order.[/li][li][b]Authoring native files[/b] means serializing new or modified content into a valid v2531 model that the original game can load and play.[/li][/ol]
+
+A tool may do one of these very well without doing the others. A correct static mesh proves neither animation decoding nor runtime pose equivalence. A plausible SMD proves neither layers nor procedural bones. A donor-file animation patcher proves real authoring, but not a general new-model compiler.
+
+That distinction is the foundation of the entire guide.
+
+[hr]
+
+[font size="5"][b]2. The shortest accurate description of the format[/b][/font]
+
+Bloodlines models use:
+
+[ul type="disc"][li]an [font face="courier new"]IDST[/font] [b]version 2531[/b] [font face="courier new"].mdl[/font] containing the header, bones, sequences, animation channels, materials, embedded vertices, flex data, eye records, and Troika extensions;[/li][li]a sibling [font face="courier new"].dx80.vtx[/font] or [font face="courier new"].dx7_2bone.vtx[/font] containing the optimized strip/index topology;[/li][li]an optional [font face="courier new"].phy[/font] containing VPhysics collision and ragdoll data;[/li][li][font face="courier new"].vmt[/font] material definitions and Bloodlines' [font face="courier new"].tth[/font]/[font face="courier new"].ttz[/font] texture pair;[/li][li]other [font face="courier new"].mdl[/font] files included as shared animation libraries.[/li][/ul]
+
+The most important first difference from later Source is simple:
+
+[quote]
+[b]There is no [font face="courier new"].vvd[/font]. Bloodlines stores vertex data inside the [font face="courier new"].mdl[/font].[/b]
+[/quote]
+
+The second is just as important:
+
+[quote]
+[b]VtMB animation is not modern Source's linked [font face="courier new"]mstudioanim_t[/font] representation. It uses a fixed 32-byte record per bone and seven classic RLE channels.[/b]
+[/quote]
+
+The third explains many apparently “almost correct” exports:
+
+[quote]
+[b]The final pose is not just the decoded clip. Retail adds selection, blend grids, masks, additive layers, transitions, included-model remapping, split hierarchy inheritance, AxisInterp, persistent partial bone updates, and secondary motion before or after skinning.[/b]
+[/quote]
+
+[hr]
+
+[font size="5"][b]3. File family and identity rules[/b][/font]
+
+[font size="4"][b]3.1 The [font face="courier new"].mdl[/font][/b][/font]
+
+The header is [b]424 bytes[/b]. The first bone begins immediately afterward on every shipped model that has bones.
+
+Key identity fields are:
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][td style="padding:3px;"][b]Meaning[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"][font face="courier new"]char[4] ID[/font][/td][td style="padding:3px;"][font face="courier new"]IDST[/font][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"][font face="courier new"]int Version[/font][/td][td style="padding:3px;"][font face="courier new"]2531[/font][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]8[/font][/td][td style="padding:3px;"][font face="courier new"]uint Checksum[/font][/td][td style="padding:3px;"]Must agree with sibling model files[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]12[/font][/td][td style="padding:3px;"][font face="courier new"]char Name[128][/font][/td][td style="padding:3px;"]Internal model path[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]140[/font][/td][td style="padding:3px;"][font face="courier new"]int Length[/font][/td][td style="padding:3px;"]Complete [font face="courier new"].mdl[/font] image length[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]144[/font][/td][td style="padding:3px;"][font face="courier new"]Vector GlobalScale[/font][/td][td style="padding:3px;"][font face="courier new"](0.5, 0.5, 0.5)[/font] in shipped content[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]240/244[/font][/td][td style="padding:3px;"][font face="courier new"]NumBones/BoneIndex[/font][/td][td style="padding:3px;"]160-byte bones[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]264/268[/font][/td][td style="padding:3px;"][font face="courier new"]NumLocalAnims/LocalAnimIndex[/font][/td][td style="padding:3px;"]72-byte animation descriptors[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]272/276[/font][/td][td style="padding:3px;"][font face="courier new"]NumLocalSeq/LocalSeqIndex[/font][/td][td style="padding:3px;"]764-byte sequence descriptors[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]292/296[/font][/td][td style="padding:3px;"][font face="courier new"]NumTextures/TextureIndex[/font][/td][td style="padding:3px;"]Material records[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]320/324[/font][/td][td style="padding:3px;"][font face="courier new"]NumBodyParts/BodyPartIndex[/font][/td][td style="padding:3px;"]Geometry hierarchy[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]344–388[/font][/td][td style="padding:3px;"]facial/IK/mouth/pose fields[/td][td style="padding:3px;"]VtMB's complete facial and pose block[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]392[/font][/td][td style="padding:3px;"][font face="courier new"]SurfacePropIndex[/font][/td][td style="padding:3px;"]Physical-material name[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]396/400[/font][/td][td style="padding:3px;"]secondary-motion count/index[/td][td style="padding:3px;"]Troika bone-chain system[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]404/408[/font][/td][td style="padding:3px;"]include-model count/index[/td][td style="padding:3px;"]Shared animation libraries[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]420[/font][/td][td style="padding:3px;"][font face="courier new"]Contents[/font][/td][td style="padding:3px;"]Model trace contents[/td][/tr][/tbody][/table]
+
+The [font face="courier new"]Name[/font] field is 128 bytes, not modern Source's 64. That moves [font face="courier new"]Length[/font] to offset 140 and is one reason a modern header overlay fails immediately. The same 128-byte widening appears in compiled VtMB expression tables, showing that it is a broader Troika toolchain trait.
+
+Most index fields are offsets from the header base, but nested structures also contain record-relative or owner-relative offsets. Each one must be followed according to its owning structure; “all offsets are file-relative” is not a safe rule.
+
+Counts are the validity gate. An empty array's index often points to the next place the compiler would have written, rather than to zero. Reading an index without first checking its count turns an empty array into plausible-looking garbage.
+
+The retail loader maps the [font face="courier new"].mdl[/font] as a file image and patches selected values in place. Runtime pointers can therefore often be converted back to file offsets by subtracting the studio-header base. The exception is equally important: activity IDs, include-model ranges and remaps, initialization flags, and bone-usage flags may have been rewritten after loading. A runtime memory dump is not automatically identical to the bytes on disk.
+
+Two trailing header integers remain zero throughout shipped content and have no located retail consumer. They should remain unidentified instead of receiving guessed modern-Source names.
+
+[font size="4"][b]3.2 The [font face="courier new"].dx80.vtx[/font][/b][/font]
+
+Bloodlines' optimized model header identifies itself as version [b]107[/b], not stock Source version 7. It is a packed parallel hierarchy that must be walked in lockstep with the [font face="courier new"].mdl[/font]:
+
+[font face="courier new"]bodypart → model → LOD → mesh → stripgroup → strip → index[/font]
+
+All nested VTX offsets are relative to the structure that owns them.
+
+The compact VtMB stripgroup is 20 bytes. Its vertex table has two real encodings:
+
+[ul type="disc"][li]a flat 2-byte mesh-local vertex ID, used by most retail static props;[/li][li]a 12-byte record whose vertex ID is at byte 10, used by non-static models and some recompiled static models.[/li][/ul]
+
+No reliable header flag distinguishes the two. [font face="courier new"]STUDIOHDR_FLAGS_STATIC_PROP[/font] is not sufficient because community-recompiled static models can use the 12-byte form. The robust test is per stripgroup: decode both candidates and select the form whose IDs are distinct and fall within the owning mesh's vertex range.
+
+The VTX index table contains 16-bit indices into that vertex table. The resolved mesh-local ID is then combined with [font face="courier new"]StudioMesh.VertexOffset[/font] to address the model's embedded vertex array.
+
+[font size="4"][b]3.3 The [font face="courier new"].phy[/font][/b][/font]
+
+The optional [font face="courier new"].phy[/font] is a separate VPhysics carrier. It must not be used as a catch-all explanation for hair, breasts, ponytails, skirts, or coats. Bloodlines has two independent non-VPhysics secondary-motion systems described later in this guide.
+
+[font size="4"][b]3.4 Materials and textures[/b][/font]
+
+A [font face="courier new"]StudioMesh.Material[/font] value is a [b]skin reference[/b], not necessarily a direct texture index. The two-dimensional skin table maps:
+
+[font face="courier new"]skinTable[family][meshSkinRef] → StudioTexture index[/font]
+
+Family zero is an identity mapping in shipped content, which is why a parser that skips the table can appear correct until an entity selects another skin family. Alternate families change states such as traffic signals, locked/unlocked props, illuminated materials, and other authored variants.
+
+[font face="courier new"]StudioTexture[/font] names a material, not a texture image. The name is resolved through the model's material search paths to a [font face="courier new"].vmt[/font], which then names Bloodlines texture resources.
+
+[hr]
+
+[font size="5"][b]4. Geometry: bodyparts, models, meshes, and embedded vertices[/b][/font]
+
+The core geometry hierarchy is familiar in concept but not in exact layout.
+
+[ul type="disc"][li][font face="courier new"]StudioBodyPart[/font] is 16 bytes.[/li][li][font face="courier new"]StudioModel[/font] is [b]224 bytes[/b].[/li][li][font face="courier new"]StudioMesh[/font] is approximately 60 bytes and includes VtMB eye and cloth fields.[/li][/ul]
+
+The 224-byte [font face="courier new"]StudioModel[/font] stride is load-bearing. A shorter walk appears to work on the overwhelming majority of models because most bodyparts contain only one model. It fails on the second and later model of a multi-model bodygroup, making this a classic corpus-coverage trap.
+
+Important [font face="courier new"]StudioModel[/font] fields include the model name, mesh count/index, vertex count/index, tangent index, vertex format, dequantization position base/scale, two eyeball fields, and six cloth fields. The eye and cloth payloads occupy space that later Source documentation does not describe correctly for Bloodlines.
+
+[font size="4"][b]4.1 Three vertex formats[/b][/font]
+
+[font face="courier new"]StudioModel.VertexListType[/font] selects one of three embedded formats. All three occur in shipped scenery, so a complete reader needs all of them.
+
+[font size="4"][b][i]Type 0: skinned, 44 bytes[/i][/b][/font]
+
+Natural x86 alignment produces this exact layout:
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"]three byte weights[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"]three 16-bit bone indices[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]10[/font][/td][td style="padding:3px;"]bone-count byte[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]12[/font][/td][td style="padding:3px;"]float position[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]24[/font][/td][td style="padding:3px;"]float normal[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]36[/font][/td][td style="padding:3px;"]float UV[/td][/tr][/tbody][/table]
+
+This is the character format and carries full floating-point positions, normals, and UVs.
+
+[font size="4"][b][i]Type 1: unskinned, 12 bytes[/i][/b][/font]
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"]three 16-bit position scalars[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]6[/font][/td][td style="padding:3px;"]16-bit packed-normal table offset[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]8[/font][/td][td style="padding:3px;"]two 16-bit UV scalars[/td][/tr][/tbody][/table]
+
+Position is reconstructed per axis as:
+
+[code]
+position = PositionOffset + uint16 * PositionScale
+[/code]
+
+In shipped files the model's [font face="courier new"]PositionOffset/PositionScale[/font] agree with interpolation through the model hull. Multiplying only by the minimum bound is incorrect.
+
+[font size="4"][b][i]Type 2: compressed, 8 bytes[/i][/b][/font]
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"]three byte position scalars[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]3[/font][/td][td style="padding:3px;"]byte packed-normal index[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"]two 16-bit UV scalars[/td][/tr][/tbody][/table]
+
+This is the byte-quantized counterpart of type 1.
+
+[font size="4"][b]4.2 Normals are authored data[/b][/font]
+
+Every vertex format carries a normal. Skinned vertices store it directly. The two packed formats address unit-vector tables embedded in the retail renderer.
+
+Those normals should not be thrown away and recomputed from triangles. Co-located split vertices frequently carry deliberately different normals around nostrils, eye sockets, mouth corners, hairlines, and hard surface boundaries. Averaging adjacent face normals destroys information the model explicitly authored.
+
+The same unit-vector table also participates in compressed facial vertex animation. This is one of the places where the renderer module, not the [font face="courier new"].mdl[/font] alone, completes the format definition.
+
+[font size="4"][b]4.3 Winding and UVs[/b][/font]
+
+The stored topology and the conventions used by an FBX exporter are not the same question. VAMPTools reverses triangle winding and flips V for its FBX target. A native reader should first preserve the stored model semantics, then perform only the coordinate and texture-space conversion required by its output format. Treating an exporter's target-specific conversion as part of v2531 itself causes double conversion elsewhere.
+
+[hr]
+
+[font size="5"][b]5. Skeleton, bind pose, skinning, attachments, hitboxes, and IK carriers[/b][/font]
+
+[font size="4"][b]5.1 [font face="courier new"]StudioBone[/font] is 160 bytes[/b][/font]
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][td style="padding:3px;"][b]Meaning[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"]name offset[/td][td style="padding:3px;"]Bone name[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"]parent[/td][td style="padding:3px;"]Parent bone, [font face="courier new"]-1[/font] for root[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]8[/font][/td][td style="padding:3px;"]six controller IDs[/td][td style="padding:3px;"]Normally [font face="courier new"]-1[/font][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]32[/font][/td][td style="padding:3px;"][font face="courier new"]pos[/font][/td][td style="padding:3px;"]Parent-relative bind position[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]44[/font][/td][td style="padding:3px;"][font face="courier new"]quat[/font][/td][td style="padding:3px;"]Parent-relative bind quaternion[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]60[/font][/td][td style="padding:3px;"][font face="courier new"]posscale[/font][/td][td style="padding:3px;"]Position-channel scale[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]72[/font][/td][td style="padding:3px;"][font face="courier new"]rotscale[/font][/td][td style="padding:3px;"]Four quaternion-component scales[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]88[/font][/td][td style="padding:3px;"][font face="courier new"]poseToBone[/font][/td][td style="padding:3px;"]World-to-bone inverse bind matrix[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]136[/font][/td][td style="padding:3px;"][font face="courier new"]Flags[/font][/td][td style="padding:3px;"]Usage plus VtMB rig behavior bits[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]140[/font][/td][td style="padding:3px;"][font face="courier new"]ProcType[/font][/td][td style="padding:3px;"]Procedural rule kind[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]144[/font][/td][td style="padding:3px;"][font face="courier new"]ProcIndex[/font][/td][td style="padding:3px;"]Bone-relative rule offset[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]148[/font][/td][td style="padding:3px;"][font face="courier new"]PhysicsBone[/font][/td][td style="padding:3px;"]Ragdoll mapping[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]152[/font][/td][td style="padding:3px;"]surface-property offset[/td][td style="padding:3px;"]Bone material[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]156[/font][/td][td style="padding:3px;"][font face="courier new"]Contents[/font][/td][td style="padding:3px;"]Bone trace contents[/td][/tr][/tbody][/table]
+
+The crucial difference from later Source is that the bind rotation and rotation scale are four-component quaternions. There is no later [font face="courier new"]RadianEuler[/font], alignment quaternion, or modern 216-byte tail hiding after the record.
+
+[font face="courier new"]poseToBone[/font] is a conventional inverse bind. Even the special split-inheritance spine uses an ordinary hierarchy-FK inverse bind; its unusual rule is applied to the live pose, not baked into bind space.
+
+Ordinary skinning uses the current bone-to-world matrix together with [font face="courier new"]poseToBone[/font]. A valid rest mesh only establishes that these cancel at bind. It does not validate the animated locals or any later pose stage.
+
+[font size="4"][b]5.2 Attachments and hitboxes[/b][/font]
+
+Attachments and hitbox sets use the model's bone indices and bind conventions. Their existence also contributes to the runtime bone-usage masks that determine which bone matrices are refreshed. A reader interested only in visible vertices can therefore miss data that changes the retail palette update policy.
+
+[font size="4"][b]5.3 Bone controllers exist structurally but are absent in content[/b][/font]
+
+The v2531 bone-controller record is 24 bytes, not modern Source's larger form. However, every shipped model declares zero bone controllers. This makes the NPC head-controller path inert: retail code writes controller indices 0 and 1, but no model resolves them.
+
+Visible head turns come from animation and choreography, not from those controller writes.
+
+[font size="4"][b]5.4 IK chains are present as authored carriers[/b][/font]
+
+Hundreds of models contain structurally valid hand and foot chains. Each 16-byte chain addresses three 28-byte links forming a parent-to-child limb triple. All authored knee-direction vectors are zero, so no model supplies a pole vector through that field.
+
+This proves the carrier and its stride. It does not, by itself, prove a complete standalone reproduction of every retail IK consumer.
+
+[hr]
+
+[font size="5"][b]6. Animation descriptors and the seven-channel record[/b][/font]
+
+[font face="courier new"]StudioAnimDesc[/font] is [b]72 bytes[/b]. It supplies the clip name, FPS, flags, frame count, movement records, bounds, and the offset to bone-animation data.
+
+At [font face="courier new"]animdesc + animindex[/font] is one fixed [b]32-byte record for every bone[/b], in header bone order:
+
+[code]
+float weight;   // binary ownership mask
+int offset[7];  // pos X/Y/Z, quaternion X/Y/Z/W
+[/code]
+
+Every non-zero channel offset is relative to that bone record and addresses classic [font face="courier new"]{valid,total}[/font] RLE runs of signed 16-bit values. Zero means the channel is absent.
+
+One run is:
+
+[code]
+union {
+    struct { uint8 valid, total; };
+    int16 value;
+};
+[/code]
+
+The first [font face="courier new"]valid[/font] frames have explicit values. Frames from [font face="courier new"]valid[/font] through [font face="courier new"]total - 1[/font] repeat the last explicit value. Runs continue until they cover the clip's frame count.
+
+Retail does not expand the entire track. It walks only to the run containing the requested sample and reads the bracketing values. A safe offline decoder must still validate every step against the model image, because a malformed or edge-case track must not become an out-of-bounds read merely because the game happened to tolerate nearby bytes.
+
+[font size="4"][b]6.1 Position and rotation use different equations[/b][/font]
+
+This is the single most important channel rule.
+
+For each position component:
+
+[code]
+present: bind_position + sample * posscale
+absent:  bind_position
+[/code]
+
+For each quaternion component:
+
+[code]
+present: sample * rotscale
+absent:  bind_quaternion_component
+[/code]
+
+Then normalize the completed quaternion.
+
+Animated rotation components [b]replace[/b] their bind components. They are not deltas to add. Missing components retain bind values; they are not zero-filled.
+
+The common failure case is a bone whose clip animates only quaternion W. Zero-filling X, Y, and Z creates a near-identity rotation and can turn a clavicle or shoulder roughly 150 degrees from the authored orientation. Adding the bind quaternion to the animated components is also wrong because it double-counts the bind.
+
+[font size="4"][b]6.2 [font face="courier new"]weight[/font] is a binary bone-ownership mask[/b][/font]
+
+The field is not an ignorable constant. Across the audited corpus it is exactly [font face="courier new"]0.0[/font] or [font face="courier new"]1.0[/font].
+
+Retail checks it before offsets, tracks, or bind fields. A zero record produces a zero local contribution for the accumulator. This is how a partial-body layer says “I do not own this bone.”
+
+That state differs from an owned bone whose animation simply has no channels and therefore holds bind. Collapsing both to “no track” destroys the semantics needed to reconstruct head-only, arm-only, and upper-body layers.
+
+[hr]
+
+[font size="5"][b]7. Timing, sequences, pose parameters, grids, and movement[/b][/font]
+
+[font size="4"][b]7.1 Timing[/b][/font]
+
+FPS belongs to the animation descriptor and is not uniformly 30. Shipped content includes 18, 20, 30, and 60 FPS clips.
+
+Retail samples with:
+
+[code]
+x = (numframes - 1) * cycle
+frame = floor(x)
+fraction = x - frame
+[/code]
+
+Duration is therefore:
+
+[code]
+(numframes - 1) / fps
+[/code]
+
+The final authored sample is at cycle [font face="courier new"]1.0[/font]. An export format that lists integer frames does not automatically reproduce retail loop edges, reverse playback, or state-restoration timing.
+
+[font size="4"][b]7.2 [font face="courier new"]StudioSeqDesc[/font] is 764 bytes[/b][/font]
+
+The sequence descriptor combines user-facing sequence metadata with a physically inline 16×16 animation-index table. Important fields include:
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"]activity-name offset[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]12[/font][/td][td style="padding:3px;"]runtime activity ID[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]16[/font][/td][td style="padding:3px;"]activity weight[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]20/24[/font][/td][td style="padding:3px;"]animation-event count/index[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]52[/font][/td][td style="padding:3px;"]blend count[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]56[/font][/td][td style="padding:3px;"]inline [font face="courier new"]short anim[16][16][/font][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]572[/font][/td][td style="padding:3px;"]two grid dimensions[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]580[/font][/td][td style="padding:3px;"]two pose-parameter indices[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]588/596[/font][/td][td style="padding:3px;"]sequence parameter ranges[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]612/616/620[/font][/td][td style="padding:3px;"]transition-duration values[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]660/664[/font][/td][td style="padding:3px;"]autolayer count/index[/td][/tr][/tbody][/table]
+
+Seven malformed one-sequence models contain an impossible autolayer count that runs into their string data. Readers must bound both count and array against the image instead of trusting every number merely because the model loads in retail.
+
+[font size="4"][b]7.3 Blend-grid orientation[/b][/font]
+
+The correct cell is:
+
+[code]
+anim[i0][i1]
+[/code]
+
+Axis zero uses a fixed stride of 16 shorts. A transposed interpretation agrees accidentally on a 9×1 locomotion fan and fails on a 3×3 aim grid.
+
+The authored grid is a subrectangle of the physical 16×16 table. Shipped models use 9×1, 3×3, 2×1, and 5×1 grids. A parser that always reads the first cell gets a valid animation, but often not the animation the game selects.
+
+[font size="4"][b]7.4 Pose parameters[/b][/font]
+
+The 20-byte pose-parameter descriptor carries a record-relative name, flags, start, end, and loop modulus. The main VtMB vocabulary is:
+
+[ul type="disc"][li][font face="courier new"]move_yaw[/font], normally [font face="courier new"]-180..180[/font] with a 360-degree loop;[/li][li][font face="courier new"]hit_yaw[/font], with the same domain;[/li][li][font face="courier new"]aim_yaw[/font] and [font face="courier new"]aim_pitch[/font] on the small set of player aim models.[/li][/ul]
+
+A parameter resolver wraps when requested, normalizes through the descriptor range, remaps through the sequence range, clamps, and returns adjacent grid cells plus a blend fraction.
+
+The 9×1 [font face="courier new"]move_yaw[/font] fan runs from -180 through +180. Its first and last cells are backpedal, while its center is forward. Cells may have different FPS and frame counts, so interpolation is by normalized cycle, not by assuming a common integer frame.
+
+On the player path, [font face="courier new"]move_yaw[/font] is right-positive, generated from realized velocity, slewed while movement updates remain fresh, and held while stationary. The weapon aim axes use the opposite yaw convention: aim yaw is left-positive and aim pitch is down-positive. Ordinary player selection writes aim yaw as zero, so the authored 3×3 weapon grid is used as a pitch blend in the center yaw column.
+
+[font size="4"][b]7.5 Activities and selection[/b][/font]
+
+Activity is [font face="courier new"]-1[/font] on disk. During loading, the game resolves the authored [font face="courier new"]ACT_*[/font] name into the DLL's activity enum. The text name is therefore the durable key; the numeric activity stored in a live model image is initialized runtime state.
+
+[font face="courier new"]actweight[/font] is the weighted-random share among sequences answering the same activity.
+
+Player buttons do not map directly to clip names. The player code first classifies realized movement and interaction state, gives protected and paired actions priority, resolves an activity, and only then chooses a sequence. Walk versus run is compared against the selected body's own authored forward-walk speed rather than a universal constant or one input bit.
+
+NPC selection has its own activity translation, disposition stance, schedule, and task policy. These code-side selectors are not stored in an exported SMD and are not recoverable by listing clip names alone.
+
+[font size="4"][b]7.6 Authored movement[/b][/font]
+
+[font face="courier new"]StudioAnimDesc.nummovements/movementindex[/font] address 44-byte movement records. Their final position is cumulative cycle displacement. Ground speed follows from displacement length divided by clip duration.
+
+The skeletal clip itself remains in place. The actor or host movement system consumes the authored movement. Translating both the actor and the skeleton applies the same movement twice.
+
+[hr]
+
+[font size="5"][b]8. Flags, additive composition, autolayers, overlays, and transitions[/b][/font]
+
+[font size="4"][b]8.1 Observed sequence flags[/b][/font]
+
+The recovered flag vocabulary is small:
+
+[ul type="disc"][li][font face="courier new"]0x1[/font]: looping, though some looping idles are unflagged;[/li][li][font face="courier new"]0x2[/font]: incoming hard cut; discard the previous-sequence fade set;[/li][li][font face="courier new"]0x4[/font]: delta/additive composition;[/li][li][font face="courier new"]0x10[/font]: within the additive branch, place the scaled quaternion delta on the right;[/li][li][font face="courier new"]0x400[/font]: select minimum rather than maximum transition duration; the branch exists but shipped sequences do not exercise it.[/li][/ul]
+
+Shipped named delta sequences use [font face="courier new"]0x14[/font], so rotation is post-multiplied:
+
+[code]
+out.rotation = normalize(out.rotation * scaled_delta)
+out.position += delta.position * weight
+[/code]
+
+This multiplication side matters when moving the data to a host whose additive node uses the opposite convention.
+
+Ordinary masked layers interpolate toward the layer pose only for bones they own.
+
+[font size="4"][b]8.2 Model-declared autolayers[/b][/font]
+
+The v2531 autolayer entry is only a four-byte target sequence index. It does not contain later Source's ramp fields, pose-parameter selection, or per-entry flags.
+
+The shipped graph is shallow: depth one, at most two children. The common host adds a masked weapon aim layer and an action delta. Entries execute in authored file order. Nearly every two-entry host places the ordinary layer first and the delta second, but unfinished throwing-star content reverses that order. Naming convention is not authority.
+
+The exact caller-side weight delivered to this table remains one of the few open runtime scalars.
+
+[font size="4"][b]8.3 Networked combat overlays are a different system[/b][/font]
+
+Combat characters separately own four overlay slots. They compose in ascending slot order. [font face="courier new"]SetLayer[/font] initializes a slot at weight [font face="courier new"]0.1[/font]; nominal blend fields exist but the located runtime path does not consume them, and replacing or removing a slot kills it immediately.
+
+That recovered [font face="courier new"]0.1[/font] belongs to the four-slot overlay system. It says nothing about the model-declared autolayer table. Combining the two because both are called “layers” is incorrect.
+
+[font size="4"][b]8.4 Client sequence transitions[/b][/font]
+
+The client retains a list of previous sequences and fades them with the cubic smoothstep:
+
+[code]
+SimpleSpline(t) = 3t² - 2t³
+[/code]
+
+Transition duration is authored on the sequence. Retail normally chooses the maximum of outgoing and incoming values. Surviving transitions are chained newest to oldest rather than normalized as a single N-way weighted set.
+
+The list has no small fixed concurrency cap. A new transition appends while prior fades can remain alive. Incoming flag [font face="courier new"]0x2[/font] clears the set as a hard cut.
+
+This transition history is client-side. The server does not maintain the same previous-pose list, so server and rendered client pose can legitimately differ during a fade.
+
+[hr]
+
+[font size="5"][b]9. Animation events are part of the runtime contract[/b][/font]
+
+Each sequence event is a [b]76-byte[/b] record:
+
+[code]
+float cycle;
+int event;
+int type;
+char options[64];
+[/code]
+
+Shipped records use type zero. The complete install contains thousands of events distributed across characters, weapons, and a few other model families.
+
+The server owns IDs below 5000. It scans the current cycle interval, handles loop wrap once, forwards the complete event record to the entity's native handler, and separately invokes the sequence-finish hook. Combat-character timing events can be forwarded to the active weapon. The event establishes the schedule point; the weapon or entity remains responsible for ammunition, traces, damage, or other gameplay work.
+
+IDs at and above 5000 are client presentation events. Their handlers cover muzzle flashes, sounds, bodygroups, attachment effects, and emitter families. Viewmodels first offer applicable events to the associated client weapon.
+
+Therefore an event number copied into a generic animation notify is not equivalent unless the same owner and handler policy is also reproduced.
+
+[hr]
+
+[font size="5"][b]10. Included models are executable animation libraries, not simple file concatenation[/b][/font]
+
+Character models contain much of their unique dialogue locally while sharing locomotion, combat, stances, and idles through recursive included-model banks.
+
+[font face="courier new"]StudioModelGroup[/font] is 116 bytes. The loader fills model pointers and virtual sequence ranges while retaining authored bone and pose-parameter remaps. A virtual sequence must first be resolved to its owning model; only then can its grid and animation descriptors be interpreted.
+
+The donor model's pose is evaluated in donor space before one 56-byte remap per target bone maps it into the including model:
+
+[ul type="disc"][li]quaternion is copied from the donor result;[/li][li]position is copied or transformed through an authored 3×4 matrix;[/li][li]a negative donor index writes the target model's bind local.[/li][/ul]
+
+An absent animation channel therefore falls back to the [b]donor bind[/b] before the outer map. It does not jump directly to the target bind. This distinction affects thousands of ordinary target/bank pairs because donor and target binds are frequently not identical.
+
+One dormant remap branch contains a loop that would fail to advance under a specific condition. Shipped remaps do not enter it. It is a latent unreachable defect, not a behavior that should be invented into ordinary evaluation.
+
+The practical rule is:
+
+[quote]
+Resolve ownership, decode in the donor's model and bind space, then apply the authored outer remap.
+[/quote]
+
+[hr]
+
+[font size="5"][b]11. Bone flag [font face="courier new"]0x2[/font] is split inheritance, not QuatInterp[/b][/font]
+
+On ordinary bipeds, [font face="courier new"]Bip01 Spine1[/font] commonly carries [font face="courier new"]StudioBone.Flags &amp; 0x2[/font].
+
+The channel decoders do not use this bit. Hierarchy construction does:
+
+[code]
+root:
+    world = root_to_world * local
+
+ordinary child:
+    world = parent_world * local
+
+flagged child:
+    world.rotation    = root_to_world.rotation * local.rotation
+    world.translation = transform_point(parent_world, local.position)
+[/code]
+
+The spine inherits translation from its parent but does not inherit the parent's rotation. Its orientation is rooted directly in the entity frame.
+
+This is why an export can look acceptable while standing and collapse on a seated, leaning, cinematic, or layered pose. A fixed correction quaternion is not equivalent; the local needed to emulate ordinary hierarchy depends on the current parent rotation.
+
+For an isolated clip, a complete corrected pose can be baked. For blended clips, correcting each clip before blending is not exactly the same as blending first and applying split inheritance. A host can choose a measured bake approximation, but it must not describe that as the exact retail hierarchy rule.
+
+The inverse binds remain conventional. [font face="courier new"]0x2[/font] changes live hierarchy composition, not bind construction.
+
+[hr]
+
+[font size="5"][b]12. Procedural bones use AxisInterp exclusively[/b][/font]
+
+Three bone fields participate:
+
+[ul type="disc"][li][font face="courier new"]Flags &amp; 0x1[/font] marks procedural usage;[/li][li][font face="courier new"]ProcType[/font] identifies the rule;[/li][li][font face="courier new"]ProcIndex[/font] points from the bone to its rule data.[/li][/ul]
+
+Every shipped procedural rule found in the full model corpus is type 1, [b]AxisInterp[/b]. No shipped rule uses QuatInterp.
+
+The AxisInterp record is [b]176 bytes[/b]:
+
+[code]
+int control;
+int axis;
+Vector pos[6];
+Quaternion quat[6];
+[/code]
+
+The six entries represent positive and negative X, Y, and Z directions. Retail extracts the selected axis column from the control bone, expresses it in the control parent's frame, chooses the appropriate signed entry for each component, blends three positions and quaternions, and replaces the driven bone's local transform during hierarchy construction.
+
+It is not a simple additive rotation. Position entries are often repeated bind positions, but real exceptions exist.
+
+AxisInterp is a nonlinear function of the already blended control pose. Evaluating it separately in each source clip and then blending the results is not equivalent to blending the control pose first and evaluating the rule once. This places the exact stage after local pose composition and before final skinning.
+
+The authoring distinction explains a persistent community mismatch: later Valve documentation emphasizes [font face="courier new"].vrd[/font]/QuatInterp, while VtMB's older [font face="courier new"].vhb[/font] path produces the AxisInterp form used throughout Bloodlines.
+
+[hr]
+
+[font size="5"][b]13. The final bone palette is persistent and partially updated[/b][/font]
+
+Retail's bone-to-world array is not rebuilt as a clean full skeleton on every pose request. It persists, and each build refreshes only the bones selected by its usage mask. Unselected slots retain earlier matrices, potentially from an older entity transform.
+
+Replaying those masked writes together with split inheritance and AxisInterp reproduces captured retail draws that a clean full recomposition does not.
+
+Some usage bits are initialized or expanded by the loader and are therefore not recoverable from the original disk flag alone. They can be reconstructed from skinned LOD usage, attachments, hitboxes, and other consumers.
+
+A modern reimplementation may deliberately choose to rebuild every bone each frame. That is a reasonable cleanup, but it is a behavioral divergence from the retail palette lifetime and should be named as such.
+
+This persistent state is outside the normal responsibility of an SMD or FBX exporter. It is nevertheless part of the pose the game draws.
+
+[hr]
+
+[font size="5"][b]14. Bloodlines has two independent secondary-motion systems[/b][/font]
+
+Hair-like bone chains and garment cloth are not the same mechanism.
+
+[font size="4"][b]14.1 Bone-chain secondary motion[/b][/font]
+
+The header fields at [font face="courier new"]396/400[/font] address 28-byte records:
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Meaning[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"]first moving bone[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"]explicit terminal bone, or [font face="courier new"]-1[/font] to follow the child chain[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]8[/font][/td][td style="padding:3px;"]still-unidentified authoring field[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]12[/font][/td][td style="padding:3px;"]gravity[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]16[/font][/td][td style="padding:3px;"]damping[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]20[/font][/td][td style="padding:3px;"]spring exponent; coefficient is [font face="courier new"]10^-value[/font][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]24[/font][/td][td style="padding:3px;"]maximum angular deviation in degrees[/td][/tr][/tbody][/table]
+
+The client creates one persistent solver object per record. The solve runs after ordinary hierarchy composition and AxisInterp, reads and writes the same bone-to-world array, and feeds ordinary skeletal skinning.
+
+The state advances with small fixed-target substeps, damping, gravity, constraints, a spring coefficient, and an authored angular ceiling. Large or reversed time gaps reset it. A control mask can fade the solved matrices in or out, and a ground mode can add another constraint.
+
+The limit is a real ceiling: captured chains saturate exactly at authored round values. These bones are not driven by [font face="courier new"].phy[/font], and they are not AxisInterp bones.
+
+The authoring meaning of the field at [font face="courier new"]+8[/font], exact ground-query behavior, one special scale path, and a standalone bit-for-bit numerical replay remain open.
+
+[font size="4"][b]14.2 Renderer garment cloth[/b][/font]
+
+Jeanette's skirt and the Sheriff's coat use a completely separate particle system owned by the renderer.
+
+Header flag [font face="courier new"]0x400[/font] agrees exactly with the presence of the cloth payload. [font face="courier new"]StudioModel[/font] supplies definition tables plus authored capsule and sphere collision records. [font face="courier new"]StudioMesh[/font] supplies three per-vertex maps:
+
+[ul type="disc"][li]a byte selector; [font face="courier new"]0xFF[/font] means ordinary skinning;[/li][li]a simulated position/normal output index;[/li][li]a simulated tangent output index.[/li][/ul]
+
+A cloth definition describes pinned and dynamic particles, distance constraints, compression-only constraints, collision triangles, tangent/normal reconstruction, and gravity scale.
+
+Pinned particles are refreshed from the current skinned source vertices. Dynamic particles persist in double-buffered state, integrate inertia, gravity, and wind, solve constraints and collision, and regenerate the final tangent basis. Specialized vertex routines substitute simulated results only on selected vertices; every other vertex keeps ordinary skeletal output.
+
+Capsule and sphere points are authored in model bind space and transformed every draw through the current skin palette. Radius is not scaled by that matrix.
+
+The simulation targets a high fixed substep rate, retains prior displacement when wind is absent, and resets after a long frame gap. Dynamic particles do not have a hidden animated-position leash. Calling this later Source jiggle bones, VPhysics, or ordinary skinned cloth is contradicted by both the carrier and the runtime path.
+
+The layout and algorithm are recovered. A complete independent numerical replay and post-skin output-series acceptance remain separate work.
+
+[hr]
+
+[font size="5"][b]15. Facial animation is another complete pipeline, not just a VTA export[/b][/font]
+
+[font size="4"][b]15.1 Correct facial header location[/b][/font]
+
+The facial block begins at header offset [b]344[/b], not 336. Two transition fields before it are easy to omit, shifting every following interpretation by eight bytes.
+
+The principal pairs are:
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Array[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]344/348[/font][/td][td style="padding:3px;"]flex descriptions[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]352/356[/font][/td][td style="padding:3px;"]flex controllers[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]360/364[/font][/td][td style="padding:3px;"]flex rules[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]368/372[/font][/td][td style="padding:3px;"]IK chains[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]376/380[/font][/td][td style="padding:3px;"]mouth records[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]384/388[/font][/td][td style="padding:3px;"]local pose parameters[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]392[/font][/td][td style="padding:3px;"]surface property[/td][/tr][/tbody][/table]
+
+[font size="4"][b]15.2 Flex rules execute in file order[/b][/font]
+
+A standard speaking face contains 65 flex descriptions, 44 controllers, and 60 reverse-Polish rules. The observed operations are:
+
+[font face="courier new"]CONST[/font], [font face="courier new"]FETCH1[/font], [font face="courier new"]FETCH2[/font], [font face="courier new"]ADD[/font], [font face="courier new"]SUB[/font], [font face="courier new"]MUL[/font], and [font face="courier new"]DIV[/font].
+
+[font face="courier new"]FETCH1[/font] reads a flex controller. [font face="courier new"]FETCH2[/font] reads the flex-description output array that previous rules are currently constructing. Rules therefore execute in file order and can consume earlier rule results.
+
+Treating [font face="courier new"]FETCH2[/font] as another controller lookup both computes the wrong expression and can index past the controller array.
+
+Division has a retail zero guard. This is required by shipped content because one rule divides by [font face="courier new"]right_open[/font] when a closed mouth can make that value zero.
+
+Three standard rules are consistently authored with right-side inputs where their names suggest the left side. They create duplicated or cancelled left-side results. This is shipped content, not a parser error. “Fixing” it changes facial behavior.
+
+[font size="4"][b]15.3 [font face="courier new"]StudioFlex[/font] and the two vertex-animation encodings[/b][/font]
+
+The common compressed record is 8 bytes:
+
+[code]
+u16 vertex index
+u16 position-direction byte offset
+u16 normal-direction byte offset
+u8  position magnitude
+u8  normal magnitude
+[/code]
+
+The two 16-bit values are offsets into a renderer unit-vector table, not signed XYZ displacements. Magnitudes use:
+
+[code]
+position_delta = direction * (magnitude / 255) * 8
+normal_delta   = direction * (magnitude / 255) * 2
+[/code]
+
+This explains why trying increasingly different short scales never converges.
+
+A second 20-byte raw form stores a floating-point position delta plus a table-encoded normal. It appears on Ming Xiao's transformation model, where deltas greatly exceed the compressed form's range.
+
+A morph target is carried by individual flex records attached to meshes; a flex-description name alone is not geometry. A single logical facial expression can span multiple materials and meshes.
+
+[font size="4"][b]15.4 Eyes and eyelids run after the flex rules[/b][/font]
+
+[font face="courier new"]StudioModel[/font] carries two 140-byte [font face="courier new"]StudioEyeball[/font] records on speaking characters and most player bodies. Eye meshes are marked by [font face="courier new"]StudioMesh.materialtype == 1[/font], with [font face="courier new"]materialparam[/font] selecting the eye record.
+
+The first 16 flex descriptions form four eyelid ramps. The ordinary flex rules do not directly produce the final lid morphs. The renderer's eye pass aims the iris and then overwrites the four eyelid flex-description slots.
+
+Running the eye pass before the rules loses its output. Running only the rules produces no final lid motion.
+
+The authored upper/lower targets are linear offsets converted through [font face="courier new"]asin(target/radius)[/font], not already-stored radians. Final lid state also depends on the live gaze basis.
+
+Blink uses a 0.3-second envelope with a fast close and slower reopen. It is assigned after ordinary networked controller interpolation, so it overwrites the incoming blink controller. Gaze selects from dialogue partner, explicit target, enemy, movement goal, heard sound, or autonomous scan, smooths the target, and feeds the renderer's iris aim.
+
+Player bodies carry eye records but no flex rig. The faithful player face is therefore still in expression while the irises continue to aim.
+
+[font size="4"][b]15.5 The mouth record is present but visually inert[/b][/font]
+
+Characters usually carry one 20-byte mouth record naming a jaw bone and the flex description called [font face="courier new"]mouth[/font]. Retail writes audio amplitude to that flex description after rule evaluation.
+
+However, that flex description has no deforming [font face="courier new"]StudioFlex[/font] records and is not consumed through [font face="courier new"]FETCH2[/font]. It is a readout, not a geometric driver. Redirecting amplitude into [font face="courier new"]jaw_drop[/font] can be a useful modernization, but it is not retail behavior.
+
+[font size="4"][b]15.6 [font face="courier new"].lip[/font] and [font face="courier new"].vfe[/font][/b][/font]
+
+The leading integer on a [font face="courier new"].lip[/font] phoneme row is the real lookup key. It selects the expression table's phoneme-class column. The printed phoneme string is not unique and must not be used as identity.
+
+The parser must also tolerate real text containing quotation marks and legacy encoded punctuation inside [font face="courier new"]WORD[/font] rows.
+
+Retail chooses [font face="courier new"]<model-stem>_phonemes.vfe[/font] or [font face="courier new"]<model-stem>_expressions.vfe[/font] from the actor's model name. The internal path stored in the VFE is authoring provenance, not the runtime selection key.
+
+The ordinary VFE header is:
+
+[table][tbody][tr][td style="padding:3px;"][b]Offset[/b][/td][td style="padding:3px;"][b]Field[/b][/td][/tr][tr][td style="padding:3px;"][font face="courier new"]0[/font][/td][td style="padding:3px;"][font face="courier new"]EFV\0[/font] identifier[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]4[/font][/td][td style="padding:3px;"]version[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]8[/font][/td][td style="padding:3px;"]128-byte internal name[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]136[/font][/td][td style="padding:3px;"]length[/td][/tr][tr][td style="padding:3px;"][font face="courier new"]140[/font][/td][td style="padding:3px;"]flex-setting count[/td][/tr][/tbody][/table]
+
+Phoneme contributions ramp in [b]before[/b] the authored phoneme start and decay to zero at the end. The blend width comes from the model header's two phoneme-filter floats. Short phonemes may never reach full weight. A symmetric ramp entirely inside the span shifts and over-articulates them.
+
+Controller accumulation order is:
+
+[ol type="1"][li]network/choreography controller state;[/li][li]phoneme contributions;[/li][li]blink assignment;[/li][li]file-ordered flex rules;[/li][li]mouth-amplitude write;[/li][li]renderer eye and eyelid write-back.[/li][/ol]
+
+Order is part of the visible result.
+
+[hr]
+
+[font size="5"][b]16. First-person animation uses two synchronized viewmodel entities[/b][/font]
+
+The first-person body is not the third-person biped.
+
+Clan/gender hand models use a 42-bone [font face="courier new"]Camera01[/font]-rooted arm rig and a shared animation bank covering firearm families and lockpicking. They contain no melee family, matching the game's policy of moving melee to third person.
+
+Compact weapon viewmodels carry visible weapon geometry on a compatible subset rig. Hands and weapon are not merged into one skeleton. The player owns two viewmodel entity slots:
+
+[ul type="disc"][li]one evaluates and draws the hands;[/li][li]the other evaluates and draws the packed weapon.[/li][/ul]
+
+Server weapon logic assigns matching semantic sequence and playback state to both. Client events own presentation effects, while server events authorize weapon timing and gameplay. Model replacement calls can swap the hands role without creating a third composition system.
+
+An importer that only extracts a hands clip has not reconstructed this two-entity runtime contract.
+
+[hr]
+
+[font size="5"][b]17. The complete skeletal and facial evaluation order[/b][/font]
+
+The exact implementation contains branches, but the durable stage order is:
+
+[font size="4"][b]Skeletal path[/b][/font]
+
+[code]
+gameplay state
+  → activity / sequence selection
+  → resolve included-model owner
+  → resolve pose parameters and grid cells
+  → sample seven-channel bone records
+  → blend grid cells in local space
+  → apply masks, ordinary layers, and additive deltas
+  → blend client transition history
+  → map included-model pose into target model
+  → build hierarchy with split inheritance
+  → evaluate AxisInterp into driven locals
+  → update the persistent masked bone palette
+  → solve bone-chain secondary motion
+  → ordinary skeletal skinning
+  → renderer cloth substitution on selected vertices
+[/code]
+
+Some ownership and mapping work is interleaved in retail code, but the data dependencies above must be preserved.
+
+[font size="4"][b]Facial path[/b][/font]
+
+[code]
+networked and choreographed controllers
+  → code-keyed phoneme accumulation
+  → blink overwrite
+  → ordered flex-rule evaluation
+  → inert mouth-amplitude readout
+  → eye aim and eyelid overwrite
+  → vertex flex deformation and eye rendering
+[/code]
+
+This is why “the clip looks right in Blender” is useful evidence but not a final acceptance test.
+
+[hr]
+
+[font size="5"][b]18. Exact differences from later Source[/b][/font]
+
+[table][tbody][tr][td style="padding:3px;"][b]Area[/b][/td][td style="padding:3px;"][b]Bloodlines v2531[/b][/td][td style="padding:3px;"][b]Later Source commonly documented[/b][/td][/tr][tr][td style="padding:3px;"]Model version[/td][td style="padding:3px;"]2531[/td][td style="padding:3px;"]44–49 and later families[/td][/tr][tr][td style="padding:3px;"]Header size[/td][td style="padding:3px;"]424 bytes[/td][td style="padding:3px;"]Larger evolving headers[/td][/tr][tr][td style="padding:3px;"]Internal name[/td][td style="padding:3px;"]128 bytes[/td][td style="padding:3px;"]Commonly 64 bytes[/td][/tr][tr][td style="padding:3px;"]Vertex storage[/td][td style="padding:3px;"]Embedded in [font face="courier new"].mdl[/font][/td][td style="padding:3px;"]Separate [font face="courier new"].vvd[/font][/td][/tr][tr][td style="padding:3px;"]Topology file[/td][td style="padding:3px;"][font face="courier new"].dx80.vtx[/font] / [font face="courier new"].dx7_2bone.vtx[/font], version 107[/td][td style="padding:3px;"]Common [font face="courier new"].dx90.vtx[/font], version 7 variants[/td][/tr][tr][td style="padding:3px;"]Bone[/td][td style="padding:3px;"]160 bytes[/td][td style="padding:3px;"]Commonly 216 bytes[/td][/tr][tr][td style="padding:3px;"]Bone rotation[/td][td style="padding:3px;"]Quaternion[/td][td style="padding:3px;"]Later layouts include Euler/alignment fields[/td][/tr][tr][td style="padding:3px;"]Animation descriptor[/td][td style="padding:3px;"]72 bytes[/td][td style="padding:3px;"]Later descriptor with anim blocks/sections[/td][/tr][tr][td style="padding:3px;"]Animation record[/td][td style="padding:3px;"]Fixed 32 bytes per bone[/td][td style="padding:3px;"]Linked records and flag-driven compact forms[/td][/tr][tr][td style="padding:3px;"]Channels[/td][td style="padding:3px;"]Seven RLE tracks: position XYZ and quaternion XYZW[/td][td style="padding:3px;"]RAW/DELTA and Quaternion48/64-style encodings[/td][/tr][tr][td style="padding:3px;"]Missing rotation channel[/td][td style="padding:3px;"]Retain bind component[/td][td style="padding:3px;"]Cannot be inferred from later encoding rules[/td][/tr][tr][td style="padding:3px;"]Per-bone weight[/td][td style="padding:3px;"]Binary ownership mask[/td][td style="padding:3px;"]Different later animation/layer machinery[/td][/tr][tr][td style="padding:3px;"]Sequence descriptor[/td][td style="padding:3px;"]764 bytes with inline 16×16 table[/td][td style="padding:3px;"]Different structure and autolayer representation[/td][/tr][tr][td style="padding:3px;"]Movement[/td][td style="padding:3px;"]VtMB 44-byte records[/td][td style="padding:3px;"]Similar concept, version-specific layout[/td][/tr][tr][td style="padding:3px;"]Sequence groups[/td][td style="padding:3px;"]One local group; shared banks are included MDLs[/td][td style="padding:3px;"]Later external animation-block systems[/td][/tr][tr][td style="padding:3px;"]Model include[/td][td style="padding:3px;"]Recursive virtual libraries plus VtMB remap[/td][td style="padding:3px;"]Similar concept, incompatible exact structures[/td][/tr][tr][td style="padding:3px;"]Bone flag [font face="courier new"]0x2[/font][/td][td style="padding:3px;"]Split rotation/translation inheritance[/td][td style="padding:3px;"]Not QuatInterp[/td][/tr][tr][td style="padding:3px;"]Procedural rules[/td][td style="padding:3px;"]Shipped content is AxisInterp[/td][td style="padding:3px;"]Later documentation emphasizes QuatInterp paths[/td][/tr][tr][td style="padding:3px;"]Bone controllers[/td][td style="padding:3px;"]Struct exists; zero authored models use it[/td][td style="padding:3px;"]Common engine feature[/td][/tr][tr][td style="padding:3px;"]Secondary motion[/td][td style="padding:3px;"]Header bone-chain table plus renderer cloth[/td][td style="padding:3px;"]Not later jiggle-bone layout[/td][/tr][tr][td style="padding:3px;"]Facial compressed delta[/td][td style="padding:3px;"]Renderer direction table plus byte magnitude[/td][td style="padding:3px;"]Often treated as later signed-short data[/td][/tr][tr][td style="padding:3px;"]Eyeball record[/td][td style="padding:3px;"]140 bytes at [font face="courier new"]StudioModel +192/+196[/font][/td][td style="padding:3px;"]Different model/record layouts[/td][/tr][tr][td style="padding:3px;"]Cloth[/td][td style="padding:3px;"]Troika renderer particle payload extending model and mesh[/td][td style="padding:3px;"]Not represented by generic Source studio structs[/td][/tr][/tbody][/table]
+
+The correct use of later Source source code is vocabulary and architectural orientation. It is not a binary layout specification for Bloodlines.
+
+[hr]
+
+[font size="5"][b]19. What the existing tools actually do[/b][/font]
+
+[font size="4"][b]Crowbar[/b][/font]
+
+Crowbar is the strongest public v2531 structure and ordinary bone-animation reference. It has dedicated model classes, expands the RLE channels, understands sequences and included-model structures, and can emit SMD animations.
+
+Its output is not a complete retail-pose oracle. SMD converts the original quaternion representation into Euler samples and cannot carry all runtime policies. Crowbar's procedural handling also interprets VtMB's bone bits through later Source assumptions: AxisInterp is not evaluated as retail does, and flag [font face="courier new"]0x2[/font] is not the QuatInterp condition it is treated as.
+
+Use Crowbar as:
+
+[ul type="disc"][li]a very valuable parser and decompiler;[/li][li]an independent structural cross-check;[/li][li]a source of ordinary sampled clips and QC/SMD material;[/li][li]never the only authority for a disputed final pose, facial delta, or procedural result.[/li][/ul]
+
+[font size="4"][b]VAMPTools[/b][/font]
+
+VAMPTools is the strongest VtMB-native static mesh/rig walk among the established public converters. Its hand-fitted geometry path produces useful FBX output and helped establish the embedded vertex and topology relationship.
+
+Its copied-forward studio header is not reliable after the attachment block, because it omits two fields and shifts the facial block. It also uses export-oriented approximations for split inheritance and leaves AxisInterp unapplied. Winding, UV, and coordinate changes in its FBX path are target conversions, not universal v2531 rules.
+
+Use VAMPTools as:
+
+[ul type="disc"][li]a static geometry and rig reference;[/li][li]an FBX inspection path;[/li][li]an independent source for fitted VtMB geometry structures;[/li][li]not a final retail skeletal or facial evaluator.[/li][/ul]
+
+[font size="4"][b]Bloodlines SDK[/b][/font]
+
+The Bloodlines SDK is the central community collection for extraction, maps, models, materials, lipsync, choreography, Crowbar, Formatter, and historical documentation.
+
+Its own documentation is candid that accurate general multi-bone animation editing and a complete original compiler were missing from the established workflow. Editor display support is not equivalent to [font face="courier new"]vampire.exe[/font] behavior.
+
+Use it as the primary community workflow and tooling collection, not as evidence that every embedded runtime system is already reproduced.
+
+[font size="4"][b]DDLullu's MDL Formatter[/b][/font]
+
+MDL Formatter made practical custom player models possible by combining a newly compiled mesh with a compatible donor Bloodlines container. It can preserve the donor skeleton, animations, procedural data, and other structures while replacing visible geometry.
+
+That is a successful compatibility compiler, not a general clean-room v2531 compiler. The established workflow cannot freely edit the skeleton, facial vertex animation, cloth, or donor animations.
+
+[font size="4"][b]SourceIO[/b][/font]
+
+SourceIO contains an explicit v2531 model path and is useful as an independent Blender-side structure and mesh reference. Its VtMB animation import path is presently not implemented, and Source 1 MDL export is not a supported route.
+
+Use it for model/material/physics comparison and as a possible future home for another decoder, not as a current Bloodlines animation oracle.
+
+[font size="4"][b]Twiglard's recent experimental Blender animation writer[/b][/font]
+
+Twiglard's recent test add-on demonstrates a materially new capability: import a VtMB model, edit an existing animation, and write it back into an already-existing model while leaving mesh sections untouched. A newly authored gesture reportedly plays in retail.
+
+That is strong evidence of a real donor-file animation writer. It crosses the line from extraction into authoring.
+
+Its announced scope is still narrow:
+
+[ul type="disc"][li]existing model as the destination;[/li][li]existing animation edited in Blender;[/li][li]mesh export disabled;[/li][li]no demonstrated new skeleton, full model build, facial compiler, cloth compiler, or arbitrary included-bank construction.[/li][/ul]
+
+Until its source and broader tests are available, it should be described as an important animation write-back milestone, not as proof that every v2531 subsystem is now authorable.
+
+[font size="4"][b]Generic SMD, FBX, and Valve SDK tooling[/b][/font]
+
+These tools provide useful interchange and familiar names. They necessarily flatten or omit parts of the original contract:
+
+[ul type="disc"][li]SMD has no representation for VtMB's included-model ownership, binary layer masks as distinct semantic state, client transition history, split inheritance, persistent palette lifetime, or renderer cloth;[/li][li]FBX can preserve a sampled skeleton but not the game's selector, event, or native owner policy;[/li][li]later Valve headers and Source SDK code provide landmarks but not compatible offsets, flags, or Troika extensions.[/li][/ul]
+
+Interchange output is a view of the data, not the format itself.
+
+[font size="4"][b]Capability summary[/b][/font]
+
+[table][tbody][tr][td style="padding:3px;"][b]Tool/path[/b][/td][td style="padding:3px;"][b]Geometry[/b][/td][td style="padding:3px;"][b]Skeleton[/b][/td][td style="padding:3px;"][b]Existing clips[/b][/td][td style="padding:3px;"][b]Final retail pose[/b][/td][td style="padding:3px;"][b]New mesh in retail[/b][/td][td style="padding:3px;"][b]Edited native animation[/b][/td][td style="padding:3px;"][b]General v2531 compiler[/b][/td][/tr][tr][td style="padding:3px;"]Crowbar[/td][td style="padding:3px;"]Strong[/td][td style="padding:3px;"]Strong[/td][td style="padding:3px;"]Strong ordinary extraction[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]Via external workflows[/td][td style="padding:3px;"]No established writer[/td][td style="padding:3px;"]No[/td][/tr][tr][td style="padding:3px;"]VAMPTools[/td][td style="padding:3px;"]Strong[/td][td style="padding:3px;"]Strong static rig[/td][td style="padding:3px;"]Useful but approximate around rig rules[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]No native compiler[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]No[/td][/tr][tr][td style="padding:3px;"]Bloodlines SDK[/td][td style="padding:3px;"]Tool collection[/td][td style="padding:3px;"]Yes through included tools[/td][td style="padding:3px;"]Extraction/workflow support[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]Yes through donor workflows[/td][td style="padding:3px;"]Historically no[/td][td style="padding:3px;"]No[/td][/tr][tr][td style="padding:3px;"]MDL Formatter[/td][td style="padding:3px;"]Donor-backed replacement[/td][td style="padding:3px;"]Donor skeleton[/td][td style="padding:3px;"]Preserves donor clips[/td][td style="padding:3px;"]Preserves inherited data, does not evaluate it independently[/td][td style="padding:3px;"]Yes[/td][td style="padding:3px;"]Historically no[/td][td style="padding:3px;"]No[/td][/tr][tr][td style="padding:3px;"]SourceIO[/td][td style="padding:3px;"]Useful import[/td][td style="padding:3px;"]Useful import[/td][td style="padding:3px;"]VtMB path not implemented[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]No[/td][td style="padding:3px;"]No[/td][/tr][tr][td style="padding:3px;"]Experimental Blender writer[/td][td style="padding:3px;"]Preserves existing mesh[/td][td style="padding:3px;"]Existing skeleton[/td][td style="padding:3px;"]Imports and edits an existing clip[/td][td style="padding:3px;"]Retail playback demonstrated narrowly[/td][td style="padding:3px;"]Not its test scope[/td][td style="padding:3px;"]Yes, narrow donor write-back[/td][td style="padding:3px;"]Not demonstrated[/td][/tr][/tbody][/table]
+
+[hr]
+
+[font size="5"][b]20. What older Bloodlines model guides usually omit[/b][/font]
+
+The following are not small details. Each can change the final visible or gameplay result:
+
+[ul type="disc"][li][font face="courier new"]StudioModel[/font] is 224 bytes, so multi-model bodygroups expose shorter false strides.[/li][li]packed prop normals come from renderer tables and preserve authored hard edges.[/li][li]the animation record carries seven quaternion/position channels, not modern compact Source data.[/li][li]missing quaternion components retain bind values rather than zero.[/li][li]per-bone animation weight is a binary layer ownership mask.[/li][li]3×3 blend grids expose the real [font face="courier new"]anim[i0][i1][/font] orientation.[/li][li]movement metadata moves the actor while the bone clip remains in place.[/li][li]activity IDs are loader-resolved; authored names are the durable key.[/li][li]model autolayers and four networked combat overlays are different systems.[/li][li]sequence transitions are client-side, persistent, and chained.[/li][li]events split at 5000 into server gameplay and client presentation ownership.[/li][li]included models evaluate in donor space and use donor bind fallback before remapping.[/li][li]bone flag [font face="courier new"]0x2[/font] is split hierarchy inheritance, not QuatInterp.[/li][li]shipped procedural bones are AxisInterp and replace driven locals after blending.[/li][li]the bone palette persists and can retain unrefreshed matrices.[/li][li]hair/breast chains use a header-level solver unrelated to [font face="courier new"].phy[/font].[/li][li]skirts and coats use a separate post-skin renderer particle system.[/li][li]compressed facial deltas address a unit-vector table.[/li][li][font face="courier new"]FETCH2[/font] reads earlier flex outputs, making rule order load-bearing.[/li][li]eyelids are overwritten by a renderer eye pass after flex-rule evaluation.[/li][li]the mouth amplitude slot does not deform the standard face.[/li][li][font face="courier new"].lip[/font] identity is numeric, not the displayed phoneme string.[/li][li]phoneme influence begins before the authored sound span.[/li][li]first-person hands and weapons are two synchronized viewmodel entities.[/li][/ul]
+
+These omissions explain why a decompiler can produce a recognizable model while still disagreeing with retail in motion, expression, secondary deformation, or event timing.
+
+[hr]
+
+[font size="5"][b]21. Minimum implementation order for a correct reader or converter[/b][/font]
+
+[font size="4"][b]Phase 1: safe container parsing[/b][/font]
+
+[ol type="1"][li]Validate [font face="courier new"]IDST[/font], version 2531, declared length, and sibling checksums.[/li][li]Treat counts as the validity gate for every array.[/li][li]Apply the correct owner-relative offset rule per structure.[/li][li]Check multiplication, addition, stride, and string termination against the model image.[/li][li]Parse the full 424-byte header without overlaying a modern Source struct.[/li][li]Walk every bodypart and every model, not only the first model in each bodygroup.[/li][li]Walk [font face="courier new"].mdl[/font] and [font face="courier new"].vtx[/font] hierarchies in lockstep and detect the VTX vertex-table form per stripgroup.[/li][/ol]
+
+[font size="4"][b]Phase 2: geometry and bind data[/b][/font]
+
+[ol type="1"][li]Decode all three embedded vertex formats.[/li][li]Preserve stored normals and material skin references.[/li][li]Resolve skin families and material search paths.[/li][li]Build the 160-byte skeleton and conventional inverse binds.[/li][li]Preserve attachments, hitboxes, IK carriers, eyes, flexes, and secondary-motion metadata even if the first consumer does not yet evaluate them.[/li][/ol]
+
+[font size="4"][b]Phase 3: ordinary animation[/b][/font]
+
+[ol type="1"][li]Parse 72-byte animation descriptors and 764-byte sequences.[/li][li]Expand or sample all seven RLE channels safely.[/li][li]Apply bind-relative position and component-replacing quaternion equations.[/li][li]Preserve the binary ownership mask.[/li][li]Use per-clip FPS and [font face="courier new"](numframes - 1) * cycle[/font] timing.[/li][li]Decode movement and animation events rather than dropping them as opaque tails.[/li][/ol]
+
+[font size="4"][b]Phase 4: sequence composition[/b][/font]
+
+[ol type="1"][li]Resolve activity names and pose parameters.[/li][li]Address the inline blend grid without transposition.[/li][li]Blend cells by normalized cycle.[/li][li]Resolve included-model ownership and remap from donor space.[/li][li]Compose masked layers, deltas, overlays, and transition history as separate mechanisms.[/li][/ol]
+
+[font size="4"][b]Phase 5: final retail pose[/b][/font]
+
+[ol type="1"][li]Build hierarchy with split inheritance.[/li][li]Evaluate AxisInterp after local blending.[/li][li]Maintain or intentionally replace the persistent partial palette policy.[/li][li]Apply bone-chain secondary motion.[/li][li]Skin using current bone-to-world times inverse bind.[/li][li]Apply renderer cloth as selected post-skin substitution.[/li][/ol]
+
+[font size="4"][b]Phase 6: facial and eye path[/b][/font]
+
+[ol type="1"][li]Decode both facial vertex formats and the renderer direction tables.[/li][li]Accumulate [font face="courier new"].lip[/font] phonemes by numeric key with the correct envelope.[/li][li]Execute flex rules in file order with correct [font face="courier new"]FETCH2[/font] and division semantics.[/li][li]Apply blink, mouth readout, gaze, iris, and eyelid stages in retail order.[/li][/ol]
+
+[hr]
+
+[font size="5"][b]22. Validation cases that expose false-positive decoders[/b][/font]
+
+A useful test set is deliberately adversarial:
+
+[ul type="disc"][li]a multi-model bodygroup to expose the 224-byte model stride;[/li][li]a packed scenery model to test position dequantization and renderer normals;[/li][li]a model with alternate skin families;[/li][li]a clavicle clip that animates only quaternion W;[/li][li]a head-only or one-arm layer with zero ownership records;[/li][li]a 3×3 aim grid to expose transposition;[/li][li]a movement clip to catch doubled root motion;[/li][li]a character whose active clip comes from an included bank with donor/target bind differences;[/li][li]a seated or leaning pose to expose split inheritance;[/li][li]an AxisInterp-driven arm twist through a crossfade;[/li][li]several overlapping client transitions;[/li][li]a sequence with both server and client animation events;[/li][li]a ponytail or breast chain that reaches its angular limit;[/li][li]Jeanette's skirt or Sheriff's coat to prove post-skin cloth substitution;[/li][li]a speaking face with [font face="courier new"]FETCH2[/font], division by closed-mouth zero, blink, and moving gaze;[/li][li]a player body showing still facial geometry but live irises;[/li][li]the synchronized hands and packed weapon viewmodels.[/li][/ul]
+
+Visual inspection is useful, but final CPU bone matrices, flex outputs, event traces, and selected post-skin vertices are stronger acceptance evidence. A rest-pose screenshot is the weakest possible animation test because inverse binds hide many errors there.
+
+[hr]
+
+[font size="5"][b]23. Authoring: what a complete compiler would still need[/b][/font]
+
+Reading v2531 does not automatically provide a writer. A native compiler must safely regenerate or relocate:
+
+[ul type="disc"][li]all count/index pairs and nested relative offsets;[/li][li]160-byte bones and 32-byte-per-bone animation regions;[/li][li]variable-size RLE tracks;[/li][li]sequence grids, activities, movements, events, layers, and transition fields;[/li][li]include-model libraries and remaps;[/li][li]all three embedded vertex formats and VTX topology;[/li][li]skin tables, materials, attachments, hitboxes, and IK carriers;[/li][li]flex rules and both vertex-animation encodings;[/li][li]eyes, mouth, lipsync association, secondary motion, and renderer cloth;[/li][li]sibling checksums and bounds.[/li][/ul]
+
+A donor-backed writer can preserve most of those structures and edit one region. That is the safest first authoring scope and already a meaningful achievement. A general compiler must also reject malformed topology, offsets, bone influences, masks, and unsupported procedural content rather than emitting a file that only appears plausible.
+
+Retail loading and playback are required tests. They are not sufficient alone: an unchanged import/export round trip, targeted byte-level structural validation, multiple animation families, and failure tests are needed to show that success is not dependent on one donor's unused space or exact clip shape.
+
+[hr]
+
+[font size="5"][b]24. Remaining bounded unknowns[/b][/font]
+
+The major format and runtime systems are substantially understood. The open edges are now specific:
+
+[ul type="disc"][li]the caller-side scalar supplied to model-declared autolayers;[/li][li]exact retail equivalence at loop boundaries, negative playback, and a few save/restore timing cases;[/li][li]whether a new implementation should reproduce persistent partial palette history or deliberately rebuild all bones;[/li][li]independent bit-for-bit numerical replay of both secondary-motion solvers;[/li][li]post-skin particle capture for garment cloth and exact live [font face="courier new"]r_cloth[/font] gating;[/li][li]the bone-chain record's field at [font face="courier new"]+8[/font], the unexercised explicit-terminal branch, and a few special controls;[/li][li]two unused zero header fields;[/li][li]unusual included-model/remap combinations outside the broad ordinary corpus;[/li][li]complete live matrix acceptance for both first-person viewmodel entities;[/li][li]complete runtime use of the structurally decoded IK carriers;[/li][li]a public, general native v2531 compiler for arbitrary skeletons, multi-bone animation, flexes, procedural data, and cloth.[/li][/ul]
+
+These are reasons to state scope precisely, not reasons to call the whole format unknown.
+
+[hr]
+
+[font size="5"][b]25. Final conclusion[/b][/font]
+
+Bloodlines MDL v2531 is no longer an opaque model format. Its container, geometry, skeletons, ordinary clips, masks, timing, grids, movement, activities, events, shared libraries, principal hierarchy rules, procedural bones, both secondary-motion carriers, facial rules, compressed morphs, eyes, lipsync selection, and first-person model split are all understood well enough to build faithful readers and increasingly complete runtime reproduction.
+
+The central lesson is that [b]VtMB is Source-derived, not Source-identical[/b]. Later Source documentation remains invaluable for vocabulary, but every stride, flag, offset, interpolation rule, and ownership boundary that affects the result must be confirmed against Bloodlines itself.
+
+Crowbar, VAMPTools, the Bloodlines SDK, MDL Formatter, SourceIO, community guides, and the new Blender animation writer each solve a different part of the problem. Their work is complementary. None should be dismissed, and none should be promoted into a capability it does not claim.
+
+The correct practical description is:
+
+[quote]
+[b]VtMB MDL v2531 is substantially decoded. Existing content can be extracted reliably, the retail pose pipeline is largely reproducible, donor-backed model workflows are mature, and native animation write-back has now been demonstrated in a constrained form. The remaining gap is a fully validated general-purpose compiler and a handful of explicitly named runtime edges—not an unknown format.[/b]
+[/quote]
+
+[hr]
+
+[font size="5"][b]Public references and community tools[/b][/font]
+
+[ul type="disc"][li]Crowbar: [a href="https://github.com/ZeqMacaw/Crowbar"]https://github.com/ZeqMacaw/Crowbar[/a][/li][li]VAMPTools: [a href="https://github.com/atrblizzard/VAMPTools"]https://github.com/atrblizzard/VAMPTools[/a][/li][li]Bloodlines SDK: [a href="https://www.moddb.com/mods/vtmb-unofficial-patch/downloads/bloodlines-sdk"]https://www.moddb.com/mods/vtmb-unofficial-patch/downloads/bloodlines-sdk[/a][/li][li]DDLullu MDL Formatter workflow: [a href="https://www.moddb.com/games/vampire-the-masquerade-bloodlines/tutorials/compiling-a-custom-pc-model-with-ddlullus-mdl-formatter"]https://www.moddb.com/games/vampire-the-masquerade-bloodlines/tutorials/compiling-a-custom-pc-model-with-ddlullus-mdl-formatter[/a][/li][li]SourceIO: [a href="https://github.com/REDxEYE/SourceIO"]https://github.com/REDxEYE/SourceIO[/a][/li][li]VtMB Mod Developer Guide: [a href="https://gamefaqs.gamespot.com/pc/914819-vampire-the-masquerade-bloodlines/faqs/54295"]https://gamefaqs.gamespot.com/pc/914819-vampire-the-masquerade-bloodlines/faqs/54295[/a][/li][li]Twiglard's animation-writer discussion: [a href="https://rpgcodex.net/forums/threads/revisiting-vtm-bloodlines.108242/page-158"]https://rpgcodex.net/forums/threads/revisiting-vtm-bloodlines.108242/page-158[/a][/li][/ul]
+
+Thanks to ZeqMacaw, atrblizzard, DDLullu, Psycho-A, ilex, the Unofficial Patch and Bloodlines SDK contributors, and everyone who preserved the community's model knowledge long enough for the remaining runtime pieces to be separated and verified.
+
+[/font]
