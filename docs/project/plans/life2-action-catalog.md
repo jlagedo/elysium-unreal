@@ -6,16 +6,15 @@ The approved design behind [`animation.md` → LIFE2](animation.md). Status stay
 ## Context
 
 The reverse engineering is closed (RE37, `docs/vtmb/animation_and_movers.md` A.3). The weapon
-translation tables and the player action rules are committed source, generated from the pinned
-binary by `research/tooling/gen_action_tables.py`; their storage form, the resolver shape they
-serve and the two test levels that hold them are `docs/architecture/animation-architecture.md`
-§3.4 and the landed sources themselves. What every remaining session builds, it builds against
-that established form.
+translation tables, the player action rules and the NPC translation surface are committed source,
+generated from the pinned binary by `research/tooling/gen_action_tables.py`; their storage form, the
+resolver shape they serve and the two test levels that hold them are
+`docs/architecture/animation-architecture.md` §3.4 and the landed sources themselves. What every
+remaining session builds, it builds against that established form.
 
-What is still only a research instrument is the **NPC** side — the pre-translation and
-class-translation bodies, the delegates, the grapple arithmetic and the task routes — and the
-**per-model events and transition graph**, which are per-install data no export carries yet. The
-runtime meanwhile still resolves activities through a **5-row hand-seeded weapon table**
+What is still only a research instrument is the **per-model events and transition graph**, which are
+per-install data no export carries yet. The runtime meanwhile still resolves activities through a
+**5-row hand-seeded weapon table**
 (`Source/ElysiumUE/Private/Player/ElysiumAnimationIntent.cpp:46-80`); LIFE3 deletes it and
 repoints the resolver onto the committed tables.
 
@@ -48,13 +47,12 @@ model corpus.
 
 | Artifact | Home |
 |---|---|
-| actor/form + NPC class translation | `Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp` (generated, committed) |
 | per-model events | `npc/blends/<stem>.json`, new `"events"` block |
 | per-model transition graph | `npc/blends/<stem>.json`, new `"transitions"` block |
 | coverage report | `$ELYSIUM_WORK_ROOT` QA report, not an export-corpus artifact |
 
-The generated `.cpp` holds its arrays in an anonymous namespace behind accessors declared in
-`Private/Visual/ElysiumActionTables.h`, beside the two already there. The generator is
+A generated `.cpp` holds its arrays in an anonymous namespace behind accessors declared in
+`Private/Visual/ElysiumActionTables.h`. The generator is
 `research/tooling/gen_action_tables.py`, run as `uv run elysium research gen_action_tables`, and
 it is **owner-run archaeology, not part of any build**; `--only` scopes it to one artifact and
 `--check` re-derives without writing.
@@ -128,17 +126,11 @@ One bullet and one commit each.
 
 | # | Session | Touches | Deps |
 |---|---|---|---|
-| **S3** | **NPC rules and class translation as source** — 10 pre-translation + 5 class-translation bodies, 2+2 delegates, grapple as 29 bases plus the `+1…+8` arithmetic, 111 task routes | generator, `ElysiumNpcActivityTables.cpp`✚, tests | — |
 | **S4** | **Catalog: events + autolayer census** | `exporters/npc_export.py`, `Private/Visual/ElysiumBlendGrids.{h,cpp}`, tests | — |
 | **S5** | **Catalog: transition graph** — decode, verify, emit, write the VtMB doc | `formats/mdl_skel.py`, `npc_export.py`, `animation_and_movers.md` | S4 |
 
-**S4 is parallel with S3**: different source, different files.
-
 ### Acceptance sentences, quoted back in each kickoff
 
-- **S3** — *77 descendants collapse to 10 pre-translation, 5 class-translation and 2+2 delegate
-  bodies; 111 task routes over 100 policy rows with zero custom exact-label routes; the 232 grapple
-  variants generated from 29 bases rather than enumerated.*
 - **S4** — *for the selected stems every clip carrying events in the MDL carries them in
   `npc/blends/<stem>.json` with cycle in [0,1] and `type == 0`, matching `npc_index.json`'s rollup;
   the autolayer census still reads `{0:13544, 1:237, 2:224}` with the one inverted host named.*
@@ -151,10 +143,10 @@ One bullet and one commit each.
 Narrowest first — no broad profile, no `--force`, no unscoped tier.
 
 - Python unit: `uv run python -m unittest pipeline.tests.<module>` for the one module touched.
-- Export: `uv run elysium export characters --only <stem>` (S4, S5), stems named in the kickoff.
+- Export: `uv run elysium export characters --only <stem>`, stems named in the kickoff.
 - Runtime: the one focused filter the session adds. Never the whole `Content` tier as routine
   validation.
-- Build: where a session touched C++ (S3) — state the scope, get owner acceptance, then
+- Build: where a session touches C++ — state the scope, get owner acceptance, then
   `uv run elysium build`.
 - Owner-run corroboration, reporting only: `uv run elysium research action_trace_join`.
 

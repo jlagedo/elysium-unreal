@@ -256,8 +256,17 @@ The ladder:
   player-side translations and both effective `Player_Anim` fields, every activity carrying its
   registered ID; of the 35 activities that surface can request, 29 resolve in the corpus directly,
   five through the weapon tables, and one — `ACT_LAND_CROUCH` — nowhere, which is the absence
-  retail's own capture recorded. Nothing about actions is exported or baked. The NPC class
-  translation, the per-model events and the transition graph are open.
+  retail's own capture recorded. The NPC translation surface is committed source beside them: 77
+  `CAI_BaseNPC` descendants collapsing to 10 pre-translation, 5 class-translation and 2+2 delegate
+  bodies plus the one paired-action tail, stored as 69 ordered rules over an 18-predicate vocabulary
+  with the inherited body chained before or after each — every address, inheritor count and owning
+  class re-decoded from the pinned RTTI walk at generation time; 63 entity classnames resolved
+  most-derived; 100 task policies over 111 task routes with zero exact-label and zero overlay-layer
+  routes; and the 232 paired-action variants generated from 29 registered bases and the `+1`…`+8`
+  arithmetic rather than enumerated, four zombie-feeding families registering their attacker and
+  victim halves the other way round. Two movement-policy rows name a request family the RE never
+  enumerated and report themselves unresolved rather than guess it. Nothing about actions is
+  exported or baked. The per-model events and the transition graph are open.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
   authority is landed; the NPC gait push, repointing the resolver onto the committed tables and
   deleting the 5-row stub, and activity→state coverage open.

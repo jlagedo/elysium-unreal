@@ -165,6 +165,78 @@ namespace
 		}
 	};
 
+	// --- the NPC side ----------------------------------------------------------------------------
+
+	int32 NpcBodyIndex(const TCHAR* Name)
+	{
+		TArrayView<const ElysiumActionTables::FNpcTranslationBody> Bodies =
+			ElysiumActionTables::NpcTranslationBodies();
+		for (int32 Index = 0; Index < Bodies.Num(); ++Index)
+		{
+			if (FCString::Stricmp(Bodies[Index].Name, Name) == 0)
+			{
+				return Index;
+			}
+		}
+		return INDEX_NONE;
+	}
+
+	// The predicates a walk is standing in for. `RunnerVariantIs` is the one operand predicate the
+	// caller answers; `CoverContextIs` belongs to the walk, because a `ForceCoverContext` row can
+	// change the context out from under it.
+	struct FNpcState
+	{
+		TArray<ElysiumActionTables::ENpcPredicate> Holds;
+		int32 Variant = INDEX_NONE;
+
+		bool operator()(ElysiumActionTables::ENpcPredicate Predicate, int32 Operand) const
+		{
+			if (Predicate == ElysiumActionTables::ENpcPredicate::RunnerVariantIs)
+			{
+				return Operand == Variant;
+			}
+			return Holds.Contains(Predicate);
+		}
+	};
+
+	ElysiumActionTables::FNpcTranslation WalkNpc(const TCHAR* BodyName, const TCHAR* Base,
+		const FNpcState& State, const TSet<FString>& Carries, int32 CoverContext = 0)
+	{
+		return ElysiumActionTables::NpcTranslate(NpcBodyIndex(BodyName), FString(Base), CoverContext,
+			[&State](ElysiumActionTables::ENpcPredicate Predicate, int32 Operand)
+			{ return State(Predicate, Operand); },
+			[&Carries](const FString& Activity) { return Carries.Contains(Activity); });
+	}
+
+	const TCHAR* SlotName(ElysiumActionTables::ENpcSlot Slot)
+	{
+		using ElysiumActionTables::ENpcSlot;
+		switch (Slot)
+		{
+		case ENpcSlot::PreTranslate:   return TEXT("pre-translate");
+		case ENpcSlot::ClassTranslate: return TEXT("class-translate");
+		case ENpcSlot::Cover:          return TEXT("cover");
+		case ENpcSlot::Reload:         return TEXT("reload");
+		case ENpcSlot::EarlyTranslate: return TEXT("early-translate");
+		}
+		return TEXT("?");
+	}
+
+	// The body index one class column names, so a class row can be checked column by column.
+	int32 ClassColumn(const ElysiumActionTables::FNpcClass& Class, ElysiumActionTables::ENpcSlot Slot)
+	{
+		using ElysiumActionTables::ENpcSlot;
+		switch (Slot)
+		{
+		case ENpcSlot::PreTranslate:   return Class.PreTranslate;
+		case ENpcSlot::ClassTranslate: return Class.ClassTranslate;
+		case ENpcSlot::Cover:          return Class.Cover;
+		case ENpcSlot::Reload:         return Class.Reload;
+		case ENpcSlot::EarlyTranslate: break;
+		}
+		return INDEX_NONE;
+	}
+
 	// What an ordered list answers for one state: the row's activity, or empty when nothing
 	// overrides what the selector already had.
 	FString Answer(TArrayView<const ElysiumActionTables::FPlayerRule> Rules,
@@ -1236,6 +1308,617 @@ bool FElysiumPlayerActionConformanceTest::RunTest(const FString&)
 		TestEqual(TEXT("and it is `ACT_LAND_CROUCH`, which no shipped body carries"), Residual[0],
 			FString(TEXT("ACT_LAND_CROUCH")));
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// The NPC translation surface, content-free.
+//
+// The census catches a bad regeneration. What it cannot catch is the thing this suite exists for:
+// **the order**. A `RewriteAndReturn` row that slid behind its chain would let the common Troika
+// body swallow the dog's fidget; a `ForceCoverContext` row that moved after the context rows would
+// hand a forced-low body its medium cover; a chain that flipped from `BeforeRules` to `AfterRules`
+// would let the Tzimisce runner's variant selection run against an untranslated request. Every one
+// of those keeps the same row count.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityTablesTest,
+	"Elysium.Substrate.NpcActivityTables", GElysiumActionTableFlags)
+bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
+{
+	using namespace ElysiumActionTables;
+
+	const FNpcTableCensus& Stored = NpcCensus();
+	TArrayView<const FNpcTranslationBody> Bodies = NpcTranslationBodies();
+	TArrayView<const FNpcClass> Classes = NpcClasses();
+
+	// --- the census is the table -----------------------------------------------------------------
+	{
+		int32 PerSlot[5] = { 0, 0, 0, 0, 0 };
+		int32 Rules = 0;
+		int32 FamilyRules = 0;
+		for (const FNpcTranslationBody& Body : Bodies)
+		{
+			++PerSlot[static_cast<int32>(Body.Slot)];
+			Rules += Body.RuleCount;
+			for (int32 Index = 0; Index < Body.RuleCount; ++Index)
+			{
+				FamilyRules += Body.Rules[Index].FromFamily != nullptr ? 1 : 0;
+			}
+		}
+		TestEqual(TEXT("pre-translation bodies"), PerSlot[0], Stored.PreTranslateBodies);
+		TestEqual(TEXT("class-translation bodies"), PerSlot[1], Stored.ClassTranslateBodies);
+		TestEqual(TEXT("cover delegates"), PerSlot[2], Stored.CoverBodies);
+		TestEqual(TEXT("reload delegates"), PerSlot[3], Stored.ReloadBodies);
+		TestEqual(TEXT("the paired-action tail"), PerSlot[4], Stored.TailBodies);
+		TestEqual(TEXT("translation rules"), Rules, Stored.TranslationRules);
+		TestEqual(TEXT("rules over an unenumerated request family"), FamilyRules,
+			Stored.UnrecoveredFamilyRules);
+		TestEqual(TEXT("subclasses"), Classes.Num(), Stored.Subclasses);
+		TestEqual(TEXT("entity aliases"), NpcEntityAliases().Num(), Stored.EntityAliases);
+		TestEqual(TEXT("grapple bases"), NpcGrappleFamilies().Num(), Stored.GrappleFamilies);
+		TestEqual(TEXT("the predicate vocabulary the emission was generated against"),
+			static_cast<int32>(ENpcPredicate::Count), Stored.Predicates);
+
+		// The acceptance sentence, as an assertion: 77 descendants collapse to 10 + 5 + 2 + 2.
+		TestEqual(TEXT("77 subclasses"), Stored.Subclasses, 77);
+		TestEqual(TEXT("collapsing to 10 pre-translation bodies"), Stored.PreTranslateBodies, 10);
+		TestEqual(TEXT("5 class-translation bodies"), Stored.ClassTranslateBodies, 5);
+		TestEqual(TEXT("2 cover delegates"), Stored.CoverBodies, 2);
+		TestEqual(TEXT("and 2 reload delegates"), Stored.ReloadBodies, 2);
+	}
+
+	// --- every body is well formed, and the chain graph terminates --------------------------------
+	for (int32 Index = 0; Index < Bodies.Num(); ++Index)
+	{
+		const FNpcTranslationBody& Body = Bodies[Index];
+		const FString Where = FString::Printf(TEXT("body %d (%s)"), Index,
+			Body.Name != nullptr ? Body.Name : TEXT("<unnamed>"));
+
+		TestNotNull(*FString::Printf(TEXT("%s names itself"), *Where), Body.Name);
+		TestNotNull(*FString::Printf(TEXT("%s carries its retail address"), *Where), Body.Address);
+		TestNotNull(*FString::Printf(TEXT("%s states its policy"), *Where), Body.Policy);
+		TestTrue(*FString::Printf(TEXT("%s has rules exactly when it says so"), *Where),
+			(Body.Rules != nullptr) == (Body.RuleCount > 0));
+		TestTrue(*FString::Printf(TEXT("%s chains exactly when it names a body"), *Where),
+			(Body.Chain != ENpcChain::None) == (Body.ChainTo != INDEX_NONE));
+
+		if (Body.ChainTo != INDEX_NONE)
+		{
+			if (TestTrue(*FString::Printf(TEXT("%s chains to a real body"), *Where),
+				Bodies.IsValidIndex(Body.ChainTo)))
+			{
+				const FNpcTranslationBody& Next = Bodies[Body.ChainTo];
+				// A body only ever inherits within its own slot; the one exception is the Troika
+				// pre-translation finishing through the non-virtual paired-action tail.
+				TestTrue(*FString::Printf(TEXT("%s chains within its slot (%s -> %s)"), *Where,
+					SlotName(Body.Slot), SlotName(Next.Slot)),
+					Next.Slot == Body.Slot || Next.Slot == ENpcSlot::EarlyTranslate);
+			}
+			// Follow the chain to its end. A cycle would hang the runtime walk on its own tripwire.
+			int32 Hops = 0;
+			int32 Cursor = Body.ChainTo;
+			while (Cursor != INDEX_NONE && Bodies.IsValidIndex(Cursor) && Hops <= Bodies.Num())
+			{
+				TestTrue(*FString::Printf(TEXT("%s does not chain back onto itself"), *Where),
+					Cursor != Index);
+				Cursor = Bodies[Cursor].ChainTo;
+				++Hops;
+			}
+			TestTrue(*FString::Printf(TEXT("%s's chain terminates"), *Where), Hops <= Bodies.Num());
+		}
+
+		for (int32 RuleIndex = 0; RuleIndex < Body.RuleCount; ++RuleIndex)
+		{
+			const FNpcRule& Rule = Body.Rules[RuleIndex];
+			const FString Row = FString::Printf(TEXT("%s row %d"), *Where, RuleIndex);
+			for (const ENpcPredicate Predicate : Rule.Predicates)
+			{
+				TestTrue(*FString::Printf(TEXT("%s names a live predicate"), *Row),
+					static_cast<int32>(Predicate) < static_cast<int32>(ENpcPredicate::Count));
+			}
+			TestFalse(*FString::Printf(TEXT("%s matches a literal or a family, never both"), *Row),
+				Rule.From != nullptr && Rule.FromFamily != nullptr);
+
+			const bool bRoutesOnly = Rule.Route == ENpcRoute::Delegate
+				|| Rule.Route == ENpcRoute::ForceCoverContext
+				|| Rule.Route == ENpcRoute::Grapple;
+			TestTrue(*FString::Printf(TEXT("%s names a target unless it only routes"), *Row),
+				(Rule.To != nullptr) == !bRoutesOnly);
+			if (Rule.To != nullptr)
+			{
+				TestTrue(*FString::Printf(TEXT("%s's target carries its registered ID"), *Row),
+					Rule.ToId > 0);
+			}
+			if (Rule.From != nullptr)
+			{
+				TestTrue(*FString::Printf(TEXT("%s's request carries its registered ID"), *Row),
+					Rule.FromId > 0);
+			}
+			if (Rule.Route == ENpcRoute::Delegate)
+			{
+				TestTrue(*FString::Printf(TEXT("%s delegates to a delegate slot"), *Row),
+					Rule.Delegate == ENpcSlot::Cover || Rule.Delegate == ENpcSlot::Reload);
+			}
+			if (Rule.Route == ENpcRoute::ForceCoverContext)
+			{
+				TestTrue(*FString::Printf(TEXT("%s forces a real cover context"), *Row),
+					Rule.Operand != 0);
+			}
+		}
+	}
+
+	// --- the class ledger points at the bodies it says it does ------------------------------------
+	{
+		TArray<int32> Inheritors;
+		Inheritors.SetNumZeroed(Bodies.Num());
+		const ENpcSlot Columns[] = { ENpcSlot::PreTranslate, ENpcSlot::ClassTranslate,
+			ENpcSlot::Cover, ENpcSlot::Reload };
+
+		for (const FNpcClass& Class : Classes)
+		{
+			for (const ENpcSlot Slot : Columns)
+			{
+				const int32 Index = ClassColumn(Class, Slot);
+				if (!TestTrue(*FString::Printf(TEXT("%s names a real %s body"), Class.CppClass,
+					SlotName(Slot)), Bodies.IsValidIndex(Index)))
+				{
+					continue;
+				}
+				TestEqual(*FString::Printf(TEXT("%s's %s column holds a %s body"), Class.CppClass,
+					SlotName(Slot), SlotName(Slot)), static_cast<int32>(Bodies[Index].Slot),
+					static_cast<int32>(Slot));
+				++Inheritors[Index];
+				TestTrue(*FString::Printf(TEXT("%s resolves the same body twice"), Class.CppClass),
+					NpcBodyFor(Class, Slot) == &Bodies[Index]);
+			}
+			TestTrue(*FString::Printf(TEXT("%s names a real StartTask body"), Class.CppClass),
+				NpcTaskHandlers().IsValidIndex(Class.StartTask));
+			TestTrue(*FString::Printf(TEXT("%s names a real RunTask body"), Class.CppClass),
+				NpcTaskHandlers().IsValidIndex(Class.RunTask));
+		}
+
+		for (int32 Index = 0; Index < Bodies.Num(); ++Index)
+		{
+			TestEqual(*FString::Printf(TEXT("%s's inheritor count is what the ledger holds"),
+				Bodies[Index].Name), Inheritors[Index], Bodies[Index].InheritorCount);
+		}
+		// The tail is reached by chain, never by a vtable column, which is why it is counted apart
+		// from the 10 + 5 + 2 + 2.
+		const int32 Tail = NpcBodyIndex(TEXT("EarlyTranslate_Grapple"));
+		if (TestTrue(TEXT("the paired-action tail is in the ledger"), Bodies.IsValidIndex(Tail)))
+		{
+			TestEqual(TEXT("and no class names it directly"), Inheritors[Tail], 0);
+		}
+	}
+
+	// --- the entity aliases resolve ---------------------------------------------------------------
+	{
+		TSet<FString> Seen;
+		for (const FNpcEntityAlias& Alias : NpcEntityAliases())
+		{
+			bool bDuplicate = false;
+			Seen.Add(FString(Alias.Classname).ToLower(), &bDuplicate);
+			TestFalse(*FString::Printf(TEXT("%s is claimed once"), Alias.Classname), bDuplicate);
+			if (!TestTrue(*FString::Printf(TEXT("%s resolves to a real class"), Alias.Classname),
+				Classes.IsValidIndex(Alias.ClassIndex)))
+			{
+				continue;
+			}
+			const FNpcClass& Owner = Classes[Alias.ClassIndex];
+			TestTrue(*FString::Printf(TEXT("%s resolves through the lookup too"), Alias.Classname),
+				FindNpcClassByEntityClass(FString(Alias.Classname)) == &Owner);
+
+			bool bClaimed = false;
+			for (int32 Index = 0; Index < Owner.EntityClassnameCount; ++Index)
+			{
+				bClaimed |= FCString::Stricmp(Owner.EntityClassnames[Index], Alias.Classname) == 0;
+			}
+			TestTrue(*FString::Printf(TEXT("%s is a name %s's own constructor claims"),
+				Alias.Classname, Owner.CppClass), bClaimed);
+		}
+
+		// The one documented miss. `sm_junkyard_1`'s Night Watchman names a class the retail DLL does
+		// not carry, and it is not silently answered with a cousin.
+		TestNull(TEXT("npc_BaseVampAI resolves to nothing rather than to a neighbour"),
+			FindNpcClassByEntityClass(TEXT("npc_BaseVampAI")));
+	}
+
+	// --- the task handlers and their policies ------------------------------------------------------
+	{
+		TArrayView<const FNpcTaskHandler> Handlers = NpcTaskHandlers();
+		TArrayView<const FNpcTaskPolicy> Policies = NpcTaskPolicies();
+
+		int32 Start = 0;
+		int32 Custom = 0;
+		int32 Animating = 0;
+		for (const FNpcTaskHandler& Handler : Handlers)
+		{
+			Start += Handler.Phase == ENpcTaskPhase::Start ? 1 : 0;
+			Custom += Handler.bSharedDispatcher ? 0 : 1;
+			Animating += (!Handler.bSharedDispatcher && Handler.PolicyCount > 0) ? 1 : 0;
+		}
+		TestEqual(TEXT("StartTask bodies"), Start, Stored.StartTaskHandlers);
+		TestEqual(TEXT("RunTask bodies"), Handlers.Num() - Start, Stored.RunTaskHandlers);
+		TestEqual(TEXT("custom task bodies"), Custom, Stored.CustomTaskHandlers);
+		TestEqual(TEXT("animation-bearing custom bodies"), Animating,
+			Stored.AnimationBearingHandlers);
+
+		TArray<int32> PolicyCounts;
+		PolicyCounts.SetNumZeroed(Handlers.Num());
+		int32 Routes = 0;
+		for (const FNpcTaskPolicy& Policy : Policies)
+		{
+			if (TestTrue(TEXT("every policy names a real handler"),
+				Handlers.IsValidIndex(Policy.Handler)))
+			{
+				++PolicyCounts[Policy.Handler];
+			}
+			TestTrue(TEXT("every policy routes at least one task"), Policy.TaskCount > 0);
+			Routes += Policy.TaskCount;
+			TestTrue(TEXT("a policy lists activities exactly when it counts them"),
+				(Policy.Activities != nullptr) == (Policy.ActivityCount > 0));
+			// The argument route is the one that names no literal: the task's own float argument is
+			// cast to an activity ID. Every other route has to name what it asks for.
+			if (Policy.Route == ENpcTaskRoute::SetIdealArgument)
+			{
+				TestEqual(TEXT("an argument route names no literal activity"), Policy.ActivityCount,
+					0);
+			}
+			else
+			{
+				TestTrue(TEXT("every other route names an activity"), Policy.ActivityCount > 0);
+			}
+		}
+		TestEqual(TEXT("100 policy rows"), Policies.Num(), Stored.TaskPolicies);
+		TestEqual(TEXT("over 111 task routes"), Routes, Stored.TaskRoutes);
+		// The finding, as an assertion: every recovered route asks for an activity. None looks a
+		// sequence label up and none allocates an overlay layer.
+		TestEqual(TEXT("no custom body looks an exact sequence label up"), Stored.ExactLabelRoutes,
+			0);
+		TestEqual(TEXT("and none allocates an overlay layer"), Stored.LayerRoutes, 0);
+
+		for (int32 Index = 0; Index < Handlers.Num(); ++Index)
+		{
+			TestEqual(*FString::Printf(TEXT("handler %s carries the policies it counts"),
+				Handlers[Index].Address), PolicyCounts[Index], Handlers[Index].PolicyCount);
+		}
+
+		// A task a shared melee family names is routed by more than one body, which is the whole
+		// reason the ledger is keyed by (handler, task) rather than by task.
+		TArray<const FNpcTaskPolicy*> Blocking;
+		CollectNpcTaskPolicies(TEXT("TASK_MELEE_BLOCK"), Blocking);
+		TestTrue(TEXT("TASK_MELEE_BLOCK is routed by more than one body"), Blocking.Num() > 1);
+	}
+
+	// --- the order, which no count catches ---------------------------------------------------------
+	{
+		const TSet<FString> Nothing;
+		const FNpcState Plain;
+
+		// The dog's leaf keeps the fidget the common Troika body would have turned into an idle.
+		// Slide that `RewriteAndReturn` row behind the chain and the two answers swap.
+		TestEqual(TEXT("the dog keeps its fidget"),
+			WalkNpc(TEXT("PreTranslate_Dog"), TEXT("ACT_FIDGET"), Plain, Nothing).Activity,
+			FString(TEXT("ACT_FIDGET")));
+		TestEqual(TEXT("and the common Troika body turns the same request into an idle"),
+			WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_FIDGET"), Plain, Nothing).Activity,
+			FString(TEXT("ACT_IDLE")));
+
+		// The human body's own rows run before the Troika chain.
+		FNpcState Relaxed;
+		Relaxed.Holds.Add(ENpcPredicate::NotArmedAlert);
+		TestEqual(TEXT("an unalerted human walks relaxed"),
+			WalkNpc(TEXT("PreTranslate_Human"), TEXT("ACT_WALK"), Relaxed, Nothing).Activity,
+			FString(TEXT("ACT_WALK_RELAXED")));
+
+		FNpcState Alerted;
+		Alerted.Holds.Add(ENpcPredicate::ArmedAlert);
+		TestEqual(TEXT("an alerted human turns alert"),
+			WalkNpc(TEXT("PreTranslate_Human"), TEXT("ACT_TURN_LEFT"), Alerted, Nothing).Activity,
+			FString(TEXT("ACT_TURN_LEFT_ALERT")));
+
+		FNpcState AlertedAiming = Alerted;
+		AlertedAiming.Holds.Add(ENpcPredicate::RangedAimCapable);
+		TestEqual(TEXT("... and aims instead of idling with a ranged weapon up"),
+			WalkNpc(TEXT("PreTranslate_Human"), TEXT("ACT_IDLE"), AlertedAiming, Nothing).Activity,
+			FString(TEXT("ACT_AIM")));
+
+		// The chain runs after: a gait override the human body does not carry still reaches the
+		// request through the common Troika body.
+		FNpcState Hurrying;
+		Hurrying.Holds.Add(ENpcPredicate::GaitOverrideRun);
+		TestEqual(TEXT("the human body's chain still applies the global gait override"),
+			WalkNpc(TEXT("PreTranslate_Human"), TEXT("ACT_WALK"), Hurrying, Nothing).Activity,
+			FString(TEXT("ACT_RUN")));
+
+		// ... and the Tzimisce runner's chain runs *before* its rules, so a request the chain
+		// delegates never reaches the variant selection at all.
+		FNpcState Variant;
+		Variant.Variant = 1;
+		const FNpcTranslation Delegated = WalkNpc(TEXT("PreTranslate_TzimisceRunner"),
+			TEXT("ACT_COVER"), Variant, Nothing);
+		TestTrue(TEXT("the runner's chain delegates a cover request before its own rules run"),
+			Delegated.bDelegated);
+		TestEqual(TEXT("and it delegates to the cover slot"), static_cast<int32>(Delegated.Delegate),
+			static_cast<int32>(ENpcSlot::Cover));
+		TestEqual(TEXT("an ordinary request reaches the runner's variant selection"),
+			WalkNpc(TEXT("PreTranslate_TzimisceRunner"), TEXT("ACT_FIDGET"), Variant,
+				Nothing).Activity, FString(TEXT("ACT_TZ_FIDGET2")));
+
+		// The cover delegate is an ordered candidate list against the body's own vocabulary.
+		const TSet<FString> Crouching = { TEXT("ACT_MIDCRUNCH_IDLE"), TEXT("ACT_CRUNCH_IDLE"),
+			TEXT("ACT_COVER") };
+		TestEqual(TEXT("Troika cover prefers the mid-crunch idle for context 100"),
+			WalkNpc(TEXT("Cover_Troika"), TEXT("ACT_COVER"), Plain, Crouching, 100).Activity,
+			FString(TEXT("ACT_MIDCRUNCH_IDLE")));
+
+		// Forced low cover rewrites the context *before* the context rows read it. Move that row
+		// after them and a forced-low body answers the medium crunch instead.
+		FNpcState ForcedLow;
+		ForcedLow.Holds.Add(ENpcPredicate::ForcedLowCover);
+		TestEqual(TEXT("forced low cover reaches the low crunch from context 100"),
+			WalkNpc(TEXT("Cover_Troika"), TEXT("ACT_COVER"), ForcedLow, Crouching, 100).Activity,
+			FString(TEXT("ACT_CRUNCH_IDLE")));
+
+		// A body carrying none of the crunch idles falls through to the base delegate.
+		const TSet<FString> BareCover = { TEXT("ACT_COVER") };
+		TestEqual(TEXT("a body with only plain cover falls through to the base delegate"),
+			WalkNpc(TEXT("Cover_Troika"), TEXT("ACT_COVER"), Plain, BareCover, 100).Activity,
+			FString(TEXT("ACT_COVER")));
+		TestEqual(TEXT("and a body with nothing at all lands on the base delegate's idle"),
+			WalkNpc(TEXT("Cover_Troika"), TEXT("ACT_COVER"), Plain, Nothing, 100).Activity,
+			FString(TEXT("ACT_IDLE")));
+
+		// The Troika fast reload's crunch answer re-enters the whole translator rather than being
+		// answered directly, which is the one route that does.
+		const FNpcTranslation Reload = WalkNpc(TEXT("Reload_Troika"), TEXT("ACT_RELOAD_FAST"), Plain,
+			Nothing, 101);
+		TestEqual(TEXT("Troika fast reload reaches the low crunch idle"), Reload.Activity,
+			FString(TEXT("ACT_CRUNCH_IDLE")));
+		TestTrue(TEXT("... through the whole translator"), Reload.bThroughTranslator);
+		TestEqual(TEXT("and without a cover context it answers the fast reload"),
+			WalkNpc(TEXT("Reload_Troika"), TEXT("ACT_RELOAD_FAST"), Plain, Nothing).Activity,
+			FString(TEXT("ACT_RELOAD_FAST")));
+
+		// The delegating rows on the common Troika pre-translation.
+		const FNpcTranslation Cover = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_COVER"), Plain,
+			Nothing);
+		TestTrue(TEXT("a cover request leaves the pre-translation for the cover delegate"),
+			Cover.bDelegated);
+		FNpcState Reloading;
+		Reloading.Holds.Add(ENpcPredicate::ReloadFastCapable);
+		const FNpcTranslation Fast = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_RELOAD_FAST"),
+			Reloading, Nothing);
+		TestTrue(TEXT("a capable fast reload leaves for the reload delegate"), Fast.bDelegated);
+		TestEqual(TEXT("... which is the reload slot"), static_cast<int32>(Fast.Delegate),
+			static_cast<int32>(ENpcSlot::Reload));
+
+		// An ordinary request finishes through the paired-action tail.
+		TestTrue(TEXT("an ordinary request reaches the paired-action tail"),
+			WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_IDLE"), Plain, Nothing).bGrappleTail);
+
+		// The two rows whose request family the recovered reading did not enumerate say so rather
+		// than guessing a membership.
+		FNpcState Frenzied;
+		Frenzied.Holds.Add(ENpcPredicate::MovementPolicyFrenzy);
+		const FNpcTranslation Unresolved = WalkNpc(TEXT("PreTranslate_Troika"), TEXT("ACT_WALK"),
+			Frenzied, Nothing);
+		TestTrue(TEXT("a frenzy movement policy reports what it cannot decide"),
+			Unresolved.bUnresolved);
+		TestEqual(TEXT("and leaves the request alone rather than guessing"), Unresolved.Activity,
+			FString(TEXT("ACT_WALK")));
+
+		// The remaining leaves.
+		TestEqual(TEXT("the wolf morph answers every request with its one activity"),
+			WalkNpc(TEXT("PreTranslate_WolfMorph"), TEXT("ACT_RANGE_ATTACK1"), Plain,
+				Nothing).Activity, FString(TEXT("ACT_WOLF_MORPH")));
+		TestEqual(TEXT("the stalker turns a gait into a combat move"),
+			WalkNpc(TEXT("PreTranslate_Stalker"), TEXT("ACT_RUN"), Plain, Nothing).Activity,
+			FString(TEXT("ACT_COMBATMOVE")));
+		const FNpcTranslation StalkerIdle = WalkNpc(TEXT("PreTranslate_Stalker"), TEXT("ACT_IDLE"),
+			Plain, Nothing);
+		TestFalse(TEXT("and leaves everything else alone"), StalkerIdle.bTranslated);
+
+		// The class-translation side, and the Ming Xiao leaf that repeats the human normalizations.
+		FNpcState Laughing;
+		Laughing.Holds.Add(ENpcPredicate::LaughIdleFlagged);
+		TestEqual(TEXT("the Troika class translation reaches the laugh idle"),
+			WalkNpc(TEXT("ClassTranslate_Troika"), TEXT("ACT_IDLE"), Laughing, Nothing).Activity,
+			FString(TEXT("ACT_LAUGH_IDLE")));
+		TestEqual(TEXT("the human class translation returns an alert turn to its ordinary form"),
+			WalkNpc(TEXT("ClassTranslate_Human"), TEXT("ACT_180_RIGHT_ALERT"), Plain,
+				Nothing).Activity, FString(TEXT("ACT_180_RIGHT")));
+		TestEqual(TEXT("... and Ming Xiao's own body does the same, then the Troika rule"),
+			WalkNpc(TEXT("ClassTranslate_MingXiao"), TEXT("ACT_IDLE"), Laughing, Nothing).Activity,
+			FString(TEXT("ACT_LAUGH_IDLE")));
+	}
+
+	// --- the grapple arithmetic --------------------------------------------------------------------
+	{
+		// The recovered table: `+1`/`+2` attacker with a short/tall victim in front, `+3`/`+4` the
+		// victim's side of the same, `+5`…`+8` the four from behind.
+		TestEqual(TEXT("attacker, short victim, front"), GrappleOffset(false, false, false), 1);
+		TestEqual(TEXT("attacker, tall victim, front"), GrappleOffset(true, false, false), 2);
+		TestEqual(TEXT("victim, short attacker, front"), GrappleOffset(false, true, false), 3);
+		TestEqual(TEXT("victim, tall attacker, front"), GrappleOffset(true, true, false), 4);
+		TestEqual(TEXT("attacker, short victim, back"), GrappleOffset(false, false, true), 5);
+		TestEqual(TEXT("attacker, tall victim, back"), GrappleOffset(true, false, true), 6);
+		TestEqual(TEXT("victim, short attacker, back"), GrappleOffset(false, true, true), 7);
+		TestEqual(TEXT("victim, tall attacker, back"), GrappleOffset(true, true, true), 8);
+
+		TSet<FString> Variants;
+		int32 Swapped = 0;
+		for (const FNpcGrappleFamily& Family : NpcGrappleFamilies())
+		{
+			TestNotNull(*FString::Printf(TEXT("%s resolves through the lookup"), Family.Base),
+				FindGrappleFamily(FString(Family.Base)));
+			TestTrue(*FString::Printf(TEXT("%s carries its registered ID"), Family.Base),
+				Family.BaseId > 0);
+			Swapped += Family.RoleOrder == ENpcGrappleRoleOrder::Canonical ? 0 : 1;
+
+			for (int32 Mask = 0; Mask < 8; ++Mask)
+			{
+				const bool bTall = (Mask & 1) != 0;
+				const bool bVictim = (Mask & 2) != 0;
+				const bool bBack = (Mask & 4) != 0;
+				const FNpcGrappleVariant Variant = GrappleVariant(Family, bTall, bVictim, bBack);
+				TestEqual(*FString::Printf(TEXT("%s's variant %d is contiguous with its base"),
+					Family.Base, Variant.Offset), Variant.ActivityId,
+					Family.BaseId + Variant.Offset);
+				TestTrue(*FString::Printf(TEXT("%s's variant names the base it came from"),
+					Family.Base), Variant.Activity.StartsWith(FString(Family.Base) + TEXT("_"),
+						ESearchCase::CaseSensitive));
+				TestTrue(*FString::Printf(TEXT("%s's role agreement follows its order"),
+					Family.Base), Variant.bNameAgreesWithRole ==
+					(Family.RoleOrder == ENpcGrappleRoleOrder::Canonical));
+
+				bool bDuplicate = false;
+				Variants.Add(Variant.Activity, &bDuplicate);
+				TestFalse(*FString::Printf(TEXT("%s is generated once"), *Variant.Activity),
+					bDuplicate);
+			}
+		}
+		TestEqual(TEXT("232 variants come out of 29 bases"), Variants.Num(),
+			NpcCensus().GrappleVariants);
+		TestEqual(TEXT("and the generated set is what the collector walks"), Variants.Num(), 232);
+
+		TArray<FString> Collected;
+		CollectGrappleVariants(Collected);
+		TestEqual(TEXT("the collector agrees with the arithmetic"), Collected.Num(), 232);
+
+		// Four of the eight zombie-feeding families register the attacker and victim halves the
+		// other way round, so the literal at the slot the role arithmetic picks names the opposite
+		// role. The arithmetic never reads the name, so this is a naming fact, not a routing one.
+		TestEqual(TEXT("four families register attacker and victim the other way round"), Swapped,
+			4);
+		const TCHAR* const SwappedBases[] = { TEXT("ACT_ZOMBIE_FEEDING_ENGAGE"),
+			TEXT("ACT_ZOMBIE_FEEDING_IDLE"), TEXT("ACT_ZOMBIE_FEEDING_BITE"),
+			TEXT("ACT_ZOMBIE_FEEDING_FEED_LOOP") };
+		for (const TCHAR* Base : SwappedBases)
+		{
+			const FNpcGrappleFamily* Family = FindGrappleFamily(FString(Base));
+			if (TestNotNull(*FString::Printf(TEXT("%s is a registered base"), Base), Family))
+			{
+				TestEqual(*FString::Printf(TEXT("%s is one of the four"), Base),
+					static_cast<int32>(Family->RoleOrder),
+					static_cast<int32>(ENpcGrappleRoleOrder::AttackerVictimSwapped));
+			}
+		}
+
+		TestNull(TEXT("an ordinary activity is not a paired-action base"),
+			FindGrappleFamily(TEXT("ACT_IDLE")));
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The NPC surface against the exported clip vocabulary.
+//
+// Same claim as the player conformance suite, over the other half of the join: every activity the
+// NPC surface can ask for is one a shipped body can answer — directly, through the weapon table
+// that sits between the class translator and the model, or, for a paired-action base, through the
+// role arithmetic that is the only way one is ever played. What resolves nowhere stays a named
+// list, because here the residual tracks how much of the cast the work root carries rather than
+// whether a rule is right.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityConformanceTest,
+	"Elysium.Content.NpcActivityConformance", GElysiumActionTableFlags)
+bool FElysiumNpcActivityConformanceTest::RunTest(const FString&)
+{
+	using namespace ElysiumActionTables;
+
+	TSet<FString> Vocabulary;
+	int32 Bodies = 0;
+	if (AbstainedOnCorpus(*this, LoadCorpusVocabulary(*this, Vocabulary, Bodies)))
+	{
+		return true;
+	}
+
+	TArray<FString> Activities;
+	CollectNpcActivities(Activities);
+	AddInfo(FString::Printf(TEXT("corpus: %d bodies, %d distinct activities; the NPC surface asks "
+		"for %d"), Bodies, Vocabulary.Num(), Activities.Num()));
+
+	int32 Direct = 0;
+	int32 Translated = 0;
+	int32 Paired = 0;
+	TArray<FString> Residual;
+	for (const FString& Activity : Activities)
+	{
+		if (Vocabulary.Contains(Activity))
+		{
+			++Direct;
+			continue;
+		}
+
+		// The weapon table stands between the class translator and the body exactly as it does for
+		// the player, so an NPC's `ACT_TURN_LEFT_ALERT` is answered as `ACT_TURN_LEFT_ALERT_<F>`.
+		bool bResolved = false;
+		for (const FWeaponLadder& Ladder : WeaponLadders())
+		{
+			if (Translate(Ladder, Activity, Carrying(Vocabulary)).bTranslated)
+			{
+				bResolved = true;
+				break;
+			}
+		}
+		if (bResolved)
+		{
+			++Translated;
+			continue;
+		}
+
+		// A paired-action base is never played as spelled. `ACT_FEEDING_ENGAGE` is a request the
+		// tail turns into one of eight registered variants, so the base resolves when a body carries
+		// any of them.
+		if (const FNpcGrappleFamily* Family = FindGrappleFamily(Activity))
+		{
+			for (int32 Mask = 0; Mask < 8 && !bResolved; ++Mask)
+			{
+				const FNpcGrappleVariant Variant = GrappleVariant(*Family, (Mask & 1) != 0,
+					(Mask & 2) != 0, (Mask & 4) != 0);
+				bResolved = Vocabulary.Contains(Variant.Activity);
+			}
+		}
+		if (bResolved)
+		{
+			++Paired;
+			continue;
+		}
+		Residual.Add(Activity);
+	}
+
+	AddInfo(FString::Printf(TEXT("  %d resolve directly, %d through the weapon table, %d through "
+		"the paired-action arithmetic, %d never"), Direct, Translated, Paired, Residual.Num()));
+	for (const FString& Activity : Residual)
+	{
+		AddInfo(FString::Printf(TEXT("  never resolves: %s"), *Activity));
+	}
+
+	TestTrue(TEXT("the corpus answers the NPC surface"), Direct > 0);
+	// All three joints carry weight. The second is the seam between the two committed tables; the
+	// third is the whole reason the 232 variants are generated rather than enumerated, and if it
+	// went to zero the arithmetic would be producing names no shipped model has.
+	TestTrue(TEXT("and the weapon table answers the bases the body cannot"), Translated > 0);
+	TestTrue(TEXT("and the role arithmetic answers the paired-action bases"), Paired > 0);
+
+	// Every generated variant is either carried by a body or is a role a body does not author; what
+	// must not happen is the whole family going unanswered, which would mean the suffixes are wrong.
+	TArray<FString> Variants;
+	CollectGrappleVariants(Variants);
+	int32 CarriedVariants = 0;
+	for (const FString& Variant : Variants)
+	{
+		CarriedVariants += Vocabulary.Contains(Variant) ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("  %d of %d generated grapple variants are carried by some body"),
+		CarriedVariants, Variants.Num()));
+	TestTrue(TEXT("the generated variant names are names shipped models actually carry"),
+		CarriedVariants > Variants.Num() / 2);
 
 	return true;
 }

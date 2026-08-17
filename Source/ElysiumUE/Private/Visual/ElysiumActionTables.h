@@ -428,4 +428,384 @@ namespace ElysiumActionTables
 	// Every distinct base and layer activity the player surface names, ladder included, in
 	// first-named order. The conformance walk's input.
 	void CollectPlayerActivities(TArray<FString>& OutActivities);
+
+	// =============================================================================================
+	// The NPC translation surface.
+	//
+	// `CAI_BaseNPC::TranslateActivity` alternates two class-side virtuals with the weapon translator:
+	// `+0x5dc` pre-translates the raw request, `+0x5e0` translates the result, and two more virtuals
+	// — `+0x8e4` cover and `+0x8e8` reload — are delegated into from both. The binary carries 77
+	// `CAI_BaseNPC` descendants, and they collapse to **10** pre-translation bodies, **five**
+	// class-translation bodies and **two implementations each** of the delegates, plus the one
+	// non-virtual tail `CBaseCombatCharacter::NPC_EarlyTranslateActivity` that the Troika body
+	// finishes through.
+	//
+	// A body is stored the way the player selector is: ordered rules over a closed predicate
+	// vocabulary, first match wins, and the body's `ChainTo` runs the inherited body before or after
+	// its own rules. The generated data lives in `ElysiumNpcActivityTables.cpp`; the behaviour is
+	// `docs/vtmb/animation_and_movers.md` A.3.
+	// =============================================================================================
+
+	enum class ENpcSlot : uint8
+	{
+		// `CAI_BaseNPC` vtable `+0x5dc`.
+		PreTranslate,
+		// ... `+0x5e0`.
+		ClassTranslate,
+		// ... `+0x8e4`, the cover-activity delegate.
+		Cover,
+		// ... `+0x8e8`, the reload-activity delegate.
+		Reload,
+		// `CBaseCombatCharacter::NPC_EarlyTranslateActivity` (`0x10328030`) — not a vtable slot, but
+		// the tail every Troika pre-translation finishes through, and the one place the paired-action
+		// grapple arithmetic lives.
+		EarlyTranslate,
+	};
+
+	// What one NPC rule row tests. As with `EPlayerPredicate`, the predicate is the recovered rule
+	// and the realized state it reads is the runtime's to supply; every offset is into the NPC.
+	enum class ENpcPredicate : uint8
+	{
+		Always,
+		// The global gait override is mode 1 — walking requests become runs.
+		GaitOverrideRun,
+		// ... mode 2 — running requests become walks.
+		GaitOverrideWalk,
+		// The movement policy byte `+0x5b84` carries bit `0x40`.
+		MovementPolicyFrenzy,
+		// ... bit `0x20`.
+		MovementPolicyRun,
+		// The capability gate on the `+0x8e8` fast-reload delegate.
+		ReloadFastCapable,
+		// The capability gate on the `+0x8e4` cover delegate.
+		CoverCapable,
+		// The flagged idle case that enters the cover delegate on the common Troika body.
+		CoverIdleFlagged,
+		// The human body's capability bit `0x40`, which is what removes aim from a gait request.
+		NoAimGait,
+		// The human body's armed/alert branch, computed from the active weapon and the NPC state and
+		// capability fields at `+0x14b8`, `+0x14bc`, `+0x5b84`, `+0x5cc0` and `+0x5d8c`.
+		ArmedAlert,
+		// Outside that branch. Not the negation of a *predicate* — it is the other arm of the same
+		// recovered branch, and it is spelled separately so a row reads as the branch it sits in.
+		NotArmedAlert,
+		// The active weapon's `+0x5a0` result carries `0x6000`, which is what turns an idle request
+		// into an aim inside the armed/alert branch.
+		RangedAimCapable,
+		// `+0x14bc & 0x80000`, the Troika class-translation's laugh-idle gate.
+		LaughIdleFlagged,
+		// The class's own form bit — `+0x14b8` on `CNPC_VHengeyokai`; the recovered reading for
+		// `CNPC_VTzimisce` names the bit only as "its form bit".
+		FormBit,
+		// `CNPC_VTzimisce`'s `+0x6688` selects the `_L` body variant.
+		BodySideLeft,
+		// `CNPC_VTzimisceRunner`'s `+0x6672` equals the row's `Operand`.
+		RunnerVariantIs,
+		// The cover context type equals the row's `Operand`.
+		CoverContextIs,
+		// `+0x14b8 & 0x200`, the Troika cover body's forced-low-cover flag.
+		ForcedLowCover,
+
+		Count,
+	};
+
+	enum class ENpcRoute : uint8
+	{
+		// Rewrite the request and keep walking this body, then its chain. The ordinary case: a body
+		// is a sequence of rewrites, not a switch.
+		Rewrite,
+		// Rewrite and return. The chain does not run.
+		RewriteAndReturn,
+		// Take the rewrite only when the body can play it; otherwise fall through to the next row.
+		// The cover and reload delegates are ordered candidate lists of exactly this kind.
+		RewriteIfAvailable,
+		// The target re-enters the whole translator rather than being answered directly. Only the
+		// Troika fast-reload body does this.
+		RewriteThroughTranslator,
+		// Hand the request to the delegate named by `Delegate` and return its answer.
+		Delegate,
+		// Force the cover context to the row's `Operand` and keep walking. One row: the Troika cover
+		// body's forced low cover.
+		ForceCoverContext,
+		// The paired-action tail: if the request is one of the 29 registered grapple bases and the
+		// linked actor and role state resolve, answer the variant the arithmetic names; otherwise
+		// leave the base unchanged.
+		Grapple,
+	};
+
+	struct FNpcRule
+	{
+		// AND-ed and `Always`-padded. Two is the deepest conjunction the recovered bodies use.
+		ENpcPredicate Predicates[2] = { ENpcPredicate::Always, ENpcPredicate::Always };
+		// What `RunnerVariantIs`, `CoverContextIs` and `ForceCoverContext` read. Zero elsewhere.
+		int32 Operand = 0;
+		// The requested activity the row matches, or null for "any request".
+		const TCHAR* From = nullptr;
+		int32 FromId = 0;
+		// Set instead of `From` when the recovered reading names a *family* of requests whose
+		// membership it does not enumerate — "walk/run/relaxed/hunt/combat-move requests" and "the
+		// walking subset". Two rows carry it. A walk that reaches one cannot decide, so it reports
+		// `bUnresolved` rather than guessing a membership; the residual is
+		// `FNpcTableCensus::UnrecoveredFamilyRules`.
+		const TCHAR* FromFamily = nullptr;
+		// The translated activity, or null when the row only routes (`Delegate`, `ForceCoverContext`,
+		// `Grapple`).
+		const TCHAR* To = nullptr;
+		int32 ToId = 0;
+		ENpcRoute Route = ENpcRoute::Rewrite;
+		// Meaningful only for `Route == Delegate`.
+		ENpcSlot Delegate = ENpcSlot::Cover;
+	};
+
+	enum class ENpcChain : uint8
+	{
+		None,
+		// The chained body runs after this body's own rules — the ordinary inheritance shape.
+		AfterRules,
+		// ... before them. Only `CNPC_VTzimisceRunner`, whose variant selection reads the *translated*
+		// activity.
+		BeforeRules,
+	};
+
+	// One recovered translation body, shared by every class whose vtable slot resolves to it.
+	struct FNpcTranslationBody
+	{
+		// A stable generated symbol — `PreTranslate_Troika`, `Cover_Base`. Not a retail name; the
+		// image carries none.
+		const TCHAR* Name = nullptr;
+		// The retail address the RTTI/vtable walk resolved, as provenance.
+		const TCHAR* Address = nullptr;
+		ENpcSlot Slot = ENpcSlot::PreTranslate;
+		// The recovered policy in one line, as `docs/vtmb/animation_and_movers.md` A.3 states it.
+		const TCHAR* Policy = nullptr;
+		const FNpcRule* Rules = nullptr;
+		int32 RuleCount = 0;
+		// Index into `NpcTranslationBodies()`, or `INDEX_NONE`.
+		int32 ChainTo = INDEX_NONE;
+		ENpcChain Chain = ENpcChain::None;
+		// How many of the 77 subclasses reach this body at its slot. Zero for the non-virtual tail,
+		// which no vtable names.
+		int32 InheritorCount = 0;
+	};
+
+	enum class ENpcTaskPhase : uint8
+	{
+		Start,
+		Run,
+	};
+
+	// Where one `StartTask`/`RunTask` body's animation policy ends. Every recovered route requests an
+	// **activity**; none looks a sequence label up and none allocates an overlay layer, which is what
+	// `FNpcTableCensus::ExactLabelRoutes` and `LayerRoutes` record as zero.
+	enum class ENpcTaskRoute : uint8
+	{
+		// `SetIdealActivity` with the row's activity.
+		SetIdeal,
+		// The restart helper: clear a current activity equal to the request, then `SetIdealActivity`,
+		// so a repeated attack restarts its sequence instead of being swallowed as an unchanged ideal.
+		RestartIdeal,
+		// `SetActivity` — resolved and committed immediately, skipping transition traversal.
+		SetActivity,
+		// The restart helper over a choice among the row's activities; `Condition` names the selector.
+		RestartIdealChoice,
+		// The task's own argument is cast to an activity ID, so the row names no literal.
+		SetIdealArgument,
+		// The navigator's movement activity when it supplies one, otherwise the row's activity.
+		SetIdealNavigator,
+		// The body rewrites the task itself and delegates to the shared `TASK_SET_ACTIVITY` handler.
+		RemapSharedTask,
+	};
+
+	// One `StartTask`/`RunTask` body. 29 distinct start bodies and 24 run bodies over the 77
+	// subclasses; excluding the shared Base/Troika dispatchers leaves 49 custom bodies, of which 31
+	// carry a direct animation policy.
+	struct FNpcTaskHandler
+	{
+		const TCHAR* Address = nullptr;
+		ENpcTaskPhase Phase = ENpcTaskPhase::Start;
+		// `CAI_BaseNPC`/`CAI_BaseNPCTroika`'s own dispatchers, which every class ultimately reaches.
+		bool bSharedDispatcher = false;
+		int32 ClassCount = 0;
+		int32 PolicyCount = 0;
+	};
+
+	// One task-to-activity policy a handler body carries. 100 rows over 111 task routes: a row names
+	// more than one task where the recovered body routes them identically.
+	struct FNpcTaskPolicy
+	{
+		// Index into `NpcTaskHandlers()`.
+		int32 Handler = INDEX_NONE;
+		const TCHAR* const* Tasks = nullptr;
+		int32 TaskCount = 0;
+		ENpcTaskRoute Route = ENpcTaskRoute::SetIdeal;
+		// Empty for `SetIdealArgument`, whose activity is the task's own argument.
+		const TCHAR* const* Activities = nullptr;
+		int32 ActivityCount = 0;
+		// The recovered branch condition, or empty when the route is unconditional.
+		const TCHAR* Condition = nullptr;
+	};
+
+	// The eight contiguous paired-action variants a grapple base registers, in registration order.
+	enum class ENpcGrappleRoleOrder : uint8
+	{
+		// `+1`/`+2` attacker with a short/tall victim, `+3`/`+4` victim with a short/tall attacker,
+		// `+5`…`+8` the same four from behind. 25 of the 29 families.
+		Canonical,
+		// The four `ACT_ZOMBIE_FEEDING_{ENGAGE,IDLE,BITE,FEED_LOOP}` families register the attacker
+		// and victim halves of each pair the other way round, so the *name* at the slot the role
+		// arithmetic selects says the opposite role. The arithmetic is by ID and does not read the
+		// name, so this changes which literal a body is asked for, not which slot is chosen.
+		AttackerVictimSwapped,
+	};
+
+	// One of the 29 specially registered paired-action bases. The 232 variants are not stored: they
+	// are the base plus one of eight role suffixes, and their IDs are `BaseId + 1 + Slot`.
+	struct FNpcGrappleFamily
+	{
+		const TCHAR* Base = nullptr;
+		int32 BaseId = 0;
+		ENpcGrappleRoleOrder RoleOrder = ENpcGrappleRoleOrder::Canonical;
+	};
+
+	// What one grapple resolution answered.
+	struct FNpcGrappleVariant
+	{
+		FString Activity;
+		int32 ActivityId = 0;
+		// `1 + (bTall ? 1 : 0) + (bVictim ? 2 : 0) + (bBack ? 4 : 0)`, so `1`…`8`.
+		int32 Offset = 0;
+		// False on the four swapped families, where the answered literal names the opposite role.
+		bool bNameAgreesWithRole = true;
+	};
+
+	struct FNpcClass
+	{
+		const TCHAR* CppClass = nullptr;
+		const TCHAR* DirectBase = nullptr;
+		// The registered entity classnames recovered beside the class's own primary vtable. A class
+		// may claim a subclass's name too, which is why `NpcEntityAliases()` resolves each name to one
+		// class rather than the runtime searching this list.
+		const TCHAR* const* EntityClassnames = nullptr;
+		int32 EntityClassnameCount = 0;
+		// Indices into `NpcTranslationBodies()`.
+		int32 PreTranslate = INDEX_NONE;
+		int32 ClassTranslate = INDEX_NONE;
+		int32 Cover = INDEX_NONE;
+		int32 Reload = INDEX_NONE;
+		// Indices into `NpcTaskHandlers()`.
+		int32 StartTask = INDEX_NONE;
+		int32 RunTask = INDEX_NONE;
+	};
+
+	// One entity classname a map can author, resolved to the most-derived class that claims it. Sorted
+	// by classname, case-folded, so the ledger reads as one list.
+	struct FNpcEntityAlias
+	{
+		const TCHAR* Classname = nullptr;
+		int32 ClassIndex = 0;
+	};
+
+	// What the generator emitted, so a malformed regeneration or a hand-edit fails a test.
+	struct FNpcTableCensus
+	{
+		int32 Subclasses = 0;
+		int32 PreTranslateBodies = 0;
+		int32 ClassTranslateBodies = 0;
+		int32 CoverBodies = 0;
+		int32 ReloadBodies = 0;
+		// The non-virtual `NPC_EarlyTranslateActivity` tail.
+		int32 TailBodies = 0;
+		int32 TranslationRules = 0;
+		// Rows naming a request family the recovered reading did not enumerate. Two, both on the
+		// common Troika pre-translation body.
+		int32 UnrecoveredFamilyRules = 0;
+		int32 EntityAliases = 0;
+		int32 StartTaskHandlers = 0;
+		int32 RunTaskHandlers = 0;
+		int32 CustomTaskHandlers = 0;
+		int32 AnimationBearingHandlers = 0;
+		int32 TaskPolicies = 0;
+		int32 TaskRoutes = 0;
+		// Both zero, and that is the finding: no custom body looks a sequence label up and none
+		// allocates an overlay layer.
+		int32 ExactLabelRoutes = 0;
+		int32 LayerRoutes = 0;
+		int32 GrappleFamilies = 0;
+		int32 GrappleVariants = 0;
+		int32 SharedTaskRegistrations = 0;
+		int32 ClassLocalTaskRegistrations = 0;
+		int32 Predicates = 0;
+	};
+
+	// --- the generated data -------------------------------------------------------------------
+	TArrayView<const FNpcTranslationBody> NpcTranslationBodies();
+	TArrayView<const FNpcClass> NpcClasses();
+	TArrayView<const FNpcEntityAlias> NpcEntityAliases();
+	TArrayView<const FNpcTaskHandler> NpcTaskHandlers();
+	TArrayView<const FNpcTaskPolicy> NpcTaskPolicies();
+	TArrayView<const FNpcGrappleFamily> NpcGrappleFamilies();
+	// The eight role suffixes an order appends, indexed by `Offset - 1`.
+	TArrayView<const TCHAR* const> NpcGrappleRoleSuffixes(ENpcGrappleRoleOrder Order);
+	const FNpcTableCensus& NpcCensus();
+
+	// --- the rules over it --------------------------------------------------------------------
+
+	const FNpcClass* FindNpcClass(const FString& CppClass);
+	// The class a map's `classname` or an `npc_maker`'s `NPCTypE` names. Falls back to the canonical
+	// `npc_<Suffix>` -> `CNPC_<Suffix>` spelling when no constructor claimed the name, which is the
+	// same two-step the survey uses. Null when neither resolves — the answer for `npc_BaseVampAI`,
+	// which is absent from the retail DLL and is not silently treated as another class.
+	const FNpcClass* FindNpcClassByEntityClass(const FString& EntityClassname);
+
+	const FNpcTranslationBody* NpcBodyFor(const FNpcClass& Class, ENpcSlot Slot);
+
+	// Answers one predicate against realized NPC state. `Operand` is meaningful only for the three
+	// predicates that read it.
+	using FNpcStateQuery = TFunctionRef<bool(ENpcPredicate Predicate, int32 Operand)>;
+
+	// What one body walk answered.
+	struct FNpcTranslation
+	{
+		// The translated activity, or the request unchanged when no row answered.
+		FString Activity;
+		bool bTranslated = false;
+		// The body and row that last rewrote it, or `INDEX_NONE`.
+		int32 Body = INDEX_NONE;
+		int32 Rule = INDEX_NONE;
+		// Set when a row handed the request to a delegate; `Delegate` names which.
+		bool bDelegated = false;
+		ENpcSlot Delegate = ENpcSlot::Cover;
+		// Set when the answer has to re-enter the whole translator (Troika fast reload).
+		bool bThroughTranslator = false;
+		// Set when the walk reached the paired-action tail with an unresolved base.
+		bool bGrappleTail = false;
+		// Set when a rule whose request family the RE did not enumerate could have applied. The walk
+		// cannot decide, so it leaves the request untranslated and says so; a caller must report it
+		// rather than treat the untranslated request as an ordinary miss.
+		bool bUnresolved = false;
+		// The cover context the walk ended with, after any `ForceCoverContext` row.
+		int32 CoverContext = 0;
+	};
+
+	// Walk one body and its chain. `HasActivity` answers the body's own clip vocabulary, which the
+	// `RewriteIfAvailable` candidate lists need; `CoverContext` seeds `CoverContextIs`.
+	FNpcTranslation NpcTranslate(int32 BodyIndex, const FString& Base, int32 CoverContext,
+		FNpcStateQuery State, TFunctionRef<bool(const FString&)> HasActivity);
+
+	const FNpcGrappleFamily* FindGrappleFamily(const FString& Base);
+	// `1 + (bTall ? 1 : 0) + (bVictim ? 2 : 0) + (bBack ? 4 : 0)` — the recovered arithmetic, and the
+	// only place it is spelled.
+	int32 GrappleOffset(bool bTallCounterpart, bool bVictimRole, bool bBackPosition);
+	FNpcGrappleVariant GrappleVariant(const FNpcGrappleFamily& Family, bool bTallCounterpart,
+		bool bVictimRole, bool bBackPosition);
+
+	// Every task policy naming one task, in table order.
+	void CollectNpcTaskPolicies(const FString& TaskName, TArray<const FNpcTaskPolicy*>& OutPolicies);
+
+	// Every distinct activity the NPC surface names — body rules, task policies and grapple bases —
+	// in first-named order. The 232 grapple variants are not included; `CollectGrappleVariants`
+	// generates those.
+	void CollectNpcActivities(TArray<FString>& OutActivities);
+	// All 232, in registration order.
+	void CollectGrappleVariants(TArray<FString>& OutVariants);
 }

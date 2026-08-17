@@ -7,7 +7,7 @@ slot tables this repository already commits — so they are generated once,
 reviewed as text, and maintained by hand-free regeneration afterwards.  Nothing
 in ``uv run elysium build`` or ``uv run elysium export`` reads ``vampire.dll``.
 
-Two artifacts, one generator.
+Three artifacts, one generator.
 
 **The weapon activity-translation tables.**  The 9,214 ordered rows over 61
 weapon classes are stored compressed, because the compressed form is the one a
@@ -37,11 +37,26 @@ registry, the seventeen code names against the pointer table at ``0x106ac3a0``,
 and the reachability column against the complete ``+0x704`` caller pass — so a
 drifted binary fails generation rather than producing a plausible file.
 
+**The NPC translation surface.**  The 77 ``CAI_BaseNPC`` descendants collapse to
+ten ``+0x5dc`` pre-translation bodies, five ``+0x5e0`` class-translation bodies
+and two implementations each of the ``+0x8e4`` cover and ``+0x8e8`` reload
+delegates, plus the one non-virtual ``NPC_EarlyTranslateActivity`` tail.  Each
+body is stored the way the player selector is — ordered rules over a closed
+predicate vocabulary, with the inherited body chained before or after them — and
+every address, inheritor count and owning class is re-decoded from the pinned
+RTTI/vtable walk at generation time, so a ledger that drifted fails rather than
+writes.  The 100 task policies over 111 task routes come from the decompiled
+override ledger in ``npc_task_override_survey``, joined to both task registries.
+The 232 paired-action grapple variants are not enumerated: each of the 29
+registered bases carries a role order, and the generator requires that order to
+reproduce all eight registered names before it emits the base.
+
 Usage::
 
     uv run elysium research gen_action_tables
     uv run elysium research gen_action_tables --check
     uv run elysium research gen_action_tables --only player
+    uv run elysium research gen_action_tables --only npc
     uv run elysium research gen_action_tables --only weapons --out <path>
 """
 from __future__ import print_function
@@ -56,7 +71,12 @@ from elysium_pipeline.paths import repo_root, vtmb_root
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from probes import player_action_survey, weapon_activity_survey  # noqa: E402
+from probes import (  # noqa: E402
+    npc_task_override_survey,
+    npc_translation_survey,
+    player_action_survey,
+    weapon_activity_survey,
+)
 
 
 DEFAULT_OUTPUT = ("Source", "ElysiumUE", "Private", "Visual",
@@ -1221,6 +1241,979 @@ def print_player_report(model, output):
 
 
 # ---------------------------------------------------------------------------
+# The NPC translation surface
+# ---------------------------------------------------------------------------
+
+DEFAULT_NPC_OUTPUT = ("Source", "ElysiumUE", "Private", "Visual",
+                      "ElysiumNpcActivityTables.cpp")
+
+# The predicate vocabulary, in the order `ENpcPredicate` declares it.  The
+# emitted `static_assert` on `ENpcPredicate::Count` is what keeps the header and
+# this list from drifting apart.
+NPC_PREDICATES = (
+    "Always",
+    "GaitOverrideRun",
+    "GaitOverrideWalk",
+    "MovementPolicyFrenzy",
+    "MovementPolicyRun",
+    "ReloadFastCapable",
+    "CoverCapable",
+    "CoverIdleFlagged",
+    "NoAimGait",
+    "ArmedAlert",
+    "NotArmedAlert",
+    "RangedAimCapable",
+    "LaughIdleFlagged",
+    "FormBit",
+    "BodySideLeft",
+    "RunnerVariantIs",
+    "CoverContextIs",
+    "ForcedLowCover",
+)
+
+# The three predicates that read `Operand`; every other row leaves it zero.
+_OPERAND_PREDICATES = ("RunnerVariantIs", "CoverContextIs")
+
+# The eight contiguous role variants a grapple base registers, as the suffix each
+# one appends.  Which order a family uses is *decided against the binary* rather
+# than assumed: `build_npc_model` requires one of the two to reproduce all eight
+# registered names exactly, so a base that matched neither would fail generation.
+GRAPPLE_ROLE_SUFFIXES = {
+    "Canonical": (
+        "ATTACKER_SHORTVICTIM_FRONT",
+        "ATTACKER_TALLVICTIM_FRONT",
+        "VICTIM_SHORTATTACKER_FRONT",
+        "VICTIM_TALLATTACKER_FRONT",
+        "ATTACKER_SHORTVICTIM_BACK",
+        "ATTACKER_TALLVICTIM_BACK",
+        "VICTIM_SHORTATTACKER_BACK",
+        "VICTIM_TALLATTACKER_BACK",
+    ),
+    "AttackerVictimSwapped": (
+        "VICTIM_SHORTATTACKER_FRONT",
+        "VICTIM_TALLATTACKER_FRONT",
+        "ATTACKER_SHORTVICTIM_FRONT",
+        "ATTACKER_TALLVICTIM_FRONT",
+        "VICTIM_SHORTATTACKER_BACK",
+        "VICTIM_TALLATTACKER_BACK",
+        "ATTACKER_SHORTVICTIM_BACK",
+        "ATTACKER_TALLVICTIM_BACK",
+    ),
+}
+
+# The probe's route vocabulary, joined to `ENpcTaskRoute`.
+NPC_TASK_ROUTES = {
+    "set_ideal": "SetIdeal",
+    "restart_ideal": "RestartIdeal",
+    "set_activity": "SetActivity",
+    "restart_ideal_choice": "RestartIdealChoice",
+    "set_ideal_argument": "SetIdealArgument",
+    "set_ideal_navigator": "SetIdealNavigator",
+    "remap_shared_task": "RemapSharedTask",
+}
+
+
+def _nrule(predicates=(), frm=None, to=None, route="Rewrite", operand=0,
+           family=None, delegate=None):
+    """One ordered translation row.
+
+    ``family`` stands in for ``frm`` where the recovered reading names a family of
+    requests without enumerating it; such a row carries no literal and the runtime
+    walk refuses to guess one.
+    """
+    if frm is not None and family is not None:
+        raise ValueError("a row matches a literal or a family, not both")
+    return {
+        "predicates": tuple(predicates),
+        "operand": operand,
+        "from": frm,
+        "family": family,
+        "to": to,
+        "route": route,
+        "delegate": delegate,
+    }
+
+
+# The recovered body ledger.  `docs/vtmb/animation_and_movers.md` A.3 is the
+# reading; every address, inheritor count and owner below is re-decoded from the
+# pinned binary at generation time and disagreement fails rather than writes.
+NPC_BODIES = (
+    {
+        "name": "PreTranslate_Base",
+        "address": 0x10271F50,
+        "slot": "PreTranslate",
+        "inheritors": 13,
+        "policy": "identity",
+        "rules": (),
+    },
+    {
+        "name": "PreTranslate_Troika",
+        "address": 0x10295590,
+        "slot": "PreTranslate",
+        "inheritors": 17,
+        "policy": "the common Troika gait/frenzy/cover/reload and paired-action "
+                  "pre-translation",
+        "chain": "EarlyTranslate_Grapple",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule(("GaitOverrideRun",), "ACT_WALK", "ACT_RUN"),
+            _nrule(("GaitOverrideRun",), "ACT_HUNT_WALK", "ACT_RUN"),
+            _nrule(("GaitOverrideWalk",), "ACT_RUN", "ACT_WALK"),
+            _nrule(("MovementPolicyFrenzy",), None, "ACT_RUN_FRENZY",
+                   family="MoveWalkRunRelaxedHuntCombat"),
+            _nrule(("MovementPolicyRun",), None, "ACT_RUN", family="MoveWalking"),
+            _nrule((), "ACT_FIDGET", "ACT_IDLE"),
+            _nrule(("ReloadFastCapable",), "ACT_RELOAD_FAST", None, "Delegate",
+                   delegate="Reload"),
+            _nrule((), "ACT_COVER", None, "Delegate", delegate="Cover"),
+            _nrule(("CoverIdleFlagged",), "ACT_IDLE", None, "Delegate", delegate="Cover"),
+        ),
+    },
+    {
+        "name": "PreTranslate_Human",
+        "address": 0x103854F0,
+        "slot": "PreTranslate",
+        "inheritors": 39,
+        "policy": "armed/alert translation, then the common Troika body",
+        "chain": "PreTranslate_Troika",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule(("NoAimGait",), "ACT_WALK_AIM", "ACT_WALK"),
+            _nrule(("NoAimGait",), "ACT_RUN_AIM", "ACT_RUN"),
+            _nrule(("NotArmedAlert",), "ACT_WALK", "ACT_WALK_RELAXED"),
+            _nrule(("NotArmedAlert",), "ACT_RUN", "ACT_RUN_RELAXED"),
+            _nrule(("ArmedAlert", "RangedAimCapable"), "ACT_IDLE", "ACT_AIM"),
+            _nrule(("ArmedAlert",), "ACT_TURN_LEFT", "ACT_TURN_LEFT_ALERT"),
+            _nrule(("ArmedAlert",), "ACT_TURN_RIGHT", "ACT_TURN_RIGHT_ALERT"),
+            _nrule(("ArmedAlert",), "ACT_90_LEFT", "ACT_90_LEFT_ALERT"),
+            _nrule(("ArmedAlert",), "ACT_90_RIGHT", "ACT_90_RIGHT_ALERT"),
+            _nrule(("ArmedAlert",), "ACT_180_LEFT", "ACT_180_LEFT_ALERT"),
+            _nrule(("ArmedAlert",), "ACT_180_RIGHT", "ACT_180_RIGHT_ALERT"),
+        ),
+    },
+    {
+        "name": "PreTranslate_Camera",
+        "address": 0x103690A0,
+        "slot": "PreTranslate",
+        "inheritors": 2,
+        "policy": "identity",
+        "rules": (),
+    },
+    {
+        "name": "PreTranslate_Dog",
+        "address": 0x10374AD0,
+        "slot": "PreTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VDog",
+        "policy": "preserves ACT_FIDGET directly; every other request enters the "
+                  "common Troika body",
+        "chain": "PreTranslate_Troika",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule((), "ACT_FIDGET", "ACT_FIDGET", "RewriteAndReturn"),
+        ),
+    },
+    {
+        "name": "PreTranslate_Hengeyokai",
+        "address": 0x10381B50,
+        "slot": "PreTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VHengeyokai",
+        "policy": "under the +0x14b8 form bit the carried-fish idle and carry replace "
+                  "idle and gait; otherwise human translation",
+        "chain": "PreTranslate_Human",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule(("FormBit",), "ACT_IDLE", "ACT_PICKUP_LIGHTIDLE", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_WALK", "ACT_PICKUP_LIGHTCARRY", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_RUN", "ACT_PICKUP_LIGHTCARRY", "RewriteAndReturn"),
+        ),
+    },
+    {
+        "name": "PreTranslate_Stalker",
+        "address": 0x103B2E60,
+        "slot": "PreTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VStalker",
+        "policy": "walk/run/hunt-walk become ACT_COMBATMOVE; every other request is "
+                  "identity",
+        "rules": (
+            _nrule((), "ACT_WALK", "ACT_COMBATMOVE", "RewriteAndReturn"),
+            _nrule((), "ACT_RUN", "ACT_COMBATMOVE", "RewriteAndReturn"),
+            _nrule((), "ACT_HUNT_WALK", "ACT_COMBATMOVE", "RewriteAndReturn"),
+        ),
+    },
+    {
+        "name": "PreTranslate_Tzimisce",
+        "address": 0x103BDE40,
+        "slot": "PreTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VTzimisce",
+        "policy": "under its form bit, idle and gait select the body-carry variants "
+                  "+0x6688 sides; otherwise common Troika translation",
+        "chain": "PreTranslate_Troika",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule(("FormBit", "BodySideLeft"), "ACT_IDLE", "ACT_IDLE_BODY_L",
+                   "RewriteAndReturn"),
+            _nrule(("FormBit", "BodySideLeft"), "ACT_WALK", "ACT_WALK_BODY_L",
+                   "RewriteAndReturn"),
+            _nrule(("FormBit", "BodySideLeft"), "ACT_RUN", "ACT_WALK_BODY_L",
+                   "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_IDLE", "ACT_IDLE_BODY", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_WALK", "ACT_WALK_BODY", "RewriteAndReturn"),
+            _nrule(("FormBit",), "ACT_RUN", "ACT_WALK_BODY", "RewriteAndReturn"),
+        ),
+    },
+    {
+        "name": "PreTranslate_TzimisceRunner",
+        "address": 0x103C3E10,
+        "slot": "PreTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VTzimisceRunner",
+        "policy": "after common Troika translation, +0x6672 selects one of the four "
+                  "TZ variants",
+        "chain": "PreTranslate_Troika",
+        "chain_order": "BeforeRules",
+        "rules": (
+            _nrule(("RunnerVariantIs",), None, "ACT_TZ_IDLE2", "RewriteAndReturn",
+                   operand=0),
+            _nrule(("RunnerVariantIs",), None, "ACT_TZ_FIDGET2", "RewriteAndReturn",
+                   operand=1),
+            _nrule(("RunnerVariantIs",), None, "ACT_TZ_WALK2", "RewriteAndReturn",
+                   operand=2),
+            _nrule(("RunnerVariantIs",), None, "ACT_TZ_RUN2", "RewriteAndReturn",
+                   operand=3),
+        ),
+    },
+    {
+        "name": "PreTranslate_WolfMorph",
+        "address": 0x103DCDC0,
+        "slot": "PreTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VWolfMorph",
+        "policy": "every request becomes ACT_WOLF_MORPH",
+        "rules": (
+            _nrule((), None, "ACT_WOLF_MORPH", "RewriteAndReturn"),
+        ),
+    },
+
+    {
+        "name": "ClassTranslate_Base",
+        "address": 0x10271F70,
+        "slot": "ClassTranslate",
+        "inheritors": 13,
+        "policy": "identity except the capability-gated cover and reload delegates",
+        "rules": (
+            _nrule(("ReloadFastCapable",), "ACT_RELOAD_FAST", None, "Delegate",
+                   delegate="Reload"),
+            _nrule(("CoverCapable",), "ACT_COVER", None, "Delegate", delegate="Cover"),
+        ),
+    },
+    {
+        "name": "ClassTranslate_Troika",
+        "address": 0x10295710,
+        "slot": "ClassTranslate",
+        "inheritors": 19,
+        "policy": "ACT_IDLE becomes ACT_LAUGH_IDLE under +0x14bc & 0x80000",
+        "rules": (
+            _nrule(("LaughIdleFlagged",), "ACT_IDLE", "ACT_LAUGH_IDLE"),
+        ),
+    },
+    {
+        "name": "ClassTranslate_Human",
+        "address": 0x103858B0,
+        "slot": "ClassTranslate",
+        "inheritors": 42,
+        "policy": "alert turn/90/180 activities return to their ordinary forms, then "
+                  "the Troika rule",
+        "chain": "ClassTranslate_Troika",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule((), "ACT_TURN_LEFT_ALERT", "ACT_TURN_LEFT"),
+            _nrule((), "ACT_TURN_RIGHT_ALERT", "ACT_TURN_RIGHT"),
+            _nrule((), "ACT_90_LEFT_ALERT", "ACT_90_LEFT"),
+            _nrule((), "ACT_90_RIGHT_ALERT", "ACT_90_RIGHT"),
+            _nrule((), "ACT_180_LEFT_ALERT", "ACT_180_LEFT"),
+            _nrule((), "ACT_180_RIGHT_ALERT", "ACT_180_RIGHT"),
+        ),
+    },
+    {
+        "name": "ClassTranslate_Camera",
+        "address": 0x103690C0,
+        "slot": "ClassTranslate",
+        "inheritors": 2,
+        "policy": "identity",
+        "rules": (),
+    },
+    {
+        "name": "ClassTranslate_MingXiao",
+        "address": 0x10394690,
+        "slot": "ClassTranslate",
+        "inheritors": 1,
+        "owner": "CNPC_VMingXiao",
+        "policy": "the same six alert-turn normalizations, otherwise the Troika rule",
+        "chain": "ClassTranslate_Troika",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule((), "ACT_TURN_LEFT_ALERT", "ACT_TURN_LEFT"),
+            _nrule((), "ACT_TURN_RIGHT_ALERT", "ACT_TURN_RIGHT"),
+            _nrule((), "ACT_90_LEFT_ALERT", "ACT_90_LEFT"),
+            _nrule((), "ACT_90_RIGHT_ALERT", "ACT_90_RIGHT"),
+            _nrule((), "ACT_180_LEFT_ALERT", "ACT_180_LEFT"),
+            _nrule((), "ACT_180_RIGHT_ALERT", "ACT_180_RIGHT"),
+        ),
+    },
+
+    {
+        "name": "Cover_Base",
+        "address": 0x10274AA0,
+        "slot": "Cover",
+        "inheritors": 13,
+        "policy": "medium or low cover for context 100/101 when the model has it, "
+                  "otherwise available ACT_COVER, otherwise ACT_IDLE",
+        "rules": (
+            _nrule(("CoverContextIs",), None, "ACT_COVER_MED", "RewriteIfAvailable",
+                   operand=100),
+            _nrule(("CoverContextIs",), None, "ACT_COVER_LOW", "RewriteIfAvailable",
+                   operand=101),
+            _nrule((), None, "ACT_COVER", "RewriteIfAvailable"),
+            _nrule((), None, "ACT_IDLE", "RewriteAndReturn"),
+        ),
+    },
+    {
+        "name": "Cover_Troika",
+        "address": 0x10297560,
+        "slot": "Cover",
+        "inheritors": 64,
+        "policy": "forced low cover, then the crunch idles for context 100, 101 or "
+                  "0x27d8, before the base fallback",
+        "chain": "Cover_Base",
+        "chain_order": "AfterRules",
+        "rules": (
+            _nrule(("ForcedLowCover",), None, None, "ForceCoverContext", operand=101),
+            _nrule(("CoverContextIs",), None, "ACT_MIDCRUNCH_IDLE", "RewriteIfAvailable",
+                   operand=100),
+            _nrule(("CoverContextIs",), None, "ACT_CRUNCH_IDLE", "RewriteIfAvailable",
+                   operand=101),
+            _nrule(("CoverContextIs",), None, "ACT_CORNER_COVER_IDLE",
+                   "RewriteIfAvailable", operand=0x27D8),
+        ),
+    },
+    {
+        "name": "Reload_Base",
+        "address": 0x10274820,
+        "slot": "Reload",
+        "inheritors": 13,
+        "policy": "ACT_RELOAD_LOW for a compatible 100/101 cover context when the "
+                  "model and environment tests pass, otherwise ACT_RELOAD",
+        "rules": (
+            _nrule(("CoverContextIs",), None, "ACT_RELOAD_LOW", "RewriteIfAvailable",
+                   operand=100),
+            _nrule(("CoverContextIs",), None, "ACT_RELOAD_LOW", "RewriteIfAvailable",
+                   operand=101),
+            _nrule((), None, "ACT_RELOAD", "RewriteAndReturn"),
+        ),
+    },
+    {
+        "name": "Reload_Troika",
+        "address": 0x102954B0,
+        "slot": "Reload",
+        "inheritors": 64,
+        "policy": "ACT_RELOAD_LOW, then the corresponding crunch idle through the "
+                  "whole translator, then ACT_RELOAD_FAST",
+        "rules": (
+            _nrule((), None, "ACT_RELOAD_LOW", "RewriteIfAvailable"),
+            _nrule(("CoverContextIs",), None, "ACT_MIDCRUNCH_IDLE",
+                   "RewriteThroughTranslator", operand=100),
+            _nrule(("CoverContextIs",), None, "ACT_CRUNCH_IDLE",
+                   "RewriteThroughTranslator", operand=101),
+            _nrule((), None, "ACT_RELOAD_FAST", "RewriteAndReturn"),
+        ),
+    },
+
+    {
+        "name": "EarlyTranslate_Grapple",
+        "address": 0x10328030,
+        "slot": "EarlyTranslate",
+        "inheritors": 0,
+        "policy": "CBaseCombatCharacter::NPC_EarlyTranslateActivity — the 29 "
+                  "registered paired-action bases, resolved by the role arithmetic",
+        "rules": (
+            _nrule((), None, None, "Grapple"),
+        ),
+    },
+)
+
+_NPC_BODY_INDEX = {row["name"]: index for index, row in enumerate(NPC_BODIES)}
+_NPC_SLOT_KEYS = {
+    "PreTranslate": "pre_translate",
+    "ClassTranslate": "class_translate",
+    "Cover": "cover_activity",
+    "Reload": "reload_activity",
+}
+
+
+def _npc_activity(by_name, name):
+    """Resolve one activity to its registered ID, or to `runtime-registered`.
+
+    `ACT_CROW_TAKEOFF` is registered at runtime rather than in the static table,
+    which the task ledger already records as its condition; it is the one name
+    with no compiled ID, and it is carried with `0` rather than dropped.
+    """
+    if name is None:
+        return None, 0
+    return name, by_name.get(name, 0)
+
+
+def build_npc_model(image):
+    """Join the recovered NPC ledger to the pinned RTTI, vtable and task decode."""
+    registrations = list(npc_translation_survey.decode_activity_registry(image))
+    activity_by_name = {}
+    for row in registrations:
+        activity_by_name.setdefault(row["name"], row["id"])
+    classes = npc_task_override_survey.decode_task_virtuals(
+        image, npc_translation_survey.find_npc_classes(image))
+    classes = npc_translation_survey.decode_translation_slots(image, classes)
+
+    # --- the bodies, checked against the vtable decode ---------------------
+    observed = {}
+    for slot, key in _NPC_SLOT_KEYS.items():
+        counts = collections.Counter(row["translation_functions"][key] for row in classes)
+        observed[slot] = counts
+    for body in NPC_BODIES:
+        slot = body["slot"]
+        address = "0x%x" % body["address"]
+        if slot == "EarlyTranslate":
+            continue
+        counts = observed[slot]
+        if address not in counts:
+            raise ValueError("%s is not a live %s body" % (address, slot))
+        if counts[address] != body["inheritors"]:
+            raise ValueError("%s inherits %s at %s, ledger says %d" %
+                             (counts[address], address, slot, body["inheritors"]))
+        owner = body.get("owner")
+        if owner is not None:
+            holders = [row["cpp_class"] for row in classes
+                       if row["translation_functions"][_NPC_SLOT_KEYS[slot]] == address]
+            if holders != [owner]:
+                raise ValueError("%s is held by %s, ledger says %s" %
+                                 (address, holders, owner))
+    for slot, counts in observed.items():
+        ledger = {"0x%x" % row["address"] for row in NPC_BODIES if row["slot"] == slot}
+        if ledger != set(counts):
+            raise ValueError("%s bodies disagree: binary %s, ledger %s" %
+                             (slot, sorted(counts), sorted(ledger)))
+
+    bodies = []
+    for body in NPC_BODIES:
+        rules = []
+        for rule in body["rules"]:
+            unknown = set(rule["predicates"]) - set(NPC_PREDICATES)
+            if unknown:
+                raise ValueError("unknown NPC predicates %s" % sorted(unknown))
+            if len(rule["predicates"]) > 2:
+                raise ValueError("an NPC rule conjoins more than two predicates")
+            reads_operand = any(name in _OPERAND_PREDICATES for name in rule["predicates"])
+            if rule["route"] != "ForceCoverContext" and reads_operand != bool(rule["operand"] or
+                    ("RunnerVariantIs" in rule["predicates"])):
+                raise ValueError("operand and predicate disagree on %r" % (rule,))
+            source, source_id = _npc_activity(activity_by_name, rule["from"])
+            target, target_id = _npc_activity(activity_by_name, rule["to"])
+            if rule["from"] is not None and source_id == 0:
+                raise ValueError("request %s is not registered" % rule["from"])
+            if rule["to"] is not None and target_id == 0:
+                raise ValueError("target %s is not registered" % rule["to"])
+            rules.append({
+                "predicates": rule["predicates"],
+                "operand": rule["operand"],
+                "from": source,
+                "from_id": source_id,
+                "family": rule["family"],
+                "to": target,
+                "to_id": target_id,
+                "route": rule["route"],
+                "delegate": rule["delegate"] or "Cover",
+            })
+        chain = body.get("chain")
+        bodies.append({
+            "name": body["name"],
+            "address": "0x%x" % body["address"],
+            "slot": body["slot"],
+            "policy": body["policy"],
+            "rules": rules,
+            "chain_to": _NPC_BODY_INDEX[chain] if chain else -1,
+            "chain": body.get("chain_order", "None") if chain else "None",
+            "inheritors": body["inheritors"],
+        })
+
+    # --- the task handlers and their policies -----------------------------
+    task_registrations = npc_task_override_survey.decode_task_registrations(image)
+    policies = npc_task_override_survey.materialize_policies(
+        task_registrations, registrations)
+    groups = npc_task_override_survey.group_handlers(classes, policies)
+    handler_index = {(row["phase"], row["handler"]): index
+                     for index, row in enumerate(groups)}
+    handlers = [{
+        "address": row["handler"],
+        "phase": row["phase"],
+        "shared": row["shared_dispatcher"],
+        "classes": row["class_count"],
+        "policies": row["action_policy_count"],
+    } for row in groups]
+
+    task_rows = []
+    for policy in policies:
+        key = (policy["phase"], policy["handler"])
+        if key not in handler_index:
+            raise ValueError("policy handler %s has no vtable group" % (key,))
+        if policy["route"] not in NPC_TASK_ROUTES:
+            raise ValueError("unknown task route %s" % policy["route"])
+        task_rows.append({
+            "handler": handler_index[key],
+            "tasks": list(policy["tasks"]),
+            "route": NPC_TASK_ROUTES[policy["route"]],
+            "activities": list(policy["activities"]),
+            "condition": policy["condition"],
+        })
+
+    # --- the classes and their entity aliases -----------------------------
+    class_rows = []
+    for row in classes:
+        functions = row["translation_functions"]
+        class_rows.append({
+            "cpp_class": row["cpp_class"],
+            "direct_base": row["direct_base"],
+            "entity_classnames": list(row["entity_classnames"]),
+            "pre_translate": _npc_body_at("PreTranslate", functions["pre_translate"]),
+            "class_translate": _npc_body_at("ClassTranslate", functions["class_translate"]),
+            "cover": _npc_body_at("Cover", functions["cover_activity"]),
+            "reload": _npc_body_at("Reload", functions["reload_activity"]),
+            "start_task": handler_index[("start", row["task_functions"]["start"])],
+            "run_task": handler_index[("run", row["task_functions"]["run"])],
+        })
+
+    by_class = {row["cpp_class"]: row for row in classes}
+    class_position = {row["cpp_class"]: index for index, row in enumerate(class_rows)}
+    alias_map, _ = npc_translation_survey._alias_index(classes)
+    aliases = []
+    for alias in sorted(alias_map, key=str.casefold):
+        winners = npc_translation_survey._most_derived(alias_map[alias], by_class)
+        if len(winners) != 1:
+            raise ValueError("entity classname %s resolves to %s" % (alias, winners))
+        aliases.append({"classname": alias, "class_index": class_position[winners[0]]})
+
+    # --- the grapple families ---------------------------------------------
+    by_id = {row["id"]: row["name"] for row in registrations}
+    families = []
+    variants = 0
+    for base in sorted((row for row in registrations if row["kind"] == "special"),
+                       key=lambda row: row["id"]):
+        order = None
+        for name, suffixes in GRAPPLE_ROLE_SUFFIXES.items():
+            if all(by_id.get(base["id"] + offset) == "%s_%s" % (base["name"], suffix)
+                   for offset, suffix in enumerate(suffixes, start=1)):
+                order = name
+                break
+        if order is None:
+            raise ValueError("%s registers no recognised role order" % base["name"])
+        variants += len(GRAPPLE_ROLE_SUFFIXES[order])
+        families.append({
+            "base": base["name"],
+            "base_id": base["id"],
+            "order": order,
+        })
+
+    model = {
+        "bodies": bodies,
+        "classes": class_rows,
+        "aliases": aliases,
+        "handlers": handlers,
+        "policies": task_rows,
+        "grapple": families,
+        "grapple_variants": variants,
+        "task_registrations": task_registrations,
+    }
+    model["census"] = npc_census(model)
+    return model
+
+
+def _npc_body_at(slot, address):
+    for index, body in enumerate(NPC_BODIES):
+        if body["slot"] == slot and "0x%x" % body["address"] == address:
+            return index
+    raise ValueError("no ledger body for %s %s" % (slot, address))
+
+
+def npc_census(model):
+    slots = collections.Counter(row["slot"] for row in model["bodies"])
+    phases = collections.Counter(row["phase"] for row in model["handlers"])
+    custom = [row for row in model["handlers"] if not row["shared"]]
+    return {
+        "subclasses": len(model["classes"]),
+        "pre_translate_bodies": slots["PreTranslate"],
+        "class_translate_bodies": slots["ClassTranslate"],
+        "cover_bodies": slots["Cover"],
+        "reload_bodies": slots["Reload"],
+        "tail_bodies": slots["EarlyTranslate"],
+        "translation_rules": sum(len(row["rules"]) for row in model["bodies"]),
+        "unrecovered_family_rules": sum(
+            1 for row in model["bodies"] for rule in row["rules"] if rule["family"]),
+        "entity_aliases": len(model["aliases"]),
+        "start_task_handlers": phases["start"],
+        "run_task_handlers": phases["run"],
+        "custom_task_handlers": len(custom),
+        "animation_bearing_handlers": sum(1 for row in custom if row["policies"]),
+        "task_policies": len(model["policies"]),
+        "task_routes": sum(len(row["tasks"]) for row in model["policies"]),
+        "exact_label_routes": 0,
+        "layer_routes": 0,
+        "grapple_families": len(model["grapple"]),
+        "grapple_variants": model["grapple_variants"],
+        "shared_task_registrations": sum(
+            1 for row in model["task_registrations"] if row["owner"] == "shared"),
+        "class_local_task_registrations": sum(
+            1 for row in model["task_registrations"] if row["owner"] != "shared"),
+        "predicates": len(NPC_PREDICATES),
+    }
+
+
+def _npc_rule_line(rule, indent):
+    """One `FNpcRule` initialiser, wrapped field-wise under the 100-column rule.
+
+    `Delegate` is the last member and is meaningful only on a delegating row, so
+    every other row simply stops before it and takes the default.
+    """
+    padded = list(rule["predicates"]) + ["Always"] * (2 - len(rule["predicates"]))
+    fields = [
+        "{ %s }" % ", ".join("P::%s" % name for name in padded),
+        str(rule["operand"]),
+        _literal(rule["from"]) if rule["from"] else "nullptr",
+        str(rule["from_id"]),
+        _literal(rule["family"]) if rule["family"] else "nullptr",
+        _literal(rule["to"]) if rule["to"] else "nullptr",
+        str(rule["to_id"]),
+        "R::%s" % rule["route"],
+    ]
+    if rule["route"] == "Delegate":
+        fields.append("S::%s" % rule["delegate"])
+
+    lines = []
+    current = indent + "{"
+    for index, field in enumerate(fields):
+        piece = field + ("," if index + 1 < len(fields) else " },")
+        candidate = "%s %s" % (current, piece)
+        if lines or index:
+            if len(candidate.expandtabs(4)) > 100:
+                lines.append(current)
+                current = indent + "\t" + piece
+                continue
+        current = candidate
+    lines.append(current)
+    return lines
+
+
+def render_npc_cpp(model):
+    out = []
+    add = out.append
+    counts = model["census"]
+
+    add("// Generated by `uv run elysium research gen_action_tables`. Do not hand-edit.")
+    add("//")
+    add("// VtMB's NPC activity-translation surface, recovered from the pinned retail `vampire.dll`")
+    add("// and committed as project source beside the weapon tables and the player action rules.")
+    add("// Nothing in the build or the export reads the binary.")
+    add("//")
+    add("// %d `CAI_BaseNPC` descendants collapse to %d pre-translation bodies, %d class-translation"
+        % (counts["subclasses"], counts["pre_translate_bodies"],
+           counts["class_translate_bodies"]))
+    add("// bodies and %d implementations each of the `+0x8e4` cover and `+0x8e8` reload delegates,"
+        % counts["cover_bodies"])
+    add("// plus the one non-virtual `NPC_EarlyTranslateActivity` tail. %d task policies over %d task"
+        % (counts["task_policies"], counts["task_routes"]))
+    add("// routes carry the class-local animation surface, with %d exact sequence-label routes and"
+        % counts["exact_label_routes"])
+    add("// %d overlay-layer routes. The %d paired-action grapple variants are not stored: they are"
+        % (counts["layer_routes"], counts["grapple_variants"]))
+    add("// %d registered bases plus the recovered `+1`…`+8` role arithmetic."
+        % counts["grapple_families"])
+    add("//")
+    add("// The recovered behaviour is `docs/vtmb/animation_and_movers.md` A.3. Every activity below")
+    add("// carries its registered ID, taken from the binary's own registration table.")
+    add("")
+    add("#include \"Visual/ElysiumActionTables.h\"")
+    add("")
+    add("namespace ElysiumActionTables")
+    add("{")
+    add("namespace")
+    add("{")
+    add("\t// A row's predicates are AND-ed and `Always`-padded; the aliases are what let one fit a line.")
+    add("\tusing P = ENpcPredicate;")
+    add("\tusing R = ENpcRoute;")
+    add("\tusing S = ENpcSlot;")
+    add("\tstatic_assert(static_cast<int32>(P::Count) == %d," % len(NPC_PREDICATES))
+    add("\t\t\"the predicate vocabulary changed; regenerate the NPC activity tables\");")
+
+    for body in model["bodies"]:
+        if not body["rules"]:
+            continue
+        add("")
+        for line in _comment("%s (%s) — %s." % (body["name"], body["address"],
+                                                body["policy"]), "\t"):
+            add(line)
+        add("\tconstexpr FNpcRule G%sRules[] =" % body["name"].replace("_", ""))
+        add("\t{")
+        for rule in body["rules"]:
+            out.extend(_npc_rule_line(rule, "\t\t"))
+        add("\t};")
+
+    add("")
+    add("\t// The %d recovered bodies, pre-translation first. `InheritorCount` is how many of the %d"
+        % (len(model["bodies"]), counts["subclasses"]))
+    add("\t// subclasses reach the body at its slot; the tail is reached by chain, not by vtable.")
+    add("\tconstexpr FNpcTranslationBody GBodies[] =")
+    add("\t{")
+    for body in model["bodies"]:
+        symbol = ("G%sRules" % body["name"].replace("_", "")) if body["rules"] else "nullptr"
+        add("\t\t{ %s, %s, ENpcSlot::%s," % (_literal(body["name"]), _literal(body["address"]),
+                                             body["slot"]))
+        for line in _wrap_text(body["policy"], "\t\t\t", width=98):
+            add(line)
+        chain_to = ("%d" % body["chain_to"]) if body["chain_to"] >= 0 else "INDEX_NONE"
+        add("\t\t\t%s, %d, %s, ENpcChain::%s, %d }," %
+            (symbol, len(body["rules"]), chain_to, body["chain"], body["inheritors"]))
+    add("\t};")
+    add("\tstatic_assert(UE_ARRAY_COUNT(GBodies) == %d, \"the NPC body ledger changed\");"
+        % len(model["bodies"]))
+
+    # --- the classes -------------------------------------------------------
+    for row in model["classes"]:
+        if not row["entity_classnames"]:
+            continue
+        names = [_literal(name) for name in row["entity_classnames"]]
+        line = "\tconstexpr const TCHAR* %s_Classnames[] = { %s };" % (
+            row["cpp_class"], ", ".join(names))
+        add("")
+        if len(line.expandtabs(4)) > 100:
+            add("\tconstexpr const TCHAR* %s_Classnames[] =" % row["cpp_class"])
+            add("\t{")
+            for wrapped in _wrap(names, "\t\t"):
+                add(wrapped)
+            add("\t};")
+        else:
+            add(line)
+
+    add("")
+    add("\t// The %d `CAI_BaseNPC` descendants, sorted by class name. The four body columns and the"
+        % counts["subclasses"])
+    add("\t// two task columns are indices, because a body is shared and a name is not.")
+    add("\tconstexpr FNpcClass GClasses[] =")
+    add("\t{")
+    for row in model["classes"]:
+        classnames = ("%s_Classnames" % row["cpp_class"]) if row["entity_classnames"] \
+            else "nullptr"
+        add("\t\t{ %s, %s," % (_literal(row["cpp_class"]), _literal(row["direct_base"])))
+        add("\t\t\t%s, %d," % (classnames, len(row["entity_classnames"])))
+        add("\t\t\t%d, %d, %d, %d, %d, %d }," %
+            (row["pre_translate"], row["class_translate"], row["cover"], row["reload"],
+             row["start_task"], row["run_task"]))
+    add("\t};")
+    add("\tstatic_assert(UE_ARRAY_COUNT(GClasses) == %d, \"the NPC subclass count changed\");"
+        % counts["subclasses"])
+
+    add("")
+    add("\t// Every entity classname a map or an `npc_maker` can author, resolved to the most-derived")
+    add("\t// class that claims it, sorted case-folded so the ledger reads as one list.")
+    add("\tconstexpr FNpcEntityAlias GAliases[] =")
+    add("\t{")
+    for row in model["aliases"]:
+        add("\t\t{ %s, %d }," % (_literal(row["classname"]), row["class_index"]))
+    add("\t};")
+    add("\tstatic_assert(UE_ARRAY_COUNT(GAliases) == %d, \"the entity alias set changed\");"
+        % counts["entity_aliases"])
+
+    add("")
+    add("\t// The %d `StartTask` and %d `RunTask` bodies, start phase first, each sorted by address."
+        % (counts["start_task_handlers"], counts["run_task_handlers"]))
+    add("\t// %d are custom; %d of those carry a direct animation policy."
+        % (counts["custom_task_handlers"], counts["animation_bearing_handlers"]))
+    add("\tconstexpr FNpcTaskHandler GTaskHandlers[] =")
+    add("\t{")
+    for row in model["handlers"]:
+        add("\t\t{ %s, ENpcTaskPhase::%s, %s, %d, %d }," %
+            (_literal(row["address"]), row["phase"].capitalize(),
+             "true" if row["shared"] else "false", row["classes"], row["policies"]))
+    add("\t};")
+
+    # --- the task policies -------------------------------------------------
+    for index, row in enumerate(model["policies"]):
+        add("")
+        names = [_literal(name) for name in row["tasks"]]
+        line = "\tconstexpr const TCHAR* GPolicy%dTasks[] = { %s };" % (index, ", ".join(names))
+        if len(line.expandtabs(4)) > 100:
+            add("\tconstexpr const TCHAR* GPolicy%dTasks[] =" % index)
+            add("\t{")
+            for wrapped in _wrap(names, "\t\t"):
+                add(wrapped)
+            add("\t};")
+        else:
+            add(line)
+        if row["activities"]:
+            values = [_literal(name) for name in row["activities"]]
+            line = "\tconstexpr const TCHAR* GPolicy%dActivities[] = { %s };" % (
+                index, ", ".join(values))
+            if len(line.expandtabs(4)) > 100:
+                add("\tconstexpr const TCHAR* GPolicy%dActivities[] =" % index)
+                add("\t{")
+                for wrapped in _wrap(values, "\t\t"):
+                    add(wrapped)
+                add("\t};")
+            else:
+                add(line)
+
+    add("")
+    add("\t// %d policy rows over %d task routes. A row names more than one task where the recovered"
+        % (counts["task_policies"], counts["task_routes"]))
+    add("\t// body routes them identically.")
+    add("\tconstexpr FNpcTaskPolicy GTaskPolicies[] =")
+    add("\t{")
+    for index, row in enumerate(model["policies"]):
+        activities = ("GPolicy%dActivities" % index) if row["activities"] else "nullptr"
+        add("\t\t{ %d, GPolicy%dTasks, %d, ENpcTaskRoute::%s," %
+            (row["handler"], index, len(row["tasks"]), row["route"]))
+        head = "\t\t\t%s, %d," % (activities, len(row["activities"]))
+        # An unconditional route carries an empty string rather than no field, so the wrap has to
+        # produce one literal for it too.
+        condition = (_wrap_text(row["condition"], "\t\t\t", width=96) if row["condition"].strip()
+                     else ["\t\t\tTEXT(\"\"),"])
+        if len(condition) == 1 and len((head + " " + condition[0].strip()).expandtabs(4)) <= 98:
+            add("%s %s }," % (head, condition[0].strip().rstrip(",")))
+        else:
+            add(head)
+            for offset, line in enumerate(condition):
+                add(line.rstrip(",") + (" }," if offset + 1 == len(condition) else ""))
+    add("\t};")
+    add("\tstatic_assert(UE_ARRAY_COUNT(GTaskPolicies) == %d, \"the task policy ledger changed\");"
+        % counts["task_policies"])
+
+    add("")
+    add("\t// The eight role suffixes, indexed by `Offset - 1`.")
+    for name in ("Canonical", "AttackerVictimSwapped"):
+        add("\tconstexpr const TCHAR* GGrappleRoles%s[] =" % name)
+        add("\t{")
+        for line in _wrap([_literal(suffix) for suffix in GRAPPLE_ROLE_SUFFIXES[name]],
+                          "\t\t"):
+            add(line)
+        add("\t};")
+
+    add("")
+    add("\t// The %d specially registered paired-action bases. Their %d variants are generated, not"
+        % (counts["grapple_families"], counts["grapple_variants"]))
+    add("\t// stored: the base plus one role suffix, at ID `BaseId + Offset`.")
+    add("\tconstexpr FNpcGrappleFamily GGrappleFamilies[] =")
+    add("\t{")
+    for row in model["grapple"]:
+        add("\t\t{ %s, %d, ENpcGrappleRoleOrder::%s }," %
+            (_literal(row["base"]), row["base_id"], row["order"]))
+    add("\t};")
+    add("\tstatic_assert(UE_ARRAY_COUNT(GGrappleFamilies) == %d, \"the grapple base set changed\");"
+        % counts["grapple_families"])
+    add("}")
+
+    for symbol, kind, table in (
+            ("NpcTranslationBodies", "FNpcTranslationBody", "GBodies"),
+            ("NpcClasses", "FNpcClass", "GClasses"),
+            ("NpcEntityAliases", "FNpcEntityAlias", "GAliases"),
+            ("NpcTaskHandlers", "FNpcTaskHandler", "GTaskHandlers"),
+            ("NpcTaskPolicies", "FNpcTaskPolicy", "GTaskPolicies"),
+            ("NpcGrappleFamilies", "FNpcGrappleFamily", "GGrappleFamilies")):
+        add("")
+        add("TArrayView<const %s> %s()" % (kind, symbol))
+        add("{")
+        add("\treturn MakeArrayView(%s);" % table)
+        add("}")
+
+    add("")
+    add("TArrayView<const TCHAR* const> NpcGrappleRoleSuffixes(ENpcGrappleRoleOrder Order)")
+    add("{")
+    add("\tswitch (Order)")
+    add("\t{")
+    add("\tcase ENpcGrappleRoleOrder::AttackerVictimSwapped:")
+    add("\t\treturn MakeArrayView(GGrappleRolesAttackerVictimSwapped);")
+    add("\tcase ENpcGrappleRoleOrder::Canonical:")
+    add("\t\tbreak;")
+    add("\t}")
+    add("\treturn MakeArrayView(GGrappleRolesCanonical);")
+    add("}")
+
+    add("")
+    add("const FNpcTableCensus& NpcCensus()")
+    add("{")
+    add("\tstatic const FNpcTableCensus GCensus =")
+    add("\t{")
+    for comment, key in (
+            ("Subclasses                  ", "subclasses"),
+            ("PreTranslateBodies          ", "pre_translate_bodies"),
+            ("ClassTranslateBodies        ", "class_translate_bodies"),
+            ("CoverBodies                 ", "cover_bodies"),
+            ("ReloadBodies                ", "reload_bodies"),
+            ("TailBodies                  ", "tail_bodies"),
+            ("TranslationRules            ", "translation_rules"),
+            ("UnrecoveredFamilyRules      ", "unrecovered_family_rules"),
+            ("EntityAliases               ", "entity_aliases"),
+            ("StartTaskHandlers           ", "start_task_handlers"),
+            ("RunTaskHandlers             ", "run_task_handlers"),
+            ("CustomTaskHandlers          ", "custom_task_handlers"),
+            ("AnimationBearingHandlers    ", "animation_bearing_handlers"),
+            ("TaskPolicies                ", "task_policies"),
+            ("TaskRoutes                  ", "task_routes"),
+            ("ExactLabelRoutes            ", "exact_label_routes"),
+            ("LayerRoutes                 ", "layer_routes"),
+            ("GrappleFamilies             ", "grapple_families"),
+            ("GrappleVariants             ", "grapple_variants"),
+            ("SharedTaskRegistrations     ", "shared_task_registrations"),
+            ("ClassLocalTaskRegistrations ", "class_local_task_registrations"),
+            ("Predicates                  ", "predicates")):
+        add("\t\t/* %s*/ %d," % (comment, counts[key]))
+    add("\t};")
+    add("\treturn GCensus;")
+    add("}")
+    add("}")
+    add("")
+    return "\n".join(out)
+
+
+def print_npc_report(model, output):
+    counts = model["census"]
+    print("=" * 78)
+    print("VtMB NPC activity translation — generated model")
+    print("=" * 78)
+    print("subclasses          %5d" % counts["subclasses"])
+    print("bodies              pre=%d class=%d cover=%d reload=%d tail=%d" %
+          (counts["pre_translate_bodies"], counts["class_translate_bodies"],
+           counts["cover_bodies"], counts["reload_bodies"], counts["tail_bodies"]))
+    print("translation rules   %5d  (%d over an unenumerated request family)" %
+          (counts["translation_rules"], counts["unrecovered_family_rules"]))
+    print("entity aliases      %5d" % counts["entity_aliases"])
+    print("task handlers       start=%d run=%d | custom=%d animation-bearing=%d" %
+          (counts["start_task_handlers"], counts["run_task_handlers"],
+           counts["custom_task_handlers"], counts["animation_bearing_handlers"]))
+    print("task policies       %5d rows / %d routes  (%d exact-label, %d layer)" %
+          (counts["task_policies"], counts["task_routes"],
+           counts["exact_label_routes"], counts["layer_routes"]))
+    print("task registrations  shared=%d class-local=%d" %
+          (counts["shared_task_registrations"], counts["class_local_task_registrations"]))
+    print("grapple             %d bases -> %d generated variants" %
+          (counts["grapple_families"], counts["grapple_variants"]))
+    swapped = [row["base"] for row in model["grapple"]
+               if row["order"] != "Canonical"]
+    print("  attacker/victim registered the other way round: %s" %
+          (", ".join(swapped) if swapped else "none"))
+    print()
+    print("output: %s" % output)
+
+
+# ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
 
@@ -1272,27 +2265,50 @@ def generate_player(args):
     return _emit(output, text, args.check)
 
 
+def generate_npc(args):
+    binary = args.binary or os.fspath(vtmb_root() / "Vampire" / "dlls" / "vampire.dll")
+    with open(binary, "rb") as handle:
+        data = handle.read()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != weapon_activity_survey.PINNED_SHA256:
+        raise ValueError("unsupported vampire.dll SHA-256 %s" % digest)
+    model = build_npc_model(npc_translation_survey.PEImage(data))
+
+    output = args.out or os.fspath(repo_root().joinpath(*DEFAULT_NPC_OUTPUT))
+    text = render_npc_cpp(model)
+    print_npc_report(model, output)
+    return _emit(output, text, args.check)
+
+
+ARTIFACTS = (
+    ("weapons", generate_weapons),
+    ("player", generate_player),
+    ("npc", generate_npc),
+)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", help="override the pinned retail vampire.dll path")
     parser.add_argument("--root", help="override the exported corpus root")
-    parser.add_argument("--only", choices=("weapons", "player"),
-                        help="generate one artifact instead of both")
+    parser.add_argument("--only", choices=tuple(name for name, _ in ARTIFACTS),
+                        help="generate one artifact instead of all three")
     parser.add_argument("--out", help="override the generated .cpp path; needs --only")
     parser.add_argument("--check", action="store_true",
                         help="verify the committed file matches; write nothing")
     args = parser.parse_args()
 
     if args.out and not args.only:
-        parser.error("--out addresses one artifact; pass --only weapons or --only player")
+        parser.error("--out addresses one artifact; pass --only %s" %
+                     "|".join(name for name, _ in ARTIFACTS))
 
     status = 0
-    if args.only in (None, "weapons"):
-        status |= generate_weapons(args)
-        if args.only is None:
+    for index, (name, generate) in enumerate(ARTIFACTS):
+        if args.only not in (None, name):
+            continue
+        if args.only is None and index:
             print()
-    if args.only in (None, "player"):
-        status |= generate_player(args)
+        status |= generate(args)
     return status
 
 

@@ -981,6 +981,16 @@ and add four for the back position. Thus an authored base such as `ACT_FEEDING_E
 the named `...ATTACKER_SHORTVICTIM_FRONT` through `...VICTIM_TALLATTACKER_BACK` family without
 model-label inference.
 
+**Four families register the attacker and victim halves the other way round** [data-verified].
+`ACT_ZOMBIE_FEEDING_ENGAGE`, `_IDLE`, `_BITE` and `_FEED_LOOP` register `...VICTIM_SHORTATTACKER_*`
+at `+1`/`+2` and `...ATTACKER_SHORTVICTIM_*` at `+3`/`+4`, with the back half swapped to match; the
+other 25 families, the four remaining zombie-feeding bases among them, follow the table above. The
+arithmetic reads the registered **ID** and never the name, so the swap changes which literal a body
+is asked for, not which slot the role bits select — an attacker in a zombie-feeding engage plays a
+clip spelled `..._VICTIM_SHORTATTACKER_FRONT`. Marked as a registration-order fact rather than a
+role inversion: no decompiled site compensates for it, and every variant is a distinct registered
+name, so the naming is what differs. `Elysium.Substrate.NpcActivityTables` names the four.
+
 The current 22-map join contains **426 class demands / 19 classnames**: 425 resolve to exact RTTI
 and all four virtual bodies, spanning four pre-translation bodies, three class-translation bodies
 and the one Troika cover/reload pair. The 18 resolved names cover the human/vampire family,

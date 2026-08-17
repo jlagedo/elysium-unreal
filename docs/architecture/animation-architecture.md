@@ -610,6 +610,26 @@ generated file `static_assert`s on its `Count`, so editing the header without re
 compiling. Every activity carries its ID from the binary's own registration table, which is what
 joins a row to VtMB's vocabulary rather than to a spelling.
 
+**The NPC surface is that same posture over a third shape.** Its unit is not a ladder or a
+selector but an inherited **body**: the binary's 77 `CAI_BaseNPC` descendants collapse to ten
+`+0x5dc` pre-translation bodies, five `+0x5e0` class-translation bodies and two implementations
+each of the `+0x8e4` cover and `+0x8e8` reload delegates, plus the one non-virtual
+`NPC_EarlyTranslateActivity` tail the Troika body finishes through. A body is ordered predicate
+rows plus a `ChainTo` naming the body it inherits, before or after its own rows — which is what
+carries the two facts a row list cannot: that a leaf's `RewriteAndReturn` outranks the common body
+it would otherwise fall into, and that one class reads the *translated* request rather than the raw
+one. The class ledger is the join: 77 rows of four body columns and two task-handler columns, with
+63 entity classnames resolved to their most-derived claimant. Beside it sit the 100 task policies
+over 111 task routes, keyed by `(handler, task)` because a task name is reused across bodies. The
+232 paired-action variants are **generated, not stored**: 29 registered bases, a per-base role
+order and the `+1`…`+8` arithmetic, with the generator requiring that order to reproduce all eight
+registered names before it emits a base.
+
+Where the recovered reading names a *family* of requests without enumerating it — the two movement
+policy branches — the row carries the family name instead of a literal and the walk reports itself
+unresolved. Guessing a membership there is the one failure these tables exist to prevent, so the
+residual is a counted census field rather than a silent gap.
+
 The **activity registry is not committed**. The runtime keys on names and never on IDs, and 4,460
 registrations — most unreachable in gameplay — is a binary dump rather than a rule. It stays a
 research artifact; the reachable names appear in the tables that use them.
@@ -636,6 +656,17 @@ load-bearing rather than decoration, and no rewrite kind naming activities that 
 carries. That second level is strictly stronger than a byte diff — a table transcribed perfectly and
 interpreted wrongly passes a diff and fails here. Owner-run retail agreement against the banked
 capture corpus corroborates and gates nothing.
+
+The NPC surface takes the same two levels, and the content-free one is where its weight sits.
+`Elysium.Substrate.NpcActivityTables` walks every body, class column and task handler against the
+census, then asserts the **orders** a count cannot see: the dog's leaf keeping the fidget the common
+Troika body would idle, forced low cover rewriting the context before the context rows read it, the
+Tzimisce runner's chain delegating a cover request before its own variant selection ever runs.
+`Elysium.Content.NpcActivityConformance` asks the corpus the three-way question the tables join —
+resolved directly, through the weapon table that stands between the class translator and the model,
+or, for a paired-action base, through the role arithmetic that is the only way one is ever played.
+Its residual stays a named list because there it measures how much of the cast the work root
+carries, not whether a rule is right.
 
 The player rules take the same two levels. `Elysium.Substrate.PlayerActionRules` is content-free and
 tests the property a row count cannot: that the *order* survives, since a ladder whose unconditional
