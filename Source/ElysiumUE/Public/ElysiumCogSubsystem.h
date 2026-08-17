@@ -23,6 +23,7 @@ class UElysiumCogSubsystem : public UWorldSubsystem
 	GENERATED_BODY()
 
 public:
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void PostInitialize() override;
@@ -40,7 +41,6 @@ private:
 	// The green-room lab window, kept because `elysium.gr` opens it by name from the console
 	// rather than through the menu. Owned by Cog once added; this is a borrowed pointer.
 	FElysiumCogWindow_GreenRoom* GreenRoomWindow = nullptr;
-	// `elysium.gr`, registered and unregistered with this world's Cog surface — a verb bound to a
-	// window that no longer exists would outlive its world.
-	IConsoleObject* GreenRoomCommand = nullptr;
+
+	TArray<IConsoleObject*> ConsoleObjects;
 };

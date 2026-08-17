@@ -63,6 +63,11 @@ namespace
 }
 #endif // ENABLE_COG
 
+bool UElysiumCogSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
+{
+	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
+}
+
 bool UElysiumCogSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	if (!Super::ShouldCreateSubsystem(Outer))
@@ -164,11 +169,11 @@ void UElysiumCogSubsystem::PostInitialize()
 	// green-room lab if this session has none, opens the window, and hands ImGui the mouse: a
 	// window that is visible behind a game still holding the cursor is not usable, and finding it
 	// through F1 and two menu levels is the friction this verb exists to remove.
-	GreenRoomCommand = IConsoleManager::Get().RegisterConsoleCommand(
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.gr"),
 		TEXT("Open the green room: a neutral stage with one body on it, live cloth tuning, and a "
 			 "camera you drive. Arms the stage if this session has none."),
-		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
+		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& /*Args*/, UWorld* /*World*/)
 		{
 			UCogSubsystem* CogNow = Cast<UCogSubsystem>(CogSubsystem.Get());
 			if (GreenRoomWindow == nullptr || !IsValid(CogNow))
@@ -186,7 +191,7 @@ void UElysiumCogSubsystem::PostInitialize()
 				CogNow->GetContext().SetEnableInput(true);
 			}
 		}),
-		ECVF_Default);
+		ECVF_Cheat));
 
 	// Boot dormant: Cog is compiled in (non-Shipping) and F1 opens it, but nothing should be on
 	// screen until then, and it must not be holding the mouse — a captured cursor makes the game's
@@ -261,11 +266,14 @@ void UElysiumCogSubsystem::Deinitialize()
 		FTSTicker::GetCoreTicker().RemoveTicker(StartupHideTicker);
 		StartupHideTicker.Reset();
 	}
-	if (GreenRoomCommand != nullptr)
+	for (IConsoleObject* Obj : ConsoleObjects)
 	{
-		IConsoleManager::Get().UnregisterConsoleObject(GreenRoomCommand);
-		GreenRoomCommand = nullptr;
+		if (Obj != nullptr)
+		{
+			IConsoleManager::Get().UnregisterConsoleObject(Obj);
+		}
 	}
+	ConsoleObjects.Reset();
 	GreenRoomWindow = nullptr;
 #endif
 
