@@ -573,15 +573,27 @@ void FElysiumDoorBase::OnDormancyChanged()
 	RefreshUseOwner();
 }
 
+FElysiumEntityHandle FElysiumDoorBase::ResolvePlayerUseTarget() const
+{
+	for (const FElysiumEntityHandle& KnobHandle : Doorknobs)
+	{
+		FElysiumEntity* Entity = World ? World->Resolve(KnobHandle) : nullptr;
+		const FElysiumLockableEntity* Knob = Entity ? Entity->AsLockableEntity() : nullptr;
+		if (Knob && !Knob->IsDead() && !Knob->IsInert())
+		{
+			return KnobHandle;
+		}
+	}
+	return Handle;
+}
+
 void FElysiumDoorBase::RefreshUseOwner()
 {
 	if (World)
 	{
-		// A knobbed door has one physical interaction point and one logical owner: the knob. Leaving
-		// the brush anchor live would let an exact hit on the slab bypass key, lockpick and
-		// OnUseBegin/OnUseEnd handling on the attachment. The slab must also leave ElysiumUse or it
-		// occludes those knobs (QueryPlayerUse fail-closed + ClearLineTo).
-		World->SetUseAnchorEnabled(Handle, IsUsable() && Doorknobs.IsEmpty() && !IsInert());
+		// The slab stays the look-ray surface. A knobbed leaf remaps focus onto the knob so looking
+		// at the wood still runs lock/key/OnUseBegin instead of DoorUse.
+		World->SetUseAnchorEnabled(Handle, IsUsable() && !IsInert());
 	}
 }
 
