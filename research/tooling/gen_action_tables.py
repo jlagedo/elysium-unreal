@@ -969,7 +969,7 @@ def player_census(model):
 def _rule_line(row, indent):
     """One `FPlayerRule` initialiser, wrapped after the operand when it is long."""
     padded = list(row["predicates"]) + ["Always"] * (3 - len(row["predicates"]))
-    head = "%s{ { %s }, %d," % (indent, ", ".join("P::%s" % name for name in padded),
+    head = "%s{ { %s }, %d," % (indent, ", ".join("PlayerP::%s" % name for name in padded),
                                 row["operand"])
     activity = _literal(row["activity"]) if row["activity"] else "nullptr"
     layer = _literal(row["layer"]) if row["layer"] else "nullptr"
@@ -1043,9 +1043,11 @@ def render_player_cpp(model):
     add("{")
     add("namespace")
     add("{")
-    add("\t// A row's predicates are AND-ed and `Always`-padded; the alias is what lets one fit a line.")
-    add("\tusing P = EPlayerPredicate;")
-    add("\tstatic_assert(static_cast<int32>(P::Count) == %d," % len(PLAYER_PREDICATES))
+    add("\t// A row's predicates are AND-ed and `Always`-padded; the alias is what lets one fit a")
+    add("\t// line. Unit-prefixed because the module builds adaptive-unity: this anonymous")
+    add("\t// namespace is regularly merged with the NPC and weapon tables' own.")
+    add("\tusing PlayerP = EPlayerPredicate;")
+    add("\tstatic_assert(static_cast<int32>(PlayerP::Count) == %d," % len(PLAYER_PREDICATES))
     add("\t\t\"the predicate vocabulary changed; regenerate the player action rules\");")
     add("")
 
@@ -1087,7 +1089,7 @@ def render_player_cpp(model):
     add("\t{")
     for row in model["pose_writes"]:
         out.extend(_comment("%s: %s." % (row["parameter"], row["note"]), "\t\t"))
-        add("\t\t{ %s, EPlayerPoseSource::%s, %sf, P::%s, %sf },"
+        add("\t\t{ %s, EPlayerPoseSource::%s, %sf, PlayerP::%s, %sf },"
             % (_literal(row["parameter"]), row["source"], _float(row["value"]),
                row["gate"], _float(row["slew"])))
     add("\t};")
@@ -1886,17 +1888,17 @@ def _npc_rule_line(rule, indent):
     """
     padded = list(rule["predicates"]) + ["Always"] * (2 - len(rule["predicates"]))
     fields = [
-        "{ %s }" % ", ".join("P::%s" % name for name in padded),
+        "{ %s }" % ", ".join("NpcP::%s" % name for name in padded),
         str(rule["operand"]),
         _literal(rule["from"]) if rule["from"] else "nullptr",
         str(rule["from_id"]),
         _literal(rule["family"]) if rule["family"] else "nullptr",
         _literal(rule["to"]) if rule["to"] else "nullptr",
         str(rule["to_id"]),
-        "R::%s" % rule["route"],
+        "NpcR::%s" % rule["route"],
     ]
     if rule["route"] == "Delegate":
-        fields.append("S::%s" % rule["delegate"])
+        fields.append("NpcS::%s" % rule["delegate"])
 
     lines = []
     current = indent + "{"
@@ -1947,11 +1949,13 @@ def render_npc_cpp(model):
     add("{")
     add("namespace")
     add("{")
-    add("\t// A row's predicates are AND-ed and `Always`-padded; the aliases are what let one fit a line.")
-    add("\tusing P = ENpcPredicate;")
-    add("\tusing R = ENpcRoute;")
-    add("\tusing S = ENpcSlot;")
-    add("\tstatic_assert(static_cast<int32>(P::Count) == %d," % len(NPC_PREDICATES))
+    add("\t// A row's predicates are AND-ed and `Always`-padded; the aliases are what let one fit a")
+    add("\t// line. Unit-prefixed because the module builds adaptive-unity: this anonymous")
+    add("\t// namespace is regularly merged with the player and weapon tables' own.")
+    add("\tusing NpcP = ENpcPredicate;")
+    add("\tusing NpcR = ENpcRoute;")
+    add("\tusing NpcS = ENpcSlot;")
+    add("\tstatic_assert(static_cast<int32>(NpcP::Count) == %d," % len(NPC_PREDICATES))
     add("\t\t\"the predicate vocabulary changed; regenerate the NPC activity tables\");")
 
     for body in model["bodies"]:

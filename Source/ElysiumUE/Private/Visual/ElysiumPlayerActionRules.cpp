@@ -21,8 +21,8 @@ namespace ElysiumActionTables
 namespace
 {
 	// A row's predicates are AND-ed and `Always`-padded; the alias is what lets one fit a line.
-	using P = EPlayerPredicate;
-	static_assert(static_cast<int32>(P::Count) == 24,
+	using PlayerP = EPlayerPredicate;
+	static_assert(static_cast<int32>(PlayerP::Count) == 24,
 		"the predicate vocabulary changed; regenerate the player action rules");
 
 	// The gait ladder. It is **not** inside any code's arm: the selector computes it
@@ -32,136 +32,136 @@ namespace
 	// in both directions rather than a hysteresis band.
 	constexpr FPlayerRule GGaitLadder[] =
 	{
-		{ { P::BelowMoveThreshold, P::Ducking, P::Always }, 0, TEXT("ACT_CROUCH"), 63, nullptr, 0 },
-		{ { P::BelowMoveThreshold, P::CombatReady, P::Always }, 0, TEXT("ACT_AIM"), 5, nullptr, 0 },
-		{ { P::BelowMoveThreshold, P::Always, P::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr, 0 },
-		{ { P::Ducking, P::Always, P::Always }, 0, TEXT("ACT_SNEAK"), 18, nullptr, 0 },
-		{ { P::AboveGaitThreshold, P::Relaxed, P::Always }, 0,
+		{ { PlayerP::BelowMoveThreshold, PlayerP::Ducking, PlayerP::Always }, 0, TEXT("ACT_CROUCH"), 63, nullptr, 0 },
+		{ { PlayerP::BelowMoveThreshold, PlayerP::CombatReady, PlayerP::Always }, 0, TEXT("ACT_AIM"), 5, nullptr, 0 },
+		{ { PlayerP::BelowMoveThreshold, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr, 0 },
+		{ { PlayerP::Ducking, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_SNEAK"), 18, nullptr, 0 },
+		{ { PlayerP::AboveGaitThreshold, PlayerP::Relaxed, PlayerP::Always }, 0,
 			TEXT("ACT_RUN_RELAXED"), 23, nullptr, 0 },
-		{ { P::AboveGaitThreshold, P::Always, P::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, 0 },
-		{ { P::Relaxed, P::Always, P::Always }, 0, TEXT("ACT_WALK_RELAXED"), 22, nullptr, 0 },
-		{ { P::Always, P::Always, P::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, 0 },
+		{ { PlayerP::AboveGaitThreshold, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, 0 },
+		{ { PlayerP::Relaxed, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_WALK_RELAXED"), 22, nullptr, 0 },
+		{ { PlayerP::Always, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, 0 },
 	};
 
 	// PLAYER_JUMP — classifier while jump/landing state is positive and water level is zero; jump
 	// helper 0x1016a870.
 	constexpr FPlayerRule GPlayerJumpRules[] =
 	{
-		{ { P::JumpPhase, P::Always, P::Always }, 1, TEXT("ACT_LEAP"), 44, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 2, TEXT("ACT_HOP"), 40, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 3, TEXT("ACT_HOP_UP"), 41, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 4, TEXT("ACT_HOP_DOWN"), 42, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 5, TEXT("ACT_LEAP_ASCEND"), 45, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 6, TEXT("ACT_LEAP_DESCEND"), 46, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 7, TEXT("ACT_FALLING"), 47, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 1, TEXT("ACT_LEAP"), 44, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 2, TEXT("ACT_HOP"), 40, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 3, TEXT("ACT_HOP_UP"), 41, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 4, TEXT("ACT_HOP_DOWN"), 42, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 5, TEXT("ACT_LEAP_ASCEND"), 45, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 6, TEXT("ACT_LEAP_DESCEND"), 46, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 7, TEXT("ACT_FALLING"), 47, nullptr, 0 },
 		// a moving body keeps its gait through the landing
-		{ { P::JumpPhase, P::GaitIsWalkOrRun, P::Always }, 8, nullptr, 0, nullptr, 0 },
-		{ { P::JumpPhase, P::Ducking, P::Always }, 8, TEXT("ACT_LAND_CROUCH"), 49, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 8, TEXT("ACT_LAND"), 48, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::GaitIsWalkOrRun, PlayerP::Always }, 8, nullptr, 0, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Ducking, PlayerP::Always }, 8, TEXT("ACT_LAND_CROUCH"), 49, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 8, TEXT("ACT_LAND"), 48, nullptr, 0 },
 		// a moving body keeps its gait through the landing
-		{ { P::JumpPhase, P::GaitIsWalkOrRun, P::Always }, 9, nullptr, 0, nullptr, 0 },
-		{ { P::JumpPhase, P::Ducking, P::Always }, 9, TEXT("ACT_LAND_CROUCH"), 49, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 9, TEXT("ACT_LAND"), 48, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 10, TEXT("ACT_LAND_HARD"), 50, nullptr, 0 },
-		{ { P::JumpPhase, P::Always, P::Always }, 11, TEXT("ACT_LAND_HARD"), 50, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::GaitIsWalkOrRun, PlayerP::Always }, 9, nullptr, 0, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Ducking, PlayerP::Always }, 9, TEXT("ACT_LAND_CROUCH"), 49, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 9, TEXT("ACT_LAND"), 48, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 10, TEXT("ACT_LAND_HARD"), 50, nullptr, 0 },
+		{ { PlayerP::JumpPhase, PlayerP::Always, PlayerP::Always }, 11, TEXT("ACT_LAND_HARD"), 50, nullptr, 0 },
 	};
 
 	// PLAYER_ATTACK1 — ranged, base/thrown, frag-grenade, and discipline-weapon attack paths.
 	constexpr FPlayerRule GPlayerAttack1Rules[] =
 	{
-		{ { P::HasActiveWeapon, P::MeleeCapable, P::Airborne }, 0,
+		{ { PlayerP::HasActiveWeapon, PlayerP::MeleeCapable, PlayerP::Airborne }, 0,
 			TEXT("ACT_MELEE_AIR_ATTACK"), 76, nullptr, 0 },
-		{ { P::HasActiveWeapon, P::MeleeCapable, P::Always }, 0,
+		{ { PlayerP::HasActiveWeapon, PlayerP::MeleeCapable, PlayerP::Always }, 0,
 			TEXT("ACT_MELEE_ATTACK"), 75, nullptr, 0 },
-		{ { P::HasActiveWeapon, P::RangedCapable, P::Always }, 0,
+		{ { PlayerP::HasActiveWeapon, PlayerP::RangedCapable, PlayerP::Always }, 0,
 			nullptr, 0, TEXT("ACT_RANGE_ATTACK1_LAYER"), 26 },
 	};
 
 	// PLAYER_PRAY — classifier when InPrayer is true or both form/prayer gate bytes are asserted.
 	constexpr FPlayerRule GPlayerPrayRules[] =
 	{
-		{ { P::SequenceUnfinished, P::NotInPrayer, P::Always }, 0,
+		{ { PlayerP::SequenceUnfinished, PlayerP::NotInPrayer, PlayerP::Always }, 0,
 			TEXT("ACT_PRAYING_BEGIN"), 305, nullptr, 0 },
 		// hold the stored ideal
-		{ { P::SequenceUnfinished, P::Always, P::Always }, 0, nullptr, 0, nullptr, 0 },
+		{ { PlayerP::SequenceUnfinished, PlayerP::Always, PlayerP::Always }, 0, nullptr, 0, nullptr, 0 },
 		// ... while the stored ideal is ACT_PRAYING_BEGIN.
-		{ { P::IdealActivityIs, P::Always, P::Always }, 305,
+		{ { PlayerP::IdealActivityIs, PlayerP::Always, PlayerP::Always }, 305,
 			TEXT("ACT_PRAYING_IDLE"), 306, nullptr, 0 },
 		// ... while the stored ideal is ACT_PRAYING_IDLE.
-		{ { P::IdealActivityIs, P::PrayerReleased, P::Always }, 306,
+		{ { PlayerP::IdealActivityIs, PlayerP::PrayerReleased, PlayerP::Always }, 306,
 			TEXT("ACT_PRAYING_END"), 307, nullptr, 0 },
 		// ... while the stored ideal is ACT_PRAYING_IDLE.
-		{ { P::IdealActivityIs, P::Always, P::Always }, 306,
+		{ { PlayerP::IdealActivityIs, PlayerP::Always, PlayerP::Always }, 306,
 			TEXT("ACT_PRAYING_IDLE"), 306, nullptr, 0 },
 		// ... while the stored ideal is ACT_PRAYING_END.
-		{ { P::IdealActivityIs, P::Always, P::Always }, 307, TEXT("ACT_IDLE"), 1, nullptr, 0 },
-		{ { P::Always, P::Always, P::Always }, 0, TEXT("ACT_PRAYING_BEGIN"), 305, nullptr, 0 },
+		{ { PlayerP::IdealActivityIs, PlayerP::Always, PlayerP::Always }, 307, TEXT("ACT_IDLE"), 1, nullptr, 0 },
+		{ { PlayerP::Always, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_PRAYING_BEGIN"), 305, nullptr, 0 },
 	};
 
 	// PLAYER_GRAPPLE — classifier while the feed/grapple target handle is live in release state
 	// zero.
 	constexpr FPlayerRule GPlayerGrappleRules[] =
 	{
-		{ { P::ReleasedFeeding, P::Always, P::Always }, 0,
+		{ { PlayerP::ReleasedFeeding, PlayerP::Always, PlayerP::Always }, 0,
 			TEXT("ACT_FEEDING_RELEASED_IDLE_ATTACKER"), 4003, nullptr, 0 },
-		{ { P::ReleasedSeductive, P::Always, P::Always }, 0,
+		{ { PlayerP::ReleasedSeductive, PlayerP::Always, PlayerP::Always }, 0,
 			TEXT("ACT_SEDUCTIVE_RELEASED_IDLE_ATTACKER"), 4041, nullptr, 0 },
 	};
 
 	// PLAYER_SWIM — classifier at water level above two, or at level two while not grounded.
 	constexpr FPlayerRule GPlayerSwimRules[] =
 	{
-		{ { P::SwimStroke, P::Always, P::Always }, 0, TEXT("ACT_SWIM"), 37, nullptr, 0 },
-		{ { P::Always, P::Always, P::Always }, 0, TEXT("ACT_TREADWATER"), 38, nullptr, 0 },
+		{ { PlayerP::SwimStroke, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_SWIM"), 37, nullptr, 0 },
+		{ { PlayerP::Always, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_TREADWATER"), 38, nullptr, 0 },
 	};
 
 	// PLAYER_USE — classifier while the interaction handle is live.
 	constexpr FPlayerRule GPlayerUseRules[] =
 	{
 		// the interaction entity supplies the activity
-		{ { P::InteractionSupplies, P::Always, P::Always }, 0, nullptr, 0, nullptr, 0 },
+		{ { PlayerP::InteractionSupplies, PlayerP::Always, PlayerP::Always }, 0, nullptr, 0, nullptr, 0 },
 	};
 
 	// PLAYER_LADDER — classifier when movement type is ten.
 	constexpr FPlayerRule GPlayerLadderRules[] =
 	{
-		{ { P::ClimbingUp, P::Always, P::Always }, 0, TEXT("ACT_CLIMB_UP"), 51, nullptr, 0 },
-		{ { P::Always, P::Always, P::Always }, 0, TEXT("ACT_CLIMB_DOWN"), 52, nullptr, 0 },
+		{ { PlayerP::ClimbingUp, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_CLIMB_UP"), 51, nullptr, 0 },
+		{ { PlayerP::Always, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_CLIMB_DOWN"), 52, nullptr, 0 },
 	};
 
 	// PLAYER_VOMIT — two native purge/vomit calls plus the only patch-first discipline Player_Anim
 	// value.
 	constexpr FPlayerRule GPlayerVomitRules[] =
 	{
-		{ { P::SequenceUnfinished, P::VomitNotEntered, P::Always }, 0,
+		{ { PlayerP::SequenceUnfinished, PlayerP::VomitNotEntered, PlayerP::Always }, 0,
 			TEXT("ACT_VOMIT_INTO"), 4197, nullptr, 0 },
 		// hold the stored ideal
-		{ { P::SequenceUnfinished, P::Always, P::Always }, 0, nullptr, 0, nullptr, 0 },
+		{ { PlayerP::SequenceUnfinished, PlayerP::Always, PlayerP::Always }, 0, nullptr, 0, nullptr, 0 },
 		// ... while the stored ideal is ACT_VOMIT_INTO.
-		{ { P::IdealActivityIs, P::Always, P::Always }, 4197,
+		{ { PlayerP::IdealActivityIs, PlayerP::Always, PlayerP::Always }, 4197,
 			TEXT("ACT_VOMIT_IDLE"), 4198, nullptr, 0 },
 		// ... while the stored ideal is ACT_VOMIT_IDLE.
-		{ { P::IdealActivityIs, P::PurgeComplete, P::Always }, 4198,
+		{ { PlayerP::IdealActivityIs, PlayerP::PurgeComplete, PlayerP::Always }, 4198,
 			TEXT("ACT_VOMIT_GETOUT"), 4199, nullptr, 0 },
 		// ... while the stored ideal is ACT_VOMIT_IDLE.
-		{ { P::IdealActivityIs, P::Always, P::Always }, 4198,
+		{ { PlayerP::IdealActivityIs, PlayerP::Always, PlayerP::Always }, 4198,
 			TEXT("ACT_VOMIT_IDLE"), 4198, nullptr, 0 },
 		// ... while the stored ideal is ACT_VOMIT_GETOUT.
-		{ { P::IdealActivityIs, P::Always, P::Always }, 4199, TEXT("ACT_IDLE"), 1, nullptr, 0 },
-		{ { P::Always, P::Always, P::Always }, 0, TEXT("ACT_VOMIT_INTO"), 4197, nullptr, 0 },
+		{ { PlayerP::IdealActivityIs, PlayerP::Always, PlayerP::Always }, 4199, TEXT("ACT_IDLE"), 1, nullptr, 0 },
+		{ { PlayerP::Always, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_VOMIT_INTO"), 4197, nullptr, 0 },
 	};
 
 	// PLAYER_BLOCK — held +wpn_secondaryatk while grounded and the active weapon capability mask
 	// intersects 0x18000.
 	constexpr FPlayerRule GPlayerBlockRules[] =
 	{
-		{ { P::Always, P::Always, P::Always }, 0, TEXT("ACT_PREBLOCK"), 4436, nullptr, 0 },
+		{ { PlayerP::Always, PlayerP::Always, PlayerP::Always }, 0, TEXT("ACT_PREBLOCK"), 4436, nullptr, 0 },
 	};
 
 	// PLAYER_RELOAD — common reload helper and frag-grenade reload-style path.
 	constexpr FPlayerRule GPlayerReloadRules[] =
 	{
-		{ { P::HasActiveWeapon, P::Always, P::Always }, 0,
+		{ { PlayerP::HasActiveWeapon, PlayerP::Always, PlayerP::Always }, 0,
 			nullptr, 0, TEXT("ACT_RELOAD_LAYER"), 86 },
 	};
 
@@ -236,12 +236,12 @@ namespace
 	{
 		// move_yaw: right-positive with zero forward; a stationary body holds its last value rather
 		// than returning it to zero.
-		{ TEXT("move_yaw"), EPlayerPoseSource::VelocityAgainstFacing, 0.0f, P::Moving, 720.0f },
+		{ TEXT("move_yaw"), EPlayerPoseSource::VelocityAgainstFacing, 0.0f, PlayerP::Moving, 720.0f },
 		// aim_yaw: a literal zero on every call in every state, so a weapon aim grid is pitch-only
 		// and there is nothing for a torso follower to drive.
-		{ TEXT("aim_yaw"), EPlayerPoseSource::Literal, 0.0f, P::Always, 0.0f },
+		{ TEXT("aim_yaw"), EPlayerPoseSource::Literal, 0.0f, PlayerP::Always, 0.0f },
 		// aim_pitch: an absolute angle from +0x206c, wrapped by 360.
-		{ TEXT("aim_pitch"), EPlayerPoseSource::AimPitchField, 0.0f, P::Always, 0.0f },
+		{ TEXT("aim_pitch"), EPlayerPoseSource::AimPitchField, 0.0f, PlayerP::Always, 0.0f },
 	};
 
 	// `CBasePlayer::NPC_TranslateActivity`. Without these two rows an unarmed gait request
