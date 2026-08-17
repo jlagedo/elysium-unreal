@@ -125,9 +125,9 @@ private:
 	int32 PendingClan = 0;
 	bool bPendingMale = true;
 
-	// The overlay, and what it draws. On by default: it is the only reading of a fight that does not
-	// require looking away from it.
-	bool bDrawOverlay = true;
+	// The overlay, and what it draws. Off by default: a map full of characters would otherwise stack
+	// labels into the world before anyone asked for them.
+	bool bDrawOverlay = false;
 	bool bOverlayEnemyLines = true;
 	// How far from the camera an overlay label is still drawn, in centimetres. A room-sized default;
 	// a map full of characters would otherwise stack forty labels into one smear.
