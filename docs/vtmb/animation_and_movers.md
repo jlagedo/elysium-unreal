@@ -904,6 +904,23 @@ pre-translation, disposition path and fallback order.
    answer, the first weapon answer, then the original logical request. If none exists and the
    original request is `ACT_RUN`, the translated fallback is `ACT_WALK`.
 
+**Nothing in the NPC chain reads a ground or air state** [VtMB decompiled + data-verified]. The
+compact-code classifier and the gait ladder that select `ACT_HOP*`, `ACT_LEAP*`, `ACT_FALLING` and
+the land family belong to `CBasePlayer`, reading the player's own jump-phase field at `+0x1db4` and
+the ground bit of `m_fFlags`; `TranslateActivity`, `ResolveActivityToSequence`, `SetIdealActivity`
+and `MaintainActivity` consult neither. An NPC's activity is whatever a schedule task, the
+disposition machine or a scripted beat has already requested, and a standing NPC's request is
+`ACT_IDLE`, issued explicitly by `TASK_SET_ACTIVITY` with argument `ACTIVITY:ACT_IDLE`.
+
+Across the 77-class `CAI_BaseNPC` RTTI surface there is exactly **one** producer of `ACT_FALLING`:
+`CNPC_VManBat`'s `TASK_MANBAT_FALL_TO_GROUND` (task 332), whose `StartTask` at `0x1038c390` sets it
+unconditionally and whose `RunTask` at `0x1038d130` hands off to `ACT_MANBAT_WRITHE` when its own
+ground trace completes. The Asian Vampire and Chang brothers reassert `ACT_LEAP_ASCEND` inside their
+own `TASK_JUMP`, gated on remaining vertical velocity. Every air activity on the cast is therefore a
+named task's doing, never an inference from the floor. Neither handler is decompiled yet, so what
+schedules ManBat's fall in the first place is open; the activity census itself is a static
+task-registry extraction and is not in doubt.
+
 #### The complete NPC translation-virtual surface [VtMB decompiled + data-verified]
 
 `uv run elysium research npc_translation_survey` makes the class side reproducible from the pinned

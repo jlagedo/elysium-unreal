@@ -39,8 +39,8 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 		return true;
 	}
 
-	float Speed = Gait == EElysiumScriptGait::Run
-		? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed;
+	float Speed = ElysiumNpcGait::TravelSpeed(Motor, Gait == EElysiumScriptGait::Run
+		? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk);
 	FString ScriptWalkLabel;
 	FString ScriptWalkAnim;
 	if (Gait == EElysiumScriptGait::Walk)

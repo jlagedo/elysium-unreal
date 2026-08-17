@@ -1291,8 +1291,8 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	// tables are a property of the body rather than of the frame, so handing one over on change is
 	// the whole of it. The generation gate is what keeps it from being a per-frame struct copy.
 	//
-	// The gait reference is rebuilt from the same tables, so the classifier's walk/run threshold and
-	// the mover's commanded speed cannot come from two different numbers.
+	// The driver has already rebuilt its own gait reference off these tables, so the classifier's
+	// walk/run threshold and the mover's commanded speed cannot come from two different numbers.
 	if (PlayerAnimDriver->GaitGeneration != PushedGaitGeneration)
 	{
 		PushedGaitGeneration = PlayerAnimDriver->GaitGeneration;
@@ -1300,7 +1300,6 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 		{
 			Move->SetGaitSpeeds(PlayerAnimDriver->GaitSpeeds);
 		}
-		PlayerAnimDriver->Gait = ElysiumAnimIntent::GaitFrom(PlayerAnimDriver->GaitSpeeds);
 	}
 	// Hand the settled record to the graph (CCC5). The push is here rather than a pull from the
 	// instance because the driver lives on this actor behind a pimpl while the visual is a component

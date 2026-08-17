@@ -57,6 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
+#include "ElysiumAnimationIntent.h"          // the jump latch and classifier the cast poses from
 #include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
@@ -1166,6 +1167,105 @@ bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 	Body->SetEnabled(true);
 	TestTrue(TEXT("re-enabling restores collision"), Body->GetActorEnableCollision());
 	TestFalse(TEXT("re-enabling an idle NPC does not wake CharacterMovement"), Movement->IsActive());
+	return true;
+}
+
+// A body that only ever stands must still report itself standing.
+//
+// `MovementMode` is zero-initialised to `MOVE_None` and only becomes `MOVE_Walking` when a
+// controller possesses the character — which happens on the body's first accepted travel request
+// and never at all for a background NPC. `IsMovingOnGround()` reads the mode alone, so such a body
+// used to report itself airborne for its whole life, and the animation latch pinned it at
+// `ACT_FALLING` while it stood on the pavement. Retail has no ground/air poll for the cast at all
+// (`docs/vtmb/animation_and_movers.md` — the compact-code classifier is the player chain's), so a
+// standing NPC selecting a fall is a defect with no faithful counterpart.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcStandingGroundTest,
+	"Elysium.Substrate.NpcStandingGround", GElysiumTestFlags)
+bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	if (!TestNotNull(TEXT("transient game world exists"), World))
+	{
+		return false;
+	}
+
+	// A solid slab to stand on. Without real floor under the capsule the body genuinely is airborne,
+	// and the assertion below would pass for the wrong reason.
+	AActor* FloorOwner = World->SpawnActor<AActor>();
+	if (!TestNotNull(TEXT("floor owner spawned"), FloorOwner))
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(FloorOwner, TEXT("Root"));
+	FloorOwner->SetRootComponent(Root);
+	Root->RegisterComponent();
+	FloorOwner->AddInstanceComponent(Root);
+
+	FElysiumConvexHull Slab;
+	for (const float X : { -600.f, 600.f })
+	{
+		for (const float Y : { -600.f, 600.f })
+		{
+			for (const float Z : { -100.f, 0.f })
+			{
+				Slab.Vertices.Emplace(X, Y, Z);
+			}
+		}
+	}
+	UElysiumBrushComponent* Floor = NewObject<UElysiumBrushComponent>(FloorOwner, TEXT("Slab"));
+	Floor->InitBrush(FElysiumEntityHandle::Invalid(), { Slab }, EElysiumBrushSolidity::Solid);
+	Floor->SetupAttachment(Root);
+	Floor->RegisterComponent();
+	FloorOwner->AddInstanceComponent(Floor);
+
+	AElysiumNpcBody* Body = World->SpawnActor<AElysiumNpcBody>();
+	if (!TestNotNull(TEXT("native NPC body spawned"), Body))
+	{
+		return false;
+	}
+	Body->InitializeAtFeet(FVector::ZeroVector, 0.0f);
+	Body->SetRuntimeReady(true);
+
+	UCharacterMovementComponent* Movement = Body->GetCharacterMovement();
+	if (!TestNotNull(TEXT("native NPC body owns CharacterMovement"), Movement))
+	{
+		return false;
+	}
+
+	// The body has never been issued a travel request — the exact case that used to read airborne.
+	TestNull(TEXT("the standing body still has no controller"), Body->GetController());
+	TestTrue(TEXT("a settled standing body reports a grounded movement mode"),
+		Movement->IsMovingOnGround());
+
+	const FElysiumLocomotionSample Sample = Body->SampleLocomotion();
+	TestTrue(TEXT("...so its locomotion sample reports it on the ground"), Sample.bOnGround);
+	TestTrue(TEXT("...standing still"), Sample.Speed2D() <= UE_KINDA_SMALL_NUMBER);
+
+	// The sleep policy is the thing this fix must not trade away: an idle body still does not tick
+	// movement or own a crowd agent (`docs/architecture/map-architecture.md`).
+	TestFalse(TEXT("a standing body still does not wake CharacterMovement"), Movement->IsActive());
+
+	// The payoff, through the pure rules the cast actually poses from: the latch stays grounded and
+	// the classifier answers Idle rather than ACT_FALLING.
+	const FElysiumGaitReference Gait;
+	FElysiumJumpLatch Latch;
+	for (int32 Frame = 0; Frame < 4; ++Frame)
+	{
+		Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Sample, 1.0f / 60.0f, Gait);
+	}
+	TestEqual(TEXT("the jump latch stays grounded under a standing body"),
+		static_cast<int32>(Latch.Phase), static_cast<int32>(EElysiumAirPhase::Grounded));
+	TestEqual(TEXT("...and the classifier answers idle, not falling"),
+		static_cast<int32>(ElysiumAnimIntent::Classify(Sample, Latch, Gait)),
+		static_cast<int32>(EElysiumAnimActivityCode::Idle));
+
 	return true;
 }
 

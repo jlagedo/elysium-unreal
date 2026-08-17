@@ -91,10 +91,46 @@ void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent
 	ModelStem = InStem;
 	Visual = InVisual;
 	AnimVariant = FMath::Max(0, InVariant);
-	if (AnimDriver.IsValid())
+	EnsureAnimDriver();
+	// A model swap is a new body: the latch, the last request and the previous model's tables all go.
+	AnimDriver->Reset();
+
+	// The body's authored speeds, resolved the moment it knows which model it wears rather than at
+	// its first animation pass. A patrol or a scripted beat can issue its first travel request in the
+	// same frame this body is built, and that request reads the tables through `GaitSpeed`.
+	UElysiumAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	AnimDriver->RefreshGaitSpeeds(Anims, FString(), FString());
+}
+
+void AElysiumNpcBody::EnsureAnimDriver()
+{
+	if (!AnimDriver.IsValid())
 	{
-		AnimDriver->Reset();
+		AnimDriver = MakePimpl<FElysiumAnimationDriver>();
+		AnimDriver->Source = EElysiumAnimSource::Npc;
 	}
+	AnimDriver->Stem = ModelStem;
+	AnimDriver->Variant = AnimVariant;
+}
+
+float AElysiumNpcBody::GaitSpeed(EElysiumNpcGaitKind Gait) const
+{
+	if (!AnimDriver.IsValid())
+	{
+		return 0.f;   // no driver yet: unanswerable, and the caller falls back
+	}
+	const FElysiumGaitSpeeds& Speeds = AnimDriver->GaitSpeeds;
+	const FElysiumGaitSpeedTable* Table = nullptr;
+	switch (Gait)
+	{
+	case EElysiumNpcGaitKind::Run:   Table = &Speeds.Run;   break;
+	case EElysiumNpcGaitKind::Sneak: Table = &Speeds.Sneak; break;
+	default:                         Table = &Speeds.Walk;  break;
+	}
+	// The forward cell: `bOrientRotationToMovement` keeps a path-following body pointed along its
+	// path, so its `move_yaw` is zero and no other cell can be the one it travels at.
+	return Table->Forward();
 }
 
 void AElysiumNpcBody::RegisterActorTickFunctions(bool bRegister)
@@ -121,13 +157,7 @@ void AElysiumNpcBody::RegisterActorTickFunctions(bool bRegister)
 
 void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 {
-	if (!AnimDriver.IsValid())
-	{
-		AnimDriver = MakePimpl<FElysiumAnimationDriver>();
-		AnimDriver->Source = EElysiumAnimSource::Npc;
-	}
-	AnimDriver->Stem = ModelStem;
-	AnimDriver->Variant = AnimVariant;
+	EnsureAnimDriver();
 
 	USkeletalMeshComponent* Body = Visual.Get();
 	UElysiumAnimSubsystem* Anims = GetGameInstance()
@@ -360,6 +390,14 @@ void AElysiumNpcBody::ApplyEnabledState()
 				Movement->CurrentFloor = Floor;
 				Movement->AdjustFloorHeight();
 				Movement->StopMovementImmediately();
+				// And the mode that says so. `MovementMode` is zero-initialised to `MOVE_None` and only
+				// ever becomes `MOVE_Walking` when a controller possesses the character — which happens
+				// on the body's FIRST accepted travel request and never for a body that only ever
+				// stands. `IsMovingOnGround()` reads the mode alone, so without this a body standing on
+				// the floor the query above just proved reports itself airborne for its whole life, and
+				// the animation latch pins it at `ACT_FALLING`. The floor result is the licence: a body
+				// with nothing walkable under it keeps `MOVE_None` and honestly reads as not grounded.
+				Movement->SetMovementMode(MOVE_Walking);
 			}
 			Movement->Deactivate();
 		}

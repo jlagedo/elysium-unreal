@@ -20,6 +20,38 @@ void FElysiumAnimationDriver::Reset()
 	GaitKey = FElysiumGaitSpeedRequest();
 	GaitSpeeds = FElysiumGaitSpeeds();
 	GaitGeneration = 0;
+	// And the reference built from them, for the same reason: a threshold left behind by the previous
+	// body would classify the next one against a walk it does not author.
+	Gait = FElysiumGaitReference();
+}
+
+bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims,
+	const FString& WeaponTag, const FString& FormTag)
+{
+	if (Anims == nullptr)
+	{
+		return false;
+	}
+	FElysiumGaitSpeedRequest Key;
+	Key.Stem = Stem;
+	Key.WeaponTag = WeaponTag;
+	Key.FormTag = FormTag;
+	Key.Variant = Variant;
+	Key.SpeedScale = SpeedScale;
+	if (GaitGeneration != 0 && Key == GaitKey)
+	{
+		return false;
+	}
+
+	GaitKey = Key;
+	Anims->ResolveGaitSpeeds(Key, GaitSpeeds);
+	++GaitGeneration;
+	// The classifier's reference comes off the same tables the movers command from, so the walk/run
+	// threshold and the commanded speed cannot come from two different numbers. It is rebuilt here
+	// rather than beside each producer's push, because there is one set of tables and both the player
+	// and the cast read the threshold off it.
+	Gait = ElysiumAnimIntent::GaitFrom(GaitSpeeds);
+	return true;
 }
 
 float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
@@ -51,28 +83,22 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	Body.MoveYawPose = ElysiumLocomotion::AdvanceMoveYaw(MoveYawFilter, Sample.MoveYawVelocity,
 		Sample.Speed2D(), DeltaSeconds);
 
-	Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Body, DeltaSeconds, Gait, OneShot);
+	// Only the player chain commands jumps, so only the player chain has air phases to latch. A cast
+	// body's mover reports itself airborne for reasons that are never a jump — a mode it has not been
+	// given yet, a lift, a frame mid-teleport — and retail answers none of them with an activity: its
+	// NPC surface has no ground poll at all, and the air activities that exist are requested by a
+	// scripted task. Passing the producer here is what keeps that a stated rule rather than a
+	// coincidence of what the movers happen to report.
+	const bool bCommandsJumps = Source == EElysiumAnimSource::Player;
+	Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Body, DeltaSeconds, Gait, OneShot,
+		bCommandsJumps);
 
 	FElysiumAnimationIntent Intent = ElysiumAnimIntent::BuildLocomotionIntent(Body, Latch, Gait,
 		Source, Stem, Character, Variant);
 
 	// The body key, resolved ahead of the request so a body that changed model this frame steers by
 	// its new speeds rather than by one frame of its old ones.
-	if (Anims != nullptr)
-	{
-		FElysiumGaitSpeedRequest Key;
-		Key.Stem = Intent.Stem;
-		Key.WeaponTag = Intent.WeaponTag;
-		Key.FormTag = Intent.FormTag;
-		Key.Variant = Variant;
-		Key.SpeedScale = SpeedScale;
-		if (GaitGeneration == 0 || Key != GaitKey)
-		{
-			GaitKey = Key;
-			Anims->ResolveGaitSpeeds(Key, GaitSpeeds);
-			++GaitGeneration;
-		}
-	}
+	RefreshGaitSpeeds(Anims, Intent.WeaponTag, Intent.FormTag);
 
 	// The discrete key. Everything else about the intent is continuous and does not re-select
 	// anything: a body that turned, sped up or strafed is playing the same request.

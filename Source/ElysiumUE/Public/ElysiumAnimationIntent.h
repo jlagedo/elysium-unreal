@@ -408,9 +408,20 @@ namespace ElysiumAnimIntent
 	// `OneShot` is what the pose layer said about the clip the current phase is riding, and it
 	// defaults to `Unknown` so every caller that has no graph — the gym, a headless think, a test —
 	// keeps the timer path it always had without naming it.
+	//
+	// **`bCommandsJumps` is what makes the air phases the player's.** The whole discriminator this
+	// latch exists for is the rising edge of a jump command, and only the player chain carries one;
+	// retail reads its jump phase off a `CBasePlayer` field, and the cast's air activities come from
+	// scripted tasks that request them outright (ManBat's fall, the Asian Vampire's jump) rather than
+	// from any ground poll — there is no generic NPC producer of `ACT_FALLING` in the shipped binary
+	// (`docs/vtmb/animation_and_movers.md`). A producer without a jump command therefore holds
+	// `Grounded` and never reaches Leap/Falling/Land from a sample, however its mover reports itself.
+	// The gait half of the latch still advances: `bLastGaitWasRun` is the walk/run memory `Classify`
+	// reads, and suppressing it would stop the whole cast ever running.
 	FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 		const FElysiumLocomotionSample& Sample, float DeltaSeconds, const FElysiumGaitReference& Gait,
-		EElysiumOneShotState OneShot = EElysiumOneShotState::Unknown);
+		EElysiumOneShotState OneShot = EElysiumOneShotState::Unknown,
+		bool bCommandsJumps = true);
 
 	// Step 2 — choose a base activity from the settled body sample plus the latch.
 	//

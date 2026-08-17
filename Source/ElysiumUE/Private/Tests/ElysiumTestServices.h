@@ -56,6 +56,12 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// the consumer's re-test only fires on the second.
 	bool bProjectsToNavigable = true;
 	TOptional<FVector> ProjectedOverride;
+	// CCC7/LIFE3 — the body's own authored forward cell per gait. Zero is the default and means
+	// "this body resolves no fan", which is how the caller's fallback to the stated constants is
+	// exercised; setting one is how an authored travel speed is expressed.
+	float AuthoredWalkSpeedCmPerSecond = 0.f;
+	float AuthoredRunSpeedCmPerSecond = 0.f;
+	float AuthoredSneakSpeedCmPerSecond = 0.f;
 
 	void Record(const FString& Call) const
 	{
@@ -141,6 +147,15 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		}
 		return bFacing ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
 	}
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait) const override
+	{
+		switch (Gait)
+		{
+		case EElysiumNpcGaitKind::Run:   return AuthoredRunSpeedCmPerSecond;
+		case EElysiumNpcGaitKind::Sneak: return AuthoredSneakSpeedCmPerSecond;
+		default:                         return AuthoredWalkSpeedCmPerSecond;
+		}
+	}
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override
 	{
 		const FVector Result = ProjectedOverride.Get(PointCm);
@@ -218,6 +233,11 @@ struct FElysiumRecordingServices final
 	FString ResolvedNpcActivityLabel = TEXT("walk");
 	FString ResolvedNpcActivityClip = TEXT("walk_0");
 	float ResolvedNpcGroundSpeedCmPerSecond = 0.f;
+	// CCC7/LIFE3 — the authored forward cells every motor this service builds answers with. Zero,
+	// the default, is a body whose export resolves no fan: its travel requests fall back to the
+	// stated `ElysiumNpcGait` constants, which is the path most Substrate cases exercise.
+	float NpcWalkSpeedCmPerSecond = 0.f;
+	float NpcRunSpeedCmPerSecond = 0.f;
 	TArray<TUniquePtr<FElysiumRecordingNpcMotor>> NpcMotors;
 	FElysiumRecordingNpcMotor* LastNpcMotor() const
 	{
@@ -250,6 +270,8 @@ struct FElysiumRecordingServices final
 		Motor->Owner = EntityOwner;
 		Motor->Feet = FeetOrigin;
 		Motor->Yaw = YawDegrees;
+		Motor->AuthoredWalkSpeedCmPerSecond = NpcWalkSpeedCmPerSecond;
+		Motor->AuthoredRunSpeedCmPerSecond = NpcRunSpeedCmPerSecond;
 		FElysiumRecordingNpcMotor* Result = Motor.Get();
 		NpcMotors.Add(MoveTemp(Motor));
 		Record(FString::Printf(TEXT("BuildNpcMotor %s yaw=%.1f stem=%s var=%d"),

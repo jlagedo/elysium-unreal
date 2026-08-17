@@ -313,7 +313,7 @@ FElysiumTranslationResult TranslateActivity(const FString& Activity, const FStri
 
 FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 	const FElysiumLocomotionSample& Sample, float DeltaSeconds, const FElysiumGaitReference& Gait,
-	EElysiumOneShotState OneShot)
+	EElysiumOneShotState OneShot, bool bCommandsJumps)
 {
 	FElysiumJumpLatch Next = Prev;
 	Next.PhaseSeconds = Prev.PhaseSeconds + FMath::Max(0.0f, DeltaSeconds);
@@ -323,7 +323,18 @@ FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 	const bool bHolding = Sample.JumpHoldRemaining > 0.0f;
 	const bool bPressEdge = bHolding && !Prev.bWasHolding;
 
-	switch (Prev.Phase)
+	// A producer with no jump command has no air phase to latch. The transition table below is the
+	// player chain's entirely — retail reads its jump phase off a `CBasePlayer` field, and the cast's
+	// air activities are requested outright by scripted tasks rather than inferred from the floor —
+	// so a body that only ever walks stays grounded however its mover reports itself. Held rather
+	// than returned early, because the gait memory below this switch still has to advance:
+	// `bLastGaitWasRun` is what `Classify` reads for walk-versus-run, and skipping it would stop the
+	// whole cast ever running.
+	if (!bCommandsJumps)
+	{
+		Next.Phase = EElysiumAirPhase::Grounded;
+	}
+	else switch (Prev.Phase)
 	{
 	case EElysiumAirPhase::Grounded:
 		if (bPressEdge)

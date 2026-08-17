@@ -92,6 +92,17 @@ enum class EElysiumNpcMoveStatus : uint8
 	Failed,
 };
 
+// Which of the body's own authored locomotion fans a travel request rides. Retail NPC travel speed
+// is the selected cycle's own authored movement rather than a scalar, so a caller names the gait and
+// the body answers with the number (`docs/architecture/movement-architecture.md` → "The speed
+// authority").
+enum class EElysiumNpcGaitKind : uint8
+{
+	Walk,
+	Run,
+	Sneak,
+};
+
 class IElysiumNpcMotor
 {
 public:
@@ -119,6 +130,17 @@ public:
 	// The body's live feet/yaw plus what its outstanding request is doing. A turn-in-place reports
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
+
+	// This body's own authored travel speed for one gait, cm/s — the forward cell of that gait's
+	// resolved fan, which is the only direction a path-following body travels in. It is the number a
+	// travel request must command with, or the body slides through a cycle authored for a different
+	// speed.
+	//
+	// **Zero means this body resolves no fan for that gait**, and it is also the default: a motor
+	// with no animation behind it (a headless world, a recording double) genuinely has no authored
+	// number to give. The caller supplies the fallback — `ElysiumNpcGait::TravelSpeed` is the one
+	// place that states it — rather than the motor inventing a constant of its own.
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait) const { return 0.f; }
 
 	// 11.14 — the reachability query: where on the navigable surface does this arbitrary point
 	// land? Geometry only. The caller keeps the decision — whether the projected point is still the

@@ -79,8 +79,13 @@ public:
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait) const override;
 
 private:
+	// CCC7 — build the driver if it does not exist yet and re-point it at the model this body wears.
+	// The driver holds the body's gait tables, and a travel request wants them before the first
+	// animation pass has run.
+	void EnsureAnimDriver();
 	FVector FeetLocation() const;
 	void ApplyEnabledState();
 	// Solidity is three independent decisions — enabled, frozen, and character-ignoring — so it is

@@ -547,6 +547,22 @@ with `T` the body's own forward walk cell plus one unit
 Neither classifier threshold is an absolute speed: every one is a fraction of an injected walk/run
 reference, so the speed authority moving takes them with it rather than leaving numbers to find.
 
+**The air phases belong to the producer that commands jumps, which is the player alone.** The latch
+exists to separate a jump press from a fall, and its whole discriminator is the rising edge of a
+jump command; a cast body carries none. Retail draws the same line — the compact-code classifier
+reads the player's own jump-phase field, while the NPC chain consults no ground state at all and its
+air activities are requested outright by named tasks (`docs/vtmb/animation_and_movers.md` → "Nothing
+in the NPC chain reads a ground or air state"). `AdvanceJumpLatch` therefore holds `Grounded` for a
+producer with no jump command, and `ACT_LEAP`/`ACT_FALLING`/`ACT_LAND` are unreachable for the cast
+from a body sample. They remain reachable the way retail reaches them: as an explicit activity
+request through the intent seam, which is the door a reaction or a scripted beat already uses.
+
+Two consequences are deliberate. A cast member walking off a ledge holds its gait instead of playing
+a fall, exactly as retail's does. And the sample's grounded flag stops being load-bearing for the
+cast, which matters because an NPC mover reports itself airborne for reasons that are never a jump —
+a body on a lift, a frame mid-teleport, or a body standing on a floor whose movement mode no
+controller has ever set.
+
 **The landing one-shot's hold is provisional rather than chosen.** A still, grounded body has to
 leave `ACT_LAND` somehow, and the classifier is content-free — it must not read the clip it is about
 to describe. A latch-local duration holds it until the graph can report a finished one-shot, at which

@@ -37,6 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
+#include "ElysiumAnimationIntent.h"          // ElysiumAnimIntent::GaitFrom — the classifier's reference
 #include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
@@ -70,6 +71,7 @@
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumNpcGait.h"       // the travel-speed fallback a body with no fan takes
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -962,6 +964,95 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		TestTrue(TEXT("clearing a patrol crosses the explicit motor Stop seam"),
 			Services.Saw(TEXT("NpcMotor Stop")));
 	}
+
+	return true;
+}
+
+// LIFE3 — the cast travels at its own body's authored cell speed, not at a constant.
+//
+// The two halves of the same rule: a body whose export resolves a walk fan commands that fan's
+// forward cell, and a body that resolves none commands `ElysiumNpcGait::WalkSpeed`. A patrol leg is
+// the smallest producer that exercises both, and the recording motor is what makes the commanded
+// number readable without a world.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTravelSpeedTest,
+	"Elysium.Substrate.Npc.TravelSpeed", GElysiumTestFlags)
+bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
+{
+	// The male body's own forward walk cell, in cm/s — the number `walk_0` authors, which is 53.8 u/s
+	// against `speed_walk`'s stated 100 and is the whole reason a constant slides.
+	constexpr float AuthoredWalk = 136.7f;
+
+	auto PatrolSpeed = [this](float BodyWalkSpeed) -> float
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__npc_travel_speed__");
+
+		FElysiumEntityDef Walker;
+		Walker.Classname = TEXT("npc_VVampire");
+		Walker.TargetName = TEXT("walker");
+		Walker.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Walker));
+
+		for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
+		{
+			FElysiumEntityDef Point;
+			Point.Classname = TEXT("info_node_patrol_point");
+			Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+			Point.Origin = FVector(static_cast<float>(PointIndex * 100), 25.0f, 0.0f);
+			Defs.Defs.Add(MoveTemp(Point));
+		}
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.bProvideNpcMotor = true;
+		Services.NpcWalkSpeedCmPerSecond = BodyWalkSpeed;
+		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* WalkerEnt = World.FindByName(TEXT("walker"));
+		if (!TestNotNull(TEXT("the walker resolved"), WalkerEnt))
+		{
+			return 0.f;
+		}
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
+			FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
+			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
+			FElysiumVariant::String(TEXT("route_1 route_2")), 0.0,
+			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
+		World.Tick(0.0);
+		World.Tick(0.05);
+
+		FElysiumRecordingNpcMotor* Motor = Services.LastNpcMotor();
+		if (!TestNotNull(TEXT("the walker owns a motor"), Motor))
+		{
+			return 0.f;
+		}
+		TestTrue(TEXT("the patrol issued its travel request"), Motor->bMoving);
+		return Motor->RequestedSpeedCmPerSecond;
+	};
+
+	TestTrue(TEXT("a body with a walk fan patrols at its own forward cell"),
+		FMath::IsNearlyEqual(PatrolSpeed(AuthoredWalk), AuthoredWalk, 0.01f));
+	TestTrue(TEXT("a body whose export resolves no fan keeps the stated constant"),
+		FMath::IsNearlyEqual(PatrolSpeed(0.f), ElysiumNpcGait::WalkSpeed, 0.01f));
+
+	// The classifier's threshold moves with the same tables, so a body walking at its authored cell
+	// is not judged against a constant it can never reach.
+	FElysiumGaitSpeeds Speeds;
+	Speeds.Walk.Count = 3;
+	Speeds.Walk.AxisMin = -180.0f;
+	Speeds.Walk.AxisMax = 180.0f;
+	Speeds.Walk.Cells[0] = 60.0f;
+	Speeds.Walk.Cells[1] = AuthoredWalk;
+	Speeds.Walk.Cells[2] = 60.0f;
+	const FElysiumGaitReference Gait = ElysiumAnimIntent::GaitFrom(Speeds);
+	TestTrue(TEXT("the walk/run split is the forward walk cell plus one unit"),
+		FMath::IsNearlyEqual(Gait.RunSplitSpeed(), AuthoredWalk + ElysiumMove::U, 0.01f));
+	TestTrue(TEXT("...which the authored walk itself cannot reach"),
+		AuthoredWalk < Gait.RunSplitSpeed());
 
 	return true;
 }

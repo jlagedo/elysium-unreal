@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumSchedule.h"
 
 #include "ElysiumWorldServices.h"          // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
+#include "Substrate/ElysiumNpcGait.h"      // the authored travel speed a retreat step commands
 #include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
 
 namespace
@@ -668,6 +669,10 @@ ElysiumSchedule::ERetreat ElysiumSchedule::StepAwayFromSavePosition(IElysiumNpcM
 		return ERetreat::NotARetreat;
 	}
 
-	return Motor->MoveTo(Destination, /*AcceptanceRadiusCm=*/16.f, /*SpeedCmPerSecond=*/0.f)
+	// A retreat is a walk backwards out of the swing, so it commands the body's own authored walk
+	// like every other travel request. Naming no speed is not an option the motor has: it clamps to
+	// 1 cm/s, and the step never completes.
+	return Motor->MoveTo(Destination, /*AcceptanceRadiusCm=*/16.f,
+		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk))
 		? ERetreat::Moving : ERetreat::MotorRefused;
 }

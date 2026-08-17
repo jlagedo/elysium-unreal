@@ -379,6 +379,16 @@ Hard-won, non-obvious, and easy to undo:
   priority.
 - **The player hull is a box, not a capsule** — `StepMove` depends on a flat bottom, and `ACharacter`
   will not take a box root.
+- **A `UCharacterMovementComponent` starts in `MOVE_None` and only a controller ever changes that.**
+  `MovementMode` has no constructor initializer, so it is zero-initialised, and the walking mode is
+  set by `ACharacter::Restart()` on possession. `AElysiumNpcBody` disables auto-possession and spawns
+  its controller lazily on the first accepted `MoveTo`, so a body that only ever stands never gets
+  one. `IsMovingOnGround()` reads the mode alone — not `IsActive()` — so such a body reports itself
+  airborne for its whole life while standing on the floor, and anything reading the locomotion
+  sample's grounded flag believes it. `ApplyEnabledState` sets the mode itself once its floor query
+  succeeds. Note the asymmetry that makes this easy to misdiagnose: `Deactivate()` never touches
+  `MovementMode`, so a body that has moved even once stays correctly grounded forever after, and only
+  the never-moved background cast is affected.
 - **An NPC movement tick already depends on the map actor while its character stands on map-owned
   collision.** CharacterMovement wires the primary tick of the movement base's owner. GameFrame
   therefore runs from `GameplayTickFunction`, which depends on the motor ticks; adding those

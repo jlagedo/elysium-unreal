@@ -341,7 +341,7 @@ bool FElysiumNpc::IssuePatrolMove()
 	}
 	PatrolIndex = FMath::Clamp(PatrolIndex, 0, PatrolPoints.Num() - 1);
 	bMoveIssued = Motor->MoveTo(PatrolPoints[PatrolIndex], /*AcceptanceRadiusCm=*/20.0f,
-		ElysiumNpcGait::WalkSpeed);
+		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk));
 	if (bMoveIssued && !bWalkingAnimation)
 	{
 		bWalkingAnimation = StartWalkingAnimation();
@@ -1533,7 +1533,8 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 	}
 	const FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
 	bMoveIssued = Motor->MoveTo(Destination, ElysiumNpcGait::ScriptAcceptanceCm,
-		ScriptedScheduleOrder.bRun ? ElysiumNpcGait::RunSpeed : ElysiumNpcGait::WalkSpeed);
+		ElysiumNpcGait::TravelSpeed(Motor, ScriptedScheduleOrder.bRun
+			? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk));
 	if (!bMoveIssued)
 	{
 		// The recovered route-failure report, and the recovered switch that silences it: "spawn flag
@@ -1649,7 +1650,8 @@ bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 		: ElysiumNpcGait::ScriptAcceptanceCm;
 	// The enemy's FEET: an entity's origin is its feet in this runtime, which is what the patrol
 	// executor already hands the same verb.
-	bMoveIssued = Motor->MoveTo(Enemy->Origin, ToleranceCm, ElysiumNpcGait::RunSpeed);
+	bMoveIssued = Motor->MoveTo(Enemy->Origin, ToleranceCm,
+		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Run));
 	if (!bMoveIssued)
 	{
 		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: the body would not take the path"));
@@ -1978,7 +1980,8 @@ void FElysiumNpc::ThinkAmbient()
 			return;
 		}
 		AmbientPhase = EAmbientPhase::Moving;
-		bMoveIssued = Motor->MoveTo(Spot->Origin, 24.0f, 254.0f);
+		bMoveIssued = Motor->MoveTo(Spot->Origin, 24.0f,
+			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk));
 		if (bMoveIssued)
 		{
 			bWalkingAnimation = StartWalkingAnimation();

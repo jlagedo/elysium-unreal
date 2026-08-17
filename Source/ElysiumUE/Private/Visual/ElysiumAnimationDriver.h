@@ -61,6 +61,15 @@ struct FElysiumAnimationDriver
 	// cell's own authored speed for anything that is not one of the three gaits.
 	float GaitSpeedForSelection(float MoveYawDegrees) const;
 
+	// Re-resolve the tables if the body key moved, and rebuild `Gait` from them. True when they
+	// moved; `Anims` may be null, and a body with no game instance keeps what it has.
+	//
+	// Callable outside `Tick` because a body's speeds are wanted before its first animation pass: an
+	// NPC's first travel request is issued in the frame its motor is built, and a request with no
+	// tables behind it travels at a constant while the body's own cycle authors something else.
+	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims, const FString& WeaponTag,
+		const FString& FormTag);
+
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;
 	FString LastStem;

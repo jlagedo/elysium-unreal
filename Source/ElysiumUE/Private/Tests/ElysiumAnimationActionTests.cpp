@@ -289,6 +289,53 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
 	}
 	{
+		// --- The air phases belong to the producer that commands jumps ---------------------------
+		//
+		// LIFE3: retail's ground/air classifier is the player chain's — the cast's air activities are
+		// requested by scripted tasks (ManBat's fall, the Asian Vampire's jump) and there is no
+		// generic NPC producer of ACT_FALLING in the shipped binary. So the SAME airborne sample has
+		// to answer two different ways depending on who published it; one answer for both would mean
+		// the rule is not being applied at all, which is what this pairing exists to catch.
+		using ElysiumAnimIntent::AdvanceJumpLatch;
+
+		FElysiumLocomotionSample Airborne = Moving(Gait.WalkSpeedCmPerSecond);
+		Airborne.bOnGround = false;
+
+		FElysiumJumpLatch Player;
+		Player = AdvanceJumpLatch(Player, Airborne, 1.0f / 60.0f, Gait,
+			EElysiumOneShotState::Unknown, /*bCommandsJumps=*/true);
+		TestEqual(TEXT("a player body walking off a ledge falls"),
+			AsInt(Player.Phase), AsInt(EElysiumAirPhase::Falling));
+		TestEqual(TEXT("...and classifies as ACT_FALLING"),
+			AsInt(ElysiumAnimIntent::Classify(Airborne, Player, Gait)),
+			AsInt(EElysiumAnimActivityCode::Falling));
+
+		FElysiumJumpLatch Cast;
+		for (int32 Frame = 0; Frame < 8; ++Frame)
+		{
+			Cast = AdvanceJumpLatch(Cast, Airborne, 1.0f / 60.0f, Gait,
+				EElysiumOneShotState::Unknown, /*bCommandsJumps=*/false);
+		}
+		TestEqual(TEXT("the identical sample leaves a cast body grounded"),
+			AsInt(Cast.Phase), AsInt(EElysiumAirPhase::Grounded));
+		TestEqual(TEXT("...and it keeps its gait rather than selecting a fall"),
+			AsInt(ElysiumAnimIntent::Classify(Airborne, Cast, Gait)),
+			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
+
+		// The half of the latch that is NOT the air phase still has to advance, or the cast could
+		// never select a run at all.
+		FElysiumLocomotionSample Sprinting = Moving(Gait.RunSpeedCmPerSecond);
+		Sprinting.bOnGround = false;
+		FElysiumJumpLatch Running;
+		Running = AdvanceJumpLatch(Running, Sprinting, 1.0f / 60.0f, Gait,
+			EElysiumOneShotState::Unknown, /*bCommandsJumps=*/false);
+		TestTrue(TEXT("the gait memory still advances for a producer with no jump command"),
+			Running.bLastGaitWasRun);
+		TestEqual(TEXT("...so a fast cast body still reaches the relaxed run"),
+			AsInt(ElysiumAnimIntent::Classify(Sprinting, Running, Gait)),
+			AsInt(EElysiumAnimActivityCode::RunRelaxed));
+	}
+	{
 		// --- The landing ends when its CLIP ends, and the timer is only the fallback -------------
 		using ElysiumAnimIntent::AdvanceJumpLatch;
 		using EOne = EElysiumOneShotState;
