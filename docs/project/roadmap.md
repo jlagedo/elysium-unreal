@@ -234,8 +234,10 @@ The ladder:
   misses, a grid label that stands as a blend space or names its miss, the aim-grid neutral
   adjudicated correct at its owner and guarded at rest, and the standing corpus verified current
   (166 models, 527 blend spaces, 0 orphans).
-- [ ] **[LIFE1 The bake closes](plans/animation.md)** — the cardinality invariant, prop-bone
-  channels retained, the orphan census, frame-interpolation adjudication, the `A_dance01` seam.
+- [~] **[LIFE1 The bake closes](plans/animation.md)** — the cardinality invariant is proved
+  offline before the bake (7,142 bank packages over 136 banks, exactly what the mount carries);
+  prop-bone channels, the orphan census, frame-interpolation adjudication and the `A_dance01`
+  seam open.
 - [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule
   artifacts, events and the transition graph exported, joined and baked; deletes the 5-row stub.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed

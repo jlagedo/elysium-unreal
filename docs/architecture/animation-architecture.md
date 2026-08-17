@@ -303,8 +303,20 @@ Owned missing channels have already become donor-bind constants (§2.3), while u
 on the playing mesh's reference pose. The former pass through the same declared translation rule;
 the latter acquire no synthesized track. The bake has a cardinality invariant: a source bank clip
 may produce its declared base/overlay derivatives, but changing the number of compatible body
-families must not multiply the bank's base sequences or packages. Planning fails before an editor
-commandlet starts if the projected inventory violates that invariant.
+families must not multiply the bank's base sequences or packages.
+
+A preflight proves that before an editor commandlet starts, and proves it over the packages
+themselves rather than over the folders holding them. It projects the exact set each bank
+produces — one sequence per clip payload the container carries, less the payloads the bake
+declines to build, plus one blend space per grid or per declaring host — from the containers'
+payload headers and the blend sidecars alone. The projection is therefore the bake's own
+arithmetic rather than an estimate of it, and it takes no model partition as an input, so a new
+body family cannot move a bank's package count. It refuses a package addressed outside
+`Anims/_banks/<bank>`, two payload labels folding onto one package name, a packaged clip the
+manifest does not account for on either half of a `<layer>@<host>` name, a payload carrying no
+frame or no track, and a source bank clip that reaches no package at all — excusing only the raw
+additive no host declares, which the container itself marks and which has nothing to be a
+difference from (§2.1).
 
 ## 3. Gameplay actions are resolved before the graph
 

@@ -54,8 +54,8 @@ in each prompt.
   clip's track list for the prop-bone chain; report before changing anything."* Then the bake
   change, then re-export **one named stem** and prove the tracks exist. The full-cast re-bake
   is a separate, owner-accepted operation.
-- **Cardinality invariant / orphan census.** Exporter-side logic plus a preflight failure
-  path; validated by running the planner against the existing corpus, no bake needed.
+- **Orphan census.** Exporter-side logic plus a preflight failure path; validated by running
+  the planner against the existing corpus, no bake needed.
 - **Frame interpolation.** An analysis session, not a code session: it reads the banked
   capture corpus under `$ELYSIUM_WORK_ROOT/research` and answers LINEAR-or-not with numbers.
   Runs fine as a background/research agent while you work something else; its deliverable is a

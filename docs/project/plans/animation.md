@@ -27,10 +27,6 @@ with its exact authored bind and morph targets, a compressed `UAnimSequence` per
 named `UBlendProfile`s, the autolayer binding in `blends/<stem>.json` — and what remains is its
 guards and its last gaps:
 
-- **The cardinality invariant.** A preflight inventory proves every source bank clip is
-  packaged once (plus named base/overlay derivatives); adding a compatible body family cannot
-  increase bank package count, and a projected `bank clips × body families` cross-product fails
-  before the editor commandlet starts.
 - **The prop bones ride the clips.** The character bake retains the seven zero-weight prop
   bones **and their animation channels** on every biped body and bank clip. Nothing skins to
   them, so a bake that drops unweighted bones removes the wielded weapon's attachment target
@@ -51,9 +47,8 @@ guards and its last gaps:
   or skin influences differ from Joy's.
 
 *Acceptance:* every character loads from the baked mount with no runtime glTF and a missed stem
-fails by name; the facial morph-target contract holds; the preflight invariant rejects any
-projected `bank clips × body families` cross-product before the editor starts; a baked biped
-base clip carries prop-bone tracks, and the verifier asserts it for every biped family.
+fails by name; the facial morph-target contract holds; a baked biped base clip carries prop-bone
+tracks, and the verifier asserts it for every biped family.
 
 ### LIFE2 The action catalog on the mount
 

@@ -1,13 +1,14 @@
 """Read the header sections of Elysium's `.eskm` skeletal container.
 
 The container is written by `exporters/UE_mdl_skeletal.py` and consumed in full by
-`FElysiumSkeletalSource` on the C++ side. This module reads only the small sections the offline
-bake orchestration and focused contract tests need before a file reaches the editor -- the bone
-tree, authored attachments and material table. Geometry, morph targets and clips are never
-decoded here; they are the editor's business.
+`FElysiumSkeletalSource` on the C++ side. This module reads what the offline bake orchestration
+and focused contract tests need before a file reaches the editor -- the bone tree, authored
+attachments, the material table, and the clip payload HEADERS. Geometry, morph targets and clip
+tracks are never decoded here; they are the editor's business.
 
 Layout is documented once, at the top of `UE_mdl_skeletal.py`.
 """
+import collections
 import hashlib
 import struct
 
@@ -183,6 +184,45 @@ def materials(blob):
         name, offset = _string(blob, offset)
         albedo, offset = _string(blob, offset)
         out[name] = albedo
+    return out
+
+
+#: One clip's payload header. `base` is the label this clip is a difference FROM, empty for a pose
+#: of its own; `flags` is the authored `StudioSeqDesc` flag word, whose `0x4` is `STUDIO_DELTA`.
+ClipPayload = collections.namedtuple("ClipPayload", "name base frames flags tracks")
+
+
+def clip_payloads(blob):
+    """[ClipPayload] for every clip the container carries, in file order.
+
+    Headers only. A track's size is computable from its own two presence bytes and the clip's
+    frame count, so this steps over the track data by its declared length rather than decoding
+    it -- which is what lets the bake preflight state a bank's whole package inventory for the
+    price of reading the file, and never for the price of understanding a pose.
+
+    The name is the packaged label, so a derived form arrives as `<layer>@<host>` exactly as the
+    exporter wrote it (`UE_mdl_skeletal.BASE_SEPARATOR`).
+    """
+    where = directory(blob).get(b"ANIM")
+    if where is None:
+        return []
+    offset = where[0]
+    count = struct.unpack_from("<I", blob, offset)[0]
+    offset += 4
+    out = []
+    for _ in range(count):
+        name, offset = _string(blob, offset)
+        base, offset = _string(blob, offset)
+        frames, _rate, flags, _mask, tracks = struct.unpack_from("<IfIiI", blob, offset)
+        offset += 20
+        for _ in range(tracks):
+            _bone, has_translation, has_rotation = struct.unpack_from("<IBB", blob, offset)
+            offset += 6
+            if has_translation:
+                offset += 12 * frames
+            if has_rotation:
+                offset += 16 * frames
+        out.append(ClipPayload(name, base, frames, flags, tracks))
     return out
 
 
