@@ -2922,8 +2922,6 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 	TestNotNull(TEXT("the single generated rain material loads"), RainMaterial);
 	for (const TCHAR* Path : {
 		TEXT("/Game/VtMB/Particles/T_RainDroplet.T_RainDroplet"),
-		TEXT("/Game/VtMB/Particles/T_RainImpact.T_RainImpact"),
-		TEXT("/Game/VtMB/Particles/T_RainStain.T_RainStain"),
 		TEXT("/Game/VtMB/Particles/T_RainMist.T_RainMist")})
 	{
 		TestNotNull(FString::Printf(TEXT("rain dependency sprite loads: %s"), Path),

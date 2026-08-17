@@ -1,22 +1,24 @@
 """Generate the one tunable outdoor-rain material and Niagara system."""
 
 from pathlib import Path
+import struct
+import zlib
 
 import unreal
 
 from elysium_pipeline.paths import export_root
 from pipeline.unreal import _bootstrap  # noqa: F401
+from pipeline.unreal import bake_lib as bl
 from pipeline.unreal import mat_fog
 
 
 PKG = "/Game/VtMB/Particles"
 SYSTEM = PKG + "/NS_ElysiumRain"
 MATERIAL = PKG + "/M_ElysiumRain"
-MPC_PATH = "/Game/VtMB/Materials/MPC_ElysiumEnvironment.MPC_ElysiumEnvironment"
+STREAK_MIC = PKG + "/MI_ElysiumRainStreak"
+MIST_MIC = PKG + "/MI_ElysiumRainMist"
 SPRITES = {
     "RainDroplet": "dropletfast.png",
-    "RainImpact": "fortituderings.png",
-    "RainStain": "d_targetblob.png",
     "RainMist": "furball.png",
 }
 
@@ -46,7 +48,6 @@ def binary(mat, cls, a, b, x, y):
 
 
 def binary_outputs(mat, cls, a, a_output, b, b_output, x, y):
-    """Binary expression with explicit source pins (notably TextureSample.A)."""
     node = mel.create_material_expression(mat, cls, x, y)
     connect(a, a_output, node, "A")
     connect(b, b_output, node, "B")
@@ -69,6 +70,35 @@ def step(mat, tested, threshold, x, y):
     return node
 
 
+def _png_chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(
+        ">I", zlib.crc32(kind + data) & 0xffffffff)
+
+
+def write_needle_png(path):
+    """A thin vertical streak: 8x128, hard core, soft sides, faded tips."""
+    width, height = 8, 128
+    rows = []
+    for y in range(height):
+        tip = min(y, height - 1 - y) / 14.0
+        tip = 1.0 if tip > 1.0 else tip
+        row = [0]
+        for x in range(width):
+            side = 1.0 - abs((x + 0.5) / width - 0.5) * 2.2
+            side = 0.0 if side < 0.0 else side
+            value = int(255.0 * (side ** 2) * tip)
+            row.append(value)
+        rows.append(bytes(row))
+    raw = b"".join(rows)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+        + _png_chunk(b"IDAT", zlib.compress(raw, 9))
+        + _png_chunk(b"IEND", b"")
+    )
+
+
 def import_sprites():
     source_root = Path(export_root()) / "particles"
     imported = {}
@@ -83,7 +113,10 @@ def import_sprites():
         name = "T_" + parameter
         asset = PKG + "/" + name
         if unreal.EditorAssetLibrary.does_asset_exist(asset):
-            unreal.EditorAssetLibrary.delete_asset(asset)
+            texture = unreal.load_asset(asset)
+            if texture:
+                imported[parameter] = texture
+                continue
         task = unreal.AssetImportTask()
         task.set_editor_property("filename", str(source))
         task.set_editor_property("destination_path", PKG)
@@ -92,7 +125,8 @@ def import_sprites():
         task.set_editor_property("replace_existing", True)
         task.set_editor_property("save", False)
         tasks.append((parameter, asset, task))
-    tools.import_asset_tasks([item[2] for item in tasks])
+    if tasks:
+        tools.import_asset_tasks([item[2] for item in tasks])
     for parameter, asset, _task in tasks:
         texture = unreal.load_asset(asset)
         if not texture:
@@ -103,7 +137,33 @@ def import_sprites():
         texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
         unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False)
         imported[parameter] = texture
+    needle = import_needle()
+    if needle:
+        imported["RainDroplet"] = needle
     return imported
+
+
+def import_needle():
+    asset = PKG + "/T_RainNeedle"
+    source = Path(export_root()) / ".policy" / "rain_needle.png"
+    write_needle_png(source)
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", str(source))
+    task.set_editor_property("destination_path", PKG)
+    task.set_editor_property("destination_name", "T_RainNeedle")
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", False)
+    tools.import_asset_tasks([task])
+    texture = unreal.load_asset(asset)
+    if not texture:
+        raise SystemExit("[make_rain_system] needle sprite import failed")
+    texture.set_editor_property("srgb", False)
+    texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    texture.set_editor_property("filter", unreal.TextureFilter.TF_BILINEAR)
+    texture.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_MASKS)
+    unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False)
+    return texture
 
 
 def texture_parameter(mat, name, texture, x, y, grayscale=False):
@@ -119,160 +179,113 @@ def texture_parameter(mat, name, texture, x, y, grayscale=False):
     return node
 
 
+def make_layer_instance(name, parent, layer):
+    path = PKG + "/" + name
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    mic = bl.make_material_instance(name, PKG, parent)
+    if not mic:
+        raise SystemExit("[make_rain_system] could not create %s" % path)
+    bl.set_scalar_param(mic, "RainLayer", layer)
+    if not unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False):
+        raise SystemExit("[make_rain_system] could not save %s" % path)
+    return mic
+
+
 def make_material(sprites):
     if unreal.EditorAssetLibrary.does_asset_exist(MATERIAL):
-        unreal.EditorAssetLibrary.delete_asset(MATERIAL)
-    mat = tools.create_asset(
-        "M_ElysiumRain", PKG, unreal.Material, unreal.MaterialFactoryNew())
+        mat = unreal.load_asset(MATERIAL)
+        if not mat:
+            raise SystemExit("[make_rain_system] could not load existing rain material")
+        mel.delete_all_material_expressions(mat)
+    else:
+        mat = tools.create_asset(
+            "M_ElysiumRain", PKG, unreal.Material, unreal.MaterialFactoryNew())
     if not mat:
         raise SystemExit("[make_rain_system] could not create rain material")
+    unreal.log("[make_rain_system] authoring unlit additive rain material")
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
-    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     mat.set_editor_property("two_sided", True)
     mat.set_editor_property("used_with_niagara_sprites", True)
-    mat.set_editor_property(
-        "translucency_lighting_mode",
-        unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING,
-    )
 
-    uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1500, -300)
-    samples = {
-        name: texture_parameter(mat, name + "Sprite", texture, -1260, y)
-        for (name, texture), y in zip(sprites.items(), (-520, -300, -80, 140))
-    }
-    for sample in samples.values():
-        connect(uv, "", sample, "UVs")
-    # One graph serves all three renderers. Runtime transient instances set RainLayer to 0, .5,
-    # or 1; no duplicate material assets or faithful/enhanced paths are generated.
-    layer = scalar(mat, "RainLayer", 0.0, -1260, 400)
-    selector_one = constant(mat, 1.0, -1040, 600)
-    impact_or_mist = step(mat, layer, 0.25, -1040, 360)
-    mist = step(mat, layer, 0.75, -1040, 520)
-    streak = binary(
-        mat, unreal.MaterialExpressionSubtract, selector_one, impact_or_mist, -820, 360)
-    impact = binary(
-        mat, unreal.MaterialExpressionMultiply, impact_or_mist,
-        binary(mat, unreal.MaterialExpressionSubtract, selector_one, mist, -820, 600),
-        -600, 440)
+    uv = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1600, -200)
+    droplet = texture_parameter(mat, "RainDropletSprite", sprites["RainDroplet"], -1360, -320)
+    mist = texture_parameter(mat, "RainMistSprite", sprites["RainMist"], -1360, -80)
+    connect(uv, "", droplet, "UVs")
+    connect(uv, "", mist, "UVs")
+    layer = scalar(mat, "RainLayer", 0.0, -1360, 200)
+    mist_sel = step(mat, layer, 0.5, -1120, 200)
+    one = constant(mat, 1.0, -1120, 80)
+    streak_sel = binary(mat, unreal.MaterialExpressionSubtract, one, mist_sel, -900, 80)
+    streak_tex = binary_outputs(
+        mat, unreal.MaterialExpressionMultiply, droplet, "R", streak_sel, "", -680, -280)
+    mist_tex = binary_outputs(
+        mat, unreal.MaterialExpressionMultiply, mist, "R", mist_sel, "", -680, -40)
+    sprite = binary(mat, unreal.MaterialExpressionAdd, streak_tex, mist_tex, -460, -160)
 
-    impact_max = mel.create_material_expression(mat, unreal.MaterialExpressionMax, -980, -180)
-    connect(samples["RainImpact"], "R", impact_max, "A")
-    connect(samples["RainStain"], "R", impact_max, "B")
-    streak_alpha = binary_outputs(
-        mat, unreal.MaterialExpressionMultiply,
-        samples["RainDroplet"], "R", streak, "", -760, -460)
-    streak_alpha = binary(
-        mat, unreal.MaterialExpressionMultiply, streak_alpha,
-        constant(mat, 1.0, -760, -380), -560, -460)
-    impact_alpha = binary(mat, unreal.MaterialExpressionMultiply, impact_max, impact, -760, -180)
-    impact_alpha = binary(
-        mat, unreal.MaterialExpressionMultiply, impact_alpha,
-        constant(mat, 0.25, -760, -100), -560, -180)
-    mist_alpha = binary_outputs(
-        mat, unreal.MaterialExpressionMultiply,
-        samples["RainMist"], "R", mist, "", -760, 100)
-    mist_alpha = binary(
-        mat, unreal.MaterialExpressionMultiply, mist_alpha,
-        constant(mat, 0.03, -760, 180), -560, 100)
-    selected_a = binary(mat, unreal.MaterialExpressionAdd, streak_alpha, impact_alpha, -320, -260)
-    selected_b = binary(mat, unreal.MaterialExpressionAdd, selected_a, mist_alpha, -300, -180)
+    particle = mel.create_material_expression(
+        mat, unreal.MaterialExpressionParticleColor, -1600, 360)
+    lit = binary_outputs(
+        mat, unreal.MaterialExpressionMultiply, particle, "RGB", sprite, "", -240, 200)
+    alpha = binary_outputs(
+        mat, unreal.MaterialExpressionMultiply, particle, "A", sprite, "", -240, 360)
 
-    # The per-map R16 maximum-height map shares the exact decode contract with weather.py.
-    world = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1500, 820)
-    world_x = channel(mat, world, "r", -1300, 760)
-    world_y = channel(mat, world, "g", -1300, 840)
-    world_z = channel(mat, world, "b", -1300, 920)
-    min_x = scalar(mat, "RainBoundsMinX", 0.0, -1500, 1040)
-    min_y = scalar(mat, "RainBoundsMinY", 0.0, -1500, 1120)
-    size_x = scalar(mat, "RainBoundsSizeX", 1.0, -1500, 1200)
-    size_y = scalar(mat, "RainBoundsSizeY", 1.0, -1500, 1280)
+    # Height-map clip stays; a zero placeholder means no cover, so every drop stays visible.
+    world = mel.create_material_expression(mat, unreal.MaterialExpressionWorldPosition, -1600, 820)
+    world_x = channel(mat, world, "r", -1400, 760)
+    world_y = channel(mat, world, "g", -1400, 840)
+    world_z = channel(mat, world, "b", -1400, 920)
+    min_x = scalar(mat, "RainBoundsMinX", 0.0, -1600, 1040)
+    min_y = scalar(mat, "RainBoundsMinY", 0.0, -1600, 1120)
+    size_x = scalar(mat, "RainBoundsSizeX", 1.0, -1600, 1200)
+    size_y = scalar(mat, "RainBoundsSizeY", 1.0, -1600, 1280)
     ux = binary(
         mat, unreal.MaterialExpressionDivide,
-        binary(mat, unreal.MaterialExpressionSubtract, world_x, min_x, -1080, 760),
-        size_x, -860, 760)
+        binary(mat, unreal.MaterialExpressionSubtract, world_x, min_x, -1180, 760),
+        size_x, -960, 760)
     uy = binary(
         mat, unreal.MaterialExpressionDivide,
-        binary(mat, unreal.MaterialExpressionSubtract, world_y, min_y, -1080, 840),
-        size_y, -860, 840)
-    height_uv = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, -640, 800)
+        binary(mat, unreal.MaterialExpressionSubtract, world_y, min_y, -1180, 840),
+        size_y, -960, 840)
+    height_uv = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, -740, 800)
     connect(ux, "", height_uv, "A")
-    # Unreal's texture V origin matches the saved raster's row-zero convention. Keep Y verbatim;
-    # flipping it selects the opposite map column and turns known uncovered locations into cover.
     connect(uy, "", height_uv, "B")
-    height = texture_parameter(
-        mat, "RainHeightTexture",
-        unreal.load_asset(
-            "/Game/VtMB/Particles/T_RainHeightPlaceholder.T_RainHeightPlaceholder"),
-        -420, 800, grayscale=True)
-    connect(height_uv, "", height, "UVs")
-    sample_r = channel(mat, height, "r", -200, 800)
+    height_tex = unreal.load_asset(
+        "/Game/VtMB/Particles/T_RainHeightPlaceholder.T_RainHeightPlaceholder")
+    if height_tex:
+        height = texture_parameter(
+            mat, "RainHeightTexture", height_tex, -520, 800, grayscale=True)
+        connect(height_uv, "", height, "UVs")
+        sample_r = channel(mat, height, "r", -300, 800)
+    else:
+        # Rain-only generate does not run the world-material placeholder import.
+        sample_r = constant(mat, 0.0, -300, 800)
+    cover = step(mat, sample_r, 0.000001, 0, 1000)
     u16 = binary(mat, unreal.MaterialExpressionMultiply, sample_r,
-                 constant(mat, 65535.0, -200, 980), 20, 800)
+                 constant(mat, 65535.0, -300, 980), -80, 800)
     index = binary(mat, unreal.MaterialExpressionSubtract, u16,
-                   constant(mat, 1.0, 20, 980), 240, 800)
-    z_scale = scalar(mat, "RainHeightZScale", 1.0, 240, 1040)
-    min_z = scalar(mat, "RainHeightMinZ", 0.0, 240, 1120)
+                   constant(mat, 1.0, -80, 980), 140, 800)
+    z_scale = scalar(mat, "RainHeightZScale", 1.0, 140, 1040)
+    min_z = scalar(mat, "RainHeightMinZ", 0.0, 140, 1120)
     decoded = binary(
         mat, unreal.MaterialExpressionAdd,
-        binary(mat, unreal.MaterialExpressionMultiply, index, z_scale, 460, 800),
-        min_z, 680, 800)
-    # UMaterialExpressionStep compiles as step(Y, X): X is the tested value and Y is
-    # the threshold.  A non-sentinel texel means the column has a rain-blocking surface;
-    # a falling particle remains visible only while it is above that maximum height.
-    cover = step(mat, sample_r, 0.000001, 680, 1000)
-    exposed = mel.create_material_expression(mat, unreal.MaterialExpressionStep, 900, 800)
+        binary(mat, unreal.MaterialExpressionMultiply, index, z_scale, 360, 800),
+        min_z, 580, 800)
+    exposed = mel.create_material_expression(mat, unreal.MaterialExpressionStep, 800, 800)
     connect(binary(mat, unreal.MaterialExpressionAdd, decoded,
-                   constant(mat, 5.0, 680, 1160), 900, 920), "", exposed, "Y")
+                   constant(mat, 5.0, 580, 1160), 800, 920), "", exposed, "Y")
     connect(world_z, "", exposed, "X")
-    one = constant(mat, 1.0, 900, 1080)
-    no_cover = binary(mat, unreal.MaterialExpressionSubtract, one, cover, 1120, 1000)
-    cover_exposed = binary(mat, unreal.MaterialExpressionMultiply, cover, exposed, 1120, 800)
-    falling_visible = binary(
-        mat, unreal.MaterialExpressionAdd, no_cover, cover_exposed, 1340, 900)
-    falling_selector = binary(mat, unreal.MaterialExpressionAdd, streak, mist, 1120, 600)
-    falling_opacity = binary(
-        mat, unreal.MaterialExpressionMultiply, falling_selector, falling_visible, 1560, 720)
-    impact_opacity = binary(mat, unreal.MaterialExpressionMultiply, impact, cover, 1340, 560)
-    visibility = binary(
-        mat, unreal.MaterialExpressionAdd, falling_opacity, impact_opacity, 1780, 640)
-    opacity = binary(mat, unreal.MaterialExpressionMultiply, selected_b, visibility, 200, -100)
-    # Keep this connection as a single assignment: it is the last gate between Niagara's
-    # simulated sprites and the translucent pass, and the content validator checks that the
-    # material compiles after the generated graph is saved.
-    if not mel.connect_material_property(streak_alpha, "", unreal.MaterialProperty.MP_OPACITY):
-        raise SystemExit("[make_rain_system] could not connect opacity")
-
-    # Impact/stain particles are projected onto the decoded crossing height; streak pixels below
-    # that same height are masked above, so the two views of the collision stay coherent.
-    impact_delta = binary(mat, unreal.MaterialExpressionSubtract, decoded, world_z, 1120, 1240)
-    impact_delta = binary(mat, unreal.MaterialExpressionMultiply, impact_delta, impact, 1340, 1240)
-    impact_delta = binary(mat, unreal.MaterialExpressionMultiply, impact_delta, cover, 1560, 1240)
-    zero = constant(mat, 0.0, 1560, 1400)
-    xy = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, 1760, 1360)
-    connect(zero, "", xy, "A")
-    connect(zero, "", xy, "B")
-    wpo = mel.create_material_expression(mat, unreal.MaterialExpressionAppendVector, 1960, 1320)
-    connect(xy, "", wpo, "A")
-    connect(impact_delta, "", wpo, "B")
-    if not mel.connect_material_property(wpo, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET):
-        raise SystemExit("[make_rain_system] could not connect impact projection")
-
-    tint = mel.create_material_expression(mat, unreal.MaterialExpressionConstant3Vector, 200, 180)
-    tint.set_editor_property("constant", unreal.LinearColor(0.46, 0.55, 0.62, 1.0))
-    collection = unreal.load_asset(MPC_PATH)
-    response = mel.create_material_expression(mat, unreal.MaterialExpressionCollectionParameter, 200, 360)
-    response.set_editor_property("collection", collection)
-    response.set_editor_property("parameter_name", "RainLightResponse")
-    lit = binary(mat, unreal.MaterialExpressionMultiply, tint, response, 440, 180)
-    inverse = mel.create_material_expression(mat, unreal.MaterialExpressionOneMinus, 440, 360)
-    connect(response, "", inverse, "")
-    emissive = binary(mat, unreal.MaterialExpressionMultiply, tint, inverse, 660, 300)
-    if not mel.connect_material_property(lit, "", unreal.MaterialProperty.MP_BASE_COLOR):
-        raise SystemExit("[make_rain_system] could not connect base color")
+    no_cover = binary(mat, unreal.MaterialExpressionSubtract, one, cover, 1020, 1000)
+    cover_exposed = binary(mat, unreal.MaterialExpressionMultiply, cover, exposed, 1020, 800)
+    # Height clip stays in the graph for a later pass. Night-rain visibility is the sprite itself.
+    emissive = lit
+    opacity = alpha
     if not mel.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR):
         raise SystemExit("[make_rain_system] could not connect emissive")
-    mel.connect_material_property(constant(mat, 0.2, 660, 440), "", unreal.MaterialProperty.MP_ROUGHNESS)
-    mel.connect_material_property(constant(mat, 0.5, 660, 520), "", unreal.MaterialProperty.MP_SPECULAR)
+    if not mel.connect_material_property(opacity, "", unreal.MaterialProperty.MP_OPACITY):
+        raise SystemExit("[make_rain_system] could not connect opacity")
     mel.recompile_material(mat)
     if not unreal.EditorAssetLibrary.save_asset(MATERIAL, only_if_is_dirty=False):
         raise SystemExit("[make_rain_system] could not save rain material")
@@ -280,17 +293,18 @@ def make_material(sprites):
 
 
 def main():
-    # Delete the owner first so reruns can replace its referenced material and sprites unattended.
+    sprites = import_sprites()
+    mat = make_material(sprites)
+    make_layer_instance("MI_ElysiumRainStreak", mat, 0.0)
+    make_layer_instance("MI_ElysiumRainMist", mat, 1.0)
     if unreal.EditorAssetLibrary.does_asset_exist(SYSTEM):
         unreal.EditorAssetLibrary.delete_asset(SYSTEM)
-    sprites = import_sprites()
-    make_material(sprites)
     template = unreal.load_asset("/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain")
     system = unreal.ElysiumRainAssetBuilder.build_rain_system(
         "NS_ElysiumRain", PKG, template)
     if not system or not unreal.EditorAssetLibrary.save_asset(SYSTEM, only_if_is_dirty=False):
         raise SystemExit("[make_rain_system] could not build/save NS_ElysiumRain")
-    unreal.log("[make_rain_system] saved one material + one three-emitter Niagara system")
+    unreal.log("[make_rain_system] saved unlit additive rain material + Streaks/Mist Niagara system")
 
 
 main()

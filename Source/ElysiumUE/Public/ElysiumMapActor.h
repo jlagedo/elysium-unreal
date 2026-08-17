@@ -481,6 +481,7 @@ private:
 	UPROPERTY(Transient) TArray<TObjectPtr<AElysiumNpcBody>> NpcMotors;
 	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraSystem> RainSystem;
+	UPROPERTY(Transient) TObjectPtr<UNiagaraComponent> RainFollowComponent;
 	UPROPERTY(Transient) TObjectPtr<UTexture2D> RainHeightTexture;
 	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RainMaterial;
 	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> RainLayerMaterials;
@@ -512,6 +513,8 @@ private:
 
 	/** Apply the recovered origin/tree/point attachment rule to one emitter component. */
 	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);
+	void RefreshFollowRain();
+	void UpdateFollowRainLocation();
 	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;
 	/** Failure identities already reported by the presentation adapter; avoids per-tick warning spam. */
 	TSet<FString> ReportedEmitterFailures;

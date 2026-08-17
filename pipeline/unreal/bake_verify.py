@@ -184,8 +184,6 @@ def verify_sm_hub_1_weather(package, world_dir):
         "/Game/VtMB/Particles/M_ElysiumRain",
         "/Game/VtMB/Particles/NS_ElysiumRain",
         "/Game/VtMB/Particles/T_RainDroplet",
-        "/Game/VtMB/Particles/T_RainImpact",
-        "/Game/VtMB/Particles/T_RainStain",
         "/Game/VtMB/Particles/T_RainMist",
     ]
     for asset in expected_policy_assets:

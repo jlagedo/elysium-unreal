@@ -83,6 +83,15 @@ static TAutoConsoleVariable<float> CVarRainEnhancement(
 	TEXT("Wetness presentation tuning: 0 is the authored reference; 1 enables the enhanced branch."));
 static TAutoConsoleVariable<float> CVarRainRateScale(
 	TEXT("elysium.RainRateScale"), 1.0f, TEXT("Enhanced rain emission multiplier."));
+static TAutoConsoleVariable<int32> CVarRainForce(
+	TEXT("elysium.RainForce"), 0,
+	TEXT("1 = force the follow-rain volume on, ignoring env_particle rate."));
+static TAutoConsoleVariable<float> CVarRainStreakWidth(
+	TEXT("elysium.RainStreakWidth"), 1.2f, TEXT("Follow-rain streak width in cm."));
+static TAutoConsoleVariable<float> CVarRainStreakLength(
+	TEXT("elysium.RainStreakLength"), 55.0f, TEXT("Follow-rain streak length in cm."));
+static TAutoConsoleVariable<float> CVarRainStreakAlpha(
+	TEXT("elysium.RainStreakAlpha"), 0.18f, TEXT("Follow-rain streak opacity."));
 static TAutoConsoleVariable<float> CVarRainMist(
 	TEXT("elysium.RainMist"), 0.20f, TEXT("Additional enhanced rain mist amount."));
 static TAutoConsoleVariable<float> CVarRainWetDarken(
@@ -155,6 +164,19 @@ static FAutoConsoleCommand GElysiumRainOff(
 	FConsoleCommandDelegate::CreateLambda([]()
 	{
 		FireOrQueueWeatherTimer(false);
+	}));
+
+static FAutoConsoleCommand GElysiumWeatherDump(
+	TEXT("elysium.weather.dump"),
+	TEXT("Print the live weather presentation summary."),
+	FConsoleCommandDelegate::CreateLambda([]()
+	{
+		if (AElysiumMapActor* Map = ActiveWeatherMap())
+		{
+			UE_LOG(LogElysium, Log, TEXT("weather %s"), *Map->GetWeatherDebugSummary());
+			return;
+		}
+		UE_LOG(LogElysium, Warning, TEXT("weather dump: no active map"));
 	}));
 
 const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase)
@@ -684,9 +706,8 @@ void AElysiumMapActor::LoadMap()
 				Services.Audio      = this;
 				Services.Travel     = this;
 				Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
-				// The weather seam is live for the material-wetness slice. env_particle state also
-				// crosses the same one-system boundary, but ApplyEmitter deliberately retains it as
-				// data only: Niagara stays disconnected until its retail semantics are resolved.
+				// The weather seam is live. rain_follow_emitter drives one viewer-volume Niagara
+				// system; other env_particle definitions still load their baked closures.
 				Services.Weather    = this;
 				Services.Camera     = LocalCameraService(this);
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
@@ -2590,8 +2611,6 @@ void AElysiumMapActor::GameplayTick(float DeltaSeconds)
 			}
 
 			TickAudio(DeltaSeconds);
-			// The environment output is sampled every frame so Cog/cvar tuning responds immediately.
-			// Particle presentation remains dormant inside ApplyEmitter.
 			TickWeatherPresentation();
 		}
 	}
@@ -2603,13 +2622,27 @@ void AElysiumMapActor::ApplyWetness(const FElysiumWeatherTransition& Transition)
 	ApplyWeatherTuning();
 }
 
+namespace
+{
+bool IsFollowRainDefinition(const FString& Definition)
+{
+	return Definition.Equals(TEXT("rain_follow_emitter"), ESearchCase::IgnoreCase);
+}
+}
+
 void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 {
-	// The rain emitter keeps its own presentation path: its system is a hand-authored global asset
-	// driven by the wetness tuning below, not one of the per-map baked closures.
-	if (Emitter.ParticleDefinition.Equals(TEXT("rain_follow_emitter"), ESearchCase::IgnoreCase))
+	// One viewer-volume system for every rain_follow_emitter. Two hub entities share it.
+	if (IsFollowRainDefinition(Emitter.ParticleDefinition))
 	{
+		if (!Emitter.bActive)
+		{
+			RainEmitterStates.Remove(Emitter.Entity.Index);
+			RefreshFollowRain();
+			return;
+		}
 		RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
+		RefreshFollowRain();
 		return;
 	}
 	if (!Emitter.bActive)
@@ -2772,6 +2805,7 @@ void AElysiumMapActor::RemoveEmitter(const FElysiumEntityHandle& Entity)
 	{
 		if (Component) { Component->DestroyComponent(); }
 	}
+	RefreshFollowRain();
 }
 
 void AElysiumMapActor::TickWeatherPresentation()
@@ -2782,7 +2816,116 @@ void AElysiumMapActor::TickWeatherPresentation()
 		GPendingWeatherTimer.Reset();
 		FireWeatherTimer(bRainOn);
 	}
+	if (CVarRainForce.GetValueOnGameThread() != 0)
+	{
+		RefreshFollowRain();
+	}
+	UpdateFollowRainLocation();
 	ApplyWeatherTuning();
+}
+
+void AElysiumMapActor::UpdateFollowRainLocation()
+{
+	if (!RainFollowComponent)
+	{
+		return;
+	}
+	FVector Location;
+	FRotator Rotation;
+	if (GetPlayerViewPoint(Location, Rotation))
+	{
+		RainFollowComponent->SetWorldLocation(Location);
+		RainFollowComponent->SetVariablePosition(TEXT("User.SpawnCenter"), Location);
+	}
+}
+
+void AElysiumMapActor::RefreshFollowRain()
+{
+	float Rate = 0.0f;
+	float Bounds = 0.0f;
+	bool bAny = false;
+	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
+	{
+		if (!IsFollowRainDefinition(Pair.Value.ParticleDefinition))
+		{
+			continue;
+		}
+		bAny = true;
+		Rate = FMath::Max(Rate, Pair.Value.RateScale);
+		Bounds = FMath::Max(Bounds, Pair.Value.BoundsCm);
+	}
+	if (CVarRainForce.GetValueOnGameThread() != 0)
+	{
+		bAny = true;
+		Rate = FMath::Max(Rate, 1.0f);
+	}
+	if (!bAny || Rate <= KINDA_SMALL_NUMBER)
+	{
+		if (RainFollowComponent)
+		{
+			RainFollowComponent->Deactivate();
+		}
+		return;
+	}
+	if (!RainFollowComponent)
+	{
+		if (!RainSystem)
+		{
+			RainSystem = LoadObject<UNiagaraSystem>(nullptr,
+				TEXT("/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain"));
+		}
+		if (!RainSystem)
+		{
+			const FString Failure = TEXT("follow|system");
+			if (!ReportedEmitterFailures.Contains(Failure))
+			{
+				ReportedEmitterFailures.Add(Failure);
+				UE_LOG(LogElysium, Warning,
+					TEXT("rain_follow_emitter on map '%s' cannot load /Game/VtMB/Particles/NS_ElysiumRain"),
+					*MapName);
+			}
+			return;
+		}
+		RainFollowComponent = NewObject<UNiagaraComponent>(this);
+		if (!RainFollowComponent)
+		{
+			const FString Failure = TEXT("follow|component");
+			if (!ReportedEmitterFailures.Contains(Failure))
+			{
+				ReportedEmitterFailures.Add(Failure);
+				UE_LOG(LogElysium, Warning,
+					TEXT("rain_follow_emitter on map '%s' could not create a Niagara component"),
+					*MapName);
+			}
+			return;
+		}
+		RainFollowComponent->SetAsset(RainSystem);
+		RainFollowComponent->SetAutoActivate(false);
+		RainFollowComponent->SetupAttachment(GetRootComponent());
+		RainFollowComponent->RegisterComponent();
+		AddInstanceComponent(RainFollowComponent);
+		UE_LOG(LogElysium, Log,
+			TEXT("follow rain created on '%s' system=%s"),
+			*MapName, *RainSystem->GetPathName());
+	}
+	if (Bounds <= KINDA_SMALL_NUMBER)
+	{
+		Bounds = 1200.0f;
+	}
+	RainFollowComponent->SetVariableFloat(TEXT("User.RateScale"), Rate);
+	RainFollowComponent->SetVariableFloat(TEXT("User.BoundsCm"), Bounds);
+	RainFollowComponent->SetVariableFloat(TEXT("User.LightResponse"), 1.0f);
+	RainFollowComponent->SetVariableFloat(TEXT("User.StreakWidth"),
+		FMath::Max(0.2f, CVarRainStreakWidth.GetValueOnGameThread()));
+	RainFollowComponent->SetVariableFloat(TEXT("User.StreakLength"),
+		FMath::Max(4.0f, CVarRainStreakLength.GetValueOnGameThread()));
+	RainFollowComponent->SetVariableFloat(TEXT("User.StreakAlpha"),
+		FMath::Clamp(CVarRainStreakAlpha.GetValueOnGameThread(), 0.0f, 1.0f));
+	UpdateFollowRainLocation();
+	if (!RainFollowComponent->IsActive())
+	{
+		RainFollowComponent->Activate();
+	}
 }
 
 void AElysiumMapActor::ApplyWeatherTuning()
@@ -2826,19 +2969,35 @@ void AElysiumMapActor::ApplyWeatherTuning()
 	}
 	const float EnhancedRate = FMath::Lerp(1.0f,
 		FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread()), Enhancement);
+	const float LightResponse = FMath::Clamp(
+		CVarRainLightResponse.GetValueOnGameThread() * 4.0f, 0.0f, 2.0f);
+	float FollowRate = 0.0f;
+	float FollowBounds = 0.0f;
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
 	{
+		if (IsFollowRainDefinition(Pair.Value.ParticleDefinition))
+		{
+			FollowRate = FMath::Max(FollowRate, Pair.Value.RateScale);
+			FollowBounds = FMath::Max(FollowBounds, Pair.Value.BoundsCm);
+		}
 		if (UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key))
 		{
 			Component->SetVariableFloat(TEXT("User.RateScale"), Pair.Value.RateScale * EnhancedRate);
-			Component->SetVariableFloat(TEXT("User.Enhancement"), Enhancement);
-			// The Niagara rate expression applies Enhancement once.  Keep the mist control as
-			// the full-wet tuning value so intermediate enhancement values remain linear.
-			Component->SetVariableFloat(TEXT("User.MistEnhancement"),
-				FMath::Max(0.0f, CVarRainMist.GetValueOnGameThread()));
-			Component->SetVariableFloat(TEXT("User.LightResponse"), FMath::Max(0.0f,
-				CVarRainLightResponse.GetValueOnGameThread()));
+			Component->SetVariableFloat(TEXT("User.LightResponse"), LightResponse);
 		}
+	}
+	if (RainFollowComponent && FollowRate > KINDA_SMALL_NUMBER)
+	{
+		RainFollowComponent->SetVariableFloat(TEXT("User.RateScale"), FollowRate * EnhancedRate);
+		RainFollowComponent->SetVariableFloat(TEXT("User.BoundsCm"),
+			FollowBounds > KINDA_SMALL_NUMBER ? FollowBounds : 1200.0f);
+		RainFollowComponent->SetVariableFloat(TEXT("User.LightResponse"), LightResponse);
+		RainFollowComponent->SetVariableFloat(TEXT("User.StreakWidth"),
+			FMath::Max(0.2f, CVarRainStreakWidth.GetValueOnGameThread()));
+		RainFollowComponent->SetVariableFloat(TEXT("User.StreakLength"),
+			FMath::Max(4.0f, CVarRainStreakLength.GetValueOnGameThread()));
+		RainFollowComponent->SetVariableFloat(TEXT("User.StreakAlpha"),
+			FMath::Clamp(CVarRainStreakAlpha.GetValueOnGameThread(), 0.0f, 1.0f));
 	}
 }
 
@@ -2855,10 +3014,17 @@ void AElysiumMapActor::FireWeatherTimer(bool bRainOn)
 
 FString AElysiumMapActor::GetWeatherDebugSummary() const
 {
-	FString Result = FString::Printf(TEXT("wet authored %.3f->%.3f presented %.3f x%.2f override=%d components %d"),
+	FString Result = FString::Printf(
+		TEXT("wet authored %.3f->%.3f presented %.3f x%.2f override=%d components %d follow=%d"),
 		WetnessTransition.CurrentWetness, WetnessTransition.TargetWetness,
 		PresentedWetness, PresentedWetnessScale, bEnvironmentWetnessOverride ? 1 : 0,
-		RainComponents.Num());
+		RainComponents.Num(),
+		RainFollowComponent && RainFollowComponent->IsActive() ? 1 : 0);
+	if (RainFollowComponent)
+	{
+		Result += FString::Printf(TEXT(" follow_loc=%s"),
+			*RainFollowComponent->GetComponentLocation().ToCompactString());
+	}
 	if (RainSystem)
 	{
 		for (const FNiagaraEmitterHandle& Handle : RainSystem->GetEmitterHandles())

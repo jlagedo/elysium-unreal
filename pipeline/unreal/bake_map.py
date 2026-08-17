@@ -936,45 +936,60 @@ class Bake(object):
             minimum, maximum = bounds["min"], bounds["max"]
             height = self.weather["height_texture"]
             rain_path = "%s/MI_ElysiumRain" % self.weather_pkg
+            mist_path = "%s/MI_ElysiumRainMist" % self.weather_pkg
             rain_recipe = {
                 "master": _asset_path(master),
                 "height": "%s/T_RainHeight" % self.weather_pkg,
                 "weather": self.weather,
+                "layers": ("streaks", "mist"),
             }
-            if self.tracker.register(
-                    "materials", rain_path, rain_recipe,
-                    expected_class="MaterialInstanceConstant"):
-                mic = bl.make_material_instance("MI_ElysiumRain", self.weather_pkg, master)
+
+            def _make_rain_mic(name, path, layer):
+                if self.tracker.register(
+                        "materials", path, {**rain_recipe, "layer": layer},
+                        expected_class="MaterialInstanceConstant"):
+                    mic = bl.make_material_instance(name, self.weather_pkg, master)
+                    if not mic:
+                        raise SystemExit("[bake] weather rain material instance failed: %s" % path)
+                    bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
+                    bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
+                    bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
+                    bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
+                    bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
+                    bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
+                    bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
+                    bl.set_scalar_param(mic, "RainLayer", layer)
+                    self.saved.append(path)
+                    self.tracker.built("materials")
+                    return mic
+                mic = unreal.EditorAssetLibrary.load_asset(path)
                 if not mic:
-                    raise SystemExit("[bake] weather rain material instance failed")
-                bl.set_tex_param(mic, "RainHeightTexture", self.rain_height)
-                bl.set_scalar_param(mic, "RainBoundsMinX", minimum[0])
-                bl.set_scalar_param(mic, "RainBoundsMinY", minimum[1])
-                bl.set_scalar_param(mic, "RainBoundsSizeX", maximum[0] - minimum[0])
-                bl.set_scalar_param(mic, "RainBoundsSizeY", maximum[1] - minimum[1])
-                bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
-                bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
-                self.saved.append(rain_path)
-                self.tracker.built("materials")
-            else:
-                mic = unreal.EditorAssetLibrary.load_asset(rain_path)
-                if not mic:
-                    raise SystemExit("[bake] cached rain material could not be loaded")
+                    raise SystemExit("[bake] cached rain material could not be loaded: %s" % path)
+                return mic
+
+            streak_mic = _make_rain_mic("MI_ElysiumRain", rain_path, 0.0)
+            mist_mic = _make_rain_mic("MI_ElysiumRainMist", mist_path, 1.0)
 
             system_path = "/Game/VtMB/Particles/NS_ElysiumRain"
             if self.tracker.register(
                     "materials", system_path,
-                    {"material": rain_path, "binding": "rain-material-v1"},
+                    {"streaks": rain_path, "mist": mist_path, "binding": "rain-material-v2"},
                     expected_class="NiagaraSystem"):
-                if not unreal.ElysiumRainAssetBuilder.bind_rain_material(system, mic):
-                    raise SystemExit("[bake] could not bind the map rain material")
+                if not unreal.ElysiumRainAssetBuilder.bind_rain_materials(
+                        system, streak_mic, mist_mic):
+                    raise SystemExit("[bake] could not bind the map rain materials")
                 self.saved.append(system_path)
                 self.tracker.built("materials")
         else:
             rain_path = "%s/MI_ElysiumRain" % self.weather_pkg
-            if unreal.EditorAssetLibrary.does_asset_exist(rain_path):
-                bl.delete_owned_asset(rain_path)
-                self.tracker.pruned("materials", 1)
+            mist_path = "%s/MI_ElysiumRainMist" % self.weather_pkg
+            pruned = 0
+            for path in (rain_path, mist_path):
+                if unreal.EditorAssetLibrary.does_asset_exist(path):
+                    bl.delete_owned_asset(path)
+                    pruned += 1
+            if pruned:
+                self.tracker.pruned("materials", pruned)
         log("materials: %s" % self.tracker.summary("materials"))
 
     def resolve_textures(self):

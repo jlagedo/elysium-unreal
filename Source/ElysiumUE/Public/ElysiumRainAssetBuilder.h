@@ -25,6 +25,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Weather")
 	static bool BindRainMaterial(UNiagaraSystem* System, UMaterialInterface* Material);
 
+	UFUNCTION(BlueprintCallable, Category="Elysium|Weather")
+	static bool BindRainMaterials(
+		UNiagaraSystem* System,
+		UMaterialInterface* Streaks,
+		UMaterialInterface* Mist);
+
 	/** Empty on success; otherwise a verifier-ready description of every discovered error. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Weather")
 	static FString ValidateRainSystem(UNiagaraSystem* System, UMaterialInterface* Material);
