@@ -613,6 +613,15 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 		}
 		return 0;
 	};
+	auto TallyMentions = [](const TCHAR* Fragment) -> bool
+	{
+		TArray<ElysiumStub::FTally> Rows;
+		ElysiumStub::CollectTally(Rows);
+		return Rows.ContainsByPredicate([Fragment](const ElysiumStub::FTally& R)
+		{
+			return R.Surface.Contains(Fragment);
+		});
+	};
 
 	// 1. A stub class's named input resolves to the shared thunk and reports under its own name.
 	FireAt(TEXT("sprite1"), TEXT("HideSprite"));
@@ -626,10 +635,18 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	TestEqual(TEXT("an unresolvable input reports"),
 		CountFor(TEXT("input"), TEXT("func_lod.Frobnicate")), 1);
 
-	// 3. A wire naming an entity the map does not contain is its own kind, not an input gap.
+	// 3. A wire naming an entity the map does not contain is an authored/runtime-state outcome, not
+	//    an unimplemented surface: retail data carries stale wires, and a valid target can be killed
+	//    before a later unlimited output fires. It is counted and reported to the I/O sinks, and it
+	//    never joins the implementation work list — including as an `input` gap, which is the one
+	//    misreading that would put every dead wire in the corpus on it.
+	//    `Elysium.Substrate.EventTransport` owns the sink half.
+	const int32 UnknownTargetsBefore = World.UnknownTargets();
 	FireAt(TEXT("no_such_entity"), TEXT("Trigger"));
-	TestEqual(TEXT("an unknown target reports as a target"),
-		CountFor(TEXT("target"), TEXT("no_such_entity.Trigger")), 1);
+	TestEqual(TEXT("an unknown target is counted as a missing receiver"),
+		World.UnknownTargets(), UnknownTargetsBefore + 1);
+	TestFalse(TEXT("a missing receiver is not an implementation stub of any kind"),
+		TallyMentions(TEXT("no_such_entity")));
 
 	// 4. The shadowing guard: base inputs still work on a stub class and report nothing.
 	FireAt(TEXT("sprite1"), TEXT("ScriptHide"));

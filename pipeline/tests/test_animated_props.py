@@ -263,6 +263,7 @@ class PlacedModelClipEmissionTests(unittest.TestCase):
                 mock.patch.object(UEK, "_mesh_section", return_value=(b"", {})),
                 mock.patch.object(mdl_skel, "local_sequences", return_value=clips),
                 mock.patch.object(mdl_skel, "blend_clip_plan", return_value=([], {})),
+                mock.patch.object(UEK, "_attachment_section", return_value=b""),
                 mock.patch.object(UEK, "_anim_section", side_effect=anim)):
             UEK.write_model({}, "models/test/prop.mdl", temporary, clip_labels=labels,
                             ensure_labels=ensure)

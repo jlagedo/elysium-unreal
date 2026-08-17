@@ -147,6 +147,9 @@ def attachments(d):
     The name index is relative to its attachment record. The 3x4 matrix is row-major: its last
     column is the Source-inch translation and its 3x3 block is an ordinary proper rotation.
     """
+    if len(d) < 336:
+        raise ValueError(
+            f"model image is {len(d)} bytes, too short for the attachment header at 328")
     count = _i32(d, 328)
     base = _i32(d, 332)
     if count < 0 or count > _MAX_ATTACHMENTS:

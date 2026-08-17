@@ -78,6 +78,7 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumScenePlayer.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumStealth.h"        // the player think's 0.1 s heartbeat
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "Scripting/ElysiumPythonVM.h"
@@ -884,11 +885,15 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	FElysiumPlayer* PlayerEnt = PlayerWorld.FindPlayer();
 	if (TestNotNull(TEXT("the player entity spawned"), PlayerEnt))
 	{
-		// Arm it due, then run the pre-move pass: the think fires and disarms itself.
+		// Arm it due, then run the pre-move pass. `RunPlayerThink` disarms it before entering the
+		// think, and the think's own tail re-arms it on the stealth surface's 0.1 s heartbeat, so a
+		// FIRED player think reads as that next deadline rather than as never. The observable is the
+		// deadline moving off the armed time onto the heartbeat; the pass that does not fire is the
+		// one below, which leaves 1.0 exactly where the test put it.
 		PlayerEnt->NextThink = 1.0f;
 		PlayerWorld.RunPlayerThink(2.0);
-		TestEqual(TEXT("the pre-move pass runs the player's think"),
-			PlayerEnt->NextThink, ELYSIUM_NEVER_THINK);
+		TestEqual(TEXT("the pre-move pass runs the player's think"), PlayerEnt->NextThink,
+			static_cast<float>(2.0 + ElysiumStealth::UpdateIntervalSeconds), 1.e-4f);
 
 		// Arm it again and run the POST-move pass instead. The general think pass skips the player,
 		// so it stays armed — the pre-move pass is the only thing that may fire it.

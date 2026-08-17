@@ -784,9 +784,12 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 	return true;
 }
 
-// 7.4 — the world MTL the runtime feeds FElysiumMaterialFactory. Asserts the parse contract holds
-// on real exported data: materials resolve albedo, the blend flags stay mutually exclusive (so the
-// factory picks exactly one master), and every referenced texture channel exists on disk.
+// 7.4 — the world MTL. Every channel and flag now lives once in the shared material corpus, keyed
+// by the `mat` line, so this file is a per-map reference sidecar: `newmtl` plus the two things only
+// this map knows (the cubemap VBSP patched in, whether the surface is a projected decal here). What
+// is asserted is therefore the parse contract over whatever channels a def does carry — the blend
+// flags stay mutually exclusive so the factory picks exactly one master, and a named texture
+// resolves on disk. The channels themselves belong to the corpus and are asserted where it is read.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialMaterialsTest,
 	"Elysium.Content.TutorialMaterials", GElysiumContentTestFlags)
 bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
@@ -837,10 +840,8 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 		}
 	}
 
-	TestTrue(TEXT("most materials resolve an albedo"), WithAlbedo > Materials.Num() / 2);
 	TestEqual(TEXT("blend flags are mutually exclusive"), MultiBlend, 0);
 	TestEqual(TEXT("every referenced texture channel exists on disk"), MissingTex, 0);
-	TestTrue(TEXT("the map has reflective surfaces"), Reflective > 0);
 	AddInfo(FString::Printf(
 		TEXT("%s materials: %d total, %d albedo | masked %d, translucent %d, additive %d, reflective %d, bump %d, wvt %d"),
 		Map, Materials.Num(), WithAlbedo, Masked, Translucent, Additive, Reflective, Bumped, Wvt));
@@ -6458,7 +6459,12 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	World.UpdatePlayerFeed();
 	World.QueuePlayerFeedEdge(EElysiumUseEdge::Released);
 	World.UpdatePlayerFeed();
-	for (int32 Step = 71; Step <= 120; ++Step)
+	// The second press only clears the continuation latch; teardown still arrives through the
+	// authored release family, which is the whole release clip long — event 4006 part-way in, then
+	// the presentation-only tail that keeps both bodies claimed to its end. Budget the full clip
+	// plus the player think's 0.1 s heartbeat quantisation, rather than a window sized to land on
+	// the deadline. `Elysium.Substrate.Feeding` pins each boundary exactly.
+	for (int32 Step = 71; Step <= 160; ++Step)
 	{
 		World.RunPlayerThink(Step * 0.05);
 		World.Tick(Step * 0.05);
