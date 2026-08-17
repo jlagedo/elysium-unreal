@@ -2391,7 +2391,11 @@ bool FElysiumPlacedModelCoverageContentTest::RunTest(const FString&)
 	{
 		return true;
 	}
-	if (!TestEqual(TEXT("the complete placed-model schema is v7"), Index.ManifestVersion, 7))
+	// The complete placed-model row arrived in v7 and every later version carries it. The gate is a
+	// floor rather than an equality so a manifest bump for an unrelated payload does not read as a
+	// missing schema — what this test needs is the rows, not a particular version.
+	if (!TestTrue(FString::Printf(TEXT("the complete placed-model schema is v7 or later (v%d)"),
+			Index.ManifestVersion), Index.ManifestVersion >= 7))
 	{
 		return true;
 	}
