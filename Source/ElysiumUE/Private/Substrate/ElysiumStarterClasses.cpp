@@ -757,6 +757,14 @@ public:
 		// touch/ChangeNow arriving before the (already-requested) travel actually runs could request
 		// a second one.
 		Ar << bChanging;
+		if (Ar.IsLoading())
+		{
+			// That window closes with the swap, and every restored world is already past it — the
+			// snapshot a map takes as the player travels away out of this very trigger records the
+			// latch set. Restoring it would make DoChangeLevel's guard refuse this transition for
+			// the rest of the map's life, so the latch is re-armed on the way in.
+			bChanging = false;
+		}
 	}
 
 private:
@@ -767,6 +775,11 @@ private:
 	{
 		if (bChanging || IsInert())
 		{
+			// Both refusals leave a fired ChangeNow with no visible effect, which reads at the
+			// controller exactly like a dead wire — say which one swallowed it.
+			UE_LOG(LogElysiumTrigger, Log, TEXT("%s: change to '%s' refused (%s)"),
+				*DebugString(), *DestMap,
+				bChanging ? TEXT("a transition is already in flight") : TEXT("entity is inert"));
 			return;
 		}
 		if (DestMap.IsEmpty())
