@@ -604,16 +604,14 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	TestTrue(TEXT("world overlap makes HasItem see the lockpick"),
 		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
 	TestTrue(TEXT("the doorknob starts locked from its attached door"), LiveKnob->IsUseLocked());
-	TestTrue(TEXT("a knobbed door keeps its slab as the look-ray surface"),
+	TestTrue(TEXT("a knobbed door keeps its slab as a look-ray target"),
 		Services.UseAnchorEnabled.FindRef(LiveDoor->Handle));
 
 	FElysiumUseCandidate Candidate;
-	Candidate.Owner = LiveDoor->Handle;
+	Candidate.Owner = LiveKnob->Handle;
 	Candidate.Selection = EElysiumUseSelection::Exact;
 	Services.UseQuery.Candidates = { Candidate };
 	World.UpdatePlayerInteraction();
-	TestEqual(TEXT("looking at a knobbed slab focuses the attached knob"),
-		World.GetFocusedUsable(), LiveKnob->Handle);
 	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
 	World.UpdatePlayerInteraction();
 	TestEqual(TEXT("carried lockpick starts an attempt-owned session"), World.GetLastUseOutcome(),

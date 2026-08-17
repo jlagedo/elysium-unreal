@@ -1323,10 +1323,10 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		return Source;
 	};
 
-	const FVector Aim = CameraRotation.Vector().GetSafeNormal();
-	const FVector Side = FRotationMatrix(CameraRotation).GetScaledAxis(EAxis::Y).GetSafeNormal();
+	const FVector Aim = Pawn->GetViewRotation().Vector().GetSafeNormal();
+	const FVector Side = FRotationMatrix(Pawn->GetViewRotation()).GetScaledAxis(EAxis::Y).GetSafeNormal();
 	const FElysiumEntityHandle ExactHandle(10, 1);
-	UBoxComponent* ExactSource = AddTarget(TEXT("ExactSource"), CameraLocation + Aim * 150.0f,
+	UBoxComponent* ExactSource = AddTarget(TEXT("ExactSource"), BodyOrigin + Aim * 150.0f,
 		FVector(3.0f), ExactHandle);
 	TestEqual(TEXT("presentation resolves the physical use visual rather than its query proxy"),
 		Map->FindUseVisual(ExactHandle), static_cast<UPrimitiveComponent*>(ExactSource));
@@ -1347,70 +1347,68 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
 	TestTrue(TEXT("disabled anchor is removed from exact targeting"), Query.Candidates.IsEmpty());
 
-	const FElysiumEntityHandle AssistedHandle(11, 1);
-	AddTarget(TEXT("AssistedSource"), CameraLocation + Aim * 150.0f + Side * 10.0f,
-		FVector(2.0f), AssistedHandle);
+	// 10 cm off-axis at 150 cm is ~3.8°, inside retail player_use_arc 30°.
+	const FElysiumEntityHandle ConeHandle(11, 1);
+	AddTarget(TEXT("ConeSource"), BodyOrigin + Aim * 150.0f + Side * 10.0f,
+		FVector(2.0f), ConeHandle);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestTrue(TEXT("outside the base cone is not assisted"), Query.Candidates.IsEmpty());
-	Query = Map->QueryPlayerUse(AssistedHandle);
-	TestEqual(TEXT("current focus receives the 25 percent assistance hysteresis"),
+	TestEqual(TEXT("an off-axis target inside the 30 degree FOV is selected"),
 		Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
 	{
-		TestEqual(TEXT("near miss is classified assisted"),
+		TestEqual(TEXT("FOV walk names the off-axis target"), Query.Candidates[0].Owner, ConeHandle);
+		TestEqual(TEXT("FOV walk is not a look-ray hit"),
 			Query.Candidates[0].Selection, EElysiumUseSelection::Assisted);
 	}
 
-	Map->SetUseAnchorEnabled(AssistedHandle, false);
-	const FElysiumEntityHandle NearHandle(12, 1);
-	AddTarget(TEXT("NearAssistSource"), CameraLocation + Aim * 150.0f + Side * 5.0f,
-		FVector(2.0f), NearHandle);
+	Map->SetUseAnchorEnabled(ConeHandle, false);
+	const FElysiumEntityHandle WideHandle(12, 1);
+	AddTarget(TEXT("WideSource"), BodyOrigin + Aim * 150.0f + Side * 150.0f,
+		FVector(2.0f), WideHandle);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestEqual(TEXT("small near miss receives restrained assistance"), Query.Candidates.Num(), 1);
-	if (!Query.Candidates.IsEmpty())
-	{
-		TestEqual(TEXT("assistance returns the intended small prop"), Query.Candidates[0].Owner, NearHandle);
-	}
+	TestTrue(TEXT("a 45 degree miss is outside the 30 degree FOV"), Query.Candidates.IsEmpty());
 
-	Map->SetUseAnchorEnabled(NearHandle, false);
+	Map->SetUseAnchorEnabled(WideHandle, false);
 	const FElysiumEntityHandle LeftHandle(20, 1);
 	const FElysiumEntityHandle RightHandle(21, 1);
-	const FVector LeftPoint = CameraLocation + Aim * 160.0f - Side * 7.0f;
-	const FVector RightPoint = CameraLocation + Aim * 160.0f;
-	AddTarget(TEXT("LeftButtonSource"), LeftPoint, FVector(3.0f), LeftHandle);
-	AddTarget(TEXT("RightButtonSource"), RightPoint, FVector(3.0f), RightHandle);
+	AddTarget(TEXT("LeftButtonSource"), BodyOrigin + Aim * 160.0f - Side * 7.0f,
+		FVector(3.0f), LeftHandle);
+	AddTarget(TEXT("RightButtonSource"), BodyOrigin + Aim * 160.0f, FVector(3.0f), RightHandle);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestEqual(TEXT("exact aim among adjacent buttons returns one control"), Query.Candidates.Num(), 1);
+	TestEqual(TEXT("look-ray among adjacent buttons returns one control"), Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
 	{
-		TestEqual(TEXT("exact aim picks the intended adjacent button"),
+		TestEqual(TEXT("look-ray picks the on-axis button"),
 			Query.Candidates[0].Owner, RightHandle);
 	}
 
 	Map->SetUseAnchorEnabled(LeftHandle, false);
 	Map->SetUseAnchorEnabled(RightHandle, false);
-	PC->SetControlRotation(FRotator::ZeroRotator);
-	if (PC->PlayerCameraManager)
-	{
-		PC->PlayerCameraManager->UpdateCamera(0.0f);
-	}
-	Map->GetPlayerViewPoint(CameraLocation, CameraRotation);
-	const FElysiumEntityHandle FarHandle(30, 1);
-	AddTarget(TEXT("FarSource"), CameraLocation + CameraRotation.Vector() * 240.0f,
-		FVector(2.0f), FarHandle);
+	const FElysiumEntityHandle MidFarHandle(29, 1);
+	AddTarget(TEXT("MidFarSource"), BodyOrigin + Aim * 240.0f, FVector(2.0f), MidFarHandle);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestTrue(TEXT("camera hit beyond body reach is rejected"), Query.Candidates.IsEmpty());
-	TestEqual(TEXT("body reach rejection is reported"), Query.MissOutcome, EElysiumUseOutcome::OutOfRange);
+	TestEqual(TEXT("the 160 unit fallback ray still reaches past 80 units"),
+		Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("fallback names the mid-far target"), Query.Candidates[0].Owner, MidFarHandle);
+	}
+
+	Map->SetUseAnchorEnabled(MidFarHandle, false);
+	const FElysiumEntityHandle FarHandle(30, 1);
+	AddTarget(TEXT("FarSource"), BodyOrigin + Aim * 450.0f, FVector(2.0f), FarHandle);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("beyond the 160 unit fallback is rejected"), Query.Candidates.IsEmpty());
 
 	Map->SetUseAnchorEnabled(FarHandle, false);
 	const FElysiumEntityHandle OccludedHandle(31, 1);
-	const FVector OccludedPoint = CameraLocation + CameraRotation.Vector() * 150.0f;
+	const FVector OccludedPoint = BodyOrigin + Aim * 150.0f;
 	AddTarget(TEXT("OccludedSource"), OccludedPoint, FVector(3.0f), OccludedHandle);
 	AActor* WallOwner = World->SpawnActor<AActor>();
 	UBoxComponent* Wall = NewObject<UBoxComponent>(WallOwner, TEXT("UseWall"));
 	WallOwner->SetRootComponent(Wall);
 	Wall->InitBoxExtent(FVector(4.0f, 50.0f, 50.0f));
-	Wall->SetWorldLocation(CameraLocation + CameraRotation.Vector() * 75.0f);
+	Wall->SetWorldLocation(BodyOrigin + Aim * 75.0f);
 	Wall->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Wall->SetCollisionObjectType(ECC_WorldStatic);
 	Wall->SetCollisionResponseToAllChannels(ECR_Ignore);
@@ -1422,7 +1420,6 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	TestEqual(TEXT("wall occlusion is reported"), Query.MissOutcome, EElysiumUseOutcome::Occluded);
 	Wall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	Map->SetUseAnchorEnabled(OccludedHandle, false);
 	const FElysiumEntityHandle SlabHandle(40, 1);
 	const FElysiumEntityHandle KnobHandle(41, 1);
 	FElysiumConvexHull SlabHull;
@@ -1436,37 +1433,27 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 			}
 		}
 	}
-	UElysiumBrushComponent* Slab = NewObject<UElysiumBrushComponent>(Map, TEXT("KnobbedSlab"));
+	UElysiumBrushComponent* Slab = NewObject<UElysiumBrushComponent>(Map, TEXT("DoorSlab"));
 	Slab->InitBrush(SlabHandle, { SlabHull }, EElysiumBrushSolidity::Solid);
 	Slab->SetupAttachment(Map->GetRootComponent());
-	Slab->SetWorldLocation(CameraLocation + CameraRotation.Vector() * 75.0f);
+	Slab->SetWorldLocation(BodyOrigin + Aim * 75.0f);
 	Slab->RegisterComponent();
 	Map->AddInstanceComponent(Slab);
 	Map->RegisterUseAnchor(Slab, SlabHandle);
-	AddTarget(TEXT("KnobOnSlabSource"), CameraLocation + CameraRotation.Vector() * 150.0f,
-		FVector(3.0f), KnobHandle);
+	AddTarget(TEXT("KnobBehindSlab"), BodyOrigin + Aim * 150.0f, FVector(3.0f), KnobHandle);
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestEqual(TEXT("an enabled slab still owns the exact ray in front of its knob"),
+	TestEqual(TEXT("the look-ray selects the door slab in front of its knob"),
 		Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
 	{
-		TestEqual(TEXT("the slab wins over the knob while its use anchor is live"),
-			Query.Candidates[0].Owner, SlabHandle);
-	}
-	Map->SetUseAnchorEnabled(SlabHandle, false);
-	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestEqual(TEXT("a knobbed slab stops blocking ElysiumUse so the knob can be selected"),
-		Query.Candidates.Num(), 1);
-	if (!Query.Candidates.IsEmpty())
-	{
-		TestEqual(TEXT("the knob is the use target once the slab is disarmed"),
-			Query.Candidates[0].Owner, KnobHandle);
+		TestEqual(TEXT("the slab is the use target"), Query.Candidates[0].Owner, SlabHandle);
 	}
 	Map->SetUseAnchorEnabled(KnobHandle, false);
 	Slab->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Map->SetUseAnchorEnabled(SlabHandle, false);
 	Map->SetUseAnchorEnabled(OccludedHandle, true);
 
-	// Offset the final POV like a third-person camera while leaving body reach at the pawn pivot.
+	// The rendered boom is not the search origin. Offset the camera; look and eye stay on the pawn.
 	ACameraActor* OffsetCamera = World->SpawnActor<ACameraActor>();
 	const FVector OffsetLocation = BodyOrigin + FVector(-180.0f, 80.0f, 40.0f);
 	OffsetCamera->SetActorLocationAndRotation(OffsetLocation,
@@ -1477,11 +1464,12 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		PC->PlayerCameraManager->UpdateCamera(0.0f);
 	}
 	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
-	TestEqual(TEXT("offset third-person POV still selects through body validation"),
+	TestEqual(TEXT("a third-person boom does not move the use search off the eye"),
 		Query.Candidates.Num(), 1);
 	if (!Query.Candidates.IsEmpty())
 	{
-		TestEqual(TEXT("offset POV keeps the logical target"), Query.Candidates[0].Owner, OccludedHandle);
+		TestEqual(TEXT("eye-forward still names the on-axis target"),
+			Query.Candidates[0].Owner, OccludedHandle);
 	}
 
 	Map->ClearUseAnchors();

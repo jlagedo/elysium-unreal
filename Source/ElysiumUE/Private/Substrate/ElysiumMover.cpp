@@ -568,31 +568,15 @@ void FElysiumDoorBase::SyncDoorknobs()
 void FElysiumDoorBase::OnDormancyChanged()
 {
 	FElysiumEntity::OnDormancyChanged();
-	// Base re-enables any live use anchor. A knobbed leaf has to put the slab back to "knob only"
-	// or ScriptUnhide restores a competing exact hit on the wood.
 	RefreshUseOwner();
-}
-
-FElysiumEntityHandle FElysiumDoorBase::ResolvePlayerUseTarget() const
-{
-	for (const FElysiumEntityHandle& KnobHandle : Doorknobs)
-	{
-		FElysiumEntity* Entity = World ? World->Resolve(KnobHandle) : nullptr;
-		const FElysiumLockableEntity* Knob = Entity ? Entity->AsLockableEntity() : nullptr;
-		if (Knob && !Knob->IsDead() && !Knob->IsInert())
-		{
-			return KnobHandle;
-		}
-	}
-	return Handle;
 }
 
 void FElysiumDoorBase::RefreshUseOwner()
 {
 	if (World)
 	{
-		// The slab stays the look-ray surface. A knobbed leaf remaps focus onto the knob so looking
-		// at the wood still runs lock/key/OnUseBegin instead of DoorUse.
+		// The slab stays a use target. Retail FindEntityFOV hits the door brush; a knob is only
+		// selected when the look-ray actually strikes it. Lock/key live on the knob's own Use.
 		World->SetUseAnchorEnabled(Handle, IsUsable() && !IsInert());
 	}
 }

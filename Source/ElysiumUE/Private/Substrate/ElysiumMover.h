@@ -151,9 +151,6 @@ public:
 	// The +use doorknob path (CBaseDoor::DoorknobUse): toggle this leaf and, if a `linked_door` is
 	// set, its partner too — the double-door swing. Reached by the +use look-cursor and `ent_fire Use`.
 	void DoorUse(const FElysiumEntityHandle& Activator);
-	// Look-ray owner for this leaf: the first live attached knob, or the door itself. The slab stays
-	// the query surface so looking at the wood still focuses lock/key/use on the knob.
-	FElysiumEntityHandle ResolvePlayerUseTarget() const;
 
 	// --- +use / debug hooks (P4.3) -----------------------------------------------------
 	// PUSE (0x100) is the dominant door bit (105 doors): it arms the +use look-cursor. Doors fire no

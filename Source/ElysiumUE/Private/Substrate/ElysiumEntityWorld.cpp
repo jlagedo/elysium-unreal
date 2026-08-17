@@ -25,7 +25,6 @@
 #include "ElysiumViewState.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumItemClasses.h"
-#include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumScenePlayer.h"
 #include "Substrate/ElysiumSkillClasses.h"
@@ -1913,33 +1912,6 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 		if (Candidate.Selection == EElysiumUseSelection::Exact)
 		{
 			break;
-		}
-	}
-	FElysiumUseCandidate Remapped;
-	if (Selected)
-	{
-		if (FElysiumEntity* Hit = Resolve(Selected->Owner))
-		{
-			if (const FElysiumDoorBase* Door = Hit->AsDoorBase())
-			{
-				const FElysiumEntityHandle UseTarget = Door->ResolvePlayerUseTarget();
-				if (UseTarget != Selected->Owner)
-				{
-					FElysiumUseContext KnobContext;
-					KnobContext.Activator = Player;
-					KnobContext.Owner = UseTarget;
-					KnobContext.AnchorPoint = Selected->AnchorPoint;
-					KnobContext.Selection = Selected->Selection;
-					KnobContext.TimeSeconds = NowSeconds();
-					FElysiumEntity* Knob = Resolve(UseTarget);
-					if (Knob && Knob->CanPlayerFocus(KnobContext))
-					{
-						Remapped = *Selected;
-						Remapped.Owner = UseTarget;
-						Selected = &Remapped;
-					}
-				}
-			}
 		}
 	}
 	TransitionUseFocus(Selected);
