@@ -126,14 +126,10 @@ One bullet and one commit each.
 
 | # | Session | Touches | Deps |
 |---|---|---|---|
-| **S4** | **Catalog: events + autolayer census** | `exporters/npc_export.py`, `Private/Visual/ElysiumBlendGrids.{h,cpp}`, tests | — |
-| **S5** | **Catalog: transition graph** — decode, verify, emit, write the VtMB doc | `formats/mdl_skel.py`, `npc_export.py`, `animation_and_movers.md` | S4 |
+| **S5** | **Catalog: transition graph** — decode, verify, emit, write the VtMB doc | `formats/mdl_skel.py`, `npc_export.py`, `animation_and_movers.md` | — |
 
 ### Acceptance sentences, quoted back in each kickoff
 
-- **S4** — *for the selected stems every clip carrying events in the MDL carries them in
-  `npc/blends/<stem>.json` with cycle in [0,1] and `type == 0`, matching `npc_index.json`'s rollup;
-  the autolayer census still reads `{0:13544, 1:237, 2:224}` with the one inverted host named.*
 - **S5** — *every decoded entry/exit node lies in `[0, n)` across all 4,445 v2531 models, `n` equals
   `max(node)+1`, a `*_to_*`-carrying model's matrix names exactly those sequences, and the lookup
   reached from `0x102726a0` reads those offsets; the layout is recorded in `animation_and_movers.md`.*
@@ -160,9 +156,6 @@ Narrowest first — no broad profile, no `--force`, no unscoped tier.
    class and entity classname. A class with no derivable tag is unreachable from the runtime, which
    would mean the runtime should key by entity classname — a change to
    `FElysiumAnimationIntent.WeaponTag`'s meaning that reaches into LIFE4.
-3. **`MANIFEST_VERSION` 7 → 8.** `npc_export.py:949` refuses cross-version integration, so anything
-   holding a v7 manifest in a work root needs a re-export. If a lane or cached bake plan pins v7,
-   S4 is wider than it looks.
-4. **The tables become ours to maintain.** A wrong row is now a bug we fix, with the RE record as
+3. **The tables become ours to maintain.** A wrong row is now a bug we fix, with the RE record as
    its rationale rather than a binary to re-diff. That is the intended posture, and it means the
    conformance tests are the only thing standing between a bad edit and a silently wrong pose.

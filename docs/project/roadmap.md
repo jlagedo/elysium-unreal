@@ -266,7 +266,11 @@ The ladder:
   arithmetic rather than enumerated, four zombie-feeding families registering their attacker and
   victim halves the other way round. Two movement-policy rows name a request family the RE never
   enumerated and report themselves unresolved rather than guess it. Nothing about actions is
-  exported or baked. The per-model events and the transition graph are open.
+  exported or baked. Per-model event timelines ride in the `npc/blends/<stem>.json` sidecar
+  beside the grids and autolayer binding — 48 owners, 631 sequences, 979 records, every cycle in
+  range and every type 0 — and the autolayer census confirms the two `move_and_ranged` banks alone
+  carry bindings (`{1:237, 2:224}`), with the one inverted host named. The transition graph is
+  open.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
   authority is landed; the NPC gait push, repointing the resolver onto the committed tables and
   deleting the 5-row stub, and activity→state coverage open.
