@@ -565,13 +565,22 @@ void FElysiumDoorBase::SyncDoorknobs()
 	RefreshUseOwner();
 }
 
+void FElysiumDoorBase::OnDormancyChanged()
+{
+	FElysiumEntity::OnDormancyChanged();
+	// Base re-enables any live use anchor. A knobbed leaf has to put the slab back to "knob only"
+	// or ScriptUnhide restores a competing exact hit on the wood.
+	RefreshUseOwner();
+}
+
 void FElysiumDoorBase::RefreshUseOwner()
 {
 	if (World)
 	{
 		// A knobbed door has one physical interaction point and one logical owner: the knob. Leaving
 		// the brush anchor live would let an exact hit on the slab bypass key, lockpick and
-		// OnUseBegin/OnUseEnd handling on the attachment.
+		// OnUseBegin/OnUseEnd handling on the attachment. The slab must also leave ElysiumUse or it
+		// occludes those knobs (QueryPlayerUse fail-closed + ClearLineTo).
 		World->SetUseAnchorEnabled(Handle, IsUsable() && Doorknobs.IsEmpty() && !IsInert());
 	}
 }

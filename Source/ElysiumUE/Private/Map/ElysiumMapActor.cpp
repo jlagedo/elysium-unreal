@@ -1590,11 +1590,20 @@ void AElysiumMapActor::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHand
 		}
 		Record.bEnabled = bEnabled;
 		UPrimitiveComponent* Component = Record.Component.Get();
-		if (Component && OwnedUseAnchorComponents.Contains(Component))
+		if (!Component)
+		{
+			continue;
+		}
+		if (OwnedUseAnchorComponents.Contains(Component))
 		{
 			Component->SetCollisionEnabled(
 				bEnabled ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+			continue;
 		}
+		// Brush slabs keep pawn/world collision. A disabled use owner (a knobbed door) must not
+		// remain on ElysiumUse or the slab eats the exact ray and occludes its own knobs.
+		Component->SetCollisionResponseToChannel(
+			ELYSIUM_USE_CHANNEL, bEnabled ? ECR_Block : ECR_Ignore);
 	}
 }
 

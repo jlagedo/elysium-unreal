@@ -1464,6 +1464,7 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	}
 	Map->SetUseAnchorEnabled(KnobHandle, false);
 	Slab->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Map->SetUseAnchorEnabled(OccludedHandle, true);
 
 	// Offset the final POV like a third-person camera while leaving body reach at the pawn pivot.
 	ACameraActor* OffsetCamera = World->SpawnActor<ACameraActor>();

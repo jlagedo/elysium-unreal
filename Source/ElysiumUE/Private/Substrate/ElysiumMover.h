@@ -158,6 +158,7 @@ public:
 	// activation and the reticle-arming (world-side) matter.
 	virtual bool IsUsable() const override;
 	virtual bool IsUseLocked() const override { return bLocked; }   // locked_icon on the reticle (P4.4)
+	virtual void OnDormancyChanged() override;
 	virtual void Use(const FElysiumEntityHandle& Activator) override { DoorUse(Activator); }
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	virtual void OnParentAttached(const FTransform& ParentWorldTransform) override;
