@@ -19,9 +19,16 @@
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumDecals.h"
 #include "ElysiumDlg.h"
+#include "ElysiumBrushComponent.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumMapActor.h"
+#include "ElysiumMoveSolve.h"                 // ElysiumMove::StandHeight / U — the +use reach's units
+#include "ElysiumPawn.h"
+#include "ElysiumUseIcons.h"                  // ELYSIUM_USE_CHANNEL
+#include "GameFramework/PlayerController.h"
+#include "Tests/AutomationCommon.h"           // FTestWorldWrapper
 #include "ElysiumInputAssets.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumPlayer.h"
@@ -6511,6 +6518,164 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	// the game-state subsystem a headless entity world does not have. The wire reaching the queue
 	// with the right provenance is the whole of what this tier can prove; the flag write is the
 	// script host's, and is covered where that host is up.
+
+	return true;
+}
+
+// ============================================================================================
+// A hub door stays selectable through the transition volume it stands in.
+//
+// sm_hub_1's exits are wired `OnFullyOpen -> <Teleport>.ChangeNow`, and the `trigger_changelevel`
+// is authored across the doorway approach — so the player's eye is inside that volume whenever
+// they are close enough to +use the door. A trigger body carries no use anchor, so if it answers
+// the ElysiumUse channel at all it blocks the look-ray where it starts and nothing behind it can
+// ever be selected. Both bodies are built from the map's own exported hulls at their own relative
+// placement, carried rigidly in front of the test pawn.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorUseThroughChangelevelTest,
+	"Elysium.Content.DoorUseThroughChangelevel", GElysiumContentTestFlags)
+bool FElysiumDoorUseThroughChangelevelTest::RunTest(const FString&)
+{
+	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sm_hub_1"));
+	if (!IFileManager::Get().FileExists(*EntsPath))
+	{
+		AddInfo(FString::Printf(
+			TEXT("ELYSIUM_TEST_ABSTAIN: sm_hub_1 has no exported .ents at %s"), *EntsPath));
+		return true;
+	}
+	FElysiumEntityDefs Defs;
+	if (!TestTrue(TEXT("sm_hub_1 .ents parses"), FElysiumEntityDefs::Parse(EntsPath, Defs)))
+	{
+		return false;
+	}
+
+	const FElysiumEntityDef* Door = nullptr;
+	const FElysiumEntityDef* Volume = nullptr;
+	for (const FElysiumEntityDef& Def : Defs.Defs)
+	{
+		if (Def.TargetName.Equals(TEXT("diner_door"), ESearchCase::IgnoreCase))
+		{
+			Door = &Def;
+		}
+		else if (Def.TargetName.Equals(TEXT("DinerTeleport1"), ESearchCase::IgnoreCase))
+		{
+			Volume = &Def;
+		}
+	}
+	if (!TestNotNull(TEXT("sm_hub_1 exports diner_door"), Door)
+		|| !TestNotNull(TEXT("sm_hub_1 exports DinerTeleport1"), Volume)
+		|| !TestTrue(TEXT("the door exports a hull"), Door->Hulls.Num() > 0)
+		|| !TestTrue(TEXT("the changelevel exports a hull"), Volume->Hulls.Num() > 0))
+	{
+		return false;
+	}
+	// The classnames have to land on the two solidities this test is about, or it proves nothing.
+	if (!TestTrue(TEXT("the door body is solid"),
+			ElysiumBrushSolidityForClass(Door->Classname) == EElysiumBrushSolidity::Solid)
+		|| !TestTrue(TEXT("the changelevel body is a trigger"),
+			ElysiumBrushSolidityForClass(Volume->Classname) == EElysiumBrushSolidity::Trigger))
+	{
+		return false;
+	}
+
+	// Hulls are entity-local; the def origin places them.
+	auto WorldBox = [](const FElysiumEntityDef& Def)
+	{
+		FBox Box(ForceInit);
+		for (const FElysiumConvexHull& Hull : Def.Hulls)
+		{
+			for (const FVector& Vertex : Hull.Vertices)
+			{
+				Box += Def.Origin + Vertex;
+			}
+		}
+		return Box;
+	};
+	const FBox DoorBox = WorldBox(*Door);
+	const FBox VolumeBox = WorldBox(*Volume);
+
+	// Where a player stands to use this door: off the slab face, along the approach the volume
+	// covers, inside the 80u look-ray reach.
+	FVector Approach = VolumeBox.GetCenter() - DoorBox.GetCenter();
+	Approach.Z = 0.0f;
+	Approach = Approach.GetSafeNormal();
+	if (!TestTrue(TEXT("the changelevel sits off the slab face"), !Approach.IsNearlyZero()))
+	{
+		return false;
+	}
+	const FVector RealEye = DoorBox.GetCenter() + Approach * (60.0f * ElysiumMove::U);
+	// The premise the test exists for — if the authored volume ever stops covering the approach,
+	// this stops being the configuration that regressed and the assertion below means nothing.
+	TestTrue(TEXT("+use range from the slab stands inside the transition volume"),
+		VolumeBox.IsInsideOrOn(RealEye));
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	APlayerController* PC = World ? World->SpawnActor<APlayerController>() : nullptr;
+	AElysiumPawn* Pawn = World ? World->SpawnActor<AElysiumPawn>(
+		FVector(0, 0, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator) : nullptr;
+	if (!TestNotNull(TEXT("door use controller"), PC)
+		|| !TestNotNull(TEXT("door use player body"), Pawn))
+	{
+		return false;
+	}
+	PC->Possess(Pawn);
+	PC->SetControlRotation(FRotator::ZeroRotator);
+	if (PC->PlayerCameraManager)
+	{
+		PC->PlayerCameraManager->UpdateCamera(0.0f);
+	}
+
+	AElysiumMapActor* Map = World->SpawnActorDeferred<AElysiumMapActor>(
+		AElysiumMapActor::StaticClass(), FTransform::Identity);
+	FVector Eye;
+	if (!TestNotNull(TEXT("door use map embodiment"), Map)
+		|| !TestTrue(TEXT("player use origin resolves"), Map->GetPlayerUseOrigin(Eye)))
+	{
+		return false;
+	}
+	const FVector Aim = Pawn->GetViewRotation().Vector().GetSafeNormal();
+
+	// Carry the exported pair in front of the pawn rigidly: the rotation taking the real
+	// eye-to-slab direction onto the test aim, applied about the real eye. Hull shape, scale and
+	// the spacing between the two bodies stay the map's own.
+	const FQuat Place = FQuat::FindBetweenNormals(
+		(DoorBox.GetCenter() - RealEye).GetSafeNormal(), Aim);
+	auto Build = [&](const FElysiumEntityDef& Def, const FElysiumEntityHandle& Owner,
+		const TCHAR* Name)
+	{
+		UElysiumBrushComponent* Body = NewObject<UElysiumBrushComponent>(Map, FName(Name));
+		Body->InitBrush(Owner, Def.Hulls, ElysiumBrushSolidityForClass(Def.Classname));
+		Body->SetupAttachment(Map->GetRootComponent());
+		Body->SetWorldLocationAndRotation(Eye + Place.RotateVector(Def.Origin - RealEye), Place);
+		Body->RegisterComponent();
+		Map->AddInstanceComponent(Body);
+		return Body;
+	};
+
+	const FElysiumEntityHandle DoorHandle(1, 1);
+	UElysiumBrushComponent* DoorBody = Build(*Door, DoorHandle, TEXT("DoorSlab"));
+	UElysiumBrushComponent* VolumeBody = Build(*Volume, FElysiumEntityHandle::Invalid(),
+		TEXT("ChangelevelVolume"));
+	// Only the door is a use target — a changelevel registers no anchor, exactly as the world builds it.
+	Map->RegisterUseAnchor(DoorBody, DoorHandle);
+
+	TestTrue(TEXT("a trigger body ignores the +use channel"),
+		VolumeBody->GetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL) == ECR_Ignore);
+
+	const FElysiumUseQueryResult Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	if (TestEqual(TEXT("the door is selected through the transition volume it stands in"),
+		Query.Candidates.Num(), 1))
+	{
+		TestEqual(TEXT("the selected use target is the door"),
+			Query.Candidates[0].Owner, DoorHandle);
+	}
 
 	return true;
 }

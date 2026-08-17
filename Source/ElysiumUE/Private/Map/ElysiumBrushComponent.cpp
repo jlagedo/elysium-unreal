@@ -1,9 +1,11 @@
 #include "ElysiumBrushComponent.h"
 
+#include "Debug/ElysiumPick.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumUseIcons.h"
 #include "Visual/ElysiumNpcBody.h"
 
 #include "GameFramework/Pawn.h"
@@ -88,6 +90,12 @@ void UElysiumBrushComponent::ApplySolidity(EElysiumBrushSolidity Solidity)
 		// Query-only overlap volume: the pawn overlaps it (its response to Pawn is Overlap, so the
 		// pawn's Block-of-WorldDynamic is not a mutual block) and walks through it, raising touch.
 		SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+		// A trigger is never a use target and must never hide one. `OverlapAllDynamic` names no
+		// response for either Elysium channel, so both would take their project-wide default and
+		// ElysiumUse defaults to Block — a changelevel volume sat in a doorway then swallows the
+		// +use ray (and the debug pick) before it reaches the door standing inside it.
+		SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
+		SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
 		SetGenerateOverlapEvents(true);
 		break;
 	case EElysiumBrushSolidity::Passable:
