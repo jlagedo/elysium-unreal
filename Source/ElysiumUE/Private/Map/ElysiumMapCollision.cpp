@@ -1,6 +1,8 @@
 #include "Map/ElysiumMapCollision.h"
 
+#include "Debug/ElysiumPick.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumUseIcons.h"
 
 #include "AI/NavigationSystemBase.h"
 #include "HAL/IConsoleManager.h"
@@ -194,6 +196,10 @@ bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 	HullCollision->bUseComplexAsSimpleCollision = false;
 	HullCollision->bUseAsyncCooking = true;
 	HullCollision->SetCollisionProfileName(TEXT("BlockAll"));
+	// .hulls include PLAYERCLIP. BlockAll would steal the +use ray (and the debug pick) from
+	// door/button brushes the way unprofiled baked world would — ElysiumPickOnly exists for that.
+	HullCollision->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
+	HullCollision->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
 	HullCollision->SetLocalCollisionBounds(HullBounds);
 	HullCollision->RegisterComponent();
 
@@ -244,11 +250,13 @@ void UElysiumMapCollision::LoadDispCol(const FString& MapName)
 		return;
 	}
 
-	DispCollision = NewObject<UProceduralMeshComponent>(Owner, TEXT("DispCollision"));
+	DispCollision = NewObject<UElysiumDispCollisionComponent>(Owner, TEXT("DispCollision"));
 	DispCollision->SetupAttachment(this);
 	DispCollision->bUseComplexAsSimpleCollision = true;
 	DispCollision->bUseAsyncCooking = true;
 	DispCollision->SetCollisionProfileName(TEXT("BlockAll"));
+	DispCollision->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
+	DispCollision->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
 	DispCollision->SetVisibility(false);
 	DispCollision->RegisterComponent();
 

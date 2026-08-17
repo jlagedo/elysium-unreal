@@ -9,6 +9,7 @@
 // deliberately has none, so its collision-only convexes otherwise register with navigation as an
 // empty component even though the BodySetup contains the complete walkable surface. Carry the
 // parsed point-cloud bounds explicitly; the inherited BodySetup remains the geometry Recast reads.
+// Overrides CreateSceneProxy to return nullptr: collision-only, never drawn or ray-traced.
 UCLASS(Transient)
 class UElysiumHullCollisionComponent final : public UProceduralMeshComponent
 {
@@ -17,9 +18,21 @@ class UElysiumHullCollisionComponent final : public UProceduralMeshComponent
 public:
 	void SetLocalCollisionBounds(const FBox& InBounds);
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() override { return nullptr; }
 
 private:
 	FBox LocalCollisionBounds = FBox(ForceInit);
+};
+
+// Collision-only procedural mesh component for displacement terrain trimeshes. Overrides
+// CreateSceneProxy to return nullptr: collision-only, never drawn or ray-traced.
+UCLASS(Transient)
+class UElysiumDispCollisionComponent final : public UProceduralMeshComponent
+{
+	GENERATED_BODY()
+
+public:
+	virtual FPrimitiveSceneProxy* CreateSceneProxy() override { return nullptr; }
 };
 
 // Readiness of the only collision the player can stand on. Disabled is an intentional satisfied
@@ -79,7 +92,7 @@ private:
 	void LoadDispCol(const FString& MapName);
 
 	UPROPERTY() TObjectPtr<UElysiumHullCollisionComponent> HullCollision;
-	UPROPERTY() TObjectPtr<UProceduralMeshComponent> DispCollision;
+	UPROPERTY() TObjectPtr<UElysiumDispCollisionComponent> DispCollision;
 	EElysiumCollisionBuildState BuildState = EElysiumCollisionBuildState::Disabled;
 	FString FailureReason;
 };
