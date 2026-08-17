@@ -27,12 +27,6 @@ with its exact authored bind and morph targets, a compressed `UAnimSequence` per
 named `UBlendProfile`s, the autolayer binding in `blends/<stem>.json` — and what remains is its
 guards and its last gaps:
 
-- **The prop bones ride the clips.** The character bake retains the seven zero-weight prop
-  bones **and their animation channels** on every biped body and bank clip. Nothing skins to
-  them, so a bake that drops unweighted bones removes the wielded weapon's attachment target
-  and the swing together — silent at idle, visible only when a melee attack plays. This is the
-  standing explanation for the wield tracking defect LIFE4 finishes against; verify by reading a
-  baked base clip's track list for the prop-bone chain before touching the runtime.
 - **The orphan census.** Orphanhood of layers/grids measured across the include DAG rather than
   assumed, so a plain-label asset that ships because an unbound grid reaches it is
   distinguished from one that ships by accident.
@@ -47,8 +41,7 @@ guards and its last gaps:
   or skin influences differ from Joy's.
 
 *Acceptance:* every character loads from the baked mount with no runtime glTF and a missed stem
-fails by name; the facial morph-target contract holds; a baked biped base clip carries prop-bone
-tracks, and the verifier asserts it for every biped family.
+fails by name; the facial morph-target contract holds.
 
 ### LIFE2 The action catalog on the mount
 

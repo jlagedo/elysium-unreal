@@ -226,6 +226,39 @@ def clip_payloads(blob):
     return out
 
 
+def clip_track_bones(blob):
+    """{clip label: the set of bone indices it carries a track for}, in file order.
+
+    Headers only, like `clip_payloads`: which bones a clip states a channel for is a property of
+    the track headers, so the answer costs the same walk that stepping over the payload does. What
+    it lets a caller ask is whether a stage downstream of the export dropped a channel the export
+    wrote, rather than whether the clip could have had one.
+    """
+    where = directory(blob).get(b"ANIM")
+    if where is None:
+        return {}
+    offset = where[0]
+    count = struct.unpack_from("<I", blob, offset)[0]
+    offset += 4
+    out = {}
+    for _ in range(count):
+        name, offset = _string(blob, offset)
+        _base, offset = _string(blob, offset)
+        frames, _rate, _flags, _mask, tracks = struct.unpack_from("<IfIiI", blob, offset)
+        offset += 20
+        bones_seen = set()
+        for _ in range(tracks):
+            bone, has_translation, has_rotation = struct.unpack_from("<IBB", blob, offset)
+            offset += 6
+            if has_translation:
+                offset += 12 * frames
+            if has_rotation:
+                offset += 16 * frames
+            bones_seen.add(bone)
+        out[name] = bones_seen
+    return out
+
+
 def _casefold_tree(tree):
     """`tree` keyed and valued by lowercased bone name.
 

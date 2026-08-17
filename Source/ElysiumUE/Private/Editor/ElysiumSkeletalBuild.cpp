@@ -178,6 +178,22 @@ namespace
 	constexpr float AnimatedRotationDeg = 0.5f;
 
 	/**
+	 * The seven zero-weight bones a character body declares under its hands as wield-model mounts
+	 * (`docs/vtmb/wielded_weapons.md`). A closed set of authored names, every one of which denotes
+	 * the same chain -- a mount hanging off `Bip01 L Hand` or `Bip01 R Hand` -- on every body that
+	 * declares it, which is exactly what the generic appendix names below are not.
+	 */
+	const TSet<FName>& PropBones()
+	{
+		static const TSet<FName> Bones = {
+			FName(TEXT("Bat")), FName(TEXT("bush hook")), FName(TEXT("handle")),
+			FName(TEXT("gerber")), FName(TEXT("Sledgehammer")), FName(TEXT("Cylinder01")),
+			FName(TEXT("tire iron")),
+		};
+		return Bones;
+	}
+
+	/**
 	 * The bones outside the `Bip01` biped that this container's clips actually ANIMATE.
 	 *
 	 * Everything else in the appendix -- the generic `BoneNN` hair chains -- ships a track only
@@ -196,6 +212,14 @@ namespace
 	 * that move are weapon props (`Bat`, `Sledgehammer`, `tire iron` ...) travelling hundreds of
 	 * centimetres. No bank rotates a hair bone at all, so the separation costs no animation.
 	 *
+	 * **A prop bone is exempt whether or not it moves**, because the argument above answers a
+	 * question it does not raise: the seven names are unambiguous, so binding one by name reaches the
+	 * chain that authored it. Leaving the rule to decide them means a bank keeps the channel only
+	 * where some clip happens to clear the thresholds, which is what makes the male locomotion bank
+	 * carry `Bat` (2.0 degrees in `baseballbat_bobble_layer`) while the female one drops all seven --
+	 * one clip family, two answers, by sex. The wielded weapon rides the channel, so the invariant
+	 * has to be the bone's, not a measurement's.
+	 *
 	 * Decided per CONTAINER rather than per clip, which is what keeps an additive symmetric: a delta
 	 * and the base it is a difference from drop the same bones, so the bone resolves the same way on
 	 * both sides and subtracts to identity.
@@ -205,7 +229,8 @@ namespace
 		TSet<int32> Silent;
 		for (int32 Index = 0; Index < Source.Bones.Num(); ++Index)
 		{
-			if (!Source.Bones[Index].Name.ToString().StartsWith(TEXT("Bip01")))
+			const FName BoneName = Source.Bones[Index].Name;
+			if (!BoneName.ToString().StartsWith(TEXT("Bip01")) && !PropBones().Contains(BoneName))
 			{
 				Silent.Add(Index);
 			}

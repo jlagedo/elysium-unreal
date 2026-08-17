@@ -306,6 +306,22 @@ class ClipPayloadReaderTests(unittest.TestCase):
     def test_a_container_with_no_clips_reads_empty(self):
         blob = container([(b"SKEL", skel_section(TREE))])
         self.assertEqual(eskm.clip_payloads(blob), [])
+        self.assertEqual(eskm.clip_track_bones(blob), {})
+
+    def test_track_bones_are_read_per_clip(self):
+        # A clip stating a channel for a bone and a clip leaving that bone to the pose it composes
+        # over are the two answers a caller has to tell apart, so the reader reports the set per
+        # clip rather than per container.
+        clips = [
+            ("first", "", 3, 0, [(0, 1, 1), (2, 1, 0)]),
+            ("second@first", "first", 12, DELTA, [(1, 0, 1)]),
+            ("third", "", 1, 0, []),
+        ]
+        blob = container([(b"ANIM", anim_section(clips))])
+        self.assertEqual(
+            eskm.clip_track_bones(blob),
+            {"first": {0, 2}, "second@first": {1}, "third": set()},
+        )
 
 
 if __name__ == "__main__":

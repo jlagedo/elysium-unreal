@@ -3,6 +3,8 @@
 #if WITH_EDITOR
 #include "ElysiumContentPaths.h"
 
+#include "Animation/AnimSequence.h"
+#include "Animation/AnimData/IAnimationDataModel.h"
 #include "Animation/Skeleton.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/Texture.h"
@@ -113,4 +115,37 @@ bool UElysiumCharacterBakeLibrary::RefPoseBoneTransform(const USkeletalMesh* Mes
 #else
 	return false;
 #endif
+}
+
+TArray<FName> UElysiumCharacterBakeLibrary::MeshBones(const USkeletalMesh* Mesh)
+{
+	TArray<FName> Names;
+#if WITH_EDITOR
+	if (Mesh != nullptr)
+	{
+		const FReferenceSkeleton& Reference = Mesh->GetRefSkeleton();
+		Names.Reserve(Reference.GetNum());
+		for (int32 Bone = 0; Bone < Reference.GetNum(); ++Bone)
+		{
+			Names.Add(Reference.GetBoneName(Bone));
+		}
+	}
+#endif
+	return Names;
+}
+
+TArray<FName> UElysiumCharacterBakeLibrary::SequenceTrackBones(const UAnimSequence* Sequence)
+{
+	TArray<FName> Tracked;
+#if WITH_EDITOR
+	// The RAW track set, which is the one the bake writes. Compressed data drops and reconstructs
+	// tracks on its own terms, so asking it would answer a different question than "was this channel
+	// baked".
+	const IAnimationDataModel* Model = Sequence != nullptr ? Sequence->GetDataModel() : nullptr;
+	if (Model != nullptr)
+	{
+		Model->GetBoneTrackNames(Tracked);
+	}
+#endif
+	return Tracked;
 }

@@ -154,11 +154,27 @@ One retail defect is reproduced, not repaired: the handleclaws material named `n
 
 Two character-side properties are load-bearing, and both are the kind an import optimizer removes:
 
-- **The seven prop bones must survive with their exact names.** They carry zero skin weight. If they
-  are stripped, every melee weapon still renders but never swings, because its socket no longer
-  exists as an animated bone.
-- **Melee attack clips must retain their prop-bone tracks.** These are the only clips that move a
-  prop bone; the idle, aim and locomotion layers do not.
+- **The seven prop bones survive with their exact names.** They carry zero skin weight, so nothing
+  about the geometry states they are needed. Stripped, every melee weapon still renders but never
+  swings, because its socket no longer exists as an animated bone.
+- **Every clip keeps its prop-bone channels, moving or constant.** The bake drops a bank clip's
+  appendix tracks when no clip in the container animates them — a generic `BoneNN` hair name denotes
+  a different chain on different bodies, so binding one by name delivers a foreign rest pose — and
+  the seven mount names are exempt from that rule outright, because each of them denotes the same
+  chain on every body that declares it.
+
+  A constant channel is not a redundant one. An untracked bone resolves to the playing mesh's own
+  bind, and a bank's stated mount value is frequently not that bind: `character_shared_female_baseball`
+  states `handle` 123.5° and 7.5 cm from the bind of every body that plays it, and
+  `character_shared_female_pc_g2` states `bush hook` 176.6° and 9.7 cm from `heather`'s. Retail poses
+  the mount from the clip, so a dropped constant is a weapon mounted at the wrong fixed offset while
+  the body animates. Leaving the decision to a motion threshold also answers by sex: it is what made
+  the male locomotion bank carry `Bat` and the female one carry none of the seven.
+
+The character bake verifier asserts both halves for every family and every bank — the built mesh
+carries every mount its container declares, and a baked base clip carries every mount channel the
+container wrote for that clip. Expectations are read per clip from the container, so a masked
+overlay that legitimately owns no mount is not a failure.
 
 Placement accuracy depends on the wield model's bind agreeing with the wearer's, per sex. The bake
 carries each model's own bind through unmodified, so agreement and disagreement both reproduce.

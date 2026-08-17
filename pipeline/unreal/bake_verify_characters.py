@@ -15,6 +15,7 @@ import os
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import wield_corpus as wc  # noqa: E402
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
@@ -51,6 +52,34 @@ def assets_under(package):
 def read_partition():
     with open(os.path.join(NPC_DIR, "families.json"), "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+#: {container path: (the wield mounts it declares, {clip label: the mounts that clip channels})}.
+#: A container is 0.4-30 MB and the mesh check and the clip check ask about the same file, so the
+#: two small answers are kept rather than the blob.
+_MOUNTS = {}
+
+
+def declared_mounts(path, container=None):
+    """What one .eskm states about the wield mounts: the bones, and which clip channels which.
+
+    A body carries these bones with zero skin weight and a bank animates them, so nothing about the
+    geometry states they are needed and every stage that prunes by weight or by measured motion can
+    drop them without a symptom. `docs/vtmb/wielded_weapons.md` owns the set.
+
+    Per clip as well as per container, because a masked overlay legitimately states no channel for a
+    bone its mask does not own -- 28 of the corpus's bank clips, all `*_layer`. Reading what each
+    clip actually wrote is what keeps the check about the bake dropping a channel rather than about
+    the export having authored one.
+    """
+    if path not in _MOUNTS:
+        blob = container if container is not None else eskm.read(path)
+        mounts = {index: name for index, (name, _parent) in enumerate(eskm.bones(blob))
+                  if name.lower() in wc.PROP_BONES}
+        per_clip = {label: [mounts[bone] for bone in sorted(bones) if bone in mounts]
+                    for label, bones in eskm.clip_track_bones(blob).items()}
+        _MOUNTS[path] = ([mounts[index] for index in sorted(mounts)], per_clip)
+    return _MOUNTS[path]
 
 
 def verify_declared_compat(partition, family, skeleton, errors):
@@ -105,7 +134,7 @@ def verify_mount_inventory(partition, errors):
         errors.append("Anims/%s: a rig family the declared partition does not name" % directory)
 
 
-def verify_mesh(stem, manifest, albedo, errors):
+def verify_mesh(stem, manifest, container_path, errors):
     """Returns the rig family the baked body belongs to, or "" when it is not baked."""
     asset = "SK_%s" % stem
     path = "%s/%s.%s" % (MESHES, asset, asset)
@@ -113,6 +142,19 @@ def verify_mesh(stem, manifest, albedo, errors):
     if mesh is None:
         errors.append("%s: not baked" % asset)
         return ""
+    container = eskm.read(container_path)
+    albedo = eskm.materials(container)
+
+    # Nothing skins to a wield mount, so a build that keeps the bones its weights need keeps a body
+    # that renders identically and has nowhere to hang a weapon.
+    mounts, _per_clip = declared_mounts(container_path, container)
+    if mounts:
+        carried = {str(name).lower()
+                   for name in unreal.ElysiumCharacterBakeLibrary.mesh_bones(mesh)}
+        missing = [name for name in mounts if name.lower() not in carried]
+        if missing:
+            errors.append("%s: %d of %d wield-mount bone(s) are not on the built mesh (%s)"
+                          % (asset, len(missing), len(mounts), ", ".join(missing)))
 
     # The family is read off what landed rather than recomputed, so the check cannot agree with the
     # bake by sharing its arithmetic: whatever skeleton the mesh actually points at is the one whose
@@ -206,7 +248,53 @@ def verify_prop(stem, manifest, errors):
             % (stem, len(record.get("clips", {}))))
 
 
-def verify_clips(family, owner, clips, errors):
+def verify_prop_bone_tracks(owner, package, clips, baked, container_path, errors):
+    """A baked base clip carries every wield-mount channel its container wrote.
+
+    Checked on ONE base clip per container, and that is the whole set rather than a sample: the
+    bake decides which bones a container's clips bind once, for the whole container, so a container
+    that kept the mounts on one pose kept them on all of them and one that dropped them dropped them
+    everywhere. A container declaring no mount -- a non-biped rig -- has nothing to answer and is
+    skipped, which is what lets every family be asked the same question.
+
+    An additive is not eligible: a bone with no track on one evaluates to the additive identity
+    rather than to the bind, so its track set answers a different question. The clip chosen is the
+    one whose own channels cover the most mounts, because a masked overlay states fewer by design.
+    """
+    mounts, per_clip = declared_mounts(container_path)
+    if not mounts:
+        return
+    label, expected = "", []
+    for candidate in sorted(clips):
+        if clips[candidate] & 0x4:
+            continue
+        asset = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(candidate)
+        if asset not in baked:
+            continue
+        carried = per_clip.get(candidate, ())
+        if len(carried) > len(expected):
+            label, expected = candidate, carried
+        if len(expected) == len(mounts):
+            break
+    if not expected:
+        # No base clip landed under its plain label, or every one of them is a masked overlay
+        # owning no mount. `verify_clips` already reports a container with nothing baked, so this
+        # is a container the check cannot speak for rather than a failure of it.
+        log("%s: no base clip states a wield-mount channel to verify" % owner)
+        return
+    name = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
+    sequence = unreal.EditorAssetLibrary.load_asset("%s/%s.%s" % (package, name, name))
+    tracked = {str(bone).lower()
+               for bone in unreal.ElysiumCharacterBakeLibrary.sequence_track_bones(sequence)}
+    missing = [bone for bone in expected if bone.lower() not in tracked]
+    if missing:
+        errors.append("%s: baked '%s' carries no channel for %d of the %d wield mount(s) the "
+                      "container writes for it (%s) -- a weapon on one of those bones would hold "
+                      "the bind pose through the whole clip"
+                      % (owner, label, len(missing), len(expected), ", ".join(missing)))
+
+
+def verify_clips(family, owner, clips, container_path, errors):
     package = "%s/%s/%s" % (ANIMS, family, owner)
     baked = {}
     for data in assets_under(package):
@@ -266,6 +354,7 @@ def verify_clips(family, owner, clips, errors):
     if additive_expected:
         log("%s/%s: %d/%d delta sequences additive"
             % (family, owner, additive_found, additive_expected))
+    verify_prop_bone_tracks(owner, package, clips, baked, container_path, errors)
     return len(baked)
 
 
@@ -377,8 +466,7 @@ def main():
         if record is None:
             errors.append("%s: not in the manifest" % stem)
             continue
-        albedo = eskm.materials(eskm.read(os.path.join(NPC_DIR, stem + ".eskm")))
-        family = verify_mesh(stem, manifest, albedo, errors)
+        family = verify_mesh(stem, manifest, os.path.join(NPC_DIR, stem + ".eskm"), errors)
         if not family:
             continue
 
@@ -417,13 +505,15 @@ def main():
         log("family '%s': %d bones, %d owners" % (family, bones, len(owners)))
         verify_declared_compat(partition, family, skeleton, errors)
         for owner, clips in sorted(owners.items()):
-            total += verify_clips(family, owner, clips, errors)
+            total += verify_clips(family, owner, clips,
+                                  os.path.join(NPC_DIR, owner + ".eskm"), errors)
             if owner in gridded:
                 spaces += verify_blend_spaces(family, owner, gridded[owner], errors)
 
     log("%d bank(s) shared across the cast" % len(bank_wanted))
     for owner, clips in sorted(bank_wanted.items()):
-        total += verify_clips(BANKS_FOLDER, owner, clips, errors)
+        total += verify_clips(BANKS_FOLDER, owner, clips,
+                              os.path.join(NPC_DIR, "banks", owner + ".eskm"), errors)
         if owner in gridded:
             spaces += verify_blend_spaces(BANKS_FOLDER, owner, gridded[owner], errors)
     log("%d sequences, %d blend spaces over %d famil%s"

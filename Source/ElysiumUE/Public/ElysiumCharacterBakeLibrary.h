@@ -5,6 +5,7 @@
 
 #include "ElysiumCharacterBakeLibrary.generated.h"
 
+class UAnimSequence;
 class UMaterialInterface;
 class USkeletalMesh;
 class USkeleton;
@@ -62,4 +63,20 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static bool RefPoseBoneTransform(const USkeletalMesh* Mesh, FName BoneName, FTransform& OutLocal);
+
+	/** The bones a built mesh's reference skeleton declares, in tree order. */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static TArray<FName> MeshBones(const USkeletalMesh* Mesh);
+
+	/**
+	 * The bones a baked sequence carries a raw track for, which is the set the bake decided. Empty
+	 * for a sequence that did not load or has no data model, so a caller comparing against what the
+	 * container declared reports that as every bone missing rather than as a pass.
+	 *
+	 * The failure it exists to catch is silent by construction: an untracked bone evaluates to the
+	 * playing mesh's bind, so a clip that lost a mount's channel poses a body that looks entirely
+	 * correct until something is attached to that mount and fails to move with it.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static TArray<FName> SequenceTrackBones(const UAnimSequence* Sequence);
 };
