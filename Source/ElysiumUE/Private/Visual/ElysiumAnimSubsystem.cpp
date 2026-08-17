@@ -85,7 +85,8 @@ namespace
 				else
 				{
 					UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"),
-						*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host));
+						*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host,
+							LayerTable));
 				}
 				continue;
 			}
@@ -107,7 +108,8 @@ namespace
 			if (LayerSequence == nullptr)
 			{
 				UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"),
-					*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host));
+					*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host,
+						LayerTable));
 				continue;
 			}
 
@@ -561,7 +563,7 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 	}
 	if (Space == nullptr)
 	{
-		return Fail(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, Owner, Host));
+		return Fail(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, Owner, Host, Table.Get()));
 	}
 
 	OutGrid.Space = Space;

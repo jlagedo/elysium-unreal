@@ -82,9 +82,11 @@ namespace ElysiumAnimResolve
 		const FString& LayerLabel);
 
 	// The miss line: label, owner, derived form, plain label, and the host that was tried (or that
-	// the table did not supply).
+	// the table did not supply). `Table` is what lets the line separate the two causes that produce
+	// the same absent asset — a host that does not declare this layer at all, and a declaring host
+	// whose derived form was never baked — which are different repairs.
 	FString DescribeLayerAssetMiss(const FString& LayerLabel, const FString& LayerOwner,
-		const FString& Host);
+		const FString& Host, const FElysiumBlendTable* Table);
 
 	// What actually armed, for `gr_layer` / `gr_grid`.
 	FString DescribeLayerArmedForm(ELayerAssetForm Form, const FString& Label, const FString& Host);

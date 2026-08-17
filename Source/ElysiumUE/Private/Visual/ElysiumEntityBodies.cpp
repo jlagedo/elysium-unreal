@@ -447,6 +447,7 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	}
 	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(LayerOwner);
 	const FString Host = ElysiumAnimResolve::ResolveLayerHost(Standing, Table.Get(), ClipName);
+	const FElysiumBlendGrid* Grid = Table.IsValid() ? Table->Find(ClipName) : nullptr;
 
 	// An aim grid stands as a blend space and a melee overlay as a plain sequence — the same two
 	// shapes the resolver's own layer path produces, decided the same way: does the label name a grid.
@@ -490,6 +491,19 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 		return true;
 	}
 
+	// **A grid stands as a blend space or it does not stand.** The sequence ladder below is not a
+	// fallback for one, it is a different answer: `ResolveNpcClip` resolves a grid LABEL through the
+	// grid at the neutral pose, so the arm would silently freeze the whole fan onto one cell that no
+	// pose parameter can move again — and it loads that cell's raw, host-less form, which for an aim
+	// layer is the split-bone pose ordinary FK reads as the arms folded over the head. Both present
+	// as a body posed wrong rather than as a lookup that failed, which is the one thing this seam
+	// exists to prevent. The resolver's own layer path already stops here; so does this one.
+	if (Grid != nullptr && Grid->IsMultiCell())
+	{
+		return Refuse(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, LayerOwner, Host,
+			Table.Get()));
+	}
+
 	// The derived form first for the same reason, then the plain label — an additive ships both ways
 	// and a mask-free overlay ships only plain, so trying both covers either without knowing which.
 	UAnimSequence* Anim = nullptr;
@@ -513,7 +527,8 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	}
 	if (Anim == nullptr)
 	{
-		return Refuse(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, LayerOwner, Host));
+		return Refuse(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, LayerOwner, Host,
+			Table.Get()));
 	}
 	// The same two-sided gate the retired accumulator carried, and it still keeps the composition
 	// honest: an additive is read as a delta and needs no mask, while an ordinary layer is read as a

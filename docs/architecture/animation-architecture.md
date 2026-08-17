@@ -243,8 +243,17 @@ host**, and a miss there looks exactly like an unexported stem.
 resolver share one rule: `Selection.SequenceLabel` first (or the lab's standing clip when no
 selection is published); when that is empty, the first sorted host in the owner's autolayer table
 that declares the layer. A miss names the label, the owner, each attempted form (`<label>@<host>`
-and the plain label) and the host that was tried. `gr_layer` and `gr_grid` report which form armed
-— derived, plain-label fallback, or nothing — and never report a ride over a miss.
+and the plain label) and the host that was tried; when the host is one the table does not bind the
+layer to, the line says so and names the hosts that do, because no bake would ever have written
+that derived form and looking for the asset is the wrong repair. `gr_layer` and `gr_grid` report
+which form armed — derived, plain-label fallback, or nothing — and never report a ride over a miss.
+
+**A grid label stands as a blend space or it does not stand.** The plain-sequence ladder is not a
+fallback for a grid, in either resolver: resolving a grid label as a clip answers it through the
+grid at the neutral pose, which freezes the whole fan onto one cell no pose parameter can move
+again, and loads that cell in its raw host-less form — for an aim layer, the split-bone pose
+ordinary FK reads as the arms folded over the head. Both present as a body posed wrong rather than
+as a lookup that failed, so a grid whose blend space is absent is a named miss instead.
 
 ### 2.2 Two guards, and what each refuses
 

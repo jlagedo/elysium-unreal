@@ -1133,15 +1133,26 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		}
 
 		const FString Miss = ElysiumAnimResolve::DescribeLayerAssetMiss(
-			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), TEXT("walk"));
+			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), TEXT("walk"), &Table);
 		TestTrue(TEXT("a miss names the label"), Miss.Contains(TEXT("'glock_aim_layer'")));
 		TestTrue(TEXT("and the owner"), Miss.Contains(TEXT("move_and_ranged_male")));
 		TestTrue(TEXT("and the derived form"), Miss.Contains(TEXT("glock_aim_layer@walk")));
 		TestTrue(TEXT("and the host that was tried"), Miss.Contains(TEXT("walk")));
 		const FString NoHost = ElysiumAnimResolve::DescribeLayerAssetMiss(
-			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), FString());
+			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), FString(), &Table);
 		TestTrue(TEXT("an empty host is named as a table miss"),
 			NoHost.Contains(TEXT("was not found in the owner's autolayer table")));
+
+		// A host outside the binding is a different failure from a host inside it whose derived form
+		// is missing: no bake would ever produce `glock_aim_layer@run`, so the line has to say the
+		// host does not declare the layer and name the ones that do, or the reader goes looking for
+		// an asset that was never meant to exist.
+		const FString Undeclared = ElysiumAnimResolve::DescribeLayerAssetMiss(
+			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), TEXT("run"), &Table);
+		TestTrue(TEXT("an undeclared host is named as such"),
+			Undeclared.Contains(TEXT("'run' does not declare it")));
+		TestTrue(TEXT("and the hosts that do declare the layer are listed"),
+			Undeclared.Contains(TEXT("aim_idle, idle, walk")));
 
 		TestEqual(TEXT("a derived sequence is reported as the derived form"),
 			ElysiumAnimResolve::DescribeLayerArmedForm(

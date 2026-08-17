@@ -18,31 +18,6 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
-### LIFE0 The composition seam holds, loudly
-
-The runtime composition machinery is sound — state machine, masked layered blend, additive node,
-blend spaces, montage slot all compose — but two defects at the selection/composition seam fail
-silently, and every one presents as the same reference-pose symptom. This rung repairs the seam
-and makes any future miss a named failure, which "Runtime failures are never silent" already
-requires.
-
-- **The aim-grid neutral.** Pose parameters at rest must land the grid's center cell; today
-  pitch 0 renders roughly one cell high (~40°) and pitch 40 renders level. Adjudicate the
-  parameter→axis mapping against the recovered conventions — `aim_pitch` down-positive,
-  `aim_yaw` left-positive, `move_yaw` right-positive (`docs/vtmb/animation_and_movers.md`
-  A.3) — and correct mapping or sample placement at its owner (runtime write or bake), never
-  with a compensating offset at the other end.
-- **Mount/sidecar agreement, verified once.** The runtime resolves hosts from the current
-  sidecar autolayer table while the mount carries assets from the last bake; a drifted pair
-  makes a table-declared derived form a legitimate-looking miss. Run the character bake verifier
-  over the standing corpus and either re-bake the named stems or record the corpus as current.
-
-*Acceptance:* a green-room matrix over at least two body families — plain clip, grid, overlay
-layer, additive layer, aim steer at the four compass cells — shows an authored pose for every
-cell, and every deliberately-broken lookup in the same matrix produces a warning naming the
-label, the owner, the host and the asset form it failed on. No reachable path leaves a body in
-reference pose without a log line saying why.
-
 ### LIFE1 The bake closes
 
 The asset stack becomes complete and self-guarding. The stack itself stands — one body

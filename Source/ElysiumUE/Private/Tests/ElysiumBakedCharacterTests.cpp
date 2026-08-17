@@ -749,6 +749,29 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				continue;
 			}
 
+			// The graph is the other half of a two-axis grid's contract, and it binds by POSITION:
+			// the upper-body `BlendSpacePlayer` takes `AimYaw` on X and `AimPitch` on Y, so a grid
+			// whose axis 0 is the pitch parameter would steer transposed while every asset check
+			// above still passed. All 49 aim grids in the corpus bind `aim_yaw` first
+			// (`docs/vtmb/animation_and_movers.md` A.3), and that is what makes the pins legal.
+			if (Axes == 2)
+			{
+				const FElysiumPoseParamDesc* AxisX = Table.Param(Grid.ParamIndex[0]);
+				const FElysiumPoseParamDesc* AxisY = Table.Param(Grid.ParamIndex[1]);
+				++Samples;
+				if (AxisX == nullptr || AxisY == nullptr
+					|| AxisX->Name != TEXT("aim_yaw") || AxisY->Name != TEXT("aim_pitch"))
+				{
+					AddError(FString::Printf(
+						TEXT("%s grid '%s': the graph steers X with `aim_yaw` and Y with `aim_pitch`, "
+						     "and this grid binds X to '%s' and Y to '%s'"),
+						*Owner, *Shown,
+						AxisX != nullptr ? *AxisX->Name : TEXT("nothing"),
+						AxisY != nullptr ? *AxisY->Name : TEXT("nothing")));
+					continue;
+				}
+			}
+
 			// The sample placement, cell by cell. Derived here rather than shared with the bake: an
 			// assertion that calls the code it is asserting cannot fail.
 			const TArray<FBlendSample>& SampleData = Space->GetBlendSamples();
@@ -831,6 +854,67 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					TEXT("%s grid '%s': %d samples and no blend data, so it evaluates to nothing"),
 					*Owner, *Shown, SampleData.Num()));
 				continue;
+			}
+
+			// **The neutral.** Every pose parameter rests at zero (`FElysiumPoseParams::Neutral`), and
+			// a grid has to answer that with the cell its own axes place there -- cell 4 of a nine-cell
+			// `move_yaw` fan, the `CC` cell of a 3x3 aim grid. Asked of the ASSET'S OWN evaluator, not
+			// of the arithmetic above: that is the path the graph takes, and a sample can sit exactly
+			// where the sidecar says and still be missed at rest by an axis whose range, divisions or
+			// wrap disagree. A grid with no cell at zero is not a defect -- it has nothing to assert.
+			{
+				FVector Neutral = FVector::ZeroVector;
+				const FElysiumBlendCell* Centre = nullptr;
+				for (const FElysiumBlendCell& Cell : Grid.Cells)
+				{
+					bool bAtZero = !Cell.Clip.IsEmpty();
+					for (int32 Axis = 0; Axis < Axes && bAtZero; ++Axis)
+					{
+						const int32 Count = Grid.GroupSize[Axis];
+						const float Alpha = Count > 1
+							? static_cast<float>(Cell.Axis[Axis]) / static_cast<float>(Count - 1) : 0.f;
+						const float Value = Grid.ParamStart[Axis]
+							+ Alpha * (Grid.ParamEnd[Axis] - Grid.ParamStart[Axis]);
+						bAtZero = FMath::IsNearlyZero(Value, static_cast<float>(GBlendSampleTolerance));
+					}
+					if (bAtZero)
+					{
+						Centre = &Cell;
+						break;
+					}
+				}
+				if (Centre != nullptr
+					&& ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Centre->Clip + Suffix) != nullptr)
+				{
+					const FString Wanted =
+						TEXT("A_") + FElysiumContentPaths::BakedAssetName(Centre->Clip + Suffix);
+					TArray<FBlendSampleData> Picked;
+					int32 Triangulation = INDEX_NONE;
+					++Samples;
+					const bool bPicked = Space->GetSamplesFromBlendInput(Neutral, Picked,
+						Triangulation, /*bCombineAnimations=*/true);
+					const FBlendSampleData* Top = nullptr;
+					for (const FBlendSampleData& Data : Picked)
+					{
+						if (Top == nullptr || Data.GetClampedWeight() > Top->GetClampedWeight())
+						{
+							Top = &Data;
+						}
+					}
+					if (!bPicked || Top == nullptr || Top->Animation == nullptr
+						|| Top->Animation->GetName() != Wanted
+						|| Top->GetClampedWeight() < 1.f - GBlendSampleTolerance)
+					{
+						AddError(FString::Printf(
+							TEXT("%s grid '%s': at rest the axes must land cell [%d,%d] ('%s') whole, and "
+							     "the asset answers %s at %.3f"),
+							*Owner, *Shown, Centre->Axis[0], Centre->Axis[1], *Wanted,
+							Top != nullptr && Top->Animation != nullptr
+								? *Top->Animation->GetName() : TEXT("nothing"),
+							Top != nullptr ? Top->GetClampedWeight() : 0.f));
+						continue;
+					}
+				}
 			}
 
 			// The measured half of the aim-grid question. Reported as an error rather than info: a

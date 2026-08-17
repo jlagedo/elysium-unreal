@@ -79,8 +79,8 @@ rule 3 governs what happens next:
 4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
-5. **LIFE0 → LIFE4** — the composition-seam repair, then a drawn weapon visible in the hand
-   through a swing → [plans/animation.md](plans/animation.md).
+5. **LIFE1 → LIFE4** — the bake's remaining guards and the action catalog, then a drawn weapon
+   visible in the hand through a swing → [plans/animation.md](plans/animation.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -117,7 +117,9 @@ rule 3 governs what happens next:
 - [x] **2.8 Automation tests** — `Substrate` (`-nullrhi`) + `Content` (self-skipping) tiers.
 - [x] **2.9 Screenshot-regression harness** — `-ElysiumShots` + `shots_diff.py`.
 
-Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Control, NetImgui.
+Deferred, tracked: console autocomplete, Gameplay Debugger category, Remote Control, NetImgui;
+a refused green-room `gr_stand` tears the standing body off the stage and `gr_status` still names
+it, so the readout claims a body the stage does not have.
 
 ## P3 — Lighting lane — **FROZEN** *(playable-path rule 2; detail: [plans/world.md](plans/world.md))*
 
@@ -227,10 +229,11 @@ Landed foundation:
 
 The ladder:
 
-- [~] **[LIFE0 The composition seam holds, loudly](plans/animation.md)** — the zero-length
-  looping montage, the sequence-or-blend-space pair on every locomotion state, and table-driven
-  layer hosts with named misses are landed; the aim-grid neutral and mount/sidecar verification
-  open.
+- [x] **LIFE0 The composition seam holds, loudly** — the zero-length looping montage, the
+  sequence-or-blend-space pair on every locomotion state, table-driven layer hosts with named
+  misses, a grid label that stands as a blend space or names its miss, the aim-grid neutral
+  adjudicated correct at its owner and guarded at rest, and the standing corpus verified current
+  (166 models, 527 blend spaces, 0 orphans).
 - [ ] **[LIFE1 The bake closes](plans/animation.md)** — the cardinality invariant, prop-bone
   channels retained, the orphan census, frame-interpolation adjudication, the `A_dance01` seam.
 - [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule

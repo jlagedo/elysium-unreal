@@ -445,8 +445,26 @@ FString ResolveLayerHost(const FString& StandingSequence, const FElysiumBlendTab
 }
 
 FString DescribeLayerAssetMiss(const FString& LayerLabel, const FString& LayerOwner,
-	const FString& Host)
+	const FString& Host, const FElysiumBlendTable* Table)
 {
+	// A layer only ever rides a host the autolayer table binds it to: that binding is what names the
+	// chain a split-bone overlay's rotation is expressed against, and it is the seam the exporter
+	// derives `<layer>@<host>` over. So a host outside the list has no correct form of this layer at
+	// all, which reads as the same missing asset as a bake that skipped one and is not the same
+	// repair — the first is the wrong question, the second is a re-bake.
+	TArray<FString> Hosts;
+	CollectDeclaringHosts(Table, LayerLabel, Hosts);
+	if (!Host.IsEmpty() && !Hosts.IsEmpty() && !Hosts.Contains(Host))
+	{
+		const int32 Shown = FMath::Min(Hosts.Num(), 4);
+		const FString Named = FString::Join(TArray<FString>(Hosts.GetData(), Shown), TEXT(", "));
+		const FString Rest = Hosts.Num() > Shown
+			? FString::Printf(TEXT(" (+%d more)"), Hosts.Num() - Shown) : FString();
+		return FString::Printf(
+			TEXT("'%s' is owned by '%s' and '%s' does not declare it — it rides %s%s, and a layer "
+				"composes only over a host that names it"),
+			*LayerLabel, *LayerOwner, *Host, *Named, *Rest);
+	}
 	return FString::Printf(
 		TEXT("'%s' is owned by '%s' but neither its grid, its derived form '%s@%s' nor its plain "
 			"label is on the mount (host %s)"),
