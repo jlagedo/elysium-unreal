@@ -250,8 +250,14 @@ The ladder:
   block headers, 595 exceptions, 57 `required` flags, 3 renames, 8 substitute bases) and
   digest-matched back to the retail row stream, with the fallback order held by conformance against
   the corpus (1,739 of 4,580 requests resolving, 38% of them at rung 2 or later, no rewrite kind
-  dead, both 0% families named). Nothing about actions is exported or baked. The player rule bodies,
-  the NPC class translation, the per-model events and the transition graph are open.
+  dead, both 0% families named). The player action rules are committed source beside them, the
+  ordinary selector stored as ordered predicate rows: 17 compact codes with exactly four dormant, an
+  8-row gait ladder ahead of the dispatch, 41 arm rows over 10 codes, the three pose writes, the two
+  player-side translations and both effective `Player_Anim` fields, every activity carrying its
+  registered ID; of the 35 activities that surface can request, 29 resolve in the corpus directly,
+  five through the weapon tables, and one — `ACT_LAND_CROUCH` — nowhere, which is the absence
+  retail's own capture recorded. Nothing about actions is exported or baked. The NPC class
+  translation, the per-model events and the transition graph are open.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
   authority is landed; the NPC gait push, repointing the resolver onto the committed tables and
   deleting the 5-row stub, and activity→state coverage open.

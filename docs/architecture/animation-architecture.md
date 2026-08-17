@@ -599,6 +599,17 @@ return base                                    // untranslated
 at subsystem init into the plain-C++ table the resolver reads. `static_assert` guards array sizes
 and ladder arity, so a malformed regeneration fails the build rather than a pose.
 
+**The player rules are the same posture over a different shape.** VtMB's player selector is code
+rather than a table, so what is stored is that code as **ordered predicate rows**: an eight-row gait
+ladder that runs ahead of the compact-code dispatch, one arm per `PLAYER_*` code, the three pose
+writes, the two player-side translations and the effective `Player_Anim` fields. A row is an
+`Always`-padded conjunction of at most three predicates plus a base activity, an additive layer, or
+neither; first match wins, and no match leaves the ladder's answer standing. `EPlayerPredicate` is
+the closed vocabulary those rows draw on, each enumerator naming the field it reads, and the
+generated file `static_assert`s on its `Count`, so editing the header without regenerating stops
+compiling. Every activity carries its ID from the binary's own registration table, which is what
+joins a row to VtMB's vocabulary rather than to a spelling.
+
 The **activity registry is not committed**. The runtime keys on names and never on IDs, and 4,460
 registrations — most unreachable in gameplay — is a binary dump rather than a rule. It stays a
 research artifact; the reachable names appear in the tables that use them.
@@ -625,6 +636,17 @@ load-bearing rather than decoration, and no rewrite kind naming activities that 
 carries. That second level is strictly stronger than a byte diff — a table transcribed perfectly and
 interpreted wrongly passes a diff and fails here. Owner-run retail agreement against the banked
 capture corpus corroborates and gates nothing.
+
+The player rules take the same two levels. `Elysium.Substrate.PlayerActionRules` is content-free and
+tests the property a row count cannot: that the *order* survives, since a ladder whose unconditional
+row moved up answers the same activity for every state and a landing arm that lost its gait deferral
+drops a running body into a land. It walks the ladder and every arm against constructed states, steps
+both retained chains end to end, and requires the codes, dormancy and census the generator emitted.
+`Elysium.Content.PlayerActionConformance` asks the corpus whether every activity the surface can
+request is one a shipped model can answer — directly, or through the weapon tables that stand between
+the selector and the body, which is where the two committed tables join. What resolves nowhere stays
+a named list rather than a count, because that is the difference between content the corpus does not
+carry and a rule read wrongly.
 
 “All actions” is defined by **reachability**, not by copying every name in the global registry. It
 is the union of:

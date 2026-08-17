@@ -565,6 +565,72 @@ Presence in this selector does not prove a branch is reachable in shipped gamepl
 the activity inventory is broader than the reconstructed movement system, so a controlled trace is
 what separates a live action from inherited/dead engine code.
 
+#### Each arm, as ordered rows [VtMB decompiled]
+
+The arms are a switch on the compact code inside the ordinary selector, taken *after* the gait
+ladder below has already answered. An arm may replace the base activity, add an additive **layer**
+beside it, or match nothing and leave the ladder's answer standing — which is what codes `0`, `1`
+and `4` do by having no arm at all, and what a jump phase outside `1…11` does. Base and layer are
+the selector's two outputs; the apply path at `0x101644f0` takes both.
+
+**The jump arm is a dense switch on the jump/landing phase at `+0x1db4`:**
+
+| Phase | Base activity |
+|---:|---|
+| `1` | `ACT_LEAP` (`0x2c`) |
+| `2` | `ACT_HOP` (`0x28`) |
+| `3` | `ACT_HOP_UP` (`0x29`) |
+| `4` | `ACT_HOP_DOWN` (`0x2a`) |
+| `5` | `ACT_LEAP_ASCEND` (`0x2d`) |
+| `6` | `ACT_LEAP_DESCEND` (`0x2e`) |
+| `7` | `ACT_FALLING` (`0x2f`) |
+| `8`, `9` | nothing when the ladder answered a walk or a run in either form; otherwise `ACT_LAND_CROUCH` (`0x31`) while ducked and `ACT_LAND` (`0x30`) still |
+| `10`, `11` | `ACT_LAND_HARD` (`0x32`) |
+
+The land pair is computed rather than branched — `((m_fFlags & 2) | 0x60) >> 1` is `0x30` or `0x31`
+— and the gait test at `0x10164cd0` compares against all four gait activities, which is what keeps a
+running body running through its own landing. This is the same arm the controlled `sm_hub_1` corpus
+exercised at phases `1`, `7` and `8`; the other eight phases are static reachability, not observed.
+
+**Melee replaces the base; ranged and reload only add a layer.** Code `5` reads the active weapon's
+capability mask through virtual `+0x5a0`: with `0x18000` it takes `0x4c - (m_fFlags & 1)`, so
+`ACT_MELEE_ATTACK` (`0x4b`) grounded and `ACT_MELEE_AIR_ATTACK` (`0x4c`) airborne, and clears the
+layer. Otherwise `0x6000` — or the weapon's own `+0x464` predicate — sets the layer to
+`ACT_RANGE_ATTACK1_LAYER` (`0x1a`) and leaves the base alone; a weapon that is neither selects
+nothing at all. Code `14` is the same shape with `ACT_RELOAD_LAYER` (`0x56`) and no gate beyond an
+active weapon. So an armed player keeps walking while the upper body fires or reloads.
+
+**Codes `7` and `12` are one shape twice.** Both test `m_bSequenceFinished` (`+0x65c`) first, so an
+unfinished clip either enters the chain or holds the stored ideal (`+0xff0`) unchanged; every later
+branch is keyed on that ideal:
+
+| Code | Enter | Loop | Released by | Leave | Then |
+|---|---|---|---|---|---|
+| `7` `PLAYER_PRAY` | `ACT_PRAYING_BEGIN` (`0x131`) | `ACT_PRAYING_IDLE` (`0x132`) | the prayer hold byte at `+0x14a8` clearing | `ACT_PRAYING_END` (`0x133`) | `ACT_IDLE` |
+| `12` `PLAYER_VOMIT` | `ACT_VOMIT_INTO` (`0x1065`) | `ACT_VOMIT_IDLE` (`0x1066`) | the blood pool at `+0x14a0` draining and `Thaumaturgy_Purge` applying, which sets `+0x1cb1` | `ACT_VOMIT_GETOUT` (`0x1067`) | `ACT_IDLE`, clearing the `+0x1cb0` latch |
+
+The "not entered yet" test is the one asymmetric part. `CBaseCombatCharacter::InPrayer` at
+`0x1033b7c0` answers true when the **current** activity (`+0xfec`) lies in `0x130…0x133` — it is an
+activity-range test, not a flag — while the purge chain compares the last applied compact code
+(`+0x1cb4`) against `12`. The vomit body at `0x10164040` also drains the pool itself, one or two
+points per finished loop, and both chains write the layer as `0`.
+
+**The remaining arms are one or two rows each.** Code `8` reads the grapple release word at
+`+0x1d60`: bit `1` selects `ACT_FEEDING_RELEASED_IDLE_ATTACKER` (`0xfa3`), bit `2`
+`ACT_SEDUCTIVE_RELEASED_IDLE_ATTACKER` (`0xfc9`), and neither flag leaves the ladder's gait alone.
+Code `9` selects `ACT_SWIM` when realized 2D speed clears the swim floor with water level above two,
+or clears a second floor while not grounded — in both cases with `m_vecVelocity.x` past a third —
+and `ACT_TREADWATER` otherwise. Code `11` selects `ACT_CLIMB_UP` at or above the climb threshold and
+`ACT_CLIMB_DOWN` below it, and separately writes a playback rate at `+0x6f4` that is zero only while
+vertical velocity sits strictly between that threshold and a higher one. Code `13` is the single row
+`ACT_PREBLOCK` (`0x1154`). Code `10` names no activity at all: the live interaction entity supplies
+one through its own `+0x84` virtual, and a `-1` leaves the ladder standing.
+
+**An unfinished swing refuses an idle.** The switch's default arm returns *without applying* when
+the base is `ACT_IDLE` or `ACT_AIM` while the stored ideal is `ACT_MELEE_ATTACK` and
+`m_bSequenceFinished` is clear. It is the only place the selector declines to write, and it is what
+keeps the ladder's own default answer from cutting a melee attack short.
+
 ### The gait ladder runs ahead of the compact-code dispatch [VtMB decompiled]
 
 The idle/crouch/sneak/walk/run choice is **not** inside a compact code's arm. The selector computes

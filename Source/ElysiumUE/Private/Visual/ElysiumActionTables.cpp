@@ -243,6 +243,109 @@ void ExpandAll(TArray<FExpandedRow>& OutRows)
 	}
 }
 
+const FPlayerAction* FindPlayerAction(int32 Code)
+{
+	for (const FPlayerAction& Action : PlayerActions())
+	{
+		if (Action.Code == Code)
+		{
+			return &Action;
+		}
+	}
+	return nullptr;
+}
+
+const FPlayerAction* FindPlayerAction(const FString& Name)
+{
+	for (const FPlayerAction& Action : PlayerActions())
+	{
+		if (FCString::Stricmp(Action.Name, *Name) == 0)
+		{
+			return &Action;
+		}
+	}
+	return nullptr;
+}
+
+bool RuleApplies(const FPlayerRule& Rule, FPlayerStateQuery State)
+{
+	for (const EPlayerPredicate Predicate : Rule.Predicates)
+	{
+		if (Predicate == EPlayerPredicate::Always)
+		{
+			continue;
+		}
+		if (!State(Predicate, Rule.Operand))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+const FPlayerRule* SelectRule(TArrayView<const FPlayerRule> Rules, FPlayerStateQuery State)
+{
+	for (const FPlayerRule& Rule : Rules)
+	{
+		if (RuleApplies(Rule, State))
+		{
+			return &Rule;
+		}
+	}
+	return nullptr;
+}
+
+FString TranslatePlayerActivity(const FString& Activity)
+{
+	for (const FPlayerTranslation& Row : PlayerTranslations())
+	{
+		if (FCString::Stricmp(Row.From, *Activity) == 0)
+		{
+			return FString(Row.To);
+		}
+	}
+	return Activity;
+}
+
+void CollectPlayerActivities(TArray<FString>& OutActivities)
+{
+	OutActivities.Reset();
+	auto Add = [&OutActivities](const TCHAR* Activity)
+	{
+		if (Activity == nullptr)
+		{
+			return;
+		}
+		const FString Name(Activity);
+		if (!OutActivities.ContainsByPredicate([&Name](const FString& Seen)
+			{ return Seen.Equals(Name, ESearchCase::IgnoreCase); }))
+		{
+			OutActivities.Add(Name);
+		}
+	};
+
+	for (const FPlayerRule& Rule : PlayerGaitLadder())
+	{
+		Add(Rule.Activity);
+		Add(Rule.Layer);
+	}
+	for (const FPlayerAction& Action : PlayerActions())
+	{
+		for (int32 Index = 0; Index < Action.RuleCount; ++Index)
+		{
+			Add(Action.Rules[Index].Activity);
+			Add(Action.Rules[Index].Layer);
+		}
+	}
+	// The two translation targets are activities the body is asked for as much as any row's is —
+	// they are what an unarmed relaxed gait actually resolves against.
+	for (const FPlayerTranslation& Row : PlayerTranslations())
+	{
+		Add(Row.To);
+	}
+	Add(PlayerTuning().MeleeHoldIdeal);
+}
+
 uint64 DigestOf(const TArray<FExpandedRow>& Rows)
 {
 	uint64 Digest = 0xCBF29CE484222325ull;
