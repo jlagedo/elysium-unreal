@@ -440,6 +440,12 @@ public:
 	void FireWeatherTimer(bool bRainOn);
 	FString GetWeatherDebugSummary() const;
 	const FElysiumWeatherTransition& GetWetnessTransition() const { return WetnessTransition; }
+	const TMap<int32, FElysiumWeatherEmitterState>& GetWeatherEmitters() const
+	{
+		return RainEmitterStates;
+	}
+	bool IsFollowRainActive() const;
+	FVector GetFollowRainLocation() const;
 	float GetPresentedWetness() const { return PresentedWetness; }
 	float GetPresentedWetnessScale() const { return PresentedWetnessScale; }
 	bool IsEnvironmentWetnessOverridden() const { return bEnvironmentWetnessOverride; }

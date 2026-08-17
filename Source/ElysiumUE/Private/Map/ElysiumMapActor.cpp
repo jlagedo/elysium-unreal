@@ -82,7 +82,8 @@ static TAutoConsoleVariable<float> CVarRainEnhancement(
 	TEXT("elysium.RainEnhancement"), 0.0f,
 	TEXT("Wetness presentation tuning: 0 is the authored reference; 1 enables the enhanced branch."));
 static TAutoConsoleVariable<float> CVarRainRateScale(
-	TEXT("elysium.RainRateScale"), 1.0f, TEXT("Enhanced rain emission multiplier."));
+	TEXT("elysium.RainRateScale"), 1.0f,
+	TEXT("Multiplier on the authored env_particle rate for live Niagara emitters."));
 static TAutoConsoleVariable<int32> CVarRainForce(
 	TEXT("elysium.RainForce"), 0,
 	TEXT("1 = force the follow-rain volume on, ignoring env_particle rate."));
@@ -2816,10 +2817,7 @@ void AElysiumMapActor::TickWeatherPresentation()
 		GPendingWeatherTimer.Reset();
 		FireWeatherTimer(bRainOn);
 	}
-	if (CVarRainForce.GetValueOnGameThread() != 0)
-	{
-		RefreshFollowRain();
-	}
+	RefreshFollowRain();
 	UpdateFollowRainLocation();
 	ApplyWeatherTuning();
 }
@@ -2859,6 +2857,8 @@ void AElysiumMapActor::RefreshFollowRain()
 		bAny = true;
 		Rate = FMath::Max(Rate, 1.0f);
 	}
+	const float ParticleRate = FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread());
+	Rate *= ParticleRate;
 	if (!bAny || Rate <= KINDA_SMALL_NUMBER)
 	{
 		if (RainFollowComponent)
@@ -2967,38 +2967,27 @@ void AElysiumMapActor::ApplyWeatherTuning()
 			TEXT("RainReflectionDebug"), static_cast<float>(FMath::Clamp(
 				CVarRainReflectionDebug.GetValueOnGameThread(), 0, 6)));
 	}
-	const float EnhancedRate = FMath::Lerp(1.0f,
-		FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread()), Enhancement);
+	const float ParticleRate = FMath::Max(0.0f, CVarRainRateScale.GetValueOnGameThread());
 	const float LightResponse = FMath::Clamp(
 		CVarRainLightResponse.GetValueOnGameThread() * 4.0f, 0.0f, 2.0f);
-	float FollowRate = 0.0f;
-	float FollowBounds = 0.0f;
 	for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : RainEmitterStates)
 	{
-		if (IsFollowRainDefinition(Pair.Value.ParticleDefinition))
-		{
-			FollowRate = FMath::Max(FollowRate, Pair.Value.RateScale);
-			FollowBounds = FMath::Max(FollowBounds, Pair.Value.BoundsCm);
-		}
 		if (UNiagaraComponent* Component = RainComponents.FindRef(Pair.Key))
 		{
-			Component->SetVariableFloat(TEXT("User.RateScale"), Pair.Value.RateScale * EnhancedRate);
+			Component->SetVariableFloat(TEXT("User.RateScale"), Pair.Value.RateScale * ParticleRate);
 			Component->SetVariableFloat(TEXT("User.LightResponse"), LightResponse);
 		}
 	}
-	if (RainFollowComponent && FollowRate > KINDA_SMALL_NUMBER)
-	{
-		RainFollowComponent->SetVariableFloat(TEXT("User.RateScale"), FollowRate * EnhancedRate);
-		RainFollowComponent->SetVariableFloat(TEXT("User.BoundsCm"),
-			FollowBounds > KINDA_SMALL_NUMBER ? FollowBounds : 1200.0f);
-		RainFollowComponent->SetVariableFloat(TEXT("User.LightResponse"), LightResponse);
-		RainFollowComponent->SetVariableFloat(TEXT("User.StreakWidth"),
-			FMath::Max(0.2f, CVarRainStreakWidth.GetValueOnGameThread()));
-		RainFollowComponent->SetVariableFloat(TEXT("User.StreakLength"),
-			FMath::Max(4.0f, CVarRainStreakLength.GetValueOnGameThread()));
-		RainFollowComponent->SetVariableFloat(TEXT("User.StreakAlpha"),
-			FMath::Clamp(CVarRainStreakAlpha.GetValueOnGameThread(), 0.0f, 1.0f));
-	}
+}
+
+bool AElysiumMapActor::IsFollowRainActive() const
+{
+	return RainFollowComponent && RainFollowComponent->IsActive();
+}
+
+FVector AElysiumMapActor::GetFollowRainLocation() const
+{
+	return RainFollowComponent ? RainFollowComponent->GetComponentLocation() : FVector::ZeroVector;
 }
 
 void AElysiumMapActor::FireWeatherTimer(bool bRainOn)
@@ -3015,11 +3004,12 @@ void AElysiumMapActor::FireWeatherTimer(bool bRainOn)
 FString AElysiumMapActor::GetWeatherDebugSummary() const
 {
 	FString Result = FString::Printf(
-		TEXT("wet authored %.3f->%.3f presented %.3f x%.2f override=%d components %d follow=%d"),
+		TEXT("wet authored %.3f->%.3f presented %.3f x%.2f override=%d components %d follow=%d force=%d"),
 		WetnessTransition.CurrentWetness, WetnessTransition.TargetWetness,
 		PresentedWetness, PresentedWetnessScale, bEnvironmentWetnessOverride ? 1 : 0,
 		RainComponents.Num(),
-		RainFollowComponent && RainFollowComponent->IsActive() ? 1 : 0);
+		RainFollowComponent && RainFollowComponent->IsActive() ? 1 : 0,
+		CVarRainForce.GetValueOnGameThread());
 	if (RainFollowComponent)
 	{
 		Result += FString::Printf(TEXT(" follow_loc=%s"),

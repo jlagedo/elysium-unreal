@@ -3,12 +3,14 @@
 #if ENABLE_COG
 
 #include "Debug/ElysiumCogStyle.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMapVisuals.h"
 
+#include "CogLocalizationConfig.h"
 #include "Engine/TextureCube.h"
 #include "HAL/IConsoleManager.h"
 #include "Materials/MaterialInstance.h"
@@ -138,12 +140,11 @@ void FElysiumCogWindow_Environment::Initialize()
 void FElysiumCogWindow_Environment::RenderHelp()
 {
 	ImGui::Text(
-		"Live control of MPC_ElysiumEnvironment. Authored sm_hub_1 timers continue updating the "
-		"engine-neutral wetness state at all times. Override substitutes only the visible material "
-		"input; Follow authored reconnects to the state already in progress. The output-scale and "
-		"source-cube and enhancement controls tune the one shared material graph. Debug modes render "
-		"the selected channel through Emissive. Local-light specular is the same "
-		"live light-rig value exposed by Look > Lighting. Niagara remains disconnected.");
+		"Live control of the one weather path. Authored sm_hub_1 timers keep updating wetness and "
+		"env_particle rate; Override substitutes only the visible material input. Rain is the "
+		"follow volume those two rain_follow_emitter entities share (NS_ElysiumRain). Force rain "
+		"turns that volume on without waiting for the dry timer. Material Look tunes the shared "
+		"wetness graph. Local-light specular is the same live light-rig value as Look > Lighting.");
 }
 
 void FElysiumCogWindow_Environment::RenderContent()
@@ -251,6 +252,101 @@ void FElysiumCogWindow_Environment::RenderContent()
 		ImGui::EndTabItem();
 	}
 
+	if (ImGui::BeginTabItem("Rain"))
+	{
+		const bool bFollow = Map->IsFollowRainActive();
+		if (bFollow)
+		{
+			ImGui::TextColored(ElysiumCogStyle::ColOk, "RAIN");
+		}
+		else
+		{
+			ImGui::TextDisabled("DRY");
+		}
+		ImGui::SameLine();
+		const bool bForced = ReadBool(TEXT("elysium.RainForce"), false);
+		ImGui::TextDisabled("%s", bForced ? "forced" : "authored emitters");
+		if (bFollow)
+		{
+			const FString Spawn = Map->GetFollowRainLocation().ToCompactString();
+			ImGui::TextDisabled("spawn %s", COG_TCHAR_TO_CHAR(*Spawn));
+		}
+
+		ImGui::SeparatorText("Presentation");
+		bool bForce = bForced;
+		if (ImGui::Checkbox("Force follow rain", &bForce))
+		{
+			WriteBool(TEXT("elysium.RainForce"), bForce);
+		}
+		ImGui::TextDisabled(
+			"Ignores env_particle rate. Authored wetness, audio and the timer graph keep running.");
+		SliderCVar("Rate scale", TEXT("elysium.RainRateScale"), 0.0f, 4.0f, "%.2fx");
+		SliderCVar("Streak width", TEXT("elysium.RainStreakWidth"), 0.2f, 8.0f, "%.2f cm");
+		SliderCVar("Streak length", TEXT("elysium.RainStreakLength"), 4.0f, 160.0f, "%.1f cm");
+		SliderCVar("Streak alpha", TEXT("elysium.RainStreakAlpha"), 0.0f, 1.0f, "%.2f");
+		ImGui::TextDisabled(
+			"Width, length and alpha are pushed as Niagara user values. The generated system still "
+			"bakes 1.2 x 55 cm at 0.18; those three sliders wait on a spawn-expression bind.");
+
+		ImGui::SeparatorText("Authored cycle");
+		if (ImGui::Button("Start rain timer"))
+		{
+			Map->FireWeatherTimer(true);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Stop rain timer"))
+		{
+			Map->FireWeatherTimer(false);
+		}
+		ImGui::TextDisabled("Same rain_on_timer / rain_off_timer I/O as the Wetness tab.");
+
+		ImGui::SeparatorText("env_particle");
+		const TMap<int32, FElysiumWeatherEmitterState>& Emitters = Map->GetWeatherEmitters();
+		if (Emitters.IsEmpty())
+		{
+			ImGui::TextDisabled("No published emitters on this map.");
+		}
+		else if (ImGui::BeginTable("##RainEmitters", 6,
+			ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp))
+		{
+			ImGui::TableSetupColumn("Entity");
+			ImGui::TableSetupColumn("Definition");
+			ImGui::TableSetupColumn("Rate", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 90.0f);
+			ImGui::TableSetupColumn("Bounds", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 60.0f);
+			ImGui::TableSetupColumn("Attach", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 50.0f);
+			ImGui::TableSetupColumn("Role", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 55.0f);
+			ImGui::TableHeadersRow();
+			FElysiumEntityWorld* World = GetEntityWorld();
+			for (const TPair<int32, FElysiumWeatherEmitterState>& Pair : Emitters)
+			{
+				const FElysiumWeatherEmitterState& Emitter = Pair.Value;
+				const FElysiumEntity* Entity = World ? World->Resolve(Emitter.Entity) : nullptr;
+				const bool bFollowDef = Emitter.ParticleDefinition.Equals(
+					TEXT("rain_follow_emitter"), ESearchCase::IgnoreCase);
+				ImGui::TableNextRow();
+				ImGui::TableNextColumn();
+				const FString EntityLabel = Entity && !Entity->TargetName.IsEmpty()
+					? Entity->TargetName
+					: FString::Printf(TEXT("#%d"), Emitter.Entity.Index);
+				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*EntityLabel));
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Emitter.ParticleDefinition));
+				ImGui::TableNextColumn();
+				ImGui::Text("%.2f -> %.2f", Emitter.RateScale, Emitter.RampTargetScale);
+				ImGui::TableNextColumn();
+				ImGui::Text("%.0f", Emitter.BoundsCm);
+				ImGui::TableNextColumn();
+				ImGui::Text("%d", Emitter.AttachType);
+				ImGui::TableNextColumn();
+				ImGui::TextUnformatted(bFollowDef ? "follow" : "other");
+			}
+			ImGui::EndTable();
+		}
+		ImGui::TextDisabled(
+			"func_particle rain boxes are still stubs. Only env_particle publishes through this seam.");
+		ImGui::EndTabItem();
+	}
+
 	if (ImGui::BeginTabItem("Material look"))
 	{
 	SliderCVar("Output scale", TEXT("elysium.EnvironmentWetnessScale"), 0.0f, 4.0f, "%.2fx");
@@ -314,7 +410,8 @@ void FElysiumCogWindow_Environment::RenderContent()
 	SliderCVar("Full-wet darken", TEXT("elysium.RainWetDarken"), 0.0f, 0.25f, "%.3f");
 	SliderCVar("Roughness reduction", TEXT("elysium.RainWetRoughness"), 0.0f, 0.50f, "%.3f");
 	SliderCVar("Rain light response", TEXT("elysium.RainLightResponse"), 0.0f, 1.0f, "%.2f");
-	ImGui::TextDisabled("Light response is retained for the future particle slice; it has no visible wetness effect.");
+	ImGui::TextDisabled(
+		"Writes the MPC and a Niagara user value. The unlit follow material does not sample it.");
 	if (ImGui::Button("Source reference"))
 	{
 		WriteFloat(TEXT("elysium.RainEnhancement"), 0.0f);

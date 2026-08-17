@@ -7,9 +7,10 @@
 #include "CoreMinimal.h"
 #include "Debug/ElysiumCogWindow.h"
 
-// Live control surface for the one Elysium environment material path. The authored entity state
-// remains authoritative; an optional presentation override substitutes only the MPC input so the
-// source state can keep advancing underneath it. Niagara is intentionally outside this window.
+// Live control surface for the one Elysium weather path: authored wetness, the follow-rain
+// Niagara volume, and the shared material graph. Entity I/O stays authoritative; an optional
+// presentation override substitutes only the MPC wetness input so the timer graph can keep
+// advancing underneath it.
 class FElysiumCogWindow_Environment : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;

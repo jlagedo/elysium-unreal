@@ -152,7 +152,7 @@ void UElysiumCogSubsystem::PostInitialize()
 	Cog->AddWindow<FElysiumCogWindow_EventQueue>("Elysium.World.Event Flow");
 	Cog->AddWindow<FElysiumCogWindow_WorldViz>("Elysium.World.Overlays");
 	Cog->AddWindow<FElysiumCogWindow_Lights>("Elysium.Look.Lighting");
-	Cog->AddWindow<FElysiumCogWindow_Environment>("Elysium.Look.Wetness & Reflections");
+	Cog->AddWindow<FElysiumCogWindow_Environment>("Elysium.Look.Environment");
 	Cog->AddWindow<FElysiumCogWindow_Audio>("Elysium.Audio.Playback");
 	Cog->AddWindow<FElysiumCogWindow_SoundScheme>("Elysium.Audio.Soundscape");
 	Cog->AddWindow<FElysiumCogWindow_Camera>("Elysium.Characters.Camera");
