@@ -552,34 +552,79 @@ leave `ACT_LAND` somehow, and the classifier is content-free — it must not rea
 to describe. A latch-local duration holds it until the graph can report a finished one-shot, at which
 point the completion callback replaces the timer.
 
-### 3.4 The generated action corpus
+### 3.4 The action tables are project source
 
-Game-derived output remains local and regenerable. Static/decompiler/capture evidence lives below
-`$ELYSIUM_WORK_ROOT/research/gameplay-actions/<run>/`; the normalized engine-neutral export lives
-below `$ELYSIUM_EXPORT_ROOT/out/animation/actions/`; the character bake turns it into a catalog on
-the gitignored `/ElysiumBaked` mount. Only the extractor, schemas and hash-pinned research
-specification are tracked.
+**A translation table is a game rule, not an export product.** It is the same category as the
+`CGameMovement` constants in `ElysiumMoveSolve.h`, the compiled slot tables in
+`ElysiumSheetSlots.h`, and the dice and disposition tables — all of which this repository already
+commits, and all of which "Bring-your-own-game" governs by governing decoder *output* rather than
+recovered rules. So the tables are written down once, reviewed as text, and maintained here.
+Nobody re-derives them, no build reads `vampire.dll`, and there is no per-install action export.
 
-The normalized corpus has these logical artifacts. Their filenames are a file seam, not a second
-status tracker:
+| Artifact | Home |
+|---|---|
+| weapon activity translation | `Private/Visual/ElysiumWeaponActivityTables.cpp` (generated, committed) |
+| actor/form + NPC class translation | `ElysiumNpcActivityTables.cpp` (generated, committed) |
+| player action rules | `ElysiumPlayerActionRules.cpp` (generated, committed) |
+| per-model events and transition graph | `npc/blends/<stem>.json`, beside the blend grids |
+| coverage report | a `$ELYSIUM_WORK_ROOT` QA report, not an export-corpus artifact |
 
-| Artifact | Required contents | Source |
-|---|---|---|
-| `activity_registry.json` | stable name, pinned-build numeric ID, registration ordinal | `vampire.dll` activity registration |
-| `player_action_rules.json` | mode, compact action code, tested predicates, base activity, pose-parameter writes, confidence/evidence | player `PostThink` classifier/router and retail trace |
-| `npc_action_rules.json` | class, schedule/task or entity request, desired activity/direct label/model change, base-versus-layer route, interrupt/completion rules, confidence/evidence | NPC class/schedule call graph, map/Python producer survey and retail trace |
-| `weapon_activity_tables.json` | weapon/RTTI/entity class, base activity, translated activity, inert authored `required`, table ordinal, shared-table identity | hash-pinned PE32 RTTI and each weapon's `acttable_t`; retail `activitydump` is an independent oracle |
-| character catalog | exact owner model and raw sequence index, label, activity, weight, flags, fade, events, grid, movement, autolayers, target compatibility | existing MDL/include exporters and player inventory |
-| `action_coverage.json` | reachable rule → translation → sequence/asset closure per supported player body and NPC class/model | deterministic join of all artifacts above |
+Each generated `.cpp` holds its arrays in an anonymous namespace behind accessors declared in
+`Private/Visual/ElysiumActionTables.h` — the shape `ElysiumGymSpec` already uses. The generator is
+`research/tooling/gen_action_tables.py`, run as `uv run elysium research gen_action_tables`: it
+reads the pinned binary through the existing probes, asserts its own round trip, and writes the
+source. It is **owner-run archaeology and part of no build**; `--check` re-derives the model and
+compares it against the committed file without writing.
 
-The character catalog extends the existing `npc/clips`, blend and index sidecars; it does not
-invent a parallel clip inventory. The disposable raw player inventory produced by
-`research/tooling/capture/inventory_player_animations.py` preserves the full 764-byte sequence and
-72-byte animation descriptors for research, while the public export carries only decoded fields
-the runtime uses. Sequence events are decoded in the model reader and across the complete native
-server/client handler surface; the catalog export (LIFE2) must emit them into this existing path. Autolayers and the
-sequence-transition graph likewise belong in the catalog rather than being recovered later from
-baked assets.
+**The tables are stored compressed, and they round-trip.** The 9,214 weapon rows over 61 classes
+are ladder-major — blocks of an ordered base sequence walked under one animation family — so what
+is stored is 18 shared base sequences (792 entries), 110 block headers, 595 exception rows, 57
+`required` flags, 3 rename rules and 8 substitute bases: 1,565 units, 17% of the row stream.
+Blocks are found structurally, a block ending where a base repeats, which is also what makes
+retail's front-to-back `ActivityOverride` walk legible: block 1 is the weapon's own animation set,
+block 2 the shared class set, block 3 a cousin weapon.
+
+**Rows are never materialised.** The resolver never indexes a row; it synthesizes one candidate per
+rung and tests it against the body's own clip vocabulary, which is what retail does:
+
+```
+for (family, bases) in Ladder(Weapon):
+    if base not in bases: continue
+    candidate = Exception(weapon, block, base) ?? Rewrite(base, family)
+    if ModelHasSequenceFor(candidate): return candidate
+return base                                    // untranslated
+```
+
+`FName` cannot be `constexpr`, so the tables are `const TCHAR*` literals in `.rdata`, interned once
+at subsystem init into the plain-C++ table the resolver reads. `static_assert` guards array sizes
+and ladder arity, so a malformed regeneration fails the build rather than a pose.
+
+The **activity registry is not committed**. The runtime keys on names and never on IDs, and 4,460
+registrations — most unreachable in gameplay — is a binary dump rather than a rule. It stays a
+research artifact; the reachable names appear in the tables that use them.
+
+What genuinely varies per install stays derived: the per-model sequence events, autolayer bindings
+and transition graph come from the user's own `.mdl` files and land in the existing
+`npc/clips`, blend and index sidecars rather than in a parallel clip inventory. The disposable raw
+player inventory produced by `research/tooling/capture/inventory_player_animations.py` preserves
+the full 764-byte sequence and 72-byte animation descriptors for research, while the public export
+carries only decoded fields the runtime uses.
+
+**Nothing about actions is baked.** Every artifact is either committed source or a per-install
+sidecar the runtime already reads, so there is no install-varying action data for an editor pass to
+produce and no action catalog on `/ElysiumBaked`.
+
+Because the tables are ours to maintain, a wrong row is a bug we fix rather than a binary we
+re-diff, and two levels of test stand where the diff used to. `Elysium.Substrate.WeaponActivityTables`
+is content-free: it expands the committed model and requires the recovered row stream back — the
+generator stamps a digest of the *retail decode* into the source and the test recomputes it from the
+*committed model*, so the two agree only if the compression is lossless. `Elysium.Content.ActionTableConformance`
+walks every ladder against the exported clip vocabulary and requires the behaviour the decode was
+read for: a substantial share of resolutions arriving from rung 2 or later, so the fallback order is
+load-bearing rather than decoration, and no rewrite kind naming activities that no shipped model
+carries. That second level is strictly stronger than a byte diff — a table transcribed perfectly and
+interpreted wrongly passes a diff and fails here. Owner-run retail agreement against the banked
+capture corpus corroborates and gates nothing.
 
 “All actions” is defined by **reachability**, not by copying every name in the global registry. It
 is the union of:

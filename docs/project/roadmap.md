@@ -244,11 +244,17 @@ The ladder:
   as a fact, no divergence; the `A_dance01` seam adjudicated at
   `Instrument.Elysium.DancerDecodeProbe3` as a graph-less measurement rather than a bake defect,
   the clip's blamed bones carrying Joy's own bind translations and skin weights.
-- [ ] **[LIFE2 The action catalog on the mount](plans/animation.md)** — the normalized rule
-  artifacts, events and the transition graph exported, joined and baked; deletes the 5-row stub.
+- [~] **[LIFE2 The action catalog as project source](plans/animation.md)** — the recovered weapon
+  translation tables are committed source, generated from the pinned binary by owner-run
+  archaeology: 9,214 ordered rows over 61 classes stored as 1,565 units (18 base sequences, 110
+  block headers, 595 exceptions, 57 `required` flags, 3 renames, 8 substitute bases) and
+  digest-matched back to the retail row stream, with the fallback order held by conformance against
+  the corpus (1,739 of 4,580 requests resolving, 38% of them at rung 2 or later, no rewrite kind
+  dead, both 0% families named). Nothing about actions is exported or baked. The player rule bodies,
+  the NPC class translation, the per-model events and the transition graph are open.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
-  authority is landed; the NPC gait push, real translation tables and activity→state coverage
-  open.
+  authority is landed; the NPC gait push, repointing the resolver onto the committed tables and
+  deleting the 5-row stub, and activity→state coverage open.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
   and weapon-state animation open.

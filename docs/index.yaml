@@ -9,6 +9,7 @@ documents:
   - {path: project/plans/spine.md, kind: plan, owner: runtime, subject: open-task specs for the runtime spine and camera director}
   - {path: project/plans/theatre.md, kind: plan, owner: choreographed scenes, subject: open-task specs for the theatre cinematic}
   - {path: project/plans/animation.md, kind: plan, owner: animation, subject: open-task specs for the character life programme}
+  - {path: project/plans/life2-action-catalog.md, kind: plan, owner: animation, subject: the recovered action tables as committed project source and the session split that lands them}
   - {path: project/plans/three-cs.md, kind: plan, owner: movement, subject: open-task specs for the character camera controls slice}
   - {path: project/plans/pipeline.md, kind: plan, owner: pipeline, subject: open-task specs for the pipeline backlog}
   - {path: project/rebuild-strategy.md, kind: strategy, owner: project, subject: rebuild strategy}

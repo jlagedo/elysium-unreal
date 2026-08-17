@@ -468,6 +468,29 @@ Landmarks: `ACT_IDLE` = 1,
 `ACT_DISPOSITION` = 0xf1. The tail of the table is a long knockback/ragdoll family
 (`ACT_KNOCKBACK_FLYING_*`), which is why the count is so much larger than any one model's vocabulary.
 
+#### The shipped literals are not consistently upper case [data-verified]
+
+The DLL registers every name upper case, but the models do not spell them that way. Across the
+166-body corpus's **1,246 distinct activity literals, 91 are not upper case** —
+`ACT_ALERT_180_INTO_Katana`, `ACT_ALERT_FRONT_INTO_baseballbat`, `ACT_MELEE_ATTACK_sledgehammer` —
+and the mixed spelling is the *family suffix*, never the `ACT_` stem. Only one pair collides when
+folded (`ACT_MELEE_ATTACK_SLEDGEHAMMER` against `ACT_MELEE_ATTACK_sledgehammer`); the other 90 have
+no upper-case twin anywhere in the corpus, so under a case-sensitive lookup they are not shadowed
+by a correctly-spelled sibling — they are simply unreachable.
+
+The cost is measurable against the weapon translation tables. Walking all 61 ladders against that
+vocabulary resolves **1,739 of 4,580 requests when the match folds case and 1,511 when it does
+not**; the 228 differences are the alert-transition, hunt, dodge and blocked sets for `Katana`,
+`Claws`, `Knife`, `TireIron` and `baseballbat`. Read case-sensitively, five weapons lose their
+whole alert-transition vocabulary while the `.mdl` files plainly carry it.
+
+**Unverified:** whether the pinned DLL's own name → enum resolution folds case has not been read
+out of the binary. The content is the argument that it must — the alternative is that Troika
+shipped five weapons' alert sets as dead data — but the decompile of the model-load resolution
+path beside `szactivitynameindex` is what would settle it. `Elysium.Content.ActionTableConformance`
+matches case-insensitively on that reading, which is also what the runtime's own
+`FElysiumNpcClipSet::ByActivity` has always done.
+
 ### Player action selection is code around the model table [VtMB decompiled]
 
 The server-side player path is located in the pinned patch `vampire.dll`. It is not a direct

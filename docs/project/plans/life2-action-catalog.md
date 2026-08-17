@@ -59,30 +59,51 @@ shared class set, block 3 a cousin weapon.
 |---|---:|
 | base sequences (18) | 792 entries |
 | block headers (weapon, sequence, family) | 110 |
-| exception rows | 1,035 |
-| `required` flags | 128 |
+| exception rows | 595 |
+| `required` flags | 57 |
 | rename rules | 3 |
-| **total stored units** | **2,070 — 22.5% of 9,214 rows** |
+| substitute bases | 8 |
+| **total stored units** | **1,565 — 17.0% of 9,214 rows** |
 
-**The decode is validated by the content.** Walking each ladder against the corpus vocabulary:
+`required` is a property of the base-sequence *entry* rather than of the block: every block walking
+a given sequence agrees on it across all 61 classes, so the 201 flagged rows store as 57 flags. The
+block's family is fitted as the token leaving the fewest literals, deterministically on a tie, and
+the rows it does not produce are the exception list.
 
-- **40% of all resolutions come from rung 2 or later** (874 at rung 1, 544 at rung 2, 85 at rung 3,
-  8 at rung 4). The fallback order is load-bearing and behaves as read.
-- `ACT_SNEAKATTACK_*_BACK` exists in no form in the corpus; its **substituted** target
-  `..._SHORTVICTIM_KATANA` resolves 40 times. Read as an append it would resolve zero times.
-- The mirror case: `ACT_KNOCKBACK_*_BACK` **appends** and resolves 33.8%. `_BACK` is a family slot
-  in one family and a literal direction in the other, and the table gets both right.
-- No rewrite kind is dead — `strip` 100%, `substitute` and `append` both resolving. A misdecoded
-  rule shows as a kind at ~0%.
+**The decode is validated by the content.** Walking all 61 ladders against the corpus vocabulary
+gives 4,580 (weapon, base) requests, of which 1,739 resolve. A request's rung is counted over the
+rungs that *declare* that base, not over every block: a base absent from block 1 is not a rung the
+walk skipped, it is a rung the walk never had.
 
-**Two families sit at exactly 0%, both accounted:** viewmodel `ACT_VM_*` (189 requests — the NPC
-corpus has no viewmodel bodies; that is LIFE6's 21+17 corpus), and directional walk/run (120
+- **38% of all resolutions come from rung 2 or later** (1,082 at rung 1, 574 at rung 2, 75 at rung
+  3, 8 at rung 4). The fallback order is load-bearing and behaves as read; flattened to one row per
+  base, 657 resolutions would become misses.
+- `_BACK` is a family slot in one family and a literal direction in the other, and the table gets
+  both right: the eight `ACT_SNEAKATTACK_*_BACK` bases **substitute**, and their targets resolve 48
+  times against the corpus; the five `ACT_KNOCKBACK_*_BACK` bases **append**, and the round trip is
+  what proves that reading rather than a resolution count — neither reading resolves for knockback,
+  because the corpus carries no weapon-decorated knockback direction at all.
+- No rewrite kind is dead: `append` answers 1,418 requests, `exception` 212, `rename` 49,
+  `substitute` 48 and `identity` 12. A misdecoded rule shows as a kind at ~0%.
+
+**The vocabulary match folds case, and that is not cosmetic.** 91 of the corpus's 1,246 activity
+literals are not upper case while the DLL registers every name upper case, so a case-sensitive walk
+resolves 1,511 instead of 1,739 and five weapons lose their whole alert-transition set. The
+measurement above is the case-folded one; `docs/vtmb/animation_and_movers.md` A.3 carries the
+finding and marks what is still unverified in the binary.
+
+**Two families sit at exactly 0%, both accounted:** viewmodel `ACT_VM_*` (417 requests — the NPC
+corpus has no viewmodel bodies; that is LIFE6's 21+17 corpus), and directional walk/run (222
 requests — `ACT_WALK_45` exists in no shipped model even unsuffixed). Both are content facts, and
 both are the "an unresolved row stays named with its provenance" case.
 
-**Not yet characterised:** 760 never-resolving requests outside those groups. Plausibly the same
-story — weapon-specific variants no body carries, falling through as designed — but unshown.
-Naming them is `action_coverage`'s job.
+**The residual is content, not a misdecoded rule.** The other 2,202 never-resolving requests spread
+across some thirty activity families — knockback 775, alert 360, the turn/180/90 trio 444 — with no
+rewrite kind falling below 11% candidate availability, which is the signature that separates absent
+content from a wrong rule. 1,232 of them carry their bare base in the corpus and no
+weapon-decorated form, which is the shared bank holding `ACT_WALK` and no `ACT_WALK_ANACONDA`.
+`Elysium.Content.ActionTableConformance` prints the full named list; grouping it by family is
+`action_coverage`'s job.
 
 ## 1. Where the tables live
 
@@ -116,26 +137,34 @@ research artifact; the reachable names appear in the tables that use them.
 // Do not hand-edit; regenerate and let the round-trip test prove it.
 namespace
 {
-    // 18 shared ordered base sequences, 792 entries.
-    constexpr const TCHAR* Bases_Melee111[] = { TEXT("ACT_RUN"), TEXT("ACT_WALK"), ... };
+    // 18 shared ordered base sequences, 792 entries, with the authored `required` positions
+    // beside each: the flag belongs to the entry, and every block walking the sequence agrees.
+    constexpr const TCHAR* Bases_111_A[] = { TEXT("ACT_RUN"), TEXT("ACT_WALK"), ... };
+    constexpr int32 Bases_111_A_Required[] = { 62, 63 };
 
     // One block per ladder rung: which base sequence, which animation family.
-    struct FBlock { const TCHAR* const* Bases; int32 Count; const TCHAR* Family; };
-    constexpr FBlock Katana[] = {
-        { Bases_Melee111, 111, TEXT("KATANA") },
-        { Bases_Melee111, 111, TEXT("MELEESHARED_ONEHAND") },
-        { Bases_Melee111, 111, TEXT("BASEBALLBAT") },
+    constexpr FActionBlock CWeaponMelee_Katana_Blocks[] = {
+        { Bases_111_A, 111, Bases_111_A_Required, 2, TEXT("KATANA") },
+        { Bases_111_A, 111, Bases_111_A_Required, 2, TEXT("MELEESHARED_ONEHAND") },
+        { Bases_111_A, 111, Bases_111_A_Required, 2, TEXT("BASEBALLBAT") },
     };
 
-    // (weapon, block index, base) -> literal target, sorted for binary search.
-    struct FException { const TCHAR* Weapon; int32 Block; const TCHAR* Base; const TCHAR* Target; };
-    constexpr FException Exceptions[] = { ... };  // 1,035 rows
+    // (block, base) -> literal target, per ladder, sorted for binary search. 595 rows in all.
+    constexpr FActionException CWeaponUnarmed_Exceptions[] = {
+        { 0, TEXT("ACT_RUN_RELAXED"), TEXT("ACT_RUN") }, ...
+    };
 }
 ```
 
-Three rename rules (`ACT_AIM → ACT_READY_<F>`, `ACT_RANGE_ATTACK1 → ACT_RANGE_ATTACK_<F>`,
-`ACT_RANGE_ATTACK1_LAYER → ACT_RANGE_ATTACK_LAYER_<F>`) live in the rewrite function beside the
-tables, with the RE citation in a comment. `required` is carried as provenance on ~76 bases and
+The exception list is **per ladder rather than one global array**: the key is already scoped by the
+weapon, so a per-weapon array is both the reviewable form and the faster lookup, and no ladder
+carries more than 59 rows.
+
+The rewrite rules are data too, so the model is entirely declarative and a dead rule is visible as
+one. Three renames (`ACT_AIM → ACT_READY_<F>`, `ACT_RANGE_ATTACK1 → ACT_RANGE_ATTACK_<F>`,
+`ACT_RANGE_ATTACK1_LAYER → ACT_RANGE_ATTACK_LAYER_<F>`) and the eight substitute bases are emitted
+as tables beside the ladders, with the RE citation in a comment; `Rewrite` in `ElysiumActionTables.cpp`
+is a pure function over them. `required` is carried as provenance on 57 base-sequence entries and
 never branched on — the pinned server translator does not read it.
 
 ## 3. Static tables, not compile-time expansion
@@ -214,9 +243,9 @@ and `bake_actions.py` are dropped.
 
 > **This reverses an earlier owner call** made under the export-and-bake framing ("bake the whole
 > catalog as documented"). It is a consequence of the tables becoming source rather than a new
-> judgement, but it should be confirmed rather than assumed. `animation-architecture.md` §3.4 —
-> which specifies the export corpus, the `out/animation/actions/` path and the bake — needs
-> rewriting to match; S1 carries that.
+> judgement. The reversal is confirmed by the owner, and `animation-architecture.md` §3.4 —
+> which specified the export corpus, the `out/animation/actions/` path and the bake — is rewritten
+> to match.
 
 ## 6. Verification
 
@@ -224,17 +253,27 @@ Three levels. The first two are the gate; the third corroborates.
 
 **Round trip and well-formedness** — content-free, runs anywhere, no game files.
 `Elysium.Substrate.WeaponActivityTables` expands the committed model and asserts it yields 9,214
-rows across 61 classes in order; that every ladder is non-empty; that every exception's block index
-is in range; that every family token is used by some ladder. This is what catches a bad
-regeneration.
+rows across 61 classes, each class's rows one contiguous run in the decode's own order, the 201
+`required` flags intact; that every ladder is non-empty; that every exception addresses a real
+block, names a base that block walks, and is reachable through the binary search its emitted order
+depends on; that no rename or substitute rule names a base no ladder walks. The proof that the
+compression is lossless is a **digest**: the generator takes an FNV-1a 64 over the retail decode's
+own row stream and stamps it into the source, and the test recomputes it from the committed model,
+so the two agree only if every row survived. This is what catches a bad regeneration or a
+hand-edit.
 
 **Behavioural conformance** — `Elysium.Content.ActionTableConformance`, against the export corpus,
 abstaining on `.elysium-incomplete.npc`. Walks every (weapon, base) ladder against the exported
-clip vocabulary and asserts the measured shape holds: resolution occurs at rung 2+ for a
-substantial share, no rewrite kind resolves at 0%, and the two accounted 0% families
-(`ACT_VM_*`, directional walk/run) are named rather than silent. This is the test that catches a
-misunderstood rule, and it is strictly stronger than a byte diff — a table transcribed perfectly
-but interpreted wrongly passes a diff and fails here.
+clip vocabulary and asserts the measured shape holds: more than a third of resolutions arrive at
+rung 2 or later and the ladder reaches past rung 2, every rewrite kind that produces a candidate
+answers at least one request, and the two accounted 0% families (`ACT_VM_*`, directional walk/run)
+are named with their counts rather than silent. It prints the full named residual, so the
+never-resolving set is a list rather than a number. This is the test that catches a misunderstood
+rule, and it is strictly stronger than a byte diff — a table transcribed perfectly but interpreted
+wrongly passes a diff and fails here.
+
+The viewmodel clause is expected to fail when LIFE6 exports viewmodel bodies; that failure is the
+corpus growing, not the tables breaking, and the test says so where it asserts.
 
 **Retail agreement** — owner-run, gates nothing. `research/tooling/probes/action_trace_join.py`
 joins the banked corpus's 1,232 observed NPC translation resolutions against the committed tables,
@@ -246,8 +285,8 @@ new capture as an owner call.
 
 `action_coverage` is a **QA report**, not runtime data and not an export-corpus artifact: the
 reachable rule → translation → sequence closure per body and NPC class, grouped by family, with
-every unresolved row named with its provenance. It is what turns the unexamined 760 into an
-accounted list.
+every unresolved row named with its provenance. The conformance test already names the residual per
+activity family; what the report adds is the per-body and per-NPC-class closure behind it.
 
 ## 7. The sessions
 
@@ -255,7 +294,7 @@ Five, one bullet and one commit each.
 
 | # | Session | Touches | Deps |
 |---|---|---|---|
-| **S1** | **Weapon tables as source** — `gen_action_tables.py`, the generated table, the accessor header, the round-trip test, the conformance test, and the §3.4 rewrite | `research/tooling/gen_action_tables.py`✚, `Private/Visual/ElysiumWeaponActivityTables.cpp`✚, `Private/Visual/ElysiumActionTables.h`✚, `Private/Tests/ElysiumActionTableTests.cpp`✚, `docs/architecture/animation-architecture.md` | — |
+| **S1** | **Weapon tables as source** — `gen_action_tables.py`, the generated table, the accessor header and its pure rules, the round-trip test, the conformance test, and the §3.4 rewrite | `research/tooling/gen_action_tables.py`✚, `Private/Visual/ElysiumWeaponActivityTables.cpp`✚, `Private/Visual/ElysiumActionTables.{h,cpp}`✚, `Private/Tests/ElysiumActionTableTests.cpp`✚, `Private/Visual/ElysiumNpcClips.{h,cpp}` (a vocabulary-only read), `docs/architecture/animation-architecture.md` | — |
 | **S2** | **Player action rules as source** — 17 codes, 4 marked dormant, predicates, pose writes | generator, `ElysiumPlayerActionRules.cpp`✚, tests | S1 |
 | **S3** | **NPC rules and class translation as source** — 10 pre-translation + 5 class-translation bodies, 2+2 delegates, grapple as 29 bases plus the `+1…+8` arithmetic, 111 task routes | generator, `ElysiumNpcActivityTables.cpp`✚, tests | S1, S2 |
 | **S4** | **Catalog: events + autolayer census** | `exporters/npc_export.py`, `Private/Visual/ElysiumBlendGrids.{h,cpp}`, tests | — |
@@ -269,8 +308,9 @@ with S1–S3**: different source, different files.
 ### Acceptance sentences, quoted back in each kickoff
 
 - **S1** — *the committed model expands to 9,214 rows across 61 classes in the recovered order with
-  the `required` column intact; `Elysium.Content.ActionTableConformance` reproduces the measured
-  rung distribution and names the two 0% families; no rewrite kind resolves at 0%.*
+  the `required` column intact, digest-matched against the retail row stream;
+  `Elysium.Content.ActionTableConformance` reproduces the measured fallback shape and names the two
+  0% families; no rewrite kind resolves at 0%.*
 - **S2** — *all 17 `PLAYER_*` codes present with exactly four dormant, every `base_activity`
   resolving in the corpus or named, both effective `Player_Anim` vdata rows carried.*
 - **S3** — *77 descendants collapse to 10 pre-translation, 5 class-translation and 2+2 delegate
@@ -301,9 +341,12 @@ Narrowest first — no broad profile, no `--force`, no unscoped tier.
    node fields were stripped, S5 has nothing to decode. Default: **S5 does not block LIFE2** — the
    sidecar carries no `"transitions"` block and LIFE5 inherits the dependency. Settle before S5
    starts, not after it stalls.
-2. **The 760 unexamined never-resolving requests.** If they turn out to cluster on a rewrite rule
-   rather than on absent content, the model is wrong somewhere and S1's conformance thresholds are
-   set too loose. Characterising them is the first thing S1 does.
+2. **The never-resolving requests are absent content, not a wrong rule.** The 2,202 outside the two
+   accounted families spread across some thirty activity families with no rewrite kind below 11%
+   candidate availability, and 1,232 of them carry their bare base in the corpus with no
+   weapon-decorated form. A misdecoded rule would have concentrated on one kind instead. The
+   conformance test prints the named list on every run, so a later drift in that shape is visible
+   rather than inferred.
 3. **Weapon class → runtime tag.** The runtime keys by `WeaponTag` (`"glock"`), the tables by C++
    class and entity classname. A class with no derivable tag is unreachable from the runtime, which
    would mean the runtime should key by entity classname — a change to

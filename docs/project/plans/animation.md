@@ -18,43 +18,38 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
-### LIFE2 The action catalog on the mount
+### LIFE2 The action catalog as project source
 
 **Approved design — the behaviour table as project source, its committed form, and the
-five-session split:** [`life2-action-catalog.md`](life2-action-catalog.md).
+five-session split:** [`life2-action-catalog.md`](life2-action-catalog.md), which carries the
+session table, the touches per session and the acceptance sentence each one is judged on.
 
-The extraction RE is closed (RE37); its output still lives only as research artifacts under
-`$ELYSIUM_WORK_ROOT`. This rung normalizes it into the export and bakes it, so every rung above
-resolves activities through data instead of hand-seeded stubs. The runtime today carries a
-5-row weapon table against 9,214 recovered rows — that stub is what this rung deletes.
+The extraction RE is closed (RE37); its output lives as research artifacts under
+`$ELYSIUM_WORK_ROOT`. This rung writes it down as **committed project source**: a translation
+table is a game rule, the same category as the `CGameMovement` constants in `ElysiumMoveSolve.h`
+and the compiled slot tables in `ElysiumSheetSlots.h`, all of which this repository already
+commits. `research/tooling/gen_action_tables.py` generates each table from the pinned binary as
+owner-run archaeology; no build and no export reads `vampire.dll`, and nobody re-derives a row.
+Every rung above then resolves activities through data instead of hand-seeded stubs.
 
-Emit under `$ELYSIUM_EXPORT_ROOT/out/animation/actions/` (schema:
-`docs/architecture/animation-architecture.md` § 3.4):
+**Nothing about actions is exported or baked.** There is no `out/animation/actions/` corpus, no
+`DA_ActionCatalog` and no `bake_actions.py`. What genuinely varies per install is the per-model
+sequence events, the autolayer census and the sequence-transition graph, which extend the existing
+`npc/blends/<stem>.json` sidecar (the NPC resolver traverses an intermediate transition sequence
+between current and ideal, so the graph is the input LIFE5 depends on). The activity registry is
+not committed: the runtime keys on names and never on IDs, so 4,460 registrations are a binary dump
+rather than a rule. `action_coverage` is a `$ELYSIUM_WORK_ROOT` QA report — the reachable rule →
+translation → sequence closure per body and NPC class, grouped by family, every unresolved row
+named with its provenance.
 
-- `activity_registry.json` — stable name, pinned-build numeric ID, registration ordinal;
-- `player_action_rules.json` — mode, compact action code, tested predicates, base activity,
-  pose-parameter writes, confidence/evidence;
-- `npc_action_rules.json` — class, schedule/task or entity request, desired activity / direct
-  label / model change, base-versus-layer route, interrupt/completion rules;
-- `weapon_activity_tables.json` — all 169 classes, 9,214 ordered rows, shared-table identity,
-  the inert authored `required` bit as provenance;
-- the character catalog — events, autolayers and the per-model **sequence-transition graph**
-  extended onto the existing clip/grid/index sidecars (the NPC resolver traverses an
-  intermediate transition sequence between current and ideal, so the graph is a catalog input
-  LIFE5 depends on);
-- `action_coverage.json` — the reachable rule → translation → sequence/asset closure per
-  supported player body and NPC class/model, grouped by family; an unresolved row stays named
-  with its provenance.
-
-The bake turns the catalog into assets/data beside the native character assets on
-`/ElysiumBaked`. Game data remains below `$ELYSIUM_EXPORT_ROOT` and `/ElysiumBaked`.
-
-*Acceptance:* every producer in the accepted action families resolves to an exact
-model/sequence identity and baked asset or a named fallback; missing required mappings fail
-content tests; the static join against the **banked** retail trace corpus agrees on base
-activity, each translation and the final sequence for the traced population; player and NPC
-records use one trace schema. A disagreement the banked corpus cannot settle escalates to a
-scoped new capture as an owner call — capture is the oracle, not the gate.
+*Acceptance:* each committed table expands to its recovered row stream in the recovered walk
+order, proved content-free against a digest the generator takes from the decode itself; every
+producer in the accepted action families resolves to an exact model/sequence identity or a named
+fallback; the behavioural conformance run reproduces the measured fallback shape against the
+export corpus, with no rewrite kind resolving nothing and every accounted 0% family named rather
+than silent. The static join against the **banked** retail trace corpus corroborates and gates
+nothing; a disagreement it cannot settle escalates to a scoped new capture as an owner call —
+capture is the oracle, not the gate.
 
 ### LIFE3 One resolver for the whole cast
 

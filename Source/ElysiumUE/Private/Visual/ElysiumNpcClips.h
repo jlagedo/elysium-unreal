@@ -88,6 +88,13 @@ struct FElysiumNpcClipSet
 
 	// Parse out/npc/clips/<Stem>.json. Returns false and fills OutError on any failure.
 	bool Load(const FString& InStem, FString& OutError);
+
+	// Every ACT_* literal this stem's vocabulary can answer, added to `Out` — the slice's own
+	// intern table, without building the clip map. A corpus-wide question ("which activities does
+	// any shipped body carry?") needs 166 of these and none of the per-clip columns, and the intern
+	// table is exactly that set: the exporter interns an activity as it writes the clip that
+	// carries it. The empty literal every plumbing sequence shares is skipped.
+	static bool LoadActivities(const FString& InStem, TSet<FString>& Out, FString& OutError);
 };
 
 // out/npc/npc_index.json — every NPC and bank with its glb and counts, no clip maps (~34 KB).

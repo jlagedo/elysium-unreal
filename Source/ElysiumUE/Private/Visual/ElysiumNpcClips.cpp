@@ -167,6 +167,24 @@ bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
 	return !Clips.IsEmpty();
 }
 
+bool FElysiumNpcClipSet::LoadActivities(const FString& InStem, TSet<FString>& Out, FString& OutError)
+{
+	TSharedPtr<FJsonObject> Root;
+	if (!ReadJsonFile(FElysiumContentPaths::NpcClips(InStem), Root, OutError))
+	{
+		return false;
+	}
+	TArray<FString> Activities;
+	ReadStringArray(Root, TEXT("activities"), Activities);
+	if (Activities.IsEmpty())
+	{
+		OutError = FString::Printf(TEXT("slice carries no `activities` intern table: %s"), *InStem);
+		return false;
+	}
+	Out.Append(Activities);
+	return true;
+}
+
 TArray<FString> FElysiumNpcClipSet::ByActivity(const FString& Activity) const
 {
 	TArray<FString> Out;
