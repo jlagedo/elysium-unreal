@@ -27,9 +27,6 @@ with its exact authored bind and morph targets, a compressed `UAnimSequence` per
 named `UBlendProfile`s, the autolayer binding in `blends/<stem>.json` — and what remains is its
 guards and its last gaps:
 
-- **The orphan census.** Orphanhood of layers/grids measured across the include DAG rather than
-  assumed, so a plain-label asset that ships because an unbound grid reaches it is
-  distinguished from one that ships by accident.
 - **Frame interpolation adjudicated.** Only 15,336 of 242,561 captured cells fire at a whole
   frame; the export defers between-key behaviour to the host's LINEAR. Decide from the banked
   corpus whether retail's between-key read is LINEAR; record agreement as a closed fact or the

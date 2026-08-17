@@ -2824,6 +2824,29 @@ be reachable from the skin root.
 `m_iszPlay` and friends name a **sequence label** (`StudioSeqDesc.szlabel`@0 → `anim[0][0]`@56 →
 local anim); the pipeline keys clips by that label.
 
+**Shared banks repeat labels, so a label alone does not name a clip — the tree it is resolved
+through does** [data-verified]. Of the 3,755 sequences the 55 shared body banks carry, 233 name a
+label another model in the tree also defines, and the repeats are families rather than accidents:
+
+| repeated label(s) | banks shipping it | rows the repeat leaves over |
+|---|---|---|
+| the eight `stealth_{success,failure}_{attacker,victim}_{short,tall}*` paired-kill clips | 20 weapon banks, 10 per sex | 144 |
+| the twelve `TwoHanded_hunt_*` / `TwoHanded_alert_*` clips | `move_and_ranged` + `meleeshared_twohand`, per sex | 24 |
+| eleven `knockback_*` clips | `meleeshared_onehand` + `meleeshared_twohand`, per sex | 22 |
+| the `combatmove` fan (label + seven cells) | `meleeshared_onehand` + `meleeshared_twohand`, per sex; `shovelhead` ships its own | 16 |
+| `kick_short`, `kick_long` | 6 melee banks, 3 per sex | 8 |
+| `dodge_stepback`, `dodge_stepback_Left`, `dodge_stepback_Right` | `meleeshared_onehand` + `meleeshared_twohand`, per sex | 6 |
+| `ragdoll` | 4 banks, and every body's own model | 4 |
+| six gangrel `*_idle2`/`*_look2`/`*_sniff2`/`*_stretch2`/`*_nails1` fidgets | the gangrel PC banks, and the gangrel bodies' own models | 9 |
+
+**Which copy retail answers with is not recovered.** `LookupSequence` (`0x1008f7b0`) is the
+label→index call and is case-insensitive, but the order of the resolved sequence array a
+transitive include tree builds — and therefore which same-named sequence wins — has not been read
+out of the binary. Two things would settle it: the construction order of that array in Ghidra, or
+a capture of a katana stealth kill, which under an own-model-and-earlier-bank-first rule plays
+`baseball`'s clip. Elysium resolves first-in-tree-order and measures what that leaves unreachable
+(`docs/architecture/animation-architecture.md` § 2.4).
+
 The consuming representation must retain the include DAG's `clip → owning model` resolution and
 bind shared clips by bone name. It need not merge every included bank into every model, but an
 engine's own cross-skeleton retargeter is not part of Troika's rule. Elysium's generated-asset

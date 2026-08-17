@@ -1889,10 +1889,18 @@ def export_characters(
     # assertion refuses the SHAPE of that cross-product, and the inventory proves its COUNT --
     # every source bank clip packaged once, addressed by owner alone and by nothing about the
     # bodies that play it.
-    from elysium_pipeline import character_inventory, character_sweep
+    #
+    # The census is the third: the count proves every bank clip reaches a package, and the census
+    # proves a body reaches the package -- measured over the whole catalogue's include DAGs, so
+    # it holds for a slice too.
+    from elysium_pipeline import character_census, character_inventory, character_sweep
     character_sweep.assert_shared_bank_layout(partition, npc_manifest)
+    reached = character_cache.reached_banks(npc_manifest, stems)
+    projected = character_inventory.project(npc_dir, npc_manifest, reached)
     print(character_inventory.summary_line(character_inventory.assert_cardinality(
-        npc_dir, partition, npc_manifest, character_cache.reached_banks(npc_manifest, stems))))
+        npc_dir, partition, npc_manifest, reached, projected)))
+    print(character_census.summary_line(character_census.assert_reachable(
+        npc_dir, partition, npc_manifest, reached, projected[0])))
     planned = character_cache.plan(
         config, npc_dir, npc_manifest, partition, stems,
         props=None if include_props else (), force=force

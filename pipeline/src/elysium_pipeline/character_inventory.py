@@ -76,7 +76,7 @@ def _fold(label: str) -> str:
     return asset_names.baked_asset_name(label)
 
 
-def _label_key(label: str) -> str:
+def label_key(label: str) -> str:
     """A clip label as both halves of the pipeline compare it.
 
     Case-folded because `FName` is, and stripped of the leading `@` a raw animation name can carry
@@ -84,6 +84,35 @@ def _label_key(label: str) -> str:
     container's have to be compared with it gone from both.
     """
     return label.lstrip(BASE_SEPARATOR).lower()
+
+
+def read_blends(npc_dir: Path, manifest: dict, bank: str) -> dict:
+    """One bank's blend sidecar, or `{}` when it declares none.
+
+    A bank that authors neither a grid nor an autolayer binding ships no sidecar, which is an
+    absence rather than a fault. One it declares and cannot be read is a fault, and it is named
+    here so both readers of the document say the same thing about it.
+    """
+    relative = manifest.get("banks", {}).get(bank, {}).get("blends", "")
+    if not relative:
+        return {}
+    path = npc_dir / relative
+    try:
+        with path.open(encoding="utf-8-sig") as handle:
+            return json.load(handle)
+    except (OSError, ValueError) as error:
+        raise ValueError(
+            f"bank '{bank}' declares blend sidecar '{relative}' and it cannot be read: {error}"
+        ) from error
+
+
+def hosts_by_target(sidecar: dict) -> dict[str, list[str]]:
+    """{layer label key: the host labels declaring it}, from a blend sidecar's autolayer table."""
+    out: dict[str, list[str]] = {}
+    for host, targets in sidecar.get("autolayers", {}).items():
+        for target in targets:
+            out.setdefault(label_key(target), []).append(host)
+    return out
 
 
 def project_bank(npc_dir: Path, manifest: dict, bank: str) -> BankInventory | None:
@@ -109,12 +138,12 @@ def project_bank(npc_dir: Path, manifest: dict, bank: str) -> BankInventory | No
             continue
         package = f"{package_root}/{SEQUENCE_PREFIX}{_fold(payload.name)}"
         inventory.sequences.setdefault(package, []).append(payload.name)
-        packaged.add(_label_key(payload.name))
+        packaged.add(label_key(payload.name))
         layer, separator, _host = payload.name.partition(BASE_SEPARATOR)
         if separator:
-            layered.add(_label_key(layer))
+            layered.add(label_key(layer))
 
-    source = {_label_key(label) for label in manifest.get("banks", {})
+    source = {label_key(label) for label in manifest.get("banks", {})
               .get(bank, {}).get("clips", {})}
     inventory.derived_only = sorted((layered & source) - packaged)
     _project_spaces(npc_dir, manifest, bank, inventory, package_root)
@@ -124,25 +153,13 @@ def project_bank(npc_dir: Path, manifest: dict, bank: str) -> BankInventory | No
 def _project_spaces(npc_dir: Path, manifest: dict, bank: str, inventory: BankInventory,
                     package_root: str) -> None:
     """The blend spaces the bake writes for one bank, over the sequences it just projected."""
-    relative = manifest.get("banks", {}).get(bank, {}).get("blends", "")
-    if not relative:
+    sidecar = read_blends(npc_dir, manifest, bank)
+    if not sidecar:
         return
-    sidecar_path = npc_dir / relative
-    try:
-        with sidecar_path.open(encoding="utf-8-sig") as handle:
-            sidecar = json.load(handle)
-    except (OSError, ValueError) as error:
-        raise ValueError(
-            f"bank '{bank}' declares blend sidecar '{relative}' and it cannot be read: {error}"
-        ) from error
-
-    hosts_by_target: dict[str, list[str]] = {}
-    for host, targets in sidecar.get("autolayers", {}).items():
-        for target in targets:
-            hosts_by_target.setdefault(target, []).append(host)
+    declaring = hosts_by_target(sidecar)
 
     for label, grid in sorted(sidecar.get("grids", {}).items()):
-        hosts = sorted(hosts_by_target.get(label, ()))
+        hosts = sorted(declaring.get(label_key(label), ()))
         for suffix in [BASE_SEPARATOR + host for host in hosts] or [""]:
             resolved = sum(
                 1 for cell in grid.get("cells", ())
@@ -190,13 +207,13 @@ def _unaccounted(inventories: dict[str, BankInventory], manifest: dict) -> list[
     """
     out = []
     for bank, inventory in inventories.items():
-        source = {_label_key(label) for label in manifest.get("banks", {})
+        source = {label_key(label) for label in manifest.get("banks", {})
                   .get(bank, {}).get("clips", {})}
         for labels in inventory.sequences.values():
             for label in labels:
                 layer, _, host = label.partition(BASE_SEPARATOR)
                 unknown = [part for part in ((layer, "layer"), (host, "host"))
-                           if part[0] and _label_key(part[0]) not in source]
+                           if part[0] and label_key(part[0]) not in source]
                 if unknown:
                     out.append(f"{bank}: '{label}' names "
                                + ", ".join(f"{kind} '{name}'" for name, kind in unknown)
@@ -208,13 +225,13 @@ def _unpackaged(inventories: dict[str, BankInventory], manifest: dict) -> list[s
     """Source clips that reach no package at all, delta-with-no-host excepted."""
     out = []
     for bank, inventory in inventories.items():
-        packaged = {_label_key(label)
+        packaged = {label_key(label)
                     for labels in inventory.sequences.values() for label in labels}
         derived = set(inventory.derived_only)
-        unbound = {_label_key(label) for label in inventory.unbound_additives}
+        unbound = {label_key(label) for label in inventory.unbound_additives}
         for label, meta in sorted(manifest.get("banks", {}).get(bank, {})
                                   .get("clips", {}).items()):
-            key = _label_key(label)
+            key = label_key(label)
             if key in packaged or key in derived:
                 continue
             # A delta the container carries and no host declares is deliberately absent, and the
@@ -226,12 +243,16 @@ def _unpackaged(inventories: dict[str, BankInventory], manifest: dict) -> list[s
     return out
 
 
-def assert_cardinality(npc_dir: Path, partition: dict, manifest: dict, banks) -> dict:
+def assert_cardinality(npc_dir: Path, partition: dict, manifest: dict, banks,
+                       projected: tuple[dict[str, BankInventory], list[str]] | None = None) -> dict:
     """Prove the projected bank inventory before the editor starts; raise ValueError if not.
 
     Returns a summary of what it proved. The count is deliberately part of that summary rather
     than only of the failure path: a cross-product announces itself in the total long before any
     individual assertion has anything to say about it.
+
+    `projected` hands in a projection the caller already made, so a run that also takes the
+    reachability census over the same inventories reads the containers once.
     """
     declared = partition.get("bank_family_of", {})
     stray = sorted(bank for bank in dict.fromkeys(banks) if bank not in declared)
@@ -241,7 +262,7 @@ def assert_cardinality(npc_dir: Path, partition: dict, manifest: dict, banks) ->
             + ", ".join(stray[:4])
         )
 
-    inventories, absent = project(npc_dir, manifest, banks)
+    inventories, absent = projected if projected is not None else project(npc_dir, manifest, banks)
     root = character_cache.BANKS + "/"
     misplaced = sorted(
         package

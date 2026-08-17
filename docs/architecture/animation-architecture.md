@@ -318,6 +318,31 @@ frame or no track, and a source bank clip that reaches no package at all — exc
 additive no host declares, which the container itself marks and which has nothing to be a
 difference from (§2.1).
 
+**The count proves a clip reaches a package; the census proves a body reaches the clip.** A body
+resolves a label through its own include tree and the first model in tree order to define one owns
+it, so a bank clip whose label an earlier model also defines is never resolved to that bank —
+and the shared banks repeat labels by the family (`docs/vtmb/animation_and_movers.md` A.7). The
+census runs in the same preflight and gives every bank clip and grid exactly one route: the label
+a body resolves here, the autolayer host that declares it, or a cell of a grid that is itself
+reached. **A cell is the distinction that needs the DAG.** A plain-label clip no host declares
+ships because a grid names it, and whether that is content the game plays or residue depends
+entirely on whether anything reaches the grid — the container cannot tell, because it holds one
+model's answer to a question the whole tree decides.
+
+Two answers refuse the bake, because both leave an asset addressed through something that is not
+there: a **declaring host no body reaches**, whose layers ship only as `<layer>@<host>` with the
+plain form withheld on purpose (§2.1), and a **grid a body reaches that stands as no blend
+space**, which is §2.1's grid rule proved before an editor starts rather than named as a runtime
+miss. A clip that reaches no body is reported rather than refused: authored content the game
+itself cannot reach is VtMB's fact, not a defect of the bake, and naming its count every run is
+what keeps a regression that multiplies it from reading as normal.
+
+The census measures over the manifest's **whole** body catalogue, never the slice a run plans — a
+body left out is a route it cannot see — and it declines to judge at all unless the manifest
+states a clip map for every body the declared partition names. Cinematic banks are excluded: a
+scene reaches one through its anim-set bone root rather than through any body's clip map, so no
+include DAG has anything to say about it.
+
 ## 3. Gameplay actions are resolved before the graph
 
 A key press never selects an animation asset. The player command says what the player asked for;
