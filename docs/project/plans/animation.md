@@ -21,7 +21,7 @@ session per task — session shape, kickoff prompts, scope traps:
 ### LIFE2 The action catalog as project source
 
 **Approved design — the behaviour table as project source, its committed form, and the
-five-session split:** [`life2-action-catalog.md`](life2-action-catalog.md), which carries the
+session split:** [`life2-action-catalog.md`](life2-action-catalog.md), which carries the
 session table, the touches per session and the acceptance sentence each one is judged on.
 
 The extraction RE is closed (RE37); its output lives as research artifacts under
