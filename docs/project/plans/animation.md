@@ -21,29 +21,11 @@ session per task — session shape, kickoff prompts, scope traps:
 ### LIFE0 The composition seam holds, loudly
 
 The runtime composition machinery is sound — state machine, masked layered blend, additive node,
-blend spaces, montage slot all compose — but four defects at the selection/composition seam fail
+blend spaces, montage slot all compose — but two defects at the selection/composition seam fail
 silently, and every one presents as the same reference-pose symptom. This rung repairs the seam
 and makes any future miss a named failure, which "Runtime failures are never silent" already
 requires.
 
-- **A blend-space selection routed into a sequence-only state.** The generated
-  `ABP_ElysiumBiped` gives only `Walk`/`Run`/`Sneak` the sequence-or-blend-space pair; `Idle`,
-  `Crouch`, `Leap`, `Falling` and `Land` carry a lone `SequencePlayer`, so a resolver answer
-  whose asset is a grid and whose activity routes to one of those states plays a null sequence —
-  full-body reference pose, nothing logged, and the blend-space presence defeats the hold-pose
-  guard in `ShouldHoldPose`. Fix structurally in the graph generator
-  (`pipeline/unreal/make_player_anim_bp.py` over the tracked t3d): every state takes the
-  `BlendListByBool` pair. Until the graph round-trips, the resolver refuses-and-names a grid
-  selection whose target state cannot play it.
-- **Layer resolution follows the table, and a miss says so.** The green-room layer path resolves
-  a derived layer's host as the *first sorted* host in the owner's autolayer table rather than
-  the sequence the body is standing on; the shipping resolver already uses
-  `Selection.SequenceLabel`. One host-resolution rule, shared: standing sequence first, table
-  fallback, each attempted asset form named on a miss. `PlayNpcGrid`'s three silent `false`
-  returns (no graph, unresolved grid, masked cell) each gain the warning the layer path already
-  has, and the Cog clip-list fall-through stops reporting "no blend space" for refusals that are
-  not that. `gr_layer`/`gr_grid` report what actually armed — derived form, plain-label
-  fallback, or nothing — never success over a miss.
 - **The aim-grid neutral.** Pose parameters at rest must land the grid's center cell; today
   pitch 0 renders roughly one cell high (~40°) and pitch 40 renders level. Adjudicate the
   parameter→axis mapping against the recovered conventions — `aim_pitch` down-positive,

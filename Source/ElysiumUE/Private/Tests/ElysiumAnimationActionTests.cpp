@@ -1097,6 +1097,73 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("aim pitch passes through unmodified"), AimSelection.AimPitch, -12.5f);
 	}
 
+	// --- Layer host: standing sequence first, table fallback, a miss names each form -------------
+	{
+		FElysiumBlendTable Table;
+		FElysiumAutoLayerBinding AimIdleLayers;
+		AimIdleLayers.Clips = { TEXT("glock_aim_layer") };
+		Table.AutoLayers.Add(TEXT("aim_idle"), AimIdleLayers);
+		FElysiumAutoLayerBinding IdleLayers;
+		IdleLayers.Clips = { TEXT("glock_aim_layer") };
+		Table.AutoLayers.Add(TEXT("idle"), IdleLayers);
+		FElysiumAutoLayerBinding WalkLayers;
+		WalkLayers.Clips = { TEXT("glock_aim_layer"), TEXT("katana_bobble_layer") };
+		Table.AutoLayers.Add(TEXT("walk"), WalkLayers);
+
+		TestEqual(TEXT("the standing sequence is the host, even when a sorted table would pick another"),
+			ElysiumAnimResolve::ResolveLayerHost(TEXT("walk"), &Table, TEXT("glock_aim_layer")),
+			FString(TEXT("walk")));
+		TestEqual(TEXT("an empty standing sequence falls back to the first sorted declaring host"),
+			ElysiumAnimResolve::ResolveLayerHost(FString(), &Table, TEXT("glock_aim_layer")),
+			FString(TEXT("aim_idle")));
+		TestEqual(TEXT("a standing sequence is the host even when the table does not declare it"),
+			ElysiumAnimResolve::ResolveLayerHost(TEXT("run"), &Table, TEXT("glock_aim_layer")),
+			FString(TEXT("run")));
+		TestTrue(TEXT("table fallback is empty when no host declares the layer"),
+			ElysiumAnimResolve::ResolveLayerHost(FString(), &Table, TEXT("missing_layer")).IsEmpty());
+
+		TArray<FString> Hosts;
+		ElysiumAnimResolve::CollectDeclaringHosts(&Table, TEXT("glock_aim_layer"), Hosts);
+		TestEqual(TEXT("declaring hosts are sorted"), Hosts.Num(), 3);
+		if (Hosts.Num() == 3)
+		{
+			TestEqual(TEXT("first sorted host is aim_idle"), Hosts[0], FString(TEXT("aim_idle")));
+			TestEqual(TEXT("then idle"), Hosts[1], FString(TEXT("idle")));
+			TestEqual(TEXT("then walk"), Hosts[2], FString(TEXT("walk")));
+		}
+
+		const FString Miss = ElysiumAnimResolve::DescribeLayerAssetMiss(
+			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), TEXT("walk"));
+		TestTrue(TEXT("a miss names the label"), Miss.Contains(TEXT("'glock_aim_layer'")));
+		TestTrue(TEXT("and the owner"), Miss.Contains(TEXT("move_and_ranged_male")));
+		TestTrue(TEXT("and the derived form"), Miss.Contains(TEXT("glock_aim_layer@walk")));
+		TestTrue(TEXT("and the host that was tried"), Miss.Contains(TEXT("walk")));
+		const FString NoHost = ElysiumAnimResolve::DescribeLayerAssetMiss(
+			TEXT("glock_aim_layer"), TEXT("move_and_ranged_male"), FString());
+		TestTrue(TEXT("an empty host is named as a table miss"),
+			NoHost.Contains(TEXT("was not found in the owner's autolayer table")));
+
+		TestEqual(TEXT("a derived sequence is reported as the derived form"),
+			ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::DerivedSequence,
+				TEXT("glock_aim_layer"), TEXT("walk")),
+			FString(TEXT("derived form 'glock_aim_layer@walk'")));
+		TestEqual(TEXT("a plain sequence is reported as the plain-label fallback"),
+			ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::PlainSequence,
+				TEXT("glock_aim_layer"), TEXT("walk")),
+			FString(TEXT("plain-label fallback 'glock_aim_layer'")));
+		TestEqual(TEXT("a derived grid is reported as such"),
+			ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::DerivedGrid,
+				TEXT("glock_aim_layer"), TEXT("idle")),
+			FString(TEXT("derived grid 'glock_aim_layer'@'idle'")));
+		TestEqual(TEXT("a miss reports nothing"),
+			ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::None, FString(), FString()),
+			FString(TEXT("nothing")));
+	}
+
 	return true;
 }
 

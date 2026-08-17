@@ -239,6 +239,13 @@ to two grids at once, one bound to a host and one declared by nobody, and the un
 to be self-consistent. **Asking for the bare label finds nothing for a grid that ships only per
 host**, and a miss there looks exactly like an unexported stem.
 
+**The host a derived form is asked for is the sequence the body is standing on.** Lab and shipping
+resolver share one rule: `Selection.SequenceLabel` first (or the lab's standing clip when no
+selection is published); when that is empty, the first sorted host in the owner's autolayer table
+that declares the layer. A miss names the label, the owner, each attempted form (`<label>@<host>`
+and the plain label) and the host that was tried. `gr_layer` and `gr_grid` report which form armed
+— derived, plain-label fallback, or nothing — and never report a ride over a miss.
+
 ### 2.2 Two guards, and what each refuses
 
 **A body's own clips never bake short.** Before writing a single clip, the bake checks every bone of

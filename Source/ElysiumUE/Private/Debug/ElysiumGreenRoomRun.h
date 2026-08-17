@@ -180,6 +180,8 @@ public:
 	// Lay a `_delta` autolayer over the standing body without disturbing it. Re-asking for the
 	// layer already running only re-weights it, so the slider drives this every frame.
 	bool LabSetLayer(const FString& Clip, float Weight, FString& OutError);
+	// Derived form, plain-label fallback, or `nothing` — what the last LabSetLayer actually armed.
+	const FString& LabLayerArmed() const { return ReviewLayerArmed; }
 	// Steer an armed aim grid, in the pose parameters' own degrees. Drives every frame from a slider,
 	// the same way `LabSetGridPosition` steers a base fan, and does not restart the layer under it.
 	void LabSetLayerAim(float Yaw, float Pitch);
@@ -268,6 +270,8 @@ public:
 	// body, and for an aim grid — those are a layer's and have no base pose to be.
 	bool LabSetGrid(const FString& Label, FString& OutError,
 		EElysiumGraphState State = EElysiumGraphState::Walk);
+	// Derived grid, plain-label grid, or `nothing` — what the last LabSetGrid actually armed.
+	const FString& LabGridArmed() const { return ReviewGridArmed; }
 	// Move the sample point, in the pose parameters' own degrees. Drives every frame from a slider;
 	// it steers the blend without restarting the animations under it.
 	void LabSetGridPosition(float Axis0, float Axis1);
@@ -452,12 +456,14 @@ private:
 	// The autolayer riding over the stage body, or empty. Lab-only: the one-shot capture path
 	// composes nothing.
 	FString ReviewLayer;
+	FString ReviewLayerArmed;
 	// The same, accumulated in acceptance order, because a host declares an ordered pair and the
 	// order is the thing being verified.
 	TArray<FString> ReviewLayers;
 	// The blend grid the body is standing on, invalid when it is on an ordinary clip. Cleared with
 	// the body for the same reason the layer is — it belongs to the one it was stood on.
 	FElysiumResolvedGrid ReviewGrid;
+	FString ReviewGridArmed;
 	// Where on that grid's axes the body is being sampled, in the pose parameters' own degrees.
 	float ReviewGridAt[2] = { 0.f, 0.f };
 	// The same for an armed aim grid's own two axes, which are the LAYER's rather than the base's.

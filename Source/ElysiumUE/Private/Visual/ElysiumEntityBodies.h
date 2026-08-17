@@ -137,8 +137,13 @@ public:
 	// `OutError`, when given, names WHICH of the refusals happened. They have five different fixes —
 	// no graph, no vocabulary entry, nothing on the mount, an unmasked pose clip — and one bare
 	// `false` for all of them is a silence a caller cannot act on.
+	// `OutArmed` names the form that loaded (derived `<label>@<host>`, plain-label fallback, or
+	// grid) so a console verb cannot report a ride over a miss. `StandingHint` is the sequence
+	// the body is posing when no selection has been published yet — a lab one-shot — and loses
+	// to `GetAppliedSelection().SequenceLabel` whenever that is set.
 	bool PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		float Weight, FString* OutError = nullptr);
+		float Weight, FString* OutError = nullptr, FString* OutArmed = nullptr,
+		const FString* StandingHint = nullptr);
 	// Steer the armed aim grid. The ordinary player producer pins both at zero, so without this a lab
 	// could not tell a 3x3 aim grid from a still pose.
 	void SetNpcLayerAim(USkeletalMeshComponent* Body, float Yaw, float Pitch);
@@ -148,14 +153,18 @@ public:
 	// parameters resolve to (ANM3). `OutGrid` comes back with the axes the caller steers through
 	// `SetNpcGridPosition` and can label a control with. False when the label names no grid — which
 	// is most labels — when the bake has not covered it, when the grid is a layer's, or when the
-	// compiled target state has no blend-space player.
+	// compiled target state has no blend-space player. `OutError` names which of those it was;
+	// `OutArmed` names the form that loaded. `StandingHint` is the lab's standing clip when no
+	// selection has been published.
 	//
 	// It is stood by **publishing a selection that names it**, over the graph's own blend-space
 	// player, so what a review body stands on is the path the game plays through rather than a
 	// second one that could drift from it.
 	bool PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		struct FElysiumResolvedGrid& OutGrid,
-		EElysiumGraphState State = EElysiumGraphState::Walk);
+		EElysiumGraphState State = EElysiumGraphState::Walk,
+		FString* OutError = nullptr, FString* OutArmed = nullptr,
+		const FString* StandingHint = nullptr);
 	void SetNpcGridPosition(USkeletalMeshComponent* Body, float Axis0, float Axis1);
 	// Take the grid back off the body. The graph holds the pose it has, so the caller's next clip
 	// owns the body outright rather than riding over a fan that is still playing underneath it.

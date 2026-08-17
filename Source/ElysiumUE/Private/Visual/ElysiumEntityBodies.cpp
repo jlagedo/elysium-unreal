@@ -4,6 +4,7 @@
 #include "ElysiumPropSkins.h"
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumAnimGraph.h"
+#include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -369,18 +370,32 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 }
 
 bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, float Weight, FString* OutError)
+	const FString& ClipName, float Weight, FString* OutError, FString* OutArmed,
+	const FString* StandingHint)
 {
 	// Every refusal below says which one it was. Five paths answered one bare `false` before, and a
 	// caller cannot tell "this body has no graph" from "this label is not in the vocabulary" from
 	// "the mount has no asset" — three different fixes behind one silence.
-	auto Refuse = [OutError](FString&& Why) -> bool
+	auto Refuse = [OutError, OutArmed](FString&& Why) -> bool
 	{
 		if (OutError != nullptr)
 		{
 			*OutError = MoveTemp(Why);
 		}
+		if (OutArmed != nullptr)
+		{
+			*OutArmed = ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::None, FString(), FString());
+		}
 		return false;
+	};
+	auto Armed = [OutArmed](ElysiumAnimResolve::ELayerAssetForm Form, const FString& Label,
+		const FString& Host)
+	{
+		if (OutArmed != nullptr)
+		{
+			*OutArmed = ElysiumAnimResolve::DescribeLayerArmedForm(Form, Label, Host);
+		}
 	};
 
 	UElysiumBipedAnimInstance* Inst = Body
@@ -423,26 +438,37 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	// raw one as the upper body folded about the waist. Asking for the plain label therefore finds
 	// nothing for every aim layer, which is not a missing export.
 	//
-	// The host is whichever one the model's own autolayer table binds this layer to. Sorted, so the
-	// same click stands the same derived asset twice running.
-	FString Host;
-	if (const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(LayerOwner))
+	// Standing sequence first (the published selection, else the lab's standing clip), table
+	// fallback. Same rule the shipping resolver uses.
+	FString Standing = Inst->GetAppliedSelection().SequenceLabel;
+	if (Standing.IsEmpty() && StandingHint != nullptr)
 	{
-		TArray<FString> Hosts;
-		for (const TPair<FString, FElysiumAutoLayerBinding>& Entry : Table->AutoLayers)
-		{
-			if (Entry.Value.Clips.Contains(ClipName))
-			{
-				Hosts.Add(Entry.Key);
-			}
-		}
-		Hosts.Sort();
-		Host = Hosts.IsEmpty() ? FString() : Hosts[0];
+		Standing = *StandingHint;
 	}
+	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(LayerOwner);
+	const FString Host = ElysiumAnimResolve::ResolveLayerHost(Standing, Table.Get(), ClipName);
 
 	// An aim grid stands as a blend space and a melee overlay as a plain sequence — the same two
 	// shapes the resolver's own layer path produces, decided the same way: does the label name a grid.
-	if (UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner, ClipName, Host))
+	UBlendSpace* Space = nullptr;
+	ElysiumAnimResolve::ELayerAssetForm GridForm = ElysiumAnimResolve::ELayerAssetForm::None;
+	if (!Host.IsEmpty())
+	{
+		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner, ClipName, Host);
+		if (Space != nullptr)
+		{
+			GridForm = ElysiumAnimResolve::ELayerAssetForm::DerivedGrid;
+		}
+	}
+	if (Space == nullptr)
+	{
+		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner, ClipName);
+		if (Space != nullptr)
+		{
+			GridForm = ElysiumAnimResolve::ELayerAssetForm::PlainGrid;
+		}
+	}
+	if (Space != nullptr)
 	{
 		// Every cell of a grid shares one mask (`docs/vtmb/animation_and_movers.md` A.4), so the
 		// first sample that carries one names the whole grid's.
@@ -460,25 +486,34 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 			}
 		}
 		Inst->ArmDebugUpperBodyOverlay(nullptr, Space, MaskName, Weight);
+		Armed(GridForm, ClipName, Host);
 		return true;
 	}
 
 	// The derived form first for the same reason, then the plain label — an additive ships both ways
 	// and a mask-free overlay ships only plain, so trying both covers either without knowing which.
-	UAnimSequence* Anim = Host.IsEmpty() ? nullptr
-		: ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
-			FString::Printf(TEXT("%s@%s"), *ClipName, *Host));
-	if (Anim == nullptr)
+	UAnimSequence* Anim = nullptr;
+	ElysiumAnimResolve::ELayerAssetForm SeqForm = ElysiumAnimResolve::ELayerAssetForm::None;
+	if (!Host.IsEmpty())
 	{
-		Anim = ResolveNpcClip(Stem, ClipName, Mesh);
+		Anim = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+			FString::Printf(TEXT("%s@%s"), *ClipName, *Host));
+		if (Anim != nullptr)
+		{
+			SeqForm = ElysiumAnimResolve::ELayerAssetForm::DerivedSequence;
+		}
 	}
 	if (Anim == nullptr)
 	{
-		return Refuse(FString::Printf(
-			TEXT("'%s' is owned by '%s' but neither its grid, its derived form '%s@%s' nor its plain "
-				"label is on the mount (host %s)"),
-			*ClipName, *LayerOwner, *ClipName, *Host,
-			Host.IsEmpty() ? TEXT("was not found in the owner's autolayer table") : *Host));
+		Anim = ResolveNpcClip(Stem, ClipName, Mesh);
+		if (Anim != nullptr)
+		{
+			SeqForm = ElysiumAnimResolve::ELayerAssetForm::PlainSequence;
+		}
+	}
+	if (Anim == nullptr)
+	{
+		return Refuse(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, LayerOwner, Host));
 	}
 	// The same two-sided gate the retired accumulator carried, and it still keeps the composition
 	// honest: an additive is read as a delta and needs no mask, while an ordinary layer is read as a
@@ -487,11 +522,13 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	if (Anim->IsValidAdditive())
 	{
 		Inst->ArmDebugUpperBodyAdditive(Anim, Weight);
+		Armed(SeqForm, ClipName, Host);
 		return true;
 	}
 	if (const UElysiumAnimLayerMask* Mask = Anim->FindMetaDataByClass<UElysiumAnimLayerMask>())
 	{
 		Inst->ArmDebugUpperBodyOverlay(Anim, nullptr, Mask->Profile, Weight);
+		Armed(SeqForm, ClipName, Host);
 		return true;
 	}
 	return Refuse(FString::Printf(
@@ -510,30 +547,71 @@ void UElysiumEntityBodies::SetNpcLayerAim(USkeletalMeshComponent* Body, float Ya
 }
 
 bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, FElysiumResolvedGrid& OutGrid, EElysiumGraphState State)
+	const FString& ClipName, FElysiumResolvedGrid& OutGrid, EElysiumGraphState State,
+	FString* OutError, FString* OutArmed, const FString* StandingHint)
 {
 	OutGrid = FElysiumResolvedGrid();
+	auto Refuse = [OutError, OutArmed, &Stem, &ClipName](FString&& Why) -> bool
+	{
+		UE_LOG(LogElysiumBodies, Warning, TEXT("npc '%s' grid '%s': %s"),
+			*Stem, *ClipName, *Why);
+		if (OutError != nullptr)
+		{
+			*OutError = MoveTemp(Why);
+		}
+		if (OutArmed != nullptr)
+		{
+			*OutArmed = ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::None, FString(), FString());
+		}
+		return false;
+	};
+
 	const AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	UElysiumBipedAnimInstance* Inst = Body
 		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
-	if (Anims == nullptr || Inst == nullptr || !Inst->HasCompiledGraph())
+	if (Anims == nullptr)
+	{
+		return Refuse(TEXT("no animation subsystem"));
+	}
+	if (Inst == nullptr)
+	{
+		return Refuse(TEXT("this body has no biped animation host"));
+	}
+	if (!Inst->HasCompiledGraph())
 	{
 		// A grid is stood by publishing a selection that names it, so it needs the graph's own
 		// blend-space player. A body with no compiled graph has nowhere to put one.
-		return false;
+		return Refuse(TEXT("this body is on the native host, which carries no compiled graph — the "
+			"generated ABP is not on the mount. Run `uv run elysium export bundle policy`"));
 	}
 	if (!Inst->CompiledStateCanPlayBlendSpace(State))
 	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("npc '%s' grid '%s': compiled state %s cannot play a blend space"),
-			*Stem, *ClipName, ElysiumAnimGraph::StateName(State));
-		return false;
+		return Refuse(FString::Printf(
+			TEXT("compiled state %s cannot play a blend space"),
+			ElysiumAnimGraph::StateName(State)));
 	}
-	if (!Anims->ResolveGrid(Stem, ClipName, Body->GetSkeletalMeshAsset(), OutGrid))
+
+	FString Standing = Inst->GetAppliedSelection().SequenceLabel;
+	if (Standing.IsEmpty() && StandingHint != nullptr)
 	{
-		return false;
+		Standing = *StandingHint;
+	}
+	const FElysiumNpcClipSet* Set = Anims->GetClipSet(Stem);
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
+	const FString LayerOwner = Clip != nullptr
+		? (Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner) : Stem;
+	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(LayerOwner);
+	const FString Host = ElysiumAnimResolve::ResolveLayerHost(Standing, Table.Get(), ClipName);
+
+	FString Why;
+	FString Armed;
+	if (!Anims->ResolveGrid(Stem, ClipName, Body->GetSkeletalMeshAsset(), OutGrid, Host, &Why,
+		&Armed))
+	{
+		return Refuse(MoveTemp(Why));
 	}
 
 	// The mirror of `PlayNpcLayer`'s gate, and it fails the same way from the other side. A grid whose
@@ -548,8 +626,14 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 			&& Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>() != nullptr)
 		{
 			OutGrid = FElysiumResolvedGrid();
-			return false;
+			return Refuse(FString::Printf(
+				TEXT("'%s' is a masked layer grid and cannot stand as a base pose — use gr_layer"),
+				*ClipName));
 		}
+	}
+	if (OutArmed != nullptr)
+	{
+		*OutArmed = MoveTemp(Armed);
 	}
 
 	// LabSetBody (and every other clip stand) plays through the one-shot slot as a looping montage.

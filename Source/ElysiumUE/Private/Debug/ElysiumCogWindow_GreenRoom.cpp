@@ -227,9 +227,18 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 			if (Lab.LabSetGrid(Clips[Index], GridError))
 			{
 				const FElysiumResolvedGrid& Grid = Lab.LabGrid();
-				LastNotice = FString::Printf(TEXT("blending %s across %d cells on %s"),
-					*Clips[Index], Grid.Space->GetBlendSamples().Num(), *Grid.AxisName[0]);
-						return;
+				LastNotice = FString::Printf(TEXT("blending %s across %d cells on %s (%s)"),
+					*Clips[Index], Grid.Space->GetBlendSamples().Num(), *Grid.AxisName[0],
+					*Lab.LabGridArmed());
+				return;
+			}
+			// Only a label that does not name a grid falls through to the resolved cell. Every
+			// other refusal — no graph, masked layer, not on the mount — is the answer, not
+			// "no blend space".
+			if (!GridError.Contains(TEXT("does not name a blend grid")))
+			{
+				LastError = GridError;
+				return;
 			}
 		}
 		Stand(Lab, PendingStem, Clips[Index]);
@@ -249,7 +258,8 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 	{
 		return;
 	}
-	LastNotice = FString::Printf(TEXT("layering %s over %s"), *Clips[Index], *Lab.LabClip());
+	LastNotice = FString::Printf(TEXT("layering %s over %s (%s)"),
+		*Clips[Index], *Lab.LabClip(), *Lab.LabLayerArmed());
 }
 
 void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)

@@ -147,12 +147,13 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			FString Error;
 			if (Run.LabSetLayer(Args[0], Arg(Args, 1, 1.0f), Error))
 			{
-				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_layer: %s riding at %.2f"),
-					*Args[0], Arg(Args, 1, 1.0f));
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_layer: %s riding at %.2f (%s)"),
+					*Args[0], Arg(Args, 1, 1.0f), *Run.LabLayerArmed());
 			}
 			else
 			{
-				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_layer failed: %s"), *Error);
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_layer failed: %s (%s)"),
+					*Error, *Run.LabLayerArmed());
 			}
 		});
 
@@ -190,12 +191,13 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			FString Error;
 			if (Run.LabSetGrid(Args[0], Error, State))
 			{
-				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_grid: %s in %s"),
-					*Args[0], ElysiumAnimGraph::StateName(State));
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_grid: %s in %s (%s)"),
+					*Args[0], ElysiumAnimGraph::StateName(State), *Run.LabGridArmed());
 			}
 			else
 			{
-				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_grid failed: %s"), *Error);
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_grid failed: %s (%s)"),
+					*Error, *Run.LabGridArmed());
 			}
 		});
 

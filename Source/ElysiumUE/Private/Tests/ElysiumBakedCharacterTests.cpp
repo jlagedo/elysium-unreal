@@ -1501,9 +1501,9 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 			Owners.Add(Entry.Value.Owner);
 		}
 
-		// Label -> the hosts declaring it, sorted, exactly as `PlayNpcLayer` sorts them: the derived
-		// asset is per host, so which host is picked decides which asset is asked for, and an
-		// unstable pick would make two identical clicks stand two different assets.
+		// Label -> the hosts declaring it, sorted. The lab's runtime host is the standing
+		// sequence (table fallback only when nothing is standing); this census still walks
+		// the first sorted host so a mount that ships any derived form of the label is counted.
 		TMap<FString, TArray<FString>> HostsByLabel;
 		TArray<FString> OwnerList = Owners.Array();
 		OwnerList.Sort();

@@ -414,4 +414,62 @@ void Resolve(const FElysiumAnimationIntent& Intent, const FElysiumAnimationCatal
 	}
 }
 
+void CollectDeclaringHosts(const FElysiumBlendTable* Table, const FString& LayerLabel,
+	TArray<FString>& OutHosts)
+{
+	OutHosts.Reset();
+	if (Table == nullptr || LayerLabel.IsEmpty())
+	{
+		return;
+	}
+	for (const TPair<FString, FElysiumAutoLayerBinding>& Entry : Table->AutoLayers)
+	{
+		if (Entry.Value.Clips.Contains(LayerLabel))
+		{
+			OutHosts.Add(Entry.Key);
+		}
+	}
+	OutHosts.Sort();
+}
+
+FString ResolveLayerHost(const FString& StandingSequence, const FElysiumBlendTable* Table,
+	const FString& LayerLabel)
+{
+	if (!StandingSequence.IsEmpty())
+	{
+		return StandingSequence;
+	}
+	TArray<FString> Hosts;
+	CollectDeclaringHosts(Table, LayerLabel, Hosts);
+	return Hosts.IsEmpty() ? FString() : Hosts[0];
+}
+
+FString DescribeLayerAssetMiss(const FString& LayerLabel, const FString& LayerOwner,
+	const FString& Host)
+{
+	return FString::Printf(
+		TEXT("'%s' is owned by '%s' but neither its grid, its derived form '%s@%s' nor its plain "
+			"label is on the mount (host %s)"),
+		*LayerLabel, *LayerOwner, *LayerLabel, *Host,
+		Host.IsEmpty() ? TEXT("was not found in the owner's autolayer table") : *Host);
+}
+
+FString DescribeLayerArmedForm(ELayerAssetForm Form, const FString& Label, const FString& Host)
+{
+	switch (Form)
+	{
+	case ELayerAssetForm::DerivedGrid:
+		return FString::Printf(TEXT("derived grid '%s'@'%s'"), *Label, *Host);
+	case ELayerAssetForm::PlainGrid:
+		return FString::Printf(TEXT("plain-label grid '%s'"), *Label);
+	case ELayerAssetForm::DerivedSequence:
+		return FString::Printf(TEXT("derived form '%s@%s'"), *Label, *Host);
+	case ELayerAssetForm::PlainSequence:
+		return FString::Printf(TEXT("plain-label fallback '%s'"), *Label);
+	case ELayerAssetForm::None:
+	default:
+		return TEXT("nothing");
+	}
+}
+
 } // namespace ElysiumAnimResolve

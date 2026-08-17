@@ -1634,7 +1634,9 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	// does a grid, and it is additionally what the clip above just replaced.
 	ReviewLayer.Reset();
 	ReviewLayers.Reset();
+	ReviewLayerArmed.Reset();
 	ReviewGrid = FElysiumResolvedGrid();
+	ReviewGridArmed.Reset();
 	LabClipTime = 0.0f;
 	// The weapon is not a layer: it belongs to the character rather than to the pose, so it goes
 	// back on the body that has just replaced the one holding it.
@@ -2435,11 +2437,14 @@ bool FElysiumGreenRoomRun::LabSetLayer(const FString& Clip, float Weight, FStrin
 	}
 	UElysiumEntityBodies* BodyFactory = Map->GetBodies();
 	FString Why;
-	if (BodyFactory == nullptr || !BodyFactory->PlayNpcLayer(Body, ReviewStem, Clip, Weight, &Why))
+	FString Armed;
+	if (BodyFactory == nullptr || !BodyFactory->PlayNpcLayer(Body, ReviewStem, Clip, Weight, &Why,
+		&Armed, &ReviewClip))
 	{
 		// The refusal is quoted rather than guessed at. It has five causes with five different
 		// fixes, and a message that listed all of them told the operator nothing about which one
 		// they were looking at.
+		ReviewLayerArmed = Armed.IsEmpty() ? TEXT("nothing") : Armed;
 		OutError = FString::Printf(TEXT("%s cannot layer '%s': %s"), *ReviewStem, *Clip,
 			Why.IsEmpty() ? TEXT("no body factory") : *Why);
 		// Logged as well as returned. The panel string is overwritten by the next click and survives
@@ -2450,7 +2455,9 @@ bool FElysiumGreenRoomRun::LabSetLayer(const FString& Clip, float Weight, FStrin
 	}
 	ReviewLayer = Clip;
 	ReviewLayers.AddUnique(Clip);
-	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s layer %s at %.2f"), *ReviewStem, *Clip, Weight);
+	ReviewLayerArmed = Armed;
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s layer %s at %.2f (%s)"),
+		*ReviewStem, *Clip, Weight, *ReviewLayerArmed);
 	return true;
 }
 
@@ -2711,8 +2718,8 @@ bool FElysiumGreenRoomRun::LabLoadLayerCase(int32 Index, FString& OutSummary, FS
 		const FString Tag = WeaponTagOf(Overlay);
 		const bool bTwoHanded =
 			ElysiumAnimIntent::WeaponGrip(Tag) == EElysiumWeaponGrip::TwoHanded;
-		OutSummary = FString::Printf(TEXT("%s: overlay `%s` (%s grip -> %s mask)"),
-			Case.Name, *Overlay,
+		OutSummary = FString::Printf(TEXT("%s: overlay `%s` (%s; %s grip -> %s mask)"),
+			Case.Name, *Overlay, *ReviewLayerArmed,
 			bTwoHanded ? TEXT("two-handed") : TEXT("one-handed"),
 			bTwoHanded ? TEXT("49-bone upper body") : TEXT("24-bone right arm"));
 	}
@@ -2743,29 +2750,20 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError,
 	}
 	UElysiumEntityBodies* BodyFactory = Map->GetBodies();
 	FElysiumResolvedGrid Grid;
-	if (BodyFactory == nullptr || !BodyFactory->PlayNpcGrid(Body, ReviewStem, Label, Grid, State))
+	FString Why;
+	FString Armed;
+	if (BodyFactory == nullptr || !BodyFactory->PlayNpcGrid(Body, ReviewStem, Label, Grid, State,
+		&Why, &Armed, &ReviewClip))
 	{
-		const UElysiumBipedAnimInstance* Inst =
-			Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance());
-		if (Inst != nullptr && Inst->HasCompiledGraph()
-			&& !Inst->CompiledStateCanPlayBlendSpace(State))
-		{
-			OutError = FString::Printf(
-				TEXT("'%s' is a blend space; compiled state %s cannot play a grid"),
-				*Label, ElysiumAnimGraph::StateName(State));
-			return false;
-		}
-		// Three refusals share this message because the operator's next move is the same for all
-		// three, and the fourth — an aim grid — is the one worth naming apart, so the clip list marks
-		// those rather than leaving them to fail here.
-		OutError = FString::Printf(
-			TEXT("%s cannot stand '%s' as a grid — does the label name one, is the body baked ")
-			TEXT("(re-export, then Restand)?"),
-			*ReviewStem, *Label);
+		ReviewGridArmed = Armed.IsEmpty() ? TEXT("nothing") : Armed;
+		OutError = Why.IsEmpty()
+			? FString::Printf(TEXT("%s cannot stand '%s' as a grid"), *ReviewStem, *Label)
+			: Why;
 		return false;
 	}
 
 	ReviewGrid = Grid;
+	ReviewGridArmed = Armed;
 	ReviewClip = Label;
 	if (!Bodies.IsEmpty() && Grid.Space != nullptr)
 	{
@@ -2780,9 +2778,9 @@ bool FElysiumGreenRoomRun::LabSetGrid(const FString& Label, FString& OutError,
 			? 0.5f * (Grid.AxisMin[Axis] + Grid.AxisMax[Axis]) : 0.f;
 	}
 	BodyFactory->SetNpcGridPosition(Body, ReviewGridAt[0], ReviewGridAt[1]);
-	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s grid %s in %s (%d axis) at %.1f, %.1f"),
+	UE_LOG(LogElysiumGreenRoom, Log, TEXT("lab: %s grid %s in %s (%d axis) at %.1f, %.1f (%s)"),
 		*ReviewStem, *Label, ElysiumAnimGraph::StateName(State), Grid.Axes,
-		ReviewGridAt[0], ReviewGridAt[1]);
+		ReviewGridAt[0], ReviewGridAt[1], *ReviewGridArmed);
 	return true;
 }
 
@@ -2805,6 +2803,7 @@ void FElysiumGreenRoomRun::LabClearGrid()
 		BodyFactory->StopNpcGrid(LabBody());
 	}
 	ReviewGrid = FElysiumResolvedGrid();
+	ReviewGridArmed.Reset();
 	// Back to a clip, because a body with neither a grid nor a clip stands in its reference pose and
 	// reads as a broken model rather than a cleared control.
 	FString Ignored;
@@ -2821,6 +2820,7 @@ void FElysiumGreenRoomRun::LabClearLayers()
 	}
 	ReviewLayer.Reset();
 	ReviewLayers.Reset();
+	ReviewLayerArmed.Reset();
 }
 
 void FElysiumGreenRoomRun::ApplyLabHud(bool bShow) const

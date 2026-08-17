@@ -32,25 +32,12 @@ Task specs stay in `docs/project/plans/animation.md`; status stays in
 
 ## Per rung
 
-### LIFE0 — composition seam (five bullets, all direct, all unblocked)
+### LIFE0 — composition seam (two bullets remain, both direct)
 
 Direct sessions, no plan mode; each bullet is nearly mechanical and validated in the green
 room. Reads: LIFE0 in the plan, `docs/architecture/animation-architecture.md` §2.1/§4, the
 engine gotchas in `Source/ElysiumUE/CLAUDE.md`.
 
-- **Montage regression + return handling.** The fix is committed; what remains is the focused
-  regression (a looping clip through the graph host asserts a non-reference pose) and
-  `PlayNpcClip` propagating `PlayOneShot`'s failure. Kickoff: *"Work LIFE0's montage bullet:
-  add the regression and make the refused montage a warned, propagated failure."*
-- **Grid-vs-sequence-only states.** Touches the graph generator
-  (`pipeline/unreal/make_player_anim_bp.py` + the tracked t3d), so warn the session about the
-  Live Coding gotcha: anything proven live is proven again after `uv run elysium build` from a
-  cold editor. Validation: a grid-shaped selection poses in every state, green room + one
-  in-game NPC idle.
-- **Layer-host resolution + named misses.** Pure runtime; the session should diff the lab path
-  against `ElysiumAnimSubsystem`'s host rule and unify them. Validation: `gr_layer` on
-  katana/baseballbat/bushhook bobble — two resolve or name their miss, none reports success
-  over nothing.
 - **Aim-grid neutral.** Adjudication first, fix second: the session must decide runtime
   mapping vs baked sample placement against the recovered axis conventions
   (`docs/vtmb/animation_and_movers.md` A.3) before touching either. If the fix is bake-side,

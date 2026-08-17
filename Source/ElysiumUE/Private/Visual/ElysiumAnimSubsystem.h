@@ -173,7 +173,8 @@ public:
 	// not which parameter that is — the sidecar owns that binding, and re-deriving it from the axis
 	// range would be guesswork on two parameters that share one.
 	bool ResolveGrid(const FString& Stem, const FString& ClipName, USkeletalMesh* Mesh,
-		struct FElysiumResolvedGrid& OutGrid);
+		struct FElysiumResolvedGrid& OutGrid, const FString& Host = FString(),
+		FString* OutError = nullptr, FString* OutArmed = nullptr);
 
 	// CCC4 — the front door. One intent in, one selection record out, plus whatever of it could be
 	// bound to `Mesh`. **This is the only resolver**: the player path and the NPC motor both come

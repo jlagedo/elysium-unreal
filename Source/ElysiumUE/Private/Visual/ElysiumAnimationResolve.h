@@ -57,4 +57,35 @@ namespace ElysiumAnimResolve
 	// The three pose parameters VtMB declares, gathered from an intent. Named in one place so a grid
 	// whose axis binds to `move_yaw` and a caller that writes `move_yaw` cannot drift apart.
 	FElysiumPoseParams PoseFrom(const FElysiumAnimationIntent& Intent);
+
+	// Which asset form a layer or grid arm actually loaded. Named on success so a console verb
+	// cannot report a ride over a miss, and named on failure so each attempted form is in the line.
+	enum class ELayerAssetForm : uint8
+	{
+		None,
+		DerivedGrid,
+		PlainGrid,
+		DerivedSequence,
+		PlainSequence,
+	};
+
+	// Hosts in `Table` that declare `LayerLabel`, sorted. Empty when the table is missing or the
+	// label is unbound — the table fallback, and the miss report's host list.
+	void CollectDeclaringHosts(const FElysiumBlendTable* Table, const FString& LayerLabel,
+		TArray<FString>& OutHosts);
+
+	// One host-resolution rule for every layer path: the sequence the body is standing on first,
+	// the first sorted declaring host when that is empty. A standing label is the host even when
+	// the table does not name it — the derived form is `<layer>@<standing>`, and picking a
+	// different table host is how the lab used to stand the wrong derived asset.
+	FString ResolveLayerHost(const FString& StandingSequence, const FElysiumBlendTable* Table,
+		const FString& LayerLabel);
+
+	// The miss line: label, owner, derived form, plain label, and the host that was tried (or that
+	// the table did not supply).
+	FString DescribeLayerAssetMiss(const FString& LayerLabel, const FString& LayerOwner,
+		const FString& Host);
+
+	// What actually armed, for `gr_layer` / `gr_grid`.
+	FString DescribeLayerArmedForm(ELayerAssetForm Form, const FString& Label, const FString& Host);
 }

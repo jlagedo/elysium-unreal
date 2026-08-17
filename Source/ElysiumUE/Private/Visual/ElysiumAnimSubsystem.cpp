@@ -45,13 +45,26 @@ namespace
 			const FElysiumBlendGrid* LayerGrid = LayerTable != nullptr
 				? LayerTable->Find(LayerLabel) : nullptr;
 
+			// Standing sequence first, table fallback — the same host the lab path uses. A first-
+			// sorted table pick would stand a different derived asset than the body is posing.
+			const FString Host = ElysiumAnimResolve::ResolveLayerHost(Selection.SequenceLabel,
+				LayerTable, LayerLabel);
+
 			if (LayerGrid != nullptr && LayerGrid->IsMultiCell())
 			{
 				// An aim grid, baked once per declaring host (`_derived_bindings` in
 				// `UE_mdl_skeletal.py`) — the loader's own `Host` parameter is the exporter's
 				// dedicated seam for this, not a mangled label.
-				Assets.OverlaySpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner,
-					LayerLabel, Selection.SequenceLabel);
+				if (!Host.IsEmpty())
+				{
+					Assets.OverlaySpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner,
+						LayerLabel, Host);
+				}
+				if (Assets.OverlaySpace == nullptr)
+				{
+					Assets.OverlaySpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner,
+						LayerLabel);
+				}
 				if (Assets.OverlaySpace != nullptr)
 				{
 					// Every cell of a grid shares one bone mask (A.4), so reading it off the base
@@ -69,6 +82,11 @@ namespace
 						}
 					}
 				}
+				else
+				{
+					UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"),
+						*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host));
+				}
 				continue;
 			}
 
@@ -76,16 +94,20 @@ namespace
 			// ancestor split bone ships ONLY in derived `<clip>@<host>` form; one that does not
 			// ships once under its plain label, and every additive ships both. Trying the derived
 			// name first and falling back handles either shape without knowing which one applies.
-			const FString DerivedLabel = FString::Printf(TEXT("%s@%s"), *LayerLabel,
-				*Selection.SequenceLabel);
-			UAnimSequence* LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
-				DerivedLabel);
+			UAnimSequence* LayerSequence = nullptr;
+			if (!Host.IsEmpty())
+			{
+				LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+					FString::Printf(TEXT("%s@%s"), *LayerLabel, *Host));
+			}
 			if (LayerSequence == nullptr)
 			{
 				LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner, LayerLabel);
 			}
 			if (LayerSequence == nullptr)
 			{
+				UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"),
+					*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host));
 				continue;
 			}
 
@@ -479,16 +501,33 @@ FString UElysiumAnimSubsystem::ResolveClipAnimName(const FString& Stem, const FS
 }
 
 bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& ClipName,
-	USkeletalMesh* Mesh, FElysiumResolvedGrid& OutGrid)
+	USkeletalMesh* Mesh, FElysiumResolvedGrid& OutGrid, const FString& Host,
+	FString* OutError, FString* OutArmed)
 {
 	OutGrid = FElysiumResolvedGrid();
+	auto Fail = [OutError, OutArmed](FString&& Why) -> bool
+	{
+		if (OutError != nullptr)
+		{
+			*OutError = MoveTemp(Why);
+		}
+		if (OutArmed != nullptr)
+		{
+			*OutArmed = ElysiumAnimResolve::DescribeLayerArmedForm(
+				ElysiumAnimResolve::ELayerAssetForm::None, FString(), FString());
+		}
+		return false;
+	};
+
 	// Same ownership rule as every other resolver here: a grid is declared by whoever owns the
 	// animations, which is a bank for anything but a dialogue clip.
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
 	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
 	if (Clip == nullptr)
 	{
-		return false;
+		return Fail(FString::Printf(
+			TEXT("'%s' is not in %s's vocabulary (%d clips)"), *ClipName, *Stem,
+			Set != nullptr ? Set->Clips.Num() : 0));
 	}
 	const FString Owner = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
 
@@ -497,13 +536,32 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 	if (Grid == nullptr)
 	{
 		// Not a defect: most labels name one animation and declare no grid at all.
-		return false;
+		return Fail(FString::Printf(TEXT("'%s' does not name a blend grid"), *ClipName));
 	}
 
-	UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName);
+	// Derived form first when a host is known, then the standalone label. A layer grid ships only
+	// as `<label>@<host>`; asking for the bare name is how 299 of 527 spaces used to look missing.
+	UBlendSpace* Space = nullptr;
+	ElysiumAnimResolve::ELayerAssetForm Form = ElysiumAnimResolve::ELayerAssetForm::None;
+	if (!Host.IsEmpty())
+	{
+		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName, Host);
+		if (Space != nullptr)
+		{
+			Form = ElysiumAnimResolve::ELayerAssetForm::DerivedGrid;
+		}
+	}
 	if (Space == nullptr)
 	{
-		return false;
+		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName);
+		if (Space != nullptr)
+		{
+			Form = ElysiumAnimResolve::ELayerAssetForm::PlainGrid;
+		}
+	}
+	if (Space == nullptr)
+	{
+		return Fail(ElysiumAnimResolve::DescribeLayerAssetMiss(ClipName, Owner, Host));
 	}
 
 	OutGrid.Space = Space;
@@ -515,6 +573,10 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 		OutGrid.AxisName[Axis] = Desc != nullptr ? Desc->Name : FString::Printf(TEXT("axis%d"), Axis);
 		OutGrid.AxisMin[Axis] = Grid->ParamStart[Axis];
 		OutGrid.AxisMax[Axis] = Grid->ParamEnd[Axis];
+	}
+	if (OutArmed != nullptr)
+	{
+		*OutArmed = ElysiumAnimResolve::DescribeLayerArmedForm(Form, ClipName, Host);
 	}
 	return true;
 }
