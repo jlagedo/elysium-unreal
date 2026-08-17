@@ -68,6 +68,7 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 	PoseParams.Reset();
 	Grids.Reset();
 	AutoLayers.Reset();
+	Events.Reset();
 
 	TSharedPtr<FJsonObject> Document;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
@@ -134,13 +135,88 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 		}
 	}
 
+	// The timelines, read before the grids for the same reason: a model may carry these alone. The
+	// options strings are interned per model, so the payload array is read first and every row
+	// names one of its entries by index.
+	int32 MalformedEvents = 0;
+	TArray<FString> EventOptions;
+	const TArray<TSharedPtr<FJsonValue>>* OptionValues = nullptr;
+	if (Document->TryGetArrayField(TEXT("event_options"), OptionValues) && OptionValues != nullptr)
+	{
+		EventOptions.Reserve(OptionValues->Num());
+		for (const TSharedPtr<FJsonValue>& Value : *OptionValues)
+		{
+			FString Option;
+			if (Value.IsValid())
+			{
+				Value->TryGetString(Option);
+			}
+			EventOptions.Add(MoveTemp(Option));
+		}
+	}
+
+	const TSharedPtr<FJsonObject>* EventObject = nullptr;
+	if (Document->TryGetObjectField(TEXT("events"), EventObject) && EventObject != nullptr)
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*EventObject)->Values)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+			if (!Pair.Value.IsValid() || !Pair.Value->TryGetArray(Rows) || Rows == nullptr)
+			{
+				++MalformedEvents;
+				continue;
+			}
+			TArray<FElysiumAnimEvent> Timeline;
+			Timeline.Reserve(Rows->Num());
+			for (const TSharedPtr<FJsonValue>& RowValue : *Rows)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Columns = nullptr;
+				if (!RowValue.IsValid() || !RowValue->TryGetArray(Columns) || Columns == nullptr
+					|| Columns->Num() < 4)
+				{
+					++MalformedEvents;
+					continue;
+				}
+				FElysiumAnimEvent Record;
+				Record.Cycle = static_cast<float>((*Columns)[0]->AsNumber());
+				Record.Event = static_cast<int32>((*Columns)[1]->AsNumber());
+				Record.Type = static_cast<int32>((*Columns)[2]->AsNumber());
+				// A phase outside 0..1 can never be reached by a dispatcher scanning the cycle, so a
+				// row carrying one is a decode fault rather than a record that simply never fires.
+				if (!FMath::IsFinite(Record.Cycle) || Record.Cycle < 0.f || Record.Cycle > 1.f)
+				{
+					++MalformedEvents;
+					continue;
+				}
+				const int32 OptionIndex = static_cast<int32>((*Columns)[3]->AsNumber());
+				if (!EventOptions.IsValidIndex(OptionIndex))
+				{
+					// The row addresses a payload the file does not carry. Dropping it is the only
+					// honest answer: an id whose handler reads its options cannot run without them.
+					++MalformedEvents;
+					continue;
+				}
+				Record.Options = EventOptions[OptionIndex];
+				Timeline.Add(MoveTemp(Record));
+			}
+			if (!Timeline.IsEmpty())
+			{
+				Events.Add(Pair.Key, MoveTemp(Timeline));
+			}
+		}
+	}
+
 	const TSharedPtr<FJsonObject>* GridObject = nullptr;
 	if (!Document->TryGetObjectField(TEXT("grids"), GridObject) || GridObject == nullptr)
 	{
-		if (AutoLayers.IsEmpty())
+		if (AutoLayers.IsEmpty() && Events.IsEmpty())
 		{
-			OutError = TEXT("blend sidecar carries neither `grids` nor `autolayers`");
+			OutError = TEXT("blend sidecar carries no `grids`, `autolayers` or `events`");
 			return false;
+		}
+		if (MalformedEvents > 0)
+		{
+			OutError = FString::Printf(TEXT("%d malformed event row(s) skipped"), MalformedEvents);
 		}
 		return true;
 	}
@@ -212,9 +288,10 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 		Grids.Add(Pair.Key, MoveTemp(Grid));
 	}
 
-	if (Malformed > 0)
+	if (Malformed > 0 || MalformedEvents > 0)
 	{
-		OutError = FString::Printf(TEXT("%d malformed grid(s) skipped"), Malformed);
+		OutError = FString::Printf(TEXT("%d malformed grid(s) and %d malformed event row(s) skipped"),
+			Malformed, MalformedEvents);
 	}
 	return IsValid();
 }

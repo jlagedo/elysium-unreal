@@ -1143,9 +1143,45 @@ def blend_clip_plan(d, clips):
     return extra, blends
 
 
+#: The columns of an interned event row, stated in the sidecar so a reader never positions them
+#: from memory. `options_i` indexes the model's own `event_options` array.
+_EVENT_FIELDS = ("cycle", "event", "type", "options_i")
+
+
+def event_table(clips):
+    """The sequence timelines `clips` declare, interned -> the sidecar's three event keys, or
+    `{}` when none of them carries an event.
+
+    A record's `options` is a fixed 64-byte payload and the corpus reuses a few dozen distinct
+    strings across its records, so the strings are interned per model and each row stores the
+    index instead. Index 0 is always `""` — the payload most records carry — which is the same
+    interning convention the clip vocabulary's `activities` array uses.
+
+    **Row order is the descriptor's own** and is never sorted: the dispatcher scans the array in
+    index order and fires every record inside the elapsed cycle interval, so two records sharing
+    a cycle arrive in the order the file states them
+    (`docs/vtmb/animation_and_movers.md` -> "Sequence events and native dispatch")."""
+    events = {}
+    options = [""]
+    interned = {"": 0}
+    for c in clips:
+        if not c.events:
+            continue
+        rows = []
+        for e in c.events:
+            if e.options not in interned:
+                interned[e.options] = len(options)
+                options.append(e.options)
+            rows.append([round(e.cycle, 6), e.event, e.type, interned[e.options]])
+        events[c.label] = rows
+    if not events:
+        return {}
+    return {"event_fields": list(_EVENT_FIELDS), "event_options": options, "events": events}
+
+
 def blend_sidecar(d, blends, clips):
-    """The blend table and autolayer binding a model ships beside its clips, or `{}` when it
-    authors neither.
+    """The blend table, autolayer binding and event timelines a model ships beside its clips,
+    or `{}` when it authors none of the three.
 
     The pose parameters travel with it because a grid's `paramindex` is an index into this
     model's own array — the axis cannot be named, wrapped or normalized without it.
@@ -1155,9 +1191,15 @@ def blend_sidecar(d, blends, clips):
     are. It is a binding rather than a mix: the host is the base pose and each entry is
     evaluated beside it and accumulated, a masked overlay or an additive according to its own
     flags. Order is part of the data — an overlay blends toward its own pose and would
-    overwrite an additive already accumulated onto the bones it owns."""
+    overwrite an additive already accumulated onto the bones it owns.
+
+    `events` comes off the same descriptor again (`numevents`/`eventindex`@20/24) and is keyed
+    by the same sequence labels, which is why all three ship in one file. It is per owning model
+    rather than per resolving character: a bank sequence's timeline would otherwise be duplicated
+    across every character that resolves the label."""
     autolayers = {c.label: list(c.autolayers) for c in clips if c.autolayers}
-    if not blends and not autolayers:
+    events = event_table(clips)
+    if not blends and not autolayers and not events:
         return {}
     return {
         "pose_parameters": [
@@ -1167,6 +1209,7 @@ def blend_sidecar(d, blends, clips):
         ],
         "grids": blends,
         **({"autolayers": autolayers} if autolayers else {}),
+        **events,
     }
 
 

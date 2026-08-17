@@ -83,6 +83,7 @@ namespace
 			(*Obj)->TryGetNumberField(TEXT("procedural_bones"), E.ProceduralBones);
 			(*Obj)->TryGetStringField(TEXT("blends"), E.Blends);
 			(*Obj)->TryGetNumberField(TEXT("blend_grids"), E.BlendGrids);
+			(*Obj)->TryGetNumberField(TEXT("event_sequences"), E.EventSequences);
 			Out.Add(Pair.Key, MoveTemp(E));
 		}
 	}
@@ -260,9 +261,9 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 		return false;
 	}
 	Root->TryGetNumberField(TEXT("manifest_version"), ManifestVersion);
-	if (ManifestVersion < 3 || ManifestVersion > 7)
+	if (ManifestVersion < 3 || ManifestVersion > 8)
 	{
-		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 7)"),
+		OutError = FString::Printf(TEXT("unsupported npc_index manifest version %d (expected 3 to 8)"),
 			ManifestVersion);
 		return false;
 	}
@@ -335,6 +336,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				(*Obj)->TryGetNumberField(TEXT("procedural_bones"), Entry.ProceduralBones);
 				(*Obj)->TryGetStringField(TEXT("blends"), Entry.Blends);
 				(*Obj)->TryGetNumberField(TEXT("blend_grids"), Entry.BlendGrids);
+				(*Obj)->TryGetNumberField(TEXT("event_sequences"), Entry.EventSequences);
 				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
 				Entry.Model.ToLowerInline();
 				// Two shapes. v6 writes one object per clip carrying the selection keys; v4/v5

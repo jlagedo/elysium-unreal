@@ -1501,6 +1501,85 @@ bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
 	AddInfo(FString::Printf(TEXT("%d owner(s), %d host(s), %d entr(ies)"),
 		Tables.Num(), Hosts, Entries));
 
+	// --- The census -------------------------------------------------------------------------------
+	// The numbers the RE recorded, asserted rather than described: the only carriers are the two
+	// shared locomotion banks, and each declares an exact host population
+	// (`docs/vtmb/animation_and_movers.md` → "The autolayer table is the base→layer binding"). These
+	// are counts and not a shape deliberately — a third carrier or a shifted population means the
+	// descriptor decode moved, which content cannot cause and a structural test would not notice.
+	//
+	// A character's own model may ship a blend sidecar for its grids or its event timelines; what it
+	// must never ship is a binding, because a body composing layers off its own model would compose
+	// them differently from every other body reaching the same bank label.
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
+	{
+		if (Pair.Value.Blends.IsEmpty())
+		{
+			continue;
+		}
+		FElysiumBlendTable Own;
+		FString OwnError;
+		if (Own.Load(Pair.Value.Blends, OwnError) && !Own.AutoLayers.IsEmpty())
+		{
+			AddError(FString::Printf(TEXT("character '%s' declares %d autolayer host(s); only the "
+				"shared locomotion banks carry any"), *Pair.Key, Own.AutoLayers.Num()));
+		}
+	}
+
+	// {single-entry hosts, two-entry hosts} per bank. Summed, the `{1: 237, 2: 224}` histogram the
+	// patch-first census reports over all 4,445 models.
+	struct FCarrierCensus
+	{
+		const TCHAR* Stem;
+		int32 Single;
+		int32 Pair;
+	};
+	static const FCarrierCensus Carriers[] = {
+		{ TEXT("character_shared_male_move_and_ranged"), 119, 113 },
+		{ TEXT("character_shared_female_move_and_ranged"), 118, 111 },
+	};
+	for (const TPair<FString, FElysiumBlendTable>& Owner : Tables)
+	{
+		bool bKnown = false;
+		for (const FCarrierCensus& Carrier : Carriers)
+		{
+			bKnown = bKnown || Owner.Key.Equals(Carrier.Stem, ESearchCase::IgnoreCase);
+		}
+		if (!bKnown)
+		{
+			AddError(FString::Printf(TEXT("bank '%s' declares an autolayer binding; only the two "
+				"move_and_ranged banks carry any"), *Owner.Key));
+		}
+	}
+	for (const FCarrierCensus& Carrier : Carriers)
+	{
+		const FElysiumBlendTable* Table = Tables.Find(Carrier.Stem);
+		if (Table == nullptr)
+		{
+			// A focused export need not carry both banks. Say which one is missing rather than
+			// asserting a population against half a corpus.
+			AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: '%s' is not in this export"),
+				Carrier.Stem));
+			continue;
+		}
+		int32 Single = 0, Paired = 0;
+		for (const TPair<FString, FElysiumAutoLayerBinding>& Binding : Table->AutoLayers)
+		{
+			if (Binding.Value.Clips.Num() == 1)
+			{
+				++Single;
+			}
+			else if (Binding.Value.Clips.Num() == 2)
+			{
+				++Paired;
+			}
+		}
+		TestEqual(FString::Printf(TEXT("%s declares its recorded single-entry hosts"), Carrier.Stem),
+			Single, Carrier.Single);
+		TestEqual(FString::Printf(TEXT("%s declares its recorded two-entry hosts"), Carrier.Stem),
+			Paired, Carrier.Pair);
+	}
+
 	// 1. Structure, against the owner's own baked animations.
 	bool bStructure = true;
 	for (const TPair<FString, FElysiumBlendTable>& Owner : Tables)
@@ -1570,6 +1649,10 @@ bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
 	// that resolves in the bank and not here would bind to nothing at runtime.
 	int32 Bodies = 0, Resolved = 0, OverlayFirst = 0, AdditiveFirst = 0, Singles = 0;
 	bool bVocabulary = true;
+	// Every host whose additive is declared first. Retail's census names exactly one, byte-identically
+	// on both banks, so this is collected by name rather than counted: a second inverted host would be
+	// a real ordering difference, and it has to be visible as a name to be adjudicated.
+	TSet<FString> Inverted;
 	for (const TPair<FString, FElysiumNpcIndexEntry>& Npc : Index.Npcs)
 	{
 		FElysiumNpcClipSet Set;
@@ -1631,6 +1714,7 @@ bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
 				else if (Additive[0])
 				{
 					++AdditiveFirst;
+					Inverted.Add(Clip.Key.ToLower());
 				}
 				else
 				{
@@ -1656,6 +1740,149 @@ bool FElysiumAutoLayerBindingTest::RunTest(const FString&)
 		"pairs one overlay with one additive"), bVocabulary);
 	TestTrue(TEXT("some body reaches a host"), Resolved > 0);
 
+	// The one host that inverts the order, named. It also borrows a *pistol* delta under a
+	// throwing-star host, which reads as authoring reuse — but it is what the file states, and a
+	// consumer that hardcoded overlay-first would compose exactly this host differently from retail.
+	TArray<FString> InvertedNames = Inverted.Array();
+	InvertedNames.Sort();
+	AddInfo(FString::Printf(TEXT("additive-first host(s): %s"),
+		InvertedNames.IsEmpty() ? TEXT("none") : *FString::Join(InvertedNames, TEXT(", "))));
+	if (AdditiveFirst > 0)
+	{
+		TestEqual(TEXT("exactly one host declares its additive first"), InvertedNames.Num(), 1);
+		TestEqual(TEXT("...and it is the one retail's census names"),
+			InvertedNames.IsEmpty() ? FString() : InvertedNames[0],
+			FString(TEXT("throwing_star_midcrouch_idle")));
+	}
+
+	return true;
+}
+
+// The sequence event timelines: what a clip fires, and at what phase of its own cycle.
+//
+// The same shape as the autolayer test above — every assertion crosses the sidecar against something
+// ANOTHER export declares. `event_sequences` in `npc_index.json` is the rollup the exporter counted
+// as it wrote the file, so a timeline the parser refused shows up here as a disagreement between the
+// two rather than as a silently shorter table. Whether the timeline is faithful to the `.mdl` is
+// measured offline against the install, which bring-your-own-game keeps out of the repo.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSequenceEventTest,
+	"Elysium.Content.SequenceEvents", GElysiumSkeletalContentFlags)
+bool FElysiumSequenceEventTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+	if (Index.ManifestVersion < 8)
+	{
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: manifest v%d predates the event timelines"),
+			Index.ManifestVersion));
+		return true;
+	}
+
+	int32 Owners = 0, Sequences = 0, Records = 0;
+	TSet<int32> Ids;
+	bool bConformant = true;
+
+	// One owner: its sidecar against the rollup the index carries for it. `Rollup` is how many
+	// sequences the exporter wrote a timeline for, so the two disagreeing means the runtime dropped
+	// rows — never a shorter table nobody noticed.
+	auto Visit = [this, &Owners, &Sequences, &Records, &Ids, &bConformant](
+		const FString& Stem, const FString& RelPath, int32 Rollup)
+	{
+		if (RelPath.IsEmpty())
+		{
+			if (Rollup != 0)
+			{
+				AddError(FString::Printf(TEXT("'%s' claims %d event timeline(s) and names no "
+					"sidecar"), *Stem, Rollup));
+				bConformant = false;
+			}
+			return;
+		}
+		FElysiumBlendTable Table;
+		FString TableError;
+		if (!Table.Load(RelPath, TableError))
+		{
+			// An unreadable sidecar is the autolayer/grid tests' fault to report as well; say it
+			// once here only when this owner was supposed to carry a timeline.
+			if (Rollup != 0)
+			{
+				AddError(FString::Printf(TEXT("'%s' declares %d event timeline(s) and its sidecar "
+					"does not load: %s"), *Stem, Rollup, *TableError));
+				bConformant = false;
+			}
+			return;
+		}
+		if (Table.Events.Num() != Rollup)
+		{
+			AddError(FString::Printf(TEXT("'%s' parses %d event timeline(s); the index counted %d "
+				"(%s)"), *Stem, Table.Events.Num(), Rollup,
+				TableError.IsEmpty() ? TEXT("no reported fault") : *TableError));
+			bConformant = false;
+		}
+		if (Table.Events.IsEmpty())
+		{
+			return;
+		}
+		++Owners;
+		Sequences += Table.Events.Num();
+		for (const TPair<FString, TArray<FElysiumAnimEvent>>& Timeline : Table.Events)
+		{
+			for (const FElysiumAnimEvent& Record : Timeline.Value)
+			{
+				++Records;
+				Ids.Add(Record.Event);
+				// The parser refuses a phase outside 0..1, so reaching this loop with one would mean
+				// the refusal stopped working. Retail's census puts every shipped record at type 0;
+				// the type is carried verbatim, so a non-zero one here is real and unhandled.
+				if (Record.Cycle < 0.f || Record.Cycle > 1.f)
+				{
+					AddError(FString::Printf(TEXT("%s '%s': record %d sits at cycle %f"),
+						*Stem, *Timeline.Key, Record.Event, Record.Cycle));
+					bConformant = false;
+				}
+				if (Record.Type != 0)
+				{
+					AddError(FString::Printf(TEXT("%s '%s': record %d carries type %d; every "
+						"shipped v2531 record is type 0"), *Stem, *Timeline.Key, Record.Event,
+						Record.Type));
+					bConformant = false;
+				}
+			}
+		}
+	};
+
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
+	{
+		Visit(Pair.Key, Pair.Value.Blends, Pair.Value.EventSequences);
+	}
+	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Banks)
+	{
+		Visit(Pair.Key, Pair.Value.Blends, Pair.Value.EventSequences);
+	}
+	for (const TPair<FString, FElysiumAnimatedPropEntry>& Pair : Index.PlacedModels)
+	{
+		Visit(Pair.Value.Stem, Pair.Value.Blends, Pair.Value.EventSequences);
+	}
+
+	if (Owners == 0)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: this export declares no sequence event timeline"));
+		return true;
+	}
+	AddInfo(FString::Printf(TEXT("%d owner(s), %d sequence(s), %d record(s), %d distinct id(s)"),
+		Owners, Sequences, Records, Ids.Num()));
+	TestTrue(TEXT("every timeline matches its rollup and every record is an in-range type 0"),
+		bConformant);
 	return true;
 }
 

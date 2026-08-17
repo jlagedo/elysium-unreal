@@ -3,9 +3,15 @@
 #include "CoreMinimal.h"
 #include "ElysiumGaitSpeeds.h"   // FElysiumGaitSpeedTable — what a locomotion fan's motion becomes
 
-// A model's blend spaces, off `npc/blends/<stem>.json` (CAP7.3). Plain C++ with no UObject
-// reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
-// `UElysiumAnimSubsystem`.
+// What a model's own sequence descriptors declare beside their clips, off `npc/blends/<stem>.json`
+// (CAP7.3): its blend spaces, its autolayer bindings and its event timelines. All three come from
+// the same 764-byte record, so they ship in one file and are read by one parser. Plain C++ with no
+// UObject reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands
+// one out is `UElysiumAnimSubsystem`.
+//
+// The file is per **owning** model, never per resolving character: a bank sequence's grid, binding
+// and timeline are stated once on the bank that owns the label rather than on each of the ~1,400
+// characters that resolve it.
 //
 // A VtMB sequence does not always name one animation. 279 of the exported sequences name a **grid**
 // of them — a 9x1 fan of `walk_0`..`walk_315` selected by `move_yaw`, a 3x3 weapon-aim layer on
@@ -120,6 +126,25 @@ struct FElysiumAutoLayerBinding
 	TArray<FString> Clips;
 };
 
+// One record on a sequence's own timeline, read from the same descriptor as the grids and the
+// bindings (`docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch").
+//
+// `Cycle` is normalized over the sequence, so it is a *phase* and not a time: the dispatcher fires
+// a record when the interval the sequence advanced through contains it, which means a looping
+// sequence visits the wrapped interval too. `Event` is the numeric dispatch id the handler
+// switches on, and `Options` is the record's 64-byte payload — the whole argument a handler gets,
+// spelled however the id's own family reads it (an integer, a bodygroup name, an `ACT_*` literal).
+//
+// The record carries no side effect of its own. What an id means belongs to the handler that
+// claims it, which is why nothing here interprets `Event` or parses `Options`.
+struct FElysiumAnimEvent
+{
+	float Cycle = 0.f;
+	int32 Event = 0;
+	int32 Type = 0;
+	FString Options;
+};
+
 struct FElysiumBlendTable
 {
 	FString Stem;
@@ -129,15 +154,24 @@ struct FElysiumBlendTable
 	TMap<FString, FElysiumBlendGrid> Grids;
 	// Keyed the same way, by HOST label. Only the two shared `move_and_ranged` banks carry any.
 	TMap<FString, FElysiumAutoLayerBinding> AutoLayers;
+	// Keyed the same way again, by the label of the sequence the timeline belongs to. **The array
+	// order is the file's**, which is the order the dispatcher fires records that share a cycle in.
+	TMap<FString, TArray<FElysiumAnimEvent>> Events;
 
-	// A table that parses but declares neither a grid nor a binding is not worth caching. The
-	// exporter writes no file at all in that case, so this only fires on a damaged one.
-	bool IsValid() const { return !Grids.IsEmpty() || !AutoLayers.IsEmpty(); }
+	// A table that parses but declares no grid, no binding and no timeline is not worth caching.
+	// The exporter writes no file at all in that case, so this only fires on a damaged one.
+	bool IsValid() const { return !Grids.IsEmpty() || !AutoLayers.IsEmpty() || !Events.IsEmpty(); }
 	const FElysiumBlendGrid* Find(const FString& Label) const { return Grids.Find(Label); }
 	// The layers `Label` declares, or null. Never reordered — see FElysiumAutoLayerBinding.
 	const FElysiumAutoLayerBinding* FindAutoLayers(const FString& Label) const
 	{
 		return AutoLayers.Find(Label);
+	}
+	// `Label`'s timeline, or null when that sequence declares none — which is most of them, and an
+	// absence rather than a fault.
+	const TArray<FElysiumAnimEvent>* FindEvents(const FString& Label) const
+	{
+		return Events.Find(Label);
 	}
 	const FElysiumPoseParamDesc* Param(int32 Index) const
 	{

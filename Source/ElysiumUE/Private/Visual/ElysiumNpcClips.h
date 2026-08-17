@@ -129,6 +129,10 @@ struct FElysiumNpcIndexEntry
 	// animation — most of them — and on any export predating CAP7.3.
 	FString Blends;
 	int32   BlendGrids = 0;
+	// How many of that same sidecar's sequences carry an event timeline. The sidecar is written for
+	// any of the three payloads, so a non-zero count here with `BlendGrids` at zero is an ordinary
+	// model that authors events and no grid. Zero on an export predating manifest v8.
+	int32   EventSequences = 0;
 };
 
 // One cinematic anim set (12.1 / PL16): the whole-cast performance a choreo scene's
@@ -187,10 +191,12 @@ struct FElysiumAnimatedPropEntry
 	TArray<FString> SplitRotationBones;
 	FString Procedural;
 	int32 ProceduralBones = 0;
-	// Same as the character entry's: "animated_props/blends/<stem>.json" and its grid count, empty
-	// on every prop but `wolf_form`, which is the one skeletal prop declaring a multi-cell sequence.
+	// Same as the character entry's: "animated_props/blends/<stem>.json", its grid count — empty on
+	// every prop but `wolf_form`, which is the one skeletal prop declaring a multi-cell sequence —
+	// and how many of its sequences carry an event timeline.
 	FString Blends;
 	int32 BlendGrids = 0;
+	int32 EventSequences = 0;
 	// **Declaration order is semantic** — see FElysiumPropClip::Index. A v4/v5 index carries only
 	// names, so those rows land here with Index set from the array position and no selection keys.
 	TArray<FElysiumPropClip> Clips;

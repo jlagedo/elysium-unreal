@@ -71,7 +71,7 @@ BLENDS_DIR = os.path.join(NPC_DIR, "blends")
 GARMENT_DIR = os.path.join(NPC_DIR, "garment")
 ANIMATED_PROP_DIR = os.path.join(NPC_DIR, "animated_props")
 PLACED_MODEL_DIR = os.path.join(NPC_DIR, "placed_models")
-MANIFEST_VERSION = 7
+MANIFEST_VERSION = 8
 
 
 def npc_models_from_ents(out_root=OUT):
@@ -382,9 +382,10 @@ def write_procedural(stem, model, rules, prefix=""):
 
 
 def write_blends(stem, model, table, prefix=""):
-    """Write one model's blend grids and autolayer binding to `<prefix>blends/<stem>.json` ->
-    the manifest fields naming it. Both are read from the same 764-byte sequence descriptor,
-    so they ship in one file; a model authoring neither writes none.
+    """Write one model's blend grids, autolayer binding and event timelines to
+    `<prefix>blends/<stem>.json` -> the manifest fields naming it. All three are read from the
+    same 764-byte sequence descriptor, so they ship in one file; a model authoring none of them
+    writes none.
 
     Kept out of `npc_manifest.json` for the reason the flex rigs and procedural tables are:
     `move_and_ranged` alone authors 253 grids, and a map places 17-22 models. `{}` for a model
@@ -424,9 +425,17 @@ def write_blends(stem, model, table, prefix=""):
                            "blends toward its own pose and would overwrite an additive "
                            "already accumulated onto the bones it owns. The record carries no "
                            "weight, ramp or flags; the weight a layer arrives with is the "
-                           "host's. See docs/vtmb/animation_and_movers.md A.3.",
+                           "host's. events[label] is that sequence's timeline, one row per "
+                           "record in the columns `event_fields` names: cycle normalized over "
+                           "the sequence, the numeric dispatch id, the record type, and an "
+                           "index into `event_options` for the record's 64-byte options "
+                           "payload. Rows stay in the descriptor's own order, which is the "
+                           "order the dispatcher fires records sharing a cycle in. See "
+                           "docs/vtmb/animation_and_movers.md A.3 and its sequence-event "
+                           "section.",
                    **table}, f, separators=(",", ":"))
-    return {"blends": rel, "blend_grids": len(table.get("grids", {}))}
+    return {"blends": rel, "blend_grids": len(table.get("grids", {})),
+            "event_sequences": len(table.get("events", {}))}
 
 
 def animated_prop_index_row(rec):
@@ -455,7 +464,8 @@ def animated_prop_index_row(rec):
         "split_bones": rec.get("split_bones", []),
         **({"procedural": rec["procedural"],
             "procedural_bones": rec["procedural_bones"]} if rec.get("procedural") else {}),
-        **({"blends": rec["blends"], "blend_grids": rec["blend_grids"]}
+        **({"blends": rec["blends"], "blend_grids": rec["blend_grids"],
+            "event_sequences": rec["event_sequences"]}
            if rec.get("blends") else {}),
         "clips": [{"name": label, "index": i, **meta}
                   for i, (label, meta) in enumerate(rec.get("clips", {}).items())],
@@ -496,7 +506,8 @@ def write_sidecars(manifest):
         "note": "counts only for npcs/banks; a character clip vocabulary lives in "
                 "clips/<stem>.json, a flex rig in facial/<stem>.json, an eyeball pair in "
                 "eyes/<stem>.json, a procedural bone rule table in procedural/<stem>.json and "
-                "a blend-grid table in blends/<stem>.json. Those paths, like the bank glb "
+                "a blend-grid table, autolayer binding and sequence event timelines in "
+                "blends/<stem>.json. Those paths, like the bank glb "
                 "paths, are relative to this file's directory. placed_models carry their "
                 "baked clip vocabulary inline, in the model's own sequence-declaration order.",
         "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
@@ -509,14 +520,16 @@ def write_sidecars(manifest):
                      **({"procedural": r["procedural"],
                          "procedural_bones": r["procedural_bones"]} if r.get("procedural")
                         else {}),
-                     **({"blends": r["blends"], "blend_grids": r["blend_grids"]}
+                     **({"blends": r["blends"], "blend_grids": r["blend_grids"],
+                         "event_sequences": r["event_sequences"]}
                         if r.get("blends") else {}),
                      **({"garment": r["garment"],
                          "garment_particles": r["garment_particles"]}
                         if r.get("garment") else {})}
                  for s, r in manifest["npcs"].items()},
         "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"]),
-                      **({"blends": r["blends"], "blend_grids": r["blend_grids"]}
+                      **({"blends": r["blends"], "blend_grids": r["blend_grids"],
+                          "event_sequences": r["event_sequences"]}
                          if r.get("blends") else {})}
                   for s, r in manifest["banks"].items()},
         # 12.1 — a choreo scene's anim-set model key -> the per-bone-root banks it was split
@@ -1005,6 +1018,9 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
                            *animated_prop_index.values()) if r.get("blends")]
     print(f"[npc] blend grids: {len(gridded)} model(s) author one, "
           f"{sum(r['blend_grids'] for r in gridded)} grids -> {BLENDS_DIR}/")
+    evented = [r for r in gridded if r["event_sequences"]]
+    print(f"[npc] sequence events: {len(evented)} model(s) author a timeline, "
+          f"{sum(r['event_sequences'] for r in evented)} sequences -> {BLENDS_DIR}/")
     print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
           f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
     if warnings:

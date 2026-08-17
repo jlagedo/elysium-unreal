@@ -312,12 +312,13 @@ TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const 
 		if (!Table->Load(RelPath, Error) || !Table->IsValid())
 		{
 			UE_LOG(LogElysiumAnim, Warning, TEXT("blends '%s': %s"), *Stem,
-				Error.IsEmpty() ? TEXT("no usable grid") : *Error);
+				Error.IsEmpty() ? TEXT("no usable grid, binding or timeline") : *Error);
 		}
 		else
 		{
-			UE_LOG(LogElysiumAnim, Verbose, TEXT("blends '%s': %d grid(s), %d pose parameter(s)"),
-				*Stem, Table->Grids.Num(), Table->PoseParams.Num());
+			UE_LOG(LogElysiumAnim, Verbose,
+				TEXT("blends '%s': %d grid(s), %d pose parameter(s), %d event timeline(s)"),
+				*Stem, Table->Grids.Num(), Table->PoseParams.Num(), Table->Events.Num());
 			Result = Table;
 		}
 	}

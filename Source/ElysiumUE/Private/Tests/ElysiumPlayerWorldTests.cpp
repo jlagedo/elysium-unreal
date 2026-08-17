@@ -714,11 +714,30 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 			Placed->RestSequence(7), FString(TEXT("idle_a")));
 	}
 
+	// v8 carries the sequence-event rollup beside the grid count. Both are counts over the SAME
+	// sidecar, and a model authoring events and no grid is ordinary — so the two are read
+	// independently rather than one gating the other.
+	FElysiumNpcIndex V8;
+	Error.Reset();
+	const FString Json8 = TEXT("{\"manifest_version\":8,"
+		"\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\",\"model\":\"models/dummy.mdl\",\"clips\":1,"
+		"\"blends\":\"blends/dummy.json\",\"blend_grids\":0,\"event_sequences\":11}},"
+		"\"banks\":{\"bank\":{\"glb\":\"banks/bank.glb\",\"model\":\"models/bank.mdl\","
+		"\"clips\":3,\"blends\":\"blends/bank.json\",\"blend_grids\":2,"
+		"\"event_sequences\":7}},\"cinematics\":{}}");
+	TestTrue(FString::Printf(TEXT("v8 manifest parses: %s"), *Error), V8.LoadJsonText(Json8, Error));
+	TestEqual(TEXT("a gridless model still reports its event timelines"),
+		V8.Npcs[TEXT("dummy")].EventSequences, 11);
+	TestEqual(TEXT("...and declares no grid"), V8.Npcs[TEXT("dummy")].BlendGrids, 0);
+	TestEqual(TEXT("a bank reports both counts off the one sidecar"),
+		V8.Banks[TEXT("bank")].EventSequences, 7);
+	TestEqual(TEXT("...beside its grids"), V8.Banks[TEXT("bank")].BlendGrids, 2);
+
 	FElysiumNpcIndex Future;
 	Error.Reset();
-	const FString Json8 = FString::Printf(TEXT("{\"manifest_version\":8,%s}"), *MinimalNpc);
-	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json8, Error));
-	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 7")));
+	const FString Json9 = FString::Printf(TEXT("{\"manifest_version\":9,%s}"), *MinimalNpc);
+	TestFalse(TEXT("future manifest is rejected"), Future.LoadJsonText(Json9, Error));
+	TestTrue(TEXT("future rejection explains supported versions"), Error.Contains(TEXT("expected 3 to 8")));
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropBoundsTest,
@@ -1402,6 +1421,49 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 	TestTrue(TEXT("wall occlusion rejects the target"), Query.Candidates.IsEmpty());
 	TestEqual(TEXT("wall occlusion is reported"), Query.MissOutcome, EElysiumUseOutcome::Occluded);
 	Wall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	Map->SetUseAnchorEnabled(OccludedHandle, false);
+	const FElysiumEntityHandle SlabHandle(40, 1);
+	const FElysiumEntityHandle KnobHandle(41, 1);
+	FElysiumConvexHull SlabHull;
+	for (const float X : { -4.f, 4.f })
+	{
+		for (const float Y : { -50.f, 50.f })
+		{
+			for (const float Z : { -50.f, 50.f })
+			{
+				SlabHull.Vertices.Emplace(X, Y, Z);
+			}
+		}
+	}
+	UElysiumBrushComponent* Slab = NewObject<UElysiumBrushComponent>(Map, TEXT("KnobbedSlab"));
+	Slab->InitBrush(SlabHandle, { SlabHull }, EElysiumBrushSolidity::Solid);
+	Slab->SetupAttachment(Map->GetRootComponent());
+	Slab->SetWorldLocation(CameraLocation + CameraRotation.Vector() * 75.0f);
+	Slab->RegisterComponent();
+	Map->AddInstanceComponent(Slab);
+	Map->RegisterUseAnchor(Slab, SlabHandle);
+	AddTarget(TEXT("KnobOnSlabSource"), CameraLocation + CameraRotation.Vector() * 150.0f,
+		FVector(3.0f), KnobHandle);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("an enabled slab still owns the exact ray in front of its knob"),
+		Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("the slab wins over the knob while its use anchor is live"),
+			Query.Candidates[0].Owner, SlabHandle);
+	}
+	Map->SetUseAnchorEnabled(SlabHandle, false);
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("a knobbed slab stops blocking ElysiumUse so the knob can be selected"),
+		Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("the knob is the use target once the slab is disarmed"),
+			Query.Candidates[0].Owner, KnobHandle);
+	}
+	Map->SetUseAnchorEnabled(KnobHandle, false);
+	Slab->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Offset the final POV like a third-person camera while leaving body reach at the pawn pivot.
 	ACameraActor* OffsetCamera = World->SpawnActor<ACameraActor>();

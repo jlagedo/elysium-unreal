@@ -1152,6 +1152,51 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 		// Case-insensitive, like every other label lookup in the module.
 		TestNotNull(TEXT("labels resolve case-insensitively"), Parsed.Find(TEXT("WALK")));
 	}
+	TestTrue(TEXT("a sidecar declaring no timeline carries none"), Parsed.Events.IsEmpty());
+
+	// The event timeline off the same descriptor: interned options, declaration order kept, and the
+	// three rows a decode fault would produce dropped rather than carried into the dispatcher.
+	const FString EventJson = TEXT(R"({"stem":"t","model":"m","pose_parameters":[],"grids":{},)")
+		TEXT(R"("event_fields":["cycle","event","type","options_i"],)")
+		TEXT(R"("event_options":["","left foot","right foot"],)")
+		TEXT(R"("events":{"walk":[[0.25,2050,0,1],[0.75,2051,0,2]],)")
+		TEXT(R"("throw":[[0.5,3005,0,0],[0.5,2040,0,1]],)")
+		TEXT(R"("damaged":[[1.5,2050,0,1],[0.5,2050,0,9],[0.5,2050]]}})");
+	FElysiumBlendTable Timeline;
+	FString EventError;
+	// The sidecar declares no grid and no binding at all: events alone are a table worth keeping,
+	// which is what the exporter's own gate now says too.
+	TestTrue(TEXT("an events-only sidecar parses"), Timeline.LoadJsonText(EventJson, EventError));
+	TestTrue(TEXT("...and reports the rows it refused"),
+		EventError.Contains(TEXT("malformed event row")));
+	TestEqual(TEXT("two sequences keep a usable timeline"), Timeline.Events.Num(), 2);
+	if (const TArray<FElysiumAnimEvent>* Footsteps = Timeline.FindEvents(TEXT("walk")))
+	{
+		TestEqual(TEXT("both records survive"), Footsteps->Num(), 2);
+		TestTrue(TEXT("the cycle is the record's own phase"),
+			FMath::IsNearlyEqual((*Footsteps)[0].Cycle, 0.25f));
+		TestEqual(TEXT("the dispatch id comes through"), (*Footsteps)[0].Event, 2050);
+		TestEqual(TEXT("...and the interned options payload is resolved"), (*Footsteps)[0].Options,
+			FString(TEXT("left foot")));
+		TestEqual(TEXT("...for every row"), (*Footsteps)[1].Options, FString(TEXT("right foot")));
+	}
+	if (const TArray<FElysiumAnimEvent>* Throw = Timeline.FindEvents(TEXT("throw")))
+	{
+		// Two records on one cycle: the file's order is the order the dispatcher fires them in, so
+		// nothing here may sort or dedupe.
+		TestEqual(TEXT("records sharing a cycle keep declaration order"), (*Throw)[0].Event, 3005);
+		TestEqual(TEXT("...both of them"), (*Throw)[1].Event, 2040);
+		TestTrue(TEXT("index 0 is the empty payload"), (*Throw)[0].Options.IsEmpty());
+	}
+	// An out-of-range phase can never be reached, an options index the file does not carry cannot be
+	// resolved, and a short row is not a record. Each is dropped rather than guessed at, and a
+	// sequence left with nothing is absent rather than present-and-empty — the two read the same to
+	// a consumer, and the count in `OutError` is what says the difference was noticed.
+	TestNull(TEXT("a sequence whose every row is malformed is dropped whole"),
+		Timeline.FindEvents(TEXT("damaged")));
+	TestNull(TEXT("a sequence with no timeline answers null"), Timeline.FindEvents(TEXT("idle")));
+	// Case-insensitive, the same as the grid and binding lookups beside it.
+	TestNotNull(TEXT("timelines resolve case-insensitively"), Timeline.FindEvents(TEXT("WALK")));
 
 	// --- The speed fan (CCC7): the same grid read as per-direction speed rather than as clips ------
 	// `MakeYawTable`'s fan authors motion on cell 4 alone, which is the hole case by construction: a
