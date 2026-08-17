@@ -428,5 +428,9 @@ private:
 	int32 StateIndex[ElysiumAnimGraph::NumGraphStates];
 	bool bStateHasBlendSpacePlayer[ElysiumAnimGraph::NumGraphStates] = {};
 	bool bRecordedAnyBlendSpacePlayer = false;
+	// A compiled class that does not carry the machine is reported once per instance. The lookup
+	// itself still retries — a class can answer later — but the report is a defect in the generated
+	// asset, and a defect restated every frame by every body drowns the log it is meant to reach.
+	bool bReportedMissingMachine = false;
 	FElysiumOneShotReport OneShot;
 };

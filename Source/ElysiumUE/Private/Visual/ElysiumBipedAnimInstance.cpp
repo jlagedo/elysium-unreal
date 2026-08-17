@@ -18,6 +18,8 @@
 #include "BonePose.h"
 #include "HAL/IConsoleManager.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumBipedGraph, Log, All);
+
 namespace
 {
 	// The one machine the authored graph carries. The asset test asserts this name, so a graph whose
@@ -213,13 +215,30 @@ void UElysiumBipedAnimInstance::CacheStateMachine()
 		Index = INDEX_NONE;
 	}
 
+	// A body on the native class carries no compiled graph, so it carries no machine either. That is
+	// the designed host for a skeletal prop — a named clip and nothing else, `ElysiumEntityBodies.cpp`
+	// installs it deliberately — and for any body that loaded before the generated graph package
+	// existed. An explicitly optional absence is not a failure and does not report.
+	if (!HasCompiledGraph())
+	{
+		return;
+	}
+
 	const FBakedAnimationStateMachine* Machine = nullptr;
 	GetStateMachineIndexAndDescription(GLocomotionMachine, MachineIndex, &Machine);
 	if (Machine == nullptr)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[elysium] no baked state machine named '%s'; compiled blend-space checks fall ")
-			TEXT("back to the authored pair list"), *GLocomotionMachine.ToString());
+		// This one IS a defect: a generated class that should carry the machine and does not, which
+		// is a renamed machine or a stale package. Once per instance — the caller retries the lookup
+		// every frame until it succeeds, and this must not become that.
+		if (!bReportedMissingMachine)
+		{
+			bReportedMissingMachine = true;
+			UE_LOG(LogElysiumBipedGraph, Warning,
+				TEXT("[elysium] compiled graph '%s' carries no baked state machine named '%s'; ")
+				TEXT("blend-space checks fall back to the authored pair list"),
+				*GetClass()->GetName(), *GLocomotionMachine.ToString());
+		}
 		return;
 	}
 	// By name rather than by declaration order: a state's index is whatever the compiler assigned,
@@ -396,7 +415,7 @@ void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 			// A named mask the body's own skeleton does not carry. Refused rather than composed
 			// unmasked, which would pull the whole rig toward the layer instead of the bones it owns
 			// — the same failure the retired accumulator's gate existed to prevent.
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogElysiumBipedGraph, Warning,
 				TEXT("[elysium] upper-body mask '%s' is absent from this body's skeleton or is not a "
 					"blend mask; the layer is left unmasked-refused"),
 				*RequestedUpperBodyMaskName.ToString());
@@ -416,7 +435,11 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	// A component that was built before any graph existed, or whose class was swapped, resolves its
 	// machine on the first update rather than staying inert for the body's whole life.
-	if (MachineIndex == INDEX_NONE)
+	//
+	// Only while the class could still answer. A native host never carries a machine, so re-asking
+	// one every frame buys nothing — and a map's skeletal props asking together is thousands of
+	// pointless lookups a second.
+	if (MachineIndex == INDEX_NONE && HasCompiledGraph())
 	{
 		CacheStateMachine();
 	}
@@ -454,7 +477,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		const EElysiumGraphState GridState = ElysiumAnimGraph::StateFor(Pending);
 		if (!CompiledStateCanPlayBlendSpace(GridState))
 		{
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogElysiumBipedGraph, Warning,
 				TEXT("[elysium] '%s' is a blend space; compiled state %s cannot play a grid ")
 				TEXT("(owner '%s')"),
 				*Pending.SequenceLabel, ElysiumAnimGraph::StateName(GridState),
