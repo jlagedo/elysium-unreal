@@ -244,7 +244,7 @@ The ladder:
   as a fact, no divergence; the `A_dance01` seam adjudicated at
   `Instrument.Elysium.DancerDecodeProbe3` as a graph-less measurement rather than a bake defect,
   the clip's blamed bones carrying Joy's own bind translations and skin weights.
-- [~] **[LIFE2 The action catalog as project source](plans/animation.md)** — the recovered weapon
+- [x] **[LIFE2 The action catalog as project source](plans/animation.md)** — the recovered weapon
   translation tables are committed source, generated from the pinned binary by owner-run
   archaeology: 9,214 ordered rows over 61 classes stored as 1,565 units (18 base sequences, 110
   block headers, 595 exceptions, 57 `required` flags, 3 renames, 8 substitute bases) and
@@ -270,7 +270,10 @@ The ladder:
   beside the grids and autolayer binding — 48 owners, 631 sequences, 979 records, every cycle in
   range and every type 0 — and the autolayer census confirms the two `move_and_ranged` banks alone
   carry bindings (`{1:237, 2:224}`), with the one inverted host named. The transition graph is
-  open.
+  closed as unauthored: `NumTransitions`@336 is 0 on all 4,445 models and `entrynode`/`exitnode`@624/628
+  are 0 on all 14,012 sequence descriptors, and `AdvanceToIdealActivity`'s traversal
+  (`FindTransitionSequence` → the `entrynode`/`exitnode`/matrix lookup at `0x10428ad0`) is
+  decompilation-confirmed dead code against shipped content — no sidecar block is emitted.
 - [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
   authority is landed; the NPC gait push, repointing the resolver onto the committed tables and
   deleting the 5-row stub, and activity→state coverage open.

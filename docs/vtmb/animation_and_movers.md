@@ -215,6 +215,7 @@ The trailing region carries the blend space. Read from the runtime evaluator
 | 588 | float[2] | `paramstart` | axis range, in the parameter's own units |
 | 596 | float[2] | `paramend` | |
 | 612 | float[3] | transition-duration triple | seconds; the crossfade time this sequence asks for, sampled piecewise-linearly over the *outgoing* sequence's cycle. Read by `FUN_1008de30`, not by the blend evaluator; the rule that consumes it is A.4c |
+| 624/628 | int | `entrynode` / `exitnode` | 1-based transition-graph node pair, `0` = none; `0` on all 14,012 sequence descriptors — see "NPC activity resolution" below |
 | 660/664 | int | `numautolayers` / `autolayerindex` | four bytes per entry, each a sequence index the dispatcher evaluates recursively |
 
 A cell is `anim[i0][i1]` at `56 + (i0 * 16 + i1) * 2`: **axis 0 takes the row stride**, a
@@ -1061,6 +1062,36 @@ ideal, it resolves again and calls `AdvanceToIdealActivity`. That function asks 
 sequence between the current and target sequence, commits `ACT_TRANSITION` while traversing an
 intermediate, and commits the saved logical/translated/weapon target on arrival. `SetActivity` is
 the immediate route that resolves and calls `SetActivityAndSequence` directly.
+
+#### The transition graph is unauthored, and the traversal branch is dead code [VtMB decompiled + data-verified]
+
+`AdvanceToIdealActivity` (`0x102726a0`) asks `CBaseAnimating::FindTransitionSequence`
+(`0x100936e0`) for an intermediate between the current and target sequence. That function walks
+the entity's model plus up to two included models (via `CBaseAnimating::GetModelPtr`, `0x100952d0`,
+which resolves index `-1`/self and `0`/`1`/include through the model-info virtual-model path) and
+hands each candidate pair of sequence numbers to `FUN_10428ad0`, the matrix lookup:
+
+1. `thunk_FUN_100c7560` resolves a global sequence number to its owning `mstudiohdr_t*` and
+   `StudioSeqDesc*`, accumulating past each included model's `NumLocalSeq`@272 range and, beyond
+   that, walking `NumIncludeModels`@404/`IncludeModelIndex`@408 (116-byte `StudioModelGroup`
+   records) exactly as `docs/vtmb/mdl_v2531.md` names them.
+2. `FUN_10428ad0` reads both resolved descriptors' `entrynode`@624/`exitnode`@628 (`mdl_v2531.md` →
+   "The transition-graph node pair"). **Either being `0` is an immediate fallback** — the function
+   returns the target sequence unmodified without touching the matrix.
+3. Only past that gate does it read the owning header's `NumTransitions`@336/`TransitionIndex`@340
+   pair as an `n×n` byte adjacency matrix (`n = NumTransitions`) at cell
+   `TransitionIndex + (entry-1)*n + (exit-1)`, then linear-scans that header's own sequence array
+   re-reading each descriptor's `entrynode`/`exitnode` (764-byte stride) for the one sequence whose
+   pair matches the matrix cell — the actual `*_to_*`-style transition clip.
+
+**None of it ever executes against shipped content.** `NumTransitions`@336 is `0` on all 4,445
+v2531 models and `entrynode`/`exitnode` are `0` on all 14,012 sequence descriptors
+(`research/tooling/probes/seqdesc_transition_fields.py`), and the same sweep finds zero sequences
+anywhere in the install whose label contains `_to_`. Step 2's gate is therefore always taken:
+`AdvanceToIdealActivity` never commits `ACT_TRANSITION` through an intermediate on any installed
+model, and always falls through to committing the resolved target directly. A remake reproduces
+the fallback behaviour — direct commit, no intermediate — by construction, with no node/matrix data
+to carry: there is nothing here for a remake to feed forward as content.
 
 The controlled `sm_hub_1` corpus independently reaches the four central return sites
 [capture-verified]. Grouping by the serial-bearing entity handle yields **1,232 complete NPC

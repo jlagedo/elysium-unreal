@@ -126,13 +126,6 @@ One bullet and one commit each.
 
 | # | Session | Touches | Deps |
 |---|---|---|---|
-| **S5** | **Catalog: transition graph** — decode, verify, emit, write the VtMB doc | `formats/mdl_skel.py`, `npc_export.py`, `animation_and_movers.md` | — |
-
-### Acceptance sentences, quoted back in each kickoff
-
-- **S5** — *every decoded entry/exit node lies in `[0, n)` across all 4,445 v2531 models, `n` equals
-  `max(node)+1`, a `*_to_*`-carrying model's matrix names exactly those sequences, and the lookup
-  reached from `0x102726a0` reads those offsets; the layout is recorded in `animation_and_movers.md`.*
 
 ### Verification per session
 
@@ -148,14 +141,10 @@ Narrowest first — no broad profile, no `--force`, no unscoped tier.
 
 ## 5. Risks
 
-1. **The transition-graph offsets may not be there.** VtMB v2531 is an odd internal fork; if the
-   node fields were stripped, S5 has nothing to decode. Default: **S5 does not block LIFE2** — the
-   sidecar carries no `"transitions"` block and LIFE5 inherits the dependency. Settle before S5
-   starts, not after it stalls.
-2. **Weapon class → runtime tag.** The runtime keys by `WeaponTag` (`"glock"`), the tables by C++
+1. **Weapon class → runtime tag.** The runtime keys by `WeaponTag` (`"glock"`), the tables by C++
    class and entity classname. A class with no derivable tag is unreachable from the runtime, which
    would mean the runtime should key by entity classname — a change to
    `FElysiumAnimationIntent.WeaponTag`'s meaning that reaches into LIFE4.
-3. **The tables become ours to maintain.** A wrong row is now a bug we fix, with the RE record as
+2. **The tables become ours to maintain.** A wrong row is now a bug we fix, with the RE record as
    its rationale rather than a binary to re-diff. That is the intended posture, and it means the
    conformance tests are the only thing standing between a bad edit and a silently wrong pose.
