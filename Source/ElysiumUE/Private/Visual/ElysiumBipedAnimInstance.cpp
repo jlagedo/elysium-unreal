@@ -266,6 +266,16 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 	Pending = Selection;
 	PendingBlendSpace = Assets.Space;
 	PendingSequence = Assets.Sequence;
+	// BuildNpcVisual (and every other clip stand) arms a looping one-shot on DefaultSlot so a
+	// freshly stood body is not the bind pose. That slot sits ON TOP of the state machine, so a
+	// walk fan the shipping driver publishes underneath never reaches the frame — the body keeps
+	// playing idle while it moves. End both owners when a locomotion asset is actually in hand;
+	// a miss leaves the slot alone so the hold still has a pose.
+	if (PendingSequence != nullptr || PendingBlendSpace != nullptr)
+	{
+		StopOneShot(0.f);
+		StopClip();
+	}
 	PendingUpperBodySpace = Assets.OverlaySpace;
 	PendingUpperBodySequence = Assets.OverlaySequence;
 	PendingUpperBodyMaskName = Assets.OverlayMaskName;

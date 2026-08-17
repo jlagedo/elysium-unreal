@@ -51,6 +51,9 @@ namespace
 		Actor->SetRootComponent(Root);
 		Root->RegisterComponent();
 		Actor->SetActorLocation(Origin);
+		// Solids are Static so Recast will take them; a Movable root refuses that attach and
+		// the room stands with no floor.
+		Root->SetMobility(EComponentMobility::Static);
 
 		UStaticMesh* Cube = bWithMeshes
 			? LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")) : nullptr;

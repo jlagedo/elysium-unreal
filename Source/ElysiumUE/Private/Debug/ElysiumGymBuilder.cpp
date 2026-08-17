@@ -34,6 +34,8 @@ AActor* Spawn(UWorld* World, const FSpec& Spec, const FVector& Origin, bool bWit
 	Actor->SetRootComponent(Root);
 	Root->RegisterComponent();
 	Actor->SetActorLocation(Origin);
+	// Solids are Static; a Movable root refuses that attach and the gym stands with no floor.
+	Root->SetMobility(EComponentMobility::Static);
 
 	UStaticMesh* Cube = nullptr;
 	if (bWithMeshes)

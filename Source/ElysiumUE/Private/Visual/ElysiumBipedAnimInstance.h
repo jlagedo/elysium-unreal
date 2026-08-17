@@ -258,6 +258,9 @@ public:
 	// the player. The instance does not reach for the driver: it lives on `AElysiumMapActor` behind a
 	// pimpl while the visual is a component of the pawn, so a pull would invert the layering and
 	// carry a null branch for every map that seats no pawn.
+	//
+	// A playable asset ends the DefaultSlot one-shot `BuildNpcVisual` armed as a standing idle: that
+	// slot covers the state machine, which is the pose the driver is publishing.
 	void PublishSelection(const FElysiumAnimationSelection& Selection,
 		const FElysiumResolvedAnimation& Assets);
 

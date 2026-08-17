@@ -315,6 +315,44 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			}
 		});
 
+	// --- the mode ---------------------------------------------------------------------------------
+
+	Register(TEXT("elysium.gr_mode"),
+		TEXT("Switch the lab: `elysium.gr_mode review|drive|arena`."),
+		[](FElysiumGreenRoomRun& Run, const TArray<FString>& Args)
+		{
+			if (Args.Num() == 0)
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning,
+					TEXT("gr_mode: name review, drive or arena."));
+				return;
+			}
+			FElysiumGreenRoomRun::ELabMode Mode = FElysiumGreenRoomRun::ELabMode::Review;
+			if (Args[0].StartsWith(TEXT("a")))
+			{
+				Mode = FElysiumGreenRoomRun::ELabMode::Arena;
+			}
+			else if (Args[0].StartsWith(TEXT("d")))
+			{
+				Mode = FElysiumGreenRoomRun::ELabMode::Drive;
+			}
+			else if (!Args[0].StartsWith(TEXT("r")))
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning,
+					TEXT("gr_mode: '%s' is not review, drive or arena."), *Args[0]);
+				return;
+			}
+			FString Error;
+			if (!Run.LabSetMode(Mode, Error))
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_mode failed: %s"), *Error);
+				return;
+			}
+			const TCHAR* Name = Run.IsArena() ? TEXT("arena")
+				: Run.IsDriving() ? TEXT("drive") : TEXT("review");
+			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_mode: %s"), Name);
+		});
+
 	// --- the readout ------------------------------------------------------------------------------
 
 	Register(TEXT("elysium.gr_status"),
