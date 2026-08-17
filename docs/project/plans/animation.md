@@ -20,6 +20,9 @@ session per task — session shape, kickoff prompts, scope traps:
 
 ### LIFE2 The action catalog on the mount
 
+**Approved design — schema, exporter home, bake shape and the seven-session split:**
+[`life2-action-catalog.md`](life2-action-catalog.md).
+
 The extraction RE is closed (RE37); its output still lives only as research artifacts under
 `$ELYSIUM_WORK_ROOT`. This rung normalizes it into the export and bakes it, so every rung above
 resolves activities through data instead of hand-seeded stubs. The runtime today carries a
