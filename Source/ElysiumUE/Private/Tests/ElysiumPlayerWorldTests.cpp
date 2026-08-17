@@ -1471,6 +1471,29 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		TestEqual(TEXT("eye-forward still names the on-axis target"),
 			Query.Candidates[0].Owner, OccludedHandle);
 	}
+	Map->SetUseAnchorEnabled(OccludedHandle, false);
+
+	// A source component rotated in world space must keep its use proxy aligned to its local bounds.
+	const FElysiumEntityHandle RotatedHandle(50, 1);
+	UBoxComponent* RotatedSource = NewObject<UBoxComponent>(Map, TEXT("RotatedTargetSource"));
+	RotatedSource->InitBoxExtent(FVector(10.0f, 2.0f, 2.0f));
+	RotatedSource->SetupAttachment(Map->GetRootComponent());
+	RotatedSource->SetWorldLocationAndRotation(
+		BodyOrigin + Aim * 150.0f, FRotator(0.0f, 90.0f, 0.0f));
+	RotatedSource->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RotatedSource->RegisterComponent();
+	Map->AddInstanceComponent(RotatedSource);
+	Map->RegisterUseAnchor(RotatedSource, RotatedHandle);
+
+	Query = Map->QueryPlayerUse(FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("rotated use anchor is selectable along player aim"),
+		Query.Candidates.Num(), 1);
+	if (!Query.Candidates.IsEmpty())
+	{
+		TestEqual(TEXT("rotated use anchor names the expected entity"),
+			Query.Candidates[0].Owner, RotatedHandle);
+	}
+	Map->SetUseAnchorEnabled(RotatedHandle, false);
 
 	Map->ClearUseAnchors();
 	Map->Destroy();

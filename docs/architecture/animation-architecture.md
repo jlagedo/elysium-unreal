@@ -566,8 +566,7 @@ Nobody re-derives them, no build reads `vampire.dll`, and there is no per-instal
 | weapon activity translation | `Private/Visual/ElysiumWeaponActivityTables.cpp` (generated, committed) |
 | actor/form + NPC class translation | `ElysiumNpcActivityTables.cpp` (generated, committed) |
 | player action rules | `ElysiumPlayerActionRules.cpp` (generated, committed) |
-| per-model events and transition graph | `npc/blends/<stem>.json`, beside the blend grids |
-| coverage report | a `$ELYSIUM_WORK_ROOT` QA report, not an export-corpus artifact |
+| per-model sequence events | `npc/blends/<stem>.json`, beside the blend grids |
 
 Each generated `.cpp` holds its arrays in an anonymous namespace behind accessors declared in
 `Private/Visual/ElysiumActionTables.h` — the shape `ElysiumGymSpec` already uses. The generator is
@@ -634,9 +633,12 @@ The **activity registry is not committed**. The runtime keys on names and never 
 registrations — most unreachable in gameplay — is a binary dump rather than a rule. It stays a
 research artifact; the reachable names appear in the tables that use them.
 
-What genuinely varies per install stays derived: the per-model sequence events, autolayer bindings
-and transition graph come from the user's own `.mdl` files and land in the existing
-`npc/clips`, blend and index sidecars rather than in a parallel clip inventory. The disposable raw
+What genuinely varies per install stays derived: the per-model sequence events and autolayer
+bindings come from the user's own `.mdl` files and land in the existing
+`npc/clips`, blend and index sidecars rather than in a parallel clip inventory. The
+sequence-transition graph is not among them — it is unauthored on every shipped model, so no
+sidecar carries it and the resolver publishes no transition sequence
+(`docs/vtmb/animation_and_movers.md` → "The transition graph is unauthored"). The disposable raw
 player inventory produced by `research/tooling/capture/inventory_player_animations.py` preserves
 the full 764-byte sequence and 72-byte animation descriptors for research, while the public export
 carries only decoded fields the runtime uses.
@@ -654,8 +656,7 @@ walks every ladder against the exported clip vocabulary and requires the behavio
 read for: a substantial share of resolutions arriving from rung 2 or later, so the fallback order is
 load-bearing rather than decoration, and no rewrite kind naming activities that no shipped model
 carries. That second level is strictly stronger than a byte diff — a table transcribed perfectly and
-interpreted wrongly passes a diff and fails here. Owner-run retail agreement against the banked
-capture corpus corroborates and gates nothing.
+interpreted wrongly passes a diff and fails here.
 
 The NPC surface takes the same two levels, and the content-free one is where its weight sits.
 `Elysium.Substrate.NpcActivityTables` walks every body, class column and task handler against the
@@ -690,10 +691,11 @@ is the union of:
 - every emitted activity or direct label seen by the retail trace, including a population that no
   static call-graph seed predicted.
 
-The coverage report groups that union into locomotion, stance/ambient/dialogue, combat, reactions
-and death, contextual/paired interactions, forms/disciplines, and scripted/cinematic overrides. An
-unresolved row remains named with its provenance; it is never dropped because a clip appears
-unused.
+**The conformance runs report that coverage themselves; there is no separate report.** Each one
+walks its own surface against the export corpus and names its residual — the family that resolves
+nothing, the activity no shipped model carries, the class the work root does not stock — so the
+closure is read where it is measured rather than restated. An unresolved row stays named with its
+provenance; it is never dropped because a clip appears unused.
 
 ### 3.5 Extraction and proof loop
 
@@ -749,7 +751,7 @@ The layer is implemented vertically so walking begins before all combat is decod
 3. **Weapons and interactions.** Draw/holster, aim, attack, reload/dryfire, block, feed/use and
    paired actions, with weapon activity tables and partial-body layers.
 4. **Full behavior coverage.** NPC combat schedules, disciplines/forms and every remaining
-   contextual action in the coverage report.
+   contextual action in that reachable union.
 
 A slice is accepted only when every request it can emit resolves for its declared model set or
 names an explicit fallback. Runtime failure is visible but non-fatal: the body keeps its previous

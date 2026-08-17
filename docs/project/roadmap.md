@@ -79,8 +79,8 @@ rule 3 governs what happens next:
 4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
-5. **LIFE2 → LIFE4** — the action catalog, one resolver for the whole cast, then a drawn weapon
-   visible in the hand through a swing → [plans/animation.md](plans/animation.md).
+5. **LIFE3 → LIFE4** — one resolver for the whole cast over the committed action tables, then a
+   drawn weapon visible in the hand through a swing → [plans/animation.md](plans/animation.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -244,7 +244,7 @@ The ladder:
   as a fact, no divergence; the `A_dance01` seam adjudicated at
   `Instrument.Elysium.DancerDecodeProbe3` as a graph-less measurement rather than a bake defect,
   the clip's blamed bones carrying Joy's own bind translations and skin weights.
-- [x] **[LIFE2 The action catalog as project source](plans/animation.md)** — the recovered weapon
+- [x] **LIFE2 The action catalog as project source** — the recovered weapon
   translation tables are committed source, generated from the pinned binary by owner-run
   archaeology: 9,214 ordered rows over 61 classes stored as 1,565 units (18 base sequences, 110
   block headers, 595 exceptions, 57 `required` flags, 3 renames, 8 substitute bases) and
@@ -281,7 +281,7 @@ The ladder:
   `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
   and weapon-state animation open.
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — flinch/knockback/death,
-  blocked/paired rules, transition traversal, the sequence-event carrier.
+  blocked/paired rules, the restart rule, the sequence-event carrier.
 - [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
   the two-component body; ranged only.
 - [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the montage migration,

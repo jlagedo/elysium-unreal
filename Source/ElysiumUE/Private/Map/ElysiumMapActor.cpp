@@ -1544,13 +1544,14 @@ void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
 		// A visual prop remains non-solid. Give only its rendered bounds a query body: this is a
 		// target surface, not a proximity/action volume, and it follows the source component through
 		// elevator attachment and animation transforms.
+		const FBoxSphereBounds LocalBounds = Source->CalcBounds(FTransform::Identity);
 		UBoxComponent* Proxy = NewObject<UBoxComponent>(this);
 		Proxy->SetCanEverAffectNavigation(false);
 		Proxy->SetMobility(EComponentMobility::Movable);
-		Proxy->InitBoxExtent(Source->Bounds.BoxExtent.ComponentMax(FVector(2.0f)));
+		Proxy->InitBoxExtent(LocalBounds.BoxExtent.ComponentMax(FVector(2.0f)));
 		Proxy->SetupAttachment(Source);
-		Proxy->SetWorldLocation(Source->Bounds.Origin);
-		Proxy->SetWorldRotation(FRotator::ZeroRotator);
+		Proxy->SetRelativeLocation(LocalBounds.Origin);
+		Proxy->SetRelativeRotation(FRotator::ZeroRotator);
 		Proxy->SetCollisionObjectType(ECC_WorldDynamic);
 		Proxy->SetCollisionResponseToAllChannels(ECR_Ignore);
 		Proxy->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Block);
@@ -1627,13 +1628,14 @@ void AElysiumMapActor::RegisterTouchAnchor(UPrimitiveComponent* Source,
 	{
 		return;
 	}
+	const FBoxSphereBounds LocalBounds = Source->CalcBounds(FTransform::Identity);
 	UBoxComponent* Proxy = NewObject<UBoxComponent>(this);
 	Proxy->SetCanEverAffectNavigation(false);
 	Proxy->SetMobility(EComponentMobility::Movable);
-	Proxy->InitBoxExtent(Source->Bounds.BoxExtent.ComponentMax(FVector(4.0f)));
+	Proxy->InitBoxExtent(LocalBounds.BoxExtent.ComponentMax(FVector(4.0f)));
 	Proxy->SetupAttachment(Source);
-	Proxy->SetWorldLocation(Source->Bounds.Origin);
-	Proxy->SetWorldRotation(FRotator::ZeroRotator);
+	Proxy->SetRelativeLocation(LocalBounds.Origin);
+	Proxy->SetRelativeRotation(FRotator::ZeroRotator);
 	Proxy->SetCollisionObjectType(ECC_WorldDynamic);
 	Proxy->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Proxy->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);

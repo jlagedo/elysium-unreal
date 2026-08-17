@@ -249,7 +249,8 @@ struct FElysiumAnimationSelection
 	FString AnimationName;
 	// The ideal being advanced to. Equal to SequenceLabel until a state machine exists to advance.
 	FString TargetSequence;
-	// ACT_TRANSITION's intermediate. Empty until CCC5 owns the traversal.
+	// ACT_TRANSITION's intermediate. Always empty: the graph retail would traverse to fill it is
+	// unauthored on every shipped model, so the ideal activity is reached directly.
 	FString TransitionSequence;
 	// The exported base-to-layer binding, in DECLARATION order — the order is data, never sorted.
 	TArray<FString> LayerLabels;

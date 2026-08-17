@@ -18,39 +18,6 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
-### LIFE2 The action catalog as project source
-
-**Approved design — the behaviour table as project source, its committed form, and the
-session split:** [`life2-action-catalog.md`](life2-action-catalog.md), which carries the
-session table, the touches per session and the acceptance sentence each one is judged on.
-
-The extraction RE is closed (RE37); its output lives as research artifacts under
-`$ELYSIUM_WORK_ROOT`. This rung writes it down as **committed project source**: a translation
-table is a game rule, the same category as the `CGameMovement` constants in `ElysiumMoveSolve.h`
-and the compiled slot tables in `ElysiumSheetSlots.h`, all of which this repository already
-commits. `research/tooling/gen_action_tables.py` generates each table from the pinned binary as
-owner-run archaeology; no build and no export reads `vampire.dll`, and nobody re-derives a row.
-Every rung above then resolves activities through data instead of hand-seeded stubs.
-
-**Nothing about actions is exported or baked.** There is no `out/animation/actions/` corpus, no
-`DA_ActionCatalog` and no `bake_actions.py`. What genuinely varies per install is the per-model
-sequence events, the autolayer census and the sequence-transition graph, which extend the existing
-`npc/blends/<stem>.json` sidecar (the NPC resolver traverses an intermediate transition sequence
-between current and ideal, so the graph is the input LIFE5 depends on). The activity registry is
-not committed: the runtime keys on names and never on IDs, so 4,460 registrations are a binary dump
-rather than a rule. `action_coverage` is a `$ELYSIUM_WORK_ROOT` QA report — the reachable rule →
-translation → sequence closure per body and NPC class, grouped by family, every unresolved row
-named with its provenance.
-
-*Acceptance:* each committed table expands to its recovered row stream in the recovered walk
-order, proved content-free against a digest the generator takes from the decode itself; every
-producer in the accepted action families resolves to an exact model/sequence identity or a named
-fallback; the behavioural conformance run reproduces the measured fallback shape against the
-export corpus, with no rewrite kind resolving nothing and every accounted 0% family named rather
-than silent. The static join against the **banked** retail trace corpus corroborates and gates
-nothing; a disagreement it cannot settle escalates to a scoped new capture as an owner call —
-capture is the oracle, not the gate.
-
 ### LIFE3 One resolver for the whole cast
 
 Locomotion becomes complete and singular: both actor kinds through `FElysiumAnimationIntent`
@@ -139,14 +106,16 @@ family closes its own reachability slice. Every remaining producer moves onto th
 Recovered resolver rules it adds (all policy over LIFE2's catalog — none adds graph machinery):
 the NPC class/weapon translation alternation and its four-way availability ladder with the
 first weapon answer preserved separately (reload start derives both end times from the
-*selected sequence's* duration over its rate, not the authored `ReloadTime`); transition-
-sequence traversal between current and ideal sequences over the catalog's transition graph; the
+*selected sequence's* duration over its rate, not the authored `ReloadTime`); the
 restart rule that clears and restarts a repeated identical request; paired-action
 role/size/side variant arithmetic; the **authored, not directional** blocked reaction (the
 attacker plays the activity its own sequence descriptor stores, `ACT_BLOCKED_REACTION_RIGHT`
 fallback — only the flinch is directional, `ACT_HIT_HEAD`/`ACT_HIT_TORSO` by `hit_yaw`); and
 the `2COMBO` substitution keyed by base Brawl/Melee. There is no firearm stagger to build —
-ranged capability `0x2000` does not satisfy the block gate `0x18000`.
+ranged capability `0x2000` does not satisfy the block gate `0x18000`. There is no transition
+traversal to build either: `AdvanceToIdealActivity` reaches an ideal activity directly, because
+the graph its `FindTransitionSequence` branch walks is unauthored on every shipped model
+(`docs/vtmb/animation_and_movers.md` → "The transition graph is unauthored").
 
 One montage-slot mechanism serves both `scripted_sequence`'s `m_iszIdle → m_iszPlay →
 m_iszPostIdle` and an interesting place's enter/hold/leave segments — the same shape, built

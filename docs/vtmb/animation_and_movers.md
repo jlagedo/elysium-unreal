@@ -1481,9 +1481,10 @@ The corpus actually uses these client IDs: 5001×48, 5003×101, 5005×1, 5101×2
 5105×45, 5112×1, 5115×4, 5116×30, 5117×5, 5118×59, 5120×12, 6001×26,
 6002×24 and 6013×10. This both identifies the dormant cases and preserves the exact live demand.
 
-`mdl_skel.local_sequences()` now carries the decoded event list on each `Seq`. The public
-character clip/grid/index sidecars and Unreal bake still emit **no event timeline**, so reproducing
-these side effects is LIFE2 implementation work, not further event-format or native-dispatch RE.
+`mdl_skel.local_sequences()` carries the decoded event list on each `Seq`, and the per-owning-model
+`npc/blends/<stem>.json` sidecar publishes it as an `events` block keyed by sequence label. The
+Unreal bake emits **no notify**, so reproducing these side effects is runtime work over that
+timeline, not further event-format or native-dispatch RE.
 
 ### What one player body answers the selector with [data-verified, partial corpus]
 

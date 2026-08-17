@@ -45,25 +45,15 @@ engine gotchas in `Source/ElysiumUE/CLAUDE.md`.
 - **Mount/sidecar verification.** A single scoped run of the character bake verifier; cheap,
   read-only. Good first session of a working day.
 
-### LIFE2 — the action catalog (plan mode first, then one session per artifact)
-
-The one rung where design review pays. Session 1 in **plan mode**: read LIFE2, the artifact
-table in `docs/architecture/animation-architecture.md` §3.4, and survey (via Explore
-subagents) what `research/tooling/probes/*_survey.py` already emit — then propose the
-normalization schema, the exporter home, and the bake shape for your approval. After approval,
-one direct session per artifact (registry, player rules, NPC rules, weapon tables,
-catalog/sidecar extension, coverage join), each with a content-test acceptance. The
-trace-comparison acceptance runs against the **banked** corpus; a session claiming it needs a
-new capture is proposing an owner call, not blocked.
-
 ### LIFE3 — one resolver for the whole cast (direct; two halves)
 
 - **Gait push** is unblocked now: a direct session on `FElysiumAnimationDriver` and the NPC
   motor, validated by a cast member walking a patrol at its authored cell speed (no
   foot-slide) in a real map.
-- **Tables + activity→state coverage** waits on LIFE2; then a direct session that deletes the
-  seeded table in `ElysiumAnimationIntent.cpp` and proves the selection record names
-  state+asset for every locomotion request. Have it use the selection record as its own
+- **Tables + activity→state coverage** is a direct session against the committed tables in
+  `Private/Visual/ElysiumWeaponActivityTables.cpp` and `ElysiumNpcActivityTables.cpp`: it
+  deletes the seeded table in `ElysiumAnimationIntent.cpp` and proves the selection record
+  names state+asset for every locomotion request. Have it use the selection record as its own
   evidence — that is what the record exists for.
 
 ### LIFE4 — weapons in hands (plan-mode-light; green-room heavy; needs the baked prop bones)
