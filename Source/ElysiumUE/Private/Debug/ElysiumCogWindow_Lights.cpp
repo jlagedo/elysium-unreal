@@ -3,6 +3,7 @@
 #if ENABLE_COG
 
 #include "Debug/ElysiumCogStyle.h"
+#include "Debug/ElysiumPick.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumLightRig.h"
 #include "ElysiumEnvironment.h"
@@ -10,6 +11,7 @@
 #include "Visual/ElysiumMapVisuals.h"
 
 #include "Camera/PlayerCameraManager.h"
+#include "CollisionQueryParams.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/LightComponent.h"
@@ -22,6 +24,7 @@
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogSubsystem.h"
 #include "CogWidgets.h"
+#include "Engine/HitResult.h"
 #include "Engine/PostProcessVolume.h"
 #include "Engine/TextureCube.h"
 #include "Engine/World.h"
@@ -141,6 +144,29 @@ namespace
 			return true;
 		}
 	};
+
+	// How far a light origin may sit behind the first visual hit and still count as in view.
+	// Fixtures and ceiling volumes bury the source a few tens of centimetres; a wall into the
+	// next room is farther than this, so those markers stay hidden.
+	constexpr double MarkerEmbedSlackCm = 48.0;
+
+	// The baked world and props block ElysiumPick and nothing else — Visibility / Camera ignore
+	// them — so this is the same channel the inspector traces. A miss is a clear line of sight;
+	// a hit that lands just short of the origin is the fixture the light lives in.
+	bool MarkerVisibleFromCamera(UWorld& World, const FVector& CamPos, const FVector& LightPos,
+		const FCollisionQueryParams& Params)
+	{
+		FHitResult Hit;
+		if (!World.LineTraceSingleByChannel(Hit, CamPos, LightPos, ELYSIUM_PICK_CHANNEL, Params))
+		{
+			return true;
+		}
+		const double Dist = FVector::Dist(CamPos, LightPos);
+		const double HitDist = Hit.Distance > 0.0f
+			? static_cast<double>(Hit.Distance)
+			: FVector::Dist(CamPos, Hit.ImpactPoint);
+		return HitDist + MarkerEmbedSlackCm >= Dist;
+	}
 }
 
 void FElysiumCogWindow_Lights::Initialize()
@@ -299,6 +325,14 @@ void FElysiumCogWindow_Lights::TickMarkersAndPick(UElysiumLightRig& Rig)
 	int32 Nearest = INDEX_NONE;
 	float NearestDistSq = PickRadius * PickRadius;
 
+	if (!bDrawMarkers && !bArmed)
+	{
+		return;
+	}
+
+	FCollisionQueryParams OcclusionParams(FName(TEXT("ElysiumLightMarkerVis")), /*bTraceComplex*/ true);
+	OcclusionParams.AddIgnoredActor(PC->GetPawn());
+
 	ImDrawList* DrawList = ImGui::GetBackgroundDrawList(ImGui::GetMainViewport());
 
 	for (int32 Index = 0; Index < Sources.Num(); ++Index)
@@ -308,8 +342,13 @@ void FElysiumCogWindow_Lights::TickMarkersAndPick(UElysiumLightRig& Rig)
 		{
 			continue;
 		}
+		const FVector WorldPos = Light->GetComponentLocation();
 		ImVec2 P;
-		if (!Proj.Project(Light->GetComponentLocation(), P))
+		if (!Proj.Project(WorldPos, P))
+		{
+			continue;
+		}
+		if (!MarkerVisibleFromCamera(*World, Proj.CamPos, WorldPos, OcclusionParams))
 		{
 			continue;
 		}
@@ -450,13 +489,13 @@ void FElysiumCogWindow_Lights::RenderContent()
 		Rig->bHasSkyAmbient ? " · +skyambient" : "");
 
 	ImGui::Checkbox("Click to select", &bClickToSelect);
-	ImGui::SetItemTooltip("LMB over the world selects the nearest light marker; RMB clears. Armed "
-		"only while this window is open and the Cog menu owns the mouse. Lights have no collision, "
-		"so this picks by screen distance to the marker, not by a trace.");
+	ImGui::SetItemTooltip("LMB over the world selects the nearest visible light marker; RMB clears. "
+		"Armed only while this window is open and the Cog menu owns the mouse. Lights have no "
+		"collision, so this picks by screen distance to the marker, not by a trace. Walls occlude.");
 	ImGui::SameLine();
 	ImGui::Checkbox("Markers", &bDrawMarkers);
-	ImGui::SetItemTooltip("Draw a dot per light over the world, in that light's own colour. "
-		"Hollow = hidden.");
+	ImGui::SetItemTooltip("Draw a dot per light the camera can see, in that light's own colour. "
+		"Walls occlude. Hollow = hidden.");
 	const float LabelGutter = ImGui::CalcTextSize("Volumetric scattering").x
 		+ ImGui::GetStyle().ItemInnerSpacing.x;
 	const float SliderWidth = FMath::Max(GetDpiScale() * 110.0f,

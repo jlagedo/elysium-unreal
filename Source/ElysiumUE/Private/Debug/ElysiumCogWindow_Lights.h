@@ -31,8 +31,10 @@ class UElysiumLightRig;
 // `_lights/`, overwritten each time); map load restores it by stable `.lights` source index.
 //
 // Lights carry no collision, so the world pick here is its own thing rather than ElysiumPick — it
-// is a screen-space nearest-marker test, which is also what makes a light inside solid geometry
-// (most of them) reachable at all.
+// is a screen-space nearest-marker test among the sources the camera can see. A light slightly
+// inside its fixture still counts (the visual hit is allowed to land short of the origin); a
+// light behind a wall does not, so the overlay is the room in view rather than every source in
+// the frustum.
 class FElysiumCogWindow_Lights : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;
