@@ -24,26 +24,12 @@ Locomotion becomes complete and singular: both actor kinds through `FElysiumAnim
 and one resolver, every gait on authored speeds, every activity routed to a state that can play
 its asset.
 
-- **The NPC gait push.** The driver already fills `GaitSpeeds`/`GaitGeneration` for every body;
-  only the player's mover receives the push. Seed the NPC's `FElysiumGaitReference` from
-  `GaitFrom(GaitSpeeds)` and push resolved speeds to the NPC mover on key change, so a walking
-  or running cast member travels at its own selected cell's authored speed and the stride does
-  not slide; the walk/run threshold becomes the body's own forward walk cell plus one unit
-  rather than `ElysiumMove::WalkSpeed`. A caller that names its own travel speed — a scripted
-  beat's `Custom` gait, a patrol leg — reads the selected cell's authored ground speed;
-  `ElysiumNpcGait::WalkSpeed`/`RunSpeed` remain the fallback for a body whose export resolves
-  no fan.
-- **Real translation tables.** The resolver consumes LIFE2's weapon and actor tables in the
-  witnessed order — weapon translate, actor translate, alternation and the availability ladder
-  where the cast needs them for locomotion-with-weapon (`glock_relaxed_walk` and kin) — and the
-  hand-seeded table in `ElysiumAnimationIntent.cpp` is deleted, not grown.
 - **Activity→state coverage.** Every activity the locomotion slice can emit routes to a graph
   state that plays its resolved asset kind, on the LIFE0-repaired graph; the selection record
   names state and asset for every request.
-- **The cast's fallback ladder, the player's absence of one.** `CAI_BaseNPC`'s recovered ladder
-  (missing translated `ACT_RUN` → weighted `ACT_WALK` → `ACT_DISPOSITION` → sequence 0) applies
-  to NPC requests only; a player miss resolves to nothing and is reported as a named miss, as
-  retail's own player chain behaves.
+- **One trace schema, both producers.** `FElysiumMoveRun` records the player's selection alone, so
+  the cast's half of the acceptance has nothing behind it. The cast emits the same `act_*` rows from
+  its own driver, or the claim that the two producers are one system is untested.
 
 *Acceptance:* patrol and scripted travel drive the cast through the intent seam at authored
 speeds with no constant-speed slide; every locomotion request either poses the body or names
@@ -103,10 +89,11 @@ family closes its own reachability slice. Every remaining producer moves onto th
 **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit are
 13.3's; this rung consumes their outcome.
 
-Recovered resolver rules it adds (all policy over LIFE2's catalog — none adds graph machinery):
-the NPC class/weapon translation alternation and its four-way availability ladder with the
-first weapon answer preserved separately (reload start derives both end times from the
-*selected sequence's* duration over its rate, not the authored `ReloadTime`); the
+Recovered resolver rules it adds (all policy over LIFE2's catalog — none adds graph machinery).
+The class/weapon alternation and its four-way availability ladder are LIFE3's and already run;
+what this rung adds over them is the combat state their predicates read — the reload chain among
+them, whose start derives both end times from the *selected sequence's* duration over its rate
+rather than the authored `ReloadTime`; the
 restart rule that clears and restarts a repeated identical request; paired-action
 role/size/side variant arithmetic; the **authored, not directional** blocked reaction (the
 attacker plays the activity its own sequence descriptor stores, `ACT_BLOCKED_REACTION_RIGHT`

@@ -504,6 +504,21 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
    order. Weapon rows remain ordered because a later duplicate-base row is a model-availability
    fallback. Retain the authored `required` bit as provenance and a diagnostic only: the pinned
    VtMB server translator never reads it, so optional and flagged rows follow the same path.
+
+   **This step needs the model vocabulary, so it lives with the resolver rather than beside the
+   intent.** `ActivityOverride` walks a weapon's ladder front to back and accepts the first rung the
+   body can actually play, so a translation that cannot ask the body what it carries is not this
+   translation — it would hand a glock-armed body `ACT_WALK_RELAXED_GLOCK`, which no shipped model
+   answers, instead of the pistol rung that does.
+
+   The two orders are different chains, not one parameterised chain, and the request's source is
+   what selects between them. The player's is a single pass, `+0x5f4` then `+0x5e0`, with no
+   availability probe after it. The cast's is `+0x5dc`, the weapon translator whose first answer is
+   retained separately, up to five (`+0x5e0`, `+0x5f4`) alternations, then the four-way availability
+   probe — final weapon answer, remembered class answer, first weapon answer, original request —
+   and finally the recovered `ACT_RUN` → `ACT_WALK` last resort. A caller whose contract predates the
+   ladder clears `bAllowFallbackLadder` and gets the miss instead of a substitution, because a gait
+   resolved through a fallback rung is not that gait.
 4. **Resolve the model vocabulary.** Find every sequence carrying the final activity, apply
    `actweight` using the supplied selection token, and retain the exact model/sequence identity.
    The chosen label then resolves through the include DAG to its owning bank.
@@ -658,6 +673,15 @@ sidecar carries it and the resolver publishes no transition sequence
 player inventory produced by `research/tooling/capture/inventory_player_animations.py` preserves
 the full 764-byte sequence and 72-byte animation descriptors for research, while the public export
 carries only decoded fields the runtime uses.
+
+**The NPC class bodies are answered only where the decode is confirmed.** Their predicates read
+live character state, and this runtime publishes two of what the human body's armed/alert branch
+needs: whether a weapon is active, and the body's own `m_NPCState`. Those two decide the branch for
+every state this runtime can produce — an idle armed body resolves the relaxed set and an alert one
+the weapon's own — while a body in combat answers neither arm and keeps its untranslated request.
+Every remaining term is a flag no system here can set, so no rung it gates is reachable. The
+faithful behaviour, the recovered chain and the divergence are recorded together in
+`docs/vtmb/animation_and_movers.md` → the human pre-translation body.
 
 **Nothing about actions is baked.** Every artifact is either committed source or a per-install
 sidecar the runtime already reads, so there is no install-varying action data for an editor pass to

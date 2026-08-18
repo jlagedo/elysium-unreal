@@ -274,9 +274,15 @@ The ladder:
   are 0 on all 14,012 sequence descriptors, and `AdvanceToIdealActivity`'s traversal
   (`FindTransitionSequence` → the `entrynode`/`exitnode`/matrix lookup at `0x10428ad0`) is
   decompilation-confirmed dead code against shipped content — no sidecar block is emitted.
-- [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed
-  authority is landed; the NPC gait push, repointing the resolver onto the committed tables and
-  deleting the 5-row stub, and activity→state coverage open.
+- [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed authority,
+  the NPC gait push and the real translation tables are landed: the 5-row stub is deleted and the
+  resolver walks the committed weapon ladders, the two `CBasePlayer` rows and the recovered NPC
+  class bodies in their witnessed orders, availability-probing each rung against the body's own
+  vocabulary, so a glock-armed body reaches `pistol_relaxed_walk` at rung 2 and an idle armed cast
+  member walks relaxed instead of weapon-up (the armed/alert branch answered over its confirmed
+  slice; a body in combat answers neither arm, the divergence recorded in
+  `docs/vtmb/animation_and_movers.md`). Activity→state coverage is open, and so is the cast's half
+  of the one trace schema — `FElysiumMoveRun` records the player's selection only.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
   and weapon-state animation open.

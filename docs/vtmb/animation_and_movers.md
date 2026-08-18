@@ -716,6 +716,15 @@ than guessed from C++ spelling.
 4. on absence, keep walking. A later duplicate-base row is therefore an ordered fallback; if no
    row survives, return the incoming activity unchanged.
 
+A shipped example of that fallback carrying real weight [data-verified]: the glock's block 1 names
+`ACT_WALK_RELAXED_GLOCK` and `ACT_RUN_RELAXED_GLOCK`, and **no shipped model answers either**. The
+clips exist — `glock_relaxed_walk` and `glock_relaxed_run` in the shared
+`character_shared_male_move_and_ranged` bank — but their sequence descriptors spell the activity
+`AWS_WALK_RELAXED_GLOCK` / `AWS_RUN_RELAXED_GLOCK`, the only two `AWS_`-prefixed literals in the
+whole exported corpus (310 of 169,183 activity entries, on 155 bodies each). Rung 1 therefore
+resolves nothing and block 2's shared `ACT_WALK_RELAXED_PISTOL` answers, so a glock-armed body's
+relaxed gait is `pistol_relaxed_walk` and the glock-named pair is unreachable content.
+
 The third dword is **not read anywhere in this translator**. The table contains 9,013 optional and
 201 `required`-flagged per-class rows, but both take the same availability path in the pinned server
 body. It remains exported because it is authored data and `activitydump` exposes it, not because a
@@ -952,11 +961,79 @@ policy byte at `+0x5b84` then maps walk/run/relaxed/hunt/combat-move requests to
 `CBaseCombatCharacter::NPC_EarlyTranslateActivity` at `0x10328030`.
 
 The human body first removes aim from gait when capability bit `0x40` is present:
-`ACT_WALK_AIM → ACT_WALK` and `ACT_RUN_AIM → ACT_RUN`. It computes its armed/alert branch from the
-active weapon and the NPC state/capability fields at `+0x14b8`, `+0x14bc`, `+0x5b84`, `+0x5cc0`
-and `+0x5d8c`. Outside that branch, walk/run become their relaxed forms. Inside it, an idle request
-becomes `ACT_AIM` when the active weapon's `+0x5a0` result has `0x6000`, and ordinary left/right,
-90-degree and 180-degree turns become their six `_ALERT` forms. The common Troika body then runs.
+`ACT_WALK_AIM → ACT_WALK` and `ACT_RUN_AIM → ACT_RUN`. It then computes one flag, stored at
+`+0x6410`, that decides whether the body stands in its **alert** animation set or its **relaxed**
+one, and every rewrite below reads it. Clear, walk and run become their relaxed forms. Set, an idle
+request becomes `ACT_AIM` when the active weapon's `+0x5a0` result has `0x6000`, and ordinary
+left/right, 90-degree and 180-degree turns become their six `_ALERT` forms. The common Troika body
+then runs.
+
+The branch is a first-match chain [VtMB decompiled, disassembly-verified]:
+
+1. no active weapon, or the weapon's `+0x19c & 0x40` — **clear**, decided before any NPC state is
+   read;
+2. capability bit `0x40`, **and** a `ConVar::GetBool()`, **and** `m_bfAINPCFlags2 & 0x400` — **set**;
+3. `m_bfAINPCFlags & 0x10000` — **clear**, and the function returns rather than falling through;
+4. `m_bfNPCFrenziedFlags & 0x200` — **set**;
+5. `m_NPCState`: `NPC_STATE_ALERT` (2) is **set** unconditionally; `NPC_STATE_COMBAT` (3) and
+   state 11 each consult their own `ConVar::GetBool()` and fall back to `m_afMemory & 0x8000000`;
+   every other state is **clear**.
+
+The five fields are datamap-recorded members, two read from the image and three recovered by
+replaying their datamap builders (`0x1027a820` for `CAI_BaseNPC`, `0x1031a600` for
+`CBaseCombatCharacter`) [VtMB decompiled]. None is keyable, so no authored map entity sets one:
+
+| Offset | Member | Note |
+|---|---|---|
+| `+0x14b8` | `m_bfAINPCFlags` | VtMB-added AI flag word; **not** `CBaseEntity::m_fFlags` |
+| `+0x14bc` | `m_bfAINPCFlags2` | its overflow word, holding the flags whose masks set bit 31 |
+| `+0x5b84` | `m_bfNPCFrenziedFlags` | the movement-policy/frenzy word the Troika body also reads |
+| `+0x5cc0` | `m_NPCState` | Source's `NPC_STATE`, extended by VtMB to at least 15 values |
+| `+0x5d8c` | `m_afMemory` | Source's NPC memory bitfield; bit 27 is a VtMB addition |
+
+`m_NPCState`'s low values are Source's own and match verbatim: `NONE=0, IDLE=1, ALERT=2, COMBAT=3,
+SCRIPT=4, PLAYDEAD=5, PRONE=6, DEAD=7`. Comparison sites elsewhere in the DLL also test 12 and 14,
+so the enum is extended rather than reused. **State 11 is a real, cross-class combat-adjacent
+state**: `CNPC_VHuman::SelectIdealState` at `0x103851e0` promotes into it from `ALERT` under a
+capability-and-ConVar gate and demotes out of it to `ALERT` or `IDLE` on melee-range tests, and
+eight further functions across other NPC classes assign it to `m_IdealNPCState` at `+0x5cc4`. Its
+authored name is not recovered — this build carries no `NPC_STATE`-to-string table.
+
+Two of the four bits are named by the game's own flag table. `0x1030cbd0` is a single `strcmpi`
+chain mapping every authored NPC-flag name to a bitmask, ending in
+`Error("Schedule has invalid NPC flag...")`, which is what compiles a schedule's
+`TASK_SET_NPC_FLAG NPCFlag:<name>` argument; its caller routes the result by sign bit, positive to
+`m_bfAINPCFlags` and negative to `m_bfAINPCFlags2` [VtMB decompiled]:
+
+- `FORCE_RELAXED_ANIMS` → `0x00010000`, which is rung 3 above. Three shipped schedules set it —
+  `SCHED_TROIKA_HIDE_AND_FAKE_RELOAD1`, `SCHED_TROIKA_HIDE_AND_RELOAD1` and
+  `SCHED_TROIKA_CHASE_ENEMY_FAILED`. The name states the rung's effect: it forces the relaxed set.
+- `MOVE_FACE_ENEMY` → `0x80000400`, whose low half is rung 2's `m_bfAINPCFlags2` bit.
+  `CNPC_VMingXiao::NPCThink` at `0x10394990` also sets the same mask directly.
+
+**Four terms are named but unrecovered, and the residual is bounded** [VtMB decompiled, negative
+result]. The three ConVars are genuine `ConVar*` globals — the call shape is an inlined
+`ConVar::GetBool()`, `!IsCommand() && m_nValue != 0`, with `m_nValue` at the `+0x2c` the code reads
+— but their names and defaults are not statically recoverable: the whole 2,389-entry
+`.CRT$XCU` global-constructor table was decompiled over the relevant address range and a byte
+search of the entire 7.86 MB image finds the three pointer addresses at their twelve read sites and
+nowhere else, so whatever writes them computes the address rather than spelling it. The bit
+meanings of `m_bfNPCFrenziedFlags & 0x200` and `m_afMemory & 0x8000000` are likewise unrecovered:
+neither is set anywhere in the image by a literal mask, no `MEMORY:` schedule token maps to bit 27
+(the four that exist are `CUSTOM2`, `FLINCHED`, `INCOVER`, `INVESTIGATING`), and the generic
+`Forget()` accessor at `0x102a98e0` is called twice, both with `INCOVER`. Bit 27 is nonetheless
+live: `CAI_BaseNPCTroika::OnStateChange` at `0x102ae140` clears it on every state transition.
+Verifying any of the four needs a live debugger against the running game, not static analysis.
+
+> **Divergence — the remake answers this branch only where the decode is confirmed.** Owner call,
+> recorded here beside the faithful behaviour above. `ElysiumAnimResolve::TranslateActivity` answers
+> the branch's two predicates from the state this runtime publishes: no active weapon and any
+> `m_NPCState` that is neither alert nor combat resolve **clear**, and alert resolves **set**. The
+> four unrecovered terms gate rungs 2, 3 and 4, and nothing in this runtime can set the flags they
+> read, so no rung they own is reachable either way. **A body in `NPC_STATE_COMBAT` answers neither
+> predicate** and keeps its untranslated request, because rung 5's combat arm terminates in a ConVar
+> whose default is not recoverable above; guessing it would invent a branch. The design is
+> `docs/architecture/animation-architecture.md` § 3.4.
 
 Six classes replace that inherited pre-translation leaf [VtMB decompiled]:
 
