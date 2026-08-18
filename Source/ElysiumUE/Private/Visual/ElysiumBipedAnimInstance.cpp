@@ -590,7 +590,8 @@ bool UElysiumBipedAnimInstance::HasCompiledGraph() const
 	return Cast<UAnimBlueprintGeneratedClass>(GetClass()) != nullptr;
 }
 
-bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
+bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds,
+	bool bHoldFinalPose)
 {
 	if (Sequence == nullptr)
 	{
@@ -623,8 +624,49 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 	// logging. A looping clip therefore asks for a segment long enough to outlast any lab or
 	// gameplay hold; the montage is replaced, not resumed, on every new selection.
 	constexpr int32 LoopingHoldCount = 1000000;
+	const int32 LoopCount = bLoop ? LoopingHoldCount : 1;
+
+	// A HELD one-shot never retires itself: it reaches its last frame and keeps posing it until a
+	// caller replaces it. That is VtMB's own frame rule rather than an Unreal convenience --
+	// `CBaseAnimating::StudioFrameAdvance` clamps a finished non-looping sequence's cycle at 1.0 and
+	// goes on evaluating it there, and `CCineNPC` only ever changes the pose by writing a new
+	// `m_nSequence`. Nothing in the engine hands the pose back on its own.
+	//
+	// Without this a beat that schedules its own end off the clip's length is racing its own
+	// animation over the same number: the montage blends out first, the slot falls through to the
+	// state machine -- the REFERENCE pose for a body carrying no locomotion selection -- and the
+	// next clip arrives a frame later. That single frame of bind pose is visible in the world.
+	//
+	// Only the caller that owns what comes next may ask for this. A held clip that nobody replaces
+	// stands still forever, so a gesture whose follow-up is the graph's own gait must NOT hold.
+	if (bHoldFinalPose && !bLoop)
+	{
+		UAnimMontage* Held = UAnimMontage::CreateSlotAnimationAsDynamicMontage(Sequence,
+			FAnimSlotGroup::DefaultSlotName, BlendIn, BlendOut, /*InPlayRate=*/1.0f, LoopCount);
+		if (Held == nullptr)
+		{
+			UE_LOG(LogElysiumBipedGraph, Warning,
+				TEXT("held one-shot '%s': the slot montage could not be built, so the body keeps "
+				     "posing whatever it already held"), *GetNameSafe(Sequence));
+			return false;
+		}
+		// BEFORE Montage_Play, and that ordering is the whole thing: FAnimMontageInstance::Initialize
+		// copies bEnableAutoBlendOut off the montage as the instance starts, so a write afterwards
+		// lands on the asset and never reaches the instance that is running.
+		Held->bEnableAutoBlendOut = false;
+		if (Montage_Play(Held, /*InPlayRate=*/1.0f, EMontagePlayReturnType::MontageLength) <= 0.0f)
+		{
+			UE_LOG(LogElysiumBipedGraph, Warning,
+				TEXT("held one-shot '%s' (%.3fs): Montage_Play refused it, so the body keeps posing "
+				     "whatever it already held"), *GetNameSafe(Sequence), Sequence->GetPlayLength());
+			return false;
+		}
+		ActiveSlotMontage = Held;
+		return true;
+	}
+
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
-		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? LoopingHoldCount : 1);
+		BlendIn, BlendOut, /*InPlayRate=*/1.0f, LoopCount);
 	return ActiveSlotMontage != nullptr;
 }
 

@@ -324,9 +324,10 @@ struct FElysiumRecordingServices final
 		return bNpcBodyVisible;
 	}
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds) override
+		bool bLoop, float* OutSeconds, bool bHoldFinalPose = false) override
 	{
-		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d"), *Stem, *ClipName, bLoop ? 1 : 0));
+		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d hold=%d"), *Stem, *ClipName,
+			bLoop ? 1 : 0, bHoldFinalPose ? 1 : 0));
 		if (OutSeconds)
 		{
 			*OutSeconds = ClipSeconds;   // a beat's OnEndSequence schedules off this

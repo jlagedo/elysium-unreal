@@ -57,14 +57,15 @@ void FElysiumAnimating::BuildBody()
 	}
 }
 
-bool FElysiumAnimating::PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds)
+bool FElysiumAnimating::PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds,
+	bool bHoldFinalPose)
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment || !Visual || ClipName.IsEmpty())
 	{
 		return false;
 	}
-	return Embodiment->PlayNpcClip(Visual, ModelStem(), ClipName, bLoop, OutSeconds);
+	return Embodiment->PlayNpcClip(Visual, ModelStem(), ClipName, bLoop, OutSeconds, bHoldFinalPose);
 }
 
 bool FElysiumAnimating::PreloadAnimClip(const FString& ClipName)

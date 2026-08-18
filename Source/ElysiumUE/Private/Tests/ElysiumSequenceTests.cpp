@@ -1264,6 +1264,132 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 	return true;
 }
 
+// ================================================================================================
+// A beat that names ITSELF in m_iszNextScript
+//
+// The authored "stand here doing this forever" idiom: `m_iszIdle`, `m_iszPlay` and `m_iszPostIdle`
+// all name one clip and the chain points back at the beat's own targetname. Eight sequences across
+// three maps do it -- sm_hub_1's `hooker_workin` (prostitute_1, `praying_idle`) is the one that
+// flashed a frame of bind pose once a second.
+//
+// Two rules are held here, both off `FUN_101a8640`:
+//   - the action clip is played HELD, so it stands on its last frame instead of retiring into
+//     whatever the state machine holds while the beat's think is still one frame away;
+//   - the chain is `(next != this) || REPEATABLE`, so a self-naming beat without spawnflag 4 stops
+//     rather than re-entering a beat the engine has already retired.
+// ================================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceSelfChainTest,
+	"Elysium.Substrate.ScriptedSequenceSelfChain", GElysiumTestFlags)
+bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
+{
+	auto BuildDefs = [](FElysiumEntityDefs& Defs, int32 SpawnFlags)
+	{
+		Defs.MapName = TEXT("__selfchain__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Damsel");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/downtown/damsel/damsel.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("hold_beat");
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("Damsel"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
+		Seq.Keys.Add(TEXT("m_iszPlay"), TEXT("praying_idle"));
+		Seq.Keys.Add(TEXT("m_iszNextScript"), TEXT("hold_beat"));   // itself
+		Seq.Keys.Add(TEXT("spawnflags"), *FString::FromInt(SpawnFlags));
+		FElysiumOutputDef W;
+		W.Name = TEXT("OnBeginSequence");
+		W.Target = TEXT("counter1");
+		W.Input = TEXT("Add");
+		W.Param = TEXT("1");
+		Seq.Outputs.Add(W);
+		Defs.Defs.Add(MoveTemp(Seq));
+
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = TEXT("counter1");
+		Defs.Defs.Add(MoveTemp(Counter));
+	};
+
+	auto CounterValue = [](const FElysiumEntity* Entity) -> float
+	{
+		TArray<TPair<FString, FString>> State;
+		Entity->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.f;
+	};
+
+	// --- REPEATABLE: the beat re-enters itself, and its action holds its final frame ---------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 4);
+
+		FElysiumRecordingServices Services;
+		Services.ClipSeconds = 0.5f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("hold_beat"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("hold_beat resolved"), Seq)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+		{
+			return false;
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+
+		double Now = 0.0;
+		for (int32 i = 0; i < 40; ++i) { World.Tick(Now); Now += 0.1; }
+
+		// The whole point of the held play: the clip must never be asked to retire on its own,
+		// because the beat schedules its end off that same length and would lose the race.
+		TestTrue(TEXT("the action clip is played HELD, not left to retire"),
+			Services.Saw(TEXT("PlayNpcClip damsel praying_idle loop=0 hold=1")));
+		TestTrue(TEXT("a REPEATABLE self-naming beat keeps re-entering itself"),
+			CounterValue(Count) > 1.f);
+	}
+
+	// --- not REPEATABLE: the same authoring stops after one pass -----------------------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 0);
+
+		FElysiumRecordingServices Services;
+		Services.ClipSeconds = 0.5f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("hold_beat"));
+		FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		if (!TestNotNull(TEXT("hold_beat resolved"), Seq)
+			|| !TestNotNull(TEXT("counter1 resolved"), Count))
+		{
+			return false;
+		}
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+
+		double Now = 0.0;
+		for (int32 i = 0; i < 40; ++i) { World.Tick(Now); Now += 0.1; }
+
+		TestEqual(TEXT("a self-naming beat that is not REPEATABLE runs once and stops"),
+			CounterValue(Count), 1.f);
+	}
+
+	return true;
+}
+
 } // namespace ElysiumSequenceTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

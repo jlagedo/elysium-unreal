@@ -283,7 +283,8 @@ public:
 	// Answered over a dynamic slot montage, which is the design's own shape for a one-shot and needs
 	// no baked montage asset. Nothing here reaches the locomotion state machine: a scripted clip
 	// plays OVER the gait rather than replacing the thing that owns it.
-	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds) override;
+	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds,
+		bool bHoldFinalPose = false) override;
 	virtual void StopOneShot(float BlendSeconds) override;
 
 	// --- the cinematic clip path ------------------------------------------------------------------

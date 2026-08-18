@@ -99,7 +99,13 @@ public:
 	//
 	// False when this instance cannot play the clip at all, which is an ordinary answer: a body
 	// whose visual has no vocabulary is not an error.
-	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds) { return false; }
+	//
+	// `bHoldFinalPose` asks the clip to stand on its last frame until a caller replaces it, instead
+	// of retiring and letting the slot fall back to whatever is underneath. Only a caller that owns
+	// what comes next may ask for it -- a held clip nobody replaces stands still forever. Ignored
+	// for a looping clip, which has no last frame to hold.
+	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds,
+		bool bHoldFinalPose = false) { return false; }
 	virtual void StopOneShot(float BlendSeconds) {}
 
 	// --- the facial flex track (roadmap 12.3) ------------------------------------------------

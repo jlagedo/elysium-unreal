@@ -66,6 +66,16 @@ namespace
 	// exported set carries it (`spawnflags 132`).
 	constexpr int32 SF_SCRIPT_NOSCRIPTMOVEMENT = 128;
 
+	// HL1 CCineMonster REPEATABLE. `FUN_101a8640` reads it twice: with the bit CLEAR the finished
+	// beat schedules its own removal, and a `m_iszNextScript` that resolves back to this very entity
+	// is NOT re-fired -- the chain condition is `(next != this) || (spawnflags & 4)`. So a beat only
+	// holds itself forever by being repeatable, which is what the authored "stand here doing this"
+	// idiom relies on (48 of 182 exported sequences set it, and every self-naming one is among them).
+	//
+	// Only the chain gate is reproduced here. The self-removal half would retire 134 sequences after
+	// their first run and is a separate change with its own blast radius.
+	constexpr int32 SF_SCRIPT_REPEATABLE = 4;
+
 	// VtMB's own additions, decoded in `docs/vtmb/entity_io.md`.
 	// 256 — with a post-idle and no live next-cine, the sequence-done path replays the post-idle and
 	// returns before cleanup, so the beat never completes (21 sequences).
@@ -372,7 +382,13 @@ public:
 		float Seconds = 0.f;
 		if (Npc != nullptr && !Play.IsEmpty())
 		{
-			Npc->PlayAnimClip(Play, /*bLoop=*/false, &Seconds);
+			// HELD, because this beat is what decides the next pose and it schedules that decision
+			// off the very number the clip is long. Left to retire on its own the animation reaches
+			// its end first, the pose falls back to the reference bind for the frame before the
+			// think lands, and the beat visibly flashes it -- once per pass of a self-chaining
+			// sequence. VtMB has no such frame: a finished non-looping sequence is clamped at its
+			// last frame and goes on being evaluated there until `CCineNPC` writes a new one.
+			Npc->PlayAnimClip(Play, /*bLoop=*/false, &Seconds, /*bHoldFinalPose=*/true);
 		}
 		else if (Npc != nullptr && bTravelled)
 		{
@@ -530,9 +546,24 @@ public:
 		// shows up in the event-queue window.
 		if (!NextScript.IsEmpty() && World != nullptr)
 		{
-			static const FName BeginSequenceInput(TEXT("BeginSequence"));
-			World->EnqueueInput(NextScript, BeginSequenceInput, FElysiumVariant::Void(), 0.0,
-				Activator, Handle);
+			// `(next != this) || REPEATABLE` — a beat that names ITSELF and is not repeatable does
+			// not chain. In VtMB it is on its way out at this point (the same flag scheduled its
+			// removal), so re-entering it would be reviving a beat the engine has already retired.
+			// Every self-naming sequence in the exported set is repeatable, so this refuses nothing
+			// that ships; it is the shape of the rule, kept honest rather than assumed.
+			const bool bSelfChain = NextScript.Equals(TargetName, ESearchCase::IgnoreCase);
+			if (bSelfChain && (SpawnFlags & SF_SCRIPT_REPEATABLE) == 0)
+			{
+				UE_LOG(LogElysiumSeq, Log,
+					TEXT("%s names itself as m_iszNextScript but is not REPEATABLE (spawnflags %d); "
+					     "the chain stops here"), *DebugString(), SpawnFlags);
+			}
+			else
+			{
+				static const FName BeginSequenceInput(TEXT("BeginSequence"));
+				World->EnqueueInput(NextScript, BeginSequenceInput, FElysiumVariant::Void(), 0.0,
+					Activator, Handle);
+			}
 		}
 	}
 

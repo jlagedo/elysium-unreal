@@ -325,7 +325,7 @@ float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& 
 }
 
 bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds)
+	const FString& ClipName, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
 {
 	UAnimSequence* Anim = Body
 		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset())
@@ -355,12 +355,12 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// the reference pose: on a graph-backed body the slot's source is the state machine, so a refused
 	// montage poses whatever that machine holds -- which for a body handed no selection is the bind
 	// pose, advancing nothing. Discarding the answer made that a silent T-pose.
-	if (!Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName)))
+	if (!Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName), bHoldFinalPose))
 	{
 		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
-			     "body keeps posing whatever it already held"),
-			*Stem, *ClipName, bLoop ? 1 : 0, Anim->GetPlayLength());
+			TEXT("npc '%s' clip '%s' (loop=%d, hold=%d, %.3fs): the animation host refused to play "
+			     "it, so the body keeps posing whatever it already held"),
+			*Stem, *ClipName, bLoop ? 1 : 0, bHoldFinalPose ? 1 : 0, Anim->GetPlayLength());
 		return false;
 	}
 	Body->TickAnimation(0.0f, false);

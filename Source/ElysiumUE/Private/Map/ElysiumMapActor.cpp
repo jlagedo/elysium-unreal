@@ -924,9 +924,9 @@ bool AElysiumMapActor::HasNpcClip(const FString& Stem, const FString& ClipName)
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds)
+	const FString& ClipName, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
 {
-	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds);
+	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds, bHoldFinalPose);
 }
 
 bool AElysiumMapActor::PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,

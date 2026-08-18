@@ -239,8 +239,12 @@ public:
 		int32 DispositionLevel) {}
 	// Crossfade a live body to a named clip; OutSeconds (optional) receives its authored length,
 	// which is what a scripted_sequence schedules its OnEndSequence off.
+	//
+	// `bHoldFinalPose` keeps a non-looping clip standing on its last frame until a caller replaces
+	// it. It belongs to a caller that owns what comes next -- a scripted beat does, a gesture that
+	// expects the gait back underneath it does not.
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds) = 0;
+		bool bLoop, float* OutSeconds, bool bHoldFinalPose = false) = 0;
 	// Resolve and retain a clip without changing the body's current animation. The map-load walker
 	// uses this before activation so runtime-created UAnimSequences and their compression work belong
 	// to the loading barrier, not to a choreographed scene's clock.
