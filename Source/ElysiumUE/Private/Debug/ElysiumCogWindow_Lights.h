@@ -7,6 +7,8 @@
 #include "CoreMinimal.h"
 #include "CogDebugGizmo.h"
 #include "Debug/ElysiumCogWindow.h"
+#include "Math/Color.h"
+#include "UObject/StrongObjectPtr.h"
 
 class UElysiumLightRig;
 
@@ -16,7 +18,8 @@ class UElysiumLightRig;
 // a scrollable per-source list (type / colour / raw magnitude / reach / lightstyle). It also owns
 // the map's ambience — the baked sky light's intensity/colour/cubemap and the height fog — because
 // how much the sky contributes and how much the per-source rig must carry is one calibration, not
-// two. Subsumes the Canvas HUD's lights readout.
+// two. Skylight leaking lives on the same tab: the override checkboxes drive the map's post-process
+// knobs. Subsumes the Canvas HUD's lights readout.
 //
 // Per-light inspector: one source is selected at a time, from the list or by clicking its marker
 // in the world, and its output/transport/shape/cone/shadow is edited directly, with a 3D gizmo on
@@ -65,6 +68,12 @@ private:
 	// to reload and rebuild it from the six exported face images. Weak: the cube is outer'd to the
 	// map actor, so a map unload takes it and the toggle simply disappears with the sky light.
 	TWeakObjectPtr<class UTextureCube> SkyCubemap;
+	// Flat cube leaking samples while the override is on. The authored night photo cube
+	// integrates to nearly nothing, so leaking it is a silent no-op.
+	TStrongObjectPtr<class UTextureCube> ConstantSkyCube;
+	bool bLeakingOwnsSkySource = false;
+	float SkyIntensityBeforeLeaking = -1.f;
+	FLinearColor LeakTint = FLinearColor(0.45f, 0.55f, 0.72f);
 	// Row indices and all editor-only state below belong to one adopted rig. A rig change clears
 	// them so travel cannot apply a previous map's selection or isolate state to the next map.
 	TWeakObjectPtr<UElysiumLightRig> ActiveRig;

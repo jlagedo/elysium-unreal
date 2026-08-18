@@ -57,5 +57,33 @@
       "class": "shopfront",
       "notes": "spot on diner window prop and plaster/dinwndwb"
     }
+  },
+  "indexes": {
+    "1": { "class": "fill", "notes": "owner pass: wide cool street wash, 52 m reach" },
+    "2": { "class": "fill", "notes": "owner pass: sidewalk wash pair" },
+    "4": { "class": "fill", "notes": "owner pass: hot point, no nearby corona" },
+    "6": { "class": "fill", "notes": "owner pass: 39 m reach smoke-shop wash" },
+    "7": { "class": "fill", "notes": "owner pass: 26 m medical-wall wash" },
+    "11": { "class": "fill", "notes": "owner pass: 52 m reach street wash" },
+    "13": { "class": "fill", "notes": "owner pass: sidewalk wash pair" },
+    "14": { "class": "fill", "notes": "owner pass: clipped hero wash on lab building" },
+    "84": { "class": "fill", "notes": "owner pass: glassc wash, no corona" },
+    "114": { "class": "fill", "notes": "owner pass: skybox miniature spot" },
+    "115": { "class": "fill", "notes": "owner pass: skybox miniature point" },
+    "116": { "class": "fill", "notes": "owner pass: diner-trim wash" },
+    "117": { "class": "fill", "notes": "owner pass: unbounded ceiling wash pair" },
+    "118": { "class": "fill", "notes": "owner pass: unbounded ceiling wash pair" },
+    "119": { "class": "fill", "notes": "owner pass: skybox miniature hero spot" },
+    "120": { "class": "fill", "notes": "owner pass: skybox miniature point" },
+    "132": { "class": "fill", "notes": "owner pass: skybox miniature point" },
+    "133": { "class": "fill", "notes": "owner pass: skybox miniature point" },
+    "318": { "class": "fill", "notes": "owner pass: arcade spot too hot even with a glowa corona" },
+    "319": { "class": "fill", "notes": "owner pass: arcade spot too hot even with a glowa corona" },
+    "320": { "class": "fill", "notes": "owner pass: arcade spot too hot even with a glowa corona" },
+    "388": { "class": "fill", "notes": "owner pass: false implied from batch vote; no local corona" },
+    "389": { "class": "fill", "notes": "owner pass: false implied from batch vote; no local corona" },
+    "486": { "class": "fill", "notes": "owner pass: clipped roof wash" },
+    "492": { "class": "fill", "notes": "owner pass: pier-window wash; sibling 491 stays on" },
+    "524": { "class": "fill", "notes": "owner pass: curb wash; siblings 487/488 stay on" }
   }
 }

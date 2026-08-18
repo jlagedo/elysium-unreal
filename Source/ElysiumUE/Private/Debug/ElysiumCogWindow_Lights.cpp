@@ -5,6 +5,7 @@
 #include "Debug/ElysiumCogStyle.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumLightRig.h"
+#include "ElysiumEnvironment.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
 
@@ -21,9 +22,11 @@
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogSubsystem.h"
 #include "CogWidgets.h"
+#include "Engine/PostProcessVolume.h"
 #include "Engine/TextureCube.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
@@ -54,6 +57,25 @@ namespace
 			&& A.RadiusCm == B.RadiusCm && A.Color == B.Color;
 	}
 
+	IConsoleVariable* FindCVar(const TCHAR* Name)
+	{
+		return IConsoleManager::Get().FindConsoleVariable(Name);
+	}
+
+	float ReadCVarFloat(const TCHAR* Name, float Fallback)
+	{
+		const IConsoleVariable* Variable = FindCVar(Name);
+		return Variable ? Variable->GetFloat() : Fallback;
+	}
+
+	void WriteCVarFloat(const TCHAR* Name, float Value)
+	{
+		if (IConsoleVariable* Variable = FindCVar(Name))
+		{
+			Variable->Set(Value);
+		}
+	}
+
 	bool SliderWithReset(const char* Label, float& Value, float Min, float Max, float Reset,
 		const char* Format, ImGuiSliderFlags Flags = ImGuiSliderFlags_None)
 	{
@@ -68,6 +90,30 @@ namespace
 			ImGui::EndPopup();
 		}
 		return bChanged;
+	}
+
+	// Optional PPV override: a negative cvar means "leave the volume alone". The checkbox is the
+	// override; the slider is the value. First enable lands on FirstValue rather than 0, so turning
+	// it on is a visible A/B instead of a silent no-op.
+	void OptionalCVarSlider(const char* EnableLabel, const char* SliderLabel, const TCHAR* Name,
+		float Minimum, float Maximum, float FirstValue, float SliderWidth, const char* Format)
+	{
+		const float Current = ReadCVarFloat(Name, -1.f);
+		bool bOverride = Current >= 0.f;
+		if (ImGui::Checkbox(EnableLabel, &bOverride))
+		{
+			WriteCVarFloat(Name, bOverride ? FirstValue : -1.f);
+		}
+		if (!bOverride)
+		{
+			return;
+		}
+		float Value = FMath::Clamp(Current >= 0.f ? Current : FirstValue, Minimum, Maximum);
+		ImGui::SetNextItemWidth(SliderWidth);
+		if (SliderWithReset(SliderLabel, Value, Minimum, Maximum, FirstValue, Format))
+		{
+			WriteCVarFloat(Name, Value);
+		}
 	}
 
 	// World -> imgui screen for the per-light markers. Same shape as the inspector's projector, in
@@ -122,7 +168,11 @@ void FElysiumCogWindow_Lights::RenderHelp()
 		"Save writes the calibration, switched-off set, and every hand-set attribute, keyed by .lights "
 		"line index, to $ELYSIUM_EXPORT_ROOT/_lights/<map>.json. Map load restores that complete state "
 		"(elysium.LightSurvey 0 returns to the full faithful rig), and Load deterministically reapplies "
-		"the file mid-session. Revert restores every owned attribute from the sidecar and calibration.");
+		"the file mid-session. Revert restores every owned attribute from the sidecar and calibration.\n\n"
+		"Sky & fog owns the adopted SkyLight and height fog. Skylight leaking bleeds sky into "
+		"rooms Lumen would leave black. The authored night cube is nearly black, so turning "
+		"leaking on swaps in a flat cube and a non-zero intensity for the A/B; turning it off "
+		"puts the authored sky back.");
 }
 
 void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
@@ -151,6 +201,8 @@ void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
 
 		ActiveRig = Rig;
 		SkyCubemap.Reset();
+		bLeakingOwnsSkySource = false;
+		SkyIntensityBeforeLeaking = -1.f;
 		SelectedSource = INDEX_NONE;
 		HoveredSource = INDEX_NONE;
 		bScrollToSelected = false;
@@ -516,6 +568,7 @@ void FElysiumCogWindow_Lights::RenderContent()
 		if (Intensity != Sky->Intensity)
 		{
 			Sky->SetIntensity(Intensity);
+			SkyIntensityBeforeLeaking = -1.f;
 		}
 
 		FLinearColor Color = Sky->GetLightColor();
@@ -528,18 +581,30 @@ void FElysiumCogWindow_Lights::RenderContent()
 		// Cubemap off falls back to a flat constant ambient of the light colour — what the sky
 		// light did before it was given the real sky. Kept togglable because it is the A/B that
 		// shows what sky occlusion is actually buying while the map is being recalibrated.
-		bool bUseCube = Sky->Cubemap != nullptr;
-		const bool bCanToggle = bUseCube || SkyCubemap.IsValid();
-		if (bCanToggle && ImGui::Checkbox("Sky cubemap (occluded IBL)", &bUseCube))
+		const bool bUsingAuthoredCube = Sky->Cubemap != nullptr
+			&& Sky->Cubemap != ConstantSkyCube.Get();
+		bool bUseCube = bUsingAuthoredCube;
+		if (ImGui::Checkbox("Sky cubemap (occluded IBL)", &bUseCube))
 		{
 			if (bUseCube)
 			{
-				Sky->Cubemap = SkyCubemap.Get();
+				if (UTextureCube* Authored = SkyCubemap.Get())
+				{
+					Sky->SetCubemap(Authored);
+				}
 			}
 			else
 			{
-				SkyCubemap = Sky->Cubemap;
-				Sky->Cubemap = nullptr;
+				if (Sky->Cubemap && Sky->Cubemap != ConstantSkyCube.Get())
+				{
+					SkyCubemap = Sky->Cubemap;
+				}
+				if (!ConstantSkyCube.IsValid())
+				{
+					ConstantSkyCube.Reset(ElysiumEnvironment::BuildConstantCube(
+						FLinearColor(0.55f, 0.58f, 0.68f)));
+				}
+				Sky->SetCubemap(ConstantSkyCube.Get());
 			}
 			Sky->RecaptureSky();
 		}
@@ -549,6 +614,89 @@ void FElysiumCogWindow_Lights::RenderContent()
 		{
 			Sky->bLowerHemisphereIsBlack = bLowerBlack;
 			Sky->RecaptureSky();
+		}
+
+		ImGui::SeparatorText("Skylight leaking");
+		const float LeakNow = ReadCVarFloat(TEXT("elysium.SkylightLeaking"), -1.f);
+		bool bLeak = LeakNow >= 0.f;
+		if (ImGui::Checkbox("Override skylight leaking", &bLeak))
+		{
+			if (bLeak)
+			{
+				if (!ConstantSkyCube.IsValid())
+				{
+					ConstantSkyCube.Reset(ElysiumEnvironment::BuildConstantCube(
+						FLinearColor(0.55f, 0.58f, 0.68f)));
+				}
+				if (Sky->Cubemap && Sky->Cubemap != ConstantSkyCube.Get())
+				{
+					SkyCubemap = Sky->Cubemap;
+				}
+				Sky->SetCubemap(ConstantSkyCube.Get());
+				if (Sky->Intensity <= KINDA_SMALL_NUMBER)
+				{
+					SkyIntensityBeforeLeaking = Sky->Intensity;
+					Sky->SetIntensity(0.5f);
+				}
+				bLeakingOwnsSkySource = true;
+				Sky->RecaptureSky();
+				WriteCVarFloat(TEXT("elysium.SkylightLeaking"), 0.15f);
+				if (ReadCVarFloat(TEXT("elysium.SkylightLeakingDistance"), -1.f) < 0.f)
+				{
+					WriteCVarFloat(TEXT("elysium.SkylightLeakingDistance"), 1000.f);
+				}
+			}
+			else
+			{
+				WriteCVarFloat(TEXT("elysium.SkylightLeaking"), -1.f);
+				WriteCVarFloat(TEXT("elysium.SkylightLeakingDistance"), -1.f);
+				if (bLeakingOwnsSkySource)
+				{
+					Sky->SetCubemap(SkyCubemap.Get());
+					bLeakingOwnsSkySource = false;
+				}
+				if (SkyIntensityBeforeLeaking >= 0.f)
+				{
+					Sky->SetIntensity(SkyIntensityBeforeLeaking);
+					SkyIntensityBeforeLeaking = -1.f;
+				}
+				Sky->RecaptureSky();
+			}
+		}
+		ImGui::SetItemTooltip("Bleeds sky into rooms Lumen would leave black. The authored night "
+			"cube is nearly black, so this swaps in a flat studio cube and a non-zero intensity "
+			"while the override is on.");
+		if (bLeak)
+		{
+			float LeakAmount = FMath::Clamp(LeakNow >= 0.f ? LeakNow : 0.15f, 0.f, 1.f);
+			ImGui::SetNextItemWidth(SliderWidth);
+			if (SliderWithReset("Leak amount", LeakAmount, 0.f, 1.f, 0.15f, "%.2f"))
+			{
+				WriteCVarFloat(TEXT("elysium.SkylightLeaking"), LeakAmount);
+			}
+			OptionalCVarSlider("Override leaking distance", "Full leak at (cm)",
+				TEXT("elysium.SkylightLeakingDistance"), 100.f, 2000.f, 1000.f,
+				SliderWidth, "%.0f");
+			ImGui::SetItemTooltip("Smaller is flatter indoor fill; larger reads as AO. Epic's "
+				"default is 1000 cm.");
+			ImGui::SetNextItemWidth(SliderWidth);
+			if (ImGui::ColorEdit3("Leak tint", &LeakTint.R))
+			{
+				// Applied below; the PPV is the live consumer.
+			}
+		}
+		if (APostProcessVolume* PPV = Visuals->GetPostProcess())
+		{
+			PPV->Settings.bOverride_LumenSkylightLeakingTint = bLeak;
+			if (bLeak)
+			{
+				PPV->Settings.LumenSkylightLeakingTint = LeakTint;
+			}
+			PPV->MarkComponentsRenderStateDirty();
+		}
+		if (bLeak)
+		{
+			ImGui::TextDisabled("Leaking samples a flat cube, not the night photo.");
 		}
 	}
 	else

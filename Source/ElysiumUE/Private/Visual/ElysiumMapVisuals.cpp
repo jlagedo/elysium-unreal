@@ -954,6 +954,8 @@ void UElysiumMapVisuals::ApplyPostProcessKnobs()
 	{
 		S.LumenDiffuseColorBoost = Boost;
 	}
+
+	PostProcess->MarkComponentsRenderStateDirty();
 }
 
 void UElysiumMapVisuals::ApplySkyBrightness()

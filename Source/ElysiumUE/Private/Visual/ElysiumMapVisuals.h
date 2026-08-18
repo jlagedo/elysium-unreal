@@ -116,6 +116,7 @@ public:
 	// the map's ambience live. Null if the bake did not place them.
 	USkyLightComponent* GetSkyLight() const { return SkyLight; }
 	UExponentialHeightFogComponent* GetHeightFog() const { return HeightFog; }
+	APostProcessVolume* GetPostProcess() const { return PostProcess; }
 
 	// This map's decoded-texture dedup index, created with the component and released with it.
 	// Anything building a material at runtime off this map's images shares it.

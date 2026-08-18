@@ -1,14 +1,15 @@
-"""Propose a LoadSurvey-compatible advisor JSON for sm_hub_1 fill lights.
+"""Propose a LoadSurvey-compatible advisor JSON for a map's fill lights.
 
 Offline neighborhood pack + conservative rules + optional per-batch verdicts.
-Does not read the standing `_lights/sm_hub_1.json` survey. Writes:
+Does not read the standing `_lights/<map>.json` survey. Writes:
 
-  $ELYSIUM_EXPORT_ROOT/_lights/sm_hub_1.advisor.json
-  $ELYSIUM_EXPORT_ROOT/_lights/sm_hub_1.advisor.report.json
+  $ELYSIUM_EXPORT_ROOT/_lights/<map>.advisor.json
+  $ELYSIUM_EXPORT_ROOT/_lights/<map>.advisor.report.json
 
-Apply by copying the advisor file over sm_hub_1.json. Usage:
+Apply by copying the advisor file over <map>.json. Usage:
 
   uv run elysium research propose_hub_lights
+  uv run elysium research propose_hub_lights --map sp_tutorial_1
   uv run elysium research propose_hub_lights --verdicts path.json
 """
 from __future__ import annotations
@@ -32,7 +33,7 @@ from elysium_pipeline.shared_corpus import (
     materials_path,
 )
 
-MAP = "sm_hub_1"
+DEFAULT_MAP = "sm_hub_1"
 FALLBACK_RADIUS_CM = 2500.0
 SPRITE_KEEP_CM = 100.0
 EMIT_KEEP_CM = 80.0
@@ -40,9 +41,11 @@ ENTITY_MATCH_CM = 8.0
 FILL_MIN_BATCH = 4
 DETACH_PERCENTILE = 75
 HERO_MAG = 2000.0
+WASH_REACH_CM = 1000.0
 OUTDOOR_PREFIXES = ("grass/", "ground/", "asphalt/", "sand/")
 OUTDOOR_TOKENS = ("sidewalk", "streetd", "street_")
-TYPE_LABEL = {0: "tex", 1: "point", 2: "spot", 3: "sun"}
+PROTECTED = {"texlight", "styled", "scripted", "sun_sky"}
+TYPE_LABEL = {0: "tex", 1: "point", 2: "spot", 3: "sun", 5: "skyamb"}
 WINDOW_TOKENS = ("wndw", "window")
 SPRITE_FAMILIES = (
     "glowa",
@@ -298,10 +301,11 @@ def load_probe(path):
 
 def load_verdicts(path):
     if path is None:
-        return {}
+        return {}, {}
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    batches = data.get("batches", data)
-    return {str(key): value for key, value in batches.items()}
+    batches = {str(key): value for key, value in (data.get("batches") or {}).items()}
+    indexes = {int(key): value for key, value in (data.get("indexes") or {}).items()}
+    return batches, indexes
 
 
 def batch_id(light):
@@ -315,6 +319,8 @@ def batch_id(light):
 
 def classify_light(light, neigh, detach_cut):
     evidence = []
+    if light["type"] in (3, 5):
+        return "sun_sky", "sun or skyambient, not a placed fill", [f"type{light['type']}"]
     if light["type"] == 0:
         return "texlight", "texlight is a visible emit-surface", ["type0"]
     if 1 <= light["style"] <= 11:
@@ -335,7 +341,7 @@ def classify_light(light, neigh, detach_cut):
         flags = world["flags"]
         if flags["window"] and flags["emissive"] and not flags["blend"]:
             return "shopfront", "opaque emissive window", [f"world:{world['key']}"]
-        if flags["blend"] or flags["glass"]:
+        if flags["glass"] or (flags["blend"] and flags["window"]):
             return "window_spill", "translucent glass nearest", [f"world:{world['key']}"]
         if flags["emissive"]:
             return "fixture", "nearest world surface emits", [f"world:{world['key']}"]
@@ -359,6 +365,20 @@ def classify_light(light, neigh, detach_cut):
             if flags["blend"]:
                 return "window_spill", "probe nearest surface is glass", [surface]
             return "fixture", "probe nearest surface emits", [surface]
+
+    # Owner pass on this map: a hot, wide point with no nearby corona was always wash.
+    # Mag>=2000 and reach>=1000 with no sprite<=100 had zero false positives against that pass.
+    if (
+        light["type"] == 1
+        and light["mag"] >= HERO_MAG
+        and light["reach_cm"] >= WASH_REACH_CM
+        and (sprite is None or sprite["dist"] > SPRITE_KEEP_CM)
+    ):
+        return (
+            "fill",
+            "high-energy wide point with no nearby corona",
+            [f"mag={light['mag']:.0f}", f"reach={light['reach_cm']:.0f}"],
+        )
 
     # Auto-fill is points only, large copy-paste batches, clearly detached, no keep signal.
     # Do not auto-kill outdoor ground lights (hub has no sky pair) or a point whose
@@ -392,7 +412,6 @@ def classify_light(light, neigh, detach_cut):
 def vote_batches(results):
     keep_classes = {
         "fixture",
-        "implied_emitter",
         "shopfront",
         "texlight",
         "styled",
@@ -467,8 +486,8 @@ def veto_auto_fill(results):
                 member["evidence"] = list(member["evidence"]) + ["fill_veto_mixed"]
 
 
-def apply_verdicts(results, verdicts):
-    if not verdicts:
+def apply_verdicts(results, batch_verdicts, index_verdicts):
+    if not batch_verdicts and not index_verdicts:
         return
     allowed = {
         "fixture",
@@ -483,9 +502,9 @@ def apply_verdicts(results, verdicts):
         "scripted",
     }
     for item in results:
-        if item["class"] != "review":
+        if item["class"] in PROTECTED:
             continue
-        verdict = verdicts.get(item["batch"])
+        verdict = index_verdicts.get(item["index"]) or batch_verdicts.get(item["batch"])
         if not verdict:
             continue
         klass = verdict.get("class", "keep")
@@ -530,38 +549,42 @@ def build_edit(light, klass):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
+    parser.add_argument("--map", default=DEFAULT_MAP, help="Map folder / sidecar stem")
     parser.add_argument(
         "--verdicts",
         default="",
-        help="JSON {batches: {id: {class, notes}}}. Default: sibling propose_hub_lights_verdicts.json",
+        help="JSON {batches, indexes}. Default: sibling verdicts for this map, if present",
     )
     args = parser.parse_args(argv)
+    map_name = args.map
     default_verdicts = Path(__file__).with_name("propose_hub_lights_verdicts.json")
+    if map_name != DEFAULT_MAP:
+        default_verdicts = Path(__file__).with_name(f"propose_{map_name}_verdicts.json")
     verdicts_path = args.verdicts or (str(default_verdicts) if default_verdicts.is_file() else "")
 
     root = export_root()
-    world = root / MAP
-    lights_path = world / f"{MAP}.lights"
+    world = root / map_name
+    lights_path = world / f"{map_name}.lights"
     if not lights_path.is_file():
         raise SystemExit(f"no {lights_path}")
 
     lights = parse_lights(lights_path)
-    sprites = parse_sprites(world / f"{MAP}.sprites")
-    props = parse_props(world / f"{MAP}.props")
-    ent_lights, dynamics, _sky_camera = parse_ents(world / f"{MAP}.ents")
+    sprites = parse_sprites(world / f"{map_name}.sprites")
+    props = parse_props(world / f"{map_name}.props")
+    ent_lights, dynamics, _sky_camera = parse_ents(world / f"{map_name}.ents")
     props.extend(dynamics)
-    cents, mats = parse_obj_centroids(world / f"{MAP}.obj")
+    cents, mats = parse_obj_centroids(world / f"{map_name}.obj")
     materials, models = load_corpus(root)
-    probe_by_index = load_probe(root / "_lights" / f"{MAP}.probe.json")
-    verdicts = load_verdicts(verdicts_path or None)
+    probe_by_index = load_probe(root / "_lights" / f"{map_name}.probe.json")
+    batch_verdicts, index_verdicts = load_verdicts(verdicts_path or None)
 
     batches = defaultdict(list)
     for light in lights:
-        if light["sky"]:
+        if light["sky"] or light["type"] in (3, 5):
             continue
         batches[batch_id(light)].append(light["index"])
 
-    playable = [light for light in lights if not light["sky"]]
+    playable = [light for light in lights if not light["sky"] and light["type"] not in (3, 5)]
     near_any = []
     neighborhoods = {}
     for light in playable:
@@ -655,7 +678,39 @@ def main(argv=None):
 
     vote_batches(results)
     veto_auto_fill(results)
-    apply_verdicts(results, verdicts)
+    apply_verdicts(results, batch_verdicts, index_verdicts)
+
+    covered = {row["index"] for row in results}
+    lights_by = {light["index"]: light for light in lights}
+    for idx, verdict in index_verdicts.items():
+        if idx in covered:
+            continue
+        light = lights_by.get(idx)
+        if light is None:
+            continue
+        klass = verdict.get("class", "fill")
+        results.append(
+            {
+                "index": idx,
+                "class": klass,
+                "reason": verdict.get("notes") or "index verdict",
+                "evidence": ["model", "sky" if light["sky"] else "index"],
+                "batch": batch_id(light),
+                "batch_size": 1,
+                "band": "sky" if light["sky"] else "main",
+                "type": light["type"],
+                "style": light["style"],
+                "mag": light["mag"],
+                "reach_cm": light["reach_cm"],
+                "pos": list(light["pos"]),
+                "near_any": -1,
+                "sprite": None,
+                "prop": None,
+                "world": None,
+                "entity": None,
+            }
+        )
+
     for item in results:
         if item["class"] == "review":
             item["class"] = "keep"
@@ -663,11 +718,12 @@ def main(argv=None):
 
     sky_n = sum(1 for light in lights if light["sky"])
     counts = Counter(item["class"] for item in results)
+    result_by = {row["index"]: row for row in results}
     edits = []
     for light in lights:
-        if light["sky"]:
+        item = result_by.get(light["index"])
+        if item is None:
             continue
-        item = next(row for row in results if row["index"] == light["index"])
         if item["class"] in ("fill", "window_spill", "mood"):
             edits.append(build_edit(light, item["class"]))
 
@@ -675,7 +731,7 @@ def main(argv=None):
     overridden = sum(1 for edit in edits if edit["overridden"])
     advisor = {
         "schema": 2,
-        "map": MAP,
+        "map": map_name,
         "saved_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
         "source": "propose_hub_lights",
         "counts": {
@@ -711,12 +767,15 @@ def main(argv=None):
         )
 
     report = {
-        "map": MAP,
+        "map": map_name,
         "playable": len(playable),
         "sky_excluded": sky_n,
         "detach_cut_cm": detach_cut,
         "probe": bool(probe_by_index),
-        "verdicts": sorted(verdicts),
+        "verdicts": {
+            "batches": sorted(batch_verdicts),
+            "indexes": sorted(index_verdicts),
+        },
         "classes": dict(counts),
         "edits": len(edits),
         "lights": results,
@@ -725,8 +784,8 @@ def main(argv=None):
 
     out_dir = root / "_lights"
     out_dir.mkdir(parents=True, exist_ok=True)
-    advisor_path = out_dir / f"{MAP}.advisor.json"
-    report_path = out_dir / f"{MAP}.advisor.report.json"
+    advisor_path = out_dir / f"{map_name}.advisor.json"
+    report_path = out_dir / f"{map_name}.advisor.report.json"
     advisor_path.write_text(json.dumps(advisor, indent="\t") + "\n", encoding="utf-8")
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
@@ -745,24 +804,37 @@ def main(argv=None):
         if 1 <= item["style"] <= 11 and item["class"] in ("fill", "window_spill")
     ]
     errors = []
-    if any(index not in playable_indexes for index in edit_indexes):
-        errors.append("edit index is not a playable .lights line")
-    if any(index in sky_indexes for index in edit_indexes):
-        errors.append("skybox light was disabled")
+    unknown = [
+        index
+        for index in edit_indexes
+        if index not in playable_indexes and index not in index_verdicts
+    ]
+    if unknown:
+        errors.append(f"edit index is not playable or verdicited: {unknown}")
+    unexpected_sky = [
+        index
+        for index in edit_indexes
+        if index in sky_indexes and index not in index_verdicts
+    ]
+    if unexpected_sky:
+        errors.append(f"skybox light disabled without a verdict: {unexpected_sky}")
     if tex_off:
         errors.append(f"texlight disabled: {tex_off}")
     if styled_off:
         errors.append(f"styled light disabled: {styled_off}")
-    if len(results) != len(playable):
+    if len([row for row in results if row["band"] != "sky"]) != len(playable):
         errors.append("report does not cover every playable light")
     if disabled > 250:
         errors.append(f"fill count {disabled} is too large for a conservative hub pass")
     if errors:
         raise SystemExit("advisor contract failed: " + "; ".join(errors))
 
-    print(f"map {MAP}: {len(lights)} sidecar rows, {len(playable)} playable, {sky_n} sky excluded")
+    print(f"map {map_name}: {len(lights)} sidecar rows, {len(playable)} playable, {sky_n} sky excluded")
     if verdicts_path:
-        print(f"  verdicts: {verdicts_path} ({len(verdicts)} batches)")
+        print(
+            f"  verdicts: {verdicts_path} "
+            f"({len(batch_verdicts)} batches, {len(index_verdicts)} indexes)"
+        )
     print(f"  detach cut (p{DETACH_PERCENTILE}): {detach_cut:.1f} cm")
     print(f"  classes: {dict(counts)}")
     print(f"  edits: {disabled} disabled, {overridden} mood overrides")

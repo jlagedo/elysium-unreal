@@ -1,0 +1,97 @@
+{
+  "map": "sp_tutorial_1",
+  "batches": {
+    "1|0|314.10,327.90,555.70|1300.5": {
+      "class": "fill",
+      "notes": "17 copy-paste cool points, brightness 25, no corona"
+    },
+    "1|0|233.45,454.55,501.00|0.0": {
+      "class": "fill",
+      "notes": "10 unbounded cool points, brightness 20, no corona"
+    },
+    "1|0|291.82,568.18,626.25|0.0": {
+      "class": "fill",
+      "notes": "8 unbounded cool warehouse points, brightness 25"
+    },
+    "1|0|314.10,327.90,555.70|650.2": {
+      "class": "fill",
+      "notes": "7 cool points, brightness 25, no corona"
+    },
+    "1|0|116.73,227.27,250.50|0.0": {
+      "class": "fill",
+      "notes": "5 unbounded cool points, brightness 10"
+    },
+    "1|0|175.09,340.91,375.75|0.0": {
+      "class": "fill",
+      "notes": "4 unbounded cool points, brightness 15"
+    },
+    "1|0|233.45,454.55,501.00|650.2": {
+      "class": "fill",
+      "notes": "3 cool points, brightness 20"
+    },
+    "1|0|31.32,35.13,69.90|325.1": {
+      "class": "fill",
+      "notes": "3 points authored at brightness 2"
+    },
+    "1|0|17.88,128.93,139.66|650.2": {
+      "class": "fill",
+      "notes": "asphalt wash, tutorial has a sky pair"
+    },
+    "1|0|17.88,128.93,139.66|1300.5": {
+      "class": "fill",
+      "notes": "asphalt wash, tutorial has a sky pair"
+    },
+    "1|0|10.55,103.98,88.86|487.7": {
+      "class": "fill",
+      "notes": "dim chainlink pair, brightness 15"
+    },
+    "1|0|11.37,77.46,81.71|325.1": {
+      "class": "fill",
+      "notes": "dim sewer pair, brightness 10"
+    },
+    "1|0|137.48,113.64,74.25|40.6": {
+      "class": "fill",
+      "notes": "park pair authored at brightness 5"
+    },
+    "1|0|307.91,45.92,45.92|325.1": {
+      "class": "fill",
+      "notes": "dim red pair, brightness 15"
+    },
+    "1|0|4.11,92.24,100.27|731.5": {
+      "class": "fill",
+      "notes": "dim cyan pair, brightness 5"
+    },
+    "1|0|78.86,54.52,5.28|650.2": {
+      "class": "fill",
+      "notes": "dim lab pair, brightness 10"
+    },
+    "1|0|95.64,77.27,4.97|325.1": {
+      "class": "fill",
+      "notes": "dim lab pair, brightness 5"
+    },
+    "2|0|1.14,23.23,25.05|650.2": {
+      "class": "fill",
+      "notes": "spot pair authored at brightness 1"
+    }
+  },
+  "indexes": {
+    "145": { "class": "fill", "notes": "spot authored at brightness 3, 80 m from anything" },
+    "177": { "class": "keep", "notes": "brighter unique point, leave on" },
+    "192": { "class": "implied_emitter", "notes": "warm 600-brightness barrel/fire spot" },
+    "193": { "class": "keep", "notes": "brighter unique point" },
+    "229": { "class": "fill", "notes": "same cool 147 199 208 fill family, brightness 40" },
+    "253": { "class": "keep", "notes": "brighter unique point, brightness 200" },
+    "254": { "class": "keep", "notes": "theatre-area point" },
+    "262": { "class": "fill", "notes": "dim brown point, brightness 50, no fixture" },
+    "263": { "class": "fill", "notes": "dim brown point, no fixture" },
+    "279": { "class": "fill", "notes": "spot authored at brightness 8" },
+    "286": { "class": "keep", "notes": "theatre-area pair" },
+    "291": { "class": "keep", "notes": "theatre-area pair" },
+    "293": { "class": "fill", "notes": "dim spot, brightness 16" },
+    "305": { "class": "fill", "notes": "dim point, brightness 10" },
+    "326": { "class": "fill", "notes": "dim spot, brightness 10" },
+    "331": { "class": "implied_emitter", "notes": "hero 3500-brightness spot" },
+    "332": { "class": "implied_emitter", "notes": "warm 400-brightness spot" },
+    "357": { "class": "keep", "notes": "near-white 50-brightness point" }
+  }
+}
