@@ -42,8 +42,6 @@ namespace
 	// maps), so the head of the table is the head of the work list.
 	const FStubClassRow GStubClasses[] =
 	{
-		{ TEXT("env_sprite"),                    TEXT("HideSprite ShowSprite TurnOn TurnOff"),
-		  TEXT("sprite visibility — no env_sprite class; the bake carries the sprite, nothing toggles it") },
 		{ TEXT("ambient_soundscheme"),           TEXT("FadeIn FadeOut Disable"),
 		  TEXT("the SoundScheme manager owns the scheme file, but no entity class receives its wires") },
 		{ TEXT("light_spot"),                    TEXT("FadeToPattern TurnOff TurnOn SetPattern"),

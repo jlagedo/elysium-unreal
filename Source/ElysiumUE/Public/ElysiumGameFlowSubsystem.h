@@ -211,6 +211,11 @@ public:
 	// refuses.
 	bool EnterStageWorld(FString& OutError);
 
+	// Clear and seed the session half of NewGame without travelling. NewGame, bare dev-map boot
+	// and direct dev-map navigation without a player all use this, so every mocked entry applies
+	// the same full character sheet.
+	bool SeedNewGameState(const FElysiumNewGameRequest& Request);
+
 	// --- Pause ---------------------------------------------------------------------------------
 	// Playing <-> Paused: the world is held (clock + engine) and the pause menu is raised. Only
 	// legal from Playing — the front end is an empty shell and has no run to pause.
@@ -244,10 +249,6 @@ private:
 
 	// Resolve FElysiumNewGameRequest::EntryPoint to a map + landmark. False when nothing resolves.
 	bool ResolveEntryPoint(const FString& EntryPoint, FString& OutMap, FString& OutLandmark) const;
-
-	// Clear and seed the session half of NewGame without travelling. NewGame and bare dev-map boot
-	// both use this, so every mocked entry applies the same full character sheet.
-	bool SeedNewGameState(const FElysiumNewGameRequest& Request);
 
 	// --- Loading screen ------------------------------------------------------------------------
 	// The engine's own movie player, over the OpenLevel flush. The hook is

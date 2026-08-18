@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameFlowSubsystem.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomConsole.h"
@@ -51,6 +52,20 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			}
 			const FString Target = (Args[0] == TEXT("next")) ? NextMapName() : Args[0];
 			const FString Landmark = (Args.Num() > 1) ? Args[1] : FString();
+
+			UGameInstance* GI = GetGameInstance();
+			UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+			if (GameState && !FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
+			{
+				if (ExportedMaps().Contains(Target))
+				{
+					if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())
+					{
+						Flow->SeedNewGameState(ElysiumStory::MakeMockCharacterRequest(FString()));
+					}
+				}
+			}
+
 			Travel(Target, Landmark);
 		}),
 		ECVF_Cheat));

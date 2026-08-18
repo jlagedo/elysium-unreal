@@ -565,11 +565,11 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 		ElysiumStub::ClearTally();
 	};
 
-	// One stub class (env_sprite — 208 wires across the shipped maps, no leaf), one classname with
-	// no registration at all, and one real class to prove the quiet path.
+	// One stub class (env_shake — named inputs, no leaf), one classname with no registration at
+	// all, and one real class to prove the quiet path.
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__test__");
-	for (const TCHAR* Pair : { TEXT("env_sprite|sprite1"), TEXT("func_lod|lod1"), TEXT("math_counter|counter1") })
+	for (const TCHAR* Pair : { TEXT("env_shake|quake1"), TEXT("func_lod|lod1"), TEXT("math_counter|counter1") })
 	{
 		FString Class, Name;
 		FString(Pair).Split(TEXT("|"), &Class, &Name);
@@ -583,10 +583,10 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
 
-	FElysiumEntity* Sprite = World.FindByName(TEXT("sprite1"));
+	FElysiumEntity* Quake = World.FindByName(TEXT("quake1"));
 	FElysiumEntity* Lod = World.FindByName(TEXT("lod1"));
 	FElysiumEntity* Counter = World.FindByName(TEXT("counter1"));
-	if (!TestNotNull(TEXT("sprite1 resolved"), Sprite)
+	if (!TestNotNull(TEXT("quake1 resolved"), Quake)
 		|| !TestNotNull(TEXT("lod1 resolved"), Lod)
 		|| !TestNotNull(TEXT("counter1 resolved"), Counter))
 	{
@@ -594,7 +594,7 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	}
 
 	// A stub class is still an inert record: it names inputs, it does not implement any.
-	TestTrue(TEXT("a stub class spawns record-only"), Sprite->IsRecordOnly());
+	TestTrue(TEXT("a stub class spawns record-only"), Quake->IsRecordOnly());
 	TestTrue(TEXT("an unregistered classname spawns record-only"), Lod->IsRecordOnly());
 	TestFalse(TEXT("a real class does not"), Counter->IsRecordOnly());
 
@@ -624,10 +624,10 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	};
 
 	// 1. A stub class's named input resolves to the shared thunk and reports under its own name.
-	FireAt(TEXT("sprite1"), TEXT("HideSprite"));
-	FireAt(TEXT("sprite1"), TEXT("HideSprite"));
+	FireAt(TEXT("quake1"), TEXT("StartShake"));
+	FireAt(TEXT("quake1"), TEXT("StartShake"));
 	TestEqual(TEXT("a stub input reports once per fire"),
-		CountFor(TEXT("input"), TEXT("env_sprite.HideSprite")), 2);
+		CountFor(TEXT("input"), TEXT("env_shake.StartShake")), 2);
 
 	// 2. An input no class on the chain owns reports too — this is what covers the classnames the
 	//    stub table does not enumerate.
@@ -649,15 +649,84 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 		TallyMentions(TEXT("no_such_entity")));
 
 	// 4. The shadowing guard: base inputs still work on a stub class and report nothing.
-	FireAt(TEXT("sprite1"), TEXT("ScriptHide"));
-	TestTrue(TEXT("a base input still reaches a stub class"), Sprite->IsHidden());
+	FireAt(TEXT("quake1"), TEXT("ScriptHide"));
+	TestTrue(TEXT("a base input still reaches a stub class"), Quake->IsHidden());
 	TestEqual(TEXT("a base input on a stub class reports nothing"),
-		CountFor(TEXT("input"), TEXT("env_sprite.ScriptHide")), 0);
+		CountFor(TEXT("input"), TEXT("env_shake.ScriptHide")), 0);
 
 	// 5. And an implemented input on a real class stays quiet.
 	FireAt(TEXT("counter1"), TEXT("Add"));
 	TestEqual(TEXT("an implemented input reports nothing"),
 		CountFor(TEXT("input"), TEXT("math_counter.Add")), 0);
+
+	return true;
+}
+
+// env_sprite visibility is a dropped presentation layer (Lumen owns glow). The four map-fired
+// inputs must resolve quietly; an unnamed input must still report; base dormancy still works.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEnvSpriteNoOpTest, "Elysium.Substrate.EnvSprite", GElysiumTestFlags)
+bool FElysiumEnvSpriteNoOpTest::RunTest(const FString&)
+{
+	IConsoleVariable* Warn = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.StubWarn"));
+	const int32 PrevWarn = Warn ? Warn->GetInt() : 2;
+	if (Warn) { Warn->Set(0); }
+	ElysiumStub::ClearTally();
+	ON_SCOPE_EXIT
+	{
+		if (Warn) { Warn->Set(PrevWarn); }
+		ElysiumStub::ClearTally();
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__test__");
+	FElysiumEntityDef Def;
+	Def.Classname = TEXT("env_sprite");
+	Def.TargetName = TEXT("sprite1");
+	Defs.Defs.Add(MoveTemp(Def));
+
+	FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* Sprite = World.FindByName(TEXT("sprite1"));
+	if (!TestNotNull(TEXT("sprite1 resolved"), Sprite))
+	{
+		return false;
+	}
+	TestTrue(TEXT("env_sprite is a real class"), Sprite->Class && !Sprite->Class->bStub);
+	TestFalse(TEXT("env_sprite is not an inert record"), Sprite->IsRecordOnly());
+
+	auto FireAt = [&World](const TCHAR* Input)
+	{
+		World.AcceptInput(TEXT("sprite1"), FName(Input), FElysiumVariant::Void(),
+			FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	};
+	auto CountFor = [](const TCHAR* Kind, const FString& Surface) -> int32
+	{
+		TArray<ElysiumStub::FTally> Rows;
+		ElysiumStub::CollectTally(Rows);
+		for (const ElysiumStub::FTally& R : Rows)
+		{
+			if (R.Kind == Kind && R.Surface == Surface) { return R.Count; }
+		}
+		return 0;
+	};
+
+	for (const TCHAR* Input : { TEXT("HideSprite"), TEXT("ShowSprite"), TEXT("TurnOn"), TEXT("TurnOff") })
+	{
+		FireAt(Input);
+		TestEqual(FString::Printf(TEXT("%s is a quiet no-op"), Input),
+			CountFor(TEXT("input"), FString::Printf(TEXT("env_sprite.%s"), Input)), 0);
+	}
+
+	FireAt(TEXT("ScriptHide"));
+	TestTrue(TEXT("ScriptHide still reaches the base"), Sprite->IsHidden());
+	TestEqual(TEXT("ScriptHide is not a stub"),
+		CountFor(TEXT("input"), TEXT("env_sprite.ScriptHide")), 0);
+
+	FireAt(TEXT("SetScale"));
+	TestEqual(TEXT("an unnamed sprite input still reports"),
+		CountFor(TEXT("input"), TEXT("env_sprite.SetScale")), 1);
 
 	return true;
 }

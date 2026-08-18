@@ -13,8 +13,8 @@ struct FElysiumInputArgs;
 // tally instead of a dozen spellings scattered across the layers. The line is deliberately loud —
 // it is a work list, not a diagnostic:
 //
-//   Stub fired!!!!! [input] env_sprite.HideSprite | on 'streetlight_red_sprite_south'
-//     | params: param="" activator=#41 caller=#38 | owner: env_sprite has no runtime class
+//   Stub fired!!!!! [input] env_shake.StartShake | on 'earthquake'
+//     | params: param="" activator=#41 caller=#38 | owner: screen shake
 //
 // `elysium.stubs` reads the tally back and `elysium.stubs clear` resets it. `elysium.StubWarn`
 // sets the volume: 2 (default) warns on every fire, 1 warns once per surface, 0 tallies silently.

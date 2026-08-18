@@ -33,6 +33,7 @@ documents:
   - {path: architecture/asset-enhancement.md, kind: architecture, owner: surface enhancement, subject: offline asset enhancement}
   - {path: architecture/uasset-bake-spike.md, kind: architecture, owner: content bake, subject: Unreal package bake}
   - {path: architecture/wielded-weapon-integration.md, kind: architecture, owner: wielded weapons, subject: third-person weapon binding modes assets and the wield bake contract}
+  - {path: architecture/bouncy-boobs-dynamics.md, kind: research-brief, owner: animation, subject: Bouncy Boobs Dynamics}
 
   - {path: vtmb/bsp_format.md, kind: vtmb-fact, owner: BSP, subject: BSP v17 container}
   - {path: vtmb/vpk_format.md, kind: vtmb-fact, owner: VPK, subject: archive format and resolution}
