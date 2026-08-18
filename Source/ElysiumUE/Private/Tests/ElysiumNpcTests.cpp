@@ -1031,6 +1031,10 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 			return 0.f;
 		}
 		TestTrue(TEXT("the patrol issued its travel request"), Motor->bMoving);
+		// The trap's first half: a patrol leg is gait-derived, so the motor must be told which fan
+		// its speed came from — that is what lets a mid-leg equip/holster re-derive it below.
+		TestTrue(TEXT("a patrol leg tags its motor with the walk fan it rode"),
+			Motor->RequestedGaitKind.IsSet() && *Motor->RequestedGaitKind == EElysiumNpcGaitKind::Walk);
 		return Motor->RequestedSpeedCmPerSecond;
 	};
 
@@ -1038,6 +1042,62 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		FMath::IsNearlyEqual(PatrolSpeed(AuthoredWalk), AuthoredWalk, 0.01f));
 	TestTrue(TEXT("a body whose export resolves no fan keeps the stated constant"),
 		FMath::IsNearlyEqual(PatrolSpeed(0.f), ElysiumNpcGait::WalkSpeed, 0.01f));
+
+	// The trap's second half: a scripted `m_fMoveTo 1` (Walk) hands the motor the resolved clip's
+	// OWN authored ground speed — not the gait fan's forward cell — via
+	// `IElysiumEmbodiment::ResolveNpcActivityClip`. That speed must reach the motor untagged, so a
+	// later fan change (a mid-beat equip) cannot silently overwrite a number the beat never asked to
+	// have replaced.
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__npc_travel_speed_scripted__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("scripted_walker");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("scripted_walk");
+		Seq.Origin = FVector(500.0f, 0.0f, 0.0f);
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("scripted_walker"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("1"));
+		Defs.Defs.Add(MoveTemp(Seq));
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.bProvideNpcMotor = true;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityClip = TEXT("walk_0");
+		// Deliberately NOT the gait fan's own forward cell (AuthoredWalk above), so a test that
+		// mistakenly re-derived this speed from the fan would read the wrong number.
+		Services.ResolvedNpcGroundSpeedCmPerSecond = 210.0f;
+		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* SeqEnt = World.FindByName(TEXT("scripted_walk"));
+		if (TestNotNull(TEXT("the scripted beat resolved"), SeqEnt))
+		{
+			World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+				FElysiumEntityHandle::Invalid(), SeqEnt->Handle);
+			double Now = 0.0;
+			for (int32 Index = 0; Index < 10; ++Index) { World.Tick(Now); Now += 0.1; }
+
+			FElysiumRecordingNpcMotor* ScriptedMotor = Services.LastNpcMotor();
+			if (TestNotNull(TEXT("the scripted walker owns a motor"), ScriptedMotor))
+			{
+				TestTrue(TEXT("the scripted walk issued its travel request"), ScriptedMotor->bMoving);
+				TestTrue(TEXT("the scripted walk uses the clip's own authored ground speed"),
+					FMath::IsNearlyEqual(ScriptedMotor->RequestedSpeedCmPerSecond, 210.0f, 0.01f));
+				TestFalse(TEXT("a caller-authored speed is NOT tagged with a gait fan to re-derive from"),
+					ScriptedMotor->RequestedGaitKind.IsSet());
+			}
+		}
+	}
 
 	// The classifier's threshold moves with the same tables, so a body walking at its authored cell
 	// is not judged against a constant it can never reach.

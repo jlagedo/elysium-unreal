@@ -19,32 +19,35 @@
 
 namespace
 {
-	IConsoleVariable* FindCVar(const TCHAR* Name)
+	// Named for this window rather than shared: an identically-named static in another Cog window's
+	// anonymous namespace is a redefinition the moment the adaptive unity build puts both files in
+	// one blob, which is a function of the working set rather than of either file.
+	IConsoleVariable* FindEnvironmentCVar(const TCHAR* Name)
 	{
 		return IConsoleManager::Get().FindConsoleVariable(Name);
 	}
 
 	float ReadFloat(const TCHAR* Name, float Fallback)
 	{
-		const IConsoleVariable* Variable = FindCVar(Name);
+		const IConsoleVariable* Variable = FindEnvironmentCVar(Name);
 		return Variable ? Variable->GetFloat() : Fallback;
 	}
 
 	bool ReadBool(const TCHAR* Name, bool Fallback)
 	{
-		const IConsoleVariable* Variable = FindCVar(Name);
+		const IConsoleVariable* Variable = FindEnvironmentCVar(Name);
 		return Variable ? Variable->GetInt() != 0 : Fallback;
 	}
 
 	int32 ReadInt(const TCHAR* Name, int32 Fallback)
 	{
-		const IConsoleVariable* Variable = FindCVar(Name);
+		const IConsoleVariable* Variable = FindEnvironmentCVar(Name);
 		return Variable ? Variable->GetInt() : Fallback;
 	}
 
 	void WriteFloat(const TCHAR* Name, float Value)
 	{
-		if (IConsoleVariable* Variable = FindCVar(Name))
+		if (IConsoleVariable* Variable = FindEnvironmentCVar(Name))
 		{
 			Variable->Set(Value);
 		}
@@ -52,7 +55,7 @@ namespace
 
 	void WriteBool(const TCHAR* Name, bool bValue)
 	{
-		if (IConsoleVariable* Variable = FindCVar(Name))
+		if (IConsoleVariable* Variable = FindEnvironmentCVar(Name))
 		{
 			Variable->Set(bValue ? 1 : 0);
 		}
@@ -60,7 +63,7 @@ namespace
 
 	void WriteInt(const TCHAR* Name, int32 Value)
 	{
-		if (IConsoleVariable* Variable = FindCVar(Name))
+		if (IConsoleVariable* Variable = FindEnvironmentCVar(Name))
 		{
 			Variable->Set(Value);
 		}

@@ -4,6 +4,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
+#include "Substrate/ElysiumNpc.h"           // the mind's state, which the alert/relaxed branch reads
 
 void FElysiumAnimationDriver::Reset()
 {
@@ -47,8 +48,15 @@ void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacte
 	{
 		ActorClassname.Reset();
 		WeaponClassname.Reset();
+		ActorState = EElysiumNpcState::Idle;
 		return;
 	}
+
+	// A body with no mind is not a cast member and has no state to read; idle is what the recovered
+	// tree answers for every state that is neither alert nor combat, so it is the honest default
+	// rather than a placeholder.
+	const FElysiumNpc* Npc = Char->AsNpc();
+	ActorState = Npc != nullptr ? Npc->GetMind().State() : EElysiumNpcState::Idle;
 
 	// The classname a map AUTHORS, which is the key both committed ledgers are joined to. The
 	// registered descriptor answers for a character no def produced, which is the player's case.
@@ -150,6 +158,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// did, and these answer which sequence set realizes it.
 	Intent.ActorClassname = ActorClassname;
 	Intent.WeaponClassname = WeaponClassname;
+	Intent.ActorState = ActorState;
 	Intent.FormTag = FormTag;
 
 	// The body key, resolved ahead of the request so a body that changed model this frame steers by
@@ -162,6 +171,9 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		|| !Intent.Activity.Equals(LastActivity, ESearchCase::IgnoreCase)
 		|| !Intent.Stem.Equals(LastStem, ESearchCase::IgnoreCase)
 		|| !Intent.WeaponClassname.Equals(LastWeaponClassname, ESearchCase::IgnoreCase)
+		// A body going alert changes which sequence set the SAME request resolves against, so the
+		// state belongs in the discrete key beside the weapon rather than in the continuous half.
+		|| Intent.ActorState != LastActorState
 		|| Intent.Route != LastRoute;
 
 	if (bChanged)
@@ -172,6 +184,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		LastActivity = Intent.Activity;
 		LastStem = Intent.Stem;
 		LastWeaponClassname = Intent.WeaponClassname;
+		LastActorState = Intent.ActorState;
 		LastRoute = Intent.Route;
 		bResolvedOnce = true;
 	}

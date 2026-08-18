@@ -13,6 +13,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumNpcGait.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
@@ -193,6 +194,27 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
 		Body ? Body->GetSkeletalMeshAsset() : nullptr, OneShot);
 
+	// **The speed authority's push, this body's half** (CCC7, mirroring the player's push in
+	// `AElysiumMapActor::TickPlayerAnimation`). An equip or holster mid-leg re-resolves the fan and
+	// advances `GaitGeneration` while the mover is still commanding the old leg's speed, so the
+	// re-command has to be pushed here rather than pulled once at `MoveTo`. Only a leg whose speed
+	// came FROM a fan is re-derived — a caller-authored speed (the scripted Walk/Custom gaits) keeps
+	// exactly the number it was handed, which is the trap this must not fall into.
+	if (AnimDriver->GaitGeneration != PushedGaitGeneration)
+	{
+		PushedGaitGeneration = AnimDriver->GaitGeneration;
+		if (bMoveRequested && RequestedGaitKind.IsSet())
+		{
+			if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+			{
+				// The same floor `MoveTo` applies: the motor treats zero as a stall, so a fan that
+				// resolves nothing must not be able to park a body mid-leg.
+				Movement->MaxWalkSpeed = FMath::Max(1.0f,
+					ElysiumNpcGait::TravelSpeed(this, *RequestedGaitKind));
+			}
+		}
+	}
+
 	// Hand the settled record to this body's own graph, the same push `AElysiumMapActor` makes for
 	// the player. Both producers fill one contract (`FElysiumAnimationDriver`), so a cast member's
 	// locomotion and the player's cannot become two systems that happen to play the same files —
@@ -239,7 +261,7 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 }
 
 bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-	float SpeedCmPerSecond, bool bAllowPartialPath)
+	float SpeedCmPerSecond, bool bAllowPartialPath, TOptional<EElysiumNpcGaitKind> GaitKind)
 {
 	bFaceRequested = false;
 	if (!bRuntimeReady || !bRequestedEnabled || bFrozen)
@@ -263,6 +285,7 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 	Movement->MaxWalkSpeed = FMath::Max(1.0f, SpeedCmPerSecond);
 	RequestedFeet = FeetDestination;
 	RequestedAcceptanceCm = FMath::Max(1.0f, AcceptanceRadiusCm);
+	RequestedGaitKind = GaitKind;
 	const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(
 		FeetDestination, RequestedAcceptanceCm, /*bStopOnOverlap=*/false,
 		/*bUsePathfinding=*/true, /*bProjectDestinationToNavigation=*/true,
@@ -298,6 +321,8 @@ void AElysiumNpcBody::Stop()
 	}
 	bMoveRequested = false;
 	bFaceRequested = false;
+	// The leg is over; there is nothing left to re-derive against a later fan change.
+	RequestedGaitKind.Reset();
 }
 
 void AElysiumNpcBody::Teleport(const FVector& FeetOrigin, float YawDegrees)

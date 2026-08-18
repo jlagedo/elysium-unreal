@@ -673,6 +673,7 @@ ElysiumSchedule::ERetreat ElysiumSchedule::StepAwayFromSavePosition(IElysiumNpcM
 	// like every other travel request. Naming no speed is not an option the motor has: it clamps to
 	// 1 cm/s, and the step never completes.
 	return Motor->MoveTo(Destination, /*AcceptanceRadiusCm=*/16.f,
-		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk))
+		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
+		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk)
 		? ERetreat::Moving : ERetreat::MotorRefused;
 }

@@ -111,8 +111,19 @@ public:
 	// A route point wants the refusal — it must never silently skip authored route data. A
 	// scripted_sequence mark wants the partial walk: the transit is the point of the beat, and its
 	// caller places the NPC on the mark when the walk ends short.
+	//
+	// `GaitKind` names which of this body's own authored fans `SpeedCmPerSecond` came from, so the
+	// body can re-command its mover if that fan's forward cell changes while this leg is still in
+	// flight (an equip/holster mid-leg advances `FElysiumAnimationDriver::GaitGeneration` and the
+	// graph immediately plays the new weapon's cycle, and the stride slides unless the mover is told).
+	//
+	// **Unset is the default and means "the caller authored this exact number; never re-derive
+	// it."** The scripted Walk/Custom gaits hand this a resolved clip's own authored ground speed —
+	// not the gait fan's forward cell — and re-deriving on every generation bump would silently
+	// overwrite a number the beat never asked to have replaced.
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond, bool bAllowPartialPath = false) = 0;
+		float SpeedCmPerSecond, bool bAllowPartialPath = false,
+		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) = 0;
 	// Turn in place toward a yaw without travelling — HL1 CCineMonster's TASK_FACE_SCRIPT, which a
 	// beat runs after reaching its mark and which `m_fMoveTo 5` runs on its own. Cancelled by
 	// Stop/Teleport/MoveTo like any other request.

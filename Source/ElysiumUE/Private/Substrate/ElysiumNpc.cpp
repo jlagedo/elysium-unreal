@@ -341,7 +341,8 @@ bool FElysiumNpc::IssuePatrolMove()
 	}
 	PatrolIndex = FMath::Clamp(PatrolIndex, 0, PatrolPoints.Num() - 1);
 	bMoveIssued = Motor->MoveTo(PatrolPoints[PatrolIndex], /*AcceptanceRadiusCm=*/20.0f,
-		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk));
+		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
+		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk);
 	if (bMoveIssued && !bWalkingAnimation)
 	{
 		bWalkingAnimation = StartWalkingAnimation();
@@ -1532,9 +1533,10 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 		return false;
 	}
 	const FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
+	const EElysiumNpcGaitKind RouteGait = ScriptedScheduleOrder.bRun
+		? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
 	bMoveIssued = Motor->MoveTo(Destination, ElysiumNpcGait::ScriptAcceptanceCm,
-		ElysiumNpcGait::TravelSpeed(Motor, ScriptedScheduleOrder.bRun
-			? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk));
+		ElysiumNpcGait::TravelSpeed(Motor, RouteGait), /*bAllowPartialPath=*/false, RouteGait);
 	if (!bMoveIssued)
 	{
 		// The recovered route-failure report, and the recovered switch that silences it: "spawn flag
@@ -1651,7 +1653,8 @@ bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 	// The enemy's FEET: an entity's origin is its feet in this runtime, which is what the patrol
 	// executor already hands the same verb.
 	bMoveIssued = Motor->MoveTo(Enemy->Origin, ToleranceCm,
-		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Run));
+		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Run),
+		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Run);
 	if (!bMoveIssued)
 	{
 		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: the body would not take the path"));
@@ -1981,7 +1984,8 @@ void FElysiumNpc::ThinkAmbient()
 		}
 		AmbientPhase = EAmbientPhase::Moving;
 		bMoveIssued = Motor->MoveTo(Spot->Origin, 24.0f,
-			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk));
+			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
+			/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk);
 		if (bMoveIssued)
 		{
 			bWalkingAnimation = StartWalkingAnimation();

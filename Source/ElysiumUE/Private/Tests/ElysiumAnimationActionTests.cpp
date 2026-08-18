@@ -6,6 +6,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumGaitSpeeds.h"               // the per-direction speed table (CCC7)
 #include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
+#include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
@@ -1184,6 +1185,72 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		Cast.Clips.Add(TEXT("run"), MakeClip(CastBank, TEXT("ACT_RUN"), 30, 0x1));
 	}
 
+	// --- The armed/alert branch, over the slice the decode confirms ---------------------------------
+	{
+		// `CNPC_VHuman`'s pre-translation chooses between the body's alert set and its relaxed one.
+		// The fixture body carries the shared pistol relaxed walk and no plain `ACT_WALK`, so which
+		// arm fired is readable straight off the resolved activity.
+		FElysiumNpcClipSet Guard;
+		Guard.Stem = TEXT("guard_body");
+		Guard.Clips.Add(TEXT("pistol_relaxed_walk"),
+			MakeClip(CastBank, TEXT("ACT_WALK_RELAXED_PISTOL"), 30, 0x1, 46));
+		Guard.Clips.Add(TEXT("glock_walk"), MakeClip(CastBank, TEXT("ACT_WALK_GLOCK"), 30, 0x1, 46));
+		FElysiumAnimationCatalog GuardCatalog;
+		GuardCatalog.Clips = &Guard;
+		GuardCatalog.BlendTableFor = Tables;
+
+		FElysiumAnimationIntent Armed = ActivityIntent(TEXT("guard_body"), TEXT("ACT_WALK"),
+			EElysiumAnimSource::Npc);
+		Armed.ActorClassname = TEXT("npc_VHumanCombatant");
+		Armed.WeaponClassname = TEXT("item_w_glock_17c");
+
+		// Idle: every override the tree reads above the state is a flag nothing here can set, so the
+		// walk falls to the tail and the body stands in its relaxed set.
+		Armed.ActorState = EElysiumNpcState::Idle;
+		const ElysiumAnimResolve::FElysiumTranslationResult Relaxed =
+			ElysiumAnimResolve::TranslateActivity(Armed, GuardCatalog);
+		TestEqual(TEXT("an idle armed body walks relaxed"), Relaxed.Resolved,
+			FString(TEXT("ACT_WALK_RELAXED_PISTOL")));
+
+		// Alert: `m_NPCState == NPC_STATE_ALERT` sets the flag unconditionally, so the same request
+		// resolves the weapon's own combat-stance walk instead.
+		Armed.ActorState = EElysiumNpcState::Alert;
+		const ElysiumAnimResolve::FElysiumTranslationResult Alerted =
+			ElysiumAnimResolve::TranslateActivity(Armed, GuardCatalog);
+		TestEqual(TEXT("the same body alert walks in its weapon's stance"), Alerted.Resolved,
+			FString(TEXT("ACT_WALK_GLOCK")));
+
+		// The gait alone cannot prove the ALERT arm fired — the armed/alert rows rewrite turns and
+		// idle, never walk, so an unanswered branch reaches the same walk by doing nothing. A turn
+		// is what separates them: only the armed/alert arm has an `_ALERT` form.
+		FElysiumAnimationIntent Turning = Armed;
+		Turning.Activity = TEXT("ACT_TURN_LEFT");
+		TestEqual(TEXT("an alert body turns in its alert form"),
+			ElysiumAnimResolve::TranslateActivity(Turning, GuardCatalog).PreTranslation,
+			FString(TEXT("ACT_TURN_LEFT_ALERT")));
+		Turning.ActorState = EElysiumNpcState::Idle;
+		TestEqual(TEXT("and an idle one turns ordinarily"),
+			ElysiumAnimResolve::TranslateActivity(Turning, GuardCatalog).PreTranslation,
+			FString(TEXT("ACT_TURN_LEFT")));
+
+		// **Combat answers neither arm, and that is the recorded absence.** The combat rung ends in
+		// a ConVar whose default no static read of the image recovers, so the request stays
+		// untranslated rather than being guessed either way.
+		Armed.ActorState = EElysiumNpcState::Combat;
+		const ElysiumAnimResolve::FElysiumTranslationResult Fighting =
+			ElysiumAnimResolve::TranslateActivity(Armed, GuardCatalog);
+		TestEqual(TEXT("a body in combat takes neither arm"), Fighting.PreTranslation,
+			FString(TEXT("ACT_WALK")));
+
+		// Empty hands take the tree's own early-out, before any state is read.
+		FElysiumAnimationIntent Bare = Armed;
+		Bare.WeaponClassname.Reset();
+		Bare.ActorState = EElysiumNpcState::Alert;
+		TestEqual(TEXT("an unarmed body is never armed/alert, whatever its state"),
+			ElysiumAnimResolve::TranslateActivity(Bare, GuardCatalog).PreTranslation,
+			FString(TEXT("ACT_WALK_RELAXED")));
+	}
+
 	// --- CCC10 — the activity-keyed upper-body path, reached by weapon translation -------------------
 	{
 		// The bake-time bound path is asserted above (the "layer binding keeps its declaration
@@ -2078,6 +2145,217 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("at least one slice transition was measured"), Checked > 0);
 	AddInfo(FString::Printf(TEXT("%d of 6 slice transitions measured on '%s'"), Checked, *Chosen));
+	return true;
+}
+
+// =====================================================================================
+// The resolver, armed, against the real corpus.
+//
+// `Elysium.Content.ActionTableConformance` walks the recovered tables directly against the
+// corpus's UNION vocabulary. This walks the RESOLVER — `ElysiumAnimResolve::Resolve`/
+// `TranslateActivity` — against one shipped body's OWN vocabulary at a time, which is the shape a
+// real equip actually asks in and the level at which the availability ladder either does or does
+// not carry weight.
+//
+// The concrete case this exists for: the shipped `glock_relaxed_walk` clip carries the misspelled
+// literal `AWS_WALK_RELAXED_GLOCK` — the only two `AWS_`-prefixed activities in the entire corpus,
+// on 155 bodies — so a glock-armed `ACT_WALK_RELAXED` request must NOT resolve
+// `ACT_WALK_RELAXED_GLOCK` (rung 1, which nothing answers): the shared `ACT_WALK_RELAXED_PISTOL`
+// at rung 2 is what actually poses it.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponGaitConformanceTest,
+	"Elysium.Content.WeaponGaitConformance", GElysiumAnimationContentFlags)
+bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!Index.Load(Error) || !Index.IsValid())
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
+		return true;
+	}
+
+	FRealTables Tables;
+	Tables.Index = &Index;
+
+	const FString PlayerStem = FindPlayerStem(Index);
+	if (PlayerStem.IsEmpty())
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no player body"));
+		return true;
+	}
+	FElysiumNpcClipSet Player;
+	if (!TestTrue(TEXT("the player body's vocabulary loads"), Player.Load(PlayerStem, Error)))
+	{
+		AddError(Error);
+		return true;
+	}
+
+	// The one shipped body carrying the glock's misspelled literal, found off the whole corpus
+	// rather than assumed of the player stem above — the AWS_ clip is authored on the cast, not
+	// guaranteed on whichever player armor `FindPlayerStem` happens to pick.
+	FString GlockStem;
+	EElysiumAnimSource GlockSource = EElysiumAnimSource::Npc;
+	FElysiumNpcClipSet GlockBody;
+	{
+		TArray<FString> Stems;
+		Index.Npcs.GenerateKeyArray(Stems);
+		Stems.Sort();
+		for (const FString& Stem : Stems)
+		{
+			FElysiumNpcClipSet Candidate;
+			FString LoadError;
+			if (!Candidate.Load(Stem, LoadError) || !Candidate.HasActivity(TEXT("AWS_WALK_RELAXED_GLOCK")))
+			{
+				continue;
+			}
+			GlockStem = Stem;
+			GlockSource = (Stem.Contains(TEXT("_Male_Armor_")) || Stem.Contains(TEXT("_Female_Armor_")))
+				? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
+			GlockBody = MoveTemp(Candidate);
+			break;
+		}
+	}
+
+	// --- The concrete case: the misspelled rung-1 literal must not answer -----------------------
+	if (GlockStem.IsEmpty())
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported body carries the glock's AWS_WALK_RELAXED_GLOCK clip"));
+	}
+	else
+	{
+		FElysiumAnimationCatalog GlockCatalog;
+		GlockCatalog.Clips = &GlockBody;
+		GlockCatalog.BlendTableFor = [&Tables](const FString& Owner) { return Tables(Owner); };
+
+		FElysiumAnimationIntent Intent;
+		Intent.Stem = GlockBody.Stem;
+		Intent.Activity = TEXT("ACT_WALK_RELAXED");
+		Intent.Source = GlockSource;
+		Intent.WeaponClassname = TEXT("item_w_glock_17c");
+
+		const ElysiumAnimResolve::FElysiumTranslationResult Result =
+			ElysiumAnimResolve::TranslateActivity(Intent, GlockCatalog);
+		TestNotEqual(FString::Printf(
+			TEXT("'%s' + item_w_glock_17c ACT_WALK_RELAXED does not answer the misspelled rung-1 literal"),
+			*GlockStem), Result.Resolved, FString(TEXT("ACT_WALK_RELAXED_GLOCK")));
+		TestEqual(TEXT("...it answers the shared pistol activity instead"), Result.Resolved,
+			FString(TEXT("ACT_WALK_RELAXED_PISTOL")));
+		TestEqual(TEXT("...off the ladder's second rung, not its first"), Result.WeaponRung, 2);
+
+		FElysiumAnimationSelection Selection;
+		ElysiumAnimResolve::Resolve(Intent, GlockCatalog, Selection);
+		TestTrue(TEXT("...and the resolve actually poses something"), Selection.IsResolved());
+		AddInfo(FString::Printf(TEXT("'%s' item_w_glock_17c ACT_WALK_RELAXED -> rung %d, %s (clip '%s' off '%s')"),
+			*GlockStem, Result.WeaponRung, *Result.Resolved, *Selection.SequenceLabel,
+			*Selection.OwnerStem));
+	}
+
+	// --- The joint that matters: is the availability ladder load-bearing at all? -----------------
+	//
+	// Every shipped weapon entity classname, crossed with the five gait activities, resolved
+	// through the real resolver against a real body's own vocabulary. If the ladder were
+	// decoration, a first-rung-only read would answer identically; it is load-bearing exactly when
+	// a real share of armed gait requests only resolve past rung 1.
+	const TCHAR* GaitActivities[] = { TEXT("ACT_WALK"), TEXT("ACT_RUN"), TEXT("ACT_SNEAK"),
+		TEXT("ACT_WALK_RELAXED"), TEXT("ACT_RUN_RELAXED") };
+
+	TArray<FString> Classnames;
+	for (const ElysiumActionTables::FWeaponLadder& Ladder : ElysiumActionTables::WeaponLadders())
+	{
+		for (int32 ClassnameIndex = 0; ClassnameIndex < Ladder.EntityClassnameCount; ++ClassnameIndex)
+		{
+			Classnames.AddUnique(FString(Ladder.EntityClassnames[ClassnameIndex]));
+		}
+	}
+	Classnames.Sort();
+	TestTrue(TEXT("the tables do name shipped weapon entity classnames"), Classnames.Num() > 0);
+
+	struct FBody
+	{
+		const FElysiumNpcClipSet* Clips;
+		EElysiumAnimSource Source;
+		const TCHAR* Name;
+	};
+	TArray<FBody> Bodies;
+	Bodies.Add({ &Player, EElysiumAnimSource::Player, TEXT("player") });
+	if (!GlockStem.IsEmpty())
+	{
+		Bodies.Add({ &GlockBody, GlockSource, TEXT("cast") });
+	}
+
+	int32 ArmedRequests = 0;
+	int32 AnsweredAtRungOne = 0;
+	int32 AnsweredBelowRungOne = 0;
+	TArray<FString> NeverAnswered;
+	for (const FBody& Body : Bodies)
+	{
+		FElysiumAnimationCatalog Catalog;
+		Catalog.Clips = Body.Clips;
+		Catalog.BlendTableFor = [&Tables](const FString& Owner) { return Tables(Owner); };
+
+		for (const FString& Classname : Classnames)
+		{
+			for (const TCHAR* Activity : GaitActivities)
+			{
+				FElysiumAnimationIntent Intent;
+				Intent.Stem = Body.Clips->Stem;
+				Intent.Activity = Activity;
+				Intent.Source = Body.Source;
+				Intent.WeaponClassname = Classname;
+
+				const ElysiumAnimResolve::FElysiumTranslationResult Result =
+					ElysiumAnimResolve::TranslateActivity(Intent, Catalog);
+				++ArmedRequests;
+				if (Result.WeaponRung == 1)
+				{
+					++AnsweredAtRungOne;
+				}
+				else if (Result.WeaponRung > 1)
+				{
+					++AnsweredBelowRungOne;
+				}
+				else
+				{
+					NeverAnswered.Add(FString::Printf(TEXT("%s: %s %s"), Body.Name, *Classname,
+						Activity));
+				}
+			}
+		}
+	}
+
+	const int32 Answered = AnsweredAtRungOne + AnsweredBelowRungOne;
+	AddInfo(FString::Printf(TEXT("armed gait requests: %d over %d weapon classnames on %d bodies; "
+		"%d answered (%d at rung 1, %d below it), %d never"), ArmedRequests, Classnames.Num(),
+		Bodies.Num(), Answered, AnsweredAtRungOne, AnsweredBelowRungOne, ArmedRequests - Answered));
+
+	// The residual is a list, not a count, in the style of `ActionTableConformance`'s own
+	// `never resolves:` lines — the misses are what a bad regeneration or a table misread would
+	// grow, and a count alone cannot say which weapon/activity pair moved.
+	NeverAnswered.Sort();
+	for (const FString& Miss : NeverAnswered)
+	{
+		AddInfo(FString::Printf(TEXT("  never resolves through the weapon ladder: %s"), *Miss));
+	}
+
+	if (!TestTrue(TEXT("at least some armed gait requests answer through the weapon ladder"),
+		Answered > 0))
+	{
+		return false;
+	}
+	const float BelowFirstShare = static_cast<float>(AnsweredBelowRungOne)
+		/ static_cast<float>(Answered);
+	AddInfo(FString::Printf(TEXT("  %d of %d answers come from rung 2 or later (%.1f%%)"),
+		AnsweredBelowRungOne, Answered, 100.0f * BelowFirstShare));
+	TestTrue(TEXT("a meaningful share of armed gait requests resolve below the weapon ladder's "
+		"first rung"), BelowFirstShare >= 0.1f);
+
 	return true;
 }
 

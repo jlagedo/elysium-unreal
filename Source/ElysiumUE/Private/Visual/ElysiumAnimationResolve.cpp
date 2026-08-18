@@ -350,14 +350,46 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	const int32 PreBody = Class != nullptr ? Class->PreTranslate : INDEX_NONE;
 	const int32 ClassBody = Class != nullptr ? Class->ClassTranslate : INDEX_NONE;
 
-	// **Every NPC predicate answers false, and that is the honest answer rather than a default.**
-	// The recovered bodies read live character state this runtime does not publish — the global gait
-	// override, the movement policy byte at `+0x5b84`, the armed/alert branch, the capability masks.
-	// Both arms of a recovered branch are spelled as their own predicate (`ArmedAlert` beside
-	// `NotArmedAlert`), so a body with no state fires NEITHER arm and the walk is the identity path
-	// plus the unconditional rewrites. Answering true anywhere here would invent the branch, which is
-	// the one failure the committed tables exist to prevent.
-	auto NoLiveState = [](ENpcPredicate, int32) { return false; };
+	// **The armed/alert branch, answered only where the decode is confirmed.**
+	//
+	// `CNPC_VHuman`'s pre-translation (`0x103854f0`) writes one flag that decides whether the body
+	// stands in its alert set or its relaxed one, and the two arms of that branch are spelled as
+	// their own predicates. The recovered decision tree reads six things; this runtime models two of
+	// them, and the four it does not — `m_bfAINPCFlags & 0x10000` (`FORCE_RELAXED_ANIMS`),
+	// `m_bfAINPCFlags2 & 0x400` (`MOVE_FACE_ENEMY`), `m_bfNPCFrenziedFlags & 0x200` and
+	// `m_afMemory` bit 27 — are flags no system here can set, so no branch of the tree they gate can
+	// be reached either way.
+	//
+	// What is left is decidable and is what these two rows answer:
+	//   - no active weapon: the tree's own early-out, before any state is read;
+	//   - `m_NPCState == NPC_STATE_ALERT`: sets the flag unconditionally;
+	//   - any state that is neither alert nor combat: falls past every override to the tail, clear.
+	//
+	// **A body in combat answers NEITHER arm, and that is a stated absence rather than an oversight.**
+	// The combat rung terminates in a ConVar whose default no static read of the image can recover —
+	// the writers are computed and leave no literal anywhere in the binary — so a body there keeps
+	// its untranslated request, which is what it did before any of this was decoded. Guessing that
+	// ConVar is the one failure the committed tables exist to prevent.
+	//
+	// Every other predicate answers false for the same reason it always did: the state it reads is
+	// the global gait override, the movement policy byte, cover and reload capability, and the form
+	// and variant bits, none of which this runtime publishes.
+	const bool bHasActiveWeapon = !Intent.WeaponClassname.IsEmpty();
+	const EElysiumNpcState ActorState = Intent.ActorState;
+	auto LiveState = [bHasActiveWeapon, ActorState](ENpcPredicate Predicate, int32)
+	{
+		switch (Predicate)
+		{
+		case ENpcPredicate::ArmedAlert:
+			return bHasActiveWeapon && ActorState == EElysiumNpcState::Alert;
+		case ENpcPredicate::NotArmedAlert:
+			return !bHasActiveWeapon
+				|| (ActorState != EElysiumNpcState::Alert
+					&& ActorState != EElysiumNpcState::Combat);
+		default:
+			return false;
+		}
+	};
 
 	int32 CoverContext = 0;
 
@@ -386,7 +418,7 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 		{
 			return Base;
 		}
-		const FNpcTranslation Walk = NpcTranslate(ClassBody, Base, CoverContext, NoLiveState,
+		const FNpcTranslation Walk = NpcTranslate(ClassBody, Base, CoverContext, LiveState,
 			Carries);
 		if (bRecord)
 		{
@@ -431,7 +463,7 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	FString Current = Out.Requested;
 	if (PreBody != INDEX_NONE)
 	{
-		const FNpcTranslation Walk = NpcTranslate(PreBody, Current, CoverContext, NoLiveState,
+		const FNpcTranslation Walk = NpcTranslate(PreBody, Current, CoverContext, LiveState,
 			Carries);
 		Record(Walk);
 		Current = Walk.Activity;

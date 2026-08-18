@@ -69,7 +69,8 @@ public:
 	FElysiumNpcAnimTickFunction AnimTickFunction;
 
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond, bool bAllowPartialPath = false) override;
+		float SpeedCmPerSecond, bool bAllowPartialPath = false,
+		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) override;
 	virtual void Face(float YawDegrees) override;
 	virtual void Stop() override;
 	virtual void Teleport(const FVector& FeetOrigin, float YawDegrees) override;
@@ -95,6 +96,13 @@ private:
 	FVector RequestedFeet = FVector::ZeroVector;
 	float RequestedAcceptanceCm = 20.0f;
 	float RequestedYaw = 0.0f;
+	// Which of this body's own authored fans the in-flight move's speed came from — unset for a
+	// caller-authored speed, which `AnimTick` must never overwrite (CCC7/LIFE, the equip-mid-leg fix).
+	TOptional<EElysiumNpcGaitKind> RequestedGaitKind;
+	// The driver's gait-table generation as last seen by this body's own push, mirroring the map
+	// actor's `PushedGaitGeneration` for the player: it advances every frame the tables move, and the
+	// re-command only fires while a gait-derived leg is in flight.
+	uint32 PushedGaitGeneration = 0;
 	bool bMoveRequested = false;
 	bool bFaceRequested = false;
 	bool bRequestedEnabled = true;

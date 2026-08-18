@@ -46,6 +46,9 @@ struct FElysiumAnimationDriver
 	FString ActorClassname;
 	FString WeaponClassname;
 	FString FormTag;
+	// The body's own state. The recovered human pre-translation reads it to choose between the alert
+	// and relaxed animation sets, so it belongs to the same push and moves the discrete key with it.
+	EElysiumNpcState ActorState = EElysiumNpcState::Idle;
 
 	// --- Per-frame state ---------------------------------------------------------------------------
 	FElysiumJumpLatch Latch;
@@ -89,6 +92,7 @@ struct FElysiumAnimationDriver
 	FString LastActivity;
 	FString LastStem;
 	FString LastWeaponClassname;
+	EElysiumNpcState LastActorState = EElysiumNpcState::Idle;
 	EElysiumAnimRoute LastRoute = EElysiumAnimRoute::Activity;
 	bool bResolvedOnce = false;
 

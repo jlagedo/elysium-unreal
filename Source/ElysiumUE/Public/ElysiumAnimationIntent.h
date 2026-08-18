@@ -6,6 +6,7 @@
 #include "ElysiumGaitSpeeds.h"
 #include "ElysiumLocomotionSample.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumNpcMindTypes.h"
 
 // What a body asks the animation layer for, and what it is told back (CCC4).
 //
@@ -190,6 +191,10 @@ struct FElysiumAnimationIntent
 	// bodies. Empty on the player, whose actor translation is the two committed `CBasePlayer` rows
 	// rather than a class body.
 	FString ActorClassname;
+	// The cast body's own state, which the recovered human pre-translation reads as `m_NPCState` to
+	// decide whether the body stands in its alert set or its relaxed one. Meaningless on the player,
+	// whose chain has no class body.
+	EElysiumNpcState ActorState = EElysiumNpcState::Idle;
 	// The form the body is wearing. No recovered translation row reads it; it rides so the seam takes
 	// it rather than growing a parameter later.
 	FString FormTag;

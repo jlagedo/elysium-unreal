@@ -39,6 +39,9 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	float Yaw = 0.0f;
 	float RequestedYaw = 0.0f;
 	float RequestedSpeedCmPerSecond = 0.0f;
+	// Which fan the in-flight request's speed came from, or unset for a caller-authored speed that
+	// must never be re-derived from a changed fan (LIFE, the equip-mid-leg fix).
+	TOptional<EElysiumNpcGaitKind> RequestedGaitKind;
 	bool bEnabled = true;
 	bool bMoving = false;
 	bool bFacing = false;
@@ -72,15 +75,27 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	}
 
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
-		float SpeedCmPerSecond, bool bAllowPartialPath = false) override
+		float SpeedCmPerSecond, bool bAllowPartialPath = false,
+		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) override
 	{
 		RequestedFeet = FeetDestination;
 		RequestedSpeedCmPerSecond = SpeedCmPerSecond;
+		RequestedGaitKind = GaitKind;
 		bMoving = bEnabled && bAcceptMoves;
 		bFacing = false;
-		Record(FString::Printf(TEXT("NpcMotor MoveTo %s radius=%.1f speed=%.1f partial=%d"),
+		const TCHAR* GaitKindName = TEXT("none");
+		if (GaitKind.IsSet())
+		{
+			switch (*GaitKind)
+			{
+			case EElysiumNpcGaitKind::Run:   GaitKindName = TEXT("run");   break;
+			case EElysiumNpcGaitKind::Sneak: GaitKindName = TEXT("sneak"); break;
+			default:                         GaitKindName = TEXT("walk"); break;
+			}
+		}
+		Record(FString::Printf(TEXT("NpcMotor MoveTo %s radius=%.1f speed=%.1f partial=%d gait=%s"),
 			*FeetDestination.ToString(), AcceptanceRadiusCm, SpeedCmPerSecond,
-			bAllowPartialPath ? 1 : 0));
+			bAllowPartialPath ? 1 : 0, GaitKindName));
 		return bMoving;
 	}
 	virtual void Face(float YawDegrees) override
