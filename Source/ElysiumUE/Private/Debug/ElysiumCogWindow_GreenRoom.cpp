@@ -33,6 +33,7 @@
 #include "HAL/IConsoleManager.h"
 
 #include "Debug/ElysiumClothDebug.h"
+#include "Engine/SkeletalMesh.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
@@ -932,6 +933,49 @@ void FElysiumCogWindow_GreenRoom::RenderPlayback(FElysiumGreenRoomRun& Lab)
 	ImGui::TextDisabled("Slowing the clip does not slow the cloth - the sim runs in real time.");
 }
 
+void FElysiumCogWindow_GreenRoom::DumpBones(FElysiumGreenRoomRun& Lab)
+{
+	// Mirrors `elysium.gr_bones` (Debug/ElysiumGreenRoomConsole.cpp): the same torso-to-head chain,
+	// the same empty-transforms-vs-absent-bone distinction, read straight off the standing body
+	// rather than through a shared accessor, because every input here (the component, the mesh, the
+	// reference skeleton) is already public on USkeletalMeshComponent/USkeletalMesh.
+	USkeletalMeshComponent* Body = Lab.LabBody();
+	const USkeletalMesh* Mesh = Body ? Body->GetSkeletalMeshAsset() : nullptr;
+	if (Mesh == nullptr)
+	{
+		BoneDumpText = TEXT("no standing body.");
+		return;
+	}
+	const TArray<FTransform>& Locals = Body->GetBoneSpaceTransforms();
+	if (Locals.Num() == 0)
+	{
+		BoneDumpText = FString::Printf(
+			TEXT("%s has no evaluated pose yet -- BoneSpaceTransforms is empty."), *Lab.LabStem());
+		return;
+	}
+	const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+	static const FName Chain[] =
+	{
+		TEXT("Bip01 Spine1"), TEXT("Bip01 Spine2"), TEXT("Bip01 Neck"), TEXT("Bip01 Head")
+	};
+	TArray<FString> Lines;
+	for (const FName BoneName : Chain)
+	{
+		const int32 Index = Ref.FindBoneIndex(BoneName);
+		if (Index == INDEX_NONE || !Locals.IsValidIndex(Index))
+		{
+			Lines.Add(FString::Printf(TEXT("%s -- not on this body"), *BoneName.ToString()));
+			continue;
+		}
+		const FVector Posed = Locals[Index].GetTranslation();
+		const FVector Bind = Ref.GetRefBonePose()[Index].GetTranslation();
+		Lines.Add(FString::Printf(
+			TEXT("%-14s posed %7.3f cm (%.2f, %.2f, %.2f)  bind %7.3f cm"),
+			*BoneName.ToString(), Posed.Size(), Posed.X, Posed.Y, Posed.Z, Bind.Size()));
+	}
+	BoneDumpText = FString::Join(Lines, TEXT("\n"));
+}
+
 void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 {
 	FElysiumGreenRoomRun::FLabView& View = Lab.LabView();
@@ -1003,6 +1047,16 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
 	ImGui::TextDisabled("The model's own bones. The bones a garment collider hangs off are named,");
 	ImGui::TextDisabled("so one sitting off its limb reads at a glance.");
+	if (ImGui::SmallButton("Dump bones"))
+	{
+		DumpBones(Lab);
+	}
+	if (!BoneDumpText.IsEmpty())
+	{
+		ImGui::SameLine();
+		ImGui::TextDisabled("torso-to-head chain, posed vs. bind (also `elysium.gr_bones`):");
+		ImGui::TextWrapped("%s", COG_TCHAR_TO_CHAR(*BoneDumpText));
+	}
 
 	const bool bHasGarment = FindGarment() != nullptr;
 	ImGui::BeginDisabled(!bHasGarment);

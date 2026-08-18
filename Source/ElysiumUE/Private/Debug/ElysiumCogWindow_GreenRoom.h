@@ -81,6 +81,13 @@ private:
 	void RenderView(FElysiumGreenRoomRun& Lab);
 	void RenderCloth(FElysiumGreenRoomRun& Lab);
 	void RenderClothDebugDraw();
+	// The evaluated local pose of the standing body's torso-to-head chain against its mesh bind —
+	// the Cog equivalent of `elysium.gr_bones`. Written by the "Dump bones" button in RenderView; a
+	// hand-triggered snapshot rather than a per-frame readout, matching that verb's log-on-request
+	// shape.
+	void DumpBones(FElysiumGreenRoomRun& Lab);
+	FString BoneDumpText;
+
 	// The eye rig (12.4). The stage carries no `FElysiumNpc`, so nothing supplies a gaze and every eye
 	// rests on its authored aim — a correct state that shows none of what the rig does. This tab is
 	// the aim, the blink and the two renderer knobs, plus the readout that separates "this model has

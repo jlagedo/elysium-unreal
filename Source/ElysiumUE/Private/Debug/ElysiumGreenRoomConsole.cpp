@@ -10,6 +10,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
+#include "Engine/SkeletalMesh.h"
 #include "HAL/IConsoleManager.h"
 #include "Logging/LogMacros.h"
 
@@ -287,6 +288,51 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				: !Run.LabView().bDrawSkeleton;
 			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_skeleton: %s"),
 				Run.LabView().bDrawSkeleton ? TEXT("on") : TEXT("off"));
+		});
+
+	Register(TEXT("elysium.gr_bones"),
+		TEXT("Dump the standing body's evaluated local pose against its mesh bind for the "
+		     "torso-to-head chain: `elysium.gr_bones`. The proportion a retarget delivers is "
+		     "otherwise invisible."),
+		[](FElysiumGreenRoomRun& Run, const TArray<FString>&)
+		{
+			USkeletalMeshComponent* Body = Run.LabBody();
+			const USkeletalMesh* Mesh = Body ? Body->GetSkeletalMeshAsset() : nullptr;
+			if (Mesh == nullptr)
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_bones: no standing body."));
+				return;
+			}
+			const TArray<FTransform>& Locals = Body->GetBoneSpaceTransforms();
+			if (Locals.Num() == 0)
+			{
+				// Distinguished from "not on this body" below: an empty array means the component has
+				// not evaluated a pose yet, not that the chain's bones are absent from the skeleton.
+				UE_LOG(LogElysiumGreenRoomCmd, Warning,
+					TEXT("gr_bones: %s has no evaluated pose yet -- BoneSpaceTransforms is empty."),
+					*Run.LabStem());
+				return;
+			}
+			const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+			static const FName Chain[] =
+			{
+				TEXT("Bip01 Spine1"), TEXT("Bip01 Spine2"), TEXT("Bip01 Neck"), TEXT("Bip01 Head")
+			};
+			for (const FName BoneName : Chain)
+			{
+				const int32 Index = Ref.FindBoneIndex(BoneName);
+				if (Index == INDEX_NONE || !Locals.IsValidIndex(Index))
+				{
+					UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_bones: %s — not on this body"),
+						*BoneName.ToString());
+					continue;
+				}
+				const FVector Posed = Locals[Index].GetTranslation();
+				const FVector Bind = Ref.GetRefBonePose()[Index].GetTranslation();
+				UE_LOG(LogElysiumGreenRoomCmd, Display,
+					TEXT("gr_bones: %-14s posed %7.3f cm (%.2f, %.2f, %.2f)  bind %7.3f cm"),
+					*BoneName.ToString(), Posed.Size(), Posed.X, Posed.Y, Posed.Z, Bind.Size());
+			}
 		});
 
 	// --- the wielded weapon (CCC10.2) -------------------------------------------------------------
