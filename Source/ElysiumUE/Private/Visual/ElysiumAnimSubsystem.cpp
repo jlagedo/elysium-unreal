@@ -136,7 +136,40 @@ void UElysiumAnimSubsystem::Deinitialize()
 	CompositionRigs.Reset();
 	EyeSets.Reset();
 	BlendTables.Reset();
+	ReportedMisses.Reset();
 	Super::Deinitialize();
+}
+
+void UElysiumAnimSubsystem::ReportMiss(const FElysiumAnimationIntent& Intent,
+	const FElysiumAnimationSelection& Selection)
+{
+	// The request as the reader would name it: the label where the route resolved one and could not
+	// bind it, the activity where nothing was ever named. Keying on the resolved activity instead
+	// would fold every rung of one body's ladder into a single line.
+	const FString& Request = Selection.SequenceLabel.IsEmpty()
+		? Intent.Activity : Selection.SequenceLabel;
+	const uint32 Key = HashCombine(HashCombine(GetTypeHash(Intent.Stem), GetTypeHash(Request)),
+		GetTypeHash(static_cast<uint8>(Selection.Outcome)));
+	if (ReportedMisses.Contains(Key))
+	{
+		return;
+	}
+	ReportedMisses.Add(Key);
+
+	const FString Line = FString::Printf(TEXT("[elysium] '%s' on '%s' binds no asset (%s): %s"),
+		*Request, *Intent.Stem, ElysiumAnimIntent::OutcomeName(Selection.Outcome),
+		Selection.Detail.IsEmpty() ? TEXT("no detail recorded") : *Selection.Detail);
+
+	// A stem with no clip vocabulary at all is the gym pawn, a menu backdrop or an unexported model
+	// — an explicitly optional absence rather than a failure, so it is stated rather than warned.
+	// Everything else here is a body that will pose whatever it last held while its record names
+	// something else, which is the failure this exists to make observable.
+	if (Selection.Outcome == EElysiumAnimOutcome::NoVocabulary)
+	{
+		UE_LOG(LogElysiumAnim, Log, TEXT("%s"), *Line);
+		return;
+	}
+	UE_LOG(LogElysiumAnim, Warning, TEXT("%s"), *Line);
 }
 
 const FElysiumNpcIndex& UElysiumAnimSubsystem::GetIndex()
@@ -616,11 +649,17 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 	ElysiumAnimResolve::Resolve(Intent, Catalog, OutSelection);
 	if (OutSelection.Outcome == EElysiumAnimOutcome::GridStateRefused)
 	{
-		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] %s"), *OutSelection.Detail);
+		ReportMiss(Intent, OutSelection);
 		return;
 	}
-	if (!OutSelection.IsResolved() || OutSelection.AssetKind == EElysiumAnimAssetKind::None)
+	// **The record naming an asset is what binds it, not the outcome being `Resolved`.** A fallback
+	// rung selected a real clip and then restated the outcome as the rung that answered, so gating
+	// the load on `Resolved` left every stalker, every availability fallback and every ACT_RUN that
+	// retried as a walk holding a pose nothing had selected while its record named the clip it was
+	// supposed to be playing.
+	if (!OutSelection.NamesBaseAsset())
 	{
+		ReportMiss(Intent, OutSelection);
 		return;
 	}
 
@@ -630,6 +669,8 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 		OutSelection.Detail = FString::Printf(
 			TEXT("'%s' resolved to '%s'@'%s', but the body has no skeletal mesh to bind against yet"),
 			*OutSelection.SequenceLabel, *OutSelection.AnimationName, *OutSelection.OwnerStem);
+		// Not reported: a body resolves before its mesh is installed as an ordinary part of standing
+		// up, and the next resolve after the mesh arrives is the one whose answer matters.
 		return;
 	}
 
@@ -659,6 +700,9 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 		OutSelection.Outcome = EElysiumAnimOutcome::NoAsset;
 		OutSelection.Detail = FString::Printf(TEXT("'%s'@'%s' is not on the baked mount"),
 			*OutSelection.AnimationName, *OutSelection.OwnerStem);
+		// A named clip the mount does not carry, on a body that has its mesh: a bake gap rather than
+		// a timing one, and the only warning that separates the two.
+		ReportMiss(Intent, OutSelection);
 	}
 
 	// A layer rides a DIFFERENT pose than the one it composes onto, so it resolves whether or not

@@ -885,6 +885,13 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			static_cast<int32>(EElysiumAnimOutcome::TranslatedFallback));
 		TestEqual(TEXT("and it plays the sequence that body actually carries"), Fell.SequenceLabel,
 			FString(TEXT("walk")));
+		// Which is the whole point of reaching rung 4, and it holds only if the bind reads the asset
+		// half rather than the outcome: the outcome here is `TranslatedFallback`, so a load gated on
+		// `IsResolved` leaves this stalker holding whatever it last posed while the record above
+		// names the clip it is supposed to be walking on.
+		TestFalse(TEXT("the outcome is not Resolved"), Fell.IsResolved());
+		TestTrue(TEXT("and the record still names a base asset for the bind to load"),
+			Fell.NamesBaseAsset());
 
 		// A player asking the same thing has no such probe at all: the two committed player rows are
 		// the whole of its actor translation, and a miss after them is a named miss.

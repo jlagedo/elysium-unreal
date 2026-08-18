@@ -314,6 +314,19 @@ struct FElysiumAnimationSelection
 	FString Detail;
 
 	bool IsResolved() const { return Outcome == EElysiumAnimOutcome::Resolved; }
+
+	// Whether the record names a base asset to load — a different question from how it came to name
+	// it, and the one a bind has to ask. Every fallback rung applies a real label first and then
+	// restates the outcome as the rung that answered (`RunToWalk`, `TranslatedFallback`,
+	// `Disposition`), so a bind keyed on `IsResolved` drops the clip the record is naming and the
+	// body poses nothing while the record says otherwise. Every path with no clip clears `AssetKind`
+	// on its way out, so this reads the asset half directly and leaves the outcome as the *how*.
+	bool NamesBaseAsset() const
+	{
+		return AssetKind != EElysiumAnimAssetKind::None
+			&& !SequenceLabel.IsEmpty()
+			&& !OwnerStem.IsEmpty();
+	}
 };
 
 // The speed authority, injected rather than read.

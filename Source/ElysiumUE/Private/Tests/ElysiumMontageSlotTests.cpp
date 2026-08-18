@@ -18,6 +18,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumAnimSubsystem.h"   // FElysiumResolvedAnimation
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -106,6 +107,54 @@ namespace
 	}
 }
 
+namespace
+{
+	// The recipe BuildNpcVisual uses for a graph-backed body, minus the placement. Null on any
+	// refusal, with the refusal already reported.
+	UElysiumBipedAnimInstance* StandGraphBody(AActor* Owner, USkeletalMesh* Mesh, UClass* Graph,
+		FAutomationTestBase& Test, USkeletalMeshComponent*& OutComp)
+	{
+		USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
+		Comp->SetMobility(EComponentMobility::Movable);
+		Comp->SetSkeletalMeshAsset(Mesh);
+		Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+		Comp->SetAnimInstanceClass(Graph);
+		Owner->SetRootComponent(Comp);
+		Comp->RegisterComponent();
+		Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		OutComp = Comp;
+
+		UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Comp->GetAnimInstance());
+		if (!Test.TestNotNull(TEXT("the generated graph installs the biped host"), Inst))
+		{
+			return nullptr;
+		}
+		// Without this the seam under test is never reached: a host reporting no compiled graph routes
+		// the one-shot to the proxy's clip player, which poses correctly and proves nothing about the
+		// slot.
+		if (!Test.TestTrue(
+			TEXT("and the body reports a compiled graph, so the one-shot takes the slot montage"),
+			Inst->HasCompiledGraph()))
+		{
+			return nullptr;
+		}
+		return Inst;
+	}
+
+	// A null tick function keeps evaluation on this thread, so the transforms are readable the moment
+	// RefreshBoneTransforms returns rather than a frame later.
+	void EvaluateFrames(USkeletalMeshComponent* Comp, int32 Frames, float DeltaSeconds,
+		TArray<FTransform>& OutPose)
+	{
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
+		{
+			Comp->TickAnimation(DeltaSeconds, /*bNeedsValidRootMotion=*/false);
+			Comp->RefreshBoneTransforms(/*TickFunction=*/nullptr);
+		}
+		OutPose = Comp->GetComponentSpaceTransforms();
+	}
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphMontageSlotTest,
 	"Elysium.Content.GraphMontageSlot", GElysiumMontageSlotFlags)
 bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
@@ -153,39 +202,16 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The recipe BuildNpcVisual uses for a graph-backed body, minus the placement.
-	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
-	Comp->SetMobility(EComponentMobility::Movable);
-	Comp->SetSkeletalMeshAsset(Pick.Mesh);
-	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-	Comp->SetAnimInstanceClass(Graph);
-	Owner->SetRootComponent(Comp);
-	Comp->RegisterComponent();
-	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-	UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Comp->GetAnimInstance());
-	if (!TestNotNull(TEXT("the generated graph installs the biped host"), Inst))
-	{
-		return false;
-	}
-	// Without this the seam under test is never reached: a host reporting no compiled graph routes
-	// the one-shot to the proxy's clip player, which poses correctly and proves nothing about the slot.
-	if (!TestTrue(TEXT("and the body reports a compiled graph, so the one-shot takes the slot montage"),
-		Inst->HasCompiledGraph()))
+	USkeletalMeshComponent* Comp = nullptr;
+	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
+	if (Inst == nullptr)
 	{
 		return false;
 	}
 
-	// A null tick function keeps evaluation on this thread, so the transforms are readable the moment
-	// RefreshBoneTransforms returns rather than a frame later.
 	const auto Evaluate = [Comp](int32 Frames, float DeltaSeconds, TArray<FTransform>& OutPose)
 	{
-		for (int32 Frame = 0; Frame < Frames; ++Frame)
-		{
-			Comp->TickAnimation(DeltaSeconds, /*bNeedsValidRootMotion=*/false);
-			Comp->RefreshBoneTransforms(/*TickFunction=*/nullptr);
-		}
-		OutPose = Comp->GetComponentSpaceTransforms();
+		EvaluateFrames(Comp, Frames, DeltaSeconds, OutPose);
 	};
 	constexpr float FrameSeconds = 1.f / 30.f;
 
@@ -270,6 +296,113 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 		Stopped.MovedBones, PosedBones, Stopped.MaxDegrees));
 	TestTrue(TEXT("and stopping it hands the frame back to the state machine underneath"),
 		Stopped.MovedBones < Looped.MovedBones);
+
+	return true;
+}
+
+// Who is allowed to end a clip somebody else armed.
+//
+// Every body with a mover publishes a locomotion selection on every anim tick, a standing one
+// included, and a stood body resolves an idle that binds an asset — so a publish that ends the
+// DefaultSlot one-shot whenever it holds an asset ends every clip another owner armed on the frame
+// after it started. What that deletes is the ambient cast's whole stance vocabulary: the schedule
+// arms an idle, a fidget or a stance transition, the next tick kills it with a zero blend, and the
+// schedule re-arms it one clip length later for the life of the map. The body stands still, and the
+// only thing that ever reaches the frame is the single forced evaluation the arm itself performs.
+//
+// The floor asserted here is that a body which is not travelling does not make that claim. It is not
+// the whole answer — a travelling body still takes the pose back from a one-shot, and the answer to
+// that is the channel arbitration slot.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphIdlePublishTest,
+	"Elysium.Content.GraphOneShotSurvivesIdlePublish", GElysiumMontageSlotFlags)
+bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
+		*FElysiumContentPaths::PlayerAnimBlueprintClass());
+	if (Graph == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
+			"(run: uv run elysium export bundle policy)"));
+		return true;
+	}
+	FLoopingClipPick Pick;
+	if (!FindLoopingClip(Pick))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	Pick.Mesh->AddToRoot();
+	Pick.Clip->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		Pick.Clip->RemoveFromRoot();
+		Pick.Mesh->RemoveFromRoot();
+	};
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("body owner spawned"), Owner))
+	{
+		return false;
+	}
+	USkeletalMeshComponent* Comp = nullptr;
+	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
+	if (Inst == nullptr)
+	{
+		return false;
+	}
+	constexpr float FrameSeconds = 1.f / 30.f;
+	TArray<FTransform> Pose;
+
+	// The stance clip, armed the way the ambient schedule arms one.
+	if (!TestTrue(TEXT("the schedule's clip is accepted by the slot"),
+		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds)))
+	{
+		return false;
+	}
+	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
+	if (!TestNotNull(TEXT("and it is playing"), Inst->GetCurrentActiveMontage()))
+	{
+		return false;
+	}
+
+	// A resolved locomotion selection with a real asset — the record a body standing still publishes
+	// on every tick of its life.
+	FElysiumAnimationSelection Standing;
+	Standing.GraphState = EElysiumGraphState::Idle;
+	Standing.SequenceLabel = Pick.Label;
+	Standing.OwnerStem = Pick.Owner;
+	Standing.AnimationName = Pick.Label;
+	Standing.AssetKind = EElysiumAnimAssetKind::Sequence;
+	Standing.Outcome = EElysiumAnimOutcome::Resolved;
+	FElysiumResolvedAnimation Assets;
+	Assets.Sequence = Pick.Clip;
+
+	Inst->PublishSelection(Standing, Assets);
+	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
+	TestNotNull(TEXT("a standing body's locomotion publish leaves the schedule's clip playing"),
+		Inst->GetCurrentActiveMontage());
+
+	// The same body, now travelling. Here the publish IS the claim: a walk fan underneath a live
+	// one-shot never reaches the frame, so the body would keep playing its idle while it moves.
+	FElysiumAnimationSelection Travelling = Standing;
+	Travelling.GraphState = EElysiumGraphState::Walk;
+	Inst->PublishSelection(Travelling, Assets);
+	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
+	TestNull(TEXT("and a travelling body's publish takes the base pose back"),
+		Inst->GetCurrentActiveMontage());
 
 	return true;
 }

@@ -266,4 +266,13 @@ private:
 	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that
 	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.
 	TMap<FString, TSharedPtr<const FElysiumBlendTable>> BlendTables;
+
+	// A request that binds no asset says so, once per (stem, request, outcome). Once, because a
+	// resolve runs on every selection change across the whole cast and the same body asking the same
+	// thing again is the same failure — a per-frame line would bury the first one. But at least
+	// once: a miss that only reaches the selection record is visible to whoever opens Cog, and a
+	// play session where the cast poses nothing has to be readable in an ordinary log.
+	void ReportMiss(const FElysiumAnimationIntent& Intent,
+		const FElysiumAnimationSelection& Selection);
+	TSet<uint32> ReportedMisses;
 };
