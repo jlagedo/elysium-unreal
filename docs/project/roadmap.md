@@ -290,12 +290,16 @@ The ladder:
   so it does not enter the weapon ladder or the class bodies and does not assert the state identity.
   Both producers emit one trace schema — `ElysiumLocomotionTrace` is the columns and the writer,
   and `FElysiumCastRun` (`-ElysiumCast`, `uv run elysium debug cast`) records the cast over the
-  arena in the stage world under authored orders. Open: the resolver does not own the live pose —
-  a locomotion publish ends the stance and fidget clips the ambient schedule arms, on every motor
-  body, every tick — a record whose outcome is any fallback names a clip the engine never loads,
-  every miss but one returns silently, the gait tables and the posed activity are resolved through
-  different chains, the harness passes on an unarmed course, and the arena is a regression
-  instrument rather than acceptance evidence.
+  arena in the stage world under authored orders. The base pose has one owner at a time: every body
+  with a mover publishes a locomotion selection each anim tick and a standing one resolves an idle
+  that binds an asset, so the publish takes the pose back from a one-shot only while the body is
+  locomoting and the ambient schedule's stance and fidget clips reach the frame (the floor until
+  LIFE4's arbitration slot decides it by priority). The bind loads the asset the record names rather
+  than only the one whose outcome is `Resolved` — every availability rung applies a real label and
+  then restates the outcome as the rung that answered — and a request that binds nothing warns once
+  per `(stem, request, outcome)` instead of reaching only the selection record. Open: the gait
+  tables and the posed activity are resolved through different chains, the harness passes on an
+  unarmed course, and the arena is a regression instrument rather than acceptance evidence.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; the channel arbitration slot (which every attack and aim path waits on),
   tracking through the prop bone, the honest check, the equip funnels and weapon-state animation

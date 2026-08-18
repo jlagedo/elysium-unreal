@@ -20,32 +20,17 @@ session per task — session shape, kickoff prompts, scope traps:
 
 ### LIFE3 One resolver for the whole cast
 
-The translation half is closed and stays closed: `TranslateActivity` walks the committed weapon
-ladders, the two `CBasePlayer` rows and the recovered NPC class bodies in their witnessed orders,
-availability-probing each rung against the body's own vocabulary, and `GraphState` is projected
-once in the resolver's step 6 and read by the anim instance, Cog, the `act_state` channel and the
-MCP surface rather than derived four times. What remains is the half the title names: the resolver
-owning the live pose, and the speed authority being one number.
+The translation tables, the graph state and the ownership of the base pose are behind this rung:
+`TranslateActivity` walks the committed weapon ladders, the two `CBasePlayer` rows and the
+recovered NPC class bodies in their witnessed orders, availability-probing each rung against the
+body's own vocabulary; `GraphState` is projected once in the resolver's step 6 and read by the anim
+instance, Cog, the `act_state` channel and the MCP surface rather than derived four times; a
+locomotion publish takes the base pose back from a one-shot only while the body is locomoting; the
+bind loads whatever asset the record names rather than only what the outcome calls `Resolved`; and
+a request that binds nothing reports once per `(stem, request, outcome)`.
 
-- **The driver does not own `Base` unconditionally.** `PublishSelection` ends the DefaultSlot
-  one-shot and the direct clip whenever the locomotion resolver holds an asset, and every motor body
-  publishes every anim tick including a standing idle. The stance vocabulary
-  `FElysiumNpc::RunSpecialIdleActivity` arms through `PlayNpcClip` — the per-stance idle, the
-  fidgets and the stance-change transitions — is therefore destroyed with a zero blend on the frame
-  after it is armed, and the schedule re-arms it once per clip length for the life of the map; the
-  single frame that renders is the forced `TickAnimation`/`RefreshBoneTransforms` the arm performs
-  at full weight. Until the arbitration slot exists (LIFE4), a locomotion publish leaves a one-shot
-  alone unless the selection is a locomoting `GraphState`. It must never end an in-flight
-  non-locomotion clip.
-- **A record that names an asset binds it.** `ResolveAnimation` gates the asset load on
-  `IsResolved()`, which is `Outcome == Resolved`; `ResolveActivityRoute` applies a real label and
-  then overwrites the outcome with `RunToWalk`, `TranslatedFallback` or `Disposition`, so every
-  rung above 1 names a sequence the engine never loads. The bind test is that the record named a
-  base asset — `AssetKind != None` with a label and an owner — and the outcome stays the *how*.
-- **Every miss says so once.** Only `GridStateRefused` warns. `MissingSequence`, `NoAsset`,
-  `MaskedRejected` and the fallback outcomes return silently, so a cast-wide pose failure leaves an
-  ordinary play log clean. One log per `(stem, label, outcome)` at the bind, and `NoVocabulary` in
-  the gym is not a failure.
+What remains is the speed authority being one number, and evidence that says so.
+
 - **Pose and speed come from the same activity.** `ResolveGaitSpeeds` keys stem, weapon, form and
   variant with `Source=Player` and no classname or `ActorState`, while the pose walks the NPC
   `+0x5dc` body — an idle human poses `ACT_WALK_RELAXED` and travels at the un-relaxed player fan.
@@ -90,11 +75,11 @@ owning the live pose, and the speed authority being one number.
   under `-nullrhi`; it is a regression instrument and not acceptance evidence (playable-path rule
   3). The gait bullet closes on one priority-map patrol with the selection record in the log.
 
-*Acceptance:* on a priority map, an ambient cast member plays its authored stance and fidget
-vocabulary while standing and its authored gait cell while travelling, with no frame in which a
-locomotion publish ends a clip another owner armed; every request in the session either binds the
-asset its record names or logs its miss once; and the intra-row no-slide predicate holds over a
-recorded patrol and a recorded scripted run. *Deps:* LIFE0, LIFE2.
+*Acceptance:* on a priority map, a cast member walks a patrol at the cell its own tables author,
+armed and unarmed, with the selection record in the log; the intra-row no-slide predicate holds
+over that patrol and over a recorded scripted run; and the coverage sweep that says the cast poses
+is driven with the classname, weapon and state the committed tables are keyed on. *Deps:* LIFE0,
+LIFE2.
 
 ### LIFE4 Weapons in hands — the third-person wielded body
 

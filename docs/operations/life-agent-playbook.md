@@ -45,24 +45,20 @@ engine gotchas in `Source/ElysiumUE/CLAUDE.md`.
 - **Mount/sidecar verification.** A single scoped run of the character bake verifier; cheap,
   read-only. Good first session of a working day.
 
-### LIFE3 — one resolver for the whole cast (direct; three sessions in order)
+### LIFE3 — one resolver for the whole cast (direct; two sessions in order)
 
-The translation tables and the graph state are behind it; the remaining spec is in
-`docs/project/plans/animation.md`. Three sessions, and the order is load-bearing.
+The translation tables, the graph state and the base pose's ownership are behind it; the remaining
+spec is in `docs/project/plans/animation.md`. Two sessions, and the order is load-bearing.
 
-- **Pose ownership first**, because until it lands nothing else can be seen: the publish stops
-  ending another owner's clip, a record whose outcome is a fallback binds the asset it names, and
-  every miss logs once at the bind. All three together — the first two produce the same symptom
-  (a body holding a pose nothing selected) and the third is how the session tells them apart.
-  Validated by watching an ambient cast member on a real map play its stance and fidget clips.
-- **One speed number** next: the gait tables resolved through the same chain as the pose, the
-  gait classified off the requested activity rather than the translated name, the motor
-  commanding the cell the body is about to play, and the driver publishing the sample it
-  classified. Trap: fixing either end alone still slides, so the session takes both.
-- **The evidence last**, because it fails for the right reason only after the two above:
-  the intra-row no-slide predicate, a harness that fails an unarmed course, a coverage sweep
-  carrying classname/weapon/state, and one priority-map patrol with the selection record in the
-  log. The arena run is the regression instrument, never the acceptance.
+- **One speed number first**: the gait tables resolved through the same chain as the pose, the
+  gait classified off the requested activity rather than the translated name, the motor commanding
+  the cell the body is about to play, and the driver publishing the sample it classified. Trap:
+  fixing either end alone still slides, so the session takes all of it rather than the first
+  symptom it reproduces.
+- **The evidence second**, because it fails for the right reason only after that: the intra-row
+  no-slide predicate, a harness that fails an unarmed course, a coverage sweep carrying
+  classname/weapon/state, and one priority-map patrol with the selection record in the log. The
+  arena run is the regression instrument, never the acceptance.
 
 ### LIFE4 — weapons in hands (plan-mode-light; green-room heavy; needs the baked prop bones)
 
