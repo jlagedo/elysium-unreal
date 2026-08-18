@@ -520,9 +520,10 @@ def build_wield_model(stem, model, library, texture_table, textures, failed):
         fail("wield skeleton %s: %s" % (stem, error))
         failed.append(stem)
         return None
-    # Gate against the .eskm's OWN row count, not the manifest's StudioBone count: a multi-rooted
-    # model (`w_f_severed_arm` is the corpus's one case) gains the writer's synthetic root, so the
-    # container legitimately carries one bone the manifest does not declare.
+    # The built skeleton's bone count must equal the .eskm's own row count exactly -- a
+    # multi-rooted model (`w_f_severed_arm` is the corpus's one case) resolves its fork onto one
+    # of its own bones (`UE_mdl_skeletal.unreal_bones`) rather than gaining an extra synthetic
+    # one, so the container's row count is always the manifest's StudioBone count.
     container_bones = len(eskm.bone_locals(eskm.read(source_path)))
     if bones != container_bones:
         fail("wield skeleton %s: built %d bones, the .eskm carries %d"
@@ -665,10 +666,10 @@ def verify(manifest, baked_stems, errors):
         source_path = os.path.join(OUT_ROOT, model["eskm"].replace("/", os.sep))
         rows = eskm.bone_locals(eskm.read(source_path))
         declared_bones = int(model.get("bone_count", -1))
-        # A multi-rooted rig gains the writer's synthetic root, which the manifest's StudioBone
-        # count does not declare; exactly one extra row named for it is the legitimate shape.
-        synthetic = len(rows) == declared_bones + 1 and rows and rows[0][0] == "__elysium_skeleton_root"
-        if len(rows) != declared_bones and not synthetic:
+        # A multi-rooted rig resolves its fork onto one of its own bones rather than gaining an
+        # extra synthetic one (`UE_mdl_skeletal.unreal_bones`), so the .eskm's row count is always
+        # exactly the manifest's declared StudioBone count.
+        if len(rows) != declared_bones:
             errors.append("%s: .eskm carries %d bones, the manifest declares %d"
                           % (stem, len(rows), declared_bones))
         if registry_bones != len(rows):

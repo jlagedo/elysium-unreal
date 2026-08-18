@@ -259,7 +259,7 @@ class PlacedModelClipEmissionTests(unittest.TestCase):
                 mock.patch.object(mdl_skel, "read_bones", return_value=[]),
                 mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
                 mock.patch.object(UEK.mdl, "search_paths", return_value=[]),
-                mock.patch.object(UEK, "unreal_bones", return_value=([], {})),
+                mock.patch.object(UEK, "unreal_bones", return_value=([], {}, {})),
                 mock.patch.object(UEK, "_mesh_section", return_value=(b"", {})),
                 mock.patch.object(mdl_skel, "local_sequences", return_value=clips),
                 mock.patch.object(mdl_skel, "blend_clip_plan", return_value=([], {})),

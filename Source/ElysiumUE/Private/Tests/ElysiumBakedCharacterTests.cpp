@@ -58,18 +58,31 @@ static constexpr EAutomationTestFlags GElysiumBakedCharacterFlags =
 
 namespace
 {
-	// The parity slice. Two bodies, deliberately small: this test composes every bone of every
-	// sampled frame of every clip it takes, so breadth costs real time and one body of each shape
-	// answers what a wider slice answers. `smiling_jack` SEEDS its rig family, so its own bone tree
-	// becomes the union every other male body merges into; `tremere_male_armor_0` merges INTO that
-	// union, which is the case where a bone can be lost.
+	// The parity slice. `smiling_jack` SEEDS its rig family, so its own bone tree becomes the union
+	// every other male body merges into; `tremere_male_armor_0` merges INTO that union, which is
+	// the case where a bone can be lost. The other seven are every stem, across all 166 exported
+	// `.eskm` containers, whose VtMB skeleton carries MORE THAN ONE parentless bone -- every one of
+	// them is affected, not a sample of them. `brian` is the most stressing case: four strays,
+	// two of whose names differ only by a `[2]` prefix.
 	const TCHAR* const GDefaultSliceStems[] = {
 		TEXT("smiling_jack"),
 		TEXT("tremere_male_armor_0"),
+		TEXT("ash"),
+		TEXT("brian"),
+		TEXT("nosferatu_female_armor_1"),
+		TEXT("nosferatu_female_armor_2"),
+		TEXT("prophet"),
+		TEXT("regular_cop"),
+		TEXT("tremere_male_armor_3"),
 	};
 
-	// `-ElysiumParityStems=a,b,c` widens the slice for a one-off run without touching this file.
-	TArray<FString> SliceStems()
+	// `-ElysiumParityStems=a,b,c` widens (or narrows) the slice for a one-off run without touching
+	// this file. `bOutIsDefaultSlice` reports whether this call resolved to `GDefaultSliceStems`
+	// unmodified -- true whenever no override was given, or the override named nothing -- because
+	// the parity test holds a resolution miss to a stricter standard on the default slice: every
+	// stem in it was put there BECAUSE it needs the coverage, where an ad-hoc stem's owner may
+	// reasonably have picked one with no bank locomotion to check.
+	TArray<FString> SliceStems(bool& bOutIsDefaultSlice)
 	{
 		FString Raw;
 		if (FParse::Value(FCommandLine::Get(), TEXT("ElysiumParityStems="), Raw) && !Raw.IsEmpty())
@@ -82,15 +95,23 @@ namespace
 			}
 			if (!Stems.IsEmpty())
 			{
+				bOutIsDefaultSlice = false;
 				return Stems;
 			}
 		}
+		bOutIsDefaultSlice = true;
 		TArray<FString> Stems;
 		for (const TCHAR* Stem : GDefaultSliceStems)
 		{
 			Stems.Add(Stem);
 		}
 		return Stems;
+	}
+
+	TArray<FString> SliceStems()
+	{
+		bool bUnusedIsDefaultSlice = false;
+		return SliceStems(bUnusedIsDefaultSlice);
 	}
 
 	// How many of a body's own clips to compose. smiling_jack owns 38 dialogue clips of up to 571
@@ -139,6 +160,18 @@ namespace
 	// rotated by its own bind (tens of degrees, centimetres of offset).
 	constexpr double GAdditiveRotationToleranceDeg = 0.5;
 	constexpr double GAdditiveTranslationTolerance = 0.5;   // centimetres
+
+	// A shared bank clip composed against a BODY's own baked skeleton, checked against the same
+	// clip composed against the BANK's own skeleton -- the one comparison that crosses Unreal's
+	// compatible-skeleton retargeting (`FSkeletonRemapping`), which every other tolerance in this
+	// file is set to avoid exercising at all. Two independently built skeletons carry their own
+	// `OrientAndScale` retarget sources, so a clean corpus still accumulates more slack here than
+	// the sub-degree/sub-millimetre agreement a body's own clips owe their own container -- but
+	// both numbers stay two orders of magnitude below the ~90 degree yaw and ~99 cm lift a clip
+	// landing on the wrong bone (a fork-carrying body's synthetic root stealing bone 0 from
+	// `Bip01`) actually produces, which is the failure this check exists to catch.
+	constexpr double GBankLocomotionRotationToleranceDeg = 2.0;
+	constexpr double GBankLocomotionTranslationTolerance = 5.0;   // centimetres
 
 	bool SampleBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
 		FTransform& OutTransform)
@@ -241,6 +274,93 @@ namespace
 	}
 
 	/**
+	 * One frame of an ORDINARY (non-additive) sequence, composed against an arbitrary TARGET
+	 * asset -- a `USkeleton` or a `USkeletalMesh` -- rather than always the sequence's own.
+	 *
+	 * Passing the sequence's own skeleton reproduces the plain evaluation every other reader in
+	 * this file uses. Passing a DIFFERENT but compatible one -- a body's own baked mesh, playing a
+	 * clip a shared bank owns -- is the compatible-skeleton retargeting path a live playthrough
+	 * actually takes: `FBoneContainer::Initialize` resolves `RequiredBones.GetSkeletonAsset()` off
+	 * whichever asset is handed in, and the compressed decode path
+	 * (`UE::Anim::Decompression::GetPoseFromAnimTrackData`) looks up
+	 * `FSkeletonRemappingRegistry::GetRemapping(SourceSkeleton, TargetSkeleton)` and applies it
+	 * whenever the two differ -- which is exactly the mechanism a fork-carrying body's synthetic
+	 * root broke, by displacing `Bip01` from bone 0 and leaving `GenerateMapping`'s
+	 * always-map-bone-0-by-index rule pointing at the wrong bone. No other check in this file
+	 * builds a `FBoneContainer` off anything but the sequence's own skeleton, so no other check can
+	 * observe this.
+	 *
+	 * Bone-indexed by the TARGET asset's own reference skeleton (`Mesh->GetRefSkeleton()` for a
+	 * mesh, `Skeleton->GetReferenceSkeleton()` for a bare skeleton) via the mesh<->skeleton pose
+	 * remap `FBoneContainer` already carries, so the caller can compose the result through that
+	 * same asset's own bone tree without a second index translation.
+	 */
+	bool EvaluateOrdinaryFrame(const UAnimSequence* Sequence, const UObject* TargetAsset,
+		const double Time, TArray<FTransform>& OutLocals)
+	{
+		const USkeletalMesh* TargetMesh = Cast<USkeletalMesh>(TargetAsset);
+		const USkeleton* TargetSkeleton = TargetMesh != nullptr
+			? TargetMesh->GetSkeleton() : Cast<USkeleton>(TargetAsset);
+		if (Sequence == nullptr || TargetAsset == nullptr || TargetSkeleton == nullptr)
+		{
+			return false;
+		}
+		const FReferenceSkeleton& Ref = TargetMesh != nullptr
+			? TargetMesh->GetRefSkeleton() : TargetSkeleton->GetReferenceSkeleton();
+#if WITH_EDITOR
+		// PIN THE PATH, for the same reason `EvaluateAdditiveFrame` does: an unresolved compression
+		// job would silently fall back to the raw data model, which never runs the compatible-
+		// skeleton remap this function exists to exercise.
+		const_cast<UAnimSequence*>(Sequence)->WaitOnExistingCompression();
+#endif
+		TArray<FBoneIndexType> RequiredBones;
+		RequiredBones.SetNumUninitialized(Ref.GetNum());
+		for (int32 Bone = 0; Bone < RequiredBones.Num(); ++Bone)
+		{
+			RequiredBones[Bone] = static_cast<FBoneIndexType>(Bone);
+		}
+
+		FMemMark Mark(FMemStack::Get());
+		FBoneContainer Container;
+		Container.InitializeTo(RequiredBones,
+			UE::Anim::FCurveFilterSettings(UE::Anim::ECurveFilterMode::None), *TargetAsset);
+		FCompactPose Pose;
+		Pose.SetBoneContainer(&Container);
+		FBlendedCurve Curve;
+		Curve.InitFrom(Container);
+		UE::Anim::FStackAttributeContainer Attributes;
+		FAnimationPoseData PoseData(Pose, Curve, Attributes);
+		if (!Sequence->IsCompressedDataValid())
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("%s: no compressed data after waiting on compression, so this reads raw and "
+				     "skips compatible-skeleton remapping"),
+				*Sequence->GetName());
+		}
+		Sequence->GetAnimationPose(PoseData, FAnimExtractContext(Time));
+
+		// Undriven bones default to the TARGET's own reference pose, same as an ordinary sequence
+		// evaluated the plain way -- this is not an additive, so there is no identity to fall back to.
+		OutLocals = Ref.GetRefBonePose();
+		for (const FCompactPoseBoneIndex BoneIndex : Pose.ForEachBoneIndex())
+		{
+			const FSkeletonPoseBoneIndex SkeletonIndex =
+				Container.GetSkeletonPoseIndexFromCompactPoseIndex(BoneIndex);
+			if (!SkeletonIndex.IsValid())
+			{
+				continue;
+			}
+			const FMeshPoseBoneIndex MeshIndex =
+				Container.GetMeshPoseIndexFromSkeletonPoseIndex(SkeletonIndex);
+			if (MeshIndex.IsValid() && OutLocals.IsValidIndex(MeshIndex.GetInt()))
+			{
+				OutLocals[MeshIndex.GetInt()] = Pose[BoneIndex];
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Compose parent-relative locals into component space by ordinary inheritance -- the rule the
 	 * runtime applies to a baked clip, and the rule the container's rotations are written for.
 	 *
@@ -301,6 +421,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	int32 AdditiveClips = 0;
 	int32 LayerClips = 0;
 	int32 BlendGrids = 0;
+	int32 BankLocomotionChecks = 0;
 
 	// The `_delta` round-trip, for one container's worth of clips against one baked body.
 	//
@@ -947,7 +1068,130 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		}
 	};
 
-	for (const FString& Stem : SliceStems())
+	// SHARED-BANK LOCOMOTION AGREEMENT: the one check that plays a bank's clip against the BODY's
+	// own baked skeleton and checks the result, rather than reading the sequence back through its
+	// own -- the exact combination that broke when a fork-carrying body's synthetic root displaced
+	// `Bip01` from bone 0. Every other check in this file builds its `FBoneContainer` off the
+	// sequence's own skeleton and would have passed unchanged with the wrong bone carrying the
+	// track; this one goes through `EvaluateOrdinaryFrame`'s arbitrary-target path, which is the
+	// compatible-skeleton retargeting a live playthrough actually takes, and composes the result
+	// through each side's own hierarchy so a mis-landed root shows up amplified at every bone below
+	// it, the same way every other composed check here does. Returns whether a qualifying clip was
+	// found and checked at all, so the caller can try another bank rather than reporting a miss.
+	auto CheckBankLocomotionAgreement = [&](const USkeletalMesh* Baked, const FString& Stem,
+		const FElysiumSkeletalSource& Source, const FString& Bank,
+		const FElysiumSkeletalSource& BankSource)
+	{
+		// An ordinary, full-body, ground-locomotion clip: not composed as a layer or delta
+		// (`Flags & 0x4`) and not owned by a partial-body mask, so its name carries the activity it
+		// plays -- the class of clip that runs constantly and is exactly what stood two
+		// fork-carrying characters sideways in the street.
+		const FElysiumSourceClip* Clip = BankSource.Clips.FindByPredicate(
+			[&BankSource](const FElysiumSourceClip& Candidate)
+			{
+				return (Candidate.Flags & 0x4) == 0 && !BankSource.Masks.IsValidIndex(Candidate.Mask)
+					&& Candidate.FrameCount > 0 && !Candidate.Tracks.IsEmpty()
+					&& (Candidate.Name.Contains(TEXT("walk"), ESearchCase::IgnoreCase)
+						|| Candidate.Name.Contains(TEXT("run"), ESearchCase::IgnoreCase));
+			});
+		if (Clip == nullptr)
+		{
+			return false;
+		}
+		UAnimSequence* Sequence = ElysiumNpcVisual::LoadBakedClip(Baked, Bank, Clip->Name);
+		if (Sequence == nullptr)
+		{
+			AddInfo(FString::Printf(
+				TEXT("%s: locomotion clip '%s' (bank '%s') not on the baked mount"),
+				*Stem, *Clip->Name, *Bank));
+			return false;
+		}
+		KeepAlive.Add(Sequence);
+		++BankLocomotionChecks;
+
+		const USkeleton* BankSkeleton = Sequence->GetSkeleton();
+		if (BankSkeleton == nullptr)
+		{
+			AddError(FString::Printf(TEXT("%s: '%s' (bank '%s') has no skeleton to compose"),
+				*Stem, *Clip->Name, *Bank));
+			return true;
+		}
+
+		TMap<FName, int32> BodyIndexOf;
+		BodyIndexOf.Reserve(Source.Bones.Num());
+		for (int32 Index = 0; Index < Source.Bones.Num(); ++Index)
+		{
+			BodyIndexOf.Add(Source.Bones[Index].Name, Index);
+		}
+
+		const double Rate = FMath::Max(static_cast<double>(Clip->FrameRate), 1.0);
+		const double Length = FMath::Max(Clip->FrameCount - 1, 1) / Rate;
+		bool bSound = true;
+		for (const double Fraction : GSampleFractions)
+		{
+			const double Time = Fraction * Length;
+			TArray<FTransform> BankLocals;
+			TArray<FTransform> BodyLocals;
+			if (!EvaluateOrdinaryFrame(Sequence, BankSkeleton, Time, BankLocals)
+				|| !EvaluateOrdinaryFrame(Sequence, Baked, Time, BodyLocals))
+			{
+				AddError(FString::Printf(
+					TEXT("%s: '%s' (bank '%s') could not be composed against both skeletons"),
+					*Stem, *Clip->Name, *Bank));
+				bSound = false;
+				break;
+			}
+
+			// Each side composed through its OWN hierarchy -- the bank's own bone tree for the
+			// bank-skeleton evaluation, the body's own for the retargeted one -- and matched by
+			// bone NAME, because the fork this guards against is precisely a disagreement about
+			// which bone occupies which INDEX.
+			TArray<FTransform> BankComposed;
+			TArray<FTransform> BodyComposed;
+			ComposeComponentSpace(BankSource.Bones, BankLocals, BankComposed);
+			ComposeComponentSpace(Source.Bones, BodyLocals, BodyComposed);
+
+			for (int32 BankIndex = 0; BankIndex < BankSource.Bones.Num(); ++BankIndex)
+			{
+				const int32* BodyIndex = BodyIndexOf.Find(BankSource.Bones[BankIndex].Name);
+				if (BodyIndex == nullptr)
+				{
+					// A bank drives bones this rig family has never had; there is nothing on the
+					// body's own hierarchy to compare that bone against.
+					continue;
+				}
+				++Samples;
+				const double Degrees = FMath::RadiansToDegrees(
+					BodyComposed[*BodyIndex].GetRotation().AngularDistance(
+						BankComposed[BankIndex].GetRotation()));
+				const double Centimetres = FVector::Distance(
+					BodyComposed[*BodyIndex].GetTranslation(),
+					BankComposed[BankIndex].GetTranslation());
+				if (Degrees > GBankLocomotionRotationToleranceDeg
+					|| Centimetres > GBankLocomotionTranslationTolerance)
+				{
+					AddError(FString::Printf(
+						TEXT("%s plays bank '%s' clip '%s': through the body's own baked skeleton ")
+						TEXT("bone '%s' composes %.2f deg / %.2f cm away from the same clip composed ")
+						TEXT("on the bank's own skeleton -- a shared-bank clip is landing on the ")
+						TEXT("wrong bone"),
+						*Stem, *Bank, *Clip->Name, *BankSource.Bones[BankIndex].Name.ToString(),
+						Degrees, Centimetres));
+					bSound = false;
+					break;
+				}
+			}
+			if (!bSound)
+			{
+				break;
+			}
+		}
+		return true;
+	};
+
+	bool bIsDefaultSlice = false;
+	const TArray<FString> Stems = SliceStems(bIsDefaultSlice);
+	for (const FString& Stem : Stems)
 	{
 		USkeletalMesh* Baked = ElysiumNpcVisual::LoadBakedMesh(Stem);
 		if (Baked == nullptr)
@@ -1125,6 +1369,48 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				// sequence (`docs/vtmb/animation_and_movers.md` A.3).
 				CheckLayerMasks(Baked, Bank, BankSource);
 			}
+
+			// The one check that plays a shared bank's clip against THIS body's own baked skeleton
+			// rather than reading it back through the bank's own -- sorted for a deterministic
+			// pick, and stopping at the first bank that actually carries an ordinary walk/run clip
+			// so a body playing several banks does not pay for loading all of their containers.
+			TArray<FString> SortedGridOwners = GridOwners.Array();
+			SortedGridOwners.Sort();
+			bool bLocomotionChecked = false;
+			for (const FString& Bank : SortedGridOwners)
+			{
+				FElysiumSkeletalSource BankSourceForPose;
+				FString BankPoseError;
+				if (!FElysiumSkeletalSource::Load(
+					FElysiumContentPaths::NpcBankSource(Bank), BankSourceForPose, BankPoseError))
+				{
+					continue;
+				}
+				if (CheckBankLocomotionAgreement(Baked, Stem, Source, Bank, BankSourceForPose))
+				{
+					bLocomotionChecked = true;
+					break;
+				}
+			}
+			if (!bLocomotionChecked)
+			{
+				if (bIsDefaultSlice)
+				{
+					// A silent pass here is the exact failure mode that let the fork defect ship: a
+					// stem in the DEFAULT slice is there because it is known to need this coverage,
+					// so a resolution miss is a hole in the check itself and must fail loudly rather
+					// than melt into an abstain the way an ad-hoc `-ElysiumParityStems=` stem may.
+					AddError(FString::Printf(
+						TEXT("%s: no ordinary bank locomotion clip could be resolved for this stem -- ")
+						TEXT("it is in the default slice because its skeleton is known to fork, and a ")
+						TEXT("miss here means this check is not covering it"), *Stem));
+				}
+				else
+				{
+					AddInfo(FString::Printf(
+						TEXT("%s: no ordinary walk/run bank clip found to check pose agreement"), *Stem));
+				}
+			}
 		}
 
 		int32 Taken = 0;
@@ -1259,8 +1545,13 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	}
 	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d bone samples, %d `_delta` clip(s) ")
 		TEXT("round-tripped through the additive bake, %d masked `_layer` clip(s) checked against ")
-		TEXT("their blend masks, %d blend grid(s) checked against their sidecar"),
-		Compared, Samples, AdditiveClips, LayerClips, BlendGrids));
+		TEXT("their blend masks, %d blend grid(s) checked against their sidecar, %d shared-bank ")
+		TEXT("locomotion clip(s) checked against the body's own baked skeleton"),
+		Compared, Samples, AdditiveClips, LayerClips, BlendGrids, BankLocomotionChecks));
+	// A wholesale resolution failure -- every stem's bank search coming up empty -- must never
+	// present as a clean run just because nothing individually errored above.
+	TestTrue(TEXT("at least one shared-bank locomotion clip was checked against a body's own ")
+		TEXT("baked skeleton"), BankLocomotionChecks > 0);
 	return true;
 }
 
@@ -1307,16 +1598,8 @@ bool FElysiumBakedBankChainAgreementTest::RunTest(const FString&)
 		TMap<FName, FName>& Tree = Trees.Add(Path);
 		for (const FElysiumSourceBone& Bone : Source.Bones)
 		{
-			FName Parent = Source.Bones.IsValidIndex(Bone.Parent)
+			const FName Parent = Source.Bones.IsValidIndex(Bone.Parent)
 				? Source.Bones[Bone.Parent].Name : NAME_None;
-			// A model whose VtMB skeleton forks carries the exporter's synthetic root above
-			// `Bip01`, and a bank -- which never forks -- does not. Reading that as a chain
-			// disagreement would report every fork-carrying body against every bank it plays,
-			// when the two agree about every bone either of them actually animates.
-			if (Parent == TEXT("__elysium_skeleton_root"))
-			{
-				Parent = NAME_None;
-			}
 			Tree.Add(Bone.Name, Parent);
 		}
 		return &Tree;

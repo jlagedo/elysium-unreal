@@ -428,6 +428,50 @@ def _build_skinned(g, idx, d, v, model_path, out_dir, anorms=None):
     return built
 
 
+def _bone_subtree_sizes(bones):
+    """Per-bone descendant count, from each bone's OWN parent chain rather than a child-list
+    build -- a few bones deep on any of these rigs, negligible against reading a whole skeleton
+    once."""
+    sizes = [0] * len(bones)
+    for b in bones:
+        p = b.parent
+        while p >= 0:
+            sizes[p] += 1
+            p = bones[p].parent
+    return sizes
+
+
+def _choose_skeleton_root(bones, roots):
+    """The parent-less bone with the LARGEST descendant subtree, ties broken by lowest original
+    index so the choice is deterministic -- the same rule `UE_mdl_skeletal.unreal_bones` applies,
+    so the two exporters agree on which bone a forked skeleton's real root is (verified against
+    the corpus: `regular_cop` bone 0 is a childless `tongue` leaf and bone 1 is `Bip01` with 76
+    descendants; `prophet` bone 0 is `Bip01` and bone 59 is a childless `Tube01` leaf -- so
+    neither "first parent-less bone" nor a hardcoded name picks correctly for both)."""
+    sizes = _bone_subtree_sizes(bones)
+    return min(roots, key=lambda i: (-sizes[i], i))
+
+
+def _reparent_bind(root_bone, stray_bone):
+    """`stray_bone`'s bind restated as a child local under `root_bone`, preserving its
+    MODEL-SPACE transform -- the same composition `UE_mdl_skeletal.unreal_bones` performs,
+    carried out here through the rotation matrix this module already carries every bone bind
+    through (`conv_quat`), rather than the Hamilton-product convention the ESKM writer uses.
+
+    A parent-less StudioBone has nothing to be relative to, so its stored (pos, quat) already
+    names its model-space bind -- exactly like the root it is being folded under. Composing
+    `new_local = root^-1 * stray` in that shared Source-space convention, before either value
+    passes through `conv_pos`/`conv_quat`, reproduces `stray_bone`'s original model-space
+    transform once ordinary FK recomposes it under `root_bone`."""
+    root_r = S.rot_matrix(root_bone.quat)
+    local_pos = tuple(float(c) for c in
+                       root_r.T @ (np.array(stray_bone.pos, dtype=np.float64)
+                                  - np.array(root_bone.pos, dtype=np.float64)))
+    stray_r = S.rot_matrix(stray_bone.quat)
+    local_quat = tuple(float(c) for c in mat_to_quat(root_r.T @ stray_r))
+    return local_pos, local_quat
+
+
 def _assemble_skinned(built, animations):
     """glTF dict for a skinned mesh + skeleton + the given animations."""
     bones = built["bones"]
@@ -437,13 +481,22 @@ def _assemble_skinned(built, animations):
     # glTFRuntime traverses the skeleton from a SINGLE root down `children`, so any bone not
     # reachable from that root is dropped from its bone map -- a vertex weighted to it then aborts
     # the whole mesh load (and leaves a half-built USkeletalMesh that faults on GC). A few VtMB
-    # skeletons have more than one parent-less bone (e.g. regular_cop bones 0/1, prophet bones 0/59),
-    # so unify them under one synthetic root. It is appended AFTER the mesh node (preserving the
-    # node-index == bone-index invariant _bake_animation targets) and is NOT a joint (skin.joints
-    # stays range(len(bones)), so JOINTS_0 values still map 1:1 to the real bones).
+    # skeletons have more than one parent-less bone (e.g. regular_cop bones 0/1, prophet bones
+    # 0/59). Rather than unifying them under a synthetic node, the largest-subtree root
+    # (`_choose_skeleton_root`) stays the scene root and absorbs every other one as a `children`
+    # entry, with that bone's OWN node re-expressed as a child local under it
+    # (`_reparent_bind`) -- the node index stays `bone.index` for every bone either way (the
+    # node-index == bone-index invariant `_bake_animation` targets, and skin.joints stays
+    # range(len(bones)), so JOINTS_0 values still map 1:1 to the real bones).
     if len(roots) > 1:
-        skel_root = len(nodes)
-        nodes.append({"name": "__elysium_skeleton_root", "children": list(roots)})
+        skel_root = _choose_skeleton_root(bones, roots)
+        for r in roots:
+            if r == skel_root:
+                continue
+            local_pos, local_quat = _reparent_bind(bones[skel_root], bones[r])
+            nodes[r]["translation"] = [float(c) for c in conv_pos(local_pos)]
+            nodes[r]["rotation"] = [float(c) for c in conv_quat(local_quat)]
+            nodes[skel_root].setdefault("children", []).append(r)
     else:
         skel_root = roots[0]
     # Morph weights are mesh-level in glTF, so the target NAMES are too: `extras.targetNames`

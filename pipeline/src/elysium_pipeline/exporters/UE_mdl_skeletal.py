@@ -101,11 +101,6 @@ MAGIC = b"ESKM"
 #: block is fixed-width and a reader needs no per-vertex length.
 MAX_INFLUENCES = 3
 
-#: Unreal's reference skeleton is single-rooted and asserts on a second parent-less bone, but a
-#: few VtMB skeletons fork (regular_cop bones 0/1, prophet bones 0/59). Those get one synthetic
-#: root above the real ones, under the name the runtime already knows.
-SYNTHETIC_ROOT = "__elysium_skeleton_root"
-
 #: StudioBone flag 0x2 (`docs/vtmb/animation_and_movers.md`): the bone's ROTATION declines its
 #: parent and roots in the character, while its translation still rides the parent. One bone per
 #: biped, always `Bip01 Spine1`.
@@ -204,6 +199,13 @@ def _qmul(a, b):
 def _qconj(q):
     """The inverse of a unit quaternion."""
     return (-q[0], -q[1], -q[2], q[3])
+
+
+def _qrotate(q, v):
+    """`v` rotated by unit quaternion `q`, via the sandwich product `q * (v, 0) * q^-1`, in the
+    same Hamilton convention as `_qmul`."""
+    x, y, z, _w = _qmul(_qmul(q, (v[0], v[1], v[2], 0.0)), _qconj(q))
+    return (x, y, z)
 
 
 #: Below this length a stored quaternion is not a rotation at all. VtMB's masked `_layer` clips
@@ -313,19 +315,124 @@ def _split_rotation_tracks(bones, frames, frame_count):
     return out
 
 
-def unreal_bones(bones):
-    """The model's bones in Unreal reference-skeleton order -> (rows, index map).
+def _bone_subtree_sizes(parents):
+    """Per-index descendant count, from each row's OWN parent chain rather than a child-list
+    build -- a few bones deep on any of these rigs, negligible against reading a whole skeleton
+    once."""
+    sizes = [0] * len(parents)
+    for i, p in enumerate(parents):
+        while p >= 0:
+            sizes[p] += 1
+            p = parents[p]
+    return sizes
 
-    A row is `(name, parent, source position, source quaternion)`. The map takes an original
-    StudioBone index to its emitted index, and every other section indexes bones through it --
-    a vertex's influences and a clip's tracks both address the emitted list, so nothing
-    downstream has to know whether a synthetic root was added."""
-    roots = [b.index for b in bones if b.parent == -1]
+
+def _reparent_local(root_pos, root_quat, stray_pos, stray_quat):
+    """`(stray_pos, stray_quat)` restated as a child local under `(root_pos, root_quat)`,
+    preserving its MODEL-SPACE transform.
+
+    A StudioBone with no parent has nothing to be relative to, so its stored (pos, quat) already
+    names its model-space bind -- exactly like the root it is being folded under here. Composing
+    `new_local = root^-1 * stray` in that shared Source-space convention, before either value
+    passes through `_conv_pos`/`_conv_quat`, reproduces `stray`'s original model-space transform
+    once ordinary FK recomposes it under `(root_pos, root_quat)`.
+
+    Raises where the composed rotation degenerates to a zero quaternion, rather than baking a
+    silently wrong (or NaN) bind -- the caller names which bones and skeleton were involved."""
+    root_inv = _qconj(root_quat)
+    delta = tuple(s - r for s, r in zip(stray_pos, root_pos))
+    new_pos = _qrotate(root_inv, delta)
+    new_quat = _qnorm(_qmul(root_inv, stray_quat))
+    if new_quat is None:
+        raise ValueError("reparented bone rotation degenerates to a zero quaternion")
+    return new_pos, new_quat
+
+
+def _single_root(rows):
+    """`rows` (`[(name, parent, pos, quat)]`, `parent` local to this same list, `-1` for a root)
+    restated single-rooted -> (rows, permutation, reparented).
+
+    Unreal's reference skeleton asserts on a second parent-less bone. A few VtMB skeletons fork
+    (`regular_cop` bones 0/1, `prophet` bones 0/59, and a cinematic actor's own `BipNN` subset can
+    fork the same way). Splicing a synthetic bone above the fork satisfies single-rootedness but
+    breaks a different, unwritten Unreal contract: `FSkeletonRemapping::GenerateMapping`
+    (`SkeletonRemapping.cpp`) matches bones by name and then forces index 0 onto index 0
+    regardless of what it is named, so a shared animation bank's real `Bip01` track lands on the
+    synthetic bone and the body's own `Bip01` is left on its static bind -- the two-actor pose
+    bug this fixes.
+
+    So the fork is resolved onto one of ITS OWN bones instead: the parent-less bone with the
+    LARGEST descendant subtree, ties broken by lowest original index so the choice is
+    deterministic across runs. Every other parent-less bone is reparented onto it with
+    `_reparent_local`, which keeps its model-space bind exactly where it was, and the whole list
+    is re-emitted in topological order -- parents before children, which a newly-reparented bone
+    may now require (e.g. `regular_cop`'s `tongue`, bone 0, moving under `Bip01`, bone 1, the
+    larger subtree).
+
+    Returns the re-ordered rows, `permutation` (original row index -> emitted slot; the identity
+    when `rows` was already single-rooted), and `reparented` (`{stray original index: chosen
+    root's original index}`, empty when nothing forked) -- the last of which lets a caller redo
+    this same composition over a DIFFERENT set of per-bone values (a reference-pose override)
+    instead of over the bind this function reads out of `rows` itself.
+    """
+    n = len(rows)
+    parents = [row[1] for row in rows]
+    roots = [i for i, p in enumerate(parents) if p < 0]
     if len(roots) <= 1:
-        return ([(b.name, b.parent, b.pos, b.quat) for b in bones], list(range(len(bones))))
-    rows = [(SYNTHETIC_ROOT, -1, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
-    rows += [(b.name, 0 if b.parent == -1 else b.parent + 1, b.pos, b.quat) for b in bones]
-    return rows, [i + 1 for i in range(len(bones))]
+        return list(rows), list(range(n)), {}
+
+    sizes = _bone_subtree_sizes(parents)
+    chosen = min(roots, key=lambda i: (-sizes[i], i))
+    root_name, _root_parent, root_pos, root_quat = rows[chosen]
+
+    rows = list(rows)
+    reparented = {}
+    for r in roots:
+        if r == chosen:
+            continue
+        name, _parent, pos, quat = rows[r]
+        try:
+            new_pos, new_quat = _reparent_local(root_pos, root_quat, pos, quat)
+        except ValueError as exc:
+            raise ValueError(
+                f"cannot reparent bone {name!r} onto root {root_name!r}: {exc}") from exc
+        rows[r] = (name, chosen, new_pos, new_quat)
+        parents[r] = chosen
+        reparented[r] = chosen
+
+    emitted = [False] * n
+    order = []
+
+    def _emit(i):
+        if emitted[i]:
+            return
+        if parents[i] >= 0:
+            _emit(parents[i])
+        emitted[i] = True
+        order.append(i)
+
+    for i in range(n):
+        _emit(i)
+
+    position_of = [0] * n
+    for slot, original in enumerate(order):
+        position_of[original] = slot
+    new_rows = [(rows[i][0], -1 if parents[i] < 0 else position_of[parents[i]],
+                rows[i][2], rows[i][3]) for i in order]
+    return new_rows, position_of, reparented
+
+
+def unreal_bones(bones):
+    """The model's bones in Unreal reference-skeleton order -> (rows, bone_map, reparented).
+
+    A row is `(name, parent, source position, source quaternion)`. `bone_map` takes an original
+    StudioBone index to its emitted index, and every other section indexes bones through it -- a
+    vertex's influences and a clip's tracks both address the emitted list. `reparented` is
+    `_single_root`'s fork-resolution record, `{stray original index: chosen root's original
+    index}`; `_ref_pose_rows` is the one caller that needs it, to redo the same composition over a
+    caller-supplied override instead of over this function's own bind."""
+    rows = [(b.name, b.parent, b.pos, b.quat) for b in bones]
+    return _single_root(rows)
 
 
 def _skel_section(rows):
@@ -338,17 +445,25 @@ def _skel_section(rows):
     return bytes(out)
 
 
-def _ref_pose_rows(rows, bone_map, ref_pose, context):
+def _ref_pose_rows(rows, bone_map, ref_pose, context, reparented=None):
     """`rows` with each real bone's (pos, quat) replaced by `ref_pose`'s entry for it.
 
     `ref_pose` is indexed by ORIGINAL StudioBone index -- `wield_corpus.bake_pose`'s shape, in
     source-space conventions, before `unreal_bones` renumbers into emitted order -- so this
     inverts `bone_map` (original -> emitted) to find, for each row, the original index it came
-    from. The synthetic root `unreal_bones` adds for a multi-rooted rig has no original index and
-    is never in `bone_map`'s image, so it keeps its identity transform untouched, same as when no
-    override is given at all. The substituted values pass through `_skel_section`'s own
-    `_conv_pos`/`_conv_quat` exactly like a bind value does -- this only changes which transform
-    reaches that conversion, never how.
+    from. `bone_map` is a genuine permutation over every StudioBone (`unreal_bones`), so every row
+    has one.
+
+    `reparented` (`unreal_bones`'s third return, `{stray original index: chosen root's original
+    index}`) names the rows `_single_root` folded onto a different bone's local frame. Such a row
+    cannot take `ref_pose`'s entry for it directly -- that entry is the bone's own MODEL-SPACE
+    override, the same convention a parent-less StudioBone's stored bind already carries, and this
+    row's parent is no longer `-1`. It is recomposed the same way `_single_root` composed the
+    bind: relative to the CHOSEN root's own `ref_pose` entry, through the same `_reparent_local`
+    math, so the override reproduces the model-space pose the caller asked for once ordinary FK
+    recomposes it under the reparented row's new parent. Every other row substitutes `ref_pose`
+    directly, and passes through `_skel_section`'s own `_conv_pos`/`_conv_quat` exactly like a
+    bind value does -- this only changes which transform reaches that conversion, never how.
 
     A length that does not match `bone_map` -- one entry per StudioBone -- is a caller defect: a
     silently truncated or padded override would bake a wrong reference pose with nothing in the
@@ -360,12 +475,27 @@ def _ref_pose_rows(rows, bone_map, ref_pose, context):
         raise ValueError(
             f"{context}: ref_pose has {len(ref_pose)} entries, expected {len(bone_map)} "
             f"(one per StudioBone)")
+    reparented = reparented or {}
     origin = [None] * len(rows)
     for original, emitted in enumerate(bone_map):
         origin[emitted] = original
-    return [(name, parent, pos, quat) if origin[row] is None
-            else (name, parent) + tuple(ref_pose[origin[row]])
-            for row, (name, parent, pos, quat) in enumerate(rows)]
+    out = []
+    for row, (name, parent, pos, quat) in enumerate(rows):
+        original = origin[row]
+        chosen = reparented.get(original)
+        if chosen is None:
+            out.append((name, parent) + tuple(ref_pose[original]))
+            continue
+        root_pos, root_quat = ref_pose[chosen]
+        stray_pos, stray_quat = ref_pose[original]
+        try:
+            new_pos, new_quat = _reparent_local(root_pos, root_quat, stray_pos, stray_quat)
+        except ValueError as exc:
+            raise ValueError(
+                f"{context}: ref_pose reparent of StudioBone {original} ({name!r}) onto "
+                f"StudioBone {chosen}: {exc}") from exc
+        out.append((name, parent, new_pos, new_quat))
+    return out
 
 
 def _attachment_section(d, bone_map):
@@ -556,9 +686,6 @@ def _bone_mask(d, bones, clip, bone_map, emitted):
     bone outside the mask animates nothing either, so both arrive as "no track" once the
     channel-less tracks are dropped. Collapsing them either drops the first or stomps the base
     pose on the second.
-
-    A synthetic root is outside every mask: it is not a bone any animation was authored
-    against, and nothing animates it, so both readings pose it identically.
     """
     records = clip.base + struct.unpack_from("<i", d, clip.base + 48)[0]
     mask = bytearray(emitted)
@@ -1034,7 +1161,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     matinfo = {name: mdl._resolve_material(name, search, lambda k: install.read(idx, k),
                                            out_dir, tex_cache) for name in matnames}
 
-    rows, bone_map = unreal_bones(bones)
+    rows, bone_map, reparented = unreal_bones(bones)
     dynamics_payload, dynamics_count = _dynamics_section(model_path, d, bones)
     mesh_payload, offsets = _mesh_section(surfaces, matnames, bone_map)
     morph_payload, morph_names = (_morph_section(d, mesh_map, matnames, offsets, anorms)
@@ -1050,7 +1177,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
         d, bones, own + extra, bone_map, len(rows), masks, ensure_labels or ())
 
     blob = _assemble([
-        (b"SKEL", _skel_section(_ref_pose_rows(rows, bone_map, ref_pose, model_path))),
+        (b"SKEL", _skel_section(_ref_pose_rows(rows, bone_map, ref_pose, model_path, reparented))),
         (b"ATCH", _attachment_section(d, bone_map)),
         (b"DYNM", dynamics_payload),
         (b"MATL", _matl_section(matnames, matinfo)),
@@ -1087,7 +1214,7 @@ def write_bank(idx, model_path, out_dir, stem):
         return None
     bones = S.read_bones(d)
     extra, _blends = S.blend_clip_plan(d, clips)
-    rows, bone_map = unreal_bones(bones)
+    rows, bone_map, _reparented = unreal_bones(bones)
     masks = {}
     anim_payload, count = _anim_section(d, bones, clips + extra, bone_map, len(rows), masks)
     if not count:
@@ -1114,20 +1241,16 @@ def _cinematic_rows(sub, root):
     no runtime rule of its own.
 
     Parents are remapped into the subset. A subset normally has exactly one bone whose parent
-    lies outside it -- that actor's own root -- and takes the same synthetic root as any other
-    multi-rooted rig when it does not (`unreal_bones`).
+    lies outside it -- that actor's own root -- and goes through the same `_single_root`
+    resolution as any other multi-rooted rig when it does not.
     """
     low = root.lower()
     order = {b.index: slot for slot, b in enumerate(sub)}
     rows = [((("Bip01" + b.name[len(root):]) if b.name[:len(root)].lower() == low else b.name),
              order.get(b.parent, -1), b.pos, b.quat)
             for b in sub]
-    if sum(1 for row in rows if row[1] == -1) <= 1:
-        return rows, order
-    shifted = [(SYNTHETIC_ROOT, -1, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
-    shifted += [(name, 0 if parent == -1 else parent + 1, pos, quat)
-                for name, parent, pos, quat in rows]
-    return shifted, {index: slot + 1 for index, slot in order.items()}
+    rows, position_of, _reparented = _single_root(rows)
+    return rows, {index: position_of[slot] for index, slot in order.items()}
 
 
 def write_cinematic(idx, model_path, out_dir, stem):

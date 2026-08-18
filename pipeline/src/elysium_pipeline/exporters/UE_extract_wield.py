@@ -19,7 +19,7 @@ import os
 import sys
 
 from elysium_pipeline import wield_corpus as W
-from elysium_pipeline.exporters.UE_mdl_skeletal import write_model
+from elysium_pipeline.exporters.UE_mdl_skeletal import write_model, unreal_bones, _reparent_local
 from elysium_pipeline.formats import bsp, eskm as ESKM, install, mdl, mdl_skel
 from elysium_pipeline.formats.tex_to_png import decode as decode_texture
 from elysium_pipeline.paths import export_root
@@ -118,28 +118,53 @@ def _assert_ref_pose(model_key, path, bones, pose):
     This is PL20's load-bearing guarantee (`wielded-weapon-integration.md` "Verification"): the
     bake's reference pose is the model's own clip at frame 0, not its container bind, and nothing
     downstream re-derives that -- so what the container actually holds has to be checked against
-    what `bake_pose` computed, by reading the file back rather than trusting the write. Matched by
-    bone NAME rather than emitted index, so a synthetic multi-root fix-up (none of this corpus needs
-    one, but nothing here assumes that) cannot misalign the comparison.
+    what `bake_pose` computed, by reading the file back rather than trusting the write.
+
+    Matched by emitted INDEX (`unreal_bones`'s own `bone_map`, recomputed here from `bones` rather
+    than threaded out of `write_model`, so this checks what the file holds against a fresh
+    resolution rather than trusting the write's internal state) -- never by name. A corpus body
+    can carry two bones sharing one literal name (`brian`'s two `lower_teeth`), which a
+    name-keyed lookup would silently collapse onto whichever row happened to be read last.
+
+    `w_f_severed_arm` is the corpus's one multi-rooted model (`bake_wield.py`): `unreal_bones`
+    resolves its fork onto one of its own bones rather than a spliced synthetic one, so a
+    reparented stray's row holds a LOCAL transform relative to the CHOSEN root, not `pose.locals`'
+    model-space entry for it directly (`reparented`, `unreal_bones`'s third return). Such a bone's
+    expected local is recomposed with the same `_reparent_local` math the write used, from
+    `pose.locals` at both the stray and the chosen root, rather than compared to `pose.locals`
+    verbatim.
     """
-    rows = {name: (translation, rotation)
-            for name, _parent, translation, rotation in ESKM.bone_locals(ESKM.read(path))}
+    rows = ESKM.bone_locals(ESKM.read(path))
+    _emitted_rows, bone_map, reparented = unreal_bones(bones)
     mismatches = []
-    for index, bone in enumerate(bones):
-        got = rows.get(bone.name)
-        if got is None:
-            mismatches.append(f"{bone.name}: bone missing from the emitted SKEL section")
-            continue
-        want_pos = bsp.source_to_unreal(*pose.locals[index][0])
-        want_quat = bsp.source_quat_to_unreal(*pose.locals[index][1])
-        got_pos, got_quat = got
-        dp = max(abs(a - b) for a, b in zip(want_pos, got_pos))
-        dr = W.quat_angle(want_quat, got_quat)
-        if dp > _REF_POSE_POS_TOL or dr > _REF_POSE_ROT_TOL:
-            mismatches.append(
-                f"{bone.name}: pos delta {dp:.5f}cm, rot delta {dr:.4f}deg "
-                f"(bake_pose wants pos={want_pos} quat={want_quat}, "
-                f"container holds pos={got_pos} quat={got_quat})")
+    if len(rows) != len(bone_map):
+        mismatches.append(
+            f"container carries {len(rows)} bone(s), unreal_bones expects {len(bone_map)}")
+    else:
+        for index, bone in enumerate(bones):
+            slot = bone_map[index]
+            name, _parent, got_pos, got_quat = rows[slot]
+            if name != bone.name:
+                mismatches.append(
+                    f"{bone.name}: emitted slot {slot} holds {name!r}, not this bone's own row")
+                continue
+            chosen = reparented.get(index)
+            if chosen is None:
+                want_pos = bsp.source_to_unreal(*pose.locals[index][0])
+                want_quat = bsp.source_quat_to_unreal(*pose.locals[index][1])
+            else:
+                root_pos, root_quat = pose.locals[chosen]
+                stray_pos, stray_quat = pose.locals[index]
+                local_pos, local_quat = _reparent_local(root_pos, root_quat, stray_pos, stray_quat)
+                want_pos = bsp.source_to_unreal(*local_pos)
+                want_quat = bsp.source_quat_to_unreal(*local_quat)
+            dp = max(abs(a - b) for a, b in zip(want_pos, got_pos))
+            dr = W.quat_angle(want_quat, got_quat)
+            if dp > _REF_POSE_POS_TOL or dr > _REF_POSE_ROT_TOL:
+                mismatches.append(
+                    f"{bone.name}: pos delta {dp:.5f}cm, rot delta {dr:.4f}deg "
+                    f"(bake_pose wants pos={want_pos} quat={want_quat}, "
+                    f"container holds pos={got_pos} quat={got_quat})")
     if mismatches:
         raise AssertionError(
             f"[wield] {model_key}: emitted reference pose disagrees with bake_pose on "

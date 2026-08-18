@@ -1,10 +1,19 @@
-"""The `.eskm` "SKEL" section's optional reference-pose override.
+"""The `.eskm` "SKEL" section's single-rooting of a forked skeleton, and its optional
+reference-pose override.
 
-`UE_mdl_skeletal.write_model` bakes every body's container bind pose into "SKEL" by default.
-`_ref_pose_rows` is the mechanism a caller (the wielded-weapon bake) uses to substitute a
-different local transform per bone -- the model's own clip at frame 0, computed elsewhere. This
-covers only the mechanism: default byte-identity, a targeted override, the synthetic-root case a
-forked skeleton takes through `unreal_bones`, and the loud failure on a length mismatch.
+Unreal's reference skeleton asserts on a second parent-less bone. `unreal_bones` resolves a
+fork (seven bodies across the exported corpus, plus the wield corpus's `w_f_severed_arm` --
+`regular_cop` and `prophet` fork on a single stray, `brian` on four, including a name that
+recurs verbatim and a pair distinguished only by studiomdl's `[2]` duplicate-instance prefix)
+onto one of its OWN bones -- the parent-less bone with the largest descendant subtree -- rather
+than splicing a synthetic bone above it: a synthetic bone at index 0 is a bone no animation bank
+names, and Unreal's skeleton remapper (`FSkeletonRemapping::GenerateMapping`) forces bone 0 onto
+bone 0 by position regardless of name, so a shared bank's real `Bip01` track would land on the
+synthetic bone and the body's own `Bip01` would keep its static bind. This covers that
+resolution -- root choice, model-space-preserving reparenting, topological order, and
+`bone_map`'s permutation contract, over both a single stray and a multi-stray/duplicate-name
+skeleton -- plus `_ref_pose_rows`, the mechanism a caller (the wielded-weapon bake) uses to
+substitute a different local transform per bone, including over a reparented row.
 
 Every skeleton here is synthesised in-code; nothing depends on the user's game install.
 """
@@ -14,10 +23,16 @@ from __future__ import annotations
 import struct
 import unittest
 
+import numpy as np
+
 from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel
 
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
+#: A 90-degree rotation about Z, used wherever a test needs a root whose orientation actually
+#: moves a reparented child's local transform -- an identity root would let a reparenting bug
+#: that drops the rotation term entirely pass unnoticed.
+QUAT_Z90 = (0.0, 0.0, 0.70710678, 0.70710678)
 
 
 def bone(index, name, parent, pos=(0.0, 0.0, 0.0), quat=IDENTITY_Q):
@@ -46,13 +61,39 @@ def _parse_skel(blob):
     return count, rows
 
 
+def _world_transform(root_pos, root_quat, local_pos, local_quat):
+    """`(local_pos, local_quat)` composed under `(root_pos, root_quat)` by ordinary FK, through
+    `mdl_skel.rot_matrix` -- deliberately NOT the quaternion-sandwich helpers
+    `UE_mdl_skeletal._reparent_local` is built from, so this verifies the RESULT against an
+    independent implementation rather than re-deriving it the same way."""
+    r = mdl_skel.rot_matrix(root_quat)
+    world_pos = np.asarray(root_pos, dtype=np.float64) + r @ np.asarray(local_pos, dtype=np.float64)
+    world_r = r @ mdl_skel.rot_matrix(local_quat)
+    return world_pos, world_r
+
+
+def _assert_reproduces_model_space(test, root_pos, root_quat, local_pos, local_quat,
+                                    expected_pos, expected_quat, tol=1e-6):
+    """The recomposed (root, local) pair lands back on `(expected_pos, expected_quat)`, checked
+    as a rotation MATRIX (not raw quaternion components, which carry a sign ambiguity a
+    numerically-equal rotation can legitimately differ on)."""
+    world_pos, world_r = _world_transform(root_pos, root_quat, local_pos, local_quat)
+    expected_r = mdl_skel.rot_matrix(expected_quat)
+    test.assertTrue(
+        np.allclose(world_pos, np.asarray(expected_pos, dtype=np.float64), atol=tol),
+        f"position {world_pos} != expected {expected_pos}")
+    test.assertTrue(
+        np.allclose(world_r, expected_r, atol=tol),
+        f"rotation {world_r} != expected {expected_r}")
+
+
 class DefaultByteIdentityTests(unittest.TestCase):
     def test_ref_pose_none_matches_no_override_at_all(self) -> None:
         bones = [
             bone(0, "root", -1, (0.0, 0.0, 0.0), IDENTITY_Q),
             bone(1, "child", 0, (1.0, 2.0, 3.0), (0.1, 0.2, 0.3, 0.9)),
         ]
-        rows, bone_map = UEK.unreal_bones(bones)
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
 
         plain = UEK._skel_section(rows)
         explicit_none = UEK._skel_section(UEK._ref_pose_rows(rows, bone_map, None, "ctx"))
@@ -61,7 +102,7 @@ class DefaultByteIdentityTests(unittest.TestCase):
 
     def test_ref_pose_rows_returns_the_same_rows_object_when_none(self) -> None:
         bones = [bone(0, "root", -1)]
-        rows, bone_map = UEK.unreal_bones(bones)
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
 
         self.assertIs(UEK._ref_pose_rows(rows, bone_map, None, "ctx"), rows)
 
@@ -73,7 +114,7 @@ class OverrideAppliedTests(unittest.TestCase):
             bone(1, "mid", 0, (1.0, 2.0, 3.0), (0.1, 0.2, 0.3, 0.9)),
             bone(2, "tip", 1, (4.0, 5.0, 6.0), (0.0, 0.0, 0.0, 1.0)),
         ]
-        rows, bone_map = UEK.unreal_bones(bones)
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
         new_pos, new_quat = (7.0, 8.0, 9.0), (0.0, 0.7071, 0.0, 0.7071)
         ref_pose = [
             (bones[0].pos, bones[0].quat),
@@ -112,46 +153,284 @@ class OverrideAppliedTests(unittest.TestCase):
         self.assertEqual(without[:s] + without[e:], overridden[:s] + overridden[e:])
 
 
-class MultiRootOverrideTests(unittest.TestCase):
-    def test_override_lands_on_the_right_row_and_synthetic_root_is_untouched(self) -> None:
-        # Two parent-less bones -- `unreal_bones` forks in the SYNTHETIC_ROOT branch.
+class SingleRootedRegressionTests(unittest.TestCase):
+    """A skeleton that was never forked takes the identity path exactly as before."""
+
+    def test_single_rooted_rows_and_bone_map_are_untouched(self) -> None:
         bones = [
-            bone(0, "root_a", -1, (1.0, 1.0, 1.0), (0.0, 0.0, 0.0, 1.0)),
-            bone(1, "root_b", -1, (2.0, 2.0, 2.0), (0.0, 0.0, 0.0, 1.0)),
+            bone(0, "root", -1, (0.0, 0.0, 0.0), IDENTITY_Q),
+            bone(1, "mid", 0, (1.0, 2.0, 3.0), (0.1, 0.2, 0.3, 0.9)),
+            bone(2, "tip", 1, (4.0, 5.0, 6.0), (0.0, 0.0, 0.0, 1.0)),
         ]
-        rows, bone_map = UEK.unreal_bones(bones)
-        self.assertEqual(rows[0][0], UEK.SYNTHETIC_ROOT)
-        self.assertEqual(bone_map, [1, 2])  # original index -> emitted index, root shifted by one
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        new_pos, new_quat = (9.0, 9.0, 9.0), (0.5, 0.5, 0.5, 0.5)
-        ref_pose = [(bones[0].pos, bones[0].quat), (new_pos, new_quat)]  # override original bone 1
+        self.assertEqual(rows, [(b.name, b.parent, b.pos, b.quat) for b in bones])
+        self.assertEqual(bone_map, [0, 1, 2])
+        self.assertEqual(reparented, {})
 
-        blob = UEK._skel_section(UEK._ref_pose_rows(rows, bone_map, ref_pose, "ctx"))
-        count, parsed = _parse_skel(blob)
-        self.assertEqual(count, 3)
-        self.assertEqual([name for name, _p, _s, _e in parsed],
-                         [UEK.SYNTHETIC_ROOT, "root_a", "root_b"])
 
-        synthetic_start, synthetic_end = parsed[0][2], parsed[0][3]
-        expected_identity = (struct.pack("<3f", *UEK._conv_pos((0.0, 0.0, 0.0)))
-                             + struct.pack("<4f", *UEK._conv_quat((0.0, 0.0, 0.0, 1.0))))
-        self.assertEqual(blob[synthetic_start:synthetic_end], expected_identity)
+class MultiRootResolutionTests(unittest.TestCase):
+    """`unreal_bones` on a forked skeleton: root choice, reparenting and topological order."""
 
-        root_a_start, root_a_end = parsed[1][2], parsed[1][3]
-        expected_root_a = (struct.pack("<3f", *UEK._conv_pos(bones[0].pos))
-                           + struct.pack("<4f", *UEK._conv_quat(bones[0].quat)))
-        self.assertEqual(blob[root_a_start:root_a_end], expected_root_a)
+    def test_no_synthetic_root_is_emitted(self) -> None:
+        bones = [
+            bone(0, "root_a", -1, (1.0, 1.0, 1.0)),
+            bone(1, "root_b", -1, (2.0, 2.0, 2.0)),
+        ]
+        rows, _bone_map, _reparented = UEK.unreal_bones(bones)
 
-        root_b_start, root_b_end = parsed[2][2], parsed[2][3]
-        expected_root_b = (struct.pack("<3f", *UEK._conv_pos(new_pos))
-                           + struct.pack("<4f", *UEK._conv_quat(new_quat)))
-        self.assertEqual(blob[root_b_start:root_b_end], expected_root_b)
+        names = [name for name, _p, _pos, _q in rows]
+        self.assertNotIn("__elysium_skeleton_root", names)
+        self.assertEqual(len(rows), len(bones))
+        self.assertFalse(hasattr(UEK, "SYNTHETIC_ROOT"))
+
+    def test_root_is_the_largest_subtree_not_the_first_bone(self) -> None:
+        # Mirrors `regular_cop`: bone 0 is a childless leaf root, bone 1 is the real root with
+        # descendants. "First parent-less bone" picks wrong here.
+        bones = [
+            bone(0, "tongue", -1, (5.0, 5.0, 5.0)),
+            bone(1, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
+            bone(2, "Bip01 Pelvis", 1, (0.0, 1.0, 0.0)),
+            bone(3, "Bip01 Spine", 2, (0.0, 1.0, 0.0)),
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        self.assertEqual(rows[0][0], "Bip01")
+        self.assertEqual(rows[0][1], -1)
+        self.assertEqual(bone_map[1], 0)
+        self.assertEqual(reparented, {0: 1})  # tongue (original 0) folded onto Bip01 (original 1)
+
+    def test_root_stays_put_when_it_is_already_the_largest_subtree(self) -> None:
+        # Mirrors `prophet`: bone 0 is the real root, the fork (a childless leaf) comes last.
+        bones = [
+            bone(0, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
+            bone(1, "Bip01 Spine", 0, (0.0, 1.0, 0.0)),
+            bone(2, "Tube01", -1, (3.0, 3.0, 3.0)),
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        self.assertEqual(rows[0][0], "Bip01")
+        self.assertEqual(bone_map[0], 0)
+        self.assertEqual(reparented, {2: 0})
+
+    def test_ties_break_on_lowest_original_index(self) -> None:
+        # Two childless roots -- equal (zero) subtree size -- must resolve deterministically.
+        bones = [
+            bone(0, "root_a", -1, (1.0, 1.0, 1.0)),
+            bone(1, "root_b", -1, (2.0, 2.0, 2.0)),
+        ]
+        _rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        self.assertEqual(bone_map[0], 0)
+        self.assertEqual(reparented, {1: 0})
+
+    def test_reparented_stray_reproduces_its_original_model_space_transform(self) -> None:
+        bones = [
+            bone(0, "Bip01", -1, (10.0, -5.0, 2.0), QUAT_Z90),
+            bone(1, "Bip01 Spine", 0, (0.0, 1.0, 0.0)),
+            bone(2, "Bip01 Spine1", 1, (0.0, 1.0, 0.0)),
+            bone(3, "prop_root", -1, (-3.0, 4.0, 7.0), (0.0, 0.38268343, 0.0, 0.92387953)),
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        self.assertEqual(reparented, {3: 0})
+        root_slot, stray_slot = bone_map[0], bone_map[3]
+        root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
+        local_pos, local_quat = rows[stray_slot][2], rows[stray_slot][3]
+        self.assertEqual(rows[stray_slot][1], root_slot)  # parent now points at the chosen root
+
+        _assert_reproduces_model_space(self, root_pos, root_quat, local_pos, local_quat,
+                                       expected_pos=bones[3].pos, expected_quat=bones[3].quat)
+
+    def test_parents_precede_children_and_bone_map_is_a_valid_permutation(self) -> None:
+        bones = [
+            bone(0, "leaf_a", -1, (9.0, 9.0, 9.0)),
+            bone(1, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
+            bone(2, "Bip01 Spine", 1, (0.0, 1.0, 0.0)),
+            bone(3, "Bip01 Spine1", 2, (0.0, 1.0, 0.0)),
+            bone(4, "stray_chain_root", -1, (5.0, 5.0, 5.0)),
+            bone(5, "stray_chain_child", 4, (1.0, 0.0, 0.0)),
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        # Every parent's emitted slot precedes its child's.
+        for slot, (_name, parent, _pos, _quat) in enumerate(rows):
+            if parent >= 0:
+                self.assertLess(parent, slot)
+
+        # `bone_map` is a bijection over every original StudioBone index.
+        self.assertEqual(len(bone_map), len(bones))
+        self.assertEqual(sorted(bone_map), list(range(len(bones))))
+
+        # It round-trips: the row at `bone_map[i]` is bone `i`'s own row.
+        for original, b in enumerate(bones):
+            self.assertEqual(rows[bone_map[original]][0], b.name)
+
+        self.assertEqual(reparented, {0: 1, 4: 1})
+        # The chosen root (Bip01, 2 descendants) beats both leaf-adjacent roots (0 and 1
+        # descendants respectively).
+        self.assertEqual(bone_map[1], 0)
+
+
+class RealCorpusShapeTests(unittest.TestCase):
+    """Coverage modelled on the measured census across the exported corpus: SEVEN forked bodies
+    (`ash`, `brian`, `nosferatu_female_armor_1`, `nosferatu_female_armor_2`, `prophet`,
+    `regular_cop`, `tremere_male_armor_3`) plus `w_f_severed_arm` in the wield corpus -- not just
+    the two-stem sample (`regular_cop`, `prophet`) the two-stray tests above already cover."""
+
+    def test_four_strays_including_a_literal_and_a_bracket_prefixed_duplicate_name(self) -> None:
+        # `brian`: a biped root plus FOUR parent-less prop bones, one of whose names ("lower_teeth")
+        # recurs verbatim on a second, unrelated bone, and a pair ("upper_teeth"/"Sphere01") that
+        # differ from a sibling only by studiomdl's "[2]" duplicate-instance prefix.
+        bones = [
+            bone(0, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
+            bone(1, "Bip01 Spine", 0, (0.0, 1.0, 0.0)),
+            bone(2, "Bip01 Spine1", 1, (0.0, 1.0, 0.0)),
+            bone(3, "lower_teeth", -1, (1.0, 70.0, 3.0)),
+            bone(4, "[2]upper_teeth", -1, (1.2, 70.0, 3.5)),
+            bone(5, "[2]Sphere01", -1, (0.5, 68.0, 2.0)),
+            bone(6, "lower_teeth", -1, (1.1, 70.1, 3.1)),  # shares bone 3's exact name string
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        # The biped root (2 descendants) beats every childless prop root.
+        self.assertEqual(bone_map[0], 0)
+        self.assertEqual(reparented, {3: 0, 4: 0, 5: 0, 6: 0})
+
+        # Every bone survives as its own row, INDEX-addressed -- the duplicate name never
+        # collapses bone 3 and bone 6 into one, and `bone_map` is still a full permutation.
+        self.assertEqual(len(rows), len(bones))
+        self.assertEqual(sorted(bone_map), list(range(len(bones))))
+        for original, b in enumerate(bones):
+            self.assertEqual(rows[bone_map[original]][0], b.name)
+
+        # Every stray -- including both same-named "lower_teeth" bones -- reproduces its OWN
+        # original model-space transform under the chosen root, independently of the others.
+        root_slot = bone_map[0]
+        root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
+        for original in (3, 4, 5, 6):
+            slot = bone_map[original]
+            self.assertEqual(rows[slot][1], root_slot)
+            _assert_reproduces_model_space(
+                self, root_pos, root_quat, rows[slot][2], rows[slot][3],
+                expected_pos=bones[original].pos, expected_quat=bones[original].quat)
+
+        for slot, (_name, parent, _pos, _quat) in enumerate(rows):
+            if parent >= 0:
+                self.assertLess(parent, slot)
+
+    def test_low_z_stray_resolves_the_same_as_a_head_height_one(self) -> None:
+        # `ash`: the fork is a single prop root at ankle height (z=14.5 in this corpus's units),
+        # not a head-height one like `brian`'s -- selection is subtree-size-only and must not care
+        # about a stray's position at all.
+        bones = [
+            bone(0, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
+            bone(1, "Bip01 Spine", 0, (0.0, 1.0, 0.0)),
+            bone(2, "[2]GeoSphere02", -1, (2.0, -3.0, 14.5)),
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+
+        self.assertEqual(bone_map[0], 0)
+        self.assertEqual(reparented, {2: 0})
+        root_slot, stray_slot = bone_map[0], bone_map[2]
+        root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
+        _assert_reproduces_model_space(
+            self, root_pos, root_quat, rows[stray_slot][2], rows[stray_slot][3],
+            expected_pos=bones[2].pos, expected_quat=bones[2].quat)
+
+
+class CinematicMultiRootTests(unittest.TestCase):
+    """`_cinematic_rows` threads the same resolution through its subset + rename remap."""
+
+    def test_forked_actor_subset_resolves_without_a_synthetic_root(self) -> None:
+        sub = [
+            bone(10, "Bip02", -1, (1.0, 1.0, 1.0)),
+            bone(11, "Bip02 Spine", 10, (0.0, 1.0, 0.0)),
+            bone(12, "Bip02 Spine1", 11, (0.0, 1.0, 0.0)),
+            bone(13, "Bip02 Prop", -1, (5.0, 5.0, 5.0)),  # a second, forked root
+        ]
+        rows, order = UEK._cinematic_rows(sub, "Bip02")
+
+        names = [name for name, _p, _pos, _q in rows]
+        self.assertNotIn("__elysium_skeleton_root", names)
+        self.assertEqual(len(rows), len(sub))
+        self.assertEqual(rows[order[10]][0], "Bip01")  # the prefix folds Bip02 -> Bip01
+        self.assertEqual(rows[order[10]][1], -1)
+        # order round-trips every original StudioBone index into a valid emitted slot.
+        self.assertEqual(sorted(order.values()), list(range(len(sub))))
+        for slot, (_name, parent, _pos, _quat) in enumerate(rows):
+            if parent >= 0:
+                self.assertLess(parent, slot)
+
+
+class ReparentedRefPoseTests(unittest.TestCase):
+    """`_ref_pose_rows` over a row `unreal_bones` reparented."""
+
+    def test_override_on_a_reparented_stray_reproduces_the_overrides_own_model_space_pose(self) -> None:
+        bones = [
+            bone(0, "root_a", -1, (1.0, 1.0, 1.0), QUAT_Z90),
+            bone(1, "root_b", -1, (2.0, 2.0, 2.0)),
+        ]
+        rows, bone_map, reparented = UEK.unreal_bones(bones)
+        self.assertEqual(reparented, {1: 0})
+
+        # A caller-supplied override (e.g. the wielded-weapon bake's clip frame 0) with values
+        # that differ from the bind on BOTH bones -- so a bug that silently fell back to the
+        # bind-derived local would be caught.
+        override_root = ((-4.0, 3.0, 0.0), (0.0, 0.0, 0.38268343, 0.92387953))
+        override_stray = ((6.0, -1.0, 2.0), (0.70710678, 0.0, 0.0, 0.70710678))
+        ref_pose = [override_root, override_stray]
+
+        out = UEK._ref_pose_rows(rows, bone_map, ref_pose, "ctx", reparented)
+
+        root_slot, stray_slot = bone_map[0], bone_map[1]
+        self.assertEqual(out[root_slot][2:], override_root)
+        stray_row = out[stray_slot]
+        self.assertEqual(stray_row[1], root_slot)
+
+        _assert_reproduces_model_space(
+            self, override_root[0], override_root[1], stray_row[2], stray_row[3],
+            expected_pos=override_stray[0], expected_quat=override_stray[1])
+
+    def test_omitted_reparented_arg_substitutes_every_row_directly(self) -> None:
+        """`reparented=None` (the default) makes every row -- including a reparented one -- take
+        `ref_pose` verbatim, with no recomposition. Documents the failure mode a caller that
+        forgets to thread `unreal_bones`' third return would hit: a wrong local on the stray row
+        rather than a loud error, which is exactly why `write_model` always threads it."""
+        bones = [
+            bone(0, "root_a", -1, (1.0, 1.0, 1.0), QUAT_Z90),
+            bone(1, "root_b", -1, (2.0, 2.0, 2.0)),
+        ]
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
+        ref_pose = [(bones[0].pos, bones[0].quat), (bones[0].pos, bones[0].quat)]
+
+        out = UEK._ref_pose_rows(rows, bone_map, ref_pose, "ctx")
+
+        stray_slot = bone_map[1]
+        # Without `reparented`, the stray row takes `ref_pose[1]` verbatim rather than being
+        # recomposed relative to the chosen root -- provably NOT what `bones[1]`'s own bind
+        # reparented to, since here `ref_pose[1] == ref_pose[0]` but the correctly-reparented
+        # local would not equal the root's own bind local (identity) unless the root transform
+        # were also identity.
+        self.assertEqual(out[stray_slot][2:], (bones[0].pos, bones[0].quat))
+
+
+class DegenerateReparentTests(unittest.TestCase):
+    def test_zero_quaternion_root_fails_loudly(self) -> None:
+        bones = [
+            bone(0, "root_a", -1, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0)),
+            bone(1, "root_b", -1, (1.0, 0.0, 0.0)),
+        ]
+        with self.assertRaises(ValueError) as ctx:
+            UEK.unreal_bones(bones)
+        self.assertIn("root_b", str(ctx.exception))
+        self.assertIn("root_a", str(ctx.exception))
 
 
 class LengthMismatchTests(unittest.TestCase):
     def test_shorter_ref_pose_fails_loudly(self) -> None:
         bones = [bone(0, "root", -1), bone(1, "child", 0)]
-        rows, bone_map = UEK.unreal_bones(bones)
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
 
         with self.assertRaises(ValueError) as ctx:
             UEK._ref_pose_rows(rows, bone_map, [((0.0, 0.0, 0.0), IDENTITY_Q)],
@@ -164,7 +443,7 @@ class LengthMismatchTests(unittest.TestCase):
 
     def test_longer_ref_pose_fails_loudly(self) -> None:
         bones = [bone(0, "root", -1)]
-        rows, bone_map = UEK.unreal_bones(bones)
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
         too_long = [((0.0, 0.0, 0.0), IDENTITY_Q), ((1.0, 1.0, 1.0), IDENTITY_Q)]
 
         with self.assertRaises(ValueError) as ctx:
@@ -174,7 +453,7 @@ class LengthMismatchTests(unittest.TestCase):
 
     def test_multi_root_length_mismatch_also_fails_loudly(self) -> None:
         bones = [bone(0, "root_a", -1), bone(1, "root_b", -1)]
-        rows, bone_map = UEK.unreal_bones(bones)
+        rows, bone_map, _reparented = UEK.unreal_bones(bones)
 
         with self.assertRaises(ValueError):
             UEK._ref_pose_rows(rows, bone_map, [((0.0, 0.0, 0.0), IDENTITY_Q)], "ctx")

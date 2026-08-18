@@ -287,12 +287,17 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 
 	IAnimationDataModel* Model = Anim->GetDataModel();
 	const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+	// Resolved by NAME, not index 0: a skeleton whose VtMB tree forks carries a non-`Bip01` bone
+	// at index 0, and reading that as the root would measure the wrong bone
+	// (`ElysiumCogWindow_GreenRoom::ScanRootMotion` resolves the same way).
+	static const FName RootBone(TEXT("Bip01"));
 	if (TestNotNull(TEXT("placement clip has an animation model"), Model)
-		&& TestTrue(TEXT("placement target skeleton has a root"), Ref.GetNum() > 0)
+		&& TestTrue(TEXT("placement target skeleton carries a 'Bip01' root"),
+			Ref.FindBoneIndex(RootBone) != INDEX_NONE)
 		&& TestTrue(TEXT("placement clip reaches 7.5 seconds"), Model->GetNumberOfFrames() >= 225))
 	{
 		const FVector RootLocal = Model->GetBoneTrackTransform(
-			Ref.GetBoneName(0), FFrameNumber(225)).GetTranslation();
+			RootBone, FFrameNumber(225)).GetTranslation();
 		// The baked basis: a character's authored forward is its own component +X, so the placement
 		// is the reflected Source yaw and nothing else.
 		const FVector CorrectWorld = Scene->Origin

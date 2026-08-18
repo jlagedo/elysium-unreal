@@ -822,9 +822,13 @@ bool FElysiumGreenRoomRun::PrepareFrame()
 		Metric.AuthoredBoundsCenter = Body->Bounds.Origin - BaseOrigin;
 		Metric.BoundsExtent = Body->Bounds.BoxExtent;
 		const FReferenceSkeleton& Ref = Body->GetSkeletalMeshAsset()->GetRefSkeleton();
-		if (Ref.GetNum() > 0)
+		// Resolved by NAME, not index 0: a skeleton whose VtMB tree forks carries a non-`Bip01`
+		// bone at index 0, and reading that as the root would measure the wrong bone with nothing
+		// to say so (`ElysiumCogWindow_GreenRoom::ScanRootMotion` resolves the same way).
+		static const FName RootBone(TEXT("Bip01"));
+		if (Ref.FindBoneIndex(RootBone) != INDEX_NONE)
 		{
-			const FTransform RootWorld = Body->GetSocketTransform(Ref.GetBoneName(0), RTS_World);
+			const FTransform RootWorld = Body->GetSocketTransform(RootBone, RTS_World);
 			Metric.AuthoredRoot = RootWorld.GetLocation() - BaseOrigin;
 			Metric.AuthoredRootRotation = RootWorld.Rotator();
 			const FName HeadName(TEXT("Bip01 Head"));
@@ -839,6 +843,14 @@ bool FElysiumGreenRoomRun::PrepareFrame()
 				Metric.AuthoredHeadForward = BaseRotation.UnrotateVector(
 					HeadWorld.GetUnitAxis(EAxis::Z)).GetSafeNormal();
 			}
+		}
+		else if (Ref.GetNum() > 0)
+		{
+			UE_LOG(LogElysiumGreenRoom, Warning,
+				TEXT("%s/%s: skeleton carries no '%s' bone, so the authored root and head cannot ")
+				TEXT("be measured"),
+				*CurrentLabel(), *Entry.Case.Label, *RootBone.ToString());
+			bAnyFailure = true;
 		}
 		if (bTheatreCamera)
 		{
