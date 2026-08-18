@@ -82,6 +82,9 @@ struct FElysiumNpcClipSet
 
 	// Every clip carrying Activity, unordered.
 	TArray<FString> ByActivity(const FString& Activity) const;
+	// Whether any clip carries it. The weapon ladder's availability probe asks this once per rung
+	// and never wants the labels, and `ByActivity` would allocate a list per rung to answer it.
+	bool HasActivity(const FString& Activity) const;
 	// Every ACT_DISPOSITION clip named `Stance_<AnimName>_Idle*` (the standing idles) or, with
 	// bWantTransitions, `Stance_<AnimName>_Trans*` (the authored blends between two of them).
 	TArray<FString> StanceClips(const FString& AnimName, bool bWantTransitions = false) const;

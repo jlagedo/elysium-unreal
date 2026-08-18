@@ -857,6 +857,8 @@ namespace ElysiumMcpImpl
 						Anim->SetStringField(TEXT("route"), ElysiumAnimIntent::RouteName(Sel.Route));
 						Anim->SetNumberField(TEXT("generation"), Sel.Generation);
 						Anim->SetStringField(TEXT("requested_activity"), Sel.RequestedActivity);
+						Anim->SetStringField(TEXT("pre_translation_activity"),
+							Sel.PreTranslationActivity);
 						Anim->SetStringField(TEXT("resolved_activity"), Sel.ResolvedActivity);
 						Anim->SetStringField(TEXT("first_weapon_activity"), Sel.FirstWeaponActivity);
 						Anim->SetStringField(TEXT("weapon_activity"), Sel.WeaponActivity);

@@ -42,6 +42,69 @@ struct FElysiumAnimationCatalog
 
 namespace ElysiumAnimResolve
 {
+	// What step 3 answered, in the shape the record keeps it.
+	//
+	// Every hop is retained because they are what a wrong pose is diagnosed from: the same request
+	// reaches a different sequence set through a weapon, through the actor's class body, and through
+	// neither, and a record that carries only the final answer cannot say which.
+	struct FElysiumTranslationResult
+	{
+		// The logical request, un-translated. Retail's `m_Activity` stays this.
+		FString Requested;
+		// Virtual `+0x5dc`'s answer. Empty on the player, whose pinned order has nothing before the
+		// weapon hook.
+		FString PreTranslation;
+		// The first and last weapon answers, kept apart because retail retains them separately —
+		// they are rungs 3 and 1 of the availability ladder below.
+		FString FirstWeaponActivity;
+		FString WeaponActivity;
+		// The latest CHANGED class/NPC answer, which is availability rung 2. Empty when no class row
+		// rewrote anything, and empty on the player.
+		FString ClassActivity;
+		// What the model vocabulary is searched for.
+		FString Resolved;
+		// How many (class → weapon) passes ran. One on the player, whose chain is a single
+		// weapon-then-actor pass; one to five on the cast.
+		int32 Iterations = 0;
+		// Which rung of the weapon ladder answered, 1-based over the rungs that declare the base.
+		// Zero when no rung could be played, which is the untranslated answer retail's own empty
+		// table gives.
+		int32 WeaponRung = 0;
+		// Which rung of `CAI_BaseNPC`'s four-way availability probe answered — final weapon answer,
+		// class answer, first weapon answer, original request. Zero on the player, who has no such
+		// probe, and zero on a cast request nothing could play.
+		int32 AvailabilityRung = 0;
+		// The answering weapon row's authored `required` bit. Reported, never acted on: the pinned
+		// server translator never reads the third dword.
+		bool bRequired = false;
+		// Set when the probe found nothing and the ORIGINAL request was `ACT_RUN`, whose recovered
+		// translated fallback is `ACT_WALK`.
+		bool bRunToWalk = false;
+		// Set when a class body carried a rule whose request family the RE never enumerated and that
+		// rule could have applied. The walk cannot decide membership, so it leaves the request alone
+		// and says so; a caller reports it rather than treating the request as an ordinary miss.
+		bool bUnresolvedFamily = false;
+		// Set when the walk reached the paired-action tail carrying a registered grapple base. The
+		// variant needs role and counterpart state no locomotion request supplies.
+		bool bGrappleUnresolved = false;
+	};
+
+	// Step 3 — the committed weapon and actor tables, applied in their witnessed order.
+	//
+	// **It needs the vocabulary.** `CBaseCombatWeapon::ActivityOverride` walks a weapon's ladder
+	// front to back and accepts the first rung the body can actually play, so a translation that
+	// cannot ask the body what it carries is not this translation: it would hand a glock-armed body
+	// `ACT_WALK_RELAXED_GLOCK`, which no shipped model carries, instead of the pistol rung that
+	// answers it.
+	//
+	// The two orders are `docs/vtmb/animation_and_movers.md` A.3. The player's is one pass —
+	// `+0x5f4` then `+0x5e0`. The cast's is `+0x5dc`, the weapon translator whose first answer is
+	// preserved, then up to five (`+0x5e0`, `+0x5f4`) alternations, then the four-way availability
+	// probe. Which one a request takes is its SOURCE, the same discriminator the fallback ladder
+	// below already uses.
+	FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Intent,
+		const FElysiumAnimationCatalog& Catalog);
+
 	// VtMB's own deterministic weighted choice, reproduced exactly: candidates sorted by label, each
 	// weight floored at 1, and the seed `hash(stem lowered) ^ variant`. Exposed because
 	// `UElysiumAnimSubsystem::PickActivityClip` is expressed over it — two implementations of one

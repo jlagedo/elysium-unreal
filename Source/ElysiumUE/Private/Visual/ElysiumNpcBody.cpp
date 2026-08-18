@@ -10,6 +10,9 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimGraph.h"
+#include "ElysiumEntityWorld.h"
+#include "ElysiumMapActor.h"
+#include "ElysiumPlayer.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
@@ -177,6 +180,15 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 		/*bGenerationMatches*/ Graph != nullptr
 			&& Report.Generation == AnimDriver->Selection.Generation,
 		Report.bInOneShotState, Report.bComplete);
+
+	// What this body's own classname and drawn weapon do to every request it makes. Refreshed here
+	// rather than on the equip: the driver keys its own re-resolve on the value changing, so a
+	// loadout swap costs one frame of latency and no per-equip wiring, and a body whose entity has
+	// gone reads empty hands rather than keeping what it last held.
+	const AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner());
+	FElysiumEntityWorld* Entities = Map ? Map->GetEntityWorld() : nullptr;
+	FElysiumEntity* OwnerEntity = Entities ? Entities->Resolve(OwningEntity) : nullptr;
+	AnimDriver->SetTranslationContext(OwnerEntity ? OwnerEntity->AsCombatCharacter() : nullptr);
 
 	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
 		Body ? Body->GetSkeletalMeshAsset() : nullptr, OneShot);

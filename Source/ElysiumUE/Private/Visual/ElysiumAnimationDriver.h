@@ -5,6 +5,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 
+class FElysiumCombatCharacter;
 class USkeletalMesh;
 
 // One body's animation selection, driven once per frame from its settled locomotion sample (CCC4).
@@ -37,6 +38,15 @@ struct FElysiumAnimationDriver
 	// and it is modelled here so the asymmetry is structural rather than a comment.
 	float SpeedScale = 1.0f;
 
+	// --- What the activity translation keys on ------------------------------------------------------
+	// The body's own entity classname and its active weapon's, pushed by whoever owns the body
+	// because only they can see the entity. They select the recovered translation bodies and the
+	// weapon ladder, so they change which sequence set every request resolves against — and they are
+	// part of the discrete key below for exactly that reason.
+	FString ActorClassname;
+	FString WeaponClassname;
+	FString FormTag;
+
 	// --- Per-frame state ---------------------------------------------------------------------------
 	FElysiumJumpLatch Latch;
 	FElysiumGaitReference Gait;
@@ -61,19 +71,24 @@ struct FElysiumAnimationDriver
 	// cell's own authored speed for anything that is not one of the three gaits.
 	float GaitSpeedForSelection(float MoveYawDegrees) const;
 
+	// Read `ActorClassname`/`WeaponClassname` off the character the body embodies. One place, because
+	// the player and the cast take the same two names off the same chain node — and a body whose
+	// character has gone reads empty hands rather than keeping the last weapon it held.
+	void SetTranslationContext(const FElysiumCombatCharacter* Character);
+
 	// Re-resolve the tables if the body key moved, and rebuild `Gait` from them. True when they
 	// moved; `Anims` may be null, and a body with no game instance keeps what it has.
 	//
 	// Callable outside `Tick` because a body's speeds are wanted before its first animation pass: an
 	// NPC's first travel request is issued in the frame its motor is built, and a request with no
 	// tables behind it travels at a constant while the body's own cycle authors something else.
-	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims, const FString& WeaponTag,
-		const FString& FormTag);
+	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims, const FString& InWeaponClassname,
+		const FString& InFormTag);
 
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;
 	FString LastStem;
-	FString LastWeaponTag;
+	FString LastWeaponClassname;
 	EElysiumAnimRoute LastRoute = EElysiumAnimRoute::Activity;
 	bool bResolvedOnce = false;
 

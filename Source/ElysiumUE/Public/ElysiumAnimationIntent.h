@@ -11,14 +11,16 @@
 //
 // `FElysiumAnimationIntent` in, `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
 // `docs/architecture/animation-architecture.md` section 3.3. This header owns the pure half: the two
-// records, the locomotion classifier, the jump latch and the activity translation pass. It reads
-// `FElysiumLocomotionSample` and nothing else, so it is asserted with no world, no catalog and no
-// UObject — `Elysium.Substrate.AnimationIntent`, the same pure-rules/engine-half split as
-// `ElysiumMoveSolve.h` and `ElysiumCameraSolve.h`.
+// records, the locomotion classifier and the jump latch. It reads `FElysiumLocomotionSample` and
+// nothing else, so it is asserted with no world, no catalog and no UObject —
+// `Elysium.Substrate.AnimationIntent`, the same pure-rules/engine-half split as `ElysiumMoveSolve.h`
+// and `ElysiumCameraSolve.h`.
 //
 // The resolution that consumes an intent lives in `Visual/ElysiumAnimationResolve.h`, which needs the
 // character catalog; the two are apart because the catalog types are private and this record crosses
-// the substrate boundary.
+// the substrate boundary. **Step 3, the activity translation, lives there too** — the committed
+// weapon ladders are availability-probed per rung against the body's own clip vocabulary, so a
+// translation that cannot see the vocabulary is not the recovered translation.
 //
 // The record is not decoration. Six things can produce a wrong pose — input, classification,
 // translation, model data, asset shape and blending — and without one line naming each, a wrong pose
@@ -72,8 +74,10 @@ enum class EElysiumAnimAssetKind : uint8
 enum class EElysiumAnimOutcome : uint8
 {
 	Resolved = 0,
-	// A translation row's override has no sequence, so the incoming activity stands. The row's
-	// authored `required` bit does not change this: the pinned server translator never reads it.
+	// The cast's four-way availability probe answered below its first rung: what the translation
+	// named has no sequence, so the class answer, the first weapon answer or the original request
+	// stands instead. The answering row's authored `required` bit does not change this — the pinned
+	// server translator never reads it.
 	TranslatedFallback,
 	// A missing translated ACT_RUN retried weighted ACT_WALK.
 	RunToWalk,
@@ -178,18 +182,27 @@ struct FElysiumAnimationIntent
 	EElysiumAirPhase AirPhase = EElysiumAirPhase::Grounded;
 
 	// --- Translation context ---------------------------------------------------------------------
-	// Both empty today. The translation pass runs over them regardless, and terminates on retail's
-	// own stop condition — an empty table is a table, not a bypass.
+	// The active weapon's ENTITY CLASSNAME (`item_w_glock_17c`), which is the key authored content
+	// spells and the key the committed ladders are joined to. Empty is a body with empty hands, and
+	// its translation is the empty table retail's own unarmed body walks.
+	FString WeaponClassname;
+	// The actor's entity classname (`npc_gangbanger_a`), which selects its recovered translation
+	// bodies. Empty on the player, whose actor translation is the two committed `CBasePlayer` rows
+	// rather than a class body.
+	FString ActorClassname;
+	// The form the body is wearing. No recovered translation row reads it; it rides so the seam takes
+	// it rather than growing a parameter later.
 	FString FormTag;
-	FString WeaponTag;
 
 	// --- Completion --------------------------------------------------------------------------
 	bool bLoop = true;
-	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder — run to walk, then the whole
-	// request as a disposition, then sequence zero. It is an NPC rule and the player has none (the
-	// controlled corpus records a ducked ACT_LAND_CROUCH request simply returning -1), so the ladder
-	// needs both this and an `Npc` source. A caller clears it when its own contract predates the
-	// ladder and its callers read the miss.
+	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder — the translation's own
+	// four-way availability probe and its run-to-walk last resort, then the whole request as a
+	// disposition, then sequence zero. It is an NPC rule and the player has none (the controlled
+	// corpus records a ducked ACT_LAND_CROUCH request simply returning -1), so the ladder needs both
+	// this and an `Npc` source. A caller clears it when its own contract predates the ladder and its
+	// callers read the miss: a gait resolved through a fallback rung is not that gait, and the
+	// weighted pick would hand the body walking speeds while it plays a crouch.
 	bool bAllowFallbackLadder = true;
 	EElysiumAnimSource CompletionOwner = EElysiumAnimSource::Player;
 
@@ -213,12 +226,13 @@ struct FElysiumAnimationSelection
 	// The LOGICAL request, un-translated. Retail's `m_Activity` stays this: translation changes the
 	// sequence set that realizes a request, not the AI-visible state.
 	FString RequestedActivity;
-	// Virtual +0x5dc. Always empty today — its semantics are unrecovered, and the player path's
-	// pinned order is +0x5f4 then +0x5e0 with nothing before them. Empty is a true statement.
+	// Virtual +0x5dc, the cast's pre-translation. Empty on the player, whose pinned order is +0x5f4
+	// then +0x5e0 with nothing before them, and empty for a cast body whose entity classname reaches
+	// no recovered class.
 	FString PreTranslationActivity;
 	// The FIRST weapon answer, kept apart from the last on purpose: retail alternates NPC-class and
 	// weapon translation for up to five iterations, and only the first weapon result is retained
-	// separately.
+	// separately — it is rung 3 of the availability probe that follows.
 	FString FirstWeaponActivity;
 	int32 TranslationIterations = 0;
 	// What the sequence set was actually chosen for.
@@ -431,65 +445,11 @@ namespace ElysiumAnimIntent
 	EElysiumAnimActivityCode Classify(const FElysiumLocomotionSample& Sample,
 		const FElysiumJumpLatch& Latch, const FElysiumGaitReference& Gait);
 
-	// One row of a translation table: the incoming activity, the override, and the authored `required`
-	// bit.
-	//
-	// **`bRequired` is provenance, and nothing branches on it.**
-	// `CBaseCombatWeapon::ActivityOverride` never reads the third dword of a table row, so the 201
-	// flagged rows and the 9,013 optional ones take the same availability path; the bit is carried
-	// because it is authored data that `activitydump` prints, not because a remake may give it
-	// behaviour retail does not have (`docs/vtmb/animation_and_movers.md` A.3).
-	//
-	// **Ordered duplicates are load-bearing, and this table cannot yet express them.** Retail keeps
-	// walking past a matching row whose output has no sequence, so a later duplicate-base row is an
-	// availability fallback. With an empty weapon table and no duplicate actor rows there is nothing
-	// to walk today; the ordered probe belongs with the weapon rung, where the data that needs it
-	// arrives.
-	struct FElysiumActivityTranslation
-	{
-		const TCHAR* From;
-		const TCHAR* To;
-		bool bRequired;
-	};
-
-	// The actor/form table (`CBasePlayer::NPC_TranslateActivity`, virtual +0x5e0). Two recovered rows.
-	// A player body carries no ACT_WALK_RELAXED or ACT_RUN_RELAXED sequence, so without the
-	// translation an unarmed request for either selects nothing at all.
-	TArrayView<const FElysiumActivityTranslation> ActorTranslations();
-
-	// The weapon table (`Weapon_TranslateActivity`, virtual +0x5f4) for a weapon tag. Carries the
-	// layer rung's seeded rows — `ACT_RANGE_ATTACK1_LAYER` to a family-specific
-	// `ACT_RANGE_ATTACK_LAYER_*` (`docs/vtmb/combat-and-damage.md`) — for the small set of ranged
-	// families CCC10 exercises; empty for an unarmed body and for any tag this rung has not seeded,
-	// same as retail's own empty table for an unarmed body.
-	TArrayView<const FElysiumActivityTranslation> WeaponTranslations(const FString& WeaponTag);
-
 	// The weapon's grip (`docs/vtmb/animation_and_movers.md` A.4), which picks the 49-bone or
 	// 24-bone upper-body mask profile a layer composes against. Defaults to `TwoHanded`: every
 	// firearm and thrown weapon takes it, and so do the two-handed melee weapons, so an unlisted
 	// tag takes the mask every aim grid already assumes.
 	EElysiumWeaponGrip WeaponGrip(const FString& WeaponTag);
-
-	// What the translation pass answered, in the shape the record keeps it.
-	struct FElysiumTranslationResult
-	{
-		// What the vocabulary is searched for.
-		FString Resolved;
-		// The first and last weapon answers, kept apart because retail retains them separately.
-		FString FirstWeaponActivity;
-		FString WeaponActivity;
-		int32 Iterations = 0;
-		// The last applied row's authored `required` bit, reported and never acted on.
-		bool bRequired = false;
-		// What a missed override falls back to.
-		FString Incoming;
-	};
-
-	// Step 3 — apply the tables in their witnessed order: weapon (+0x5f4) then actor (+0x5e0), the
-	// pinned player order. With an empty weapon table the loop runs once and terminates on retail's
-	// own stop condition, which is a translation pass over an empty table rather than a bypass.
-	FElysiumTranslationResult TranslateActivity(const FString& Activity, const FString& WeaponTag,
-		const FString& FormTag);
 
 	// Build the frame's intent from the settled sample. The player path and the NPC motor both come
 	// through here, which is what stops the cast's locomotion and the player's becoming two systems

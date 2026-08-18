@@ -428,66 +428,6 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
 	}
 
-	// --- Step 3, the translation pass ---------------------------------------------------------------
-	{
-		const FElysiumTranslationResult Walk = TranslateActivity(TEXT("ACT_WALK_RELAXED"),
-			FString(), FString());
-		TestEqual(TEXT("the relaxed walk translates"), Walk.Resolved, FString(TEXT("ACT_WALK")));
-		// The row's authored bit is REPORTED. Nothing branches on it, and the assertion that says so
-		// lives in the resolver test — the pinned server translator never reads the third dword, so
-		// giving it a gate would be giving it behaviour retail does not have.
-		TestEqual(TEXT("the authored required bit rides along as provenance"), Walk.bRequired, true);
-		TestEqual(TEXT("a miss falls back to what came in"), Walk.Incoming,
-			FString(TEXT("ACT_WALK_RELAXED")));
-
-		const FElysiumTranslationResult Run = TranslateActivity(TEXT("ACT_RUN_RELAXED"),
-			FString(), FString());
-		TestEqual(TEXT("the relaxed run translates"), Run.Resolved, FString(TEXT("ACT_RUN")));
-
-		// **The weapon seam is a real pass over an empty table, not a bypass.** With no weapon the
-		// loop runs and terminates on retail's own stop condition, and the first weapon answer equals
-		// the incoming activity by construction rather than by accident.
-		TestEqual(TEXT("the first weapon answer is the incoming activity"), Run.FirstWeaponActivity,
-			FString(TEXT("ACT_RUN_RELAXED")));
-		TestEqual(TEXT("and so is the last"), Run.WeaponActivity, FString(TEXT("ACT_RUN_RELAXED")));
-
-		const FElysiumTranslationResult Idle = TranslateActivity(TEXT("ACT_IDLE"),
-			FString(), FString());
-		TestEqual(TEXT("an activity with no row passes through unchanged"), Idle.Resolved,
-			FString(TEXT("ACT_IDLE")));
-		TestEqual(TEXT("and no row applied"), Idle.Iterations, 0);
-	}
-
-	// --- CCC10 — the weapon rung's seeded layer-activity translation ---------------------------------
-	{
-		// `Weapon_TranslateActivity` (virtual +0x5f4) is the SAME table `WeaponTranslations` already
-		// stood for the ordinary activity override — the layer rung only had to seed real rows into
-		// it, not build a second mechanism (`docs/vtmb/combat-and-damage.md`).
-		const FElysiumTranslationResult Glock = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
-			TEXT("glock"), FString());
-		TestEqual(TEXT("a named family translates its ordinary attack into its own layer activity"),
-			Glock.Resolved, FString(TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK")));
-		TestEqual(TEXT("kept as the first weapon answer too"), Glock.FirstWeaponActivity,
-			FString(TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK")));
-
-		const FElysiumTranslationResult Steyr = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
-			TEXT("STEYR"), FString());
-		TestEqual(TEXT("the weapon tag lookup is case-insensitive, like every vocabulary key"),
-			Steyr.Resolved, FString(TEXT("ACT_RANGE_ATTACK_LAYER_STEYR")));
-
-		const FElysiumTranslationResult Unseeded = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
-			TEXT("anaconda"), FString());
-		TestEqual(TEXT("a ranged family this rung has not seeded has no override row, same as an ")
-			TEXT("unarmed body's empty table"), Unseeded.Resolved,
-			FString(TEXT("ACT_RANGE_ATTACK1_LAYER")));
-		TestEqual(TEXT("and applies no row"), Unseeded.Iterations, 0);
-
-		const FElysiumTranslationResult Melee = TranslateActivity(TEXT("ACT_RANGE_ATTACK1_LAYER"),
-			TEXT("knife"), FString());
-		TestEqual(TEXT("a melee tag has no ranged override row either"), Melee.Resolved,
-			FString(TEXT("ACT_RANGE_ATTACK1_LAYER")));
-	}
-
 	// --- CCC10 — weapon grip, which is not melee-versus-ranged ---------------------------------------
 	{
 		// The property under test: a resolver keyed on "is this melee" gets `bushhook` and
@@ -571,6 +511,15 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 		TestTrue(TEXT("a held crouch is not"), Crouch.bLoop);
 		TestEqual(TEXT("and the cast comes through the same builder"),
 			static_cast<int32>(Crouch.Source), static_cast<int32>(EElysiumAnimSource::Npc));
+
+		// The same body sample, asked for by the cast: the relaxed forms are the player selector's
+		// own output, and the two rows that undo them are a `CBasePlayer` virtual no cast body
+		// reaches. A cast gait request is therefore the plain activity, or nothing downstream would
+		// ever turn it back into one.
+		const FElysiumAnimationIntent CastRun = BuildLocomotionIntent(Sample, Latch, Gait,
+			EElysiumAnimSource::Npc, TEXT("regular_cop"), FElysiumEntityHandle(), 0);
+		TestEqual(TEXT("a cast body asks for the plain run"), CastRun.Activity,
+			FString(TEXT("ACT_RUN")));
 	}
 
 	return true;
@@ -680,10 +629,25 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 	Pc.Clips.Add(TEXT("Jump2"), MakeClip(MiscBank, TEXT(""), 0, 0x0));
 	// An additive layer: flags 0x14, no activity, and never selectable as a base pose.
 	Pc.Clips.Add(TEXT("pistol_aim_layer"), MakeClip(CastBank, TEXT(""), 0, 0x14));
-	// CCC10's seeded weapon-layer translation target: an ordinary masked sequence, reached only
-	// through `ACT_RANGE_ATTACK_LAYER_GLOCK`, never through the untranslated `ACT_RANGE_ATTACK1_LAYER`.
+	// The weapon-layer translation target: an ordinary masked sequence, reached only through the
+	// rename rule's `ACT_RANGE_ATTACK_LAYER_GLOCK`, never through the untranslated
+	// `ACT_RANGE_ATTACK1_LAYER`.
 	Pc.Clips.Add(TEXT("glock_attack_layer"),
 		MakeClip(CastBank, TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK"), 30, 0x0));
+	// **The shipped corpus's own glock gait**, and the reason the ladder's order is load-bearing:
+	// `glock_relaxed_walk` carries the misspelled literal `AWS_WALK_RELAXED_GLOCK`, so rung 1 of the
+	// glock ladder names an activity no body answers and rung 2's shared `_PISTOL` set is what
+	// actually poses a glock-armed relaxed walk. The fixture reproduces exactly that shape.
+	Pc.Clips.Add(TEXT("glock_relaxed_walk"),
+		MakeClip(CastBank, TEXT("AWS_WALK_RELAXED_GLOCK"), 30, 0x1, 46));
+	Pc.Clips.Add(TEXT("pistol_relaxed_walk"),
+		MakeClip(CastBank, TEXT("ACT_WALK_RELAXED_PISTOL"), 30, 0x1, 46));
+	// The one `required`-flagged base in both glock blocks is `ACT_RANGE_ATTACK1`, which the rename
+	// rule turns into `ACT_RANGE_ATTACK_<family>`. This body carries only the shared form — a shipped
+	// body carries the glock one and answers at rung 1 — so the flagged rung-1 row misses here and
+	// the walk has to keep going.
+	Pc.Clips.Add(TEXT("pistol_attack"),
+		MakeClip(CastBank, TEXT("ACT_RANGE_ATTACK_PISTOL"), 30, 0x0, 22));
 	// **No `land_crouch`.** The controlled corpus records the one ducked ACT_LAND_CROUCH request
 	// returning -1 on a validated player body, so the fixture must not invent one.
 
@@ -871,30 +835,64 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			FString(TEXT("ACT_LAND_CROUCH")));
 	}
 
-	// --- A required override that misses is still just a miss ---------------------------------------------
+	// --- A flagged row that misses does not stop the walk -------------------------------------------------
 	{
-		// `CBaseCombatWeapon::ActivityOverride` never reads a row's third dword, so the flagged rows
-		// and the optional ones take the same availability path. Both actor rows are flagged, so a
-		// body carrying the relaxed form and NOT the translated one must fall back to what came in —
-		// if the resolver branched on the bit, this would report a catalog error instead.
-		FElysiumNpcClipSet RelaxedOnly;
-		RelaxedOnly.Stem = TEXT("relaxed_body");
-		RelaxedOnly.Clips.Add(TEXT("run_relaxed"),
-			MakeClip(CastBank, TEXT("ACT_RUN_RELAXED"), 30, 0x1));
-		FElysiumAnimationCatalog RelaxedCatalog;
-		RelaxedCatalog.Clips = &RelaxedOnly;
-		RelaxedCatalog.BlendTableFor = Tables;
+		// `CBaseCombatWeapon::ActivityOverride` never reads a row's third dword, so the 201 flagged
+		// rows and the 9,013 optional ones take the same availability path. `ACT_RANGE_ATTACK1` is
+		// the one flagged base in both of the glock's blocks, and the fixture body is built to miss
+		// its first rung: if the bit gated anything, that miss would end the walk instead of falling
+		// through to the shared set at rung 2.
+		FElysiumAnimationIntent Shot = ActivityIntent(TEXT("pc_body"), TEXT("ACT_RANGE_ATTACK1"));
+		Shot.WeaponClassname = TEXT("item_w_glock_17c");
+		const ElysiumAnimResolve::FElysiumTranslationResult Fired =
+			ElysiumAnimResolve::TranslateActivity(Shot, PcCatalog);
+		TestEqual(TEXT("the flagged rung-1 row misses and the walk continues"), Fired.WeaponRung, 2);
+		TestEqual(TEXT("landing on the shared class set"), Fired.Resolved,
+			FString(TEXT("ACT_RANGE_ATTACK_PISTOL")));
+		TestTrue(TEXT("and the answering row's authored bit is reported, never acted on"),
+			Fired.bRequired);
+	}
+
+	// --- The cast's availability probe, which the player has no equivalent of -----------------------------
+	{
+		// `CNPC_VStalker`'s pre-translation rewrites `ACT_WALK` to `ACT_COMBATMOVE` unconditionally
+		// and returns. A body that carries no combat move still walks, because rung 4 of
+		// `CAI_BaseNPC`'s availability probe is the original logical request — and reaching it is the
+		// difference between a stalker walking and a stalker standing still.
+		FElysiumNpcClipSet Stalker;
+		Stalker.Stem = TEXT("stalker_body");
+		Stalker.Clips.Add(TEXT("walk"), MakeClip(CastBank, TEXT("ACT_WALK"), 30, 0x1));
+		FElysiumAnimationCatalog StalkerCatalog;
+		StalkerCatalog.Clips = &Stalker;
+		StalkerCatalog.BlendTableFor = Tables;
+
+		FElysiumAnimationIntent Prowl = ActivityIntent(TEXT("stalker_body"), TEXT("ACT_WALK"),
+			EElysiumAnimSource::Npc);
+		Prowl.ActorClassname = TEXT("npc_VStalker");
+		const ElysiumAnimResolve::FElysiumTranslationResult Walked =
+			ElysiumAnimResolve::TranslateActivity(Prowl, StalkerCatalog);
+		TestEqual(TEXT("the class's own pre-translation runs"), Walked.PreTranslation,
+			FString(TEXT("ACT_COMBATMOVE")));
+		TestEqual(TEXT("nothing it named is playable, so the original request answers"),
+			Walked.AvailabilityRung, 4);
+		TestEqual(TEXT("as ACT_WALK"), Walked.Resolved, FString(TEXT("ACT_WALK")));
 
 		FElysiumAnimationSelection Fell;
-		ElysiumAnimResolve::Resolve(
-			ActivityIntent(TEXT("relaxed_body"), TEXT("ACT_RUN_RELAXED")), RelaxedCatalog, Fell);
-		TestEqual(TEXT("a flagged override with no sequence falls back like any other"),
+		ElysiumAnimResolve::Resolve(Prowl, StalkerCatalog, Fell);
+		TestEqual(TEXT("which the record names as the availability fallback it is"),
 			static_cast<int32>(Fell.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::TranslatedFallback));
-		TestEqual(TEXT("landing on the activity that came in"), Fell.ResolvedActivity,
-			FString(TEXT("ACT_RUN_RELAXED")));
 		TestEqual(TEXT("and it plays the sequence that body actually carries"), Fell.SequenceLabel,
-			FString(TEXT("run_relaxed")));
+			FString(TEXT("walk")));
+
+		// A player asking the same thing has no such probe at all: the two committed player rows are
+		// the whole of its actor translation, and a miss after them is a named miss.
+		FElysiumAnimationIntent AsPlayer = Prowl;
+		AsPlayer.Source = EElysiumAnimSource::Player;
+		const ElysiumAnimResolve::FElysiumTranslationResult PlayerWalk =
+			ElysiumAnimResolve::TranslateActivity(AsPlayer, StalkerCatalog);
+		TestEqual(TEXT("the player runs no pre-translation"), PlayerWalk.PreTranslation, FString());
+		TestEqual(TEXT("and no availability probe"), PlayerWalk.AvailabilityRung, 0);
 	}
 
 	// --- The cast's fallback ladder, in the recovered order ---------------------------------------------
@@ -1093,6 +1091,99 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			FString(TEXT("run_90")));
 	}
 
+	// --- Step 3, over the committed tables ----------------------------------------------------------
+	{
+		using namespace ElysiumAnimResolve;
+
+		// **The player's two rows**, which are what make an unarmed relaxed gait resolve at all: the
+		// fixture carries no `ACT_WALK_RELAXED` sequence, exactly as a shipped player body does not.
+		TestEqual(TEXT("the fixture carries no relaxed walk of its own"),
+			Pc.ByActivity(TEXT("ACT_WALK_RELAXED")).Num(), 0);
+
+		FElysiumAnimationIntent Relaxed = ActivityIntent(TEXT("pc_body"), TEXT("ACT_WALK_RELAXED"));
+		FElysiumTranslationResult Bare = TranslateActivity(Relaxed, PcCatalog);
+		TestEqual(TEXT("so `CBasePlayer::NPC_TranslateActivity` turns it into ACT_WALK"), Bare.Resolved,
+			FString(TEXT("ACT_WALK")));
+		TestEqual(TEXT("with no weapon the first and last weapon answers agree by construction"),
+			Bare.FirstWeaponActivity, Bare.WeaponActivity);
+		TestEqual(TEXT("and the empty table translated nothing"), Bare.WeaponRung, 0);
+		TestTrue(TEXT("the player walks no availability probe"), Bare.AvailabilityRung == 0);
+		TestTrue(TEXT("and has no pre-translation before the weapon hook"),
+			Bare.PreTranslation.IsEmpty());
+
+		FElysiumAnimationSelection BareSelection;
+		ElysiumAnimResolve::Resolve(Relaxed, PcCatalog, BareSelection);
+		TestEqual(TEXT("which does resolve"), BareSelection.SequenceLabel, FString(TEXT("walk")));
+
+		// **The availability ladder, which is the whole reason the rows are not materialised.** The
+		// glock ladder's first rung names `ACT_WALK_RELAXED_GLOCK`; the body carries the clip but
+		// under the misspelled `AWS_` literal, so no rung-1 candidate answers and the shared pistol
+		// set at rung 2 is what poses a glock-armed relaxed walk.
+		FElysiumAnimationIntent Armed = Relaxed;
+		Armed.WeaponClassname = TEXT("item_w_glock_17c");
+		const FElysiumTranslationResult Glock = TranslateActivity(Armed, PcCatalog);
+		TestEqual(TEXT("the glock's relaxed walk resolves through the ladder's second rung"),
+			Glock.WeaponRung, 2);
+		TestEqual(TEXT("naming the shared pistol activity"), Glock.Resolved,
+			FString(TEXT("ACT_WALK_RELAXED_PISTOL")));
+
+		FElysiumAnimationSelection ArmedSelection;
+		ElysiumAnimResolve::Resolve(Armed, PcCatalog, ArmedSelection);
+		TestEqual(TEXT("and the body plays the pistol clip, not the glock one"),
+			ArmedSelection.SequenceLabel, FString(TEXT("pistol_relaxed_walk")));
+		TestEqual(TEXT("resolved outright, because the weapon table already probed availability"),
+			static_cast<int32>(ArmedSelection.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::Resolved));
+
+		// A ladder whose every rung names something the body cannot play leaves the base alone, which
+		// is the same answer retail's own empty table gives.
+		FElysiumAnimationIntent Katana = ActivityIntent(TEXT("pc_body"), TEXT("ACT_RUN_RELAXED"));
+		Katana.WeaponClassname = TEXT("item_w_katana");
+		const FElysiumTranslationResult Melee = TranslateActivity(Katana, PcCatalog);
+		TestEqual(TEXT("no katana rung is playable here"), Melee.WeaponRung, 0);
+		TestEqual(TEXT("so the player rows answer the untranslated request"), Melee.Resolved,
+			FString(TEXT("ACT_RUN")));
+
+		// A weapon classname the ledger does not carry is not silently mapped to a cousin table.
+		FElysiumAnimationIntent Unknown = Relaxed;
+		Unknown.WeaponClassname = TEXT("item_w_sw_m64");
+		TestEqual(TEXT("an unrecovered weapon classname translates nothing"),
+			TranslateActivity(Unknown, PcCatalog).Resolved, FString(TEXT("ACT_WALK")));
+
+		// **The cast's chain is not the player's.** `ACT_WALK_RELAXED` on a cast body reaches no
+		// player row, so it survives to the availability probe and is answered at rung 4 — the
+		// original request — only if the body carries it. This one does not, and the miss is named.
+		FElysiumAnimationIntent CastRelaxed = ActivityIntent(TEXT("cast_body"),
+			TEXT("ACT_WALK_RELAXED"), EElysiumAnimSource::Npc);
+		const FElysiumTranslationResult CastWalk = TranslateActivity(CastRelaxed, CastCatalog);
+		TestEqual(TEXT("no class body is reached without an actor classname"),
+			CastWalk.PreTranslation, FString(TEXT("ACT_WALK_RELAXED")));
+		TestEqual(TEXT("and nothing the ladder named is playable"), CastWalk.AvailabilityRung, 0);
+		TestEqual(TEXT("so the record names what the translation produced"), CastWalk.Resolved,
+			FString(TEXT("ACT_WALK_RELAXED")));
+
+		// The recovered last resort is keyed on the ORIGINAL request. `ACT_SNEAK` is not on the cast
+		// fixture and is not `ACT_RUN`, so it stays a miss; `ACT_RUN` would have taken `ACT_WALK`.
+		FElysiumAnimationIntent CastSneak = ActivityIntent(TEXT("cast_body"), TEXT("ACT_SNEAK"),
+			EElysiumAnimSource::Npc);
+		const FElysiumTranslationResult Sneak = TranslateActivity(CastSneak, CastCatalog);
+		TestFalse(TEXT("a missing sneak does not take the run fallback"), Sneak.bRunToWalk);
+
+		// A caller whose contract predates the ladder gets the miss, not a substitution.
+		FElysiumAnimationIntent NoLadder = CastRelaxed;
+		NoLadder.Activity = TEXT("ACT_RUN");
+		NoLadder.bAllowFallbackLadder = false;
+		Cast.Clips.Remove(TEXT("run"));
+		TestFalse(TEXT("with the ladder refused, a missing run does not become a walk"),
+			TranslateActivity(NoLadder, CastCatalog).bRunToWalk);
+		NoLadder.bAllowFallbackLadder = true;
+		const FElysiumTranslationResult RunFallback = TranslateActivity(NoLadder, CastCatalog);
+		TestTrue(TEXT("and with it allowed, the recovered ACT_RUN fallback takes ACT_WALK"),
+			RunFallback.bRunToWalk);
+		TestEqual(TEXT("naming ACT_WALK"), RunFallback.Resolved, FString(TEXT("ACT_WALK")));
+		Cast.Clips.Add(TEXT("run"), MakeClip(CastBank, TEXT("ACT_RUN"), 30, 0x1));
+	}
+
 	// --- CCC10 — the activity-keyed upper-body path, reached by weapon translation -------------------
 	{
 		// The bake-time bound path is asserted above (the "layer binding keeps its declaration
@@ -1101,7 +1192,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		FElysiumAnimationIntent Attack;
 		Attack.Stem = TEXT("pc_body");
 		Attack.Activity = TEXT("ACT_RANGE_ATTACK1_LAYER");
-		Attack.WeaponTag = TEXT("glock");
+		Attack.WeaponClassname = TEXT("item_w_glock_17c");
 		Attack.Route = EElysiumAnimRoute::Activity;
 		Attack.Channel = EElysiumAnimChannel::UpperBody;
 		Attack.Source = EElysiumAnimSource::Debug;
@@ -1119,7 +1210,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		// like retail's own empty table, and the untranslated activity is simply not in the
 		// vocabulary.
 		FElysiumAnimationIntent Unarmed = Attack;
-		Unarmed.WeaponTag.Reset();
+		Unarmed.WeaponClassname.Reset();
 		FElysiumAnimationSelection Missed;
 		ElysiumAnimResolve::Resolve(Unarmed, PcCatalog, Missed);
 		TestEqual(TEXT("with no weapon the activity passes through untranslated"),
@@ -1657,9 +1748,16 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 				Player.ByActivity(Relaxed).Num(), 0);
 		}
 		// And with the table applied, the same request resolves. That is the seam doing work.
-		const ElysiumAnimIntent::FElysiumTranslationResult T =
-			ElysiumAnimIntent::TranslateActivity(TEXT("ACT_RUN_RELAXED"), FString(), FString());
-		TestEqual(TEXT("which the actor table turns into ACT_RUN"), T.Resolved,
+		FElysiumAnimationCatalog Catalog;
+		Catalog.Clips = &Player;
+		Catalog.BlendTableFor = [&Tables](const FString& Owner) { return Tables(Owner); };
+		FElysiumAnimationIntent Request;
+		Request.Stem = Player.Stem;
+		Request.Activity = TEXT("ACT_RUN_RELAXED");
+		Request.Source = EElysiumAnimSource::Player;
+		const ElysiumAnimResolve::FElysiumTranslationResult T =
+			ElysiumAnimResolve::TranslateActivity(Request, Catalog);
+		TestEqual(TEXT("which the player rows turn into ACT_RUN"), T.Resolved,
 			FString(TEXT("ACT_RUN")));
 		TestTrue(TEXT("and that one does resolve"),
 			ResolveOn(Player, Tables, *T.Resolved, EElysiumAnimSource::Player).IsResolved());

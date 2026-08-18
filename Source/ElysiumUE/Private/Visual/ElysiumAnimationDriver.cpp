@@ -1,5 +1,10 @@
 #include "Visual/ElysiumAnimationDriver.h"
 
+#include "ElysiumClassRegistry.h"
+#include "ElysiumEntityDefs.h"
+#include "ElysiumPlayer.h"
+#include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
+
 void FElysiumAnimationDriver::Reset()
 {
 	Latch = FElysiumJumpLatch();
@@ -7,7 +12,7 @@ void FElysiumAnimationDriver::Reset()
 	Assets = FElysiumResolvedAnimation();
 	LastActivity.Reset();
 	LastStem.Reset();
-	LastWeaponTag.Reset();
+	LastWeaponClassname.Reset();
 	LastRoute = EElysiumAnimRoute::Activity;
 	bResolvedOnce = false;
 	// A teleport is not a turn: slewing the stride across one would rotate the body's gait over a
@@ -25,8 +30,54 @@ void FElysiumAnimationDriver::Reset()
 	Gait = FElysiumGaitReference();
 }
 
+void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacter* Char)
+{
+	// Written only on change. This runs once per body per frame while the answer moves only on an
+	// equip, a possession or a model swap, and the discrete key below already treats a moved value
+	// as a re-resolve.
+	auto Adopt = [](FString& Field, const FString& Value)
+	{
+		if (!Field.Equals(Value, ESearchCase::CaseSensitive))
+		{
+			Field = Value;
+		}
+	};
+
+	if (Char == nullptr)
+	{
+		ActorClassname.Reset();
+		WeaponClassname.Reset();
+		return;
+	}
+
+	// The classname a map AUTHORS, which is the key both committed ledgers are joined to. The
+	// registered descriptor answers for a character no def produced, which is the player's case.
+	if (Char->Def != nullptr)
+	{
+		Adopt(ActorClassname, Char->Def->Classname);
+	}
+	else if (Char->Class != nullptr)
+	{
+		Adopt(ActorClassname, Char->Class->ClassName.ToString());
+	}
+	else
+	{
+		ActorClassname.Reset();
+	}
+
+	const FElysiumItem* Active = Char->Inventory.Active(*Char);
+	if (Active != nullptr && Active->Def != nullptr)
+	{
+		Adopt(WeaponClassname, Active->Def->Classname);
+	}
+	else
+	{
+		WeaponClassname.Reset();
+	}
+}
+
 bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims,
-	const FString& WeaponTag, const FString& FormTag)
+	const FString& InWeaponClassname, const FString& InFormTag)
 {
 	if (Anims == nullptr)
 	{
@@ -34,8 +85,8 @@ bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims,
 	}
 	FElysiumGaitSpeedRequest Key;
 	Key.Stem = Stem;
-	Key.WeaponTag = WeaponTag;
-	Key.FormTag = FormTag;
+	Key.WeaponClassname = InWeaponClassname;
+	Key.FormTag = InFormTag;
 	Key.Variant = Variant;
 	Key.SpeedScale = SpeedScale;
 	if (GaitGeneration != 0 && Key == GaitKey)
@@ -95,17 +146,22 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 
 	FElysiumAnimationIntent Intent = ElysiumAnimIntent::BuildLocomotionIntent(Body, Latch, Gait,
 		Source, Stem, Character, Variant);
+	// The translation context, which the classifier has no business knowing: it answers what the body
+	// did, and these answer which sequence set realizes it.
+	Intent.ActorClassname = ActorClassname;
+	Intent.WeaponClassname = WeaponClassname;
+	Intent.FormTag = FormTag;
 
 	// The body key, resolved ahead of the request so a body that changed model this frame steers by
 	// its new speeds rather than by one frame of its old ones.
-	RefreshGaitSpeeds(Anims, Intent.WeaponTag, Intent.FormTag);
+	RefreshGaitSpeeds(Anims, Intent.WeaponClassname, Intent.FormTag);
 
 	// The discrete key. Everything else about the intent is continuous and does not re-select
 	// anything: a body that turned, sped up or strafed is playing the same request.
 	const bool bChanged = !bResolvedOnce
 		|| !Intent.Activity.Equals(LastActivity, ESearchCase::IgnoreCase)
 		|| !Intent.Stem.Equals(LastStem, ESearchCase::IgnoreCase)
-		|| !Intent.WeaponTag.Equals(LastWeaponTag, ESearchCase::IgnoreCase)
+		|| !Intent.WeaponClassname.Equals(LastWeaponClassname, ESearchCase::IgnoreCase)
 		|| Intent.Route != LastRoute;
 
 	if (bChanged)
@@ -115,7 +171,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		++Generation;
 		LastActivity = Intent.Activity;
 		LastStem = Intent.Stem;
-		LastWeaponTag = Intent.WeaponTag;
+		LastWeaponClassname = Intent.WeaponClassname;
 		LastRoute = Intent.Route;
 		bResolvedOnce = true;
 	}

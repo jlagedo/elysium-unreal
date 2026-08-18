@@ -1255,6 +1255,10 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 		// The variant is the body's own index, so the same character resolves the same idle every load
 		// — repeatability is what makes a weighted pick assertable at all.
 		PlayerAnimDriver->Variant = FMath::Max(0, PlayerAnimDriver->Character.Index);
+		// What the drawn weapon does to the gait. Refreshed here rather than on the equip, because
+		// this is the pass that already reads the character and the driver keys its own re-resolve on
+		// the value changing — a swap therefore costs one frame of latency and no per-equip wiring.
+		PlayerAnimDriver->SetTranslationContext(EntityWorld->FindPlayer());
 	}
 
 	USkeletalMeshComponent* Visual = Body->GetPlayerVisual();

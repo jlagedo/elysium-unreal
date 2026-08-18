@@ -96,7 +96,9 @@ struct FElysiumGaitSpeeds
 struct FElysiumGaitSpeedRequest
 {
 	FString Stem;
-	FString WeaponTag;
+	// The active weapon's entity classname and the body's form, exactly as the intent spells them —
+	// they change which sequence `ACT_WALK` resolves to, which is the whole membership rule here.
+	FString WeaponClassname;
 	FString FormTag;
 	int32 Variant = 0;
 
@@ -111,7 +113,7 @@ struct FElysiumGaitSpeedRequest
 		return Variant == Other.Variant
 			&& FMath::IsNearlyEqual(SpeedScale, Other.SpeedScale)
 			&& Stem.Equals(Other.Stem, ESearchCase::IgnoreCase)
-			&& WeaponTag.Equals(Other.WeaponTag, ESearchCase::IgnoreCase)
+			&& WeaponClassname.Equals(Other.WeaponClassname, ESearchCase::IgnoreCase)
 			&& FormTag.Equals(Other.FormTag, ESearchCase::IgnoreCase);
 	}
 	bool operator!=(const FElysiumGaitSpeedRequest& Other) const { return !(*this == Other); }

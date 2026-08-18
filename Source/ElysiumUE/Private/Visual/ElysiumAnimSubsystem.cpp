@@ -687,7 +687,7 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		Intent.Stem = Request.Stem;
 		Intent.Activity = ElysiumAnimIntent::ActivityName(Code);
 		Intent.Variant = Request.Variant;
-		Intent.WeaponTag = Request.WeaponTag;
+		Intent.WeaponClassname = Request.WeaponClassname;
 		Intent.FormTag = Request.FormTag;
 		Intent.Source = EElysiumAnimSource::Player;
 		// A gait that resolves through the fallback ladder is not that gait. Reaching `walk` for a

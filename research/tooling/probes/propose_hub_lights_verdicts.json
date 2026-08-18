@@ -1,0 +1,61 @@
+{
+  "map": "sm_hub_1",
+  "batches": {
+    "1|0|81.28,250.06,144.76|1300.5": {
+      "class": "fill",
+      "notes": "sewer low pocket: six identical dim points, no sprite or fixture"
+    },
+    "1|0|67.12,184.07,272.59|1300.5": {
+      "class": "fill",
+      "notes": "sewer low pocket: four identical dim points on a grate, no fixture"
+    },
+    "1|0|134.24,368.14,545.19|1300.5": {
+      "class": "fill",
+      "notes": "sewer low pocket: lone dim point, no fixture"
+    },
+    "1|0|102.64,15.31,15.31|325.1": {
+      "class": "fill",
+      "notes": "ceiling pair authored at brightness 5, no corona"
+    },
+    "1|0|41.53,42.98,58.39|0.0": {
+      "class": "fill",
+      "notes": "street pair authored at brightness 2, no corona"
+    },
+    "1|0|222.28,118.48,48.92|1300.5": {
+      "class": "fill",
+      "notes": "junk-lot dim point (brightness 10) with no fixture"
+    },
+    "2|0|3559.01,2297.93,1311.60|1300.5": {
+      "class": "keep",
+      "notes": "detached spots over the pier street; hub has no sky pair so this may be load-bearing glow"
+    },
+    "1|0|3803.38,8457.65,4304.31|975.4": {
+      "class": "implied_emitter",
+      "notes": "sewer_light prop and glowa corona at ~84 cm"
+    },
+    "1|0|3446.90,2569.49,609.61|650.2": {
+      "class": "implied_emitter",
+      "notes": "cage_light housing and glowa corona at ~82 cm"
+    },
+    "2|0|38878.15,12746.55,703.39|325.1": {
+      "class": "implied_emitter",
+      "notes": "warm 1000-brightness spots on trash barrels (fire)"
+    },
+    "2|0|38878.15,12746.55,703.39|650.2": {
+      "class": "implied_emitter",
+      "notes": "warm 1000-brightness spot on a trash barrel (fire)"
+    },
+    "2|0|78431.38,60136.76,27744.38|975.4": {
+      "class": "implied_emitter",
+      "notes": "hero sodium street lamp (brightness 2000) next to pierlightb"
+    },
+    "2|0|2558.31,860.86,368.14|0.0": {
+      "class": "shopfront",
+      "notes": "spot on emissive medical window plaster/medwndwa"
+    },
+    "2|0|75.44,1333.37,1265.79|975.4": {
+      "class": "shopfront",
+      "notes": "spot on diner window prop and plaster/dinwndwb"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 #include "Visual/ElysiumAnimationResolve.h"
 
+#include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumAnimGraph.h"
 
 namespace ElysiumAnimResolve
@@ -10,6 +11,11 @@ namespace
 	const TCHAR* const GDispositionActivity = TEXT("ACT_DISPOSITION");
 	const TCHAR* const GRunActivity = TEXT("ACT_RUN");
 	const TCHAR* const GWalkActivity = TEXT("ACT_WALK");
+	// The one request that is answered without an availability probe at all: a scripted custom move
+	// names the sequence set the scene author meant, so retail commits it whatever the body carries.
+	const TCHAR* const GScriptCustomMove = TEXT("ACT_SCRIPT_CUSTOM_MOVE");
+	// `CAI_BaseNPC::TranslateActivity`'s own bound on the class/weapon alternation.
+	constexpr int32 GMaxAlternations = 5;
 
 	// Fill the asset half of the record from a resolved label. The owner is the include DAG's answer
 	// and is never re-derived: `Clip->Owner` names the bank offline, and a resolver keyed on the label
@@ -120,8 +126,8 @@ namespace
 		// the sequence set that realizes a request, not the AI-visible state.
 		Out.RequestedActivity = Intent.Activity;
 
-		const ElysiumAnimIntent::FElysiumTranslationResult Translation =
-			ElysiumAnimIntent::TranslateActivity(Intent.Activity, Intent.WeaponTag, Intent.FormTag);
+		const FElysiumTranslationResult Translation = TranslateActivity(Intent, Catalog);
+		Out.PreTranslationActivity = Translation.PreTranslation;
 		Out.FirstWeaponActivity = Translation.FirstWeaponActivity;
 		Out.WeaponActivity = Translation.WeaponActivity;
 		Out.TranslationIterations = Translation.Iterations;
@@ -130,73 +136,75 @@ namespace
 		int32 Candidates = 0;
 		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Candidates);
 
-		// An override that resolves nothing falls back to the activity that came in.
-		//
-		// **The authored `required` bit does not gate this**, and giving it a gate would be giving it
-		// behaviour retail does not have: `CBaseCombatWeapon::ActivityOverride` never reads the third
-		// dword, so the 201 flagged rows and the 9,013 optional ones take the same availability path
-		// (`docs/vtmb/animation_and_movers.md` A.3). The bit rides on the record as provenance —
-		// `activitydump` prints it — and nothing branches on it.
-		if (Label.IsEmpty() && Translation.Iterations > 0)
+		if (!Label.IsEmpty())
 		{
-			int32 Fallback = 0;
-			Label = TryActivity(Catalog, Translation.Incoming, Intent.Variant, Fallback);
+			Out.Candidates = Candidates;
+			ApplyLabel(Label, Intent, Catalog, Out);
+			if (Out.Outcome != EElysiumAnimOutcome::Resolved)
+			{
+				return;
+			}
+			// **The authored `required` bit does not gate any of this**, and giving it a gate would
+			// be giving it behaviour retail does not have: `CBaseCombatWeapon::ActivityOverride`
+			// never reads the third dword, so the 201 flagged rows and the 9,013 optional ones take
+			// the same availability path. The bit rides on the translation as provenance only.
+			if (Translation.bRunToWalk)
+			{
+				Out.Outcome = EElysiumAnimOutcome::RunToWalk;
+				Out.Detail = FString::Printf(
+					TEXT("nothing the translation named is on '%s'; the recovered ACT_RUN fallback ")
+					TEXT("took ACT_WALK"), *Intent.Stem);
+			}
+			else if (Translation.AvailabilityRung > 1)
+			{
+				// Rung 1 is the translation's own answer; every rung below it is retail's ordered
+				// availability fallback, and which one answered is what separates "the body plays
+				// what the weapon named" from "the body plays what it had".
+				Out.Outcome = EElysiumAnimOutcome::TranslatedFallback;
+				Out.Detail = FString::Printf(
+					TEXT("'%s' has no sequence on '%s'; availability rung %d took '%s'"),
+					*Translation.WeaponActivity, *Intent.Stem, Translation.AvailabilityRung,
+					*Out.ResolvedActivity);
+			}
+			return;
+		}
+
+		// A class rule the walk could not decide is not an ordinary miss, and it outranks the
+		// ladder's own report: the request may well have had an answer the RE did not enumerate.
+		if (Translation.bUnresolvedFamily || Translation.bGrappleUnresolved)
+		{
+			Out.AssetKind = EElysiumAnimAssetKind::None;
+			Out.Outcome = EElysiumAnimOutcome::MissingSequence;
+			Out.Detail = FString::Printf(
+				TEXT("'%s' resolved nothing on '%s', and %s, so the untranslated request is not a ")
+				TEXT("verdict"), *Translation.Resolved, *Intent.Stem,
+				Translation.bUnresolvedFamily
+					? TEXT("a class rule names a request family the RE never enumerated")
+					: TEXT("it is a paired-action base with no role state to select a variant"));
+			return;
+		}
+
+		// **The rest of the recovered fallback ladder is the cast's, not the player's.** The run
+		// retry lives in the translation, where retail puts it; what is left here is the whole
+		// request as a disposition, then sequence zero. The player's chain has no ladder at all —
+		// the controlled corpus records a ducked ACT_LAND_CROUCH request simply returning -1 — so a
+		// player miss is reported as the named miss it is.
+		if (Intent.Source == EElysiumAnimSource::Npc && Intent.bAllowFallbackLadder)
+		{
+			Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Candidates);
 			if (!Label.IsEmpty())
 			{
-				Out.ResolvedActivity = Translation.Incoming;
-				Out.Candidates = Fallback;
+				Out.ResolvedActivity = GDispositionActivity;
+				Out.Candidates = Candidates;
 				ApplyLabel(Label, Intent, Catalog, Out);
 				if (Out.Outcome == EElysiumAnimOutcome::Resolved)
 				{
-					Out.Outcome = EElysiumAnimOutcome::TranslatedFallback;
+					Out.Outcome = EElysiumAnimOutcome::Disposition;
 					Out.Detail = FString::Printf(
-						TEXT("'%s' has no sequence on '%s'; the override fell back to '%s'"),
-						*Translation.Resolved, *Intent.Stem, *Translation.Incoming);
+						TEXT("'%s' resolved nothing on '%s'; retried as ACT_DISPOSITION"),
+						*Translation.Resolved, *Intent.Stem);
 				}
 				return;
-			}
-		}
-
-		// **The recovered fallback ladder is the cast's, not the player's.** `CAI_BaseNPC` retries a
-		// missing run as a walk, then the whole request as a disposition, then sequence zero. The
-		// player's chain has no such ladder — the controlled corpus records a ducked ACT_LAND_CROUCH
-		// request simply returning -1 — so a player miss is reported as the named miss it is.
-		if (Label.IsEmpty() && Intent.Source == EElysiumAnimSource::Npc
-			&& Intent.bAllowFallbackLadder)
-		{
-			if (Out.ResolvedActivity.Equals(GRunActivity, ESearchCase::IgnoreCase))
-			{
-				Label = TryActivity(Catalog, GWalkActivity, Intent.Variant, Candidates);
-				if (!Label.IsEmpty())
-				{
-					Out.ResolvedActivity = GWalkActivity;
-					Out.Candidates = Candidates;
-					ApplyLabel(Label, Intent, Catalog, Out);
-					if (Out.Outcome == EElysiumAnimOutcome::Resolved)
-					{
-						Out.Outcome = EElysiumAnimOutcome::RunToWalk;
-						Out.Detail = TEXT("no ACT_RUN sequence; retried weighted ACT_WALK");
-					}
-					return;
-				}
-			}
-			if (Label.IsEmpty())
-			{
-				Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Candidates);
-				if (!Label.IsEmpty())
-				{
-					Out.ResolvedActivity = GDispositionActivity;
-					Out.Candidates = Candidates;
-					ApplyLabel(Label, Intent, Catalog, Out);
-					if (Out.Outcome == EElysiumAnimOutcome::Resolved)
-					{
-						Out.Outcome = EElysiumAnimOutcome::Disposition;
-						Out.Detail = FString::Printf(
-							TEXT("'%s' resolved nothing on '%s'; retried as ACT_DISPOSITION"),
-							*Translation.Resolved, *Intent.Stem);
-					}
-					return;
-				}
 			}
 			// The hard fallback. It cannot be named: exact identity is (owner, raw index) and the
 			// character export writes no raw index, so what the record can say is that retail would
@@ -211,20 +219,12 @@ namespace
 			return;
 		}
 
-		if (Label.IsEmpty())
-		{
-			// A miss is a miss whatever the row's authored bit said, because the translator does not
-			// read it. What the record names is the activity and the body, which is what a fallback
-			// has to be declared against.
-			Out.AssetKind = EElysiumAnimAssetKind::None;
-			Out.Outcome = EElysiumAnimOutcome::MissingSequence;
-			Out.Detail = FString::Printf(TEXT("'%s' has no sequence on '%s'"),
-				*Translation.Resolved, *Intent.Stem);
-			return;
-		}
-
-		Out.Candidates = Candidates;
-		ApplyLabel(Label, Intent, Catalog, Out);
+		// A named miss: the activity and the body, which is what a fallback has to be declared
+		// against. Nothing is substituted for it — the graph declares its own fallback off this line.
+		Out.AssetKind = EElysiumAnimAssetKind::None;
+		Out.Outcome = EElysiumAnimOutcome::MissingSequence;
+		Out.Detail = FString::Printf(TEXT("'%s' has no sequence on '%s'"),
+			*Translation.Resolved, *Intent.Stem);
 	}
 
 	void ResolveExactLabelRoute(const FElysiumAnimationIntent& Intent,
@@ -316,6 +316,198 @@ namespace
 		Out.Detail = FString::Printf(TEXT("gesture '%s' is absent from '%s'; nothing plays"),
 			*Intent.SequenceLabel, *Intent.Stem);
 	}
+}
+
+FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Intent,
+	const FElysiumAnimationCatalog& Catalog)
+{
+	using namespace ElysiumActionTables;
+
+	FElysiumTranslationResult Out;
+	Out.Requested = Intent.Activity;
+	Out.Resolved = Intent.Activity;
+	Out.FirstWeaponActivity = Intent.Activity;
+	Out.WeaponActivity = Intent.Activity;
+
+	const FElysiumNpcClipSet* Clips = Catalog.Clips;
+	auto Carries = [Clips](const FString& Activity)
+	{
+		return Clips != nullptr && Clips->HasActivity(Activity);
+	};
+
+	// The weapon's own ladder, keyed on the entity classname authored content spells. Null is the
+	// ordinary answer twice over — empty hands, and 108 of the 169 weapon subclasses carry no table
+	// — and it means "translate nothing", exactly as retail's unarmed body does.
+	const FWeaponLadder* Ladder = Intent.WeaponClassname.IsEmpty()
+		? nullptr : FindLadderByEntityClass(Intent.WeaponClassname);
+
+	// **The chain a request takes is its source**, the same discriminator the fallback ladder below
+	// uses: `CBasePlayer` and `CAI_BaseNPC` are two different translators, not two configurations of
+	// one.
+	const bool bCast = Intent.Source == EElysiumAnimSource::Npc;
+	const FNpcClass* Class = (bCast && !Intent.ActorClassname.IsEmpty())
+		? FindNpcClassByEntityClass(Intent.ActorClassname) : nullptr;
+	const int32 PreBody = Class != nullptr ? Class->PreTranslate : INDEX_NONE;
+	const int32 ClassBody = Class != nullptr ? Class->ClassTranslate : INDEX_NONE;
+
+	// **Every NPC predicate answers false, and that is the honest answer rather than a default.**
+	// The recovered bodies read live character state this runtime does not publish — the global gait
+	// override, the movement policy byte at `+0x5b84`, the armed/alert branch, the capability masks.
+	// Both arms of a recovered branch are spelled as their own predicate (`ArmedAlert` beside
+	// `NotArmedAlert`), so a body with no state fires NEITHER arm and the walk is the identity path
+	// plus the unconditional rewrites. Answering true anywhere here would invent the branch, which is
+	// the one failure the committed tables exist to prevent.
+	auto NoLiveState = [](ENpcPredicate, int32) { return false; };
+
+	int32 CoverContext = 0;
+
+	auto Record = [&](const FNpcTranslation& Walk)
+	{
+		CoverContext = Walk.CoverContext;
+		Out.bUnresolvedFamily |= Walk.bUnresolved;
+		// The tail row matches every request, so reaching it says nothing on its own. What is
+		// unanswerable is reaching it carrying a base that IS one of the 29 registered paired-action
+		// families, because the variant then needs role and counterpart state.
+		Out.bGrappleUnresolved |= Walk.bGrappleTail && FindGrappleFamily(Walk.Activity) != nullptr;
+	};
+
+	// One actor-side translation. The availability probe inside the weapon ladder does not record:
+	// a rung retail rejected did not happen, and its side effects are not part of the record.
+	auto ActorTranslate = [&](const FString& Base, bool bRecord) -> FString
+	{
+		if (!bCast)
+		{
+			// `CBasePlayer::NPC_TranslateActivity` (`0x101647a0`) — two rows, and they are what makes
+			// an unarmed relaxed gait resolve at all: a player body carries no `ACT_WALK_RELAXED` or
+			// `ACT_RUN_RELAXED` sequence, only weapon-suffixed ones.
+			return TranslatePlayerActivity(Base);
+		}
+		if (ClassBody == INDEX_NONE)
+		{
+			return Base;
+		}
+		const FNpcTranslation Walk = NpcTranslate(ClassBody, Base, CoverContext, NoLiveState,
+			Carries);
+		if (bRecord)
+		{
+			Record(Walk);
+		}
+		return Walk.Activity;
+	};
+
+	// `CBaseCombatWeapon::ActivityOverride` (`0x1024f210`): walk the ladder front to back and take
+	// the first rung the body can play. **The probe tests the candidate as the actor table would
+	// leave it**, because retail passes each row's output through the owner's `NPC_TranslateActivity`
+	// before asking whether a sequence exists.
+	auto WeaponTranslate = [&](const FString& Base) -> FString
+	{
+		if (Ladder == nullptr)
+		{
+			return Base;
+		}
+		const FTranslation Result = Translate(*Ladder, Base, [&](const FString& Candidate)
+			{ return Carries(ActorTranslate(Candidate, /*bRecord*/ false)); });
+		if (Result.bTranslated)
+		{
+			Out.WeaponRung = Result.Rung;
+			Out.bRequired = Result.bRequired;
+		}
+		return Result.Activity;
+	};
+
+	if (!bCast)
+	{
+		// The pinned player order: `SetIdealActivity` -> `+0x5f4` -> `+0x5e0` -> `SetActivity`. One
+		// pass, no alternation, and no availability probe after it — a player miss resolves to
+		// nothing and is named by the caller, which is what the controlled corpus records.
+		Out.Iterations = 1;
+		Out.FirstWeaponActivity = WeaponTranslate(Out.Requested);
+		Out.WeaponActivity = Out.FirstWeaponActivity;
+		Out.Resolved = ActorTranslate(Out.WeaponActivity, /*bRecord*/ false);
+		return Out;
+	}
+
+	// 1. `+0x5dc` pre-translates the raw request.
+	FString Current = Out.Requested;
+	if (PreBody != INDEX_NONE)
+	{
+		const FNpcTranslation Walk = NpcTranslate(PreBody, Current, CoverContext, NoLiveState,
+			Carries);
+		Record(Walk);
+		Current = Walk.Activity;
+	}
+	Out.PreTranslation = Current;
+
+	// 2. the weapon translator, whose first answer is retained separately from the last.
+	Current = WeaponTranslate(Current);
+	Out.FirstWeaponActivity = Current;
+
+	// 3. up to five (`+0x5e0`, `+0x5f4`) alternations, remembering the latest CHANGED class answer.
+	// The loop stops when the weapon answer equals the activity that entered the iteration.
+	for (int32 Pass = 0; Pass < GMaxAlternations; ++Pass)
+	{
+		++Out.Iterations;
+		const FString ClassAnswer = ActorTranslate(Current, /*bRecord*/ true);
+		if (!ClassAnswer.Equals(Current, ESearchCase::IgnoreCase))
+		{
+			Out.ClassActivity = ClassAnswer;
+		}
+		const FString WeaponAnswer = WeaponTranslate(ClassAnswer);
+		if (WeaponAnswer.Equals(Current, ESearchCase::IgnoreCase))
+		{
+			break;
+		}
+		Current = WeaponAnswer;
+	}
+	Out.WeaponActivity = Current;
+
+	// 4. a scripted custom move returns without an availability probe.
+	if (Out.Requested.Equals(GScriptCustomMove, ESearchCase::IgnoreCase))
+	{
+		Out.Resolved = Current;
+		return Out;
+	}
+
+	// 5. availability, in the recovered order: the final weapon answer, the remembered class answer,
+	// the first weapon answer, then the original logical request.
+	//
+	// A caller whose contract predates the fallback ladder reads the miss and keeps its own answer,
+	// so the probe is what its `bAllowFallbackLadder` switches off: a gait resolved through rung 3
+	// is not that gait, and reporting it as one is the silent substitution the record exists to
+	// prevent.
+	if (!Intent.bAllowFallbackLadder)
+	{
+		Out.Resolved = Current;
+		return Out;
+	}
+
+	const FString* const Rungs[] =
+	{
+		&Out.WeaponActivity, &Out.ClassActivity, &Out.FirstWeaponActivity, &Out.Requested
+	};
+	for (int32 Rung = 0; Rung < static_cast<int32>(UE_ARRAY_COUNT(Rungs)); ++Rung)
+	{
+		if (Rungs[Rung]->IsEmpty() || !Carries(*Rungs[Rung]))
+		{
+			continue;
+		}
+		Out.Resolved = *Rungs[Rung];
+		Out.AvailabilityRung = Rung + 1;
+		return Out;
+	}
+
+	// The recovered last resort, keyed on the ORIGINAL request rather than on the translated one.
+	if (Out.Requested.Equals(GRunActivity, ESearchCase::IgnoreCase))
+	{
+		Out.Resolved = GWalkActivity;
+		Out.bRunToWalk = true;
+		return Out;
+	}
+
+	// Nothing was playable. The record names what the translation produced, which is what a miss has
+	// to be declared against.
+	Out.Resolved = Out.WeaponActivity;
+	return Out;
 }
 
 FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant)

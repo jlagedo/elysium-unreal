@@ -30,55 +30,6 @@ namespace
 		{ EElysiumAnimActivityCode::Treadwater,  TEXT("ACT_TREADWATER") },
 	};
 
-	// The actor/form table. Both rows carry the authored `required` bit, which is reported and never
-	// acted on — the pinned server translator does not read it.
-	const FElysiumActivityTranslation GActorTranslations[] =
-	{
-		{ TEXT("ACT_WALK_RELAXED"), TEXT("ACT_WALK"), true },
-		{ TEXT("ACT_RUN_RELAXED"),  TEXT("ACT_RUN"),  true },
-	};
-
-	// The layer rung's seeded weapon rows (CCC10, `docs/vtmb/combat-and-damage.md`). Every firearm's
-	// ordinary attack realizes `ACT_RANGE_ATTACK1_LAYER`; this is what turns it into the
-	// family-specific sequence set the shared `move_and_ranged` bank actually carries. `CCC11`
-	// extends the roster for real weapon-fire gameplay — this rung only needs enough of it to prove
-	// the resolver's activity-keyed path end to end.
-	const FElysiumActivityTranslation GGlockLayerTranslations[] =
-	{
-		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_GLOCK"), true },
-	};
-	const FElysiumActivityTranslation GM37LayerTranslations[] =
-	{
-		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_M37"), true },
-	};
-	const FElysiumActivityTranslation GSteyrLayerTranslations[] =
-	{
-		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_STEYR"), true },
-	};
-	const FElysiumActivityTranslation GSubmachineGunLayerTranslations[] =
-	{
-		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_SUBMACHINEGUN"), true },
-	};
-	const FElysiumActivityTranslation GCrossbowLayerTranslations[] =
-	{
-		{ TEXT("ACT_RANGE_ATTACK1_LAYER"), TEXT("ACT_RANGE_ATTACK_LAYER_CROSSBOW"), true },
-	};
-
-	struct FElysiumWeaponTranslationTable
-	{
-		const TCHAR* WeaponTag;
-		TArrayView<const FElysiumActivityTranslation> Rows;
-	};
-
-	const FElysiumWeaponTranslationTable GWeaponTranslationTables[] =
-	{
-		{ TEXT("glock"),         MakeArrayView(GGlockLayerTranslations) },
-		{ TEXT("m37"),           MakeArrayView(GM37LayerTranslations) },
-		{ TEXT("steyr"),         MakeArrayView(GSteyrLayerTranslations) },
-		{ TEXT("submachinegun"), MakeArrayView(GSubmachineGunLayerTranslations) },
-		{ TEXT("crossbow"),      MakeArrayView(GCrossbowLayerTranslations) },
-	};
-
 	// The one-handed roster (`docs/vtmb/animation_and_movers.md` A.4, measured over both melee
 	// banks). Every other tag — every firearm/thrown weapon, and the melee `bushhook`/
 	// `sledgehammer` — takes the default two-handed mask; the two-handed melee pair is listed
@@ -99,19 +50,6 @@ namespace
 		{ TEXT("bushhook"),     EElysiumWeaponGrip::TwoHanded },
 		{ TEXT("sledgehammer"), EElysiumWeaponGrip::TwoHanded },
 	};
-
-	const FElysiumActivityTranslation* FindRow(TArrayView<const FElysiumActivityTranslation> Table,
-		const FString& From)
-	{
-		for (const FElysiumActivityTranslation& Row : Table)
-		{
-			if (From.Equals(Row.From, ESearchCase::IgnoreCase))
-			{
-				return &Row;
-			}
-		}
-		return nullptr;
-	}
 }
 
 const TCHAR* ActivityName(EElysiumAnimActivityCode Code)
@@ -241,27 +179,6 @@ const TCHAR* AirPhaseName(EElysiumAirPhase Phase)
 	}
 }
 
-TArrayView<const FElysiumActivityTranslation> ActorTranslations()
-{
-	return MakeArrayView(GActorTranslations);
-}
-
-TArrayView<const FElysiumActivityTranslation> WeaponTranslations(const FString& WeaponTag)
-{
-	for (const FElysiumWeaponTranslationTable& Table : GWeaponTranslationTables)
-	{
-		if (WeaponTag.Equals(Table.WeaponTag, ESearchCase::IgnoreCase))
-		{
-			return Table.Rows;
-		}
-	}
-	// Every other tag — unarmed, a melee weapon, a ranged family this rung has not seeded — has no
-	// override row, and an unarmed body's table is empty in retail too. The pass below still runs
-	// over this view and terminates on its own stop condition, which is why the seam is exercised
-	// rather than skipped.
-	return TArrayView<const FElysiumActivityTranslation>();
-}
-
 EElysiumWeaponGrip WeaponGrip(const FString& WeaponTag)
 {
 	for (const FElysiumWeaponGripEntry& Entry : GWeaponGrips)
@@ -272,43 +189,6 @@ EElysiumWeaponGrip WeaponGrip(const FString& WeaponTag)
 		}
 	}
 	return EElysiumWeaponGrip::TwoHanded;
-}
-
-FElysiumTranslationResult TranslateActivity(const FString& Activity, const FString& WeaponTag,
-	const FString& FormTag)
-{
-	// The form half of the actor table has no recovered rows; the tag rides through so the seam takes
-	// it rather than growing a second parameter later.
-	(void)FormTag;
-
-	FElysiumTranslationResult Out;
-	Out.Incoming = Activity;
-	FString Current = Activity;
-
-	// Weapon first — `Weapon_TranslateActivity` at virtual +0x5f4, the pinned player order.
-	if (const FElysiumActivityTranslation* Row = FindRow(WeaponTranslations(WeaponTag), Current))
-	{
-		Out.Incoming = Current;
-		Current = Row->To;
-		Out.bRequired = Row->bRequired;
-		++Out.Iterations;
-	}
-	// Retained whether or not a row applied: retail keeps the first weapon answer separately from the
-	// last, and with an empty table the two agree by construction rather than by accident.
-	Out.FirstWeaponActivity = Current;
-	Out.WeaponActivity = Current;
-
-	// Then the actor/form table — `CBasePlayer::NPC_TranslateActivity` at virtual +0x5e0.
-	if (const FElysiumActivityTranslation* Row = FindRow(ActorTranslations(), Current))
-	{
-		Out.Incoming = Current;
-		Current = Row->To;
-		Out.bRequired = Row->bRequired;
-		++Out.Iterations;
-	}
-
-	Out.Resolved = Current;
-	return Out;
 }
 
 FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
@@ -494,7 +374,24 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	EElysiumAnimSource Source, const FString& Stem, const FElysiumEntityHandle& Character,
 	int32 Variant)
 {
-	const EElysiumAnimActivityCode Code = Classify(Sample, Latch, Gait);
+	EElysiumAnimActivityCode Code = Classify(Sample, Latch, Gait);
+
+	// **The relaxed gait forms belong to the player's own selector.** Retail's cast has no
+	// locomotion classifier: a schedule task requests `ACT_WALK` or `ACT_RUN` outright, and the two
+	// rows that turn a relaxed request back into a plain one are `CBasePlayer::NPC_TranslateActivity`
+	// — a player virtual no cast body reaches. A cast body therefore asks for the plain activity,
+	// because nothing downstream of it would ever undo the relaxed form.
+	if (Source == EElysiumAnimSource::Npc)
+	{
+		if (Code == EElysiumAnimActivityCode::WalkRelaxed)
+		{
+			Code = EElysiumAnimActivityCode::Walk;
+		}
+		else if (Code == EElysiumAnimActivityCode::RunRelaxed)
+		{
+			Code = EElysiumAnimActivityCode::Run;
+		}
+	}
 
 	FElysiumAnimationIntent Out;
 	Out.Character = Character;

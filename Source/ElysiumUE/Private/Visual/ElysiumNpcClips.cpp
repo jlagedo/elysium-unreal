@@ -199,6 +199,22 @@ TArray<FString> FElysiumNpcClipSet::ByActivity(const FString& Activity) const
 	return Out;
 }
 
+bool FElysiumNpcClipSet::HasActivity(const FString& Activity) const
+{
+	if (Activity.IsEmpty())
+	{
+		return false;
+	}
+	for (const TPair<FString, FElysiumNpcClip>& Pair : Clips)
+	{
+		if (Pair.Value.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 TArray<FString> FElysiumNpcClipSet::StanceClips(const FString& AnimName, bool bWantTransitions) const
 {
 	// `stances.mdl` names an idle `Stance_<Name>_Idle_<N>` and the authored blend between two of
