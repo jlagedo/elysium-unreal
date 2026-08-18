@@ -34,6 +34,7 @@ documents:
   - {path: architecture/uasset-bake-spike.md, kind: architecture, owner: content bake, subject: Unreal package bake}
   - {path: architecture/wielded-weapon-integration.md, kind: architecture, owner: wielded weapons, subject: third-person weapon binding modes assets and the wield bake contract}
   - {path: architecture/effects-architecture.md, kind: architecture, owner: effects, subject: Unreal reproduction of VtMB visual and impulse effects}
+  - {path: architecture/water-architecture.md, kind: architecture, owner: water, subject: Unreal reproduction of VtMB water surfaces volumes and underwater}
   - {path: architecture/bouncy-boobs-dynamics.md, kind: research-brief, owner: animation, subject: Bouncy Boobs Dynamics}
 
   - {path: vtmb/bsp_format.md, kind: vtmb-fact, owner: BSP, subject: BSP v17 container}
@@ -80,6 +81,7 @@ documents:
   - {path: vtmb/reflections.md, kind: vtmb-fact, owner: reflections, subject: envmap behavior}
   - {path: vtmb/color_gamma.md, kind: vtmb-fact, owner: rendering, subject: original color pipeline}
   - {path: vtmb/weather.md, kind: vtmb-fact, owner: weather, subject: precipitation and wetness}
+  - {path: vtmb/water.md, kind: vtmb-fact, owner: water, subject: water surfaces volumes and the Source water path}
   - {path: vtmb/effects.md, kind: vtmb-fact, owner: effects, subject: particle framework and the full effect-family inventory}
   - {path: vtmb/vtmb-ui.md, kind: vtmb-fact, owner: user interface, subject: original UI systems}
   - {path: vtmb/m0_menu_build.md, kind: vtmb-fact, owner: user interface, subject: GameUI menu reconstruction}
