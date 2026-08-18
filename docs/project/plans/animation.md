@@ -187,6 +187,13 @@ would reproduce timing retail does not have; whether the composite wants a monta
 weapon layers' overlay treatment is this rung's design call, as is whether a scene's clip
 changes regain a crossfade (the divergence CCC9 recorded).
 
+- **The choreo-scene rewire (hard slice).** The scene pipeline is broken end-to-end and has not
+  been exercised since the LIFE programme started: NPCs do not load at their scene marks, a
+  playing scene reproduces with its cast outside the camera, and the camera and trigger systems
+  have both changed underneath the wiring. The slice re-wires the whole path — actor placement
+  at marks, the scene camera, the triggers that start scenes — before any montage-migration work
+  builds on it. (The arbitration slot's claim lifecycle is proven independently of this; a
+  scene's Scene-band claims submit and release correctly even while the staging is broken.)
 - **The composition weight, measured.** The four-byte autolayer record carries no weight, ramp
   or flags; the scalar lives in the game DLL and only retail answers it. The move is an
   analysis pass over the **banked** captures, not a new hook: the combine is closed arithmetic,

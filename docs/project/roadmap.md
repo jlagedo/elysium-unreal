@@ -311,8 +311,10 @@ The ladder:
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.
 - [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
   the two-component body; ranged only.
-- [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the montage migration,
-  the gesture un-collapse, the measured layer weight, the `Prince_Escort_Male` cluster.
+- [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the choreo-scene rewire
+  hard slice (marks, camera, triggers — the pipeline is broken end-to-end and untested since the
+  LIFE programme started), then the montage migration, the gesture un-collapse, the measured
+  layer weight, the `Prince_Escort_Male` cluster.
 - [ ] **[LIFE8 Alive — played acceptance](plans/animation.md)** — the programme's owner-played
   finish line; owns the capture-tooling trim.
 - [P] **[LIFE9 Secondary-motion calibration](plans/animation.md)** — hair/cloth fitting and
