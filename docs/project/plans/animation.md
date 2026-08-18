@@ -28,14 +28,6 @@ binding metadata are `docs/architecture/wielded-weapon-integration.md`; the corp
 working tree (leader-pose follower, `(classname, sex)` resolution, the green-room `gr_wield`
 lane); what remains is making it *true*:
 
-- **Tracking through the prop bone.** With the prop-bone channels baked, make the drawn weapon
-  actually sit in the animated hand through locomotion and a swing. The honest check
-  (`elysium.gr_wield_check`) has already localised the defect: mapping and tracking are sound —
-  the drawn geometry rides the wearer's own mount bone rigidly — but **placement** fails, the
-  geometry orbiting the hand outside its own bind radius (bat: centre 68 cm out against a 51 cm
-  radius; glock: 127 cm against 13 cm). The weapon's baked bind/reference pose disagrees with the
-  wearer's, so the fix is upstream in the wield bake. No socket, no offset, no correction factor:
-  a placement that needs one means the bake is wrong upstream, and the fix goes there.
 - **The equip funnels.** Parse `wieldmodel_m`/`wieldmodel_f` and `anim_prefix` onto
   `FElysiumItemDef`; attach on equip and detach on holster through
   `FElysiumWeapon::OnEquipped`/`OnHolstered` and `FElysiumInventory::SetActiveWeapon` — no

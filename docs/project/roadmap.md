@@ -301,10 +301,11 @@ The ladder:
   LIFE4's arbitration slot decides it by priority), and the bind loads the asset the record names,
   warning once per `(stem, request, outcome)` when a request binds nothing.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
-  `DA_WieldModels` baked; the honest check runs (`elysium.gr_wield_check` gates mapping, tracking
-  and placement off the drawn mesh's own skinning matrices, and reads placement broken at bake);
-  the channel arbitration slot (which every attack and aim path waits on), tracking through the
-  prop bone, the equip funnels and weapon-state animation open.
+  `DA_WieldModels` baked; tracking through the prop bone landed: the wield bake re-skins a
+  ref-pose-overridden model's geometry into the override frame, and `elysium.gr_wield_check`
+  passes mapping, tracking and placement on animated bases through locomotion and a swing, melee
+  and firearm, both sexes; the channel arbitration slot (which every attack and aim path waits
+  on), the equip funnels, visibility and weapon-state animation open.
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
   discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.

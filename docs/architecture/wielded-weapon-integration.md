@@ -102,7 +102,9 @@ non-Chang wearer) takes a small anim graph blending a sequence player against a 
 per bone; that is a runtime enhancement consuming already-baked clips, never a bake change.
 
 A melee weapon appears to swing because the prop bone belongs to the **character's** skeleton and
-the character's own attack clip moves it; the motion arrives through the character's graph. A
+the character's clip carries it through the arm chain; the motion arrives through the character's
+graph. In the shipped melee clips the mount's local transform under the hand is constant to
+within ~2° — the swing is the arm's, not the mount's. A
 static-mesh optimization for the clip-constant majority remains available later as a bake-side
 change — the manifest already carries the mount bone and constancy facts it would key on — and is
 taken up only if profiling demands it.
@@ -176,8 +178,14 @@ carries every mount its container declares, and a baked base clip carries every 
 container wrote for that clip. Expectations are read per clip from the container, so a masked
 overlay that legitimately owns no mount is not a failure.
 
-Placement accuracy depends on the wield model's bind agreeing with the wearer's, per sex. The bake
-carries each model's own bind through unmodified, so agreement and disagreement both reproduce.
+Placement accuracy depends on the emitted model being self-consistent: when a clip's frame-0 pose
+overrides the reference pose, the bake re-states the mesh's positions and authored normals from the
+bind frame into the override frame (`T(b) = M_ref · M_bind⁻¹`, linear-blend over the same influence
+rules the emitter and the runtime builder use), so the skeleton rows and the geometry describe one
+frame and the drawn composition equals retail's `W(B) · GB(B)⁻¹ · v_bind`. The re-statement is
+loud on a length mismatch, a zero quaternion, or a ref-pose+morph combination. A model's authored
+bind itself is carried as authored, so per-sex agreement and disagreement with the wearer both
+reproduce.
 
 ## Player and NPC
 
@@ -223,21 +231,37 @@ The live acceptance instrument is the green room's `elysium.gr_wield_check` (a C
 window of an animated base and gates three separable claims, failing with the gate name, the worst
 sample, its clip time and the distance:
 
-- **Mapping** — a mount the wearer declares coincides with the wearer's own animated bone, every
-  frame, swing included (retail overwrites a matched bone with the wearer's matrix, so the gap is
-  ~0 or the mechanism is broken).
+- **Mapping** — a mount the wearer declares coincides with the wearer's own animated bone. The
+  comparison is between **hand-frame locals**: the drawn mount in the rendered hand's frame
+  against the wearer's mount local in the game-thread hand's frame — the clip-authored,
+  arm-motion-invariant quantity — scored as the minimum against the wearer's current and previous
+  frame (a deliberate one-game-frame amnesty), and gated on both distance and rotation
+  (`ElysiumWieldMountDeg`, 5°). Retail overwrites a matched bone with the wearer's matrix, so the
+  gap is ~0 or the mechanism is broken. All firearm mounts (`body`, `stock`, `uzi`, `shotgun`,
+  `frame`) are undeclared by every character, so the mapping gate runs only for melee; the
+  verdict line states when it does not run.
 - **Tracking** — the drawn geometry's centre holds its offset in the hand's frame, whatever that
   offset currently is.
-- **Placement** — the hand actually touches the mesh: the drawn centre stays within the mesh's own
-  bind-space bounds radius of the hand, so a weapon riding the hand rigidly from a metre away fails
-  rather than passing as "tracking". No offset is corrected at runtime; a placement failure names
-  the bake as the owner of the fix.
+- **Placement** — the hand actually touches the mesh: the hand's distance to the drawn mesh's
+  bind-space bounding box stays within `max(tolerance, ElysiumWieldTouchCm)`. The 10 cm floor is
+  corpus-derived — the widest authored grip gap over the 61 geometry-bearing models is 7.2 cm
+  (`w_m_pineapple`, `w_m_pistol_glock`), where retail's own clip holds the wrist behind the grip —
+  while the bake-defect class this gate exists for reads at 18 cm and above. No offset is
+  corrected at runtime; a placement failure names the bake as the owner of the fix.
 
 Two guards keep a pass meaningful: the base must move the hand (a near-static or paused base closes
 as *unproven*), and the window aborts, named, when the body or the held weapon changes under it.
+An ablation that strips the prop-bone channels needs a female base to register on the mapping gate:
+the male bank's melee mount channels equal the body's reference-pose local, so removing them
+changes nothing on a male body, while the female bank's diverge by up to 2°.
 
 The check reads the skinning matrices out of the mesh object's **dynamic data** — the last packet
 the render thread actually received — because every cheaper reading lies about a leader-pose
 follower: game-thread socket answers come through the leader bone map, and freshly rebuilt
 `GetCurrentRefToLocalMatrices` values skip the staleness the proxy renders with (the engine gotcha
-in `Source/ElysiumUE/CLAUDE.md`).
+in `Source/ElysiumUE/CLAUDE.md`). The wearer's hand is read from the **body's own render packet**,
+and the window flushes rendering commands each sample so the two packets describe one frame —
+comparing a render-thread packet against a game-thread pose reads as tens of centimetres of
+phantom error mid-swing. A zero-skin-weight bone carries no matrix in a render packet, so the
+wearer's mount itself is never read render-side. The per-sample flush stalls the render thread and
+belongs to this acceptance instrument only, never to gameplay code.

@@ -573,6 +573,99 @@ def _surface_normals(surface):
     return out
 
 
+def _model_space_pose(bones, locals_, context):
+    """Each bone's `(pos, quat)` MODEL-SPACE transform, composed by ordinary FK over `locals_`.
+
+    `locals_` is one source-space `(pos, quat)` per StudioBone, parent-relative -- `Bone.pos`/
+    `Bone.quat`'s own convention, in which a parent-less bone's local already IS its model-space
+    transform. Composition is deliberately CONVENTIONAL, with no `SPLIT_ROTATION` branch: these
+    frames exist to relate geometry to the SKEL section's rows, and every consumer of those rows
+    (Unreal's reference skeleton, `CalculateInvRefMatrices`) composes them by plain inheritance,
+    so a rule applied here and not there would re-open the very disagreement this closes.
+    StudioBone order states a parent before its children, so one ascending pass composes it.
+
+    A zero quaternion cannot name a rotation, so it fails loudly with the bone rather than baking
+    a silently wrong frame -- `read_anim` writes one for a masked-out bone, and a caller passing
+    such a pose here is a caller defect, not data to guess around.
+    """
+    out = []
+    for index, bone in enumerate(bones):
+        pos, quat = locals_[index]
+        quat = _qnorm(quat)
+        if quat is None:
+            raise ValueError(
+                f"{context}: bone {index} ({bone.name!r}) carries a zero quaternion")
+        if bone.parent < 0:
+            out.append((tuple(pos), quat))
+            continue
+        parent_pos, parent_quat = out[bone.parent]
+        out.append((
+            tuple(p + o for p, o in zip(parent_pos, _qrotate(parent_quat, pos))),
+            _qmul(parent_quat, quat),
+        ))
+    return out
+
+
+def _reskin_surfaces(surfaces, bones, ref_pose, context):
+    """Restate every surface's geometry from the container's bind space into `ref_pose`'s space,
+    in place.
+
+    The MESH section's vertices are the model's bind-pose model-space geometry, and Unreal reads
+    them as component-space positions OF THE REFERENCE POSE the SKEL section states
+    (`CalculateInvRefMatrices` derives the skinning inverses from those rows). Overriding the
+    reference pose without restating the geometry therefore bakes a self-contradictory container:
+    the drawn mesh sits off its own skeleton by exactly each skinned bone's bind->override
+    model-space delta -- 68 cm on `w_m_baseball_bat`, 120-144 cm on the pistols, the wield
+    corpus's placement defect. So each vertex is pushed through its influences' rigid moves
+    `T(b) = M_ref(b) * M_bind(b)^-1` -- ordinary linear-blend skinning from the bind frame to the
+    override frame -- and its authored normal rotates the same way, leaving the drawn composition
+    `W(b) * M_ref(b)^-1 * v_ref` equal to retail's `W(b) * M_bind(b)^-1 * v_bind` on every bone.
+
+    Influence handling mirrors what actually reaches the file and the runtime builder: the first
+    `MAX_INFLUENCES` slots (`_mesh_section` truncates there), out-of-range joints resolved to
+    bone 0 and a weightless vertex bound wholly to bone 0 (`ElysiumSkeletalBuild`'s own
+    fallbacks), weights renormalised over what remains. A zero authored normal stays zero, so
+    `_surface_normals`' geometric fallback still recognises it -- and reconstructs from the
+    restated positions.
+    """
+    if len(ref_pose) != len(bones):
+        raise ValueError(
+            f"{context}: ref_pose has {len(ref_pose)} entries, expected {len(bones)} "
+            f"(one per StudioBone)")
+    bind_ms = _model_space_pose(bones, [(b.pos, b.quat) for b in bones], f"{context} (bind)")
+    ref_ms = _model_space_pose(bones, ref_pose, f"{context} (ref_pose)")
+    moves = []
+    for (bind_pos, bind_quat), (ref_pos, ref_quat) in zip(bind_ms, ref_ms):
+        quat = _qmul(ref_quat, _qconj(bind_quat))
+        offset = tuple(r - m for r, m in zip(ref_pos, _qrotate(quat, bind_pos)))
+        moves.append((offset, quat))
+    for surface in surfaces.values():
+        new_pos, new_nrm = [], []
+        for position, normal, joints, weights in zip(surface["pos"], surface["nrm"],
+                                                     surface["joints"], surface["weights"]):
+            influences = [(int(j) if 0 <= int(j) < len(bones) else 0, float(w))
+                          for j, w in zip(joints[:MAX_INFLUENCES], weights[:MAX_INFLUENCES])
+                          if float(w) > 0.0] or [(0, 1.0)]
+            total = sum(w for _j, w in influences)
+            px = py = pz = nx = ny = nz = 0.0
+            for joint, weight in influences:
+                offset, quat = moves[joint]
+                mx, my, mz = _qrotate(quat, position)
+                px += weight * (mx + offset[0])
+                py += weight * (my + offset[1])
+                pz += weight * (mz + offset[2])
+                rx, ry, rz = _qrotate(quat, normal)
+                nx += weight * rx
+                ny += weight * ry
+                nz += weight * rz
+            new_pos.append((px / total, py / total, pz / total))
+            length = (nx * nx + ny * ny + nz * nz) ** 0.5
+            new_nrm.append((nx / length, ny / length, nz / length) if length > 1e-12
+                           else (0.0, 0.0, 0.0))
+        surface["pos"] = new_pos
+        surface["nrm"] = new_nrm
+
+
 def _mesh_section(surfaces, matnames, bone_map):
     """Concatenate the per-material surfaces into one vertex list plus a section table.
 
@@ -1141,7 +1234,10 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     a sequence of `(pos, quat)` indexed by original StudioBone index, in the same source-space
     conventions as `Bone.pos`/`Bone.quat` (`wield_corpus.bake_pose`'s shape). It exists for the
     wielded-weapon models whose faithful reference pose is the model's own clip at frame 0 rather
-    than its container bind. Left `None`, the container's own bind pose is written exactly as
+    than its container bind. The "MESH" geometry is restated into that pose in the same write
+    (`_reskin_surfaces`) -- vertices are meaningful only against the reference pose they are
+    stored with, so an override that left them in bind space would bake a container that
+    disagrees with itself. Left `None`, the container's own bind pose is written exactly as
     before -- byte-identical output for every caller that does not pass it."""
     loaded = mdl.load(idx, model_path)
     if not loaded:
@@ -1160,6 +1256,16 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     tex_cache = {}
     matinfo = {name: mdl._resolve_material(name, search, lambda k: install.read(idx, k),
                                            out_dir, tex_cache) for name in matnames}
+
+    if ref_pose is not None:
+        # BEFORE the mesh section reads the surfaces: the SKEL override below changes the frame
+        # the vertices are interpreted in, so the vertices move into it in the same write.
+        _reskin_surfaces(surfaces, bones, ref_pose, model_path)
+        if anorms and S.flex_descs(d):
+            # Morph deltas are bind-space vertex offsets and nothing restates them; baking them
+            # against an overridden reference pose would be silently wrong on every frame. No
+            # caller combines the two today -- refuse loudly rather than let one start to.
+            raise ValueError(f"{model_path}: ref_pose override cannot carry a morph section")
 
     rows, bone_map, reparented = unreal_bones(bones)
     dynamics_payload, dynamics_count = _dynamics_section(model_path, d, bones)

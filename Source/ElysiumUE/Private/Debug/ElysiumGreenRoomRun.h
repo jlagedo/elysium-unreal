@@ -514,8 +514,8 @@ private:
 		// Whether the wearer declares the mount, read when the window opens; the mapping gate only
 		// exists for a declared mount (an undeclared one has no wearer bone to coincide with).
 		bool bWearerDeclares = false;
-		// The mesh's own bind-space bounds radius — the placement gate's yardstick for "the hand
-		// touches the mesh".
+		// The mesh's own bind-space bounds radius — context in the verdict; the placement gate
+		// itself measures the hand against the drawn bounding box, not this sphere.
 		float BindRadiusCm = 0.0f;
 		TWeakObjectPtr<const USkeletalMeshComponent> Body;
 		TWeakObjectPtr<const USkeletalMeshComponent> Wield;
@@ -526,6 +526,11 @@ private:
 		// the base animated at all, without which a pass claims nothing.
 		FVector HandStart = FVector::ZeroVector;
 		float HandPeakCm = 0.0f;
+		// The wearer's mount local in the hand's frame at the previous sample. The drawn side
+		// trails the game thread by a pipeline frame, so the mapping gate scores each drawn
+		// local against the wearer's current and previous locals.
+		FTransform PrevWearerLocal = FTransform::Identity;
+		bool bPrevWearerLocal = false;
 		// One worst reading per gate, each with the sample and clip time it landed on.
 		float WorstMapCm = 0.0f;
 		float WorstMapDeg = 0.0f;
@@ -534,7 +539,8 @@ private:
 		float WorstDriftCm = 0.0f;
 		int32 WorstDriftSample = 0;
 		float WorstDriftTime = 0.0f;
-		// Placement keeps the worst distance-beyond-radius and the raw distance it came from.
+		// Placement keeps the worst hand-to-drawn-box distance and, for context, the raw
+		// hand-to-centre distance at that same sample.
 		float WorstPlaceCm = 0.0f;
 		float WorstPlaceDistCm = 0.0f;
 		int32 WorstPlaceSample = 0;

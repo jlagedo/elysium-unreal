@@ -459,5 +459,135 @@ class LengthMismatchTests(unittest.TestCase):
             UEK._ref_pose_rows(rows, bone_map, [((0.0, 0.0, 0.0), IDENTITY_Q)], "ctx")
 
 
+def _surface(pos, nrm, joints, weights, tris=()):
+    """The minimal `decode_skinned`-shaped surface `_reskin_surfaces` reads."""
+    return {"pos": list(pos), "nrm": list(nrm), "uv": [(0.0, 0.0)] * len(pos),
+            "joints": [list(j) for j in joints], "weights": [list(w) for w in weights],
+            "tris": list(tris)}
+
+
+def _rigid_move(bind_ms, ref_ms, point):
+    """`M_ref * M_bind^-1` applied to a model-space point, via the same independent numpy path
+    `_world_transform` uses -- never the quaternion helpers under test."""
+    bind_pos, bind_r = bind_ms
+    ref_pos, ref_r = ref_ms
+    local = bind_r.T @ (np.asarray(point, dtype=np.float64) - bind_pos)
+    return ref_r @ local + ref_pos
+
+
+class RefPoseGeometryTests(unittest.TestCase):
+    """`_reskin_surfaces`: the MESH geometry follows the SKEL section's reference-pose override.
+
+    The vertices in the container are meaningful only against the reference pose they are stored
+    with (`CalculateInvRefMatrices` derives the skinning inverses from the SKEL rows), so an
+    override that moved the skeleton but not the geometry bakes a self-contradictory file -- the
+    wield corpus's measured placement defect. Expectations here are composed through
+    `_world_transform`'s numpy matrices, independent of the quaternion helpers under test.
+    """
+
+    # A two-bone chain whose child both translates and rotates between bind and override, so a
+    # bug that drops either term cannot pass.
+    BONES = [
+        bone(0, "root", -1, (0.0, 0.0, 0.0), IDENTITY_Q),
+        bone(1, "grip", 0, (1.0, 2.0, 3.0), QUAT_Z90),
+    ]
+    REF_POSE = [
+        ((0.0, 0.0, 0.0), IDENTITY_Q),
+        ((4.0, -1.0, 0.5), (0.38268343, 0.0, 0.0, 0.92387953)),  # 45 deg about X, moved
+    ]
+
+    def _model_space(self, locals_):
+        out = []
+        for index, b in enumerate(self.BONES):
+            pos, quat = locals_[index]
+            if b.parent < 0:
+                out.append((np.asarray(pos, dtype=np.float64), mdl_skel.rot_matrix(quat)))
+                continue
+            parent_pos, parent_r = out[b.parent]
+            out.append((parent_pos + parent_r @ np.asarray(pos, dtype=np.float64),
+                        parent_r @ mdl_skel.rot_matrix(quat)))
+        return out
+
+    def test_identity_override_leaves_geometry_unchanged(self) -> None:
+        bind = [(b.pos, b.quat) for b in self.BONES]
+        surface = _surface(pos=[(0.5, 0.25, -1.0)], nrm=[(0.0, 1.0, 0.0)],
+                           joints=[(1, 0, 0)], weights=[(1.0, 0.0, 0.0)])
+        surfaces = {"mat": surface}
+
+        UEK._reskin_surfaces(surfaces, self.BONES, bind, "ctx")
+
+        self.assertTrue(np.allclose(surface["pos"][0], (0.5, 0.25, -1.0), atol=1e-6))
+        self.assertTrue(np.allclose(surface["nrm"][0], (0.0, 1.0, 0.0), atol=1e-6))
+
+    def test_single_influence_vertex_moves_rigidly_with_its_bone(self) -> None:
+        vertex = (0.5, 0.25, -1.0)
+        surface = _surface(pos=[vertex], nrm=[(0.0, 1.0, 0.0)],
+                           joints=[(1, 0, 0)], weights=[(1.0, 0.0, 0.0)])
+        bind_ms = self._model_space([(b.pos, b.quat) for b in self.BONES])
+        ref_ms = self._model_space(self.REF_POSE)
+
+        UEK._reskin_surfaces({"mat": surface}, self.BONES, self.REF_POSE, "ctx")
+
+        expected = _rigid_move(bind_ms[1], ref_ms[1], vertex)
+        self.assertTrue(np.allclose(surface["pos"][0], expected, atol=1e-6),
+                        f"{surface['pos'][0]} != {expected}")
+        # The normal takes the rotation alone: same move, zero translation.
+        expected_nrm = _rigid_move(bind_ms[1], ref_ms[1], (0.0, 1.0, 0.0)) \
+            - _rigid_move(bind_ms[1], ref_ms[1], (0.0, 0.0, 0.0))
+        self.assertTrue(np.allclose(surface["nrm"][0], expected_nrm, atol=1e-6))
+        self.assertAlmostEqual(float(np.linalg.norm(surface["nrm"][0])), 1.0, places=6)
+
+    def test_blended_vertex_interpolates_its_influences(self) -> None:
+        vertex = (2.0, 0.0, 1.0)
+        surface = _surface(pos=[vertex], nrm=[(0.0, 0.0, 1.0)],
+                           joints=[(0, 1, 0)], weights=[(0.25, 0.75, 0.0)])
+        bind_ms = self._model_space([(b.pos, b.quat) for b in self.BONES])
+        ref_ms = self._model_space(self.REF_POSE)
+
+        UEK._reskin_surfaces({"mat": surface}, self.BONES, self.REF_POSE, "ctx")
+
+        expected = (0.25 * _rigid_move(bind_ms[0], ref_ms[0], vertex)
+                    + 0.75 * _rigid_move(bind_ms[1], ref_ms[1], vertex))
+        self.assertTrue(np.allclose(surface["pos"][0], expected, atol=1e-6),
+                        f"{surface['pos'][0]} != {expected}")
+
+    def test_weightless_vertex_binds_wholly_to_bone_zero(self) -> None:
+        # Mirrors `ElysiumSkeletalBuild`'s own fallback (`Influences.Emplace(0, 1.0f)`), so the
+        # restated geometry and the built mesh keep agreeing on what such a vertex rides.
+        vertex = (1.0, 1.0, 1.0)
+        surface = _surface(pos=[vertex], nrm=[(1.0, 0.0, 0.0)],
+                           joints=[(1, 0, 0)], weights=[(0.0, 0.0, 0.0)])
+        ref_pose = [((5.0, 0.0, 0.0), IDENTITY_Q), (self.BONES[1].pos, self.BONES[1].quat)]
+
+        UEK._reskin_surfaces({"mat": surface}, self.BONES, ref_pose, "ctx")
+
+        self.assertTrue(np.allclose(surface["pos"][0], (6.0, 1.0, 1.0), atol=1e-6))
+
+    def test_zero_authored_normal_stays_zero_for_the_geometric_fallback(self) -> None:
+        surface = _surface(pos=[(0.5, 0.25, -1.0)], nrm=[(0.0, 0.0, 0.0)],
+                           joints=[(1, 0, 0)], weights=[(1.0, 0.0, 0.0)])
+
+        UEK._reskin_surfaces({"mat": surface}, self.BONES, self.REF_POSE, "ctx")
+
+        self.assertEqual(surface["nrm"][0], (0.0, 0.0, 0.0))
+
+    def test_length_mismatch_fails_loudly(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            UEK._reskin_surfaces({}, self.BONES, [((0.0, 0.0, 0.0), IDENTITY_Q)],
+                                 "models/weapons/w_short.mdl")
+
+        self.assertIn("models/weapons/w_short.mdl", str(ctx.exception))
+
+    def test_zero_quaternion_in_the_override_fails_loudly(self) -> None:
+        ref_pose = [((0.0, 0.0, 0.0), IDENTITY_Q), ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))]
+
+        with self.assertRaises(ValueError) as ctx:
+            UEK._reskin_surfaces({}, self.BONES, ref_pose, "models/weapons/w_zero.mdl")
+
+        message = str(ctx.exception)
+        self.assertIn("models/weapons/w_zero.mdl", message)
+        self.assertIn("grip", message)
+
+
 if __name__ == "__main__":
     unittest.main()
