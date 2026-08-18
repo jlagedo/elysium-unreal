@@ -1204,8 +1204,15 @@ float FElysiumNpc::RunSpecialIdleActivity(double Now)
 		/*bTalking=*/IsDispositionTalking(), Now,
 		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
 	float Seconds = 0.f;
+	// HELD, for the third time and the same reason: the scheduler holds this pose off `TaskEndsAt`,
+	// which is this clip's own length, and re-checks only on its own cadence. A stance fidget or a
+	// transition (`ElysiumStance::Select` answers both with bLoop false) therefore retires before
+	// the task that replaces it, and the slot's weight falls to the locomotion machine -- which for
+	// a body standing still with nothing published is the reference bind. That is the flash on a bum
+	// at a barrel fire: the drinking gesture IS an authored fidget on this path.
 	if (!Choice.IsSet()
-		|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds))
+		|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds,
+			/*bHoldFinalPose=*/!Choice.bLoop))
 	{
 		return -1.f;
 	}

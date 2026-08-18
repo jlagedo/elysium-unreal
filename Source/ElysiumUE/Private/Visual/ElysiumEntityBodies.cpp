@@ -1522,7 +1522,24 @@ bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const F
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FString Clip = Anims ? Anims->PickActivityClip(Stem, Activity, Variant) : FString();
-	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, bLoop, OutSeconds, bHoldFinalPose);
+	if (Clip.IsEmpty())
+	{
+		return false;
+	}
+	// The CLIP decides whether it loops, not the caller. VtMB reads `m_bSequenceLoops` off the
+	// sequence's own flags (RE35, `FElysiumNpcClip::IsLooping`), so an authored loop keeps looping
+	// however it was asked for -- and the ambient callers ask for every activity with bLoop false.
+	// Without this a body-language idle authored as a loop plays once and then stands on its last
+	// frame, which is what a held one-shot means: frozen, not resting.
+	bool bLoops = bLoop;
+	if (const FElysiumNpcClipSet* Set = Anims->GetClipSet(Stem))
+	{
+		if (const FElysiumNpcClip* Row = Set->Find(Clip))
+		{
+			bLoops = bLoop || Row->IsLooping();
+		}
+	}
+	return PlayNpcClip(Body, Stem, Clip, bLoops, OutSeconds, bHoldFinalPose && !bLoops);
 }
 
 bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,

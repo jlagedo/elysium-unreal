@@ -55,6 +55,10 @@ struct FElysiumNpcClip
 	// so playing it standalone folds the skeleton up instead of animating it. The engine composes
 	// these on top of something else and never selects one, which is why they carry no activity.
 	bool IsAdditive() const { return (Flags & 0x14) == 0x14; }
+	// Bit 0 — STUDIO_LOOPING. `ResetSequenceInfo` derives `m_bSequenceLoops` from it, so whether a
+	// clip loops is a property of the CLIP and not of whoever asked to play it: an authored loop
+	// keeps looping however it was requested.
+	bool IsLooping() const { return (Flags & 1) != 0; }
 	// Bit 1 — this clip takes no transition. It snaps in AND drops every clip still fading out,
 	// so it lands on a clean pose rather than over the tail of whatever it interrupted. 2,642 of
 	// the 5,836 shipped sequences set it, most of them attacks, and it is much of why VtMB's
