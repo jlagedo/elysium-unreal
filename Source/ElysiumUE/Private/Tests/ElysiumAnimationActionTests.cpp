@@ -8,6 +8,7 @@
 #include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
 #include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumAnimGraph.h"
+#include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
 // CCC4 — the intent, the resolver and the selection record.
@@ -1658,6 +1659,178 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 			|| IsOneShotState(EElysiumGraphState::Sneak)
 			|| IsOneShotState(EElysiumGraphState::Idle)
 			|| IsOneShotState(EElysiumGraphState::Falling));
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// LIFE3 - the driver, and the one speed number it publishes.
+//
+// The whole chain is content-free, so all of it is asserted here: the body key the tables resolve
+// under, the gait the stride is read at, the discrete key that decides when anything re-resolves,
+// and the sample the record was classified from. Every one of them is a place the speed and the
+// pose can come apart, and the failure they share is the same one -- the body plays a cell it is
+// not travelling at.
+// =====================================================================================
+
+namespace
+{
+	// A five-cell `move_yaw` fan over the shipped -180..180 axis: back, side, forward, side, back.
+	FElysiumGaitSpeedTable Fan(float Forward, float Side, float Back)
+	{
+		FElysiumGaitSpeedTable Table;
+		Table.Count = 5;
+		Table.AxisMin = -180.0f;
+		Table.AxisMax = 180.0f;
+		Table.Cells[0] = Back;
+		Table.Cells[1] = Side;
+		Table.Cells[2] = Forward;
+		Table.Cells[3] = Side;
+		Table.Cells[4] = Back;
+		Table.Scale = 1.0f;
+		return Table;
+	}
+
+	// A grounded body travelling straight ahead at `Speed`, which is what a path-following cast
+	// member reports once its facing has settled onto its path.
+	FElysiumLocomotionSample Travelling(float Speed)
+	{
+		FElysiumLocomotionSample Sample;
+		Sample.bOnGround = true;
+		Sample.LocalVelocity = FVector(Speed, 0.0f, 0.0f);
+		Sample.WishScale = Speed > 0.0f ? 1.0f : 0.0f;
+		return Sample;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationDriverTest,
+	"Elysium.Substrate.AnimationDriver", GElysiumAnimationTestFlags)
+bool FElysiumAnimationDriverTest::RunTest(const FString&)
+{
+	constexpr float ForwardWalk = 140.0f;
+	constexpr float SideWalk = 70.0f;
+	constexpr float BackWalk = 60.0f;
+	constexpr float ForwardRun = 560.0f;
+
+	// --- The body key: the same chain the pose walks ----------------------------------------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.ActorClassname = TEXT("npc_gangbanger_a");
+		Driver.WeaponClassname = TEXT("item_w_glock_17c");
+		Driver.FormTag = TEXT("human");
+		Driver.ActorState = EElysiumNpcState::Alert;
+		Driver.Variant = 3;
+
+		const FElysiumGaitSpeedRequest Key = Driver.BuildGaitKey();
+		TestEqual(TEXT("the gait key walks the body's own pre-translation source"),
+			static_cast<int32>(Key.Source), static_cast<int32>(EElysiumAnimSource::Npc));
+		TestEqual(TEXT("...carries the actor classname that finds its class bodies"),
+			Key.ActorClassname, Driver.ActorClassname);
+		TestEqual(TEXT("...and the state the alert/relaxed branch reads"),
+			static_cast<int32>(Key.ActorState), static_cast<int32>(EElysiumNpcState::Alert));
+		TestEqual(TEXT("...beside the weapon and form it already carried"),
+			Key.WeaponClassname, Driver.WeaponClassname);
+
+		// Each of the three is a different set of sequences, so each of the three has to move the
+		// key. A key that compares equal across them resolves one body's speeds for another's pose.
+		FElysiumGaitSpeedRequest Player = Key;
+		Player.Source = EElysiumAnimSource::Player;
+		TestTrue(TEXT("a player-sourced key is not the same key"), Player != Key);
+
+		FElysiumGaitSpeedRequest OtherClass = Key;
+		OtherClass.ActorClassname = TEXT("npc_thug_a");
+		TestTrue(TEXT("another class body is not the same key"), OtherClass != Key);
+
+		FElysiumGaitSpeedRequest Combat = Key;
+		Combat.ActorState = EElysiumNpcState::Combat;
+		TestTrue(TEXT("another actor state is not the same key"), Combat != Key);
+
+		const FElysiumGaitSpeedRequest Same = Key;
+		TestTrue(TEXT("and an unchanged body is"), Same == Key);
+	}
+
+	// --- The stride: classified from the graph state, read at a direction -------------------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, SideWalk, BackWalk);
+		Driver.GaitSpeeds.Run = Fan(ForwardRun, 300.0f, 240.0f);
+
+		// The record a translated request actually publishes: the resolved name is a weapon-ladder
+		// literal outside the slice's own code vocabulary, and the resolve-time cell is whatever the
+		// body happened to be doing when the activity last changed.
+		Driver.Selection.GraphState = EElysiumGraphState::Walk;
+		Driver.Selection.ResolvedActivity = TEXT("ACT_WALK_RELAXED_PISTOL");
+		Driver.Selection.GroundSpeedCmPerSecond = 999.0f;
+
+		TestEqual(TEXT("an armed walk still reads its own walk fan"),
+			Driver.GaitSpeedForSelection(0.0f), ForwardWalk);
+		TestEqual(TEXT("...at the direction it is travelling in, not at forward"),
+			Driver.GaitSpeedForSelection(90.0f), SideWalk);
+		TestEqual(TEXT("...including the reversal a patrol turnaround plays"),
+			Driver.GaitSpeedForSelection(180.0f), BackWalk);
+
+		Driver.Selection.GraphState = EElysiumGraphState::Run;
+		TestEqual(TEXT("and the run state reads the run fan"),
+			Driver.GaitSpeedForSelection(0.0f), ForwardRun);
+
+		// Anything that is not one of the three gaits keeps the resolved cell's own authored speed,
+		// which is what a scripted label route publishes and what the caller asked for by name.
+		Driver.Selection.GraphState = EElysiumGraphState::Idle;
+		TestEqual(TEXT("a non-gait state keeps the resolved cell's own speed"),
+			Driver.GaitSpeedForSelection(0.0f), 999.0f);
+	}
+
+	// --- The discrete key, and the sample the record was classified from --------------------------
+	{
+		constexpr float Dt = 1.0f / 60.0f;
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, SideWalk, BackWalk);
+		Driver.GaitSpeeds.Run = Fan(ForwardRun, 300.0f, 240.0f);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+
+		const FElysiumLocomotionSample Walking = Travelling(ForwardWalk);
+		Driver.Tick(Dt, Walking, nullptr, nullptr);
+		const uint32 First = Driver.Generation;
+		TestTrue(TEXT("the first tick is a request"), First > 0);
+		TestEqual(TEXT("a walking body stands in the walk state"),
+			AsInt(Driver.Selection.GraphState), AsInt(EElysiumGraphState::Walk));
+		// With no catalog behind it the record resolves nothing -- and the stride is STILL the
+		// body's own fan, because the gait comes off the projected state rather than off a resolved
+		// name.
+		TestEqual(TEXT("a body with no vocabulary still travels at its own authored cell"),
+			Driver.Selection.GroundSpeedCmPerSecond, ForwardWalk);
+
+		// The sample the driver classified, kept beside the record it produced.
+		TestEqual(TEXT("the driver keeps the sample it classified"),
+			Driver.Sample.Speed2D(), ForwardWalk);
+		TestEqual(TEXT("...with the filtered pose parameter the record was steered by"),
+			Driver.Sample.MoveYawPose, Driver.Selection.MoveYaw);
+
+		Driver.Tick(Dt, Walking, nullptr, nullptr);
+		TestEqual(TEXT("the same request does not re-resolve"), Driver.Generation, First);
+
+		// The classname arrives a frame late -- the owner has to resolve the entity before it can
+		// push one -- so it has to be part of the key, or the class-less first answer is kept for
+		// the life of the request.
+		Driver.ActorClassname = TEXT("npc_gangbanger_a");
+		Driver.Tick(Dt, Walking, nullptr, nullptr);
+		TestTrue(TEXT("a resolved actor classname is a new request"), Driver.Generation > First);
+
+		const uint32 Classed = Driver.Generation;
+		Driver.Tick(Dt, Walking, nullptr, nullptr);
+		TestEqual(TEXT("...and settles once it stops moving"), Driver.Generation, Classed);
+
+		// A reset drops the published pair together: a sample left behind beside an empty record
+		// would trace a body moving through a frame nothing classified.
+		Driver.Reset();
+		TestEqual(TEXT("a reset forgets the sample with the record"), Driver.Sample.Speed2D(), 0.0f);
 	}
 
 	return true;

@@ -65,6 +65,9 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	float AuthoredWalkSpeedCmPerSecond = 0.f;
 	float AuthoredRunSpeedCmPerSecond = 0.f;
 	float AuthoredSneakSpeedCmPerSecond = 0.f;
+	// How much of the forward cell a fully-reversed direction commands. One means a flat fan, which
+	// is the default so every existing case reads exactly the number it set above.
+	float StrafeSpeedFraction = 1.0f;
 
 	void Record(const FString& Call) const
 	{
@@ -162,14 +165,25 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		}
 		return bFacing ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
 	}
-	virtual float GaitSpeed(EElysiumNpcGaitKind Gait) const override
+	// The stub carries one cell per gait rather than a fan, and `StrafeSpeedFraction` is how a test
+	// says "this body's sideways cells are slower than its forward one" without building a table:
+	// the fraction is applied by how far off forward the direction is, so a substrate test can
+	// assert that a turning body is commanded a different number than a settled one.
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees = 0.0f) const override
 	{
+		float Forward = AuthoredWalkSpeedCmPerSecond;
 		switch (Gait)
 		{
-		case EElysiumNpcGaitKind::Run:   return AuthoredRunSpeedCmPerSecond;
-		case EElysiumNpcGaitKind::Sneak: return AuthoredSneakSpeedCmPerSecond;
-		default:                         return AuthoredWalkSpeedCmPerSecond;
+		case EElysiumNpcGaitKind::Run:   Forward = AuthoredRunSpeedCmPerSecond;   break;
+		case EElysiumNpcGaitKind::Sneak: Forward = AuthoredSneakSpeedCmPerSecond; break;
+		default: break;
 		}
+		if (Forward <= 0.f || !FMath::IsFinite(MoveYawDegrees))
+		{
+			return Forward;   // no fan to read a direction out of: the caller falls back
+		}
+		const float Off = FMath::Abs(FRotator::NormalizeAxis(MoveYawDegrees)) / 180.0f;
+		return Forward * FMath::Lerp(1.0f, StrafeSpeedFraction, FMath::Clamp(Off, 0.0f, 1.0f));
 	}
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override
 	{

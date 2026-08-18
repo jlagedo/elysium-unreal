@@ -63,6 +63,10 @@ public:
 	void AnimTick(float DeltaSeconds);
 	// The frame's selection record. Never null, for the same reason the player's is not.
 	const FElysiumAnimationSelection& GetAnimSelection() const;
+	// The sample that record was classified from — the driver's own, not a fresh `SampleLocomotion`.
+	// The two are published together and read together; a producer that re-samples describes a
+	// different frame than the record beside it.
+	const FElysiumLocomotionSample& GetAnimSample() const;
 
 	// Public so a test can read the declared frame order off the class default.
 	UPROPERTY()
@@ -80,7 +84,7 @@ public:
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
-	virtual float GaitSpeed(EElysiumNpcGaitKind Gait) const override;
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees = 0.0f) const override;
 
 private:
 	// CCC7 — build the driver if it does not exist yet and re-point it at the model this body wears.
@@ -99,10 +103,6 @@ private:
 	// Which of this body's own authored fans the in-flight move's speed came from — unset for a
 	// caller-authored speed, which `AnimTick` must never overwrite (CCC7/LIFE, the equip-mid-leg fix).
 	TOptional<EElysiumNpcGaitKind> RequestedGaitKind;
-	// The driver's gait-table generation as last seen by this body's own push, mirroring the map
-	// actor's `PushedGaitGeneration` for the player: it advances every frame the tables move, and the
-	// re-command only fires while a gait-derived leg is in flight.
-	uint32 PushedGaitGeneration = 0;
 	bool bMoveRequested = false;
 	bool bFaceRequested = false;
 	bool bRequestedEnabled = true;

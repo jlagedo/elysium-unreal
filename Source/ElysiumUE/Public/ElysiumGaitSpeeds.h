@@ -89,38 +89,6 @@ struct FElysiumGaitSpeeds
 	float Peak() const;
 };
 
-// What a body has to state to be given its tables. The key is deliberately everything that can
-// change which sequence `ACT_WALK` resolves to and nothing that cannot — the current gait, the
-// current `move_yaw` and the body's speed are all absent, which is what lets one resolve serve
-// every frame until the body itself changes.
-struct FElysiumGaitSpeedRequest
-{
-	FString Stem;
-	// The active weapon's entity classname and the body's form, exactly as the intent spells them —
-	// they change which sequence `ACT_WALK` resolves to, which is the whole membership rule here.
-	FString WeaponClassname;
-	FString FormTag;
-	int32 Variant = 0;
-
-	// `m_flSpeedScale` — the character's own rate multiplier. **It scales run and sneak and not
-	// walk**, which is faithful: retail passes it to two of the three extractor calls. The visible
-	// consequence is that a speed buff raises the run while leaving the walk/run threshold where it
-	// was, so a buffed body pins to the run.
-	float SpeedScale = 1.0f;
-
-	bool operator==(const FElysiumGaitSpeedRequest& Other) const
-	{
-		return Variant == Other.Variant
-			&& FMath::IsNearlyEqual(SpeedScale, Other.SpeedScale)
-			&& Stem.Equals(Other.Stem, ESearchCase::IgnoreCase)
-			&& WeaponClassname.Equals(Other.WeaponClassname, ESearchCase::IgnoreCase)
-			&& FormTag.Equals(Other.FormTag, ESearchCase::IgnoreCase);
-	}
-	bool operator!=(const FElysiumGaitSpeedRequest& Other) const { return !(*this == Other); }
-
-	bool IsValid() const { return !Stem.IsEmpty(); }
-};
-
 // Everything the wish-speed decision reads, as data rather than as mover state — so the decision
 // table is asserted with no pawn, no world and no console.
 struct FElysiumWishSpeedInput

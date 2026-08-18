@@ -104,7 +104,7 @@ void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent
 	// same frame this body is built, and that request reads the tables through `GaitSpeed`.
 	UElysiumAnimSubsystem* Anims = GetGameInstance()
 		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	AnimDriver->RefreshGaitSpeeds(Anims, FString(), FString());
+	AnimDriver->RefreshGaitSpeeds(Anims);
 }
 
 void AElysiumNpcBody::EnsureAnimDriver()
@@ -118,7 +118,7 @@ void AElysiumNpcBody::EnsureAnimDriver()
 	AnimDriver->Variant = AnimVariant;
 }
 
-float AElysiumNpcBody::GaitSpeed(EElysiumNpcGaitKind Gait) const
+float AElysiumNpcBody::GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const
 {
 	if (!AnimDriver.IsValid())
 	{
@@ -132,9 +132,16 @@ float AElysiumNpcBody::GaitSpeed(EElysiumNpcGaitKind Gait) const
 	case EElysiumNpcGaitKind::Sneak: Table = &Speeds.Sneak; break;
 	default:                         Table = &Speeds.Walk;  break;
 	}
-	// The forward cell: `bOrientRotationToMovement` keeps a path-following body pointed along its
-	// path, so its `move_yaw` is zero and no other cell can be the one it travels at.
-	return Table->Forward();
+	// The cell at the direction asked for. `bOrientRotationToMovement` settles a path-following body
+	// onto zero, but it is not there while it turns — a patrol turnaround plays several strafe cells
+	// on its way round, and commanding the forward one through them is the slide.
+	return Table->SpeedAt(MoveYawDegrees);
+}
+
+const FElysiumLocomotionSample& AElysiumNpcBody::GetAnimSample() const
+{
+	static const FElysiumLocomotionSample Empty;
+	return AnimDriver.IsValid() ? AnimDriver->Sample : Empty;
 }
 
 void AElysiumNpcBody::RegisterActorTickFunctions(bool bRegister)
@@ -193,25 +200,29 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 
 	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
 		Body ? Body->GetSkeletalMeshAsset() : nullptr, OneShot);
+	// From here on the driver's own `Sample` is the frame: the getter above recomputes from live
+	// component state, and calling it twice in one frame is how a reader comes to describe a frame
+	// the record does not.
 
-	// **The speed authority's push, this body's half** (CCC7, mirroring the player's push in
-	// `AElysiumMapActor::TickPlayerAnimation`). An equip or holster mid-leg re-resolves the fan and
-	// advances `GaitGeneration` while the mover is still commanding the old leg's speed, so the
-	// re-command has to be pushed here rather than pulled once at `MoveTo`. Only a leg whose speed
-	// came FROM a fan is re-derived — a caller-authored speed (the scripted Walk/Custom gaits) keeps
-	// exactly the number it was handed, which is the trap this must not fall into.
-	if (AnimDriver->GaitGeneration != PushedGaitGeneration)
+	// **The speed authority's push, this body's half** (LIFE3, mirroring the player's push in
+	// `AElysiumMapActor::TickPlayerAnimation`). The mover is commanded with the cell the body is
+	// about to *play*: the fan is steered by the realized `move_yaw` the record just published, so
+	// the number handed to `MaxWalkSpeed` is read at that same angle. Per frame rather than on a
+	// generation change, because the direction moves every frame while the tables move almost never
+	// — and an equip mid-leg, which is what the generation gate existed for, is then just one more
+	// frame's answer.
+	//
+	// Only a leg whose speed came FROM a fan is re-derived — a caller-authored speed (the scripted
+	// Walk/Custom gaits) keeps exactly the number it was handed, which is the trap this must not
+	// fall into.
+	if (bMoveRequested && RequestedGaitKind.IsSet())
 	{
-		PushedGaitGeneration = AnimDriver->GaitGeneration;
-		if (bMoveRequested && RequestedGaitKind.IsSet())
+		if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 		{
-			if (UCharacterMovementComponent* Movement = GetCharacterMovement())
-			{
-				// The same floor `MoveTo` applies: the motor treats zero as a stall, so a fan that
-				// resolves nothing must not be able to park a body mid-leg.
-				Movement->MaxWalkSpeed = FMath::Max(1.0f,
-					ElysiumNpcGait::TravelSpeed(this, *RequestedGaitKind));
-			}
+			// The same floor `MoveTo` applies: the motor treats zero as a stall, so a fan that
+			// resolves nothing must not be able to park a body mid-leg.
+			Movement->MaxWalkSpeed = FMath::Max(1.0f, ElysiumNpcGait::TravelSpeed(this,
+				*RequestedGaitKind, AnimDriver->Selection.MoveYaw));
 		}
 	}
 

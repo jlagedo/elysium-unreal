@@ -11,8 +11,12 @@ void FElysiumAnimationDriver::Reset()
 	Latch = FElysiumJumpLatch();
 	Selection = FElysiumAnimationSelection();
 	Assets = FElysiumResolvedAnimation();
+	// The published pair goes together: a producer left holding last epoch's sample beside this
+	// epoch's empty record would trace a body that moved through a frame nothing classified.
+	Sample = FElysiumLocomotionSample();
 	LastActivity.Reset();
 	LastStem.Reset();
+	LastActorClassname.Reset();
 	LastWeaponClassname.Reset();
 	LastRoute = EElysiumAnimRoute::Activity;
 	bResolvedOnce = false;
@@ -84,19 +88,29 @@ void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacte
 	}
 }
 
-bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims,
-	const FString& InWeaponClassname, const FString& InFormTag)
+FElysiumGaitSpeedRequest FElysiumAnimationDriver::BuildGaitKey() const
+{
+	// **The whole translation context, not a subset.** The tables are resolved through the same
+	// chain the pose is: same source, same class body, same alert/relaxed branch.
+	FElysiumGaitSpeedRequest Key;
+	Key.Stem = Stem;
+	Key.Source = Source;
+	Key.ActorClassname = ActorClassname;
+	Key.WeaponClassname = WeaponClassname;
+	Key.FormTag = FormTag;
+	Key.ActorState = ActorState;
+	Key.Variant = Variant;
+	Key.SpeedScale = SpeedScale;
+	return Key;
+}
+
+bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims)
 {
 	if (Anims == nullptr)
 	{
 		return false;
 	}
-	FElysiumGaitSpeedRequest Key;
-	Key.Stem = Stem;
-	Key.WeaponClassname = InWeaponClassname;
-	Key.FormTag = InFormTag;
-	Key.Variant = Variant;
-	Key.SpeedScale = SpeedScale;
+	const FElysiumGaitSpeedRequest Key = BuildGaitKey();
 	if (GaitGeneration != 0 && Key == GaitKey)
 	{
 		return false;
@@ -115,12 +129,15 @@ bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims,
 
 float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
 {
+	// Off the projected graph state, which is step 6's single answer over the LOGICAL request — not
+	// off the translated name, whose vocabulary is the weapon and class ladders rather than the
+	// slice's own codes.
 	const FElysiumGaitSpeedTable* Table = nullptr;
-	switch (ElysiumAnimIntent::ActivityCode(Selection.ResolvedActivity))
+	switch (Selection.GraphState)
 	{
-	case EElysiumAnimActivityCode::Walk:  Table = &GaitSpeeds.Walk;  break;
-	case EElysiumAnimActivityCode::Run:   Table = &GaitSpeeds.Run;   break;
-	case EElysiumAnimActivityCode::Sneak: Table = &GaitSpeeds.Sneak; break;
+	case EElysiumGraphState::Walk:  Table = &GaitSpeeds.Walk;  break;
+	case EElysiumGraphState::Run:   Table = &GaitSpeeds.Run;   break;
+	case EElysiumGraphState::Sneak: Table = &GaitSpeeds.Sneak; break;
 	default: break;
 	}
 	if (Table != nullptr && Table->IsValid())
@@ -132,15 +149,18 @@ float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
 	return Selection.GroundSpeedCmPerSecond;
 }
 
-void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
+void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionSample& InSample,
 	UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh,
 	EElysiumOneShotState OneShot)
 {
 	// The pose parameter is a rate, and this is the one place per body per frame — a producer's
 	// sample is a getter a readout may take twice, so it seeds the value and cannot advance it.
-	FElysiumLocomotionSample Body = Sample;
-	Body.MoveYawPose = ElysiumLocomotion::AdvanceMoveYaw(MoveYawFilter, Sample.MoveYawVelocity,
-		Sample.Speed2D(), DeltaSeconds);
+	FElysiumLocomotionSample Body = InSample;
+	Body.MoveYawPose = ElysiumLocomotion::AdvanceMoveYaw(MoveYawFilter, InSample.MoveYawVelocity,
+		InSample.Speed2D(), DeltaSeconds);
+	// Kept, so the record and the frame it describes are one published pair. Every reader — the
+	// graph, the trace, Cog — takes both from here rather than asking the body again.
+	Sample = Body;
 
 	// Only the player chain commands jumps, so only the player chain has air phases to latch. A cast
 	// body's mover reports itself airborne for reasons that are never a jump — a mode it has not been
@@ -163,13 +183,18 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 
 	// The body key, resolved ahead of the request so a body that changed model this frame steers by
 	// its new speeds rather than by one frame of its old ones.
-	RefreshGaitSpeeds(Anims, Intent.WeaponClassname, Intent.FormTag);
+	RefreshGaitSpeeds(Anims);
 
 	// The discrete key. Everything else about the intent is continuous and does not re-select
 	// anything: a body that turned, sped up or strafed is playing the same request.
 	const bool bChanged = !bResolvedOnce
 		|| !Intent.Activity.Equals(LastActivity, ESearchCase::IgnoreCase)
 		|| !Intent.Stem.Equals(LastStem, ESearchCase::IgnoreCase)
+		// The class body a request translates through is chosen by the actor's classname, and the
+		// owner can only push it once its entity resolves — a first tick taken before that resolves
+		// against no class body at all, and without this the answer is kept for the life of the
+		// request.
+		|| !Intent.ActorClassname.Equals(LastActorClassname, ESearchCase::IgnoreCase)
 		|| !Intent.WeaponClassname.Equals(LastWeaponClassname, ESearchCase::IgnoreCase)
 		// A body going alert changes which sequence set the SAME request resolves against, so the
 		// state belongs in the discrete key beside the weapon rather than in the continuous half.
@@ -183,6 +208,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		++Generation;
 		LastActivity = Intent.Activity;
 		LastStem = Intent.Stem;
+		LastActorClassname = Intent.ActorClassname;
 		LastWeaponClassname = Intent.WeaponClassname;
 		LastActorState = Intent.ActorState;
 		LastRoute = Intent.Route;
@@ -217,8 +243,12 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	if (Anims == nullptr)
 	{
 		// No game instance to read a catalog from. The classifier still ran, so the record says what
-		// was asked for and why nothing answered.
+		// was asked for and why nothing answered — and the stride is published on this path too,
+		// because the tables are the body's and a resolve is not what produced them. A body holding
+		// fans it resolved earlier still travels at them; one that never resolved any falls through
+		// to the cell speed, which here is zero.
 		ElysiumAnimResolve::Resolve(Intent, FElysiumAnimationCatalog(), Selection);
+		Selection.GroundSpeedCmPerSecond = GaitSpeedForSelection(Intent.Body.MoveYaw());
 		Assets = FElysiumResolvedAnimation();
 		return;
 	}

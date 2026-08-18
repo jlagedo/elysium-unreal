@@ -423,6 +423,57 @@ enum class EElysiumOneShotState : uint8
 	Complete,
 };
 
+// What a body has to state to be given its tables (CCC7).
+//
+// **The key is the same chain the POSE resolves through**, and nothing else: everything that can
+// change which sequence `ACT_WALK` resolves to is here, and everything that cannot is absent — the
+// current gait, the current `move_yaw` and the body's speed are all missing, which is what lets one
+// resolve serve every frame until the body itself changes.
+//
+// The source, the actor classname and the actor state are members for exactly that reason: they
+// select the `+0x5dc`/`+0x5e0` class bodies and the alert/relaxed branch, so a set resolved without
+// them is a set resolved for a different body than the one being posed.
+struct FElysiumGaitSpeedRequest
+{
+	FString Stem;
+	// Which pre-translation chain the request walks — the two committed `CBasePlayer` rows for
+	// `Player`, the recovered NPC class bodies for `Npc`. The pose walks one of them; the speeds
+	// have to walk the same one.
+	EElysiumAnimSource Source = EElysiumAnimSource::Player;
+	// The actor's own entity classname, which is what finds its recovered class bodies. Empty on the
+	// player, whose actor translation is the two committed rows rather than a class body.
+	FString ActorClassname;
+	// The active weapon's entity classname and the body's form, exactly as the intent spells them —
+	// they change which sequence `ACT_WALK` resolves to, which is the whole membership rule here.
+	FString WeaponClassname;
+	FString FormTag;
+	// The body's own state, which the recovered human pre-translation reads to choose between the
+	// alert and relaxed animation sets — and a relaxed walk and an alert one are different fans.
+	EElysiumNpcState ActorState = EElysiumNpcState::Idle;
+	int32 Variant = 0;
+
+	// `m_flSpeedScale` — the character's own rate multiplier. **It scales run and sneak and not
+	// walk**, which is faithful: retail passes it to two of the three extractor calls. The visible
+	// consequence is that a speed buff raises the run while leaving the walk/run threshold where it
+	// was, so a buffed body pins to the run.
+	float SpeedScale = 1.0f;
+
+	bool operator==(const FElysiumGaitSpeedRequest& Other) const
+	{
+		return Variant == Other.Variant
+			&& Source == Other.Source
+			&& ActorState == Other.ActorState
+			&& FMath::IsNearlyEqual(SpeedScale, Other.SpeedScale)
+			&& Stem.Equals(Other.Stem, ESearchCase::IgnoreCase)
+			&& ActorClassname.Equals(Other.ActorClassname, ESearchCase::IgnoreCase)
+			&& WeaponClassname.Equals(Other.WeaponClassname, ESearchCase::IgnoreCase)
+			&& FormTag.Equals(Other.FormTag, ESearchCase::IgnoreCase);
+	}
+	bool operator!=(const FElysiumGaitSpeedRequest& Other) const { return !(*this == Other); }
+
+	bool IsValid() const { return !Stem.IsEmpty(); }
+};
+
 namespace ElysiumAnimIntent
 {
 	// The one place an ACT_* literal is spelled for the slice, in both directions. Keeping the code

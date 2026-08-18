@@ -74,8 +74,15 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 				*DebugString(), *CustomClip, *CustomAnim, Speed);
 		}
 	}
+	// A scripted Run rides the run fan and nothing else, so it names it and lets the body's own
+	// animation pass re-derive the cell as the leg turns. Walk and Custom above resolved a specific
+	// clip's authored ground speed instead — a number the beat asked for by name — so they stay
+	// untagged and are never re-derived from a fan.
+	const TOptional<EElysiumNpcGaitKind> RequestedGait = Gait == EElysiumScriptGait::Run
+		? TOptional<EElysiumNpcGaitKind>(EElysiumNpcGaitKind::Run)
+		: TOptional<EElysiumNpcGaitKind>();
 	if (!Motor->MoveTo(Mark, ElysiumNpcGait::ScriptAcceptanceCm, Speed,
-		/*bAllowPartialPath=*/true))
+		/*bAllowPartialPath=*/true, RequestedGait))
 	{
 		ScriptPhase = EScriptPhase::None;
 		ReleaseScriptMove(TEXT("script path unavailable"));

@@ -142,16 +142,19 @@ public:
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
 
-	// This body's own authored travel speed for one gait, cm/s — the forward cell of that gait's
-	// resolved fan, which is the only direction a path-following body travels in. It is the number a
-	// travel request must command with, or the body slides through a cycle authored for a different
-	// speed.
+	// This body's own authored travel speed for one gait at one facing-relative direction, cm/s —
+	// the cell of that gait's resolved fan the body is about to play. It is the number a travel
+	// request must command with, or the body slides through a cycle authored for a different speed.
+	//
+	// `MoveYawDegrees` defaults to zero, the forward cell, which is where a settled path-following
+	// body sits. It is not where a turning one sits: a patrol turnaround plays several strafe cells
+	// on its way round, and those are different authored numbers.
 	//
 	// **Zero means this body resolves no fan for that gait**, and it is also the default: a motor
 	// with no animation behind it (a headless world, a recording double) genuinely has no authored
 	// number to give. The caller supplies the fallback — `ElysiumNpcGait::TravelSpeed` is the one
 	// place that states it — rather than the motor inventing a constant of its own.
-	virtual float GaitSpeed(EElysiumNpcGaitKind Gait) const { return 0.f; }
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees = 0.0f) const { return 0.f; }
 
 	// 11.14 — the reachability query: where on the navigable surface does this arbitrary point
 	// land? Geometry only. The caller keeps the decision — whether the projected point is still the

@@ -250,6 +250,10 @@ public:
 	// bank it resolved through, and why if it did not. Never null: a body with no vocabulary answers a
 	// default record whose outcome says exactly that, so a reader has nothing to test.
 	const FElysiumAnimationSelection& GetPlayerAnimSelection() const;
+	// The sample that record was classified from, with the driver's own filtered pose parameter on
+	// it. Published as one pair with the record above and read as one: a reader that re-samples the
+	// mover instead is describing a frame the record never saw.
+	const FElysiumLocomotionSample& GetPlayerAnimSample() const;
 
 	// B7 — the uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
 	// a sky-scope entity (its origin and hulls are already carried through the transform by the

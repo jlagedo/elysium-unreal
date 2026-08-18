@@ -733,7 +733,13 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		Intent.Variant = Request.Variant;
 		Intent.WeaponClassname = Request.WeaponClassname;
 		Intent.FormTag = Request.FormTag;
-		Intent.Source = EElysiumAnimSource::Player;
+		// **The same chain the pose walks** (LIFE3). The source selects the pre-translation body,
+		// the classname finds the recovered `+0x5dc`/`+0x5e0` class rows and the state picks the
+		// alert or the relaxed set — so a cast body's speeds come off the sequences that body is
+		// actually about to play rather than off the player fan the request happens to name.
+		Intent.Source = Request.Source;
+		Intent.ActorClassname = Request.ActorClassname;
+		Intent.ActorState = Request.ActorState;
 		// A gait that resolves through the fallback ladder is not that gait. Reaching `walk` for a
 		// missing `sneak` and then calling its speeds the sneak table is exactly the silent
 		// substitution the record exists to prevent, and here it would also make the body move at

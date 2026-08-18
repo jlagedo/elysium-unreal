@@ -336,8 +336,15 @@ void FElysiumMoveRun::Sample()
 	// no visual there, so the outcome is `NoVocabulary` and the asset is none — which is the right
 	// split: the gym brackets the classification `CCC7` will move, and the sited courses carry the
 	// resolution.
-	const FElysiumLocomotionSample& Locomotion = Body.Move->GetLocomotionSample();
+	//
+	// Both halves come off the DRIVER where there is one, because the driver is what published the
+	// record: its sample carries the filtered pose parameter the graph was steered by, where the
+	// mover's own carries the unfiltered input it was seeded with. In the gym there is no map actor
+	// and therefore no driver, so the mover's sample is the only sample and the record is empty —
+	// which is the same split the selection already reads.
 	static const FElysiumAnimationSelection EmptySelection;
+	const FElysiumLocomotionSample& Locomotion = Body.Map
+		? Body.Map->GetPlayerAnimSample() : Body.Move->GetLocomotionSample();
 	const FElysiumAnimationSelection& Sel = Body.Map
 		? Body.Map->GetPlayerAnimSelection() : EmptySelection;
 

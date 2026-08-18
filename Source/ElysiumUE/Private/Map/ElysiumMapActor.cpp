@@ -1324,6 +1324,14 @@ const FElysiumAnimationSelection& AElysiumMapActor::GetPlayerAnimSelection() con
 	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->Selection : Empty;
 }
 
+const FElysiumLocomotionSample& AElysiumMapActor::GetPlayerAnimSample() const
+{
+	// Same shape and same reason as the record above: a shared empty sample rather than a pointer,
+	// and the two are always read together.
+	static const FElysiumLocomotionSample Empty;
+	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->Sample : Empty;
+}
+
 void AElysiumMapActor::ClearPlayerVisual()
 {
 	APawn* Pawn = ResolvePlayerPawn();

@@ -15,13 +15,19 @@ namespace ElysiumNpcGait
 	inline constexpr float WalkSpeed = 254.0f;   // speed_walk 100 in/s
 	inline constexpr float RunSpeed  = 571.5f;   // speed_runbase 225 in/s
 
-	// What a travel request commands, cm/s: the body's own authored forward cell for the gait, or
-	// the stated constant when this body resolves no fan for it. One place, because every producer
-	// — patrol, ambient, scripted travel, a combat chase, a retreat — wants the same answer, and a
-	// producer that reached for the constant directly is the constant-speed slide.
-	inline float TravelSpeed(const IElysiumNpcMotor* Motor, EElysiumNpcGaitKind Gait)
+	// What a travel request commands, cm/s: the body's own authored cell for the gait at the
+	// direction it is travelling in, or the stated constant when this body resolves no fan for it.
+	// One place, because every producer — patrol, ambient, scripted travel, a combat chase, a
+	// retreat — wants the same answer, and a producer that reached for the constant directly is the
+	// constant-speed slide.
+	//
+	// `MoveYawDegrees` is the realized direction the body's own fan is being steered by. A request
+	// being *issued* leaves it at zero — the leg has not started, so forward is the honest answer —
+	// and the body's own animation pass re-commands with the live angle every frame after that.
+	inline float TravelSpeed(const IElysiumNpcMotor* Motor, EElysiumNpcGaitKind Gait,
+		float MoveYawDegrees = 0.0f)
 	{
-		const float Authored = Motor ? Motor->GaitSpeed(Gait) : 0.f;
+		const float Authored = Motor ? Motor->GaitSpeed(Gait, MoveYawDegrees) : 0.f;
 		if (FMath::IsFinite(Authored) && Authored > 0.f)
 		{
 			return Authored;

@@ -1407,8 +1407,10 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 		const AElysiumNpcBody* Npc = *It;
 		if (Npc)
 		{
+			// The driver's published pair, not a fresh sample: a readout that re-samples shows a
+			// frame the record beside it never classified.
 			ElysiumCogLocomotion::Row("npc", COG_TCHAR_TO_CHAR(*Npc->GetName()),
-				Npc->SampleLocomotion(), &Npc->GetAnimSelection());
+				Npc->GetAnimSample(), &Npc->GetAnimSelection());
 		}
 	}
 

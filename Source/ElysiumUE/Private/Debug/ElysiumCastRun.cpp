@@ -352,7 +352,10 @@ void FElysiumCastRun::Sample()
 
 	const FVector P = Body->GetActorLocation();
 	const FVector V = Body->GetVelocity();
-	const FElysiumLocomotionSample Locomotion = Body->SampleLocomotion();
+	// The driver's own published pair, both halves of it. `SampleLocomotion()` recomputes from live
+	// component state, so calling it here would write a sample the record beside it never saw — and
+	// the writer's contract is the published sample and the published selection and nothing else.
+	const FElysiumLocomotionSample& Locomotion = Body->GetAnimSample();
 	const FElysiumAnimationSelection& Selection = Body->GetAnimSelection();
 
 	Recorder.BeginFrame();
@@ -396,12 +399,15 @@ void FElysiumCastRun::FinishCourse()
 	if (const AElysiumNpcBody* Body = FindBody())
 	{
 		const float Inv = 1.0f / ElysiumMove::U;
+		// The forward cell of each fan, which is what the constant's name claims — the direction is
+		// left at zero deliberately, so the manifest keeps stating the same number whatever the body
+		// happened to be facing when the course ended.
 		Recorder.SetConstant(TEXT("GaitWalkForward"),
-			Body->GaitSpeed(EElysiumNpcGaitKind::Walk) * Inv);
+			Body->GaitSpeed(EElysiumNpcGaitKind::Walk, 0.0f) * Inv);
 		Recorder.SetConstant(TEXT("GaitRunForward"),
-			Body->GaitSpeed(EElysiumNpcGaitKind::Run) * Inv);
+			Body->GaitSpeed(EElysiumNpcGaitKind::Run, 0.0f) * Inv);
 		Recorder.SetConstant(TEXT("GaitSneakForward"),
-			Body->GaitSpeed(EElysiumNpcGaitKind::Sneak) * Inv);
+			Body->GaitSpeed(EElysiumNpcGaitKind::Sneak, 0.0f) * Inv);
 	}
 
 	Totals.Write(Recorder);

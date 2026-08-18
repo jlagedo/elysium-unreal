@@ -72,6 +72,11 @@ struct FElysiumAnimationDriver
 
 	// The stride the current selection commands at a direction, cm/s. Falls back to the resolved
 	// cell's own authored speed for anything that is not one of the three gaits.
+	//
+	// The gait is read off the record's `GraphState`, which is projected once from the LOGICAL
+	// request. A translated name cannot answer this: `ACT_WALK_RELAXED_PISTOL` is a walk and is not
+	// in the slice's small code vocabulary, so switching on the resolved activity classifies every
+	// armed or class-translated body as "not a gait" and freezes its stride at the resolve-time cell.
 	float GaitSpeedForSelection(float MoveYawDegrees) const;
 
 	// Read `ActorClassname`/`WeaponClassname` off the character the body embodies. One place, because
@@ -79,18 +84,30 @@ struct FElysiumAnimationDriver
 	// character has gone reads empty hands rather than keeping the last weapon it held.
 	void SetTranslationContext(const FElysiumCombatCharacter* Character);
 
+	// The body key this driver's tables resolve under — **the same chain the pose walks**: the same
+	// source, the same actor classname, the same alert/relaxed state, the same weapon and form. Pure,
+	// so `Elysium.Substrate.AnimationDriver` can assert the membership rule with no subsystem behind
+	// it; keyed on less than this, an idle cast human poses `ACT_WALK_RELAXED` off its class body and
+	// travels at the un-relaxed player fan.
+	FElysiumGaitSpeedRequest BuildGaitKey() const;
+
 	// Re-resolve the tables if the body key moved, and rebuild `Gait` from them. True when they
 	// moved; `Anims` may be null, and a body with no game instance keeps what it has.
 	//
 	// Callable outside `Tick` because a body's speeds are wanted before its first animation pass: an
 	// NPC's first travel request is issued in the frame its motor is built, and a request with no
 	// tables behind it travels at a constant while the body's own cycle authors something else.
-	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims, const FString& InWeaponClassname,
-		const FString& InFormTag);
+	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims);
 
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;
 	FString LastStem;
+	// The actor's own classname, which is what finds its recovered `+0x5dc`/`+0x5e0` class bodies —
+	// so it changes which sequence set the SAME request resolves against, exactly as the weapon and
+	// the state below do. It is pushed a frame after the body is built (the entity has to resolve
+	// first), and without it here that first tick's class-less answer would be kept for the life of
+	// the request.
+	FString LastActorClassname;
 	FString LastWeaponClassname;
 	EElysiumNpcState LastActorState = EElysiumNpcState::Idle;
 	EElysiumAnimRoute LastRoute = EElysiumAnimRoute::Activity;
@@ -101,6 +118,12 @@ struct FElysiumAnimationDriver
 	// the MCP surface — can read this unconditionally rather than testing a pointer.
 	FElysiumAnimationSelection Selection;
 	FElysiumResolvedAnimation Assets;
+	// **The sample this driver classified**, filtered pose parameter and all. A producer's own
+	// locomotion getter recomputes from live component state, so a reader that calls one after this
+	// has ticked is describing a different frame than the record beside it; the trace's contract is
+	// the published pair and nothing else, so the pair has to exist. Zeroed until the first tick,
+	// exactly as `Selection` reads `NoVocabulary` until then.
+	FElysiumLocomotionSample Sample;
 
 	// Advance the latch, classify, and resolve if the request moved. `Anims` may be null (no game
 	// instance), and `Mesh` may be null (no body built yet) — the record is produced either way,
@@ -109,7 +132,7 @@ struct FElysiumAnimationDriver
 	// `OneShot` is the pose layer's answer about the clip the latch's current phase is riding, read
 	// by the **caller** before this runs — the driver never reaches for an anim instance, because it
 	// also serves bodies that have none. `Unknown` keeps the timer fallback.
-	void Tick(float DeltaSeconds, const FElysiumLocomotionSample& Sample,
+	void Tick(float DeltaSeconds, const FElysiumLocomotionSample& InSample,
 		UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh,
 		EElysiumOneShotState OneShot = EElysiumOneShotState::Unknown);
 

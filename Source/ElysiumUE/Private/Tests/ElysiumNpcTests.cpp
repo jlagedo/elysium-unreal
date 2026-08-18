@@ -1099,6 +1099,78 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		}
 	}
 
+	// LIFE3 — a scripted `m_fMoveTo 2` (Run) rides the run FAN rather than a named clip, so it names
+	// the fan on its way out: that tag is what lets the body's own animation pass re-derive the cell
+	// as the leg turns. It is the exact opposite of the Walk case above, and both have to hold.
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__npc_travel_speed_scripted_run__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("scripted_runner");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("scripted_run");
+		Seq.Origin = FVector(500.0f, 0.0f, 0.0f);
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("scripted_runner"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("2"));
+		Defs.Defs.Add(MoveTemp(Seq));
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.bProvideNpcMotor = true;
+		Services.NpcRunSpeedCmPerSecond = 500.0f;
+		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* SeqEnt = World.FindByName(TEXT("scripted_run"));
+		if (TestNotNull(TEXT("the scripted run beat resolved"), SeqEnt))
+		{
+			World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+				FElysiumEntityHandle::Invalid(), SeqEnt->Handle);
+			double Now = 0.0;
+			for (int32 Index = 0; Index < 10; ++Index) { World.Tick(Now); Now += 0.1; }
+
+			FElysiumRecordingNpcMotor* RunMotor = Services.LastNpcMotor();
+			if (TestNotNull(TEXT("the scripted runner owns a motor"), RunMotor))
+			{
+				TestTrue(TEXT("the scripted run issued its travel request"), RunMotor->bMoving);
+				TestTrue(TEXT("a scripted run tags its motor with the run fan it rode"),
+					RunMotor->RequestedGaitKind.IsSet()
+						&& *RunMotor->RequestedGaitKind == EElysiumNpcGaitKind::Run);
+				TestTrue(TEXT("...at that fan's own forward cell"),
+					FMath::IsNearlyEqual(RunMotor->RequestedSpeedCmPerSecond, 500.0f, 0.01f));
+			}
+		}
+	}
+
+	// LIFE3 — and the number itself is per-direction. A travel request being ISSUED asks at forward,
+	// because the leg has not started; the body's own animation pass asks again at the realized
+	// `move_yaw` every frame after that, and a turnaround is where the two answers separate.
+	{
+		FElysiumRecordingNpcMotor Motor;
+		Motor.AuthoredWalkSpeedCmPerSecond = AuthoredWalk;
+		Motor.StrafeSpeedFraction = 0.5f;
+		TestTrue(TEXT("a settled leg commands the forward cell"),
+			FMath::IsNearlyEqual(ElysiumNpcGait::TravelSpeed(&Motor, EElysiumNpcGaitKind::Walk),
+				AuthoredWalk, 0.01f));
+		TestTrue(TEXT("a reversing one commands the cell it is about to play"),
+			FMath::IsNearlyEqual(ElysiumNpcGait::TravelSpeed(&Motor, EElysiumNpcGaitKind::Walk, 180.0f),
+				AuthoredWalk * 0.5f, 0.01f));
+		// A body with no fan answers zero however it is pointed, so the stated constant is what a
+		// direction can never quietly scale.
+		FElysiumRecordingNpcMotor NoFan;
+		TestTrue(TEXT("a body with no fan keeps the stated constant at every direction"),
+			FMath::IsNearlyEqual(ElysiumNpcGait::TravelSpeed(&NoFan, EElysiumNpcGaitKind::Walk, 180.0f),
+				ElysiumNpcGait::WalkSpeed, 0.01f));
+	}
+
 	// The classifier's threshold moves with the same tables, so a body walking at its authored cell
 	// is not judged against a constant it can never reach.
 	FElysiumGaitSpeeds Speeds;
