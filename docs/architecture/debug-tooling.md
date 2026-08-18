@@ -393,10 +393,49 @@ and the state machine's state — so a camera regression becomes the same diff a
 rather than the view — the pawn's own origin is its box centre, so a coordinate read off either the
 camera or the actor is half a hull out.
 
+### The cast harness, and the one trace both producers write
+
+`uv run elysium debug cast` is the movement harness's other half: the same body trace, recorded from
+the cast instead of from the player. It exists because a body trace with one producer proves nothing
+about two — the player's locomotion and the cast's are claimed to be one system, and a claim that
+only one of them is ever recorded is untested.
+
+**One schema and one writer.** `ElysiumLocomotionTrace` owns the columns and the row: it takes the
+`FElysiumLocomotionSample` a moving body published and the `FElysiumAnimationSelection` its driver
+resolved from it, and nothing else — no mover, no controller, no entity, so a recording cannot
+disagree with what ran. The movement harness declares those columns **plus** what only a driven
+player body can measure (the replayed command's sequence number, the standing hull's headroom, the
+ground's friction scale, the camera's solve); the cast harness declares them verbatim. That split is
+asserted with no world by `Elysium.Substrate.LocomotionTrace`, which also holds the writer to filling
+every column it declares — the recorder refuses a frame with a hole in it, so a clean frame is the
+proof.
+
+**The arena, not the gym.** A cast course runs in the stage world over the combat arena, for the
+reason the gym runs there: the floor is derived from this repository's own values. It cannot be the
+gym, because the gym deliberately builds no navigation and a cast body is an `ACharacter` following a
+Recast path. The arena's `intersting_place` anchors are deliberately not created — one standing in
+the room would let an ambient claim take a body off its course — and the stage world's frozen pawn is
+moved to the arena's player mark rather than left standing in the middle of the room that was just
+built around it.
+
+**A course is an authored order, not a command stream**, because nothing about the cast takes input:
+a patrol route of `info_node_patrol_point` records armed by `FollowPatrolPath`, or a
+`scripted_sequence` marker armed by `BeginSequence`, delivered through the entity input table a
+level script uses. Nothing reaches into the mind, the schedule or the motor, so what is recorded is
+the whole chain from the order to the pose. The recording window is a fixed number of seconds rather
+than "until it arrives", so the frame count is the same at any gait and a slower body records a body
+that got less far rather than a course of a different length.
+
+Its runs live under `$ELYSIUM_EXPORT_ROOT/_cast/` with their own baseline root, which is not
+fastidiousness: the comparator fails a stem a baseline carries and a run does not, so sharing `_move`
+would make a player-only run report every cast course as missing. `-CastBody=<stem>` picks the body;
+with none named the run takes the first baked stem and records which one in the manifest, because a
+recording made on a different body is a different recording.
+
 ## Tracking
 
 Implementation sequence and status live only in `docs/project/roadmap.md` — P2, with the movement
-and camera harness under its CCC slice;
+and camera harness under its CCC slice and the cast harness under LIFE;
 `docs/architecture/engine-core.md` owns the entity substrate design it observes.
 
 ## Prior art / sources

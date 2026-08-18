@@ -13,6 +13,7 @@ class FElysiumGreenRoomRun;
 class FElysiumProbeRun;
 class FElysiumShotRun;
 class FElysiumMoveRun;
+class FElysiumCastRun;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumCurrentMapReady, AElysiumMapActor*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumCurrentMapFailed, AElysiumMapActor*, const FString&);
@@ -229,4 +230,8 @@ private:
 
 	// Headless movement-regression harness (4.7), created only under -ElysiumMove.
 	TPimplPtr<FElysiumMoveRun> MoveRun;
+
+	// Headless cast-locomotion harness, created only under -ElysiumCast: the body trace's second
+	// producer, recording the cast's selection where the movement run records the player's.
+	TPimplPtr<FElysiumCastRun> CastRun;
 };

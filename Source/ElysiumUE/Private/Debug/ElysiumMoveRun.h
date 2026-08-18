@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "Debug/ElysiumChannelRecorder.h"
+#include "Debug/ElysiumLocomotionTrace.h"
 #include "Debug/ElysiumMoveCourses.h"
 #include "ElysiumUserCmd.h"
 
@@ -35,6 +36,11 @@ public:
 	static bool IsRequested();
 	// True when this run wants the generated gym rather than a map.
 	static bool WantsGym();
+
+	// The columns this producer declares: the shared body trace plus what only a driven player body
+	// can measure. Exposed so `Elysium.Substrate.LocomotionTrace` can hold the two producers to one
+	// schema without standing a world up.
+	static TArray<const TCHAR*> DeclaredChannels();
 
 	explicit FElysiumMoveRun(UElysiumMapSubsystem* InSubsystem);
 	~FElysiumMoveRun();
@@ -97,8 +103,11 @@ private:
 	FVector StartFeet = FVector::ZeroVector;
 	FVector StartForward = FVector::ForwardVector;
 
+	// The body trace's own accumulator (CCC1/CCC4) — the activity totals, the peak speed and the
+	// string identities, counted the same way the cast's harness counts them.
+	ElysiumLocomotionTrace::FTotals Totals;
+
 	// Summary values accumulated across the course.
-	double PeakSpeed2D = 0.0;
 	double PeakApexUnits = 0.0;
 	double AdvanceMax = 0.0;
 	double TopStand = 0.0;
@@ -129,20 +138,6 @@ private:
 	// is the point: it is the cheap catch for a camera that never engaged, and the only camera
 	// channel a committed gym baseline can carry.
 	double CamThirdMax = 0.0;
-	// The selection's course totals (CCC4). The first two saturate at any gait — a course either
-	// resolves every frame or it does not — which is what makes them the assertion a committed gym
-	// baseline can carry, and the cheap catch for the resolver going dark. The bitmask is the
-	// opposite and is declared speed-dependent, because *which* activities a course reaches moves
-	// when the gait does.
-	int32 ActResolvedFrames = 0;
-	int32 ActFallbackFrames = 0;
-	uint32 ActCodesSeen = 0;
-	// The identities the course resolved through, as run metadata rather than as channels: there is
-	// no string channel by design, because a value on disk with no comparison rule is what the
-	// registry refuses. Metadata describes the run; the Content tier is what asserts an identity
-	// against the real corpus. Sorted on the way out so the text is deterministic.
-	TSet<FString> AnimBanks;
-	TSet<FString> AnimSelections;
 };
 
 #endif // !UE_BUILD_SHIPPING

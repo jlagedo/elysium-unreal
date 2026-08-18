@@ -49,7 +49,10 @@
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
 #include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
+#include "Debug/ElysiumCastRun.h"             // the body trace's second producer
+#include "Debug/ElysiumLocomotionTrace.h"     // the recorded body trace, both producers
 #include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "Debug/ElysiumMoveRun.h"             // the body trace's first producer
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -1326,6 +1329,171 @@ bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 	TestEqual(TEXT("a fresh sample commands nothing"), Fresh.WishScale, 0.0f);
 	TestEqual(TEXT("a fresh sample is standing"),
 		static_cast<int32>(Fresh.Stance), static_cast<int32>(EElysiumStance::Standing));
+	return true;
+}
+
+// =====================================================================================
+// The recorded body trace (`Debug/ElysiumLocomotionTrace.h`). The file-on-disk half of the same
+// contract the sample above states: two producers, one schema, one writer.
+//
+// The claim this holds is the one neither harness can hold by itself: that the cast's columns ARE
+// the player's columns, that the writer fills every one of them, and that each lands the value its
+// own record carries rather than a plausible neighbour. No world is needed for any of it — the
+// writer takes the two published records and nothing else, which is the property being asserted.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLocomotionTraceTest,
+	"Elysium.Substrate.LocomotionTrace", GElysiumTestFlags)
+bool FElysiumLocomotionTraceTest::RunTest(const FString&)
+{
+	const TArrayView<const TCHAR* const> Shared = ElysiumLocomotionTrace::Channels();
+	const TArray<const TCHAR*> CastColumns = FElysiumCastRun::DeclaredChannels();
+	const TArray<const TCHAR*> PlayerColumns = FElysiumMoveRun::DeclaredChannels();
+
+	// --- One schema, two producers -------------------------------------------------------------
+	// The cast declares the shared trace verbatim; the player declares it in the same order and then
+	// adds what only a driven body can measure. A column in one and not the other would be the
+	// contract splitting, and this is where that shows.
+	TestEqual(TEXT("the cast declares exactly the shared trace"), CastColumns.Num(), Shared.Num());
+	for (int32 Index = 0; Index < Shared.Num() && Index < CastColumns.Num(); ++Index)
+	{
+		TestEqual(FString::Printf(TEXT("cast column %d is the shared one"), Index),
+			FString(CastColumns[Index]), FString(Shared[Index]));
+		TestTrue(FString::Printf(TEXT("the player carries shared column %d in the same place"), Index),
+			PlayerColumns.IsValidIndex(Index) && FCString::Strcmp(PlayerColumns[Index], Shared[Index]) == 0);
+	}
+	TestTrue(TEXT("...and the player adds columns of its own"), PlayerColumns.Num() > Shared.Num());
+
+	// Both open, which is the registry's own gate: a name with no comparison rule cannot be a column.
+	{
+		FElysiumChannelRecorder Opened;
+		FString OpenError;
+		TestTrue(TEXT("the cast's columns are all registered"), Opened.Open(CastColumns, OpenError));
+		TestTrue(TEXT("the player's columns are all registered"), Opened.Open(PlayerColumns, OpenError));
+	}
+
+	// --- The writer fills the whole schema -----------------------------------------------------
+	// `EndFrame` refuses a frame with an unwritten column, so a clean frame IS the assertion that
+	// the writer covers every channel it declares — the day a column is added and not written, this
+	// fails rather than a hole appearing in a CSV somewhere.
+	FElysiumChannelRecorder Recorder;
+	FString Error;
+	if (!TestTrue(TEXT("the shared trace opens"), Recorder.Open(Shared, Error)))
+	{
+		return false;
+	}
+
+	FElysiumLocomotionSample Sample;
+	// 2.54 cm to the unit, so 254 cm/s is a round 100 u/s — the columns are emitted in Source units
+	// and these numbers are what prove the conversion rather than restating it.
+	Sample.FacingYaw = 90.0f;
+	Sample.LocalVelocity = FVector(254.0f, 0.0f, 0.0f);
+	Sample.MoveYawWish = 30.0f;
+	Sample.MoveYawVelocity = 20.0f;
+	Sample.MoveYawPose = 20.0f;      // the sample's unfiltered value; the record's is what is written
+	Sample.bOnGround = true;
+	Sample.Water = EElysiumWaterLevel::Waist;
+	// The unduck ramp: the one stance that is BOTH ducked and ducking, which is what proves the two
+	// columns are Source's own pair rather than a three-value collapse.
+	Sample.Stance = EElysiumStance::Rising;
+
+	FElysiumAnimationSelection Selection;
+	Selection.RequestedActivity = TEXT("ACT_WALK");
+	Selection.ResolvedActivity = TEXT("ACT_WALK_PISTOL");
+	Selection.SequenceLabel = TEXT("pistol_walk");
+	Selection.AnimationName = TEXT("pistol_walk_0");
+	Selection.OwnerStem = TEXT("male_shared");
+	Selection.Stem = TEXT("some_body");
+	Selection.Route = EElysiumAnimRoute::Activity;
+	Selection.Outcome = EElysiumAnimOutcome::Resolved;
+	Selection.AssetKind = EElysiumAnimAssetKind::Sequence;
+	Selection.GraphState = EElysiumGraphState::Walk;
+	Selection.AirPhase = EElysiumAirPhase::Grounded;
+	Selection.Generation = 7;
+	Selection.MoveYaw = 45.0f;       // the driver's filtered answer, which is what the trace records
+	Selection.GroundSpeedCmPerSecond = 254.0f;
+	Selection.FadeSeconds = 0.25f;
+
+	Recorder.BeginFrame();
+	ElysiumLocomotionTrace::Frame(Recorder, 1.0f / 60.0f, FVector(254.0f, 508.0f, 0.0f),
+		FVector(0.0f, 254.0f, 0.0f), Sample, Selection);
+	TestTrue(TEXT("the writer leaves no declared column unwritten"), Recorder.EndFrame(Error));
+
+	ElysiumLocomotionTrace::FTotals Totals;
+	Totals.Observe(Sample, Selection);
+
+	// A second frame, carrying the one value that is not a reading: a miss counts as a fallback.
+	FElysiumAnimationSelection Missed = Selection;
+	Missed.Outcome = EElysiumAnimOutcome::MissingSequence;
+	Missed.RequestedActivity = TEXT("ACT_SNEAK");
+	Recorder.BeginFrame();
+	ElysiumLocomotionTrace::Frame(Recorder, 1.0f / 60.0f, FVector::ZeroVector, FVector::ZeroVector,
+		Sample, Missed);
+	TestTrue(TEXT("a second frame is accepted"), Recorder.EndFrame(Error));
+	Totals.Observe(Sample, Missed);
+	Totals.Write(Recorder);
+
+	// --- What landed where ----------------------------------------------------------------------
+	FString Csv;
+	FString Manifest;
+	Recorder.Serialize(Csv, Manifest);
+
+	TArray<FString> Lines;
+	Csv.ParseIntoArrayLines(Lines);
+	if (!TestEqual(TEXT("a header and one line per frame"), Lines.Num(), 3))
+	{
+		return false;
+	}
+	TArray<FString> Header;
+	Lines[0].ParseIntoArray(Header, TEXT(","));
+	TArray<FString> Row;
+	Lines[1].ParseIntoArray(Row, TEXT(","));
+
+	auto Column = [&Header, &Row](const TCHAR* Name) -> FString
+	{
+		const int32 Index = Header.IndexOfByKey(FString(Name));
+		return Row.IsValidIndex(Index) ? Row[Index] : FString();
+	};
+
+	TestEqual(TEXT("the origin is emitted in Source units"), Column(TEXT("px")),
+		FString(TEXT("100.0000")));
+	TestEqual(TEXT("...and so is the velocity"), Column(TEXT("vy")), FString(TEXT("100.0000")));
+	TestEqual(TEXT("the speed comes off the sample, not off the velocity argument"),
+		Column(TEXT("speed2d")), FString(TEXT("100.0000")));
+	TestEqual(TEXT("the unduck ramp reports ducked"), Column(TEXT("ducked")), FString(TEXT("1")));
+	TestEqual(TEXT("...and ducking, both at once, which is the whole point of the pair"),
+		Column(TEXT("ducking")), FString(TEXT("1")));
+	TestEqual(TEXT("the water level rides as its ordinal"), Column(TEXT("water")),
+		FString::FromInt(static_cast<int32>(EElysiumWaterLevel::Waist)));
+	TestEqual(TEXT("the pose parameter is the record's, not the sample's"),
+		Column(TEXT("move_yaw")), FString(TEXT("45.000")));
+	TestEqual(TEXT("...with the sample's own two yaws beside it"),
+		Column(TEXT("move_yaw_vel")), FString(TEXT("20.000")));
+	TestEqual(TEXT("the activity code is the LOGICAL request's"), Column(TEXT("act_code")),
+		FString::FromInt(static_cast<int32>(EElysiumAnimActivityCode::Walk)));
+	TestEqual(TEXT("the graph state is the one the record named"), Column(TEXT("act_state")),
+		FString::FromInt(static_cast<int32>(EElysiumGraphState::Walk)));
+	TestEqual(TEXT("the stride is the selected cell's own speed, in Source units"),
+		Column(TEXT("act_stride")), FString(TEXT("100.0000")));
+	TestEqual(TEXT("the generation rides, so a reader can tell a re-resolve from a hold"),
+		Column(TEXT("act_gen")), FString(TEXT("7")));
+
+	// --- The totals, which are what a baseline actually compares --------------------------------
+	TestEqual(TEXT("a clean resolve counts as resolved"), Totals.ResolvedFrames, 1);
+	TestEqual(TEXT("and a miss counts as a fallback"), Totals.FallbackFrames, 1);
+	TestTrue(TEXT("both activities are in the reached mask"),
+		(Totals.CodesSeen & (1u << static_cast<uint32>(EElysiumAnimActivityCode::Walk))) != 0
+		&& (Totals.CodesSeen & (1u << static_cast<uint32>(EElysiumAnimActivityCode::Sneak))) != 0);
+	TestEqual(TEXT("the peak speed is in Source units"), Totals.PeakSpeed2D, 100.0, 0.001);
+	TestTrue(TEXT("the run channels reach the manifest"),
+		Manifest.Contains(TEXT("\"name\": \"act_resolved\"")));
+	TestTrue(TEXT("the bank the selection resolved through rides as metadata"),
+		Manifest.Contains(TEXT("\"anim_banks\": \"male_shared\"")));
+	TestTrue(TEXT("...and so does the identity it resolved to"),
+		Manifest.Contains(TEXT("ACT_WALK_PISTOL=pistol_walk@male_shared:pistol_walk_0")));
+	// There is no string channel by design, so an identity must never have become a column.
+	TestEqual(TEXT("no identity leaked into the CSV"),
+		Header.IndexOfByKey(FString(TEXT("anim_banks"))), INDEX_NONE);
 	return true;
 }
 

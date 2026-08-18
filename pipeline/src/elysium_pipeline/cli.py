@@ -1232,6 +1232,19 @@ def debug_move(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
     _debug(ctx, "move", [*(args or ()), *ctx.args])
 
 
+@debug_app.command("cast", context_settings=PASSTHROUGH)
+def debug_cast(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
+    """Record the cast's locomotion courses and diff them against their baselines.
+
+    Usage: `debug cast <course> <hz>`, both optional. The other producer of the same body trace
+    `debug move` records for the player: a cast body is stood on the arena in the stage world and
+    driven by an authored travel order -- a patrol route, a scripted beat -- while its own driver's
+    selection is written through the same channels. `-CastBody=<stem>` picks the body;
+    `--promote` makes what the run just recorded the new baseline.
+    """
+    _debug(ctx, "cast", [*(args or ()), *ctx.args])
+
+
 @debug_app.command("greenroom", context_settings=PASSTHROUGH)
 def debug_greenroom(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
     _debug(ctx, "greenroom", [*(args or ()), *ctx.args])

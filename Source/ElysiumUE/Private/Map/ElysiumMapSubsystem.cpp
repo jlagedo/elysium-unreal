@@ -6,6 +6,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomConsole.h"
+#include "Debug/ElysiumCastRun.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
@@ -165,6 +166,12 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		MoveRun = MakePimpl<FElysiumMoveRun>(this);
 	}
+	// Under -ElysiumCast, arm the headless cast-locomotion run: the same body trace from the other
+	// producer, over the arena in the stage world.
+	if (FElysiumCastRun::IsRequested())
+	{
+		CastRun = MakePimpl<FElysiumCastRun>(this);
+	}
 #endif
 }
 
@@ -282,6 +289,7 @@ void UElysiumMapSubsystem::Deinitialize()
 	GreenRoomRun.Reset();
 	ProbeRun.Reset();
 	MoveRun.Reset();
+	CastRun.Reset();
 	for (IConsoleObject* Obj : ConsoleObjects)
 	{
 		IConsoleManager::Get().UnregisterConsoleObject(Obj);

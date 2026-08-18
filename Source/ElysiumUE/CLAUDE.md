@@ -332,7 +332,10 @@ command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProf
 (`-ElysiumMove`, courses in `ElysiumMoveCourses.h` over the generated gym `ElysiumGymSpec.h` /
 `ElysiumGymBuilder.h`, recorded through `FElysiumChannelRecorder` over the `ElysiumChannels.h`
 registry, driven by `uv run elysium debug move`, compared by
-`pipeline/src/elysium_pipeline/validation/channel_diff.py`).
+`pipeline/src/elysium_pipeline/validation/channel_diff.py`), `FElysiumCastRun` (`-ElysiumCast`,
+courses in `ElysiumCastCourses.h` over the arena `Debug/ElysiumArenaSpec.h` / `ElysiumArenaBuilder.h`,
+driven by `uv run elysium debug cast`, same recorder and comparator). The two recording runs share
+one schema and one writer, `Debug/ElysiumLocomotionTrace.h`.
 
 Automation tests live in `Private/Tests/`: content-free `Elysium.Substrate.*` suites are split by
 domain across the focused `Elysium*Tests.cpp` files and run under `-nullrhi`; `ElysiumContentTests.cpp`

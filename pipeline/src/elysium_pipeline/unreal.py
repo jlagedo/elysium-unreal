@@ -630,6 +630,42 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             diff.append("--promote")
         _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
         return None
+    if kind == "cast":
+        course = values[0] if values else ""
+        hz = values[1] if len(values) > 1 else "60"
+        if course.isdigit():
+            hz, course = course, ""
+
+        # The other producer of the same trace. No map and no host switch: the arena it records over
+        # is geometry the run stands itself in the stage world, the way the gym is — what a course
+        # measures is the cast body and the resolver, not a level.
+        launch = [
+            *common, "-ElysiumCast", f"-CastHz={hz}",
+            "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
+            "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
+        ]
+        if course:
+            launch.append(f"-CastCourse={course}")
+        # Anything past the course and the rate reaches the editor verbatim, which is how
+        # `-CastBody=<stem>` picks the body the arena stands.
+        launch.extend(values[2:])
+        if exec_cmds:
+            launch.append("-ExecCmds=" + ";".join(exec_cmds))
+        _run(config, runner, editor, launch)
+
+        # Its own run directory, and therefore its own baseline root. The comparator fails a stem
+        # that a baseline carries and a run does not, so pointing both at `_move` would make a
+        # player-only run report every cast course as missing.
+        cast_root = config.export_root / "_cast"
+        diff = [
+            "-m", "elysium_pipeline.validation.channel_diff",
+            "--out", os.fspath(cast_root),
+            "--gym-baseline", os.fspath(cast_root / "baseline"),
+        ]
+        if promote:
+            diff.append("--promote")
+        _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
+        return None
     if kind == "gr":
         # The interactive green room. It shares the harness's stage and body factory and nothing
         # else: no offscreen rendering, no `-unattended`, no capture, no contact sheet, and no exit

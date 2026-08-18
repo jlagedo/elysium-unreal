@@ -260,7 +260,7 @@ then use `uv run elysium` as the only public command surface.
 - Export generates the required `/Game/Elysium`, `/Game/VtMB/**`, and
   `/ElysiumBaked/<map>/**` packages unless an explicit intermediate-only mode is selected.
 - `test [filter]` runs the `Substrate`, `Content`, or fully qualified automation tier.
-- `run editor|play` and `debug profile|probe|shots|move|greenroom|modelroom` expose the Unreal
+- `run editor|play` and `debug profile|probe|shots|move|cast|greenroom|modelroom` expose the Unreal
   development and acceptance harnesses.
 - `research <case>`, `ide vscode`, and `mcp` expose research, IDE and control tooling.
 

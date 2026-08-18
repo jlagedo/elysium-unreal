@@ -18,22 +18,6 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
-### LIFE3 One resolver for the whole cast
-
-Locomotion becomes complete and singular: both actor kinds through `FElysiumAnimationIntent`
-and one resolver, every gait on authored speeds, every activity routed to a state that can play
-its asset.
-
-- **One trace schema, both producers.** `FElysiumMoveRun` records the player's selection alone, so
-  the cast's half of the acceptance has nothing behind it. The cast emits the same `act_*` rows from
-  its own driver, or the claim that the two producers are one system is untested.
-
-*Acceptance:* patrol and scripted travel drive the cast through the intent seam at authored
-speeds with no constant-speed slide; every locomotion request either poses the body or names
-its miss in the selection record; both producers fill one `FElysiumLocomotionSample` and emit
-one trace schema, so the player's locomotion and the cast's are demonstrably one system.
-*Deps:* LIFE0, LIFE2.
-
 ### LIFE4 Weapons in hands — the third-person wielded body
 
 What a character holds, finished. The recovered contract — four item model roles, the equip

@@ -407,6 +407,12 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 	{
 		BootKind = EBootKind::Stage;
 	}
+	// The cast run wants the same empty level, for the same reason: the arena it records over is
+	// geometry it stands itself, and a map behind it would only be somewhere else to walk.
+	else if (FParse::Param(FCommandLine::Get(), TEXT("ElysiumCast")))
+	{
+		BootKind = EBootKind::Stage;
+	}
 	else if (NewGameFlag == 0)
 	{
 		// -ElysiumNewGame=0 loads the story map through the dev path instead of through New Game,

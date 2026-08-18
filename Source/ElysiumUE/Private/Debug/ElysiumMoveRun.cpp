@@ -3,6 +3,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "Debug/ElysiumGymBuilder.h"
+#include "Debug/ElysiumLocomotionTrace.h"
 #include "Debug/ElysiumMoveCourses.h"
 #include "ElysiumCameraComponent.h"
 #include "ElysiumContentPaths.h"
@@ -85,20 +86,13 @@ FElysiumMoveRun::~FElysiumMoveRun()
 
 namespace
 {
-	// The move producer's frame channels, in column order. Every one resolves in
-	// `ElysiumChannels::Defs()` or the recorder refuses to open — which is what stops a value
-	// reaching disk with nothing that knows how to compare it.
-	const TCHAR* const GMoveChannels[] =
+	// What this harness measures that the shared body trace cannot: the command stream it is
+	// replaying, the two mover answers no body sample carries, and the camera's own solve. Every one
+	// resolves in `ElysiumChannels::Defs()` or the recorder refuses to open — which is what stops a
+	// value reaching disk with nothing that knows how to compare it.
+	const TCHAR* const GPlayerOnlyChannels[] =
 	{
-		TEXT("frame"), TEXT("seq"), TEXT("dt"),
-		TEXT("px"), TEXT("py"), TEXT("pz"),
-		TEXT("vx"), TEXT("vy"), TEXT("vz"), TEXT("speed2d"),
-		TEXT("onground"), TEXT("ducked"), TEXT("ducking"), TEXT("canunduck"),
-		TEXT("water"), TEXT("surffric"),
-		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"), TEXT("move_yaw"),
-		TEXT("act_code"), TEXT("act_route"), TEXT("act_outcome"), TEXT("act_asset"),
-		TEXT("act_state"),
-		TEXT("air_phase"), TEXT("act_gen"), TEXT("act_stride"), TEXT("act_fade"),
+		TEXT("seq"), TEXT("canunduck"), TEXT("surffric"),
 		TEXT("cam_boom"), TEXT("cam_damp"), TEXT("cam_pitch"), TEXT("cam_yaw"),
 		TEXT("cam_clip"), TEXT("cam_third"),
 	};
@@ -146,6 +140,14 @@ namespace
 		}
 		return ElysiumMoveCourses::Gym(ElysiumGym::Build(T));
 	}
+}
+
+TArray<const TCHAR*> FElysiumMoveRun::DeclaredChannels()
+{
+	const TArrayView<const TCHAR* const> Shared = ElysiumLocomotionTrace::Channels();
+	TArray<const TCHAR*> Names(Shared.GetData(), Shared.Num());
+	Names.Append(GPlayerOnlyChannels, UE_ARRAY_COUNT(GPlayerOnlyChannels));
+	return Names;
 }
 
 bool FElysiumMoveRun::BuildGym()
@@ -263,7 +265,8 @@ bool FElysiumMoveRun::BeginCourse(int32 Index, ECoursePhase InPhase)
 	if (Phase == ECoursePhase::Record)
 	{
 		FString Error;
-		if (!Recorder.Open(GMoveChannels, Error))
+		const TArray<const TCHAR*> Columns = DeclaredChannels();
+		if (!Recorder.Open(Columns, Error))
 		{
 			UE_LOG(LogElysiumMove, Error, TEXT("%s"), *Error);
 			return false;
@@ -272,7 +275,6 @@ bool FElysiumMoveRun::BeginCourse(int32 Index, ECoursePhase InPhase)
 
 	StartFeet = Feet;
 	StartForward = FRotator(0.0f, Yaw, 0.0f).Vector();
-	PeakSpeed2D = 0.0;
 	PeakApexUnits = 0.0;
 	AdvanceMax = 0.0;
 	TopStand = 0.0;
@@ -285,11 +287,7 @@ bool FElysiumMoveRun::BeginCourse(int32 Index, ECoursePhase InPhase)
 	GroundTransitions = 0;
 	bWasOnGround = true;
 	CamThirdMax = 0.0;
-	ActResolvedFrames = 0;
-	ActFallbackFrames = 0;
-	ActCodesSeen = 0;
-	AnimBanks.Reset();
-	AnimSelections.Reset();
+	Totals.Reset();
 
 	if (Phase == ECoursePhase::Probe)
 	{
@@ -322,84 +320,37 @@ void FElysiumMoveRun::Sample()
 
 	const FVector P = Body.Pawn->GetActorLocation();
 	const FVector V = Body.Move->Velocity;
-	const double Speed2D = FVector2D(V.X, V.Y).Size();
 	const bool bGround = Body.Move->IsOnGround();
 
-	// Positions and velocities are emitted in **Source units**, not cm, so a row reads directly
+	// The run channels below are emitted in **Source units**, not cm, so a row reads directly
 	// against `docs/vtmb/source_movement.md`'s numbers (and against a retail demo dump, if one is
-	// ever taken).
+	// ever taken). The frame columns are the shared trace's, which converts the same way.
 	const double Inv = 1.0 / ElysiumMove::U;
 
-	Recorder.BeginFrame();
-	Recorder.Set(TEXT("frame"), Recorder.FrameCount());
-	Recorder.Set(TEXT("seq"), static_cast<int32>(Body.Router->CurrentCmd().Seq));
-	Recorder.Set(TEXT("dt"), StepSeconds);
-	Recorder.Set(TEXT("px"), P.X * Inv);
-	Recorder.Set(TEXT("py"), P.Y * Inv);
-	Recorder.Set(TEXT("pz"), P.Z * Inv);
-	Recorder.Set(TEXT("vx"), V.X * Inv);
-	Recorder.Set(TEXT("vy"), V.Y * Inv);
-	Recorder.Set(TEXT("vz"), V.Z * Inv);
-	Recorder.Set(TEXT("speed2d"), Speed2D * Inv);
-	Recorder.Set(TEXT("onground"), bGround);
-	Recorder.Set(TEXT("ducked"), Body.Move->IsDucked());
-	Recorder.Set(TEXT("ducking"), Body.Move->IsDucking());
-	Recorder.Set(TEXT("canunduck"), Body.Move->CanUnduck());
-	Recorder.Set(TEXT("water"), static_cast<int32>(Body.Move->GetWaterLevel()));
-	Recorder.Set(TEXT("surffric"), Body.Move->GetSurfaceFriction());
-
-	// The body sample (CCC1), read rather than re-derived: the mover published it at its tick tail,
-	// so these are the yaws of the frame that was actually integrated.
-	const FElysiumLocomotionSample& Locomotion = Body.Move->GetLocomotionSample();
-	Recorder.Set(TEXT("move_yaw_wish"), Locomotion.MoveYawWish);
-	Recorder.Set(TEXT("move_yaw_vel"), Locomotion.MoveYawVelocity);
-
-	// The selection (CCC4), read off the record the post-move pass published rather than re-resolved,
-	// for the same reason the sample above is read rather than re-derived: two derivations of one
-	// answer are how a recording comes to disagree with what actually ran.
+	// The body sample (CCC1) and the selection (CCC4), both read rather than re-derived: the mover
+	// published the sample at its tick tail and the post-move pass published the record off it, so
+	// these are the frame that was actually integrated and the request it actually resolved. Two
+	// derivations of one answer are how a recording comes to disagree with what ran.
 	//
-	// In the gym these carry the classifier alone. There is no map, no player entity and no visual
-	// there, so the outcome is `NoVocabulary` and the asset is none — which is the right split: the
-	// gym brackets the classification `CCC7` will move, and the sited courses carry the resolution.
+	// In the gym the selection carries the classifier alone. There is no map, no player entity and
+	// no visual there, so the outcome is `NoVocabulary` and the asset is none — which is the right
+	// split: the gym brackets the classification `CCC7` will move, and the sited courses carry the
+	// resolution.
+	const FElysiumLocomotionSample& Locomotion = Body.Move->GetLocomotionSample();
 	static const FElysiumAnimationSelection EmptySelection;
 	const FElysiumAnimationSelection& Sel = Body.Map
 		? Body.Map->GetPlayerAnimSelection() : EmptySelection;
-	// The classifier's own answer is the pre-translation activity, which is what the record keeps as
-	// the logical request; the resolved one is only different once a translation row applied.
-	const EElysiumAnimActivityCode Code = ElysiumAnimIntent::ActivityCode(Sel.RequestedActivity);
-	Recorder.Set(TEXT("act_code"), static_cast<int32>(Code));
-	Recorder.Set(TEXT("act_route"), static_cast<int32>(Sel.Route));
-	Recorder.Set(TEXT("act_outcome"), static_cast<int32>(Sel.Outcome));
-	Recorder.Set(TEXT("act_asset"), static_cast<int32>(Sel.AssetKind));
-	// The state the record named, not one this recorder projected: the trace and the pose come off
-	// the same field, so a run cannot record a state the graph never entered.
-	Recorder.Set(TEXT("act_state"), static_cast<int32>(Sel.GraphState));
-	Recorder.Set(TEXT("air_phase"), static_cast<int32>(Sel.AirPhase));
-	Recorder.Set(TEXT("act_gen"), static_cast<int32>(Sel.Generation));
-	// The pose parameter, off the same record. It comes from the driver rather than from the sample
-	// above because the slew is a rate the driver owns; the sample carries its unfiltered input.
-	Recorder.Set(TEXT("move_yaw"), Sel.MoveYaw);
-	Recorder.Set(TEXT("act_stride"), Sel.GroundSpeedCmPerSecond * Inv);
-	Recorder.Set(TEXT("act_fade"), Sel.FadeSeconds);
 
-	ActCodesSeen |= (Code != EElysiumAnimActivityCode::Unknown)
-		? (1u << static_cast<uint32>(Code)) : 0u;
-	if (Sel.Outcome == EElysiumAnimOutcome::Resolved)
-	{
-		++ActResolvedFrames;
-	}
-	else
-	{
-		++ActFallbackFrames;
-	}
-	if (!Sel.OwnerStem.IsEmpty())
-	{
-		// A run course's manifest naming the PC-only bank IS the bank-ownership claim, in text, in the
-		// run's own output.
-		AnimBanks.Add(Sel.OwnerStem);
-		AnimSelections.Add(FString::Printf(TEXT("%s=%s@%s:%s"), *Sel.ResolvedActivity,
-			*Sel.SequenceLabel, *Sel.OwnerStem, *Sel.AnimationName));
-	}
+	Recorder.BeginFrame();
+	// The shared body trace — the same rows the cast's harness writes, through the same writer.
+	ElysiumLocomotionTrace::Frame(Recorder, StepSeconds, P, V, Locomotion, Sel);
+	Totals.Observe(Locomotion, Sel);
+
+	// And what only this producer can measure: the command being replayed, and the two mover answers
+	// no body sample carries.
+	Recorder.Set(TEXT("seq"), static_cast<int32>(Body.Router->CurrentCmd().Seq));
+	Recorder.Set(TEXT("canunduck"), Body.Move->CanUnduck());
+	Recorder.Set(TEXT("surffric"), Body.Move->GetSurfaceFriction());
 
 	// The camera (CCC2), read off the manager's settled sample. This runs from the core ticker,
 	// which the engine ticks *after* the world — so the sample published inside this frame's view
@@ -423,7 +374,6 @@ void FElysiumMoveRun::Sample()
 		return;
 	}
 
-	PeakSpeed2D = FMath::Max(PeakSpeed2D, Speed2D * Inv);
 	if (bCamFresh)
 	{
 		CamThirdMax = FMath::Max(CamThirdMax, static_cast<double>(Cam.ThirdWeight));
@@ -567,20 +517,10 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetOverride(Override.Key, Override.Value);
 	}
 
-	// The selection's string identities (CCC4). Sorted and joined so the line is deterministic across
-	// two runs of the same course; empty on the gym, which stands a body with no model behind it.
-	{
-		auto Joined = [](const TSet<FString>& Values)
-		{
-			TArray<FString> Sorted = Values.Array();
-			Sorted.Sort();
-			return FString::Join(Sorted, TEXT(" "));
-		};
-		Recorder.SetMeta(TEXT("anim_stem"), Body.Map ? Body.Map->GetPlayerAnimSelection().Stem
-			: FString());
-		Recorder.SetMeta(TEXT("anim_banks"), Joined(AnimBanks));
-		Recorder.SetMeta(TEXT("anim_selections"), Joined(AnimSelections));
-	}
+	// The body trace's own run channels and the selection's string identities (CCC4), written by the
+	// same accumulator the cast's harness writes — empty on a gym course that stood a body with no
+	// model behind it.
+	Totals.Write(Recorder);
 
 	Recorder.SetRun(TEXT("frames"), Recorder.FrameCount());
 	Recorder.SetRun(TEXT("advance_max"), AdvanceMax);
@@ -589,11 +529,7 @@ void FElysiumMoveRun::FinishCourse()
 	Recorder.SetRun(TEXT("peak_rise"), PeakApexUnits);
 	Recorder.SetRun(TEXT("ground_transitions"), GroundTransitions);
 	Recorder.SetRun(TEXT("ended_ducked"), bEndedDucked);
-	Recorder.SetRun(TEXT("peak_speed2d"), PeakSpeed2D);
 	Recorder.SetRun(TEXT("cam_third_max"), CamThirdMax);
-	Recorder.SetRun(TEXT("act_resolved"), ActResolvedFrames);
-	Recorder.SetRun(TEXT("act_fallbacks"), ActFallbackFrames);
-	Recorder.SetRun(TEXT("act_codes"), static_cast<int32>(ActCodesSeen));
 
 	// Only the leniency courses carry these. A course that merely *holds* jump re-fires on landing at
 	// a gait-dependent moment, so declaring the count universally would commit a number `CCC7` moves.
@@ -616,7 +552,7 @@ void FElysiumMoveRun::FinishCourse()
 		TEXT("course '%s': %d frames, advance %.1f u, stood %.2f u, reached %.2f u, ")
 		TEXT("peak 2D %.1f u/s, %d ground transitions -> %s"),
 		*Course.Name.ToString(), Recorder.FrameCount(), AdvanceMax, TopStand, ReachMax,
-		PeakSpeed2D, GroundTransitions, *Stem);
+		Totals.PeakSpeed2D, GroundTransitions, *Stem);
 }
 
 bool FElysiumMoveRun::Tick(float /*DeltaSeconds*/)

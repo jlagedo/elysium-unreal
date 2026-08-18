@@ -274,7 +274,7 @@ The ladder:
   are 0 on all 14,012 sequence descriptors, and `AdvanceToIdealActivity`'s traversal
   (`FindTransitionSequence` → the `entrynode`/`exitnode`/matrix lookup at `0x10428ad0`) is
   decompilation-confirmed dead code against shipped content — no sidecar block is emitted.
-- [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the player speed authority,
+- [x] **LIFE3 One resolver for the whole cast** — the player speed authority,
   the NPC gait push and the real translation tables are landed: the 5-row stub is deleted and the
   resolver walks the committed weapon ladders, the two `CBasePlayer` rows and the recovered NPC
   class bodies in their witnessed orders, availability-probing each rung against the body's own
@@ -291,8 +291,14 @@ The ladder:
   naming their recovered ladder rung. The 11 cast bodies behind those misses are the four animals
   with no crouch/sneak, three never-locomoting props and four wounded scripted bodies; the 25
   sequence-zero rungs among them pose nothing because the character export writes no raw sequence
-  index, which is the named limit rather than a coverage hole. The cast's half of the one trace
-  schema is open — `FElysiumMoveRun` records the player's selection only.
+  index, which is the named limit rather than a coverage hole. Both producers emit one trace schema:
+  `ElysiumLocomotionTrace` is the columns and the writer, taking the published sample and selection
+  and nothing else, and the movement harness declares it plus what only a driven player body can
+  measure while `FElysiumCastRun` (`-ElysiumCast`, `uv run elysium debug cast`) declares it verbatim
+  and records the cast over the arena in the stage world, driven by authored orders — a patrol route,
+  a `scripted_sequence` — through the entity input table. Its three courses resolve 1,140 of 1,140
+  frames with no fallback, and `speed2d` equals `act_stride` equals the body's own authored fan to
+  four decimals in both gaits, so the no-slide claim is a recording rather than an argument.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
   and weapon-state animation open.
