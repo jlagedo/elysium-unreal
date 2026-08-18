@@ -1237,10 +1237,14 @@ def debug_cast(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
     """Record the cast's locomotion courses and diff them against their baselines.
 
     Usage: `debug cast <course> <hz>`, both optional. The other producer of the same body trace
-    `debug move` records for the player: a cast body is stood on the arena in the stage world and
-    driven by an authored travel order -- a patrol route, a scripted beat -- while its own driver's
-    selection is written through the same channels. `-CastBody=<stem>` picks the body;
-    `--promote` makes what the run just recorded the new baseline.
+    `debug move` records for the player: a cast body is driven by an authored travel order -- a
+    patrol route, a scripted beat -- while its own driver's selection is written through the same
+    channels, and every course judges its own no-slide predicate before anything is compared.
+
+    Two hosts. By default the body stands on the arena in the stage world, which is the regression
+    instrument; `--sited` drives the priority map's own cast down the map's own authored route,
+    armed and unarmed, which is the only host an acceptance claim can be made on. `-CastBody=<stem>`
+    picks the body the arena stands; `--promote` makes what the run just recorded the new baseline.
     """
     _debug(ctx, "cast", [*(args or ()), *ctx.args])
 

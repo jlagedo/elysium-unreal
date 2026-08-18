@@ -826,7 +826,7 @@ IElysiumNpcMotor* AElysiumMapActor::BuildNpcMotor(USkeletalMeshComponent* Body,
 		return nullptr;
 	}
 
-	Motor->SetOwningEntity(EntityOwner);
+	Motor->SetOwningEntity(this, EntityOwner);
 	Motor->InitializeAtFeet(FeetOrigin, YawDegrees);
 	Motor->SetRuntimeReady(RuntimePhase == EElysiumMapRuntimePhase::Active);
 	Motor->SetModelStem(Stem, Body, Variant);

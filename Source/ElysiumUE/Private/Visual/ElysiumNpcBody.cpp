@@ -14,6 +14,7 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpcGait.h"
+#include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
@@ -107,6 +108,12 @@ void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent
 	AnimDriver->RefreshGaitSpeeds(Anims);
 }
 
+void AElysiumNpcBody::SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner)
+{
+	OwningMap = InMap;
+	OwningEntity = InOwner;
+}
+
 void AElysiumNpcBody::EnsureAnimDriver()
 {
 	if (!AnimDriver.IsValid())
@@ -142,6 +149,23 @@ const FElysiumLocomotionSample& AElysiumNpcBody::GetAnimSample() const
 {
 	static const FElysiumLocomotionSample Empty;
 	return AnimDriver.IsValid() ? AnimDriver->Sample : Empty;
+}
+
+void AElysiumNpcBody::GetAnimTranslationContext(FString& OutActorClassname,
+	FString& OutWeaponClassname, EElysiumNpcState& OutActorState) const
+{
+	if (AnimDriver.IsValid())
+	{
+		OutActorClassname = AnimDriver->ActorClassname;
+		OutWeaponClassname = AnimDriver->WeaponClassname;
+		OutActorState = AnimDriver->ActorState;
+		return;
+	}
+	// A body with no driver has keyed nothing yet, which is a real state rather than empty hands: the
+	// caller is told the same empty answer either way, and the frame count is what says which.
+	OutActorClassname.Reset();
+	OutWeaponClassname.Reset();
+	OutActorState = EElysiumNpcState::Idle;
 }
 
 void AElysiumNpcBody::RegisterActorTickFunctions(bool bRegister)
@@ -193,10 +217,25 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	// rather than on the equip: the driver keys its own re-resolve on the value changing, so a
 	// loadout swap costs one frame of latency and no per-equip wiring, and a body whose entity has
 	// gone reads empty hands rather than keeping what it last held.
-	const AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner());
+	const AElysiumMapActor* Map = OwningMap.Get();
 	FElysiumEntityWorld* Entities = Map ? Map->GetEntityWorld() : nullptr;
 	FElysiumEntity* OwnerEntity = Entities ? Entities->Resolve(OwningEntity) : nullptr;
-	AnimDriver->SetTranslationContext(OwnerEntity ? OwnerEntity->AsCombatCharacter() : nullptr);
+	FElysiumCombatCharacter* Character = OwnerEntity ? OwnerEntity->AsCombatCharacter() : nullptr;
+	// A body standing for an entity it cannot reach keys every request it makes on no classname and
+	// empty hands — the class bodies and the weapon ladders are then simply never walked, and the
+	// record says "resolved" the whole time. Once per body, because the answer does not come back.
+	if (Character == nullptr && OwningEntity.IsSet() && !bWarnedNoTranslationContext)
+	{
+		bWarnedNoTranslationContext = true;
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("NPC body '%s' cannot reach the character it stands for (%s): every request it ")
+			TEXT("makes will be keyed with no classname and empty hands"),
+			*ModelStem, Map == nullptr ? TEXT("no owning map actor")
+				: (Entities == nullptr ? TEXT("no entity world")
+					: (OwnerEntity == nullptr ? TEXT("the entity does not resolve")
+						: TEXT("the entity is not a combat character"))));
+	}
+	AnimDriver->SetTranslationContext(Character);
 
 	AnimDriver->Tick(DeltaSeconds, SampleLocomotion(), Anims,
 		Body ? Body->GetSkeletalMeshAsset() : nullptr, OneShot);
@@ -456,8 +495,21 @@ FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 {
 	// An NPC faces where its actor is turned — `bOrientRotationToMovement` keeps that pointed along
 	// the path — where a player body faces where the view points.
-	return ElysiumLocomotion::FromCharacterMovement(*this,
+	FElysiumLocomotionSample Out = ElysiumLocomotion::FromCharacterMovement(*this,
 		static_cast<float>(GetActorRotation().Yaw));
+
+	// **What this body was commanded** (LIFE3). A cast body's command stream is its travel order:
+	// the motor is handed one number per leg and re-handed the cell it is about to play every frame
+	// after that, and `MaxWalkSpeed` is where that number lives. Publishing it makes the cast's gait
+	// test the same disjunction the player's is — retail tests the realized speed *or* the commanded
+	// one — so a body ordered to run is running on its first moving frame rather than after it has
+	// accelerated past the split, which is what an order-driven producer means by "run".
+	//
+	// Only while a leg is in flight: `MaxWalkSpeed` keeps its last value after a stop, and a body
+	// standing still has commanded nothing.
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Out.CommandedSpeed = (bMoveRequested && Movement != nullptr) ? Movement->MaxWalkSpeed : 0.0f;
+	return Out;
 }
 
 EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& OutYawDegrees)

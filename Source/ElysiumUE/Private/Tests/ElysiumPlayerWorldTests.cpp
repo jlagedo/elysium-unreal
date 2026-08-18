@@ -1133,7 +1133,8 @@ bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 	}
 
 	const FElysiumEntityHandle NpcOwner(37, 4);
-	Body->SetOwningEntity(NpcOwner);
+	// No map actor: this body stands in a bare test world, and the identity half is what is asserted.
+	Body->SetOwningEntity(nullptr, NpcOwner);
 	TestTrue(TEXT("native NPC motor retains its logical toucher identity"),
 		Body->GetOwningEntity() == NpcOwner);
 	Body->InitializeAtFeet(FVector::ZeroVector, 0.0f);

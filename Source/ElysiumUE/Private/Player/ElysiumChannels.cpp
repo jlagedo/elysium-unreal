@@ -85,6 +85,13 @@ namespace
 	  true,  TEXT("the selected cell's authored ground speed") },
 	{ TEXT("act_fade"),    TEXT("anim"), EScope::Frame, EKind::Numeric, 0.001f, 3, TEXT("s"),
 	  true,  TEXT("the authored transition duration the selection carries; 0 is a snap") },
+	// What the MOTOR was commanding while that cell played (LIFE3). It is the third number the
+	// no-slide predicate needs: without it a frame whose realized speed sits under the cell it is
+	// playing cannot be told apart from a body still accelerating into the cell, or one the path
+	// follower is holding below its commanded speed — and both of those are honest, while a slide
+	// is not. Zero on a body with no travel order, which is a body that is not being commanded.
+	{ TEXT("act_cmd"),     TEXT("anim"), EScope::Frame, EKind::Numeric, 2.0f,   4, TEXT("u/s"),
+	  true,  TEXT("the speed the motor commanded this frame; 0 when no travel order is in flight") },
 
 	// --- The camera producer, per frame (CCC2) --------------------------------------------------
 	// The faithful evaluator's solve, read off the settled sample the camera manager publishes
@@ -162,6 +169,12 @@ namespace
 	  false, TEXT("frames whose outcome was not a clean resolve") },
 	{ TEXT("act_codes"),     TEXT("anim"), EScope::Run, EKind::Exact, 0.0f, 0, TEXT(""),
 	  true,  TEXT("bitmask of the activity codes the course reached") },
+	// The no-slide verdict, carried by the recording itself (LIFE3). It saturates at zero the way
+	// the two above do — a body either travels at the cell it is playing or it does not, at any
+	// gait — so it is an exact run channel rather than a tolerance, and a recording that reaches
+	// disk with a non-zero one has already failed its own harness.
+	{ TEXT("slide_frames"),  TEXT("anim"), EScope::Run, EKind::Exact, 0.0f, 0, TEXT(""),
+	  false, TEXT("at-speed frames whose realized speed disagreed with the cell it was playing") },
 	};
 }
 

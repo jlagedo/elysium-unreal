@@ -1351,18 +1351,24 @@ bool FElysiumLocomotionTraceTest::RunTest(const FString&)
 	const TArray<const TCHAR*> PlayerColumns = FElysiumMoveRun::DeclaredChannels();
 
 	// --- One schema, two producers -------------------------------------------------------------
-	// The cast declares the shared trace verbatim; the player declares it in the same order and then
-	// adds what only a driven body can measure. A column in one and not the other would be the
-	// contract splitting, and this is where that shows.
-	TestEqual(TEXT("the cast declares exactly the shared trace"), CastColumns.Num(), Shared.Num());
-	for (int32 Index = 0; Index < Shared.Num() && Index < CastColumns.Num(); ++Index)
+	// Both producers declare the shared trace first, in the same order, and then whatever only they
+	// can measure — the player its replayed command stream, the two mover answers and the camera
+	// solve; the cast the speed its motor was commanding while the cell played. A SHARED column in
+	// one and not the other would be the contract splitting, and this is where that shows.
+	for (int32 Index = 0; Index < Shared.Num(); ++Index)
 	{
-		TestEqual(FString::Printf(TEXT("cast column %d is the shared one"), Index),
-			FString(CastColumns[Index]), FString(Shared[Index]));
+		TestTrue(FString::Printf(TEXT("the cast carries shared column %d in the same place"), Index),
+			CastColumns.IsValidIndex(Index) && FCString::Strcmp(CastColumns[Index], Shared[Index]) == 0);
 		TestTrue(FString::Printf(TEXT("the player carries shared column %d in the same place"), Index),
 			PlayerColumns.IsValidIndex(Index) && FCString::Strcmp(PlayerColumns[Index], Shared[Index]) == 0);
 	}
-	TestTrue(TEXT("...and the player adds columns of its own"), PlayerColumns.Num() > Shared.Num());
+	TestTrue(TEXT("...and each producer adds columns of its own"),
+		CastColumns.Num() > Shared.Num() && PlayerColumns.Num() > Shared.Num());
+	// The cast's own column is the commanded speed, named here so adding a second one is a
+	// deliberate edit rather than a silent divergence from the shared schema.
+	TestEqual(TEXT("the cast adds exactly one column"), CastColumns.Num(), Shared.Num() + 1);
+	TestEqual(TEXT("...and it is the commanded speed"),
+		FString(CastColumns.Last()), FString(TEXT("act_cmd")));
 
 	// Both open, which is the registry's own gate: a name with no comparison rule cannot be a column.
 	{

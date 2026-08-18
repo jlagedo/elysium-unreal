@@ -178,6 +178,27 @@ def pair_rows(a: list[dict], b: list[dict], by_time: bool):
             yield ra, b[j]
 
 
+# What a recording has to agree with its baseline about before the numbers mean anything. A course
+# run on a different body, under a different classname, or with a different weapon in its hands is a
+# different recording: the gait fans, the translation ladder and therefore every speed in the trace
+# all key on these. Comparing the traces without comparing these is how a body swap reads as a
+# regression in `act_stride` instead of as a body swap.
+IDENTITY_KEYS = ("cast_body", "cast_class", "cast_weapon", "anim_stem", "host", "course")
+
+
+def compare_identity(base_run: dict, cur_run: dict) -> list[str]:
+    problems: list[str] = []
+    for key in IDENTITY_KEYS:
+        if key not in base_run and key not in cur_run:
+            continue
+        was, now = base_run.get(key, ""), cur_run.get(key, "")
+        if was != now:
+            problems.append(
+                f"  {key}: {was!r} -> {now!r} — this is a different recording, not a different "
+                f"result; re-promote deliberately")
+    return problems
+
+
 def compare_declarations(base: dict[str, Channel], cur: dict[str, Channel],
                          committed: bool) -> list[str]:
     """Both directions, plus rule drift.
@@ -275,6 +296,28 @@ def compare_frames(base_csv: Path, cur_csv: Path, channels: dict[str, Channel],
     return ok, notes
 
 
+# The file a harness leaves in its own output directory when the run itself failed — a course that
+# recorded nothing, an order that never armed its leaf, a claim a recording did not hold. It is
+# checked before anything is compared or promoted, because those failures are exactly the ones a
+# per-recording comparison cannot see: the evidence is the recording that is NOT there.
+REFUSAL_FILE = "run.failed"
+
+
+def refusal(directory: Path) -> str | None:
+    """The reason this run directory is refused outright, or None."""
+    marker = directory / REFUSAL_FILE
+    if not marker.is_file():
+        return None
+    try:
+        # `errors="replace"`: the reason is a diagnostic, and a run whose refusal cannot be decoded
+        # is still a refused run — losing the exit code to a mojibake byte would be the silent pass
+        # the marker exists to close.
+        return (marker.read_text(encoding="utf-8", errors="replace").strip()
+                or "(the harness left no reason)")
+    except OSError as exc:
+        return f"(the refusal marker is unreadable: {exc})"
+
+
 def manifests(directory: Path) -> dict[str, Path]:
     if not directory.is_dir():
         return {}
@@ -298,6 +341,10 @@ def is_deferred(manifest_path: Path) -> bool:
 
 
 def cmd_promote(out: Path, gym_baseline: Path) -> int:
+    refused = refusal(out)
+    if refused is not None:
+        print(f"[channels] refusing to promote a failed run: {refused}")
+        return 1
     current = manifests(out)
     if not current:
         print(f"[channels] nothing to promote: no runs under {out}")
@@ -335,6 +382,10 @@ def cmd_promote(out: Path, gym_baseline: Path) -> int:
 
 
 def cmd_diff(out: Path, gym_baseline: Path) -> int:
+    refused = refusal(out)
+    if refused is not None:
+        print(f"[channels] REFUSED  the run that produced {out} failed: {refused}")
+        return 1
     current = manifests(out)
     if not current:
         print(f"[channels] no runs under {out}")
@@ -360,10 +411,11 @@ def cmd_diff(out: Path, gym_baseline: Path) -> int:
             print(f"[channels] NEW      {stem} (no baseline under {base_dir})")
             continue
 
-        _base_run, base_channels, _ = read_manifest(base_path)
-        _cur_run, cur_channels, _ = read_manifest(path)
+        base_run, base_channels, _ = read_manifest(base_path)
+        cur_run, cur_channels, _ = read_manifest(path)
 
-        notes = compare_declarations(base_channels, cur_channels, committed)
+        notes = compare_identity(base_run, cur_run)
+        notes.extend(compare_declarations(base_channels, cur_channels, committed))
         ok = not notes
 
         values_ok, value_notes, deferred = compare_run_channels(

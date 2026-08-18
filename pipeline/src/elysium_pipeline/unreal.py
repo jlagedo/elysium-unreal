@@ -636,14 +636,22 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         if course.isdigit():
             hz, course = course, ""
 
-        # The other producer of the same trace. No map and no host switch: the arena it records over
-        # is geometry the run stands itself in the stage world, the way the gym is — what a course
-        # measures is the cast body and the resolver, not a level.
+        # The other producer of the same trace, on one of two hosts. By default the arena it records
+        # over is geometry the run stands itself in the stage world, the way the gym is — what a
+        # course measures is the cast body and the resolver, not a level. `--sited` is the other
+        # question: the priority map's own cast, walking the map's own authored route, which is the
+        # only host an acceptance claim can be made on.
+        sited_map = "sm_hub_1" if sited_only else ""
         launch = [
             *common, "-ElysiumCast", f"-CastHz={hz}",
             "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
             "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
         ]
+        if sited_map:
+            if not (config.export_root / sited_map).is_dir():
+                raise UnrealFailure(
+                    f"{sited_map} is not exported; the sited cast courses walk its own route")
+            launch.append(f"-ElysiumMap={sited_map}")
         if course:
             launch.append(f"-CastCourse={course}")
         # Anything past the course and the rate reaches the editor verbatim, which is how
@@ -655,8 +663,9 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
 
         # Its own run directory, and therefore its own baseline root. The comparator fails a stem
         # that a baseline carries and a run does not, so pointing both at `_move` would make a
-        # player-only run report every cast course as missing.
-        cast_root = config.export_root / "_cast"
+        # player-only run report every cast course as missing — and the two cast hosts are apart
+        # for the same reason.
+        cast_root = config.export_root / "_cast" / sited_map if sited_map             else config.export_root / "_cast"
         diff = [
             "-m", "elysium_pipeline.validation.channel_diff",
             "--out", os.fspath(cast_root),

@@ -7,6 +7,7 @@
 #include "Templates/PimplPtr.h"
 #include "ElysiumNpcBody.generated.h"
 
+class AElysiumMapActor;
 class AElysiumNpcBody;
 
 // CCC4 — the cast's animation pass, in TG_PostPhysics. A SECOND tick function rather than the
@@ -48,9 +49,16 @@ public:
 
 	void InitializeAtFeet(const FVector& FeetOrigin, float YawDegrees);
 	void SetRuntimeReady(bool bReady);
-	// The plain-C++ NPC this engine body embodies. Collision ingress uses this identity so an
-	// ACharacter overlap remains an NPC toucher instead of being collapsed to !player.
-	void SetOwningEntity(const FElysiumEntityHandle& InOwner) { OwningEntity = InOwner; }
+	// The plain-C++ NPC this engine body embodies, and the map actor that owns the world it lives
+	// in. Collision ingress uses the entity identity so an ACharacter overlap remains an NPC toucher
+	// instead of being collapsed to !player.
+	//
+	// The map is held rather than read back off `GetOwner()` because an `APawn`'s owner is not
+	// permanent: `AController::Possess` sets it to the controller, and this body spawns its
+	// controller lazily the first time it is asked to travel. Reading the map off the actor owner
+	// therefore answers correctly for a body that has never moved and null for every body that has —
+	// which silently keys every request a MOVING body makes on no classname and empty hands.
+	void SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner);
 	FElysiumEntityHandle GetOwningEntity() const { return OwningEntity; }
 	// The model this body wears and the repeatable token its weighted picks ride on. Set once when
 	// the motor is built, because that is the one place that knows both.
@@ -67,6 +75,13 @@ public:
 	// The two are published together and read together; a producer that re-samples describes a
 	// different frame than the record beside it.
 	const FElysiumLocomotionSample& GetAnimSample() const;
+	// What the driver keyed that record on: the actor's classname, the classname of the weapon
+	// actually in its hands, and the state the alert/relaxed branch read. Read-only, and read off the
+	// driver rather than off the entity, because the entity's authored loadout and what the body is
+	// holding are different facts — an armed course that proved only the first proved nothing about
+	// the ladder.
+	void GetAnimTranslationContext(FString& OutActorClassname, FString& OutWeaponClassname,
+		EElysiumNpcState& OutActorState) const;
 
 	// Public so a test can read the declared frame order off the class default.
 	UPROPERTY()
@@ -111,7 +126,11 @@ private:
 	// screen; an ignoring body still collides with the world, just not with other characters.
 	bool bFrozen = false;
 	bool bIgnoreCharacterCollision = false;
+	// Reported once: a body that cannot reach its character keys every request on no classname and
+	// empty hands, and nothing downstream of that is wrong enough to notice.
+	bool bWarnedNoTranslationContext = false;
 	FElysiumEntityHandle OwningEntity;
+	TWeakObjectPtr<AElysiumMapActor> OwningMap;
 
 	// CCC4 — the same driver the player body runs, on the same contract. Held by value: it is plain
 	// C++ with no UObject in it, and it dies with the body.

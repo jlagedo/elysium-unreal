@@ -4,12 +4,16 @@
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumEntityDefs.h"               // what a map stands each cast body as
 #include "ElysiumGaitSpeeds.h"               // the per-direction speed table (CCC7)
 #include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
 #include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimationResolve.h"
+
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 
 // CCC4 — the intent, the resolver and the selection record.
 //
@@ -1902,11 +1906,24 @@ namespace
 		return FString();
 	}
 
+	// The rest of the key a cast request is resolved under. It is a struct rather than three more
+	// defaulted parameters because the whole point of the cast sweep is that these three are what the
+	// committed tables are joined to: the classname finds the `+0x5dc`/`+0x5e0` class bodies, the
+	// weapon walks the ladders, and the state picks the alert set over the relaxed one. A sweep that
+	// left them empty drives none of that work and asserts a body no map stands.
+	struct FCastContext
+	{
+		FString ActorClassname;
+		FString WeaponClassname;
+		EElysiumNpcState ActorState = EElysiumNpcState::Idle;
+	};
+
 	// `bLadder` defaults off: the ladder would mask a miss behind a walk or a disposition, and a miss
 	// is exactly what several of the assertions below are about. The cast's own coverage turns it on,
 	// because that is the chain a cast body actually resolves through at runtime.
 	FElysiumAnimationSelection ResolveOn(const FElysiumNpcClipSet& Set, FRealTables& Tables,
-		const TCHAR* Activity, EElysiumAnimSource Source, bool bLadder = false)
+		const TCHAR* Activity, EElysiumAnimSource Source, bool bLadder = false,
+		const FCastContext& Context = FCastContext())
 	{
 		FElysiumAnimationCatalog Catalog;
 		Catalog.Clips = &Set;
@@ -1917,9 +1934,74 @@ namespace
 		Intent.Activity = Activity;
 		Intent.Source = Source;
 		Intent.bAllowFallbackLadder = bLadder;
+		Intent.ActorClassname = Context.ActorClassname;
+		Intent.WeaponClassname = Context.WeaponClassname;
+		Intent.ActorState = Context.ActorState;
 
 		FElysiumAnimationSelection Out;
 		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+		return Out;
+	}
+
+	// What a map actually stands a body as. The cast half of the coverage sweep is keyed on the
+	// classname and the weapon, and the only place either is authored is a map's own entities — so
+	// they are read from there rather than invented, and a body no exported map stands is reported
+	// as one rather than driven under a plausible classname.
+	struct FAuthoredCast
+	{
+		FString Classname;
+		FString Weapon;
+	};
+
+	// Body stem -> what the exported maps author it as. First occurrence wins and the map order is
+	// the file system's, which is stable for a given export; a body stood under two classnames is a
+	// fact about the corpus rather than an ambiguity this has to resolve.
+	TMap<FString, FAuthoredCast> AuthoredCastByStem()
+	{
+		TMap<FString, FAuthoredCast> Out;
+		TArray<FString> Dirs;
+		IFileManager::Get().FindFiles(Dirs, *(FElysiumContentPaths::Root() / TEXT("*")),
+			/*Files*/ false, /*Directories*/ true);
+		Dirs.Sort();
+		for (const FString& Map : Dirs)
+		{
+			const FString EntsPath = FElysiumContentPaths::MapEnts(Map);
+			FElysiumEntityDefs Defs;
+			if (!IFileManager::Get().FileExists(*EntsPath)
+				|| !FElysiumEntityDefs::Parse(EntsPath, Defs))
+			{
+				continue;
+			}
+			for (const FElysiumEntityDef& Def : Defs.Defs)
+			{
+				if (!Def.Classname.StartsWith(TEXT("npc_"), ESearchCase::IgnoreCase))
+				{
+					continue;
+				}
+				const FString Model = Def.Keys.FindRef(TEXT("model"));
+				if (Model.IsEmpty())
+				{
+					continue;
+				}
+				// The stem the character export keys on is the model file's own base name, lowered.
+				const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
+				FAuthoredCast& Entry = Out.FindOrAdd(Stem);
+				if (Entry.Classname.IsEmpty())
+				{
+					Entry.Classname = Def.Classname;
+				}
+				if (Entry.Weapon.IsEmpty())
+				{
+					// `additionalequipment` is the loadout key; "0" is how a map spells "nothing",
+					// and an `npc_maker` template carries the same key as the body it makes.
+					const FString Equipment = Def.Keys.FindRef(TEXT("additionalequipment"));
+					if (!Equipment.IsEmpty() && Equipment != TEXT("0"))
+					{
+						Entry.Weapon = Equipment;
+					}
+				}
+			}
+		}
 		return Out;
 	}
 
@@ -2285,16 +2367,36 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	Index.Npcs.GenerateKeyArray(Stems);
 	Stems.Sort();
 
+	// The three states the recovered human pre-translation branches on. Every one of them selects a
+	// different animation set for the SAME request, so a sweep that drove one drove a third of the
+	// committed table.
+	const EElysiumNpcState CastStates[] =
+	{
+		EElysiumNpcState::Idle, EElysiumNpcState::Alert, EElysiumNpcState::Combat,
+	};
+
+	// What the maps stand each body as, which is the only authored source for the other two thirds
+	// of the key.
+	const TMap<FString, FAuthoredCast> Authored = AuthoredCastByStem();
+
 	int32 BodiesChecked = 0;
 	int32 CastBodiesChecked = 0;
+	int32 CastBodiesUnauthored = 0;
 	int32 CastRequests = 0;
 	int32 CastNamedMisses = 0;
+	// The two halves of a miss, kept apart because they are different facts: a fallback rung that
+	// named a clip is a body posing something the ladder found, and sequence zero is a body posing
+	// nothing at all. Collapsing them reports the second as the first.
+	int32 CastMissesPosing = 0;
+	int32 CastMissesPosingNothing = 0;
+	int32 CastArmedRequests = 0;
 	// Which request landed on which rung, counted rather than summarised: "38 misses" is a number and
 	// "ACT_SNEAK reached sequence zero on 25 bodies" is a finding, and the two are the difference
 	// between a body that stands on something and a body that stands on nothing nameable.
 	TMap<FString, int32> CastMissRungs;
 	TSet<FString> ContractFailures;
 	TSet<FString> CoverageFailures;
+	TSet<FString> StateFailures;
 
 	auto Cover = [&CoverageFailures](const FElysiumAnimationSelection& Sel, const FString& Stem,
 		const TCHAR* Requested)
@@ -2320,24 +2422,93 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 
 		if (!bPlayerBody)
 		{
-			// The cast's half. The ladder is ON because that is the chain a cast body runs through at
-			// runtime, and no shape is required of the answer: a body with no sneak in its vocabulary
-			// taking the disposition rung is retail's behaviour rather than a gap. What is required is
-			// that the record says which of the two happened, and that the state it names can play it.
+			// The cast's half, driven under the whole key the committed tables are joined to: the
+			// body's own authored classname, its hands empty and then full, and each of the three
+			// states the human pre-translation branches on. The ladder is ON because that is the
+			// chain a cast body runs through at runtime, and no shape is required of the answer: a
+			// body with no sneak in its vocabulary taking the disposition rung is retail's behaviour
+			// rather than a gap. What is required is that the record says which of the two happened,
+			// that the state it names can play it, and that the state is the one the projection rule
+			// gives for the request rather than one the resolver arrived at some other way.
 			++CastBodiesChecked;
-			for (const EElysiumAnimActivityCode Code : CastSlice)
+			const FAuthoredCast* Stood = Authored.Find(Stem);
+			if (Stood == nullptr)
 			{
-				const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Code);
-				const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Requested,
-					EElysiumAnimSource::Npc, /*bLadder=*/ true);
-				++CastRequests;
-				if (!Sel.IsResolved())
+				++CastBodiesUnauthored;
+			}
+			// Empty hands first, because the empty table is the one retail's own unarmed cast walks;
+			// then whatever the maps put in this body's hands, and the shipped glock when they put
+			// nothing — the armed branch has to be entered on every body, not only on the armed ones.
+			TArray<FString> Weapons;
+			Weapons.Add(FString());
+			Weapons.Add((Stood != nullptr && !Stood->Weapon.IsEmpty())
+				? Stood->Weapon : FString(TEXT("item_w_glock_17c")));
+
+			for (const EElysiumNpcState State : CastStates)
+			{
+				for (const FString& Weapon : Weapons)
 				{
-					++CastNamedMisses;
-					CastMissRungs.FindOrAdd(FString::Printf(TEXT("%s -> %s"), Requested,
-						ElysiumAnimIntent::OutcomeName(Sel.Outcome))) += 1;
+					FCastContext Context;
+					Context.ActorClassname = Stood != nullptr ? Stood->Classname : FString();
+					Context.WeaponClassname = Weapon;
+					Context.ActorState = State;
+					for (const EElysiumAnimActivityCode Code : CastSlice)
+					{
+						const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Code);
+						const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Requested,
+							EElysiumAnimSource::Npc, /*bLadder=*/ true, Context);
+						++CastRequests;
+						CastArmedRequests += Weapon.IsEmpty() ? 0 : 1;
+
+						// Step 6's projection, asserted as an identity rather than trusted. It is
+						// made over the LOGICAL request, so no weapon, class body or state may move
+						// it — and every reader downstream (the anim instance, Cog, the trace, the
+						// MCP surface) reads this one field.
+						const EElysiumGraphState Expected = ElysiumAnimGraph::StateForActivity(Code);
+						if (Sel.GraphState != Expected)
+						{
+							StateFailures.Add(FString::Printf(
+								TEXT("%s on %s (%s/%s/state %d) named state %s; the projection over ")
+								TEXT("the logical request is %s"),
+								Requested, *Stem,
+								Context.ActorClassname.IsEmpty()
+									? TEXT("(no class)") : *Context.ActorClassname,
+								Weapon.IsEmpty() ? TEXT("(empty hands)") : *Weapon,
+								static_cast<int32>(State),
+								ElysiumAnimGraph::StateName(Sel.GraphState),
+								ElysiumAnimGraph::StateName(Expected)));
+						}
+
+						if (!Sel.IsResolved())
+						{
+							++CastNamedMisses;
+							const bool bPoses = Sel.NamesBaseAsset();
+							CastMissesPosing += bPoses ? 1 : 0;
+							CastMissesPosingNothing += bPoses ? 0 : 1;
+							CastMissRungs.FindOrAdd(FString::Printf(TEXT("%s -> %s, %s"), Requested,
+								ElysiumAnimIntent::OutcomeName(Sel.Outcome),
+								bPoses ? TEXT("posing a clip") : TEXT("posing nothing"))) += 1;
+
+							// The separation, enforced. The three translation rungs exist to FIND a
+							// clip, so one that answered and named none is a rung reporting an answer
+							// it does not have; sequence zero and an empty vocabulary are the two
+							// honest ways to pose nothing.
+							const bool bTranslationRung =
+								Sel.Outcome == EElysiumAnimOutcome::TranslatedFallback
+								|| Sel.Outcome == EElysiumAnimOutcome::RunToWalk
+								|| Sel.Outcome == EElysiumAnimOutcome::Disposition;
+							if (bTranslationRung && !bPoses)
+							{
+								ContractFailures.Add(FString::Printf(
+									TEXT("%s on %s answered %s and named no clip — a translation ")
+									TEXT("rung that poses nothing is sequence zero under another name"),
+									Requested, *Stem,
+									ElysiumAnimIntent::OutcomeName(Sel.Outcome)));
+							}
+						}
+						Cover(Sel, Stem, Requested);
+					}
 				}
-				Cover(Sel, Stem, Requested);
 			}
 			continue;
 		}
@@ -2385,9 +2556,15 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	}
 	AddInfo(FString::Printf(
 		TEXT("%d player bodies across %d activities plus the %d unwitnessed; ")
-		TEXT("%d cast bodies across %d activities (%d of %d cast requests were named misses)"),
+		TEXT("%d cast bodies across %d activities x %d states x 2 hands = %d requests (%d armed), ")
+		TEXT("of which %d were named misses: %d posed a clip the ladder found and %d posed nothing. ")
+		TEXT("%d cast bodies are stood by no exported map and carry no authored classname."),
 		BodiesChecked, UE_ARRAY_COUNT(Slice), UE_ARRAY_COUNT(Unwitnessed),
-		CastBodiesChecked, UE_ARRAY_COUNT(CastSlice), CastNamedMisses, CastRequests));
+		CastBodiesChecked, UE_ARRAY_COUNT(CastSlice), UE_ARRAY_COUNT(CastStates), CastRequests,
+		CastArmedRequests, CastNamedMisses, CastMissesPosing, CastMissesPosingNothing,
+		CastBodiesUnauthored));
+	TestTrue(TEXT("the sweep drove the cast under a real authored classname on some body"),
+		CastBodiesChecked == 0 || CastBodiesUnauthored < CastBodiesChecked);
 	CastMissRungs.KeySort([](const FString& A, const FString& B) { return A < B; });
 	for (const TPair<FString, int32>& Rung : CastMissRungs)
 	{
@@ -2414,6 +2591,16 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	TestEqual(
 		TEXT("every request the slice can emit names a state that plays what it resolved, or names its miss"),
 		CoverageFailures.Num(), 0);
+
+	// And the projection itself. Separate again: a state that cannot play its asset is a graph gap,
+	// while a state that is not the one the request projects to is the record disagreeing with the
+	// single rule every reader of `GraphState` depends on.
+	for (const FString& Failure : StateFailures)
+	{
+		AddError(FString::Printf(TEXT("graph-state identity: %s"), *Failure));
+	}
+	TestEqual(TEXT("every cast request names the state its logical request projects to"),
+		StateFailures.Num(), 0);
 	return true;
 }
 
@@ -2612,6 +2799,25 @@ bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
 		FElysiumAnimationSelection Selection;
 		ElysiumAnimResolve::Resolve(Intent, GlockCatalog, Selection);
 		TestTrue(TEXT("...and the resolve actually poses something"), Selection.IsResolved());
+
+		// **The clip label, asserted on the real body.** The translation result above says which
+		// activity answered; only the label says which clip the body will actually play, and the
+		// whole point of the misspelled rung-1 literal is that a resolver keyed on the activity
+		// alone would still name the glock clip. So the record has to name a clip the shared pistol
+		// activity owns and none the misspelled glock literal owns — the same claim the fixture
+		// makes, made against the shipped corpus, where a re-export can break it.
+		const TArray<FString> PistolClips = GlockBody.ByActivity(TEXT("ACT_WALK_RELAXED_PISTOL"));
+		const TArray<FString> GlockClips = GlockBody.ByActivity(TEXT("AWS_WALK_RELAXED_GLOCK"));
+		TestTrue(TEXT("the shipped body carries the misspelled glock clip this case is about"),
+			GlockClips.Num() > 0);
+		TestTrue(FString::Printf(
+			TEXT("...and the record names a clip the shared pistol activity owns, not one of the ")
+			TEXT("%d the glock literal owns (it named '%s')"), GlockClips.Num(),
+			*Selection.SequenceLabel),
+			PistolClips.Contains(Selection.SequenceLabel)
+				&& !GlockClips.Contains(Selection.SequenceLabel));
+		TestTrue(TEXT("...off a named bank, so the label is an identity rather than a bare string"),
+			!Selection.OwnerStem.IsEmpty() && !Selection.AnimationName.IsEmpty());
 		AddInfo(FString::Printf(TEXT("'%s' item_w_glock_17c ACT_WALK_RELAXED -> rung %d, %s (clip '%s' off '%s')"),
 			*GlockStem, Result.WeaponRung, *Result.Resolved, *Selection.SequenceLabel,
 			*Selection.OwnerStem));
