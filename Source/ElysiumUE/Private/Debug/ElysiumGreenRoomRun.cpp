@@ -23,6 +23,7 @@
 #include "ElysiumPlayer.h"   // FElysiumSheet — the arena checks the record's clan before seeding one
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
+#include "SkeletalRenderPublic.h"   // the wield check reads the drawn mesh's own skinning matrices
 #include "Debug/ElysiumScreenshot.h"
 #if !UE_BUILD_SHIPPING
 // The gym's and the arena's engine halves are debug-only, while their specs are not. Drive and
@@ -2322,6 +2323,51 @@ void FElysiumGreenRoomRun::LabClearWield()
 	ReviewWield.Reset();
 }
 
+// What the DRAWN mesh is doing, read from the skinning matrices in the mesh object's own dynamic
+// data — the last packet the render thread actually received, not anything recomputed on demand.
+// Both cheaper readings lie about a follower: GetSocketTransform answers through the leader bone
+// map, and GetCurrentRefToLocalMatrices rebuilds fresh matrices from current game-thread state —
+// each once claimed a weapon rode the hand at 0.0000 while the mesh drew frozen at its reference
+// pose off a proxy nothing had updated. The dynamic data is the one reading that carries that
+// staleness.
+//
+// `OutMount` is the rendered world transform of the mount's bind frame. `OutCentre` is where the
+// drawn geometry's middle is: the mesh's bind-space bounds centre pushed through the mount's
+// skinning matrix — exact for the rigid-under-the-mount majority the corpus measures, and honest
+// in the way that matters: it moves only when the drawn mesh moves, bind offsets included. False
+// when the bone, the mesh object or its first packet is missing (never rendered is not riding
+// anything); HaveValidDynamicData guards the install frame, whose packet
+// GetReferenceToLocalMatrices dereferences unchecked.
+static bool ElysiumRenderedWield(const USkeletalMeshComponent& Wield, FName Mount,
+	FTransform& OutMount, FVector& OutCentre)
+{
+	const USkeletalMesh* const Mesh = Wield.GetSkeletalMeshAsset();
+	const FSkeletalMeshObject* const MeshObject = Wield.GetMeshObject();
+	const int32 Index = Mesh != nullptr && MeshObject != nullptr
+			&& MeshObject->HaveValidDynamicData()
+		? Mesh->GetRefSkeleton().FindBoneIndex(Mount) : INDEX_NONE;
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	const TConstArrayView<FMatrix44f> RefToLocals = MeshObject->GetReferenceToLocalMatrices();
+	const TArray<FMatrix44f>& InvBind = Mesh->GetRefBasesInvMatrix();
+	if (!RefToLocals.IsValidIndex(Index) || !InvBind.IsValidIndex(Index))
+	{
+		return false;
+	}
+	const FMatrix RefToLocal(RefToLocals[Index]);
+	const FTransform ComponentToWorld = Wield.GetComponentTransform();
+	// RefToLocal = InvBind * ComponentSpace, so the bind matrix on the left recovers the rendered
+	// component-space bone; the component transform then lifts it to the world. The bounds centre
+	// is already bind-space, so it goes through RefToLocal as-is.
+	const FMatrix RenderedCS = FMatrix(InvBind[Index].Inverse()) * RefToLocal;
+	OutMount = FTransform(RenderedCS * ComponentToWorld.ToMatrixWithScale());
+	OutCentre = ComponentToWorld.TransformPosition(
+		RefToLocal.TransformPosition(FVector(Mesh->GetImportedBounds().Origin)));
+	return true;
+}
+
 bool FElysiumGreenRoomRun::LabWieldCheck(FString& OutReport) const
 {
 	const USkeletalMeshComponent* const Body = LabBody();
@@ -2341,33 +2387,254 @@ bool FElysiumGreenRoomRun::LabWieldCheck(FString& OutReport) const
 	}
 
 	const FName Mount = Ref->MountBone;
-	// Whether the WEARER declares the mount decides which of the two compositions is under test, and
+	// Whether the WEARER declares the mount decides which of the two compositions is rendering, and
 	// it is read off the wearer rather than assumed from the binding: the manifest's classification
 	// is metadata, and the body standing here is what actually answers.
 	const bool bWearerDeclares = Body->GetBoneIndex(Mount) != INDEX_NONE;
-	const FTransform WieldAt = Wield->GetSocketTransform(Mount, RTS_World);
-	const FTransform HandAt = Body->GetSocketTransform(Ref->HandBone, RTS_World);
-
-	if (bWearerDeclares)
+	FTransform MountAt;
+	FVector CentreAt;
+	if (!ElysiumRenderedWield(*Wield, Mount, MountAt, CentreAt))
 	{
-		const FTransform WearerAt = Body->GetSocketTransform(Mount, RTS_World);
-		const float PosCm = FVector::Dist(WieldAt.GetLocation(), WearerAt.GetLocation());
-		const float RotDeg = FMath::RadiansToDegrees(
-			WieldAt.GetRotation().AngularDistance(WearerAt.GetRotation()));
 		OutReport = FString::Printf(
-			TEXT("%s: mount '%s' is name-matched — weapon vs wearer %.4f cm / %.4f deg (want ~0); "
-			     "%.1f cm from %s"),
-			*ReviewWield, *Mount.ToString(), PosCm, RotDeg,
-			FVector::Dist(WieldAt.GetLocation(), HandAt.GetLocation()), *Ref->HandBone.ToString());
-		return true;
+			TEXT("%s: the weapon's render data does not answer for mount '%s' yet"),
+			*ReviewWield, *Mount.ToString());
+		return false;
+	}
+	const FTransform HandAt = Body->GetSocketTransform(Ref->HandBone, RTS_World);
+	const float CentreCm = FVector::Dist(CentreAt, HandAt.GetLocation());
+
+	// No verdict lives on this line — a single frame cannot prove tracking — but the distance is
+	// the DRAWN geometry's, so a weapon drawing away from the body reads as far away here rather
+	// than hiding behind the leader array's answer. The verdict is gr_wield_check's window.
+	OutReport = FString::Printf(
+		TEXT("%s: mount '%s' is %s; the drawn geometry's centre sits %.1f cm from %s "
+		     "(mesh radius %.0f cm) — the verdict is gr_wield_check's"),
+		*ReviewWield, *Mount.ToString(),
+		bWearerDeclares ? TEXT("the wearer's own bone")
+		                : TEXT("NOT declared by this body (it rides the hand off its reference pose)"),
+		CentreCm, *Ref->HandBone.ToString(),
+		Wield->GetSkeletalMeshAsset() != nullptr
+			? Wield->GetSkeletalMeshAsset()->GetImportedBounds().SphereRadius : 0.0f);
+	return true;
+}
+
+bool FElysiumGreenRoomRun::LabWieldTrackStart(float Seconds, float ToleranceCm, FString& OutError)
+{
+	if (IsDriving())
+	{
+		OutError = TEXT("the tracking check samples the review stage — `elysium.gr_mode review` first");
+		return false;
+	}
+	const USkeletalMeshComponent* const Body = LabBody();
+	const USkeletalMeshComponent* const Wield = ElysiumNpcVisual::FindWieldModel(Body);
+	if (Body == nullptr || Wield == nullptr)
+	{
+		OutError = TEXT("nothing is held — `elysium.gr_wield <item>` first");
+		return false;
+	}
+	const FElysiumWieldModelRef* Ref = nullptr;
+	if (UElysiumWieldTable::FindRow(FName(*ReviewWield), bReviewWieldFemale, Ref)
+		!= EElysiumWieldResult::Found)
+	{
+		OutError = FString::Printf(TEXT("'%s' no longer resolves"), *ReviewWield);
+		return false;
+	}
+	// The hand is the frame every sample is expressed in, so a body without it has nothing to
+	// measure against — GetSocketTransform would quietly answer the component transform and the
+	// window would measure the stage.
+	if (Body->GetBoneIndex(Ref->HandBone) == INDEX_NONE)
+	{
+		OutError = FString::Printf(TEXT("the standing body does not declare the hand bone '%s'"),
+			*Ref->HandBone.ToString());
+		return false;
 	}
 
-	OutReport = FString::Printf(
-		TEXT("%s: mount '%s' is NOT declared by this body — it rides %s off its reference pose, "
-		     "%.1f cm out (a difference here is the expected composition, not an error)"),
-		*ReviewWield, *Mount.ToString(), *Ref->HandBone.ToString(),
-		FVector::Dist(WieldAt.GetLocation(), HandAt.GetLocation()));
+	WieldTrack = FWieldTrackProbe();
+	WieldTrack.bRunning = true;
+	// One loop of the standing clip is the natural window: every frame the base can show has shown
+	// once. A graph-posed grid reports no duration, so the clamp's floor is the window there.
+	const float Loop = LabDuration() > KINDA_SMALL_NUMBER
+		? LabDuration() / FMath::Max(LabViewState.Speed, 0.01f) : 0.0f;
+	WieldTrack.SecondsWanted = Seconds > 0.0f ? Seconds : FMath::Clamp(Loop, 1.0f, 20.0f);
+	WieldTrack.ToleranceCm = ToleranceCm > 0.0f ? ToleranceCm : 5.0f;
+	WieldTrack.Classname = ReviewWield;
+	WieldTrack.MountBone = Ref->MountBone;
+	WieldTrack.HandBone = Ref->HandBone;
+	WieldTrack.bWearerDeclares = Body->GetBoneIndex(Ref->MountBone) != INDEX_NONE;
+	WieldTrack.BindRadiusCm = Wield->GetSkeletalMeshAsset() != nullptr
+		? static_cast<float>(Wield->GetSkeletalMeshAsset()->GetImportedBounds().SphereRadius)
+		: 0.0f;
+	WieldTrack.Body = Body;
+	WieldTrack.Wield = Wield;
+	UE_LOG(LogElysiumGreenRoom, Log,
+		TEXT("wield track: sampling '%s' mount '%s' against hand '%s' for %.1f s "
+		     "(tolerance %.1f cm)"),
+		*WieldTrack.Classname, *WieldTrack.MountBone.ToString(), *WieldTrack.HandBone.ToString(),
+		WieldTrack.SecondsWanted, WieldTrack.ToleranceCm);
 	return true;
+}
+
+void FElysiumGreenRoomRun::TickWieldTrack(float DeltaSeconds)
+{
+	if (!WieldTrack.bRunning)
+	{
+		return;
+	}
+	const USkeletalMeshComponent* const Body = WieldTrack.Body.Get();
+	const USkeletalMeshComponent* const Wield = WieldTrack.Wield.Get();
+	if (Body == nullptr || Wield == nullptr || Body != LabBody()
+		|| ReviewWield != WieldTrack.Classname)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: aborted — the body or the held weapon changed under the window"),
+			*WieldTrack.Classname));
+		return;
+	}
+
+	// The drawn side comes off the renderer's own matrices, never the follower's socket answer;
+	// the wearer's side is the leader's own array, which is what the body itself animates from.
+	FTransform MountAt;
+	FVector CentreAt;
+	if (!ElysiumRenderedWield(*Wield, WieldTrack.MountBone, MountAt, CentreAt))
+	{
+		// The install frame has no render packet yet; skip rather than abort, so a check issued in
+		// the same breath as the equip still opens. A packet that never arrives is caught by the
+		// sample floor at close.
+		WieldTrack.SecondsSeen += DeltaSeconds;
+		return;
+	}
+	const FTransform HandAt = Body->GetSocketTransform(WieldTrack.HandBone, RTS_World);
+	const FVector HandComp =
+		Body->GetSocketTransform(WieldTrack.HandBone, RTS_Component).GetLocation();
+
+	// MAPPING — a declared mount coincides with the wearer's bone, every frame, swing or not.
+	if (WieldTrack.bWearerDeclares)
+	{
+		const FTransform WearerAt = Body->GetSocketTransform(WieldTrack.MountBone, RTS_World);
+		const float MapCm = FVector::Dist(MountAt.GetLocation(), WearerAt.GetLocation());
+		if (MapCm > WieldTrack.WorstMapCm)
+		{
+			WieldTrack.WorstMapCm = MapCm;
+			WieldTrack.WorstMapSample = WieldTrack.Samples;
+			WieldTrack.WorstMapTime = LabClipTime;
+		}
+		WieldTrack.WorstMapDeg = FMath::Max(WieldTrack.WorstMapDeg, FMath::RadiansToDegrees(
+			MountAt.GetRotation().AngularDistance(WearerAt.GetRotation())));
+	}
+
+	// TRACKING — the drawn centre holds its offset in the hand's frame, whatever that offset is.
+	const FVector CentreInHand = HandAt.InverseTransformPosition(CentreAt);
+	if (WieldTrack.Samples == 0)
+	{
+		WieldTrack.Baseline = CentreInHand;
+		WieldTrack.HandStart = HandComp;
+	}
+	const float DriftCm = FVector::Dist(CentreInHand, WieldTrack.Baseline);
+	if (DriftCm > WieldTrack.WorstDriftCm)
+	{
+		WieldTrack.WorstDriftCm = DriftCm;
+		WieldTrack.WorstDriftSample = WieldTrack.Samples;
+		WieldTrack.WorstDriftTime = LabClipTime;
+	}
+
+	// PLACEMENT — the hand touches the mesh: the drawn centre within the mesh's own bind radius.
+	const float PlaceDistCm = FVector::Dist(CentreAt, HandAt.GetLocation());
+	const float PlaceOverCm = FMath::Max(0.0f, PlaceDistCm - WieldTrack.BindRadiusCm);
+	if (PlaceOverCm > WieldTrack.WorstPlaceCm)
+	{
+		WieldTrack.WorstPlaceCm = PlaceOverCm;
+		WieldTrack.WorstPlaceDistCm = PlaceDistCm;
+		WieldTrack.WorstPlaceSample = WieldTrack.Samples;
+		WieldTrack.WorstPlaceTime = LabClipTime;
+	}
+
+	WieldTrack.HandPeakCm = FMath::Max(WieldTrack.HandPeakCm,
+		static_cast<float>(FVector::Dist(HandComp, WieldTrack.HandStart)));
+	++WieldTrack.Samples;
+	WieldTrack.SecondsSeen += DeltaSeconds;
+	if (WieldTrack.SecondsSeen < WieldTrack.SecondsWanted)
+	{
+		return;
+	}
+
+	// A pass is a claim about motion, so the base has to have supplied some: a hand that never left
+	// its first position bounds the possible drift at zero even for a weapon nailed to the stage.
+	const float NeedHandCm = FMath::Max(WieldTrack.ToleranceCm * 3.0f, 15.0f);
+	if (WieldTrack.Samples < 10)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: unproven — only %d samples landed in %.1f s; widen the window"),
+			*WieldTrack.Classname, WieldTrack.Samples, WieldTrack.SecondsSeen));
+	}
+	else if (WieldTrack.HandPeakCm < NeedHandCm)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: unproven — the base moved '%s' only %.1f cm (need >= %.0f). Stand a base "
+			     "that swings the hand (a walk, an attack) and rerun; is the clip paused?"),
+			*WieldTrack.Classname, *WieldTrack.HandBone.ToString(), WieldTrack.HandPeakCm,
+			NeedHandCm));
+	}
+	else if (WieldTrack.bWearerDeclares && WieldTrack.WorstMapCm > WieldTrack.ToleranceCm)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: FAIL(mapping) — the rendered mount sat %.1f cm / %.1f deg off the wearer's "
+			     "own '%s' it must coincide with, worst at sample %d (clip t=%.2f s), over %d "
+			     "samples (tolerance %.1f cm)"),
+			*WieldTrack.Classname, WieldTrack.WorstMapCm, WieldTrack.WorstMapDeg,
+			*WieldTrack.MountBone.ToString(), WieldTrack.WorstMapSample, WieldTrack.WorstMapTime,
+			WieldTrack.Samples, WieldTrack.ToleranceCm));
+	}
+	else if (WieldTrack.WorstDriftCm > WieldTrack.ToleranceCm)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: FAIL(tracking) — the drawn geometry drifted %.1f cm off its offset from "
+			     "hand '%s', worst at sample %d (clip t=%.2f s), over %d samples (tolerance "
+			     "%.1f cm)"),
+			*WieldTrack.Classname, WieldTrack.WorstDriftCm, *WieldTrack.HandBone.ToString(),
+			WieldTrack.WorstDriftSample, WieldTrack.WorstDriftTime, WieldTrack.Samples,
+			WieldTrack.ToleranceCm));
+	}
+	else if (WieldTrack.WorstPlaceCm > WieldTrack.ToleranceCm)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: FAIL(placement) — the drawn geometry's centre sat %.0f cm from hand '%s' "
+			     "against its own %.0f cm radius (%.0f cm beyond touch), worst at sample %d "
+			     "(clip t=%.2f s), over %d samples — no runtime offset corrects this; the bake is "
+			     "wrong upstream"),
+			*WieldTrack.Classname, WieldTrack.WorstPlaceDistCm, *WieldTrack.HandBone.ToString(),
+			WieldTrack.BindRadiusCm, WieldTrack.WorstPlaceCm, WieldTrack.WorstPlaceSample,
+			WieldTrack.WorstPlaceTime, WieldTrack.Samples));
+	}
+	else
+	{
+		CloseWieldTrack(true, FString::Printf(
+			TEXT("%s: PASS — the drawn geometry rode hand '%s' (drift %.2f cm) at %.0f cm against "
+			     "its own %.0f cm radius%s, over %d samples of an animated base (the hand "
+			     "travelled %.0f cm)"),
+			*WieldTrack.Classname, *WieldTrack.HandBone.ToString(), WieldTrack.WorstDriftCm,
+			WieldTrack.WorstPlaceDistCm, WieldTrack.BindRadiusCm,
+			WieldTrack.bWearerDeclares
+				? *FString::Printf(TEXT(", on the wearer's '%s' within %.2f cm / %.1f deg"),
+					*WieldTrack.MountBone.ToString(), WieldTrack.WorstMapCm,
+					WieldTrack.WorstMapDeg)
+				: TEXT(""),
+			WieldTrack.Samples, WieldTrack.HandPeakCm));
+	}
+}
+
+void FElysiumGreenRoomRun::CloseWieldTrack(bool bPass, const FString& Verdict)
+{
+	WieldTrack.bRunning = false;
+	WieldTrack.bPassed = bPass;
+	WieldTrack.Verdict = Verdict;
+	if (bPass)
+	{
+		UE_LOG(LogElysiumGreenRoom, Display, TEXT("wield track: %s"), *Verdict);
+	}
+	else
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("wield track: %s"), *Verdict);
+	}
 }
 
 void FElysiumGreenRoomRun::ReapplyWield()
@@ -2882,6 +3149,8 @@ void FElysiumGreenRoomRun::TickLab(float DeltaSeconds)
 	{
 		Map->SeekCinematicClip(Body, LabClipTime);
 	}
+
+	TickWieldTrack(DeltaSeconds);
 
 	Body->UpdateBounds();
 	const FBox Bounds = Body->Bounds.GetBox();

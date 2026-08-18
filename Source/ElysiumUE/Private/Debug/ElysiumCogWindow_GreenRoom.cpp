@@ -1163,12 +1163,36 @@ void FElysiumCogWindow_GreenRoom::RenderWield(FElysiumGreenRoomRun& Lab)
 			Lab.LabClearWield();
 			LastNotice.Reset();
 		}
-		// The composition, measured every frame rather than on a button: a weapon that drifts off its
-		// bone during a clip would be invisible in a one-shot reading taken at install time.
+		// The composition, described: which mount, whether the wearer declares it, where the weapon
+		// sits relative to the hand right now. The line carries no verdict — whether the weapon
+		// RIDES the hand is only provable over a window of a moving base, which is the button below.
 		FString Check;
 		if (Lab.LabWieldCheck(Check))
 		{
 			ImGui::TextWrapped("%s", COG_TCHAR_TO_CHAR(*Check));
+		}
+		if (Lab.LabWieldTrackRunning())
+		{
+			ImGui::TextDisabled("tracking check: sampling...");
+		}
+		else
+		{
+			if (ImGui::SmallButton("Check tracking"))
+			{
+				FString Error;
+				if (!Lab.LabWieldTrackStart(0.0f, 0.0f, Error))
+				{
+					LastError = Error;
+				}
+			}
+			if (!Lab.LabWieldTrackVerdict().IsEmpty())
+			{
+				ImGui::SameLine();
+				ImGui::TextColored(
+					Lab.LabWieldTrackPassed() ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColError,
+					Lab.LabWieldTrackPassed() ? "ok" : "failed");
+				ImGui::TextWrapped("%s", COG_TCHAR_TO_CHAR(*Lab.LabWieldTrackVerdict()));
+			}
 		}
 	}
 	if (!LastNotice.IsEmpty())

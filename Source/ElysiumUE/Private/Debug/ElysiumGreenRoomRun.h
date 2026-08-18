@@ -215,18 +215,42 @@ public:
 	EElysiumWieldResult LabSetWield(const FString& Classname, bool bFemale, FString& OutDetail);
 	// Empty the standing body's hands. Safe when they already are.
 	void LabClearWield();
-	// The acceptance, as a number rather than a look.
-	//
-	// Retail composes a held weapon by overwriting every bone whose NAME matches the wearer with the
-	// wearer's own world matrix, so for a mount bone the wearer declares the two transforms are not
-	// merely close — they are the SAME. Leader pose is that rule, so the distance between them is
-	// either ~0 or the mechanism is not doing what it is believed to do, and no screenshot angle can
-	// tell those apart. For a mount the wearer does NOT declare (every firearm), the weapon rides the
-	// hand off its reference pose and a difference there is expected, so the report says which case
-	// it measured rather than applying one threshold to both.
+	// The instant composition readout — which mount the weapon is on, whether the wearer declares
+	// it, and where the weapon currently sits relative to the hand. A description, never a
+	// verification: for a name-matched mount the weapon and the wearer read the SAME leader-array
+	// entry, so comparing those two transforms is an identity that answers 0 whether or not the
+	// bone ever animates. Tracking is LabWieldTrackStart's to prove.
 	//
 	// False, with the reason in `OutReport`, when nothing is held.
 	bool LabWieldCheck(FString& OutReport) const;
+	// The verification. It reads what is DRAWN — the skinning matrices out of the mesh object's own
+	// dynamic data — because every cheaper reading lies about a follower: the game thread's socket
+	// answers come through the leader bone map, and freshly rebuilt matrices skip the staleness the
+	// proxy actually renders with. Sampled every lab frame over a window of an animated base, it
+	// gates three separable claims, and the failure names which one broke, at which sample, by how
+	// far:
+	//
+	// - MAPPING — for a mount the wearer declares, the rendered mount coincides with the wearer's
+	//   own animated bone (retail overwrites a matched bone with the wearer's matrix, so the gap is
+	//   ~0 or the mechanism is broken; the rule holds through a swing).
+	// - TRACKING — the drawn geometry's centre holds its offset in the hand's frame: a held weapon
+	//   rides the hand, whatever that offset currently is.
+	// - PLACEMENT — the hand actually touches the mesh: the drawn centre stays within the mesh's
+	//   own bind radius of the hand, so a weapon orbiting the hand rigidly from a metre away fails
+	//   rather than passing as "tracking". No offset is corrected here — a placement that needs one
+	//   means the bake is wrong upstream, and this gate is what says so.
+	//
+	// Two guards keep a pass meaningful: the base must actually move the hand (a paused or
+	// near-static base closes as unproven rather than passing vacuously), and the window aborts,
+	// named, when the body or the held weapon changes under it.
+	//
+	// `Seconds` <= 0 samples one loop of the standing clip; `ToleranceCm` <= 0 takes the default.
+	// False, with the reason, when the window cannot open. The verdict logs when the window closes
+	// and stays on LabWieldTrackVerdict until the next window opens.
+	bool LabWieldTrackStart(float Seconds, float ToleranceCm, FString& OutError);
+	bool LabWieldTrackRunning() const { return WieldTrack.bRunning; }
+	bool LabWieldTrackPassed() const { return WieldTrack.bPassed; }
+	const FString& LabWieldTrackVerdict() const { return WieldTrack.Verdict; }
 	const FString& LabWield() const { return ReviewWield; }
 	bool LabWieldFemale() const { return bReviewWieldFemale; }
 	// Every item classname whose row carries geometry for this sex, sorted. Empty when the wield bake
@@ -473,6 +497,55 @@ private:
 	// rather than to the pose it is in, and watching one track the hand across clips is the point.
 	FString ReviewWield;
 	bool bReviewWieldFemale = false;
+	// One sampling window of the wield tracking check. The weak pointers pin what the window opened
+	// over, so a restand or a re-equip mid-window is a named abort rather than a measurement that
+	// quietly spans two different weapons.
+	struct FWieldTrackProbe
+	{
+		bool bRunning = false;
+		bool bPassed = false;
+		float SecondsWanted = 0.0f;
+		float SecondsSeen = 0.0f;
+		float ToleranceCm = 0.0f;
+		int32 Samples = 0;
+		FString Classname;
+		FName MountBone;
+		FName HandBone;
+		// Whether the wearer declares the mount, read when the window opens; the mapping gate only
+		// exists for a declared mount (an undeclared one has no wearer bone to coincide with).
+		bool bWearerDeclares = false;
+		// The mesh's own bind-space bounds radius — the placement gate's yardstick for "the hand
+		// touches the mesh".
+		float BindRadiusCm = 0.0f;
+		TWeakObjectPtr<const USkeletalMeshComponent> Body;
+		TWeakObjectPtr<const USkeletalMeshComponent> Wield;
+		// The drawn centre in the wearer's hand frame at the first sample — the tracking gate's
+		// baseline.
+		FVector Baseline = FVector::ZeroVector;
+		// The component-space hand at the first sample and how far it got from there — the proof
+		// the base animated at all, without which a pass claims nothing.
+		FVector HandStart = FVector::ZeroVector;
+		float HandPeakCm = 0.0f;
+		// One worst reading per gate, each with the sample and clip time it landed on.
+		float WorstMapCm = 0.0f;
+		float WorstMapDeg = 0.0f;
+		int32 WorstMapSample = 0;
+		float WorstMapTime = 0.0f;
+		float WorstDriftCm = 0.0f;
+		int32 WorstDriftSample = 0;
+		float WorstDriftTime = 0.0f;
+		// Placement keeps the worst distance-beyond-radius and the raw distance it came from.
+		float WorstPlaceCm = 0.0f;
+		float WorstPlaceDistCm = 0.0f;
+		int32 WorstPlaceSample = 0;
+		float WorstPlaceTime = 0.0f;
+		FString Verdict;
+	};
+	FWieldTrackProbe WieldTrack;
+	// One frame of an open window, from TickLab. Closes the window itself when the time is up or
+	// the stage changed under it.
+	void TickWieldTrack(float DeltaSeconds);
+	void CloseWieldTrack(bool bPass, const FString& Verdict);
 	bool bLayerAimFollowsLook = true;
 	FString ReviewAnimSet;
 	FString ReviewBoneRoot;

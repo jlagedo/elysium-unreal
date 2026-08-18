@@ -522,6 +522,15 @@ Hard-won, non-obvious, and easy to undo:
   character-vs-character switch a `scripted_sequence` beat borrows. Collapsing any of the three into
   the others makes a scene's cast vanish. They are resolved together in `ApplyCollisionState`, so a
   new caller must go through it rather than touching the capsule directly.
+- **No game-thread bone query tells you where a leader-pose follower is drawn.**
+  `GetSocketTransform` on a follower answers through the leader bone map, and
+  `GetCurrentRefToLocalMatrices` rebuilds fresh matrices from current game-thread state — both can
+  report a followed weapon riding the hand while the mesh draws frozen at its reference pose off a
+  proxy nothing has updated. The drawn frame is the skinning matrices in
+  `GetMeshObject()->GetReferenceToLocalMatrices()` (the last dynamic-data packet the render thread
+  received), guarded by `HaveValidDynamicData()` — on the install frame the packet does not exist
+  yet and the accessor dereferences it unchecked. The worked example is the green room's wield
+  tracking check (`ElysiumRenderedWield` in `Debug/ElysiumGreenRoomRun.cpp`).
 
 ## Build and test loop
 

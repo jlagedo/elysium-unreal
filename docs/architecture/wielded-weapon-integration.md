@@ -215,3 +215,29 @@ own 6.357° wiggle — is a runtime-graph enhancement away, not a divergence bak
   handleclaws `null` slot as the one recorded exception.
 - Resolve every manifest row through the asset registry, reject duplicate package paths, and sweep
   stale packages below the wield root before saving.
+
+### Runtime verification — the wield tracking check
+
+The live acceptance instrument is the green room's `elysium.gr_wield_check` (a Cog button and the
+`gr_status` readout expose the same window). It samples the **drawn** weapon every lab frame over a
+window of an animated base and gates three separable claims, failing with the gate name, the worst
+sample, its clip time and the distance:
+
+- **Mapping** — a mount the wearer declares coincides with the wearer's own animated bone, every
+  frame, swing included (retail overwrites a matched bone with the wearer's matrix, so the gap is
+  ~0 or the mechanism is broken).
+- **Tracking** — the drawn geometry's centre holds its offset in the hand's frame, whatever that
+  offset currently is.
+- **Placement** — the hand actually touches the mesh: the drawn centre stays within the mesh's own
+  bind-space bounds radius of the hand, so a weapon riding the hand rigidly from a metre away fails
+  rather than passing as "tracking". No offset is corrected at runtime; a placement failure names
+  the bake as the owner of the fix.
+
+Two guards keep a pass meaningful: the base must move the hand (a near-static or paused base closes
+as *unproven*), and the window aborts, named, when the body or the held weapon changes under it.
+
+The check reads the skinning matrices out of the mesh object's **dynamic data** — the last packet
+the render thread actually received — because every cheaper reading lies about a leader-pose
+follower: game-thread socket answers come through the leader bone map, and freshly rebuilt
+`GetCurrentRefToLocalMatrices` values skip the staleness the proxy renders with (the engine gotcha
+in `Source/ElysiumUE/CLAUDE.md`).

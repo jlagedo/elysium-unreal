@@ -313,7 +313,30 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			FString Check;
 			if (Run.LabWieldCheck(Check))
 			{
-				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_wield check: %s"), *Check);
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_wield: %s"), *Check);
+			}
+		});
+
+	Register(TEXT("elysium.gr_wield_check"),
+		TEXT("Verify the held weapon rides the wearer's hand across an animated base: "
+		     "`elysium.gr_wield_check [seconds] [tolerance_cm]`. Samples the rendered mount "
+		     "against the hand every frame; the verdict logs when the window closes, failing "
+		     "with the worst sample and distance."),
+		[](FElysiumGreenRoomRun& Run, const TArray<FString>& Args)
+		{
+			if (Run.LabWieldTrackRunning())
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning,
+					TEXT("gr_wield_check: a window is already sampling."));
+				return;
+			}
+			FString Error;
+			if (!Run.LabWieldTrackStart(
+					Args.Num() > 0 ? FCString::Atof(*Args[0]) : 0.0f,
+					Args.Num() > 1 ? FCString::Atof(*Args[1]) : 0.0f, Error))
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_wield_check failed: %s"),
+					*Error);
 			}
 		});
 
@@ -378,6 +401,10 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			FString Check;
 			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  weapon %s"),
 				Run.LabWieldCheck(Check) ? *Check : TEXT("(none held)"));
+			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  track  %s"),
+				Run.LabWieldTrackRunning() ? TEXT("(sampling)")
+				: Run.LabWieldTrackVerdict().IsEmpty() ? TEXT("(not run)")
+				: *Run.LabWieldTrackVerdict());
 		});
 }
 
