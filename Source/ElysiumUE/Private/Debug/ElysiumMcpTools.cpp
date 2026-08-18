@@ -12,6 +12,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumGraphState.h"
 #include "Debug/ElysiumLogTap.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
@@ -869,6 +870,10 @@ namespace ElysiumMcpImpl
 						Anim->SetNumberField(TEXT("variant"), Sel.Variant);
 						Anim->SetNumberField(TEXT("weight"), Sel.Weight);
 						Anim->SetNumberField(TEXT("candidates"), Sel.Candidates);
+						// The graph state the record names, beside the asset it named: together they
+						// are the activity-to-state answer an agent can read without a screenshot.
+						Anim->SetStringField(TEXT("state"),
+							ElysiumAnimGraph::StateName(Sel.GraphState));
 						Anim->SetStringField(TEXT("asset"),
 							ElysiumAnimIntent::AssetKindName(Sel.AssetKind));
 						Anim->SetStringField(TEXT("animation"), Sel.AnimationName);

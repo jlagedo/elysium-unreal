@@ -484,7 +484,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// same question of the authored pair list, but a stale generated class can disagree.
 	if (PendingBlendSpace != nullptr)
 	{
-		const EElysiumGraphState GridState = ElysiumAnimGraph::StateFor(Pending);
+		const EElysiumGraphState GridState = Pending.GraphState;
 		if (!CompiledStateCanPlayBlendSpace(GridState))
 		{
 			UE_LOG(LogElysiumBipedGraph, Warning,
@@ -510,7 +510,10 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 
 	// --- project the record onto what the graph reads --------------------------------------------
-	RequestedState = ElysiumAnimGraph::StateFor(Pending);
+	// The state is READ off the record rather than derived here. The resolver projected it once, and
+	// an instance that re-derived its own would be a second answer to the question the record exists
+	// to settle — visible the day a readout and the pose disagree about where the body is standing.
+	RequestedState = Pending.GraphState;
 	RequestedBlendSpace = PendingBlendSpace;
 	RequestedSequence = PendingSequence;
 	// A held stance repeats its into-pose, which is retail's reselect-and-restart expressed as a

@@ -691,7 +691,9 @@ void UElysiumEntityBodies::StandGridSelection(UElysiumBipedAnimInstance& Inst,
 	Selection.Source = EElysiumAnimSource::Debug;
 	Selection.Route = EElysiumAnimRoute::ExactLabel;
 	// The state is explicit so a grid can be stood in any of the eight. Walk remains the default:
-	// no one-shot completion contract.
+	// no one-shot completion contract. The activity is named beside it because every readout of the
+	// record shows what was asked for, and a stand with no activity would read as a hole.
+	Selection.GraphState = State;
 	Selection.ResolvedActivity = ElysiumAnimGraph::ActivityForState(State);
 	Selection.RequestedActivity = Selection.ResolvedActivity;
 	Selection.SequenceLabel = Grid.Label;

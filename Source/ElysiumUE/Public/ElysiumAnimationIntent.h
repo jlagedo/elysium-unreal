@@ -4,6 +4,7 @@
 
 #include "ElysiumEntityHandle.h"
 #include "ElysiumGaitSpeeds.h"
+#include "ElysiumGraphState.h"
 #include "ElysiumLocomotionSample.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumNpcMindTypes.h"
@@ -283,6 +284,16 @@ struct FElysiumAnimationSelection
 	float FadeSeconds = 0.0f;
 
 	// --- Step 6: the published parameters. It does not repeat selection. --------------------------
+	// Which of the eight graph states realizes this selection. **Projected once, here, and read
+	// everywhere else**: the anim instance, the Cog row, the trace and the MCP surface all have to
+	// agree about where the body is standing, and a projection each of them derived for itself is
+	// four answers waiting to disagree. The rule that produces it is
+	// `ElysiumAnimGraph::StateForActivity` over the LOGICAL request — translation changes which
+	// sequences realize a request, never what the body is doing.
+	//
+	// It is named even on a miss, because a miss still has to stand somewhere: that is what lets a
+	// request that resolved nothing be read as "held the pose in state X" rather than as silence.
+	EElysiumGraphState GraphState = EElysiumGraphState::Idle;
 	// The latch state the classification was made under, carried so a reader can tell an ACT_FALLING
 	// that came from a jump from one that came from walking off a ledge — which is the whole thing the
 	// latch exists to distinguish, and it would be invisible on the record without it.

@@ -75,6 +75,8 @@ namespace
 	  true,  TEXT("EElysiumAnimOutcome; 0 is a clean resolve and anything else names the fallback") },
 	{ TEXT("act_asset"),   TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
 	  true,  TEXT("EElysiumAnimAssetKind the label resolved to") },
+	{ TEXT("act_state"),   TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
+	  true,  TEXT("EElysiumGraphState the record named; where the body stands, even on a miss") },
 	{ TEXT("air_phase"),   TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),
 	  true,  TEXT("EElysiumAirPhase the jump latch holds; what the sample alone cannot answer") },
 	{ TEXT("act_gen"),     TEXT("anim"), EScope::Frame, EKind::Exact,   0.0f,   0, TEXT(""),

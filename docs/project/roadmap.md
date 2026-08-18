@@ -281,8 +281,18 @@ The ladder:
   vocabulary, so a glock-armed body reaches `pistol_relaxed_walk` at rung 2 and an idle armed cast
   member walks relaxed instead of weapon-up (the armed/alert branch answered over its confirmed
   slice; a body in combat answers neither arm, the divergence recorded in
-  `docs/vtmb/animation_and_movers.md`). Activity→state coverage is open, and so is the cast's half
-  of the one trace schema — `FElysiumMoveRun` records the player's selection only.
+  `docs/vtmb/animation_and_movers.md`). Activity→state coverage is closed: the graph state rides on
+  the selection record as `GraphState`, projected once in the resolver's step 6 and read by the anim
+  instance, Cog, the `act_state` channel and the MCP surface rather than derived four times, so a
+  readout and a pose cannot disagree; `StateCanPlay` is the coverage rule as one predicate, and both
+  producers are swept against it over the real corpus — 52 player bodies across the classifier's own
+  13 emittable activities (the relaxed forms included, the water pair held only to pose-or-name) and
+  114 cast bodies across the recovered NPC subset, 532 of 570 cast requests posing and all 38 misses
+  naming their recovered ladder rung. The 11 cast bodies behind those misses are the four animals
+  with no crouch/sneak, three never-locomoting props and four wounded scripted bodies; the 25
+  sequence-zero rungs among them pose nothing because the character export writes no raw sequence
+  index, which is the named limit rather than a coverage hole. The cast's half of the one trace
+  schema is open — `FElysiumMoveRun` records the player's selection only.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
   and weapon-state animation open.

@@ -56,15 +56,6 @@ namespace ElysiumAnimGraph
 		}
 	}
 
-	EElysiumGraphState StateFor(const FElysiumAnimationSelection& Selection)
-	{
-		// The LOGICAL request, not the translated one: translation changes which sequences realize a
-		// request, never what the body is doing. `ACT_WALK_RELAXED` and `ACT_WALK` are the same gait
-		// and the same state, which is exactly what the relaxed rows of the player's own translation
-		// table say.
-		return StateForActivity(ElysiumAnimIntent::ActivityCode(Selection.RequestedActivity));
-	}
-
 	const TCHAR* StateName(EElysiumGraphState State)
 	{
 		switch (State)
@@ -128,14 +119,36 @@ namespace ElysiumAnimGraph
 		}
 	}
 
+	bool StateCanPlay(EElysiumGraphState State, EElysiumAnimAssetKind Kind)
+	{
+		switch (Kind)
+		{
+		// Nothing to play. The graph answers a miss by holding the pose it has, which every state
+		// can do, so a request that resolved no asset is never a coverage hole.
+		case EElysiumAnimAssetKind::None:
+			return true;
+		// Every state carries a sequence player: the authored pair is sequence-or-blend-space on all
+		// eight, and `bHasBlendSpace` is what picks between them.
+		case EElysiumAnimAssetKind::Sequence:
+			return true;
+		case EElysiumAnimAssetKind::BlendSpace:
+			return StateCanPlayBlendSpace(State);
+		// A masked overlay is never a base pose — it rides the layered blend, which is the same rule
+		// that refuses an additive from the base channel.
+		case EElysiumAnimAssetKind::Layer:
+		default:
+			return false;
+		}
+	}
+
 	bool RefuseUnplayableGrid(FElysiumAnimationSelection& Selection)
 	{
 		if (Selection.AssetKind != EElysiumAnimAssetKind::BlendSpace)
 		{
 			return false;
 		}
-		const EElysiumGraphState State = StateFor(Selection);
-		if (StateCanPlayBlendSpace(State))
+		const EElysiumGraphState State = Selection.GraphState;
+		if (StateCanPlay(State, Selection.AssetKind))
 		{
 			return false;
 		}

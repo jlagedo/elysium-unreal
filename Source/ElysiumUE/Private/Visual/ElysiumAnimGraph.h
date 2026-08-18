@@ -3,41 +3,21 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumGraphState.h"
 
-#include "ElysiumAnimGraph.generated.h"
-
-// The player graph's own vocabulary, and the rules that project a selection onto it (CCC5).
+// The rules that project a selection onto the player graph's state vocabulary (CCC5).
 //
 // Pure: a selection record in, a state and a duration out. No UObject, no asset, no world — which
 // is what lets `Elysium.Substrate.AnimationGraph` assert the whole projection on the stack, and what
 // keeps the graph itself free of any decision. The graph reads these answers; it does not compute
 // them.
-
-// Eight states, deliberately NOT the classifier's thirteen activity codes.
 //
-// The projection between the two is where the graph's declared answers live: `ACT_LAND_CROUCH`
-// resolves nothing on a validated player body, the relaxed gaits are what the classifier emits
-// before translation, and swimming is reachable but outside the slice. A body asking for any of
-// those still has to stand somewhere, and naming the eight states separately is what makes "where"
-// a stated rule rather than an accident of an `if` chain inside the graph.
-UENUM()
-enum class EElysiumGraphState : uint8
-{
-	Idle,
-	Walk,
-	Run,
-	Sneak,
-	Crouch,
-	Leap,
-	Falling,
-	Land,
-};
+// The eight states themselves are `ElysiumGraphState.h`: the selection record names the state it
+// resolved to, so the vocabulary crosses the substrate boundary with the record while these rules
+// stay here.
 
 namespace ElysiumAnimGraph
 {
-	// How many states there are, for a caller sizing an array by them.
-	inline constexpr int32 NumGraphStates = 8;
-
 	// The duration baked into every transition in the authored graph, as its inertialization
 	// request. It is a CEILING and never a value read off VtMB: the authored fade arrives at runtime
 	// through `TransitionSeconds` below, and requests merge by taking the smaller, so the runtime
@@ -81,32 +61,32 @@ namespace ElysiumAnimGraph
 	float TransitionSeconds(const FElysiumAnimationSelection* Outgoing,
 		const FElysiumAnimationSelection& Incoming);
 
-	// Which of the eight states realizes a selection.
+	// Which of the eight states realizes an activity. **The one projection**: the resolver runs it
+	// once and the answer rides on the record as `FElysiumAnimationSelection::GraphState`, so the
+	// anim instance, the Cog row, the trace and the MCP surface all read the same state rather than
+	// each deriving one.
 	//
 	// Everything outside the slice lands on `Idle`, which is a decision rather than a fallback: a
 	// body that cannot say what it is doing should stand, and the record still names the activity it
 	// asked for.
-	EElysiumGraphState StateFor(const FElysiumAnimationSelection& Selection);
-
-	// The same projection from the classifier's own code, which is what a test drives and what the
-	// intent carries before a selection exists.
 	EElysiumGraphState StateForActivity(EElysiumAnimActivityCode Code);
 
-	// The state's name, spelled once. The authored graph's state nodes carry exactly these names, so
-	// `Elysium.Substrate.AnimationGraph` can assert the asset against this list rather than against
-	// a screenshot.
-	const TCHAR* StateName(EElysiumGraphState State);
-
-	// Inverse of `StateName`. False when the string is not one of the eight.
-	bool TryParseState(const FString& Name, EElysiumGraphState& OutState);
-
-	// The ACT_* the debug/grid stand path publishes so `StateFor` lands on this state. Walk is the
-	// default stand because it has no one-shot completion contract.
+	// The ACT_* the debug/grid stand path publishes so the record's state reads as this one. Walk is
+	// the default stand because it has no one-shot completion contract.
 	const TCHAR* ActivityForState(EElysiumGraphState State);
 
 	// Whether this state evaluates a blend space. Every locomotion state carries the
 	// sequence-or-blend-space pair, so a grid-shaped selection is playable in all eight.
 	bool StateCanPlayBlendSpace(EElysiumGraphState State);
+
+	// Whether a state can play a selection of this shape at all — the activity-to-state coverage
+	// rule in one predicate, so a slice acceptance can walk every request it can emit against it
+	// instead of spot-checking the grid half.
+	//
+	// `None` is playable by construction: there is nothing to play, and the graph answers a miss by
+	// holding the pose it has. `Layer` never is — a masked overlay rides the layered blend and is
+	// never a base pose, which is the same rule that refuses an additive from the base channel.
+	bool StateCanPlay(EElysiumGraphState State, EElysiumAnimAssetKind Kind);
 
 	// If the selection is a blend space whose target state cannot play one, refuse it in place and
 	// name the miss (label, state, asset form). Returns true when it refused.

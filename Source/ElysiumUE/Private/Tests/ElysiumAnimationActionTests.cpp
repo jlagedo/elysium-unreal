@@ -802,7 +802,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("Land's grid is a blend space"), static_cast<int32>(LandGrid.AssetKind),
 			static_cast<int32>(EElysiumAnimAssetKind::BlendSpace));
 
-		// An exact-label grid carries no activity, so StateFor lands on Idle — which can play it.
+		// An exact-label grid carries no activity, so the record's state is Idle — which can play it.
 		FElysiumAnimationIntent ExactGrid;
 		ExactGrid.Stem = TEXT("pc_body");
 		ExactGrid.SequenceLabel = TEXT("idle");
@@ -1572,12 +1572,61 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 			AsInt(StateForActivity(EElysiumAnimActivityCode::Unknown)),
 			AsInt(EElysiumGraphState::Idle));
 
-		// The record carries the LOGICAL request, so the projection reads it off the un-translated
-		// activity the way the resolver's own record does.
+		// --- coverage: every activity the slice can emit lands somewhere that can play it ---------
+		//
+		// Spot checks prove the rows that were argued over; this proves there is no row missing. A
+		// classifier answer with no state is what would leave a body in the reference pose with
+		// nothing in the log, so the enum is walked whole rather than sampled.
+		using ElysiumAnimGraph::StateCanPlay;
+		for (uint8 Code = 0; Code <= static_cast<uint8>(EElysiumAnimActivityCode::Treadwater); ++Code)
+		{
+			const EElysiumAnimActivityCode Activity = static_cast<EElysiumAnimActivityCode>(Code);
+			const EElysiumGraphState State = StateForActivity(Activity);
+			const FString Named = Code == 0
+				? FString(TEXT("(outside the slice)"))
+				: FString(ElysiumAnimIntent::ActivityName(Activity));
+			TestTrue(*FString::Printf(TEXT("%s routes to one of the eight states"), *Named),
+				static_cast<int32>(State) >= 0 && static_cast<int32>(State) < NumGraphStates);
+			// Both shapes the resolver can hand back, because which one an activity resolves to is
+			// the body's data and not this projection's to know: a fan on one model is a single clip
+			// on another, and a state that could play only one of them would be a hole that shows up
+			// on some cast members and not others.
+			TestTrue(*FString::Printf(TEXT("%s's state %s plays a sequence"), *Named,
+					StateName(State)),
+				StateCanPlay(State, EElysiumAnimAssetKind::Sequence));
+			TestTrue(*FString::Printf(TEXT("%s's state %s plays a blend space"), *Named,
+					StateName(State)),
+				StateCanPlay(State, EElysiumAnimAssetKind::BlendSpace));
+			// And a miss is playable everywhere, because the graph answers it by holding its pose.
+			TestTrue(*FString::Printf(TEXT("%s's state %s can answer a miss"), *Named,
+					StateName(State)),
+				StateCanPlay(State, EElysiumAnimAssetKind::None));
+		}
+
+		// The one shape no state may take as a base pose. A masked overlay rides the layered blend;
+		// standing one as the body would replace the pose it is supposed to compose over.
+		for (int32 i = 0; i < NumGraphStates; ++i)
+		{
+			const EElysiumGraphState State = static_cast<EElysiumGraphState>(i);
+			TestFalse(*FString::Printf(TEXT("%s refuses a layer as a base pose"), StateName(State)),
+				StateCanPlay(State, EElysiumAnimAssetKind::Layer));
+		}
+
+		// The record carries the projection itself: the resolver runs it once and every reader — the
+		// anim instance, the Cog row, the trace, the MCP surface — reads this field instead of
+		// deriving a second answer.
+		FElysiumAnimationCatalog Empty;
+		FElysiumAnimationIntent Sneaking;
+		Sneaking.Stem = TEXT("nobody");
+		Sneaking.Activity = ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::Sneak);
 		FElysiumAnimationSelection Sel;
-		Sel.RequestedActivity = ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::Sneak);
-		TestEqual(TEXT("a selection projects off its requested activity"),
-			AsInt(StateFor(Sel)), AsInt(EElysiumGraphState::Sneak));
+		ElysiumAnimResolve::Resolve(Sneaking, Empty, Sel);
+		TestEqual(TEXT("the record names the state its request projects to"),
+			AsInt(Sel.GraphState), AsInt(EElysiumGraphState::Sneak));
+		// Even with no vocabulary behind it. A body that resolved nothing still has to stand
+		// somewhere, and a record that named no state would make that "nowhere".
+		TestEqual(TEXT("even when nothing resolved"), static_cast<int32>(Sel.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::NoVocabulary));
 	}
 
 	// --- The names the authored asset is asserted against -----------------------------------------
@@ -1673,8 +1722,11 @@ namespace
 		return FString();
 	}
 
+	// `bLadder` defaults off: the ladder would mask a miss behind a walk or a disposition, and a miss
+	// is exactly what several of the assertions below are about. The cast's own coverage turns it on,
+	// because that is the chain a cast body actually resolves through at runtime.
 	FElysiumAnimationSelection ResolveOn(const FElysiumNpcClipSet& Set, FRealTables& Tables,
-		const TCHAR* Activity, EElysiumAnimSource Source)
+		const TCHAR* Activity, EElysiumAnimSource Source, bool bLadder = false)
 	{
 		FElysiumAnimationCatalog Catalog;
 		Catalog.Clips = &Set;
@@ -1684,13 +1736,37 @@ namespace
 		Intent.Stem = Set.Stem;
 		Intent.Activity = Activity;
 		Intent.Source = Source;
-		// The ladder would mask a miss behind a walk or a disposition, and a miss is exactly what two
-		// of the assertions below are about.
-		Intent.bAllowFallbackLadder = false;
+		Intent.bAllowFallbackLadder = bLadder;
 
 		FElysiumAnimationSelection Out;
 		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
 		return Out;
+	}
+
+	// The activity-to-state rule, applied to one record: the state it names has to be able to play
+	// the asset shape it resolved, and a request that resolved nothing has to have said why.
+	//
+	// Returns an empty string when the record is sound, or the line to report when it is not.
+	FString DescribeCoverageFailure(const FElysiumAnimationSelection& Sel, const FString& Stem,
+		const TCHAR* Requested)
+	{
+		if (!ElysiumAnimGraph::StateCanPlay(Sel.GraphState, Sel.AssetKind))
+		{
+			return FString::Printf(TEXT("%s on %s resolved a %s into state %s, which cannot play one"),
+				Requested, *Stem, ElysiumAnimIntent::AssetKindName(Sel.AssetKind),
+				ElysiumAnimGraph::StateName(Sel.GraphState));
+		}
+		if (!Sel.IsResolved() && Sel.Detail.IsEmpty())
+		{
+			return FString::Printf(TEXT("%s on %s answered %s with no line naming the miss"),
+				Requested, *Stem, ElysiumAnimIntent::OutcomeName(Sel.Outcome));
+		}
+		if (Sel.IsResolved() && Sel.AssetKind == EElysiumAnimAssetKind::None)
+		{
+			return FString::Printf(TEXT("%s on %s reports a clean resolve with no asset"),
+				Requested, *Stem);
+		}
+		return FString();
 	}
 }
 
@@ -1945,9 +2021,15 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 	return true;
 }
 
-// The slice-acceptance rule, applied: every activity the classifier can emit either resolves on every
-// player body or is a NAMED miss. A slice is not accepted while one of its own requests has no answer
-// on a body it ships with (`docs/architecture/animation-architecture.md` section 3.6).
+// The slice-acceptance rule, applied to BOTH producers: every activity the classifier can emit either
+// resolves — into a graph state that can play the shape it resolved to — or is a NAMED miss, on every
+// player body and on every cast body the export carries. A slice is not accepted while one of its own
+// requests has no answer on a body it ships with
+// (`docs/architecture/animation-architecture.md` section 3.6).
+//
+// The cast's half is here rather than in a second test because it is the same rule: one resolver, one
+// record, one projection. Two tests would let the two producers' coverage drift apart, which is the
+// exact failure "one resolver for the whole cast" exists to prevent.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationSliceCoverageTest,
 	"Elysium.Content.AnimationSliceCoverage", GElysiumAnimationContentFlags)
 bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
@@ -1970,8 +2052,10 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	FRealTables Tables;
 	Tables.Index = &Index;
 
-	// The whole locomotion slice, less the water pair — swimming is reachable but outside what the
-	// controlled corpus witnessed, so it is not held to the slice rule yet.
+	// What the player's classifier can emit, in its own words. The two relaxed forms are what
+	// `Classify` actually produces for a moving player — the plain gaits only exist downstream of
+	// step 3 — so a coverage pass that asked only for `ACT_WALK` would be testing the translation's
+	// output rather than the slice's input.
 	struct FSliceRequirement
 	{
 		EElysiumAnimActivityCode Code;
@@ -1980,15 +2064,41 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	};
 	const FSliceRequirement Slice[] =
 	{
-		{ EElysiumAnimActivityCode::Idle,       EElysiumAnimAssetKind::Sequence },
-		{ EElysiumAnimActivityCode::Walk,       EElysiumAnimAssetKind::BlendSpace },
-		{ EElysiumAnimActivityCode::Run,        EElysiumAnimAssetKind::BlendSpace },
-		{ EElysiumAnimActivityCode::Sneak,      EElysiumAnimAssetKind::BlendSpace },
-		{ EElysiumAnimActivityCode::Crouch,     EElysiumAnimAssetKind::Sequence },
-		{ EElysiumAnimActivityCode::Leap,       EElysiumAnimAssetKind::Sequence },
-		{ EElysiumAnimActivityCode::Falling,    EElysiumAnimAssetKind::Sequence },
-		{ EElysiumAnimActivityCode::Land,       EElysiumAnimAssetKind::Sequence },
-		{ EElysiumAnimActivityCode::LandCrouch, EElysiumAnimAssetKind::None, true },
+		{ EElysiumAnimActivityCode::Idle,        EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::WalkRelaxed, EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Walk,        EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::RunRelaxed,  EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Run,         EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Sneak,       EElysiumAnimAssetKind::BlendSpace },
+		{ EElysiumAnimActivityCode::Crouch,      EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Leap,        EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Falling,     EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::Land,        EElysiumAnimAssetKind::Sequence },
+		{ EElysiumAnimActivityCode::LandCrouch,  EElysiumAnimAssetKind::None, true },
+	};
+
+	// The water pair is emittable and unwitnessed: the controlled corpus never recorded either, so
+	// neither is held to a shape. It is still walked, because the rule that applies to it is the one
+	// that applies to everything — pose the body or name the miss — and leaving it out of the sweep
+	// is what would let it become the silent answer.
+	const EElysiumAnimActivityCode Unwitnessed[] =
+	{
+		EElysiumAnimActivityCode::Swim,
+		EElysiumAnimActivityCode::Treadwater,
+	};
+
+	// What a cast body's classifier can emit. It is a strict subset, and the difference is recovered
+	// rather than convenient: `BuildLocomotionIntent` turns the relaxed forms back into plain ones for
+	// an NPC source (the two rows that undo them are `CBasePlayer` virtuals no cast body reaches), and
+	// the air phases are unreachable from a cast body sample at all, because the latch's whole
+	// discriminator is a jump command the cast never issues.
+	const EElysiumAnimActivityCode CastSlice[] =
+	{
+		EElysiumAnimActivityCode::Idle,
+		EElysiumAnimActivityCode::Walk,
+		EElysiumAnimActivityCode::Run,
+		EElysiumAnimActivityCode::Sneak,
+		EElysiumAnimActivityCode::Crouch,
 	};
 
 	TArray<FString> Stems;
@@ -1996,32 +2106,76 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	Stems.Sort();
 
 	int32 BodiesChecked = 0;
+	int32 CastBodiesChecked = 0;
+	int32 CastRequests = 0;
+	int32 CastNamedMisses = 0;
+	// Which request landed on which rung, counted rather than summarised: "38 misses" is a number and
+	// "ACT_SNEAK reached sequence zero on 25 bodies" is a finding, and the two are the difference
+	// between a body that stands on something and a body that stands on nothing nameable.
+	TMap<FString, int32> CastMissRungs;
 	TSet<FString> ContractFailures;
+	TSet<FString> CoverageFailures;
+
+	auto Cover = [&CoverageFailures](const FElysiumAnimationSelection& Sel, const FString& Stem,
+		const TCHAR* Requested)
+	{
+		const FString Failure = DescribeCoverageFailure(Sel, Stem, Requested);
+		if (!Failure.IsEmpty())
+		{
+			CoverageFailures.Add(Failure);
+		}
+	};
+
 	for (const FString& Stem : Stems)
 	{
-		if (!Stem.Contains(TEXT("_Male_Armor_")) && !Stem.Contains(TEXT("_Female_Armor_")))
-		{
-			continue;
-		}
+		const bool bPlayerBody = Stem.Contains(TEXT("_Male_Armor_"))
+			|| Stem.Contains(TEXT("_Female_Armor_"));
+
 		FElysiumNpcClipSet Body;
 		FString LoadError;
 		if (!Body.Load(Stem, LoadError))
 		{
 			continue;
 		}
-		++BodiesChecked;
 
+		if (!bPlayerBody)
+		{
+			// The cast's half. The ladder is ON because that is the chain a cast body runs through at
+			// runtime, and no shape is required of the answer: a body with no sneak in its vocabulary
+			// taking the disposition rung is retail's behaviour rather than a gap. What is required is
+			// that the record says which of the two happened, and that the state it names can play it.
+			++CastBodiesChecked;
+			for (const EElysiumAnimActivityCode Code : CastSlice)
+			{
+				const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Code);
+				const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Requested,
+					EElysiumAnimSource::Npc, /*bLadder=*/ true);
+				++CastRequests;
+				if (!Sel.IsResolved())
+				{
+					++CastNamedMisses;
+					CastMissRungs.FindOrAdd(FString::Printf(TEXT("%s -> %s"), Requested,
+						ElysiumAnimIntent::OutcomeName(Sel.Outcome))) += 1;
+				}
+				Cover(Sel, Stem, Requested);
+			}
+			continue;
+		}
+
+		++BodiesChecked;
 		for (const FSliceRequirement& Requirement : Slice)
 		{
-			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables,
-				ElysiumAnimIntent::ActivityName(Requirement.Code), EElysiumAnimSource::Player);
+			const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Requirement.Code);
+			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Requested,
+				EElysiumAnimSource::Player);
+			Cover(Sel, Stem, Requested);
 			if (Requirement.bExpectedMiss)
 			{
 				if (Sel.Outcome != EElysiumAnimOutcome::MissingSequence
 					|| Sel.AssetKind != EElysiumAnimAssetKind::None)
 				{
 					ContractFailures.Add(FString::Printf(TEXT("%s on %s resolved as %s/%s, not the named miss"),
-						ElysiumAnimIntent::ActivityName(Requirement.Code), *Stem,
+						Requested, *Stem,
 						ElysiumAnimIntent::OutcomeName(Sel.Outcome),
 						ElysiumAnimIntent::AssetKindName(Sel.AssetKind)));
 				}
@@ -2030,11 +2184,17 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 			if (!Sel.IsResolved() || Sel.AssetKind != Requirement.AssetKind)
 			{
 				ContractFailures.Add(FString::Printf(TEXT("%s on %s resolved as %s/%s; expected %s"),
-					ElysiumAnimIntent::ActivityName(Requirement.Code), *Stem,
+					Requested, *Stem,
 					ElysiumAnimIntent::OutcomeName(Sel.Outcome),
 					ElysiumAnimIntent::AssetKindName(Sel.AssetKind),
 					ElysiumAnimIntent::AssetKindName(Requirement.AssetKind)));
 			}
+		}
+
+		for (const EElysiumAnimActivityCode Code : Unwitnessed)
+		{
+			const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Code);
+			Cover(ResolveOn(Body, Tables, Requested, EElysiumAnimSource::Player), Stem, Requested);
 		}
 	}
 
@@ -2043,8 +2203,16 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no player bodies"));
 		return true;
 	}
-	AddInfo(FString::Printf(TEXT("%d player bodies checked across %d activities"), BodiesChecked,
-		UE_ARRAY_COUNT(Slice)));
+	AddInfo(FString::Printf(
+		TEXT("%d player bodies across %d activities plus the %d unwitnessed; ")
+		TEXT("%d cast bodies across %d activities (%d of %d cast requests were named misses)"),
+		BodiesChecked, UE_ARRAY_COUNT(Slice), UE_ARRAY_COUNT(Unwitnessed),
+		CastBodiesChecked, UE_ARRAY_COUNT(CastSlice), CastNamedMisses, CastRequests));
+	CastMissRungs.KeySort([](const FString& A, const FString& B) { return A < B; });
+	for (const TPair<FString, int32>& Rung : CastMissRungs)
+	{
+		AddInfo(FString::Printf(TEXT("  cast miss: %s on %d bodies"), *Rung.Key, Rung.Value));
+	}
 
 	// `ACT_LAND_CROUCH` is the one named miss. Every other state must also drive the asset kind
 	// the player graph expects, so resolution coverage and graph compatibility share one corpus pass.
@@ -2054,6 +2222,18 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("every slice activity resolves with the expected asset kind, or is the named miss"),
 		ContractFailures.Num(), 0);
+
+	// The activity-to-state half, over both producers' whole emittable set. It is kept separate from
+	// the shape contract above on purpose: an asset kind that changed is a corpus regression, while a
+	// state that cannot play what it was handed is a graph gap, and collapsing them would report the
+	// second as the first.
+	for (const FString& Failure : CoverageFailures)
+	{
+		AddError(FString::Printf(TEXT("activity->state coverage: %s"), *Failure));
+	}
+	TestEqual(
+		TEXT("every request the slice can emit names a state that plays what it resolved, or names its miss"),
+		CoverageFailures.Num(), 0);
 	return true;
 }
 

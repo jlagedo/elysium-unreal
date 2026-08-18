@@ -531,8 +531,18 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
 The selection record contains the request source/channel, logical requested activity, VtMB
 pre-translation, first weapon activity, each NPC/class → weapon iteration, resolved activity,
 weapon activity, target sequence, transition sequence/state, variant token, sequence label and raw
-index, selected model and owner stem, selected asset kind, active layer labels, pose parameters, and a
-success/fallback reason. The same record is rendered in Cog and written by headless acceptance
+index, selected model and owner stem, selected asset kind, **the graph state it resolved to**,
+active layer labels, pose parameters, and a success/fallback reason.
+
+**The graph state is projected once, here, and carried rather than re-derived.** Step 6 writes it
+from the *logical* request before any route runs, so every exit names a state — a miss holds its
+pose somewhere, and a record that named no state would make that somewhere "nowhere". Every reader
+downstream — the Anim Instance's `RequestedState`, the Cog locomotion row, the `act_state` channel,
+the MCP surface — reads that field. A reader deriving its own would be a second answer to the
+question the record exists to settle, visible the day a readout and the pose on screen disagree.
+The coverage rule over it is one predicate, `StateCanPlay(state, asset kind)`: a miss is playable in
+every state, a sequence in all eight, a grid only where the authored pair carries a blend-space
+player, and a masked layer nowhere — the same rule that refuses an additive from the base channel. The same record is rendered in Cog and written by headless acceptance
 runs. Without it, a wrong pose can be blamed on input, AI, translation, model data or blending with
 no way to distinguish them.
 

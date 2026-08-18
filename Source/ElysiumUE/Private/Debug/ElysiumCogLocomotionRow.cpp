@@ -4,6 +4,7 @@
 
 #include "Debug/ElysiumCogStyle.h"
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumGraphState.h"
 #include "ElysiumLocomotionSample.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
@@ -63,15 +64,18 @@ void ElysiumCogLocomotion::SetupColumns()
 	ImGui::TableSetupColumn("Stance");
 	ImGui::TableSetupColumn("Jump");
 	ImGui::TableSetupColumn("Activity");
+	ImGui::TableSetupColumn("State");
 	ImGui::TableSetupColumn("Label");
 	ImGui::TableSetupColumn("Owner bank");
 	ImGui::TableSetupColumn("Asset");
 	ImGui::TableSetupColumn("Outcome");
 }
 
-// The five selection columns are CCC4's, and `Owner bank` is the one that carries the acceptance
+// The six selection columns are CCC4's, and `Owner bank` is the one that carries the acceptance
 // visually: the player's row reads its PC-only bank while every cast row reads the shared one, side
-// by side, out of one function.
+// by side, out of one function. `State` is read off the record rather than projected here, so a row
+// that disagrees with the pose on screen is the resolver's answer being wrong and never this
+// window's arithmetic.
 void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 	const FElysiumLocomotionSample& S, const FElysiumAnimationSelection* Sel)
 {
@@ -94,7 +98,7 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 
 	if (Sel == nullptr)
 	{
-		for (int32 Column = 0; Column < 5; ++Column)
+		for (int32 Column = 0; Column < 6; ++Column)
 		{
 			ImGui::TableNextColumn(); ImGui::TextDisabled("--");
 		}
@@ -104,6 +108,9 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 	ImGui::TableNextColumn();
 	if (Sel->ResolvedActivity.IsEmpty()) { ImGui::TextDisabled("--"); }
 	else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->ResolvedActivity)); }
+
+	ImGui::TableNextColumn();
+	ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(ElysiumAnimGraph::StateName(Sel->GraphState)));
 
 	ImGui::TableNextColumn();
 	if (Sel->SequenceLabel.IsEmpty()) { ImGui::TextDisabled("--"); }

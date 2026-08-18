@@ -24,9 +24,6 @@ Locomotion becomes complete and singular: both actor kinds through `FElysiumAnim
 and one resolver, every gait on authored speeds, every activity routed to a state that can play
 its asset.
 
-- **Activity→state coverage.** Every activity the locomotion slice can emit routes to a graph
-  state that plays its resolved asset kind, on the LIFE0-repaired graph; the selection record
-  names state and asset for every request.
 - **One trace schema, both producers.** `FElysiumMoveRun` records the player's selection alone, so
   the cast's half of the acceptance has nothing behind it. The cast emits the same `act_*` rows from
   its own driver, or the claim that the two producers are one system is untested.

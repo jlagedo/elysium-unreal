@@ -97,6 +97,7 @@ namespace
 		TEXT("water"), TEXT("surffric"),
 		TEXT("move_yaw_wish"), TEXT("move_yaw_vel"), TEXT("move_yaw"),
 		TEXT("act_code"), TEXT("act_route"), TEXT("act_outcome"), TEXT("act_asset"),
+		TEXT("act_state"),
 		TEXT("air_phase"), TEXT("act_gen"), TEXT("act_stride"), TEXT("act_fade"),
 		TEXT("cam_boom"), TEXT("cam_damp"), TEXT("cam_pitch"), TEXT("cam_yaw"),
 		TEXT("cam_clip"), TEXT("cam_third"),
@@ -370,6 +371,9 @@ void FElysiumMoveRun::Sample()
 	Recorder.Set(TEXT("act_route"), static_cast<int32>(Sel.Route));
 	Recorder.Set(TEXT("act_outcome"), static_cast<int32>(Sel.Outcome));
 	Recorder.Set(TEXT("act_asset"), static_cast<int32>(Sel.AssetKind));
+	// The state the record named, not one this recorder projected: the trace and the pose come off
+	// the same field, so a run cannot record a state the graph never entered.
+	Recorder.Set(TEXT("act_state"), static_cast<int32>(Sel.GraphState));
 	Recorder.Set(TEXT("air_phase"), static_cast<int32>(Sel.AirPhase));
 	Recorder.Set(TEXT("act_gen"), static_cast<int32>(Sel.Generation));
 	// The pose parameter, off the same record. It comes from the driver rather than from the sample

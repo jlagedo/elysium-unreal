@@ -597,6 +597,12 @@ void Resolve(const FElysiumAnimationIntent& Intent, const FElysiumAnimationCatal
 	Out.Stem = Intent.Stem;
 	Out.Variant = Intent.Variant;
 
+	// Step 6 — the graph state, projected once and from the LOGICAL request. Set BEFORE the routes
+	// run, so every path out of this function names a state: a miss holds its pose somewhere, and
+	// `RefuseUnplayableGrid` below asks the record rather than re-deriving an answer of its own.
+	Out.GraphState = ElysiumAnimGraph::StateForActivity(
+		ElysiumAnimIntent::ActivityCode(Intent.Activity));
+
 	// Step 6 — the continuous parameters, published whatever the selection turned out to be. They are
 	// what the graph steers on, and a frame that resolved nothing still moved.
 	Out.AirPhase = Intent.AirPhase;
