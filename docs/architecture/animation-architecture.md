@@ -497,6 +497,12 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
    a dialogue gesture owns only its slot. Death, damage, combat and locomotion do not become an
    accidental ordering of `if` statements inside an Anim Instance. The priority table is explicit,
    data-tested and capture-verified before it is labelled retail behaviour.
+
+   **The arbitration decides who ends a clip, so no producer ends another's.** Locomotion is
+   published every tick by every body that has a mover, including one standing still, so a
+   locomotion publish that clears whatever else is playing silently outranks every other channel and
+   the ambient, scripted and reaction families cannot hold a frame. A request ends a clip only where
+   the table says it wins.
 2. **Choose a base activity.** Locomotion classification operates on the body sample; gameplay
    requests supply attacks, reactions and contextual actions. A direct-sequence request bypasses
    only this and activity translation.

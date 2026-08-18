@@ -18,6 +18,84 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
+### LIFE3 One resolver for the whole cast
+
+The translation half is closed and stays closed: `TranslateActivity` walks the committed weapon
+ladders, the two `CBasePlayer` rows and the recovered NPC class bodies in their witnessed orders,
+availability-probing each rung against the body's own vocabulary, and `GraphState` is projected
+once in the resolver's step 6 and read by the anim instance, Cog, the `act_state` channel and the
+MCP surface rather than derived four times. What remains is the half the title names: the resolver
+owning the live pose, and the speed authority being one number.
+
+- **The driver does not own `Base` unconditionally.** `PublishSelection` ends the DefaultSlot
+  one-shot and the direct clip whenever the locomotion resolver holds an asset, and every motor body
+  publishes every anim tick including a standing idle. The stance vocabulary
+  `FElysiumNpc::RunSpecialIdleActivity` arms through `PlayNpcClip` — the per-stance idle, the
+  fidgets and the stance-change transitions — is therefore destroyed with a zero blend on the frame
+  after it is armed, and the schedule re-arms it once per clip length for the life of the map; the
+  single frame that renders is the forced `TickAnimation`/`RefreshBoneTransforms` the arm performs
+  at full weight. Until the arbitration slot exists (LIFE4), a locomotion publish leaves a one-shot
+  alone unless the selection is a locomoting `GraphState`. It must never end an in-flight
+  non-locomotion clip.
+- **A record that names an asset binds it.** `ResolveAnimation` gates the asset load on
+  `IsResolved()`, which is `Outcome == Resolved`; `ResolveActivityRoute` applies a real label and
+  then overwrites the outcome with `RunToWalk`, `TranslatedFallback` or `Disposition`, so every
+  rung above 1 names a sequence the engine never loads. The bind test is that the record named a
+  base asset — `AssetKind != None` with a label and an owner — and the outcome stays the *how*.
+- **Every miss says so once.** Only `GridStateRefused` warns. `MissingSequence`, `NoAsset`,
+  `MaskedRejected` and the fallback outcomes return silently, so a cast-wide pose failure leaves an
+  ordinary play log clean. One log per `(stem, label, outcome)` at the bind, and `NoVocabulary` in
+  the gym is not a failure.
+- **Pose and speed come from the same activity.** `ResolveGaitSpeeds` keys stem, weapon, form and
+  variant with `Source=Player` and no classname or `ActorState`, while the pose walks the NPC
+  `+0x5dc` body — an idle human poses `ACT_WALK_RELAXED` and travels at the un-relaxed player fan.
+  `GaitSpeedForSelection` then switches on `ActivityCode(Selection.ResolvedActivity)`, whose
+  vocabulary is the unsuffixed literals only, so every translated name falls through to the
+  resolve-time cell and the stride stops tracking direction. Resolve the gait with the same
+  source, classname and state the pose uses, and classify it from the requested activity or
+  `GraphState`.
+- **The motor commands the cell the body is about to play.** `GaitSpeed` returns `Table->Forward()`
+  and `MoveTo` sets one `MaxWalkSpeed`, while the posed fan is steered by realized `move_yaw`. A
+  patrol turnaround plays a strafe cell at the forward speed. Command `SpeedAt(move_yaw)` per
+  substep, or hold translation until facing is aligned. Scripted `Run` passes its gait kind so the
+  push can re-derive it; scripted `Walk` and `Custom` keep the caller's number.
+- **The trace carries the sample the driver ticked.** The writer's contract is the published sample
+  and selection and nothing else; the cast harness calls `SampleLocomotion()`, which recomputes
+  `FromCharacterMovement` after the driver already consumed one. The driver keeps the sample it
+  classified and both producers read that.
+- **No-slide is a predicate, not a printout.** `speed2d` and `act_stride` are independent columns
+  compared only against the previous recording, at a 2.0 u/s tolerance, and a body that never moves
+  resolves `ACT_IDLE` on every frame of a walk course. The check is intra-row: on moving frames,
+  `|speed2d − act_stride|` and `|act_stride −` the body's authored forward cell are below a tight
+  epsilon, peak speed clears the still cut, and the course's activity codes include the gait. This
+  also settles whether the bar admits a commanded run — either `CommandedSpeed` is published on the
+  cast sample, or the opening frames of every run request are walk-classified and the claim says so.
+- **The harness fails loudly.** An input that does not arm its leaf, a course filter that matches
+  nothing, a missing body, an empty write and a refused `EndFrame` all fail the run with a non-zero
+  status; the output directory is cleared at run start so a stale recording cannot be read as this
+  one. The default body is a named locomoting humanoid rather than the first baked stem, and the
+  comparator checks the recorded body against the baseline's.
+- **The coverage sweep carries class, weapon and state.** The 52/114/570 loops set stem, activity,
+  source and the ladder flag only, so the committed tables' load-bearing work — availability and the
+  armed/alert branch — is never entered and `GraphState` identity is never asserted. Drive the cast
+  half with each body's authored classname, at least one equipped weapon and `ActorState` across
+  Idle/Alert/Combat; require `GraphState == StateForActivity(requested)`; separate sequence-zero
+  (no clip, poses nothing) from a fallback that named a clip. The glock claim asserts the resolved
+  clip label on a real body, not only on the fixture.
+- **The discrete key carries the actor classname.** The key is activity, stem, weapon, state and
+  route. `ActorClassname` is what finds the `+0x5dc`/`+0x5e0` class bodies and is pushed onto the
+  intent without being compared, so a first tick whose entity had not resolved keeps the wrong class
+  body for the life of the request.
+- **Gait qualifies on a real map.** `FElysiumCastRun` stands the combat arena in the stage world
+  under `-nullrhi`; it is a regression instrument and not acceptance evidence (playable-path rule
+  3). The gait bullet closes on one priority-map patrol with the selection record in the log.
+
+*Acceptance:* on a priority map, an ambient cast member plays its authored stance and fidget
+vocabulary while standing and its authored gait cell while travelling, with no frame in which a
+locomotion publish ends a clip another owner armed; every request in the session either binds the
+asset its record names or logs its miss once; and the intra-row no-slide predicate holds over a
+recorded patrol and a recorded scripted run. *Deps:* LIFE0, LIFE2.
+
 ### LIFE4 Weapons in hands — the third-person wielded body
 
 What a character holds, finished. The recovered contract — four item model roles, the equip
@@ -45,9 +123,25 @@ lane); what remains is making it *true*:
 - **Visibility.** Consume `FElysiumCameraView::bDrawWorldWeapon` (published, currently
   reader-less): suppress submission only — never destroy the attachment or clear a model to
   hide it.
+- **The channel arbitration slot, before any layer is wired.** `FElysiumAnimationIntent` declares
+  the channels and only `Base` is arbitrated; `BuildLocomotionIntent` always writes `Base` and the
+  driver's `Tick` has no request queue, so an attack or aim request has nowhere to go but the base
+  locomotion replacement. The driver takes a request slot the action families write, with a
+  priority order that decides which channel owns the pose — and it replaces LIFE3's interim rule
+  that a locomotion publish only spares a one-shot while the body is not locomoting. Nothing in
+  this rung's attack or aim path lands before it.
 - **Weapon-state animation.** Draw/holster, per-weapon idle/walk translation and the aim/attack
   layer families arm through the table-declared hosts (LIFE2's tables, LIFE0's host rule), so a
-  drawn weapon changes how the body stands and moves, not only what the hand holds.
+  drawn weapon changes how the body stands and moves, not only what the hand holds. This rung makes
+  the standing-with-weapon call: either the player producer walks `PlayerGaitLadder()` with a live
+  `CombatReady`/`Relaxed` query so a combat-ready stand requests `ACT_AIM`, or the committed 8-row
+  ladder and the 17 compact codes are named beside `Classify` as this rung's, so two artifacts do
+  not both read as the live selector. A corpus case pins the combat arm: a real combatant stem with
+  a drawn glock and `ActorState == Combat` keeps its requested gait untranslated, then takes the
+  weapon ladder only. `FormTag` rides the driver, the intent and the gait key with no writer; a row
+  that reads it is pushed from `SetTranslationContext` in the same change. The translation hops the
+  resolver walked — the class answer, the availability rung, the weapon rung — reach the selection
+  record so a readout can show which rung fired.
 - `changball`/`gio_spirit` are thrown projectiles — free-standing actors playing their own
   clips, never attached. The inherited unknowns (no recovered holster-carry state,
   `item_g_stake`'s nulled models, `handleclaws` tracking) stay named in the owning doc and gate
@@ -69,6 +163,26 @@ family closes its own reachability slice. Every remaining producer moves onto th
 `PlayNpcActivity` stays a compatibility adapter until patrol and scripted travel cross over.
 **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit are
 13.3's; this rung consumes their outcome.
+
+Three seams open before the first family lands:
+
+- **The cast chain is discriminated by body kind, not by producer.** `Source` is the producer, and
+  an NPC's damage reaction and its patrol address the same body through different sources; the
+  resolver forks the recovered cast chain on `Source == Npc`, so `Damage`, `Scene`, `Interaction`
+  and `Debug` take `CBasePlayer`'s one-pass chain with no `+0x5dc`, no class/weapon alternation and
+  no four-way probe. The fork moves to an explicit body-kind test and `Source` keeps arbitration and
+  diagnostics; a `Source=Damage` intent on a human combatant still walks the class body and the
+  probe.
+- **`PlayNpcActivity` stops being a second resolver.** It calls `PickActivityClip` on the raw
+  `ACT_*` — no weapon ladder, no class body, no availability probe, no selection record, no named
+  miss — and patrol, scripted travel, ambient, schedule and the weapon path all reach it. Anything
+  the driver already classifies goes through `Resolve` with classname, weapon and state; whatever
+  is left of the adapter goes through the same call or is deleted.
+- **A reaction is not an idle.** `StateForActivity` maps the locomotion slice plus `Unknown`,
+  `Swim` and `Treadwater` onto eight states, so a hit, a melee attack or a scripted custom move
+  projects to `Idle` and a resolved asset plays as an idle overlay. Each family added here extends
+  the activity codes and the state projection in the same change, or rides a montage slot and
+  leaves `GraphState` naming the held locomotion state.
 
 Recovered resolver rules it adds (all policy over LIFE2's catalog — none adds graph machinery).
 The class/weapon alternation and its four-way availability ladder are LIFE3's and already run;

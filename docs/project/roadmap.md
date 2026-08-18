@@ -274,36 +274,35 @@ The ladder:
   are 0 on all 14,012 sequence descriptors, and `AdvanceToIdealActivity`'s traversal
   (`FindTransitionSequence` → the `entrynode`/`exitnode`/matrix lookup at `0x10428ad0`) is
   decompilation-confirmed dead code against shipped content — no sidecar block is emitted.
-- [x] **LIFE3 One resolver for the whole cast** — the player speed authority,
-  the NPC gait push and the real translation tables are landed: the 5-row stub is deleted and the
-  resolver walks the committed weapon ladders, the two `CBasePlayer` rows and the recovered NPC
-  class bodies in their witnessed orders, availability-probing each rung against the body's own
-  vocabulary, so a glock-armed body reaches `pistol_relaxed_walk` at rung 2 and an idle armed cast
-  member walks relaxed instead of weapon-up (the armed/alert branch answered over its confirmed
-  slice; a body in combat answers neither arm, the divergence recorded in
-  `docs/vtmb/animation_and_movers.md`). Activity→state coverage is closed: the graph state rides on
-  the selection record as `GraphState`, projected once in the resolver's step 6 and read by the anim
+- [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the translation tables and
+  the graph state are landed. The 5-row stub is deleted and the resolver walks the committed weapon
+  ladders, the two `CBasePlayer` rows and the recovered NPC class bodies in their witnessed orders,
+  availability-probing each rung against the body's own vocabulary, so a glock-armed body reaches
+  `pistol_relaxed_walk` at rung 2 and an idle armed cast member walks relaxed instead of weapon-up
+  (the armed/alert branch answered over its confirmed slice; a body in combat answers neither arm,
+  the divergence recorded in `docs/vtmb/animation_and_movers.md`). The graph state rides on the
+  selection record as `GraphState`, projected once in the resolver's step 6 and read by the anim
   instance, Cog, the `act_state` channel and the MCP surface rather than derived four times, so a
   readout and a pose cannot disagree; `StateCanPlay` is the coverage rule as one predicate, and both
   producers are swept against it over the real corpus — 52 player bodies across the classifier's own
   13 emittable activities (the relaxed forms included, the water pair held only to pose-or-name) and
-  114 cast bodies across the recovered NPC subset, 532 of 570 cast requests posing and all 38 misses
-  naming their recovered ladder rung. The 11 cast bodies behind those misses are the four animals
-  with no crouch/sneak, three never-locomoting props and four wounded scripted bodies; the 25
-  sequence-zero rungs among them pose nothing because the character export writes no raw sequence
-  index, which is the named limit rather than a coverage hole. Both producers emit one trace schema:
-  `ElysiumLocomotionTrace` is the columns and the writer, taking the published sample and selection
-  and nothing else, and the movement harness declares it plus what only a driven player body can
-  measure while `FElysiumCastRun` (`-ElysiumCast`, `uv run elysium debug cast`) declares it verbatim
-  and records the cast over the arena in the stage world, driven by authored orders — a patrol route,
-  a `scripted_sequence` — through the entity input table. Its three courses resolve 1,140 of 1,140
-  frames with no fallback, and `speed2d` equals `act_stride` equals the body's own authored fan to
-  four decimals in both gaits, so the no-slide claim is a recording rather than an argument.
+  114 cast bodies across the recovered NPC subset. That sweep sets stem, activity and source only,
+  so it does not enter the weapon ladder or the class bodies and does not assert the state identity.
+  Both producers emit one trace schema — `ElysiumLocomotionTrace` is the columns and the writer,
+  and `FElysiumCastRun` (`-ElysiumCast`, `uv run elysium debug cast`) records the cast over the
+  arena in the stage world under authored orders. Open: the resolver does not own the live pose —
+  a locomotion publish ends the stance and fidget clips the ambient schedule arms, on every motor
+  body, every tick — a record whose outcome is any fallback names a clip the engine never loads,
+  every miss but one returns silently, the gait tables and the posed activity are resolved through
+  different chains, the harness passes on an unarmed course, and the arena is a regression
+  instrument rather than acceptance evidence.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
-  `DA_WieldModels` baked; tracking through the prop bone, the honest check, the equip funnels
-  and weapon-state animation open.
-- [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — flinch/knockback/death,
-  blocked/paired rules, the restart rule, the sequence-event carrier.
+  `DA_WieldModels` baked; the channel arbitration slot (which every attack and aim path waits on),
+  tracking through the prop bone, the honest check, the equip funnels and weapon-state animation
+  open.
+- [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
+  discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
+  flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.
 - [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
   the two-component body; ranged only.
 - [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the montage migration,

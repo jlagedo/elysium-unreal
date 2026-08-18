@@ -429,8 +429,14 @@ that got less far rather than a course of a different length.
 Its runs live under `$ELYSIUM_EXPORT_ROOT/_cast/` with their own baseline root, which is not
 fastidiousness: the comparator fails a stem a baseline carries and a run does not, so sharing `_move`
 would make a player-only run report every cast course as missing. `-CastBody=<stem>` picks the body;
-with none named the run takes the first baked stem and records which one in the manifest, because a
-recording made on a different body is a different recording.
+with none named the run takes the first baked stem and records which one in the manifest. A
+recording made on a different body is a different recording, and the comparator does not yet read
+that field, so a run whose body changed is compared against a baseline it does not belong to.
+
+**It is a regression instrument, not acceptance evidence.** The arena is this repository's own
+floor in a headless stage world, which is what makes a recording repeatable and is also what
+disqualifies it under playable-path rule 3: a rung closes on real input in the built game, and a
+recorded course is what tells you a closed rung stopped being true.
 
 ## Tracking
 
