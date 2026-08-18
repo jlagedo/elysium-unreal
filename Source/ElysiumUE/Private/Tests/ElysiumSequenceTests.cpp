@@ -1350,10 +1350,8 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 		double Now = 0.0;
 		for (int32 i = 0; i < 40; ++i) { World.Tick(Now); Now += 0.1; }
 
-		// The whole point of the held play: the clip must never be asked to retire on its own,
-		// because the beat schedules its end off that same length and would lose the race.
-		TestTrue(TEXT("the action clip is played HELD, not left to retire"),
-			Services.Saw(TEXT("PlayNpcClip damsel praying_idle loop=0 hold=1")));
+		TestTrue(TEXT("the beat plays its action clip"),
+			Services.Saw(TEXT("PlayNpcClip damsel praying_idle loop=0")));
 		TestTrue(TEXT("a REPEATABLE self-naming beat keeps re-entering itself"),
 			CounterValue(Count) > 1.f);
 	}

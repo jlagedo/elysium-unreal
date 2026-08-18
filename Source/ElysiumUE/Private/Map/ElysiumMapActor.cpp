@@ -900,10 +900,9 @@ bool AElysiumMapActor::IsNpcBodyVisible(USkeletalMeshComponent* Body)
 }
 
 bool AElysiumMapActor::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
+	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
 {
-	return Bodies->PlayNpcActivity(Body, Stem, Activity, Variant, bLoop, OutSeconds,
-		bHoldFinalPose);
+	return Bodies->PlayNpcActivity(Body, Stem, Activity, Variant, bLoop, OutSeconds);
 }
 
 bool AElysiumMapActor::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,
@@ -925,9 +924,9 @@ bool AElysiumMapActor::HasNpcClip(const FString& Stem, const FString& ClipName)
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
+	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
-	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds, bHoldFinalPose);
+	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds);
 }
 
 bool AElysiumMapActor::PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,

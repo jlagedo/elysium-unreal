@@ -743,8 +743,7 @@ public:
 	void BuildBody();
 
 	// --- The animation seam (8.5), implemented once for every character ---------------------
-	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr,
-		bool bHoldFinalPose = false) override;
+	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
 	virtual bool PreloadAnimClip(const FString& ClipName) override;
 	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
 		const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;

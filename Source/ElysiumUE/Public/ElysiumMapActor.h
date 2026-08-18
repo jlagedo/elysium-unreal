@@ -300,14 +300,13 @@ public:
 		FElysiumDisposition& OutRow) override;
 	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds, bool bHoldFinalPose = false) override;
+		bool bLoop, float* OutSeconds) override;
 	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName) override;
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
 		const FString& ClipName) override;
 	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds,
-		bool bHoldFinalPose = false) override;
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override;
 	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,

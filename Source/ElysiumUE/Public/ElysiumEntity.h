@@ -293,10 +293,7 @@ public:
 	// so the scripting host can reach it without knowing the leaf type (the same no-RTTI reason
 	// `GetAttachBody` is here). OutSeconds receives the clip's authored length — a
 	// `scripted_sequence` times its `OnEndSequence` off it.
-	// `bHoldFinalPose` keeps a non-looping clip standing on its last frame until this entity plays
-	// something else -- for a caller that owns the follow-up, which a scripted beat does.
-	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr,
-		bool bHoldFinalPose = false) { return false; }
+	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
 	virtual bool PreloadAnimClip(const FString& ClipName) { return false; }
 
 	// Hand the body back to its resting pose — the disposition idle 8.5 picked for it. What a

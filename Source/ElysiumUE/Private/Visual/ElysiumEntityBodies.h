@@ -123,7 +123,7 @@ public:
 	bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition, FVector& OutForward) const;
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds, bool bHoldFinalPose = false);
+		bool bLoop, float* OutSeconds);
 	// Compose an autolayer over whatever this body is already playing — a `_delta` additive, a masked
 	// partial-body `_layer`, or a masked aim grid, decided from the asset. Same resolution chain as
 	// PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself is
@@ -184,8 +184,7 @@ public:
 	// clip already playing, so this answers for one clip rather than for the pair.
 	float ClipFadeSeconds(const FString& Stem, const FString& ClipName) const;
 	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds,
-		bool bHoldFinalPose = false);
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
 	bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 	bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,

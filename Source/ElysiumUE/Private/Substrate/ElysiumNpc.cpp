@@ -1058,17 +1058,8 @@ bool FElysiumNpc::PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choice
 		static_cast<uint32>(AmbientActivityCycle++));
 	const FString Activity = TypeRow->PickActivity(Choices, Seed);
 	float Seconds = 0.0f;
-	// HELD, for the same reason a scripted beat's action is: `OutEnd` is this clip's own length, and
-	// the dwell loop only looks at it every 0.1s, so the animation always retires before the think
-	// that replaces it. Left to blend out it drops the pose to the state machine -- the reference
-	// bind for a body standing still with no locomotion selection -- for the frames in between, and
-	// a bum cycling barrel-fire activities flashes it on every change.
-	//
-	// The ambient system owns the follow-up at every exit: Into hands to Dwelling, Dwelling picks
-	// the next activity or idles, Out ends in FinishAmbientUse's ResetAnimToIdle. Nothing here
-	// relies on the clip ending to give the body back.
 	if (Activity.IsEmpty() || !Embodiment->PlayNpcActivity(Visual, ModelStem(), Activity,
-		AmbientActivityCycle, bLoop, &Seconds, /*bHoldFinalPose=*/!bLoop))
+		AmbientActivityCycle, bLoop, &Seconds))
 	{
 		return false;
 	}
@@ -1204,15 +1195,8 @@ float FElysiumNpc::RunSpecialIdleActivity(double Now)
 		/*bTalking=*/IsDispositionTalking(), Now,
 		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
 	float Seconds = 0.f;
-	// HELD, for the third time and the same reason: the scheduler holds this pose off `TaskEndsAt`,
-	// which is this clip's own length, and re-checks only on its own cadence. A stance fidget or a
-	// transition (`ElysiumStance::Select` answers both with bLoop false) therefore retires before
-	// the task that replaces it, and the slot's weight falls to the locomotion machine -- which for
-	// a body standing still with nothing published is the reference bind. That is the flash on a bum
-	// at a barrel fire: the drinking gesture IS an authored fidget on this path.
 	if (!Choice.IsSet()
-		|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds,
-			/*bHoldFinalPose=*/!Choice.bLoop))
+		|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds))
 	{
 		return -1.f;
 	}
@@ -1242,12 +1226,8 @@ float FElysiumNpc::PlayActivity(const FString& Activity)
 		return -1.f;
 	}
 	float Seconds = 0.f;
-	// HELD, because TASK_SET_ACTIVITY sets a pose and completes -- the schedule's own WAIT steps are
-	// what hold it, and they can hold it far longer than the clip runs. A clip that retires on its
-	// own would give the body back partway through the wait and stand the NPC in the state machine's
-	// pose for the rest of it, which is the reference bind while it is standing still.
 	if (!Embodiment->PlayNpcActivity(Visual, ModelStem(), Activity, ScheduleActivityCycle++,
-		/*bLoop=*/false, &Seconds, /*bHoldFinalPose=*/true))
+		/*bLoop=*/false, &Seconds))
 	{
 		return -1.f;
 	}

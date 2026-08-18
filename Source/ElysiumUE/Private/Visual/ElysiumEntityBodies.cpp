@@ -325,7 +325,7 @@ float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& 
 }
 
 bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
+	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
 	UAnimSequence* Anim = Body
 		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset())
@@ -355,14 +355,16 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// the reference pose: on a graph-backed body the slot's source is the state machine, so a refused
 	// montage poses whatever that machine holds -- which for a body handed no selection is the bind
 	// pose, advancing nothing. Discarding the answer made that a silent T-pose.
-	if (!Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName), bHoldFinalPose))
+	if (!Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName)))
 	{
 		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("npc '%s' clip '%s' (loop=%d, hold=%d, %.3fs): the animation host refused to play "
-			     "it, so the body keeps posing whatever it already held"),
-			*Stem, *ClipName, bLoop ? 1 : 0, bHoldFinalPose ? 1 : 0, Anim->GetPlayLength());
+			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
+			     "body keeps posing whatever it already held"),
+			*Stem, *ClipName, bLoop ? 1 : 0, Anim->GetPlayLength());
 		return false;
 	}
+	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs)"),
+		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength());
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
 	Body->SetVisibility(true, true);
@@ -1516,7 +1518,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 }
 
 bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
+	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
 {
 	AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
@@ -1539,7 +1541,7 @@ bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const F
 			bLoops = bLoop || Row->IsLooping();
 		}
 	}
-	return PlayNpcClip(Body, Stem, Clip, bLoops, OutSeconds, bHoldFinalPose && !bLoops);
+	return PlayNpcClip(Body, Stem, Clip, bLoops, OutSeconds);
 }
 
 bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,

@@ -382,13 +382,7 @@ public:
 		float Seconds = 0.f;
 		if (Npc != nullptr && !Play.IsEmpty())
 		{
-			// HELD, because this beat is what decides the next pose and it schedules that decision
-			// off the very number the clip is long. Left to retire on its own the animation reaches
-			// its end first, the pose falls back to the reference bind for the frame before the
-			// think lands, and the beat visibly flashes it -- once per pass of a self-chaining
-			// sequence. VtMB has no such frame: a finished non-looping sequence is clamped at its
-			// last frame and goes on being evaluated there until `CCineNPC` writes a new one.
-			Npc->PlayAnimClip(Play, /*bLoop=*/false, &Seconds, /*bHoldFinalPose=*/true);
+			Npc->PlayAnimClip(Play, /*bLoop=*/false, &Seconds);
 		}
 		else if (Npc != nullptr && bTravelled)
 		{

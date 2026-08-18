@@ -239,12 +239,8 @@ public:
 		int32 DispositionLevel) {}
 	// Crossfade a live body to a named clip; OutSeconds (optional) receives its authored length,
 	// which is what a scripted_sequence schedules its OnEndSequence off.
-	//
-	// `bHoldFinalPose` keeps a non-looping clip standing on its last frame until a caller replaces
-	// it. It belongs to a caller that owns what comes next -- a scripted beat does, a gesture that
-	// expects the gait back underneath it does not.
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds, bool bHoldFinalPose = false) = 0;
+		bool bLoop, float* OutSeconds) = 0;
 	// Resolve and retain a clip without changing the body's current animation. The map-load walker
 	// uses this before activation so runtime-created UAnimSequences and their compression work belong
 	// to the loading barrier, not to a choreographed scene's clock.
@@ -258,8 +254,7 @@ public:
 	// Select and play a manifest clip by VtMB ACT_* activity. Ambient interesting-place data is
 	// authored in activities rather than clip labels; Variant makes its weighted pick repeatable.
 	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds,
-		bool bHoldFinalPose = false) { return false; }
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) { return false; }
 	// Resolve the same deterministic activity selection without playing it. OutLabel is the NPC
 	// vocabulary key that must go back through PlayNpcClip so the shared-bank owner is preserved;
 	// OutAnimName is the concrete neutral-pose cell whose optional authored speed configures the motor.
