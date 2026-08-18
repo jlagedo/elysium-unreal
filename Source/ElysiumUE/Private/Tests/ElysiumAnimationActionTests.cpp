@@ -1752,8 +1752,26 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		Combat.ActorState = EElysiumNpcState::Combat;
 		TestTrue(TEXT("another actor state is not the same key"), Combat != Key);
 
-		const FElysiumGaitSpeedRequest Same = Key;
-		TestTrue(TEXT("and an unchanged body is"), Same == Key);
+		FElysiumGaitSpeedRequest OtherForm = Key;
+		OtherForm.FormTag = TEXT("werewolf");
+		TestTrue(TEXT("another form is not the same key"), OtherForm != Key);
+
+		FElysiumGaitSpeedRequest Unarmed = Key;
+		Unarmed.WeaponClassname.Reset();
+		TestTrue(TEXT("and empty hands are not the same key"), Unarmed != Key);
+
+		// Field-wise rather than reflexive: a key assembled from the same values on a different
+		// body has to compare equal, or every producer re-resolves its tables every frame. Copying
+		// the key and comparing it with itself would pass whatever the comparison was written to do.
+		FElysiumGaitSpeedRequest Rebuilt;
+		Rebuilt.Stem = TEXT("gangbanger_a");
+		Rebuilt.Source = EElysiumAnimSource::Npc;
+		Rebuilt.ActorClassname = TEXT("npc_gangbanger_a");
+		Rebuilt.WeaponClassname = TEXT("item_w_glock_17c");
+		Rebuilt.FormTag = TEXT("human");
+		Rebuilt.ActorState = EElysiumNpcState::Alert;
+		Rebuilt.Variant = 3;
+		TestTrue(TEXT("and the same values assembled again are the same key"), Rebuilt == Key);
 	}
 
 	// --- The stride: classified from the graph state, read at a direction -------------------------
@@ -1814,8 +1832,6 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		// The sample the driver classified, kept beside the record it produced.
 		TestEqual(TEXT("the driver keeps the sample it classified"),
 			Driver.Sample.Speed2D(), ForwardWalk);
-		TestEqual(TEXT("...with the filtered pose parameter the record was steered by"),
-			Driver.Sample.MoveYawPose, Driver.Selection.MoveYaw);
 
 		Driver.Tick(Dt, Walking, nullptr, nullptr);
 		TestEqual(TEXT("the same request does not re-resolve"), Driver.Generation, First);
@@ -1830,6 +1846,27 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		const uint32 Classed = Driver.Generation;
 		Driver.Tick(Dt, Walking, nullptr, nullptr);
 		TestEqual(TEXT("...and settles once it stops moving"), Driver.Generation, Classed);
+
+		// The pose parameter is a rate, and the pair has to carry the FILTERED value. A body walking
+		// dead ahead cannot show that — its raw yaw and its filtered one are both zero, so the two
+		// sides of the assertion agree whichever one the driver published. A body that has just
+		// begun to turn can: the slew is one step in, so the filtered value is neither the raw
+		// reading nor where it started.
+		FElysiumLocomotionSample Turning = Travelling(ForwardWalk);
+		Turning.MoveYawVelocity = 60.0f;
+		Driver.Tick(Dt, Turning, nullptr, nullptr);
+		TestEqual(TEXT("the record is steered by the sample's own pose parameter"),
+			Driver.Sample.MoveYawPose, Driver.Selection.MoveYaw);
+		TestEqual(TEXT("...which keeps the raw reading it was filtered from"),
+			Driver.Sample.MoveYawVelocity, Turning.MoveYawVelocity);
+		TestTrue(TEXT("...and is neither that reading"),
+			!FMath::IsNearlyEqual(Driver.Sample.MoveYawPose, Turning.MoveYawVelocity));
+		TestTrue(TEXT("...nor the zero it started from"),
+			FMath::Abs(Driver.Sample.MoveYawPose) > UE_KINDA_SMALL_NUMBER);
+		// And the stride follows it off the fan, at the angle that was actually published.
+		TestEqual(TEXT("...and the stride is the fan read at that angle"),
+			Driver.Selection.GroundSpeedCmPerSecond,
+			Driver.GaitSpeeds.Walk.SpeedAt(Driver.Selection.MoveYaw));
 
 		// A reset drops the published pair together: a sample left behind beside an empty record
 		// would trace a body moving through a frame nothing classified.
@@ -1986,12 +2023,12 @@ namespace
 				// The stem the character export keys on is the model file's own base name, lowered.
 				const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
 				FAuthoredCast& Entry = Out.FindOrAdd(Stem);
+				// The FIRST def that stands this body, both halves of it. Filling the classname from
+				// one map and the loadout from another would synthesise a pair no map authored, and
+				// the committed ladders are joined to the pair rather than to either field.
 				if (Entry.Classname.IsEmpty())
 				{
 					Entry.Classname = Def.Classname;
-				}
-				if (Entry.Weapon.IsEmpty())
-				{
 					// `additionalequipment` is the loadout key; "0" is how a map spells "nothing",
 					// and an `npc_maker` template carries the same key as the body it makes.
 					const FString Equipment = Def.Keys.FindRef(TEXT("additionalequipment"));
@@ -2563,8 +2600,16 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 		CastBodiesChecked, UE_ARRAY_COUNT(CastSlice), UE_ARRAY_COUNT(CastStates), CastRequests,
 		CastArmedRequests, CastNamedMisses, CastMissesPosing, CastMissesPosingNothing,
 		CastBodiesUnauthored));
-	TestTrue(TEXT("the sweep drove the cast under a real authored classname on some body"),
-		CastBodiesChecked == 0 || CastBodiesUnauthored < CastBodiesChecked);
+	// **Almost every cast body, not merely one.** "fewer unauthored than checked" passes with a
+	// single authored body in 114, which is the shape of an export whose map entities stopped
+	// parsing: the sweep would then drive the whole cast class-less and still report that the
+	// committed ladders were exercised. Two bodies in the shipped corpus are stood by no exported
+	// map, so that is the bar, and a corpus regression moves it immediately.
+	constexpr int32 MaxUnauthoredCastBodies = 2;
+	TestTrue(FString::Printf(
+		TEXT("at most %d cast bodies are stood by no exported map (%d of %d were)"),
+		MaxUnauthoredCastBodies, CastBodiesUnauthored, CastBodiesChecked),
+		CastBodiesChecked == 0 || CastBodiesUnauthored <= MaxUnauthoredCastBodies);
 	CastMissRungs.KeySort([](const FString& A, const FString& B) { return A < B; });
 	for (const TPair<FString, int32>& Rung : CastMissRungs)
 	{

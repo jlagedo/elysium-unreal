@@ -1554,8 +1554,11 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 		ImGui::TableSetupScrollFreeze(0, 1);
 		ElysiumCogLocomotion::SetupColumns();
 		ImGui::TableHeadersRow();
+		// The driver's published pair, not a fresh sample beside a settled record: the mover's
+		// getter recomputes from live component state, and the two halves then describe different
+		// frames.
 		ElysiumCogLocomotion::Row("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
-			Body->GetLocomotionSample(), &Map->GetPlayerAnimSelection());
+			Map->GetPlayerAnimSample(), &Map->GetPlayerAnimSelection());
 		ImGui::EndTable();
 	}
 

@@ -665,7 +665,9 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         # that a baseline carries and a run does not, so pointing both at `_move` would make a
         # player-only run report every cast course as missing — and the two cast hosts are apart
         # for the same reason.
-        cast_root = config.export_root / "_cast" / sited_map if sited_map             else config.export_root / "_cast"
+        cast_root = config.export_root / "_cast"
+        if sited_map:
+            cast_root = cast_root / sited_map
         diff = [
             "-m", "elysium_pipeline.validation.channel_diff",
             "--out", os.fspath(cast_root),

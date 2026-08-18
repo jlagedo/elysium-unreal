@@ -99,7 +99,7 @@ public:
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
-	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees = 0.0f) const override;
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const override;
 
 private:
 	// CCC7 — build the driver if it does not exist yet and re-point it at the model this body wears.
@@ -112,6 +112,16 @@ private:
 	// resolved in one place and re-applied from every one of them.
 	void ApplyCollisionState();
 	void ApplyCrowdState();
+	// **The one speed number** (LIFE3): what this body's mover is commanded with while a leg driven
+	// by one of its own fans is in flight, cm/s.
+	//
+	// It is the cell the record just published, read back off the published record rather than
+	// re-derived from the motor's requested gait kind — those are two keys (the order's gait and the
+	// projection of the classified activity) and they can name different fans on the same frame, at
+	// which point the body plays one cycle and travels at another. Only where the record projects to
+	// no gait at all — the opening frames of a leg, before the body has left its idle — does the
+	// order's own kind answer, because there is no published cell yet to command.
+	float CommandedTravelSpeed() const;
 	FVector RequestedFeet = FVector::ZeroVector;
 	float RequestedAcceptanceCm = 20.0f;
 	float RequestedYaw = 0.0f;
@@ -129,6 +139,10 @@ private:
 	// Reported once: a body that cannot reach its character keys every request on no classname and
 	// empty hands, and nothing downstream of that is wrong enough to notice.
 	bool bWarnedNoTranslationContext = false;
+	// And once per body per gait: the record projected to a gait whose fan published nothing, so the
+	// commanded number falls back to the stated constant while the record names a different one.
+	// That is the one place the speed authority is still two numbers, and it says so.
+	mutable uint8 WarnedSpeedFallback = 0;
 	FElysiumEntityHandle OwningEntity;
 	TWeakObjectPtr<AElysiumMapActor> OwningMap;
 

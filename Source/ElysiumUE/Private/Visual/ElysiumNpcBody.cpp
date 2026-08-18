@@ -145,6 +145,44 @@ float AElysiumNpcBody::GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees)
 	return Table->SpeedAt(MoveYawDegrees);
 }
 
+float AElysiumNpcBody::CommandedTravelSpeed() const
+{
+	// The published record is the authority. `GaitSpeedForSelection` already read this body's own
+	// fan for the projected graph state at the realized `move_yaw`, so re-reading a fan here — from
+	// the travel order's gait kind, which is a different key — is what let a body play a walk cycle
+	// at a run speed on a turnaround that dropped the run fan's rear cell under the split.
+	const FElysiumAnimationSelection& Sel = AnimDriver->Selection;
+	EElysiumNpcGaitKind Projected = EElysiumNpcGaitKind::Walk;
+	if (ElysiumNpcGait::GaitKindForState(Sel.GraphState, Projected))
+	{
+		if (FMath::IsFinite(Sel.GroundSpeedCmPerSecond) && Sel.GroundSpeedCmPerSecond > 0.f)
+		{
+			return Sel.GroundSpeedCmPerSecond;
+		}
+		// The record projected to a gait and published no number for it: the body resolves no fan
+		// for that gait and no clip speed either, so the stated constant is all there is. That is
+		// the one residual place the command and the record are two numbers, and it is reported —
+		// once per gait per body, because the answer does not come back on its own.
+		const uint8 Bit = static_cast<uint8>(1u << static_cast<uint8>(Projected));
+		if ((WarnedSpeedFallback & Bit) == 0)
+		{
+			WarnedSpeedFallback |= Bit;
+			UE_LOG(LogElysiumNpcEnt, Warning,
+				TEXT("NPC body '%s' published graph state %s with no cell speed: its %s fan resolved ")
+				TEXT("nothing and the mover falls back to the stated constant, so what it travels at ")
+				TEXT("is not what its record names"),
+				*ModelStem, ElysiumAnimGraph::StateName(Sel.GraphState),
+				Projected == EElysiumNpcGaitKind::Run ? TEXT("run")
+					: (Projected == EElysiumNpcGaitKind::Sneak ? TEXT("sneak") : TEXT("walk")));
+		}
+		return ElysiumNpcGait::TravelSpeed(this, Projected, Sel.MoveYaw);
+	}
+	// Not a gait at all — the opening frames of a leg, where the body is still standing in its idle
+	// and the record has no cell to command. The order's own kind is what it was given, so it is
+	// what carries the body until the classifier catches up.
+	return ElysiumNpcGait::TravelSpeed(this, *RequestedGaitKind, Sel.MoveYaw);
+}
+
 const FElysiumLocomotionSample& AElysiumNpcBody::GetAnimSample() const
 {
 	static const FElysiumLocomotionSample Empty;
@@ -244,12 +282,11 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	// the record does not.
 
 	// **The speed authority's push, this body's half** (LIFE3, mirroring the player's push in
-	// `AElysiumMapActor::TickPlayerAnimation`). The mover is commanded with the cell the body is
-	// about to *play*: the fan is steered by the realized `move_yaw` the record just published, so
-	// the number handed to `MaxWalkSpeed` is read at that same angle. Per frame rather than on a
-	// generation change, because the direction moves every frame while the tables move almost never
-	// — and an equip mid-leg, which is what the generation gate existed for, is then just one more
-	// frame's answer.
+	// `AElysiumMapActor::TickPlayerAnimation`). The mover is commanded with the cell the record it
+	// just published names — literally that number, not a second reading keyed on the travel order's
+	// own gait. Per frame rather than on a generation change, because the direction moves every
+	// frame while the tables move almost never — and an equip mid-leg, which is what the generation
+	// gate existed for, is then just one more frame's answer.
 	//
 	// Only a leg whose speed came FROM a fan is re-derived — a caller-authored speed (the scripted
 	// Walk/Custom gaits) keeps exactly the number it was handed, which is the trap this must not
@@ -260,8 +297,7 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 		{
 			// The same floor `MoveTo` applies: the motor treats zero as a stall, so a fan that
 			// resolves nothing must not be able to park a body mid-leg.
-			Movement->MaxWalkSpeed = FMath::Max(1.0f, ElysiumNpcGait::TravelSpeed(this,
-				*RequestedGaitKind, AnimDriver->Selection.MoveYaw));
+			Movement->MaxWalkSpeed = FMath::Max(1.0f, CommandedTravelSpeed());
 		}
 	}
 
@@ -401,6 +437,9 @@ void AElysiumNpcBody::SetFrozen(bool bInFrozen)
 		Stop();   // drop the outstanding request before the body stops simulating
 	}
 	ApplyEnabledState();
+	// After the stop, not before: the crowd register only accepts a state change from an idle
+	// agent, and the abort above is what makes this one idle.
+	ApplyCrowdState();
 }
 
 void AElysiumNpcBody::SetIgnoreCharacterCollision(bool bIgnore)
@@ -430,6 +469,11 @@ void AElysiumNpcBody::ApplyCrowdState()
 	}
 	Crowd->SetCrowdSeparation(!bIgnoreCharacterCollision);
 	Crowd->SetCrowdCollisionQueryRange(bIgnoreCharacterCollision ? 0.0f : 200.0f);
+	// A frozen body is SOLID_NONE — a character walks through it — so it must not steer other
+	// agents around it either. Detour avoidance is a separate register from collision, and an
+	// immobilised body left in it is an invisible obstacle every neighbour paths around.
+	Crowd->SetCrowdSimulationState(bFrozen
+		? ECrowdSimulationState::Disabled : ECrowdSimulationState::Enabled);
 }
 
 void AElysiumNpcBody::ApplyCollisionState()

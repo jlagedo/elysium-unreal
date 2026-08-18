@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+#include "ElysiumGraphState.h"      // the projected state a published cell is a cell of
 #include "ElysiumWorldServices.h"   // IElysiumNpcMotor — the body that answers with its own speeds
 
 // An NPC's travel speeds and the bounds a scripted move runs under.
@@ -14,6 +15,24 @@ namespace ElysiumNpcGait
 {
 	inline constexpr float WalkSpeed = 254.0f;   // speed_walk 100 in/s
 	inline constexpr float RunSpeed  = 571.5f;   // speed_runbase 225 in/s
+
+	// Which of the body's own fans a projected graph state is a state of. Only the three gaits have
+	// one; every other state plays a cell whose speed the selection record already carries, and
+	// asking a fan for it would be inventing a number.
+	//
+	// It lives here, beside the travel speed it selects, because the speed authority has to be one
+	// number: the record publishes its cell through this mapping and the motor commands through the
+	// same one, so the two cannot name different fans.
+	inline bool GaitKindForState(EElysiumGraphState State, EElysiumNpcGaitKind& OutKind)
+	{
+		switch (State)
+		{
+		case EElysiumGraphState::Walk:  OutKind = EElysiumNpcGaitKind::Walk;  return true;
+		case EElysiumGraphState::Run:   OutKind = EElysiumNpcGaitKind::Run;   return true;
+		case EElysiumGraphState::Sneak: OutKind = EElysiumNpcGaitKind::Sneak; return true;
+		default: return false;
+		}
+	}
 
 	// What a travel request commands, cm/s: the body's own authored cell for the gait at the
 	// direction it is travelling in, or the stated constant when this body resolves no fan for it.

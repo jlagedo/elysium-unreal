@@ -26,9 +26,17 @@ class UWorld;
 // **Two hosts, and they answer different questions.** Without `-ElysiumMap` it runs in the **stage
 // world over the combat arena**, for the reason the movement gym runs there: the floor is derived
 // from this repository's own values, so what a course measures is the body and the resolver rather
-// than a map. That host is the regression instrument. With a map it stands nothing at all and drives
-// the map's own authored cast down the map's own authored route, which is the acceptance — a
-// recording made on generated geometry is not evidence that the game's own content walks.
+// than a map. That host is the regression instrument. With a map it dresses no room and builds no
+// geometry: it stands one body — the map's own authored classname, model, stat block and loadout —
+// on the map's own patrol route, over the map's own floor and navigation graph, which is the
+// acceptance. A recording made on generated geometry is not evidence that the game's own content
+// walks.
+//
+// It stands that body rather than adopting the one the level script already drives, and holds the
+// rest of the map's cast still while the course runs (`HushOtherBodies`). Both are the same
+// requirement: a course has to begin from the same state every time and measure one body. The map's
+// own `patrol_cop` walks this very route, and two crowd agents converging on it are steered around
+// each other in whichever order they met — which is a recording of Detour, not of the resolver.
 //
 // A course drives the body through an **authored order** (`ElysiumCastCourses.h`) — a patrol route,
 // a scripted beat — and never through the motor directly, so the recording covers the whole producer
@@ -64,6 +72,11 @@ private:
 	bool StandArena();
 	// Kill the previous course's cast, dress the room for this one, and stand the body on its start.
 	bool BeginCourse(int32 Index);
+	// Freeze every body in the world except this course's own. A sited host is a living map whose
+	// script drives its own cast down the same routes; two agents that meet are steered around each
+	// other by Detour in whichever order they arrived, which is a recording of the crowd. Arena
+	// hosts stand nothing else and never call it.
+	void HushOtherBodies();
 	// Deliver the course's travel order. Separate from `BeginCourse` because a freshly spawned body
 	// has to reach the ground and finish activating before it can take one. False when the order
 	// could not be delivered at all.
@@ -172,12 +185,22 @@ private:
 		int32 CommandMismatches = 0;
 		double WorstCommand = 0.0;
 		int32 SlideFrames = 0;
+		// At-speed frames whose published state is one of the three gaits, where the cell that
+		// steered the row has to be this body's own fan read at the row's own direction. It is the
+		// strongest of the three because it is answerable at every angle.
+		int32 CellFrames = 0;
+		int32 CellMismatches = 0;
+		double WorstCell = 0.0;
 		// At-speed frames travelling within the forward window, where the cell being played has to
 		// be the body's own authored forward cell rather than one of its strafes.
 		int32 ForwardFrames = 0;
 		int32 ForwardMismatches = 0;
 		double WorstSlide = 0.0;
 		double WorstForward = 0.0;
+		// The widest bar any forward frame was judged at — the epsilon plus this fan's own blend
+		// across the window. Reported so a reader can tell a tight fan from a loose one rather than
+		// reading `WorstForward` against a constant that is not the one that applied.
+		double WorstForwardAllowed = 0.0;
 		int32 FirstBadFrame = INDEX_NONE;
 		double FirstBadSpeed = 0.0;
 		double FirstBadStride = 0.0;

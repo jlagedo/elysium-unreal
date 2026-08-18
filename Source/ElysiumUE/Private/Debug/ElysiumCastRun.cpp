@@ -14,8 +14,10 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumRng.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcGait.h"
 #include "Visual/ElysiumNpcBody.h"
 
 #include "Engine/GameInstance.h"
@@ -56,13 +58,18 @@ namespace
 	// tight on purpose: the mover is commanded with that exact cell every frame, so anything above
 	// rounding means the two numbers came from different places, which is the whole defect.
 	constexpr double NoSlideEpsilon = 1.0;
-	// How near forward a frame has to be travelling before the cell it plays is required to be the
+	// How near forward a frame has to be travelling before the cell it plays is compared against the
 	// body's own forward cell. Anything wider is a strafe, and a strafe cell is a different number by
-	// design — but the window is narrower than "not a strafe" for an arithmetic reason: the fan's
-	// cells sit 45 degrees apart and `SpeedAt` blends between the two the angle falls between, so a
-	// body ten degrees off forward is legitimately a fifth of the way toward a cell that can be
-	// twenty u/s slower. Two degrees keeps that blend inside the epsilon, which is what makes a
-	// failure here mean the wrong fan rather than the right one read off-axis.
+	// design.
+	//
+	// **The window is a window, not a tolerance.** The fan's cells sit 45 degrees apart and
+	// `SpeedAt` blends between the two the angle falls between, so a body inside this window is
+	// legitimately a fraction of the way toward a neighbouring cell — and how far that is depends on
+	// the fan, not on the window: a walk fan whose forward and adjacent cells differ by 20 u/s and
+	// one where they differ by 60 give errors three times apart at the same angle. Pinning the bar
+	// to a fixed epsilon at a fixed angle therefore says nothing about the fan; it says the fan was
+	// shallow. So the window is fixed, so the frame count stays stable, and the tolerance inside it
+	// is read off the body's own fan at the window's edge (`ForwardTolerance` below).
 	constexpr double ForwardWindowDegrees = 2.0;
 	// The fewest at-speed frames a course that declares a gait has to produce, and the fewest of
 	// those that have to be travelling forward. A body that never reached its commanded speed proved
@@ -86,24 +93,31 @@ namespace
 	// three locomotion fans, and it is the same body the sited courses stand.
 	const TCHAR* const CastDefaultBody = TEXT("regular_cop");
 
-	// Which of the body's own fans a graph state is a state of. Only the three gaits have one; every
-	// other state plays a cell whose speed the record already carries, and asking a fan for it would
-	// be inventing a number.
-	bool GaitKindForState(EElysiumGraphState State, EElysiumNpcGaitKind& OutKind)
+	// How far a published cell may sit from the body's own forward cell inside the forward window,
+	// u/s: the epsilon, plus whatever this fan's own blend does across that window. The second term
+	// is measured rather than assumed — `SpeedAt` at the window's edge against `SpeedAt` at forward
+	// IS the fan's local gradient, and `SpeedAt` is piecewise linear between cells, so nothing
+	// inside the window can be further off than the edge is.
+	double ForwardTolerance(const AElysiumNpcBody& Body, EElysiumNpcGaitKind Kind, double Forward)
 	{
-		switch (State)
-		{
-		case EElysiumGraphState::Walk:  OutKind = EElysiumNpcGaitKind::Walk;  return true;
-		case EElysiumGraphState::Run:   OutKind = EElysiumNpcGaitKind::Run;   return true;
-		case EElysiumGraphState::Sneak: OutKind = EElysiumNpcGaitKind::Sneak; return true;
-		default: return false;
-		}
+		const double Inv = 1.0 / ElysiumMove::U;
+		const double Right = Body.GaitSpeed(Kind, static_cast<float>(ForwardWindowDegrees)) * Inv;
+		const double Left = Body.GaitSpeed(Kind, static_cast<float>(-ForwardWindowDegrees)) * Inv;
+		return NoSlideEpsilon
+			+ FMath::Max(FMath::Abs(Right - Forward), FMath::Abs(Left - Forward));
 	}
 
 	// The map's own patrol node, by the token a level script spells: its targetname first, then the
 	// `Group` key, which is what all 34 of Santa Monica's nodes actually carry.
+	//
+	// A `Group` is a group — nothing in the format says one token names one node — so a token that
+	// matches more than one is answered with the first the world iterates, which is an arbitrary
+	// coordinate. That is reported rather than picked silently: a course that begins on a different
+	// node than it names is a recording of a different route.
 	const FElysiumEntity* FindPatrolNode(const FElysiumEntityWorld& World, const FString& Name)
 	{
+		const FElysiumEntity* ByGroup = nullptr;
+		int32 GroupMatches = 0;
 		for (const TUniquePtr<FElysiumEntity>& Ent : World.Entities())
 		{
 			if (!Ent.IsValid() || Ent->Def == nullptr)
@@ -114,13 +128,27 @@ namespace
 			{
 				continue;
 			}
-			if (Ent->Def->TargetName.Equals(Name, ESearchCase::IgnoreCase)
-				|| Ent->Def->Keys.FindRef(TEXT("Group")).Equals(Name, ESearchCase::IgnoreCase))
+			if (Ent->Def->TargetName.Equals(Name, ESearchCase::IgnoreCase))
 			{
 				return Ent.Get();
 			}
+			if (Ent->Def->Keys.FindRef(TEXT("Group")).Equals(Name, ESearchCase::IgnoreCase))
+			{
+				++GroupMatches;
+				if (ByGroup == nullptr)
+				{
+					ByGroup = Ent.Get();
+				}
+			}
 		}
-		return nullptr;
+		if (GroupMatches > 1)
+		{
+			UE_LOG(LogElysiumCast, Warning,
+				TEXT("'%s' is the Group key of %d patrol nodes; this course takes the first the ")
+				TEXT("world iterates, which is not a coordinate the map authored for it"),
+				*Name, GroupMatches);
+		}
+		return ByGroup;
 	}
 }
 
@@ -365,6 +393,14 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 	}
 	CastEntity = FElysiumEntityHandle::Invalid();
 
+	// **And the session's random position, back where the last course found it.** The RNG streams
+	// are the session's, shared by every entity in the map: an NPC's schedule pick and the seconds
+	// it idles for are draws off `NpcSchedule`, so how far into that stream this course's body
+	// starts depends on how many of the map's own cast drew before it — which the map's own load
+	// decides, not the course. Two runs whose loads differed by one draw then think a frame apart,
+	// which reads as a regression in every column. A course begins from the same position, always.
+	ElysiumRng::SeedAll(0);
+
 	// --- Where the course begins ----------------------------------------------------------------
 	// An arena course is written against the room's own extent; a sited course begins on the first
 	// node of the map's own route, facing the second, because those are the only coordinates in it
@@ -386,8 +422,23 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 			return false;
 		}
 		Start = First->Origin;
-		StartYaw = Second != nullptr
-			? static_cast<float>((Second->Origin - First->Origin).Rotation().Yaw) : StartYaw;
+		if (Second != nullptr)
+		{
+			StartYaw = static_cast<float>((Second->Origin - First->Origin).Rotation().Yaw);
+		}
+		else
+		{
+			// The whole point of the sited start is that both coordinates are the map's: the body
+			// begins on the first node facing the second, so its opening frames are a stride rather
+			// than a turn. With no second node the arena's authored yaw is used instead, which is a
+			// number this map never wrote down.
+			UE_LOG(LogElysiumCast, Warning,
+				TEXT("course '%s': '%s' resolves no second route node, so the body starts on the ")
+				TEXT("harness's own yaw %.1f rather than facing where it is about to walk"),
+				*Course.Name.ToString(),
+				Course.RouteNames.Num() > 1 ? *Course.RouteNames[1] : TEXT("(no second node named)"),
+				StartYaw);
+		}
 	}
 
 	// --- Stand the character up -----------------------------------------------------------------
@@ -416,6 +467,18 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 	{
 		UE_LOG(LogElysiumCast, Error, TEXT("course '%s': %s"), *Course.Name.ToString(), *Error);
 		return false;
+	}
+
+	// **The map's other cast, held still for the course.** A sited host is a living map: its own
+	// level script stands `patrol_cop` on the very route this course walks, and Detour steers two
+	// converging agents around each other in an order that depends on which reached the crossing
+	// first. That is a recording of the crowd rather than of the resolver, and it is why the sited
+	// courses did not reproduce run over run. Every other body is frozen — non-solid, out of the
+	// avoidance register and off its own order — so what the recording measures is this body, the
+	// map's floor and the map's route.
+	if (bSited)
+	{
+		HushOtherBodies();
 	}
 
 	// --- Dress the room -------------------------------------------------------------------------
@@ -476,6 +539,34 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 		Course.Weapon.IsEmpty() ? TEXT(", hands empty")
 			: *FString::Printf(TEXT(", holding %s"), *Course.Weapon));
 	return true;
+}
+
+void FElysiumCastRun::HushOtherBodies()
+{
+	UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		return;
+	}
+	int32 Held = 0;
+	for (TActorIterator<AElysiumNpcBody> It(World); It; ++It)
+	{
+		AElysiumNpcBody* Body = *It;
+		if (Body == nullptr || Body->GetOwningEntity() == CastEntity)
+		{
+			continue;
+		}
+		// Stop first, freeze second: freezing drops the outstanding order anyway, but the crowd
+		// register only takes a state change from an idle agent and the stop is what makes it one.
+		Body->Stop();
+		Body->SetFrozen(true);
+		++Held;
+	}
+	if (Held > 0)
+	{
+		UE_LOG(LogElysiumCast, Log,
+			TEXT("held %d of this map's own bodies still for the course"), Held);
+	}
 }
 
 bool FElysiumCastRun::ArmCourse()
@@ -654,20 +745,43 @@ bool FElysiumCastRun::Sample()
 			}
 		}
 
-		// And the cell itself, where the direction makes the question answerable: travelling forward,
-		// the cell that steered the row has to be the body's own authored forward cell for the state
-		// it published it under.
+		// And the cell itself, in two assertions that are answerable at any angle rather than one
+		// that is only answerable near forward.
 		EElysiumNpcGaitKind Kind = EElysiumNpcGaitKind::Walk;
-		if (FMath::Abs(Previous.MoveYaw) <= ForwardWindowDegrees
-			&& GaitKindForState(Previous.State, Kind))
+		if (ElysiumNpcGait::GaitKindForState(Previous.State, Kind))
 		{
+			// **The identity.** The cell that steered this row has to be this body's own fan, read
+			// at the direction the row was published under. It holds at every angle — there is no
+			// blend error in it, because both sides are the same fan at the same angle — and it is
+			// what separates a published cell from the resolver's clip speed, which is what the
+			// record falls back to when a gait resolves no fan at all.
+			const double Cell = Body->GaitSpeed(Kind, static_cast<float>(Previous.MoveYaw)) * Inv;
+			if (Cell > 0.0)
+			{
+				++NoSlide.CellFrames;
+				const double FanOff = FMath::Abs(Previous.Stride - Cell);
+				NoSlide.WorstCell = FMath::Max(NoSlide.WorstCell, FanOff);
+				if (FanOff > NoSlideEpsilon)
+				{
+					++NoSlide.CellMismatches;
+				}
+			}
+
+			// **And forward.** Near forward the cell has to be the forward one rather than a
+			// strafe — which is the claim the identity above cannot make on its own, because a
+			// stride that never tracked direction at all would satisfy it on a body that never
+			// turned. The bar is the epsilon plus this fan's own blend across the window, measured
+			// off the fan rather than assumed, so a steeper fan is not a failure and a shallow one
+			// does not buy slack it has not earned.
 			const double Forward = Body->GaitSpeed(Kind, 0.0f) * Inv;
-			if (Forward > 0.0)
+			if (FMath::Abs(Previous.MoveYaw) <= ForwardWindowDegrees && Forward > 0.0)
 			{
 				++NoSlide.ForwardFrames;
+				const double Allowed = ForwardTolerance(*Body, Kind, Forward);
+				NoSlide.WorstForwardAllowed = FMath::Max(NoSlide.WorstForwardAllowed, Allowed);
 				const double CellOff = FMath::Abs(Previous.Stride - Forward);
 				NoSlide.WorstForward = FMath::Max(NoSlide.WorstForward, CellOff);
-				if (CellOff > NoSlideEpsilon)
+				if (CellOff > Allowed)
 				{
 					++NoSlide.ForwardMismatches;
 				}
@@ -742,17 +856,18 @@ bool FElysiumCastRun::FinishCourse()
 	Recorder.SetMeta(TEXT("cast_class"), Course.Classname);
 	// And what the driver was ACTUALLY keyed on, which is the authored loadout only once the
 	// inventory has equipped it. The pair is deliberate: `cast_weapon` is what the course asked for
-	// and `cast_held` is what the ladder walked, and a course whose second is empty proved nothing
-	// about the armed branch however the first reads.
+	// and `cast_held` is what the ladder walked. Both are identity — the comparator refuses a
+	// baseline pair that disagrees about either — and an armed course whose second does not match
+	// its first is refused below, because it recorded the unarmed branch under an armed name.
+	FString KeyedClass, KeyedWeapon;
 	{
-		FString ActorClass, ActiveWeapon;
 		EElysiumNpcState ActorState = EElysiumNpcState::Idle;
 		if (const AElysiumNpcBody* Keyed = FindBody())
 		{
-			Keyed->GetAnimTranslationContext(ActorClass, ActiveWeapon, ActorState);
+			Keyed->GetAnimTranslationContext(KeyedClass, KeyedWeapon, ActorState);
 		}
-		Recorder.SetMeta(TEXT("cast_held"), ActiveWeapon);
-		Recorder.SetMeta(TEXT("cast_keyed_class"), ActorClass);
+		Recorder.SetMeta(TEXT("cast_held"), KeyedWeapon);
+		Recorder.SetMeta(TEXT("cast_keyed_class"), KeyedClass);
 		Recorder.SetMetaNumber(TEXT("cast_state"), static_cast<int32>(ActorState));
 	}
 
@@ -780,8 +895,8 @@ bool FElysiumCastRun::FinishCourse()
 	Totals.Write(Recorder);
 	Recorder.SetRun(TEXT("frames"), Recorder.FrameCount());
 	Recorder.SetRun(TEXT("advance_max"), AdvanceMax);
-	Recorder.SetRun(TEXT("slide_frames"),
-		NoSlide.SlideFrames + NoSlide.ForwardMismatches + NoSlide.CommandMismatches);
+	Recorder.SetRun(TEXT("slide_frames"), NoSlide.SlideFrames + NoSlide.ForwardMismatches
+		+ NoSlide.CommandMismatches + NoSlide.CellMismatches);
 	// The denominators ride as metadata rather than as channels: how many frames a body spends at its
 	// commanded speed moves with the navigation solve, and a value with no stable comparison rule is
 	// exactly what the registry refuses to accept as a channel.
@@ -790,7 +905,10 @@ bool FElysiumCastRun::FinishCourse()
 	Recorder.SetMetaNumber(TEXT("noslide_forward"), NoSlide.ForwardFrames);
 	Recorder.SetMetaNumber(TEXT("noslide_worst"), NoSlide.WorstSlide);
 	Recorder.SetMetaNumber(TEXT("noslide_worst_forward"), NoSlide.WorstForward);
+	Recorder.SetMetaNumber(TEXT("noslide_forward_bar"), NoSlide.WorstForwardAllowed);
 	Recorder.SetMetaNumber(TEXT("noslide_worst_command"), NoSlide.WorstCommand);
+	Recorder.SetMetaNumber(TEXT("noslide_cell"), NoSlide.CellFrames);
+	Recorder.SetMetaNumber(TEXT("noslide_worst_cell"), NoSlide.WorstCell);
 
 	const FString Stem = FString::Printf(TEXT("%s.%s.%dhz"),
 		MapName.IsEmpty() ? TEXT("arena") : *MapName, *Course.Name.ToString(), Hz);
@@ -803,11 +921,12 @@ bool FElysiumCastRun::FinishCourse()
 
 	UE_LOG(LogElysiumCast, Log,
 		TEXT("course '%s': %d frames, advanced %.1f u, peak 2D %.1f u/s, %d resolved / %d fallback, ")
-		TEXT("%d of %d moving frames at the commanded speed (worst slide %.2f, worst command ")
-		TEXT("%.2f, worst cell %.2f u/s) -> %s"),
+		TEXT("%d of %d moving frames at the commanded speed (worst slide %.2f, worst command %.2f, ")
+		TEXT("worst cell %.2f over %d gait frames, worst forward %.2f of a %.2f bar over %d) -> %s"),
 		*Course.Name.ToString(), Recorder.FrameCount(), AdvanceMax, Totals.PeakSpeed2D,
 		Totals.ResolvedFrames, Totals.FallbackFrames, NoSlide.AtSpeedFrames, NoSlide.MovingFrames,
-		NoSlide.WorstSlide, NoSlide.WorstCommand, NoSlide.WorstForward, *Stem);
+		NoSlide.WorstSlide, NoSlide.WorstCommand, NoSlide.WorstCell, NoSlide.CellFrames,
+		NoSlide.WorstForward, NoSlide.WorstForwardAllowed, NoSlide.ForwardFrames, *Stem);
 
 	// --- The claim ------------------------------------------------------------------------------
 	bool bHeld = true;
@@ -817,6 +936,29 @@ bool FElysiumCastRun::FinishCourse()
 		UE_LOG(LogElysiumCast, Error, TEXT("course '%s': %s"), *Course.Name.ToString(), *Line);
 	};
 
+	// **What the course is a course of, declared.** A course that names neither a gait nor a
+	// standstill is asked nothing at all below, and a predicate evaluated over no frames is the
+	// vacuous pass the whole rung exists to replace — so it is the course that fails, here, rather
+	// than the run that passes quietly.
+	if (!Course.bExpectStill && Course.ExpectGait == EElysiumAnimActivityCode::Unknown)
+	{
+		Refuse(TEXT("this course declares neither a gait nor a standstill, so nothing about the ")
+			TEXT("recording is checked and passing it would mean nothing"));
+	}
+
+	// And what the course asked to be holding. `cast_weapon` is what the spawn keyfield named and
+	// `cast_held` is what the driver's ladder actually walked; a course whose second is empty, or
+	// is something else, recorded the unarmed branch under an armed name however the first reads.
+	if (!Course.Weapon.IsEmpty() && !KeyedWeapon.Equals(Course.Weapon, ESearchCase::IgnoreCase))
+	{
+		Refuse(FString::Printf(
+			TEXT("the course asked for '%s' and the driver was keyed on %s — the armed branch this ")
+			TEXT("course exists to walk was never entered"),
+			*Course.Weapon,
+			KeyedWeapon.IsEmpty() ? TEXT("empty hands")
+				: *FString::Printf(TEXT("'%s'"), *KeyedWeapon)));
+	}
+
 	const double StillCut = FElysiumGaitReference().StillSpeed() / ElysiumMove::U;
 	if (Course.bExpectStill)
 	{
@@ -825,6 +967,20 @@ bool FElysiumCastRun::FinishCourse()
 			Refuse(FString::Printf(
 				TEXT("the body was asked for nothing and travelled at %.2f u/s, past the %.2f u/s ")
 				TEXT("standstill"), Totals.PeakSpeed2D, StillCut));
+		}
+		// A still course proves the resolver ran, or it proves nothing: a body that stood there
+		// binding no asset and classifying no activity would clear the speed bar above exactly the
+		// way a correct one does.
+		if (Totals.ResolvedFrames == 0)
+		{
+			Refuse(FString::Printf(
+				TEXT("no frame of this standing course resolved an asset (%d fell back) — the ")
+				TEXT("recording is of a body the driver never posed"), Totals.FallbackFrames));
+		}
+		if (Totals.CodesSeen == 0)
+		{
+			Refuse(TEXT("the classifier named no activity on any frame of this standing course, so ")
+				TEXT("the standstill it holds is a standstill nothing was asked about"));
 		}
 	}
 	else if (Course.ExpectGait != EElysiumAnimActivityCode::Unknown)
@@ -874,12 +1030,22 @@ bool FElysiumCastRun::FinishCourse()
 			NoSlide.SlideFrames, NoSlide.AtSpeedFrames, NoSlide.WorstSlide, NoSlide.FirstBadFrame,
 			NoSlide.FirstBadSpeed, NoSlide.FirstBadStride, NoSlide.FirstBadCommanded));
 	}
+	if (NoSlide.CellMismatches > 0)
+	{
+		Refuse(FString::Printf(
+			TEXT("%d of %d gait frame(s) published a stride that is not this body's own fan read at ")
+			TEXT("the direction the frame was published under (worst %.2f u/s) — the cell came from ")
+			TEXT("somewhere other than the fan the mover is commanded from"),
+			NoSlide.CellMismatches, NoSlide.CellFrames, NoSlide.WorstCell));
+	}
 	if (NoSlide.ForwardMismatches > 0)
 	{
 		Refuse(FString::Printf(
 			TEXT("%d of %d forward-travelling frame(s) played a cell that is not this body's own ")
-			TEXT("authored forward cell (worst %.2f u/s off)"),
-			NoSlide.ForwardMismatches, NoSlide.ForwardFrames, NoSlide.WorstForward));
+			TEXT("authored forward cell (worst %.2f u/s off, against a %.2f u/s bar this fan's own ")
+			TEXT("blend across the %.1f degree window allows)"),
+			NoSlide.ForwardMismatches, NoSlide.ForwardFrames, NoSlide.WorstForward,
+			NoSlide.WorstForwardAllowed, ForwardWindowDegrees));
 	}
 	return bHeld;
 }
@@ -1024,6 +1190,13 @@ bool FElysiumCastRun::Tick(float /*DeltaSeconds*/)
 			{
 				Fail(TEXT("the character stood up with no engine body — nothing can be recorded"));
 				return false;
+			}
+			// Again, because the settle is long enough for a map's own `npc_maker` to have stood
+			// something new since the course began, and a body that arrived after the first pass
+			// would be the one crossing the route.
+			if (!MapName.IsEmpty())
+			{
+				HushOtherBodies();
 			}
 			if (!ArmCourse())
 			{

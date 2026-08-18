@@ -183,7 +183,13 @@ def pair_rows(a: list[dict], b: list[dict], by_time: bool):
 # different recording: the gait fans, the translation ladder and therefore every speed in the trace
 # all key on these. Comparing the traces without comparing these is how a body swap reads as a
 # regression in `act_stride` instead of as a body swap.
-IDENTITY_KEYS = ("cast_body", "cast_class", "cast_weapon", "anim_stem", "host", "course")
+#
+# `cast_weapon` is what the course asked to be holding and `cast_held` is what the driver's ladder
+# was actually keyed on. Both are identity: a run whose armed course silently walked the unarmed
+# branch agrees with its baseline about the first and not the second, and without the second that
+# reads as the traces simply matching.
+IDENTITY_KEYS = ("cast_body", "cast_class", "cast_weapon", "cast_held", "anim_stem", "host",
+                 "course")
 
 
 def compare_identity(base_run: dict, cur_run: dict) -> list[str]:

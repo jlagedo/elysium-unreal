@@ -172,6 +172,29 @@ void UElysiumAnimSubsystem::ReportMiss(const FElysiumAnimationIntent& Intent,
 	UE_LOG(LogElysiumAnim, Warning, TEXT("%s"), *Line);
 }
 
+void UElysiumAnimSubsystem::ReportGaitFanMiss(const FElysiumGaitSpeedRequest& Request,
+	EElysiumAnimActivityCode Code, const TCHAR* Reason,
+	const FElysiumAnimationSelection& Selection)
+{
+	const uint32 Key = HashCombine(HashCombine(GetTypeHash(Request.Stem),
+		GetTypeHash(static_cast<uint8>(Code))), GetTypeHash(FString(Reason)));
+	if (ReportedGaitMisses.Contains(Key))
+	{
+		return;
+	}
+	ReportedGaitMisses.Add(Key);
+
+	UE_LOG(LogElysiumAnim, Warning,
+		TEXT("[elysium] '%s' resolves no %s fan (%s): it will travel at the stated constant while ")
+		TEXT("its record names a cell (class '%s', weapon '%s', state %d, label '%s'@'%s')"),
+		*Request.Stem, ElysiumAnimIntent::ActivityName(Code), Reason,
+		Request.ActorClassname.IsEmpty() ? TEXT("(none)") : *Request.ActorClassname,
+		Request.WeaponClassname.IsEmpty() ? TEXT("(empty hands)") : *Request.WeaponClassname,
+		static_cast<int32>(Request.ActorState),
+		Selection.SequenceLabel.IsEmpty() ? TEXT("(none)") : *Selection.SequenceLabel,
+		Selection.OwnerStem.IsEmpty() ? TEXT("(none)") : *Selection.OwnerStem);
+}
+
 const FElysiumNpcIndex& UElysiumAnimSubsystem::GetIndex()
 {
 	if (!bIndexLoaded)
@@ -746,10 +769,14 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		// walking pace while playing a crouch.
 		Intent.bAllowFallbackLadder = false;
 
+		// Every way out of here is a body that will travel at a constant while its record names a
+		// cell, so every one of them says so once rather than returning a quiet false into a caller
+		// that discards it.
 		FElysiumAnimationSelection Selection;
 		ElysiumAnimResolve::Resolve(Intent, Catalog, Selection);
 		if (Selection.SequenceLabel.IsEmpty() || Selection.OwnerStem.IsEmpty())
 		{
+			ReportGaitFanMiss(Request, Code, TEXT("the request named no sequence"), Selection);
 			return false;
 		}
 		// The fan belongs to the bank the weighted pick landed in, not to the body — one body's walk
@@ -757,14 +784,23 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		const TSharedPtr<const FElysiumBlendTable> Owner = GetBlendTable(Selection.OwnerStem);
 		if (!Owner.IsValid())
 		{
+			ReportGaitFanMiss(Request, Code, TEXT("the owning bank carries no blend table"),
+				Selection);
 			return false;
 		}
 		const FElysiumBlendGrid* Grid = Owner->Find(Selection.SequenceLabel);
 		if (Grid == nullptr)
 		{
+			ReportGaitFanMiss(Request, Code, TEXT("the blend table carries no grid for that label"),
+				Selection);
 			return false;
 		}
-		return ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Scale, Table);
+		if (!ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Scale, Table))
+		{
+			ReportGaitFanMiss(Request, Code, TEXT("the grid produced no speed fan"), Selection);
+			return false;
+		}
+		return true;
 	};
 
 	// `sv_walkscale` 1.0, `sv_runscale` 1.0, `sv_sneakscale` 2.3, and the rate multiplier on two of

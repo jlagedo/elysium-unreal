@@ -169,7 +169,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// says "this body's sideways cells are slower than its forward one" without building a table:
 	// the fraction is applied by how far off forward the direction is, so a substrate test can
 	// assert that a turning body is commanded a different number than a settled one.
-	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees = 0.0f) const override
+	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const override
 	{
 		float Forward = AuthoredWalkSpeedCmPerSecond;
 		switch (Gait)

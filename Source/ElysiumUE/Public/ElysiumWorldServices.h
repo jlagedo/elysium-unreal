@@ -112,15 +112,17 @@ public:
 	// scripted_sequence mark wants the partial walk: the transit is the point of the beat, and its
 	// caller places the NPC on the mark when the walk ends short.
 	//
-	// `GaitKind` names which of this body's own authored fans `SpeedCmPerSecond` came from, so the
-	// body can re-command its mover if that fan's forward cell changes while this leg is still in
-	// flight (an equip/holster mid-leg advances `FElysiumAnimationDriver::GaitGeneration` and the
-	// graph immediately plays the new weapon's cycle, and the stride slides unless the mover is told).
+	// `GaitKind` names which of this body's own authored fans `SpeedCmPerSecond` came from. Naming
+	// one hands the leg to the speed authority: the body's own animation pass re-commands its mover
+	// every frame with the cell the selection record published that frame, so a leg that turns, or
+	// whose tables move under it on an equip, travels at the cycle it is playing rather than at the
+	// number this call happened to resolve. `SpeedCmPerSecond` is then only the opening command,
+	// before the first classification.
 	//
 	// **Unset is the default and means "the caller authored this exact number; never re-derive
 	// it."** The scripted Walk/Custom gaits hand this a resolved clip's own authored ground speed —
-	// not the gait fan's forward cell — and re-deriving on every generation bump would silently
-	// overwrite a number the beat never asked to have replaced.
+	// not the gait fan's forward cell — and re-deriving it would silently overwrite a number the
+	// beat asked for by name.
 	virtual bool MoveTo(const FVector& FeetDestination, float AcceptanceRadiusCm,
 		float SpeedCmPerSecond, bool bAllowPartialPath = false,
 		TOptional<EElysiumNpcGaitKind> GaitKind = TOptional<EElysiumNpcGaitKind>()) = 0;

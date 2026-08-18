@@ -1398,8 +1398,13 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 	const APlayerController* PC = World->GetFirstPlayerController();
 	if (const IElysiumPlayerBody* Body = PC ? Cast<IElysiumPlayerBody>(PC->GetPawn()) : nullptr)
 	{
+		// The driver's published pair where there is a driver, for the same reason the cast rows
+		// below take theirs: the mover's getter recomputes from live component state, so pairing it
+		// with the record beside it shows a frame that record never classified. Without a map actor
+		// there is no driver, and the mover's own sample is the only sample there is.
 		ElysiumCogLocomotion::Row("player", COG_TCHAR_TO_CHAR(*PC->GetPawn()->GetName()),
-			Body->GetLocomotionSample(), Map ? &Map->GetPlayerAnimSelection() : nullptr);
+			Map ? Map->GetPlayerAnimSample() : Body->GetLocomotionSample(),
+			Map ? &Map->GetPlayerAnimSelection() : nullptr);
 	}
 
 	for (TActorIterator<AElysiumNpcBody> It(const_cast<UWorld*>(World)); It; ++It)

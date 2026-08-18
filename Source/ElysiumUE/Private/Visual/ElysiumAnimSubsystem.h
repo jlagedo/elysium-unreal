@@ -275,4 +275,13 @@ private:
 	void ReportMiss(const FElysiumAnimationIntent& Intent,
 		const FElysiumAnimationSelection& Selection);
 	TSet<uint32> ReportedMisses;
+
+	// And the same shape for a gait fan that would not resolve. A body whose fans do not resolve
+	// rides the stated `speed_walk`/`speed_runbase` constants for the rest of its life while its
+	// record keeps naming a cell, which is the speed authority quietly becoming two numbers. Once
+	// per (stem, gait, reason): the resolve re-runs on every equip and every state change across the
+	// whole cast, and the same body failing the same way again is the same fact.
+	void ReportGaitFanMiss(const FElysiumGaitSpeedRequest& Request, EElysiumAnimActivityCode Code,
+		const TCHAR* Reason, const FElysiumAnimationSelection& Selection);
+	TSet<uint32> ReportedGaitMisses;
 };
