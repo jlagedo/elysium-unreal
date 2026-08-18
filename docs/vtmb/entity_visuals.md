@@ -197,11 +197,11 @@ the links); rendering them opaque turns a chain into a solid tube with a chain p
 
 ## 6. `env_particle` / `func_particle` / `params_particle` / `env_steam`
 
-125 `env_particle` emitters, keys `particle_definition`, `active` (start state),
-`attach_type`, `bounds`, `ramp_scale`. **Open question:** what `particle_definition` names is
-unresolved — VtMB is early Source, so it could name either the Troika KeyValues particle scripts
-(`particles/*.txt`) or Source `.pcf` systems; this needs to be settled before an emitter can be
-drawn at all.
+`particle_definition` names a Troika `particles/<name>.txt` script — not a Source `.pcf`.
+The full effect inventory (every producer, every family, and the `env_phys*` impulse
+classes that sit beside the particle language) is `docs/vtmb/effects.md`. The definition
+grammar is `docs/vtmb/weather.md`. Unreal reproduction is
+`docs/architecture/effects-architecture.md`.
 
 ---
 
@@ -288,5 +288,6 @@ behavior surface this data feeds), `docs/vtmb/python_bridge.md` (name→delegate
 Python call paths), `docs/architecture/engine-core.md` (`FElysiumEntityWorld`, the classname registry, the
 spawn pass — the Unreal substrate that consumes `.ents`), `docs/architecture/runtime-architecture.md` (the
 substrate's place in the map epoch and frame), `docs/vtmb/lighting.md` (real-time lighting),
-`docs/vtmb/mdl_v2531.md` (prop model decode), `pipeline/CLAUDE.md` ("BSP format", "Static props /
+`docs/vtmb/mdl_v2531.md` (prop model decode), `docs/vtmb/effects.md` (particle framework and
+every effect family), `pipeline/CLAUDE.md` ("BSP format", "Static props /
 models", "Collision models").
