@@ -483,6 +483,16 @@ swap therefore carries one frame of latency, which is deliberate and less than t
 retail carries. The same tables build `FElysiumGaitReference`, so the classifier's walk/run threshold
 and the mover's commanded speed cannot come from two different numbers.
 
+**The cast's mover is commanded with the number the record publishes.** Each anim pass hands the
+NPC motor's `MaxWalkSpeed` the cell the selection it just published names (`GroundSpeedCmPerSecond`)
+whenever the projected graph state is a gait, so what the body travels at and what its record says
+it plays are one number; the travel order's own gait kind carries only a leg's opening frames,
+before a gait has been published, and a gait state whose fan resolves no cell warns once per gait
+per body before falling back. A caller-authored speed — the scripted Walk and Custom gaits — keeps
+exactly the number it was handed. The pass order is sample → resolve → re-command, which leaves one
+frame between the record and the mover: a row's velocity was realized under the previous row's
+cell, and any check comparing a recorded speed to a recorded stride aligns to that.
+
 **It is sampled in the post-move pass** — the one the camera director and the eye tick already run
 in — so no consumer reads a half-integrated frame. One struct, two producers, deliberately: the
 player's mover and the NPC motor fill the same record, so the cast's locomotion and the player's
@@ -569,9 +579,10 @@ with `T` the body's own forward walk cell plus one unit
   a walk/run split or a relaxed form below it.
 - **The walk/run split reads both speeds**, realized and commanded, which is retail's own
   disjunction. The commanded term is what selects the run on the first frame of a full input instead
-  of after the body has accelerated into it. The body sample carries `CommandedSpeed` for it and
-  reports zero on a producer with no command, which is every NPC — so the cast is judged on realized
-  speed alone, as it must be.
+  of after the body has accelerated into it. The body sample carries `CommandedSpeed` for it: the
+  player's mover reports its command, and an NPC motor reports the `MaxWalkSpeed` it holds while a
+  travel leg is in flight and zero otherwise — so the cast's split is the same disjunction and a
+  commanded run classifies as a run on its first frame.
 - **No gait memory.** `HysteresisFraction` defaults to zero because retail holds none and the
   commanded term removed the flicker the margin existed to damp.
 

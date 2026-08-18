@@ -274,32 +274,32 @@ The ladder:
   are 0 on all 14,012 sequence descriptors, and `AdvanceToIdealActivity`'s traversal
   (`FindTransitionSequence` → the `entrynode`/`exitnode`/matrix lookup at `0x10428ad0`) is
   decompilation-confirmed dead code against shipped content — no sidecar block is emitted.
-- [~] **[LIFE3 One resolver for the whole cast](plans/animation.md)** — the translation tables and
-  the graph state are landed. The 5-row stub is deleted and the resolver walks the committed weapon
+- [x] **LIFE3 One resolver for the whole cast** — the translation tables, the graph state, the base
+  pose's ownership and the speed authority are landed. The resolver walks the committed weapon
   ladders, the two `CBasePlayer` rows and the recovered NPC class bodies in their witnessed orders,
   availability-probing each rung against the body's own vocabulary, so a glock-armed body reaches
   `pistol_relaxed_walk` at rung 2 and an idle armed cast member walks relaxed instead of weapon-up
-  (the armed/alert branch answered over its confirmed slice; a body in combat answers neither arm,
-  the divergence recorded in `docs/vtmb/animation_and_movers.md`). The graph state rides on the
-  selection record as `GraphState`, projected once in the resolver's step 6 and read by the anim
-  instance, Cog, the `act_state` channel and the MCP surface rather than derived four times, so a
-  readout and a pose cannot disagree; `StateCanPlay` is the coverage rule as one predicate, and both
-  producers are swept against it over the real corpus — 52 player bodies across the classifier's own
-  13 emittable activities (the relaxed forms included, the water pair held only to pose-or-name) and
-  114 cast bodies across the recovered NPC subset. That sweep sets stem, activity and source only,
-  so it does not enter the weapon ladder or the class bodies and does not assert the state identity.
-  Both producers emit one trace schema — `ElysiumLocomotionTrace` is the columns and the writer,
-  and `FElysiumCastRun` (`-ElysiumCast`, `uv run elysium debug cast`) records the cast over the
-  arena in the stage world under authored orders. The base pose has one owner at a time: every body
-  with a mover publishes a locomotion selection each anim tick and a standing one resolves an idle
-  that binds an asset, so the publish takes the pose back from a one-shot only while the body is
-  locomoting and the ambient schedule's stance and fidget clips reach the frame (the floor until
-  LIFE4's arbitration slot decides it by priority). The bind loads the asset the record names rather
-  than only the one whose outcome is `Resolved` — every availability rung applies a real label and
-  then restates the outcome as the rung that answered — and a request that binds nothing warns once
-  per `(stem, request, outcome)` instead of reaching only the selection record. Open: the gait
-  tables and the posed activity are resolved through different chains, the harness passes on an
-  unarmed course, and the arena is a regression instrument rather than acceptance evidence.
+  (a body in combat answers neither arm, the divergence recorded in
+  `docs/vtmb/animation_and_movers.md`). The graph state rides on the selection record as
+  `GraphState`, projected once in the resolver's step 6 and read by the anim instance, Cog, the
+  `act_state` channel and the MCP surface, so a readout and a pose cannot disagree. The speed is one
+  number: the gait tables resolve under the same source, classname and state the pose walks, the
+  gait classifies off the graph state, and the NPC mover is commanded each pass with the cell the
+  record publishes — the discrete key carries the actor classname, and a body reaches its character
+  directly rather than through an owner `Possess` overwrites. Both producers emit one trace schema
+  off the sample the driver ticked (`ElysiumLocomotionTrace` is the columns and the writer), and the
+  evidence holds the claim: the intra-row no-slide predicate is evaluated in the run itself, the
+  harness fails loudly — refused filters, missing bodies, unarmed orders and empty writes are
+  non-zero exits plus a `run.failed` marker the comparator refuses — the coverage sweep drives 3,420
+  cast requests keyed on authored classname, weapon and `ActorState` with
+  `GraphState == StateForActivity(requested)` asserted and sequence-zero split from a fallback that
+  named a clip, and the acceptance patrol is `sm_hub_1`'s own cop route walked armed and unarmed at
+  the cells its tables author with the selection record in the log
+  (`uv run elysium debug cast --sited`; worst intra-row slide under 1 u/s). The base pose has one
+  owner at a time: every body with a mover publishes a locomotion selection each anim tick, so the
+  publish takes the pose back from a one-shot only while the body is locomoting (the floor until
+  LIFE4's arbitration slot decides it by priority), and the bind loads the asset the record names,
+  warning once per `(stem, request, outcome)` when a request binds nothing.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; the channel arbitration slot (which every attack and aim path waits on),
   tracking through the prop bone, the honest check, the equip funnels and weapon-state animation

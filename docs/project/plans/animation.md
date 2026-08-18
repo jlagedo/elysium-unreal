@@ -18,69 +18,6 @@ The CCC slice (camera, controls, the played movement feel) remains its own surfa
 session per task — session shape, kickoff prompts, scope traps:
 `docs/operations/life-agent-playbook.md`.
 
-### LIFE3 One resolver for the whole cast
-
-The translation tables, the graph state and the ownership of the base pose are behind this rung:
-`TranslateActivity` walks the committed weapon ladders, the two `CBasePlayer` rows and the
-recovered NPC class bodies in their witnessed orders, availability-probing each rung against the
-body's own vocabulary; `GraphState` is projected once in the resolver's step 6 and read by the anim
-instance, Cog, the `act_state` channel and the MCP surface rather than derived four times; a
-locomotion publish takes the base pose back from a one-shot only while the body is locomoting; the
-bind loads whatever asset the record names rather than only what the outcome calls `Resolved`; and
-a request that binds nothing reports once per `(stem, request, outcome)`.
-
-What remains is the speed authority being one number, and evidence that says so.
-
-- **Pose and speed come from the same activity.** `ResolveGaitSpeeds` keys stem, weapon, form and
-  variant with `Source=Player` and no classname or `ActorState`, while the pose walks the NPC
-  `+0x5dc` body — an idle human poses `ACT_WALK_RELAXED` and travels at the un-relaxed player fan.
-  `GaitSpeedForSelection` then switches on `ActivityCode(Selection.ResolvedActivity)`, whose
-  vocabulary is the unsuffixed literals only, so every translated name falls through to the
-  resolve-time cell and the stride stops tracking direction. Resolve the gait with the same
-  source, classname and state the pose uses, and classify it from the requested activity or
-  `GraphState`.
-- **The motor commands the cell the body is about to play.** `GaitSpeed` returns `Table->Forward()`
-  and `MoveTo` sets one `MaxWalkSpeed`, while the posed fan is steered by realized `move_yaw`. A
-  patrol turnaround plays a strafe cell at the forward speed. Command `SpeedAt(move_yaw)` per
-  substep, or hold translation until facing is aligned. Scripted `Run` passes its gait kind so the
-  push can re-derive it; scripted `Walk` and `Custom` keep the caller's number.
-- **The trace carries the sample the driver ticked.** The writer's contract is the published sample
-  and selection and nothing else; the cast harness calls `SampleLocomotion()`, which recomputes
-  `FromCharacterMovement` after the driver already consumed one. The driver keeps the sample it
-  classified and both producers read that.
-- **No-slide is a predicate, not a printout.** `speed2d` and `act_stride` are independent columns
-  compared only against the previous recording, at a 2.0 u/s tolerance, and a body that never moves
-  resolves `ACT_IDLE` on every frame of a walk course. The check is intra-row: on moving frames,
-  `|speed2d − act_stride|` and `|act_stride −` the body's authored forward cell are below a tight
-  epsilon, peak speed clears the still cut, and the course's activity codes include the gait. This
-  also settles whether the bar admits a commanded run — either `CommandedSpeed` is published on the
-  cast sample, or the opening frames of every run request are walk-classified and the claim says so.
-- **The harness fails loudly.** An input that does not arm its leaf, a course filter that matches
-  nothing, a missing body, an empty write and a refused `EndFrame` all fail the run with a non-zero
-  status; the output directory is cleared at run start so a stale recording cannot be read as this
-  one. The default body is a named locomoting humanoid rather than the first baked stem, and the
-  comparator checks the recorded body against the baseline's.
-- **The coverage sweep carries class, weapon and state.** The 52/114/570 loops set stem, activity,
-  source and the ladder flag only, so the committed tables' load-bearing work — availability and the
-  armed/alert branch — is never entered and `GraphState` identity is never asserted. Drive the cast
-  half with each body's authored classname, at least one equipped weapon and `ActorState` across
-  Idle/Alert/Combat; require `GraphState == StateForActivity(requested)`; separate sequence-zero
-  (no clip, poses nothing) from a fallback that named a clip. The glock claim asserts the resolved
-  clip label on a real body, not only on the fixture.
-- **The discrete key carries the actor classname.** The key is activity, stem, weapon, state and
-  route. `ActorClassname` is what finds the `+0x5dc`/`+0x5e0` class bodies and is pushed onto the
-  intent without being compared, so a first tick whose entity had not resolved keeps the wrong class
-  body for the life of the request.
-- **Gait qualifies on a real map.** `FElysiumCastRun` stands the combat arena in the stage world
-  under `-nullrhi`; it is a regression instrument and not acceptance evidence (playable-path rule
-  3). The gait bullet closes on one priority-map patrol with the selection record in the log.
-
-*Acceptance:* on a priority map, a cast member walks a patrol at the cell its own tables author,
-armed and unarmed, with the selection record in the log; the intra-row no-slide predicate holds
-over that patrol and over a recorded scripted run; and the coverage sweep that says the cast poses
-is driven with the classname, weapon and state the committed tables are keyed on. *Deps:* LIFE0,
-LIFE2.
-
 ### LIFE4 Weapons in hands — the third-person wielded body
 
 What a character holds, finished. The recovered contract — four item model roles, the equip

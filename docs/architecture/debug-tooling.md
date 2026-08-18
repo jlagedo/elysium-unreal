@@ -429,9 +429,26 @@ that got less far rather than a course of a different length.
 Its runs live under `$ELYSIUM_EXPORT_ROOT/_cast/` with their own baseline root, which is not
 fastidiousness: the comparator fails a stem a baseline carries and a run does not, so sharing `_move`
 would make a player-only run report every cast course as missing. `-CastBody=<stem>` picks the body;
-with none named the run takes the first baked stem and records which one in the manifest. A
-recording made on a different body is a different recording, and the comparator does not yet read
-that field, so a run whose body changed is compared against a baseline it does not belong to.
+with none named the run takes `regular_cop`, a named locomoting humanoid, and a mount without it
+refuses the run rather than substituting. The recorded identity — body, classname, weapon asked and
+weapon actually held, stem, host and course — is checked by the comparator, so a recording made on
+a different body, or one whose equip silently failed, fails instead of being read against a
+baseline it does not belong to. A course that declares no weapon still records `item_w_fists`: the
+loadout arms every combat character with fists, so an "unarmed" body walks the fists ladder rather
+than none.
+
+**Two hosts, one harness.** `uv run elysium debug cast --sited` runs the same recorder on a
+priority map's own content instead of the arena — `sm_hub_1`'s cop, dressed in the map's authored
+classname, loadout and patrol route, with the map's other bodies held still for the course so crowd
+avoidance cannot throttle the recorded one; its recordings live under `_cast/<map>/` with their own
+baseline. The recording carries its own verdict: the run evaluates the intra-row no-slide predicate
+— on at-speed frames the realized speed, the commanded cell and the published stride agree, aligned
+one row back because a row's velocity was realized under the previous pass's command — and a course
+that never reaches speed, never plays its declared gait, arms nothing or writes nothing fails the
+run. A headless `-unattended` editor on Windows does not reliably surface its exit status, so a
+failed run writes a `run.failed` marker into its own output directory and `channel_diff` refuses
+the directory outright, for diff and promote alike; the output directory is cleared at run start
+(never `baseline/`) so a stale recording cannot be read as this one.
 
 **It is a regression instrument, not acceptance evidence.** The arena is this repository's own
 floor in a headless stage world, which is what makes a recording repeatable and is also what

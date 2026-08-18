@@ -358,6 +358,11 @@ Hard-won, non-obvious, and easy to undo:
   keeps navigation click-to-open instead of rendering whole live windows on hover. Reapply both when
   updating Cog. `SetEnableInput` dereferences the lazily created ImGui context, so every boot-time call
   guards on `GetEnableInput()` first.
+- **An `APawn`'s owner is not permanent.** `AController::Possess` overwrites the pawn's owner with
+  the controller, and `AElysiumNpcBody` possesses lazily on its first accepted travel order — so
+  anything read back off `GetOwner()` answers only for a body that has never moved. The body holds
+  its `AElysiumMapActor` directly (`SetOwningEntity`), and a body that cannot reach its character
+  warns once naming the broken link.
 - **The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not `PreLoadMap`** — the
   movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem. Its blocking
   screen auto-completes; `PostLoadMapWithWorld` installs the same visual in the player UI root's
