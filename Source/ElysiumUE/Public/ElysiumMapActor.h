@@ -306,7 +306,8 @@ public:
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
 		const FString& ClipName) override;
 	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override;
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds,
+		bool bHoldFinalPose = false) override;
 	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,

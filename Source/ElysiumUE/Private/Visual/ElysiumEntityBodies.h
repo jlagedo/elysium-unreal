@@ -184,7 +184,8 @@ public:
 	// clip already playing, so this answers for one clip rather than for the pair.
 	float ClipFadeSeconds(const FString& Stem, const FString& ClipName) const;
 	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds,
+		bool bHoldFinalPose = false);
 	bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
 		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 	bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,

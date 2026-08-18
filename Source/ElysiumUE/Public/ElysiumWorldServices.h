@@ -258,7 +258,8 @@ public:
 	// Select and play a manifest clip by VtMB ACT_* activity. Ambient interesting-place data is
 	// authored in activities rather than clip labels; Variant makes its weighted pick repeatable.
 	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) { return false; }
+		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds,
+		bool bHoldFinalPose = false) { return false; }
 	// Resolve the same deterministic activity selection without playing it. OutLabel is the NPC
 	// vocabulary key that must go back through PlayNpcClip so the shared-bank owner is preserved;
 	// OutAnimName is the concrete neutral-pose cell whose optional authored speed configures the motor.

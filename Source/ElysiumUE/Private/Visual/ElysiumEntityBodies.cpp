@@ -1516,13 +1516,13 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 }
 
 bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
+	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds, bool bHoldFinalPose)
 {
 	AActor* Owner = GetOwner();
 	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
 	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	const FString Clip = Anims ? Anims->PickActivityClip(Stem, Activity, Variant) : FString();
-	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, bLoop, OutSeconds);
+	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, bLoop, OutSeconds, bHoldFinalPose);
 }
 
 bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,
