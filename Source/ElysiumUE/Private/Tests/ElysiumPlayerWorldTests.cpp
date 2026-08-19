@@ -1109,6 +1109,110 @@ bool FElysiumGenesisExitTest::RunTest(const FString&)
 	return true;
 }
 
+// Retail touch-reconciliation ordering (RE campaign `touchpartition-findings.md` F5-F8; ledger
+// C171/C172; recovered in retail engine.dll/vampire.dll). When a player's trigger containment
+// changes in one reconciliation, the 2004 engine fires the NEW contact's StartTouch synchronously
+// during the move and defers the OLD contact's EndTouch to that frame's post-think untouch pass
+// (`GameFrame` step 4); both outputs land in the same event-queue drain (step 6). So begins are
+// queued BEFORE ends, and with the queue's FIFO tie-break the END edge is the LAST writer of any
+// state both edges touch. `ReconcilePlayerTouches` must reproduce that order — the faithful
+// behaviour, not the current inverted ends-then-begins pass.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTouchReconcileOrderTest,
+	"Elysium.Substrate.TouchReconcileOrder", GElysiumTestFlags)
+bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__touch_reconcile_order__");
+
+	auto AddWire = [](FElysiumEntityDef& Source, const TCHAR* Output,
+		const TCHAR* Target, const TCHAR* Input, const TCHAR* Param)
+	{
+		FElysiumOutputDef Wire;
+		Wire.Name = Output;
+		Wire.Target = Target;
+		Wire.Input = Input;
+		Wire.Param = Param;
+		Wire.Times = -1;
+		Source.Outputs.Add(MoveTemp(Wire));
+	};
+
+	// Two abutting player triggers writing the same counter: the OLD volume's OnEndTouch sets 100,
+	// the NEW volume's OnStartTouch sets 200. Retail order (begin before end) leaves 100 as the final
+	// value because the end edge is queued last; the inverted order leaves 200.
+	FElysiumEntityDef VolumeOld;
+	VolumeOld.Classname = TEXT("trigger_multiple");
+	VolumeOld.TargetName = TEXT("vol_old");
+	VolumeOld.Keys.Add(TEXT("spawnflags"), TEXT("1")); // ALLOW_CLIENTS
+	AddWire(VolumeOld, TEXT("OnEndTouch"), TEXT("counter1"), TEXT("SetValue"), TEXT("100"));
+	Defs.Defs.Add(MoveTemp(VolumeOld));
+
+	FElysiumEntityDef VolumeNew;
+	VolumeNew.Classname = TEXT("trigger_multiple");
+	VolumeNew.TargetName = TEXT("vol_new");
+	VolumeNew.Keys.Add(TEXT("spawnflags"), TEXT("1")); // ALLOW_CLIENTS
+	AddWire(VolumeNew, TEXT("OnStartTouch"), TEXT("counter1"), TEXT("SetValue"), TEXT("200"));
+	Defs.Defs.Add(MoveTemp(VolumeNew));
+
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	FElysiumEntity* VolOld = World.FindByName(TEXT("vol_old"));
+	FElysiumEntity* VolNew = World.FindByName(TEXT("vol_new"));
+	FElysiumEntity* CounterEnt = World.FindByName(TEXT("counter1"));
+	if (!TestNotNull(TEXT("old volume resolved"), VolOld)
+		|| !TestNotNull(TEXT("new volume resolved"), VolNew)
+		|| !TestNotNull(TEXT("counter resolved"), CounterEnt))
+	{
+		return false;
+	}
+	World.Activate(0.0);
+
+	// Seed containment: the player is inside the old volume (its OnStartTouch is unwired, so the seed
+	// produces no output), then drain so the queue is clean before the reconciliation under test.
+	World.RouteBrushTouch(VolOld->Handle, Player, /*bBegin*/ true);
+	World.Tick(0.0);
+
+	auto CounterValue = [&CounterEnt]()
+	{
+		TArray<TPair<FString, FString>> State;
+		CounterEnt->GetDebugState(State);
+		for (const TPair<FString, FString>& Row : State)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.0f;
+	};
+	TestEqual(TEXT("counter unwritten before the reconciliation"), CounterValue(), 0.0f);
+
+	// One reconciliation moves the player from the old volume into the new one: End(old) + Begin(new).
+	TArray<FElysiumEntityHandle> FinalContainment { VolNew->Handle };
+	World.ReconcilePlayerTouches(FinalContainment);
+
+	// The queue now holds exactly the two SetValue events in delivery order (Pending() is sorted by
+	// FireTime then FIFO serial). Retail queues the begin first, so the earliest pending event must be
+	// the NEW volume's StartTouch, and the OLD volume's EndTouch must sit behind it.
+	const TArray<FElysiumIOEvent>& Pending = World.Queue().Pending();
+	if (!TestEqual(TEXT("reconciliation queued exactly the two edge outputs"), Pending.Num(), 2))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the new contact's StartTouch is delivered first (begin before end)"),
+		Pending[0].Caller.Index, VolNew->Handle.Index);
+	TestEqual(TEXT("the old contact's EndTouch is delivered last"),
+		Pending[1].Caller.Index, VolOld->Handle.Index);
+
+	// Draining both: the end edge, queued last, is the final writer — retail leaves 100, not 200.
+	World.Tick(0.0);
+	TestEqual(TEXT("the old contact's OnEndTouch wins as the last writer"), CounterValue(), 100.0f);
+
+	return true;
+}
+
 // =====================================================================================
 // Engine integration for the one part GenesisExit cannot model on a bare entity world:
 // SetActorLocation(..., TeleportPhysics) may synchronously recompute the real hull overlap. The

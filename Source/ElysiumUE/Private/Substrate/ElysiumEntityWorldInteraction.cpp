@@ -144,15 +144,22 @@ void FElysiumEntityWorld::ReconcilePlayerTouches(TConstArrayView<FElysiumEntityH
 			| static_cast<uint32>(Player.Index);
 		return ActiveTouches.Contains(Key);
 	});
-	Ends.Sort();
+	// Begins before ends, reproducing retail's frame order: the engine fires a new contact's
+	// StartTouch synchronously during the move, and defers a stale contact's EndTouch to that frame's
+	// post-think untouch pass — both outputs reach the same event-queue drain, so with the queue's
+	// FIFO tie-break the end edge is the last writer of any shared state (retail engine.dll relink →
+	// `PhysicsMarkEntityAsTouched` StartTouch vs `PhysicsCheckForEntityUntouch` EndTouch;
+	// `docs/vtmb/entity_io.md`). Within each phase the entity-index sort is a deterministic substitute
+	// for retail's spatial (BSP-leaf) enumeration, which no map is known to depend on.
 	Begins.Sort();
-	for (int32 BrushIndex : Ends)
-	{
-		RouteBrushTouch(FElysiumEntityHandle(BrushIndex, Epoch), Player, /*bBegin*/ false);
-	}
+	Ends.Sort();
 	for (int32 BrushIndex : Begins)
 	{
 		RouteBrushTouch(FElysiumEntityHandle(BrushIndex, Epoch), Player, /*bBegin*/ true);
+	}
+	for (int32 BrushIndex : Ends)
+	{
+		RouteBrushTouch(FElysiumEntityHandle(BrushIndex, Epoch), Player, /*bBegin*/ false);
 	}
 }
 
