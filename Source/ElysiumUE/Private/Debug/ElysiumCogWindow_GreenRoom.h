@@ -150,31 +150,46 @@ private:
 	// answers "does this character have cloth at all", which is what the list column is for.
 	TArray<bool> StemHasCloth;
 
-	// The selected model's clip vocabulary, sorted, cached per stem. A well-connected NPC resolves
-	// well over a thousand clips, so this is neither rebuilt nor re-sorted per frame.
-	FString ClipsStem;
-	TArray<FString> Clips;
-	// Parallel to Clips — the cell a blend-grid label actually plays, or empty when the label names
-	// one animation. A grid resolves to a cell that is NOT in the vocabulary, so without this the
-	// list would show `walk` and stand something whose name appears nowhere on screen. Built once per
-	// stem beside the vocabulary rather than per frame per row.
-	TArray<FString> ClipCells;
-	// Parallel to Clips — whether the label is an additive layer rather than a pose. Read off the
-	// vocabulary once per stem, because the answer changes what a broken-looking body means.
-	TArray<bool> ClipAdditive;
-	// Parallel to Clips — whether the label is a masked partial-body overlay, the other kind of
-	// autolayer. Taken from the NAME, unlike ClipAdditive: the mask that actually decides this lives
-	// in the container and reaches the runtime on the baked sequence, and the vocabulary sidecar the
-	// list is built from carries neither. It is a row hint, not the decision — the pick still goes
-	// through the same door as everything else and a wrong hint comes back as a refusal on screen.
-	TArray<bool> ClipOverlay;
-	// Parallel to Clips — the stem whose file carries the animation: the body itself for its own
-	// dialogue clips, a shared bank otherwise. A body resolves most of its vocabulary through banks
-	// it has nothing else to do with, and which file a clip came out of is the first thing worth
-	// knowing when one of them looks wrong.
-	TArray<FString> ClipOwner;
+	// One row of the selected model's clip vocabulary — one struct rather than parallel arrays, so
+	// a label can never drift apart from the facts the list draws beside it.
+	struct FClipRow
+	{
+		// The vocabulary label the pick resolves.
+		FString Label;
+		// The cell a blend-grid label actually plays, or empty when the label names one animation.
+		// A grid resolves to a cell that is NOT in the vocabulary, so without this the list would
+		// show `walk` and stand something whose name appears nowhere on screen.
+		FString Cell;
+		// The stem whose file carries the animation: empty for the body's own clips, a shared bank
+		// otherwise. A body resolves most of its vocabulary through banks it has nothing else to do
+		// with, and which file a clip came out of is the first thing worth knowing when one of them
+		// looks wrong.
+		FString Owner;
+		// 0 unknown, 1 the clip moves Bip01, 2 it holds it. VtMB's vocabulary does not record this
+		// and only the resolved sequence can answer it, so it is filled by ScanRootMotion rather
+		// than on load -- resolving a whole vocabulary is hundreds of package loads.
+		uint8 RootMotion = 0;
+		// Whether the label is an additive layer rather than a pose. Read off the vocabulary,
+		// because the answer changes what a broken-looking body means.
+		bool bAdditive = false;
+		// Whether the label is a masked partial-body overlay, the other kind of autolayer. Taken
+		// from the NAME, unlike bAdditive: the mask that actually decides this lives in the
+		// container and reaches the runtime on the baked sequence, and the vocabulary sidecar the
+		// list is built from carries neither. It is a row hint, not the decision — the pick still
+		// goes through the same door as everything else and a wrong hint comes back as a refusal
+		// on screen.
+		bool bOverlay = false;
+	};
 
-	// Row index of the clip the keyboard is on, into Clips. Arrow keys move it and stand what they
+	// The selected model's clip vocabulary, sorted by label, cached per stem. A well-connected NPC
+	// resolves well over a thousand clips, so this is neither rebuilt nor re-sorted per frame.
+	FString ClipsStem;
+	TArray<FClipRow> ClipRows;
+	// Rebuilds the vocabulary cache for PendingStem, along with the distinct-owner list, and resets
+	// everything keyed to the previous stem — the filters, the cursor and the root-motion scan.
+	void RebuildClipCache();
+
+	// Row index of the clip the keyboard is on, into ClipRows. Arrow keys move it and stand what they
 	// land on, so a vocabulary can be walked without the mouse.
 	int32 ClipCursor = INDEX_NONE;
 	// Retail's `layer_weight` for the next layer picked, and for the one already running — the
@@ -201,11 +216,8 @@ private:
 	int32 KindFilter = 0;       // 1 = poses only, 2 = autolayers only (either kind)
 	int32 MotionFilter = 0;     // 1 = carries the root, 2 = root held. Needs the scan below.
 
-	// Parallel to Clips: 0 unknown, 1 the clip moves Bip01, 2 it holds it. VtMB's vocabulary does
-	// not record this and only the resolved sequence can answer it, so it is filled by an explicit
-	// scan rather than on load -- resolving a whole vocabulary is hundreds of package loads.
-	TArray<uint8> ClipRootMotion;
-	// Which stem ClipRootMotion belongs to, so a different body discards it rather than mislabels.
+	// Which stem the rows' RootMotion answers belong to, so a different body discards them rather
+	// than mislabels.
 	FString ScannedStem;
 
 	void ScanRootMotion(FElysiumGreenRoomRun& Lab);

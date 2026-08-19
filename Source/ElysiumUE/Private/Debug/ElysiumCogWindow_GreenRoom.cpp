@@ -13,7 +13,6 @@
 #include "ElysiumPlayerBody.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumEntityBodies.h"
-#include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "ChaosClothAsset/ClothAsset.h"
 #include "ChaosClothAsset/ClothAssetInteractor.h"
@@ -205,31 +204,31 @@ void FElysiumCogWindow_GreenRoom::Stand(FElysiumGreenRoomRun& Lab, const FString
 
 void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 {
-	if (!Clips.IsValidIndex(Index))
+	if (!ClipRows.IsValidIndex(Index))
 	{
 		return;
 	}
+	const FClipRow& Row = ClipRows[Index];
 	bUserPicked = true;
 	ClipCursor = Index;
-	const bool bLayerRow = (ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index])
-		|| (ClipOverlay.IsValidIndex(Index) && ClipOverlay[Index]);
+	const bool bLayerRow = Row.bAdditive || Row.bOverlay;
 	if (!bLayerRow)
 	{
-		PendingClip = Clips[Index];
+		PendingClip = Row.Label;
 		// A grid row stands the whole fan when there is a baked blend space for it, and the single
 		// resolved cell when there is not. The cell is a fallback rather than an error path: a label
 		// with no baked fan must still stand something.
-		const bool bGridRow = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
+		const bool bGridRow = !Row.Cell.IsEmpty();
 		LastError.Reset();
 		LastNotice.Reset();
 		if (bGridRow)
 		{
 			FString GridError;
-			if (Lab.LabSetGrid(Clips[Index], GridError))
+			if (Lab.LabSetGrid(Row.Label, GridError))
 			{
 				const FElysiumResolvedGrid& Grid = Lab.LabGrid();
 				LastNotice = FString::Printf(TEXT("blending %s across %d cells on %s (%s)"),
-					*Clips[Index], Grid.Space->GetBlendSamples().Num(), *Grid.AxisName[0],
+					*Row.Label, Grid.Space->GetBlendSamples().Num(), *Grid.AxisName[0],
 					*Lab.LabGridArmed());
 				return;
 			}
@@ -242,11 +241,11 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 				return;
 			}
 		}
-		Stand(Lab, PendingStem, Clips[Index]);
+		Stand(Lab, PendingStem, Row.Label);
 		if (bGridRow && LastError.IsEmpty())
 		{
 			LastNotice = FString::Printf(TEXT("%s: playing the resolved cell '%s' — no blend space"),
-				*Clips[Index], *ClipCells[Index]);
+				*Row.Label, *Row.Cell);
 		}
 		return;
 	}
@@ -255,12 +254,12 @@ void FElysiumCogWindow_GreenRoom::Pick(FElysiumGreenRoomRun& Lab, int32 Index)
 	// the field that Restand reads.
 	LastError.Reset();
 	LastNotice.Reset();
-	if (!Lab.LabSetLayer(Clips[Index], LayerWeight, LastError))
+	if (!Lab.LabSetLayer(Row.Label, LayerWeight, LastError))
 	{
 		return;
 	}
 	LastNotice = FString::Printf(TEXT("layering %s over %s (%s)"),
-		*Clips[Index], *Lab.LabClip(), *Lab.LabLayerArmed());
+		*Row.Label, *Lab.LabClip(), *Lab.LabLayerArmed());
 }
 
 void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
@@ -305,7 +304,10 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 
 void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 {
-	ClipRootMotion.Reset();
+	for (FClipRow& Row : ClipRows)
+	{
+		Row.RootMotion = 0;
+	}
 	ScannedStem.Reset();
 
 	const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
@@ -319,14 +321,13 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 	}
 
 	static const FName RootBone(TEXT("Bip01"));
-	ClipRootMotion.SetNumZeroed(Clips.Num());
 	int32 Moving = 0;
-	for (int32 Index = 0; Index < Clips.Num(); ++Index)
+	for (FClipRow& Row : ClipRows)
 	{
 		FString Error;
 		// A baked sequence is addressed by owner and animation name off the standing mesh's own rig
 		// family.
-		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Clips[Index], Mesh, Error);
+		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Row.Label, Mesh, Error);
 		FTransform Start;
 		FTransform End;
 		const float Length = Sequence != nullptr ? Sequence->GetPlayLength() : 0.0f;
@@ -337,11 +338,11 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 		}
 		const bool bMoves = FVector::Dist(Start.GetTranslation(), End.GetTranslation()) > 0.5
 			|| FMath::RadiansToDegrees(Start.GetRotation().AngularDistance(End.GetRotation())) > 0.5;
-		ClipRootMotion[Index] = bMoves ? 1 : 2;
+		Row.RootMotion = bMoves ? 1 : 2;
 		Moving += bMoves ? 1 : 0;
 	}
 	ScannedStem = PendingStem;
-	LastNotice = FString::Printf(TEXT("%d of %d clips carry the root"), Moving, Clips.Num());
+	LastNotice = FString::Printf(TEXT("%d of %d clips carry the root"), Moving, ClipRows.Num());
 }
 
 void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
@@ -454,6 +455,54 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 
 }
 
+void FElysiumCogWindow_GreenRoom::RebuildClipCache()
+{
+	ClipRows.Reset();
+	ClipOwners.Reset();
+	ScannedStem.Reset();
+	OwnerFilter.Reset();
+	ClipCursor = INDEX_NONE;
+	ClipsStem = PendingStem;
+	const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
+	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	if (const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(PendingStem) : nullptr)
+	{
+		TArray<FString> Labels;
+		Set->Clips.GetKeys(Labels);
+		Labels.Sort();
+		// Which of these labels is really a fan of animations. A grid collapsed to a cell is the
+		// one thing in this window that changes what plays without changing what was asked for,
+		// so it is named on screen rather than left to the log.
+		ClipRows.Reserve(Labels.Num());
+		for (const FString& Label : Labels)
+		{
+			FClipRow& Row = ClipRows.AddDefaulted_GetRef();
+			Row.Label = Label;
+			const FString Cell = Anims->ResolveClipAnimName(PendingStem, Label);
+			Row.Cell = Cell.Equals(Label, ESearchCase::IgnoreCase) ? FString() : Cell;
+			const FElysiumNpcClip* Clip = Set->Find(Label);
+			const bool bAdditiveClip = Clip != nullptr && Clip->IsAdditive();
+			Row.bAdditive = bAdditiveClip;
+			Row.bOverlay = !bAdditiveClip && Label.EndsWith(TEXT("_layer"));
+			Row.Owner = Clip != nullptr && !Clip->IsOwnedBy(PendingStem)
+				? Clip->Owner : FString();
+		}
+		ClipOwners.Reserve(ClipRows.Num());
+		for (const FClipRow& Row : ClipRows)
+		{
+			ClipOwners.Add(Row.Owner);
+		}
+		ClipOwners.Sort();
+		ClipOwners.SetNum(Algo::Unique(ClipOwners));
+		// The body's own file sorts as the empty string; name it, so the list reads as a set of
+		// sources rather than as one blank row among thirty banks.
+		if (!ClipOwners.IsEmpty() && ClipOwners[0].IsEmpty())
+		{
+			ClipOwners[0] = PendingStem;
+		}
+	}
+}
+
 void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 {
 	// --- clips --------------------------------------------------------------------------------
@@ -464,55 +513,11 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 	}
 	if (ClipsStem != PendingStem)
 	{
-		Clips.Reset();
-		ClipCells.Reset();
-		ClipAdditive.Reset();
-		ClipOverlay.Reset();
-		ClipOwner.Reset();
-		ClipOwners.Reset();
-		ClipRootMotion.Reset();
-		ScannedStem.Reset();
-		OwnerFilter.Reset();
-		ClipCursor = INDEX_NONE;
-		ClipsStem = PendingStem;
-		const UGameInstance* GI = GetMapSubsystem() ? GetMapSubsystem()->GetGameInstance() : nullptr;
-		UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-		if (const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(PendingStem) : nullptr)
-		{
-			Set->Clips.GetKeys(Clips);
-			Clips.Sort();
-			// Which of these labels is really a fan of animations. A grid collapsed to a cell is the
-			// one thing in this window that changes what plays without changing what was asked for,
-			// so it is named on screen rather than left to the log.
-			ClipCells.Reserve(Clips.Num());
-			ClipAdditive.Reserve(Clips.Num());
-			ClipOverlay.Reserve(Clips.Num());
-			ClipOwner.Reserve(Clips.Num());
-			for (const FString& Label : Clips)
-			{
-				const FString Cell = Anims->ResolveClipAnimName(PendingStem, Label);
-				ClipCells.Add(Cell.Equals(Label, ESearchCase::IgnoreCase) ? FString() : Cell);
-				const FElysiumNpcClip* Clip = Set->Find(Label);
-				const bool bAdditiveClip = Clip != nullptr && Clip->IsAdditive();
-				ClipAdditive.Add(bAdditiveClip);
-				ClipOverlay.Add(!bAdditiveClip && Label.EndsWith(TEXT("_layer")));
-				ClipOwner.Add(Clip != nullptr && !Clip->IsOwnedBy(PendingStem)
-					? Clip->Owner : FString());
-			}
-			ClipOwners = ClipOwner;
-			ClipOwners.Sort();
-			ClipOwners.SetNum(Algo::Unique(ClipOwners));
-			// The body's own file sorts as the empty string; name it, so the list reads as a set of
-			// sources rather than as one blank row among thirty banks.
-			if (!ClipOwners.IsEmpty() && ClipOwners[0].IsEmpty())
-			{
-				ClipOwners[0] = PendingStem;
-			}
-		}
+		RebuildClipCache();
 	}
 
 	ImGui::SeparatorText(COG_TCHAR_TO_CHAR(
-		*FString::Printf(TEXT("Clips in %s (%d)"), *PendingStem, Clips.Num())));
+		*FString::Printf(TEXT("Clips in %s (%d)"), *PendingStem, ClipRows.Num())));
 	const float ButtonWidth = ImGui::CalcTextSize("Rescan").x
 		+ ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x;
 	const float FieldWidth = FMath::Max(GetDpiScale() * 120.0f,
@@ -520,7 +525,7 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 
 	ImGui::SetNextItemWidth(FieldWidth);
 	FCogWidgets::InputTextWithHint("##ClipFilter", "(filter - try 'walk' or 'Stance')", ClipFilter);
-	if (Clips.IsEmpty())
+	if (ClipRows.IsEmpty())
 	{
 		ImGui::TextDisabled("No clip vocabulary - npc/clips/%s.json is missing.",
 			COG_TCHAR_TO_CHAR(*PendingStem));
@@ -570,22 +575,22 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 	}
 
 	// The rows the filters leave, in order. Built before the list is drawn because the arrow keys
-	// have to step through what is on screen -- stepping through Clips itself would jump over
+	// have to step through what is on screen -- stepping through ClipRows itself would jump over
 	// filtered-out rows and stand something the list is not showing.
 	TArray<int32> Visible;
-	Visible.Reserve(Clips.Num());
-	for (int32 Index = 0; Index < Clips.Num(); ++Index)
+	Visible.Reserve(ClipRows.Num());
+	for (int32 Index = 0; Index < ClipRows.Num(); ++Index)
 	{
-		if (!ClipFilter.IsEmpty() && !Clips[Index].Contains(ClipFilter))
+		const FClipRow& Row = ClipRows[Index];
+		if (!ClipFilter.IsEmpty() && !Row.Label.Contains(ClipFilter))
 		{
 			continue;
 		}
 		if (!OwnerFilter.IsEmpty())
 		{
-			const FString& Source = ClipOwner.IsValidIndex(Index) ? ClipOwner[Index] : FString();
 			// The body's own clips carry an empty owner and are listed under the model's name.
-			const bool bMine = Source.IsEmpty() && OwnerFilter == PendingStem;
-			if (!bMine && Source != OwnerFilter)
+			const bool bMine = Row.Owner.IsEmpty() && OwnerFilter == PendingStem;
+			if (!bMine && Row.Owner != OwnerFilter)
 			{
 				continue;
 			}
@@ -594,8 +599,7 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 		{
 			// Both kinds of autolayer sit on the same side of this filter: what it separates is
 			// "picking this stands the body" from "picking this composes over the body".
-			const bool bLayer = (ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index])
-				|| (ClipOverlay.IsValidIndex(Index) && ClipOverlay[Index]);
+			const bool bLayer = Row.bAdditive || Row.bOverlay;
 			if (bLayer != (KindFilter == 2))
 			{
 				continue;
@@ -603,8 +607,7 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 		}
 		if (MotionFilter != 0)
 		{
-			const uint8 Motion = ClipRootMotion.IsValidIndex(Index) ? ClipRootMotion[Index] : 0;
-			if (Motion != (MotionFilter == 1 ? 1 : 2))
+			if (Row.RootMotion != (MotionFilter == 1 ? 1 : 2))
 			{
 				continue;
 			}
@@ -615,7 +618,8 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 	{
 		// The cursor follows the standing clip, and falls to the first visible row when the filter
 		// moves out from under it.
-		const int32 Standing = Clips.IndexOfByKey(PendingClip);
+		const int32 Standing = ClipRows.IndexOfByPredicate(
+			[this](const FClipRow& Row) { return Row.Label == PendingClip; });
 		ClipCursor = Visible.Contains(Standing) ? Standing
 			: (Visible.IsEmpty() ? INDEX_NONE : Visible[0]);
 	}
@@ -646,40 +650,38 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 	ImGui::BeginChild("##Clips", ImVec2(0, GetDpiScale() * 140.f), ImGuiChildFlags_Borders);
 	for (const int32 Index : Visible)
 	{
-		const bool bGrid = ClipCells.IsValidIndex(Index) && !ClipCells[Index].IsEmpty();
-		const bool bAdditive = ClipAdditive.IsValidIndex(Index) && ClipAdditive[Index];
-		const bool bOverlay = ClipOverlay.IsValidIndex(Index) && ClipOverlay[Index];
-		const FString Bank = ClipOwner.IsValidIndex(Index) ? ClipOwner[Index] : FString();
+		const FClipRow& Clip = ClipRows[Index];
+		const bool bGrid = !Clip.Cell.IsEmpty();
 		ImGui::PushID(Index);
 		FString Row = bGrid
-			? FString::Printf(TEXT("%s  -> %s"), *Clips[Index], *ClipCells[Index])
-			: Clips[Index];
-		if (bAdditive || bOverlay)
+			? FString::Printf(TEXT("%s  -> %s"), *Clip.Label, *Clip.Cell)
+			: Clip.Label;
+		if (Clip.bAdditive || Clip.bOverlay)
 		{
 			// Named on the row, not hidden from the list: picking one composes it over the body
 			// rather than standing it, and saying which rows do that is what stops the layer from
 			// reading as a clip that did nothing. The two kinds are named apart because they fail
 			// apart — a delta over the wrong base is anatomical nonsense, an overlay under no mask
 			// is a body with no legs.
-			Row += bAdditive ? TEXT("   [additive layer]") : TEXT("   [overlay layer]");
+			Row += Clip.bAdditive ? TEXT("   [additive layer]") : TEXT("   [overlay layer]");
 			ImGui::PushStyleColor(ImGuiCol_Text, ElysiumCogStyle::ColName);
 		}
 		if (ImGui::Selectable(COG_TCHAR_TO_CHAR(*Row),
-			ClipCursor == Index || PendingClip == Clips[Index]))
+			ClipCursor == Index || PendingClip == Clip.Label))
 		{
 			Pick(Lab, Index);
 		}
-		if (bAdditive || bOverlay)
+		if (Clip.bAdditive || Clip.bOverlay)
 		{
 			ImGui::PopStyleColor();
 		}
-		if (!Bank.IsEmpty())
+		if (!Clip.Owner.IsEmpty())
 		{
 			// Right-aligned so the labels stay readable down the left edge; a body's own clips are
 			// left blank rather than repeating the model's name on hundreds of rows.
-			const float Width = ImGui::CalcTextSize(COG_TCHAR_TO_CHAR(*Bank)).x;
+			const float Width = ImGui::CalcTextSize(COG_TCHAR_TO_CHAR(*Clip.Owner)).x;
 			ImGui::SameLine(ImGui::GetContentRegionAvail().x - Width);
-			ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Bank));
+			ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Clip.Owner));
 		}
 		if (bClipCursorMoved && ClipCursor == Index)
 		{
