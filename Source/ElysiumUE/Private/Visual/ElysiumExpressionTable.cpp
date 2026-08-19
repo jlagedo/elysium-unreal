@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 
 #include "HAL/FileManager.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/ScopeLock.h"
 
@@ -329,3 +330,61 @@ void ElysiumExpressions::CacheStats(int32& OutEntries, int32& OutHits, int32& Ou
 	OutHits = GCacheHits;
 	OutMisses = GCacheMisses;
 }
+
+// --- elysium.expression -------------------------------------------------------------------------
+//
+// The expression reader's own verb, in the role `elysium.scene parse` plays for the `.vcd` reader:
+// resolve a scene's `param`/`param2` the way the runtime resolves it, before asking a face to move.
+// No world and no map, so it works over the whole 249-file corpus.
+
+static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumExpressionCmd(
+	TEXT("elysium.expression"),
+	TEXT("Faceposer weight tables: `elysium.expression <param>` lists a table's rows, "
+	     "`<param> <row>` dumps one row's controller weights."),
+	FConsoleCommandWithArgsAndOutputDeviceDelegate::CreateStatic(
+		[](const TArray<FString>& Args, FOutputDevice& Ar)
+		{
+			if (Args.Num() < 1)
+			{
+				int32 Entries = 0, Hits = 0, Misses = 0;
+				ElysiumExpressions::CacheStats(Entries, Hits, Misses);
+				Ar.Logf(TEXT("expression tables under %s; cache: %d entries, %d hits, %d misses"),
+					*FElysiumContentPaths::ExpressionsDir(), Entries, Hits, Misses);
+				return;
+			}
+			TSharedPtr<const FElysiumExpressionTable> Table =
+				ElysiumExpressions::Load(Args[0], ElysiumExpressions::ExpressionClass);
+			if (!Table.IsValid())
+			{
+				Ar.Logf(ELogVerbosity::Warning, TEXT("'%s' resolves to no table under %s"),
+					*Args[0], *FElysiumContentPaths::ExpressionsDir());
+				return;
+			}
+			Ar.Logf(TEXT("%s: %d key(s), %d row(s)%s%s"), *Table->Stem, Table->Keys.Num(),
+				Table->Rows.Num(), Table->bHasWeighting ? TEXT(", $hasweighting") : TEXT(""),
+				Table->NumMalformedRows > 0
+					? *FString::Printf(TEXT(", %d malformed row(s) dropped"), Table->NumMalformedRows) : TEXT(""));
+
+			if (Args.Num() < 2)
+			{
+				for (const FElysiumExpressionRow& Row : Table->Rows)
+				{
+					Ar.Logf(TEXT("    \"%s\"  %s"), *Row.Name, *Row.Description);
+				}
+				return;
+			}
+			const int32 Index = Table->FindRow(Args[1]);
+			if (Index == INDEX_NONE)
+			{
+				Ar.Logf(ELogVerbosity::Warning, TEXT("no row named '%s' in %s"), *Args[1], *Table->Stem);
+				return;
+			}
+			const FElysiumExpressionRow& Row = Table->Rows[Index];
+			Ar.Logf(TEXT("  row \"%s\" (%s)  %s"), *Row.Name, *Row.Class, *Row.Description);
+			for (int32 k = 0; k < Table->Keys.Num(); ++k)
+			{
+				// A key at influence 0 is one this row does not participate in; printed anyway, so
+				// what the row leaves alone is as visible as what it writes.
+				Ar.Logf(TEXT("    %-24s %.3f  x%.3f"), *Table->Keys[k], Row.Values[k], Row.Weights[k]);
+			}
+		}));

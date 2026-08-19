@@ -83,6 +83,12 @@ struct FElysiumExpressionTable
 
 namespace ElysiumExpressions
 {
+	// The expression half's `Class` for `Load` — the class half of `client.dll`'s
+	// `"expressions/%s_%s.vfe"` (FUN_100C42F0 supplies "phonemes" for the lipsync half,
+	// `ElysiumLip::PhonemeClass`). Only reached when a `param` names a bare model stem rather than
+	// the table itself — 4 of the 23 authored params do.
+	inline constexpr const TCHAR* ExpressionClass = TEXT("expressions");
+
 	// Resolve an `expression` event's `param` to a table, through a shared cache keyed on the
 	// resolved stem.
 	//

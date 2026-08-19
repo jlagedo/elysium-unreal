@@ -175,14 +175,6 @@ namespace
 		TEXT("Time constant (seconds) the jaw lags its target by; 0 steps at the span boundary."),
 		ECVF_Default);
 
-	// The class half of `client.dll`'s `"expressions/%s_%s.vfe"` (FUN_100C42F0 supplies "phonemes"
-	// for the lipsync half). Only reached when an event's `param` names a bare model stem rather than
-	// the table itself — 4 of the 23 authored params do.
-	const TCHAR* const GExpressionClass = TEXT("expressions");
-
-	// The lipsync half of the same pair, straight from FUN_100C42F0.
-	const TCHAR* const GPhonemeClass = TEXT("phonemes");
-
 	// Subclass-member field accessor. Deliberately file-local rather than the shared
 	// ElysiumAddClassField (Substrate/ElysiumClassFields.h): its bool setter keeps Python
 	// truthiness for non-string variants, where the shared template always coerces via ToInt.
@@ -1368,7 +1360,7 @@ public:
 			return;
 		}
 		FLiveExpression Live;
-		Live.Table = ElysiumExpressions::Load(Event.Param, GExpressionClass);
+		Live.Table = ElysiumExpressions::Load(Event.Param, ElysiumExpressions::ExpressionClass);
 		Live.Row = Live.Table.IsValid() ? Live.Table->FindRow(Event.Param2) : INDEX_NONE;
 		if (Live.Row == INDEX_NONE)
 		{
@@ -1670,14 +1662,14 @@ public:
 		const FString Stem = FPaths::GetBaseFilename(Actor->Model).ToLower();
 		if (!Stem.IsEmpty())
 		{
-			Binding.Table = ElysiumExpressions::Load(Stem, GPhonemeClass);
+			Binding.Table = ElysiumExpressions::Load(Stem, ElysiumLip::PhonemeClass);
 		}
 		// `phonemes` / `phonemes_male` are the fallbacks client.dll names literally. Every rigged
 		// character in the shipped cast carries its own table, so this is reached only by a model
 		// whose stem has none.
 		if (!Binding.Table.IsValid())
 		{
-			Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), GPhonemeClass);
+			Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), ElysiumLip::PhonemeClass);
 		}
 		// The blend width is this speaker's own `studiohdr` +232/+236 pair, read off its rig. A body
 		// with no rig keeps the binding's modal default, which is what sp_theatre's three speakers
@@ -2133,137 +2125,6 @@ static void DumpSceneData(const FElysiumSceneData& S, FOutputDevice& Ar)
 		Ar.Logf(TEXT("    (%d degenerate time range(s) clamped)"), S.NumDegenerate);
 	}
 }
-
-// --- elysium.expression -------------------------------------------------------------------------
-//
-// The expression reader's own verb, in the role `elysium.scene parse` plays for the `.vcd` reader:
-// resolve a scene's `param`/`param2` the way the runtime resolves it, before asking a face to move.
-// No world and no map, so it works over the whole 249-file corpus.
-
-static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumExpressionCmd(
-	TEXT("elysium.expression"),
-	TEXT("Faceposer weight tables: `elysium.expression <param>` lists a table's rows, "
-	     "`<param> <row>` dumps one row's controller weights."),
-	FConsoleCommandWithArgsAndOutputDeviceDelegate::CreateStatic(
-		[](const TArray<FString>& Args, FOutputDevice& Ar)
-		{
-			if (Args.Num() < 1)
-			{
-				int32 Entries = 0, Hits = 0, Misses = 0;
-				ElysiumExpressions::CacheStats(Entries, Hits, Misses);
-				Ar.Logf(TEXT("expression tables under %s; cache: %d entries, %d hits, %d misses"),
-					*FElysiumContentPaths::ExpressionsDir(), Entries, Hits, Misses);
-				return;
-			}
-			TSharedPtr<const FElysiumExpressionTable> Table =
-				ElysiumExpressions::Load(Args[0], GExpressionClass);
-			if (!Table.IsValid())
-			{
-				Ar.Logf(ELogVerbosity::Warning, TEXT("'%s' resolves to no table under %s"),
-					*Args[0], *FElysiumContentPaths::ExpressionsDir());
-				return;
-			}
-			Ar.Logf(TEXT("%s: %d key(s), %d row(s)%s%s"), *Table->Stem, Table->Keys.Num(),
-				Table->Rows.Num(), Table->bHasWeighting ? TEXT(", $hasweighting") : TEXT(""),
-				Table->NumMalformedRows > 0
-					? *FString::Printf(TEXT(", %d malformed row(s) dropped"), Table->NumMalformedRows) : TEXT(""));
-
-			if (Args.Num() < 2)
-			{
-				for (const FElysiumExpressionRow& Row : Table->Rows)
-				{
-					Ar.Logf(TEXT("    \"%s\"  %s"), *Row.Name, *Row.Description);
-				}
-				return;
-			}
-			const int32 Index = Table->FindRow(Args[1]);
-			if (Index == INDEX_NONE)
-			{
-				Ar.Logf(ELogVerbosity::Warning, TEXT("no row named '%s' in %s"), *Args[1], *Table->Stem);
-				return;
-			}
-			const FElysiumExpressionRow& Row = Table->Rows[Index];
-			Ar.Logf(TEXT("  row \"%s\" (%s)  %s"), *Row.Name, *Row.Class, *Row.Description);
-			for (int32 k = 0; k < Table->Keys.Num(); ++k)
-			{
-				// A key at influence 0 is one this row does not participate in; printed anyway, so
-				// what the row leaves alone is as visible as what it writes.
-				Ar.Logf(TEXT("    %-24s %.3f  x%.3f"), *Table->Keys[k], Row.Values[k], Row.Weights[k]);
-			}
-		}));
-
-// The corpus-facing half of the lipsync join, needing no world: read a line's `.lip` off disk and,
-// with a model stem, show what its phonemes resolve to on that face.
-static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumLipCmd(
-	TEXT("elysium.lip"),
-	TEXT("Lipsync: `elysium.lip <line path>` dumps a .lip's words and phonemes, "
-	     "`<line path> <model stem>` also resolves each phoneme against that model's phoneme table, "
-	     "`cache [clear]` reports the parse cache."),
-	FConsoleCommandWithArgsAndOutputDeviceDelegate::CreateStatic(
-		[](const TArray<FString>& Args, FOutputDevice& Ar)
-		{
-			if (Args.Num() >= 1 && Args[0].Equals(TEXT("cache"), ESearchCase::IgnoreCase))
-			{
-				if (Args.Num() >= 2 && Args[1].Equals(TEXT("clear"), ESearchCase::IgnoreCase))
-				{
-					ElysiumLip::ClearCache();
-					Ar.Logf(TEXT("lip cache cleared"));
-					return;
-				}
-				int32 Entries = 0, Hits = 0, Misses = 0;
-				ElysiumLip::CacheStats(Entries, Hits, Misses);
-				Ar.Logf(TEXT("lip tracks under %s; cache: %d entries, %d hits, %d misses"),
-					*FElysiumContentPaths::LipDir(), Entries, Hits, Misses);
-				return;
-			}
-			if (Args.Num() < 1)
-			{
-				Ar.Logf(TEXT("usage: elysium.lip <line path> [model stem] | cache [clear]"));
-				return;
-			}
-
-			const FString Rel = ElysiumLip::NormalizeLipRel(Args[0]);
-			TSharedPtr<const FElysiumLipTrack> Track = ElysiumLip::Load(Args[0]);
-			if (!Track.IsValid())
-			{
-				Ar.Logf(ELogVerbosity::Warning, TEXT("no usable .lip at %s"),
-					*FElysiumContentPaths::LipFile(Rel));
-				return;
-			}
-			Ar.Logf(TEXT("%s: version %s, %d word(s), %d phoneme(s), %.3fs%s%s"),
-				*Rel, *Track->Version, Track->Words.Num(), Track->NumPhonemes(), Track->LatestTime,
-				Track->SpeakerName.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", %s"), *Track->SpeakerName),
-				Track->NumMalformedRows > 0
-					? *FString::Printf(TEXT(", %d malformed row(s) dropped"), Track->NumMalformedRows) : TEXT(""));
-
-			// With a stem, the join is shown end to end: code -> row -> the controllers it writes.
-			TSharedPtr<const FElysiumExpressionTable> Table = Args.Num() >= 2
-				? ElysiumExpressions::Load(Args[1], GPhonemeClass) : nullptr;
-			if (Args.Num() >= 2 && !Table.IsValid())
-			{
-				Ar.Logf(ELogVerbosity::Warning, TEXT("'%s' resolves to no phoneme table"), *Args[1]);
-			}
-
-			for (const FElysiumLipWord& Word : Track->Words)
-			{
-				Ar.Logf(TEXT("  %-20s %.3f  %.3f"), *Word.Text, Word.Start, Word.End);
-				for (const FElysiumLipPhoneme& P : Word.Phonemes)
-				{
-					FString Resolved;
-					if (Table.IsValid())
-					{
-						const int32 Row = Table->FindRowByPhonemeCode(P.Code);
-						// The string is printed beside the row it actually reaches, because the two
-						// disagree far more often than not.
-						Resolved = Row != INDEX_NONE
-							? FString::Printf(TEXT("  -> \"%s\""), *Table->Rows[Row].Name)
-							: FString(TEXT("  -> (no row)"));
-					}
-					Ar.Logf(TEXT("      %-5d %-6s %.3f  %.3f%s"),
-						P.Code, *P.Phoneme, P.Start, P.End, *Resolved);
-				}
-			}
-		}));
 
 static FAutoConsoleCommandWithWorldArgsAndOutputDevice GElysiumSceneCmd(
 	TEXT("elysium.scene"),

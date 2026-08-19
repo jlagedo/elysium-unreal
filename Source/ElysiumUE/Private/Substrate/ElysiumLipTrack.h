@@ -130,6 +130,11 @@ struct FElysiumLipSyncBinding
 
 namespace ElysiumLip
 {
+	// The lipsync half's `Class` for `ElysiumExpressions::Load` — the class half of `client.dll`'s
+	// `"expressions/%s_%s.vfe"`, straight from FUN_100C42F0 (the expression half is
+	// `ElysiumExpressions::ExpressionClass`).
+	inline constexpr const TCHAR* PhonemeClass = TEXT("phonemes");
+
 	// A `speak` event's `param` (or a dialogue line's source path) -> the mirror-relative `.lip` key.
 	// Identical folding to `ElysiumScene::NormalizeSceneRel` — both mirrors strip the same `sound/`
 	// prefix — with the extension swapped for `.lip`.

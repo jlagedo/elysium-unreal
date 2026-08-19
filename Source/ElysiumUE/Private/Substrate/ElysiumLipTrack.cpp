@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "Substrate/ElysiumSceneData.h"
 
+#include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeLock.h"
@@ -470,3 +471,76 @@ void ElysiumLip::CacheStats(int32& OutEntries, int32& OutHits, int32& OutMisses)
 	OutHits = GLipCacheHits;
 	OutMisses = GLipCacheMisses;
 }
+
+// The corpus-facing half of the lipsync join, needing no world: read a line's `.lip` off disk and,
+// with a model stem, show what its phonemes resolve to on that face.
+static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumLipCmd(
+	TEXT("elysium.lip"),
+	TEXT("Lipsync: `elysium.lip <line path>` dumps a .lip's words and phonemes, "
+	     "`<line path> <model stem>` also resolves each phoneme against that model's phoneme table, "
+	     "`cache [clear]` reports the parse cache."),
+	FConsoleCommandWithArgsAndOutputDeviceDelegate::CreateStatic(
+		[](const TArray<FString>& Args, FOutputDevice& Ar)
+		{
+			if (Args.Num() >= 1 && Args[0].Equals(TEXT("cache"), ESearchCase::IgnoreCase))
+			{
+				if (Args.Num() >= 2 && Args[1].Equals(TEXT("clear"), ESearchCase::IgnoreCase))
+				{
+					ElysiumLip::ClearCache();
+					Ar.Logf(TEXT("lip cache cleared"));
+					return;
+				}
+				int32 Entries = 0, Hits = 0, Misses = 0;
+				ElysiumLip::CacheStats(Entries, Hits, Misses);
+				Ar.Logf(TEXT("lip tracks under %s; cache: %d entries, %d hits, %d misses"),
+					*FElysiumContentPaths::LipDir(), Entries, Hits, Misses);
+				return;
+			}
+			if (Args.Num() < 1)
+			{
+				Ar.Logf(TEXT("usage: elysium.lip <line path> [model stem] | cache [clear]"));
+				return;
+			}
+
+			const FString Rel = ElysiumLip::NormalizeLipRel(Args[0]);
+			TSharedPtr<const FElysiumLipTrack> Track = ElysiumLip::Load(Args[0]);
+			if (!Track.IsValid())
+			{
+				Ar.Logf(ELogVerbosity::Warning, TEXT("no usable .lip at %s"),
+					*FElysiumContentPaths::LipFile(Rel));
+				return;
+			}
+			Ar.Logf(TEXT("%s: version %s, %d word(s), %d phoneme(s), %.3fs%s%s"),
+				*Rel, *Track->Version, Track->Words.Num(), Track->NumPhonemes(), Track->LatestTime,
+				Track->SpeakerName.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", %s"), *Track->SpeakerName),
+				Track->NumMalformedRows > 0
+					? *FString::Printf(TEXT(", %d malformed row(s) dropped"), Track->NumMalformedRows) : TEXT(""));
+
+			// With a stem, the join is shown end to end: code -> row -> the controllers it writes.
+			TSharedPtr<const FElysiumExpressionTable> Table = Args.Num() >= 2
+				? ElysiumExpressions::Load(Args[1], ElysiumLip::PhonemeClass) : nullptr;
+			if (Args.Num() >= 2 && !Table.IsValid())
+			{
+				Ar.Logf(ELogVerbosity::Warning, TEXT("'%s' resolves to no phoneme table"), *Args[1]);
+			}
+
+			for (const FElysiumLipWord& Word : Track->Words)
+			{
+				Ar.Logf(TEXT("  %-20s %.3f  %.3f"), *Word.Text, Word.Start, Word.End);
+				for (const FElysiumLipPhoneme& P : Word.Phonemes)
+				{
+					FString Resolved;
+					if (Table.IsValid())
+					{
+						const int32 Row = Table->FindRowByPhonemeCode(P.Code);
+						// The string is printed beside the row it actually reaches, because the two
+						// disagree far more often than not.
+						Resolved = Row != INDEX_NONE
+							? FString::Printf(TEXT("  -> \"%s\""), *Table->Rows[Row].Name)
+							: FString(TEXT("  -> (no row)"));
+					}
+					Ar.Logf(TEXT("      %-5d %-6s %.3f  %.3f%s"),
+						P.Code, *P.Phoneme, P.Start, P.End, *Resolved);
+				}
+			}
+		}));
